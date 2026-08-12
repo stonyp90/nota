@@ -58,7 +58,7 @@
   --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
 
-  --maxw: 1180px;
+  --maxw: 1600px; /* maximized width — fills wide screens, side padding via .wrap */
   --gap: 20px;
 }
 
@@ -245,7 +245,6 @@ a:hover { text-decoration: underline; }
 /* --- Hero / intro -------------------------------------------------------- */
 .intro { padding: clamp(14px, 3vw, 26px) 0 4px; }
 .intro h1 { font-size: clamp(24px, 3.2vw, 33px); font-weight: 800; }
-.intro h1 .icon-btn { width: 30px; height: 30px; vertical-align: middle; }
 .intro p { color: var(--ink-muted); max-width: 60ch; margin: 8px 0 0; font-size: 15px; }
 .eyebrow {
   display: inline-block; font-size: 12px; font-weight: 700; text-transform: uppercase;
@@ -266,13 +265,15 @@ a:hover { text-decoration: underline; }
   color: var(--brand); background: var(--surface); border: 1px solid var(--border);
   padding: 4px 9px; border-radius: 999px; white-space: nowrap; flex: none;
 }
-.explainer .icon-btn { flex: none; width: 32px; height: 32px; }
 
 /* --- Layout -------------------------------------------------------------- */
 /* Only set vertical padding here — the horizontal padding comes from .wrap.
    A `padding: … 0 …` shorthand would reset .wrap's side padding, pushing the
    panels 28px past the hero content on each side (misalignment). */
 .layout { display: grid; grid-template-columns: 1fr 380px; gap: clamp(16px, 2.4vw, 24px); padding-top: clamp(12px, 2vw, 18px); padding-bottom: clamp(40px, 7vw, 64px); align-items: start; }
+/* Maximized calendar: the offer panel hides and the calendar takes the full width. */
+.layout.cal-max { grid-template-columns: 1fr; }
+.layout.cal-max .side { display: none; }
 /* Responsive column widths live in the breakpoints section (1024 -> 1fr 340px,
    900 -> single column). A dead max-width:940px rule was removed here. */
 
@@ -297,8 +298,12 @@ select, input[type='text'], input[type='number'], input[type='date'] {
 }
 select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow: 0 0 0 3px rgb(80 184 72 / 0.15); }
 
-/* --- Unique filter bar: chips + segmented controls ----------------------- */
-.filterbar { padding: 14px 18px 10px; display: flex; flex-direction: column; gap: 10px; }
+/* --- Filter panel: hidden until opened from the toolbar ------------------ */
+.filterbar {
+  margin: 0 16px 6px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px;
+  background: var(--surface-inset); border: 1px solid var(--border); border-radius: var(--radius);
+}
+.filterbar[hidden] { display: none; }
 .filterbar-row { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; }
 .chip-group { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip {
@@ -322,16 +327,17 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 .seg-btn.is-on { background: var(--surface); color: var(--brand); box-shadow: var(--shadow-sm); }
 
 /* --- Calendar ------------------------------------------------------------ */
-.cal-toolbar { display: flex; align-items: center; gap: 10px; padding: 12px 18px; }
+.cal-toolbar { display: flex; align-items: center; gap: 8px; padding: 12px 18px; }
+.cal-nav { display: inline-flex; gap: 4px; }
 .cal-title { font-weight: 700; font-size: 15px; text-transform: capitalize; }
-.hint-bar {
-  font-size: 12px; color: var(--ink-muted); padding: 8px 18px;
+.btn-icon { padding-left: 9px; padding-right: 9px; }
+/* Active-filter count riding on the Filtres toggle. */
+.filter-count {
+  display: inline-grid; place-items: center; min-width: 17px; height: 17px; margin-left: 6px;
+  padding: 0 4px; border-radius: 999px; background: var(--brand); color: var(--brand-ink);
+  font-size: 11px; font-weight: 800; line-height: 1;
 }
-.hint-bar kbd {
-  font-family: var(--font-mono); font-size: 11px; background: var(--surface);
-  border: 1px solid var(--border-strong); border-bottom-width: 2px;
-  border-radius: var(--radius-sm); padding: 1px 5px; color: var(--ink);
-}
+#filters-toggle.has-active { border-color: var(--brand); color: var(--brand); }
 
 .cal-grid { display: flex; flex-direction: column; gap: 6px; padding: 10px 16px 16px; }
 .cal-row { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
@@ -431,12 +437,6 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .dossier-name { font-weight: 600; font-size: 14px; }
 .dossier-item .help { margin-top: 2px; }
 .dossier-item input[type='text'], .dossier-item input[type='file'] { width: 100%; margin-top: 8px; }
-.read-btn {
-  appearance: none; border: 1px solid var(--border); background: var(--surface); cursor: pointer;
-  width: 30px; height: 30px; border-radius: var(--radius); flex: none; display: grid; place-items: center;
-  color: var(--ink-muted);
-}
-.read-btn:hover { color: var(--brand); border-color: var(--brand); }
 .file-note { font-size: 12px; color: var(--warn); margin-top: 6px; }
 
 /* --- Model / footer sections -------------------------------------------- */
@@ -663,9 +663,8 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   .cards { grid-template-columns: 1fr; }
   .section { padding: 28px 0; }
   #day-dialog, dialog { width: 96vw; }
-  /* Explainer stacks (badge over text) and drops its redundant speaker */
+  /* Explainer stacks the badge over the text on narrow screens. */
   .explainer { flex-direction: column; align-items: flex-start; gap: 8px; }
-  .explainer .icon-btn { display: none; }
   .hero-cta { gap: 8px; }
   .hero-cta .btn-lg { flex: 1 1 auto; }
 }

@@ -117,29 +117,6 @@
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
 
-  // ---------------------------------------------------------------------------
-  // Text to speech (Web Speech API)
-  // ---------------------------------------------------------------------------
-  var ttsSupported = 'speechSynthesis' in window;
-  var SPEAKER_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>';
-  function pickVoice() {
-    if (!ttsSupported) return null;
-    var vs = window.speechSynthesis.getVoices() || [];
-    return vs.find(function (v) { return v.lang === 'fr-CA'; }) ||
-           vs.find(function (v) { return /^fr/.test(v.lang); }) || null;
-  }
-  // On-demand read-aloud. Any control with [data-speak] or [data-speak-target]
-  // triggers it (see the delegated listener in wire()). No global toggle.
-  function speak(text) {
-    if (!ttsSupported || !text) return;
-    try {
-      window.speechSynthesis.cancel();
-      var u = new SpeechSynthesisUtterance(text);
-      u.lang = 'fr-CA';
-      var v = pickVoice(); if (v) u.voice = v;
-      window.speechSynthesis.speak(u);
-    } catch (e) {}
-  }
 
   // ---------------------------------------------------------------------------
   // Toast
@@ -468,15 +445,27 @@
     setGroupVal('seg-sort', 'sort', state.filters.sort || 'montant-desc');
   }
   function afterFilterChange() { writeHash(); renderCalendar(); renderAgenda(); }
-  function filtersActive() {
-    var f = state.filters;
-    return !!(f.service || f.statut || f.min != null || f.max != null || (f.sort && f.sort !== 'montant-desc'));
+  function activeFilterCount() {
+    var f = state.filters, n = 0;
+    if (f.service) n++;
+    if (f.statut) n++;
+    if (f.min != null) n++;
+    if (f.max != null) n++;
+    if (f.sort && f.sort !== 'montant-desc') n++;
+    return n;
   }
+  function filtersActive() { return activeFilterCount() > 0; }
   function updateFilterSummary(count) {
     var rc = $('result-count');
     if (rc) rc.textContent = count + ' offre' + (count === 1 ? '' : 's') + ' ce mois';
     var rb = $('filters-reset');
     if (rb) rb.hidden = !filtersActive();
+    // Surface the active-filter count on the (collapsed) toggle so hidden filters stay visible.
+    var n = activeFilterCount();
+    var fc = $('filters-count');
+    if (fc) { fc.textContent = String(n); fc.hidden = n === 0; }
+    var ft = $('filters-toggle');
+    if (ft) ft.classList.toggle('has-active', n > 0);
   }
   function resetFilters() {
     state.filters = { service: '', statut: '', min: null, max: null, sort: 'montant-desc' };
@@ -734,14 +723,8 @@
       }
       // Dynamically generated inputs carry no <label>, so name them explicitly.
       input.setAttribute('aria-label', it.nom);
-      var read = el('button', 'read-btn');
-      read.innerHTML = SPEAKER_SVG;
-      read.type = 'button';
-      read.title = 'Lire à voix haute';
-      read.setAttribute('aria-label', 'Lire : ' + it.nom);
-      read.addEventListener('click', function () { speak(it.nom + '. ' + it.aide); });
 
-      row.appendChild(check); row.appendChild(body); row.appendChild(read);
+      row.appendChild(check); row.appendChild(body);
       list.appendChild(row);
     });
 
@@ -798,13 +781,6 @@
     badge.hidden = false;
     badge.textContent = done + '/' + total;
     badge.dataset.complete = r.ready ? 'true' : 'false';
-  }
-
-  function readAllDossier() {
-    var svc = D.serviceById($('d-service').value) || D.SERVICES[0];
-    var text = 'Dossier pour ' + svc.nom + '. ' +
-      dossierItems(svc).map(function (it) { return it.nom + '. ' + it.aide; }).join(' ');
-    speak(text);
   }
 
   // ---------------------------------------------------------------------------
@@ -1133,18 +1109,6 @@
       var cur = document.documentElement.getAttribute('data-theme');
       setTheme(cur === 'dark' ? 'light' : 'dark');
     });
-    // Read-aloud: any [data-speak] / [data-speak-target] control speaks on click.
-    document.addEventListener('click', function (e) {
-      var b = e.target.closest('[data-speak], [data-speak-target]');
-      if (!b) return;
-      var text = b.getAttribute('data-speak');
-      if (!text && b.dataset.speakTarget) {
-        var t = $(b.dataset.speakTarget);
-        text = t ? (t.innerText || t.textContent) : '';
-      }
-      if (text) speak(text.trim());
-    });
-
     // Calendar
     $('cal-prev').addEventListener('click', function () { step(-1); });
     $('cal-next').addEventListener('click', function () { step(1); });
@@ -1157,6 +1121,24 @@
     $('seg-statut').addEventListener('click', function (e) { var b = e.target.closest('.seg-btn'); if (!b) return; setGroupActive(this, b); state.filters.statut = b.dataset.statut; afterFilterChange(); });
     $('seg-sort').addEventListener('click', function (e) { var b = e.target.closest('.seg-btn'); if (!b) return; setGroupActive(this, b); state.filters.sort = b.dataset.sort; afterFilterChange(); });
     $('filters-reset').addEventListener('click', resetFilters);
+
+    // Filters stay collapsed until the customer opens them from the toolbar.
+    $('filters-toggle').addEventListener('click', function () {
+      var panel = $('filters');
+      var willOpen = panel.hidden;
+      panel.hidden = !willOpen;
+      this.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+    });
+
+    // Maximize the calendar: hide the offer panel and let the calendar fill the width.
+    $('cal-maximize').addEventListener('click', function () {
+      var layout = document.querySelector('.layout');
+      var on = layout.classList.toggle('cal-max');
+      this.setAttribute('aria-pressed', on ? 'true' : 'false');
+      var lbl = on ? 'Réduire le calendrier' : 'Agrandir le calendrier';
+      this.setAttribute('aria-label', lbl); this.setAttribute('title', lbl);
+      renderCalendar();
+    });
 
     // Privacy (Law 25) — opens the dedicated confidentialité view.
     var pv = $('privacy-link');
@@ -1188,7 +1170,6 @@
 
     // Dossier
     $('d-service').addEventListener('change', renderDossier);
-    $('dossier-read-all').addEventListener('click', readAllDossier);
 
     // Notary
     $('notary-form').addEventListener('submit', onNotarySubmit);
@@ -1230,6 +1211,8 @@
     buildServiceChips();
     readHash();
     syncFilterChips();
+    // If a shared link pre-selects filters, reveal the (otherwise hidden) panel.
+    if (filtersActive()) { $('filters').hidden = false; $('filters-toggle').setAttribute('aria-expanded', 'true'); }
     renderLegend();
     wire();
 

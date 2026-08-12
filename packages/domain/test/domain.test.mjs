@@ -268,3 +268,18 @@ test('dueReminders: the dossier_incomplet hook fires for an incomplete open lead
   const both = { ...incomplete, dateISO: D.addDays(TODAY, 3) };
   assert.deepEqual(D.dueReminders(both, TODAY), ['j3', 'dossier_incomplet']);
 });
+
+test('recommendedAmount: mid-tier default, within bounds, one-tap booking', () => {
+  // refinancement 950, 5 days out -> prioritaire (1.6-2.2, mid 1.9) -> 1805 (round 5)
+  const t = D.tierById('prioritaire');
+  const expected = Math.round((950 * (t.apercuMin + t.apercuMax) / 2) / 5) * 5;
+  assert.equal(D.recommendedAmount('refinancement', '2026-08-17', TODAY), expected);
+  // always within [floor, 10x floor]
+  for (const s of D.SERVICES) {
+    const r = D.recommendedAmount(s.id, '2026-08-13', TODAY); // 1 day = extreme
+    assert.ok(r >= s.prixDepart && r <= s.prixDepart * 10, `${s.id} recommended in bounds`);
+  }
+  // unknown service / bad date -> null
+  assert.equal(D.recommendedAmount('bad', '2026-09-01', TODAY), null);
+  assert.equal(D.recommendedAmount('testament', 'nope', TODAY), null);
+});

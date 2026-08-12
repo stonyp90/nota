@@ -304,6 +304,20 @@
     return d.toISOString().slice(0, 10);
   }
 
+  // --- Recommended offer (one-tap booking) -----------------------------------
+  // The single biggest step for a client is deciding "how much do I offer?".
+  // Given the date, suggest the middle of that tier's market-acceptance range ×
+  // the service floor (rounded to $5, clamped to [floor, 10× floor]). The UI
+  // pre-fills this so a client can book with one tap instead of a decision.
+  function recommendedAmount(serviceId, dateISO, todayISO) {
+    const svc = serviceById(serviceId);
+    if (!svc || !isISODate(dateISO)) return null;
+    const days = isISODate(todayISO) ? Math.max(0, daysBetween(todayISO, dateISO)) : 0;
+    const t = tierById(tierForDays(days));
+    const mult = (t.apercuMin + t.apercuMax) / 2;
+    return clampMontant(svc, Math.round((svc.prixDepart * mult) / 5) * 5);
+  }
+
   // --- Lead qualification ----------------------------------------------------
   // A lead is "sellable" to a notary only once the client has assembled every
   // required document and field for the service AND consented to share the
@@ -407,6 +421,7 @@
     makeFixtures,
     bidLabel,
     leadReadiness,
+    recommendedAmount,
     REMINDER_OFFSETS,
     REMINDER_KINDS,
     reminderKindForDays,

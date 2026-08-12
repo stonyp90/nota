@@ -52,9 +52,6 @@ async function boot() {
     url: 'https://nota.example/',
     pretendToBeVisual: true,
     beforeParse(window) {
-      // jsdom has no Web Speech API.
-      window.speechSynthesis = { getVoices: () => [], cancel() {}, speak() {}, onvoiceschanged: null };
-      window.SpeechSynthesisUtterance = function (t) { this.text = t; };
       // Force the deterministic offline/localStorage path on boot.
       window.fetch = () => Promise.reject(new Error('offline'));
       // jsdom doesn't implement scrolling; setTab calls it on its default path.
@@ -322,4 +319,47 @@ test('rendered amounts use the money() format ("N NNN $")', async () => {
   assert.ok(texts.length > 0, 'no money figures rendered');
   assert.ok(texts.some((t) => / \$$/.test(t.trim())), 'no amount ends with " $"');
   assert.ok(texts.some((t) => /\d \d{3} \$/.test(t)), 'no space-grouped thousands amount found');
+});
+
+// 17. Filters are collapsed by default and the toolbar toggle reveals/hides them;
+//     activating a filter surfaces a count badge on the (collapsed) toggle.
+test('filters stay hidden until the toggle opens them, with an active-count badge', async () => {
+  const { win, doc } = await boot();
+  const panel = $(doc, 'filters');
+  const toggle = $(doc, 'filters-toggle');
+  assert.equal(panel.hidden, true, 'filter panel should start hidden');
+  assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+
+  toggle.click();
+  assert.equal(panel.hidden, false, 'toggle should reveal the filter panel');
+  assert.equal(toggle.getAttribute('aria-expanded'), 'true');
+
+  toggle.click();
+  assert.equal(panel.hidden, true, 'toggle should collapse the filter panel again');
+
+  // The count badge stays hidden with no active filters, and appears once one is set.
+  const badge = $(doc, 'filters-count');
+  assert.equal(badge.hidden, true, 'count badge should be hidden with no active filters');
+  const openBtn = all(doc, '#chips-service .chip').find((c) => c.dataset.svc);
+  openBtn.click();
+  assert.equal(badge.hidden, false, 'count badge should show once a filter is active');
+  assert.equal(badge.textContent, '1');
+  assert.ok(toggle.classList.contains('has-active'), 'toggle should mark itself active');
+});
+
+// 18. Maximize toggle expands the calendar full-width and hides the offer panel.
+test('maximize toggle adds cal-max and hides the side panel', async () => {
+  const { doc } = await boot();
+  const layout = doc.querySelector('.layout');
+  const btn = $(doc, 'cal-maximize');
+  assert.equal(layout.classList.contains('cal-max'), false);
+  assert.equal(btn.getAttribute('aria-pressed'), 'false');
+
+  btn.click();
+  assert.equal(layout.classList.contains('cal-max'), true, 'maximize should add cal-max');
+  assert.equal(btn.getAttribute('aria-pressed'), 'true');
+
+  btn.click();
+  assert.equal(layout.classList.contains('cal-max'), false, 'toggling again should restore the layout');
+  assert.equal(btn.getAttribute('aria-pressed'), 'false');
 });
