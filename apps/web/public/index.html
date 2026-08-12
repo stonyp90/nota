@@ -160,19 +160,40 @@
       <!-- ================= CARNET ================= -->
       <section class="tab-pane is-active" id="pane-carnet" role="tabpanel" aria-label="Carnet">
         <div class="wrap">
-          <div class="intro">
-            <span class="eyebrow">Carnet public · Québec</span>
-            <h1>Un notaire, à la date qu’il vous faut.</h1>
-            <p>Choisissez le jour. Un notaire de Québec le retient. Gratuit pour vous.</p>
-            <div class="hero-cta">
-              <button class="btn btn-primary btn-lg" id="cta-reserver">Réserver votre date →</button>
-              <button class="btn btn-lg" id="cta-voir">Voir la demande</button>
+          <div class="intro intro--split">
+            <div class="intro-lead">
+              <span class="eyebrow">Carnet public · Québec</span>
+              <h1>Un notaire, à la date qu’il vous faut.</h1>
+              <p>Choisissez le jour. Un notaire de Québec le retient. Gratuit pour vous.</p>
+              <div class="hero-cta">
+                <button class="btn btn-primary btn-lg" id="cta-reserver">Réserver votre date →</button>
+                <button class="btn btn-lg" id="cta-voir">Voir la demande</button>
+              </div>
             </div>
 
-            <div class="explainer" role="note">
-              <span class="explainer-badge">Marché du temps</span>
-              <p><strong>On ne compare pas les prix — on réserve le bon moment.</strong> Votre offre reflète l’urgence de la date, pas un rabais.</p>
-            </div>
+            <aside class="intro-aside">
+              <!-- Decorative date/time mark: a rounded-square "date card" holding a clock
+                   (a moment in time), with one bright dot = the retained slot. Token-only,
+                   aria-hidden, and deliberately NOT a calendar grid (the month calendar
+                   renders directly below the hero). -->
+              <svg class="hero-motif" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+                <g class="motif-plate">
+                  <rect x="54" y="54" width="92" height="92" rx="16" transform="rotate(-8 100 100)" fill="none" stroke="currentColor" stroke-opacity=".16" stroke-width="1.5"/>
+                  <rect x="44" y="44" width="112" height="112" rx="18" fill="currentColor" fill-opacity=".05" stroke="currentColor" stroke-opacity=".30" stroke-width="1.75"/>
+                </g>
+                <circle cx="100" cy="100" r="34" fill="none" stroke="currentColor" stroke-opacity=".34" stroke-width="1.5"/>
+                <line x1="100" y1="100" x2="100" y2="76" stroke="currentColor" stroke-opacity=".82" stroke-width="2.25" stroke-linecap="round"/>
+                <line x1="100" y1="100" x2="117" y2="88" stroke="currentColor" stroke-opacity=".55" stroke-width="2" stroke-linecap="round"/>
+                <circle cx="100" cy="100" r="3" fill="currentColor"/>
+                <circle class="motif-accent-halo" cx="100" cy="66" r="8" fill="none" stroke-opacity=".35" stroke-width="1.5"/>
+                <circle class="motif-accent" cx="100" cy="66" r="4.5"/>
+              </svg>
+
+              <div class="explainer explainer--note" role="note">
+                <span class="explainer-badge">Marché du temps</span>
+                <p><strong>On ne compare pas les prix — on réserve le bon moment.</strong> Votre offre reflète l’urgence de la date, pas un rabais.</p>
+              </div>
+            </aside>
           </div>
         </div>
 
