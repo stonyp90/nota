@@ -202,8 +202,8 @@
       cell.dataset.date = iso;
       cell.tabIndex = iso === state.focusDate ? 0 : -1;
       cell.setAttribute('aria-label', dayTitle(iso));
-      if (iso === today) cell.classList.add('is-today');
-      if (iso === state.selectedDate) cell.classList.add('is-selected');
+      if (iso === today) { cell.classList.add('is-today'); cell.setAttribute('aria-current', 'date'); }
+      if (iso === state.selectedDate) { cell.classList.add('is-selected'); cell.setAttribute('aria-selected', 'true'); }
 
       cell.appendChild(el('span', 'cal-daynum', String(day)));
 
@@ -264,9 +264,15 @@
     if (state.selectedDate) visible = visible.filter(function (b) { return b.dateISO === state.selectedDate; });
 
     if (!visible.length) {
-      ag.appendChild(el('div', 'agenda-day', state.selectedDate
+      var empty = el('div', 'agenda-empty');
+      empty.appendChild(el('p', 'agenda-empty-text', state.selectedDate
         ? 'Aucune offre le ' + dayTitle(state.selectedDate) + '.'
-        : 'Aucune offre pour ce filtre.'));
+        : (filtersActive() ? 'Aucune offre pour ce filtre.' : 'Aucune offre ce mois-ci.')));
+      var cta = el('button', 'btn btn-sm', filtersActive() ? 'Réinitialiser les filtres' : 'Réserver cette date');
+      cta.type = 'button';
+      cta.addEventListener('click', filtersActive() ? resetFilters : function () { $('cta-reserver').click(); });
+      empty.appendChild(cta);
+      ag.appendChild(empty);
       return;
     }
 
@@ -362,9 +368,12 @@
     if (dlg.showModal && !dlg.open) dlg.showModal();
   }
 
+  // When the day modal closes, restore focus to the triggering cell — UNLESS we
+  // deliberately navigated away to the offer form (offerForDay).
+  var dayNavAway = false;
   function offerForDay() {
     var iso = state.selectedDate || state.focusDate;
-    $('day-dialog').close();
+    dayNavAway = true; $('day-dialog').close();
     setTab('carnet', { scroll: false });
     if (D.serviceById(state.filters.service)) $('o-service').value = state.filters.service;
     onOfferServiceChange();
@@ -383,22 +392,24 @@
       moveFocus(map[e.key]);
     } else if (e.key === 'PageUp') { e.preventDefault(); step(-1); }
     else if (e.key === 'PageDown') { e.preventDefault(); step(1); }
-    else if (e.key === 'Home') { e.preventDefault(); state.focusDate = todayISO(); state.anchor = firstOfMonth(state.focusDate); refreshMonth(); }
+    else if (e.key === 'Home') { e.preventDefault(); state.focusDate = todayISO(); state.anchor = firstOfMonth(state.focusDate); reloadAndRender(); }
     else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDay(state.focusDate); }
     else if (e.key === 'Escape') { e.preventDefault(); resetFilters(); }
   }
   function moveFocus(delta) {
     var next = D.addDays(state.focusDate, delta);
-    if (monthKey(next) !== monthKey(state.anchor)) { state.anchor = firstOfMonth(next); }
+    var changedMonth = monthKey(next) !== monthKey(state.anchor);
+    if (changedMonth) state.anchor = firstOfMonth(next);
     state.focusDate = next;
-    refreshMonth();
-    var c = document.querySelector('.cal-cell[data-date="' + next + '"]');
-    if (c) c.focus();
+    function focusCell() { var c = document.querySelector('.cal-cell[data-date="' + next + '"]'); if (c) c.focus(); }
+    // Crossing a month boundary needs fresh bids for the new month, not just a re-render.
+    if (changedMonth) reloadAndRender().then(focusCell);
+    else { refreshMonth(); focusCell(); }
   }
   function step(months) {
     state.anchor = addMonths(state.anchor, months);
     state.focusDate = state.anchor;
-    refreshMonth();
+    reloadAndRender();
   }
 
   // ---------------------------------------------------------------------------
@@ -411,7 +422,7 @@
     if (h.has('min')) state.filters.min = num(h.get('min'));
     if (h.has('max')) state.filters.max = num(h.get('max'));
     if (h.has('tri')) state.filters.sort = h.get('tri');
-    if (h.has('jour')) { state.selectedDate = h.get('jour'); state.focusDate = h.get('jour'); state.anchor = firstOfMonth(h.get('jour')); }
+    if (h.has('jour') && D.isISODate(h.get('jour'))) { state.selectedDate = h.get('jour'); state.focusDate = h.get('jour'); state.anchor = firstOfMonth(h.get('jour')); }
   }
   function writeHash() {
     var h = new URLSearchParams();
@@ -513,7 +524,11 @@
     var amt = $('o-amount');
     if (svc) {
       amt.min = svc.prixDepart; amt.max = svc.prixDepart * D.PREMIUM_CAP; amt.step = 5;
-      amt.value = svc.prixDepart; amt.disabled = false;
+      amt.disabled = false;
+      // Pre-fill the recommended (mid-tier) offer so a client can book in one tap
+      // instead of leaving the gauge at the floor ("peu susceptible d'être retenue").
+      var rec = D.recommendedAmount(svc.id, state.offer.dateISO, todayISO());
+      amt.value = rec != null ? rec : svc.prixDepart;
     } else { amt.disabled = true; amt.value = 0; }
     onAmountChange();
   }
@@ -531,6 +546,9 @@
       var when = days <= 0 ? 'aujourd’hui' : ('dans ' + days + ' jour' + (days > 1 ? 's' : ''));
       $('tp-text').textContent = 'Signature ' + when + ' · le marché se conclut ici entre ' +
         t.apercuMin.toFixed(1) + '× et ' + t.apercuMax.toFixed(1) + '×.';
+      // Re-tune the pre-filled amount to this date's tier.
+      var rec = D.recommendedAmount(state.offer.serviceId, date, todayISO());
+      if (rec != null) $('o-amount').value = rec;
     } else { tp.hidden = true; }
     onAmountChange();
   }
@@ -580,7 +598,13 @@
     var o = state.offer;
     var courriel = ($('o-courriel') && $('o-courriel').value || '').trim();
     var v = D.validateOffer({ serviceId: o.serviceId, dateISO: o.dateISO, montant: o.montant, courriel: courriel, todayISO: todayISO() });
-    $('offer-submit').disabled = !v.ok;
+    var s = $('offer-submit');
+    // Editing after a publish resets the CTA out of its success/busy state.
+    if (!s.getAttribute('aria-busy') && s.textContent.trim() !== 'Publier mon offre') {
+      s.textContent = 'Publier mon offre';
+      var succ = $('offer-success'); if (succ) succ.hidden = true;
+    }
+    s.disabled = !v.ok;
     return v;
   }
 
@@ -610,6 +634,9 @@
 
   async function onOfferSubmit(e) {
     e.preventDefault();
+    var submit = $('offer-submit');
+    if (submit.disabled) return; // also blocks Enter-to-submit on an invalid offer
+    submit.disabled = true; submit.setAttribute('aria-busy', 'true'); submit.textContent = 'Publication…';
     var o = state.offer;
     var payload = {
       serviceId: o.serviceId, dateISO: o.dateISO, montant: o.montant,
@@ -630,9 +657,11 @@
     if (!res.ok) {
       clear(errBox); errBox.hidden = false;
       res.errors.forEach(function (er) { errBox.appendChild(el('li', null, er.message)); });
+      submit.textContent = 'Publier mon offre'; submit.disabled = false; submit.removeAttribute('aria-busy');
       return;
     }
     errBox.hidden = true;
+    submit.removeAttribute('aria-busy'); submit.textContent = 'Offre publiée ✓'; // stays disabled → no duplicate submit
     toast('Offre publiée : ' + D.money(payload.montant) + (store.online ? '' : ' (démo locale)'));
     buildCalendarLinks(res.bid);
     $('offer-success').hidden = false;
@@ -1177,6 +1206,11 @@
     $('day-close').addEventListener('click', function () { $('day-dialog').close(); });
     $('day-offer').addEventListener('click', offerForDay);
     $('day-dialog').addEventListener('click', function (e) { if (e.target === this) this.close(); });
+    $('day-dialog').addEventListener('close', function () {
+      if (dayNavAway) { dayNavAway = false; return; }
+      var c = document.querySelector('.cal-cell[data-date="' + state.focusDate + '"]');
+      if (c) c.focus();
+    });
 
     // Reveal dialog
     $('reveal-confirm').addEventListener('click', function () { $('reveal-dialog').close(); commitAnon(false); });
