@@ -68,6 +68,27 @@ function unsubPK(email) {
 }
 const UNSUB_SK = 'UNSUB';
 
+// --- Notary console -----------------------------------------------------------
+// A notary declining a bid: a single marker item looked up by GetItem, so a
+// declined bid drops out of that notary's list without a Scan.
+//
+//   PK = DECLINE#<notaryId>#<bidId>   SK = DECLINE
+//
+// A notary retaining (accepting) a bid: a pointer item under the notary's own
+// partition, so their calendar feed is one Query (begins_with) — no Scan, which
+// the API Lambda role deliberately lacks (Get/Put/Query only, see infra).
+//
+//   PK = NOTARY#<notaryId>   SK = RETAINED#<dateISO>#<bidId>
+function declinePK(notaryId, bidId) {
+  return `DECLINE#${notaryId}#${bidId}`;
+}
+const DECLINE_SK = 'DECLINE';
+
+function retainedSK(dateISO, bidId) {
+  return `RETAINED#${dateISO}#${bidId}`;
+}
+const RETAINED_PREFIX = 'RETAINED#';
+
 module.exports = {
   monthOf,
   bidPK,
@@ -81,4 +102,8 @@ module.exports = {
   SENT_SK,
   unsubPK,
   UNSUB_SK,
+  declinePK,
+  DECLINE_SK,
+  retainedSK,
+  RETAINED_PREFIX,
 };

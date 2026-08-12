@@ -50,3 +50,43 @@ test('listByMonth returns [] for an empty partition', async () => {
   assert.deepEqual(await repo.listByMonth('2026-01'), []);
   assert.equal(doc.calls(), 1);
 });
+
+// --- Fix 4: conditional retain (TOCTOU) -------------------------------------
+
+test('retain writes with an "ouverte" ConditionExpression and returns the bid on success', async () => {
+  const sent = [];
+  const doc = { async send(cmd) { sent.push(cmd); return {}; } };
+  const repo = createDynamoRepo({ tableName: 't', doc });
+  const bid = { id: 'a', dateISO: '2026-08-20', serviceId: 'testament', montant: 800, status: 'retenue', notaryId: 'N1' };
+
+  const out = await repo.retain(bid, 'N1');
+  assert.equal(out, bid);
+  const input = sent[0].input;
+  assert.equal(input.ConditionExpression, '#s = :ouverte');
+  assert.equal(input.ExpressionAttributeNames['#s'], 'status');
+  assert.equal(input.ExpressionAttributeValues[':ouverte'], 'ouverte');
+});
+
+test('retain returns null when the conditional check fails (lost TOCTOU race)', async () => {
+  const doc = {
+    async send() {
+      const e = new Error('conditional check failed');
+      e.name = 'ConditionalCheckFailedException';
+      throw e;
+    },
+  };
+  const repo = createDynamoRepo({ tableName: 't', doc });
+  assert.equal(await repo.retain({ id: 'a', dateISO: '2026-08-20', status: 'retenue' }, 'N1'), null);
+});
+
+test('retain rethrows a non-conditional error', async () => {
+  const doc = {
+    async send() {
+      const e = new Error('boom');
+      e.name = 'ProvisionedThroughputExceededException';
+      throw e;
+    },
+  };
+  const repo = createDynamoRepo({ tableName: 't', doc });
+  await assert.rejects(() => repo.retain({ id: 'a', dateISO: '2026-08-20' }, 'N1'), /boom/);
+});

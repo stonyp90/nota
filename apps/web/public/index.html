@@ -260,6 +260,11 @@
                     publiquement. Aucun document n’est transmis à cette étape. Données hébergées au Canada
                     et supprimées sur demande (Loi 25).
                   </p>
+                  <p class="help" id="offer-dossier-note">
+                    Les réponses déjà saisies dans votre <strong>Dossier</strong> accompagnent l’offre pour
+                    aider le notaire à l’évaluer. Les documents eux-mêmes ne sont partagés de façon sécurisée
+                    qu’après qu’un notaire a retenu votre demande.
+                  </p>
 
                   <button type="submit" class="btn btn-primary w-full" id="offer-submit" disabled>
                     Publier mon offre
@@ -370,6 +375,97 @@
               <strong>À vérifier avant le lancement.</strong> Les enchères publiques sur des honoraires professionnels
               peuvent attirer l’attention de la Chambre. Un appel à l’inspection professionnelle est recommandé.
             </p>
+          </div>
+
+          <!-- ===== Console notaire ===== -->
+          <div class="panel panel-pad panel-narrow" id="notary-console">
+            <h2 class="h-sub">Console notaire
+              <button class="icon-btn" aria-label="Écouter"
+                data-speak="Console notaire. Accédez aux demandes ouvertes, retenez un dossier et synchronisez vos signatures à votre agenda.">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>
+              </button>
+            </h2>
+            <p class="help">Accédez aux demandes ouvertes, retenez un dossier et synchronisez vos signatures à votre agenda.</p>
+
+            <!-- Auth gate -->
+            <form id="notary-auth-form" class="nc-auth">
+              <div class="form-row">
+                <label class="lbl" for="nc-email">Courriel de votre abonnement</label>
+                <input type="email" id="nc-email" inputmode="email" autocomplete="email" placeholder="vous@etude.ca" required />
+                <p class="help">Démo : n’importe quel courriel valide ouvre une console. En production, l’accès est réservé aux abonnements actifs.</p>
+              </div>
+              <ul class="errors" id="notary-console-errors" hidden></ul>
+              <button type="submit" class="btn btn-primary" id="notary-console-signin">Accéder à ma console</button>
+            </form>
+
+            <!-- Authenticated view -->
+            <div id="notary-authed" hidden>
+              <div class="nc-bar">
+                <div class="nc-id">
+                  <span class="nc-id-label">Connecté</span>
+                  <strong id="notary-email-label"></strong>
+                </div>
+                <span class="header-spacer"></span>
+                <button class="btn btn-sm" id="notary-refresh">Rafraîchir</button>
+                <button class="btn btn-sm btn-ghost" id="notary-signout">Se déconnecter</button>
+              </div>
+
+              <h3 class="nc-h">Demandes ouvertes</h3>
+              <div class="nc-list" id="notary-open-list" aria-live="polite"></div>
+              <p class="help" id="notary-open-empty" hidden>Aucune demande ouverte pour l’instant.</p>
+
+              <h3 class="nc-h">Dossiers retenus</h3>
+              <div class="nc-list" id="notary-retained-list"></div>
+              <p class="help" id="notary-retained-empty">Aucun dossier retenu pour l’instant.</p>
+
+              <div class="nc-cal">
+                <a class="btn btn-sm" id="notary-webcal" href="#" target="_blank" rel="noopener">S’abonner au calendrier (webcal)</a>
+                <p class="help">Ajoute vos signatures retenues à votre agenda (Apple Calendar, Outlook, Google) et se met à jour automatiquement.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= CONFIDENTIALITÉ (Loi 25) ================= -->
+      <section class="tab-pane" id="pane-confidentialite" role="tabpanel" aria-label="Confidentialité" hidden>
+        <div class="wrap">
+          <div class="intro">
+            <span class="eyebrow">Vie privée · Loi 25</span>
+            <h1>Vos renseignements, protégés.
+              <button class="icon-btn" aria-label="Écouter"
+                data-speak="Vos renseignements, protégés. Nota respecte la Loi 25 du Québec sur la protection des renseignements personnels.">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>
+              </button>
+            </h1>
+            <p>Nota respecte la <em>Loi 25</em> (Loi sur la protection des renseignements personnels dans le secteur privé). Voici, en clair, ce que nous recueillons et vos droits.</p>
+          </div>
+
+          <div class="cards">
+            <div class="card">
+              <h3>Ce que nous recueillons</h3>
+              <p>Votre date de signature, le service, le montant offert et les 3 premiers caractères de votre code postal — affichés publiquement. Votre courriel et le contenu de votre dossier restent privés.</p>
+            </div>
+            <div class="card">
+              <h3>Hébergé au Canada</h3>
+              <p>Vos données sont conservées sur des serveurs canadiens (Amazon Web Services, région <strong>ca-central-1</strong>, Montréal). Elles ne quittent pas le pays.</p>
+            </div>
+            <div class="card">
+              <h3>Anonyme par défaut</h3>
+              <p>Les offres sont affichées comme « Client · secteur postal ». Votre nom n’est visible que si vous choisissez explicitement de le rendre public.</p>
+            </div>
+          </div>
+
+          <div class="panel panel-pad panel-narrow mt-md">
+            <h2 class="h-sub">Vos droits et nos engagements</h2>
+            <ul class="privacy-list">
+              <li><strong>Conservation.</strong> Une offre et son dossier sont conservés au plus <strong>12 mois</strong> après la date de signature, puis supprimés automatiquement. Le courriel de notification est effacé dès que l’offre est close ou expirée.</li>
+              <li><strong>Droit de suppression.</strong> Vous pouvez demander l’accès, la rectification ou la suppression de vos renseignements en tout temps en écrivant à <a href="mailto:confidentialite@nota.ca">confidentialite@nota.ca</a>. Nous répondons dans un délai de 30 jours.</li>
+              <li><strong>Partage du dossier.</strong> Le contenu de votre dossier n’est transmis à personne tant qu’un notaire n’a pas retenu votre demande, et seulement après votre consentement explicite. Les documents eux-mêmes sont échangés de façon sécurisée à cette étape.</li>
+              <li><strong>Vérification d’identité.</strong> Nota ne vérifie pas votre identité. C’est le notaire qui retient votre demande qui vérifie votre identité au moment de la signature, comme l’exige la loi.</li>
+              <li><strong>Aucune revente.</strong> Nous ne vendons ni ne louons vos renseignements. Les notaires paient un abonnement fixe, jamais un pourcentage — aucune donnée n’est monnayée.</li>
+              <li><strong>Responsable.</strong> Une personne responsable de la protection des renseignements personnels supervise ces pratiques : <a href="mailto:confidentialite@nota.ca">confidentialite@nota.ca</a>.</li>
+            </ul>
           </div>
         </div>
       </section>

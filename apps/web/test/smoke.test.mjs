@@ -257,6 +257,63 @@ test('courriel field is optional and stays private in the local store', async ()
   assert.equal(res.bid.courriel, undefined);
 });
 
+// 13. Notary console: the auth gate renders, the authed view is gated until
+//     sign-in, and Nota.notary exposes its hooks. feedUrl builds a webcal link.
+test('notary console renders its auth gate and exposes Nota.notary hooks', async () => {
+  const { doc, Nota } = await boot();
+  assert.ok($(doc, 'notary-console'), 'notary console missing');
+  assert.ok($(doc, 'nc-email'), 'notary email field missing');
+  assert.equal($(doc, 'notary-authed').hidden, true); // gated until sign-in
+  assert.equal($(doc, 'notary-auth-form').hidden, false);
+  assert.equal(typeof Nota.notary, 'object');
+  for (const k of ['signIn', 'signOut', 'loadBids', 'accept', 'decline', 'feedUrl', 'state']) {
+    assert.ok(k in Nota.notary, `Nota.notary missing ${k}`);
+  }
+  // feedUrl swaps the http(s) scheme for webcal:// and carries the token.
+  assert.match(Nota.notary.feedUrl('abc.def'), /^webcal:\/\/.*\/notary\/feed\.ics\?token=abc\.def$/);
+});
+
+// 14. The footer privacy link opens the dedicated Law 25 confidentialité pane.
+test('privacy link opens the Law 25 confidentialité pane', async () => {
+  const { doc } = await boot();
+  const pane = $(doc, 'pane-confidentialite');
+  assert.ok(pane, 'confidentialité pane missing');
+  assert.equal(pane.hidden, true);
+  $(doc, 'privacy-link').click();
+  assert.equal(pane.hidden, false);
+  assert.equal(pane.classList.contains('is-active'), true);
+});
+
+// 15. Submitting an offer attaches the saved dossier snapshot + courriel to the
+//     store payload (so an accepting notary sees real data).
+test('submitting an offer attaches the saved dossier snapshot and courriel', async () => {
+  const { win, doc, D, Nota } = await boot();
+  const snap = { valeurPropriete: '250000', __consent: '1' };
+  win.localStorage.setItem('nota.dossier.v1', JSON.stringify({ refinancement: snap }));
+
+  // Nota.store is the same object the app submits through — spy on createBid.
+  let captured = null;
+  const orig = Nota.store.createBid;
+  Nota.store.createBid = async function (payload) {
+    captured = payload;
+    return { ok: true, bid: { id: 'x', serviceId: payload.serviceId, dateISO: payload.dateISO, montant: payload.montant, tier: 'standard' } };
+  };
+
+  const sel = $(doc, 'o-service'); sel.value = 'refinancement'; fire(win, sel, 'change');
+  const date = $(doc, 'o-date'); date.value = D.addDays(todayISO(), 5); fire(win, date, 'change'); fire(win, date, 'input');
+  $(doc, 'o-amount').value = '2000'; fire(win, $(doc, 'o-amount'), 'input');
+  $(doc, 'o-courriel').value = 'client@example.ca'; fire(win, $(doc, 'o-courriel'), 'input');
+  fire(win, $(doc, 'offer-form'), 'submit');
+  await wait(10);
+
+  Nota.store.createBid = orig;
+  assert.ok(captured, 'createBid was not called');
+  // Compare by value (the snapshot is parsed in the jsdom realm, so a strict
+  // deep-equal would trip on cross-realm prototypes).
+  assert.equal(JSON.stringify(captured.dossier), JSON.stringify(snap));
+  assert.equal(captured.courriel, 'client@example.ca');
+});
+
 // 12. Money passthrough: amounts route through D.money — trailing " $" and
 //     space-grouped thousands appear in the rendered figures.
 test('rendered amounts use the money() format ("N NNN $")', async () => {

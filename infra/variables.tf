@@ -53,3 +53,8 @@ variable "stripe_price_id" {
   sensitive   = true
   default     = ""
 }
+
+# --- Notary console auth -----------------------------------------------------
+# The HMAC signing secret for notary console tokens (NOTA_NOTARY_SECRET) is NOT
+# an input variable: it is generated in-stack by random_password.notary_secret
+# (see lambda.tf) so production is never left with an empty, forge-able secret.

@@ -12,6 +12,10 @@ const {
   SENT_SK,
   unsubPK,
   UNSUB_SK,
+  declinePK,
+  DECLINE_SK,
+  retainedSK,
+  RETAINED_PREFIX,
 } = require('./keys');
 const { STATUS } = require('@nota/domain');
 
@@ -88,6 +92,30 @@ function createDynamoRepo({ tableName, endpoint, region, doc } = {}) {
     async put(bid) {
       await doc.send(new PutCommand({ TableName: tableName, Item: toItem(bid) }));
       return bid;
+    },
+    // Conditional retain: write the retained item ONLY while the stored bid is
+    // still OUVERTE. The ConditionExpression is evaluated against the existing
+    // item, so two concurrent accepts cannot both win — the second trips
+    // ConditionalCheckFailedException and we surface that as `null` (the handler
+    // maps it to 409 deja_retenue). Mirror of repo-memory's retain(). `bid` is
+    // the fully-formed retained item.
+    async retain(bid, notaryId) {
+      void notaryId;
+      try {
+        await doc.send(
+          new PutCommand({
+            TableName: tableName,
+            Item: toItem(bid),
+            ConditionExpression: '#s = :ouverte',
+            ExpressionAttributeNames: { '#s': 'status' },
+            ExpressionAttributeValues: { ':ouverte': STATUS.OUVERTE },
+          })
+        );
+        return bid;
+      } catch (err) {
+        if (err && err.name === 'ConditionalCheckFailedException') return null;
+        throw err;
+      }
     },
 
     // Every open (not-retained) bid, across all month partitions. Used only by
@@ -176,6 +204,61 @@ function createDynamoRepo({ tableName, endpoint, region, doc } = {}) {
         new GetCommand({ TableName: tableName, Key: { PK: unsubPK(email), SK: UNSUB_SK } })
       );
       return !!out.Item;
+    },
+
+    // --- Notary console (declines + retained calendar pointers) -------------
+    // All Get/Put/Query — no Scan — so the API Lambda's least-privilege policy
+    // (dynamodb:GetItem/PutItem/Query only) is unchanged.
+    async putDecline(notaryId, bidId) {
+      await doc.send(
+        new PutCommand({
+          TableName: tableName,
+          Item: { PK: declinePK(notaryId, bidId), SK: DECLINE_SK, type: 'decline', notaryId, bidId },
+        })
+      );
+    },
+    async wasDeclined(notaryId, bidId) {
+      const out = await doc.send(
+        new GetCommand({ TableName: tableName, Key: { PK: declinePK(notaryId, bidId), SK: DECLINE_SK } })
+      );
+      return !!out.Item;
+    },
+    async putRetained(notaryId, event) {
+      await doc.send(
+        new PutCommand({
+          TableName: tableName,
+          Item: {
+            PK: notaryPK(notaryId),
+            SK: retainedSK(event.dateISO, event.id),
+            type: 'retained',
+            notaryId,
+            id: event.id,
+            dateISO: event.dateISO,
+            serviceId: event.serviceId,
+            montant: event.montant,
+          },
+        })
+      );
+    },
+    // One Query on the notary's partition for the SK RETAINED# range, paginated.
+    async listRetainedByNotary(notaryId) {
+      const events = [];
+      let ExclusiveStartKey;
+      do {
+        const out = await doc.send(
+          new QueryCommand({
+            TableName: tableName,
+            KeyConditionExpression: 'PK = :pk AND begins_with(SK, :b)',
+            ExpressionAttributeValues: { ':pk': notaryPK(notaryId), ':b': RETAINED_PREFIX },
+            ExclusiveStartKey,
+          })
+        );
+        (out.Items || []).forEach((i) =>
+          events.push({ id: i.id, dateISO: i.dateISO, serviceId: i.serviceId, montant: i.montant })
+        );
+        ExclusiveStartKey = out.LastEvaluatedKey;
+      } while (ExclusiveStartKey);
+      return events;
     },
   };
 }

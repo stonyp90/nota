@@ -22,16 +22,34 @@ function createMemoryRepo(seed = []) {
   const notified = new Map(); // `${refId}#${kind}` -> timestamp
   const unsubscribed = new Set(); // lowercased emails
 
+  // Notary console: declines (per notary+bid) and retained pointers (per notary).
+  const declines = new Set(); // `${notaryId}#${bidId}`
+  const retained = new Map(); // `${notaryId}#${bidId}` -> { id, dateISO, serviceId, montant }
+
   return {
     async listByMonth(month) {
       return [...byId.values()]
         .filter((b) => monthOf(b.dateISO) === month)
         .sort((a, b) => a.dateISO.localeCompare(b.dateISO) || String(a.id).localeCompare(String(b.id)));
     },
-    async get(id) {
+    // `dateISO` is accepted (and ignored) so this adapter's signature matches
+    // repo-dynamo's `get(id, dateISO)`, which needs it to build the composite key.
+    async get(id, dateISO) {
+      void dateISO;
       return byId.get(id) || null;
     },
     async put(bid) {
+      byId.set(bid.id, bid);
+      return bid;
+    },
+    // Conditional retain: flip a bid to RETENUE for `notaryId` ONLY while it is
+    // still OUVERTE, mirroring the DynamoDB ConditionExpression. Returns the
+    // stored bid on success, or null if another notary already retained it
+    // (the TOCTOU loser). `bid` is the fully-formed retained item.
+    async retain(bid, notaryId) {
+      void notaryId;
+      const current = byId.get(bid.id);
+      if (!current || current.status === STATUS.RETENUE) return null;
       byId.set(bid.id, bid);
       return bid;
     },
@@ -70,6 +88,28 @@ function createMemoryRepo(seed = []) {
     },
     async isUnsubscribed(email) {
       return unsubscribed.has(String(email).trim().toLowerCase());
+    },
+
+    // --- Notary console (declines + retained calendar pointers) -------------
+    async putDecline(notaryId, bidId) {
+      declines.add(`${notaryId}#${bidId}`);
+    },
+    async wasDeclined(notaryId, bidId) {
+      return declines.has(`${notaryId}#${bidId}`);
+    },
+    async putRetained(notaryId, event) {
+      retained.set(`${notaryId}#${event.id}`, {
+        id: event.id,
+        dateISO: event.dateISO,
+        serviceId: event.serviceId,
+        montant: event.montant,
+      });
+    },
+    async listRetainedByNotary(notaryId) {
+      return [...retained.entries()]
+        .filter(([k]) => k.startsWith(`${notaryId}#`))
+        .map(([, v]) => v)
+        .sort((a, b) => a.dateISO.localeCompare(b.dateISO) || String(a.id).localeCompare(String(b.id)));
     },
 
     async _all() {

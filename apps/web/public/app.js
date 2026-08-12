@@ -599,6 +599,12 @@
       // Private: used only for notifications, never shown on the carnet.
       courriel: ($('o-courriel').value || '').trim(),
     };
+    // Attach the structured dossier snapshot the client assembled for THIS
+    // service (field values + document filenames + consent), so an accepting
+    // notary sees real data. Stored privately by the API; never in publicBid().
+    // The files themselves are not sent here — only the values already saved.
+    var snapshot = dossierFor(o.serviceId);
+    if (snapshot && Object.keys(snapshot).length) payload.dossier = snapshot;
     var res = await store.createBid(payload);
     var errBox = $('offer-errors');
     if (!res.ok) {
@@ -797,6 +803,256 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Notary console (consumes /notary/* API). Token lives in localStorage; every
+  // call handles 401/403/409 gracefully via toasts. Retained dossiers are kept
+  // per-email so a reload restores the "Dossiers retenus" section. Never runs a
+  // fetch on boot unless a token is already stored (ncRestore).
+  // ---------------------------------------------------------------------------
+  var LS_NC_TOKEN = 'nota.notary.token';
+  var LS_NC_FEED_TOKEN = 'nota.notary.feedtoken';
+  var LS_NC_EMAIL = 'nota.notary.email';
+  var LS_NC_RETAINED = 'nota.notary.retained.v1';
+
+  // token   -> SESSION scope, sent in the Authorization header (never a URL).
+  // feedToken -> FEED scope (read-only), the only token placed in the webcal URL.
+  var nc = { token: null, feedToken: null, email: null, open: [] };
+
+  function ncRetainedAll() { return lsLoad(LS_NC_RETAINED) || {}; }
+  function ncRetainedFor(email) { var a = ncRetainedAll(); return a[email] || []; }
+  function ncRetainedSave(email, list) { var a = ncRetainedAll(); a[email] = list; lsSave(LS_NC_RETAINED, a); }
+  function ncRetainedAdd(email, entry) {
+    var list = ncRetainedFor(email).filter(function (e) { return e.id !== entry.id; });
+    list.push(entry); ncRetainedSave(email, list);
+  }
+
+  // Build the webcal:// subscription URL from the API base. A relative '/api'
+  // base is resolved against the current origin first, then the scheme swapped.
+  // `token` must be the read-only FEED token — never the session token.
+  function ncFeedUrl(token) {
+    var base = API_BASE;
+    if (base.indexOf('http') !== 0) base = location.origin + base;
+    var httpUrl = base + '/notary/feed.ics?token=' + encodeURIComponent(token);
+    return httpUrl.replace(/^https?:\/\//, 'webcal://');
+  }
+
+  function ncSetErrors(msgs) {
+    var box = $('notary-console-errors'); if (!box) return;
+    clear(box);
+    if (!msgs || !msgs.length) { box.hidden = true; return; }
+    box.hidden = false;
+    msgs.forEach(function (m) { box.appendChild(el('li', null, m)); });
+  }
+
+  // 401 -> the token is dead: drop it and return to the sign-in gate.
+  function ncExpire(msg) {
+    nc.token = null; nc.feedToken = null; nc.email = null; nc.open = [];
+    try {
+      localStorage.removeItem(LS_NC_TOKEN);
+      localStorage.removeItem(LS_NC_FEED_TOKEN);
+      localStorage.removeItem(LS_NC_EMAIL);
+    } catch (e) {}
+    ncRenderAuthState();
+    if (msg) toast(msg);
+  }
+
+  async function ncSignIn(email) {
+    email = (email || '').trim();
+    var r;
+    try {
+      r = await fetch(API_BASE + '/notary/session', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: email }),
+      });
+    } catch (e) { ncSetErrors(['Console indisponible hors ligne. Réessayez une fois en ligne.']); return { ok: false }; }
+    var j = {}; try { j = await r.json(); } catch (e) {}
+    if (r.status !== 200) {
+      ncSetErrors((j.errors || [{ message: 'Connexion refusée.' }]).map(function (x) { return x.message; }));
+      return { ok: false };
+    }
+    ncSetErrors([]);
+    nc.token = j.token; nc.feedToken = j.feedToken || null; nc.email = email;
+    lsSave(LS_NC_TOKEN, j.token); lsSave(LS_NC_FEED_TOKEN, nc.feedToken); lsSave(LS_NC_EMAIL, email);
+    ncRenderAuthState();
+    await ncLoadBids();
+    toast('Console ouverte pour ' + email + '.');
+    return { ok: true };
+  }
+
+  async function ncLoadBids() {
+    if (!nc.token) return;
+    var r;
+    try {
+      r = await fetch(API_BASE + '/notary/bids', {
+        headers: { accept: 'application/json', authorization: 'Bearer ' + nc.token },
+      });
+    } catch (e) { toast('Impossible de charger les demandes (hors ligne).'); return; }
+    if (r.status === 401) { ncExpire('Session expirée. Reconnectez-vous.'); return; }
+    var j = {}; try { j = await r.json(); } catch (e) {}
+    nc.open = j.bids || [];
+    ncRenderOpen();
+  }
+
+  async function ncAccept(id, dateISO, bidMeta) {
+    if (!nc.token) return;
+    var r;
+    try {
+      r = await fetch(API_BASE + '/notary/bids/accept', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer ' + nc.token },
+        body: JSON.stringify({ id: id, dateISO: dateISO }),
+      });
+    } catch (e) { toast('Action impossible (hors ligne).'); return; }
+    if (r.status === 401) { ncExpire('Session expirée. Reconnectez-vous.'); return; }
+    var j = {}; try { j = await r.json(); } catch (e) {}
+    if (r.status === 409) { toast('Cette offre a déjà été retenue par un autre notaire.'); ncDropOpen(id); ncRenderOpen(); return; }
+    if (r.status === 404) { toast('Offre introuvable — elle a peut-être expiré.'); ncDropOpen(id); ncRenderOpen(); return; }
+    if (r.status !== 200) { toast('Échec de la prise en charge.'); return; }
+    var entry = {
+      id: j.id, dateISO: dateISO, serviceId: bidMeta.serviceId, montant: bidMeta.montant,
+      tier: bidMeta.tier, prefixe: bidMeta.prefixe || null,
+      courriel: j.courriel || null, dossier: j.dossier || null,
+    };
+    ncRetainedAdd(nc.email, entry);
+    ncDropOpen(id);
+    ncRenderOpen(); ncRenderRetained();
+    toast('Demande retenue. Dossier du client débloqué.');
+  }
+
+  async function ncDecline(id, dateISO) {
+    if (!nc.token) return;
+    var r;
+    try {
+      r = await fetch(API_BASE + '/notary/bids/decline', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer ' + nc.token },
+        body: JSON.stringify({ id: id, dateISO: dateISO }),
+      });
+    } catch (e) { toast('Action impossible (hors ligne).'); return; }
+    if (r.status === 401) { ncExpire('Session expirée. Reconnectez-vous.'); return; }
+    if (r.status !== 200) { toast('Échec du refus.'); return; }
+    ncDropOpen(id);
+    ncRenderOpen();
+    toast('Demande déclinée.');
+  }
+
+  function ncDropOpen(id) { nc.open = nc.open.filter(function (b) { return b.id !== id; }); }
+
+  function ncRenderAuthState() {
+    var authed = !!nc.token;
+    var form = $('notary-auth-form'); var view = $('notary-authed');
+    if (form) form.hidden = authed;
+    if (view) view.hidden = !authed;
+    if (authed) {
+      var lbl = $('notary-email-label'); if (lbl) lbl.textContent = nc.email || '';
+      // The webcal URL carries ONLY the read-only feed token, never the session
+      // token — a leaked calendar URL must not authorize accept/dossier.
+      var wc = $('notary-webcal');
+      if (wc) { if (nc.feedToken) { wc.href = ncFeedUrl(nc.feedToken); wc.hidden = false; } else { wc.hidden = true; } }
+      ncRenderRetained();
+    }
+  }
+
+  function ncReadyBadge(ready) {
+    var b = el('span', 'nc-ready', ready ? 'Dossier complet' : 'Dossier incomplet');
+    b.dataset.ready = ready ? 'true' : 'false';
+    return b;
+  }
+  function ncTierPill(tier) {
+    var t = D.tierById(tier || 'standard') || D.tierById('standard');
+    var pill = el('span', 'pill', t.nom); pill.dataset.tier = t.id || 'standard';
+    return pill;
+  }
+
+  function ncOpenCard(b) {
+    var svc = D.serviceById(b.serviceId);
+    var card = el('div', 'nc-card'); card.dataset.id = b.id;
+
+    var head = el('div', 'nc-card-head');
+    head.appendChild(el('div', 'nc-card-title', svc ? svc.nom : b.serviceId));
+    head.appendChild(el('div', 'nc-card-amount', D.money(b.montant)));
+    card.appendChild(head);
+
+    var meta = el('div', 'nc-card-meta');
+    meta.appendChild(el('span', 'nc-date', dayTitle(b.dateISO)));
+    if (b.prefixe) meta.appendChild(el('span', 'nc-prefixe', b.prefixe));
+    meta.appendChild(ncTierPill(b.tier));
+    meta.appendChild(ncReadyBadge(b.ready));
+    card.appendChild(meta);
+
+    var actions = el('div', 'nc-card-actions');
+    var acc = el('button', 'btn btn-sm btn-primary nc-accept', 'Accepter'); acc.type = 'button';
+    var dec = el('button', 'btn btn-sm nc-decline', 'Décliner'); dec.type = 'button';
+    actions.appendChild(acc); actions.appendChild(dec);
+    card.appendChild(actions);
+    return card;
+  }
+
+  function ncRenderOpen() {
+    var list = $('notary-open-list'); if (!list) return; clear(list);
+    var empty = $('notary-open-empty');
+    if (!nc.open.length) { if (empty) empty.hidden = false; return; }
+    if (empty) empty.hidden = true;
+    nc.open.forEach(function (b) { list.appendChild(ncOpenCard(b)); });
+  }
+
+  function ncDossierBlock(entry) {
+    var wrap = el('div', 'nc-dossier');
+    wrap.appendChild(el('div', 'nc-dossier-h', 'Dossier du client'));
+    var svc = D.serviceById(entry.serviceId);
+    var rows = el('dl', 'nc-kv');
+    function kv(k, v) { rows.appendChild(el('dt', null, k)); rows.appendChild(el('dd', null, v)); }
+    kv('Courriel', entry.courriel || '—');
+    var d = entry.dossier || {};
+    if (svc) {
+      svc.champs.forEach(function (c) { if (d[c.id]) kv(c.label, String(d[c.id])); });
+      svc.documents.forEach(function (doc) { if (d[doc.id]) kv(doc.nom, String(d[doc.id]) + ' · transmis à la signature'); });
+    }
+    kv('Consentement de partage', d.__consent ? 'Oui' : 'Non');
+    wrap.appendChild(rows);
+    return wrap;
+  }
+
+  function ncRetainedCard(entry) {
+    var svc = D.serviceById(entry.serviceId);
+    var card = el('div', 'nc-card is-retained'); card.dataset.id = entry.id;
+    var head = el('div', 'nc-card-head');
+    head.appendChild(el('div', 'nc-card-title', svc ? svc.nom : entry.serviceId));
+    head.appendChild(el('div', 'nc-card-amount', D.money(entry.montant)));
+    card.appendChild(head);
+    var meta = el('div', 'nc-card-meta');
+    meta.appendChild(el('span', 'nc-date', dayTitle(entry.dateISO)));
+    if (entry.prefixe) meta.appendChild(el('span', 'nc-prefixe', entry.prefixe));
+    meta.appendChild(ncTierPill(entry.tier));
+    meta.appendChild(el('span', 'pill pill-retenue', 'retenue'));
+    card.appendChild(meta);
+    card.appendChild(ncDossierBlock(entry));
+    return card;
+  }
+
+  function ncRenderRetained() {
+    var list = $('notary-retained-list'); if (!list) return; clear(list);
+    var empty = $('notary-retained-empty');
+    var items = nc.email ? ncRetainedFor(nc.email) : [];
+    if (!items.length) { if (empty) empty.hidden = false; return; }
+    if (empty) empty.hidden = true;
+    items.slice().sort(function (a, b) { return a.dateISO.localeCompare(b.dateISO); })
+      .forEach(function (e) { list.appendChild(ncRetainedCard(e)); });
+  }
+
+  function ncSignOut() { ncExpire('Déconnecté.'); }
+
+  function ncRestore() {
+    var tok = lsLoad(LS_NC_TOKEN); var feed = lsLoad(LS_NC_FEED_TOKEN); var em = lsLoad(LS_NC_EMAIL);
+    if (typeof tok === 'string' && typeof em === 'string') {
+      nc.token = tok; nc.feedToken = typeof feed === 'string' ? feed : null; nc.email = em;
+      ncRenderAuthState();
+      ncLoadBids();
+    } else {
+      ncRenderAuthState();
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Tabs
   // ---------------------------------------------------------------------------
   function setTab(tab, opts) {
@@ -805,7 +1061,7 @@
     document.querySelectorAll('.nav-tab').forEach(function (b) {
       b.setAttribute('aria-selected', b.dataset.tab === tab ? 'true' : 'false');
     });
-    ['carnet', 'dossier', 'notaires'].forEach(function (t) {
+    ['carnet', 'dossier', 'notaires', 'confidentialite'].forEach(function (t) {
       var pane = $('pane-' + t);
       var active = t === tab;
       pane.classList.toggle('is-active', active);
@@ -869,11 +1125,11 @@
     $('seg-sort').addEventListener('click', function (e) { var b = e.target.closest('.seg-btn'); if (!b) return; setGroupActive(this, b); state.filters.sort = b.dataset.sort; afterFilterChange(); });
     $('filters-reset').addEventListener('click', resetFilters);
 
-    // Privacy (Law 25) — kept out of the footer to stay simple.
+    // Privacy (Law 25) — opens the dedicated confidentialité view.
     var pv = $('privacy-link');
     if (pv) pv.addEventListener('click', function (e) {
       e.preventDefault();
-      toast('Données hébergées au Canada. Suppression sur demande — écrivez à confidentialite@nota.ca (Loi 25).');
+      setTab('confidentialite');
     });
 
     // Offer form
@@ -903,6 +1159,20 @@
 
     // Notary
     $('notary-form').addEventListener('submit', onNotarySubmit);
+
+    // Notary console
+    var ncForm = $('notary-auth-form');
+    if (ncForm) ncForm.addEventListener('submit', function (e) { e.preventDefault(); ncSignIn($('nc-email').value); });
+    var ncOut = $('notary-signout'); if (ncOut) ncOut.addEventListener('click', ncSignOut);
+    var ncRef = $('notary-refresh'); if (ncRef) ncRef.addEventListener('click', function () { ncLoadBids(); toast('Demandes rafraîchies.'); });
+    var ncOpenList = $('notary-open-list');
+    if (ncOpenList) ncOpenList.addEventListener('click', function (e) {
+      var card = e.target.closest('.nc-card'); if (!card) return;
+      var id = card.dataset.id;
+      var b = nc.open.filter(function (x) { return x.id === id; })[0]; if (!b) return;
+      if (e.target.closest('.nc-accept')) ncAccept(id, b.dateISO, b);
+      else if (e.target.closest('.nc-decline')) ncDecline(id, b.dateISO);
+    });
 
     // Hero CTAs — orient the buyer immediately
     var ctaR = $('cta-reserver');
@@ -940,6 +1210,9 @@
     await refreshMonthData();
     renderCalendar(); renderAgenda();
 
+    // Restore a stored notary session (no fetch unless a token is present).
+    ncRestore();
+
     // scroll:false so loading on a phone never scrolls past the calendar.
     setTab(state.tab, { scroll: false });
   }
@@ -954,6 +1227,17 @@
     selectDate: selectDate,
     reload: reloadAndRender,
     dossierState: dossierState,
+    // Notary console hooks for tests and future integration.
+    notary: {
+      state: nc,
+      signIn: ncSignIn,
+      signOut: ncSignOut,
+      loadBids: ncLoadBids,
+      accept: ncAccept,
+      decline: ncDecline,
+      feedUrl: ncFeedUrl,
+      retainedFor: ncRetainedFor,
+    },
     _internals: { applyFilters: applyFilters, acceptance: acceptance, buildCalendarLinks: buildCalendarLinks },
   };
 
