@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Nota">
-  <rect width="64" height="64" rx="15" fill="#2c5f34" />
+  <rect width="64" height="64" rx="6" fill="#2c5f34" />
   <g fill="#ffffff">
     <rect x="16" y="15" width="7.5" height="34" rx="2.5" />
     <rect x="40.5" y="15" width="7.5" height="34" rx="2.5" />

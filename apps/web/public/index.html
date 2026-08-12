@@ -129,15 +129,7 @@
       <div class="wrap">
         <a class="brand" href="#" aria-label="Nota, accueil">
           <span class="brand-mark" aria-hidden="true">
-            <svg viewBox="0 0 64 64" width="30" height="30">
-              <rect width="64" height="64" rx="15" fill="var(--brand)" />
-              <g fill="#ffffff">
-                <rect x="16" y="15" width="7.5" height="34" rx="2.5" />
-                <rect x="40.5" y="15" width="7.5" height="34" rx="2.5" />
-                <polygon points="16,15 24,15 48,49 40,49" />
-              </g>
-              <circle cx="48" cy="16" r="8" fill="var(--brand-bright)" stroke="var(--brand)" stroke-width="3" />
-            </svg>
+            <img src="favicon.svg" width="30" height="30" alt="" />
           </span>
           <span class="brand-word">Nota</span>
           <span class="brand-sub">Québec</span>
@@ -181,15 +173,7 @@
               <div class="sub-card" role="group" aria-label="Ajouter le carnet à votre agenda">
                 <div class="sub-card-head">
                   <span class="sub-card-logo" aria-hidden="true">
-                    <svg viewBox="0 0 64 64" width="30" height="30">
-                      <rect width="64" height="64" rx="15" fill="var(--brand)" />
-                      <g fill="#ffffff">
-                        <rect x="16" y="15" width="7.5" height="34" rx="2.5" />
-                        <rect x="40.5" y="15" width="7.5" height="34" rx="2.5" />
-                        <polygon points="16,15 24,15 48,49 40,49" />
-                      </g>
-                      <circle cx="48" cy="16" r="8" fill="var(--brand-bright)" stroke="var(--brand)" stroke-width="3" />
-                    </svg>
+                    <img src="favicon.svg" width="30" height="30" alt="" />
                   </span>
                   <div>
                     <div class="sub-card-title">Le carnet dans votre agenda</div>
@@ -287,7 +271,6 @@
                     <div class="slider-row">
                       <input type="range" id="o-amount" min="0" max="100" value="0" step="1" aria-label="Montant de l’offre" />
                     </div>
-                    <input type="number" id="o-amount-num" class="hidden" aria-hidden="true" />
                     <p class="mult-note" id="o-mult">—</p>
                   </div>
 
@@ -320,23 +303,28 @@
                   </div>
 
                   <div class="form-row">
-                    <label class="lbl" for="o-courriel">Courriel — pour être averti, jamais affiché</label>
+                    <label class="lbl" for="o-courriel">Courriel (optionnel)</label>
                     <input type="email" id="o-courriel" placeholder="vous@exemple.ca" autocomplete="email" inputmode="email" />
-                    <p class="help">Optionnel. Sert uniquement à vous prévenir (offre publiée, date qui approche, demande retenue). Jamais montré sur le carnet.</p>
+                    <p class="help">Sert à vous prévenir. Jamais affiché.</p>
                   </div>
 
                   <ul class="errors" id="offer-errors" hidden></ul>
 
-                  <p class="help" id="consent-line">
-                    En publiant, la date, le service, le montant et le secteur postal sont affichés
-                    publiquement. Aucun document n’est transmis à cette étape. Données hébergées au Canada
-                    et supprimées sur demande (Loi 25).
-                  </p>
-                  <p class="help" id="offer-dossier-note">
-                    Les réponses déjà saisies dans votre <strong>Dossier</strong> accompagnent l’offre pour
-                    aider le notaire à l’évaluer. Les documents eux-mêmes ne sont partagés de façon sécurisée
-                    qu’après qu’un notaire a retenu votre demande.
-                  </p>
+                  <details class="disclosure">
+                    <summary>Confidentialité et Loi 25</summary>
+                    <div class="disclosure-body">
+                      <p id="consent-line">
+                        En publiant, la date, le service, le montant et le secteur postal deviennent
+                        publics. Aucun document n’est transmis à cette étape. Données hébergées au
+                        Canada, supprimées sur demande (Loi 25).
+                      </p>
+                      <p id="offer-dossier-note">
+                        Les réponses de votre <strong>Dossier</strong> accompagnent l’offre pour aider le
+                        notaire à l’évaluer. Les documents ne sont partagés, de façon sécurisée, qu’après
+                        qu’un notaire a retenu votre demande.
+                      </p>
+                    </div>
+                  </details>
 
                   <button type="submit" class="btn btn-primary w-full" id="offer-submit" disabled>
                     Publier mon offre
@@ -354,12 +342,13 @@
               </div>
             </div>
 
-            <div class="panel panel-pad">
-              <p class="note">
-                <strong>Modèle sans commission.</strong> Nota facture un abonnement fixe aux notaires, jamais un
-                pourcentage de l’acte — pour respecter le Code de déontologie de la Chambre des notaires.
-              </p>
-            </div>
+            <details class="disclosure">
+              <summary>Modèle sans commission</summary>
+              <div class="disclosure-body">
+                <p>Nota facture un abonnement fixe aux notaires, jamais un pourcentage de l’acte —
+                   pour respecter le Code de déontologie de la Chambre des notaires.</p>
+              </div>
+            </details>
           </aside>
         </div>
       </section>

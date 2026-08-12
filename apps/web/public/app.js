@@ -16,6 +16,11 @@
       ? 'http://localhost:8788'
       : '/api');
 
+  // Absolute API base: a relative '/api' resolved against the current origin.
+  function apiBaseAbs() { return API_BASE.indexOf('http') === 0 ? API_BASE : location.origin + API_BASE; }
+  // Swap an http(s) URL to the webcal:// scheme that calendar apps subscribe to.
+  function toWebcal(httpUrl) { return httpUrl.replace(/^https?:\/\//, 'webcal://'); }
+
   var todayISO = function () { return new Date().toISOString().slice(0, 10); };
 
   // ---------------------------------------------------------------------------
@@ -87,7 +92,6 @@
     selectedDate: null,
     focusDate: todayISO(),
     tab: 'carnet',
-    tts: false,
     offer: { serviceId: '', dateISO: '', montant: 0, anonyme: true },
   };
 
@@ -288,7 +292,7 @@
     var meta = el('div', 'bid-meta');
     var who = el('div', 'bid-who');
     who.textContent = D.bidLabel(b);
-    if (b.anonyme) { var tag = el('span', 'tag-anon', 'anonyme'); tag.style.marginLeft = '6px'; who.appendChild(tag); }
+    if (b.anonyme) { who.appendChild(el('span', 'tag-anon', 'anonyme')); }
     meta.appendChild(who);
 
     var svc = D.serviceById(b.serviceId);
@@ -366,7 +370,7 @@
     onOfferServiceChange();
     $('o-date').value = iso; onOfferDateChange();
     var amt = $('o-amount'); if (!amt.disabled) amt.focus();
-    amt.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    amt.scrollIntoView({ behavior: 'auto', block: 'center' });
   }
 
   // ---------------------------------------------------------------------------
@@ -832,20 +836,15 @@
   // base is resolved against the current origin first, then the scheme swapped.
   // `token` must be the read-only FEED token — never the session token.
   function ncFeedUrl(token) {
-    var base = API_BASE;
-    if (base.indexOf('http') !== 0) base = location.origin + base;
-    var httpUrl = base + '/notary/feed.ics?token=' + encodeURIComponent(token);
-    return httpUrl.replace(/^https?:\/\//, 'webcal://');
+    return toWebcal(apiBaseAbs() + '/notary/feed.ics?token=' + encodeURIComponent(token));
   }
 
   // Point the hero "add to your calendar" card at the PUBLIC carnet feed. One
   // click subscribes the whole carnet (all open dates, kept in sync) into the
   // visitor's Google / Outlook / Apple calendar; .ics covers everything else.
   function wireCarnetSubscribe() {
-    var base = API_BASE;
-    if (base.indexOf('http') !== 0) base = location.origin + base;
-    var http = base + '/carnet/feed.ics';
-    var webcal = http.replace(/^https?:\/\//, 'webcal://');
+    var http = apiBaseAbs() + '/carnet/feed.ics';
+    var webcal = toWebcal(http);
     var name = 'Nota — carnet Québec';
     function set(id, href) { var a = $(id); if (a) a.href = href; }
     set('sub-ics', http);
@@ -1087,7 +1086,7 @@
       pane.hidden = !active;
     });
     if (tab === 'dossier') renderDossier();
-    if (opts.scroll !== false) window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (opts.scroll !== false) window.scrollTo({ top: 0, behavior: 'auto' });
   }
 
   // ---------------------------------------------------------------------------
@@ -1210,12 +1209,12 @@
       setTab('carnet', { scroll: false });
       var svc = $('o-service'); if (svc) svc.focus();
       var side = document.querySelector('.side');
-      if (side) side.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (side) side.scrollIntoView({ behavior: 'auto', block: 'start' });
     });
     var ctaV = $('cta-voir');
     if (ctaV) ctaV.addEventListener('click', function () {
       var cal = $('cal-grid');
-      if (cal) cal.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (cal) cal.scrollIntoView({ behavior: 'auto', block: 'center' });
     });
   }
 

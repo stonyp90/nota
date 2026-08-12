@@ -23,6 +23,7 @@
   --brand: var(--hunter-700);
   --brand-bright: var(--hunter-500);
   --brand-ink: #ffffff;
+  --on-accent: #ffffff; /* text/knob on saturated accents (tier pills, toggle) — white in every theme */
 
   --bg: #eef2ef; /* subtle tint so borderless white panels float cleanly */
   --surface: #ffffff;
@@ -60,6 +61,9 @@
 
   --maxw: 1600px; /* maximized width — fills wide screens, side padding via .wrap */
   --gap: 20px;
+
+  --header-h: 62px;   /* sticky .site-header height */
+  --sticky-top: 82px; /* header + breathing gap: sticky .side offset & scroll-padding */
 }
 
 /* Dark theme — system preference.
@@ -174,7 +178,7 @@ a:hover { text-decoration: underline; }
 }
 .brand:hover { text-decoration: none; }
 .brand-mark { width: 30px; height: 30px; display: grid; place-items: center; }
-.brand-mark svg { display: block; filter: drop-shadow(0 1px 2px rgb(15 23 42 / 0.15)); }
+.brand-mark img { display: block; filter: drop-shadow(0 1px 2px rgb(15 23 42 / 0.15)); }
 .brand-word { font-weight: 800; }
 .brand-sub {
   color: var(--brand); font-weight: 700; font-size: 10px; text-transform: uppercase;
@@ -345,13 +349,12 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 .cal-cell {
   background: var(--surface); min-height: 74px; padding: 7px 9px; position: relative;
   display: flex; flex-direction: column; gap: 3px; cursor: pointer;
-  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  border: 1px solid var(--border); border-radius: var(--radius-sm); scroll-margin-top: var(--sticky-top);
   text-align: left; font: inherit; color: var(--ink);
   transition: transform .1s ease, box-shadow .1s ease, border-color .1s;
 }
 .cal-cell:hover { background: var(--surface-hover); border-color: var(--border-strong); transform: translateY(-1px); box-shadow: var(--shadow-sm); }
 .cal-cell.is-out { background: transparent; border-color: transparent; cursor: default; pointer-events: none; }
-.cal-cell.is-empty { color: var(--ink-muted); }
 .cal-cell.is-today { border-color: var(--brand-bright); box-shadow: inset 0 0 0 1px var(--brand-bright); }
 .cal-cell.is-selected { border-color: var(--brand); box-shadow: inset 0 0 0 1px var(--brand); }
 .cal-cell:focus-visible { outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px rgb(80 184 72 / 0.25); }
@@ -364,7 +367,7 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 .cal-density { height: 3px; border-radius: 999px; background: var(--brand-bright); opacity: .3; }
 
 /* --- Agenda / bid list --------------------------------------------------- */
-.agenda { padding: 6px 0 4px; max-height: 460px; overflow: auto; }
+.agenda { padding: 6px 0 4px; max-height: 460px; overflow: auto; overscroll-behavior: contain; }
 .agenda-day { padding: 10px 18px 4px; font-size: 12px; font-weight: 700; color: var(--ink-muted); position: sticky; top: 0; background: var(--surface); }
 .bid-row { display: flex; align-items: center; gap: 12px; padding: 10px 18px; border-top: 1px solid var(--border); }
 .bid-row.is-retenue { opacity: .55; }
@@ -374,7 +377,7 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 .bid-sub { font-size: 12px; color: var(--ink-muted); }
 .pill {
   font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px;
-  color: #fff; white-space: nowrap;
+  color: var(--on-accent); white-space: nowrap;
 }
 .pill[data-tier='standard'] { background: var(--tier-standard); }
 .pill[data-tier='rapide'] { background: var(--tier-rapide); }
@@ -382,14 +385,18 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 .pill[data-tier='urgence'] { background: var(--tier-urgence); }
 .pill[data-tier='extreme'] { background: var(--tier-extreme); }
 .pill-retenue { background: var(--surface-inset); color: var(--ink-muted); border: 1px solid var(--border-strong); }
-.tag-anon { font-size: 11px; color: var(--ink-muted); border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); padding: 1px 6px; }
+.tag-anon { font-size: 11px; color: var(--ink-muted); border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); padding: 1px 6px; margin-left: 6px; }
 
 .legend { display: flex; flex-wrap: wrap; gap: 10px; padding: 6px 18px 12px; font-size: 12px; color: var(--ink-muted); }
 .legend-item { display: inline-flex; align-items: center; gap: 6px; }
 .legend-dot { width: 10px; height: 10px; border-radius: var(--radius-sm); }
 
 /* --- Offer form (side panel) -------------------------------------------- */
-.side { display: flex; flex-direction: column; gap: var(--gap); position: sticky; top: 82px; }
+.side { display: flex; flex-direction: column; gap: var(--gap); position: sticky; top: var(--sticky-top); }
+/* Cap the sticky offer panel to the viewport and let it scroll internally, so
+   "Publier mon offre" is always reachable without moving the whole page.
+   overflow on .panel (not .side) clips content only — never the box-shadow. */
+.side .panel { max-height: calc(100dvh - var(--sticky-top) - var(--gap)); overflow-y: auto; overscroll-behavior: contain; }
 .form-row { margin-bottom: 14px; }
 .form-row label.lbl { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; margin-bottom: 8px; }
 .help { font-size: 12px; color: var(--ink-muted); margin-top: 4px; }
@@ -414,7 +421,7 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .switch { position: relative; width: 42px; height: 24px; flex: none; }
 .switch input { opacity: 0; width: 0; height: 0; }
 .switch .track { position: absolute; inset: 0; background: var(--border-strong); border-radius: 999px; transition: background .12s; cursor: pointer; }
-.switch .track::before { content: ''; position: absolute; width: 18px; height: 18px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: transform .12s; }
+.switch .track::before { content: ''; position: absolute; width: 18px; height: 18px; left: 3px; top: 3px; background: var(--on-accent); border-radius: 50%; transition: transform .12s; }
 .switch input:checked + .track { background: var(--brand); }
 .switch input:checked + .track::before { transform: translateX(18px); }
 
@@ -454,6 +461,35 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
   padding: 12px 16px; border-radius: var(--radius); font-size: 13px; color: var(--ink-muted);
 }
 .note strong { color: var(--ink); }
+
+/* --- Progressive disclosure (native <details>, token-styled) --------------
+   Keeps required copy (Loi 25, business model) available but collapsed by
+   default, so the booking flow isn't buried under text. */
+.disclosure {
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface-inset); margin: 10px 0 14px;
+}
+.side > .disclosure { margin: 0; } /* flex child: rely on .side gap, avoid doubling */
+.disclosure > summary {
+  list-style: none; cursor: pointer; user-select: none;
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 12px; font-size: 12px; font-weight: 600; color: var(--ink-muted);
+}
+.disclosure > summary::-webkit-details-marker { display: none; }
+.disclosure > summary::before {
+  content: ''; width: 6px; height: 6px; flex: none;
+  border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg); transition: transform .15s;
+}
+.disclosure[open] > summary::before { transform: rotate(45deg); }
+.disclosure > summary:hover { color: var(--ink); }
+.disclosure > summary:focus-visible {
+  outline: none; border-radius: var(--radius-sm);
+  box-shadow: 0 0 0 3px rgb(80 184 72 / 0.25);
+}
+.disclosure-body { padding: 0 12px 12px; }
+.disclosure-body p { font-size: 12px; color: var(--ink-muted); margin-top: 0; }
+.disclosure-body p + p { margin-top: 8px; }
 
 .site-footer { border-top: 1px solid var(--border); padding: 28px 0; color: var(--ink-muted); font-size: 13px; }
 
@@ -614,8 +650,8 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
 .legend-item { transition: color .14s ease; }
 .explainer { transition: border-color .2s ease, box-shadow .2s ease; }
 .explainer:hover { box-shadow: var(--shadow-sm); }
-.brand-mark svg { transition: transform .2s cubic-bezier(.2, .8, .2, 1); }
-.brand:hover .brand-mark svg { transform: rotate(-6deg) scale(1.06); }
+.brand-mark img { transition: transform .2s cubic-bezier(.2, .8, .2, 1); }
+.brand:hover .brand-mark img { transform: rotate(-6deg) scale(1.06); }
 
 /* ── Hero: compact two-column band — copy left, "add to your calendar" right ──
    Keeps the hero short so the CALENDAR is the focus and rises up the page. The
@@ -645,7 +681,7 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
 }
 .sub-card-head { display: flex; align-items: center; gap: 11px; }
 .sub-card-logo { flex: none; display: grid; place-items: center; }
-.sub-card-logo svg { display: block; }
+.sub-card-logo img { display: block; }
 .sub-card-title { font-weight: 700; font-size: 13.5px; line-height: 1.2; }
 .sub-card-sub { font-size: 12px; color: var(--ink-muted); margin-top: 1px; }
 .sub-card-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
@@ -692,6 +728,7 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
 @media (max-width: 900px) {
   .layout { grid-template-columns: 1fr; }
   .side { position: static; }
+  .side .panel { max-height: none; overflow: visible; } /* single column: panel flows full-length */
   .intro { padding: 20px 0 4px; }
   /* Hero collapses to one column: copy + CTAs + note, then the subscribe card
      full-width, then the calendar. */
@@ -730,3 +767,6 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
 
 /* Never let the page scroll sideways */
 html, body { max-width: 100%; overflow-x: hidden; }
+/* Smooth scrolling centralized in CSS (so the reduced-motion reset above wins),
+   and every anchored/focus/programmatic scroll stops BELOW the sticky header. */
+html { scroll-behavior: smooth; scroll-padding-top: var(--sticky-top); }
