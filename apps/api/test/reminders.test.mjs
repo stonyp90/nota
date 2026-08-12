@@ -62,6 +62,44 @@ test('the scheduler sends exactly the due reminders for a seeded set of bids', a
   }
 });
 
+test('the scheduler mails dateApproaching for exactly the on-cadence offsets and stays silent off-cadence', async () => {
+  // A multi-bid table straddling every reminder boundary. dueReminders fires
+  // only at 7/3/1 days out; 8/6/4/2/0 are off-cadence and must send nothing.
+  // Boundaries themselves are proven in the domain suite — here we assert the
+  // notifier + scheduler send exactly the due set, with the right template.
+  const seed = [
+    bidAt('d8', 8),
+    bidAt('d7', 7),
+    bidAt('d6', 6),
+    bidAt('d4', 4),
+    bidAt('d3', 3),
+    bidAt('d2', 2),
+    bidAt('d1', 1),
+    bidAt('d0', 0),
+  ];
+  const repo = createMemoryRepo(seed);
+  const mailer = createFakeMailer();
+  const notifier = createNotifier({ repo, mailer, baseUrl: 'https://nota.example', operatorEmail: null, now: () => TODAY });
+
+  const res = await runReminders({ repo, notifier, now: () => TODAY });
+
+  assert.equal(res.scanned, seed.length);
+  assert.equal(res.due, 3, 'exactly the 7/3/1 offsets are due');
+  assert.equal(res.sent, 3);
+
+  const recipients = mailer.sent.map((m) => m.to).sort();
+  assert.deepEqual(recipients, ['d1@example.ca', 'd3@example.ca', 'd7@example.ca']);
+
+  // Every message is the tier-aware date-approaching template.
+  for (const m of mailer.sent) {
+    assert.ok(m.subject.startsWith('Votre signature approche'), 'unexpected template: ' + m.subject);
+  }
+  // The off-cadence bids are never mailed.
+  for (const who of ['d8', 'd6', 'd4', 'd2', 'd0']) {
+    assert.equal(mailer.sent.some((m) => m.to === who + '@example.ca'), false, who + ' should be silent');
+  }
+});
+
 test('the scheduler is idempotent: a second run the same day sends nothing new', async () => {
   const repo = createMemoryRepo([bidAt('j7', 7), bidAt('j3', 3)]);
   const mailer = createFakeMailer();

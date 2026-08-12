@@ -37,18 +37,23 @@ const SENDER = {
 
 // Colors defined once (single source), then referenced inline. Inline styles are
 // mandatory for email; centralizing them here keeps values configurable rather
-// than scattered literals.
+// than scattered literals. These mirror the Nota web brand (hunter-green ramp).
 const PALETTE = {
-  ink: '#16232f',
-  muted: '#5b6b7b',
-  bg: '#eef2f5',
-  card: '#ffffff',
-  border: '#dce4ea',
-  brand: '#0b6b5b',
-  brandInk: '#ffffff',
-  footer: '#8a97a4',
-  rule: '#eef2f5',
+  ink: '#0b1220', // brand ink
+  muted: '#4d5b6e', // brand muted (AA on white)
+  bg: '#f4f7f4', // inset panel — frames the white card
+  card: '#ffffff', // brand background/surface
+  border: '#dbe2ea', // brand border
+  brand: '#2c5f34', // hunter green — primary
+  brandBright: '#50b848', // hunter green — bright accent
+  brandDark: '#244c2a', // hunter green — dark
+  brandInk: '#ffffff', // text on brand
+  footer: '#6b7a8a', // muted small print
+  rule: '#f4f7f4', // inset callout background
 };
+
+// Nota web font stack. Email clients that lack Inter fall back gracefully.
+const FONT = "Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif";
 
 // --- formatting helpers ------------------------------------------------------
 const money = (m) => domain.money(m);
@@ -95,19 +100,46 @@ function preheaderHtml(text) {
     '</div>'
   );
 }
+// Bulletproof, table-based CTA. Hunter green with white text; the padding +
+// line-height guarantee a >=44px touch target on mobile.
 function button(label, url) {
   return (
-    '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:22px 0 4px;">' +
-    '<tr><td style="border-radius:10px;background:' +
+    '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0 4px;">' +
+    '<tr><td align="center" style="border-radius:10px;background:' +
     PALETTE.brand +
     ';">' +
     '<a href="' +
     esc(url) +
-    '" style="display:inline-block;padding:13px 24px;font-size:15px;font-weight:600;color:' +
+    '" style="display:inline-block;padding:14px 30px;min-height:20px;line-height:20px;font-family:' +
+    FONT +
+    ';font-size:16px;font-weight:600;color:' +
     PALETTE.brandInk +
     ';text-decoration:none;border-radius:10px;">' +
     esc(label) +
     '</a></td></tr></table>'
+  );
+}
+// Header band: the Nota "N" mark rendered WITHOUT images/SVG (many clients block
+// them) — a hunter-green rounded square holding a bold white "N" — next to the
+// "Nota" wordmark in brand green. border-radius degrades gracefully to a square.
+function logoHeader() {
+  return (
+    '<tr><td style="padding:4px 24px 18px;">' +
+    '<table role="presentation" cellpadding="0" cellspacing="0"><tr>' +
+    '<td width="40" height="40" align="center" valign="middle" style="width:40px;height:40px;background:' +
+    PALETTE.brand +
+    ';border-radius:11px;font-family:' +
+    FONT +
+    ';font-size:22px;line-height:40px;font-weight:800;color:' +
+    PALETTE.brandInk +
+    ';text-align:center;">N</td>' +
+    '<td style="padding-left:11px;font-family:' +
+    FONT +
+    ';font-size:22px;font-weight:800;letter-spacing:-0.02em;color:' +
+    PALETTE.brand +
+    ';">Nota</td>' +
+    '</tr></table>' +
+    '</td></tr>'
   );
 }
 function footer(unsubscribeUrl) {
@@ -143,19 +175,21 @@ function layout({ preheader, heading, lead, bodyHtml, ctaLabel, ctaUrl, unsubscr
     preheaderHtml(preheader || '') +
     '<div style="background:' +
     PALETTE.bg +
-    ";padding:24px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;\">" +
-    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;">' +
-    '<tr><td style="padding:0 24px 16px;">' +
-    '<span style="font-size:20px;font-weight:700;color:' +
-    PALETTE.brand +
-    ';letter-spacing:-0.02em;">Nota</span>' +
-    '</td></tr>' +
+    ';padding:24px 0;font-family:' +
+    FONT +
+    ';">' +
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;margin:0 auto;">' +
+    logoHeader() +
     '<tr><td style="background:' +
     PALETTE.card +
     ';border:1px solid ' +
     PALETTE.border +
+    ';border-top:3px solid ' +
+    PALETTE.brand +
     ';border-radius:12px;padding:28px 24px;">' +
-    '<h1 style="margin:0 0 12px;font-size:22px;line-height:1.25;color:' +
+    '<h1 style="margin:0 0 12px;font-family:' +
+    FONT +
+    ';font-size:22px;line-height:1.25;font-weight:700;color:' +
     PALETTE.ink +
     ';">' +
     esc(heading) +
@@ -170,11 +204,12 @@ function layout({ preheader, heading, lead, bodyHtml, ctaLabel, ctaUrl, unsubscr
     '</table></div>'
   );
 }
-function textLayout({ heading, lead, lines, ctaLabel, ctaUrl, unsubscribeUrl }) {
+function textLayout({ heading, lead, lines, textLines, ctaLabel, ctaUrl, unsubscribeUrl }) {
+  const body = lines || textLines || [];
   const parts = [heading, ''];
   if (lead) parts.push(lead, '');
-  (lines || []).forEach((l) => parts.push(l));
-  if (lines && lines.length) parts.push('');
+  body.forEach((l) => parts.push(l));
+  if (body.length) parts.push('');
   if (ctaLabel && ctaUrl) parts.push(ctaLabel + ' : ' + ctaUrl, '');
   parts.push('—', SENDER.name + ' · ' + SENDER.address);
   parts.push('Se désabonner : ' + unsubscribeUrl);
