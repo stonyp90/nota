@@ -140,6 +140,7 @@ body {
   color: var(--ink);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  transition: background-color .25s ease, color .25s ease;
 }
 
 h1, h2, h3 { letter-spacing: -0.02em; line-height: 1.15; margin: 0; }
@@ -147,7 +148,7 @@ h1, h2, h3 { letter-spacing: -0.02em; line-height: 1.15; margin: 0; }
 a { color: var(--brand); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
-.wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
+.wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 clamp(16px, 4vw, 28px); }
 
 /* --- Skip link ----------------------------------------------------------- */
 .skip {
@@ -242,7 +243,7 @@ a:hover { text-decoration: underline; }
 :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 
 /* --- Hero / intro -------------------------------------------------------- */
-.intro { padding: 16px 0 4px; }
+.intro { padding: clamp(14px, 3vw, 26px) 0 4px; }
 .intro h1 { font-size: clamp(24px, 3.2vw, 33px); font-weight: 800; }
 .intro h1 .icon-btn { width: 30px; height: 30px; vertical-align: middle; }
 .intro p { color: var(--ink-muted); max-width: 60ch; margin: 8px 0 0; font-size: 15px; }
@@ -268,7 +269,7 @@ a:hover { text-decoration: underline; }
 .explainer .icon-btn { flex: none; width: 32px; height: 32px; }
 
 /* --- Layout -------------------------------------------------------------- */
-.layout { display: grid; grid-template-columns: 1fr 380px; gap: var(--gap); padding: 14px 0 48px; align-items: start; }
+.layout { display: grid; grid-template-columns: 1fr 380px; gap: clamp(16px, 2.4vw, 24px); padding: clamp(12px, 2vw, 18px) 0 clamp(40px, 7vw, 64px); align-items: start; }
 @media (max-width: 940px) { .layout { grid-template-columns: 1fr; } }
 
 .panel {
@@ -436,7 +437,7 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .file-note { font-size: 12px; color: var(--warn); margin-top: 6px; }
 
 /* --- Model / footer sections -------------------------------------------- */
-.section { padding: 40px 0; border-top: 1px solid var(--border); }
+.section { padding: clamp(32px, 6vw, 56px) 0; border-top: 1px solid var(--border); }
 .section h2 { font-size: 22px; font-weight: 800; margin-bottom: 8px; }
 .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 20px; }
 @media (max-width: 780px) { .cards { grid-template-columns: 1fr; } }
@@ -528,6 +529,29 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
 .card { transition: transform .14s, box-shadow .14s, border-color .14s; }
 .card:hover { transform: translateY(-2px); border-color: var(--border-strong); box-shadow: var(--shadow); }
 
+/* Layered entrance — hero elements cascade in, section cards stagger */
+@keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.intro > * { animation: fadeUp .42s cubic-bezier(.2, .8, .2, 1) both; }
+.intro .eyebrow { animation-delay: .02s; }
+.intro h1 { animation-delay: .06s; }
+.intro p { animation-delay: .12s; }
+.intro .hero-cta { animation-delay: .18s; }
+.intro .explainer { animation-delay: .24s; }
+.cards .card { animation: fadeUp .42s cubic-bezier(.2, .8, .2, 1) both; }
+.cards .card:nth-child(2) { animation-delay: .08s; }
+.cards .card:nth-child(3) { animation-delay: .16s; }
+
+/* More hover micro-interactions across client surfaces */
+.bid-row { transition: background-color .14s ease; }
+.bid-row:hover { background: var(--surface-inset); }
+.dossier-item { transition: background-color .14s ease; }
+.dossier-item:hover { background: var(--surface-inset); }
+.legend-item { transition: color .14s ease; }
+.explainer { transition: border-color .2s ease, box-shadow .2s ease; }
+.explainer:hover { box-shadow: var(--shadow-sm); }
+.brand-mark svg { transition: transform .2s cubic-bezier(.2, .8, .2, 1); }
+.brand:hover .brand-mark svg { transform: rotate(-6deg) scale(1.06); }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
 }
@@ -560,6 +584,11 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   .cards { grid-template-columns: 1fr; }
   .section { padding: 28px 0; }
   #day-dialog, dialog { width: 96vw; }
+  /* Explainer stacks (badge over text) and drops its redundant speaker */
+  .explainer { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .explainer .icon-btn { display: none; }
+  .hero-cta { gap: 8px; }
+  .hero-cta .btn-lg { flex: 1 1 auto; }
 }
 @media (max-width: 420px) {
   .nav-tabs { gap: 0; }
