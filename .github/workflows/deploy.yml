@@ -115,11 +115,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Fingerprinted assets get a short cache; index.html + the service
-          # worker are always revalidated so clients pick up new deploys.
+          # Assets: browsers revalidate every 5 min (max-age), but the CloudFront
+          # edge caches them for a day (s-maxage) — fewer origin hits, lower cost;
+          # every deploy invalidates /* so the edge never serves stale assets.
+          # index.html + the service worker are always revalidated.
           aws s3 sync apps/web/dist "s3://${{ vars.WEB_BUCKET }}" \
             --delete \
-            --cache-control "public,max-age=300" \
+            --cache-control "public,max-age=300,s-maxage=86400" \
             --exclude index.html \
             --exclude sw.js
           aws s3 cp apps/web/dist/index.html "s3://${{ vars.WEB_BUCKET }}/index.html" \

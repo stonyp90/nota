@@ -168,6 +168,7 @@ resource "aws_cloudfront_distribution" "web" {
     viewer_protocol_policy = "redirect-to-https"
     allowed_methods        = ["GET", "HEAD", "OPTIONS"]
     cached_methods         = ["GET", "HEAD"]
+    compress               = true # gzip/brotli at the edge — smaller transfers, lower cost, faster
 
     # AWS managed "CachingOptimized" policy.
     cache_policy_id = "658327ea-f89d-4fab-a63d-7e88639e58f6"
@@ -189,6 +190,7 @@ resource "aws_cloudfront_distribution" "web" {
     viewer_protocol_policy = "redirect-to-https"
     allowed_methods        = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
     cached_methods         = ["GET", "HEAD"]
+    compress               = true # compress JSON API responses too
 
     # AWS managed "CachingDisabled" policy — API responses must not be cached.
     cache_policy_id = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"

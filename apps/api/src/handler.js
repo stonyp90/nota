@@ -294,6 +294,10 @@ function createApp(repo, opts = {}) {
         etude: null,
         notaryId: null,
         createdAt: todayISO,
+        // DynamoDB TTL (epoch seconds): auto-delete ~13 months after the signing
+        // date — Law 25 retention + zero storage cost for stale bids. Never
+        // exposed publicly (not in publicBid/notaryBid).
+        ttl: Math.floor(Date.parse(payload.dateISO + 'T00:00:00Z') / 1000) + 400 * 86400,
       };
       await repo.put(bid);
 

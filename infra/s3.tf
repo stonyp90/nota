@@ -24,6 +24,27 @@ resource "aws_s3_bucket_versioning" "web" {
   }
 }
 
+# Cost control: every deploy overwrites app.js/styles.css/index.html, creating a
+# new version and leaving the old ones as noncurrent versions that would pile up
+# forever. Expire noncurrent versions after 30 days and clean up failed
+# multipart uploads, so storage stays lean.
+resource "aws_s3_bucket_lifecycle_configuration" "web" {
+  bucket     = aws_s3_bucket.web.id
+  depends_on = [aws_s3_bucket_versioning.web]
+
+  rule {
+    id     = "expire-noncurrent-versions"
+    status = "Enabled"
+    filter {}
+    noncurrent_version_expiration {
+      noncurrent_days = 30
+    }
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+  }
+}
+
 # Server-side encryption at rest (S3-managed keys, AES256).
 resource "aws_s3_bucket_server_side_encryption_configuration" "web" {
   bucket = aws_s3_bucket.web.id

@@ -35,4 +35,13 @@ resource "aws_dynamodb_table" "main" {
   point_in_time_recovery {
     enabled = true
   }
+
+  # Auto-expire bids ~13 months after the signing date (Law 25 retention + no
+  # storage cost for stale data). The API stamps an epoch-seconds `ttl` on bid
+  # items only; notary/subscription items have no ttl and persist. TTL deletes
+  # are free.
+  ttl {
+    attribute_name = "ttl"
+    enabled        = true
+  }
 }
