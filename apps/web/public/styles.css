@@ -273,7 +273,8 @@ a:hover { text-decoration: underline; }
    A `padding: … 0 …` shorthand would reset .wrap's side padding, pushing the
    panels 28px past the hero content on each side (misalignment). */
 .layout { display: grid; grid-template-columns: 1fr 380px; gap: clamp(16px, 2.4vw, 24px); padding-top: clamp(12px, 2vw, 18px); padding-bottom: clamp(40px, 7vw, 64px); align-items: start; }
-@media (max-width: 940px) { .layout { grid-template-columns: 1fr; } }
+/* Responsive column widths live in the breakpoints section (1024 -> 1fr 340px,
+   900 -> single column). A dead max-width:940px rule was removed here. */
 
 .panel {
   background: var(--surface); border: 1px solid var(--border);
