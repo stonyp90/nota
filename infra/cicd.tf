@@ -63,10 +63,16 @@ data "aws_iam_policy_document" "github_deploy_assume" {
     #   - Tags (releases):      "repo:stonyp90/nota:ref:refs/tags/*"
     #   - Any branch:           "repo:stonyp90/nota:ref:refs/heads/*"
     #   - Pull requests:        "repo:stonyp90/nota:pull_request"
+    # The stonyp90 org enables the "immutable numeric ID" OIDC subject
+    # customization, so GitHub injects owner/repo numeric IDs into `sub`:
+    #   repo:stonyp90@<ownerId>/nota@<repoId>:ref:refs/heads/main
+    # Match that shape with wildcards for the (stable) numeric IDs. Still scoped
+    # to THIS repo + the main branch. (AWS requires a sub/job_workflow_ref
+    # condition, so we can't key on the cleaner `repository` claim alone.)
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:stonyp90/nota:ref:refs/heads/main"]
+      values   = ["repo:stonyp90@*/nota@*:ref:refs/heads/main"]
     }
   }
 }
