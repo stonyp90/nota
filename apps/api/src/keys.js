@@ -17,6 +17,14 @@
  *   PK = NOTARY#<id>          SK = PROFILE   (a notary's subscription profile)
  *   PK = EVENT#<stripeId>     SK = EVENT     (a processed webhook event, for
  *                                             idempotent delivery)
+ *
+ * Notifications add two more item shapes in the same single table:
+ *
+ *   PK = SENT#<refId>#<kind>  SK = SENT      (one notification/reminder already
+ *                                             sent — the idempotency ledger so a
+ *                                             kind is never sent twice)
+ *   PK = UNSUB#<email>        SK = UNSUB     (a recorded CASL/Law-25 opt-out; the
+ *                                             sender checks it before every send)
  */
 
 function monthOf(dateISO) {
@@ -47,6 +55,19 @@ function eventPK(stripeEventId) {
 }
 const EVENT_SK = 'EVENT';
 
+// Sent-notification ledger: one item per (bid|subscription id, kind) already
+// mailed, so a reminder/notification is never sent twice.
+function sentPK(refId, kind) {
+  return `SENT#${refId}#${kind}`;
+}
+const SENT_SK = 'SENT';
+
+// Recorded opt-out. Email is lowercased so lookups are case-insensitive.
+function unsubPK(email) {
+  return 'UNSUB#' + String(email).trim().toLowerCase();
+}
+const UNSUB_SK = 'UNSUB';
+
 module.exports = {
   monthOf,
   bidPK,
@@ -56,4 +77,8 @@ module.exports = {
   NOTARY_SK,
   eventPK,
   EVENT_SK,
+  sentPK,
+  SENT_SK,
+  unsubPK,
+  UNSUB_SK,
 };

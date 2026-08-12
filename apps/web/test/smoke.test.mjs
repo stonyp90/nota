@@ -226,6 +226,37 @@ test('theme toggle flips documentElement[data-theme]', async () => {
   assert.equal(root.getAttribute('data-theme'), 'light');
 });
 
+// 12b. Optional courriel field exists and never blocks a valid offer, and the
+//      offline store never keeps it on the public bid (privacy by omission).
+test('courriel field is optional and stays private in the local store', async () => {
+  const { win, doc, D, Nota } = await boot();
+
+  // The field is present in the offer form and not required.
+  const courriel = $(doc, 'o-courriel');
+  assert.ok(courriel, 'offer form is missing #o-courriel');
+  assert.equal(courriel.required, false);
+
+  // A valid offer WITHOUT a courriel still enables submit.
+  const sel = $(doc, 'o-service');
+  sel.value = 'refinancement';
+  fire(win, sel, 'change');
+  const date = $(doc, 'o-date');
+  date.value = D.addDays(todayISO(), 5);
+  fire(win, date, 'change');
+  fire(win, date, 'input');
+  $(doc, 'o-amount').value = '2000';
+  fire(win, $(doc, 'o-amount'), 'input');
+  assert.equal($(doc, 'offer-submit').disabled, false);
+
+  // Creating a bid with a courriel offline must not surface it on the bid.
+  const res = await Nota.store.createBid({
+    serviceId: 'refinancement', dateISO: D.addDays(todayISO(), 5), montant: 2000,
+    anonyme: true, courriel: 'client@example.ca',
+  });
+  assert.equal(res.ok, true);
+  assert.equal(res.bid.courriel, undefined);
+});
+
 // 12. Money passthrough: amounts route through D.money — trailing " $" and
 //     space-grouped thousands appear in the rendered figures.
 test('rendered amounts use the money() format ("N NNN $")', async () => {

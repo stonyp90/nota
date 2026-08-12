@@ -2,6 +2,7 @@
 
 const domain = require('@nota/domain');
 const { createBilling } = require('./billing');
+const { decodeUnsubToken } = require('./notifications');
 
 /**
  * HTTP application, transport-agnostic. `createApp` takes a Repo port and
@@ -14,6 +15,11 @@ const { createBilling } = require('./billing');
  * date. All offer arithmetic is revalidated here through @nota/domain — the
  * client's tier, premium and total are never trusted.
  */
+// Reject request bodies larger than this before attempting to parse them, so a
+// hostile or runaway client cannot force a large JSON.parse. Function URLs cap
+// payloads well above this, but the guard keeps the handler self-contained.
+const MAX_BODY_BYTES = 64 * 1024;
+
 function createApp(repo, opts = {}) {
   const now = opts.now || (() => new Date().toISOString().slice(0, 10));
   const newId = opts.newId || (() => require('crypto').randomUUID());
@@ -40,6 +46,30 @@ function createApp(repo, opts = {}) {
       cancelUrl: process.env.STRIPE_CANCEL_URL,
     });
     return billingInstance;
+  }
+
+  // Notifier is injected so tests pass a fake (no SES package, no network). In
+  // production it is built LAZILY from a real SES adapter on first use, exactly
+  // like billing — and ONLY when NOTA_FROM_EMAIL is configured, so existing
+  // tests (which never set it) run with notifications simply disabled. All sends
+  // are best-effort: a mail failure must never affect an HTTP response.
+  let notifierInstance = opts.notifier || null;
+  let notifierResolved = false;
+  function notifier() {
+    if (notifierInstance) return notifierInstance;
+    if (notifierResolved) return null;
+    notifierResolved = true;
+    if (!process.env.NOTA_FROM_EMAIL) return null; // notifications disabled
+    const { createSesAdapter } = require('./notify-port');
+    const { createNotifier } = require('./notifications');
+    const mailer = createSesAdapter({ from: process.env.NOTA_FROM_EMAIL, region: process.env.AWS_REGION });
+    notifierInstance = createNotifier({
+      repo,
+      mailer,
+      baseUrl: process.env.NOTA_BASE_URL,
+      operatorEmail: process.env.NOTA_OPERATOR_EMAIL,
+    });
+    return notifierInstance;
   }
 
   // Case-insensitive header lookup (Lambda function URL and node:http both
@@ -73,17 +103,47 @@ function createApp(repo, opts = {}) {
     };
   }
 
+  // Shared CORS headers so a JSON response and a bodiless 204 preflight agree.
+  function corsHeaders() {
+    return {
+      'access-control-allow-origin': '*',
+      'access-control-allow-methods': 'GET,POST,OPTIONS',
+      'access-control-allow-headers': 'content-type',
+    };
+  }
+
   function json(statusCode, obj) {
     return {
       statusCode,
       headers: {
         'content-type': 'application/json; charset=utf-8',
-        'access-control-allow-origin': '*',
-        'access-control-allow-methods': 'GET,POST,OPTIONS',
-        'access-control-allow-headers': 'content-type',
+        ...corsHeaders(),
         'cache-control': 'no-store',
       },
       body: JSON.stringify(obj),
+    };
+  }
+
+  // A minimal fr-CA confirmation page for the unsubscribe link (opened in a
+  // browser from an email footer, so HTML rather than JSON).
+  function htmlPage(statusCode, title, message) {
+    const body =
+      '<!doctype html><html lang="fr-CA"><head><meta charset="utf-8">' +
+      '<meta name="viewport" content="width=device-width, initial-scale=1">' +
+      '<title>' +
+      title +
+      ' — Nota</title></head>' +
+      '<body style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#eef2f5;margin:0;padding:48px 16px;">' +
+      '<div style="max-width:520px;margin:0 auto;background:#fff;border:1px solid #dce4ea;border-radius:12px;padding:28px 24px;">' +
+      '<h1 style="margin:0 0 12px;font-size:20px;color:#16232f;">' +
+      title +
+      '</h1><p style="margin:0;font-size:15px;line-height:1.6;color:#5b6b7b;">' +
+      message +
+      '</p></div></body></html>';
+    return {
+      statusCode,
+      headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },
+      body,
     };
   }
 
@@ -94,7 +154,14 @@ function createApp(repo, opts = {}) {
     const route = (request.path || '/').replace(/^\/api(?=\/|$)/, '') || '/';
     const query = request.query || {};
 
-    if (method === 'OPTIONS') return json(204, {});
+    // A 204 must carry no body (a `{}` body is a protocol violation), so return
+    // the bare CORS headers rather than routing through json().
+    if (method === 'OPTIONS') return { statusCode: 204, headers: corsHeaders(), body: '' };
+
+    // Guard oversized bodies before any JSON.parse below.
+    if (typeof request.body === 'string' && Buffer.byteLength(request.body) > MAX_BODY_BYTES) {
+      return json(413, { errors: [{ code: 'corps_trop_grand', message: 'Le corps de la requête est trop volumineux.' }] });
+    }
 
     if (route === '/health' && method === 'GET') {
       return json(200, { ok: true, today: now() });
@@ -124,6 +191,7 @@ function createApp(repo, opts = {}) {
         serviceId: payload.serviceId,
         dateISO: payload.dateISO,
         montant: payload.montant,
+        courriel: payload.courriel,
         todayISO,
       });
       if (!v.ok) return json(422, { errors: v.errors });
@@ -139,11 +207,20 @@ function createApp(repo, opts = {}) {
         anonyme,
         nom: anonyme ? null : String(payload.nom || '').trim().slice(0, 120) || null,
         prefixe: String(payload.prefixe || '').trim().toUpperCase().slice(0, 3) || null,
+        // PRIVATE: used only for notifications, never surfaced by publicBid().
+        courriel: v.courriel ? v.courriel.toLowerCase() : null,
         status: domain.STATUS.OUVERTE,
         etude: null,
         createdAt: todayISO,
       };
       await repo.put(bid);
+
+      // Fire-and-forget: confirm the offer to the client + alert the operator.
+      // Never awaited and never allowed to reject the response — if mail fails
+      // the offer is still created and returned.
+      const n = notifier();
+      if (n) Promise.resolve(n.onOfferCreated(bid)).catch(() => {});
+
       return json(201, { bid: publicBid(bid) });
     }
 
@@ -170,7 +247,31 @@ function createApp(repo, opts = {}) {
       if (!result.ok) {
         return json(400, { errors: [{ code: 'signature_invalide', message: 'Signature Stripe invalide.' }] });
       }
+
+      // Fire the matching subscription lifecycle email (welcome/receipt/dunning/
+      // win-back + operator alert). Best-effort; skipped on a redelivered event.
+      const n = notifier();
+      if (n && result.event && !result.duplicate) {
+        Promise.resolve(n.onSubscription(result.event, result.notary)).catch(() => {});
+      }
+
       return json(200, { received: true });
+    }
+
+    // CASL / Law 25 opt-out. The email footer links here with a token that
+    // encodes the recipient's address; we record the opt-out and the sender
+    // checks it before every future send. Opening it in a browser shows a page.
+    if (route === '/unsubscribe' && method === 'GET') {
+      const email = decodeUnsubToken(query.token || '');
+      if (!email || !domain.isEmail(email)) {
+        return htmlPage(400, 'Lien invalide', 'Ce lien de désabonnement est invalide ou incomplet.');
+      }
+      await repo.putUnsubscribe(email, now());
+      return htmlPage(
+        200,
+        'Désabonnement confirmé',
+        'Vous ne recevrez plus de courriels de Nota à cette adresse. Vous pouvez fermer cette page.'
+      );
     }
 
     return json(404, { errors: [{ code: 'introuvable', message: 'Route inconnue.' }] });

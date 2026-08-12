@@ -522,6 +522,9 @@
     $('o-amount-display').textContent = svc ? D.money(amt) : '—';
 
     if (svc && amt) {
+      // Screen readers otherwise announce the raw slider number (e.g. "2000");
+      // aria-valuetext gives the formatted amount ("2 000 $").
+      $('o-amount').setAttribute('aria-valuetext', D.money(amt));
       var mult = amt / svc.prixDepart;
       $('o-mult').textContent = mult.toFixed(2) + '× le prix de départ (' + D.money(svc.prixDepart) + ')';
       if (D.isISODate(state.offer.dateISO)) {
@@ -534,6 +537,7 @@
         $('gauge-label').textContent = 'Choisissez d’abord une date.';
       }
     } else {
+      $('o-amount').removeAttribute('aria-valuetext');
       $('o-mult').textContent = '—';
       $('gauge-fill').style.width = '0%';
       $('gauge-label').textContent = 'Choisissez une date et un montant.';
@@ -554,7 +558,8 @@
 
   function validateOfferUI() {
     var o = state.offer;
-    var v = D.validateOffer({ serviceId: o.serviceId, dateISO: o.dateISO, montant: o.montant, todayISO: todayISO() });
+    var courriel = ($('o-courriel') && $('o-courriel').value || '').trim();
+    var v = D.validateOffer({ serviceId: o.serviceId, dateISO: o.dateISO, montant: o.montant, courriel: courriel, todayISO: todayISO() });
     $('offer-submit').disabled = !v.ok;
     return v;
   }
@@ -574,6 +579,9 @@
   function commitAnon(anon) {
     state.offer.anonyme = anon;
     $('o-anon').checked = anon;
+    // role="switch" overrides the native checkbox role, so aria-checked must be
+    // kept in sync by hand (WCAG 4.1.2).
+    $('o-anon').setAttribute('aria-checked', anon ? 'true' : 'false');
     $('name-row').hidden = anon;
     $('anon-help').textContent = anon
       ? 'Affichée comme « Client · secteur postal ».'
@@ -588,6 +596,8 @@
       anonyme: o.anonyme,
       nom: o.anonyme ? null : ($('o-name').value || '').trim(),
       prefixe: ($('o-prefix').value || '').trim().toUpperCase().slice(0, 3),
+      // Private: used only for notifications, never shown on the carnet.
+      courriel: ($('o-courriel').value || '').trim(),
     };
     var res = await store.createBid(payload);
     var errBox = $('offer-errors');
@@ -689,6 +699,8 @@
         });
         body.appendChild(input);
       }
+      // Dynamically generated inputs carry no <label>, so name them explicitly.
+      input.setAttribute('aria-label', it.nom);
       var read = el('button', 'read-btn');
       read.innerHTML = SPEAKER_SVG;
       read.type = 'button';
@@ -710,6 +722,7 @@
     cbody.appendChild(el('div', 'help', 'Le notaire qui retient votre demande vérifiera votre identité à la signature. Rien n’est transmis avant.'));
     var clabel = el('label', 'consent-toggle');
     var cinput = document.createElement('input'); cinput.type = 'checkbox'; cinput.checked = !!savedC.__consent;
+    cinput.setAttribute('aria-label', 'J’autorise le partage de mon dossier avec le notaire retenu.');
     cinput.addEventListener('change', function () {
       dossierSet(svc.id, '__consent', this.checked ? '1' : '');
       ccheck.dataset.on = this.checked ? 'true' : 'false';
@@ -870,6 +883,7 @@
     $('o-amount').addEventListener('input', onAmountChange);
     $('o-anon').addEventListener('change', onAnonToggle);
     $('o-prefix').addEventListener('input', validateOfferUI);
+    $('o-courriel').addEventListener('input', validateOfferUI);
     $('offer-form').addEventListener('submit', onOfferSubmit);
     $('o-date').setAttribute('min', todayISO());
 

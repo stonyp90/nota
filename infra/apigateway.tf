@@ -42,6 +42,14 @@ resource "aws_apigatewayv2_stage" "default" {
   api_id      = aws_apigatewayv2_api.api.id
   name        = "$default"
   auto_deploy = true
+
+  # Account-wide default throttling for every route on this stage. Sane low
+  # limits to cap abuse / accidental floods (they also protect the Lambda's
+  # reserved concurrency). Tunable: raise as legitimate traffic grows.
+  default_route_settings {
+    throttling_rate_limit  = 20 # steady-state requests/sec
+    throttling_burst_limit = 40 # max concurrent burst
+  }
 }
 
 # Allow API Gateway to invoke the function with lambda:InvokeFunction (the

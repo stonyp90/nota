@@ -37,6 +37,100 @@ locals {
   has_custom_domain = var.domain_name != ""
 }
 
+# ---------------------------------------------------------------------------
+# Security response-headers policy — attached to BOTH cache behaviors so every
+# response (SPA assets and API) carries hardened security headers.
+# ---------------------------------------------------------------------------
+resource "aws_cloudfront_response_headers_policy" "security" {
+  name    = "${var.project_name}-security-headers"
+  comment = "Security headers (HSTS, nosniff, frame-deny, referrer, CSP, Permissions-Policy) for the SPA + API."
+
+  security_headers_config {
+    # HSTS: 2 years, cover subdomains, and request preload-list inclusion.
+    strict_transport_security {
+      access_control_max_age_sec = 63072000
+      include_subdomains         = true
+      preload                    = true
+      override                   = true
+    }
+
+    # X-Content-Type-Options: nosniff.
+    content_type_options {
+      override = true
+    }
+
+    # X-Frame-Options: DENY (defense in depth alongside frame-ancestors 'none').
+    frame_options {
+      frame_option = "DENY"
+      override     = true
+    }
+
+    # Referrer-Policy.
+    referrer_policy {
+      referrer_policy = "strict-origin-when-cross-origin"
+      override        = true
+    }
+
+    # Content-Security-Policy. Tuned to NOT break the app: it loads the Inter
+    # stylesheet + font from https://rsms.me, external app.js/domain.js on 'self',
+    # inline JSON-LD + inline styles, and fetches /api on 'self'.
+    content_security_policy {
+      content_security_policy = "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://rsms.me; font-src 'self' https://rsms.me data:; script-src 'self' 'unsafe-inline'; connect-src 'self'"
+      override                = true
+    }
+  }
+
+  # Permissions-Policy: disable powerful features the app does not use.
+  custom_headers_config {
+    items {
+      header   = "Permissions-Policy"
+      value    = "camera=(), microphone=(), geolocation=()"
+      override = true
+    }
+  }
+}
+
+# ---------------------------------------------------------------------------
+# CloudFront Function (viewer-request) — SPA router.
+#
+# Attached to the DEFAULT (S3) behavior ONLY. It rewrites "extensionless" paths
+# (no "." in the last path segment) that are NOT under /api to /index.html, so
+# client-side routing handles unknown SPA routes. This replaces the old
+# distribution-level custom_error_response 403/404 -> /index.html mapping, which
+# also swallowed API errors (turning /api/nope into a 200 index.html). Real
+# assets (foo.js, foo.css, foo.png) keep their extension and pass through; API
+# requests never reach this function because they match the /api/* behavior, and
+# the /api guard is belt-and-suspenders.
+# ---------------------------------------------------------------------------
+resource "aws_cloudfront_function" "spa_router" {
+  name    = "${var.project_name}-spa-router"
+  runtime = "cloudfront-js-2.0"
+  comment = "Rewrite extensionless non-/api paths to /index.html for SPA routing."
+  publish = true
+
+  code = <<-EOT
+    function handler(event) {
+      var request = event.request;
+      var uri = request.uri;
+
+      // Never rewrite API paths (defense in depth; /api/* uses its own behavior).
+      if (uri.startsWith('/api')) {
+        return request;
+      }
+
+      // Last path segment (e.g. "index.html", "app.js", or "" for "/foo/").
+      var lastSegment = uri.slice(uri.lastIndexOf('/') + 1);
+
+      // No file extension => treat as an SPA route and serve the app shell.
+      if (lastSegment.indexOf('.') === -1) {
+        request.uri = '/index.html';
+      }
+
+      return request;
+    }
+  EOT
+}
+
 resource "aws_cloudfront_distribution" "web" {
   enabled             = true
   is_ipv6_enabled     = true
@@ -77,6 +171,15 @@ resource "aws_cloudfront_distribution" "web" {
 
     # AWS managed "CachingOptimized" policy.
     cache_policy_id = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+
+    # Attach hardened security response headers.
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+
+    # SPA routing: rewrite extensionless non-/api paths to /index.html.
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.spa_router.arn
+    }
   }
 
   # --- /api/* behavior: route to Lambda, no caching ---------------------
@@ -93,24 +196,16 @@ resource "aws_cloudfront_distribution" "web" {
     # AWS managed "AllViewerExceptHostHeader" origin request policy: forwards
     # everything except Host (Lambda function URLs reject a mismatched Host).
     origin_request_policy_id = "b689b0a8-53d0-40ab-baf2-68738e2966ac"
+
+    # Attach hardened security response headers.
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
   }
 
-  # SPA fallback: with OAC a missing S3 key returns 403 (not 404), because the
-  # OAC principal is not allowed to List the bucket. Map BOTH 403 and 404 to
-  # index.html with a 200 so client-side routing handles unknown paths.
-  custom_error_response {
-    error_code            = 403
-    response_code         = 200
-    response_page_path    = "/index.html"
-    error_caching_min_ttl = 0
-  }
-
-  custom_error_response {
-    error_code            = 404
-    response_code         = 200
-    response_page_path    = "/index.html"
-    error_caching_min_ttl = 0
-  }
+  # NOTE: the distribution-level custom_error_response 403/404 -> /index.html
+  # blocks were REMOVED. They masked API errors as 200 index.html (e.g.
+  # /api/nope returned 200 HTML). SPA fallback is now handled per-request by the
+  # spa_router CloudFront function on the default behavior only, so /api/* 4xx/5xx
+  # responses pass through unchanged. default_root_object stays index.html.
 
   # Custom domain aliases, only when a domain is configured.
   aliases = local.has_custom_domain ? [var.domain_name] : []

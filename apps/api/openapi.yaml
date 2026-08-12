@@ -216,6 +216,37 @@ paths:
                 errors:
                   - code: signature_invalide
                     message: Signature Stripe invalide.
+  /unsubscribe:
+    get:
+      operationId: unsubscribe
+      summary: Record a CASL / Law-25 email opt-out.
+      description: >-
+        Opened from the unsubscribe link in every email footer. The `token`
+        encodes the recipient's address (base64url); the opt-out is recorded
+        (an `UNSUB#<email>` item) and the sender checks it before every future
+        send. Returns a small fr-CA HTML confirmation page, not JSON, because it
+        is opened in a browser. Idempotent — unsubscribing twice is a no-op.
+      parameters:
+        - name: token
+          in: query
+          required: true
+          description: Base64url-encoded recipient email from the email footer link.
+          schema:
+            type: string
+          example: Y2xpZW50QGV4YW1wbGUuY2E
+      responses:
+        "200":
+          description: Opt-out recorded; a confirmation page is returned.
+          content:
+            text/html:
+              schema:
+                type: string
+        "400":
+          description: The token is missing or does not decode to a valid email.
+          content:
+            text/html:
+              schema:
+                type: string
 components:
   schemas:
     Tier:
@@ -269,6 +300,17 @@ components:
           type: string
           maxLength: 3
           description: Postal-code prefix shown for anonymous bids (e.g. "G1R").
+        courriel:
+          type: string
+          format: email
+          maxLength: 254
+          description: >-
+            OPTIONAL. Private client email used only for notifications (offer
+            published, date approaching, offer retained). Stored server-side and
+            NEVER returned in the public Bid projection. Empty/absent is allowed;
+            a non-empty value must be a valid email or the offer is rejected with
+            `courriel_invalide`.
+          example: client@example.ca
     Bid:
       type: object
       description: Public projection of a bid. Private dossier data is never included.

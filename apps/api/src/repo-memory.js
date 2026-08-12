@@ -1,6 +1,7 @@
 'use strict';
 
 const { monthOf } = require('./keys');
+const { STATUS } = require('@nota/domain');
 
 /**
  * In-memory implementation of the Repo port. Used by the test suite and by the
@@ -17,6 +18,10 @@ function createMemoryRepo(seed = []) {
   const byNotary = new Map();
   const events = new Map();
 
+  // Notification ledgers: sent (idempotency) and unsubscribe (suppression).
+  const notified = new Map(); // `${refId}#${kind}` -> timestamp
+  const unsubscribed = new Set(); // lowercased emails
+
   return {
     async listByMonth(month) {
       return [...byId.values()]
@@ -29,6 +34,11 @@ function createMemoryRepo(seed = []) {
     async put(bid) {
       byId.set(bid.id, bid);
       return bid;
+    },
+    // Every open (not-retained) bid across all months — the reminder scheduler
+    // asks the domain which of these are due for a reminder today.
+    async scanOpenBids() {
+      return [...byId.values()].filter((b) => b.status !== STATUS.RETENUE);
     },
 
     // --- Billing (notary subscriptions + webhook idempotency) ---------------
@@ -45,6 +55,21 @@ function createMemoryRepo(seed = []) {
     },
     async wasEventProcessed(stripeEventId) {
       return events.has(stripeEventId);
+    },
+
+    // --- Notifications (idempotency + unsubscribe suppression) --------------
+    async markNotificationSent(refId, kind, at) {
+      notified.set(`${refId}#${kind}`, at || true);
+    },
+    async wasNotificationSent(refId, kind) {
+      return notified.has(`${refId}#${kind}`);
+    },
+    async putUnsubscribe(email, at) {
+      unsubscribed.add(String(email).trim().toLowerCase());
+      return at || true;
+    },
+    async isUnsubscribed(email) {
+      return unsubscribed.has(String(email).trim().toLowerCase());
     },
 
     async _all() {

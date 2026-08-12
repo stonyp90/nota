@@ -108,6 +108,61 @@ test('unknown route is 404', async () => {
   assert.equal(res.statusCode, 404);
 });
 
+test('courriel is stored privately and NEVER leaks in the public projection', async () => {
+  const a = app();
+  const res = await post(a, {
+    serviceId: 'testament',
+    dateISO: '2026-08-20',
+    montant: 700,
+    courriel: 'Client@Example.CA',
+  });
+  assert.equal(res.statusCode, 201);
+  // Not on the POST response...
+  assert.equal(parse(res).bid.courriel, undefined);
+  // ...nor on GET /bids...
+  const listed = parse(await getBids(a, '2026-08')).bids[0];
+  assert.equal(listed.courriel, undefined);
+  // ...but it IS persisted privately (normalized to lowercase) for notifications.
+  const stored = (await a.repo._all())[0];
+  assert.equal(stored.courriel, 'client@example.ca');
+});
+
+test('an invalid courriel is rejected with courriel_invalide and nothing is stored', async () => {
+  const a = app();
+  const res = await post(a, { serviceId: 'testament', dateISO: '2026-08-20', montant: 700, courriel: 'nope' });
+  assert.equal(res.statusCode, 422);
+  assert.ok(parse(res).errors.some((e) => e.code === 'courriel_invalide'));
+  assert.equal((await a.repo._all()).length, 0);
+});
+
+test('OPTIONS preflight is 204 with an empty body and CORS headers', async () => {
+  const res = await app().handle({ method: 'OPTIONS', path: '/bids' });
+  assert.equal(res.statusCode, 204);
+  assert.equal(res.body, ''); // a 204 must not carry a body
+  assert.equal(res.headers['access-control-allow-methods'], 'GET,POST,OPTIONS');
+});
+
+test('an oversized POST body is rejected with 413 before it is parsed', async () => {
+  const a = app();
+  const huge = 'x'.repeat(64 * 1024 + 1); // one byte over the cap
+  const res = await a.handle({ method: 'POST', path: '/bids', body: huge });
+  assert.equal(res.statusCode, 413);
+  assert.ok(parse(res).errors.some((e) => e.code === 'corps_trop_grand'));
+  assert.equal((await a.repo._all()).length, 0); // nothing stored
+});
+
+test('a POST body at the size cap is not rejected as oversized', async () => {
+  // Exactly 64KB of valid JSON must pass the guard (it is rejected later only on
+  // its own merits, here a domain validation 201/422 — never 413).
+  const a = app();
+  const base = { serviceId: 'testament', dateISO: '2026-08-20', montant: 700 };
+  const pad = 64 * 1024 - JSON.stringify({ ...base, _p: '' }).length;
+  const body = JSON.stringify({ ...base, _p: 'x'.repeat(pad) });
+  assert.equal(Buffer.byteLength(body), 64 * 1024);
+  const res = await a.handle({ method: 'POST', path: '/bids', body });
+  assert.notEqual(res.statusCode, 413);
+});
+
 test('the public projection omits any dossier fields', async () => {
   // Even if a raw item somehow carries documents, GET must not expose them.
   const repo = createMemoryRepo([

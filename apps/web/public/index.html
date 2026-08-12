@@ -25,11 +25,17 @@
     <meta property="og:title" content="Nota — le carnet public des actes notariés à Québec" />
     <meta property="og:description" content="Choisissez votre date, nommez votre prix. Testament, procuration, refinancement. Un notaire de Québec retient votre demande. Gratuit pour le client." />
     <meta property="og:url" content="https://d1s1h4894dau0c.cloudfront.net/" />
+    <!-- Raster first: most social scrapers do not render SVG. SVG kept as a fallback. -->
+    <meta property="og:image" content="https://d1s1h4894dau0c.cloudfront.net/og.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Nota — carnet public des actes notariés à Québec" />
     <meta property="og:image" content="https://d1s1h4894dau0c.cloudfront.net/og.svg" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Nota — carnet public des actes notariés à Québec" />
     <meta name="twitter:description" content="Choisissez votre date, nommez votre prix. Un notaire de Québec retient votre demande." />
-    <meta name="twitter:image" content="https://d1s1h4894dau0c.cloudfront.net/og.svg" />
+    <meta name="twitter:image" content="https://d1s1h4894dau0c.cloudfront.net/og.png" />
 
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://rsms.me/" crossorigin />
@@ -51,7 +57,7 @@
           "@type": "OfferCatalog",
           "name": "Services notariés",
           "itemListElement": [
-            { "@type": "Offer", "priceCurrency": "CAD", "price": "495", "itemOffered": { "@type": "Service", "name": "Testament et mandat de protection" } },
+            { "@type": "Offer", "priceCurrency": "CAD", "price": "650", "itemOffered": { "@type": "Service", "name": "Testament et mandat de protection" } },
             { "@type": "Offer", "priceCurrency": "CAD", "price": "295", "itemOffered": { "@type": "Service", "name": "Procuration" } },
             { "@type": "Offer", "priceCurrency": "CAD", "price": "950", "itemOffered": { "@type": "Service", "name": "Refinancement hypothécaire" } }
           ]
@@ -63,7 +69,7 @@
         "@context": "https://schema.org",
         "@type": "FAQPage",
         "mainEntity": [
-          { "@type": "Question", "name": "Combien coûte un testament chez le notaire à Québec ?", "acceptedAnswer": { "@type": "Answer", "text": "Sur Nota, un testament et mandat de protection démarre à 495 $. Vous pouvez offrir davantage si votre échéance est rapprochée ; un notaire de la région retient alors votre demande." } },
+          { "@type": "Question", "name": "Combien coûte un testament chez le notaire à Québec ?", "acceptedAnswer": { "@type": "Answer", "text": "Sur Nota, un testament et mandat de protection démarre à 650 $. Vous pouvez offrir davantage si votre échéance est rapprochée ; un notaire de la région retient alors votre demande." } },
           { "@type": "Question", "name": "Puis-je obtenir un rendez-vous de notaire rapidement ?", "acceptedAnswer": { "@type": "Answer", "text": "Oui. Vous affichez la date de signature souhaitée et votre offre. Plus l’échéance est proche, plus l’offre pèse, ce qui incite un notaire à vous retenir rapidement." } },
           { "@type": "Question", "name": "Est-ce gratuit pour le client ?", "acceptedAnswer": { "@type": "Answer", "text": "Oui, Nota est gratuit pour le client. Les notaires paient un abonnement fixe, jamais un pourcentage de l’acte." } },
           { "@type": "Question", "name": "Mon nom est-il rendu public ?", "acceptedAnswer": { "@type": "Answer", "text": "Non par défaut. Les offres sont anonymes et affichées comme « Client · secteur postal ». Vous pouvez choisir de rendre votre nom visible." } },
@@ -220,11 +226,12 @@
 
                   <div class="switch-row">
                     <div>
-                      <div class="switch-title">Offre anonyme</div>
+                      <div class="switch-title" id="anon-title">Offre anonyme</div>
                       <div class="help" id="anon-help">Affichée comme « Client · secteur postal ».</div>
                     </div>
                     <label class="switch">
-                      <input type="checkbox" id="o-anon" checked />
+                      <input type="checkbox" id="o-anon" role="switch"
+                        aria-labelledby="anon-title" aria-describedby="anon-help" aria-checked="true" checked />
                       <span class="track"></span>
                     </label>
                   </div>
@@ -238,6 +245,12 @@
                     <label class="lbl" for="o-prefix">3 premiers caractères du code postal</label>
                     <input type="text" id="o-prefix" maxlength="3" placeholder="G1R" class="uppercase" />
                     <p class="help">Aide le notaire à jauger la distance sans vous identifier.</p>
+                  </div>
+
+                  <div class="form-row">
+                    <label class="lbl" for="o-courriel">Courriel — pour être averti, jamais affiché</label>
+                    <input type="email" id="o-courriel" placeholder="vous@exemple.ca" autocomplete="email" inputmode="email" />
+                    <p class="help">Optionnel. Sert uniquement à vous prévenir (offre publiée, date qui approche, demande retenue). Jamais montré sur le carnet.</p>
                   </div>
 
                   <ul class="errors" id="offer-errors" hidden></ul>

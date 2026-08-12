@@ -72,6 +72,14 @@ test('dates: ISO validation', () => {
   assert.equal(D.isISODate(''), false);
 });
 
+test('dates: ISO validation rejects non-existent calendar days (no silent roll-over)', () => {
+  assert.equal(D.isISODate('2026-02-31'), false); // February never has 31 days
+  assert.equal(D.isISODate('2026-04-31'), false); // April has 30 days
+  assert.equal(D.isISODate('2026-02-30'), false);
+  assert.equal(D.isISODate('2026-02-29'), false); // 2026 is not a leap year
+  assert.equal(D.isISODate('2028-02-29'), true);  // 2028 is a leap year
+});
+
 test('dates: daysBetween and addDays are inverse and tz-stable', () => {
   assert.equal(D.daysBetween('2026-08-12', '2026-08-19'), 7);
   assert.equal(D.daysBetween('2026-08-12', '2026-08-12'), 0);
@@ -122,6 +130,17 @@ test('validateOffer: rejects a malformed date', () => {
   const r = D.validateOffer({ serviceId: 'procuration', dateISO: 'demain', montant: 300, todayISO: TODAY });
   assert.equal(r.ok, false);
   assert.ok(r.errors.some((e) => e.code === 'date_invalide'));
+});
+
+test('validateOffer: a missing/invalid todayISO is rejected, not silently skipped', () => {
+  const missing = D.validateOffer({ serviceId: 'procuration', dateISO: '2026-09-01', montant: 300 });
+  assert.equal(missing.ok, false);
+  assert.ok(missing.errors.some((e) => e.code === 'date_invalide'));
+  assert.equal(missing.tier, null);
+
+  const invalid = D.validateOffer({ serviceId: 'procuration', dateISO: '2026-09-01', montant: 300, todayISO: 'hier' });
+  assert.equal(invalid.ok, false);
+  assert.ok(invalid.errors.some((e) => e.code === 'date_invalide'));
 });
 
 test('validateOffer: rejects non-positive amount', () => {
@@ -182,4 +201,70 @@ test('leadReadiness: identity document is a required intake item', () => {
 test('bidLabel: name when public, postal prefix when anonymous', () => {
   assert.equal(D.bidLabel({ anonyme: false, nom: 'Marie-Ève Tremblay', prefixe: 'G1R' }), 'Marie-Ève Tremblay');
   assert.equal(D.bidLabel({ anonyme: true, nom: 'Marie-Ève Tremblay', prefixe: 'G1R' }), 'Client · G1R');
+});
+
+// --- optional courriel on an offer -------------------------------------------
+
+test('isEmail: accepts plausible addresses, rejects garbage', () => {
+  assert.equal(D.isEmail('client@example.ca'), true);
+  assert.equal(D.isEmail('a@b.co'), true);
+  assert.equal(D.isEmail('no-at-sign'), false);
+  assert.equal(D.isEmail('two @spaces.ca'), false);
+  assert.equal(D.isEmail('missing@domain'), false);
+  assert.equal(D.isEmail(''), false);
+});
+
+test('validateOffer: courriel is optional — absent/empty is still ok', () => {
+  const base = { serviceId: 'testament', dateISO: '2026-08-20', montant: 700, todayISO: TODAY };
+  assert.equal(D.validateOffer(base).ok, true);
+  assert.equal(D.validateOffer(base).courriel, null);
+  assert.equal(D.validateOffer({ ...base, courriel: '' }).ok, true);
+});
+
+test('validateOffer: a valid courriel passes and is echoed back trimmed', () => {
+  const r = D.validateOffer({ serviceId: 'testament', dateISO: '2026-08-20', montant: 700, todayISO: TODAY, courriel: '  Client@Example.CA ' });
+  assert.equal(r.ok, true);
+  assert.equal(r.courriel, 'Client@Example.CA');
+});
+
+test('validateOffer: an invalid courriel is rejected with courriel_invalide', () => {
+  const r = D.validateOffer({ serviceId: 'testament', dateISO: '2026-08-20', montant: 700, todayISO: TODAY, courriel: 'not-an-email' });
+  assert.equal(r.ok, false);
+  assert.ok(r.errors.some((e) => e.code === 'courriel_invalide'));
+});
+
+// --- reminder schedule -------------------------------------------------------
+
+test('REMINDER_OFFSETS is the 7/3/1 cadence', () => {
+  assert.deepEqual(D.REMINDER_OFFSETS, [7, 3, 1]);
+});
+
+test('dueReminders: fires the matching kind exactly on 7/3/1 days out', () => {
+  const open = (dateISO) => ({ id: 'b', serviceId: 'testament', dateISO, montant: 700, status: 'ouverte' });
+  assert.deepEqual(D.dueReminders(open(D.addDays(TODAY, 7)), TODAY), ['j7']);
+  assert.deepEqual(D.dueReminders(open(D.addDays(TODAY, 3)), TODAY), ['j3']);
+  assert.deepEqual(D.dueReminders(open(D.addDays(TODAY, 1)), TODAY), ['j1']);
+});
+
+test('dueReminders: nothing on a non-cadence day', () => {
+  const open = { id: 'b', serviceId: 'testament', dateISO: D.addDays(TODAY, 5), montant: 700, status: 'ouverte' };
+  assert.deepEqual(D.dueReminders(open, TODAY), []);
+});
+
+test('dueReminders: nothing for a retained bid, even on a cadence day', () => {
+  const retenue = { id: 'b', serviceId: 'testament', dateISO: D.addDays(TODAY, 7), montant: 700, status: 'retenue' };
+  assert.deepEqual(D.dueReminders(retenue, TODAY), []);
+});
+
+test('dueReminders: nothing for a bid whose signing date has passed', () => {
+  const past = { id: 'b', serviceId: 'testament', dateISO: D.addDays(TODAY, -1), montant: 700, status: 'ouverte' };
+  assert.deepEqual(D.dueReminders(past, TODAY), []);
+});
+
+test('dueReminders: the dossier_incomplet hook fires for an incomplete open lead', () => {
+  const incomplete = { id: 'b', serviceId: 'testament', dateISO: D.addDays(TODAY, 10), montant: 700, status: 'ouverte', dossierReady: false };
+  assert.deepEqual(D.dueReminders(incomplete, TODAY), ['dossier_incomplet']);
+  // On a cadence day it stacks with the date-approaching kind.
+  const both = { ...incomplete, dateISO: D.addDays(TODAY, 3) };
+  assert.deepEqual(D.dueReminders(both, TODAY), ['j3', 'dossier_incomplet']);
 });

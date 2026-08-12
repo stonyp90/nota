@@ -20,7 +20,7 @@ Nota launches with **exactly three services**, each with a bounded,
 client-assemblable intake defined in `packages/domain` (its own document
 checklist and info fields, each with plain-language fr-CA help text):
 
-- **Testament et mandat de protection** — *prix de départ* 495 $
+- **Testament et mandat de protection** — *prix de départ* 650 $
 - **Procuration** — *prix de départ* 295 $
 - **Refinancement hypothécaire** — *prix de départ* 950 $
 

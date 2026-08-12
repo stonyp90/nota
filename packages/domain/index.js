@@ -138,7 +138,26 @@
   const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
   function isISODate(s) {
-    return typeof s === 'string' && ISO_DATE.test(s) && !Number.isNaN(Date.parse(s + 'T00:00:00Z'));
+    if (typeof s !== 'string' || !ISO_DATE.test(s)) return false;
+    // Reject dates that JS would silently roll over (e.g. 2026-02-31 -> March).
+    // Build the date at UTC and require the components to round-trip unchanged.
+    const y = Number(s.slice(0, 4));
+    const m = Number(s.slice(5, 7));
+    const d = Number(s.slice(8, 10));
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    return (
+      dt.getUTCFullYear() === y &&
+      dt.getUTCMonth() + 1 === m &&
+      dt.getUTCDate() === d
+    );
+  }
+
+  // A pragmatic single-line email check: exactly one @, no spaces, a dot in the
+  // domain. Enough to reject obvious garbage; the notary verifies identity, not
+  // this regex. Shared by the offer form (optional courriel) and the API.
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  function isEmail(s) {
+    return typeof s === 'string' && s.length <= 254 && EMAIL_RE.test(s.trim());
   }
 
   function daysBetween(fromISO, toISO) {
@@ -169,7 +188,11 @@
 
     if (!isISODate(input.dateISO)) {
       errors.push({ code: 'date_invalide', message: 'La date doit être au format AAAA-MM-JJ.' });
-    } else if (isISODate(input.todayISO)) {
+    } else if (!isISODate(input.todayISO)) {
+      // Without a valid reference "today" the past-date rule cannot be applied.
+      // Fail closed with a typed error rather than silently skipping the check.
+      errors.push({ code: 'date_invalide', message: 'La date du jour est manquante ou invalide.' });
+    } else {
       days = daysBetween(input.todayISO, input.dateISO);
       if (days < 0) errors.push({ code: 'date_passee', message: 'La date de signature est déjà passée.' });
       tier = tierForDays(Math.max(0, days));
@@ -185,6 +208,14 @@
       premium = montant / svc.prixDepart;
     }
 
+    // Courriel is OPTIONAL (used only for private notifications, never shown on
+    // the public carnet). An empty/absent value is fine; a non-empty value must
+    // look like an email.
+    const courrielRaw = input.courriel == null ? '' : String(input.courriel).trim();
+    if (courrielRaw !== '' && !isEmail(courrielRaw)) {
+      errors.push({ code: 'courriel_invalide', message: 'Le courriel n’est pas valide.' });
+    }
+
     return {
       ok: errors.length === 0,
       errors,
@@ -193,6 +224,7 @@
       premium,
       prixDepart: svc ? svc.prixDepart : null,
       montant: montantValide ? montant : null,
+      courriel: courrielRaw || null,
     };
   }
 
@@ -297,6 +329,58 @@
     };
   }
 
+  // --- Reminder schedule -----------------------------------------------------
+  // The cadence at which an open lead's client is reminded that their signing
+  // date is approaching, expressed as whole days BEFORE the date. Closer dates
+  // convert faster, so the nudges tighten as the day nears. This is a business
+  // rule — the API scheduler encodes nothing itself, it just asks the domain
+  // which reminders are due today for a given bid.
+  const REMINDER_OFFSETS = [7, 3, 1];
+
+  // The kinds of reminder a bid can be due for. j7/j3/j1 are the date-approaching
+  // nudges (one per offset). dossier_incomplet is the "finish your file" nudge,
+  // the #1 conversion lever, and is due whenever an open lead is known to be
+  // incomplete (bid.dossierReady === false) — a hook the app can flip on.
+  const REMINDER_KINDS = {
+    J7: 'j7',
+    J3: 'j3',
+    J1: 'j1',
+    DOSSIER_INCOMPLET: 'dossier_incomplet',
+  };
+
+  // Map a day-offset to its date-approaching kind, or null when no reminder
+  // falls on that exact day.
+  function reminderKindForDays(days) {
+    if (days === 7) return REMINDER_KINDS.J7;
+    if (days === 3) return REMINDER_KINDS.J3;
+    if (days === 1) return REMINDER_KINDS.J1;
+    return null;
+  }
+
+  // Which reminder kinds are due for `bid` as of `todayISO`. Pure and
+  // deterministic — the same inputs always yield the same array. A retained bid
+  // (already taken by a notary) and a bid whose signing date has passed are
+  // never due for anything. The sender is responsible for idempotency
+  // (not sending the same kind twice); this only says what is due.
+  function dueReminders(bid, todayISO) {
+    const due = [];
+    if (!bid || bid.status === STATUS.RETENUE) return due;
+    if (!isISODate(bid.dateISO) || !isISODate(todayISO)) return due;
+
+    const days = daysBetween(todayISO, bid.dateISO);
+    if (days < 0) return due; // the signing date is already past
+
+    const dateKind = reminderKindForDays(days);
+    if (dateKind) due.push(dateKind);
+
+    // Dossier-incompletion hook: an open lead we know to be incomplete gets a
+    // "finish your file" nudge. Kept separate from the date cadence so it can
+    // fire independently; the sender's SENT ledger prevents daily repeats.
+    if (bid.dossierReady === false) due.push(REMINDER_KINDS.DOSSIER_INCOMPLET);
+
+    return due;
+  }
+
   // --- Public label helpers --------------------------------------------------
   // How a bid identifies itself on the public carnet: the chosen name, or the
   // postal prefix for anonymous bids ("Client · G1R").
@@ -315,6 +399,7 @@
     PREMIUM_CAP,
     STATUS,
     isISODate,
+    isEmail,
     daysBetween,
     addDays,
     validateOffer,
@@ -322,6 +407,10 @@
     makeFixtures,
     bidLabel,
     leadReadiness,
+    REMINDER_OFFSETS,
+    REMINDER_KINDS,
+    reminderKindForDays,
+    dueReminders,
     FIXTURE_SEED,
   };
 });

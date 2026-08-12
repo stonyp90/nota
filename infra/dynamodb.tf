@@ -10,6 +10,14 @@ resource "aws_dynamodb_table" "main" {
   name         = "${var.project_name}-main"
   billing_mode = "PAY_PER_REQUEST" # on-demand: no capacity planning, pay per request
 
+  # Guard against accidental (or malicious) table deletion. Must be explicitly
+  # disabled before the table can be destroyed.
+  deletion_protection_enabled = true
+
+  # FUTURE IMPROVEMENT: enable encryption at rest with a customer-managed KMS key
+  # (SSE-KMS via a server_side_encryption block) instead of the default
+  # AWS-owned key, for tighter key control / auditability.
+
   hash_key  = "PK"
   range_key = "SK"
 

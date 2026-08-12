@@ -21,7 +21,7 @@ checklist a client can complete alone). Amounts are the **starting price**
 
 | Service | `serviceId` | Prix de départ |
 | --- | --- | --- |
-| Testament et mandat de protection | `testament` | **495 $** |
+| Testament et mandat de protection | `testament` | **650 $** |
 | Procuration | `procuration` | **295 $** |
 | Refinancement hypothécaire | `refinancement` | **950 $** |
 

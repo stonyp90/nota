@@ -84,6 +84,10 @@ resource "aws_lambda_function" "api" {
   timeout     = 10
   memory_size = 256
 
+  # Blast-radius cap: hard ceiling on concurrent executions so a traffic spike
+  # or DoS can't exhaust account-wide Lambda concurrency or run up unbounded cost.
+  reserved_concurrent_executions = 20
+
   environment {
     variables = {
       # AWS_REGION is a reserved runtime variable set by Lambda automatically,
@@ -95,6 +99,13 @@ resource "aws_lambda_function" "api" {
       STRIPE_SECRET_KEY     = var.stripe_secret_key
       STRIPE_WEBHOOK_SECRET = var.stripe_webhook_secret
       STRIPE_PRICE_ID       = var.stripe_price_id
+
+      # Email notifications (see notifications.tf). When NOTA_FROM_EMAIL is empty
+      # the handler leaves notifications DISABLED, so the stack is fully
+      # functional without SES configured. Set var.from_email to enable.
+      NOTA_FROM_EMAIL     = var.from_email
+      NOTA_OPERATOR_EMAIL = var.operator_email
+      NOTA_BASE_URL       = var.base_url
     }
   }
 }

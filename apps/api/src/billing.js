@@ -70,37 +70,39 @@ function createBilling({ repo, stripe, newId, now, successUrl, cancelUrl } = {})
     return { ok: true, url };
   }
 
-  // Persist a status transition for the notary the event points at. Returns
-  // whether a notary was found and updated.
+  // Persist a status transition for the notary the event points at. Returns the
+  // updated notary (or null when none was found), so the caller can notify it.
   async function transition(id, patch) {
-    if (!id) return false;
+    if (!id) return null;
     const notary = await repo.getNotary(id);
-    if (!notary) return false;
-    await repo.putNotary({ ...notary, ...patch, updatedAt: clock() });
-    return true;
+    if (!notary) return null;
+    const updated = { ...notary, ...patch, updatedAt: clock() };
+    await repo.putNotary(updated);
+    return updated;
   }
 
   // Map one verified event to a repo change. Unknown types are ignored (return
-  // handled:false) — never throw on them.
+  // handled:false) — never throw on them. Also returns the affected notary so
+  // the webhook route can send the matching lifecycle email.
   async function applyEvent(event) {
     const obj = (event && event.data && event.data.object) || {};
 
     switch (event.type) {
       case 'checkout.session.completed': {
-        const handled = await transition(obj.client_reference_id, {
+        const notary = await transition(obj.client_reference_id, {
           subscriptionStatus: SUBSCRIPTION_STATUS.ACTIVE,
           customerId: obj.customer || null,
           subscriptionId: obj.subscription || null,
         });
-        return { handled };
+        return { handled: !!notary, notary };
       }
 
       case 'customer.subscription.deleted': {
         const notaryId = obj.metadata && obj.metadata.notaryId;
-        const handled = await transition(notaryId, {
+        const notary = await transition(notaryId, {
           subscriptionStatus: SUBSCRIPTION_STATUS.CANCELED,
         });
-        return { handled };
+        return { handled: !!notary, notary };
       }
 
       case 'customer.subscription.updated': {
@@ -108,13 +110,13 @@ function createBilling({ repo, stripe, newId, now, successUrl, cancelUrl } = {})
         let next = null;
         if (obj.status === 'canceled') next = SUBSCRIPTION_STATUS.CANCELED;
         else if (obj.status === 'unpaid' || obj.status === 'past_due') next = SUBSCRIPTION_STATUS.PAST_DUE;
-        if (!next) return { handled: false };
-        const handled = await transition(notaryId, { subscriptionStatus: next });
-        return { handled };
+        if (!next) return { handled: false, notary: null };
+        const notary = await transition(notaryId, { subscriptionStatus: next });
+        return { handled: !!notary, notary };
       }
 
       default:
-        return { handled: false };
+        return { handled: false, notary: null };
     }
   }
 
@@ -132,15 +134,18 @@ function createBilling({ repo, stripe, newId, now, successUrl, cancelUrl } = {})
     }
 
     if (await repo.wasEventProcessed(event.id)) {
-      return { ok: true, handled: false, duplicate: true, type: event.type };
+      return { ok: true, handled: false, duplicate: true, type: event.type, event, notary: null };
     }
 
-    const { handled } = await applyEvent(event);
+    const { handled, notary } = await applyEvent(event);
     // Record every verified event (even ignored types) so a redelivery of any
     // kind is skipped.
     await repo.markEventProcessed(event.id, clock());
 
-    return { ok: true, handled, duplicate: false, type: event.type };
+    // The verified event and the affected notary are returned so the route can
+    // fire the matching lifecycle email (welcome/receipt/dunning/win-back)
+    // outside this module — billing stays free of any I/O beyond its two ports.
+    return { ok: true, handled, duplicate: false, type: event.type, event, notary };
   }
 
   return { startSubscription, handleWebhook };
