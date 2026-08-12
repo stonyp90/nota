@@ -1,0 +1,139 @@
+# Deploy — build + ship Nota to AWS on every push to main, using short-lived
+# credentials obtained through OIDC (aws-actions/configure-aws-credentials).
+# No long-lived AWS access keys are stored in GitHub.
+#
+# Configuration lives in GitHub Actions *variables* (not secrets — none of
+# these are sensitive; they are public identifiers). Set them once with:
+#
+#   gh variable set AWS_DEPLOY_ROLE_ARN --repo stonyp90/nota \
+#     --body "arn:aws:iam::436136277668:role/nota-github-deploy"   # from `terraform output github_deploy_role_arn`
+#   gh variable set WEB_BUCKET          --repo stonyp90/nota --body "nota-web-17087f79"
+#   gh variable set CF_DISTRIBUTION_ID  --repo stonyp90/nota --body "E1Z4E4PF2FD9VG"
+#
+# Required variables:
+#   AWS_DEPLOY_ROLE_ARN  - the OIDC deploy role ARN (terraform output)
+#   WEB_BUCKET           - S3 web assets bucket name
+#   CF_DISTRIBUTION_ID   - CloudFront distribution id
+
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+# OIDC needs id-token: write to mint the token; contents: read to checkout.
+permissions:
+  id-token: write
+  contents: read
+
+# Never run two deploys against the same environment at once; let the newest
+# push win but don't cancel a deploy mid-flight (could leave assets half-synced).
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ca-central-1
+
+jobs:
+  test:
+    name: Tests (domain + api + BDD + web)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install workspaces
+        run: npm ci
+
+      - name: Unit tests (domain + api)
+        run: npm test
+
+      - name: BDD suite (Cucumber)
+        run: npm install --prefix features && npm test --prefix features
+
+      - name: Web smoke test (jsdom)
+        run: npm test --workspace @nota/web
+
+  deploy:
+    name: Build + deploy to AWS
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install workspaces
+        run: npm ci
+
+      - name: Build web (SPA)
+        run: npm run build --workspace @nota/web
+
+      - name: Verify build output
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Fail early if the build produced nothing to deploy.
+          if [ ! -d apps/web/dist ] || [ -z "$(ls -A apps/web/dist)" ]; then
+            echo "::error::apps/web/dist is missing or empty — build failed to produce assets" >&2
+            exit 1
+          fi
+
+      - name: Configure AWS credentials (OIDC — no secrets)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Package + deploy the Lambda
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Vendor the workspace-linked @nota/domain into the api package so it
+          # resolves at runtime (the AWS SDK + stripe are provided by the Lambda
+          # runtime / omitted, so only the domain code needs vendoring).
+          mkdir -p apps/api/node_modules/@nota/domain
+          cp packages/domain/index.js packages/domain/package.json apps/api/node_modules/@nota/domain/
+          ( cd apps/api && zip -qr /tmp/api.zip . -x '*.git*' )
+          aws lambda update-function-code \
+            --function-name nota-api \
+            --zip-file fileb:///tmp/api.zip \
+            --publish
+
+      - name: Sync web assets to S3
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Fingerprinted assets get a short cache; index.html + the service
+          # worker are always revalidated so clients pick up new deploys.
+          aws s3 sync apps/web/dist "s3://${{ vars.WEB_BUCKET }}" \
+            --delete \
+            --cache-control "public,max-age=300" \
+            --exclude index.html \
+            --exclude sw.js
+          aws s3 cp apps/web/dist/index.html "s3://${{ vars.WEB_BUCKET }}/index.html" \
+            --cache-control "no-cache"
+          # sw.js is optional — only upload it if the build emitted one.
+          if [ -f apps/web/dist/sw.js ]; then
+            aws s3 cp apps/web/dist/sw.js "s3://${{ vars.WEB_BUCKET }}/sw.js" \
+              --cache-control "no-cache"
+          fi
+
+      - name: Invalidate CloudFront cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          aws cloudfront create-invalidation \
+            --distribution-id "${{ vars.CF_DISTRIBUTION_ID }}" \
+            --paths "/*"

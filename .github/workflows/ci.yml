@@ -1,7 +1,12 @@
 name: CI
 
+# Fast pre-merge checks (tests + terraform validate, NO deploy). Runs on pull
+# requests and on pushes to any branch EXCEPT main — pushes to main are covered
+# by deploy.yml, which runs the same test suite before shipping, so ignoring
+# main here avoids a redundant duplicate run.
 on:
   push:
+    branches-ignore: [main]
   pull_request:
 
 # Cancel superseded runs on the same ref to keep the queue fast.

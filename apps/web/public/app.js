@@ -1110,7 +1110,13 @@
   // Data refresh
   // ---------------------------------------------------------------------------
   async function refreshMonthData() {
-    state.monthBids = await store.listMonth(monthKey(state.anchor));
+    var panel = $('carnet-panel');
+    if (panel) panel.classList.add('is-loading');
+    try {
+      state.monthBids = await store.listMonth(monthKey(state.anchor));
+    } finally {
+      if (panel) panel.classList.remove('is-loading');
+    }
   }
   function refreshMonth() { renderCalendar(); renderAgenda(); }
   async function reloadAndRender() { await refreshMonthData(); refreshMonth(); }

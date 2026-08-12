@@ -24,7 +24,7 @@
   --brand-bright: var(--hunter-500);
   --brand-ink: #ffffff;
 
-  --bg: #ffffff;
+  --bg: #eef2ef; /* subtle tint so borderless white panels float cleanly */
   --surface: #ffffff;
   --surface-inset: #f4f7f4;
   --surface-hover: #e9f1e9;
@@ -277,8 +277,8 @@ a:hover { text-decoration: underline; }
    900 -> single column). A dead max-width:940px rule was removed here. */
 
 .panel {
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--radius-lg); box-shadow: var(--shadow-sm);
+  background: var(--surface);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow);
 }
 .panel-pad { padding: 18px; }
 .panel-head {
@@ -327,7 +327,6 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 .cal-title { font-weight: 700; font-size: 15px; text-transform: capitalize; }
 .hint-bar {
   font-size: 12px; color: var(--ink-muted); padding: 8px 18px;
-  border-bottom: 1px solid var(--border); background: var(--surface-inset);
 }
 .hint-bar kbd {
   font-family: var(--font-mono); font-size: 11px; background: var(--surface);
@@ -446,7 +445,7 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .section h2 { font-size: 22px; font-weight: 800; margin-bottom: 8px; }
 .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 20px; }
 @media (max-width: 780px) { .cards { grid-template-columns: 1fr; } }
-.card { border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 18px; background: var(--surface); }
+.card { border-radius: var(--radius-lg); padding: 18px; background: var(--surface); box-shadow: var(--shadow-sm); }
 .card h3 { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
 .card p { color: var(--ink-muted); font-size: 14px; margin: 0; }
 .price { font-size: 22px; font-weight: 800; color: var(--brand); }
@@ -521,11 +520,11 @@ dialog::backdrop { background: rgb(15 23 42 / 0.45); }
 .nc-list { display: flex; flex-direction: column; gap: 10px; }
 
 .nc-card {
-  border: 1px solid var(--border); border-radius: var(--radius-lg);
-  background: var(--surface); padding: 14px; box-shadow: var(--shadow-sm);
-  transition: transform .14s, box-shadow .14s, border-color .14s;
+  border-radius: var(--radius-lg);
+  background: var(--surface-inset); padding: 14px;
+  transition: transform .14s, background-color .14s;
 }
-.nc-card:hover { transform: translateY(-1px); border-color: var(--border-strong); box-shadow: var(--shadow); }
+.nc-card:hover { transform: translateY(-1px); background: var(--surface-hover); }
 .nc-card.is-retained { border-left: 3px solid var(--brand); }
 .nc-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .nc-card-title { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
@@ -618,6 +617,19 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
 .explainer:hover { box-shadow: var(--shadow-sm); }
 .brand-mark svg { transition: transform .2s cubic-bezier(.2, .8, .2, 1); }
 .brand:hover .brand-mark svg { transform: rotate(-6deg) scale(1.06); }
+
+/* Calendar loading: an indeterminate top bar while the carnet fetches (real
+   latency on the live API). Scoped to the carnet panel; overlay only. */
+#carnet-panel { position: relative; }
+#carnet-panel.is-loading { pointer-events: none; }
+#carnet-panel.is-loading::after {
+  content: ''; position: absolute; top: 0; left: -40%; height: 2px; width: 40%;
+  background: var(--brand-bright); border-radius: 2px;
+  box-shadow: 0 0 8px var(--brand-bright);
+  animation: loadbar 1.05s ease-in-out infinite;
+}
+#carnet-panel.is-loading #cal-grid, #carnet-panel.is-loading #agenda { opacity: .55; transition: opacity .2s; }
+@keyframes loadbar { 0% { left: -40%; } 55% { left: 62%; } 100% { left: 100%; } }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
