@@ -6,7 +6,7 @@
     <title>Nota — le carnet public des actes notariés à Québec</title>
     <meta
       name="description"
-      content="Nota — le carnet public des actes notariés à Québec. Affichez la date où vous devez signer (testament, procuration, refinancement) et ce que vous êtes prêt à payer. Un notaire de la région retient votre demande. Gratuit pour le client."
+      content="Notaire à Québec pour la date voulue : testament, procuration, refinancement. Affichez votre date, un notaire retient rapidement votre demande. Gratuit."
     />
     <meta name="keywords" content="notaire Québec, testament notarié Québec, procuration notaire, refinancement hypothécaire notaire, prix notaire Québec, rendez-vous notaire rapide, notaire urgent Québec" />
     <meta name="robots" content="index, follow, max-image-preview:large" />
@@ -36,8 +36,14 @@
     <meta name="twitter:title" content="Nota — carnet public des actes notariés à Québec" />
     <meta name="twitter:description" content="Choisissez votre date, nommez votre prix. Un notaire de Québec retient votre demande." />
     <meta name="twitter:image" content="https://d1s1h4894dau0c.cloudfront.net/og.png" />
+    <meta name="twitter:image:alt" content="Carte Nota : le carnet public des actes notariés à Québec — testament, procuration, refinancement." />
 
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Nota" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <link rel="preconnect" href="https://rsms.me/" crossorigin />
     <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
     <link rel="stylesheet" href="styles.css" />
@@ -46,11 +52,49 @@
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
+        "@type": "Organization",
+        "@id": "https://d1s1h4894dau0c.cloudfront.net/#organization",
+        "name": "Nota",
+        "url": "https://d1s1h4894dau0c.cloudfront.net/",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://d1s1h4894dau0c.cloudfront.net/og.png",
+          "width": 1200,
+          "height": 630
+        },
+        "image": "https://d1s1h4894dau0c.cloudfront.net/og.png",
+        "areaServed": { "@type": "City", "name": "Québec" }
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "@id": "https://d1s1h4894dau0c.cloudfront.net/#website",
+        "name": "Nota",
+        "url": "https://d1s1h4894dau0c.cloudfront.net/",
+        "inLanguage": "fr-CA",
+        "publisher": { "@id": "https://d1s1h4894dau0c.cloudfront.net/#organization" }
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
         "@type": "ProfessionalService",
+        "@id": "https://d1s1h4894dau0c.cloudfront.net/#business",
         "name": "Nota",
         "description": "Carnet public des actes notariés à Québec. Les clients affichent la date de signature souhaitée et leur offre ; un notaire de la région retient la demande.",
         "url": "https://d1s1h4894dau0c.cloudfront.net/",
-        "areaServed": { "@type": "City", "name": "Québec", "address": { "@type": "PostalAddress", "addressRegion": "QC", "addressCountry": "CA" } },
+        "image": "https://d1s1h4894dau0c.cloudfront.net/og.png",
+        "parentOrganization": { "@id": "https://d1s1h4894dau0c.cloudfront.net/#organization" },
+        "areaServed": { "@type": "City", "name": "Québec" },
+        "address": {
+          "@type": "PostalAddress",
+          "addressLocality": "Québec",
+          "addressRegion": "QC",
+          "addressCountry": "CA"
+        },
+        "geo": { "@type": "GeoCoordinates", "latitude": 46.8139, "longitude": -71.2080 },
         "knowsLanguage": "fr-CA",
         "priceRange": "$$",
         "hasOfferCatalog": {

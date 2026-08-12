@@ -181,7 +181,16 @@
     $('cal-title').textContent = monthTitle(state.anchor);
     var grid = $('cal-grid'); clear(grid);
 
-    DOW.forEach(function (d) { grid.appendChild(el('div', 'cal-dow', d)); });
+    // Weekday header: a role="row" of role="columnheader" cells, so the
+    // surrounding role="grid" is well-formed for assistive technology.
+    var head = el('div', 'cal-row cal-dow-row');
+    head.setAttribute('role', 'row');
+    DOW.forEach(function (d) {
+      var h = el('div', 'cal-dow', d);
+      h.setAttribute('role', 'columnheader');
+      head.appendChild(h);
+    });
+    grid.appendChild(head);
 
     var visible = applyFilters(state.monthBids);
     updateFilterSummary(visible.length);
@@ -191,11 +200,20 @@
     Object.keys(byDay).forEach(function (k) { maxCount = Math.max(maxCount, byDay[k].length); });
 
     var lead = mondayIndex(state.anchor);
-    for (var i = 0; i < lead; i++) grid.appendChild(el('div', 'cal-cell is-out'));
-
     var dim = daysInMonth(state.anchor);
     var today = todayISO();
+
+    // Each week is its own role="row" of exactly 7 cells. Leading/trailing
+    // blanks are empty gridcells so every row stays a full 7 columns.
+    var week = null;
+    function openRow() { week = el('div', 'cal-row'); week.setAttribute('role', 'row'); grid.appendChild(week); }
+    function blank() { var b = el('div', 'cal-cell is-out'); b.setAttribute('role', 'gridcell'); week.appendChild(b); }
+    var slot = 0;
+    openRow();
+    for (var i = 0; i < lead; i++) { blank(); slot++; }
+
     for (var day = 1; day <= dim; day++) {
+      if (slot > 0 && slot % 7 === 0) openRow();
       var iso = state.anchor.slice(0, 8) + String(day).padStart(2, '0');
       var cell = el('button', 'cal-cell');
       cell.type = 'button';
@@ -209,21 +227,26 @@
       cell.appendChild(el('span', 'cal-daynum', String(day)));
 
       // Cells stay essential: count + the single headline figure. All the
-      // detail lives in the day modal (click / Enter).
+      // detail lives in the day modal (click / Enter). The aria-label carries
+      // the same summary sighted users read from the badge and figure.
       var dayBids = byDay[iso] || [];
       if (dayBids.length) {
         cell.classList.add('has-bids');
         cell.appendChild(el('span', 'cal-count', String(dayBids.length)));
 
+        var n = dayBids.length;
+        var plural = n > 1 ? 's' : '';
         var open = dayBids.filter(function (b) { return b.status !== D.STATUS.RETENUE; });
         if (open.length) {
           var top = Math.max.apply(null, open.map(function (b) { return b.montant; }));
           cell.appendChild(el('span', 'cal-top', D.money(top)));
+          cell.setAttribute('aria-label', dayTitle(iso) + ', ' + n + ' offre' + plural + ', meilleure ' + D.money(top));
         } else {
           // Everything taken: show what cleared, struck through — more useful to
           // the next bidder than an em-dash.
           var cleared = Math.max.apply(null, dayBids.map(function (b) { return b.montant; }));
           cell.appendChild(el('span', 'cal-top is-cleared', D.money(cleared)));
+          cell.setAttribute('aria-label', dayTitle(iso) + ', ' + n + ' offre' + plural + ' retenue' + plural + ', ' + D.money(cleared) + ' obtenu');
         }
 
         var dens = el('div', 'cal-density');
@@ -232,8 +255,12 @@
       }
 
       cell.addEventListener('click', function () { openDay(this.dataset.date); });
-      grid.appendChild(cell);
+      week.appendChild(cell);
+      slot++;
     }
+
+    // Pad the final week so it, too, holds a full 7 columns.
+    while (slot % 7 !== 0) { blank(); slot++; }
   }
 
   function renderLegend() {
@@ -1215,6 +1242,13 @@
 
     // scroll:false so loading on a phone never scrolls past the calendar.
     setTab(state.tab, { scroll: false });
+
+    // Register the service worker (installable PWA + offline shell). Skip on
+    // localhost so the dev server's live edits aren't served from cache, and on
+    // file:// where SWs are unavailable.
+    if ('serviceWorker' in navigator && location.protocol === 'https:') {
+      navigator.serviceWorker.register('/sw.js').catch(function () {});
+    }
   }
 
   // Documented handle for tests and the future notary console. `const`/`let` at

@@ -331,7 +331,8 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
   border-radius: var(--radius-sm); padding: 1px 5px; color: var(--ink);
 }
 
-.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; padding: 10px 16px 16px; }
+.cal-grid { display: flex; flex-direction: column; gap: 6px; padding: 10px 16px 16px; }
+.cal-row { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
 .cal-dow { text-align: center; font-size: 11px; font-weight: 700; color: var(--ink-muted); padding: 4px 0; text-transform: uppercase; letter-spacing: .04em; }
 .cal-cell {
   background: var(--surface); min-height: 74px; padding: 7px 9px; position: relative;
@@ -639,6 +640,7 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   .cal-cell { min-height: 66px; padding: 6px 6px; }
   .cal-top { font-size: 13px; }
   .cal-grid { gap: 4px; padding: 8px 10px 12px; }
+  .cal-row { gap: 4px; }
   .cal-dow { font-size: 10px; }
   .filters { padding: 10px 14px; gap: 8px; }
   .field { flex: 1 1 40%; }
