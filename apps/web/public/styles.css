@@ -253,8 +253,8 @@ a:hover { text-decoration: underline; }
 
 /* Time-not-price explainer band */
 .explainer {
-  display: flex; align-items: center; gap: 12px;
-  margin-top: 14px; padding: 10px 14px;
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 12px; padding: 8px 12px;
   background: var(--surface-inset); border: 1px solid var(--border);
   border-left: 3px solid var(--brand); border-radius: var(--radius);
 }
@@ -270,7 +270,7 @@ a:hover { text-decoration: underline; }
 /* Only set vertical padding here — the horizontal padding comes from .wrap.
    A `padding: … 0 …` shorthand would reset .wrap's side padding, pushing the
    panels 28px past the hero content on each side (misalignment). */
-.layout { display: grid; grid-template-columns: 1fr 380px; gap: clamp(16px, 2.4vw, 24px); padding-top: clamp(12px, 2vw, 18px); padding-bottom: clamp(40px, 7vw, 64px); align-items: start; }
+.layout { display: grid; grid-template-columns: 1fr 380px; gap: clamp(16px, 2.4vw, 24px); padding-top: clamp(6px, 1.2vw, 12px); padding-bottom: clamp(40px, 7vw, 64px); align-items: start; }
 /* Maximized calendar: the offer panel hides and the calendar takes the full width. */
 .layout.cal-max { grid-template-columns: 1fr; }
 .layout.cal-max .side { display: none; }
@@ -641,17 +641,14 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   background: var(--surface);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
-  padding: 16px 18px;
+  padding: 13px 15px;
 }
-.sub-card-head { display: flex; align-items: flex-start; gap: 12px; }
-.sub-card-ico {
-  flex: none; width: 34px; height: 34px; border-radius: var(--radius);
-  display: grid; place-items: center;
-  background: var(--surface-inset); color: var(--brand);
-}
-.sub-card-title { font-weight: 700; font-size: 14px; }
-.sub-card-sub { font-size: 12.5px; color: var(--ink-muted); margin-top: 2px; }
-.sub-card-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.sub-card-head { display: flex; align-items: center; gap: 11px; }
+.sub-card-logo { flex: none; display: grid; place-items: center; }
+.sub-card-logo svg { display: block; }
+.sub-card-title { font-weight: 700; font-size: 13.5px; line-height: 1.2; }
+.sub-card-sub { font-size: 12px; color: var(--ink-muted); margin-top: 1px; }
+.sub-card-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
 .sub-card-actions .btn { flex: 1 1 auto; }
 
 /* Preserve the brand entrance cascade under the two-column nesting: cancel the
