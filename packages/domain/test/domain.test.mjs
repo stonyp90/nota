@@ -30,7 +30,7 @@ test('services: acte de vente is intentionally absent', () => {
 });
 
 test('services: starting prices are the canonical values', () => {
-  assert.equal(D.serviceById('testament').prixDepart, 495);
+  assert.equal(D.serviceById('testament').prixDepart, 650);
   assert.equal(D.serviceById('procuration').prixDepart, 295);
   assert.equal(D.serviceById('refinancement').prixDepart, 950);
 });
@@ -96,13 +96,13 @@ test('validateOffer: rejects below starting price', () => {
 });
 
 test('validateOffer: rejects above the 10x premium cap', () => {
-  const r = D.validateOffer({ serviceId: 'testament', dateISO: '2026-08-13', montant: 5000, todayISO: TODAY });
+  const r = D.validateOffer({ serviceId: 'testament', dateISO: '2026-08-13', montant: 7000, todayISO: TODAY });
   assert.equal(r.ok, false);
   assert.ok(r.errors.some((e) => e.code === 'plafond_depasse'));
 });
 
 test('validateOffer: exactly 10x is allowed', () => {
-  const r = D.validateOffer({ serviceId: 'testament', dateISO: '2026-08-13', montant: 4950, todayISO: TODAY });
+  const r = D.validateOffer({ serviceId: 'testament', dateISO: '2026-08-13', montant: 6500, todayISO: TODAY });
   assert.equal(r.ok, true);
 });
 
@@ -153,6 +153,29 @@ test('makeFixtures: every fixture is a valid offer', () => {
   for (const b of fx) {
     const r = D.validateOffer({ serviceId: b.serviceId, dateISO: b.dateISO, montant: b.montant, todayISO: TODAY });
     assert.equal(r.ok, true, `${b.id} ${b.serviceId} ${b.montant} on ${b.dateISO}`);
+  }
+});
+
+test('leadReadiness: sellable only when dossier complete AND consent given', () => {
+  const svc = D.serviceById('procuration');
+  const ids = [...svc.documents, ...svc.champs].map((x) => x.id);
+
+  assert.equal(D.leadReadiness('procuration', {}).ready, false);
+
+  const filled = {};
+  ids.forEach((id) => { filled[id] = 'ok'; });
+  const noConsent = D.leadReadiness('procuration', filled);
+  assert.equal(noConsent.missing.length, 0);
+  assert.equal(noConsent.ready, false); // complete but no consent
+
+  filled.__consent = true;
+  assert.equal(D.leadReadiness('procuration', filled).ready, true);
+});
+
+test('leadReadiness: identity document is a required intake item', () => {
+  // Every service must collect a photo ID before a lead is complete.
+  for (const s of D.SERVICES) {
+    assert.ok(s.documents.some((d) => d.id === 'piece_identite'), `${s.id} collects ID`);
   }
 });
 

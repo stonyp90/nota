@@ -37,7 +37,7 @@ test('POST /bids accepts a valid offer and echoes the derived tier', async () =>
 
 test('POST then GET: the new bid shows up in its month partition', async () => {
   const a = app();
-  await post(a, { serviceId: 'testament', dateISO: '2026-08-20', montant: 600 });
+  await post(a, { serviceId: 'testament', dateISO: '2026-08-20', montant: 700 });
   const res = await getBids(a, '2026-08');
   const { bids } = parse(res);
   assert.equal(bids.length, 1);
@@ -46,8 +46,8 @@ test('POST then GET: the new bid shows up in its month partition', async () => {
 
 test('GET /bids defaults to the current month and reads one month only', async () => {
   const a = app();
-  await post(a, { serviceId: 'testament', dateISO: '2026-08-20', montant: 600 });
-  await post(a, { serviceId: 'testament', dateISO: '2026-09-20', montant: 600 });
+  await post(a, { serviceId: 'testament', dateISO: '2026-08-20', montant: 700 });
+  await post(a, { serviceId: 'testament', dateISO: '2026-09-20', montant: 700 });
   assert.equal(parse(await getBids(a, '2026-08')).bids.length, 1);
   assert.equal(parse(await getBids(a, '2026-09')).bids.length, 1);
   assert.equal(parse(await getBids(a)).bids.length, 1); // defaults to 2026-08
@@ -62,7 +62,7 @@ test('server revalidates: below starting price is 422, not stored', async () => 
 });
 
 test('server revalidates: above 10x premium cap is 422', async () => {
-  const res = await post(app(), { serviceId: 'testament', dateISO: '2026-08-13', montant: 5000 });
+  const res = await post(app(), { serviceId: 'testament', dateISO: '2026-08-13', montant: 7000 });
   assert.equal(res.statusCode, 422);
   assert.ok(parse(res).errors.some((e) => e.code === 'plafond_depasse'));
 });
@@ -84,7 +84,7 @@ test('server never trusts a client-sent tier or premium', async () => {
 
 test('anonymity is enforced server-side: name never leaks when anonyme', async () => {
   const a = app();
-  await post(a, { serviceId: 'testament', dateISO: '2026-08-20', montant: 600, anonyme: true, nom: 'Marie-Ève Tremblay', prefixe: 'g1r' });
+  await post(a, { serviceId: 'testament', dateISO: '2026-08-20', montant: 700, anonyme: true, nom: 'Marie-Ève Tremblay', prefixe: 'g1r' });
   const bid = parse(await getBids(a, '2026-08')).bids[0];
   assert.equal(bid.anonyme, true);
   assert.equal(bid.nom, null);
@@ -93,7 +93,7 @@ test('anonymity is enforced server-side: name never leaks when anonyme', async (
 
 test('a named bid keeps its name public', async () => {
   const a = app();
-  await post(a, { serviceId: 'testament', dateISO: '2026-08-20', montant: 600, anonyme: false, nom: 'Luc Gagné' });
+  await post(a, { serviceId: 'testament', dateISO: '2026-08-20', montant: 700, anonyme: false, nom: 'Luc Gagné' });
   const bid = parse(await getBids(a, '2026-08')).bids[0];
   assert.equal(bid.nom, 'Luc Gagné');
 });
@@ -111,7 +111,7 @@ test('unknown route is 404', async () => {
 test('the public projection omits any dossier fields', async () => {
   // Even if a raw item somehow carries documents, GET must not expose them.
   const repo = createMemoryRepo([
-    { id: 'x', serviceId: 'testament', dateISO: '2026-08-20', montant: 600, status: 'ouverte', anonyme: true, prefixe: 'G1R', documents: { secret: 'leak' }, createdAt: TODAY },
+    { id: 'x', serviceId: 'testament', dateISO: '2026-08-20', montant: 700, status: 'ouverte', anonyme: true, prefixe: 'G1R', documents: { secret: 'leak' }, createdAt: TODAY },
   ]);
   const a = { ...createApp(repo, { now: () => TODAY }) };
   const bid = parse(await a.handle({ method: 'GET', path: '/bids', query: { month: '2026-08' } })).bids[0];

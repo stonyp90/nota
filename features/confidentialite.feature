@@ -5,7 +5,7 @@ Fonctionnalité: Confidentialité de l'enchère
   affiche son nom. Le préfixe postal reste visible dans les deux cas.
 
   Scénario: une enchère anonyme masque le nom mais montre le préfixe
-    Quand je publie une enchère anonyme au nom de "Marie Tremblay" avec préfixe "G1R" pour "testament" le "2026-08-20" à 600
+    Quand je publie une enchère anonyme au nom de "Marie Tremblay" avec préfixe "G1R" pour "testament" le "2026-08-20" à 700
     Alors la réponse a le statut 201
     Et dans le carnet du mois "2026-08", l'enchère n'expose aucun nom
     Et dans le carnet du mois "2026-08", l'enchère expose le préfixe "G1R"

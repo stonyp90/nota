@@ -194,8 +194,10 @@ test('dossier tab lists first service intake items and badge shows 0/N', async (
   Nota.setTab('dossier');
   const svc = D.SERVICES[0];
   const expected = svc.documents.length + svc.champs.length;
-  assert.equal(all(doc, '#dossier-list .dossier-item').length, expected);
-  assert.equal(expected, 5); // testament: 2 docs + 3 champs
+  // The intake items, excluding the appended consent row.
+  assert.equal(all(doc, '#dossier-list .dossier-item:not(.dossier-consent)').length, expected);
+  assert.equal(expected, 6); // testament: 2 docs + 4 champs
+  assert.equal(all(doc, '#dossier-list .dossier-consent').length, 1); // consent row present
   assert.equal($(doc, 'dossier-badge').textContent, '0/' + expected);
 });
 

@@ -39,7 +39,9 @@
     {
       id: 'testament',
       nom: 'Testament et mandat de protection',
-      prixDepart: 495,
+      // Floor reflects the two-act bundle (will + protection mandate), which the
+      // Québec market prices at ~700–1000 $. See docs/decisions/0006.
+      prixDepart: 650,
       description:
         'Testament notarié et mandat de protection en cas d’inaptitude.',
       documents: [
@@ -50,6 +52,7 @@
         { id: 'liquidateur', label: 'Liquidateur (exécuteur) pressenti', aide: 'La personne qui réglera la succession. Nom complet et lien avec vous.' },
         { id: 'beneficiaires', label: 'Bénéficiaires principaux', aide: 'Qui hérite, et dans quelles proportions approximatives.' },
         { id: 'mandataire', label: 'Mandataire en cas d’inaptitude', aide: 'La personne qui vous représenterait si vous perdiez vos capacités.' },
+        { id: 'tuteur', label: 'Tuteur des enfants mineurs', aide: 'Si vous avez des enfants mineurs, qui en prendrait soin. Écrivez « aucun » s’il n’y a pas d’enfant mineur.' },
       ],
     },
     {
@@ -64,6 +67,7 @@
       champs: [
         { id: 'mandataire', label: 'Personne mandatée', aide: 'Nom complet de la personne qui pourra agir en votre nom.' },
         { id: 'portee', label: 'Portée de la procuration', aide: 'Générale (tous vos biens) ou spéciale. Écrivez « aucune limite » si générale.' },
+        { id: 'duree', label: 'Durée ou échéance', aide: 'Jusqu’à quand la procuration doit valoir. Écrivez « indéterminée » si sans fin prévue.' },
       ],
     },
     {
@@ -77,6 +81,7 @@
         { id: 'offre_preteur', nom: 'Offre de financement du prêteur', aide: 'Le document d’engagement de la banque, avec le taux et le montant.' },
         { id: 'releve_hypotheque', nom: 'Relevé hypothécaire actuel', aide: 'Un relevé de moins de 30 jours du prêt à rembourser.' },
         { id: 'compte_taxes', nom: 'Compte de taxes municipales', aide: 'Le compte le plus récent de la municipalité.' },
+        { id: 'certificat_localisation', nom: 'Certificat de localisation', aide: 'Le plan de l’arpenteur-géomètre. C’est souvent le document qui retarde un dossier — vérifiez qu’il est à jour.' },
       ],
       champs: [
         { id: 'adresse', label: 'Adresse de l’immeuble', aide: 'Adresse civique complète de la propriété refinancée.' },
@@ -267,6 +272,31 @@
     return d.toISOString().slice(0, 10);
   }
 
+  // --- Lead qualification ----------------------------------------------------
+  // A lead is "sellable" to a notary only once the client has assembled every
+  // required document and field for the service AND consented to share the
+  // dossier with the notary who retains the request. Identity verification
+  // itself is performed by the notary at signing (in person / by video, per
+  // Québec rules) — Nota collects the ID document, it does not verify identity.
+  // `saved` is the per-service intake map; consent is stored under `__consent`.
+  function leadReadiness(serviceId, saved) {
+    saved = saved || {};
+    const svc = serviceById(serviceId);
+    if (!svc) return { total: 0, done: 0, missing: [], consent: false, ready: false };
+    const items = svc.documents
+      .map((d) => ({ id: d.id, nom: d.nom }))
+      .concat(svc.champs.map((c) => ({ id: c.id, nom: c.label })));
+    const missing = items.filter((it) => !saved[it.id]).map((it) => it.nom);
+    const consent = !!saved.__consent;
+    return {
+      total: items.length,
+      done: items.length - missing.length,
+      missing,
+      consent,
+      ready: missing.length === 0 && consent,
+    };
+  }
+
   // --- Public label helpers --------------------------------------------------
   // How a bid identifies itself on the public carnet: the chosen name, or the
   // postal prefix for anonymous bids ("Client · G1R").
@@ -291,6 +321,7 @@
     rankOf,
     makeFixtures,
     bidLabel,
+    leadReadiness,
     FIXTURE_SEED,
   };
 });

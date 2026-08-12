@@ -700,6 +700,27 @@
       list.appendChild(row);
     });
 
+    // Consent to share the completed dossier with the retained notary (Law 25).
+    // Required before a lead is "sellable"; the notary verifies identity at signing.
+    var savedC = dossierFor(svc.id);
+    var crow = el('div', 'dossier-item dossier-consent');
+    var ccheck = el('div', 'dossier-check', '✓'); ccheck.dataset.on = savedC.__consent ? 'true' : 'false';
+    var cbody = el('div', 'dossier-body');
+    cbody.appendChild(el('div', 'dossier-name', 'Consentement de partage'));
+    cbody.appendChild(el('div', 'help', 'Le notaire qui retient votre demande vérifiera votre identité à la signature. Rien n’est transmis avant.'));
+    var clabel = el('label', 'consent-toggle');
+    var cinput = document.createElement('input'); cinput.type = 'checkbox'; cinput.checked = !!savedC.__consent;
+    cinput.addEventListener('change', function () {
+      dossierSet(svc.id, '__consent', this.checked ? '1' : '');
+      ccheck.dataset.on = this.checked ? 'true' : 'false';
+      updateDossierBar();
+    });
+    clabel.appendChild(cinput);
+    clabel.appendChild(document.createTextNode(' J’autorise le partage de mon dossier avec le notaire retenu.'));
+    cbody.appendChild(clabel);
+    crow.appendChild(ccheck); crow.appendChild(cbody);
+    list.appendChild(crow);
+
     updateDossierBar();
   }
 
@@ -711,17 +732,26 @@
     var saved = dossierFor(svc.id);
     var done = items.filter(function (it) { return saved[it.id]; }).length;
     var total = items.length;
+    var r = D.leadReadiness(svc.id, saved);
     $('dossier-count').textContent = done + ' / ' + total;
     $('dossier-fill').style.width = (total ? Math.round((done / total) * 100) : 0) + '%';
-    var missing = items.filter(function (it) { return !saved[it.id]; }).map(function (it) { return it.nom; });
-    $('dossier-missing').textContent = missing.length
-      ? 'À compléter : ' + missing.join(', ') + '.'
-      : 'Dossier complet. Prêt à être transmis dès qu’un notaire retient votre offre.';
+
+    var m = $('dossier-missing');
+    if (r.ready) {
+      m.textContent = '✓ Prêt à être retenu par un notaire — votre identité sera vérifiée à la signature.';
+      m.dataset.ready = 'true';
+    } else {
+      var parts = [];
+      if (r.missing.length) parts.push('à compléter : ' + r.missing.join(', '));
+      if (!r.consent) parts.push('consentement de partage requis');
+      m.textContent = parts.join(' · ') + '.';
+      m.dataset.ready = 'false';
+    }
 
     var badge = $('dossier-badge');
     badge.hidden = false;
     badge.textContent = done + '/' + total;
-    badge.dataset.complete = done === total ? 'true' : 'false';
+    badge.dataset.complete = r.ready ? 'true' : 'false';
   }
 
   function readAllDossier() {

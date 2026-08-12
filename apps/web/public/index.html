@@ -220,7 +220,7 @@
 
                   <div class="switch-row">
                     <div>
-                      <div style="font-weight:600;font-size:14px">Offre anonyme</div>
+                      <div class="switch-title">Offre anonyme</div>
                       <div class="help" id="anon-help">Affichée comme « Client · secteur postal ».</div>
                     </div>
                     <label class="switch">
@@ -236,7 +236,7 @@
 
                   <div class="form-row">
                     <label class="lbl" for="o-prefix">3 premiers caractères du code postal</label>
-                    <input type="text" id="o-prefix" maxlength="3" placeholder="G1R" style="text-transform:uppercase" />
+                    <input type="text" id="o-prefix" maxlength="3" placeholder="G1R" class="uppercase" />
                     <p class="help">Aide le notaire à jauger la distance sans vous identifier.</p>
                   </div>
 
@@ -248,14 +248,14 @@
                     et supprimées sur demande (Loi 25).
                   </p>
 
-                  <button type="submit" class="btn btn-primary" style="width:100%" id="offer-submit" disabled>
+                  <button type="submit" class="btn btn-primary w-full" id="offer-submit" disabled>
                     Publier mon offre
                   </button>
                 </form>
 
                 <div id="offer-success" hidden>
-                  <p class="help" style="margin-top:14px">Offre publiée. Ajoutez la date à votre agenda :</p>
-                  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+                  <p class="help mt-sm">Offre publiée. Ajoutez la date à votre agenda :</p>
+                  <div class="actions-inline">
                     <a class="btn btn-sm" id="ics-link" download="offre-nota.ics">Télécharger .ics</a>
                     <a class="btn btn-sm" id="gcal-link" target="_blank" rel="noopener">Google Agenda</a>
                     <a class="btn btn-sm" id="outlook-link" target="_blank" rel="noopener">Outlook</a>
@@ -282,7 +282,7 @@
             <h1>Ce que le notaire demandera</h1>
             <p>Préparez-le d’avance. Rien n’est transmis avant qu’un notaire retienne votre demande.</p>
           </div>
-          <div class="panel" style="margin-bottom:60px">
+          <div class="panel mb-xl">
             <div class="filters">
               <div class="field">
                 <label for="d-service">Service</label>
@@ -290,7 +290,7 @@
               </div>
             </div>
             <div class="dossier-progress">
-              <div style="display:flex;justify-content:space-between;align-items:center">
+              <div class="row-between">
                 <strong id="dossier-count">0 / 0</strong>
                 <button class="btn btn-sm" id="dossier-read-all">
                   <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>
@@ -335,8 +335,8 @@
             </div>
           </div>
 
-          <div class="panel panel-pad" style="margin:24px 0 60px;max-width:560px">
-            <h2 style="font-size:16px;margin-bottom:12px">Manifester votre intérêt</h2>
+          <div class="panel panel-pad panel-narrow">
+            <h2 class="h-sub">Manifester votre intérêt</h2>
             <form id="notary-form">
               <div class="form-row">
                 <label class="lbl" for="n-name">Nom du notaire</label>
@@ -353,7 +353,7 @@
               <ul class="errors" id="notary-errors" hidden></ul>
               <button type="submit" class="btn btn-primary">Demander l’accès</button>
             </form>
-            <p class="note" style="margin-top:16px">
+            <p class="note mt-md">
               <strong>À vérifier avant le lancement.</strong> Les enchères publiques sur des honoraires professionnels
               peuvent attirer l’attention de la Chambre. Un appel à l’inspection professionnelle est recommandé.
             </p>

@@ -400,6 +400,9 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .dossier-bar { height: 8px; background: var(--surface-inset); border-radius: 999px; overflow: hidden; margin: 8px 0; }
 .dossier-bar > span { display: block; height: 100%; background: var(--brand); transition: width .2s; }
 .dossier-missing { font-size: 13px; color: var(--ink-muted); }
+.dossier-missing[data-ready='true'] { color: var(--ok); font-weight: 700; }
+.consent-toggle { display: inline-flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.consent-toggle input { width: 18px; height: 18px; accent-color: var(--brand); cursor: pointer; }
 .dossier-list { padding: 6px 0; }
 .dossier-item { display: flex; gap: 12px; align-items: flex-start; padding: 12px 18px; border-top: 1px solid var(--border); }
 .dossier-check { flex: none; margin-top: 3px; width: 20px; height: 20px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); display: grid; place-items: center; color: var(--brand); font-weight: 800; }
@@ -468,6 +471,18 @@ dialog::backdrop { background: rgb(15 23 42 / 0.45); }
 .day-foot .day-metric { flex: 1; }
 .day-metric .k { font-size: 11px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: .04em; }
 .day-metric .v { font-size: 18px; font-weight: 800; }
+
+/* Brand utility classes — replace ad-hoc inline styles, keep markup on-brand */
+.w-full { width: 100%; }
+.uppercase { text-transform: uppercase; }
+.mb-xl { margin-bottom: 48px; }
+.mt-sm { margin-top: 14px; }
+.mt-md { margin-top: 16px; }
+.row-between { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.actions-inline { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.switch-title { font-weight: 600; font-size: 14px; }
+.panel-narrow { max-width: 560px; margin: 24px 0 48px; }
+.h-sub { font-size: 16px; font-weight: 700; margin-bottom: 12px; }
 
 .hidden, [hidden] { display: none !important; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }

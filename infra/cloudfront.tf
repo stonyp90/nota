@@ -4,18 +4,20 @@
 #
 # Origins:
 #   1. S3 bucket (via OAC)        -> default behavior, serves the static SPA.
-#   2. Lambda function URL        -> ordered behavior for /api/*, no caching.
+#   2. API Gateway HTTP API       -> ordered behavior for /api/*, no caching.
 #
 # FUTURE ADDITIONS (not built yet):
 #   - SES for transactional email (continue-prompt #5).
 #   - Presigned-URL S3 upload bucket(s) for user uploads (#2).
 ###############################################################################
 
-# Origin Access Control that signs CloudFront -> Lambda function URL requests
-# with SigV4, so the IAM-authed function URL accepts them.
+# Origin Access Control originally created to SigV4-sign CloudFront -> Lambda
+# function URL requests. The /api/* origin now goes through API Gateway (public
+# HTTPS, no OAC needed) because the account SCP blocks lambda:InvokeFunctionUrl.
+# This resource is retained but unused (harmless); safe to remove later.
 resource "aws_cloudfront_origin_access_control" "lambda" {
   name                              = "${var.project_name}-lambda-oac"
-  description                       = "SigV4 signing for the Lambda function URL origin"
+  description                       = "SigV4 signing for the Lambda function URL origin (unused)"
   origin_access_control_origin_type = "lambda"
   signing_behavior                  = "always"
   signing_protocol                  = "sigv4"
@@ -25,13 +27,11 @@ locals {
   s3_origin_id     = "s3-web"
   lambda_origin_id = "lambda-api"
 
-  # Lambda function URL comes back as "https://<id>.lambda-url.<region>.on.aws/".
-  # CloudFront custom origins need a bare host, so strip scheme and trailing slash.
-  lambda_origin_domain = replace(
-    replace(aws_lambda_function_url.api.function_url, "https://", ""),
-    "/",
-    "",
-  )
+  # The /api/* origin is the public HTTP API Gateway endpoint, a bare host:
+  # "<api-id>.execute-api.<region>.amazonaws.com". CloudFront proxies to it
+  # over HTTPS; no OAC/SigV4 signing is needed (the API is public and the
+  # Lambda is protected by the SCP-allowed lambda:InvokeFunction path).
+  api_origin_domain = "${aws_apigatewayv2_api.api.id}.execute-api.${var.region}.amazonaws.com"
 
   # Attach a custom domain only when var.domain_name is set.
   has_custom_domain = var.domain_name != ""
@@ -51,20 +51,19 @@ resource "aws_cloudfront_distribution" "web" {
     origin_access_control_id = aws_cloudfront_origin_access_control.web.id
   }
 
-  # --- Origin 2: Lambda function URL via OAC ----------------------------
-  # The function URL is AuthType AWS_IAM (never public — org SCPs commonly
-  # block public function URLs anyway). CloudFront signs each origin request
-  # with SigV4 through this Origin Access Control, so the API is reachable
-  # only through the distribution.
+  # --- Origin 2: API Gateway HTTP API (public HTTPS) --------------------
+  # Repointed from the Lambda function URL to an API Gateway HTTP API because
+  # the account SCP blocks lambda:InvokeFunctionUrl. The HTTP API endpoint is
+  # public; CloudFront simply proxies to it over HTTPS (no OAC/SigV4). The
+  # $default route forwards /api/* to the same Lambda.
   origin {
-    origin_id                = local.lambda_origin_id
-    domain_name              = local.lambda_origin_domain
-    origin_access_control_id = aws_cloudfront_origin_access_control.lambda.id
+    origin_id   = local.lambda_origin_id
+    domain_name = local.api_origin_domain
 
     custom_origin_config {
       http_port              = 80
       https_port             = 443
-      origin_protocol_policy = "https-only" # Lambda URLs are HTTPS only
+      origin_protocol_policy = "https-only" # API Gateway is HTTPS only
       origin_ssl_protocols   = ["TLSv1.2"]
     }
   }

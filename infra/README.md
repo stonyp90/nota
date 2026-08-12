@@ -20,11 +20,14 @@ Lambda API, both served **same-origin** through a single CloudFront distribution
 
 - **S3** — private bucket (all public access blocked, versioned, AES256). Read
   only by CloudFront via Origin Access Control (OAC).
-- **Lambda** — `apps/api` zipped and deployed with a function URL (auth `NONE`);
-  reachable only through CloudFront's `/api/*` behavior in practice.
+- **Lambda** — `apps/api` zipped and deployed. Fronted by an **API Gateway HTTP
+  API** (`apigateway.tf`); the account SCP blocks Lambda function URLs
+  (`lambda:InvokeFunctionUrl`), so CloudFront proxies `/api/*` to the public HTTP
+  API instead, which invokes the Lambda via `lambda:InvokeFunction`. See
+  `docs/decisions/0004`.
 - **DynamoDB** — single table, `PK`/`SK` string keys, PAY_PER_REQUEST, PITR on.
-- **CloudFront** — two origins; `403`/`404` are rewritten to `/index.html` (200)
-  for SPA client-side routing.
+- **CloudFront** — two origins (S3 for the SPA, API Gateway for `/api/*`);
+  `403`/`404` from S3 are rewritten to `/index.html` (200) for SPA routing.
 
 ## Two-provider ACM caveat
 
