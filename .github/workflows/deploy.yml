@@ -115,15 +115,26 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Assets: browsers revalidate every 5 min (max-age), but the CloudFront
-          # edge caches them for a day (s-maxage) — fewer origin hits, lower cost;
-          # every deploy invalidates /* so the edge never serves stale assets.
-          # index.html + the service worker are always revalidated.
+          # JS/CSS are content-hashed by the build (app.<hash>.js …), so their
+          # names change whenever their bytes do — cache them immutably for a
+          # year. Stable icons ride along. index.html + sw.js are the un-hashed
+          # source of truth that points at the current hashes: never cache them,
+          # so a new deploy is picked up immediately. --delete prunes the prior
+          # build's hashed files. /* is still invalidated at the end.
           aws s3 sync apps/web/dist "s3://${{ vars.WEB_BUCKET }}" \
             --delete \
-            --cache-control "public,max-age=300,s-maxage=86400" \
+            --cache-control "public,max-age=31536000,immutable" \
             --exclude index.html \
-            --exclude sw.js
+            --exclude sw.js \
+            --exclude robots.txt \
+            --exclude sitemap.xml
+          # SEO text files change without a hash — keep them only briefly cached.
+          for f in robots.txt sitemap.xml; do
+            if [ -f "apps/web/dist/$f" ]; then
+              aws s3 cp "apps/web/dist/$f" "s3://${{ vars.WEB_BUCKET }}/$f" \
+                --cache-control "public,max-age=3600"
+            fi
+          done
           aws s3 cp apps/web/dist/index.html "s3://${{ vars.WEB_BUCKET }}/index.html" \
             --cache-control "no-cache"
           # sw.js is optional — only upload it if the build emitted one.

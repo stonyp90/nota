@@ -1,12 +1,20 @@
 /* Nota service worker — installable PWA + offline app shell.
-   Shell (HTML/CSS/JS) is cache-first so the app opens offline (then falls back
-   to its localStorage carnet). The API is network-first and never cached — the
-   carnet must be fresh, and POSTs must reach the server. */
-const CACHE = 'nota-shell-v1';
+   Strategy:
+     - HTML (navigations): network-first, so a new deploy's index.html — which
+       points at freshly content-hashed asset filenames — is picked up the moment
+       the user is online; falls back to the cached shell when offline.
+     - Hashed assets (app.<hash>.js, styles.<hash>.css, domain.<hash>.js) and
+       icons: cache-first. Safe because a content change changes the filename, so
+       a stale asset can never shadow a new one.
+     - API: network-first, never cached (the carnet must be fresh; POSTs must
+       reach the server).
+   The cache name is stamped per build, so `activate` purges every prior shell
+   and returning visitors never get pinned to an old bundle. */
+const CACHE = 'nota-shell-dev'; /* build.mjs stamps this per build */
 const SHELL = [
   '/', '/index.html', '/app.js', '/domain.js', '/styles.css',
   '/favicon.svg', '/icon-192.png', '/icon-512.png', '/manifest.webmanifest',
-];
+]; /* build.mjs rewrites this list with the hashed filenames */
 
 self.addEventListener('install', (e) => {
   e.waitUntil(
@@ -39,7 +47,23 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // Shell/assets: cache-first, then network (and cache it), else the app shell.
+  // HTML shell: network-first so new asset hashes are picked up online; the
+  // cached shell is the offline fallback. Same-origin navigations only.
+  const isHtml = req.mode === 'navigate' || url.pathname === '/' || url.pathname === '/index.html';
+  if (isHtml) {
+    e.respondWith(
+      fetch(req)
+        .then((res) => {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put('/index.html', copy));
+          return res;
+        })
+        .catch(() => caches.match('/index.html').then((r) => r || caches.match('/')))
+    );
+    return;
+  }
+
+  // Hashed assets / icons: cache-first, then network (and cache it).
   e.respondWith(
     caches.match(req).then((cached) =>
       cached ||
