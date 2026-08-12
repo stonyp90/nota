@@ -1,0 +1,76 @@
+'use strict';
+
+const assert = require('node:assert/strict');
+const { When, Then } = require('@cucumber/cucumber');
+
+// --- Tarification et paliers de temps ---------------------------------------
+
+When('une signature est prévue dans {int} jours', function (jours) {
+  this.result = this.domain.tierForDays(jours);
+});
+
+Then('le palier est {string}', function (palier) {
+  assert.equal(this.result, palier);
+});
+
+// --- Format monétaire québécois ---------------------------------------------
+
+When('je formate le montant {int}', function (dollars) {
+  this.result = this.domain.money(dollars);
+});
+
+Then('l\'affichage est {string}', function (affichage) {
+  assert.equal(this.result, affichage);
+});
+
+// --- Plancher et plafond (validateOffer) ------------------------------------
+
+When('je valide une offre de {int} $ pour une date valide', function (montant) {
+  const dateISO = this.domain.addDays(this.today, 10); // 10 jours -> palier rapide
+  this.result = this.domain.validateOffer({
+    serviceId: this.input.serviceId,
+    dateISO,
+    montant,
+    todayISO: this.today,
+  });
+});
+
+Then('l\'offre est refusée', function () {
+  assert.equal(this.result.ok, false);
+});
+
+Then('l\'offre est acceptée', function () {
+  assert.equal(this.result.ok, true, 'erreurs: ' + JSON.stringify(this.result.errors));
+});
+
+Then('l\'erreur {string} est présente', function (code) {
+  const codes = this.result.errors.map((e) => e.code);
+  assert.ok(codes.includes(code), `attendu ${code}, obtenu ${JSON.stringify(codes)}`);
+});
+
+Then('le palier calculé n\'est pas vide', function () {
+  assert.ok(this.result.tier, 'le palier ne doit pas être nul');
+});
+
+// --- Garde-fou déontologique ------------------------------------------------
+
+const INTERDITS = ['commission', 'cut', 'percentage', 'pourcentage', 'ristourne', 'rake', 'fee', 'kickback'];
+
+When('j\'inspecte les exports du module de domaine', function () {
+  this.exports = Object.keys(this.domain);
+});
+
+Then('aucun export ne ressemble à une commission ou à un pourcentage', function () {
+  const suspects = this.exports.filter((name) =>
+    INTERDITS.some((mot) => name.toLowerCase().includes(mot))
+  );
+  assert.deepEqual(suspects, [], `exports suspects: ${JSON.stringify(suspects)}`);
+});
+
+Then('il n\'existe pas d\'export {string}', function (name) {
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(this.domain, name),
+    false,
+    `le domaine ne doit pas exposer "${name}"`
+  );
+});

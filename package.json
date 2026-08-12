@@ -1,0 +1,23 @@
+{
+  "name": "nota",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Nota — a public marketplace where clients in Quebec City post the date they need a notarial act signed and what they will pay for it.",
+  "license": "UNLICENSED",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "test": "npm test --workspace @nota/domain && npm test --workspace @nota/api",
+    "test:domain": "npm test --workspace @nota/domain",
+    "test:api": "npm test --workspace @nota/api",
+    "test:web": "npm test --workspace @nota/web",
+    "build": "npm run build --workspace @nota/web",
+    "dev": "npm run dev --workspace @nota/web",
+    "api:local": "npm run start --workspace @nota/api"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

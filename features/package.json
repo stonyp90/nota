@@ -1,0 +1,13 @@
+{
+  "name": "@nota/features",
+  "version": "0.1.0",
+  "private": true,
+  "description": "BDD (Gherkin) executable specifications for the Nota marketplace, written against @nota/domain and apps/api.",
+  "type": "commonjs",
+  "scripts": {
+    "test": "cucumber-js"
+  },
+  "devDependencies": {
+    "@cucumber/cucumber": "latest"
+  }
+}

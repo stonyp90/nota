@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build output
+apps/web/dist/
+apps/api/build/
+infra/build/
+
+# Terraform
+infra/.terraform/
+infra/.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+infra/terraform.tfvars
+crash.log
+
+# Secrets / local env — never commit credentials
+.env
+.env.*
+*.pem
+awsenv.sh
+
+# OS / editor
+.DS_Store
+*.log
+.idea/
+.vscode/

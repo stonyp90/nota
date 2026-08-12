@@ -1,0 +1,190 @@
+# Nota
+
+**Nota** is a public marketplace for notarial acts in Quebec City. A client posts
+the date they need an *acte notarié* signed and what they are willing to pay for
+it; notaries watch a public calendar (the *carnet*) and pick up the work that
+fits their schedule. Closer dates command a higher premium — the market prices
+urgency.
+
+> **How Nota makes money — the one rule that shapes everything.** Nota charges
+> notaries a **flat subscription**. It never takes a percentage or commission of
+> the *acte*. Quebec's *Code de déontologie des notaires* (Chambre des notaires
+> du Québec) forbids sharing professional fees with a non-notaire, so a
+> commission model is not an option. See
+> [`docs/decisions/0001-flat-fee-not-commission.md`](docs/decisions/0001-flat-fee-not-commission.md).
+
+## Services and pricing
+
+Three acts, each with a bounded, client-assemblable intake (a short document
+checklist a client can complete alone). Amounts are the **starting price**
+(*prix de départ*); the client may offer more, up to a hard **10× cap**.
+
+| Service | `serviceId` | Prix de départ |
+| --- | --- | --- |
+| Testament et mandat de protection | `testament` | **495 $** |
+| Procuration | `procuration` | **295 $** |
+| Refinancement hypothécaire | `refinancement` | **950 $** |
+
+Amounts are formatted fr-CA through `money()` — a space thousands separator and a
+trailing ` $` (e.g. `1 350 $`). All prices, tiers and the cap live in
+`packages/domain` and are asserted by tests; they are never hardcoded in the apps.
+
+### Timing tiers
+
+The **tier** is derived from how many days away the requested signing date is. It
+is the axis that makes the calendar meaningful — the closer the date, the higher
+the premium the market will bear.
+
+| Tier | Days to date | Indicative premium |
+| --- | --- | --- |
+| `standard` | 15+ | 1.0×–1.2× |
+| `rapide` | 8–14 | 1.2×–1.5× |
+| `prioritaire` | 4–7 | 1.6×–2.2× |
+| `urgence` | 2–3 | 2.5×–4.0× |
+| `extreme` | 0–1 | 4.0×–10.0× |
+
+`tierForDays(days)` is the single source of truth for this mapping.
+
+## Architecture
+
+Nota is a small npm-workspaces monorepo built around a **domain-centric
+(hexagonal) design**: a pure business-rules core with thin adapters for HTTP,
+persistence and UI. Framework, I/O and AWS concerns never leak into the core.
+
+```
+nota/
+├── packages/
+│   └── domain/        @nota/domain — pure business rules, ZERO dependencies.
+│                      Prices, tiers, premium cap, offer validation, money(),
+│                      deterministic fixtures. The core of the hexagon.
+├── apps/
+│   ├── api/           @nota/api — HTTP + persistence adapter.
+│   │                  createApp(repo) routes GET /health, GET/POST /bids and
+│   │                  revalidates every offer through @nota/domain. Ports:
+│   │                  repo-dynamo (AWS) and repo-memory (dev/tests). Entry
+│   │                  points: index.js (Lambda) and local-server.js (dev).
+│   └── web/           @nota/web — static UI adapter, ZERO runtime dependencies.
+│                      Vanilla JS carnet + offer flow; loads the same
+│                      @nota/domain module in the browser (window.NotaDomain).
+├── features/          Cucumber (Gherkin) BDD suite — executable specifications
+│                      against @nota/domain and apps/api. Not a workspace.
+└── infra/             Terraform: S3 + CloudFront + Lambda + DynamoDB.
+```
+
+**Domain at the center.** `packages/domain` depends on nothing. `apps/api` and
+`apps/web` depend on it and adapt it to a transport (HTTP/Lambda) and a UI
+(browser). The API's `createApp(repo, opts)` takes the repository as an injected
+**port**, so the same routing logic runs against DynamoDB in production and an
+in-memory repo in tests — the clock and id generator are injected the same way.
+
+### API routes
+
+Served same-origin: CloudFront routes `/api/*` to the Lambda, so the browser
+needs no CORS.
+
+| Method | Route | Response |
+| --- | --- | --- |
+| `GET` | `/health` | `200 { ok, today }` |
+| `GET` | `/bids?month=YYYY-MM` | `200 { month, bids }` |
+| `POST` | `/bids` | `201 { bid }` · `422 { errors }` · `400 { errors }` |
+
+`POST /bids` accepts `{ serviceId, dateISO, montant, anonyme, nom?, prefixe? }`.
+Validation error codes: `service_inconnu`, `montant_invalide`, `date_invalide`,
+`date_passee`, `sous_prix_depart`, `plafond_depasse`. A public bid **never**
+leaks `nom` when `anonyme` is set — anonymity is enforced server-side, not just
+in the UI. The full contract lives in
+[`apps/api/openapi.yaml`](apps/api/openapi.yaml).
+
+### Data model
+
+A **single DynamoDB table**, partitioned by month so the calendar reads exactly
+one partition per month displayed:
+
+```
+PK = MONTH#YYYY-MM          (all bids that month — one Query)
+SK = BID#YYYY-MM-DD#<id>    (sorted by day, then id, within the partition)
+```
+
+See [`docs/decisions/0002-single-table-dynamodb.md`](docs/decisions/0002-single-table-dynamodb.md).
+
+### Privacy (Quebec Law 25)
+
+Everything regional is hosted in **`ca-central-1`** for data residency.
+**Anonymity is default-on** (`anonyme` defaults to `true`), and consent is
+collected at the point of collection.
+
+## Run locally
+
+Requires **Node 20+**.
+
+```bash
+npm install          # install all workspaces
+npm test             # domain + api unit tests
+```
+
+Two dev servers, run in separate terminals:
+
+```bash
+npm run dev          # @nota/web on http://localhost:4173
+npm run api:local    # @nota/api on http://localhost:8788
+```
+
+`api:local` uses an **in-memory repo seeded with domain fixtures** when
+`TABLE_NAME` is unset, so the API returns a populated carnet with no
+infrastructure at all. The web dev server single-sources the domain module at
+`/domain.js` and falls back unknown paths to `index.html` (matching CloudFront).
+
+### Full stack with Docker (no AWS)
+
+To run the whole stack — DynamoDB Local, table creation, API and web — with a
+single command and no AWS account:
+
+```bash
+docker compose up
+```
+
+This starts `dynamodb-local` (:8000), creates the `nota` table, runs the API
+against it (:8788) and serves the web app (:4173).
+
+## Tests
+
+```bash
+npm test                                   # @nota/domain + @nota/api unit tests
+npm run test:web                           # @nota/web jsdom smoke test
+npm install --prefix features \
+  && npm test --prefix features            # Cucumber BDD suite
+```
+
+## Deploy
+
+Infrastructure is Terraform in [`infra/`](infra/): a private S3 bucket (OAC) and
+a Node 20 Lambda API, both served same-origin through one CloudFront
+distribution, backed by a single DynamoDB table (PAY_PER_REQUEST). Idle cost is
+near **$0** — the stack is scale-to-zero serverless.
+
+**Region note.** All regional resources live in `ca-central-1` (Law 25). The
+**ACM certificate must be created in `us-east-1`** — CloudFront can only attach
+certificates from that region — which is the sole reason `providers.tf` declares
+a second, aliased AWS provider.
+
+```bash
+cd infra
+terraform init
+terraform apply
+```
+
+Terraform provisions infrastructure only; it does not upload the SPA build. After
+apply, publish the site as a separate deploy step — sync the build to S3 and
+invalidate the CloudFront cache:
+
+```bash
+npm run build --workspace @nota/web
+aws s3 sync apps/web/dist "s3://$(terraform -chdir=infra output -raw web_bucket_name)" --delete
+aws cloudfront create-invalidation \
+  --distribution-id <distribution-id> --paths '/*'
+```
+
+The Lambda function URL is **AuthType `AWS_IAM`** and is invoked only via
+CloudFront's Origin Access Control (SigV4) — never public. See
+[`docs/decisions/0004-cloudfront-oac-iam-api.md`](docs/decisions/0004-cloudfront-oac-iam-api.md)
+and [`infra/README.md`](infra/README.md).

@@ -1,0 +1,75 @@
+# docker-compose.yml — the whole Nota stack, locally, with NO AWS account.
+#
+#     docker compose up
+#
+# brings up DynamoDB Local, creates the single "nota" table, runs the API
+# against it, and serves the web app — a self-contained mirror of the
+# same-origin CloudFront layout you can iterate on independently. Every service
+# mounts the repo, so edits are picked up on the next restart.
+name: nota
+
+services:
+  # DynamoDB Local — the single-table backing store, in memory, on :8000.
+  # -sharedDb makes every client see the same table regardless of credentials.
+  dynamodb-local:
+    image: amazon/dynamodb-local:latest
+    working_dir: /home/dynamodblocal
+    command: "-jar DynamoDBLocal.jar -inMemory -sharedDb"
+    ports:
+      - "8000:8000"
+
+  # One-shot: install workspace deps into the mounted node_modules, then create
+  # the "nota" table (idempotent) and exit. Retries until DynamoDB Local answers.
+  dynamo-init:
+    image: node:20-alpine
+    working_dir: /repo
+    volumes:
+      - ./:/repo
+    environment:
+      TABLE_NAME: nota
+      DYNAMO_ENDPOINT: http://dynamodb-local:8000
+      AWS_REGION: ca-central-1
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local
+    command: >
+      sh -c "npm install --no-audit --no-fund &&
+             until node apps/api/scripts/create-table.js; do
+               echo 'waiting for dynamodb-local...'; sleep 2;
+             done"
+    depends_on:
+      - dynamodb-local
+
+  # The Nota API on :8788, talking to DynamoDB Local. Dummy AWS creds satisfy the
+  # SDK; nothing leaves the machine. Starts once the table exists.
+  api:
+    image: node:20-alpine
+    working_dir: /repo
+    volumes:
+      - ./:/repo
+    environment:
+      PORT: 8788
+      TABLE_NAME: nota
+      DYNAMO_ENDPOINT: http://dynamodb-local:8000
+      AWS_REGION: ca-central-1
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local
+    command: ["node", "apps/api/local-server.js"]
+    ports:
+      - "8788:8788"
+    depends_on:
+      dynamo-init:
+        condition: service_completed_successfully
+
+  # The static web app on :4173. Zero runtime deps — plain node:http, no install.
+  web:
+    image: node:20-alpine
+    working_dir: /repo
+    volumes:
+      - ./:/repo
+    environment:
+      PORT: 4173
+    command: ["node", "apps/web/run-local.mjs"]
+    ports:
+      - "4173:4173"
+    depends_on:
+      - api

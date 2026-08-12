@@ -1,0 +1,335 @@
+openapi: 3.1.0
+info:
+  title: Nota API
+  version: 0.1.0
+  description: >-
+    HTTP API for the Nota marketplace: the public carnet of notarial-act bids for
+    Quebec City. Every offer is revalidated server-side through @nota/domain; the
+    client's tier, premium and total are never trusted, and a bid marked
+    `anonyme` never leaks its `nom`.
+
+
+    NOTE: this specification is kept in sync with `apps/api/src/handler.js` **by
+    hand** for now. When a route or field changes there, update it here in the
+    same change (see AGENTS.md).
+  license:
+    name: UNLICENSED
+servers:
+  - url: /api
+    description: Same-origin path fronted by CloudFront (production).
+  - url: http://localhost:8788
+    description: Local dev server (apps/api/local-server.js).
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      summary: Liveness probe.
+      responses:
+        "200":
+          description: Service is up; echoes the server's current date.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, today]
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+                  today:
+                    type: string
+                    format: date
+                    description: Server "today" as ISO YYYY-MM-DD.
+              example:
+                ok: true
+                today: "2026-08-12"
+  /bids:
+    get:
+      operationId: listBids
+      summary: List the public bids for a month.
+      parameters:
+        - name: month
+          in: query
+          required: false
+          description: Month to read, `YYYY-MM`. Defaults to the current month.
+          schema:
+            type: string
+            pattern: '^\d{4}-\d{2}$'
+          example: "2026-08"
+      responses:
+        "200":
+          description: The bids posted in that month (public projection).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [month, bids]
+                properties:
+                  month:
+                    type: string
+                    pattern: '^\d{4}-\d{2}$'
+                  bids:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Bid"
+        "400":
+          description: Malformed `month` parameter.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                errors:
+                  - code: mois_invalide
+                    message: month doit être AAAA-MM.
+    post:
+      operationId: createBid
+      summary: Post a bid on a date.
+      description: >-
+        Revalidates the offer through @nota/domain. `anonyme` defaults to true;
+        `nom` is stored only when `anonyme` is false and is never returned for an
+        anonymous bid.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OfferInput"
+      responses:
+        "201":
+          description: Bid created (public projection).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [bid]
+                properties:
+                  bid:
+                    $ref: "#/components/schemas/Bid"
+        "400":
+          description: Body was not valid JSON.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                errors:
+                  - code: json_invalide
+                    message: Corps JSON invalide.
+        "422":
+          description: >-
+            The offer failed domain validation. One or more typed errors are
+            returned; the client renders them inline.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                errors:
+                  - code: sous_prix_depart
+                    message: L’offre doit être d’au moins 495 $.
+  /notaries/subscribe:
+    post:
+      operationId: startSubscription
+      summary: Start a notary's flat monthly subscription.
+      description: >-
+        Opens a Stripe Checkout Session (`mode: subscription`) for the single
+        flat monthly price and returns the hosted URL the client redirects to.
+        Card data never touches this server. Billing is a flat subscription for
+        marketplace access — never a commission or share of an acte.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubscribeInput"
+      responses:
+        "200":
+          description: Checkout Session created; redirect the client to `url`.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [url]
+                properties:
+                  url:
+                    type: string
+                    format: uri
+                    description: Stripe-hosted Checkout URL.
+                example:
+                  url: https://checkout.stripe.com/c/pay/cs_test_a1b2c3
+        "422":
+          description: The email failed validation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                errors:
+                  - code: courriel_invalide
+                    message: Un courriel valide est requis.
+  /stripe/webhook:
+    post:
+      operationId: stripeWebhook
+      summary: Stripe webhook receiver (subscription lifecycle).
+      description: >-
+        Verifies the raw request body against the webhook signing secret using
+        the `stripe-signature` header, then advances the notary's subscription
+        state (`active` / `canceled` / `past_due`). Processing is idempotent by
+        event id, so a redelivered event is a no-op. Not called by browsers.
+      parameters:
+        - name: stripe-signature
+          in: header
+          required: true
+          description: Stripe signature used to verify the payload.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        description: The raw Stripe event payload (verified, not parsed as trusted JSON).
+        content:
+          application/json:
+            schema:
+              type: object
+              description: An opaque Stripe Event object.
+      responses:
+        "200":
+          description: Event verified and processed (or ignored/duplicated).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [received]
+                properties:
+                  received:
+                    type: boolean
+                    const: true
+              example:
+                received: true
+        "400":
+          description: Missing or invalid Stripe signature.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                errors:
+                  - code: signature_invalide
+                    message: Signature Stripe invalide.
+components:
+  schemas:
+    Tier:
+      type: string
+      description: Timing tier derived from days-to-date (ascending urgency).
+      enum: [standard, rapide, prioritaire, urgence, extreme]
+    Status:
+      type: string
+      description: Lifecycle of a bid.
+      enum: [ouverte, retenue]
+    ServiceId:
+      type: string
+      enum: [testament, procuration, refinancement]
+    SubscribeInput:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: The notary's email; used as the Stripe customer email.
+          example: notaire@example.ca
+    OfferInput:
+      type: object
+      required: [serviceId, dateISO, montant]
+      properties:
+        serviceId:
+          $ref: "#/components/schemas/ServiceId"
+        dateISO:
+          type: string
+          format: date
+          description: Requested signing date, ISO YYYY-MM-DD (must not be in the past).
+          example: "2026-08-20"
+        montant:
+          type: integer
+          minimum: 1
+          description: >-
+            Offer in whole Canadian dollars. Must be >= the service's prix de
+            départ and <= 10× it (the premium cap).
+          example: 640
+        anonyme:
+          type: boolean
+          default: true
+          description: When true (default), the bid is published without a name.
+        nom:
+          type: string
+          maxLength: 120
+          description: Display name; stored only when anonyme is false.
+        prefixe:
+          type: string
+          maxLength: 3
+          description: Postal-code prefix shown for anonymous bids (e.g. "G1R").
+    Bid:
+      type: object
+      description: Public projection of a bid. Private dossier data is never included.
+      required: [id, serviceId, dateISO, montant, tier, premium, status, anonyme]
+      properties:
+        id:
+          type: string
+        serviceId:
+          $ref: "#/components/schemas/ServiceId"
+        dateISO:
+          type: string
+          format: date
+        montant:
+          type: integer
+        tier:
+          $ref: "#/components/schemas/Tier"
+        premium:
+          type: number
+          description: montant / prix de départ (>= 1.0, <= 10.0).
+        status:
+          $ref: "#/components/schemas/Status"
+        etude:
+          type: [string, "null"]
+          description: Retaining notary's practice, present only when status is retenue.
+        anonyme:
+          type: boolean
+        nom:
+          type: [string, "null"]
+          description: Always null when anonyme is true.
+        prefixe:
+          type: [string, "null"]
+        createdAt:
+          type: string
+          format: date
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: Stable machine-readable error code.
+          enum:
+            - service_inconnu
+            - montant_invalide
+            - date_invalide
+            - date_passee
+            - sous_prix_depart
+            - plafond_depasse
+            - mois_invalide
+            - json_invalide
+            - courriel_invalide
+            - signature_invalide
+            - introuvable
+        message:
+          type: string
+          description: Human-readable message (fr-CA).
+    ErrorResponse:
+      type: object
+      required: [errors]
+      properties:
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/Error"

@@ -1,0 +1,8 @@
+{
+  "default": {
+    "paths": ["*.feature"],
+    "require": ["support/**/*.js", "steps/**/*.js"],
+    "publishQuiet": true,
+    "format": ["summary", "progress"]
+  }
+}

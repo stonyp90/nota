@@ -1,0 +1,19 @@
+{
+  "name": "@nota/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Nota API — Lambda function URL over a single DynamoDB table. Revalidates every offer through @nota/domain.",
+  "license": "UNLICENSED",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "test": "node --test",
+    "start": "node local-server.js"
+  },
+  "dependencies": {
+    "@nota/domain": "*",
+    "@aws-sdk/client-dynamodb": "^3.667.0",
+    "@aws-sdk/lib-dynamodb": "^3.667.0",
+    "stripe": "^16"
+  }
+}

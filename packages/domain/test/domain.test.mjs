@@ -1,0 +1,162 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const D = require('../index.js');
+
+const TODAY = '2026-08-12';
+
+test('money: fr-CA space thousands separator and trailing $', () => {
+  assert.equal(D.money(950), '950 $');
+  assert.equal(D.money(1350), '1 350 $');
+  assert.equal(D.money(13500), '13 500 $');
+  assert.equal(D.money(4950), '4 950 $');
+  assert.equal(D.money(0), '0 $');
+});
+
+test('money: rounds and handles junk', () => {
+  assert.equal(D.money(1234.6), '1 235 $');
+  assert.equal(D.money('nope'), '0 $');
+});
+
+test('services: exactly the three bounded-intake acts', () => {
+  assert.equal(D.SERVICES.length, 3);
+  assert.deepEqual(D.SERVICES.map((s) => s.id).sort(), ['procuration', 'refinancement', 'testament']);
+});
+
+test('services: acte de vente is intentionally absent', () => {
+  assert.equal(D.serviceById('acte_vente'), null);
+});
+
+test('services: starting prices are the canonical values', () => {
+  assert.equal(D.serviceById('testament').prixDepart, 495);
+  assert.equal(D.serviceById('procuration').prixDepart, 295);
+  assert.equal(D.serviceById('refinancement').prixDepart, 950);
+});
+
+test('services: every service has documents and fields with help text', () => {
+  for (const s of D.SERVICES) {
+    assert.ok(s.documents.length >= 1, `${s.id} has documents`);
+    assert.ok(s.champs.length >= 1, `${s.id} has fields`);
+    for (const d of s.documents) assert.ok(d.aide && d.aide.length > 0, `${s.id}/${d.id} help`);
+    for (const c of s.champs) assert.ok(c.aide && c.aide.length > 0, `${s.id}/${c.id} help`);
+  }
+});
+
+test('tiers: ordered ascending urgency', () => {
+  assert.deepEqual(D.TIERS.map((t) => t.id), ['standard', 'rapide', 'prioritaire', 'urgence', 'extreme']);
+});
+
+test('tierForDays: boundaries', () => {
+  assert.equal(D.tierForDays(0), 'extreme');
+  assert.equal(D.tierForDays(1), 'extreme');
+  assert.equal(D.tierForDays(2), 'urgence');
+  assert.equal(D.tierForDays(3), 'urgence');
+  assert.equal(D.tierForDays(4), 'prioritaire');
+  assert.equal(D.tierForDays(7), 'prioritaire');
+  assert.equal(D.tierForDays(8), 'rapide');
+  assert.equal(D.tierForDays(14), 'rapide');
+  assert.equal(D.tierForDays(15), 'standard');
+  assert.equal(D.tierForDays(90), 'standard');
+});
+
+test('premium cap is 10', () => {
+  assert.equal(D.PREMIUM_CAP, 10);
+});
+
+test('dates: ISO validation', () => {
+  assert.equal(D.isISODate('2026-08-12'), true);
+  assert.equal(D.isISODate('2026-13-01'), false);
+  assert.equal(D.isISODate('12-08-2026'), false);
+  assert.equal(D.isISODate(''), false);
+});
+
+test('dates: daysBetween and addDays are inverse and tz-stable', () => {
+  assert.equal(D.daysBetween('2026-08-12', '2026-08-19'), 7);
+  assert.equal(D.daysBetween('2026-08-12', '2026-08-12'), 0);
+  assert.equal(D.addDays('2026-08-12', 7), '2026-08-19');
+  assert.equal(D.addDays('2026-08-31', 1), '2026-09-01');
+});
+
+test('validateOffer: a clean prioritaire offer', () => {
+  const r = D.validateOffer({ serviceId: 'refinancement', dateISO: '2026-08-17', montant: 1500, todayISO: TODAY });
+  assert.equal(r.ok, true);
+  assert.equal(r.errors.length, 0);
+  assert.equal(r.tier, 'prioritaire');
+  assert.equal(r.days, 5);
+  assert.equal(r.prixDepart, 950);
+  assert.ok(Math.abs(r.premium - 1500 / 950) < 1e-9);
+});
+
+test('validateOffer: rejects below starting price', () => {
+  const r = D.validateOffer({ serviceId: 'testament', dateISO: '2026-09-30', montant: 400, todayISO: TODAY });
+  assert.equal(r.ok, false);
+  assert.ok(r.errors.some((e) => e.code === 'sous_prix_depart'));
+});
+
+test('validateOffer: rejects above the 10x premium cap', () => {
+  const r = D.validateOffer({ serviceId: 'testament', dateISO: '2026-08-13', montant: 5000, todayISO: TODAY });
+  assert.equal(r.ok, false);
+  assert.ok(r.errors.some((e) => e.code === 'plafond_depasse'));
+});
+
+test('validateOffer: exactly 10x is allowed', () => {
+  const r = D.validateOffer({ serviceId: 'testament', dateISO: '2026-08-13', montant: 4950, todayISO: TODAY });
+  assert.equal(r.ok, true);
+});
+
+test('validateOffer: rejects an unknown service', () => {
+  const r = D.validateOffer({ serviceId: 'acte_vente', dateISO: '2026-09-01', montant: 1350, todayISO: TODAY });
+  assert.equal(r.ok, false);
+  assert.ok(r.errors.some((e) => e.code === 'service_inconnu'));
+});
+
+test('validateOffer: rejects a past date', () => {
+  const r = D.validateOffer({ serviceId: 'procuration', dateISO: '2026-08-01', montant: 300, todayISO: TODAY });
+  assert.equal(r.ok, false);
+  assert.ok(r.errors.some((e) => e.code === 'date_passee'));
+});
+
+test('validateOffer: rejects a malformed date', () => {
+  const r = D.validateOffer({ serviceId: 'procuration', dateISO: 'demain', montant: 300, todayISO: TODAY });
+  assert.equal(r.ok, false);
+  assert.ok(r.errors.some((e) => e.code === 'date_invalide'));
+});
+
+test('validateOffer: rejects non-positive amount', () => {
+  const r = D.validateOffer({ serviceId: 'procuration', dateISO: '2026-09-01', montant: 0, todayISO: TODAY });
+  assert.equal(r.ok, false);
+  assert.ok(r.errors.some((e) => e.code === 'montant_invalide'));
+});
+
+test('rankOf: highest amount is 1st, retenue excluded from totals', () => {
+  const bids = [
+    { id: 'a', serviceId: 'testament', dateISO: '2026-08-20', montant: 600, status: 'ouverte' },
+    { id: 'b', serviceId: 'testament', dateISO: '2026-08-20', montant: 900, status: 'ouverte' },
+    { id: 'c', serviceId: 'testament', dateISO: '2026-08-20', montant: 700, status: 'retenue' },
+    { id: 'd', serviceId: 'testament', dateISO: '2026-08-21', montant: 999, status: 'ouverte' },
+  ];
+  assert.deepEqual(D.rankOf(bids[1], bids), { rang: 1, total: 2 });
+  assert.deepEqual(D.rankOf(bids[0], bids), { rang: 2, total: 2 });
+});
+
+test('makeFixtures: deterministic across calls', () => {
+  const a = D.makeFixtures(TODAY);
+  const b = D.makeFixtures(TODAY);
+  assert.deepEqual(a, b);
+  assert.equal(a.length, 34);
+});
+
+test('makeFixtures: every fixture is a valid offer', () => {
+  const fx = D.makeFixtures(TODAY);
+  for (const b of fx) {
+    const r = D.validateOffer({ serviceId: b.serviceId, dateISO: b.dateISO, montant: b.montant, todayISO: TODAY });
+    assert.equal(r.ok, true, `${b.id} ${b.serviceId} ${b.montant} on ${b.dateISO}`);
+  }
+});
+
+test('bidLabel: name when public, postal prefix when anonymous', () => {
+  assert.equal(D.bidLabel({ anonyme: false, nom: 'Marie-Ève Tremblay', prefixe: 'G1R' }), 'Marie-Ève Tremblay');
+  assert.equal(D.bidLabel({ anonyme: true, nom: 'Marie-Ève Tremblay', prefixe: 'G1R' }), 'Client · G1R');
+});

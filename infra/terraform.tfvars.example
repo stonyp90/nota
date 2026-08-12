@@ -1,0 +1,13 @@
+# Copy to terraform.tfvars and adjust as needed.
+
+# All regional resources live here (data residency: Quebec Law 25).
+region = "ca-central-1"
+
+# Resource name prefix.
+project_name = "nota"
+
+# --- Optional custom domain ---------------------------------------------
+# Leave both unset (defaults) to serve via the default *.cloudfront.net domain.
+# To attach a custom domain, set BOTH of these:
+# domain_name    = "app.example.com"
+# hosted_zone_id = "Z0123456789ABCDEFGHIJ"

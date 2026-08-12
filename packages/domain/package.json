@@ -1,0 +1,12 @@
+{
+  "name": "@nota/domain",
+  "version": "0.1.0",
+  "description": "Business rules for the Nota marketplace. No dependencies, no DOM, no network.",
+  "license": "UNLICENSED",
+  "private": true,
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node --test"
+  }
+}

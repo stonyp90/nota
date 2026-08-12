@@ -1,0 +1,18 @@
+User-agent: *
+Allow: /
+
+# AI / LLM crawlers welcome — this content is meant to be discoverable.
+User-agent: GPTBot
+Allow: /
+User-agent: OAI-SearchBot
+Allow: /
+User-agent: ChatGPT-User
+Allow: /
+User-agent: PerplexityBot
+Allow: /
+User-agent: ClaudeBot
+Allow: /
+User-agent: Google-Extended
+Allow: /
+
+Sitemap: https://d1s1h4894dau0c.cloudfront.net/sitemap.xml

@@ -1,0 +1,16 @@
+{
+  "name": "@nota/web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Nota web app — public carnet, offer flow, document intake, text-to-speech. Zero runtime dependencies.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "node run-local.mjs",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "jsdom": "^24.1.0"
+  }
+}

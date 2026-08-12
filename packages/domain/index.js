@@ -1,0 +1,296 @@
+/**
+ * @nota/domain — business rules for the Nota marketplace.
+ *
+ * Rules:
+ *   - No dependencies, no DOM, no network. Pure functions and data only.
+ *   - This module is the single source of truth for prices, tiers, the premium
+ *     cap, offer validation and the document intake schema. If a number or a
+ *     tier label is meaningful to the product, it lives here and is asserted by
+ *     a test — never hardcoded in apps/web or apps/api.
+ *   - UMD wrapper so the same file loads in Node (`require('@nota/domain')`),
+ *     the browser (`window.NotaDomain`) and the test runner.
+ */
+(function (root, factory) {
+  const api = factory();
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  else root.NotaDomain = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  'use strict';
+
+  // --- Money -----------------------------------------------------------------
+  // Amounts are integer Canadian dollars. Quebec formats with a space as the
+  // thousands separator and a trailing " $". Everything user-facing that shows
+  // an amount MUST route through money() so the format is defined in one place.
+  function money(dollars) {
+    const n = Math.round(Number(dollars) || 0);
+    const digits = Math.abs(n)
+      .toString()
+      .replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+    return (n < 0 ? '−' : '') + digits + ' $';
+  }
+
+  // --- Services --------------------------------------------------------------
+  // Only acts with a bounded, client-assemblable intake are listed. Acte de
+  // vente was removed deliberately — see docs/decisions/0003-bounded-intake.md.
+  // Each service carries its own document checklist and info fields, with
+  // plain-language help text (fr-CA) used by both the Dossier UI and the
+  // text-to-speech reader.
+  const SERVICES = [
+    {
+      id: 'testament',
+      nom: 'Testament et mandat de protection',
+      prixDepart: 495,
+      description:
+        'Testament notarié et mandat de protection en cas d’inaptitude.',
+      documents: [
+        { id: 'piece_identite', nom: 'Pièce d’identité avec photo', aide: 'Permis de conduire, passeport ou carte d’assurance maladie valide.' },
+        { id: 'liste_biens', nom: 'Liste sommaire des biens', aide: 'Immeubles, comptes, placements. Une estimation suffit à cette étape.' },
+      ],
+      champs: [
+        { id: 'liquidateur', label: 'Liquidateur (exécuteur) pressenti', aide: 'La personne qui réglera la succession. Nom complet et lien avec vous.' },
+        { id: 'beneficiaires', label: 'Bénéficiaires principaux', aide: 'Qui hérite, et dans quelles proportions approximatives.' },
+        { id: 'mandataire', label: 'Mandataire en cas d’inaptitude', aide: 'La personne qui vous représenterait si vous perdiez vos capacités.' },
+      ],
+    },
+    {
+      id: 'procuration',
+      nom: 'Procuration',
+      prixDepart: 295,
+      description:
+        'Procuration générale ou spéciale pour agir en votre nom.',
+      documents: [
+        { id: 'piece_identite', nom: 'Pièce d’identité avec photo', aide: 'Permis de conduire, passeport ou carte d’assurance maladie valide.' },
+      ],
+      champs: [
+        { id: 'mandataire', label: 'Personne mandatée', aide: 'Nom complet de la personne qui pourra agir en votre nom.' },
+        { id: 'portee', label: 'Portée de la procuration', aide: 'Générale (tous vos biens) ou spéciale. Écrivez « aucune limite » si générale.' },
+      ],
+    },
+    {
+      id: 'refinancement',
+      nom: 'Refinancement hypothécaire',
+      prixDepart: 950,
+      description:
+        'Acte de prêt et publication de l’hypothèque lors d’un refinancement.',
+      documents: [
+        { id: 'piece_identite', nom: 'Pièce d’identité avec photo', aide: 'Permis de conduire, passeport ou carte d’assurance maladie valide.' },
+        { id: 'offre_preteur', nom: 'Offre de financement du prêteur', aide: 'Le document d’engagement de la banque, avec le taux et le montant.' },
+        { id: 'releve_hypotheque', nom: 'Relevé hypothécaire actuel', aide: 'Un relevé de moins de 30 jours du prêt à rembourser.' },
+        { id: 'compte_taxes', nom: 'Compte de taxes municipales', aide: 'Le compte le plus récent de la municipalité.' },
+      ],
+      champs: [
+        { id: 'adresse', label: 'Adresse de l’immeuble', aide: 'Adresse civique complète de la propriété refinancée.' },
+        { id: 'preteur', label: 'Prêteur', aide: 'Le nom de l’institution qui accorde le nouveau prêt.' },
+        { id: 'date_echeance_taux', label: 'Échéance du taux', aide: 'La date avant laquelle le taux offert doit être signé, si connue.' },
+      ],
+    },
+  ];
+
+  function serviceById(id) {
+    return SERVICES.find((s) => s.id === id) || null;
+  }
+
+  // --- Timing tiers ----------------------------------------------------------
+  // The tier is derived from how many days away the requested signing date is.
+  // It is the axis that makes the public calendar meaningful: closer date,
+  // higher tier, higher premium the market will bear. Order matters (ascending
+  // urgency) and is relied on by the UI legend.
+  const TIERS = [
+    { id: 'standard',    nom: 'Standard',    maxJours: null, apercuMin: 1.0, apercuMax: 1.2 },
+    { id: 'rapide',      nom: 'Rapide',      maxJours: 14,   apercuMin: 1.2, apercuMax: 1.5 },
+    { id: 'prioritaire', nom: 'Prioritaire', maxJours: 7,    apercuMin: 1.6, apercuMax: 2.2 },
+    { id: 'urgence',     nom: 'Urgence',     maxJours: 3,    apercuMin: 2.5, apercuMax: 4.0 },
+    { id: 'extreme',     nom: 'Extrême',     maxJours: 1,    apercuMin: 4.0, apercuMax: 10.0 },
+  ];
+
+  function tierById(id) {
+    return TIERS.find((t) => t.id === id) || null;
+  }
+
+  // Days away -> tier id. 0-1 day = extreme (overnight/weekend rescue),
+  // 2-3 = urgence, 4-7 = prioritaire, 8-14 = rapide, 15+ = standard.
+  function tierForDays(days) {
+    const d = Math.max(0, Math.floor(Number(days)));
+    if (d <= 1) return 'extreme';
+    if (d <= 3) return 'urgence';
+    if (d <= 7) return 'prioritaire';
+    if (d <= 14) return 'rapide';
+    return 'standard';
+  }
+
+  // --- Premium cap -----------------------------------------------------------
+  // A client may offer up to 10x the service's starting price. The cap is a
+  // product rule, enforced identically on the client and, authoritatively, on
+  // the server.
+  const PREMIUM_CAP = 10;
+
+  // --- Offer statuses --------------------------------------------------------
+  const STATUS = { OUVERTE: 'ouverte', RETENUE: 'retenue' };
+
+  // --- Dates -----------------------------------------------------------------
+  // State stores ISO YYYY-MM-DD strings; parse at UTC midnight so day math is
+  // timezone-stable regardless of where the process runs.
+  const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+  function isISODate(s) {
+    return typeof s === 'string' && ISO_DATE.test(s) && !Number.isNaN(Date.parse(s + 'T00:00:00Z'));
+  }
+
+  function daysBetween(fromISO, toISO) {
+    const a = Date.parse(fromISO + 'T00:00:00Z');
+    const b = Date.parse(toISO + 'T00:00:00Z');
+    return Math.round((b - a) / 86400000);
+  }
+
+  // --- Offer validation ------------------------------------------------------
+  // The one function the API must call before persisting anything. Returns the
+  // derived tier and premium so the caller never recomputes them, and a list of
+  // typed errors (empty when ok). The client shows these inline; the server
+  // rejects on any of them.
+  function validateOffer(input) {
+    input = input || {};
+    const errors = [];
+
+    const svc = serviceById(input.serviceId);
+    if (!svc) errors.push({ code: 'service_inconnu', message: 'Service inconnu.' });
+
+    const montant = Math.round(Number(input.montant));
+    const montantValide = Number.isFinite(montant) && montant > 0;
+    if (!montantValide) errors.push({ code: 'montant_invalide', message: 'Le montant doit être un nombre positif.' });
+
+    let days = null;
+    let tier = null;
+    let premium = null;
+
+    if (!isISODate(input.dateISO)) {
+      errors.push({ code: 'date_invalide', message: 'La date doit être au format AAAA-MM-JJ.' });
+    } else if (isISODate(input.todayISO)) {
+      days = daysBetween(input.todayISO, input.dateISO);
+      if (days < 0) errors.push({ code: 'date_passee', message: 'La date de signature est déjà passée.' });
+      tier = tierForDays(Math.max(0, days));
+    }
+
+    if (svc && montantValide) {
+      if (montant < svc.prixDepart) {
+        errors.push({ code: 'sous_prix_depart', message: `L’offre doit être d’au moins ${money(svc.prixDepart)}.` });
+      }
+      if (montant > svc.prixDepart * PREMIUM_CAP) {
+        errors.push({ code: 'plafond_depasse', message: `L’offre ne peut dépasser ${money(svc.prixDepart * PREMIUM_CAP)} (${PREMIUM_CAP}×).` });
+      }
+      premium = montant / svc.prixDepart;
+    }
+
+    return {
+      ok: errors.length === 0,
+      errors,
+      tier,
+      days,
+      premium,
+      prixDepart: svc ? svc.prixDepart : null,
+      montant: montantValide ? montant : null,
+    };
+  }
+
+  // --- Ranking ---------------------------------------------------------------
+  // A bid's rank among the open bids on the same day for the same service,
+  // highest amount first. Powers the "3e sur 7" scarcity signal.
+  function rankOf(bid, bids) {
+    const peers = bids
+      .filter((b) => b.dateISO === bid.dateISO && b.serviceId === bid.serviceId && b.status !== STATUS.RETENUE)
+      .sort((a, b) => b.montant - a.montant || String(a.id).localeCompare(String(b.id)));
+    const total = peers.length;
+    const idx = peers.findIndex((b) => b.id === bid.id);
+    return { rang: idx < 0 ? null : idx + 1, total };
+  }
+
+  // --- Deterministic fixtures ------------------------------------------------
+  // Demo bids for an empty carnet. Seeded from a fixed constant so tests and
+  // snapshots are stable — never Math.random(). `todayISO` anchors the dates so
+  // the fixtures always sit in the visible month.
+  const FIXTURE_SEED = 0x4e6f7461; // "Nota"
+
+  function makeRng(seed) {
+    let s = seed >>> 0;
+    return function next() {
+      // xorshift32
+      s ^= s << 13; s >>>= 0;
+      s ^= s >> 17;
+      s ^= s << 5; s >>>= 0;
+      return s / 0xffffffff;
+    };
+  }
+
+  const FIXTURE_PREFIXES = ['G1R', 'G1K', 'G2B', 'G1V', 'G1S', 'G3J'];
+  const FIXTURE_NAMES = ['Marie-Ève Tremblay', 'Luc Gagné', 'Sophie Bergeron', 'Jean Roy', 'Chantal Côté', 'Marc Fortin'];
+  const FIXTURE_ETUDES = ['Étude Laval', 'Notaires du Vieux-Québec', 'Cabinet Sainte-Foy'];
+
+  function makeFixtures(todayISO) {
+    const rng = makeRng(FIXTURE_SEED);
+    const bids = [];
+    const count = 34;
+    for (let i = 0; i < count; i++) {
+      const svc = SERVICES[Math.floor(rng() * SERVICES.length)];
+      const dayOffset = 1 + Math.floor(rng() * 27); // within the visible month
+      const dateISO = addDays(todayISO, dayOffset);
+      const tier = tierForDays(dayOffset);
+      const t = tierById(tier);
+      const mult = t.apercuMin + rng() * (t.apercuMax - t.apercuMin);
+      const montant = clampMontant(svc, Math.round((svc.prixDepart * mult) / 5) * 5);
+      const anonyme = rng() > 0.35;
+      const retenue = rng() > 0.8;
+      bids.push({
+        id: 'fx-' + i,
+        serviceId: svc.id,
+        dateISO,
+        montant,
+        tier,
+        premium: montant / svc.prixDepart,
+        anonyme,
+        nom: anonyme ? null : FIXTURE_NAMES[Math.floor(rng() * FIXTURE_NAMES.length)],
+        prefixe: FIXTURE_PREFIXES[Math.floor(rng() * FIXTURE_PREFIXES.length)],
+        status: retenue ? STATUS.RETENUE : STATUS.OUVERTE,
+        etude: retenue ? FIXTURE_ETUDES[Math.floor(rng() * FIXTURE_ETUDES.length)] : null,
+      });
+    }
+    return bids;
+  }
+
+  function clampMontant(svc, montant) {
+    const min = svc.prixDepart;
+    const max = svc.prixDepart * PREMIUM_CAP;
+    return Math.min(max, Math.max(min, montant));
+  }
+
+  function addDays(iso, n) {
+    const base = Date.parse(iso + 'T00:00:00Z');
+    const d = new Date(base + n * 86400000);
+    return d.toISOString().slice(0, 10);
+  }
+
+  // --- Public label helpers --------------------------------------------------
+  // How a bid identifies itself on the public carnet: the chosen name, or the
+  // postal prefix for anonymous bids ("Client · G1R").
+  function bidLabel(bid) {
+    if (!bid.anonyme && bid.nom) return bid.nom;
+    return 'Client · ' + (bid.prefixe || '—');
+  }
+
+  return {
+    money,
+    SERVICES,
+    serviceById,
+    TIERS,
+    tierById,
+    tierForDays,
+    PREMIUM_CAP,
+    STATUS,
+    isISODate,
+    daysBetween,
+    addDays,
+    validateOffer,
+    rankOf,
+    makeFixtures,
+    bidLabel,
+    FIXTURE_SEED,
+  };
+});
