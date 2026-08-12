@@ -838,6 +838,22 @@
     return httpUrl.replace(/^https?:\/\//, 'webcal://');
   }
 
+  // Point the hero "add to your calendar" card at the PUBLIC carnet feed. One
+  // click subscribes the whole carnet (all open dates, kept in sync) into the
+  // visitor's Google / Outlook / Apple calendar; .ics covers everything else.
+  function wireCarnetSubscribe() {
+    var base = API_BASE;
+    if (base.indexOf('http') !== 0) base = location.origin + base;
+    var http = base + '/carnet/feed.ics';
+    var webcal = http.replace(/^https?:\/\//, 'webcal://');
+    var name = 'Nota — carnet Québec';
+    function set(id, href) { var a = $(id); if (a) a.href = href; }
+    set('sub-ics', http);
+    set('sub-apple', webcal);
+    set('sub-google', 'https://calendar.google.com/calendar/render?cid=' + encodeURIComponent(webcal));
+    set('sub-outlook', 'https://outlook.live.com/calendar/0/addfromweb?url=' + encodeURIComponent(http) + '&name=' + encodeURIComponent(name));
+  }
+
   function ncSetErrors(msgs) {
     var box = $('notary-console-errors'); if (!box) return;
     clear(box);
@@ -1215,6 +1231,7 @@
     if (filtersActive()) { $('filters').hidden = false; $('filters-toggle').setAttribute('aria-expanded', 'true'); }
     renderLegend();
     wire();
+    wireCarnetSubscribe();
 
     // Restore theme preference
     var savedTheme = lsLoad('nota.theme'); if (savedTheme) setTheme(savedTheme);

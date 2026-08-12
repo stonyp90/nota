@@ -231,7 +231,7 @@ a:hover { text-decoration: underline; }
 .btn svg { flex: none; }
 
 /* Hero call-to-action — the buyer's first, obvious action */
-.hero-cta { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+.hero-cta { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
 
 /* Guided step badges (1 · 2 · 3) in the offer panel */
 .step {
@@ -243,7 +243,7 @@ a:hover { text-decoration: underline; }
 :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 
 /* --- Hero / intro -------------------------------------------------------- */
-.intro { padding: clamp(14px, 3vw, 26px) 0 4px; }
+.intro { padding: clamp(10px, 2vw, 18px) 0 2px; }
 .intro h1 { font-size: clamp(24px, 3.2vw, 33px); font-weight: 800; }
 .intro p { color: var(--ink-muted); max-width: 60ch; margin: 8px 0 0; font-size: 15px; }
 .eyebrow {
@@ -617,84 +617,57 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
 .brand-mark svg { transition: transform .2s cubic-bezier(.2, .8, .2, 1); }
 .brand:hover .brand-mark svg { transform: rotate(-6deg) scale(1.06); }
 
-/* ── Hero rebalance: editorial two-column band ───────────────────────────────
-   The widened 1600px band no longer leaves the right half empty. The left column
-   stays the single, left-pinned anchor (its edge still lines up with the calendar
-   and panels below); the right column fills the void with a calm date/time mark
-   and the SAME "Marché du temps" note promoted into a borderless floating card.
-   Zero new copy. Scoped to the .intro--split modifier so the dossier / notaire /
-   vie-privée .intro blocks stay single-column and untouched. */
-
-/* Left copy is capped to its reading measure — never a greedy 1fr — so the aside
-   sits just past the text and any slack falls to the OUTER right margin instead
-   of opening a void down the CENTRE of the band. Aside floor 300px keeps it from
-   reading as a sliver at 901–1100px; ceiling 380px echoes the calendar's side
-   panel. minmax(0,…) lets the left track shrink first, so nothing overflows. */
+/* ── Hero: compact two-column band — copy left, "add to your calendar" right ──
+   Keeps the hero short so the CALENDAR is the focus and rises up the page. The
+   left column holds the copy, CTAs and the "Marché du temps" note; the right
+   column turns the old dead space into a FUNCTION — a card that subscribes the
+   whole carnet into the visitor's Google/Outlook/Apple calendar. The copy hugs
+   the left edge (aligned with the calendar below) and the card the right edge
+   (aligned with, and flowing into, the offer panel below). Scoped to
+   .intro--split so the dossier / notaire / vie-privée sections stay single-column. */
 .intro--split {
   display: grid;
-  grid-template-columns: minmax(0, 60ch) minmax(300px, 380px);
-  column-gap: clamp(28px, 5vw, 72px);
-  justify-content: space-between; /* copy hugs the left edge (aligned with the calendar below), aside the right edge (aligned with the offer panel below) — the slack becomes centred, intentional whitespace, not a lopsided void */
+  grid-template-columns: minmax(0, 58ch) minmax(300px, 360px);
+  column-gap: clamp(28px, 5vw, 64px);
+  justify-content: space-between;
   align-items: start;
 }
 .intro-lead { min-width: 0; }
-.intro-aside {
-  display: flex;
-  flex-direction: column;
-  gap: clamp(14px, 1.6vw, 20px);
-  min-width: 0;
-}
+.intro-aside { min-width: 0; }
 
-/* Decorative date/time mark. Colour is 100% token-driven: currentColor rides
-   --brand (which resolves to a BRIGHT green in dark mode, so it never fades), and
-   the "retained moment" accent rides --brand-bright. Left-aligned (no auto
-   margin) so its edge matches the note card below. */
-.hero-motif {
-  color: var(--brand);
-  display: block;
-  width: clamp(150px, 15vw, 196px);
-  height: auto;
-  margin-top: 2px;
-}
-.hero-motif .motif-accent { fill: var(--brand-bright); }
-.hero-motif .motif-accent-halo { stroke: var(--brand-bright); }
-/* Light micro-interaction echoing .brand-mark's hover rotate; the global
-   prefers-reduced-motion rule below already neutralises it. */
-.hero-motif .motif-plate {
-  transform-origin: 100px 100px;
-  transition: transform .45s cubic-bezier(.2, .8, .2, 1);
-}
-.intro-aside:hover .hero-motif .motif-plate { transform: rotate(3deg); }
-
-/* "Marché du temps" promoted to a borderless floating note card: white surface,
-   soft shadow, square-ish radius, NO border. Overrides the base .explainer inset
-   band + 3px left rule, and cancels its hover de-elevation to --shadow-sm. */
-.explainer--note {
-  align-items: flex-start;
-  gap: 10px;
-  margin: 0;
-  padding: 14px 16px;
+/* Subscribe card — borderless floating panel (white surface, soft shadow,
+   square-ish radius), matching the offer panel it sits above. */
+.sub-card {
   background: var(--surface);
-  border: 0;
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
+  padding: 16px 18px;
 }
-.explainer--note:hover { box-shadow: var(--shadow); }
+.sub-card-head { display: flex; align-items: flex-start; gap: 12px; }
+.sub-card-ico {
+  flex: none; width: 34px; height: 34px; border-radius: var(--radius);
+  display: grid; place-items: center;
+  background: var(--surface-inset); color: var(--brand);
+}
+.sub-card-title { font-weight: 700; font-size: 14px; }
+.sub-card-sub { font-size: 12.5px; color: var(--ink-muted); margin-top: 2px; }
+.sub-card-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.sub-card-actions .btn { flex: 1 1 auto; }
 
-/* Preserve the brand entrance cascade under the new nesting: cancel the
-   block-level fade the base `.intro > *` rule would put on the two columns, then
-   re-stagger the inner items (left copy) and the aside (mark, then note). */
+/* Preserve the brand entrance cascade under the two-column nesting: cancel the
+   block-level fade the base `.intro > *` rule would put on the columns, then
+   re-stagger the inner items. */
 .intro--split > * { animation: none; }
 .intro--split .intro-lead > *,
 .intro--split .intro-aside > * {
   animation: fadeUp .42s cubic-bezier(.2, .8, .2, 1) both;
 }
-.intro--split .intro-lead .eyebrow     { animation-delay: .02s; }
-.intro--split .intro-lead h1           { animation-delay: .06s; }
-.intro--split .intro-lead p            { animation-delay: .12s; }
-.intro--split .intro-lead .hero-cta    { animation-delay: .18s; }
-.intro--split .intro-aside .hero-motif { animation-delay: .14s; }
-.intro--split .intro-aside .explainer  { animation-delay: .28s; }
+.intro--split .intro-lead .eyebrow    { animation-delay: .02s; }
+.intro--split .intro-lead h1          { animation-delay: .06s; }
+.intro--split .intro-lead p           { animation-delay: .12s; }
+.intro--split .intro-lead .hero-cta   { animation-delay: .18s; }
+.intro--split .intro-lead .explainer  { animation-delay: .24s; }
+.intro--split .intro-aside .sub-card  { animation-delay: .16s; }
 
 /* Calendar loading: an indeterminate top bar while the carnet fetches (real
    latency on the live API). Scoped to the carnet panel; overlay only. */
@@ -723,12 +696,9 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   .layout { grid-template-columns: 1fr; }
   .side { position: static; }
   .intro { padding: 20px 0 4px; }
-  /* Hero collapses to one column; the decorative mark (a wide-screen void-filler
-     only) drops so the single-column scroll stays short before the calendar. The
-     note becomes a full-width card under the CTAs, preserving the reading order. */
+  /* Hero collapses to one column: copy + CTAs + note, then the subscribe card
+     full-width, then the calendar. */
   .intro--split { grid-template-columns: 1fr; row-gap: 14px; }
-  .intro--split .hero-motif { display: none; }
-  .intro--split .intro-aside { gap: 0; }
 }
 @media (max-width: 680px) {
   .wrap { padding: 0 16px; }

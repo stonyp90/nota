@@ -169,29 +169,31 @@
                 <button class="btn btn-primary btn-lg" id="cta-reserver">Réserver votre date →</button>
                 <button class="btn btn-lg" id="cta-voir">Voir la demande</button>
               </div>
-            </div>
-
-            <aside class="intro-aside">
-              <!-- Decorative date/time mark: a rounded-square "date card" holding a clock
-                   (a moment in time), with one bright dot = the retained slot. Token-only,
-                   aria-hidden, and deliberately NOT a calendar grid (the month calendar
-                   renders directly below the hero). -->
-              <svg class="hero-motif" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
-                <g class="motif-plate">
-                  <rect x="54" y="54" width="92" height="92" rx="16" transform="rotate(-8 100 100)" fill="none" stroke="currentColor" stroke-opacity=".16" stroke-width="1.5"/>
-                  <rect x="44" y="44" width="112" height="112" rx="18" fill="currentColor" fill-opacity=".05" stroke="currentColor" stroke-opacity=".30" stroke-width="1.75"/>
-                </g>
-                <circle cx="100" cy="100" r="34" fill="none" stroke="currentColor" stroke-opacity=".34" stroke-width="1.5"/>
-                <line x1="100" y1="100" x2="100" y2="76" stroke="currentColor" stroke-opacity=".82" stroke-width="2.25" stroke-linecap="round"/>
-                <line x1="100" y1="100" x2="117" y2="88" stroke="currentColor" stroke-opacity=".55" stroke-width="2" stroke-linecap="round"/>
-                <circle cx="100" cy="100" r="3" fill="currentColor"/>
-                <circle class="motif-accent-halo" cx="100" cy="66" r="8" fill="none" stroke-opacity=".35" stroke-width="1.5"/>
-                <circle class="motif-accent" cx="100" cy="66" r="4.5"/>
-              </svg>
-
-              <div class="explainer explainer--note" role="note">
+              <div class="explainer" role="note">
                 <span class="explainer-badge">Marché du temps</span>
                 <p><strong>On ne compare pas les prix — on réserve le bon moment.</strong> Votre offre reflète l’urgence de la date, pas un rabais.</p>
+              </div>
+            </div>
+
+            <!-- Subscribe the whole carnet into a personal calendar (one-click), so
+                 every open date shows up and stays in sync in Google/Outlook/Apple. -->
+            <aside class="intro-aside">
+              <div class="sub-card" role="group" aria-label="Ajouter le carnet à votre agenda">
+                <div class="sub-card-head">
+                  <span class="sub-card-ico" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M12 14v4M10 16h4"/></svg>
+                  </span>
+                  <div>
+                    <div class="sub-card-title">Ajoutez le carnet à votre agenda</div>
+                    <div class="sub-card-sub">Toutes les dates ouvertes — synchronisé automatiquement.</div>
+                  </div>
+                </div>
+                <div class="sub-card-actions">
+                  <a class="btn btn-sm" id="sub-google" target="_blank" rel="noopener">Google</a>
+                  <a class="btn btn-sm" id="sub-outlook" target="_blank" rel="noopener">Outlook</a>
+                  <a class="btn btn-sm" id="sub-apple">Apple</a>
+                  <a class="btn btn-sm" id="sub-ics" download="nota-carnet.ics">iCal .ics</a>
+                </div>
               </div>
             </aside>
           </div>

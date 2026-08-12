@@ -41,4 +41,33 @@ function buildNotaryFeed(events = []) {
   return lines.join('\r\n');
 }
 
-module.exports = { buildNotaryFeed };
+// The PUBLIC carnet feed: every open/retained offer as an all-day event, so a
+// customer (or anyone) can subscribe to the whole carnet in Google / Outlook /
+// Apple over webcal. Each `bid` is the SAME public projection GET /bids exposes
+// — id, dateISO, serviceId, montant — so this can never leak courriel/dossier.
+function buildCarnetFeed(bids = []) {
+  const lines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Nota//Carnet public//FR-CA',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    'X-WR-CALNAME:Nota — carnet public (Québec)',
+  ];
+  for (const b of bids) {
+    const svc = domain.serviceById(b.serviceId);
+    const name = svc ? svc.nom : b.serviceId;
+    lines.push(
+      'BEGIN:VEVENT',
+      'UID:' + b.id + '@nota',
+      'DTSTART;VALUE=DATE:' + compact(b.dateISO),
+      'DTEND;VALUE=DATE:' + compact(domain.addDays(b.dateISO, 1)),
+      'SUMMARY:' + name + ' — ' + domain.money(b.montant),
+      'END:VEVENT'
+    );
+  }
+  lines.push('END:VCALENDAR');
+  return lines.join('\r\n');
+}
+
+module.exports = { buildNotaryFeed, buildCarnetFeed };

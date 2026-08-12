@@ -4,7 +4,7 @@ const domain = require('@nota/domain');
 const { createBilling } = require('./billing');
 const { decodeUnsubToken } = require('./notifications');
 const { signToken, verifyToken, notaryIdForEmail, SCOPES } = require('./notary-auth');
-const { buildNotaryFeed } = require('./ics');
+const { buildNotaryFeed, buildCarnetFeed } = require('./ics');
 
 /**
  * HTTP application, transport-agnostic. `createApp` takes a Repo port and
@@ -531,6 +531,19 @@ function createApp(repo, opts = {}) {
       if (!notaryId) return json(401, { errors: [{ code: 'non_autorise', message: 'Jeton invalide ou expiré.' }] });
       const events = await repo.listRetainedByNotary(notaryId);
       return calendar(200, buildNotaryFeed(events));
+    }
+
+    // PUBLIC carnet feed — no token. Anyone can subscribe to the whole carnet in
+    // Google / Outlook / Apple over webcal. It scans the same forward month
+    // window the notary open feed uses and returns ONLY the public projection
+    // (publicBid), so it can never expose a courriel or dossier.
+    if (route === '/carnet/feed.ics' && method === 'GET') {
+      const months = monthWindow(now().slice(0, 7), NOTARY_HORIZON_MONTHS);
+      const bids = [];
+      for (const m of months) {
+        for (const b of await repo.listByMonth(m)) bids.push(publicBid(b));
+      }
+      return calendar(200, buildCarnetFeed(bids));
     }
 
     return json(404, { errors: [{ code: 'introuvable', message: 'Route inconnue.' }] });

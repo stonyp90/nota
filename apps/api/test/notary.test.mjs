@@ -226,6 +226,23 @@ test('feed.ics and dossier reject an invalid token with 401', async () => {
   assert.equal((await dossier(a, 'x', 'id-1', '2026-08-20')).statusCode, 401);
 });
 
+test('GET /carnet/feed.ics is PUBLIC (no token) and never leaks private data', async () => {
+  const a = app();
+  const bid = await seedBid(a); // posts to 2026-08-20 with courriel client@example.ca
+
+  // No token required — it is the public carnet, same data as GET /bids.
+  const res = await a.handle({ method: 'GET', path: '/carnet/feed.ics', query: {} });
+  assert.equal(res.statusCode, 200);
+  assert.match(res.headers['content-type'], /text\/calendar/);
+  assert.match(res.body, /BEGIN:VCALENDAR/);
+  assert.ok(res.body.includes('UID:' + bid.id + '@nota'), 'feed is missing the seeded offer');
+  assert.ok(res.body.includes('DTSTART;VALUE=DATE:20260820'), 'feed has the wrong event date');
+  assert.match(res.body, /SUMMARY:.*Testament/, 'feed SUMMARY should carry the domain service name');
+  // The public feed MUST NEVER expose the client courriel or dossier.
+  assert.ok(!res.body.includes('client@example.ca'), 'public feed leaked a courriel');
+  assert.ok(!/liquidateur|Marie Roy/.test(res.body), 'public feed leaked dossier content');
+});
+
 // --- Fix 4: conditional accept closes the TOCTOU race -----------------------
 
 test('two concurrent accepts on one open bid -> exactly one 200, one 409, one notaryId', async () => {
