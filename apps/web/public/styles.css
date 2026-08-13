@@ -215,6 +215,44 @@ a:hover { text-decoration: underline; }
 .icon-btn svg { display: block; }
 .icon-btn:active { transform: scale(0.94); }
 
+/* --- Notifications (bell + dropdown, paired with the email the API sends) -- */
+.notif-wrap { position: relative; }
+#notif-bell { position: relative; }
+#notif-bell.has-unread { color: var(--brand); border-color: var(--border-strong); }
+.notif-badge {
+  position: absolute; top: -5px; right: -5px; min-width: 17px; height: 17px; padding: 0 4px;
+  border-radius: 999px; background: var(--danger); color: var(--on-accent);
+  font-size: 10px; font-weight: 800; line-height: 17px; text-align: center;
+  border: 2px solid var(--surface);
+}
+.notif-panel {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 60;
+  width: min(340px, calc(100vw - 32px));
+  background: var(--surface); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
+  overflow: hidden; animation: paneIn .16s cubic-bezier(.2, .8, .2, 1) both;
+}
+.notif-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 12px 14px; border-bottom: 1px solid var(--border);
+}
+.notif-head-title { font-weight: 700; font-size: 13px; }
+.notif-list { max-height: min(420px, 70vh); overflow-y: auto; overscroll-behavior: contain; }
+.notif-empty { padding: 24px 14px; text-align: center; color: var(--ink-muted); font-size: 13px; }
+.notif-item {
+  padding: 11px 14px; border-bottom: 1px solid var(--border); cursor: default;
+  transition: background-color .12s;
+}
+.notif-item:last-child { border-bottom: 0; }
+.notif-item[role='button'] { cursor: pointer; }
+.notif-item[role='button']:hover, .notif-item[role='button']:focus-visible { background: var(--surface-inset); outline: none; }
+.notif-item.is-unread { background: var(--surface-hover); }
+.notif-item.is-unread .notif-title::before {
+  content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 7px;
+  border-radius: 50%; background: var(--brand); vertical-align: middle;
+}
+.notif-title { font-size: 13px; font-weight: 600; color: var(--ink); }
+.notif-body { font-size: 12px; color: var(--ink-muted); margin-top: 2px; }
+
 /* --- Buttons ------------------------------------------------------------- */
 .btn {
   appearance: none; font: inherit; font-weight: 600; cursor: pointer;

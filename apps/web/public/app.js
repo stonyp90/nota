@@ -132,6 +132,93 @@
   }
 
   // ---------------------------------------------------------------------------
+  // In-app notifications — the second channel beside the email the API sends.
+  // No login: we track THIS browser's own offers in localStorage and surface the
+  // same lifecycle events (published, date approaching J-7/3/1, retained) in the
+  // bell. Idempotent by a stable per-event key.
+  // ---------------------------------------------------------------------------
+  var LS_NOTIF = 'nota.notifs.v1';
+  var LS_MYOFFERS = 'nota.myoffers.v1';
+  function notifLoad() { return lsLoad(LS_NOTIF) || []; }
+  function notifSave(a) { lsSave(LS_NOTIF, a); }
+  function myOffers() { return lsLoad(LS_MYOFFERS) || []; }
+  function addMyOffer(bid) {
+    var a = myOffers().filter(function (o) { return o.id !== bid.id; });
+    a.push({ id: bid.id, dateISO: bid.dateISO, serviceId: bid.serviceId, montant: bid.montant });
+    lsSave(LS_MYOFFERS, a.slice(-50));
+  }
+  function svcName(id) { var s = D.serviceById(id); return s ? s.nom : id; }
+  function addNotif(n) {
+    var a = notifLoad();
+    if (a.some(function (x) { return x.key === n.key; })) return; // idempotent
+    a.unshift({ key: n.key, title: n.title, body: n.body || '', dateISO: n.dateISO || null, read: false });
+    notifSave(a.slice(0, 40));
+    renderNotifs();
+  }
+  function renderNotifs() {
+    var list = $('notif-list'); if (!list) return;
+    var a = notifLoad();
+    var unread = a.filter(function (x) { return !x.read; }).length;
+    var badge = $('notif-badge');
+    if (badge) { badge.textContent = unread > 9 ? '9+' : String(unread); badge.hidden = unread === 0; }
+    var bell = $('notif-bell'); if (bell) bell.classList.toggle('has-unread', unread > 0);
+    clear(list);
+    if (!a.length) { list.appendChild(el('div', 'notif-empty', 'Aucune notification pour le moment.')); return; }
+    a.forEach(function (n) {
+      var item = el('div', 'notif-item' + (n.read ? '' : ' is-unread'));
+      item.appendChild(el('div', 'notif-title', n.title));
+      if (n.body) item.appendChild(el('div', 'notif-body', n.body));
+      if (n.dateISO) {
+        item.setAttribute('role', 'button'); item.tabIndex = 0;
+        var go = function () { toggleNotifPanel(false); markAllRead(); openDay(n.dateISO); };
+        item.addEventListener('click', go);
+        item.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+      }
+      list.appendChild(item);
+    });
+  }
+  function markAllRead() { var a = notifLoad(); a.forEach(function (x) { x.read = true; }); notifSave(a); renderNotifs(); }
+  function toggleNotifPanel(force) {
+    var panel = $('notif-panel'), bell = $('notif-bell'); if (!panel) return;
+    var open = force != null ? force : panel.hidden;
+    panel.hidden = !open;
+    bell.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) renderNotifs();
+  }
+  // Derive notifications from this browser's offers: local date-approaching, and
+  // "retained" by matching each offer id against its month's public bids.
+  async function computeNotifications() {
+    var offers = myOffers(); if (!offers.length) { renderNotifs(); return; }
+    offers.forEach(function (o) {
+      var days = D.daysBetween(todayISO(), o.dateISO);
+      if (days >= 0 && (days === 7 || days === 3 || days === 1 || days === 0)) {
+        addNotif({
+          key: 'approach:' + o.id + ':' + days,
+          title: days === 0 ? 'Votre signature est aujourd’hui' : 'Votre date approche (J-' + days + ')',
+          body: dayTitle(o.dateISO) + ' · ' + svcName(o.serviceId), dateISO: o.dateISO,
+        });
+      }
+    });
+    var months = {}; offers.forEach(function (o) { months[monthKey(o.dateISO)] = true; });
+    for (var m in months) {
+      try {
+        var bids = await store.listMonth(m);
+        offers.forEach(function (o) {
+          var mine = bids.filter(function (b) { return b.id === o.id; })[0];
+          if (mine && mine.status === D.STATUS.RETENUE) {
+            addNotif({
+              key: 'retained:' + o.id,
+              title: 'Un notaire a retenu votre demande 🎉',
+              body: dayTitle(o.dateISO) + (mine.etude ? ' · ' + mine.etude : ''), dateISO: o.dateISO,
+            });
+          }
+        });
+      } catch (e) { /* offline — try again next load */ }
+    }
+    renderNotifs();
+  }
+
+  // ---------------------------------------------------------------------------
   // Filtering / sorting
   // ---------------------------------------------------------------------------
   function applyFilters(bids) {
@@ -681,6 +768,14 @@
     toast('Offre publiée : ' + D.money(payload.montant) + (store.online ? '' : ' (démo locale)'));
     buildCalendarLinks(res.bid);
     $('offer-success').hidden = false;
+    // Track this offer + raise the in-app "published" notification (email is sent by the API).
+    addMyOffer(res.bid);
+    addNotif({
+      key: 'published:' + res.bid.id,
+      title: 'Offre publiée',
+      body: D.money(res.bid.montant) + ' · ' + dayTitle(res.bid.dateISO) + ' · ' + svcName(res.bid.serviceId),
+      dateISO: res.bid.dateISO,
+    });
     state.selectedDate = payload.dateISO;
     await refreshMonthData();
     renderCalendar(); renderAgenda();
@@ -1169,6 +1264,14 @@
       var cur = document.documentElement.getAttribute('data-theme');
       setTheme(cur === 'dark' ? 'light' : 'dark');
     });
+
+    // Notification bell
+    $('notif-bell').addEventListener('click', function (e) { e.stopPropagation(); toggleNotifPanel(); });
+    $('notif-clear').addEventListener('click', markAllRead);
+    $('notif-panel').addEventListener('click', function (e) { e.stopPropagation(); });
+    document.addEventListener('click', function () { toggleNotifPanel(false); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') toggleNotifPanel(false); });
+
     // Calendar
     $('cal-prev').addEventListener('click', function () { step(-1); });
     $('cal-next').addEventListener('click', function () { step(1); });
@@ -1298,6 +1401,11 @@
 
     // Restore a stored notary session (no fetch unless a token is present).
     ncRestore();
+
+    // In-app notifications: render what's stored, then derive fresh events
+    // (date-approaching / retained) from this browser's own offers.
+    renderNotifs();
+    computeNotifications();
 
     // scroll:false so loading on a phone never scrolls past the calendar.
     setTab(state.tab, { scroll: false });
