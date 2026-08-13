@@ -63,7 +63,7 @@
   --gap: 20px;
 
   --header-h: 62px;   /* sticky .site-header height */
-  --sticky-top: 82px; /* header + breathing gap: sticky .side offset & scroll-padding */
+  --sticky-top: 82px; /* header height + breathing gap — used for scroll-padding / scroll-margin */
 }
 
 /* Dark theme — system preference.
@@ -274,12 +274,10 @@ a:hover { text-decoration: underline; }
 /* Only set vertical padding here — the horizontal padding comes from .wrap.
    A `padding: … 0 …` shorthand would reset .wrap's side padding, pushing the
    panels 28px past the hero content on each side (misalignment). */
-.layout { display: grid; grid-template-columns: 1fr 380px; gap: clamp(16px, 2.4vw, 24px); padding-top: clamp(6px, 1.2vw, 12px); padding-bottom: clamp(40px, 7vw, 64px); align-items: start; }
-/* Maximized calendar: the offer panel hides and the calendar takes the full width. */
-.layout.cal-max { grid-template-columns: 1fr; }
-.layout.cal-max .side { display: none; }
-/* Responsive column widths live in the breakpoints section (1024 -> 1fr 340px,
-   900 -> single column). A dead max-width:940px rule was removed here. */
+.layout { display: grid; grid-template-columns: 1fr; gap: clamp(16px, 2.4vw, 24px); padding-top: clamp(6px, 1.2vw, 12px); padding-bottom: clamp(40px, 7vw, 64px); align-items: start; }
+/* Maximized calendar: taller day cells + hide the legend (there's no side panel to hide anymore). */
+.layout.cal-max .cal-cell { min-height: 112px; }
+.layout.cal-max #legend { display: none; }
 
 .panel {
   background: var(--surface);
@@ -393,12 +391,7 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 .legend-item { display: inline-flex; align-items: center; gap: 6px; }
 .legend-dot { width: 10px; height: 10px; border-radius: var(--radius-sm); }
 
-/* --- Offer form (side panel) -------------------------------------------- */
-.side { display: flex; flex-direction: column; gap: var(--gap); position: sticky; top: var(--sticky-top); }
-/* Cap the sticky offer panel to the viewport and let it scroll internally, so
-   "Publier mon offre" is always reachable without moving the whole page.
-   overflow on .panel (not .side) clips content only — never the box-shadow. */
-.side .panel { max-height: calc(100dvh - var(--sticky-top) - var(--gap)); overflow-y: auto; overscroll-behavior: contain; }
+/* --- Offer form (now inside the day-booking dialog) --------------------- */
 .form-row { margin-bottom: 14px; }
 .form-row label.lbl { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; margin-bottom: 8px; }
 .help { font-size: 12px; color: var(--ink-muted); margin-top: 4px; }
@@ -472,7 +465,6 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
   border: 1px solid var(--border); border-radius: var(--radius-sm);
   background: var(--surface-inset); margin: 10px 0 14px;
 }
-.side > .disclosure { margin: 0; } /* flex child: rely on .side gap, avoid doubling */
 .disclosure > summary {
   list-style: none; cursor: pointer; user-select: none;
   display: flex; align-items: center; gap: 8px;
@@ -517,7 +509,7 @@ dialog::backdrop { background: rgb(15 23 42 / 0.45); }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
 /* --- Day detail dialog (enlarged day over a dimmed backdrop) -------------- */
-#day-dialog { max-width: 560px; width: 94vw; }
+#day-dialog { max-width: 620px; width: 94vw; max-height: 90vh; overflow-y: auto; overscroll-behavior: contain; }
 #day-dialog::backdrop { background: rgb(15 23 42 / 0.5); backdrop-filter: blur(2px); }
 .day-head { display: flex; align-items: flex-start; gap: 12px; padding: 20px 22px 14px; }
 .day-head .header-spacer { flex: 1; }
@@ -525,11 +517,24 @@ dialog::backdrop { background: rgb(15 23 42 / 0.45); }
 .day-sub { font-size: 13px; color: var(--ink-muted); margin-top: 2px; }
 .day-close { appearance: none; border: 0; background: var(--surface-inset); color: var(--ink); width: 34px; height: 34px; border-radius: 999px; cursor: pointer; font-size: 18px; line-height: 1; flex: none; }
 .day-close:hover { background: var(--surface-hover); }
-.day-bids { max-height: 52vh; overflow: auto; }
-.day-foot { padding: 16px 22px 22px; border-top: 1px solid var(--border); display: flex; gap: 10px; align-items: center; }
-.day-foot .day-metric { flex: 1; }
-.day-metric .k { font-size: 11px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: .04em; }
-.day-metric .v { font-size: 18px; font-weight: 800; }
+
+/* --- Day booking surface (value → offers → book, all in one dialog) ------ */
+.day-value { padding: 0 22px 14px; }
+.day-value-k { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-muted); }
+.day-value-v { font-size: 30px; font-weight: 800; letter-spacing: -0.02em; color: var(--ink); }
+.day-value-note { font-size: 12px; color: var(--ink-muted); margin: 2px 0 0; }
+.day-bids { max-height: 30vh; overflow: auto; overscroll-behavior: contain; border-top: 1px solid var(--border); }
+.day-bids:empty { display: none; }
+.day-bids .bid-row:first-child { border-top: 0; }
+.day-book { padding: 16px 22px 22px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 16px; }
+.book-step { display: flex; flex-direction: column; gap: 8px; }
+.book-step-lbl { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; color: var(--ink); }
+.book-opt { color: var(--ink-muted); font-weight: 600; font-size: 12px; }
+#o-service-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+#o-service-chips .chip { flex: 1 1 auto; justify-content: center; }
+.day-book .tier-preview { margin: 0; }
+.book-options { margin: 0; }
+.book-options .form-row:last-of-type { margin-bottom: 0; }
 
 /* Brand utility classes — replace ad-hoc inline styles, keep markup on-brand */
 .w-full { width: 100%; }
@@ -540,6 +545,8 @@ dialog::backdrop { background: rgb(15 23 42 / 0.45); }
 .row-between { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .actions-inline { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
 .offer-success { margin-top: 14px; padding: 12px 14px; background: var(--surface-inset); border-radius: var(--radius); border-left: 3px solid var(--ok); }
+.offer-success-head { display: flex; align-items: flex-start; gap: 10px; }
+.offer-success-logo { flex: none; display: block; }
 .offer-success .mt-sm { margin-top: 0; }
 .switch-title { font-weight: 600; font-size: 14px; }
 .panel-narrow { max-width: 560px; margin: 24px 0 48px; }
@@ -621,6 +628,7 @@ dialog::backdrop { background: rgb(15 23 42 / 0.45); }
 @keyframes backdropIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes rowIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 @keyframes pop { 0% { transform: scale(.9); } 60% { transform: scale(1.04); } 100% { transform: scale(1); } }
+@keyframes sheetUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
 
 dialog[open] { animation: dialogIn .2s cubic-bezier(.2, .8, .2, 1) both; }
 dialog[open]::backdrop { animation: backdropIn .2s ease both; }
@@ -727,13 +735,7 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
 /* ==========================================================================
    Responsive — mobile / tablet / desktop, no horizontal overflow anywhere.
    ========================================================================== */
-@media (max-width: 1024px) {
-  .layout { grid-template-columns: 1fr 340px; }
-}
 @media (max-width: 900px) {
-  .layout { grid-template-columns: 1fr; }
-  .side { position: static; }
-  .side .panel { max-height: none; overflow: visible; } /* single column: panel flows full-length */
   .intro { padding: 20px 0 4px; }
   /* Hero collapses to one column: copy + CTAs + note, then the subscribe card
      full-width, then the calendar. */
@@ -757,6 +759,13 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   .cards { grid-template-columns: 1fr; }
   .section { padding: 28px 0; }
   #day-dialog, dialog { width: 96vw; }
+  /* The day-booking dialog becomes a bottom sheet on phones (thumb-reachable,
+     slides up). Ordered after the 96vw rule so width:100% wins. */
+  #day-dialog { margin: 0; inset: auto 0 0 0; width: 100%; max-width: 100%; max-height: 92dvh; border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
+  #day-dialog[open] { animation: sheetUp .28s cubic-bezier(.2, .8, .2, 1) both; }
+  .day-head { padding: 16px 16px 12px; }
+  .day-value { padding: 0 16px 12px; }
+  .day-book { padding: 14px 16px 18px; }
   /* Explainer stacks the badge over the text on narrow screens. */
   .explainer { flex-direction: column; align-items: flex-start; gap: 8px; }
   .hero-cta { gap: 8px; }

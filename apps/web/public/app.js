@@ -363,24 +363,30 @@
       ? D.money(Math.max.apply(null, open.map(function (b) { return b.montant; })))
       : '—';
 
+    // --- Inline booking (relocated offer-form) — the clicked day IS the date ---
+    $('o-date').value = iso; onOfferDateChange();
+    var sel = $('o-service'), chips = $('o-service-chips');
+    if (D.serviceById(state.filters.service)) {           // active carnet filter → 2-click path
+      sel.value = state.filters.service;
+      var pre = chips && chips.querySelector('[data-svc="' + state.filters.service + '"]');
+      if (pre) setGroupActive(chips, pre);
+    } else {                                              // clean 3-click path
+      sel.selectedIndex = -1;                             // value '' WITHOUT a placeholder option (options.length stays 3)
+      if (chips) chips.querySelectorAll('.chip').forEach(function (x) { x.classList.remove('is-on'); x.setAttribute('aria-pressed', 'false'); });
+    }
+    onOfferServiceChange();                               // amount/gauge + recommendedAmount pre-fill + validity
+    var succ = $('offer-success'); if (succ) succ.hidden = true;
+    var eb = $('offer-errors'); if (eb) { eb.hidden = true; clear(eb); }
+    $('day-hint').textContent = open.length
+      ? 'Proposez plus que ' + D.money(Math.max.apply(null, open.map(function (b) { return b.montant; }))) + ' pour passer devant.'
+      : 'Aucune offre — fixez votre prix.';
+    validateOfferUI();
+
     renderCalendar();
     var dlg = $('day-dialog');
     if (dlg.showModal && !dlg.open) dlg.showModal();
   }
 
-  // When the day modal closes, restore focus to the triggering cell — UNLESS we
-  // deliberately navigated away to the offer form (offerForDay).
-  var dayNavAway = false;
-  function offerForDay() {
-    var iso = state.selectedDate || state.focusDate;
-    dayNavAway = true; $('day-dialog').close();
-    setTab('carnet', { scroll: false });
-    if (D.serviceById(state.filters.service)) $('o-service').value = state.filters.service;
-    onOfferServiceChange();
-    $('o-date').value = iso; onOfferDateChange();
-    var amt = $('o-amount'); if (!amt.disabled) amt.focus();
-    amt.scrollIntoView({ behavior: 'auto', block: 'center' });
-  }
 
   // ---------------------------------------------------------------------------
   // Keyboard navigation (roving tabindex on the grid)
@@ -510,6 +516,16 @@
     var all = el('button', 'chip is-on', 'Tous');
     all.type = 'button'; all.dataset.svc = ''; all.setAttribute('aria-pressed', 'true');
     wrap.appendChild(all);
+    D.SERVICES.forEach(function (s) {
+      var b = el('button', 'chip', s.nom.split(' ')[0]);
+      b.type = 'button'; b.dataset.svc = s.id; b.setAttribute('aria-pressed', 'false');
+      wrap.appendChild(b);
+    });
+  }
+  // Service chips inside the booking dialog (one per act; no "Tous"). Only sets
+  // the hidden #o-service value — that select keeps its 3 tested options.
+  function buildBookingChips() {
+    var wrap = $('o-service-chips'); if (!wrap) return; clear(wrap);
     D.SERVICES.forEach(function (s) {
       var b = el('button', 'chip', s.nom.split(' ')[0]);
       b.type = 'button'; b.dataset.svc = s.id; b.setAttribute('aria-pressed', 'false');
@@ -1193,6 +1209,13 @@
 
     // Offer form
     $('o-service').addEventListener('change', onOfferServiceChange);
+    // Service chips drive the hidden #o-service select (keeps its tested options).
+    $('o-service-chips').addEventListener('click', function (e) {
+      var b = e.target.closest('.chip'); if (!b) return;
+      setGroupActive(this, b);
+      $('o-service').value = b.dataset.svc;
+      onOfferServiceChange();
+    });
     $('o-date').addEventListener('change', onOfferDateChange);
     $('o-date').addEventListener('input', onOfferDateChange);
     $('o-amount').addEventListener('input', onAmountChange);
@@ -1202,12 +1225,10 @@
     $('offer-form').addEventListener('submit', onOfferSubmit);
     $('o-date').setAttribute('min', todayISO());
 
-    // Day dialog
+    // Day booking dialog
     $('day-close').addEventListener('click', function () { $('day-dialog').close(); });
-    $('day-offer').addEventListener('click', offerForDay);
     $('day-dialog').addEventListener('click', function (e) { if (e.target === this) this.close(); });
     $('day-dialog').addEventListener('close', function () {
-      if (dayNavAway) { dayNavAway = false; return; }
       var c = document.querySelector('.cal-cell[data-date="' + state.focusDate + '"]');
       if (c) c.focus();
     });
@@ -1241,9 +1262,7 @@
     var ctaR = $('cta-reserver');
     if (ctaR) ctaR.addEventListener('click', function () {
       setTab('carnet', { scroll: false });
-      var svc = $('o-service'); if (svc) svc.focus();
-      var side = document.querySelector('.side');
-      if (side) side.scrollIntoView({ behavior: 'auto', block: 'start' });
+      openDay(state.selectedDate || state.focusDate || todayISO());
     });
     var ctaV = $('cta-voir');
     if (ctaV) ctaV.addEventListener('click', function () {
@@ -1258,6 +1277,7 @@
   async function boot() {
     populateServiceSelects();
     buildServiceChips();
+    buildBookingChips();
     readHash();
     syncFilterChips();
     // If a shared link pre-selects filters, reveal the (otherwise hidden) panel.

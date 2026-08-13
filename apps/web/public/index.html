@@ -244,115 +244,6 @@
 
             <div class="agenda" id="agenda" aria-live="polite"></div>
           </div>
-
-          <!-- Offer form -->
-          <aside class="side">
-            <div class="panel">
-              <div class="panel-head"><h2>Réserver votre date</h2></div>
-              <div class="panel-pad">
-                <form id="offer-form" novalidate>
-                  <div class="form-row">
-                    <label class="lbl" for="o-service"><span class="step">1</span> Quel acte&nbsp;?</label>
-                    <select id="o-service" required></select>
-                    <p class="help" id="o-service-help"></p>
-                  </div>
-
-                  <div class="form-row">
-                    <label class="lbl" for="o-date"><span class="step">2</span> Pour quelle date&nbsp;?</label>
-                    <input type="date" id="o-date" required />
-                  </div>
-
-                  <div class="tier-preview" id="tier-preview" hidden>
-                    <span class="pill" id="tp-pill" data-tier="standard">Standard</span>
-                    <span class="tp-text" id="tp-text"></span>
-                  </div>
-
-                  <div class="form-row">
-                    <label class="lbl" for="o-amount"><span class="step">3</span> Votre offre pour cette date</label>
-                    <div class="amount-big" id="o-amount-display">—</div>
-                    <div class="slider-row">
-                      <input type="range" id="o-amount" min="0" max="100" value="0" step="1" aria-label="Montant de l’offre" />
-                    </div>
-                    <p class="mult-note" id="o-mult">—</p>
-                  </div>
-
-                  <div class="form-row">
-                    <div class="gauge"><div class="gauge-fill" id="gauge-fill" style="width:0%"></div></div>
-                    <div class="gauge-label" id="gauge-label">Choisissez une date et un montant.</div>
-                  </div>
-
-                  <div class="switch-row">
-                    <div>
-                      <div class="switch-title" id="anon-title">Offre anonyme</div>
-                      <div class="help" id="anon-help">Affichée comme « Client · secteur postal ».</div>
-                    </div>
-                    <label class="switch">
-                      <input type="checkbox" id="o-anon" role="switch"
-                        aria-labelledby="anon-title" aria-describedby="anon-help" aria-checked="true" checked />
-                      <span class="track"></span>
-                    </label>
-                  </div>
-
-                  <div class="form-row" id="name-row" hidden>
-                    <label class="lbl" for="o-name">Nom affiché publiquement</label>
-                    <input type="text" id="o-name" placeholder="Prénom Nom" autocomplete="name" />
-                  </div>
-
-                  <div class="form-row">
-                    <label class="lbl" for="o-prefix">3 premiers caractères du code postal</label>
-                    <input type="text" id="o-prefix" maxlength="3" placeholder="G1R" class="uppercase" />
-                    <p class="help">Aide le notaire à jauger la distance sans vous identifier.</p>
-                  </div>
-
-                  <div class="form-row">
-                    <label class="lbl" for="o-courriel">Courriel (optionnel)</label>
-                    <input type="email" id="o-courriel" placeholder="vous@exemple.ca" autocomplete="email" inputmode="email" />
-                    <p class="help">Sert à vous prévenir. Jamais affiché.</p>
-                  </div>
-
-                  <ul class="errors" id="offer-errors" hidden></ul>
-
-                  <details class="disclosure">
-                    <summary>Confidentialité et Loi 25</summary>
-                    <div class="disclosure-body">
-                      <p id="consent-line">
-                        En publiant, la date, le service, le montant et le secteur postal deviennent
-                        publics. Aucun document n’est transmis à cette étape. Données hébergées au
-                        Canada, supprimées sur demande (Loi 25).
-                      </p>
-                      <p id="offer-dossier-note">
-                        Les réponses de votre <strong>Dossier</strong> accompagnent l’offre pour aider le
-                        notaire à l’évaluer. Les documents ne sont partagés, de façon sécurisée, qu’après
-                        qu’un notaire a retenu votre demande.
-                      </p>
-                    </div>
-                  </details>
-
-                  <p class="help">Gratuit · sans engagement · anonyme · aucun document requis à cette étape.</p>
-                  <button type="submit" class="btn btn-primary w-full" id="offer-submit" disabled>
-                    Publier mon offre
-                  </button>
-                </form>
-
-                <div id="offer-success" class="offer-success" hidden>
-                  <p class="help mt-sm"><strong>Offre publiée.</strong> Un notaire de la région peut maintenant retenir votre demande. Ajoutez la date à votre agenda :</p>
-                  <div class="actions-inline">
-                    <a class="btn btn-sm" id="ics-link" download="offre-nota.ics">Télécharger .ics</a>
-                    <a class="btn btn-sm" id="gcal-link" target="_blank" rel="noopener">Google Agenda</a>
-                    <a class="btn btn-sm" id="outlook-link" target="_blank" rel="noopener">Outlook</a>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <details class="disclosure">
-              <summary>Modèle sans commission</summary>
-              <div class="disclosure-body">
-                <p>Nota facture un abonnement fixe aux notaires, jamais un pourcentage de l’acte —
-                   pour respecter le Code de déontologie de la Chambre des notaires.</p>
-              </div>
-            </details>
-          </aside>
         </div>
       </section>
 
@@ -525,23 +416,83 @@
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-    <dialog id="day-dialog" aria-label="Détail de la journée">
+    <dialog id="day-dialog" aria-label="Réserver cette date">
       <div class="day-head">
         <div>
           <div class="day-title" id="day-title"></div>
           <div class="day-sub" id="day-sub"></div>
         </div>
         <span class="header-spacer"></span>
-        <button class="day-close" id="day-close" aria-label="Fermer">×</button>
+        <button type="button" class="day-close" id="day-close" aria-label="Fermer">×</button>
+      </div>
+      <div class="day-value">
+        <div class="day-value-k">Meilleure offre ouverte</div>
+        <div class="day-value-v" id="day-best">—</div>
+        <p class="day-value-note" id="day-hint"></p>
       </div>
       <div class="day-bids" id="day-bids"></div>
-      <div class="day-foot">
-        <div class="day-metric">
-          <div class="k">Meilleure offre ouverte</div>
-          <div class="v" id="day-best">—</div>
+      <form id="offer-form" class="day-book" novalidate>
+        <div class="book-step">
+          <div class="book-step-lbl"><span class="step">1</span> Quel acte&nbsp;?</div>
+          <div class="chip-group" id="o-service-chips" role="group" aria-label="Choisir l’acte"></div>
+          <label class="visually-hidden" for="o-service">Quel acte&nbsp;?</label>
+          <select id="o-service" class="visually-hidden" required tabindex="-1" aria-hidden="true"></select>
+          <p class="help" id="o-service-help"></p>
         </div>
-        <button class="btn btn-primary" id="day-offer">Offrir ce jour-là</button>
-      </div>
+        <input type="date" id="o-date" class="visually-hidden" required tabindex="-1" aria-hidden="true" />
+        <div class="tier-preview" id="tier-preview" hidden>
+          <span class="pill" id="tp-pill" data-tier="standard">Standard</span>
+          <span class="tp-text" id="tp-text"></span>
+        </div>
+        <div class="book-step">
+          <div class="book-step-lbl"><span class="step">2</span> Votre offre <span class="book-opt">— pré-remplie</span></div>
+          <div class="amount-big" id="o-amount-display">—</div>
+          <div class="slider-row"><input type="range" id="o-amount" min="0" max="100" value="0" step="1" aria-label="Montant de l’offre" /></div>
+          <div class="gauge"><div class="gauge-fill" id="gauge-fill" style="width:0%"></div></div>
+          <div class="gauge-label" id="gauge-label">Choisissez un acte.</div>
+          <p class="mult-note" id="o-mult">—</p>
+        </div>
+        <details class="disclosure book-options">
+          <summary>Options et confidentialité</summary>
+          <div class="disclosure-body">
+            <div class="switch-row">
+              <div>
+                <div class="switch-title" id="anon-title">Offre anonyme</div>
+                <div class="help" id="anon-help">Affichée comme « Client · secteur postal ».</div>
+              </div>
+              <label class="switch"><input type="checkbox" id="o-anon" role="switch" aria-labelledby="anon-title" aria-describedby="anon-help" aria-checked="true" checked /><span class="track"></span></label>
+            </div>
+            <div class="form-row" id="name-row" hidden>
+              <label class="lbl" for="o-name">Nom affiché publiquement</label>
+              <input type="text" id="o-name" placeholder="Prénom Nom" autocomplete="name" />
+            </div>
+            <div class="form-row">
+              <label class="lbl" for="o-prefix">3 premiers caractères du code postal</label>
+              <input type="text" id="o-prefix" maxlength="3" placeholder="G1R" class="uppercase" />
+            </div>
+            <div class="form-row">
+              <label class="lbl" for="o-courriel">Courriel (optionnel)</label>
+              <input type="email" id="o-courriel" placeholder="vous@exemple.ca" autocomplete="email" inputmode="email" />
+              <p class="help">Sert à vous prévenir. Jamais affiché.</p>
+            </div>
+            <p id="consent-line" class="help">En publiant, la date, le service, le montant et le secteur postal deviennent publics. Aucun document n’est transmis à cette étape. Données au Canada, supprimées sur demande (Loi 25).</p>
+            <p id="offer-dossier-note" class="help">Les réponses de votre <strong>Dossier</strong> accompagnent l’offre ; les documents ne sont partagés qu’après qu’un notaire a retenu votre demande.</p>
+          </div>
+        </details>
+        <ul class="errors" id="offer-errors" hidden></ul>
+        <button type="submit" class="btn btn-primary w-full btn-lg" id="offer-submit" disabled>Publier mon offre</button>
+        <div id="offer-success" class="offer-success" hidden>
+          <div class="offer-success-head">
+            <img class="offer-success-logo" src="favicon.svg" width="26" height="26" alt="Nota" />
+            <p class="help mt-sm"><strong>Offre publiée.</strong> Ajoutez la date à votre agenda :</p>
+          </div>
+          <div class="actions-inline">
+            <a class="btn btn-sm" id="ics-link" download="offre-nota.ics">Télécharger .ics</a>
+            <a class="btn btn-sm" id="gcal-link" target="_blank" rel="noopener">Google Agenda</a>
+            <a class="btn btn-sm" id="outlook-link" target="_blank" rel="noopener">Outlook</a>
+          </div>
+        </div>
+      </form>
     </dialog>
 
     <dialog id="reveal-dialog">
