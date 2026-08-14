@@ -1208,8 +1208,19 @@
       var lbl = $('notary-email-label'); if (lbl) lbl.textContent = nc.email || '';
       // The webcal URL carries ONLY the read-only feed token, never the session
       // token — a leaked calendar URL must not authorize accept/dossier.
-      var wc = $('notary-webcal');
-      if (wc) { if (nc.feedToken) { wc.href = ncFeedUrl(nc.feedToken); wc.hidden = false; } else { wc.hidden = true; } }
+      // Full sync options for the notary's retained-signings feed (like the
+      // public carnet card): Google / Outlook / Apple / iCal, all from the
+      // read-only FEED token.
+      if (nc.feedToken) {
+        var http = apiBaseAbs() + '/notary/feed.ics?token=' + encodeURIComponent(nc.feedToken);
+        var webcal = toWebcal(http);
+        var name = 'Nota — signatures retenues';
+        var set = function (id, href) { var a = $(id); if (a) a.href = href; };
+        set('notary-webcal', http);
+        set('notary-apple', webcal);
+        set('notary-google', 'https://calendar.google.com/calendar/render?cid=' + encodeURIComponent(webcal));
+        set('notary-outlook', 'https://outlook.live.com/calendar/0/addfromweb?url=' + encodeURIComponent(http) + '&name=' + encodeURIComponent(name));
+      }
       ncRenderRetained();
     }
   }
@@ -1329,7 +1340,10 @@
       .forEach(function (e) { list.appendChild(ncRetainedCard(e)); });
   }
 
-  function ncSignOut() { ncExpire('Déconnecté.'); }
+  // Explicit sign-out purges the cached retained client PII (courriel/dossier),
+  // not just the tokens. NOT done in ncExpire — a transient 401 calls that too
+  // and must not destroy the notary's only client-side copy.
+  function ncSignOut() { try { localStorage.removeItem(LS_NC_RETAINED); } catch (e) {} ncExpire('Déconnecté.'); }
 
   function ncRestore() {
     var tok = lsLoad(LS_NC_TOKEN); var feed = lsLoad(LS_NC_FEED_TOKEN); var em = lsLoad(LS_NC_EMAIL);
