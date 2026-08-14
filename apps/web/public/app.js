@@ -787,6 +787,9 @@
     toast('Offre publiée : ' + D.money(payload.montant) + (store.online ? '' : ' (démo locale)'));
     buildCalendarLinks(res.bid);
     $('offer-success').hidden = false;
+    // The dossier is what makes this lead sellable — show its real progress here
+    // and give a one-tap path to finish it for THIS service.
+    fillDossierNext(res.bid.serviceId);
     // Track this offer + raise the in-app "published" notification (email is sent by the API).
     addMyOffer(res.bid);
     addNotif({
@@ -867,15 +870,23 @@
 
       var input;
       if (it.kind === 'doc') {
-        input = document.createElement('input'); input.type = 'file';
+        var fileLbl = el('label', 'file-field');
+        input = document.createElement('input'); input.type = 'file'; input.className = 'file-native';
+        var fileCta = el('span', 'file-cta', saved[it.id] ? 'Remplacer le fichier' : 'Choisir un fichier');
         input.addEventListener('change', function () {
           var name = this.files && this.files[0] ? this.files[0].name : '';
           dossierSet(svc.id, it.id, name);
           check.dataset.on = name ? 'true' : 'false';
+          row.dataset.done = name ? 'true' : 'false';
+          fileCta.textContent = name ? 'Remplacer le fichier' : 'Choisir un fichier';
+          var note = body.querySelector('.file-note');
+          if (name) { if (!note) { note = el('div', 'file-note'); body.appendChild(note); } note.textContent = 'Sélectionné : ' + name + ' — reste sur votre appareil.'; }
+          else if (note) { note.remove(); }
           updateDossierBar();
         });
-        body.appendChild(input);
-        if (saved[it.id]) { var fn = el('div', 'file-note', 'Sélectionné : ' + saved[it.id] + ' — le fichier reste sur votre appareil à cette étape.'); body.appendChild(fn); }
+        fileLbl.appendChild(input); fileLbl.appendChild(fileCta);
+        body.appendChild(fileLbl);
+        if (saved[it.id]) { var fn = el('div', 'file-note', 'Sélectionné : ' + saved[it.id] + ' — reste sur votre appareil.'); body.appendChild(fn); }
       } else {
         input = document.createElement('input'); input.type = 'text';
         input.value = saved[it.id] || '';
@@ -949,17 +960,41 @@
     badge.dataset.complete = r.ready ? 'true' : 'false';
   }
 
+  // Post-publish bridge: fill the "Complétez votre dossier" step with the booked
+  // service's real readiness and wire its CTA to open the dossier for it.
+  function fillDossierNext(serviceId) {
+    var svc = D.serviceById(serviceId); if (!svc) return;
+    var r = D.leadReadiness(serviceId, dossierFor(serviceId));
+    var badge = $('dossier-next-badge'); if (badge) badge.textContent = r.done + '/' + r.total;
+    var fill = $('dossier-next-fill'); if (fill) fill.style.width = (r.total ? Math.round((r.done / r.total) * 100) : 0) + '%';
+    var h = $('dossier-next-h'), sub = $('dossier-next-sub'), cta = $('dossier-next-cta');
+    if (r.ready) {
+      if (h) h.textContent = 'Dossier complet ✓';
+      if (sub) sub.textContent = 'Votre demande est prête à être retenue immédiatement.';
+      if (cta) cta.textContent = 'Revoir mon dossier';
+    } else {
+      if (h) h.textContent = 'Complétez votre dossier';
+      if (sub) sub.textContent = 'Les demandes au dossier complet sont retenues en priorité par les notaires.';
+      if (cta) cta.textContent = 'Compléter mon dossier';
+    }
+    if (cta) cta.onclick = function () { openDossier(serviceId); };
+  }
+
+  // Jump from a booked offer straight into its dossier: close the day dialog,
+  // preselect the service, open the tab.
+  function openDossier(serviceId) {
+    var dlg = $('day-dialog'); if (dlg && dlg.open && dlg.close) dlg.close();
+    if (serviceId && D.serviceById(serviceId)) $('d-service').value = serviceId;
+    setTab('dossier');
+  }
+
   // ---------------------------------------------------------------------------
   // Notary form
   // ---------------------------------------------------------------------------
   async function onNotarySubmit(e) {
     e.preventDefault();
     var errs = [];
-    var name = $('n-name').value.trim();
-    var etude = $('n-etude').value.trim();
     var email = $('n-email').value.trim();
-    if (!name) errs.push('Le nom est requis.');
-    if (!etude) errs.push('L’étude est requise.');
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) errs.push('Courriel invalide.');
     var box = $('notary-errors');
     if (errs.length) { clear(box); box.hidden = false; errs.forEach(function (m) { box.appendChild(el('li', null, m)); }); return; }
@@ -974,7 +1009,7 @@
       // Free onboarding: start a Stripe Connect account link, then redirect to it.
       var r = await fetch(API_BASE + '/notaries/connect', {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ email: email, name: name, etude: etude }),
+        body: JSON.stringify({ email: email }),
       });
       var j = await r.json();
       if (r.ok && j.url) { window.location.href = j.url; return; }
@@ -1005,6 +1040,40 @@
   function ncRetainedAdd(email, entry) {
     var list = ncRetainedFor(email).filter(function (e) { return e.id !== entry.id; });
     list.push(entry); ncRetainedSave(email, list);
+  }
+  function ncRetainedUpdate(email, id, patch) {
+    var list = ncRetainedFor(email).map(function (e) {
+      return e.id === id ? Object.assign({}, e, patch) : e;
+    });
+    ncRetainedSave(email, list);
+  }
+
+  // A notary marks a retained act completed with its final value → the API
+  // charges Nota's commission (Stripe Connect application fee) and returns the
+  // real commission in cents (never a client-side rate). Session bearer only.
+  async function ncCompleteAct(id, actAmount, btn) {
+    if (!nc.token) return;
+    var amt = Number(actAmount);
+    if (!(amt > 0)) { toast('Montant de l’acte invalide.'); return; }
+    if (btn) { btn.disabled = true; btn.textContent = 'Envoi…'; }
+    function restore() { if (btn) { btn.disabled = false; btn.textContent = 'Marquer complété'; } }
+    var r;
+    try {
+      r = await fetch(API_BASE + '/notary/acts/complete', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer ' + nc.token },
+        body: JSON.stringify({ bidId: id, actAmount: amt }),
+      });
+    } catch (e) { toast('Action impossible (hors ligne).'); restore(); return; }
+    if (r.status === 401) { ncExpire('Session expirée. Reconnectez-vous.'); return; }
+    var j = {}; try { j = await r.json(); } catch (e) {}
+    if (r.status !== 200 || !j.ok) {
+      toast((j.errors && j.errors[0] && j.errors[0].message) || 'Impossible de compléter l’acte.');
+      restore(); return;
+    }
+    ncRetainedUpdate(nc.email, id, { completed: true, actAmount: amt, commissionCents: j.commissionCents || 0 });
+    ncRenderRetained();
+    toast('Acte complété. Commission Nota : ' + D.money((j.commissionCents || 0) / 100) + '.');
   }
 
   // Build the webcal:// subscription URL from the API base. A relative '/api'
@@ -1205,6 +1274,33 @@
     return wrap;
   }
 
+  // The "mark act completed" block on each retained dossier card. Once done, it
+  // shows a badge with the true commission the API charged.
+  function ncCompleteBlock(entry) {
+    var wrap = el('div', 'nc-complete');
+    if (entry.completed) {
+      var done = el('div', 'nc-complete-done');
+      done.appendChild(el('span', 'nc-done-badge', 'Acte complété'));
+      done.appendChild(el('span', 'nc-done-fee',
+        'Valeur ' + D.money(entry.actAmount) + ' · commission Nota ' + D.money((entry.commissionCents || 0) / 100)));
+      wrap.appendChild(done);
+      return wrap;
+    }
+    wrap.appendChild(el('div', 'nc-complete-h', 'Acte signé ? Confirmez la valeur finale'));
+    var row = el('div', 'nc-complete-row');
+    var lbl = el('label', 'nc-complete-lbl'); // wraps input → implicit a11y, no id needed
+    lbl.appendChild(el('span', 'nc-complete-cap', 'Valeur de l’acte'));
+    var input = el('input', 'nc-actval');
+    input.type = 'number'; input.min = '1'; input.step = '1'; input.setAttribute('inputmode', 'numeric');
+    input.value = String(entry.montant != null ? entry.montant : '');
+    lbl.appendChild(input);
+    var btn = el('button', 'btn btn-sm btn-primary nc-complete-btn', 'Marquer complété');
+    btn.type = 'button';
+    row.appendChild(lbl); row.appendChild(btn);
+    wrap.appendChild(row);
+    wrap.appendChild(el('p', 'help', 'Nota prélève sa commission uniquement à cette étape, sur la valeur confirmée.'));
+    return wrap;
+  }
   function ncRetainedCard(entry) {
     var svc = D.serviceById(entry.serviceId);
     var card = el('div', 'nc-card is-retained'); card.dataset.id = entry.id;
@@ -1219,6 +1315,7 @@
     meta.appendChild(el('span', 'pill pill-retenue', 'retenue'));
     card.appendChild(meta);
     card.appendChild(ncDossierBlock(entry));
+    card.appendChild(ncCompleteBlock(entry));
     return card;
   }
 
@@ -1396,6 +1493,14 @@
       else if (e.target.closest('.nc-decline')) ncDecline(id, b.dateISO);
     });
 
+    var ncRetList = $('notary-retained-list');
+    if (ncRetList) ncRetList.addEventListener('click', function (e) {
+      var btn = e.target.closest('.nc-complete-btn'); if (!btn) return;
+      var card = e.target.closest('.nc-card'); if (!card) return;
+      var input = card.querySelector('.nc-actval');
+      ncCompleteAct(card.dataset.id, input ? input.value : '', btn);
+    });
+
     // Hero CTAs — orient the buyer immediately
     var ctaR = $('cta-reserver');
     if (ctaR) ctaR.addEventListener('click', function () {
@@ -1471,6 +1576,7 @@
       loadBids: ncLoadBids,
       accept: ncAccept,
       decline: ncDecline,
+      complete: ncCompleteAct,
       feedUrl: ncFeedUrl,
       retainedFor: ncRetainedFor,
     },

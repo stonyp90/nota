@@ -215,10 +215,10 @@
                   </div>
                 </div>
                 <div class="sub-card-actions">
-                  <a class="btn btn-sm" id="sub-google" target="_blank" rel="noopener">Google</a>
-                  <a class="btn btn-sm" id="sub-outlook" target="_blank" rel="noopener">Outlook</a>
-                  <a class="btn btn-sm" id="sub-apple">Apple</a>
-                  <a class="btn btn-sm" id="sub-ics" download="nota-carnet.ics">iCal</a>
+                  <a class="btn btn-sm sub-btn" id="sub-google" target="_blank" rel="noopener"><svg class="brand-ic" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.8z"/><path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1A12 12 0 0 0 12 24z"/><path fill="#FBBC05" d="M5.3 14.3a7.2 7.2 0 0 1 0-4.6V6.6H1.3a12 12 0 0 0 0 10.8l4-3.1z"/><path fill="#EA4335" d="M12 4.8c1.8 0 3.3.6 4.6 1.8l3.4-3.4A12 12 0 0 0 12 0 12 12 0 0 0 1.3 6.6l4 3.1C6.2 6.9 8.9 4.8 12 4.8z"/></svg>Google</a>
+                  <a class="btn btn-sm sub-btn" id="sub-outlook" target="_blank" rel="noopener"><svg class="brand-ic" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="#0F6CBD" d="M2 6.2 9 4.9v14.2L2 17.8z"/><path fill="#fff" d="M5.5 9.2c-1 0-1.7.9-1.7 2.3s.7 2.3 1.7 2.3 1.7-.9 1.7-2.3-.7-2.3-1.7-2.3zm0 1c.4 0 .7.5.7 1.3s-.3 1.3-.7 1.3-.7-.5-.7-1.3.3-1.3.7-1.3z"/><rect x="9.5" y="5.5" width="12.5" height="13" rx="1.5" fill="#0F6CBD"/><path fill="#fff" d="M15.7 8.6a3 3 0 1 0 0 6 3 3 0 0 0 0-6zm0 1.6a1.4 1.4 0 1 1 0 2.8 1.4 1.4 0 0 1 0-2.8z"/></svg>Outlook</a>
+                  <a class="btn btn-sm sub-btn" id="sub-apple"><svg class="brand-ic" viewBox="0 0 384 512" width="13" height="13" aria-hidden="true" fill="currentColor"><path d="M318.7 268c-.3-36 16.4-63 50-83-18.8-27-47-42-84-45-35-3-73 20-87 20s-52-19-79-19c-56 1-114 43-114 130 0 26 5 53 15 81 13 37 60 128 109 126 26-1 44-19 78-19s50 18 78 18c50-1 92-83 105-120-67-32-64-93-64-95zM256 84c17-20 15-49 14-59-14 1-40 9-56 29-14 17-19 43-16 58 16 1 41-8 58-28z"/></svg>Apple</a>
+                  <a class="btn btn-sm sub-btn" id="sub-ics" download="nota-carnet.ics"><svg class="brand-ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>iCal</a>
                 </div>
               </div>
             </aside>
@@ -331,28 +331,22 @@
             </div>
           </div>
 
+          <div class="notaires-cols">
           <div class="panel panel-pad panel-narrow">
             <h2 class="h-sub">Devenir notaire — gratuit</h2>
             <p class="help mb-sm">Inscription gratuite. Connectez un compte de paiement sécurisé (Stripe) ; Nota ne prélève une commission que sur les actes complétés.</p>
             <form id="notary-form">
               <div class="form-row">
-                <label class="lbl" for="n-name">Nom du notaire</label>
-                <input type="text" id="n-name" required />
-              </div>
-              <div class="form-row">
-                <label class="lbl" for="n-etude">Étude</label>
-                <input type="text" id="n-etude" required />
-              </div>
-              <div class="form-row">
-                <label class="lbl" for="n-email">Courriel</label>
-                <input type="text" id="n-email" inputmode="email" required />
+                <label class="lbl" for="n-email">Courriel professionnel</label>
+                <input type="email" id="n-email" inputmode="email" autocomplete="email" placeholder="vous@etude.ca" required />
+                <p class="help">Nom, étude et coordonnées bancaires sont recueillis à l’étape suivante, sur Stripe.</p>
               </div>
               <ul class="errors" id="notary-errors" hidden></ul>
               <button type="submit" class="btn btn-primary" id="notary-submit">Commencer gratuitement</button>
             </form>
             <p class="note mt-md">
-              <strong>À vérifier avant le lancement.</strong> Les enchères publiques sur des honoraires professionnels
-              peuvent attirer l’attention de la Chambre. Un appel à l’inspection professionnelle est recommandé.
+              <strong>Vous gardez la main.</strong> Vous fixez vos honoraires et vérifiez l’identité du client à la
+              signature, comme l’exige la loi. Nota n’intervient jamais dans l’acte notarié.
             </p>
           </div>
 
@@ -389,14 +383,15 @@
               <p class="help" id="notary-open-empty" hidden>Aucune demande ouverte pour l’instant.</p>
 
               <h3 class="nc-h">Dossiers retenus</h3>
-              <div class="nc-list" id="notary-retained-list"></div>
-              <p class="help" id="notary-retained-empty">Aucun dossier retenu pour l’instant.</p>
+              <div class="nc-list" id="notary-retained-list" aria-live="polite"></div>
+              <p class="help" id="notary-retained-empty" hidden>Aucun dossier retenu pour l’instant.</p>
 
               <div class="nc-cal">
                 <a class="btn btn-sm" id="notary-webcal" href="#" target="_blank" rel="noopener">S’abonner au calendrier (webcal)</a>
                 <p class="help">Ajoute vos signatures retenues à votre agenda (Apple Calendar, Outlook, Google) et se met à jour automatiquement.</p>
               </div>
             </div>
+          </div>
           </div>
         </div>
       </section>
@@ -517,13 +512,29 @@
         <div id="offer-success" class="offer-success" hidden>
           <div class="offer-success-head">
             <img class="offer-success-logo" src="favicon.svg" width="26" height="26" alt="Nota" />
-            <p class="help mt-sm"><strong>Offre publiée.</strong> Ajoutez la date à votre agenda :</p>
+            <p class="help mt-sm"><strong>Offre publiée.</strong> Une dernière étape la fait retenir plus vite.</p>
           </div>
-          <div class="actions-inline">
-            <a class="btn btn-sm" id="ics-link" download="offre-nota.ics">Télécharger .ics</a>
-            <a class="btn btn-sm" id="gcal-link" target="_blank" rel="noopener">Google Agenda</a>
-            <a class="btn btn-sm" id="outlook-link" target="_blank" rel="noopener">Outlook</a>
+          <div class="dossier-next" id="dossier-next">
+            <div class="dossier-next-row">
+              <div class="dossier-next-txt">
+                <div class="dossier-next-h" id="dossier-next-h">Complétez votre dossier</div>
+                <div class="help" id="dossier-next-sub">Les demandes au dossier complet sont retenues en priorité par les notaires.</div>
+              </div>
+              <span class="dossier-next-badge" id="dossier-next-badge">0/6</span>
+            </div>
+            <div class="dossier-bar"><span id="dossier-next-fill" style="width:0%"></span></div>
+            <button type="button" class="btn btn-primary btn-sm w-full mt-sm" id="dossier-next-cta">Compléter mon dossier</button>
           </div>
+          <details class="disclosure">
+            <summary>Ajouter la date à mon agenda</summary>
+            <div class="disclosure-body">
+              <div class="actions-inline">
+                <a class="btn btn-sm" id="ics-link" download="offre-nota.ics">Télécharger .ics</a>
+                <a class="btn btn-sm" id="gcal-link" target="_blank" rel="noopener">Google Agenda</a>
+                <a class="btn btn-sm" id="outlook-link" target="_blank" rel="noopener">Outlook</a>
+              </div>
+            </div>
+          </details>
         </div>
       </form>
     </dialog>

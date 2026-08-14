@@ -281,7 +281,7 @@ a:hover { text-decoration: underline; }
 .btn svg { flex: none; }
 
 /* Hero call-to-action — the buyer's first, obvious action */
-.hero-cta { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+.hero-cta { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
 
 /* Guided step badges (1 · 2 · 3) in the offer panel */
 .step {
@@ -293,9 +293,9 @@ a:hover { text-decoration: underline; }
 :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 
 /* --- Hero / intro -------------------------------------------------------- */
-.intro { padding: clamp(10px, 2vw, 18px) 0 2px; }
-.intro h1 { font-size: clamp(24px, 3.2vw, 33px); font-weight: 800; }
-.intro p { color: var(--ink-muted); max-width: 60ch; margin: 8px 0 0; font-size: 15px; }
+.intro { padding: clamp(6px, 1.4vw, 12px) 0 2px; }
+.intro h1 { font-size: clamp(22px, 2.8vw, 30px); font-weight: 800; line-height: 1.1; }
+.intro p { color: var(--ink-muted); max-width: 60ch; margin: 5px 0 0; font-size: 14px; }
 .eyebrow {
   display: inline-block; font-size: 12px; font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.08em; color: var(--brand); margin-bottom: 8px;
@@ -303,8 +303,8 @@ a:hover { text-decoration: underline; }
 
 /* Time-not-price explainer band */
 .explainer {
-  display: flex; align-items: center; gap: 10px;
-  margin-top: 12px; padding: 8px 12px;
+  display: inline-flex; align-items: center; gap: 10px; width: fit-content; max-width: 100%;
+  margin-top: 10px; padding: 7px 12px;
   background: var(--surface-inset); border: 1px solid var(--border);
   border-left: 3px solid var(--brand); border-radius: var(--radius);
 }
@@ -340,7 +340,7 @@ a:hover { text-decoration: underline; }
 .filters { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 18px; }
 .field { display: flex; flex-direction: column; gap: 4px; }
 .field > label { font-size: 11px; font-weight: 600; color: var(--ink-muted); text-transform: uppercase; letter-spacing: .04em; }
-select, input[type='text'], input[type='number'], input[type='date'] {
+select, input[type='text'], input[type='email'], input[type='number'], input[type='date'] {
   font: inherit; padding: 8px 10px; border: 1px solid var(--border-strong);
   border-radius: var(--radius); background: var(--surface); color: var(--ink); min-width: 120px;
 }
@@ -492,15 +492,26 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .dossier-missing[data-ready='true'] { color: var(--ok); font-weight: 700; }
 .consent-toggle { display: inline-flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; font-weight: 600; cursor: pointer; }
 .consent-toggle input { width: 18px; height: 18px; accent-color: var(--brand); cursor: pointer; }
-.dossier-list { padding: 6px 0; }
-.dossier-item { display: flex; gap: 12px; align-items: flex-start; padding: 12px 18px; border-top: 1px solid var(--border); }
-.dossier-check { flex: none; margin-top: 3px; width: 20px; height: 20px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); display: grid; place-items: center; color: var(--brand); font-weight: 800; }
+/* Dossier: a light 2-column grid of compact cards (uses the horizontal space,
+   far less heavy than full-width stacked rows). */
+.dossier-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; padding: 6px 0; align-items: start; }
+.dossier-item { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.dossier-consent { grid-column: 1 / -1; }
+.dossier-check { flex: none; margin-top: 2px; width: 18px; height: 18px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); display: grid; place-items: center; color: var(--brand); font-weight: 800; font-size: 12px; }
 .dossier-check[data-on='true'] { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }
 .dossier-body { flex: 1; min-width: 0; }
-.dossier-name { font-weight: 600; font-size: 14px; }
+.dossier-name { font-weight: 600; font-size: 13.5px; }
 .dossier-item .help { margin-top: 2px; }
-.dossier-item input[type='text'], .dossier-item input[type='file'] { width: 100%; margin-top: 8px; }
-.file-note { font-size: 12px; color: var(--warn); margin-top: 6px; }
+.dossier-item input[type='text'] { width: 100%; margin-top: 8px; }
+.dossier-item[data-done='true'] .help { display: none; }
+.dossier-item[data-done='true'] .dossier-name { color: var(--ink-muted); }
+/* Themed file picker — hides the raw OS "Choose File" chrome. */
+.file-field { display: inline-flex; align-items: center; gap: 8px; margin-top: 8px; cursor: pointer; }
+.dossier-item input.file-native { position: absolute; width: 1px; height: 1px; opacity: 0; margin: 0; padding: 0; }
+.file-cta { display: inline-flex; align-items: center; padding: 7px 14px; border-radius: 999px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--ink-muted); font-weight: 600; font-size: 13px; transition: border-color .15s, color .15s; }
+.file-field:hover .file-cta { border-color: var(--brand); color: var(--ink); }
+.file-native:focus-visible + .file-cta { outline: 2px solid var(--ring); outline-offset: 2px; }
+.file-note { font-size: 12px; color: var(--ink-muted); margin-top: 6px; }
 
 /* --- Model / footer sections -------------------------------------------- */
 .section { padding: clamp(32px, 6vw, 56px) 0; border-top: 1px solid var(--border); }
@@ -656,6 +667,27 @@ dialog::backdrop { background: rgb(15 23 42 / 0.45); }
 .nc-kv dt { font-size: 12px; font-weight: 600; color: var(--ink-muted); }
 .nc-kv dd { font-size: 13px; color: var(--ink); margin: 0; overflow-wrap: anywhere; }
 .nc-cal { margin-top: 18px; }
+.nc-complete { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.nc-complete-h { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-muted); margin-bottom: 8px; }
+.nc-complete-row { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
+.nc-complete-lbl { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: var(--ink-muted); }
+.nc-actval { max-width: 140px; }
+.nc-complete-done { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.nc-done-badge { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px; white-space: nowrap; background: var(--hunter-100); color: var(--hunter-700); border: 1px solid var(--hunter-300); }
+.nc-done-fee { font-size: 12px; color: var(--ink-muted); }
+
+/* Dossier post-publish bridge (in the day modal). */
+.dossier-next { margin-top: 12px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+.dossier-next-row { display: flex; align-items: flex-start; gap: 10px; }
+.dossier-next-txt { flex: 1; min-width: 0; }
+.dossier-next-h { font-weight: 700; font-size: 14px; }
+.dossier-next-badge { flex: none; font-size: 12px; font-weight: 800; padding: 2px 9px; border-radius: 999px; background: var(--surface-inset); color: var(--ink); }
+.dossier-next .dossier-bar { margin: 10px 0 0; }
+
+/* Notaires: onboarding form + console side by side (use the horizontal space). */
+.notaires-cols { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); align-items: start; }
+.notaires-cols .panel-narrow { max-width: none; margin: 0; }
+@media (max-width: 900px) { .notaires-cols { grid-template-columns: 1fr; } }
 
 /* --- Privacy (Law 25) list ---------------------------------------------- */
 .privacy-list { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
@@ -737,11 +769,10 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
    .intro--split so the dossier / notaire / vie-privée sections stay single-column. */
 .intro--split {
   display: grid;
-  grid-template-columns: minmax(0, 58ch) minmax(300px, 360px);
-  column-gap: clamp(28px, 5vw, 64px);
-  justify-content: start;
-  align-items: start;
-  max-width: 1120px; /* keep the copy + subscribe card grouped so wide screens show no gap */
+  grid-template-columns: minmax(0, 62ch) minmax(300px, 380px);
+  column-gap: clamp(24px, 4vw, 56px);
+  justify-content: space-between; /* copy hugs the left edge, card the right edge — bookends the full width, aligned with the calendar below */
+  align-items: center; /* centre the card against the copy so no dead vertical space */
 }
 .intro-lead { min-width: 0; }
 .intro-aside { min-width: 0; }
@@ -760,7 +791,11 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
 .sub-card-title { font-weight: 700; font-size: 13.5px; line-height: 1.2; }
 .sub-card-sub { font-size: 12px; color: var(--ink-muted); margin-top: 1px; }
 .sub-card-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
-.sub-card-actions .btn { flex: 1 1 auto; }
+.sub-card-actions .btn { flex: 1 1 auto; gap: 6px; padding-left: 10px; padding-right: 10px; }
+.brand-ic { flex: none; display: block; }
+/* Borderless notification bell in the header. */
+#notif-bell { border-color: transparent; background: transparent; }
+#notif-bell:hover { background: var(--surface-inset); }
 
 /* Preserve the brand entrance cascade under the two-column nesting: cancel the
    block-level fade the base `.intro > *` rule would put on the columns, then
@@ -817,7 +852,7 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   .cal-dow { font-size: 10px; }
   .filters { padding: 10px 14px; gap: 8px; }
   .field { flex: 1 1 40%; }
-  select, input[type='text'], input[type='number'], input[type='date'] { min-width: 0; width: 100%; }
+  select, input[type='text'], input[type='email'], input[type='number'], input[type='date'] { min-width: 0; width: 100%; }
   .cards { grid-template-columns: 1fr; }
   .section { padding: 28px 0; }
   #day-dialog, dialog { width: 96vw; }
