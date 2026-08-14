@@ -264,8 +264,6 @@
     updateFilterSummary(visible.length);
     var byDay = {};
     visible.forEach(function (b) { (byDay[b.dateISO] = byDay[b.dateISO] || []).push(b); });
-    var maxCount = 1;
-    Object.keys(byDay).forEach(function (k) { maxCount = Math.max(maxCount, byDay[k].length); });
 
     var lead = mondayIndex(state.anchor);
     var dim = daysInMonth(state.anchor);
@@ -317,9 +315,16 @@
           cell.setAttribute('aria-label', dayTitle(iso) + ', ' + n + ' offre' + plural + ' retenue' + plural + ', ' + D.money(cleared) + ' obtenu');
         }
 
-        var dens = el('div', 'cal-density');
-        dens.style.opacity = String(0.18 + 0.6 * (dayBids.length / maxCount));
-        cell.appendChild(dens);
+        // Status meter: a green segment for offers still open, a muted segment
+        // for offers a notary has retained — so accepted vs. waiting reads at a glance.
+        var retenue = dayBids.filter(function (b) { return b.status === D.STATUS.RETENUE; });
+        if (retenue.length) cell.classList.add('has-retenue');
+        if (!open.length) cell.classList.add('is-taken');
+        var meter = el('div', 'cal-status');
+        var oSeg = el('span', 'cal-status-open'); oSeg.style.flexGrow = String(open.length);
+        var tSeg = el('span', 'cal-status-taken'); tSeg.style.flexGrow = String(retenue.length);
+        meter.appendChild(oSeg); meter.appendChild(tSeg);
+        cell.appendChild(meter);
       }
 
       cell.addEventListener('click', function () { openDay(this.dataset.date); });
@@ -338,6 +343,14 @@
       var dot = el('span', 'legend-dot'); dot.style.background = 'var(--tier-' + t.id + ')';
       item.appendChild(dot);
       item.appendChild(document.createTextNode(t.nom));
+      lg.appendChild(item);
+    });
+    // Status key (distinct class so the tier-count test still holds).
+    [['ouverte', 'En attente'], ['retenue', 'Retenu']].forEach(function (s) {
+      var item = el('span', 'legend-status-item');
+      var dot = el('span', 'legend-dot'); dot.style.background = 'var(--status-' + s[0] + ')';
+      item.appendChild(dot);
+      item.appendChild(document.createTextNode(s[1]));
       lg.appendChild(item);
     });
   }
@@ -381,7 +394,8 @@
   }
 
   function bidRow(b) {
-    var row = el('div', 'bid-row' + (b.status === D.STATUS.RETENUE ? ' is-retenue' : ''));
+    var retenue = b.status === D.STATUS.RETENUE;
+    var row = el('div', 'bid-row' + (retenue ? ' is-retenue' : ' is-open'));
     row.appendChild(el('span', 'bid-amount', D.money(b.montant)));
 
     var meta = el('div', 'bid-meta');
@@ -394,12 +408,14 @@
     var rk = D.rankOf(b, state.monthBids);
     var sub = svc ? svc.nom : b.serviceId;
     if (rk.rang && rk.total > 1) sub += ' · ' + rk.rang + 'e sur ' + rk.total;
-    if (b.status === D.STATUS.RETENUE && b.etude) sub += ' · retenue par ' + b.etude;
     meta.appendChild(el('div', 'bid-sub', sub));
     row.appendChild(meta);
 
-    if (b.status === D.STATUS.RETENUE) {
-      row.appendChild(el('span', 'pill pill-retenue', 'retenue'));
+    if (retenue) {
+      // Accepted: name the retaining notary (étude) — long names truncate with a tooltip.
+      var chip = el('span', 'status-chip', b.etude ? 'Retenu · ' + b.etude : 'Retenu');
+      if (b.etude) chip.title = 'Retenu par ' + b.etude;
+      row.appendChild(chip);
     } else {
       var pill = el('span', 'pill', D.tierById(b.tier ? b.tier : 'standard').nom);
       pill.dataset.tier = b.tier || 'standard';
@@ -440,8 +456,9 @@
     $('day-title').textContent = dayTitle(iso);
     var days = D.daysBetween(todayISO(), iso);
     var when = days < 0 ? 'passé' : days === 0 ? 'aujourd’hui' : 'dans ' + days + ' jour' + (days > 1 ? 's' : '');
+    var takenN = shown.filter(function (b) { return b.status === D.STATUS.RETENUE; }).length;
     $('day-sub').textContent = shown.length
-      ? shown.length + ' offre' + (shown.length > 1 ? 's' : '') + ' · ' + when
+      ? shown.length + ' offre' + (shown.length > 1 ? 's' : '') + (takenN ? ' · ' + takenN + ' retenue' + (takenN > 1 ? 's' : '') : '') + ' · ' + when
       : 'Aucune offre · ' + when + ' · soyez le premier';
 
     var list = $('day-bids'); clear(list);

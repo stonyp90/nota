@@ -47,6 +47,11 @@
   --tier-urgence: #c2410c;
   --tier-extreme: #b42318;
 
+  /* Offer status: waiting for a notary vs. retained by one. var() aliases, so
+     they track the theme automatically — do not duplicate into the dark blocks. */
+  --status-ouverte: var(--brand-bright);
+  --status-retenue: var(--ink-muted);
+
   /* Geometry — softened, but not pill-round (a bit more square) */
   --radius: 8px;
   --radius-sm: 6px;
@@ -400,7 +405,10 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 .cal-count { position: absolute; top: 7px; right: 8px; font-size: 10px; font-weight: 700; background: var(--brand); color: var(--brand-ink); border-radius: 999px; min-width: 16px; text-align: center; padding: 1px 5px; }
 .cal-top { font-size: 15px; font-weight: 800; letter-spacing: -0.02em; margin-top: auto; }
 .cal-top.is-cleared { text-decoration: line-through; color: var(--ink-muted); font-weight: 600; }
-.cal-density { height: 3px; border-radius: 999px; background: var(--brand-bright); opacity: .3; }
+.cal-status { display: flex; height: 3px; border-radius: 999px; overflow: hidden; background: var(--border); }
+.cal-status-open { background: var(--status-ouverte); }
+.cal-status-taken { background: var(--status-retenue); }
+.cal-cell.is-taken .cal-count { background: var(--status-retenue); color: var(--brand-ink); }
 
 /* --- Agenda / bid list --------------------------------------------------- */
 /* Agenda: a dense responsive grid of day-cards so it fills the full width below
@@ -410,9 +418,15 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 .agenda-empty { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 28px 18px; text-align: center; }
 .agenda-empty-text { margin: 0; font-size: 13px; color: var(--ink-muted); }
 .agenda-day { padding: 11px 14px 6px; font-size: 12px; font-weight: 700; color: var(--ink-muted); }
-.bid-row { display: flex; align-items: center; gap: 10px; padding: 9px 14px; border-top: 1px solid var(--border); }
+.bid-row { display: flex; align-items: center; gap: 10px; padding: 9px 14px 9px 12px; border-top: 1px solid var(--border); border-left: 2px solid transparent; }
+.bid-row.is-open { border-left-color: var(--status-ouverte); }
+.bid-row.is-retenue { border-left-color: var(--status-retenue); }
+.status-chip {
+  font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px;
+  background: var(--surface); color: var(--status-retenue); border: 1px solid var(--border-strong);
+  max-width: 44%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: none;
+}
 .agenda-group .agenda-day + .bid-row { border-top: 0; }
-.bid-row.is-retenue { opacity: .55; }
 .bid-amount { font-weight: 800; font-size: 15px; min-width: 78px; }
 .bid-meta { flex: 1; min-width: 0; }
 .bid-who { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -430,7 +444,8 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 .tag-anon { font-size: 11px; color: var(--ink-muted); border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); padding: 1px 6px; margin-left: 6px; }
 
 .legend { display: flex; flex-wrap: wrap; gap: 10px; padding: 6px 18px 12px; font-size: 12px; color: var(--ink-muted); }
-.legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.legend-item, .legend-status-item { display: inline-flex; align-items: center; gap: 6px; }
+.legend-status-item:first-of-type { margin-left: 4px; padding-left: 12px; border-left: 1px solid var(--border); }
 .legend-dot { width: 10px; height: 10px; border-radius: var(--radius-sm); }
 
 /* --- Offer form (now inside the day-booking dialog) --------------------- */
