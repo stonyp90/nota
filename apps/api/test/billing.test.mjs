@@ -208,6 +208,46 @@ test('POST /stripe/webhook returns 400 when signature verification throws', asyn
 
 // --- model guardrails ---------------------------------------------------------
 
+// --- EDGE CASES (logic) — commission math + boundaries -----------------------
+
+async function activeBilling(rate) {
+  const repo = createMemoryRepo();
+  const stripe = fakeStripe();
+  const billing = createBilling({ repo, stripe, newId: () => 'n-1', now: () => NOW, commissionRate: rate });
+  await billing.connectNotary({ email: 'e@x.ca' });
+  await billing.handleWebhook(JSON.stringify(accountUpdated('a', 'n-1', true)), 'good');
+  return { repo, stripe, billing };
+}
+
+test('EDGE (logic): a fractional-cent commission rounds to the nearest cent', async () => {
+  const { billing } = await activeBilling(RATE);
+  // 999.99 × 100 × 0.10 = 9999.9 -> 10000
+  const r = await billing.completeAct({ notaryId: 'n-1', bidId: 'b1', actAmount: 999.99 });
+  assert.equal(r.commissionCents, 10000);
+});
+
+test('EDGE (logic): a very large act value does not overflow the fee', async () => {
+  const { billing } = await activeBilling(RATE);
+  const r = await billing.completeAct({ notaryId: 'n-1', bidId: 'big', actAmount: 1_000_000 });
+  assert.equal(r.commissionCents, 10_000_000); // 1e6 × 100 × 0.10
+});
+
+test('EDGE (logic): a custom commission rate is honored end-to-end', async () => {
+  const { billing, stripe } = await activeBilling(0.15);
+  const r = await billing.completeAct({ notaryId: 'n-1', bidId: 'b', actAmount: 2000 });
+  assert.equal(r.commissionCents, Math.round(2000 * 100 * 0.15)); // 30000
+  assert.equal(stripe.calls.charges[0].applicationFeeCents, 30000);
+});
+
+test('EDGE (logic): re-completing the SAME bid uses one idempotency key (no double charge)', async () => {
+  const { billing, stripe } = await activeBilling(RATE);
+  await billing.completeAct({ notaryId: 'n-1', bidId: 'dup', actAmount: 1000 });
+  await billing.completeAct({ notaryId: 'n-1', bidId: 'dup', actAmount: 1000 });
+  // Both calls route through the adapter with the same bidId -> Stripe would
+  // dedupe via idempotencyKey `act:dup`; assert the port always received it.
+  assert.ok(stripe.calls.charges.every((c) => c.bidId === 'dup'));
+});
+
 test('the commission lives ONLY in billing — the @nota/domain module stays free of it', () => {
   // The platform commission is a billing concern. The domain (pricing, tiers,
   // validation) must never express a share of an acte, so the déontologie

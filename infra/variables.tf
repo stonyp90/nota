@@ -47,11 +47,15 @@ variable "stripe_webhook_secret" {
   default     = ""
 }
 
-variable "stripe_price_id" {
-  description = "Stripe Price id (price_...) of the flat monthly subscription. Set via TF_VAR_stripe_price_id."
-  type        = string
-  sensitive   = true
-  default     = ""
+variable "commission_rate" {
+  description = "Platform commission on a completed act, as a fraction (0.10 = 10%). Set via TF_VAR_commission_rate."
+  type        = number
+  default     = 0.10
+
+  validation {
+    condition     = var.commission_rate >= 0 && var.commission_rate < 1
+    error_message = "commission_rate must be a fraction in [0, 1)."
+  }
 }
 
 # --- Notary console auth -----------------------------------------------------

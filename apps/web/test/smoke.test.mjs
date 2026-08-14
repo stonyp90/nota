@@ -363,3 +363,57 @@ test('maximize toggle adds cal-max and hides the side panel', async () => {
   assert.equal(layout.classList.contains('cal-max'), false, 'toggling again should restore the layout');
   assert.equal(btn.getAttribute('aria-pressed'), 'false');
 });
+
+// --- EDGE CASES (UI) — status marking + empty states -------------------------
+
+// Replace the seeded month with custom bids, then re-render through the app.
+async function reseed(ctx, bids) {
+  ctx.win.localStorage.setItem('nota.bids.v1', JSON.stringify(bids));
+  await ctx.Nota.reload();
+  await wait(30);
+}
+const dayOf = (anchor, dd) => anchor.slice(0, 8) + dd; // 'YYYY-MM-' + 'DD'
+
+test('EDGE (UI): a fully-retained day marks the cell taken and names the notary (not dimmed)', async () => {
+  const ctx = await boot();
+  const iso = dayOf(ctx.anchor, '15');
+  const longEtude = 'Notaires du Vieux-Québec et Associés SENCRL s.r.l.';
+  await reseed(ctx, [{
+    id: 'r1', serviceId: 'testament', dateISO: iso, montant: 1800,
+    tier: 'standard', status: ctx.D.STATUS.RETENUE, etude: longEtude, anonyme: true, createdAt: iso,
+  }]);
+
+  const cell = ctx.doc.querySelector('.cal-cell[data-date="' + iso + '"]');
+  assert.ok(cell.classList.contains('is-taken'), 'all-retained cell is marked taken');
+  assert.ok(cell.querySelector('.cal-top.is-cleared'), 'taken cell shows a struck cleared amount');
+
+  const chip = ctx.doc.querySelector('.agenda .status-chip');
+  assert.ok(chip, 'retained agenda row carries a status chip');
+  assert.match(chip.getAttribute('title') || '', /Notaires du Vieux-Québec/);
+  const row = ctx.doc.querySelector('.agenda .bid-row.is-retenue');
+  assert.ok(row && !row.classList.contains('is-open'), 'row is retained, not open');
+});
+
+test('EDGE (UI): a filter that matches nothing renders the empty state with a reset CTA', async () => {
+  const ctx = await boot();
+  ctx.Nota.state.filters.min = 9_999_999; // nothing qualifies
+  await ctx.Nota.reload();
+  await wait(30);
+  const empty = ctx.doc.querySelector('.agenda .agenda-empty');
+  assert.ok(empty, 'agenda renders its empty state');
+  assert.ok(empty.querySelector('button'), 'empty state offers a CTA button');
+});
+
+test('EDGE (UI): a mixed open/retained day keeps the open headline + a split status meter', async () => {
+  const ctx = await boot();
+  const iso = dayOf(ctx.anchor, '16');
+  await reseed(ctx, [
+    { id: 'o1', serviceId: 'testament', dateISO: iso, montant: 900, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
+    { id: 'r2', serviceId: 'testament', dateISO: iso, montant: 700, tier: 'standard', status: ctx.D.STATUS.RETENUE, etude: 'Étude X', anonyme: true, createdAt: iso },
+  ]);
+  const cell = ctx.doc.querySelector('.cal-cell[data-date="' + iso + '"]');
+  assert.ok(cell.classList.contains('has-retenue'), 'mixed day flagged has-retenue');
+  assert.ok(!cell.classList.contains('is-taken'), 'still has an open offer');
+  assert.ok(cell.querySelector('.cal-top:not(.is-cleared)'), 'open headline shown, not struck');
+  assert.ok(cell.querySelector('.cal-status-open') && cell.querySelector('.cal-status-taken'), 'split open/taken meter');
+});
