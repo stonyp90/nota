@@ -600,6 +600,7 @@ dialog::backdrop { background: rgb(15 23 42 / 0.45); }
 .w-full { width: 100%; }
 .uppercase { text-transform: uppercase; }
 .mb-xl { margin-bottom: 48px; }
+.mb-sm { margin-bottom: 12px; }
 .mt-sm { margin-top: 14px; }
 .mt-md { margin-top: 16px; }
 .row-between { display: flex; align-items: center; justify-content: space-between; gap: 10px; }

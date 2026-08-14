@@ -952,7 +952,7 @@
   // ---------------------------------------------------------------------------
   // Notary form
   // ---------------------------------------------------------------------------
-  function onNotarySubmit(e) {
+  async function onNotarySubmit(e) {
     e.preventDefault();
     var errs = [];
     var name = $('n-name').value.trim();
@@ -964,11 +964,24 @@
     var box = $('notary-errors');
     if (errs.length) { clear(box); box.hidden = false; errs.forEach(function (m) { box.appendChild(el('li', null, m)); }); return; }
     box.hidden = true;
-    var list = lsLoad('nota.notaires') || [];
-    list.push({ name: name, etude: etude, email: email, at: todayISO() });
-    lsSave('nota.notaires', list);
-    $('notary-form').reset();
-    toast('Merci. Nous vous écrirons à ' + email + '.');
+    var submit = $('notary-submit');
+    if (submit) { submit.disabled = true; submit.textContent = 'Redirection…'; }
+    function fail(msg) {
+      clear(box); box.hidden = false; box.appendChild(el('li', null, msg));
+      if (submit) { submit.disabled = false; submit.textContent = 'Commencer gratuitement'; }
+    }
+    try {
+      // Free onboarding: start a Stripe Connect account link, then redirect to it.
+      var r = await fetch(API_BASE + '/notaries/connect', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: email, name: name, etude: etude }),
+      });
+      var j = await r.json();
+      if (r.ok && j.url) { window.location.href = j.url; return; }
+      fail((j.errors && j.errors[0] && j.errors[0].message) || 'Inscription indisponible pour le moment.');
+    } catch (err) {
+      fail('Hors ligne — réessayez.');
+    }
   }
 
   // ---------------------------------------------------------------------------

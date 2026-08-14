@@ -1,10 +1,10 @@
 # language: fr
-Fonctionnalité: Revenus par abonnement — garde-fou déontologique
-  La Chambre des notaires interdit le partage d'honoraires. Le modèle
-  d'affaires de Nota repose sur l'abonnement, jamais sur une commission ou
-  un pourcentage prélevé sur les honoraires. Ce scénario encode cette
-  contrainte : le module de domaine ne doit exposer aucun concept de
-  commission, de ristourne ni de pourcentage.
+Fonctionnalité: Frontière déontologique du domaine
+  La commission de la plateforme (part d'un acte complété) est une affaire de
+  facturation, isolée dans la couche billing. Le module de DOMAINE — le calcul
+  notarial : prix planchers, paliers, validation des offres — ne doit jamais
+  exposer un concept de commission, de ristourne ni de pourcentage, afin que la
+  logique des honoraires reste séparée du prélèvement de la plateforme.
 
   Scénario: le domaine n'expose aucun concept de commission ou de pourcentage
     Quand j'inspecte les exports du module de domaine

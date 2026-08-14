@@ -48,15 +48,15 @@ function createApp(repo, opts = {}) {
     const stripe = createStripeAdapter({
       secretKey: process.env.STRIPE_SECRET_KEY,
       webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
-      priceId: process.env.STRIPE_PRICE_ID,
     });
     billingInstance = createBilling({
       repo,
       stripe,
       newId,
       now: () => new Date().toISOString(),
-      successUrl: process.env.STRIPE_SUCCESS_URL,
-      cancelUrl: process.env.STRIPE_CANCEL_URL,
+      onboardingReturnUrl: process.env.NOTA_ONBOARDING_RETURN_URL,
+      onboardingRefreshUrl: process.env.NOTA_ONBOARDING_REFRESH_URL,
+      commissionRate: process.env.NOTA_COMMISSION_RATE ? Number(process.env.NOTA_COMMISSION_RATE) : undefined,
     });
     return billingInstance;
   }
@@ -319,18 +319,34 @@ function createApp(repo, opts = {}) {
       return json(201, { bid: publicBid(bid) });
     }
 
-    // Open a flat monthly subscription for a notary. Returns the Stripe Checkout
-    // URL the client redirects to; card data never touches this server.
-    if (route === '/notaries/subscribe' && method === 'POST') {
+    // Begin FREE notary onboarding — open a Stripe Connect onboarding link.
+    // No subscription; Nota takes a commission only when an act completes.
+    if (route === '/notaries/connect' && method === 'POST') {
       let payload;
       try {
         payload = typeof request.body === 'string' ? JSON.parse(request.body || '{}') : request.body || {};
       } catch {
         return json(400, { errors: [{ code: 'json_invalide', message: 'Corps JSON invalide.' }] });
       }
-      const result = await billing().startSubscription({ email: payload.email });
+      const result = await billing().connectNotary({ email: payload.email });
       if (!result.ok) return json(422, { errors: result.errors });
       return json(200, { url: result.url });
+    }
+
+    // A notary marks a retained act completed with its final value; Nota charges
+    // its commission as a Stripe Connect application fee. Session-scoped.
+    if (route === '/notary/acts/complete' && method === 'POST') {
+      const notaryId = requireScope(bearer(request), SCOPES.SESSION);
+      if (!notaryId) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+      let payload;
+      try {
+        payload = typeof request.body === 'string' ? JSON.parse(request.body || '{}') : request.body || {};
+      } catch {
+        return json(400, { errors: [{ code: 'json_invalide', message: 'Corps JSON invalide.' }] });
+      }
+      const result = await billing().completeAct({ notaryId, bidId: payload.bidId, actAmount: payload.actAmount });
+      if (!result.ok) return json(422, { errors: result.errors });
+      return json(200, { ok: true, commissionCents: result.commissionCents });
     }
 
     // Stripe webhook. The raw request body and the `stripe-signature` header are

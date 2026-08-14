@@ -5,73 +5,117 @@
  * adapter (see stripe-port.js). Framework- and SDK-free — the tests drive it
  * with the in-memory repo and a plain fake stripe object, no network.
  *
- * Nota bills notaries a FLAT MONTHLY SUBSCRIPTION for marketplace access. This
- * module deliberately holds no notion of a per-transaction charge, a rate, or a
- * platform share of an acte — the Code de déontologie forbids fee-sharing with
- * a non-notaire (ADR 0001, ADR 0005). A guardrail test asserts that absence.
+ * MODEL (2026-08-14): notaries join and browse for FREE. Nota is a marketplace
+ * that takes a COMMISSION — a percentage of a retained act's value — collected
+ * only when that act completes, as a Stripe Connect application fee on a
+ * destination charge to the notary's connected account. There is no subscription.
+ *
+ * NOTE: a share of a notarial acte is fee-sharing the Québec Code de déontologie
+ * restricts; this model is an explicit owner decision and needs a legal review
+ * with the Chambre before launch. The commission concept lives ONLY here in the
+ * billing layer — the @nota/domain pricing logic stays free of it.
  */
 
-// A pragmatic single-line address check: exactly one @, no spaces, a dot in
-// the domain. We only need to reject obvious garbage before handing the address
-// to Stripe as the customer email.
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// Subscription lifecycle as Nota sees it. `pending` is written the moment a
-// Checkout Session is opened; the webhooks move it forward.
-const SUBSCRIPTION_STATUS = {
-  PENDING: 'pending',
+// Marketplace status of a notary under the commission model. ONBOARDING until
+// their Stripe Connect account can accept charges; ACTIVE once it can.
+const NOTARY_STATUS = {
+  ONBOARDING: 'onboarding',
   ACTIVE: 'active',
-  CANCELED: 'canceled',
-  PAST_DUE: 'past_due',
+  RESTRICTED: 'restricted',
 };
 
-function createBilling({ repo, stripe, newId, now, successUrl, cancelUrl } = {}) {
+// Default platform commission on a completed act (share of the acte's value).
+// Configurable via NOTA_COMMISSION_RATE so the rate is never baked into logic.
+const DEFAULT_COMMISSION_RATE = 0.10;
+
+function createBilling({
+  repo, stripe, newId, now,
+  onboardingReturnUrl, onboardingRefreshUrl, commissionRate,
+} = {}) {
   if (!repo) throw new Error('createBilling: repo is required');
   if (!stripe) throw new Error('createBilling: stripe adapter is required');
 
   const genId = newId || (() => require('crypto').randomUUID());
   const clock = now || (() => new Date().toISOString());
-  const okUrl = successUrl || '';
-  const koUrl = cancelUrl || '';
+  const rate = typeof commissionRate === 'number' ? commissionRate : DEFAULT_COMMISSION_RATE;
+
+  // Nota's share of an act, in cents, from the act's dollar value.
+  function feeCents(actAmount) {
+    return Math.round(Number(actAmount) * 100 * rate);
+  }
 
   /**
-   * Begin a subscription: validate the email, open a Checkout Session, then
-   * record a PENDING notary profile keyed by the same id we passed to Stripe as
-   * the client reference. Returns `{ ok:true, url }` or `{ ok:false, errors }`.
+   * Begin FREE onboarding: validate the email, create the notary's Stripe
+   * Connect account + a hosted onboarding link, and record an ONBOARDING profile
+   * keyed by the same id stamped on the Connect account. Returns `{ ok, url }`.
    */
-  async function startSubscription({ email } = {}) {
+  async function connectNotary({ email } = {}) {
     const clean = String(email == null ? '' : email).trim().toLowerCase();
     if (!clean || clean.length > 254 || !EMAIL_RE.test(clean)) {
-      return {
-        ok: false,
-        errors: [{ code: 'courriel_invalide', message: 'Un courriel valide est requis.' }],
-      };
+      return { ok: false, errors: [{ code: 'courriel_invalide', message: 'Un courriel valide est requis.' }] };
     }
 
     const id = genId();
-    const { url } = await stripe.createSubscriptionCheckout({
-      email: clean,
-      successUrl: okUrl,
-      cancelUrl: koUrl,
-      clientReferenceId: id,
+    const { accountId } = await stripe.createConnectAccount({ email: clean, notaryId: id });
+    const { url } = await stripe.createOnboardingLink({
+      accountId, notaryId: id,
+      returnUrl: onboardingReturnUrl || '',
+      refreshUrl: onboardingRefreshUrl || '',
     });
 
     const at = clock();
     await repo.putNotary({
-      id,
-      email: clean,
-      subscriptionStatus: SUBSCRIPTION_STATUS.PENDING,
-      customerId: null,
-      subscriptionId: null,
-      createdAt: at,
-      updatedAt: at,
+      id, email: clean,
+      status: NOTARY_STATUS.ONBOARDING,
+      connectAccountId: accountId,
+      chargesEnabled: false,
+      commissionCentsCollected: 0,
+      createdAt: at, updatedAt: at,
     });
 
     return { ok: true, url };
   }
 
-  // Persist a status transition for the notary the event points at. Returns the
-  // updated notary (or null when none was found), so the caller can notify it.
+  /**
+   * Collect Nota's commission when a retained act completes: the client's act
+   * payment is a destination charge to the notary's connected account, and Nota
+   * keeps `application_fee_amount` = rate × value. The notary must have finished
+   * onboarding (charges enabled). Returns `{ ok, commissionCents }`.
+   */
+  async function completeAct({ notaryId, bidId, actAmount } = {}) {
+    const notary = notaryId ? await repo.getNotary(notaryId) : null;
+    if (!notary) {
+      return { ok: false, errors: [{ code: 'notaire_introuvable', message: 'Notaire introuvable.' }] };
+    }
+    if (notary.status !== NOTARY_STATUS.ACTIVE || !notary.chargesEnabled || !notary.connectAccountId) {
+      return { ok: false, errors: [{ code: 'compte_incomplet', message: 'Le compte du notaire n’est pas prêt à encaisser.' }] };
+    }
+    const amount = Number(actAmount);
+    if (!(amount > 0)) {
+      return { ok: false, errors: [{ code: 'montant_invalide', message: 'Montant de l’acte invalide.' }] };
+    }
+
+    const fee = feeCents(amount);
+    const charge = await stripe.chargeActCommission({
+      connectAccountId: notary.connectAccountId,
+      amountCents: Math.round(amount * 100),
+      applicationFeeCents: fee,
+      currency: 'cad',
+      bidId, notaryId,
+    });
+
+    await repo.putNotary({
+      ...notary,
+      commissionCentsCollected: (notary.commissionCentsCollected || 0) + fee,
+      updatedAt: clock(),
+    });
+
+    return { ok: true, commissionCents: fee, chargeId: charge && charge.id };
+  }
+
+  // Persist a status transition for the notary the event points at.
   async function transition(id, patch) {
     if (!id) return null;
     const notary = await repo.getNotary(id);
@@ -81,37 +125,29 @@ function createBilling({ repo, stripe, newId, now, successUrl, cancelUrl } = {})
     return updated;
   }
 
-  // Map one verified event to a repo change. Unknown types are ignored (return
-  // handled:false) — never throw on them. Also returns the affected notary so
-  // the webhook route can send the matching lifecycle email.
+  // Map one verified event to a repo change. Unknown types are ignored (never
+  // throw). Returns the affected notary so the webhook route can notify it.
   async function applyEvent(event) {
     const obj = (event && event.data && event.data.object) || {};
 
     switch (event.type) {
-      case 'checkout.session.completed': {
-        const notary = await transition(obj.client_reference_id, {
-          subscriptionStatus: SUBSCRIPTION_STATUS.ACTIVE,
-          customerId: obj.customer || null,
-          subscriptionId: obj.subscription || null,
+      // Connect onboarding progressed: flip ACTIVE once the account can charge.
+      case 'account.updated': {
+        const notaryId = obj.metadata && obj.metadata.notaryId;
+        const enabled = !!obj.charges_enabled;
+        const notary = await transition(notaryId, {
+          chargesEnabled: enabled,
+          status: enabled ? NOTARY_STATUS.ACTIVE : NOTARY_STATUS.ONBOARDING,
         });
         return { handled: !!notary, notary };
       }
 
-      case 'customer.subscription.deleted': {
+      // Notary disconnected their account from the platform.
+      case 'account.application.deauthorized': {
         const notaryId = obj.metadata && obj.metadata.notaryId;
         const notary = await transition(notaryId, {
-          subscriptionStatus: SUBSCRIPTION_STATUS.CANCELED,
+          status: NOTARY_STATUS.RESTRICTED, chargesEnabled: false,
         });
-        return { handled: !!notary, notary };
-      }
-
-      case 'customer.subscription.updated': {
-        const notaryId = obj.metadata && obj.metadata.notaryId;
-        let next = null;
-        if (obj.status === 'canceled') next = SUBSCRIPTION_STATUS.CANCELED;
-        else if (obj.status === 'unpaid' || obj.status === 'past_due') next = SUBSCRIPTION_STATUS.PAST_DUE;
-        if (!next) return { handled: false, notary: null };
-        const notary = await transition(notaryId, { subscriptionStatus: next });
         return { handled: !!notary, notary };
       }
 
@@ -121,9 +157,8 @@ function createBilling({ repo, stripe, newId, now, successUrl, cancelUrl } = {})
   }
 
   /**
-   * Verify and process a webhook delivery. Returns `{ ok:false }` on a bad
-   * signature (route -> 400). Otherwise `{ ok:true, ... }`. Idempotent: an event
-   * id already recorded is ignored, so a redelivery is a no-op.
+   * Verify and process a webhook delivery. `{ ok:false }` on a bad signature
+   * (route -> 400). Idempotent: an event id already recorded is a no-op.
    */
   async function handleWebhook(rawBody, signature) {
     let event;
@@ -138,17 +173,11 @@ function createBilling({ repo, stripe, newId, now, successUrl, cancelUrl } = {})
     }
 
     const { handled, notary } = await applyEvent(event);
-    // Record every verified event (even ignored types) so a redelivery of any
-    // kind is skipped.
     await repo.markEventProcessed(event.id, clock());
-
-    // The verified event and the affected notary are returned so the route can
-    // fire the matching lifecycle email (welcome/receipt/dunning/win-back)
-    // outside this module — billing stays free of any I/O beyond its two ports.
     return { ok: true, handled, duplicate: false, type: event.type, event, notary };
   }
 
-  return { startSubscription, handleWebhook };
+  return { connectNotary, completeAct, handleWebhook, commissionRate: rate };
 }
 
-module.exports = { createBilling, SUBSCRIPTION_STATUS };
+module.exports = { createBilling, NOTARY_STATUS, DEFAULT_COMMISSION_RATE };

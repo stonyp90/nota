@@ -2,26 +2,20 @@
 
 /**
  * Stripe adapter — a Port implementation that mirrors the shape of
- * repo-dynamo.js.
+ * repo-dynamo.js. The `stripe` SDK is required LAZILY inside the factory, so the
+ * test suite (which injects a plain fake implementing this same interface) never
+ * loads the package; only a live request pulls it in.
  *
- * The `stripe` SDK is required LAZILY inside the factory, exactly like
- * repo-dynamo lazy-requires the AWS SDK. The test suite injects a plain fake
- * that implements this same interface, so it never loads the package; only a
- * live request that actually talks to Stripe pulls it in.
+ * Card data never touches our servers: Stripe hosts onboarding and payment.
  *
- * Card data never touches our servers: Stripe Checkout hosts the payment form
- * (no PCI scope for us). We only ever open a Checkout Session and verify signed
- * webhooks.
- *
- * Billing model: a single recurring FLAT monthly subscription price
- * (`priceId`). One line item, quantity one. There is no per-act, tiered, or
- * usage-metered component — Nota bills notaries for marketplace access, never a
- * share of an acte (see docs/decisions/0005-stripe-flat-subscription.md).
+ * MODEL: Nota is a Connect PLATFORM. Notaries onboard a connected (Express)
+ * account for free; when a retained act completes, the client's payment is a
+ * destination charge to that account and Nota keeps an `application_fee_amount`
+ * (its commission). No subscription. See billing.js for the compliance note.
  */
-function createStripeAdapter({ secretKey, webhookSecret, priceId } = {}) {
+function createStripeAdapter({ secretKey, webhookSecret } = {}) {
   if (!secretKey) throw new Error('createStripeAdapter: secretKey is required');
   if (!webhookSecret) throw new Error('createStripeAdapter: webhookSecret is required');
-  if (!priceId) throw new Error('createStripeAdapter: priceId is required');
 
   // Lazy import keeps the Stripe SDK out of the dependency graph for tests.
   const Stripe = require('stripe');
@@ -29,26 +23,57 @@ function createStripeAdapter({ secretKey, webhookSecret, priceId } = {}) {
 
   return {
     /**
-     * Open a hosted Checkout Session for the flat monthly subscription.
-     * `clientReferenceId` is our notary id; we also stamp it onto the
-     * subscription metadata so later subscription webhooks can be traced back
-     * to the notary without a secondary lookup. An idempotency key derived from
-     * the notary id makes a retried subscribe request reuse the same session.
+     * Create the notary's connected (Express) account. `notaryId` is stamped on
+     * the account metadata so later `account.updated` webhooks trace back to the
+     * notary without a secondary lookup.
      */
-    async createSubscriptionCheckout({ email, successUrl, cancelUrl, clientReferenceId }) {
-      const session = await stripe.checkout.sessions.create(
+    async createConnectAccount({ email, notaryId }) {
+      const account = await stripe.accounts.create({
+        type: 'express',
+        email,
+        country: 'CA',
+        default_currency: 'cad',
+        capabilities: { transfers: { requested: true }, card_payments: { requested: true } },
+        business_type: 'individual',
+        metadata: { notaryId },
+      });
+      return { accountId: account.id };
+    },
+
+    /**
+     * Open a hosted onboarding link for a connected account. An idempotency key
+     * derived from the notary id makes a retried request reuse the same link.
+     */
+    async createOnboardingLink({ accountId, notaryId, returnUrl, refreshUrl }) {
+      const link = await stripe.accountLinks.create(
         {
-          mode: 'subscription',
-          line_items: [{ price: priceId, quantity: 1 }],
-          customer_email: email,
-          client_reference_id: clientReferenceId,
-          subscription_data: { metadata: { notaryId: clientReferenceId } },
-          success_url: successUrl,
-          cancel_url: cancelUrl,
+          account: accountId,
+          type: 'account_onboarding',
+          return_url: returnUrl,
+          refresh_url: refreshUrl,
         },
-        clientReferenceId ? { idempotencyKey: `checkout:${clientReferenceId}` } : undefined
+        notaryId ? { idempotencyKey: `onboard:${notaryId}` } : undefined
       );
-      return { url: session.url };
+      return { url: link.url };
+    },
+
+    /**
+     * Charge a completed act as a destination charge to the notary's connected
+     * account, keeping `application_fee_amount` (Nota's commission). Idempotent
+     * per bid so a retried completion never double-charges.
+     */
+    async chargeActCommission({ connectAccountId, amountCents, applicationFeeCents, currency, bidId }) {
+      const intent = await stripe.paymentIntents.create(
+        {
+          amount: amountCents,
+          currency: currency || 'cad',
+          application_fee_amount: applicationFeeCents,
+          transfer_data: { destination: connectAccountId },
+          metadata: { bidId: bidId || '' },
+        },
+        bidId ? { idempotencyKey: `act:${bidId}` } : undefined
+      );
+      return { id: intent.id, applicationFeeCents };
     },
 
     /**
