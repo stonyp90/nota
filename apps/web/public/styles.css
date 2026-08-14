@@ -23,6 +23,7 @@
   --brand: var(--hunter-700);
   --brand-bright: var(--hunter-500);
   --brand-ink: #ffffff;
+  --brand-hover: var(--hunter-800);
   --on-accent: #ffffff; /* text/knob on saturated accents (tier pills, toggle) — white in every theme */
 
   --bg: #eef2ef; /* subtle tint so borderless white panels float cleanly */
@@ -81,6 +82,7 @@
     --brand: var(--hunter-500);
     --brand-bright: var(--hunter-400);
     --brand-ink: #08130a;
+    --brand-hover: var(--hunter-400);
 
     --bg: #0a0a0a;
     --surface: #121412;
@@ -113,6 +115,7 @@
   --brand: var(--hunter-500);
   --brand-bright: var(--hunter-400);
   --brand-ink: #08130a;
+  --brand-hover: var(--hunter-400);
 
   --bg: #0a0a0a;
   --surface: #121412;
@@ -269,7 +272,7 @@ a:hover { text-decoration: underline; }
 .btn:not(:disabled):hover { background: var(--surface-inset); }
 .btn:not(:disabled):active { transform: translateY(1px); }
 .btn-primary { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }
-.btn-primary:not(:disabled):hover { background: var(--hunter-800); }
+.btn-primary:not(:disabled):hover { background: var(--brand-hover); }
 .btn-ghost { border-color: transparent; background: transparent; color: var(--ink-muted); }
 .btn-ghost:hover { background: var(--surface-inset); color: var(--ink); }
 .btn-sm { padding: 6px 12px; font-size: 13px; }
@@ -735,8 +738,9 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   display: grid;
   grid-template-columns: minmax(0, 58ch) minmax(300px, 360px);
   column-gap: clamp(28px, 5vw, 64px);
-  justify-content: space-between;
+  justify-content: start;
   align-items: start;
+  max-width: 1120px; /* keep the copy + subscribe card grouped so wide screens show no gap */
 }
 .intro-lead { min-width: 0; }
 .intro-aside { min-width: 0; }
