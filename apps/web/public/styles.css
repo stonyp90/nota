@@ -214,19 +214,19 @@ a:hover { text-decoration: underline; }
 .tab-badge[data-complete='true'] { background: var(--ok); }
 
 .icon-btn {
-  appearance: none; border: 1px solid var(--border); background: var(--surface);
+  appearance: none; border: 1px solid transparent; background: transparent;
   color: var(--ink); width: 38px; height: 38px; border-radius: var(--radius);
   cursor: pointer; display: grid; place-items: center; font-size: 16px;
 }
-.icon-btn:hover { background: var(--surface-inset); border-color: var(--border-strong); }
-.icon-btn[aria-pressed='true'] { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }
+.icon-btn:hover { background: var(--surface-inset); }
+.icon-btn[aria-pressed='true'] { background: var(--brand); color: var(--brand-ink); }
 .icon-btn svg { display: block; }
 .icon-btn:active { transform: scale(0.94); }
 
 /* --- Notifications (bell + dropdown, paired with the email the API sends) -- */
 .notif-wrap { position: relative; }
 #notif-bell { position: relative; }
-#notif-bell.has-unread { color: var(--brand); border-color: var(--border-strong); }
+#notif-bell.has-unread { color: var(--brand); }
 .notif-badge {
   position: absolute; top: -5px; right: -5px; min-width: 17px; height: 17px; padding: 0 4px;
   border-radius: 999px; background: var(--danger); color: var(--on-accent);
@@ -283,7 +283,6 @@ a:hover { text-decoration: underline; }
 /* Hero call-to-action — the buyer's first, obvious action */
 .hero-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 14px; }
 .hero-cta { display: flex; gap: 10px; flex-wrap: wrap; }
-.hero-actions .explainer { margin-top: 0; }
 
 /* Guided step badges (1 · 2 · 3) in the offer panel */
 .step {
@@ -303,20 +302,6 @@ a:hover { text-decoration: underline; }
   letter-spacing: 0.08em; color: var(--brand); margin-bottom: 8px;
 }
 
-/* Time-not-price explainer band */
-.explainer {
-  display: inline-flex; align-items: center; gap: 10px; width: fit-content; max-width: 100%;
-  margin-top: 10px; padding: 7px 12px;
-  background: var(--surface-inset); border: 1px solid var(--border);
-  border-left: 3px solid var(--brand); border-radius: var(--radius);
-}
-.explainer p { margin: 0; font-size: 13.5px; color: var(--ink-muted); flex: 1; }
-.explainer p strong { color: var(--ink); }
-.explainer-badge {
-  font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em;
-  color: var(--brand); background: var(--surface); border: 1px solid var(--border);
-  padding: 4px 9px; border-radius: 999px; white-space: nowrap; flex: none;
-}
 
 /* --- Layout -------------------------------------------------------------- */
 /* Only set vertical padding here — the horizontal padding comes from .wrap.
@@ -745,7 +730,6 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
 .intro h1 { animation-delay: .06s; }
 .intro p { animation-delay: .12s; }
 .intro .hero-cta { animation-delay: .18s; }
-.intro .explainer { animation-delay: .24s; }
 .cards .card { animation: fadeUp .42s cubic-bezier(.2, .8, .2, 1) both; }
 .cards .card:nth-child(2) { animation-delay: .08s; }
 .cards .card:nth-child(3) { animation-delay: .16s; }
@@ -756,8 +740,6 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
 .dossier-item { transition: background-color .14s ease; }
 .dossier-item:hover { background: var(--surface-inset); }
 .legend-item { transition: color .14s ease; }
-.explainer { transition: border-color .2s ease, box-shadow .2s ease; }
-.explainer:hover { box-shadow: var(--shadow-sm); }
 .brand-mark img { transition: transform .2s cubic-bezier(.2, .8, .2, 1); }
 .brand:hover .brand-mark img { transform: rotate(-6deg) scale(1.06); }
 
@@ -796,8 +778,6 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
 .sub-card-actions .btn { flex: 1 1 auto; gap: 6px; padding-left: 10px; padding-right: 10px; }
 .brand-ic { flex: none; display: block; }
 /* Borderless notification bell in the header. */
-#notif-bell { border-color: transparent; background: transparent; }
-#notif-bell:hover { background: var(--surface-inset); }
 
 /* Preserve the brand entrance cascade under the two-column nesting: cancel the
    block-level fade the base `.intro > *` rule would put on the columns, then
@@ -811,7 +791,6 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
 .intro--split .intro-lead h1          { animation-delay: .06s; }
 .intro--split .intro-lead p           { animation-delay: .12s; }
 .intro--split .intro-lead .hero-cta   { animation-delay: .18s; }
-.intro--split .intro-lead .explainer  { animation-delay: .24s; }
 .intro--split .intro-aside .sub-card  { animation-delay: .16s; }
 
 /* Calendar loading: an indeterminate top bar while the carnet fetches (real
@@ -866,7 +845,6 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   .day-value { padding: 0 16px 12px; }
   .day-book { padding: 14px 16px 18px; }
   /* Explainer stacks the badge over the text on narrow screens. */
-  .explainer { flex-direction: column; align-items: flex-start; gap: 8px; }
   .hero-cta { gap: 8px; }
   .hero-cta .btn-lg { flex: 1 1 auto; }
 }
