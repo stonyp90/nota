@@ -281,7 +281,9 @@ a:hover { text-decoration: underline; }
 .btn svg { flex: none; }
 
 /* Hero call-to-action — the buyer's first, obvious action */
-.hero-cta { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+.hero-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 14px; }
+.hero-cta { display: flex; gap: 10px; flex-wrap: wrap; }
+.hero-actions .explainer { margin-top: 0; }
 
 /* Guided step badges (1 · 2 · 3) in the offer panel */
 .step {
