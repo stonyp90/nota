@@ -185,17 +185,26 @@ function createApp(repo, opts = {}) {
     };
   }
 
-  // A text/calendar (iCalendar) response for the notary webcal feed.
+  // A text/calendar (iCalendar) response for a webcal feed. Content-Disposition
+  // makes a direct browser navigation download the .ics with a filename;
+  // webcal/Google/Outlook subscribe paths fetch server-side and ignore it.
   function calendar(statusCode, body) {
     return {
       statusCode,
       headers: {
         'content-type': 'text/calendar; charset=utf-8',
+        'content-disposition': 'attachment; filename="nota-carnet.ics"',
         ...corsHeaders(),
         'cache-control': 'no-store',
       },
       body,
     };
+  }
+
+  // RFC 5545 DTSTAMP (UTC, second precision) — required per VEVENT; Outlook
+  // silently drops events without it. Derived from the injectable clock.
+  function icsStamp() {
+    return new Date(nowMs()).toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
   }
 
   // A minimal fr-CA confirmation page for the unsubscribe link (opened in a
@@ -530,7 +539,7 @@ function createApp(repo, opts = {}) {
       const notaryId = requireScope(query.token, SCOPES.FEED);
       if (!notaryId) return json(401, { errors: [{ code: 'non_autorise', message: 'Jeton invalide ou expiré.' }] });
       const events = await repo.listRetainedByNotary(notaryId);
-      return calendar(200, buildNotaryFeed(events));
+      return calendar(200, buildNotaryFeed(events, icsStamp()));
     }
 
     // PUBLIC carnet feed — no token. Anyone can subscribe to the whole carnet in
@@ -543,7 +552,7 @@ function createApp(repo, opts = {}) {
       for (const m of months) {
         for (const b of await repo.listByMonth(m)) bids.push(publicBid(b));
       }
-      return calendar(200, buildCarnetFeed(bids));
+      return calendar(200, buildCarnetFeed(bids, icsStamp()));
     }
 
     return json(404, { errors: [{ code: 'introuvable', message: 'Route inconnue.' }] });

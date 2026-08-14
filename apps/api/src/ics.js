@@ -14,9 +14,16 @@ function compact(dateISO) {
   return String(dateISO).replace(/-/g, '');
 }
 
+// RFC 5545 §3.3.11: escape backslash, comma, semicolon and newlines in TEXT
+// values, so a comma in a service name or an fr-CA "1 500,00 $" never truncates
+// the SUMMARY or breaks the parse.
+function escText(s) {
+  return String(s).replace(/([\\,;])/g, '\\$1').replace(/\r?\n/g, '\\n');
+}
+
 // A retained event is `{ id, dateISO, serviceId }` (extra fields ignored). Each
 // becomes an all-day event 'Signature notariée — <service>' spanning one day.
-function buildNotaryFeed(events = []) {
+function buildNotaryFeed(events = [], stamp) {
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
@@ -31,9 +38,10 @@ function buildNotaryFeed(events = []) {
     lines.push(
       'BEGIN:VEVENT',
       'UID:' + e.id + '@nota',
+      ...(stamp ? ['DTSTAMP:' + stamp] : []),
       'DTSTART;VALUE=DATE:' + compact(e.dateISO),
       'DTEND;VALUE=DATE:' + compact(domain.addDays(e.dateISO, 1)),
-      'SUMMARY:Signature notariée — ' + name,
+      'SUMMARY:' + escText('Signature notariée — ' + name),
       'END:VEVENT'
     );
   }
@@ -45,7 +53,7 @@ function buildNotaryFeed(events = []) {
 // customer (or anyone) can subscribe to the whole carnet in Google / Outlook /
 // Apple over webcal. Each `bid` is the SAME public projection GET /bids exposes
 // — id, dateISO, serviceId, montant — so this can never leak courriel/dossier.
-function buildCarnetFeed(bids = []) {
+function buildCarnetFeed(bids = [], stamp) {
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
@@ -60,9 +68,10 @@ function buildCarnetFeed(bids = []) {
     lines.push(
       'BEGIN:VEVENT',
       'UID:' + b.id + '@nota',
+      ...(stamp ? ['DTSTAMP:' + stamp] : []),
       'DTSTART;VALUE=DATE:' + compact(b.dateISO),
       'DTEND;VALUE=DATE:' + compact(domain.addDays(b.dateISO, 1)),
-      'SUMMARY:' + name + ' — ' + domain.money(b.montant),
+      'SUMMARY:' + escText(name + ' — ' + domain.money(b.montant)),
       'END:VEVENT'
     );
   }

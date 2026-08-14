@@ -809,12 +809,15 @@
     var startCompact = bid.dateISO.replace(/-/g, '');
     var endCompact = D.addDays(bid.dateISO, 1).replace(/-/g, '');
     var details = 'Offre publiée sur Nota : ' + D.money(bid.montant) + '.';
+    // RFC 5545: DTSTAMP is required (Outlook drops events without it); escape TEXT.
+    var esc = function (s) { return String(s).replace(/([\\,;])/g, '\\$1').replace(/\r?\n/g, '\\n'); };
+    var stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
 
     var ics = [
       'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Nota//FR-CA//',
-      'BEGIN:VEVENT', 'UID:' + bid.id + '@nota',
+      'BEGIN:VEVENT', 'UID:' + bid.id + '@nota', 'DTSTAMP:' + stamp,
       'DTSTART;VALUE=DATE:' + startCompact, 'DTEND;VALUE=DATE:' + endCompact,
-      'SUMMARY:' + title, 'DESCRIPTION:' + details, 'END:VEVENT', 'END:VCALENDAR',
+      'SUMMARY:' + esc(title), 'DESCRIPTION:' + esc(details), 'END:VEVENT', 'END:VCALENDAR',
     ].join('\r\n');
     $('ics-link').href = 'data:text/calendar;charset=utf-8,' + encodeURIComponent(ics);
 
