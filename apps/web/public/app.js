@@ -371,10 +371,12 @@
     else order.sort();
 
     order.forEach(function (iso) {
-      ag.appendChild(el('div', 'agenda-day', dayTitle(iso)));
+      var group = el('div', 'agenda-group');
+      group.appendChild(el('div', 'agenda-day', dayTitle(iso)));
       groups[iso]
         .sort(function (a, b) { return b.montant - a.montant; })
-        .forEach(function (b) { ag.appendChild(bidRow(b)); });
+        .forEach(function (b) { group.appendChild(bidRow(b)); });
+      ag.appendChild(group);
     });
   }
 
