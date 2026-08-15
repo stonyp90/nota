@@ -207,9 +207,9 @@ test('dossier tab lists first service intake items and badge shows 0/N', async (
 test('profile documents: upload sets it, then it can be removed', async () => {
   const { win, doc, D, Nota } = await boot();
   Nota.setTab('profil');
-  const dsel = doc.querySelector('.profil-doc-service');
-  assert.ok(dsel, 'document service selector rendered in the profile');
-  dsel.value = 'testament'; fire(win, dsel, 'change');
+  const chip = doc.querySelector('.profil-doc-chips .chip[data-svc="testament"]');
+  assert.ok(chip, 'document service chip rendered in the profile');
+  chip.click();
   const rows = all(doc, '.profil-doc-list .doc-row');
   const expected = D.serviceById('testament').documents.length + D.serviceById('testament').champs.length;
   assert.equal(rows.length, expected);

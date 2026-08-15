@@ -1218,14 +1218,25 @@
     var dCard = el('div', 'profil-card profil-docs');
     dCard.appendChild(el('h2', 'profil-card-title', 'Mes documents'));
     dCard.appendChild(el('p', 'help', 'Téléversez ce que le notaire demandera. Ajoutez, retirez ou marquez « validé ». Tout reste sur votre appareil jusqu’à ce qu’un notaire retienne votre demande.'));
-    var dsel = document.createElement('select'); dsel.className = 'profil-doc-service';
-    dsel.setAttribute('aria-label', 'Acte pour lequel préparer les documents');
-    D.SERVICES.forEach(function (s) { var o = document.createElement('option'); o.value = s.id; o.textContent = s.nom; dsel.appendChild(o); });
-    dCard.appendChild(dsel);
+    // Service picker as outline chips (not a native dropdown) — matches the
+    // calendar, one click to switch, on-aesthetic.
+    var dchips = el('div', 'chip-group profil-doc-chips');
+    dchips.setAttribute('role', 'group'); dchips.setAttribute('aria-label', 'Acte pour lequel préparer les documents');
+    D.SERVICES.forEach(function (s, i) {
+      var c = el('button', 'chip' + (i === 0 ? ' is-on' : ''), s.nom.split(' ')[0]);
+      c.type = 'button'; c.dataset.svc = s.id; c.setAttribute('aria-pressed', i === 0 ? 'true' : 'false');
+      dchips.appendChild(c);
+    });
+    dCard.appendChild(dchips);
     var dbox = el('div', 'profil-doc-list');
     dCard.appendChild(dbox);
-    dsel.addEventListener('change', function () { renderProfilDocs(dbox, dsel.value); });
-    renderProfilDocs(dbox, dsel.value);
+    dchips.addEventListener('click', function (e) {
+      var b = e.target.closest('.chip'); if (!b) return;
+      dchips.querySelectorAll('.chip').forEach(function (x) { x.classList.remove('is-on'); x.setAttribute('aria-pressed', 'false'); });
+      b.classList.add('is-on'); b.setAttribute('aria-pressed', 'true');
+      renderProfilDocs(dbox, b.dataset.svc);
+    });
+    renderProfilDocs(dbox, D.SERVICES[0].id);
     body.appendChild(dCard);
   }
 

@@ -595,7 +595,7 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .my-offer-badge[data-status='pending'] { color: var(--brand); border-color: var(--brand); }
 .my-offer-badge[data-status='expired'] { color: var(--ink-muted); border-style: dashed; }
 /* Documents inside the profile: upload / remove / mark-validated. */
-.profil-doc-service { margin: 4px 0 8px; max-width: 340px; }
+.profil-doc-chips { margin: 2px 0 6px; }
 /* Flex (not grid) so the LAST row's cards grow to fill the width — no empty
    right-side slots when the document count doesn't divide evenly. */
 .profil-doc-list { display: flex; flex-wrap: wrap; gap: 10px; align-items: stretch; }
