@@ -133,6 +133,14 @@ function createApp(repo, opts = {}) {
   // Public projection: strip anything private and enforce anonymity server-side.
   // A bid marked anonyme never leaks its name, whatever the client sent. The
   // dossier (documents/fields) is never part of the public shape.
+  // Premium shown PUBLICLY is relative to the public starting price (prixDepart),
+  // never the private per-bid dynamic base — otherwise round(montant/premium)
+  // would recover the private floor and decode the client's pricing answers.
+  function publicPremium(b) {
+    const svc = domain.serviceById(b.serviceId);
+    return svc && svc.prixDepart ? b.montant / svc.prixDepart : 1;
+  }
+
   function publicBid(b) {
     return {
       id: b.id,
@@ -140,7 +148,7 @@ function createApp(repo, opts = {}) {
       dateISO: b.dateISO,
       montant: b.montant,
       tier: b.tier,
-      premium: b.premium,
+      premium: publicPremium(b),
       status: b.status,
       etude: b.etude || null,
       anonyme: !!b.anonyme,

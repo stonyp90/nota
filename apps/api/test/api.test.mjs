@@ -171,12 +171,24 @@ test('a POST body at the size cap is not rejected as oversized', async () => {
   assert.notEqual(res.statusCode, 413);
 });
 
-test('the public projection omits any dossier fields', async () => {
-  // Even if a raw item somehow carries documents, GET must not expose them.
+test('the public projection omits every private field (dossier, pricing, basePrice, courriel)', async () => {
+  // Even if a raw item carries them, GET /bids must expose none of these.
   const repo = createMemoryRepo([
-    { id: 'x', serviceId: 'testament', dateISO: '2026-08-20', montant: 700, status: 'ouverte', anonyme: true, prefixe: 'G1R', documents: { secret: 'leak' }, createdAt: TODAY },
+    {
+      id: 'x', serviceId: 'testament', dateISO: '2026-08-20', montant: 700, status: 'ouverte', anonyme: true, prefixe: 'G1R',
+      documents: { secret: 'leak' }, dossier: { secret: 'leak' }, courriel: 'client@example.ca',
+      pricing: { who_for: 'couple', fiducie_needed: 'oui' }, basePrice: 1250, createdAt: TODAY,
+    },
   ]);
   const a = { ...createApp(repo, { now: () => TODAY }) };
   const bid = parse(await a.handle({ method: 'GET', path: '/bids', query: { month: '2026-08' } })).bids[0];
   assert.equal(bid.documents, undefined);
+  assert.equal(bid.dossier, undefined);
+  assert.equal(bid.courriel, undefined);
+  assert.equal(bid.basePrice, undefined);
+  // The pricing answers (succession, loan value, bank approval) must NEVER leak.
+  assert.equal(bid.pricing, undefined, 'pricing answers must never appear in the public projection');
+  assert.equal(Object.prototype.hasOwnProperty.call(bid, 'pricing'), false);
+  // Public premium is anchored on prixDepart, not the private base (700/650).
+  assert.ok(Math.abs(bid.premium - 700 / 650) < 1e-9);
 });

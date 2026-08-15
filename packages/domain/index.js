@@ -321,8 +321,11 @@
       const a = answers[c.id];
       let ok;
       if (c.type === 'choice') ok = (c.options || []).some((o) => o.id === a);
-      else if (c.type === 'bracket') ok = Number.isFinite(Number(a));
-      else if (c.type === 'flag') ok = a === true;
+      else if (c.type === 'bracket') {
+        // A blank/null/false/"" all coerce to a finite 0 via Number(); require a
+        // real positive number so a crafted payload cannot skip the question.
+        ok = (typeof a === 'number' || (typeof a === 'string' && a.trim() !== '')) && Number.isFinite(Number(a)) && Number(a) > 0;
+      } else if (c.type === 'flag') ok = a === true;
       else ok = true;
       if (!ok) missing.push({ id: c.id, label: c.label });
     }

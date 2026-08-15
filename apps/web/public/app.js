@@ -768,6 +768,9 @@
       det.appendChild(inner);
       box.appendChild(det);
     }
+    // Keep the base-note fresh across act switches (it lives outside #o-criteria).
+    var bn = $('o-base-note');
+    if (bn) bn.textContent = svc ? 'Prix de départ : ' + D.money(currentBase()) + '.' : '';
   }
 
   function setCriterion(id, value) {
@@ -787,8 +790,11 @@
     if (!svc) return;
     var base = currentBase();
     var amt = $('o-amount');
+    // Read the value BEFORE raising min — a range input clamps .value up to the
+    // new min in real browsers, which would defeat the below-floor check.
+    var prev = Number(amt.value);
     amt.min = base; amt.max = base * D.PREMIUM_CAP;
-    if (Number(amt.value) < base) {
+    if (prev < base) {
       var rec = D.recommendedAmount(svc.id, state.offer.dateISO, todayISO(), state.offer.pricing);
       amt.value = rec != null ? rec : base;
     }

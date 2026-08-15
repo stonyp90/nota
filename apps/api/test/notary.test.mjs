@@ -134,6 +134,21 @@ test('GET /notary/bids reads the token from the Authorization header (no query t
   assert.equal(bids[0].complexity.level, 'simple');
 });
 
+test('GET /notary/bids labels a hard file "complexe" with its factors', async () => {
+  const a = app();
+  // A refinancement in a succession with no bank approval is a hard file.
+  await postBid(a, {
+    serviceId: 'refinancement', dateISO: '2026-08-25', montant: 3000,
+    pricing: { valeur_pret: 250000, succession: 'oui', approbation_bancaire: 'non' },
+  });
+  const { token } = await session(a, 'complexe@notaire.ca');
+  const { bids } = parse(await listBids(a, token));
+  const bid = bids.find((b) => b.serviceId === 'refinancement');
+  assert.ok(bid, 'the refinancement bid is listed');
+  assert.equal(bid.complexity.level, 'complexe'); // succession(2) + pas encore(2) = 4
+  assert.ok(bid.complexity.factors.length >= 2, 'the hardening factors are named for the notary');
+});
+
 test('GET /notary/bids excludes bids this notary declined and supports ?service=', async () => {
   const a = app();
   const b1 = await seedBid(a, { serviceId: 'testament', dateISO: '2026-08-20' });
