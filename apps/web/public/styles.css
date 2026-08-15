@@ -329,6 +329,20 @@ a:hover { text-decoration: underline; }
 
 /* --- Hero / intro -------------------------------------------------------- */
 .intro { padding: clamp(12px, 1.6vw, 20px) 0 clamp(16px, 2.4vw, 30px); }
+/* Carnet hero: copy on the left, a "how it works" card fills the right (the
+   space the calendar-subscribe card used to hold before it moved to Notaires). */
+.intro--hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(20px, 4vw, 48px); align-items: center; }
+.intro-main { min-width: 0; }
+.hero-aside { min-width: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px 18px; }
+.hero-steps-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--brand); margin-bottom: 12px; }
+/* Steps laid out horizontally (3 columns) — short card, fills the width. */
+.hero-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.hero-steps li { display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 1.4; color: var(--ink-muted); }
+.hero-steps li strong { display: block; color: var(--ink); font-weight: 700; }
+.hero-step-n { flex: none; width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid var(--brand); background: var(--surface); color: var(--brand); font-weight: 800; font-size: 12px; display: grid; place-items: center; }
+.hero-steps-foot { margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--border); font-size: 12px; line-height: 1.4; color: var(--ink-muted); }
+@media (max-width: 900px) { .intro--hero { grid-template-columns: 1fr; } }
+@media (max-width: 460px) { .hero-steps { grid-template-columns: 1fr; } }
 .intro h1 { font-size: clamp(24px, 3vw, 34px); font-weight: 800; line-height: 1.12; margin-top: 6px; }
 .intro p { color: var(--ink-muted); max-width: 60ch; margin: 10px 0 0; font-size: 15px; line-height: 1.55; }
 .eyebrow {
@@ -533,7 +547,7 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 /* Profile: a top row of at-a-glance / set-once cards (offers · coordinates ·
    notifications) that auto-fit across the width, then a full-width documents
    work area below — no tall-thin void, honest use of the horizontal space. */
-.profil-stack { display: flex; flex-direction: column; gap: 14px; }
+.profil-stack { display: flex; flex-direction: column; gap: 12px; }
 /* Every section is a full-width band whose content lays out in a grid that
    fills the width (auto-fit) — no empty right half, no ragged inter-card void. */
 .my-offers-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; }
@@ -541,7 +555,7 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .profil-fields .form-row { margin: 0; }
 .profil-fields .form-row input { width: 100%; }
 .profil-switches { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 2px 24px; }
-.profil-card { padding: 16px 18px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); display: flex; flex-direction: column; gap: 8px; }
+.profil-card { padding: 13px 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); display: flex; flex-direction: column; gap: 7px; }
 .profil-card-title { font-size: 15px; font-weight: 700; color: var(--ink); }
 /* The card is a flex column with its own gap — zero the children's stacking
    margins so field/switch spacing isn't doubled (the source of the void). */
@@ -565,8 +579,16 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
    right-side slots when the document count doesn't divide evenly. */
 .profil-doc-list { display: flex; flex-wrap: wrap; gap: 10px; align-items: stretch; }
 .profil-doc-list .doc-row { flex: 1 1 300px; }
-.doc-count { flex: 1 1 100%; font-size: 12.5px; font-weight: 600; color: var(--ink-muted); }
-.doc-count[data-complete='true'] { color: var(--brand); }
+/* Documents progress header: labelled bar, full-width above the checklist. */
+.doc-progress { flex: 1 1 100%; display: flex; flex-direction: column; gap: 6px; margin-bottom: 2px; }
+.doc-count { font-size: 12.5px; font-weight: 600; color: var(--ink-muted); }
+.doc-count[data-complete='true'] { color: var(--ok); }
+.doc-bar { height: 6px; background: var(--surface-inset); border-radius: 999px; overflow: hidden; }
+.doc-bar span { display: block; height: 100%; background: var(--brand-bright); border-radius: 999px; transition: width .25s ease; }
+.doc-progress[data-complete='true'] .doc-bar span { background: var(--ok); }
+/* First-time empty state (Mes offres with no offers). */
+.profil-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 4px 0 2px; }
+.profil-empty-text { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--ink-muted); }
 .doc-row { border: 1px solid var(--border); border-radius: var(--radius); padding: 11px 13px; display: flex; flex-direction: column; gap: 6px; }
 .doc-row[data-done='true'] { border-color: var(--brand); }
 .doc-row-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -714,6 +736,9 @@ dialog::backdrop { background: var(--backdrop); }
 .offer-success .mt-sm { margin-top: 0; }
 .switch-title { font-weight: 600; font-size: 14px; }
 .panel-narrow { max-width: 560px; margin: 24px 0 48px; }
+/* Legal pages: the long-form list panel fills the width (its list is 2-column)
+   so there is no blank right half. */
+#pane-confidentialite .panel-narrow, #pane-conditions .panel-narrow, #pane-charte .panel-narrow { max-width: none; }
 .h-sub { font-size: 16px; font-weight: 700; margin-bottom: 12px; }
 
 /* --- Notary console ------------------------------------------------------ */
@@ -790,8 +815,10 @@ dialog::backdrop { background: var(--backdrop); }
 @media (max-width: 900px) { .notaires-cols { grid-template-columns: 1fr; } }
 
 /* --- Privacy (Law 25) list ---------------------------------------------- */
-.privacy-list { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
-.privacy-list li { position: relative; padding-left: 20px; font-size: 14px; color: var(--ink-muted); }
+/* Two-column on wide screens so the long-form list fills the panel width
+   (readable measure per item) instead of leaving a big blank right side. */
+.privacy-list { list-style: none; margin: 4px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 12px 32px; align-content: start; }
+.privacy-list li { position: relative; padding-left: 20px; font-size: 14px; line-height: 1.5; color: var(--ink-muted); }
 .privacy-list li strong { color: var(--ink); }
 .privacy-list li::before {
   content: ''; position: absolute; left: 0; top: 8px; width: 8px; height: 8px;

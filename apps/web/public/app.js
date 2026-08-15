@@ -1066,12 +1066,21 @@
   // Profile (coordinates + notification settings)
   // ---------------------------------------------------------------------------
   // A card listing the client's posted offers with their live status — their
-  // consolidated "where do my requests stand?" view. Null when they have none.
+  // consolidated "where do my requests stand?" view. When they have none, a
+  // friendly first-time prompt with a CTA to the carnet.
   function buildMyOffersCard() {
     var offers = myOffers();
-    if (!offers.length) return null;
     var card = el('div', 'profil-card');
     card.appendChild(el('h2', 'profil-card-title', 'Mes offres'));
+    if (!offers.length) {
+      var empty = el('div', 'profil-empty');
+      empty.appendChild(el('p', 'profil-empty-text', 'Vous n’avez pas encore publié d’offre. Choisissez une date au carnet et un notaire de Québec la retient.'));
+      var cta = el('button', 'btn btn-primary btn-sm', 'Réserver votre première date →'); cta.type = 'button';
+      cta.addEventListener('click', function () { toggleNotifPanel(false); setTab('carnet'); });
+      empty.appendChild(cta);
+      card.appendChild(empty);
+      return card;
+    }
     var list = el('div', 'my-offers-list');
     offers.slice().sort(function (a, b) { return String(b.dateISO).localeCompare(String(a.dateISO)); }).forEach(function (o) {
       var st = clientOfferStatus(o);
@@ -1177,9 +1186,24 @@
     var valid = dossierValidated(sid);
     var items = dossierItems(svc);
     var done = items.filter(function (it) { return saved[it.id]; }).length;
-    var count = el('div', 'doc-count', done + ' / ' + items.length + ' fournis');
-    if (done === items.length && items.length) count.dataset.complete = 'true';
-    container.appendChild(count);
+    var complete = items.length > 0 && done === items.length;
+    // Progress header: a labelled bar so the client sees how ready their dossier
+    // is at a glance, plus a clear "complete" and a no-documents-needed state.
+    var prog = el('div', 'doc-progress');
+    if (complete) prog.dataset.complete = 'true';
+    var count = el('div', 'doc-count', items.length
+      ? (complete ? '✓ Tout est prêt · ' + done + ' / ' + items.length : done + ' / ' + items.length + ' fournis')
+      : 'Aucun document requis pour cet acte.');
+    if (complete) count.dataset.complete = 'true';
+    prog.appendChild(count);
+    if (items.length) {
+      var bar = el('div', 'doc-bar');
+      var fill = el('span'); fill.style.width = Math.round(done / items.length * 100) + '%';
+      bar.appendChild(fill);
+      prog.appendChild(bar);
+    }
+    container.appendChild(prog);
+    if (!items.length) return;
     items.forEach(function (it) {
       var provided = !!saved[it.id];
       var row = el('div', 'doc-row');
