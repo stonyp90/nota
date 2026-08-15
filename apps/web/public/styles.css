@@ -443,7 +443,7 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 .cal-row { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
 .cal-dow { text-align: center; font-size: 11px; font-weight: 700; color: var(--ink-muted); padding: 4px 0; text-transform: uppercase; letter-spacing: .04em; }
 .cal-cell {
-  background: var(--surface); min-height: clamp(84px, 7vw, 120px); padding: 7px 9px; position: relative;
+  background: var(--surface); min-height: clamp(84px, 7vw, 120px); padding: 7px 9px 14px; position: relative;
   display: flex; flex-direction: column; gap: 3px; cursor: pointer;
   border: 1px solid var(--border); border-radius: var(--radius-sm); scroll-margin-top: var(--sticky-top);
   text-align: left; font: inherit; color: var(--ink);
@@ -460,7 +460,7 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 .cal-count { position: absolute; top: 7px; right: 8px; font-size: 10px; font-weight: 700; background: var(--brand); color: var(--brand-ink); border-radius: 999px; min-width: 16px; text-align: center; padding: 1px 5px; }
 .cal-top { font-size: 15px; font-weight: 800; letter-spacing: -0.02em; margin-top: auto; white-space: nowrap; }
 /* Info line: service + urgency tier of the headline offer. */
-.cal-info { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 10.5px; line-height: 1.2; }
+.cal-info { display: flex; align-items: center; gap: 6px; min-width: 0; margin-top: 1px; font-size: 10.5px; line-height: 1.2; }
 .cal-info-svc { color: var(--ink-muted); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cal-info-tier { flex: none; color: var(--ink); font-weight: 700; padding: 1px 6px; border: 1px solid var(--border); border-radius: 999px; }
 .cal-cell[data-tier='rapide'] .cal-info-tier { color: var(--tier-rapide-ink); border-color: var(--tier-rapide-ink); }
@@ -468,16 +468,9 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 .cal-cell[data-tier='urgence'] .cal-info-tier { color: var(--tier-urgence-ink); border-color: var(--tier-urgence-ink); }
 .cal-cell[data-tier='extreme'] .cal-info-tier { color: var(--tier-extreme-ink); border-color: var(--tier-extreme-ink); }
 .cal-top.is-cleared { text-decoration: line-through; color: var(--ink-muted); font-weight: 600; }
-.cal-status { display: flex; height: 3px; border-radius: 999px; overflow: hidden; background: var(--border); }
+.cal-status { position: absolute; left: 9px; right: 9px; bottom: 6px; display: flex; height: 3px; border-radius: 999px; overflow: hidden; background: var(--border); }
 .cal-status-open { background: var(--status-ouverte); }
 .cal-status-taken { background: var(--status-retenue); }
-/* Colour accent by urgency tier — a left bar on days with an open offer, so
-   urgency reads at a glance (warm = urgent) and matches the legend + agenda. */
-.cal-cell[data-tier]::before { content: ''; position: absolute; left: 0; top: 7px; bottom: 7px; width: 3px; border-radius: 999px; background: var(--tier-standard); }
-.cal-cell[data-tier='rapide']::before { background: var(--tier-rapide); }
-.cal-cell[data-tier='prioritaire']::before { background: var(--tier-prioritaire); }
-.cal-cell[data-tier='urgence']::before { background: var(--tier-urgence); }
-.cal-cell[data-tier='extreme']::before { background: var(--tier-extreme); }
 .cal-cell.is-taken .cal-count { background: var(--status-retenue); color: var(--brand-ink); }
 /* The client's OWN offer status on a day: a subtle ring + a coloured pill. */
 .cal-cell.has-mine { box-shadow: inset 0 0 0 1.5px var(--brand); }
