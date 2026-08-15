@@ -50,6 +50,10 @@
   --tier-prioritaire: #906800;
   --tier-urgence: #c2410c;
   --tier-extreme: #b42318;
+  --tier-rapide-ink: #78c282; --tier-prioritaire-ink: #e0b44a; --tier-urgence-ink: #f0894c; --tier-extreme-ink: #f97066;
+  /* Outline text/border tint per tier — light = base, dark = brighter for AA. */
+  --tier-rapide-ink: var(--tier-rapide); --tier-prioritaire-ink: var(--tier-prioritaire);
+  --tier-urgence-ink: var(--tier-urgence); --tier-extreme-ink: var(--tier-extreme);
 
   /* Offer status: waiting for a notary vs. retained by one. var() aliases, so
      they track the theme automatically — do not duplicate into the dark blocks. */
@@ -113,6 +117,7 @@
     --tier-prioritaire: #906800;
     --tier-urgence: #c2410c;
     --tier-extreme: #b42318;
+    --tier-rapide-ink: #78c282; --tier-prioritaire-ink: #e0b44a; --tier-urgence-ink: #f0894c; --tier-extreme-ink: #f97066;
 
     --shadow-lg: 0 20px 40px -12px rgb(0 0 0 / 0.6);
   }
@@ -458,10 +463,10 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 .cal-info { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 10.5px; line-height: 1.2; }
 .cal-info-svc { color: var(--ink-muted); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cal-info-tier { flex: none; color: var(--ink); font-weight: 700; padding: 1px 6px; border: 1px solid var(--border); border-radius: 999px; }
-.cal-cell[data-tier='rapide'] .cal-info-tier { color: var(--tier-rapide); border-color: var(--tier-rapide); }
-.cal-cell[data-tier='prioritaire'] .cal-info-tier { color: var(--tier-prioritaire); border-color: var(--tier-prioritaire); }
-.cal-cell[data-tier='urgence'] .cal-info-tier { color: var(--tier-urgence); border-color: var(--tier-urgence); }
-.cal-cell[data-tier='extreme'] .cal-info-tier { color: var(--tier-extreme); border-color: var(--tier-extreme); }
+.cal-cell[data-tier='rapide'] .cal-info-tier { color: var(--tier-rapide-ink); border-color: var(--tier-rapide-ink); }
+.cal-cell[data-tier='prioritaire'] .cal-info-tier { color: var(--tier-prioritaire-ink); border-color: var(--tier-prioritaire-ink); }
+.cal-cell[data-tier='urgence'] .cal-info-tier { color: var(--tier-urgence-ink); border-color: var(--tier-urgence-ink); }
+.cal-cell[data-tier='extreme'] .cal-info-tier { color: var(--tier-extreme-ink); border-color: var(--tier-extreme-ink); }
 .cal-top.is-cleared { text-decoration: line-through; color: var(--ink-muted); font-weight: 600; }
 .cal-status { display: flex; height: 3px; border-radius: 999px; overflow: hidden; background: var(--border); }
 .cal-status-open { background: var(--status-ouverte); }
@@ -736,8 +741,6 @@ dialog::backdrop { background: var(--backdrop); }
 .day-bids:empty { display: none; }
 .day-bids .bid-row:first-child { border-top: 0; }
 .day-bids-more { padding: 8px 14px; font-size: 12px; color: var(--ink-muted); border-top: 1px solid var(--border); }
-/* "Take a bet" — a notary retains an open offer from the day view. */
-.bid-take { flex: none; }
 /* Scale guard: a day-group caps its rows and links to the full day view. */
 .agenda-more { display: block; width: 100%; text-align: left; appearance: none; background: transparent; border: 0; border-top: 1px solid var(--border); padding: 8px 14px; font: inherit; font-size: 12px; font-weight: 600; color: var(--brand); cursor: pointer; }
 .agenda-more:hover { background: var(--surface-hover); }
@@ -856,7 +859,7 @@ dialog::backdrop { background: var(--backdrop); }
 /* --- Privacy (Law 25) list ---------------------------------------------- */
 /* Two-column on wide screens so the long-form list fills the panel width
    (readable measure per item) instead of leaving a big blank right side. */
-.privacy-list { list-style: none; margin: 4px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 12px 32px; align-content: start; }
+.privacy-list { list-style: none; margin: 4px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(330px, 100%), 1fr)); gap: 12px 32px; align-content: start; }
 .privacy-list li { position: relative; padding-left: 20px; font-size: 14px; line-height: 1.5; color: var(--ink-muted); }
 .privacy-list li strong { color: var(--ink); }
 .privacy-list li::before {
@@ -1039,8 +1042,10 @@ html { scroll-behavior: smooth; scroll-padding-top: var(--sticky-top); }
 .fsa-water-label { fill: var(--ink-muted); font-size: 2.3px; font-weight: 600; letter-spacing: .2px; opacity: .75; }
 .fsa-node { cursor: pointer; }
 .fsa-node circle { fill: var(--brand); stroke: var(--brand-bright); stroke-width: .4; transition: fill-opacity .12s, stroke-width .12s; }
-.fsa-node:hover circle, .fsa-node:focus-visible circle { stroke-width: 1.2; }
+.fsa-node:hover circle { stroke-width: 1.2; }
+.fsa-node:focus-visible circle { stroke: var(--ring); stroke-width: 2; }
 .fsa-node:focus-visible { outline: none; }
+.fsa-node .fsa-hit { pointer-events: fill; }
 .fsa-node.is-unset circle { fill: var(--ink-muted); stroke: var(--border-strong); stroke-dasharray: 1.2 1; }
 /* Labels carry a halo (paint-order stroke) so they stay legible over bubbles. */
 .fsa-node-code { fill: var(--ink); font-size: 2.4px; font-weight: 800; paint-order: stroke; stroke: var(--surface-inset); stroke-width: 1; stroke-linejoin: round; }

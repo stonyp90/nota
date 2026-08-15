@@ -455,7 +455,6 @@
   function renderAgenda() {
     var ag = $('agenda'); clear(ag);
     var visible = applyFilters(state.monthBids);
-    if (state.selectedDate) visible = visible.filter(function (b) { return b.dateISO === state.selectedDate; });
 
     if (!visible.length) {
       var empty = el('div', 'agenda-empty');
@@ -494,8 +493,7 @@
     });
   }
 
-  function bidRow(b, opts) {
-    opts = opts || {};
+  function bidRow(b) {
     var retenue = b.status === D.STATUS.RETENUE;
     var row = el('div', 'bid-row' + (retenue ? ' is-retenue' : ' is-open'));
     row.appendChild(el('span', 'bid-amount', D.money(b.montant)));
@@ -522,15 +520,6 @@
       var pill = el('span', 'pill', D.tierById(b.tier ? b.tier : 'standard').nom);
       pill.dataset.tier = b.tier || 'standard';
       row.appendChild(pill);
-      // "Take a bet": a notary retains this open offer. In the offline demo this
-      // marks it retained locally; online it would route through the console.
-      if (opts.actions) {
-        var take = el('button', 'btn btn-sm bid-take', 'Retenir');
-        take.type = 'button';
-        take.setAttribute('aria-label', 'Retenir cette offre de ' + D.money(b.montant) + ' — ' + (D.serviceById(b.serviceId) || {}).nom);
-        take.addEventListener('click', function (e) { e.stopPropagation(); takeBid(b); });
-        row.appendChild(take);
-      }
     }
     return row;
   }
@@ -577,8 +566,17 @@
     G3A: 'Boischatel', G3B: 'Côte-de-Beaupré', G3C: 'Côte-de-Beaupré',
     G3E: 'Lac-Beauport', G3S: 'Lac-Beauport', G3G: 'Stoneham',
   };
-  // Real [lat, lng] per city, projected onto the map so bubbles sit at their
-  // true relative places over the Québec geography (river, Île d'Orléans…).
+  // Rest of the province by FSA area (first 2 chars) → city / region, so the map
+  // supports offers anywhere in Québec, not just Québec City.
+  var REGION_OF = {
+    H0: 'Montréal', H1: 'Montréal', H2: 'Montréal', H3: 'Montréal', H4: 'Montréal', H5: 'Montréal', H8: 'Montréal', H9: 'Montréal',
+    H7: 'Laval', J4: 'Longueuil', J3: 'Saint-Hyacinthe', J5: 'Repentigny', J6: 'Châteauguay', J2: 'Montérégie',
+    J7: 'Saint-Jérôme', J8: 'Gatineau', J9: 'Gatineau', J1: 'Sherbrooke', J0: 'Québec (province)',
+    G6: 'Lévis', G7: 'Saguenay', G8: 'Trois-Rivières', G9: 'Trois-Rivières', G5: 'Rimouski', G4: 'Charlevoix', G0: 'Est-du-Québec',
+    G1: 'Québec', G2: 'Québec', G3: 'Québec',
+  };
+  // Real [lat, lng] per place, projected onto the map so bubbles sit at their
+  // true relative positions over Québec (river, Île d'Orléans, the province…).
   var CITY_GEO = {
     'Vieux-Québec': [46.812, -71.207], 'Limoilou': [46.83, -71.235], 'Vanier': [46.82, -71.283],
     'Les Rivières': [46.835, -71.30], 'Sainte-Foy': [46.783, -71.29], 'Sillery': [46.77, -71.255],
@@ -586,8 +584,20 @@
     'Loretteville': [46.85, -71.36], 'Val-Bélair': [46.85, -71.47], "L'Ancienne-Lorette": [46.80, -71.35],
     'Boischatel': [46.90, -71.15], 'Côte-de-Beaupré': [46.95, -71.02], 'Lac-Beauport': [46.94, -71.28],
     'Stoneham': [47.0, -71.37],
+    // Province-wide centres
+    'Québec': [46.813, -71.208], 'Lévis': [46.79, -71.18], 'Montréal': [45.508, -73.561], 'Laval': [45.57, -73.72],
+    'Longueuil': [45.53, -73.51], 'Saint-Hyacinthe': [45.63, -72.95], 'Repentigny': [45.74, -73.45],
+    'Châteauguay': [45.36, -73.75], 'Montérégie': [45.45, -73.28], 'Saint-Jérôme': [45.78, -74.0],
+    'Gatineau': [45.48, -75.66], 'Sherbrooke': [45.40, -71.89], 'Trois-Rivières': [46.343, -72.542],
+    'Saguenay': [48.43, -71.07], 'Rimouski': [48.45, -68.52], 'Charlevoix': [47.44, -70.5],
+    'Est-du-Québec': [48.2, -68.8], 'Québec (province)': [46.8, -72.5],
   };
-  function cityOf(prefix) { return (prefix && CITY_OF[prefix]) || 'Autres'; }
+  function cityOf(prefix) {
+    if (!prefix) return 'Autres';
+    if (CITY_OF[prefix]) return CITY_OF[prefix];         // Québec-City boroughs (3-char)
+    var region = REGION_OF[prefix.slice(0, 2)];          // rest of the province (2-char area)
+    return region || 'Autres';
+  }
   function svgEl(name, attrs) {
     var e = document.createElementNS('http://www.w3.org/2000/svg', name);
     for (var k in attrs) e.setAttribute(k, attrs[k]);
@@ -630,18 +640,23 @@
     function pj(g) { return { x: ((g[1] - B.lng0) / (B.lng1 - B.lng0)) * 100, y: 4 + ((B.lat0 - g[0]) / (B.lat0 - B.lat1)) * 54 }; }
 
     var svg = svgEl('svg', { 'class': 'fsa-svg', viewBox: '0 0 100 64', role: 'group', 'aria-label': 'Carte de la région de Québec — touchez une ville pour voir ses offres' });
-    svg.appendChild(svgEl('rect', { 'class': 'fsa-land', x: 0, y: 0, width: 100, height: 64, rx: 4 }));
-    // The St. Lawrence: project its real north-shore line, then fill the water side.
-    var SHORE = [[46.715, -71.60], [46.735, -71.44], [46.755, -71.30], [46.775, -71.20], [46.80, -71.12], [46.83, -71.04], [46.87, -70.95], [46.92, -70.82]];
+    svg.appendChild(svgEl('rect', { 'class': 'fsa-land', 'aria-hidden': 'true', x: 0, y: 0, width: 100, height: 64, rx: 4 }));
+    // The St. Lawrence north/west bank across the province (Montréal → estuary):
+    // project the real shore line, then fill the water side. Off-view points clip.
+    var SHORE = [
+      [45.42, -73.95], [45.50, -73.55], [45.72, -73.18], [46.03, -73.11], [46.2, -72.8], [46.343, -72.54],
+      [46.5, -72.1], [46.66, -71.75], [46.72, -71.55], [46.755, -71.30], [46.775, -71.20], [46.80, -71.12],
+      [46.83, -71.04], [46.87, -70.95], [46.95, -70.7], [47.2, -70.25], [47.65, -69.5], [48.2, -68.8], [48.5, -68.1],
+    ];
     var pts = SHORE.map(function (s) { return pj(s); });
     var wd = 'M ' + pts.map(function (p) { return p.x.toFixed(1) + ' ' + p.y.toFixed(1); }).join(' L ') +
       ' L ' + pts[pts.length - 1].x.toFixed(1) + ' 130 L ' + pts[0].x.toFixed(1) + ' 130 Z';
-    svg.appendChild(svgEl('path', { 'class': 'fsa-water', d: wd }));
+    svg.appendChild(svgEl('path', { 'class': 'fsa-water', 'aria-hidden': 'true', d: wd }));
     var isle = pj([46.905, -70.98]);
     if (isle.x > 6 && isle.x < 94 && isle.y > 6 && isle.y < 58) {
-      svg.appendChild(svgEl('ellipse', { 'class': 'fsa-isle', cx: isle.x.toFixed(1), cy: isle.y.toFixed(1), rx: 8, ry: 3.2, transform: 'rotate(-38 ' + isle.x.toFixed(1) + ' ' + isle.y.toFixed(1) + ')' }));
+      svg.appendChild(svgEl('ellipse', { 'class': 'fsa-isle', 'aria-hidden': 'true', cx: isle.x.toFixed(1), cy: isle.y.toFixed(1), rx: 8, ry: 3.2, transform: 'rotate(-38 ' + isle.x.toFixed(1) + ' ' + isle.y.toFixed(1) + ')' }));
     }
-    svg.appendChild(svgEl('text', { 'class': 'fsa-water-label', x: 80, y: 60, 'text-anchor': 'middle' })).textContent = 'Fleuve Saint-Laurent';
+    svg.appendChild(svgEl('text', { 'class': 'fsa-water-label', 'aria-hidden': 'true', x: 80, y: 60, 'text-anchor': 'middle' })).textContent = 'Fleuve Saint-Laurent';
 
     var unknown = 0, placed = [];
     order.forEach(function (city) {
@@ -667,6 +682,7 @@
       var tt = svgEl('title', {});
       tt.textContent = city + ' — ' + n + ' offre' + (n > 1 ? 's' : '') + (best ? ', meilleure ' + D.money(best) : '');
       g.appendChild(tt);
+      g.appendChild(svgEl('circle', { 'class': 'fsa-hit', cx: pos.x, cy: pos.y, r: Math.max(r, 6).toFixed(1), fill: 'transparent' }));
       g.appendChild(svgEl('circle', { cx: pos.x, cy: pos.y, r: r.toFixed(1), 'fill-opacity': (0.34 + frac * 0.5).toFixed(2) }));
       var code = svgEl('text', { x: pos.x, y: (above ? pos.y - r - 1 : pos.y + r + 3).toFixed(1), 'text-anchor': 'middle', 'class': 'fsa-node-code' });
       code.textContent = city;
@@ -687,22 +703,7 @@
     state.filters.prefixe = prefix;
     state.selectedDate = null;
     setView('liste');
-  }
-
-  // Retain (take) an open offer. Offline-demo path: flip it to "retenue" in the
-  // local store + in memory, then repaint the calendar, agenda and day view.
-  function takeBid(b) {
-    if (!b || b.status === D.STATUS.RETENUE) return;
-    var etude = b.etude || 'Notaire (démo)';
-    var all = ensureSeed();
-    var it = all.filter(function (x) { return x.id === b.id; })[0];
-    if (it) { it.status = D.STATUS.RETENUE; it.etude = etude; lsSave(LS_BIDS, all); }
-    b.status = D.STATUS.RETENUE; b.etude = etude;
-    var mb = state.monthBids.filter(function (x) { return x.id === b.id; })[0];
-    if (mb) { mb.status = D.STATUS.RETENUE; mb.etude = etude; }
-    renderActiveView();
-    if (state.selectedDate) openDay(state.selectedDate);
-    toast('Offre retenue — le dossier du client est débloqué.');
+    var fa = $('fsa-active'); (fa && !fa.hidden ? fa : $('tab-view-liste')).focus();
   }
 
   // ---------------------------------------------------------------------------
@@ -731,6 +732,9 @@
     var shown = all.filter(function (b) {
       if (f.service && b.serviceId !== f.service) return false;
       if (f.statut && b.status !== f.statut) return false;
+      if (f.min != null && b.montant < f.min) return false;
+      if (f.max != null && b.montant > f.max) return false;
+      if (f.prefixe && cityOf(b.prefixe) !== f.prefixe) return false;
       return true;
     }).sort(function (a, b) { return b.montant - a.montant; });
 
@@ -744,7 +748,7 @@
 
     var list = $('day-bids'); clear(list);
     var DAY_CAP = 40; // bound the DOM even if a day draws hundreds of offers
-    shown.slice(0, DAY_CAP).forEach(function (b) { list.appendChild(bidRow(b, { actions: true })); });
+    shown.slice(0, DAY_CAP).forEach(function (b) { list.appendChild(bidRow(b)); });
     if (shown.length > DAY_CAP) {
       list.appendChild(el('div', 'day-bids-more', '+ ' + (shown.length - DAY_CAP) + ' autres · les ' + DAY_CAP + ' meilleures offres sont affichées'));
     }
@@ -906,6 +910,7 @@
       if (state.filters.prefixe) {
         var lab = fa.querySelector('.fsa-active-label');
         if (lab) lab.textContent = state.filters.prefixe;
+        fa.setAttribute('aria-label', 'Retirer le filtre : ' + state.filters.prefixe);
         fa.hidden = false;
       } else { fa.hidden = true; }
     }
@@ -1724,7 +1729,7 @@
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ email: nc.email }),
       });
-      var j = await r.json();
+      var j = {}; try { j = await r.json(); } catch (e) {}
       if (r.ok && j.url) { window.location.href = j.url; return; }
       fail((j.errors && j.errors[0] && j.errors[0].message) || 'Connexion du compte indisponible pour le moment.');
     } catch (err) { fail('Hors ligne — réessayez.'); }

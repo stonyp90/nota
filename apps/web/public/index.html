@@ -300,7 +300,7 @@
             </div>
 
             <div class="view-panel" id="view-carte" role="tabpanel" aria-labelledby="tab-view-carte" hidden>
-              <div class="fsa-map" id="cal-map" aria-live="polite"></div>
+              <div class="fsa-map" id="cal-map"></div>
             </div>
           </div>
         </div>
@@ -402,16 +402,16 @@
                 <button class="btn btn-sm btn-ghost" id="notary-signout">Se déconnecter</button>
               </div>
 
-              <h3 class="nc-h">Demandes ouvertes</h3>
+              <h2 class="nc-h">Demandes ouvertes</h2>
               <div class="nc-list" id="notary-open-list" aria-live="polite"></div>
               <p class="help" id="notary-open-empty" hidden>Aucune demande ouverte pour l’instant.</p>
 
-              <h3 class="nc-h">Dossiers retenus</h3>
+              <h2 class="nc-h">Dossiers retenus</h2>
               <div class="nc-list" id="notary-retained-list" aria-live="polite"></div>
               <p class="help" id="notary-retained-empty" hidden>Aucun dossier retenu pour l’instant.</p>
 
               <div class="nc-pay">
-                <h3 class="nc-h">Paiements</h3>
+                <h2 class="nc-h">Paiements</h2>
                 <p class="help">Connectez un compte de paiement sécurisé (Stripe) pour être payé sur les actes complétés. Nota ne prélève sa commission qu’à la signature, sur la valeur confirmée.</p>
                 <ul class="errors" id="notary-connect-errors" role="alert" aria-atomic="true" hidden></ul>
                 <button type="button" class="btn btn-sm" id="notary-connect">Connecter mon compte de paiement</button>
