@@ -472,17 +472,25 @@
     if (state.filters.sort.indexOf('date') === 0) order.sort(state.filters.sort === 'date-asc' ? undefined : function (a, b) { return b.localeCompare(a); });
     else order.sort();
 
+    var PER_DAY = 8; // cap rows per day so a busy month never floods the DOM
     order.forEach(function (iso) {
       var group = el('div', 'agenda-group');
       group.appendChild(el('div', 'agenda-day', dayTitle(iso)));
-      groups[iso]
-        .sort(function (a, b) { return b.montant - a.montant; })
-        .forEach(function (b) { group.appendChild(bidRow(b)); });
+      var dayBids = groups[iso].sort(function (a, b) { return b.montant - a.montant; });
+      dayBids.slice(0, PER_DAY).forEach(function (b) { group.appendChild(bidRow(b)); });
+      if (dayBids.length > PER_DAY) {
+        var extra = dayBids.length - PER_DAY;
+        var more = el('button', 'agenda-more', '+ ' + extra + ' autre' + (extra > 1 ? 's' : '') + ' offre' + (extra > 1 ? 's' : ''));
+        more.type = 'button';
+        more.addEventListener('click', function () { openDay(iso); });
+        group.appendChild(more);
+      }
       ag.appendChild(group);
     });
   }
 
-  function bidRow(b) {
+  function bidRow(b, opts) {
+    opts = opts || {};
     var retenue = b.status === D.STATUS.RETENUE;
     var row = el('div', 'bid-row' + (retenue ? ' is-retenue' : ' is-open'));
     row.appendChild(el('span', 'bid-amount', D.money(b.montant)));
@@ -509,8 +517,33 @@
       var pill = el('span', 'pill', D.tierById(b.tier ? b.tier : 'standard').nom);
       pill.dataset.tier = b.tier || 'standard';
       row.appendChild(pill);
+      // "Take a bet": a notary retains this open offer. In the offline demo this
+      // marks it retained locally; online it would route through the console.
+      if (opts.actions) {
+        var take = el('button', 'btn btn-sm bid-take', 'Retenir');
+        take.type = 'button';
+        take.setAttribute('aria-label', 'Retenir cette offre de ' + D.money(b.montant) + ' — ' + (D.serviceById(b.serviceId) || {}).nom);
+        take.addEventListener('click', function (e) { e.stopPropagation(); takeBid(b); });
+        row.appendChild(take);
+      }
     }
     return row;
+  }
+
+  // Retain (take) an open offer. Offline-demo path: flip it to "retenue" in the
+  // local store + in memory, then repaint the calendar, agenda and day view.
+  function takeBid(b) {
+    if (!b || b.status === D.STATUS.RETENUE) return;
+    var etude = b.etude || 'Notaire (démo)';
+    var all = ensureSeed();
+    var it = all.filter(function (x) { return x.id === b.id; })[0];
+    if (it) { it.status = D.STATUS.RETENUE; it.etude = etude; lsSave(LS_BIDS, all); }
+    b.status = D.STATUS.RETENUE; b.etude = etude;
+    var mb = state.monthBids.filter(function (x) { return x.id === b.id; })[0];
+    if (mb) { mb.status = D.STATUS.RETENUE; mb.etude = etude; }
+    renderCalendar(); renderAgenda();
+    if (state.selectedDate) openDay(state.selectedDate);
+    toast('Offre retenue — le dossier du client est débloqué.');
   }
 
   // ---------------------------------------------------------------------------
@@ -551,7 +584,11 @@
       : 'Aucune offre · ' + when + ' · soyez le premier';
 
     var list = $('day-bids'); clear(list);
-    shown.forEach(function (b) { list.appendChild(bidRow(b)); });
+    var DAY_CAP = 40; // bound the DOM even if a day draws hundreds of offers
+    shown.slice(0, DAY_CAP).forEach(function (b) { list.appendChild(bidRow(b, { actions: true })); });
+    if (shown.length > DAY_CAP) {
+      list.appendChild(el('div', 'day-bids-more', '+ ' + (shown.length - DAY_CAP) + ' autres · les ' + DAY_CAP + ' meilleures offres sont affichées'));
+    }
 
     var open = shown.filter(function (b) { return b.status !== D.STATUS.RETENUE; });
     $('day-best').textContent = open.length
