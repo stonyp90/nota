@@ -106,7 +106,6 @@
   // Carnet view ids (segmented switcher) + the sentinel key for offers with no
   // postal sector, used by the Carte grouping and the prefixe filter.
   var VIEWS = ['calendrier', 'liste', 'carte'];
-  var NO_FSA = '∅';
 
   // ---------------------------------------------------------------------------
   // Date helpers
@@ -286,10 +285,7 @@
       if (f.statut && b.status !== f.statut) return false;
       if (f.min != null && b.montant < f.min) return false;
       if (f.max != null && b.montant > f.max) return false;
-      if (f.prefixe) {
-        if (f.prefixe === NO_FSA) { if (b.prefixe) return false; }
-        else if ((b.prefixe || '') !== f.prefixe) return false;
-      }
+      if (f.prefixe && cityOf(b.prefixe) !== f.prefixe) return false;
       return true;
     });
     var s = f.sort;
@@ -568,16 +564,28 @@
   // heatmap grid. No coordinates exist, so density IS the map. A card drills in.
   // Approximate schematic positions (viewBox x:0..100, y:0..64) for the
   // Québec-region FSAs — a recognisable spatial layout by sector, NOT accurate.
-  var FSA_POS = {
-    G1R: { x: 46, y: 44 }, G1K: { x: 55, y: 37 }, G1L: { x: 41, y: 39 }, G1M: { x: 38, y: 33 }, G1J: { x: 60, y: 43 },
-    G1H: { x: 48, y: 29 }, G1G: { x: 55, y: 30 }, G1E: { x: 65, y: 40 }, G1C: { x: 70, y: 35 }, G1B: { x: 74, y: 39 },
-    G1S: { x: 33, y: 46 }, G1T: { x: 29, y: 40 }, G1V: { x: 23, y: 48 }, G1W: { x: 18, y: 44 }, G1X: { x: 21, y: 38 },
-    G1Y: { x: 27, y: 44 }, G1N: { x: 37, y: 43 }, G1P: { x: 30, y: 34 },
-    G2A: { x: 43, y: 20 }, G2B: { x: 50, y: 16 }, G2C: { x: 57, y: 19 }, G2E: { x: 35, y: 22 }, G2G: { x: 62, y: 22 },
-    G2J: { x: 41, y: 14 }, G2K: { x: 47, y: 12 }, G2L: { x: 53, y: 14 }, G2M: { x: 60, y: 14 }, G2N: { x: 65, y: 17 },
-    G3A: { x: 82, y: 26 }, G3B: { x: 86, y: 31 }, G3C: { x: 88, y: 36 }, G3E: { x: 68, y: 26 }, G3G: { x: 73, y: 21 },
-    G3J: { x: 78, y: 43 }, G3K: { x: 84, y: 40 }, G3S: { x: 78, y: 18 },
+  // Postal sector (FSA) → Québec-region city / borough, so the map reads by city
+  // rather than by raw postal code. Unknown / missing → "Autres".
+  var CITY_OF = {
+    G1A: 'Vieux-Québec', G1R: 'Vieux-Québec',
+    G1G: 'Limoilou', G1H: 'Limoilou', G1J: 'Limoilou', G1K: 'Limoilou', G1L: 'Limoilou',
+    G1M: 'Vanier', G1N: 'Vanier', G1P: 'Les Rivières',
+    G1S: 'Sainte-Foy', G1T: 'Sainte-Foy', G1V: 'Sainte-Foy', G1W: 'Sainte-Foy', G1Y: 'Sillery', G1X: 'Cap-Rouge',
+    G1B: 'Beauport', G1C: 'Beauport', G1E: 'Beauport', G3J: 'Beauport', G3K: 'Beauport',
+    G2A: 'Charlesbourg', G2B: 'Charlesbourg', G2C: 'Charlesbourg', G2K: 'Charlesbourg', G2L: 'Charlesbourg', G2M: 'Charlesbourg', G2N: 'Charlesbourg',
+    G2J: 'Loretteville', G2G: 'Val-Bélair', G2E: "L'Ancienne-Lorette",
+    G3A: 'Boischatel', G3B: 'Côte-de-Beaupré', G3C: 'Côte-de-Beaupré',
+    G3E: 'Lac-Beauport', G3S: 'Lac-Beauport', G3G: 'Stoneham',
   };
+  var CITY_POS = {
+    'Vieux-Québec': { x: 50, y: 44 }, 'Limoilou': { x: 56, y: 36 }, 'Vanier': { x: 42, y: 38 },
+    'Les Rivières': { x: 38, y: 31 }, 'Sainte-Foy': { x: 28, y: 46 }, 'Sillery': { x: 35, y: 48 },
+    'Cap-Rouge': { x: 19, y: 45 }, 'Beauport': { x: 70, y: 40 }, 'Charlesbourg': { x: 52, y: 18 },
+    'Loretteville': { x: 43, y: 14 }, 'Val-Bélair': { x: 61, y: 20 }, "L'Ancienne-Lorette": { x: 33, y: 24 },
+    'Boischatel': { x: 82, y: 28 }, 'Côte-de-Beaupré': { x: 89, y: 33 }, 'Lac-Beauport': { x: 65, y: 23 },
+    'Stoneham': { x: 71, y: 16 }, 'Autres': { x: 12, y: 58 },
+  };
+  function cityOf(prefix) { return (prefix && CITY_OF[prefix]) || 'Autres'; }
   function svgEl(name, attrs) {
     var e = document.createElementNS('http://www.w3.org/2000/svg', name);
     for (var k in attrs) e.setAttribute(k, attrs[k]);
@@ -598,28 +606,29 @@
       cta.addEventListener('click', filtersActive() ? resetFilters : function () { $('cta-reserver').click(); });
       empty.appendChild(cta); map.appendChild(empty); return;
     }
+    // Group by CITY (mapped from the postal sector), not by raw FSA.
     var groups = {}, order = [];
-    visible.forEach(function (b) { var k = b.prefixe || NO_FSA; if (!groups[k]) { groups[k] = []; order.push(k); } groups[k].push(b); });
+    visible.forEach(function (b) { var k = cityOf(b.prefixe); if (!groups[k]) { groups[k] = []; order.push(k); } groups[k].push(b); });
     var max = order.reduce(function (m, k) { return Math.max(m, groups[k].length); }, 1);
 
-    var svg = svgEl('svg', { 'class': 'fsa-svg', viewBox: '0 0 100 64', role: 'group', 'aria-label': 'Carte des secteurs postaux — touchez un secteur pour voir ses offres' });
+    var svg = svgEl('svg', { 'class': 'fsa-svg', viewBox: '0 0 100 64', role: 'group', 'aria-label': 'Carte des villes et secteurs — touchez une ville pour voir ses offres' });
     svg.appendChild(svgEl('rect', { 'class': 'fsa-land', x: 1, y: 1, width: 98, height: 62, rx: 4 }));
     svg.appendChild(svgEl('path', { 'class': 'fsa-water', d: 'M1 52 Q 26 47 52 53 T 99 49 L 99 63 L 1 63 Z' }));
 
     var unknown = 0;
-    order.forEach(function (key) {
-      var n = groups[key].length;
-      var openN = groups[key].filter(function (b) { return b.status !== D.STATUS.RETENUE; }).length;
-      var pos = FSA_POS[key];
-      if (!pos) { pos = { x: 12 + (unknown * 16) % 76, y: 59 }; unknown++; }
+    order.forEach(function (city) {
+      var n = groups[city].length;
+      var openN = groups[city].filter(function (b) { return b.status !== D.STATUS.RETENUE; }).length;
+      var pos = CITY_POS[city];
+      if (!pos) { pos = { x: 12 + (unknown * 18) % 76, y: 58 }; unknown++; }
       var frac = n / max;
       var r = (2 + frac * 2.8);
-      var g = svgEl('g', { 'class': 'fsa-node' + (key === NO_FSA ? ' is-unset' : ''), tabindex: '0', role: 'button' });
-      g.dataset.fsa = key;
-      g.setAttribute('aria-label', (key === NO_FSA ? 'Secteur non précisé' : 'Secteur ' + key) + ', ' + n + ' offre' + (n > 1 ? 's' : '') + (openN ? ', ' + openN + ' ouverte' + (openN > 1 ? 's' : '') : '') + '. Voir la liste.');
+      var g = svgEl('g', { 'class': 'fsa-node' + (city === 'Autres' ? ' is-unset' : ''), tabindex: '0', role: 'button' });
+      g.dataset.fsa = city;
+      g.setAttribute('aria-label', city + ', ' + n + ' offre' + (n > 1 ? 's' : '') + (openN ? ', ' + openN + ' ouverte' + (openN > 1 ? 's' : '') : '') + '. Voir la liste.');
       g.appendChild(svgEl('circle', { cx: pos.x, cy: pos.y, r: r.toFixed(1), 'fill-opacity': (0.34 + frac * 0.5).toFixed(2) }));
       var code = svgEl('text', { x: pos.x, y: (pos.y - r - 1).toFixed(1), 'text-anchor': 'middle', 'class': 'fsa-node-code' });
-      code.textContent = key === NO_FSA ? 'Autres' : key;
+      code.textContent = city;
       g.appendChild(code);
       var cnt = svgEl('text', { x: pos.x, y: (pos.y + 0.9).toFixed(1), 'text-anchor': 'middle', 'class': 'fsa-node-n' });
       cnt.textContent = n;
@@ -629,7 +638,7 @@
       svg.appendChild(g);
     });
     map.appendChild(svg);
-    map.appendChild(el('p', 'fsa-note', 'Secteurs postaux de la région de Québec (positions approximatives). Touchez un secteur pour voir ses offres.'));
+    map.appendChild(el('p', 'fsa-note', 'Villes et secteurs de la région de Québec (positions approximatives). Touchez une ville pour voir ses offres.'));
   }
 
   // Drill into a sector: filter to its FSA and show the list view.
@@ -855,7 +864,7 @@
     if (fa) {
       if (state.filters.prefixe) {
         var lab = fa.querySelector('.fsa-active-label');
-        if (lab) lab.textContent = state.filters.prefixe === NO_FSA ? 'Secteur non précisé' : 'Secteur ' + state.filters.prefixe;
+        if (lab) lab.textContent = state.filters.prefixe;
         fa.hidden = false;
       } else { fa.hidden = true; }
     }
