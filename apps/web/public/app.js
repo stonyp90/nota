@@ -628,20 +628,32 @@
     svg.appendChild(svgEl('ellipse', { 'class': 'fsa-isle', cx: 84, cy: 33, rx: 12, ry: 4.2, transform: 'rotate(-38 84 33)' }));
     svg.appendChild(svgEl('text', { 'class': 'fsa-water-label', x: 74, y: 57, 'text-anchor': 'middle' })).textContent = 'Fleuve Saint-Laurent';
 
-    var unknown = 0;
+    var unknown = 0, placed = [];
     order.forEach(function (city) {
-      var n = groups[city].length;
-      var openN = groups[city].filter(function (b) { return b.status !== D.STATUS.RETENUE; }).length;
+      var list = groups[city];
+      var n = list.length;
+      var opens = list.filter(function (b) { return b.status !== D.STATUS.RETENUE; });
+      var openN = opens.length;
+      var best = openN ? opens.reduce(function (a, b) { return b.montant > a.montant ? b : a; }, opens[0]).montant : null;
       var geo = CITY_GEO[city];
       var pos = geo ? proj(geo) : { x: 7, y: 11 + (unknown * 9) };
       if (!geo) unknown++;
       var frac = n / max;
       var r = (2 + frac * 2.8);
+      // Declutter: if a nearby city already put its label above, drop this one below.
+      var above = true;
+      for (var pi = 0; pi < placed.length; pi++) {
+        if (Math.abs(placed[pi].x - pos.x) < 15 && Math.abs(placed[pi].y - pos.y) < 7) { above = false; break; }
+      }
+      placed.push({ x: pos.x, y: pos.y });
       var g = svgEl('g', { 'class': 'fsa-node' + (city === 'Autres' ? ' is-unset' : ''), tabindex: '0', role: 'button' });
       g.dataset.fsa = city;
       g.setAttribute('aria-label', city + ', ' + n + ' offre' + (n > 1 ? 's' : '') + (openN ? ', ' + openN + ' ouverte' + (openN > 1 ? 's' : '') : '') + '. Voir la liste.');
+      var tt = svgEl('title', {});
+      tt.textContent = city + ' — ' + n + ' offre' + (n > 1 ? 's' : '') + (best ? ', meilleure ' + D.money(best) : '');
+      g.appendChild(tt);
       g.appendChild(svgEl('circle', { cx: pos.x, cy: pos.y, r: r.toFixed(1), 'fill-opacity': (0.34 + frac * 0.5).toFixed(2) }));
-      var code = svgEl('text', { x: pos.x, y: (pos.y - r - 1).toFixed(1), 'text-anchor': 'middle', 'class': 'fsa-node-code' });
+      var code = svgEl('text', { x: pos.x, y: (above ? pos.y - r - 1 : pos.y + r + 3).toFixed(1), 'text-anchor': 'middle', 'class': 'fsa-node-code' });
       code.textContent = city;
       g.appendChild(code);
       var cnt = svgEl('text', { x: pos.x, y: (pos.y + 0.9).toFixed(1), 'text-anchor': 'middle', 'class': 'fsa-node-n' });
