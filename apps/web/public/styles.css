@@ -515,7 +515,6 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .profil-card-title { font-size: 15px; font-weight: 700; color: var(--ink); }
 .profil-card .switch-row { margin-top: 2px; }
 /* Documents inside the profile: upload / remove / mark-validated. */
-.profil-docs { grid-column: 1 / -1; }
 .profil-doc-service { margin: 4px 0 8px; max-width: 340px; }
 .profil-doc-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
 .doc-count { grid-column: 1 / -1; font-size: 12.5px; font-weight: 600; color: var(--ink-muted); }
