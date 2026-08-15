@@ -855,10 +855,13 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
 .sub-card-actions .btn { flex: 1 1 auto; gap: 6px; padding-left: 10px; padding-right: 10px; }
 .brand-ic { flex: none; display: block; }
 /* On the Notaires page the same subscribe card sits as a full-width band —
-   pitch on the left, calendar buttons on the right — so it fills the row. */
+   pitch on the left, the four calendar buttons grow to fill the right side so
+   the row reads full-width with no dead gap between them. */
 .notary-carnet { margin-top: 16px; }
-.notary-carnet .sub-card { display: flex; align-items: center; justify-content: space-between; gap: 14px 24px; flex-wrap: wrap; }
-.notary-carnet .sub-card-actions { margin-top: 0; flex: 0 1 auto; }
+.notary-carnet .sub-card { display: flex; align-items: center; flex-wrap: wrap; gap: 14px 32px; }
+.notary-carnet .sub-card-head { flex: 1 1 300px; }
+.notary-carnet .sub-card-actions { margin-top: 0; flex: 2 1 520px; }
+.notary-carnet .sub-card-actions .btn { flex: 1 1 0; justify-content: center; }
 /* Borderless notification bell in the header. */
 
 /* Calendar loading: an indeterminate top bar while the carnet fetches (real
