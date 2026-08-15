@@ -324,6 +324,21 @@ test('profile persists coordinates and prefills the offer form', async () => {
   assert.equal($(doc, 'o-prefix').value, 'G1R');
 });
 
+// 12d. The single account menu (avatar) merges profile + notifications + menu.
+test('account menu opens and navigates to the profile', async () => {
+  const { doc } = await boot();
+  // Only two primary tabs remain (Carnet, Notaires) — the rest moved into the menu.
+  assert.equal(doc.querySelectorAll('.nav-tabs .nav-tab').length, 2);
+
+  const bell = $(doc, 'notif-bell');
+  bell.click(); // open the account menu
+  assert.equal($(doc, 'notif-panel').hidden, false);
+
+  $(doc, 'acct-profil').click(); // "Mon profil"
+  assert.equal($(doc, 'pane-profil').hidden, false);
+  assert.equal($(doc, 'notif-panel').hidden, true); // menu closes after navigating
+});
+
 // 13. Notary console: the auth gate renders, the authed view is gated until
 //     sign-in, and Nota.notary exposes its hooks. feedUrl builds a webcal link.
 test('notary console renders its auth gate and exposes Nota.notary hooks', async () => {

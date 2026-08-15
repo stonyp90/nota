@@ -208,7 +208,14 @@
     var open = force != null ? force : panel.hidden;
     panel.hidden = !open;
     bell.setAttribute('aria-expanded', open ? 'true' : 'false');
-    if (open) renderNotifs();
+    if (open) { renderNotifs(); acctSync(); }
+  }
+  // Reflect the client's profile in the account menu header.
+  function acctSync() {
+    var p = profileGet();
+    var name = $('acct-name'), email = $('acct-email');
+    if (name) name.textContent = p.nom || 'Mon profil';
+    if (email) email.textContent = p.courriel || 'Coordonnées, documents, préférences';
   }
   // Derive notifications from this browser's offers: local date-approaching, and
   // "retained" by matching each offer id against its month's public bids.
@@ -1664,6 +1671,10 @@
     $('notif-bell').addEventListener('click', function (e) { e.stopPropagation(); toggleNotifPanel(); });
     $('notif-clear').addEventListener('click', markAllRead);
     $('notif-panel').addEventListener('click', function (e) { e.stopPropagation(); });
+    // Account-menu items → switch pane, then close the menu.
+    $('acct-profil').addEventListener('click', function () { setTab('profil'); toggleNotifPanel(false); });
+    $('acct-documents').addEventListener('click', function () { setTab('dossier'); toggleNotifPanel(false); });
+    $('acct-confid').addEventListener('click', function () { setTab('confidentialite'); toggleNotifPanel(false); });
     document.addEventListener('click', function () { toggleNotifPanel(false); });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') toggleNotifPanel(false); });
 

@@ -261,6 +261,20 @@ a:hover { text-decoration: underline; }
 .notif-title { font-size: 13px; font-weight: 600; color: var(--ink); }
 .notif-body { font-size: 12px; color: var(--ink-muted); margin-top: 2px; }
 
+/* Account menu (avatar) — merges profile + notifications + menu into one panel. */
+.acct-btn { border-radius: 50%; }
+.acct-panel { padding: 6px; }
+.acct-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; appearance: none; background: transparent; border: 0; border-radius: var(--radius); padding: 9px 10px; font: inherit; color: var(--ink); cursor: pointer; }
+.acct-item:hover, .acct-item:focus-visible { background: var(--surface-inset); outline: none; }
+.acct-item svg { flex: none; color: var(--ink-muted); }
+.acct-avatar { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--border); color: var(--brand); flex: none; }
+.acct-labels { display: flex; flex-direction: column; min-width: 0; }
+.acct-item-title { font-weight: 600; font-size: 14px; }
+.acct-item-sub { font-size: 12px; color: var(--ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acct-sep { height: 1px; background: var(--border); margin: 6px 4px; }
+.acct-panel .notif-head { padding: 6px 10px; border-bottom: 0; }
+.acct-panel .notif-list { max-height: min(320px, 50vh); }
+
 /* --- Buttons ------------------------------------------------------------- */
 .btn {
   appearance: none; font: inherit; font-weight: 500; cursor: pointer;
