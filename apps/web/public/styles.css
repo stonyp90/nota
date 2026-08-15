@@ -449,6 +449,13 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 .cal-status { display: flex; height: 3px; border-radius: 999px; overflow: hidden; background: var(--border); }
 .cal-status-open { background: var(--status-ouverte); }
 .cal-status-taken { background: var(--status-retenue); }
+/* Colour accent by urgency tier — a left bar on days with an open offer, so
+   urgency reads at a glance (warm = urgent) and matches the legend + agenda. */
+.cal-cell[data-tier]::before { content: ''; position: absolute; left: 0; top: 7px; bottom: 7px; width: 3px; border-radius: 999px; background: var(--tier-standard); }
+.cal-cell[data-tier='rapide']::before { background: var(--tier-rapide); }
+.cal-cell[data-tier='prioritaire']::before { background: var(--tier-prioritaire); }
+.cal-cell[data-tier='urgence']::before { background: var(--tier-urgence); }
+.cal-cell[data-tier='extreme']::before { background: var(--tier-extreme); }
 .cal-cell.is-taken .cal-count { background: var(--status-retenue); color: var(--brand-ink); }
 /* The client's OWN offer status on a day: a subtle ring + a coloured pill. */
 .cal-cell.has-mine { box-shadow: inset 0 0 0 1.5px var(--brand); }

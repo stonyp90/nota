@@ -365,9 +365,12 @@
         var plural = n > 1 ? 's' : '';
         var open = dayBids.filter(function (b) { return b.status !== D.STATUS.RETENUE; });
         if (open.length) {
-          var top = Math.max.apply(null, open.map(function (b) { return b.montant; }));
-          cell.appendChild(el('span', 'cal-top', D.money(top)));
-          cell.setAttribute('aria-label', dayTitle(iso) + ', ' + n + ' offre' + plural + ', meilleure ' + D.money(top));
+          var topOffer = open.reduce(function (a, b) { return b.montant > a.montant ? b : a; }, open[0]);
+          cell.appendChild(el('span', 'cal-top', D.money(topOffer.montant)));
+          // Colour the cell by the headline offer's urgency tier (matches the
+          // legend + agenda) — warm = urgent, cool = calm.
+          if (topOffer.tier) cell.dataset.tier = topOffer.tier;
+          cell.setAttribute('aria-label', dayTitle(iso) + ', ' + n + ' offre' + plural + ', meilleure ' + D.money(topOffer.montant) + ', ' + (D.TIER_LABELS ? (D.TIER_LABELS[topOffer.tier] || topOffer.tier) : topOffer.tier));
         } else {
           // Everything taken: show what cleared, struck through — more useful to
           // the next bidder than an em-dash.
