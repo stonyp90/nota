@@ -849,6 +849,15 @@ dialog::backdrop { background: var(--backdrop); }
 .nota-guarantee { margin-top: var(--gap); }
 .nc-pay { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); }
 .nc-pay .btn { margin-top: 4px; }
+/* Notary earnings roll-up: realised value, Nota's commission, and net. */
+.nc-earn { margin-top: 6px; }
+.nc-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.nc-stat { border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; background: var(--surface); }
+.nc-stat-v { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; color: var(--ink); }
+.nc-stat-k { font-size: 12px; font-weight: 600; color: var(--ink-muted); margin-top: 3px; }
+.nc-stat-net { border-color: var(--brand); }
+.nc-stat-net .nc-stat-v { color: var(--brand); }
+.nc-earn .help { margin-top: 10px; }
 
 /* --- Privacy (Law 25) list ---------------------------------------------- */
 /* Two-column on wide screens so the long-form list fills the panel width

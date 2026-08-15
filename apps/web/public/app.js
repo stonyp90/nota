@@ -2072,10 +2072,52 @@
     var list = $('notary-retained-list'); if (!list) return; clear(list);
     var empty = $('notary-retained-empty');
     var items = nc.email ? ncRetainedFor(nc.email) : [];
+    ncRenderEarnings();
     if (!items.length) { if (empty) empty.hidden = false; return; }
     if (empty) empty.hidden = true;
     items.slice().sort(function (a, b) { return a.dateISO.localeCompare(b.dateISO); })
       .forEach(function (e) { list.appendChild(ncRetainedCard(e)); });
+  }
+
+  // Earnings roll-up so the notary sees exactly what they realised, what Nota
+  // took as commission (the real server-charged fee), and their net — plus what
+  // is still in progress. All figures come from the completed retained acts.
+  function ncEarnings(email) {
+    var items = email ? ncRetainedFor(email) : [];
+    var e = { done: 0, realized: 0, commission: 0, net: 0, pending: 0, pendingVal: 0 };
+    items.forEach(function (it) {
+      if (it.completed) {
+        e.done++;
+        e.realized += Number(it.actAmount) || 0;
+        e.commission += (Number(it.commissionCents) || 0) / 100;
+      } else {
+        e.pending++;
+        e.pendingVal += Number(it.montant) || 0;
+      }
+    });
+    e.net = e.realized - e.commission;
+    return e;
+  }
+  function ncRenderEarnings() {
+    var box = $('notary-earnings'); if (!box) return; clear(box);
+    var e = ncEarnings(nc.email);
+    function tile(k, v, cls) {
+      var t = el('div', 'nc-stat' + (cls ? ' ' + cls : ''));
+      t.appendChild(el('div', 'nc-stat-v', v));
+      t.appendChild(el('div', 'nc-stat-k', k));
+      return t;
+    }
+    var grid = el('div', 'nc-stats');
+    grid.appendChild(tile('Actes complétés', String(e.done)));
+    grid.appendChild(tile('Valeur réalisée', D.money(e.realized)));
+    grid.appendChild(tile('Commission Nota', D.money(e.commission)));
+    grid.appendChild(tile('Net à vous', D.money(e.net), 'nc-stat-net'));
+    box.appendChild(grid);
+    if (e.pending) {
+      box.appendChild(el('p', 'help', e.pending + ' dossier' + (e.pending > 1 ? 's' : '') + ' à compléter · valeur estimée ' + D.money(e.pendingVal) + '. La commission n’est prélevée qu’à la signature, sur la valeur confirmée.'));
+    } else if (!e.done) {
+      box.appendChild(el('p', 'help', 'Vos revenus et la commission Nota s’afficheront ici dès votre premier acte complété.'));
+    }
   }
 
   // Explicit sign-out purges the cached retained client PII (courriel/dossier),
