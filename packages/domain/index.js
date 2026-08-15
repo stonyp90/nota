@@ -543,8 +543,8 @@
       total: list.length,
       ouvertes: open.length,
       retenues: list.length - open.length,
-      // Whole percent of the carnet a notary has already taken — the proof the
-      // marketplace clears, shown as-is when there is nothing to divide.
+      // Share of the carnet a notary has already taken, 0–100 (whole numbers) —
+      // the proof the marketplace clears. 0 when there is nothing to divide.
       tauxRetenue: list.length ? Math.round(((list.length - open.length) / list.length) * 100) : 0,
       prochaineDispo: dispo.length ? dispo[0] : null,
       meilleure: open.length ? Math.max.apply(null, open.map((b) => Math.round(Number(b.montant) || 0))) : null,

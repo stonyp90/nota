@@ -498,6 +498,72 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Hero pulse — the live market beside the hero copy
+  // ---------------------------------------------------------------------------
+  // The client's first question is "combien j'offre ?". Answer it with the
+  // month's own numbers: the median amount proposed per act, its volume, and
+  // how much of the carnet a notary has already taken. Aggregation is the
+  // domain's (D.carnetPulse); this only formats and wires each row to the
+  // service filter of the carnet below.
+  function plural(n, word) { return n + ' ' + word + (n === 1 ? '' : 's'); }
+
+  function pulseRow(s, active) {
+    var row = el('button', 'pulse-row' + (active ? ' is-on' : ''));
+    row.type = 'button';
+    row.dataset.svc = s.id;
+    row.setAttribute('aria-pressed', active ? 'true' : 'false');
+    row.title = active ? 'Retirer le filtre ' + s.nom : 'Voir seulement : ' + s.nom;
+
+    var name = el('span', 'pulse-svc');
+    var dot = el('span', 'pulse-dot');
+    dot.style.background = 'var(--svc-' + s.id + ')';
+    name.appendChild(dot);
+    name.appendChild(document.createTextNode(s.nom.split(' ')[0]));
+    row.appendChild(name);
+
+    // Median when the month has offers, the service floor when it has none —
+    // never an empty cell, and never a mean (one 9 000 $ urgence must not
+    // masquerade as the going rate).
+    var amount = el('span', 'pulse-amount', D.money(s.median == null ? s.prixDepart : s.median));
+    if (s.median == null) amount.classList.add('is-floor');
+    row.appendChild(amount);
+
+    row.appendChild(el('span', 'pulse-meta',
+      s.total === 0 ? 'aucune offre ce mois' : plural(s.total, 'offre') + ' · ' + s.retenues + ' retenue' + (s.retenues === 1 ? '' : 's')));
+    row.appendChild(el('span', 'pulse-sub', s.median == null ? 'prix de départ' : 'médiane'));
+    return row;
+  }
+
+  function renderPulse() {
+    var rows = $('pulse-rows');
+    if (!rows) return;
+    var p = D.carnetPulse(state.monthBids, todayISO());
+
+    var m = $('pulse-month');
+    if (m) m.textContent = monthTitle(state.anchor);
+
+    clear(rows);
+    p.services.forEach(function (s) {
+      rows.appendChild(pulseRow(s, state.filters.service === s.id));
+    });
+
+    // Proof the marketplace clears — the one number the calendar itself cannot
+    // show at a glance.
+    var foot = $('pulse-foot');
+    if (foot) {
+      if (p.total === 0) {
+        foot.textContent = 'Aucune demande ce mois-ci — proposez la vôtre : les notaires de Québec la verront.';
+      } else if (p.retenues === 0) {
+        foot.textContent = 'Aucune demande encore retenue ce mois — le carnet est grand ouvert.';
+      } else {
+        foot.textContent = p.retenues + ' des ' + plural(p.total, 'demande') + ' de ce mois '
+          + (p.retenues === 1 ? 'a' : 'ont') + ' déjà été retenue' + (p.retenues === 1 ? '' : 's')
+          + ' par un notaire (' + p.tauxRetenue + ' %).';
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Agenda rendering
   // ---------------------------------------------------------------------------
   function renderAgenda() {
@@ -577,6 +643,10 @@
   function renderActiveView() {
     var visible = applyFilters(state.monthBids);
     updateFilterSummary(visible.length, visible);
+    // The pulse reads the WHOLE month (not `visible`): it is the market
+    // reference the filters are applied against, so filtering must not
+    // rewrite it — only highlight the row that is active.
+    renderPulse();
     if (state.view === 'liste') renderAgenda();
     else if (state.view === 'carte') renderCarte();
     else renderCalendar();
@@ -2362,6 +2432,19 @@
 
     // Filters — chip + segmented groups, single-select each
     $('chips-service').addEventListener('click', function (e) { var b = e.target.closest('.chip'); if (!b) return; setGroupActive(this, b); state.filters.service = b.dataset.svc; afterFilterChange(); });
+    // Hero pulse rows are a second entry point into the same service filter:
+    // click the act you came for, the carnet below narrows to it; click again
+    // to clear. The chip group stays in sync so there is one source of truth.
+    var pulse = $('pulse-rows');
+    if (pulse) {
+      pulse.addEventListener('click', function (e) {
+        var row = e.target.closest('.pulse-row');
+        if (!row) return;
+        state.filters.service = state.filters.service === row.dataset.svc ? '' : row.dataset.svc;
+        syncFilterChips();
+        afterFilterChange();
+      });
+    }
     $('chips-montant').addEventListener('click', function (e) { var b = e.target.closest('.chip'); if (!b) return; setGroupActive(this, b); state.filters.min = b.dataset.min ? Number(b.dataset.min) : null; afterFilterChange(); });
     $('seg-statut').addEventListener('click', function (e) { var b = e.target.closest('.seg-btn'); if (!b) return; setGroupActive(this, b); state.filters.statut = b.dataset.statut; afterFilterChange(); });
     $('seg-sort').addEventListener('click', function (e) { var b = e.target.closest('.seg-btn'); if (!b) return; setGroupActive(this, b); state.filters.sort = b.dataset.sort; afterFilterChange(); });

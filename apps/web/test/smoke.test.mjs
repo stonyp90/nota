@@ -595,3 +595,55 @@ test('EDGE (UI): a mixed open/retained day keeps the open headline + a split sta
   assert.ok(cell.querySelector('.cal-top:not(.is-cleared)'), 'open headline shown, not struck');
   assert.ok(cell.querySelector('.cal-status-open') && cell.querySelector('.cal-status-taken'), 'split open/taken meter');
 });
+
+test('the hero pulse shows the month median per service and filters the carnet', async () => {
+  const ctx = await boot();
+  const iso = dayOf(ctx.anchor, '15');
+  const mk = (id, serviceId, montant, status) => ({
+    id, serviceId, dateISO: iso, montant, tier: 'standard',
+    status: status || ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso,
+  });
+  // testament: 700 / 900 / 2000 -> median 900, one of them retained.
+  // procuration: a single 400 offer. refinancement: none this month.
+  await reseed(ctx, [
+    mk('t1', 'testament', 700),
+    mk('t2', 'testament', 900, ctx.D.STATUS.RETENUE),
+    mk('t3', 'testament', 2000),
+    mk('p1', 'procuration', 400),
+  ]);
+
+  const rows = [...ctx.doc.querySelectorAll('#pulse-rows .pulse-row')];
+  assert.equal(rows.length, ctx.D.SERVICES.length, 'one row per service, always');
+  const byId = Object.fromEntries(rows.map((r) => [r.dataset.svc, r]));
+
+  // The median (not the mean: 1200) is what a client is shown.
+  assert.equal(byId.testament.querySelector('.pulse-amount').textContent, ctx.D.money(900));
+  assert.match(byId.testament.querySelector('.pulse-meta').textContent, /3 offres · 1 retenue$/);
+  assert.equal(byId.procuration.querySelector('.pulse-amount').textContent, ctx.D.money(400));
+
+  // A service with no offer this month falls back to its floor, flagged as such.
+  const refi = byId.refinancement;
+  assert.equal(refi.querySelector('.pulse-amount').textContent, ctx.D.money(ctx.D.serviceById('refinancement').prixDepart));
+  assert.ok(refi.querySelector('.pulse-amount').classList.contains('is-floor'), 'floor, not a market median');
+  assert.match(refi.querySelector('.pulse-meta').textContent, /aucune offre/);
+
+  // The foot states how much of the carnet notaries have already taken.
+  assert.match(ctx.doc.getElementById('pulse-foot').textContent, /1 des 4 demandes .* \(25 %\)\./);
+  assert.match(ctx.doc.getElementById('pulse-month').textContent, /\d{4}$/, 'names the displayed month');
+
+  // Clicking a row filters the carnet to that service, and syncs the chip group.
+  byId.procuration.click();
+  await wait(30);
+  assert.equal(ctx.doc.getElementById('result-count').textContent, '1 offre ce mois');
+  assert.equal(ctx.doc.querySelector('#chips-service .chip[data-svc="procuration"]').getAttribute('aria-pressed'), 'true');
+  const onRow = ctx.doc.querySelector('#pulse-rows .pulse-row[data-svc="procuration"]');
+  assert.equal(onRow.getAttribute('aria-pressed'), 'true');
+  // The pulse itself keeps reading the WHOLE month — it is the reference, not a result.
+  assert.equal(ctx.doc.querySelector('#pulse-rows .pulse-row[data-svc="testament"] .pulse-amount').textContent, ctx.D.money(900));
+
+  // Clicking the active row again clears the filter.
+  onRow.click();
+  await wait(30);
+  assert.equal(ctx.doc.getElementById('result-count').textContent, '4 offres ce mois');
+  assert.equal(ctx.doc.querySelector('#chips-service .chip[data-svc=""]').getAttribute('aria-pressed'), 'true');
+});
