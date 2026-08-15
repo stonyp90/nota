@@ -855,7 +855,19 @@ dialog::backdrop { background: var(--backdrop); }
 #pane-notaires .nota-guarantee { order: 4; }
 
 #notary-console { margin-top: 16px; max-width: none; }
-.nc-auth { max-width: 560px; }
+/* Sign-in gate: form on the left, a concise "what you get" reassurance on the right,
+   so the panel reads as complete and reinforces value at the decision point. */
+.nc-gate { max-width: 940px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 300px); gap: 24px 44px; align-items: start; }
+.nc-gate-main { min-width: 0; }
+.nc-gate-aside { border-left: 1px solid var(--border); padding-left: 40px; }
+.nc-gate-aside-title { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-muted); margin-bottom: 14px; }
+.nc-benefits { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 13px; }
+.nc-benefits li { position: relative; padding-left: 26px; font-size: 13.5px; line-height: 1.45; color: var(--ink); }
+.nc-benefits li::before { content: '✓'; position: absolute; left: 0; top: -1px; color: var(--brand); font-weight: 800; }
+@media (max-width: 760px) {
+  .nc-gate { grid-template-columns: 1fr; gap: 20px; }
+  .nc-gate-aside { border-left: 0; padding-left: 0; border-top: 1px solid var(--border); padding-top: 18px; }
+}
 .nc-auth .form-row { margin-bottom: 12px; }
 .nc-auth-cta { width: 100%; }
 .nc-auth-fine { margin-top: 10px; }
