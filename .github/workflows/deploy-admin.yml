@@ -25,12 +25,16 @@
 name: Deploy Admin
 
 on:
+  # Manual-only until the admin surface is actually stood up (Terraform applied
+  # with enable_admin = true + the ADMIN_* repo variables set). Re-enable the
+  # push trigger below once the admin-production environment + role/bucket exist,
+  # otherwise every apps/api push fails this workflow with no admin infra to ship to.
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - apps/admin/**
-      - apps/api/**
+  # push:
+  #   branches: [main]
+  #   paths:
+  #     - apps/admin/**
+  #     - apps/api/**
 
 # OIDC needs id-token: write to mint the token; contents: read to checkout.
 permissions:
