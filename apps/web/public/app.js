@@ -408,20 +408,22 @@
         meter.appendChild(oSeg); meter.appendChild(tSeg);
         cell.appendChild(meter);
 
-        // Per-service mix — how many of each act sit on this day. A proportional
-        // stacked bar is identical in size at 1 bid or 2000; the exact counts live
-        // in each segment's tooltip + the cell aria-label, so it never overflows.
+        // Per-service counts — how many of each act sit on this day, each number
+        // colour-coded by service (a dot + the count). The total is the count
+        // badge; these break it down. Only services present that day are shown.
         var svcCounts = D.SERVICES.map(function (s) {
           return { id: s.id, short: s.nom.split(' ')[0], n: dayBids.filter(function (b) { return b.serviceId === s.id; }).length };
         }).filter(function (c) { return c.n > 0; });
         if (svcCounts.length) {
-          var svcBar = el('div', 'cal-svc-bar'); svcBar.setAttribute('aria-hidden', 'true');
+          var svcRow = el('div', 'cal-svc-counts'); svcRow.setAttribute('aria-hidden', 'true');
           svcCounts.forEach(function (c) {
-            var seg = el('span', 'cal-svc-seg'); seg.dataset.svc = c.id;
-            seg.style.flexGrow = String(c.n); seg.title = c.short + ' : ' + c.n;
-            svcBar.appendChild(seg);
+            var item = el('span', 'cal-svc-count'); item.dataset.svc = c.id;
+            item.title = c.short + ' : ' + c.n;
+            item.appendChild(el('span', 'cal-svc-dot'));
+            item.appendChild(document.createTextNode(String(c.n)));
+            svcRow.appendChild(item);
           });
-          cell.appendChild(svcBar);
+          cell.appendChild(svcRow);
           var mix = svcCounts.map(function (c) { return c.n + ' ' + c.short.toLowerCase(); }).join(', ');
           cell.setAttribute('aria-label', (cell.getAttribute('aria-label') || dayTitle(iso)) + ' — ' + mix);
         }
