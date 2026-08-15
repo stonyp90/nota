@@ -92,7 +92,7 @@
     selectedDate: null,
     focusDate: todayISO(),
     tab: 'carnet',
-    offer: { serviceId: '', dateISO: '', montant: 0, anonyme: true },
+    offer: { serviceId: '', dateISO: '', montant: 0, anonyme: true, pricing: {} },
   };
 
   // ---------------------------------------------------------------------------
@@ -611,7 +611,7 @@
       if (!sel) return;
       D.SERVICES.forEach(function (s) {
         var o = document.createElement('option');
-        o.value = s.id; o.textContent = s.nom + ' — ' + D.money(s.prixDepart);
+        o.value = s.id; o.textContent = s.nom + ' — à partir de ' + D.money(s.prixDepart);
         sel.appendChild(o);
       });
     });
@@ -639,18 +639,116 @@
     });
   }
 
+  // The dynamic floor for the current offer, from the client's pricing answers
+  // (== the flat base when nothing is answered). Everything in the booking form
+  // — slider bounds, the recommended pre-fill, the "× base" note — reads this.
+  function currentBase() {
+    var b = D.computeBasePrice(state.offer.serviceId, state.offer.pricing);
+    if (b != null) return b;
+    var svc = D.serviceById(state.offer.serviceId);
+    return svc ? svc.prixDepart : 0;
+  }
+
+  // Render the service's pricing criteria INTO the booking flow, so answering
+  // them (the same questions the notary needs) refines the price live — "the
+  // document merged with the process". Optional: unanswered = base price, so
+  // one-tap booking still works.
+  function renderOfferCriteria(serviceId) {
+    var box = $('o-criteria');
+    var step = $('o-criteria-step');
+    if (!box) return;
+    clear(box);
+    var svc = D.serviceById(serviceId);
+    var criteria = (svc && svc.pricing && svc.pricing.criteria) || [];
+    if (step) step.hidden = criteria.length === 0;
+    criteria.forEach(function (c) {
+      var row = el('div', 'crit-row');
+      if (c.type === 'flag') {
+        var lab = el('label', 'crit-flag');
+        var cb = document.createElement('input');
+        cb.type = 'checkbox'; cb.id = 'crit-' + c.id; cb.checked = !!state.offer.pricing[c.id];
+        cb.addEventListener('change', function () { setCriterion(c.id, cb.checked); });
+        lab.appendChild(cb);
+        var txt = el('span', 'crit-text');
+        txt.appendChild(el('span', 'crit-label', c.label));
+        if (c.aide) txt.appendChild(el('span', 'help', c.aide));
+        lab.appendChild(txt);
+        row.appendChild(lab);
+      } else if (c.type === 'choice') {
+        row.appendChild(el('span', 'crit-label', c.label));
+        var grp = el('div', 'crit-choices');
+        (c.options || []).forEach(function (opt) {
+          var b = el('button', 'chip', opt.label);
+          b.type = 'button';
+          var on = state.offer.pricing[c.id] === opt.id;
+          b.setAttribute('aria-pressed', on ? 'true' : 'false');
+          b.classList.toggle('is-on', on);
+          b.addEventListener('click', function () {
+            grp.querySelectorAll('.chip').forEach(function (x) { x.classList.remove('is-on'); x.setAttribute('aria-pressed', 'false'); });
+            b.classList.add('is-on'); b.setAttribute('aria-pressed', 'true');
+            setCriterion(c.id, opt.id);
+          });
+          grp.appendChild(b);
+        });
+        row.appendChild(grp);
+        if (c.aide) row.appendChild(el('span', 'help', c.aide));
+      } else if (c.type === 'bracket') {
+        var lbl = el('label', 'crit-label', c.label);
+        lbl.setAttribute('for', 'crit-' + c.id);
+        row.appendChild(lbl);
+        var inp = document.createElement('input');
+        inp.type = 'number'; inp.id = 'crit-' + c.id; inp.min = '0'; inp.step = '1000';
+        inp.inputMode = 'numeric'; inp.placeholder = c.unit === '$' ? '350 000' : '';
+        if (state.offer.pricing[c.id] != null) inp.value = state.offer.pricing[c.id];
+        inp.addEventListener('input', function () {
+          setCriterion(c.id, inp.value === '' ? undefined : Number(inp.value));
+        });
+        row.appendChild(inp);
+        if (c.aide) row.appendChild(el('span', 'help', c.aide));
+      }
+      box.appendChild(row);
+    });
+  }
+
+  function setCriterion(id, value) {
+    if (value === undefined || value === '' || value === false) delete state.offer.pricing[id];
+    else state.offer.pricing[id] = value;
+    onCriteriaChange();
+  }
+
+  // A criteria change re-derives the base: retune the slider bounds + the
+  // pre-fill (only bumping the amount when it now falls below the new floor, so
+  // a manual choice is preserved), refresh the note, and re-validate.
+  function onCriteriaChange() {
+    var svc = D.serviceById(state.offer.serviceId);
+    if (!svc) return;
+    var base = currentBase();
+    var amt = $('o-amount');
+    amt.min = base; amt.max = base * D.PREMIUM_CAP;
+    if (Number(amt.value) < base) {
+      var rec = D.recommendedAmount(svc.id, state.offer.dateISO, todayISO(), state.offer.pricing);
+      amt.value = rec != null ? rec : base;
+    }
+    var bn = $('o-base-note');
+    if (bn) bn.textContent = 'Prix de départ ajusté : ' + D.money(base) + '.';
+    onAmountChange();
+  }
+
   function onOfferServiceChange() {
     var svc = D.serviceById($('o-service').value);
     state.offer.serviceId = svc ? svc.id : '';
+    state.offer.pricing = {}; // reset criteria for the newly-chosen act
     $('o-service-help').textContent = svc ? svc.description : '';
+    renderOfferCriteria(state.offer.serviceId);
     var amt = $('o-amount');
     if (svc) {
-      amt.min = svc.prixDepart; amt.max = svc.prixDepart * D.PREMIUM_CAP; amt.step = 5;
+      var base = currentBase();
+      amt.min = base; amt.max = base * D.PREMIUM_CAP; amt.step = 5;
       amt.disabled = false;
       // Pre-fill the recommended (mid-tier) offer so a client can book in one tap
       // instead of leaving the gauge at the floor ("peu susceptible d'être retenue").
-      var rec = D.recommendedAmount(svc.id, state.offer.dateISO, todayISO());
-      amt.value = rec != null ? rec : svc.prixDepart;
+      var rec = D.recommendedAmount(svc.id, state.offer.dateISO, todayISO(), state.offer.pricing);
+      amt.value = rec != null ? rec : base;
     } else { amt.disabled = true; amt.value = 0; }
     onAmountChange();
   }
@@ -669,7 +767,7 @@
       $('tp-text').textContent = 'Signature ' + when + ' · le marché se conclut ici entre ' +
         t.apercuMin.toFixed(1) + '× et ' + t.apercuMax.toFixed(1) + '×.';
       // Re-tune the pre-filled amount to this date's tier.
-      var rec = D.recommendedAmount(state.offer.serviceId, date, todayISO());
+      var rec = D.recommendedAmount(state.offer.serviceId, date, todayISO(), state.offer.pricing);
       if (rec != null) $('o-amount').value = rec;
     } else { tp.hidden = true; }
     onAmountChange();
@@ -685,8 +783,9 @@
       // Screen readers otherwise announce the raw slider number (e.g. "2000");
       // aria-valuetext gives the formatted amount ("2 000 $").
       $('o-amount').setAttribute('aria-valuetext', D.money(amt));
-      var mult = amt / svc.prixDepart;
-      $('o-mult').textContent = mult.toFixed(2) + '× le prix de départ (' + D.money(svc.prixDepart) + ')';
+      var base = currentBase();
+      var mult = amt / base;
+      $('o-mult').textContent = mult.toFixed(2) + '× le prix de départ (' + D.money(base) + ')';
       if (D.isISODate(state.offer.dateISO)) {
         var tierId = D.tierForDays(Math.max(0, D.daysBetween(todayISO(), state.offer.dateISO)));
         var g = acceptance(mult, tierId);
@@ -719,7 +818,7 @@
   function validateOfferUI() {
     var o = state.offer;
     var courriel = ($('o-courriel') && $('o-courriel').value || '').trim();
-    var v = D.validateOffer({ serviceId: o.serviceId, dateISO: o.dateISO, montant: o.montant, courriel: courriel, todayISO: todayISO() });
+    var v = D.validateOffer({ serviceId: o.serviceId, dateISO: o.dateISO, montant: o.montant, courriel: courriel, pricing: o.pricing, todayISO: todayISO() });
     var s = $('offer-submit');
     // Editing after a publish resets the CTA out of its success/busy state.
     if (!s.getAttribute('aria-busy') && s.textContent.trim() !== 'Publier mon offre') {
@@ -774,6 +873,9 @@
     // The files themselves are not sent here — only the values already saved.
     var snapshot = dossierFor(o.serviceId);
     if (snapshot && Object.keys(snapshot).length) payload.dossier = snapshot;
+    // The pricing criteria the client answered (part of the dossier); the API
+    // recomputes the floor from these and stores them privately on the bid.
+    if (o.pricing && Object.keys(o.pricing).length) payload.pricing = o.pricing;
     var res = await store.createBid(payload);
     var errBox = $('offer-errors');
     if (!res.ok) {

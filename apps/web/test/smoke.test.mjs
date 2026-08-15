@@ -159,8 +159,8 @@ test('offer form: services populated, anon default on, slider capped at prixDepa
   const amt = $(doc, 'o-amount');
   assert.equal(amt.disabled, false);
   const refi = D.serviceById('refinancement');
-  assert.equal(amt.max, String(refi.prixDepart * D.PREMIUM_CAP)); // 950 * 10 = 9500
-  assert.equal(amt.max, '9500');
+  assert.equal(amt.max, String(refi.prixDepart * D.PREMIUM_CAP)); // 2000 * 10 = 20000
+  assert.equal(amt.max, '20000');
 });
 
 // 8. A valid service+date+amount combination enables the submit button.
@@ -179,7 +179,7 @@ test('a valid offer combination enables #offer-submit', async () => {
   fire(win, date, 'input');
 
   const amt = $(doc, 'o-amount');
-  amt.value = '2000'; // between 950 and 9500
+  amt.value = '2000'; // at the refinancement floor (2000), within the 20000 cap
   fire(win, amt, 'input');
 
   assert.equal(submit.disabled, false);
@@ -252,6 +252,28 @@ test('courriel field is optional and stays private in the local store', async ()
   });
   assert.equal(res.ok, true);
   assert.equal(res.bid.courriel, undefined);
+});
+
+// 12b. Pricing criteria are woven into the booking flow and adjust the floor live
+//      ("the document merged with the process").
+test('offer criteria render and a flag raises the dynamic floor', async () => {
+  const { win, doc } = await boot();
+  const sel = $(doc, 'o-service');
+  sel.value = 'refinancement';
+  fire(win, sel, 'change');
+
+  assert.equal($(doc, 'o-criteria-step').hidden, false);
+  assert.ok($(doc, 'crit-valeur_pret'), 'loan-value input rendered');
+  const coemp = $(doc, 'crit-coemprunteur');
+  assert.ok(coemp, 'co-borrower flag rendered');
+
+  const amt = $(doc, 'o-amount');
+  assert.equal(Number(amt.min), 2000); // base floor before any criterion
+
+  coemp.checked = true;
+  fire(win, coemp, 'change'); // +75 -> dynamic floor rises
+  assert.equal(Number(amt.min), 2075);
+  assert.equal(Number(amt.max), 20750); // (2000 + 75) * 10
 });
 
 // 13. Notary console: the auth gate renders, the authed view is gated until

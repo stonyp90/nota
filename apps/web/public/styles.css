@@ -587,6 +587,16 @@ dialog::backdrop { background: rgb(15 23 42 / 0.45); }
 .day-bids .bid-row:first-child { border-top: 0; }
 .day-book { padding: 16px 22px 22px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 16px; }
 .book-step { display: flex; flex-direction: column; gap: 8px; }
+/* Pricing criteria woven into the booking flow (dossier merged with the process). */
+.o-criteria { display: flex; flex-direction: column; gap: 10px; }
+.crit-row { display: flex; flex-direction: column; gap: 5px; }
+.crit-flag { display: flex; align-items: flex-start; gap: 9px; cursor: pointer; }
+.crit-flag input { margin-top: 3px; flex: none; accent-color: var(--brand); }
+.crit-text { display: flex; flex-direction: column; gap: 1px; }
+.crit-label { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+.crit-choices { display: flex; gap: 6px; flex-wrap: wrap; }
+.crit-row input[type='number'] { max-width: 180px; }
+#o-base-note { color: var(--brand); font-weight: 600; }
 .book-step-lbl { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; color: var(--ink); }
 .book-opt { color: var(--ink-muted); font-weight: 600; font-size: 12px; }
 #o-service-chips { display: flex; flex-wrap: wrap; gap: 8px; }

@@ -29,17 +29,17 @@ test('choice criteria add the chosen option (procuration portée)', () => {
 });
 
 test('bracket criteria add the first bracket the value falls in (refinancement loan value)', () => {
-  assert.equal(computeBasePrice('refinancement', { valeur_pret: 250000 }), 950);          // <=300k -> +0
-  assert.equal(computeBasePrice('refinancement', { valeur_pret: 300000 }), 950);          // boundary inclusive
-  assert.equal(computeBasePrice('refinancement', { valeur_pret: 450000 }), 950 + 150);    // <=600k
-  assert.equal(computeBasePrice('refinancement', { valeur_pret: 900000 }), 950 + 350);    // open top bracket
-  assert.equal(computeBasePrice('refinancement', { valeur_pret: 900000, coemprunteur: true }), 950 + 350 + 75);
-  assert.equal(computeBasePrice('refinancement', {}), 950);                                // unanswered -> base bracket
+  assert.equal(computeBasePrice('refinancement', { valeur_pret: 250000 }), 2000);          // <=300k -> +0
+  assert.equal(computeBasePrice('refinancement', { valeur_pret: 300000 }), 2000);          // boundary inclusive
+  assert.equal(computeBasePrice('refinancement', { valeur_pret: 450000 }), 2000 + 150);    // <=600k
+  assert.equal(computeBasePrice('refinancement', { valeur_pret: 900000 }), 2000 + 350);    // open top bracket
+  assert.equal(computeBasePrice('refinancement', { valeur_pret: 900000, coemprunteur: true }), 2000 + 350 + 75);
+  assert.equal(computeBasePrice('refinancement', {}), 2000);                                // unanswered -> base bracket
 });
 
 test('unknown service returns null; a bad bracket value is ignored, not NaN', () => {
   assert.equal(computeBasePrice('inconnu', {}), null);
-  assert.equal(computeBasePrice('refinancement', { valeur_pret: 'oops' }), 950);
+  assert.equal(computeBasePrice('refinancement', { valeur_pret: 'oops' }), 2000);
 });
 
 test('validateOffer enforces the DYNAMIC floor (a complex act raises the minimum)', () => {
@@ -58,10 +58,10 @@ test('validateOffer enforces the DYNAMIC floor (a complex act raises the minimum
 
 test('validateOffer premium cap scales with the dynamic base', () => {
   const today = '2026-08-14';
-  // refinancement with a big loan: base 1300; cap = 13000; 13001 must fail.
-  const over = validateOffer({ serviceId: 'refinancement', dateISO: '2026-09-20', montant: 13001, todayISO: today, pricing: { valeur_pret: 900000 } });
+  // refinancement with a big loan: base 2350; cap = 23500; 23501 must fail.
+  const over = validateOffer({ serviceId: 'refinancement', dateISO: '2026-09-20', montant: 23501, todayISO: today, pricing: { valeur_pret: 900000 } });
   assert.ok(over.errors.some((e) => e.code === 'plafond_depasse'));
-  const under = validateOffer({ serviceId: 'refinancement', dateISO: '2026-09-20', montant: 13000, todayISO: today, pricing: { valeur_pret: 900000 } });
+  const under = validateOffer({ serviceId: 'refinancement', dateISO: '2026-09-20', montant: 23500, todayISO: today, pricing: { valeur_pret: 900000 } });
   assert.equal(under.ok, true);
 });
 

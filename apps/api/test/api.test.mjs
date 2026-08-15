@@ -27,11 +27,11 @@ test('GET /health returns the server date', async () => {
 
 test('POST /bids accepts a valid offer and echoes the derived tier', async () => {
   const a = app();
-  const res = await post(a, { serviceId: 'refinancement', dateISO: '2026-08-17', montant: 1500 });
+  const res = await post(a, { serviceId: 'refinancement', dateISO: '2026-08-17', montant: 3000 });
   assert.equal(res.statusCode, 201);
   const { bid } = parse(res);
   assert.equal(bid.tier, 'prioritaire');
-  assert.equal(bid.montant, 1500);
+  assert.equal(bid.montant, 3000);
   assert.equal(bid.status, 'ouverte');
 });
 
@@ -79,7 +79,7 @@ test('server never trusts a client-sent tier or premium', async () => {
   const res = await post(a, { serviceId: 'refinancement', dateISO: '2026-08-13', montant: 2000, tier: 'standard', premium: 1.0 });
   const { bid } = parse(res);
   assert.equal(bid.tier, 'extreme'); // 1 day away, recomputed server-side
-  assert.ok(Math.abs(bid.premium - 2000 / 950) < 1e-9);
+  assert.ok(Math.abs(bid.premium - 2000 / 2000) < 1e-9);
 });
 
 test('anonymity is enforced server-side: name never leaks when anonyme', async () => {

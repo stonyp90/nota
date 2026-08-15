@@ -23,7 +23,7 @@ async function postN(a, n) {
     const res = await a.handle({
       method: 'POST',
       path: '/bids',
-      body: JSON.stringify({ serviceId: 'refinancement', dateISO: '2026-09-' + day, montant: 1000 + (i % 60) * 10 }),
+      body: JSON.stringify({ serviceId: 'refinancement', dateISO: '2026-09-' + day, montant: 2000 + (i % 60) * 10 }),
     });
     if (res.statusCode === 201) ok++;
   }
@@ -39,9 +39,9 @@ for (const N of [5, 10, 100, 1000]) {
     const { bids } = JSON.parse(res.body);
     assert.equal(bids.length, N, `GET should return exactly ${N} bids`);
     // ranking/aggregation must not blow up at scale
-    assert.ok(bids.every((b) => b.tier && b.montant >= 950), 'every bid server-validated');
-    // amounts within the refinancement cap
-    assert.ok(bids.every((b) => b.montant <= 9500), 'no bid exceeds the 10x cap');
+    assert.ok(bids.every((b) => b.tier && b.montant >= 2000), 'every bid server-validated');
+    // amounts within the refinancement cap (base 2000 -> 10x = 20000)
+    assert.ok(bids.every((b) => b.montant <= 20000), 'no bid exceeds the 10x cap');
   });
 }
 

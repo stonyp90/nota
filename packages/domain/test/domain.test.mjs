@@ -32,7 +32,7 @@ test('services: acte de vente is intentionally absent', () => {
 test('services: starting prices are the canonical values', () => {
   assert.equal(D.serviceById('testament').prixDepart, 650);
   assert.equal(D.serviceById('procuration').prixDepart, 295);
-  assert.equal(D.serviceById('refinancement').prixDepart, 950);
+  assert.equal(D.serviceById('refinancement').prixDepart, 2000);
 });
 
 test('services: every service has documents and fields with help text', () => {
@@ -88,13 +88,13 @@ test('dates: daysBetween and addDays are inverse and tz-stable', () => {
 });
 
 test('validateOffer: a clean prioritaire offer', () => {
-  const r = D.validateOffer({ serviceId: 'refinancement', dateISO: '2026-08-17', montant: 1500, todayISO: TODAY });
+  const r = D.validateOffer({ serviceId: 'refinancement', dateISO: '2026-08-17', montant: 3000, todayISO: TODAY });
   assert.equal(r.ok, true);
   assert.equal(r.errors.length, 0);
   assert.equal(r.tier, 'prioritaire');
   assert.equal(r.days, 5);
-  assert.equal(r.prixDepart, 950);
-  assert.ok(Math.abs(r.premium - 1500 / 950) < 1e-9);
+  assert.equal(r.prixDepart, 2000);
+  assert.ok(Math.abs(r.premium - 3000 / 2000) < 1e-9);
 });
 
 test('validateOffer: rejects below starting price', () => {
@@ -270,9 +270,9 @@ test('dueReminders: the dossier_incomplet hook fires for an incomplete open lead
 });
 
 test('recommendedAmount: mid-tier default, within bounds, one-tap booking', () => {
-  // refinancement 950, 5 days out -> prioritaire (1.6-2.2, mid 1.9) -> 1805 (round 5)
+  // refinancement 2000, 5 days out -> prioritaire (1.6-2.2, mid 1.9) -> 3800 (round 5)
   const t = D.tierById('prioritaire');
-  const expected = Math.round((950 * (t.apercuMin + t.apercuMax) / 2) / 5) * 5;
+  const expected = Math.round((2000 * (t.apercuMin + t.apercuMax) / 2) / 5) * 5;
   assert.equal(D.recommendedAmount('refinancement', '2026-08-17', TODAY), expected);
   // always within [floor, 10x floor]
   for (const s of D.SERVICES) {

@@ -97,11 +97,15 @@
     {
       id: 'refinancement',
       nom: 'Refinancement hypothécaire',
-      prixDepart: 950,
+      // Refinancement is priced well above the other acts: it is the most work
+      // (loan act + hypothec publication + title/certificate review) and carries
+      // real value at stake, so the floor starts at 2000 $ and rises with the
+      // loan value below.
+      prixDepart: 2000,
       description:
         'Acte de prêt et publication de l’hypothèque lors d’un refinancement.',
       pricing: {
-        base: 950,
+        base: 2000,
         criteria: [
           {
             id: 'valeur_pret', type: 'bracket', label: 'Valeur du prêt', aide: 'Le montant du nouveau financement.', unit: '$',
