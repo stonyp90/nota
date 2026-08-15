@@ -846,8 +846,23 @@ dialog::backdrop { background: var(--backdrop); }
 .h-sub { font-size: 16px; font-weight: 700; margin-bottom: 12px; }
 
 /* --- Notary console ------------------------------------------------------ */
+/* Notary page order: lead with the CONSOLE (the sign-in / working surface), then
+   the "carnet in your agenda" prospecting card below it. Reordered with flex order
+   so the sign-in is the first thing a notary meets — no risky DOM move. */
+#pane-notaires > .wrap { display: flex; flex-direction: column; }
+#pane-notaires #notary-console { order: 2; }
+#pane-notaires .notary-carnet { order: 3; }
+#pane-notaires .nota-guarantee { order: 4; }
+
 #notary-console { margin-top: 16px; max-width: none; }
+.nc-auth { max-width: 560px; }
 .nc-auth .form-row { margin-bottom: 12px; }
+.nc-auth-cta { width: 100%; }
+.nc-auth-fine { margin-top: 10px; }
+/* New-notary welcome: sign-in and sign-up share one email field; this callout
+   offers free onboarding when the address has no account yet. */
+.nc-signup { margin-top: 16px; max-width: 560px; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; border: 1px solid var(--brand); border-radius: var(--radius); background: var(--surface-inset); }
+.nc-signup-lead { margin: 0; font-size: 14px; line-height: 1.5; color: var(--ink); }
 .nc-bar {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   padding: 12px 14px; margin-bottom: 18px;

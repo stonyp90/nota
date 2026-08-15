@@ -1817,25 +1817,45 @@
   // ---------------------------------------------------------------------------
   // "Get paid": connect a Stripe payout account, driven by the signed-in notary's
   // email (the sign-up + console are one door now). Reuses /notaries/connect.
+  // Free notary signup = Stripe Connect onboarding. Shared by the auth-gate signup
+  // prompt (a new notary, from ncSignIn) and the in-console "connect payment"
+  // button. Redirects to Stripe's hosted onboarding; on failure calls onError(msg).
+  async function ncStartOnboard(email, onError) {
+    email = (email || '').trim();
+    if (!email) { onError && onError('Un courriel est requis.'); return false; }
+    try {
+      var r = await fetch(API_BASE + '/notaries/connect', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: email }),
+      });
+      var j = {}; try { j = await r.json(); } catch (e) {}
+      if (r.ok && j.url) { window.location.href = j.url; return true; }
+      onError && onError((j.errors && j.errors[0] && j.errors[0].message) || 'Inscription indisponible pour le moment.');
+    } catch (err) { onError && onError('Hors ligne — réessayez une fois en ligne.'); }
+    return false;
+  }
+
   async function ncConnectPayout() {
     if (!nc.email) { toast('Connectez-vous d’abord à votre console.'); return; }
     var box = $('notary-connect-errors');
     var btn = $('notary-connect');
     if (box) box.hidden = true;
     if (btn) { btn.disabled = true; btn.textContent = 'Redirection…'; }
-    function fail(msg) {
+    await ncStartOnboard(nc.email, function (msg) {
       if (box) { clear(box); box.hidden = false; box.appendChild(el('li', null, msg)); }
       if (btn) { btn.disabled = false; btn.textContent = 'Connecter mon compte de paiement'; }
-    }
-    try {
-      var r = await fetch(API_BASE + '/notaries/connect', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ email: nc.email }),
-      });
-      var j = {}; try { j = await r.json(); } catch (e) {}
-      if (r.ok && j.url) { window.location.href = j.url; return; }
-      fail((j.errors && j.errors[0] && j.errors[0].message) || 'Connexion du compte indisponible pour le moment.');
-    } catch (err) { fail('Hors ligne — réessayez.'); }
+    });
+  }
+
+  // A valid email with no active subscription isn't an error — it's a NEW notary.
+  // Offer free signup (which is what opens the console) instead of a dead end.
+  function ncShowSignup(email) {
+    ncSetErrors([]);
+    nc.pendingSignupEmail = email;
+    var who = $('notary-signup-email'); if (who) who.textContent = email;
+    var errs = $('notary-signup-errors'); if (errs) errs.hidden = true;
+    var btn = $('notary-signup-btn'); if (btn) { btn.disabled = false; btn.textContent = 'M’inscrire gratuitement →'; }
+    var prompt = $('notary-signup-prompt'); if (prompt) { prompt.hidden = false; prompt.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
   }
 
   // ---------------------------------------------------------------------------
@@ -1938,6 +1958,7 @@
 
   async function ncSignIn(email) {
     email = (email || '').trim();
+    var signup = $('notary-signup-prompt'); if (signup) signup.hidden = true; // reset on each attempt
     var r;
     try {
       r = await fetch(API_BASE + '/notary/session', {
@@ -1947,6 +1968,12 @@
     } catch (e) { ncSetErrors(['Console indisponible hors ligne. Réessayez une fois en ligne.']); return { ok: false }; }
     var j = {}; try { j = await r.json(); } catch (e) {}
     if (r.status !== 200) {
+      // Not a registered/active notary → this email just needs to sign up (free).
+      // Offer onboarding right here instead of a dead-end "abonnement requis".
+      if (r.status === 403 && j.errors && j.errors[0] && j.errors[0].code === 'abonnement_requis') {
+        ncShowSignup(email);
+        return { ok: false, signup: true };
+      }
       ncSetErrors((j.errors || [{ message: 'Connexion refusée.' }]).map(function (x) { return x.message; }));
       return { ok: false };
     }
@@ -2104,9 +2131,16 @@
   function ncRenderOpen() {
     var list = $('notary-open-list'); if (!list) return; clear(list);
     var empty = $('notary-open-empty');
-    if (!nc.open.length) { if (empty) empty.hidden = false; return; }
+    var head = $('notary-open-h');
+    // Soonest signature date first — a notary competes on TIME, so the nearest
+    // deadlines (the offers about to be grabbed) lead. Count in the heading.
+    var open = nc.open.slice().sort(function (a, b) {
+      return a.dateISO.localeCompare(b.dateISO) || (b.montant || 0) - (a.montant || 0);
+    });
+    if (head) head.textContent = open.length ? 'Demandes ouvertes · ' + open.length : 'Demandes ouvertes';
+    if (!open.length) { if (empty) empty.hidden = false; return; }
     if (empty) empty.hidden = true;
-    nc.open.forEach(function (b) { list.appendChild(ncOpenCard(b)); });
+    open.forEach(function (b) { list.appendChild(ncOpenCard(b)); });
   }
 
   function ncDossierBlock(entry) {
@@ -2417,6 +2451,17 @@
     // Notary console
     var ncForm = $('notary-auth-form');
     if (ncForm) ncForm.addEventListener('submit', function (e) { e.preventDefault(); ncSignIn($('nc-email').value); });
+    // Same door: a new notary's signup CTA starts the free Stripe onboarding.
+    var ncSignup = $('notary-signup-btn');
+    if (ncSignup) ncSignup.addEventListener('click', function () {
+      var email = nc.pendingSignupEmail || ($('nc-email') && $('nc-email').value.trim());
+      ncSignup.disabled = true; ncSignup.textContent = 'Redirection vers l’inscription…';
+      ncStartOnboard(email, function (msg) {
+        ncSignup.disabled = false; ncSignup.textContent = 'M’inscrire gratuitement →';
+        var box = $('notary-signup-errors');
+        if (box) { clear(box); box.hidden = false; box.appendChild(el('li', null, msg)); }
+      });
+    });
     var ncOut = $('notary-signout'); if (ncOut) ncOut.addEventListener('click', ncSignOut);
     var ncRef = $('notary-refresh'); if (ncRef) ncRef.addEventListener('click', function () { ncLoadBids().then(function (ok) { if (ok) toast('Demandes rafraîchies.'); }); });
     var ncOpenList = $('notary-open-list');

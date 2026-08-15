@@ -379,15 +379,23 @@
           <div class="panel panel-pad" id="notary-console">
             <!-- Auth gate -->
             <form id="notary-auth-form" class="nc-auth">
-              <h2 class="h-sub">Accéder à ma console</h2>
-              <p class="help mb-sm">Voyez les demandes ouvertes, retenez celles qui remplissent votre semaine, faites-vous payer sur les actes complétés.</p>
+              <h2 class="h-sub">Ouvrez votre console</h2>
+              <p class="help mb-sm">Une seule porte, <strong>sans mot de passe</strong> : entrez votre courriel professionnel — première visite ou retour, c’est le même geste. Vous voyez les demandes ouvertes, en retenez celles qui remplissent votre semaine, et êtes payé sur les actes complétés.</p>
               <div class="form-row">
-                <label class="lbl" for="nc-email">Votre courriel professionnel</label>
+                <label class="lbl" for="nc-email">Courriel professionnel</label>
                 <input type="email" id="nc-email" inputmode="email" autocomplete="email" placeholder="vous@etude.ca" required />
-                <p class="help">Démo : n’importe quel courriel valide ouvre une console. En production, l’accès est réservé aux notaires inscrits au Tableau de l’Ordre.</p>
               </div>
               <ul class="errors" id="notary-console-errors" role="alert" aria-atomic="true" hidden></ul>
-              <button type="submit" class="btn btn-primary" id="notary-console-signin">Accéder à ma console</button>
+              <button type="submit" class="btn btn-primary btn-lg nc-auth-cta" id="notary-console-signin">Ouvrir ma console →</button>
+              <p class="help nc-auth-fine">Première fois ? Entrez simplement votre courriel : si aucun compte n’existe encore, l’inscription gratuite se propose automatiquement.</p>
+
+              <!-- Shown when the email has no account yet: sign-in and sign-up are the
+                   same door — a new notary is offered free onboarding right here. -->
+              <div id="notary-signup-prompt" class="nc-signup" hidden>
+                <p class="nc-signup-lead"><strong>Bienvenue !</strong> <span id="notary-signup-email"></span> n’a pas encore de compte notaire. L’inscription est <strong>gratuite</strong> (~2 min) : elle crée votre compte de paiement sécurisé et ouvre votre console.</p>
+                <ul class="errors" id="notary-signup-errors" role="alert" aria-atomic="true" hidden></ul>
+                <button type="button" class="btn btn-primary btn-lg nc-auth-cta" id="notary-signup-btn">M’inscrire gratuitement →</button>
+              </div>
             </form>
 
             <!-- Authenticated view -->
@@ -402,7 +410,7 @@
                 <button class="btn btn-sm btn-ghost" id="notary-signout">Se déconnecter</button>
               </div>
 
-              <h2 class="nc-h">Demandes ouvertes</h2>
+              <h2 class="nc-h" id="notary-open-h">Demandes ouvertes</h2>
               <div class="nc-list" id="notary-open-list" aria-live="polite"></div>
               <p class="help" id="notary-open-empty" hidden>Aucune demande ouverte pour l’instant.</p>
 
