@@ -333,7 +333,7 @@
     verifyToken(token).then(function (ok) {
       // Strip the token from the URL either way — a used/dead token must not linger.
       history.replaceState(null, '', location.pathname);
-      if (ok) { renderOverview(); }
+      if (ok) { renderOverview(); toast('Connexion réussie.'); }
       else { renderAuthRequest({ error: 'Lien invalide ou expiré.' }); }
     });
   }
@@ -488,7 +488,8 @@
     note.textContent = 'du ' + shortDate(from) + ' au ' + shortDate(to);
   }
 
-  async function loadOverviewInto(container) {
+  async function loadOverviewInto(container, opts) {
+    opts = opts || {};
     // Sequence guard: rapidly switching range presets fires overlapping fetches;
     // stamp each with a generation and drop any response that a newer request
     // has superseded, so a slow earlier fetch can never overwrite the newer view.
@@ -503,9 +504,12 @@
 
     clear(container);
     if (!r.ok || !r.json) {
-      container.appendChild(buildErrorBanner(function () { loadOverviewInto(container); }));
+      container.appendChild(buildErrorBanner(function () { loadOverviewInto(container, { afterError: true }); }));
       return;
     }
+    // Confirm recovery only after a prior failure — never on the initial load,
+    // where a toast on every sign-in would just be noise.
+    if (opts.afterError) toast('Données chargées.');
     var data = r.json;
     var view = el('div', 'view-enter');
     if (isEmptyOverview(data)) {

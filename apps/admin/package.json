@@ -7,6 +7,10 @@
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
-    "dev": "node run-local.mjs"
+    "dev": "node run-local.mjs",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "jsdom": "^24.1.0"
   }
 }
