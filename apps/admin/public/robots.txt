@@ -1,0 +1,3 @@
+# admin.nota.ca is a private console — keep it out of every index.
+User-agent: *
+Disallow: /

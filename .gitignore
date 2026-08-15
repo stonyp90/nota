@@ -4,6 +4,7 @@ node_modules/
 
 # Build output
 apps/web/dist/
+apps/admin/dist/
 apps/api/build/
 infra/build/
 

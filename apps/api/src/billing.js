@@ -16,6 +16,13 @@
  * billing layer — the @nota/domain pricing logic stays free of it.
  */
 
+const {
+  statsDeltasForComplete,
+  statsDeltasForNotaryOnboarding,
+  statsDeltasForNotaryActive,
+  statsDeltasForGauge,
+} = require('./stats');
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Marketplace status of a notary under the commission model. ONBOARDING until
@@ -46,6 +53,17 @@ function createBilling({
     return Math.round(Number(actAmount) * 100 * rate);
   }
 
+  // Best-effort analytics rollups (see keys.js STATS#). A rollup failure must
+  // never affect a billing outcome; a phase-4 reconcile heals any drift.
+  async function recordStats(deltas) {
+    if (!deltas || !deltas.length || typeof repo.applyStatsDeltas !== 'function') return;
+    try {
+      await repo.applyStatsDeltas(deltas);
+    } catch {
+      /* swallow — billing correctness does not depend on analytics counters */
+    }
+  }
+
   /**
    * Begin FREE onboarding: validate the email, create the notary's Stripe
    * Connect account + a hosted onboarding link, and record an ONBOARDING profile
@@ -74,6 +92,7 @@ function createBilling({
       commissionCentsCollected: 0,
       createdAt: at, updatedAt: at,
     });
+    await recordStats(statsDeltasForNotaryOnboarding());
 
     return { ok: true, url };
   }
@@ -97,6 +116,16 @@ function createBilling({
       return { ok: false, errors: [{ code: 'montant_invalide', message: 'Montant de l’acte invalide.' }] };
     }
 
+    // Idempotency: a bid whose act was already completed never charges again.
+    // The write-once ledger below (attribute_not_exists on the ACT# item) plus
+    // the Stripe idempotency key (act:<bidId>) make a retry safe end to end.
+    if (bidId && typeof repo.getActCompletion === 'function') {
+      const prior = await repo.getActCompletion(bidId);
+      if (prior) {
+        return { ok: true, commissionCents: prior.commissionCents, chargeId: prior.chargeId, alreadyCompleted: true };
+      }
+    }
+
     const fee = feeCents(amount);
     const charge = await stripe.chargeActCommission({
       connectAccountId: notary.connectAccountId,
@@ -106,11 +135,26 @@ function createBilling({
       bidId, notaryId,
     });
 
+    // markActCompleted returns true only on the FIRST write (write-once ledger).
+    // A concurrent double-submit whose guard read missed the other in-flight
+    // charge must NOT also bump the analytics counters, or actes/commission
+    // over-count for one act. Default true when the repo lacks the method.
+    let firstWrite = true;
+    if (bidId && typeof repo.markActCompleted === 'function') {
+      firstWrite = await repo.markActCompleted(bidId, {
+        bidId, notaryId, actAmount: amount, commissionCents: fee,
+        chargeId: charge && charge.id, completedAt: clock(),
+      });
+    }
+
     await repo.putNotary({
       ...notary,
       commissionCentsCollected: (notary.commissionCentsCollected || 0) + fee,
       updatedAt: clock(),
     });
+    if (firstWrite) {
+      await recordStats(statsDeltasForComplete({ completedAt: String(clock()).slice(0, 10), commissionCents: fee }));
+    }
 
     return { ok: true, commissionCents: fee, chargeId: charge && charge.id };
   }
@@ -135,19 +179,34 @@ function createBilling({
       case 'account.updated': {
         const notaryId = obj.metadata && obj.metadata.notaryId;
         const enabled = !!obj.charges_enabled;
+        const prior = notaryId ? await repo.getNotary(notaryId) : null;
+        const wasActive = !!(prior && prior.status === NOTARY_STATUS.ACTIVE);
         const notary = await transition(notaryId, {
           chargesEnabled: enabled,
           status: enabled ? NOTARY_STATUS.ACTIVE : NOTARY_STATUS.ONBOARDING,
         });
+        // Move the gauge only on an ACTUAL active<->onboarding transition, so a
+        // charges_enabled toggle can never double-count (true->false->true) and
+        // a revert-to-onboarding decrements the active bucket.
+        if (notary) {
+          if (enabled && !wasActive) await recordStats(statsDeltasForNotaryActive());
+          else if (!enabled && wasActive) await recordStats(statsDeltasForGauge({ active: -1, onboarding: 1 }));
+        }
         return { handled: !!notary, notary };
       }
 
       // Notary disconnected their account from the platform.
       case 'account.application.deauthorized': {
         const notaryId = obj.metadata && obj.metadata.notaryId;
+        const prior = notaryId ? await repo.getNotary(notaryId) : null;
         const notary = await transition(notaryId, {
           status: NOTARY_STATUS.RESTRICTED, chargesEnabled: false,
         });
+        // Decrement whichever bucket they were counted in (no monotonic leak).
+        if (notary && prior) {
+          if (prior.status === NOTARY_STATUS.ACTIVE) await recordStats(statsDeltasForGauge({ active: -1 }));
+          else if (prior.status === NOTARY_STATUS.ONBOARDING) await recordStats(statsDeltasForGauge({ onboarding: -1 }));
+        }
         return { handled: !!notary, notary };
       }
 

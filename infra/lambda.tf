@@ -38,8 +38,8 @@ resource "aws_iam_role" "api" {
   assume_role_policy = data.aws_iam_policy_document.lambda_assume.json
 }
 
-# Least-privilege data access: only the three actions the handler performs,
-# and only against this table's ARN (no wildcards on resources).
+# Least-privilege data access: only the actions the handler performs, and only
+# against this table's ARN (no wildcards on resources).
 data "aws_iam_policy_document" "api_dynamodb" {
   statement {
     sid    = "TableAccess"
@@ -49,6 +49,11 @@ data "aws_iam_policy_document" "api_dynamodb" {
       "dynamodb:GetItem",
       "dynamodb:PutItem",
       "dynamodb:Query",
+      # UpdateItem lets the public API atomically ADD to the STATS# rollup
+      # counters (best-effort analytics the admin surface reads). This is the
+      # ONLY admin-related grant that is NOT gated behind var.enable_admin — it
+      # is purely additive (no dynamodb:Scan, no new resources).
+      "dynamodb:UpdateItem",
     ]
 
     resources = [aws_dynamodb_table.main.arn]
@@ -95,11 +100,11 @@ resource "aws_lambda_function" "api" {
   source_code_hash = data.archive_file.api.output_base64sha256
 
   timeout     = 10
-  memory_size = 256
+  memory_size = var.api_memory_size
 
   # Blast-radius cap: hard ceiling on concurrent executions so a traffic spike
   # or DoS can't exhaust account-wide Lambda concurrency or run up unbounded cost.
-  reserved_concurrent_executions = 20
+  reserved_concurrent_executions = var.api_reserved_concurrency
 
   environment {
     variables = {

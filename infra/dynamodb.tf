@@ -31,6 +31,10 @@ resource "aws_dynamodb_table" "main" {
     type = "S"
   }
 
+  # GSI1 (notary/act enumeration) deferred to admin phase 2. Adding a GSI is a
+  # real, online change to the LIVE main table and is not needed until then, so
+  # phase 1 intentionally leaves the table schema untouched.
+
   # Point-in-time recovery: continuous backups for the last 35 days.
   point_in_time_recovery {
     enabled = true

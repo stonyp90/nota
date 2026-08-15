@@ -44,6 +44,17 @@
       prixDepart: 650,
       description:
         'Testament notarié et mandat de protection en cas d’inaptitude.',
+      // Dynamic base price = base + the flat add-on of each answered criterion.
+      // Criteria are DATA (edit here, no code change) and are collected as part
+      // of the dossier — the same questions the notary needs (see computeBasePrice).
+      pricing: {
+        base: 650,
+        criteria: [
+          { id: 'couple', type: 'flag', label: 'Pour un couple (deux testaments miroirs)', aide: 'Deux testaments coordonnés plutôt qu’un seul.', add: 350 },
+          { id: 'enfants_mineurs', type: 'flag', label: 'Enfants mineurs (clause de tutelle)', aide: 'Ajoute la désignation d’un tuteur au testament.', add: 75 },
+          { id: 'entreprise_fiducie', type: 'flag', label: 'Actifs d’entreprise ou fiducie', aide: 'Parts d’entreprise, fiducie ou actifs à structurer.', add: 250 },
+        ],
+      },
       documents: [
         { id: 'piece_identite', nom: 'Pièce d’identité avec photo', aide: 'Permis de conduire, passeport ou carte d’assurance maladie valide.' },
         { id: 'liste_biens', nom: 'Liste sommaire des biens', aide: 'Immeubles, comptes, placements. Une estimation suffit à cette étape.' },
@@ -61,6 +72,19 @@
       prixDepart: 295,
       description:
         'Procuration générale ou spéciale pour agir en votre nom.',
+      pricing: {
+        base: 295,
+        criteria: [
+          {
+            id: 'portee', type: 'choice', label: 'Portée', aide: 'Une procuration générale couvre l’ensemble de vos biens.',
+            options: [
+              { id: 'speciale', label: 'Spéciale', add: 0 },
+              { id: 'generale', label: 'Générale', add: 40 },
+            ],
+          },
+          { id: 'protection', type: 'flag', label: 'Mandat de protection (inaptitude)', aide: 'Un mandat qui prend effet si vous devenez inapte.', add: 150 },
+        ],
+      },
       documents: [
         { id: 'piece_identite', nom: 'Pièce d’identité avec photo', aide: 'Permis de conduire, passeport ou carte d’assurance maladie valide.' },
       ],
@@ -76,6 +100,20 @@
       prixDepart: 950,
       description:
         'Acte de prêt et publication de l’hypothèque lors d’un refinancement.',
+      pricing: {
+        base: 950,
+        criteria: [
+          {
+            id: 'valeur_pret', type: 'bracket', label: 'Valeur du prêt', aide: 'Le montant du nouveau financement.', unit: '$',
+            brackets: [
+              { max: 300000, add: 0 },
+              { max: 600000, add: 150 },
+              { max: null, add: 350 },
+            ],
+          },
+          { id: 'coemprunteur', type: 'flag', label: 'Co-emprunteur', aide: 'Une seconde personne inscrite au prêt.', add: 75 },
+        ],
+      },
       documents: [
         { id: 'piece_identite', nom: 'Pièce d’identité avec photo', aide: 'Permis de conduire, passeport ou carte d’assurance maladie valide.' },
         { id: 'offre_preteur', nom: 'Offre de financement du prêteur', aide: 'Le document d’engagement de la banque, avec le taux et le montant.' },
@@ -93,6 +131,46 @@
 
   function serviceById(id) {
     return SERVICES.find((s) => s.id === id) || null;
+  }
+
+  // --- Dynamic base price ----------------------------------------------------
+  // A service's floor price, derived from a small set of DATA-DRIVEN criteria
+  // (see each service's `pricing`). Each answered criterion contributes a FLAT
+  // add-on:
+  //   - flag:    +add when the answer is truthy
+  //   - choice:  +add of the chosen option
+  //   - bracket: +add of the first bracket the numeric value falls in (value <=
+  //              max; a null max is the open-ended top bracket)
+  // Answers come from the client's dossier, so "the document" and "the price"
+  // are one dataset. With NO answers a service returns its base (== prixDepart),
+  // so every existing caller and behaviour is unchanged. Criteria are edited as
+  // data here — never hardcoded in the app or API.
+  function criterionAdd(criterion, answer) {
+    if (!criterion) return 0;
+    if (criterion.type === 'flag') return answer ? Number(criterion.add) || 0 : 0;
+    if (criterion.type === 'choice') {
+      const opt = (criterion.options || []).find((o) => o.id === answer);
+      return opt ? Number(opt.add) || 0 : 0;
+    }
+    if (criterion.type === 'bracket') {
+      const v = Number(answer);
+      if (!Number.isFinite(v)) return 0; // not answered yet -> base bracket
+      for (const b of criterion.brackets || []) {
+        if (b.max == null || v <= b.max) return Number(b.add) || 0;
+      }
+      return 0;
+    }
+    return 0;
+  }
+
+  function computeBasePrice(serviceId, answers) {
+    const svc = serviceById(serviceId);
+    if (!svc) return null;
+    if (!svc.pricing) return svc.prixDepart;
+    answers = answers || {};
+    let price = Number(svc.pricing.base) || svc.prixDepart || 0;
+    for (const c of svc.pricing.criteria || []) price += criterionAdd(c, answers[c.id]);
+    return Math.max(0, Math.round(price));
   }
 
   // --- Timing tiers ----------------------------------------------------------
@@ -198,14 +276,18 @@
       tier = tierForDays(Math.max(0, days));
     }
 
+    // Dynamic floor: the base price derived from the client's pricing answers
+    // (part of the dossier). Falls back to the flat base when no answers are
+    // supplied, so existing callers see identical behaviour.
+    const base = svc ? computeBasePrice(svc.id, input.pricing) : null;
     if (svc && montantValide) {
-      if (montant < svc.prixDepart) {
-        errors.push({ code: 'sous_prix_depart', message: `L’offre doit être d’au moins ${money(svc.prixDepart)}.` });
+      if (montant < base) {
+        errors.push({ code: 'sous_prix_depart', message: `L’offre doit être d’au moins ${money(base)}.` });
       }
-      if (montant > svc.prixDepart * PREMIUM_CAP) {
-        errors.push({ code: 'plafond_depasse', message: `L’offre ne peut dépasser ${money(svc.prixDepart * PREMIUM_CAP)} (${PREMIUM_CAP}×).` });
+      if (montant > base * PREMIUM_CAP) {
+        errors.push({ code: 'plafond_depasse', message: `L’offre ne peut dépasser ${money(base * PREMIUM_CAP)} (${PREMIUM_CAP}×).` });
       }
-      premium = montant / svc.prixDepart;
+      premium = montant / base;
     }
 
     // Courriel is OPTIONAL (used only for private notifications, never shown on
@@ -222,7 +304,10 @@
       tier,
       days,
       premium,
-      prixDepart: svc ? svc.prixDepart : null,
+      // The dynamic floor the offer was validated against (== the flat base when
+      // no pricing criteria were answered).
+      prixDepart: base,
+      basePrice: base,
       montant: montantValide ? montant : null,
       courriel: courrielRaw || null,
     };
@@ -309,13 +394,18 @@
   // Given the date, suggest the middle of that tier's market-acceptance range ×
   // the service floor (rounded to $5, clamped to [floor, 10× floor]). The UI
   // pre-fills this so a client can book with one tap instead of a decision.
-  function recommendedAmount(serviceId, dateISO, todayISO) {
+  function recommendedAmount(serviceId, dateISO, todayISO, answers) {
     const svc = serviceById(serviceId);
     if (!svc || !isISODate(dateISO)) return null;
     const days = isISODate(todayISO) ? Math.max(0, daysBetween(todayISO, dateISO)) : 0;
     const t = tierById(tierForDays(days));
     const mult = (t.apercuMin + t.apercuMax) / 2;
-    return clampMontant(svc, Math.round((svc.prixDepart * mult) / 5) * 5);
+    // Anchor the recommendation on the DYNAMIC base (with the client's pricing
+    // answers), so a more complex act recommends a proportionally higher offer.
+    const base = computeBasePrice(serviceId, answers);
+    const min = base;
+    const max = base * PREMIUM_CAP;
+    return Math.min(max, Math.max(min, Math.round((base * mult) / 5) * 5));
   }
 
   // --- Lead qualification ----------------------------------------------------
@@ -407,6 +497,7 @@
     money,
     SERVICES,
     serviceById,
+    computeBasePrice,
     TIERS,
     tierById,
     tierForDays,

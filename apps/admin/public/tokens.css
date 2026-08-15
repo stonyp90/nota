@@ -1,0 +1,167 @@
+/* ==========================================================================
+   Nota — design tokens (admin console).
+   The three theme blocks below (:root light palette, the prefers-color-scheme
+   dark block, and the [data-theme='dark'] toggle block) are COPIED VERBATIM from
+   apps/web/public/styles.css so the admin brand tracks the marketing site exactly
+   — same hunter-green ramp, same --ink / --bg / --surface / --border names. Keep
+   them in lockstep with apps/web when either side changes a color.
+
+   Admin-only tokens (layout geometry) live in a separate bare :root block at the
+   bottom, leaving the copied palette untouched.
+   ========================================================================== */
+
+:root {
+  /* Hunter green — the Tablix brand ramp */
+  --hunter-50: #f0f9f0;
+  --hunter-100: #dcf0dc;
+  --hunter-200: #afdbb4;
+  --hunter-300: #78c282;
+  --hunter-400: #5ab455;
+  --hunter-500: #50b848;
+  --hunter-600: #429c3c;
+  --hunter-700: #2c5f34;
+  --hunter-800: #244c2a;
+  --hunter-900: #1b331f;
+  --hunter-950: #0d1a10;
+
+  /* Semantic tokens (light) */
+  --brand: var(--hunter-700);
+  --brand-bright: var(--hunter-500);
+  --brand-ink: #ffffff;
+  --brand-hover: var(--hunter-800);
+  --on-accent: #ffffff; /* text/knob on saturated accents (tier pills, toggle) — white in every theme */
+
+  --bg: #eef2ef; /* subtle tint so borderless white panels float cleanly */
+  --surface: #ffffff;
+  --surface-inset: #f4f7f4;
+  --surface-hover: #e9f1e9;
+  --ink: #0b1220;
+  --ink-muted: #4d5b6e; /* darker than slate-500 for AA on white */
+  --border: #dbe2ea;
+  --border-strong: #b8c2cf;
+  --ring: var(--hunter-600);
+
+  --danger: #b42318;
+  --warn: #b54708;
+  --ok: var(--hunter-600);
+
+  /* Tier accent ramp — cool (calm) to warm (urgent).
+     All five are dark enough for white .pill text to meet WCAG AA (>=4.5:1). */
+  --tier-standard: #64748b;
+  --tier-rapide: #357f30;
+  --tier-prioritaire: #906800;
+  --tier-urgence: #c2410c;
+  --tier-extreme: #b42318;
+
+  /* Offer status: waiting for a notary vs. retained by one. var() aliases, so
+     they track the theme automatically — do not duplicate into the dark blocks. */
+  --status-ouverte: var(--brand-bright);
+  --status-retenue: var(--ink-muted);
+
+  /* Geometry — softened, but not pill-round (a bit more square) */
+  --radius: 8px;
+  --radius-sm: 6px;
+  --radius-lg: 12px;
+
+  --shadow-sm: 0 1px 2px rgb(15 23 42 / 0.05);
+  --shadow: 0 6px 20px -8px rgb(15 23 42 / 0.12);
+  --shadow-lg: 0 24px 50px -16px rgb(44 95 52 / 0.24);
+
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
+
+  --maxw: 1600px; /* maximized width — fills wide screens, side padding via .wrap */
+  --gap: 20px;
+
+  --header-h: 62px;   /* sticky .site-header height */
+  --sticky-top: 82px; /* header height + breathing gap — used for scroll-padding / scroll-margin */
+}
+
+/* Dark theme — system preference.
+   A STANDALONE @media block: prefers-color-scheme now actually applies. The old
+   form comma-joined a selector list to an @media rule (`:root[...], @media {...}`),
+   which is invalid CSS and was silently discarded — so system-dark users got the
+   light UI. Excludes an explicit light opt-out via :not([data-theme='light']). */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --brand: var(--hunter-500);
+    --brand-bright: var(--hunter-400);
+    --brand-ink: #08130a;
+    --brand-hover: var(--hunter-400);
+
+    --bg: #0a0a0a;
+    --surface: #121412;
+    --surface-inset: #171a17;
+    --surface-hover: #1d211d;
+    --ink: #f8fafc;
+    --ink-muted: #aab6b0;
+    --border: #2a2f2a;
+    --border-strong: #3d443d;
+    --ring: var(--hunter-400);
+
+    --danger: #f97066;
+    --warn: #f79009;
+    --ok: var(--hunter-600);
+
+    --tier-standard: #64748b;
+    --tier-rapide: #357f30;
+    --tier-prioritaire: #906800;
+    --tier-urgence: #c2410c;
+    --tier-extreme: #b42318;
+
+    --shadow-lg: 0 20px 40px -12px rgb(0 0 0 / 0.6);
+  }
+}
+
+/* Explicit dark toggle — wins over system preference in both directions.
+   Defines the SAME complete token set as the @media block above; keep the two in
+   lockstep so no token (e.g. --warn, --shadow-lg) drifts back to its light value. */
+:root[data-theme='dark'] {
+  --brand: var(--hunter-500);
+  --brand-bright: var(--hunter-400);
+  --brand-ink: #08130a;
+  --brand-hover: var(--hunter-400);
+
+  --bg: #0a0a0a;
+  --surface: #121412;
+  --surface-inset: #171a17;
+  --surface-hover: #1d211d;
+  --ink: #f8fafc;
+  --ink-muted: #aab6b0;
+  --border: #2a2f2a;
+  --border-strong: #3d443d;
+  --ring: var(--hunter-400);
+
+  --danger: #f97066;
+  --warn: #f79009;
+  --ok: var(--hunter-600);
+
+  --tier-standard: #64748b;
+  --tier-rapide: #357f30;
+  --tier-prioritaire: #906800;
+  --tier-urgence: #c2410c;
+  --tier-extreme: #b42318;
+
+  --shadow-lg: 0 20px 40px -12px rgb(0 0 0 / 0.6);
+}
+
+/* --- Admin-only tokens ----------------------------------------------------
+   Layout geometry specific to the console. On a bare :root so they apply in
+   every theme (they are neutral sizes, not colors). */
+:root {
+  --admin-topbar-h: 58px;
+  --admin-sidebar-w: 216px;
+  --admin-content-maxw: 1400px;
+  --admin-tile-min: 220px;
+  --admin-gap: 18px;
+  --admin-sticky-top: calc(var(--admin-topbar-h) + 16px);
+
+  /* Translucent washes for hover/active states. Buttons stay outline/transparent
+     — no button ever gets a solid fill — so these low-alpha tints are the only
+     background a button shows on interaction. Green channel is hunter-500
+     (80 184 72), faint enough to read the same in light and dark. --neutral-wash
+     is a theme-neutral ink veil for non-brand controls. */
+  --brand-wash: rgb(80 184 72 / 0.10);
+  --brand-wash-strong: rgb(80 184 72 / 0.18);
+  --neutral-wash: rgb(120 130 120 / 0.10);
+}

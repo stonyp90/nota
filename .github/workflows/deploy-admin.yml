@@ -1,0 +1,147 @@
+# Deploy Admin — build + ship the Nota ADMIN surface (admin.nota.ca) to AWS.
+#
+# Mirrors deploy.yml (OIDC short-lived creds, no long-lived keys), but for the
+# SEPARATE admin stack authored in infra/admin.tf + infra/admin-cdn.tf. That
+# stack only exists when Terraform is applied with enable_admin = true; this
+# workflow does NOT create infrastructure — it publishes code/assets into it.
+#
+# GATING (defence in depth):
+#   1. Triggers only via manual dispatch OR pushes to main that touch the admin
+#      SPA / shared api bundle (path filter below).
+#   2. The deploy job runs in the PROTECTED GitHub Environment "admin-production"
+#      (configure REQUIRED REVIEWERS on it in repo Settings -> Environments), so
+#      every admin deploy needs a human approval before it runs.
+#   3. The AWS role it assumes (ADMIN_DEPLOY_ROLE_ARN) is a dedicated
+#      least-privilege OIDC role whose trust policy only accepts the
+#      "admin-production" environment (see aws_iam_role.admin_github_deploy).
+#
+# Required GitHub Actions *variables* (public identifiers, not secrets) — from
+# `terraform output` after applying with enable_admin = true:
+#   gh variable set ADMIN_DEPLOY_ROLE_ARN    --repo stonyp90/nota --body "$(terraform -chdir=infra output -raw admin_github_deploy_role_arn)"
+#   gh variable set ADMIN_WEB_BUCKET         --repo stonyp90/nota --body "$(terraform -chdir=infra output -raw admin_web_bucket)"
+#   gh variable set ADMIN_CF_DISTRIBUTION_ID --repo stonyp90/nota --body "$(terraform -chdir=infra output -raw admin_cloudfront_distribution_id)"
+#   gh variable set ADMIN_LAMBDA_NAME        --repo stonyp90/nota --body "$(terraform -chdir=infra output -raw admin_lambda_name)"
+
+name: Deploy Admin
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - apps/admin/**
+      - apps/api/**
+
+# OIDC needs id-token: write to mint the token; contents: read to checkout.
+permissions:
+  id-token: write
+  contents: read
+
+# Never run two admin deploys at once; newest wins but don't cancel mid-flight.
+concurrency:
+  group: deploy-admin-production
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ca-central-1
+
+jobs:
+  test:
+    name: Tests (domain + api + BDD + web)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install workspaces
+        run: npm ci
+
+      - name: Unit tests (domain + api)
+        run: npm test
+
+      - name: BDD suite (Cucumber)
+        run: npm install --prefix features && npm test --prefix features
+
+      - name: Web smoke test (jsdom)
+        run: npm test --workspace @nota/web
+
+  deploy:
+    name: Build + deploy admin to AWS
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # PROTECTED environment: requires human approval (configure required
+    # reviewers in repo Settings -> Environments -> admin-production).
+    environment: admin-production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install workspaces
+        run: npm ci
+
+      - name: Build admin (SPA)
+        run: node apps/admin/build.mjs
+
+      - name: Verify build output
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Fail early if the build produced nothing to deploy.
+          if [ ! -d apps/admin/dist ] || [ -z "$(ls -A apps/admin/dist)" ]; then
+            echo "::error::apps/admin/dist is missing or empty — admin build failed to produce assets" >&2
+            exit 1
+          fi
+
+      - name: Configure AWS credentials (OIDC — no secrets)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.ADMIN_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Package + deploy the admin Lambda
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The admin Lambda ships the SAME apps/api bundle as the public API
+          # (handler admin.handler). Vendor the workspace-linked @nota/domain in
+          # so it resolves at runtime, exactly like deploy.yml does.
+          mkdir -p apps/api/node_modules/@nota/domain
+          cp packages/domain/index.js packages/domain/package.json apps/api/node_modules/@nota/domain/
+          ( cd apps/api && zip -qr /tmp/admin-api.zip . -x '*.git*' )
+          aws lambda update-function-code \
+            --function-name "${{ vars.ADMIN_LAMBDA_NAME }}" \
+            --zip-file fileb:///tmp/admin-api.zip \
+            --publish
+
+      - name: Sync admin assets to S3
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Hashed assets are immutable for a year; index.html is the un-hashed
+          # entrypoint that must never be cached so a new deploy is picked up
+          # immediately. --delete prunes the previous build's hashed files.
+          aws s3 sync apps/admin/dist "s3://${{ vars.ADMIN_WEB_BUCKET }}" \
+            --delete \
+            --cache-control "public,max-age=31536000,immutable" \
+            --exclude index.html
+          aws s3 cp apps/admin/dist/index.html "s3://${{ vars.ADMIN_WEB_BUCKET }}/index.html" \
+            --cache-control "no-cache"
+
+      - name: Invalidate CloudFront cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          aws cloudfront create-invalidation \
+            --distribution-id "${{ vars.ADMIN_CF_DISTRIBUTION_ID }}" \
+            --paths "/*"

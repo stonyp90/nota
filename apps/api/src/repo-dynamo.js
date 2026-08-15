@@ -16,6 +16,20 @@ const {
   DECLINE_SK,
   retainedSK,
   RETAINED_PREFIX,
+  STATS_GAUGE_PK,
+  STATS_GAUGE_SK,
+  actPK,
+  ACT_SK,
+  adminPK,
+  ADMIN_SK,
+  adminLoginPK,
+  ADMIN_LOGIN_SK,
+  adminSessionPK,
+  ADMIN_SESSION_SK,
+  auditPK,
+  auditSK,
+  adminRlPK,
+  ADMIN_RL_SK,
 } = require('./keys');
 const { STATUS } = require('@nota/domain');
 
@@ -29,13 +43,21 @@ const { STATUS } = require('@nota/domain');
  * `endpoint` lets the local dev server point at DynamoDB Local (docker-compose);
  * in Lambda it is omitted and the SDK resolves the regional endpoint.
  */
-function createDynamoRepo({ tableName, endpoint, region, doc } = {}) {
+function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } = {}) {
   if (!tableName) throw new Error('createDynamoRepo: tableName is required');
 
   // Lazy import keeps the SDK out of the dependency graph for tests. The command
   // classes are always needed; the concrete client is built only when the caller
   // did not inject its own document client.
-  const { PutCommand, GetCommand, QueryCommand, ScanCommand } = require('@aws-sdk/lib-dynamodb');
+  const { PutCommand, GetCommand, QueryCommand, ScanCommand, UpdateCommand } = require('@aws-sdk/lib-dynamodb');
+
+  // The admin surface's identity/session/audit items live in a SEPARATE table
+  // (blast-radius isolation). Only the admin Lambda passes adminTableName; the
+  // public Lambda never does, so calling an admin method there fails loudly.
+  function adminTable() {
+    if (!adminTableName) throw new Error('admin table not configured on this repo');
+    return adminTableName;
+  }
 
   // `doc` is injectable so a test can drive the paginating reads (listByMonth /
   // scanOpenBids) against a fake document client with no AWS. Production omits it
@@ -259,6 +281,251 @@ function createDynamoRepo({ tableName, endpoint, region, doc } = {}) {
         ExclusiveStartKey = out.LastEvaluatedKey;
       } while (ExclusiveStartKey);
       return events;
+    },
+
+    // --- Completed-act ledger (idempotency) ---------------------------------
+    // Write-once: the ConditionExpression rejects a second completion of the
+    // same bid, so a retry never double-charges. Returns false when it already
+    // existed (the caller then treats the completion as already done).
+    async markActCompleted(bidId, record) {
+      try {
+        await doc.send(
+          new PutCommand({
+            TableName: tableName,
+            Item: { PK: actPK(bidId), SK: ACT_SK, type: 'act', ...record },
+            ConditionExpression: 'attribute_not_exists(PK)',
+          })
+        );
+        return true;
+      } catch (err) {
+        if (err && err.name === 'ConditionalCheckFailedException') return false;
+        throw err;
+      }
+    },
+    async getActCompletion(bidId) {
+      const out = await doc.send(
+        new GetCommand({ TableName: tableName, Key: { PK: actPK(bidId), SK: ACT_SK } })
+      );
+      if (!out.Item) return null;
+      const { PK, SK, type, ...rec } = out.Item;
+      return rec;
+    },
+
+    // --- Analytics rollups (STATS#) -----------------------------------------
+    // Atomic ADD — commutative, no read-modify-write, so concurrent writers on
+    // the hot bid/retain/act paths never race. Requires dynamodb:UpdateItem on
+    // the table (granted additively in infra/lambda.tf).
+    async applyStatsDeltas(deltas) {
+      // Build every counter UpdateItem, then fire them CONCURRENTLY — a fact's
+      // global + per-service ADDs are independent, so one round-trip instead of a
+      // serial chain keeps the hot write path (POST /bids etc.) fast. Still
+      // awaited so the writes land before a possible Lambda freeze.
+      const cmds = [];
+      for (const d of deltas || []) {
+        const names = {};
+        const values = {};
+        const adds = [];
+        let i = 0;
+        for (const [k, n] of Object.entries(d.adds || {})) {
+          names['#a' + i] = k;
+          values[':a' + i] = Number(n || 0);
+          adds.push(`#a${i} :a${i}`);
+          i += 1;
+        }
+        if (!adds.length) continue;
+        cmds.push(
+          new UpdateCommand({
+            TableName: tableName,
+            Key: { PK: d.pk, SK: d.sk },
+            UpdateExpression: 'ADD ' + adds.join(', '),
+            ExpressionAttributeNames: names,
+            ExpressionAttributeValues: values,
+          })
+        );
+      }
+      await Promise.all(cmds.map((c) => doc.send(c)));
+    },
+    // Range Query over one STATS# partition, paginated. Items carry PK/SK; the
+    // analytics layer reads SK to recover the day.
+    async queryStats(pk, skStart, skEnd) {
+      const items = [];
+      let ExclusiveStartKey;
+      do {
+        const out = await doc.send(
+          new QueryCommand({
+            TableName: tableName,
+            KeyConditionExpression: 'PK = :pk AND SK BETWEEN :a AND :b',
+            ExpressionAttributeValues: { ':pk': pk, ':a': skStart, ':b': skEnd },
+            ExclusiveStartKey,
+          })
+        );
+        (out.Items || []).forEach((it) => items.push(it));
+        ExclusiveStartKey = out.LastEvaluatedKey;
+      } while (ExclusiveStartKey);
+      return items;
+    },
+    async getGauge() {
+      const out = await doc.send(
+        new GetCommand({ TableName: tableName, Key: { PK: STATS_GAUGE_PK, SK: STATS_GAUGE_SK } })
+      );
+      return out.Item || null;
+    },
+
+    // --- Admin identities (separate nota-admin table) -----------------------
+    async getAdmin(id) {
+      const out = await doc.send(new GetCommand({ TableName: adminTable(), Key: { PK: adminPK(id), SK: ADMIN_SK } }));
+      if (!out.Item) return null;
+      const { PK, SK, type, ...admin } = out.Item;
+      return admin;
+    },
+    async putAdmin(admin) {
+      await doc.send(
+        new PutCommand({ TableName: adminTable(), Item: { PK: adminPK(admin.id), SK: ADMIN_SK, type: 'admin', ...admin } })
+      );
+      return admin;
+    },
+
+    // --- Admin login challenges (single-use magic links) --------------------
+    async putLoginChallenge(challenge) {
+      await doc.send(
+        new PutCommand({
+          TableName: adminTable(),
+          Item: { PK: adminLoginPK(challenge.challengeId), SK: ADMIN_LOGIN_SK, type: 'login', ...challenge },
+        })
+      );
+    },
+    // Atomic single-use consume: SET consumed only while it is still false and
+    // unexpired. A replay (or expired link) trips the condition -> null.
+    async consumeLoginChallenge(challengeId, nowMs) {
+      try {
+        const out = await doc.send(
+          new UpdateCommand({
+            TableName: adminTable(),
+            Key: { PK: adminLoginPK(challengeId), SK: ADMIN_LOGIN_SK },
+            // `consumed` is a DynamoDB RESERVED WORD — it MUST be aliased or the
+            // whole magic-link verify throws ValidationException. Alias every
+            // attribute referenced in an expression, defensively.
+            UpdateExpression: 'SET #consumed = :true',
+            ConditionExpression: 'attribute_exists(PK) AND #consumed = :false AND #expiresAt > :now',
+            ExpressionAttributeNames: { '#consumed': 'consumed', '#expiresAt': 'expiresAt' },
+            ExpressionAttributeValues: { ':true': true, ':false': false, ':now': Number(nowMs) || 0 },
+            ReturnValues: 'ALL_NEW',
+          })
+        );
+        const { PK, SK, type, ...rec } = out.Attributes || {};
+        return rec;
+      } catch (err) {
+        if (err && err.name === 'ConditionalCheckFailedException') return null;
+        throw err;
+      }
+    },
+
+    // --- Admin sessions (revocable, server-side) ----------------------------
+    async putAdminSession(session) {
+      await doc.send(
+        new PutCommand({
+          TableName: adminTable(),
+          Item: { PK: adminSessionPK(session.sessionId), SK: ADMIN_SESSION_SK, type: 'session', ...session },
+        })
+      );
+    },
+    async getAdminSession(sessionId) {
+      const out = await doc.send(
+        new GetCommand({ TableName: adminTable(), Key: { PK: adminSessionPK(sessionId), SK: ADMIN_SESSION_SK } })
+      );
+      if (!out.Item) return null;
+      const { PK, SK, type, ...session } = out.Item;
+      return session;
+    },
+    async touchAdminSession(sessionId, lastSeenMs, absoluteExpiresAt) {
+      const values = { ':t': Number(lastSeenMs) };
+      const names = { '#lastSeenAt': 'lastSeenAt' };
+      let expr = 'SET #lastSeenAt = :t';
+      if (typeof absoluteExpiresAt === 'number') {
+        expr += ', #absoluteExpiresAt = :a';
+        names['#absoluteExpiresAt'] = 'absoluteExpiresAt';
+        values[':a'] = absoluteExpiresAt;
+      }
+      await doc.send(
+        new UpdateCommand({
+          TableName: adminTable(),
+          Key: { PK: adminSessionPK(sessionId), SK: ADMIN_SESSION_SK },
+          UpdateExpression: expr,
+          ConditionExpression: 'attribute_exists(PK)',
+          ExpressionAttributeNames: names,
+          ExpressionAttributeValues: values,
+        })
+      ).catch((err) => {
+        if (!(err && err.name === 'ConditionalCheckFailedException')) throw err;
+      });
+    },
+    async revokeAdminSession(sessionId, at) {
+      await doc.send(
+        new UpdateCommand({
+          TableName: adminTable(),
+          Key: { PK: adminSessionPK(sessionId), SK: ADMIN_SESSION_SK },
+          UpdateExpression: 'SET #revokedAt = :at',
+          ConditionExpression: 'attribute_exists(PK)',
+          ExpressionAttributeNames: { '#revokedAt': 'revokedAt' },
+          ExpressionAttributeValues: { ':at': at || new Date().toISOString() },
+        })
+      ).catch((err) => {
+        if (!(err && err.name === 'ConditionalCheckFailedException')) throw err;
+      });
+    },
+
+    // --- Audit log (append-only) --------------------------------------------
+    async appendAudit(entry) {
+      const day = String(entry.ts || '').slice(0, 10);
+      await doc.send(
+        new PutCommand({
+          TableName: adminTable(),
+          Item: { PK: auditPK(day), SK: auditSK(entry.ts, entry.id), type: 'audit', day, ...entry },
+          ConditionExpression: 'attribute_not_exists(PK) OR attribute_not_exists(SK)',
+        })
+      ).catch((err) => {
+        // A colliding (ts,id) is astronomically unlikely; never let audit block.
+        if (!(err && err.name === 'ConditionalCheckFailedException')) throw err;
+      });
+    },
+    async queryAuditByDay(dayISO) {
+      const items = [];
+      let ExclusiveStartKey;
+      do {
+        const out = await doc.send(
+          new QueryCommand({
+            TableName: adminTable(),
+            KeyConditionExpression: 'PK = :pk',
+            ExpressionAttributeValues: { ':pk': auditPK(dayISO) },
+            ExclusiveStartKey,
+          })
+        );
+        (out.Items || []).forEach((it) => {
+          const { PK, SK, type, ...rec } = it;
+          items.push(rec);
+        });
+        ExclusiveStartKey = out.LastEvaluatedKey;
+      } while (ExclusiveStartKey);
+      return items;
+    },
+
+    // --- Rate limiting (fixed window, TTL'd counter) ------------------------
+    async incrRateCounter(scope, key, windowSec, nowMs) {
+      const windowStart = Math.floor(nowMs / 1000 / windowSec);
+      const out = await doc.send(
+        new UpdateCommand({
+          TableName: adminTable(),
+          Key: { PK: adminRlPK(scope, key), SK: `${ADMIN_RL_SK}#${windowStart}` },
+          UpdateExpression: 'ADD #c :one SET #ttl = :ttl',
+          ExpressionAttributeNames: { '#c': 'count', '#ttl': 'ttl' },
+          ExpressionAttributeValues: {
+            ':one': 1,
+            ':ttl': (windowStart + 1) * windowSec + 60,
+          },
+          ReturnValues: 'UPDATED_NEW',
+        })
+      );
+      return (out.Attributes && out.Attributes.count) || 1;
     },
   };
 }

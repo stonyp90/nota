@@ -47,8 +47,8 @@ resource "aws_apigatewayv2_stage" "default" {
   # limits to cap abuse / accidental floods (they also protect the Lambda's
   # reserved concurrency). Tunable: raise as legitimate traffic grows.
   default_route_settings {
-    throttling_rate_limit  = 20 # steady-state requests/sec
-    throttling_burst_limit = 40 # max concurrent burst
+    throttling_rate_limit  = var.api_throttle_rate_limit  # steady-state requests/sec
+    throttling_burst_limit = var.api_throttle_burst_limit # max burst
   }
 }
 

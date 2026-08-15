@@ -5,6 +5,7 @@ const { createBilling } = require('./billing');
 const { decodeUnsubToken } = require('./notifications');
 const { signToken, verifyToken, notaryIdForEmail, SCOPES } = require('./notary-auth');
 const { buildNotaryFeed, buildCarnetFeed } = require('./ics');
+const { statsDeltasForOffer, statsDeltasForRetain } = require('./stats');
 
 /**
  * HTTP application, transport-agnostic. `createApp` takes a Repo port and
@@ -83,6 +84,20 @@ function createApp(repo, opts = {}) {
       operatorEmail: process.env.NOTA_OPERATOR_EMAIL,
     });
     return notifierInstance;
+  }
+
+  // Best-effort analytics rollups (see keys.js STATS#). Awaited so the counter
+  // write completes within the request (a Lambda may freeze after responding),
+  // but wrapped so a rollup failure — including an older repo without the method
+  // or a missing UpdateItem grant — can NEVER break a bid/retain. A phase-4
+  // reconcile heals any counter drift from a partial failure.
+  async function recordStats(deltas) {
+    if (!deltas || !deltas.length || typeof repo.applyStatsDeltas !== 'function') return;
+    try {
+      await repo.applyStatsDeltas(deltas);
+    } catch {
+      /* swallow: analytics must never affect the marketplace write path */
+    }
   }
 
   // Case-insensitive header lookup (Lambda function URL and node:http both
@@ -246,6 +261,13 @@ function createApp(repo, opts = {}) {
       return json(413, { errors: [{ code: 'corps_trop_grand', message: 'Le corps de la requête est trop volumineux.' }] });
     }
 
+    // The public API never serves the admin surface — that lives on its own
+    // Lambda (admin-handler.js) behind admin.nota.ca. Refuse /admin/* here so
+    // this internet-facing function can never be coaxed into admin behaviour.
+    if (/^\/admin(\/|$)/.test(route)) {
+      return json(404, { errors: [{ code: 'introuvable', message: 'Route inconnue.' }] });
+    }
+
     if (route === '/health' && method === 'GET') {
       return json(200, { ok: true, today: now() });
     }
@@ -275,6 +297,9 @@ function createApp(repo, opts = {}) {
         dateISO: payload.dateISO,
         montant: payload.montant,
         courriel: payload.courriel,
+        // Dynamic pricing criteria (part of the dossier): the server recomputes
+        // the floor from these, never trusting the client's base/total.
+        pricing: payload.pricing,
         todayISO,
       });
       if (!v.ok) return json(422, { errors: v.errors });
@@ -299,6 +324,16 @@ function createApp(repo, opts = {}) {
           payload.dossier && typeof payload.dossier === 'object' && !Array.isArray(payload.dossier)
             ? payload.dossier
             : null,
+        // PRIVATE: the pricing criteria answers (part of the dossier — "the
+        // document merged with the process"). Released with the dossier to the
+        // retaining notary; NEVER in publicBid(). The authoritative floor was
+        // already recomputed from these in validateOffer above.
+        pricing:
+          payload.pricing && typeof payload.pricing === 'object' && !Array.isArray(payload.pricing)
+            ? payload.pricing
+            : null,
+        // The server-derived floor this offer was validated against.
+        basePrice: v.basePrice,
         status: domain.STATUS.OUVERTE,
         etude: null,
         notaryId: null,
@@ -309,6 +344,7 @@ function createApp(repo, opts = {}) {
         ttl: Math.floor(Date.parse(payload.dateISO + 'T00:00:00Z') / 1000) + 400 * 86400,
       };
       await repo.put(bid);
+      await recordStats(statsDeltasForOffer(bid));
 
       // Fire-and-forget: confirm the offer to the client + alert the operator.
       // Never awaited and never allowed to reject the response — if mail fails
@@ -514,6 +550,7 @@ function createApp(repo, opts = {}) {
         serviceId: retained.serviceId,
         montant: retained.montant,
       });
+      await recordStats(statsDeltasForRetain(retained, now()));
       return json(200, { id: retained.id, courriel: retained.courriel || null, dossier: retained.dossier || null });
     }
 

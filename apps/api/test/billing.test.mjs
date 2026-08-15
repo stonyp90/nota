@@ -239,13 +239,20 @@ test('EDGE (logic): a custom commission rate is honored end-to-end', async () =>
   assert.equal(stripe.calls.charges[0].applicationFeeCents, 30000);
 });
 
-test('EDGE (logic): re-completing the SAME bid uses one idempotency key (no double charge)', async () => {
-  const { billing, stripe } = await activeBilling(RATE);
-  await billing.completeAct({ notaryId: 'n-1', bidId: 'dup', actAmount: 1000 });
-  await billing.completeAct({ notaryId: 'n-1', bidId: 'dup', actAmount: 1000 });
-  // Both calls route through the adapter with the same bidId -> Stripe would
-  // dedupe via idempotencyKey `act:dup`; assert the port always received it.
-  assert.ok(stripe.calls.charges.every((c) => c.bidId === 'dup'));
+test('EDGE (logic): re-completing the SAME bid is idempotent — exactly one charge, one tally', async () => {
+  const { repo, billing, stripe } = await activeBilling(RATE);
+  const first = await billing.completeAct({ notaryId: 'n-1', bidId: 'dup', actAmount: 1000 });
+  const second = await billing.completeAct({ notaryId: 'n-1', bidId: 'dup', actAmount: 1000 });
+
+  // The write-once ACT ledger must short-circuit the second call BEFORE Stripe.
+  assert.equal(stripe.calls.charges.length, 1); // never charged twice
+  assert.equal(second.alreadyCompleted, true);
+  assert.equal(second.commissionCents, first.commissionCents);
+  assert.equal(second.chargeId, first.chargeId);
+
+  // And the commission is tallied exactly once on the notary.
+  const notary = await repo.getNotary('n-1');
+  assert.equal(notary.commissionCentsCollected, first.commissionCents);
 });
 
 test('the commission lives ONLY in billing — the @nota/domain module stays free of it', () => {

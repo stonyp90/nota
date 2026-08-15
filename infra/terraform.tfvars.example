@@ -11,3 +11,16 @@ project_name = "nota"
 # To attach a custom domain, set BOTH of these:
 # domain_name    = "app.example.com"
 # hosted_zone_id = "Z0123456789ABCDEFGHIJ"
+
+# --- Admin surface (admin.nota.ca) — PHASE 1 ----------------------------
+# Feature-flagged OFF by default: with enable_admin = false, `terraform plan`
+# creates NO admin resources. Flip to true ONLY after the values below are
+# ready. admin.nota.ca is expected to live in the SAME hosted zone as the public
+# domain, so admin reuses hosted_zone_id above for its ACM validation + DNS.
+# enable_admin        = true
+# admin_domain_name   = "admin.nota.ca"
+# admin_allowed_cidrs = ["203.0.113.7/32"]        # EMPTY = admin unreachable (safe default)
+# admin_emails        = ["you@nota.ca"]           # allowlisted admin logins
+#
+# The admin Lambda reuses the public SES sender (from_email). Verify it in SES
+# and exit the SES sandbox before enabling admin login email.

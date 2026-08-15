@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="fr-CA" data-theme="">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- Pre-paint theme setter. External (not inline) so the strict admin CSP can
+         forbid 'unsafe-inline' scripts; render-blocking + first in <head> so it
+         runs before admin.css paints, avoiding a light→dark flash. -->
+    <script src="admin-theme.js"></script>
+
+    <title>Nota · Admin</title>
+    <!-- Private console: never index or follow. -->
+    <meta name="robots" content="noindex,nofollow" />
+    <meta name="theme-color" content="#2c5f34" />
+    <meta name="color-scheme" content="light dark" />
+
+    <!-- API base override for local dev. Empty/absent → same-origin "/api/admin"
+         (CloudFront routes /api/admin/* to the admin API and strips only /api, so
+         the API receives /admin/...). The base already carries the '/admin'
+         namespace, so admin.js appends "/auth/request", "/me", etc. For local dev
+         pointing straight at the admin API, include that namespace, e.g.
+         content="http://localhost:8790/admin". -->
+    <meta name="nota-admin-api" content="" />
+
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="admin.css" />
+  </head>
+  <body>
+    <a class="skip" href="#app">Aller au contenu</a>
+
+    <header class="admin-header">
+      <a class="admin-brand" href="#/" aria-label="Nota Admin, accueil">
+        <span class="admin-brand-mark" aria-hidden="true">
+          <img src="favicon.svg" width="26" height="26" alt="" />
+        </span>
+        <span class="admin-brand-word">Nota</span>
+        <span class="admin-brand-sub">Admin</span>
+      </a>
+      <span class="admin-spacer"></span>
+
+      <!-- User identity + logout. Hidden until authenticated; populated by admin.js. -->
+      <div class="admin-userbar" id="admin-userbar" hidden>
+        <div class="admin-user">
+          <span class="admin-user-email" id="admin-user-email"></span>
+          <span class="role-pill" id="admin-user-role"></span>
+        </div>
+        <button type="button" class="btn btn-sm btn-ghost" id="admin-logout">Se déconnecter</button>
+      </div>
+
+      <button type="button" class="icon-btn" id="admin-theme-toggle" title="Thème clair / sombre" aria-label="Changer de thème">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      </button>
+    </header>
+
+    <!-- SPA mount point. admin.js renders the auth gate or the console here. -->
+    <main id="app" tabindex="-1"></main>
+
+    <!-- Live region for transient status messages. -->
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script src="admin.js"></script>
+  </body>
+</html>

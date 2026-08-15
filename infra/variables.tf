@@ -105,3 +105,74 @@ variable "lambda_duration_p99_ratio" {
     error_message = "lambda_duration_p99_ratio must be between 0 (exclusive) and 1 (inclusive)."
   }
 }
+
+# --- Admin surface (admin.nota.ca) — PHASE 1, feature-flagged ----------------
+# The entire admin stack (admin.tf + admin-cdn.tf) is gated behind enable_admin.
+# With enable_admin = false (the default) `terraform plan` creates NO admin
+# resources: the live public stack is unchanged. The ONLY ungated admin-related
+# change is a single additive dynamodb:UpdateItem grant on the public API role
+# (see lambda.tf) for STATS# analytics rollups.
+variable "enable_admin" {
+  description = "Master switch for the admin surface (admin.tf + admin-cdn.tf). Leave false to keep the admin stack entirely uncreated."
+  type        = bool
+  default     = false
+}
+
+variable "admin_domain_name" {
+  description = "Custom domain for the admin CloudFront distribution (e.g. admin.nota.ca). Empty falls back to the default *.cloudfront.net domain (no ACM/Route53 for admin). Uses var.hosted_zone_id for DNS validation + alias records."
+  type        = string
+  default     = ""
+}
+
+variable "admin_allowed_cidrs" {
+  description = "WAF IPv4 CIDR allowlist for the admin surface. EMPTY (the default) means the WAF blocks EVERYONE — the admin surface is unreachable (safe closed default). Admins on dynamic IPs must keep this current."
+  type        = list(string)
+  default     = []
+}
+
+variable "admin_emails" {
+  description = "Allowlisted admin login email addresses (injected as NOTA_ADMIN_EMAILS). Empty means no one can log in."
+  type        = list(string)
+  default     = []
+}
+
+# --- Scale / capacity limits ------------------------------------------------
+# Raised from the initial sane-low defaults so the public API is not the launch
+# ceiling (it was 20 req/s + 20 concurrent). Kept as variables — never hardcoded
+# — so capacity grows with traffic. The account concurrency pool is 1000; keep at
+# least 100 unreserved across all functions.
+variable "api_throttle_rate_limit" {
+  description = "API Gateway steady-state requests/sec for the public API stage."
+  type        = number
+  default     = 500
+}
+
+variable "api_throttle_burst_limit" {
+  description = "API Gateway burst request ceiling for the public API stage."
+  type        = number
+  default     = 1000
+}
+
+variable "api_reserved_concurrency" {
+  description = "Reserved concurrent executions for the public API Lambda (blast-radius cap)."
+  type        = number
+  default     = 100
+}
+
+variable "api_memory_size" {
+  description = "Memory (MB) for the public API Lambda. Lambda CPU scales with memory; 512 keeps partition-heavy reads (whole-month Queries, .ics feeds) CPU-comfortable."
+  type        = number
+  default     = 512
+}
+
+variable "admin_reserved_concurrency" {
+  description = "Reserved concurrent executions for the admin API Lambda."
+  type        = number
+  default     = 10
+}
+
+variable "admin_memory_size" {
+  description = "Memory (MB) for the admin API Lambda."
+  type        = number
+  default     = 512
+}
