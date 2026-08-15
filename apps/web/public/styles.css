@@ -252,7 +252,8 @@ a:hover { text-decoration: underline; }
 }
 .notif-item:last-child { border-bottom: 0; }
 .notif-item[role='button'] { cursor: pointer; }
-.notif-item[role='button']:hover, .notif-item[role='button']:focus-visible { background: var(--surface-inset); outline: none; }
+.notif-item[role='button']:hover { background: var(--surface-inset); }
+.notif-item[role='button']:focus-visible { background: var(--surface-inset); outline: 2px solid var(--ring); outline-offset: -2px; }
 .notif-item.is-unread { background: var(--surface-hover); }
 .notif-item.is-unread .notif-title::before {
   content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 7px;
@@ -267,7 +268,8 @@ a:hover { text-decoration: underline; }
 .acct-btn[aria-expanded='true'] { border-color: var(--brand); color: var(--brand); }
 .acct-panel { padding: 6px; }
 .acct-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; appearance: none; background: transparent; border: 0; border-radius: var(--radius); padding: 9px 10px; font: inherit; color: var(--ink); cursor: pointer; }
-.acct-item:hover, .acct-item:focus-visible { background: var(--surface-inset); outline: none; }
+.acct-item:hover { background: var(--surface-inset); }
+.acct-item:focus-visible { background: var(--surface-inset); outline: 2px solid var(--ring); outline-offset: -2px; }
 .acct-item svg { flex: none; color: var(--ink-muted); }
 .acct-avatar { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--border); color: var(--brand); flex: none; }
 .acct-labels { display: flex; flex-direction: column; min-width: 0; }
@@ -299,7 +301,7 @@ a:hover { text-decoration: underline; }
 
 /* Hero call-to-action — the buyer's first, obvious action */
 .hero-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 22px; }
-.hero-cta { display: flex; gap: 10px; flex-wrap: wrap; }
+.hero-cta { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
 
 /* Guided step badges (1 · 2 · 3) in the offer panel */
 .step {
@@ -311,7 +313,7 @@ a:hover { text-decoration: underline; }
 :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 
 /* --- Hero / intro -------------------------------------------------------- */
-.intro { padding: clamp(20px, 3.2vw, 44px) 0 clamp(16px, 2.4vw, 30px); }
+.intro { padding: clamp(12px, 1.6vw, 20px) 0 clamp(16px, 2.4vw, 30px); }
 .intro h1 { font-size: clamp(24px, 3vw, 34px); font-weight: 800; line-height: 1.12; margin-top: 6px; }
 .intro p { color: var(--ink-muted); max-width: 60ch; margin: 10px 0 0; font-size: 15px; line-height: 1.55; }
 .eyebrow {
@@ -325,9 +327,12 @@ a:hover { text-decoration: underline; }
    A `padding: … 0 …` shorthand would reset .wrap's side padding, pushing the
    panels 28px past the hero content on each side (misalignment). */
 .layout { display: grid; grid-template-columns: 1fr; gap: clamp(16px, 2.4vw, 24px); padding-top: clamp(6px, 1.2vw, 12px); padding-bottom: clamp(40px, 7vw, 64px); align-items: start; }
-/* Maximized calendar: taller day cells + hide the legend (there's no side panel to hide anymore). */
-.layout.cal-max .cal-cell { min-height: 112px; }
-.layout.cal-max #legend { display: none; }
+/* Full-screen calendar (Fullscreen API on #carnet-panel): fill the viewport
+   with a padded surface and taller day cells that use the extra height. */
+#carnet-panel:fullscreen, #carnet-panel:-webkit-full-screen {
+  background: var(--surface); padding: 10px 18px 20px; overflow: auto; border-radius: 0;
+}
+#carnet-panel:fullscreen .cal-cell, #carnet-panel:-webkit-full-screen .cal-cell { min-height: clamp(88px, 11vh, 128px); }
 
 .panel {
   background: var(--surface);
@@ -392,10 +397,10 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 #filters-toggle.has-active { border-color: var(--brand); color: var(--brand); }
 
 .cal-grid { display: flex; flex-direction: column; gap: 6px; padding: 10px 16px 16px; }
-.cal-row { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.cal-row { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
 .cal-dow { text-align: center; font-size: 11px; font-weight: 700; color: var(--ink-muted); padding: 4px 0; text-transform: uppercase; letter-spacing: .04em; }
 .cal-cell {
-  background: var(--surface); min-height: 74px; padding: 7px 9px; position: relative;
+  background: var(--surface); min-height: 66px; padding: 7px 9px; position: relative;
   display: flex; flex-direction: column; gap: 3px; cursor: pointer;
   border: 1px solid var(--border); border-radius: var(--radius-sm); scroll-margin-top: var(--sticky-top);
   text-align: left; font: inherit; color: var(--ink);
@@ -410,7 +415,7 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 .cal-daynum { font-size: 12px; font-weight: 600; color: var(--ink-muted); }
 .cal-cell.is-today .cal-daynum { color: var(--brand); font-weight: 800; }
 .cal-count { position: absolute; top: 7px; right: 8px; font-size: 10px; font-weight: 700; background: var(--brand); color: var(--brand-ink); border-radius: 999px; min-width: 16px; text-align: center; padding: 1px 5px; }
-.cal-top { font-size: 15px; font-weight: 800; letter-spacing: -0.02em; margin-top: auto; }
+.cal-top { font-size: 15px; font-weight: 800; letter-spacing: -0.02em; margin-top: auto; white-space: nowrap; }
 .cal-top.is-cleared { text-decoration: line-through; color: var(--ink-muted); font-weight: 600; }
 .cal-status { display: flex; height: 3px; border-radius: 999px; overflow: hidden; background: var(--border); }
 .cal-status-open { background: var(--status-ouverte); }
@@ -418,7 +423,7 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 .cal-cell.is-taken .cal-count { background: var(--status-retenue); color: var(--brand-ink); }
 /* The client's OWN offer status on a day: a subtle ring + a coloured pill. */
 .cal-cell.has-mine { box-shadow: inset 0 0 0 1.5px var(--brand); }
-.cal-mine { align-self: flex-start; margin-top: 4px; font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); color: var(--ink-muted); white-space: nowrap; }
+.cal-mine { align-self: flex-start; max-width: 100%; overflow: hidden; text-overflow: ellipsis; margin-top: 4px; font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); color: var(--ink-muted); white-space: nowrap; }
 .cal-mine[data-status='approved'] { color: var(--ok); border-color: var(--ok); }
 .cal-mine[data-status='pending'] { color: var(--brand); border-color: var(--brand); }
 .cal-mine[data-status='expired'] { color: var(--ink-muted); border-style: dashed; }
@@ -510,16 +515,25 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .dossier-pricing { grid-column: 1 / -1; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
 .dossier-pricing .o-criteria { margin-top: 10px; }
 .dossier-price { margin-top: 12px; font-weight: 600; color: var(--brand); font-size: 14px; }
-/* Profile: coordinates + notification settings, two responsive cards. */
-/* Coordonnées + Notifications stack in a narrow left column; Mes documents
-   fills the entire right side — no wasted horizontal (or vertical) space. */
-.profil-grid { display: grid; grid-template-columns: minmax(300px, 380px) 1fr; gap: 14px; align-items: start; }
-.profil-col-left { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
-.profil-grid > .profil-docs { margin: 0; }
-@media (max-width: 900px) { .profil-grid { grid-template-columns: 1fr; } }
-.profil-card { padding: 16px 18px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); display: flex; flex-direction: column; gap: 10px; }
+/* Profile: a top row of at-a-glance / set-once cards (offers · coordinates ·
+   notifications) that auto-fit across the width, then a full-width documents
+   work area below — no tall-thin void, honest use of the horizontal space. */
+.profil-stack { display: flex; flex-direction: column; gap: 14px; }
+/* Every section is a full-width band whose content lays out in a grid that
+   fills the width (auto-fit) — no empty right half, no ragged inter-card void. */
+.my-offers-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; }
+.profil-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px 18px; }
+.profil-fields .form-row { margin: 0; }
+.profil-fields .form-row input { width: 100%; }
+.profil-switches { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 2px 24px; }
+.profil-card { padding: 16px 18px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); display: flex; flex-direction: column; gap: 8px; }
 .profil-card-title { font-size: 15px; font-weight: 700; color: var(--ink); }
-.profil-card .switch-row { margin-top: 2px; }
+/* The card is a flex column with its own gap — zero the children's stacking
+   margins so field/switch spacing isn't doubled (the source of the void). */
+.profil-card .form-row { margin-bottom: 2px; }
+.profil-card .form-row label.lbl { margin-bottom: 6px; }
+.profil-card .switch-row { padding: 4px 0; }
+.profil-card .help { margin-top: 0; }
 /* Mes offres — the client's posted offers with live status. */
 .my-offer { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; text-align: left; appearance: none; background: transparent; border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; font: inherit; color: var(--ink); cursor: pointer; transition: border-color .12s; }
 .my-offer:hover, .my-offer:focus-visible { border-color: var(--brand); outline: none; }
@@ -719,7 +733,7 @@ dialog::backdrop { background: rgb(15 23 42 / 0.45); }
   font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px; white-space: nowrap;
   background: var(--surface-inset); color: var(--ink-muted); border: 1px solid var(--border-strong);
 }
-.nc-ready[data-ready='true'] { background: var(--hunter-100); color: var(--hunter-700); border-color: var(--hunter-300); }
+.nc-ready[data-ready='true'] { color: var(--ok); border-color: var(--ok); }
 .nc-card-actions { display: flex; gap: 8px; margin-top: 12px; }
 
 .nc-dossier { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
@@ -735,7 +749,7 @@ dialog::backdrop { background: rgb(15 23 42 / 0.45); }
 .nc-complete-lbl { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: var(--ink-muted); }
 .nc-actval { max-width: 140px; }
 .nc-complete-done { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.nc-done-badge { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px; white-space: nowrap; background: var(--hunter-100); color: var(--hunter-700); border: 1px solid var(--hunter-300); }
+.nc-done-badge { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px; white-space: nowrap; background: transparent; color: var(--ok); border: 1px solid var(--ok); }
 .nc-done-fee { font-size: 12px; color: var(--ink-muted); }
 
 /* Dossier post-publish bridge (in the day modal). */
@@ -854,6 +868,11 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
 .sub-card-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
 .sub-card-actions .btn { flex: 1 1 auto; gap: 6px; padding-left: 10px; padding-right: 10px; }
 .brand-ic { flex: none; display: block; }
+/* On the Notaires page the same subscribe card sits as a full-width band —
+   pitch on the left, calendar buttons on the right — so it fills the row. */
+.notary-carnet { margin-top: 16px; }
+.notary-carnet .sub-card { display: flex; align-items: center; justify-content: space-between; gap: 14px 24px; flex-wrap: wrap; }
+.notary-carnet .sub-card-actions { margin-top: 0; flex: 0 1 auto; }
 /* Borderless notification bell in the header. */
 
 /* Preserve the brand entrance cascade under the two-column nesting: cancel the
@@ -903,8 +922,8 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   .brand { font-size: 18px; }
   .nav-tab { padding: 7px 10px; font-size: 13px; }
   .intro h1 { font-size: clamp(24px, 7vw, 30px); }
-  .cal-cell { min-height: 66px; padding: 6px 6px; }
-  .cal-top { font-size: 13px; }
+  .cal-cell { min-height: 62px; padding: 6px 6px; }
+  .cal-top { font-size: 12px; }
   .cal-grid { gap: 4px; padding: 8px 10px 12px; }
   .cal-row { gap: 4px; }
   .cal-dow { font-size: 10px; }

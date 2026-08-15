@@ -59,14 +59,20 @@
       if (!v.ok) return { ok: false, errors: v.errors };
 
       if (this.online) {
+        var r = null;
         try {
-          var r = await fetch(API_BASE + '/bids', {
+          r = await fetch(API_BASE + '/bids', {
             method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload),
           });
-          var j = await r.json();
+        } catch (e) { r = null; /* only a rejected fetch (true offline) falls back to local */ }
+        if (r) {
+          // Guard the parse: an empty/non-JSON error body must NOT be swallowed
+          // into the local-demo path (which would falsely report success).
+          var j = {};
+          try { j = await r.json(); } catch (e) { /* empty or non-JSON body */ }
           if (r.status === 201) return { ok: true, bid: j.bid };
-          return { ok: false, errors: j.errors || [{ code: 'erreur', message: 'Erreur serveur.' }] };
-        } catch (e) { /* fall back to local */ }
+          return { ok: false, errors: (j && j.errors) || [{ code: 'erreur', message: 'Erreur serveur. Réessayez.' }] };
+        }
       }
       var anonyme = payload.anonyme !== false;
       var bid = {
@@ -388,6 +394,10 @@
         badge.dataset.status = mineSt;
         badge.title = 'Votre offre — ' + { approved: 'approuvée par un notaire', pending: 'en attente d’un notaire', expired: 'expirée' }[mineSt];
         cell.appendChild(badge);
+        // The badge is a child span, excluded from the button's accessible name;
+        // fold its status into the cell's aria-label so it's not sight-only.
+        cell.setAttribute('aria-label', (cell.getAttribute('aria-label') || dayTitle(iso)) +
+          ', votre offre ' + { approved: 'approuvée', pending: 'en attente', expired: 'expirée' }[mineSt]);
       }
 
       cell.addEventListener('click', function () { openDay(this.dataset.date); });
@@ -1048,6 +1058,7 @@
     if (!offers.length) return null;
     var card = el('div', 'profil-card');
     card.appendChild(el('h2', 'profil-card-title', 'Mes offres'));
+    var list = el('div', 'my-offers-list');
     offers.slice().sort(function (a, b) { return String(b.dateISO).localeCompare(String(a.dateISO)); }).forEach(function (o) {
       var st = clientOfferStatus(o);
       var row = el('button', 'my-offer'); row.type = 'button'; row.dataset.status = st;
@@ -1058,8 +1069,9 @@
       var badge = el('span', 'my-offer-badge', OFFER_STATUS_LABEL[st]); badge.dataset.status = st;
       row.appendChild(badge);
       row.addEventListener('click', function () { toggleNotifPanel(false); setTab('carnet'); openDay(o.dateISO); });
-      card.appendChild(row);
+      list.appendChild(row);
     });
+    card.appendChild(list);
     return card;
   }
 
@@ -1067,10 +1079,17 @@
     var body = $('profil-body'); if (!body) return; clear(body);
     var p = profileGet();
 
-    // Coordinates card — reused when publishing an offer.
+    // Mes offres — a full-width band at the top; its offers lay out across the
+    // width so the actionable "where do my requests stand" view leads.
+    var oCard = buildMyOffersCard();
+    if (oCard) body.appendChild(oCard);
+
+    // Coordinates card — reused when publishing an offer. A full-width band;
+    // the fields sit in a grid that fills the width (no empty right half).
     var idCard = el('div', 'profil-card');
     idCard.appendChild(el('h2', 'profil-card-title', 'Coordonnées'));
     idCard.appendChild(el('p', 'help', 'Réutilisées automatiquement quand vous publiez une offre.'));
+    var idFields = el('div', 'profil-fields');
     [
       { key: 'nom', label: 'Nom (offre non anonyme)', ph: 'Prénom Nom', type: 'text' },
       { key: 'courriel', label: 'Courriel', ph: 'vous@exemple.ca', type: 'email' },
@@ -1085,17 +1104,17 @@
         var val = f.key === 'prefixe' ? inp.value.trim().toUpperCase().slice(0, 3) : inp.value.trim();
         var patch = {}; patch[f.key] = val; profileSet(patch);
       });
-      row.appendChild(inp); idCard.appendChild(row);
+      row.appendChild(inp); idFields.appendChild(row);
     });
-    var leftCol = el('div', 'profil-col-left');
-    var oCard = buildMyOffersCard();
-    if (oCard) leftCol.appendChild(oCard);
-    leftCol.appendChild(idCard);
+    idCard.appendChild(idFields);
+    body.appendChild(idCard);
 
     // Notifications card — on by default, per-kind toggles gate addNotif().
+    // The toggles sit in a grid so they fill the width instead of stacking thin.
     var nCard = el('div', 'profil-card');
     nCard.appendChild(el('h2', 'profil-card-title', 'Notifications'));
     nCard.appendChild(el('p', 'help', 'Par courriel et dans l’application. Activées par défaut.'));
+    var nGrid = el('div', 'profil-switches');
     [
       { key: 'published', label: 'Confirmation de publication d’une offre' },
       { key: 'reminders', label: 'Rappels à l’approche de la date' },
@@ -1114,10 +1133,10 @@
         var np = {}; np[t.key] = cb.checked; profileSet({ notifs: np });
       });
       lab.appendChild(cb); lab.appendChild(el('span', 'track'));
-      row.appendChild(lab); nCard.appendChild(row);
+      row.appendChild(lab); nGrid.appendChild(row);
     });
-    leftCol.appendChild(nCard);
-    body.appendChild(leftCol);
+    nCard.appendChild(nGrid);
+    body.appendChild(nCard);
 
     // Documents card — the full document list per service, with upload / remove /
     // mark-validated. "One profile" = coordinates + notifications + documents.
@@ -1545,23 +1564,31 @@
     nc.token = j.token; nc.feedToken = j.feedToken || null; nc.email = email;
     lsSave(LS_NC_TOKEN, j.token); lsSave(LS_NC_FEED_TOKEN, nc.feedToken); lsSave(LS_NC_EMAIL, email);
     ncRenderAuthState();
-    await ncLoadBids();
-    toast('Console ouverte pour ' + email + '.');
+    var loaded = await ncLoadBids();
+    if (loaded) toast('Console ouverte pour ' + email + '.');
     return { ok: true };
   }
 
   async function ncLoadBids() {
-    if (!nc.token) return;
+    if (!nc.token) return false;
     var r;
     try {
       r = await fetch(API_BASE + '/notary/bids', {
         headers: { accept: 'application/json', authorization: 'Bearer ' + nc.token },
       });
-    } catch (e) { toast('Impossible de charger les demandes (hors ligne).'); return; }
-    if (r.status === 401) { ncExpire('Session expirée. Reconnectez-vous.'); return; }
+    } catch (e) {
+      // A failed load must NOT read as "no open requests" (blank region) — show
+      // the error in-region and report failure so callers don't toast success.
+      nc.open = []; ncRenderOpen();
+      var empty = $('notary-open-empty');
+      if (empty) { empty.textContent = 'Impossible de charger les demandes (hors ligne). Réessayez.'; empty.hidden = false; }
+      return false;
+    }
+    if (r.status === 401) { ncExpire('Session expirée. Reconnectez-vous.'); return false; }
     var j = {}; try { j = await r.json(); } catch (e) {}
     nc.open = j.bids || [];
     ncRenderOpen();
+    return true;
   }
 
   async function ncAccept(id, dateISO, bidMeta) {
@@ -1868,15 +1895,31 @@
       this.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
     });
 
-    // Maximize the calendar: hide the offer panel and let the calendar fill the width.
+    // Expand the calendar to true full screen (Fullscreen API) rather than a
+    // wider in-page mode. The button reflects state via fullscreenchange.
     $('cal-maximize').addEventListener('click', function () {
-      var layout = document.querySelector('.layout');
-      var on = layout.classList.toggle('cal-max');
-      this.setAttribute('aria-pressed', on ? 'true' : 'false');
-      var lbl = on ? 'Réduire le calendrier' : 'Agrandir le calendrier';
-      this.setAttribute('aria-label', lbl); this.setAttribute('title', lbl);
-      renderCalendar();
+      var panel = $('carnet-panel'); if (!panel) return;
+      var fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+      if (fsEl) {
+        (document.exitFullscreen || document.webkitExitFullscreen || function () {}).call(document);
+      } else {
+        (panel.requestFullscreen || panel.webkitRequestFullscreen || function () {}).call(panel);
+      }
     });
+    function onFullscreenChange() {
+      var panel = $('carnet-panel');
+      var on = !!(document.fullscreenElement || document.webkitFullscreenElement);
+      var btn = $('cal-maximize');
+      if (panel) panel.classList.toggle('is-fullscreen', on);
+      if (btn) {
+        btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        var lbl = on ? 'Quitter le plein écran' : 'Plein écran';
+        btn.setAttribute('aria-label', lbl); btn.setAttribute('title', lbl);
+      }
+      renderCalendar(); // reflow cells to the new viewport
+    }
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', onFullscreenChange);
 
     // Privacy (Law 25) — opens the dedicated confidentialité view.
     var pv = $('privacy-link');
@@ -1926,7 +1969,7 @@
     var ncForm = $('notary-auth-form');
     if (ncForm) ncForm.addEventListener('submit', function (e) { e.preventDefault(); ncSignIn($('nc-email').value); });
     var ncOut = $('notary-signout'); if (ncOut) ncOut.addEventListener('click', ncSignOut);
-    var ncRef = $('notary-refresh'); if (ncRef) ncRef.addEventListener('click', function () { ncLoadBids(); toast('Demandes rafraîchies.'); });
+    var ncRef = $('notary-refresh'); if (ncRef) ncRef.addEventListener('click', function () { ncLoadBids().then(function (ok) { if (ok) toast('Demandes rafraîchies.'); }); });
     var ncOpenList = $('notary-open-list');
     if (ncOpenList) ncOpenList.addEventListener('click', function (e) {
       var card = e.target.closest('.nc-card'); if (!card) return;
@@ -1979,6 +2022,9 @@
     onOfferServiceChange();
     if (state.selectedDate) { $('o-date').value = state.selectedDate; onOfferDateChange(); }
 
+    // Paint the (date-derived) grid immediately so the first load never shows a
+    // blank panel while the live month data is still in flight, then repaint.
+    renderCalendar(); renderAgenda();
     await refreshMonthData();
     renderCalendar(); renderAgenda();
 

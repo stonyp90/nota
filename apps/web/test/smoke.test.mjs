@@ -472,21 +472,17 @@ test('filters stay hidden until the toggle opens them, with an active-count badg
   assert.ok(toggle.classList.contains('has-active'), 'toggle should mark itself active');
 });
 
-// 18. Maximize toggle expands the calendar full-width and hides the offer panel.
-test('maximize toggle adds cal-max and hides the side panel', async () => {
+// 18. Expand button requests true full screen on the calendar panel.
+test('expand button requests fullscreen on the calendar panel', async () => {
   const { doc } = await boot();
-  const layout = doc.querySelector('.layout');
+  const panel = $(doc, 'carnet-panel');
   const btn = $(doc, 'cal-maximize');
-  assert.equal(layout.classList.contains('cal-max'), false);
+  let called = 0;
+  panel.requestFullscreen = function () { called++; return Promise.resolve(); };
   assert.equal(btn.getAttribute('aria-pressed'), 'false');
 
   btn.click();
-  assert.equal(layout.classList.contains('cal-max'), true, 'maximize should add cal-max');
-  assert.equal(btn.getAttribute('aria-pressed'), 'true');
-
-  btn.click();
-  assert.equal(layout.classList.contains('cal-max'), false, 'toggling again should restore the layout');
-  assert.equal(btn.getAttribute('aria-pressed'), 'false');
+  assert.equal(called, 1, 'clicking expand should request fullscreen on the calendar panel');
 });
 
 // --- EDGE CASES (UI) — status marking + empty states -------------------------

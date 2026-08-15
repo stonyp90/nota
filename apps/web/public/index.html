@@ -196,38 +196,14 @@
       <!-- ================= CARNET ================= -->
       <section class="tab-pane is-active" id="pane-carnet" role="tabpanel" aria-labelledby="tab-carnet">
         <div class="wrap">
-          <div class="intro intro--split">
-            <div class="intro-lead">
-              <span class="eyebrow">Carnet public · Québec</span>
-              <h1>Un notaire, à la date qu’il vous faut.</h1>
-              <p>Choisissez le jour. Un notaire de Québec le retient. Gratuit pour vous.</p>
-              <div class="hero-cta">
-                <button class="btn btn-primary btn-lg" id="cta-reserver">Réserver votre date →</button>
-                <button class="btn btn-lg" id="cta-voir">Voir les dates</button>
-              </div>
+          <div class="intro">
+            <span class="eyebrow">Carnet public · Québec</span>
+            <h1>Un notaire, à la date qu’il vous faut.</h1>
+            <p>Choisissez le jour. Un notaire de Québec le retient. Gratuit pour vous.</p>
+            <div class="hero-cta">
+              <button class="btn btn-primary btn-lg" id="cta-reserver">Réserver votre date →</button>
+              <button class="btn btn-lg" id="cta-voir">Voir les dates</button>
             </div>
-
-            <!-- Subscribe the whole carnet into a personal calendar (one-click), so
-                 every open date shows up and stays in sync in Google/Outlook/Apple. -->
-            <aside class="intro-aside">
-              <div class="sub-card" role="group" aria-label="Ajouter le carnet à votre agenda">
-                <div class="sub-card-head">
-                  <span class="sub-card-logo" aria-hidden="true">
-                    <img src="favicon.svg" width="30" height="30" alt="" />
-                  </span>
-                  <div>
-                    <div class="sub-card-title">Le carnet dans votre agenda</div>
-                    <div class="sub-card-sub">Synchronisé automatiquement.</div>
-                  </div>
-                </div>
-                <div class="sub-card-actions">
-                  <a class="btn btn-sm sub-btn" id="sub-google" target="_blank" rel="noopener"><svg class="brand-ic" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.8z"/><path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1A12 12 0 0 0 12 24z"/><path fill="#FBBC05" d="M5.3 14.3a7.2 7.2 0 0 1 0-4.6V6.6H1.3a12 12 0 0 0 0 10.8l4-3.1z"/><path fill="#EA4335" d="M12 4.8c1.8 0 3.3.6 4.6 1.8l3.4-3.4A12 12 0 0 0 12 0 12 12 0 0 0 1.3 6.6l4 3.1C6.2 6.9 8.9 4.8 12 4.8z"/></svg>Google</a>
-                  <a class="btn btn-sm sub-btn" id="sub-outlook" target="_blank" rel="noopener"><svg class="brand-ic" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="#0F6CBD" d="M2 6.2 9 4.9v14.2L2 17.8z"/><path fill="#fff" d="M5.5 9.2c-1 0-1.7.9-1.7 2.3s.7 2.3 1.7 2.3 1.7-.9 1.7-2.3-.7-2.3-1.7-2.3zm0 1c.4 0 .7.5.7 1.3s-.3 1.3-.7 1.3-.7-.5-.7-1.3.3-1.3.7-1.3z"/><rect x="9.5" y="5.5" width="12.5" height="13" rx="1.5" fill="#0F6CBD"/><path fill="#fff" d="M15.7 8.6a3 3 0 1 0 0 6 3 3 0 0 0 0-6zm0 1.6a1.4 1.4 0 1 1 0 2.8 1.4 1.4 0 0 1 0-2.8z"/></svg>Outlook</a>
-                  <a class="btn btn-sm sub-btn" id="sub-apple"><svg class="brand-ic" viewBox="0 0 384 512" width="13" height="13" aria-hidden="true" fill="currentColor"><path d="M318.7 268c-.3-36 16.4-63 50-83-18.8-27-47-42-84-45-35-3-73 20-87 20s-52-19-79-19c-56 1-114 43-114 130 0 26 5 53 15 81 13 37 60 128 109 126 26-1 44-19 78-19s50 18 78 18c50-1 92-83 105-120-67-32-64-93-64-95zM256 84c17-20 15-49 14-59-14 1-40 9-56 29-14 17-19 43-16 58 16 1 41-8 58-28z"/></svg>Apple</a>
-                  <a class="btn btn-sm sub-btn" id="sub-ics" download="nota-carnet.ics"><svg class="brand-ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>iCal</a>
-                </div>
-              </div>
-            </aside>
           </div>
         </div>
 
@@ -337,6 +313,28 @@
             </div>
           </div>
 
+          <!-- Prospecting feed for notaries: subscribe the whole carnet of open
+               demands into a personal agenda (Google / Outlook / Apple / iCal). -->
+          <aside class="notary-carnet">
+            <div class="sub-card" role="group" aria-label="Ajouter le carnet des demandes à votre agenda">
+                <div class="sub-card-head">
+                  <span class="sub-card-logo" aria-hidden="true">
+                    <img src="favicon.svg" width="30" height="30" alt="" />
+                  </span>
+                  <div>
+                    <div class="sub-card-title">Le carnet dans votre agenda</div>
+                    <div class="sub-card-sub">Toutes les demandes ouvertes, à jour dans votre agenda.</div>
+                  </div>
+                </div>
+                <div class="sub-card-actions">
+                  <a class="btn btn-sm sub-btn" id="sub-google" target="_blank" rel="noopener"><svg class="brand-ic" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.8z"/><path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1A12 12 0 0 0 12 24z"/><path fill="#FBBC05" d="M5.3 14.3a7.2 7.2 0 0 1 0-4.6V6.6H1.3a12 12 0 0 0 0 10.8l4-3.1z"/><path fill="#EA4335" d="M12 4.8c1.8 0 3.3.6 4.6 1.8l3.4-3.4A12 12 0 0 0 12 0 12 12 0 0 0 1.3 6.6l4 3.1C6.2 6.9 8.9 4.8 12 4.8z"/></svg>Google</a>
+                  <a class="btn btn-sm sub-btn" id="sub-outlook" target="_blank" rel="noopener"><svg class="brand-ic" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="#0F6CBD" d="M2 6.2 9 4.9v14.2L2 17.8z"/><path fill="#fff" d="M5.5 9.2c-1 0-1.7.9-1.7 2.3s.7 2.3 1.7 2.3 1.7-.9 1.7-2.3-.7-2.3-1.7-2.3zm0 1c.4 0 .7.5.7 1.3s-.3 1.3-.7 1.3-.7-.5-.7-1.3.3-1.3.7-1.3z"/><rect x="9.5" y="5.5" width="12.5" height="13" rx="1.5" fill="#0F6CBD"/><path fill="#fff" d="M15.7 8.6a3 3 0 1 0 0 6 3 3 0 0 0 0-6zm0 1.6a1.4 1.4 0 1 1 0 2.8 1.4 1.4 0 0 1 0-2.8z"/></svg>Outlook</a>
+                  <a class="btn btn-sm sub-btn" id="sub-apple"><svg class="brand-ic" viewBox="0 0 384 512" width="13" height="13" aria-hidden="true" fill="currentColor"><path d="M318.7 268c-.3-36 16.4-63 50-83-18.8-27-47-42-84-45-35-3-73 20-87 20s-52-19-79-19c-56 1-114 43-114 130 0 26 5 53 15 81 13 37 60 128 109 126 26-1 44-19 78-19s50 18 78 18c50-1 92-83 105-120-67-32-64-93-64-95zM256 84c17-20 15-49 14-59-14 1-40 9-56 29-14 17-19 43-16 58 16 1 41-8 58-28z"/></svg>Apple</a>
+                  <a class="btn btn-sm sub-btn" id="sub-ics" download="nota-carnet.ics"><svg class="brand-ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>iCal</a>
+                </div>
+              </div>
+          </aside>
+
           <div class="notaires-cols">
           <div class="panel panel-pad panel-narrow">
             <h2 class="h-sub">Devenir notaire — gratuit</h2>
@@ -347,7 +345,7 @@
                 <input type="email" id="n-email" inputmode="email" autocomplete="email" placeholder="vous@etude.ca" required />
                 <p class="help">Nom, étude et coordonnées bancaires sont recueillis à l’étape suivante, sur Stripe.</p>
               </div>
-              <ul class="errors" id="notary-errors" hidden></ul>
+              <ul class="errors" id="notary-errors" role="alert" aria-atomic="true" hidden></ul>
               <button type="submit" class="btn btn-primary" id="notary-submit">Commencer gratuitement</button>
             </form>
           </div>
@@ -364,7 +362,7 @@
                 <input type="email" id="nc-email" inputmode="email" autocomplete="email" placeholder="vous@etude.ca" required />
                 <p class="help">Démo : n’importe quel courriel valide ouvre une console. En production, l’accès est réservé aux notaires inscrits au Tableau de l’Ordre.</p>
               </div>
-              <ul class="errors" id="notary-console-errors" hidden></ul>
+              <ul class="errors" id="notary-console-errors" role="alert" aria-atomic="true" hidden></ul>
               <button type="submit" class="btn btn-primary" id="notary-console-signin">Accéder à ma console</button>
             </form>
 
@@ -415,7 +413,7 @@
             <h1>Mon profil</h1>
             <p>Vos coordonnées et préférences, enregistrées sur cet appareil et réutilisées automatiquement pour vos offres et votre dossier.</p>
           </div>
-          <div id="profil-body" class="profil-grid"></div>
+          <div id="profil-body" class="profil-stack"></div>
         </div>
       </section>
 
@@ -534,7 +532,7 @@
             <p id="offer-dossier-note" class="help">Les réponses de votre <strong>Dossier</strong> accompagnent l’offre ; les documents ne sont partagés qu’après qu’un notaire a retenu votre demande.</p>
           </div>
         </details>
-        <ul class="errors" id="offer-errors" hidden></ul>
+        <ul class="errors" id="offer-errors" role="alert" aria-atomic="true" hidden></ul>
         <button type="submit" class="btn btn-primary w-full btn-lg" id="offer-submit" disabled>Publier mon offre</button>
         <div id="offer-success" class="offer-success" hidden>
           <div class="offer-success-head">
