@@ -582,7 +582,7 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
    margins so field/switch spacing isn't doubled (the source of the void). */
 .profil-card .form-row { margin-bottom: 2px; }
 .profil-card .form-row label.lbl { margin-bottom: 6px; }
-.profil-card .switch-row { padding: 4px 0; max-width: 420px; }
+.profil-card .switch-row { padding: 5px 0; justify-content: flex-start; gap: 12px; }
 .profil-card .help { margin-top: 0; }
 /* Mes offres — the client's posted offers with live status. */
 .my-offer { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; text-align: left; appearance: none; background: transparent; border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; font: inherit; color: var(--ink); cursor: pointer; transition: border-color .12s; }

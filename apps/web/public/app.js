@@ -1195,7 +1195,6 @@
       { key: 'retained', label: 'Avis quand un notaire retient votre offre' },
     ].forEach(function (t) {
       var row = el('div', 'switch-row');
-      var txt = el('div'); txt.appendChild(el('div', 'switch-title', t.label)); row.appendChild(txt);
       var lab = el('label', 'switch');
       var cb = document.createElement('input'); cb.type = 'checkbox'; cb.setAttribute('role', 'switch');
       cb.id = 'p-notif-' + t.key;
@@ -1207,7 +1206,9 @@
         var np = {}; np[t.key] = cb.checked; profileSet({ notifs: np });
       });
       lab.appendChild(cb); lab.appendChild(el('span', 'track'));
-      row.appendChild(lab); nGrid.appendChild(row);
+      // Control first (left), label after — toggles line up in a clean column.
+      var txt = el('div'); txt.appendChild(el('div', 'switch-title', t.label));
+      row.appendChild(lab); row.appendChild(txt); nGrid.appendChild(row);
     });
     nCard.appendChild(nGrid);
     body.appendChild(nCard);
