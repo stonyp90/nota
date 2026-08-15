@@ -262,7 +262,9 @@ a:hover { text-decoration: underline; }
 .notif-body { font-size: 12px; color: var(--ink-muted); margin-top: 2px; }
 
 /* Account menu (avatar) — merges profile + notifications + menu into one panel. */
-.acct-btn { border-radius: 50%; }
+.acct-btn { border-radius: 50%; border: 1px solid var(--border); }
+.acct-btn:hover { border-color: var(--brand); }
+.acct-btn[aria-expanded='true'] { border-color: var(--brand); color: var(--brand); }
 .acct-panel { padding: 6px; }
 .acct-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; appearance: none; background: transparent; border: 0; border-radius: var(--radius); padding: 9px 10px; font: inherit; color: var(--ink); cursor: pointer; }
 .acct-item:hover, .acct-item:focus-visible { background: var(--surface-inset); outline: none; }
@@ -507,6 +509,18 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .profil-card { padding: 16px 18px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); display: flex; flex-direction: column; gap: 10px; }
 .profil-card-title { font-size: 15px; font-weight: 700; color: var(--ink); }
 .profil-card .switch-row { margin-top: 2px; }
+/* Documents inside the profile: upload / remove / mark-validated. */
+.profil-docs { grid-column: 1 / -1; }
+.profil-doc-service { margin: 4px 0 8px; max-width: 340px; }
+.profil-doc-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+.doc-row { border: 1px solid var(--border); border-radius: var(--radius); padding: 11px 13px; display: flex; flex-direction: column; gap: 6px; }
+.doc-row[data-done='true'] { border-color: var(--brand); }
+.doc-row-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.doc-row-name { font-weight: 600; font-size: 13.5px; }
+.doc-valid { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink-muted); white-space: nowrap; cursor: pointer; }
+.doc-valid input { accent-color: var(--brand); }
+.doc-file { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12.5px; color: var(--ink-muted); }
+.doc-file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dossier-check { flex: none; margin-top: 2px; width: 18px; height: 18px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); display: grid; place-items: center; color: var(--brand); font-weight: 800; font-size: 12px; }
 .dossier-check[data-on='true'] { background: transparent; color: var(--brand); border-color: var(--brand); }
 .dossier-body { flex: 1; min-width: 0; }

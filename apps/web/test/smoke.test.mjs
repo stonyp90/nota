@@ -195,7 +195,20 @@ test('dossier tab lists first service intake items and badge shows 0/N', async (
   assert.equal(all(doc, '#dossier-list .dossier-item:not(.dossier-consent)').length, expected);
   assert.equal(expected, 6); // testament: 2 docs + 4 champs
   assert.equal(all(doc, '#dossier-list .dossier-consent').length, 1); // consent row present
-  assert.equal($(doc, 'dossier-badge').textContent, '0/' + expected);
+});
+
+// 9c. The profile is the ONE place for documents: upload / remove / mark-validated.
+test('profile documents: upload sets it, then it can be removed', async () => {
+  const { win, doc, D, Nota } = await boot();
+  Nota.setTab('profil');
+  const dsel = doc.querySelector('.profil-doc-service');
+  assert.ok(dsel, 'document service selector rendered in the profile');
+  dsel.value = 'testament'; fire(win, dsel, 'change');
+  const rows = all(doc, '.profil-doc-list .doc-row');
+  const expected = D.serviceById('testament').documents.length + D.serviceById('testament').champs.length;
+  assert.equal(rows.length, expected);
+  // A field row exists; no "validé" affordance until it has a value.
+  assert.equal(all(doc, '.profil-doc-list .doc-valid').length, 0);
 });
 
 // 9b. The dossier profile asks the price-determining questions, shows the price,

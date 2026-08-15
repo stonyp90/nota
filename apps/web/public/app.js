@@ -1044,6 +1044,74 @@
       row.appendChild(lab); nCard.appendChild(row);
     });
     body.appendChild(nCard);
+
+    // Documents card — the full document list per service, with upload / remove /
+    // mark-validated. "One profile" = coordinates + notifications + documents.
+    var dCard = el('div', 'profil-card profil-docs');
+    dCard.appendChild(el('h2', 'profil-card-title', 'Mes documents'));
+    dCard.appendChild(el('p', 'help', 'Téléversez ce que le notaire demandera. Ajoutez, retirez ou marquez « validé ». Tout reste sur votre appareil jusqu’à ce qu’un notaire retienne votre demande.'));
+    var dsel = document.createElement('select'); dsel.className = 'profil-doc-service';
+    dsel.setAttribute('aria-label', 'Acte pour lequel préparer les documents');
+    D.SERVICES.forEach(function (s) { var o = document.createElement('option'); o.value = s.id; o.textContent = s.nom; dsel.appendChild(o); });
+    dCard.appendChild(dsel);
+    var dbox = el('div', 'profil-doc-list');
+    dCard.appendChild(dbox);
+    dsel.addEventListener('change', function () { renderProfilDocs(dbox, dsel.value); });
+    renderProfilDocs(dbox, dsel.value);
+    body.appendChild(dCard);
+  }
+
+  // Render the per-service document checklist into `container`: each item can be
+  // uploaded (or typed), removed, and marked validated. Persisted in the profile.
+  function renderProfilDocs(container, sid) {
+    clear(container);
+    var svc = D.serviceById(sid); if (!svc) return;
+    var saved = dossierFor(sid);
+    var valid = dossierValidated(sid);
+    dossierItems(svc).forEach(function (it) {
+      var provided = !!saved[it.id];
+      var row = el('div', 'doc-row');
+      row.dataset.done = provided ? 'true' : 'false';
+      var top = el('div', 'doc-row-top');
+      top.appendChild(el('span', 'doc-row-name', it.nom));
+      if (provided) {
+        var vlab = el('label', 'doc-valid');
+        var vcb = document.createElement('input'); vcb.type = 'checkbox'; vcb.checked = !!valid[it.id];
+        vcb.setAttribute('aria-label', 'Marquer « ' + it.nom + ' » comme validé');
+        vcb.addEventListener('change', function () { dossierSetValidated(sid, it.id, vcb.checked); row.dataset.valid = vcb.checked ? 'true' : 'false'; });
+        vlab.appendChild(vcb); vlab.appendChild(document.createTextNode(' Validé'));
+        top.appendChild(vlab);
+      }
+      row.appendChild(top);
+      if (it.aide) row.appendChild(el('div', 'help', it.aide));
+      if (it.kind === 'doc') {
+        var fl = el('label', 'file-field');
+        var fi = document.createElement('input'); fi.type = 'file'; fi.className = 'file-native';
+        var cta = el('span', 'file-cta', provided ? 'Remplacer le fichier' : 'Choisir un fichier');
+        fi.addEventListener('change', function () {
+          var name = this.files && this.files[0] ? this.files[0].name : '';
+          dossierSet(sid, it.id, name);
+          renderProfilDocs(container, sid);
+        });
+        fl.appendChild(fi); fl.appendChild(cta);
+        row.appendChild(fl);
+        if (provided) {
+          var meta = el('div', 'doc-file');
+          meta.appendChild(el('span', 'doc-file-name', '📎 ' + saved[it.id]));
+          var rm = el('button', 'btn btn-sm', 'Retirer'); rm.type = 'button';
+          rm.addEventListener('click', function () { dossierSet(sid, it.id, ''); dossierSetValidated(sid, it.id, false); renderProfilDocs(container, sid); });
+          meta.appendChild(rm);
+          row.appendChild(meta);
+        }
+      } else {
+        var ti = document.createElement('input'); ti.type = 'text'; ti.value = saved[it.id] || ''; ti.placeholder = 'Votre réponse';
+        ti.setAttribute('aria-label', it.nom);
+        ti.addEventListener('input', function () { dossierSet(sid, it.id, this.value.trim()); });
+        ti.addEventListener('blur', function () { renderProfilDocs(container, sid); }); // reveal the "validé" affordance once filled
+        row.appendChild(ti);
+      }
+      container.appendChild(row);
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -1065,6 +1133,13 @@
     var d = dossierState(); d[sid] = d[sid] || {}; d[sid].__pricing = d[sid].__pricing || {};
     if (val === undefined || val === '' || val === false) delete d[sid].__pricing[critId];
     else d[sid].__pricing[critId] = val;
+    lsSave(LS_DOSSIER, d);
+  }
+  // Per-document "validé" flag, stored in the profile (dossier) under __validated.
+  function dossierValidated(sid) { var d = dossierFor(sid); return (d && d.__validated) || {}; }
+  function dossierSetValidated(sid, id, on) {
+    var d = dossierState(); d[sid] = d[sid] || {}; d[sid].__validated = d[sid].__validated || {};
+    if (on) d[sid].__validated[id] = true; else delete d[sid].__validated[id];
     lsSave(LS_DOSSIER, d);
   }
   function dossierItems(svc) {
@@ -1209,9 +1284,11 @@
     }
 
     var badge = $('dossier-badge');
-    badge.hidden = false;
-    badge.textContent = done + '/' + total;
-    badge.dataset.complete = r.ready ? 'true' : 'false';
+    if (badge) {
+      badge.hidden = false;
+      badge.textContent = done + '/' + total;
+      badge.dataset.complete = r.ready ? 'true' : 'false';
+    }
   }
 
   // Post-publish bridge: fill the "Complétez votre dossier" step with the booked
@@ -1673,7 +1750,6 @@
     $('notif-panel').addEventListener('click', function (e) { e.stopPropagation(); });
     // Account-menu items → switch pane, then close the menu.
     $('acct-profil').addEventListener('click', function () { setTab('profil'); toggleNotifPanel(false); });
-    $('acct-documents').addEventListener('click', function () { setTab('dossier'); toggleNotifPanel(false); });
     $('acct-confid').addEventListener('click', function () { setTab('confidentialite'); toggleNotifPanel(false); });
     document.addEventListener('click', function () { toggleNotifPanel(false); });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') toggleNotifPanel(false); });
