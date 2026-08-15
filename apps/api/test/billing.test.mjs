@@ -20,12 +20,14 @@ const RATE = 0.10;
  * raw body as the JSON event and rejects the signature literal 'bad'.
  */
 function fakeStripe() {
-  const calls = { accounts: [], links: [], charges: [] };
+  const calls = { accounts: [], links: [], charges: [], authorizations: [], transfers: [] };
   return {
     calls,
     async createConnectAccount(args) { calls.accounts.push(args); return { accountId: 'acct_' + args.notaryId }; },
     async createOnboardingLink(args) { calls.links.push(args); return { url: 'https://connect.stripe.test/onboard/' + args.accountId }; },
     async chargeActCommission(args) { calls.charges.push(args); return { id: 'pi_' + (args.bidId || 'x'), applicationFeeCents: args.applicationFeeCents }; },
+    async createOfferAuthorization(args) { calls.authorizations.push(args); return { sessionId: 'cs_' + (args.bidId || 'x'), url: 'https://checkout.stripe.test/pay/' + (args.bidId || 'x') }; },
+    async captureAndTransfer(args) { calls.transfers.push(args); return { paymentIntentId: args.paymentIntentId, chargeId: 'ch_' + (args.bidId || 'x'), transferId: 'tr_' + (args.bidId || 'x'), applicationFeeCents: args.applicationFeeCents, netCents: args.amountCents - args.applicationFeeCents }; },
     constructEvent(rawBody, signature) {
       if (signature === 'bad' || !signature) throw new Error('signature verification failed');
       return JSON.parse(rawBody);
@@ -253,6 +255,126 @@ test('EDGE (logic): re-completing the SAME bid is idempotent — exactly one cha
   // And the commission is tallied exactly once on the notary.
   const notary = await repo.getNotary('n-1');
   assert.equal(notary.commissionCentsCollected, first.commissionCents);
+});
+
+// --- PAY-ON-ACCEPT: authorize at post, capture + pay the notary on accept ----
+
+const checkoutCompleted = (id, bidId, bidDate, pi) => ({
+  id, type: 'checkout.session.completed',
+  data: { object: { payment_intent: pi, metadata: { bidId, bidDate } } },
+});
+const checkoutExpired = (id, bidId, bidDate) => ({
+  id, type: 'checkout.session.expired',
+  data: { object: { metadata: { bidId, bidDate } } },
+});
+const DEFAULT_PRICING = { testament: { who_for: 'solo', fiducie_needed: 'non' } };
+
+test('authorizeOffer opens a hosted Checkout to authorize the client card', async () => {
+  const { stripe, billing } = setup();
+  const res = await billing.authorizeOffer({ bidId: 'BID#1', bidDate: '2026-09-01', amountCents: 90000, email: 'c@x.ca' });
+  assert.equal(res.ok, true);
+  assert.match(res.url, /^https:\/\/checkout\.stripe\.test\//);
+  assert.equal(stripe.calls.authorizations[0].amountCents, 90000);
+  assert.equal(stripe.calls.authorizations[0].bidId, 'BID#1');
+
+  const bad = await billing.authorizeOffer({ bidId: 'x', amountCents: 0 });
+  assert.equal(bad.ok, false);
+  assert.equal(bad.errors[0].code, 'montant_invalide');
+});
+
+test('checkout.session.completed binds the PaymentIntent to the bid and makes it live', async () => {
+  const { repo, billing } = setup();
+  await repo.put({ id: 'BID#1', dateISO: '2026-09-01', serviceId: 'testament', montant: 900, status: 'ouverte', paymentStatus: 'pending' });
+  const r = await billing.handleWebhook(JSON.stringify(checkoutCompleted('evt_c1', 'BID#1', '2026-09-01', 'pi_1')), 'good');
+  assert.equal(r.ok, true);
+  assert.equal(r.handled, true);
+  const bid = await repo.get('BID#1', '2026-09-01');
+  assert.equal(bid.paymentStatus, 'authorized');
+  assert.equal(bid.paymentIntentId, 'pi_1');
+});
+
+test('checkout.session.expired voids a never-accepted authorization', async () => {
+  const { repo, billing } = setup();
+  await repo.put({ id: 'BID#2', dateISO: '2026-09-01', serviceId: 'testament', montant: 900, status: 'ouverte', paymentStatus: 'pending' });
+  const r = await billing.handleWebhook(JSON.stringify(checkoutExpired('evt_e1', 'BID#2', '2026-09-01')), 'good');
+  assert.equal(r.handled, true);
+  assert.equal((await repo.get('BID#2', '2026-09-01')).paymentStatus, 'void');
+});
+
+test('payNotaryOnAccept captures the hold, transfers the net, keeps the commission, and is idempotent', async () => {
+  const { repo, stripe, billing } = setup();
+  await billing.connectNotary({ email: 'n@x.ca' }); // n-1
+  await billing.handleWebhook(JSON.stringify(accountUpdated('e', 'n-1', true)), 'good'); // -> active
+
+  const res = await billing.payNotaryOnAccept({ notaryId: 'n-1', bidId: 'BID#7', actAmount: 2000, paymentIntentId: 'pi_7' });
+  assert.equal(res.ok, true);
+  assert.equal(res.commissionCents, 20000); // 10% of 2000$
+  assert.equal(res.netCents, 180000);       // 200000 - 20000
+  const t = stripe.calls.transfers[0];
+  assert.equal(t.paymentIntentId, 'pi_7');
+  assert.equal(t.connectAccountId, 'acct_n-1');
+  assert.equal(t.amountCents, 200000);
+  assert.equal(t.applicationFeeCents, 20000);
+  assert.equal((await repo.getNotary('n-1')).commissionCentsCollected, 20000);
+
+  // Idempotent: a second accept for the same bid never transfers again.
+  const again = await billing.payNotaryOnAccept({ notaryId: 'n-1', bidId: 'BID#7', actAmount: 2000, paymentIntentId: 'pi_7' });
+  assert.equal(again.alreadyPaid, true);
+  assert.equal(stripe.calls.transfers.length, 1);
+});
+
+test('payNotaryOnAccept refuses a not-ready notary and a missing authorization', async () => {
+  const { billing } = setup();
+  await billing.connectNotary({ email: 'n@x.ca' }); // onboarding, not charge-ready
+  const notReady = await billing.payNotaryOnAccept({ notaryId: 'n-1', bidId: 'b', actAmount: 900, paymentIntentId: 'pi' });
+  assert.equal(notReady.errors[0].code, 'compte_incomplet');
+
+  await billing.handleWebhook(JSON.stringify(accountUpdated('e', 'n-1', true)), 'good');
+  const noPay = await billing.payNotaryOnAccept({ notaryId: 'n-1', bidId: 'b', actAmount: 900 });
+  assert.equal(noPay.errors[0].code, 'paiement_absent');
+});
+
+test('end-to-end: post → pending (hidden) → authorize → accept pays the notary in full', async () => {
+  const { repo, stripe, app } = setup();
+
+  // 1) Post an offer — PENDING, returns a Checkout URL, hidden from the carnet.
+  const posted = parse(await app.handle({
+    method: 'POST', path: '/bids',
+    body: JSON.stringify({ serviceId: 'testament', dateISO: '2026-08-20', montant: 700, prefixe: 'G1R', pricing: DEFAULT_PRICING.testament }),
+  }));
+  assert.equal(posted.paymentStatus, 'pending');
+  assert.match(posted.checkoutUrl, /^https:\/\/checkout\.stripe\.test\//);
+  assert.equal(stripe.calls.authorizations.length, 1);
+  let feed = parse(await app.handle({ method: 'GET', path: '/bids', query: { month: '2026-08' } }));
+  assert.equal(feed.bids.length, 0, 'a pending offer must not appear on the public carnet');
+
+  // 2) Client authorizes their card — webhook binds the PaymentIntent, offer goes live.
+  await app.handle({
+    method: 'POST', path: '/stripe/webhook', headers: { 'stripe-signature': 'good' },
+    body: JSON.stringify(checkoutCompleted('evt_live', 'x', '2026-08-20', 'pi_x')),
+  });
+  feed = parse(await app.handle({ method: 'GET', path: '/bids', query: { month: '2026-08' } }));
+  assert.equal(feed.bids.length, 1);
+  const montant = feed.bids[0].montant;
+
+  // 3) A charge-ready notary signs in and accepts → paid in full, net of commission.
+  const email = 'a@notaire.ca';
+  const id = notaryIdForEmail(email);
+  await repo.putNotary({ id, email, status: 'active', chargesEnabled: true, connectAccountId: 'acct_x', commissionCentsCollected: 0 });
+  const sess = parse(await app.handle({ method: 'POST', path: '/notary/session', body: JSON.stringify({ email }) }));
+  const acc = parse(await app.handle({
+    method: 'POST', path: '/notary/bids/accept',
+    headers: { authorization: 'Bearer ' + sess.token },
+    body: JSON.stringify({ id: 'x', dateISO: '2026-08-20' }),
+  }));
+  const cents = Math.round(montant * 100);
+  const fee = Math.round(montant * 100 * RATE);
+  assert.equal(acc.paid, true);
+  assert.equal(acc.commissionCents, fee);
+  assert.equal(acc.netCents, cents - fee);
+  assert.equal(stripe.calls.transfers.length, 1);
+  assert.equal(stripe.calls.transfers[0].paymentIntentId, 'pi_x');
+  assert.equal(stripe.calls.transfers[0].amountCents, cents);
 });
 
 test('the commission lives ONLY in billing — the @nota/domain module stays free of it', () => {

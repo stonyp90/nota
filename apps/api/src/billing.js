@@ -159,6 +159,89 @@ function createBilling({
     return { ok: true, commissionCents: fee, chargeId: charge && charge.id };
   }
 
+  /**
+   * PAY-ON-ACCEPT, step 1 — authorize the client's card when they post an offer.
+   * Opens a hosted Checkout session that AUTHORIZES (manual capture) the act
+   * amount; nothing is captured until a notary accepts. Returns `{ ok, url }`;
+   * the client is redirected there and the webhook binds the resulting
+   * PaymentIntent back to the bid (see applyEvent: checkout.session.completed).
+   */
+  async function authorizeOffer({ bidId, bidDate, amountCents, email, description, successUrl, cancelUrl } = {}) {
+    const cents = Math.round(Number(amountCents));
+    if (!(cents > 0)) {
+      return { ok: false, errors: [{ code: 'montant_invalide', message: 'Montant de l’offre invalide.' }] };
+    }
+    const { sessionId, url } = await stripe.createOfferAuthorization({
+      amountCents: cents, currency: 'cad', bidId, bidDate, description,
+      customerEmail: email || undefined, successUrl, cancelUrl,
+    });
+    return { ok: true, url, sessionId };
+  }
+
+  /**
+   * PAY-ON-ACCEPT, step 2 — when a notary accepts a retained act, CAPTURE the
+   * client's authorized payment and TRANSFER the net (value − commission) to the
+   * notary immediately. Nota keeps the commission. Requires a bound
+   * `paymentIntentId` (the client authorized at post) and a charge-ready notary.
+   *
+   * Idempotent: writes the SAME write-once act ledger as completeAct, so a later
+   * completeAct call for the same bid is a no-op — the act is only ever paid once.
+   * Returns `{ ok, commissionCents, netCents, transferId, chargeId }`.
+   */
+  async function payNotaryOnAccept({ notaryId, bidId, actAmount, paymentIntentId } = {}) {
+    const notary = notaryId ? await repo.getNotary(notaryId) : null;
+    if (!notary) {
+      return { ok: false, errors: [{ code: 'notaire_introuvable', message: 'Notaire introuvable.' }] };
+    }
+    if (notary.status !== NOTARY_STATUS.ACTIVE || !notary.chargesEnabled || !notary.connectAccountId) {
+      return { ok: false, errors: [{ code: 'compte_incomplet', message: 'Le compte du notaire n’est pas prêt à encaisser.' }] };
+    }
+    const amount = Number(actAmount);
+    if (!(amount > 0)) {
+      return { ok: false, errors: [{ code: 'montant_invalide', message: 'Montant de l’acte invalide.' }] };
+    }
+    if (!paymentIntentId) {
+      return { ok: false, errors: [{ code: 'paiement_absent', message: 'Aucune autorisation de paiement n’est liée à cette offre.' }] };
+    }
+
+    // Idempotency guard: a bid already paid (on accept OR completion) never charges again.
+    if (bidId && typeof repo.getActCompletion === 'function') {
+      const prior = await repo.getActCompletion(bidId);
+      if (prior) {
+        return { ok: true, commissionCents: prior.commissionCents, netCents: prior.netCents, transferId: prior.transferId, chargeId: prior.chargeId, alreadyPaid: true };
+      }
+    }
+
+    const fee = feeCents(amount);
+    const result = await stripe.captureAndTransfer({
+      paymentIntentId,
+      connectAccountId: notary.connectAccountId,
+      amountCents: Math.round(amount * 100),
+      applicationFeeCents: fee,
+      currency: 'cad',
+      bidId, notaryId,
+    });
+
+    let firstWrite = true;
+    if (bidId && typeof repo.markActCompleted === 'function') {
+      firstWrite = await repo.markActCompleted(bidId, {
+        bidId, notaryId, actAmount: amount, commissionCents: fee,
+        netCents: result.netCents, transferId: result.transferId, chargeId: result.chargeId,
+        paidOnAccept: true, completedAt: clock(),
+      });
+    }
+    await repo.putNotary({
+      ...notary,
+      commissionCentsCollected: (notary.commissionCentsCollected || 0) + fee,
+      updatedAt: clock(),
+    });
+    if (firstWrite) {
+      await recordStats(statsDeltasForComplete({ completedAt: String(clock()).slice(0, 10), commissionCents: fee }));
+    }
+
+    return { ok: true, commissionCents: fee, netCents: result.netCents, transferId: result.transferId, chargeId: result.chargeId };
+  }
+
   // Persist a status transition for the notary the event points at.
   async function transition(id, patch) {
     if (!id) return null;
@@ -210,6 +293,33 @@ function createBilling({
         return { handled: !!notary, notary };
       }
 
+      // Client finished Checkout — their card is AUTHORIZED. Bind the resulting
+      // PaymentIntent to the bid and mark it authorized so it goes live on the
+      // carnet and a notary can be paid the instant they accept.
+      case 'checkout.session.completed': {
+        const md = obj.metadata || {};
+        const paymentIntentId = typeof obj.payment_intent === 'string'
+          ? obj.payment_intent
+          : (obj.payment_intent && obj.payment_intent.id) || null;
+        let bid = null;
+        if (md.bidId && typeof repo.authorizeBid === 'function') {
+          bid = await repo.authorizeBid(md.bidId, md.bidDate, { paymentIntentId, authorizedAt: clock() });
+        }
+        return { handled: !!bid, notary: null, bid };
+      }
+
+      // Authorization lapsed or was cancelled before any notary accepted — void
+      // the (never-captured) hold and drop the offer from the carnet.
+      case 'checkout.session.expired':
+      case 'payment_intent.canceled': {
+        const md = obj.metadata || {};
+        let bid = null;
+        if (md.bidId && typeof repo.voidBidAuthorization === 'function') {
+          bid = await repo.voidBidAuthorization(md.bidId, md.bidDate, { voidedAt: clock() });
+        }
+        return { handled: !!bid, notary: null, bid };
+      }
+
       default:
         return { handled: false, notary: null };
     }
@@ -236,7 +346,7 @@ function createBilling({
     return { ok: true, handled, duplicate: false, type: event.type, event, notary };
   }
 
-  return { connectNotary, completeAct, handleWebhook, commissionRate: rate };
+  return { connectNotary, authorizeOffer, payNotaryOnAccept, completeAct, handleWebhook, commissionRate: rate };
 }
 
 module.exports = { createBilling, NOTARY_STATUS, DEFAULT_COMMISSION_RATE };

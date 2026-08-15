@@ -77,6 +77,74 @@ function createStripeAdapter({ secretKey, webhookSecret } = {}) {
     },
 
     /**
+     * PAY-ON-ACCEPT, step 1 — authorize the client's card for a posted offer.
+     * A hosted Checkout Session in `payment` mode with a MANUAL-CAPTURE payment
+     * intent: the client's card is authorized (funds held) but nothing is
+     * captured until a notary accepts. Card data never touches our servers. The
+     * bid id rides on the session + intent metadata so the webhook can bind the
+     * resulting PaymentIntent back to the bid. Idempotent per bid.
+     */
+    async createOfferAuthorization({ amountCents, currency, bidId, bidDate, description, customerEmail, successUrl, cancelUrl }) {
+      const meta = { bidId: bidId || '', bidDate: bidDate || '' };
+      const session = await stripe.checkout.sessions.create(
+        {
+          mode: 'payment',
+          payment_intent_data: {
+            capture_method: 'manual',
+            description: description || 'Acte notarié — Nota',
+            metadata: meta,
+          },
+          line_items: [
+            {
+              quantity: 1,
+              price_data: {
+                currency: currency || 'cad',
+                unit_amount: amountCents,
+                product_data: { name: description || 'Acte notarié' },
+              },
+            },
+          ],
+          customer_email: customerEmail || undefined,
+          metadata: meta,
+          success_url: successUrl,
+          cancel_url: cancelUrl,
+        },
+        bidId ? { idempotencyKey: `auth:${bidId}` } : undefined
+      );
+      return { sessionId: session.id, url: session.url };
+    },
+
+    /**
+     * PAY-ON-ACCEPT, step 2 — when a notary accepts, CAPTURE the authorized
+     * payment (funds move to the platform) and TRANSFER the net (act value minus
+     * Nota's commission) to the notary's connected account. This is the Stripe
+     * "separate charges and transfers" model: the destination notary is unknown
+     * at authorization time, so we capture on the platform then transfer.
+     * Idempotent per bid end-to-end via the capture/transfer idempotency keys.
+     */
+    async captureAndTransfer({ paymentIntentId, connectAccountId, amountCents, applicationFeeCents, currency, bidId }) {
+      const captured = await stripe.paymentIntents.capture(
+        paymentIntentId,
+        {},
+        bidId ? { idempotencyKey: `capture:${bidId}` } : undefined
+      );
+      const chargeId = captured && (typeof captured.latest_charge === 'string' ? captured.latest_charge : captured.latest_charge && captured.latest_charge.id);
+      const netCents = amountCents - applicationFeeCents;
+      const transfer = await stripe.transfers.create(
+        {
+          amount: netCents,
+          currency: currency || 'cad',
+          destination: connectAccountId,
+          source_transaction: chargeId || undefined,
+          transfer_group: bidId ? `bid:${bidId}` : undefined,
+          metadata: { bidId: bidId || '' },
+        },
+        bidId ? { idempotencyKey: `transfer:${bidId}` } : undefined
+      );
+      return { paymentIntentId, chargeId: chargeId || null, transferId: transfer.id, applicationFeeCents, netCents };
+    },
+
+    /**
      * Verify a webhook payload against the signing secret and return the parsed
      * event. Throws when the signature does not match — the route turns that
      * into a 400.

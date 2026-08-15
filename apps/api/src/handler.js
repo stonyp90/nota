@@ -61,6 +61,15 @@ function createApp(repo, opts = {}) {
     });
     return billingInstance;
   }
+  // True when Stripe billing is available, decided WITHOUT loading the SDK — so
+  // pay-on-accept turns on for a configured deployment but stays off for demo and
+  // tests, which keep the pre-billing behaviour (offers go live the instant they
+  // are posted). `siteUrl` builds the Checkout return links.
+  const billingConfigured = !!opts.billing || !!(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET);
+  const siteUrl = opts.siteUrl || process.env.NOTA_SITE_URL || '';
+  // An offer is shown on the carnet unless its card authorization is still pending
+  // or was voided (pay-on-accept). Legacy bids (no paymentStatus) are always live.
+  const isLive = (b) => b.paymentStatus !== 'pending' && b.paymentStatus !== 'void';
 
   // Notifier is injected so tests pass a fake (no SES package, no network). In
   // production it is built LAZILY from a real SES adapter on first use, exactly
@@ -289,7 +298,7 @@ function createApp(repo, opts = {}) {
         return json(400, { errors: [{ code: 'mois_invalide', message: 'month doit être AAAA-MM.' }] });
       }
       const bids = await repo.listByMonth(month);
-      return json(200, { month, bids: bids.map(publicBid) });
+      return json(200, { month, bids: bids.filter(isLive).map(publicBid) });
     }
 
     if (route === '/bids' && method === 'POST') {
@@ -354,6 +363,11 @@ function createApp(repo, opts = {}) {
         // exposed publicly (not in publicBid/notaryBid).
         ttl: Math.floor(Date.parse(payload.dateISO + 'T00:00:00Z') / 1000) + 400 * 86400,
       };
+      // Pay-on-accept: with billing on, a posted offer is PENDING until the client
+      // authorizes their card via hosted Checkout — the webhook then binds the
+      // PaymentIntent and the offer goes live (isLive). Without billing (demo/tests)
+      // the offer is live immediately, exactly as before.
+      if (billingConfigured) bid.paymentStatus = 'pending';
       await repo.put(bid);
       await recordStats(statsDeltasForOffer(bid));
 
@@ -362,6 +376,21 @@ function createApp(repo, opts = {}) {
       // the offer is still created and returned.
       const n = notifier();
       if (n) Promise.resolve(n.onOfferCreated(bid)).catch(() => {});
+
+      if (billingConfigured) {
+        const svc = domain.serviceById(bid.serviceId);
+        const auth = await billing().authorizeOffer({
+          bidId: bid.id,
+          bidDate: bid.dateISO,
+          amountCents: Math.round(bid.montant * 100),
+          email: bid.courriel || undefined,
+          description: (svc && svc.nom) || 'Acte notarié',
+          successUrl: siteUrl ? siteUrl + '/?paiement=ok' : undefined,
+          cancelUrl: siteUrl ? siteUrl + '/?paiement=annule' : undefined,
+        });
+        if (!auth.ok) return json(422, { errors: auth.errors });
+        return json(201, { bid: publicBid(bid), paymentStatus: 'pending', checkoutUrl: auth.url });
+      }
 
       return json(201, { bid: publicBid(bid) });
     }
@@ -500,6 +529,7 @@ function createApp(repo, opts = {}) {
         const bids = await repo.listByMonth(month);
         for (const b of bids) {
           if (b.status !== domain.STATUS.OUVERTE) continue;
+          if (!isLive(b)) continue; // hide offers whose card authorization is still pending/void
           if (query.service && b.serviceId !== query.service) continue;
           if (await repo.wasDeclined(notaryId, b.id)) continue;
           if (seen.has(b.id)) continue;
@@ -525,11 +555,24 @@ function createApp(repo, opts = {}) {
       const bid = await repo.get(payload.id, payload.dateISO);
       if (!bid) return json(404, { errors: [{ code: 'introuvable', message: 'Offre introuvable.' }] });
 
+      // PAY-ON-ACCEPT: capture the client's authorized card and transfer the net
+      // (act value − commission) to the notary the instant they accept. A no-op
+      // without billing or without an authorized payment; idempotent per bid
+      // (shared act ledger), so a re-accept or double-submit never pays twice.
+      async function payout(b) {
+        if (!billingConfigured || !b || !b.paymentIntentId) return null;
+        return billing().payNotaryOnAccept({ notaryId, bidId: b.id, actAmount: b.montant, paymentIntentId: b.paymentIntentId });
+      }
+      const withPayout = (base, pay) => !pay ? base
+        : pay.ok ? { ...base, paid: true, commissionCents: pay.commissionCents, netCents: pay.netCents }
+          : { ...base, paid: false, paymentError: (pay.errors && pay.errors[0] && pay.errors[0].code) || 'paiement_echoue' };
+
       // Idempotent + access-controlled: re-accept by the SAME notary returns the
-      // dossier; a bid already retained by ANOTHER notary is a 409.
+      // dossier (settling payment if it had not been); another notary -> 409.
       if (bid.status === domain.STATUS.RETENUE) {
         if (bid.notaryId === notaryId) {
-          return json(200, { id: bid.id, courriel: bid.courriel || null, dossier: bid.dossier || null });
+          const pay = await payout(bid);
+          return json(200, withPayout({ id: bid.id, courriel: bid.courriel || null, dossier: bid.dossier || null }, pay));
         }
         return json(409, { errors: [{ code: 'deja_retenue', message: 'Cette offre est déjà retenue.' }] });
       }
@@ -543,7 +586,9 @@ function createApp(repo, opts = {}) {
       };
       // Conditional retain closes the TOCTOU race: two notaries accepting the
       // same open bid concurrently both read status=ouverte, but only ONE write
-      // succeeds — the repo flips the bid only while it is still ouverte.
+      // succeeds — the repo flips the bid only while it is still ouverte. Because
+      // only the winner reaches the payout below, the client's card is captured
+      // exactly once.
       const retained = await repo.retain(updated, notaryId);
       if (!retained) {
         // Lost the race. Re-read to answer precisely: if WE ended up the winner
@@ -551,7 +596,8 @@ function createApp(repo, opts = {}) {
         // bid is now held by someone else -> 409.
         const fresh = await repo.get(payload.id, payload.dateISO);
         if (fresh && fresh.status === domain.STATUS.RETENUE && fresh.notaryId === notaryId) {
-          return json(200, { id: fresh.id, courriel: fresh.courriel || null, dossier: fresh.dossier || null });
+          const pay = await payout(fresh);
+          return json(200, withPayout({ id: fresh.id, courriel: fresh.courriel || null, dossier: fresh.dossier || null }, pay));
         }
         return json(409, { errors: [{ code: 'deja_retenue', message: 'Cette offre est déjà retenue.' }] });
       }
@@ -562,7 +608,8 @@ function createApp(repo, opts = {}) {
         montant: retained.montant,
       });
       await recordStats(statsDeltasForRetain(retained, now()));
-      return json(200, { id: retained.id, courriel: retained.courriel || null, dossier: retained.dossier || null });
+      const pay = await payout(retained);
+      return json(200, withPayout({ id: retained.id, courriel: retained.courriel || null, dossier: retained.dossier || null }, pay));
     }
 
     if (route === '/notary/bids/decline' && method === 'POST') {

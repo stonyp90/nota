@@ -70,7 +70,7 @@
           // into the local-demo path (which would falsely report success).
           var j = {};
           try { j = await r.json(); } catch (e) { /* empty or non-JSON body */ }
-          if (r.status === 201) return { ok: true, bid: j.bid };
+          if (r.status === 201) return { ok: true, bid: j.bid, checkoutUrl: j.checkoutUrl || null, paymentStatus: j.paymentStatus || null };
           return { ok: false, errors: (j && j.errors) || [{ code: 'erreur', message: 'Erreur serveur. Réessayez.' }] };
         }
       }
@@ -1315,6 +1315,17 @@
       return;
     }
     errBox.hidden = true;
+    // Pay-on-accept: when the API returns a Checkout URL, the offer is PENDING
+    // until the client authorizes their card. Remember it locally, then hand off
+    // to Stripe's hosted page — the offer only reaches the carnet once the
+    // authorization webhook confirms, and a notary is paid the instant they accept.
+    if (res.checkoutUrl) {
+      submit.removeAttribute('aria-busy'); submit.textContent = 'Redirection vers le paiement…';
+      profileSet({ courriel: payload.courriel, prefixe: payload.prefixe, nom: payload.nom || '', anonyme: payload.anonyme });
+      addMyOffer(res.bid);
+      window.location.href = res.checkoutUrl;
+      return;
+    }
     submit.removeAttribute('aria-busy'); submit.textContent = 'Offre publiée ✓'; // stays disabled → no duplicate submit
     toast('Offre publiée : ' + D.money(payload.montant) + (store.online ? '' : ' (démo locale)'));
     buildCalendarLinks(res.bid);
@@ -2428,11 +2439,27 @@
   // ---------------------------------------------------------------------------
   // Boot
   // ---------------------------------------------------------------------------
+  // After the client authorizes (or cancels) their card on Stripe's hosted
+  // Checkout, Stripe redirects back with ?paiement=ok|annule. Surface a short
+  // status and strip the param so a reload is clean. Publication itself is
+  // confirmed server-side by the authorization webhook, so this is informational.
+  function handleCheckoutReturn() {
+    var q = new URLSearchParams(location.search);
+    var p = q.get('paiement');
+    if (!p) return;
+    if (p === 'ok') toast('Paiement autorisé — votre offre est en cours de publication.');
+    else if (p === 'annule') toast('Paiement annulé — votre offre n’a pas été publiée.');
+    q.delete('paiement');
+    var qs = q.toString();
+    history.replaceState(null, '', location.pathname + (qs ? '?' + qs : '') + location.hash);
+  }
+
   async function boot() {
     populateServiceSelects();
     buildServiceChips();
     buildBookingChips();
     readHash();
+    handleCheckoutReturn();
     syncFilterChips();
     // If a shared link pre-selects filters, reveal the (otherwise hidden) panel.
     if (filtersActive()) { $('filters').hidden = false; $('filters-toggle').setAttribute('aria-expanded', 'true'); }

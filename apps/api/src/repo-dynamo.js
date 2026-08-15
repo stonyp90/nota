@@ -140,6 +140,38 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
       }
     },
 
+    // --- Pay-on-accept authorization ----------------------------------------
+    // The Stripe webhook binds the client's authorized PaymentIntent to the bid
+    // (offer goes live) or voids the hold if it lapsed. Read-modify-write on the
+    // bid item — no contention here (unlike retain), so no ConditionExpression.
+    async authorizeBid(bidId, dateISO, patch) {
+      if (!dateISO) return null;
+      const out = await doc.send(
+        new GetCommand({ TableName: tableName, Key: { PK: bidPK(dateISO), SK: `BID#${dateISO}#${bidId}` } })
+      );
+      const bid = fromItem(out.Item);
+      if (!bid) return null;
+      const updated = {
+        ...bid,
+        paymentStatus: 'authorized',
+        paymentIntentId: (patch && patch.paymentIntentId) || bid.paymentIntentId || null,
+        authorizedAt: (patch && patch.authorizedAt) || bid.authorizedAt || null,
+      };
+      await doc.send(new PutCommand({ TableName: tableName, Item: toItem(updated) }));
+      return updated;
+    },
+    async voidBidAuthorization(bidId, dateISO, patch) {
+      if (!dateISO) return null;
+      const out = await doc.send(
+        new GetCommand({ TableName: tableName, Key: { PK: bidPK(dateISO), SK: `BID#${dateISO}#${bidId}` } })
+      );
+      const bid = fromItem(out.Item);
+      if (!bid) return null;
+      const updated = { ...bid, paymentStatus: 'void', voidedAt: (patch && patch.voidedAt) || null };
+      await doc.send(new PutCommand({ TableName: tableName, Item: toItem(updated) }));
+      return updated;
+    },
+
     // Every open (not-retained) bid, across all month partitions. Used only by
     // the daily reminder scheduler (a bounded, low-frequency scan). The filter
     // keeps retained bids out; the domain decides which of the rest are due.
