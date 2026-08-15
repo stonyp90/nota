@@ -129,6 +129,9 @@ test('GET /notary/bids reads the token from the Authorization header (no query t
   assert.equal(bids[0].courriel, undefined);
   assert.equal(bids[0].dossier, undefined);
   assert.equal(typeof bids[0].ready, 'boolean');
+  // The case-complexity signal is exposed to the notary (default testament = simple).
+  assert.ok(bids[0].complexity && bids[0].complexity.level, 'complexity exposed to notary');
+  assert.equal(bids[0].complexity.level, 'simple');
 });
 
 test('GET /notary/bids excludes bids this notary declined and supports ?service=', async () => {

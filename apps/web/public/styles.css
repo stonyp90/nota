@@ -505,7 +505,15 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .dossier-pricing .o-criteria { margin-top: 10px; }
 .dossier-price { margin-top: 12px; font-weight: 600; color: var(--brand); font-size: 14px; }
 /* Profile: coordinates + notification settings, two responsive cards. */
-.profil-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; align-items: start; }
+/* Coordonnées + Notifications stack in a narrow left column; Mes documents
+   fills the entire right side — no wasted horizontal space. */
+.profil-grid { display: grid; grid-template-columns: minmax(300px, 400px) 1fr; gap: 14px; align-items: start; }
+.profil-grid > .profil-card:not(.profil-docs) { grid-column: 1; }
+.profil-grid > .profil-docs { grid-column: 2; grid-row: 1 / -1; margin: 0; }
+@media (max-width: 900px) {
+  .profil-grid { grid-template-columns: 1fr; }
+  .profil-grid > .profil-docs { grid-column: 1; grid-row: auto; }
+}
 .profil-card { padding: 16px 18px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); display: flex; flex-direction: column; gap: 10px; }
 .profil-card-title { font-size: 15px; font-weight: 700; color: var(--ink); }
 .profil-card .switch-row { margin-top: 2px; }
@@ -684,6 +692,11 @@ dialog::backdrop { background: rgb(15 23 42 / 0.45); }
 .nc-card-amount { font-size: 18px; font-weight: 800; letter-spacing: -0.02em; }
 .nc-card-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
 .nc-date { font-size: 12px; color: var(--ink-muted); text-transform: capitalize; }
+/* Case-complexity signal on a notary's open-bid card (outline, colour by level). */
+.nc-complexity { font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--ink-muted); }
+.nc-complexity[data-level='simple'] { color: var(--ok); border-color: var(--ok); }
+.nc-complexity[data-level='complexe'] { color: var(--danger); border-color: var(--danger); }
+.nc-factors { font-size: 12px; color: var(--ink-muted); margin-top: 6px; }
 .nc-prefixe {
   font-size: 11px; font-weight: 700; color: var(--ink-muted);
   border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); padding: 1px 6px;

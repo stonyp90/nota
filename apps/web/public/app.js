@@ -1595,7 +1595,14 @@
     if (b.prefixe) meta.appendChild(el('span', 'nc-prefixe', b.prefixe));
     meta.appendChild(ncTierPill(b.tier));
     meta.appendChild(ncReadyBadge(b.ready));
+    if (b.complexity) meta.appendChild(ncComplexityPill(b.complexity));
     card.appendChild(meta);
+
+    // The parameters that make this file easy or hard — so the notary knows if
+    // the posted price fits a simple or a complex case before retaining it.
+    if (b.complexity && b.complexity.factors && b.complexity.factors.length) {
+      card.appendChild(el('div', 'nc-factors', 'Facteurs : ' + b.complexity.factors.join(' · ')));
+    }
 
     var actions = el('div', 'nc-card-actions');
     var acc = el('button', 'btn btn-sm btn-primary nc-accept', 'Accepter'); acc.type = 'button';
@@ -1603,6 +1610,13 @@
     actions.appendChild(acc); actions.appendChild(dec);
     card.appendChild(actions);
     return card;
+  }
+
+  function ncComplexityPill(c) {
+    var labels = { simple: 'Cas simple', standard: 'Standard', complexe: 'Cas complexe' };
+    var pill = el('span', 'nc-complexity', labels[c.level] || c.level);
+    pill.dataset.level = c.level;
+    return pill;
   }
 
   function ncRenderOpen() {

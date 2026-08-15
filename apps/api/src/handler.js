@@ -164,6 +164,9 @@ function createApp(repo, opts = {}) {
       premium: b.premium,
       prefixe: b.prefixe || null,
       ready: r.ready,
+      // The case-complexity signal (easy/hard) + the factors that drive it, so a
+      // notary can judge whether the posted price fits the file before retaining.
+      complexity: domain.complexity(b.serviceId, b.pricing || null),
     };
   }
 
