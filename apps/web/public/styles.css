@@ -61,6 +61,10 @@
   --shadow-sm: 0 1px 2px rgb(15 23 42 / 0.05);
   --shadow: 0 6px 20px -8px rgb(15 23 42 / 0.12);
   --shadow-lg: 0 24px 50px -16px rgb(44 95 52 / 0.24);
+  --shadow-brand: 0 6px 16px -6px rgb(44 95 52 / 0.5); /* brand-primary hover lift */
+  --logo-shadow: 0 1px 2px rgb(15 23 42 / 0.15);       /* header brand mark */
+  --focus-ring: rgb(80 184 72 / 0.3);                  /* brand focus glow (3px) */
+  --backdrop: rgb(15 23 42 / 0.5);                     /* dialog scrim */
 
   --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
@@ -186,7 +190,7 @@ a:hover { text-decoration: underline; }
 }
 .brand:hover { text-decoration: none; }
 .brand-mark { width: 30px; height: 30px; display: grid; place-items: center; }
-.brand-mark img { display: block; filter: drop-shadow(0 1px 2px rgb(15 23 42 / 0.15)); }
+.brand-mark img { display: block; filter: drop-shadow(var(--logo-shadow)); }
 .brand-word { font-weight: 800; }
 .brand-sub {
   color: var(--brand); font-weight: 700; font-size: 10px; text-transform: uppercase;
@@ -353,7 +357,7 @@ select, input[type='text'], input[type='email'], input[type='number'], input[typ
   font: inherit; padding: 8px 10px; border: 1px solid var(--border-strong);
   border-radius: var(--radius); background: var(--surface); color: var(--ink); min-width: 120px;
 }
-select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow: 0 0 0 3px rgb(80 184 72 / 0.15); }
+select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow: 0 0 0 3px var(--focus-ring); }
 
 /* --- Filter panel: hidden until opened from the toolbar ------------------ */
 .filterbar {
@@ -410,7 +414,7 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 .cal-cell.is-out { background: transparent; border-color: transparent; cursor: default; pointer-events: none; }
 .cal-cell.is-today { border-color: var(--brand-bright); box-shadow: inset 0 0 0 1px var(--brand-bright); }
 .cal-cell.is-selected { border-color: var(--brand); box-shadow: inset 0 0 0 1px var(--brand); }
-.cal-cell:focus-visible { outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px rgb(80 184 72 / 0.25); }
+.cal-cell:focus-visible { outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px var(--focus-ring); }
 .cal-cell.has-bids { border-color: var(--border-strong); }
 .cal-daynum { font-size: 12px; font-weight: 600; color: var(--ink-muted); }
 .cal-cell.is-today .cal-daynum { color: var(--brand); font-weight: 800; }
@@ -494,7 +498,7 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .switch .track::before { content: ''; position: absolute; width: 18px; height: 18px; left: 3px; top: 3px; background: var(--on-accent); border-radius: 50%; transition: transform .12s; }
 .switch input:checked + .track { background: var(--brand); }
 .switch input:checked + .track::before { transform: translateX(18px); }
-.switch input:focus-visible + .track { box-shadow: 0 0 0 3px rgb(80 184 72 / 0.35); }
+.switch input:focus-visible + .track { box-shadow: 0 0 0 3px var(--focus-ring); }
 
 .errors { list-style: none; margin: 8px 0 0; padding: 0; }
 .errors li { color: var(--danger); font-size: 13px; padding: 2px 0; }
@@ -611,7 +615,7 @@ input.file-native { position: absolute; width: 1px; height: 1px; opacity: 0; mar
 .disclosure > summary:hover { color: var(--ink); }
 .disclosure > summary:focus-visible {
   outline: none; border-radius: var(--radius-sm);
-  box-shadow: 0 0 0 3px rgb(80 184 72 / 0.25);
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 .disclosure-body { padding: 0 12px 12px; }
 .disclosure-body p { font-size: 12px; color: var(--ink-muted); margin-top: 0; }
@@ -633,7 +637,7 @@ dialog {
   border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 0;
   background: var(--surface); color: var(--ink); max-width: 440px; width: 92vw; box-shadow: var(--shadow-lg);
 }
-dialog::backdrop { background: rgb(15 23 42 / 0.45); }
+dialog::backdrop { background: var(--backdrop); }
 .dialog-pad { padding: 22px; }
 .dialog-pad h3 { font-size: 18px; margin-bottom: 8px; }
 .dialog-pad p { color: var(--ink-muted); font-size: 14px; margin: 0 0 16px; }
@@ -641,7 +645,7 @@ dialog::backdrop { background: rgb(15 23 42 / 0.45); }
 
 /* --- Day detail dialog (enlarged day over a dimmed backdrop) -------------- */
 #day-dialog { max-width: 620px; width: 94vw; max-height: 90vh; overflow-y: auto; overscroll-behavior: contain; }
-#day-dialog::backdrop { background: rgb(15 23 42 / 0.5); backdrop-filter: blur(2px); }
+#day-dialog::backdrop { background: var(--backdrop); backdrop-filter: blur(2px); }
 .day-head { display: flex; align-items: flex-start; gap: 12px; padding: 20px 22px 14px; }
 .day-head .header-spacer { flex: 1; }
 .day-title { font-size: 20px; font-weight: 800; text-transform: capitalize; letter-spacing: -0.02em; }
@@ -810,7 +814,7 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
 .dossier-check { transition: background .15s, border-color .15s, transform .15s; }
 .dossier-check[data-on='true'] { animation: pop .2s ease; }
 .btn, .nav-tab, .icon-btn, .cal-cell, .pill { transition: background .14s, border-color .14s, color .14s, transform .1s, box-shadow .14s; }
-.btn-primary:not(:disabled):hover { box-shadow: 0 6px 16px -6px rgb(44 95 52 / 0.5); transform: translateY(-1px); }
+.btn-primary:not(:disabled):hover { box-shadow: var(--shadow-brand); transform: translateY(-1px); }
 .card { transition: transform .14s, box-shadow .14s, border-color .14s; }
 .card:hover { transform: translateY(-2px); border-color: var(--border-strong); box-shadow: var(--shadow); }
 
@@ -834,26 +838,8 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
 .brand-mark img { transition: transform .2s cubic-bezier(.2, .8, .2, 1); }
 .brand:hover .brand-mark img { transform: rotate(-6deg) scale(1.06); }
 
-/* ── Hero: compact two-column band — copy left, "add to your calendar" right ──
-   Keeps the hero short so the CALENDAR is the focus and rises up the page. The
-   left column holds the copy, CTAs and the "Marché du temps" note; the right
-   column turns the old dead space into a FUNCTION — a card that subscribes the
-   whole carnet into the visitor's Google/Outlook/Apple calendar. The copy hugs
-   the left edge (aligned with the calendar below) and the card the right edge
-   (aligned with, and flowing into, the offer panel below). Scoped to
-   .intro--split so the dossier / notaire / vie-privée sections stay single-column. */
-.intro--split {
-  display: grid;
-  grid-template-columns: minmax(0, 62ch) minmax(300px, 380px);
-  column-gap: clamp(24px, 4vw, 56px);
-  justify-content: space-between; /* copy hugs the left edge, card the right edge — bookends the full width, aligned with the calendar below */
-  align-items: center; /* centre the card against the copy so no dead vertical space */
-}
-.intro-lead { min-width: 0; }
-.intro-aside { min-width: 0; }
-
-/* Subscribe card — borderless floating panel (white surface, soft shadow,
-   square-ish radius), matching the offer panel it sits above. */
+/* Subscribe card — borderless floating panel (white surface, soft shadow):
+   the "Le carnet dans votre agenda" band on the Notaires page. */
 .sub-card {
   background: var(--surface);
   border-radius: var(--radius-lg);
@@ -874,20 +860,6 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
 .notary-carnet .sub-card { display: flex; align-items: center; justify-content: space-between; gap: 14px 24px; flex-wrap: wrap; }
 .notary-carnet .sub-card-actions { margin-top: 0; flex: 0 1 auto; }
 /* Borderless notification bell in the header. */
-
-/* Preserve the brand entrance cascade under the two-column nesting: cancel the
-   block-level fade the base `.intro > *` rule would put on the columns, then
-   re-stagger the inner items. */
-.intro--split > * { animation: none; }
-.intro--split .intro-lead > *,
-.intro--split .intro-aside > * {
-  animation: fadeUp .42s cubic-bezier(.2, .8, .2, 1) both;
-}
-.intro--split .intro-lead .eyebrow    { animation-delay: .02s; }
-.intro--split .intro-lead h1          { animation-delay: .06s; }
-.intro--split .intro-lead p           { animation-delay: .12s; }
-.intro--split .intro-lead .hero-cta   { animation-delay: .18s; }
-.intro--split .intro-aside .sub-card  { animation-delay: .16s; }
 
 /* Calendar loading: an indeterminate top bar while the carnet fetches (real
    latency on the live API). Scoped to the carnet panel; overlay only. */
@@ -911,9 +883,6 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
    ========================================================================== */
 @media (max-width: 900px) {
   .intro { padding: 20px 0 4px; }
-  /* Hero collapses to one column: copy + CTAs + note, then the subscribe card
-     full-width, then the calendar. */
-  .intro--split { grid-template-columns: 1fr; row-gap: 14px; }
 }
 @media (max-width: 680px) {
   .wrap { padding: 0 16px; }
