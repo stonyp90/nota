@@ -1008,3 +1008,49 @@ html, body { max-width: 100%; overflow-x: hidden; }
 /* Smooth scrolling centralized in CSS (so the reduced-motion reset above wins),
    and every anchored/focus/programmatic scroll stops BELOW the sticky header. */
 html { scroll-behavior: smooth; scroll-padding-top: var(--sticky-top); }
+
+/* ==========================================================================
+   Carnet view switcher + Carte (FSA heatmap) + sector chip
+   ========================================================================== */
+.view-switch { flex: 0 0 auto; }
+.view-switch .seg-btn { display: inline-flex; align-items: center; gap: 5px; }
+.view-switch .seg-btn svg { flex: none; }
+.view-switch .seg-btn[aria-selected='true'] { background: var(--surface); color: var(--brand); box-shadow: var(--shadow-sm); }
+.view-panel { min-width: 0; }
+.view-panel[hidden] { display: none; }
+
+.fsa-map {
+  display: grid; align-items: start; gap: 12px; padding: 12px 16px 18px;
+  grid-template-columns: repeat(auto-fill, minmax(clamp(150px, 20vw, 200px), 1fr));
+}
+.fsa-card {
+  appearance: none; font: inherit; text-align: left; cursor: pointer; color: var(--ink);
+  display: flex; flex-direction: column; gap: 8px; min-height: 108px; padding: 12px 14px;
+  background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-lg);
+  transition: transform .1s ease, box-shadow .1s ease, border-color .1s;
+}
+@supports (background: color-mix(in srgb, red, white)) {
+  .fsa-card { background: color-mix(in srgb, var(--brand) var(--fsa-heat, 0%), var(--surface)); }
+}
+.fsa-card:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); border-color: var(--brand); }
+.fsa-card:focus-visible { outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px var(--focus-ring); }
+.fsa-card.is-unset { border-style: dashed; }
+.fsa-code { font-size: 16px; font-weight: 800; letter-spacing: .01em; }
+.fsa-card.is-unset .fsa-code { font-size: 13px; font-weight: 700; color: var(--ink-muted); }
+.fsa-count { font-size: 12px; font-weight: 600; color: var(--ink-muted); }
+.fsa-top { margin-top: auto; font-size: 14px; font-weight: 800; letter-spacing: -0.02em; white-space: nowrap; }
+.fsa-top.is-cleared { text-decoration: line-through; color: var(--ink-muted); font-weight: 600; }
+.fsa-heat { height: 4px; border-radius: 999px; background: var(--border); overflow: hidden; }
+.fsa-heat > span { display: block; height: 100%; background: var(--brand); border-radius: 999px; }
+
+.fsa-active {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font: inherit;
+  font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px;
+  background: transparent; color: var(--brand); border: 1px solid var(--brand);
+}
+.fsa-active[hidden] { display: none; }
+.fsa-active:hover { background: var(--surface-hover); }
+.fsa-active:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--focus-ring); }
+.fsa-active-x { font-size: 12px; line-height: 1; }
+
+#carnet-panel:fullscreen .fsa-card, #carnet-panel:-webkit-full-screen .fsa-card { min-height: clamp(108px, 12vh, 150px); }

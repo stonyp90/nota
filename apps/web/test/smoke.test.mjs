@@ -563,6 +563,7 @@ test('EDGE (UI): a fully-retained day marks the cell taken and names the notary 
   assert.ok(cell.classList.contains('is-taken'), 'all-retained cell is marked taken');
   assert.ok(cell.querySelector('.cal-top.is-cleared'), 'taken cell shows a struck cleared amount');
 
+  ctx.Nota.setView('liste'); // the agenda lives in the List view now
   const chip = ctx.doc.querySelector('.agenda .status-chip');
   assert.ok(chip, 'retained agenda row carries a status chip');
   assert.match(chip.getAttribute('title') || '', /Notaires du Vieux-Québec/);
@@ -575,6 +576,7 @@ test('EDGE (UI): a filter that matches nothing renders the empty state with a re
   ctx.Nota.state.filters.min = 9_999_999; // nothing qualifies
   await ctx.Nota.reload();
   await wait(30);
+  ctx.Nota.setView('liste'); // the agenda lives in the List view now
   const empty = ctx.doc.querySelector('.agenda .agenda-empty');
   assert.ok(empty, 'agenda renders its empty state');
   assert.ok(empty.querySelector('button'), 'empty state offers a CTA button');

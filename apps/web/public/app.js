@@ -95,12 +95,18 @@
   var state = {
     anchor: firstOfMonth(todayISO()),
     monthBids: [],
-    filters: { service: '', statut: '', min: null, max: null, sort: 'montant-desc' },
+    filters: { service: '', statut: '', min: null, max: null, sort: 'montant-desc', prefixe: '' },
     selectedDate: null,
     focusDate: todayISO(),
     tab: 'carnet',
+    view: 'calendrier',
     offer: { serviceId: '', dateISO: '', montant: 0, anonyme: true, pricing: {} },
   };
+
+  // Carnet view ids (segmented switcher) + the sentinel key for offers with no
+  // postal sector, used by the Carte grouping and the prefixe filter.
+  var VIEWS = ['calendrier', 'liste', 'carte'];
+  var NO_FSA = '∅';
 
   // ---------------------------------------------------------------------------
   // Date helpers
@@ -280,6 +286,10 @@
       if (f.statut && b.status !== f.statut) return false;
       if (f.min != null && b.montant < f.min) return false;
       if (f.max != null && b.montant > f.max) return false;
+      if (f.prefixe) {
+        if (f.prefixe === NO_FSA) { if (b.prefixe) return false; }
+        else if ((b.prefixe || '') !== f.prefixe) return false;
+      }
       return true;
     });
     var s = f.sort;
@@ -313,7 +323,6 @@
     grid.appendChild(head);
 
     var visible = applyFilters(state.monthBids);
-    updateFilterSummary(visible.length, visible);
     var byDay = {};
     visible.forEach(function (b) { (byDay[b.dateISO] = byDay[b.dateISO] || []).push(b); });
     // The client's OWN offers, to badge their status on the calendar. Status is
@@ -530,6 +539,79 @@
     return row;
   }
 
+  // One dispatch for the three carnet views: keep the shared toolbar summary
+  // correct in EVERY view, then paint ONLY the active region.
+  function renderActiveView() {
+    var visible = applyFilters(state.monthBids);
+    updateFilterSummary(visible.length, visible);
+    if (state.view === 'liste') renderAgenda();
+    else if (state.view === 'carte') renderCarte();
+    else renderCalendar();
+  }
+
+  // Toggle the segmented tabs + their tabpanels, then render the active view.
+  function setView(v) {
+    if (VIEWS.indexOf(v) < 0) v = 'calendrier';
+    state.view = v;
+    VIEWS.forEach(function (name) {
+      var on = name === v;
+      var tab = $('tab-view-' + name);
+      var panel = $('view-' + name);
+      if (tab) { tab.classList.toggle('is-on', on); tab.setAttribute('aria-selected', on ? 'true' : 'false'); tab.tabIndex = on ? 0 : -1; }
+      if (panel) panel.hidden = !on;
+    });
+    writeHash();
+    renderActiveView();
+  }
+
+  // Carte — offers grouped by postal sector (FSA / 3-char b.prefixe) as a density
+  // heatmap grid. No coordinates exist, so density IS the map. A card drills in.
+  function renderCarte() {
+    var map = $('cal-map'); clear(map);
+    var visible = applyFilters(state.monthBids);
+    if (!visible.length) {
+      var empty = el('div', 'agenda-empty');
+      empty.appendChild(el('p', 'agenda-empty-text', filtersActive() ? 'Aucune offre pour ce filtre.' : 'Aucune offre ce mois-ci.'));
+      var cta = el('button', 'btn btn-sm', filtersActive() ? 'Réinitialiser les filtres' : 'Réserver une date');
+      cta.type = 'button';
+      cta.addEventListener('click', filtersActive() ? resetFilters : function () { $('cta-reserver').click(); });
+      empty.appendChild(cta); map.appendChild(empty); return;
+    }
+    var groups = {}, order = [];
+    visible.forEach(function (b) { var k = b.prefixe || NO_FSA; if (!groups[k]) { groups[k] = []; order.push(k); } groups[k].push(b); });
+    var max = order.reduce(function (m, k) { return Math.max(m, groups[k].length); }, 1);
+    order.sort(function (a, b) { if (a === NO_FSA) return 1; if (b === NO_FSA) return -1; return a.localeCompare(b); });
+    order.forEach(function (key) {
+      var list = groups[key];
+      var n = list.length;
+      var open = list.filter(function (b) { return b.status !== D.STATUS.RETENUE; });
+      var intensity = Math.round((n / max) * 100);
+      var card = el('button', 'fsa-card' + (key === NO_FSA ? ' is-unset' : ''));
+      card.type = 'button'; card.dataset.fsa = key;
+      card.style.setProperty('--fsa-heat', Math.round(intensity * 0.6) + '%');
+      card.appendChild(el('span', 'fsa-code', key === NO_FSA ? 'Secteur non précisé' : key));
+      card.appendChild(el('span', 'fsa-count', n + ' offre' + (n > 1 ? 's' : '') + (open.length && open.length < n ? ' · ' + open.length + ' ouverte' + (open.length > 1 ? 's' : '') : '')));
+      if (open.length) {
+        var top = open.reduce(function (a, b) { return b.montant > a.montant ? b : a; }, open[0]);
+        card.appendChild(el('span', 'fsa-top', D.money(top.montant)));
+      } else {
+        var cleared = Math.max.apply(null, list.map(function (b) { return b.montant; }));
+        card.appendChild(el('span', 'fsa-top is-cleared', D.money(cleared)));
+      }
+      var heat = el('div', 'fsa-heat'); var bar = el('span'); bar.style.width = intensity + '%'; heat.appendChild(bar); card.appendChild(heat);
+      card.setAttribute('aria-label', (key === NO_FSA ? 'Secteur non précisé' : 'Secteur ' + key) + ', ' + n + ' offre' + (n > 1 ? 's' : '') + '. Voir la liste.');
+      card.addEventListener('click', function () { selectFSA(this.dataset.fsa); });
+      map.appendChild(card);
+    });
+  }
+
+  // Drill into a sector: filter to its FSA and show the list view.
+  function selectFSA(prefix) {
+    state.filters.prefixe = prefix;
+    state.selectedDate = null;
+    setView('liste');
+  }
+
   // Retain (take) an open offer. Offline-demo path: flip it to "retenue" in the
   // local store + in memory, then repaint the calendar, agenda and day view.
   function takeBid(b) {
@@ -541,7 +623,7 @@
     b.status = D.STATUS.RETENUE; b.etude = etude;
     var mb = state.monthBids.filter(function (x) { return x.id === b.id; })[0];
     if (mb) { mb.status = D.STATUS.RETENUE; mb.etude = etude; }
-    renderCalendar(); renderAgenda();
+    renderActiveView();
     if (state.selectedDate) openDay(state.selectedDate);
     toast('Offre retenue — le dossier du client est débloqué.');
   }
@@ -557,7 +639,7 @@
       $('o-date').value = iso; onOfferDateChange();
     }
     writeHash();
-    renderCalendar(); renderAgenda();
+    renderActiveView();
     var c = document.querySelector('.cal-cell[data-date="' + iso + '"]');
     if (c) c.focus();
   }
@@ -620,7 +702,7 @@
       : 'Aucune offre — fixez votre prix.';
     validateOfferUI();
 
-    renderCalendar();
+    renderActiveView();
     var dlg = $('day-dialog');
     if (dlg.showModal && !dlg.open) dlg.showModal();
   }
@@ -666,6 +748,8 @@
     if (h.has('min')) state.filters.min = num(h.get('min'));
     if (h.has('max')) state.filters.max = num(h.get('max'));
     if (h.has('tri')) state.filters.sort = h.get('tri');
+    if (h.has('fsa')) state.filters.prefixe = h.get('fsa');
+    if (h.has('vue') && VIEWS.indexOf(h.get('vue')) >= 0) state.view = h.get('vue');
     if (h.has('jour') && D.isISODate(h.get('jour'))) { state.selectedDate = h.get('jour'); state.focusDate = h.get('jour'); state.anchor = firstOfMonth(h.get('jour')); }
   }
   function writeHash() {
@@ -676,6 +760,8 @@
     if (f.min != null) h.set('min', f.min);
     if (f.max != null) h.set('max', f.max);
     if (f.sort && f.sort !== 'montant-desc') h.set('tri', f.sort);
+    if (f.prefixe) h.set('fsa', f.prefixe);
+    if (state.view && state.view !== 'calendrier') h.set('vue', state.view);
     if (state.selectedDate) h.set('jour', state.selectedDate);
     var s = h.toString();
     history.replaceState(null, '', s ? '#' + s : location.pathname);
@@ -703,13 +789,14 @@
     setGroupVal('chips-montant', 'min', state.filters.min == null ? '' : String(state.filters.min));
     setGroupVal('seg-sort', 'sort', state.filters.sort || 'montant-desc');
   }
-  function afterFilterChange() { writeHash(); renderCalendar(); renderAgenda(); }
+  function afterFilterChange() { writeHash(); renderActiveView(); }
   function activeFilterCount() {
     var f = state.filters, n = 0;
     if (f.service) n++;
     if (f.statut) n++;
     if (f.min != null) n++;
     if (f.max != null) n++;
+    if (f.prefixe) n++;
     if (f.sort && f.sort !== 'montant-desc') n++;
     return n;
   }
@@ -737,12 +824,20 @@
     if (fc) { fc.textContent = String(n); fc.hidden = n === 0; }
     var ft = $('filters-toggle');
     if (ft) ft.classList.toggle('has-active', n > 0);
+    var fa = $('fsa-active');
+    if (fa) {
+      if (state.filters.prefixe) {
+        var lab = fa.querySelector('.fsa-active-label');
+        if (lab) lab.textContent = state.filters.prefixe === NO_FSA ? 'Secteur non précisé' : 'Secteur ' + state.filters.prefixe;
+        fa.hidden = false;
+      } else { fa.hidden = true; }
+    }
   }
   function resetFilters() {
-    state.filters = { service: '', statut: '', min: null, max: null, sort: 'montant-desc' };
+    state.filters = { service: '', statut: '', min: null, max: null, sort: 'montant-desc', prefixe: '' };
     state.selectedDate = null;
     syncFilterChips(); writeHash();
-    renderCalendar(); renderAgenda();
+    renderActiveView();
     toast('Filtres réinitialisés.');
   }
 
@@ -1079,7 +1174,7 @@
     });
     state.selectedDate = payload.dateISO;
     await refreshMonthData();
-    renderCalendar(); renderAgenda();
+    renderActiveView();
   }
 
   // ---------------------------------------------------------------------------
@@ -1949,7 +2044,7 @@
       if (panel) panel.classList.remove('is-loading');
     }
   }
-  function refreshMonth() { renderCalendar(); renderAgenda(); }
+  function refreshMonth() { renderActiveView(); }
   async function reloadAndRender() { await refreshMonthData(); refreshMonth(); }
 
   // ---------------------------------------------------------------------------
@@ -1995,6 +2090,20 @@
     $('seg-statut').addEventListener('click', function (e) { var b = e.target.closest('.seg-btn'); if (!b) return; setGroupActive(this, b); state.filters.statut = b.dataset.statut; afterFilterChange(); });
     $('seg-sort').addEventListener('click', function (e) { var b = e.target.closest('.seg-btn'); if (!b) return; setGroupActive(this, b); state.filters.sort = b.dataset.sort; afterFilterChange(); });
     $('filters-reset').addEventListener('click', resetFilters);
+    var vsw = $('view-switch');
+    if (vsw) {
+      vsw.addEventListener('click', function (e) { var b = e.target.closest('.seg-btn[data-view]'); if (!b) return; setView(b.dataset.view); b.focus(); });
+      vsw.addEventListener('keydown', function (e) {
+        var d = { ArrowLeft: -1, ArrowRight: 1 };
+        if (!(e.key in d) && e.key !== 'Home' && e.key !== 'End') return;
+        e.preventDefault();
+        var i = VIEWS.indexOf(state.view); if (i < 0) i = 0;
+        if (e.key === 'Home') i = 0; else if (e.key === 'End') i = VIEWS.length - 1; else i = (i + d[e.key] + VIEWS.length) % VIEWS.length;
+        setView(VIEWS[i]); var t = $('tab-view-' + VIEWS[i]); if (t) t.focus();
+      });
+    }
+    var fsaX = $('fsa-active');
+    if (fsaX) fsaX.addEventListener('click', function () { state.filters.prefixe = ''; writeHash(); renderActiveView(); });
 
     // Filters stay collapsed until the customer opens them from the toolbar.
     $('filters-toggle').addEventListener('click', function () {
@@ -2025,7 +2134,7 @@
         var lbl = on ? 'Quitter le plein écran' : 'Plein écran';
         btn.setAttribute('aria-label', lbl); btn.setAttribute('title', lbl);
       }
-      renderCalendar(); // reflow cells to the new viewport
+      renderActiveView(); // reflow the active view to the new viewport
     }
     document.addEventListener('fullscreenchange', onFullscreenChange);
     document.addEventListener('webkitfullscreenchange', onFullscreenChange);
@@ -2099,8 +2208,8 @@
     });
     var ctaV = $('cta-voir');
     if (ctaV) ctaV.addEventListener('click', function () {
-      var cal = $('cal-grid');
-      if (cal) cal.scrollIntoView({ behavior: 'auto', block: 'center' });
+      var panel = $('carnet-panel');
+      if (panel) panel.scrollIntoView({ behavior: 'auto', block: 'center' });
     });
   }
 
@@ -2126,11 +2235,11 @@
     onOfferServiceChange();
     if (state.selectedDate) { $('o-date').value = state.selectedDate; onOfferDateChange(); }
 
-    // Paint the (date-derived) grid immediately so the first load never shows a
-    // blank panel while the live month data is still in flight, then repaint.
-    renderCalendar(); renderAgenda();
+    // Paint the active view immediately (setView also applies the initial
+    // tab/panel visibility, honouring a `vue=` deep link), then repaint on fetch.
+    setView(state.view);
     await refreshMonthData();
-    renderCalendar(); renderAgenda();
+    renderActiveView();
 
     // Restore a stored notary session (no fetch unless a token is present).
     ncRestore();
@@ -2158,6 +2267,7 @@
     store: store,
     domain: D,
     setTab: setTab,
+    setView: setView,
     selectDate: selectDate,
     reload: reloadAndRender,
     dossierState: dossierState,
