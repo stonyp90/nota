@@ -1,0 +1,135 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const D = require('../index.js');
+
+const TODAY = '2026-08-12';
+
+function bid(over) {
+  return {
+    id: 'b' + Math.random().toString(36).slice(2),
+    serviceId: 'testament',
+    dateISO: D.addDays(TODAY, 5),
+    montant: 800,
+    status: D.STATUS.OUVERTE,
+    ...over,
+  };
+}
+
+test('carnetPulse: empty carnet reports zeros, no median, no next date', () => {
+  const p = D.carnetPulse([], TODAY);
+  assert.equal(p.total, 0);
+  assert.equal(p.ouvertes, 0);
+  assert.equal(p.retenues, 0);
+  assert.equal(p.tauxRetenue, 0);
+  assert.equal(p.prochaineDispo, null);
+  assert.equal(p.meilleure, null);
+  // The three services are always present so the panel keeps a stable shape.
+  assert.deepEqual(p.services.map((s) => s.id), D.SERVICES.map((s) => s.id));
+  for (const s of p.services) {
+    assert.equal(s.total, 0);
+    assert.equal(s.median, null);
+    assert.equal(s.prixDepart, D.serviceById(s.id).prixDepart);
+  }
+});
+
+test('carnetPulse: junk input is tolerated', () => {
+  const p = D.carnetPulse(null, TODAY);
+  assert.equal(p.total, 0);
+  const q = D.carnetPulse([null, {}, { dateISO: 'nope', montant: 1 }, bid({})], TODAY);
+  assert.equal(q.total, 1);
+});
+
+test('carnetPulse: counts split open vs retained and the retention rate', () => {
+  const p = D.carnetPulse(
+    [
+      bid({}),
+      bid({}),
+      bid({ status: D.STATUS.RETENUE }),
+      bid({ serviceId: 'procuration', montant: 400, status: D.STATUS.RETENUE }),
+    ],
+    TODAY,
+  );
+  assert.equal(p.total, 4);
+  assert.equal(p.ouvertes, 2);
+  assert.equal(p.retenues, 2);
+  assert.equal(p.tauxRetenue, 50);
+});
+
+test('carnetPulse: median is the middle proposed amount, averaged on an even count', () => {
+  const odd = D.carnetPulse(
+    [bid({ montant: 700 }), bid({ montant: 900 }), bid({ montant: 2000 })],
+    TODAY,
+  );
+  assert.equal(odd.services.find((s) => s.id === 'testament').median, 900);
+
+  const even = D.carnetPulse(
+    [bid({ montant: 700 }), bid({ montant: 900 }), bid({ montant: 1000 }), bid({ montant: 2000 })],
+    TODAY,
+  );
+  // (900 + 1000) / 2, rounded to a whole dollar
+  assert.equal(even.services.find((s) => s.id === 'testament').median, 950);
+});
+
+test('carnetPulse: retained offers count toward the median — they are what the market cleared at', () => {
+  const p = D.carnetPulse(
+    [bid({ montant: 700 }), bid({ montant: 900, status: D.STATUS.RETENUE }), bid({ montant: 1100 })],
+    TODAY,
+  );
+  const t = p.services.find((s) => s.id === 'testament');
+  assert.equal(t.median, 900);
+  assert.equal(t.total, 3);
+  assert.equal(t.ouvertes, 2);
+});
+
+test('carnetPulse: per-service rows carry their own counts', () => {
+  const p = D.carnetPulse(
+    [
+      bid({ serviceId: 'testament' }),
+      bid({ serviceId: 'procuration', montant: 400 }),
+      bid({ serviceId: 'procuration', montant: 600, status: D.STATUS.RETENUE }),
+    ],
+    TODAY,
+  );
+  const proc = p.services.find((s) => s.id === 'procuration');
+  assert.equal(proc.total, 2);
+  assert.equal(proc.ouvertes, 1);
+  assert.equal(proc.median, 500);
+  assert.equal(p.services.find((s) => s.id === 'refinancement').total, 0);
+});
+
+test('carnetPulse: prochaineDispo is the soonest upcoming date still open', () => {
+  const p = D.carnetPulse(
+    [
+      bid({ dateISO: D.addDays(TODAY, -3) }), // past
+      bid({ dateISO: D.addDays(TODAY, 2), status: D.STATUS.RETENUE }), // taken
+      bid({ dateISO: D.addDays(TODAY, 9) }),
+      bid({ dateISO: D.addDays(TODAY, 4) }),
+    ],
+    TODAY,
+  );
+  assert.equal(p.prochaineDispo, D.addDays(TODAY, 4));
+  // Today itself counts as available.
+  const now = D.carnetPulse([bid({ dateISO: TODAY })], TODAY);
+  assert.equal(now.prochaineDispo, TODAY);
+});
+
+test('carnetPulse: meilleure is the highest amount still open to a notary', () => {
+  const p = D.carnetPulse(
+    [bid({ montant: 900 }), bid({ montant: 5000, status: D.STATUS.RETENUE }), bid({ montant: 1400 })],
+    TODAY,
+  );
+  assert.equal(p.meilleure, 1400);
+});
+
+test('carnetPulse: the demo fixtures produce a populated, coherent pulse', () => {
+  const p = D.carnetPulse(D.makeFixtures(TODAY), TODAY);
+  assert.equal(p.total, p.ouvertes + p.retenues);
+  assert.ok(p.total > 0);
+  assert.ok(p.tauxRetenue >= 0 && p.tauxRetenue <= 100);
+  for (const s of p.services) {
+    if (s.median != null) assert.ok(s.median >= s.prixDepart, `${s.id} median at or above its floor`);
+  }
+});

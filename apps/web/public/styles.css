@@ -449,6 +449,14 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 
 /* --- Calendar ------------------------------------------------------------ */
 .cal-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; row-gap: 8px; padding: 12px 18px; }
+/* Narrow toolbar: a flex:1 spacer inside a wrapping row is unpredictable, so turn it
+   into a clean full-width row break, and give the view switcher its own full-width
+   row with equal buttons — no ragged wraps at ~400-640px. */
+@media (max-width: 680px) {
+  .cal-toolbar .header-spacer { flex: 0 0 100%; height: 0; }
+  .cal-toolbar .view-switch { flex: 1 1 100%; width: 100%; }
+  .cal-toolbar .view-switch .seg-btn { flex: 1; justify-content: center; }
+}
 .cal-nav { display: inline-flex; gap: 4px; }
 .cal-title { font-weight: 700; font-size: 15px; text-transform: capitalize; white-space: nowrap; }
 .btn-icon { padding-left: 9px; padding-right: 9px; }
@@ -646,11 +654,11 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .consent-toggle input { width: 18px; height: 18px; accent-color: var(--brand); cursor: pointer; }
 /* Dossier: a light 2-column grid of compact cards (uses the horizontal space,
    far less heavy than full-width stacked rows). */
-.dossier-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; padding: 6px 0; align-items: start; }
+.dossier-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 12px; padding: 6px 0; align-items: start; }
 .dossier-item { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
 .dossier-consent { grid-column: 1 / -1; }
 .dossier-pricing { grid-column: 1 / -1; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
-.dossier-pricing .o-criteria { margin-top: 10px; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px 20px; align-items: start; }
+.dossier-pricing .o-criteria { margin-top: 10px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 12px 20px; align-items: start; }
 /* Booking dialog step-2 criteria go two-up (id beats the generic .o-criteria flex); the optional expander stays full width. */
 #o-criteria { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px 22px; }
 #o-criteria > .crit-more { grid-column: 1 / -1; margin: 4px 0 0; }
@@ -668,6 +676,7 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .profil-fields .form-row { margin: 0; }
 .profil-fields .form-row input { width: 100%; max-width: 460px; }
 .profil-switches { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px 24px; }
+@media (max-width: 900px) { .profil-switches { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 700px) { .profil-switches { grid-template-columns: 1fr; } }
 .profil-card { padding: 13px 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); display: flex; flex-direction: column; gap: 7px; }
 .profil-card-title { font-size: 15px; font-weight: 700; color: var(--ink); }
@@ -1121,8 +1130,11 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
 }
 /* Comfortable touch targets on phones (>=44px), gated to coarse pointers so the
    desktop density is untouched. */
-@media (max-width: 680px) and (pointer: coarse) {
-  .btn, .nav-tab, .chip, .seg-btn { min-height: 44px; }
+/* Comfortable 44px touch targets on ANY coarse pointer (phones AND tablets, e.g.
+   iPad portrait at 768) — not width-gated. Fine pointers (mouse/trackpad) keep the
+   desktop density untouched. Includes the smaller controls that were being missed. */
+@media (pointer: coarse) {
+  .btn, .nav-tab, .chip, .seg-btn, .acct-legal-link, .fsa-active, .agenda-more { min-height: 44px; }
   .btn-icon, .cal-nav .btn { min-width: 44px; }
   .icon-btn, .day-close { width: 44px; height: 44px; }
 }

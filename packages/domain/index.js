@@ -493,6 +493,65 @@
     return { rang: idx < 0 ? null : idx + 1, total };
   }
 
+  // --- Carnet pulse ----------------------------------------------------------
+  // What the market looks like right now, aggregated from a set of bids (one
+  // month, typically). It answers the two questions a client has before they
+  // offer anything: "how much do people pay for this act?" and "does a notary
+  // actually take these?". Pure arithmetic over the carnet — the UI only
+  // formats what comes back.
+  //
+  // The median (not the mean) is the market signal: a single 9 000 $ urgent
+  // refinancing must not drag the typical testament price upward. Retained
+  // offers stay in the median — they are precisely the amounts that cleared —
+  // but availability and the best open amount count open offers only.
+  function median(values) {
+    if (!values.length) return null;
+    const sorted = values.slice().sort((a, b) => a - b);
+    const mid = sorted.length >> 1;
+    return sorted.length % 2
+      ? sorted[mid]
+      : Math.round((sorted[mid - 1] + sorted[mid]) / 2);
+  }
+
+  function carnetPulse(bids, todayISO) {
+    const list = (Array.isArray(bids) ? bids : []).filter(
+      (b) => b && isISODate(b.dateISO) && serviceById(b.serviceId),
+    );
+    const isOpen = (b) => b.status !== STATUS.RETENUE;
+    const open = list.filter(isOpen);
+    const today = isISODate(todayISO) ? todayISO : null;
+
+    const services = SERVICES.map((s) => {
+      const mine = list.filter((b) => b.serviceId === s.id);
+      return {
+        id: s.id,
+        nom: s.nom,
+        prixDepart: s.prixDepart,
+        total: mine.length,
+        ouvertes: mine.filter(isOpen).length,
+        retenues: mine.filter((b) => !isOpen(b)).length,
+        median: median(mine.map((b) => Math.round(Number(b.montant) || 0))),
+      };
+    });
+
+    const dispo = open
+      .filter((b) => !today || b.dateISO >= today)
+      .map((b) => b.dateISO)
+      .sort();
+
+    return {
+      total: list.length,
+      ouvertes: open.length,
+      retenues: list.length - open.length,
+      // Whole percent of the carnet a notary has already taken — the proof the
+      // marketplace clears, shown as-is when there is nothing to divide.
+      tauxRetenue: list.length ? Math.round(((list.length - open.length) / list.length) * 100) : 0,
+      prochaineDispo: dispo.length ? dispo[0] : null,
+      meilleure: open.length ? Math.max.apply(null, open.map((b) => Math.round(Number(b.montant) || 0))) : null,
+      services,
+    };
+  }
+
   // --- Deterministic fixtures ------------------------------------------------
   // Demo bids for an empty carnet. Seeded from a fixed constant so tests and
   // snapshots are stable — never Math.random(). `todayISO` anchors the dates so
@@ -699,6 +758,7 @@
     addDays,
     validateOffer,
     rankOf,
+    carnetPulse,
     makeFixtures,
     bidLabel,
     leadReadiness,
