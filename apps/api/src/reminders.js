@@ -24,6 +24,9 @@ async function runReminders({ repo, notifier, now } = {}) {
   const errors = [];
 
   for (const bid of openBids) {
+    // Pay-on-accept: never remind a client about an offer that never went live —
+    // its card authorization is still pending, or it lapsed/was voided.
+    if (bid.paymentStatus === 'pending' || bid.paymentStatus === 'void') continue;
     const kinds = domain.dueReminders(bid, todayISO);
     for (const kind of kinds) {
       due += 1;

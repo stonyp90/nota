@@ -88,6 +88,8 @@ function createAnalytics({ repo, now, gaugeHorizonMonths } = {}) {
       for (const b of bids) {
         if (seen.has(b.id)) continue;
         seen.add(b.id);
+        // Match the public carnet: pending/void (unauthorized-card) offers are not live.
+        if (b.paymentStatus === 'pending' || b.paymentStatus === 'void') continue;
         if (b.status === domain.STATUS.RETENUE) retained += 1;
         else open += 1;
       }

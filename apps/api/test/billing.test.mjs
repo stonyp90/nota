@@ -166,7 +166,7 @@ test('POST /notaries/connect returns 422 {errors} on an invalid email', async ()
   assert.equal(parse(res).errors[0].code, 'courriel_invalide');
 });
 
-test('POST /notary/acts/complete requires a session token and charges the commission', async () => {
+test('POST /notary/acts/complete: session-gated, verifies bid ownership, then charges the commission', async () => {
   const { repo, app } = setup();
   // 401 without a token.
   assert.equal((await app.handle({ method: 'POST', path: '/notary/acts/complete', body: '{}' })).statusCode, 401);
@@ -176,11 +176,22 @@ test('POST /notary/acts/complete requires a session token and charges the commis
   const id = notaryIdForEmail(email);
   await repo.putNotary({ id, email, status: 'active', chargesEnabled: true, connectAccountId: 'acct_x', commissionCentsCollected: 0 });
   const sess = parse(await app.handle({ method: 'POST', path: '/notary/session', body: JSON.stringify({ email }) }));
+  const auth = { authorization: 'Bearer ' + sess.token };
 
+  // SECURITY: a bid this notary did NOT retain is rejected (no ledger poisoning).
+  await repo.put({ id: 'BID#9', dateISO: '2026-08-20', serviceId: 'testament', montant: 1500, status: 'ouverte', notaryId: null });
+  const stranger = await app.handle({
+    method: 'POST', path: '/notary/acts/complete', headers: auth,
+    body: JSON.stringify({ bidId: 'BID#9', dateISO: '2026-08-20', actAmount: 1500 }),
+  });
+  assert.equal(stranger.statusCode, 403);
+  assert.equal(await repo.getActCompletion('BID#9'), null); // the shared act ledger stays untouched
+
+  // Once this notary has retained it, completing charges the commission.
+  await repo.put({ id: 'BID#9', dateISO: '2026-08-20', serviceId: 'testament', montant: 1500, status: 'retenue', notaryId: id });
   const res = await app.handle({
-    method: 'POST', path: '/notary/acts/complete',
-    headers: { authorization: 'Bearer ' + sess.token },
-    body: JSON.stringify({ bidId: 'BID#9', actAmount: 1500 }),
+    method: 'POST', path: '/notary/acts/complete', headers: auth,
+    body: JSON.stringify({ bidId: 'BID#9', dateISO: '2026-08-20', actAmount: 1500 }),
   });
   assert.equal(res.statusCode, 200);
   assert.equal(parse(res).commissionCents, Math.round(1500 * 100 * RATE)); // 15000

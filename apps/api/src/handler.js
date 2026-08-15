@@ -420,6 +420,15 @@ function createApp(repo, opts = {}) {
       } catch {
         return json(400, { errors: [{ code: 'json_invalide', message: 'Corps JSON invalide.' }] });
       }
+      // AUTHORIZATION: only the notary who RETAINED this bid may complete it — and
+      // thus write the shared write-once act ledger. Without this, any active notary
+      // could POST an arbitrary public bid id and poison its ledger, blocking the
+      // real payout while still counting a commission. Loading the bid by its full
+      // (id, dateISO) key also validates both fields (a missing key → 403, not a 500).
+      const bid = payload.bidId && payload.dateISO ? await repo.get(payload.bidId, payload.dateISO) : null;
+      if (!bid || bid.status !== domain.STATUS.RETENUE || bid.notaryId !== notaryId) {
+        return json(403, { errors: [{ code: 'acte_non_autorise', message: 'Cet acte ne vous a pas été confié.' }] });
+      }
       const result = await billing().completeAct({ notaryId, bidId: payload.bidId, actAmount: payload.actAmount });
       if (!result.ok) return json(422, { errors: result.errors });
       return json(200, { ok: true, commissionCents: result.commissionCents });
@@ -608,6 +617,10 @@ function createApp(repo, opts = {}) {
         montant: retained.montant,
       });
       await recordStats(statsDeltasForRetain(retained, now()));
+      // Tell the client a notary retained their offer (fire-and-forget; never blocks
+      // or fails the response), mirroring the onOfferCreated call in POST /bids.
+      const rn = notifier();
+      if (rn) Promise.resolve(rn.onOfferRetained(retained)).catch(() => {});
       const pay = await payout(retained);
       return json(200, withPayout({ id: retained.id, courriel: retained.courriel || null, dossier: retained.dossier || null }, pay));
     }
@@ -661,7 +674,9 @@ function createApp(repo, opts = {}) {
       const months = monthWindow(now().slice(0, 7), NOTARY_HORIZON_MONTHS);
       const bids = [];
       for (const m of months) {
-        for (const b of await repo.listByMonth(m)) bids.push(publicBid(b));
+        // Same isLive gate as GET /bids: never leak pending/void (unauthorized or
+        // withdrawn) offers into the publicly subscribable calendar feed.
+        for (const b of await repo.listByMonth(m)) if (isLive(b)) bids.push(publicBid(b));
       }
       return calendar(200, buildCarnetFeed(bids, icsStamp()));
     }

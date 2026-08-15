@@ -21,7 +21,10 @@
   // Swap an http(s) URL to the webcal:// scheme that calendar apps subscribe to.
   function toWebcal(httpUrl) { return httpUrl.replace(/^https?:\/\//, 'webcal://'); }
 
-  var todayISO = function () { return new Date().toISOString().slice(0, 10); };
+  // LOCAL calendar date (Québec), not the UTC slice — otherwise every evening in
+  // UTC-4/-5 "today" would roll to tomorrow, mis-marking is-today and blocking the
+  // current local day. Display formatters keep timeZone:'UTC' on the ISO date.
+  var todayISO = function () { var d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
 
   // ---------------------------------------------------------------------------
   // store shim. Interface: listMonth(month) -> [bid]; createBid(payload) -> res.
@@ -161,11 +164,21 @@
     a.push({ id: bid.id, dateISO: bid.dateISO, serviceId: bid.serviceId, montant: bid.montant });
     lsSave(LS_MYOFFERS, a.slice(-50));
   }
+  // Once we ever observe an offer retained, persist it on the myOffers entry so the
+  // "Approuvé" status survives navigating away from that offer's month.
+  function markMyOfferRetained(id) {
+    var a = myOffers(); var changed = false;
+    a.forEach(function (o) { if (o.id === id && !o.retained) { o.retained = true; changed = true; } });
+    if (changed) lsSave(LS_MYOFFERS, a);
+  }
   // The live status of one of the client's own offers: retained by a notary
-  // (approved), still open past its date (expired), or waiting (pending).
+  // (approved), still open past its date (expired), or waiting (pending). The
+  // retained flag is checked first so status is correct in ANY loaded month, not
+  // only the anchor month whose bids happen to be in state.monthBids.
   function clientOfferStatus(o) {
+    if (o.retained) return 'approved';
     var pub = (state.monthBids || []).filter(function (b) { return b.id === o.id; })[0];
-    if (pub && pub.status === D.STATUS.RETENUE) return 'approved';
+    if (pub && pub.status === D.STATUS.RETENUE) { markMyOfferRetained(o.id); return 'approved'; }
     if (D.daysBetween(todayISO(), o.dateISO) < 0) return 'expired';
     return 'pending';
   }
@@ -433,7 +446,7 @@
       var mineSt = myOfferStatus(iso);
       if (mineSt) {
         cell.classList.add('has-mine');
-        var badge = el('span', 'cal-mine', { approved: '✓ Approuvé', pending: 'En attente', expired: 'Expiré' }[mineSt]);
+        var badge = el('span', 'cal-mine', OFFER_STATUS_LABEL[mineSt]);
         badge.dataset.status = mineSt;
         badge.title = 'Votre offre — ' + { approved: 'approuvée par un notaire', pending: 'en attente d’un notaire', expired: 'expirée' }[mineSt];
         cell.appendChild(badge);
@@ -507,30 +520,47 @@
   // service filter of the carnet below.
   function plural(n, word) { return n + ' ' + word + (n === 1 ? '' : 's'); }
 
-  function pulseRow(s, active) {
+  function pulseRow(s, active, busiest) {
+    var short = s.nom.split(' ')[0];
+    var priced = s.median == null ? s.prixDepart : s.median;
     var row = el('button', 'pulse-row' + (active ? ' is-on' : ''));
     row.type = 'button';
     row.dataset.svc = s.id;
     row.setAttribute('aria-pressed', active ? 'true' : 'false');
-    row.title = active ? 'Retirer le filtre ' + s.nom : 'Voir seulement : ' + s.nom;
+    // The row's text is four fragments; name the WHOLE control once so a screen
+    // reader announces the figure and what clicking it does, not "788 $ 10 offres".
+    row.setAttribute('aria-label',
+      short + ' — ' + (s.median == null ? 'à partir de ' : 'médiane ') + D.money(priced) + ', '
+      + (s.total === 0 ? 'aucune offre ce mois' : plural(s.total, 'offre') + ' dont ' + plural(s.retenues, 'retenue')) + '. '
+      + (active ? 'Retirer ce filtre.' : 'Filtrer le carnet sur ce service.'));
 
     var name = el('span', 'pulse-svc');
     var dot = el('span', 'pulse-dot');
     dot.style.background = 'var(--svc-' + s.id + ')';
     name.appendChild(dot);
-    name.appendChild(document.createTextNode(s.nom.split(' ')[0]));
+    name.appendChild(document.createTextNode(short));
     row.appendChild(name);
 
     // Median when the month has offers, the service floor when it has none —
     // never an empty cell, and never a mean (one 9 000 $ urgence must not
     // masquerade as the going rate).
-    var amount = el('span', 'pulse-amount', D.money(s.median == null ? s.prixDepart : s.median));
+    var amount = el('span', 'pulse-amount', D.money(priced));
     if (s.median == null) amount.classList.add('is-floor');
     row.appendChild(amount);
 
     row.appendChild(el('span', 'pulse-meta',
       s.total === 0 ? 'aucune offre ce mois' : plural(s.total, 'offre') + ' · ' + s.retenues + ' retenue' + (s.retenues === 1 ? '' : 's')));
     row.appendChild(el('span', 'pulse-sub', s.median == null ? 'prix de départ' : 'médiane'));
+
+    // Volume bar: this service's share of the busiest one, in its own hue. It
+    // carries the row structure now that the separators are gone, and adds the
+    // one thing the numbers alone don't show — which act drives the month.
+    var bar = el('span', 'pulse-bar');
+    var fill = el('span');
+    fill.style.width = (busiest > 0 ? Math.round((s.total / busiest) * 100) : 0) + '%';
+    fill.style.background = 'var(--svc-' + s.id + ')';
+    bar.appendChild(fill);
+    row.appendChild(bar);
     return row;
   }
 
@@ -543,8 +573,9 @@
     if (m) m.textContent = monthTitle(state.anchor);
 
     clear(rows);
+    var busiest = p.services.reduce(function (m, s) { return Math.max(m, s.total); }, 0);
     p.services.forEach(function (s) {
-      rows.appendChild(pulseRow(s, state.filters.service === s.id));
+      rows.appendChild(pulseRow(s, state.filters.service === s.id, busiest));
     });
 
     // Proof the marketplace clears — the one number the calendar itself cannot
@@ -888,7 +919,14 @@
 
   // Enlarged day view: click/Enter a cell to see every offer for that day over
   // a dimmed backdrop. Cells stay minimal; all detail lives here.
-  function openDay(iso) {
+  async function openDay(iso) {
+    // A day in a different month (opened from a reminder/retenue notification or a
+    // "Mes offres" row) needs that month's bids loaded first — otherwise the dialog
+    // shows an empty day and the calendar stays on the wrong month behind it.
+    if (monthKey(iso) !== monthKey(state.anchor)) {
+      state.anchor = firstOfMonth(iso);
+      await reloadAndRender();
+    }
     state.focusDate = iso;
     state.selectedDate = iso;
     var all = state.monthBids.filter(function (b) { return b.dateISO === iso; });
@@ -1847,13 +1885,6 @@
       m.textContent = parts.join(' · ') + '.';
       m.dataset.ready = 'false';
     }
-
-    var badge = $('dossier-badge');
-    if (badge) {
-      badge.hidden = false;
-      badge.textContent = done + '/' + total;
-      badge.dataset.complete = r.ready ? 'true' : 'false';
-    }
   }
 
   // Post-publish bridge: fill the "Complétez votre dossier" step with the booked
@@ -1962,7 +1993,7 @@
   // A notary marks a retained act completed with its final value → the API
   // charges Nota's commission (Stripe Connect application fee) and returns the
   // real commission in cents (never a client-side rate). Session bearer only.
-  async function ncCompleteAct(id, actAmount, btn) {
+  async function ncCompleteAct(id, dateISO, actAmount, btn) {
     if (!nc.token) return;
     var amt = Number(actAmount);
     if (!(amt > 0)) { toast('Montant de l’acte invalide.'); return; }
@@ -1973,7 +2004,7 @@
       r = await fetch(API_BASE + '/notary/acts/complete', {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: 'Bearer ' + nc.token },
-        body: JSON.stringify({ bidId: id, actAmount: amt }),
+        body: JSON.stringify({ bidId: id, dateISO: dateISO, actAmount: amt }),
       });
     } catch (e) { toast('Action impossible (hors ligne).'); restore(); return; }
     if (r.status === 401) { ncExpire('Session expirée. Reconnectez-vous.'); return; }
@@ -2261,7 +2292,7 @@
   }
   function ncRetainedCard(entry) {
     var svc = D.serviceById(entry.serviceId);
-    var card = el('div', 'nc-card is-retained'); card.dataset.id = entry.id;
+    var card = el('div', 'nc-card is-retained'); card.dataset.id = entry.id; card.dataset.date = entry.dateISO || '';
     var head = el('div', 'nc-card-head');
     head.appendChild(el('div', 'nc-card-title', svc ? svc.nom : entry.serviceId));
     head.appendChild(el('div', 'nc-card-amount', D.money(entry.montant)));
@@ -2368,6 +2399,14 @@
     if (tab === 'dossier') renderDossier();
     if (tab === 'profil') renderProfil();
     if (opts.scroll !== false) window.scrollTo({ top: 0, behavior: 'auto' });
+    // Move focus into the new pane's heading so keyboard/SR users are never dropped
+    // to <body> when a menu/link navigates and its container is hidden. The
+    // focus-visible ring only shows for keyboard users, so mouse clicks are unaffected.
+    if (opts.focus !== false) {
+      var activePane = $('pane-' + tab);
+      var h = activePane && activePane.querySelector('h1');
+      if (h) { h.setAttribute('tabindex', '-1'); try { h.focus({ preventScroll: true }); } catch (e) { h.focus(); } }
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -2484,10 +2523,8 @@
       }
     });
     function onFullscreenChange() {
-      var panel = $('carnet-panel');
       var on = !!(document.fullscreenElement || document.webkitFullscreenElement);
       var btn = $('cal-maximize');
-      if (panel) panel.classList.toggle('is-fullscreen', on);
       if (btn) {
         btn.setAttribute('aria-pressed', on ? 'true' : 'false');
         var lbl = on ? 'Quitter le plein écran' : 'Plein écran';
@@ -2568,7 +2605,7 @@
       var btn = e.target.closest('.nc-complete-btn'); if (!btn) return;
       var card = e.target.closest('.nc-card'); if (!card) return;
       var input = card.querySelector('.nc-actval');
-      ncCompleteAct(card.dataset.id, input ? input.value : '', btn);
+      ncCompleteAct(card.dataset.id, card.dataset.date, input ? input.value : '', btn);
     });
 
     // Hero CTAs — orient the buyer immediately

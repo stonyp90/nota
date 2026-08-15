@@ -168,11 +168,10 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
 
     try {
       switch (type) {
-        case 'checkout.session.completed':
-          await toNotary('subWelcome', emails.subWelcome);
-          await toNotary('subReceipt', emails.subReceipt);
-          await toOperator('operatorNotarySubscribed', emails.operatorNotarySubscribed, { notaryEmail: email });
-          break;
+        // Under the pay-on-accept COMMISSION model there are no notary subscription
+        // checkouts: checkout.session.completed is the CLIENT authorizing their offer
+        // card (bound in billing.applyEvent). It must NOT trigger a notary
+        // subscription welcome/receipt or a "notaire abonné" operator alert.
         case 'invoice.paid':
         case 'invoice.payment_succeeded':
           await toNotary('subReceipt', emails.subReceipt);

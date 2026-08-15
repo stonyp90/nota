@@ -147,12 +147,15 @@ function createBilling({
       });
     }
 
-    await repo.putNotary({
-      ...notary,
-      commissionCentsCollected: (notary.commissionCentsCollected || 0) + fee,
-      updatedAt: clock(),
-    });
+    // Only the write-once ledger's FIRST writer bumps the notary's accumulator and
+    // the analytics counters — a concurrent duplicate (deduped by Stripe) must not
+    // over-count the collected commission.
     if (firstWrite) {
+      await repo.putNotary({
+        ...notary,
+        commissionCentsCollected: (notary.commissionCentsCollected || 0) + fee,
+        updatedAt: clock(),
+      });
       await recordStats(statsDeltasForComplete({ completedAt: String(clock()).slice(0, 10), commissionCents: fee }));
     }
 
@@ -230,12 +233,14 @@ function createBilling({
         paidOnAccept: true, completedAt: clock(),
       });
     }
-    await repo.putNotary({
-      ...notary,
-      commissionCentsCollected: (notary.commissionCentsCollected || 0) + fee,
-      updatedAt: clock(),
-    });
+    // Guard the accumulator + stats with the ledger's first-write, so a concurrent
+    // double-accept (charge deduped by Stripe) can't over-count the commission.
     if (firstWrite) {
+      await repo.putNotary({
+        ...notary,
+        commissionCentsCollected: (notary.commissionCentsCollected || 0) + fee,
+        updatedAt: clock(),
+      });
       await recordStats(statsDeltasForComplete({ completedAt: String(clock()).slice(0, 10), commissionCents: fee }));
     }
 

@@ -60,7 +60,7 @@
      data-viz fills (the per-service mix bar + its legend). */
   --svc-testament: #2563eb;
   --svc-procuration: #7c3aed;
-  --svc-refinancement: #0d9488;
+  --svc-refinancement: #0f766e; /* darker teal → AA (>=4.5:1) for the small per-service count text */
 
   /* Offer status: waiting for a notary vs. retained by one. var() aliases, so
      they track the theme automatically — do not duplicate into the dark blocks. */
@@ -364,51 +364,89 @@ a:hover { text-decoration: underline; }
 
 /* --- Hero / intro -------------------------------------------------------- */
 .intro { padding: clamp(12px, 1.6vw, 20px) 0 clamp(16px, 2.4vw, 30px); }
-/* Carnet hero: copy on the left, a card fills the right — the live market
-   pulse on Carnet, the "how it works" steps on Notaires. */
-.intro--hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(20px, 4vw, 48px); align-items: center; }
+/* Split hero: copy on the left, live content on the right — the market pulse on
+   Carnet, the "how it works" steps on Notaires. Both asides are CHROMELESS (no
+   card, no border, no fill): the hero is one continuous surface, and the two
+   columns are tied together by a shared top edge instead of a box. */
+.intro--hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(20px, 4vw, 48px); align-items: start; }
 .intro-main { min-width: 0; }
-.hero-aside { min-width: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px 18px; }
-.hero-steps-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--brand); margin-bottom: 12px; }
-/* Steps laid out horizontally (3 columns) — short card, fills the width. */
-.hero-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+/* A QUERY CONTAINER: the aside is half the hero above 900px and full width
+   below it, so its content must answer to ITS OWN width, not the viewport's. */
+.hero-aside { min-width: 0; container: aside / inline-size; }
+/* The aside's kicker sits on the SAME baseline as the .eyebrow opposite it:
+   same 12px, same 700, same inherited 1.5 line-height (kept explicit — the
+   two columns start on one line only as long as these agree). */
+.hero-steps-title {
+  font-size: 12px; font-weight: 700; line-height: 1.5; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--brand); margin-bottom: 12px;
+}
+/* Steps: a clean vertical list by default, three across once the aside itself
+   is wide enough for ~150px per step. Keyed to the container, not the viewport,
+   so it never lands on a ragged 2 + 1 orphan row at the middle widths. */
+.hero-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr; gap: 14px 20px; }
+@container aside (min-width: 470px) {
+  .hero-steps { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 20px; }
+}
 .hero-steps li { display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 1.4; color: var(--ink-muted); }
 .hero-steps li strong { display: block; color: var(--ink); font-weight: 700; }
-.hero-step-n { flex: none; width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid var(--brand); background: var(--surface); color: var(--brand); font-weight: 800; font-size: 12px; display: grid; place-items: center; }
-.hero-steps-foot { margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--border); font-size: 12px; line-height: 1.4; color: var(--ink-muted); }
+.hero-step-n { flex: none; width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid var(--brand); color: var(--brand); font-weight: 800; font-size: 12px; display: grid; place-items: center; }
+.hero-steps-foot { margin: 14px 0 0; font-size: 12px; line-height: 1.4; color: var(--ink-muted); }
 
-/* Hero pulse — live per-service medians beside the carnet hero. Deliberately
-   unboxed: no card, no border, it reads as part of the hero. Each row is still
-   a button that filters the carnet below (hairline separators only). */
+/* Hero pulse — live per-service medians beside the carnet hero. No rules, no
+   box: the rows are separated by rhythm and by their own volume bar, and each
+   one is a button that filters the carnet below. */
 .pulse { min-width: 0; }
 .pulse-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .pulse .hero-steps-title { margin-bottom: 0; }
 .pulse-month { font-size: 12px; font-weight: 600; color: var(--ink-muted); text-transform: capitalize; }
-.pulse-rows { display: grid; margin-top: 6px; }
+.pulse-rows { display: grid; gap: 2px; margin-top: 10px; }
 .pulse-row {
   display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline;
-  gap: 2px 12px; width: 100%; text-align: left; padding: 10px 0;
-  background: none; border: 0; border-top: 1px solid var(--border);
+  gap: 3px 12px; text-align: left;
+  /* Bled out by its own padding so the text stays flush with the hero copy
+     while the hover/active tint still reads as a full-width row. The row
+     STRETCHES (no width:100%, which would shrink the content box by the
+     padding and pull the amounts 20px off the hero's right edge). */
+  padding: 8px 10px; margin: 0 -10px;
+  background: none; border: 0; border-radius: var(--radius);
   font: inherit; color: inherit; cursor: pointer;
+  transition: background-color .12s ease;
 }
+.pulse-row:hover { background: var(--surface-hover); }
+.pulse-row.is-on { background: var(--surface-inset); }
 .pulse-row:hover .pulse-svc, .pulse-row.is-on .pulse-svc { color: var(--brand); }
-.pulse-row.is-on { font-weight: 800; }
 .pulse-svc { display: flex; align-items: center; gap: 7px; min-width: 0; font-size: 14px; font-weight: 700; }
 .pulse-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
 .pulse-amount { font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
 /* No offer yet this month: the figure is the service floor, not a market fact. */
 .pulse-amount.is-floor { color: var(--ink-muted); font-weight: 700; }
-.pulse-meta, .pulse-sub { font-size: 11.5px; font-weight: 400; color: var(--ink-muted); }
-.pulse-meta { padding-left: 15px; }
+.pulse-meta, .pulse-sub { font-size: 11.5px; color: var(--ink-muted); }
+.pulse-meta { padding-left: 15px; } /* clears the dot: 8px + the 7px gap */
 .pulse-sub { text-align: right; white-space: nowrap; }
-.pulse-foot { margin: 12px 0 0; font-size: 12px; line-height: 1.45; color: var(--ink-muted); }
+/* Share of the month's demand, in the service's own hue. Deliberately SHORT and
+   left-aligned under the counts: a gauge that belongs to its row, never a rule
+   spanning the width (that would just put the removed borders back). */
+.pulse-bar {
+  grid-column: 1; justify-self: start; width: min(110px, 100%);
+  height: 3px; border-radius: 2px; background: var(--surface-inset);
+  overflow: hidden; margin: 5px 0 0 15px;
+}
+.pulse-bar > span { display: block; height: 100%; border-radius: inherit; min-width: 2px; }
+.pulse-foot { margin: 14px 0 0; font-size: 12px; line-height: 1.45; color: var(--ink-muted); }
 
-@media (max-width: 900px) { .intro--hero { grid-template-columns: 1fr; } }
-@media (max-width: 460px) { .hero-steps { grid-template-columns: 1fr; } }
+/* One column below 900px: the aside stacks under the copy, still chromeless —
+   separated by space alone, and with roomier rows for touch. */
+@media (max-width: 900px) {
+  .intro--hero { grid-template-columns: 1fr; gap: clamp(18px, 3vw, 26px); }
+  .pulse-row { padding-block: 10px; } /* comfortable touch target when stacked */
+}
 .intro h1 { font-size: clamp(24px, 3vw, 34px); font-weight: 800; line-height: 1.12; margin-top: 6px; }
 .intro p { color: var(--ink-muted); max-width: 60ch; margin: 10px 0 0; font-size: 15px; line-height: 1.55; }
+/* Block, not inline-block: as an inline box it sat on the line-box strut, so on
+   wide viewports (where it fits on ONE line) it dropped ~4px below the aside's
+   kicker opposite it and the two hero columns started off-line. */
 .eyebrow {
-  display: inline-block; font-size: 12px; font-weight: 700; text-transform: uppercase;
+  display: block; font-size: 12px; font-weight: 700; line-height: 1.5; text-transform: uppercase;
   letter-spacing: 0.08em; color: var(--brand); margin-bottom: 8px;
 }
 
