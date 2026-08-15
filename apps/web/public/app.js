@@ -370,7 +370,16 @@
           // Colour the cell by the headline offer's urgency tier (matches the
           // legend + agenda) — warm = urgent, cool = calm.
           if (topOffer.tier) cell.dataset.tier = topOffer.tier;
-          cell.setAttribute('aria-label', dayTitle(iso) + ', ' + n + ' offre' + plural + ', meilleure ' + D.money(topOffer.montant) + ', ' + (D.TIER_LABELS ? (D.TIER_LABELS[topOffer.tier] || topOffer.tier) : topOffer.tier));
+          // Info line: the headline offer's service + urgency tier, so a scanner
+          // reads what act and how urgent without opening the day.
+          var svcT = D.serviceById(topOffer.serviceId);
+          var svcShort = svcT ? svcT.nom.split(' ')[0] : topOffer.serviceId;
+          var tierNom = D.tierById(topOffer.tier || 'standard').nom;
+          var info = el('div', 'cal-info');
+          info.appendChild(el('span', 'cal-info-svc', svcShort));
+          info.appendChild(el('span', 'cal-info-tier', tierNom));
+          cell.appendChild(info);
+          cell.setAttribute('aria-label', dayTitle(iso) + ', ' + n + ' offre' + plural + ', meilleure ' + D.money(topOffer.montant) + ', ' + svcShort + ', ' + tierNom);
         } else {
           // Everything taken: show what cleared, struck through — more useful to
           // the next bidder than an em-dash.
@@ -416,6 +425,7 @@
 
   function renderLegend() {
     var lg = $('legend'); clear(lg);
+    lg.appendChild(el('span', 'legend-label', 'Urgence'));
     D.TIERS.forEach(function (t) {
       var item = el('span', 'legend-item');
       var dot = el('span', 'legend-dot'); dot.style.background = 'var(--tier-' + t.id + ')';
@@ -423,6 +433,7 @@
       item.appendChild(document.createTextNode(t.nom));
       lg.appendChild(item);
     });
+    lg.appendChild(el('span', 'legend-label legend-label--sep', 'Statut'));
     // Status key (distinct class so the tier-count test still holds).
     [['ouverte', 'En attente'], ['retenue', 'Retenu']].forEach(function (s) {
       var item = el('span', 'legend-status-item');

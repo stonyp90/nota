@@ -429,7 +429,7 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 .cal-row { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
 .cal-dow { text-align: center; font-size: 11px; font-weight: 700; color: var(--ink-muted); padding: 4px 0; text-transform: uppercase; letter-spacing: .04em; }
 .cal-cell {
-  background: var(--surface); min-height: 66px; padding: 7px 9px; position: relative;
+  background: var(--surface); min-height: clamp(84px, 7vw, 120px); padding: 7px 9px; position: relative;
   display: flex; flex-direction: column; gap: 3px; cursor: pointer;
   border: 1px solid var(--border); border-radius: var(--radius-sm); scroll-margin-top: var(--sticky-top);
   text-align: left; font: inherit; color: var(--ink);
@@ -445,6 +445,14 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 .cal-cell.is-today .cal-daynum { color: var(--brand); font-weight: 800; }
 .cal-count { position: absolute; top: 7px; right: 8px; font-size: 10px; font-weight: 700; background: var(--brand); color: var(--brand-ink); border-radius: 999px; min-width: 16px; text-align: center; padding: 1px 5px; }
 .cal-top { font-size: 15px; font-weight: 800; letter-spacing: -0.02em; margin-top: auto; white-space: nowrap; }
+/* Info line: service + urgency tier of the headline offer. */
+.cal-info { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 10.5px; line-height: 1.2; }
+.cal-info-svc { color: var(--ink-muted); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cal-info-tier { flex: none; color: var(--ink); font-weight: 700; padding: 1px 6px; border: 1px solid var(--border); border-radius: 999px; }
+.cal-cell[data-tier='rapide'] .cal-info-tier { color: var(--tier-rapide); border-color: var(--tier-rapide); }
+.cal-cell[data-tier='prioritaire'] .cal-info-tier { color: var(--tier-prioritaire); border-color: var(--tier-prioritaire); }
+.cal-cell[data-tier='urgence'] .cal-info-tier { color: var(--tier-urgence); border-color: var(--tier-urgence); }
+.cal-cell[data-tier='extreme'] .cal-info-tier { color: var(--tier-extreme); border-color: var(--tier-extreme); }
 .cal-top.is-cleared { text-decoration: line-through; color: var(--ink-muted); font-weight: 600; }
 .cal-status { display: flex; height: 3px; border-radius: 999px; overflow: hidden; background: var(--border); }
 .cal-status-open { background: var(--status-ouverte); }
@@ -467,7 +475,7 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 /* --- Agenda / bid list --------------------------------------------------- */
 /* Agenda: a dense responsive grid of day-cards so it fills the full width below
    the calendar (no sparse full-width rows / blank space). */
-.agenda { display: grid; grid-template-columns: repeat(auto-fill, minmax(clamp(240px, 24vw, 300px), 1fr)); gap: 12px; padding: 12px 16px 18px; align-items: start; }
+.agenda { display: grid; grid-template-columns: repeat(auto-fit, minmax(clamp(240px, 24vw, 300px), 1fr)); gap: 12px; padding: 12px 16px 18px; align-items: start; }
 .agenda-group { background: var(--surface-inset); border-radius: var(--radius-lg); padding-bottom: 6px; overflow: hidden; }
 .agenda-empty { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 28px 18px; text-align: center; }
 .agenda-empty-text { margin: 0; font-size: 13px; color: var(--ink-muted); }
@@ -499,7 +507,8 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 
 .legend { display: flex; flex-wrap: wrap; gap: 10px; padding: 6px 18px 12px; font-size: 12px; color: var(--ink-muted); }
 .legend-item, .legend-status-item { display: inline-flex; align-items: center; gap: 6px; }
-.legend-status-item:first-of-type { margin-left: 4px; padding-left: 12px; border-left: 1px solid var(--border); }
+.legend-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--ink); }
+.legend-label--sep { margin-left: 4px; padding-left: 12px; border-left: 1px solid var(--border); }
 .legend-dot { width: 10px; height: 10px; border-radius: var(--radius-sm); }
 
 /* --- Offer form (now inside the day-booking dialog) --------------------- */
@@ -545,11 +554,14 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .consent-toggle input { width: 18px; height: 18px; accent-color: var(--brand); cursor: pointer; }
 /* Dossier: a light 2-column grid of compact cards (uses the horizontal space,
    far less heavy than full-width stacked rows). */
-.dossier-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; padding: 6px 0; align-items: start; }
+.dossier-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; padding: 6px 0; align-items: start; }
 .dossier-item { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
 .dossier-consent { grid-column: 1 / -1; }
 .dossier-pricing { grid-column: 1 / -1; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
-.dossier-pricing .o-criteria { margin-top: 10px; }
+.dossier-pricing .o-criteria { margin-top: 10px; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px 20px; align-items: start; }
+/* Booking dialog step-2 criteria go two-up (id beats the generic .o-criteria flex); the optional expander stays full width. */
+#o-criteria { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px 16px; }
+#o-criteria > .crit-more { grid-column: 1 / -1; }
 .dossier-price { margin-top: 12px; font-weight: 600; color: var(--brand); font-size: 14px; }
 /* Profile: a top row of at-a-glance / set-once cards (offers · coordinates ·
    notifications) that auto-fit across the width, then a full-width documents
@@ -557,18 +569,20 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .profil-stack { display: flex; flex-direction: column; gap: 12px; }
 /* Every section is a full-width band whose content lays out in a grid that
    fills the width (auto-fit) — no empty right half, no ragged inter-card void. */
-.my-offers-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; }
-.profil-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px 18px; }
+.my-offers-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 400px)); justify-content: center; gap: 10px; }
+.profil-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 180px; gap: 10px 18px; align-items: end; }
+@media (max-width: 560px) { .profil-fields { grid-template-columns: 1fr; } }
 .profil-fields .form-row { margin: 0; }
-.profil-fields .form-row input { width: 100%; }
-.profil-switches { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 2px 24px; }
+.profil-fields .form-row input { width: 100%; max-width: 460px; }
+.profil-switches { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px 24px; }
+@media (max-width: 700px) { .profil-switches { grid-template-columns: 1fr; } }
 .profil-card { padding: 13px 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); display: flex; flex-direction: column; gap: 7px; }
 .profil-card-title { font-size: 15px; font-weight: 700; color: var(--ink); }
 /* The card is a flex column with its own gap — zero the children's stacking
    margins so field/switch spacing isn't doubled (the source of the void). */
 .profil-card .form-row { margin-bottom: 2px; }
 .profil-card .form-row label.lbl { margin-bottom: 6px; }
-.profil-card .switch-row { padding: 4px 0; }
+.profil-card .switch-row { padding: 4px 0; max-width: 420px; }
 .profil-card .help { margin-top: 0; }
 /* Mes offres — the client's posted offers with live status. */
 .my-offer { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; text-align: left; appearance: none; background: transparent; border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; font: inherit; color: var(--ink); cursor: pointer; transition: border-color .12s; }
@@ -594,8 +608,8 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .doc-bar span { display: block; height: 100%; background: var(--brand-bright); border-radius: 999px; transition: width .25s ease; }
 .doc-progress[data-complete='true'] .doc-bar span { background: var(--ok); }
 /* First-time empty state (Mes offres with no offers). */
-.profil-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 4px 0 2px; }
-.profil-empty-text { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--ink-muted); }
+.profil-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 14px; padding: 20px 0 16px; }
+.profil-empty-text { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--ink-muted); max-width: 48ch; }
 .doc-row { border: 1px solid var(--border); border-radius: var(--radius); padding: 11px 13px; display: flex; flex-direction: column; gap: 6px; }
 .doc-row[data-done='true'] { border-color: var(--brand); }
 .doc-row-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -815,7 +829,7 @@ dialog::backdrop { background: var(--backdrop); }
 .dossier-next .dossier-bar { margin: 10px 0 0; }
 
 /* Notaires: onboarding form + console side by side (use the horizontal space). */
-.notaires-cols { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); align-items: stretch; margin-top: clamp(14px, 2vw, 24px); }
+.notaires-cols { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); align-items: start; margin-top: clamp(14px, 2vw, 24px); }
 .notaires-cols .panel-narrow { max-width: none; margin: 0; }
 /* Full-width reassurance strip below both columns — balances them, fills the gap. */
 .nota-guarantee { margin-top: var(--gap); }
