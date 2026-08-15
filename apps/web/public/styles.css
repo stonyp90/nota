@@ -298,7 +298,7 @@ a:hover { text-decoration: underline; }
 .btn svg { flex: none; }
 
 /* Hero call-to-action — the buyer's first, obvious action */
-.hero-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 14px; }
+.hero-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 22px; }
 .hero-cta { display: flex; gap: 10px; flex-wrap: wrap; }
 
 /* Guided step badges (1 · 2 · 3) in the offer panel */
@@ -311,9 +311,9 @@ a:hover { text-decoration: underline; }
 :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 
 /* --- Hero / intro -------------------------------------------------------- */
-.intro { padding: clamp(6px, 1.4vw, 12px) 0 2px; }
-.intro h1 { font-size: clamp(22px, 2.8vw, 30px); font-weight: 800; line-height: 1.1; }
-.intro p { color: var(--ink-muted); max-width: 60ch; margin: 5px 0 0; font-size: 14px; }
+.intro { padding: clamp(20px, 3.2vw, 44px) 0 clamp(16px, 2.4vw, 30px); }
+.intro h1 { font-size: clamp(24px, 3vw, 34px); font-weight: 800; line-height: 1.12; margin-top: 6px; }
+.intro p { color: var(--ink-muted); max-width: 60ch; margin: 10px 0 0; font-size: 15px; line-height: 1.55; }
 .eyebrow {
   display: inline-block; font-size: 12px; font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.08em; color: var(--brand); margin-bottom: 8px;
@@ -506,14 +506,11 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .dossier-price { margin-top: 12px; font-weight: 600; color: var(--brand); font-size: 14px; }
 /* Profile: coordinates + notification settings, two responsive cards. */
 /* Coordonnées + Notifications stack in a narrow left column; Mes documents
-   fills the entire right side — no wasted horizontal space. */
-.profil-grid { display: grid; grid-template-columns: minmax(300px, 400px) 1fr; gap: 14px; align-items: start; }
-.profil-grid > .profil-card:not(.profil-docs) { grid-column: 1; }
-.profil-grid > .profil-docs { grid-column: 2; grid-row: 1 / -1; margin: 0; }
-@media (max-width: 900px) {
-  .profil-grid { grid-template-columns: 1fr; }
-  .profil-grid > .profil-docs { grid-column: 1; grid-row: auto; }
-}
+   fills the entire right side — no wasted horizontal (or vertical) space. */
+.profil-grid { display: grid; grid-template-columns: minmax(300px, 380px) 1fr; gap: 14px; align-items: start; }
+.profil-col-left { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.profil-grid > .profil-docs { margin: 0; }
+@media (max-width: 900px) { .profil-grid { grid-template-columns: 1fr; } }
 .profil-card { padding: 16px 18px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); display: flex; flex-direction: column; gap: 10px; }
 .profil-card-title { font-size: 15px; font-weight: 700; color: var(--ink); }
 .profil-card .switch-row { margin-top: 2px; }
@@ -521,6 +518,8 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .profil-docs { grid-column: 1 / -1; }
 .profil-doc-service { margin: 4px 0 8px; max-width: 340px; }
 .profil-doc-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+.doc-count { grid-column: 1 / -1; font-size: 12.5px; font-weight: 600; color: var(--ink-muted); }
+.doc-count[data-complete='true'] { color: var(--brand); }
 .doc-row { border: 1px solid var(--border); border-radius: var(--radius); padding: 11px 13px; display: flex; flex-direction: column; gap: 6px; }
 .doc-row[data-done='true'] { border-color: var(--brand); }
 .doc-row-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -733,7 +732,7 @@ dialog::backdrop { background: rgb(15 23 42 / 0.45); }
 .dossier-next .dossier-bar { margin: 10px 0 0; }
 
 /* Notaires: onboarding form + console side by side (use the horizontal space). */
-.notaires-cols { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); align-items: stretch; }
+.notaires-cols { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); align-items: stretch; margin-top: clamp(14px, 2vw, 24px); }
 .notaires-cols .panel-narrow { max-width: none; margin: 0; }
 /* Full-width reassurance strip below both columns — balances them, fills the gap. */
 .nota-guarantee { margin-top: var(--gap); }

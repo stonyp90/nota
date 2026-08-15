@@ -1031,7 +1031,8 @@
       });
       row.appendChild(inp); idCard.appendChild(row);
     });
-    body.appendChild(idCard);
+    var leftCol = el('div', 'profil-col-left');
+    leftCol.appendChild(idCard);
 
     // Notifications card — on by default, per-kind toggles gate addNotif().
     var nCard = el('div', 'profil-card');
@@ -1057,7 +1058,8 @@
       lab.appendChild(cb); lab.appendChild(el('span', 'track'));
       row.appendChild(lab); nCard.appendChild(row);
     });
-    body.appendChild(nCard);
+    leftCol.appendChild(nCard);
+    body.appendChild(leftCol);
 
     // Documents card — the full document list per service, with upload / remove /
     // mark-validated. "One profile" = coordinates + notifications + documents.
@@ -1082,7 +1084,12 @@
     var svc = D.serviceById(sid); if (!svc) return;
     var saved = dossierFor(sid);
     var valid = dossierValidated(sid);
-    dossierItems(svc).forEach(function (it) {
+    var items = dossierItems(svc);
+    var done = items.filter(function (it) { return saved[it.id]; }).length;
+    var count = el('div', 'doc-count', done + ' / ' + items.length + ' fournis');
+    if (done === items.length && items.length) count.dataset.complete = 'true';
+    container.appendChild(count);
+    items.forEach(function (it) {
       var provided = !!saved[it.id];
       var row = el('div', 'doc-row');
       row.dataset.done = provided ? 'true' : 'false';
