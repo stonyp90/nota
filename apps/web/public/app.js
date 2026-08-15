@@ -658,10 +658,24 @@
     }
     svg.appendChild(svgEl('text', { 'class': 'fsa-water-label', 'aria-hidden': 'true', x: 80, y: 60, 'text-anchor': 'middle' })).textContent = 'Fleuve Saint-Laurent';
 
-    var unknown = 0, placed = [];
-    order.forEach(function (city) {
-      var list = groups[city];
-      var n = list.length;
+    // Plot one bubble per city. Radius (sqrt of its share of demand) + tint encode
+    // volume. At province scale many cities collapse onto nearly the same point,
+    // so this pass is collision-aware: place the BUSIEST cities first, push any
+    // overlapping bubble clear of those already placed, and drop a city NAME label
+    // only when it would overprint one already drawn — the bubble, its count and
+    // the hover tooltip still identify every city, so no information is lost.
+    var unknown = 0, placedNodes = [], placedLabels = [];
+    var ranked = order.map(function (city) { return { city: city, list: groups[city], n: groups[city].length }; })
+      .sort(function (a, b) { return b.n - a.n; });
+    function overprints(boxes, b) {
+      for (var i = 0; i < boxes.length; i++) {
+        var o = boxes[i];
+        if (Math.abs(o.x - b.x) < (o.w + b.w) / 2 && Math.abs(o.y - b.y) < (o.h + b.h) / 2) return true;
+      }
+      return false;
+    }
+    ranked.forEach(function (row, idx) {
+      var city = row.city, list = row.list, n = row.n;
       var opens = list.filter(function (b) { return b.status !== D.STATUS.RETENUE; });
       var openN = opens.length;
       var best = openN ? opens.reduce(function (a, b) { return b.montant > a.montant ? b : a; }, opens[0]).montant : null;
@@ -669,25 +683,50 @@
       var pos = geo ? pj(geo) : { x: 7, y: 11 + (unknown * 9) };
       if (!geo) unknown++;
       var frac = n / max;
-      var r = (2 + frac * 2.8);
-      // Declutter: if a nearby city already put its label above, drop this one below.
-      var above = true;
-      for (var pi = 0; pi < placed.length; pi++) {
-        if (Math.abs(placed[pi].x - pos.x) < 15 && Math.abs(placed[pi].y - pos.y) < 7) { above = false; break; }
+      var r = 1.7 + Math.sqrt(frac) * 2.1; // sqrt: area tracks volume, mid cities stay compact
+      // Separate overlapping bubbles — relax this one out of every placed bubble
+      // (enough passes to fully unstack a tight pile of co-located cities).
+      for (var it = 0; it < 40; it++) {
+        var moved = false;
+        for (var pi = 0; pi < placedNodes.length; pi++) {
+          var p = placedNodes[pi], dx = pos.x - p.x, dy = pos.y - p.y, d = Math.sqrt(dx * dx + dy * dy), min = r + p.r + 2.4;
+          if (d < min) {
+            if (d < 0.01) { dx = Math.cos(idx * 2.399); dy = Math.sin(idx * 2.399); d = 1; } // golden-angle scatter for exact ties
+            var push = (min - d) + 0.1; pos.x += (dx / d) * push; pos.y += (dy / d) * push; moved = true;
+          }
+        }
+        pos.x = Math.max(r + 1, Math.min(99 - r, pos.x));
+        pos.y = Math.max(r + 5, Math.min(60 - r, pos.y));
+        if (!moved) break;
       }
-      placed.push({ x: pos.x, y: pos.y });
+      placedNodes.push({ x: pos.x, y: pos.y, r: r });
+      var cx = pos.x.toFixed(1), cy = pos.y.toFixed(1);
+
       var g = svgEl('g', { 'class': 'fsa-node' + (city === 'Autres' ? ' is-unset' : ''), tabindex: '0', role: 'button' });
       g.dataset.fsa = city;
       g.setAttribute('aria-label', city + ', ' + n + ' offre' + (n > 1 ? 's' : '') + (openN ? ', ' + openN + ' ouverte' + (openN > 1 ? 's' : '') : '') + '. Voir la liste.');
       var tt = svgEl('title', {});
       tt.textContent = city + ' — ' + n + ' offre' + (n > 1 ? 's' : '') + (best ? ', meilleure ' + D.money(best) : '');
       g.appendChild(tt);
-      g.appendChild(svgEl('circle', { 'class': 'fsa-hit', cx: pos.x, cy: pos.y, r: Math.max(r, 6).toFixed(1), fill: 'transparent' }));
-      g.appendChild(svgEl('circle', { cx: pos.x, cy: pos.y, r: r.toFixed(1), 'fill-opacity': (0.34 + frac * 0.5).toFixed(2) }));
-      var code = svgEl('text', { x: pos.x, y: (above ? pos.y - r - 1 : pos.y + r + 3).toFixed(1), 'text-anchor': 'middle', 'class': 'fsa-node-code' });
-      code.textContent = city;
-      g.appendChild(code);
-      var cnt = svgEl('text', { x: pos.x, y: (pos.y + 0.9).toFixed(1), 'text-anchor': 'middle', 'class': 'fsa-node-n' });
+      g.appendChild(svgEl('circle', { 'class': 'fsa-hit', cx: cx, cy: cy, r: Math.max(r, 6).toFixed(1), fill: 'transparent' }));
+      g.appendChild(svgEl('circle', { cx: cx, cy: cy, r: r.toFixed(1), 'fill-opacity': (0.34 + frac * 0.5).toFixed(2) }));
+      // City name — try above the bubble, then below; skip if it would overprint
+      // another label OR sit on a neighbouring bubble (busiest cities, placed
+      // first, keep their names; the rest stay identifiable by count + tooltip).
+      var otherBubbles = placedNodes.slice(0, -1).map(function (p) { return { x: p.x, y: p.y, w: p.r * 1.7, h: p.r * 1.7 }; });
+      var obstacles = placedLabels.concat(otherBubbles);
+      var lw = Math.max(city.length * 1.15, 4), lh = 3.4;
+      var above = { x: pos.x, y: pos.y - r - 2.0, w: lw, h: lh };
+      var below = { x: pos.x, y: pos.y + r + 2.8, w: lw, h: lh };
+      var box = (above.y > 3.4 && !overprints(obstacles, above)) ? above
+        : (below.y < 61 && !overprints(obstacles, below)) ? below : null;
+      if (box) {
+        placedLabels.push(box);
+        var code = svgEl('text', { x: cx, y: box.y.toFixed(1), 'text-anchor': 'middle', 'class': 'fsa-node-code' });
+        code.textContent = city;
+        g.appendChild(code);
+      }
+      var cnt = svgEl('text', { x: cx, y: (pos.y + 0.9).toFixed(1), 'text-anchor': 'middle', 'class': 'fsa-node-n' });
       cnt.textContent = n;
       g.appendChild(cnt);
       g.addEventListener('click', function () { selectFSA(this.dataset.fsa); });

@@ -50,8 +50,8 @@
   --tier-prioritaire: #906800;
   --tier-urgence: #c2410c;
   --tier-extreme: #b42318;
-  --tier-rapide-ink: #78c282; --tier-prioritaire-ink: #e0b44a; --tier-urgence-ink: #f0894c; --tier-extreme-ink: #f97066;
-  /* Outline text/border tint per tier — light = base, dark = brighter for AA. */
+  /* Outline text/border tint per tier — light = base, dark = brighter for AA
+     (the dark values live in BOTH dark blocks below; keep all three in sync). */
   --tier-rapide-ink: var(--tier-rapide); --tier-prioritaire-ink: var(--tier-prioritaire);
   --tier-urgence-ink: var(--tier-urgence); --tier-extreme-ink: var(--tier-extreme);
 
@@ -81,6 +81,17 @@
 
   --header-h: 62px;   /* sticky .site-header height */
   --sticky-top: 82px; /* header height + breathing gap — used for scroll-padding / scroll-margin */
+
+  /* Fixed third-party brand-mark colours (Google / Outlook calendar logos).
+     These are brand IDENTITY constants, NOT theme tokens: they must render
+     identically in every theme and must never be restyled. Defined here only so
+     no literal colour lives in markup — reference via var() in the SVG fills. */
+  --logo-google-blue: #4285f4;
+  --logo-google-green: #34a853;
+  --logo-google-yellow: #fbbc05;
+  --logo-google-red: #ea4335;
+  --logo-outlook-blue: #0f6cbd;
+  --logo-on-brand: #ffffff;
 }
 
 /* Dark theme — system preference.
@@ -154,6 +165,7 @@
   --tier-prioritaire: #906800;
   --tier-urgence: #c2410c;
   --tier-extreme: #b42318;
+  --tier-rapide-ink: #78c282; --tier-prioritaire-ink: #e0b44a; --tier-urgence-ink: #f0894c; --tier-extreme-ink: #f97066;
 
   --shadow-lg: 0 20px 40px -12px rgb(0 0 0 / 0.6);
 }
@@ -536,7 +548,7 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .mult-note { font-size: 12px; color: var(--ink-muted); }
 
 .gauge { height: 8px; border-radius: 999px; background: var(--surface-inset); overflow: hidden; margin: 8px 0 4px; }
-.gauge-fill { height: 100%; background: linear-gradient(90deg, var(--tier-rapide), var(--tier-prioritaire), var(--tier-urgence)); transition: width .18s; }
+.gauge-fill { height: 100%; background: linear-gradient(90deg, var(--tier-rapide), var(--tier-prioritaire), var(--tier-urgence)); }
 .gauge-label { font-size: 12px; font-weight: 600; }
 
 .switch-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; }
@@ -554,7 +566,7 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 /* --- Dossier ------------------------------------------------------------- */
 .dossier-progress { padding: 14px 18px; }
 .dossier-bar { height: 8px; background: var(--surface-inset); border-radius: 999px; overflow: hidden; margin: 8px 0; }
-.dossier-bar > span { display: block; height: 100%; background: var(--brand); transition: width .2s; }
+.dossier-bar > span { display: block; height: 100%; background: var(--brand); }
 .dossier-missing { font-size: 13px; color: var(--ink-muted); }
 .dossier-missing[data-ready='true'] { color: var(--ok); font-weight: 700; }
 .consent-toggle { display: inline-flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; font-weight: 600; cursor: pointer; }

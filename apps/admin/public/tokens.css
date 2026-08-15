@@ -164,4 +164,5 @@
   --brand-wash: rgb(80 184 72 / 0.10);
   --brand-wash-strong: rgb(80 184 72 / 0.18);
   --neutral-wash: rgb(120 130 120 / 0.10);
+  --focus-ring: rgb(80 184 72 / 0.15); /* input/control focus glow (3px) — theme-neutral, same as the washes */
 }

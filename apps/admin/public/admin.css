@@ -128,7 +128,7 @@ a:hover { text-decoration: underline; }
   border-radius: var(--radius); background: var(--surface); color: var(--ink);
 }
 .input::placeholder { color: var(--ink-muted); opacity: .8; }
-.input:focus { border-color: var(--ring); outline: none; box-shadow: 0 0 0 3px rgb(80 184 72 / 0.15); }
+.input:focus { border-color: var(--ring); outline: none; box-shadow: 0 0 0 3px var(--focus-ring); }
 
 /* --- Segmented control (date-range presets) -------------------------------
    Outline pills — the active preset is marked with hunter-green ink + border,
