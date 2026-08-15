@@ -364,7 +364,7 @@
       var dayBids = byDay[iso] || [];
       if (dayBids.length) {
         cell.classList.add('has-bids');
-        cell.appendChild(el('span', 'cal-count', String(dayBids.length)));
+        cell.appendChild(el('span', 'cal-count', compactCount(dayBids.length)));
 
         var n = dayBids.length;
         var plural = n > 1 ? 's' : '';
@@ -403,6 +403,24 @@
         var tSeg = el('span', 'cal-status-taken'); tSeg.style.flexGrow = String(retenue.length);
         meter.appendChild(oSeg); meter.appendChild(tSeg);
         cell.appendChild(meter);
+
+        // Per-service mix — how many of each act sit on this day. A proportional
+        // stacked bar is identical in size at 1 bid or 2000; the exact counts live
+        // in each segment's tooltip + the cell aria-label, so it never overflows.
+        var svcCounts = D.SERVICES.map(function (s) {
+          return { id: s.id, short: s.nom.split(' ')[0], n: dayBids.filter(function (b) { return b.serviceId === s.id; }).length };
+        }).filter(function (c) { return c.n > 0; });
+        if (svcCounts.length) {
+          var svcBar = el('div', 'cal-svc-bar'); svcBar.setAttribute('aria-hidden', 'true');
+          svcCounts.forEach(function (c) {
+            var seg = el('span', 'cal-svc-seg'); seg.dataset.svc = c.id;
+            seg.style.flexGrow = String(c.n); seg.title = c.short + ' : ' + c.n;
+            svcBar.appendChild(seg);
+          });
+          cell.appendChild(svcBar);
+          var mix = svcCounts.map(function (c) { return c.n + ' ' + c.short.toLowerCase(); }).join(', ');
+          cell.setAttribute('aria-label', (cell.getAttribute('aria-label') || dayTitle(iso)) + ' — ' + mix);
+        }
       }
 
       // The client's own offer status on this day (approved / pending / expired).
@@ -428,6 +446,12 @@
     while (slot % 7 !== 0) { blank(); slot++; }
   }
 
+  // Compact a bid count so the badge pill never widens: 2000 -> "2k", 1250 -> "1.2k".
+  // The aria-label always uses the real integer, so screen readers hear the exact count.
+  function compactCount(n) {
+    return n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1).replace('.0', '') + 'k' : String(n);
+  }
+
   function renderLegend() {
     var lg = $('legend'); clear(lg);
     lg.appendChild(el('span', 'legend-label', 'Urgence'));
@@ -445,6 +469,15 @@
       var dot = el('span', 'legend-dot'); dot.style.background = 'var(--status-' + s[0] + ')';
       item.appendChild(dot);
       item.appendChild(document.createTextNode(s[1]));
+      lg.appendChild(item);
+    });
+    // Service key — decodes the per-service mix bar in each calendar cell.
+    lg.appendChild(el('span', 'legend-label legend-label--sep', 'Service'));
+    D.SERVICES.forEach(function (s) {
+      var item = el('span', 'legend-status-item');
+      var dot = el('span', 'legend-dot'); dot.style.background = 'var(--svc-' + s.id + ')';
+      item.appendChild(dot);
+      item.appendChild(document.createTextNode(s.nom.split(' ')[0]));
       lg.appendChild(item);
     });
   }
@@ -575,6 +608,13 @@
     G6: 'Lévis', G7: 'Saguenay', G8: 'Trois-Rivières', G9: 'Trois-Rivières', G5: 'Rimouski', G4: 'Charlevoix', G0: 'Est-du-Québec',
     G1: 'Québec', G2: 'Québec', G3: 'Québec',
   };
+  // Real Québec landmass — the province boundary from public GeoJSON (Natural
+  // Earth via click_that_hood), simplified (Douglas–Peucker) to ~100 [lat,lng]
+  // points so it embeds with zero runtime deps and projects like the bubbles.
+  var QC_OUTLINE = [[51.413,-57.104],[51.276,-58.628],[50.204,-60.134],[50.269,-66.442],[48.138,-69.684],[48.44,-71.071],[48.109,-69.73],[46.742,-71.299],[48.364,-68.823],[49.121,-66.639],[49.214,-64.942],[48.756,-64.158],[48.88,-64.558],[48.521,-64.189],[48.013,-65.27],[47.925,-68.373],[46.691,-69.985],[45.392,-70.635],[45.013,-71.506],[44.993,-74.736],[45.564,-74.397],[45.456,-76.338],[46.337,-78.704],[47.442,-79.576],[51.553,-79.551],[51.164,-78.845],[51.776,-79.033],[52.238,-78.406],[53.024,-78.983],[54.183,-79.049],[54.658,-79.761],[55.288,-77.76],[56.406,-76.519],[57.669,-76.806],[58.614,-78.569],[59.71,-77.774],[59.565,-77.314],[59.915,-77.427],[60.159,-76.759],[60.065,-77.631],[60.836,-77.512],[60.789,-78.191],[61.542,-77.475],[62.278,-78.156],[62.59,-77.418],[62.105,-74.556],[62.48,-73.679],[61.676,-71.99],[61.567,-72.303],[61.606,-71.572],[61.431,-71.888],[61.155,-71.578],[61.069,-69.514],[60.068,-69.625],[60.062,-71.031],[59.868,-69.563],[59.32,-69.758],[59.239,-69.235],[58.77,-70.25],[58.774,-68.356],[58.127,-68.344],[57.765,-69.369],[58.576,-68.003],[58.074,-68.128],[58.462,-67.732],[57.923,-67.71],[58.82,-66.465],[58.32,-66.066],[59.011,-65.881],[59.041,-65.317],[59.148,-65.715],[59.49,-65.542],[59.376,-64.983],[59.736,-65.544],[60.303,-64.535],[59.531,-64.827],[59.496,-64.34],[59.017,-64.291],[58.927,-64.879],[58.749,-63.481],[58.086,-64.432],[57.734,-63.596],[56.304,-64.137],[55.35,-63.096],[54.612,-63.669],[54.713,-65.69],[55.339,-66.779],[54.742,-66.699],[55.071,-67.428],[54.622,-67.036],[54.064,-67.782],[53.34,-66.91],[52.699,-67.067],[52.974,-66.346],[52.201,-66.439],[52.171,-65.109],[51.558,-64.581],[53.114,-63.693],[52.651,-63.378],[52.471,-64.082],[52,-63.751],[52,-57.101],[51.413,-57.104]];
+  // St. Lawrence centerline (Montréal → gulf), drawn as the river through the land.
+  var QC_STLAWRENCE = [[45.42,-73.95],[45.5,-73.55],[45.72,-73.18],[46.03,-73.11],[46.2,-72.8],[46.343,-72.54],[46.5,-72.1],[46.66,-71.75],[46.8,-71.2],[46.95,-70.7],[47.3,-70.05],[47.75,-69.3],[48.2,-68.55],[48.6,-68],[49,-67.2],[49.3,-66.2]];
+
   // Real [lat, lng] per place, projected onto the map so bubbles sit at their
   // true relative positions over Québec (river, Île d'Orléans, the province…).
   var CITY_GEO = {
@@ -631,32 +671,25 @@
       var lats = gs.map(function (g) { return g[0]; }), lngs = gs.map(function (g) { return g[1]; });
       var loLat = Math.min.apply(null, lats), hiLat = Math.max.apply(null, lats);
       var loLng = Math.min.apply(null, lngs), hiLng = Math.max.apply(null, lngs);
-      var latSpan = Math.max(hiLat - loLat, 0.045), lngSpan = Math.max(hiLng - loLng, 0.085);
-      var cLat = (loLat + hiLat) / 2, cLng = (loLng + hiLng) / 2, padLat = latSpan * 0.6, padLng = lngSpan * 0.5;
+      // Min span keeps a recognizable slice of the province on screen even when
+      // every bid sits in one city; the max side grows to fit a north+south spread
+      // so both are always visible ("the map scales to the data").
+      var latSpan = Math.max(hiLat - loLat, 1.5), lngSpan = Math.max(hiLng - loLng, 2.4);
+      var cLat = (loLat + hiLat) / 2, cLng = (loLng + hiLng) / 2, padLat = latSpan * 0.32, padLng = lngSpan * 0.28;
       B = { lat0: cLat + latSpan / 2 + padLat, lat1: cLat - latSpan / 2 - padLat, lng0: cLng - lngSpan / 2 - padLng, lng1: cLng + lngSpan / 2 + padLng };
     } else {
       B = { lat0: 47.0, lat1: 46.72, lng0: -71.5, lng1: -70.95 };
     }
     function pj(g) { return { x: ((g[1] - B.lng0) / (B.lng1 - B.lng0)) * 100, y: 4 + ((B.lat0 - g[0]) / (B.lat0 - B.lat1)) * 54 }; }
 
-    var svg = svgEl('svg', { 'class': 'fsa-svg', viewBox: '0 0 100 64', role: 'group', 'aria-label': 'Carte de la région de Québec — touchez une ville pour voir ses offres' });
-    svg.appendChild(svgEl('rect', { 'class': 'fsa-land', 'aria-hidden': 'true', x: 0, y: 0, width: 100, height: 64, rx: 4 }));
-    // The St. Lawrence north/west bank across the province (Montréal → estuary):
-    // project the real shore line, then fill the water side. Off-view points clip.
-    var SHORE = [
-      [45.42, -73.95], [45.50, -73.55], [45.72, -73.18], [46.03, -73.11], [46.2, -72.8], [46.343, -72.54],
-      [46.5, -72.1], [46.66, -71.75], [46.72, -71.55], [46.755, -71.30], [46.775, -71.20], [46.80, -71.12],
-      [46.83, -71.04], [46.87, -70.95], [46.95, -70.7], [47.2, -70.25], [47.65, -69.5], [48.2, -68.8], [48.5, -68.1],
-    ];
-    var pts = SHORE.map(function (s) { return pj(s); });
-    var wd = 'M ' + pts.map(function (p) { return p.x.toFixed(1) + ' ' + p.y.toFixed(1); }).join(' L ') +
-      ' L ' + pts[pts.length - 1].x.toFixed(1) + ' 130 L ' + pts[0].x.toFixed(1) + ' 130 Z';
-    svg.appendChild(svgEl('path', { 'class': 'fsa-water', 'aria-hidden': 'true', d: wd }));
-    var isle = pj([46.905, -70.98]);
-    if (isle.x > 6 && isle.x < 94 && isle.y > 6 && isle.y < 58) {
-      svg.appendChild(svgEl('ellipse', { 'class': 'fsa-isle', 'aria-hidden': 'true', cx: isle.x.toFixed(1), cy: isle.y.toFixed(1), rx: 8, ry: 3.2, transform: 'rotate(-38 ' + isle.x.toFixed(1) + ' ' + isle.y.toFixed(1) + ')' }));
-    }
-    svg.appendChild(svgEl('text', { 'class': 'fsa-water-label', 'aria-hidden': 'true', x: 80, y: 60, 'text-anchor': 'middle' })).textContent = 'Fleuve Saint-Laurent';
+    var svg = svgEl('svg', { 'class': 'fsa-svg', viewBox: '0 0 100 64', role: 'group', 'aria-label': 'Carte du Québec — touchez une ville pour voir ses offres' });
+    // Real geographic base, all projected through pj() so it zooms with the data:
+    // a water canvas, the actual Québec landmass on top, then the St. Lawrence
+    // drawn back through the land. Off-view geometry is clipped by the viewBox.
+    svg.appendChild(svgEl('rect', { 'class': 'fsa-water', 'aria-hidden': 'true', x: 0, y: 0, width: 100, height: 64 }));
+    function projectPath(coords) { return 'M ' + coords.map(function (g) { var p = pj(g); return p.x.toFixed(1) + ' ' + p.y.toFixed(1); }).join(' L '); }
+    svg.appendChild(svgEl('path', { 'class': 'fsa-land', 'aria-hidden': 'true', d: projectPath(QC_OUTLINE) + ' Z' }));
+    svg.appendChild(svgEl('path', { 'class': 'fsa-river', 'aria-hidden': 'true', fill: 'none', d: projectPath(QC_STLAWRENCE) }));
 
     // Plot one bubble per city. Radius (sqrt of its share of demand) + tint encode
     // volume. At province scale many cities collapse onto nearly the same point,
@@ -689,7 +722,7 @@
       for (var it = 0; it < 40; it++) {
         var moved = false;
         for (var pi = 0; pi < placedNodes.length; pi++) {
-          var p = placedNodes[pi], dx = pos.x - p.x, dy = pos.y - p.y, d = Math.sqrt(dx * dx + dy * dy), min = r + p.r + 2.4;
+          var p = placedNodes[pi], dx = pos.x - p.x, dy = pos.y - p.y, d = Math.sqrt(dx * dx + dy * dy), min = r + p.r + 2.9;
           if (d < min) {
             if (d < 0.01) { dx = Math.cos(idx * 2.399); dy = Math.sin(idx * 2.399); d = 1; } // golden-angle scatter for exact ties
             var push = (min - d) + 0.1; pos.x += (dx / d) * push; pos.y += (dy / d) * push; moved = true;
@@ -709,7 +742,7 @@
       tt.textContent = city + ' — ' + n + ' offre' + (n > 1 ? 's' : '') + (best ? ', meilleure ' + D.money(best) : '');
       g.appendChild(tt);
       g.appendChild(svgEl('circle', { 'class': 'fsa-hit', cx: cx, cy: cy, r: Math.max(r, 6).toFixed(1), fill: 'transparent' }));
-      g.appendChild(svgEl('circle', { cx: cx, cy: cy, r: r.toFixed(1), 'fill-opacity': (0.34 + frac * 0.5).toFixed(2) }));
+      g.appendChild(svgEl('circle', { cx: cx, cy: cy, r: r.toFixed(1), 'fill-opacity': (0.6 + frac * 0.35).toFixed(2) }));
       // City name — try above the bubble, then below; skip if it would overprint
       // another label OR sit on a neighbouring bubble (busiest cities, placed
       // first, keep their names; the rest stay identifiable by count + tooltip).
@@ -734,7 +767,7 @@
       svg.appendChild(g);
     });
     map.appendChild(svg);
-    map.appendChild(el('p', 'fsa-note', 'Villes et secteurs de la région de Québec (positions approximatives). Touchez une ville pour voir ses offres.'));
+    map.appendChild(el('p', 'fsa-note', 'Carte du Québec — chaque bulle est une ville, sa taille indique le volume d’offres. Touchez une ville pour voir ses offres.'));
   }
 
   // Drill into a sector: filter to its FSA and show the list view.
