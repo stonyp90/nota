@@ -512,6 +512,28 @@ test('the calendar badges the client\'s own offer status (approved)', async () =
   assert.equal(badge.dataset.status, 'approved');
 });
 
+test('the toolbar surfaces the next availability (soonest open date)', async () => {
+  const ctx = await boot();
+  const today = todayISO();
+  // One open offer dated today (always >= today) → it is the next availability.
+  await reseed(ctx, [{
+    id: 'a1', serviceId: 'testament', dateISO: today, montant: 900,
+    tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: today,
+  }]);
+  const av = ctx.doc.getElementById('cal-avail');
+  assert.ok(av && !av.hidden, 'the next-availability pill is shown when an open offer is upcoming');
+  assert.match(av.textContent, /Prochaine dispo/);
+  assert.ok(av.textContent.includes(String(Number(today.slice(8, 10)))), 'it names the soonest open date');
+
+  // When that same offer is retained (none open), the pill hides.
+  await reseed(ctx, [{
+    id: 'a1', serviceId: 'testament', dateISO: today, montant: 900,
+    tier: 'standard', status: ctx.D.STATUS.RETENUE, etude: 'Étude X', anonyme: true, createdAt: today,
+  }]);
+  const av2 = ctx.doc.getElementById('cal-avail');
+  assert.ok(av2.hidden, 'no open offer → the pill hides');
+});
+
 test('EDGE (UI): a fully-retained day marks the cell taken and names the notary (not dimmed)', async () => {
   const ctx = await boot();
   const iso = dayOf(ctx.anchor, '15');

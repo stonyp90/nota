@@ -118,8 +118,10 @@
   }
   var fmtMonth = new Intl.DateTimeFormat('fr-CA', { month: 'long', year: 'numeric', timeZone: 'UTC' });
   var fmtDayLong = new Intl.DateTimeFormat('fr-CA', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
+  var fmtDayShort = new Intl.DateTimeFormat('fr-CA', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
   function monthTitle(anchor) { return fmtMonth.format(new Date(anchor + 'T00:00:00Z')); }
   function dayTitle(iso) { return fmtDayLong.format(new Date(iso + 'T00:00:00Z')); }
+  function dayShort(iso) { return fmtDayShort.format(new Date(iso + 'T00:00:00Z')).replace(/\.$/, ''); }
 
   // ---------------------------------------------------------------------------
   // DOM helpers
@@ -311,7 +313,7 @@
     grid.appendChild(head);
 
     var visible = applyFilters(state.monthBids);
-    updateFilterSummary(visible.length);
+    updateFilterSummary(visible.length, visible);
     var byDay = {};
     visible.forEach(function (b) { (byDay[b.dateISO] = byDay[b.dateISO] || []).push(b); });
     // The client's OWN offers, to badge their status on the calendar. Status is
@@ -661,9 +663,21 @@
     return n;
   }
   function filtersActive() { return activeFilterCount() > 0; }
-  function updateFilterSummary(count) {
+  function updateFilterSummary(count, visible) {
     var rc = $('result-count');
     if (rc) rc.textContent = count + ' offre' + (count === 1 ? '' : 's') + ' ce mois';
+    // Next availability: the soonest upcoming date (>= today) with an offer still
+    // open (not yet retained) among what's shown — a liveness cue for the market.
+    var av = $('cal-avail');
+    if (av) {
+      var today = todayISO();
+      var soon = (visible || []).reduce(function (best, b) {
+        if (b.status === D.STATUS.RETENUE || b.dateISO < today) return best;
+        return (best === null || b.dateISO < best) ? b.dateISO : best;
+      }, null);
+      if (soon) { av.textContent = 'Prochaine dispo · ' + dayShort(soon); av.hidden = false; }
+      else { av.textContent = ''; av.hidden = true; }
+    }
     var rb = $('filters-reset');
     if (rb) rb.hidden = !filtersActive();
     // Surface the active-filter count on the (collapsed) toggle so hidden filters stay visible.
