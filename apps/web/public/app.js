@@ -587,13 +587,6 @@
     'Boischatel': [46.90, -71.15], 'Côte-de-Beaupré': [46.95, -71.02], 'Lac-Beauport': [46.94, -71.28],
     'Stoneham': [47.0, -71.37],
   };
-  var GEO_B = { lat0: 47.04, lat1: 46.71, lng0: -71.55, lng1: -70.90 };
-  function proj(g) {
-    return {
-      x: ((g[1] - GEO_B.lng0) / (GEO_B.lng1 - GEO_B.lng0)) * 100,
-      y: 3 + ((GEO_B.lat0 - g[0]) / (GEO_B.lat0 - GEO_B.lat1)) * 56,
-    };
-  }
   function cityOf(prefix) { return (prefix && CITY_OF[prefix]) || 'Autres'; }
   function svgEl(name, attrs) {
     var e = document.createElementNS('http://www.w3.org/2000/svg', name);
@@ -620,13 +613,35 @@
     visible.forEach(function (b) { var k = cityOf(b.prefixe); if (!groups[k]) { groups[k] = []; order.push(k); } groups[k].push(b); });
     var max = order.reduce(function (m, k) { return Math.max(m, groups[k].length); }, 1);
 
+    // Fit the projection to the cities actually present (+ padding) so they
+    // spread across the map instead of clustering in one corner.
+    var gs = order.map(function (c) { return CITY_GEO[c]; }).filter(Boolean);
+    var B;
+    if (gs.length) {
+      var lats = gs.map(function (g) { return g[0]; }), lngs = gs.map(function (g) { return g[1]; });
+      var loLat = Math.min.apply(null, lats), hiLat = Math.max.apply(null, lats);
+      var loLng = Math.min.apply(null, lngs), hiLng = Math.max.apply(null, lngs);
+      var latSpan = Math.max(hiLat - loLat, 0.045), lngSpan = Math.max(hiLng - loLng, 0.085);
+      var cLat = (loLat + hiLat) / 2, cLng = (loLng + hiLng) / 2, padLat = latSpan * 0.6, padLng = lngSpan * 0.5;
+      B = { lat0: cLat + latSpan / 2 + padLat, lat1: cLat - latSpan / 2 - padLat, lng0: cLng - lngSpan / 2 - padLng, lng1: cLng + lngSpan / 2 + padLng };
+    } else {
+      B = { lat0: 47.0, lat1: 46.72, lng0: -71.5, lng1: -70.95 };
+    }
+    function pj(g) { return { x: ((g[1] - B.lng0) / (B.lng1 - B.lng0)) * 100, y: 4 + ((B.lat0 - g[0]) / (B.lat0 - B.lat1)) * 54 }; }
+
     var svg = svgEl('svg', { 'class': 'fsa-svg', viewBox: '0 0 100 64', role: 'group', 'aria-label': 'Carte de la région de Québec — touchez une ville pour voir ses offres' });
-    // North-shore land, the St. Lawrence sweeping SW→NE across the lower-right,
-    // and Île d'Orléans downstream — a real-geography base for the city bubbles.
     svg.appendChild(svgEl('rect', { 'class': 'fsa-land', x: 0, y: 0, width: 100, height: 64, rx: 4 }));
-    svg.appendChild(svgEl('path', { 'class': 'fsa-water', d: 'M100 18 Q 78 32 58 41 Q 40 49 27 58 L 22 64 L 100 64 Z' }));
-    svg.appendChild(svgEl('ellipse', { 'class': 'fsa-isle', cx: 84, cy: 33, rx: 12, ry: 4.2, transform: 'rotate(-38 84 33)' }));
-    svg.appendChild(svgEl('text', { 'class': 'fsa-water-label', x: 74, y: 57, 'text-anchor': 'middle' })).textContent = 'Fleuve Saint-Laurent';
+    // The St. Lawrence: project its real north-shore line, then fill the water side.
+    var SHORE = [[46.715, -71.60], [46.735, -71.44], [46.755, -71.30], [46.775, -71.20], [46.80, -71.12], [46.83, -71.04], [46.87, -70.95], [46.92, -70.82]];
+    var pts = SHORE.map(function (s) { return pj(s); });
+    var wd = 'M ' + pts.map(function (p) { return p.x.toFixed(1) + ' ' + p.y.toFixed(1); }).join(' L ') +
+      ' L ' + pts[pts.length - 1].x.toFixed(1) + ' 130 L ' + pts[0].x.toFixed(1) + ' 130 Z';
+    svg.appendChild(svgEl('path', { 'class': 'fsa-water', d: wd }));
+    var isle = pj([46.905, -70.98]);
+    if (isle.x > 6 && isle.x < 94 && isle.y > 6 && isle.y < 58) {
+      svg.appendChild(svgEl('ellipse', { 'class': 'fsa-isle', cx: isle.x.toFixed(1), cy: isle.y.toFixed(1), rx: 8, ry: 3.2, transform: 'rotate(-38 ' + isle.x.toFixed(1) + ' ' + isle.y.toFixed(1) + ')' }));
+    }
+    svg.appendChild(svgEl('text', { 'class': 'fsa-water-label', x: 80, y: 60, 'text-anchor': 'middle' })).textContent = 'Fleuve Saint-Laurent';
 
     var unknown = 0, placed = [];
     order.forEach(function (city) {
@@ -636,7 +651,7 @@
       var openN = opens.length;
       var best = openN ? opens.reduce(function (a, b) { return b.montant > a.montant ? b : a; }, opens[0]).montant : null;
       var geo = CITY_GEO[city];
-      var pos = geo ? proj(geo) : { x: 7, y: 11 + (unknown * 9) };
+      var pos = geo ? pj(geo) : { x: 7, y: 11 + (unknown * 9) };
       if (!geo) unknown++;
       var frac = n / max;
       var r = (2 + frac * 2.8);
