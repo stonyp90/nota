@@ -577,14 +577,23 @@
     G3A: 'Boischatel', G3B: 'Côte-de-Beaupré', G3C: 'Côte-de-Beaupré',
     G3E: 'Lac-Beauport', G3S: 'Lac-Beauport', G3G: 'Stoneham',
   };
-  var CITY_POS = {
-    'Vieux-Québec': { x: 50, y: 44 }, 'Limoilou': { x: 56, y: 36 }, 'Vanier': { x: 42, y: 38 },
-    'Les Rivières': { x: 38, y: 31 }, 'Sainte-Foy': { x: 28, y: 46 }, 'Sillery': { x: 35, y: 48 },
-    'Cap-Rouge': { x: 19, y: 45 }, 'Beauport': { x: 70, y: 40 }, 'Charlesbourg': { x: 52, y: 18 },
-    'Loretteville': { x: 43, y: 14 }, 'Val-Bélair': { x: 61, y: 20 }, "L'Ancienne-Lorette": { x: 33, y: 24 },
-    'Boischatel': { x: 82, y: 28 }, 'Côte-de-Beaupré': { x: 89, y: 33 }, 'Lac-Beauport': { x: 65, y: 23 },
-    'Stoneham': { x: 71, y: 16 }, 'Autres': { x: 12, y: 58 },
+  // Real [lat, lng] per city, projected onto the map so bubbles sit at their
+  // true relative places over the Québec geography (river, Île d'Orléans…).
+  var CITY_GEO = {
+    'Vieux-Québec': [46.812, -71.207], 'Limoilou': [46.83, -71.235], 'Vanier': [46.82, -71.283],
+    'Les Rivières': [46.835, -71.30], 'Sainte-Foy': [46.783, -71.29], 'Sillery': [46.77, -71.255],
+    'Cap-Rouge': [46.752, -71.35], 'Beauport': [46.88, -71.18], 'Charlesbourg': [46.87, -71.27],
+    'Loretteville': [46.85, -71.36], 'Val-Bélair': [46.85, -71.47], "L'Ancienne-Lorette": [46.80, -71.35],
+    'Boischatel': [46.90, -71.15], 'Côte-de-Beaupré': [46.95, -71.02], 'Lac-Beauport': [46.94, -71.28],
+    'Stoneham': [47.0, -71.37],
   };
+  var GEO_B = { lat0: 47.04, lat1: 46.71, lng0: -71.55, lng1: -70.90 };
+  function proj(g) {
+    return {
+      x: ((g[1] - GEO_B.lng0) / (GEO_B.lng1 - GEO_B.lng0)) * 100,
+      y: 3 + ((GEO_B.lat0 - g[0]) / (GEO_B.lat0 - GEO_B.lat1)) * 56,
+    };
+  }
   function cityOf(prefix) { return (prefix && CITY_OF[prefix]) || 'Autres'; }
   function svgEl(name, attrs) {
     var e = document.createElementNS('http://www.w3.org/2000/svg', name);
@@ -611,16 +620,21 @@
     visible.forEach(function (b) { var k = cityOf(b.prefixe); if (!groups[k]) { groups[k] = []; order.push(k); } groups[k].push(b); });
     var max = order.reduce(function (m, k) { return Math.max(m, groups[k].length); }, 1);
 
-    var svg = svgEl('svg', { 'class': 'fsa-svg', viewBox: '0 0 100 64', role: 'group', 'aria-label': 'Carte des villes et secteurs — touchez une ville pour voir ses offres' });
-    svg.appendChild(svgEl('rect', { 'class': 'fsa-land', x: 1, y: 1, width: 98, height: 62, rx: 4 }));
-    svg.appendChild(svgEl('path', { 'class': 'fsa-water', d: 'M1 52 Q 26 47 52 53 T 99 49 L 99 63 L 1 63 Z' }));
+    var svg = svgEl('svg', { 'class': 'fsa-svg', viewBox: '0 0 100 64', role: 'group', 'aria-label': 'Carte de la région de Québec — touchez une ville pour voir ses offres' });
+    // North-shore land, the St. Lawrence sweeping SW→NE across the lower-right,
+    // and Île d'Orléans downstream — a real-geography base for the city bubbles.
+    svg.appendChild(svgEl('rect', { 'class': 'fsa-land', x: 0, y: 0, width: 100, height: 64, rx: 4 }));
+    svg.appendChild(svgEl('path', { 'class': 'fsa-water', d: 'M100 18 Q 78 32 58 41 Q 40 49 27 58 L 22 64 L 100 64 Z' }));
+    svg.appendChild(svgEl('ellipse', { 'class': 'fsa-isle', cx: 84, cy: 33, rx: 12, ry: 4.2, transform: 'rotate(-38 84 33)' }));
+    svg.appendChild(svgEl('text', { 'class': 'fsa-water-label', x: 74, y: 57, 'text-anchor': 'middle' })).textContent = 'Fleuve Saint-Laurent';
 
     var unknown = 0;
     order.forEach(function (city) {
       var n = groups[city].length;
       var openN = groups[city].filter(function (b) { return b.status !== D.STATUS.RETENUE; }).length;
-      var pos = CITY_POS[city];
-      if (!pos) { pos = { x: 12 + (unknown * 18) % 76, y: 58 }; unknown++; }
+      var geo = CITY_GEO[city];
+      var pos = geo ? proj(geo) : { x: 7, y: 11 + (unknown * 9) };
+      if (!geo) unknown++;
       var frac = n / max;
       var r = (2 + frac * 2.8);
       var g = svgEl('g', { 'class': 'fsa-node' + (city === 'Autres' ? ' is-unset' : ''), tabindex: '0', role: 'button' });

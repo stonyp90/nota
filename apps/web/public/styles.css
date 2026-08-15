@@ -30,6 +30,9 @@
   --surface: #ffffff;
   --surface-inset: #f4f7f4;
   --surface-hover: #e9f1e9;
+  --water: #d3e6f2;         /* map water (St. Lawrence) */
+  --land: #eef2ec;          /* map land */
+  --isle: #e2ead9;          /* map island */
   --ink: #0b1220;
   --ink-muted: #4d5b6e; /* darker than slate-500 for AA on white */
   --border: #dbe2ea;
@@ -92,6 +95,9 @@
     --surface: #121412;
     --surface-inset: #171a17;
     --surface-hover: #1d211d;
+    --water: #14232e;
+    --land: #12160f;
+    --isle: #182013;
     --ink: #f8fafc;
     --ink-muted: #aab6b0;
     --border: #2a2f2a;
@@ -125,6 +131,9 @@
   --surface: #121412;
   --surface-inset: #171a17;
   --surface-hover: #1d211d;
+  --water: #14232e;
+  --land: #12160f;
+  --isle: #182013;
   --ink: #f8fafc;
   --ink-muted: #aab6b0;
   --border: #2a2f2a;
@@ -1024,8 +1033,10 @@ html { scroll-behavior: smooth; scroll-padding-top: var(--sticky-top); }
 
 .fsa-map { padding: 12px 16px 18px; }
 .fsa-svg { display: block; width: 100%; max-width: 780px; height: auto; margin: 0 auto; }
-.fsa-land { fill: var(--surface-inset); stroke: var(--border); stroke-width: .25; }
-.fsa-water { fill: var(--surface-hover); opacity: .6; }
+.fsa-land { fill: var(--land); stroke: var(--border); stroke-width: .25; }
+.fsa-water { fill: var(--water); }
+.fsa-isle { fill: var(--isle); stroke: var(--border); stroke-width: .2; }
+.fsa-water-label { fill: var(--ink-muted); font-size: 2.3px; font-weight: 600; letter-spacing: .2px; opacity: .75; }
 .fsa-node { cursor: pointer; }
 .fsa-node circle { fill: var(--brand); stroke: var(--brand-bright); stroke-width: .4; transition: fill-opacity .12s, stroke-width .12s; }
 .fsa-node:hover circle, .fsa-node:focus-visible circle { stroke-width: 1.2; }
