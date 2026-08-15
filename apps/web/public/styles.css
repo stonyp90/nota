@@ -720,8 +720,10 @@ dialog::backdrop { background: rgb(15 23 42 / 0.45); }
 .dossier-next .dossier-bar { margin: 10px 0 0; }
 
 /* Notaires: onboarding form + console side by side (use the horizontal space). */
-.notaires-cols { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); align-items: start; }
+.notaires-cols { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); align-items: stretch; }
 .notaires-cols .panel-narrow { max-width: none; margin: 0; }
+/* Full-width reassurance strip below both columns — balances them, fills the gap. */
+.nota-guarantee { margin-top: var(--gap); }
 @media (max-width: 900px) { .notaires-cols { grid-template-columns: 1fr; } }
 
 /* --- Privacy (Law 25) list ---------------------------------------------- */
