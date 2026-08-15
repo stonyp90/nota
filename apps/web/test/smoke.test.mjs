@@ -486,6 +486,23 @@ async function reseed(ctx, bids) {
 }
 const dayOf = (anchor, dd) => anchor.slice(0, 8) + dd; // 'YYYY-MM-' + 'DD'
 
+test('the calendar badges the client\'s own offer status (approved)', async () => {
+  const ctx = await boot();
+  const iso = dayOf(ctx.anchor, '15');
+  // The client tracked this offer; the matching public bid is retained -> approved.
+  ctx.win.localStorage.setItem('nota.myoffers.v1', JSON.stringify([{ id: 'r1', dateISO: iso, serviceId: 'testament', montant: 900 }]));
+  await reseed(ctx, [{
+    id: 'r1', serviceId: 'testament', dateISO: iso, montant: 900,
+    tier: 'standard', status: ctx.D.STATUS.RETENUE, etude: 'Étude X', anonyme: true, createdAt: iso,
+  }]);
+  const cell = ctx.doc.querySelector('.cal-cell[data-date="' + iso + '"]');
+  assert.ok(cell, 'cell for the offer date exists');
+  assert.ok(cell.classList.contains('has-mine'));
+  const badge = cell.querySelector('.cal-mine');
+  assert.ok(badge, 'the client-offer status badge is shown');
+  assert.equal(badge.dataset.status, 'approved');
+});
+
 test('EDGE (UI): a fully-retained day marks the cell taken and names the notary (not dimmed)', async () => {
   const ctx = await boot();
   const iso = dayOf(ctx.anchor, '15');

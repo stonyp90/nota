@@ -299,6 +299,19 @@
     updateFilterSummary(visible.length);
     var byDay = {};
     visible.forEach(function (b) { (byDay[b.dateISO] = byDay[b.dateISO] || []).push(b); });
+    // The client's OWN offers, to badge their status on the calendar. Status is
+    // read from the live public bid (unfiltered): retained -> approved; still
+    // open on a past date -> expired; otherwise pending.
+    var mineByDate = {};
+    myOffers().forEach(function (o) { mineByDate[o.dateISO] = o; });
+    function myOfferStatus(iso) {
+      var mine = mineByDate[iso];
+      if (!mine) return null;
+      var pub = state.monthBids.filter(function (b) { return b.id === mine.id; })[0];
+      if (pub && pub.status === D.STATUS.RETENUE) return 'approved';
+      if (D.daysBetween(todayISO(), iso) < 0) return 'expired';
+      return 'pending';
+    }
 
     var lead = mondayIndex(state.anchor);
     var dim = daysInMonth(state.anchor);
@@ -360,6 +373,16 @@
         var tSeg = el('span', 'cal-status-taken'); tSeg.style.flexGrow = String(retenue.length);
         meter.appendChild(oSeg); meter.appendChild(tSeg);
         cell.appendChild(meter);
+      }
+
+      // The client's own offer status on this day (approved / pending / expired).
+      var mineSt = myOfferStatus(iso);
+      if (mineSt) {
+        cell.classList.add('has-mine');
+        var badge = el('span', 'cal-mine', { approved: '✓ Approuvé', pending: 'En attente', expired: 'Expiré' }[mineSt]);
+        badge.dataset.status = mineSt;
+        badge.title = 'Votre offre — ' + { approved: 'approuvée par un notaire', pending: 'en attente d’un notaire', expired: 'expirée' }[mineSt];
+        cell.appendChild(badge);
       }
 
       cell.addEventListener('click', function () { openDay(this.dataset.date); });

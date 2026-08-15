@@ -416,6 +416,12 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 .cal-status-open { background: var(--status-ouverte); }
 .cal-status-taken { background: var(--status-retenue); }
 .cal-cell.is-taken .cal-count { background: var(--status-retenue); color: var(--brand-ink); }
+/* The client's OWN offer status on a day: a subtle ring + a coloured pill. */
+.cal-cell.has-mine { box-shadow: inset 0 0 0 1.5px var(--brand); }
+.cal-mine { align-self: flex-start; margin-top: 4px; font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); color: var(--ink-muted); white-space: nowrap; }
+.cal-mine[data-status='approved'] { color: var(--ok); border-color: var(--ok); }
+.cal-mine[data-status='pending'] { color: var(--brand); border-color: var(--brand); }
+.cal-mine[data-status='expired'] { color: var(--ink-muted); border-style: dashed; }
 
 /* --- Agenda / bid list --------------------------------------------------- */
 /* Agenda: a dense responsive grid of day-cards so it fills the full width below
