@@ -353,22 +353,6 @@
             </aside>
           </div>
 
-          <div class="cards">
-            <div class="card">
-              <h3>Visibilité de la demande</h3>
-              <p>Chaque offre affiche la date, le service, le montant et le secteur postal. Vous voyez la pression réelle du marché.</p>
-            </div>
-            <div class="card">
-              <h3>Vous choisissez</h3>
-              <p>Retenez une offre et le dossier du client vous est ouvert. Déclinez sans frais. Aucune obligation de volume.</p>
-            </div>
-            <div class="card">
-              <h3>Commission seulement</h3>
-              <p class="price">0 $</p>
-              <p>Gratuit à l’inscription. Nota prélève une commission uniquement sur les actes complétés — vous ne payez que sur ce qui se concrétise.</p>
-            </div>
-          </div>
-
           <!-- Prospecting feed for notaries: subscribe the whole carnet of open
                demands into a personal agenda (Google / Outlook / Apple / iCal). -->
           <aside class="notary-carnet">
@@ -391,28 +375,12 @@
               </div>
           </aside>
 
-          <div class="notaires-cols">
-          <div class="panel panel-pad panel-narrow">
-            <h2 class="h-sub">Devenir notaire — gratuit</h2>
-            <p class="help mb-sm">Inscription gratuite. Connectez un compte de paiement sécurisé (Stripe) ; Nota ne prélève une commission que sur les actes complétés.</p>
-            <form id="notary-form">
-              <div class="form-row">
-                <label class="lbl" for="n-email">Courriel professionnel</label>
-                <input type="email" id="n-email" inputmode="email" autocomplete="email" placeholder="vous@etude.ca" required />
-                <p class="help">Nom, étude et coordonnées bancaires sont recueillis à l’étape suivante, sur Stripe.</p>
-              </div>
-              <ul class="errors" id="notary-errors" role="alert" aria-atomic="true" hidden></ul>
-              <button type="submit" class="btn btn-primary" id="notary-submit">Commencer gratuitement</button>
-            </form>
-          </div>
-
-          <!-- ===== Console notaire ===== -->
-          <div class="panel panel-pad panel-narrow" id="notary-console">
-            <h2 class="h-sub">Console notaire</h2>
-            <p class="help">Accédez aux demandes ouvertes, retenez un dossier et synchronisez vos signatures à votre agenda.</p>
-
+          <!-- ===== Console notaire — la porte d'entrée unique ===== -->
+          <div class="panel panel-pad" id="notary-console">
             <!-- Auth gate -->
             <form id="notary-auth-form" class="nc-auth">
+              <h2 class="h-sub">Accéder à ma console</h2>
+              <p class="help mb-sm">Voyez les demandes ouvertes, retenez celles qui remplissent votre semaine, faites-vous payer sur les actes complétés.</p>
               <div class="form-row">
                 <label class="lbl" for="nc-email">Votre courriel professionnel</label>
                 <input type="email" id="nc-email" inputmode="email" autocomplete="email" placeholder="vous@etude.ca" required />
@@ -442,6 +410,13 @@
               <div class="nc-list" id="notary-retained-list" aria-live="polite"></div>
               <p class="help" id="notary-retained-empty" hidden>Aucun dossier retenu pour l’instant.</p>
 
+              <div class="nc-pay">
+                <h3 class="nc-h">Paiements</h3>
+                <p class="help">Connectez un compte de paiement sécurisé (Stripe) pour être payé sur les actes complétés. Nota ne prélève sa commission qu’à la signature, sur la valeur confirmée.</p>
+                <ul class="errors" id="notary-connect-errors" role="alert" aria-atomic="true" hidden></ul>
+                <button type="button" class="btn btn-sm" id="notary-connect">Connecter mon compte de paiement</button>
+              </div>
+
               <div class="nc-cal">
                 <div class="nc-cal-h">Vos signatures dans votre agenda</div>
                 <div class="sub-card-actions">
@@ -453,7 +428,6 @@
                 <p class="help">Vos dossiers retenus, à jour automatiquement (webcal).</p>
               </div>
             </div>
-          </div>
           </div>
           <p class="note nota-guarantee">
             <strong>Vous gardez la main.</strong> Vous fixez vos honoraires et vérifiez l’identité du client à la signature, comme l’exige la loi. Nota n’intervient jamais dans l’acte notarié.

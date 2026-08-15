@@ -773,7 +773,7 @@ dialog::backdrop { background: var(--backdrop); }
 .h-sub { font-size: 16px; font-weight: 700; margin-bottom: 12px; }
 
 /* --- Notary console ------------------------------------------------------ */
-#notary-console { margin-top: 8px; }
+#notary-console { margin-top: 16px; max-width: none; }
 .nc-auth .form-row { margin-bottom: 12px; }
 .nc-bar {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
@@ -839,11 +839,10 @@ dialog::backdrop { background: var(--backdrop); }
 .dossier-next .dossier-bar { margin: 10px 0 0; }
 
 /* Notaires: onboarding form + console side by side (use the horizontal space). */
-.notaires-cols { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); align-items: start; margin-top: clamp(14px, 2vw, 24px); }
-.notaires-cols .panel-narrow { max-width: none; margin: 0; }
-/* Full-width reassurance strip below both columns — balances them, fills the gap. */
+/* Single full-width notary console (the page's one tool) + get-paid step. */
 .nota-guarantee { margin-top: var(--gap); }
-@media (max-width: 900px) { .notaires-cols { grid-template-columns: 1fr; } }
+.nc-pay { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); }
+.nc-pay .btn { margin-top: 4px; }
 
 /* --- Privacy (Law 25) list ---------------------------------------------- */
 /* Two-column on wide screens so the long-form list fills the panel width

@@ -1657,32 +1657,27 @@
   // ---------------------------------------------------------------------------
   // Notary form
   // ---------------------------------------------------------------------------
-  async function onNotarySubmit(e) {
-    e.preventDefault();
-    var errs = [];
-    var email = $('n-email').value.trim();
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) errs.push('Courriel invalide.');
-    var box = $('notary-errors');
-    if (errs.length) { clear(box); box.hidden = false; errs.forEach(function (m) { box.appendChild(el('li', null, m)); }); return; }
-    box.hidden = true;
-    var submit = $('notary-submit');
-    if (submit) { submit.disabled = true; submit.textContent = 'Redirection…'; }
+  // "Get paid": connect a Stripe payout account, driven by the signed-in notary's
+  // email (the sign-up + console are one door now). Reuses /notaries/connect.
+  async function ncConnectPayout() {
+    if (!nc.email) { toast('Connectez-vous d’abord à votre console.'); return; }
+    var box = $('notary-connect-errors');
+    var btn = $('notary-connect');
+    if (box) box.hidden = true;
+    if (btn) { btn.disabled = true; btn.textContent = 'Redirection…'; }
     function fail(msg) {
-      clear(box); box.hidden = false; box.appendChild(el('li', null, msg));
-      if (submit) { submit.disabled = false; submit.textContent = 'Commencer gratuitement'; }
+      if (box) { clear(box); box.hidden = false; box.appendChild(el('li', null, msg)); }
+      if (btn) { btn.disabled = false; btn.textContent = 'Connecter mon compte de paiement'; }
     }
     try {
-      // Free onboarding: start a Stripe Connect account link, then redirect to it.
       var r = await fetch(API_BASE + '/notaries/connect', {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ email: email }),
+        body: JSON.stringify({ email: nc.email }),
       });
       var j = await r.json();
       if (r.ok && j.url) { window.location.href = j.url; return; }
-      fail((j.errors && j.errors[0] && j.errors[0].message) || 'Inscription indisponible pour le moment.');
-    } catch (err) {
-      fail('Hors ligne — réessayez.');
-    }
+      fail((j.errors && j.errors[0] && j.errors[0].message) || 'Connexion du compte indisponible pour le moment.');
+    } catch (err) { fail('Hors ligne — réessayez.'); }
   }
 
   // ---------------------------------------------------------------------------
@@ -1934,7 +1929,7 @@
     }
 
     var actions = el('div', 'nc-card-actions');
-    var acc = el('button', 'btn btn-sm btn-primary nc-accept', 'Accepter'); acc.type = 'button';
+    var acc = el('button', 'btn btn-sm btn-primary nc-accept', 'Retenir'); acc.type = 'button';
     var dec = el('button', 'btn btn-sm nc-decline', 'Décliner'); dec.type = 'button';
     actions.appendChild(acc); actions.appendChild(dec);
     card.appendChild(actions);
@@ -2217,7 +2212,7 @@
     $('d-service').addEventListener('change', renderDossier);
 
     // Notary
-    $('notary-form').addEventListener('submit', onNotarySubmit);
+    var ncPay = $('notary-connect'); if (ncPay) ncPay.addEventListener('click', ncConnectPayout);
 
     // Notary console
     var ncForm = $('notary-auth-form');
