@@ -287,6 +287,12 @@ a:hover { text-decoration: underline; }
 .acct-sep { height: 1px; background: var(--border); margin: 6px 4px; }
 .acct-panel .notif-head { padding: 6px 10px; border-bottom: 0; }
 .acct-panel .notif-list { max-height: min(320px, 50vh); }
+/* Legal links cluster at the foot of the account menu — compact wrapping links,
+   not full-width buttons, so it reads as a footer. */
+.acct-legal { display: flex; flex-wrap: wrap; gap: 2px; padding: 2px 2px 4px; }
+.acct-legal-link { appearance: none; border: 0; background: transparent; color: var(--ink-muted); font: inherit; font-size: 12px; font-weight: 600; padding: 6px 8px; border-radius: var(--radius-sm); cursor: pointer; }
+.acct-legal-link:hover { background: var(--surface-inset); color: var(--ink); }
+.acct-legal-link:focus-visible { background: var(--surface-inset); outline: 2px solid var(--ring); outline-offset: -2px; }
 
 /* --- Buttons ------------------------------------------------------------- */
 .btn {
@@ -630,6 +636,10 @@ input.file-native { position: absolute; width: 1px; height: 1px; opacity: 0; mar
 .disclosure-body p + p { margin-top: 8px; }
 
 .site-footer { border-top: 1px solid var(--border); padding: 28px 0; color: var(--ink-muted); font-size: 13px; }
+.site-footer .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; }
+.site-footer .footer-brand { margin-right: 6px; }
+.site-footer a { color: var(--ink-muted); }
+.site-footer a:hover { color: var(--brand); text-decoration: none; }
 
 /* --- Toast --------------------------------------------------------------- */
 .toast {

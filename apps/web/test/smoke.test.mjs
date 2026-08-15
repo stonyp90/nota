@@ -391,15 +391,31 @@ test('notary console renders its auth gate and exposes Nota.notary hooks', async
   assert.match(Nota.notary.feedUrl('abc.def'), /^webcal:\/\/.*\/notary\/feed\.ics\?token=abc\.def$/);
 });
 
-// 14. The footer privacy link opens the dedicated Law 25 confidentialité pane.
-test('privacy link opens the Law 25 confidentialité pane', async () => {
+// 14. The footer legal links open their dedicated panes (Loi 25 confidentialité,
+//     conditions d'utilisation / TOS, charte des droits).
+test('footer legal links open the confidentialité / conditions / charte panes', async () => {
   const { doc } = await boot();
-  const pane = $(doc, 'pane-confidentialite');
-  assert.ok(pane, 'confidentialité pane missing');
-  assert.equal(pane.hidden, true);
-  $(doc, 'privacy-link').click();
-  assert.equal(pane.hidden, false);
-  assert.equal(pane.classList.contains('is-active'), true);
+  for (const [goto, paneId] of [
+    ['confidentialite', 'pane-confidentialite'],
+    ['conditions', 'pane-conditions'],
+    ['charte', 'pane-charte'],
+  ]) {
+    const pane = $(doc, paneId);
+    assert.ok(pane, paneId + ' missing');
+    assert.equal(pane.hidden, true, goto + ' pane should start hidden');
+    doc.querySelector('.site-footer .goto-link[data-goto="' + goto + '"]').click();
+    assert.equal(pane.hidden, false, goto + ' pane should open');
+    assert.equal(pane.classList.contains('is-active'), true);
+  }
+});
+
+// 14b. The account-menu legal links open the same panes.
+test('account-menu legal links open the conditions and charte panes', async () => {
+  const { doc } = await boot();
+  $(doc, 'acct-conditions').click();
+  assert.equal($(doc, 'pane-conditions').hidden, false, 'Conditions d’utilisation opens from the menu');
+  $(doc, 'acct-charte').click();
+  assert.equal($(doc, 'pane-charte').hidden, false, 'Charte des droits opens from the menu');
 });
 
 // 15. Submitting an offer attaches the saved dossier snapshot + courriel to the

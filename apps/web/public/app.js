@@ -1830,7 +1830,7 @@
     document.querySelectorAll('.nav-tab').forEach(function (b) {
       b.setAttribute('aria-selected', b.dataset.tab === tab ? 'true' : 'false');
     });
-    ['carnet', 'dossier', 'notaires', 'profil', 'confidentialite'].forEach(function (t) {
+    ['carnet', 'dossier', 'notaires', 'profil', 'confidentialite', 'conditions', 'charte'].forEach(function (t) {
       var pane = $('pane-' + t);
       if (!pane) return;
       var active = t === tab;
@@ -1885,6 +1885,14 @@
     // Account-menu items → switch pane, then close the menu.
     $('acct-profil').addEventListener('click', function () { setTab('profil'); toggleNotifPanel(false); });
     $('acct-confid').addEventListener('click', function () { setTab('confidentialite'); toggleNotifPanel(false); });
+    $('acct-conditions').addEventListener('click', function () { setTab('conditions'); toggleNotifPanel(false); });
+    $('acct-charte').addEventListener('click', function () { setTab('charte'); toggleNotifPanel(false); });
+    // Delegated in-content / footer links that jump to a tab-pane by name.
+    document.addEventListener('click', function (e) {
+      var g = e.target.closest && e.target.closest('.goto-link[data-goto]');
+      if (!g) return;
+      e.preventDefault(); setTab(g.dataset.goto); toggleNotifPanel(false);
+    });
     document.addEventListener('click', function () { toggleNotifPanel(false); });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') toggleNotifPanel(false); });
 
@@ -1934,13 +1942,8 @@
     }
     document.addEventListener('fullscreenchange', onFullscreenChange);
     document.addEventListener('webkitfullscreenchange', onFullscreenChange);
-
-    // Privacy (Law 25) — opens the dedicated confidentialité view.
-    var pv = $('privacy-link');
-    if (pv) pv.addEventListener('click', function (e) {
-      e.preventDefault();
-      setTab('confidentialite');
-    });
+    // Legal pages (Confidentialité / Conditions / Charte) are reached via the
+    // account menu and the footer's .goto-link handler wired above.
 
     // Offer form
     $('o-service').addEventListener('change', onOfferServiceChange);

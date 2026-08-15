@@ -186,7 +186,11 @@
             </div>
             <div class="notif-list" id="notif-list"></div>
             <div class="acct-sep"></div>
-            <button type="button" class="acct-item" id="acct-confid">Confidentialité</button>
+            <nav class="acct-legal" aria-label="Informations légales">
+              <button type="button" class="acct-legal-link" id="acct-confid">Confidentialité</button>
+              <button type="button" class="acct-legal-link" id="acct-conditions">Conditions d’utilisation</button>
+              <button type="button" class="acct-legal-link" id="acct-charte">Charte des droits</button>
+            </nav>
           </div>
         </div>
       </div>
@@ -454,12 +458,95 @@
           </div>
         </div>
       </section>
+
+      <!-- ================= CONDITIONS D'UTILISATION (TOS) ================= -->
+      <section class="tab-pane" id="pane-conditions" role="region" aria-label="Conditions d’utilisation" hidden>
+        <div class="wrap">
+          <div class="intro">
+            <span class="eyebrow">Conditions d’utilisation</span>
+            <h1>Les règles du service, en clair.</h1>
+            <p>En utilisant Nota, vous acceptez ces conditions. Nota est une place de marché qui met en relation des clients et des notaires du Québec — Nota n’est pas un notaire et ne pose aucun acte notarié.</p>
+          </div>
+
+          <div class="cards">
+            <div class="card">
+              <h3>Ce qu’est Nota</h3>
+              <p>Un carnet public où vous proposez une date et un montant ; un notaire du Québec choisit de retenir votre demande. Nota facilite la mise en relation, rien de plus.</p>
+            </div>
+            <div class="card">
+              <h3>Vous restez maître</h3>
+              <p>Vous fixez la date, le montant et votre niveau d’anonymat. Aucune obligation : vous pouvez retirer une offre tant qu’aucun notaire ne l’a retenue.</p>
+            </div>
+            <div class="card">
+              <h3>Gratuit pour le client</h3>
+              <p>Publier une offre est gratuit. Nota se rémunère par une commission versée par le notaire, uniquement sur les actes complétés.</p>
+            </div>
+          </div>
+
+          <div class="panel panel-pad panel-narrow mt-md">
+            <h2 class="h-sub">Les conditions</h2>
+            <ul class="privacy-list">
+              <li><strong>Rôle de Nota.</strong> Nota fournit une plateforme de mise en relation. Nous ne rédigeons pas d’actes, ne donnons aucun conseil juridique, fiscal ou financier, et ne sommes pas partie au mandat entre vous et le notaire.</li>
+              <li><strong>Indépendance du notaire.</strong> Le notaire qui retient votre demande agit en toute indépendance : il fixe ses honoraires, vérifie votre identité et rédige l’acte selon la loi. Nota n’intervient jamais dans l’acte notarié.</li>
+              <li><strong>Vos engagements.</strong> Vous fournissez des renseignements exacts et n’utilisez pas le service à des fins illégales ou trompeuses. Une offre publiée est un engagement de bonne foi à procéder à la date convenue.</li>
+              <li><strong>Prix et commission.</strong> Le montant que vous offrez est celui que le notaire reçoit pour l’acte. La commission de Nota est prélevée auprès du notaire sur les actes complétés ; elle ne s’ajoute pas à votre montant.</li>
+              <li><strong>Disponibilité.</strong> Le service est fourni « tel quel ». Nous visons une haute disponibilité sans garantir l’absence d’interruption. Nota peut suspendre ou refuser une offre contraire à ces conditions.</li>
+              <li><strong>Responsabilité.</strong> Dans la mesure permise par la loi, la responsabilité de Nota se limite à la mise en relation. La qualité, la validité et l’exécution de l’acte relèvent du notaire.</li>
+              <li><strong>Données personnelles.</strong> Le traitement de vos renseignements est décrit dans notre <a href="#" class="goto-link" data-goto="confidentialite">politique de confidentialité</a> (Loi 25).</li>
+              <li><strong>Modifications.</strong> Ces conditions peuvent évoluer ; la version en vigueur est celle affichée ici. Les changements importants vous seront signalés.</li>
+              <li><strong>Droit applicable.</strong> Ces conditions sont régies par le droit du Québec ; tout litige relève des tribunaux du district judiciaire de Québec.</li>
+              <li><strong>Contact.</strong> Une question ? Écrivez à <a href="mailto:info@nota.ca">info@nota.ca</a>.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= CHARTE DES DROITS ================= -->
+      <section class="tab-pane" id="pane-charte" role="region" aria-label="Charte des droits" hidden>
+        <div class="wrap">
+          <div class="intro">
+            <span class="eyebrow">Charte des droits</span>
+            <h1>Vos droits sur Nota.</h1>
+            <p>Nos engagements envers vous, le client. Cette charte guide chaque décision que nous prenons.</p>
+          </div>
+
+          <div class="cards">
+            <div class="card">
+              <h3>Vous gardez le contrôle</h3>
+              <p>Vous choisissez la date, le montant et votre anonymat. Personne ne décide à votre place.</p>
+            </div>
+            <div class="card">
+              <h3>Aucune pression</h3>
+              <p>Aucune obligation, aucun démarchage. Vous retirez une offre tant qu’elle n’est pas retenue, sans frais.</p>
+            </div>
+            <div class="card">
+              <h3>Un notaire indépendant</h3>
+              <p>Le notaire vérifie votre identité et rédige l’acte selon la loi. Nota n’intervient jamais dans l’acte.</p>
+            </div>
+          </div>
+
+          <div class="panel panel-pad panel-narrow mt-md">
+            <h2 class="h-sub">Nos engagements</h2>
+            <ul class="privacy-list">
+              <li><strong>Gratuité.</strong> Publier une offre et consulter le carnet est gratuit pour le client — pour toujours.</li>
+              <li><strong>Transparence des prix.</strong> Un prix de départ clair par service, aucun frais caché. Ce que vous offrez est ce que le notaire reçoit.</li>
+              <li><strong>Anonymat par défaut.</strong> Votre offre s’affiche « Client · secteur postal ». Votre nom n’apparaît que si vous le choisissez.</li>
+              <li><strong>Vos données protégées.</strong> Hébergement au Canada, conformité à la Loi 25, aucune revente. Voir la <a href="#" class="goto-link" data-goto="confidentialite">confidentialité</a>.</li>
+              <li><strong>Traitement équitable.</strong> Le carnet est public et les mêmes règles s’appliquent à tous. Aucune offre n’est mise en avant contre paiement.</li>
+              <li><strong>Liberté de partir.</strong> Vous pouvez demander la suppression de vos renseignements en tout temps.</li>
+              <li><strong>Un recours.</strong> Un problème, une question ? Une personne vous répond : <a href="mailto:info@nota.ca">info@nota.ca</a>.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
     </main>
 
     <footer class="site-footer">
       <div class="wrap">
-        <span class="brand-word">Nota</span> · Québec
-        <a href="#" id="privacy-link">Confidentialité</a>
+        <span class="footer-brand"><span class="brand-word">Nota</span> · Québec</span>
+        <a href="#" class="goto-link" data-goto="confidentialite">Confidentialité</a>
+        <a href="#" class="goto-link" data-goto="conditions">Conditions d’utilisation</a>
+        <a href="#" class="goto-link" data-goto="charte">Charte des droits</a>
       </div>
     </footer>
 
