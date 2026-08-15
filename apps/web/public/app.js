@@ -148,6 +148,15 @@
     a.push({ id: bid.id, dateISO: bid.dateISO, serviceId: bid.serviceId, montant: bid.montant });
     lsSave(LS_MYOFFERS, a.slice(-50));
   }
+  // The live status of one of the client's own offers: retained by a notary
+  // (approved), still open past its date (expired), or waiting (pending).
+  function clientOfferStatus(o) {
+    var pub = (state.monthBids || []).filter(function (b) { return b.id === o.id; })[0];
+    if (pub && pub.status === D.STATUS.RETENUE) return 'approved';
+    if (D.daysBetween(todayISO(), o.dateISO) < 0) return 'expired';
+    return 'pending';
+  }
+  var OFFER_STATUS_LABEL = { approved: '✓ Approuvé', pending: 'En attente', expired: 'Expiré' };
   function svcName(id) { var s = D.serviceById(id); return s ? s.nom : id; }
 
   // --- Client profile --------------------------------------------------------
@@ -306,11 +315,7 @@
     myOffers().forEach(function (o) { mineByDate[o.dateISO] = o; });
     function myOfferStatus(iso) {
       var mine = mineByDate[iso];
-      if (!mine) return null;
-      var pub = state.monthBids.filter(function (b) { return b.id === mine.id; })[0];
-      if (pub && pub.status === D.STATUS.RETENUE) return 'approved';
-      if (D.daysBetween(todayISO(), iso) < 0) return 'expired';
-      return 'pending';
+      return mine ? clientOfferStatus(mine) : null;
     }
 
     var lead = mondayIndex(state.anchor);
@@ -1036,6 +1041,28 @@
   // ---------------------------------------------------------------------------
   // Profile (coordinates + notification settings)
   // ---------------------------------------------------------------------------
+  // A card listing the client's posted offers with their live status — their
+  // consolidated "where do my requests stand?" view. Null when they have none.
+  function buildMyOffersCard() {
+    var offers = myOffers();
+    if (!offers.length) return null;
+    var card = el('div', 'profil-card');
+    card.appendChild(el('h2', 'profil-card-title', 'Mes offres'));
+    offers.slice().sort(function (a, b) { return String(b.dateISO).localeCompare(String(a.dateISO)); }).forEach(function (o) {
+      var st = clientOfferStatus(o);
+      var row = el('button', 'my-offer'); row.type = 'button'; row.dataset.status = st;
+      var main = el('div', 'my-offer-main');
+      main.appendChild(el('div', 'my-offer-svc', svcName(o.serviceId)));
+      main.appendChild(el('div', 'my-offer-meta', dayTitle(o.dateISO) + ' · ' + D.money(o.montant)));
+      row.appendChild(main);
+      var badge = el('span', 'my-offer-badge', OFFER_STATUS_LABEL[st]); badge.dataset.status = st;
+      row.appendChild(badge);
+      row.addEventListener('click', function () { toggleNotifPanel(false); setTab('carnet'); openDay(o.dateISO); });
+      card.appendChild(row);
+    });
+    return card;
+  }
+
   function renderProfil() {
     var body = $('profil-body'); if (!body) return; clear(body);
     var p = profileGet();
@@ -1061,6 +1088,8 @@
       row.appendChild(inp); idCard.appendChild(row);
     });
     var leftCol = el('div', 'profil-col-left');
+    var oCard = buildMyOffersCard();
+    if (oCard) leftCol.appendChild(oCard);
     leftCol.appendChild(idCard);
 
     // Notifications card — on by default, per-kind toggles gate addNotif().

@@ -362,6 +362,19 @@ test('account menu opens and navigates to the profile', async () => {
   assert.equal($(doc, 'notif-panel').hidden, true); // menu closes after navigating
 });
 
+// 12e. Mes offres: the profile lists the client's posted offers with their status.
+test('profile "Mes offres" lists offers with their live status', async () => {
+  const { win, doc, D, Nota } = await boot();
+  const iso = D.addDays(todayISO(), 5);
+  win.localStorage.setItem('nota.myoffers.v1', JSON.stringify([{ id: 'o1', dateISO: iso, serviceId: 'testament', montant: 900 }]));
+  Nota.setTab('profil');
+  const row = doc.querySelector('.my-offer');
+  assert.ok(row, 'an offer row is shown in the profile');
+  const badge = row.querySelector('.my-offer-badge');
+  assert.ok(badge, 'the status badge is shown');
+  assert.equal(badge.dataset.status, 'pending'); // future date, not retained
+});
+
 // 13. Notary console: the auth gate renders, the authed view is gated until
 //     sign-in, and Nota.notary exposes its hooks. feedUrl builds a webcal link.
 test('notary console renders its auth gate and exposes Nota.notary hooks', async () => {

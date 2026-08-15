@@ -520,6 +520,16 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .profil-card { padding: 16px 18px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); display: flex; flex-direction: column; gap: 10px; }
 .profil-card-title { font-size: 15px; font-weight: 700; color: var(--ink); }
 .profil-card .switch-row { margin-top: 2px; }
+/* Mes offres — the client's posted offers with live status. */
+.my-offer { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; text-align: left; appearance: none; background: transparent; border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; font: inherit; color: var(--ink); cursor: pointer; transition: border-color .12s; }
+.my-offer:hover, .my-offer:focus-visible { border-color: var(--brand); outline: none; }
+.my-offer-main { min-width: 0; }
+.my-offer-svc { font-weight: 600; font-size: 13.5px; }
+.my-offer-meta { font-size: 12px; color: var(--ink-muted); margin-top: 2px; }
+.my-offer-badge { flex: none; font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--border); white-space: nowrap; color: var(--ink-muted); }
+.my-offer-badge[data-status='approved'] { color: var(--ok); border-color: var(--ok); }
+.my-offer-badge[data-status='pending'] { color: var(--brand); border-color: var(--brand); }
+.my-offer-badge[data-status='expired'] { color: var(--ink-muted); border-style: dashed; }
 /* Documents inside the profile: upload / remove / mark-validated. */
 .profil-doc-service { margin: 4px 0 8px; max-width: 340px; }
 .profil-doc-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
