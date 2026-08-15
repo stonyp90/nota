@@ -653,6 +653,56 @@
   // them (the same questions the notary needs) refines the price live — "the
   // document merged with the process". Optional: unanswered = base price, so
   // one-tap booking still works.
+  // Build one pricing-criterion control (flag / choice / bracket). SHARED by the
+  // booking flow and the Dossier profile page so the price questions look and
+  // behave identically wherever they are answered. `onChange(value)` receives
+  // the new answer; `idPrefix` namespaces input ids so both surfaces coexist.
+  function buildCriterionRow(c, current, onChange, idPrefix) {
+    var row = el('div', 'crit-row');
+    if (c.type === 'flag') {
+      var lab = el('label', 'crit-flag');
+      var cb = document.createElement('input');
+      cb.type = 'checkbox'; cb.id = idPrefix + c.id; cb.checked = !!current;
+      cb.addEventListener('change', function () { onChange(cb.checked); });
+      lab.appendChild(cb);
+      var txt = el('span', 'crit-text');
+      txt.appendChild(el('span', 'crit-label', c.label));
+      if (c.aide) txt.appendChild(el('span', 'help', c.aide));
+      lab.appendChild(txt);
+      row.appendChild(lab);
+    } else if (c.type === 'choice') {
+      row.appendChild(el('span', 'crit-label', c.label));
+      var grp = el('div', 'crit-choices');
+      (c.options || []).forEach(function (opt) {
+        var b = el('button', 'chip', opt.label);
+        b.type = 'button';
+        var on = current === opt.id;
+        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+        b.classList.toggle('is-on', on);
+        b.addEventListener('click', function () {
+          grp.querySelectorAll('.chip').forEach(function (x) { x.classList.remove('is-on'); x.setAttribute('aria-pressed', 'false'); });
+          b.classList.add('is-on'); b.setAttribute('aria-pressed', 'true');
+          onChange(opt.id);
+        });
+        grp.appendChild(b);
+      });
+      row.appendChild(grp);
+      if (c.aide) row.appendChild(el('span', 'help', c.aide));
+    } else if (c.type === 'bracket') {
+      var lbl = el('label', 'crit-label', c.label);
+      lbl.setAttribute('for', idPrefix + c.id);
+      row.appendChild(lbl);
+      var inp = document.createElement('input');
+      inp.type = 'number'; inp.id = idPrefix + c.id; inp.min = '0'; inp.step = '1000';
+      inp.inputMode = 'numeric'; inp.placeholder = c.unit === '$' ? '350 000' : '';
+      if (current != null) inp.value = current;
+      inp.addEventListener('input', function () { onChange(inp.value === '' ? undefined : Number(inp.value)); });
+      row.appendChild(inp);
+      if (c.aide) row.appendChild(el('span', 'help', c.aide));
+    }
+    return row;
+  }
+
   function renderOfferCriteria(serviceId) {
     var box = $('o-criteria');
     var step = $('o-criteria-step');
@@ -662,57 +712,16 @@
     var criteria = (svc && svc.pricing && svc.pricing.criteria) || [];
     if (step) step.hidden = criteria.length === 0;
     criteria.forEach(function (c) {
-      var row = el('div', 'crit-row');
-      if (c.type === 'flag') {
-        var lab = el('label', 'crit-flag');
-        var cb = document.createElement('input');
-        cb.type = 'checkbox'; cb.id = 'crit-' + c.id; cb.checked = !!state.offer.pricing[c.id];
-        cb.addEventListener('change', function () { setCriterion(c.id, cb.checked); });
-        lab.appendChild(cb);
-        var txt = el('span', 'crit-text');
-        txt.appendChild(el('span', 'crit-label', c.label));
-        if (c.aide) txt.appendChild(el('span', 'help', c.aide));
-        lab.appendChild(txt);
-        row.appendChild(lab);
-      } else if (c.type === 'choice') {
-        row.appendChild(el('span', 'crit-label', c.label));
-        var grp = el('div', 'crit-choices');
-        (c.options || []).forEach(function (opt) {
-          var b = el('button', 'chip', opt.label);
-          b.type = 'button';
-          var on = state.offer.pricing[c.id] === opt.id;
-          b.setAttribute('aria-pressed', on ? 'true' : 'false');
-          b.classList.toggle('is-on', on);
-          b.addEventListener('click', function () {
-            grp.querySelectorAll('.chip').forEach(function (x) { x.classList.remove('is-on'); x.setAttribute('aria-pressed', 'false'); });
-            b.classList.add('is-on'); b.setAttribute('aria-pressed', 'true');
-            setCriterion(c.id, opt.id);
-          });
-          grp.appendChild(b);
-        });
-        row.appendChild(grp);
-        if (c.aide) row.appendChild(el('span', 'help', c.aide));
-      } else if (c.type === 'bracket') {
-        var lbl = el('label', 'crit-label', c.label);
-        lbl.setAttribute('for', 'crit-' + c.id);
-        row.appendChild(lbl);
-        var inp = document.createElement('input');
-        inp.type = 'number'; inp.id = 'crit-' + c.id; inp.min = '0'; inp.step = '1000';
-        inp.inputMode = 'numeric'; inp.placeholder = c.unit === '$' ? '350 000' : '';
-        if (state.offer.pricing[c.id] != null) inp.value = state.offer.pricing[c.id];
-        inp.addEventListener('input', function () {
-          setCriterion(c.id, inp.value === '' ? undefined : Number(inp.value));
-        });
-        row.appendChild(inp);
-        if (c.aide) row.appendChild(el('span', 'help', c.aide));
-      }
-      box.appendChild(row);
+      box.appendChild(buildCriterionRow(c, state.offer.pricing[c.id], function (val) { setCriterion(c.id, val); }, 'crit-'));
     });
   }
 
   function setCriterion(id, value) {
     if (value === undefined || value === '' || value === false) delete state.offer.pricing[id];
     else state.offer.pricing[id] = value;
+    // The pricing answers belong to the client's PROFILE (dossier) — the single
+    // source of truth shared with the Dossier page.
+    dossierSetPricing(state.offer.serviceId, id, value);
     onCriteriaChange();
   }
 
@@ -737,7 +746,9 @@
   function onOfferServiceChange() {
     var svc = D.serviceById($('o-service').value);
     state.offer.serviceId = svc ? svc.id : '';
-    state.offer.pricing = {}; // reset criteria for the newly-chosen act
+    // Seed pricing from the client's PROFILE (dossier) for this act, so answers
+    // given on the Dossier page pre-fill and drive the offer floor here too.
+    state.offer.pricing = svc ? Object.assign({}, dossierPricing(svc.id)) : {};
     $('o-service-help').textContent = svc ? svc.description : '';
     renderOfferCriteria(state.offer.serviceId);
     var amt = $('o-amount');
@@ -947,6 +958,16 @@
     if (val) d[sid][key] = val; else delete d[sid][key];
     lsSave(LS_DOSSIER, d);
   }
+  // The price-determining answers live in the profile too, under a reserved
+  // __pricing key (so they never collide with document/field ids and are ignored
+  // by leadReadiness). This is the single source of truth the booking flow reads.
+  function dossierPricing(sid) { var d = dossierFor(sid); return (d && d.__pricing) || {}; }
+  function dossierSetPricing(sid, critId, val) {
+    var d = dossierState(); d[sid] = d[sid] || {}; d[sid].__pricing = d[sid].__pricing || {};
+    if (val === undefined || val === '' || val === false) delete d[sid].__pricing[critId];
+    else d[sid].__pricing[critId] = val;
+    lsSave(LS_DOSSIER, d);
+  }
   function dossierItems(svc) {
     var items = [];
     svc.documents.forEach(function (x) { items.push({ kind: 'doc', id: x.id, nom: x.nom, aide: x.aide }); });
@@ -959,6 +980,30 @@
     $('d-service').value = svc.id;
     var list = $('dossier-list'); clear(list);
     var saved = dossierFor(svc.id);
+
+    // Basic questions that DETERMINE THE PRICE — saved in the client's profile
+    // and shared with the booking flow. Full-width card at the top of the dossier.
+    var pcrit = (svc.pricing && svc.pricing.criteria) || [];
+    if (pcrit.length) {
+      var pcard = el('div', 'dossier-pricing');
+      var pbody = el('div', 'dossier-body');
+      pbody.appendChild(el('div', 'dossier-name', 'Questions qui déterminent le prix'));
+      pbody.appendChild(el('div', 'help', 'Enregistrées dans votre profil. Elles ajustent le prix de départ de cet acte.'));
+      var pbox = el('div', 'o-criteria');
+      var pans = dossierPricing(svc.id);
+      pcrit.forEach(function (c) {
+        pbox.appendChild(buildCriterionRow(c, pans[c.id], function (val) {
+          dossierSetPricing(svc.id, c.id, val);
+          updateDossierPrice(svc);
+        }, 'dcrit-'));
+      });
+      pbody.appendChild(pbox);
+      var priceEl = el('div', 'dossier-price'); priceEl.id = 'dossier-price';
+      pbody.appendChild(priceEl);
+      pcard.appendChild(pbody);
+      list.appendChild(pcard);
+      updateDossierPrice(svc);
+    }
 
     dossierItems(svc).forEach(function (it) {
       var row = el('div', 'dossier-item');
@@ -1030,6 +1075,14 @@
     list.appendChild(crow);
 
     updateDossierBar();
+  }
+
+  // The base price the client's profile answers determine for this act.
+  function updateDossierPrice(svc) {
+    var node = $('dossier-price');
+    if (!node) return;
+    var base = D.computeBasePrice(svc.id, dossierPricing(svc.id));
+    node.textContent = 'Prix de départ déterminé : ' + D.money(base) + '.';
   }
 
   // Update only the progress DOM — never re-render the list, which would steal

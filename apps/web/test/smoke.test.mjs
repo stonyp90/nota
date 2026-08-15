@@ -198,6 +198,32 @@ test('dossier tab lists first service intake items and badge shows 0/N', async (
   assert.equal($(doc, 'dossier-badge').textContent, '0/' + expected);
 });
 
+// 9b. The dossier profile asks the price-determining questions, shows the price,
+//     and is the single source of truth the booking flow reads back.
+test('dossier profile determines the price and shares it with the booking flow', async () => {
+  const { win, doc, D, Nota } = await boot();
+  Nota.setTab('dossier');
+  const dsel = $(doc, 'd-service');
+  dsel.value = 'refinancement';
+  fire(win, dsel, 'change');
+
+  const price = $(doc, 'dossier-price');
+  assert.ok(price, 'determined price shown in the profile');
+  assert.ok(price.textContent.includes(D.money(2000)), 'base 2000 with no answers');
+
+  const coemp = $(doc, 'dcrit-coemprunteur');
+  assert.ok(coemp, 'profile pricing question rendered');
+  coemp.checked = true;
+  fire(win, coemp, 'change'); // +75, persisted to the profile
+  assert.ok($(doc, 'dossier-price').textContent.includes(D.money(2075)));
+
+  // Booking flow reads the profile answer back -> same dynamic floor.
+  const osel = $(doc, 'o-service');
+  osel.value = 'refinancement';
+  fire(win, osel, 'change');
+  assert.equal(Number($(doc, 'o-amount').min), 2075);
+});
+
 // 10. Clicking a has-bids cell opens the day modal populated with bid rows.
 test('clicking a has-bids cell opens the day modal with bid rows', async () => {
   const { doc } = await boot();
