@@ -488,6 +488,11 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .dossier-pricing { grid-column: 1 / -1; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
 .dossier-pricing .o-criteria { margin-top: 10px; }
 .dossier-price { margin-top: 12px; font-weight: 600; color: var(--brand); font-size: 14px; }
+/* Profile: coordinates + notification settings, two responsive cards. */
+.profil-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; align-items: start; }
+.profil-card { padding: 16px 18px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); display: flex; flex-direction: column; gap: 10px; }
+.profil-card-title { font-size: 15px; font-weight: 700; color: var(--ink); }
+.profil-card .switch-row { margin-top: 2px; }
 .dossier-check { flex: none; margin-top: 2px; width: 18px; height: 18px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); display: grid; place-items: center; color: var(--brand); font-weight: 800; font-size: 12px; }
 .dossier-check[data-on='true'] { background: transparent; color: var(--brand); border-color: var(--brand); }
 .dossier-body { flex: 1; min-width: 0; }

@@ -162,6 +162,7 @@
             Dossier <span class="tab-badge" id="dossier-badge" hidden>0/0</span>
           </button>
           <button class="nav-tab" role="tab" id="tab-notaires" aria-controls="pane-notaires" data-tab="notaires" aria-selected="false">Notaires</button>
+          <button class="nav-tab" role="tab" id="tab-profil" aria-controls="pane-profil" data-tab="profil" aria-selected="false">Profil</button>
         </nav>
         <div class="notif-wrap">
           <button class="icon-btn" id="notif-bell" title="Notifications" aria-label="Notifications" aria-haspopup="true" aria-expanded="false">
@@ -399,6 +400,17 @@
       </section>
 
       <!-- ================= CONFIDENTIALITÉ (Loi 25) ================= -->
+      <section class="tab-pane" id="pane-profil" role="tabpanel" aria-labelledby="tab-profil" hidden>
+        <div class="wrap">
+          <div class="intro">
+            <span class="eyebrow">Votre profil</span>
+            <h1>Mon profil</h1>
+            <p>Vos coordonnées et préférences, enregistrées sur cet appareil et réutilisées automatiquement pour vos offres et votre dossier.</p>
+          </div>
+          <div id="profil-body" class="profil-grid"></div>
+        </div>
+      </section>
+
       <section class="tab-pane" id="pane-confidentialite" role="tabpanel" aria-label="Confidentialité" hidden>
         <div class="wrap">
           <div class="intro">

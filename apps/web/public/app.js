@@ -148,7 +148,32 @@
     lsSave(LS_MYOFFERS, a.slice(-50));
   }
   function svcName(id) { var s = D.serviceById(id); return s ? s.nom : id; }
+
+  // --- Client profile --------------------------------------------------------
+  // Created with sensible defaults on first read (all notifications on). Held on
+  // this device; reused across the offer flow and the dossier.
+  var LS_PROFILE = 'nota.profile.v1';
+  var PROFILE_NOTIF_DEFAULTS = { published: true, reminders: true, retained: true };
+  function profileGet() {
+    var p = lsLoad(LS_PROFILE) || {};
+    return {
+      nom: p.nom || '', courriel: p.courriel || '', prefixe: p.prefixe || '',
+      anonyme: p.anonyme !== false,
+      notifs: Object.assign({}, PROFILE_NOTIF_DEFAULTS, p.notifs || {}),
+    };
+  }
+  function profileSet(patch) {
+    var cur = profileGet();
+    var next = Object.assign({}, cur, patch || {});
+    if (patch && patch.notifs) next.notifs = Object.assign({}, cur.notifs, patch.notifs);
+    lsSave(LS_PROFILE, next);
+    return next;
+  }
+  function notifAllowed(kind) { return profileGet().notifs[kind] !== false; }
+
   function addNotif(n) {
+    // Respect the profile's notification preferences (a kind'd notif can be off).
+    if (n.kind && !notifAllowed(n.kind)) return;
     var a = notifLoad();
     if (a.some(function (x) { return x.key === n.key; })) return; // idempotent
     a.unshift({ key: n.key, title: n.title, body: n.body || '', dateISO: n.dateISO || null, read: false });
@@ -194,6 +219,7 @@
       if (days >= 0 && (days === 7 || days === 3 || days === 1 || days === 0)) {
         addNotif({
           key: 'approach:' + o.id + ':' + days,
+          kind: 'reminders',
           title: days === 0 ? 'Votre signature est aujourd’hui' : 'Votre date approche (J-' + days + ')',
           body: dayTitle(o.dateISO) + ' · ' + svcName(o.serviceId), dateISO: o.dateISO,
         });
@@ -208,6 +234,7 @@
           if (mine && mine.status === D.STATUS.RETENUE) {
             addNotif({
               key: 'retained:' + o.id,
+              kind: 'retained',
               title: 'Un notaire a retenu votre demande 🎉',
               body: dayTitle(o.dateISO) + (mine.etude ? ' · ' + mine.etude : ''), dateISO: o.dateISO,
             });
@@ -481,6 +508,12 @@
       if (chips) chips.querySelectorAll('.chip').forEach(function (x) { x.classList.remove('is-on'); x.setAttribute('aria-pressed', 'false'); });
     }
     onOfferServiceChange();                               // amount/gauge + recommendedAmount pre-fill + validity
+    // Prefill identity from the client's saved profile so nothing is re-entered.
+    var prof = profileGet();
+    if ($('o-courriel')) $('o-courriel').value = prof.courriel;
+    if ($('o-prefix')) $('o-prefix').value = prof.prefixe;
+    if ($('o-name')) $('o-name').value = prof.nom;
+    commitAnon(prof.anonyme);
     var succ = $('offer-success'); if (succ) succ.hidden = true;
     var eb = $('offer-errors'); if (eb) { eb.hidden = true; clear(eb); }
     $('day-hint').textContent = open.length
@@ -903,10 +936,13 @@
     // The dossier is what makes this lead sellable — show its real progress here
     // and give a one-tap path to finish it for THIS service.
     fillDossierNext(res.bid.serviceId);
+    // Remember the client's coordinates in their profile for next time.
+    profileSet({ courriel: payload.courriel, prefixe: payload.prefixe, nom: payload.nom || '', anonyme: payload.anonyme });
     // Track this offer + raise the in-app "published" notification (email is sent by the API).
     addMyOffer(res.bid);
     addNotif({
       key: 'published:' + res.bid.id,
+      kind: 'published',
       title: 'Offre publiée',
       body: D.money(res.bid.montant) + ' · ' + dayTitle(res.bid.dateISO) + ' · ' + svcName(res.bid.serviceId),
       dateISO: res.bid.dateISO,
@@ -945,6 +981,62 @@
     $('outlook-link').href = 'https://outlook.live.com/calendar/0/deeplink/compose?subject=' +
       encodeURIComponent(title) + '&body=' + encodeURIComponent(details) +
       '&startdt=' + bid.dateISO + '&enddt=' + D.addDays(bid.dateISO, 1) + '&allday=true';
+  }
+
+  // ---------------------------------------------------------------------------
+  // Profile (coordinates + notification settings)
+  // ---------------------------------------------------------------------------
+  function renderProfil() {
+    var body = $('profil-body'); if (!body) return; clear(body);
+    var p = profileGet();
+
+    // Coordinates card — reused when publishing an offer.
+    var idCard = el('div', 'profil-card');
+    idCard.appendChild(el('h2', 'profil-card-title', 'Coordonnées'));
+    idCard.appendChild(el('p', 'help', 'Réutilisées automatiquement quand vous publiez une offre.'));
+    [
+      { key: 'nom', label: 'Nom (offre non anonyme)', ph: 'Prénom Nom', type: 'text' },
+      { key: 'courriel', label: 'Courriel', ph: 'vous@exemple.ca', type: 'email' },
+      { key: 'prefixe', label: '3 premiers caractères du code postal', ph: 'G1R', type: 'text' },
+    ].forEach(function (f) {
+      var row = el('div', 'form-row');
+      var lab = el('label', 'lbl', f.label); lab.setAttribute('for', 'p-' + f.key); row.appendChild(lab);
+      var inp = document.createElement('input');
+      inp.type = f.type; inp.id = 'p-' + f.key; inp.placeholder = f.ph; inp.value = p[f.key] || '';
+      if (f.key === 'prefixe') { inp.maxLength = 3; inp.className = 'uppercase'; }
+      inp.addEventListener('input', function () {
+        var val = f.key === 'prefixe' ? inp.value.trim().toUpperCase().slice(0, 3) : inp.value.trim();
+        var patch = {}; patch[f.key] = val; profileSet(patch);
+      });
+      row.appendChild(inp); idCard.appendChild(row);
+    });
+    body.appendChild(idCard);
+
+    // Notifications card — on by default, per-kind toggles gate addNotif().
+    var nCard = el('div', 'profil-card');
+    nCard.appendChild(el('h2', 'profil-card-title', 'Notifications'));
+    nCard.appendChild(el('p', 'help', 'Par courriel et dans l’application. Activées par défaut.'));
+    [
+      { key: 'published', label: 'Confirmation de publication d’une offre' },
+      { key: 'reminders', label: 'Rappels à l’approche de la date' },
+      { key: 'retained', label: 'Avis quand un notaire retient votre offre' },
+    ].forEach(function (t) {
+      var row = el('div', 'switch-row');
+      var txt = el('div'); txt.appendChild(el('div', 'switch-title', t.label)); row.appendChild(txt);
+      var lab = el('label', 'switch');
+      var cb = document.createElement('input'); cb.type = 'checkbox'; cb.setAttribute('role', 'switch');
+      cb.id = 'p-notif-' + t.key;
+      cb.checked = p.notifs[t.key] !== false;
+      cb.setAttribute('aria-checked', cb.checked ? 'true' : 'false');
+      cb.setAttribute('aria-label', t.label);
+      cb.addEventListener('change', function () {
+        cb.setAttribute('aria-checked', cb.checked ? 'true' : 'false');
+        var np = {}; np[t.key] = cb.checked; profileSet({ notifs: np });
+      });
+      lab.appendChild(cb); lab.appendChild(el('span', 'track'));
+      row.appendChild(lab); nCard.appendChild(row);
+    });
+    body.appendChild(nCard);
   }
 
   // ---------------------------------------------------------------------------
@@ -1520,13 +1612,15 @@
     document.querySelectorAll('.nav-tab').forEach(function (b) {
       b.setAttribute('aria-selected', b.dataset.tab === tab ? 'true' : 'false');
     });
-    ['carnet', 'dossier', 'notaires', 'confidentialite'].forEach(function (t) {
+    ['carnet', 'dossier', 'notaires', 'profil', 'confidentialite'].forEach(function (t) {
       var pane = $('pane-' + t);
+      if (!pane) return;
       var active = t === tab;
       pane.classList.toggle('is-active', active);
       pane.hidden = !active;
     });
     if (tab === 'dossier') renderDossier();
+    if (tab === 'profil') renderProfil();
     if (opts.scroll !== false) window.scrollTo({ top: 0, behavior: 'auto' });
   }
 

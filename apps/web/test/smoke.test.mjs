@@ -302,6 +302,28 @@ test('offer criteria render and a flag raises the dynamic floor', async () => {
   assert.equal(Number(amt.max), 20750); // (2000 + 75) * 10
 });
 
+// 12c. The profile saves coordinates + notification prefs and prefills the offer.
+test('profile persists coordinates and prefills the offer form', async () => {
+  const { win, doc, Nota } = await boot();
+  Nota.setTab('profil');
+
+  const courriel = $(doc, 'p-courriel'); courriel.value = 'client@example.ca'; fire(win, courriel, 'input');
+  const prefix = $(doc, 'p-prefixe'); prefix.value = 'g1r'; fire(win, prefix, 'input');
+  const pub = $(doc, 'p-notif-published'); assert.ok(pub, 'notification toggle rendered');
+  pub.checked = false; fire(win, pub, 'change');
+
+  // Re-render reflects the persisted values (incl. the uppercased prefix + the pref).
+  Nota.setTab('carnet'); Nota.setTab('profil');
+  assert.equal($(doc, 'p-courriel').value, 'client@example.ca');
+  assert.equal($(doc, 'p-prefixe').value, 'G1R');
+  assert.equal($(doc, 'p-notif-published').checked, false);
+
+  // Opening a day prefills the offer form from the profile.
+  doc.querySelector('#cal-grid .cal-cell.has-bids').click();
+  assert.equal($(doc, 'o-courriel').value, 'client@example.ca');
+  assert.equal($(doc, 'o-prefix').value, 'G1R');
+});
+
 // 13. Notary console: the auth gate renders, the authed view is gated until
 //     sign-in, and Nota.notary exposes its hooks. feedUrl builds a webcal link.
 test('notary console renders its auth gate and exposes Nota.notary hooks', async () => {
