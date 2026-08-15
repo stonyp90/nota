@@ -550,8 +550,11 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .my-offer-badge[data-status='expired'] { color: var(--ink-muted); border-style: dashed; }
 /* Documents inside the profile: upload / remove / mark-validated. */
 .profil-doc-service { margin: 4px 0 8px; max-width: 340px; }
-.profil-doc-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
-.doc-count { grid-column: 1 / -1; font-size: 12.5px; font-weight: 600; color: var(--ink-muted); }
+/* Flex (not grid) so the LAST row's cards grow to fill the width — no empty
+   right-side slots when the document count doesn't divide evenly. */
+.profil-doc-list { display: flex; flex-wrap: wrap; gap: 10px; align-items: stretch; }
+.profil-doc-list .doc-row { flex: 1 1 300px; }
+.doc-count { flex: 1 1 100%; font-size: 12.5px; font-weight: 600; color: var(--ink-muted); }
 .doc-count[data-complete='true'] { color: var(--brand); }
 .doc-row { border: 1px solid var(--border); border-radius: var(--radius); padding: 11px 13px; display: flex; flex-direction: column; gap: 6px; }
 .doc-row[data-done='true'] { border-color: var(--brand); }
