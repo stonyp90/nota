@@ -698,6 +698,10 @@
     // only when it would overprint one already drawn — the bubble, its count and
     // the hover tooltip still identify every city, so no information is lost.
     var unknown = 0, placedNodes = [], placedLabels = [];
+    // All texts live in ONE top, non-interactive layer appended AFTER every bubble,
+    // so a later (smaller) bubble can never cover an earlier (bigger) city's name
+    // or count — the busiest cities' labels always stay readable.
+    var labelLayer = svgEl('g', { 'class': 'fsa-labels', 'aria-hidden': 'true' });
     var ranked = order.map(function (city) { return { city: city, list: groups[city], n: groups[city].length }; })
       .sort(function (a, b) { return b.n - a.n; });
     function overprints(boxes, b) {
@@ -753,19 +757,22 @@
       var below = { x: pos.x, y: pos.y + r + 2.8, w: lw, h: lh };
       var box = (above.y > 3.4 && !overprints(obstacles, above)) ? above
         : (below.y < 61 && !overprints(obstacles, below)) ? below : null;
+      g.addEventListener('click', function () { selectFSA(this.dataset.fsa); });
+      g.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectFSA(this.dataset.fsa); } });
+      svg.appendChild(g);
+      // Name + count are drawn in the top text layer (below), never on the node,
+      // so no later bubble can occlude them.
       if (box) {
         placedLabels.push(box);
         var code = svgEl('text', { x: cx, y: box.y.toFixed(1), 'text-anchor': 'middle', 'class': 'fsa-node-code' });
         code.textContent = city;
-        g.appendChild(code);
+        labelLayer.appendChild(code);
       }
       var cnt = svgEl('text', { x: cx, y: (pos.y + 0.9).toFixed(1), 'text-anchor': 'middle', 'class': 'fsa-node-n' });
       cnt.textContent = n;
-      g.appendChild(cnt);
-      g.addEventListener('click', function () { selectFSA(this.dataset.fsa); });
-      g.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectFSA(this.dataset.fsa); } });
-      svg.appendChild(g);
+      labelLayer.appendChild(cnt);
     });
+    svg.appendChild(labelLayer);
     map.appendChild(svg);
     map.appendChild(el('p', 'fsa-note', 'Carte du Québec — chaque bulle est une ville, sa taille indique le volume d’offres. Touchez une ville pour voir ses offres.'));
   }

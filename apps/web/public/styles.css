@@ -1078,6 +1078,7 @@ html { scroll-behavior: smooth; scroll-padding-top: var(--sticky-top); }
 .fsa-node .fsa-hit { pointer-events: fill; }
 .fsa-node.is-unset circle { fill: var(--ink-muted); stroke: var(--border-strong); stroke-dasharray: 1.2 1; }
 /* Labels carry a halo (paint-order stroke) so they stay legible over bubbles. */
+.fsa-labels { pointer-events: none; } /* top text layer — never blocks a bubble click */
 .fsa-node-code { fill: var(--ink); font-size: 2.4px; font-weight: 800; paint-order: stroke; stroke: var(--surface-inset); stroke-width: 1; stroke-linejoin: round; }
 .fsa-node-n { fill: var(--on-accent); font-size: 2.8px; font-weight: 800; paint-order: stroke; stroke: var(--hunter-900); stroke-width: .7; stroke-linejoin: round; }
 .fsa-note { margin: 8px 0 0; font-size: 12px; color: var(--ink-muted); text-align: center; }
