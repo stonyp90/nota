@@ -393,9 +393,14 @@
               <!-- Shown when the email has no account yet: sign-in and sign-up are the
                    same door — a new notary is offered free onboarding right here. -->
               <div id="notary-signup-prompt" class="nc-signup" hidden>
-                <p class="nc-signup-lead"><strong>Bienvenue !</strong> <span id="notary-signup-email"></span> n’a pas encore de compte notaire. L’inscription est <strong>gratuite</strong> (~2 min) : elle crée votre compte de paiement sécurisé et ouvre votre console.</p>
+                <p class="nc-signup-lead"><strong>Bienvenue !</strong> <span id="notary-signup-email"></span> n’a pas encore de compte. L’inscription est <strong>gratuite et sans engagement</strong> — deux étapes :</p>
+                <ol class="nc-signup-steps">
+                  <li>Vous créez votre compte de paiement sécurisé via <strong>Stripe</strong>, notre partenaire (~2 min).</li>
+                  <li>Votre console s’ouvre aussitôt — vous voyez les demandes et en retenez.</li>
+                </ol>
                 <ul class="errors" id="notary-signup-errors" role="alert" aria-atomic="true" hidden></ul>
                 <button type="button" class="btn btn-primary btn-lg nc-auth-cta" id="notary-signup-btn">M’inscrire gratuitement →</button>
+                <p class="help nc-auth-fine">Vous serez redirigé vers Stripe pour la vérification d’identité qu’exige la loi, puis ramené ici.</p>
               </div>
               </div>
               <aside class="nc-gate-aside" aria-label="Ce que vous obtenez">

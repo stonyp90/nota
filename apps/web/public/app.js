@@ -2272,6 +2272,10 @@
       ncLoadBids();
     } else {
       ncRenderAuthState();
+      // Pre-fill the email for a notary returning from Stripe onboarding (or a
+      // repeat visit), so they finish sign-in in one click. Never a token.
+      var inp = $('nc-email');
+      if (inp && !inp.value && typeof em === 'string' && em) inp.value = em;
     }
   }
 
@@ -2457,6 +2461,7 @@
     var ncSignup = $('notary-signup-btn');
     if (ncSignup) ncSignup.addEventListener('click', function () {
       var email = nc.pendingSignupEmail || ($('nc-email') && $('nc-email').value.trim());
+      try { if (email) lsSave(LS_NC_EMAIL, email); } catch (e) {} // remember for the return from Stripe
       ncSignup.disabled = true; ncSignup.textContent = 'Redirection vers l’inscription…';
       ncStartOnboard(email, function (msg) {
         ncSignup.disabled = false; ncSignup.textContent = 'M’inscrire gratuitement →';
