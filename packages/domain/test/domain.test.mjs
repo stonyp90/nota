@@ -88,7 +88,7 @@ test('dates: daysBetween and addDays are inverse and tz-stable', () => {
 });
 
 test('validateOffer: a clean prioritaire offer', () => {
-  const r = D.validateOffer({ serviceId: 'refinancement', dateISO: '2026-08-17', montant: 3000, todayISO: TODAY });
+  const r = D.validateOffer({ serviceId: 'refinancement', dateISO: '2026-08-17', montant: 3000, todayISO: TODAY, pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue' } });
   assert.equal(r.ok, true);
   assert.equal(r.errors.length, 0);
   assert.equal(r.tier, 'prioritaire');
@@ -110,7 +110,7 @@ test('validateOffer: rejects above the 10x premium cap', () => {
 });
 
 test('validateOffer: exactly 10x is allowed', () => {
-  const r = D.validateOffer({ serviceId: 'testament', dateISO: '2026-08-13', montant: 6500, todayISO: TODAY });
+  const r = D.validateOffer({ serviceId: 'testament', dateISO: '2026-08-13', montant: 6500, todayISO: TODAY, pricing: { who_for: 'solo', fiducie_needed: 'non' } });
   assert.equal(r.ok, true);
 });
 
@@ -170,7 +170,7 @@ test('makeFixtures: deterministic across calls', () => {
 test('makeFixtures: every fixture is a valid offer', () => {
   const fx = D.makeFixtures(TODAY);
   for (const b of fx) {
-    const r = D.validateOffer({ serviceId: b.serviceId, dateISO: b.dateISO, montant: b.montant, todayISO: TODAY });
+    const r = D.validateOffer({ serviceId: b.serviceId, dateISO: b.dateISO, montant: b.montant, todayISO: TODAY, pricing: b.pricing });
     assert.equal(r.ok, true, `${b.id} ${b.serviceId} ${b.montant} on ${b.dateISO}`);
   }
 });
@@ -215,14 +215,14 @@ test('isEmail: accepts plausible addresses, rejects garbage', () => {
 });
 
 test('validateOffer: courriel is optional — absent/empty is still ok', () => {
-  const base = { serviceId: 'testament', dateISO: '2026-08-20', montant: 700, todayISO: TODAY };
+  const base = { serviceId: 'testament', dateISO: '2026-08-20', montant: 700, todayISO: TODAY, pricing: { who_for: 'solo', fiducie_needed: 'non' } };
   assert.equal(D.validateOffer(base).ok, true);
   assert.equal(D.validateOffer(base).courriel, null);
   assert.equal(D.validateOffer({ ...base, courriel: '' }).ok, true);
 });
 
 test('validateOffer: a valid courriel passes and is echoed back trimmed', () => {
-  const r = D.validateOffer({ serviceId: 'testament', dateISO: '2026-08-20', montant: 700, todayISO: TODAY, courriel: '  Client@Example.CA ' });
+  const r = D.validateOffer({ serviceId: 'testament', dateISO: '2026-08-20', montant: 700, todayISO: TODAY, courriel: '  Client@Example.CA ', pricing: { who_for: 'solo', fiducie_needed: 'non' } });
   assert.equal(r.ok, true);
   assert.equal(r.courriel, 'Client@Example.CA');
 });

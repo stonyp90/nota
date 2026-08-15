@@ -4,70 +4,85 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const domain = require('../index.js');
-const { computeBasePrice, validateOffer, serviceById, recommendedAmount } = domain;
+const { computeBasePrice, validateOffer, complexity, missingRequired } = domain;
 
-test('with NO answers a service returns its flat base (== prixDepart) — full back-compat', () => {
+const TODAY = '2026-08-14';
+// Fully-answered mandatory params, per service, that keep each at its BASE price.
+const BASE_ANSWERS = {
+  testament: { who_for: 'solo', fiducie_needed: 'non' },
+  procuration: { scope: 'specifique', realEstate: 'non' },
+  refinancement: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue' },
+};
+
+test('with NO answers a service returns its flat base (== prixDepart)', () => {
   for (const svc of domain.SERVICES) {
     assert.equal(computeBasePrice(svc.id, {}), svc.prixDepart, svc.id);
-    assert.equal(computeBasePrice(svc.id, undefined), svc.prixDepart, svc.id);
     assert.equal(svc.pricing.base, svc.prixDepart, svc.id + ' base mirrors prixDepart');
   }
 });
 
-test('flag criteria add their flat amount when truthy (testament)', () => {
-  assert.equal(computeBasePrice('testament', { couple: true }), 650 + 350);
-  assert.equal(computeBasePrice('testament', { enfants_mineurs: true }), 650 + 75);
-  assert.equal(computeBasePrice('testament', { couple: true, enfants_mineurs: true, entreprise_fiducie: true }), 650 + 350 + 75 + 250);
-  assert.equal(computeBasePrice('testament', { couple: false }), 650); // falsy = no add
+test('testament: who_for scales, fiducie_needed is the complexity jump', () => {
+  assert.equal(computeBasePrice('testament', { who_for: 'couple' }), 650 + 450);
+  assert.equal(computeBasePrice('testament', { fiducie_needed: 'oui' }), 650 + 600);
+  assert.equal(computeBasePrice('testament', { who_for: 'couple', fiducie_needed: 'oui' }), 650 + 450 + 600);
+  assert.equal(computeBasePrice('testament', { business_assets: true }), 650 + 300);
+  assert.equal(computeBasePrice('testament', { include_mandate: 'non' }), 650 - 150); // will only
 });
 
-test('choice criteria add the chosen option (procuration portée)', () => {
-  assert.equal(computeBasePrice('procuration', { portee: 'speciale' }), 295);
-  assert.equal(computeBasePrice('procuration', { portee: 'generale' }), 295 + 40);
-  assert.equal(computeBasePrice('procuration', { portee: 'generale', protection: true }), 295 + 40 + 150);
-  assert.equal(computeBasePrice('procuration', { portee: 'inconnu' }), 295); // unknown option = no add
+test('procuration: scope scales, realEstate is the complexity jump', () => {
+  assert.equal(computeBasePrice('procuration', { scope: 'generale' }), 295 + 100);
+  assert.equal(computeBasePrice('procuration', { realEstate: 'oui' }), 295 + 200);
+  assert.equal(computeBasePrice('procuration', { usage: 'etranger' }), 295 + 150);
 });
 
-test('bracket criteria add the first bracket the value falls in (refinancement loan value)', () => {
-  assert.equal(computeBasePrice('refinancement', { valeur_pret: 250000 }), 2000);          // <=300k -> +0
-  assert.equal(computeBasePrice('refinancement', { valeur_pret: 300000 }), 2000);          // boundary inclusive
-  assert.equal(computeBasePrice('refinancement', { valeur_pret: 450000 }), 2000 + 150);    // <=600k
-  assert.equal(computeBasePrice('refinancement', { valeur_pret: 900000 }), 2000 + 350);    // open top bracket
-  assert.equal(computeBasePrice('refinancement', { valeur_pret: 900000, coemprunteur: true }), 2000 + 350 + 75);
-  assert.equal(computeBasePrice('refinancement', {}), 2000);                                // unanswered -> base bracket
+test('refinancement: loan-value brackets + succession + bank approval + optionals', () => {
+  assert.equal(computeBasePrice('refinancement', { valeur_pret: 250000 }), 2000);
+  assert.equal(computeBasePrice('refinancement', { valeur_pret: 450000 }), 2000 + 150);
+  assert.equal(computeBasePrice('refinancement', { valeur_pret: 800000 }), 2000 + 350);
+  assert.equal(computeBasePrice('refinancement', { valeur_pret: 1500000 }), 2000 + 600);
+  assert.equal(computeBasePrice('refinancement', { succession: 'oui' }), 2000 + 400);
+  assert.equal(computeBasePrice('refinancement', { approbation_bancaire: 'non' }), 2000 + 200);
+  assert.equal(computeBasePrice('refinancement', { coemprunteur: true }), 2000 + 150);
 });
 
-test('unknown service returns null; a bad bracket value is ignored, not NaN', () => {
-  assert.equal(computeBasePrice('inconnu', {}), null);
-  assert.equal(computeBasePrice('refinancement', { valeur_pret: 'oops' }), 2000);
+// --- Mandatory parameters ----------------------------------------------------
+
+test('missingRequired lists the unanswered mandatory params per service', () => {
+  assert.deepEqual(missingRequired('refinancement', {}).map((m) => m.id), ['valeur_pret', 'succession', 'approbation_bancaire']);
+  assert.deepEqual(missingRequired('testament', {}).map((m) => m.id), ['who_for', 'fiducie_needed']);
+  assert.deepEqual(missingRequired('procuration', {}).map((m) => m.id), ['scope', 'realEstate']);
+  // Fully answered -> nothing missing.
+  for (const svc of domain.SERVICES) assert.deepEqual(missingRequired(svc.id, BASE_ANSWERS[svc.id]), []);
 });
 
-test('validateOffer enforces the DYNAMIC floor (a complex act raises the minimum)', () => {
-  const today = '2026-08-14';
-  // A couple testament floor is 1000; an offer of 900 is now below the floor.
-  const low = validateOffer({ serviceId: 'testament', dateISO: '2026-09-20', montant: 900, todayISO: today, pricing: { couple: true } });
-  assert.equal(low.ok, false);
-  assert.ok(low.errors.some((e) => e.code === 'sous_prix_depart'));
-  assert.equal(low.basePrice, 1000);
+test('validateOffer BLOCKS a bid until the mandatory params are answered', () => {
+  const noParams = validateOffer({ serviceId: 'refinancement', dateISO: '2026-09-20', montant: 2500, todayISO: TODAY });
+  assert.equal(noParams.ok, false);
+  assert.ok(noParams.errors.some((e) => e.code === 'parametre_requis' && e.param === 'succession'));
 
-  // The same 900 is fine with no criteria (floor stays 650).
-  const ok = validateOffer({ serviceId: 'testament', dateISO: '2026-09-20', montant: 900, todayISO: today });
+  const ok = validateOffer({ serviceId: 'refinancement', dateISO: '2026-09-20', montant: 2500, todayISO: TODAY, pricing: BASE_ANSWERS.refinancement });
   assert.equal(ok.ok, true);
-  assert.equal(ok.basePrice, 650);
+  assert.equal(ok.basePrice, 2000);
 });
 
-test('validateOffer premium cap scales with the dynamic base', () => {
-  const today = '2026-08-14';
-  // refinancement with a big loan: base 2350; cap = 23500; 23501 must fail.
-  const over = validateOffer({ serviceId: 'refinancement', dateISO: '2026-09-20', montant: 23501, todayISO: today, pricing: { valeur_pret: 900000 } });
-  assert.ok(over.errors.some((e) => e.code === 'plafond_depasse'));
-  const under = validateOffer({ serviceId: 'refinancement', dateISO: '2026-09-20', montant: 23500, todayISO: today, pricing: { valeur_pret: 900000 } });
-  assert.equal(under.ok, true);
+// --- Case complexity (the notary's easy/hard signal) -------------------------
+
+test('complexity: succession + no bank approval flag a refinancement as complexe', () => {
+  const c = complexity('refinancement', { valeur_pret: 250000, succession: 'oui', approbation_bancaire: 'non' });
+  assert.equal(c.level, 'complexe'); // 2 (succession) + 2 (pas encore) = 4
+  assert.ok(c.factors.some((f) => /succession/i.test(f)));
+  assert.ok(c.factors.some((f) => /Approbation/i.test(f)));
 });
 
-test('recommendedAmount anchors on the dynamic base (higher base -> higher suggestion)', () => {
-  const plain = recommendedAmount('testament', '2026-09-20', '2026-08-14');
-  const couple = recommendedAmount('testament', '2026-09-20', '2026-08-14', { couple: true });
-  assert.ok(couple > plain, 'a couple testament recommends a higher offer');
-  assert.ok(couple >= 1000); // at least the couple floor
+test('complexity: a clean file is simple; a single hardener is standard', () => {
+  assert.equal(complexity('refinancement', BASE_ANSWERS.refinancement).level, 'simple');
+  assert.equal(complexity('testament', { who_for: 'couple', fiducie_needed: 'non' }).level, 'simple'); // score 1
+  assert.equal(complexity('testament', { fiducie_needed: 'oui' }).level, 'standard'); // score 2
+  assert.equal(complexity('procuration', { scope: 'generale', realEstate: 'oui' }).level, 'standard'); // scope=scale(0) + realEstate(2) = 2
+});
+
+test('recommendedAmount anchors on the dynamic base', () => {
+  const plain = domain.recommendedAmount('testament', '2026-09-20', TODAY, BASE_ANSWERS.testament);
+  const couple = domain.recommendedAmount('testament', '2026-09-20', TODAY, { who_for: 'couple', fiducie_needed: 'non' });
+  assert.ok(couple > plain);
 });

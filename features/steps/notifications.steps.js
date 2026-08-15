@@ -44,7 +44,7 @@ Given(
   'une offre ouverte avec le courriel {string} pour {string} à {int} dans {int} jours',
   async function (courriel, serviceId, montant, jours) {
     const dateISO = this.domain.addDays(this.today, jours);
-    await this.request({ method: 'POST', path: '/bids', body: JSON.stringify({ serviceId, dateISO, montant, courriel }) });
+    await this.request({ method: 'POST', path: '/bids', body: JSON.stringify({ serviceId, dateISO, montant, courriel, pricing: { testament: { who_for: "solo", fiducie_needed: "non" }, procuration: { scope: "specifique", realEstate: "non" }, refinancement: { valeur_pret: 250000, succession: "non", approbation_bancaire: "obtenue" } }[serviceId] }) });
     assert.equal(this.response.statusCode, 201, 'la publication de départ a échoué: ' + this.response.body);
     this.lastBidId = this.responseJson.bid.id;
   }
@@ -56,7 +56,7 @@ When(
   'un client publie une offre avec le courriel {string} pour {string} à {int} dans {int} jours',
   async function (courriel, serviceId, montant, jours) {
     const dateISO = this.domain.addDays(this.today, jours);
-    await this.request({ method: 'POST', path: '/bids', body: JSON.stringify({ serviceId, dateISO, montant, courriel }) });
+    await this.request({ method: 'POST', path: '/bids', body: JSON.stringify({ serviceId, dateISO, montant, courriel, pricing: { testament: { who_for: "solo", fiducie_needed: "non" }, procuration: { scope: "specifique", realEstate: "non" }, refinancement: { valeur_pret: 250000, succession: "non", approbation_bancaire: "obtenue" } }[serviceId] }) });
     const j = this.responseJson;
     this.lastBidId = j.bid ? j.bid.id : null;
   }
@@ -66,7 +66,7 @@ When(
   'un client publie une offre sans courriel pour {string} à {int} dans {int} jours',
   async function (serviceId, montant, jours) {
     const dateISO = this.domain.addDays(this.today, jours);
-    await this.request({ method: 'POST', path: '/bids', body: JSON.stringify({ serviceId, dateISO, montant }) });
+    await this.request({ method: 'POST', path: '/bids', body: JSON.stringify({ serviceId, dateISO, montant, pricing: { testament: { who_for: 'solo', fiducie_needed: 'non' }, procuration: { scope: 'specifique', realEstate: 'non' }, refinancement: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue' } }[serviceId] }) });
     const j = this.responseJson;
     this.lastBidId = j.bid ? j.bid.id : null;
   }

@@ -11,11 +11,18 @@ Given('le service {string}', function (serviceId) {
 
 // --- POST /bids -------------------------------------------------------------
 
+// Default mandatory pricing params per service so a publication validates unless
+// a scenario explicitly overrides them.
+const DEFAULT_PRICING = {
+  testament: { who_for: 'solo', fiducie_needed: 'non' },
+  procuration: { scope: 'specifique', realEstate: 'non' },
+  refinancement: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue' },
+};
 async function publish(world, body) {
   await world.request({
     method: 'POST',
     path: '/bids',
-    body: JSON.stringify(body),
+    body: JSON.stringify({ pricing: DEFAULT_PRICING[body.serviceId], ...body }),
   });
 }
 

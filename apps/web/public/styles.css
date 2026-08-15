@@ -531,7 +531,7 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .dossier-item[data-done='true'] .dossier-name { color: var(--ink-muted); }
 /* Themed file picker — hides the raw OS "Choose File" chrome. */
 .file-field { display: inline-flex; align-items: center; gap: 8px; margin-top: 8px; cursor: pointer; }
-.dossier-item input.file-native { position: absolute; width: 1px; height: 1px; opacity: 0; margin: 0; padding: 0; }
+input.file-native { position: absolute; width: 1px; height: 1px; opacity: 0; margin: 0; padding: 0; }
 .file-cta { display: inline-flex; align-items: center; padding: 7px 14px; border-radius: 999px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--ink-muted); font-weight: 600; font-size: 13px; transition: border-color .15s, color .15s; }
 .file-field:hover .file-cta { border-color: var(--brand); color: var(--ink); }
 .file-native:focus-visible + .file-cta { outline: 2px solid var(--ring); outline-offset: 2px; }

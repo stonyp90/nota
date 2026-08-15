@@ -182,6 +182,12 @@ test('a valid offer combination enables #offer-submit', async () => {
   amt.value = '2000'; // at the refinancement floor (2000), within the 20000 cap
   fire(win, amt, 'input');
 
+  // The 3 mandatory refinancement params must be answered before submit enables.
+  assert.equal(submit.disabled, true, 'still blocked until mandatory params answered');
+  const lv = $(doc, 'crit-valeur_pret'); lv.value = '300000'; fire(win, lv, 'input');
+  $(doc, 'crit-succession__non').click();
+  $(doc, 'crit-approbation_bancaire__obtenue').click();
+
   assert.equal(submit.disabled, false);
 });
 
@@ -227,14 +233,14 @@ test('dossier profile determines the price and shares it with the booking flow',
   const coemp = $(doc, 'dcrit-coemprunteur');
   assert.ok(coemp, 'profile pricing question rendered');
   coemp.checked = true;
-  fire(win, coemp, 'change'); // +75, persisted to the profile
-  assert.ok($(doc, 'dossier-price').textContent.includes(D.money(2075)));
+  fire(win, coemp, 'change'); // +150, persisted to the profile
+  assert.ok($(doc, 'dossier-price').textContent.includes(D.money(2150)));
 
   // Booking flow reads the profile answer back -> same dynamic floor.
   const osel = $(doc, 'o-service');
   osel.value = 'refinancement';
   fire(win, osel, 'change');
-  assert.equal(Number($(doc, 'o-amount').min), 2075);
+  assert.equal(Number($(doc, 'o-amount').min), 2150);
 });
 
 // 10. Clicking a has-bids cell opens the day modal populated with bid rows.
@@ -282,12 +288,16 @@ test('courriel field is optional and stays private in the local store', async ()
   fire(win, date, 'input');
   $(doc, 'o-amount').value = '2000';
   fire(win, $(doc, 'o-amount'), 'input');
+  $(doc, 'crit-valeur_pret').value = '300000'; fire(win, $(doc, 'crit-valeur_pret'), 'input');
+  $(doc, 'crit-succession__non').click();
+  $(doc, 'crit-approbation_bancaire__obtenue').click();
   assert.equal($(doc, 'offer-submit').disabled, false);
 
   // Creating a bid with a courriel offline must not surface it on the bid.
   const res = await Nota.store.createBid({
     serviceId: 'refinancement', dateISO: D.addDays(todayISO(), 5), montant: 2000,
     anonyme: true, courriel: 'client@example.ca',
+    pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue' },
   });
   assert.equal(res.ok, true);
   assert.equal(res.bid.courriel, undefined);
@@ -310,9 +320,9 @@ test('offer criteria render and a flag raises the dynamic floor', async () => {
   assert.equal(Number(amt.min), 2000); // base floor before any criterion
 
   coemp.checked = true;
-  fire(win, coemp, 'change'); // +75 -> dynamic floor rises
-  assert.equal(Number(amt.min), 2075);
-  assert.equal(Number(amt.max), 20750); // (2000 + 75) * 10
+  fire(win, coemp, 'change'); // +150 -> dynamic floor rises
+  assert.equal(Number(amt.min), 2150);
+  assert.equal(Number(amt.max), 21500); // (2000 + 150) * 10
 });
 
 // 12c. The profile saves coordinates + notification prefs and prefills the offer.
@@ -397,15 +407,19 @@ test('submitting an offer attaches the saved dossier snapshot and courriel', asy
   const sel = $(doc, 'o-service'); sel.value = 'refinancement'; fire(win, sel, 'change');
   const date = $(doc, 'o-date'); date.value = D.addDays(todayISO(), 5); fire(win, date, 'change'); fire(win, date, 'input');
   $(doc, 'o-amount').value = '2000'; fire(win, $(doc, 'o-amount'), 'input');
+  $(doc, 'crit-valeur_pret').value = '300000'; fire(win, $(doc, 'crit-valeur_pret'), 'input');
+  $(doc, 'crit-succession__non').click();
+  $(doc, 'crit-approbation_bancaire__obtenue').click();
   $(doc, 'o-courriel').value = 'client@example.ca'; fire(win, $(doc, 'o-courriel'), 'input');
   fire(win, $(doc, 'offer-form'), 'submit');
   await wait(10);
 
   Nota.store.createBid = orig;
   assert.ok(captured, 'createBid was not called');
-  // Compare by value (the snapshot is parsed in the jsdom realm, so a strict
-  // deep-equal would trip on cross-realm prototypes).
-  assert.equal(JSON.stringify(captured.dossier), JSON.stringify(snap));
+  // The saved snapshot's fields ride along (the dossier also picks up the
+  // answered __pricing, which is expected — pricing answers live in the profile).
+  assert.equal(captured.dossier.valeurPropriete, snap.valeurPropriete);
+  assert.equal(captured.dossier.__consent, snap.__consent);
   assert.equal(captured.courriel, 'client@example.ca');
 });
 

@@ -54,7 +54,7 @@
     async createBid(payload) {
       var v = D.validateOffer({
         serviceId: payload.serviceId, dateISO: payload.dateISO,
-        montant: payload.montant, todayISO: todayISO(),
+        montant: payload.montant, pricing: payload.pricing, todayISO: todayISO(),
       });
       if (!v.ok) return { ok: false, errors: v.errors };
 
@@ -75,6 +75,7 @@
         tier: v.tier, premium: v.premium, anonyme: anonyme,
         nom: anonyme ? null : (payload.nom || null),
         prefixe: (payload.prefixe || '').toUpperCase().slice(0, 3) || null,
+        pricing: payload.pricing || null,
         status: D.STATUS.OUVERTE, etude: null, createdAt: todayISO(),
       };
       var all = ensureSeed(); all.push(bid); lsSave(LS_BIDS, all);
@@ -716,6 +717,7 @@
       (c.options || []).forEach(function (opt) {
         var b = el('button', 'chip', opt.label);
         b.type = 'button';
+        b.id = idPrefix + c.id + '__' + opt.id;
         var on = current === opt.id;
         b.setAttribute('aria-pressed', on ? 'true' : 'false');
         b.classList.toggle('is-on', on);
@@ -751,9 +753,21 @@
     var svc = D.serviceById(serviceId);
     var criteria = (svc && svc.pricing && svc.pricing.criteria) || [];
     if (step) step.hidden = criteria.length === 0;
-    criteria.forEach(function (c) {
-      box.appendChild(buildCriterionRow(c, state.offer.pricing[c.id], function (val) { setCriterion(c.id, val); }, 'crit-'));
-    });
+    var mkRow = function (c) {
+      return buildCriterionRow(c, state.offer.pricing[c.id], function (val) { setCriterion(c.id, val); }, 'crit-');
+    };
+    // Mandatory questions shown directly; optional "hardeners" behind an expander
+    // so the happy path stays ~3 clicks.
+    criteria.filter(function (c) { return c.required; }).forEach(function (c) { box.appendChild(mkRow(c)); });
+    var optional = criteria.filter(function (c) { return !c.required; });
+    if (optional.length) {
+      var det = document.createElement('details'); det.className = 'disclosure crit-more';
+      var sum = document.createElement('summary'); sum.textContent = 'Affiner (facultatif)'; det.appendChild(sum);
+      var inner = el('div', 'o-criteria');
+      optional.forEach(function (c) { inner.appendChild(mkRow(c)); });
+      det.appendChild(inner);
+      box.appendChild(det);
+    }
   }
 
   function setCriterion(id, value) {

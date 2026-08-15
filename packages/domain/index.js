@@ -47,12 +47,39 @@
       // Dynamic base price = base + the flat add-on of each answered criterion.
       // Criteria are DATA (edit here, no code change) and are collected as part
       // of the dossier — the same questions the notary needs (see computeBasePrice).
+      // 2 mandatory questions (scale + complexity-flip), the rest optional
+      // behind an "affiner" expander (see the research model). Weights (poids)
+      // drive the notary's complexity label.
       pricing: {
         base: 650,
         criteria: [
-          { id: 'couple', type: 'flag', label: 'Pour un couple (deux testaments miroirs)', aide: 'Deux testaments coordonnés plutôt qu’un seul.', add: 350 },
-          { id: 'enfants_mineurs', type: 'flag', label: 'Enfants mineurs (clause de tutelle)', aide: 'Ajoute la désignation d’un tuteur au testament.', add: 75 },
-          { id: 'entreprise_fiducie', type: 'flag', label: 'Actifs d’entreprise ou fiducie', aide: 'Parts d’entreprise, fiducie ou actifs à structurer.', add: 250 },
+          {
+            id: 'who_for', type: 'choice', required: true, label: 'Le testament est pour qui ?',
+            aide: 'Un couple = deux testaments miroirs + deux mandats.',
+            options: [
+              { id: 'solo', label: 'Moi seul', add: 0, poids: 0 },
+              { id: 'couple', label: 'Couple', add: 450, poids: 0 },
+            ],
+          },
+          {
+            id: 'fiducie_needed', type: 'choice', required: true, label: 'Un héritier a-t-il besoin d’être protégé ?',
+            aide: 'Enfant mineur, proche à charge ou handicapé, ou remise de l’héritage à un âge précis.',
+            options: [
+              { id: 'non', label: 'Non', add: 0, poids: 0 },
+              { id: 'oui', label: 'Oui', add: 600, poids: 2 },
+            ],
+          },
+          {
+            id: 'include_mandate', type: 'choice', optional: true, label: 'Inclure le mandat de protection ?',
+            aide: 'Le forfait standard réunit le testament et le mandat d’inaptitude.',
+            options: [
+              { id: 'oui', label: 'Oui (forfait)', add: 0, poids: 0 },
+              { id: 'non', label: 'Testament seul', add: -150, poids: 0 },
+            ],
+          },
+          { id: 'famille_recomposee', type: 'flag', optional: true, label: 'Famille recomposée', aide: 'Conjoint et enfants d’unions différentes.', add: 150, poids: 1 },
+          { id: 'business_assets', type: 'flag', optional: true, label: 'Entreprise, société ou ferme', aide: 'Actions, convention d’actionnaires, gel successoral.', add: 300, poids: 2 },
+          { id: 'foreign_assets', type: 'flag', optional: true, label: 'Biens importants à l’étranger', aide: 'Immeuble ou comptes hors Canada.', add: 250, poids: 2 },
         ],
       },
       documents: [
@@ -76,13 +103,30 @@
         base: 295,
         criteria: [
           {
-            id: 'portee', type: 'choice', label: 'Portée', aide: 'Une procuration générale couvre l’ensemble de vos biens.',
+            id: 'scope', type: 'choice', required: true, label: 'Étendue de la procuration',
+            aide: 'Un acte précis, ou la gestion générale de vos biens.',
             options: [
-              { id: 'speciale', label: 'Spéciale', add: 0 },
-              { id: 'generale', label: 'Générale', add: 40 },
+              { id: 'specifique', label: 'Un acte précis', add: 0, poids: 0 },
+              { id: 'generale', label: 'Gestion générale', add: 100, poids: 0 },
             ],
           },
-          { id: 'protection', type: 'flag', label: 'Mandat de protection (inaptitude)', aide: 'Un mandat qui prend effet si vous devenez inapte.', add: 150 },
+          {
+            id: 'realEstate', type: 'choice', required: true, label: 'Vise-t-elle un immeuble ?',
+            aide: 'Pouvoir de vendre, acheter ou hypothéquer une propriété — encadré strictement par la loi.',
+            options: [
+              { id: 'non', label: 'Non', add: 0, poids: 0 },
+              { id: 'oui', label: 'Oui', add: 200, poids: 2 },
+            ],
+          },
+          {
+            id: 'usage', type: 'choice', optional: true, label: 'Où sera-t-elle utilisée ?',
+            aide: 'À l’étranger : apostille ou traduction requise.',
+            options: [
+              { id: 'qc_canada', label: 'Québec / Canada', add: 0, poids: 0 },
+              { id: 'etranger', label: 'À l’étranger', add: 150, poids: 1 },
+            ],
+          },
+          { id: 'langue', type: 'flag', optional: true, label: 'En anglais / traduction', aide: 'Version anglaise ou traduite requise.', add: 100, poids: 1 },
         ],
       },
       documents: [
@@ -108,14 +152,50 @@
         base: 2000,
         criteria: [
           {
-            id: 'valeur_pret', type: 'bracket', label: 'Valeur du prêt', aide: 'Le montant du nouveau financement.', unit: '$',
+            id: 'valeur_pret', type: 'bracket', required: true, label: 'Montant du nouveau prêt', aide: 'Le montant du refinancement.', unit: '$',
             brackets: [
-              { max: 300000, add: 0 },
-              { max: 600000, add: 150 },
-              { max: null, add: 350 },
+              { max: 300000, add: 0, poids: 0 },
+              { max: 600000, add: 150, poids: 0 },
+              { max: 1000000, add: 350, poids: 1 },
+              { max: null, add: 600, poids: 1 },
             ],
           },
-          { id: 'coemprunteur', type: 'flag', label: 'Co-emprunteur', aide: 'Une seconde personne inscrite au prêt.', add: 75 },
+          {
+            id: 'succession', type: 'choice', required: true, label: 'La propriété fait-elle partie d’une succession ?',
+            aide: 'Héritiers, liquidateur : dossier nettement plus complexe.',
+            options: [
+              { id: 'non', label: 'Non', add: 0, poids: 0 },
+              { id: 'oui', label: 'Oui', add: 400, poids: 2 },
+            ],
+          },
+          {
+            id: 'approbation_bancaire', type: 'choice', required: true, label: 'Approbation bancaire',
+            aide: 'Où en êtes-vous avec le prêteur ? Sans instructions, le notaire ne peut signer à la date visée.',
+            options: [
+              { id: 'obtenue', label: 'Obtenue', add: 0, poids: 0 },
+              { id: 'en_cours', label: 'En cours', add: 100, poids: 1 },
+              { id: 'non', label: 'Pas encore', add: 200, poids: 2 },
+            ],
+          },
+          { id: 'coemprunteur', type: 'flag', optional: true, label: 'Co-emprunteur / indivision', aide: 'Plus de deux propriétaires inscrits.', add: 150, poids: 1 },
+          {
+            id: 'assurance_habitation', type: 'choice', optional: true, label: 'Assurance habitation à jour ?',
+            aide: 'Le prêteur exige une assurance en vigueur (feu, dégât d’eau, foudre…). Sans elle, le refinancement ne peut se conclure.',
+            options: [
+              { id: 'oui', label: 'Oui, en vigueur', add: 0, poids: 0 },
+              { id: 'a_renouveler', label: 'À renouveler', add: 0, poids: 1 },
+              { id: 'non', label: 'Aucune', add: 0, poids: 2 },
+            ],
+          },
+          {
+            id: 'certificat_localisation', type: 'choice', optional: true, label: 'Certificat de localisation',
+            aide: 'Un certificat périmé ou absent retarde souvent le dossier.',
+            options: [
+              { id: 'a_jour', label: 'À jour', add: 0, poids: 0 },
+              { id: 'inconnu', label: 'Je ne sais pas', add: 0, poids: 1 },
+              { id: 'perime', label: 'Périmé / absent', add: 100, poids: 1 },
+            ],
+          },
         ],
       },
       documents: [
@@ -175,6 +255,78 @@
     let price = Number(svc.pricing.base) || svc.prixDepart || 0;
     for (const c of svc.pricing.criteria || []) price += criterionAdd(c, answers[c.id]);
     return Math.max(0, Math.round(price));
+  }
+
+  // --- Case complexity (the "easy vs hard" signal a notary needs) -------------
+  // Each criterion/option can carry a `poids` (complexity weight, 0=easy..2=hard).
+  // complexity() sums the weights of the answered criteria into a level so a
+  // notary sees at a glance whether the posted price is for a simple or a hard
+  // file, and WHICH factors make it hard.
+  function criterionPoids(criterion, answer) {
+    if (!criterion) return 0;
+    if (criterion.type === 'flag') return answer ? Number(criterion.poids) || 0 : 0;
+    if (criterion.type === 'choice') {
+      const opt = (criterion.options || []).find((o) => o.id === answer);
+      return opt ? Number(opt.poids) || 0 : 0;
+    }
+    if (criterion.type === 'bracket') {
+      const v = Number(answer);
+      if (!Number.isFinite(v)) return 0;
+      for (const b of criterion.brackets || []) {
+        if (b.max == null || v <= b.max) return Number(b.poids) || 0;
+      }
+      return 0;
+    }
+    return 0;
+  }
+
+  // The label for what a criterion's answer contributes (for the notary's factor
+  // list): "Approbation bancaire : Pas encore", "Co-emprunteur", etc.
+  function criterionFactorLabel(criterion, answer) {
+    if (criterion.type === 'choice') {
+      const opt = (criterion.options || []).find((o) => o.id === answer);
+      return opt ? criterion.label + ' : ' + opt.label : criterion.label;
+    }
+    return criterion.label;
+  }
+
+  function complexity(serviceId, answers) {
+    const svc = serviceById(serviceId);
+    if (!svc || !svc.pricing) return { level: 'standard', score: 0, factors: [] };
+    answers = answers || {};
+    let score = 0;
+    const factors = [];
+    for (const c of svc.pricing.criteria || []) {
+      const p = criterionPoids(c, answers[c.id]);
+      if (p > 0) {
+        score += p;
+        factors.push(criterionFactorLabel(c, answers[c.id]));
+      }
+    }
+    const level = score >= 3 ? 'complexe' : score >= 1 ? 'standard' : 'simple';
+    return { level, score, factors };
+  }
+
+  // --- Mandatory parameters ---------------------------------------------------
+  // Some criteria are `required: true` — without them the posted price is
+  // meaningless to a notary (e.g. refinancement succession + bank approval), so a
+  // bid cannot be submitted until they are answered. Returns the unanswered ones.
+  function missingRequired(serviceId, answers) {
+    const svc = serviceById(serviceId);
+    if (!svc || !svc.pricing) return [];
+    answers = answers || {};
+    const missing = [];
+    for (const c of svc.pricing.criteria || []) {
+      if (!c.required) continue;
+      const a = answers[c.id];
+      let ok;
+      if (c.type === 'choice') ok = (c.options || []).some((o) => o.id === a);
+      else if (c.type === 'bracket') ok = Number.isFinite(Number(a));
+      else if (c.type === 'flag') ok = a === true;
+      else ok = true;
+      if (!ok) missing.push({ id: c.id, label: c.label });
+    }
+    return missing;
   }
 
   // --- Timing tiers ----------------------------------------------------------
@@ -294,6 +446,15 @@
       premium = montant / base;
     }
 
+    // Mandatory pricing parameters must be answered before a bid is valid —
+    // without them the posted price is meaningless to a notary (inert until a
+    // service marks a criterion `required`).
+    if (svc) {
+      for (const m of missingRequired(svc.id, input.pricing)) {
+        errors.push({ code: 'parametre_requis', param: m.id, message: `Réponse requise : ${m.label}.` });
+      }
+    }
+
     // Courriel is OPTIONAL (used only for private notifications, never shown on
     // the public carnet). An empty/absent value is fine; a non-empty value must
     // look like an email.
@@ -361,7 +522,11 @@
       const tier = tierForDays(dayOffset);
       const t = tierById(tier);
       const mult = t.apercuMin + rng() * (t.apercuMax - t.apercuMin);
-      const montant = clampMontant(svc, Math.round((svc.prixDepart * mult) / 5) * 5);
+      // Fixtures carry realistic mandatory params so they are VALID offers under
+      // the new pricing model, and their montant sits at/above the dynamic base.
+      const pricing = fixturePricing(svc, rng);
+      const base = computeBasePrice(svc.id, pricing);
+      const montant = Math.min(base * PREMIUM_CAP, Math.max(base, Math.round((base * mult) / 5) * 5));
       const anonyme = rng() > 0.35;
       const retenue = rng() > 0.8;
       bids.push({
@@ -370,7 +535,8 @@
         dateISO,
         montant,
         tier,
-        premium: montant / svc.prixDepart,
+        premium: montant / base,
+        pricing,
         anonyme,
         nom: anonyme ? null : FIXTURE_NAMES[Math.floor(rng() * FIXTURE_NAMES.length)],
         prefixe: FIXTURE_PREFIXES[Math.floor(rng() * FIXTURE_PREFIXES.length)],
@@ -385,6 +551,21 @@
     const min = svc.prixDepart;
     const max = svc.prixDepart * PREMIUM_CAP;
     return Math.min(max, Math.max(min, montant));
+  }
+
+  // Plausible mandatory-param answers for a demo fixture, so it validates and
+  // shows a realistic mix of simple/standard/complexe cases on the carnet.
+  function fixturePricing(svc, rng) {
+    if (svc.id === 'testament') return { who_for: rng() > 0.6 ? 'couple' : 'solo', fiducie_needed: rng() > 0.82 ? 'oui' : 'non' };
+    if (svc.id === 'procuration') return { scope: rng() > 0.5 ? 'generale' : 'specifique', realEstate: rng() > 0.72 ? 'oui' : 'non' };
+    if (svc.id === 'refinancement') {
+      return {
+        valeur_pret: 150000 + Math.floor(rng() * 700000),
+        succession: rng() > 0.85 ? 'oui' : 'non',
+        approbation_bancaire: ['obtenue', 'en_cours', 'non'][Math.floor(rng() * 3)],
+      };
+    }
+    return {};
   }
 
   function addDays(iso, n) {
@@ -502,6 +683,8 @@
     SERVICES,
     serviceById,
     computeBasePrice,
+    complexity,
+    missingRequired,
     TIERS,
     tierById,
     tierForDays,

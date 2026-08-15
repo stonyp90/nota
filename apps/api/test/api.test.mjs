@@ -15,7 +15,15 @@ function app(seed = []) {
   return { ...createApp(repo, { now: () => TODAY, newId: () => 'id-' + ++n }), repo };
 }
 
-const post = (a, obj) => a.handle({ method: 'POST', path: '/bids', body: JSON.stringify(obj) });
+// Default mandatory pricing params per service, so a POST validates unless a
+// test overrides `pricing` explicitly.
+const DEFAULT_PRICING = {
+  testament: { who_for: 'solo', fiducie_needed: 'non' },
+  procuration: { scope: 'specifique', realEstate: 'non' },
+  refinancement: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue' },
+};
+const post = (a, obj) =>
+  a.handle({ method: 'POST', path: '/bids', body: JSON.stringify({ pricing: DEFAULT_PRICING[obj.serviceId], ...obj }) });
 const getBids = (a, month) => a.handle({ method: 'GET', path: '/bids', query: month ? { month } : {} });
 const parse = (res) => JSON.parse(res.body);
 
