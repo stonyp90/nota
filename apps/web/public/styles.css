@@ -574,8 +574,9 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .dossier-pricing { grid-column: 1 / -1; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
 .dossier-pricing .o-criteria { margin-top: 10px; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px 20px; align-items: start; }
 /* Booking dialog step-2 criteria go two-up (id beats the generic .o-criteria flex); the optional expander stays full width. */
-#o-criteria { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px 16px; }
-#o-criteria > .crit-more { grid-column: 1 / -1; }
+#o-criteria { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px 22px; }
+#o-criteria > .crit-more { grid-column: 1 / -1; margin: 4px 0 0; }
+#o-criteria > .crit-more .o-criteria { padding: 10px 14px 14px; gap: 14px; }
 .dossier-price { margin-top: 12px; font-weight: 600; color: var(--brand); font-size: 14px; }
 /* Profile: a top row of at-a-glance / set-once cards (offers · coordinates ·
    notifications) that auto-fit across the width, then a full-width documents
@@ -692,7 +693,7 @@ input.file-native { position: absolute; width: 1px; height: 1px; opacity: 0; mar
   outline: none; border-radius: var(--radius-sm);
   box-shadow: 0 0 0 3px var(--focus-ring);
 }
-.disclosure-body { padding: 0 12px 12px; }
+.disclosure-body { padding: 0 14px 14px; }
 .disclosure-body p { font-size: 12px; color: var(--ink-muted); margin-top: 0; }
 .disclosure-body p + p { margin-top: 8px; }
 
@@ -725,7 +726,7 @@ dialog::backdrop { background: var(--backdrop); }
 /* --- Day detail dialog (enlarged day over a dimmed backdrop) -------------- */
 #day-dialog { max-width: 620px; width: 94vw; max-height: 90vh; overflow-y: auto; overscroll-behavior: contain; }
 #day-dialog::backdrop { background: var(--backdrop); backdrop-filter: blur(2px); }
-.day-head { display: flex; align-items: flex-start; gap: 12px; padding: 20px 22px 14px; }
+.day-head { display: flex; align-items: flex-start; gap: 12px; padding: 22px 24px 16px; }
 .day-head .header-spacer { flex: 1; }
 .day-title { font-size: 20px; font-weight: 800; text-transform: capitalize; letter-spacing: -0.02em; }
 .day-sub { font-size: 13px; color: var(--ink-muted); margin-top: 2px; }
@@ -733,7 +734,7 @@ dialog::backdrop { background: var(--backdrop); }
 .day-close:hover { background: var(--surface-hover); }
 
 /* --- Day booking surface (value → offers → book, all in one dialog) ------ */
-.day-value { padding: 0 22px 14px; }
+.day-value { padding: 0 24px 16px; }
 .day-value-k { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-muted); }
 .day-value-v { font-size: 30px; font-weight: 800; letter-spacing: -0.02em; color: var(--ink); }
 .day-value-note { font-size: 12px; color: var(--ink-muted); margin: 2px 0 0; }
@@ -744,11 +745,11 @@ dialog::backdrop { background: var(--backdrop); }
 /* Scale guard: a day-group caps its rows and links to the full day view. */
 .agenda-more { display: block; width: 100%; text-align: left; appearance: none; background: transparent; border: 0; border-top: 1px solid var(--border); padding: 8px 14px; font: inherit; font-size: 12px; font-weight: 600; color: var(--brand); cursor: pointer; }
 .agenda-more:hover { background: var(--surface-hover); }
-.day-book { padding: 16px 22px 22px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 16px; }
-.book-step { display: flex; flex-direction: column; gap: 8px; }
+.day-book { padding: 20px 24px 24px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 20px; }
+.book-step { display: flex; flex-direction: column; gap: 10px; }
 /* Pricing criteria woven into the booking flow (dossier merged with the process). */
-.o-criteria { display: flex; flex-direction: column; gap: 10px; }
-.crit-row { display: flex; flex-direction: column; gap: 5px; }
+.o-criteria { display: flex; flex-direction: column; gap: 14px; }
+.crit-row { display: flex; flex-direction: column; gap: 6px; }
 .crit-flag { display: flex; align-items: flex-start; gap: 9px; cursor: pointer; }
 .crit-flag input { margin-top: 3px; flex: none; accent-color: var(--brand); }
 .crit-text { display: flex; flex-direction: column; gap: 1px; }
