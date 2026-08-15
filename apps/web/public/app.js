@@ -1238,13 +1238,27 @@
   // ---------------------------------------------------------------------------
   // Profile (coordinates + notification settings)
   // ---------------------------------------------------------------------------
+  // Distinct icon per profile section, so the bands are easy to tell apart.
+  var IC_OFFERS = '<path d="M20.59 13.41 13.42 20.6a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><circle cx="7" cy="7" r="1"/>';
+  var IC_COORD = '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>';
+  var IC_NOTIF = '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>';
+  var IC_DOCS = '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>';
+  function profilHead(iconPaths, title) {
+    var head = el('div', 'profil-card-head');
+    var ic = el('span', 'profil-card-ic');
+    ic.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + iconPaths + '</svg>';
+    head.appendChild(ic);
+    head.appendChild(el('h2', 'profil-card-title', title));
+    return head;
+  }
+
   // A card listing the client's posted offers with their live status — their
   // consolidated "where do my requests stand?" view. When they have none, a
   // friendly first-time prompt with a CTA to the carnet.
   function buildMyOffersCard() {
     var offers = myOffers();
     var card = el('div', 'profil-card');
-    card.appendChild(el('h2', 'profil-card-title', 'Mes offres'));
+    card.appendChild(profilHead(IC_OFFERS, 'Mes offres'));
     if (!offers.length) {
       var empty = el('div', 'profil-empty');
       empty.appendChild(el('p', 'profil-empty-text', 'Vous n’avez pas encore publié d’offre. Choisissez une date au carnet et un notaire de Québec la retient.'));
@@ -1283,7 +1297,7 @@
     // Coordinates card — reused when publishing an offer. A full-width band;
     // the fields sit in a grid that fills the width (no empty right half).
     var idCard = el('div', 'profil-card');
-    idCard.appendChild(el('h2', 'profil-card-title', 'Coordonnées'));
+    idCard.appendChild(profilHead(IC_COORD, 'Coordonnées'));
     idCard.appendChild(el('p', 'help', 'Réutilisées automatiquement quand vous publiez une offre.'));
     var idFields = el('div', 'profil-fields');
     [
@@ -1308,7 +1322,7 @@
     // Notifications card — on by default, per-kind toggles gate addNotif().
     // The toggles sit in a grid so they fill the width instead of stacking thin.
     var nCard = el('div', 'profil-card');
-    nCard.appendChild(el('h2', 'profil-card-title', 'Notifications'));
+    nCard.appendChild(profilHead(IC_NOTIF, 'Notifications'));
     nCard.appendChild(el('p', 'help', 'Par courriel et dans l’application. Activées par défaut.'));
     var nGrid = el('div', 'profil-switches');
     [
@@ -1338,7 +1352,7 @@
     // Documents card — the full document list per service, with upload / remove /
     // mark-validated. "One profile" = coordinates + notifications + documents.
     var dCard = el('div', 'profil-card profil-docs');
-    dCard.appendChild(el('h2', 'profil-card-title', 'Mes documents'));
+    dCard.appendChild(profilHead(IC_DOCS, 'Mes documents'));
     dCard.appendChild(el('p', 'help', 'Téléversez ce que le notaire demandera. Ajoutez, retirez ou marquez « validé ». Tout reste sur votre appareil jusqu’à ce qu’un notaire retienne votre demande.'));
     // Service picker as outline chips (not a native dropdown) — matches the
     // calendar, one click to switch, on-aesthetic.

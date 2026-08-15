@@ -578,6 +578,10 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 @media (max-width: 700px) { .profil-switches { grid-template-columns: 1fr; } }
 .profil-card { padding: 13px 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); display: flex; flex-direction: column; gap: 7px; }
 .profil-card-title { font-size: 15px; font-weight: 700; color: var(--ink); }
+/* Iconed section header so the bands are easy to tell apart at a glance. */
+.profil-card-head { display: flex; align-items: center; gap: 10px; }
+.profil-card-ic { display: grid; place-items: center; width: 30px; height: 30px; flex: none; border-radius: var(--radius-sm); background: var(--surface-inset); color: var(--brand); }
+.profil-card-ic svg { display: block; }
 /* The card is a flex column with its own gap — zero the children's stacking
    margins so field/switch spacing isn't doubled (the source of the void). */
 .profil-card .form-row { margin-bottom: 2px; }
