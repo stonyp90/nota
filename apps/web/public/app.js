@@ -371,7 +371,9 @@
         var open = dayBids.filter(function (b) { return b.status !== D.STATUS.RETENUE; });
         if (open.length) {
           var topOffer = open.reduce(function (a, b) { return b.montant > a.montant ? b : a; }, open[0]);
-          cell.appendChild(el('span', 'cal-top', D.money(topOffer.montant)));
+          var topEl = el('span', 'cal-top', D.money(topOffer.montant));
+          topEl.dataset.compact = compactMoney(topOffer.montant);
+          cell.appendChild(topEl);
           // Colour the cell by the headline offer's urgency tier (matches the
           // legend + agenda) — warm = urgent, cool = calm.
           if (topOffer.tier) cell.dataset.tier = topOffer.tier;
@@ -389,7 +391,9 @@
           // Everything taken: show what cleared, struck through — more useful to
           // the next bidder than an em-dash.
           var cleared = Math.max.apply(null, dayBids.map(function (b) { return b.montant; }));
-          cell.appendChild(el('span', 'cal-top is-cleared', D.money(cleared)));
+          var clrEl = el('span', 'cal-top is-cleared', D.money(cleared));
+          clrEl.dataset.compact = compactMoney(cleared);
+          cell.appendChild(clrEl);
           cell.setAttribute('aria-label', dayTitle(iso) + ', ' + n + ' offre' + plural + ' retenue' + plural + ', ' + D.money(cleared) + ' obtenu');
         }
 
@@ -450,6 +454,15 @@
   // The aria-label always uses the real integer, so screen readers hear the exact count.
   function compactCount(n) {
     return n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1).replace('.0', '') + 'k' : String(n);
+  }
+  // Compact a dollar amount for the tightest calendar cells (phones): 3285 -> "3,3k",
+  // 715 -> "715". Swapped in only by the narrow container query; the full amount and
+  // the day dialog keep the exact "1 320 $".
+  function compactMoney(n) {
+    n = Math.round(Number(n) || 0);
+    if (n < 1000) return String(n);
+    var k = n / 1000;
+    return (k >= 10 ? String(Math.round(k)) : (Math.round(k * 10) / 10 + '').replace('.', ',')) + 'k';
   }
 
   function renderLegend() {
