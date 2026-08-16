@@ -98,7 +98,7 @@
   var state = {
     anchor: firstOfMonth(todayISO()),
     monthBids: [],
-    filters: { service: '', statut: '', min: null, max: null, sort: 'montant-desc', prefixe: '' },
+    filters: { service: '', statut: '', min: null, max: null, sort: 'montant-desc' },
     selectedDate: null,
     focusDate: todayISO(),
     tab: 'carnet',
@@ -106,9 +106,8 @@
     offer: { serviceId: '', dateISO: '', montant: 0, anonyme: true, pricing: {} },
   };
 
-  // Carnet view ids (segmented switcher) + the sentinel key for offers with no
-  // postal sector, used by the Carte grouping and the prefixe filter.
-  var VIEWS = ['calendrier', 'liste', 'carte'];
+  // Carnet view ids (segmented switcher).
+  var VIEWS = ['calendrier', 'liste'];
 
   // ---------------------------------------------------------------------------
   // Date helpers
@@ -298,7 +297,6 @@
       if (f.statut && b.status !== f.statut) return false;
       if (f.min != null && b.montant < f.min) return false;
       if (f.max != null && b.montant > f.max) return false;
-      if (f.prefixe && cityOf(b.prefixe) !== f.prefixe) return false;
       return true;
     });
     var s = f.sort;
@@ -679,7 +677,6 @@
     // rewrite it — only highlight the row that is active.
     renderPulse();
     if (state.view === 'liste') renderAgenda();
-    else if (state.view === 'carte') renderCarte();
     else renderCalendar();
   }
 
@@ -696,209 +693,6 @@
     });
     writeHash();
     renderActiveView();
-  }
-
-  // Carte — offers grouped by postal sector (FSA / 3-char b.prefixe) as a density
-  // heatmap grid. No coordinates exist, so density IS the map. A card drills in.
-  // Approximate schematic positions (viewBox x:0..100, y:0..64) for the
-  // Québec-region FSAs — a recognisable spatial layout by sector, NOT accurate.
-  // Postal sector (FSA) → Québec-region city / borough, so the map reads by city
-  // rather than by raw postal code. Unknown / missing → "Autres".
-  var CITY_OF = {
-    G1A: 'Vieux-Québec', G1R: 'Vieux-Québec',
-    G1G: 'Limoilou', G1H: 'Limoilou', G1J: 'Limoilou', G1K: 'Limoilou', G1L: 'Limoilou',
-    G1M: 'Vanier', G1N: 'Vanier', G1P: 'Les Rivières',
-    G1S: 'Sainte-Foy', G1T: 'Sainte-Foy', G1V: 'Sainte-Foy', G1W: 'Sainte-Foy', G1Y: 'Sillery', G1X: 'Cap-Rouge',
-    G1B: 'Beauport', G1C: 'Beauport', G1E: 'Beauport', G3J: 'Beauport', G3K: 'Beauport',
-    G2A: 'Charlesbourg', G2B: 'Charlesbourg', G2C: 'Charlesbourg', G2K: 'Charlesbourg', G2L: 'Charlesbourg', G2M: 'Charlesbourg', G2N: 'Charlesbourg',
-    G2J: 'Loretteville', G2G: 'Val-Bélair', G2E: "L'Ancienne-Lorette",
-    G3A: 'Boischatel', G3B: 'Côte-de-Beaupré', G3C: 'Côte-de-Beaupré',
-    G3E: 'Lac-Beauport', G3S: 'Lac-Beauport', G3G: 'Stoneham',
-  };
-  // Rest of the province by FSA area (first 2 chars) → city / region, so the map
-  // supports offers anywhere in Québec, not just Québec City.
-  var REGION_OF = {
-    H0: 'Montréal', H1: 'Montréal', H2: 'Montréal', H3: 'Montréal', H4: 'Montréal', H5: 'Montréal', H8: 'Montréal', H9: 'Montréal',
-    H7: 'Laval', J4: 'Longueuil', J3: 'Saint-Hyacinthe', J5: 'Repentigny', J6: 'Châteauguay', J2: 'Montérégie',
-    J7: 'Saint-Jérôme', J8: 'Gatineau', J9: 'Gatineau', J1: 'Sherbrooke', J0: 'Québec (province)',
-    G6: 'Lévis', G7: 'Saguenay', G8: 'Trois-Rivières', G9: 'Trois-Rivières', G5: 'Rimouski', G4: 'Charlevoix', G0: 'Est-du-Québec',
-    G1: 'Québec', G2: 'Québec', G3: 'Québec',
-  };
-  // Real Québec landmass — the province boundary from public GeoJSON (Natural
-  // Earth via click_that_hood), simplified (Douglas–Peucker) to ~100 [lat,lng]
-  // points so it embeds with zero runtime deps and projects like the bubbles.
-  var QC_OUTLINE = [[51.413,-57.104],[51.276,-58.628],[50.204,-60.134],[50.269,-66.442],[48.138,-69.684],[48.44,-71.071],[48.109,-69.73],[46.742,-71.299],[48.364,-68.823],[49.121,-66.639],[49.214,-64.942],[48.756,-64.158],[48.88,-64.558],[48.521,-64.189],[48.013,-65.27],[47.925,-68.373],[46.691,-69.985],[45.392,-70.635],[45.013,-71.506],[44.993,-74.736],[45.564,-74.397],[45.456,-76.338],[46.337,-78.704],[47.442,-79.576],[51.553,-79.551],[51.164,-78.845],[51.776,-79.033],[52.238,-78.406],[53.024,-78.983],[54.183,-79.049],[54.658,-79.761],[55.288,-77.76],[56.406,-76.519],[57.669,-76.806],[58.614,-78.569],[59.71,-77.774],[59.565,-77.314],[59.915,-77.427],[60.159,-76.759],[60.065,-77.631],[60.836,-77.512],[60.789,-78.191],[61.542,-77.475],[62.278,-78.156],[62.59,-77.418],[62.105,-74.556],[62.48,-73.679],[61.676,-71.99],[61.567,-72.303],[61.606,-71.572],[61.431,-71.888],[61.155,-71.578],[61.069,-69.514],[60.068,-69.625],[60.062,-71.031],[59.868,-69.563],[59.32,-69.758],[59.239,-69.235],[58.77,-70.25],[58.774,-68.356],[58.127,-68.344],[57.765,-69.369],[58.576,-68.003],[58.074,-68.128],[58.462,-67.732],[57.923,-67.71],[58.82,-66.465],[58.32,-66.066],[59.011,-65.881],[59.041,-65.317],[59.148,-65.715],[59.49,-65.542],[59.376,-64.983],[59.736,-65.544],[60.303,-64.535],[59.531,-64.827],[59.496,-64.34],[59.017,-64.291],[58.927,-64.879],[58.749,-63.481],[58.086,-64.432],[57.734,-63.596],[56.304,-64.137],[55.35,-63.096],[54.612,-63.669],[54.713,-65.69],[55.339,-66.779],[54.742,-66.699],[55.071,-67.428],[54.622,-67.036],[54.064,-67.782],[53.34,-66.91],[52.699,-67.067],[52.974,-66.346],[52.201,-66.439],[52.171,-65.109],[51.558,-64.581],[53.114,-63.693],[52.651,-63.378],[52.471,-64.082],[52,-63.751],[52,-57.101],[51.413,-57.104]];
-  // St. Lawrence centerline (Montréal → gulf), drawn as the river through the land.
-  var QC_STLAWRENCE = [[45.42,-73.95],[45.5,-73.55],[45.72,-73.18],[46.03,-73.11],[46.2,-72.8],[46.343,-72.54],[46.5,-72.1],[46.66,-71.75],[46.8,-71.2],[46.95,-70.7],[47.3,-70.05],[47.75,-69.3],[48.2,-68.55],[48.6,-68],[49,-67.2],[49.3,-66.2]];
-
-  // Real [lat, lng] per place, projected onto the map so bubbles sit at their
-  // true relative positions over Québec (river, Île d'Orléans, the province…).
-  var CITY_GEO = {
-    'Vieux-Québec': [46.812, -71.207], 'Limoilou': [46.83, -71.235], 'Vanier': [46.82, -71.283],
-    'Les Rivières': [46.835, -71.30], 'Sainte-Foy': [46.783, -71.29], 'Sillery': [46.77, -71.255],
-    'Cap-Rouge': [46.752, -71.35], 'Beauport': [46.88, -71.18], 'Charlesbourg': [46.87, -71.27],
-    'Loretteville': [46.85, -71.36], 'Val-Bélair': [46.85, -71.47], "L'Ancienne-Lorette": [46.80, -71.35],
-    'Boischatel': [46.90, -71.15], 'Côte-de-Beaupré': [46.95, -71.02], 'Lac-Beauport': [46.94, -71.28],
-    'Stoneham': [47.0, -71.37],
-    // Province-wide centres
-    'Québec': [46.813, -71.208], 'Lévis': [46.79, -71.18], 'Montréal': [45.508, -73.561], 'Laval': [45.57, -73.72],
-    'Longueuil': [45.53, -73.51], 'Saint-Hyacinthe': [45.63, -72.95], 'Repentigny': [45.74, -73.45],
-    'Châteauguay': [45.36, -73.75], 'Montérégie': [45.45, -73.28], 'Saint-Jérôme': [45.78, -74.0],
-    'Gatineau': [45.48, -75.66], 'Sherbrooke': [45.40, -71.89], 'Trois-Rivières': [46.343, -72.542],
-    'Saguenay': [48.43, -71.07], 'Rimouski': [48.45, -68.52], 'Charlevoix': [47.44, -70.5],
-    'Est-du-Québec': [48.2, -68.8], 'Québec (province)': [46.8, -72.5],
-  };
-  function cityOf(prefix) {
-    if (!prefix) return 'Autres';
-    if (CITY_OF[prefix]) return CITY_OF[prefix];         // Québec-City boroughs (3-char)
-    var region = REGION_OF[prefix.slice(0, 2)];          // rest of the province (2-char area)
-    return region || 'Autres';
-  }
-  function svgEl(name, attrs) {
-    var e = document.createElementNS('http://www.w3.org/2000/svg', name);
-    for (var k in attrs) e.setAttribute(k, attrs[k]);
-    return e;
-  }
-
-  // Carte — offers plotted on a schematic map of Québec's postal sectors (FSA).
-  // No coordinates exist in the data, so positions are approximate-by-sector;
-  // a bubble's size + tint encode how much demand sits there. Click to drill in.
-  function renderCarte() {
-    var map = $('cal-map'); clear(map);
-    var visible = applyFilters(state.monthBids);
-    if (!visible.length) {
-      var empty = el('div', 'agenda-empty');
-      empty.appendChild(el('p', 'agenda-empty-text', filtersActive() ? 'Aucune offre pour ce filtre.' : 'Aucune offre ce mois-ci.'));
-      var cta = el('button', 'btn btn-sm', filtersActive() ? 'Réinitialiser les filtres' : 'Réserver une date');
-      cta.type = 'button';
-      cta.addEventListener('click', filtersActive() ? resetFilters : function () { $('cta-reserver').click(); });
-      empty.appendChild(cta); map.appendChild(empty); return;
-    }
-    // Group by CITY (mapped from the postal sector), not by raw FSA.
-    var groups = {}, order = [];
-    visible.forEach(function (b) { var k = cityOf(b.prefixe); if (!groups[k]) { groups[k] = []; order.push(k); } groups[k].push(b); });
-    var max = order.reduce(function (m, k) { return Math.max(m, groups[k].length); }, 1);
-
-    // Fit the projection to the cities actually present (+ padding) so they
-    // spread across the map instead of clustering in one corner.
-    var gs = order.map(function (c) { return CITY_GEO[c]; }).filter(Boolean);
-    var B;
-    if (gs.length) {
-      var lats = gs.map(function (g) { return g[0]; }), lngs = gs.map(function (g) { return g[1]; });
-      var loLat = Math.min.apply(null, lats), hiLat = Math.max.apply(null, lats);
-      var loLng = Math.min.apply(null, lngs), hiLng = Math.max.apply(null, lngs);
-      // Min span keeps a recognizable slice of the province on screen even when
-      // every bid sits in one city; the max side grows to fit a north+south spread
-      // so both are always visible ("the map scales to the data").
-      var latSpan = Math.max(hiLat - loLat, 1.5), lngSpan = Math.max(hiLng - loLng, 2.4);
-      var cLat = (loLat + hiLat) / 2, cLng = (loLng + hiLng) / 2, padLat = latSpan * 0.32, padLng = lngSpan * 0.28;
-      B = { lat0: cLat + latSpan / 2 + padLat, lat1: cLat - latSpan / 2 - padLat, lng0: cLng - lngSpan / 2 - padLng, lng1: cLng + lngSpan / 2 + padLng };
-    } else {
-      B = { lat0: 47.0, lat1: 46.72, lng0: -71.5, lng1: -70.95 };
-    }
-    function pj(g) { return { x: ((g[1] - B.lng0) / (B.lng1 - B.lng0)) * 100, y: 4 + ((B.lat0 - g[0]) / (B.lat0 - B.lat1)) * 54 }; }
-
-    var svg = svgEl('svg', { 'class': 'fsa-svg', viewBox: '0 0 100 64', role: 'group', 'aria-label': 'Carte du Québec — touchez une ville pour voir ses offres' });
-    // Real geographic base, all projected through pj() so it zooms with the data:
-    // a water canvas, the actual Québec landmass on top, then the St. Lawrence
-    // drawn back through the land. Off-view geometry is clipped by the viewBox.
-    svg.appendChild(svgEl('rect', { 'class': 'fsa-water', 'aria-hidden': 'true', x: 0, y: 0, width: 100, height: 64 }));
-    function projectPath(coords) { return 'M ' + coords.map(function (g) { var p = pj(g); return p.x.toFixed(1) + ' ' + p.y.toFixed(1); }).join(' L '); }
-    svg.appendChild(svgEl('path', { 'class': 'fsa-land', 'aria-hidden': 'true', d: projectPath(QC_OUTLINE) + ' Z' }));
-    svg.appendChild(svgEl('path', { 'class': 'fsa-river', 'aria-hidden': 'true', fill: 'none', d: projectPath(QC_STLAWRENCE) }));
-
-    // Plot one bubble per city. Radius (sqrt of its share of demand) + tint encode
-    // volume. At province scale many cities collapse onto nearly the same point,
-    // so this pass is collision-aware: place the BUSIEST cities first, push any
-    // overlapping bubble clear of those already placed, and drop a city NAME label
-    // only when it would overprint one already drawn — the bubble, its count and
-    // the hover tooltip still identify every city, so no information is lost.
-    var unknown = 0, placedNodes = [], placedLabels = [];
-    // All texts live in ONE top, non-interactive layer appended AFTER every bubble,
-    // so a later (smaller) bubble can never cover an earlier (bigger) city's name
-    // or count — the busiest cities' labels always stay readable.
-    var labelLayer = svgEl('g', { 'class': 'fsa-labels', 'aria-hidden': 'true' });
-    var ranked = order.map(function (city) { return { city: city, list: groups[city], n: groups[city].length }; })
-      .sort(function (a, b) { return b.n - a.n; });
-    function overprints(boxes, b) {
-      for (var i = 0; i < boxes.length; i++) {
-        var o = boxes[i];
-        if (Math.abs(o.x - b.x) < (o.w + b.w) / 2 && Math.abs(o.y - b.y) < (o.h + b.h) / 2) return true;
-      }
-      return false;
-    }
-    ranked.forEach(function (row, idx) {
-      var city = row.city, list = row.list, n = row.n;
-      var opens = list.filter(function (b) { return b.status !== D.STATUS.RETENUE; });
-      var openN = opens.length;
-      var best = openN ? opens.reduce(function (a, b) { return b.montant > a.montant ? b : a; }, opens[0]).montant : null;
-      var geo = CITY_GEO[city];
-      var pos = geo ? pj(geo) : { x: 7, y: 11 + (unknown * 9) };
-      if (!geo) unknown++;
-      var frac = n / max;
-      var r = 1.7 + Math.sqrt(frac) * 2.1; // sqrt: area tracks volume, mid cities stay compact
-      // Separate overlapping bubbles — relax this one out of every placed bubble
-      // (enough passes to fully unstack a tight pile of co-located cities).
-      for (var it = 0; it < 40; it++) {
-        var moved = false;
-        for (var pi = 0; pi < placedNodes.length; pi++) {
-          var p = placedNodes[pi], dx = pos.x - p.x, dy = pos.y - p.y, d = Math.sqrt(dx * dx + dy * dy), min = r + p.r + 2.9;
-          if (d < min) {
-            if (d < 0.01) { dx = Math.cos(idx * 2.399); dy = Math.sin(idx * 2.399); d = 1; } // golden-angle scatter for exact ties
-            var push = (min - d) + 0.1; pos.x += (dx / d) * push; pos.y += (dy / d) * push; moved = true;
-          }
-        }
-        pos.x = Math.max(r + 1, Math.min(99 - r, pos.x));
-        pos.y = Math.max(r + 5, Math.min(60 - r, pos.y));
-        if (!moved) break;
-      }
-      placedNodes.push({ x: pos.x, y: pos.y, r: r });
-      var cx = pos.x.toFixed(1), cy = pos.y.toFixed(1);
-
-      var g = svgEl('g', { 'class': 'fsa-node' + (city === 'Autres' ? ' is-unset' : ''), tabindex: '0', role: 'button' });
-      g.dataset.fsa = city;
-      g.setAttribute('aria-label', city + ', ' + n + ' offre' + (n > 1 ? 's' : '') + (openN ? ', ' + openN + ' ouverte' + (openN > 1 ? 's' : '') : '') + '. Voir la liste.');
-      var tt = svgEl('title', {});
-      tt.textContent = city + ' — ' + n + ' offre' + (n > 1 ? 's' : '') + (best ? ', meilleure ' + D.money(best) : '');
-      g.appendChild(tt);
-      g.appendChild(svgEl('circle', { 'class': 'fsa-hit', cx: cx, cy: cy, r: Math.max(r, 6).toFixed(1), fill: 'transparent' }));
-      g.appendChild(svgEl('circle', { cx: cx, cy: cy, r: r.toFixed(1), 'fill-opacity': (0.6 + frac * 0.35).toFixed(2) }));
-      // City name — try above the bubble, then below; skip if it would overprint
-      // another label OR sit on a neighbouring bubble (busiest cities, placed
-      // first, keep their names; the rest stay identifiable by count + tooltip).
-      var otherBubbles = placedNodes.slice(0, -1).map(function (p) { return { x: p.x, y: p.y, w: p.r * 1.7, h: p.r * 1.7 }; });
-      var obstacles = placedLabels.concat(otherBubbles);
-      var lw = Math.max(city.length * 1.15, 4), lh = 3.4;
-      var above = { x: pos.x, y: pos.y - r - 2.0, w: lw, h: lh };
-      var below = { x: pos.x, y: pos.y + r + 2.8, w: lw, h: lh };
-      var box = (above.y > 3.4 && !overprints(obstacles, above)) ? above
-        : (below.y < 61 && !overprints(obstacles, below)) ? below : null;
-      g.addEventListener('click', function () { selectFSA(this.dataset.fsa); });
-      g.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectFSA(this.dataset.fsa); } });
-      svg.appendChild(g);
-      // Name + count are drawn in the top text layer (below), never on the node,
-      // so no later bubble can occlude them.
-      if (box) {
-        placedLabels.push(box);
-        var code = svgEl('text', { x: cx, y: box.y.toFixed(1), 'text-anchor': 'middle', 'class': 'fsa-node-code' });
-        code.textContent = city;
-        labelLayer.appendChild(code);
-      }
-      var cnt = svgEl('text', { x: cx, y: (pos.y + 0.9).toFixed(1), 'text-anchor': 'middle', 'class': 'fsa-node-n' });
-      cnt.textContent = n;
-      labelLayer.appendChild(cnt);
-    });
-    svg.appendChild(labelLayer);
-    map.appendChild(svg);
-    map.appendChild(el('p', 'fsa-note', 'Carte du Québec — chaque bulle est une ville, sa taille indique le volume d’offres. Touchez une ville pour voir ses offres.'));
-  }
-
-  // Drill into a sector: filter to its FSA and show the list view.
-  function selectFSA(prefix) {
-    state.filters.prefixe = prefix;
-    state.selectedDate = null;
-    setView('liste');
-    var fa = $('fsa-active'); (fa && !fa.hidden ? fa : $('tab-view-liste')).focus();
   }
 
   // ---------------------------------------------------------------------------
@@ -936,7 +730,6 @@
       if (f.statut && b.status !== f.statut) return false;
       if (f.min != null && b.montant < f.min) return false;
       if (f.max != null && b.montant > f.max) return false;
-      if (f.prefixe && cityOf(b.prefixe) !== f.prefixe) return false;
       return true;
     }).sort(function (a, b) { return b.montant - a.montant; });
 
@@ -1031,7 +824,6 @@
     if (h.has('min')) state.filters.min = num(h.get('min'));
     if (h.has('max')) state.filters.max = num(h.get('max'));
     if (h.has('tri')) state.filters.sort = h.get('tri');
-    if (h.has('fsa')) state.filters.prefixe = h.get('fsa');
     if (h.has('vue') && VIEWS.indexOf(h.get('vue')) >= 0) state.view = h.get('vue');
     if (h.has('jour') && D.isISODate(h.get('jour'))) { state.selectedDate = h.get('jour'); state.focusDate = h.get('jour'); state.anchor = firstOfMonth(h.get('jour')); }
   }
@@ -1043,7 +835,6 @@
     if (f.min != null) h.set('min', f.min);
     if (f.max != null) h.set('max', f.max);
     if (f.sort && f.sort !== 'montant-desc') h.set('tri', f.sort);
-    if (f.prefixe) h.set('fsa', f.prefixe);
     if (state.view && state.view !== 'calendrier') h.set('vue', state.view);
     if (state.selectedDate) h.set('jour', state.selectedDate);
     var s = h.toString();
@@ -1079,7 +870,6 @@
     if (f.statut) n++;
     if (f.min != null) n++;
     if (f.max != null) n++;
-    if (f.prefixe) n++;
     if (f.sort && f.sort !== 'montant-desc') n++;
     return n;
   }
@@ -1107,18 +897,9 @@
     if (fc) { fc.textContent = String(n); fc.hidden = n === 0; }
     var ft = $('filters-toggle');
     if (ft) ft.classList.toggle('has-active', n > 0);
-    var fa = $('fsa-active');
-    if (fa) {
-      if (state.filters.prefixe) {
-        var lab = fa.querySelector('.fsa-active-label');
-        if (lab) lab.textContent = state.filters.prefixe;
-        fa.setAttribute('aria-label', 'Retirer le filtre : ' + state.filters.prefixe);
-        fa.hidden = false;
-      } else { fa.hidden = true; }
-    }
   }
   function resetFilters() {
-    state.filters = { service: '', statut: '', min: null, max: null, sort: 'montant-desc', prefixe: '' };
+    state.filters = { service: '', statut: '', min: null, max: null, sort: 'montant-desc' };
     state.selectedDate = null;
     syncFilterChips(); writeHash();
     renderActiveView();
@@ -2156,6 +1937,19 @@
 
   function ncDropOpen(id) { nc.open = nc.open.filter(function (b) { return b.id !== id; }); }
 
+  // Live "money on the table" for the sign-in gate — real open demands + total value
+  // this month (state.monthBids already holds only live, card-authorized offers), so a
+  // prospective notary sees the payoff BEFORE committing to Stripe onboarding.
+  function renderNotaryOpportunity() {
+    var box = $('notary-opportunity'); if (!box) return;
+    var open = (state.monthBids || []).filter(function (b) { return b.status !== D.STATUS.RETENUE; });
+    if (!open.length) { box.hidden = true; return; }
+    var total = open.reduce(function (s, b) { return s + (Number(b.montant) || 0); }, 0);
+    $('notary-opp-count').textContent = String(open.length);
+    $('notary-opp-total').textContent = D.money(total);
+    box.hidden = false;
+  }
+
   function ncRenderAuthState() {
     var authed = !!nc.token;
     var form = $('notary-auth-form'); var view = $('notary-authed');
@@ -2398,6 +2192,7 @@
     });
     if (tab === 'dossier') renderDossier();
     if (tab === 'profil') renderProfil();
+    if (tab === 'notaires') renderNotaryOpportunity();
     if (opts.scroll !== false) window.scrollTo({ top: 0, behavior: 'auto' });
     // Move focus into the new pane's heading so keyboard/SR users are never dropped
     // to <body> when a menu/link navigates and its container is hidden. The
@@ -2428,6 +2223,7 @@
     } finally {
       if (panel) panel.classList.remove('is-loading');
     }
+    renderNotaryOpportunity(); // keep the gate's live "money on the table" fresh
   }
   function refreshMonth() { renderActiveView(); }
   async function reloadAndRender() { await refreshMonthData(); refreshMonth(); }
@@ -2500,9 +2296,6 @@
         setView(VIEWS[i]); var t = $('tab-view-' + VIEWS[i]); if (t) t.focus();
       });
     }
-    var fsaX = $('fsa-active');
-    if (fsaX) fsaX.addEventListener('click', function () { state.filters.prefixe = ''; writeHash(); renderActiveView(); });
-
     // Filters stay collapsed until the customer opens them from the toolbar.
     $('filters-toggle').addEventListener('click', function () {
       var panel = $('filters');

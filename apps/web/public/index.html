@@ -244,17 +244,9 @@
                   <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
                   Liste
                 </button>
-                <button type="button" class="seg-btn" id="tab-view-carte" role="tab" data-view="carte" aria-selected="false" aria-controls="view-carte" tabindex="-1">
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-                  Carte
-                </button>
               </div>
 
               <span class="header-spacer"></span>
-              <button type="button" class="fsa-active" id="fsa-active" hidden aria-label="Retirer le filtre de secteur">
-                <span class="fsa-active-label"></span>
-                <span class="fsa-active-x" aria-hidden="true">✕</span>
-              </button>
               <span class="cal-avail" id="cal-avail" aria-live="polite" hidden></span>
               <span class="result-count" id="result-count" aria-live="polite"></span>
               <button class="btn btn-sm" id="filters-toggle" aria-expanded="false" aria-controls="filters" title="Filtrer les offres">
@@ -299,10 +291,6 @@
 
             <div class="view-panel" id="view-liste" role="tabpanel" aria-labelledby="tab-view-liste" hidden>
               <div class="agenda" id="agenda"></div>
-            </div>
-
-            <div class="view-panel" id="view-carte" role="tabpanel" aria-labelledby="tab-view-carte" hidden>
-              <div class="fsa-map" id="cal-map"></div>
             </div>
           </div>
         </div>
@@ -406,6 +394,12 @@
               </div>
               </div>
               <aside class="nc-gate-aside" aria-label="Ce que vous obtenez">
+                <!-- Live proof of demand, so the payoff is visible before onboarding. -->
+                <div class="nc-opportunity" id="notary-opportunity" hidden>
+                  <div class="nc-opp-eyebrow">En jeu ce mois, à Québec</div>
+                  <div class="nc-opp-figure"><strong id="notary-opp-count">—</strong> demandes ouvertes</div>
+                  <div class="nc-opp-value"><strong id="notary-opp-total">—</strong> à retenir — sans frais d’inscription</div>
+                </div>
                 <div class="nc-gate-aside-title">Votre console, en clair</div>
                 <ul class="nc-benefits">
                   <li>Toutes les demandes ouvertes, triées par date de signature.</li>

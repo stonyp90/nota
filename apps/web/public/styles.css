@@ -30,9 +30,6 @@
   --surface: #ffffff;
   --surface-inset: #f4f7f4;
   --surface-hover: #e9f1e9;
-  --water: #d3e6f2;         /* map water (St. Lawrence) */
-  --land: #eef2ec;          /* map land */
-  --isle: #e2ead9;          /* map island */
   --ink: #0b1220;
   --ink-muted: #4d5b6e; /* darker than slate-500 for AA on white */
   --border: #dbe2ea;
@@ -117,9 +114,6 @@
     --surface: #121412;
     --surface-inset: #171a17;
     --surface-hover: #1d211d;
-    --water: #14232e;
-    --land: #12160f;
-    --isle: #182013;
     --ink: #f8fafc;
     --ink-muted: #aab6b0;
     --border: #2a2f2a;
@@ -155,9 +149,6 @@
   --surface: #121412;
   --surface-inset: #171a17;
   --surface-hover: #1d211d;
-  --water: #14232e;
-  --land: #12160f;
-  --isle: #182013;
   --ink: #f8fafc;
   --ink-muted: #aab6b0;
   --border: #2a2f2a;
@@ -345,13 +336,15 @@ a:hover { text-decoration: underline; }
 .btn-ghost { border-color: transparent; background: transparent; color: var(--ink-muted); }
 .btn-ghost:hover { background: var(--surface-inset); color: var(--ink); }
 .btn-sm { padding: 5px 11px; font-size: 12.5px; }
-.btn-lg { padding: 8px 16px; font-size: 14px; font-weight: 600; }
+.btn-lg { padding: 7px 14px; font-size: 14px; font-weight: 600; }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
 .btn svg { flex: none; }
 
 /* Hero call-to-action — the buyer's first, obvious action */
 .hero-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 22px; }
-.hero-cta { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+/* margin-top:auto pins the buttons to the BOTTOM of the copy column, so the
+   two hero columns end on the same line instead of one trailing off. */
+.hero-cta { display: flex; gap: 10px; flex-wrap: wrap; margin-top: auto; padding-top: 14px; }
 
 /* Guided step badges (1 · 2 · 3) in the offer panel */
 .step {
@@ -363,13 +356,13 @@ a:hover { text-decoration: underline; }
 :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 
 /* --- Hero / intro -------------------------------------------------------- */
-.intro { padding: clamp(12px, 1.6vw, 20px) 0 clamp(16px, 2.4vw, 30px); }
+.intro { padding: clamp(10px, 1.2vw, 16px) 0 clamp(12px, 1.8vw, 20px); }
 /* Split hero: copy on the left, live content on the right — the market pulse on
    Carnet, the "how it works" steps on Notaires. Both asides are CHROMELESS (no
    card, no border, no fill): the hero is one continuous surface, and the two
    columns are tied together by a shared top edge instead of a box. */
-.intro--hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(20px, 4vw, 48px); align-items: start; }
-.intro-main { min-width: 0; }
+.intro--hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(20px, 4vw, 48px); align-items: stretch; }
+.intro-main { min-width: 0; display: flex; flex-direction: column; }
 /* A QUERY CONTAINER: the aside is half the hero above 900px and full width
    below it, so its content must answer to ITS OWN width, not the viewport's. */
 .hero-aside { min-width: 0; container: aside / inline-size; }
@@ -395,19 +388,19 @@ a:hover { text-decoration: underline; }
 /* Hero pulse — live per-service medians beside the carnet hero. No rules, no
    box: the rows are separated by rhythm and by their own volume bar, and each
    one is a button that filters the carnet below. */
-.pulse { min-width: 0; }
+.pulse { min-width: 0; display: flex; flex-direction: column; }
 .pulse-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .pulse .hero-steps-title { margin-bottom: 0; }
 .pulse-month { font-size: 12px; font-weight: 600; color: var(--ink-muted); text-transform: capitalize; }
-.pulse-rows { display: grid; gap: 2px; margin-top: 10px; }
+.pulse-rows { display: grid; gap: 2px; margin-top: 6px; flex: 1; align-content: space-between; }
 .pulse-row {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline;
-  gap: 3px 12px; text-align: left;
+  display: grid; grid-template-columns: auto minmax(24px, 1fr) auto; align-items: baseline;
+  gap: 2px 12px; text-align: left;
   /* Bled out by its own padding so the text stays flush with the hero copy
      while the hover/active tint still reads as a full-width row. The row
      STRETCHES (no width:100%, which would shrink the content box by the
      padding and pull the amounts 20px off the hero's right edge). */
-  padding: 8px 10px; margin: 0 -10px;
+  padding: 6px 10px; margin: 0 -10px;
   background: none; border: 0; border-radius: var(--radius);
   font: inherit; color: inherit; cursor: pointer;
   transition: background-color .12s ease;
@@ -415,24 +408,24 @@ a:hover { text-decoration: underline; }
 .pulse-row:hover { background: var(--surface-hover); }
 .pulse-row.is-on { background: var(--surface-inset); }
 .pulse-row:hover .pulse-svc, .pulse-row.is-on .pulse-svc { color: var(--brand); }
-.pulse-svc { display: flex; align-items: center; gap: 7px; min-width: 0; font-size: 14px; font-weight: 700; }
+.pulse-svc { grid-column: 1 / 3; grid-row: 1; display: flex; align-items: center; gap: 7px; min-width: 0; font-size: 14px; font-weight: 700; }
 .pulse-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
-.pulse-amount { font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pulse-amount { grid-column: 3; grid-row: 1; font-size: 17px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
 /* No offer yet this month: the figure is the service floor, not a market fact. */
 .pulse-amount.is-floor { color: var(--ink-muted); font-weight: 700; }
 .pulse-meta, .pulse-sub { font-size: 11.5px; color: var(--ink-muted); }
-.pulse-meta { padding-left: 15px; } /* clears the dot: 8px + the 7px gap */
-.pulse-sub { text-align: right; white-space: nowrap; }
-/* Share of the month's demand, in the service's own hue. Deliberately SHORT and
-   left-aligned under the counts: a gauge that belongs to its row, never a rule
-   spanning the width (that would just put the removed borders back). */
+.pulse-meta { grid-column: 1; grid-row: 2; padding-left: 15px; white-space: nowrap; } /* 15px clears the dot: 8px + the 7px gap */
+.pulse-sub { grid-column: 3; grid-row: 2; text-align: right; white-space: nowrap; }
+/* Share of the month's demand, in the service's own hue. Short and inline with
+   the counts: a gauge that belongs to its row, never a rule spanning the width
+   (that would just put the removed borders back). */
 .pulse-bar {
-  grid-column: 1; justify-self: start; width: min(110px, 100%);
-  height: 3px; border-radius: 2px; background: var(--surface-inset);
-  overflow: hidden; margin: 5px 0 0 15px;
+  grid-column: 2; grid-row: 2; align-self: center; justify-self: start;
+  width: min(84px, 100%); height: 3px; border-radius: 2px;
+  background: var(--surface-inset); overflow: hidden; margin-left: 12px;
 }
 .pulse-bar > span { display: block; height: 100%; border-radius: inherit; min-width: 2px; }
-.pulse-foot { margin: 14px 0 0; font-size: 12px; line-height: 1.45; color: var(--ink-muted); }
+.pulse-foot { margin: 10px 0 0; font-size: 12px; line-height: 1.45; color: var(--ink-muted); }
 
 /* One column below 900px: the aside stacks under the copy, still chromeless —
    separated by space alone, and with roomier rows for touch. */
@@ -440,8 +433,10 @@ a:hover { text-decoration: underline; }
   .intro--hero { grid-template-columns: 1fr; gap: clamp(18px, 3vw, 26px); }
   .pulse-row { padding-block: 10px; } /* comfortable touch target when stacked */
 }
-.intro h1 { font-size: clamp(24px, 3vw, 34px); font-weight: 800; line-height: 1.12; margin-top: 6px; }
-.intro p { color: var(--ink-muted); max-width: 60ch; margin: 10px 0 0; font-size: 15px; line-height: 1.55; }
+.intro h1 { font-size: clamp(21px, 2.4vw, 28px); font-weight: 800; line-height: 1.15; margin-top: 4px; }
+/* 68ch, not 60: the hero copy owns half the page, and the shorter measure left
+   a visible blank gutter down its right edge. */
+.intro p { color: var(--ink-muted); max-width: 68ch; margin: 8px 0 0; font-size: 14.5px; line-height: 1.5; }
 /* Block, not inline-block: as an inline box it sat on the line-box strut, so on
    wide viewports (where it fits on ONE line) it dropped ~4px below the aside's
    kicker opposite it and the two hero columns started off-line. */
@@ -455,7 +450,7 @@ a:hover { text-decoration: underline; }
 /* Only set vertical padding here — the horizontal padding comes from .wrap.
    A `padding: … 0 …` shorthand would reset .wrap's side padding, pushing the
    panels 28px past the hero content on each side (misalignment). */
-.layout { display: grid; grid-template-columns: 1fr; gap: clamp(16px, 2.4vw, 24px); padding-top: clamp(6px, 1.2vw, 12px); padding-bottom: clamp(40px, 7vw, 64px); align-items: start; }
+.layout { display: grid; grid-template-columns: 1fr; gap: clamp(14px, 2vw, 20px); padding-top: clamp(4px, 0.8vw, 8px); padding-bottom: clamp(24px, 4vw, 40px); align-items: start; }
 /* Full-screen calendar (Fullscreen API on #carnet-panel): fill the viewport
    with a padded surface and taller day cells that use the extra height. */
 #carnet-panel:fullscreen, #carnet-panel:-webkit-full-screen {
@@ -513,7 +508,7 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 .seg-btn.is-on { background: var(--surface); color: var(--brand); box-shadow: var(--shadow-sm); }
 
 /* --- Calendar ------------------------------------------------------------ */
-.cal-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; row-gap: 8px; padding: 12px 18px; }
+.cal-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; row-gap: 8px; padding: 10px 14px; }
 /* Narrow toolbar: a flex:1 spacer inside a wrapping row is unpredictable, so turn it
    into a clean full-width row break, and give the view switcher its own full-width
    row with equal buttons — no ragged wraps at ~400-640px. */
@@ -536,11 +531,11 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 /* The month grid is a QUERY CONTAINER: cells always keep 7 columns, so their
    content must respond to the GRID's width — not the viewport — to stay legible
    in a narrow column, in fullscreen, or on a phone. See the @container rules below. */
-.cal-grid { container: cal / inline-size; display: flex; flex-direction: column; gap: 6px; padding: 10px 16px 16px; }
+.cal-grid { container: cal / inline-size; display: flex; flex-direction: column; gap: 5px; padding: 6px 14px 12px; }
 .cal-row { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
 .cal-dow { text-align: center; font-size: 11px; font-weight: 700; color: var(--ink-muted); padding: 4px 0; text-transform: uppercase; letter-spacing: .04em; }
 .cal-cell {
-  background: var(--surface); min-height: clamp(84px, 7vw, 120px); padding: 7px 9px 14px; position: relative;
+  background: var(--surface); min-height: clamp(68px, 5.4vw, 98px); padding: 6px 8px 12px; position: relative;
   display: flex; flex-direction: column; gap: 3px; cursor: pointer;
   border: 1px solid transparent; border-radius: var(--radius-sm); scroll-margin-top: var(--sticky-top);
   text-align: left; font: inherit; color: var(--ink);
@@ -670,7 +665,7 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 .pill-retenue { background: var(--surface-inset); color: var(--ink-muted); border: 1px solid var(--border-strong); }
 .tag-anon { font-size: 11px; color: var(--ink-muted); border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); padding: 1px 6px; margin-left: 6px; }
 
-.legend { display: flex; flex-wrap: wrap; gap: 10px; padding: 6px 18px 12px; font-size: 12px; color: var(--ink-muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 10px; padding: 2px 14px 10px; font-size: 12px; color: var(--ink-muted); }
 .legend-item, .legend-status-item { display: inline-flex; align-items: center; gap: 6px; }
 .legend-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--ink); }
 .legend-label--sep { margin-left: 4px; padding-left: 12px; border-left: 1px solid var(--border); }
@@ -806,7 +801,7 @@ input.file-native { position: absolute; width: 1px; height: 1px; opacity: 0; mar
 .file-note { font-size: 12px; color: var(--ink-muted); margin-top: 6px; }
 
 /* --- Model / footer sections -------------------------------------------- */
-.section { padding: clamp(32px, 6vw, 56px) 0; border-top: 1px solid var(--border); }
+.section { padding: clamp(24px, 4vw, 40px) 0; border-top: 1px solid var(--border); }
 .section h2 { font-size: 22px; font-weight: 800; margin-bottom: 8px; }
 .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 20px; }
 @media (max-width: 780px) { .cards { grid-template-columns: 1fr; } }
@@ -920,7 +915,7 @@ dialog::backdrop { background: var(--backdrop); }
 /* Brand utility classes — replace ad-hoc inline styles, keep markup on-brand */
 .w-full { width: 100%; }
 .uppercase { text-transform: uppercase; }
-.mb-xl { margin-bottom: 48px; }
+.mb-xl { margin-bottom: 32px; }
 .mb-sm { margin-bottom: 12px; }
 .mt-sm { margin-top: 14px; }
 .mt-md { margin-top: 16px; }
@@ -931,7 +926,7 @@ dialog::backdrop { background: var(--backdrop); }
 .offer-success-logo { flex: none; display: block; }
 .offer-success .mt-sm { margin-top: 0; }
 .switch-title { font-weight: 600; font-size: 14px; }
-.panel-narrow { max-width: 560px; margin: 24px 0 48px; }
+.panel-narrow { max-width: 560px; margin: 18px 0 32px; }
 /* Legal pages: the long-form list panel fills the width (its list is 2-column)
    so there is no blank right half. */
 #pane-confidentialite .panel-narrow, #pane-conditions .panel-narrow, #pane-charte .panel-narrow { max-width: none; }
@@ -946,21 +941,37 @@ dialog::backdrop { background: var(--backdrop); }
 #pane-notaires .notary-carnet { order: 3; }
 #pane-notaires .nota-guarantee { order: 4; }
 
-#notary-console { margin-top: 16px; max-width: none; }
+#notary-console { margin-top: 12px; max-width: none; }
 /* Sign-in gate: form on the left, a concise "what you get" reassurance on the right,
    so the panel reads as complete and reinforces value at the decision point. */
-.nc-gate { max-width: 940px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 300px); gap: 24px 44px; align-items: start; }
+/* No max-width: capped at 940px it left a dead band down the right of a
+   full-width panel on wide screens. The columns own the panel now. */
+.nc-gate { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 360px); gap: 20px clamp(28px, 5vw, 64px); align-items: start; }
 .nc-gate-main { min-width: 0; }
-.nc-gate-aside { border-left: 1px solid var(--border); padding-left: 40px; }
+.nc-gate-aside { padding-left: 0; }
+/* Live demand proof at the top of the gate aside — real numbers, so the payoff is
+   concrete before a notary onboards. Hidden until populated (no data → no panel). */
+/* Panes move focus to their <h1> on navigation so screen readers announce the new
+   page; that programmatic focus must NOT paint a ring on a non-interactive heading. */
+.tab-pane h1:focus, .intro h1:focus { outline: none; box-shadow: none; }
+.nc-opportunity { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+.nc-opp-eyebrow { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--brand); margin-bottom: 5px; }
+.nc-opp-figure { font-size: 21px; font-weight: 800; letter-spacing: -0.01em; color: var(--ink); line-height: 1.15; }
+.nc-opp-figure strong { color: var(--brand); }
+.nc-opp-value { font-size: 12.5px; color: var(--ink-muted); margin-top: 3px; }
+.nc-opp-value strong { color: var(--ink); font-weight: 700; }
 .nc-gate-aside-title { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-muted); margin-bottom: 14px; }
 .nc-benefits { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 13px; }
 .nc-benefits li { position: relative; padding-left: 26px; font-size: 13.5px; line-height: 1.45; color: var(--ink); }
 .nc-benefits li::before { content: '✓'; position: absolute; left: 0; top: -1px; color: var(--brand); font-weight: 800; }
 @media (max-width: 760px) {
   .nc-gate { grid-template-columns: 1fr; gap: 20px; }
-  .nc-gate-aside { border-left: 0; padding-left: 0; border-top: 1px solid var(--border); padding-top: 18px; }
+  .nc-gate-aside { padding-top: 4px; }
 }
 .nc-auth .form-row { margin-bottom: 12px; }
+/* The email field matches the button under it: at 120px it sat in the middle of
+   an otherwise empty column. */
+.nc-auth .form-row input { width: 100%; }
 .nc-auth-cta { width: 100%; }
 .nc-auth-fine { margin-top: 10px; }
 /* New-notary welcome: sign-in and sign-up share one email field; this callout
@@ -1134,7 +1145,7 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
 /* On the Notaires page the same subscribe card sits as a full-width band —
    pitch on the left, the four calendar buttons grow to fill the right side so
    the row reads full-width with no dead gap between them. */
-.notary-carnet { margin-top: 16px; }
+.notary-carnet { margin-top: 12px; }
 .notary-carnet .sub-card { display: flex; align-items: center; flex-wrap: wrap; gap: 14px 32px; }
 .notary-carnet .sub-card-head { flex: 1 1 300px; }
 .notary-carnet .sub-card-actions { margin-top: 0; flex: 2 1 520px; }
@@ -1162,7 +1173,7 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
    Responsive — mobile / tablet / desktop, no horizontal overflow anywhere.
    ========================================================================== */
 @media (max-width: 900px) {
-  .intro { padding: 20px 0 4px; }
+  .intro { padding: 14px 0 4px; }
 }
 @media (max-width: 680px) {
   .wrap { padding: 0 16px; }
@@ -1170,7 +1181,7 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   .brand-sub { display: none; }
   .brand { font-size: 18px; }
   .nav-tab { padding: 7px 10px; font-size: 13px; }
-  .intro h1 { font-size: clamp(24px, 7vw, 30px); }
+  .intro h1 { font-size: clamp(20px, 5.6vw, 25px); }
   .cal-cell { min-height: 62px; padding: 6px 6px; }
   .cal-top { font-size: 12px; }
   .cal-grid { gap: 4px; padding: 8px 10px 12px; }
@@ -1199,7 +1210,7 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
    iPad portrait at 768) — not width-gated. Fine pointers (mouse/trackpad) keep the
    desktop density untouched. Includes the smaller controls that were being missed. */
 @media (pointer: coarse) {
-  .btn, .nav-tab, .chip, .seg-btn, .acct-legal-link, .fsa-active, .agenda-more { min-height: 44px; }
+  .btn, .nav-tab, .chip, .seg-btn, .acct-legal-link, .agenda-more { min-height: 44px; }
   .btn-icon, .cal-nav .btn { min-width: 44px; }
   .icon-btn, .day-close { width: 44px; height: 44px; }
 }
@@ -1218,7 +1229,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 html { scroll-behavior: smooth; scroll-padding-top: var(--sticky-top); }
 
 /* ==========================================================================
-   Carnet view switcher + Carte (FSA heatmap) + sector chip
+   Carnet view switcher (Calendrier · Liste)
    ========================================================================== */
 .view-switch { flex: 0 0 auto; }
 .view-switch .seg-btn { display: inline-flex; align-items: center; gap: 5px; }
@@ -1227,32 +1238,3 @@ html { scroll-behavior: smooth; scroll-padding-top: var(--sticky-top); }
 .view-panel { min-width: 0; }
 .view-panel[hidden] { display: none; }
 
-.fsa-map { padding: 12px 16px 18px; }
-.fsa-svg { display: block; width: 100%; max-width: 780px; height: auto; margin: 0 auto; }
-.fsa-water { fill: var(--water); }
-.fsa-land { fill: var(--land); stroke: var(--border-strong); stroke-width: .4; stroke-linejoin: round; }
-.fsa-river { stroke: var(--water); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.fsa-node { cursor: pointer; }
-.fsa-node circle { fill: var(--brand); stroke: var(--surface); stroke-width: .8; transition: fill-opacity .12s, stroke-width .12s; }
-.fsa-node:hover circle { stroke: var(--brand-bright); stroke-width: 1.2; }
-.fsa-node:focus-visible circle { stroke: var(--ring); stroke-width: 2; }
-.fsa-node:focus-visible { outline: none; }
-.fsa-node .fsa-hit { pointer-events: fill; }
-.fsa-node.is-unset circle { fill: var(--ink-muted); stroke: var(--border-strong); stroke-dasharray: 1.2 1; }
-/* Labels carry a halo (paint-order stroke) so they stay legible over bubbles. */
-.fsa-labels { pointer-events: none; } /* top text layer — never blocks a bubble click */
-.fsa-node-code { fill: var(--ink); font-size: 2.4px; font-weight: 800; paint-order: stroke; stroke: var(--surface-inset); stroke-width: 1; stroke-linejoin: round; }
-.fsa-node-n { fill: var(--on-accent); font-size: 2.8px; font-weight: 800; paint-order: stroke; stroke: var(--hunter-900); stroke-width: .7; stroke-linejoin: round; }
-.fsa-note { margin: 8px 0 0; font-size: 12px; color: var(--ink-muted); text-align: center; }
-
-.fsa-active {
-  display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font: inherit;
-  font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px;
-  background: transparent; color: var(--brand); border: 1px solid var(--brand);
-}
-.fsa-active[hidden] { display: none; }
-.fsa-active:hover { background: var(--surface-hover); }
-.fsa-active:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--focus-ring); }
-.fsa-active-x { font-size: 12px; line-height: 1; }
-
-#carnet-panel:fullscreen .fsa-card, #carnet-panel:-webkit-full-screen .fsa-card { min-height: clamp(108px, 12vh, 150px); }
