@@ -329,8 +329,8 @@
           <div class="intro intro--hero">
             <div class="intro-main">
               <span class="eyebrow">Pour les notaires</span>
-              <h1>Gratuit pour les notaires.</h1>
-              <p>Inscription gratuite, sans frais fixes. Retenez les demandes qui remplissent votre semaine — Nota se rémunère par une commission, uniquement sur les actes complétés.</p>
+              <h1>Remplissez votre semaine. Payé à la signature.</h1>
+              <p>Inscription gratuite, sans frais fixes : Nota se rémunère par une commission, uniquement sur les actes complétés. Vous retenez les demandes qui vous conviennent, vous déclinez le reste sans frais.</p>
             </div>
             <aside class="hero-aside" aria-label="Comment ça marche pour les notaires">
               <div class="hero-steps-title">Comment ça marche</div>
@@ -370,19 +370,19 @@
             <!-- Auth gate -->
             <form id="notary-auth-form" class="nc-auth nc-gate">
               <div class="nc-gate-main">
-              <h2 class="h-sub">Ouvrez votre console</h2>
-              <p class="help mb-sm">Une seule porte, <strong>sans mot de passe</strong> : entrez votre courriel professionnel — première visite ou retour, c’est le même geste. Vous voyez les demandes ouvertes, en retenez celles qui remplissent votre semaine, et êtes payé sur les actes complétés.</p>
+              <h2 class="h-sub">Accédez aux demandes</h2>
+              <p class="help mb-sm">Voyez les demandes ouvertes à Québec, retenez celles qui remplissent votre semaine, et soyez payé sur les actes complétés. Un seul courriel professionnel — <strong>sans mot de passe</strong>, première visite ou retour, c’est le même geste.</p>
               <div class="form-row">
                 <label class="lbl" for="nc-email">Courriel professionnel</label>
-                <input type="email" id="nc-email" inputmode="email" autocomplete="email" placeholder="vous@etude.ca" required />
+                <input type="email" id="nc-email" inputmode="email" autocomplete="email" placeholder="vous@etude.ca" aria-describedby="notary-console-errors" required />
               </div>
               <ul class="errors" id="notary-console-errors" role="alert" aria-atomic="true" hidden></ul>
-              <button type="submit" class="btn btn-primary btn-lg nc-auth-cta" id="notary-console-signin">Ouvrir ma console →</button>
+              <button type="submit" class="btn btn-primary btn-lg nc-auth-cta" id="notary-console-signin">Voir les demandes ouvertes →</button>
               <p class="help nc-auth-fine">Première fois ? Entrez simplement votre courriel : si aucun compte n’existe encore, l’inscription gratuite se propose automatiquement.</p>
 
               <!-- Shown when the email has no account yet: sign-in and sign-up are the
                    same door — a new notary is offered free onboarding right here. -->
-              <div id="notary-signup-prompt" class="nc-signup" hidden>
+              <div id="notary-signup-prompt" class="nc-signup" tabindex="-1" hidden>
                 <p class="nc-signup-lead"><strong>Bienvenue !</strong> <span id="notary-signup-email"></span> n’a pas encore de compte. L’inscription est <strong>gratuite et sans engagement</strong> — deux étapes :</p>
                 <ol class="nc-signup-steps">
                   <li>Vous créez votre compte de paiement sécurisé via <strong>Stripe</strong>, notre partenaire (~2 min).</li>
@@ -390,7 +390,7 @@
                 </ol>
                 <ul class="errors" id="notary-signup-errors" role="alert" aria-atomic="true" hidden></ul>
                 <button type="button" class="btn btn-primary btn-lg nc-auth-cta" id="notary-signup-btn">M’inscrire gratuitement →</button>
-                <p class="help nc-auth-fine">Vous serez redirigé vers Stripe pour la vérification d’identité qu’exige la loi, puis ramené ici.</p>
+                <p class="help nc-auth-fine">Stripe vous demandera une pièce d’identité et un compte bancaire pour vos versements — ces informations restent chez Stripe, Nota ne les voit jamais. Vous êtes ensuite ramené ici.</p>
               </div>
               </div>
               <aside class="nc-gate-aside" aria-label="Ce que vous obtenez">
@@ -400,12 +400,12 @@
                   <div class="nc-opp-figure"><strong id="notary-opp-count">—</strong> demandes ouvertes</div>
                   <div class="nc-opp-value"><strong id="notary-opp-total">—</strong> à retenir — sans frais d’inscription</div>
                 </div>
-                <div class="nc-gate-aside-title">Votre console, en clair</div>
+                <div class="nc-gate-aside-title">Ce que vous obtenez</div>
                 <ul class="nc-benefits">
-                  <li>Toutes les demandes ouvertes, triées par date de signature.</li>
-                  <li>Retenez en un clic — le dossier du client s’ouvre aussitôt.</li>
-                  <li>Payé à la signature : la commission Nota est déduite automatiquement.</li>
-                  <li>Vos signatures synchronisées dans votre agenda.</li>
+                  <li>Des demandes de clients réels à Québec, triées par date de signature.</li>
+                  <li>Retenez celles qui vous conviennent — le dossier s’ouvre aussitôt.</li>
+                  <li>Payé en entier à la signature ; la commission Nota est déduite, jamais une facture à courir.</li>
+                  <li>Vous fixez vos honoraires et gardez la main sur chaque acte.</li>
                 </ul>
               </aside>
             </form>
