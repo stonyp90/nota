@@ -1950,6 +1950,50 @@
     box.hidden = false;
   }
 
+  // --- Lead-delivery preferences ---------------------------------------------
+  // How (in-app / email / SMS) and at what PACE Nota alerts this notary about new
+  // matching demands, plus which acts + urgency they care about. Stored per email
+  // (local for the demo; a deployment would sync these to the API so the server's
+  // notifier + an SMS adapter respect them).
+  var LS_NC_PREFS = 'nota.notary.prefs.v1';
+  var ncPrefsSavedT = null;
+  function ncDefaultPrefs() {
+    var svc = {}; D.SERVICES.forEach(function (s) { svc[s.id] = true; });
+    return { email: true, sms: false, phone: '', pace: 'instant', urgent: false, services: svc };
+  }
+  function ncPrefsGet(email) {
+    var d = ncDefaultPrefs();
+    var stored = (lsLoad(LS_NC_PREFS) || {})[email] || {};
+    return Object.assign(d, stored, { services: Object.assign(d.services, stored.services || {}) });
+  }
+  function ncPrefsSave(email, prefs) {
+    var all = lsLoad(LS_NC_PREFS) || {}; all[email] = prefs; lsSave(LS_NC_PREFS, all);
+    var saved = $('notary-prefs-saved');
+    if (saved) { saved.hidden = false; clearTimeout(ncPrefsSavedT); ncPrefsSavedT = setTimeout(function () { saved.hidden = true; }, 2200); }
+  }
+  function ncPrefsPatch(patch) { if (nc.email) ncPrefsSave(nc.email, Object.assign(ncPrefsGet(nc.email), patch)); }
+  function ncRenderPrefs() {
+    if (!nc.email) return;
+    var p = ncPrefsGet(nc.email);
+    var chk = function (id, on) { var e = $(id); if (e) e.checked = !!on; };
+    chk('pref-ch-email', p.email); chk('pref-ch-sms', p.sms); chk('pref-urgent', p.urgent);
+    if ($('pref-phone')) $('pref-phone').value = p.phone || '';
+    if ($('pref-phone-row')) $('pref-phone-row').hidden = !p.sms;
+    document.querySelectorAll('#pref-pace .seg-btn').forEach(function (b) {
+      var on = b.dataset.pace === p.pace; b.classList.toggle('is-on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    var svcWrap = $('pref-svc');
+    if (svcWrap && !svcWrap.children.length) {
+      D.SERVICES.forEach(function (s) {
+        var c = el('button', 'chip', s.nom.split(' ')[0]); c.type = 'button'; c.dataset.svc = s.id;
+        svcWrap.appendChild(c);
+      });
+    }
+    if (svcWrap) svcWrap.querySelectorAll('.chip').forEach(function (c) {
+      var on = p.services[c.dataset.svc] !== false; c.classList.toggle('is-on', on); c.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+  }
+
   function ncRenderAuthState() {
     var authed = !!nc.token;
     var form = $('notary-auth-form'); var view = $('notary-authed');
@@ -1957,6 +2001,7 @@
     if (view) view.hidden = !authed;
     if (authed) {
       var lbl = $('notary-email-label'); if (lbl) lbl.textContent = nc.email || '';
+      ncRenderPrefs(); // lead-delivery preferences for this notary
       // The webcal URL carries ONLY the read-only feed token, never the session
       // token — a leaked calendar URL must not authorize accept/dossier.
       // Full sync options for the notary's retained-signings feed (like the
@@ -2384,6 +2429,24 @@
     });
     var ncOut = $('notary-signout'); if (ncOut) ncOut.addEventListener('click', ncSignOut);
     var ncRef = $('notary-refresh'); if (ncRef) ncRef.addEventListener('click', function () { ncLoadBids().then(function (ok) { if (ok) toast('Demandes rafraîchies.'); }); });
+
+    // Lead-delivery preferences — every control saves on change (per notary).
+    if ($('pref-ch-email')) $('pref-ch-email').addEventListener('change', function () { ncPrefsPatch({ email: this.checked }); });
+    if ($('pref-ch-sms')) $('pref-ch-sms').addEventListener('change', function () { ncPrefsPatch({ sms: this.checked }); if ($('pref-phone-row')) $('pref-phone-row').hidden = !this.checked; });
+    if ($('pref-phone')) $('pref-phone').addEventListener('change', function () { ncPrefsPatch({ phone: this.value.trim() }); });
+    if ($('pref-urgent')) $('pref-urgent').addEventListener('change', function () { ncPrefsPatch({ urgent: this.checked }); });
+    var ncPace = $('pref-pace');
+    if (ncPace) ncPace.addEventListener('click', function (e) {
+      var b = e.target.closest('.seg-btn'); if (!b) return;
+      ncPace.querySelectorAll('.seg-btn').forEach(function (x) { var on = x === b; x.classList.toggle('is-on', on); x.setAttribute('aria-pressed', on ? 'true' : 'false'); });
+      ncPrefsPatch({ pace: b.dataset.pace });
+    });
+    var ncSvc = $('pref-svc');
+    if (ncSvc) ncSvc.addEventListener('click', function (e) {
+      var c = e.target.closest('.chip'); if (!c) return;
+      var on = !c.classList.contains('is-on'); c.classList.toggle('is-on', on); c.setAttribute('aria-pressed', on ? 'true' : 'false');
+      var svc = ncPrefsGet(nc.email).services; svc[c.dataset.svc] = on; ncPrefsPatch({ services: svc });
+    });
     var ncOpenList = $('notary-open-list');
     if (ncOpenList) ncOpenList.addEventListener('click', function (e) {
       var card = e.target.closest('.nc-card'); if (!card) return;

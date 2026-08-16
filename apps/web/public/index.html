@@ -422,6 +422,37 @@
                 <button class="btn btn-sm btn-ghost" id="notary-signout">Se déconnecter</button>
               </div>
 
+              <!-- Lead-delivery preferences: HOW (in-app / email / SMS) and at what PACE
+                   Nota alerts this notary about new matching demands. -->
+              <section class="nc-prefs" aria-labelledby="notary-prefs-h">
+                <h2 class="nc-h" id="notary-prefs-h">Recevez vos leads à votre rythme</h2>
+                <p class="help">Choisissez comment et à quelle fréquence Nota vous prévient des nouvelles demandes qui vous conviennent. Modifiable à tout moment.</p>
+                <div class="nc-prefs-grid">
+                  <div class="nc-pref-block">
+                    <div class="nc-pref-title">Comment vous prévenir</div>
+                    <label class="switch-row"><span class="nc-pref-lbl">Dans l’application <span class="nc-pref-hint">toujours actif</span></span><span class="switch"><input type="checkbox" id="pref-ch-inapp" checked disabled /><span class="track"></span></span></label>
+                    <label class="switch-row"><span class="nc-pref-lbl">Par courriel</span><span class="switch"><input type="checkbox" id="pref-ch-email" /><span class="track"></span></span></label>
+                    <label class="switch-row"><span class="nc-pref-lbl">Par texto (SMS)</span><span class="switch"><input type="checkbox" id="pref-ch-sms" /><span class="track"></span></span></label>
+                    <div class="form-row nc-pref-phone" id="pref-phone-row" hidden>
+                      <label class="lbl" for="pref-phone">Mobile pour les textos</label>
+                      <input type="tel" id="pref-phone" inputmode="tel" autocomplete="tel" placeholder="(418) 000-0000" />
+                    </div>
+                  </div>
+                  <div class="nc-pref-block">
+                    <div class="nc-pref-title">À quelle fréquence</div>
+                    <div class="seg nc-pref-pace" id="pref-pace" role="group" aria-label="Fréquence des alertes">
+                      <button type="button" class="seg-btn is-on" data-pace="instant" aria-pressed="true">À chaque demande</button>
+                      <button type="button" class="seg-btn" data-pace="daily" aria-pressed="false">Résumé quotidien</button>
+                      <button type="button" class="seg-btn" data-pace="weekly" aria-pressed="false">Résumé hebdo</button>
+                    </div>
+                    <label class="switch-row"><span class="nc-pref-lbl">Seulement les demandes urgentes (Prioritaire et +)</span><span class="switch"><input type="checkbox" id="pref-urgent" /><span class="track"></span></span></label>
+                    <div class="nc-pref-title nc-pref-title--sub">Quels actes vous intéressent</div>
+                    <div class="chip-group nc-pref-svc" id="pref-svc" role="group" aria-label="Actes"></div>
+                  </div>
+                </div>
+                <p class="help nc-prefs-saved" id="notary-prefs-saved" role="status" aria-live="polite" hidden>✓ Préférences enregistrées.</p>
+              </section>
+
               <h2 class="nc-h" id="notary-open-h">Demandes ouvertes</h2>
               <div class="nc-list" id="notary-open-list"></div>
               <p class="help" id="notary-open-empty" hidden>Aucune demande ouverte pour l’instant.</p>

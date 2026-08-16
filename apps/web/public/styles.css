@@ -1045,6 +1045,20 @@ dialog::backdrop { background: var(--backdrop); }
 /* Notaires: onboarding form + console side by side (use the horizontal space). */
 /* Single full-width notary console (the page's one tool) + get-paid step. */
 .nota-guarantee { margin-top: var(--gap); }
+/* Lead-delivery preferences — how (in-app/email/SMS) + pace + which acts. */
+.nc-prefs { margin: 6px 0 8px; padding: 16px 18px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-inset); }
+.nc-prefs > .nc-h { margin-top: 0; }
+.nc-prefs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: 8px 36px; margin-top: 8px; align-items: start; }
+.nc-pref-block { min-width: 0; }
+.nc-pref-title { font-size: 11.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-muted); margin-bottom: 4px; }
+.nc-pref-title--sub { margin-top: 14px; }
+.nc-pref-lbl { font-size: 13.5px; }
+.nc-pref-hint { font-size: 11px; color: var(--brand); font-weight: 700; margin-left: 6px; }
+.nc-pref-pace { display: inline-flex; flex-wrap: wrap; margin: 2px 0 6px; max-width: 100%; }
+.nc-pref-pace .seg-btn { font-size: 12.5px; }
+.nc-pref-phone { margin-top: 8px; }
+.nc-pref-svc { margin-top: 4px; }
+.nc-prefs-saved { color: var(--ok); font-weight: 700; margin-top: 10px; }
 .nc-pay { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); }
 .nc-pay .btn { margin-top: 4px; }
 /* Notary earnings roll-up: realised value, Nota's commission, and net. */
