@@ -1,10 +1,11 @@
 <!doctype html>
-<html lang="fr-CA" data-theme="">
+<html lang="fr-CA" data-theme="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <!-- Apply the saved theme before first paint to avoid a light→dark flash. -->
-    <script>try{var t=JSON.parse(localStorage.getItem('nota.theme')||'null');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
+    <!-- Dark is the default; honour an explicit saved choice. Applied before first
+         paint to avoid a flash. -->
+    <script>try{var t=JSON.parse(localStorage.getItem('nota.theme')||'null');document.documentElement.setAttribute('data-theme',t==='light'?'light':'dark');}catch(e){document.documentElement.setAttribute('data-theme','dark');}</script>
     <title>Nota — le carnet public des actes notariés à Québec</title>
     <meta
       name="description"

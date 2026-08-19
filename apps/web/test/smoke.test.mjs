@@ -259,13 +259,13 @@ test('clicking a has-bids cell opens the day modal with bid rows', async () => {
 test('theme toggle flips documentElement[data-theme]', async () => {
   const { doc } = await boot();
   const root = doc.documentElement;
-  assert.equal(root.getAttribute('data-theme'), ''); // markup default
-
-  $(doc, 'theme-toggle').click();
-  assert.equal(root.getAttribute('data-theme'), 'dark');
+  assert.equal(root.getAttribute('data-theme'), 'dark'); // dark is the default
 
   $(doc, 'theme-toggle').click();
   assert.equal(root.getAttribute('data-theme'), 'light');
+
+  $(doc, 'theme-toggle').click();
+  assert.equal(root.getAttribute('data-theme'), 'dark');
 });
 
 // 12b. Optional courriel field exists and never blocks a valid offer, and the
