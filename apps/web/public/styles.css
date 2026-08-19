@@ -85,6 +85,16 @@
 
   --maxw: 1600px; /* maximized width — fills wide screens, side padding via .wrap */
   --gap: 20px;
+  /* Spacing scale. These are the values already most used in this file, named
+     so neighbouring components stop drifting 1-3px apart. */
+  --space-1: 2px;  --space-2: 4px;   --space-3: 6px;   --space-4: 8px;
+  --space-5: 10px; --space-6: 12px;  --space-7: 14px;  --space-8: 16px;
+  --space-9: 18px; --space-10: 20px; --space-12: 24px; --space-14: 28px;
+  --space-16: 32px;
+  /* The three decisions everything else derives from. */
+  --pad-card: var(--space-6) var(--space-7);
+  --pad-card-lg: var(--space-8) var(--space-9);
+  --pad-dialog: var(--space-12);
 
   --header-h: 62px;   /* sticky .site-header height */
   --sticky-top: 82px; /* header height + breathing gap — used for scroll-padding / scroll-margin */
@@ -628,7 +638,7 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 
 /* --- Filter panel: hidden until opened from the toolbar ------------------ */
 .filterbar {
-  margin: 0 16px 6px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px;
+  margin: 0 0 var(--space-3); padding: var(--pad-card); display: flex; flex-direction: column; gap: var(--space-5);
   background: var(--surface-inset); border: 1px solid var(--border); border-radius: var(--radius);
 }
 .filterbar[hidden] { display: none; }
@@ -834,7 +844,7 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 /* The card header carries the date and, like the calendar cell, the odds of
    getting a notary that day — the list was the one view showing a price with no
    sense of how gettable the date is. */
-.bid-row { display: flex; align-items: center; gap: 10px; padding: 9px 14px 9px 12px; border-top: 1px solid var(--border); border-left: 2px solid transparent; }
+.bid-row { display: flex; align-items: center; gap: 10px; padding: 9px var(--space-12) 9px 22px; border-top: 1px solid var(--border); border-left: 2px solid transparent; }
 .bid-row.is-open { border-left-color: var(--status-ouverte); }
 .bid-row.is-retenue { border-left-color: var(--status-retenue); }
 .status-chip {
@@ -1144,12 +1154,12 @@ dialog::backdrop { background: var(--backdrop); }
 .day-bids { max-height: 30vh; overflow: auto; overscroll-behavior: contain; border-top: 1px solid var(--border); }
 .day-bids:empty { display: none; }
 .day-bids .bid-row:first-child { border-top: 0; }
-.day-bids-more { padding: 8px 14px; font-size: 12px; color: var(--ink-muted); border-top: 1px solid var(--border); }
+.day-bids-more { padding: var(--space-4) var(--space-12); font-size: 12px; color: var(--ink-muted); border-top: 1px solid var(--border); }
 .day-bids-rest[hidden] { display: none; }
 .day-bids-toggle { width: 100%; margin: 6px 0 2px; justify-content: center; }
 /* The day's totals under the single headline offer: how many for the act being
    booked, and how many that date carries in all. */
-.day-bids-count { padding: 8px 14px; font-size: 12px; color: var(--ink-muted); line-height: 1.5; }
+.day-bids-count { padding: var(--space-4) var(--space-12); font-size: 12px; color: var(--ink-muted); line-height: 1.5; }
 /* Scale guard: a day-group caps its rows and links to the full day view. */
 .day-book { padding: 20px 24px 24px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 20px; }
 .book-step { display: flex; flex-direction: column; gap: 10px; }
@@ -1581,18 +1591,27 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
    Responsive — mobile / tablet / desktop, no horizontal overflow anywhere.
    ========================================================================== */
 @media (max-width: 900px) {
-  .intro { padding: 14px 0 4px; }
+  /* 14 top / 4 bottom inverted the desktop asymmetry and let the market copy
+     nearly touch the calendar card. */
+  .intro { padding: var(--space-7) 0 var(--space-6); }
 }
 @media (max-width: 680px) {
-  .wrap { padding: 0 16px; }
+  /* Longhand: a shorthand would reset .layout's vertical padding to 0 and the
+     carnet would butt against the hero and against the footer. */
+  .wrap { padding-inline: var(--space-8); }
   .site-header .wrap { height: 56px; gap: 8px; }
+  /* The header shrinks here, so the scroll offset it feeds must shrink with it,
+     or a scrolled-to cell lands 25px under the header instead of 19. */
+  :root { --header-h: 56px; --sticky-top: 76px; }
   .brand-sub { display: none; }
   .brand { font-size: 18px; }
   .nav-tab { padding: 7px 10px; font-size: 13px; }
   .intro h1 { font-size: clamp(20px, 5.6vw, 25px); }
   .cal-cell { min-height: 62px; padding: 6px 6px; }
   .cal-avg { font-size: 12px; }
-  .cal-grid { gap: 4px; padding: 8px 10px 12px; }
+    /* Sides stay at 14 so the grid lines up with the toolbar, filter bar and
+     legend that bracket it inside the same card. */
+  .cal-grid { gap: 4px; padding: var(--space-4) var(--space-7) var(--space-6); }
   .cal-row { gap: 4px; }
   .cal-dow { font-size: 10px; }
   .filters { padding: 10px 14px; gap: 8px; }
@@ -1606,6 +1625,10 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   #day-dialog { margin: 0; inset: auto 0 0 0; width: 100%; max-width: 100%; max-height: 92dvh; border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
   #day-dialog[open] { animation: sheetUp .28s cubic-bezier(.2, .8, .2, 1) both; }
   .day-head { padding: 16px 16px 12px; }
+  /* The offer rows shrink with the bands that bracket them; the 2px difference
+     compensates .bid-row's own left border. */
+  .day-bids .bid-row { padding-left: 14px; padding-right: var(--space-8); }
+  .day-bids-count, .day-bids-more { padding-left: var(--space-8); padding-right: var(--space-8); }
   .day-value { padding: 0 16px 12px; }
   .day-book { padding: 14px 16px 18px; }
   /* The day dialog becomes a full-width sheet on phones, so its rows are as tight
