@@ -36,6 +36,23 @@
 
   function lsLoad(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
   function lsSave(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  // Scalar flags (plain strings, not JSON) with an in-memory fallback. A
+  // locked-down browser (Safari private mode) throws on write, and a guide that
+  // cannot remember it was dismissed would re-greet on every navigation — the
+  // fallback at least holds the decision for the session.
+  var memFlags = {};
+  function flagGet(k) {
+    try { var v = localStorage.getItem(k); if (v != null) return v; } catch (e) {}
+    return Object.prototype.hasOwnProperty.call(memFlags, k) ? memFlags[k] : null;
+  }
+  function flagSet(k, v) {
+    memFlags[k] = String(v);
+    try { localStorage.setItem(k, String(v)); } catch (e) {}
+  }
+  function flagClear(k) {
+    delete memFlags[k];
+    try { localStorage.removeItem(k); } catch (e) {}
+  }
   function ensureSeed() {
     var a = lsLoad(LS_BIDS);
     if (!a) { a = D.makeFixtures(todayISO()); lsSave(LS_BIDS, a); }
@@ -290,6 +307,13 @@
   // The account menu is one identity hub for BOTH roles. Priority: an active
   // notary session outranks a device-local client identity, which outranks the
   // anonymous visitor.
+  // What the visitor SAID they are, remembered across visits. Distinct from
+  // accountRole() below, which is derived from a real session — this is only a
+  // preference, used to open the right door (auth modal, onboarding guide).
+  var LS_ROLE = 'nota.role.v1';
+  function roleGet() { var r = flagGet(LS_ROLE); return r === 'notary' || r === 'client' ? r : ''; }
+  function roleSet(role) { if (role === 'notary' || role === 'client') flagSet(LS_ROLE, role); }
+
   function accountRole() {
     if (nc && nc.token) return 'notary';
     if (profileGet().courriel) return 'client';
@@ -305,6 +329,7 @@
     publier: '<path d="M12 5v14M5 12h14"/>',
     signin: '<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="M10 17l5-5-5-5M15 12H3"/>',
     signout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/>',
+    guide: '<circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>',
   };
   function acctIcon(name) {
     var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -342,7 +367,7 @@
     }
   }
   function openAuthModal(role) {
-    authSetRole(role || 'client');
+    authSetRole(role || roleGet() || 'client'); // honour what they told the guide
     var errs = $('auth-errors'); if (errs) errs.hidden = true;
     var em = $('auth-email'); if (em) em.value = profileGet().courriel || '';
     var dlg = $('auth-dialog');
@@ -382,6 +407,15 @@
       return;
     }
     profileSet({ courriel: val });               // client identity is device-local
+    // Fire-and-forget welcome email (conversion nudge). Idempotent server-side,
+    // so re-signing in never re-sends; never blocks or breaks the UI on failure.
+    try {
+      fetch(API_BASE + '/client/welcome', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ courriel: val }),
+      }).catch(function () {});
+    } catch (e) {}
     if (dlg && dlg.close) { try { dlg.close(); } catch (e) {} }
     renderAccountMenu();
     computeNotifications();
@@ -394,6 +428,169 @@
     toggleNotifPanel(false);
     setTab('carnet', { scroll: false });
     openDay(state.selectedDate || state.focusDate || todayISO());
+  }
+
+  // ---------------------------------------------------------------------------
+  // First-visit onboarding guide
+  // ---------------------------------------------------------------------------
+  // A tiny two-view <dialog>: pick a role, read a 3-step explanation, then land
+  // in the real flow. Auto-shows once (gated by LS_ONBOARDED); re-openable from
+  // the footer. Copy lives here (data-driven) so nothing is baked into markup.
+  var LS_ONBOARDED = 'nota.onboarded.v1';
+  var LS_ONB_DISMISS = 'nota.onboarded.dismissed.v1';
+  // Escape / backdrop / ✕ are ambiguous — a mis-click should not burn the guide
+  // forever. Count those dismissals and grant one more showing before we stop
+  // asking; an explicit "Passer" or a completed CTA ends it immediately.
+  var ONB_MAX_DISMISSALS = 2;
+  var ONB_ICONS = {
+    calendrier: '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/>',
+    prix: '<path d="M20 12V7a2 2 0 0 0-2-2h-5L3 15l6 6 10-9z"/><circle cx="15.5" cy="8.5" r="1.2"/>',
+    retenu: '<path d="M20 6 9 17l-5-5"/>',
+    liste: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+    main: '<path d="M18 11V6a1.5 1.5 0 0 0-3 0M15 11V4.5a1.5 1.5 0 0 0-3 0V11M12 11V6a1.5 1.5 0 0 0-3 0v8"/><path d="M9 14 7.4 12.4A1.6 1.6 0 0 0 5 14.7l3 3.3a5 5 0 0 0 4 2h1a5 5 0 0 0 5-5v-4"/>',
+    acte: '<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+  };
+  // Steps + CTA per role. The buyer publishes; the notary browses open demands.
+  var ONB_FLOWS = {
+    client: {
+      title: 'Trouvez votre notaire en 3 étapes',
+      sub: 'Vous publiez, les notaires vous font des offres.',
+      cta: 'Publier ma demande →',
+      alt: 'Explorer le carnet d’abord',
+      steps: [
+        { icon: 'calendrier', t: 'Choisissez votre date', d: 'sur le calendrier public.' },
+        { icon: 'prix', t: 'Proposez votre prix', d: 'plus l’échéance est proche, plus votre offre pèse.' },
+        { icon: 'retenu', t: 'Un notaire vous retient', d: 'payé à la signature, gratuit pour vous.' },
+      ],
+    },
+    notary: {
+      title: 'Recevez des dossiers en 3 étapes',
+      sub: 'Vous choisissez les demandes qui vous conviennent.',
+      cta: 'Voir les demandes →',
+      alt: 'Explorer le carnet d’abord',
+      steps: [
+        { icon: 'liste', t: 'Voyez les demandes ouvertes', d: 'à Québec, triées par date.' },
+        { icon: 'main', t: 'Retenez celle qui vous convient', d: 'le dossier du client s’ouvre.' },
+        { icon: 'acte', t: 'Complétez l’acte', d: 'commission seulement sur ce qui se conclut.' },
+      ],
+    },
+  };
+
+  function onbIcon(name) {
+    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('width', '17'); svg.setAttribute('height', '17');
+    svg.setAttribute('fill', 'none'); svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '1.8'); svg.setAttribute('stroke-linecap', 'round');
+    svg.setAttribute('stroke-linejoin', 'round'); svg.setAttribute('aria-hidden', 'true');
+    svg.innerHTML = ONB_ICONS[name] || '';
+    return svg;
+  }
+
+  function onbSeen() { return !!flagGet(LS_ONBOARDED); }
+  function onbMarkSeen() { flagSet(LS_ONBOARDED, '1'); }
+  function onbDismissals() { return Number(flagGet(LS_ONB_DISMISS) || 0) || 0; }
+
+  // VIEW 1 (role choice). Both views live in the DOM; we just show/hide.
+  function onbShowRoleView() {
+    // Drop the parked role and point the accessible name back at THIS view's
+    // heading — the VIEW 2 heading is about to be hidden.
+    var dlg = $('onboarding-dialog');
+    if (dlg) { dlg.removeAttribute('data-role'); dlg.setAttribute('aria-labelledby', 'onb-title'); }
+    var r = $('onb-view-role'), s = $('onb-view-steps');
+    if (r) r.hidden = false;
+    if (s) s.hidden = true;
+  }
+
+  // VIEW 2 (steps) for the chosen role — swaps the title/sub, rebuilds the step
+  // list, and sets the CTA label. The picked role is parked on the dialog so the
+  // CTA knows where to route.
+  function onbShowStepsView(role) {
+    var flow = ONB_FLOWS[role]; if (!flow) return;
+    roleSet(role); // remember it beyond this modal — the auth modal reads it back
+    var dlg = $('onboarding-dialog');
+    if (dlg) { dlg.setAttribute('data-role', role); dlg.setAttribute('aria-labelledby', 'onb-steps-title'); }
+    var title = $('onb-steps-title'); if (title) title.textContent = flow.title;
+    var sub = $('onb-steps-sub'); if (sub) sub.textContent = flow.sub;
+    var list = $('onb-steps');
+    if (list) {
+      clear(list);
+      flow.steps.forEach(function (st, i) {
+        var li = el('li', 'onb-step');
+        li.appendChild(el('span', 'onb-step-n', String(i + 1)));
+        var body = el('div', 'onb-step-body');
+        body.appendChild(el('div', 'onb-step-t', st.t));
+        body.appendChild(el('div', 'onb-step-d', st.d));
+        li.appendChild(body);
+        var ic = el('span', 'onb-step-ic'); ic.setAttribute('aria-hidden', 'true');
+        ic.appendChild(onbIcon(st.icon));
+        li.appendChild(ic);
+        list.appendChild(li);
+      });
+    }
+    var cta = $('onb-cta'); if (cta) cta.textContent = flow.cta;
+    var alt = $('onb-alt'); if (alt) alt.textContent = flow.alt;
+    var r = $('onb-view-role'), s = $('onb-view-steps');
+    if (r) r.hidden = true;
+    if (s) s.hidden = false;
+    // Focus follows the view, or a keyboard/SR user is left on a hidden control.
+    if (cta) { try { cta.focus(); } catch (e) {} }
+  }
+
+  // Open the guide at VIEW 1 (used on first visit and from the footer link).
+  // Same jsdom-safe showModal guard as the auth modal.
+  function onbOpen() {
+    onbShowRoleView();
+    toggleNotifPanel(false);
+    var dlg = $('onboarding-dialog');
+    if (dlg && dlg.showModal) { try { dlg.showModal(); } catch (e) { /* already open */ } }
+  }
+
+  // Auto-show once per browser. After boot, gated by LS_ONBOARDED.
+  function maybeShowOnboarding() {
+    if (onbSeen()) return;                                 // already decided
+    if (accountRole() !== 'anon') return;                  // signed in: nothing to explain
+    if (onbDismissals() >= ONB_MAX_DISMISSALS) return;     // asked enough; stop nagging
+    onbOpen();
+  }
+
+  // The CTA: remember we're done, close, and route into the REAL component —
+  // client reuses the hero reserve path, notary jumps to the notaries tab.
+  function onbComplete(explore) {
+    var dlg = $('onboarding-dialog');
+    var role = dlg ? dlg.getAttribute('data-role') : '';
+    onbMarkSeen();
+    if (dlg && dlg.close) { try { dlg.close(); } catch (e) {} }
+    // "Explorer le carnet d'abord": land on the marketplace itself. The primary
+    // CTA chains straight into the offer modal, which is the right default but a
+    // jarring modal-to-modal jump for anyone who just wants to look around.
+    if (explore === true) { setTab('carnet'); return; }
+    if (role === 'notary') {
+      setTab('notaires');
+    } else {
+      var heroCta = $('cta-reserver');
+      if (heroCta) heroCta.click(); // reuse the exact hero reserve flow
+      else openOfferFlow();
+    }
+  }
+
+  // Wired to the dialog's `close` event, i.e. the ambiguous exits (✕ / Escape /
+  // backdrop). Counts the dismissal rather than flagging the guide as seen, so a
+  // mis-click still leaves ONB_MAX_DISMISSALS - 1 chances. No-ops once an
+  // explicit decision (CTA / Passer) has already flagged it.
+  function onbDefer() {
+    if (onbSeen()) return;
+    flagSet(LS_ONB_DISMISS, String(onbDismissals() + 1));
+  }
+
+  // "Passer" is a decision, not an accident, so it flags the guide as seen right
+  // away — unlike the ambiguous exits, which go through onbDefer(). Flagging here
+  // rather than on `close` also keeps this working under jsdom, whose close()
+  // shim dispatches no close event.
+  function onbDismiss() {
+    onbMarkSeen();
+    var dlg = $('onboarding-dialog');
+    if (dlg && dlg.close) { try { dlg.close(); } catch (e) {} }
   }
 
   // "Forget me on this device": wipe the client's local identity + history. Guarded
@@ -455,17 +652,25 @@
 
     var actions = $('acct-actions'); if (!actions) return;
     clear(actions);
+    // The guide auto-shows once and then never again; a footer link is not a
+    // discoverable way back, so every account state carries an explicit row.
+    function onbAcctRow() {
+      return acctAction('guide', 'Comment ça marche', function () { toggleNotifPanel(false); onbOpen(); });
+    }
     if (role === 'notary') {
       actions.appendChild(acctAction('dossiers', 'Mes demandes & dossiers', function () { toggleNotifPanel(false); setTab('notaires'); }));
+      actions.appendChild(onbAcctRow());
       actions.appendChild(acctAction('signout', 'Se déconnecter', function () { ncSignOut(); renderAccountMenu(); toggleNotifPanel(false); }));
     } else if (role === 'client') {
       actions.appendChild(acctAction('profil', 'Mon profil', function () { toggleNotifPanel(false); setTab('profil'); }));
       actions.appendChild(acctAction('offers', 'Mes demandes', function () { toggleNotifPanel(false); setTab('profil'); }));
+      actions.appendChild(onbAcctRow());
       actions.appendChild(acctAction('signout', 'Se déconnecter', clientSignOut));
     } else {
       // The identity head IS the "Se connecter / s’inscrire" trigger — don't repeat it.
       actions.appendChild(acctAction('publier', 'Publier une demande', openOfferFlow));
       actions.appendChild(acctAction('notaire', 'Espace notaire', function () { toggleNotifPanel(false); setTab('notaires'); }));
+      actions.appendChild(onbAcctRow());
     }
   }
   // Derive notifications from this browser's offers: local date-approaching, and
@@ -803,18 +1008,39 @@
       return;
     }
 
-    // Group by day (agenda always reads chronologically within the current sort's day order)
-    var order = [];
+    // Group the visible offers by day.
     var groups = {};
-    visible.forEach(function (b) { if (!groups[b.dateISO]) { groups[b.dateISO] = []; order.push(b.dateISO); } groups[b.dateISO].push(b); });
-    if (state.filters.sort.indexOf('date') === 0) order.sort(state.filters.sort === 'date-asc' ? undefined : function (a, b) { return b.localeCompare(a); });
-    else order.sort();
+    visible.forEach(function (b) { (groups[b.dateISO] = groups[b.dateISO] || []).push(b); });
 
-    var PER_DAY = 2; // top 2 per day; cards stretch to a uniform height so rows align
+    // One full card per UPCOMING day of the month — including days with no offer
+    // yet — so the grid stays complete and every rectangle aligns. Past days
+    // can't be booked, so the list starts at today.
+    var dim = daysInMonth(state.anchor);
+    var order = [];
+    for (var day = 1; day <= dim; day++) {
+      var iso = state.anchor.slice(0, 8) + String(day).padStart(2, '0');
+      if (iso >= today) order.push(iso);
+    }
+    if (state.filters.sort === 'date-desc') order.reverse(); // else chronological
+
+    var PER_DAY = 2; // top 2 per day; the rest fold into a "+N" control
     order.forEach(function (iso) {
-      var group = el('div', 'agenda-group');
+      var dayBids = (groups[iso] || []).slice().sort(function (a, b) { return b.montant - a.montant; });
+      var group = el('div', 'agenda-group' + (dayBids.length ? '' : ' is-vacant'));
+      group.dataset.date = iso;
       group.appendChild(el('div', 'agenda-day', dayTitle(iso)));
-      var dayBids = groups[iso].sort(function (a, b) { return b.montant - a.montant; });
+
+      if (!dayBids.length) {
+        // No bet on this day: still a full rectangle, and a way in to reserve it.
+        var vac = el('button', 'agenda-vacant', 'Aucune offre — réserver');
+        vac.type = 'button';
+        vac.setAttribute('aria-label', 'Aucune offre le ' + dayTitle(iso) + ' — réserver cette date');
+        vac.addEventListener('click', function () { openDay(iso); });
+        group.appendChild(vac);
+        ag.appendChild(group);
+        return;
+      }
+
       dayBids.slice(0, PER_DAY).forEach(function (b) { group.appendChild(bidRow(b)); });
       if (dayBids.length > PER_DAY) {
         var extra = dayBids.length - PER_DAY;
@@ -2602,12 +2828,32 @@
       b.addEventListener('click', function () { authSocial(b.dataset.provider); });
     });
     var authForm = $('auth-email-form'); if (authForm) authForm.addEventListener('submit', authSubmitEmail);
-    var hLogin = $('header-login'); if (hLogin) hLogin.addEventListener('click', function () { openAuthModal('client'); });
-    var hSignup = $('header-signup'); if (hSignup) hSignup.addEventListener('click', function () { openAuthModal('client'); });
+    var hLogin = $('header-login'); if (hLogin) hLogin.addEventListener('click', function () { openAuthModal(); });
+    var hSignup = $('header-signup'); if (hSignup) hSignup.addEventListener('click', function () { openAuthModal(); });
     renderAccountMenu(); // set the initial logged-out (auth buttons) / signed-in (avatar) state
     // Click the backdrop (outside the body) to dismiss.
     var authDlg = $('auth-dialog');
     if (authDlg) authDlg.addEventListener('click', function (e) { if (e.target === authDlg) { try { authDlg.close(); } catch (er) {} } });
+
+    // Onboarding guide: role choice → steps, back, skip, CTA, dismissals.
+    document.querySelectorAll('#onb-view-role .onb-choice').forEach(function (b) {
+      b.addEventListener('click', function () { onbShowStepsView(b.getAttribute('data-role')); });
+    });
+    var onbBack = $('onb-back'); if (onbBack) onbBack.addEventListener('click', onbShowRoleView);
+    var onbSkip = $('onb-skip'); if (onbSkip) onbSkip.addEventListener('click', onbDismiss);
+    // Guard the arg: a click event object is truthy and would read as "explore".
+    var onbCta = $('onb-cta'); if (onbCta) onbCta.addEventListener('click', function () { onbComplete(false); });
+    var onbAlt = $('onb-alt'); if (onbAlt) onbAlt.addEventListener('click', function () { onbComplete(true); });
+    var onbDlg = $('onboarding-dialog');
+    if (onbDlg) {
+      // Backdrop click dismisses. `close` covers the ambiguous exits (✕ /
+      // Escape / backdrop) — those defer rather than flag, so a mis-click is
+      // recoverable; "Passer" and the CTAs flag the guide themselves.
+      onbDlg.addEventListener('click', function (e) { if (e.target === onbDlg) { try { onbDlg.close(); } catch (er) {} } });
+      onbDlg.addEventListener('close', onbDefer);
+    }
+    var onbLink = $('footer-guide');
+    if (onbLink) onbLink.addEventListener('click', function (e) { e.preventDefault(); onbOpen(); });
 
     // Delegated in-content / footer links that jump to a tab-pane by name.
     document.addEventListener('click', function (e) {
@@ -2847,6 +3093,9 @@
     // scroll:false so loading on a phone never scrolls past the calendar.
     setTab(state.tab, { scroll: false });
 
+    // First visit only: greet with the tiny onboarding guide (VIEW 1).
+    maybeShowOnboarding();
+
     // Register the service worker (installable PWA + offline shell). Skip on
     // localhost so the dev server's live edits aren't served from cache, and on
     // file:// where SWs are unavailable.
@@ -2884,6 +3133,14 @@
       render: renderAccountMenu,
       signOut: clientSignOut,
       signIn: openClientSignIn,
+    },
+    // First-visit onboarding guide: open() shows VIEW 1, reset() clears the flag
+    // (both the persisted and the in-session copy), seen() reports the flag.
+    onboarding: {
+      open: onbOpen,
+      role: roleGet,
+      seen: onbSeen,
+      reset: function () { flagClear(LS_ONBOARDED); flagClear(LS_ONB_DISMISS); flagClear(LS_ROLE); },
     },
     _internals: { applyFilters: applyFilters, acceptance: acceptance, buildCalendarLinks: buildCalendarLinks },
   };

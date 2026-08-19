@@ -606,6 +606,47 @@ test('EDGE (UI): a filter that matches nothing renders the empty state with a re
   assert.ok(empty.querySelector('button'), 'empty state offers a CTA button');
 });
 
+test('LIST: every upcoming day of the month renders a full card, even with no offer', async () => {
+  const ctx = await boot();
+  // A single offer on today; every later day of the month then has none.
+  await reseed(ctx, [{
+    id: 't1', serviceId: 'testament', dateISO: ctx.today, montant: 1500,
+    tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: ctx.today,
+  }]);
+  ctx.Nota.setView('liste');
+
+  const dim = daysInMonthUTC(ctx.anchor);
+  const todayDay = Number(ctx.today.slice(8, 10));
+  const upcoming = dim - todayDay + 1; // today .. last day of month, inclusive
+
+  const groups = all(ctx.doc, '#agenda .agenda-group');
+  assert.equal(groups.length, upcoming, 'one full card per upcoming day, empty days included');
+
+  const todayCard = ctx.doc.querySelector('#agenda .agenda-group[data-date="' + ctx.today + '"]');
+  assert.ok(todayCard && todayCard.querySelector('.bid-row'), "today's card shows its own offer");
+
+  const vacant = all(ctx.doc, '#agenda .agenda-vacant');
+  assert.equal(vacant.length, upcoming - 1, 'each day without an offer shows a vacant placeholder');
+  if (dim > todayDay) assert.ok(vacant.length > 0, 'an empty upcoming day still renders a full rectangle');
+});
+
+test('LIST: a day shows at most two offers; the rest fold into a "+N autres offres" control', async () => {
+  const ctx = await boot();
+  const iso = ctx.today;
+  await reseed(ctx, [1900, 1700, 1500, 1300].map(function (montant, i) {
+    return { id: 'm' + i, serviceId: 'testament', dateISO: iso, montant: montant,
+      tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso };
+  }));
+  ctx.Nota.setView('liste');
+
+  const card = ctx.doc.querySelector('#agenda .agenda-group[data-date="' + iso + '"]');
+  assert.ok(card, 'today has a card');
+  assert.equal(card.querySelectorAll('.bid-row').length, 2, 'at most two offers shown per day');
+  const more = card.querySelector('.agenda-more');
+  assert.ok(more, 'the overflow folds into a "+N autres offres" control');
+  assert.match(more.textContent, /\+\s*2\s+autres\s+offres/);
+});
+
 test('EDGE (UI): a mixed open/retained day stays available with the open average', async () => {
   const ctx = await boot();
   const iso = ctx.D.addDays(ctx.today, 2); // future date (past cells are blanked)
@@ -788,4 +829,301 @@ test('clientSignOut clears the device-local identity and offer history', async (
   assert.equal(win.localStorage.getItem('nota.myoffers.v1'), null, 'offer history is cleared');
   const prof = JSON.parse(win.localStorage.getItem('nota.profile.v1') || '{}');
   assert.ok(!prof.courriel, 'the saved email is gone');
+});
+
+// 20. First-visit onboarding guide: the dialog exists, auto-shows on a fresh
+//     boot (no nota.onboarded.v1), and exposes the documented handle.
+test('onboarding dialog exists and auto-shows on a fresh first visit', async () => {
+  const { doc, win, Nota } = await boot();
+  const dlg = $(doc, 'onboarding-dialog');
+  assert.ok(dlg, 'the onboarding dialog is in the DOM');
+  assert.ok(dlg.classList.contains('onb-modal'), 'it carries the .onb-modal class');
+  // Fresh boot: the flag is unset, so the guide auto-shows (showModal shim → open).
+  assert.equal(win.localStorage.getItem('nota.onboarded.v1'), null, 'not yet flagged');
+  assert.equal(dlg.open, true, 'the guide auto-shows on the first visit');
+  // Documented, testable handle.
+  assert.equal(typeof Nota.onboarding, 'object');
+  assert.equal(typeof Nota.onboarding.open, 'function');
+  assert.equal(typeof Nota.onboarding.reset, 'function');
+  // VIEW 1 (role choice) is the visible view, with its two outline choice cards.
+  assert.equal($(doc, 'onb-view-role').hidden, false);
+  assert.equal($(doc, 'onb-view-steps').hidden, true);
+  assert.equal(all(doc, '#onb-view-role .onb-choice').length, 2);
+});
+
+// 21. It stays dismissed once the browser has seen it (flag gates the auto-show).
+test('onboarding does not auto-show when nota.onboarded.v1 is already set', async () => {
+  const dom = new JSDOM(HTML_SRC, {
+    runScripts: 'outside-only',
+    url: 'https://nota.example/',
+    pretendToBeVisual: true,
+    beforeParse(window) {
+      window.fetch = () => Promise.reject(new Error('offline'));
+      window.scrollTo = () => {};
+      if (!window.HTMLDialogElement.prototype.showModal) window.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
+      if (!window.HTMLDialogElement.prototype.close) window.HTMLDialogElement.prototype.close = function () { this.open = false; };
+      // Pre-seed the "already onboarded" flag before app.js boots.
+      window.localStorage.setItem('nota.onboarded.v1', '1');
+    },
+  });
+  const win = dom.window;
+  win.eval(DOMAIN_SRC);
+  win.eval(APP_SRC);
+  await wait(50);
+  assert.equal($(win.document, 'onboarding-dialog').open, false, 'the guide stays closed on return visits');
+});
+
+// 22. Choosing CLIENT renders that role's 3 steps and the client CTA label.
+test('onboarding: choosing the client role renders its 3 steps + CTA', async () => {
+  const { doc } = await boot();
+  doc.querySelector('#onb-view-role .onb-choice[data-role="client"]').click();
+  assert.equal($(doc, 'onb-view-role').hidden, true);
+  assert.equal($(doc, 'onb-view-steps').hidden, false);
+  const steps = all(doc, '#onb-steps .onb-step');
+  assert.equal(steps.length, 3, 'three steps for the client');
+  const titles = steps.map((s) => s.querySelector('.onb-step-t').textContent);
+  assert.deepEqual(titles, ['Choisissez votre date', 'Proposez votre prix', 'Un notaire vous retient']);
+  const chips = steps.map((s) => s.querySelector('.onb-step-n').textContent);
+  assert.deepEqual(chips, ['1', '2', '3'], 'numbered 1..3');
+  assert.equal($(doc, 'onb-cta').textContent, 'Publier ma demande →');
+  assert.equal($(doc, 'onboarding-dialog').getAttribute('data-role'), 'client');
+});
+
+// 23. Choosing NOTARY renders its 3 steps and the notary CTA label; "Changer"
+//     returns to VIEW 1.
+test('onboarding: choosing the notary role renders its 3 steps + CTA, and back returns to VIEW 1', async () => {
+  const { doc } = await boot();
+  doc.querySelector('#onb-view-role .onb-choice[data-role="notary"]').click();
+  const titles = all(doc, '#onb-steps .onb-step .onb-step-t').map((n) => n.textContent);
+  assert.deepEqual(titles, ['Voyez les demandes ouvertes', 'Retenez celle qui vous convient', 'Complétez l’acte']);
+  assert.equal($(doc, 'onb-cta').textContent, 'Voir les demandes →');
+  // "← Changer" swaps back to the role choice.
+  $(doc, 'onb-back').click();
+  assert.equal($(doc, 'onb-view-role').hidden, false);
+  assert.equal($(doc, 'onb-view-steps').hidden, true);
+});
+
+// 24. Completing the client CTA sets the flag, closes the guide, and routes into
+//     the real offer flow (carnet tab + the day dialog opens).
+test('onboarding: the client CTA flags onboarded, closes, and opens the offer flow', async () => {
+  const { doc, win, Nota } = await boot();
+  doc.querySelector('#onb-view-role .onb-choice[data-role="client"]').click();
+  $(doc, 'onb-cta').click();
+  assert.equal(win.localStorage.getItem('nota.onboarded.v1'), '1', 'onboarded flag is set');
+  assert.equal($(doc, 'onboarding-dialog').open, false, 'the guide is closed');
+  assert.equal(Nota.state.tab, 'carnet', 'routed into the carnet');
+  assert.equal($(doc, 'day-dialog').open, true, 'the reserve/offer day dialog opened');
+});
+
+// 25. Completing the notary CTA routes to the notaires tab.
+test('onboarding: the notary CTA flags onboarded, closes, and routes to notaires', async () => {
+  const { doc, win, Nota } = await boot();
+  doc.querySelector('#onb-view-role .onb-choice[data-role="notary"]').click();
+  $(doc, 'onb-cta').click();
+  assert.equal(win.localStorage.getItem('nota.onboarded.v1'), '1');
+  assert.equal($(doc, 'onboarding-dialog').open, false);
+  assert.equal(Nota.state.tab, 'notaires', 'routed into the notaries tab');
+});
+
+// 26. Dismissing via "Passer" sets the flag without routing; reset() clears it
+//     and open() re-shows VIEW 1.
+test('onboarding: Passer dismisses + flags, and reset()/open() re-show the guide', async () => {
+  const { doc, win, Nota } = await boot();
+  // Move to VIEW 2 so "Passer" is present, then skip.
+  doc.querySelector('#onb-view-role .onb-choice[data-role="client"]').click();
+  $(doc, 'onb-skip').click();
+  assert.equal(win.localStorage.getItem('nota.onboarded.v1'), '1', 'Passer flags onboarded');
+  assert.equal($(doc, 'onboarding-dialog').open, false, 'the guide is closed');
+  // reset() clears the flag; open() shows VIEW 1 again.
+  Nota.onboarding.reset();
+  assert.equal(win.localStorage.getItem('nota.onboarded.v1'), null, 'reset clears the flag');
+  Nota.onboarding.open();
+  assert.equal($(doc, 'onboarding-dialog').open, true, 'open() re-shows the guide');
+  assert.equal($(doc, 'onb-view-role').hidden, false, 'at VIEW 1 (role choice)');
+});
+
+// 27. The footer "Comment ça marche" link re-opens the guide at VIEW 1.
+test('onboarding: the footer link re-opens the guide at VIEW 1', async () => {
+  const { doc } = await boot();
+  const dlg = $(doc, 'onboarding-dialog');
+  try { dlg.close(); } catch (e) {} // simulate a prior dismissal
+  assert.equal(dlg.open, false);
+  const link = $(doc, 'footer-guide');
+  assert.ok(link, 'the footer guide link exists');
+  link.click();
+  assert.equal(dlg.open, true, 'the footer link re-opens the guide');
+  assert.equal($(doc, 'onb-view-role').hidden, false, 'reopened at VIEW 1');
+});
+
+// ---------------------------------------------------------------------------
+// Onboarding, second pass: a remembered role, a recoverable dismissal, and the
+// accessibility affordances a two-view modal needs.
+// ---------------------------------------------------------------------------
+
+// Boot a fresh app with arbitrary pre-seeded localStorage. Same shims as boot(),
+// but the seed runs before app.js so the gates see it.
+async function bootSeeded(seed) {
+  const dom = new JSDOM(HTML_SRC, {
+    runScripts: 'outside-only',
+    url: 'https://nota.example/',
+    pretendToBeVisual: true,
+    beforeParse(window) {
+      window.fetch = () => Promise.reject(new Error('offline'));
+      window.scrollTo = () => {};
+      if (!window.HTMLDialogElement.prototype.showModal) window.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
+      if (!window.HTMLDialogElement.prototype.close) window.HTMLDialogElement.prototype.close = function () { this.open = false; };
+      Object.keys(seed || {}).forEach((k) => window.localStorage.setItem(k, seed[k]));
+    },
+  });
+  const win = dom.window;
+  win.eval(DOMAIN_SRC);
+  win.eval(APP_SRC);
+  await wait(50);
+  return { win, doc: win.document, Nota: win.Nota };
+}
+
+// 28. The role choice is remembered on the device, not just parked on the dialog.
+test('onboarding: the chosen role is persisted and exposed on the handle', async () => {
+  const { doc, win, Nota } = await boot();
+  assert.equal(win.localStorage.getItem('nota.role.v1'), null, 'no role before choosing');
+  doc.querySelector('#onb-view-role .onb-choice[data-role="notary"]').click();
+  assert.equal(win.localStorage.getItem('nota.role.v1'), 'notary', 'the choice is persisted');
+  assert.equal(Nota.onboarding.role(), 'notary', 'and readable through the handle');
+  // Going back and picking the other role overwrites it.
+  $(doc, 'onb-back').click();
+  doc.querySelector('#onb-view-role .onb-choice[data-role="client"]').click();
+  assert.equal(Nota.onboarding.role(), 'client', 'the latest choice wins');
+});
+
+// 29. That remembered role is what the auth modal opens on — a notary who said
+//     "Je suis notaire" must not be asked again as a client.
+test('onboarding: the remembered role pre-selects the auth modal', async () => {
+  const { doc } = await bootSeeded({ 'nota.role.v1': 'notary', 'nota.onboarded.v1': '1' });
+  $(doc, 'header-login').click();
+  const on = doc.querySelector('#auth-role .seg-btn.is-on');
+  assert.ok(on, 'a role segment is selected');
+  assert.equal(on.dataset.role, 'notary', 'the auth modal opens on the remembered role');
+  assert.equal($(doc, 'auth-continue').textContent, 'Accéder à l’espace notaire →');
+});
+
+// 30. An accidental dismissal (Escape / backdrop / ✕) must not burn the guide
+//     forever — it defers, and the visitor gets one more chance.
+test('onboarding: an accidental dismissal defers instead of flagging onboarded', async () => {
+  const { doc, win } = await boot();
+  const dlg = $(doc, 'onboarding-dialog');
+  assert.equal(dlg.open, true);
+  fire(win, dlg, 'close'); // what Escape / backdrop / ✕ do in a real browser
+  assert.equal(win.localStorage.getItem('nota.onboarded.v1'), null, 'not permanently flagged');
+  assert.equal(win.localStorage.getItem('nota.onboarded.dismissed.v1'), '1', 'the dismissal is counted');
+});
+
+// 31. Second chance granted after one dismissal; withheld after two.
+test('onboarding: re-shows after one dismissal, stops after two', async () => {
+  const second = await bootSeeded({ 'nota.onboarded.dismissed.v1': '1' });
+  assert.equal($(second.doc, 'onboarding-dialog').open, true, 'one more chance after a single dismissal');
+  const third = await bootSeeded({ 'nota.onboarded.dismissed.v1': '2' });
+  assert.equal($(third.doc, 'onboarding-dialog').open, false, 'two dismissals means stop asking');
+});
+
+// 32. An explicit "Passer" is a decision, not an accident — it flags immediately.
+test('onboarding: Passer flags onboarded on the first click', async () => {
+  const { doc, win } = await boot();
+  doc.querySelector('#onb-view-role .onb-choice[data-role="client"]').click();
+  $(doc, 'onb-skip').click();
+  assert.equal(win.localStorage.getItem('nota.onboarded.v1'), '1');
+  // The trailing `close` event a real browser fires must not also count a dismissal.
+  fire(win, $(doc, 'onboarding-dialog'), 'close');
+  assert.equal(win.localStorage.getItem('nota.onboarded.dismissed.v1'), null, 'no stray dismissal counted');
+});
+
+// 33. Someone already signed in has nothing to be onboarded about.
+test('onboarding: does not auto-show for an already signed-in visitor', async () => {
+  // Seeded exactly as lsSave writes them (JSON), and ncRestore needs both the
+  // token and the email before it will consider the session restored.
+  const notary = await bootSeeded({
+    'nota.notary.token': JSON.stringify('tok-abc'),
+    'nota.notary.email': JSON.stringify('me@etude.ca'),
+  });
+  assert.equal($(notary.doc, 'onboarding-dialog').open, false, 'a signed-in notary is not greeted');
+  const client = await bootSeeded({ 'nota.profile.v1': JSON.stringify({ courriel: 'a@b.ca' }) });
+  assert.equal($(client.doc, 'onboarding-dialog').open, false, 'a known client is not greeted');
+});
+
+// 34. Accessibility: the dialog must announce the view the reader is actually on,
+//     move focus into it, and say where they are in the flow.
+test('onboarding: labelling, progress and focus follow the active view', async () => {
+  const { doc } = await boot();
+  const dlg = $(doc, 'onboarding-dialog');
+  assert.equal(dlg.getAttribute('aria-labelledby'), 'onb-title', 'VIEW 1 is labelled by its own heading');
+  assert.equal($(doc, 'onb-progress').textContent, 'Étape 1 sur 2');
+  doc.querySelector('#onb-view-role .onb-choice[data-role="client"]').click();
+  assert.equal(dlg.getAttribute('aria-labelledby'), 'onb-steps-title', 'VIEW 2 relabels to the steps heading');
+  assert.equal($(doc, 'onb-steps-progress').textContent, 'Étape 2 sur 2');
+  assert.equal(doc.activeElement, $(doc, 'onb-cta'), 'focus lands on the CTA of the new view');
+  // Back restores VIEW 1's label and clears the parked role.
+  $(doc, 'onb-back').click();
+  assert.equal(dlg.getAttribute('aria-labelledby'), 'onb-title');
+  assert.equal(dlg.getAttribute('data-role'), null, 'the parked role is cleared on back');
+});
+
+// 35. A second, softer exit: look around the carnet without being thrown into a
+//     modal. The old client CTA chained straight into the day dialog.
+test('onboarding: the secondary CTA lands on the carnet without opening a modal', async () => {
+  const { doc, win, Nota } = await boot();
+  doc.querySelector('#onb-view-role .onb-choice[data-role="client"]').click();
+  const alt = $(doc, 'onb-alt');
+  assert.ok(alt, 'the secondary action exists');
+  assert.equal(alt.textContent, 'Explorer le carnet d’abord');
+  alt.click();
+  assert.equal(win.localStorage.getItem('nota.onboarded.v1'), '1', 'still a completed onboarding');
+  assert.equal($(doc, 'onboarding-dialog').open, false, 'the guide closed');
+  assert.equal(Nota.state.tab, 'carnet', 'landed on the carnet');
+  assert.equal($(doc, 'day-dialog').open, false, 'and NOT chained into a second modal');
+});
+
+// 36. The guide stays reachable from the account menu, not just a footer link a
+//     first-time visitor will never look for.
+test('onboarding: the account menu offers a way back into the guide', async () => {
+  const { doc, win } = await bootSeeded({ 'nota.profile.v1': JSON.stringify({ courriel: 'a@b.ca' }) });
+  win.Nota.account.render();
+  const row = Array.from(doc.querySelectorAll('#acct-actions button, #acct-actions a'))
+    .find((b) => /Comment ça marche/.test(b.textContent));
+  assert.ok(row, 'the account menu has a "Comment ça marche" row');
+  row.click();
+  assert.equal($(doc, 'onboarding-dialog').open, true, 'it re-opens the guide');
+  assert.equal($(doc, 'onb-view-role').hidden, false, 'at VIEW 1');
+});
+
+// 37. localStorage can throw (Safari private mode). The guide must not then
+//     re-greet on every single navigation within the session.
+test('onboarding: survives a localStorage that refuses to write', async () => {
+  const { doc, win } = await boot();
+  // Make every write throw, as a locked-down browser would.
+  win.localStorage.setItem = () => { throw new Error('QuotaExceededError'); };
+  doc.querySelector('#onb-view-role .onb-choice[data-role="client"]').click();
+  $(doc, 'onb-skip').click();
+  assert.equal($(doc, 'onboarding-dialog').open, false, 'dismissal still works');
+  assert.equal(win.Nota.onboarding.seen(), true, 'and is remembered in memory for this session');
+});
+
+// 38. Client sign-in fires a fire-and-forget welcome email (POST /client/welcome).
+//     The backend is idempotent; the UI must fire it and never block on it.
+test('client sign-in POSTs the welcome email to /client/welcome', async () => {
+  const ctx = await boot();
+  const { win, doc } = ctx;
+  // Record outbound fetches (the boot stub rejects everything; here we resolve).
+  const calls = [];
+  win.fetch = (url, opts) => {
+    calls.push({ url: String(url), opts: opts || {} });
+    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ ok: true }) });
+  };
+
+  $(doc, 'auth-email').value = 'nouveau@client.ca';   // authRole defaults to 'client'
+  fire(win, $(doc, 'auth-email-form'), 'submit');
+  await wait(0);
+
+  const welcome = calls.find((c) => c.url.indexOf('/client/welcome') !== -1);
+  assert.ok(welcome, 'expected a POST to /client/welcome on client sign-in');
+  assert.equal((welcome.opts.method || '').toUpperCase(), 'POST');
+  assert.equal(JSON.parse(welcome.opts.body || '{}').courriel, 'nouveau@client.ca');
 });

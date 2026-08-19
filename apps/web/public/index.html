@@ -644,6 +644,7 @@
         <a href="#" class="goto-link" data-goto="confidentialite">Confidentialité</a>
         <a href="#" class="goto-link" data-goto="conditions">Conditions d’utilisation</a>
         <a href="#" class="goto-link" data-goto="charte">Charte des droits</a>
+        <a href="#" class="footer-guide" id="footer-guide">Comment ça marche</a>
         <!-- Contact actions (courriel, and phone only when a line is configured
              in @nota/domain CONTACT). Filled by renderContact(). -->
         <div class="footer-contact" id="footer-contact"></div>
@@ -809,6 +810,51 @@
         </form>
 
         <p class="auth-fine" id="auth-fine">Première visite ou retour, c’est le même geste. Vos renseignements restent sur cet appareil.</p>
+      </div>
+    </dialog>
+
+    <!-- First-visit onboarding guide: pick a role (client or notary), then a
+         tiny 3-step explanation, then drop into the real flow. Auto-shows once
+         (gated by localStorage nota.onboarded.v1); re-openable from the footer.
+         Same <dialog> + showModal pattern as #auth-dialog above. -->
+    <dialog id="onboarding-dialog" class="onb-modal" aria-labelledby="onb-title">
+      <form method="dialog" class="auth-x-form"><button class="auth-x" value="close" aria-label="Fermer">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button></form>
+
+      <div class="onb-body">
+        <!-- VIEW 1 — role choice -->
+        <div class="onb-view" id="onb-view-role">
+          <div class="auth-mark" aria-hidden="true"><span class="brand-badge"><img src="favicon.svg" width="26" height="26" alt="" /></span></div>
+          <h2 id="onb-title" class="onb-title">Bienvenue sur Nota</h2>
+          <p class="onb-sub">Comment souhaitez-vous utiliser Nota ?</p>
+          <p class="onb-progress" id="onb-progress">Étape 1 sur 2</p>
+
+          <div class="onb-choices" role="group" aria-label="Comment souhaitez-vous utiliser Nota ?">
+            <button type="button" class="onb-choice" data-role="client">
+              <span class="onb-choice-ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></span>
+              <span class="onb-choice-t">Je cherche un notaire</span>
+              <span class="onb-choice-d">Publiez votre date, recevez des offres.</span>
+            </button>
+            <button type="button" class="onb-choice" data-role="notary">
+              <span class="onb-choice-ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span>
+              <span class="onb-choice-t">Je suis notaire</span>
+              <span class="onb-choice-d">Voyez les demandes ouvertes à Québec.</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- VIEW 2 — role steps (title, sub, 3 steps, CTA) filled by app.js -->
+        <div class="onb-view" id="onb-view-steps" hidden>
+          <button type="button" class="onb-back" id="onb-back">← Changer</button>
+          <h2 class="onb-title onb-steps-title" id="onb-steps-title"></h2>
+          <p class="onb-sub" id="onb-steps-sub"></p>
+          <p class="onb-progress" id="onb-steps-progress">Étape 2 sur 2</p>
+          <ol class="onb-steps" id="onb-steps"></ol>
+          <button type="button" class="btn btn-primary btn-lg onb-cta" id="onb-cta"></button>
+          <button type="button" class="onb-alt" id="onb-alt"></button>
+          <button type="button" class="onb-skip" id="onb-skip">Passer</button>
+        </div>
       </div>
     </dialog>
 
