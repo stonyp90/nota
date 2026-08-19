@@ -191,6 +191,9 @@ resource "aws_lambda_function" "admin" {
   # overview is a heavier read, so 5 was too tight for a few concurrent operators.
   reserved_concurrent_executions = var.admin_reserved_concurrency
 
+  # Use the retention-capped log group (logs.tf) rather than a never-expire one.
+  depends_on = [aws_cloudwatch_log_group.admin]
+
   environment {
     variables = {
       NODE_ENV = "production"

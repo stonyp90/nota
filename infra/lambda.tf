@@ -106,6 +106,10 @@ resource "aws_lambda_function" "api" {
   # or DoS can't exhaust account-wide Lambda concurrency or run up unbounded cost.
   reserved_concurrent_executions = var.api_reserved_concurrency
 
+  # Ensure the retention-capped log group (logs.tf) exists before the first
+  # invocation, so Lambda writes to it instead of auto-creating a never-expire one.
+  depends_on = [aws_cloudwatch_log_group.api]
+
   environment {
     variables = {
       # AWS_REGION is a reserved runtime variable set by Lambda automatically,

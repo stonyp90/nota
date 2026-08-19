@@ -80,6 +80,26 @@ terraform init -backend=false && terraform validate
 terraform fmt -recursive
 ```
 
+## Cost notes
+
+This stack is serverless and pay-per-use by design — on-demand DynamoDB,
+on-demand Lambda, `PriceClass_100` CloudFront, S3 noncurrent-version expiry, and
+DynamoDB TTL all keep idle cost near zero. Two cost levers worth knowing:
+
+- **Lambda log retention (`logs.tf`).** Lambda auto-creates its
+  `/aws/lambda/<fn>` log group with retention *Never expire*, so logs pile up
+  forever. `logs.tf` declares each Lambda's log group explicitly with
+  `retention_in_days = var.log_retention_days` (14 by default), capping log
+  storage. If the stack is already deployed, `terraform import` the existing
+  groups once before the next apply (import commands are in `logs.tf`).
+- **Daily reminder Scan (recommendation, not yet built).** The reminder
+  scheduler calls `scanOpenBids()`, a full-table `Scan` of `nota-main` once a
+  day. On PAY_PER_REQUEST you pay to read *every* item each run (the filter is
+  applied after the read), so this cost grows with total table size. When
+  volume warrants it, add the deferred GSI (e.g. `GSI1` keyed on bid status/due
+  date) and replace the Scan with a `Query`. This is an app + live-table change,
+  so it stays out of the infra layer until phase 2.
+
 ## Future additions (not built yet)
 
 - **SES** for transactional email (continue-prompt #5).
