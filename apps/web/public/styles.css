@@ -368,6 +368,10 @@ a:hover { text-decoration: underline; }
 .auth-social { display: flex; flex-direction: column; gap: 9px; }
 .auth-oauth { justify-content: center; gap: 10px; width: 100%; padding: 11px 14px; font-weight: 600; }
 .auth-oauth .brand-ic { flex: none; }
+/* Social login is not wired yet — shown but disabled with a "Bientôt" tag. */
+.auth-oauth[disabled] { opacity: .5; cursor: not-allowed; }
+.auth-oauth[disabled]:hover { transform: none; background: transparent; border-color: var(--border); }
+.auth-soon { margin-left: auto; font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-muted); border: 1px solid var(--border); border-radius: 999px; padding: 1px 7px; }
 .auth-divider { display: flex; align-items: center; gap: 12px; margin: 16px 0; color: var(--ink-muted); font-size: 12px; }
 .auth-divider::before, .auth-divider::after { content: ''; height: 1px; background: var(--border); flex: 1; }
 .auth-email { display: flex; flex-direction: column; gap: 8px; }
@@ -692,11 +696,12 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 /* --- Agenda / bid list --------------------------------------------------- */
 /* Agenda: a dense responsive grid of day-cards so it fills the full width below
    the calendar (no sparse full-width rows / blank space). */
-/* Masonry columns so day-groups pack tightly, top-to-bottom then across, with no
-   row-alignment gaps (a grid aligned every row to its tallest card). */
-.agenda { columns: clamp(240px, 24vw, 300px); column-gap: 12px; padding: 12px 16px 18px; }
-.agenda-group { background: var(--surface-inset); border-radius: var(--radius-lg); padding-bottom: 6px; overflow: hidden; break-inside: avoid; margin-bottom: 12px; }
-.agenda-empty { column-span: all; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 28px 18px; text-align: center; }
+/* Row-aligned grid: day-groups line up in tidy rows/columns. Each day is capped to
+   its top 3 offers (rest behind "voir plus"), so heights stay close and rows align
+   without large gaps. */
+.agenda { display: grid; grid-template-columns: repeat(auto-fill, minmax(clamp(240px, 24vw, 300px), 1fr)); gap: 12px; padding: 12px 16px 18px; align-items: start; }
+.agenda-group { background: var(--surface-inset); border-radius: var(--radius-lg); padding-bottom: 6px; overflow: hidden; }
+.agenda-empty { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 28px 18px; text-align: center; }
 .agenda-empty-text { margin: 0; font-size: 13px; color: var(--ink-muted); }
 .agenda-day { padding: 11px 14px 6px; font-size: 12px; font-weight: 700; color: var(--ink-muted); }
 .bid-row { display: flex; align-items: center; gap: 10px; padding: 9px 14px 9px 12px; border-top: 1px solid var(--border); border-left: 2px solid transparent; }

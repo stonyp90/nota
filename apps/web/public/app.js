@@ -804,7 +804,7 @@
     if (state.filters.sort.indexOf('date') === 0) order.sort(state.filters.sort === 'date-asc' ? undefined : function (a, b) { return b.localeCompare(a); });
     else order.sort();
 
-    var PER_DAY = 8; // cap rows per day so a busy month never floods the DOM
+    var PER_DAY = 3; // top 3 per day keeps every card a similar height so the grid aligns
     order.forEach(function (iso) {
       var group = el('div', 'agenda-group');
       group.appendChild(el('div', 'agenda-day', dayTitle(iso)));
