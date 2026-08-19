@@ -260,8 +260,10 @@
     var a = notifLoad();
     var unread = a.filter(function (x) { return !x.read; }).length;
     var badge = $('notif-badge');
-    if (badge) { badge.textContent = unread > 9 ? '9+' : String(unread); badge.hidden = unread === 0; }
-    var bell = $('notif-bell'); if (bell) bell.classList.toggle('has-unread', unread > 0);
+    // Notifications are personal — an anonymous visitor sees none (no badge, no list).
+    var isAnon = accountRole() === 'anon';
+    if (badge) { badge.textContent = unread > 9 ? '9+' : String(unread); badge.hidden = isAnon || unread === 0; }
+    var bell = $('notif-bell'); if (bell) bell.classList.toggle('has-unread', !isAnon && unread > 0);
     clear(list);
     if (!a.length) { list.appendChild(el('div', 'notif-empty', 'Aucune notification pour le moment.')); return; }
     a.forEach(function (n) {
@@ -320,13 +322,71 @@
     return b;
   }
 
-  // Open the profile pane on the Coordonnées card and focus the email field, so an
-  // anonymous visitor "signs in" simply by identifying themselves. focus:false on
-  // setTab keeps focus off the pane heading so it lands on the email input.
-  function openClientSignIn() {
+  // --- Sign-in / sign-up modal (one door for client AND notary) --------------
+  // A role toggle + social options (OAuth not wired yet) + a passwordless courriel
+  // path. Client → device-local identity; notary → the existing /notary/session.
+  var authRole = 'client';
+  function authSetRole(role) {
+    authRole = role === 'notary' ? 'notary' : 'client';
+    document.querySelectorAll('#auth-role .seg-btn').forEach(function (b) {
+      var on = b.dataset.role === authRole;
+      b.classList.toggle('is-on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    var fine = $('auth-fine'), cont = $('auth-continue');
+    if (authRole === 'notary') {
+      if (fine) fine.textContent = 'Accédez aux demandes ouvertes à Québec. Sans mot de passe.';
+      if (cont) cont.textContent = 'Accéder à l’espace notaire →';
+    } else {
+      if (fine) fine.textContent = 'Publiez une demande et suivez vos offres. Vos renseignements restent sur cet appareil.';
+      if (cont) cont.textContent = 'Continuer →';
+    }
+  }
+  function openAuthModal(role) {
+    authSetRole(role || 'client');
+    var errs = $('auth-errors'); if (errs) errs.hidden = true;
+    var em = $('auth-email'); if (em) em.value = profileGet().courriel || '';
+    var dlg = $('auth-dialog');
     toggleNotifPanel(false);
+    if (dlg && dlg.showModal) {
+      try { dlg.showModal(); } catch (e) { /* already open */ }
+      setTimeout(function () { try { (em || dlg).focus(); } catch (e) {} }, 30);
+    } else { // jsdom / no <dialog> support: fall back to the profile identity path
+      setTab('profil', { focus: false });
+      var f = $('p-courriel'); if (f) { try { f.focus(); } catch (e) {} }
+    }
+  }
+  // Kept as the anonymous "sign in" entry point (name referenced elsewhere).
+  function openClientSignIn() { openAuthModal('client'); }
+
+  function authSocial(provider) {
+    // Real OAuth (Google/Facebook/LinkedIn) needs provider apps + a backend; not
+    // wired yet. Surface the option honestly and steer to the courriel path.
+    toast('La connexion ' + provider + ' arrive bientôt — continuez avec votre courriel pour l’instant.');
+    var em = $('auth-email'); if (em) { try { em.focus(); } catch (e) {} }
+  }
+  function authSubmitEmail(e) {
+    if (e && e.preventDefault) e.preventDefault();
+    var em = $('auth-email'), errs = $('auth-errors');
+    var val = em ? em.value.trim() : '';
+    if (!val || !D.isEmail(val)) {
+      if (errs) { clear(errs); errs.hidden = false; errs.appendChild(el('li', null, 'Entrez un courriel valide.')); }
+      return;
+    }
+    if (errs) errs.hidden = true;
+    var dlg = $('auth-dialog');
+    if (authRole === 'notary') {
+      if (dlg && dlg.close) { try { dlg.close(); } catch (e) {} }
+      setTab('notaires', { focus: false });
+      var ncEmail = $('nc-email'); if (ncEmail) ncEmail.value = val;
+      ncSignIn(val); // existing /notary/session flow (offers free signup when new)
+      return;
+    }
+    profileSet({ courriel: val });               // client identity is device-local
+    if (dlg && dlg.close) { try { dlg.close(); } catch (e) {} }
+    renderAccountMenu();
+    computeNotifications();
+    toast('Bienvenue ! Vous êtes connecté comme ' + val + '.');
     setTab('profil', { focus: false });
-    var f = $('p-courriel'); if (f) { try { f.focus(); } catch (e) { /* jsdom */ } }
   }
 
   // The offer flow entry point used elsewhere (hero CTA): the carnet with a day open.
@@ -399,7 +459,7 @@
       actions.appendChild(acctAction('offers', 'Mes demandes', function () { toggleNotifPanel(false); setTab('profil'); }));
       actions.appendChild(acctAction('signout', 'Se déconnecter', clientSignOut));
     } else {
-      actions.appendChild(acctAction('signin', 'Se connecter / s’inscrire', openClientSignIn));
+      // The identity head IS the "Se connecter / s’inscrire" trigger — don't repeat it.
       actions.appendChild(acctAction('publier', 'Publier une demande', openOfferFlow));
       actions.appendChild(acctAction('notaire', 'Espace notaire', function () { toggleNotifPanel(false); setTab('notaires'); }));
     }
@@ -1126,7 +1186,9 @@
   // (== the flat base when nothing is answered). Everything in the booking form
   // — slider bounds, the recommended pre-fill, the "× base" note — reads this.
   function currentBase() {
-    var b = D.computeBasePrice(state.offer.serviceId, state.offer.pricing);
+    // Nota quotes 1.5× the market rate (notaPrice); the whole booking form —
+    // slider bounds, the recommended pre-fill, the "prix de départ" — reads this.
+    var b = D.notaPrice(state.offer.serviceId, state.offer.pricing);
     if (b != null) return b;
     var svc = D.serviceById(state.offer.serviceId);
     return svc ? svc.prixDepart : 0;
@@ -1858,11 +1920,11 @@
     updateDossierBar();
   }
 
-  // The base price the client's profile answers determine for this act.
+  // The Nota price (1.5× market) the client's profile answers determine for this act.
   function updateDossierPrice(svc) {
     var node = $('dossier-price');
     if (!node) return;
-    var base = D.computeBasePrice(svc.id, dossierPricing(svc.id));
+    var base = D.notaPrice(svc.id, dossierPricing(svc.id));
     node.textContent = 'Prix de départ déterminé : ' + D.money(base) + '.';
   }
 
@@ -2551,6 +2613,19 @@
     $('acct-confid').addEventListener('click', function () { setTab('confidentialite'); toggleNotifPanel(false); });
     $('acct-conditions').addEventListener('click', function () { setTab('conditions'); toggleNotifPanel(false); });
     $('acct-charte').addEventListener('click', function () { setTab('charte'); toggleNotifPanel(false); });
+
+    // Sign-in / sign-up modal: role toggle, social options, courriel path.
+    document.querySelectorAll('#auth-role .seg-btn').forEach(function (b) {
+      b.addEventListener('click', function () { authSetRole(b.dataset.role); });
+    });
+    document.querySelectorAll('.auth-oauth').forEach(function (b) {
+      b.addEventListener('click', function () { authSocial(b.dataset.provider); });
+    });
+    var authForm = $('auth-email-form'); if (authForm) authForm.addEventListener('submit', authSubmitEmail);
+    // Click the backdrop (outside the body) to dismiss.
+    var authDlg = $('auth-dialog');
+    if (authDlg) authDlg.addEventListener('click', function (e) { if (e.target === authDlg) { try { authDlg.close(); } catch (er) {} } });
+
     // Delegated in-content / footer links that jump to a tab-pane by name.
     document.addEventListener('click', function (e) {
       var g = e.target.closest && e.target.closest('.goto-link[data-goto]');

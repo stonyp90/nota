@@ -149,7 +149,7 @@
 
     <header class="site-header">
       <div class="wrap">
-        <a class="brand" href="#" aria-label="Nota, accueil">
+        <a class="brand goto-link" href="#" data-goto="carnet" aria-label="Nota, accueil — retour au menu">
           <span class="brand-mark" aria-hidden="true">
             <img src="favicon.svg" width="30" height="30" alt="" />
           </span>
@@ -184,12 +184,15 @@
             <div class="acct-sep"></div>
             <!-- Role-aware actions (sign in / sign out, routes). Filled by renderAccountMenu(). -->
             <nav class="acct-actions" id="acct-actions" aria-label="Actions du compte"></nav>
-            <div class="acct-sep"></div>
-            <div class="notif-head">
-              <span class="notif-head-title">Notifications</span>
-              <button type="button" class="btn btn-sm btn-ghost" id="notif-clear">Tout marquer lu</button>
+            <!-- Notifications belong to a signed-in person; hidden entirely when anonymous. -->
+            <div class="acct-notifs" id="acct-notifs">
+              <div class="acct-sep"></div>
+              <div class="notif-head">
+                <span class="notif-head-title">Notifications</span>
+                <button type="button" class="btn btn-sm btn-ghost" id="notif-clear">Tout marquer lu</button>
+              </div>
+              <div class="notif-list" id="notif-list"></div>
             </div>
-            <div class="notif-list" id="notif-list"></div>
             <div class="acct-sep"></div>
             <nav class="acct-legal" aria-label="Informations légales">
               <button type="button" class="acct-legal-link" id="acct-confid">Confidentialité</button>
@@ -755,6 +758,51 @@
           <button class="btn" id="reveal-cancel">Rester anonyme</button>
           <button class="btn btn-primary" id="reveal-confirm">Afficher mon nom</button>
         </div>
+      </div>
+    </dialog>
+
+    <!-- Sign-in / sign-up modal: choose a role (client or notary), then continue
+         with a social provider or a courriel. Social OAuth is not wired yet — those
+         buttons surface the option and point to the courriel path for now. -->
+    <dialog id="auth-dialog" class="auth-modal" aria-labelledby="auth-title">
+      <form method="dialog" class="auth-x-form"><button class="auth-x" value="close" aria-label="Fermer">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button></form>
+      <div class="auth-body">
+        <div class="auth-mark" aria-hidden="true"><span class="brand-badge"><img src="favicon.svg" width="26" height="26" alt="" /></span></div>
+        <h2 id="auth-title" class="auth-title">Bienvenue sur Nota</h2>
+        <p class="auth-sub">Connectez-vous ou créez votre compte — sans mot de passe.</p>
+
+        <div class="seg auth-role" id="auth-role" role="group" aria-label="Vous êtes">
+          <button type="button" class="seg-btn is-on" data-role="client" aria-pressed="true">Je suis client</button>
+          <button type="button" class="seg-btn" data-role="notary" aria-pressed="false">Je suis notaire</button>
+        </div>
+
+        <div class="auth-social">
+          <button type="button" class="btn auth-oauth" data-provider="Google">
+            <svg class="brand-ic" viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path fill="var(--logo-google-blue)" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.8z"/><path fill="var(--logo-google-green)" d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1A12 12 0 0 0 12 24z"/><path fill="var(--logo-google-yellow)" d="M5.3 14.3a7.2 7.2 0 0 1 0-4.6V6.6H1.3a12 12 0 0 0 0 10.8l4-3.1z"/><path fill="var(--logo-google-red)" d="M12 4.8c1.8 0 3.3.6 4.6 1.8l3.4-3.4A12 12 0 0 0 12 0 12 12 0 0 0 1.3 6.6l4 3.1C6.2 6.9 8.9 4.8 12 4.8z"/></svg>
+            <span>Continuer avec Google</span>
+          </button>
+          <button type="button" class="btn auth-oauth" data-provider="Facebook">
+            <svg class="brand-ic" viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path fill="var(--logo-facebook)" d="M24 12.07C24 5.4 18.63 0 12 0S0 5.4 0 12.07C0 18.1 4.39 23.1 10.13 24v-8.44H7.08v-3.49h3.05V9.4c0-3.02 1.79-4.68 4.53-4.68 1.31 0 2.68.23 2.68.23v2.98h-1.5c-1.48 0-1.95.92-1.95 1.86v2.24h3.31l-.53 3.49h-2.78V24C19.61 23.1 24 18.1 24 12.07z"/></svg>
+            <span>Continuer avec Facebook</span>
+          </button>
+          <button type="button" class="btn auth-oauth" data-provider="LinkedIn">
+            <svg class="brand-ic" viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path fill="var(--logo-linkedin)" d="M20.45 20.45h-3.56v-5.57c0-1.33-.02-3.04-1.85-3.04-1.86 0-2.14 1.45-2.14 2.94v5.67H9.35V9h3.41v1.56h.05c.48-.9 1.63-1.85 3.36-1.85 3.6 0 4.27 2.37 4.27 5.45v6.29zM5.34 7.43a2.06 2.06 0 1 1 0-4.13 2.06 2.06 0 0 1 0 4.13zM7.12 20.45H3.56V9h3.56v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.72v20.56C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.72V1.72C24 .77 23.2 0 22.22 0z"/></svg>
+            <span>Continuer avec LinkedIn</span>
+          </button>
+        </div>
+
+        <div class="auth-divider"><span>ou</span></div>
+
+        <form id="auth-email-form" class="auth-email" novalidate>
+          <label class="lbl" for="auth-email">Courriel</label>
+          <input type="email" id="auth-email" inputmode="email" autocomplete="email" placeholder="vous@courriel.ca" required />
+          <ul class="errors" id="auth-errors" role="alert" aria-atomic="true" hidden></ul>
+          <button type="submit" class="btn btn-primary btn-lg auth-continue" id="auth-continue">Continuer →</button>
+        </form>
+
+        <p class="auth-fine" id="auth-fine">Première visite ou retour, c’est le même geste. Vos renseignements restent sur cet appareil.</p>
       </div>
     </dialog>
 

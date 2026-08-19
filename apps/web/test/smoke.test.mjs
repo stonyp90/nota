@@ -158,9 +158,9 @@ test('offer form: services populated, anon default on, slider capped at prixDepa
 
   const amt = $(doc, 'o-amount');
   assert.equal(amt.disabled, false);
-  const refi = D.serviceById('refinancement');
-  assert.equal(amt.max, String(refi.prixDepart * D.PREMIUM_CAP)); // 2000 * 10 = 20000
-  assert.equal(amt.max, '20000');
+  // The form quotes Nota's price (1.5× market); the slider caps at notaPrice × 10.
+  assert.equal(amt.max, String(D.notaPrice('refinancement') * D.PREMIUM_CAP)); // 3000 * 10 = 30000
+  assert.equal(amt.max, '30000');
 });
 
 // 8. A valid service+date+amount combination enables the submit button.
@@ -228,19 +228,20 @@ test('dossier profile determines the price and shares it with the booking flow',
 
   const price = $(doc, 'dossier-price');
   assert.ok(price, 'determined price shown in the profile');
-  assert.ok(price.textContent.includes(D.money(2000)), 'base 2000 with no answers');
+  // Nota price = 1.5× market (2000 -> 3000) with no answers.
+  assert.ok(price.textContent.includes(D.money(D.notaPrice('refinancement'))), 'Nota price 3000 with no answers');
 
   const coemp = $(doc, 'dcrit-coemprunteur');
   assert.ok(coemp, 'profile pricing question rendered');
   coemp.checked = true;
-  fire(win, coemp, 'change'); // +150, persisted to the profile
-  assert.ok($(doc, 'dossier-price').textContent.includes(D.money(2150)));
+  fire(win, coemp, 'change'); // +150 market (+225 Nota), persisted to the profile
+  assert.ok($(doc, 'dossier-price').textContent.includes(D.money(D.notaPrice('refinancement', { coemprunteur: true }))));
 
-  // Booking flow reads the profile answer back -> same dynamic floor.
+  // Booking flow reads the profile answer back -> same Nota floor.
   const osel = $(doc, 'o-service');
   osel.value = 'refinancement';
   fire(win, osel, 'change');
-  assert.equal(Number($(doc, 'o-amount').min), 2150);
+  assert.equal(Number($(doc, 'o-amount').min), D.notaPrice('refinancement', { coemprunteur: true }));
 });
 
 // 10. Clicking a has-bids cell opens the day modal populated with bid rows.
@@ -306,7 +307,7 @@ test('courriel field is optional and stays private in the local store', async ()
 // 12b. Pricing criteria are woven into the booking flow and adjust the floor live
 //      ("the document merged with the process").
 test('offer criteria render and a flag raises the dynamic floor', async () => {
-  const { win, doc } = await boot();
+  const { win, doc, D } = await boot();
   const sel = $(doc, 'o-service');
   sel.value = 'refinancement';
   fire(win, sel, 'change');
@@ -317,12 +318,12 @@ test('offer criteria render and a flag raises the dynamic floor', async () => {
   assert.ok(coemp, 'co-borrower flag rendered');
 
   const amt = $(doc, 'o-amount');
-  assert.equal(Number(amt.min), 2000); // base floor before any criterion
+  assert.equal(Number(amt.min), D.notaPrice('refinancement')); // Nota floor (3000) before any criterion
 
   coemp.checked = true;
-  fire(win, coemp, 'change'); // +150 -> dynamic floor rises
-  assert.equal(Number(amt.min), 2150);
-  assert.equal(Number(amt.max), 21500); // (2000 + 150) * 10
+  fire(win, coemp, 'change'); // +150 market -> Nota floor rises
+  assert.equal(Number(amt.min), D.notaPrice('refinancement', { coemprunteur: true })); // 3225
+  assert.equal(Number(amt.max), D.notaPrice('refinancement', { coemprunteur: true }) * 10); // 32250
 });
 
 // 12c. The profile saves coordinates + notification prefs and prefills the offer.
@@ -349,17 +350,35 @@ test('profile persists coordinates and prefills the offer form', async () => {
 
 // 12d. The single account menu (avatar) merges profile + notifications + menu.
 test('account menu opens and navigates to the profile', async () => {
-  const { doc } = await boot();
+  const { win, doc } = await boot();
   // Only two primary tabs remain (Carnet, Notaires) — the rest moved into the menu.
   assert.equal(doc.querySelectorAll('.nav-tabs .nav-tab').length, 2);
 
-  const bell = $(doc, 'notif-bell');
-  bell.click(); // open the account menu
-  assert.equal($(doc, 'notif-panel').hidden, false);
+  // A signed-in client (has a courriel): the identity head routes to their profile.
+  win.localStorage.setItem('nota.profile.v1', JSON.stringify({ courriel: 'marie@example.ca' }));
 
-  $(doc, 'acct-profil').click(); // "Mon profil"
+  const bell = $(doc, 'notif-bell');
+  bell.click(); // open the account menu (re-renders it into the client state)
+  assert.equal($(doc, 'notif-panel').hidden, false);
+  assert.equal($(doc, 'notif-panel').dataset.role, 'client');
+
+  $(doc, 'acct-profil').click(); // client head -> "Mon profil"
   assert.equal($(doc, 'pane-profil').hidden, false);
   assert.equal($(doc, 'notif-panel').hidden, true); // menu closes after navigating
+});
+
+// 12d-bis. Notifications are personal: an anonymous visitor gets no badge and the
+// account panel is flagged anonymous (the CSS hides the notifications section).
+test('anonymous visitor sees no notifications', async () => {
+  const { win, doc } = await boot();
+  win.localStorage.setItem('nota.notifs.v1', JSON.stringify([{ key: 'k', title: 'Rappel', read: false }]));
+  $(doc, 'notif-bell').click(); // open panel -> renders account menu + notifs (anonymous)
+  assert.equal($(doc, 'notif-panel').dataset.role, 'anon');
+  assert.equal($(doc, 'notif-badge').hidden, true); // no unread badge while logged out
+  // The sign-in / sign-up modal exists as the anonymous entry point.
+  assert.ok($(doc, 'auth-dialog'), 'sign-in modal is present');
+  assert.equal(doc.querySelectorAll('#auth-role .seg-btn').length, 2); // client / notary
+  assert.equal(doc.querySelectorAll('.auth-oauth').length, 3); // Google / Facebook / LinkedIn
 });
 
 // 12e. Mes offres: the profile lists the client's posted offers with their status.

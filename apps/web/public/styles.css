@@ -96,6 +96,8 @@
   --logo-google-yellow: #fbbc05;
   --logo-google-red: #ea4335;
   --logo-outlook-blue: #0f6cbd;
+  --logo-facebook: #1877f2;
+  --logo-linkedin: #0a66c2;
   --logo-on-brand: #ffffff;
 }
 
@@ -337,6 +339,33 @@ a:hover { text-decoration: underline; }
 .acct-legal-link { appearance: none; border: 0; background: transparent; color: var(--ink-muted); font: inherit; font-size: 12px; font-weight: 600; padding: 6px 8px; border-radius: var(--radius-sm); cursor: pointer; }
 .acct-legal-link:hover { background: var(--surface-inset); color: var(--ink); }
 .acct-legal-link:focus-visible { background: var(--surface-inset); outline: 2px solid var(--ring); outline-offset: -2px; }
+/* Notifications belong to a signed-in person — hidden entirely when anonymous. */
+#notif-panel[data-role='anon'] #acct-notifs { display: none; }
+/* Safety cap so a long notifications list can never push the menu past the viewport. */
+.acct-panel { max-height: min(88vh, 660px); overflow-y: auto; overscroll-behavior: contain; }
+
+/* --- Sign-in / sign-up modal -------------------------------------------- */
+.auth-modal { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); color: var(--ink); box-shadow: var(--shadow-lg); padding: 0; width: min(420px, 92vw); max-height: 92vh; overflow: auto; }
+.auth-modal::backdrop { background: rgb(0 0 0 / 0.6); backdrop-filter: blur(2px); }
+.auth-x-form { position: absolute; top: 10px; right: 10px; margin: 0; z-index: 1; }
+.auth-x { appearance: none; border: 0; background: transparent; color: var(--ink-muted); cursor: pointer; padding: 6px; border-radius: var(--radius-sm); display: grid; place-items: center; }
+.auth-x:hover { background: var(--surface-inset); color: var(--ink); }
+.auth-body { padding: 30px 26px 24px; display: flex; flex-direction: column; }
+.auth-mark { display: grid; place-items: center; margin-bottom: 12px; }
+.auth-mark .brand-badge { width: 46px; height: 46px; border-radius: 13px; display: grid; place-items: center; background: var(--surface-inset); border: 1px solid var(--border); }
+.auth-title { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; text-align: center; margin: 0; }
+.auth-sub { font-size: 13.5px; color: var(--ink-muted); text-align: center; margin: 6px 0 18px; line-height: 1.5; }
+.auth-role { width: 100%; margin-bottom: 16px; }
+.auth-social { display: flex; flex-direction: column; gap: 9px; }
+.auth-oauth { justify-content: center; gap: 10px; width: 100%; padding: 11px 14px; font-weight: 600; }
+.auth-oauth .brand-ic { flex: none; }
+.auth-divider { display: flex; align-items: center; gap: 12px; margin: 16px 0; color: var(--ink-muted); font-size: 12px; }
+.auth-divider::before, .auth-divider::after { content: ''; height: 1px; background: var(--border); flex: 1; }
+.auth-email { display: flex; flex-direction: column; gap: 8px; }
+.auth-email .lbl { font-size: 12px; margin-bottom: 0; }
+.auth-email input { width: 100%; }
+.auth-continue { width: 100%; margin-top: 4px; }
+.auth-fine { font-size: 12px; color: var(--ink-muted); line-height: 1.5; margin: 14px 0 0; text-align: center; }
 
 /* --- Buttons ------------------------------------------------------------- */
 .btn {

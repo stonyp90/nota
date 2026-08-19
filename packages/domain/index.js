@@ -247,6 +247,8 @@
     return 0;
   }
 
+  // The market reference rate for an act: per-service `base`/`prixDepart` + the
+  // client's criteria adds. (What a notary typically charges.)
   function computeBasePrice(serviceId, answers) {
     const svc = serviceById(serviceId);
     if (!svc) return null;
@@ -255,6 +257,15 @@
     let price = Number(svc.pricing.base) || svc.prixDepart || 0;
     for (const c of svc.pricing.criteria || []) price += criterionAdd(c, answers[c.id]);
     return Math.max(0, Math.round(price));
+  }
+
+  // Nota positions the price it QUOTES the client above the going market rate, so a
+  // posted offer is compelling to notaries and gets retained fast. This is the price
+  // the app shows and pre-fills; computeBasePrice stays the market reference.
+  const MARKET_MULTIPLIER = 1.5;
+  function notaPrice(serviceId, answers) {
+    const base = computeBasePrice(serviceId, answers);
+    return base == null ? null : Math.round(base * MARKET_MULTIPLIER);
   }
 
   // --- Case complexity (the "easy vs hard" signal a notary needs) -------------
@@ -669,9 +680,10 @@
     const days = isISODate(todayISO) ? Math.max(0, daysBetween(todayISO, dateISO)) : 0;
     const t = tierById(tierForDays(days));
     const mult = (t.apercuMin + t.apercuMax) / 2;
-    // Anchor the recommendation on the DYNAMIC base (with the client's pricing
-    // answers), so a more complex act recommends a proportionally higher offer.
-    const base = computeBasePrice(serviceId, answers);
+    // Anchor the recommendation on Nota's quoted price (1.5× the market rate, with
+    // the client's pricing answers), so a more complex act recommends a
+    // proportionally higher offer and the posted price sits above market.
+    const base = notaPrice(serviceId, answers);
     const min = base;
     const max = base * PREMIUM_CAP;
     return Math.min(max, Math.max(min, Math.round((base * mult) / 5) * 5));
@@ -767,6 +779,8 @@
     SERVICES,
     serviceById,
     computeBasePrice,
+    notaPrice,
+    MARKET_MULTIPLIER,
     complexity,
     missingRequired,
     TIERS,

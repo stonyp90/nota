@@ -270,14 +270,16 @@ test('dueReminders: the dossier_incomplet hook fires for an incomplete open lead
 });
 
 test('recommendedAmount: mid-tier default, within bounds, one-tap booking', () => {
-  // refinancement 2000, 5 days out -> prioritaire (1.6-2.2, mid 1.9) -> 3800 (round 5)
+  // refinancement market 2000 -> Nota price 3000, 5 days out -> prioritaire (mid 1.9)
   const t = D.tierById('prioritaire');
-  const expected = Math.round((2000 * (t.apercuMin + t.apercuMax) / 2) / 5) * 5;
+  const base = D.notaPrice('refinancement');
+  const expected = Math.round((base * (t.apercuMin + t.apercuMax) / 2) / 5) * 5;
   assert.equal(D.recommendedAmount('refinancement', '2026-08-17', TODAY), expected);
-  // always within [floor, 10x floor]
+  // always within [Nota floor, 10x floor]
   for (const s of D.SERVICES) {
     const r = D.recommendedAmount(s.id, '2026-08-13', TODAY); // 1 day = extreme
-    assert.ok(r >= s.prixDepart && r <= s.prixDepart * 10, `${s.id} recommended in bounds`);
+    const floor = D.notaPrice(s.id);
+    assert.ok(r >= floor && r <= floor * 10, `${s.id} recommended in bounds`);
   }
   // unknown service / bad date -> null
   assert.equal(D.recommendedAmount('bad', '2026-09-01', TODAY), null);
