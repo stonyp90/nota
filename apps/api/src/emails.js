@@ -49,7 +49,8 @@ const PALETTE = {
   brandDark: '#244c2a', // hunter green — dark
   brandInk: '#ffffff', // text on brand
   footer: '#6b7a8a', // muted small print
-  rule: '#f4f7f4', // inset callout background
+  rule: '#f4f7f4', // neutral inset background
+  tint: '#f0f9f0', // hunter-50 — soft brand wash for callouts
 };
 
 // Nota web font stack. Email clients that lack Inter fall back gracefully.
@@ -93,76 +94,107 @@ function linksFor(baseUrl) {
 }
 
 // --- layout primitives -------------------------------------------------------
+// Hidden inbox-preview line. The trailing run of zero-width joiners + spaces
+// pushes body copy out of the preview so only the preheader shows.
+const PREHEADER_SPACER = '&#847; &zwnj; &nbsp; '.repeat(24);
 function preheaderHtml(text) {
   return (
-    '<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;height:0;width:0;">' +
+    '<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;opacity:0;color:transparent;height:0;width:0;">' +
     esc(text) +
+    PREHEADER_SPACER +
     '</div>'
   );
 }
-// Bulletproof, table-based CTA. Hunter green with white text; the padding +
-// line-height guarantee a >=44px touch target on mobile.
+// Bulletproof, VML-free, table-based CTA. Hunter green with white text; the
+// padding + line-height guarantee a >=44px touch target on mobile, and
+// mso-padding-alt keeps Outlook honest about the padding.
 function button(label, url) {
   return (
-    '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0 4px;">' +
-    '<tr><td align="center" style="border-radius:10px;background:' +
+    '<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:26px auto 6px;border-collapse:separate;">' +
+    '<tr><td align="center" bgcolor="' +
+    PALETTE.brand +
+    '" style="border-radius:10px;background-color:' +
     PALETTE.brand +
     ';">' +
     '<a href="' +
     esc(url) +
-    '" style="display:inline-block;padding:14px 30px;min-height:20px;line-height:20px;font-family:' +
+    '" target="_blank" style="display:inline-block;padding:14px 32px;mso-padding-alt:14px 32px;min-height:20px;line-height:20px;font-family:' +
     FONT +
-    ';font-size:16px;font-weight:600;color:' +
+    ';font-size:16px;font-weight:600;letter-spacing:0.01em;color:' +
     PALETTE.brandInk +
-    ';text-decoration:none;border-radius:10px;">' +
+    ';text-decoration:none;border-radius:10px;border:1px solid ' +
+    PALETTE.brandDark +
+    ';">' +
     esc(label) +
     '</a></td></tr></table>'
   );
 }
 // Header band: the Nota "N" mark rendered WITHOUT images/SVG (many clients block
 // them) — a hunter-green rounded square holding a bold white "N" — next to the
-// "Nota" wordmark in brand green. border-radius degrades gracefully to a square.
+// "Nota" wordmark in brand green and a small tagline. border-radius degrades
+// gracefully to a square. Sits at the top of the card, above a hairline rule.
 function logoHeader() {
   return (
-    '<tr><td style="padding:4px 24px 18px;">' +
-    '<table role="presentation" cellpadding="0" cellspacing="0"><tr>' +
-    '<td width="40" height="40" align="center" valign="middle" style="width:40px;height:40px;background:' +
+    '<tr><td style="padding:26px 30px 22px;border-bottom:1px solid ' +
+    PALETTE.border +
+    ';">' +
+    '<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>' +
+    '<td width="40" height="40" align="center" valign="middle" style="width:40px;height:40px;background-color:' +
     PALETTE.brand +
     ';border-radius:11px;font-family:' +
     FONT +
     ';font-size:22px;line-height:40px;font-weight:800;color:' +
     PALETTE.brandInk +
     ';text-align:center;">N</td>' +
-    '<td style="padding-left:11px;font-family:' +
+    '<td valign="middle" style="padding-left:12px;">' +
+    '<div style="font-family:' +
     FONT +
-    ';font-size:22px;font-weight:800;letter-spacing:-0.02em;color:' +
+    ';font-size:21px;line-height:1.1;font-weight:800;letter-spacing:-0.02em;color:' +
     PALETTE.brand +
-    ';">Nota</td>' +
-    '</tr></table>' +
+    ';">Nota</div>' +
+    '<div style="font-family:' +
+    FONT +
+    ';font-size:12px;line-height:1.5;font-weight:500;letter-spacing:0.02em;color:' +
+    PALETTE.footer +
+    ';">La place de marché notariale</div>' +
+    '</td></tr></table>' +
     '</td></tr>'
   );
 }
+// CASL / Law-25 footer, inside the card on a top hairline: sender name +
+// registered mailing address, a plain-language reason for the message, and a
+// working unsubscribe link alongside support + privacy contacts.
 function footer(unsubscribeUrl) {
   return (
-    '<tr><td style="padding:18px 24px 0;">' +
-    '<div style="border-top:1px solid ' +
+    '<tr><td style="padding:22px 30px 26px;border-top:1px solid ' +
     PALETTE.border +
-    ';padding-top:14px;font-size:12px;line-height:1.6;color:' +
+    ';">' +
+    '<div style="font-family:' +
+    FONT +
+    ';font-size:12px;line-height:1.6;color:' +
     PALETTE.footer +
     ';">' +
-    '<p style="margin:0 0 6px;">' +
+    '<p style="margin:0 0 4px;font-weight:700;color:' +
+    PALETTE.muted +
+    ';">' +
     esc(SENDER.name) +
-    ' · ' +
+    '</p>' +
+    '<p style="margin:0 0 10px;">' +
     esc(SENDER.address) +
     '</p>' +
-    '<p style="margin:0 0 6px;">Vous recevez ce courriel de Nota au sujet de votre activité sur la place de marché.</p>' +
+    '<p style="margin:0 0 10px;">Vous recevez ce courriel de Nota au sujet de votre activité sur la place de marché notariale du Québec.</p>' +
     '<p style="margin:0;">' +
     '<a href="' +
     esc(unsubscribeUrl) +
     '" style="color:' +
     PALETTE.footer +
     ';text-decoration:underline;">Se désabonner</a>' +
-    ' · <a href="mailto:' +
+    ' &nbsp;·&nbsp; <a href="mailto:' +
+    esc(SENDER.supportEmail) +
+    '" style="color:' +
+    PALETTE.footer +
+    ';text-decoration:underline;">Nous écrire</a>' +
+    ' &nbsp;·&nbsp; <a href="mailto:' +
     esc(SENDER.privacyEmail) +
     '" style="color:' +
     PALETTE.footer +
@@ -170,38 +202,58 @@ function footer(unsubscribeUrl) {
     '</p></div></td></tr>'
   );
 }
+// One shared, robust shell for every template. A full-bleed neutral background
+// table frames a single light card (header + content + footer) so all text sits
+// on a stable light surface — legible with images off and safe in dark-mode
+// clients. The MSO ghost table pins the width to 600px in Outlook, where
+// max-width is ignored; everywhere else the card is fluid up to 600px.
 function layout({ preheader, heading, lead, bodyHtml, ctaLabel, ctaUrl, unsubscribeUrl }) {
   return (
     preheaderHtml(preheader || '') +
-    '<div style="background:' +
+    '<div style="background-color:' +
     PALETTE.bg +
-    ';padding:24px 0;font-family:' +
+    ';margin:0;padding:0;">' +
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="' +
+    PALETTE.bg +
+    '" style="width:100%;background-color:' +
+    PALETTE.bg +
+    ';border-collapse:collapse;">' +
+    '<tr><td align="center" style="padding:28px 12px;font-family:' +
     FONT +
     ';">' +
-    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;margin:0 auto;">' +
-    logoHeader() +
-    '<tr><td style="background:' +
+    '<!--[if mso]><table role="presentation" width="600" align="center" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->' +
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;margin:0 auto;background-color:' +
     PALETTE.card +
     ';border:1px solid ' +
     PALETTE.border +
     ';border-top:3px solid ' +
     PALETTE.brand +
-    ';border-radius:12px;padding:28px 24px;">' +
+    ';border-radius:14px;border-collapse:separate;overflow:hidden;">' +
+    logoHeader() +
+    '<tr><td style="padding:26px 30px 30px;">' +
     '<h1 style="margin:0 0 12px;font-family:' +
     FONT +
-    ';font-size:22px;line-height:1.25;font-weight:700;color:' +
+    ';font-size:22px;line-height:1.3;font-weight:700;color:' +
     PALETTE.ink +
     ';">' +
     esc(heading) +
     '</h1>' +
     (lead
-      ? '<p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:' + PALETTE.muted + ';">' + esc(lead) + '</p>'
+      ? '<p style="margin:0 0 18px;font-family:' +
+        FONT +
+        ';font-size:15px;line-height:1.6;color:' +
+        PALETTE.muted +
+        ';">' +
+        esc(lead) +
+        '</p>'
       : '') +
     (bodyHtml || '') +
     (ctaLabel && ctaUrl ? button(ctaLabel, ctaUrl) : '') +
     '</td></tr>' +
     footer(unsubscribeUrl) +
-    '</table></div>'
+    '</table>' +
+    '<!--[if mso]></td></tr></table><![endif]-->' +
+    '</td></tr></table></div>'
   );
 }
 function textLayout({ heading, lead, lines, textLines, ctaLabel, ctaUrl, unsubscribeUrl }) {
@@ -211,22 +263,38 @@ function textLayout({ heading, lead, lines, textLines, ctaLabel, ctaUrl, unsubsc
   body.forEach((l) => parts.push(l));
   if (body.length) parts.push('');
   if (ctaLabel && ctaUrl) parts.push(ctaLabel + ' : ' + ctaUrl, '');
-  parts.push('—', SENDER.name + ' · ' + SENDER.address);
+  parts.push('—', SENDER.name, SENDER.address, '');
   parts.push('Se désabonner : ' + unsubscribeUrl);
+  parts.push('Nous écrire : ' + SENDER.supportEmail);
   return parts.join('\n');
 }
 function para(text) {
-  return '<p style="margin:0 0 14px;font-size:15px;line-height:1.6;color:' + PALETTE.ink + ';">' + esc(text) + '</p>';
-}
-function callout(text) {
   return (
-    '<div style="margin:0 0 16px;padding:12px 14px;background:' +
-    PALETTE.rule +
-    ';border-radius:8px;font-size:14px;line-height:1.5;color:' +
+    '<p style="margin:0 0 16px;font-family:' +
+    FONT +
+    ';font-size:15px;line-height:1.6;color:' +
     PALETTE.ink +
     ';">' +
     esc(text) +
-    '</div>'
+    '</p>'
+  );
+}
+// Emphasis panel (offer summary, key fact). Table-based so the tint background +
+// padding survive Outlook; a brand left rule ties it to the accent.
+function callout(text) {
+  return (
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 18px;border-collapse:separate;">' +
+    '<tr><td style="padding:13px 16px;background-color:' +
+    PALETTE.tint +
+    ';border-left:3px solid ' +
+    PALETTE.brand +
+    ';border-radius:6px;font-family:' +
+    FONT +
+    ';font-size:14px;line-height:1.5;font-weight:600;color:' +
+    PALETTE.ink +
+    ';">' +
+    esc(text) +
+    '</td></tr></table>'
   );
 }
 function build(opts) {
