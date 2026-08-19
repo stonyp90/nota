@@ -347,6 +347,9 @@ a:hover { text-decoration: underline; }
 .acct-legal-link:focus-visible { background: var(--surface-inset); outline: 2px solid var(--ring); outline-offset: -2px; }
 /* Notifications belong to a signed-in person — hidden entirely when anonymous. */
 #notif-panel[data-role='anon'] #acct-notifs { display: none; }
+/* Logged-out auth buttons (login + signup); the avatar takes over once signed in. */
+.header-auth { display: inline-flex; align-items: center; gap: 6px; }
+.header-auth[hidden] { display: none; }
 /* Safety cap so a long notifications list can never push the menu past the viewport. */
 .acct-panel { max-height: min(88vh, 660px); overflow-y: auto; overscroll-behavior: contain; }
 

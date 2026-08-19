@@ -433,7 +433,10 @@
     var role = accountRole();
     var name = $('acct-name'), email = $('acct-email'), roleTag = $('acct-role');
     var panel = $('notif-panel'); if (panel) panel.dataset.role = role;
-    var signinBtn = $('header-signin'); if (signinBtn) signinBtn.hidden = role !== 'anon';
+    // Best practice: logged-out shows explicit login/signup; the avatar/account
+    // menu is for the signed-in state only.
+    var headerAuth = $('header-auth'); if (headerAuth) headerAuth.hidden = role !== 'anon';
+    var acctWrap = document.querySelector('.acct-wrap'); if (acctWrap) acctWrap.hidden = role === 'anon';
     var p = profileGet();
 
     if (role === 'notary') {
@@ -2593,8 +2596,9 @@
       b.addEventListener('click', function () { authSocial(b.dataset.provider); });
     });
     var authForm = $('auth-email-form'); if (authForm) authForm.addEventListener('submit', authSubmitEmail);
-    var headerSignin = $('header-signin'); if (headerSignin) headerSignin.addEventListener('click', function () { openAuthModal('client'); });
-    renderAccountMenu(); // set the initial header sign-in / avatar state on load
+    var hLogin = $('header-login'); if (hLogin) hLogin.addEventListener('click', function () { openAuthModal('client'); });
+    var hSignup = $('header-signup'); if (hSignup) hSignup.addEventListener('click', function () { openAuthModal('client'); });
+    renderAccountMenu(); // set the initial logged-out (auth buttons) / signed-in (avatar) state
     // Click the backdrop (outside the body) to dismiss.
     var authDlg = $('auth-dialog');
     if (authDlg) authDlg.addEventListener('click', function (e) { if (e.target === authDlg) { try { authDlg.close(); } catch (er) {} } });
