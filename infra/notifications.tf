@@ -87,9 +87,10 @@ resource "aws_iam_role" "reminders" {
   assume_role_policy = data.aws_iam_policy_document.lambda_assume.json
 }
 
-# The scheduler reads open bids (Scan), reads the sent/unsub ledgers (GetItem)
-# and writes the sent ledger (PutItem); Query is included for parity with the
-# API role. Scoped to this one table's ARN — no wildcards on resources.
+# The scheduler enumerates open bids via a Query on the sparse GSI1 (no Scan),
+# reads the sent/unsub ledgers (GetItem) and writes the sent ledger (PutItem).
+# Scoped to this table's ARN AND its index ARNs — Querying a GSI requires the
+# "<table>/index/*" resource. dynamodb:Scan is intentionally NOT granted.
 data "aws_iam_policy_document" "reminders_dynamodb" {
   statement {
     sid    = "TableReadWrite"
@@ -99,10 +100,12 @@ data "aws_iam_policy_document" "reminders_dynamodb" {
       "dynamodb:GetItem",
       "dynamodb:PutItem",
       "dynamodb:Query",
-      "dynamodb:Scan",
     ]
 
-    resources = [aws_dynamodb_table.main.arn]
+    resources = [
+      aws_dynamodb_table.main.arn,
+      "${aws_dynamodb_table.main.arn}/index/*",
+    ]
   }
 }
 
