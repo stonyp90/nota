@@ -222,6 +222,20 @@ resource "aws_wafv2_ip_set" "admin_allowlist" {
   addresses          = var.admin_allowed_cidrs
 }
 
+# IPv6 companion allowlist. The distribution serves IPv6 (is_ipv6_enabled) and
+# Happy-Eyeballs browsers reach CloudFront over IPv6 when available, so the WAF
+# sees a v6 source address that the IPv4 set can never match. Without this rule
+# an IPv6 viewer is blocked even when their IPv4 is allowlisted. EMPTY = nobody.
+resource "aws_wafv2_ip_set" "admin_allowlist_v6" {
+  count              = local.admin_enabled
+  provider           = aws.us_east_1
+  name               = "${var.project_name}-admin-allowlist-v6"
+  description        = "IPv6 CIDRs permitted to reach the admin surface. EMPTY = nobody by default."
+  scope              = "CLOUDFRONT"
+  ip_address_version = "IPV6"
+  addresses          = var.admin_allowed_cidrs_v6
+}
+
 resource "aws_wafv2_web_acl" "admin" {
   count       = local.admin_enabled
   provider    = aws.us_east_1
@@ -251,6 +265,27 @@ resource "aws_wafv2_web_acl" "admin" {
     visibility_config {
       cloudwatch_metrics_enabled = true
       metric_name                = "${var.project_name}-admin-ipallow"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  rule {
+    name     = "allow-allowlisted-ips-v6"
+    priority = 1
+
+    action {
+      allow {}
+    }
+
+    statement {
+      ip_set_reference_statement {
+        arn = aws_wafv2_ip_set.admin_allowlist_v6[0].arn
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${var.project_name}-admin-ipallow-v6"
       sampled_requests_enabled   = true
     }
   }
