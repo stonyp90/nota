@@ -200,6 +200,16 @@ resource "aws_cloudfront_response_headers_policy" "admin_security" {
       value    = "camera=(), microphone=(), geolocation=()"
       override = true
     }
+
+    # Private console: refuse indexing on EVERY response the edge serves —
+    # HTML, JS, CSS, favicon, API JSON alike. The SPA's <meta name="robots">
+    # only covers index.html and robots.txt only covers compliant crawlers;
+    # this header is the layer that binds regardless of content type.
+    items {
+      header   = "X-Robots-Tag"
+      value    = "noindex, nofollow"
+      override = true
+    }
   }
 }
 
@@ -244,8 +254,21 @@ resource "aws_wafv2_web_acl" "admin" {
   description = "Default-BLOCK web ACL for the admin surface - only allowlisted IPs pass."
 
   # Closed by default: block everything that doesn't match the allow rule below.
+  # The blocked 403 is the ONLY response a crawler ever sees (WAF runs before
+  # CloudFront behaviors, so the response-headers policy never applies to it) —
+  # stamp the noindex directive on the block itself so search/LLM crawlers get
+  # it regardless of their 403/robots semantics.
   default_action {
-    block {}
+    block {
+      custom_response {
+        response_code = 403
+
+        response_header {
+          name  = "X-Robots-Tag"
+          value = "noindex, nofollow"
+        }
+      }
+    }
   }
 
   rule {

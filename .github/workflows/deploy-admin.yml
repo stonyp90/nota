@@ -135,10 +135,15 @@ jobs:
           # Hashed assets are immutable for a year; index.html is the un-hashed
           # entrypoint that must never be cached so a new deploy is picked up
           # immediately. --delete prunes the previous build's hashed files.
+          # robots.txt is un-hashed POLICY (never index the admin) — short cache
+          # so a policy change propagates, mirroring the public deploy.
           aws s3 sync apps/admin/dist "s3://${{ vars.ADMIN_WEB_BUCKET }}" \
             --delete \
             --cache-control "public,max-age=31536000,immutable" \
-            --exclude index.html
+            --exclude index.html \
+            --exclude robots.txt
+          aws s3 cp apps/admin/dist/robots.txt "s3://${{ vars.ADMIN_WEB_BUCKET }}/robots.txt" \
+            --cache-control "public,max-age=3600"
           aws s3 cp apps/admin/dist/index.html "s3://${{ vars.ADMIN_WEB_BUCKET }}/index.html" \
             --cache-control "no-cache"
 

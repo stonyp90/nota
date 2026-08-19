@@ -67,18 +67,23 @@ function createAdminApp(repo, opts = {}) {
     return parts.length ? parts[parts.length - 1] : null;
   }
 
-  function corsHeaders() {
+  // Headers on EVERY response: CORS locked to the admin origin, plus a hard
+  // noindex. The CDN's response-headers policy also sets X-Robots-Tag, but the
+  // API Gateway execute-api URL is reachable directly (no CloudFront, no WAF),
+  // so the origin must refuse indexing on its own.
+  function baseHeaders() {
     return {
       'access-control-allow-origin': adminOrigin || 'null',
       'access-control-allow-methods': 'GET,POST,OPTIONS',
       'access-control-allow-headers': 'content-type,authorization',
       'vary': 'origin',
+      'x-robots-tag': 'noindex, nofollow',
     };
   }
   function json(statusCode, obj) {
     return {
       statusCode,
-      headers: { 'content-type': 'application/json; charset=utf-8', ...corsHeaders(), 'cache-control': 'no-store' },
+      headers: { 'content-type': 'application/json; charset=utf-8', ...baseHeaders(), 'cache-control': 'no-store' },
       body: JSON.stringify(obj),
     };
   }
@@ -92,7 +97,7 @@ function createAdminApp(repo, opts = {}) {
     const route = (request.path || '/').replace(/^\/api(?=\/|$)/, '') || '/';
     const query = request.query || {};
 
-    if (method === 'OPTIONS') return { statusCode: 204, headers: corsHeaders(), body: '' };
+    if (method === 'OPTIONS') return { statusCode: 204, headers: baseHeaders(), body: '' };
 
     // Hard boundary: this Lambda answers nothing outside /admin/*.
     if (!/^\/admin(\/|$)/.test(route)) {

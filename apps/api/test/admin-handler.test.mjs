@@ -130,3 +130,17 @@ test('OPTIONS preflight returns 204 with the locked admin origin', async () => {
   assert.equal(res.statusCode, 204);
   assert.equal(res.headers['access-control-allow-origin'], 'https://admin.nota.ca');
 });
+
+test('every admin response carries x-robots-tag noindex (the API origin is reachable directly, bypassing the CDN header policy)', async () => {
+  const h = make();
+  const session = await login(h);
+  // Success, error, preflight, and out-of-surface 404 — all must refuse indexing.
+  for (const res of [
+    await h.call('GET', '/admin/me', { bearer: session }),
+    await h.call('GET', '/admin/metrics/overview'), // 401
+    await h.call('OPTIONS', '/admin/metrics/overview'), // 204
+    await h.call('GET', '/'), // 404
+  ]) {
+    assert.equal(res.headers['x-robots-tag'], 'noindex, nofollow');
+  }
+});
