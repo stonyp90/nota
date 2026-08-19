@@ -388,24 +388,28 @@
   // calling out on a calendar cell — on a calm date the tier is noise, because
   // the tier is a pure function of the date the cell already shows.
   const TIERS = [
-    { id: 'standard',    nom: 'Standard',    maxJours: null, apercuMin: 1.0, apercuMax: 1.2,  eleve: false },
-    { id: 'rapide',      nom: 'Rapide',      maxJours: 14,   apercuMin: 1.2, apercuMax: 1.5,  eleve: false },
-    { id: 'prioritaire', nom: 'Prioritaire', maxJours: 7,    apercuMin: 1.6, apercuMax: 2.2,  eleve: true },
-    { id: 'urgence',     nom: 'Urgent',      maxJours: 3,    apercuMin: 2.5, apercuMax: 4.0,  eleve: true },
-    { id: 'extreme',     nom: 'Extrême',     maxJours: 1,    apercuMin: 4.0, apercuMax: 10.0, eleve: true },
+    { id: 'standard',    nom: 'Standard',    maxJours: null, apercuMin: 1.0, apercuMax: 1.2, eleve: false },
+    { id: 'rapide',      nom: 'Rapide',      maxJours: 14,   apercuMin: 1.2, apercuMax: 1.5, eleve: false },
+    // The last three days before a signature are one situation, not three: a
+    // notary has to clear their week for it. The band is centred on 3.0, which
+    // is what recommendedAmount pre-fills (it takes the midpoint).
+    { id: 'prioritaire', nom: 'Prioritaire', maxJours: 3,    apercuMin: 2.5, apercuMax: 3.5, eleve: true },
   ];
 
+  // Bids posted under the old five-tier ladder still carry these ids. Map them
+  // rather than returning null, or a stored bid would render as a blank pill.
+  const LEGACY_TIERS = { urgence: 'prioritaire', extreme: 'prioritaire' };
+
   function tierById(id) {
-    return TIERS.find((t) => t.id === id) || null;
+    const key = LEGACY_TIERS[id] || id;
+    return TIERS.find((t) => t.id === key) || null;
   }
 
   // Days away -> tier id. 0-1 day = extreme (overnight/weekend rescue),
   // 2-3 = urgence, 4-7 = prioritaire, 8-14 = rapide, 15+ = standard.
   function tierForDays(days) {
     const d = Math.max(0, Math.floor(Number(days)));
-    if (d <= 1) return 'extreme';
-    if (d <= 3) return 'urgence';
-    if (d <= 7) return 'prioritaire';
+    if (d <= 3) return 'prioritaire';
     if (d <= 14) return 'rapide';
     return 'standard';
   }
@@ -624,6 +628,65 @@
     };
   }
 
+  // --- Week-agenda vignette ----------------------------------------------------
+  // Shapes the "remplissez votre semaine" board on the notary landing: a batch of
+  // REAL open demands placed on a Mon–Fri agenda by their true signing weekday.
+  // Pure and deterministic — the caller animates, this only selects and places.
+  //   • only open, upcoming, weekday demands qualify (a week board has no weekend);
+  //   • soonest signing dates are served first;
+  //   • at most WEEK_AGENDA_PER_DAY per column and WEEK_AGENDA_MAX overall, so the
+  //     board reads as an agenda rather than a heap;
+  //   • `offset` rotates the starting point through the qualifying pool (wrapping),
+  //     so a looping animation can show a different batch on every cycle.
+  const WEEK_AGENDA_PER_DAY = 2;
+  const WEEK_AGENDA_MAX = 8;
+
+  function weekdayIndex(iso) {
+    // 0 = Monday … 6 = Sunday, computed in UTC like every date rule here.
+    return (new Date(iso + 'T00:00:00Z').getUTCDay() + 6) % 7;
+  }
+
+  function weekAgenda(bids, todayISO, opts) {
+    const offset = Math.max(0, Math.floor((opts && opts.offset) || 0));
+    const pool = (Array.isArray(bids) ? bids : [])
+      .filter(
+        (b) =>
+          b &&
+          b.status !== STATUS.RETENUE &&
+          isISODate(b.dateISO) &&
+          serviceById(b.serviceId) &&
+          (!isISODate(todayISO) || b.dateISO >= todayISO) &&
+          weekdayIndex(b.dateISO) < 5,
+      )
+      .sort((a, b) => (a.dateISO < b.dateISO ? -1 : a.dateISO > b.dateISO ? 1 : 0));
+
+    const items = [];
+    if (pool.length) {
+      const perDay = [0, 0, 0, 0, 0];
+      const start = offset % pool.length;
+      for (let i = 0; i < pool.length && items.length < WEEK_AGENDA_MAX; i++) {
+        const b = pool[(start + i) % pool.length];
+        const day = weekdayIndex(b.dateISO);
+        if (perDay[day] >= WEEK_AGENDA_PER_DAY) continue;
+        perDay[day]++;
+        items.push({
+          id: b.id,
+          serviceId: b.serviceId,
+          nomCourt: serviceById(b.serviceId).nomCourt,
+          montant: Math.round(Number(b.montant) || 0),
+          dateISO: b.dateISO,
+          day,
+        });
+      }
+    }
+
+    return {
+      items,
+      total: items.reduce((s, i) => s + i.montant, 0),
+      poolSize: pool.length,
+    };
+  }
+
   // --- Deterministic fixtures ------------------------------------------------
   // Demo bids for an empty carnet. Seeded from a fixed constant so tests and
   // snapshots are stable — never Math.random(). `todayISO` anchors the dates so
@@ -731,7 +794,7 @@
   // The realistic chance (a %) that a client gets a notary to take a given date:
   // the more lead time, the easier it is. Keyed to the same urgency tier as the
   // pricing, so a far-off date reads as high-chance and a last-minute one as low.
-  const OBTAIN_CHANCE = { standard: 95, rapide: 88, prioritaire: 72, urgence: 55, extreme: 38 };
+  const OBTAIN_CHANCE = { standard: 95, rapide: 88, prioritaire: 45 };
   function obtainChance(dateISO, todayISO) {
     if (!isISODate(dateISO)) return null;
     const days = isISODate(todayISO) ? Math.max(0, daysBetween(todayISO, dateISO)) : 0;
@@ -850,6 +913,7 @@
     validateOffer,
     rankOf,
     carnetPulse,
+    weekAgenda,
     CONTACT,
     telHref,
     makeFixtures,

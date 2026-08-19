@@ -35,7 +35,8 @@ test('GET /health returns the server date', async () => {
 
 test('POST /bids accepts a valid offer and echoes the derived tier', async () => {
   const a = app();
-  const res = await post(a, { serviceId: 'refinancement', dateISO: '2026-08-17', montant: 3000 });
+  // 3 days out is the top of the prioritaire band.
+  const res = await post(a, { serviceId: 'refinancement', dateISO: '2026-08-15', montant: 3000 });
   assert.equal(res.statusCode, 201);
   const { bid } = parse(res);
   assert.equal(bid.tier, 'prioritaire');
@@ -86,7 +87,7 @@ test('server never trusts a client-sent tier or premium', async () => {
   // Client lies: claims standard tier and a tiny premium on an urgent date.
   const res = await post(a, { serviceId: 'refinancement', dateISO: '2026-08-13', montant: 2000, tier: 'standard', premium: 1.0 });
   const { bid } = parse(res);
-  assert.equal(bid.tier, 'extreme'); // 1 day away, recomputed server-side
+  assert.equal(bid.tier, 'prioritaire'); // 1 day away, recomputed server-side
   assert.ok(Math.abs(bid.premium - 2000 / 2000) < 1e-9);
 });
 

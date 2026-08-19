@@ -50,16 +50,21 @@ test('services: every service has documents and fields with help text', () => {
 });
 
 test('tiers: ordered ascending urgency', () => {
-  assert.deepEqual(D.TIERS.map((t) => t.id), ['standard', 'rapide', 'prioritaire', 'urgence', 'extreme']);
+  assert.deepEqual(D.TIERS.map((t) => t.id), ['standard', 'rapide', 'prioritaire']);
+});
+
+test('tiers: the old five-tier ids still resolve, so stored bids keep rendering', () => {
+  assert.equal(D.tierById('urgence').id, 'prioritaire');
+  assert.equal(D.tierById('extreme').id, 'prioritaire');
+  assert.equal(D.tierById('nope'), null);
 });
 
 test('tierForDays: boundaries', () => {
-  assert.equal(D.tierForDays(0), 'extreme');
-  assert.equal(D.tierForDays(1), 'extreme');
-  assert.equal(D.tierForDays(2), 'urgence');
-  assert.equal(D.tierForDays(3), 'urgence');
-  assert.equal(D.tierForDays(4), 'prioritaire');
-  assert.equal(D.tierForDays(7), 'prioritaire');
+  // The last three days before a signature are one situation, not three.
+  assert.equal(D.tierForDays(0), 'prioritaire');
+  assert.equal(D.tierForDays(1), 'prioritaire');
+  assert.equal(D.tierForDays(3), 'prioritaire');
+  assert.equal(D.tierForDays(4), 'rapide');
   assert.equal(D.tierForDays(8), 'rapide');
   assert.equal(D.tierForDays(14), 'rapide');
   assert.equal(D.tierForDays(15), 'standard');
@@ -93,11 +98,12 @@ test('dates: daysBetween and addDays are inverse and tz-stable', () => {
 });
 
 test('validateOffer: a clean prioritaire offer', () => {
-  const r = D.validateOffer({ serviceId: 'refinancement', dateISO: '2026-08-17', montant: 3000, todayISO: TODAY, pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue' } });
+  // 3 days out is the top of the prioritaire band.
+  const r = D.validateOffer({ serviceId: 'refinancement', dateISO: '2026-08-15', montant: 3000, todayISO: TODAY, pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue' } });
   assert.equal(r.ok, true);
   assert.equal(r.errors.length, 0);
   assert.equal(r.tier, 'prioritaire');
-  assert.equal(r.days, 5);
+  assert.equal(r.days, 3);
   assert.equal(r.prixDepart, 2000);
   assert.ok(Math.abs(r.premium - 3000 / 2000) < 1e-9);
 });
@@ -275,14 +281,15 @@ test('dueReminders: the dossier_incomplet hook fires for an incomplete open lead
 });
 
 test('recommendedAmount: mid-tier default, within bounds, one-tap booking', () => {
-  // refinancement market 2000 -> Nota price 3000, 5 days out -> prioritaire (mid 1.9)
+  // 2 days out -> prioritaire, whose band is centred on 3.0.
   const t = D.tierById('prioritaire');
+  assert.equal((t.apercuMin + t.apercuMax) / 2, 3.0, 'prioritaire defaults to 3x');
   const base = D.notaPrice('refinancement');
   const expected = Math.round((base * (t.apercuMin + t.apercuMax) / 2) / 5) * 5;
-  assert.equal(D.recommendedAmount('refinancement', '2026-08-17', TODAY), expected);
+  assert.equal(D.recommendedAmount('refinancement', '2026-08-14', TODAY), expected);
   // always within [Nota floor, 10x floor]
   for (const s of D.SERVICES) {
-    const r = D.recommendedAmount(s.id, '2026-08-13', TODAY); // 1 day = extreme
+    const r = D.recommendedAmount(s.id, '2026-08-13', TODAY); // 1 day = prioritaire
     const floor = D.notaPrice(s.id);
     assert.ok(r >= floor && r <= floor * 10, `${s.id} recommended in bounds`);
   }

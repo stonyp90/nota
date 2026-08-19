@@ -141,7 +141,7 @@ test('calendar renders day cells for the anchor month and 7 weekday headers', as
 test('legend renders one item per timing tier', async () => {
   const { doc, D } = await boot();
   assert.equal(all(doc, '#legend .legend-item').length, D.TIERS.length);
-  assert.equal(D.TIERS.length, 5);
+  assert.equal(D.TIERS.length, 3, 'the ladder is standard, rapide, prioritaire');
 });
 
 // 5. No open/taken day ever renders a bare em-dash headline.
