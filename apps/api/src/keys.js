@@ -177,11 +177,30 @@ function adminRlPK(scope, key) {
 }
 const ADMIN_RL_SK = 'RL';
 
-// Reserved for admin phase 2 notary/act enumeration (a sparse GSI1 over PROFILE
-// + ACT# items). Named here so the key shape is declared in one place; the GSI
-// itself is not created on the live table until phase 2.
+// GSI1 attribute names — a sparse, overloaded global secondary index on the
+// main table. The GSI1 index itself IS created (see infra/dynamodb.tf); admin
+// phase 2 can overload it further (notary/act enumeration) by adding its own
+// GSI1PK namespaces alongside the OPENBID# one below.
 const GSI1_PK = 'GSI1PK';
 const GSI1_SK = 'GSI1SK';
+
+// --- Open-bid enumeration (reminder scheduler, no Scan) -----------------------
+// The daily reminder worker needs "every open (not-retained) bid" across all
+// month partitions. Rather than Scan the whole table (which bills for every
+// item each day), OPEN bids carry sparse GSI1 attributes so the worker reads
+// them with a single Query on GSI1PK = OPENBID_GSI1PK. A retained bid omits
+// these attributes and therefore falls out of the sparse index automatically.
+//
+//   GSI1PK = "OPENBID"            (one partition holding all open bids)
+//   GSI1SK = "<dateISO>#<id>"     (sorted by signing date, then id)
+//
+// Single partition is fine here: bid creation is low-rate and the read is one
+// Query/day. If open-bid write volume ever approaches a single GSI partition's
+// ceiling, shard OPENBID_GSI1PK by month and fan the daily read across shards.
+const OPENBID_GSI1PK = 'OPENBID';
+function openBidGSI1SK(bid) {
+  return `${bid.dateISO}#${bid.id}`;
+}
 
 module.exports = {
   monthOf,
@@ -221,4 +240,6 @@ module.exports = {
   ADMIN_RL_SK,
   GSI1_PK,
   GSI1_SK,
+  OPENBID_GSI1PK,
+  openBidGSI1SK,
 };

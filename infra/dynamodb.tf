@@ -31,9 +31,31 @@ resource "aws_dynamodb_table" "main" {
     type = "S"
   }
 
-  # GSI1 (notary/act enumeration) deferred to admin phase 2. Adding a GSI is a
-  # real, online change to the LIVE main table and is not needed until then, so
-  # phase 1 intentionally leaves the table schema untouched.
+  # GSI1 partition/sort attributes. Only items that carry these attributes appear
+  # in the index (a SPARSE GSI). Today the sole writer is the open-bid enumeration
+  # used by the daily reminder worker (apps/api keys.js: GSI1PK = "OPENBID"); admin
+  # phase 2 can overload the same index with its own GSI1PK namespaces.
+  attribute {
+    name = "GSI1PK"
+    type = "S"
+  }
+
+  attribute {
+    name = "GSI1SK"
+    type = "S"
+  }
+
+  # GSI1 — sparse index over OPEN bids so the daily reminder scheduler reads the
+  # open set with one Query instead of a full-table Scan (cost scales with the
+  # number of open bids, not the whole table). PAY_PER_REQUEST table => the index
+  # is on-demand too (no capacity to provision). Projection ALL so the worker gets
+  # the full bid item from the index without a second GetItem.
+  global_secondary_index {
+    name            = "GSI1"
+    hash_key        = "GSI1PK"
+    range_key       = "GSI1SK"
+    projection_type = "ALL"
+  }
 
   # Point-in-time recovery: continuous backups for the last 35 days.
   point_in_time_recovery {

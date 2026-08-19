@@ -92,13 +92,38 @@ DynamoDB TTL all keep idle cost near zero. Two cost levers worth knowing:
   `retention_in_days = var.log_retention_days` (14 by default), capping log
   storage. If the stack is already deployed, `terraform import` the existing
   groups once before the next apply (import commands are in `logs.tf`).
-- **Daily reminder Scan (recommendation, not yet built).** The reminder
-  scheduler calls `scanOpenBids()`, a full-table `Scan` of `nota-main` once a
-  day. On PAY_PER_REQUEST you pay to read *every* item each run (the filter is
-  applied after the read), so this cost grows with total table size. When
-  volume warrants it, add the deferred GSI (e.g. `GSI1` keyed on bid status/due
-  date) and replace the Scan with a `Query`. This is an app + live-table change,
-  so it stays out of the infra layer until phase 2.
+- **Daily reminder enumeration — sparse GSI1, no Scan.** The reminder scheduler
+  used to `Scan` the whole `nota-main` table daily to find open bids (billing a
+  read for *every* item each run, growing with table size). It now Queries a
+  **sparse GSI1** instead: open (not-retained) bids carry `GSI1PK = "OPENBID"`
+  (see `apps/api/src/keys.js`); a retained bid omits the attribute and drops out
+  of the index. Daily read cost is now proportional to the number of *open*
+  bids, not the whole table. The reminder Lambda role no longer holds
+  `dynamodb:Scan`.
+
+  **Rollout (order matters — do NOT deploy the code before the index exists):**
+
+  1. `terraform apply` — adds GSI1 to the live table (an online index build; the
+     table stays available while it backfills its own structure).
+  2. Deploy the new API/reminders Lambda code (normal `deploy.yml` on merge to
+     `main`). From here every bid write stamps the GSI1 attributes.
+  3. Backfill the pre-existing open bids **once** so the daily Query sees the
+     backlog, not just newly-written bids (run with an operator/deploy
+     credential — the reminder role has no `Scan`):
+
+     ```bash
+     # dry run first (writes nothing):
+     DRY_RUN=1 TABLE_NAME=nota-main AWS_REGION=ca-central-1 \
+       node apps/api/scripts/backfill-open-bid-gsi.js
+     # then for real:
+     TABLE_NAME=nota-main AWS_REGION=ca-central-1 \
+       node apps/api/scripts/backfill-open-bid-gsi.js
+     ```
+
+  Reminders are best-effort and idempotent (a `SENT#` ledger prevents duplicates),
+  so a brief gap before the backfill only risks a delayed nudge, never a double
+  send. If volume ever approaches a single GSI partition's write ceiling, shard
+  `OPENBID` by month and fan the daily read across the shards (noted in `keys.js`).
 
 ## Future additions (not built yet)
 

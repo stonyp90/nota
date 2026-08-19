@@ -30,6 +30,10 @@ const {
   auditSK,
   adminRlPK,
   ADMIN_RL_SK,
+  GSI1_PK,
+  GSI1_SK,
+  OPENBID_GSI1PK,
+  openBidGSI1SK,
 } = require('./keys');
 const { STATUS } = require('@nota/domain');
 
@@ -49,7 +53,9 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
   // Lazy import keeps the SDK out of the dependency graph for tests. The command
   // classes are always needed; the concrete client is built only when the caller
   // did not inject its own document client.
-  const { PutCommand, GetCommand, QueryCommand, ScanCommand, UpdateCommand } = require('@aws-sdk/lib-dynamodb');
+  // No ScanCommand: the reminder worker now reads open bids via a GSI1 Query,
+  // so this repo performs no table Scans at all.
+  const { PutCommand, GetCommand, QueryCommand, UpdateCommand } = require('@aws-sdk/lib-dynamodb');
 
   // The admin surface's identity/session/audit items live in a SEPARATE table
   // (blast-radius isolation). Only the admin Lambda passes adminTableName; the
@@ -60,7 +66,7 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
   }
 
   // `doc` is injectable so a test can drive the paginating reads (listByMonth /
-  // scanOpenBids) against a fake document client with no AWS. Production omits it
+  // listOpenBids) against a fake document client with no AWS. Production omits it
   // and we construct the real client here.
   if (!doc) {
     const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
@@ -75,18 +81,30 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
   }
 
   function toItem(bid) {
-    return { PK: bidPK(bid.dateISO), SK: bidSK(bid), type: 'bid', ...bid };
+    const item = { PK: bidPK(bid.dateISO), SK: bidSK(bid), type: 'bid', ...bid };
+    // Sparse GSI1 membership: ONLY open (not-retained) bids are indexed, so the
+    // daily reminder worker Queries just the open set instead of Scanning the
+    // whole table. A retained bid omits these attributes — and because every bid
+    // mutation rewrites the full item (PutCommand), retaining a bid drops it out
+    // of the index automatically.
+    if (bid.status !== STATUS.RETENUE) {
+      item[GSI1_PK] = OPENBID_GSI1PK;
+      item[GSI1_SK] = openBidGSI1SK(bid);
+    }
+    return item;
   }
   function fromItem(item) {
     if (!item) return null;
-    const { PK, SK, type, ...bid } = item;
+    // Strip the storage keys AND the sparse-index attributes, so a bid handed to
+    // the domain/notifier never carries GSI1PK/GSI1SK.
+    const { PK, SK, type, [GSI1_PK]: _gpk, [GSI1_SK]: _gsk, ...bid } = item;
     return bid;
   }
 
   return {
     async listByMonth(month) {
       // A month partition can exceed DynamoDB's 1MB page, so follow
-      // LastEvaluatedKey to exhaustion — same contract as scanOpenBids and the
+      // LastEvaluatedKey to exhaustion — same contract as listOpenBids and the
       // memory adapter, which both return every matching item.
       const bids = [];
       let ExclusiveStartKey;
@@ -173,18 +191,20 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
     },
 
     // Every open (not-retained) bid, across all month partitions. Used only by
-    // the daily reminder scheduler (a bounded, low-frequency scan). The filter
-    // keeps retained bids out; the domain decides which of the rest are due.
-    async scanOpenBids() {
+    // the daily reminder scheduler. Reads the sparse GSI1 (only open bids are
+    // indexed) with a single paginated Query instead of a full-table Scan, so
+    // cost is proportional to the number of OPEN bids, not the whole table.
+    async listOpenBids() {
       const bids = [];
       let ExclusiveStartKey;
       do {
         const out = await doc.send(
-          new ScanCommand({
+          new QueryCommand({
             TableName: tableName,
-            FilterExpression: '#t = :bid AND #s <> :retenue',
-            ExpressionAttributeNames: { '#t': 'type', '#s': 'status' },
-            ExpressionAttributeValues: { ':bid': 'bid', ':retenue': STATUS.RETENUE },
+            IndexName: 'GSI1',
+            KeyConditionExpression: '#g = :open',
+            ExpressionAttributeNames: { '#g': GSI1_PK },
+            ExpressionAttributeValues: { ':open': OPENBID_GSI1PK },
             ExclusiveStartKey,
           })
         );

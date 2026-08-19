@@ -10,12 +10,15 @@ const { createDynamoRepo } = require('../src/repo-dynamo.js');
 // threads LastEvaluatedKey -> ExclusiveStartKey across pages. No AWS involved.
 function fakeDoc(pages) {
   const startKeys = [];
+  const sentInputs = [];
   let call = 0;
   return {
     startKeys,
+    sentInputs,
     calls: () => call,
     async send(cmd) {
       startKeys.push(cmd.input.ExclusiveStartKey);
+      sentInputs.push(cmd.input);
       return pages[call++];
     },
   };
@@ -89,4 +92,67 @@ test('retain rethrows a non-conditional error', async () => {
   };
   const repo = createDynamoRepo({ tableName: 't', doc });
   await assert.rejects(() => repo.retain({ id: 'a', dateISO: '2026-08-20' }, 'N1'), /boom/);
+});
+
+// --- Sparse GSI1 open-bid index (reminder enumeration, no Scan) --------------
+
+test('put stamps GSI1 attributes on an OPEN bid so it joins the sparse index', async () => {
+  const sent = [];
+  const doc = { async send(cmd) { sent.push(cmd); return {}; } };
+  const repo = createDynamoRepo({ tableName: 't', doc });
+
+  await repo.put({ id: 'a', dateISO: '2026-08-20', serviceId: 'testament', montant: 800, status: 'ouverte' });
+
+  const item = sent[0].input.Item;
+  assert.equal(item.GSI1PK, 'OPENBID');
+  assert.equal(item.GSI1SK, '2026-08-20#a', 'sorted by signing date then id');
+});
+
+test('a RETAINED bid carries NO GSI1 attributes, so it drops out of the index', async () => {
+  const sent = [];
+  const doc = { async send(cmd) { sent.push(cmd); return {}; } };
+  const repo = createDynamoRepo({ tableName: 't', doc });
+
+  await repo.retain({ id: 'a', dateISO: '2026-08-20', serviceId: 'testament', montant: 800, status: 'retenue' }, 'N1');
+
+  const item = sent[0].input.Item;
+  assert.equal('GSI1PK' in item, false, 'retained bids are not indexed');
+  assert.equal('GSI1SK' in item, false);
+});
+
+test('listOpenBids Queries the sparse GSI1, paginates, and strips index attrs', async () => {
+  const openA = {
+    PK: 'MONTH#2026-08', SK: 'BID#2026-08-01#a', type: 'bid',
+    GSI1PK: 'OPENBID', GSI1SK: '2026-08-01#a',
+    id: 'a', dateISO: '2026-08-01', montant: 500, status: 'ouverte',
+  };
+  const openB = {
+    PK: 'MONTH#2026-09', SK: 'BID#2026-09-02#b', type: 'bid',
+    GSI1PK: 'OPENBID', GSI1SK: '2026-09-02#b',
+    id: 'b', dateISO: '2026-09-02', montant: 600, status: 'ouverte',
+  };
+  const lastKey = { GSI1PK: 'OPENBID', GSI1SK: '2026-08-01#a' };
+  const doc = fakeDoc([
+    { Items: [openA], LastEvaluatedKey: lastKey }, // page 1 not the end
+    { Items: [openB] }, // page 2 stops
+  ]);
+
+  const repo = createDynamoRepo({ tableName: 't', doc });
+  const bids = await repo.listOpenBids();
+
+  // Both pages accumulated; PK/SK/type AND GSI1PK/GSI1SK stripped by fromItem.
+  assert.deepEqual(bids, [
+    { id: 'a', dateISO: '2026-08-01', montant: 500, status: 'ouverte' },
+    { id: 'b', dateISO: '2026-09-02', montant: 600, status: 'ouverte' },
+  ]);
+  // It reads the index, not the base table, keyed on the OPENBID partition.
+  const q = doc.sentInputs ? doc.sentInputs[0] : null;
+  assert.ok(q, 'query input captured');
+  assert.equal(q.IndexName, 'GSI1');
+  assert.equal(q.KeyConditionExpression, '#g = :open');
+  assert.equal(q.ExpressionAttributeNames['#g'], 'GSI1PK');
+  assert.equal(q.ExpressionAttributeValues[':open'], 'OPENBID');
+  // Pagination threads LastEvaluatedKey -> ExclusiveStartKey.
+  assert.equal(doc.startKeys[0], undefined);
+  assert.deepEqual(doc.startKeys[1], lastKey);
 });

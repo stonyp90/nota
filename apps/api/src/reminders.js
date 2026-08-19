@@ -18,12 +18,12 @@ async function runReminders({ repo, notifier, now } = {}) {
   if (!notifier) throw new Error('runReminders: notifier is required');
   const todayISO = (now || (() => new Date().toISOString().slice(0, 10)))();
 
-  const openBids = await repo.scanOpenBids();
+  const open = await repo.listOpenBids();
   let due = 0;
   let sent = 0;
   const errors = [];
 
-  for (const bid of openBids) {
+  for (const bid of open) {
     // Pay-on-accept: never remind a client about an offer that never went live —
     // its card authorization is still pending, or it lapsed/was voided.
     if (bid.paymentStatus === 'pending' || bid.paymentStatus === 'void') continue;
@@ -40,7 +40,7 @@ async function runReminders({ repo, notifier, now } = {}) {
     }
   }
 
-  return { todayISO, scanned: openBids.length, due, sent, errors };
+  return { todayISO, openBids: open.length, due, sent, errors };
 }
 
 module.exports = { runReminders };

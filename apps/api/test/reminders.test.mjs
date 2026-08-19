@@ -48,9 +48,9 @@ test('the scheduler sends exactly the due reminders for a seeded set of bids', a
 
   const res = await runReminders({ repo, notifier, now: () => TODAY });
 
-  // scanOpenBids excludes the retained bid; the past + quiet bids have no due
+  // listOpenBids excludes the retained bid; the past + quiet bids have no due
   // reminder; j7/j3/j1 each have one; the incomplete dossier has one.
-  assert.equal(res.scanned, 6, 'retained bid should not be scanned');
+  assert.equal(res.openBids, 6, 'retained bid should not be enumerated');
   assert.equal(res.due, 4);
   assert.equal(res.sent, 4);
 
@@ -83,7 +83,7 @@ test('the scheduler mails dateApproaching for exactly the on-cadence offsets and
 
   const res = await runReminders({ repo, notifier, now: () => TODAY });
 
-  assert.equal(res.scanned, seed.length);
+  assert.equal(res.openBids, seed.length);
   assert.equal(res.due, 3, 'exactly the 7/3/1 offsets are due');
   assert.equal(res.sent, 3);
 
