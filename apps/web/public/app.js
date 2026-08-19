@@ -33,7 +33,6 @@
   // change this interface — apps/web depends only on these two methods.
   // ---------------------------------------------------------------------------
   var LS_BIDS = 'nota.bids.v1';
-  var LS_BIDS_SIG = 'nota.bids.sig.v1';
 
   function lsLoad(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
   function lsSave(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
@@ -56,10 +55,7 @@
   }
   function ensureSeed() {
     var a = lsLoad(LS_BIDS);
-    var sig = D.seedSignature();
-    // A seed from an older pricing model would put medians below today's
-    // floors — rebuild the demo data whenever the pricing shape changes.
-    if (!a || flagGet(LS_BIDS_SIG) !== sig) { a = D.makeFixtures(todayISO()); lsSave(LS_BIDS, a); flagSet(LS_BIDS_SIG, sig); }
+    if (!a) { a = D.makeFixtures(todayISO()); lsSave(LS_BIDS, a); }
     return a;
   }
 
