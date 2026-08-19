@@ -153,6 +153,11 @@ Then('le client {string} ne reçoit aucun courriel', function (email) {
   assert.equal(hits.length, 0, `${email} a reçu ${hits.length} courriel(s): ` + summary(hits));
 });
 
+Then('le notaire {string} ne reçoit aucun courriel', function (email) {
+  const hits = this.mailsTo(email);
+  assert.equal(hits.length, 0, `${email} a reçu ${hits.length} courriel(s): ` + summary(hits));
+});
+
 Then('le client {string} ne reçoit aucun courriel {string}', function (email, label) {
   const hits = this.mailsTo(email).filter(isKind(label));
   assert.equal(hits.length, 0, `${email} a reçu « ${label} » à tort: ` + summary(hits));

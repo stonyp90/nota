@@ -69,6 +69,10 @@ class NotaWorld extends World {
       newId: () => 'bid-' + ++seq,
       notifier: this.notifier,
       billing: this.billing,
+      // The fake billing exists only to serve the Stripe webhook route; the
+      // acceptance suites document the pre-billing offer flow (offers go live the
+      // instant they are posted), so pay-on-accept stays off here.
+      billingConfigured: false,
     });
 
     // Scratch state shared between steps of one scenario.

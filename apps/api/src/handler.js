@@ -65,7 +65,13 @@ function createApp(repo, opts = {}) {
   // pay-on-accept turns on for a configured deployment but stays off for demo and
   // tests, which keep the pre-billing behaviour (offers go live the instant they
   // are posted). `siteUrl` builds the Checkout return links.
-  const billingConfigured = !!opts.billing || !!(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET);
+  // An explicit `billingConfigured` wins: a caller may inject a billing adapter
+  // ONLY to exercise the webhook route yet keep the pre-billing offer flow (the
+  // BDD world does exactly this). Otherwise infer it from an injected adapter or
+  // the Stripe environment.
+  const billingConfigured = opts.billingConfigured != null
+    ? !!opts.billingConfigured
+    : (!!opts.billing || !!(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET));
   const siteUrl = opts.siteUrl || process.env.NOTA_SITE_URL || '';
   // An offer is shown on the carnet unless its card authorization is still pending
   // or was voided (pay-on-accept). Legacy bids (no paymentStatus) are always live.

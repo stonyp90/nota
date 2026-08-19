@@ -18,11 +18,10 @@ Fonctionnalité: Cycle de vie des notifications
     Et aucun courriel client n'est tenté
     Et l'opérateur reçoit le courriel "nouveau lead"
 
-  Scénario: un notaire qui s'abonne est accueilli et l'opérateur est notifié
+  Scénario: le webhook « checkout.session.completed » n'accueille pas de notaire (modèle à la commission)
     Quand un notaire "notaire@exemple.ca" complète son abonnement via le webhook "checkout.session.completed"
     Alors la réponse a le statut 200
-    Et le notaire "notaire@exemple.ca" reçoit le courriel "bienvenue"
-    Et l'opérateur reçoit le courriel "nouveau notaire abonné"
+    Et le notaire "notaire@exemple.ca" ne reçoit aucun courriel
 
   Scénario: un rappel est dû à 3 jours de la signature
     Étant donné une offre ouverte avec le courriel "relance@exemple.ca" pour "testament" à 700 dans 3 jours
