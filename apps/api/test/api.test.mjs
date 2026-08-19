@@ -87,7 +87,7 @@ test('server never trusts a client-sent tier or premium', async () => {
   // Client lies: claims standard tier and a tiny premium on an urgent date.
   const res = await post(a, { serviceId: 'refinancement', dateISO: '2026-08-13', montant: 2000, tier: 'standard', premium: 1.0 });
   const { bid } = parse(res);
-  assert.equal(bid.tier, 'prioritaire'); // 1 day away, recomputed server-side
+  assert.equal(bid.tier, 'urgence'); // 1 day away, recomputed server-side
   assert.ok(Math.abs(bid.premium - 2000 / 2000) < 1e-9);
 });
 

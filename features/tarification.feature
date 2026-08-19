@@ -11,15 +11,21 @@ Fonctionnalité: Tarification et paliers de temps
 
     Exemples:
       | jours | palier      |
-      | 0     | prioritaire |
-      | 1     | prioritaire |
+      | 0     | extreme     |
+      | 1     | urgence     |
+      | 2     | prioritaire |
       | 3     | prioritaire |
       | 4     | rapide      |
       | 14    | rapide      |
       | 15    | standard    |
       | 30    | standard    |
 
-  Scénario: le palier prioritaire propose 3x le prix de départ
-    Quand une signature est prévue dans 2 jours
-    Alors le palier est "prioritaire"
-    Et le multiplicateur proposé est 3
+  Plan du scénario: le multiplicateur proposé monte à mesure que la date approche
+    Quand une signature est prévue dans <jours> jours
+    Alors le multiplicateur proposé est <multiplicateur>
+
+    Exemples:
+      | jours | multiplicateur |
+      | 0     | 8              |
+      | 1     | 6              |
+      | 2     | 3              |

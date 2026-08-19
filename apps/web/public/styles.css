@@ -545,12 +545,23 @@ a:hover { text-decoration: underline; }
 .pulse-row:hover .pulse-svc, .pulse-row.is-on .pulse-svc { color: var(--brand); }
 .pulse-svc { grid-column: 1 / 3; grid-row: 1; display: flex; align-items: center; gap: 7px; min-width: 0; font-size: 14px; font-weight: 700; }
 .pulse-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
-.pulse-amount { grid-column: 3; grid-row: 1; font-size: 17px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
-/* No offer yet this month: the figure is the service floor, not a market fact. */
-.pulse-amount.is-floor { color: var(--ink-muted); font-weight: 700; }
-.pulse-meta, .pulse-sub { font-size: 11.5px; color: var(--ink-muted); }
-.pulse-meta { grid-column: 1; grid-row: 2; padding-left: 15px; white-space: nowrap; } /* 15px clears the dot: 8px + the 7px gap */
-.pulse-sub { grid-column: 3; grid-row: 2; text-align: right; white-space: nowrap; }
+/* One glyph per act, so a service is recognised before its name is read. */
+.svc-ic { flex: none; display: block; }
+.chip-svc { display: inline-flex; align-items: center; gap: 6px; }
+.chip-svc .svc-ic { color: var(--svc-fallback, currentColor); }
+.chip-svc[data-svc='testament'] .svc-ic { color: var(--svc-testament); }
+.chip-svc[data-svc='procuration'] .svc-ic { color: var(--svc-procuration); }
+.chip-svc[data-svc='refinancement'] .svc-ic { color: var(--svc-refinancement); }
+.chip-svc.is-on .svc-ic { color: currentColor; }
+.legend-item .svc-ic, .legend-status-item .svc-ic { margin-right: 1px; }
+/* Two figures per act, because they answer two questions: the floor the server
+   will accept at all, and what other clients are actually offering this month. */
+.pulse-figs { grid-column: 3; grid-row: 1 / 3; display: flex; align-items: baseline; gap: 18px; white-space: nowrap; }
+.pulse-fig { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+.pulse-fig-k { font-size: 10.5px; font-weight: 600; color: var(--ink-muted); letter-spacing: .01em; }
+.pulse-fig-v { font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.pulse-fig-v.is-empty { color: var(--ink-muted); font-weight: 600; }
+.pulse-meta { grid-column: 1; grid-row: 2; font-size: 11.5px; color: var(--ink-muted); padding-left: 22px; white-space: nowrap; }
 /* Share of the month's demand, in the service's own hue. Short and inline with
    the counts: a gauge that belongs to its row, never a rule spanning the width
    (that would just put the removed borders back). */
@@ -698,19 +709,26 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
    plus a matching left edge — colour reinforces the word, it never carries the
    meaning alone. */
 .cal-urgency {
-  align-self: flex-start; margin-top: 3px; padding: 1px 7px; border-radius: 999px;
-  font-size: 10px; font-weight: 800; letter-spacing: .02em; white-space: nowrap;
-  border: 1px solid currentColor; color: var(--tier-prioritaire);
+  position: absolute; top: 6px; right: 26px;
+  font-size: 10px; font-weight: 800; letter-spacing: .01em; white-space: nowrap;
+  color: var(--tier-standard);
 }
+.cal-urgency[data-tier='rapide'] { color: var(--tier-rapide); }
+.cal-urgency[data-tier='prioritaire'] { color: var(--tier-prioritaire); }
 .cal-urgency[data-tier='urgence'] { color: var(--tier-urgence); }
-.cal-urgency[data-tier='extreme'] { color: var(--tier-extreme); background: var(--tier-extreme); border-color: var(--tier-extreme); color: var(--on-brand, #fff); }
+/* The steepest step is the one a client must not miss, so it is the only one
+   that fills rather than tints. */
+.cal-urgency[data-tier='extreme'] { color: var(--on-accent, #fff); background: var(--tier-extreme); padding: 1px 5px; border-radius: 999px; }
+.legend-mult { font-weight: 800; }
 .cal-cell[data-tier]::before {
   content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
   border-radius: var(--radius-sm) 0 0 var(--radius-sm); pointer-events: none;
-  background: var(--tier-prioritaire);
+  background: var(--tier-standard);
 }
+.cal-cell[data-tier='rapide']::before { background: var(--tier-rapide); }
+.cal-cell[data-tier='prioritaire']::before { background: var(--tier-prioritaire); }
 .cal-cell[data-tier='urgence']::before { background: var(--tier-urgence); }
-.cal-cell[data-tier='extreme']::before { background: var(--tier-extreme); }
+.cal-cell[data-tier='extreme']::before { background: var(--tier-extreme); width: 4px; }
 .cal-daynum { font-size: 12px; font-weight: 600; color: var(--ink-muted); }
 /* Today gets the classic filled date-circle (a data indicator, not a button) —
    the clearest "you are here" affordance, matching the count badge's fill. */
@@ -730,6 +748,8 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 .svc-bid { display: inline-flex; align-items: baseline; gap: 5px; min-width: 0; max-width: 100%; }
 .svc-bid-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; align-self: center; }
 .svc-bid-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+/* In a cell the glyph carries the act, so it is tinted rather than outlined. */
+.svc-bid .svc-ic { align-self: center; }
 .svc-bid-amount { font-weight: 800; letter-spacing: -0.02em; white-space: nowrap; }
 
 /* A calendar cell prints the dot and the price only. Hovering the row names the
@@ -790,8 +810,6 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
   .cal-daynum { font-size: 11px; }
   /* Cells get too narrow for "3 285 $": swap to the compact form (data-compact),
      which always fits. The full amount stays in the DOM + day dialog for a11y. */
-  .cal-urgency { font-size: 0; padding: 0; margin-top: 2px; width: 8px; height: 8px; border-radius: 50%; background: currentColor; border: 0; }
-  .cal-urgency[data-tier='extreme'] { background: var(--tier-extreme); }
   .cal-svc-bids .svc-bid-amount { font-size: 0; }
   .cal-svc-bids .svc-bid-amount::after { content: attr(data-compact); font-size: 11px; font-weight: 800; }
   .cal-avg { font-size: 0; }
@@ -1183,13 +1201,11 @@ dialog::backdrop { background: var(--backdrop); }
 #pane-notaires > .wrap { display: flex; flex-direction: column; }
 /* Order (flex only, no DOM move): hero → value grid → calendar-add → sign-in → guarantee. */
 #pane-notaires .nc-why { order: 2; }
-#pane-notaires .nc-week { order: 3; }
-#pane-notaires .notary-carnet { order: 4; }
-#pane-notaires #notary-console { order: 5; }
-#pane-notaires .nota-guarantee { order: 6; }
-/* The value grid and week vignette only belong to the signed-out LANDING;
-   hidden in the working console. */
-.nc-why, .nc-week { display: none; }
+#pane-notaires .notary-carnet { order: 3; }
+#pane-notaires #notary-console { order: 4; }
+#pane-notaires .nota-guarantee { order: 5; }
+/* The value grid only belongs to the signed-out LANDING; hidden in the working console. */
+.nc-why { display: none; }
 /* Signed-out: a full-page two-column landing — a rich value column on the left,
    the sign-in anchored as a centered card on the right (no empty strip, no wide margins). */
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) {
@@ -1198,7 +1214,6 @@ dialog::backdrop { background: var(--backdrop); }
   grid-template-areas:
     "hero      console"
     "why       console"
-    "semaine   console"
     "carnet    console"
     "guarantee console";
   column-gap: clamp(32px, 5vw, 80px);
@@ -1210,9 +1225,10 @@ dialog::backdrop { background: var(--backdrop); }
 /* Keep a readable measure on the lede without capping the whole hero block. */
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .intro p { max-width: 78ch; }
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .nc-why         { grid-area: why; display: grid; }
-#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .nc-week        { grid-area: semaine; display: flex; }
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-carnet  { grid-area: carnet; }
-#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) #notary-console { grid-area: console; align-self: center; margin: 0; }
+/* The console anchors to the TOP of the column so the sign-in — the page's one
+   action — is on screen immediately instead of centred into the fold. */
+#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) #notary-console { grid-area: console; align-self: start; margin: 0; }
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .nota-guarantee { grid-area: guarantee; }
 /* Hero collapses to a single column on THIS pane only (the client carnet hero
    keeps its two columns); the three steps become one muted caption, not a panel. */
@@ -1221,7 +1237,7 @@ dialog::backdrop { background: var(--backdrop); }
 @media (max-width: 900px) {
   #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) {
     grid-template-columns: minmax(0, 620px);
-    grid-template-areas: "hero" "why" "semaine" "carnet" "console" "guarantee";
+    grid-template-areas: "hero" "why" "carnet" "console" "guarantee";
     justify-content: center;
   }
   #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) #notary-console { align-self: stretch; }
@@ -1236,21 +1252,24 @@ dialog::backdrop { background: var(--backdrop); }
 .hero-steps-inline { margin: 12px 0 0; font-size: 12.5px; line-height: 1.6; color: var(--ink-muted); }
 .hero-steps-inline span { color: var(--border-strong); }
 
-/* Week vignette — "remplissez votre semaine" played out with live market data.
-   Real open demands (D.weekAgenda) drop onto a Mon–Fri board one by one while
-   the payoff counts up; the board then clears and replays the next batch.
-   Borderless: the inset surface alone seats it in the column. */
+/* Week vignette — the marketplace played out with live data, in the onboarding
+   dialog only. Real demands (D.weekAgenda) drop onto a Mon–Fri board one by one
+   while the money counts up; the board then clears and replays the next batch.
+   Borderless: the inset surface alone seats it. */
 .nc-week[hidden] { display: none; }
 .nc-week {
-  margin-top: 26px; padding: 16px 18px 13px;
-  flex-direction: column; gap: 12px;
+  display: flex; flex-direction: column; gap: 12px;
+  padding: 16px 18px 13px;
   border-radius: var(--radius);
   background: var(--surface-inset);
 }
 .nc-week-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .nc-week-kicker { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--brand); }
 .nc-week-total { font-size: 13px; color: var(--ink-muted); }
-.nc-week-total strong { color: var(--brand); font-weight: 800; font-variant-numeric: tabular-nums; }
+.nc-week-total strong { display: inline-block; color: var(--brand); font-weight: 800; font-variant-numeric: tabular-nums; }
+/* A small pop each time money lands on the board. */
+.nc-week-total strong.is-tick { animation: nc-week-tick .35s ease; }
+@keyframes nc-week-tick { 40% { transform: scale(1.12); } }
 .nc-week-board { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; transition: opacity .45s ease; }
 .nc-week-board.is-out { opacity: 0; }
 .nc-week-col { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
@@ -1271,6 +1290,7 @@ dialog::backdrop { background: var(--backdrop); }
   opacity: 1; transform: none;
   transition: opacity .3s ease, transform .5s cubic-bezier(.2, 1.4, .4, 1);
 }
+.nc-week-chip.is-in:hover { transform: translateY(-1px); box-shadow: var(--shadow); transition: transform .15s ease, box-shadow .15s ease; }
 .nc-week-chip-top { display: flex; align-items: center; gap: 5px; min-width: 0; }
 .nc-week-chip-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .nc-week-chip-name { font-size: 10.5px; font-weight: 600; color: var(--ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1288,18 +1308,21 @@ dialog::backdrop { background: var(--backdrop); }
   transition: opacity .3s ease, transform .45s cubic-bezier(.2, 1.4, .4, 1);
 }
 .nc-week-note { margin: 0; font-size: 11.5px; line-height: 1.5; color: var(--ink-muted); }
+.nc-week-note[hidden] { display: none; }
 .nc-week-check-key { color: var(--brand); font-weight: 800; }
-/* Tight columns: the act name goes, the amount stays. */
-@media (max-width: 1100px) and (min-width: 901px) { .nc-week-chip-name { display: none; } }
-@media (max-width: 480px) { .nc-week-chip-name { display: none; } }
 @media (prefers-reduced-motion: reduce) {
   .nc-week-board { transition: none; }
   .nc-week-chip, .nc-week-chip-check, .nc-week-chip.is-taken { opacity: 1; transform: none; transition: none; }
+  .nc-week-total strong.is-tick { animation: none; }
 }
-/* Carnet flavour of the vignette: lives in the client hero (no auth gate, no
-   grid area), balancing the pulse panel beside it. */
-.nc-week--carnet { display: flex; margin-top: 22px; }
-.nc-week--carnet[hidden] { display: none; }
+/* In the welcome dialog: sits under both views, left-aligned against the
+   dialog's centred text. Modal columns are narrow, so the dot + amount say it
+   all and the tooltip keeps the act's name. */
+.nc-week--onb { margin-top: 18px; text-align: left; }
+.nc-week--onb .nc-week-chip-name { display: none; }
+/* Nameless chips read as one line: dot + amount, on a shorter row. */
+.nc-week--onb .nc-week-chip { flex-direction: row; align-items: center; gap: 7px; height: 38px; }
+.nc-week--onb .nc-week-slot { height: 38px; }
 
 /* "Follow the carnet" card under the client calendar — same public feed as the
    notaires landing card, framed for a client watching the dates. */

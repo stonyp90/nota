@@ -50,19 +50,26 @@ test('services: every service has documents and fields with help text', () => {
 });
 
 test('tiers: ordered ascending urgency', () => {
-  assert.deepEqual(D.TIERS.map((t) => t.id), ['standard', 'rapide', 'prioritaire']);
-});
-
-test('tiers: the old five-tier ids still resolve, so stored bids keep rendering', () => {
-  assert.equal(D.tierById('urgence').id, 'prioritaire');
-  assert.equal(D.tierById('extreme').id, 'prioritaire');
+  assert.deepEqual(D.TIERS.map((t) => t.id), ['standard', 'rapide', 'prioritaire', 'urgence', 'extreme']);
   assert.equal(D.tierById('nope'), null);
 });
 
+test('tiers: the ladder is strictly more expensive as the date closes in', () => {
+  // Each step must cost strictly more than the one below it, or the calendar's
+  // colours would rank dates in an order the prices do not.
+  const mults = D.TIERS.map((t) => D.tierMultiplier(t.id));
+  for (let i = 1; i < mults.length; i++) {
+    assert.ok(mults[i] > mults[i - 1], D.TIERS[i].id + ' must cost more than ' + D.TIERS[i - 1].id);
+  }
+  assert.deepEqual(mults, [1.1, 1.35, 3, 6, 8]);
+  // ...and the steepest step still fits under the hard cap the server enforces.
+  assert.ok(mults[mults.length - 1] <= D.PREMIUM_CAP);
+});
+
 test('tierForDays: boundaries', () => {
-  // The last three days before a signature are one situation, not three.
-  assert.equal(D.tierForDays(0), 'prioritaire');
-  assert.equal(D.tierForDays(1), 'prioritaire');
+  assert.equal(D.tierForDays(0), 'extreme');      // signing today
+  assert.equal(D.tierForDays(1), 'urgence');      // tomorrow
+  assert.equal(D.tierForDays(2), 'prioritaire');
   assert.equal(D.tierForDays(3), 'prioritaire');
   assert.equal(D.tierForDays(4), 'rapide');
   assert.equal(D.tierForDays(8), 'rapide');
@@ -289,7 +296,7 @@ test('recommendedAmount: mid-tier default, within bounds, one-tap booking', () =
   assert.equal(D.recommendedAmount('refinancement', '2026-08-14', TODAY), expected);
   // always within [Nota floor, 10x floor]
   for (const s of D.SERVICES) {
-    const r = D.recommendedAmount(s.id, '2026-08-13', TODAY); // 1 day = prioritaire
+    const r = D.recommendedAmount(s.id, '2026-08-13', TODAY); // 1 day = urgence
     const floor = D.notaPrice(s.id);
     assert.ok(r >= floor && r <= floor * 10, `${s.id} recommended in bounds`);
   }
@@ -367,4 +374,25 @@ test('elevated tiers are exactly the ones that carry a real premium', () => {
   const calmDays = calmes.map((t) => (t.maxJours == null ? Infinity : t.maxJours));
   eleves.forEach((t) => assert.ok(t.maxJours != null && t.maxJours < Math.min(...calmDays),
     t.id + ' should be nearer than every calm tier'));
+});
+
+test('tierMultiplier is the number recommendedAmount actually uses', () => {
+  D.TIERS.forEach((t) => {
+    assert.equal(D.tierMultiplier(t.id), (t.apercuMin + t.apercuMax) / 2);
+  });
+  assert.equal(D.tierMultiplier('prioritaire'), 3.0);
+  assert.equal(D.tierMultiplier('urgence'), 6.0, 'tomorrow costs 6x');
+  assert.equal(D.tierMultiplier('extreme'), 8.0, 'today costs 8x');
+  assert.equal(D.tierMultiplier('nope'), null);
+
+  // The number a cell shows must be the number the booking form pre-fills, or
+  // the calendar is quoting a price the form then contradicts.
+  const svc = 'refinancement';
+  const base = D.notaPrice(svc);
+  D.TIERS.forEach((t) => {
+    const days = t.maxJours == null ? 40 : t.maxJours;
+    const dateISO = D.addDays('2026-08-12', days);
+    const expected = Math.round((base * D.tierMultiplier(D.tierForDays(days))) / 5) * 5;
+    assert.equal(D.recommendedAmount(svc, dateISO, '2026-08-12'), expected, t.id);
+  });
 });

@@ -223,19 +223,6 @@
                 <button class="btn btn-primary btn-lg" id="cta-reserver">Réserver votre date →</button>
                 <button class="btn btn-lg" id="cta-voir">Voir les dates</button>
               </div>
-              <!-- Live vignette: real carnet offers drop onto a Mon–Fri board one
-                   by one while the money in play counts up; the taken ones flip
-                   to a ✓ — the marketplace clearing, played in front of the
-                   client. Same board as the notaires landing (D.weekAgenda, with
-                   retenues). Decorative: the pulse panel holds the real numbers. -->
-              <div class="nc-week nc-week--carnet" id="cw-week" aria-hidden="true" hidden>
-                <div class="nc-week-head">
-                  <span class="nc-week-kicker">Cette semaine à Québec</span>
-                  <span class="nc-week-total"><strong id="cw-week-total">0&nbsp;$</strong> en jeu</span>
-                </div>
-                <div class="nc-week-board" id="cw-week-board"></div>
-                <p class="nc-week-note">Offres réelles du carnet — <span class="nc-week-check-key">✓</span> déjà retenue par un notaire.</p>
-              </div>
             </div>
             <!-- Live market pulse: what the carnet is actually paying, per act.
                  Answers "combien j'offre ?" with real medians instead of copy;
@@ -321,7 +308,7 @@
                 <div>
                   <div class="sub-card-kicker">Suivez les dates</div>
                   <div class="sub-card-title">Le carnet dans votre agenda</div>
-                  <div class="sub-card-sub">Ajoutez le carnet à Google, Outlook ou Apple en un clic — les dates ouvertes à Québec, à jour automatiquement.</div>
+                  <div class="sub-card-sub">Ajoutez le carnet à Google, Outlook ou Apple en un clic. Les dates ouvertes à Québec, à jour automatiquement.</div>
                 </div>
               </div>
               <div class="sub-card-actions">
@@ -369,7 +356,7 @@
             <div class="intro-main">
               <span class="eyebrow">Pour les notaires</span>
               <h1>Remplissez votre semaine. Payé à la signature.</h1>
-              <p>Inscription gratuite, sans frais fixes — Nota se rémunère par une commission, uniquement sur les actes que vous complétez. Vous retenez ce qui vous convient, vous déclinez le reste sans frais.</p>
+              <p>Inscription gratuite, sans frais fixes. Nota se rémunère par une commission, uniquement sur les actes que vous complétez. Vous retenez ce qui vous convient, vous déclinez le reste sans frais.</p>
               <p class="hero-steps-inline">Inscrivez-vous, gratuit <span aria-hidden="true">·</span> Retenez ce qui vous convient <span aria-hidden="true">·</span> Payé en entier à la signature</p>
             </div>
           </div>
@@ -382,7 +369,7 @@
             </div>
             <div class="nc-why-item">
               <span class="nc-why-ic" aria-hidden="true">◆</span>
-              <div><div class="nc-why-t">Payé en entier à la signature</div><p class="nc-why-p">La commission Nota est déduite à la source — jamais une facture à courir.</p></div>
+              <div><div class="nc-why-t">Payé en entier à la signature</div><p class="nc-why-p">La commission Nota est déduite à la source, jamais une facture à courir.</p></div>
             </div>
             <div class="nc-why-item">
               <span class="nc-why-ic" aria-hidden="true">◆</span>
@@ -390,24 +377,9 @@
             </div>
             <div class="nc-why-item">
               <span class="nc-why-ic" aria-hidden="true">◆</span>
-              <div><div class="nc-why-t">Sans frais fixes</div><p class="nc-why-p">Inscription gratuite ; une commission seulement sur les actes complétés.</p></div>
+              <div><div class="nc-why-t">Sans frais fixes</div><p class="nc-why-p">Inscription gratuite, une commission seulement sur les actes complétés.</p></div>
             </div>
           </section>
-
-          <!-- Live vignette: real open demands drop onto a Mon–Fri board one by
-               one while the payoff counts up — the headline ("remplissez votre
-               semaine, payé à la signature") played out with market data. The
-               batch comes from D.weekAgenda over state.monthBids and rotates on
-               every loop. Decorative (aria-hidden): the same numbers live in the
-               console's "en jeu ce mois" line. -->
-          <div class="nc-week" id="nc-week" aria-hidden="true" hidden>
-            <div class="nc-week-head">
-              <span class="nc-week-kicker">Une semaine sur Nota</span>
-              <span class="nc-week-total"><strong id="nc-week-total">0&nbsp;$</strong> à la signature</span>
-            </div>
-            <div class="nc-week-board" id="nc-week-board"></div>
-            <p class="nc-week-note">Demandes réelles ouvertes en ce moment, placées à leur jour de signature.</p>
-          </div>
 
           <!-- Prospecting feed for notaries: subscribe the whole carnet of open
                demands into a personal agenda (Google / Outlook / Apple / iCal).
@@ -452,20 +424,20 @@
               </div>
               <ul class="errors" id="notary-console-errors" role="alert" aria-atomic="true" hidden></ul>
               <button type="submit" class="btn btn-primary btn-lg nc-auth-cta" id="notary-console-signin">Voir les demandes ouvertes →</button>
-              <p class="help nc-auth-fine">Sans mot de passe — première visite ou retour, c’est le même courriel. Si aucun compte n’existe encore, l’inscription gratuite se propose ici même.</p>
-              <p class="nc-soon" id="notary-phase2-note"><span class="nc-soon-tag">Bientôt</span>Vérification d’identité, inscription et <strong>réalisation complète de l’acte en ligne</strong> : recevez la demande, rencontrez le client et signez à distance — tout le parcours notaire, de bout en bout, sans quitter Nota.</p>
+              <p class="help nc-auth-fine">Sans mot de passe. Première visite ou retour, c’est le même courriel. Si aucun compte n’existe encore, l’inscription gratuite se propose ici même.</p>
+              <p class="nc-soon" id="notary-phase2-note"><span class="nc-soon-tag">Bientôt</span>Vérification d’identité, inscription et <strong>réalisation complète de l’acte en ligne</strong> : recevez la demande, rencontrez le client et signez à distance. Tout le parcours notaire, de bout en bout, sans quitter Nota.</p>
 
               <!-- Shown when the email has no account yet: sign-in and sign-up are the
                    same door — a new notary is offered free onboarding right here. -->
               <div id="notary-signup-prompt" class="nc-signup" tabindex="-1" hidden>
-                <p class="nc-signup-lead"><strong>Bienvenue !</strong> <span id="notary-signup-email"></span> n’a pas encore de compte. L’inscription est <strong>gratuite et sans engagement</strong> — deux étapes :</p>
+                <p class="nc-signup-lead"><strong>Bienvenue !</strong> <span id="notary-signup-email"></span> n’a pas encore de compte. L’inscription est <strong>gratuite et sans engagement</strong>, en deux étapes :</p>
                 <ol class="nc-signup-steps">
                   <li>Vous créez votre compte de paiement sécurisé via <strong>Stripe</strong>, notre partenaire (~2 min).</li>
-                  <li>Votre console s’ouvre aussitôt — vous voyez les demandes et en retenez.</li>
+                  <li>Votre console s’ouvre aussitôt. Vous voyez les demandes et en retenez.</li>
                 </ol>
                 <ul class="errors" id="notary-signup-errors" role="alert" aria-atomic="true" hidden></ul>
                 <button type="button" class="btn btn-primary btn-lg nc-auth-cta" id="notary-signup-btn">M’inscrire gratuitement →</button>
-                <p class="help nc-auth-fine">Stripe vous demandera une pièce d’identité et un compte bancaire pour vos versements — ces informations restent chez Stripe, Nota ne les voit jamais. Vous êtes ensuite ramené ici.</p>
+                <p class="help nc-auth-fine">Stripe vous demandera une pièce d’identité et un compte bancaire pour vos versements. Ces informations restent chez Stripe, Nota ne les voit jamais. Vous êtes ensuite ramené ici.</p>
               </div>
               </div>
             </form>
@@ -544,7 +516,7 @@
             </div>
           </div>
           <p class="note nota-guarantee">
-            <strong>Vous gardez la main.</strong> Vous fixez vos honoraires et vérifiez l’identité du client à la signature, comme l’exige la loi — Nota n’intervient jamais dans l’acte.
+            <strong>Vous gardez la main.</strong> Vous fixez vos honoraires et vérifiez l’identité du client à la signature, comme l’exige la loi. Nota n’intervient jamais dans l’acte.
           </p>
         </div>
       </section>
@@ -572,7 +544,7 @@
           <div class="cards">
             <div class="card">
               <h3>Ce que nous recueillons</h3>
-              <p>Votre date de signature, le service, le montant offert et les 3 premiers caractères de votre code postal — affichés publiquement. Votre courriel et le contenu de votre dossier restent privés.</p>
+              <p>Votre date de signature, le service, le montant offert et les 3 premiers caractères de votre code postal, affichés publiquement. Votre courriel et le contenu de votre dossier restent privés.</p>
             </div>
             <div class="card">
               <h3>Hébergé au Canada</h3>
@@ -591,7 +563,7 @@
               <li><strong>Droit de suppression.</strong> Vous pouvez demander l’accès, la rectification ou la suppression de vos renseignements en tout temps en écrivant à <a href="mailto:confidentialite@nota.ca">confidentialite@nota.ca</a>. Nous répondons dans un délai de 30 jours.</li>
               <li><strong>Partage du dossier.</strong> Le contenu de votre dossier n’est transmis à personne tant qu’un notaire n’a pas retenu votre demande, et seulement après votre consentement explicite. Les documents eux-mêmes sont échangés de façon sécurisée à cette étape.</li>
               <li><strong>Vérification d’identité.</strong> Nota ne vérifie pas votre identité. C’est le notaire qui retient votre demande qui vérifie votre identité au moment de la signature, comme l’exige la loi.</li>
-              <li><strong>Aucune revente.</strong> Nous ne vendons ni ne louons vos renseignements. Nota se rémunère par une commission sur les actes complétés — aucune donnée n’est monnayée.</li>
+              <li><strong>Aucune revente.</strong> Nous ne vendons ni ne louons vos renseignements. Nota se rémunère par une commission sur les actes complétés. Aucune donnée n’est monnayée.</li>
               <li><strong>Responsable.</strong> Une personne responsable de la protection des renseignements personnels supervise ces pratiques : <a href="mailto:confidentialite@nota.ca">confidentialite@nota.ca</a>.</li>
             </ul>
           </div>
@@ -604,13 +576,13 @@
           <div class="intro">
             <span class="eyebrow">Conditions d’utilisation</span>
             <h1>Les règles du service, en clair.</h1>
-            <p>En utilisant Nota, vous acceptez ces conditions. Nota est une place de marché qui met en relation des clients et des notaires du Québec — Nota n’est pas un notaire et ne pose aucun acte notarié.</p>
+            <p>En utilisant Nota, vous acceptez ces conditions. Nota est une place de marché qui met en relation des clients et des notaires du Québec. Nota n’est pas un notaire et ne pose aucun acte notarié.</p>
           </div>
 
           <div class="cards">
             <div class="card">
               <h3>Ce qu’est Nota</h3>
-              <p>Un carnet public où vous proposez une date et un montant ; un notaire du Québec choisit de retenir votre demande. Nota facilite la mise en relation, rien de plus.</p>
+              <p>Un carnet public où vous proposez une date et un montant. Un notaire du Québec choisit de retenir votre demande. Nota facilite la mise en relation, rien de plus.</p>
             </div>
             <div class="card">
               <h3>Vous restez maître</h3>
@@ -632,8 +604,8 @@
               <li><strong>Disponibilité.</strong> Le service est fourni « tel quel ». Nous visons une haute disponibilité sans garantir l’absence d’interruption. Nota peut suspendre ou refuser une offre contraire à ces conditions.</li>
               <li><strong>Responsabilité.</strong> Dans la mesure permise par la loi, la responsabilité de Nota se limite à la mise en relation. La qualité, la validité et l’exécution de l’acte relèvent du notaire.</li>
               <li><strong>Données personnelles.</strong> Le traitement de vos renseignements est décrit dans notre <a href="#" class="goto-link" data-goto="confidentialite">politique de confidentialité</a> (Loi 25).</li>
-              <li><strong>Modifications.</strong> Ces conditions peuvent évoluer ; la version en vigueur est celle affichée ici. Les changements importants vous seront signalés.</li>
-              <li><strong>Droit applicable.</strong> Ces conditions sont régies par le droit du Québec ; tout litige relève des tribunaux du district judiciaire de Québec.</li>
+              <li><strong>Modifications.</strong> Ces conditions peuvent évoluer. La version en vigueur est celle affichée ici. Les changements importants vous seront signalés.</li>
+              <li><strong>Droit applicable.</strong> Ces conditions sont régies par le droit du Québec. Tout litige relève des tribunaux du district judiciaire de Québec.</li>
               <li><strong>Contact.</strong> Une question ? Écrivez à <a href="mailto:info@nota.ca">info@nota.ca</a>.</li>
             </ul>
           </div>
@@ -667,7 +639,7 @@
           <div class="panel panel-pad panel-narrow mt-md">
             <h2 class="h-sub">Nos engagements</h2>
             <ul class="privacy-list">
-              <li><strong>Gratuité.</strong> Publier une offre et consulter le carnet est gratuit pour le client — pour toujours.</li>
+              <li><strong>Gratuité.</strong> Publier une offre et consulter le carnet est gratuit pour le client, pour toujours.</li>
               <li><strong>Transparence des prix.</strong> Un prix de départ clair par service, aucun frais caché. Ce que vous offrez est ce que le notaire reçoit.</li>
               <li><strong>Anonymat par défaut.</strong> Votre offre s’affiche « Client · secteur postal ». Votre nom n’apparaît que si vous le choisissez.</li>
               <li><strong>Vos données protégées.</strong> Hébergement au Canada, conformité à la Loi 25, aucune revente. Voir la <a href="#" class="goto-link" data-goto="confidentialite">confidentialité</a>.</li>
@@ -725,12 +697,12 @@
           <span class="tp-text" id="tp-text"></span>
         </div>
         <div class="book-step" id="o-criteria-step" hidden>
-          <div class="book-step-lbl"><span class="step">2</span> Quelques détails <span class="book-opt">— ajustent le prix</span></div>
+          <div class="book-step-lbl"><span class="step">2</span> Quelques détails <span class="book-opt">(ajustent le prix)</span></div>
           <div id="o-criteria" class="o-criteria"></div>
           <p class="mult-note" id="o-base-note"></p>
         </div>
         <div class="book-step">
-          <div class="book-step-lbl"><span class="step">3</span> Votre offre <span class="book-opt">— pré-remplie</span></div>
+          <div class="book-step-lbl"><span class="step">3</span> Votre offre <span class="book-opt">(pré-remplie)</span></div>
           <div class="amount-big" id="o-amount-display">—</div>
           <div class="slider-row"><input type="range" id="o-amount" min="0" max="100" value="0" step="1" aria-label="Montant de l’offre" /></div>
           <div class="gauge"><div class="gauge-fill" id="gauge-fill"></div></div>
@@ -756,7 +728,7 @@
               <input type="text" id="o-prefix" maxlength="3" placeholder="G1R" class="uppercase"
                      autocomplete="postal-code" inputmode="text" spellcheck="false"
                      pattern="[A-Za-z][0-9][A-Za-z]" aria-describedby="prefix-help" />
-              <p class="help" id="prefix-help">Les 3 premiers caractères de votre code postal — le seul repère de lieu que voient les notaires. Il indique votre secteur sans révéler votre adresse.</p>
+              <p class="help" id="prefix-help">Les 3 premiers caractères de votre code postal, le seul repère de lieu que voient les notaires. Il indique votre secteur sans révéler votre adresse.</p>
               <p class="prefix-preview" id="prefix-preview" aria-live="polite"></p>
             </div>
             <div class="form-row">
@@ -765,10 +737,10 @@
               <p class="help">Sert à vous prévenir. Jamais affiché.</p>
             </div>
             <p id="consent-line" class="help">En publiant, la date, le service, le montant et le secteur postal deviennent publics. Aucun document n’est transmis à cette étape. Données au Canada, supprimées sur demande (Loi 25).</p>
-            <p id="offer-dossier-note" class="help">Les réponses de votre <strong>Dossier</strong> accompagnent l’offre ; les documents ne sont partagés qu’après qu’un notaire a retenu votre demande.</p>
+            <p id="offer-dossier-note" class="help">Les réponses de votre <strong>Dossier</strong> accompagnent l’offre. Les documents ne sont partagés qu’après qu’un notaire a retenu votre demande.</p>
           </div>
         </details>
-        <p class="nc-soon soon-online"><span class="nc-soon-tag">Bientôt</span>Les notaires pourront réaliser l’acte <strong>entièrement en ligne</strong> sur Nota — signature à distance comprise, sans déplacement. Aujourd’hui, vous convenez du lieu avec le notaire qui vous retient.</p>
+        <p class="nc-soon soon-online"><span class="nc-soon-tag">Bientôt</span>Les notaires pourront réaliser l’acte <strong>entièrement en ligne</strong> sur Nota, signature à distance comprise, sans déplacement. Aujourd’hui, vous convenez du lieu avec le notaire qui vous retient.</p>
         <ul class="errors" id="offer-errors" role="alert" aria-atomic="true" hidden></ul>
         <button type="submit" class="btn btn-primary w-full btn-lg" id="offer-submit" disabled>Publier mon offre</button>
         <div id="offer-success" class="offer-success" hidden>
@@ -826,7 +798,7 @@
       <div class="auth-body">
         <div class="auth-mark" aria-hidden="true"><span class="brand-badge"><img src="favicon.svg" width="26" height="26" alt="" /></span></div>
         <h2 id="auth-title" class="auth-title">Bienvenue sur Nota</h2>
-        <p class="auth-sub">Connectez-vous ou créez votre compte — sans mot de passe.</p>
+        <p class="auth-sub">Connectez-vous ou créez votre compte, sans mot de passe.</p>
 
         <div class="seg auth-role" id="auth-role" role="group" aria-label="Vous êtes">
           <button type="button" class="seg-btn is-on" data-role="client" aria-pressed="true">Je suis client</button>
@@ -890,6 +862,7 @@
               <span class="onb-choice-d">Voyez les demandes ouvertes à Québec.</span>
             </button>
           </div>
+
         </div>
 
         <!-- VIEW 2 — role steps (title, sub, 3 steps, CTA) filled by app.js -->
@@ -902,6 +875,22 @@
           <button type="button" class="btn btn-primary btn-lg onb-cta" id="onb-cta"></button>
           <button type="button" class="onb-alt" id="onb-alt"></button>
           <button type="button" class="onb-skip" id="onb-skip">Passer</button>
+        </div>
+
+        <!-- Live board under BOTH views: real carnet offers land on a Mon–Fri
+             week while the money counts up (D.weekAgenda over state.monthBids).
+             Its flavour follows the visitor: the role choice and the client
+             steps show the market clearing ("en jeu", ✓ = taken); the notary
+             steps show a week paying out ("à la signature", open demands only).
+             Decorative (aria-hidden); renderOnbWeekAnim drives it. -->
+        <div class="nc-week nc-week--onb" id="ob-week" aria-hidden="true" hidden>
+          <div class="nc-week-head">
+            <span class="nc-week-kicker" id="ob-week-kicker">Cette semaine à Québec</span>
+            <span class="nc-week-total"><strong id="ob-week-total">0&nbsp;$</strong> <span id="ob-week-mode">en jeu</span></span>
+          </div>
+          <div class="nc-week-board" id="ob-week-board"></div>
+          <p class="nc-week-note" id="ob-week-note-carnet">Offres réelles du carnet — <span class="nc-week-check-key">✓</span> déjà retenue par un notaire.</p>
+          <p class="nc-week-note" id="ob-week-note-notaire" hidden>Demandes réelles ouvertes en ce moment, placées à leur jour de signature.</p>
         </div>
       </div>
     </dialog>

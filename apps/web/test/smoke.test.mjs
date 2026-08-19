@@ -141,7 +141,7 @@ test('calendar renders day cells for the anchor month and 7 weekday headers', as
 test('legend renders one item per timing tier', async () => {
   const { doc, D } = await boot();
   assert.equal(all(doc, '#legend .legend-item').length, D.TIERS.length);
-  assert.equal(D.TIERS.length, 3, 'the ladder is standard, rapide, prioritaire');
+  assert.equal(D.TIERS.length, 5, 'five steps, because the last week is where the price moves');
 });
 
 // 5. No open/taken day ever renders a bare em-dash headline.
@@ -168,7 +168,10 @@ test('a day with bids shows the best open offer per act', async () => {
     const items = [...c.querySelectorAll('.svc-bid')];
     assert.ok(items.length > 0 && items.length <= D.SERVICES.length);
     items.forEach((it) => {
-      assert.ok(it.querySelector('.svc-bid-dot'), 'each price carries its act colour');
+      // The act's own glyph, tinted with its colour: the same mark the legend,
+      // the chips and the market rows use, so one glyph means one act everywhere.
+      assert.ok(it.querySelector('.svc-ic') || it.querySelector('.svc-bid-dot'),
+        'each price carries its act mark');
       assert.match(it.querySelector('.svc-bid-amount').textContent, /\u00A0\$$/, 'formatted through money()');
       // A cell prints the dot and the price only — no visible act name.
       assert.equal(it.querySelector('.svc-bid-name'), null, 'no visible name in a cell');
@@ -756,30 +759,39 @@ test('CARNET: rests on open offers; retained ones are one filter click away', as
   assert.equal(ctx.Nota.state.filters.statut, '', 'and "Toutes" still shows everything');
 });
 
-test('URGENCY: named on the dates that carry a premium, absent on calm ones', async () => {
+test('URGENCY: every upcoming day prices its own notice, from the domain', async () => {
   const ctx = await boot();
-  const iso = ctx.D.addDays(ctx.today, 1);       // extreme: 0-1 days out
-  const calm = ctx.D.addDays(ctx.today, 20);     // standard: 15+ days out
-  const mk = (id, dateISO) => ({ id, serviceId: 'testament', dateISO, montant: 1500,
-    tier: ctx.D.tierForDays(ctx.D.daysBetween(ctx.today, dateISO)),
-    status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: dateISO });
-  await reseed(ctx, [mk('u1', iso), mk('c1', calm)]);
+  const near = ctx.D.addDays(ctx.today, 1);    // prioritaire
+  const calm = ctx.D.addDays(ctx.today, 20);   // standard
 
-  const urgent = ctx.doc.querySelector('.cal-cell[data-date="' + iso + '"]');
-  const label = urgent.querySelector('.cal-urgency');
-  assert.ok(label, 'a near date names its urgency');
-  const tier = ctx.D.tierById(ctx.D.tierForDays(ctx.D.daysBetween(ctx.today, iso)));
-  assert.ok(tier.eleve, 'and that tier is an elevated one');
-  assert.equal(label.textContent, tier.nom, 'in words, from the domain — never a bare colour');
-  assert.equal(label.dataset.tier, tier.id);
-  assert.equal(urgent.dataset.tier, tier.id, 'the cell edge matches the label');
+  [near, calm].forEach((iso) => {
+    const cell = ctx.doc.querySelector('.cal-cell[data-date="' + iso + '"]');
+    if (!cell) return;                          // may fall outside the anchor month
+    const tierId = ctx.D.tierForDays(ctx.D.daysBetween(ctx.today, iso));
+    const mark = cell.querySelector('.cal-urgency');
+    assert.ok(mark, 'a day with no offer still has a price for its notice: ' + iso);
+    assert.equal(mark.dataset.tier, tierId);
+    assert.equal(cell.dataset.tier, tierId, 'the cell edge matches the marker');
 
-  // A calm date says nothing: its tier is already implied by the date itself.
-  const calmCell = ctx.doc.querySelector('.cal-cell[data-date="' + calm + '"]');
-  if (calmCell) {
-    assert.equal(calmCell.querySelector('.cal-urgency'), null, 'no urgency marker on a calm date');
-    assert.equal(calmCell.dataset.tier, undefined, 'and no coloured edge either');
-  }
+    // The number shown must be the number the booking form pre-fills, or the
+    // calendar quotes a price the form then contradicts.
+    const m = ctx.D.tierMultiplier(tierId);
+    const shown = Number(mark.textContent.replace('×', '').replace(',', '.'));
+    assert.equal(shown, Math.round(m * 10) / 10, 'the cell quotes the domain multiplier');
+  });
+
+  // A near date must cost strictly more than a distant one, or the whole
+  // premise of the carnet is not on screen.
+  assert.ok(
+    ctx.D.tierMultiplier(ctx.D.tierForDays(1)) > ctx.D.tierMultiplier(ctx.D.tierForDays(20)),
+    'urgency must read as more expensive',
+  );
+
+  // The legend is what turns the colour into that price.
+  const key = [...ctx.doc.querySelectorAll('#legend .legend-item')]
+    .find((n) => /Prioritaire/.test(n.textContent));
+  assert.ok(key, 'the legend keys each tier');
+  assert.match(key.textContent, /3×/, 'with its multiplier, not just a name');
 });
 
 
@@ -791,7 +803,7 @@ test('LEGEND: the service key decodes the price colours, and says where detail l
   const txt = note.textContent;
   assert.match(txt, /meilleure offre encore ouverte/, 'names what the figure is');
   assert.match(txt, /couleur/, 'points at the service key above it');
-  assert.match(txt, /Ouvrez une case/, 'says how to reach the detail');
+  assert.match(txt, /multiple du prix de départ/, 'says what the multiplier means');
   // The percentage it used to explain is no longer on the compact surface.
   assert.ok(!/chances d’obtenir/.test(txt), 'no longer explains an odds percentage');
 
@@ -974,15 +986,31 @@ test('the hero pulse shows the month median per service and filters the carnet',
   assert.equal(rows.length, ctx.D.SERVICES.length, 'one row per service, always');
   const byId = Object.fromEntries(rows.map((r) => [r.dataset.svc, r]));
 
-  // The median (not the mean: 1200) is what a client is shown.
-  assert.equal(byId.testament.querySelector('.pulse-amount').textContent, ctx.D.money(900));
-  assert.match(byId.testament.querySelector('.pulse-meta').textContent, /3 offres · 1 retenue$/);
-  assert.equal(byId.procuration.querySelector('.pulse-amount').textContent, ctx.D.money(400));
+  // Two figures per act: the floor the server accepts at all, and what other
+  // clients are actually offering. They answer different questions, so both are
+  // shown rather than one standing in for the other.
+  const figs = (row) => [...row.querySelectorAll('.pulse-fig')].map((f) => [
+    f.querySelector('.pulse-fig-k').textContent,
+    f.querySelector('.pulse-fig-v').textContent,
+  ]);
+  const floorOf = (id) => ctx.D.money(ctx.D.serviceById(id).prixDepart);
 
-  // A service with no offer this month falls back to its floor, flagged as such.
+  // The median (not the mean: 1200) is what a client is shown.
+  assert.deepEqual(figs(byId.testament), [
+    ['à partir de', floorOf('testament')],
+    ['médiane', ctx.D.money(900)],
+  ]);
+  assert.match(byId.testament.querySelector('.pulse-meta').textContent, /3 offres · 1 retenue$/);
+  assert.deepEqual(figs(byId.procuration), [
+    ['à partir de', floorOf('procuration')],
+    ['médiane', ctx.D.money(400)],
+  ]);
+
+  // An act with no offer this month still shows its floor; the median is simply
+  // absent rather than the floor masquerading as a market fact.
   const refi = byId.refinancement;
-  assert.equal(refi.querySelector('.pulse-amount').textContent, ctx.D.money(ctx.D.serviceById('refinancement').prixDepart));
-  assert.ok(refi.querySelector('.pulse-amount').classList.contains('is-floor'), 'floor, not a market median');
+  assert.deepEqual(figs(refi), [['à partir de', floorOf('refinancement')], ['médiane', '—']]);
+  assert.ok(refi.querySelectorAll('.pulse-fig-v')[1].classList.contains('is-empty'));
   assert.match(refi.querySelector('.pulse-meta').textContent, /aucune offre/);
 
   // The foot leads with what is still winnable, not with the acceptance rate:
@@ -998,7 +1026,10 @@ test('the hero pulse shows the month median per service and filters the carnet',
   const onRow = ctx.doc.querySelector('#pulse-rows .pulse-row[data-svc="procuration"]');
   assert.equal(onRow.getAttribute('aria-pressed'), 'true');
   // The pulse itself keeps reading the WHOLE month — it is the reference, not a result.
-  assert.equal(ctx.doc.querySelector('#pulse-rows .pulse-row[data-svc="testament"] .pulse-amount').textContent, ctx.D.money(900));
+  assert.equal(
+    ctx.doc.querySelectorAll('#pulse-rows .pulse-row[data-svc="testament"] .pulse-fig-v')[1].textContent,
+    ctx.D.money(900),
+  );
 
   // Clicking the active row again returns to every act, the carnet's resting
   // scope: 4 seeded, 1 retained, so 3 open ones are counted.

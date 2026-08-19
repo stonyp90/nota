@@ -159,6 +159,10 @@
   // DOM helpers
   // ---------------------------------------------------------------------------
   function $(id) { return document.getElementById(id); }
+  // "3×" / "1,4×" — French decimal comma, and no pointless ",0".
+  function multLabel(m) {
+    return (Math.round(m * 10) / 10).toFixed(1).replace(/,?\.0$/, '').replace('.', ',') + '×';
+  }
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
 
@@ -168,6 +172,32 @@
   // has the same size, hit area, tooltip and accessible name; the icon alone is
   // never the label (screen readers get the full sentence).
   // ---------------------------------------------------------------------------
+  // One glyph per act, so a service is recognised before its name is read. Keyed
+  // by the domain's service ids; adding an act without a glyph falls back to the
+  // colour dot rather than rendering nothing.
+  var SVC_ICONS = {
+    // A signed sheet: a will and a protection mandate are written and signed.
+    testament: '<path d="M15 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h9"/><path d="M8 8h6M8 12h4"/><path d="M19.5 11.5 21 13l-5 5-2 .5.5-2z"/>',
+    // A stamped seal: a power of attorney is authority delegated under seal.
+    procuration: '<circle cx="12" cy="9" r="4.5"/><path d="M9.2 12.8 8 21l4-2 4 2-1.2-8.2"/>',
+    // A house with a key line: refinancing is a mortgage on a home.
+    refinancement: '<path d="M3 10.5 12 4l9 6.5"/><path d="M5 10v10h14V10"/><path d="M10 20v-5h4v5"/>',
+  };
+  function svcIcon(id, size) {
+    if (!SVC_ICONS[id]) return null;
+    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    var px = String(size || 14);
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('width', px); svg.setAttribute('height', px);
+    svg.setAttribute('fill', 'none'); svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '1.9');
+    svg.setAttribute('stroke-linecap', 'round'); svg.setAttribute('stroke-linejoin', 'round');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.setAttribute('class', 'svc-ic');
+    svg.innerHTML = SVC_ICONS[id];
+    return svg;
+  }
+
   var MINI_ICONS = {
     agenda: '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4M12 13v4M10 15h4"/>',
     partager: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/>',
@@ -410,7 +440,7 @@
   function authSocial(provider) {
     // Real OAuth (Google/Facebook/LinkedIn) needs provider apps + a backend; not
     // wired yet. Surface the option honestly and steer to the courriel path.
-    toast('La connexion ' + provider + ' arrive bientôt — continuez avec votre courriel pour l’instant.');
+    toast('La connexion ' + provider + ' arrive bientôt. Continuez avec votre courriel pour l’instant.');
     var em = $('auth-email'); if (em) { try { em.focus(); } catch (e) {} }
   }
   function authSubmitEmail(e) {
@@ -524,6 +554,7 @@
     var r = $('onb-view-role'), s = $('onb-view-steps');
     if (r) r.hidden = false;
     if (s) s.hidden = true;
+    renderOnbWeekAnim(); // (re)start the live board when this view is on screen
   }
 
   // VIEW 2 (steps) for the chosen role — swaps the title/sub, rebuilds the step
@@ -557,6 +588,7 @@
     var r = $('onb-view-role'), s = $('onb-view-steps');
     if (r) r.hidden = true;
     if (s) s.hidden = false;
+    renderOnbWeekAnim(); // reflavour the live board for the chosen role
     // Focus follows the view, or a keyboard/SR user is left on a hidden control.
     if (cta) { try { cta.focus(); } catch (e) {} }
   }
@@ -568,6 +600,7 @@
     toggleNotifPanel(false);
     var dlg = $('onboarding-dialog');
     if (dlg && dlg.showModal) { try { dlg.showModal(); } catch (e) { /* already open */ } }
+    renderOnbWeekAnim(); // the dialog is open now — the live board can start
   }
 
   // Auto-show once per browser. After boot, gated by LS_ONBOARDED.
@@ -861,15 +894,7 @@
         // see, in a fifth and sixth colour competing with the act colours. Say
         // it in words, and only where it changes the decision: the near dates a
         // notary has to clear their week for.
-        if (topTier && topTier.eleve) {
-          cell.dataset.tier = topTier.id;
-          var urg = el('span', 'cal-urgency', topTier.nom);
-          urg.dataset.tier = topTier.id;
-          urg.title = 'Délai serré — le marché se conclut ici entre '
-            + topTier.apercuMin.toFixed(1).replace('.', ',') + '× et '
-            + topTier.apercuMax.toFixed(1).replace('.', ',') + '× le prix de départ.';
-          cell.appendChild(urg);
-        }
+
         // Expanding is only offered when it reveals something the collapsed cell
         // does not already say: how deep the competition is, and the number to
         // beat. Everything else (act, urgency) is carried by the legend and the
@@ -886,6 +911,22 @@
         cell.appendChild(expandChevron(cell, dayTitle(iso)));
         cell.setAttribute('aria-label', dayTitle(iso) + ' — ' + plural(dayBids.length, 'offre')
           + ', meilleure offre ' + D.money(Math.max.apply(null, pool.map(function (b) { return b.montant; }))));
+      }
+
+      // What this date costs, whether or not anyone has offered on it yet: the
+      // tier is a pure function of the notice, so an empty day has a price too,
+      // and that is precisely the day a client is deciding about.
+      if (!isPast) {
+        var tier = D.tierById(D.tierForDays(D.daysBetween(today, iso)));
+        if (tier) {
+          cell.dataset.tier = tier.id;
+          var mult = D.tierMultiplier(tier.id);
+          var urg = el('span', 'cal-urgency', multLabel(mult));
+          urg.dataset.tier = tier.id;
+          urg.title = tier.nom + '. À ce délai, une offre se conclut autour de '
+            + multLabel(mult) + ' le prix de départ.';
+          cell.appendChild(urg);
+        }
       }
 
       if (!isPast) cell.addEventListener('click', function () { openDay(this.dataset.date); });
@@ -949,9 +990,13 @@
       // Carried for the CSS tooltip a calendar cell shows on hover, where there
       // is no room to print the name.
       item.dataset.name = svc.nom;
-      var dot = el('span', 'svc-bid-dot');
-      dot.style.background = 'var(--svc-' + svc.id + ')';
-      item.appendChild(dot);
+      var ic = svcIcon(svc.id, 12);
+      if (ic) item.appendChild(ic);
+      else {
+        var dot = el('span', 'svc-bid-dot');
+        dot.style.background = 'var(--svc-' + svc.id + ')';
+        item.appendChild(dot);
+      }
       // A cell shows the dot alone — the colour is decoded by the legend, and
       // hovering names the act. A list card has the room, so it prints the name.
       // Either way the name is in the DOM for screen readers, which have no
@@ -978,20 +1023,29 @@
 
   function renderLegend() {
     var lg = $('legend'); clear(lg);
-    lg.appendChild(el('span', 'legend-label', 'Urgence'));
+    // The key that turns a colour on a cell into a price: each tier with the
+    // multiple of the starting price an offer actually settles at.
+    lg.appendChild(el('span', 'legend-label', 'Délai'));
     D.TIERS.forEach(function (t) {
       var item = el('span', 'legend-item');
       var dot = el('span', 'legend-dot'); dot.style.background = 'var(--tier-' + t.id + ')';
       item.appendChild(dot);
-      item.appendChild(document.createTextNode(t.nom));
+      item.appendChild(document.createTextNode(t.nom + ' '));
+      var m = el('span', 'legend-mult', multLabel(D.tierMultiplier(t.id)));
+      m.style.color = 'var(--tier-' + t.id + ')';
+      item.appendChild(m);
       lg.appendChild(item);
     });
     // Service key — decodes the per-service mix bar in each calendar cell.
     lg.appendChild(el('span', 'legend-label legend-label--sep', 'Service'));
     D.SERVICES.forEach(function (s) {
       var item = el('span', 'legend-status-item');
-      var dot = el('span', 'legend-dot'); dot.style.background = 'var(--svc-' + s.id + ')';
-      item.appendChild(dot);
+      var ic = svcIcon(s.id, 13);
+      if (ic) { ic.style.color = 'var(--svc-' + s.id + ')'; item.appendChild(ic); }
+      else {
+        var dot = el('span', 'legend-dot'); dot.style.background = 'var(--svc-' + s.id + ')';
+        item.appendChild(dot);
+      }
       item.appendChild(document.createTextNode(s.nom));
       lg.appendChild(item);
     });
@@ -1003,8 +1057,9 @@
     var note = el('span', 'legend-note');
     note.appendChild(el('strong', null, 'Dans chaque case'));
     note.appendChild(document.createTextNode(
-      ' : la meilleure offre encore ouverte pour chaque acte, à la couleur ci-dessus. '
-      + 'Ouvrez une case pour voir qui offre et le montant à battre.'
+      ' : la meilleure offre encore ouverte pour chaque acte, à la couleur ci-dessus, '
+      + 'et le multiple du prix de départ qu’il faut compter à ce délai. '
+      + 'Plus la date est proche, plus ce multiple monte.'
     ));
     lg.appendChild(note);
   }
@@ -1027,30 +1082,47 @@
     row.type = 'button';
     row.dataset.svc = s.id;
     row.setAttribute('aria-pressed', active ? 'true' : 'false');
-    // The row's text is four fragments; name the WHOLE control once so a screen
-    // reader announces the figure and what clicking it does, not "788 $ 10 offres".
+    // The row is several fragments; name the WHOLE control once so a screen
+    // reader announces the figures and what clicking it does, not "788 $ 10 offres".
     row.setAttribute('aria-label',
-      short + ' — ' + (s.median == null ? 'à partir de ' : 'médiane ') + D.money(priced) + ', '
-      + (s.total === 0 ? 'aucune offre ce mois' : plural(s.total, 'offre') + ' dont ' + plural(s.retenues, 'retenue')) + '. '
+      short + ' — à partir de ' + D.money(s.prixDepart)
+      + (s.median == null ? ', aucune offre ce mois' : ', médiane des offres ' + D.money(s.median)) + '. '
       + (active ? 'Retirer ce filtre.' : 'Afficher le carnet pour cet acte.'));
 
     var name = el('span', 'pulse-svc');
-    var dot = el('span', 'pulse-dot');
-    dot.style.background = 'var(--svc-' + s.id + ')';
-    name.appendChild(dot);
+    var ic = svcIcon(s.id, 15);
+    if (ic) { ic.style.color = 'var(--svc-' + s.id + ')'; name.appendChild(ic); }
+    else {
+      var dot = el('span', 'pulse-dot');
+      dot.style.background = 'var(--svc-' + s.id + ')';
+      name.appendChild(dot);
+    }
     name.appendChild(document.createTextNode(short));
     row.appendChild(name);
 
-    // Median when the month has offers, the service floor when it has none —
-    // never an empty cell, and never a mean (one 9 000 $ urgence must not
-    // masquerade as the going rate).
-    var amount = el('span', 'pulse-amount', D.money(priced));
-    if (s.median == null) amount.classList.add('is-floor');
-    row.appendChild(amount);
+    // Two figures, because they answer two different questions. The floor is
+    // what the server will accept at all, and it is stable. The median is what
+    // other clients are actually offering this month, and it is what a notary
+    // is choosing between. Never a mean: one 9 000 $ urgence must not
+    // masquerade as the going rate.
+    var figs = el('span', 'pulse-figs');
+
+    var dep = el('span', 'pulse-fig');
+    dep.appendChild(el('span', 'pulse-fig-k', 'à partir de'));
+    dep.appendChild(el('span', 'pulse-fig-v', D.money(s.prixDepart)));
+    figs.appendChild(dep);
+
+    var med = el('span', 'pulse-fig');
+    med.appendChild(el('span', 'pulse-fig-k', 'médiane'));
+    var medV = el('span', 'pulse-fig-v', s.median == null ? '—' : D.money(s.median));
+    if (s.median == null) medV.classList.add('is-empty');
+    med.appendChild(medV);
+    figs.appendChild(med);
+
+    row.appendChild(figs);
 
     row.appendChild(el('span', 'pulse-meta',
       s.total === 0 ? 'aucune offre ce mois' : plural(s.total, 'offre') + ' · ' + s.retenues + ' retenue' + (s.retenues === 1 ? '' : 's')));
-    row.appendChild(el('span', 'pulse-sub', s.median == null ? 'prix de départ' : 'médiane'));
 
     // Volume bar: this service's share of the busiest one, in its own hue. It
     // carries the row structure now that the separators are gone, and adds the
@@ -1100,12 +1172,12 @@
     if (foot) {
       var ouvertes = Math.max(0, p.total - p.retenues);
       if (p.total === 0) {
-        foot.textContent = 'Aucune demande ce mois-ci — proposez la vôtre : les notaires de Québec la verront.';
+        foot.textContent = 'Aucune demande ce mois-ci. Proposez la vôtre, les notaires de Québec la verront.';
       } else if (ouvertes === 0) {
-        foot.textContent = 'Toutes les demandes de ce mois sont retenues — proposez la vôtre pour une date libre.';
+        foot.textContent = 'Toutes les demandes de ce mois sont retenues. Proposez la vôtre pour une date libre.';
       } else {
         foot.textContent = plural(ouvertes, 'demande') + ' encore ouverte'
-          + (ouvertes === 1 ? '' : 's') + ' ce mois-ci — comparez les montants, puis proposez le vôtre.';
+          + (ouvertes === 1 ? '' : 's') + ' ce mois-ci. Comparez les montants, puis proposez le vôtre.';
       }
     }
   }
@@ -1219,7 +1291,7 @@
       var dLeft = D.daysBetween(todayISO(), iso);
       var when = dLeft <= 0 ? 'aujourd’hui' : dLeft === 1 ? 'demain' : 'dans ' + dLeft + ' jours';
       chanceEl.textContent = 'Chances d’obtenir un notaire : ' + D.obtainChance(iso, todayISO())
-        + PCT + ' — la date est ' + when + ', et plus elle approche, plus un notaire a de mal à s’y libérer.';
+        + PCT + '. La date est ' + when + ', et plus elle approche, plus un notaire a de mal à s’y libérer.';
     }
     validateOfferUI();
 
@@ -1287,7 +1359,7 @@
     $('day-best').textContent = top != null ? D.money(top) : '—';
     $('day-hint').textContent = top != null
       ? 'Proposez plus que ' + D.money(top) + ' pour passer devant.'
-      : (svc ? 'Aucune offre en ' + svc.nom.toLowerCase() + ' — fixez votre prix.' : 'Aucune offre — fixez votre prix.');
+      : (svc ? 'Aucune offre en ' + svc.nom.toLowerCase() + '. Fixez votre prix.' : 'Aucune offre. Fixez votre prix.');
   }
 
   // ---------------------------------------------------------------------------
@@ -1450,8 +1522,10 @@
     wrap.appendChild(all);
     D.SERVICES.forEach(function (s) {
       var on = state.filters.service === s.id;
-      var b = el('button', 'chip' + (on ? ' is-on' : ''), s.nomCourt);
+      var b = el('button', 'chip chip-svc' + (on ? ' is-on' : ''));
       b.type = 'button'; b.dataset.svc = s.id; b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      var ic = svcIcon(s.id); if (ic) b.appendChild(ic);
+      b.appendChild(document.createTextNode(s.nomCourt));
       wrap.appendChild(b);
     });
   }
@@ -1460,8 +1534,10 @@
   function buildBookingChips() {
     var wrap = $('o-service-chips'); if (!wrap) return; clear(wrap);
     D.SERVICES.forEach(function (s) {
-      var b = el('button', 'chip', s.nom.split(' ')[0]);
+      var b = el('button', 'chip chip-svc');
       b.type = 'button'; b.dataset.svc = s.id; b.setAttribute('aria-pressed', 'false');
+      var ic = svcIcon(s.id); if (ic) b.appendChild(ic);
+      b.appendChild(document.createTextNode(s.nomCourt));
       wrap.appendChild(b);
     });
   }
@@ -1672,9 +1748,9 @@
     var top = t.apercuMax * 1.25;
     var pct = Math.max(4, Math.min(100, ((mult - 1) / (top - 1)) * 100));
     var label;
-    if (mult < t.apercuMin) label = 'Sous la fourchette du marché — peu susceptible d’être retenue.';
+    if (mult < t.apercuMin) label = 'Sous la fourchette du marché, peu susceptible d’être retenue.';
     else if (mult <= t.apercuMax) label = 'Dans la fourchette qui se conclut à ce délai.';
-    else label = 'Offre généreuse — susceptible d’être retenue rapidement.';
+    else label = 'Offre généreuse, susceptible d’être retenue rapidement.';
     return { pct: pct, label: label };
   }
 
@@ -1716,7 +1792,7 @@
         prev.textContent = '« ' + norm + ' » n’est pas un secteur du Québec. Nota dessert Québec pour l’instant.';
       } else {
         prev.dataset.state = 'warn';
-        prev.textContent = 'Format attendu : une lettre, un chiffre, une lettre — « ' + PREFIX_EXAMPLE + ' ».';
+        prev.textContent = 'Format attendu : une lettre, un chiffre, une lettre, comme « ' + PREFIX_EXAMPLE + ' ».';
       }
     }
     validateOfferUI();
@@ -2224,13 +2300,13 @@
           row.dataset.done = name ? 'true' : 'false';
           fileCta.textContent = name ? 'Remplacer le fichier' : 'Choisir un fichier';
           var note = body.querySelector('.file-note');
-          if (name) { if (!note) { note = el('div', 'file-note'); body.appendChild(note); } note.textContent = 'Sélectionné : ' + name + ' — reste sur votre appareil.'; }
+          if (name) { if (!note) { note = el('div', 'file-note'); body.appendChild(note); } note.textContent = 'Sélectionné : ' + name + '. Reste sur votre appareil.'; }
           else if (note) { note.remove(); }
           updateDossierBar();
         });
         fileLbl.appendChild(input); fileLbl.appendChild(fileCta);
         body.appendChild(fileLbl);
-        if (saved[it.id]) { var fn = el('div', 'file-note', 'Sélectionné : ' + saved[it.id] + ' — reste sur votre appareil.'); body.appendChild(fn); }
+        if (saved[it.id]) { var fn = el('div', 'file-note', 'Sélectionné : ' + saved[it.id] + '. Reste sur votre appareil.'); body.appendChild(fn); }
       } else {
         input = document.createElement('input'); input.type = 'text';
         input.value = saved[it.id] || '';
@@ -2296,7 +2372,7 @@
 
     var m = $('dossier-missing');
     if (r.ready) {
-      m.textContent = '✓ Prêt à être retenu par un notaire — votre identité sera vérifiée à la signature.';
+      m.textContent = '✓ Prêt à être retenu par un notaire. Votre identité sera vérifiée à la signature.';
       m.dataset.ready = 'true';
     } else {
       var parts = [];
@@ -2354,7 +2430,7 @@
       var j = {}; try { j = await r.json(); } catch (e) {}
       if (r.ok && j.url) { window.location.href = j.url; return true; }
       onError && onError((j.errors && j.errors[0] && j.errors[0].message) || 'Inscription indisponible pour le moment.');
-    } catch (err) { onError && onError('Hors ligne — réessayez une fois en ligne.'); }
+    } catch (err) { onError && onError('Hors ligne. Réessayez une fois en ligne.'); }
     return false;
   }
 
@@ -2552,7 +2628,7 @@
     if (r.status === 401) { ncExpire('Session expirée. Reconnectez-vous.'); return; }
     var j = {}; try { j = await r.json(); } catch (e) {}
     if (r.status === 409) { toast('Cette offre a déjà été retenue par un autre notaire.'); ncDropOpen(id); ncRenderOpen(); return; }
-    if (r.status === 404) { toast('Offre introuvable — elle a peut-être expiré.'); ncDropOpen(id); ncRenderOpen(); return; }
+    if (r.status === 404) { toast('Offre introuvable, elle a peut-être expiré.'); ncDropOpen(id); ncRenderOpen(); return; }
     if (r.status !== 200) { toast('Échec de la prise en charge.'); return; }
     var entry = {
       id: j.id, dateISO: dateISO, serviceId: bidMeta.serviceId, montant: bidMeta.montant,
@@ -2596,6 +2672,170 @@
     $('notary-opp-total').textContent = D.money(total);
     box.hidden = false;
   }
+
+  // --- Week vignette (onboarding dialog) ---------------------------------------
+  // The marketplace played out with market data: real demands (D.weekAgenda over
+  // state.monthBids) drop onto a Mon–Fri board one by one while the money counts
+  // up; the board then clears and replays the NEXT batch (the domain rotates
+  // through the pool via `offset`). One board under both onboarding views, two
+  // flavours by role:
+  //   • carnet (role choice + client steps) — open AND retained demands;
+  //     retained ones flip to a ✓ once the board settles: the market clearing;
+  //   • notaire (notary steps) — open demands only: a week paying out.
+  // Self-stopping: every step re-checks the board is still on screen (dialog
+  // open, page visible) — a closed dialog kills offsetParent, parking the loop.
+  var fmtWeekday = new Intl.DateTimeFormat('fr-CA', { weekday: 'short', timeZone: 'UTC' });
+  // Labels come from the locale, anchored on a known Monday (2024-01-01).
+  var WEEK_DAY_LABELS = [0, 1, 2, 3, 4].map(function (i) {
+    return fmtWeekday.format(new Date(Date.UTC(2024, 0, 1 + i))).replace(/\.$/, '');
+  });
+
+  function makeWeekVignette(cfg) {
+    var v = { timers: [], raf: null, offset: 0, cycling: false };
+
+    function stop() {
+      v.timers.forEach(clearTimeout); v.timers = [];
+      if (v.raf) cancelAnimationFrame(v.raf); v.raf = null;
+      v.cycling = false;
+    }
+    function later(fn, ms) { v.timers.push(setTimeout(fn, ms)); }
+    function onScreen() {
+      var box = $(cfg.box);
+      return !!(box && !box.hidden && box.offsetParent && !document.hidden);
+    }
+    function batchNow() {
+      var ret = typeof cfg.retenues === 'function' ? cfg.retenues() : cfg.retenues;
+      return D.weekAgenda(state.monthBids, todayISO(), { offset: v.offset, retenues: ret });
+    }
+
+    // Count the total up smoothly — money() formats every frame so the vignette
+    // never shows a number the rest of the app would not.
+    function tween(from, to) {
+      var out = $(cfg.total); if (!out) return;
+      if (v.raf) cancelAnimationFrame(v.raf);
+      var t0 = performance.now(), dur = 550;
+      function frame(t) {
+        var k = Math.min(1, (t - t0) / dur);
+        k = 1 - Math.pow(1 - k, 3);
+        out.textContent = D.money(Math.round(from + (to - from) * k));
+        v.raf = k < 1 ? requestAnimationFrame(frame) : null;
+      }
+      v.raf = requestAnimationFrame(frame);
+    }
+
+    // Build the board for one batch: five labelled columns, a chip per demand in
+    // its true weekday, ghost slots padding every column to the same height. The
+    // service is said the way the carnet says it — a coloured dot, never a border.
+    function build(batch) {
+      var board = $(cfg.board); clear(board);
+      var cols = WEEK_DAY_LABELS.map(function (lbl) {
+        var col = el('div', 'nc-week-col');
+        col.appendChild(el('span', 'nc-week-day', lbl));
+        board.appendChild(col);
+        return col;
+      });
+      var chips = batch.items.map(function (it) {
+        var chip = el('div', 'nc-week-chip');
+        chip.style.color = 'var(--svc-' + it.serviceId + ')';
+        chip.title = it.nomCourt + ' · ' + D.money(it.montant) + ' · ' + dayShort(it.dateISO) +
+          (it.retenue ? ' · retenue par ' + (it.etude || 'un notaire') : '');
+        var top = el('span', 'nc-week-chip-top');
+        top.appendChild(el('span', 'nc-week-chip-dot'));
+        top.appendChild(el('span', 'nc-week-chip-name', it.nomCourt));
+        chip.appendChild(top);
+        chip.appendChild(el('span', 'nc-week-chip-amt', D.money(it.montant)));
+        if (it.retenue) chip.appendChild(el('span', 'nc-week-chip-check', '✓'));
+        cols[it.day].appendChild(chip);
+        return chip;
+      });
+      cols.forEach(function (col) {
+        while (col.children.length < 3) col.appendChild(el('div', 'nc-week-slot'));
+      });
+      return chips;
+    }
+
+    function cycle() {
+      if (!onScreen()) { stop(); return; }
+      var batch = batchNow();
+      if (!batch.items.length) { stop(); $(cfg.box).hidden = true; return; }
+      v.offset = (v.offset + batch.items.length) % Math.max(1, batch.poolSize);
+      var chips = build(batch);
+      $(cfg.board).classList.remove('is-out');
+      $(cfg.total).textContent = D.money(0);
+      var landed = 0;
+      chips.forEach(function (chip, i) {
+        later(function () {
+          if (!onScreen()) { stop(); return; }
+          chip.classList.add('is-in');
+          var from = landed; landed += batch.items[i].montant;
+          tween(from, landed);
+          // A small pop on the counter each time money lands.
+          var out = $(cfg.total);
+          if (out) { out.classList.remove('is-tick'); void out.offsetWidth; out.classList.add('is-tick'); }
+        }, 500 + i * 650);
+      });
+      var settled = 500 + chips.length * 650;
+      // Once the board is full, taken demands flip to their ✓ — the clearing.
+      later(function () {
+        chips.forEach(function (chip, i) {
+          if (batch.items[i].retenue) chip.classList.add('is-taken');
+        });
+      }, settled + 700);
+      later(function () { $(cfg.board).classList.add('is-out'); }, settled + 3800);
+      later(cycle, settled + 4300);
+    }
+
+    function render() {
+      var box = $(cfg.box); if (!box) return;
+      var batch = batchNow();
+      if ((cfg.enabled && !cfg.enabled()) || !batch.items.length) { stop(); box.hidden = true; return; }
+      box.hidden = false;
+      // Reduced motion: the filled board, its true total, no loop.
+      if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        stop();
+        build(batch).forEach(function (chip, i) {
+          chip.classList.add('is-in');
+          if (batch.items[i].retenue) chip.classList.add('is-taken');
+        });
+        $(cfg.total).textContent = D.money(batch.total);
+        return;
+      }
+      if (v.cycling) return; // a loop already drives the board
+      v.cycling = true;
+      cycle();
+    }
+
+    return { render: render, restart: function () { stop(); render(); } };
+  }
+
+  // Notary flavour while the notary steps are on screen; carnet flavour
+  // everywhere else (role choice, client steps).
+  function onbWeekFlavour() {
+    var dlg = $('onboarding-dialog'), steps = $('onb-view-steps');
+    var onNotarySteps = dlg && steps && !steps.hidden && dlg.getAttribute('data-role') === 'notary';
+    return onNotarySteps ? 'notaire' : 'carnet';
+  }
+
+  var weekVigOnb = makeWeekVignette({
+    box: 'ob-week', board: 'ob-week-board', total: 'ob-week-total',
+    retenues: function () { return onbWeekFlavour() === 'carnet'; },
+    enabled: function () { var dlg = $('onboarding-dialog'); return !!(dlg && dlg.open); },
+  });
+
+  function renderOnbWeekAnim() {
+    // The head and key line follow the flavour before the board (re)starts.
+    var notaire = onbWeekFlavour() === 'notaire';
+    var kick = $('ob-week-kicker'); if (kick) kick.textContent = notaire ? 'Une semaine sur Nota' : 'Cette semaine à Québec';
+    var mode = $('ob-week-mode'); if (mode) mode.textContent = notaire ? 'à la signature' : 'en jeu';
+    var noteC = $('ob-week-note-carnet'); if (noteC) noteC.hidden = notaire;
+    var noteN = $('ob-week-note-notaire'); if (noteN) noteN.hidden = !notaire;
+    weekVigOnb.restart();
+  }
+
+  // The loop parks itself when the page is hidden; wake it on return.
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) renderOnbWeekAnim();
+  });
 
   // --- Lead-delivery preferences ---------------------------------------------
   // How (in-app / email / SMS) and at what PACE Nota alerts this notary about new
@@ -2946,6 +3186,7 @@
       if (panel) panel.classList.remove('is-loading');
     }
     renderNotaryOpportunity(); // keep the gate's live "money on the table" fresh
+    renderOnbWeekAnim(); // and the welcome dialog's live week board, if open
   }
   function refreshMonth() { renderActiveView(); }
   async function reloadAndRender() { await refreshMonthData(); refreshMonth(); }
@@ -3191,8 +3432,8 @@
     var q = new URLSearchParams(location.search);
     var p = q.get('paiement');
     if (!p) return;
-    if (p === 'ok') toast('Paiement autorisé — votre offre est en cours de publication.');
-    else if (p === 'annule') toast('Paiement annulé — votre offre n’a pas été publiée.');
+    if (p === 'ok') toast('Paiement autorisé. Votre offre est en cours de publication.');
+    else if (p === 'annule') toast('Paiement annulé. Votre offre n’a pas été publiée.');
     q.delete('paiement');
     var qs = q.toString();
     history.replaceState(null, '', location.pathname + (qs ? '?' + qs : '') + location.hash);

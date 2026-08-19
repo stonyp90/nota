@@ -387,28 +387,37 @@
   // to clear their week for it, and the market prices that. Only these are worth
   // calling out on a calendar cell — on a calm date the tier is noise, because
   // the tier is a pure function of the date the cell already shows.
+  // Five steps, because the last week is where the price actually moves and a
+  // client deciding between "today" and "in three days" needs to see the
+  // difference. Each band's MIDPOINT is the multiple a client is offered by
+  // default (tierMultiplier), so the ladder reads 1,1× · 1,4× · 3× · 6× · 8×.
   const TIERS = [
-    { id: 'standard',    nom: 'Standard',    maxJours: null, apercuMin: 1.0, apercuMax: 1.2, eleve: false },
-    { id: 'rapide',      nom: 'Rapide',      maxJours: 14,   apercuMin: 1.2, apercuMax: 1.5, eleve: false },
-    // The last three days before a signature are one situation, not three: a
-    // notary has to clear their week for it. The band is centred on 3.0, which
-    // is what recommendedAmount pre-fills (it takes the midpoint).
-    { id: 'prioritaire', nom: 'Prioritaire', maxJours: 3,    apercuMin: 2.5, apercuMax: 3.5, eleve: true },
+    { id: 'standard',    nom: 'Standard',    maxJours: null, apercuMin: 1.0, apercuMax: 1.2,  eleve: false },
+    { id: 'rapide',      nom: 'Rapide',      maxJours: 14,   apercuMin: 1.2, apercuMax: 1.5,  eleve: false },
+    { id: 'prioritaire', nom: 'Prioritaire', maxJours: 3,    apercuMin: 2.5, apercuMax: 3.5,  eleve: true },
+    { id: 'urgence',     nom: 'Urgent',      maxJours: 1,    apercuMin: 5.0, apercuMax: 7.0,  eleve: true },
+    { id: 'extreme',     nom: 'Extrême',     maxJours: 0,    apercuMin: 6.0, apercuMax: 10.0, eleve: true },
   ];
 
-  // Bids posted under the old five-tier ladder still carry these ids. Map them
-  // rather than returning null, or a stored bid would render as a blank pill.
-  const LEGACY_TIERS = { urgence: 'prioritaire', extreme: 'prioritaire' };
+  // What a client is actually asked to pay at a given notice, as a multiple of
+  // the starting price: the middle of the tier's market band, which is exactly
+  // what recommendedAmount pre-fills. One number, one definition, so the price
+  // shown on a calendar cell can never disagree with the price in the form.
+  function tierMultiplier(id) {
+    const t = tierById(id);
+    return t ? (t.apercuMin + t.apercuMax) / 2 : null;
+  }
 
   function tierById(id) {
-    const key = LEGACY_TIERS[id] || id;
-    return TIERS.find((t) => t.id === key) || null;
+    return TIERS.find((t) => t.id === id) || null;
   }
 
   // Days away -> tier id. 0-1 day = extreme (overnight/weekend rescue),
   // 2-3 = urgence, 4-7 = prioritaire, 8-14 = rapide, 15+ = standard.
   function tierForDays(days) {
     const d = Math.max(0, Math.floor(Number(days)));
+    if (d <= 0) return 'extreme';       // signing today
+    if (d <= 1) return 'urgence';       // tomorrow
     if (d <= 3) return 'prioritaire';
     if (d <= 14) return 'rapide';
     return 'standard';
@@ -632,7 +641,9 @@
   // Shapes the "remplissez votre semaine" board on the notary landing: a batch of
   // REAL open demands placed on a Mon–Fri agenda by their true signing weekday.
   // Pure and deterministic — the caller animates, this only selects and places.
-  //   • only open, upcoming, weekday demands qualify (a week board has no weekend);
+  //   • only open, upcoming, weekday demands qualify (a week board has no
+  //     weekend) — unless `retenues` is set, which admits taken demands too so a
+  //     client-facing board can show the marketplace clearing;
   //   • soonest signing dates are served first;
   //   • at most WEEK_AGENDA_PER_DAY per column and WEEK_AGENDA_MAX overall, so the
   //     board reads as an agenda rather than a heap;
@@ -648,11 +659,12 @@
 
   function weekAgenda(bids, todayISO, opts) {
     const offset = Math.max(0, Math.floor((opts && opts.offset) || 0));
+    const withRetenues = !!(opts && opts.retenues);
     const pool = (Array.isArray(bids) ? bids : [])
       .filter(
         (b) =>
           b &&
-          b.status !== STATUS.RETENUE &&
+          (withRetenues || b.status !== STATUS.RETENUE) &&
           isISODate(b.dateISO) &&
           serviceById(b.serviceId) &&
           (!isISODate(todayISO) || b.dateISO >= todayISO) &&
@@ -676,6 +688,8 @@
           montant: Math.round(Number(b.montant) || 0),
           dateISO: b.dateISO,
           day,
+          retenue: b.status === STATUS.RETENUE,
+          etude: b.etude || null,
         });
       }
     }
@@ -794,7 +808,7 @@
   // The realistic chance (a %) that a client gets a notary to take a given date:
   // the more lead time, the easier it is. Keyed to the same urgency tier as the
   // pricing, so a far-off date reads as high-chance and a last-minute one as low.
-  const OBTAIN_CHANCE = { standard: 95, rapide: 88, prioritaire: 45 };
+  const OBTAIN_CHANCE = { standard: 95, rapide: 88, prioritaire: 62, urgence: 40, extreme: 25 };
   function obtainChance(dateISO, todayISO) {
     if (!isISODate(dateISO)) return null;
     const days = isISODate(todayISO) ? Math.max(0, daysBetween(todayISO, dateISO)) : 0;
@@ -904,6 +918,7 @@
     TIERS,
     tierById,
     tierForDays,
+    tierMultiplier,
     PREMIUM_CAP,
     STATUS,
     isISODate,
