@@ -216,7 +216,7 @@ resource "aws_wafv2_ip_set" "admin_allowlist" {
   count              = local.admin_enabled
   provider           = aws.us_east_1
   name               = "${var.project_name}-admin-allowlist"
-  description        = "IPv4 CIDRs permitted to reach the admin surface. EMPTY = nobody (safe closed default)."
+  description        = "IPv4 CIDRs permitted to reach the admin surface. EMPTY = nobody by default."
   scope              = "CLOUDFRONT"
   ip_address_version = "IPV4"
   addresses          = var.admin_allowed_cidrs
@@ -227,7 +227,7 @@ resource "aws_wafv2_web_acl" "admin" {
   provider    = aws.us_east_1
   name        = "${var.project_name}-admin-acl"
   scope       = "CLOUDFRONT"
-  description = "Default-BLOCK web ACL for the admin surface; only allowlisted IPs pass."
+  description = "Default-BLOCK web ACL for the admin surface - only allowlisted IPs pass."
 
   # Closed by default: block everything that doesn't match the allow rule below.
   default_action {
