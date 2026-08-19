@@ -118,7 +118,7 @@
   // stay one click away under "Retenues".
   // This is also what activeFilterCount() compares against: a default is not a
   // choice the client made, so it must not light the badge or spring the panel.
-  var FILTER_DEFAULTS = { service: '', statut: 'ouverte', min: null, max: null, sort: 'montant-desc' };
+  var FILTER_DEFAULTS = { service: D.DEFAULT_SERVICE_ID, statut: 'ouverte', min: null, max: null, sort: 'montant-desc' };
 
   var state = {
     anchor: firstOfMonth(todayISO()),
@@ -1042,13 +1042,16 @@
     var row = el('button', 'pulse-row' + (active ? ' is-on' : ''));
     row.type = 'button';
     row.dataset.svc = s.id;
-    row.setAttribute('aria-pressed', active ? 'true' : 'false');
+    // The rows are the act selector, so they are a radio group, not toggles:
+    // one is always chosen and clicking it again does not un-choose it.
+    row.setAttribute('role', 'radio');
+    row.setAttribute('aria-checked', active ? 'true' : 'false');
     // The row's text is four fragments; name the WHOLE control once so a screen
     // reader announces the figure and what clicking it does, not "788 $ 10 offres".
     row.setAttribute('aria-label',
       short + ' — ' + (s.median == null ? 'à partir de ' : 'médiane ') + D.money(priced) + ', '
       + (s.total === 0 ? 'aucune offre ce mois' : plural(s.total, 'offre') + ' dont ' + plural(s.retenues, 'retenue')) + '. '
-      + (active ? 'Retirer ce filtre.' : 'Filtrer le carnet sur ce service.'));
+      + (active ? 'Acte affiché.' : 'Afficher le carnet pour cet acte.'));
 
     var name = el('span', 'pulse-svc');
     var dot = el('span', 'pulse-dot');
@@ -1504,7 +1507,6 @@
   function afterFilterChange() { writeHash(); renderActiveView(); }
   function activeFilterCount() {
     var f = state.filters, n = 0;
-    if (f.service !== FILTER_DEFAULTS.service) n++;
     if (f.statut !== FILTER_DEFAULTS.statut) n++;
     if (f.min !== FILTER_DEFAULTS.min) n++;
     if (f.max !== FILTER_DEFAULTS.max) n++;
@@ -1559,14 +1561,17 @@
     });
   }
 
+  // The carnet always shows exactly ONE act. Mixing three acts on one grid asked
+  // the reader to compare a 750 $ procuration against a 2 000 $ refinancement in
+  // the same column and draw a conclusion from it; there isn't one to draw. So
+  // there is no "Tous" — the scope is always a single act, and every price on
+  // screen is therefore comparable to every other.
   function buildServiceChips() {
     var wrap = $('chips-service'); if (!wrap) return; clear(wrap);
-    var all = el('button', 'chip is-on', 'Tous');
-    all.type = 'button'; all.dataset.svc = ''; all.setAttribute('aria-pressed', 'true');
-    wrap.appendChild(all);
     D.SERVICES.forEach(function (s) {
-      var b = el('button', 'chip', s.nom.split(' ')[0]);
-      b.type = 'button'; b.dataset.svc = s.id; b.setAttribute('aria-pressed', 'false');
+      var on = state.filters.service === s.id;
+      var b = el('button', 'chip' + (on ? ' is-on' : ''), s.nomCourt);
+      b.type = 'button'; b.dataset.svc = s.id; b.setAttribute('aria-pressed', on ? 'true' : 'false');
       wrap.appendChild(b);
     });
   }
@@ -3087,7 +3092,8 @@
       pulse.addEventListener('click', function (e) {
         var row = e.target.closest('.pulse-row');
         if (!row) return;
-        state.filters.service = state.filters.service === row.dataset.svc ? '' : row.dataset.svc;
+        if (state.filters.service === row.dataset.svc) return; // already scoped here
+        state.filters.service = row.dataset.svc;
         syncFilterChips();
         afterFilterChange();
       });

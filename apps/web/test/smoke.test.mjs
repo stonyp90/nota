@@ -553,9 +553,16 @@ test('filters stay hidden until the toggle opens them, with an active-count badg
   // The count badge stays hidden with no active filters, and appears once one is set.
   const badge = $(doc, 'filters-count');
   assert.equal(badge.hidden, true, 'count badge should be hidden with no active filters');
-  const openBtn = all(doc, '#chips-service .chip').find((c) => c.dataset.svc);
-  openBtn.click();
-  assert.equal(badge.hidden, false, 'count badge should show once a filter is active');
+
+  // Changing the ACT is not a filter — it is the carnet's scope, always set to
+  // exactly one act — so it must never light the badge.
+  const otherAct = all(doc, '#chips-service .chip').find((c) => c.getAttribute('aria-pressed') === 'false');
+  otherAct.click();
+  assert.equal(badge.hidden, true, 'switching act does not count as a filter');
+
+  // A real filter does.
+  doc.querySelector('#seg-statut .seg-btn[data-statut="retenue"]').click();
+  assert.equal(badge.hidden, false, 'count badge shows once a filter is active');
   assert.equal(badge.textContent, '1');
   assert.ok(toggle.classList.contains('has-active'), 'toggle should mark itself active');
 });
@@ -576,8 +583,15 @@ test('expand button requests fullscreen on the calendar panel', async () => {
 // --- EDGE CASES (UI) — status marking + empty states -------------------------
 
 // Replace the seeded month with custom bids, then re-render through the app.
-async function reseed(ctx, bids) {
+// The carnet shows exactly ONE act at a time, so seeding bids for an act and
+// then reading the grid means scoping the carnet to that act. When every seeded
+// bid is the same act we do it automatically — otherwise pass `scope` for the
+// one under test — so a test reads as "these offers, this act".
+async function reseed(ctx, bids, scope) {
   ctx.win.localStorage.setItem('nota.bids.v1', JSON.stringify(bids));
+  const acts = [...new Set((bids || []).map((b) => b.serviceId))];
+  const act = scope || (acts.length === 1 ? acts[0] : null);
+  if (act) ctx.Nota.state.filters.service = act;
   await ctx.Nota.reload();
   await wait(30);
 }
@@ -1040,17 +1054,17 @@ test('the hero pulse shows the month median per service and filters the carnet',
   assert.equal(ctx.doc.getElementById('result-count').textContent, '1 offre ce mois');
   assert.equal(ctx.doc.querySelector('#chips-service .chip[data-svc="procuration"]').getAttribute('aria-pressed'), 'true');
   const onRow = ctx.doc.querySelector('#pulse-rows .pulse-row[data-svc="procuration"]');
-  assert.equal(onRow.getAttribute('aria-pressed'), 'true');
+  assert.equal(onRow.getAttribute('aria-checked'), 'true', 'the rows are a radio group, not toggles');
   // The pulse itself keeps reading the WHOLE month — it is the reference, not a result.
   assert.equal(ctx.doc.querySelector('#pulse-rows .pulse-row[data-svc="testament"] .pulse-amount').textContent, ctx.D.money(900));
 
-  // Clicking the active row again clears the filter.
+  // Clicking the ACTIVE row again is a no-op: there is no "no act" state to
+  // fall back to, so the carnet never empties itself out from under the reader.
   onRow.click();
   await wait(30);
-  // Clearing the SERVICE filter returns to the carnet's resting state, which is
-  // "Ouvertes" — 4 seeded, 1 retained, so 3 are counted.
-  assert.equal(ctx.doc.getElementById('result-count').textContent, '3 offres ce mois');
-  assert.equal(ctx.doc.querySelector('#chips-service .chip[data-svc=""]').getAttribute('aria-pressed'), 'true');
+  assert.equal(ctx.doc.getElementById('result-count').textContent, '1 offre ce mois');
+  assert.equal(onRow.getAttribute('aria-checked'), 'true', 'still scoped to that act');
+  assert.equal(ctx.doc.querySelector('#chips-service .chip[data-svc=""]'), null, 'there is no "Tous" chip');
 });
 
 test('LIST: a card is the booking affordance; rows carry no share or download', async () => {
