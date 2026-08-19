@@ -30,8 +30,8 @@ test('services: acte de vente is intentionally absent', () => {
 });
 
 test('services: starting prices are the canonical values', () => {
-  assert.equal(D.serviceById('testament').prixDepart, 650);
-  assert.equal(D.serviceById('procuration').prixDepart, 295);
+  assert.equal(D.serviceById('testament').prixDepart, 1250);
+  assert.equal(D.serviceById('procuration').prixDepart, 750);
   assert.equal(D.serviceById('refinancement').prixDepart, 2000);
 });
 
@@ -104,7 +104,7 @@ test('validateOffer: rejects below starting price', () => {
 });
 
 test('validateOffer: rejects above the 10x premium cap', () => {
-  const r = D.validateOffer({ serviceId: 'testament', dateISO: '2026-08-13', montant: 7000, todayISO: TODAY });
+  const r = D.validateOffer({ serviceId: 'testament', dateISO: '2026-08-13', montant: 13000, todayISO: TODAY });
   assert.equal(r.ok, false);
   assert.ok(r.errors.some((e) => e.code === 'plafond_depasse'));
 });
@@ -215,14 +215,14 @@ test('isEmail: accepts plausible addresses, rejects garbage', () => {
 });
 
 test('validateOffer: courriel is optional — absent/empty is still ok', () => {
-  const base = { serviceId: 'testament', dateISO: '2026-08-20', montant: 700, todayISO: TODAY, pricing: { who_for: 'solo', fiducie_needed: 'non' } };
+  const base = { serviceId: 'testament', dateISO: '2026-08-20', montant: 1400, todayISO: TODAY, pricing: { who_for: 'solo', fiducie_needed: 'non' } };
   assert.equal(D.validateOffer(base).ok, true);
   assert.equal(D.validateOffer(base).courriel, null);
   assert.equal(D.validateOffer({ ...base, courriel: '' }).ok, true);
 });
 
 test('validateOffer: a valid courriel passes and is echoed back trimmed', () => {
-  const r = D.validateOffer({ serviceId: 'testament', dateISO: '2026-08-20', montant: 700, todayISO: TODAY, courriel: '  Client@Example.CA ', pricing: { who_for: 'solo', fiducie_needed: 'non' } });
+  const r = D.validateOffer({ serviceId: 'testament', dateISO: '2026-08-20', montant: 1400, todayISO: TODAY, courriel: '  Client@Example.CA ', pricing: { who_for: 'solo', fiducie_needed: 'non' } });
   assert.equal(r.ok, true);
   assert.equal(r.courriel, 'Client@Example.CA');
 });

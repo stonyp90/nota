@@ -22,17 +22,17 @@ test('with NO answers a service returns its flat base (== prixDepart)', () => {
 });
 
 test('testament: who_for scales, fiducie_needed is the complexity jump', () => {
-  assert.equal(computeBasePrice('testament', { who_for: 'couple' }), 650 + 450);
-  assert.equal(computeBasePrice('testament', { fiducie_needed: 'oui' }), 650 + 600);
-  assert.equal(computeBasePrice('testament', { who_for: 'couple', fiducie_needed: 'oui' }), 650 + 450 + 600);
-  assert.equal(computeBasePrice('testament', { business_assets: true }), 650 + 300);
-  assert.equal(computeBasePrice('testament', { include_mandate: 'non' }), 650 - 150); // will only
+  assert.equal(computeBasePrice('testament', { who_for: 'couple' }), 1250 + 450);
+  assert.equal(computeBasePrice('testament', { fiducie_needed: 'oui' }), 1250 + 600);
+  assert.equal(computeBasePrice('testament', { who_for: 'couple', fiducie_needed: 'oui' }), 1250 + 450 + 600);
+  assert.equal(computeBasePrice('testament', { business_assets: true }), 1250 + 300);
+  assert.equal(computeBasePrice('testament', { include_mandate: 'non' }), 1250 - 150); // will only
 });
 
 test('procuration: scope scales, realEstate is the complexity jump', () => {
-  assert.equal(computeBasePrice('procuration', { scope: 'generale' }), 295 + 100);
-  assert.equal(computeBasePrice('procuration', { realEstate: 'oui' }), 295 + 200);
-  assert.equal(computeBasePrice('procuration', { usage: 'etranger' }), 295 + 150);
+  assert.equal(computeBasePrice('procuration', { scope: 'generale' }), 750 + 100);
+  assert.equal(computeBasePrice('procuration', { realEstate: 'oui' }), 750 + 200);
+  assert.equal(computeBasePrice('procuration', { usage: 'etranger' }), 750 + 150);
 });
 
 test('refinancement: loan-value brackets + succession + bank approval + optionals', () => {

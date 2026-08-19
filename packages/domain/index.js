@@ -39,9 +39,8 @@
     {
       id: 'testament',
       nom: 'Testament et mandat de protection',
-      // Floor reflects the two-act bundle (will + protection mandate), which the
-      // Québec market prices at ~700–1000 $. See docs/decisions/0006.
-      prixDepart: 650,
+      // Nota starting price for the two-act bundle (will + protection mandate).
+      prixDepart: 1250,
       description:
         'Testament notarié et mandat de protection en cas d’inaptitude.',
       // Dynamic base price = base + the flat add-on of each answered criterion.
@@ -51,7 +50,7 @@
       // behind an "affiner" expander (see the research model). Weights (poids)
       // drive the notary's complexity label.
       pricing: {
-        base: 650,
+        base: 1250,
         criteria: [
           {
             id: 'who_for', type: 'choice', required: true, label: 'Le testament est pour qui ?',
@@ -96,11 +95,11 @@
     {
       id: 'procuration',
       nom: 'Procuration',
-      prixDepart: 295,
+      prixDepart: 750,
       description:
         'Procuration générale ou spéciale pour agir en votre nom.',
       pricing: {
-        base: 295,
+        base: 750,
         criteria: [
           {
             id: 'scope', type: 'choice', required: true, label: 'Étendue de la procuration',
@@ -259,10 +258,11 @@
     return Math.max(0, Math.round(price));
   }
 
-  // Nota positions the price it QUOTES the client above the going market rate, so a
-  // posted offer is compelling to notaries and gets retained fast. This is the price
-  // the app shows and pre-fills; computeBasePrice stays the market reference.
-  const MARKET_MULTIPLIER = 1.5;
+  // The price Nota QUOTES the client (shown + pre-filled). The per-service `base`
+  // prices are already set to Nota's starting price, so the multiplier is 1; it
+  // stays a single knob to shift every quote at once without touching per-service
+  // data. recommendedAmount scales this up by the urgency tier.
+  const MARKET_MULTIPLIER = 1;
   function notaPrice(serviceId, answers) {
     const base = computeBasePrice(serviceId, answers);
     return base == null ? null : Math.round(base * MARKET_MULTIPLIER);
