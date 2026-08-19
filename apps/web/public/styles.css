@@ -642,8 +642,6 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
    row with equal buttons — no ragged wraps at ~400-640px. */
 @media (max-width: 680px) {
   .cal-toolbar .header-spacer { flex: 0 0 100%; height: 0; }
-  .cal-toolbar .view-switch { flex: 1 1 100%; width: 100%; }
-  .cal-toolbar .view-switch .seg-btn { flex: 1; justify-content: center; }
 }
 .cal-nav { display: inline-flex; gap: 4px; }
 .cal-title { font-weight: 700; font-size: 15px; white-space: nowrap; }
@@ -676,8 +674,8 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 /* Past dates: blanked and inert, but kept in the grid so no row is lost. */
 .cal-cell.is-past { background: transparent; border-color: transparent; cursor: default; pointer-events: none; box-shadow: none; }
 .cal-cell.is-past .cal-daynum { color: var(--border-strong); }
-.cal-cell.is-today { border-color: var(--brand-bright); }
-.cal-cell.is-selected { border-color: var(--brand); box-shadow: inset 0 0 0 1px var(--brand); }
+.cal-cell.is-today { border-color: transparent; }
+.cal-cell.is-selected { border-color: transparent; box-shadow: none; background: var(--surface-inset); }
 .cal-cell:focus-visible { outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px var(--focus-ring); }
 /* Demand days carry NO box of their own: the price + chance% (and the thin left
    tier strip) are the signal. No fill, no border — empty days stay blank, so the
@@ -716,14 +714,6 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 /* Available days stay brand-tinted (inviting); fully-taken days read muted. */
 .cal-cell.is-taken { background: var(--surface-inset); }
 .cal-cell.is-taken:hover { background: var(--surface-hover); }
-/* The client's OWN offer status on a day: a subtle ring + a coloured pill. */
-/* Own-offer ring on its OWN pseudo-element (::after), so it never overrides the
-   today / selected / :focus-visible box-shadow rings — a day you already bid on
-   still shows a visible keyboard-focus ring (WCAG 2.4.7). ::before is the tier strip. */
-.cal-cell.has-mine::after {
-  content: ''; position: absolute; inset: 0; border-radius: inherit;
-  box-shadow: inset 0 0 0 1.5px var(--brand); pointer-events: none;
-}
 /* --- Per-act prices, and the chevron that opens the detail ---------------- */
 /* A dot plus a price. The dot's colour is decoded by the Service key in the
    legend, so the act's name is never repeated on a cell or a card. */
@@ -755,10 +745,6 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 }
 .cal-svc-bids { display: flex; flex-direction: column; gap: 2px; margin-top: auto; min-width: 0; font-size: 12.5px; }
 .cal-svc-bids .svc-bid { min-width: 0; }
-.agenda-svc-bids { display: flex; flex-direction: column; gap: 4px; padding: 2px 14px 10px; font-size: 13.5px; }
-.agenda-svc-bids .svc-bid { width: 100%; gap: 7px; }
-.agenda-svc-bids .svc-bid-name { flex: 1; }
-.agenda-svc-bids .svc-bid-amount { margin-left: auto; }
 
 /* Collapsed is the resting state everywhere. The chevron is the only way in, so
    it works the same with a mouse, a finger or a keyboard. */
@@ -770,22 +756,15 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 }
 .cell-chevron:hover { background: var(--surface-inset); color: var(--ink); }
 .cell-chevron[aria-expanded='true'] { transform: rotate(180deg); }
-.agenda-day .cell-chevron { position: static; flex: none; }
 
 /* What the chevron reveals. */
-.cal-more, .agenda-detail { display: none; }
+.cal-more { display: none; }
 .cal-cell.is-expanded .cal-more { display: flex; flex-wrap: wrap; gap: 2px 8px; margin-top: 4px; font-size: 10.5px; line-height: 1.35; color: var(--ink-muted); }
 .cal-more-beat { font-weight: 700; color: var(--brand); }
-.agenda-group.is-expanded .agenda-detail { display: block; }
-.agenda-beat { padding: 8px 14px 2px; font-size: 12px; line-height: 1.45; color: var(--ink-muted); }
-.agenda-beat strong { color: var(--brand); font-weight: 700; }
 /* An expanded cell must be able to outgrow its row without shoving neighbours. */
 .cal-cell.is-expanded { z-index: 3; background: var(--surface); border-color: var(--border-strong); box-shadow: var(--shadow-lg); }
 
-.cal-mine { align-self: flex-start; max-width: 100%; overflow: hidden; text-overflow: ellipsis; margin-top: 4px; font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); color: var(--ink-muted); white-space: nowrap; }
-.cal-mine[data-status='approved'] { color: var(--ok); border-color: var(--ok); }
-.cal-mine[data-status='pending'] { color: var(--brand); border-color: var(--brand); }
-.cal-mine[data-status='expired'] { color: var(--ink-muted); border-style: dashed; }
+
 
 
 /* Responsive cells, driven by the GRID width (7 columns are fixed, so cell width
@@ -796,8 +775,6 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
   .cal-avg { font-size: 13px; }
   .cal-svc-bids .svc-bid-amount { font-size: 11.5px; }
   /* "En attente / Approuvé / Expiré" would clip, so collapse the own-offer badge to a status dot. */
-  .cal-mine { font-size: 0; padding: 0; margin-top: 3px; width: 9px; height: 9px; border: 0; border-radius: 50%; background: currentColor; }
-  .cal-mine[data-status='expired'] { background: var(--ink-muted); }
 }
 @container cal (max-width: 560px) {
   .cal-cell { padding: 6px 6px 12px; min-height: clamp(66px, 15cqw, 96px); }
@@ -818,8 +795,6 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 /* Row-aligned grid: day-groups line up in tidy rows/columns. Each day shows only
    its best offer (the rest behind "+N autres offres"), so heights stay close and
    rows align without large gaps. */
-.agenda { display: grid; grid-template-columns: repeat(auto-fill, minmax(clamp(240px, 24vw, 300px), 1fr)); gap: 12px; padding: 12px 16px 18px; align-items: stretch; }
-.agenda-group { background: var(--surface-inset); border-radius: var(--radius-lg); padding-bottom: 6px; overflow: hidden; display: flex; flex-direction: column; min-height: 128px; cursor: pointer; transition: transform .1s ease, box-shadow .1s ease, background .12s ease; }
 
 /* Same bargain as the calendar cell: the resting card stays simple — the day,
    one amount, the odds — and hover is where a client digs into what it takes to
@@ -828,19 +803,10 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 
 /* Without hover (touch), the coaching line is simply always there. */
 
-.agenda-beat { padding: 0 14px 2px; font-size: 11.5px; line-height: 1.45; color: var(--ink-muted); }
-.agenda-beat strong { color: var(--brand); font-weight: 700; }
 /* A day with no bet is still a full rectangle: the placeholder fills the card and doubles as a "reserve this date" affordance. */
-.agenda-vacant { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; width: 100%; appearance: none; background: transparent; border: 0; padding: 16px 14px; font: inherit; font-size: 12px; font-weight: 600; color: var(--ink-muted); text-align: center; cursor: pointer; }
-.agenda-vacant:hover, .agenda-vacant:focus-visible { background: var(--surface-hover); color: var(--ink); }
-.agenda-empty { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 28px 18px; text-align: center; }
-.agenda-empty-text { margin: 0; font-size: 13px; color: var(--ink-muted); }
 /* The card header carries the date and, like the calendar cell, the odds of
    getting a notary that day — the list was the one view showing a price with no
    sense of how gettable the date is. */
-.agenda-day { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 11px 14px 6px; font-size: 12px; font-weight: 700; color: var(--ink-muted); }
-.agenda-day-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.agenda-day-t::first-letter { text-transform: uppercase; }
 .bid-row { display: flex; align-items: center; gap: 10px; padding: 9px 14px 9px 12px; border-top: 1px solid var(--border); border-left: 2px solid transparent; }
 .bid-row.is-open { border-left-color: var(--status-ouverte); }
 .bid-row.is-retenue { border-left-color: var(--status-retenue); }
@@ -849,7 +815,6 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
   background: var(--surface); color: var(--status-retenue); border: 1px solid var(--border-strong);
   max-width: 44%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: none;
 }
-.agenda-group .agenda-day + .bid-row { border-top: 0; }
 /* A list card is only 240-390px wide at EVERY breakpoint (the grid packs 1-4
    columns), and a single flex line cannot hold amount + name + service + tier +
    actions: the client name and the service were ellipsised into "C..." /
@@ -857,11 +822,6 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
    the identity its own full-width line beneath, via `order` (the markup order is
    amount, meta, tier, actions). The day dialog keeps the single-line row — it
    has 600px to work with. */
-.agenda .bid-row { flex-wrap: wrap; row-gap: 3px; }
-.agenda .bid-amount { order: 1; }
-.agenda .pill, .agenda .status-chip { order: 2; }
-.agenda .bid-meta { order: 4; flex: 1 0 100%; }
-.agenda .status-chip { max-width: none; }
 .bid-amount { font-weight: 800; font-size: 15px; min-width: 78px; }
 .bid-meta { flex: 1; min-width: 0; }
 .bid-who { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1122,8 +1082,6 @@ dialog::backdrop { background: var(--backdrop); }
    booked, and how many that date carries in all. */
 .day-bids-count { padding: 8px 14px; font-size: 12px; color: var(--ink-muted); line-height: 1.5; }
 /* Scale guard: a day-group caps its rows and links to the full day view. */
-.agenda-more { display: block; width: 100%; text-align: left; appearance: none; background: transparent; border: 0; border-top: 1px solid var(--border); padding: 8px 14px; font: inherit; font-size: 12px; font-weight: 600; color: var(--brand); cursor: pointer; }
-.agenda-more:hover { background: var(--surface-hover); }
 .day-book { padding: 20px 24px 24px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 20px; }
 .book-step { display: flex; flex-direction: column; gap: 10px; }
 /* Pricing criteria woven into the booking flow (dossier merged with the process). */
@@ -1174,11 +1132,13 @@ dialog::backdrop { background: var(--backdrop); }
 #pane-notaires > .wrap { display: flex; flex-direction: column; }
 /* Order (flex only, no DOM move): hero → value grid → calendar-add → sign-in → guarantee. */
 #pane-notaires .nc-why { order: 2; }
-#pane-notaires .notary-carnet { order: 3; }
-#pane-notaires #notary-console { order: 4; }
-#pane-notaires .nota-guarantee { order: 5; }
-/* The value grid only belongs to the signed-out LANDING; hidden in the working console. */
-.nc-why { display: none; }
+#pane-notaires .nc-week { order: 3; }
+#pane-notaires .notary-carnet { order: 4; }
+#pane-notaires #notary-console { order: 5; }
+#pane-notaires .nota-guarantee { order: 6; }
+/* The value grid and week vignette only belong to the signed-out LANDING;
+   hidden in the working console. */
+.nc-why, .nc-week { display: none; }
 /* Signed-out: a full-page two-column landing — a rich value column on the left,
    the sign-in anchored as a centered card on the right (no empty strip, no wide margins). */
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) {
@@ -1538,7 +1498,7 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
    iPad portrait at 768) — not width-gated. Fine pointers (mouse/trackpad) keep the
    desktop density untouched. Includes the smaller controls that were being missed. */
 @media (pointer: coarse) {
-  .btn, .nav-tab, .chip, .seg-btn, .acct-legal-link, .agenda-more { min-height: 44px; }
+  .btn, .nav-tab, .chip, .seg-btn, .acct-legal-link { min-height: 44px; }
   /* Footer links and the brand are plain <a>s (~20px tall) — they need the same
      thumb-sized hit area as the buttons above. inline-flex so the gap-based
      footer row keeps its alignment. */
@@ -1565,10 +1525,6 @@ html { scroll-behavior: smooth; scroll-padding-top: var(--sticky-top); }
 /* ==========================================================================
    Carnet view switcher (Calendrier · Liste)
    ========================================================================== */
-.view-switch { flex: 0 0 auto; }
-.view-switch .seg-btn { display: inline-flex; align-items: center; gap: 5px; }
-.view-switch .seg-btn svg { flex: none; }
-.view-switch .seg-btn[aria-selected='true'] { background: var(--surface-hover); color: var(--brand); border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
 .view-panel { min-width: 0; }
 .view-panel[hidden] { display: none; }
 

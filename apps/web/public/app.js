@@ -118,7 +118,7 @@
   // stay one click away under "Retenues".
   // This is also what activeFilterCount() compares against: a default is not a
   // choice the client made, so it must not light the badge or spring the panel.
-  var FILTER_DEFAULTS = { service: D.DEFAULT_SERVICE_ID, statut: 'ouverte', min: null, max: null, sort: 'montant-desc' };
+  var FILTER_DEFAULTS = { service: '', statut: 'ouverte', min: null, max: null, sort: 'montant-desc' };
 
   var state = {
     anchor: firstOfMonth(todayISO()),
@@ -127,14 +127,12 @@
     selectedDate: null,
     focusDate: todayISO(),
     tab: 'carnet',
-    view: 'liste',
     offer: { serviceId: '', dateISO: '', montant: 0, anonyme: true, pricing: {} },
   };
 
   // Carnet view ids (segmented switcher).
   // Order matters: the FIRST entry is the fallback for an unknown view, and the
   // switcher renders in this order. The list leads.
-  var VIEWS = ['liste', 'calendrier'];
 
   // ---------------------------------------------------------------------------
   // Date helpers
@@ -875,20 +873,6 @@
           + ', meilleure offre ' + D.money(Math.max.apply(null, pool.map(function (b) { return b.montant; }))));
       }
 
-      // The client's own offer status on this day (approved / pending / expired).
-      var mineSt = isPast ? null : myOfferStatus(iso);
-      if (mineSt) {
-        cell.classList.add('has-mine');
-        var badge = el('span', 'cal-mine', OFFER_STATUS_LABEL[mineSt]);
-        badge.dataset.status = mineSt;
-        badge.title = 'Votre offre — ' + { approved: 'approuvée par un notaire', pending: 'en attente d’un notaire', expired: 'expirée' }[mineSt];
-        cell.appendChild(badge);
-        // The badge is a child span, excluded from the button's accessible name;
-        // fold its status into the cell's aria-label so it's not sight-only.
-        cell.setAttribute('aria-label', (cell.getAttribute('aria-label') || dayTitle(iso)) +
-          ', votre offre ' + { approved: 'approuvée', pending: 'en attente', expired: 'expirée' }[mineSt]);
-      }
-
       if (!isPast) cell.addEventListener('click', function () { openDay(this.dataset.date); });
       if (week) week.appendChild(cell);
 
@@ -993,15 +977,6 @@
       item.appendChild(document.createTextNode(t.nom));
       lg.appendChild(item);
     });
-    lg.appendChild(el('span', 'legend-label legend-label--sep', 'Statut'));
-    // Status key (distinct class so the tier-count test still holds).
-    [['ouverte', 'Ouverte'], ['retenue', 'Retenue']].forEach(function (s) {
-      var item = el('span', 'legend-status-item');
-      var dot = el('span', 'legend-dot'); dot.style.background = 'var(--status-' + s[0] + ')';
-      item.appendChild(dot);
-      item.appendChild(document.createTextNode(s[1]));
-      lg.appendChild(item);
-    });
     // Service key — decodes the per-service mix bar in each calendar cell.
     lg.appendChild(el('span', 'legend-label legend-label--sep', 'Service'));
     D.SERVICES.forEach(function (s) {
@@ -1042,16 +1017,13 @@
     var row = el('button', 'pulse-row' + (active ? ' is-on' : ''));
     row.type = 'button';
     row.dataset.svc = s.id;
-    // The rows are the act selector, so they are a radio group, not toggles:
-    // one is always chosen and clicking it again does not un-choose it.
-    row.setAttribute('role', 'radio');
-    row.setAttribute('aria-checked', active ? 'true' : 'false');
+    row.setAttribute('aria-pressed', active ? 'true' : 'false');
     // The row's text is four fragments; name the WHOLE control once so a screen
     // reader announces the figure and what clicking it does, not "788 $ 10 offres".
     row.setAttribute('aria-label',
       short + ' — ' + (s.median == null ? 'à partir de ' : 'médiane ') + D.money(priced) + ', '
       + (s.total === 0 ? 'aucune offre ce mois' : plural(s.total, 'offre') + ' dont ' + plural(s.retenues, 'retenue')) + '. '
-      + (active ? 'Acte affiché.' : 'Afficher le carnet pour cet acte.'));
+      + (active ? 'Retirer ce filtre.' : 'Afficher le carnet pour cet acte.'));
 
     var name = el('span', 'pulse-svc');
     var dot = el('span', 'pulse-dot');
@@ -1129,105 +1101,6 @@
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Agenda rendering
-  // ---------------------------------------------------------------------------
-  function renderAgenda() {
-    var ag = $('agenda'); clear(ag);
-    // Only today and upcoming dates — a past signing date can't be booked.
-    var today = todayISO();
-    var visible = applyFilters(state.monthBids).filter(function (b) { return b.dateISO >= today; });
-
-    if (!visible.length) {
-      var empty = el('div', 'agenda-empty');
-      empty.appendChild(el('p', 'agenda-empty-text', state.selectedDate
-        ? 'Aucune offre le ' + dayTitle(state.selectedDate) + '.'
-        : (filtersActive() ? 'Aucune offre pour ce filtre.' : 'Aucune offre ce mois-ci.')));
-      var cta = el('button', 'btn btn-sm', filtersActive() ? 'Réinitialiser les filtres' : 'Réserver cette date');
-      cta.type = 'button';
-      cta.addEventListener('click', filtersActive() ? resetFilters : function () { $('cta-reserver').click(); });
-      empty.appendChild(cta);
-      ag.appendChild(empty);
-      return;
-    }
-
-    // Group the visible offers by day.
-    var groups = {};
-    visible.forEach(function (b) { (groups[b.dateISO] = groups[b.dateISO] || []).push(b); });
-
-    // One full card per UPCOMING day of the month — including days with no offer
-    // yet — so the grid stays complete and every rectangle aligns. Past days
-    // can't be booked, so the list starts at today.
-    var dim = daysInMonth(state.anchor);
-    var order = [];
-    for (var day = 1; day <= dim; day++) {
-      var iso = state.anchor.slice(0, 8) + String(day).padStart(2, '0');
-      if (iso >= today) order.push(iso);
-    }
-    if (state.filters.sort === 'date-desc') order.reverse(); // else chronological
-
-    var PER_DAY = 1; // the single best offer per day; the rest fold into a "+N" control
-    order.forEach(function (iso) {
-      var dayBids = (groups[iso] || []).slice().sort(function (a, b) { return b.montant - a.montant; });
-      var group = el('div', 'agenda-group' + (dayBids.length ? '' : ' is-vacant'));
-      group.dataset.date = iso;
-      // The card IS the booking affordance — clicking anywhere on it opens the
-      // day. The buttons inside remain the keyboard path.
-      group.addEventListener('click', function () { openDay(iso); });
-      var head = el('div', 'agenda-day');
-      head.appendChild(el('span', 'agenda-day-t', dayTitle(iso)));
-      group.appendChild(head);
-
-      if (!dayBids.length) {
-        // No bet on this day: still a full rectangle, and a way in to reserve it.
-        var vac = el('button', 'agenda-vacant', 'Aucune offre — réserver');
-        vac.type = 'button';
-        vac.setAttribute('aria-label', 'Aucune offre le ' + dayTitle(iso) + ' — réserver cette date');
-        vac.addEventListener('click', function (e) { e.stopPropagation(); openDay(iso); });
-        group.appendChild(vac);
-        ag.appendChild(group);
-        return;
-      }
-
-      // Collapsed, a card says one thing per act: what it currently takes. The
-      // colour is decoded by the Service key in the legend, so no name is
-      // repeated here.
-      var bids = serviceBids('agenda-svc-bids', dayBids, true);
-      if (bids) group.appendChild(bids);
-
-      var openBids = dayBids.filter(function (b) { return b.status !== D.STATUS.RETENUE; });
-      var extra = dayBids.length - PER_DAY;
-
-      // Expanding reveals what the collapsed card cannot say: who is offering,
-      // and the number to beat. A day with no open offer still has something
-      // worth showing — which étude took it — so it keeps its chevron too.
-      var detail = el('div', 'agenda-detail');
-      dayBids.slice(0, PER_DAY).forEach(function (b) { detail.appendChild(bidRow(b)); });
-      var beat = el('div', 'agenda-beat');
-      if (openBids.length) {
-        var top = Math.max.apply(null, openBids.map(function (b) { return b.montant; }));
-        beat.appendChild(document.createTextNode('Pour devancer, proposez plus de '));
-        beat.appendChild(el('strong', null, D.money(top)));
-        beat.appendChild(document.createTextNode('.'));
-      } else {
-        beat.appendChild(document.createTextNode('Aucune offre ouverte — vous fixez le prix.'));
-      }
-      detail.appendChild(beat);
-      group.appendChild(detail);
-      head.appendChild(expandChevron(group, dayTitle(iso)));
-
-      var more = el('button', 'agenda-more', extra > 0
-        ? '+ ' + extra + ' autre' + (extra > 1 ? 's' : '') + ' offre' + (extra > 1 ? 's' : '')
-        : 'Voir cette journée');
-      more.type = 'button';
-      more.setAttribute('aria-label', (extra > 0
-        ? 'Voir les ' + dayBids.length + ' offres du '
-        : 'Voir la journée du ') + dayTitle(iso));
-      more.addEventListener('click', function (e) { e.stopPropagation(); openDay(iso); });
-      group.appendChild(more);
-      ag.appendChild(group);
-    });
-  }
 
   function bidRow(b) {
     var retenue = b.status === D.STATUS.RETENUE;
@@ -1261,8 +1134,8 @@
     return row;
   }
 
-  // One dispatch for the three carnet views: keep the shared toolbar summary
-  // correct in EVERY view, then paint ONLY the active region.
+  // Repaint the carnet: the shared toolbar summary, the market reference, then
+  // the grid itself.
   function renderActiveView() {
     var visible = applyFilters(state.monthBids);
     updateFilterSummary(visible.length, visible);
@@ -1270,23 +1143,7 @@
     // reference the filters are applied against, so filtering must not
     // rewrite it — only highlight the row that is active.
     renderPulse();
-    if (state.view === 'liste') renderAgenda();
-    else renderCalendar();
-  }
-
-  // Toggle the segmented tabs + their tabpanels, then render the active view.
-  function setView(v) {
-    if (VIEWS.indexOf(v) < 0) v = VIEWS[0];
-    state.view = v;
-    VIEWS.forEach(function (name) {
-      var on = name === v;
-      var tab = $('tab-view-' + name);
-      var panel = $('view-' + name);
-      if (tab) { tab.classList.toggle('is-on', on); tab.setAttribute('aria-selected', on ? 'true' : 'false'); tab.tabIndex = on ? 0 : -1; }
-      if (panel) panel.hidden = !on;
-    });
-    writeHash();
-    renderActiveView();
+    renderCalendar();
   }
 
   // ---------------------------------------------------------------------------
@@ -1464,7 +1321,6 @@
     if (h.has('min')) state.filters.min = num(h.get('min'));
     if (h.has('max')) state.filters.max = num(h.get('max'));
     if (h.has('tri')) state.filters.sort = h.get('tri');
-    if (h.has('vue') && VIEWS.indexOf(h.get('vue')) >= 0) state.view = h.get('vue');
     if (h.has('jour') && D.isISODate(h.get('jour'))) { state.selectedDate = h.get('jour'); state.focusDate = h.get('jour'); state.anchor = firstOfMonth(h.get('jour')); }
   }
   function writeHash() {
@@ -1475,8 +1331,6 @@
     if (f.min != null) h.set('min', f.min);
     if (f.max != null) h.set('max', f.max);
     if (f.sort && f.sort !== 'montant-desc') h.set('tri', f.sort);
-    // Only a NON-default view is worth a hash param; VIEWS[0] is the default.
-    if (state.view && state.view !== VIEWS[0]) h.set('vue', state.view);
     if (state.selectedDate) h.set('jour', state.selectedDate);
     var s = h.toString();
     history.replaceState(null, '', s ? '#' + s : location.pathname);
@@ -1507,6 +1361,7 @@
   function afterFilterChange() { writeHash(); renderActiveView(); }
   function activeFilterCount() {
     var f = state.filters, n = 0;
+    if (f.service !== FILTER_DEFAULTS.service) n++;
     if (f.statut !== FILTER_DEFAULTS.statut) n++;
     if (f.min !== FILTER_DEFAULTS.min) n++;
     if (f.max !== FILTER_DEFAULTS.max) n++;
@@ -1516,7 +1371,9 @@
   function filtersActive() { return activeFilterCount() > 0; }
   function updateFilterSummary(count, visible) {
     var rc = $('result-count');
-    if (rc) rc.textContent = count + ' offre' + (count === 1 ? '' : 's') + ' ce mois';
+    // plural() carries the French rule (singular at 0 as well as 1); this line
+    // had the English one and rendered "0 offres".
+    if (rc) rc.textContent = plural(count, 'offre') + ' ce mois';
     // Next availability: the soonest upcoming date (>= today) with an offer still
     // open (not yet retained) among what's shown — a liveness cue for the market.
     var av = $('cal-avail');
@@ -1561,13 +1418,15 @@
     });
   }
 
-  // The carnet always shows exactly ONE act. Mixing three acts on one grid asked
-  // the reader to compare a 750 $ procuration against a 2 000 $ refinancement in
-  // the same column and draw a conclusion from it; there isn't one to draw. So
-  // there is no "Tous" — the scope is always a single act, and every price on
-  // screen is therefore comparable to every other.
+  // The carnet opens showing EVERY act, so a first visit shows the whole market
+  // and each cell prices the acts actually on that day. Narrowing to one act is
+  // one click away, and makes every price on screen directly comparable.
   function buildServiceChips() {
     var wrap = $('chips-service'); if (!wrap) return; clear(wrap);
+    var all = el('button', 'chip' + (state.filters.service ? '' : ' is-on'), 'Tous les actes');
+    all.type = 'button'; all.dataset.svc = '';
+    all.setAttribute('aria-pressed', state.filters.service ? 'false' : 'true');
+    wrap.appendChild(all);
     D.SERVICES.forEach(function (s) {
       var on = state.filters.service === s.id;
       var b = el('button', 'chip' + (on ? ' is-on' : ''), s.nomCourt);
@@ -3092,8 +2951,7 @@
       pulse.addEventListener('click', function (e) {
         var row = e.target.closest('.pulse-row');
         if (!row) return;
-        if (state.filters.service === row.dataset.svc) return; // already scoped here
-        state.filters.service = row.dataset.svc;
+        state.filters.service = state.filters.service === row.dataset.svc ? '' : row.dataset.svc;
         syncFilterChips();
         afterFilterChange();
       });
@@ -3102,18 +2960,6 @@
     $('seg-statut').addEventListener('click', function (e) { var b = e.target.closest('.seg-btn'); if (!b) return; setGroupActive(this, b); state.filters.statut = b.dataset.statut; afterFilterChange(); });
     $('seg-sort').addEventListener('click', function (e) { var b = e.target.closest('.seg-btn'); if (!b) return; setGroupActive(this, b); state.filters.sort = b.dataset.sort; afterFilterChange(); });
     $('filters-reset').addEventListener('click', resetFilters);
-    var vsw = $('view-switch');
-    if (vsw) {
-      vsw.addEventListener('click', function (e) { var b = e.target.closest('.seg-btn[data-view]'); if (!b) return; setView(b.dataset.view); b.focus(); });
-      vsw.addEventListener('keydown', function (e) {
-        var d = { ArrowLeft: -1, ArrowRight: 1 };
-        if (!(e.key in d) && e.key !== 'Home' && e.key !== 'End') return;
-        e.preventDefault();
-        var i = VIEWS.indexOf(state.view); if (i < 0) i = 0;
-        if (e.key === 'Home') i = 0; else if (e.key === 'End') i = VIEWS.length - 1; else i = (i + d[e.key] + VIEWS.length) % VIEWS.length;
-        setView(VIEWS[i]); var t = $('tab-view-' + VIEWS[i]); if (t) t.focus();
-      });
-    }
     // Filters stay collapsed until the customer opens them from the toolbar.
     $('filters-toggle').addEventListener('click', function () {
       var panel = $('filters');
@@ -3290,9 +3136,8 @@
     onOfferServiceChange();
     if (state.selectedDate) { $('o-date').value = state.selectedDate; onOfferDateChange(); }
 
-    // Paint the active view immediately (setView also applies the initial
-    // tab/panel visibility, honouring a `vue=` deep link), then repaint on fetch.
-    setView(state.view);
+    // Paint immediately from cache, then repaint when the month's data lands.
+    renderActiveView();
     await refreshMonthData();
     renderActiveView();
 
@@ -3325,7 +3170,6 @@
     store: store,
     domain: D,
     setTab: setTab,
-    setView: setView,
     selectDate: selectDate,
     reload: reloadAndRender,
     dossierState: dossierState,

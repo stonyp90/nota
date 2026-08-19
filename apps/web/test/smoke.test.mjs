@@ -46,14 +46,6 @@ function fire(win, elmt, type) {
  * Fresh per test so interactive mutations (offer form, theme, day modal) never
  * bleed between assertions.
  */
-// The app boots on the LIST view (the default since the list names the client,
-// act and price outright). Tests that inspect calendar DOM select it explicitly.
-async function bootCalendar() {
-  const ctx = await boot();
-  ctx.Nota.setView('calendrier');
-  return ctx;
-}
-
 async function boot() {
   const dom = new JSDOM(HTML_SRC, {
     runScripts: 'outside-only',
@@ -121,7 +113,7 @@ test('store is offline and monthBids is seeded deterministically', async () => {
 
 // 3. Calendar grid: one day cell per day-of-month + 7 weekday headers.
 test('calendar renders day cells for the anchor month and 7 weekday headers', async () => {
-  const { doc, anchor, today } = await bootCalendar();
+  const { doc, anchor, today } = await boot();
   const dayCells = all(doc, '#cal-grid .cal-cell:not(.is-out)');
   assert.equal(all(doc, '#cal-grid .cal-dow').length, 7);
 
@@ -154,7 +146,7 @@ test('legend renders one item per timing tier', async () => {
 
 // 5. No open/taken day ever renders a bare em-dash headline.
 test('no calendar figure is a bare em-dash', async () => {
-  const { doc } = await bootCalendar();
+  const { doc } = await boot();
   const amounts = all(doc, '#cal-grid .svc-bid-amount, #cal-grid .cal-avg');
   assert.ok(amounts.length > 0, 'expected at least one price figure');
   assert.ok(amounts.every((t) => t.textContent.trim() !== '—'), 'a cell rendered a bare em-dash');
@@ -163,7 +155,7 @@ test('no calendar figure is a bare em-dash', async () => {
 // 6. A cell states the best OPEN offer per act — a price needs no explaining,
 //    unlike the odds percentage it replaced. The colour is decoded by the legend.
 test('a day with bids shows the best open offer per act', async () => {
-  const { doc, D } = await bootCalendar();
+  const { doc, D } = await boot();
   const hasBids = all(doc, '#cal-grid .cal-cell.has-bids');
   assert.ok(hasBids.length > 0, 'expected at least one day with bids');
 
@@ -295,7 +287,7 @@ test('dossier profile determines the price and shares it with the booking flow',
 
 // 10. Clicking a has-bids cell opens the day modal populated with bid rows.
 test('clicking a has-bids cell opens the day modal with bid rows', async () => {
-  const { doc } = await bootCalendar();
+  const { doc } = await boot();
   const cell = doc.querySelector('#cal-grid .cal-cell.has-bids');
   assert.ok(cell, 'expected a has-bids cell to click');
   cell.click();
@@ -377,7 +369,7 @@ test('offer criteria render and a flag raises the dynamic floor', async () => {
 
 // 12c. The profile saves coordinates + notification prefs and prefills the offer.
 test('profile persists coordinates and prefills the offer form', async () => {
-  const { win, doc, Nota } = await bootCalendar();
+  const { win, doc, Nota } = await boot();
   Nota.setTab('profil');
 
   const courriel = $(doc, 'p-courriel'); courriel.value = 'client@example.ca'; fire(win, courriel, 'input');
@@ -527,7 +519,7 @@ test('submitting an offer attaches the saved dossier snapshot and courriel', asy
 //     amount can never wrap mid-number.
 test('rendered amounts use the money() format ("N NNN $", no-break spaces)', async () => {
   const { doc } = await boot();
-  const texts = all(doc, '#cal-grid .cal-avg, #agenda .bid-amount').map((e) => e.textContent);
+  const texts = all(doc, '#cal-grid .svc-bid-amount, #cal-grid .cal-avg').map((e) => e.textContent);
   assert.ok(texts.length > 0, 'no money figures rendered');
   assert.ok(texts.some((t) => /\u00A0\$$/.test(t.trim())), 'no amount ends with a no-break space + "$"');
   assert.ok(texts.some((t) => /\d\u00A0\d{3}\u00A0\$/.test(t)), 'no grouped-thousands amount found');
@@ -554,14 +546,9 @@ test('filters stay hidden until the toggle opens them, with an active-count badg
   const badge = $(doc, 'filters-count');
   assert.equal(badge.hidden, true, 'count badge should be hidden with no active filters');
 
-  // Changing the ACT is not a filter — it is the carnet's scope, always set to
-  // exactly one act — so it must never light the badge.
-  const otherAct = all(doc, '#chips-service .chip').find((c) => c.getAttribute('aria-pressed') === 'false');
-  otherAct.click();
-  assert.equal(badge.hidden, true, 'switching act does not count as a filter');
-
-  // A real filter does.
-  doc.querySelector('#seg-statut .seg-btn[data-statut="retenue"]').click();
+  // The carnet rests on every act, so narrowing to one IS a filter.
+  const oneAct = all(doc, '#chips-service .chip').find((c) => c.dataset.svc);
+  oneAct.click();
   assert.equal(badge.hidden, false, 'count badge shows once a filter is active');
   assert.equal(badge.textContent, '1');
   assert.ok(toggle.classList.contains('has-active'), 'toggle should mark itself active');
@@ -597,22 +584,6 @@ async function reseed(ctx, bids, scope) {
 }
 const dayOf = (anchor, dd) => anchor.slice(0, 8) + dd; // 'YYYY-MM-' + 'DD'
 
-test('the calendar badges the client\'s own offer status (approved)', async () => {
-  const ctx = await bootCalendar();
-  const iso = ctx.D.addDays(ctx.today, 2); // future date (past cells are blanked)
-  // The client tracked this offer; the matching public bid is retained -> approved.
-  ctx.win.localStorage.setItem('nota.myoffers.v1', JSON.stringify([{ id: 'r1', dateISO: iso, serviceId: 'testament', montant: 900 }]));
-  await reseed(ctx, [{
-    id: 'r1', serviceId: 'testament', dateISO: iso, montant: 900,
-    tier: 'standard', status: ctx.D.STATUS.RETENUE, etude: 'Étude X', anonyme: true, createdAt: iso,
-  }]);
-  const cell = ctx.doc.querySelector('.cal-cell[data-date="' + iso + '"]');
-  assert.ok(cell, 'cell for the offer date exists');
-  assert.ok(cell.classList.contains('has-mine'));
-  const badge = cell.querySelector('.cal-mine');
-  assert.ok(badge, 'the client-offer status badge is shown');
-  assert.equal(badge.dataset.status, 'approved');
-});
 
 test('the toolbar surfaces the next availability (soonest open date)', async () => {
   const ctx = await boot();
@@ -637,7 +608,7 @@ test('the toolbar surfaces the next availability (soonest open date)', async () 
 });
 
 test('EDGE (UI): a fully-retained day marks the cell taken and names the notary (not dimmed)', async () => {
-  const ctx = await bootCalendar();
+  const ctx = await boot();
   const iso = ctx.D.addDays(ctx.today, 2); // future date (the list only shows today onward)
   const longEtude = 'Notaires du Vieux-Québec et Associés SENCRL s.r.l.';
   await reseed(ctx, [{
@@ -659,89 +630,29 @@ test('EDGE (UI): a fully-retained day marks the cell taken and names the notary 
   assert.equal(cell.querySelector('.cal-svc-bids'), null, 'no open price to show');
   assert.match(cell.querySelector('.cal-more-beat').textContent, /retenue —/, 'names the étude instead');
 
-  ctx.Nota.setView('liste'); // the agenda lives in the List view now
-  ctx.doc.querySelector('.agenda .agenda-group[data-date="' + iso + '"] .cell-chevron').click();
-  const chip = ctx.doc.querySelector('.agenda .status-chip');
-  assert.ok(chip, 'retained agenda row carries a status chip');
+  // Opening the day names the étude on the offer row itself.
+  cell.click();
+  await wait(30);
+  const chip = ctx.doc.querySelector('#day-bids .status-chip');
+  assert.ok(chip, 'the retained offer carries a status chip');
   assert.match(chip.getAttribute('title') || '', /Notaires du Vieux-Québec/);
-  const row = ctx.doc.querySelector('.agenda .bid-row.is-retenue');
+  const row = ctx.doc.querySelector('#day-bids .bid-row.is-retenue');
   assert.ok(row && !row.classList.contains('is-open'), 'row is retained, not open');
 });
 
-test('EDGE (UI): a filter that matches nothing renders the empty state with a reset CTA', async () => {
+test('EDGE (UI): a filter that matches nothing empties the grid without breaking it', async () => {
   const ctx = await boot();
   ctx.Nota.state.filters.min = 9_999_999; // nothing qualifies
   await ctx.Nota.reload();
   await wait(30);
-  ctx.Nota.setView('liste'); // the agenda lives in the List view now
-  const empty = ctx.doc.querySelector('.agenda .agenda-empty');
-  assert.ok(empty, 'agenda renders its empty state');
-  assert.ok(empty.querySelector('button'), 'empty state offers a CTA button');
+  // The month still renders its days — a calendar with no cells would lose the
+  // client's place — but no day carries an offer, and the count says so.
+  assert.ok(ctx.doc.querySelectorAll('#cal-grid .cal-cell:not(.is-out)').length > 0, 'the month is still drawn');
+  assert.equal(ctx.doc.querySelectorAll('#cal-grid .cal-cell.has-bids').length, 0, 'no day shows an offer');
+  assert.equal(ctx.doc.getElementById('result-count').textContent, '0 offre ce mois');
 });
 
-test('LIST: every upcoming day of the month renders a full card, even with no offer', async () => {
-  const ctx = await boot();
-  // A single offer on today; every later day of the month then has none.
-  await reseed(ctx, [{
-    id: 't1', serviceId: 'testament', dateISO: ctx.today, montant: 1500,
-    tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: ctx.today,
-  }]);
-  ctx.Nota.setView('liste');
 
-  const dim = daysInMonthUTC(ctx.anchor);
-  const todayDay = Number(ctx.today.slice(8, 10));
-  const upcoming = dim - todayDay + 1; // today .. last day of month, inclusive
-
-  const groups = all(ctx.doc, '#agenda .agenda-group');
-  assert.equal(groups.length, upcoming, 'one full card per upcoming day, empty days included');
-
-  const todayCard = ctx.doc.querySelector('#agenda .agenda-group[data-date="' + ctx.today + '"]');
-  assert.ok(todayCard && todayCard.querySelector('.bid-row'), "today's card shows its own offer");
-
-  const vacant = all(ctx.doc, '#agenda .agenda-vacant');
-  assert.equal(vacant.length, upcoming - 1, 'each day without an offer shows a vacant placeholder');
-  if (dim > todayDay) assert.ok(vacant.length > 0, 'an empty upcoming day still renders a full rectangle');
-});
-
-test('LIST: each card coaches what it would take to lead that day', async () => {
-  const ctx = await boot();
-  const iso = ctx.D.addDays(ctx.today, 3);
-  await reseed(ctx, [
-    { id: 'b1', serviceId: 'testament', dateISO: iso, montant: 1500, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
-    { id: 'b2', serviceId: 'testament', dateISO: iso, montant: 1100, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
-  ]);
-  ctx.Nota.setView('liste');
-  const card = ctx.doc.querySelector('.agenda .agenda-group[data-date="' + iso + '"]');
-  // Collapsed by default: the detail is behind the chevron, not on the surface.
-  assert.equal(card.classList.contains('is-expanded'), false, 'cards rest collapsed');
-  const chevron = card.querySelector('.cell-chevron');
-  assert.ok(chevron, 'a card with open offers offers a way to expand');
-  assert.equal(chevron.getAttribute('aria-expanded'), 'false');
-  chevron.click();
-  assert.equal(card.classList.contains('is-expanded'), true, 'the chevron expands the card');
-  assert.equal(chevron.getAttribute('aria-expanded'), 'true');
-  assert.equal($(ctx.doc, 'day-dialog').open, false, 'expanding does NOT book the day');
-
-  const beat = card.querySelector('.agenda-beat');
-  assert.ok(beat, 'the card says what it would take to lead the day');
-  assert.match(beat.textContent, /Pour devancer/);
-  assert.equal(beat.querySelector('strong').textContent, ctx.D.money(1500), 'quotes the best OPEN offer');
-
-  // A day whose only offer is already retained coaches differently rather than
-  // quoting a price nobody can outbid. Needs "Toutes", since the carnet rests on
-  // open offers and would otherwise render that day as vacant.
-  const taken = ctx.D.addDays(ctx.today, 4);
-  await reseed(ctx, [{ id: 'r1', serviceId: 'testament', dateISO: taken, montant: 900, tier: 'standard', status: ctx.D.STATUS.RETENUE, etude: 'Étude X', anonyme: true, createdAt: taken }]);
-  ctx.doc.querySelector('#seg-statut .seg-btn[data-statut=""]').click();
-  ctx.Nota.setView('liste');
-  const takenCard = ctx.doc.querySelector('.agenda .agenda-group[data-date="' + taken + '"]');
-  assert.ok(takenCard, 'the retained day has a card once "Toutes" is selected');
-  // Nothing is winnable there, so the collapsed card prices nothing — but which
-  // étude took it is still worth revealing, so the chevron stays.
-  assert.equal(takenCard.querySelector('.agenda-svc-bids'), null, 'no open price to show');
-  takenCard.querySelector('.cell-chevron').click();
-  assert.match(takenCard.querySelector('.agenda-beat').textContent, /vous fixez le prix/);
-});
 
 test('CARNET: rests on open offers; retained ones are one filter click away', async () => {
   const ctx = await boot();
@@ -762,7 +673,7 @@ test('CARNET: rests on open offers; retained ones are one filter click away', as
 });
 
 test('URGENCY: named on the dates that carry a premium, absent on calm ones', async () => {
-  const ctx = await bootCalendar();
+  const ctx = await boot();
   const iso = ctx.D.addDays(ctx.today, 1);       // extreme: 0-1 days out
   const calm = ctx.D.addDays(ctx.today, 20);     // standard: 15+ days out
   const mk = (id, dateISO) => ({ id, serviceId: 'testament', dateISO, montant: 1500,
@@ -787,46 +698,10 @@ test('URGENCY: named on the dates that carry a premium, absent on calm ones', as
   }
 });
 
-test('VIEW: the carnet opens on the list, with the calendar as the second option', async () => {
-  const ctx = await boot();
-  assert.equal(ctx.Nota.state.view, 'liste', 'the list is the default view');
-  assert.equal($(ctx.doc, 'view-liste').hidden, false, 'the list panel is the visible one');
-  assert.equal($(ctx.doc, 'view-calendrier').hidden, true);
 
-  // The switcher offers the list first and marks it selected.
-  const segs = [...ctx.doc.querySelectorAll('#view-switch .seg-btn')];
-  assert.deepEqual(segs.map((b) => b.dataset.view), ['liste', 'calendrier'], 'list leads the switcher');
-  assert.equal(segs[0].getAttribute('aria-selected'), 'true');
-  assert.equal(segs[1].getAttribute('aria-selected'), 'false');
-
-  // The default view stays out of the hash; a non-default one goes in.
-  assert.ok(!ctx.win.location.hash.includes('vue='), 'the default view is not in the hash');
-  ctx.Nota.setView('calendrier');
-  assert.equal($(ctx.doc, 'view-calendrier').hidden, false);
-  assert.ok(ctx.win.location.hash.includes('vue=calendrier'), 'a non-default view is');
-});
-
-test('LIST: a day shows only its best offer; the rest fold into a "+N autres offres" control', async () => {
-  const ctx = await boot();
-  const iso = ctx.today;
-  await reseed(ctx, [1900, 1700, 1500, 1300].map(function (montant, i) {
-    return { id: 'm' + i, serviceId: 'testament', dateISO: iso, montant: montant,
-      tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso };
-  }));
-  ctx.Nota.setView('liste');
-
-  const card = ctx.doc.querySelector('#agenda .agenda-group[data-date="' + iso + '"]');
-  assert.ok(card, 'today has a card');
-  const rows = card.querySelectorAll('.bid-row');
-  assert.equal(rows.length, 1, 'a single offer shown per day');
-  assert.match(rows[0].querySelector('.bid-amount').textContent, /1\s*900/, 'and it is the highest one');
-  const more = card.querySelector('.agenda-more');
-  assert.ok(more, 'the overflow folds into a "+N autres offres" control');
-  assert.match(more.textContent, /\+\s*3\s+autres\s+offres/);
-});
 
 test('LEGEND: the service key decodes the price colours, and says where detail lives', async () => {
-  const ctx = await bootCalendar();
+  const ctx = await boot();
   const note = ctx.doc.querySelector('#legend .legend-note');
   assert.ok(note, 'the legend carries an explainer for the cell figures');
   const txt = note.textContent;
@@ -842,7 +717,7 @@ test('LEGEND: the service key decodes the price colours, and says where detail l
 });
 
 test('DAY: the booking dialog says what the calendar % means for that date', async () => {
-  const ctx = await bootCalendar();
+  const ctx = await boot();
   // Any upcoming day with offers — avoids assuming today + N stays in-month.
   const cell = [...ctx.doc.querySelectorAll('#cal-grid .cal-cell.has-bids')]
     .find((c) => c.dataset.date > ctx.today);
@@ -865,7 +740,7 @@ test('DAY: the booking dialog says what the calendar % means for that date', asy
 });
 
 test('DAY: opens on the domain default act, showing only its best offer + totals', async () => {
-  const ctx = await bootCalendar();
+  const ctx = await boot();
   const iso = ctx.D.addDays(ctx.today, 5);
   await reseed(ctx, [
     { id: 'r1', serviceId: 'refinancement', dateISO: iso, montant: 4000, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
@@ -896,7 +771,7 @@ test('DAY: opens on the domain default act, showing only its best offer + totals
 });
 
 test('DAY: switching the act re-scopes the headline offer and the totals', async () => {
-  const ctx = await bootCalendar();
+  const ctx = await boot();
   const iso = ctx.D.addDays(ctx.today, 5);
   await reseed(ctx, [
     { id: 'r1', serviceId: 'refinancement', dateISO: iso, montant: 4000, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
@@ -968,26 +843,9 @@ test('COMING SOON: both audiences are told the act will be doable fully online',
   assert.match(notary.textContent, /en ligne/);
 });
 
-test('LIST: a day with a single offer still offers a way into the day dialog', async () => {
-  const ctx = await boot();
-  const iso = ctx.today;
-  // Exactly one offer: nothing folds away, so there is no "+N" control. The card
-  // must still expose the day, or the rows (which are not clickable) dead-end.
-  await reseed(ctx, [{ id: 'solo', serviceId: 'testament', dateISO: iso, montant: 1500,
-    tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso }]);
-  ctx.Nota.setView('liste');
-
-  const card = ctx.doc.querySelector('#agenda .agenda-group[data-date="' + iso + '"]');
-  assert.equal(card.querySelectorAll('.bid-row').length, 1, 'its single offer is shown');
-  const open = card.querySelector('.agenda-more');
-  assert.ok(open, 'the card still carries a day control');
-  assert.equal(open.textContent, 'Voir cette journée');
-  open.click();
-  assert.equal($(ctx.doc, 'day-dialog').open, true, 'and it opens the day dialog');
-});
 
 test('EDGE (UI): a mixed open/retained day stays available with the open average', async () => {
-  const ctx = await bootCalendar();
+  const ctx = await boot();
   const iso = ctx.D.addDays(ctx.today, 2); // future date (past cells are blanked)
   await reseed(ctx, [
     { id: 'o1', serviceId: 'testament', dateISO: iso, montant: 1400, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
@@ -1054,41 +912,18 @@ test('the hero pulse shows the month median per service and filters the carnet',
   assert.equal(ctx.doc.getElementById('result-count').textContent, '1 offre ce mois');
   assert.equal(ctx.doc.querySelector('#chips-service .chip[data-svc="procuration"]').getAttribute('aria-pressed'), 'true');
   const onRow = ctx.doc.querySelector('#pulse-rows .pulse-row[data-svc="procuration"]');
-  assert.equal(onRow.getAttribute('aria-checked'), 'true', 'the rows are a radio group, not toggles');
+  assert.equal(onRow.getAttribute('aria-pressed'), 'true');
   // The pulse itself keeps reading the WHOLE month — it is the reference, not a result.
   assert.equal(ctx.doc.querySelector('#pulse-rows .pulse-row[data-svc="testament"] .pulse-amount').textContent, ctx.D.money(900));
 
-  // Clicking the ACTIVE row again is a no-op: there is no "no act" state to
-  // fall back to, so the carnet never empties itself out from under the reader.
+  // Clicking the active row again returns to every act, the carnet's resting
+  // scope: 4 seeded, 1 retained, so 3 open ones are counted.
   onRow.click();
   await wait(30);
-  assert.equal(ctx.doc.getElementById('result-count').textContent, '1 offre ce mois');
-  assert.equal(onRow.getAttribute('aria-checked'), 'true', 'still scoped to that act');
-  assert.equal(ctx.doc.querySelector('#chips-service .chip[data-svc=""]'), null, 'there is no "Tous" chip');
+  assert.equal(ctx.doc.getElementById('result-count').textContent, '3 offres ce mois');
+  assert.equal(ctx.doc.querySelector('#chips-service .chip[data-svc=""]').getAttribute('aria-pressed'), 'true');
 });
 
-test('LIST: a card is the booking affordance; rows carry no share or download', async () => {
-  const ctx = await boot();
-  const iso = ctx.D.addDays(ctx.today, 2);
-  await reseed(ctx, [{
-    id: 'a1', serviceId: 'testament', dateISO: iso, montant: 900,
-    tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, prefixe: 'G1R', createdAt: iso,
-  }]);
-  ctx.Nota.setView('liste');
-  const card = ctx.doc.querySelector('.agenda .agenda-group[data-date="' + iso + '"]');
-  assert.ok(card, 'the list renders the day card');
-
-  // Passing someone else's demand around, and exporting it to a calendar, are
-  // not things a client browsing the carnet should be invited to do.
-  assert.equal(card.querySelectorAll('.row-actions').length, 0, 'no row actions');
-  assert.equal(card.querySelectorAll('a[download]').length, 0, 'no .ics download on a row');
-  assert.equal(card.querySelectorAll('.mini-partager').length, 0, 'no share action');
-
-  // Clicking anywhere on the card books that day.
-  card.click();
-  assert.equal($(ctx.doc, 'day-dialog').open, true, 'the card opens the booking dialog');
-  assert.equal(ctx.Nota.state.selectedDate, iso, 'on the clicked day');
-});
 
 test('each pulse row has a book button that opens the dialog on that service', async () => {
   const ctx = await boot();

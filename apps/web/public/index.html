@@ -232,7 +232,7 @@
                 <span class="hero-steps-title">Ce que les clients offrent</span>
                 <span class="pulse-month" id="pulse-month"></span>
               </div>
-              <div class="pulse-rows" id="pulse-rows" role="radiogroup" aria-label="Acte affiché au carnet"></div>
+              <div class="pulse-rows" id="pulse-rows"></div>
               <p class="pulse-foot" id="pulse-foot"></p>
             </aside>
           </div>
@@ -249,16 +249,6 @@
               </div>
               <span class="cal-title" id="cal-title" aria-live="polite"></span>
 
-              <div class="seg view-switch" id="view-switch" role="tablist" aria-label="Affichage du carnet">
-                <button type="button" class="seg-btn is-on" id="tab-view-liste" role="tab" data-view="liste" aria-selected="true" aria-controls="view-liste" tabindex="0">
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
-                  Liste
-                </button>
-                <button type="button" class="seg-btn" id="tab-view-calendrier" role="tab" data-view="calendrier" aria-selected="false" aria-controls="view-calendrier" tabindex="-1">
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>
-                  Calendrier
-                </button>
-              </div>
 
               <span class="header-spacer"></span>
               <span class="cal-avail" id="cal-avail" aria-live="polite" hidden></span>
@@ -296,16 +286,14 @@
               </div>
             </div>
 
-            <!-- One view area, three tabpanels. Only the active panel is shown;
-                 [hidden] removes the others from layout AND the a11y tree. -->
-            <div class="view-panel" id="view-calendrier" role="tabpanel" aria-labelledby="tab-view-calendrier">
+            <!-- The carnet IS the calendar. A second, list rendering of the same
+                 month said nothing the grid did not, and under a single-act
+                 scope it was mostly empty placeholder cards. -->
+            <div class="view-panel" id="view-calendrier">
               <div class="cal-grid" id="cal-grid" role="grid" aria-label="Calendrier des offres"></div>
               <div class="legend" id="legend"></div>
             </div>
 
-            <div class="view-panel" id="view-liste" role="tabpanel" aria-labelledby="tab-view-liste" hidden>
-              <div class="agenda" id="agenda"></div>
-            </div>
           </div>
         </div>
       </section>
@@ -368,6 +356,21 @@
               <div><div class="nc-why-t">Sans frais fixes</div><p class="nc-why-p">Inscription gratuite ; une commission seulement sur les actes complétés.</p></div>
             </div>
           </section>
+
+          <!-- Live vignette: real open demands drop onto a Mon–Fri board one by
+               one while the payoff counts up — the headline ("remplissez votre
+               semaine, payé à la signature") played out with market data. The
+               batch comes from D.weekAgenda over state.monthBids and rotates on
+               every loop. Decorative (aria-hidden): the same numbers live in the
+               console's "en jeu ce mois" line. -->
+          <div class="nc-week" id="nc-week" aria-hidden="true" hidden>
+            <div class="nc-week-head">
+              <span class="nc-week-kicker">Une semaine sur Nota</span>
+              <span class="nc-week-total"><strong id="nc-week-total">0&nbsp;$</strong> à la signature</span>
+            </div>
+            <div class="nc-week-board" id="nc-week-board"></div>
+            <p class="nc-week-note">Demandes réelles ouvertes en ce moment, placées à leur jour de signature.</p>
+          </div>
 
           <!-- Prospecting feed for notaries: subscribe the whole carnet of open
                demands into a personal agenda (Google / Outlook / Apple / iCal). -->
