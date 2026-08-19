@@ -135,21 +135,34 @@ test('legend renders one item per timing tier', async () => {
 });
 
 // 5. No open/taken day ever renders a bare em-dash headline.
-test('no calendar headline is a bare em-dash', async () => {
+test('no calendar figure is a bare em-dash', async () => {
   const { doc } = await bootCalendar();
-  const tops = all(doc, '#cal-grid .cal-avg');
-  assert.ok(tops.length > 0, 'expected at least one average figure');
-  assert.ok(tops.every((t) => t.textContent.trim() !== '—'), 'a cal-avg rendered a bare em-dash');
+  const amounts = all(doc, '#cal-grid .svc-bid-amount, #cal-grid .cal-avg');
+  assert.ok(amounts.length > 0, 'expected at least one price figure');
+  assert.ok(amounts.every((t) => t.textContent.trim() !== '—'), 'a cell rendered a bare em-dash');
 });
 
-// 6. Days with bids show the average price + a %-chance-to-obtain chip.
-test('days with bids show avg price and chance', async () => {
-  const { doc } = await bootCalendar();
+// 6. A cell states the best OPEN offer per act — a price needs no explaining,
+//    unlike the odds percentage it replaced. The colour is decoded by the legend.
+test('a day with bids shows the best open offer per act', async () => {
+  const { doc, D } = await bootCalendar();
   const hasBids = all(doc, '#cal-grid .cal-cell.has-bids');
   assert.ok(hasBids.length > 0, 'expected at least one day with bids');
-  assert.ok(hasBids.every((c) => c.querySelector('.cal-avg')), 'a has-bids cell is missing its average figure');
-  assert.ok(hasBids.every((c) => c.querySelector('.cal-chance')), 'a has-bids cell is missing its chance chip');
-  assert.ok(hasBids.every((c) => /\d+\s*%/.test(c.querySelector('.cal-chance').textContent)), 'chance chip shows a percentage');
+
+  // Every such cell prices at least one act, and never repeats the act's name
+  // (the Service key in the legend carries it).
+  const priced = hasBids.filter((c) => c.querySelector('.cal-svc-bids'));
+  assert.ok(priced.length > 0, 'at least one day still has an open offer');
+  priced.forEach((c) => {
+    const items = [...c.querySelectorAll('.svc-bid')];
+    assert.ok(items.length > 0 && items.length <= D.SERVICES.length);
+    items.forEach((it) => {
+      assert.ok(it.querySelector('.svc-bid-dot'), 'each price carries its act colour');
+      assert.match(it.querySelector('.svc-bid-amount').textContent, /\u00A0\$$/, 'formatted through money()');
+    });
+  });
+  // The odds percentage is gone from the compact surface.
+  assert.equal(doc.querySelectorAll('#cal-grid .cal-chance').length, 0);
 });
 
 // 7. Offer form: 3 service options, anonymity on by default, service selection
@@ -600,10 +613,14 @@ test('EDGE (UI): a fully-retained day marks the cell taken and names the notary 
 
   const cell = ctx.doc.querySelector('.cal-cell[data-date="' + iso + '"]');
   assert.ok(cell.classList.contains('is-taken'), 'all-retained cell is marked taken');
-  assert.ok(cell.querySelector('.cal-avg.is-cleared'), 'taken cell shows a struck cleared average');
-  assert.match(cell.querySelector('.cal-chance').textContent, /\d+\s*%/); // chance still shown
+  // Nothing is open, so there is no per-act price to quote — the cell falls back
+  // to a struck-through figure for what cleared, and offers no chevron.
+  assert.ok(cell.querySelector('.cal-avg.is-cleared'), 'taken cell shows a struck cleared figure');
+  assert.equal(cell.querySelector('.cal-svc-bids'), null, 'no open price to show');
+  assert.match(cell.querySelector('.cal-more-beat').textContent, /retenue —/, 'names the étude instead');
 
   ctx.Nota.setView('liste'); // the agenda lives in the List view now
+  ctx.doc.querySelector('.agenda .agenda-group[data-date="' + iso + '"] .cell-chevron').click();
   const chip = ctx.doc.querySelector('.agenda .status-chip');
   assert.ok(chip, 'retained agenda row carries a status chip');
   assert.match(chip.getAttribute('title') || '', /Notaires du Vieux-Québec/);
@@ -655,6 +672,16 @@ test('LIST: each card coaches what it would take to lead that day', async () => 
   ]);
   ctx.Nota.setView('liste');
   const card = ctx.doc.querySelector('.agenda .agenda-group[data-date="' + iso + '"]');
+  // Collapsed by default: the detail is behind the chevron, not on the surface.
+  assert.equal(card.classList.contains('is-expanded'), false, 'cards rest collapsed');
+  const chevron = card.querySelector('.cell-chevron');
+  assert.ok(chevron, 'a card with open offers offers a way to expand');
+  assert.equal(chevron.getAttribute('aria-expanded'), 'false');
+  chevron.click();
+  assert.equal(card.classList.contains('is-expanded'), true, 'the chevron expands the card');
+  assert.equal(chevron.getAttribute('aria-expanded'), 'true');
+  assert.equal($(ctx.doc, 'day-dialog').open, false, 'expanding does NOT book the day');
+
   const beat = card.querySelector('.agenda-beat');
   assert.ok(beat, 'the card says what it would take to lead the day');
   assert.match(beat.textContent, /Pour devancer/);
@@ -669,6 +696,10 @@ test('LIST: each card coaches what it would take to lead that day', async () => 
   ctx.Nota.setView('liste');
   const takenCard = ctx.doc.querySelector('.agenda .agenda-group[data-date="' + taken + '"]');
   assert.ok(takenCard, 'the retained day has a card once "Toutes" is selected');
+  // Nothing is winnable there, so the collapsed card prices nothing — but which
+  // étude took it is still worth revealing, so the chevron stays.
+  assert.equal(takenCard.querySelector('.agenda-svc-bids'), null, 'no open price to show');
+  takenCard.querySelector('.cell-chevron').click();
   assert.match(takenCard.querySelector('.agenda-beat').textContent, /vous fixez le prix/);
 });
 
@@ -728,28 +759,20 @@ test('LIST: a day shows only its best offer; the rest fold into a "+N autres off
   assert.match(more.textContent, /\+\s*3\s+autres\s+offres/);
 });
 
-test('LEGEND: the calendar explains its two cell figures, using the domain bounds', async () => {
-  const ctx = await boot();
+test('LEGEND: the service key decodes the price colours, and says where detail lives', async () => {
+  const ctx = await bootCalendar();
   const note = ctx.doc.querySelector('#legend .legend-note');
   assert.ok(note, 'the legend carries an explainer for the cell figures');
   const txt = note.textContent;
-  assert.match(txt, /prix moyen/, 'it names the price figure');
-  assert.match(txt, /chances d’obtenir un notaire/, 'it names what the % measures');
+  assert.match(txt, /meilleure offre encore ouverte/, 'names what the figure is');
+  assert.match(txt, /couleur/, 'points at the service key above it');
+  assert.match(txt, /Ouvrez une case/, 'says how to reach the detail');
+  // The percentage it used to explain is no longer on the compact surface.
+  assert.ok(!/chances d’obtenir/.test(txt), 'no longer explains an odds percentage');
 
-  // The quoted bounds must come from @nota/domain, never be retyped as copy.
-  const best = ctx.D.obtainChance(ctx.D.addDays(ctx.today, 30), ctx.today);
-  const worst = ctx.D.obtainChance(ctx.today, ctx.today);
-  assert.ok(best > worst, 'a distant date beats a same-day one');
-  // Percentages carry a no-break space before the sign, like money().
-  assert.ok(txt.includes(best + '\u00A0%'), 'quotes the domain upper bound (' + best + ' %)');
-  assert.ok(txt.includes(worst + '\u00A0%'), 'quotes the domain lower bound (' + worst + ' %)');
-
-  // And the figure printed in a cell is the same domain value, not a UI copy.
-  const cell = ctx.doc.querySelector('.cal-cell.has-bids .cal-chance');
-  if (cell) {
-    const iso = cell.closest('.cal-cell').dataset.date;
-    assert.equal(cell.textContent, ctx.D.obtainChance(iso, ctx.today) + '\u00A0%');
-  }
+  // The Service key still exists — it is what decodes the dot colours.
+  const svcKeys = [...ctx.doc.querySelectorAll('#legend .legend-status-item')];
+  assert.ok(svcKeys.length >= ctx.D.SERVICES.length, 'the service key is present');
 });
 
 test('DAY: the booking dialog says what the calendar % means for that date', async () => {
@@ -770,8 +793,9 @@ test('DAY: the booking dialog says what the calendar % means for that date', asy
   const days = ctx.D.daysBetween(ctx.today, iso);
   const when = days === 1 ? 'demain' : 'dans ' + days + ' jours';
   assert.ok(line.textContent.includes(when), 'and states the lead time driving it (' + when + ')');
-  // The cell badge and the dialog must never disagree about the same date.
-  assert.equal(cell.querySelector('.cal-chance').textContent, expected + '\u00A0%');
+  // The odds live ONLY here now, where the sentence says what drives them — the
+  // compact cell shows prices instead, which need no explaining.
+  assert.equal(cell.querySelector('.cal-chance'), null, 'no unexplained % on the cell');
 });
 
 test('DAY: opens on the domain default act, showing only its best offer + totals', async () => {
@@ -906,11 +930,20 @@ test('EDGE (UI): a mixed open/retained day stays available with the open average
   const cell = ctx.doc.querySelector('.cal-cell[data-date="' + iso + '"]');
   assert.ok(cell.classList.contains('is-avail'), 'mixed day still has an open offer -> available');
   assert.ok(!cell.classList.contains('is-taken'), 'still has an open offer');
-  // Average is of the OPEN offers only (1400), not struck.
-  const avg = cell.querySelector('.cal-avg');
-  assert.ok(avg && !avg.classList.contains('is-cleared'), 'open average shown, not struck');
-  assert.equal(avg.textContent.replace(/\s| |\$/g, ''), '1400');
-  assert.match(cell.querySelector('.cal-chance').textContent, /\d+\s*%/);
+  // The price quoted is the best OPEN offer (1400) — the retained 1300 is not
+  // what a client has to beat, so it never becomes the headline.
+  const priced = [...cell.querySelectorAll('.svc-bid-amount')];
+  assert.equal(priced.length, 1, 'one act priced on this day');
+  assert.equal(priced[0].textContent.replace(/[\s\u00A0$]/g, ''), '1400');
+  assert.equal(cell.querySelector('.cal-avg'), null, 'no struck figure while something is open');
+
+  // The number to beat is that same figure, behind the chevron.
+  cell.querySelector('.cell-chevron').click();
+  assert.ok(cell.classList.contains('is-expanded'));
+  assert.match(cell.querySelector('.cal-more-beat').textContent, /1\u00A0400/);
+  // The count reflects what is actually shown: the carnet rests on "Ouvertes",
+  // so the retained sibling is filtered out and is not counted as competition.
+  assert.match(cell.querySelector('.cal-more-n').textContent, /1 offre/, 'counts the visible offers');
 });
 
 test('the hero pulse shows the month median per service and filters the carnet', async () => {

@@ -332,3 +332,18 @@ test('every fixture postal prefix is a valid Quebec prefix', () => {
     .filter((b) => b.prefixe)
     .forEach((b) => assert.ok(D.isQuebecPostalPrefix(b.prefixe), b.prefixe + ' should be a Quebec prefix'));
 });
+
+test('every service carries a short, unique, uppercase code for compact surfaces', () => {
+  const codes = D.SERVICES.map((s) => s.abrev);
+  assert.equal(codes.length, D.SERVICES.length);
+  codes.forEach((c, i) => {
+    assert.equal(typeof c, 'string', D.SERVICES[i].id + ' has no abrev');
+    assert.ok(c.length >= 2 && c.length <= 4, c + ' must stay short enough for a calendar cell');
+    assert.equal(c, c.toUpperCase(), c + ' must be uppercase');
+  });
+  assert.equal(new Set(codes).size, codes.length, 'codes must be unambiguous');
+  // Each code should plausibly stand for its own service name.
+  D.SERVICES.forEach((s) => {
+    assert.equal(s.abrev[0], s.nom[0].toUpperCase(), s.abrev + ' should start like ' + s.nom);
+  });
+});

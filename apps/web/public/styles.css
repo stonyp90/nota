@@ -704,12 +704,6 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 }
 /* Cell content: the day's AVERAGE offer (headline) + a plain availability chip. */
 .cal-avg { font-size: 16px; font-weight: 800; letter-spacing: -0.02em; margin-top: auto; white-space: nowrap; color: var(--ink); }
-.cal-avg.is-cleared { text-decoration: line-through; color: var(--ink-muted); font-weight: 600; }
-.cal-chance { display: inline-flex; align-items: center; gap: 5px; margin-top: 3px; font-size: 11px; font-weight: 700; white-space: nowrap; }
-.cal-chance::before { content: ''; width: 7px; height: 7px; border-radius: 50%; flex: none; background: currentColor; }
-.cal-chance[data-level='high'], .agenda-chance[data-level='high'] { color: var(--ok); }
-.cal-chance[data-level='mid'], .agenda-chance[data-level='mid'] { color: var(--warn); }
-.cal-chance[data-level='low'], .agenda-chance[data-level='low'] { color: var(--danger); }
 /* Available days stay brand-tinted (inviting); fully-taken days read muted. */
 .cal-cell.is-taken { background: var(--surface-inset); }
 .cal-cell.is-taken:hover { background: var(--surface-hover); }
@@ -721,70 +715,53 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
   content: ''; position: absolute; inset: 0; border-radius: inherit;
   box-shadow: inset 0 0 0 1.5px var(--brand); pointer-events: none;
 }
-/* Offer count — a corner badge, so the figure in the cell body is never misread
-   as "the" offer. */
-.cal-count { position: absolute; top: 6px; right: 6px; font-size: 10px; font-weight: 800; line-height: 1; min-width: 16px; text-align: center; padding: 2px 5px; border-radius: 999px; background: var(--brand); color: var(--on-brand, #04140b); }
-.cal-cell.is-taken .cal-count { background: var(--ink-muted); }
+/* --- Per-act prices, and the chevron that opens the detail ---------------- */
+/* A dot plus a price. The dot's colour is decoded by the Service key in the
+   legend, so the act's name is never repeated on a cell or a card. */
+.svc-bid { display: inline-flex; align-items: baseline; gap: 5px; min-width: 0; }
+.svc-bid-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; align-self: center; }
+.svc-bid-code { font-size: 9.5px; font-weight: 800; letter-spacing: .06em; opacity: .85; }
+.svc-bid-amount { font-weight: 800; letter-spacing: -0.02em; white-space: nowrap; }
+.legend-code { font-size: 9.5px; font-weight: 800; letter-spacing: .06em; margin-right: 1px; }
+.cal-svc-bids { display: flex; flex-direction: column; gap: 2px; margin-top: auto; font-size: 12.5px; }
+.agenda-svc-bids { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 2px 14px 10px; font-size: 13.5px; }
 
-/* Which acts are on the day, as a CODE: a coloured dot + a count per act,
-   decoded by the Service key in the legend under the grid. A cell is far too
-   narrow for act names, and this keeps the mix readable at a glance. */
-.cal-svc-counts { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; margin-top: 4px; font-size: 11px; font-weight: 700; line-height: 1; }
-.cal-svc-item { display: inline-flex; align-items: center; gap: 4px; }
-.cal-svc-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+/* Collapsed is the resting state everywhere. The chevron is the only way in, so
+   it works the same with a mouse, a finger or a keyboard. */
+.cell-chevron {
+  position: absolute; top: 4px; right: 4px; display: grid; place-items: center;
+  width: 26px; height: 26px; padding: 0; appearance: none; border: 0; border-radius: 50%;
+  background: transparent; color: var(--ink-muted); cursor: pointer;
+  transition: transform .15s ease, background .12s ease, color .12s ease;
+}
+.cell-chevron:hover { background: var(--surface-inset); color: var(--ink); }
+.cell-chevron[aria-expanded='true'] { transform: rotate(180deg); }
+.agenda-day .cell-chevron { position: static; flex: none; }
 
-/* The detail line: act + urgency in words. Hidden on smaller cells by the
-   @container rules below, and brought back on hover (see the zoom block). */
-.cal-info { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: 4px; font-size: 10.5px; line-height: 1.3; color: var(--ink-muted); }
-.cal-info-tier { font-weight: 700; color: var(--tier-standard); }
-.cal-info-tier[data-tier='rapide'] { color: var(--tier-rapide); }
-.cal-info-tier[data-tier='prioritaire'] { color: var(--tier-prioritaire); }
-.cal-info-tier[data-tier='urgence'] { color: var(--tier-urgence); }
-.cal-info-tier[data-tier='extreme'] { color: var(--tier-extreme); }
-.cal-info-svc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+/* What the chevron reveals. */
+.cal-more, .agenda-detail { display: none; }
+.cal-cell.is-expanded .cal-more { display: flex; flex-wrap: wrap; gap: 2px 8px; margin-top: 4px; font-size: 10.5px; line-height: 1.35; color: var(--ink-muted); }
+.cal-more-beat { font-weight: 700; color: var(--brand); }
+.agenda-group.is-expanded .agenda-detail { display: block; }
+.agenda-beat { padding: 8px 14px 2px; font-size: 12px; line-height: 1.45; color: var(--ink-muted); }
+.agenda-beat strong { color: var(--brand); font-weight: 700; }
+/* An expanded cell must be able to outgrow its row without shoving neighbours. */
+.cal-cell.is-expanded { z-index: 3; background: var(--surface); border-color: var(--border-strong); box-shadow: var(--shadow-lg); }
 
 .cal-mine { align-self: flex-start; max-width: 100%; overflow: hidden; text-overflow: ellipsis; margin-top: 4px; font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); color: var(--ink-muted); white-space: nowrap; }
 .cal-mine[data-status='approved'] { color: var(--ok); border-color: var(--ok); }
 .cal-mine[data-status='pending'] { color: var(--brand); border-color: var(--brand); }
 .cal-mine[data-status='expired'] { color: var(--ink-muted); border-style: dashed; }
 
-@media (hover: hover) and (pointer: fine) {
-  /* Raise the hovered cell over its neighbours and scale it slightly, so the
-     detail below has somewhere to go without reflowing the grid. */
-  .cal-cell.has-bids:hover,
-  .cal-cell.has-bids:focus-visible {
-    z-index: 5; transform: scale(1.07); background: var(--surface);
-    border-color: var(--border-strong); box-shadow: var(--shadow-lg);
-  }
-  /* Whatever the container rules hid at this width, hover restores. */
-  .cal-cell.has-bids:hover .cal-info,
-  .cal-cell.has-bids:focus-visible .cal-info,
-  .cal-cell.has-bids:hover .cal-info-svc,
-  .cal-cell.has-bids:focus-visible .cal-info-svc,
-  .cal-cell.has-bids:hover .cal-svc-dot,
-  .cal-cell.has-bids:focus-visible .cal-svc-dot { display: revert; }
-  .cal-cell.has-bids:hover .cal-info,
-  .cal-cell.has-bids:focus-visible .cal-info { display: flex; }
-  /* And the amount returns to words rather than the compact "3,3k". */
-  .cal-cell.has-bids:hover .cal-avg,
-  .cal-cell.has-bids:focus-visible .cal-avg { font-size: 13px; }
-  .cal-cell.has-bids:hover .cal-avg::after,
-  .cal-cell.has-bids:focus-visible .cal-avg::after { content: none; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .cal-cell.has-bids:hover, .cal-cell.has-bids:focus-visible { transform: none; }
-}
 
 /* Responsive cells, driven by the GRID width (7 columns are fixed, so cell width
    ≈ grid width / 7). Detail is shed progressively so the essentials — day number,
    count, top price, urgency strip, service-mix + status bars — always fit cleanly
    at every resolution, and nothing ever clips mid-word. */
-@container cal (max-width: 900px) {
-  .cal-info-svc { display: none; } /* service NAME drops; the colour mix bar still shows the mix */
-}
 @container cal (max-width: 740px) {
-  .cal-info { display: none; }     /* tier pill drops too — the left urgency strip carries it */
   .cal-avg { font-size: 13px; }
+  /* Narrow cells show the price alone; the dot still carries the act. */
+  .svc-bid-amount { font-size: 11.5px; }
   /* "En attente / Approuvé / Expiré" would clip, so collapse the own-offer badge to a status dot. */
   .cal-mine { font-size: 0; padding: 0; margin-top: 3px; width: 9px; height: 9px; border: 0; border-radius: 50%; background: currentColor; }
   .cal-mine[data-status='expired'] { background: var(--ink-muted); }
@@ -792,13 +769,10 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 @container cal (max-width: 560px) {
   .cal-cell { padding: 6px 6px 12px; min-height: clamp(66px, 15cqw, 96px); }
   .cal-daynum { font-size: 11px; }
-  .cal-count { top: 5px; right: 5px; font-size: 9px; min-width: 14px; padding: 1px 4px; }
-  /* Phone cells: keep the coloured per-service numbers, drop the dots to fit. */
-  .cal-svc-counts { margin-top: 3px; gap: 1px 7px; font-size: 10px; }
-  .cal-count { top: 4px; right: 4px; }
-  .cal-svc-dot { display: none; }
   /* Cells get too narrow for "3 285 $": swap to the compact form (data-compact),
      which always fits. The full amount stays in the DOM + day dialog for a11y. */
+  .svc-bid-amount { font-size: 0; }
+  .svc-bid-amount::after { content: attr(data-compact); font-size: 11px; font-weight: 800; }
   .cal-avg { font-size: 0; }
   .cal-avg::after { content: attr(data-compact); font-size: 12.5px; font-weight: 800; letter-spacing: -0.02em; }
 }
@@ -816,26 +790,9 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
    one amount, the odds — and hover is where a client digs into what it takes to
    be retained. Fine pointers only; on touch the tap opens the day dialog, which
    carries the same detail. */
-@media (hover: hover) and (pointer: fine) {
-  .agenda-group:hover, .agenda-group:focus-within {
-    background: var(--surface); box-shadow: var(--shadow-lg); transform: translateY(-2px);
-  }
-  /* Truncated identity lines open up. */
-  .agenda-group:hover .bid-who, .agenda-group:focus-within .bid-who,
-  .agenda-group:hover .bid-sub, .agenda-group:focus-within .bid-sub {
-    white-space: normal; overflow: visible; text-overflow: clip;
-  }
-  .agenda-group:hover .agenda-day-t, .agenda-group:focus-within .agenda-day-t {
-    overflow: visible; text-overflow: clip;
-  }
-  /* And the line that says what it would take to lead this day. */
-  .agenda-beat { display: none; }
-  .agenda-group:hover .agenda-beat, .agenda-group:focus-within .agenda-beat { display: block; }
-}
+
 /* Without hover (touch), the coaching line is simply always there. */
-@media not all and (hover: hover) {
-  .agenda-beat { display: block; }
-}
+
 .agenda-beat { padding: 0 14px 2px; font-size: 11.5px; line-height: 1.45; color: var(--ink-muted); }
 .agenda-beat strong { color: var(--brand); font-weight: 700; }
 /* A day with no bet is still a full rectangle: the placeholder fills the card and doubles as a "reserve this date" affordance. */
@@ -846,11 +803,9 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 /* The card header carries the date and, like the calendar cell, the odds of
    getting a notary that day — the list was the one view showing a price with no
    sense of how gettable the date is. */
-.agenda-day { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 11px 14px 6px; font-size: 12px; font-weight: 700; color: var(--ink-muted); }
+.agenda-day { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 11px 14px 6px; font-size: 12px; font-weight: 700; color: var(--ink-muted); }
 .agenda-day-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .agenda-day-t::first-letter { text-transform: uppercase; }
-.agenda-chance { display: inline-flex; align-items: center; gap: 5px; flex: none; font-size: 11px; font-weight: 700; white-space: nowrap; }
-.agenda-chance::before { content: ''; width: 7px; height: 7px; border-radius: 50%; flex: none; background: currentColor; }
 .bid-row { display: flex; align-items: center; gap: 10px; padding: 9px 14px 9px 12px; border-top: 1px solid var(--border); border-left: 2px solid transparent; }
 .bid-row.is-open { border-left-color: var(--status-ouverte); }
 .bid-row.is-retenue { border-left-color: var(--status-retenue); }
@@ -1407,7 +1362,6 @@ dialog::backdrop { background: var(--backdrop); }
 dialog[open] { animation: dialogIn .2s cubic-bezier(.2, .8, .2, 1) both; }
 dialog[open]::backdrop { animation: backdropIn .2s ease both; }
 .bid-row { animation: rowIn .2s ease both; }
-.cal-count { animation: pop .25s ease both; }
 .gauge-fill { transition: width .35s cubic-bezier(.2, .8, .2, 1); }
 .dossier-bar > span { transition: width .35s cubic-bezier(.2, .8, .2, 1); }
 .dossier-check { transition: background .15s, border-color .15s, transform .15s; }

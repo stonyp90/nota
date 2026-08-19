@@ -792,8 +792,7 @@
     for (var day = 1; day <= dim; day++) {
       if (slot > 0 && slot % 7 === 0) openRow();
       var iso = state.anchor.slice(0, 8) + String(day).padStart(2, '0');
-      var cell = el('button', 'cal-cell');
-      cell.type = 'button';
+      var cell = el('div', 'cal-cell');
       cell.setAttribute('role', 'gridcell');
       cell.dataset.date = iso;
       cell.tabIndex = iso === state.focusDate ? 0 : -1;
@@ -803,7 +802,7 @@
       // Past dates can't be booked: keep the cell (so the grid never loses a row)
       // but blank it out — muted, no offers, not interactive.
       var isPast = iso < today;
-      if (isPast) { cell.classList.add('is-past'); cell.disabled = true; cell.tabIndex = -1; }
+      if (isPast) { cell.classList.add('is-past'); cell.setAttribute('aria-disabled', 'true'); cell.tabIndex = -1; }
 
       cell.appendChild(el('span', 'cal-daynum', String(day)));
 
@@ -818,56 +817,38 @@
         // otherwise what cleared) — the price a client should aim for.
         var pool = open.length ? open : dayBids;
         var avg = Math.round(pool.reduce(function (s, b) { return s + (Number(b.montant) || 0); }, 0) / pool.length);
-        var avgEl = el('span', 'cal-avg' + (open.length ? '' : ' is-cleared'), D.money(avg));
-        avgEl.dataset.compact = compactMoney(avg);
-        cell.appendChild(avgEl);
-        // Chance to obtain a notary on this date (lead-time based), shown as a %.
-        var chance = D.obtainChance(iso, today);
-        var chanceEl = chanceBadge('cal-chance', iso, today);
         if (open.length) { cell.classList.add('is-avail'); } else { cell.classList.add('is-taken'); }
-        cell.appendChild(chanceEl);
-
-        // How many offers are on this day — a corner badge, so the figure below
-        // is never misread as "the" offer.
-        var count = el('span', 'cal-count', compactCount(dayBids.length));
-        count.title = plural(dayBids.length, 'offre') + ' ce jour';
-        cell.appendChild(count);
-
-        // Which acts, as coloured counts. A cell has no room for names, so this
-        // is a CODE decoded by the Service key in the legend below the grid —
-        // one dot per act present, with how many. Dots drop on phone cells; the
-        // coloured numbers survive (see the @container rules).
-        var byService = {};
-        dayBids.forEach(function (b) { byService[b.serviceId] = (byService[b.serviceId] || 0) + 1; });
-        var svcWrap = el('div', 'cal-svc-counts');
-        D.SERVICES.forEach(function (svc) {
-          var n = byService[svc.id]; if (!n) return;
-          var item = el('span', 'cal-svc-item');
-          item.style.color = 'var(--svc-' + svc.id + ')';
-          item.title = plural(n, 'offre') + ' — ' + svc.nom;
-          var dot = el('span', 'cal-svc-dot');
-          dot.style.background = 'var(--svc-' + svc.id + ')';
-          item.appendChild(dot);
-          item.appendChild(document.createTextNode(String(n)));
-          svcWrap.appendChild(item);
-        });
-        if (svcWrap.childNodes.length) cell.appendChild(svcWrap);
+        // What is being offered, per act. Nothing here needs explaining.
+        var bids = serviceBids('cal-svc-bids', dayBids);
+        if (bids) cell.appendChild(bids);
+        else {
+          // Every offer on this day is already retained: show what cleared.
+          var avgEl = el('span', 'cal-avg is-cleared', D.money(avg));
+          avgEl.dataset.compact = compactMoney(avg);
+          cell.appendChild(avgEl);
+        }
 
         // The tier of the soonest-to-clear offer drives the left urgency strip
         // (CSS reads data-tier) and the detail line revealed on hover.
         var topBid = pool.slice().sort(function (a, b) { return b.montant - a.montant; })[0];
         var topTier = D.tierById(topBid && topBid.tier ? topBid.tier : 'standard');
         if (topTier) cell.dataset.tier = topTier.id;
-        var info = el('div', 'cal-info');
-        if (topTier) {
-          var tierPill = el('span', 'cal-info-tier', topTier.nom);
-          tierPill.dataset.tier = topTier.id;
-          info.appendChild(tierPill);
+        // Expanding is only offered when it reveals something the collapsed cell
+        // does not already say: how deep the competition is, and the number to
+        // beat. Everything else (act, urgency) is carried by the legend and the
+        // left urgency strip, so it would just be noise.
+        var more = el('div', 'cal-more');
+        more.appendChild(el('span', 'cal-more-n', plural(dayBids.length, 'offre')));
+        if (open.length) {
+          var lead = Math.max.apply(null, open.map(function (b) { return b.montant; }));
+          more.appendChild(el('span', 'cal-more-beat', 'à battre : ' + D.money(lead)));
+        } else if (topBid && topBid.etude) {
+          more.appendChild(el('span', 'cal-more-beat', 'retenue — ' + topBid.etude));
         }
-        var topSvc = topBid && D.serviceById(topBid.serviceId);
-        if (topSvc) info.appendChild(el('span', 'cal-info-svc', topSvc.nom));
-        if (info.childNodes.length) cell.appendChild(info);
-        cell.setAttribute('aria-label', dayTitle(iso) + ' — prix moyen ' + D.money(avg) + ', ' + chance + PCT + ' de chances d’obtenir un notaire');
+        cell.appendChild(more);
+        cell.appendChild(expandChevron(cell, dayTitle(iso)));
+        cell.setAttribute('aria-label', dayTitle(iso) + ' — ' + plural(dayBids.length, 'offre')
+          + ', meilleure offre ' + D.money(Math.max.apply(null, pool.map(function (b) { return b.montant; }))));
       }
 
       // The client's own offer status on this day (approved / pending / expired).
@@ -884,7 +865,7 @@
           ', votre offre ' + { approved: 'approuvée', pending: 'en attente', expired: 'expirée' }[mineSt]);
       }
 
-      cell.addEventListener('click', function () { openDay(this.dataset.date); });
+      if (!isPast) cell.addEventListener('click', function () { openDay(this.dataset.date); });
       week.appendChild(cell);
       slot++;
     }
@@ -895,18 +876,64 @@
 
   // Compact a bid count so the badge pill never widens: 2000 -> "2k", 1250 -> "1.2k".
   // The aria-label always uses the real integer, so screen readers hear the exact count.
-  // Colour banding for the odds badge. Shared by the calendar cell and the list
-  // card so the two views never disagree about what reads as a good chance.
-  function chanceLevel(pct) { return pct >= 80 ? 'high' : pct >= 55 ? 'mid' : 'low'; }
+
+  // Expand control shared by the calendar cell and the list card. Detail is
+  // COLLAPSED by default — the resting surface stays simple — and this is the
+  // affordance that opens it. A real button, so it works on touch and by
+  // keyboard; hover reveals nothing, which is the point.
+  function expandChevron(target, what) {
+    var b = el('button', 'cell-chevron'); b.type = 'button';
+    var label = 'Afficher le détail' + (what ? ' — ' + what : '');
+    b.setAttribute('aria-label', label);
+    b.setAttribute('aria-expanded', 'false');
+    b.title = label;
+    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('width', '14'); svg.setAttribute('height', '14');
+    svg.setAttribute('fill', 'none'); svg.setAttribute('stroke', 'currentColor'); svg.setAttribute('stroke-width', '2.4');
+    svg.setAttribute('stroke-linecap', 'round'); svg.setAttribute('stroke-linejoin', 'round');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.innerHTML = '<path d="m6 9 6 6 6-6"/>';
+    b.appendChild(svg);
+    b.addEventListener('click', function (e) {
+      e.stopPropagation();               // never books the day; it only opens detail
+      var open = !target.classList.contains('is-expanded');
+      target.classList.toggle('is-expanded', open);
+      b.setAttribute('aria-expanded', open ? 'true' : 'false');
+      var next = (open ? 'Masquer le détail' : 'Afficher le détail') + (what ? ' — ' + what : '');
+      b.setAttribute('aria-label', next); b.title = next;
+    });
+    return b;
+  }
   // fr-CA sets a no-break space before the sign, exactly as money() does.
   var PCT = '\u00A0%';
-  function chanceBadge(cls, iso, today) {
-    var pct = D.obtainChance(iso, today);
-    var node = el('span', cls, pct + PCT);
-    node.dataset.level = chanceLevel(pct);
-    node.title = pct + PCT + ' de chances d’obtenir un notaire à cette date';
-    return node;
+  // The best OPEN offer per act on a day, colour-keyed to the Service legend.
+  // Collapsed cells show the amount alone; expanded ones add the act's name.
+  function serviceBids(cls, dayBids) {
+    var best = {};
+    dayBids.forEach(function (b) {
+      if (b.status === D.STATUS.RETENUE) return;         // only what is still winnable
+      var cur = best[b.serviceId];
+      if (!cur || b.montant > cur) best[b.serviceId] = b.montant;
+    });
+    var wrap = el('div', cls);
+    D.SERVICES.forEach(function (svc) {
+      var amount = best[svc.id];
+      if (amount == null) return;
+      var item = el('span', 'svc-bid');
+      item.style.color = 'var(--svc-' + svc.id + ')';
+      item.title = svc.nom + ' — meilleure offre ouverte : ' + D.money(amount);
+      var dot = el('span', 'svc-bid-dot');
+      dot.style.background = 'var(--svc-' + svc.id + ')';
+      item.appendChild(dot);
+      item.appendChild(el('span', 'svc-bid-code', svc.abrev));
+      var amt = el('span', 'svc-bid-amount', D.money(amount));
+      amt.dataset.compact = compactMoney(amount);
+      item.appendChild(amt);
+      wrap.appendChild(item);
+    });
+    return wrap.childNodes.length ? wrap : null;
   }
+
 
   function compactCount(n) {
     // French decimal comma, like compactMoney below — toFixed() emits an en-US
@@ -950,6 +977,9 @@
       var item = el('span', 'legend-status-item');
       var dot = el('span', 'legend-dot'); dot.style.background = 'var(--svc-' + s.id + ')';
       item.appendChild(dot);
+      var code = el('span', 'legend-code', s.abrev);
+      code.style.color = 'var(--svc-' + s.id + ')';
+      item.appendChild(code);
       item.appendChild(document.createTextNode(s.nom.split(' ')[0]));
       lg.appendChild(item);
     });
@@ -958,14 +988,11 @@
     // and say what drives the % — it is a lead-time estimate, not a live count of
     // this date's offers, and reading it as the latter would mislead. The bounds
     // come from the domain so they cannot drift from OBTAIN_CHANCE.
-    var t = todayISO();
-    var best = D.obtainChance(D.addDays(t, 30), t);
-    var worst = D.obtainChance(t, t);
     var note = el('span', 'legend-note');
     note.appendChild(el('strong', null, 'Dans chaque case'));
     note.appendChild(document.createTextNode(
-      ' : le prix moyen des offres, et vos chances d’obtenir un notaire ce jour-là — '
-      + 'de ' + best + PCT + ' pour une date lointaine à ' + worst + PCT + ' pour demain.'
+      ' : la meilleure offre encore ouverte pour chaque acte, à la couleur ci-dessus. '
+      + 'Ouvrez une case pour voir qui offre et le montant à battre.'
     ));
     lg.appendChild(note);
   }
@@ -1118,7 +1145,6 @@
       group.addEventListener('click', function () { openDay(iso); });
       var head = el('div', 'agenda-day');
       head.appendChild(el('span', 'agenda-day-t', dayTitle(iso)));
-      head.appendChild(chanceBadge('agenda-chance', iso, today));
       group.appendChild(head);
 
       if (!dayBids.length) {
@@ -1132,15 +1158,20 @@
         return;
       }
 
-      dayBids.slice(0, PER_DAY).forEach(function (b) { group.appendChild(bidRow(b)); });
-      // Always render the day control, even with nothing folded away: the rows
-      // themselves are not clickable, so without it a day showing its single
-      // offer would be a dead end with no way into the day dialog. It doubles as
-      // the uniform card footer, which keeps the grid rows aligned.
-      var extra = dayBids.length - PER_DAY;
-      // The point of the whole product, said once per day: what would it take to
-      // lead this date. Compacted away at rest, revealed on hover (see the CSS).
+      // Collapsed, a card says one thing per act: what it currently takes. The
+      // colour is decoded by the Service key in the legend, so no name is
+      // repeated here.
+      var bids = serviceBids('agenda-svc-bids', dayBids);
+      if (bids) group.appendChild(bids);
+
       var openBids = dayBids.filter(function (b) { return b.status !== D.STATUS.RETENUE; });
+      var extra = dayBids.length - PER_DAY;
+
+      // Expanding reveals what the collapsed card cannot say: who is offering,
+      // and the number to beat. A day with no open offer still has something
+      // worth showing — which étude took it — so it keeps its chevron too.
+      var detail = el('div', 'agenda-detail');
+      dayBids.slice(0, PER_DAY).forEach(function (b) { detail.appendChild(bidRow(b)); });
       var beat = el('div', 'agenda-beat');
       if (openBids.length) {
         var top = Math.max.apply(null, openBids.map(function (b) { return b.montant; }));
@@ -1150,7 +1181,9 @@
       } else {
         beat.appendChild(document.createTextNode('Aucune offre ouverte — vous fixez le prix.'));
       }
-      group.appendChild(beat);
+      detail.appendChild(beat);
+      group.appendChild(detail);
+      head.appendChild(expandChevron(group, dayTitle(iso)));
 
       var more = el('button', 'agenda-more', extra > 0
         ? '+ ' + extra + ' autre' + (extra > 1 ? 's' : '') + ' offre' + (extra > 1 ? 's' : '')

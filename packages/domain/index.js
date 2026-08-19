@@ -68,6 +68,10 @@
     {
       id: 'testament',
       nom: 'Testament et mandat de protection',
+      // Three-letter code printed beside a price on a calendar cell or list card,
+      // where there is no room for the name. The legend pairs code, colour and
+      // name, so the code is recognised at a glance and decodable when it isn't.
+      abrev: 'TES',
       // Nota starting price for the two-act bundle (will + protection mandate).
       prixDepart: 1250,
       description:
@@ -124,6 +128,7 @@
     {
       id: 'procuration',
       nom: 'Procuration',
+      abrev: 'PRO',
       prixDepart: 750,
       description:
         'Procuration générale ou spéciale pour agir en votre nom.',
@@ -169,6 +174,7 @@
     {
       id: 'refinancement',
       nom: 'Refinancement hypothécaire',
+      abrev: 'REF',
       // Refinancement is priced well above the other acts: it is the most work
       // (loan act + hypothec publication + title/certificate review) and carries
       // real value at stake, so the floor starts at 2000 $ and rises with the
