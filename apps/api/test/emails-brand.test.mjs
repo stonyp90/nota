@@ -94,3 +94,28 @@ test('the plain-text alternative carries heading and sender identification', () 
     assert.ok(text.includes(emails.SENDER.name), `${name}: text missing sender name`);
   }
 });
+
+// The API resolves @nota/domain through apps/api/node_modules/@nota/domain, a
+// PHYSICAL copy the deploy step refreshes (`cp packages/domain/index.js …`). A
+// stale copy shadows the workspace symlink and silently serves old business
+// rules to every email, ICS file and analytics label — while the whole suite
+// still passes. These assertions fail loudly when that copy drifts.
+test('the domain the API actually resolves is current, not a stale copy', () => {
+  const domain = require('@nota/domain');
+  const workspace = require('../../../packages/domain/index.js');
+
+  // fr-CA money uses a NO-BREAK space; a stale pre-NBSP copy has ASCII spaces.
+  const amount = domain.money(1234567);
+  assert.ok(!amount.includes(' '), 'money() served to the API still has ASCII spaces: ' + JSON.stringify(amount));
+  assert.ok(amount.includes(' '), 'money() must separate with a no-break space');
+  assert.equal(amount, workspace.money(1234567), 'the API sees a different money() than the workspace');
+
+  // A spot-check on a label that changed, so a drift in either direction shows.
+  assert.equal(domain.tierById('urgence').nom, workspace.tierById('urgence').nom,
+    'the API resolves a different tier label than packages/domain');
+  assert.deepEqual(
+    domain.SERVICES.map((s) => s.id),
+    workspace.SERVICES.map((s) => s.id),
+    'the API resolves a different service list than packages/domain'
+  );
+});

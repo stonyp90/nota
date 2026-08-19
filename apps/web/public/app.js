@@ -119,12 +119,14 @@
     selectedDate: null,
     focusDate: todayISO(),
     tab: 'carnet',
-    view: 'calendrier',
+    view: 'liste',
     offer: { serviceId: '', dateISO: '', montant: 0, anonyme: true, pricing: {} },
   };
 
   // Carnet view ids (segmented switcher).
-  var VIEWS = ['calendrier', 'liste'];
+  // Order matters: the FIRST entry is the fallback for an unknown view, and the
+  // switcher renders in this order. The list leads.
+  var VIEWS = ['liste', 'calendrier'];
 
   // ---------------------------------------------------------------------------
   // Date helpers
@@ -813,6 +815,47 @@
         var chanceEl = chanceBadge('cal-chance', iso, today);
         if (open.length) { cell.classList.add('is-avail'); } else { cell.classList.add('is-taken'); }
         cell.appendChild(chanceEl);
+
+        // How many offers are on this day — a corner badge, so the figure below
+        // is never misread as "the" offer.
+        var count = el('span', 'cal-count', compactCount(dayBids.length));
+        count.title = plural(dayBids.length, 'offre') + ' ce jour';
+        cell.appendChild(count);
+
+        // Which acts, as coloured counts. A cell has no room for names, so this
+        // is a CODE decoded by the Service key in the legend below the grid —
+        // one dot per act present, with how many. Dots drop on phone cells; the
+        // coloured numbers survive (see the @container rules).
+        var byService = {};
+        dayBids.forEach(function (b) { byService[b.serviceId] = (byService[b.serviceId] || 0) + 1; });
+        var svcWrap = el('div', 'cal-svc-counts');
+        D.SERVICES.forEach(function (svc) {
+          var n = byService[svc.id]; if (!n) return;
+          var item = el('span', 'cal-svc-item');
+          item.style.color = 'var(--svc-' + svc.id + ')';
+          item.title = plural(n, 'offre') + ' — ' + svc.nom;
+          var dot = el('span', 'cal-svc-dot');
+          dot.style.background = 'var(--svc-' + svc.id + ')';
+          item.appendChild(dot);
+          item.appendChild(document.createTextNode(String(n)));
+          svcWrap.appendChild(item);
+        });
+        if (svcWrap.childNodes.length) cell.appendChild(svcWrap);
+
+        // The tier of the soonest-to-clear offer drives the left urgency strip
+        // (CSS reads data-tier) and the detail line revealed on hover.
+        var topBid = pool.slice().sort(function (a, b) { return b.montant - a.montant; })[0];
+        var topTier = D.tierById(topBid && topBid.tier ? topBid.tier : 'standard');
+        if (topTier) cell.dataset.tier = topTier.id;
+        var info = el('div', 'cal-info');
+        if (topTier) {
+          var tierPill = el('span', 'cal-info-tier', topTier.nom);
+          tierPill.dataset.tier = topTier.id;
+          info.appendChild(tierPill);
+        }
+        var topSvc = topBid && D.serviceById(topBid.serviceId);
+        if (topSvc) info.appendChild(el('span', 'cal-info-svc', topSvc.nom));
+        if (info.childNodes.length) cell.appendChild(info);
         cell.setAttribute('aria-label', dayTitle(iso) + ' — prix moyen ' + D.money(avg) + ', ' + chance + PCT + ' de chances d’obtenir un notaire');
       }
 
@@ -1151,7 +1194,7 @@
 
   // Toggle the segmented tabs + their tabpanels, then render the active view.
   function setView(v) {
-    if (VIEWS.indexOf(v) < 0) v = 'calendrier';
+    if (VIEWS.indexOf(v) < 0) v = VIEWS[0];
     state.view = v;
     VIEWS.forEach(function (name) {
       var on = name === v;
@@ -1350,7 +1393,8 @@
     if (f.min != null) h.set('min', f.min);
     if (f.max != null) h.set('max', f.max);
     if (f.sort && f.sort !== 'montant-desc') h.set('tri', f.sort);
-    if (state.view && state.view !== 'calendrier') h.set('vue', state.view);
+    // Only a NON-default view is worth a hash param; VIEWS[0] is the default.
+    if (state.view && state.view !== VIEWS[0]) h.set('vue', state.view);
     if (state.selectedDate) h.set('jour', state.selectedDate);
     var s = h.toString();
     history.replaceState(null, '', s ? '#' + s : location.pathname);

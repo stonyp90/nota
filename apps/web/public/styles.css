@@ -197,6 +197,14 @@ html { -webkit-text-size-adjust: 100%; }
 
 body {
   margin: 0;
+  /* Sticky-footer column: without it the footer sits wherever the content ends
+     and the rest of the viewport is bare canvas — 412px on Notaires, 784px on
+     Profil. dvh (with a vh fallback) so mobile browser chrome does not add a
+     phantom scrollbar. */
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
   font-family: var(--font-sans);
   font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   background: var(--bg);
@@ -205,6 +213,10 @@ body {
   -webkit-font-smoothing: antialiased;
   transition: background-color .25s ease, color .25s ease;
 }
+
+/* Takes the slack in the body column, so the footer is pushed to the bottom on
+   short pages and simply follows the content on long ones. */
+#main { flex: 1 0 auto; }
 
 h1, h2, h3 { letter-spacing: -0.02em; line-height: 1.15; margin: 0; }
 
@@ -713,10 +725,59 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
   content: ''; position: absolute; inset: 0; border-radius: inherit;
   box-shadow: inset 0 0 0 1.5px var(--brand); pointer-events: none;
 }
+/* Offer count — a corner badge, so the figure in the cell body is never misread
+   as "the" offer. */
+.cal-count { position: absolute; top: 6px; right: 6px; font-size: 10px; font-weight: 800; line-height: 1; min-width: 16px; text-align: center; padding: 2px 5px; border-radius: 999px; background: var(--brand); color: var(--on-brand, #04140b); }
+.cal-cell.is-taken .cal-count { background: var(--ink-muted); }
+
+/* Which acts are on the day, as a CODE: a coloured dot + a count per act,
+   decoded by the Service key in the legend under the grid. A cell is far too
+   narrow for act names, and this keeps the mix readable at a glance. */
+.cal-svc-counts { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; margin-top: 4px; font-size: 11px; font-weight: 700; line-height: 1; }
+.cal-svc-item { display: inline-flex; align-items: center; gap: 4px; }
+.cal-svc-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+
+/* The detail line: act + urgency in words. Hidden on smaller cells by the
+   @container rules below, and brought back on hover (see the zoom block). */
+.cal-info { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: 4px; font-size: 10.5px; line-height: 1.3; color: var(--ink-muted); }
+.cal-info-tier { font-weight: 700; color: var(--tier-standard); }
+.cal-info-tier[data-tier='rapide'] { color: var(--tier-rapide); }
+.cal-info-tier[data-tier='prioritaire'] { color: var(--tier-prioritaire); }
+.cal-info-tier[data-tier='urgence'] { color: var(--tier-urgence); }
+.cal-info-tier[data-tier='extreme'] { color: var(--tier-extreme); }
+.cal-info-svc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+
 .cal-mine { align-self: flex-start; max-width: 100%; overflow: hidden; text-overflow: ellipsis; margin-top: 4px; font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); color: var(--ink-muted); white-space: nowrap; }
 .cal-mine[data-status='approved'] { color: var(--ok); border-color: var(--ok); }
 .cal-mine[data-status='pending'] { color: var(--brand); border-color: var(--brand); }
 .cal-mine[data-status='expired'] { color: var(--ink-muted); border-style: dashed; }
+
+@media (hover: hover) and (pointer: fine) {
+  /* Raise the hovered cell over its neighbours and scale it slightly, so the
+     detail below has somewhere to go without reflowing the grid. */
+  .cal-cell.has-bids:hover,
+  .cal-cell.has-bids:focus-visible {
+    z-index: 5; transform: scale(1.07); background: var(--surface);
+    border-color: var(--border-strong); box-shadow: var(--shadow-lg);
+  }
+  /* Whatever the container rules hid at this width, hover restores. */
+  .cal-cell.has-bids:hover .cal-info,
+  .cal-cell.has-bids:focus-visible .cal-info,
+  .cal-cell.has-bids:hover .cal-info-svc,
+  .cal-cell.has-bids:focus-visible .cal-info-svc,
+  .cal-cell.has-bids:hover .cal-svc-dot,
+  .cal-cell.has-bids:focus-visible .cal-svc-dot { display: revert; }
+  .cal-cell.has-bids:hover .cal-info,
+  .cal-cell.has-bids:focus-visible .cal-info { display: flex; }
+  /* And the amount returns to words rather than the compact "3,3k". */
+  .cal-cell.has-bids:hover .cal-avg,
+  .cal-cell.has-bids:focus-visible .cal-avg { font-size: 13px; }
+  .cal-cell.has-bids:hover .cal-avg::after,
+  .cal-cell.has-bids:focus-visible .cal-avg::after { content: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cal-cell.has-bids:hover, .cal-cell.has-bids:focus-visible { transform: none; }
+}
 
 /* Responsive cells, driven by the GRID width (7 columns are fixed, so cell width
    ≈ grid width / 7). Detail is shed progressively so the essentials — day number,
@@ -727,7 +788,7 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 }
 @container cal (max-width: 740px) {
   .cal-info { display: none; }     /* tier pill drops too — the left urgency strip carries it */
-  .cal-top { font-size: 13px; }
+  .cal-avg { font-size: 13px; }
   /* "En attente / Approuvé / Expiré" would clip, so collapse the own-offer badge to a status dot. */
   .cal-mine { font-size: 0; padding: 0; margin-top: 3px; width: 9px; height: 9px; border: 0; border-radius: 50%; background: currentColor; }
   .cal-mine[data-status='expired'] { background: var(--ink-muted); }
@@ -738,11 +799,12 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
   .cal-count { top: 5px; right: 5px; font-size: 9px; min-width: 14px; padding: 1px 4px; }
   /* Phone cells: keep the coloured per-service numbers, drop the dots to fit. */
   .cal-svc-counts { margin-top: 3px; gap: 1px 7px; font-size: 10px; }
+  .cal-count { top: 4px; right: 4px; }
   .cal-svc-dot { display: none; }
   /* Cells get too narrow for "3 285 $": swap to the compact form (data-compact),
      which always fits. The full amount stays in the DOM + day dialog for a11y. */
-  .cal-top { font-size: 0; }
-  .cal-top::after { content: attr(data-compact); font-size: 12.5px; font-weight: 800; letter-spacing: -0.02em; }
+  .cal-avg { font-size: 0; }
+  .cal-avg::after { content: attr(data-compact); font-size: 12.5px; font-weight: 800; letter-spacing: -0.02em; }
 }
 
 /* --- Agenda / bid list --------------------------------------------------- */
@@ -1120,7 +1182,9 @@ dialog::backdrop { background: var(--backdrop); }
   align-items: start;
 }
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .intro--hero   { grid-area: hero; margin: 0; }
-#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .intro-main     { max-width: 640px; }
+#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .intro-main     { max-width: none; }
+/* Keep a readable measure on the lede without capping the whole hero block. */
+#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .intro p { max-width: 78ch; }
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .nc-why         { grid-area: why; display: grid; }
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-carnet  { grid-area: carnet; }
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) #notary-console { grid-area: console; align-self: center; margin: 0; }
@@ -1131,10 +1195,9 @@ dialog::backdrop { background: var(--backdrop); }
 /* Narrow screens: the landing stacks back to one calm centered column. */
 @media (max-width: 900px) {
   #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 620px);
     grid-template-areas: "hero" "why" "carnet" "console" "guarantee";
-    max-width: 620px;
-    margin-inline: auto;
+    justify-content: center;
   }
   #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) #notary-console { align-self: stretch; }
 }
@@ -1412,7 +1475,7 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   .nav-tab { padding: 7px 10px; font-size: 13px; }
   .intro h1 { font-size: clamp(20px, 5.6vw, 25px); }
   .cal-cell { min-height: 62px; padding: 6px 6px; }
-  .cal-top { font-size: 12px; }
+  .cal-avg { font-size: 12px; }
   .cal-grid { gap: 4px; padding: 8px 10px 12px; }
   .cal-row { gap: 4px; }
   .cal-dow { font-size: 10px; }
@@ -1483,7 +1546,8 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
 }
 
 /* Never let the page scroll sideways */
-html, body { max-width: 100%; overflow-x: hidden; }
+html { max-width: 100%; overflow-x: hidden; }
+body { max-width: 100%; }
 /* Smooth scrolling centralized in CSS (so the reduced-motion reset above wins),
    and every anchored/focus/programmatic scroll stops BELOW the sticky header. */
 html { scroll-behavior: smooth; scroll-padding-top: var(--sticky-top); }

@@ -46,6 +46,14 @@ function fire(win, elmt, type) {
  * Fresh per test so interactive mutations (offer form, theme, day modal) never
  * bleed between assertions.
  */
+// The app boots on the LIST view (the default since the list names the client,
+// act and price outright). Tests that inspect calendar DOM select it explicitly.
+async function bootCalendar() {
+  const ctx = await boot();
+  ctx.Nota.setView('calendrier');
+  return ctx;
+}
+
 async function boot() {
   const dom = new JSDOM(HTML_SRC, {
     runScripts: 'outside-only',
@@ -113,7 +121,7 @@ test('store is offline and monthBids is seeded deterministically', async () => {
 
 // 3. Calendar grid: one day cell per day-of-month + 7 weekday headers.
 test('calendar renders day cells for the anchor month and 7 weekday headers', async () => {
-  const { doc, anchor } = await boot();
+  const { doc, anchor } = await bootCalendar();
   const dayCells = all(doc, '#cal-grid .cal-cell:not(.is-out)');
   assert.equal(dayCells.length, daysInMonthUTC(anchor));
   assert.equal(all(doc, '#cal-grid .cal-dow').length, 7);
@@ -128,7 +136,7 @@ test('legend renders one item per timing tier', async () => {
 
 // 5. No open/taken day ever renders a bare em-dash headline.
 test('no calendar headline is a bare em-dash', async () => {
-  const { doc } = await boot();
+  const { doc } = await bootCalendar();
   const tops = all(doc, '#cal-grid .cal-avg');
   assert.ok(tops.length > 0, 'expected at least one average figure');
   assert.ok(tops.every((t) => t.textContent.trim() !== '—'), 'a cal-avg rendered a bare em-dash');
@@ -136,7 +144,7 @@ test('no calendar headline is a bare em-dash', async () => {
 
 // 6. Days with bids show the average price + a %-chance-to-obtain chip.
 test('days with bids show avg price and chance', async () => {
-  const { doc } = await boot();
+  const { doc } = await bootCalendar();
   const hasBids = all(doc, '#cal-grid .cal-cell.has-bids');
   assert.ok(hasBids.length > 0, 'expected at least one day with bids');
   assert.ok(hasBids.every((c) => c.querySelector('.cal-avg')), 'a has-bids cell is missing its average figure');
@@ -248,7 +256,7 @@ test('dossier profile determines the price and shares it with the booking flow',
 
 // 10. Clicking a has-bids cell opens the day modal populated with bid rows.
 test('clicking a has-bids cell opens the day modal with bid rows', async () => {
-  const { doc } = await boot();
+  const { doc } = await bootCalendar();
   const cell = doc.querySelector('#cal-grid .cal-cell.has-bids');
   assert.ok(cell, 'expected a has-bids cell to click');
   cell.click();
@@ -330,7 +338,7 @@ test('offer criteria render and a flag raises the dynamic floor', async () => {
 
 // 12c. The profile saves coordinates + notification prefs and prefills the offer.
 test('profile persists coordinates and prefills the offer form', async () => {
-  const { win, doc, Nota } = await boot();
+  const { win, doc, Nota } = await bootCalendar();
   Nota.setTab('profil');
 
   const courriel = $(doc, 'p-courriel'); courriel.value = 'client@example.ca'; fire(win, courriel, 'input');
@@ -537,7 +545,7 @@ async function reseed(ctx, bids) {
 const dayOf = (anchor, dd) => anchor.slice(0, 8) + dd; // 'YYYY-MM-' + 'DD'
 
 test('the calendar badges the client\'s own offer status (approved)', async () => {
-  const ctx = await boot();
+  const ctx = await bootCalendar();
   const iso = ctx.D.addDays(ctx.today, 2); // future date (past cells are blanked)
   // The client tracked this offer; the matching public bid is retained -> approved.
   ctx.win.localStorage.setItem('nota.myoffers.v1', JSON.stringify([{ id: 'r1', dateISO: iso, serviceId: 'testament', montant: 900 }]));
@@ -576,7 +584,7 @@ test('the toolbar surfaces the next availability (soonest open date)', async () 
 });
 
 test('EDGE (UI): a fully-retained day marks the cell taken and names the notary (not dimmed)', async () => {
-  const ctx = await boot();
+  const ctx = await bootCalendar();
   const iso = ctx.D.addDays(ctx.today, 2); // future date (the list only shows today onward)
   const longEtude = 'Notaires du Vieux-Québec et Associés SENCRL s.r.l.';
   await reseed(ctx, [{
@@ -632,6 +640,25 @@ test('LIST: every upcoming day of the month renders a full card, even with no of
   if (dim > todayDay) assert.ok(vacant.length > 0, 'an empty upcoming day still renders a full rectangle');
 });
 
+test('VIEW: the carnet opens on the list, with the calendar as the second option', async () => {
+  const ctx = await boot();
+  assert.equal(ctx.Nota.state.view, 'liste', 'the list is the default view');
+  assert.equal($(ctx.doc, 'view-liste').hidden, false, 'the list panel is the visible one');
+  assert.equal($(ctx.doc, 'view-calendrier').hidden, true);
+
+  // The switcher offers the list first and marks it selected.
+  const segs = [...ctx.doc.querySelectorAll('#view-switch .seg-btn')];
+  assert.deepEqual(segs.map((b) => b.dataset.view), ['liste', 'calendrier'], 'list leads the switcher');
+  assert.equal(segs[0].getAttribute('aria-selected'), 'true');
+  assert.equal(segs[1].getAttribute('aria-selected'), 'false');
+
+  // The default view stays out of the hash; a non-default one goes in.
+  assert.ok(!ctx.win.location.hash.includes('vue='), 'the default view is not in the hash');
+  ctx.Nota.setView('calendrier');
+  assert.equal($(ctx.doc, 'view-calendrier').hidden, false);
+  assert.ok(ctx.win.location.hash.includes('vue=calendrier'), 'a non-default view is');
+});
+
 test('LIST: a day shows only its best offer; the rest fold into a "+N autres offres" control', async () => {
   const ctx = await boot();
   const iso = ctx.today;
@@ -676,7 +703,7 @@ test('LEGEND: the calendar explains its two cell figures, using the domain bound
 });
 
 test('DAY: the booking dialog says what the calendar % means for that date', async () => {
-  const ctx = await boot();
+  const ctx = await bootCalendar();
   // Any upcoming day with offers — avoids assuming today + N stays in-month.
   const cell = [...ctx.doc.querySelectorAll('#cal-grid .cal-cell.has-bids')]
     .find((c) => c.dataset.date > ctx.today);
@@ -698,7 +725,7 @@ test('DAY: the booking dialog says what the calendar % means for that date', asy
 });
 
 test('DAY: opens on the domain default act, showing only its best offer + totals', async () => {
-  const ctx = await boot();
+  const ctx = await bootCalendar();
   const iso = ctx.D.addDays(ctx.today, 5);
   await reseed(ctx, [
     { id: 'r1', serviceId: 'refinancement', dateISO: iso, montant: 4000, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
@@ -729,7 +756,7 @@ test('DAY: opens on the domain default act, showing only its best offer + totals
 });
 
 test('DAY: switching the act re-scopes the headline offer and the totals', async () => {
-  const ctx = await boot();
+  const ctx = await bootCalendar();
   const iso = ctx.D.addDays(ctx.today, 5);
   await reseed(ctx, [
     { id: 'r1', serviceId: 'refinancement', dateISO: iso, montant: 4000, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
@@ -820,7 +847,7 @@ test('LIST: a day with a single offer still offers a way into the day dialog', a
 });
 
 test('EDGE (UI): a mixed open/retained day stays available with the open average', async () => {
-  const ctx = await boot();
+  const ctx = await bootCalendar();
   const iso = ctx.D.addDays(ctx.today, 2); // future date (past cells are blanked)
   await reseed(ctx, [
     { id: 'o1', serviceId: 'testament', dateISO: iso, montant: 1400, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
