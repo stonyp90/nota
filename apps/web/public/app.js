@@ -112,10 +112,18 @@
   // ---------------------------------------------------------------------------
   // State
   // ---------------------------------------------------------------------------
+  // Resting state of the carnet filters. The carnet opens on what is still
+  // WINNABLE — a client comes to see what others offered and what it takes to be
+  // retained, not to be told upfront how much was already taken. Retained offers
+  // stay one click away under "Retenues".
+  // This is also what activeFilterCount() compares against: a default is not a
+  // choice the client made, so it must not light the badge or spring the panel.
+  var FILTER_DEFAULTS = { service: '', statut: 'ouverte', min: null, max: null, sort: 'montant-desc' };
+
   var state = {
     anchor: firstOfMonth(todayISO()),
     monthBids: [],
-    filters: { service: '', statut: '', min: null, max: null, sort: 'montant-desc' },
+    filters: Object.assign({}, FILTER_DEFAULTS),
     selectedDate: null,
     focusDate: todayISO(),
     tab: 'carnet',
@@ -1048,14 +1056,14 @@
     // show at a glance.
     var foot = $('pulse-foot');
     if (foot) {
+      var ouvertes = Math.max(0, p.total - p.retenues);
       if (p.total === 0) {
         foot.textContent = 'Aucune demande ce mois-ci — proposez la vôtre : les notaires de Québec la verront.';
-      } else if (p.retenues === 0) {
-        foot.textContent = 'Aucune demande encore retenue ce mois — le carnet est grand ouvert.';
+      } else if (ouvertes === 0) {
+        foot.textContent = 'Toutes les demandes de ce mois sont retenues — proposez la vôtre pour une date libre.';
       } else {
-        foot.textContent = p.retenues + ' des ' + plural(p.total, 'demande') + ' de ce mois '
-          + (p.retenues === 1 ? 'a' : 'ont') + ' déjà été retenue' + (p.retenues === 1 ? '' : 's')
-          + ' par un notaire (' + p.tauxRetenue + ' %).';
+        foot.textContent = plural(ouvertes, 'demande') + ' encore ouverte'
+          + (ouvertes === 1 ? '' : 's') + ' ce mois-ci — comparez les montants, puis proposez le vôtre.';
       }
     }
   }
@@ -1425,11 +1433,11 @@
   function afterFilterChange() { writeHash(); renderActiveView(); }
   function activeFilterCount() {
     var f = state.filters, n = 0;
-    if (f.service) n++;
-    if (f.statut) n++;
-    if (f.min != null) n++;
-    if (f.max != null) n++;
-    if (f.sort && f.sort !== 'montant-desc') n++;
+    if (f.service !== FILTER_DEFAULTS.service) n++;
+    if (f.statut !== FILTER_DEFAULTS.statut) n++;
+    if (f.min !== FILTER_DEFAULTS.min) n++;
+    if (f.max !== FILTER_DEFAULTS.max) n++;
+    if (f.sort !== FILTER_DEFAULTS.sort) n++;
     return n;
   }
   function filtersActive() { return activeFilterCount() > 0; }

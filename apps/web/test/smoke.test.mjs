@@ -592,6 +592,12 @@ test('EDGE (UI): a fully-retained day marks the cell taken and names the notary 
     tier: 'standard', status: ctx.D.STATUS.RETENUE, etude: longEtude, anonyme: true, createdAt: iso,
   }]);
 
+  // The carnet rests on "Ouvertes", so a retained-only day is absent until the
+  // client asks for retained offers — that is the product rule, not a bug.
+  assert.equal(ctx.doc.querySelector('.cal-cell[data-date="' + iso + '"]').classList.contains('is-taken'),
+    false, 'retained offers are not shown by default');
+  ctx.doc.querySelector('#seg-statut .seg-btn[data-statut="retenue"]').click();
+
   const cell = ctx.doc.querySelector('.cal-cell[data-date="' + iso + '"]');
   assert.ok(cell.classList.contains('is-taken'), 'all-retained cell is marked taken');
   assert.ok(cell.querySelector('.cal-avg.is-cleared'), 'taken cell shows a struck cleared average');
@@ -638,6 +644,24 @@ test('LIST: every upcoming day of the month renders a full card, even with no of
   const vacant = all(ctx.doc, '#agenda .agenda-vacant');
   assert.equal(vacant.length, upcoming - 1, 'each day without an offer shows a vacant placeholder');
   if (dim > todayDay) assert.ok(vacant.length > 0, 'an empty upcoming day still renders a full rectangle');
+});
+
+test('CARNET: rests on open offers; retained ones are one filter click away', async () => {
+  const ctx = await boot();
+  assert.equal(ctx.Nota.state.filters.statut, 'ouverte', 'the carnet opens on what is still winnable');
+  assert.equal(ctx.doc.querySelector('#seg-statut .seg-btn[data-statut="ouverte"]').getAttribute('aria-pressed'), 'true');
+
+  // A default is not a choice the client made: it must not light the active-filter
+  // badge, and it must not spring the filter panel open on first paint.
+  assert.equal($(ctx.doc, 'filters').hidden, true, 'the filter panel starts closed');
+  const badge = ctx.doc.getElementById('filters-badge');
+  if (badge) assert.equal(badge.hidden, true, 'no active-filter badge for the resting state');
+
+  // Retained offers are still reachable — they are hidden by default, not removed.
+  ctx.doc.querySelector('#seg-statut .seg-btn[data-statut="retenue"]').click();
+  assert.equal(ctx.Nota.state.filters.statut, 'retenue');
+  ctx.doc.querySelector('#seg-statut .seg-btn[data-statut=""]').click();
+  assert.equal(ctx.Nota.state.filters.statut, '', 'and "Toutes" still shows everything');
 });
 
 test('VIEW: the carnet opens on the list, with the calendar as the second option', async () => {
@@ -894,8 +918,9 @@ test('the hero pulse shows the month median per service and filters the carnet',
   assert.ok(refi.querySelector('.pulse-amount').classList.contains('is-floor'), 'floor, not a market median');
   assert.match(refi.querySelector('.pulse-meta').textContent, /aucune offre/);
 
-  // The foot states how much of the carnet notaries have already taken.
-  assert.match(ctx.doc.getElementById('pulse-foot').textContent, /1 des 4 demandes .* \(25 %\)\./);
+  // The foot leads with what is still winnable, not with the acceptance rate:
+  // 4 seeded, 1 retained -> 3 still open.
+  assert.match(ctx.doc.getElementById('pulse-foot').textContent, /3 demandes encore ouvertes/);
   assert.match(ctx.doc.getElementById('pulse-month').textContent, /\d{4}$/, 'names the displayed month');
 
   // Clicking a row filters the carnet to that service, and syncs the chip group.
@@ -911,7 +936,9 @@ test('the hero pulse shows the month median per service and filters the carnet',
   // Clicking the active row again clears the filter.
   onRow.click();
   await wait(30);
-  assert.equal(ctx.doc.getElementById('result-count').textContent, '4 offres ce mois');
+  // Clearing the SERVICE filter returns to the carnet's resting state, which is
+  // "Ouvertes" — 4 seeded, 1 retained, so 3 are counted.
+  assert.equal(ctx.doc.getElementById('result-count').textContent, '3 offres ce mois');
   assert.equal(ctx.doc.querySelector('#chips-service .chip[data-svc=""]').getAttribute('aria-pressed'), 'true');
 });
 
