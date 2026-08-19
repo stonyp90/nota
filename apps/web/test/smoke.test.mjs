@@ -425,16 +425,38 @@ test('anonymous visitor sees no notifications', async () => {
 });
 
 // 12e. Mes offres: the profile lists the client's posted offers with their status.
-test('profile "Mes offres" lists offers with their live status', async () => {
+test('profile "Mes offres" is a table, soonest first, past offers folded away', async () => {
   const { win, doc, D, Nota } = await boot();
-  const iso = D.addDays(todayISO(), 5);
-  win.localStorage.setItem('nota.myoffers.v1', JSON.stringify([{ id: 'o1', dateISO: iso, serviceId: 'testament', montant: 900 }]));
+  const at = (n) => D.addDays(todayISO(), n);
+  win.localStorage.setItem('nota.myoffers.v1', JSON.stringify([
+    { id: 'far',  dateISO: at(20), serviceId: 'testament',     montant: 900 },
+    { id: 'soon', dateISO: at(2),  serviceId: 'procuration',   montant: 700 },
+    { id: 'old',  dateISO: at(-5), serviceId: 'refinancement', montant: 4000 },
+  ]));
   Nota.setTab('profil');
-  const row = doc.querySelector('.my-offer');
-  assert.ok(row, 'an offer row is shown in the profile');
-  const badge = row.querySelector('.my-offer-badge');
-  assert.ok(badge, 'the status badge is shown');
-  assert.equal(badge.dataset.status, 'pending'); // future date, not retained
+
+  // Four facts on one axis, not a full-width band per offer.
+  const liveTable = doc.querySelector('#my-offers-live').closest('.my-offers');
+  assert.deepEqual(
+    all(liveTable, 'thead th').map((n) => n.textContent),
+    ['Acte', 'Date', 'Montant', 'Statut'],
+  );
+
+  // The client's question is temporal, so live offers run soonest first.
+  assert.deepEqual(all(doc, '#my-offers-live tr').map((r) => r.dataset.id), ['soon', 'far']);
+
+  // A past offer can never change again, so it does not dilute the live list.
+  const past = doc.querySelector('.my-offers-past');
+  assert.ok(past, 'past offers are folded away');
+  assert.equal(past.open, false, 'and collapsed by default');
+  assert.match(past.querySelector('.my-offers-past-sum').textContent, /1 offre passée/);
+  assert.deepEqual(all(doc, '#my-offers-past tr').map((r) => r.dataset.id), ['old']);
+
+  // Status is per row, and amounts still go through money().
+  const soon = doc.querySelector('#my-offers-live tr[data-id="soon"]');
+  assert.equal(soon.querySelector('.my-offer-status').dataset.status, 'pending');
+  assert.equal(soon.querySelector('.c-montant').textContent, D.money(700));
+  assert.equal(soon.querySelector('.my-offer-rel').textContent, 'dans 2 jours');
 });
 
 // 13. Notary console: the auth gate renders, the authed view is gated until
@@ -653,6 +675,68 @@ test('EDGE (UI): a filter that matches nothing empties the grid without breaking
 });
 
 
+
+test('GRID: exactly one tab stop, and the chevron is reached by arrows not Tab', async () => {
+  const ctx = await boot();
+  const tabbable = all(ctx.doc, '#cal-grid [tabindex="0"]');
+  assert.equal(tabbable.length, 1, 'a grid is ONE tab stop, whatever it contains');
+  assert.ok(tabbable[0].classList.contains('cal-cell'));
+  // Every nested control is arrow-reachable, never Tab-reachable (APG grid).
+  all(ctx.doc, '#cal-grid .cell-chevron').forEach((b) => {
+    assert.equal(b.tabIndex, -1, 'a chevron must not add its own tab stop');
+  });
+});
+
+test('GRID: Enter on a chevron toggles that cell and does not open a day', async () => {
+  const ctx = await boot();
+  const cell = ctx.doc.querySelector('#cal-grid .cal-cell.has-bids .cell-chevron')?.closest('.cal-cell');
+  assert.ok(cell, 'a day with offers exists');
+  const chevron = cell.querySelector('.cell-chevron');
+
+  // The grid's key handler must not swallow a keystroke aimed at a nested
+  // button: it used to preventDefault and open the ROVING-focus date instead.
+  const ev = new ctx.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+  chevron.dispatchEvent(ev);
+  assert.equal(ev.defaultPrevented, false, 'the chevron keeps its own activation');
+  assert.equal($(ctx.doc, 'day-dialog').open, false, 'expanding is not booking');
+});
+
+test('GRID: a past day is inert to the keyboard, as it already is to the mouse', async () => {
+  const ctx = await boot();
+  // Aim the roving focus at yesterday, then press Enter on the grid.
+  ctx.Nota.state.focusDate = ctx.D.addDays(ctx.today, -1);
+  const ev = new ctx.win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+  $(ctx.doc, 'cal-grid').dispatchEvent(ev);
+  assert.equal($(ctx.doc, 'day-dialog').open, false, 'a past date cannot be booked by keyboard either');
+});
+
+test('HASH: an unknown act or status falls back instead of emptying the carnet', async () => {
+  // A bookmark from an older build, or a hand-typed URL, must not strand the
+  // reader on an empty grid with no way back.
+  const bogus = await bootSeeded({}, '#svc=nope&statut=bogus&tri=chaos');
+  assert.equal(bogus.Nota.state.filters.service, '', 'unknown act falls back to every act');
+  assert.equal(bogus.Nota.state.filters.statut, 'ouverte', 'unknown status falls back to the default');
+  assert.equal(bogus.Nota.state.filters.sort, 'montant-desc', 'unknown sort falls back to the default');
+
+  // A legitimate deep link still works.
+  const good = await bootSeeded({}, '#svc=procuration&statut=retenue');
+  assert.equal(good.Nota.state.filters.service, 'procuration');
+  assert.equal(good.Nota.state.filters.statut, 'retenue');
+});
+
+test('FILTERS: reset returns to the resting state, not to a state with no act', async () => {
+  const ctx = await boot();
+  ctx.Nota.state.filters.min = 500;
+  ctx.Nota.state.filters.service = 'procuration';
+  ctx.Nota.state.filters.statut = 'retenue';
+  ctx.doc.querySelector('#filters-reset').click();
+
+  // Reset used to hardcode the pre-change defaults and set statut to '', which
+  // revealed retained offers and reported MORE active filters than before.
+  assert.equal(ctx.Nota.state.filters.statut, 'ouverte');
+  assert.equal(ctx.Nota.state.filters.min, null);
+  assert.equal($(ctx.doc, 'filters-count').hidden, true, 'resetting cannot leave filters active');
+});
 
 test('CARNET: rests on open offers; retained ones are one filter click away', async () => {
   const ctx = await boot();
@@ -1143,10 +1227,10 @@ test('onboarding: the footer link re-opens the guide at VIEW 1', async () => {
 
 // Boot a fresh app with arbitrary pre-seeded localStorage. Same shims as boot(),
 // but the seed runs before app.js so the gates see it.
-async function bootSeeded(seed) {
+async function bootSeeded(seed, hash) {
   const dom = new JSDOM(HTML_SRC, {
     runScripts: 'outside-only',
-    url: 'https://nota.example/',
+    url: 'https://nota.example/' + (hash || ''),
     pretendToBeVisual: true,
     beforeParse(window) {
       window.fetch = () => Promise.reject(new Error('offline'));

@@ -315,9 +315,19 @@ a:hover { text-decoration: underline; }
 .notif-list { max-height: min(420px, 70vh); overflow-y: auto; overscroll-behavior: contain; }
 .notif-empty { padding: 24px 14px; text-align: center; color: var(--ink-muted); font-size: 13px; }
 .notif-item {
-  padding: 11px 14px; border-bottom: 1px solid var(--border); cursor: default;
+  position: relative; padding: 11px 34px 11px 14px; border-bottom: 1px solid var(--border); cursor: default;
   transition: background-color .12s;
 }
+/* Per-item dismiss — a quiet ✕ that firms up on hover/focus, sized like the
+   calendar's cell chevron so small round actions stay one family. */
+.notif-x {
+  position: absolute; top: 8px; right: 6px; display: grid; place-items: center;
+  width: 24px; height: 24px; padding: 0; appearance: none; border: 0; border-radius: 50%;
+  background: transparent; color: var(--ink-muted); font-size: 11px; line-height: 1; cursor: pointer;
+  opacity: .6;
+}
+.notif-x:hover { background: var(--surface-hover); color: var(--ink); opacity: 1; }
+.notif-x:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; opacity: 1; }
 .notif-item:last-child { border-bottom: 0; }
 .notif-item[role='button'] { cursor: pointer; }
 .notif-item[role='button']:hover { background: var(--surface-inset); }
@@ -665,7 +675,7 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
   background: transparent; min-height: clamp(68px, 5.4vw, 98px); padding: 6px 8px 12px; position: relative;
   min-width: 0;
   display: flex; flex-direction: column; gap: 3px; cursor: pointer;
-  border: 1px solid transparent; border-radius: var(--radius-sm); scroll-margin-top: var(--sticky-top);
+  border: 1px solid var(--border); border-radius: var(--radius-sm); scroll-margin-top: var(--sticky-top);
   text-align: left; font: inherit; color: var(--ink);
   transition: transform .1s ease, box-shadow .1s ease, border-color .1s;
 }
@@ -734,11 +744,10 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
   background: var(--surface); color: var(--ink);
   border: 1px solid var(--border-strong); box-shadow: var(--shadow);
   font-size: 11.5px; font-weight: 600; line-height: 1.3; white-space: nowrap;
-  opacity: 0; transform: translateY(2px); pointer-events: none;
-  transition: opacity .12s ease, transform .12s ease;
+  display: none; pointer-events: none;
 }
 @media (hover: hover) and (pointer: fine) {
-  .cal-svc-bids .svc-bid:hover::after { opacity: 1; transform: translateY(0); }
+  .cal-svc-bids .svc-bid:hover::after { display: block; }
 }
 @media (prefers-reduced-motion: reduce) {
   .cal-svc-bids .svc-bid::after { transition: none; }
@@ -907,7 +916,6 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .profil-stack { display: flex; flex-direction: column; gap: 12px; }
 /* Every section is a full-width band whose content lays out in a grid that
    fills the width (auto-fit) — no empty right half, no ragged inter-card void. */
-.my-offers-list { display: flex; flex-direction: column; gap: 8px; }
 /* Third track is 128px: the shared input rule has min-width:120px, so a
    narrower track would be overflowed by its own field. */
 .profil-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 128px; gap: 10px 18px; align-items: end; }
@@ -932,15 +940,7 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .profil-card .switch-row { padding: 5px 0; justify-content: flex-start; gap: 12px; }
 .profil-card .help { margin-top: 0; }
 /* Mes offres — the client's posted offers with live status. */
-.my-offer { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; text-align: left; appearance: none; background: transparent; border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; font: inherit; color: var(--ink); cursor: pointer; transition: border-color .12s; }
 .my-offer:hover, .my-offer:focus-visible { border-color: var(--brand); outline: none; }
-.my-offer-main { min-width: 0; }
-.my-offer-svc { font-weight: 600; font-size: 13.5px; }
-.my-offer-meta { font-size: 12px; color: var(--ink-muted); margin-top: 2px; }
-.my-offer-badge { flex: none; font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--border); white-space: nowrap; color: var(--ink-muted); }
-.my-offer-badge[data-status='approved'] { color: var(--ok); border-color: var(--ok); }
-.my-offer-badge[data-status='pending'] { color: var(--brand); border-color: var(--brand); }
-.my-offer-badge[data-status='expired'] { color: var(--ink-muted); border-style: dashed; }
 /* Documents inside the profile: upload / remove / mark-validated. */
 .profil-doc-chips { margin: 2px 0 6px; }
 /* Flex (not grid) so the LAST row's cards grow to fill the width — no empty
@@ -955,6 +955,57 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .doc-bar span { display: block; height: 100%; background: var(--brand-bright); border-radius: 999px; transition: width .25s ease; }
 .doc-progress[data-complete='true'] .doc-bar span { background: var(--ok); }
 /* First-time empty state (Mes offres with no offers). */
+/* Mes offres — four facts per offer, on one axis. Full-width bands spent about
+   1500px of horizontal space per row saying four short things, and made seven
+   offers an 800px wall. */
+.my-offers { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.my-offers th {
+  text-align: left; padding: 0 10px 6px;
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .02em;
+  color: var(--ink-muted); border-bottom: 1px solid var(--border);
+}
+.my-offers td { padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.my-offers tbody tr:last-child td { border-bottom: 0; }
+.my-offers .c-acte { font-weight: 600; min-width: 150px; }
+.my-offers .c-date { width: 24%; min-width: 120px; }
+.my-offers .c-montant { width: 16%; min-width: 92px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.my-offers .c-statut { width: 14%; min-width: 96px; }
+.my-offer-day { display: block; }
+.my-offer-rel { display: block; margin-top: 1px; font-size: 12px; color: var(--ink-muted); }
+.my-offer-status {
+  display: inline-block; padding: 2px 9px; border-radius: 999px;
+  border: 1px solid var(--border); color: var(--ink-muted);
+  font-size: 11px; font-weight: 700; white-space: nowrap;
+}
+.my-offer-status[data-status='approved'] { color: var(--ok); border-color: var(--ok); }
+.my-offer-status[data-status='pending'] { color: var(--brand); border-color: var(--brand); }
+.my-offer-status[data-status='expired'] { color: var(--ink-muted); border-style: dashed; }
+/* Offers whose date has passed are present, never diluting the live list. */
+.my-offers-past { margin-top: 6px; }
+.my-offers-past-sum { padding: 8px 0; font-size: 12.5px; color: var(--ink-muted); cursor: pointer; }
+.my-offers-past tbody tr { opacity: .7; }
+
+/* Below this a table cannot hold four columns without wrapping the act name to
+   three lines, so each row becomes a card. */
+@media (max-width: 860px) {
+  .my-offers, .my-offers tbody, .my-offers tr, .my-offers td { display: block; width: auto; }
+  .my-offers thead { display: none; }
+  .my-offers tbody { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 8px; }
+  .my-offers tbody tr {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: 'acte statut' 'date montant';
+    gap: 4px 10px; align-items: center;
+    padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius);
+  }
+  .my-offers td { padding: 0; border: 0; }
+  .my-offers .c-acte { grid-area: acte; }
+  .my-offers .c-statut { grid-area: statut; justify-self: end; }
+  .my-offers .c-date { grid-area: date; }
+  .my-offers .c-montant { grid-area: montant; }
+}
+@media (max-width: 560px) { .my-offers tbody { grid-template-columns: minmax(0, 1fr); } }
+@media (pointer: coarse) { .my-offers-past-sum { min-height: 44px; display: flex; align-items: center; } }
+
 .profil-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 14px; padding: 20px 0 16px; }
 .profil-empty-text { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--ink-muted); max-width: 48ch; }
 .doc-row { border: 1px solid var(--border); border-radius: var(--radius); padding: 11px 13px; display: flex; flex-direction: column; gap: 6px; }
@@ -1147,6 +1198,7 @@ dialog::backdrop { background: var(--backdrop); }
   grid-template-areas:
     "hero      console"
     "why       console"
+    "semaine   console"
     "carnet    console"
     "guarantee console";
   column-gap: clamp(32px, 5vw, 80px);
@@ -1158,6 +1210,7 @@ dialog::backdrop { background: var(--backdrop); }
 /* Keep a readable measure on the lede without capping the whole hero block. */
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .intro p { max-width: 78ch; }
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .nc-why         { grid-area: why; display: grid; }
+#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .nc-week        { grid-area: semaine; display: flex; }
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-carnet  { grid-area: carnet; }
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) #notary-console { grid-area: console; align-self: center; margin: 0; }
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .nota-guarantee { grid-area: guarantee; }
@@ -1168,7 +1221,7 @@ dialog::backdrop { background: var(--backdrop); }
 @media (max-width: 900px) {
   #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) {
     grid-template-columns: minmax(0, 620px);
-    grid-template-areas: "hero" "why" "carnet" "console" "guarantee";
+    grid-template-areas: "hero" "why" "semaine" "carnet" "console" "guarantee";
     justify-content: center;
   }
   #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) #notary-console { align-self: stretch; }
@@ -1182,6 +1235,75 @@ dialog::backdrop { background: var(--backdrop); }
 @media (max-width: 560px) { .nc-why { grid-template-columns: 1fr; } }
 .hero-steps-inline { margin: 12px 0 0; font-size: 12.5px; line-height: 1.6; color: var(--ink-muted); }
 .hero-steps-inline span { color: var(--border-strong); }
+
+/* Week vignette — "remplissez votre semaine" played out with live market data.
+   Real open demands (D.weekAgenda) drop onto a Mon–Fri board one by one while
+   the payoff counts up; the board then clears and replays the next batch.
+   Borderless: the inset surface alone seats it in the column. */
+.nc-week[hidden] { display: none; }
+.nc-week {
+  margin-top: 26px; padding: 16px 18px 13px;
+  flex-direction: column; gap: 12px;
+  border-radius: var(--radius);
+  background: var(--surface-inset);
+}
+.nc-week-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.nc-week-kicker { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--brand); }
+.nc-week-total { font-size: 13px; color: var(--ink-muted); }
+.nc-week-total strong { color: var(--brand); font-weight: 800; font-variant-numeric: tabular-nums; }
+.nc-week-board { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; transition: opacity .45s ease; }
+.nc-week-board.is-out { opacity: 0; }
+.nc-week-col { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.nc-week-day { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-muted); text-align: center; }
+/* Ghost slot: the empty half-hour a demand has not claimed (yet). */
+.nc-week-slot { height: 46px; border: 1px dashed var(--border); border-radius: 8px; }
+/* A demand chip. `color` carries the act's --svc-* token (set inline) and the
+   DOT says the service — the same visual grammar as the carnet's cells, where
+   coloured borders belong to urgency, never to the act. */
+.nc-week-chip {
+  position: relative; height: 46px; padding: 0 8px; min-width: 0;
+  display: flex; flex-direction: column; justify-content: center; gap: 1px;
+  border: 1px solid var(--border-strong); border-radius: 8px;
+  background: var(--surface);
+  opacity: 0; transform: translateY(-10px) scale(.9);
+}
+.nc-week-chip.is-in {
+  opacity: 1; transform: none;
+  transition: opacity .3s ease, transform .5s cubic-bezier(.2, 1.4, .4, 1);
+}
+.nc-week-chip-top { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.nc-week-chip-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.nc-week-chip-name { font-size: 10.5px; font-weight: 600; color: var(--ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nc-week-chip-amt { font-size: 12.5px; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; }
+/* A taken demand flips once the board settles: the chip calms down and its ✓
+   appears — the marketplace clearing, shown rather than claimed. */
+.nc-week-chip-check {
+  position: absolute; top: 3px; right: 6px;
+  font-size: 10px; font-weight: 800; color: var(--brand);
+  opacity: 0; transform: scale(.4);
+}
+.nc-week-chip.is-taken { opacity: .72; transition: opacity .4s ease; }
+.nc-week-chip.is-taken .nc-week-chip-check {
+  opacity: 1; transform: none;
+  transition: opacity .3s ease, transform .45s cubic-bezier(.2, 1.4, .4, 1);
+}
+.nc-week-note { margin: 0; font-size: 11.5px; line-height: 1.5; color: var(--ink-muted); }
+.nc-week-check-key { color: var(--brand); font-weight: 800; }
+/* Tight columns: the act name goes, the amount stays. */
+@media (max-width: 1100px) and (min-width: 901px) { .nc-week-chip-name { display: none; } }
+@media (max-width: 480px) { .nc-week-chip-name { display: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .nc-week-board { transition: none; }
+  .nc-week-chip, .nc-week-chip-check, .nc-week-chip.is-taken { opacity: 1; transform: none; transition: none; }
+}
+/* Carnet flavour of the vignette: lives in the client hero (no auth gate, no
+   grid area), balancing the pulse panel beside it. */
+.nc-week--carnet { display: flex; margin-top: 22px; }
+.nc-week--carnet[hidden] { display: none; }
+
+/* "Follow the carnet" card under the client calendar — same public feed as the
+   notaires landing card, framed for a client watching the dates. */
+.carnet-sub { margin-top: 16px; }
 
 #notary-console { margin-top: 12px; max-width: none; }
 /* Sign-in gate: ONE narrow column, shown as a solid card that anchors the right

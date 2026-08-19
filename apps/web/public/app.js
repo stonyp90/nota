@@ -280,9 +280,18 @@
     notifSave(a.slice(0, 40));
     renderNotifs();
   }
+  // Dismissing keeps the entry (flagged) rather than deleting it: notifications
+  // are derived idempotently by `key`, so a deleted one would only come back on
+  // the next derive pass.
+  function dismissNotif(key) {
+    var a = notifLoad();
+    a.forEach(function (x) { if (x.key === key) { x.dismissed = true; x.read = true; } });
+    notifSave(a);
+    renderNotifs();
+  }
   function renderNotifs() {
     var list = $('notif-list'); if (!list) return;
-    var a = notifLoad();
+    var a = notifLoad().filter(function (x) { return !x.dismissed; });
     var unread = a.filter(function (x) { return !x.read; }).length;
     var badge = $('notif-badge');
     // Notifications are personal — an anonymous visitor sees none (no badge, no list).
@@ -295,6 +304,13 @@
       var item = el('div', 'notif-item' + (n.read ? '' : ' is-unread'));
       item.appendChild(el('div', 'notif-title', n.title));
       if (n.body) item.appendChild(el('div', 'notif-body', n.body));
+      // Per-item dismiss: a small ✕ that never triggers the row's own action.
+      var x = el('button', 'notif-x', '✕');
+      x.type = 'button';
+      x.setAttribute('aria-label', 'Ignorer cette notification');
+      x.title = 'Ignorer';
+      x.addEventListener('click', function (e) { e.stopPropagation(); dismissNotif(n.key); });
+      item.appendChild(x);
       if (n.dateISO) {
         item.setAttribute('role', 'button'); item.tabIndex = 0;
         var go = function () { toggleNotifPanel(false); markAllRead(); openDay(n.dateISO); };
@@ -642,9 +658,8 @@
     // menu is for the signed-in state only.
     var headerAuth = $('header-auth'); if (headerAuth) headerAuth.hidden = role !== 'anon';
     var acctWrap = document.querySelector('.acct-wrap'); if (acctWrap) acctWrap.hidden = role === 'anon';
-    // Calendar-sync of the whole carnet is notary tooling: a client browsing the
-    // carnet has no use for a feed of everyone else's demands.
-    var carnetFeed = $('notary-carnet'); if (carnetFeed) carnetFeed.hidden = role !== 'notary';
+    // Calendar-sync of the whole carnet shows on the landing too: a prospecting
+    // notary can subscribe before ever creating an account (the feed is public).
     var p = profileGet();
 
     if (role === 'notary') {
@@ -892,6 +907,7 @@
   // keyboard; hover reveals nothing, which is the point.
   function expandChevron(target, what) {
     var b = el('button', 'cell-chevron'); b.type = 'button';
+    b.tabIndex = -1;   // reached through the grid, not through Tab (APG grid pattern)
     var label = 'Afficher le détail' + (what ? ' — ' + what : '');
     b.setAttribute('aria-label', label);
     b.setAttribute('aria-expanded', 'false');
@@ -950,13 +966,6 @@
   }
 
 
-  function compactCount(n) {
-    // French decimal comma, like compactMoney below — toFixed() emits an en-US
-    // point, so this rendered "1.2k" beside the carnet's "3,3k".
-    return n >= 1000
-      ? (n / 1000).toFixed(n >= 10000 ? 0 : 1).replace('.0', '').replace('.', ',') + 'k'
-      : String(n);
-  }
   // Compact a dollar amount for the tightest calendar cells (phones): 3285 -> "3,3k",
   // 715 -> "715". Swapped in only by the narrow container query; the full amount and
   // the day dialog keep the exact "1 320 $".
@@ -1285,6 +1294,7 @@
   // Keyboard navigation (roving tabindex on the grid)
   // ---------------------------------------------------------------------------
   function onGridKey(e) {
+    if (e.target && e.target.closest && e.target.closest('.cell-chevron')) return;
     var map = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 };
     if (e.key in map) {
       e.preventDefault();
@@ -1292,7 +1302,10 @@
     } else if (e.key === 'PageUp') { e.preventDefault(); step(-1); }
     else if (e.key === 'PageDown') { e.preventDefault(); step(1); }
     else if (e.key === 'Home') { e.preventDefault(); state.focusDate = todayISO(); state.anchor = firstOfMonth(state.focusDate); reloadAndRender(); }
-    else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDay(state.focusDate); }
+    else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      if (state.focusDate >= todayISO()) openDay(state.focusDate);
+    }
     else if (e.key === 'Escape') { e.preventDefault(); resetFilters(); }
   }
   function moveFocus(delta) {
@@ -1316,11 +1329,19 @@
   // ---------------------------------------------------------------------------
   function readHash() {
     var h = new URLSearchParams(location.hash.replace(/^#/, ''));
-    if (h.has('svc')) state.filters.service = h.get('svc');
-    if (h.has('statut')) state.filters.statut = h.get('statut');
+    var SORTS = ['montant-desc', 'date-asc', 'date-desc'];
+    if (h.has('svc')) {
+      var svc = h.get('svc');
+      state.filters.service = (svc === '' || D.serviceById(svc)) ? svc : FILTER_DEFAULTS.service;
+    }
+    if (h.has('statut')) {
+      var st = h.get('statut');
+      var known = st === '' || st === D.STATUS.OUVERTE || st === D.STATUS.RETENUE;
+      state.filters.statut = known ? st : FILTER_DEFAULTS.statut;
+    }
     if (h.has('min')) state.filters.min = num(h.get('min'));
     if (h.has('max')) state.filters.max = num(h.get('max'));
-    if (h.has('tri')) state.filters.sort = h.get('tri');
+    if (h.has('tri') && SORTS.indexOf(h.get('tri')) >= 0) state.filters.sort = h.get('tri');
     if (h.has('jour') && D.isISODate(h.get('jour'))) { state.selectedDate = h.get('jour'); state.focusDate = h.get('jour'); state.anchor = firstOfMonth(h.get('jour')); }
   }
   function writeHash() {
@@ -1396,7 +1417,7 @@
     if (ft) ft.classList.toggle('has-active', n > 0);
   }
   function resetFilters() {
-    state.filters = { service: '', statut: '', min: null, max: null, sort: 'montant-desc' };
+    state.filters = Object.assign({}, FILTER_DEFAULTS);
     state.selectedDate = null;
     syncFilterChips(); writeHash();
     renderActiveView();
@@ -1862,6 +1883,10 @@
   // A card listing the client's posted offers with their live status — their
   // consolidated "where do my requests stand?" view. When they have none, a
   // friendly first-time prompt with a CTA to the carnet.
+  // Mes offres: four facts and one action per offer, in columns. Full-width
+  // bands wasted ~1500px of horizontal space per row and made seven offers an
+  // 800px wall; a table puts the dates and the amounts on a single axis so the
+  // eye can run down them, and a row costs ~48px instead of ~80.
   function buildMyOffersCard() {
     var offers = myOffers();
     var card = el('div', 'profil-card');
@@ -1869,28 +1894,80 @@
     if (!offers.length) {
       var empty = el('div', 'profil-empty');
       empty.appendChild(el('p', 'profil-empty-text', 'Vous n’avez pas encore publié d’offre. Choisissez une date au carnet et un notaire de Québec la retient.'));
-      var cta = el('button', 'btn btn-primary btn-sm', 'Réserver votre première date →'); cta.type = 'button';
+      var cta = el('button', 'btn btn-primary btn-sm', 'Réserver ma première date'); cta.type = 'button';
       cta.addEventListener('click', function () { toggleNotifPanel(false); setTab('carnet'); });
       empty.appendChild(cta);
       card.appendChild(empty);
       return card;
     }
-    card.appendChild(el('p', 'help', 'L’historique de vos demandes publiées et leur statut — Approuvé, En attente ou Expiré.'));
-    var list = el('div', 'my-offers-list');
-    offers.slice().sort(function (a, b) { return String(b.dateISO).localeCompare(String(a.dateISO)); }).forEach(function (o) {
-      var st = clientOfferStatus(o);
-      var row = el('button', 'my-offer'); row.type = 'button'; row.dataset.status = st;
-      var main = el('div', 'my-offer-main');
-      main.appendChild(el('div', 'my-offer-svc', svcName(o.serviceId)));
-      main.appendChild(el('div', 'my-offer-meta', dayTitle(o.dateISO) + ' · ' + D.money(o.montant)));
-      row.appendChild(main);
-      var badge = el('span', 'my-offer-badge', OFFER_STATUS_LABEL[st]); badge.dataset.status = st;
-      row.appendChild(badge);
-      row.addEventListener('click', function () { toggleNotifPanel(false); setTab('carnet'); openDay(o.dateISO); });
-      list.appendChild(row);
+
+    var today = todayISO();
+    var rows = offers.map(function (o) {
+      return { o: o, st: clientOfferStatus(o), past: D.daysBetween(today, o.dateISO) < 0 };
     });
-    card.appendChild(list);
+    // Soonest first for what is still live: the client's question is temporal.
+    var live = rows.filter(function (r) { return !r.past; })
+      .sort(function (a, b) { return String(a.o.dateISO).localeCompare(String(b.o.dateISO)); });
+    // Dead rows never dilute the live list; most recent first behind a summary.
+    var gone = rows.filter(function (r) { return r.past; })
+      .sort(function (a, b) { return String(b.o.dateISO).localeCompare(String(a.o.dateISO)); });
+
+    if (live.length) card.appendChild(myOffersTable(live, 'live'));
+    else card.appendChild(el('p', 'help', 'Aucune offre à venir.'));
+
+    if (gone.length) {
+      var det = el('details', 'my-offers-past');
+      var sum = el('summary', 'my-offers-past-sum', plural(gone.length, 'offre') + ' passée' + (gone.length < 2 ? '' : 's'));
+      det.appendChild(sum);
+      det.appendChild(myOffersTable(gone, 'past'));
+      card.appendChild(det);
+    }
     return card;
+  }
+
+  function myOffersTable(rows, which) {
+    var table = el('table', 'my-offers');
+    var head = el('thead');
+    var hr = el('tr');
+    [['Acte', 'c-acte'], ['Date', 'c-date'], ['Montant', 'c-montant'], ['Statut', 'c-statut']].forEach(function (c) {
+      var th = el('th', c[1], c[0]); th.scope = 'col'; hr.appendChild(th);
+    });
+    head.appendChild(hr); table.appendChild(head);
+
+    var body = el('tbody');
+    body.id = 'my-offers-' + which;
+    rows.forEach(function (r) {
+      var tr = el('tr', 'my-offer');
+      tr.dataset.status = r.st;
+      tr.dataset.id = r.o.id;
+      tr.appendChild(el('td', 'c-acte', svcName(r.o.serviceId)));
+
+      var dcell = el('td', 'c-date');
+      dcell.appendChild(el('span', 'my-offer-day', dayShort(r.o.dateISO)));
+      dcell.appendChild(el('span', 'my-offer-rel', relativeDay(r.o.dateISO)));
+      tr.appendChild(dcell);
+
+      tr.appendChild(el('td', 'c-montant', D.money(r.o.montant)));
+
+      var scell = el('td', 'c-statut');
+      var pill = el('span', 'my-offer-status', OFFER_STATUS_LABEL[r.st]);
+      pill.dataset.status = r.st;
+      scell.appendChild(pill);
+      tr.appendChild(scell);
+      body.appendChild(tr);
+    });
+    table.appendChild(body);
+    return table;
+  }
+
+  // "dans 3 jours" / "demain" / "il y a 5 jours" — the same vocabulary the day
+  // dialog already uses, so a date reads the same way everywhere.
+  function relativeDay(iso) {
+    var d = D.daysBetween(todayISO(), iso);
+    if (d === 0) return 'aujourd’hui';
+    if (d === 1) return 'demain';
+    if (d === -1) return 'hier';
+    return d > 0 ? 'dans ' + plural(d, 'jour') : 'il y a ' + plural(-d, 'jour');
   }
 
   function renderProfil() {
@@ -2368,18 +2445,24 @@
     return toWebcal(apiBaseAbs() + '/notary/feed.ics?token=' + encodeURIComponent(token));
   }
 
-  // Point the hero "add to your calendar" card at the PUBLIC carnet feed. One
+  // Point every "add to your calendar" card at the PUBLIC carnet feed. One
   // click subscribes the whole carnet (all open dates, kept in sync) into the
   // visitor's Google / Outlook / Apple calendar; .ics covers everything else.
+  // Two cards share the feed: the notaires landing (sub-*) and the client
+  // carnet (csub-*).
   function wireCarnetSubscribe() {
     var http = apiBaseAbs() + '/carnet/feed.ics';
     var webcal = toWebcal(http);
     var name = 'Nota — carnet Québec';
+    var google = 'https://calendar.google.com/calendar/render?cid=' + encodeURIComponent(webcal);
+    var outlook = 'https://outlook.live.com/calendar/0/addfromweb?url=' + encodeURIComponent(http) + '&name=' + encodeURIComponent(name);
     function set(id, href) { var a = $(id); if (a) a.href = href; }
-    set('sub-ics', http);
-    set('sub-apple', webcal);
-    set('sub-google', 'https://calendar.google.com/calendar/render?cid=' + encodeURIComponent(webcal));
-    set('sub-outlook', 'https://outlook.live.com/calendar/0/addfromweb?url=' + encodeURIComponent(http) + '&name=' + encodeURIComponent(name));
+    ['sub', 'csub'].forEach(function (p) {
+      set(p + '-ics', http);
+      set(p + '-apple', webcal);
+      set(p + '-google', google);
+      set(p + '-outlook', outlook);
+    });
   }
 
   function ncSetErrors(msgs) {
