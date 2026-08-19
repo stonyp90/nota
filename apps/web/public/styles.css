@@ -69,6 +69,7 @@
   --radius-sm: 6px;
   --radius-lg: 12px;
 
+  color-scheme: light;
   --shadow-sm: 0 1px 2px rgb(15 23 42 / 0.05);
   --shadow: 0 6px 20px -8px rgb(15 23 42 / 0.12);
   --shadow-lg: 0 24px 50px -16px rgb(44 95 52 / 0.24);
@@ -122,7 +123,7 @@
 
     --danger: #f97066;
     --warn: #f79009;
-    --ok: var(--hunter-600);
+    --ok: var(--hunter-500);
 
     --tier-standard: #64748b;
     --tier-rapide: #357f30;
@@ -132,7 +133,13 @@
     --tier-rapide-ink: #78c282; --tier-prioritaire-ink: #e0b44a; --tier-urgence-ink: #f0894c; --tier-extreme-ink: #f97066;
     --svc-testament: #60a5fa; --svc-procuration: #a78bfa; --svc-refinancement: #2dd4bf;
 
+    /* Dark shadows are cast in black, not light ink, so they read on #0a0a0a. */
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.5);
+    --shadow: 0 8px 24px -10px rgb(0 0 0 / 0.6);
     --shadow-lg: 0 20px 40px -12px rgb(0 0 0 / 0.6);
+    --shadow-brand: 0 6px 16px -6px rgb(80 184 72 / 0.4);
+    --focus-ring: rgb(80 184 72 / 0.45);
+    color-scheme: dark;
   }
 }
 
@@ -157,7 +164,7 @@
 
   --danger: #f97066;
   --warn: #f79009;
-  --ok: var(--hunter-600);
+  --ok: var(--hunter-500);
 
   --tier-standard: #64748b;
   --tier-rapide: #357f30;
@@ -167,7 +174,13 @@
   --tier-rapide-ink: #78c282; --tier-prioritaire-ink: #e0b44a; --tier-urgence-ink: #f0894c; --tier-extreme-ink: #f97066;
   --svc-testament: #60a5fa; --svc-procuration: #a78bfa; --svc-refinancement: #2dd4bf;
 
+  /* Dark shadows are cast in black, not light ink, so they read on #0a0a0a. */
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.5);
+  --shadow: 0 8px 24px -10px rgb(0 0 0 / 0.6);
   --shadow-lg: 0 20px 40px -12px rgb(0 0 0 / 0.6);
+  --shadow-brand: 0 6px 16px -6px rgb(80 184 72 / 0.4);
+  --focus-ring: rgb(80 184 72 / 0.45);
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
