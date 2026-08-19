@@ -301,7 +301,7 @@ function createApp(repo, opts = {}) {
     if (route === '/bids' && method === 'GET') {
       const month = query.month || now().slice(0, 7);
       if (!/^\d{4}-\d{2}$/.test(month)) {
-        return json(400, { errors: [{ code: 'mois_invalide', message: 'month doit être AAAA-MM.' }] });
+        return json(400, { errors: [{ code: 'mois_invalide', message: 'Le paramètre « month » doit être au format AAAA-MM.' }] });
       }
       const bids = await repo.listByMonth(month);
       return json(200, { month, bids: bids.filter(isLive).map(publicBid) });
@@ -662,7 +662,7 @@ function createApp(repo, opts = {}) {
       // accepted as a fallback. A feed-scoped token is rejected.
       const notaryId = requireScope(bearer(request) || payload.token, SCOPES.SESSION);
       if (!notaryId) return json(401, { errors: [{ code: 'non_autorise', message: 'Jeton invalide ou expiré.' }] });
-      if (!payload.id) return json(422, { errors: [{ code: 'id_manquant', message: 'id est requis.' }] });
+      if (!payload.id) return json(422, { errors: [{ code: 'id_manquant', message: 'L’identifiant de l’offre est requis.' }] });
       await repo.putDecline(notaryId, payload.id);
       return json(200, { declined: true });
     }

@@ -30,7 +30,7 @@ const domain = require('@nota/domain');
 // PLACEHOLDER; replace with Nota's registered mailing address before go-live.
 const SENDER = {
   name: 'Nota',
-  address: 'Nota — 000, rue Placeholder, bureau 000, Québec (Québec) G0X 0X0, Canada',
+  address: 'Nota — 000, rue à confirmer, bureau 000, Québec (Québec) G0X 0X0, Canada',
   supportEmail: 'bonjour@nota.ca',
   privacyEmail: 'confidentialite@nota.ca',
 };
@@ -209,6 +209,9 @@ function footer(unsubscribeUrl) {
 // max-width is ignored; everywhere else the card is fluid up to 600px.
 function layout({ preheader, heading, lead, bodyHtml, ctaLabel, ctaUrl, unsubscribeUrl }) {
   return (
+    '<!doctype html><html lang="fr-CA"><head><meta charset="utf-8" />' +
+    '<meta name="viewport" content="width=device-width, initial-scale=1" />' +
+    '<title>' + esc(heading || 'Nota') + ' — Nota</title></head><body style="margin:0;padding:0;">' +
     preheaderHtml(preheader || '') +
     '<div style="background-color:' +
     PALETTE.bg +
@@ -253,7 +256,8 @@ function layout({ preheader, heading, lead, bodyHtml, ctaLabel, ctaUrl, unsubscr
     footer(unsubscribeUrl) +
     '</table>' +
     '<!--[if mso]></td></tr></table><![endif]-->' +
-    '</td></tr></table></div>'
+    '</td></tr></table></div>' +
+    '</body></html>'
   );
 }
 function textLayout({ heading, lead, lines, textLines, ctaLabel, ctaUrl, unsubscribeUrl }) {
@@ -321,7 +325,7 @@ function offerPublished(ctx) {
     subject: 'Votre offre est en ligne : ' + money(ctx.montant),
     preheader: 'Complétez votre dossier — une demande prête est retenue beaucoup plus vite.',
     heading: 'Votre offre est publiée',
-    lead: 'Votre offre pour un ' + svcNom(ctx.serviceId) + ' le ' + fmtDate(ctx.dateISO) + ' est maintenant sur le carnet Nota.',
+    lead: 'Votre offre pour votre acte — ' + svcNom(ctx.serviceId) + ' — le ' + fmtDate(ctx.dateISO) + ' est maintenant sur le carnet Nota.',
     bodyHtml:
       callout(offerLine(ctx)) +
       para(
@@ -355,17 +359,18 @@ function dossierIncomplete(ctx) {
 // the tier's market range.
 function dateApproaching(ctx) {
   const days = Number(ctx.days);
-  const dLabel = days <= 1 ? 'demain' : 'dans ' + days + ' jours';
+  const dLabel = days <= 0 ? 'aujourd’hui' : days === 1 ? 'demain' : 'dans ' + days + ' jours';
   const t = domain.tierById(ctx.tier);
-  const range = t ? t.apercuMin.toFixed(1) + '× à ' + t.apercuMax.toFixed(1) + '×' : '';
+  const dec = (n) => n.toFixed(1).replace('.', ','); // fr-CA decimal comma
+  const range = t ? dec(t.apercuMin) + '× à ' + dec(t.apercuMax) + '×' : '';
   return build({
     subject: 'Votre signature approche — ' + dLabel,
     preheader: 'Une offre plus forte est retenue plus vite. Vérifiez la vôtre.',
     heading: 'Votre date approche',
     lead:
-      'Votre ' +
+      'Votre rendez-vous — ' +
       svcNom(ctx.serviceId) +
-      ' est prévu ' +
+      ' — est prévu ' +
       dLabel +
       ' (' +
       fmtDate(ctx.dateISO) +
@@ -419,11 +424,11 @@ function dateMissedNoUptake(ctx) {
     preheader: 'Bonifier votre offre attire un notaire plus rapidement.',
     heading: 'Il est encore temps d’attirer un notaire',
     lead:
-      'Votre ' +
+      'Votre demande — ' +
       svcNom(ctx.serviceId) +
-      ' du ' +
+      ' — du ' +
       fmtDate(ctx.dateISO) +
-      ' approche et aucun notaire ne l’a encore retenu.',
+      ' approche et aucun notaire ne l’a encore retenue.',
     bodyHtml:
       callout(offerLine(ctx)) +
       para(

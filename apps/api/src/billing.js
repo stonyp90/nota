@@ -109,7 +109,7 @@ function createBilling({
       return { ok: false, errors: [{ code: 'notaire_introuvable', message: 'Notaire introuvable.' }] };
     }
     if (notary.status !== NOTARY_STATUS.ACTIVE || !notary.chargesEnabled || !notary.connectAccountId) {
-      return { ok: false, errors: [{ code: 'compte_incomplet', message: 'Le compte du notaire n’est pas prêt à encaisser.' }] };
+      return { ok: false, errors: [{ code: 'compte_incomplet', message: 'Votre compte n’est pas encore prêt à encaisser les paiements. Terminez votre inscription Stripe.' }] };
     }
     const amount = Number(actAmount);
     if (!(amount > 0)) {
@@ -197,7 +197,7 @@ function createBilling({
       return { ok: false, errors: [{ code: 'notaire_introuvable', message: 'Notaire introuvable.' }] };
     }
     if (notary.status !== NOTARY_STATUS.ACTIVE || !notary.chargesEnabled || !notary.connectAccountId) {
-      return { ok: false, errors: [{ code: 'compte_incomplet', message: 'Le compte du notaire n’est pas prêt à encaisser.' }] };
+      return { ok: false, errors: [{ code: 'compte_incomplet', message: 'Votre compte n’est pas encore prêt à encaisser les paiements. Terminez votre inscription Stripe.' }] };
     }
     const amount = Number(actAmount);
     if (!(amount > 0)) {

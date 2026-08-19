@@ -1,5 +1,10 @@
 'use strict';
 
+// fr-CA is the product language, so every Stripe-hosted surface (Checkout,
+// Express onboarding, the payout dashboard) is pinned to it. Overridable for a
+// future market rather than baked in.
+const STRIPE_LOCALE = process.env.NOTA_STRIPE_LOCALE || 'fr-CA';
+
 /**
  * Stripe adapter — a Port implementation that mirrors the shape of
  * repo-dynamo.js. The `stripe` SDK is required LAZILY inside the factory, so the
@@ -32,6 +37,9 @@ function createStripeAdapter({ secretKey, webhookSecret } = {}) {
         type: 'express',
         email,
         country: 'CA',
+        // Without this, Stripe-hosted onboarding and the payout dashboard render
+        // in English for a product that is fr-CA everywhere else.
+        preferred_locales: [STRIPE_LOCALE, 'fr'],
         default_currency: 'cad',
         capabilities: { transfers: { requested: true }, card_payments: { requested: true } },
         business_type: 'individual',
@@ -89,6 +97,9 @@ function createStripeAdapter({ secretKey, webhookSecret } = {}) {
       const session = await stripe.checkout.sessions.create(
         {
           mode: 'payment',
+          // Stripe defaults to 'auto' (the BROWSER's language), which drops an
+          // English payment page into the middle of an all-French flow.
+          locale: STRIPE_LOCALE,
           payment_intent_data: {
             capture_method: 'manual',
             description: description || 'Acte notarié — Nota',

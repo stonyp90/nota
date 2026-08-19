@@ -193,7 +193,7 @@
   function showUserbar(on) {
     var bar = $('admin-userbar'); if (bar) bar.hidden = !on;
   }
-  var ROLE_LABELS = { super_admin: 'Super admin', analyst: 'Analyste' };
+  var ROLE_LABELS = { super_admin: 'Administrateur principal', analyst: 'Analyste' };
   function renderUserbar() {
     if (!me) return;
     $('admin-user-email').textContent = me.email || '';
@@ -552,7 +552,7 @@
 
     grid.appendChild(tile('Offres ouvertes', num(g.open || 0), 'en ce moment', true));
     grid.appendChild(tile('Notaires actifs', num(g.activeNotaries || 0), 'sur la plateforme', true));
-    grid.appendChild(tile('Notaires en intégration', num(g.onboardingNotaries || 0), 'onboarding', true));
+    grid.appendChild(tile('Notaires en intégration', num(g.onboardingNotaries || 0), 'en intégration', true));
     return grid;
   }
 

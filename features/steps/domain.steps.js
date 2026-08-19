@@ -20,7 +20,10 @@ When('je formate le montant {int}', function (dollars) {
 });
 
 Then('l\'affichage est {string}', function (affichage) {
-  assert.equal(this.result, affichage);
+  // money() separates with a NO-BREAK space (U+00A0) so an amount never wraps
+  // mid-number. A Gherkin table cannot carry that character legibly, so the
+  // comparison normalizes it — the scenario below pins the real character.
+  assert.equal(this.result.replace(/\u00A0/g, ' '), affichage);
 });
 
 // --- Plancher et plafond (validateOffer) ------------------------------------
@@ -79,4 +82,9 @@ Then('il n\'existe pas d\'export {string}', function (name) {
     false,
     `le domaine ne doit pas exposer "${name}"`
   );
+});
+
+Then('l\'affichage n\'utilise aucune espace sécable', function () {
+  assert.ok(!this.result.includes(' '), 'money() must not emit a breaking space: ' + this.result);
+  assert.ok(this.result.includes('\u00A0'), 'money() must separate with a no-break space');
 });
