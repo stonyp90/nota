@@ -884,6 +884,21 @@
       item.appendChild(document.createTextNode(s.nom.split(' ')[0]));
       lg.appendChild(item);
     });
+    // The two figures printed in every cell were never named anywhere: the % had
+    // only a title tooltip, which never appears on a touch device. Spell both out,
+    // and say what drives the % — it is a lead-time estimate, not a live count of
+    // this date's offers, and reading it as the latter would mislead. The bounds
+    // come from the domain so they cannot drift from OBTAIN_CHANCE.
+    var t = todayISO();
+    var best = D.obtainChance(D.addDays(t, 30), t);
+    var worst = D.obtainChance(t, t);
+    var note = el('span', 'legend-note');
+    note.appendChild(el('strong', null, 'Dans chaque case'));
+    note.appendChild(document.createTextNode(
+      ' : le prix moyen des offres, et vos chances d’obtenir un notaire ce jour-là — '
+      + 'de ' + best + ' % pour une date lointaine à ' + worst + ' % pour demain.'
+    ));
+    lg.appendChild(note);
   }
 
   // ---------------------------------------------------------------------------
@@ -1228,6 +1243,15 @@
     $('day-hint').textContent = open.length
       ? 'Proposez plus que ' + D.money(Math.max.apply(null, open.map(function (b) { return b.montant; }))) + ' pour passer devant.'
       : 'Aucune offre — fixez votre prix.';
+    // Name the calendar's % again where the date is actually chosen, with this
+    // date's own lead time — the cell shows the number, this says what it means.
+    var chanceEl = $('day-chance');
+    if (chanceEl) {
+      var dLeft = D.daysBetween(todayISO(), iso);
+      var when = dLeft <= 0 ? 'aujourd’hui' : dLeft === 1 ? 'demain' : 'dans ' + dLeft + ' jours';
+      chanceEl.textContent = 'Chances d’obtenir un notaire : ' + D.obtainChance(iso, todayISO())
+        + ' % — la date est ' + when + ', et plus elle approche, plus un notaire a de mal à s’y libérer.';
+    }
     validateOfferUI();
 
     renderActiveView();

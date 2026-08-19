@@ -649,6 +649,51 @@ test('LIST: a day shows only its best offer; the rest fold into a "+N autres off
   assert.match(more.textContent, /\+\s*3\s+autres\s+offres/);
 });
 
+test('LEGEND: the calendar explains its two cell figures, using the domain bounds', async () => {
+  const ctx = await boot();
+  const note = ctx.doc.querySelector('#legend .legend-note');
+  assert.ok(note, 'the legend carries an explainer for the cell figures');
+  const txt = note.textContent;
+  assert.match(txt, /prix moyen/, 'it names the price figure');
+  assert.match(txt, /chances d’obtenir un notaire/, 'it names what the % measures');
+
+  // The quoted bounds must come from @nota/domain, never be retyped as copy.
+  const best = ctx.D.obtainChance(ctx.D.addDays(ctx.today, 30), ctx.today);
+  const worst = ctx.D.obtainChance(ctx.today, ctx.today);
+  assert.ok(best > worst, 'a distant date beats a same-day one');
+  assert.ok(txt.includes(best + ' %'), 'quotes the domain upper bound (' + best + ' %)');
+  assert.ok(txt.includes(worst + ' %'), 'quotes the domain lower bound (' + worst + ' %)');
+
+  // And the figure printed in a cell is the same domain value, not a UI copy.
+  const cell = ctx.doc.querySelector('.cal-cell.has-bids .cal-chance');
+  if (cell) {
+    const iso = cell.closest('.cal-cell').dataset.date;
+    assert.equal(cell.textContent, ctx.D.obtainChance(iso, ctx.today) + ' %');
+  }
+});
+
+test('DAY: the booking dialog says what the calendar % means for that date', async () => {
+  const ctx = await boot();
+  // Any upcoming day with offers — avoids assuming today + N stays in-month.
+  const cell = [...ctx.doc.querySelectorAll('#cal-grid .cal-cell.has-bids')]
+    .find((c) => c.dataset.date > ctx.today);
+  assert.ok(cell, 'expected an upcoming cell with offers');
+  const iso = cell.dataset.date;
+  cell.click();
+  await wait(30);
+
+  const line = $(ctx.doc, 'day-chance');
+  assert.ok(line, 'the day dialog carries a chance explainer');
+  const expected = ctx.D.obtainChance(iso, ctx.today);
+  assert.ok(line.textContent.includes(expected + ' %'),
+    'quotes the domain value for THIS date (' + expected + ' %): ' + line.textContent);
+  const days = ctx.D.daysBetween(ctx.today, iso);
+  const when = days === 1 ? 'demain' : 'dans ' + days + ' jours';
+  assert.ok(line.textContent.includes(when), 'and states the lead time driving it (' + when + ')');
+  // The cell badge and the dialog must never disagree about the same date.
+  assert.equal(cell.querySelector('.cal-chance').textContent, expected + ' %');
+});
+
 test('LIST: a day with a single offer still offers a way into the day dialog', async () => {
   const ctx = await boot();
   const iso = ctx.today;
