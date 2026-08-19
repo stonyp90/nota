@@ -177,8 +177,12 @@
               <span class="acct-labels">
                 <span class="acct-item-title" id="acct-name">Mon profil</span>
                 <span class="acct-item-sub" id="acct-email">Coordonnées, documents, préférences</span>
+                <span class="acct-role" id="acct-role" hidden></span>
               </span>
             </button>
+            <div class="acct-sep"></div>
+            <!-- Role-aware actions (sign in / sign out, routes). Filled by renderAccountMenu(). -->
+            <nav class="acct-actions" id="acct-actions" aria-label="Actions du compte"></nav>
             <div class="acct-sep"></div>
             <div class="notif-head">
               <span class="notif-head-title">Notifications</span>
@@ -330,18 +334,30 @@
             <div class="intro-main">
               <span class="eyebrow">Pour les notaires</span>
               <h1>Remplissez votre semaine. Payé à la signature.</h1>
-              <p>Inscription gratuite, sans frais fixes : Nota se rémunère par une commission, uniquement sur les actes complétés. Vous retenez les demandes qui vous conviennent, vous déclinez le reste sans frais.</p>
+              <p>Inscription gratuite, sans frais fixes — Nota se rémunère par une commission, uniquement sur les actes que vous complétez. Vous retenez ce qui vous convient, vous déclinez le reste sans frais.</p>
+              <p class="hero-steps-inline">Inscrivez-vous, gratuit <span aria-hidden="true">·</span> Retenez ce qui vous convient <span aria-hidden="true">·</span> Payé en entier à la signature</p>
             </div>
-            <aside class="hero-aside" aria-label="Comment ça marche pour les notaires">
-              <div class="hero-steps-title">Comment ça marche</div>
-              <ol class="hero-steps">
-                <li><span class="hero-step-n">1</span><span class="hero-step-txt"><strong>Inscrivez-vous.</strong> Gratuit, sans frais fixes.</span></li>
-                <li><span class="hero-step-n">2</span><span class="hero-step-txt"><strong>Retenez une demande.</strong> Le dossier du client s’ouvre.</span></li>
-                <li><span class="hero-step-n">3</span><span class="hero-step-txt"><strong>Complétez l’acte.</strong> Commission seulement sur ce qui se conclut.</span></li>
-              </ol>
-              <p class="hero-steps-foot">Aucune obligation de volume — déclinez sans frais.</p>
-            </aside>
           </div>
+
+          <!-- Value grid — fills the landing and makes the payoff concrete. -->
+          <section class="nc-why" aria-label="Ce que vous obtenez">
+            <div class="nc-why-item">
+              <span class="nc-why-ic" aria-hidden="true">◆</span>
+              <div><div class="nc-why-t">Des demandes réelles à Québec</div><p class="nc-why-p">Des clients qui ont fixé une date et un prix, triés par date de signature.</p></div>
+            </div>
+            <div class="nc-why-item">
+              <span class="nc-why-ic" aria-hidden="true">◆</span>
+              <div><div class="nc-why-t">Payé en entier à la signature</div><p class="nc-why-p">La commission Nota est déduite à la source — jamais une facture à courir.</p></div>
+            </div>
+            <div class="nc-why-item">
+              <span class="nc-why-ic" aria-hidden="true">◆</span>
+              <div><div class="nc-why-t">Vous gardez la main</div><p class="nc-why-p">Vous fixez vos honoraires et choisissez les dossiers qui vous conviennent.</p></div>
+            </div>
+            <div class="nc-why-item">
+              <span class="nc-why-ic" aria-hidden="true">◆</span>
+              <div><div class="nc-why-t">Sans frais fixes</div><p class="nc-why-p">Inscription gratuite ; une commission seulement sur les actes complétés.</p></div>
+            </div>
+          </section>
 
           <!-- Prospecting feed for notaries: subscribe the whole carnet of open
                demands into a personal agenda (Google / Outlook / Apple / iCal). -->
@@ -352,8 +368,9 @@
                     <img src="favicon.svg" width="30" height="30" alt="" />
                   </span>
                   <div>
+                    <div class="sub-card-kicker">Commencez sans compte</div>
                     <div class="sub-card-title">Le carnet dans votre agenda</div>
-                    <div class="sub-card-sub">Toutes les demandes ouvertes, à jour dans votre agenda.</div>
+                    <div class="sub-card-sub">Toutes les demandes ouvertes à Québec, à jour automatiquement dans Google, Outlook ou Apple — gratuit, sans compte, avant même de vous inscrire.</div>
                   </div>
                 </div>
                 <div class="sub-card-actions">
@@ -370,15 +387,21 @@
             <!-- Auth gate -->
             <form id="notary-auth-form" class="nc-auth nc-gate">
               <div class="nc-gate-main">
+              <!-- Live proof of demand, right above the field so the payoff is the last
+                   thing seen before typing. Hidden until populated (no data → no line). -->
+              <p class="nc-opp-line" id="notary-opportunity" hidden>
+                <span class="nc-opp-tag">En jeu ce mois à Québec</span>
+                <span class="nc-opp-stat"><strong id="notary-opp-count">—</strong> demandes ouvertes <span class="nc-opp-sep" aria-hidden="true">·</span> <strong id="notary-opp-total">—</strong> à retenir</span>
+              </p>
               <h2 class="h-sub">Accédez aux demandes</h2>
-              <p class="help mb-sm">Voyez les demandes ouvertes à Québec, retenez celles qui remplissent votre semaine, et soyez payé sur les actes complétés. Un seul courriel professionnel — <strong>sans mot de passe</strong>, première visite ou retour, c’est le même geste.</p>
               <div class="form-row">
                 <label class="lbl" for="nc-email">Courriel professionnel</label>
                 <input type="email" id="nc-email" inputmode="email" autocomplete="email" placeholder="vous@etude.ca" aria-describedby="notary-console-errors" required />
               </div>
               <ul class="errors" id="notary-console-errors" role="alert" aria-atomic="true" hidden></ul>
               <button type="submit" class="btn btn-primary btn-lg nc-auth-cta" id="notary-console-signin">Voir les demandes ouvertes →</button>
-              <p class="help nc-auth-fine">Première fois ? Entrez simplement votre courriel : si aucun compte n’existe encore, l’inscription gratuite se propose automatiquement.</p>
+              <p class="help nc-auth-fine">Sans mot de passe — première visite ou retour, c’est le même courriel. Si aucun compte n’existe encore, l’inscription gratuite se propose ici même.</p>
+              <p class="nc-soon" id="notary-phase2-note"><span class="nc-soon-tag">Bientôt</span>Vérification d’identité et inscription entièrement en ligne : tout le parcours notaire, de bout en bout, sans quitter Nota.</p>
 
               <!-- Shown when the email has no account yet: sign-in and sign-up are the
                    same door — a new notary is offered free onboarding right here. -->
@@ -393,21 +416,6 @@
                 <p class="help nc-auth-fine">Stripe vous demandera une pièce d’identité et un compte bancaire pour vos versements — ces informations restent chez Stripe, Nota ne les voit jamais. Vous êtes ensuite ramené ici.</p>
               </div>
               </div>
-              <aside class="nc-gate-aside" aria-label="Ce que vous obtenez">
-                <!-- Live proof of demand, so the payoff is visible before onboarding. -->
-                <div class="nc-opportunity" id="notary-opportunity" hidden>
-                  <div class="nc-opp-eyebrow">En jeu ce mois, à Québec</div>
-                  <div class="nc-opp-figure"><strong id="notary-opp-count">—</strong> demandes ouvertes</div>
-                  <div class="nc-opp-value"><strong id="notary-opp-total">—</strong> à retenir — sans frais d’inscription</div>
-                </div>
-                <div class="nc-gate-aside-title">Ce que vous obtenez</div>
-                <ul class="nc-benefits">
-                  <li>Des demandes de clients réels à Québec, triées par date de signature.</li>
-                  <li>Retenez celles qui vous conviennent — le dossier s’ouvre aussitôt.</li>
-                  <li>Payé en entier à la signature ; la commission Nota est déduite, jamais une facture à courir.</li>
-                  <li>Vous fixez vos honoraires et gardez la main sur chaque acte.</li>
-                </ul>
-              </aside>
             </form>
 
             <!-- Authenticated view -->
@@ -484,7 +492,7 @@
             </div>
           </div>
           <p class="note nota-guarantee">
-            <strong>Vous gardez la main.</strong> Vous fixez vos honoraires et vérifiez l’identité du client à la signature, comme l’exige la loi. Nota n’intervient jamais dans l’acte notarié.
+            <strong>Vous gardez la main.</strong> Vous fixez vos honoraires et vérifiez l’identité du client à la signature, comme l’exige la loi — Nota n’intervient jamais dans l’acte.
           </p>
         </div>
       </section>
@@ -626,6 +634,9 @@
         <a href="#" class="goto-link" data-goto="confidentialite">Confidentialité</a>
         <a href="#" class="goto-link" data-goto="conditions">Conditions d’utilisation</a>
         <a href="#" class="goto-link" data-goto="charte">Charte des droits</a>
+        <!-- Contact actions (courriel, and phone only when a line is configured
+             in @nota/domain CONTACT). Filled by renderContact(). -->
+        <div class="footer-contact" id="footer-contact"></div>
       </div>
     </footer>
 

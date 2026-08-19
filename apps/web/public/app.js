@@ -137,6 +137,46 @@
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
 
+  // ---------------------------------------------------------------------------
+  // Mini icon buttons — the small round actions that sit on a component (an
+  // offer row, a pulse row, a notary card). One primitive so every one of them
+  // has the same size, hit area, tooltip and accessible name; the icon alone is
+  // never the label (screen readers get the full sentence).
+  // ---------------------------------------------------------------------------
+  var MINI_ICONS = {
+    agenda: '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4M12 13v4M10 15h4"/>',
+    partager: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/>',
+    reserver: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+    telephone: '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.4-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/>',
+    courriel: '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 6 10-6"/>',
+  };
+
+  function miniIcon(name) {
+    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('width', '15');
+    svg.setAttribute('height', '15');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '2');
+    svg.setAttribute('stroke-linecap', 'round');
+    svg.setAttribute('stroke-linejoin', 'round');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.innerHTML = MINI_ICONS[name] || '';
+    return svg;
+  }
+
+  // `onClick` omitted → an <a> (href set by the caller), so a download or a
+  // tel:/mailto: link keeps its native behaviour instead of being faked.
+  function miniBtn(name, label, onClick) {
+    var b = el(onClick ? 'button' : 'a', 'mini-btn mini-' + name);
+    if (onClick) { b.type = 'button'; b.addEventListener('click', onClick); }
+    b.title = label;
+    b.setAttribute('aria-label', label);
+    b.appendChild(miniIcon(name));
+    return b;
+  }
+
 
   // ---------------------------------------------------------------------------
   // Toast
@@ -243,14 +283,126 @@
     var open = force != null ? force : panel.hidden;
     panel.hidden = !open;
     bell.setAttribute('aria-expanded', open ? 'true' : 'false');
-    if (open) { renderNotifs(); acctSync(); }
+    if (open) { renderNotifs(); renderAccountMenu(); }
   }
-  // Reflect the client's profile in the account menu header.
-  function acctSync() {
+  // The account menu is one identity hub for BOTH roles. Priority: an active
+  // notary session outranks a device-local client identity, which outranks the
+  // anonymous visitor.
+  function accountRole() {
+    if (nc && nc.token) return 'notary';
+    if (profileGet().courriel) return 'client';
+    return 'anon';
+  }
+
+  // Small inline icon for an account-menu action row (18px, currentColor).
+  var ACCT_ICONS = {
+    profil: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+    offers: '<path d="M20.59 13.41 13.42 20.6a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><circle cx="7" cy="7" r="1"/>',
+    dossiers: '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
+    notaire: '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
+    publier: '<path d="M12 5v14M5 12h14"/>',
+    signin: '<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="M10 17l5-5-5-5M15 12H3"/>',
+    signout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/>',
+  };
+  function acctIcon(name) {
+    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('width', '18'); svg.setAttribute('height', '18');
+    svg.setAttribute('fill', 'none'); svg.setAttribute('stroke', 'currentColor'); svg.setAttribute('stroke-width', '2');
+    svg.setAttribute('stroke-linecap', 'round'); svg.setAttribute('stroke-linejoin', 'round'); svg.setAttribute('aria-hidden', 'true');
+    svg.innerHTML = ACCT_ICONS[name] || '';
+    return svg;
+  }
+  function acctAction(icon, label, onClick) {
+    var b = el('button', 'acct-item acct-action'); b.type = 'button';
+    b.appendChild(acctIcon(icon));
+    b.appendChild(el('span', 'acct-item-title', label));
+    b.addEventListener('click', onClick);
+    return b;
+  }
+
+  // Open the profile pane on the Coordonnées card and focus the email field, so an
+  // anonymous visitor "signs in" simply by identifying themselves. focus:false on
+  // setTab keeps focus off the pane heading so it lands on the email input.
+  function openClientSignIn() {
+    toggleNotifPanel(false);
+    setTab('profil', { focus: false });
+    var f = $('p-courriel'); if (f) { try { f.focus(); } catch (e) { /* jsdom */ } }
+  }
+
+  // The offer flow entry point used elsewhere (hero CTA): the carnet with a day open.
+  function openOfferFlow() {
+    toggleNotifPanel(false);
+    setTab('carnet', { scroll: false });
+    openDay(state.selectedDate || state.focusDate || todayISO());
+  }
+
+  // "Forget me on this device": wipe the client's local identity + history. Guarded
+  // by a plain confirm (no dedicated modal helper exists for this). After clearing,
+  // every surface that reads the profile/offers is re-rendered.
+  function clientSignOut() {
+    var ok = true;
+    try { ok = window.confirm('Se déconnecter effacera de cet appareil vos coordonnées, vos offres publiées, votre dossier et vos notifications. Continuer ?'); } catch (e) { ok = true; }
+    if (!ok) return;
+    try {
+      localStorage.removeItem(LS_PROFILE);
+      localStorage.removeItem(LS_MYOFFERS);
+      localStorage.removeItem(LS_DOSSIER);
+      localStorage.removeItem(LS_NOTIF);
+    } catch (e) {}
+    toggleNotifPanel(false);
+    renderAccountMenu();
+    if (state.tab === 'profil') renderProfil();
+    renderActiveView(); // repaint the carnet's "my offers" status markers
+    renderNotifs();
+    toast('Vous êtes déconnecté.');
+  }
+
+  // The identity head reacts to the role: notary → their console, client → their
+  // profile, anonymous → the sign-in (email) field.
+  function onAcctHeadClick() {
+    var role = accountRole();
+    if (role === 'notary') { toggleNotifPanel(false); setTab('notaires'); return; }
+    if (role === 'client') { toggleNotifPanel(false); setTab('profil'); return; }
+    openClientSignIn();
+  }
+
+  // Role-aware account menu: the ONE place a client or a notary signs in, sees who
+  // they are, reaches their history, and signs out. Notifications + legal links
+  // stay in every state.
+  function renderAccountMenu() {
+    var role = accountRole();
+    var name = $('acct-name'), email = $('acct-email'), roleTag = $('acct-role');
+    var panel = $('notif-panel'); if (panel) panel.dataset.role = role;
     var p = profileGet();
-    var name = $('acct-name'), email = $('acct-email');
-    if (name) name.textContent = p.nom || 'Mon profil';
-    if (email) email.textContent = p.courriel || 'Coordonnées, documents, préférences';
+
+    if (role === 'notary') {
+      if (name) name.textContent = nc.email || 'Espace notaire';
+      if (email) email.textContent = 'Vos demandes et vos dossiers retenus';
+      if (roleTag) { roleTag.textContent = 'Espace notaire'; roleTag.hidden = false; }
+    } else if (role === 'client') {
+      if (name) name.textContent = p.nom || 'Mon compte';
+      if (email) email.textContent = p.courriel;
+      if (roleTag) { roleTag.textContent = 'Client'; roleTag.hidden = false; }
+    } else {
+      if (name) name.textContent = 'Se connecter / s’inscrire';
+      if (email) email.textContent = 'Publiez une demande, ou ouvrez l’espace notaire';
+      if (roleTag) { roleTag.hidden = true; roleTag.textContent = ''; }
+    }
+
+    var actions = $('acct-actions'); if (!actions) return;
+    clear(actions);
+    if (role === 'notary') {
+      actions.appendChild(acctAction('dossiers', 'Mes demandes & dossiers', function () { toggleNotifPanel(false); setTab('notaires'); }));
+      actions.appendChild(acctAction('signout', 'Se déconnecter', function () { ncSignOut(); renderAccountMenu(); toggleNotifPanel(false); }));
+    } else if (role === 'client') {
+      actions.appendChild(acctAction('profil', 'Mon profil', function () { toggleNotifPanel(false); setTab('profil'); }));
+      actions.appendChild(acctAction('offers', 'Mes demandes', function () { toggleNotifPanel(false); setTab('profil'); }));
+      actions.appendChild(acctAction('signout', 'Se déconnecter', clientSignOut));
+    } else {
+      actions.appendChild(acctAction('signin', 'Se connecter / s’inscrire', openClientSignIn));
+      actions.appendChild(acctAction('publier', 'Publier une demande', openOfferFlow));
+      actions.appendChild(acctAction('notaire', 'Espace notaire', function () { toggleNotifPanel(false); setTab('notaires'); }));
+    }
   }
   // Derive notifications from this browser's offers: local date-approaching, and
   // "retained" by matching each offer id against its month's public bids.
@@ -559,7 +711,23 @@
     fill.style.background = 'var(--svc-' + s.id + ')';
     bar.appendChild(fill);
     row.appendChild(bar);
-    return row;
+
+    // The row filters; the button beside it books. They are SIBLINGS — a button
+    // cannot legally nest inside a button, and the two actions are different.
+    var item = el('div', 'pulse-item');
+    item.appendChild(row);
+    item.appendChild(miniBtn('reserver', 'Réserver un ' + short.toLowerCase(), function () { bookService(s.id); }));
+    return item;
+  }
+
+  // Quick book from the pulse: preselect the act, then open the same booking
+  // dialog the hero CTA opens, on the day the client is already looking at.
+  function bookService(serviceId) {
+    state.filters.service = serviceId;
+    syncFilterChips();
+    writeHash();
+    setTab('carnet', { scroll: false });
+    openDay(state.selectedDate || state.focusDate || todayISO());
   }
 
   function renderPulse() {
@@ -664,6 +832,17 @@
       pill.dataset.tier = b.tier || 'standard';
       row.appendChild(pill);
     }
+
+    // Row actions: keep this date, or pass it on. Both work on ANY offer (they
+    // only use public data), so they are shown on open and retained rows alike.
+    var acts = el('div', 'row-actions');
+    var svcNom = D.serviceById(b.serviceId) ? D.serviceById(b.serviceId).nom : b.serviceId;
+    var ics = miniBtn('agenda', 'Ajouter au calendrier : ' + svcNom + ', ' + dayTitle(b.dateISO));
+    ics.href = calendarLinks(b).ics;
+    ics.setAttribute('download', 'nota-' + b.dateISO + '.ics');
+    acts.appendChild(ics);
+    acts.appendChild(miniBtn('partager', 'Partager cette offre', function (e) { e.stopPropagation(); shareBid(b); }));
+    row.appendChild(acts);
     return row;
   }
 
@@ -1226,6 +1405,7 @@
     if (res.checkoutUrl) {
       submit.removeAttribute('aria-busy'); submit.textContent = 'Redirection vers le paiement…';
       profileSet({ courriel: payload.courriel, prefixe: payload.prefixe, nom: payload.nom || '', anonyme: payload.anonyme });
+      renderAccountMenu(); // an offer that carries an email signs the client in
       addMyOffer(res.bid);
       window.location.href = res.checkoutUrl;
       return;
@@ -1237,8 +1417,10 @@
     // The dossier is what makes this lead sellable — show its real progress here
     // and give a one-tap path to finish it for THIS service.
     fillDossierNext(res.bid.serviceId);
-    // Remember the client's coordinates in their profile for next time.
+    // Remember the client's coordinates in their profile for next time — an offer
+    // that carries an email implicitly signs the client in on this device.
     profileSet({ courriel: payload.courriel, prefixe: payload.prefixe, nom: payload.nom || '', anonyme: payload.anonyme });
+    renderAccountMenu();
     // Track this offer + raise the in-app "published" notification (email is sent by the API).
     addMyOffer(res.bid);
     addNotif({
@@ -1256,7 +1438,9 @@
   // ---------------------------------------------------------------------------
   // Calendar deeplinks (.ics + Google + Outlook), all-day event
   // ---------------------------------------------------------------------------
-  function buildCalendarLinks(bid) {
+  // One builder, two consumers: the post-booking confirmation (which fills the
+  // three links in the dialog) and the per-row agenda button.
+  function calendarLinks(bid) {
     var svc = D.serviceById(bid.serviceId);
     var title = 'Signature notariée — ' + (svc ? svc.nom : bid.serviceId);
     var startCompact = bid.dateISO.replace(/-/g, '');
@@ -1272,16 +1456,51 @@
       'DTSTART;VALUE=DATE:' + startCompact, 'DTEND;VALUE=DATE:' + endCompact,
       'SUMMARY:' + esc(title), 'DESCRIPTION:' + esc(details), 'END:VEVENT', 'END:VCALENDAR',
     ].join('\r\n');
-    $('ics-link').href = 'data:text/calendar;charset=utf-8,' + encodeURIComponent(ics);
 
-    $('gcal-link').href = 'https://calendar.google.com/calendar/render?action=TEMPLATE' +
-      '&text=' + encodeURIComponent(title) +
-      '&dates=' + startCompact + '/' + endCompact +
-      '&details=' + encodeURIComponent(details);
+    return {
+      title: title,
+      ics: 'data:text/calendar;charset=utf-8,' + encodeURIComponent(ics),
+      gcal: 'https://calendar.google.com/calendar/render?action=TEMPLATE' +
+        '&text=' + encodeURIComponent(title) +
+        '&dates=' + startCompact + '/' + endCompact +
+        '&details=' + encodeURIComponent(details),
+      outlook: 'https://outlook.live.com/calendar/0/deeplink/compose?subject=' +
+        encodeURIComponent(title) + '&body=' + encodeURIComponent(details) +
+        '&startdt=' + bid.dateISO + '&enddt=' + D.addDays(bid.dateISO, 1) + '&allday=true',
+    };
+  }
 
-    $('outlook-link').href = 'https://outlook.live.com/calendar/0/deeplink/compose?subject=' +
-      encodeURIComponent(title) + '&body=' + encodeURIComponent(details) +
-      '&startdt=' + bid.dateISO + '&enddt=' + D.addDays(bid.dateISO, 1) + '&allday=true';
+  function buildCalendarLinks(bid) {
+    var links = calendarLinks(bid);
+    $('ics-link').href = links.ics;
+    $('gcal-link').href = links.gcal;
+    $('outlook-link').href = links.outlook;
+  }
+
+  // A deep link straight to this offer's day in the carnet, filtered to its act.
+  function bidShareUrl(b) {
+    return location.origin + location.pathname + '#svc=' + encodeURIComponent(b.serviceId) + '&jour=' + b.dateISO;
+  }
+
+  // Share sheet where the platform has one, clipboard everywhere else. Both
+  // paths end in visible feedback — a share that silently does nothing reads
+  // as a broken button.
+  function shareBid(b) {
+    var svc = D.serviceById(b.serviceId);
+    var url = bidShareUrl(b);
+    var text = (svc ? svc.nom : b.serviceId) + ' · ' + dayTitle(b.dateISO) + ' · ' + D.money(b.montant);
+    if (navigator.share) {
+      navigator.share({ title: 'Nota — ' + text, text: text, url: url }).catch(function () { /* dismissed */ });
+      return;
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(
+        function () { toast('Lien copié'); },
+        function () { toast('Copie impossible — ' + url); }
+      );
+      return;
+    }
+    toast(url);
   }
 
   // ---------------------------------------------------------------------------
@@ -1317,6 +1536,7 @@
       card.appendChild(empty);
       return card;
     }
+    card.appendChild(el('p', 'help', 'L’historique de vos demandes publiées et leur statut — Approuvé, En attente ou Expiré.'));
     var list = el('div', 'my-offers-list');
     offers.slice().sort(function (a, b) { return String(b.dateISO).localeCompare(String(a.dateISO)); }).forEach(function (o) {
       var st = clientOfferStatus(o);
@@ -1352,7 +1572,7 @@
     [
       { key: 'nom', label: 'Nom (offre non anonyme)', ph: 'Prénom Nom', type: 'text' },
       { key: 'courriel', label: 'Courriel', ph: 'vous@exemple.ca', type: 'email' },
-      { key: 'prefixe', label: '3 premiers caractères du code postal', ph: 'G1R', type: 'text' },
+      { key: 'prefixe', label: 'Code postal', ph: 'G1R', type: 'text' },
     ].forEach(function (f) {
       var row = el('div', 'form-row');
       var lab = el('label', 'lbl', f.label); lab.setAttribute('for', 'p-' + f.key); row.appendChild(lab);
@@ -1362,6 +1582,9 @@
       inp.addEventListener('input', function () {
         var val = f.key === 'prefixe' ? inp.value.trim().toUpperCase().slice(0, 3) : inp.value.trim();
         var patch = {}; patch[f.key] = val; profileSet(patch);
+        // A saved email is what makes the client "signed in" — keep the account
+        // menu (and its role tag) in sync as they type it.
+        if (f.key === 'courriel') renderAccountMenu();
       });
       row.appendChild(inp); idFields.appendChild(row);
     });
@@ -1837,6 +2060,7 @@
       localStorage.removeItem(LS_NC_EMAIL);
     } catch (e) {}
     ncRenderAuthState();
+    renderAccountMenu(); // session gone → menu falls back to client/anonymous
     if (msg) toast(msg);
   }
 
@@ -1865,6 +2089,7 @@
     nc.token = j.token; nc.feedToken = j.feedToken || null; nc.email = email;
     lsSave(LS_NC_TOKEN, j.token); lsSave(LS_NC_FEED_TOKEN, nc.feedToken); lsSave(LS_NC_EMAIL, email);
     ncRenderAuthState();
+    renderAccountMenu(); // the account menu now reflects the notary session
     var loaded = await ncLoadBids();
     if (loaded) toast('Console ouverte pour ' + email + '.');
     return { ok: true };
@@ -2059,6 +2284,12 @@
     var acc = el('button', 'btn btn-sm btn-primary nc-accept', 'Retenir'); acc.type = 'button';
     var dec = el('button', 'btn btn-sm nc-decline', 'Décliner'); dec.type = 'button';
     actions.appendChild(acc); actions.appendChild(dec);
+    // Block the date before deciding: the signing day, straight into the
+    // notary's own agenda, without retaining the demande first.
+    var hold = miniBtn('agenda', 'Bloquer cette date dans mon agenda');
+    hold.href = calendarLinks(b).ics;
+    hold.setAttribute('download', 'nota-' + b.dateISO + '.ics');
+    actions.appendChild(hold);
     card.appendChild(actions);
     return card;
   }
@@ -2217,6 +2448,7 @@
       var inp = $('nc-email');
       if (inp && !inp.value && typeof em === 'string' && em) inp.value = em;
     }
+    renderAccountMenu(); // reflect any restored session (or its absence) at boot
   }
 
   // ---------------------------------------------------------------------------
@@ -2246,6 +2478,29 @@
       var activePane = $('pane-' + tab);
       var h = activePane && activePane.querySelector('h1');
       if (h) { h.setAttribute('tabindex', '-1'); try { h.focus({ preventScroll: true }); } catch (e) { h.focus(); } }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Contact actions — one email button, and a call button ONLY when a real line
+  // exists (D.CONTACT.telephone). Both read the domain, so the address lives in
+  // exactly one place across web and email.
+  // ---------------------------------------------------------------------------
+  function renderContact() {
+    var host = $('footer-contact');
+    if (!host) return;
+    clear(host);
+    var c = D.CONTACT || {};
+    if (c.courriel) {
+      var mail = miniBtn('courriel', 'Écrire à ' + c.courriel);
+      mail.href = 'mailto:' + c.courriel;
+      host.appendChild(mail);
+    }
+    var tel = D.telHref(c.telephone);
+    if (tel) {
+      var call = miniBtn('telephone', 'Appeler ' + c.telephone);
+      call.href = tel;
+      host.appendChild(call);
     }
   }
 
@@ -2290,8 +2545,9 @@
     $('notif-bell').addEventListener('click', function (e) { e.stopPropagation(); toggleNotifPanel(); });
     $('notif-clear').addEventListener('click', markAllRead);
     $('notif-panel').addEventListener('click', function (e) { e.stopPropagation(); });
-    // Account-menu items → switch pane, then close the menu.
-    $('acct-profil').addEventListener('click', function () { setTab('profil'); toggleNotifPanel(false); });
+    // Account-menu items → switch pane, then close the menu. The identity head
+    // routes by role (notary console / client profile / anonymous sign-in).
+    $('acct-profil').addEventListener('click', onAcctHeadClick);
     $('acct-confid').addEventListener('click', function () { setTab('confidentialite'); toggleNotifPanel(false); });
     $('acct-conditions').addEventListener('click', function () { setTab('conditions'); toggleNotifPanel(false); });
     $('acct-charte').addEventListener('click', function () { setTab('charte'); toggleNotifPanel(false); });
@@ -2505,6 +2761,7 @@
     // If a shared link pre-selects filters, reveal the (otherwise hidden) panel.
     if (filtersActive()) { $('filters').hidden = false; $('filters-toggle').setAttribute('aria-expanded', 'true'); }
     renderLegend();
+    renderContact();
     wire();
     wireCarnetSubscribe();
 
@@ -2562,6 +2819,13 @@
       complete: ncCompleteAct,
       feedUrl: ncFeedUrl,
       retainedFor: ncRetainedFor,
+    },
+    // Unified account hub (client + notary) hooks for tests and integration.
+    account: {
+      role: accountRole,
+      render: renderAccountMenu,
+      signOut: clientSignOut,
+      signIn: openClientSignIn,
     },
     _internals: { applyFilters: applyFilters, acceptance: acceptance, buildCalendarLinks: buildCalendarLinks },
   };

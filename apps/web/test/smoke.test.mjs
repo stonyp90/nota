@@ -647,3 +647,118 @@ test('the hero pulse shows the month median per service and filters the carnet',
   assert.equal(ctx.doc.getElementById('result-count').textContent, '4 offres ce mois');
   assert.equal(ctx.doc.querySelector('#chips-service .chip[data-svc=""]').getAttribute('aria-pressed'), 'true');
 });
+
+test('offer rows carry an .ics download and a share action', async () => {
+  const ctx = await boot();
+  const iso = dayOf(ctx.anchor, '15');
+  await reseed(ctx, [{
+    id: 'a1', serviceId: 'testament', dateISO: iso, montant: 900,
+    tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, prefixe: 'G1R', createdAt: iso,
+  }]);
+  ctx.Nota.setView('liste');
+  const row = ctx.doc.querySelector('.agenda .bid-row');
+  assert.ok(row, 'the list renders the offer');
+
+  const ics = row.querySelector('a.mini-agenda');
+  assert.ok(ics, 'agenda button is a real link, so the download works natively');
+  assert.equal(ics.getAttribute('download'), `nota-${iso}.ics`);
+  // A valid all-day VEVENT for that exact date, not a placeholder href.
+  const cal = decodeURIComponent(ics.href.replace(/^data:text\/calendar;charset=utf-8,/, ''));
+  assert.match(cal, /BEGIN:VCALENDAR/);
+  assert.match(cal, new RegExp(`DTSTART;VALUE=DATE:${iso.replace(/-/g, '')}`));
+  assert.ok(ics.getAttribute('aria-label').length > 10, 'icon-only button is named for screen readers');
+
+  // No Web Share and no clipboard in jsdom: the URL still has to reach the user.
+  const share = row.querySelector('button.mini-partager');
+  assert.ok(share, 'share action present');
+  share.click();
+  const toast = ctx.doc.getElementById('toast');
+  assert.match(toast.textContent, new RegExp(`svc=testament&jour=${iso}`), 'falls back to showing the deep link');
+});
+
+test('each pulse row has a book button that opens the dialog on that service', async () => {
+  const ctx = await boot();
+  const iso = dayOf(ctx.anchor, '15');
+  await reseed(ctx, [{
+    id: 'a1', serviceId: 'testament', dateISO: iso, montant: 900,
+    tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso,
+  }]);
+  ctx.Nota.selectDate(iso);
+  const item = ctx.doc.querySelector('.pulse-item .mini-reserver');
+  assert.ok(item, 'the book button sits beside the filter row, not inside it');
+  // A button may never nest in a button — the filter row IS a button.
+  assert.equal(ctx.doc.querySelector('.pulse-row button'), null);
+
+  item.click();
+  await wait(30);
+  assert.ok(ctx.doc.getElementById('day-dialog').open, 'the booking dialog opened');
+  assert.equal(ctx.Nota.state.filters.service, 'testament', 'preselected the act it was clicked from');
+  assert.equal(ctx.doc.getElementById('o-service').value, 'testament');
+});
+
+test('the footer exposes the domain contact email, and no phone until one exists', async () => {
+  const ctx = await boot();
+  const host = ctx.doc.getElementById('footer-contact');
+  const mail = host.querySelector('a.mini-courriel');
+  assert.equal(mail.getAttribute('href'), `mailto:${ctx.D.CONTACT.courriel}`);
+  // telephone is null in the domain -> no call button is invented in the UI.
+  assert.equal(host.querySelector('.mini-telephone'), ctx.D.CONTACT.telephone ? host.querySelector('.mini-telephone') : null);
+});
+
+// 16. The account menu is the ONE identity hub for both roles. It renders three
+//     distinct states — notary session, device-local client, anonymous — and the
+//     client can "forget me on this device" to return to anonymous.
+const acctActionLabels = (doc) =>
+  all(doc, '#acct-actions .acct-action .acct-item-title').map((n) => n.textContent);
+
+test('account menu reflects the notary identity when a token is present', async () => {
+  const { doc, Nota } = await boot();
+  Nota.notary.state.token = 'sess.tok';
+  Nota.notary.state.email = 'notaire@quebec.ca';
+  Nota.account.render();
+  assert.equal(Nota.account.role(), 'notary');
+  assert.match($(doc, 'acct-name').textContent, /notaire@quebec\.ca/);
+  const roleTag = $(doc, 'acct-role');
+  assert.equal(roleTag.hidden, false);
+  assert.match(roleTag.textContent, /Espace notaire/i);
+  const labels = acctActionLabels(doc);
+  assert.ok(labels.some((t) => /dossiers/i.test(t)), 'a route to demandes & dossiers');
+  assert.ok(labels.some((t) => /déconnecter/i.test(t)), 'a sign-out action');
+});
+
+test('account menu reflects the client identity when the profile has an email', async () => {
+  const { win, doc, Nota } = await boot();
+  win.localStorage.setItem('nota.profile.v1', JSON.stringify({ courriel: 'client@example.ca', nom: 'Alex Roy' }));
+  Nota.account.render();
+  assert.equal(Nota.account.role(), 'client');
+  assert.equal($(doc, 'acct-email').textContent, 'client@example.ca');
+  assert.equal($(doc, 'acct-name').textContent, 'Alex Roy');
+  assert.match($(doc, 'acct-role').textContent, /Client/);
+  const labels = acctActionLabels(doc);
+  assert.ok(labels.some((t) => /profil/i.test(t)), 'a route to the profile');
+  assert.ok(labels.some((t) => /déconnecter/i.test(t)), 'a sign-out action');
+});
+
+test('account menu shows the anonymous sign-in invitation by default', async () => {
+  const { doc, Nota } = await boot();
+  assert.equal(Nota.account.role(), 'anon');
+  Nota.account.render();
+  assert.equal($(doc, 'acct-role').hidden, true);
+  assert.match($(doc, 'acct-name').textContent, /connecter/i);
+  const labels = acctActionLabels(doc);
+  assert.ok(labels.some((t) => /Publier une demande/i.test(t)), 'an offer-flow entry');
+  assert.ok(labels.some((t) => /Espace notaire/i.test(t)), 'a notary entry');
+});
+
+test('clientSignOut clears the device-local identity and offer history', async () => {
+  const { win, Nota } = await boot();
+  win.localStorage.setItem('nota.profile.v1', JSON.stringify({ courriel: 'client@example.ca' }));
+  win.localStorage.setItem('nota.myoffers.v1', JSON.stringify([{ id: 'o1', dateISO: todayISO(), serviceId: 'testament', montant: 900 }]));
+  win.confirm = () => true; // approve the "forget me on this device" guard
+  assert.equal(Nota.account.role(), 'client');
+  Nota.account.signOut();
+  assert.equal(Nota.account.role(), 'anon', 'identity returns to anonymous');
+  assert.equal(win.localStorage.getItem('nota.myoffers.v1'), null, 'offer history is cleared');
+  const prof = JSON.parse(win.localStorage.getItem('nota.profile.v1') || '{}');
+  assert.ok(!prof.courriel, 'the saved email is gone');
+});
