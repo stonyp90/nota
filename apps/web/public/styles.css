@@ -468,10 +468,6 @@ a:hover { text-decoration: underline; }
 .mini-btn svg { display: block; }
 /* Actions stay quiet until the row they belong to is hovered or focused —
    the data reads first, the tools appear when you go for them. */
-.row-actions { display: flex; align-items: center; gap: 2px; margin-left: 4px; }
-.bid-row .row-actions { opacity: 0; transition: opacity .12s ease; }
-.bid-row:hover .row-actions, .bid-row:focus-within .row-actions { opacity: 1; }
-@media (hover: none) { .bid-row .row-actions { opacity: 1; } }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
 .btn svg { flex: none; }
 
@@ -814,7 +810,34 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
    its best offer (the rest behind "+N autres offres"), so heights stay close and
    rows align without large gaps. */
 .agenda { display: grid; grid-template-columns: repeat(auto-fill, minmax(clamp(240px, 24vw, 300px), 1fr)); gap: 12px; padding: 12px 16px 18px; align-items: stretch; }
-.agenda-group { background: var(--surface-inset); border-radius: var(--radius-lg); padding-bottom: 6px; overflow: hidden; display: flex; flex-direction: column; min-height: 128px; }
+.agenda-group { background: var(--surface-inset); border-radius: var(--radius-lg); padding-bottom: 6px; overflow: hidden; display: flex; flex-direction: column; min-height: 128px; cursor: pointer; transition: transform .1s ease, box-shadow .1s ease, background .12s ease; }
+
+/* Same bargain as the calendar cell: the resting card stays simple — the day,
+   one amount, the odds — and hover is where a client digs into what it takes to
+   be retained. Fine pointers only; on touch the tap opens the day dialog, which
+   carries the same detail. */
+@media (hover: hover) and (pointer: fine) {
+  .agenda-group:hover, .agenda-group:focus-within {
+    background: var(--surface); box-shadow: var(--shadow-lg); transform: translateY(-2px);
+  }
+  /* Truncated identity lines open up. */
+  .agenda-group:hover .bid-who, .agenda-group:focus-within .bid-who,
+  .agenda-group:hover .bid-sub, .agenda-group:focus-within .bid-sub {
+    white-space: normal; overflow: visible; text-overflow: clip;
+  }
+  .agenda-group:hover .agenda-day-t, .agenda-group:focus-within .agenda-day-t {
+    overflow: visible; text-overflow: clip;
+  }
+  /* And the line that says what it would take to lead this day. */
+  .agenda-beat { display: none; }
+  .agenda-group:hover .agenda-beat, .agenda-group:focus-within .agenda-beat { display: block; }
+}
+/* Without hover (touch), the coaching line is simply always there. */
+@media not all and (hover: hover) {
+  .agenda-beat { display: block; }
+}
+.agenda-beat { padding: 0 14px 2px; font-size: 11.5px; line-height: 1.45; color: var(--ink-muted); }
+.agenda-beat strong { color: var(--brand); font-weight: 700; }
 /* A day with no bet is still a full rectangle: the placeholder fills the card and doubles as a "reserve this date" affordance. */
 .agenda-vacant { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; width: 100%; appearance: none; background: transparent; border: 0; padding: 16px 14px; font: inherit; font-size: 12px; font-weight: 600; color: var(--ink-muted); text-align: center; cursor: pointer; }
 .agenda-vacant:hover, .agenda-vacant:focus-visible { background: var(--surface-hover); color: var(--ink); }
@@ -847,7 +870,6 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 .agenda .bid-row { flex-wrap: wrap; row-gap: 3px; }
 .agenda .bid-amount { order: 1; }
 .agenda .pill, .agenda .status-chip { order: 2; }
-.agenda .row-actions { order: 3; margin-left: auto; }
 .agenda .bid-meta { order: 4; flex: 1 0 100%; }
 .agenda .status-chip { max-width: none; }
 .bid-amount { font-weight: 800; font-size: 15px; min-width: 78px; }
@@ -1497,7 +1519,6 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   .day-bids .bid-row { flex-wrap: wrap; row-gap: 3px; }
   .day-bids .bid-amount { order: 1; }
   .day-bids .pill, .day-bids .status-chip { order: 2; }
-  .day-bids .row-actions { order: 3; margin-left: auto; }
   .day-bids .bid-meta { order: 4; flex: 1 0 100%; }
   .day-bids .status-chip { max-width: none; }
   /* Explainer stacks the badge over the text on narrow screens. */

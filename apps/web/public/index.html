@@ -371,16 +371,18 @@
 
           <!-- Prospecting feed for notaries: subscribe the whole carnet of open
                demands into a personal agenda (Google / Outlook / Apple / iCal). -->
-          <aside class="notary-carnet">
+          <!-- Notary tooling: the carnet feed is only useful to someone who works
+               it, so it appears once a notary is signed in (renderAccountMenu). -->
+          <aside class="notary-carnet" id="notary-carnet" hidden>
             <div class="sub-card" role="group" aria-label="Ajouter le carnet des demandes à votre agenda">
                 <div class="sub-card-head">
                   <span class="sub-card-logo" aria-hidden="true">
                     <img src="favicon.svg" width="30" height="30" alt="" />
                   </span>
                   <div>
-                    <div class="sub-card-kicker">Commencez sans compte</div>
+                    <div class="sub-card-kicker">Votre outil de prospection</div>
                     <div class="sub-card-title">Le carnet dans votre agenda</div>
-                    <div class="sub-card-sub">Toutes les demandes ouvertes à Québec, à jour automatiquement dans Google, Outlook ou Apple — gratuit, sans compte, avant même de vous inscrire.</div>
+                    <div class="sub-card-sub">Toutes les demandes ouvertes à Québec, à jour automatiquement dans Google, Outlook ou Apple.</div>
                   </div>
                 </div>
                 <div class="sub-card-actions">

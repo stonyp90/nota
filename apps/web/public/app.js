@@ -644,6 +644,9 @@
     // menu is for the signed-in state only.
     var headerAuth = $('header-auth'); if (headerAuth) headerAuth.hidden = role !== 'anon';
     var acctWrap = document.querySelector('.acct-wrap'); if (acctWrap) acctWrap.hidden = role === 'anon';
+    // Calendar-sync of the whole carnet is notary tooling: a client browsing the
+    // carnet has no use for a feed of everyone else's demands.
+    var carnetFeed = $('notary-carnet'); if (carnetFeed) carnetFeed.hidden = role !== 'notary';
     var p = profileGet();
 
     if (role === 'notary') {
@@ -1110,6 +1113,9 @@
       var dayBids = (groups[iso] || []).slice().sort(function (a, b) { return b.montant - a.montant; });
       var group = el('div', 'agenda-group' + (dayBids.length ? '' : ' is-vacant'));
       group.dataset.date = iso;
+      // The card IS the booking affordance — clicking anywhere on it opens the
+      // day. The buttons inside remain the keyboard path.
+      group.addEventListener('click', function () { openDay(iso); });
       var head = el('div', 'agenda-day');
       head.appendChild(el('span', 'agenda-day-t', dayTitle(iso)));
       head.appendChild(chanceBadge('agenda-chance', iso, today));
@@ -1120,7 +1126,7 @@
         var vac = el('button', 'agenda-vacant', 'Aucune offre — réserver');
         vac.type = 'button';
         vac.setAttribute('aria-label', 'Aucune offre le ' + dayTitle(iso) + ' — réserver cette date');
-        vac.addEventListener('click', function () { openDay(iso); });
+        vac.addEventListener('click', function (e) { e.stopPropagation(); openDay(iso); });
         group.appendChild(vac);
         ag.appendChild(group);
         return;
@@ -1132,6 +1138,20 @@
       // offer would be a dead end with no way into the day dialog. It doubles as
       // the uniform card footer, which keeps the grid rows aligned.
       var extra = dayBids.length - PER_DAY;
+      // The point of the whole product, said once per day: what would it take to
+      // lead this date. Compacted away at rest, revealed on hover (see the CSS).
+      var openBids = dayBids.filter(function (b) { return b.status !== D.STATUS.RETENUE; });
+      var beat = el('div', 'agenda-beat');
+      if (openBids.length) {
+        var top = Math.max.apply(null, openBids.map(function (b) { return b.montant; }));
+        beat.appendChild(document.createTextNode('Pour devancer, proposez plus de '));
+        beat.appendChild(el('strong', null, D.money(top)));
+        beat.appendChild(document.createTextNode('.'));
+      } else {
+        beat.appendChild(document.createTextNode('Aucune offre ouverte — vous fixez le prix.'));
+      }
+      group.appendChild(beat);
+
       var more = el('button', 'agenda-more', extra > 0
         ? '+ ' + extra + ' autre' + (extra > 1 ? 's' : '') + ' offre' + (extra > 1 ? 's' : '')
         : 'Voir cette journée');
@@ -1139,7 +1159,7 @@
       more.setAttribute('aria-label', (extra > 0
         ? 'Voir les ' + dayBids.length + ' offres du '
         : 'Voir la journée du ') + dayTitle(iso));
-      more.addEventListener('click', function () { openDay(iso); });
+      more.addEventListener('click', function (e) { e.stopPropagation(); openDay(iso); });
       group.appendChild(more);
       ag.appendChild(group);
     });
@@ -1174,16 +1194,6 @@
       row.appendChild(pill);
     }
 
-    // Row actions: keep this date, or pass it on. Both work on ANY offer (they
-    // only use public data), so they are shown on open and retained rows alike.
-    var acts = el('div', 'row-actions');
-    var svcNom = D.serviceById(b.serviceId) ? D.serviceById(b.serviceId).nom : b.serviceId;
-    var ics = miniBtn('agenda', 'Ajouter au calendrier : ' + svcNom + ', ' + dayTitle(b.dateISO));
-    ics.href = calendarLinks(b).ics;
-    ics.setAttribute('download', 'nota-' + b.dateISO + '.ics');
-    acts.appendChild(ics);
-    acts.appendChild(miniBtn('partager', 'Partager cette offre', function (e) { e.stopPropagation(); shareBid(b); }));
-    row.appendChild(acts);
     return row;
   }
 
@@ -1902,30 +1912,10 @@
   }
 
   // A deep link straight to this offer's day in the carnet, filtered to its act.
-  function bidShareUrl(b) {
-    return location.origin + location.pathname + '#svc=' + encodeURIComponent(b.serviceId) + '&jour=' + b.dateISO;
-  }
 
   // Share sheet where the platform has one, clipboard everywhere else. Both
   // paths end in visible feedback — a share that silently does nothing reads
   // as a broken button.
-  function shareBid(b) {
-    var svc = D.serviceById(b.serviceId);
-    var url = bidShareUrl(b);
-    var text = (svc ? svc.nom : b.serviceId) + ' · ' + dayTitle(b.dateISO) + ' · ' + D.money(b.montant);
-    if (navigator.share) {
-      navigator.share({ title: 'Nota — ' + text, text: text, url: url }).catch(function () { /* dismissed */ });
-      return;
-    }
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(url).then(
-        function () { toast('Lien copié'); },
-        function () { toast('Copie impossible — ' + url); }
-      );
-      return;
-    }
-    toast(url);
-  }
 
   // ---------------------------------------------------------------------------
   // Profile (coordinates + notification settings)

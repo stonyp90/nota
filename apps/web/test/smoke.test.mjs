@@ -646,6 +646,32 @@ test('LIST: every upcoming day of the month renders a full card, even with no of
   if (dim > todayDay) assert.ok(vacant.length > 0, 'an empty upcoming day still renders a full rectangle');
 });
 
+test('LIST: each card coaches what it would take to lead that day', async () => {
+  const ctx = await boot();
+  const iso = ctx.D.addDays(ctx.today, 3);
+  await reseed(ctx, [
+    { id: 'b1', serviceId: 'testament', dateISO: iso, montant: 1500, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
+    { id: 'b2', serviceId: 'testament', dateISO: iso, montant: 1100, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
+  ]);
+  ctx.Nota.setView('liste');
+  const card = ctx.doc.querySelector('.agenda .agenda-group[data-date="' + iso + '"]');
+  const beat = card.querySelector('.agenda-beat');
+  assert.ok(beat, 'the card says what it would take to lead the day');
+  assert.match(beat.textContent, /Pour devancer/);
+  assert.equal(beat.querySelector('strong').textContent, ctx.D.money(1500), 'quotes the best OPEN offer');
+
+  // A day whose only offer is already retained coaches differently rather than
+  // quoting a price nobody can outbid. Needs "Toutes", since the carnet rests on
+  // open offers and would otherwise render that day as vacant.
+  const taken = ctx.D.addDays(ctx.today, 4);
+  await reseed(ctx, [{ id: 'r1', serviceId: 'testament', dateISO: taken, montant: 900, tier: 'standard', status: ctx.D.STATUS.RETENUE, etude: 'Étude X', anonyme: true, createdAt: taken }]);
+  ctx.doc.querySelector('#seg-statut .seg-btn[data-statut=""]').click();
+  ctx.Nota.setView('liste');
+  const takenCard = ctx.doc.querySelector('.agenda .agenda-group[data-date="' + taken + '"]');
+  assert.ok(takenCard, 'the retained day has a card once "Toutes" is selected');
+  assert.match(takenCard.querySelector('.agenda-beat').textContent, /vous fixez le prix/);
+});
+
 test('CARNET: rests on open offers; retained ones are one filter click away', async () => {
   const ctx = await boot();
   assert.equal(ctx.Nota.state.filters.statut, 'ouverte', 'the carnet opens on what is still winnable');
@@ -942,32 +968,27 @@ test('the hero pulse shows the month median per service and filters the carnet',
   assert.equal(ctx.doc.querySelector('#chips-service .chip[data-svc=""]').getAttribute('aria-pressed'), 'true');
 });
 
-test('offer rows carry an .ics download and a share action', async () => {
+test('LIST: a card is the booking affordance; rows carry no share or download', async () => {
   const ctx = await boot();
-  const iso = ctx.D.addDays(ctx.today, 2); // future date (the list only shows today onward)
+  const iso = ctx.D.addDays(ctx.today, 2);
   await reseed(ctx, [{
     id: 'a1', serviceId: 'testament', dateISO: iso, montant: 900,
     tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, prefixe: 'G1R', createdAt: iso,
   }]);
   ctx.Nota.setView('liste');
-  const row = ctx.doc.querySelector('.agenda .bid-row');
-  assert.ok(row, 'the list renders the offer');
+  const card = ctx.doc.querySelector('.agenda .agenda-group[data-date="' + iso + '"]');
+  assert.ok(card, 'the list renders the day card');
 
-  const ics = row.querySelector('a.mini-agenda');
-  assert.ok(ics, 'agenda button is a real link, so the download works natively');
-  assert.equal(ics.getAttribute('download'), `nota-${iso}.ics`);
-  // A valid all-day VEVENT for that exact date, not a placeholder href.
-  const cal = decodeURIComponent(ics.href.replace(/^data:text\/calendar;charset=utf-8,/, ''));
-  assert.match(cal, /BEGIN:VCALENDAR/);
-  assert.match(cal, new RegExp(`DTSTART;VALUE=DATE:${iso.replace(/-/g, '')}`));
-  assert.ok(ics.getAttribute('aria-label').length > 10, 'icon-only button is named for screen readers');
+  // Passing someone else's demand around, and exporting it to a calendar, are
+  // not things a client browsing the carnet should be invited to do.
+  assert.equal(card.querySelectorAll('.row-actions').length, 0, 'no row actions');
+  assert.equal(card.querySelectorAll('a[download]').length, 0, 'no .ics download on a row');
+  assert.equal(card.querySelectorAll('.mini-partager').length, 0, 'no share action');
 
-  // No Web Share and no clipboard in jsdom: the URL still has to reach the user.
-  const share = row.querySelector('button.mini-partager');
-  assert.ok(share, 'share action present');
-  share.click();
-  const toast = ctx.doc.getElementById('toast');
-  assert.match(toast.textContent, new RegExp(`svc=testament&jour=${iso}`), 'falls back to showing the deep link');
+  // Clicking anywhere on the card books that day.
+  card.click();
+  assert.equal($(ctx.doc, 'day-dialog').open, true, 'the card opens the booking dialog');
+  assert.equal(ctx.Nota.state.selectedDate, iso, 'on the clicked day');
 });
 
 test('each pulse row has a book button that opens the dialog on that service', async () => {
