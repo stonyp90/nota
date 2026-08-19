@@ -665,6 +665,7 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 .cal-dow { text-align: center; font-size: 11px; font-weight: 700; color: var(--ink-muted); padding: 4px 0; text-transform: uppercase; letter-spacing: .04em; }
 .cal-cell {
   background: transparent; min-height: clamp(68px, 5.4vw, 98px); padding: 6px 8px 12px; position: relative;
+  min-width: 0;
   display: flex; flex-direction: column; gap: 3px; cursor: pointer;
   border: 1px solid transparent; border-radius: var(--radius-sm); scroll-margin-top: var(--sticky-top);
   text-align: left; font: inherit; color: var(--ink);
@@ -718,13 +719,20 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 /* --- Per-act prices, and the chevron that opens the detail ---------------- */
 /* A dot plus a price. The dot's colour is decoded by the Service key in the
    legend, so the act's name is never repeated on a cell or a card. */
-.svc-bid { display: inline-flex; align-items: baseline; gap: 5px; min-width: 0; }
+.svc-bid { display: inline-flex; align-items: baseline; gap: 5px; min-width: 0; max-width: 100%; }
 .svc-bid-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; align-self: center; }
-.svc-bid-code { font-size: 9.5px; font-weight: 800; letter-spacing: .06em; opacity: .85; }
+/* The name leads; the short code is the fallback for cells too narrow to hold
+   it, and is hidden until a container query asks for it. */
+.svc-bid-code { display: none; font-size: 9.5px; font-weight: 800; letter-spacing: .06em; opacity: .85; }
+.svc-bid-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .svc-bid-amount { font-weight: 800; letter-spacing: -0.02em; white-space: nowrap; }
 .legend-code { font-size: 9.5px; font-weight: 800; letter-spacing: .06em; margin-right: 1px; }
-.cal-svc-bids { display: flex; flex-direction: column; gap: 2px; margin-top: auto; font-size: 12.5px; }
-.agenda-svc-bids { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 2px 14px 10px; font-size: 13.5px; }
+.cal-svc-bids { display: flex; flex-direction: column; gap: 2px; margin-top: auto; min-width: 0; font-size: 12.5px; }
+.cal-svc-bids .svc-bid { min-width: 0; }
+.agenda-svc-bids { display: flex; flex-direction: column; gap: 4px; padding: 2px 14px 10px; font-size: 13.5px; }
+.agenda-svc-bids .svc-bid { width: 100%; gap: 7px; }
+.agenda-svc-bids .svc-bid-name { flex: 1; }
+.agenda-svc-bids .svc-bid-amount { margin-left: auto; }
 
 /* Collapsed is the resting state everywhere. The chevron is the only way in, so
    it works the same with a mouse, a finger or a keyboard. */
@@ -760,8 +768,11 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
    at every resolution, and nothing ever clips mid-word. */
 @container cal (max-width: 740px) {
   .cal-avg { font-size: 13px; }
-  /* Narrow cells show the price alone; the dot still carries the act. */
-  .svc-bid-amount { font-size: 11.5px; }
+  .cal-svc-bids .svc-bid-amount { font-size: 11.5px; }
+  /* Too narrow for "Refinancement hypothécaire": the three-letter code takes
+     over, and the legend still decodes it. */
+  .cal-svc-bids .svc-bid-name { display: none; }
+  .cal-svc-bids .svc-bid-code { display: inline; }
   /* "En attente / Approuvé / Expiré" would clip, so collapse the own-offer badge to a status dot. */
   .cal-mine { font-size: 0; padding: 0; margin-top: 3px; width: 9px; height: 9px; border: 0; border-radius: 50%; background: currentColor; }
   .cal-mine[data-status='expired'] { background: var(--ink-muted); }
@@ -771,8 +782,9 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
   .cal-daynum { font-size: 11px; }
   /* Cells get too narrow for "3 285 $": swap to the compact form (data-compact),
      which always fits. The full amount stays in the DOM + day dialog for a11y. */
-  .svc-bid-amount { font-size: 0; }
-  .svc-bid-amount::after { content: attr(data-compact); font-size: 11px; font-weight: 800; }
+  .cal-svc-bids .svc-bid-code { display: none; }
+  .cal-svc-bids .svc-bid-amount { font-size: 0; }
+  .cal-svc-bids .svc-bid-amount::after { content: attr(data-compact); font-size: 11px; font-weight: 800; }
   .cal-avg { font-size: 0; }
   .cal-avg::after { content: attr(data-compact); font-size: 12.5px; font-weight: 800; letter-spacing: -0.02em; }
 }

@@ -347,3 +347,13 @@ test('every service carries a short, unique, uppercase code for compact surfaces
     assert.equal(s.abrev[0], s.nom[0].toUpperCase(), s.abrev + ' should start like ' + s.nom);
   });
 });
+
+test('every service has a short name that fits a calendar cell', () => {
+  D.SERVICES.forEach((s) => {
+    assert.equal(typeof s.nomCourt, 'string', s.id + ' has no nomCourt');
+    assert.ok(s.nomCourt.length > 0 && s.nomCourt.length <= 16, s.nomCourt + ' is too long for a cell');
+    assert.ok(!s.nomCourt.includes(' '), s.nomCourt + ' should be a single word');
+    assert.ok(s.nom.startsWith(s.nomCourt), s.nomCourt + ' must be a prefix of ' + s.nom);
+  });
+  assert.equal(new Set(D.SERVICES.map((s) => s.nomCourt)).size, D.SERVICES.length, 'short names must be distinct');
+});

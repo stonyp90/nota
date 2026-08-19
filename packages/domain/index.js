@@ -68,6 +68,9 @@
     {
       id: 'testament',
       nom: 'Testament et mandat de protection',
+      // What fits a calendar cell. The full `nom` is used wherever there is
+      // room for it (list cards, the day dialog, the legend's own key).
+      nomCourt: 'Testament',
       // Three-letter code printed beside a price on a calendar cell or list card,
       // where there is no room for the name. The legend pairs code, colour and
       // name, so the code is recognised at a glance and decodable when it isn't.
@@ -128,6 +131,7 @@
     {
       id: 'procuration',
       nom: 'Procuration',
+      nomCourt: 'Procuration',
       abrev: 'PRO',
       prixDepart: 750,
       description:
@@ -174,6 +178,7 @@
     {
       id: 'refinancement',
       nom: 'Refinancement hypothécaire',
+      nomCourt: 'Refinancement',
       abrev: 'REF',
       // Refinancement is priced well above the other acts: it is the most work
       // (loan act + hypothec publication + title/certificate review) and carries

@@ -782,9 +782,20 @@
 
     // Each week is its own role="row" of exactly 7 cells. Leading/trailing
     // blanks are empty gridcells so every row stays a full 7 columns.
+    // Row index (0-based) of the week containing today, when today is in the
+    // displayed month. Earlier rows hold nothing bookable, so they are skipped.
+    var firstRow = 0;
+    if (monthKey(today) === monthKey(state.anchor)) {
+      firstRow = Math.floor((lead + Number(today.slice(8, 10)) - 1) / 7);
+    }
     var week = null;
-    function openRow() { week = el('div', 'cal-row'); week.setAttribute('role', 'row'); grid.appendChild(week); }
-    function blank() { var b = el('div', 'cal-cell is-out'); b.setAttribute('role', 'gridcell'); week.appendChild(b); }
+    var rowIndex = -1;
+    function openRow() {
+      rowIndex++;
+      if (rowIndex < firstRow) { week = null; return; }   // wholly-past week: skip
+      week = el('div', 'cal-row'); week.setAttribute('role', 'row'); grid.appendChild(week);
+    }
+    function blank() { if (!week) return; var b = el('div', 'cal-cell is-out'); b.setAttribute('role', 'gridcell'); week.appendChild(b); }
     var slot = 0;
     openRow();
     for (var i = 0; i < lead; i++) { blank(); slot++; }
@@ -819,7 +830,7 @@
         var avg = Math.round(pool.reduce(function (s, b) { return s + (Number(b.montant) || 0); }, 0) / pool.length);
         if (open.length) { cell.classList.add('is-avail'); } else { cell.classList.add('is-taken'); }
         // What is being offered, per act. Nothing here needs explaining.
-        var bids = serviceBids('cal-svc-bids', dayBids);
+        var bids = serviceBids('cal-svc-bids', dayBids, true);   // short name: a cell is narrow
         if (bids) cell.appendChild(bids);
         else {
           // Every offer on this day is already retained: show what cleared.
@@ -866,7 +877,8 @@
       }
 
       if (!isPast) cell.addEventListener('click', function () { openDay(this.dataset.date); });
-      week.appendChild(cell);
+      if (week) week.appendChild(cell);
+
       slot++;
     }
 
@@ -908,7 +920,7 @@
   var PCT = '\u00A0%';
   // The best OPEN offer per act on a day, colour-keyed to the Service legend.
   // Collapsed cells show the amount alone; expanded ones add the act's name.
-  function serviceBids(cls, dayBids) {
+  function serviceBids(cls, dayBids, useShortName) {
     var best = {};
     dayBids.forEach(function (b) {
       if (b.status === D.STATUS.RETENUE) return;         // only what is still winnable
@@ -925,7 +937,12 @@
       var dot = el('span', 'svc-bid-dot');
       dot.style.background = 'var(--svc-' + svc.id + ')';
       item.appendChild(dot);
+      // The full name is what a client actually reads. The short code stays in
+      // the DOM beside it and is swapped in by CSS only where a cell is too
+      // narrow to hold the name (see the @container rules), so the information
+      // degrades rather than disappears.
       item.appendChild(el('span', 'svc-bid-code', svc.abrev));
+      item.appendChild(el('span', 'svc-bid-name', useShortName ? svc.nomCourt : svc.nom));
       var amt = el('span', 'svc-bid-amount', D.money(amount));
       amt.dataset.compact = compactMoney(amount);
       item.appendChild(amt);
@@ -980,7 +997,7 @@
       var code = el('span', 'legend-code', s.abrev);
       code.style.color = 'var(--svc-' + s.id + ')';
       item.appendChild(code);
-      item.appendChild(document.createTextNode(s.nom.split(' ')[0]));
+      item.appendChild(document.createTextNode(s.nom));
       lg.appendChild(item);
     });
     // The two figures printed in every cell were never named anywhere: the % had

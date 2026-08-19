@@ -121,10 +121,28 @@ test('store is offline and monthBids is seeded deterministically', async () => {
 
 // 3. Calendar grid: one day cell per day-of-month + 7 weekday headers.
 test('calendar renders day cells for the anchor month and 7 weekday headers', async () => {
-  const { doc, anchor } = await bootCalendar();
+  const { doc, anchor, today } = await bootCalendar();
   const dayCells = all(doc, '#cal-grid .cal-cell:not(.is-out)');
-  assert.equal(dayCells.length, daysInMonthUTC(anchor));
   assert.equal(all(doc, '#cal-grid .cal-dow').length, 7);
+
+  // Weeks entirely in the past are not rendered at all — they held nothing
+  // bookable and cost a third of the grid's height. Every remaining day of the
+  // month is present, from the start of today's week onward.
+  const dim = daysInMonthUTC(anchor);
+  const dayNums = dayCells.map((c) => Number(c.dataset.date.slice(8, 10)));
+  assert.equal(dayNums[dayNums.length - 1], dim, 'the month still runs to its last day');
+  assert.ok(dayCells.length <= dim);
+
+  const todayDay = Number(today.slice(8, 10));
+  if (today.slice(0, 7) === anchor.slice(0, 7)) {
+    assert.ok(dayNums.includes(todayDay), 'today is always rendered');
+    // Nothing from a week that ended before today's week began.
+    const firstShown = dayNums[0];
+    assert.ok(firstShown <= todayDay, 'today is not the first cell unless its week starts there');
+    assert.ok(todayDay - firstShown < 7, 'at most the current week is shown before today');
+  } else {
+    assert.equal(dayCells.length, dim, 'a month without today renders in full');
+  }
 });
 
 // 4. Legend shows one item per tier (5).
