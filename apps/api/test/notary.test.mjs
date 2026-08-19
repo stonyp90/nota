@@ -58,7 +58,7 @@ async function seedBid(a, over = {}) {
   const res = await postBid(a, {
     serviceId: 'testament',
     dateISO: '2026-08-20',
-    montant: 800,
+    montant: 1400,
     courriel: 'client@example.ca',
     dossier: SAMPLE_DOSSIER,
     ...over,
@@ -152,7 +152,7 @@ test('GET /notary/bids labels a hard file "complexe" with its factors', async ()
 test('GET /notary/bids excludes bids this notary declined and supports ?service=', async () => {
   const a = app();
   const b1 = await seedBid(a, { serviceId: 'testament', dateISO: '2026-08-20' });
-  const b2 = await seedBid(a, { serviceId: 'procuration', dateISO: '2026-08-21', montant: 400 });
+  const b2 = await seedBid(a, { serviceId: 'procuration', dateISO: '2026-08-21', montant: 900 });
   const { token } = await session(a, 'me@notaire.ca');
 
   // Decline b1 -> it drops from the list.

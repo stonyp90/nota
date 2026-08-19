@@ -950,6 +950,8 @@ dialog::backdrop { background: var(--backdrop); }
 .day-bids:empty { display: none; }
 .day-bids .bid-row:first-child { border-top: 0; }
 .day-bids-more { padding: 8px 14px; font-size: 12px; color: var(--ink-muted); border-top: 1px solid var(--border); }
+.day-bids-rest[hidden] { display: none; }
+.day-bids-toggle { width: 100%; margin: 6px 0 2px; justify-content: center; }
 /* Scale guard: a day-group caps its rows and links to the full day view. */
 .agenda-more { display: block; width: 100%; text-align: left; appearance: none; background: transparent; border: 0; border-top: 1px solid var(--border); padding: 8px 14px; font: inherit; font-size: 12px; font-weight: 600; color: var(--brand); cursor: pointer; }
 .agenda-more:hover { background: var(--surface-hover); }

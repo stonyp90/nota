@@ -433,6 +433,7 @@
     var role = accountRole();
     var name = $('acct-name'), email = $('acct-email'), roleTag = $('acct-role');
     var panel = $('notif-panel'); if (panel) panel.dataset.role = role;
+    var signinBtn = $('header-signin'); if (signinBtn) signinBtn.hidden = role !== 'anon';
     var p = profileGet();
 
     if (role === 'notary') {
@@ -934,10 +935,27 @@
       : 'Aucune offre · ' + when + ' · soyez le premier';
 
     var list = $('day-bids'); clear(list);
-    var DAY_CAP = 40; // bound the DOM even if a day draws hundreds of offers
-    shown.slice(0, DAY_CAP).forEach(function (b) { list.appendChild(bidRow(b)); });
-    if (shown.length > DAY_CAP) {
-      list.appendChild(el('div', 'day-bids-more', '+ ' + (shown.length - DAY_CAP) + ' autres · les ' + DAY_CAP + ' meilleures offres sont affichées'));
+    var INITIAL = 3;   // keep the modal compact: only the top 3, rest behind "voir plus"
+    var DAY_CAP = 40;  // hard bound so a day with hundreds never floods the DOM
+    var capped = shown.slice(0, DAY_CAP);
+    capped.slice(0, INITIAL).forEach(function (b) { list.appendChild(bidRow(b)); });
+    if (capped.length > INITIAL) {
+      var rest = el('div', 'day-bids-rest'); rest.hidden = true;
+      capped.slice(INITIAL).forEach(function (b) { rest.appendChild(bidRow(b)); });
+      list.appendChild(rest);
+      var n = capped.length - INITIAL;
+      var toggle = el('button', 'btn btn-sm day-bids-toggle', 'Voir les ' + n + ' autres offres'); toggle.type = 'button';
+      toggle.setAttribute('aria-expanded', 'false');
+      toggle.addEventListener('click', function () {
+        var opening = rest.hidden;
+        rest.hidden = !opening;
+        toggle.setAttribute('aria-expanded', opening ? 'true' : 'false');
+        toggle.textContent = opening ? 'Voir moins' : 'Voir les ' + n + ' autres offres';
+      });
+      list.appendChild(toggle);
+      if (shown.length > DAY_CAP) {
+        list.appendChild(el('div', 'day-bids-more', '+ ' + (shown.length - DAY_CAP) + ' autres — les ' + DAY_CAP + ' meilleures sont affichées'));
+      }
     }
 
     var open = shown.filter(function (b) { return b.status !== D.STATUS.RETENUE; });
@@ -2575,6 +2593,8 @@
       b.addEventListener('click', function () { authSocial(b.dataset.provider); });
     });
     var authForm = $('auth-email-form'); if (authForm) authForm.addEventListener('submit', authSubmitEmail);
+    var headerSignin = $('header-signin'); if (headerSignin) headerSignin.addEventListener('click', function () { openAuthModal('client'); });
+    renderAccountMenu(); // set the initial header sign-in / avatar state on load
     // Click the backdrop (outside the body) to dismiss.
     var authDlg = $('auth-dialog');
     if (authDlg) authDlg.addEventListener('click', function (e) { if (e.target === authDlg) { try { authDlg.close(); } catch (er) {} } });

@@ -363,6 +363,7 @@ test('account menu opens and navigates to the profile', async () => {
   bell.click(); // open the account menu (re-renders it into the client state)
   assert.equal($(doc, 'notif-panel').hidden, false);
   assert.equal($(doc, 'notif-panel').dataset.role, 'client');
+  assert.equal($(doc, 'header-signin').hidden, true); // sign-in hidden once signed in
 
   $(doc, 'acct-profil').click(); // client head -> "Mon profil"
   assert.equal($(doc, 'pane-profil').hidden, false);
@@ -377,6 +378,7 @@ test('anonymous visitor sees no notifications', async () => {
   $(doc, 'notif-bell').click(); // open panel -> renders account menu + notifs (anonymous)
   assert.equal($(doc, 'notif-panel').dataset.role, 'anon');
   assert.equal($(doc, 'notif-badge').hidden, true); // no unread badge while logged out
+  assert.equal($(doc, 'header-signin').hidden, false); // visible sign-in when logged out
   // The sign-in / sign-up modal exists as the anonymous entry point.
   assert.ok($(doc, 'auth-dialog'), 'sign-in modal is present');
   assert.equal(doc.querySelectorAll('#auth-role .seg-btn').length, 2); // client / notary

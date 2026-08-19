@@ -351,7 +351,7 @@ test('end-to-end: post → pending (hidden) → authorize → accept pays the no
   // 1) Post an offer — PENDING, returns a Checkout URL, hidden from the carnet.
   const posted = parse(await app.handle({
     method: 'POST', path: '/bids',
-    body: JSON.stringify({ serviceId: 'testament', dateISO: '2026-08-20', montant: 700, prefixe: 'G1R', pricing: DEFAULT_PRICING.testament }),
+    body: JSON.stringify({ serviceId: 'testament', dateISO: '2026-08-20', montant: 1400, prefixe: 'G1R', pricing: DEFAULT_PRICING.testament }),
   }));
   assert.equal(posted.paymentStatus, 'pending');
   assert.match(posted.checkoutUrl, /^https:\/\/checkout\.stripe\.test\//);
