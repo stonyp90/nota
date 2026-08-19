@@ -728,12 +728,12 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
    meaning alone. */
 .cal-urgency {
   position: absolute; top: 6px; right: 26px;
-  font-size: 10px; font-weight: 800; letter-spacing: .01em; white-space: nowrap;
-  color: var(--tier-standard);
+  font-size: 11px; font-weight: 800; letter-spacing: .01em; white-space: nowrap;
+  color: var(--ink-muted);
 }
-.cal-urgency[data-tier='rapide'] { color: var(--tier-rapide); }
-.cal-urgency[data-tier='prioritaire'] { color: var(--tier-prioritaire); }
-.cal-urgency[data-tier='urgence'] { color: var(--tier-urgence); }
+.cal-urgency[data-tier='rapide'] { color: var(--tier-rapide-ink); }
+.cal-urgency[data-tier='prioritaire'] { color: var(--tier-prioritaire-ink); }
+.cal-urgency[data-tier='urgence'] { color: var(--tier-urgence-ink); }
 /* The steepest step is the one a client must not miss, so it is the only one
    that fills rather than tints. */
 .cal-urgency[data-tier='extreme'] { color: var(--on-accent, #fff); background: var(--tier-extreme); padding: 1px 5px; border-radius: 999px; }
@@ -841,18 +841,27 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
    a fine pointer, so here the cell can safely contain its own content again.
    Measured at 320/375/414: every act still prints its price, and nothing leaves
    its cell. The cost is height (87px -> 127px at 320), which a phone scrolls. */
+/* Pinned right:26px to clear the chevron, the multiplier escaped the left edge
+   of a narrow cell and printed on the previous day's number — up to 17px out at
+   320px, and still overlapping until a cell can spare ~65px. In flow it cannot.
+   Order puts it between the date and the price: it is what the price MEANS, so
+   it has to be read before it, and the DOM appends it last (app.js:928). */
+@container cal (max-width: 500px) {
+  .cal-urgency { position: static; align-self: flex-start; order: 1; }
+  .cal-svc-bids, .cal-avg { order: 2; }
+  /* Appended after .cal-svc-bids, so without this it outranks both above. */
+  .cal-more { order: 3; }
+  .cal-urgency[data-tier='extreme'] { padding: 0 var(--space-1); }
+}
 @container cal (max-width: 440px) {
   .cal-row { gap: 3px; }
   .cal-cell { padding: 5px 3px 8px; gap: 2px; align-items: center; overflow: hidden; }
-  .cal-daynum, .cal-cell.is-today .cal-daynum { align-self: center; }
+  .cal-daynum, .cal-cell.is-today .cal-daynum, .cal-urgency { align-self: center; }
   .cal-svc-bids { width: 100%; gap: 3px; }
   /* Glyph over price rather than beside it: 26px of width fits one or the other,
      never both. line-height pays back most of the height that stacking costs. */
   .cal-svc-bids .svc-bid { flex-direction: column; align-items: center; gap: 0; width: 100%; line-height: 1.05; }
   .cal-svc-bids .svc-bid-amount::after { letter-spacing: -0.03em; }
-  /* Pinned right:26px to clear the chevron, this escaped 17px to the LEFT of a
-     34px cell and landed on the previous day's number. In flow it cannot. */
-  .cal-urgency { position: static; align-self: center; }
   /* 26px is under any touch minimum, and the corner it sits in is needed for the
      date. Tapping the cell already opens the day dialog, which carries the full
      detail the chevron would have expanded. */
@@ -1708,7 +1717,11 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   .nav-tab { padding: 7px 10px; font-size: 13px; }
   .intro h1 { font-size: clamp(20px, 5.6vw, 25px); }
   .cal-cell { min-height: 62px; padding: 6px 6px; }
-  .cal-avg { font-size: 12px; }
+  /* .cal-avg deliberately has NO font-size here. The container query compacts it
+     by zeroing the font and reprinting attr(data-compact) from ::after; a
+     viewport rule that restores a visible size cannot remove the ::after, so the
+     two used to print together as "3 285 $3,3k". Sizing belongs to the container
+     queries, which is what this cell's content responds to anyway. */
     /* Sides stay at 14 so the grid lines up with the toolbar, filter bar and
      legend that bracket it inside the same card. */
   .cal-grid { gap: 4px; padding: var(--space-4) var(--space-7) var(--space-6); }
@@ -1766,7 +1779,7 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
    iPad portrait at 768) — not width-gated. Fine pointers (mouse/trackpad) keep the
    desktop density untouched. Includes the smaller controls that were being missed. */
 @media (pointer: coarse) {
-  .btn, .nav-tab, .chip, .seg-btn, .acct-legal-link { min-height: 44px; }
+  .btn, .nav-tab, .chip, .seg-btn, .acct-legal-link, input[type='range'] { min-height: 44px; }
   /* Footer links and the brand are plain <a>s (~20px tall) — they need the same
      thumb-sized hit area as the buttons above. inline-flex so the gap-based
      footer row keeps its alignment. */
