@@ -743,9 +743,9 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 /* --- Agenda / bid list --------------------------------------------------- */
 /* Agenda: a dense responsive grid of day-cards so it fills the full width below
    the calendar (no sparse full-width rows / blank space). */
-/* Row-aligned grid: day-groups line up in tidy rows/columns. Each day is capped to
-   its top 3 offers (rest behind "voir plus"), so heights stay close and rows align
-   without large gaps. */
+/* Row-aligned grid: day-groups line up in tidy rows/columns. Each day shows only
+   its best offer (the rest behind "+N autres offres"), so heights stay close and
+   rows align without large gaps. */
 .agenda { display: grid; grid-template-columns: repeat(auto-fill, minmax(clamp(240px, 24vw, 300px), 1fr)); gap: 12px; padding: 12px 16px 18px; align-items: stretch; }
 .agenda-group { background: var(--surface-inset); border-radius: var(--radius-lg); padding-bottom: 6px; overflow: hidden; display: flex; flex-direction: column; min-height: 128px; }
 /* A day with no bet is still a full rectangle: the placeholder fills the card and doubles as a "reserve this date" affordance. */
@@ -763,6 +763,19 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
   max-width: 44%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: none;
 }
 .agenda-group .agenda-day + .bid-row { border-top: 0; }
+/* A list card is only 240-390px wide at EVERY breakpoint (the grid packs 1-4
+   columns), and a single flex line cannot hold amount + name + service + tier +
+   actions: the client name and the service were ellipsised into "C..." /
+   "Refi..." on phones AND on a 1920 desktop alike. Give the numbers one line and
+   the identity its own full-width line beneath, via `order` (the markup order is
+   amount, meta, tier, actions). The day dialog keeps the single-line row — it
+   has 600px to work with. */
+.agenda .bid-row { flex-wrap: wrap; row-gap: 3px; }
+.agenda .bid-amount { order: 1; }
+.agenda .pill, .agenda .status-chip { order: 2; }
+.agenda .row-actions { order: 3; margin-left: auto; }
+.agenda .bid-meta { order: 4; flex: 1 0 100%; }
+.agenda .status-chip { max-width: none; }
 .bid-amount { font-weight: 800; font-size: 15px; min-width: 78px; }
 .bid-meta { flex: 1; min-width: 0; }
 .bid-who { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1387,6 +1400,24 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   /* Explainer stacks the badge over the text on narrow screens. */
   .hero-cta { gap: 8px; }
   .hero-cta .btn-lg { flex: 1 1 auto; }
+  /* Logged-out header: brand + nav + theme + TWO auth buttons cannot fit a phone
+     row — the primary CTA was being pushed past the viewport and clipped by the
+     overflow-x guard below, leaving no way to sign up at all. Drop the secondary
+     button (the modal it opens serves sign-in AND sign-up from one passwordless
+     field) and let the primary shrink. */
+  #header-login { display: none; }
+  .header-auth .btn { padding: 0 12px; font-size: 13px; white-space: nowrap; }
+}
+/* Below this the theme toggle is the first thing to go: the palette still
+   follows the OS via prefers-color-scheme, so nothing becomes unreachable. */
+@media (max-width: 560px) {
+  #theme-toggle { display: none; }
+}
+/* Smallest phones (320-360): the header wordmark yields to the logo mark, which
+   stays the home affordance. Scoped to the header — the footer reuses
+   .brand-word and has room for it. */
+@media (max-width: 360px) {
+  .site-header .brand-word { display: none; }
 }
 /* Comfortable touch targets on phones (>=44px), gated to coarse pointers so the
    desktop density is untouched. */
@@ -1395,6 +1426,10 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
    desktop density untouched. Includes the smaller controls that were being missed. */
 @media (pointer: coarse) {
   .btn, .nav-tab, .chip, .seg-btn, .acct-legal-link, .agenda-more { min-height: 44px; }
+  /* Footer links and the brand are plain <a>s (~20px tall) — they need the same
+     thumb-sized hit area as the buttons above. inline-flex so the gap-based
+     footer row keeps its alignment. */
+  .site-footer a, .brand { min-height: 44px; display: inline-flex; align-items: center; }
   .mini-btn { width: 44px; height: 44px; }
   .btn-icon, .cal-nav .btn { min-width: 44px; }
   .icon-btn, .day-close { width: 44px; height: 44px; }

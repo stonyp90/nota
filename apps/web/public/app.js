@@ -1023,7 +1023,7 @@
     }
     if (state.filters.sort === 'date-desc') order.reverse(); // else chronological
 
-    var PER_DAY = 2; // top 2 per day; the rest fold into a "+N" control
+    var PER_DAY = 1; // the single best offer per day; the rest fold into a "+N" control
     order.forEach(function (iso) {
       var dayBids = (groups[iso] || []).slice().sort(function (a, b) { return b.montant - a.montant; });
       var group = el('div', 'agenda-group' + (dayBids.length ? '' : ' is-vacant'));
@@ -1042,13 +1042,20 @@
       }
 
       dayBids.slice(0, PER_DAY).forEach(function (b) { group.appendChild(bidRow(b)); });
-      if (dayBids.length > PER_DAY) {
-        var extra = dayBids.length - PER_DAY;
-        var more = el('button', 'agenda-more', '+ ' + extra + ' autre' + (extra > 1 ? 's' : '') + ' offre' + (extra > 1 ? 's' : ''));
-        more.type = 'button';
-        more.addEventListener('click', function () { openDay(iso); });
-        group.appendChild(more);
-      }
+      // Always render the day control, even with nothing folded away: the rows
+      // themselves are not clickable, so without it a day showing its single
+      // offer would be a dead end with no way into the day dialog. It doubles as
+      // the uniform card footer, which keeps the grid rows aligned.
+      var extra = dayBids.length - PER_DAY;
+      var more = el('button', 'agenda-more', extra > 0
+        ? '+ ' + extra + ' autre' + (extra > 1 ? 's' : '') + ' offre' + (extra > 1 ? 's' : '')
+        : 'Voir cette journée');
+      more.type = 'button';
+      more.setAttribute('aria-label', (extra > 0
+        ? 'Voir les ' + dayBids.length + ' offres du '
+        : 'Voir la journée du ') + dayTitle(iso));
+      more.addEventListener('click', function () { openDay(iso); });
+      group.appendChild(more);
       ag.appendChild(group);
     });
   }

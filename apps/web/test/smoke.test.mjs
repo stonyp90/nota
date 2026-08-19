@@ -630,7 +630,7 @@ test('LIST: every upcoming day of the month renders a full card, even with no of
   if (dim > todayDay) assert.ok(vacant.length > 0, 'an empty upcoming day still renders a full rectangle');
 });
 
-test('LIST: a day shows at most two offers; the rest fold into a "+N autres offres" control', async () => {
+test('LIST: a day shows only its best offer; the rest fold into a "+N autres offres" control', async () => {
   const ctx = await boot();
   const iso = ctx.today;
   await reseed(ctx, [1900, 1700, 1500, 1300].map(function (montant, i) {
@@ -641,10 +641,30 @@ test('LIST: a day shows at most two offers; the rest fold into a "+N autres offr
 
   const card = ctx.doc.querySelector('#agenda .agenda-group[data-date="' + iso + '"]');
   assert.ok(card, 'today has a card');
-  assert.equal(card.querySelectorAll('.bid-row').length, 2, 'at most two offers shown per day');
+  const rows = card.querySelectorAll('.bid-row');
+  assert.equal(rows.length, 1, 'a single offer shown per day');
+  assert.match(rows[0].querySelector('.bid-amount').textContent, /1\s*900/, 'and it is the highest one');
   const more = card.querySelector('.agenda-more');
   assert.ok(more, 'the overflow folds into a "+N autres offres" control');
-  assert.match(more.textContent, /\+\s*2\s+autres\s+offres/);
+  assert.match(more.textContent, /\+\s*3\s+autres\s+offres/);
+});
+
+test('LIST: a day with a single offer still offers a way into the day dialog', async () => {
+  const ctx = await boot();
+  const iso = ctx.today;
+  // Exactly one offer: nothing folds away, so there is no "+N" control. The card
+  // must still expose the day, or the rows (which are not clickable) dead-end.
+  await reseed(ctx, [{ id: 'solo', serviceId: 'testament', dateISO: iso, montant: 1500,
+    tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso }]);
+  ctx.Nota.setView('liste');
+
+  const card = ctx.doc.querySelector('#agenda .agenda-group[data-date="' + iso + '"]');
+  assert.equal(card.querySelectorAll('.bid-row').length, 1, 'its single offer is shown');
+  const open = card.querySelector('.agenda-more');
+  assert.ok(open, 'the card still carries a day control');
+  assert.equal(open.textContent, 'Voir cette journée');
+  open.click();
+  assert.equal($(ctx.doc, 'day-dialog').open, true, 'and it opens the day dialog');
 });
 
 test('EDGE (UI): a mixed open/retained day stays available with the open average', async () => {
