@@ -684,15 +684,23 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
    month reads as figures on a grid, not a wall of green rectangles. */
 .cal-cell.has-bids { background: transparent; }
 .cal-cell.has-bids:hover { background: var(--surface-hover); }
-/* Left urgency strip — a compact tier signal that NEVER clips. It draws the eye
-   on elevated-urgency days at a glance, and at narrow widths (container queries
-   below) it fully replaces the tier pill, which cannot fit a small cell. */
-.cal-cell.has-bids::before {
-  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
-  border-radius: var(--radius-sm) 0 0 var(--radius-sm); background: transparent; pointer-events: none;
+/* Urgency, said in words and only on the dates where it changes the decision.
+   A calm date shows nothing: its tier is a pure function of the date the cell
+   already prints, so a marker there is noise. Elevated dates get a named label
+   plus a matching left edge — colour reinforces the word, it never carries the
+   meaning alone. */
+.cal-urgency {
+  align-self: flex-start; margin-top: 3px; padding: 1px 7px; border-radius: 999px;
+  font-size: 10px; font-weight: 800; letter-spacing: .02em; white-space: nowrap;
+  border: 1px solid currentColor; color: var(--tier-prioritaire);
 }
-.cal-cell[data-tier='rapide']::before { background: var(--tier-rapide); }
-.cal-cell[data-tier='prioritaire']::before { background: var(--tier-prioritaire); }
+.cal-urgency[data-tier='urgence'] { color: var(--tier-urgence); }
+.cal-urgency[data-tier='extreme'] { color: var(--tier-extreme); background: var(--tier-extreme); border-color: var(--tier-extreme); color: var(--on-brand, #fff); }
+.cal-cell[data-tier]::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm); pointer-events: none;
+  background: var(--tier-prioritaire);
+}
 .cal-cell[data-tier='urgence']::before { background: var(--tier-urgence); }
 .cal-cell[data-tier='extreme']::before { background: var(--tier-extreme); }
 .cal-daynum { font-size: 12px; font-weight: 600; color: var(--ink-muted); }
@@ -721,12 +729,30 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
    legend, so the act's name is never repeated on a cell or a card. */
 .svc-bid { display: inline-flex; align-items: baseline; gap: 5px; min-width: 0; max-width: 100%; }
 .svc-bid-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; align-self: center; }
-/* The name leads; the short code is the fallback for cells too narrow to hold
-   it, and is hidden until a container query asks for it. */
-.svc-bid-code { display: none; font-size: 9.5px; font-weight: 800; letter-spacing: .06em; opacity: .85; }
 .svc-bid-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .svc-bid-amount { font-weight: 800; letter-spacing: -0.02em; white-space: nowrap; }
-.legend-code { font-size: 9.5px; font-weight: 800; letter-spacing: .06em; margin-right: 1px; }
+
+/* A calendar cell prints the dot and the price only. Hovering the row names the
+   act, so the colour never has to be memorised — the legend is the fallback,
+   and the name sits in the DOM for screen readers either way. Nothing on the
+   path to the grid clips, so the bubble escapes its cell cleanly. */
+.cal-svc-bids .svc-bid { position: relative; }
+.cal-svc-bids .svc-bid::after {
+  content: attr(data-name);
+  position: absolute; bottom: calc(100% + 6px); left: -4px;
+  z-index: 6; padding: 4px 9px; border-radius: var(--radius-sm);
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--border-strong); box-shadow: var(--shadow);
+  font-size: 11.5px; font-weight: 600; line-height: 1.3; white-space: nowrap;
+  opacity: 0; transform: translateY(2px); pointer-events: none;
+  transition: opacity .12s ease, transform .12s ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .cal-svc-bids .svc-bid:hover::after { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cal-svc-bids .svc-bid::after { transition: none; }
+}
 .cal-svc-bids { display: flex; flex-direction: column; gap: 2px; margin-top: auto; min-width: 0; font-size: 12.5px; }
 .cal-svc-bids .svc-bid { min-width: 0; }
 .agenda-svc-bids { display: flex; flex-direction: column; gap: 4px; padding: 2px 14px 10px; font-size: 13.5px; }
@@ -769,10 +795,6 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 @container cal (max-width: 740px) {
   .cal-avg { font-size: 13px; }
   .cal-svc-bids .svc-bid-amount { font-size: 11.5px; }
-  /* Too narrow for "Refinancement hypothécaire": the three-letter code takes
-     over, and the legend still decodes it. */
-  .cal-svc-bids .svc-bid-name { display: none; }
-  .cal-svc-bids .svc-bid-code { display: inline; }
   /* "En attente / Approuvé / Expiré" would clip, so collapse the own-offer badge to a status dot. */
   .cal-mine { font-size: 0; padding: 0; margin-top: 3px; width: 9px; height: 9px; border: 0; border-radius: 50%; background: currentColor; }
   .cal-mine[data-status='expired'] { background: var(--ink-muted); }
@@ -782,7 +804,8 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
   .cal-daynum { font-size: 11px; }
   /* Cells get too narrow for "3 285 $": swap to the compact form (data-compact),
      which always fits. The full amount stays in the DOM + day dialog for a11y. */
-  .cal-svc-bids .svc-bid-code { display: none; }
+  .cal-urgency { font-size: 0; padding: 0; margin-top: 2px; width: 8px; height: 8px; border-radius: 50%; background: currentColor; border: 0; }
+  .cal-urgency[data-tier='extreme'] { background: var(--tier-extreme); }
   .cal-svc-bids .svc-bid-amount { font-size: 0; }
   .cal-svc-bids .svc-bid-amount::after { content: attr(data-compact); font-size: 11px; font-weight: 800; }
   .cal-avg { font-size: 0; }

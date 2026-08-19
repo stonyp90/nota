@@ -171,12 +171,20 @@ test('a day with bids shows the best open offer per act', async () => {
   // (the Service key in the legend carries it).
   const priced = hasBids.filter((c) => c.querySelector('.cal-svc-bids'));
   assert.ok(priced.length > 0, 'at least one day still has an open offer');
+  const names = D.SERVICES.map((sv) => sv.nom);
   priced.forEach((c) => {
     const items = [...c.querySelectorAll('.svc-bid')];
     assert.ok(items.length > 0 && items.length <= D.SERVICES.length);
     items.forEach((it) => {
       assert.ok(it.querySelector('.svc-bid-dot'), 'each price carries its act colour');
       assert.match(it.querySelector('.svc-bid-amount').textContent, /\u00A0\$$/, 'formatted through money()');
+      // A cell prints the dot and the price only — no visible act name.
+      assert.equal(it.querySelector('.svc-bid-name'), null, 'no visible name in a cell');
+      // ...but the name must reach a screen reader, which has no hover and
+      // cannot see a colour, and must feed the hover tooltip.
+      const sr = it.querySelector('.visually-hidden');
+      assert.ok(sr && names.includes(sr.textContent), 'the act is named for assistive tech');
+      assert.equal(it.dataset.name, sr.textContent, 'the tooltip names the same act');
     });
   });
   // The odds percentage is gone from the compact surface.
@@ -737,6 +745,32 @@ test('CARNET: rests on open offers; retained ones are one filter click away', as
   assert.equal(ctx.Nota.state.filters.statut, 'retenue');
   ctx.doc.querySelector('#seg-statut .seg-btn[data-statut=""]').click();
   assert.equal(ctx.Nota.state.filters.statut, '', 'and "Toutes" still shows everything');
+});
+
+test('URGENCY: named on the dates that carry a premium, absent on calm ones', async () => {
+  const ctx = await bootCalendar();
+  const iso = ctx.D.addDays(ctx.today, 1);       // extreme: 0-1 days out
+  const calm = ctx.D.addDays(ctx.today, 20);     // standard: 15+ days out
+  const mk = (id, dateISO) => ({ id, serviceId: 'testament', dateISO, montant: 1500,
+    tier: ctx.D.tierForDays(ctx.D.daysBetween(ctx.today, dateISO)),
+    status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: dateISO });
+  await reseed(ctx, [mk('u1', iso), mk('c1', calm)]);
+
+  const urgent = ctx.doc.querySelector('.cal-cell[data-date="' + iso + '"]');
+  const label = urgent.querySelector('.cal-urgency');
+  assert.ok(label, 'a near date names its urgency');
+  const tier = ctx.D.tierById(ctx.D.tierForDays(ctx.D.daysBetween(ctx.today, iso)));
+  assert.ok(tier.eleve, 'and that tier is an elevated one');
+  assert.equal(label.textContent, tier.nom, 'in words, from the domain — never a bare colour');
+  assert.equal(label.dataset.tier, tier.id);
+  assert.equal(urgent.dataset.tier, tier.id, 'the cell edge matches the label');
+
+  // A calm date says nothing: its tier is already implied by the date itself.
+  const calmCell = ctx.doc.querySelector('.cal-cell[data-date="' + calm + '"]');
+  if (calmCell) {
+    assert.equal(calmCell.querySelector('.cal-urgency'), null, 'no urgency marker on a calm date');
+    assert.equal(calmCell.dataset.tier, undefined, 'and no coloured edge either');
+  }
 });
 
 test('VIEW: the carnet opens on the list, with the calendar as the second option', async () => {

@@ -71,10 +71,6 @@
       // What fits a calendar cell. The full `nom` is used wherever there is
       // room for it (list cards, the day dialog, the legend's own key).
       nomCourt: 'Testament',
-      // Three-letter code printed beside a price on a calendar cell or list card,
-      // where there is no room for the name. The legend pairs code, colour and
-      // name, so the code is recognised at a glance and decodable when it isn't.
-      abrev: 'TES',
       // Nota starting price for the two-act bundle (will + protection mandate).
       prixDepart: 1250,
       description:
@@ -132,7 +128,6 @@
       id: 'procuration',
       nom: 'Procuration',
       nomCourt: 'Procuration',
-      abrev: 'PRO',
       prixDepart: 750,
       description:
         'Procuration générale ou spéciale pour agir en votre nom.',
@@ -179,7 +174,6 @@
       id: 'refinancement',
       nom: 'Refinancement hypothécaire',
       nomCourt: 'Refinancement',
-      abrev: 'REF',
       // Refinancement is priced well above the other acts: it is the most work
       // (loan act + hypothec publication + title/certificate review) and carries
       // real value at stake, so the floor starts at 2000 $ and rises with the
@@ -389,12 +383,16 @@
   // It is the axis that makes the public calendar meaningful: closer date,
   // higher tier, higher premium the market will bear. Order matters (ascending
   // urgency) and is relied on by the UI legend.
+  // `eleve` marks the tiers where the date itself is the problem: a notary has
+  // to clear their week for it, and the market prices that. Only these are worth
+  // calling out on a calendar cell — on a calm date the tier is noise, because
+  // the tier is a pure function of the date the cell already shows.
   const TIERS = [
-    { id: 'standard',    nom: 'Standard',    maxJours: null, apercuMin: 1.0, apercuMax: 1.2 },
-    { id: 'rapide',      nom: 'Rapide',      maxJours: 14,   apercuMin: 1.2, apercuMax: 1.5 },
-    { id: 'prioritaire', nom: 'Prioritaire', maxJours: 7,    apercuMin: 1.6, apercuMax: 2.2 },
-    { id: 'urgence',     nom: 'Urgent',     maxJours: 3,    apercuMin: 2.5, apercuMax: 4.0 },
-    { id: 'extreme',     nom: 'Extrême',     maxJours: 1,    apercuMin: 4.0, apercuMax: 10.0 },
+    { id: 'standard',    nom: 'Standard',    maxJours: null, apercuMin: 1.0, apercuMax: 1.2,  eleve: false },
+    { id: 'rapide',      nom: 'Rapide',      maxJours: 14,   apercuMin: 1.2, apercuMax: 1.5,  eleve: false },
+    { id: 'prioritaire', nom: 'Prioritaire', maxJours: 7,    apercuMin: 1.6, apercuMax: 2.2,  eleve: true },
+    { id: 'urgence',     nom: 'Urgent',      maxJours: 3,    apercuMin: 2.5, apercuMax: 4.0,  eleve: true },
+    { id: 'extreme',     nom: 'Extrême',     maxJours: 1,    apercuMin: 4.0, apercuMax: 10.0, eleve: true },
   ];
 
   function tierById(id) {

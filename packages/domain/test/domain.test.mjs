@@ -333,21 +333,6 @@ test('every fixture postal prefix is a valid Quebec prefix', () => {
     .forEach((b) => assert.ok(D.isQuebecPostalPrefix(b.prefixe), b.prefixe + ' should be a Quebec prefix'));
 });
 
-test('every service carries a short, unique, uppercase code for compact surfaces', () => {
-  const codes = D.SERVICES.map((s) => s.abrev);
-  assert.equal(codes.length, D.SERVICES.length);
-  codes.forEach((c, i) => {
-    assert.equal(typeof c, 'string', D.SERVICES[i].id + ' has no abrev');
-    assert.ok(c.length >= 2 && c.length <= 4, c + ' must stay short enough for a calendar cell');
-    assert.equal(c, c.toUpperCase(), c + ' must be uppercase');
-  });
-  assert.equal(new Set(codes).size, codes.length, 'codes must be unambiguous');
-  // Each code should plausibly stand for its own service name.
-  D.SERVICES.forEach((s) => {
-    assert.equal(s.abrev[0], s.nom[0].toUpperCase(), s.abrev + ' should start like ' + s.nom);
-  });
-});
-
 test('every service has a short name that fits a calendar cell', () => {
   D.SERVICES.forEach((s) => {
     assert.equal(typeof s.nomCourt, 'string', s.id + ' has no nomCourt');
@@ -356,4 +341,23 @@ test('every service has a short name that fits a calendar cell', () => {
     assert.ok(s.nom.startsWith(s.nomCourt), s.nomCourt + ' must be a prefix of ' + s.nom);
   });
   assert.equal(new Set(D.SERVICES.map((s) => s.nomCourt)).size, D.SERVICES.length, 'short names must be distinct');
+});
+
+test('elevated tiers are exactly the ones that carry a real premium', () => {
+  const eleves = D.TIERS.filter((t) => t.eleve);
+  const calmes = D.TIERS.filter((t) => !t.eleve);
+  assert.ok(eleves.length > 0 && calmes.length > 0, 'the split must be meaningful');
+  D.TIERS.forEach((t) => assert.equal(typeof t.eleve, 'boolean', t.id + ' has no eleve flag'));
+
+  // The flag must track the pricing ladder, not be set by hand out of step with
+  // it: every elevated tier prices above every calm one.
+  const worstCalm = Math.max(...calmes.map((t) => t.apercuMax));
+  const bestEleve = Math.min(...eleves.map((t) => t.apercuMin));
+  assert.ok(bestEleve >= worstCalm, 'an elevated tier must price above every calm tier');
+
+  // And they must be the CLOSEST dates: every elevated tier has a tighter
+  // deadline than every calm one (maxJours null = the open-ended far tier).
+  const calmDays = calmes.map((t) => (t.maxJours == null ? Infinity : t.maxJours));
+  eleves.forEach((t) => assert.ok(t.maxJours != null && t.maxJours < Math.min(...calmDays),
+    t.id + ' should be nearer than every calm tier'));
 });

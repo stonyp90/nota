@@ -830,7 +830,7 @@
         var avg = Math.round(pool.reduce(function (s, b) { return s + (Number(b.montant) || 0); }, 0) / pool.length);
         if (open.length) { cell.classList.add('is-avail'); } else { cell.classList.add('is-taken'); }
         // What is being offered, per act. Nothing here needs explaining.
-        var bids = serviceBids('cal-svc-bids', dayBids, true);   // short name: a cell is narrow
+        var bids = serviceBids('cal-svc-bids', dayBids, false);  // dot only: a cell has no room
         if (bids) cell.appendChild(bids);
         else {
           // Every offer on this day is already retained: show what cleared.
@@ -843,7 +843,20 @@
         // (CSS reads data-tier) and the detail line revealed on hover.
         var topBid = pool.slice().sort(function (a, b) { return b.montant - a.montant; })[0];
         var topTier = D.tierById(topBid && topBid.tier ? topBid.tier : 'standard');
-        if (topTier) cell.dataset.tier = topTier.id;
+        // Urgency is a pure function of the date, and the grid already shows the
+        // date — so a tier marker on every cell restates what the reader can
+        // see, in a fifth and sixth colour competing with the act colours. Say
+        // it in words, and only where it changes the decision: the near dates a
+        // notary has to clear their week for.
+        if (topTier && topTier.eleve) {
+          cell.dataset.tier = topTier.id;
+          var urg = el('span', 'cal-urgency', topTier.nom);
+          urg.dataset.tier = topTier.id;
+          urg.title = 'Délai serré — le marché se conclut ici entre '
+            + topTier.apercuMin.toFixed(1).replace('.', ',') + '× et '
+            + topTier.apercuMax.toFixed(1).replace('.', ',') + '× le prix de départ.';
+          cell.appendChild(urg);
+        }
         // Expanding is only offered when it reveals something the collapsed cell
         // does not already say: how deep the competition is, and the number to
         // beat. Everything else (act, urgency) is carried by the legend and the
@@ -920,7 +933,7 @@
   var PCT = '\u00A0%';
   // The best OPEN offer per act on a day, colour-keyed to the Service legend.
   // Collapsed cells show the amount alone; expanded ones add the act's name.
-  function serviceBids(cls, dayBids, useShortName) {
+  function serviceBids(cls, dayBids, showName) {
     var best = {};
     dayBids.forEach(function (b) {
       if (b.status === D.STATUS.RETENUE) return;         // only what is still winnable
@@ -933,16 +946,17 @@
       if (amount == null) return;
       var item = el('span', 'svc-bid');
       item.style.color = 'var(--svc-' + svc.id + ')';
-      item.title = svc.nom + ' — meilleure offre ouverte : ' + D.money(amount);
+      // Carried for the CSS tooltip a calendar cell shows on hover, where there
+      // is no room to print the name.
+      item.dataset.name = svc.nom;
       var dot = el('span', 'svc-bid-dot');
       dot.style.background = 'var(--svc-' + svc.id + ')';
       item.appendChild(dot);
-      // The full name is what a client actually reads. The short code stays in
-      // the DOM beside it and is swapped in by CSS only where a cell is too
-      // narrow to hold the name (see the @container rules), so the information
-      // degrades rather than disappears.
-      item.appendChild(el('span', 'svc-bid-code', svc.abrev));
-      item.appendChild(el('span', 'svc-bid-name', useShortName ? svc.nomCourt : svc.nom));
+      // A cell shows the dot alone — the colour is decoded by the legend, and
+      // hovering names the act. A list card has the room, so it prints the name.
+      // Either way the name is in the DOM for screen readers, which have no
+      // hover and cannot see a colour.
+      item.appendChild(el('span', showName ? 'svc-bid-name' : 'visually-hidden', svc.nom));
       var amt = el('span', 'svc-bid-amount', D.money(amount));
       amt.dataset.compact = compactMoney(amount);
       item.appendChild(amt);
@@ -994,9 +1008,6 @@
       var item = el('span', 'legend-status-item');
       var dot = el('span', 'legend-dot'); dot.style.background = 'var(--svc-' + s.id + ')';
       item.appendChild(dot);
-      var code = el('span', 'legend-code', s.abrev);
-      code.style.color = 'var(--svc-' + s.id + ')';
-      item.appendChild(code);
       item.appendChild(document.createTextNode(s.nom));
       lg.appendChild(item);
     });
@@ -1178,7 +1189,7 @@
       // Collapsed, a card says one thing per act: what it currently takes. The
       // colour is decoded by the Service key in the legend, so no name is
       // repeated here.
-      var bids = serviceBids('agenda-svc-bids', dayBids);
+      var bids = serviceBids('agenda-svc-bids', dayBids, true);
       if (bids) group.appendChild(bids);
 
       var openBids = dayBids.filter(function (b) { return b.status !== D.STATUS.RETENUE; });
