@@ -33,6 +33,7 @@
   // change this interface — apps/web depends only on these two methods.
   // ---------------------------------------------------------------------------
   var LS_BIDS = 'nota.bids.v1';
+  var LS_BIDS_SIG = 'nota.bids.sig.v1';
 
   function lsLoad(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
   function lsSave(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
@@ -55,7 +56,10 @@
   }
   function ensureSeed() {
     var a = lsLoad(LS_BIDS);
-    if (!a) { a = D.makeFixtures(todayISO()); lsSave(LS_BIDS, a); }
+    var sig = D.seedSignature();
+    // A seed from an older pricing model would put medians below today's
+    // floors — rebuild the demo data whenever the pricing shape changes.
+    if (!a || flagGet(LS_BIDS_SIG) !== sig) { a = D.makeFixtures(todayISO()); lsSave(LS_BIDS, a); flagSet(LS_BIDS_SIG, sig); }
     return a;
   }
 
@@ -2541,6 +2545,34 @@
     });
   }
 
+  // Email subscription beside the calendar card — the same public carnet,
+  // delivered by courriel when a new date opens. Stored locally for the demo;
+  // a deployment would register the address with the API's notifier instead.
+  var LS_CARNET_MAIL = 'nota.carnet.mail.v1';
+  function renderCarnetMail() {
+    var form = $('carnet-mail-form'), done = $('carnet-mail-done');
+    if (!form || !done) return;
+    var email = flagGet(LS_CARNET_MAIL);
+    form.hidden = !!email;
+    done.hidden = !email;
+    var addr = $('carnet-mail-addr');
+    if (addr) addr.textContent = email ? 'Abonné : ' + email : '';
+  }
+  function carnetMailSubscribe() {
+    var input = $('carnet-mail-input');
+    var val = input ? input.value.trim() : '';
+    if (!val || !D.isEmail(val)) { toast('Courriel invalide.'); return; }
+    flagSet(LS_CARNET_MAIL, val); // local for the demo; a deployment would register this with the API's notifier
+    toast('Abonné — vous recevrez les nouvelles dates.');
+    renderCarnetMail();
+  }
+  function carnetMailUnsubscribe() {
+    flagClear(LS_CARNET_MAIL);
+    var input = $('carnet-mail-input'); if (input) input.value = '';
+    toast('Désabonné.');
+    renderCarnetMail();
+  }
+
   function ncSetErrors(msgs) {
     var box = $('notary-console-errors'); if (!box) return;
     clear(box);
@@ -2740,7 +2772,9 @@
         chip.title = it.nomCourt + ' · ' + D.money(it.montant) + ' · ' + dayShort(it.dateISO) +
           (it.retenue ? ' · retenue par ' + (it.etude || 'un notaire') : '');
         var top = el('span', 'nc-week-chip-top');
-        top.appendChild(el('span', 'nc-week-chip-dot'));
+        // The act's own glyph when it has one (it inherits the chip's --svc-*
+        // colour via currentColor); the colour dot otherwise.
+        top.appendChild(svcIcon(it.serviceId, 12) || el('span', 'nc-week-chip-dot'));
         top.appendChild(el('span', 'nc-week-chip-name', it.nomCourt));
         chip.appendChild(top);
         chip.appendChild(el('span', 'nc-week-chip-amt', D.money(it.montant)));
@@ -2805,30 +2839,161 @@
       cycle();
     }
 
-    return { render: render, restart: function () { stop(); render(); } };
+    return { render: render, restart: function () { stop(); render(); }, stop: stop };
   }
 
-  // Notary flavour while the notary steps are on screen; carnet flavour
-  // everywhere else (role choice, client steps).
-  function onbWeekFlavour() {
+  // Which onboarding view is on screen — each gets its own animation:
+  //   • 'role'    (role choice)  — the week board, carnet flavour, act glyphs;
+  //   • 'client'  (client steps) — ONE bid played out (the bid vignette);
+  //   • 'notaire' (notary steps) — the week board paying out + agenda providers.
+  function onbView() {
     var dlg = $('onboarding-dialog'), steps = $('onb-view-steps');
-    var onNotarySteps = dlg && steps && !steps.hidden && dlg.getAttribute('data-role') === 'notary';
-    return onNotarySteps ? 'notaire' : 'carnet';
+    if (!dlg || !steps || steps.hidden) return 'role';
+    return dlg.getAttribute('data-role') === 'notary' ? 'notaire' : 'client';
   }
 
   var weekVigOnb = makeWeekVignette({
     box: 'ob-week', board: 'ob-week-board', total: 'ob-week-total',
-    retenues: function () { return onbWeekFlavour() === 'carnet'; },
+    retenues: function () { return onbView() !== 'notaire'; },
     enabled: function () { var dlg = $('onboarding-dialog'); return !!(dlg && dlg.open); },
   });
 
+  // --- Bid vignette (client onboarding step) -----------------------------------
+  // One real demand from the carnet played out end to end: the price climbs
+  // from the act's starting price to the offered amount, the demand lands au
+  // carnet, then a notaire retains it (or the city sees it). Cycles through
+  // the month's bids, retained ones first — the happy ending leads. Same
+  // lifecycle discipline as the board: every step re-checks the vignette is
+  // still on screen, and closing the dialog parks the loop.
+  var bidVigOnb = (function () {
+    var v = { timers: [], raf: null, idx: 0, cycling: false };
+
+    function stop() {
+      v.timers.forEach(clearTimeout); v.timers = [];
+      if (v.raf) cancelAnimationFrame(v.raf); v.raf = null;
+      v.cycling = false;
+    }
+    function later(fn, ms) { v.timers.push(setTimeout(fn, ms)); }
+    function onScreen() {
+      var box = $('ob-bid');
+      return !!(box && !box.hidden && box.offsetParent && !document.hidden);
+    }
+    function pool() {
+      var valid = (state.monthBids || []).filter(function (b) {
+        return !!(b && b.dateISO && D.serviceById(b.serviceId));
+      });
+      var retained = valid.filter(function (b) { return b.status === D.STATUS.RETENUE; });
+      var open = valid.filter(function (b) { return b.status !== D.STATUS.RETENUE; });
+      return retained.concat(open);
+    }
+    // The amount climbs from the act's starting price to the offer — money()
+    // formats every frame so the vignette never shows a foreign number.
+    function tweenAmt(from, to) {
+      var out = $('ob-bid-amt'); if (!out) return;
+      if (v.raf) cancelAnimationFrame(v.raf);
+      var t0 = performance.now(), dur = 900;
+      function frame(t) {
+        var k = Math.min(1, (t - t0) / dur);
+        k = 1 - Math.pow(1 - k, 3);
+        out.textContent = D.money(Math.round(from + (to - from) * k));
+        v.raf = k < 1 ? requestAnimationFrame(frame) : null;
+      }
+      v.raf = requestAnimationFrame(frame);
+    }
+    // The card (glyph, act, signing date) and the closing stamp for one bid.
+    function fill(b) {
+      var svc = D.serviceById(b.serviceId);
+      var icBox = $('ob-bid-ic');
+      if (icBox) {
+        clear(icBox);
+        icBox.style.color = 'var(--svc-' + svc.id + ')';
+        var ic = svcIcon(svc.id, 18); if (ic) icBox.appendChild(ic);
+      }
+      var name = $('ob-bid-name'); if (name) name.textContent = svc.nom;
+      var date = $('ob-bid-date'); if (date) date.textContent = dayTitle(b.dateISO);
+      var fin = $('ob-bid-stamp-fin');
+      if (fin) {
+        clear(fin);
+        if (b.status === D.STATUS.RETENUE) {
+          fin.appendChild(el('span', 'nc-week-check-key', '✓'));
+          fin.appendChild(document.createTextNode(' Retenue par ' + (b.etude || 'un notaire')));
+        } else {
+          fin.textContent = 'Ouverte — les notaires de Québec la voient';
+        }
+      }
+      return svc;
+    }
+    function cycle() {
+      if (!onScreen()) { stop(); return; }
+      var list = pool();
+      if (!list.length) { stop(); var b0 = $('ob-bid'); if (b0) b0.hidden = true; return; }
+      var b = list[v.idx % list.length];
+      v.idx = (v.idx + 1) % list.length;
+      var svc = fill(b);
+      var scene = $('ob-bid-scene'), pub = $('ob-bid-stamp-pub'), fin = $('ob-bid-stamp-fin');
+      if (scene) scene.classList.remove('is-out');
+      if (pub) pub.classList.remove('is-on');
+      if (fin) fin.classList.remove('is-on');
+      var amt = $('ob-bid-amt'); if (amt) amt.textContent = D.money(svc.prixDepart || 0);
+      later(function () {
+        if (!onScreen()) { stop(); return; }
+        tweenAmt(svc.prixDepart || 0, Number(b.montant) || 0);
+      }, 400);
+      later(function () {
+        if (!onScreen()) { stop(); return; }
+        if (pub) pub.classList.add('is-on');
+      }, 1300);
+      later(function () {
+        if (!onScreen()) { stop(); return; }
+        if (fin) fin.classList.add('is-on');
+      }, 2600);
+      later(function () { if (scene) scene.classList.add('is-out'); }, 4700);
+      later(cycle, 5200);
+    }
+    function render() {
+      var box = $('ob-bid'); if (!box) return;
+      var list = pool();
+      var dlg = $('onboarding-dialog');
+      if (!(dlg && dlg.open) || !list.length) { stop(); box.hidden = true; return; }
+      box.hidden = false;
+      // Reduced motion: one completed story — final amount, both stamps.
+      if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        stop();
+        var b = list[v.idx % list.length];
+        fill(b);
+        var amt = $('ob-bid-amt'); if (amt) amt.textContent = D.money(Number(b.montant) || 0);
+        var scene = $('ob-bid-scene'); if (scene) scene.classList.remove('is-out');
+        var pub = $('ob-bid-stamp-pub'); if (pub) pub.classList.add('is-on');
+        var fin = $('ob-bid-stamp-fin'); if (fin) fin.classList.add('is-on');
+        return;
+      }
+      if (v.cycling) return; // a loop already drives the vignette
+      v.cycling = true;
+      cycle();
+    }
+
+    return { render: render, restart: function () { stop(); render(); }, stop: stop };
+  })();
+
   function renderOnbWeekAnim() {
-    // The head and key line follow the flavour before the board (re)starts.
-    var notaire = onbWeekFlavour() === 'notaire';
+    var view = onbView();
+    if (view === 'client') {
+      // The client steps trade the board for one bid played out in full.
+      weekVigOnb.stop();
+      var wk = $('ob-week'); if (wk) wk.hidden = true;
+      bidVigOnb.restart();
+      return;
+    }
+    bidVigOnb.stop();
+    var bid = $('ob-bid'); if (bid) bid.hidden = true;
+    // The head, key line and providers row follow the flavour before the
+    // board (re)starts.
+    var notaire = view === 'notaire';
     var kick = $('ob-week-kicker'); if (kick) kick.textContent = notaire ? 'Une semaine sur Nota' : 'Cette semaine à Québec';
     var mode = $('ob-week-mode'); if (mode) mode.textContent = notaire ? 'à la signature' : 'en jeu';
     var noteC = $('ob-week-note-carnet'); if (noteC) noteC.hidden = notaire;
     var noteN = $('ob-week-note-notaire'); if (noteN) noteN.hidden = !notaire;
+    var prov = $('ob-week-providers'); if (prov) prov.hidden = !notaire;
     weekVigOnb.restart();
   }
 
@@ -3452,6 +3617,11 @@
     renderContact();
     wire();
     wireCarnetSubscribe();
+    renderCarnetMail();
+    var cmForm = $('carnet-mail-form');
+    if (cmForm) cmForm.addEventListener('submit', function (e) { e.preventDefault(); carnetMailSubscribe(); });
+    var cmOff = $('carnet-mail-off');
+    if (cmOff) cmOff.addEventListener('click', carnetMailUnsubscribe);
 
     // Restore theme preference
     var savedTheme = lsLoad('nota.theme'); if (savedTheme) setTheme(savedTheme);

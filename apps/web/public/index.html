@@ -219,6 +219,13 @@
               <span class="eyebrow">Place de marché des services notariaux · Québec</span>
               <h1>Un notaire, à la date qu’il vous faut.</h1>
               <p>Le principe est simple : <strong>vous proposez</strong> la date et le prix de votre acte (testament, procuration ou refinancement). Au carnet public, <strong>les notaires de Québec</strong> voient votre demande et l’un d’eux la retient. L’offre rencontre la demande. Gratuit pour vous.</p>
+              <!-- Trust points: claims already made elsewhere on the site, gathered
+                   here so the hero's left column carries as much weight as the pulse. -->
+              <ul class="hero-points">
+                <li><strong>Anonyme au carnet</strong> — seul votre secteur (ex.&nbsp;G1R) est visible, jamais votre adresse.</li>
+                <li><strong>Rien n’est transmis</strong> avant qu’un notaire retienne votre demande.</li>
+                <li><strong>Gratuit pour vous</strong> — Nota se rémunère par commission auprès du notaire.</li>
+              </ul>
               <div class="hero-cta">
                 <button class="btn btn-primary btn-lg" id="cta-reserver">Réserver votre date →</button>
                 <button class="btn btn-lg" id="cta-voir">Voir les dates</button>
@@ -301,6 +308,7 @@
                Links are wired by wireCarnetSubscribe (csub-*). -->
           <aside class="carnet-sub" aria-label="Ajouter le carnet à votre agenda">
             <div class="sub-card" role="group" aria-label="Ajouter le carnet des dates à votre agenda">
+              <div class="sub-card-cal">
               <div class="sub-card-head">
                 <span class="sub-card-logo" aria-hidden="true">
                   <img src="favicon.svg" width="30" height="30" alt="" />
@@ -316,6 +324,24 @@
                 <a class="btn btn-sm sub-btn" id="csub-outlook" target="_blank" rel="noopener"><svg class="brand-ic" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="var(--logo-outlook-blue)" d="M2 6.2 9 4.9v14.2L2 17.8z"/><path fill="var(--logo-on-brand)" d="M5.5 9.2c-1 0-1.7.9-1.7 2.3s.7 2.3 1.7 2.3 1.7-.9 1.7-2.3-.7-2.3-1.7-2.3zm0 1c.4 0 .7.5.7 1.3s-.3 1.3-.7 1.3-.7-.5-.7-1.3.3-1.3.7-1.3z"/><rect x="9.5" y="5.5" width="12.5" height="13" rx="1.5" fill="var(--logo-outlook-blue)"/><path fill="var(--logo-on-brand)" d="M15.7 8.6a3 3 0 1 0 0 6 3 3 0 0 0 0-6zm0 1.6a1.4 1.4 0 1 1 0 2.8 1.4 1.4 0 0 1 0-2.8z"/></svg>Outlook</a>
                 <a class="btn btn-sm sub-btn" id="csub-apple"><svg class="brand-ic" viewBox="0 0 384 512" width="13" height="13" aria-hidden="true" fill="currentColor"><path d="M318.7 268c-.3-36 16.4-63 50-83-18.8-27-47-42-84-45-35-3-73 20-87 20s-52-19-79-19c-56 1-114 43-114 130 0 26 5 53 15 81 13 37 60 128 109 126 26-1 44-19 78-19s50 18 78 18c50-1 92-83 105-120-67-32-64-93-64-95zM256 84c17-20 15-49 14-59-14 1-40 9-56 29-14 17-19 43-16 58 16 1 41-8 58-28z"/></svg>Apple</a>
                 <a class="btn btn-sm sub-btn" id="csub-ics" download="nota-carnet.ics"><svg class="brand-ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>iCal</a>
+              </div>
+              </div>
+              <!-- Email alternative: same feed, delivered as a courriel. Wired by
+                   renderCarnetMail (local for the demo; a deployment would register
+                   the address with the API's notifier). -->
+              <div class="sub-card-mail">
+                <div class="sub-card-kicker">Ou par courriel</div>
+                <div class="sub-card-title">Les nouvelles dates, par courriel</div>
+                <form id="carnet-mail-form" class="sub-mail-form">
+                  <label class="visually-hidden" for="carnet-mail-input">Votre courriel</label>
+                  <input type="email" id="carnet-mail-input" autocomplete="email" placeholder="vous@exemple.ca" required />
+                  <button type="submit" class="btn btn-sm">M’abonner</button>
+                </form>
+                <p class="help">Un courriel quand une nouvelle date s’ouvre à Québec. Désabonnement en un clic.</p>
+                <p class="sub-mail-done" id="carnet-mail-done" hidden>
+                  <span id="carnet-mail-addr"></span>
+                  <button type="button" class="btn btn-sm btn-ghost" id="carnet-mail-off">Se désabonner</button>
+                </p>
               </div>
             </div>
           </aside>
@@ -877,12 +903,13 @@
           <button type="button" class="onb-skip" id="onb-skip">Passer</button>
         </div>
 
-        <!-- Live board under BOTH views: real carnet offers land on a Mon–Fri
-             week while the money counts up (D.weekAgenda over state.monthBids).
-             Its flavour follows the visitor: the role choice and the client
-             steps show the market clearing ("en jeu", ✓ = taken); the notary
-             steps show a week paying out ("à la signature", open demands only).
-             Decorative (aria-hidden); renderOnbWeekAnim drives it. -->
+        <!-- Live board under the role choice and the NOTARY steps: real carnet
+             offers land on a Mon–Fri week while the money counts up
+             (D.weekAgenda over state.monthBids). The role choice shows the
+             market clearing ("en jeu", ✓ = taken, service glyphs); the notary
+             steps show a week paying out ("à la signature", open demands only,
+             plus the agenda providers). Decorative (aria-hidden);
+             renderOnbWeekAnim drives it. -->
         <div class="nc-week nc-week--onb" id="ob-week" aria-hidden="true" hidden>
           <div class="nc-week-head">
             <span class="nc-week-kicker" id="ob-week-kicker">Cette semaine à Québec</span>
@@ -891,6 +918,36 @@
           <div class="nc-week-board" id="ob-week-board"></div>
           <p class="nc-week-note" id="ob-week-note-carnet">Offres réelles du carnet — <span class="nc-week-check-key">✓</span> déjà retenue par un notaire.</p>
           <p class="nc-week-note" id="ob-week-note-notaire" hidden>Demandes réelles ouvertes en ce moment, placées à leur jour de signature.</p>
+          <div class="nc-week-providers" id="ob-week-providers" hidden>
+            <svg class="brand-ic" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="var(--logo-google-blue)" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.8z"/><path fill="var(--logo-google-green)" d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1A12 12 0 0 0 12 24z"/><path fill="var(--logo-google-yellow)" d="M5.3 14.3a7.2 7.2 0 0 1 0-4.6V6.6H1.3a12 12 0 0 0 0 10.8l4-3.1z"/><path fill="var(--logo-google-red)" d="M12 4.8c1.8 0 3.3.6 4.6 1.8l3.4-3.4A12 12 0 0 0 12 0 12 12 0 0 0 1.3 6.6l4 3.1C6.2 6.9 8.9 4.8 12 4.8z"/></svg>
+            <svg class="brand-ic" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="var(--logo-outlook-blue)" d="M2 6.2 9 4.9v14.2L2 17.8z"/><path fill="var(--logo-on-brand)" d="M5.5 9.2c-1 0-1.7.9-1.7 2.3s.7 2.3 1.7 2.3 1.7-.9 1.7-2.3-.7-2.3-1.7-2.3zm0 1c.4 0 .7.5.7 1.3s-.3 1.3-.7 1.3-.7-.5-.7-1.3.3-1.3.7-1.3z"/><rect x="9.5" y="5.5" width="12.5" height="13" rx="1.5" fill="var(--logo-outlook-blue)"/><path fill="var(--logo-on-brand)" d="M15.7 8.6a3 3 0 1 0 0 6 3 3 0 0 0 0-6zm0 1.6a1.4 1.4 0 1 1 0 2.8 1.4 1.4 0 0 1 0-2.8z"/></svg>
+            <svg class="brand-ic" viewBox="0 0 384 512" width="13" height="13" aria-hidden="true" fill="currentColor"><path d="M318.7 268c-.3-36 16.4-63 50-83-18.8-27-47-42-84-45-35-3-73 20-87 20s-52-19-79-19c-56 1-114 43-114 130 0 26 5 53 15 81 13 37 60 128 109 126 26-1 44-19 78-19s50 18 78 18c50-1 92-83 105-120-67-32-64-93-64-95zM256 84c17-20 15-49 14-59-14 1-40 9-56 29-14 17-19 43-16 58 16 1 41-8 58-28z"/></svg>
+            <span>Le carnet s'ajoute à votre agenda en un clic.</span>
+          </div>
+        </div>
+
+        <!-- Bid vignette under the CLIENT steps only: one real demand played
+             out — the price climbs from the act's starting price to the
+             offered amount, the demand is published au carnet, then a notaire
+             retains it. Decorative (aria-hidden); renderOnbWeekAnim drives it. -->
+        <div class="ob-bid" id="ob-bid" aria-hidden="true" hidden>
+          <div class="nc-week-head">
+            <span class="nc-week-kicker">Vous proposez — un notaire retient</span>
+          </div>
+          <div class="ob-bid-scene" id="ob-bid-scene">
+            <div class="ob-bid-card">
+              <span class="ob-bid-ic" id="ob-bid-ic"></span>
+              <span class="ob-bid-main">
+                <span class="ob-bid-name" id="ob-bid-name"></span>
+                <span class="ob-bid-date" id="ob-bid-date"></span>
+              </span>
+              <strong class="ob-bid-amt" id="ob-bid-amt">0&nbsp;$</strong>
+            </div>
+            <div class="ob-bid-stamps">
+              <span class="ob-bid-stamp" id="ob-bid-stamp-pub">Publiée au carnet</span>
+              <span class="ob-bid-stamp" id="ob-bid-stamp-fin"></span>
+            </div>
+          </div>
         </div>
       </div>
     </dialog>

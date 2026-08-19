@@ -78,6 +78,10 @@ async function boot() {
   const month = monthKey(anchor);
   const seed = D.makeFixtures(anchor);
   win.localStorage.setItem('nota.bids.v1', JSON.stringify(seed));
+  // The store rebuilds any seed whose pricing signature is stale (ensureSeed);
+  // stamp the current signature so this pre-seed reads as current, exactly as
+  // a previous run of the app would have left it.
+  win.localStorage.setItem('nota.bids.sig.v1', D.seedSignature());
 
   // 3) app -> boots immediately (readyState is 'complete'), exposes window.Nota
   win.eval(APP_SRC);

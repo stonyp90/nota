@@ -718,6 +718,20 @@
     };
   }
 
+  // Fingerprint of the pricing shape the fixtures are built from. A seed made
+  // under an older model would put its medians below today's floors, so
+  // adapters compare this signature (never a hand-bumped version) and rebuild
+  // their demo data whenever it changes.
+  function seedSignature() {
+    return [
+      'v1',
+      FIXTURE_SEED.toString(16),
+      PREMIUM_CAP,
+      SERVICES.map((s) => s.id + ':' + s.prixDepart).join(','),
+      TIERS.map((t) => t.id + ':' + t.apercuMin + '-' + t.apercuMax).join(','),
+    ].join('|');
+  }
+
   const FIXTURE_PREFIXES = ['G1R', 'G1K', 'G2B', 'G1V', 'G1S', 'G3J'];
   const FIXTURE_NAMES = ['Marie-Ève Tremblay', 'Luc Gagné', 'Sophie Bergeron', 'Jean Roy', 'Chantal Côté', 'Marc Fortin'];
   const FIXTURE_ETUDES = ['Étude Laval', 'Notaires du Vieux-Québec', 'Cabinet Sainte-Foy'];
@@ -932,6 +946,7 @@
     CONTACT,
     telHref,
     makeFixtures,
+    seedSignature,
     bidLabel,
     leadReadiness,
     recommendedAmount,
