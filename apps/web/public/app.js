@@ -782,7 +782,9 @@
   // ---------------------------------------------------------------------------
   function renderAgenda() {
     var ag = $('agenda'); clear(ag);
-    var visible = applyFilters(state.monthBids);
+    // Only today and upcoming dates — a past signing date can't be booked.
+    var today = todayISO();
+    var visible = applyFilters(state.monthBids).filter(function (b) { return b.dateISO >= today; });
 
     if (!visible.length) {
       var empty = el('div', 'agenda-empty');

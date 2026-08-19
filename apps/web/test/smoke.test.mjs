@@ -575,7 +575,7 @@ test('the toolbar surfaces the next availability (soonest open date)', async () 
 
 test('EDGE (UI): a fully-retained day marks the cell taken and names the notary (not dimmed)', async () => {
   const ctx = await boot();
-  const iso = dayOf(ctx.anchor, '15');
+  const iso = ctx.D.addDays(ctx.today, 2); // future date (the list only shows today onward)
   const longEtude = 'Notaires du Vieux-Québec et Associés SENCRL s.r.l.';
   await reseed(ctx, [{
     id: 'r1', serviceId: 'testament', dateISO: iso, montant: 1800,
@@ -677,7 +677,7 @@ test('the hero pulse shows the month median per service and filters the carnet',
 
 test('offer rows carry an .ics download and a share action', async () => {
   const ctx = await boot();
-  const iso = dayOf(ctx.anchor, '15');
+  const iso = ctx.D.addDays(ctx.today, 2); // future date (the list only shows today onward)
   await reseed(ctx, [{
     id: 'a1', serviceId: 'testament', dateISO: iso, montant: 900,
     tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, prefixe: 'G1R', createdAt: iso,
