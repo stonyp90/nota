@@ -498,6 +498,27 @@ function subWelcome(ctx) {
   });
 }
 
+// Welcome a CLIENT who just signed up — conversion-first: one clear next step
+// (publish a demand). Sent once per email (idempotent in the notifier).
+function clientWelcome(ctx) {
+  return build({
+    subject: 'Bienvenue sur Nota — un notaire à la date qu’il vous faut',
+    preheader: 'Publiez votre première demande en quelques minutes — gratuit pour vous.',
+    heading: 'Bienvenue sur Nota',
+    lead: 'Vous êtes à quelques clics d’un notaire à Québec, à la date qui vous convient.',
+    bodyHtml: para(
+      'Choisissez votre date sur le carnet public, proposez votre prix, et un notaire de la région retient votre demande. Plus votre échéance est proche, plus votre offre se démarque. Vous ne payez que le notaire, à la signature — utiliser Nota est gratuit.'
+    ),
+    textLines: [
+      '1) Choisissez votre date.  2) Proposez votre prix.  3) Un notaire vous retient.',
+      'Gratuit pour vous — vous payez le notaire à la signature.',
+    ],
+    ctaLabel: 'Publier ma demande',
+    ctaUrl: linksFor(ctx.baseUrl).carnet,
+    unsubscribeUrl: ctx.unsubscribeUrl,
+  });
+}
+
 function subReceipt(ctx) {
   return build({
     subject: 'Reçu — votre abonnement Nota',
@@ -598,6 +619,7 @@ function operatorNewLead(ctx) {
 // Registry — the notifier looks templates up by name; tests iterate it to assert
 // every template carries a subject, an unsubscribe link and sender ID.
 const TEMPLATES = {
+  clientWelcome,
   offerPublished,
   dossierIncomplete,
   dateApproaching,

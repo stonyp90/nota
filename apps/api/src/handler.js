@@ -401,6 +401,26 @@ function createApp(repo, opts = {}) {
       return json(201, { bid: publicBid(bid) });
     }
 
+    // Welcome a client who just signed up (email captured in the sign-in modal,
+    // no offer posted yet). Fire-and-forget welcome email, idempotent per address
+    // in the notifier. Always answers 200 {ok:true} so the modal never blocks on
+    // mail: a missing/invalid address is a silent no-op, not an error the UI must
+    // handle, and no data is echoed back.
+    if (route === '/client/welcome' && method === 'POST') {
+      let payload;
+      try {
+        payload = typeof request.body === 'string' ? JSON.parse(request.body || '{}') : request.body || {};
+      } catch {
+        return json(400, { errors: [{ code: 'json_invalide', message: 'Corps JSON invalide.' }] });
+      }
+      const email = String(payload.courriel || payload.email || '').trim().toLowerCase();
+      if (email && domain.isEmail(email)) {
+        const n = notifier();
+        if (n) Promise.resolve(n.onClientSignup(email)).catch(() => {});
+      }
+      return json(200, { ok: true });
+    }
+
     // Begin FREE notary onboarding — open a Stripe Connect onboarding link.
     // No subscription; Nota takes a commission only when an act completes.
     if (route === '/notaries/connect' && method === 'POST') {

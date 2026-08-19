@@ -117,6 +117,27 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
     }
   }
 
+  // --- Client onboarding ---------------------------------------------------
+  // Fired when a client signs up (email captured in the sign-in modal, no offer
+  // yet). One warm welcome, conversion-first (publish a demand). Idempotent per
+  // address, so re-opening the modal or signing in again never re-sends. Wired
+  // fire-and-forget from POST /client/welcome — never throws to the caller.
+  async function onClientSignup(email) {
+    const to = String(email || '').trim().toLowerCase();
+    if (!to) return { ok: true, results: [] };
+    try {
+      const r = await sendOnce({
+        refId: to,
+        kind: 'clientWelcome',
+        to,
+        buildTemplate: (env) => emails.clientWelcome({ ...env }),
+      });
+      return { ok: true, results: [r] };
+    } catch (err) {
+      return { ok: false, error: String((err && err.message) || err), results: [] };
+    }
+  }
+
   // --- Reminder cadence (called by the daily scheduler) --------------------
   // Maps a domain reminder kind to its template. j7/j3/j1 share the tier-aware
   // dateApproaching template; dossier_incomplet uses the dossierIncomplete nudge.
@@ -210,6 +231,7 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
   return {
     onOfferCreated,
     onOfferRetained,
+    onClientSignup,
     onReminderDue,
     onSubscription,
     unsubscribe,
