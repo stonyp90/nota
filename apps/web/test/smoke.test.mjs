@@ -536,7 +536,7 @@ const dayOf = (anchor, dd) => anchor.slice(0, 8) + dd; // 'YYYY-MM-' + 'DD'
 
 test('the calendar badges the client\'s own offer status (approved)', async () => {
   const ctx = await boot();
-  const iso = dayOf(ctx.anchor, '15');
+  const iso = ctx.D.addDays(ctx.today, 2); // future date (past cells are blanked)
   // The client tracked this offer; the matching public bid is retained -> approved.
   ctx.win.localStorage.setItem('nota.myoffers.v1', JSON.stringify([{ id: 'r1', dateISO: iso, serviceId: 'testament', montant: 900 }]));
   await reseed(ctx, [{
@@ -608,7 +608,7 @@ test('EDGE (UI): a filter that matches nothing renders the empty state with a re
 
 test('EDGE (UI): a mixed open/retained day stays available with the open average', async () => {
   const ctx = await boot();
-  const iso = dayOf(ctx.anchor, '16');
+  const iso = ctx.D.addDays(ctx.today, 2); // future date (past cells are blanked)
   await reseed(ctx, [
     { id: 'o1', serviceId: 'testament', dateISO: iso, montant: 1400, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
     { id: 'r2', serviceId: 'testament', dateISO: iso, montant: 1300, tier: 'standard', status: ctx.D.STATUS.RETENUE, etude: 'Étude X', anonyme: true, createdAt: iso },

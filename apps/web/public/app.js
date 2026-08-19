@@ -582,13 +582,17 @@
       cell.setAttribute('aria-label', dayTitle(iso));
       if (iso === today) { cell.classList.add('is-today'); cell.setAttribute('aria-current', 'date'); }
       if (iso === state.selectedDate) { cell.classList.add('is-selected'); cell.setAttribute('aria-selected', 'true'); }
+      // Past dates can't be booked: keep the cell (so the grid never loses a row)
+      // but blank it out — muted, no offers, not interactive.
+      var isPast = iso < today;
+      if (isPast) { cell.classList.add('is-past'); cell.disabled = true; cell.tabIndex = -1; }
 
       cell.appendChild(el('span', 'cal-daynum', String(day)));
 
       // Cells stay essential: count + the single headline figure. All the
       // detail lives in the day modal (click / Enter). The aria-label carries
       // the same summary sighted users read from the badge and figure.
-      var dayBids = byDay[iso] || [];
+      var dayBids = isPast ? [] : (byDay[iso] || []);
       if (dayBids.length) {
         cell.classList.add('has-bids');
         var open = dayBids.filter(function (b) { return b.status !== D.STATUS.RETENUE; });
@@ -610,7 +614,7 @@
       }
 
       // The client's own offer status on this day (approved / pending / expired).
-      var mineSt = myOfferStatus(iso);
+      var mineSt = isPast ? null : myOfferStatus(iso);
       if (mineSt) {
         cell.classList.add('has-mine');
         var badge = el('span', 'cal-mine', OFFER_STATUS_LABEL[mineSt]);
@@ -806,7 +810,7 @@
     if (state.filters.sort.indexOf('date') === 0) order.sort(state.filters.sort === 'date-asc' ? undefined : function (a, b) { return b.localeCompare(a); });
     else order.sort();
 
-    var PER_DAY = 3; // top 3 per day keeps every card a similar height so the grid aligns
+    var PER_DAY = 2; // top 2 per day; cards stretch to a uniform height so rows align
     order.forEach(function (iso) {
       var group = el('div', 'agenda-group');
       group.appendChild(el('div', 'agenda-day', dayTitle(iso)));
