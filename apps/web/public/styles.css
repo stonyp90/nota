@@ -537,6 +537,12 @@ a:hover { text-decoration: underline; }
 .pulse-rows { display: grid; gap: 4px; margin-top: 6px; align-content: start; }
 /* The filter button takes the width; the book button sits at its right edge. */
 .pulse-item { display: flex; align-items: center; gap: 2px; }
+/* Grid and flex items default to min-width:auto, so .pulse-item refused to shrink
+   below its min-content and pushed the 44px book button 53px past a 320px
+   viewport, scrolling the WHOLE page sideways and squeezing the carnet with it.
+   The figures ellipsis instead of shoving. Measured 53px -> 0 at 320. */
+.pulse-item, .pulse-figs, .pulse-fig, .pulse-fig-v { min-width: 0; }
+.pulse-fig-v { overflow: hidden; text-overflow: ellipsis; }
 .pulse-item .pulse-row { flex: 1; min-width: 0; }
 .pulse-item .mini-btn { margin-right: -8px; }
 .pulse-item:hover .mini-reserver, .pulse-item:focus-within .mini-reserver { color: var(--brand); }
@@ -826,6 +832,31 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
   .cal-svc-bids .svc-bid-amount::after { content: attr(data-compact); font-size: 11px; font-weight: 800; }
   .cal-avg { font-size: 0; }
   .cal-avg::after { content: attr(data-compact); font-size: 12.5px; font-weight: 800; letter-spacing: -0.02em; }
+}
+/* Phones. Seven columns are not negotiable, so on a 320px screen a cell is 34px
+   wide with a 26px content box, and a glyph + gap + compact amount laid out in a
+   ROW needs 45px. The row was clamped to the box while its text carried on
+   painting over the next day, because the tooltip above deliberately leaves
+   nothing on the path to the grid clipping. That tooltip is display:none without
+   a fine pointer, so here the cell can safely contain its own content again.
+   Measured at 320/375/414: every act still prints its price, and nothing leaves
+   its cell. The cost is height (87px -> 127px at 320), which a phone scrolls. */
+@container cal (max-width: 440px) {
+  .cal-row { gap: 3px; }
+  .cal-cell { padding: 5px 3px 8px; gap: 2px; align-items: center; overflow: hidden; }
+  .cal-daynum, .cal-cell.is-today .cal-daynum { align-self: center; }
+  .cal-svc-bids { width: 100%; gap: 3px; }
+  /* Glyph over price rather than beside it: 26px of width fits one or the other,
+     never both. line-height pays back most of the height that stacking costs. */
+  .cal-svc-bids .svc-bid { flex-direction: column; align-items: center; gap: 0; width: 100%; line-height: 1.05; }
+  .cal-svc-bids .svc-bid-amount::after { letter-spacing: -0.03em; }
+  /* Pinned right:26px to clear the chevron, this escaped 17px to the LEFT of a
+     34px cell and landed on the previous day's number. In flow it cannot. */
+  .cal-urgency { position: static; align-self: center; }
+  /* 26px is under any touch minimum, and the corner it sits in is needed for the
+     date. Tapping the cell already opens the day dialog, which carries the full
+     detail the chevron would have expanded. */
+  .cell-chevron { display: none; }
 }
 
 /* --- Agenda / bid list --------------------------------------------------- */
