@@ -89,6 +89,25 @@ variable "api_5xx_threshold" {
   default     = 5
 }
 
+# Cost control: Lambda auto-creates its /aws/lambda/<fn> log group with retention
+# set to "Never expire", so log storage grows forever. Declaring the groups in
+# Terraform (see logs.tf) caps retention at this many days. 14 balances useful
+# debugging history against storage cost; raise for longer forensic windows.
+variable "log_retention_days" {
+  description = "CloudWatch Logs retention (days) for the Lambda log groups. Caps otherwise-unbounded log storage cost."
+  type        = number
+  default     = 14
+
+  validation {
+    # Only values AWS actually accepts for retention_in_days.
+    condition = contains(
+      [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653],
+      var.log_retention_days
+    )
+    error_message = "log_retention_days must be one of the values CloudWatch Logs accepts (e.g. 1, 3, 5, 7, 14, 30, 60, 90, 365, ...)."
+  }
+}
+
 variable "dynamodb_user_errors_threshold" {
   description = "Alarm when DynamoDB UserErrors (client-side 400s) exceed this count in 5 minutes. Note: UserErrors is an account/region-wide metric with no TableName dimension."
   type        = number

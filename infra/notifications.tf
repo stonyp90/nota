@@ -139,6 +139,9 @@ resource "aws_lambda_function" "reminders" {
   timeout     = 60
   memory_size = 256
 
+  # Use the retention-capped log group (logs.tf) rather than a never-expire one.
+  depends_on = [aws_cloudwatch_log_group.reminders]
+
   environment {
     variables = {
       TABLE_NAME          = aws_dynamodb_table.main.name

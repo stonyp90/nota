@@ -191,6 +191,9 @@ resource "aws_lambda_function" "admin" {
   # overview is a heavier read, so 5 was too tight for a few concurrent operators.
   reserved_concurrent_executions = var.admin_reserved_concurrency
 
+  # Use the retention-capped log group (logs.tf) rather than a never-expire one.
+  depends_on = [aws_cloudwatch_log_group.admin]
+
   environment {
     variables = {
       NODE_ENV = "production"
@@ -203,7 +206,7 @@ resource "aws_lambda_function" "admin" {
       TABLE_NAME       = aws_dynamodb_table.main.name
 
       # Allowlisted admin login addresses + public base URL for links.
-      NOTA_ADMIN_EMAILS   = join(",", var.admin_emails)
+      NOTA_ADMIN_EMAILS = join(",", var.admin_emails)
       # Custom domain when set; otherwise fall back to the CloudFront default
       # domain so the emailed magic-link is always an absolute, working URL.
       NOTA_ADMIN_BASE_URL = var.admin_domain_name != "" ? "https://${var.admin_domain_name}" : "https://${aws_cloudfront_distribution.admin[0].domain_name}"
