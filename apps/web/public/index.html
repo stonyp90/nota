@@ -411,7 +411,7 @@
               <ul class="errors" id="notary-console-errors" role="alert" aria-atomic="true" hidden></ul>
               <button type="submit" class="btn btn-primary btn-lg nc-auth-cta" id="notary-console-signin">Voir les demandes ouvertes →</button>
               <p class="help nc-auth-fine">Sans mot de passe — première visite ou retour, c’est le même courriel. Si aucun compte n’existe encore, l’inscription gratuite se propose ici même.</p>
-              <p class="nc-soon" id="notary-phase2-note"><span class="nc-soon-tag">Bientôt</span>Vérification d’identité et inscription entièrement en ligne : tout le parcours notaire, de bout en bout, sans quitter Nota.</p>
+              <p class="nc-soon" id="notary-phase2-note"><span class="nc-soon-tag">Bientôt</span>Vérification d’identité, inscription et <strong>réalisation complète de l’acte en ligne</strong> : recevez la demande, rencontrez le client et signez à distance — tout le parcours notaire, de bout en bout, sans quitter Nota.</p>
 
               <!-- Shown when the email has no account yet: sign-in and sign-up are the
                    same door — a new notary is offered free onboarding right here. -->
@@ -443,7 +443,7 @@
               <!-- Lead-delivery preferences: HOW (in-app / email / SMS) and at what PACE
                    Nota alerts this notary about new matching demands. -->
               <section class="nc-prefs" aria-labelledby="notary-prefs-h">
-                <h2 class="nc-h" id="notary-prefs-h">Recevez vos leads à votre rythme</h2>
+                <h2 class="nc-h" id="notary-prefs-h">Recevez vos demandes à votre rythme</h2>
                 <p class="help">Choisissez comment et à quelle fréquence Nota vous prévient des nouvelles demandes qui vous conviennent. Modifiable à tout moment.</p>
                 <div class="nc-prefs-grid">
                   <div class="nc-pref-block">
@@ -461,7 +461,7 @@
                     <div class="seg nc-pref-pace" id="pref-pace" role="group" aria-label="Fréquence des alertes">
                       <button type="button" class="seg-btn is-on" data-pace="instant" aria-pressed="true">À chaque demande</button>
                       <button type="button" class="seg-btn" data-pace="daily" aria-pressed="false">Résumé quotidien</button>
-                      <button type="button" class="seg-btn" data-pace="weekly" aria-pressed="false">Résumé hebdo</button>
+                      <button type="button" class="seg-btn" data-pace="weekly" aria-pressed="false">Résumé hebdomadaire</button>
                     </div>
                     <label class="switch-row"><span class="nc-pref-lbl">Seulement les demandes urgentes (Prioritaire et +)</span><span class="switch"><input type="checkbox" id="pref-urgent" /><span class="track"></span></span></label>
                     <div class="nc-pref-title nc-pref-title--sub">Quels actes vous intéressent</div>
@@ -710,8 +710,12 @@
               <input type="text" id="o-name" placeholder="Prénom Nom" autocomplete="name" />
             </div>
             <div class="form-row">
-              <label class="lbl" for="o-prefix">3 premiers caractères du code postal</label>
-              <input type="text" id="o-prefix" maxlength="3" placeholder="G1R" class="uppercase" />
+              <label class="lbl" for="o-prefix">Secteur postal</label>
+              <input type="text" id="o-prefix" maxlength="3" placeholder="G1R" class="uppercase"
+                     autocomplete="postal-code" inputmode="text" spellcheck="false"
+                     pattern="[A-Za-z][0-9][A-Za-z]" aria-describedby="prefix-help" />
+              <p class="help" id="prefix-help">Les 3 premiers caractères de votre code postal — le seul repère de lieu que voient les notaires. Il indique votre secteur sans révéler votre adresse.</p>
+              <p class="prefix-preview" id="prefix-preview" aria-live="polite"></p>
             </div>
             <div class="form-row">
               <label class="lbl" for="o-courriel">Courriel (optionnel)</label>
@@ -722,6 +726,7 @@
             <p id="offer-dossier-note" class="help">Les réponses de votre <strong>Dossier</strong> accompagnent l’offre ; les documents ne sont partagés qu’après qu’un notaire a retenu votre demande.</p>
           </div>
         </details>
+        <p class="nc-soon soon-online"><span class="nc-soon-tag">Bientôt</span>Les notaires pourront réaliser l’acte <strong>entièrement en ligne</strong> sur Nota — signature à distance comprise, sans déplacement. Aujourd’hui, vous convenez du lieu avec le notaire qui vous retient.</p>
         <ul class="errors" id="offer-errors" role="alert" aria-atomic="true" hidden></ul>
         <button type="submit" class="btn btn-primary w-full btn-lg" id="offer-submit" disabled>Publier mon offre</button>
         <div id="offer-success" class="offer-success" hidden>

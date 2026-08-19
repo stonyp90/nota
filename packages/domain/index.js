@@ -21,12 +21,16 @@
   // Amounts are integer Canadian dollars. Quebec formats with a space as the
   // thousands separator and a trailing " $". Everything user-facing that shows
   // an amount MUST route through money() so the format is defined in one place.
+  // fr-CA sets a no-break space between thousands groups and before the sign, so
+  // an amount never wraps mid-number or orphans its "$" onto the next line.
+  const NBSP = '\u00A0';
+
   function money(dollars) {
     const n = Math.round(Number(dollars) || 0);
     const digits = Math.abs(n)
       .toString()
-      .replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-    return (n < 0 ? '−' : '') + digits + ' $';
+      .replace(/\B(?=(\d{3})+(?!\d))/g, NBSP);
+    return (n < 0 ? '−' : '') + digits + NBSP + '$';
   }
 
   // --- Services --------------------------------------------------------------
@@ -35,6 +39,31 @@
   // Each service carries its own document checklist and info fields, with
   // plain-language help text (fr-CA) used by both the Dossier UI and the
   // text-to-speech reader.
+  // The only location signal an anonymous bid carries publicly: the first three
+  // characters of a Canadian postal code (the forward sortation area), shown as
+  // "Client · G1R". Format is letter-digit-letter; Quebec's FSAs begin with G, H
+  // or J. Defined here so no adapter re-implements the format.
+  // Several criterion labels are questions. Concatenating them into a longer
+  // sentence must not produce "… ? ." or "… ? : Oui".
+  function endPunctuated(label) { return /[?!.:]\s*$/.test(String(label || '')); }
+  function stripEndPunctuation(label) { return String(label || '').replace(/\s*[?!.:]+\s*$/, ''); }
+
+  const POSTAL_PREFIX_RE = /^[A-Z]\d[A-Z]$/;
+  const QC_POSTAL_LETTERS = ['G', 'H', 'J'];
+  function normalizePostalPrefix(value) {
+    return String(value == null ? '' : value).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3);
+  }
+  function isPostalPrefix(value) { return POSTAL_PREFIX_RE.test(normalizePostalPrefix(value)); }
+  function isQuebecPostalPrefix(value) {
+    const p = normalizePostalPrefix(value);
+    return isPostalPrefix(p) && QC_POSTAL_LETTERS.indexOf(p.charAt(0)) !== -1;
+  }
+
+  // The act pre-selected when a client opens the booking flow without having
+  // filtered the carnet first. Which act leads is a product decision, so it is
+  // named here and asserted by a test rather than typed into the UI.
+  const DEFAULT_SERVICE_ID = 'refinancement';
+
   const SERVICES = [
     {
       id: 'testament',
@@ -296,7 +325,8 @@
   function criterionFactorLabel(criterion, answer) {
     if (criterion.type === 'choice') {
       const opt = (criterion.options || []).find((o) => o.id === answer);
-      return opt ? criterion.label + ' : ' + opt.label : criterion.label;
+      // "…succession ? : Oui" reads as a typo — drop the label's own terminator.
+    return opt ? stripEndPunctuation(criterion.label) + ' : ' + opt.label : criterion.label;
     }
     return criterion.label;
   }
@@ -352,7 +382,7 @@
     { id: 'standard',    nom: 'Standard',    maxJours: null, apercuMin: 1.0, apercuMax: 1.2 },
     { id: 'rapide',      nom: 'Rapide',      maxJours: 14,   apercuMin: 1.2, apercuMax: 1.5 },
     { id: 'prioritaire', nom: 'Prioritaire', maxJours: 7,    apercuMin: 1.6, apercuMax: 2.2 },
-    { id: 'urgence',     nom: 'Urgence',     maxJours: 3,    apercuMin: 2.5, apercuMax: 4.0 },
+    { id: 'urgence',     nom: 'Urgent',     maxJours: 3,    apercuMin: 2.5, apercuMax: 4.0 },
     { id: 'extreme',     nom: 'Extrême',     maxJours: 1,    apercuMin: 4.0, apercuMax: 10.0 },
   ];
 
@@ -465,7 +495,7 @@
     // service marks a criterion `required`).
     if (svc) {
       for (const m of missingRequired(svc.id, input.pricing)) {
-        errors.push({ code: 'parametre_requis', param: m.id, message: `Réponse requise : ${m.label}.` });
+        errors.push({ code: 'parametre_requis', param: m.id, message: `Réponse requise : ${endPunctuated(m.label) ? m.label : m.label + '.'}` });
       }
     }
 
@@ -788,6 +818,11 @@
   return {
     money,
     SERVICES,
+    DEFAULT_SERVICE_ID,
+    QC_POSTAL_LETTERS,
+    normalizePostalPrefix,
+    isPostalPrefix,
+    isQuebecPostalPrefix,
     serviceById,
     computeBasePrice,
     notaPrice,

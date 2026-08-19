@@ -499,7 +499,11 @@ a:hover { text-decoration: underline; }
 .pulse { min-width: 0; display: flex; flex-direction: column; }
 .pulse-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .pulse .hero-steps-title { margin-bottom: 0; }
-.pulse-month { font-size: 12px; font-weight: 600; color: var(--ink-muted); text-transform: capitalize; }
+/* fr-CA dates are lower-case (`jeudi 20 août`). `text-transform: capitalize`
+   title-cases every word and produced `Jeudi 20 Août`; ::first-letter gives a
+   heading its opening capital without touching the month. */
+.pulse-month { font-size: 12px; font-weight: 600; color: var(--ink-muted); }
+.pulse-month::first-letter { text-transform: uppercase; }
 .pulse-rows { display: grid; gap: 2px; margin-top: 6px; flex: 1; align-content: space-between; }
 /* The filter button takes the width; the book button sits at its right edge. */
 .pulse-item { display: flex; align-items: center; gap: 2px; }
@@ -634,7 +638,8 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
   .cal-toolbar .view-switch .seg-btn { flex: 1; justify-content: center; }
 }
 .cal-nav { display: inline-flex; gap: 4px; }
-.cal-title { font-weight: 700; font-size: 15px; text-transform: capitalize; white-space: nowrap; }
+.cal-title { font-weight: 700; font-size: 15px; white-space: nowrap; }
+.cal-title::first-letter { text-transform: uppercase; }
 .btn-icon { padding-left: 9px; padding-right: 9px; }
 /* Active-filter count riding on the Filtres toggle. */
 .filter-count {
@@ -694,9 +699,9 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 .cal-avg.is-cleared { text-decoration: line-through; color: var(--ink-muted); font-weight: 600; }
 .cal-chance { display: inline-flex; align-items: center; gap: 5px; margin-top: 3px; font-size: 11px; font-weight: 700; white-space: nowrap; }
 .cal-chance::before { content: ''; width: 7px; height: 7px; border-radius: 50%; flex: none; background: currentColor; }
-.cal-chance[data-level='high'] { color: var(--ok); }
-.cal-chance[data-level='mid'] { color: var(--warn); }
-.cal-chance[data-level='low'] { color: var(--danger); }
+.cal-chance[data-level='high'], .agenda-chance[data-level='high'] { color: var(--ok); }
+.cal-chance[data-level='mid'], .agenda-chance[data-level='mid'] { color: var(--warn); }
+.cal-chance[data-level='low'], .agenda-chance[data-level='low'] { color: var(--danger); }
 /* Available days stay brand-tinted (inviting); fully-taken days read muted. */
 .cal-cell.is-taken { background: var(--surface-inset); }
 .cal-cell.is-taken:hover { background: var(--surface-hover); }
@@ -753,7 +758,14 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 .agenda-vacant:hover, .agenda-vacant:focus-visible { background: var(--surface-hover); color: var(--ink); }
 .agenda-empty { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 28px 18px; text-align: center; }
 .agenda-empty-text { margin: 0; font-size: 13px; color: var(--ink-muted); }
-.agenda-day { padding: 11px 14px 6px; font-size: 12px; font-weight: 700; color: var(--ink-muted); }
+/* The card header carries the date and, like the calendar cell, the odds of
+   getting a notary that day — the list was the one view showing a price with no
+   sense of how gettable the date is. */
+.agenda-day { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 11px 14px 6px; font-size: 12px; font-weight: 700; color: var(--ink-muted); }
+.agenda-day-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agenda-day-t::first-letter { text-transform: uppercase; }
+.agenda-chance { display: inline-flex; align-items: center; gap: 5px; flex: none; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.agenda-chance::before { content: ''; width: 7px; height: 7px; border-radius: 50%; flex: none; background: currentColor; }
 .bid-row { display: flex; align-items: center; gap: 10px; padding: 9px 14px 9px 12px; border-top: 1px solid var(--border); border-left: 2px solid transparent; }
 .bid-row.is-open { border-left-color: var(--status-ouverte); }
 .bid-row.is-retenue { border-left-color: var(--status-retenue); }
@@ -1013,7 +1025,8 @@ dialog::backdrop { background: var(--backdrop); }
 #day-dialog::backdrop { background: var(--backdrop); backdrop-filter: blur(2px); }
 .day-head { display: flex; align-items: flex-start; gap: 12px; padding: 22px 24px 16px; }
 .day-head .header-spacer { flex: 1; }
-.day-title { font-size: 20px; font-weight: 800; text-transform: capitalize; letter-spacing: -0.02em; }
+.day-title { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
+.day-title::first-letter { text-transform: uppercase; }
 .day-sub { font-size: 13px; color: var(--ink-muted); margin-top: 2px; }
 .day-close { appearance: none; border: 0; background: var(--surface-inset); color: var(--ink); width: 34px; height: 34px; border-radius: 999px; cursor: pointer; font-size: 18px; line-height: 1; flex: none; }
 .day-close:hover { background: var(--surface-hover); }
@@ -1031,6 +1044,9 @@ dialog::backdrop { background: var(--backdrop); }
 .day-bids-more { padding: 8px 14px; font-size: 12px; color: var(--ink-muted); border-top: 1px solid var(--border); }
 .day-bids-rest[hidden] { display: none; }
 .day-bids-toggle { width: 100%; margin: 6px 0 2px; justify-content: center; }
+/* The day's totals under the single headline offer: how many for the act being
+   booked, and how many that date carries in all. */
+.day-bids-count { padding: 8px 14px; font-size: 12px; color: var(--ink-muted); line-height: 1.5; }
 /* Scale guard: a day-group caps its rows and links to the full day view. */
 .agenda-more { display: block; width: 100%; text-align: left; appearance: none; background: transparent; border: 0; border-top: 1px solid var(--border); padding: 8px 14px; font: inherit; font-size: 12px; font-weight: 600; color: var(--brand); cursor: pointer; }
 .agenda-more:hover { background: var(--surface-hover); }
@@ -1151,6 +1167,16 @@ dialog::backdrop { background: var(--backdrop); }
 .nc-opp-sep { color: var(--border-strong); margin: 0 3px; }
 /* Phase-2 teaser: full onboarding coming online. The "Bientôt" marker is an OUTLINE
    pill (brand border + text, transparent fill) — never a colour-filled badge. */
+/* Live echo of what the carnet will publish for this bid, colour-keyed to the
+   state of the entry (valid Quebec sector / still typing / off-format). */
+.prefix-preview { margin: 6px 0 0; font-size: 12px; line-height: 1.5; color: var(--ink-muted); }
+.prefix-preview:empty { display: none; }
+.prefix-preview[data-state='ok'] { color: var(--brand); }
+.prefix-preview[data-state='warn'] { color: var(--status-retenue); }
+/* The client-facing "coming soon" sits above the publish button, so it needs a
+   little more air than the notary-side note it borrows its styling from. */
+.soon-online { margin-bottom: 12px; }
+
 .nc-soon { margin: 12px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--ink-muted); }
 .nc-soon-tag { display: inline-block; margin-right: 8px; padding: 1px 9px; border: 1px solid var(--brand); border-radius: 999px; font-size: 11px; font-weight: 800; letter-spacing: .03em; color: var(--brand); text-transform: uppercase; }
 .nc-auth .form-row { margin-bottom: 12px; }
@@ -1187,7 +1213,7 @@ dialog::backdrop { background: var(--backdrop); }
 .nc-card-title { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
 .nc-card-amount { font-size: 18px; font-weight: 800; letter-spacing: -0.02em; }
 .nc-card-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
-.nc-date { font-size: 12px; color: var(--ink-muted); text-transform: capitalize; }
+.nc-date { font-size: 12px; color: var(--ink-muted); }
 /* Case-complexity signal on a notary's open-bid card (outline, colour by level). */
 .nc-complexity { font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--ink-muted); }
 .nc-complexity[data-level='simple'] { color: var(--ok); border-color: var(--ok); }
@@ -1403,6 +1429,14 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   .day-head { padding: 16px 16px 12px; }
   .day-value { padding: 0 16px 12px; }
   .day-book { padding: 14px 16px 18px; }
+  /* The day dialog becomes a full-width sheet on phones, so its rows are as tight
+     as the list cards — give them the same two-line treatment. */
+  .day-bids .bid-row { flex-wrap: wrap; row-gap: 3px; }
+  .day-bids .bid-amount { order: 1; }
+  .day-bids .pill, .day-bids .status-chip { order: 2; }
+  .day-bids .row-actions { order: 3; margin-left: auto; }
+  .day-bids .bid-meta { order: 4; flex: 1 0 100%; }
+  .day-bids .status-chip { max-width: none; }
   /* Explainer stacks the badge over the text on narrow screens. */
   .hero-cta { gap: 8px; }
   .hero-cta .btn-lg { flex: 1 1 auto; }

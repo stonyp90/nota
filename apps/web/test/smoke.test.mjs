@@ -475,14 +475,16 @@ test('submitting an offer attaches the saved dossier snapshot and courriel', asy
   assert.equal(captured.courriel, 'client@example.ca');
 });
 
-// 12. Money passthrough: amounts route through D.money — trailing " $" and
-//     space-grouped thousands appear in the rendered figures.
-test('rendered amounts use the money() format ("N NNN $")', async () => {
+// 12. Money passthrough: amounts route through D.money — the fr-CA no-break
+//     space (U+00A0) groups thousands and precedes the sign, so a rendered
+//     amount can never wrap mid-number.
+test('rendered amounts use the money() format ("N NNN $", no-break spaces)', async () => {
   const { doc } = await boot();
   const texts = all(doc, '#cal-grid .cal-avg, #agenda .bid-amount').map((e) => e.textContent);
   assert.ok(texts.length > 0, 'no money figures rendered');
-  assert.ok(texts.some((t) => / \$$/.test(t.trim())), 'no amount ends with " $"');
-  assert.ok(texts.some((t) => /\d \d{3} \$/.test(t)), 'no space-grouped thousands amount found');
+  assert.ok(texts.some((t) => /\u00A0\$$/.test(t.trim())), 'no amount ends with a no-break space + "$"');
+  assert.ok(texts.some((t) => /\d\u00A0\d{3}\u00A0\$/.test(t)), 'no grouped-thousands amount found');
+  assert.ok(!texts.some((t) => / \$/.test(t)), 'a breaking space before "$" would let it wrap away');
 });
 
 // 17. Filters are collapsed by default and the toolbar toggle reveals/hides them;
@@ -661,14 +663,15 @@ test('LEGEND: the calendar explains its two cell figures, using the domain bound
   const best = ctx.D.obtainChance(ctx.D.addDays(ctx.today, 30), ctx.today);
   const worst = ctx.D.obtainChance(ctx.today, ctx.today);
   assert.ok(best > worst, 'a distant date beats a same-day one');
-  assert.ok(txt.includes(best + ' %'), 'quotes the domain upper bound (' + best + ' %)');
-  assert.ok(txt.includes(worst + ' %'), 'quotes the domain lower bound (' + worst + ' %)');
+  // Percentages carry a no-break space before the sign, like money().
+  assert.ok(txt.includes(best + '\u00A0%'), 'quotes the domain upper bound (' + best + ' %)');
+  assert.ok(txt.includes(worst + '\u00A0%'), 'quotes the domain lower bound (' + worst + ' %)');
 
   // And the figure printed in a cell is the same domain value, not a UI copy.
   const cell = ctx.doc.querySelector('.cal-cell.has-bids .cal-chance');
   if (cell) {
     const iso = cell.closest('.cal-cell').dataset.date;
-    assert.equal(cell.textContent, ctx.D.obtainChance(iso, ctx.today) + ' %');
+    assert.equal(cell.textContent, ctx.D.obtainChance(iso, ctx.today) + '\u00A0%');
   }
 });
 
@@ -685,13 +688,117 @@ test('DAY: the booking dialog says what the calendar % means for that date', asy
   const line = $(ctx.doc, 'day-chance');
   assert.ok(line, 'the day dialog carries a chance explainer');
   const expected = ctx.D.obtainChance(iso, ctx.today);
-  assert.ok(line.textContent.includes(expected + ' %'),
+  assert.ok(line.textContent.includes(expected + '\u00A0%'),
     'quotes the domain value for THIS date (' + expected + ' %): ' + line.textContent);
   const days = ctx.D.daysBetween(ctx.today, iso);
   const when = days === 1 ? 'demain' : 'dans ' + days + ' jours';
   assert.ok(line.textContent.includes(when), 'and states the lead time driving it (' + when + ')');
   // The cell badge and the dialog must never disagree about the same date.
-  assert.equal(cell.querySelector('.cal-chance').textContent, expected + ' %');
+  assert.equal(cell.querySelector('.cal-chance').textContent, expected + '\u00A0%');
+});
+
+test('DAY: opens on the domain default act, showing only its best offer + totals', async () => {
+  const ctx = await boot();
+  const iso = ctx.D.addDays(ctx.today, 5);
+  await reseed(ctx, [
+    { id: 'r1', serviceId: 'refinancement', dateISO: iso, montant: 4000, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
+    { id: 'r2', serviceId: 'refinancement', dateISO: iso, montant: 2500, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
+    { id: 't1', serviceId: 'testament', dateISO: iso, montant: 9000, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
+  ]);
+  const cell = ctx.doc.querySelector('.cal-cell[data-date="' + iso + '"]');
+  cell.click();
+  await wait(30);
+
+  // The booking form opens on the default act, not on an empty choice.
+  assert.equal($(ctx.doc, 'o-service').value, ctx.D.DEFAULT_SERVICE_ID);
+  const onChip = ctx.doc.querySelector('#o-service-chips .chip.is-on');
+  assert.ok(onChip, 'a service chip is pre-selected');
+  assert.equal(onChip.dataset.svc, ctx.D.DEFAULT_SERVICE_ID);
+
+  // Exactly one row: the best offer for THAT act (4000), not the day's top (9000).
+  // Direct children only — the rest stay in DOM inside the collapsed section.
+  const rows = ctx.doc.querySelectorAll('#day-bids > .bid-row');
+  assert.equal(rows.length, 1, 'only the best offer for the selected act is listed');
+  assert.match(rows[0].querySelector('.bid-amount').textContent, /4\s*000/);
+  assert.equal($(ctx.doc, 'day-best').textContent, ctx.D.money(4000), 'headline is the act\u2019s best');
+
+  // ...and the totals are stated.
+  const count = ctx.doc.querySelector('#day-bids .day-bids-count').textContent;
+  assert.match(count, /2 offres en refinancement/, 'counts the act');
+  assert.match(count, /3 offres ce jour/, 'and the whole day');
+});
+
+test('DAY: switching the act re-scopes the headline offer and the totals', async () => {
+  const ctx = await boot();
+  const iso = ctx.D.addDays(ctx.today, 5);
+  await reseed(ctx, [
+    { id: 'r1', serviceId: 'refinancement', dateISO: iso, montant: 4000, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
+    { id: 't1', serviceId: 'testament', dateISO: iso, montant: 9000, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
+  ]);
+  ctx.doc.querySelector('.cal-cell[data-date="' + iso + '"]').click();
+  await wait(30);
+  assert.equal($(ctx.doc, 'day-best').textContent, ctx.D.money(4000));
+
+  ctx.doc.querySelector('#o-service-chips .chip[data-svc="testament"]').click();
+  await wait(30);
+  const rows = ctx.doc.querySelectorAll('#day-bids > .bid-row');
+  assert.equal(rows.length, 1, 'still a single headline offer');
+  assert.equal($(ctx.doc, 'day-best').textContent, ctx.D.money(9000), 'now the testament best');
+  assert.match($(ctx.doc, 'day-hint').textContent, /9\s*000/, 'the bar to clear follows too');
+
+  // An act with nothing on the day says so rather than showing another act's offer.
+  ctx.doc.querySelector('#o-service-chips .chip[data-svc="procuration"]').click();
+  await wait(30);
+  assert.equal(ctx.doc.querySelectorAll('#day-bids > .bid-row').length, 0);
+  assert.equal($(ctx.doc, 'day-best').textContent, '—');
+  assert.match(ctx.doc.querySelector('#day-bids .day-bids-count').textContent, /Aucune offre en procuration/);
+});
+
+test('POSTAL: the sector field normalizes as you type and previews what is published', async () => {
+  const ctx = await boot();
+  const inp = $(ctx.doc, 'o-prefix');
+  const prev = $(ctx.doc, 'prefix-preview');
+  assert.ok(inp && prev, 'the field and its preview exist');
+  assert.equal(inp.getAttribute('autocomplete'), 'postal-code', 'browsers can autofill it');
+  assert.ok(ctx.doc.getElementById('prefix-help'), 'the field explains why it is asked');
+  assert.equal(inp.getAttribute('aria-describedby'), 'prefix-help');
+
+  // Lowercase + punctuation + overflow are normalized in place by the domain rule.
+  inp.value = ' g1r 2k4 ';
+  fire(ctx.win, inp, 'input');
+  assert.equal(inp.value, 'G1R', 'normalized to the 3-character sector');
+  assert.equal(prev.dataset.state, 'ok');
+  assert.match(prev.textContent, /Client · G1R/, 'previews the exact public label');
+
+  // Still typing is not an error — the field is optional.
+  inp.value = 'G1';
+  fire(ctx.win, inp, 'input');
+  assert.equal(prev.dataset.state, 'pending');
+
+  // A valid prefix outside Quebec is flagged, not silently accepted.
+  inp.value = 'M5V';
+  fire(ctx.win, inp, 'input');
+  assert.equal(prev.dataset.state, 'warn');
+  assert.ok(!ctx.D.isQuebecPostalPrefix('M5V'));
+
+  // Empty clears the preview entirely.
+  inp.value = '';
+  fire(ctx.win, inp, 'input');
+  assert.equal(prev.textContent, '');
+});
+
+test('COMING SOON: both audiences are told the act will be doable fully online', async () => {
+  const { doc } = await boot();
+  const client = doc.querySelector('.soon-online');
+  assert.ok(client, 'the booking flow carries the notice');
+  assert.match(client.textContent, /Bientôt/, 'it is labelled as not yet available');
+  assert.match(client.textContent, /entièrement en ligne/);
+  assert.ok(doc.getElementById('offer-submit'), 'and it sits with the publish action');
+
+  const notary = doc.getElementById('notary-phase2-note');
+  assert.ok(notary, 'the notary side carries it too');
+  assert.match(notary.textContent, /Bientôt/);
+  assert.match(notary.textContent, /en ligne/);
 });
 
 test('LIST: a day with a single offer still offers a way into the day dialog', async () => {
@@ -879,7 +986,7 @@ test('account menu shows the anonymous sign-in invitation by default', async () 
   assert.equal($(doc, 'acct-role').hidden, true);
   assert.match($(doc, 'acct-name').textContent, /connecter/i);
   const labels = acctActionLabels(doc);
-  assert.ok(labels.some((t) => /Publier une demande/i.test(t)), 'an offer-flow entry');
+  assert.ok(labels.some((t) => /Publier une offre/i.test(t)), 'an offer-flow entry');
   assert.ok(labels.some((t) => /Espace notaire/i.test(t)), 'a notary entry');
 });
 

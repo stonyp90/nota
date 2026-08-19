@@ -238,7 +238,7 @@
     if (D.daysBetween(todayISO(), o.dateISO) < 0) return 'expired';
     return 'pending';
   }
-  var OFFER_STATUS_LABEL = { approved: '✓ Approuvé', pending: 'En attente', expired: 'Expiré' };
+  var OFFER_STATUS_LABEL = { approved: '✓ Approuvée', pending: 'En attente', expired: 'Expirée' };
   function svcName(id) { var s = D.serviceById(id); return s ? s.nom : id; }
 
   // --- Client profile --------------------------------------------------------
@@ -658,17 +658,17 @@
       return acctAction('guide', 'Comment ça marche', function () { toggleNotifPanel(false); onbOpen(); });
     }
     if (role === 'notary') {
-      actions.appendChild(acctAction('dossiers', 'Mes demandes & dossiers', function () { toggleNotifPanel(false); setTab('notaires'); }));
+      actions.appendChild(acctAction('dossiers', 'Mes demandes et dossiers', function () { toggleNotifPanel(false); setTab('notaires'); }));
       actions.appendChild(onbAcctRow());
       actions.appendChild(acctAction('signout', 'Se déconnecter', function () { ncSignOut(); renderAccountMenu(); toggleNotifPanel(false); }));
     } else if (role === 'client') {
       actions.appendChild(acctAction('profil', 'Mon profil', function () { toggleNotifPanel(false); setTab('profil'); }));
-      actions.appendChild(acctAction('offers', 'Mes demandes', function () { toggleNotifPanel(false); setTab('profil'); }));
+      actions.appendChild(acctAction('offers', 'Mes offres', function () { toggleNotifPanel(false); setTab('profil'); }));
       actions.appendChild(onbAcctRow());
       actions.appendChild(acctAction('signout', 'Se déconnecter', clientSignOut));
     } else {
       // The identity head IS the "Se connecter / s’inscrire" trigger — don't repeat it.
-      actions.appendChild(acctAction('publier', 'Publier une demande', openOfferFlow));
+      actions.appendChild(acctAction('publier', 'Publier une offre', openOfferFlow));
       actions.appendChild(acctAction('notaire', 'Espace notaire', function () { toggleNotifPanel(false); setTab('notaires'); }));
       actions.appendChild(onbAcctRow());
     }
@@ -810,12 +810,10 @@
         cell.appendChild(avgEl);
         // Chance to obtain a notary on this date (lead-time based), shown as a %.
         var chance = D.obtainChance(iso, today);
-        var chanceEl = el('span', 'cal-chance', chance + ' %');
-        chanceEl.dataset.level = chance >= 80 ? 'high' : chance >= 55 ? 'mid' : 'low';
-        chanceEl.title = chance + ' % de chances d’obtenir un notaire à cette date';
+        var chanceEl = chanceBadge('cal-chance', iso, today);
         if (open.length) { cell.classList.add('is-avail'); } else { cell.classList.add('is-taken'); }
         cell.appendChild(chanceEl);
-        cell.setAttribute('aria-label', dayTitle(iso) + ' — prix moyen ' + D.money(avg) + ', ' + chance + ' % de chances d’obtenir un notaire');
+        cell.setAttribute('aria-label', dayTitle(iso) + ' — prix moyen ' + D.money(avg) + ', ' + chance + PCT + ' de chances d’obtenir un notaire');
       }
 
       // The client's own offer status on this day (approved / pending / expired).
@@ -843,8 +841,25 @@
 
   // Compact a bid count so the badge pill never widens: 2000 -> "2k", 1250 -> "1.2k".
   // The aria-label always uses the real integer, so screen readers hear the exact count.
+  // Colour banding for the odds badge. Shared by the calendar cell and the list
+  // card so the two views never disagree about what reads as a good chance.
+  function chanceLevel(pct) { return pct >= 80 ? 'high' : pct >= 55 ? 'mid' : 'low'; }
+  // fr-CA sets a no-break space before the sign, exactly as money() does.
+  var PCT = '\u00A0%';
+  function chanceBadge(cls, iso, today) {
+    var pct = D.obtainChance(iso, today);
+    var node = el('span', cls, pct + PCT);
+    node.dataset.level = chanceLevel(pct);
+    node.title = pct + PCT + ' de chances d’obtenir un notaire à cette date';
+    return node;
+  }
+
   function compactCount(n) {
-    return n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1).replace('.0', '') + 'k' : String(n);
+    // French decimal comma, like compactMoney below — toFixed() emits an en-US
+    // point, so this rendered "1.2k" beside the carnet's "3,3k".
+    return n >= 1000
+      ? (n / 1000).toFixed(n >= 10000 ? 0 : 1).replace('.0', '').replace('.', ',') + 'k'
+      : String(n);
   }
   // Compact a dollar amount for the tightest calendar cells (phones): 3285 -> "3,3k",
   // 715 -> "715". Swapped in only by the narrow container query; the full amount and
@@ -868,7 +883,7 @@
     });
     lg.appendChild(el('span', 'legend-label legend-label--sep', 'Statut'));
     // Status key (distinct class so the tier-count test still holds).
-    [['ouverte', 'En attente'], ['retenue', 'Retenu']].forEach(function (s) {
+    [['ouverte', 'Ouverte'], ['retenue', 'Retenue']].forEach(function (s) {
       var item = el('span', 'legend-status-item');
       var dot = el('span', 'legend-dot'); dot.style.background = 'var(--status-' + s[0] + ')';
       item.appendChild(dot);
@@ -896,7 +911,7 @@
     note.appendChild(el('strong', null, 'Dans chaque case'));
     note.appendChild(document.createTextNode(
       ' : le prix moyen des offres, et vos chances d’obtenir un notaire ce jour-là — '
-      + 'de ' + best + ' % pour une date lointaine à ' + worst + ' % pour demain.'
+      + 'de ' + best + PCT + ' pour une date lointaine à ' + worst + PCT + ' pour demain.'
     ));
     lg.appendChild(note);
   }
@@ -909,7 +924,8 @@
   // how much of the carnet a notary has already taken. Aggregation is the
   // domain's (D.carnetPulse); this only formats and wires each row to the
   // service filter of the carnet below.
-  function plural(n, word) { return n + ' ' + word + (n === 1 ? '' : 's'); }
+  // French keeps the singular at 0 as well as 1 ("0 demande"), unlike English.
+  function plural(n, word) { return n + ' ' + word + (n < 2 ? '' : 's'); }
 
   function pulseRow(s, active, busiest) {
     var short = s.nom.split(' ')[0];
@@ -1043,7 +1059,10 @@
       var dayBids = (groups[iso] || []).slice().sort(function (a, b) { return b.montant - a.montant; });
       var group = el('div', 'agenda-group' + (dayBids.length ? '' : ' is-vacant'));
       group.dataset.date = iso;
-      group.appendChild(el('div', 'agenda-day', dayTitle(iso)));
+      var head = el('div', 'agenda-day');
+      head.appendChild(el('span', 'agenda-day-t', dayTitle(iso)));
+      head.appendChild(chanceBadge('agenda-chance', iso, today));
+      group.appendChild(head);
 
       if (!dayBids.length) {
         // No bet on this day: still a full rectangle, and a way in to reserve it.
@@ -1174,63 +1193,24 @@
     state.focusDate = iso;
     state.selectedDate = iso;
     var all = state.monthBids.filter(function (b) { return b.dateISO === iso; });
-    var f = state.filters;
-    var shown = all.filter(function (b) {
-      if (f.service && b.serviceId !== f.service) return false;
-      if (f.statut && b.status !== f.statut) return false;
-      if (f.min != null && b.montant < f.min) return false;
-      if (f.max != null && b.montant > f.max) return false;
-      return true;
-    }).sort(function (a, b) { return b.montant - a.montant; });
 
     $('day-title').textContent = dayTitle(iso);
     var days = D.daysBetween(todayISO(), iso);
     var when = days < 0 ? 'passé' : days === 0 ? 'aujourd’hui' : 'dans ' + days + ' jour' + (days > 1 ? 's' : '');
-    var takenN = shown.filter(function (b) { return b.status === D.STATUS.RETENUE; }).length;
-    $('day-sub').textContent = shown.length
-      ? shown.length + ' offre' + (shown.length > 1 ? 's' : '') + (takenN ? ' · ' + takenN + ' retenue' + (takenN > 1 ? 's' : '') : '') + ' · ' + when
+    var takenN = all.filter(function (b) { return b.status === D.STATUS.RETENUE; }).length;
+    $('day-sub').textContent = all.length
+      ? all.length + ' offre' + (all.length > 1 ? 's' : '') + (takenN ? ' · ' + takenN + ' retenue' + (takenN > 1 ? 's' : '') : '') + ' · ' + when
       : 'Aucune offre · ' + when + ' · soyez le premier';
-
-    var list = $('day-bids'); clear(list);
-    var INITIAL = 3;   // keep the modal compact: only the top 3, rest behind "voir plus"
-    var DAY_CAP = 40;  // hard bound so a day with hundreds never floods the DOM
-    var capped = shown.slice(0, DAY_CAP);
-    capped.slice(0, INITIAL).forEach(function (b) { list.appendChild(bidRow(b)); });
-    if (capped.length > INITIAL) {
-      var rest = el('div', 'day-bids-rest'); rest.hidden = true;
-      capped.slice(INITIAL).forEach(function (b) { rest.appendChild(bidRow(b)); });
-      list.appendChild(rest);
-      var n = capped.length - INITIAL;
-      var toggle = el('button', 'btn btn-sm day-bids-toggle', 'Voir les ' + n + ' autres offres'); toggle.type = 'button';
-      toggle.setAttribute('aria-expanded', 'false');
-      toggle.addEventListener('click', function () {
-        var opening = rest.hidden;
-        rest.hidden = !opening;
-        toggle.setAttribute('aria-expanded', opening ? 'true' : 'false');
-        toggle.textContent = opening ? 'Voir moins' : 'Voir les ' + n + ' autres offres';
-      });
-      list.appendChild(toggle);
-      if (shown.length > DAY_CAP) {
-        list.appendChild(el('div', 'day-bids-more', '+ ' + (shown.length - DAY_CAP) + ' autres — les ' + DAY_CAP + ' meilleures sont affichées'));
-      }
-    }
-
-    var open = shown.filter(function (b) { return b.status !== D.STATUS.RETENUE; });
-    $('day-best').textContent = open.length
-      ? D.money(Math.max.apply(null, open.map(function (b) { return b.montant; })))
-      : '—';
 
     // --- Inline booking (relocated offer-form) — the clicked day IS the date ---
     $('o-date').value = iso; onOfferDateChange();
     var sel = $('o-service'), chips = $('o-service-chips');
-    if (D.serviceById(state.filters.service)) {           // active carnet filter → 2-click path
-      sel.value = state.filters.service;
-      var pre = chips && chips.querySelector('[data-svc="' + state.filters.service + '"]');
-      if (pre) setGroupActive(chips, pre);
-    } else {                                              // clean 3-click path
-      sel.selectedIndex = -1;                             // value '' WITHOUT a placeholder option (options.length stays 3)
-      if (chips) chips.querySelectorAll('.chip').forEach(function (x) { x.classList.remove('is-on'); x.setAttribute('aria-pressed', 'false'); });
-    }
+    // An active carnet filter wins; otherwise fall back to the domain's default
+    // act, so the form opens ready to book instead of on an empty choice.
+    var preselect = D.serviceById(state.filters.service) ? state.filters.service : D.DEFAULT_SERVICE_ID;
+    sel.value = preselect;
+    var pre = chips && chips.querySelector('[data-svc="' + preselect + '"]');
+    if (pre) setGroupActive(chips, pre);
     onOfferServiceChange();                               // amount/gauge + recommendedAmount pre-fill + validity
     // Prefill identity from the client's saved profile so nothing is re-entered.
     var prof = profileGet();
@@ -1240,9 +1220,7 @@
     commitAnon(prof.anonyme);
     var succ = $('offer-success'); if (succ) succ.hidden = true;
     var eb = $('offer-errors'); if (eb) { eb.hidden = true; clear(eb); }
-    $('day-hint').textContent = open.length
-      ? 'Proposez plus que ' + D.money(Math.max.apply(null, open.map(function (b) { return b.montant; }))) + ' pour passer devant.'
-      : 'Aucune offre — fixez votre prix.';
+    renderDayBids(iso);
     // Name the calendar's % again where the date is actually chosen, with this
     // date's own lead time — the cell shows the number, this says what it means.
     var chanceEl = $('day-chance');
@@ -1250,7 +1228,7 @@
       var dLeft = D.daysBetween(todayISO(), iso);
       var when = dLeft <= 0 ? 'aujourd’hui' : dLeft === 1 ? 'demain' : 'dans ' + dLeft + ' jours';
       chanceEl.textContent = 'Chances d’obtenir un notaire : ' + D.obtainChance(iso, todayISO())
-        + ' % — la date est ' + when + ', et plus elle approche, plus un notaire a de mal à s’y libérer.';
+        + PCT + ' — la date est ' + when + ', et plus elle approche, plus un notaire a de mal à s’y libérer.';
     }
     validateOfferUI();
 
@@ -1259,6 +1237,67 @@
     if (dlg.showModal && !dlg.open) dlg.showModal();
   }
 
+
+  // The day dialog answers one question: what do I have to beat for the act I am
+  // booking? So it leads with the single best offer for the SELECTED act, states
+  // the day's totals, and folds everything else behind a toggle. Re-run whenever
+  // the act changes — the headline, the hint and the list all depend on it.
+  var DAY_CAP = 40;  // hard bound so a day with hundreds never floods the DOM
+
+  function renderDayBids(iso) {
+    var list = $('day-bids'); if (!list) return;
+    clear(list);
+    var f = state.filters;
+    var dayAll = state.monthBids.filter(function (b) {
+      if (b.dateISO !== iso) return false;
+      if (f.statut && b.status !== f.statut) return false;
+      if (f.min != null && b.montant < f.min) return false;
+      if (f.max != null && b.montant > f.max) return false;
+      return true;
+    }).sort(function (a, b) { return b.montant - a.montant; });
+
+    var svc = D.serviceById($('o-service') ? $('o-service').value : '');
+    var matching = svc ? dayAll.filter(function (b) { return b.serviceId === svc.id; }) : dayAll;
+
+    // Headline row: the one offer to beat for this act.
+    if (matching.length) list.appendChild(bidRow(matching[0]));
+
+    // Totals: what the client is actually up against on this date.
+    var counts = [];
+    if (svc) {
+      counts.push(matching.length
+        ? matching.length + ' offre' + (matching.length > 1 ? 's' : '') + ' en ' + svc.nom.toLowerCase()
+        : 'Aucune offre en ' + svc.nom.toLowerCase());
+    }
+    counts.push(dayAll.length + ' offre' + (dayAll.length > 1 ? 's' : '') + ' ce jour, tous actes confondus');
+    list.appendChild(el('div', 'day-bids-count', counts.join(' · ')));
+
+    // Everything not shown above, on demand.
+    var others = dayAll.filter(function (b) { return b !== matching[0]; }).slice(0, DAY_CAP);
+    if (others.length) {
+      var rest = el('div', 'day-bids-rest'); rest.hidden = true;
+      others.forEach(function (b) { rest.appendChild(bidRow(b)); });
+      list.appendChild(rest);
+      var label = 'Voir les ' + others.length + ' autre' + (others.length > 1 ? 's' : '') + ' offre' + (others.length > 1 ? 's' : '');
+      var toggle = el('button', 'btn btn-sm day-bids-toggle', label); toggle.type = 'button';
+      toggle.setAttribute('aria-expanded', 'false');
+      toggle.addEventListener('click', function () {
+        var opening = rest.hidden;
+        rest.hidden = !opening;
+        toggle.setAttribute('aria-expanded', opening ? 'true' : 'false');
+        toggle.textContent = opening ? 'Voir moins' : label;
+      });
+      list.appendChild(toggle);
+    }
+
+    // Headline figure + the bar to clear, both scoped to the selected act.
+    var open = matching.filter(function (b) { return b.status !== D.STATUS.RETENUE; });
+    var top = open.length ? Math.max.apply(null, open.map(function (b) { return b.montant; })) : null;
+    $('day-best').textContent = top != null ? D.money(top) : '—';
+    $('day-hint').textContent = top != null
+      ? 'Proposez plus que ' + D.money(top) + ' pour passer devant.'
+      : (svc ? 'Aucune offre en ' + svc.nom.toLowerCase() + ' — fixez votre prix.' : 'Aucune offre — fixez votre prix.');
+  }
 
   // ---------------------------------------------------------------------------
   // Keyboard navigation (roving tabindex on the grid)
@@ -1544,6 +1583,10 @@
     onAmountChange();
   }
 
+  // Shown in the format hints. Taken from a real fixture prefix so the example is
+  // always a genuine Quebec sector.
+  var PREFIX_EXAMPLE = (D.makeFixtures(todayISO()).find(function (b) { return b.prefixe; }) || {}).prefixe || 'G1R';
+
   function onOfferServiceChange() {
     var svc = D.serviceById($('o-service').value);
     state.offer.serviceId = svc ? svc.id : '';
@@ -1639,6 +1682,36 @@
     }
     s.disabled = !v.ok;
     return v;
+  }
+
+  // The postal prefix is the one piece of location a bid publishes, so the field
+  // normalizes as you type (domain-owned format) and previews the exact public
+  // string. An incomplete entry is not an error — the field is optional — so it
+  // is flagged only once three characters are in.
+  function onPrefixInput() {
+    var inp = $('o-prefix'); if (!inp) return;
+    var norm = D.normalizePostalPrefix(inp.value);
+    if (inp.value !== norm) inp.value = norm;
+    var prev = $('prefix-preview');
+    if (prev) {
+      clear(prev);
+      if (!norm) {
+        prev.removeAttribute('data-state');
+      } else if (D.isQuebecPostalPrefix(norm)) {
+        prev.dataset.state = 'ok';
+        prev.textContent = 'Votre offre s’affichera « Client · ' + norm + ' ».';
+      } else if (norm.length < 3) {
+        prev.dataset.state = 'pending';
+        prev.textContent = 'Encore ' + (3 - norm.length) + ' caractère' + (3 - norm.length > 1 ? 's' : '') + ' — format « ' + PREFIX_EXAMPLE + ' ».';
+      } else if (D.isPostalPrefix(norm)) {
+        prev.dataset.state = 'warn';
+        prev.textContent = '« ' + norm + ' » n’est pas un secteur du Québec. Nota dessert Québec pour l’instant.';
+      } else {
+        prev.dataset.state = 'warn';
+        prev.textContent = 'Format attendu : une lettre, un chiffre, une lettre — « ' + PREFIX_EXAMPLE + ' ».';
+      }
+    }
+    validateOfferUI();
   }
 
   function onAnonToggle() {
@@ -2594,7 +2667,7 @@
   }
 
   function ncComplexityPill(c) {
-    var labels = { simple: 'Cas simple', standard: 'Standard', complexe: 'Cas complexe' };
+    var labels = { simple: 'Cas simple', standard: 'Cas standard', complexe: 'Cas complexe' };
     var pill = el('span', 'nc-complexity', labels[c.level] || c.level);
     pill.dataset.level = c.level;
     return pill;
@@ -2670,7 +2743,7 @@
     meta.appendChild(el('span', 'nc-date', dayTitle(entry.dateISO)));
     if (entry.prefixe) meta.appendChild(el('span', 'nc-prefixe', entry.prefixe));
     meta.appendChild(ncTierPill(entry.tier));
-    meta.appendChild(el('span', 'pill pill-retenue', 'retenue'));
+    meta.appendChild(el('span', 'pill pill-retenue', 'Retenue'));
     card.appendChild(meta);
     card.appendChild(ncDossierBlock(entry));
     card.appendChild(ncCompleteBlock(entry));
@@ -2974,12 +3047,13 @@
       setGroupActive(this, b);
       $('o-service').value = b.dataset.svc;
       onOfferServiceChange();
+      if (state.selectedDate) renderDayBids(state.selectedDate); // list follows the act
     });
     $('o-date').addEventListener('change', onOfferDateChange);
     $('o-date').addEventListener('input', onOfferDateChange);
     $('o-amount').addEventListener('input', onAmountChange);
     $('o-anon').addEventListener('change', onAnonToggle);
-    $('o-prefix').addEventListener('input', validateOfferUI);
+    $('o-prefix').addEventListener('input', onPrefixInput);
     $('o-courriel').addEventListener('input', validateOfferUI);
     $('offer-form').addEventListener('submit', onOfferSubmit);
     $('o-date').setAttribute('min', todayISO());

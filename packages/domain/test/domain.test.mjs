@@ -7,17 +7,22 @@ const D = require('../index.js');
 
 const TODAY = '2026-08-12';
 
-test('money: fr-CA space thousands separator and trailing $', () => {
-  assert.equal(D.money(950), '950 $');
-  assert.equal(D.money(1350), '1 350 $');
-  assert.equal(D.money(13500), '13 500 $');
-  assert.equal(D.money(4950), '4 950 $');
-  assert.equal(D.money(0), '0 $');
+// fr-CA separates thousands and the sign with a NO-BREAK space (U+00A0), so an
+// amount never wraps mid-number or leaves its "$" stranded on the next line.
+const NB = '\u00A0';
+
+test('money: fr-CA no-break space thousands separator and trailing $', () => {
+  assert.equal(D.money(950), '950' + NB + '$');
+  assert.equal(D.money(1350), '1' + NB + '350' + NB + '$');
+  assert.equal(D.money(13500), '13' + NB + '500' + NB + '$');
+  assert.equal(D.money(4950), '4' + NB + '950' + NB + '$');
+  assert.equal(D.money(0), '0' + NB + '$');
+  assert.ok(!D.money(1350).includes(' '), 'never a breaking ASCII space');
 });
 
 test('money: rounds and handles junk', () => {
-  assert.equal(D.money(1234.6), '1 235 $');
-  assert.equal(D.money('nope'), '0 $');
+  assert.equal(D.money(1234.6), '1' + NB + '235' + NB + '$');
+  assert.equal(D.money('nope'), '0' + NB + '$');
 });
 
 test('services: exactly the three bounded-intake acts', () => {
@@ -293,4 +298,37 @@ test('obtainChance: high with lead time, low last-minute', () => {
   assert.ok(near <= 55, 'a last-minute date reads as low chance');
   assert.ok(far > near, 'more lead time = higher chance');
   assert.equal(D.obtainChance('nope', TODAY), null);
+});
+
+test('DEFAULT_SERVICE_ID names a real service', () => {
+  assert.equal(typeof D.DEFAULT_SERVICE_ID, 'string');
+  const svc = D.serviceById(D.DEFAULT_SERVICE_ID);
+  assert.ok(svc, 'the default must resolve to an actual service');
+  assert.ok(D.SERVICES.some((s) => s.id === D.DEFAULT_SERVICE_ID));
+  assert.equal(svc.id, 'refinancement', 'refinancement leads the booking flow');
+});
+
+test('postal prefix: normalizes, validates the format, and knows Quebec', () => {
+  assert.equal(D.normalizePostalPrefix(' g1r 2k4 '), 'G1R', 'uppercases, strips, keeps 3');
+  assert.equal(D.normalizePostalPrefix('g1r'), 'G1R');
+  assert.equal(D.normalizePostalPrefix(null), '');
+  assert.equal(D.normalizePostalPrefix('!!'), '');
+
+  assert.ok(D.isPostalPrefix('G1R'), 'letter-digit-letter is the format');
+  assert.ok(D.isPostalPrefix('h2x'), 'case-insensitive via normalization');
+  assert.ok(!D.isPostalPrefix('G1'), 'too short');
+  assert.ok(!D.isPostalPrefix('GG1'), 'wrong shape');
+  assert.ok(!D.isPostalPrefix('123'), 'not digits');
+
+  assert.ok(D.isQuebecPostalPrefix('G1R'), 'Quebec City');
+  assert.ok(D.isQuebecPostalPrefix('H2X'), 'Montreal');
+  assert.ok(!D.isQuebecPostalPrefix('M5V'), 'Toronto is not Quebec');
+  assert.ok(!D.isQuebecPostalPrefix('G1'), 'must still be a valid prefix');
+  D.QC_POSTAL_LETTERS.forEach((L) => assert.ok(D.isQuebecPostalPrefix(L + '1A')));
+});
+
+test('every fixture postal prefix is a valid Quebec prefix', () => {
+  D.makeFixtures('2026-08-19')
+    .filter((b) => b.prefixe)
+    .forEach((b) => assert.ok(D.isQuebecPostalPrefix(b.prefixe), b.prefixe + ' should be a Quebec prefix'));
 });
