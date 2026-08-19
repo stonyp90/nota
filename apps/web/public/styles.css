@@ -39,6 +39,8 @@
   --danger: #b42318;
   --warn: #b54708;
   --ok: var(--hunter-600);
+  --danger-solid: #b42318; /* solid deep red for badge fills — dark --danger is a light salmon that fails white-text contrast */
+  --brand-tint: rgb(80 184 72 / 0.08); /* faint brand wash — demand-day calendar cells */
 
   /* Tier accent ramp — cool (calm) to warm (urgent).
      All five are dark enough for white .pill text to meet WCAG AA (>=4.5:1). */
@@ -126,6 +128,8 @@
     --danger: #f97066;
     --warn: #f79009;
     --ok: var(--hunter-500);
+    --danger-solid: #b42318;
+    --brand-tint: rgb(80 184 72 / 0.14);
 
     --tier-standard: #64748b;
     --tier-rapide: #357f30;
@@ -167,6 +171,8 @@
   --danger: #f97066;
   --warn: #f79009;
   --ok: var(--hunter-500);
+  --danger-solid: #b42318;
+  --brand-tint: rgb(80 184 72 / 0.14);
 
   --tier-standard: #64748b;
   --tier-rapide: #357f30;
@@ -279,7 +285,7 @@ a:hover { text-decoration: underline; }
 #notif-bell.has-unread { color: var(--brand); }
 .notif-badge {
   position: absolute; top: -5px; right: -5px; min-width: 17px; height: 17px; padding: 0 4px;
-  border-radius: 999px; background: var(--danger); color: var(--on-accent);
+  border-radius: 999px; background: var(--danger-solid); color: var(--on-accent);
   font-size: 10px; font-weight: 800; line-height: 17px; text-align: center;
   border: 2px solid var(--surface);
 }
@@ -517,6 +523,7 @@ a:hover { text-decoration: underline; }
 
 .panel {
   background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg); box-shadow: var(--shadow);
 }
 .panel-pad { padding: 18px; }
@@ -558,11 +565,13 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 .seg { display: inline-flex; background: var(--surface-inset); border: 1px solid var(--border); border-radius: 999px; padding: 3px; gap: 2px; }
 .seg-btn {
   appearance: none; font: inherit; font-weight: 500; font-size: 12.5px; cursor: pointer;
-  padding: 5px 12px; border-radius: 999px; border: 0; background: transparent; color: var(--ink-muted);
-  transition: background .15s, color .15s, box-shadow .15s;
+  padding: 5px 12px; border-radius: 999px; border: 1px solid transparent; background: transparent; color: var(--ink-muted);
+  transition: background .15s, color .15s, box-shadow .15s, border-color .15s;
 }
 .seg-btn:hover { color: var(--ink); }
-.seg-btn.is-on { background: var(--surface); color: var(--brand); box-shadow: var(--shadow-sm); }
+/* Selected chip reads RAISED off the track: a fill lighter than the inset track
+   plus a strong hairline, so it never looks sunken in dark. */
+.seg-btn.is-on { background: var(--surface-hover); color: var(--brand); border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
 
 /* --- Calendar ------------------------------------------------------------ */
 .cal-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; row-gap: 8px; padding: 10px 14px; }
@@ -594,7 +603,7 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 .cal-cell {
   background: var(--surface); min-height: clamp(68px, 5.4vw, 98px); padding: 6px 8px 12px; position: relative;
   display: flex; flex-direction: column; gap: 3px; cursor: pointer;
-  border: 1px solid transparent; border-radius: var(--radius-sm); scroll-margin-top: var(--sticky-top);
+  border: 1px solid var(--border); border-radius: var(--radius-sm); scroll-margin-top: var(--sticky-top);
   text-align: left; font: inherit; color: var(--ink);
   transition: transform .1s ease, box-shadow .1s ease, border-color .1s;
 }
@@ -603,7 +612,10 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 .cal-cell.is-today { border-color: var(--brand-bright); }
 .cal-cell.is-selected { border-color: var(--brand); box-shadow: inset 0 0 0 1px var(--brand); }
 .cal-cell:focus-visible { outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px var(--focus-ring); }
-.cal-cell.has-bids { border-color: transparent; }
+/* Demand days: the tier strip (::before) carries the edge colour, and a faint
+   brand wash lifts the cell off the panel so booked-interest days pop. */
+.cal-cell.has-bids { border-color: transparent; background: var(--brand-tint); }
+.cal-cell.has-bids:hover { background: var(--surface-hover); }
 /* Left urgency strip — a compact tier signal that NEVER clips. It draws the eye
    on elevated-urgency days at a glance, and at narrow widths (container queries
    below) it fully replaces the tier pill, which cannot fit a small cell. */
@@ -623,32 +635,17 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
   min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px;
   background: var(--brand); color: var(--on-accent); font-weight: 800;
 }
-.cal-count { position: absolute; top: 7px; right: 8px; font-size: 10px; font-weight: 700; background: var(--brand); color: var(--brand-ink); border-radius: 999px; min-width: 16px; text-align: center; padding: 1px 5px; }
-.cal-top { font-size: 15px; font-weight: 800; letter-spacing: -0.02em; margin-top: auto; white-space: nowrap; }
-/* Info line: service + urgency tier of the headline offer. */
-.cal-info { display: flex; align-items: center; gap: 6px; min-width: 0; margin-top: 1px; font-size: 10.5px; line-height: 1.2; }
-.cal-info-svc { color: var(--ink-muted); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cal-info-tier { flex: none; color: var(--ink); font-weight: 700; padding: 1px 6px; border: 1px solid var(--border); border-radius: 999px; }
-.cal-cell[data-tier='rapide'] .cal-info-tier { color: var(--tier-rapide-ink); border-color: var(--tier-rapide-ink); }
-.cal-cell[data-tier='prioritaire'] .cal-info-tier { color: var(--tier-prioritaire-ink); border-color: var(--tier-prioritaire-ink); }
-.cal-cell[data-tier='urgence'] .cal-info-tier { color: var(--tier-urgence-ink); border-color: var(--tier-urgence-ink); }
-.cal-cell[data-tier='extreme'] .cal-info-tier { color: var(--tier-extreme-ink); border-color: var(--tier-extreme-ink); }
-.cal-top.is-cleared { text-decoration: line-through; color: var(--ink-muted); font-weight: 600; }
-.cal-status { position: absolute; left: 9px; right: 9px; bottom: 6px; display: flex; height: 3px; border-radius: 999px; overflow: hidden; background: var(--border); }
-.cal-status-open { background: var(--status-ouverte); }
-.cal-status-taken { background: var(--status-retenue); }
-/* Per-service counts — the day's total (the count badge) broken down by service,
-   each number colour-coded (a dot + the count). Only present services show. */
-.cal-svc-counts { display: flex; flex-wrap: wrap; gap: 2px 9px; margin-top: 5px; font-size: 11px; font-weight: 800; line-height: 1.1; }
-.cal-svc-count { display: inline-flex; align-items: center; gap: 3px; color: var(--ink-muted); }
-.cal-svc-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--border-strong); }
-.cal-svc-count[data-svc='testament'] { color: var(--svc-testament); }
-.cal-svc-count[data-svc='testament'] .cal-svc-dot { background: var(--svc-testament); }
-.cal-svc-count[data-svc='procuration'] { color: var(--svc-procuration); }
-.cal-svc-count[data-svc='procuration'] .cal-svc-dot { background: var(--svc-procuration); }
-.cal-svc-count[data-svc='refinancement'] { color: var(--svc-refinancement); }
-.cal-svc-count[data-svc='refinancement'] .cal-svc-dot { background: var(--svc-refinancement); }
-.cal-cell.is-taken .cal-count { background: var(--status-retenue); color: var(--brand-ink); }
+/* Cell content: the day's AVERAGE offer (headline) + a plain availability chip. */
+.cal-avg { font-size: 16px; font-weight: 800; letter-spacing: -0.02em; margin-top: auto; white-space: nowrap; color: var(--ink); }
+.cal-avg.is-cleared { text-decoration: line-through; color: var(--ink-muted); font-weight: 600; }
+.cal-chance { display: inline-flex; align-items: center; gap: 5px; margin-top: 3px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.cal-chance::before { content: ''; width: 7px; height: 7px; border-radius: 50%; flex: none; background: currentColor; }
+.cal-chance[data-level='high'] { color: var(--ok); }
+.cal-chance[data-level='mid'] { color: var(--warn); }
+.cal-chance[data-level='low'] { color: var(--danger); }
+/* Available days stay brand-tinted (inviting); fully-taken days read muted. */
+.cal-cell.is-taken { background: var(--surface-inset); }
+.cal-cell.is-taken:hover { background: var(--surface-hover); }
 /* The client's OWN offer status on a day: a subtle ring + a coloured pill. */
 /* Own-offer ring on its OWN pseudo-element (::after), so it never overrides the
    today / selected / :focus-visible box-shadow rings — a day you already bid on
@@ -869,7 +866,7 @@ input.file-native { position: absolute; width: 1px; height: 1px; opacity: 0; mar
 .section h2 { font-size: 22px; font-weight: 800; margin-bottom: 8px; }
 .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 20px; }
 @media (max-width: 780px) { .cards { grid-template-columns: 1fr; } }
-.card { border-radius: var(--radius-lg); padding: 18px; background: var(--surface); box-shadow: var(--shadow-sm); }
+.card { border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 18px; background: var(--surface); box-shadow: var(--shadow-sm); }
 .card h3 { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
 .card p { color: var(--ink-muted); font-size: 14px; margin: 0; }
 .price { font-size: 22px; font-weight: 800; color: var(--brand); }
@@ -1098,11 +1095,12 @@ dialog::backdrop { background: var(--backdrop); }
 .nc-list { display: flex; flex-direction: column; gap: 10px; }
 
 .nc-card {
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--surface-inset); padding: 14px;
-  transition: transform .14s, background-color .14s;
+  transition: transform .14s, background-color .14s, border-color .14s;
 }
-.nc-card:hover { transform: translateY(-1px); background: var(--surface-hover); }
+.nc-card:hover { transform: translateY(-1px); background: var(--surface-hover); border-color: var(--border-strong); }
 .nc-card.is-retained { border-left: 3px solid var(--brand); }
 .nc-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .nc-card-title { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
@@ -1359,7 +1357,7 @@ html { scroll-behavior: smooth; scroll-padding-top: var(--sticky-top); }
 .view-switch { flex: 0 0 auto; }
 .view-switch .seg-btn { display: inline-flex; align-items: center; gap: 5px; }
 .view-switch .seg-btn svg { flex: none; }
-.view-switch .seg-btn[aria-selected='true'] { background: var(--surface); color: var(--brand); box-shadow: var(--shadow-sm); }
+.view-switch .seg-btn[aria-selected='true'] { background: var(--surface-hover); color: var(--brand); border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
 .view-panel { min-width: 0; }
 .view-panel[hidden] { display: none; }
 

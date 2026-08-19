@@ -129,17 +129,19 @@ test('legend renders one item per timing tier', async () => {
 // 5. No open/taken day ever renders a bare em-dash headline.
 test('no calendar headline is a bare em-dash', async () => {
   const { doc } = await boot();
-  const tops = all(doc, '#cal-grid .cal-top');
-  assert.ok(tops.length > 0, 'expected at least one headline figure');
-  assert.ok(tops.every((t) => t.textContent.trim() !== '—'), 'a cal-top rendered a bare em-dash');
+  const tops = all(doc, '#cal-grid .cal-avg');
+  assert.ok(tops.length > 0, 'expected at least one average figure');
+  assert.ok(tops.every((t) => t.textContent.trim() !== '—'), 'a cal-avg rendered a bare em-dash');
 });
 
-// 6. Days with bids carry the has-bids class and a count badge.
-test('days with bids get has-bids and a count badge', async () => {
+// 6. Days with bids show the average price + a %-chance-to-obtain chip.
+test('days with bids show avg price and chance', async () => {
   const { doc } = await boot();
   const hasBids = all(doc, '#cal-grid .cal-cell.has-bids');
   assert.ok(hasBids.length > 0, 'expected at least one day with bids');
-  assert.ok(hasBids.every((c) => c.querySelector('.cal-count')), 'a has-bids cell is missing its count badge');
+  assert.ok(hasBids.every((c) => c.querySelector('.cal-avg')), 'a has-bids cell is missing its average figure');
+  assert.ok(hasBids.every((c) => c.querySelector('.cal-chance')), 'a has-bids cell is missing its chance chip');
+  assert.ok(hasBids.every((c) => /\d+\s*%/.test(c.querySelector('.cal-chance').textContent)), 'chance chip shows a percentage');
 });
 
 // 7. Offer form: 3 service options, anonymity on by default, service selection
@@ -158,9 +160,9 @@ test('offer form: services populated, anon default on, slider capped at prixDepa
 
   const amt = $(doc, 'o-amount');
   assert.equal(amt.disabled, false);
-  // The form quotes Nota's price (1.5× market); the slider caps at notaPrice × 10.
-  assert.equal(amt.max, String(D.notaPrice('refinancement') * D.PREMIUM_CAP)); // 3000 * 10 = 30000
-  assert.equal(amt.max, '30000');
+  // The form quotes Nota's starting price; the slider caps at notaPrice × 10.
+  assert.equal(amt.max, String(D.notaPrice('refinancement') * D.PREMIUM_CAP)); // 2000 * 10 = 20000
+  assert.equal(amt.max, '20000');
 });
 
 // 8. A valid service+date+amount combination enables the submit button.
@@ -475,7 +477,7 @@ test('submitting an offer attaches the saved dossier snapshot and courriel', asy
 //     space-grouped thousands appear in the rendered figures.
 test('rendered amounts use the money() format ("N NNN $")', async () => {
   const { doc } = await boot();
-  const texts = all(doc, '#cal-grid .cal-top, #agenda .bid-amount').map((e) => e.textContent);
+  const texts = all(doc, '#cal-grid .cal-avg, #agenda .bid-amount').map((e) => e.textContent);
   assert.ok(texts.length > 0, 'no money figures rendered');
   assert.ok(texts.some((t) => / \$$/.test(t.trim())), 'no amount ends with " $"');
   assert.ok(texts.some((t) => /\d \d{3} \$/.test(t)), 'no space-grouped thousands amount found');
@@ -580,7 +582,8 @@ test('EDGE (UI): a fully-retained day marks the cell taken and names the notary 
 
   const cell = ctx.doc.querySelector('.cal-cell[data-date="' + iso + '"]');
   assert.ok(cell.classList.contains('is-taken'), 'all-retained cell is marked taken');
-  assert.ok(cell.querySelector('.cal-top.is-cleared'), 'taken cell shows a struck cleared amount');
+  assert.ok(cell.querySelector('.cal-avg.is-cleared'), 'taken cell shows a struck cleared average');
+  assert.match(cell.querySelector('.cal-chance').textContent, /\d+\s*%/); // chance still shown
 
   ctx.Nota.setView('liste'); // the agenda lives in the List view now
   const chip = ctx.doc.querySelector('.agenda .status-chip');
@@ -601,18 +604,21 @@ test('EDGE (UI): a filter that matches nothing renders the empty state with a re
   assert.ok(empty.querySelector('button'), 'empty state offers a CTA button');
 });
 
-test('EDGE (UI): a mixed open/retained day keeps the open headline + a split status meter', async () => {
+test('EDGE (UI): a mixed open/retained day stays available with the open average', async () => {
   const ctx = await boot();
   const iso = dayOf(ctx.anchor, '16');
   await reseed(ctx, [
-    { id: 'o1', serviceId: 'testament', dateISO: iso, montant: 900, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
-    { id: 'r2', serviceId: 'testament', dateISO: iso, montant: 700, tier: 'standard', status: ctx.D.STATUS.RETENUE, etude: 'Étude X', anonyme: true, createdAt: iso },
+    { id: 'o1', serviceId: 'testament', dateISO: iso, montant: 1400, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
+    { id: 'r2', serviceId: 'testament', dateISO: iso, montant: 1300, tier: 'standard', status: ctx.D.STATUS.RETENUE, etude: 'Étude X', anonyme: true, createdAt: iso },
   ]);
   const cell = ctx.doc.querySelector('.cal-cell[data-date="' + iso + '"]');
-  assert.ok(cell.classList.contains('has-retenue'), 'mixed day flagged has-retenue');
+  assert.ok(cell.classList.contains('is-avail'), 'mixed day still has an open offer -> available');
   assert.ok(!cell.classList.contains('is-taken'), 'still has an open offer');
-  assert.ok(cell.querySelector('.cal-top:not(.is-cleared)'), 'open headline shown, not struck');
-  assert.ok(cell.querySelector('.cal-status-open') && cell.querySelector('.cal-status-taken'), 'split open/taken meter');
+  // Average is of the OPEN offers only (1400), not struck.
+  const avg = cell.querySelector('.cal-avg');
+  assert.ok(avg && !avg.classList.contains('is-cleared'), 'open average shown, not struck');
+  assert.equal(avg.textContent.replace(/\s| |\$/g, ''), '1400');
+  assert.match(cell.querySelector('.cal-chance').textContent, /\d+\s*%/);
 });
 
 test('the hero pulse shows the month median per service and filters the carnet', async () => {

@@ -689,6 +689,17 @@
     return Math.min(max, Math.max(min, Math.round((base * mult) / 5) * 5));
   }
 
+  // The realistic chance (a %) that a client gets a notary to take a given date:
+  // the more lead time, the easier it is. Keyed to the same urgency tier as the
+  // pricing, so a far-off date reads as high-chance and a last-minute one as low.
+  const OBTAIN_CHANCE = { standard: 95, rapide: 88, prioritaire: 72, urgence: 55, extreme: 38 };
+  function obtainChance(dateISO, todayISO) {
+    if (!isISODate(dateISO)) return null;
+    const days = isISODate(todayISO) ? Math.max(0, daysBetween(todayISO, dateISO)) : 0;
+    const tierId = tierForDays(days);
+    return OBTAIN_CHANCE[tierId] != null ? OBTAIN_CHANCE[tierId] : 60;
+  }
+
   // --- Lead qualification ----------------------------------------------------
   // A lead is "sellable" to a notary only once the client has assembled every
   // required document and field for the service AND consented to share the
@@ -801,6 +812,7 @@
     bidLabel,
     leadReadiness,
     recommendedAmount,
+    obtainChance,
     REMINDER_OFFSETS,
     REMINDER_KINDS,
     reminderKindForDays,

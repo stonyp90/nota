@@ -587,69 +587,22 @@
       var dayBids = byDay[iso] || [];
       if (dayBids.length) {
         cell.classList.add('has-bids');
-        cell.appendChild(el('span', 'cal-count', compactCount(dayBids.length)));
-
-        var n = dayBids.length;
-        var plural = n > 1 ? 's' : '';
         var open = dayBids.filter(function (b) { return b.status !== D.STATUS.RETENUE; });
-        if (open.length) {
-          var topOffer = open.reduce(function (a, b) { return b.montant > a.montant ? b : a; }, open[0]);
-          var topEl = el('span', 'cal-top', D.money(topOffer.montant));
-          topEl.dataset.compact = compactMoney(topOffer.montant);
-          cell.appendChild(topEl);
-          // Colour the cell by the headline offer's urgency tier (matches the
-          // legend + agenda) — warm = urgent, cool = calm.
-          if (topOffer.tier) cell.dataset.tier = topOffer.tier;
-          // Info line: the headline offer's service + urgency tier, so a scanner
-          // reads what act and how urgent without opening the day.
-          var svcT = D.serviceById(topOffer.serviceId);
-          var svcShort = svcT ? svcT.nom.split(' ')[0] : topOffer.serviceId;
-          var tierNom = D.tierById(topOffer.tier || 'standard').nom;
-          var info = el('div', 'cal-info');
-          info.appendChild(el('span', 'cal-info-svc', svcShort));
-          info.appendChild(el('span', 'cal-info-tier', tierNom));
-          cell.appendChild(info);
-          cell.setAttribute('aria-label', dayTitle(iso) + ', ' + n + ' offre' + plural + ', meilleure ' + D.money(topOffer.montant) + ', ' + svcShort + ', ' + tierNom);
-        } else {
-          // Everything taken: show what cleared, struck through — more useful to
-          // the next bidder than an em-dash.
-          var cleared = Math.max.apply(null, dayBids.map(function (b) { return b.montant; }));
-          var clrEl = el('span', 'cal-top is-cleared', D.money(cleared));
-          clrEl.dataset.compact = compactMoney(cleared);
-          cell.appendChild(clrEl);
-          cell.setAttribute('aria-label', dayTitle(iso) + ', ' + n + ' offre' + plural + ' retenue' + plural + ', ' + D.money(cleared) + ' obtenu');
-        }
-
-        // Status meter: a green segment for offers still open, a muted segment
-        // for offers a notary has retained — so accepted vs. waiting reads at a glance.
-        var retenue = dayBids.filter(function (b) { return b.status === D.STATUS.RETENUE; });
-        if (retenue.length) cell.classList.add('has-retenue');
-        if (!open.length) cell.classList.add('is-taken');
-        var meter = el('div', 'cal-status');
-        var oSeg = el('span', 'cal-status-open'); oSeg.style.flexGrow = String(open.length);
-        var tSeg = el('span', 'cal-status-taken'); tSeg.style.flexGrow = String(retenue.length);
-        meter.appendChild(oSeg); meter.appendChild(tSeg);
-        cell.appendChild(meter);
-
-        // Per-service counts — how many of each act sit on this day, each number
-        // colour-coded by service (a dot + the count). The total is the count
-        // badge; these break it down. Only services present that day are shown.
-        var svcCounts = D.SERVICES.map(function (s) {
-          return { id: s.id, short: s.nom.split(' ')[0], n: dayBids.filter(function (b) { return b.serviceId === s.id; }).length };
-        }).filter(function (c) { return c.n > 0; });
-        if (svcCounts.length) {
-          var svcRow = el('div', 'cal-svc-counts'); svcRow.setAttribute('aria-hidden', 'true');
-          svcCounts.forEach(function (c) {
-            var item = el('span', 'cal-svc-count'); item.dataset.svc = c.id;
-            item.title = c.short + ' : ' + c.n;
-            item.appendChild(el('span', 'cal-svc-dot'));
-            item.appendChild(document.createTextNode(String(c.n)));
-            svcRow.appendChild(item);
-          });
-          cell.appendChild(svcRow);
-          var mix = svcCounts.map(function (c) { return c.n + ' ' + c.short.toLowerCase(); }).join(', ');
-          cell.setAttribute('aria-label', (cell.getAttribute('aria-label') || dayTitle(iso)) + ' — ' + mix);
-        }
+        // Headline: the AVERAGE offer for the day (open offers when any remain,
+        // otherwise what cleared) — the price a client should aim for.
+        var pool = open.length ? open : dayBids;
+        var avg = Math.round(pool.reduce(function (s, b) { return s + (Number(b.montant) || 0); }, 0) / pool.length);
+        var avgEl = el('span', 'cal-avg' + (open.length ? '' : ' is-cleared'), D.money(avg));
+        avgEl.dataset.compact = compactMoney(avg);
+        cell.appendChild(avgEl);
+        // Chance to obtain a notary on this date (lead-time based), shown as a %.
+        var chance = D.obtainChance(iso, today);
+        var chanceEl = el('span', 'cal-chance', chance + ' %');
+        chanceEl.dataset.level = chance >= 80 ? 'high' : chance >= 55 ? 'mid' : 'low';
+        chanceEl.title = chance + ' % de chances d’obtenir un notaire à cette date';
+        if (open.length) { cell.classList.add('is-avail'); } else { cell.classList.add('is-taken'); }
+        cell.appendChild(chanceEl);
+        cell.setAttribute('aria-label', dayTitle(iso) + ' — prix moyen ' + D.money(avg) + ', ' + chance + ' % de chances d’obtenir un notaire');
       }
 
       // The client's own offer status on this day (approved / pending / expired).

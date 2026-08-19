@@ -285,3 +285,12 @@ test('recommendedAmount: mid-tier default, within bounds, one-tap booking', () =
   assert.equal(D.recommendedAmount('bad', '2026-09-01', TODAY), null);
   assert.equal(D.recommendedAmount('testament', 'nope', TODAY), null);
 });
+
+test('obtainChance: high with lead time, low last-minute', () => {
+  const far = D.obtainChance(D.addDays(TODAY, 60), TODAY);
+  const near = D.obtainChance(D.addDays(TODAY, 1), TODAY);
+  assert.ok(far >= 90 && far <= 100, 'a far date reads as high chance');
+  assert.ok(near <= 55, 'a last-minute date reads as low chance');
+  assert.ok(far > near, 'more lead time = higher chance');
+  assert.equal(D.obtainChance('nope', TODAY), null);
+});
