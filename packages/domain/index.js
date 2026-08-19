@@ -493,6 +493,28 @@
     return { rang: idx < 0 ? null : idx + 1, total };
   }
 
+  // --- Contact points --------------------------------------------------------
+  // Where a human reaches Nota. Defined ONCE here (the API's transactional
+  // emails and the web footer both read it) so a change never has to be made
+  // twice. `telephone` stays null until a real line exists — the UI renders the
+  // call button only when it is set, because a wrong number is worse than none.
+  const CONTACT = {
+    courriel: 'bonjour@nota.ca',
+    confidentialite: 'confidentialite@nota.ca',
+    telephone: null,
+  };
+
+  // A dial string for a tel: href — digits only, keeping a leading + and
+  // assuming +1 (Canada) when the number is written without a country code.
+  function telHref(raw) {
+    const s = String(raw == null ? '' : raw).trim();
+    if (!s) return null;
+    const plus = s.charAt(0) === '+';
+    const digits = s.replace(/\D/g, '');
+    if (!digits) return null;
+    return 'tel:' + (plus ? '+' + digits : '+1' + digits);
+  }
+
   // --- Carnet pulse ----------------------------------------------------------
   // What the market looks like right now, aggregated from a set of bids (one
   // month, typically). It answers the two questions a client has before they
@@ -759,6 +781,8 @@
     validateOffer,
     rankOf,
     carnetPulse,
+    CONTACT,
+    telHref,
     makeFixtures,
     bidLabel,
     leadReadiness,

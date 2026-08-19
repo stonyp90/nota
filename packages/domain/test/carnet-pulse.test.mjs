@@ -133,3 +133,24 @@ test('carnetPulse: the demo fixtures produce a populated, coherent pulse', () =>
     if (s.median != null) assert.ok(s.median >= s.prixDepart, `${s.id} median at or above its floor`);
   }
 });
+
+// --- Contact points ---------------------------------------------------------
+
+test('CONTACT: the support email is defined once, here, and is a valid address', () => {
+  assert.ok(D.CONTACT, 'the domain exposes the contact points');
+  assert.ok(D.isEmail(D.CONTACT.courriel), 'support email is valid');
+});
+
+test('CONTACT: the phone number is null until a real line exists — never invented', () => {
+  // A wrong phone number is worse than no phone button, so the UI renders the
+  // call button ONLY when this is a non-empty string.
+  assert.ok(D.CONTACT.telephone === null || typeof D.CONTACT.telephone === 'string');
+});
+
+test('telHref: strips formatting to the dial string, null when there is no line', () => {
+  assert.equal(D.telHref(null), null);
+  assert.equal(D.telHref(''), null);
+  assert.equal(D.telHref('418 555-0123'), 'tel:+14185550123');
+  assert.equal(D.telHref('+1 (418) 555-0123'), 'tel:+14185550123');
+  assert.equal(D.telHref('+33 1 23 45 67 89'), 'tel:+33123456789');
+});
