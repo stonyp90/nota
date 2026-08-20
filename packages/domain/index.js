@@ -33,6 +33,19 @@
     return (n < 0 ? '−' : '') + digits + NBSP + '$';
   }
 
+  // English-Canada twin of money(): same integer dollars and rounding, but the
+  // en-CA shape — leading "$", comma thousands separator ("$1,250"), and the
+  // same true minus sign placed before the "$" ("−$1,250"). Bilingual surfaces
+  // (emails, calendar feeds) show money() on the French side and moneyEn() on
+  // the English side; neither format is ever built inline elsewhere.
+  function moneyEn(dollars) {
+    const n = Math.round(Number(dollars) || 0);
+    const digits = Math.abs(n)
+      .toString()
+      .replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return (n < 0 ? '−' : '') + '$' + digits;
+  }
+
   // --- Services --------------------------------------------------------------
   // Only acts with a bounded, client-assemblable intake are listed. Acte de
   // vente was removed deliberately — see docs/decisions/0003-bounded-intake.md.
@@ -68,6 +81,10 @@
     {
       id: 'testament',
       nom: 'Testament et mandat de protection',
+      // English names for server-side consumers (emails, ICS feeds); the web
+      // app's i18n dictionary is asserted to agree with these.
+      nomEn: 'Will and protection mandate',
+      nomCourtEn: 'Will',
       // What fits a calendar cell. The full `nom` is used wherever there is
       // room for it (list cards, the day dialog, the legend's own key).
       nomCourt: 'Testament',
@@ -128,6 +145,8 @@
       id: 'procuration',
       nom: 'Procuration',
       nomCourt: 'Procuration',
+      nomEn: 'Power of attorney',
+      nomCourtEn: 'Power of attorney',
       prixDepart: 750,
       description:
         'Procuration générale ou spéciale pour agir en votre nom.',
@@ -174,6 +193,8 @@
       id: 'refinancement',
       nom: 'Refinancement hypothécaire',
       nomCourt: 'Refinancement',
+      nomEn: 'Mortgage refinancing',
+      nomCourtEn: 'Refinancing',
       // Refinancement is priced well above the other acts: it is the most work
       // (loan act + hypothec publication + title/certificate review) and carries
       // real value at stake, so the floor starts at 2000 $ and rises with the
@@ -392,11 +413,11 @@
   // difference. Each band's MIDPOINT is the multiple a client is offered by
   // default (tierMultiplier), so the ladder reads 1,2× · 1,6× · 3,5× · 7× · 9×.
   const TIERS = [
-    { id: 'standard',    nom: 'Standard',    maxJours: null, apercuMin: 1.0, apercuMax: 1.4,  eleve: false },
-    { id: 'rapide',      nom: 'Rapide',      maxJours: 14,   apercuMin: 1.4, apercuMax: 1.8,  eleve: false },
-    { id: 'prioritaire', nom: 'Prioritaire', maxJours: 3,    apercuMin: 3.0, apercuMax: 4.0,  eleve: true },
-    { id: 'urgence',     nom: 'Urgent',      maxJours: 1,    apercuMin: 6.0, apercuMax: 8.0,  eleve: true },
-    { id: 'extreme',     nom: 'Extrême',     maxJours: 0,    apercuMin: 8.0, apercuMax: 10.0, eleve: true },
+    { id: 'standard',    nom: 'Standard',    nomEn: 'Standard', maxJours: null, apercuMin: 1.0, apercuMax: 1.4,  eleve: false },
+    { id: 'rapide',      nom: 'Rapide',      nomEn: 'Fast',     maxJours: 14,   apercuMin: 1.4, apercuMax: 1.8,  eleve: false },
+    { id: 'prioritaire', nom: 'Prioritaire', nomEn: 'Priority', maxJours: 3,    apercuMin: 3.0, apercuMax: 4.0,  eleve: true },
+    { id: 'urgence',     nom: 'Urgent',      nomEn: 'Urgent',   maxJours: 1,    apercuMin: 6.0, apercuMax: 8.0,  eleve: true },
+    { id: 'extreme',     nom: 'Extrême',     nomEn: 'Extreme',  maxJours: 0,    apercuMin: 8.0, apercuMax: 10.0, eleve: true },
   ];
 
   // What a client is actually asked to pay at a given notice, as a multiple of
@@ -982,6 +1003,7 @@
 
   return {
     money,
+    moneyEn,
     SERVICES,
     DEFAULT_SERVICE_ID,
     QC_POSTAL_LETTERS,

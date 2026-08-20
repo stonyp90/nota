@@ -25,6 +25,22 @@ test('money: rounds and handles junk', () => {
   assert.equal(D.money('nope'), '0' + NB + '$');
 });
 
+// en-CA mirrors money(): same integer dollars, same rounding — only the
+// English-Canada shape (leading $, comma thousands) differs.
+test('moneyEn: en-CA comma thousands separator and leading $', () => {
+  assert.equal(D.moneyEn(950), '$950');
+  assert.equal(D.moneyEn(1350), '$1,350');
+  assert.equal(D.moneyEn(13500), '$13,500');
+  assert.equal(D.moneyEn(1234567), '$1,234,567');
+  assert.equal(D.moneyEn(0), '$0');
+  assert.equal(D.moneyEn(-1250), '−$1,250');
+});
+
+test('moneyEn: rounds and handles junk exactly like money()', () => {
+  assert.equal(D.moneyEn(1234.6), '$1,235');
+  assert.equal(D.moneyEn('nope'), '$0');
+});
+
 test('services: exactly the three bounded-intake acts', () => {
   assert.equal(D.SERVICES.length, 3);
   assert.deepEqual(D.SERVICES.map((s) => s.id).sort(), ['procuration', 'refinancement', 'testament']);
