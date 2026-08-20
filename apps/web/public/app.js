@@ -865,7 +865,11 @@
       var isPast = iso < today;
       if (isPast) { cell.classList.add('is-past'); cell.setAttribute('aria-disabled', 'true'); cell.tabIndex = -1; }
 
-      cell.appendChild(el('span', 'cal-daynum', String(day)));
+      // The 7-column grid reflows to 3 on a phone, where a weekday HEADER can no
+      // longer sit above its column. There the cell carries its own weekday.
+      var dayEl = el('span', 'cal-daynum', String(day));
+      dayEl.dataset.dow = DOW[mondayIndex(iso)];
+      cell.appendChild(dayEl);
 
       // Cells stay essential: count + the single headline figure. All the
       // detail lives in the day modal (click / Enter). The aria-label carries
@@ -1371,7 +1375,8 @@
   // ---------------------------------------------------------------------------
   function onGridKey(e) {
     if (e.target && e.target.closest && e.target.closest('.cell-chevron')) return;
-    var map = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 };
+    var cols = gridCols();
+    var map = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -cols, ArrowDown: cols };
     if (e.key in map) {
       e.preventDefault();
       moveFocus(map[e.key]);
@@ -1384,8 +1389,22 @@
     }
     else if (e.key === 'Escape') { e.preventDefault(); resetFilters(); }
   }
+  // How many columns the grid ACTUALLY renders. The month grid is 7 wide, but it
+  // reflows to fewer on a phone, so "one row up" is not always seven days.
+  function gridCols() {
+    var g = $('cal-grid');
+    if (!g) return 7;
+    var t = getComputedStyle(g).gridTemplateColumns;
+    if (!t || t === 'none') return 7;
+    var n = t.trim().split(/\s+/).length;
+    return n > 0 ? n : 7;
+  }
+
   function moveFocus(delta) {
     var next = D.addDays(state.focusDate, delta);
+    // The reflowed grid does not render past cells, so there is nothing to land
+    // on before today.
+    if (next < todayISO() && gridCols() !== 7) return;
     var changedMonth = monthKey(next) !== monthKey(state.anchor);
     if (changedMonth) state.anchor = firstOfMonth(next);
     state.focusDate = next;
