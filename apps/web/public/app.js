@@ -629,20 +629,26 @@
     if (cta) { try { cta.focus(); } catch (e) {} }
   }
 
-  // Open the guide at VIEW 1 (used on first visit and from the footer link).
-  // Same jsdom-safe showModal guard as the auth modal.
+  // Open the guide (first visit and the footer link). A visitor who already
+  // told us their side resumes at THEIR steps — "← Changer" still leads back;
+  // everyone else starts at the choice. Same jsdom-safe showModal guard as
+  // the auth modal.
   function onbOpen() {
-    onbShowRoleView();
+    var known = roleGet();
+    if (known && ONB_FLOWS[known]) onbShowStepsView(known);
+    else onbShowRoleView();
     toggleNotifPanel(false);
     var dlg = $('onboarding-dialog');
     if (dlg && dlg.showModal) { try { dlg.showModal(); } catch (e) { /* already open */ } }
     renderOnbWeekAnim(); // the dialog is open now — the live board can start
-    // showModal autofocuses the ✕ (first tabbable). Put initial focus on the
-    // first role card instead — the same post-open pattern openAuthModal uses —
-    // so both entries into the role view land in the same place.
+    // showModal autofocuses the ✕ (first tabbable). Put initial focus where
+    // the shown view wants it — the pre-open focus calls no-op on a closed
+    // dialog, so this is the one that actually lands.
     setTimeout(function () {
-      var first = document.querySelector('#onb-view-role .onb-choice');
-      if (first && dlg && dlg.open) { try { first.focus(); } catch (e) {} }
+      if (!dlg || !dlg.open) return;
+      var role = $('onb-view-role');
+      var target = role && !role.hidden ? role.querySelector('.onb-choice') : $('onb-cta');
+      if (target) { try { target.focus(); } catch (e) {} }
     }, 30);
   }
 
@@ -733,6 +739,8 @@
     // Best practice: logged-out shows explicit login/signup; the avatar/account
     // menu is for the signed-in state only.
     var headerAuth = $('header-auth'); if (headerAuth) headerAuth.hidden = role !== 'anon';
+    // The mobile drawer mirrors the header pair: auth buttons only while anonymous.
+    var mnavAuth = $('mnav-auth'); if (mnavAuth) mnavAuth.hidden = role !== 'anon';
     var acctWrap = document.querySelector('.acct-wrap'); if (acctWrap) acctWrap.hidden = role === 'anon';
     // Agenda sync is a NOTARY tool: it subscribes a working calendar to the
     // carnet feed. A client books a date, they do not follow the whole month, so
@@ -3652,6 +3660,13 @@
       b.tabIndex = sel ? 0 : -1;
     });
     if (!anySelected && tabs.length) tabs[0].tabIndex = 0;
+    // The drawer's section links track the same selection (no tablist ARIA —
+    // they are plain nav links; aria-current says which page they're on).
+    document.querySelectorAll('.mnav-link[data-tab]').forEach(function (b) {
+      var on = b.dataset.tab === tab;
+      b.classList.toggle('is-on', on);
+      if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+    });
   }
 
   function setTab(tab, opts) {
@@ -3767,6 +3782,47 @@
       setTheme(cur === 'dark' ? 'light' : 'dark');
     });
 
+    // Mobile nav drawer (hamburger). Same actions as the header — setTab, the
+    // auth modal, the theme switch — behind phone chrome. The goto-link legal
+    // rows are handled by the delegated document listener below; the drawer
+    // only has to close itself after any choice.
+    var mnav = $('mobile-nav'), mnavScrim = $('mnav-scrim'), navBurger = $('nav-burger');
+    function setMobileNav(open) {
+      if (!mnav || !mnavScrim || !navBurger) return;
+      mnav.classList.toggle('is-open', open);
+      mnavScrim.classList.toggle('is-open', open);
+      navBurger.setAttribute('aria-expanded', open ? 'true' : 'false');
+      document.documentElement.classList.toggle('nav-open', open);
+      // Focus follows the panel in, and returns to the burger on the way out.
+      if (open) { var first = mnav.querySelector('.mnav-link'); if (first) try { first.focus(); } catch (e) {} }
+      else if (mnav.contains(document.activeElement)) { try { navBurger.focus(); } catch (e) {} }
+    }
+    if (mnav && mnavScrim && navBurger) {
+      navBurger.addEventListener('click', function () { setMobileNav(!mnav.classList.contains('is-open')); });
+      $('mnav-close').addEventListener('click', function () { setMobileNav(false); });
+      mnavScrim.addEventListener('click', function () { setMobileNav(false); });
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && mnav.classList.contains('is-open')) setMobileNav(false);
+      });
+      mnav.querySelectorAll('.mnav-link[data-tab]').forEach(function (b) {
+        b.addEventListener('click', function () { setTab(this.dataset.tab); });
+      });
+      $('mnav-theme').addEventListener('click', function () {
+        var cur = document.documentElement.getAttribute('data-theme');
+        setTheme(cur === 'dark' ? 'light' : 'dark');
+      });
+      var mLogin = $('mnav-login'); if (mLogin) mLogin.addEventListener('click', function () { openAuthModal(); });
+      var mSignup = $('mnav-signup'); if (mSignup) mSignup.addEventListener('click', function () { openAuthModal(); });
+      // Any committed choice closes the drawer (links navigate via their own
+      // handlers; the auth buttons open a modal above the page).
+      mnav.addEventListener('click', function (e) {
+        if (e.target.closest && e.target.closest('.mnav-link, .mnav-auth .btn')) setMobileNav(false);
+      });
+    }
+
+    // Footer base line: the year comes from the clock, not the markup.
+    var fy = $('footer-year'); if (fy) fy.textContent = String(new Date().getFullYear());
+
     // Notification bell
     $('notif-bell').addEventListener('click', function (e) { e.stopPropagation(); toggleNotifPanel(); });
     $('notif-clear').addEventListener('click', markAllRead);
@@ -3818,6 +3874,21 @@
     document.querySelectorAll('#onb-view-role .onb-choice').forEach(function (b) {
       b.addEventListener('click', function () { onbShowStepsView(b.getAttribute('data-role')); });
     });
+    // Arrow keys move between the role cards — standard grouped-choice
+    // keyboard behaviour; Enter/Space already activate them as buttons.
+    var onbChoices = document.querySelector('#onb-view-role .onb-choices');
+    if (onbChoices) {
+      onbChoices.addEventListener('keydown', function (e) {
+        if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].indexOf(e.key) === -1) return;
+        var btns = Array.prototype.slice.call(onbChoices.querySelectorAll('.onb-choice'));
+        var i = btns.indexOf(document.activeElement);
+        if (i === -1) return;
+        e.preventDefault();
+        var back = e.key === 'ArrowLeft' || e.key === 'ArrowUp';
+        var next = btns[(i + (back ? btns.length - 1 : 1)) % btns.length];
+        if (next) { try { next.focus(); } catch (er) {} }
+      });
+    }
     var onbBack = $('onb-back'); if (onbBack) onbBack.addEventListener('click', onbShowRoleView);
     var onbSkip = $('onb-skip'); if (onbSkip) onbSkip.addEventListener('click', onbDismiss);
     // Guard the arg: a click event object is truthy and would read as "explore".

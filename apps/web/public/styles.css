@@ -390,6 +390,53 @@ a:hover { text-decoration: underline; }
 .acct-panel { max-height: min(calc(100vh - var(--header-h) - 16px), 660px); overflow-y: auto; overscroll-behavior: contain; }
 .acct-panel { max-height: min(calc(100dvh - var(--header-h) - 16px), 660px); }
 
+/* --- Mobile navigation drawer (hamburger) -------------------------------- */
+/* Phones only: the burger and its right-side drawer replace the inline tabs,
+   the login button and the theme toggle below 720px (the same threshold where
+   the hero stacks). Desktop and tablet never see either. */
+.nav-burger { display: none; }
+.mnav-scrim {
+  position: fixed; inset: 0; z-index: 65; background: var(--backdrop);
+  opacity: 0; pointer-events: none; transition: opacity .2s ease;
+}
+.mnav-scrim.is-open { opacity: 1; pointer-events: auto; }
+.mnav {
+  position: fixed; top: 0; right: 0; bottom: 0; z-index: 70;
+  width: min(320px, 84vw);
+  display: flex; flex-direction: column;
+  padding: var(--space-5) var(--space-7) calc(var(--space-8) + env(safe-area-inset-bottom, 0px));
+  background: var(--surface); border-left: 1px solid var(--border); box-shadow: var(--shadow-lg);
+  overflow-y: auto; overscroll-behavior: contain;
+  /* visibility swaps AFTER the slide-out so the exit still animates; on open
+     the delay is removed so the panel is interactive immediately. */
+  transform: translateX(105%); visibility: hidden;
+  transition: transform .24s cubic-bezier(.2, .8, .2, 1), visibility 0s .24s;
+}
+.mnav.is-open { transform: none; visibility: visible; transition: transform .24s cubic-bezier(.2, .8, .2, 1); }
+/* No page scroll behind the open drawer. */
+html.nav-open, html.nav-open body { overflow: hidden; }
+.mnav-head { display: flex; align-items: center; gap: 10px; padding: var(--space-2) var(--space-2) var(--space-4); }
+.mnav-title { font-weight: 800; font-size: 15px; letter-spacing: -0.01em; }
+.mnav-group { display: flex; flex-direction: column; }
+.mnav-link {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  appearance: none; background: transparent; border: 0; border-radius: var(--radius);
+  padding: var(--space-6) var(--space-6); font: inherit; font-size: 15px; font-weight: 600;
+  color: var(--ink); cursor: pointer; transition: background .12s, color .12s;
+}
+.mnav-link:hover { background: var(--surface-inset); text-decoration: none; color: var(--ink); }
+.mnav-link.is-on { background: var(--surface-inset); color: var(--brand); }
+.mnav-link svg { flex: none; color: var(--ink-muted); }
+.mnav-link.is-on svg { color: var(--brand); }
+.mnav-sep { height: 1px; background: var(--border); margin: var(--space-5) var(--space-2); flex: none; }
+.mnav-auth { gap: var(--space-4); padding: 0 var(--space-2); }
+.mnav-auth .btn { width: 100%; }
+/* When the auth pair hides (signed in), its trailing separator must go with it
+   or two hairlines stack. */
+#mnav-auth[hidden] + .mnav-auth-sep { display: none; }
+.mnav-legal .mnav-link { font-size: 13.5px; font-weight: 500; color: var(--ink-muted); padding-block: var(--space-5); }
+.mnav-legal .mnav-link:hover { color: var(--ink); }
+
 /* --- Sign-in / sign-up modal -------------------------------------------- */
 .auth-modal { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); color: var(--ink); box-shadow: var(--shadow-lg); padding: 0; width: min(420px, 92vw); max-height: 92vh; overflow: auto; }
 .auth-modal::backdrop { background: rgb(0 0 0 / 0.6); backdrop-filter: blur(2px); }
@@ -648,7 +695,10 @@ a:hover { text-decoration: underline; }
 /* Only set vertical padding here — the horizontal padding comes from .wrap.
    A `padding: … 0 …` shorthand would reset .wrap's side padding, pushing the
    panels 28px past the hero content on each side (misalignment). */
-.layout { display: grid; grid-template-columns: 1fr; gap: clamp(14px, 2vw, 20px); padding-top: clamp(4px, 0.8vw, 8px); padding-bottom: clamp(24px, 4vw, 40px); align-items: start; }
+/* minmax(0, 1fr), not 1fr: a bare 1fr's auto minimum is the panel's
+   min-content, and the filter bar's nowrap scroll rows would force the track
+   (and the page) wider than the phone viewport instead of scrolling. */
+.layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: clamp(14px, 2vw, 20px); padding-top: clamp(4px, 0.8vw, 8px); padding-bottom: clamp(24px, 4vw, 40px); align-items: start; }
 /* Full-screen calendar (Fullscreen API on #carnet-panel): fill the viewport
    with a padded surface and taller day cells that use the extra height. */
 #carnet-panel:fullscreen, #carnet-panel:-webkit-full-screen {
@@ -933,8 +983,9 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
   .cal-row { display: contents; }
   .cal-dow-row { display: none; }
   /* Out-of-month blanks exist ONLY to hold a weekday column, and there are no
-     weekday columns here. Past days stay: the month is drawn whole. */
-  .cal-cell.is-out { display: none; }
+     weekday columns here. The dead history that anchors the rolling window's
+     first week holds no place either: the phone grid opens on today. */
+  .cal-cell.is-out, .cal-cell.is-past { display: none; }
 }
 /* Cell content in reflowed mode. The `cal` container is still narrow here, so
    the ≤560 compact-money swap is still matching — but the CELL is now 82px, and
@@ -1252,11 +1303,23 @@ input.file-native { position: absolute; width: 1px; height: 1px; opacity: 0; mar
 .disclosure-body p { font-size: 12px; color: var(--ink-muted); margin-top: 0; }
 .disclosure-body p + p { margin-top: 8px; }
 
-.site-footer { border-top: 1px solid var(--border); padding: 28px 0; color: var(--ink-muted); font-size: 13px; }
-.site-footer .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; }
-.site-footer .footer-brand { margin-right: 6px; }
+/* Structured footer: identity + contact on the left, two link columns beside
+   it, and a base line (©, hosting note) under a hairline. Stacks on phones. */
+.site-footer { border-top: 1px solid var(--border); padding: 28px 0 18px; color: var(--ink-muted); font-size: 13px; }
 .site-footer a { color: var(--ink-muted); }
 .site-footer a:hover { color: var(--brand); text-decoration: none; }
+.footer-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr); gap: 24px 32px; align-items: start; }
+.footer-id { min-width: 0; }
+.site-footer .footer-brand { color: var(--ink); font-weight: 700; }
+.footer-tag { margin: 8px 0 0; max-width: 40ch; font-size: 12.5px; line-height: 1.55; }
+.footer-col { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.footer-col-h { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--ink); margin-bottom: 6px; }
+.footer-col a { padding: 3px 0; }
+.footer-base { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--border); font-size: 12px; }
+@media (max-width: 680px) {
+  .footer-grid { grid-template-columns: 1fr 1fr; gap: 20px 24px; }
+  .footer-id { grid-column: 1 / -1; }
+}
 
 /* --- Toast --------------------------------------------------------------- */
 .toast {
@@ -1273,6 +1336,9 @@ dialog {
   background: var(--surface); color: var(--ink); max-width: 440px; width: 92vw; box-shadow: var(--shadow-lg);
 }
 dialog::backdrop { background: var(--backdrop); }
+/* A modal owns the scroll: without this the page keeps scrolling under the
+   wheel/touch behind the open dialog. */
+body:has(dialog[open]) { overflow: hidden; }
 .dialog-pad { padding: 22px; }
 .dialog-pad h3 { font-size: 18px; margin-bottom: 8px; }
 .dialog-pad p { color: var(--ink-muted); font-size: 14px; margin: 0 0 16px; }
@@ -1920,7 +1986,8 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
 /* On the Notaires page the same subscribe card sits as a full-width band —
    pitch on the left, the four calendar buttons grow to fill the right side so
    the row reads full-width with no dead gap between them. */
-.footer-contact { display: flex; align-items: center; gap: 2px; margin-left: auto; }
+/* Sits under the footer tagline now (no auto margin — the grid places it). */
+.footer-contact { display: flex; align-items: center; gap: 2px; margin-top: 8px; }
 .nc-card-actions .mini-btn { margin-left: auto; }
 .notary-carnet { margin-top: 12px; }
 /* The full-width band breathes more than the compact card. */
@@ -1976,12 +2043,24 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   /* flex:1 alone still refuses to go under min-content, so two btn-lg wrapped
      to two rows and the pair cost 114px instead of 44px. */
   .hero-cta .btn { flex: 1 1 0; min-width: 0; }
-  /* "a partir de" and "mediane" are legible from the figures' own placement. */
-  .pulse-fig-k, .pulse-meta { display: none; }
+  /* The captions STAY: two bare amounts side by side read as one confusing
+     price. Only the per-act counts line goes — the captions are the meaning. */
+  .pulse-meta { display: none; }
+  .pulse-fig-k { font-size: 10px; }
   .pulse-figs { flex-direction: row; gap: var(--space-5); align-items: baseline; }
   .pulse-item { gap: var(--space-3); }
   /* A "maximize" toggle means nothing on a touch device, and is inert on iOS. */
   #cal-maximize { display: none; }
+
+  /* The header hands everything to the hamburger drawer: tabs, BOTH auth
+     buttons and the theme toggle live there now — the phone header is brand +
+     burger (plus the avatar, which only exists once signed in). */
+  .nav-burger { display: grid; }
+  .nav-tabs, .header-auth, #theme-toggle { display: none; }
+}
+/* Above the drawer threshold the drawer can never appear, open class or not. */
+@media (min-width: 720px) {
+  .mnav, .mnav-scrim { display: none; }
 }
 
 @media (max-width: 680px) {
@@ -2054,22 +2133,11 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   /* Explainer stacks the badge over the text on narrow screens. */
   .hero-cta { gap: 8px; }
   .hero-cta .btn-lg { flex: 1 1 auto; }
-  /* Logged-out header: brand + nav + theme + TWO auth buttons cannot fit a phone
-     row — the primary CTA was being pushed past the viewport and clipped by the
-     overflow-x guard below, leaving no way to sign up at all. Drop the secondary
-     button (the modal it opens serves sign-in AND sign-up from one passwordless
-     field) and let the primary shrink. */
-  #header-login { display: none; }
-  /* The block axis is 0 here on purpose, but the 44px floor that rescues it
-     is in @media (pointer: coarse). A narrowed DESKTOP window matches this
-     query and not that one, and the button collapses to its line box. */
-  .header-auth .btn { padding: 0 12px; font-size: 13px; white-space: nowrap; min-height: var(--space-16); }
+  /* (Auth buttons left the phone header entirely — they live in the
+     hamburger drawer below 720px.) */
 }
-/* Below this the theme toggle is the first thing to go: the palette still
-   follows the OS via prefers-color-scheme, so nothing becomes unreachable. */
-@media (max-width: 560px) {
-  #theme-toggle { display: none; }
-}
+/* (The theme toggle leaves the header with the tabs at 719.98px — it lives in
+   the hamburger drawer on phones, so it stays reachable at every width.) */
 /* Smallest phones (320-360): the header wordmark yields to the logo mark, which
    stays the home affordance. Scoped to the header — the footer reuses
    .brand-word and has room for it. */
@@ -2121,3 +2189,43 @@ html { scroll-behavior: smooth; scroll-padding-top: var(--sticky-top); }
 .view-panel { min-width: 0; }
 .view-panel[hidden] { display: none; }
 
+
+/* ==========================================================================
+   Phone compaction — calendar toolbar and filter bar (≤680px).
+   Last in the file on purpose: these reflow rules must outrank the component
+   defaults above at equal specificity.
+   ========================================================================== */
+@media (max-width: 680px) {
+  /* THE TOOLBAR WAS A TOWER. Every control wrapped to its own line — nav row,
+     title row, dispo pill row, count row, Filtres row — ~230px of chrome
+     before the first date. Three tight rows instead: [nav … Filtres],
+     [title], [dispo … count]. */
+  .cal-toolbar { padding: var(--space-5) var(--space-7) var(--space-3); row-gap: var(--space-3); }
+  /* The spacer goes back to being a spacer (the 680px rule above turns it
+     into a row break; here the break comes from the title's own 100% basis). */
+  .cal-toolbar .header-spacer { flex: 1 1 auto; height: auto; order: 2; }
+  .cal-nav { order: 1; }
+  #filters-toggle { order: 3; }
+  .cal-title { order: 4; flex: 1 0 100%; font-size: 14px; }
+  .cal-avail { order: 5; padding-block: 2px; }
+  .result-count { order: 6; margin-left: auto; }
+
+  /* THE FILTER BAR SPRAWLED OVER SIX RAGGED ROWS. Two single-line rows now:
+     the act chips, then statut + montant + tri together — each row scrolls
+     sideways instead of wrapping, bled to the card edge so the scroll reaches
+     the viewport like the calendar grid does. */
+  .filterbar { padding: var(--space-5) var(--space-7); gap: var(--space-4); }
+  .filterbar > .chip-group, .filterbar-row {
+    flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    margin-inline: calc(-1 * var(--space-7)); padding-inline: var(--space-7);
+  }
+  .filterbar > .chip-group::-webkit-scrollbar, .filterbar-row::-webkit-scrollbar { display: none; }
+  /* Nothing inside a scroll row may shrink or wrap — the row scrolls instead. */
+  .filterbar .chip, .filterbar .seg, .filterbar .seg-btn, .filterbar-row .btn { flex: none; }
+  .filterbar-row { gap: var(--space-4); }
+  /* The nested montant group rides the row's scroll — one scroll container. */
+  .filterbar-row .chip-group { flex-wrap: nowrap; margin-inline: 0; padding-inline: 0; }
+  /* A flexible spacer is meaningless inside a scroll row. */
+  .filterbar-row .header-spacer { display: none; }
+}
