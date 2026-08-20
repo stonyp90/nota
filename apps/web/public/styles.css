@@ -853,7 +853,7 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
    320px, and still overlapping until a cell can spare ~65px. In flow it cannot.
    Order puts it between the date and the price: it is what the price MEANS, so
    it has to be read before it, and the DOM appends it last (app.js:928). */
-@container cal (max-width: 500px) {
+@container cal (max-width: 650px) {
   .cal-urgency { position: static; align-self: flex-start; order: 1; }
   .cal-svc-bids, .cal-avg { order: 2; }
   /* Appended after .cal-svc-bids, so without this it outranks both above. */
@@ -1340,7 +1340,11 @@ dialog::backdrop { background: var(--backdrop); }
     grid-template-areas: "hero" "why" "carnet" "console" "guarantee";
     justify-content: center;
   }
-  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) #notary-console { align-self: stretch; }
+  /* The two-column rule zeroes this margin so the console top-aligns beside
+     the hero. Stacked, that leaves it flush against the subscribe card, the
+     one seam in the ladder with no space at all. Longhand so the other
+     three sides of the shorthand survive. */
+  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) #notary-console { align-self: stretch; margin-top: var(--space-6); }
 }
 /* Value grid — 2×2 on the landing, fills the left column. */
 .nc-why { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 28px; margin-top: 8px; }
@@ -1844,7 +1848,9 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   .brand { font-size: 18px; }
   .nav-tab { padding: 7px 10px; font-size: 13px; }
   .intro h1 { font-size: clamp(20px, 5.6vw, 25px); }
-  .cal-cell { min-height: 62px; padding: 6px 6px; }
+  /* No padding here. The cal container queries own cell padding, and a
+     viewport rule this late in the file silently outranks all of them. */
+  .cal-cell { min-height: 62px; }
   /* .cal-avg deliberately has NO font-size here. The container query compacts it
      by zeroing the font and reprinting attr(data-compact) from ::after; a
      viewport rule that restores a visible size cannot remove the ::after, so the
@@ -1852,7 +1858,9 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
      queries, which is what this cell's content responds to anyway. */
     /* Sides stay at 14 so the grid lines up with the toolbar, filter bar and
      legend that bracket it inside the same card. */
-  .cal-grid { gap: 4px; padding: var(--space-4) var(--space-7) var(--space-6); }
+  /* Padding only. gap:4px here outranked the 3-column reflow's own gap, so
+     the phone grid packed 2px tighter than the token chose. */
+  .cal-grid { padding: var(--space-4) var(--space-7) var(--space-6); }
 
   .cal-row { gap: 4px; }
   .cal-dow { font-size: 10px; }
@@ -1889,7 +1897,10 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
      button (the modal it opens serves sign-in AND sign-up from one passwordless
      field) and let the primary shrink. */
   #header-login { display: none; }
-  .header-auth .btn { padding: 0 12px; font-size: 13px; white-space: nowrap; }
+  /* The block axis is 0 here on purpose, but the 44px floor that rescues it
+     is in @media (pointer: coarse). A narrowed DESKTOP window matches this
+     query and not that one, and the button collapses to its line box. */
+  .header-auth .btn { padding: 0 12px; font-size: 13px; white-space: nowrap; min-height: var(--space-16); }
 }
 /* Below this the theme toggle is the first thing to go: the palette still
    follows the OS via prefers-color-scheme, so nothing becomes unreachable. */
