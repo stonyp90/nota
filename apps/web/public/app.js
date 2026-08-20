@@ -2722,6 +2722,23 @@
     return fmtWeekday.format(new Date(Date.UTC(2024, 0, 1 + i))).replace(/\.$/, '');
   });
 
+  // Restart a CSS animation class even when it is already applied — the reflow
+  // between remove and add is what lets the same beat replay.
+  function retrigger(elm, cls) {
+    if (!elm) return;
+    elm.classList.remove(cls); void elm.offsetWidth; elm.classList.add(cls);
+  }
+
+  // Float the just-landed amount up off the counter ("+680 $" … gone). One
+  // reusable element per counter, re-armed on every landing.
+  function weekDeltaPop(totalId, amount) {
+    var out = $(totalId); if (!out || !out.parentElement) return;
+    var d = out.parentElement.querySelector('.nc-week-delta');
+    if (!d) { d = el('span', 'nc-week-delta'); out.parentElement.insertBefore(d, out); }
+    d.textContent = '+' + D.money(amount);
+    retrigger(d, 'is-live');
+  }
+
   function makeWeekVignette(cfg) {
     var v = { timers: [], raf: null, offset: 0, cycling: false };
 
@@ -2766,9 +2783,13 @@
         board.appendChild(col);
         return col;
       });
-      var chips = batch.items.map(function (it) {
+      var chips = batch.items.map(function (it, i) {
         var chip = el('div', 'nc-week-chip');
         chip.style.color = 'var(--svc-' + it.serviceId + ')';
+        // A slight, index-derived lean on entry (see .nc-week-chip --tilt) so
+        // consecutive drops don't read as one stamped pattern. Deterministic —
+        // never Math.random, which would unsettle snapshots.
+        chip.style.setProperty('--tilt', (((i % 3) - 1) * 2.5) + 'deg');
         chip.title = it.nomCourt + ' · ' + D.money(it.montant) + ' · ' + dayShort(it.dateISO) +
           (it.retenue ? ' · retenue par ' + (it.etude || 'un notaire') : '');
         var top = el('span', 'nc-week-chip-top');
@@ -2803,16 +2824,22 @@
           chip.classList.add('is-in');
           var from = landed; landed += batch.items[i].montant;
           tween(from, landed);
-          // A small pop on the counter each time money lands.
-          var out = $(cfg.total);
-          if (out) { out.classList.remove('is-tick'); void out.offsetWidth; out.classList.add('is-tick'); }
+          // Three beats per landing: the counter pops, the amount floats off
+          // it, and the receiving day lights up.
+          retrigger($(cfg.total), 'is-tick');
+          weekDeltaPop(cfg.total, batch.items[i].montant);
+          retrigger(chip.parentElement && chip.parentElement.querySelector('.nc-week-day'), 'is-hit');
         }, 500 + i * 650);
       });
       var settled = 500 + chips.length * 650;
-      // Once the board is full, taken demands flip to their ✓ — the clearing.
+      // Once the board is full, taken demands flip to their ✓ one by one — the
+      // clearing told as a sequence, not a switch.
       later(function () {
+        var nth = 0;
         chips.forEach(function (chip, i) {
-          if (batch.items[i].retenue) chip.classList.add('is-taken');
+          if (!batch.items[i].retenue) return;
+          later(function () { chip.classList.add('is-taken'); }, nth * 220);
+          nth++;
         });
       }, settled + 700);
       later(function () { $(cfg.board).classList.add('is-out'); }, settled + 3800);
@@ -2896,7 +2923,8 @@
         var k = Math.min(1, (t - t0) / dur);
         k = 1 - Math.pow(1 - k, 3);
         out.textContent = D.money(Math.round(from + (to - from) * k));
-        v.raf = k < 1 ? requestAnimationFrame(frame) : null;
+        if (k < 1) { v.raf = requestAnimationFrame(frame); }
+        else { v.raf = null; retrigger(out, 'is-tick'); } // settle with a pop
       }
       v.raf = requestAnimationFrame(frame);
     }
@@ -2931,9 +2959,12 @@
       v.idx = (v.idx + 1) % list.length;
       var svc = fill(b);
       var scene = $('ob-bid-scene'), pub = $('ob-bid-stamp-pub'), fin = $('ob-bid-stamp-fin');
+      var card = document.querySelector('#ob-bid .ob-bid-card');
       if (scene) scene.classList.remove('is-out');
       if (pub) pub.classList.remove('is-on');
       if (fin) fin.classList.remove('is-on');
+      if (card) card.classList.remove('is-pub');
+      retrigger(scene, 'is-live'); // the fresh card settles in
       var amt = $('ob-bid-amt'); if (amt) amt.textContent = D.money(svc.prixDepart || 0);
       later(function () {
         if (!onScreen()) { stop(); return; }
@@ -2942,6 +2973,7 @@
       later(function () {
         if (!onScreen()) { stop(); return; }
         if (pub) pub.classList.add('is-on');
+        if (card) retrigger(card, 'is-pub'); // the card rings as it lands au carnet
       }, 1300);
       later(function () {
         if (!onScreen()) { stop(); return; }
@@ -2993,7 +3025,11 @@
     var mode = $('ob-week-mode'); if (mode) mode.textContent = notaire ? 'à la signature' : 'en jeu';
     var noteC = $('ob-week-note-carnet'); if (noteC) noteC.hidden = notaire;
     var noteN = $('ob-week-note-notaire'); if (noteN) noteN.hidden = !notaire;
-    var prov = $('ob-week-providers'); if (prov) prov.hidden = !notaire;
+    var prov = $('ob-week-providers');
+    if (prov) {
+      prov.hidden = !notaire;
+      if (notaire) retrigger(prov, 'is-live'); // the agenda marks file in
+    }
     weekVigOnb.restart();
   }
 
