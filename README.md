@@ -63,9 +63,14 @@ nota/
 │   │                  revalidates every offer through @nota/domain. Ports:
 │   │                  repo-dynamo (AWS) and repo-memory (dev/tests). Entry
 │   │                  points: index.js (Lambda) and local-server.js (dev).
-│   └── web/           @nota/web — static UI adapter, ZERO runtime dependencies.
-│                      Vanilla JS carnet + offer flow; loads the same
-│                      @nota/domain module in the browser (window.NotaDomain).
+│   ├── web/           @nota/web — static UI adapter, ZERO runtime dependencies.
+│   │                  Vanilla JS carnet + offer flow; loads the same
+│   │                  @nota/domain module in the browser (window.NotaDomain).
+│   └── admin/         @nota/admin — the private admin console (admin.nota.ca).
+│                      Magic-link sign-in + metrics overview. Vanilla JS, zero
+│                      runtime deps, strict-CSP safe, noindex everywhere. Talks
+│                      to its OWN Lambda (apps/api/admin.js) — read-only on the
+│                      customer table, read/write on the separate admin table.
 ├── features/          Cucumber (Gherkin) BDD suite — executable specifications
 │                      against @nota/domain and apps/api. Not a workspace.
 └── infra/             Terraform: S3 + CloudFront + Lambda + DynamoDB.
@@ -94,6 +99,22 @@ Validation error codes: `service_inconnu`, `montant_invalide`, `date_invalide`,
 leaks `nom` when `anonyme` is set — anonymity is enforced server-side, not just
 in the UI. The full contract lives in
 [`apps/api/openapi.yaml`](apps/api/openapi.yaml).
+
+### Admin API routes (admin.nota.ca)
+
+A separate Lambda (`apps/api/admin.js`) behind its own CloudFront distribution,
+answering only `/admin/*`. Passwordless magic-link auth; every session token is
+checked against a live server-side session on every request. Contract:
+[`apps/api/admin-openapi.yaml`](apps/api/admin-openapi.yaml).
+
+| Method | Route | Response |
+| --- | --- | --- |
+| `POST` | `/admin/auth/request` | `200 { ok }` (+ `devLink` outside production) · `429` |
+| `POST` | `/admin/auth/verify` | `200 { session, role, expiresAt }` · `401` |
+| `POST` | `/admin/auth/refresh` | `200 { session, expiresAt }` · `401` |
+| `POST` | `/admin/auth/logout` | `200 { ok }` |
+| `GET` | `/admin/me` | `200 { email, role, permissions }` · `401` |
+| `GET` | `/admin/metrics/overview` | `200 { range, kpis, gauge, series }` · `401` |
 
 ### Data model
 
@@ -134,6 +155,22 @@ npm run api:local    # @nota/api on http://localhost:8788
 infrastructure at all. The web dev server single-sources the domain module at
 `/domain.js` and falls back unknown paths to `index.html` (matching CloudFront).
 
+### Admin console locally
+
+Two more servers give the full admin experience — real magic-link flow, no AWS,
+no mailbox:
+
+```bash
+npm run admin:local  # admin API on http://localhost:8790 (fixtures + seeded stats)
+npm run dev:admin    # admin console on http://localhost:4174 (proxies /api/* to :8790)
+```
+
+Open http://localhost:4174, request a link for `admin@nota.local` (or set
+`NOTA_ADMIN_EMAILS`), and click the **dev link echoed on the page** — outside
+production the API returns the magic link in the response, so the whole
+sign-in completes locally. The overview renders a deterministic seeded
+dashboard (fixtures + a 28-day analytics history).
+
 ### Full stack with Docker (no AWS)
 
 To run the whole stack — DynamoDB Local, table creation, API and web — with a
@@ -143,14 +180,17 @@ single command and no AWS account:
 docker compose up
 ```
 
-This starts `dynamodb-local` (:8000), creates the `nota` table, runs the API
-against it (:8788) and serves the web app (:4173).
+This starts `dynamodb-local` (:8000), creates the `nota` and `nota-admin`
+tables, runs the API against them (:8788), serves the web app (:4173), and
+brings up the admin surface too — the admin API (:8790) and the admin console
+(:4174), mirroring production's two-table, two-Lambda split.
 
 ## Tests
 
 ```bash
 npm test                                   # @nota/domain + @nota/api unit tests
 npm run test:web                           # @nota/web jsdom smoke test
+npm run test:admin                         # @nota/admin jsdom + dev-proxy tests
 npm install --prefix features \
   && npm test --prefix features            # Cucumber BDD suite
 ```

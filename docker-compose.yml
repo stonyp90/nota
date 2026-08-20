@@ -27,6 +27,7 @@ services:
       - ./:/repo
     environment:
       TABLE_NAME: nota
+      ADMIN_TABLE_NAME: nota-admin
       DYNAMO_ENDPOINT: http://dynamodb-local:8000
       AWS_REGION: ca-central-1
       AWS_ACCESS_KEY_ID: local
@@ -73,3 +74,44 @@ services:
       - "4173:4173"
     depends_on:
       - api
+
+  # The ADMIN API on :8790 — the admin.nota.ca Lambda, locally, against the same
+  # DynamoDB Local plus the separate nota-admin table (mirroring production's
+  # two-table split). Magic links are echoed in the response (devEcho) and land
+  # on the admin console below.
+  admin-api:
+    image: node:20-alpine
+    working_dir: /repo
+    volumes:
+      - ./:/repo
+    environment:
+      PORT: 8790
+      TABLE_NAME: nota
+      ADMIN_TABLE_NAME: nota-admin
+      DYNAMO_ENDPOINT: http://dynamodb-local:8000
+      AWS_REGION: ca-central-1
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local
+      NOTA_ADMIN_BASE_URL: http://localhost:4174
+    command: ["node", "apps/api/admin-local-server.js"]
+    ports:
+      - "8790:8790"
+    depends_on:
+      dynamo-init:
+        condition: service_completed_successfully
+
+  # The admin console on :4174, proxying /api/* same-origin to admin-api —
+  # the same layout CloudFront gives admin.nota.ca.
+  admin:
+    image: node:20-alpine
+    working_dir: /repo
+    volumes:
+      - ./:/repo
+    environment:
+      PORT: 4174
+      NOTA_ADMIN_API: http://admin-api:8790
+    command: ["node", "apps/admin/run-local.mjs"]
+    ports:
+      - "4174:4174"
+    depends_on:
+      - admin-api

@@ -1,0 +1,329 @@
+openapi: 3.1.0
+info:
+  title: Nota Admin API
+  version: 0.1.0
+  description: >-
+    HTTP API for the Nota admin console (admin.nota.ca). A separate surface from
+    the public API — its own Lambda (apps/api/admin.js), its own signing secret,
+    read-only IAM on the customer table and read/write only on the separate
+    admin table. Auth is a passwordless magic link: request → e-mailed
+    single-use link → short-lived server-backed session presented as a Bearer
+    token on every call. Responses never reveal whether an address is an admin
+    (no account enumeration), and every response carries
+    `X-Robots-Tag: noindex`.
+
+
+    NOTE: this specification is kept in sync with
+    `apps/api/src/admin-handler.js` **by hand** for now. When a route or field
+    changes there, update it here in the same change (see AGENTS.md).
+  license:
+    name: UNLICENSED
+servers:
+  - url: /api
+    description: Same-origin path fronted by the admin CloudFront distribution.
+  - url: http://localhost:8790
+    description: Local dev admin API (apps/api/admin-local-server.js).
+components:
+  securitySchemes:
+    adminSession:
+      type: http
+      scheme: bearer
+      description: >-
+        Admin session token minted by `/admin/auth/verify`. A valid signature is
+        necessary but not sufficient — the server-side session must exist, be
+        un-revoked, inside its 12 h absolute window and not idle past 30 min.
+  schemas:
+    Errors:
+      type: object
+      required: [errors]
+      properties:
+        errors:
+          type: array
+          items:
+            type: object
+            required: [code, message]
+            properties:
+              code:
+                type: string
+              message:
+                type: string
+    SessionGrant:
+      type: object
+      required: [ok, session, expiresAt]
+      properties:
+        ok:
+          type: boolean
+          const: true
+        session:
+          type: string
+          description: Bearer token for subsequent admin calls.
+        role:
+          type: string
+          enum: [super_admin, analyst]
+        expiresAt:
+          type: string
+          format: date-time
+          description: Absolute session expiry (hard 12 h cap; refresh never extends it).
+  responses:
+    Unauthorized:
+      description: Missing, invalid, expired, idled-out or revoked session.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Errors"
+          example:
+            errors:
+              - code: non_autorise
+                message: Session invalide ou expirée.
+paths:
+  /admin/auth/request:
+    post:
+      operationId: requestAdminLogin
+      summary: Request a magic sign-in link.
+      description: >-
+        Always answers `200 {ok: true}` for a well-formed request, whether or
+        not the address is on the admin allowlist — the body never distinguishes
+        an admin from a stranger. Rate-limited per source IP. Outside
+        production, the response additionally echoes the link as `devLink` so
+        local dev completes the flow without a mailbox.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        "200":
+          description: Accepted (regardless of allowlist membership).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+                  devLink:
+                    type: string
+                    description: Dev/test only — the magic link itself. Never present in production.
+        "400":
+          description: Malformed JSON body.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Errors"
+        "429":
+          description: Per-IP rate limit hit.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Errors"
+  /admin/auth/verify:
+    post:
+      operationId: verifyAdminMagicLink
+      summary: Redeem a magic-link token for a session.
+      description: >-
+        Single-use — the challenge is consumed atomically, so a replayed link is
+        rejected with 401.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+      responses:
+        "200":
+          description: Session established.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionGrant"
+        "400":
+          description: Malformed JSON body.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Errors"
+        "401":
+          description: Invalid, expired or already-used link.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Errors"
+  /admin/auth/refresh:
+    post:
+      operationId: refreshAdminSession
+      summary: Slide the idle window and re-mint the session token.
+      description: >-
+        Keep-alive for an active operator. Never extends the absolute 12 h cap
+        set at login.
+      security:
+        - adminSession: []
+      responses:
+        "200":
+          description: Fresh token for the same session.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionGrant"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /admin/auth/logout:
+    post:
+      operationId: adminLogout
+      summary: Revoke the server-side session.
+      description: "Idempotent — always `200 {ok: true}`, even for an invalid token."
+      security:
+        - adminSession: []
+      responses:
+        "200":
+          description: Session revoked (or was already invalid).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+  /admin/me:
+    get:
+      operationId: getAdminMe
+      summary: The authenticated operator's identity and permissions.
+      security:
+        - adminSession: []
+      responses:
+        "200":
+          description: Current principal.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [email, role, permissions]
+                properties:
+                  email:
+                    type: string
+                  role:
+                    type: string
+                    enum: [super_admin, analyst]
+                  permissions:
+                    type: array
+                    items:
+                      type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /admin/metrics/overview:
+    get:
+      operationId: getAdminMetricsOverview
+      summary: The Overview dashboard payload.
+      description: >-
+        History (offers, retentions, completed acts) read from the sharded
+        STATS# rollup counters over a date range, plus present-tense inventory
+        computed live from the carnet — no table Scan anywhere.
+      security:
+        - adminSession: []
+      parameters:
+        - name: from
+          in: query
+          required: false
+          description: Range start, `YYYY-MM-DD`. Defaults to 29 days before `to`.
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: false
+          description: Range end, `YYYY-MM-DD`. Defaults to today.
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Aggregated metrics for the range.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [range, kpis, gauge, series]
+                properties:
+                  range:
+                    type: object
+                    required: [from, to, days]
+                    properties:
+                      from:
+                        type: string
+                        format: date
+                      to:
+                        type: string
+                        format: date
+                      days:
+                        type: integer
+                  kpis:
+                    type: object
+                    required: [offersPosted, offersRetained, retentionRate, commissionCents, actsCompleted]
+                    properties:
+                      offersPosted:
+                        type: integer
+                      offersRetained:
+                        type: integer
+                      retentionRate:
+                        type: number
+                        description: 0..1 fraction (the console also accepts 0..100).
+                      commissionCents:
+                        type: integer
+                      actsCompleted:
+                        type: integer
+                  gauge:
+                    type: object
+                    required: [open, retained, activeNotaries, onboardingNotaries]
+                    properties:
+                      open:
+                        type: integer
+                      retained:
+                        type: integer
+                      activeNotaries:
+                        type: integer
+                      onboardingNotaries:
+                        type: integer
+                  series:
+                    type: object
+                    required: [offersPerDay, byService]
+                    properties:
+                      offersPerDay:
+                        type: array
+                        items:
+                          type: object
+                          required: [date, count]
+                          properties:
+                            date:
+                              type: string
+                              format: date
+                            count:
+                              type: integer
+                      byService:
+                        type: array
+                        items:
+                          type: object
+                          required: [serviceId, nom, offers, retained]
+                          properties:
+                            serviceId:
+                              type: string
+                            nom:
+                              type: string
+                            offers:
+                              type: integer
+                            retained:
+                              type: integer
+        "401":
+          $ref: "#/components/responses/Unauthorized"

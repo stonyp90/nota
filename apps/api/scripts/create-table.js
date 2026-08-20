@@ -1,17 +1,27 @@
 'use strict';
 
 /**
- * Creates the single Nota table in DynamoDB Local for development. Idempotent.
+ * Creates the Nota tables in DynamoDB Local for development. Idempotent.
  * Run by docker-compose (the `dynamo-init` service) and available manually:
- *   TABLE_NAME=nota DYNAMO_ENDPOINT=http://localhost:8000 node scripts/create-table.js
+ *   TABLE_NAME=nota ADMIN_TABLE_NAME=nota-admin \
+ *   DYNAMO_ENDPOINT=http://localhost:8000 node scripts/create-table.js
+ *
+ * Two tables, mirroring production (infra/dynamodb.tf + infra/admin.tf):
+ *   - TABLE_NAME        — the single main table (bids, notaries, stats) with
+ *                         the sparse GSI1 over open bids.
+ *   - ADMIN_TABLE_NAME  — the separate admin table (identities, single-use
+ *                         login challenges, sessions, audit) with TTL on `ttl`.
+ *                         Optional: skipped when the variable is unset.
  */
 const {
   DynamoDBClient,
   CreateTableCommand,
   DescribeTableCommand,
+  UpdateTimeToLiveCommand,
 } = require('@aws-sdk/client-dynamodb');
 
 const TableName = process.env.TABLE_NAME || 'nota';
+const AdminTableName = process.env.ADMIN_TABLE_NAME || '';
 const endpoint = process.env.DYNAMO_ENDPOINT || 'http://localhost:8000';
 const region = process.env.AWS_REGION || 'ca-central-1';
 
@@ -21,13 +31,20 @@ const client = new DynamoDBClient({
   credentials: { accessKeyId: 'local', secretAccessKey: 'local' },
 });
 
-(async () => {
+async function exists(name) {
   try {
-    await client.send(new DescribeTableCommand({ TableName }));
-    console.log(`Table "${TableName}" already exists.`);
-    return;
+    await client.send(new DescribeTableCommand({ TableName: name }));
+    return true;
   } catch (err) {
     if (err.name !== 'ResourceNotFoundException') throw err;
+    return false;
+  }
+}
+
+async function createMainTable() {
+  if (await exists(TableName)) {
+    console.log(`Table "${TableName}" already exists.`);
+    return;
   }
   await client.send(
     new CreateTableCommand({
@@ -59,6 +76,41 @@ const client = new DynamoDBClient({
     })
   );
   console.log(`Created table "${TableName}" at ${endpoint}.`);
+}
+
+async function createAdminTable() {
+  if (!AdminTableName) return;
+  if (await exists(AdminTableName)) {
+    console.log(`Table "${AdminTableName}" already exists.`);
+    return;
+  }
+  await client.send(
+    new CreateTableCommand({
+      TableName: AdminTableName,
+      BillingMode: 'PAY_PER_REQUEST',
+      AttributeDefinitions: [
+        { AttributeName: 'PK', AttributeType: 'S' },
+        { AttributeName: 'SK', AttributeType: 'S' },
+      ],
+      KeySchema: [
+        { AttributeName: 'PK', KeyType: 'HASH' },
+        { AttributeName: 'SK', KeyType: 'RANGE' },
+      ],
+    })
+  );
+  // Expired challenges/sessions reap themselves, exactly like infra/admin.tf.
+  await client.send(
+    new UpdateTimeToLiveCommand({
+      TableName: AdminTableName,
+      TimeToLiveSpecification: { AttributeName: 'ttl', Enabled: true },
+    })
+  );
+  console.log(`Created table "${AdminTableName}" (TTL on "ttl") at ${endpoint}.`);
+}
+
+(async () => {
+  await createMainTable();
+  await createAdminTable();
 })().catch((e) => {
   console.error(e);
   process.exit(1);

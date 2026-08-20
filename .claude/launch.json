@@ -7,6 +7,18 @@
       "runtimeArgs": ["run", "dev"],
       "port": 4173,
       "autoPort": true
+    },
+    {
+      "name": "nota-admin-api",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "admin:local"],
+      "port": 8790
+    },
+    {
+      "name": "nota-admin",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev:admin"],
+      "port": 4174
     }
   ]
 }

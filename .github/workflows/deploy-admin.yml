@@ -74,6 +74,9 @@ jobs:
       - name: Web smoke test (jsdom)
         run: npm test --workspace @nota/web
 
+      - name: Admin console tests (jsdom + dev proxy)
+        run: npm test --workspace @nota/admin
+
   deploy:
     name: Build + deploy admin to AWS
     needs: test

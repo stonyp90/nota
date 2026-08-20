@@ -13,9 +13,13 @@
     "test:domain": "npm test --workspace @nota/domain",
     "test:api": "npm test --workspace @nota/api",
     "test:web": "npm test --workspace @nota/web",
+    "test:admin": "npm test --workspace @nota/admin",
     "build": "npm run build --workspace @nota/web",
+    "build:admin": "npm run build --workspace @nota/admin",
     "dev": "npm run dev --workspace @nota/web",
-    "api:local": "npm run start --workspace @nota/api"
+    "dev:admin": "npm run dev --workspace @nota/admin",
+    "api:local": "npm run start --workspace @nota/api",
+    "admin:local": "npm run start:admin --workspace @nota/api"
   },
   "engines": {
     "node": ">=20"

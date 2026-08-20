@@ -10,6 +10,7 @@ business rules in one place and the merge boundaries clean.
 | `packages/domain` | Business rules: prices, tiers, premium cap, offer validation, `money()`, fixtures. | I/O, DOM, network, framework or AWS code. Zero dependencies. |
 | `apps/api` | Persistence + HTTP: routing, DynamoDB single-table repo, Lambda/dev adapters. | Business rules — call `@nota/domain` instead of reimplementing them. |
 | `apps/web` | UI: the public carnet, offer flow, document intake. | Runtime dependencies (must stay zero). Duplicated business logic. |
+| `apps/admin` | UI: the private admin console (admin.nota.ca) — magic-link gate, metrics overview. | Runtime dependencies (must stay zero). Business rules. Anything indexable (it ships `noindex` everywhere). |
 | `infra` | Terraform: S3, CloudFront, Lambda, DynamoDB, ACM. | Application logic. |
 | `features` | Cucumber (Gherkin) BDD specs against domain + api. | Product code. |
 
@@ -47,5 +48,7 @@ business rules in one place and the merge boundaries clean.
 
 - Domain change → update/extend its tests **and** any BDD feature it affects.
 - New API behavior → keep `apps/api/openapi.yaml` in sync by hand (it is derived
-  from `apps/api/src/handler.js`).
-- `npm test`, `npm run test:web`, and the `features` suite must be green.
+  from `apps/api/src/handler.js`). Admin API behavior → same for
+  `apps/api/admin-openapi.yaml` (derived from `apps/api/src/admin-handler.js`).
+- `npm test`, `npm run test:web`, `npm run test:admin`, and the `features`
+  suite must be green.

@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   test:
-    name: Tests (domain + api + BDD + web)
+    name: Tests (domain + api + BDD + web + admin)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -38,6 +38,9 @@ jobs:
 
       - name: Web smoke test (jsdom)
         run: npm test --workspace @nota/web
+
+      - name: Admin console tests (jsdom + dev proxy)
+        run: npm test --workspace @nota/admin
 
   terraform:
     name: Terraform validate

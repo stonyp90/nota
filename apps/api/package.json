@@ -8,7 +8,8 @@
   "main": "index.js",
   "scripts": {
     "test": "node --test",
-    "start": "node local-server.js"
+    "start": "node local-server.js",
+    "start:admin": "node admin-local-server.js"
   },
   "dependencies": {
     "@nota/domain": "*",
