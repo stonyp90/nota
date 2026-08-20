@@ -1,0 +1,1026 @@
+<title>Nota Business Plan</title>
+
+<style>
+/* ─────────────────────────────────────────────────────────────
+   Palette: registry ink on cool paper, brass seal accent.
+   Neutrals carry a blue bias so they read as chosen, not default.
+   ───────────────────────────────────────────────────────────── */
+:root{
+  --paper:#F4F6F8;
+  --surface:#FFFFFF;
+  --surface-2:#EDF1F5;
+  --ink:#111823;
+  --ink-2:#33404F;
+  --muted:#5D6C7E;
+  --faint:#8896A6;
+  --rule:#DCE3EA;
+  --rule-strong:#C3CEDA;
+  --brass:#8F6714;
+  --brass-bright:#A8791F;
+  --brass-wash:#F6EEDC;
+  --verdigris:#2F6B57;
+  --verdigris-wash:#E6F0EB;
+  --oxide:#8E4034;
+  --oxide-wash:#F8EAE7;
+  --shadow:0 1px 2px rgba(17,24,35,.05),0 8px 24px -12px rgba(17,24,35,.14);
+
+  --display:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua","Sitka Text",Georgia,serif;
+  --body:"Avenir Next",Avenir,"Segoe UI",system-ui,-apple-system,"Helvetica Neue",sans-serif;
+  --mono:"SF Mono","IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+
+  --measure:68ch;
+  --wide:1140px;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0D131B;
+    --surface:#141C26;
+    --surface-2:#1B2531;
+    --ink:#E6EBF2;
+    --ink-2:#C4CEDA;
+    --muted:#93A1B2;
+    --faint:#71808F;
+    --rule:#25313F;
+    --rule-strong:#33424F;
+    --brass:#D9A441;
+    --brass-bright:#E3B45C;
+    --brass-wash:#2A2113;
+    --verdigris:#63B394;
+    --verdigris-wash:#132620;
+    --oxide:#D08376;
+    --oxide-wash:#2A1613;
+    --shadow:0 1px 2px rgba(0,0,0,.30),0 10px 28px -14px rgba(0,0,0,.55);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0D131B;
+  --surface:#141C26;
+  --surface-2:#1B2531;
+  --ink:#E6EBF2;
+  --ink-2:#C4CEDA;
+  --muted:#93A1B2;
+  --faint:#71808F;
+  --rule:#25313F;
+  --rule-strong:#33424F;
+  --brass:#D9A441;
+  --brass-bright:#E3B45C;
+  --brass-wash:#2A2113;
+  --verdigris:#63B394;
+  --verdigris-wash:#132620;
+  --oxide:#D08376;
+  --oxide-wash:#2A1613;
+  --shadow:0 1px 2px rgba(0,0,0,.30),0 10px 28px -14px rgba(0,0,0,.55);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--body);
+  font-size:16.5px;
+  line-height:1.68;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+
+/* ── Layout scaffolding ───────────────────────────────────── */
+.wrap{max-width:var(--wide);margin:0 auto;padding:0 28px}
+.col{max-width:var(--measure)}
+section{padding:0 0 4.5rem}
+.rule{height:1px;background:var(--rule);border:0;margin:0 0 3rem}
+
+h1,h2,h3,h4{font-family:var(--display);font-weight:600;text-wrap:balance;margin:0}
+h2{font-size:clamp(1.65rem,3.1vw,2.3rem);line-height:1.18;letter-spacing:-.012em}
+h3{font-size:1.22rem;line-height:1.32;margin:2.4rem 0 .7rem}
+h4{font-size:1.02rem;line-height:1.35;margin:1.6rem 0 .4rem;font-family:var(--body);font-weight:650}
+p{margin:0 0 1.05rem}
+a{color:var(--brass);text-decoration:underline;text-underline-offset:2px;text-decoration-thickness:.06em}
+a:hover{color:var(--brass-bright)}
+:focus-visible{outline:2px solid var(--brass-bright);outline-offset:3px;border-radius:2px}
+strong{font-weight:650;color:var(--ink)}
+em{font-style:italic}
+code{font-family:var(--mono);font-size:.87em;background:var(--surface-2);padding:.1em .35em;border-radius:3px}
+
+.eyebrow{
+  font-family:var(--mono);font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--brass);margin:0 0 .55rem;display:block;font-weight:500;
+}
+.lede{font-size:1.12rem;line-height:1.62;color:var(--ink-2)}
+.small{font-size:.88rem;line-height:1.58;color:var(--muted)}
+.tnum{font-variant-numeric:tabular-nums}
+
+/* ── Section head with a numeral in the margin ────────────── */
+.shead{display:flex;gap:1.15rem;align-items:baseline;margin:0 0 1.5rem}
+.snum{
+  font-family:var(--mono);font-size:.78rem;color:var(--faint);
+  letter-spacing:.06em;padding-top:.42rem;flex:0 0 auto;width:2.1rem;
+}
+.shead > div{min-width:0}
+.shead .sub{color:var(--muted);font-size:1rem;margin:.5rem 0 0;max-width:60ch}
+
+/* ── Masthead ─────────────────────────────────────────────── */
+.mast{padding:5.5rem 0 3.2rem}
+.mast .mark{
+  font-family:var(--display);font-size:clamp(3.4rem,9vw,5.6rem);line-height:.94;
+  letter-spacing:-.03em;font-weight:600;margin:0 0 .5rem;
+}
+.mast .thesis{
+  font-family:var(--display);font-style:italic;font-size:clamp(1.3rem,3.2vw,1.8rem);
+  line-height:1.3;color:var(--brass);margin:0 0 1.4rem;max-width:22ch;
+}
+.mast .stand{font-size:1.08rem;line-height:1.62;color:var(--ink-2);max-width:60ch;margin:0 0 2.2rem}
+.meta{
+  display:flex;flex-wrap:wrap;gap:.5rem 1.6rem;font-family:var(--mono);
+  font-size:.76rem;letter-spacing:.05em;color:var(--muted);
+  padding-top:1.3rem;border-top:1px solid var(--rule);
+}
+
+/* ── Figure strip ─────────────────────────────────────────── */
+.figs{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;
+  background:var(--rule);border:1px solid var(--rule);border-radius:6px;overflow:hidden;margin:2.6rem 0 0}
+.fig{background:var(--surface);padding:1.15rem 1.25rem}
+.fig .v{font-family:var(--display);font-size:1.85rem;line-height:1.1;font-weight:600;
+  letter-spacing:-.02em;font-variant-numeric:tabular-nums;display:block}
+.fig .k{font-size:.79rem;line-height:1.42;color:var(--muted);margin-top:.35rem;display:block}
+.fig.hi .v{color:var(--brass)}
+
+/* ── Cards & callouts ─────────────────────────────────────── */
+.card{background:var(--surface);border:1px solid var(--rule);border-radius:8px;
+  padding:1.5rem 1.6rem;box-shadow:var(--shadow)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.1rem}
+.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1.1rem}
+.grid4{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:1rem}
+.card h4{margin:0 0 .5rem;font-size:1rem}
+.card p:last-child{margin-bottom:0}
+
+.note{
+  background:var(--surface-2);border:1px solid var(--rule);border-radius:8px;
+  padding:1.35rem 1.5rem;margin:1.8rem 0;
+}
+.note.brass{background:var(--brass-wash);border-color:color-mix(in srgb,var(--brass) 28%,transparent)}
+.note.good{background:var(--verdigris-wash);border-color:color-mix(in srgb,var(--verdigris) 28%,transparent)}
+.note.risk{background:var(--oxide-wash);border-color:color-mix(in srgb,var(--oxide) 28%,transparent)}
+.note p:last-child{margin-bottom:0}
+.note .label{
+  font-family:var(--mono);font-size:.68rem;letter-spacing:.13em;text-transform:uppercase;
+  display:block;margin-bottom:.5rem;font-weight:500;
+}
+.note.brass .label{color:var(--brass)}
+.note.good .label{color:var(--verdigris)}
+.note.risk .label{color:var(--oxide)}
+
+.pull{
+  font-family:var(--display);font-size:clamp(1.25rem,2.7vw,1.6rem);line-height:1.38;
+  color:var(--ink);margin:2.2rem 0;padding-left:1.4rem;
+  border-left:2px solid var(--brass);max-width:52ch;
+}
+
+/* ── The urgency ladder: the page's signature instrument ──── */
+.ladder{margin:2rem 0 .8rem;display:flex;flex-direction:column;gap:.5rem}
+.rung{display:grid;grid-template-columns:7.2rem 5.5rem 1fr 5.2rem;gap:.9rem;align-items:center}
+.rung .tier{
+  font-family:var(--mono);font-size:.72rem;letter-spacing:.06em;padding:.28rem .5rem;
+  border-radius:3px;text-align:center;color:var(--surface);background:var(--t);
+}
+.rung .days{font-size:.85rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.rung .track{display:block;height:12px;background:var(--surface-2);border-radius:2px;overflow:hidden}
+/* No transform-based reveal here: the bar IS the datum, so its resting state
+   must be the true width under every renderer. */
+.rung .bar{display:block;height:100%;background:var(--t);border-radius:2px;width:var(--w)}
+.rung .mult{font-family:var(--mono);font-size:.82rem;text-align:right;
+  font-variant-numeric:tabular-nums;color:var(--ink-2)}
+@media (max-width:620px){
+  .rung{grid-template-columns:6.2rem 1fr 4.4rem;grid-template-areas:"tier days mult" "bar bar bar";gap:.5rem .7rem}
+  .rung .tier{grid-area:tier}.rung .days{grid-area:days}
+  .rung .mult{grid-area:mult}.rung .track{grid-area:bar}
+}
+
+/* ── Tables ───────────────────────────────────────────────── */
+.tw{overflow-x:auto;margin:1.6rem 0;border:1px solid var(--rule);border-radius:8px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:.9rem;min-width:520px}
+th,td{text-align:left;padding:.68rem .95rem;border-bottom:1px solid var(--rule);vertical-align:top}
+thead th{
+  font-family:var(--mono);font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--muted);font-weight:500;background:var(--surface-2);white-space:nowrap;
+}
+tbody tr:last-child td{border-bottom:0}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+tr.total td{font-weight:650;background:var(--surface-2)}
+td.pos{color:var(--verdigris);font-weight:600}
+td.neg{color:var(--oxide)}
+
+/* ── Comparison pair (the déontologie fix) ────────────────── */
+.pair{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:1.1rem;margin:1.8rem 0}
+.pane{border-radius:8px;padding:1.4rem 1.5rem;border:1px solid}
+.pane.bad{background:var(--oxide-wash);border-color:color-mix(in srgb,var(--oxide) 26%,transparent)}
+.pane.good{background:var(--verdigris-wash);border-color:color-mix(in srgb,var(--verdigris) 26%,transparent)}
+.pane .tag{font-family:var(--mono);font-size:.66rem;letter-spacing:.13em;text-transform:uppercase;
+  display:inline-block;padding:.24rem .55rem;border-radius:3px;color:#fff;margin-bottom:.7rem}
+.pane.bad .tag{background:var(--oxide)}
+.pane.good .tag{background:var(--verdigris)}
+.pane h4{margin:0 0 .8rem;font-family:var(--display);font-size:1.12rem;font-weight:600}
+.pane.bad h4{color:var(--oxide)}
+.pane.good h4{color:var(--verdigris)}
+.flow{list-style:none;padding:0;margin:0 0 .9rem;font-size:.93rem}
+.flow li{display:flex;justify-content:space-between;gap:1rem;padding:.34rem 0;
+  border-bottom:1px dotted color-mix(in srgb,var(--muted) 32%,transparent)}
+.flow li:last-child{border-bottom:0}
+.flow .amt{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.pane .verdict{font-size:.88rem;font-weight:600;margin:0}
+.pane.bad .verdict{color:var(--oxide)}
+.pane.good .verdict{color:var(--verdigris)}
+
+/* ── Lists ────────────────────────────────────────────────── */
+ul.clean{list-style:none;padding:0;margin:0 0 1.1rem}
+ul.clean li{position:relative;padding-left:1.15rem;margin-bottom:.62rem}
+ul.clean li::before{content:"";position:absolute;left:0;top:.72em;width:5px;height:5px;
+  border-radius:50%;background:var(--brass)}
+ol.steps{list-style:none;counter-reset:s;padding:0;margin:1.4rem 0}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:2rem 1fr;gap:.9rem;
+  padding:.9rem 0;border-top:1px solid var(--rule)}
+ol.steps li::before{content:counter(s);font-family:var(--mono);font-size:.78rem;
+  color:var(--brass);padding-top:.28rem}
+ol.steps li:last-child{border-bottom:1px solid var(--rule)}
+ol.steps b{display:block;font-weight:650;margin-bottom:.15rem}
+
+/* ── Footer ───────────────────────────────────────────────── */
+footer{border-top:1px solid var(--rule);padding:2.6rem 0 4rem;color:var(--muted);font-size:.85rem}
+footer h3{font-size:.95rem;margin:0 0 .9rem;font-family:var(--body);font-weight:650;color:var(--ink)}
+.srcs{columns:2;column-gap:2.4rem;font-size:.8rem;line-height:1.55}
+.srcs a{display:block;margin-bottom:.42rem;break-inside:avoid;color:var(--muted);text-decoration:none;
+  border-bottom:1px solid var(--rule);padding-bottom:.42rem}
+.srcs a:hover{color:var(--brass)}
+@media (max-width:640px){.srcs{columns:1}}
+</style>
+
+<main>
+
+<!-- ══════════════════ MASTHEAD ══════════════════ -->
+<div class="wrap mast">
+  <span class="eyebrow">Pre-seed · Québec City · August 2026</span>
+  <h1 class="mark">Nota</h1>
+  <p class="thesis">Pricing time in the Québec notarial market.</p>
+  <p class="stand">Québec abolished mandatory notary tariffs in 1991. Thirty-five years later, no
+  price discovery mechanism has ever existed. Nota is that mechanism — a public calendar where a
+  client posts the date they need an act signed and what they will pay, and the market prices
+  urgency.</p>
+
+  <div class="figs">
+    <div class="fig"><span class="v tnum">$250K</span><span class="k">CAD pre-seed, 12 months of runway</span></div>
+    <div class="fig hi"><span class="v tnum">~21,000</span><span class="k">lines already written, tested and deployed</span></div>
+    <div class="fig"><span class="v tnum">~3,900</span><span class="k">notaries in Québec, each with unsold calendar gaps</span></div>
+    <div class="fig"><span class="v tnum">~$245M</span><span class="k">annual act value in the three launch services</span></div>
+    <div class="fig hi"><span class="v tnum">3.7%</span><span class="k">of addressable volume needed by year three</span></div>
+  </div>
+
+  <div class="meta">
+    <span>Anthony Paquet</span>
+    <span>anthonypaquet1508@gmail.com</span>
+    <span>Version 1.0</span>
+  </div>
+</div>
+
+<!-- ══════════════════ 01 SUMMARY ══════════════════ -->
+<div class="wrap"><hr class="rule"></div>
+<section class="wrap">
+  <div class="shead">
+    <span class="snum">01</span>
+    <div>
+      <h2>What Nota is, and why now</h2>
+      <p class="sub">A two-sided marketplace where the axis of price is the date, not the document.</p>
+    </div>
+  </div>
+
+  <div class="col">
+    <p>A client posts the date they need an <em>acte notarié</em> signed and the amount they offer.
+    Notaries watch a public calendar — the <em>carnet</em> — and pick up the work that fits their
+    schedule. Because every offer is attached to a date, a signature needed tomorrow clears at a
+    multiple of one needed in three weeks. That is the entire mechanism, and nothing in Québec does
+    it today.</p>
+
+    <p>Two things make this fundable now rather than in five years.</p>
+  </div>
+
+  <div class="grid2" style="margin:1.8rem 0">
+    <div class="card">
+      <h4>The product already exists</h4>
+      <p class="small">A pure business-rules core, an HTTP and DynamoDB API, a zero-dependency web
+      app, Stripe payments, notary authentication, an admin console, transactional email, a Cucumber
+      BDD suite and Terraform infrastructure live on AWS in <code>ca-central-1</code>. Built solo.
+      <strong>This raise does not fund a build — it funds distribution and liquidity.</strong></p>
+    </div>
+    <div class="card">
+      <h4>The rails for a remote act are law</h4>
+      <p class="small">Bill 34, in force 24 October 2023, made the <em>acte notarié technologique</em>
+      permanent in Québec. Remote signature is legal — but under art. 46 it is <strong>exceptional</strong>,
+      party-requested and circumstance-justified. That constraint is not an obstacle to route around.
+      It is the wedge.</p>
+    </div>
+  </div>
+
+  <div class="col">
+    <p><strong>The ask.</strong> $250,000 for twelve months, to take the live product from zero to
+    proven liquidity in the Québec City market, restructure monetization onto déontologie-safe
+    footing, and build the compliance layer that makes remote signing routine for the cases where
+    the law already allows it.</p>
+  </div>
+
+  <div class="tw" style="max-width:760px">
+    <table>
+      <thead><tr><th>Horizon</th><th class="n">Acts closed</th><th class="n">GMV</th><th class="n">Net revenue</th></tr></thead>
+      <tbody>
+        <tr><td>Y1 — Québec City, three services</td><td class="n">244</td><td class="n">$257,664</td><td class="n">$25,766</td></tr>
+        <tr><td>Y2 — All Québec, remote layer</td><td class="n">2,800</td><td class="n">$3,220,000</td><td class="n">$322,000</td></tr>
+        <tr><td>Y3 — Widening act catalogue</td><td class="n">11,000</td><td class="n">$15,950,000</td><td class="n">$1,595,000</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="col small">Year 3 represents about <strong>3.7%</strong> of addressable Québec act volume.
+  The plan does not require winning the market. It requires being the place where price is discovered.</p>
+</section>
+
+<!-- ══════════════════ 02 TWO FINDINGS ══════════════════ -->
+<div class="wrap"><hr class="rule"></div>
+<section class="wrap">
+  <div class="shead">
+    <span class="snum">02</span>
+    <div>
+      <h2>Two findings that reshaped this plan</h2>
+      <p class="sub">Written against the statute and the code, not against assumptions. Both came back
+      different from the working hypothesis, and both are load-bearing.</p>
+    </div>
+  </div>
+
+  <div class="col">
+    <h3>Remote signing is already legal — and that is better news than it sounds</h3>
+    <p>The original Phase 2 premise was that clients must appear in person, and that going fully
+    online expands the market a hundredfold. In Québec that premise is half wrong, and the half that
+    is wrong is the half that was going to be expensive.</p>
+    <p>The <em>acte notarié technologique</em> signed by videoconference is permanent law, not a
+    pandemic measure. The infrastructure exists and is sanctioned: a prescribed videoconference
+    channel, the notary's official digital signature, a technological minute. <strong>Nota does not
+    need to lobby a remote act into existence, invent a legal instrument, or wait on a
+    regulator.</strong> That is years and hundreds of thousands of dollars removed from Phase 2.</p>
+    <p>What is true is narrower and more interesting. Under <strong>art. 46</strong> of the
+    <em>Loi sur le notariat</em>, a notary may only <strong>exceptionally</strong> authorize a remote
+    signature. The request must come <strong>from a party</strong>, and the justifying circumstance
+    must be <strong>specific to that party</strong> — distance from an available notary, health or
+    functional limitation, weather, an unforeseen event prejudicing another party. Convenience does
+    not qualify.</p>
+  </div>
+
+  <div class="note brass">
+    <span class="label">The actual barrier</span>
+    <p>It is not the technology, and not the law's silence. <strong>The justification burden and the
+    disciplinary exposure sit entirely on the individual notary</strong>, who therefore defaults to
+    "come in person" — the only option that never generates a complaint.</p>
+  </div>
+
+  <div class="col">
+    <p><strong>That is a product.</strong> Nota captures the party's request in their own words at
+    intake, classifies the qualifying circumstance, collects the supporting evidence, and attaches a
+    timestamped, auditable justification record to the dossier. The notary receives a file that is
+    already defensible. A discretionary judgment call with personal downside becomes a standard,
+    evidenced workflow — and this is worth more to a notary than the marketplace itself.</p>
+  </div>
+
+  <p class="pull">The expansion does not come from making a legal signature possible. It comes from
+  removing geography as a matching constraint.</p>
+
+  <div class="col">
+    <h3>The implemented revenue model is a déontologie risk</h3>
+    <p>The billing layer currently implements a <strong>10% commission</strong> on a completed act,
+    collected against the notary's account. The code flags this itself: a share of a notarial act is
+    fee-sharing the Québec <em>Code de déontologie</em> restricts, and the model needs legal review
+    with the Chambre before launch.</p>
+    <p>That flag is correct. As implemented, the notary receives 90% of their own professional fee
+    and a non-<em>notaire</em> keeps 10% — the textbook shape of prohibited fee-sharing, exposing
+    every notary on the platform to a disciplinary complaint. It is the single largest structural
+    risk in the business and it must be fixed before the first live act.</p>
+    <p><strong>The fix preserves the economics and changes the legal structure entirely: charge the
+    client, not the notary.</strong></p>
+  </div>
+
+  <div class="pair">
+    <div class="pane bad">
+      <span class="tag">Commission</span>
+      <h4>Deducted from the notary's fee</h4>
+      <ul class="flow">
+        <li><span>Client pays</span><span class="amt">650 $</span></li>
+        <li><span>Notary receives</span><span class="amt">585 $ &middot; 90%</span></li>
+        <li><span>Nota keeps, from the honoraires</span><span class="amt">65 $</span></li>
+      </ul>
+      <p class="verdict">Fee-sharing. Every notary on the platform is exposed.</p>
+    </div>
+    <div class="pane good">
+      <span class="tag">Client-side fee</span>
+      <h4>Charged on top, for Nota's own service</h4>
+      <ul class="flow">
+        <li><span>Client pays</span><span class="amt">650 $ + 65 $ = 715 $</span></li>
+        <li><span>Notary receives</span><span class="amt">650 $ &middot; 100%</span></li>
+        <li><span>Nota is paid by the client</span><span class="amt">65 $</span></li>
+      </ul>
+      <p class="verdict">Identical unit economics. No share of any professional fee.</p>
+    </div>
+  </div>
+
+  <div class="col">
+    <p>Nota is paid by the client for work Nota actually performs — sourcing a notary, assembling and
+    validating the dossier, running the transaction. It takes no share of any professional fee. The
+    notary's <em>honoraires</em> arrive whole.</p>
+  </div>
+
+  <div class="note">
+    <span class="label" style="color:var(--muted)">Budgeted</span>
+    <p class="small">$20,000 of this round buys a formal déontologie opinion and structured engagement
+    with the Chambre des notaires before launch. Getting an opinion on file is also a competitive
+    asset: it is the kind of work a well-funded entrant from outside Québec will not know it needs
+    to do.</p>
+  </div>
+</section>
+
+<!-- ══════════════════ 03 THE PROBLEM ══════════════════ -->
+<div class="wrap"><hr class="rule"></div>
+<section class="wrap">
+  <div class="shead">
+    <span class="snum">03</span>
+    <div>
+      <h2>Two sides, both stuck</h2>
+      <p class="sub">Neither can find the other, and neither can price the thing that actually varies.</p>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h4>The client</h4>
+      <ul class="clean small">
+        <li>Price discovery costs a sequence of phone calls during business hours.</li>
+        <li>Published ranges are wide — a will and protection mandate run 700–1,000 $ — and you learn
+        where you land only after you call.</li>
+        <li>Urgency has no price. There is no way to pay to jump a three-week queue, because there is
+        no queue and no market.</li>
+        <li>So the act does not happen. Roughly half of Québec adults have no will; among 18–34
+        year-olds it is about 70%.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>The notary</h4>
+      <ul class="clean small">
+        <li>A hole in the calendar is unrecoverable inventory — it expires like an airline seat.</li>
+        <li>No channel exists to sell short-notice availability. A cancelled Thursday cannot be listed
+        anywhere.</li>
+        <li>Client acquisition is referral and signage.</li>
+        <li>Buying leads is ineffective; sharing fees is prohibited.</li>
+      </ul>
+    </div>
+  </div>
+
+  <p class="pull">A deregulated market with real price dispersion, real supply elasticity and real
+  demand urgency — and no mechanism connecting any of it.</p>
+</section>
+
+<!-- ══════════════════ 04 THE MECHANISM ══════════════════ -->
+<div class="wrap"><hr class="rule"></div>
+<section class="wrap">
+  <div class="shead">
+    <span class="snum">04</span>
+    <div>
+      <h2>The mechanism</h2>
+      <p class="sub">The tier is derived from how many days away the signing date is. It is the axis
+      that makes the calendar mean something.</p>
+    </div>
+  </div>
+
+  <div class="ladder" style="max-width:760px">
+    <div class="rung" style="--t:#7C8EA3;--w:12%;--d:.05s">
+      <span class="tier">standard</span><span class="days">15+ days</span>
+      <span class="track"><span class="bar"></span></span><span class="mult">1.0–1.2&times;</span>
+    </div>
+    <div class="rung" style="--t:#6B87A8;--w:15%;--d:.13s">
+      <span class="tier">rapide</span><span class="days">8–14 days</span>
+      <span class="track"><span class="bar"></span></span><span class="mult">1.2–1.5&times;</span>
+    </div>
+    <div class="rung" style="--t:#A8791F;--w:22%;--d:.21s">
+      <span class="tier">prioritaire</span><span class="days">4–7 days</span>
+      <span class="track"><span class="bar"></span></span><span class="mult">1.6–2.2&times;</span>
+    </div>
+    <div class="rung" style="--t:#B4711C;--w:40%;--d:.29s">
+      <span class="tier">urgence</span><span class="days">2–3 days</span>
+      <span class="track"><span class="bar"></span></span><span class="mult">2.5–4.0&times;</span>
+    </div>
+    <div class="rung" style="--t:#8E4034;--w:100%;--d:.37s">
+      <span class="tier">extreme</span><span class="days">0–1 day</span>
+      <span class="track"><span class="bar"></span></span><span class="mult">4.0–10.0&times;</span>
+    </div>
+  </div>
+  <p class="small" style="max-width:760px">Bar length is the tier's maximum premium against the 10&times; ceiling.</p>
+
+  <div class="col">
+    <h3>Guardrails</h3>
+    <p>Offers are floored at a market-researched <em>prix de départ</em> per service and hard-capped
+    at ten times it, so the market is a real auction rather than a race to the bottom or a panic tax.
+    Both the browser and the server load the <em>same</em> rules module, so the price a client sees
+    and the price the server enforces cannot drift. Anonymity is default-on and enforced server-side,
+    not merely in the interface.</p>
+
+    <h3>Three services, chosen for a bounded intake</h3>
+    <p>Each launch service has a short document checklist a layperson can complete alone, in one
+    sitting, without a professional pre-consult.</p>
+  </div>
+
+  <div class="tw" style="max-width:820px">
+    <table>
+      <thead><tr><th>Service</th><th class="n">Prix de départ</th><th>Why it qualifies</th></tr></thead>
+      <tbody>
+        <tr><td>Testament et mandat de protection</td><td class="n">650 $</td><td>Identity, asset list, named parties. No third party involved.</td></tr>
+        <tr><td>Procuration</td><td class="n">295 $</td><td>Identity, mandatary, scope. No third party involved.</td></tr>
+        <tr><td>Refinancement hypothécaire</td><td class="n">2 000 $</td><td>Highest value and complexity of the three; priced accordingly.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="col small"><em>Acte de vente</em> was deliberately excluded: it requires coordinated
+  document transfer between broker, surveyor and lender before the notary can begin. That is a
+  workflow product, not a web form. Discipline about what not to launch is why the marketplace can be
+  self-serve on day one. Each service also carries a dynamic base price built from criteria collected
+  during intake — a couple's mirror wills add 450 $, a protective trust for a dependent heir adds
+  600 $ — so the client gets an accurate price and the notary gets a pre-qualified file with a
+  complexity weighting already computed.</p>
+</section>
+
+<!-- ══════════════════ 05 WHAT'S BUILT ══════════════════ -->
+<div class="wrap"><hr class="rule"></div>
+<section class="wrap">
+  <div class="shead">
+    <span class="snum">05</span>
+    <div>
+      <h2>This raise does not fund a build</h2>
+      <p class="sub">The platform is written, tested and deployed. Roughly 21,000 lines, built solo.</p>
+    </div>
+  </div>
+
+  <div class="grid4">
+    <div class="card"><h4>Domain core</h4><p class="small">Prices, tiers, cap, validation, dynamic pricing. Zero dependencies. Asserted by tests.</p></div>
+    <div class="card"><h4>API</h4><p class="small">Lambda and single-table DynamoDB behind hexagonal ports and adapters. The server revalidates every offer.</p></div>
+    <div class="card"><h4>Web app</h4><p class="small">Public carnet, offer flow, dossier intake, Québec map, notary console. Zero runtime dependencies.</p></div>
+    <div class="card"><h4>Payments</h4><p class="small">Stripe — card authorized at post, captured on completion, connected accounts, reconciliation.</p></div>
+    <div class="card"><h4>Notary side</h4><p class="small">Authentication, sign-up gate, lead-delivery preferences, ICS calendar feed, earnings roll-up.</p></div>
+    <div class="card"><h4>Operations</h4><p class="small">Admin console, transactional email with scheduled reminders, analytics with drift healing.</p></div>
+    <div class="card"><h4>Infrastructure</h4><p class="small">Terraform: S3, CloudFront, IAM-authed Lambda, DynamoDB — live in <code>ca-central-1</code>. Idle cost near zero.</p></div>
+    <div class="card"><h4>Quality</h4><p class="small">Unit, DOM and Cucumber BDD suites. CI on every push. Seven architecture decision records.</p></div>
+  </div>
+
+  <div class="note" style="margin-top:1.8rem">
+    <span class="label" style="color:var(--muted)">Why the architecture is a commercial fact</span>
+    <p class="small">The domain core depends on nothing; the API and the web app adapt it to a
+    transport and a user interface. Business rules exist in exactly one place. Adding a fourth
+    service, a new pricing criterion or a new jurisdiction is a data change in the domain package,
+    not a rewrite — <strong>Phase 2 and Phase 3 are cheap because Phase 1 was built correctly.</strong>
+    Law 25 compliance is designed in rather than bolted on: Canadian data residency, anonymity
+    default-on, consent at the point of collection.</p>
+  </div>
+</section>
+
+<!-- ══════════════════ 06 MARKET ══════════════════ -->
+<div class="wrap"><hr class="rule"></div>
+<section class="wrap">
+  <div class="shead">
+    <span class="snum">06</span>
+    <div>
+      <h2>Market, bottom up</h2>
+      <p class="sub">Québec only. Volumes are estimates, offered as scale rather than precision.</p>
+    </div>
+  </div>
+
+  <div class="tw" style="max-width:860px">
+    <table>
+      <thead><tr><th>Service</th><th class="n">Annual volume</th><th class="n">Avg act value</th><th class="n">Annual act value</th></tr></thead>
+      <tbody>
+        <tr><td>Wills and protection mandates</td><td class="n">~200,000</td><td class="n">650 $</td><td class="n">~$130M</td></tr>
+        <tr><td>Refinancing (new hypothec)</td><td class="n">~50,000</td><td class="n">2 000 $</td><td class="n">~$100M</td></tr>
+        <tr><td>Procurations</td><td class="n">~50,000</td><td class="n">295 $</td><td class="n">~$15M</td></tr>
+        <tr class="total"><td>Addressable market, three services</td><td class="n">~300,000</td><td class="n">—</td><td class="n">~$245M</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="col">
+    <p>The profession as a whole — roughly 3,900 practising notaries — bills on the order of
+    <strong>$1.1–1.2 billion</strong> a year in professional fees. Wills volume is anchored on the
+    Chambre's <em>Registre des dispositions testamentaires</em>, which recorded 215,576 registrations
+    in 2017–18 and now holds over six million wills. Refinancing volume is inferred from the Canadian
+    renewal cycle.</p>
+
+    <h3>Beyond the three services</h3>
+    <p>Residential closings alone run about <strong>90,000 transactions a year</strong> in Québec at
+    1,500–3,500 $ each — a single category larger than the entire current addressable market. Beyond
+    Québec sits the civil-law <em>notariat</em>: the International Union of Notaries spans roughly
+    ninety member states, including France, Belgium, Switzerland and most of Latin America, all
+    running the same instrument Nota is built around. That is where a hundredfold claim actually
+    lives — not in avoiding a car trip.</p>
+  </div>
+
+  <h3 class="col">Why now</h3>
+  <ol class="steps" style="max-width:820px">
+    <li><div><b>Remote acts became law</b><span class="small">Bill 34 made the technological notarial act permanent in October 2023. The rails exist and are sanctioned. Nota is not betting on legislation.</span></div></li>
+    <li><div><b>Thirty-five years of blind pricing</b><span class="small">Fees free since 1991 with no discovery mechanism ever built. The gap does not close on its own — someone has to build the venue.</span></div></li>
+    <li><div><b>The renewal wall</b><span class="small">Roughly 1.2 million Canadian fixed-rate mortgages renewing in 2025, driving volume straight into the highest-value service on the platform.</span></div></li>
+    <li><div><b>The wealth transfer</b><span class="small">The largest intergenerational transfer in Canadian history, against a population where half the adults have no will.</span></div></li>
+    <li><div><b>Access-to-justice pressure</b><span class="small">Notary coverage is uneven across the regions — and distance from an available notary is a statutorily recognised ground for signing remotely. The exception categories map onto the under-served.</span></div></li>
+  </ol>
+</section>
+
+<!-- ══════════════════ 07 PHASE 1 ══════════════════ -->
+<div class="wrap"><hr class="rule"></div>
+<section class="wrap">
+  <div class="shead">
+    <span class="snum">07</span>
+    <div>
+      <h2>Phase 1 — the price of time</h2>
+      <p class="sub">Prove that a time-priced notarial marketplace clears, in one city, with real money.</p>
+    </div>
+  </div>
+
+  <div class="col">
+    <p><strong>Québec City.</strong> About 850,000 people and roughly 400 notaries. Chosen over
+    Montréal deliberately: small enough that a solo founder can meet a material share of local supply
+    in person, dense enough to reach liquidity. Supply joins free, with no card — the only thing a
+    notary risks by signing up is nothing.</p>
+  </div>
+
+  <div class="tw" style="max-width:900px">
+    <table>
+      <thead><tr><th>Months</th><th>Focus</th><th>Exit criteria</th></tr></thead>
+      <tbody>
+        <tr><td class="tnum">1–2</td><td><strong>Déontologie restructure.</strong> Client-side fee, billing refactor, written opinion, Chambre engagement.</td><td>Opinion on file. No fee-sharing exposure.</td></tr>
+        <tr><td class="tnum">1–3</td><td><strong>Supply.</strong> Thirty Québec City notaries recruited in person. Free to join, free to browse.</td><td>25+ notaries with preferences configured.</td></tr>
+        <tr><td class="tnum">3–6</td><td><strong>Demand.</strong> Carnet SEO, mortgage-broker and financial-planner referral partnerships, urgency-targeted paid search.</td><td>25+ bids/month, fill rate above 45%.</td></tr>
+        <tr><td class="tnum">6–12</td><td><strong>Liquidity.</strong> Tighten time-to-retain, publish the urgency curve, extend to Lévis and Saguenay.</td><td>90+ bids/month, fill rate above 60%.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note brass">
+    <span class="label">The one metric that matters</span>
+    <p><strong>Fill rate</strong> — the share of posted bids a notary retains. Below roughly 40% the
+    market is not clearing, and the answer is more supply or better floors. Above roughly 60% the
+    flywheel is real and the constraint moves to demand. Everything else is secondary.</p>
+  </div>
+
+  <p class="pull">The asset Phase 1 produces is not revenue. It is the only dataset of realised price
+  × days-to-date × act type in Québec — and nobody can reconstruct it without running the same
+  marketplace for the same year.</p>
+</section>
+
+<!-- ══════════════════ 08 PHASE 2 ══════════════════ -->
+<div class="wrap"><hr class="rule"></div>
+<section class="wrap">
+  <div class="shead">
+    <span class="snum">08</span>
+    <div>
+      <h2>Phase 2 — the act without the trip</h2>
+      <p class="sub">Removing geography as a matching constraint.</p>
+    </div>
+  </div>
+
+  <div class="pair">
+    <div class="card">
+      <span class="eyebrow" style="color:var(--muted)">Today</span>
+      <p style="font-family:var(--display);font-size:1.2rem;line-height:1.4;margin:0">A client in Québec
+      City is matched against <strong>~400</strong> notaries.</p>
+    </div>
+    <div class="card" style="border-color:color-mix(in srgb,var(--brass) 40%,transparent)">
+      <span class="eyebrow">With remote matching</span>
+      <p style="font-family:var(--display);font-size:1.2rem;line-height:1.4;margin:0">The same client is
+      matched against <strong>~3,900</strong> — and a notary in Rimouski sells an empty Thursday to a
+      client in Gatineau.</p>
+    </div>
+  </div>
+
+  <div class="col">
+    <p>The market does not get ten times bigger because the client saves a car trip. It gets ten
+    times more liquid because supply and demand stop being partitioned by postal code. In a
+    marketplace, liquidity <em>is</em> the product.</p>
+  </div>
+
+  <ol class="steps" style="max-width:860px">
+    <li><div><b>The exception layer — the wedge</b><span class="small">Capture the party's request at intake, classify the qualifying circumstance, collect the evidence, attach a timestamped audit record to the dossier. The notary receives a file that is already defensible. This makes Nota valuable to a notary independent of the marketplace.</span></div></li>
+    <li><div><b>Dossier automation</b><span class="small">Presigned document upload, automated identity and completeness checks, structured hand-off into the notary's existing tooling. The dossier arrives complete or it does not arrive — the difference between selling a lead and selling a file.</span></div></li>
+    <li><div><b>Signing rails</b><span class="small">Integration with the sanctioned videoconference channel and the notary's official digital signature, so the act is executed and the technological minute closed without leaving the workflow.</span></div></li>
+    <li><div><b>Province-wide matching</b><span class="small">Once the above holds, the carnet stops being a Québec City calendar and becomes a Québec calendar.</span></div></li>
+    <li><div><b>Cross-border corridor</b><span class="small">The statute contemplates a signature received by a notary qualified in a UINL member state, within that state's territory — a legal path to serving Québécois abroad, and the first step onto the civil-law world's rails.</span></div></li>
+  </ol>
+
+  <div class="note good">
+    <span class="label">The honest regulatory position</span>
+    <p>Phase 2 is deliberately built to be <strong>fully valuable under the current statute</strong>.
+    The art. 46 exception categories are large, real, and systematically under-served precisely
+    because nobody has removed the notary's justification burden. Bill 34's pullback remains contested
+    inside the profession, and every comparable jurisdiction has moved toward liberalization. If
+    art. 46 loosens, Nota is the only operator already holding the compliance layer, the supply
+    network and the price data. <strong>That is upside, not the plan. The plan works if nothing
+    changes.</strong></p>
+  </div>
+</section>
+
+<!-- ══════════════════ 09 BUSINESS MODEL ══════════════════ -->
+<div class="wrap"><hr class="rule"></div>
+<section class="wrap">
+  <div class="shead">
+    <span class="snum">09</span>
+    <div>
+      <h2>Business model and unit economics</h2>
+      <p class="sub">A client-side service fee of 10% of the act value, charged on top of the notary's
+      fee and collected only on a completed act.</p>
+    </div>
+  </div>
+
+  <div class="col">
+    <p>The card is authorized when the offer is posted and captured on completion, so a posted bid is
+    a real commitment and the notary is never chasing payment. Cost of revenue is payment processing
+    plus effectively nothing — the infrastructure is serverless and scale-to-zero.</p>
+  </div>
+
+  <div class="tw" style="max-width:700px">
+    <table>
+      <thead><tr><th></th><th class="n">Y1</th><th class="n">Y2</th><th class="n">Y3</th></tr></thead>
+      <tbody>
+        <tr><td>Average realised act value</td><td class="n">1 056 $</td><td class="n">1 150 $</td><td class="n">1 450 $</td></tr>
+        <tr><td>Net revenue per act</td><td class="n">106 $</td><td class="n">115 $</td><td class="n">145 $</td></tr>
+        <tr><td>Gross profit per act</td><td class="n">94 $</td><td class="n">104 $</td><td class="n">133 $</td></tr>
+        <tr><td>Blended client CAC</td><td class="n">164 $</td><td class="n">55 $</td><td class="n">40 $</td></tr>
+        <tr class="total"><td>Contribution per act</td><td class="n neg">(70) $</td><td class="n pos">49 $</td><td class="n pos">93 $</td></tr>
+        <tr><td>Gross margin</td><td class="n">89%</td><td class="n">90%</td><td class="n">91%</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="col">
+    <p>Year 1 CAC exceeds revenue per act. That is what a year-one marketplace looks like, and the
+    model says so rather than assuming it away. On the supply side a notary costs about
+    <strong>500 $</strong> to recruit and returns roughly <strong>2,071 $</strong> a year in gross
+    profit — LTV to CAC of about <strong>12&times;</strong> over a three-year tenure, payback inside
+    five acts.</p>
+
+    <h3>The repeat-purchase problem, stated plainly</h3>
+    <p>A client buys a will roughly once a decade. Client retention is not the flywheel and this plan
+    does not pretend otherwise. Three things carry the business instead.</p>
+  </div>
+
+  <div class="grid3">
+    <div class="card"><h4>Supply is the durable asset</h4><p class="small">Notaries are recurring, not one-time. Every notary recruited compounds; the network is the moat.</p></div>
+    <div class="card"><h4>Organic demand capture</h4><p class="small">The public carnet is a continuously refreshed, hyper-local corpus of real posted prices — structurally the best possible answer to "combien coûte un testament notarié à Québec ?". No competitor can index what they do not transact.</p></div>
+    <div class="card"><h4>Zero-CAC referral</h4><p class="small">Mortgage brokers, financial planners, benefit providers and estate advisors all sit upstream of the intent moment and all need a notary to hand a client to.</p></div>
+  </div>
+
+  <p class="col small" style="margin-top:1.4rem">Refinancing, unlike wills, genuinely recurs on the
+  renewal cycle — a second reason it earns its place as the high-value service. Two expansion levers
+  sit behind the core fee: a flat dossier-preparation fee of 99–149 $, unambiguously Nota's own
+  service, which lifts revenue per act by about half on the low-value services; and notary practice
+  tooling sold as a flat subscription, which is a software fee rather than a deduction from an act.</p>
+</section>
+
+<!-- ══════════════════ 10 COMPETITION ══════════════════ -->
+<div class="wrap"><hr class="rule"></div>
+<section class="wrap">
+  <div class="shead">
+    <span class="snum">10</span>
+    <div>
+      <h2>Competition</h2>
+      <p class="sub">Every participant prices a document. Nota prices a date.</p>
+    </div>
+  </div>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th>Who</th><th>What they do</th><th>Where Nota differs</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Notairo</strong></td><td>Montréal legal-tech; digital preparation of real-estate closings, final signature in person.</td><td>Closest analogue. Workflow software for one act type — fixed pricing, no marketplace, no time-based discovery.</td></tr>
+        <tr><td><strong>Nolos</strong></td><td>Online notarized wills, ~21 service points in Québec.</td><td>A distribution network with fixed prices — a chain, not a market. No urgency pricing, no notary-side liquidity.</td></tr>
+        <tr><td><strong>Neolegal / ScriptaLegal</strong></td><td>Online legal services and document generation with notarial add-ons.</td><td>Document-first and price-fixed. They do not sell notary availability.</td></tr>
+        <tr><td><strong>Traditional practice</strong></td><td>Phone, referral, signage.</td><td>The real competitor. Nota wins by pricing time, which the phone cannot do.</td></tr>
+        <tr><td><strong>US remote-notarization platforms</strong></td><td>High-volume remote online notarization for common-law notaries public.</td><td>Structurally cannot enter. A Québec <em>notaire</em> is a civil-law public officer, and the Code de déontologie makes their commission model illegal here.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="col">
+    <h3>Defensibility, honestly ranked</h3>
+    <ul class="clean">
+      <li><strong>The urgency price curve</strong> — requires running the marketplace to obtain.</li>
+      <li><strong>The notary network</strong> — slow and in-person to build.</li>
+      <li><strong>The déontologie-safe structure</strong> plus a written opinion — an outside entrant will not know to build it.</li>
+      <li><strong>The exception-layer compliance product</strong> — requires understanding art. 46 well enough to productize it.</li>
+    </ul>
+    <p class="small">None of these are patents. All of them are years.</p>
+  </div>
+</section>
+
+<!-- ══════════════════ 11 FINANCIALS ══════════════════ -->
+<div class="wrap"><hr class="rule"></div>
+<section class="wrap">
+  <div class="shead">
+    <span class="snum">11</span>
+    <div>
+      <h2>Three-year projection</h2>
+      <p class="sub">Year 1 is a proof-of-liquidity year. The model is driver-based and every figure
+      here recalculates from the assumptions sheet.</p>
+    </div>
+  </div>
+
+  <div class="tw" style="max-width:860px">
+    <table>
+      <thead><tr><th></th><th class="n">Y1 2026-27</th><th class="n">Y2 2027-28</th><th class="n">Y3 2028-29</th></tr></thead>
+      <tbody>
+        <tr><td>Notaries on platform</td><td class="n">30</td><td class="n">220</td><td class="n">700</td></tr>
+        <tr><td>Bids posted</td><td class="n">434</td><td class="n">4,912</td><td class="n">17,742</td></tr>
+        <tr><td>Fill rate</td><td class="n">56%</td><td class="n">57%</td><td class="n">62%</td></tr>
+        <tr><td>Acts completed</td><td class="n">244</td><td class="n">2,800</td><td class="n">11,000</td></tr>
+        <tr><td>Average realised act value</td><td class="n">1 056 $</td><td class="n">1 150 $</td><td class="n">1 450 $</td></tr>
+        <tr class="total"><td>GMV</td><td class="n">$257,664</td><td class="n">$3,220,000</td><td class="n">$15,950,000</td></tr>
+        <tr class="total"><td>Net revenue</td><td class="n">$25,766</td><td class="n">$322,000</td><td class="n">$1,595,000</td></tr>
+        <tr><td>Gross profit</td><td class="n">$23,041</td><td class="n">$289,940</td><td class="n">$1,459,150</td></tr>
+        <tr><td>Operating expense</td><td class="n">($250,000)</td><td class="n">($720,000)</td><td class="n">($1,850,000)</td></tr>
+        <tr class="total"><td>Net income</td><td class="n neg">($226,959)</td><td class="n neg">($430,060)</td><td class="n neg">($390,850)</td></tr>
+        <tr><td>Headcount (FTE)</td><td class="n">1 + contract</td><td class="n">4</td><td class="n">10</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="col small">Year 3 is 3.7% of addressable act volume. Cumulative capital required through
+  Year 3 is about <strong>$1.05M</strong>. <strong>Series A trigger:</strong> exiting Year 2 at a
+  $300–500K ARR run-rate with province-wide liquidity proven and the exception layer in production,
+  raising against the full act catalogue and the first cross-border corridor.</p>
+
+  <h3 class="col">Use of funds — $250,000 over twelve months</h3>
+  <div class="tw" style="max-width:820px">
+    <table>
+      <thead><tr><th>Line</th><th class="n">Amount</th><th>Note</th></tr></thead>
+      <tbody>
+        <tr><td>Founder salary</td><td class="n">$96,000</td><td>8,000 $/month. Below market, deliberately — this raise buys focus.</td></tr>
+        <tr><td>Client acquisition</td><td class="n">$40,000</td><td>Paid search, content, partnership build-out.</td></tr>
+        <tr><td>Notary advisor</td><td class="n">$25,000</td><td>Part-time practising notary. Credibility with supply, correctness on the exception layer.</td></tr>
+        <tr><td>Design and front-end contract</td><td class="n">$25,000</td><td>About three months part-time — the one place outside help beats doing it solo.</td></tr>
+        <tr><td>Legal</td><td class="n">$20,000</td><td>Déontologie opinion, Chambre engagement, incorporation, terms, Law 25 program.</td></tr>
+        <tr><td>Contingency</td><td class="n">$17,000</td><td>About 7%.</td></tr>
+        <tr><td>Notary acquisition</td><td class="n">$15,000</td><td>Field sales, congrès, travel.</td></tr>
+        <tr><td>Infrastructure and tooling</td><td class="n">$12,000</td><td>Serverless keeps this small.</td></tr>
+        <tr class="total"><td>Total</td><td class="n">$250,000</td><td>About 20,800 $/month average burn.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h4>Non-dilutive stacking</h4>
+      <p class="small">As a Québec CCPC with a technical founder doing eligible development, refundable
+      SR&amp;ED and Québec R&amp;D wage credits can return a meaningful share of the salary line.
+      Modelled at zero and treated as runway extension of two to three months, not budgeted revenue.</p>
+    </div>
+    <div class="card">
+      <h4>The follow-on is designed in</h4>
+      <p class="small">Investissement Québec's Fonds Impulsion invests $250K–1M at pre-seed and seed
+      but requires a <strong>lead investor and a referral</strong> from a recognised accelerator or
+      Anges Québec. Securing an angel lead in this round and an accelerator relationship is therefore
+      not optional — it is the bridge to the seed.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════ 12 WHAT HAS TO BE TRUE ══════════════════ -->
+<div class="wrap"><hr class="rule"></div>
+<section class="wrap">
+  <div class="shead">
+    <span class="snum">12</span>
+    <div>
+      <h2>What has to be true</h2>
+      <p class="sub">Three assumptions carry the model. Each has a named falsification test, and all
+      three resolve inside this round.</p>
+    </div>
+  </div>
+
+  <div class="grid3">
+    <div class="card">
+      <span class="eyebrow">Resolves month 6</span>
+      <h4>Clients pay a premium for a date</h4>
+      <p class="small">Test: the realised premium distribution by tier. If <code>urgence</code> and
+      <code>extreme</code> bids do not clear above <code>standard</code>, the core thesis is wrong —
+      and that is visible for well under $100,000.</p>
+    </div>
+    <div class="card">
+      <span class="eyebrow">Resolves month 5</span>
+      <h4>Notaries sell short-notice availability</h4>
+      <p class="small">Test: fill rate on the <code>prioritaire</code> and <code>urgence</code> tiers
+      specifically, not blended.</p>
+    </div>
+    <div class="card">
+      <span class="eyebrow">Resolves month 2</span>
+      <h4>The client-side fee is déontologie-safe</h4>
+      <p class="small">Test: a written legal opinion from Québec counsel, with structured engagement
+      with the Chambre des notaires.</p>
+    </div>
+  </div>
+
+  <p class="pull">$250,000 is enough to confirm or refute the entire thesis, and not a dollar is spent
+  building something that has not been validated.</p>
+</section>
+
+<!-- ══════════════════ 13 RISKS ══════════════════ -->
+<div class="wrap"><hr class="rule"></div>
+<section class="wrap">
+  <div class="shead">
+    <span class="snum">13</span>
+    <div>
+      <h2>Risk register</h2>
+      <p class="sub">Stated at full strength, because an investor will find each of these anyway.</p>
+    </div>
+  </div>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th>Risk</th><th>Severity</th><th>Mitigation</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Fee-sharing under the Code de déontologie</strong></td><td><span style="color:var(--oxide);font-weight:650">Critical</span></td><td>Restructure to a client-side service fee before launch. Written opinion budgeted, month 2. The notary receives 100% of their honoraires.</td></tr>
+        <tr><td>Art. 46 keeps remote signing exceptional</td><td>High</td><td>Phase 2 is designed to be fully valuable under the current statute. The exception categories are large and under-served. Liberalization is upside, not plan.</td></tr>
+        <tr><td>Cold-start liquidity fails</td><td>High</td><td>Supply is free and frictionless. One dense city first. Fill rate monitored weekly with an explicit floor-adjustment lever.</td></tr>
+        <tr><td>Low client repeat rate</td><td>Medium-high</td><td>Supply-side moat, compounding organic capture, zero-CAC referral channels, recurring refinancing.</td></tr>
+        <tr><td>Chambre opposition</td><td>Medium-high</td><td>Early, written, partnership-framed engagement. Nota never touches the act or shares a fee — it is demand generation for the profession.</td></tr>
+        <tr><td>A funded competitor copies the mechanism</td><td>Medium</td><td>The price curve requires running the market to obtain; the notary network is slow and in-person; the déontologie structure is non-obvious from outside Québec.</td></tr>
+        <tr><td>Solo-founder key-person risk</td><td>Medium</td><td>Architecture decision records, BDD specs as executable specification, second engineer early in Year 2.</td></tr>
+        <tr><td>Race to the bottom on price</td><td>Low</td><td>Hard floors per service and a 10&times; cap, enforced server-side in the domain core.</td></tr>
+        <tr><td>Law 25 / privacy incident</td><td>Low-medium</td><td>Canadian data residency, anonymity default-on, consent at collection, right-to-erasure on the roadmap.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ══════════════════ 14 TEAM + ASK ══════════════════ -->
+<div class="wrap"><hr class="rule"></div>
+<section class="wrap">
+  <div class="shead">
+    <span class="snum">14</span>
+    <div>
+      <h2>Team, and the ask</h2>
+      <p class="sub">$250,000 CAD pre-seed. Twelve months. SAFE or convertible note, with an angel lead.</p>
+    </div>
+  </div>
+
+  <div class="col">
+    <h3>Anthony Paquet, founder</h3>
+    <p>The case is the repository. Working solo: a hexagonally architected monorepo with a
+    dependency-free domain core; an HTTP and DynamoDB API on an IAM-authed Lambda behind CloudFront;
+    a zero-runtime-dependency web app; Stripe payments with connected accounts and reconciliation;
+    notary and admin authentication; transactional email with scheduled reminders; an ICS feed;
+    analytics with drift healing; Terraform infrastructure live in <code>ca-central-1</code>; a
+    Cucumber BDD suite; CI running unit, DOM, BDD and infrastructure validation on every push; Law 25
+    compliance designed in; and seven architecture decision records explaining the reasoning.</p>
+
+    <p><strong>Why this de-risks the round.</strong> Most pre-seed capital funds the possibility that
+    a team can build the thing. Here the thing is built, deployed and tested. The capital buys twelve
+    months of undivided attention on the parts that cannot be solved by writing code — meeting
+    notaries, getting the legal structure right, and finding out whether the market clears.</p>
+
+    <p><strong>Hiring.</strong> Year 1: founder, contract design, and a part-time practising notary
+    advisor. Year 2: a notary-relations lead — the bottleneck is in-person supply recruitment, not
+    engineering — a second engineer, and a growth hire.</p>
+  </div>
+
+  <h3 class="col">What the money buys</h3>
+  <div class="grid4">
+    <div class="card"><h4>Legal footing</h4><p class="small">A déontologie-clean structure with a written opinion on file — the largest risk in the business, retired first.</p></div>
+    <div class="card"><h4>A working market</h4><p class="small">Thirty notaries and functioning two-sided liquidity in Québec City.</p></div>
+    <div class="card"><h4>Proprietary data</h4><p class="small">244 completed acts and the first urgency price curve for the Québec notarial market. It does not otherwise exist.</p></div>
+    <div class="card"><h4>Phase 2 in reach</h4><p class="small">The art. 46 compliance layer shipped, making remote signing routine where the law already allows it.</p></div>
+  </div>
+
+  <p class="pull" style="margin-top:2.6rem">Québec deregulated notary fees in 1991 and never built a
+  market. The market is built. This funds finding out whether it clears.</p>
+</section>
+
+<!-- ══════════════════ FOOTER ══════════════════ -->
+<footer class="wrap">
+  <h3>Sources</h3>
+  <div class="srcs">
+    <a href="https://www.cnq.org/en/your-notary/a-digital-professional/signing-a-technology-based-notarial-act-remotely/">Chambre des notaires du Québec — signing a technology-based notarial act remotely</a>
+    <a href="https://www.cnq.org/la-chambre-et-votre-protection/actualites-et-salle-de-presse/acte-a-distance-avec-un-notaire-les-choses-a-savoir/">Chambre des notaires — the remote act under the new law</a>
+    <a href="https://www.cnq.org/wp-content/uploads/2023/10/978677-2023_10_27_refonte_normes_acte_techno_v1final.pdf">Normes concernant l'acte notarié en minute sur un support technologique</a>
+    <a href="https://gascon.ca/une-nouvelle-loi-qui-fait-jaser-la-loi-visant-a-moderniser-le-notariat-et-a-favoriser-lacces-a-la-justice/">Gascon et associés — analysis of Bill 34, Loi visant à moderniser le notariat</a>
+    <a href="https://www.legisquebec.gouv.qc.ca/fr/document/lc/N-3">Légis Québec — Loi sur le notariat, RLRQ c. N-3</a>
+    <a href="https://jurivision.ca/lacte-notarie-electronique-a-distance/">Jurivision — L'acte notarié électronique à distance</a>
+    <a href="https://www.cnq.org/en/the-chambre-and-your-protection/the-chambres-services/search-the-registers/">Chambre des notaires — Registre des dispositions testamentaires</a>
+    <a href="https://notairo.com/en/blogs/news/frais-de-notaire-au-quebec-en-2026-a-quoi-s-attendre">Notairo — notary fees in Québec, 2026</a>
+    <a href="https://notairo.com/en/blogs/presse-et-medias/notairo-lance-la-premiere-plateforme-quebecoise-pour-preparer-les-transactions-immobilieres-en-ligne">Notairo — Québec's first digital real-estate closing platform</a>
+    <a href="https://nolos.ca/en">Nolos — online notarized wills</a>
+    <a href="https://apciq.ca/en/quebec-city-and-montreal-real-estate-markets-continue-to-trend-upward/">APCIQ — Québec residential market statistics</a>
+    <a href="https://www.cmhc-schl.gc.ca/professionals/housing-markets-data-and-research/housing-research/research-reports/housing-finance/residential-mortgage-industry-report">CMHC — Residential Mortgage Industry Report</a>
+    <a href="https://conseiller.ca/nouvelles/heritage-la-moitie-des-canadiens-nont-toujours-pas-de-testament/">Conseiller — half of Canadians still have no will</a>
+    <a href="https://www.investquebec.com/fr/salle-de-presse/le-gouvernement-du-quebec-investit-dans-les-entreprises-technologiques-innovantes">Investissement Québec — Fonds Impulsion</a>
+  </div>
+  <p style="margin-top:1.8rem;font-size:.78rem;color:var(--faint)">Market volumes are estimates derived
+  from the sources above, offered as scale rather than precision. Financial projections are
+  model outputs, not forecasts. Nota, August 2026.</p>
+</footer>
+
+</main>
