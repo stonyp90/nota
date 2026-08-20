@@ -1173,21 +1173,6 @@
     p.services.forEach(function (s) {
       rows.appendChild(pulseRow(s, state.filters.service === s.id, busiest));
     });
-
-    // Proof the marketplace clears — the one number the calendar itself cannot
-    // show at a glance.
-    var foot = $('pulse-foot');
-    if (foot) {
-      var ouvertes = Math.max(0, p.total - p.retenues);
-      if (p.total === 0) {
-        foot.textContent = 'Aucune demande ce mois-ci. Proposez la vôtre, les notaires de Québec la verront.';
-      } else if (ouvertes === 0) {
-        foot.textContent = 'Toutes les demandes de ce mois sont retenues. Proposez la vôtre pour une date libre.';
-      } else {
-        foot.textContent = plural(ouvertes, 'demande') + ' encore ouverte'
-          + (ouvertes === 1 ? '' : 's') + ' ce mois-ci. Comparez les montants, puis proposez le vôtre.';
-      }
-    }
   }
 
 
@@ -2817,7 +2802,11 @@
         top.appendChild(svcIcon(it.serviceId, 12) || el('span', 'nc-week-chip-dot'));
         top.appendChild(el('span', 'nc-week-chip-name', it.nomCourt));
         chip.appendChild(top);
-        chip.appendChild(el('span', 'nc-week-chip-amt', D.money(it.montant)));
+        var amt = el('span', 'nc-week-chip-amt', D.money(it.montant));
+        // The modal's five columns swap to the calendar's compact form
+        // (data-compact) — the exact amount stays in the DOM and the tooltip.
+        amt.dataset.compact = compactMoney(it.montant);
+        chip.appendChild(amt);
         if (it.retenue) chip.appendChild(el('span', 'nc-week-chip-check', '✓'));
         cols[it.day].appendChild(chip);
         return chip;

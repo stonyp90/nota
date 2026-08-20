@@ -540,9 +540,10 @@ a:hover { text-decoration: underline; }
    heading its opening capital without touching the month. */
 .pulse-month { font-size: 12px; font-weight: 600; color: var(--ink-muted); }
 .pulse-month::first-letter { text-transform: uppercase; }
-/* Rows pack together at the top — spreading them across the hero's full height
-   (space-between) made the gaps grow with every line the hero copy gains. */
-.pulse-rows { display: grid; gap: 4px; margin-top: 6px; align-content: start; }
+/* Rows fill the column so BOTH hero sides end on the same line — but the
+   spread is capped, so the gaps can never balloon when the copy column grows
+   tall (the failure mode that once pushed rows 80px apart). */
+.pulse-rows { display: grid; gap: var(--space-2); margin-top: var(--space-3); flex: 1; align-content: space-between; max-height: 380px; }
 /* The filter button takes the width; the book button sits at its right edge. */
 .pulse-item { display: flex; align-items: center; gap: 2px; }
 /* Grid and flex items default to min-width:auto, so .pulse-item refused to shrink
@@ -597,7 +598,6 @@ a:hover { text-decoration: underline; }
   background: var(--surface-inset); overflow: hidden; margin-left: 12px;
 }
 .pulse-bar > span { display: block; height: 100%; border-radius: inherit; min-width: 2px; }
-.pulse-foot { margin: 10px 0 0; font-size: 12px; line-height: 1.45; color: var(--ink-muted); }
 
 /* One column below 900px: the aside stacks under the copy, still chromeless —
    separated by space alone, and with roomier rows for touch. */
@@ -1423,13 +1423,26 @@ dialog::backdrop { background: var(--backdrop); }
   .nc-week-total strong.is-tick, .nc-week-delta.is-live, .nc-week-day.is-hit { animation: none; }
 }
 /* In the welcome dialog: sits under both views, left-aligned against the
-   dialog's centred text. Modal columns are narrow, so the dot + amount say it
-   all and the tooltip keeps the act's name. */
-.nc-week--onb { margin-top: 18px; text-align: left; }
+   dialog's centred text. Modal columns are narrow, so the glyph + amount say it
+   all and the tooltip keeps the act's name. The vignette is a container so the
+   chips can re-lay by the DIALOG's width, not the viewport's. */
+.nc-week--onb { margin-top: 18px; text-align: left; container: ncweek / inline-size; }
 .nc-week--onb .nc-week-chip-name { display: none; }
-/* Nameless chips read as one line: dot + amount, on a shorter row. */
-.nc-week--onb .nc-week-chip { flex-direction: row; align-items: center; gap: 7px; height: 38px; }
+/* Nameless chips read as one line: glyph + amount, on a shorter row. */
+.nc-week--onb .nc-week-chip { flex-direction: row; align-items: center; gap: 7px; height: 38px; padding: 0 8px; overflow: hidden; }
 .nc-week--onb .nc-week-slot { height: 38px; }
+/* Five columns in a ≤440px modal cannot carry "2 860 $" beside a glyph: the
+   amount swaps to the calendar's compact form (data-compact, "2,9k"). The
+   exact figure stays in the DOM and in the chip's tooltip. */
+.nc-week--onb .nc-week-chip-amt { font-size: 0; white-space: nowrap; }
+.nc-week--onb .nc-week-chip-amt::after { content: attr(data-compact); font-size: 12px; font-weight: 800; letter-spacing: -0.01em; }
+/* Phone-width dialog: ~48px columns fit neither glyph BESIDE amount nor full
+   padding — the glyph stacks over the amount, both centred, logos intact. */
+@container ncweek (max-width: 330px) {
+  .nc-week--onb .nc-week-board { gap: 5px; }
+  .nc-week--onb .nc-week-chip { flex-direction: column; justify-content: center; gap: 2px; padding: 0 4px; }
+  .nc-week--onb .nc-week-chip-amt::after { font-size: 10.5px; }
+}
 /* Notary flavour only: the same board also lands in their agenda. Decorative
    (it lives inside the aria-hidden vignette) — brand marks + one muted line. */
 .nc-week-providers { display: flex; align-items: center; gap: 7px; font-size: 11.5px; line-height: 1.5; color: var(--ink-muted); }
@@ -1781,13 +1794,10 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
    Below it the pitch is trimmed instead: the prose goes (the h1 and the two
    CTAs still say what this is) and the market panel keeps its FIGURES and drops
    its captions, so the carnet lands at the fold rather than under a wall of
-   copy. Measured 1194px -> 637px at 320, and 735px -> 588px at 768.
-
-   Placed HERE, late, on purpose: .hero-points' base rule sets display:flex at
-   equal specificity, so an earlier copy of this block silently lost to it. */
+   copy. Measured 1194px -> 637px at 320, and 735px -> 588px at 768. */
 @media (max-width: 719.98px) {
   .intro--hero { grid-template-columns: 1fr; gap: clamp(18px, 3vw, 26px); }
-  .intro .eyebrow, .intro-main > p, .hero-points, .pulse-foot { display: none; }
+  .intro .eyebrow, .intro-main > p, .hero-points { display: none; }
   /* Side by side rather than stacked. */
   .hero-cta { flex-direction: row; }
   /* flex:1 alone still refuses to go under min-content, so two btn-lg wrapped

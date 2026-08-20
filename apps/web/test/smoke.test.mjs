@@ -1017,9 +1017,9 @@ test('the hero pulse shows the month median per service and filters the carnet',
   assert.ok(refi.querySelectorAll('.pulse-fig-v')[1].classList.contains('is-empty'));
   assert.match(refi.querySelector('.pulse-meta').textContent, /aucune offre/);
 
-  // The foot leads with what is still winnable, not with the acceptance rate:
-  // 4 seeded, 1 retained -> 3 still open.
-  assert.match(ctx.doc.getElementById('pulse-foot').textContent, /3 demandes encore ouvertes/);
+  // The foot line was removed — the rows carry the whole story; nothing may
+  // resurrect it below the pulse.
+  assert.equal(ctx.doc.getElementById('pulse-foot'), null);
   assert.match(ctx.doc.getElementById('pulse-month').textContent, /\d{4}$/, 'names the displayed month');
 
   // Clicking a row filters the carnet to that service, and syncs the chip group.
