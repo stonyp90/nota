@@ -382,8 +382,13 @@ a:hover { text-decoration: underline; }
 /* Logged-out auth buttons (login + signup); the avatar takes over once signed in. */
 .header-auth { display: inline-flex; align-items: center; gap: 6px; }
 .header-auth[hidden] { display: none; }
-/* Safety cap so a long notifications list can never push the menu past the viewport. */
-.acct-panel { max-height: min(88vh, 660px); overflow-y: auto; overscroll-behavior: contain; }
+/* Safety cap so a long notifications list can never push the menu past the
+   viewport. The cap subtracts the sticky header the panel hangs from (plus its
+   8px gap and an 8px floor margin) — a bare 88vh ignored that offset and let
+   the panel's bottom edge run past short landscape viewports. dvh line for
+   mobile URL-bar honesty; the vh line above it is the older-browser fallback. */
+.acct-panel { max-height: min(calc(100vh - var(--header-h) - 16px), 660px); overflow-y: auto; overscroll-behavior: contain; }
+.acct-panel { max-height: min(calc(100dvh - var(--header-h) - 16px), 660px); }
 
 /* --- Sign-in / sign-up modal -------------------------------------------- */
 .auth-modal { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); color: var(--ink); box-shadow: var(--shadow-lg); padding: 0; width: min(420px, 92vw); max-height: 92vh; overflow: auto; }
@@ -1523,16 +1528,19 @@ dialog::backdrop { background: var(--backdrop); }
    exact figure stays in the DOM and in the chip's tooltip. */
 .nc-week--onb .nc-week-chip-amt { font-size: 0; white-space: nowrap; }
 .nc-week--onb .nc-week-chip-amt::after { content: attr(data-compact); font-size: 12px; font-weight: 800; letter-spacing: -0.01em; }
-/* Phone-width dialog: ~48px columns fit neither glyph BESIDE amount nor full
-   padding — the glyph stacks over the amount, both centred, logos intact. */
-@container ncweek (max-width: 330px) {
+/* At every realistic dialog width (a 440px modal gives a ~374px container),
+   five columns fit neither glyph BESIDE amount nor full padding once the
+   compact form hits four characters ("9,9k") — the glyph stacks over the
+   amount, both centred, logos intact. The row layout above remains for any
+   future wider host of the same vignette. */
+@container ncweek (max-width: 380px) {
   .nc-week--onb .nc-week-board { gap: 5px; }
   .nc-week--onb .nc-week-chip { flex-direction: column; justify-content: center; gap: 2px; padding: 0 4px; }
   .nc-week--onb .nc-week-chip-amt::after { font-size: 10.5px; }
 }
 /* Notary flavour only: the same board also lands in their agenda. Decorative
    (it lives inside the aria-hidden vignette) — brand marks + one muted line. */
-.nc-week-providers { display: flex; align-items: center; gap: 7px; font-size: 11.5px; line-height: 1.5; color: var(--ink-muted); }
+.nc-week-providers { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; font-size: 11.5px; line-height: 1.5; color: var(--ink-muted); }
 .nc-week-providers[hidden] { display: none; }
 .nc-week-providers .brand-ic { flex: none; }
 /* The three agenda marks file in one after the other when the row appears. */
@@ -1578,8 +1586,10 @@ dialog::backdrop { background: var(--backdrop); }
 .ob-bid-stamps { display: flex; flex-direction: column; gap: 5px; }
 /* Step stamps fade-and-rise in sequence: published, then retained/open. Each
    carries a dot that turns brand the moment its step is reached. */
-.ob-bid-stamp { display: flex; align-items: center; gap: 7px; font-size: 11.5px; line-height: 1.5; color: var(--ink-muted); opacity: 0; transform: translateY(4px); }
-.ob-bid-stamp::before { content: ''; flex: none; width: 5px; height: 5px; border-radius: 50%; background: var(--border-strong); transition: background-color .3s ease; }
+/* flex-start + a nudged dot: when the stamp wraps to two lines on a narrow
+   dialog, the dot stays with the FIRST line instead of floating between them. */
+.ob-bid-stamp { display: flex; align-items: flex-start; gap: 7px; font-size: 11.5px; line-height: 1.5; color: var(--ink-muted); opacity: 0; transform: translateY(4px); }
+.ob-bid-stamp::before { content: ''; flex: none; width: 5px; height: 5px; margin-top: 6px; border-radius: 50%; background: var(--border-strong); transition: background-color .3s ease; }
 .ob-bid-stamp.is-on { opacity: 1; transform: none; transition: opacity .35s ease, transform .45s ease; }
 .ob-bid-stamp.is-on::before { background: var(--brand); }
 /* The closing stamp (retenue / ouverte) arrives with a touch more spring. */
@@ -2000,6 +2010,11 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
    desktop density untouched. Includes the smaller controls that were being missed. */
 @media (pointer: coarse) {
   .btn, .nav-tab, .chip, .seg-btn, .acct-item, .acct-legal-link, input[type='range'] { min-height: 44px; }
+  /* Repeated at .header-auth .btn specificity: the ≤680px header rule sets a
+     32px floor on the SAME selector, and on a phone (coarse + narrow) it was
+     out-ranking the plain .btn floor above — leaving the only sign-up button
+     under the 44px touch target. */
+  .header-auth .btn { min-height: 44px; }
   /* Clickable notification rows and their dismiss ✕ join the 44px floor; the
      row's right padding grows so text never slides under the bigger target. */
   .notif-item[role='button'] { min-height: 44px; }
