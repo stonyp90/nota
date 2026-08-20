@@ -1841,6 +1841,19 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
 }
 
 @media (max-width: 680px) {
+  /* THE LEGEND WAS ONE CRAMMED PARAGRAPH. Everything lived in a single
+     wrapping flex row, so "SERVICE" landed mid-line right after "Extreme 8x"
+     with a vertical rule in front of it, reading as one run-on block. Each
+     label now takes its own line and its keys wrap underneath it, and the rows
+     get room to breathe. */
+  .legend { gap: var(--space-4) var(--space-5); }
+  .legend-label { flex: 1 0 100%; margin-top: var(--space-2); }
+  /* The rule and the indent only make sense inline, which it no longer is. */
+  .legend-label--sep { margin-left: 0; padding-left: 0; border-left: 0; }
+  /* Four lines restating what the cell already prints, on the screen with the
+     least room for it. */
+  .legend-note { display: none; }
+
   /* Longhand: a shorthand would reset .layout's vertical padding to 0 and the
      carnet would butt against the hero and against the footer. */
   .wrap { padding-inline: var(--space-8); }
@@ -1854,7 +1867,8 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   .intro h1 { font-size: clamp(20px, 5.6vw, 25px); }
   /* No padding here. The cal container queries own cell padding, and a
      viewport rule this late in the file silently outranks all of them. */
-  .cal-cell { min-height: 62px; }
+  /* No min-height: @container cal owns cell sizing, and a viewport rule this
+     far down the file outranks it at equal specificity. */
   /* .cal-avg deliberately has NO font-size here. The container query compacts it
      by zeroing the font and reprinting attr(data-compact) from ::after; a
      viewport rule that restores a visible size cannot remove the ::after, so the
@@ -1936,8 +1950,7 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   .nav-tabs { gap: 0; }
   .nav-tab { padding: 6px 7px; font-size: 12px; }
   .brand-word { font-size: 17px; }
-  .cal-cell { min-height: 58px; }
-  .cal-daynum { font-size: 11px; }
+  /* .cal-cell and .cal-daynum are sized by @container cal, not from here. */
 }
 
 /* Never let the page scroll sideways */

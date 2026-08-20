@@ -1427,3 +1427,166 @@ test('client sign-in POSTs the welcome email to /client/welcome', async () => {
   assert.equal((welcome.opts.method || '').toUpperCase(), 'POST');
   assert.equal(JSON.parse(welcome.opts.body || '{}').courriel, 'nouveau@client.ca');
 });
+
+// ---------------------------------------------------------------------------
+// 20. THE TWO DATA EXTREMES, and the cascade rule that keeps cells from
+//     overlapping at narrow widths.
+//
+//     jsdom has NO layout engine: every getBoundingClientRect is 0x0, so a real
+//     "do these two boxes intersect" assertion is impossible here. The geometry
+//     was verified in a browser at 320/360/375/390/414/430/563/600/768/834/
+//     1024/1280/1440/1920. What these tests pin down instead are the two things
+//     that CAUSE the overlaps we actually shipped:
+//       a) a cell rendering content it has no room for, or an amount whose
+//          compact fallback is missing, so the narrow layouts print nothing or
+//          print the long form and spill into the next day;
+//       b) a late @media rule silently outranking the @container rule that was
+//          supposed to make the cell fit. That one bit twice.
+// ---------------------------------------------------------------------------
+
+// Every act, every day, several offers each, and amounts long enough to be the
+// worst case for a 34px cell.
+function heavyBids(D, anchor, days) {
+  const out = [];
+  for (let d = 1; d <= days; d++) {
+    const dd = String(d).padStart(2, '0');
+    D.SERVICES.forEach((svc, si) => {
+      for (let n = 0; n < 3; n++) {
+        out.push({
+          id: 'h' + d + '-' + svc.id + '-' + n,
+          serviceId: svc.id,
+          dateISO: anchor.slice(0, 8) + dd,
+          // Deliberately wide: five figures is the longest a cell will ever see.
+          montant: 10000 + si * 1000 + n * 137,
+          tier: 'standard',
+          status: n === 2 ? D.STATUS.RETENUE : D.STATUS.OUVERTE,
+          anonyme: true,
+          createdAt: anchor,
+        });
+      }
+    });
+  }
+  return out;
+}
+
+test('no data: the calendar still renders a full month and claims nothing', async () => {
+  const ctx = await boot();
+  await reseed(ctx, [], 'testament');
+  // Wholly-past week rows are dropped on purpose, so a month is not 28+ cells.
+  // What must hold is that every remaining day of the month has one.
+  const cells = all(ctx.doc, '#cal-grid .cal-cell');
+  const anchor0 = firstOfMonth(todayISO());
+  const dates = new Set(cells.map((c) => c.dataset.date).filter(Boolean));
+  for (let d = Number(todayISO().slice(8)); d <= daysInMonthUTC(anchor0); d++) {
+    assert.ok(dates.has(anchor0.slice(0, 8) + String(d).padStart(2, '0')),
+      'day ' + d + ' of the month has a cell even with zero offers');
+  }
+  assert.equal(cells.length % 7, 0, 'the grid still renders whole weeks, got ' + cells.length);
+  // Nothing may claim an offer, a price, or a "N offres" count.
+  assert.equal(all(ctx.doc, '#cal-grid .svc-bid').length, 0, 'no service rows on an empty month');
+  assert.equal(all(ctx.doc, '#cal-grid .cal-avg').length, 0, 'no cleared-day figure on an empty month');
+  // The legend is what decodes the colours, so it must survive the empty state.
+  assert.ok(all(ctx.doc, '.legend .legend-item').length > 0, 'legend still renders with no data');
+  // French pluralisation: "0 offre", never "0 offres".
+  const count = ctx.doc.getElementById('result-count');
+  if (count && count.textContent.trim()) {
+    assert.ok(!/\b0\s+offres\b/.test(count.textContent), 'singular for zero, got: ' + count.textContent);
+  }
+});
+
+test('lots of data: every cell stays inside the shape the narrow layouts assume', async () => {
+  const ctx = await boot();
+  const D = ctx.D;
+  const anchor = firstOfMonth(todayISO());
+  const days = daysInMonthUTC(anchor);
+  await reseed(ctx, heavyBids(D, anchor, days), 'testament');
+
+  const cells = all(ctx.doc, '#cal-grid .cal-cell').filter((c) => !c.classList.contains('is-out'));
+  const remaining = daysInMonthUTC(anchor) - Number(todayISO().slice(8)) + 1;
+  assert.ok(cells.length >= remaining, 'every remaining day of the month has a cell under load');
+
+  const withBids = cells.filter((c) => c.querySelector('.svc-bid'));
+  assert.ok(withBids.length > 0, 'the heavy fixture reaches the grid');
+
+  withBids.forEach((cell) => {
+    // A cell shows at most ONE row per act however many offers a day collects.
+    // More than that and the 3-column phone cell runs past its own height.
+    const rows = cell.querySelectorAll('.svc-bid');
+    assert.ok(rows.length <= D.SERVICES.length,
+      cell.dataset.date + ' renders ' + rows.length + ' rows for ' + D.SERVICES.length + ' acts');
+
+    cell.querySelectorAll('.svc-bid-amount').forEach((amt) => {
+      // Below a 560px container the amount is hidden and ::after prints
+      // attr(data-compact). No data-compact means a BLANK price on every phone.
+      const compact = amt.getAttribute('data-compact');
+      assert.ok(compact && compact.trim(), 'every amount carries a compact form, ' + cell.dataset.date);
+      assert.ok(compact.length <= 6,
+        'compact form stays short enough for a 26px content box, got "' + compact + '"');
+    });
+  });
+
+  // The multiplier is the one figure that shares the cell's top line with the
+  // date, and it is what escaped its box before. Every future cell prints one.
+  const future = cells.filter((c) => c.dataset.date >= todayISO() && !c.classList.contains('is-past'));
+  future.forEach((c) => {
+    assert.ok(c.querySelector('.cal-urgency'), 'future cell ' + c.dataset.date + ' prints its multiplier');
+  });
+});
+
+test('no @media rule may outrank a calendar @container rule on the same property', () => {
+  // The regression this exists for: styles.css set
+  //   @container cal (max-width: 440px) { .cal-cell { padding: 6px 8px 10px } }
+  // and then, HUNDREDS of lines later,
+  //   @media (max-width: 680px)         { .cal-cell { padding: 6px 6px } }
+  // Equal specificity, so the media rule won purely on file order and every
+  // container query that sized a cell was dead. Same story for .cal-grid's gap.
+  const css = readFileSync(fileURLToPath(new URL('../public/styles.css', import.meta.url)), 'utf8');
+
+  // Split into top-level at-rule blocks, keeping the offset each one starts at.
+  const blocks = [];
+  const re = /@(media|container)([^{]*)\{/g;
+  let m;
+  while ((m = re.exec(css))) {
+    let depth = 1, i = re.lastIndex;
+    while (i < css.length && depth > 0) {
+      if (css[i] === '{') depth++;
+      else if (css[i] === '}') depth--;
+      i++;
+    }
+    blocks.push({ kind: m[1], cond: m[2].trim(), start: m.index, body: css.slice(re.lastIndex, i - 1) });
+  }
+
+  // (selector, property) pairs a block sets, for calendar selectors only.
+  const pairs = (body) => {
+    const out = [];
+    const rr = /([^{}]+)\{([^{}]*)\}/g;
+    let r;
+    while ((r = rr.exec(body))) {
+      const sel = r[1].replace(/\/\*[\s\S]*?\*\//g, '').trim().replace(/\s+/g, ' ');
+      if (!/(^|[\s,>+~])\.cal[-\w]*/.test(sel)) continue;
+      r[2].split(';').forEach((decl) => {
+        const p = decl.split(':')[0].trim().toLowerCase();
+        if (p) out.push(sel + ' || ' + p);
+      });
+    }
+    return out;
+  };
+
+  const containers = blocks.filter((b) => b.kind === 'container' && /\bcal(wrap)?\b/.test(b.cond));
+  assert.ok(containers.length > 0, 'the calendar still uses container queries');
+
+  const clashes = [];
+  containers.forEach((c) => {
+    const owned = new Set(pairs(c.body));
+    blocks
+      .filter((b) => b.kind === 'media' && b.start > c.start)
+      .forEach((b) => {
+        pairs(b.body).forEach((p) => {
+          if (owned.has(p)) clashes.push('@media (' + b.cond + ') overrides @container (' + c.cond + ') on  ' + p);
+        });
+      });
+  });
+
+  assert.deepEqual(clashes, [],
+    'a later @media rule silently defeats a calendar @container rule:\n  ' + clashes.join('\n  '));
+});

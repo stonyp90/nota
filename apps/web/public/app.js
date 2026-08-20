@@ -695,6 +695,12 @@
     // menu is for the signed-in state only.
     var headerAuth = $('header-auth'); if (headerAuth) headerAuth.hidden = role !== 'anon';
     var acctWrap = document.querySelector('.acct-wrap'); if (acctWrap) acctWrap.hidden = role === 'anon';
+    // Agenda sync is a NOTARY tool: it subscribes a working calendar to the
+    // carnet feed. A client books a date, they do not follow the whole month, so
+    // showing them four calendar buttons and a mailing form is noise on the one
+    // screen where the calendar itself should be the whole point.
+    var syncCard = document.querySelector('.carnet-sub');
+    if (syncCard) syncCard.hidden = role !== 'notary';
     // Calendar-sync of the whole carnet shows on the landing too: a prospecting
     // notary can subscribe before ever creating an account (the feed is public).
     var p = profileGet();
