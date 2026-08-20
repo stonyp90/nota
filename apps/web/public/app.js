@@ -153,6 +153,8 @@
     return new Date(Date.UTC(p[0], p[1], 0)).getUTCDate();
   }
   var fmtMonth = new Intl.DateTimeFormat('fr-CA', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  var fmtMonthOnly = new Intl.DateTimeFormat('fr-CA', { month: 'long', timeZone: 'UTC' });
+  var fmtMonthShort = new Intl.DateTimeFormat('fr-CA', { month: 'short', timeZone: 'UTC' });
   var fmtDayLong = new Intl.DateTimeFormat('fr-CA', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
   var fmtDayShort = new Intl.DateTimeFormat('fr-CA', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
   function monthTitle(anchor) { return fmtMonth.format(new Date(anchor + 'T00:00:00Z')); }
@@ -533,7 +535,9 @@
   var ONB_FLOWS = {
     client: {
       title: 'Trouvez votre notaire en 3 étapes',
-      sub: 'Vous publiez, les notaires vous font des offres.',
+      // The model, said right: the CLIENT posts the offer; a notary retains
+      // it. Nobody bids back at the client.
+      sub: 'Vous publiez votre demande ; un notaire de Québec la retient.',
       cta: 'Publier ma demande →',
       alt: 'Explorer le carnet d’abord',
       steps: [
@@ -579,6 +583,13 @@
     var r = $('onb-view-role'), s = $('onb-view-steps');
     if (r) r.hidden = false;
     if (s) s.hidden = true;
+    // "← Changer" hides the control that held focus; put it on the first role
+    // card so a keyboard/SR user is never dropped to <body>. Only when the
+    // dialog is actually open — this also runs while preparing to open it.
+    if (dlg && dlg.open) {
+      var first = r && r.querySelector('.onb-choice');
+      if (first) { try { first.focus(); } catch (e) {} }
+    }
     renderOnbWeekAnim(); // (re)start the live board when this view is on screen
   }
 
@@ -626,6 +637,13 @@
     var dlg = $('onboarding-dialog');
     if (dlg && dlg.showModal) { try { dlg.showModal(); } catch (e) { /* already open */ } }
     renderOnbWeekAnim(); // the dialog is open now — the live board can start
+    // showModal autofocuses the ✕ (first tabbable). Put initial focus on the
+    // first role card instead — the same post-open pattern openAuthModal uses —
+    // so both entries into the role view land in the same place.
+    setTimeout(function () {
+      var first = document.querySelector('#onb-view-role .onb-choice');
+      if (first && dlg && dlg.open) { try { first.focus(); } catch (e) {} }
+    }, 30);
   }
 
   // Auto-show once per browser. After boot, gated by LS_ONBOARDED.
@@ -825,8 +843,31 @@
   // ---------------------------------------------------------------------------
   var DOW = ['lun', 'mar', 'mer', 'jeu', 'ven', 'sam', 'dim'];
 
+  // The calendar's visible span. Anchored on the CURRENT month it is a rolling
+  // six-week window opening on Monday of today's week — the booking-industry
+  // shape (Airbnb, Booking, Calendly all open on "today onward"): late in the
+  // month, a whole-month grid is a page of dead days with every bookable date
+  // hidden behind a "next" click. Anchored on any other month it returns null
+  // and the plain whole month renders instead.
+  function calWindow() {
+    var today = todayISO();
+    if (monthKey(state.anchor) !== monthKey(today)) return null;
+    var start = D.addDays(today, -mondayIndex(today));
+    return { start: start, end: D.addDays(start, 41) };
+  }
+  // "août – septembre 2026" — the window's span, the year printed once when shared.
+  function windowTitle(win) {
+    var from = firstOfMonth(state.anchor), to = firstOfMonth(win.end);
+    if (monthKey(from) === monthKey(to)) return monthTitle(from);
+    if (from.slice(0, 4) === to.slice(0, 4)) {
+      return fmtMonthOnly.format(new Date(from + 'T00:00:00Z')) + ' – ' + monthTitle(to);
+    }
+    return monthTitle(from) + ' – ' + monthTitle(to);
+  }
+
   function renderCalendar() {
-    $('cal-title').textContent = monthTitle(state.anchor);
+    var win = calWindow();
+    $('cal-title').textContent = win ? windowTitle(win) : monthTitle(state.anchor);
     var grid = $('cal-grid'); clear(grid);
 
     // Weekday header: a role="row" of role="columnheader" cells, so the
@@ -853,27 +894,22 @@
       return mine ? clientOfferStatus(mine) : null;
     }
 
-    var lead = mondayIndex(state.anchor);
-    var dim = daysInMonth(state.anchor);
     var today = todayISO();
 
-    // Each week is its own role="row" of exactly 7 cells. Leading/trailing
-    // blanks are empty gridcells so every row stays a full 7 columns.
-    // The WHOLE month is drawn, past weeks included: a month with its first
-    // fortnight missing reads as a broken calendar, and the dates already
-    // gone are what tell a client how the prices they can see got there.
-    // Past cells stay inert (is-past below), they are simply no longer absent.
+    // Each week is its own role="row" of exactly 7 cells, so the surrounding
+    // role="grid" stays well-formed however the window is shaped.
     var week = null;
     function openRow() {
       week = el('div', 'cal-row'); week.setAttribute('role', 'row'); grid.appendChild(week);
     }
-    // The cells that pad the first and last weeks carry the REAL adjacent-month
-    // dates rather than being empty, which is what every calendar does: the seam
-    // between months stays legible, and "lundi" in the last row means the same
-    // thing it means in the first. They are muted, out of the tab order, and
-    // carry no prices — only the anchor month's offers are loaded, so a figure
-    // here would be a claim we cannot make. A future one is clickable and moves
-    // the calendar to its own month, where the offers ARE loaded.
+    // Whole-month view only: the cells that pad the first and last weeks carry
+    // the REAL adjacent-month dates rather than being empty, which is what
+    // every calendar does — the seam stays legible, and "lundi" in the last row
+    // means the same thing it means in the first. They are muted, out of the
+    // tab order, and carry no prices — only the viewed months' offers are
+    // loaded, so a figure here would be a claim we cannot make. A future one is
+    // clickable and moves the calendar to its own month, where the offers ARE
+    // loaded (and the current month arrives as its rolling window).
     function outCell(iso) {
       if (!week) return;
       var b = el('div', 'cal-cell is-out');
@@ -896,19 +932,7 @@
       }
       week.appendChild(b);
     }
-    var slot = 0;
-    openRow();
-    // Leading pad: the last `lead` days of the previous month.
-    var prevAnchor = addMonths(state.anchor, -1);
-    var prevDim = daysInMonth(prevAnchor);
-    for (var i = 0; i < lead; i++) {
-      outCell(prevAnchor.slice(0, 8) + String(prevDim - lead + 1 + i).padStart(2, '0'));
-      slot++;
-    }
-
-    for (var day = 1; day <= dim; day++) {
-      if (slot > 0 && slot % 7 === 0) openRow();
-      var iso = state.anchor.slice(0, 8) + String(day).padStart(2, '0');
+    function liveCell(iso) {
       var cell = el('div', 'cal-cell');
       cell.setAttribute('role', 'gridcell');
       cell.dataset.date = iso;
@@ -923,8 +947,13 @@
 
       // The 7-column grid reflows to 3 on a phone, where a weekday HEADER can no
       // longer sit above its column. There the cell carries its own weekday.
-      var dayEl = el('span', 'cal-daynum', String(day));
+      var dayEl = el('span', 'cal-daynum', String(Number(iso.slice(8, 10))));
       dayEl.dataset.dow = DOW[mondayIndex(iso)];
+      // The rolling window holds a month seam INSIDE the grid: the 1st names
+      // its month beside the number, the way every booking calendar labels it.
+      if (win && iso.slice(8, 10) === '01') {
+        dayEl.dataset.month = fmtMonthShort.format(new Date(iso + 'T00:00:00Z')).replace(/\.$/, '');
+      }
       cell.appendChild(dayEl);
 
       // Cells stay essential: count + the single headline figure. All the
@@ -984,7 +1013,9 @@
         var tier = D.tierById(D.tierForDays(D.daysBetween(today, iso)));
         if (tier) {
           cell.dataset.tier = tier.id;
-          var mult = D.tierMultiplier(tier.id);
+          // Tuned on the month's history (retained offers), not the static
+          // ladder — the badge quotes what this market actually pays.
+          var mult = D.tierMultiplier(tier.id, state.monthBids);
           var urg = el('span', 'cal-urgency', multLabel(mult));
           urg.dataset.tier = tier.id;
           urg.title = tier.nom + '. À ce délai, une offre se conclut autour de '
@@ -995,21 +1026,37 @@
 
       if (!isPast) cell.addEventListener('click', function () { openDay(this.dataset.date); });
       if (week) week.appendChild(cell);
-
-      slot++;
     }
 
-    // Trailing pad: the first days of the next month, so the last week is a full
-    // seven columns like every other one. Previously the row just stopped.
-    var nextAnchor = addMonths(state.anchor, 1);
-    var nextDay = 1;
-    while (slot % 7 !== 0) {
-      outCell(nextAnchor.slice(0, 8) + String(nextDay).padStart(2, '0'));
-      nextDay++; slot++;
+    // The sequence of cells. Rolling window: 42 consecutive live days from
+    // Monday of today's week — the seam to next month is crossed with real,
+    // priced cells (refreshMonthData loads both months), and the few days of
+    // dead history are just the start of today's week, not half a month.
+    // Whole-month view: every day of the month, its first and last weeks
+    // padded with muted adjacent-month dates so each row keeps 7 columns.
+    var seq = [];
+    if (win) {
+      for (var d = win.start; d <= win.end; d = D.addDays(d, 1)) seq.push({ iso: d, out: false });
+    } else {
+      var lead = mondayIndex(state.anchor);
+      var prevAnchor = addMonths(state.anchor, -1);
+      var prevDim = daysInMonth(prevAnchor);
+      for (var i = 0; i < lead; i++) {
+        seq.push({ iso: prevAnchor.slice(0, 8) + String(prevDim - lead + 1 + i).padStart(2, '0'), out: true });
+      }
+      var dim = daysInMonth(state.anchor);
+      for (var day = 1; day <= dim; day++) {
+        seq.push({ iso: state.anchor.slice(0, 8) + String(day).padStart(2, '0'), out: false });
+      }
+      var nextAnchor = addMonths(state.anchor, 1);
+      for (var nd = 1; seq.length % 7 !== 0; nd++) {
+        seq.push({ iso: nextAnchor.slice(0, 8) + String(nd).padStart(2, '0'), out: true });
+      }
     }
-
-    // Pad the final week so it, too, holds a full 7 columns.
-    while (slot % 7 !== 0) { blank(); slot++; }
+    seq.forEach(function (item, idx) {
+      if (idx % 7 === 0) openRow();
+      if (item.out) outCell(item.iso); else liveCell(item.iso);
+    });
   }
 
   // Compact a bid count so the badge pill never widens: 2000 -> "2k", 1250 -> "1.2k".
@@ -1052,17 +1099,29 @@
     dayBids.forEach(function (b) {
       if (b.status === D.STATUS.RETENUE) return;         // only what is still winnable
       var cur = best[b.serviceId];
-      if (!cur || b.montant > cur) best[b.serviceId] = b.montant;
+      if (!cur) best[b.serviceId] = { amount: b.montant, n: 1 };
+      else { cur.n += 1; if (b.montant > cur.amount) cur.amount = b.montant; }
     });
     var wrap = el('div', cls);
     D.SERVICES.forEach(function (svc) {
-      var amount = best[svc.id];
-      if (amount == null) return;
+      var entry = best[svc.id];
+      if (!entry) return;
+      var amount = entry.amount;
       var item = el('span', 'svc-bid');
       item.style.color = 'var(--svc-' + svc.id + ')';
       // Carried for the CSS tooltip a calendar cell shows on hover, where there
       // is no room to print the name.
       item.dataset.name = svc.nom;
+      // The bubble's second line says what the cell cannot: how deep the
+      // competition runs and where the act's price STARTS, so the printed
+      // figure reads as high or low at a glance.
+      var detail = plural(entry.n, 'offre') + (entry.n < 2 ? ' ouverte' : ' ouvertes');
+      if (svc.prixDepart) {
+        detail += ' · départ ' + D.money(svc.prixDepart);
+        var pct = Math.round((amount / svc.prixDepart - 1) * 100);
+        if (pct > 0) detail += ' · +' + pct + PCT;
+      }
+      item.dataset.detail = detail;
       var ic = svcIcon(svc.id, 12);
       if (ic) item.appendChild(ic);
       else {
@@ -1071,10 +1130,12 @@
         item.appendChild(dot);
       }
       // A cell shows the dot alone — the colour is decoded by the legend, and
-      // hovering names the act. A list card has the room, so it prints the name.
-      // Either way the name is in the DOM for screen readers, which have no
-      // hover and cannot see a colour.
-      item.appendChild(el('span', showName ? 'svc-bid-name' : 'visually-hidden', svc.nom));
+      // hovering names the act with its depth and starting price. A list card
+      // has the room, so it prints the name. Either way the words are in the
+      // DOM for screen readers, which have no hover and cannot see a colour —
+      // they hear exactly what a hovering reader sees.
+      item.appendChild(el('span', showName ? 'svc-bid-name' : 'visually-hidden',
+        showName ? svc.nom : svc.nom + ' — ' + detail));
       var amt = el('span', 'svc-bid-amount', D.money(amount));
       amt.dataset.compact = compactMoney(amount);
       item.appendChild(amt);
@@ -1104,7 +1165,7 @@
       var dot = el('span', 'legend-dot'); dot.style.background = 'var(--tier-' + t.id + ')';
       item.appendChild(dot);
       item.appendChild(document.createTextNode(t.nom + ' '));
-      var m = el('span', 'legend-mult', multLabel(D.tierMultiplier(t.id)));
+      var m = el('span', 'legend-mult', multLabel(D.tierMultiplier(t.id, state.monthBids)));
       m.style.color = 'var(--tier-' + t.id + ')';
       item.appendChild(m);
       lg.appendChild(item);
@@ -1231,7 +1292,11 @@
     var p = D.carnetPulse(state.monthBids, todayISO());
 
     var m = $('pulse-month');
-    if (m) m.textContent = monthTitle(state.anchor);
+    if (m) {
+      // The pulse reads the same span the calendar shows, so its label must too.
+      var win = calWindow();
+      m.textContent = win ? windowTitle(win) : monthTitle(state.anchor);
+    }
 
     clear(rows);
     var busiest = p.services.reduce(function (m, s) { return Math.max(m, s.total); }, 0);
@@ -1380,6 +1445,26 @@
     var svc = D.serviceById($('o-service') ? $('o-service').value : '');
     var matching = svc ? dayAll.filter(function (b) { return b.serviceId === svc.id; }) : dayAll;
 
+    // Competitive facts (the bar to clear, per act and for the headline) come
+    // from the RAW day pool: an open offer exists whether or not the carnet's
+    // statut/montant filters keep it out of the visible list.
+    var dayRaw = state.monthBids.filter(function (b) { return b.dateISO === iso; });
+    var rawMatching = svc ? dayRaw.filter(function (b) { return b.serviceId === svc.id; }) : dayRaw;
+
+    // Each act chip carries its own bar to clear (open offers only) — the
+    // amount changes with the act, so it belongs on the choice itself.
+    var chipWrap = $('o-service-chips');
+    if (chipWrap) D.SERVICES.forEach(function (s) {
+      var subEl = chipWrap.querySelector('[data-svc="' + s.id + '"] .chip-svc-sub');
+      if (!subEl) return;
+      var best = null;
+      dayRaw.forEach(function (b) {
+        if (b.serviceId === s.id && b.status !== D.STATUS.RETENUE && (best == null || b.montant > best)) best = b.montant;
+      });
+      subEl.textContent = best != null ? D.money(best) : 'libre';
+      subEl.classList.toggle('is-free', best == null);
+    });
+
     // Headline row: the one offer to beat for this act.
     if (matching.length) list.appendChild(bidRow(matching[0]));
 
@@ -1412,15 +1497,55 @@
     }
 
     // Headline figure + the bar to clear, both scoped to the selected act. The
-    // label names that act — the amount means nothing without it.
-    var open = matching.filter(function (b) { return b.status !== D.STATUS.RETENUE; });
+    // label names that act — the amount means nothing without it. No open offer
+    // reads « Libre »: an opportunity, not a missing number.
+    var open = rawMatching.filter(function (b) { return b.status !== D.STATUS.RETENUE; });
     var top = open.length ? Math.max.apply(null, open.map(function (b) { return b.montant; })) : null;
     var bestK = $('day-best-k');
     if (bestK) bestK.textContent = svc ? 'Meilleure offre ouverte · ' + svc.nomCourt : 'Meilleure offre ouverte';
-    $('day-best').textContent = top != null ? D.money(top) : '—';
-    $('day-hint').textContent = top != null
-      ? 'Proposez plus que ' + D.money(top) + ' pour passer devant.'
-      : (svc ? 'Aucune offre en ' + svc.nom.toLowerCase() + '. Fixez votre prix.' : 'Aucune offre. Fixez votre prix.');
+    var bestV = $('day-best');
+    bestV.textContent = top != null ? D.money(top) : 'Libre';
+    bestV.classList.toggle('is-free', top == null);
+    bestV.classList.remove('pulse'); void bestV.offsetWidth; bestV.classList.add('pulse');
+    state.dayTop = top;
+    if (top == null) {
+      var name = svc ? svc.nom.toLowerCase() : 'cet acte';
+      var hint = $('day-hint');
+      hint.classList.remove('is-ahead');
+      // Two different reasons to be free, two different messages: a retained
+      // offer is not an empty day.
+      var takenN = rawMatching.length;
+      hint.textContent = takenN
+        ? (takenN > 1 ? 'Les offres en ' + name + ' sont déjà retenues' : 'L’offre en ' + name + ' est déjà retenue')
+          + ' — la place est libre, fixez votre prix.'
+        : 'Aucune offre en ' + name + ' pour cette date. Soyez le premier — fixez votre prix.';
+    }
+    updateBeatUI();
+  }
+
+  // The card's bottom line is LIVE: it compares the slider to the act's best
+  // open offer and, while the offer trails, gives a one-tap way over the bar.
+  function beatAmount() {
+    var amt = $('o-amount');
+    if (state.dayTop == null || !amt || amt.disabled) return null;
+    var target = state.dayTop + (Number(amt.step) || 5);
+    var max = Number(amt.max);
+    return Number.isFinite(max) && target > max ? null : target;
+  }
+  function updateBeatUI() {
+    var btn = $('day-beat'), hint = $('day-hint');
+    if (!btn || !hint) return;
+    if (state.dayTop == null) { btn.hidden = true; return; }  // renderDayBids wrote the free-slot hint
+    // Both strings are static on purpose: the aria-live card announces only
+    // when the offer crosses the bar, not on every slider step.
+    var ahead = Number($('o-amount').value) > state.dayTop;
+    hint.textContent = ahead
+      ? 'Votre offre passe devant.'
+      : 'Proposez plus que ' + D.money(state.dayTop) + ' pour passer devant.';
+    hint.classList.toggle('is-ahead', ahead);
+    var t = beatAmount();
+    btn.hidden = ahead || t == null;
+    if (!btn.hidden) btn.textContent = 'Passer devant · ' + D.money(t);
   }
 
   // ---------------------------------------------------------------------------
@@ -1455,17 +1580,25 @@
 
   function moveFocus(delta) {
     var next = D.addDays(state.focusDate, delta);
-    var changedMonth = monthKey(next) !== monthKey(state.anchor);
-    if (changedMonth) state.anchor = firstOfMonth(next);
+    var win = calWindow();
+    // The rolling window has no cells before its first row — dead history is
+    // not worth arrowing into, so the focus simply stops at the window's edge.
+    if (win && next < win.start) return;
+    // A date already rendered (in the window, or in the viewed month) only
+    // moves the roving focus; anything outside re-anchors the calendar there.
+    var visible = win ? next <= win.end : monthKey(next) === monthKey(state.anchor);
+    if (!visible) state.anchor = firstOfMonth(next);
     state.focusDate = next;
     function focusCell() { var c = document.querySelector('.cal-cell[data-date="' + next + '"]'); if (c) c.focus(); }
-    // Crossing a month boundary needs fresh bids for the new month, not just a re-render.
-    if (changedMonth) reloadAndRender().then(focusCell);
+    // Leaving the rendered span needs fresh bids, not just a re-render.
+    if (!visible) reloadAndRender().then(focusCell);
     else { refreshMonth(); focusCell(); }
   }
   function step(months) {
     state.anchor = addMonths(state.anchor, months);
-    state.focusDate = state.anchor;
+    // Stepping back onto the current month lands on the rolling window, whose
+    // first bookable day is today — the 1st may not be rendered at all.
+    state.focusDate = calWindow() ? todayISO() : state.anchor;
     reloadAndRender();
   }
 
@@ -1539,7 +1672,8 @@
     var rc = $('result-count');
     // plural() carries the French rule (singular at 0 as well as 1); this line
     // had the English one and rendered "0 offres".
-    if (rc) rc.textContent = plural(count, 'offre') + ' ce mois';
+    // The rolling window spans two months, so "ce mois" would miscount there.
+    if (rc) rc.textContent = plural(count, 'offre') + (calWindow() ? ' au carnet' : ' ce mois');
     // Next availability: the soonest upcoming date (>= today) with an offer still
     // open (not yet retained) among what's shown — a liveness cue for the market.
     var av = $('cal-avail');
@@ -1609,8 +1743,13 @@
     D.SERVICES.forEach(function (s) {
       var b = el('button', 'chip chip-svc');
       b.type = 'button'; b.dataset.svc = s.id; b.setAttribute('aria-pressed', 'false');
-      var ic = svcIcon(s.id); if (ic) b.appendChild(ic);
-      b.appendChild(document.createTextNode(s.nomCourt));
+      var main = el('span', 'chip-svc-main');
+      var ic = svcIcon(s.id); if (ic) main.appendChild(ic);
+      main.appendChild(document.createTextNode(s.nomCourt));
+      b.appendChild(main);
+      // Each act's own offre à battre for the date being booked — filled by
+      // renderDayBids, so the trade-off between acts shows at the choice itself.
+      b.appendChild(el('span', 'chip-svc-sub'));
       wrap.appendChild(b);
     });
   }
@@ -1732,7 +1871,7 @@
     var prev = Number(amt.value);
     amt.min = base; amt.max = base * D.PREMIUM_CAP;
     if (prev < base) {
-      var rec = D.recommendedAmount(svc.id, state.offer.dateISO, todayISO(), state.offer.pricing);
+      var rec = D.recommendedAmount(svc.id, state.offer.dateISO, todayISO(), state.offer.pricing, state.monthBids);
       amt.value = rec != null ? rec : base;
     }
     var bn = $('o-base-note');
@@ -1759,7 +1898,7 @@
       amt.disabled = false;
       // Pre-fill the recommended (mid-tier) offer so a client can book in one tap
       // instead of leaving the gauge at the floor ("peu susceptible d'être retenue").
-      var rec = D.recommendedAmount(svc.id, state.offer.dateISO, todayISO(), state.offer.pricing);
+      var rec = D.recommendedAmount(svc.id, state.offer.dateISO, todayISO(), state.offer.pricing, state.monthBids);
       amt.value = rec != null ? rec : base;
     } else { amt.disabled = true; amt.value = 0; }
     onAmountChange();
@@ -1779,7 +1918,7 @@
       $('tp-text').textContent = 'Signature ' + when + ' · le marché se conclut ici entre ' +
         t.apercuMin.toFixed(1) + '× et ' + t.apercuMax.toFixed(1) + '×.';
       // Re-tune the pre-filled amount to this date's tier.
-      var rec = D.recommendedAmount(state.offer.serviceId, date, todayISO(), state.offer.pricing);
+      var rec = D.recommendedAmount(state.offer.serviceId, date, todayISO(), state.offer.pricing, state.monthBids);
       if (rec != null) $('o-amount').value = rec;
     } else { tp.hidden = true; }
     onAmountChange();
@@ -1813,6 +1952,7 @@
       $('gauge-fill').style.width = '0%';
       $('gauge-label').textContent = 'Choisissez une date et un montant.';
     }
+    updateBeatUI();
     validateOfferUI();
   }
 
@@ -3068,7 +3208,9 @@
       });
       var retained = valid.filter(function (b) { return b.status === D.STATUS.RETENUE; });
       var open = valid.filter(function (b) { return b.status !== D.STATUS.RETENUE; });
-      return retained.concat(open);
+      // The client leads with the happy ending (demands DO get taken); the
+      // notary leads with what is still takeable.
+      return onbView() === 'notaire' ? open.concat(retained) : retained.concat(open);
     }
     // The amount climbs from the act's starting price to the offer — money()
     // formats every frame so the vignette never shows a foreign number.
@@ -3099,6 +3241,11 @@
       }
       var name = $('ob-bid-name'); if (name) name.textContent = svc.nom;
       var date = $('ob-bid-date'); if (date) date.textContent = dayTitle(b.dateISO);
+      // The same story reads from either side: the head and the open-bid
+      // outcome speak to whoever is being onboarded.
+      var notaire = onbView() === 'notaire';
+      var kick = $('ob-bid-kicker');
+      if (kick) kick.textContent = notaire ? 'Des demandes réelles — retenues en un clic' : 'Vous proposez — un notaire retient';
       var fin = $('ob-bid-stamp-fin');
       if (fin) {
         clear(fin);
@@ -3106,7 +3253,7 @@
           fin.appendChild(el('span', 'nc-week-check-key', '✓'));
           fin.appendChild(document.createTextNode(' Retenue par ' + (b.etude || 'un notaire')));
         } else {
-          fin.textContent = 'Ouverte — les notaires de Québec la voient';
+          fin.textContent = notaire ? 'Ouverte — à retenir en un clic' : 'Ouverte — les notaires de Québec la voient';
         }
       }
       return svc;
@@ -3167,10 +3314,15 @@
     return { render: render, restart: function () { stop(); render(); }, stop: stop };
   })();
 
+  // On a phone the steps view already fills the screen: the five-column board
+  // under it is too much. Both STEPS views focus on the single-bid story there;
+  // the board stays for the role choice and for wide screens.
+  var onbMobileMq = window.matchMedia ? window.matchMedia('(max-width: 680px)') : null;
   function renderOnbWeekAnim() {
     var view = onbView();
-    if (view === 'client') {
-      // The client steps trade the board for one bid played out in full.
+    var mobileSteps = view === 'notaire' && onbMobileMq && onbMobileMq.matches;
+    if (view === 'client' || mobileSteps) {
+      // The steps trade the board for one bid played out in full.
       weekVigOnb.stop();
       var wk = $('ob-week'); if (wk) wk.hidden = true;
       bidVigOnb.restart();
@@ -3193,10 +3345,19 @@
     weekVigOnb.restart();
   }
 
-  // The loop parks itself when the page is hidden; wake it on return.
+  // The loop parks itself when the page is hidden; wake it on return — but
+  // only when the dialog is actually open: for everyone else this would just
+  // rewrite text inside a closed dialog for nothing.
   document.addEventListener('visibilitychange', function () {
-    if (!document.hidden) renderOnbWeekAnim();
+    var dlg = $('onboarding-dialog');
+    if (!document.hidden && dlg && dlg.open) renderOnbWeekAnim();
   });
+  // Crossing the phone breakpoint swaps which vignette a steps view carries.
+  if (onbMobileMq) {
+    var onbMqChange = function () { renderOnbWeekAnim(); };
+    if (onbMobileMq.addEventListener) onbMobileMq.addEventListener('change', onbMqChange);
+    else if (onbMobileMq.addListener) onbMobileMq.addListener(onbMqChange);
+  }
 
   // --- Lead-delivery preferences ---------------------------------------------
   // How (in-app / email / SMS) and at what PACE Nota alerts this notary about new
@@ -3556,13 +3717,21 @@
     var panel = $('carnet-panel');
     if (panel) panel.classList.add('is-loading');
     try {
-      state.monthBids = await store.listMonth(monthKey(state.anchor));
+      // The rolling window crosses the month seam, so it needs BOTH months it
+      // spans — otherwise next month's first days would render as empty when
+      // they carry offers. A plain month view loads just itself, as before.
+      var months = [monthKey(state.anchor)];
+      var win = calWindow();
+      if (win && months.indexOf(monthKey(win.end)) < 0) months.push(monthKey(win.end));
+      var lists = await Promise.all(months.map(function (m) { return store.listMonth(m); }));
+      state.monthBids = Array.prototype.concat.apply([], lists);
     } finally {
       if (panel) panel.classList.remove('is-loading');
     }
     renderNotaryOpportunity(); // keep the gate's live "money on the table" fresh
     renderNotaryLive(); // and the landing's open-demand teaser
     renderOnbWeekAnim(); // and the welcome dialog's live week board, if open
+    renderLegend(); // the legend's multipliers are tuned on the freshly loaded month
   }
   function refreshMonth() { renderActiveView(); }
   async function reloadAndRender() { await refreshMonthData(); refreshMonth(); }
@@ -3660,7 +3829,12 @@
       // Escape / backdrop) — those defer rather than flag, so a mis-click is
       // recoverable; "Passer" and the CTAs flag the guide themselves.
       onbDlg.addEventListener('click', function (e) { if (e.target === onbDlg) { try { onbDlg.close(); } catch (er) {} } });
-      onbDlg.addEventListener('close', onbDefer);
+      onbDlg.addEventListener('close', function () {
+        // Deterministic teardown: don't leave queued vignette timers firing
+        // against a closed dialog until the next onScreen() check parks them.
+        weekVigOnb.stop(); bidVigOnb.stop();
+        onbDefer();
+      });
     }
     var onbLink = $('footer-guide');
     if (onbLink) onbLink.addEventListener('click', function (e) { e.preventDefault(); onbOpen(); });
@@ -3754,6 +3928,14 @@
     $('o-date').addEventListener('change', onOfferDateChange);
     $('o-date').addEventListener('input', onOfferDateChange);
     $('o-amount').addEventListener('input', onAmountChange);
+    // One tap over the bar: jump the slider just past the act's best open offer.
+    $('day-beat').addEventListener('click', function () {
+      var t = beatAmount(); if (t == null) return;
+      $('o-amount').value = t;
+      onAmountChange();
+      var disp = $('o-amount-display');
+      if (disp) { disp.classList.remove('flash'); void disp.offsetWidth; disp.classList.add('flash'); }
+    });
     $('o-anon').addEventListener('change', onAnonToggle);
     $('o-prefix').addEventListener('input', onPrefixInput);
     $('o-courriel').addEventListener('input', validateOfferUI);

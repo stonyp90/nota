@@ -61,7 +61,7 @@ test('tiers: the ladder is strictly more expensive as the date closes in', () =>
   for (let i = 1; i < mults.length; i++) {
     assert.ok(mults[i] > mults[i - 1], D.TIERS[i].id + ' must cost more than ' + D.TIERS[i - 1].id);
   }
-  assert.deepEqual(mults, [1.1, 1.35, 3, 6, 8]);
+  assert.deepEqual(mults, [1.2, 1.6, 3.5, 7, 9]);
   // ...and the steepest step still fits under the hard cap the server enforces.
   assert.ok(mults[mults.length - 1] <= D.PREMIUM_CAP);
 });
@@ -288,9 +288,9 @@ test('dueReminders: the dossier_incomplet hook fires for an incomplete open lead
 });
 
 test('recommendedAmount: mid-tier default, within bounds, one-tap booking', () => {
-  // 2 days out -> prioritaire, whose band is centred on 3.0.
+  // 2 days out -> prioritaire, whose band is centred on 3.5.
   const t = D.tierById('prioritaire');
-  assert.equal((t.apercuMin + t.apercuMax) / 2, 3.0, 'prioritaire defaults to 3x');
+  assert.equal((t.apercuMin + t.apercuMax) / 2, 3.5, 'prioritaire defaults to 3.5x');
   const base = D.notaPrice('refinancement');
   const expected = Math.round((base * (t.apercuMin + t.apercuMax) / 2) / 5) * 5;
   assert.equal(D.recommendedAmount('refinancement', '2026-08-14', TODAY), expected);
@@ -380,9 +380,9 @@ test('tierMultiplier is the number recommendedAmount actually uses', () => {
   D.TIERS.forEach((t) => {
     assert.equal(D.tierMultiplier(t.id), (t.apercuMin + t.apercuMax) / 2);
   });
-  assert.equal(D.tierMultiplier('prioritaire'), 3.0);
-  assert.equal(D.tierMultiplier('urgence'), 6.0, 'tomorrow costs 6x');
-  assert.equal(D.tierMultiplier('extreme'), 8.0, 'today costs 8x');
+  assert.equal(D.tierMultiplier('prioritaire'), 3.5);
+  assert.equal(D.tierMultiplier('urgence'), 7.0, 'tomorrow costs 7x');
+  assert.equal(D.tierMultiplier('extreme'), 9.0, 'today costs 9x');
   assert.equal(D.tierMultiplier('nope'), null);
 
   // The number a cell shows must be the number the booking form pre-fills, or

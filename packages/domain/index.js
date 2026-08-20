@@ -390,22 +390,84 @@
   // Five steps, because the last week is where the price actually moves and a
   // client deciding between "today" and "in three days" needs to see the
   // difference. Each band's MIDPOINT is the multiple a client is offered by
-  // default (tierMultiplier), so the ladder reads 1,1× · 1,4× · 3× · 6× · 8×.
+  // default (tierMultiplier), so the ladder reads 1,2× · 1,6× · 3,5× · 7× · 9×.
   const TIERS = [
-    { id: 'standard',    nom: 'Standard',    maxJours: null, apercuMin: 1.0, apercuMax: 1.2,  eleve: false },
-    { id: 'rapide',      nom: 'Rapide',      maxJours: 14,   apercuMin: 1.2, apercuMax: 1.5,  eleve: false },
-    { id: 'prioritaire', nom: 'Prioritaire', maxJours: 3,    apercuMin: 2.5, apercuMax: 3.5,  eleve: true },
-    { id: 'urgence',     nom: 'Urgent',      maxJours: 1,    apercuMin: 5.0, apercuMax: 7.0,  eleve: true },
-    { id: 'extreme',     nom: 'Extrême',     maxJours: 0,    apercuMin: 6.0, apercuMax: 10.0, eleve: true },
+    { id: 'standard',    nom: 'Standard',    maxJours: null, apercuMin: 1.0, apercuMax: 1.4,  eleve: false },
+    { id: 'rapide',      nom: 'Rapide',      maxJours: 14,   apercuMin: 1.4, apercuMax: 1.8,  eleve: false },
+    { id: 'prioritaire', nom: 'Prioritaire', maxJours: 3,    apercuMin: 3.0, apercuMax: 4.0,  eleve: true },
+    { id: 'urgence',     nom: 'Urgent',      maxJours: 1,    apercuMin: 6.0, apercuMax: 8.0,  eleve: true },
+    { id: 'extreme',     nom: 'Extrême',     maxJours: 0,    apercuMin: 8.0, apercuMax: 10.0, eleve: true },
   ];
 
   // What a client is actually asked to pay at a given notice, as a multiple of
-  // the starting price: the middle of the tier's market band, which is exactly
-  // what recommendedAmount pre-fills. One number, one definition, so the price
-  // shown on a calendar cell can never disagree with the price in the form.
-  function tierMultiplier(id) {
+  // the starting price. With no history it is the middle of the tier's market
+  // band — exactly what recommendedAmount pre-fills. Pass the carnet's bids and
+  // it becomes the TUNED value learned from what actually cleared. One number,
+  // one definition, so the price shown on a calendar cell can never disagree
+  // with the price in the form.
+  function tierMultiplier(id, bids) {
     const t = tierById(id);
-    return t ? (t.apercuMin + t.apercuMax) / 2 : null;
+    if (!t) return null;
+    if (bids != null) return tunedTierMultipliers(bids)[t.id];
+    return (t.apercuMin + t.apercuMax) / 2;
+  }
+
+  // --- Adaptive tuning --------------------------------------------------------
+  // The ladder above is a PRIOR, not a verdict: the market itself says what a
+  // given notice is worth, one retained offer at a time. tunedTierMultipliers
+  // folds that history back into the ladder so the number quoted tracks the
+  // data over time instead of a constant someone once picked.
+  //
+  //   • Only RETAINED offers teach — an open ask is a wish, not a price.
+  //   • The signal is the tier's MEDIAN realized premium (montant / base), so a
+  //     single flamboyant outlier cannot move the quote.
+  //   • The median is shrunk toward the static midpoint with a prior weight of
+  //     TUNING_PRIOR_STRENGTH pseudo-observations: no data → exactly the static
+  //     ladder; a handful of deals → a nudge; a real history → the market's own
+  //     number.
+  //   • The result is clamped to the tier's advertised band and the hard
+  //     PREMIUM_CAP, and the ladder is kept strictly ascending — the calendar's
+  //     colours must never rank dates in an order the prices contradict.
+  const TUNING_PRIOR_STRENGTH = 6;
+  // The minimum daylight between two adjacent tuned steps (bands share edges,
+  // so without it two tiers could quote the same multiple).
+  const TUNING_MIN_STEP = 0.05;
+
+  function median(values) {
+    const s = values.slice().sort((a, b) => a - b);
+    const mid = Math.floor(s.length / 2);
+    return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+  }
+
+  function tunedTierMultipliers(bids) {
+    const byTier = {};
+    if (Array.isArray(bids)) {
+      for (const b of bids) {
+        if (!b || b.status !== STATUS.RETENUE) continue;
+        const t = tierById(b.tier);
+        if (!t) continue;
+        // A premium outside [1, cap] cannot come from a valid offer — noise.
+        const p = Number(b.premium);
+        if (!Number.isFinite(p) || p < 1 || p > PREMIUM_CAP) continue;
+        (byTier[t.id] = byTier[t.id] || []).push(p);
+      }
+    }
+    const out = {};
+    let prev = 0;
+    for (const t of TIERS) {
+      const prior = (t.apercuMin + t.apercuMax) / 2;
+      const obs = byTier[t.id];
+      let m = prior;
+      if (obs && obs.length) {
+        m = (obs.length * median(obs) + TUNING_PRIOR_STRENGTH * prior)
+          / (obs.length + TUNING_PRIOR_STRENGTH);
+      }
+      m = Math.min(Math.min(t.apercuMax, PREMIUM_CAP), Math.max(t.apercuMin, m));
+      m = Math.min(Math.max(m, prev + TUNING_MIN_STEP), PREMIUM_CAP);
+      out[t.id] = Math.round(m * 100) / 100;
+      prev = out[t.id];
+    }
+    return out;
   }
 
   function tierById(id) {
@@ -804,12 +866,15 @@
   // Given the date, suggest the middle of that tier's market-acceptance range ×
   // the service floor (rounded to $5, clamped to [floor, 10× floor]). The UI
   // pre-fills this so a client can book with one tap instead of a decision.
-  function recommendedAmount(serviceId, dateISO, todayISO, answers) {
+  // `bids` (optional) is the carnet's history: when supplied, the pre-fill uses
+  // the TUNED multiplier learned from retained offers instead of the static
+  // midpoint, so the recommendation follows the market over time.
+  function recommendedAmount(serviceId, dateISO, todayISO, answers, bids) {
     const svc = serviceById(serviceId);
     if (!svc || !isISODate(dateISO)) return null;
     const days = isISODate(todayISO) ? Math.max(0, daysBetween(todayISO, dateISO)) : 0;
     const t = tierById(tierForDays(days));
-    const mult = (t.apercuMin + t.apercuMax) / 2;
+    const mult = tierMultiplier(t.id, bids);
     // Anchor the recommendation on Nota's quoted price (1.5× the market rate, with
     // the client's pricing answers), so a more complex act recommends a
     // proportionally higher offer and the posted price sits above market.
@@ -933,6 +998,7 @@
     tierById,
     tierForDays,
     tierMultiplier,
+    tunedTierMultipliers,
     PREMIUM_CAP,
     STATUS,
     isISODate,

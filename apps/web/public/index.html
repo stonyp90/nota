@@ -218,6 +218,7 @@
             <div class="intro-main">
               <span class="eyebrow">Place de marché des services notariaux · Québec</span>
               <h1>Un notaire, à la date qu’il vous faut.</h1>
+              <p class="hero-tagline">Proposez votre date et votre prix — un notaire de Québec retient votre demande. <strong>Gratuit pour vous.</strong></p>
               <p>Le principe est simple : <strong>vous proposez</strong> la date et le prix de votre acte (testament, procuration ou refinancement). Au carnet public, <strong>les notaires de Québec</strong> voient votre demande et l’un d’eux la retient. L’offre rencontre la demande. Gratuit pour vous.</p>
               <!-- Trust points: claims already made elsewhere on the site, gathered
                    here so the hero's left column carries as much weight as the pulse. -->
@@ -732,6 +733,7 @@
             <div class="day-value-k" id="day-best-k">Meilleure offre ouverte</div>
             <div class="day-value-v" id="day-best">—</div>
             <p class="day-value-note" id="day-hint"></p>
+            <button type="button" class="day-beat" id="day-beat" hidden>Passer devant</button>
           </div>
           <div class="day-bids" id="day-bids"></div>
         </div>
@@ -891,14 +893,14 @@
         <div class="onb-view" id="onb-view-role">
           <div class="auth-mark" aria-hidden="true"><span class="brand-badge"><img src="favicon.svg" width="26" height="26" alt="" /></span></div>
           <h2 id="onb-title" class="onb-title">Bienvenue sur Nota</h2>
-          <p class="onb-sub">Comment souhaitez-vous utiliser Nota ?</p>
+          <p class="onb-sub">Comment souhaitez-vous utiliser Nota&nbsp;?</p>
           <p class="onb-progress" id="onb-progress">Étape 1 sur 2</p>
 
-          <div class="onb-choices" role="group" aria-label="Comment souhaitez-vous utiliser Nota ?">
+          <div class="onb-choices" role="group" aria-label="Comment souhaitez-vous utiliser Nota ?" aria-describedby="onb-progress">
             <button type="button" class="onb-choice" data-role="client">
               <span class="onb-choice-ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></span>
               <span class="onb-choice-t">Je cherche un notaire</span>
-              <span class="onb-choice-d">Publiez votre date, recevez des offres.</span>
+              <span class="onb-choice-d">Publiez votre demande — date et prix&nbsp;; un notaire la retient.</span>
             </button>
             <button type="button" class="onb-choice" data-role="notary">
               <span class="onb-choice-ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span>
@@ -911,7 +913,7 @@
 
         <!-- VIEW 2 — role steps (title, sub, 3 steps, CTA) filled by app.js -->
         <div class="onb-view" id="onb-view-steps" hidden>
-          <button type="button" class="onb-back" id="onb-back">← Changer</button>
+          <button type="button" class="onb-back" id="onb-back"><span aria-hidden="true">← </span>Changer</button>
           <h2 class="onb-title onb-steps-title" id="onb-steps-title"></h2>
           <p class="onb-sub" id="onb-steps-sub"></p>
           <p class="onb-progress" id="onb-steps-progress">Étape 2 sur 2</p>
@@ -940,7 +942,7 @@
             <svg class="brand-ic" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="var(--logo-google-blue)" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.8z"/><path fill="var(--logo-google-green)" d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1A12 12 0 0 0 12 24z"/><path fill="var(--logo-google-yellow)" d="M5.3 14.3a7.2 7.2 0 0 1 0-4.6V6.6H1.3a12 12 0 0 0 0 10.8l4-3.1z"/><path fill="var(--logo-google-red)" d="M12 4.8c1.8 0 3.3.6 4.6 1.8l3.4-3.4A12 12 0 0 0 12 0 12 12 0 0 0 1.3 6.6l4 3.1C6.2 6.9 8.9 4.8 12 4.8z"/></svg>
             <svg class="brand-ic" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="var(--logo-outlook-blue)" d="M2 6.2 9 4.9v14.2L2 17.8z"/><path fill="var(--logo-on-brand)" d="M5.5 9.2c-1 0-1.7.9-1.7 2.3s.7 2.3 1.7 2.3 1.7-.9 1.7-2.3-.7-2.3-1.7-2.3zm0 1c.4 0 .7.5.7 1.3s-.3 1.3-.7 1.3-.7-.5-.7-1.3.3-1.3.7-1.3z"/><rect x="9.5" y="5.5" width="12.5" height="13" rx="1.5" fill="var(--logo-outlook-blue)"/><path fill="var(--logo-on-brand)" d="M15.7 8.6a3 3 0 1 0 0 6 3 3 0 0 0 0-6zm0 1.6a1.4 1.4 0 1 1 0 2.8 1.4 1.4 0 0 1 0-2.8z"/></svg>
             <svg class="brand-ic" viewBox="0 0 384 512" width="13" height="13" aria-hidden="true" fill="currentColor"><path d="M318.7 268c-.3-36 16.4-63 50-83-18.8-27-47-42-84-45-35-3-73 20-87 20s-52-19-79-19c-56 1-114 43-114 130 0 26 5 53 15 81 13 37 60 128 109 126 26-1 44-19 78-19s50 18 78 18c50-1 92-83 105-120-67-32-64-93-64-95zM256 84c17-20 15-49 14-59-14 1-40 9-56 29-14 17-19 43-16 58 16 1 41-8 58-28z"/></svg>
-            <span>Le carnet s'ajoute à votre agenda en un clic.</span>
+            <span>Le carnet s’ajoute à votre agenda en un clic.</span>
           </div>
         </div>
 
@@ -950,7 +952,7 @@
              retains it. Decorative (aria-hidden); renderOnbWeekAnim drives it. -->
         <div class="ob-bid" id="ob-bid" aria-hidden="true" hidden>
           <div class="nc-week-head">
-            <span class="nc-week-kicker">Vous proposez — un notaire retient</span>
+            <span class="nc-week-kicker" id="ob-bid-kicker">Vous proposez — un notaire retient</span>
           </div>
           <div class="ob-bid-scene" id="ob-bid-scene">
             <div class="ob-bid-card">

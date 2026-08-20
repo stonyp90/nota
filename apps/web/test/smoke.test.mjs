@@ -36,6 +36,11 @@ function daysInMonthUTC(anchor) {
   const p = anchor.split('-').map(Number);
   return new Date(Date.UTC(p[0], p[1], 0)).getUTCDate(); // day 0 of next month = last day of this one
 }
+const mondayIndexUTC = (iso) => (new Date(iso + 'T00:00:00Z').getUTCDay() + 6) % 7;
+function addMonthsUTC(iso, n) {
+  const p = iso.split('-').map(Number);
+  return new Date(Date.UTC(p[0], p[1] - 1 + n, 1)).toISOString().slice(0, 10);
+}
 
 function fire(win, elmt, type) {
   elmt.dispatchEvent(new win.Event(type, { bubbles: true }));
@@ -46,7 +51,7 @@ function fire(win, elmt, type) {
  * Fresh per test so interactive mutations (offer form, theme, day modal) never
  * bleed between assertions.
  */
-async function boot() {
+async function boot(opts = {}) {
   const dom = new JSDOM(HTML_SRC, {
     runScripts: 'outside-only',
     url: 'https://nota.example/',
@@ -76,7 +81,10 @@ async function boot() {
   const today = todayISO();
   const anchor = firstOfMonth(today);
   const month = monthKey(anchor);
-  const seed = D.makeFixtures(anchor);
+  let seed = D.makeFixtures(anchor);
+  // A test may reshape the seed (e.g. push an offer past the month seam) while
+  // still exercising the real offline boot path.
+  if (opts.mutateSeed) seed = opts.mutateSeed(seed, D) || seed;
   win.localStorage.setItem('nota.bids.v1', JSON.stringify(seed));
   // The store rebuilds any seed whose pricing signature is stale (ensureSeed);
   // stamp the current signature so this pre-seed reads as current, exactly as
@@ -115,33 +123,63 @@ test('store is offline and monthBids is seeded deterministically', async () => {
   assert.equal(Nota.state.monthBids.length, expectedMonth.length);
 });
 
-// 3. Calendar grid: one day cell per day-of-month + 7 weekday headers.
-test('calendar renders day cells for the anchor month and 7 weekday headers', async () => {
-  const { doc, anchor, today } = await boot();
-  const dayCells = all(doc, '#cal-grid .cal-cell:not(.is-out)');
+// 3. Calendar grid on the CURRENT month: a rolling six-week window, the
+//    standard booking-calendar shape (Airbnb, Booking, Calendly all open on
+//    "today onward"). Late in a month, a whole-month grid is a page of dead
+//    days with the bookable ones hidden behind a "next" click; the window
+//    opens on Monday of today's week and runs 42 consecutive days, crossing
+//    the month seam with LIVE, priced cells. Other months render whole.
+test('the current month renders as a rolling six-week window', async () => {
+  const { doc, D, today } = await boot();
   assert.equal(all(doc, '#cal-grid .cal-dow').length, 7);
 
-  // The month is drawn WHOLE, past weeks included: a month missing its first
-  // fortnight reads as a broken calendar. Past days are inert, not absent.
-  const dim = daysInMonthUTC(anchor);
-  const dayNums = dayCells.map((c) => Number(c.dataset.date.slice(8, 10)));
-  assert.equal(dayCells.length, dim, 'every day of the month has a cell');
-  assert.equal(dayNums[0], 1, 'the month starts on the 1st');
-  assert.equal(dayNums[dayNums.length - 1], dim, 'and runs to its last day');
-  assert.deepEqual(dayNums, dayNums.slice().sort((a, b) => a - b), 'in order, with no gaps');
+  const cells = all(doc, '#cal-grid .cal-cell');
+  assert.equal(cells.length, 42, 'six full weeks');
+  assert.equal(all(doc, '#cal-grid .cal-cell.is-out').length, 0,
+    'no muted adjacent-month pads: every cell in the window is a real cell');
 
-  const todayDay = Number(today.slice(8, 10));
-  if (today.slice(0, 7) === anchor.slice(0, 7)) {
-    assert.ok(dayNums.includes(todayDay), 'today is rendered');
-    // Everything before today is present AND inert: past dates cannot be booked.
-    const past = dayCells.filter((c) => c.dataset.date < today);
-    assert.equal(past.length, todayDay - 1, 'every day before today is rendered');
-    past.forEach((c) => {
-      assert.ok(c.classList.contains('is-past'), c.dataset.date + ' is marked past');
-      assert.equal(c.getAttribute('aria-disabled'), 'true', c.dataset.date + ' is disabled');
-      assert.equal(c.tabIndex, -1, c.dataset.date + ' is out of the tab order');
-    });
-  }
+  const start = D.addDays(today, -mondayIndexUTC(today));
+  cells.forEach((c, i) => assert.equal(c.dataset.date, D.addDays(start, i), 'consecutive days, no gaps'));
+
+  // Today is rendered; the few days before it (its own week) are inert history.
+  assert.ok(cells.some((c) => c.dataset.date === today), 'today is rendered');
+  cells.filter((c) => c.dataset.date < today).forEach((c) => {
+    assert.ok(c.classList.contains('is-past'), c.dataset.date + ' is marked past');
+    assert.equal(c.getAttribute('aria-disabled'), 'true', c.dataset.date + ' is disabled');
+    assert.equal(c.tabIndex, -1, c.dataset.date + ' is out of the tab order');
+  });
+
+  // The window always reaches into next month, and those days are bookable
+  // cells like any other.
+  const nextMonth = cells.filter((c) => monthKey(c.dataset.date) > monthKey(today));
+  assert.ok(nextMonth.length > 0, 'the window crosses the month seam');
+  nextMonth.forEach((c) => assert.ok(!c.classList.contains('is-past'), c.dataset.date + ' is bookable'));
+
+  // The seam is labeled: the 1st prints its month beside the day number.
+  const firstOfNext = cells.find((c) => c.dataset.date > today && c.dataset.date.slice(8) === '01');
+  assert.ok(firstOfNext, 'the window holds a 1st of the month');
+  assert.ok(firstOfNext.querySelector('.cal-daynum').dataset.month, 'the 1st names its month');
+
+  // The title spans the window ("août – septembre 2026").
+  assert.match($(doc, 'cal-title').textContent, /–/, 'the title names both months');
+});
+
+// 3b. The window loads BOTH months it spans: an offer early next month prices
+//     its cell instead of vanishing behind the seam.
+test('the rolling window loads and prices offers past the month seam', async () => {
+  const seamDate = addMonthsUTC(firstOfMonth(todayISO()), 1).slice(0, 8) + '02';
+  const ctx = await boot({
+    mutateSeed(seed, D) {
+      const src = seed.find((b) => b.status === D.STATUS.OUVERTE);
+      seed.push(Object.assign({}, src, { id: 'seam-test', dateISO: seamDate }));
+      return seed;
+    },
+  });
+  assert.ok(ctx.Nota.state.monthBids.some((b) => b.id === 'seam-test'),
+    'next month’s offers load with the window');
+  const cell = ctx.doc.querySelector('#cal-grid .cal-cell[data-date="' + seamDate + '"]');
+  assert.ok(cell && !cell.classList.contains('is-out'), 'the seam day is a live cell');
+  assert.ok(cell.querySelector('.svc-bid'), 'and it prints its price');
 });
 
 // 4. Legend shows one item per tier (5).
@@ -184,9 +222,16 @@ test('a day with bids shows the best open offer per act', async () => {
       assert.equal(it.querySelector('.svc-bid-name'), null, 'no visible name in a cell');
       // ...but the name must reach a screen reader, which has no hover and
       // cannot see a colour, and must feed the hover tooltip.
+      assert.ok(names.includes(it.dataset.name), 'the tooltip names the act');
+      // The hover bubble's second line says something the cell cannot: how
+      // deep the competition runs and where the act's price STARTS, so the
+      // printed figure reads as high or low at a glance.
+      assert.match(it.dataset.detail, /^\d+ offres? ouvertes? · départ .+\$/,
+        'the tooltip carries depth + starting price, got: ' + it.dataset.detail);
+      // Screen readers hear exactly what a hovering reader sees.
       const sr = it.querySelector('.visually-hidden');
-      assert.ok(sr && names.includes(sr.textContent), 'the act is named for assistive tech');
-      assert.equal(it.dataset.name, sr.textContent, 'the tooltip names the same act');
+      assert.ok(sr, 'the act is named for assistive tech');
+      assert.equal(sr.textContent, it.dataset.name + ' — ' + it.dataset.detail);
     });
   });
   // The odds percentage is gone from the compact surface.
@@ -724,7 +769,7 @@ test('EDGE (UI): a filter that matches nothing empties the grid without breaking
   // client's place — but no day carries an offer, and the count says so.
   assert.ok(ctx.doc.querySelectorAll('#cal-grid .cal-cell:not(.is-out)').length > 0, 'the month is still drawn');
   assert.equal(ctx.doc.querySelectorAll('#cal-grid .cal-cell.has-bids').length, 0, 'no day shows an offer');
-  assert.equal(ctx.doc.getElementById('result-count').textContent, '0 offre ce mois');
+  assert.equal(ctx.doc.getElementById('result-count').textContent, '0 offre au carnet');
 });
 
 
@@ -824,10 +869,12 @@ test('URGENCY: every upcoming day prices its own notice, from the domain', async
     assert.equal(cell.dataset.tier, tierId, 'the cell edge matches the marker');
 
     // The number shown must be the number the booking form pre-fills, or the
-    // calendar quotes a price the form then contradicts.
-    const m = ctx.D.tierMultiplier(tierId);
+    // calendar quotes a price the form then contradicts. It is the TUNED
+    // multiplier — learned from the month's retained offers — not the static
+    // ladder midpoint.
+    const m = ctx.D.tierMultiplier(tierId, ctx.Nota.state.monthBids);
     const shown = Number(mark.textContent.replace('×', '').replace(',', '.'));
-    assert.equal(shown, Math.round(m * 10) / 10, 'the cell quotes the domain multiplier');
+    assert.equal(shown, Math.round(m * 10) / 10, 'the cell quotes the tuned domain multiplier');
   });
 
   // A near date must cost strictly more than a distant one, or the whole
@@ -841,7 +888,9 @@ test('URGENCY: every upcoming day prices its own notice, from the domain', async
   const key = [...ctx.doc.querySelectorAll('#legend .legend-item')]
     .find((n) => /Prioritaire/.test(n.textContent));
   assert.ok(key, 'the legend keys each tier');
-  assert.match(key.textContent, /3×/, 'with its multiplier, not just a name');
+  const legendMult = ctx.D.tierMultiplier('prioritaire', ctx.Nota.state.monthBids);
+  const legendLabel = String(Math.round(legendMult * 10) / 10).replace('.', ',') + '×';
+  assert.ok(key.textContent.includes(legendLabel), 'with its (tuned) multiplier, not just a name');
 });
 
 
@@ -938,8 +987,63 @@ test('DAY: switching the act re-scopes the headline offer and the totals', async
   ctx.doc.querySelector('#o-service-chips .chip[data-svc="procuration"]').click();
   await wait(30);
   assert.equal(ctx.doc.querySelectorAll('#day-bids > .bid-row').length, 0);
-  assert.equal($(ctx.doc, 'day-best').textContent, '—');
+  assert.equal($(ctx.doc, 'day-best').textContent, 'Libre');
+  assert.match($(ctx.doc, 'day-hint').textContent, /Soyez le premier/);
   assert.match(ctx.doc.querySelector('#day-bids .day-bids-count').textContent, /Aucune offre en procuration/);
+});
+
+test('DAY: each act chip carries its own offre à battre for the date', async () => {
+  const ctx = await boot();
+  const iso = ctx.D.addDays(ctx.today, 5);
+  await reseed(ctx, [
+    { id: 'r1', serviceId: 'refinancement', dateISO: iso, montant: 4000, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
+    { id: 'r2', serviceId: 'refinancement', dateISO: iso, montant: 6000, tier: 'standard', status: ctx.D.STATUS.RETENUE, anonyme: true, createdAt: iso },
+    { id: 't1', serviceId: 'testament', dateISO: iso, montant: 9000, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
+  ]);
+  ctx.doc.querySelector('.cal-cell[data-date="' + iso + '"]').click();
+  await wait(30);
+  const sub = (svc) => ctx.doc.querySelector('#o-service-chips .chip[data-svc="' + svc + '"] .chip-svc-sub').textContent;
+  // Open offers only: the retained 6000 must not raise the refinancement bar.
+  assert.match(sub('refinancement'), /4\s*000/);
+  assert.match(sub('testament'), /9\s*000/);
+  assert.equal(sub('procuration'), 'libre');
+});
+
+test('DAY: « Passer devant » lifts the offer just above the act’s best', async () => {
+  const ctx = await boot();
+  const iso = ctx.D.addDays(ctx.today, 5);
+  await reseed(ctx, [
+    { id: 'r1', serviceId: 'refinancement', dateISO: iso, montant: 4000, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
+  ]);
+  ctx.doc.querySelector('.cal-cell[data-date="' + iso + '"]').click();
+  await wait(30);
+  const amt = $(ctx.doc, 'o-amount');
+  const btn = $(ctx.doc, 'day-beat');
+  // Trail the bar on purpose: the shortcut shows and the hint names the bar.
+  amt.value = amt.min; fire(ctx.win, amt, 'input');
+  assert.equal(btn.hidden, false, 'the shortcut shows while the offer trails');
+  assert.match($(ctx.doc, 'day-hint').textContent, /4\s*000/);
+  btn.click();
+  assert.ok(Number(amt.value) > 4000, 'one tap clears the bar');
+  assert.equal(btn.hidden, true, 'nothing left to beat');
+  assert.match($(ctx.doc, 'day-hint').textContent, /passe devant/i);
+});
+
+test('DAY: an act whose only offer is already retained still reads « Libre »', async () => {
+  const ctx = await boot();
+  const iso = ctx.D.addDays(ctx.today, 5);
+  await reseed(ctx, [
+    { id: 'p1', serviceId: 'procuration', dateISO: iso, montant: 5000, tier: 'standard', status: ctx.D.STATUS.RETENUE, anonyme: true, createdAt: iso },
+  ]);
+  ctx.doc.querySelector('.cal-cell[data-date="' + iso + '"]').click();
+  await wait(30);
+  ctx.doc.querySelector('#o-service-chips .chip[data-svc="procuration"]').click();
+  await wait(30);
+  // No OPEN offer to beat — but the reason differs from an empty day, and the
+  // copy says so: the existing offer is already retained.
+  assert.equal($(ctx.doc, 'day-best').textContent, 'Libre');
+  assert.match($(ctx.doc, 'day-hint').textContent, /retenue/);
+  assert.equal($(ctx.doc, 'day-beat').hidden, true);
 });
 
 test('POSTAL: the sector field normalizes as you type and previews what is published', async () => {
@@ -1071,7 +1175,7 @@ test('the hero pulse shows the month median per service and filters the carnet',
   // Clicking a row filters the carnet to that service, and syncs the chip group.
   byId.procuration.click();
   await wait(30);
-  assert.equal(ctx.doc.getElementById('result-count').textContent, '1 offre ce mois');
+  assert.equal(ctx.doc.getElementById('result-count').textContent, '1 offre au carnet');
   assert.equal(ctx.doc.querySelector('#chips-service .chip[data-svc="procuration"]').getAttribute('aria-pressed'), 'true');
   const onRow = ctx.doc.querySelector('#pulse-rows .pulse-row[data-svc="procuration"]');
   assert.equal(onRow.getAttribute('aria-pressed'), 'true');
@@ -1085,7 +1189,7 @@ test('the hero pulse shows the month median per service and filters the carnet',
   // scope: 4 seeded, 1 retained, so 3 open ones are counted.
   onRow.click();
   await wait(30);
-  assert.equal(ctx.doc.getElementById('result-count').textContent, '3 offres ce mois');
+  assert.equal(ctx.doc.getElementById('result-count').textContent, '3 offres au carnet');
   assert.equal(ctx.doc.querySelector('#chips-service .chip[data-svc=""]').getAttribute('aria-pressed'), 'true');
 });
 
@@ -1711,12 +1815,24 @@ test('account menu closes when focus moves outside it', async () => {
   assert.equal($(doc, 'notif-panel').hidden, true, 'the menu never lingers behind a moved focus');
 });
 
-// 21. Adjacent-month days pad the first and last weeks. Standard calendar
-//     behaviour: the real date, muted, no prices (only the anchor month's offers
-//     are loaded, so a figure there would be a claim the app cannot make), and a
-//     FUTURE one navigates to its own month where the offers do exist.
-test('the first and last weeks are padded with real adjacent-month dates', async () => {
-  const { doc, anchor } = await boot();
+// Step the calendar to next month (a plain whole-month view) and wait for it.
+async function gotoNextMonth(ctx) {
+  const target = monthKey(addMonthsUTC(firstOfMonth(todayISO()), 1));
+  $(ctx.doc, 'cal-next').click();
+  const rendered = () => ctx.doc.querySelector('#cal-grid .cal-cell:not(.is-out)[data-date^="' + target + '"]');
+  for (let i = 0; i < 100 && !(monthKey(ctx.Nota.state.anchor) === target && rendered()); i++) await wait(20);
+  return target + '-01';
+}
+
+// 21. A FUTURE month renders whole, its first and last weeks padded with real
+//     adjacent-month dates. Standard calendar behaviour: the real date, muted,
+//     no prices (only the viewed months' offers are loaded, so a figure there
+//     would be a claim the app cannot make), and a FUTURE pad navigates to its
+//     own month — or window — where the offers do exist.
+test('a future month pads its first and last weeks with real adjacent-month dates', async () => {
+  const ctx = await boot();
+  const { doc } = ctx;
+  const anchor = await gotoNextMonth(ctx);
   const rows = all(doc, '#cal-grid .cal-row:not(.cal-dow-row)');
   assert.ok(rows.length > 0, 'the grid renders week rows');
   rows.forEach((r, i) => {
@@ -1750,10 +1866,11 @@ test('the first and last weeks are padded with real adjacent-month dates', async
 test('a future adjacent-month day moves the calendar to its own month', async () => {
   const ctx = await boot();
   const { doc, Nota } = ctx;
+  await gotoNextMonth(ctx);
   const nav = all(doc, '#cal-grid .cal-cell.is-out.is-nav');
   if (!nav.length) return; // a month that starts on Monday and ends on Sunday has no pad
   const target = nav[0].dataset.date;
-  assert.ok(target > todayISO(), 'only future adjacent days are navigable');
+  assert.ok(target >= todayISO(), 'only future adjacent days are navigable');
   nav[0].click();
   // The click sets the anchor and THEN reloads and re-renders. Poll for the
   // rendered cell, not the anchor: a fixed wait, or waiting on the anchor
@@ -1770,4 +1887,53 @@ test('a future adjacent-month day moves the calendar to its own month', async ()
       assert.equal(c.getAttribute('aria-disabled'), 'true', c.dataset.date + ' is disabled');
     }
   });
+});
+
+// The menu regressions the cross-resolution audit caught, pinned as CSS facts:
+// the account panel's height cap must subtract the sticky header it hangs from
+// (a bare vh cap overflowed short landscape viewports), and the phone-visible
+// controls must sit on the 44px coarse-pointer floor — including the auth
+// button, whose ≤680px rule outranks the plain .btn floor on specificity.
+test('menu CSS: panel viewport cap and coarse-pointer touch floors hold', () => {
+  const css = readFileSync(fileURLToPath(new URL('../public/styles.css', import.meta.url)), 'utf8');
+  assert.match(css, /\.acct-panel\s*\{[^}]*max-height:\s*min\(calc\(100dvh - var\(--header-h\)/,
+    'the account panel cap subtracts the sticky header');
+  // Concatenate every @media (pointer: coarse) block (there are several),
+  // brace-matched so the assertions look only inside the gated rules.
+  let block = '';
+  for (let at = css.indexOf('@media (pointer: coarse)'); at !== -1; at = css.indexOf('@media (pointer: coarse)', at + 1)) {
+    let i = css.indexOf('{', at), depth = 0;
+    for (let j = i; j < css.length; j++) {
+      if (css[j] === '{') depth++;
+      else if (css[j] === '}' && --depth === 0) { block += css.slice(i, j + 1); break; }
+    }
+  }
+  assert.match(block, /\.acct-item/, 'account-menu rows are on the 44px floor');
+  assert.match(block, /\.header-auth \.btn\s*\{\s*min-height:\s*44px/,
+    'the auth button floor matches the ≤680px rule\'s specificity');
+  assert.match(block, /\.notif-x\s*\{[^}]*44px/, 'the notification dismiss is on the 44px floor');
+});
+
+// The ≤720px hero drops the full pitch paragraph, and before this NOTHING on a
+// phone said what Nota actually is — the h1 and two buttons assumed you knew.
+// A one-line tagline fills that gap on phones only; desktop keeps the full
+// paragraph and never shows both.
+test('the phone hero carries a one-line product description', async () => {
+  const { doc } = await boot();
+  const tag = doc.querySelector('#pane-carnet .intro--hero .hero-tagline');
+  assert.ok(tag, 'the hero has a tagline');
+  assert.ok(tag.textContent.trim().length >= 40, 'it actually describes the product');
+
+  const css = readFileSync(fileURLToPath(new URL('../public/styles.css', import.meta.url)), 'utf8');
+  assert.match(css, /\.hero-tagline\s*\{[^}]*display:\s*none/,
+    'hidden by default: desktop shows the full pitch instead');
+  const at = css.indexOf('@media (max-width: 719.98px)');
+  assert.ok(at !== -1, 'the hero phone threshold block exists');
+  let i = css.indexOf('{', at), depth = 0, block = '';
+  for (let j = i; j < css.length; j++) {
+    if (css[j] === '{') depth++;
+    else if (css[j] === '}' && --depth === 0) { block = css.slice(i, j + 1); break; }
+  }
+  assert.match(block, /\.hero-tagline\s*\{[^}]*display:\s*block/,
+    'shown inside the block that hides the full paragraph');
 });

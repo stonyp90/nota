@@ -91,7 +91,7 @@ Then('l\'affichage n\'utilise aucune espace sécable', function () {
 
 // The multiplier a client is offered by default for the current tier. It is the
 // midpoint of the tier's market band, which is what recommendedAmount pre-fills.
-Then('le multiplicateur proposé est {int}', function (attendu) {
+Then('le multiplicateur proposé est {float}', function (attendu) {
   const t = this.domain.tierById(this.result);
   assert.ok(t, 'palier inconnu : ' + this.result);
   assert.equal((t.apercuMin + t.apercuMax) / 2, attendu);

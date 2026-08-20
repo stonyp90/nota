@@ -395,13 +395,27 @@ a:hover { text-decoration: underline; }
 .auth-modal::backdrop { background: rgb(0 0 0 / 0.6); backdrop-filter: blur(2px); }
 .auth-x-form { position: absolute; top: 10px; right: 10px; margin: 0; z-index: 1; }
 .auth-x { appearance: none; border: 0; background: transparent; color: var(--ink-muted); cursor: pointer; padding: 6px; border-radius: var(--radius-sm); display: grid; place-items: center; }
+/* 18px glyph + 6px padding is a 30px target — under the touch minimum. Give
+   fingers the full 44px without changing what a mouse sees. */
+@media (pointer: coarse) { .auth-x { padding: 13px; } }
 .auth-x:hover { background: var(--surface-inset); color: var(--ink); }
 .auth-body { padding: 30px 26px 24px; display: flex; flex-direction: column; }
 .auth-mark { display: grid; place-items: center; margin-bottom: 12px; }
 .auth-mark .brand-badge { width: 46px; height: 46px; border-radius: 13px; display: grid; place-items: center; background: var(--surface-inset); border: 1px solid var(--border); }
 .auth-title { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; text-align: center; margin: 0; }
 .auth-sub { font-size: 13.5px; color: var(--ink-muted); text-align: center; margin: 6px 0 18px; line-height: 1.5; }
-.auth-role { width: 100%; margin-bottom: 16px; }
+/* The base .seg lets the unselected option sit as bare text in the track, which
+   reads as a label, not a button. Here both halves must read as the same kind of
+   thing: equal widths, a hover fill that invites the click, and the selected one
+   raised on a filled pill so the pair reads as one two-position control.
+   Scoped to .auth-role only — the calendar's segments keep the base look. */
+.auth-role { display: flex; width: 100%; margin-bottom: 16px; }
+.auth-role .seg-btn { flex: 1; text-align: center; padding: 8px 14px; font-weight: 600; }
+.auth-role .seg-btn:not(.is-on):hover { background: var(--surface-hover); color: var(--ink); }
+/* Not var(--surface): in dark it sits below the inset track and would read
+   sunken. --surface-hover stays lighter than the track in both themes; the
+   strong hairline and the bigger shadow are what separate it from a hover. */
+.auth-role .seg-btn.is-on { background: var(--surface-hover); border-color: var(--border-strong); box-shadow: var(--shadow); }
 .auth-social { display: flex; flex-direction: column; gap: 9px; }
 .auth-oauth { justify-content: center; gap: 10px; width: 100%; padding: 11px 14px; font-weight: 600; }
 .auth-oauth .brand-ic { flex: none; }
@@ -471,8 +485,11 @@ a:hover { text-decoration: underline; }
 .btn:not(:disabled):hover { background: var(--surface-inset); }
 .btn:not(:disabled):active { transform: translateY(1px); }
 /* Primary action reads as primary through brand colour + weight, never a fill. */
-.btn-primary { background: transparent; color: var(--brand); border-color: var(--brand); font-weight: 600; }
-.btn-primary:not(:disabled):hover { background: var(--surface-inset); border-color: var(--brand); }
+.btn-primary { background: transparent; color: var(--brand); border-color: var(--brand); font-weight: 600; transition: background .12s, border-color .12s, transform .12s ease, box-shadow .12s ease; }
+/* The primary action lifts on hover — the same shadow-brand cue the hero CTA
+   already uses, so "this is the one" reads consistently across the app. */
+.btn-primary:not(:disabled):hover { background: var(--surface-inset); border-color: var(--brand); transform: translateY(-1px); box-shadow: var(--shadow-brand); }
+.btn-primary:not(:disabled):active { transform: translateY(0); box-shadow: none; }
 .btn-ghost { border-color: transparent; background: transparent; color: var(--ink-muted); }
 .btn-ghost:hover { background: var(--surface-inset); color: var(--ink); }
 .btn-sm { padding: 5px 11px; font-size: 12.5px; }
@@ -486,10 +503,11 @@ a:hover { text-decoration: underline; }
   display: inline-grid; place-items: center; flex: none;
   width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%;
   background: none; color: var(--ink-muted); cursor: pointer;
-  text-decoration: none; transition: background-color .12s ease, color .12s ease;
+  text-decoration: none; transition: background-color .12s ease, color .12s ease, transform .12s ease;
 }
 .mini-btn:hover { background: var(--surface-hover); color: var(--brand); text-decoration: none; }
-.mini-btn:active { background: var(--surface-inset); }
+/* Pressing compresses — the standard tactile cue for an icon-only control. */
+.mini-btn:active { background: var(--surface-inset); transform: scale(.94); }
 .mini-btn svg { display: block; }
 /* Actions stay quiet until the row they belong to is hovered or focused —
    the data reads first, the tools appear when you go for them. */
@@ -559,7 +577,9 @@ a:hover { text-decoration: underline; }
 .pulse-fig-v { overflow: hidden; text-overflow: ellipsis; }
 .pulse-item .pulse-row { flex: 1; min-width: 0; }
 .pulse-item .mini-btn { margin-right: -8px; }
-.pulse-item:hover .mini-reserver, .pulse-item:focus-within .mini-reserver { color: var(--brand); }
+/* The book action wakes with the row: brand colour plus a 2px nudge toward
+   where the click leads. transform joins the mini-btn transition below. */
+.pulse-item:hover .mini-reserver, .pulse-item:focus-within .mini-reserver { color: var(--brand); transform: translateX(2px); }
 .pulse-row {
   display: grid; grid-template-columns: auto minmax(24px, 1fr) auto; align-items: baseline;
   gap: 2px 12px; text-align: left;
@@ -594,15 +614,17 @@ a:hover { text-decoration: underline; }
 .pulse-fig-v { font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .pulse-fig-v.is-empty { color: var(--ink-muted); font-weight: 600; }
 .pulse-meta { grid-column: 1; grid-row: 2; font-size: 11.5px; color: var(--ink-muted); padding-left: 22px; white-space: nowrap; }
-/* Share of the month's demand, in the service's own hue. Short and inline with
-   the counts: a gauge that belongs to its row, never a rule spanning the width
-   (that would just put the removed borders back). */
+/* Share of the month's demand, in the service's own hue. The gauge runs the
+   full middle column — from the counts to the figures — so on a wide hero the
+   fill level stays readable instead of ending in a stub. */
 .pulse-bar {
-  grid-column: 2; grid-row: 2; align-self: center; justify-self: start;
-  width: min(84px, 100%); height: 3px; border-radius: 2px;
+  grid-column: 2; grid-row: 2; align-self: center; justify-self: stretch;
+  height: 3px; border-radius: 2px;
   background: var(--surface-inset); overflow: hidden; margin-left: 12px;
 }
-.pulse-bar > span { display: block; height: 100%; border-radius: inherit; min-width: 2px; }
+/* The fill eases to its level when the month's data lands — the motion is the
+   "live" cue. Decelerating curve, so it settles rather than snaps. */
+.pulse-bar > span { display: block; height: 100%; border-radius: inherit; min-width: 2px; transition: width .45s cubic-bezier(.22, 1, .36, 1); }
 
 /* One column below 900px: the aside stacks under the copy, still chromeless —
    separated by space alone, and with roomier rows for touch. */
@@ -755,7 +777,7 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 .cal-urgency[data-tier='urgence'] { color: var(--tier-urgence-ink); }
 /* The steepest step is the one a client must not miss, so it is the only one
    that fills rather than tints. */
-.cal-urgency[data-tier='extreme'] { color: var(--on-accent, #fff); background: var(--tier-extreme); padding: 1px 5px; border-radius: 999px; }
+.cal-urgency[data-tier='extreme'] { color: var(--on-accent, #fff); background: var(--tier-extreme); padding: 1px 5px; border-radius: 999px; box-shadow: var(--shadow-sm); }
 .legend-mult { font-weight: 800; }
 .cal-cell[data-tier]::before {
   content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
@@ -767,6 +789,13 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 .cal-cell[data-tier='urgence']::before { background: var(--tier-urgence); }
 .cal-cell[data-tier='extreme']::before { background: var(--tier-extreme); width: 4px; }
 .cal-daynum { font-size: 12px; font-weight: 600; color: var(--ink-muted); }
+/* The rolling window carries a month seam inside the grid: the 1st names its
+   month beside the number ("1 sept"), the way every booking calendar labels it. */
+.cal-daynum[data-month]::after {
+  content: " " attr(data-month);
+  font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--ink-muted);
+}
 /* Today gets the classic filled date-circle (a data indicator, not a button) —
    the clearest "you are here" affordance, matching the count badge's fill. */
 .cal-cell.is-today .cal-daynum {
@@ -790,24 +819,36 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 .svc-bid-amount { font-weight: 800; letter-spacing: -0.02em; white-space: nowrap; }
 
 /* A calendar cell prints the dot and the price only. Hovering the row names the
-   act, so the colour never has to be memorised — the legend is the fallback,
-   and the name sits in the DOM for screen readers either way. Nothing on the
-   path to the grid clips, so the bubble escapes its cell cleanly. */
+   act on its first line and, on its second, what the cell has no room to say:
+   how many offers are still open and the act's starting price (data-detail),
+   so the printed figure reads as high or low at a glance. The same words sit
+   in the DOM for screen readers. Nothing on the path to the grid clips, so
+   the bubble escapes its cell cleanly. */
 .cal-svc-bids .svc-bid { position: relative; }
 .cal-svc-bids .svc-bid::after {
-  content: attr(data-name);
+  content: attr(data-name) "\A" attr(data-detail);
   position: absolute; bottom: calc(100% + 6px); left: -4px;
-  z-index: 6; padding: 4px 9px; border-radius: var(--radius-sm);
+  z-index: 6; padding: 5px 10px; border-radius: var(--radius-sm);
   background: var(--surface); color: var(--ink);
   border: 1px solid var(--border-strong); box-shadow: var(--shadow);
-  font-size: 11.5px; font-weight: 600; line-height: 1.3; white-space: nowrap;
+  font-size: 11.5px; font-weight: 600; line-height: 1.45;
+  white-space: pre-line; width: max-content; max-width: 240px;
   display: none; pointer-events: none;
 }
+/* The bubble hangs off its row's left edge; in the last two columns that runs
+   past the grid's right edge, so it right-aligns there instead. */
+.cal-row .cal-cell:nth-child(n+6) .svc-bid::after { left: auto; right: -4px; }
 @media (hover: hover) and (pointer: fine) {
   .cal-svc-bids .svc-bid:hover::after { display: block; }
 }
 @media (prefers-reduced-motion: reduce) {
   .cal-svc-bids .svc-bid::after { transition: none; }
+  /* Motion-flavoured polish (lifts, nudges, eased fills) goes still; colour
+     and shadow state changes remain. */
+  .btn-primary, .mini-btn, .pulse-bar > span, .pulse-item .mini-reserver, .cal-cell { transition: none; }
+  .btn-primary:not(:disabled):hover, .cal-cell:hover { transform: none; }
+  .pulse-item:hover .mini-reserver, .pulse-item:focus-within .mini-reserver { transform: none; }
+  .mini-btn:active { transform: none; }
 }
 .cal-svc-bids { display: flex; flex-direction: column; gap: 2px; margin-top: auto; min-width: 0; font-size: 12.5px; }
 .cal-svc-bids .svc-bid { min-width: 0; }
@@ -1256,7 +1297,25 @@ dialog::backdrop { background: var(--backdrop); }
 .day-value { padding: 12px 14px 10px; }
 .day-value-k { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-muted); }
 .day-value-v { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; color: var(--ink); }
+/* « Libre » — no open offer to beat is an opportunity, so it reads in green. */
+.day-value-v.is-free { color: var(--ok); }
 .day-value-note { font-size: 12px; color: var(--ink-muted); margin: 2px 0 0; }
+/* The live line flips green the moment the slider clears the bar. */
+.day-value-note.is-ahead { color: var(--ok); font-weight: 600; }
+/* One tap over the bar. */
+.day-beat {
+  appearance: none; font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer;
+  margin-top: 8px; padding: 6px 14px; border-radius: 999px;
+  border: 1px solid var(--brand); background: transparent; color: var(--brand);
+  transition: background .15s, color .15s;
+}
+.day-beat:hover { background: var(--brand); color: var(--surface); }
+/* The headline lands with a small settle; the amount echoes it after a one-tap
+   jump. Both sit still under prefers-reduced-motion. */
+@keyframes day-best-in { from { opacity: 0; transform: translateY(3px); } }
+.day-value-v.pulse { animation: day-best-in .25s ease-out; }
+.amount-big.flash { animation: day-best-in .45s ease-out; }
+@media (prefers-reduced-motion: reduce) { .day-value-v.pulse, .amount-big.flash { animation: none; } }
 /* Says what the calendar's % means, for the date being booked. Sits under the
    header — it depends on the DATE, not on the act chosen below. */
 .day-chance { font-size: 12px; color: var(--ink-muted); margin: 0; padding: 0 24px 16px; line-height: 1.5; }
@@ -1285,7 +1344,14 @@ dialog::backdrop { background: var(--backdrop); }
 .book-step-lbl { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; color: var(--ink); }
 .book-opt { color: var(--ink-muted); font-weight: 600; font-size: 12px; }
 #o-service-chips { display: flex; flex-wrap: wrap; gap: 8px; }
-#o-service-chips .chip { flex: 1 1 auto; justify-content: center; }
+/* Booking chips are two lines — the act, then its own offre à battre for the
+   date — so the acts compare at a glance before one is chosen. */
+#o-service-chips .chip { flex: 1 1 auto; justify-content: center; flex-direction: column; align-items: center; gap: 3px; padding: 8px 14px; border-radius: var(--radius); }
+.chip-svc-main { display: inline-flex; align-items: center; gap: 6px; }
+.chip-svc-sub { font-size: 11px; font-weight: 600; color: var(--ink-muted); }
+.chip-svc-sub:empty { display: none; }
+.chip-svc-sub.is-free { color: var(--ok); }
+#o-service-chips .chip.is-on .chip-svc-sub { color: inherit; }
 .day-book .tier-preview { margin: 0; }
 .book-options { margin: 0; }
 .book-options .form-row:last-of-type { margin-bottom: 0; }
@@ -1431,6 +1497,11 @@ dialog::backdrop { background: var(--backdrop); }
 .hero-points li { font-size: 14px; line-height: 1.5; color: var(--ink-muted); }
 .hero-points li strong { color: var(--ink); }
 .hero-points li::before { content: '◆'; color: var(--brand); font-size: 10.5px; margin-right: 9px; }
+/* One clean line under the phone h1. The ≤720px hero drops the full pitch
+   paragraph, and before this nothing on a phone said what Nota IS — the h1 and
+   two buttons assumed you knew. Hidden wherever the full paragraph shows. */
+.hero-tagline { display: none; font-size: 14.5px; line-height: 1.55; color: var(--ink-muted); margin: 2px 0 4px; }
+.hero-tagline strong { color: var(--ink); }
 
 /* Week vignette — the marketplace played out with live data, in the onboarding
    dialog only. Real demands (D.weekAgenda) drop onto a Mon–Fri board one by one
@@ -1898,6 +1969,8 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
 @media (max-width: 719.98px) {
   .intro--hero { grid-template-columns: 1fr; gap: clamp(18px, 3vw, 26px); }
   .intro .eyebrow, .intro-main > p, .hero-points { display: none; }
+  /* ...except the one-line tagline, which replaces the prose it drops. */
+  .intro-main > p.hero-tagline { display: block; }
   /* Side by side rather than stacked. */
   .hero-cta { flex-direction: row; }
   /* flex:1 alone still refuses to go under min-content, so two btn-lg wrapped
