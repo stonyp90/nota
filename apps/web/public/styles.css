@@ -853,19 +853,39 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
   .cal-more { order: 3; }
   .cal-urgency[data-tier='extreme'] { padding: 0 var(--space-1); }
 }
+/* PHONES: the month grid drops from 7 columns to 3.
+   Seven columns on a 320px screen give a 34px cell, which cannot carry a glyph
+   and a price side by side however the content is tuned — the previous attempt
+   stacked them and still had to compact "1 900 $" down to "1,9k". Three columns
+   give an 82px cell, wider than the 7-column cell is at ANY phone size, so the
+   cell renders the way it does on a desktop and the prices come back in full.
+
+   What that costs: a cell is no longer under a weekday column, so the weekday
+   header row goes and each cell prints its own ("MER 19", app.js sets data-dow).
+   Empty padding cells and past days are dropped rather than blanked, so the grid
+   opens on today and packs 13 real dates into 5 rows instead of 21 slots into 3.
+
+   This is keyed on a container on the grid's PARENT: an element cannot respond
+   to its own container query, and .cal-grid is the `cal` container itself. */
+#view-calendrier { container: calwrap / inline-size; }
+@container calwrap (max-width: 468px) {
+  .cal-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
+  .cal-row { display: contents; }
+  .cal-dow-row { display: none; }
+  .cal-cell.is-past, .cal-cell.is-out { display: none; }
+}
+/* Cell content in reflowed mode. The `cal` container is still narrow here, so
+   the ≤560 compact-money swap is still matching — but the CELL is now 82px, and
+   grid width no longer implies cell width once the column count changes. */
 @container cal (max-width: 440px) {
-  .cal-row { gap: 3px; }
-  .cal-cell { padding: 5px 3px 8px; gap: 2px; align-items: center; overflow: hidden; }
-  .cal-daynum, .cal-cell.is-today .cal-daynum, .cal-urgency { align-self: center; }
-  .cal-svc-bids { width: 100%; gap: 3px; }
-  /* Glyph over price rather than beside it: 26px of width fits one or the other,
-     never both. line-height pays back most of the height that stacking costs. */
-  .cal-svc-bids .svc-bid { flex-direction: column; align-items: center; gap: 0; width: 100%; line-height: 1.05; }
-  .cal-svc-bids .svc-bid-amount::after { letter-spacing: -0.03em; }
-  /* 26px is under any touch minimum, and the corner it sits in is needed for the
-     date. Tapping the cell already opens the day dialog, which carries the full
-     detail the chevron would have expanded. */
-  .cell-chevron { display: none; }
+  .cal-cell { padding: 6px 8px 10px; gap: 2px; overflow: hidden; }
+  .cal-daynum::before {
+    content: attr(data-dow) " ";
+    font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  }
+  /* An 82px cell fits "1 900 $" (57px with its glyph). Undo the compaction. */
+  .cal-svc-bids .svc-bid-amount { font-size: 11.5px; }
+  .cal-svc-bids .svc-bid-amount::after { content: none; }
 }
 
 /* --- Agenda / bid list --------------------------------------------------- */
@@ -1695,7 +1715,7 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   background: var(--surface);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
-  padding: 13px 15px;
+  padding: 18px 20px;
 }
 .sub-card-head { display: flex; align-items: center; gap: 11px; }
 .sub-card-logo { flex: none; display: grid; place-items: center; }
@@ -1712,7 +1732,8 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
 .footer-contact { display: flex; align-items: center; gap: 2px; margin-left: auto; }
 .nc-card-actions .mini-btn { margin-left: auto; }
 .notary-carnet { margin-top: 12px; }
-.notary-carnet .sub-card { display: flex; align-items: center; flex-wrap: wrap; gap: 14px 32px; }
+/* The full-width band breathes more than the compact card. */
+.notary-carnet .sub-card { display: flex; align-items: center; flex-wrap: wrap; gap: 14px 32px; padding: 22px 26px; }
 .notary-carnet .sub-card-head { flex: 1 1 300px; }
 .notary-carnet .sub-card-actions { margin-top: 0; flex: 2 1 520px; }
 .notary-carnet .sub-card-actions .btn { flex: 1 1 0; justify-content: center; }
@@ -1764,6 +1785,22 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
     /* Sides stay at 14 so the grid lines up with the toolbar, filter bar and
      legend that bracket it inside the same card. */
   .cal-grid { gap: 4px; padding: var(--space-4) var(--space-7) var(--space-6); }
+  /* FOCUS ON THE CARNET. On a phone the pitch used to push the calendar 1194px
+     down, past two full screens, so the one thing a client came for was the last
+     thing they saw. The prose goes (the h1 and the two CTAs still say what this
+     is), the market panel keeps its FIGURES and drops its captions, and the
+     calendar lands at the fold instead. Measured 1194px -> 589px at 320x568. */
+  .intro .eyebrow, .intro-main > p, .hero-points, .pulse-foot { display: none; }
+  /* Two 44px buttons side by side rather than stacked. */
+  .hero-cta { flex-direction: row; }
+  .hero-cta .btn { flex: 1; }
+  /* "a partir de" and "mediane" are legible from the figures' own placement. */
+  .pulse-fig-k, .pulse-meta { display: none; }
+  .pulse-figs { flex-direction: row; gap: var(--space-5); align-items: baseline; }
+  .pulse-item { gap: var(--space-3); }
+  /* A "maximize" toggle means nothing on a phone, and it is inert on iOS. */
+  #cal-maximize { display: none; }
+
   .cal-row { gap: 4px; }
   .cal-dow { font-size: 10px; }
   .filters { padding: 10px 14px; gap: 8px; }
