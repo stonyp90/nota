@@ -2173,8 +2173,22 @@
       bar.appendChild(fill);
       prog.appendChild(bar);
     }
-    container.appendChild(prog);
-    if (!items.length) return;
+    if (!items.length) { container.appendChild(prog); return; }
+    // The checklist is the tallest thing in the profile by a wide margin: six
+    // rows of name + guidance + file picker ran 905px on a phone, over half the
+    // page, almost all of it an empty state. Collapse it behind its own progress
+    // line, the same bargain the calendar cell strikes with its chevron. Open
+    // only while the client is part-way through, which is the one state where
+    // the remaining rows are what they came to see.
+    var det = el('details', 'doc-disclose');
+    det.open = done > 0 && !complete;
+    var sum = document.createElement('summary');
+    sum.className = 'doc-summary';
+    sum.appendChild(prog);
+    det.appendChild(sum);
+    var rows = el('div', 'doc-rows');
+    det.appendChild(rows);
+    container.appendChild(det);
     items.forEach(function (it) {
       var provided = !!saved[it.id];
       var row = el('div', 'doc-row');
@@ -2217,7 +2231,7 @@
         ti.addEventListener('blur', function () { renderProfilDocs(container, sid); }); // reveal the "validé" affordance once filled
         row.appendChild(ti);
       }
-      container.appendChild(row);
+      rows.appendChild(row);
     });
   }
 

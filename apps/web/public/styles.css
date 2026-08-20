@@ -1042,8 +1042,29 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .profil-doc-chips { margin: 2px 0 6px; }
 /* Flex (not grid) so the LAST row's cards grow to fill the width — no empty
    right-side slots when the document count doesn't divide evenly. */
-.profil-doc-list { display: flex; flex-wrap: wrap; gap: 10px; align-items: stretch; }
+.profil-doc-list { display: block; }
+/* The checklist collapses behind its progress line. .doc-rows carries the wrap
+   that .profil-doc-list used to, so rows still pack 2-up and 3-up as they widen. */
+.doc-rows { display: flex; flex-wrap: wrap; gap: var(--space-5); align-items: stretch; padding-top: var(--space-5); }
 .profil-doc-list .doc-row { flex: 1 1 300px; }
+.doc-disclose { border: 0; }
+/* The whole progress line is the control, so it gets the thumb-sized target and
+   the chevron the rest of the app uses for the same bargain. */
+.doc-summary {
+  display: flex; align-items: center; gap: var(--space-5);
+  min-height: 44px; padding: var(--space-2) 0; cursor: pointer; list-style: none;
+  border-radius: var(--radius-sm);
+}
+.doc-summary::-webkit-details-marker { display: none; }
+.doc-summary .doc-progress { flex: 1; margin-bottom: 0; }
+.doc-summary::after {
+  content: ''; flex: none; width: 9px; height: 9px; margin-right: var(--space-2);
+  border-right: 2px solid var(--ink-muted); border-bottom: 2px solid var(--ink-muted);
+  transform: rotate(45deg) translate(-2px, -2px); transition: transform .15s ease;
+}
+.doc-disclose[open] > .doc-summary::after { transform: rotate(-135deg) translate(-2px, -2px); }
+.doc-summary:hover::after { border-color: var(--ink); }
+.doc-summary:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--focus-ring); }
 /* Documents progress header: labelled bar, full-width above the checklist. */
 .doc-progress { flex: 1 1 100%; display: flex; flex-direction: column; gap: 6px; margin-bottom: 2px; }
 .doc-count { font-size: 12.5px; font-weight: 600; color: var(--ink-muted); }
