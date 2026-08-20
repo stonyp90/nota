@@ -495,7 +495,13 @@ a:hover { text-decoration: underline; }
 .hero-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 22px; }
 /* margin-top:auto pins the buttons to the BOTTOM of the copy column, so the
    two hero columns end on the same line instead of one trailing off. */
-.hero-cta { display: flex; gap: 10px; flex-wrap: wrap; margin-top: auto; padding-top: 14px; }
+.hero-cta { display: flex; gap: var(--space-5); flex-wrap: wrap; margin-top: auto; padding-top: var(--space-9); }
+/* A slim, equal pair: ONE set height rather than padding-derived boxes, so the
+   filled and the outlined button can never drift apart by a border or a wrap.
+   Wide screens only — under 681px the pair keeps its full touch height. */
+@media (min-width: 681px) {
+  .hero-cta .btn { height: 32px; padding-top: 0; padding-bottom: 0; }
+}
 
 /* Guided step badges (1 · 2 · 3) in the offer panel */
 .step {
@@ -507,7 +513,9 @@ a:hover { text-decoration: underline; }
 :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 
 /* --- Hero / intro -------------------------------------------------------- */
-.intro { padding: clamp(10px, 1.2vw, 16px) 0 clamp(12px, 1.8vw, 20px); }
+/* A touch more floor than ceiling: the hero hands off to a PANEL below, and
+   the seam between an open surface and a card needs the larger share of air. */
+.intro { padding: clamp(10px, 1.2vw, 16px) 0 clamp(16px, 2.2vw, 26px); }
 /* Split hero: copy on the left, live content on the right — the market pulse on
    Carnet, the "how it works" steps on Notaires. Both asides are CHROMELESS (no
    card, no border, no fill): the hero is one continuous surface, and the two
