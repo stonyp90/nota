@@ -172,7 +172,7 @@
         </div>
         <!-- One account menu (avatar) merging profile + notifications + menu. -->
         <div class="notif-wrap acct-wrap">
-          <button class="icon-btn acct-btn" id="notif-bell" title="Compte et notifications" aria-label="Compte et notifications" aria-haspopup="true" aria-expanded="false">
+          <button class="icon-btn acct-btn" id="notif-bell" title="Compte et notifications" aria-label="Compte et notifications" aria-haspopup="true" aria-expanded="false" aria-controls="notif-panel">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
             <span class="notif-badge" id="notif-badge" hidden>0</span>
           </button>
@@ -380,7 +380,11 @@
               <span class="eyebrow">Pour les notaires</span>
               <h1>Remplissez votre semaine. Payé à la signature.</h1>
               <p>Inscription gratuite, sans frais fixes. Nota se rémunère par une commission, uniquement sur les actes que vous complétez. Vous retenez ce qui vous convient, vous déclinez le reste sans frais.</p>
-              <p class="hero-steps-inline">Inscrivez-vous, gratuit <span aria-hidden="true">·</span> Retenez ce qui vous convient <span aria-hidden="true">·</span> Payé en entier à la signature</p>
+              <ol class="nc-steps" aria-label="Comment ça marche">
+                <li class="nc-step"><span class="nc-step-n" aria-hidden="true">1</span>Inscrivez-vous, gratuit</li>
+                <li class="nc-step"><span class="nc-step-n" aria-hidden="true">2</span>Retenez ce qui vous convient</li>
+                <li class="nc-step"><span class="nc-step-n" aria-hidden="true">3</span>Payé en entier à la signature</li>
+              </ol>
             </div>
           </div>
 
@@ -538,6 +542,18 @@
               </div>
             </div>
           </div>
+          <!-- Live teaser of the open inventory (signed-out only): real demands,
+               soonest first, every card funnelling into the sign-in gate. Filled
+               by renderNotaryLive(); hidden signed-in — the console's own open
+               list takes over. -->
+          <section class="nc-live" id="notary-live" aria-labelledby="notary-live-h" hidden>
+            <div class="nc-live-head">
+              <h2 class="nc-live-h" id="notary-live-h">Ouvertes en ce moment</h2>
+              <p class="nc-live-sub" id="notary-live-sub"></p>
+            </div>
+            <div class="nc-live-grid" id="notary-live-grid"></div>
+          </section>
+
           <p class="note nota-guarantee">
             <strong>Vous gardez la main.</strong> Vous fixez vos honoraires et vérifiez l’identité du client à la signature, comme l’exige la loi. Nota n’intervient jamais dans l’acte.
           </p>
@@ -699,13 +715,7 @@
         <span class="header-spacer"></span>
         <button type="button" class="day-close" id="day-close" aria-label="Fermer">×</button>
       </div>
-      <div class="day-value">
-        <div class="day-value-k">Meilleure offre ouverte</div>
-        <div class="day-value-v" id="day-best">—</div>
-        <p class="day-value-note" id="day-hint"></p>
-        <p class="day-chance" id="day-chance"></p>
-      </div>
-      <div class="day-bids" id="day-bids"></div>
+      <p class="day-chance" id="day-chance"></p>
       <form id="offer-form" class="day-book" novalidate>
         <div class="book-step">
           <div class="book-step-lbl"><span class="step">1</span> Quel acte&nbsp;?</div>
@@ -713,6 +723,17 @@
           <label class="visually-hidden" for="o-service">Quel acte&nbsp;?</label>
           <select id="o-service" class="visually-hidden" required tabindex="-1" aria-hidden="true"></select>
           <p class="help" id="o-service-help"></p>
+        </div>
+        <!-- Market context for the SELECTED act — sits under the act choice
+             because the number changes with it. aria-live announces the new
+             offer-to-beat when a client switches act. -->
+        <div class="day-market" aria-live="polite">
+          <div class="day-value">
+            <div class="day-value-k" id="day-best-k">Meilleure offre ouverte</div>
+            <div class="day-value-v" id="day-best">—</div>
+            <p class="day-value-note" id="day-hint"></p>
+          </div>
+          <div class="day-bids" id="day-bids"></div>
         </div>
         <input type="date" id="o-date" class="visually-hidden" required tabindex="-1" aria-hidden="true" />
         <div class="tier-preview" id="tier-preview" hidden>

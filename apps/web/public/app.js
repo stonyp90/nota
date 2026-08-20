@@ -360,7 +360,28 @@
     var open = force != null ? force : panel.hidden;
     panel.hidden = !open;
     bell.setAttribute('aria-expanded', open ? 'true' : 'false');
-    if (open) { renderNotifs(); renderAccountMenu(); }
+    if (open) {
+      renderNotifs(); renderAccountMenu();
+      // Menu-button contract: opening hands focus to the first row, so a
+      // keyboard user is IN the menu they just opened, not still on the trigger.
+      var first = acctMenuItems()[0];
+      if (first) { try { first.focus(); } catch (e) {} }
+    }
+  }
+  // The rows a keyboard user can walk inside the account panel, in DOM order.
+  // Skips disabled/hidden rows and, for an anonymous visitor, the notifications
+  // block that the CSS hides (jsdom sees no computed styles, so check the state).
+  function acctMenuItems() {
+    var panel = $('notif-panel'); if (!panel) return [];
+    var anon = panel.dataset.role === 'anon';
+    var notifs = $('acct-notifs');
+    return Array.prototype.filter.call(panel.querySelectorAll('button, .notif-item[role="button"]'), function (b) {
+      if (b.disabled || b.hidden) return false;
+      if (anon && notifs && notifs.contains(b)) return false;
+      var n = b.parentElement;
+      while (n && n !== panel) { if (n.hidden) return false; n = n.parentElement; }
+      return true;
+    });
   }
   // The account menu is one identity hub for BOTH roles. Priority: an active
   // notary session outranks a device-local client identity, which outranks the
@@ -1390,9 +1411,12 @@
       list.appendChild(toggle);
     }
 
-    // Headline figure + the bar to clear, both scoped to the selected act.
+    // Headline figure + the bar to clear, both scoped to the selected act. The
+    // label names that act — the amount means nothing without it.
     var open = matching.filter(function (b) { return b.status !== D.STATUS.RETENUE; });
     var top = open.length ? Math.max.apply(null, open.map(function (b) { return b.montant; })) : null;
+    var bestK = $('day-best-k');
+    if (bestK) bestK.textContent = svc ? 'Meilleure offre ouverte · ' + svc.nomCourt : 'Meilleure offre ouverte';
     $('day-best').textContent = top != null ? D.money(top) : '—';
     $('day-hint').textContent = top != null
       ? 'Proposez plus que ' + D.money(top) + ' pour passer devant.'
@@ -2764,6 +2788,68 @@
     box.hidden = false;
   }
 
+  // Public teaser of the live inventory on the signed-out landing: the month's
+  // real open demands, soonest first, each card a button into the sign-in gate.
+  // Capped — the full list is the payoff of signing in; overflow collapses into
+  // one "+N autres" card. Hidden signed-in (the console's open list takes over)
+  // and when the month has nothing open (no data → no empty section).
+  var NC_LIVE_MAX = 6;
+  function ncFocusGate() {
+    var inp = $('nc-email'); if (!inp) return;
+    if (inp.scrollIntoView) { try { inp.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {} }
+    try { inp.focus({ preventScroll: true }); } catch (e) { inp.focus(); }
+  }
+  function ncLiveCard(b) {
+    var svc = D.serviceById(b.serviceId);
+    var tier = D.tierById(b.tier || 'standard') || D.tierById('standard');
+    var card = el('button', 'nc-live-card');
+    card.type = 'button';
+    card.setAttribute('aria-label', 'Se connecter pour retenir : ' + (svc ? svc.nom : b.serviceId) +
+      ', ' + dayShort(b.dateISO) + ', ' + D.money(b.montant));
+    var top = el('div', 'nc-live-top');
+    var s = el('span', 'nc-live-svc');
+    // The act's colour token paints the glyph (currentColor); the name stays ink.
+    s.style.color = 'var(--svc-' + b.serviceId + ')';
+    var ic = svcIcon(b.serviceId, 15); if (ic) s.appendChild(ic);
+    s.appendChild(el('span', 'nc-live-svc-name', svc ? svc.nomCourt : b.serviceId));
+    top.appendChild(s);
+    var pill = el('span', 'pill', tier.nom);
+    pill.dataset.tier = tier.id;
+    top.appendChild(pill);
+    card.appendChild(top);
+    card.appendChild(el('div', 'nc-live-amt', D.money(b.montant)));
+    card.appendChild(el('div', 'nc-live-meta', dayShort(b.dateISO) + ' · ' + D.bidLabel(b)));
+    card.addEventListener('click', ncFocusGate);
+    return card;
+  }
+  function renderNotaryLive() {
+    var box = $('notary-live'); if (!box) return;
+    var gate = $('notary-auth-form');
+    var open = (state.monthBids || [])
+      .filter(function (b) { return b.status !== D.STATUS.RETENUE; })
+      .slice()
+      .sort(function (a, b) { return a.dateISO < b.dateISO ? -1 : a.dateISO > b.dateISO ? 1 : 0; });
+    if (!open.length || !gate || gate.hidden) { box.hidden = true; return; }
+    var sub = $('notary-live-sub');
+    if (sub) {
+      var total = open.reduce(function (s, b) { return s + (Number(b.montant) || 0); }, 0);
+      sub.textContent = open.length + ' demande' + (open.length > 1 ? 's' : '') +
+        ' ce mois-ci · ' + D.money(total) + ' à retenir';
+    }
+    var grid = $('notary-live-grid'); clear(grid);
+    open.slice(0, NC_LIVE_MAX).forEach(function (b) { grid.appendChild(ncLiveCard(b)); });
+    var extra = open.length - NC_LIVE_MAX;
+    if (extra > 0) {
+      var more = el('button', 'nc-live-card nc-live-more');
+      more.type = 'button';
+      more.appendChild(el('strong', null, '+' + extra + ' autre' + (extra > 1 ? 's' : '') + ' demande' + (extra > 1 ? 's' : '')));
+      more.appendChild(el('span', 'nc-live-meta', 'Inscrivez-vous pour tout voir'));
+      more.addEventListener('click', ncFocusGate);
+      grid.appendChild(more);
+    }
+    box.hidden = false;
+  }
+
   // --- Week vignette (onboarding dialog) ---------------------------------------
   // The marketplace played out with market data: real demands (D.weekAgenda over
   // state.monthBids) drop onto a Mon–Fri board one by one while the money counts
@@ -2817,7 +2903,9 @@
     }
 
     // Count the total up smoothly — money() formats every frame so the vignette
-    // never shows a number the rest of the app would not.
+    // never shows a number the rest of the app would not. A tracked timer
+    // guarantees the FINAL figure even where rAF is suspended (throttled or
+    // battery-saver tabs): the frames are decoration, the number is not.
     function tween(from, to) {
       var out = $(cfg.total); if (!out) return;
       if (v.raf) cancelAnimationFrame(v.raf);
@@ -2829,6 +2917,7 @@
         v.raf = k < 1 ? requestAnimationFrame(frame) : null;
       }
       v.raf = requestAnimationFrame(frame);
+      later(function () { out.textContent = D.money(to); }, dur + 100);
     }
 
     // Build the board for one batch: five labelled columns, a chip per demand in
@@ -2892,21 +2981,26 @@
           retrigger($(cfg.total), 'is-tick');
           weekDeltaPop(cfg.total, batch.items[i].montant);
           retrigger(chip.parentElement && chip.parentElement.querySelector('.nc-week-day'), 'is-hit');
+          // The cycle's tail anchors on the LAST landing, never on wall-clock
+          // arithmetic from cycle start: background-tab timer clamping can
+          // stretch the landings, and the flip must not fire before the final
+          // chip is in.
+          if (i === chips.length - 1) {
+            later(function () {
+              // Taken demands flip to their ✓ one by one — the clearing told
+              // as a sequence, not a switch.
+              var nth = 0;
+              chips.forEach(function (c, j) {
+                if (!batch.items[j].retenue) return;
+                later(function () { c.classList.add('is-taken'); }, nth * 220);
+                nth++;
+              });
+            }, 700);
+            later(function () { $(cfg.board).classList.add('is-out'); }, 3800);
+            later(cycle, 4300);
+          }
         }, 500 + i * 650);
       });
-      var settled = 500 + chips.length * 650;
-      // Once the board is full, taken demands flip to their ✓ one by one — the
-      // clearing told as a sequence, not a switch.
-      later(function () {
-        var nth = 0;
-        chips.forEach(function (chip, i) {
-          if (!batch.items[i].retenue) return;
-          later(function () { chip.classList.add('is-taken'); }, nth * 220);
-          nth++;
-        });
-      }, settled + 700);
-      later(function () { $(cfg.board).classList.add('is-out'); }, settled + 3800);
-      later(cycle, settled + 4300);
     }
 
     function render() {
@@ -2990,6 +3084,9 @@
         else { v.raf = null; retrigger(out, 'is-tick'); } // settle with a pop
       }
       v.raf = requestAnimationFrame(frame);
+      // The final figure is guaranteed by a tracked timer even where rAF is
+      // suspended — the frames are decoration, the number is not.
+      later(function () { out.textContent = D.money(to); }, dur + 100);
     }
     // The card (glyph, act, signing date) and the closing stamp for one bid.
     function fill(b) {
@@ -3150,6 +3247,7 @@
     var form = $('notary-auth-form'); var view = $('notary-authed');
     if (form) form.hidden = authed;
     if (view) view.hidden = !authed;
+    renderNotaryLive(); // the teaser follows the gate: shown signed-out, gone signed-in
     if (authed) {
       var lbl = $('notary-email-label'); if (lbl) lbl.textContent = nc.email || '';
       ncRenderPrefs(); // lead-delivery preferences for this notary
@@ -3380,12 +3478,25 @@
   // ---------------------------------------------------------------------------
   // Tabs
   // ---------------------------------------------------------------------------
+  // ARIA tabs pattern: one header tab in the Tab order (roving tabindex), the
+  // rest reached with arrow keys. Panes without a header tab (profil, legal)
+  // keep the first tab reachable so the tablist never becomes a dead end.
+  function syncNavTabs(tab) {
+    var tabs = document.querySelectorAll('.nav-tab');
+    var anySelected = false;
+    tabs.forEach(function (b) {
+      var sel = b.dataset.tab === tab;
+      if (sel) anySelected = true;
+      b.setAttribute('aria-selected', sel ? 'true' : 'false');
+      b.tabIndex = sel ? 0 : -1;
+    });
+    if (!anySelected && tabs.length) tabs[0].tabIndex = 0;
+  }
+
   function setTab(tab, opts) {
     opts = opts || {};
     state.tab = tab;
-    document.querySelectorAll('.nav-tab').forEach(function (b) {
-      b.setAttribute('aria-selected', b.dataset.tab === tab ? 'true' : 'false');
-    });
+    syncNavTabs(tab);
     ['carnet', 'dossier', 'notaires', 'profil', 'confidentialite', 'conditions', 'charte'].forEach(function (t) {
       var pane = $('pane-' + t);
       if (!pane) return;
@@ -3395,7 +3506,7 @@
     });
     if (tab === 'dossier') renderDossier();
     if (tab === 'profil') renderProfil();
-    if (tab === 'notaires') renderNotaryOpportunity();
+    if (tab === 'notaires') { renderNotaryOpportunity(); renderNotaryLive(); }
     if (opts.scroll !== false) window.scrollTo({ top: 0, behavior: 'auto' });
     // Move focus into the new pane's heading so keyboard/SR users are never dropped
     // to <body> when a menu/link navigates and its container is hidden. The
@@ -3450,6 +3561,7 @@
       if (panel) panel.classList.remove('is-loading');
     }
     renderNotaryOpportunity(); // keep the gate's live "money on the table" fresh
+    renderNotaryLive(); // and the landing's open-demand teaser
     renderOnbWeekAnim(); // and the welcome dialog's live week board, if open
   }
   function refreshMonth() { renderActiveView(); }
@@ -3463,6 +3575,24 @@
     document.querySelectorAll('.nav-tab').forEach(function (b) {
       b.addEventListener('click', function () { setTab(this.dataset.tab); });
     });
+    syncNavTabs(state.tab); // roving tabindex from the very first paint
+    // Horizontal tablist keyboard: Left/Right move and activate (automatic
+    // activation — two tabs, both cheap to render), Home/End jump.
+    var tablist = document.querySelector('.nav-tabs');
+    if (tablist) tablist.addEventListener('keydown', function (e) {
+      var tabs = Array.prototype.slice.call(tablist.querySelectorAll('.nav-tab'));
+      if (!tabs.length) return;
+      var i = tabs.indexOf(document.activeElement);
+      var next = null;
+      if (e.key === 'ArrowRight') next = tabs[(i + 1 + tabs.length) % tabs.length];
+      else if (e.key === 'ArrowLeft') next = tabs[(i - 1 + tabs.length) % tabs.length];
+      else if (e.key === 'Home') next = tabs[0];
+      else if (e.key === 'End') next = tabs[tabs.length - 1];
+      if (!next) return;
+      e.preventDefault();
+      setTab(next.dataset.tab, { focus: false });
+      try { next.focus(); } catch (er) {}
+    });
     $('theme-toggle').addEventListener('click', function () {
       var cur = document.documentElement.getAttribute('data-theme');
       setTheme(cur === 'dark' ? 'light' : 'dark');
@@ -3472,6 +3602,27 @@
     $('notif-bell').addEventListener('click', function (e) { e.stopPropagation(); toggleNotifPanel(); });
     $('notif-clear').addEventListener('click', markAllRead);
     $('notif-panel').addEventListener('click', function (e) { e.stopPropagation(); });
+    // Up/Down walk the panel's rows (wrapping), Home/End jump — the menu half
+    // of the menu-button contract the account panel signs up for.
+    $('notif-panel').addEventListener('keydown', function (e) {
+      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Home' && e.key !== 'End') return;
+      var items = acctMenuItems(); if (!items.length) return;
+      var i = items.indexOf(document.activeElement);
+      var next;
+      if (e.key === 'Home') next = items[0];
+      else if (e.key === 'End') next = items[items.length - 1];
+      else if (i < 0) next = e.key === 'ArrowDown' ? items[0] : items[items.length - 1];
+      else next = items[(i + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length];
+      e.preventDefault();
+      try { next.focus(); } catch (er) {}
+    });
+    // A menu must not linger once focus has moved on (e.g. Tab past its end).
+    document.addEventListener('focusin', function (e) {
+      var panel = $('notif-panel');
+      if (!panel || panel.hidden) return;
+      var wrap = document.querySelector('.acct-wrap');
+      if (wrap && e.target instanceof Element && !wrap.contains(e.target)) toggleNotifPanel(false);
+    });
     // Account-menu items → switch pane, then close the menu. The identity head
     // routes by role (notary console / client profile / anonymous sign-in).
     $('acct-profil').addEventListener('click', onAcctHeadClick);
@@ -3521,7 +3672,15 @@
       e.preventDefault(); setTab(g.dataset.goto); toggleNotifPanel(false);
     });
     document.addEventListener('click', function () { toggleNotifPanel(false); });
-    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') toggleNotifPanel(false); });
+    // Escape closes the account menu AND hands focus back to its trigger —
+    // dismissing must never drop a keyboard user onto <body>.
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape') return;
+      var panel = $('notif-panel');
+      if (!panel || panel.hidden) return;
+      toggleNotifPanel(false);
+      var bell = $('notif-bell'); if (bell) { try { bell.focus(); } catch (er) {} }
+    });
 
     // Calendar
     $('cal-prev').addEventListener('click', function () { step(-1); });

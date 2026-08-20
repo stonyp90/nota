@@ -1243,13 +1243,18 @@ dialog::backdrop { background: var(--backdrop); }
 .day-close { appearance: none; border: 0; background: var(--surface-inset); color: var(--ink); width: 34px; height: 34px; border-radius: 999px; cursor: pointer; font-size: 18px; line-height: 1; flex: none; }
 .day-close:hover { background: var(--surface-hover); }
 
-/* --- Day booking surface (value → offers → book, all in one dialog) ------ */
-.day-value { padding: 0 24px 16px; }
+/* --- Day booking surface (acte → offre à battre → book, all in one dialog) - */
+/* Act-scoped market context: the offer to beat FOR THE SELECTED ACT. Lives
+   inside the form, right under the act chips, because it changes with them —
+   the inset card makes that dependency read at a glance. */
+.day-market { background: var(--surface-inset); border-radius: var(--radius); overflow: hidden; }
+.day-value { padding: 12px 14px 10px; }
 .day-value-k { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-muted); }
-.day-value-v { font-size: 30px; font-weight: 800; letter-spacing: -0.02em; color: var(--ink); }
+.day-value-v { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; color: var(--ink); }
 .day-value-note { font-size: 12px; color: var(--ink-muted); margin: 2px 0 0; }
-/* Says what the calendar's % means, for the date being booked. */
-.day-chance { font-size: 12px; color: var(--ink-muted); margin: 8px 0 0; padding-top: 8px; border-top: 1px solid var(--border); line-height: 1.5; }
+/* Says what the calendar's % means, for the date being booked. Sits under the
+   header — it depends on the DATE, not on the act chosen below. */
+.day-chance { font-size: 12px; color: var(--ink-muted); margin: 0; padding: 0 24px 16px; line-height: 1.5; }
 .day-bids { max-height: 30vh; overflow: auto; overscroll-behavior: contain; border-top: 1px solid var(--border); }
 .day-bids:empty { display: none; }
 .day-bids .bid-row:first-child { border-top: 0; }
@@ -1308,11 +1313,12 @@ dialog::backdrop { background: var(--backdrop); }
    • SIGNED-IN → the working console (demand lists + two-column prefs grid) needs
      room, so it uses a single wide column. */
 #pane-notaires > .wrap { display: flex; flex-direction: column; }
-/* Order (flex only, no DOM move): hero → value grid → calendar-add → sign-in → guarantee. */
+/* Order (flex only, no DOM move): hero → value grid → calendar-add → sign-in → teaser → guarantee. */
 #pane-notaires .nc-why { order: 2; }
 #pane-notaires .notary-carnet { order: 3; }
 #pane-notaires #notary-console { order: 4; }
-#pane-notaires .nota-guarantee { order: 5; }
+#pane-notaires .nc-live { order: 5; }
+#pane-notaires .nota-guarantee { order: 6; }
 /* The value grid only belongs to the signed-out LANDING; hidden in the working console. */
 .nc-why { display: none; }
 /* Signed-out: a full-page two-column landing — a rich value column on the left,
@@ -1324,6 +1330,7 @@ dialog::backdrop { background: var(--backdrop); }
     "hero      console"
     "why       console"
     "carnet    console"
+    "live      console"
     "guarantee console";
   column-gap: clamp(32px, 5vw, 80px);
   row-gap: 0;
@@ -1336,8 +1343,13 @@ dialog::backdrop { background: var(--backdrop); }
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .nc-why         { grid-area: why; display: grid; }
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-carnet  { grid-area: carnet; }
 /* The console anchors to the TOP of the column so the sign-in — the page's one
-   action — is on screen immediately instead of centred into the fold. */
-#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) #notary-console { grid-area: console; align-self: start; margin: 0; }
+   action — is on screen immediately instead of centred into the fold, and stays
+   pinned (sticky, under the sticky header) while the teaser scrolls beside it. */
+#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) #notary-console {
+  grid-area: console; align-self: start; margin: 0;
+  position: sticky; top: calc(var(--header-h) + 16px);
+}
+#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .nc-live        { grid-area: live; }
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .nota-guarantee { grid-area: guarantee; }
 /* Hero collapses to a single column on THIS pane only (the client carnet hero
    keeps its two columns); the three steps become one muted caption, not a panel. */
@@ -1346,14 +1358,15 @@ dialog::backdrop { background: var(--backdrop); }
 @media (max-width: 900px) {
   #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) {
     grid-template-columns: minmax(0, 620px);
-    grid-template-areas: "hero" "why" "carnet" "console" "guarantee";
+    grid-template-areas: "hero" "why" "carnet" "console" "live" "guarantee";
     justify-content: center;
   }
   /* The two-column rule zeroes this margin so the console top-aligns beside
      the hero. Stacked, that leaves it flush against the subscribe card, the
      one seam in the ladder with no space at all. Longhand so the other
-     three sides of the shorthand survive. */
-  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) #notary-console { align-self: stretch; margin-top: var(--space-6); }
+     three sides of the shorthand survive. Sticky belongs to the two-column
+     layout only — pinning a full-width card in a stack would cover content. */
+  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) #notary-console { align-self: stretch; margin-top: var(--space-6); position: static; }
 }
 /* Value grid — 2×2 on the landing, fills the left column. */
 .nc-why { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 28px; margin-top: 8px; }
@@ -1362,8 +1375,48 @@ dialog::backdrop { background: var(--backdrop); }
 .nc-why-t { font-weight: 700; font-size: 14px; color: var(--ink); margin-bottom: 3px; letter-spacing: -0.01em; }
 .nc-why-p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink-muted); }
 @media (max-width: 560px) { .nc-why { grid-template-columns: 1fr; } }
-.hero-steps-inline { margin: 12px 0 0; font-size: 12.5px; line-height: 1.6; color: var(--ink-muted); }
-.hero-steps-inline span { color: var(--border-strong); }
+/* The three-beat pitch under the notary hero: numbered, scannable, one line
+   each — the same copy the old dot-separated caption carried, given weight. */
+.nc-steps { list-style: none; margin: 16px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 10px 26px; }
+.nc-step { display: flex; align-items: center; gap: 9px; font-size: 13.5px; font-weight: 600; color: var(--ink); }
+.nc-step-n {
+  flex: none; width: 22px; height: 22px;
+  display: grid; place-items: center;
+  border: 1px solid var(--brand); border-radius: 999px;
+  font-size: 11px; font-weight: 800; color: var(--brand);
+}
+
+/* Live teaser of the open inventory (signed-out landing). Cards mirror the
+   console's .nc-card surface; the whole card is a button into the sign-in. */
+.nc-live { margin-top: var(--space-8); }
+.nc-live[hidden] { display: none; }
+.nc-live-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.nc-live-h { font-size: 14px; font-weight: 800; letter-spacing: -0.01em; margin: 0; }
+.nc-live-sub { margin: 0; font-size: 12.5px; color: var(--ink-muted); }
+.nc-live-sub strong { color: var(--brand); font-weight: 800; }
+.nc-live-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(215px, 100%), 1fr)); gap: 10px; }
+.nc-live-card {
+  display: flex; flex-direction: column; align-items: stretch; gap: 7px; min-width: 0;
+  padding: 12px 14px; text-align: left; font: inherit; color: var(--ink);
+  border: 1px solid var(--border); border-radius: var(--radius-lg);
+  background: var(--surface-inset); cursor: pointer;
+  transition: transform .14s, background-color .14s, border-color .14s;
+}
+.nc-live-card:hover { transform: translateY(-1px); background: var(--surface-hover); border-color: var(--border-strong); }
+.nc-live-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+/* The span's colour is the act's --svc-* token (set inline) — it paints the
+   glyph via currentColor; the act's NAME stays ink. Same grammar as the carnet. */
+.nc-live-svc { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.nc-live-svc-name { font-size: 12.5px; font-weight: 700; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nc-live-amt { font-size: 19px; font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.nc-live-meta { font-size: 12px; color: var(--ink-muted); }
+/* Overflow card: "+N autres" — dashed, centred, brand-inked, same footprint. */
+.nc-live-more {
+  align-items: center; justify-content: center; text-align: center; gap: 4px;
+  border-style: dashed; background: transparent; color: var(--brand);
+}
+.nc-live-more strong { font-size: 14px; font-weight: 800; }
+.nc-live-more .nc-live-meta { color: inherit; opacity: .85; }
 
 /* Client-hero trust points: fill the gap the taller pulse panel leaves between
    the lede and the CTAs with the site's existing promises. The lede itself
@@ -1905,7 +1958,8 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
      compensates .bid-row's own left border. */
   .day-bids .bid-row { padding-left: 14px; padding-right: var(--space-8); }
   .day-bids-count, .day-bids-more { padding-left: var(--space-8); padding-right: var(--space-8); }
-  .day-value { padding: 0 16px 12px; }
+  .day-value { padding: 10px 12px 8px; }
+  .day-chance { padding: 0 16px 12px; }
   .day-book { padding: 14px 16px 18px; }
   /* The day dialog becomes a full-width sheet on phones, so its rows are as tight
      as the list cards — give them the same two-line treatment. */
@@ -1945,7 +1999,12 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
    iPad portrait at 768) — not width-gated. Fine pointers (mouse/trackpad) keep the
    desktop density untouched. Includes the smaller controls that were being missed. */
 @media (pointer: coarse) {
-  .btn, .nav-tab, .chip, .seg-btn, .acct-legal-link, input[type='range'] { min-height: 44px; }
+  .btn, .nav-tab, .chip, .seg-btn, .acct-item, .acct-legal-link, input[type='range'] { min-height: 44px; }
+  /* Clickable notification rows and their dismiss ✕ join the 44px floor; the
+     row's right padding grows so text never slides under the bigger target. */
+  .notif-item[role='button'] { min-height: 44px; }
+  .notif-item { padding-right: 48px; }
+  .notif-x { width: 44px; height: 44px; top: 2px; right: 0; }
   /* Footer links and the brand are plain <a>s (~20px tall) — they need the same
      thumb-sized hit area as the buttons above. inline-flex so the gap-based
      footer row keeps its alignment. */

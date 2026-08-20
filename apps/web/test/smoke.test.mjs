@@ -485,6 +485,49 @@ test('notary console renders its auth gate and exposes Nota.notary hooks', async
   assert.match(Nota.notary.feedUrl('abc.def'), /^webcal:\/\/.*\/notary\/feed\.ics\?token=abc\.def$/);
 });
 
+// 13b. The signed-out notaires landing shows a live teaser of open demands —
+//      real inventory, soonest first, every card funnelling into the sign-in
+//      gate. Signed-in, the console's own list takes over and the teaser hides.
+test('notaires landing teases open demands and funnels each card to sign-in', async () => {
+  const { doc, D, Nota } = await boot();
+  doc.querySelector('.nav-tab[data-tab="notaires"]').click();
+
+  const box = $(doc, 'notary-live');
+  assert.ok(box, 'live-demand teaser section missing');
+  assert.equal(box.hidden, false, 'teaser should show while signed out');
+
+  const open = Nota.state.monthBids
+    .filter((b) => b.status !== D.STATUS.RETENUE)
+    .sort((a, b) => (a.dateISO < b.dateISO ? -1 : a.dateISO > b.dateISO ? 1 : 0));
+  const cards = all(doc, '#notary-live-grid .nc-live-card:not(.nc-live-more)');
+  assert.ok(cards.length > 0, 'teaser should render demand cards');
+  assert.equal(cards.length, Math.min(open.length, 6));
+
+  // Soonest first, each card carrying the demand's real amount.
+  cards.forEach((card, i) => {
+    assert.ok(card.textContent.includes(D.money(open[i].montant)), `card ${i} should show ${D.money(open[i].montant)}`);
+  });
+
+  // Overflow collapses into a "+N autres" card (only when there IS overflow).
+  const more = doc.querySelector('#notary-live-grid .nc-live-more');
+  if (open.length > 6) {
+    assert.ok(more, 'overflow card missing');
+    assert.ok(more.textContent.includes(String(open.length - 6)));
+  } else {
+    assert.equal(more, null);
+  }
+
+  // The section header counts the whole open month, not just the visible cards.
+  const sub = $(doc, 'notary-live-sub');
+  const total = open.reduce((s, b) => s + b.montant, 0);
+  assert.ok(sub.textContent.includes(String(open.length)));
+  assert.ok(sub.textContent.includes(D.money(total)));
+
+  // A card is a button that lands focus on the sign-in email field.
+  cards[0].click();
+  assert.equal(doc.activeElement, $(doc, 'nc-email'), 'clicking a card should focus the sign-in field');
+});
+
 // 14. The footer legal links open their dedicated panes (Loi 25 confidentialité,
 //     conditions d'utilisation / TOS, charte des droits).
 test('footer legal links open the confidentialité / conditions / charte panes', async () => {
