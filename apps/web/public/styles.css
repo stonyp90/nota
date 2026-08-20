@@ -689,7 +689,8 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 @media (max-width: 680px) {
   .cal-toolbar .header-spacer { flex: 0 0 100%; height: 0; }
 }
-.cal-nav { display: inline-flex; gap: 4px; }
+/* 44px targets 4px apart still mis-tap: 8px is the floor between neighbours. */
+.cal-nav { display: inline-flex; gap: var(--space-4); }
 .cal-title { font-weight: 700; font-size: 15px; white-space: nowrap; }
 .cal-title::first-letter { text-transform: uppercase; }
 .btn-icon { padding-left: 9px; padding-right: 9px; }
@@ -1533,7 +1534,10 @@ dialog::backdrop { background: var(--backdrop); }
 
 /* "Follow the carnet" card under the client calendar — same public feed as the
    notaires landing card, framed for a client watching the dates. */
-.carnet-sub { margin-top: 16px; }
+/* No margin-top. .carnet-sub is a grid item of .wrap.layout, whose row-gap
+   already spaces it, and a grid gap does not collapse with a margin — the
+   two ADDED, making this the one seam on the page at 30/31/36px where the
+   gap declares 14/15/20. */
 /* Two ways to follow: the calendar buttons on the left, the courriel form on
    the right, split by a hairline. Under 900px they stack and the divider
    becomes a top border. */
