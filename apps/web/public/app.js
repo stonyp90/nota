@@ -846,10 +846,44 @@
     function openRow() {
       week = el('div', 'cal-row'); week.setAttribute('role', 'row'); grid.appendChild(week);
     }
-    function blank() { if (!week) return; var b = el('div', 'cal-cell is-out'); b.setAttribute('role', 'gridcell'); week.appendChild(b); }
+    // The cells that pad the first and last weeks carry the REAL adjacent-month
+    // dates rather than being empty, which is what every calendar does: the seam
+    // between months stays legible, and "lundi" in the last row means the same
+    // thing it means in the first. They are muted, out of the tab order, and
+    // carry no prices — only the anchor month's offers are loaded, so a figure
+    // here would be a claim we cannot make. A future one is clickable and moves
+    // the calendar to its own month, where the offers ARE loaded.
+    function outCell(iso) {
+      if (!week) return;
+      var b = el('div', 'cal-cell is-out');
+      b.setAttribute('role', 'gridcell');
+      b.dataset.date = iso;
+      b.tabIndex = -1;
+      b.setAttribute('aria-label', dayTitle(iso));
+      var n = el('span', 'cal-daynum', String(Number(iso.slice(8, 10))));
+      n.dataset.dow = DOW[mondayIndex(iso)];
+      b.appendChild(n);
+      if (iso < today) {
+        b.setAttribute('aria-disabled', 'true');
+      } else {
+        b.classList.add('is-nav');
+        b.addEventListener('click', function () {
+          state.anchor = firstOfMonth(iso);
+          state.focusDate = iso;
+          reloadAndRender().then(function () { openDay(iso); });
+        });
+      }
+      week.appendChild(b);
+    }
     var slot = 0;
     openRow();
-    for (var i = 0; i < lead; i++) { blank(); slot++; }
+    // Leading pad: the last `lead` days of the previous month.
+    var prevAnchor = addMonths(state.anchor, -1);
+    var prevDim = daysInMonth(prevAnchor);
+    for (var i = 0; i < lead; i++) {
+      outCell(prevAnchor.slice(0, 8) + String(prevDim - lead + 1 + i).padStart(2, '0'));
+      slot++;
+    }
 
     for (var day = 1; day <= dim; day++) {
       if (slot > 0 && slot % 7 === 0) openRow();
@@ -942,6 +976,15 @@
       if (week) week.appendChild(cell);
 
       slot++;
+    }
+
+    // Trailing pad: the first days of the next month, so the last week is a full
+    // seven columns like every other one. Previously the row just stopped.
+    var nextAnchor = addMonths(state.anchor, 1);
+    var nextDay = 1;
+    while (slot % 7 !== 0) {
+      outCell(nextAnchor.slice(0, 8) + String(nextDay).padStart(2, '0'));
+      nextDay++; slot++;
     }
 
     // Pad the final week so it, too, holds a full 7 columns.

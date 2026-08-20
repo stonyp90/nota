@@ -717,7 +717,13 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
   transition: transform .1s ease, box-shadow .1s ease, border-color .1s;
 }
 .cal-cell:hover { background: var(--surface-hover); border-color: var(--border-strong); transform: translateY(-1px); box-shadow: var(--shadow-sm); }
-.cal-cell.is-out { background: transparent; border-color: transparent; cursor: default; pointer-events: none; }
+/* Adjacent-month days: present and readable, but clearly not this month. No
+   border, no prices, and the date sits at the same weight a past day does.
+   A future one navigates to its own month, so it takes a pointer. */
+.cal-cell.is-out { background: transparent; border-color: transparent; cursor: default; }
+.cal-cell.is-out .cal-daynum { color: var(--border-strong); }
+.cal-cell.is-out.is-nav { cursor: pointer; }
+.cal-cell.is-out.is-nav:hover .cal-daynum { color: var(--ink-muted); }
 /* Past dates: blanked and inert, but kept in the grid so no row is lost. */
 .cal-cell.is-past { background: transparent; border-color: transparent; cursor: default; pointer-events: none; box-shadow: none; }
 .cal-cell.is-past .cal-daynum { color: var(--border-strong); }

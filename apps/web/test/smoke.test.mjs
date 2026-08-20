@@ -1593,3 +1593,138 @@ test('no @media rule may outrank a calendar @container rule on the same property
   assert.deepEqual(clashes, [],
     'a later @media rule silently defeats a calendar @container rule:\n  ' + clashes.join('\n  '));
 });
+
+// ============================================================================
+// Menu UX — the header tablist follows the ARIA tabs pattern (roving tabindex,
+// arrow keys), and the account menu behaves like a real menu button: focus
+// moves in on open, Escape hands it back to the trigger, arrows walk the rows,
+// and tabbing away closes the panel.
+// ============================================================================
+
+const key = (win, elmt, k) =>
+  elmt.dispatchEvent(new win.KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
+
+test('header tabs: roving tabindex and arrow-key activation', async () => {
+  const { win, doc, Nota } = await boot();
+  const tabs = all(doc, '.nav-tabs .nav-tab');
+  assert.equal(tabs[0].tabIndex, 0, 'selected tab is in the Tab order');
+  assert.equal(tabs[1].tabIndex, -1, 'unselected tab is reached by arrows, not Tab');
+
+  tabs[0].focus();
+  key(win, tabs[0], 'ArrowRight');
+  assert.equal(Nota.state.tab, 'notaires', 'ArrowRight activates the next tab');
+  assert.equal(tabs[1].getAttribute('aria-selected'), 'true');
+  assert.equal(tabs[1].tabIndex, 0);
+  assert.equal(tabs[0].tabIndex, -1);
+  assert.equal(doc.activeElement, tabs[1], 'focus follows the activation');
+
+  key(win, tabs[1], 'ArrowRight'); // wraps around
+  assert.equal(Nota.state.tab, 'carnet');
+  key(win, tabs[0], 'End');
+  assert.equal(Nota.state.tab, 'notaires');
+  key(win, tabs[1], 'Home');
+  assert.equal(Nota.state.tab, 'carnet');
+
+  // A pane with no header tab (profil) must not strand the tablist at -1/-1.
+  Nota.setTab('profil', { focus: false });
+  assert.ok(tabs.some((t) => t.tabIndex === 0), 'one header tab stays in the Tab order');
+});
+
+test('account menu: aria wiring, focus on open, Escape restores the trigger', async () => {
+  const { win, doc } = await boot();
+  const bell = $(doc, 'notif-bell');
+  assert.equal(bell.getAttribute('aria-controls'), 'notif-panel');
+
+  bell.click();
+  assert.equal($(doc, 'notif-panel').hidden, false);
+  assert.equal(doc.activeElement, $(doc, 'acct-profil'), 'first item focused on open');
+
+  key(win, doc.activeElement, 'Escape');
+  assert.equal($(doc, 'notif-panel').hidden, true);
+  assert.equal(doc.activeElement, bell, 'Escape returns focus to the trigger');
+});
+
+test('account menu: ArrowDown / ArrowUp walk the rows and wrap', async () => {
+  const { win, doc } = await boot();
+  $(doc, 'notif-bell').click();
+  const panel = $(doc, 'notif-panel');
+  const head = $(doc, 'acct-profil');
+  assert.equal(doc.activeElement, head);
+
+  key(win, head, 'ArrowDown');
+  assert.notEqual(doc.activeElement, head, 'ArrowDown leaves the head');
+  assert.ok(panel.contains(doc.activeElement), 'focus stays inside the panel');
+  key(win, doc.activeElement, 'ArrowUp');
+  assert.equal(doc.activeElement, head, 'ArrowUp comes back');
+  key(win, head, 'ArrowUp'); // wraps to the last row
+  assert.ok(panel.contains(doc.activeElement) && doc.activeElement !== head, 'ArrowUp wraps from the first row');
+});
+
+test('account menu closes when focus moves outside it', async () => {
+  const { doc } = await boot();
+  $(doc, 'notif-bell').click();
+  assert.equal($(doc, 'notif-panel').hidden, false);
+  $(doc, 'cta-reserver').focus(); // e.g. Tab past the end of the menu
+  assert.equal($(doc, 'notif-panel').hidden, true, 'the menu never lingers behind a moved focus');
+});
+
+// 21. Adjacent-month days pad the first and last weeks. Standard calendar
+//     behaviour: the real date, muted, no prices (only the anchor month's offers
+//     are loaded, so a figure there would be a claim the app cannot make), and a
+//     FUTURE one navigates to its own month where the offers do exist.
+test('the first and last weeks are padded with real adjacent-month dates', async () => {
+  const { doc, anchor } = await boot();
+  const rows = all(doc, '#cal-grid .cal-row:not(.cal-dow-row)');
+  assert.ok(rows.length > 0, 'the grid renders week rows');
+  rows.forEach((r, i) => {
+    assert.equal(r.children.length, 7, 'week ' + (i + 1) + ' is a full seven columns');
+  });
+
+  const outs = all(doc, '#cal-grid .cal-cell.is-out');
+  outs.forEach((c) => {
+    assert.ok(c.dataset.date, 'an adjacent-month cell carries its real date');
+    assert.notEqual(c.dataset.date.slice(0, 7), anchor.slice(0, 7), 'and it is NOT the anchor month');
+    const n = c.querySelector('.cal-daynum');
+    assert.ok(n && n.textContent.trim(), 'it prints its day number');
+    assert.equal(c.querySelectorAll('.svc-bid').length, 0, 'and never a price');
+    assert.equal(c.tabIndex, -1, 'it stays out of the tab order');
+  });
+
+  // Leading pad runs to the last day of the previous month; trailing starts at 1.
+  const lead = outs.filter((c) => c.dataset.date < anchor);
+  if (lead.length) {
+    const prevLast = lead[lead.length - 1].dataset.date;
+    const nextDay = new Date(prevLast + 'T00:00:00Z');
+    nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+    assert.equal(nextDay.toISOString().slice(0, 10), anchor, 'the leading pad runs up to the 1st');
+  }
+  const trail = outs.filter((c) => c.dataset.date > anchor);
+  if (trail.length) {
+    assert.equal(Number(trail[0].dataset.date.slice(8, 10)), 1, 'the trailing pad starts on the 1st');
+  }
+});
+
+test('a future adjacent-month day moves the calendar to its own month', async () => {
+  const ctx = await boot();
+  const { doc, Nota } = ctx;
+  const nav = all(doc, '#cal-grid .cal-cell.is-out.is-nav');
+  if (!nav.length) return; // a month that starts on Monday and ends on Sunday has no pad
+  const target = nav[0].dataset.date;
+  assert.ok(target > todayISO(), 'only future adjacent days are navigable');
+  nav[0].click();
+  // The click sets the anchor and THEN reloads and re-renders. Poll for the
+  // rendered cell, not the anchor: a fixed wait, or waiting on the anchor
+  // alone, races the re-render under a loaded test runner.
+  const inMonth = () => doc.querySelector('#cal-grid .cal-cell:not(.is-out)[data-date="' + target + '"]');
+  for (let i = 0; i < 100 && !inMonth(); i++) await wait(20);
+  assert.equal(Nota.state.anchor.slice(0, 7), target.slice(0, 7), 'the calendar moved to that month');
+  assert.ok(inMonth(), 'and the date is now an in-month cell');
+
+  // Past adjacent days stay inert: they are not navigable and not bookable.
+  all(doc, '#cal-grid .cal-cell.is-out').forEach((c) => {
+    if (c.dataset.date < todayISO()) {
+      assert.ok(!c.classList.contains('is-nav'), c.dataset.date + ' is not navigable');
+      assert.equal(c.getAttribute('aria-disabled'), 'true', c.dataset.date + ' is disabled');
+    }
+  });
+});
