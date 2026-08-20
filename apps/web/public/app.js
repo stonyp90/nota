@@ -838,17 +838,12 @@
 
     // Each week is its own role="row" of exactly 7 cells. Leading/trailing
     // blanks are empty gridcells so every row stays a full 7 columns.
-    // Row index (0-based) of the week containing today, when today is in the
-    // displayed month. Earlier rows hold nothing bookable, so they are skipped.
-    var firstRow = 0;
-    if (monthKey(today) === monthKey(state.anchor)) {
-      firstRow = Math.floor((lead + Number(today.slice(8, 10)) - 1) / 7);
-    }
+    // The WHOLE month is drawn, past weeks included: a month with its first
+    // fortnight missing reads as a broken calendar, and the dates already
+    // gone are what tell a client how the prices they can see got there.
+    // Past cells stay inert (is-past below), they are simply no longer absent.
     var week = null;
-    var rowIndex = -1;
     function openRow() {
-      rowIndex++;
-      if (rowIndex < firstRow) { week = null; return; }   // wholly-past week: skip
       week = el('div', 'cal-row'); week.setAttribute('role', 'row'); grid.appendChild(week);
     }
     function blank() { if (!week) return; var b = el('div', 'cal-cell is-out'); b.setAttribute('role', 'gridcell'); week.appendChild(b); }
@@ -1393,9 +1388,6 @@
 
   function moveFocus(delta) {
     var next = D.addDays(state.focusDate, delta);
-    // The reflowed grid does not render past cells, so there is nothing to land
-    // on before today.
-    if (next < todayISO() && gridCols() !== 7) return;
     var changedMonth = monthKey(next) !== monthKey(state.anchor);
     if (changedMonth) state.anchor = firstOfMonth(next);
     state.focusDate = next;

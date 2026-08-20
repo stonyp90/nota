@@ -121,23 +121,26 @@ test('calendar renders day cells for the anchor month and 7 weekday headers', as
   const dayCells = all(doc, '#cal-grid .cal-cell:not(.is-out)');
   assert.equal(all(doc, '#cal-grid .cal-dow').length, 7);
 
-  // Weeks entirely in the past are not rendered at all — they held nothing
-  // bookable and cost a third of the grid's height. Every remaining day of the
-  // month is present, from the start of today's week onward.
+  // The month is drawn WHOLE, past weeks included: a month missing its first
+  // fortnight reads as a broken calendar. Past days are inert, not absent.
   const dim = daysInMonthUTC(anchor);
   const dayNums = dayCells.map((c) => Number(c.dataset.date.slice(8, 10)));
-  assert.equal(dayNums[dayNums.length - 1], dim, 'the month still runs to its last day');
-  assert.ok(dayCells.length <= dim);
+  assert.equal(dayCells.length, dim, 'every day of the month has a cell');
+  assert.equal(dayNums[0], 1, 'the month starts on the 1st');
+  assert.equal(dayNums[dayNums.length - 1], dim, 'and runs to its last day');
+  assert.deepEqual(dayNums, dayNums.slice().sort((a, b) => a - b), 'in order, with no gaps');
 
   const todayDay = Number(today.slice(8, 10));
   if (today.slice(0, 7) === anchor.slice(0, 7)) {
-    assert.ok(dayNums.includes(todayDay), 'today is always rendered');
-    // Nothing from a week that ended before today's week began.
-    const firstShown = dayNums[0];
-    assert.ok(firstShown <= todayDay, 'today is not the first cell unless its week starts there');
-    assert.ok(todayDay - firstShown < 7, 'at most the current week is shown before today');
-  } else {
-    assert.equal(dayCells.length, dim, 'a month without today renders in full');
+    assert.ok(dayNums.includes(todayDay), 'today is rendered');
+    // Everything before today is present AND inert: past dates cannot be booked.
+    const past = dayCells.filter((c) => c.dataset.date < today);
+    assert.equal(past.length, todayDay - 1, 'every day before today is rendered');
+    past.forEach((c) => {
+      assert.ok(c.classList.contains('is-past'), c.dataset.date + ' is marked past');
+      assert.equal(c.getAttribute('aria-disabled'), 'true', c.dataset.date + ' is disabled');
+      assert.equal(c.tabIndex, -1, c.dataset.date + ' is out of the tab order');
+    });
   }
 });
 

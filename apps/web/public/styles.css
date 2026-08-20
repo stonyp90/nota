@@ -880,7 +880,9 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
   .cal-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
   .cal-row { display: contents; }
   .cal-dow-row { display: none; }
-  .cal-cell.is-past, .cal-cell.is-out { display: none; }
+  /* Out-of-month blanks exist ONLY to hold a weekday column, and there are no
+     weekday columns here. Past days stay: the month is drawn whole. */
+  .cal-cell.is-out { display: none; }
 }
 /* Cell content in reflowed mode. The `cal` container is still narrow here, so
    the ≤560 compact-money swap is still matching — but the CELL is now 82px, and
