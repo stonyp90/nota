@@ -602,7 +602,6 @@ a:hover { text-decoration: underline; }
 /* One column below 900px: the aside stacks under the copy, still chromeless —
    separated by space alone, and with roomier rows for touch. */
 @media (max-width: 900px) {
-  .intro--hero { grid-template-columns: 1fr; gap: clamp(18px, 3vw, 26px); }
   .pulse-row { padding-block: 10px; } /* comfortable touch target when stacked */
 }
 .intro h1 { font-size: clamp(21px, 2.4vw, 28px); font-weight: 800; line-height: 1.15; margin-top: 4px; }
@@ -1772,6 +1771,36 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
      nearly touch the calendar card. */
   .intro { padding: var(--space-7) 0 var(--space-6); }
 }
+/* THE HERO'S TWO-COLUMN THRESHOLD, and everything that follows from it.
+   Below this the market panel cannot sit beside the copy, so it stacks under it
+   and the hero doubles in height: measured 543px at 768 against 340px at 1280,
+   which pushed the carnet to 735px, further down than it sits on a PHONE. The
+   old threshold was 900px, so every iPad portrait width paid that cost. 720px
+   is where two columns still leave the pulse ~300px, its comfortable minimum.
+
+   Below it the pitch is trimmed instead: the prose goes (the h1 and the two
+   CTAs still say what this is) and the market panel keeps its FIGURES and drops
+   its captions, so the carnet lands at the fold rather than under a wall of
+   copy. Measured 1194px -> 637px at 320, and 735px -> 588px at 768.
+
+   Placed HERE, late, on purpose: .hero-points' base rule sets display:flex at
+   equal specificity, so an earlier copy of this block silently lost to it. */
+@media (max-width: 719.98px) {
+  .intro--hero { grid-template-columns: 1fr; gap: clamp(18px, 3vw, 26px); }
+  .intro .eyebrow, .intro-main > p, .hero-points, .pulse-foot { display: none; }
+  /* Side by side rather than stacked. */
+  .hero-cta { flex-direction: row; }
+  /* flex:1 alone still refuses to go under min-content, so two btn-lg wrapped
+     to two rows and the pair cost 114px instead of 44px. */
+  .hero-cta .btn { flex: 1 1 0; min-width: 0; }
+  /* "a partir de" and "mediane" are legible from the figures' own placement. */
+  .pulse-fig-k, .pulse-meta { display: none; }
+  .pulse-figs { flex-direction: row; gap: var(--space-5); align-items: baseline; }
+  .pulse-item { gap: var(--space-3); }
+  /* A "maximize" toggle means nothing on a touch device, and is inert on iOS. */
+  #cal-maximize { display: none; }
+}
+
 @media (max-width: 680px) {
   /* Longhand: a shorthand would reset .layout's vertical padding to 0 and the
      carnet would butt against the hero and against the footer. */
@@ -1793,21 +1822,6 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
     /* Sides stay at 14 so the grid lines up with the toolbar, filter bar and
      legend that bracket it inside the same card. */
   .cal-grid { gap: 4px; padding: var(--space-4) var(--space-7) var(--space-6); }
-  /* FOCUS ON THE CARNET. On a phone the pitch used to push the calendar 1194px
-     down, past two full screens, so the one thing a client came for was the last
-     thing they saw. The prose goes (the h1 and the two CTAs still say what this
-     is), the market panel keeps its FIGURES and drops its captions, and the
-     calendar lands at the fold instead. Measured 1194px -> 589px at 320x568. */
-  .intro .eyebrow, .intro-main > p, .hero-points, .pulse-foot { display: none; }
-  /* Two 44px buttons side by side rather than stacked. */
-  .hero-cta { flex-direction: row; }
-  .hero-cta .btn { flex: 1; }
-  /* "a partir de" and "mediane" are legible from the figures' own placement. */
-  .pulse-fig-k, .pulse-meta { display: none; }
-  .pulse-figs { flex-direction: row; gap: var(--space-5); align-items: baseline; }
-  .pulse-item { gap: var(--space-3); }
-  /* A "maximize" toggle means nothing on a phone, and it is inert on iOS. */
-  #cal-maximize { display: none; }
 
   .cal-row { gap: 4px; }
   .cal-dow { font-size: 10px; }
