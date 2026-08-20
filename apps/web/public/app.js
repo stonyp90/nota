@@ -8,6 +8,11 @@
   var D = window.NotaDomain;
   if (!D) { console.error('NotaDomain missing'); return; }
 
+  // English side of the few user-facing strings the i18n DOM observer cannot
+  // reach: confirm(), data-* attributes rendered by CSS content, and calendar
+  // link payloads. Everything else stays canonical French — see i18n.js.
+  var T = function (s) { return window.NotaI18N ? window.NotaI18N.t(s) : s; };
+
   // API base: same-origin /api in production (CloudFront routes it to Lambda);
   // the standalone dev API on :8788 in local development.
   var API_BASE =
@@ -152,11 +157,13 @@
     var p = anchor.split('-').map(Number);
     return new Date(Date.UTC(p[0], p[1], 0)).getUTCDate();
   }
-  var fmtMonth = new Intl.DateTimeFormat('fr-CA', { month: 'long', year: 'numeric', timeZone: 'UTC' });
-  var fmtMonthOnly = new Intl.DateTimeFormat('fr-CA', { month: 'long', timeZone: 'UTC' });
-  var fmtMonthShort = new Intl.DateTimeFormat('fr-CA', { month: 'short', timeZone: 'UTC' });
-  var fmtDayLong = new Intl.DateTimeFormat('fr-CA', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
-  var fmtDayShort = new Intl.DateTimeFormat('fr-CA', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+  // Dates follow the interface language (NotaI18N); French remains the default.
+  var LOCALE = (window.NotaI18N && window.NotaI18N.locale()) || 'fr-CA';
+  var fmtMonth = new Intl.DateTimeFormat(LOCALE, { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  var fmtMonthOnly = new Intl.DateTimeFormat(LOCALE, { month: 'long', timeZone: 'UTC' });
+  var fmtMonthShort = new Intl.DateTimeFormat(LOCALE, { month: 'short', timeZone: 'UTC' });
+  var fmtDayLong = new Intl.DateTimeFormat(LOCALE, { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
+  var fmtDayShort = new Intl.DateTimeFormat(LOCALE, { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
   function monthTitle(anchor) { return fmtMonth.format(new Date(anchor + 'T00:00:00Z')); }
   function dayTitle(iso) { return fmtDayLong.format(new Date(iso + 'T00:00:00Z')); }
   function dayShort(iso) { return fmtDayShort.format(new Date(iso + 'T00:00:00Z')).replace(/\.$/, ''); }
@@ -165,9 +172,10 @@
   // DOM helpers
   // ---------------------------------------------------------------------------
   function $(id) { return document.getElementById(id); }
-  // "3×" / "1,4×" — French decimal comma, and no pointless ",0".
+  // "3×" / "1,4×" — decimal comma in French, point in English; no pointless ",0".
   function multLabel(m) {
-    return (Math.round(m * 10) / 10).toFixed(1).replace(/,?\.0$/, '').replace('.', ',') + '×';
+    var s = (Math.round(m * 10) / 10).toFixed(1).replace(/,?\.0$/, '');
+    return (LOCALE === 'fr-CA' ? s.replace('.', ',') : s) + '×';
   }
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
@@ -574,6 +582,24 @@
   function onbMarkSeen() { flagSet(LS_ONBOARDED, '1'); }
   function onbDismissals() { return Number(flagGet(LS_ONB_DISMISS) || 0) || 0; }
 
+  // The guide's funnel, counted locally: shown → role_client/role_notary →
+  // completed/explored, plus skipped (Passer) and deferred (✕/Esc/backdrop).
+  // Counters only — no PII, no network; local for the demo, a deployment
+  // would drain them into its analytics. Read via Nota.onboarding.stats().
+  var LS_ONB_STATS = 'nota.onb.stats.v1';
+  function onbCount(key) {
+    var s = lsLoad(LS_ONB_STATS) || {};
+    s[key] = (Number(s[key]) || 0) + 1;
+    lsSave(LS_ONB_STATS, s);
+  }
+  function onbStats() { return lsLoad(LS_ONB_STATS) || {}; }
+
+  // One rule for "is the guide on screen", not two implementations of it.
+  function onbDialogOpen() {
+    var dlg = $('onboarding-dialog');
+    return !!(dlg && dlg.open);
+  }
+
   // VIEW 1 (role choice). Both views live in the DOM; we just show/hide.
   function onbShowRoleView() {
     // Drop the parked role and point the accessible name back at THIS view's
@@ -634,6 +660,7 @@
   // everyone else starts at the choice. Same jsdom-safe showModal guard as
   // the auth modal.
   function onbOpen() {
+    onbCount('shown');
     var known = roleGet();
     if (known && ONB_FLOWS[known]) onbShowStepsView(known);
     else onbShowRoleView();
@@ -664,7 +691,10 @@
   // client reuses the hero reserve path, notary jumps to the notaries tab.
   function onbComplete(explore) {
     var dlg = $('onboarding-dialog');
-    var role = dlg ? dlg.getAttribute('data-role') : '';
+    // roleGet() is the source of truth (onbShowStepsView persisted it); the
+    // parked data-role only backstops storage-less browsers.
+    var role = roleGet() || (dlg ? dlg.getAttribute('data-role') : '');
+    onbCount(explore === true ? 'explored' : 'completed');
     onbMarkSeen();
     if (dlg && dlg.close) { try { dlg.close(); } catch (e) {} }
     // "Explorer le carnet d'abord": land on the marketplace itself. The primary
@@ -686,6 +716,7 @@
   // explicit decision (CTA / Passer) has already flagged it.
   function onbDefer() {
     if (onbSeen()) return;
+    onbCount('deferred');
     flagSet(LS_ONB_DISMISS, String(onbDismissals() + 1));
   }
 
@@ -694,6 +725,7 @@
   // rather than on `close` also keeps this working under jsdom, whose close()
   // shim dispatches no close event.
   function onbDismiss() {
+    onbCount('skipped');
     onbMarkSeen();
     var dlg = $('onboarding-dialog');
     if (dlg && dlg.close) { try { dlg.close(); } catch (e) {} }
@@ -704,7 +736,7 @@
   // every surface that reads the profile/offers is re-rendered.
   function clientSignOut() {
     var ok = true;
-    try { ok = window.confirm('Se déconnecter effacera de cet appareil vos coordonnées, vos offres publiées, votre dossier et vos notifications. Continuer ?'); } catch (e) { ok = true; }
+    try { ok = window.confirm(T('Se déconnecter effacera de cet appareil vos coordonnées, vos offres publiées, votre dossier et vos notifications. Continuer ?')); } catch (e) { ok = true; }
     if (!ok) return;
     try {
       localStorage.removeItem(LS_PROFILE);
@@ -849,7 +881,14 @@
   // ---------------------------------------------------------------------------
   // Calendar rendering
   // ---------------------------------------------------------------------------
-  var DOW = ['lun', 'mar', 'mer', 'jeu', 'ven', 'sam', 'dim'];
+  // Monday-first weekday abbreviations from the locale (anchored on a known
+  // Monday, 2024-01-01), dot-stripped and lowercased like the fr-CA originals.
+  var DOW = (function () {
+    var f = new Intl.DateTimeFormat(LOCALE, { weekday: 'short', timeZone: 'UTC' });
+    return [0, 1, 2, 3, 4, 5, 6].map(function (i) {
+      return f.format(new Date(Date.UTC(2024, 0, 1 + i))).replace(/\.$/, '').toLowerCase();
+    });
+  })();
 
   // The calendar's visible span. Anchored on the CURRENT month it is a rolling
   // six-week window opening on Monday of today's week — the booking-industry
@@ -1119,7 +1158,7 @@
       item.style.color = 'var(--svc-' + svc.id + ')';
       // Carried for the CSS tooltip a calendar cell shows on hover, where there
       // is no room to print the name.
-      item.dataset.name = svc.nom;
+      item.dataset.name = T(svc.nom);
       // The bubble's second line says what the cell cannot: how deep the
       // competition runs and where the act's price STARTS, so the printed
       // figure reads as high or low at a glance.
@@ -1129,7 +1168,7 @@
         var pct = Math.round((amount / svc.prixDepart - 1) * 100);
         if (pct > 0) detail += ' · +' + pct + PCT;
       }
-      item.dataset.detail = detail;
+      item.dataset.detail = T(detail);
       var ic = svcIcon(svc.id, 12);
       if (ic) item.appendChild(ic);
       else {
@@ -1143,7 +1182,7 @@
       // DOM for screen readers, which have no hover and cannot see a colour —
       // they hear exactly what a hovering reader sees.
       item.appendChild(el('span', showName ? 'svc-bid-name' : 'visually-hidden',
-        showName ? svc.nom : svc.nom + ' — ' + detail));
+        showName ? T(svc.nom) : T(svc.nom) + ' — ' + T(detail)));
       var amt = el('span', 'svc-bid-amount', D.money(amount));
       amt.dataset.compact = compactMoney(amount);
       item.appendChild(amt);
@@ -1160,7 +1199,8 @@
     n = Math.round(Number(n) || 0);
     if (n < 1000) return String(n);
     var k = n / 1000;
-    return (k >= 10 ? String(Math.round(k)) : (Math.round(k * 10) / 10 + '').replace('.', ',')) + 'k';
+    var s = k >= 10 ? String(Math.round(k)) : String(Math.round(k * 10) / 10);
+    return (LOCALE === 'fr-CA' ? s.replace('.', ',') : s) + 'k';
   }
 
   function renderLegend() {
@@ -1480,8 +1520,8 @@
     var counts = [];
     if (svc) {
       counts.push(matching.length
-        ? matching.length + ' offre' + (matching.length > 1 ? 's' : '') + ' en ' + svc.nom.toLowerCase()
-        : 'Aucune offre en ' + svc.nom.toLowerCase());
+        ? matching.length + ' offre' + (matching.length > 1 ? 's' : '') + ' en ' + T(svc.nom).toLowerCase()
+        : 'Aucune offre en ' + T(svc.nom).toLowerCase());
     }
     counts.push(dayAll.length + ' offre' + (dayAll.length > 1 ? 's' : '') + ' ce jour, tous actes confondus');
     list.appendChild(el('div', 'day-bids-count', counts.join(' · ')));
@@ -1517,7 +1557,7 @@
     bestV.classList.remove('pulse'); void bestV.offsetWidth; bestV.classList.add('pulse');
     state.dayTop = top;
     if (top == null) {
-      var name = svc ? svc.nom.toLowerCase() : 'cet acte';
+      var name = svc ? T(svc.nom).toLowerCase() : 'cet acte';
       var hint = $('day-hint');
       hint.classList.remove('is-ahead');
       // Two different reasons to be free, two different messages: a retained
@@ -2119,10 +2159,10 @@
   // three links in the dialog) and the per-row agenda button.
   function calendarLinks(bid) {
     var svc = D.serviceById(bid.serviceId);
-    var title = 'Signature notariée — ' + (svc ? svc.nom : bid.serviceId);
+    var title = T('Signature notariée') + ' — ' + (svc ? T(svc.nom) : bid.serviceId);
     var startCompact = bid.dateISO.replace(/-/g, '');
     var endCompact = D.addDays(bid.dateISO, 1).replace(/-/g, '');
-    var details = 'Offre publiée sur Nota : ' + D.money(bid.montant) + '.';
+    var details = T('Offre publiée sur Nota : ' + D.money(bid.montant) + '.');
     // RFC 5545: DTSTAMP is required (Outlook drops events without it); escape TEXT.
     var esc = function (s) { return String(s).replace(/([\\,;])/g, '\\$1').replace(/\r?\n/g, '\\n'); };
     var stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
@@ -2764,7 +2804,7 @@
   function wireCarnetSubscribe() {
     var http = apiBaseAbs() + '/carnet/feed.ics';
     var webcal = toWebcal(http);
-    var name = 'Nota — carnet Québec';
+    var name = T('Nota — carnet Québec');
     var google = 'https://calendar.google.com/calendar/render?cid=' + encodeURIComponent(webcal);
     var outlook = 'https://outlook.live.com/calendar/0/addfromweb?url=' + encodeURIComponent(http) + '&name=' + encodeURIComponent(name);
     function set(id, href) { var a = $(id); if (a) a.href = href; }
@@ -2941,7 +2981,9 @@
   // Capped — the full list is the payoff of signing in; overflow collapses into
   // one "+N autres" card. Hidden signed-in (the console's open list takes over)
   // and when the month has nothing open (no data → no empty section).
-  var NC_LIVE_MAX = 6;
+  // 8 + the "+N autres" overflow card = 9 = three clean rows of three at the
+  // desktop card width; every narrower grid just wraps.
+  var NC_LIVE_MAX = 8;
   function ncFocusGate() {
     var inp = $('nc-email'); if (!inp) return;
     if (inp.scrollIntoView) { try { inp.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {} }
@@ -3009,7 +3051,7 @@
   //   • notaire (notary steps) — open demands only: a week paying out.
   // Self-stopping: every step re-checks the board is still on screen (dialog
   // open, page visible) — a closed dialog kills offsetParent, parking the loop.
-  var fmtWeekday = new Intl.DateTimeFormat('fr-CA', { weekday: 'short', timeZone: 'UTC' });
+  var fmtWeekday = new Intl.DateTimeFormat(LOCALE, { weekday: 'short', timeZone: 'UTC' });
   // Labels come from the locale, anchored on a known Monday (2024-01-01).
   var WEEK_DAY_LABELS = [0, 1, 2, 3, 4].map(function (i) {
     return fmtWeekday.format(new Date(Date.UTC(2024, 0, 1 + i))).replace(/\.$/, '');
@@ -3187,7 +3229,7 @@
   var weekVigOnb = makeWeekVignette({
     box: 'ob-week', board: 'ob-week-board', total: 'ob-week-total',
     retenues: function () { return onbView() !== 'notaire'; },
-    enabled: function () { var dlg = $('onboarding-dialog'); return !!(dlg && dlg.open); },
+    enabled: onbDialogOpen,
   });
 
   // --- Bid vignette (client onboarding step) -----------------------------------
@@ -3300,8 +3342,7 @@
     function render() {
       var box = $('ob-bid'); if (!box) return;
       var list = pool();
-      var dlg = $('onboarding-dialog');
-      if (!(dlg && dlg.open) || !list.length) { stop(); box.hidden = true; return; }
+      if (!onbDialogOpen() || !list.length) { stop(); box.hidden = true; return; }
       box.hidden = false;
       // Reduced motion: one completed story — final amount, both stamps.
       if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
@@ -3428,7 +3469,7 @@
       if (nc.feedToken) {
         var http = apiBaseAbs() + '/notary/feed.ics?token=' + encodeURIComponent(nc.feedToken);
         var webcal = toWebcal(http);
-        var name = 'Nota — signatures retenues';
+        var name = T('Nota — signatures retenues');
         var set = function (id, href) { var a = $(id); if (a) a.href = href; };
         set('notary-webcal', http);
         set('notary-apple', webcal);
@@ -3872,7 +3913,12 @@
 
     // Onboarding guide: role choice → steps, back, skip, CTA, dismissals.
     document.querySelectorAll('#onb-view-role .onb-choice').forEach(function (b) {
-      b.addEventListener('click', function () { onbShowStepsView(b.getAttribute('data-role')); });
+      b.addEventListener('click', function () {
+        var role = b.getAttribute('data-role');
+        onbCount('role_' + role); // counted on the CLICK, not on view render —
+        // the resume path also renders the steps view without a new choice.
+        onbShowStepsView(role);
+      });
     });
     // Arrow keys move between the role cards — standard grouped-choice
     // keyboard behaviour; Enter/Space already activate them as buttons.
@@ -4203,7 +4249,11 @@
       open: onbOpen,
       role: roleGet,
       seen: onbSeen,
-      reset: function () { flagClear(LS_ONBOARDED); flagClear(LS_ONB_DISMISS); flagClear(LS_ROLE); },
+      stats: onbStats,
+      reset: function () {
+        flagClear(LS_ONBOARDED); flagClear(LS_ONB_DISMISS); flagClear(LS_ROLE);
+        try { localStorage.removeItem(LS_ONB_STATS); } catch (e) {}
+      },
     },
     _internals: { applyFilters: applyFilters, acceptance: acceptance, buildCalendarLinks: buildCalendarLinks },
   };

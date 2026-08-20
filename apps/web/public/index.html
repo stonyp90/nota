@@ -14,6 +14,10 @@
     <meta name="keywords" content="notaire Québec, refinancement hypothécaire notaire Québec, notaire refinancement hypothèque Ville de Québec, prix notaire refinancement Québec, mainlevée hypothèque notaire, mortgage refinancing notary Quebec City, refinance mortgage notary Quebec, real estate notary Quebec City, testament notarié Québec, procuration notaire, rendez-vous notaire rapide, notaire urgent Québec" />
     <meta name="robots" content="index, follow, max-image-preview:large" />
     <link rel="canonical" href="https://d1s1h4894dau0c.cloudfront.net/" />
+    <!-- Language alternates: ?lang= is honoured (and persisted) by i18n.js. -->
+    <link rel="alternate" hreflang="fr-CA" href="https://d1s1h4894dau0c.cloudfront.net/" />
+    <link rel="alternate" hreflang="en-CA" href="https://d1s1h4894dau0c.cloudfront.net/?lang=en" />
+    <link rel="alternate" hreflang="x-default" href="https://d1s1h4894dau0c.cloudfront.net/" />
     <meta name="theme-color" content="#2c5f34" />
 
     <!-- Local / geo signals (Ville de Québec) -->
@@ -166,6 +170,10 @@
         <button class="icon-btn nav-burger" id="nav-burger" aria-label="Ouvrir le menu" aria-haspopup="true" aria-expanded="false" aria-controls="mobile-nav">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
         </button>
+        <!-- Language toggle: shows the OTHER language ("EN" on the French
+             site). Wired and labelled by i18n.js; data-i18n-skip keeps the
+             translator's DOM walker away from it. -->
+        <button class="icon-btn lang-btn" id="lang-toggle" data-lang-toggle="short" data-i18n-skip></button>
         <button class="icon-btn" id="theme-toggle" title="Thème clair / sombre" aria-label="Changer de thème">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
         </button>
@@ -243,6 +251,8 @@
         <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
         Thème clair / sombre
       </button>
+      <!-- Full-name language toggle ("English" / "Français"); see i18n.js. -->
+      <button type="button" class="mnav-link" id="mnav-lang" data-lang-toggle="long" data-i18n-skip></button>
       <div class="mnav-sep"></div>
       <div class="mnav-group mnav-legal" role="group" aria-label="Informations légales">
         <a href="#" class="mnav-link goto-link" data-goto="confidentialite">Confidentialité</a>
@@ -421,16 +431,25 @@
             <div class="intro-main">
               <span class="eyebrow">Pour les notaires</span>
               <h1>Remplissez votre semaine. Payé à la signature.</h1>
-              <p>Inscription gratuite, sans frais fixes. Nota se rémunère par une commission, uniquement sur les actes que vous complétez. Vous retenez ce qui vous convient, vous déclinez le reste sans frais.</p>
-              <ol class="nc-steps" aria-label="Comment ça marche">
-                <li class="nc-step"><span class="nc-step-n" aria-hidden="true">1</span>Inscrivez-vous, gratuit</li>
-                <li class="nc-step"><span class="nc-step-n" aria-hidden="true">2</span>Retenez ce qui vous convient</li>
-                <li class="nc-step"><span class="nc-step-n" aria-hidden="true">3</span>Payé en entier à la signature</li>
-              </ol>
+              <!-- ONE line of pitch at every width — the inventory below is the
+                   real argument; anything longer is in the way of it. -->
+              <p class="nc-lede">Des clients de Québec ont fixé leur date et leur prix — retenez ce qui vous convient. Inscription gratuite, payé en entier à la signature.</p>
             </div>
           </div>
 
-          <!-- Value grid — fills the landing and makes the payoff concrete. -->
+          <!-- THE CENTREPIECE — the live open inventory (signed-out only):
+               real demands, soonest first, every card funnelling into the
+               sign-in gate. Filled by renderNotaryLive(); hidden signed-in —
+               the console's own open list takes over. -->
+          <section class="nc-live" id="notary-live" aria-labelledby="notary-live-h" hidden>
+            <div class="nc-live-head">
+              <h2 class="nc-live-h" id="notary-live-h">Ouvertes en ce moment</h2>
+              <p class="nc-live-sub" id="notary-live-sub"></p>
+            </div>
+            <div class="nc-live-grid" id="notary-live-grid"></div>
+          </section>
+
+          <!-- Value grid — the supporting argument, demoted below the inventory. -->
           <section class="nc-why" aria-label="Ce que vous obtenez">
             <div class="nc-why-item">
               <span class="nc-why-ic" aria-hidden="true">◆</span>
@@ -523,10 +542,25 @@
                 <button class="btn btn-sm btn-ghost" id="notary-signout">Se déconnecter</button>
               </div>
 
+              <h2 class="nc-h" id="notary-open-h">Demandes ouvertes</h2>
+              <div class="nc-list nc-grid" id="notary-open-list"></div>
+              <p class="help" id="notary-open-empty" hidden>Aucune demande ouverte pour l’instant.</p>
+
+              <h2 class="nc-h">Dossiers retenus</h2>
+              <div class="nc-list nc-grid nc-grid--wide" id="notary-retained-list"></div>
+              <p class="help" id="notary-retained-empty" hidden>Aucun dossier retenu pour l’instant.</p>
+
+              <h2 class="nc-h">Vos revenus</h2>
+              <div class="nc-earn" id="notary-earnings"></div>
+
               <!-- Lead-delivery preferences: HOW (in-app / email / SMS) and at what PACE
-                   Nota alerts this notary about new matching demands. -->
-              <section class="nc-prefs" aria-labelledby="notary-prefs-h">
-                <h2 class="nc-h" id="notary-prefs-h">Recevez vos demandes à votre rythme</h2>
+                   Nota alerts this notary about new matching demands. Collapsed by
+                   default — settings, not the working surface. -->
+              <details class="nc-prefs" id="notary-prefs">
+                <summary class="nc-prefs-sum">
+                  <h2 class="nc-h" id="notary-prefs-h">Recevez vos demandes à votre rythme</h2>
+                  <span class="nc-prefs-hint">courriel, texto, fréquence, actes</span>
+                </summary>
                 <p class="help">Choisissez comment et à quelle fréquence Nota vous prévient des nouvelles demandes qui vous conviennent. Modifiable à tout moment.</p>
                 <div class="nc-prefs-grid">
                   <div class="nc-pref-block">
@@ -552,18 +586,7 @@
                   </div>
                 </div>
                 <p class="help nc-prefs-saved" id="notary-prefs-saved" role="status" aria-live="polite" hidden>✓ Préférences enregistrées.</p>
-              </section>
-
-              <h2 class="nc-h" id="notary-open-h">Demandes ouvertes</h2>
-              <div class="nc-list" id="notary-open-list"></div>
-              <p class="help" id="notary-open-empty" hidden>Aucune demande ouverte pour l’instant.</p>
-
-              <h2 class="nc-h">Dossiers retenus</h2>
-              <div class="nc-list" id="notary-retained-list"></div>
-              <p class="help" id="notary-retained-empty" hidden>Aucun dossier retenu pour l’instant.</p>
-
-              <h2 class="nc-h">Vos revenus</h2>
-              <div class="nc-earn" id="notary-earnings"></div>
+              </details>
 
               <div class="nc-pay">
                 <h2 class="nc-h">Paiements</h2>
@@ -584,18 +607,6 @@
               </div>
             </div>
           </div>
-          <!-- Live teaser of the open inventory (signed-out only): real demands,
-               soonest first, every card funnelling into the sign-in gate. Filled
-               by renderNotaryLive(); hidden signed-in — the console's own open
-               list takes over. -->
-          <section class="nc-live" id="notary-live" aria-labelledby="notary-live-h" hidden>
-            <div class="nc-live-head">
-              <h2 class="nc-live-h" id="notary-live-h">Ouvertes en ce moment</h2>
-              <p class="nc-live-sub" id="notary-live-sub"></p>
-            </div>
-            <div class="nc-live-grid" id="notary-live-grid"></div>
-          </section>
-
           <p class="note nota-guarantee">
             <strong>Vous gardez la main.</strong> Vous fixez vos honoraires et vérifiez l’identité du client à la signature, comme l’exige la loi. Nota n’intervient jamais dans l’acte.
           </p>
@@ -746,7 +757,7 @@
           <span class="footer-col-h">Explorer</span>
           <a href="#" class="goto-link" data-goto="carnet">Le carnet</a>
           <a href="#" class="goto-link" data-goto="notaires">Pour les notaires</a>
-          <a href="#" class="footer-guide" id="footer-guide">Comment ça marche</a>
+          <a href="#" id="footer-guide">Comment ça marche</a>
         </nav>
         <nav class="footer-col" aria-label="Informations légales">
           <span class="footer-col-h">Légal</span>
@@ -948,7 +959,7 @@
 
       <div class="onb-body">
         <!-- VIEW 1 — role choice -->
-        <div class="onb-view" id="onb-view-role">
+        <div id="onb-view-role">
           <div class="auth-mark" aria-hidden="true"><span class="brand-badge"><img src="favicon.svg" width="26" height="26" alt="" /></span></div>
           <h2 id="onb-title" class="onb-title">Bienvenue sur Nota</h2>
           <p class="onb-sub">Comment souhaitez-vous utiliser Nota&nbsp;?</p>
@@ -970,7 +981,7 @@
         </div>
 
         <!-- VIEW 2 — role steps (title, sub, 3 steps, CTA) filled by app.js -->
-        <div class="onb-view" id="onb-view-steps" hidden>
+        <div id="onb-view-steps" hidden>
           <button type="button" class="onb-back" id="onb-back"><span aria-hidden="true">← </span>Changer</button>
           <h2 class="onb-title onb-steps-title" id="onb-steps-title"></h2>
           <p class="onb-sub" id="onb-steps-sub"></p>
@@ -1031,6 +1042,9 @@
     </dialog>
 
     <!-- @nota/domain, copied in by the build/dev step; exposes window.NotaDomain -->
+    <!-- i18n first: app.js reads NotaI18N.locale() for its date formatters, and
+     the English DOM pass must land before app.js renders. -->
+    <script src="i18n.js"></script>
     <script src="domain.js"></script>
     <script src="app.js"></script>
   </body>

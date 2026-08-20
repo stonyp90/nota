@@ -546,7 +546,7 @@ test('notaires landing teases open demands and funnels each card to sign-in', as
     .sort((a, b) => (a.dateISO < b.dateISO ? -1 : a.dateISO > b.dateISO ? 1 : 0));
   const cards = all(doc, '#notary-live-grid .nc-live-card:not(.nc-live-more)');
   assert.ok(cards.length > 0, 'teaser should render demand cards');
-  assert.equal(cards.length, Math.min(open.length, 6));
+  assert.equal(cards.length, Math.min(open.length, 8));
 
   // Soonest first, each card carrying the demand's real amount.
   cards.forEach((card, i) => {
@@ -555,9 +555,9 @@ test('notaires landing teases open demands and funnels each card to sign-in', as
 
   // Overflow collapses into a "+N autres" card (only when there IS overflow).
   const more = doc.querySelector('#notary-live-grid .nc-live-more');
-  if (open.length > 6) {
+  if (open.length > 8) {
     assert.ok(more, 'overflow card missing');
-    assert.ok(more.textContent.includes(String(open.length - 6)));
+    assert.ok(more.textContent.includes(String(open.length - 8)));
   } else {
     assert.equal(more, null);
   }

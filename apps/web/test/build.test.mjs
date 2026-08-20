@@ -25,10 +25,11 @@ test('JS/CSS assets are emitted with content-hashed filenames', () => {
   assert.equal(hashed(/^app\.[0-9a-f]{10}\.js$/).length, 1, 'missing hashed app.js');
   assert.equal(hashed(/^styles\.[0-9a-f]{10}\.css$/).length, 1, 'missing hashed styles.css');
   assert.equal(hashed(/^domain\.[0-9a-f]{10}\.js$/).length, 1, 'missing hashed domain.js');
+  assert.equal(hashed(/^i18n\.[0-9a-f]{10}\.js$/).length, 1, 'missing hashed i18n.js');
 });
 
 test('no un-hashed app.js/styles.css/domain.js ship in dist', () => {
-  for (const bare of ['app.js', 'styles.css', 'domain.js']) {
+  for (const bare of ['app.js', 'styles.css', 'domain.js', 'i18n.js']) {
     assert.ok(!files.includes(bare), `dist still contains un-hashed ${bare}`);
   }
 });
@@ -37,6 +38,7 @@ test('index.html references only the hashed asset filenames', () => {
   assert.match(html, /src="app\.[0-9a-f]{10}\.js"/, 'index.html lost its hashed app.js ref');
   assert.match(html, /href="styles\.[0-9a-f]{10}\.css"/, 'index.html lost its hashed styles.css ref');
   assert.match(html, /src="domain\.[0-9a-f]{10}\.js"/, 'index.html lost its hashed domain.js ref');
+  assert.match(html, /src="i18n\.[0-9a-f]{10}\.js"/, 'index.html lost its hashed i18n.js ref');
   assert.doesNotMatch(html, /(src|href)="(app\.js|styles\.css|domain\.js)"/, 'index.html still points at an un-hashed asset');
 });
 

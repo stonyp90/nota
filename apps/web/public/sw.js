@@ -12,8 +12,9 @@
    and returning visitors never get pinned to an old bundle. */
 const CACHE = 'nota-shell-dev'; /* build.mjs stamps this per build */
 const SHELL = [
-  '/', '/index.html', '/app.js', '/domain.js', '/styles.css',
+  '/', '/index.html', '/app.js', '/domain.js', '/i18n.js', '/styles.css',
   '/favicon.svg', '/icon-192.png', '/icon-512.png', '/manifest.webmanifest',
+  '/manifest.en.webmanifest',
 ]; /* build.mjs rewrites this list with the hashed filenames */
 
 self.addEventListener('install', (e) => {

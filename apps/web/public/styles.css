@@ -300,6 +300,9 @@ a:hover { text-decoration: underline; }
 .icon-btn[aria-pressed='true'] { background: transparent; color: var(--brand); border-color: var(--brand); }
 .icon-btn svg { display: block; }
 .icon-btn:active { transform: scale(0.94); }
+/* Language toggle: an icon-btn carrying two letters ("EN"/"FR") instead of an
+   svg, keeping the icon row's rhythm. Labelled by NotaI18N.wireToggles(). */
+.lang-btn { font-size: 12.5px; font-weight: 650; letter-spacing: 0.04em; }
 
 /* --- Notifications (bell + dropdown, paired with the email the API sends) -- */
 .notif-wrap { position: relative; }
@@ -1450,25 +1453,20 @@ body:has(dialog[open]) { overflow: hidden; }
    • SIGNED-IN → the working console (demand lists + two-column prefs grid) needs
      room, so it uses a single wide column. */
 #pane-notaires > .wrap { display: flex; flex-direction: column; }
-/* Order (flex only, no DOM move): hero → value grid → calendar-add → sign-in → teaser → guarantee. */
-#pane-notaires .nc-why { order: 2; }
-#pane-notaires .notary-carnet { order: 3; }
-#pane-notaires #notary-console { order: 4; }
-#pane-notaires .nc-live { order: 5; }
-#pane-notaires .nota-guarantee { order: 6; }
 /* The value grid only belongs to the signed-out LANDING; hidden in the working console. */
 .nc-why { display: none; }
-/* Signed-out: a full-page two-column landing — a rich value column on the left,
-   the sign-in anchored as a centered card on the right (no empty strip, no wide margins). */
+/* Signed-out: the INVENTORY is the pitch. One line of copy, then the live open
+   demands, with the sign-in sticky beside them — everything else (value grid,
+   agenda band, guarantee) is supporting material, full width below the fold. */
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 420px);
   grid-template-areas:
     "hero      console"
-    "why       console"
-    "carnet    console"
     "live      console"
-    "guarantee console";
+    "why       why"
+    "carnet    carnet"
+    "guarantee guarantee";
   column-gap: clamp(32px, 5vw, 80px);
   row-gap: 0;
   align-items: start;
@@ -1477,7 +1475,8 @@ body:has(dialog[open]) { overflow: hidden; }
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .intro-main     { max-width: none; }
 /* Keep a readable measure on the lede without capping the whole hero block. */
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .intro p { max-width: 78ch; }
-#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .nc-why         { grid-area: why; display: grid; }
+#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .nc-live        { grid-area: live; align-self: start; }
+#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .nc-why         { grid-area: why; display: grid; margin-top: var(--space-8); }
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-carnet  { grid-area: carnet; }
 /* The console anchors to the TOP of the column so the sign-in — the page's one
    action — is on screen immediately instead of centred into the fold, and stays
@@ -1486,16 +1485,24 @@ body:has(dialog[open]) { overflow: hidden; }
   grid-area: console; align-self: start; margin: 0;
   position: sticky; top: calc(var(--header-h) + 16px);
 }
-#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .nc-live        { grid-area: live; }
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .nota-guarantee { grid-area: guarantee; }
 /* Hero collapses to a single column on THIS pane only (the client carnet hero
-   keeps its two columns); the three steps become one muted caption, not a panel. */
+   keeps its two columns). */
 #pane-notaires .intro--hero { display: block; }
-/* Narrow screens: the landing stacks back to one calm centered column. */
+/* SIGNED-IN: the pane is a workspace, not a pitch. The hero keeps only its
+   heading (panes focus their h1 on navigation), the lede goes, and the
+   prospecting band slides behind the console (flex order — the wrap is a flex
+   column signed-in) so the open demands are the first thing on screen. */
+#pane-notaires > .wrap:has(#notary-authed:not([hidden])) .intro--hero p { display: none; }
+#pane-notaires > .wrap:has(#notary-authed:not([hidden])) .intro--hero { margin-bottom: 0; }
+#pane-notaires > .wrap:has(#notary-authed:not([hidden])) .notary-carnet { order: 1; }
+#pane-notaires > .wrap:has(#notary-authed:not([hidden])) .nota-guarantee { order: 2; }
+/* Narrow screens: one column, in selling order — a line of pitch, the open
+   demands, then the sign-in the cards funnel into; the rest follows. */
 @media (max-width: 900px) {
   #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) {
     grid-template-columns: minmax(0, 620px);
-    grid-template-areas: "hero" "why" "carnet" "console" "live" "guarantee";
+    grid-template-areas: "hero" "live" "console" "why" "carnet" "guarantee";
     justify-content: center;
   }
   /* The two-column rule zeroes this margin so the console top-aligns beside
@@ -1505,30 +1512,20 @@ body:has(dialog[open]) { overflow: hidden; }
      layout only — pinning a full-width card in a stack would cover content. */
   #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) #notary-console { align-self: stretch; margin-top: var(--space-6); position: static; }
 }
-/* Value grid — 2×2 on the landing, fills the left column. */
-.nc-why { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 28px; margin-top: 8px; }
+/* Value grid — the supporting argument, one full-width row below the inventory. */
+.nc-why { grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr)); gap: 18px 28px; margin-top: 8px; }
 .nc-why-item { display: flex; gap: 11px; }
 .nc-why-ic { flex: none; color: var(--brand); font-size: 11px; line-height: 1.7; }
 .nc-why-t { font-weight: 700; font-size: 14px; color: var(--ink); margin-bottom: 3px; letter-spacing: -0.01em; }
 .nc-why-p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink-muted); }
-@media (max-width: 560px) { .nc-why { grid-template-columns: 1fr; } }
-/* The three-beat pitch under the notary hero: numbered, scannable, one line
-   each — the same copy the old dot-separated caption carried, given weight. */
-.nc-steps { list-style: none; margin: 16px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 10px 26px; }
-.nc-step { display: flex; align-items: center; gap: 9px; font-size: 13.5px; font-weight: 600; color: var(--ink); }
-.nc-step-n {
-  flex: none; width: 22px; height: 22px;
-  display: grid; place-items: center;
-  border: 1px solid var(--brand); border-radius: 999px;
-  font-size: 11px; font-weight: 800; color: var(--brand);
-}
 
-/* Live teaser of the open inventory (signed-out landing). Cards mirror the
-   console's .nc-card surface; the whole card is a button into the sign-in. */
-.nc-live { margin-top: var(--space-8); }
+/* The landing's centrepiece: the live open inventory, directly under the one
+   line of pitch. Cards mirror the console's .nc-card surface; the whole card
+   is a button into the sign-in. */
+.nc-live { margin-top: 4px; }
 .nc-live[hidden] { display: none; }
 .nc-live-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
-.nc-live-h { font-size: 14px; font-weight: 800; letter-spacing: -0.01em; margin: 0; }
+.nc-live-h { font-size: 15px; font-weight: 800; letter-spacing: -0.01em; margin: 0; }
 .nc-live-sub { margin: 0; font-size: 12.5px; color: var(--ink-muted); }
 .nc-live-sub strong { color: var(--brand); font-weight: 800; }
 .nc-live-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(215px, 100%), 1fr)); gap: 10px; }
@@ -1815,8 +1812,15 @@ body:has(dialog[open]) { overflow: hidden; }
 .nc-id strong { font-size: 14px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 46vw; }
 .nc-h { font-size: 14px; font-weight: 800; letter-spacing: -0.01em; margin: 18px 0 10px; }
 .nc-list { display: flex; flex-direction: column; gap: 10px; }
+/* Console lists are grids: a 1240px-wide strip per demand wastes the row and
+   caps how many dossiers fit one screen. Open demands pack ~3-up; retained
+   cards carry the client dossier and the completion form, so they get a wider
+   2-up track. Cards stretch to equal row height, actions pinned to the foot. */
+.nc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr)); gap: 10px; }
+.nc-grid--wide { grid-template-columns: repeat(auto-fill, minmax(min(480px, 100%), 1fr)); }
 
 .nc-card {
+  display: flex; flex-direction: column;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--surface-inset); padding: 14px;
@@ -1826,7 +1830,7 @@ body:has(dialog[open]) { overflow: hidden; }
 .nc-card.is-retained { border-left: 3px solid var(--brand); }
 .nc-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .nc-card-title { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
-.nc-card-amount { font-size: 18px; font-weight: 800; letter-spacing: -0.02em; }
+.nc-card-amount { font-size: 18px; font-weight: 800; letter-spacing: -0.02em; white-space: nowrap; }
 .nc-card-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
 .nc-date { font-size: 12px; color: var(--ink-muted); }
 /* Case-complexity signal on a notary's open-bid card (outline, colour by level). */
@@ -1843,7 +1847,7 @@ body:has(dialog[open]) { overflow: hidden; }
   background: var(--surface-inset); color: var(--ink-muted); border: 1px solid var(--border-strong);
 }
 .nc-ready[data-ready='true'] { color: var(--ok); border-color: var(--ok); }
-.nc-card-actions { display: flex; gap: 8px; margin-top: 12px; }
+.nc-card-actions { display: flex; gap: 8px; margin-top: auto; padding-top: 12px; }
 
 .nc-dossier { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
 .nc-dossier-h { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--brand); margin-bottom: 8px; }
@@ -1873,8 +1877,17 @@ body:has(dialog[open]) { overflow: hidden; }
 /* Single full-width notary console (the page's one tool) + get-paid step. */
 .nota-guarantee { margin-top: var(--gap); }
 /* Lead-delivery preferences — how (in-app/email/SMS) + pace + which acts. */
-.nc-prefs { margin: 6px 0 8px; padding: 16px 18px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-inset); }
-.nc-prefs > .nc-h { margin-top: 0; }
+/* Alert preferences — settings, not the working surface: a collapsed panel
+   below the money. The summary row is the whole control; a chevron flips open. */
+.nc-prefs { margin: 18px 0 8px; padding: 12px 18px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-inset); }
+.nc-prefs[open] { padding-bottom: 16px; }
+.nc-prefs-sum { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; cursor: pointer; list-style: none; }
+.nc-prefs-sum::-webkit-details-marker { display: none; }
+.nc-prefs-sum::after { content: '▾'; margin-left: auto; color: var(--ink-muted); font-size: 12px; transition: transform .14s; }
+.nc-prefs[open] .nc-prefs-sum::after { transform: rotate(180deg); }
+.nc-prefs-sum .nc-h { margin: 0; }
+.nc-prefs-hint { font-size: 12px; color: var(--ink-muted); }
+.nc-prefs > .help { margin-top: 10px; }
 .nc-prefs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: 8px 36px; margin-top: 8px; align-items: start; }
 .nc-pref-block { min-width: 0; }
 .nc-pref-title { font-size: 11.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-muted); margin-bottom: 4px; }
@@ -2038,6 +2051,8 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   .intro .eyebrow, .intro-main > p, .hero-points { display: none; }
   /* ...except the one-line tagline, which replaces the prose it drops. */
   .intro-main > p.hero-tagline { display: block; }
+  /* The notary lede is already a single line — it IS the phone copy. */
+  .intro-main > p.nc-lede { display: block; }
   /* Side by side rather than stacked. */
   .hero-cta { flex-direction: row; }
   /* flex:1 alone still refuses to go under min-content, so two btn-lg wrapped
