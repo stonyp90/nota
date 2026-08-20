@@ -22,6 +22,9 @@ crash.log
 *.pem
 awsenv.sh
 
+# Claude Code runtime state (the launch config itself IS committed)
+.claude/scheduled_tasks.lock
+
 # OS / editor
 .DS_Store
 *.log
