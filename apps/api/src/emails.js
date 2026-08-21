@@ -783,35 +783,6 @@ function newMatchingBids(ctx) {
   });
 }
 
-function subWelcome(ctx) {
-  return build({
-    subjectFr: 'Bienvenue sur Nota',
-    subjectEn: 'Welcome to Nota',
-    preheaderFr: 'Votre abonnement est actif — accédez au carnet dès maintenant.',
-    preheaderEn: 'Your subscription is active — access the carnet now.',
-    fr: {
-      heading: 'Votre abonnement est actif',
-      lead: 'Merci de vous être abonné. Vous avez maintenant accès à toutes les demandes du carnet.',
-      bodyHtml: para(
-        'Nota facture un abonnement mensuel fixe pour l’accès à la place de marché — jamais un pourcentage de l’acte. Retenez autant de demandes que vous le souhaitez, sans frais par dossier.'
-      ),
-      textLines: ['Votre abonnement mensuel fixe est actif. Aucun frais par dossier.'],
-      ctaLabel: 'Accéder au carnet',
-    },
-    en: {
-      heading: 'Your subscription is active',
-      lead: 'Thank you for subscribing. You now have access to every request on the carnet.',
-      bodyHtml: para(
-        'Nota charges a flat monthly subscription for marketplace access — never a percentage of the deed. Take as many requests as you like, with no per-file fees.'
-      ),
-      textLines: ['Your flat monthly subscription is active. No per-file fees.'],
-      ctaLabel: 'Go to the carnet',
-    },
-    ctaUrl: linksFor(ctx.baseUrl).carnet,
-    unsubscribeUrl: ctx.unsubscribeUrl,
-  });
-}
-
 // Welcome a CLIENT who just signed up — conversion-first: one clear next step
 // (publish a demand). Sent once per email (idempotent in the notifier).
 function clientWelcome(ctx) {
@@ -849,117 +820,30 @@ function clientWelcome(ctx) {
   });
 }
 
-function subReceipt(ctx) {
-  return build({
-    subjectFr: 'Reçu — votre abonnement Nota',
-    subjectEn: 'Receipt — your Nota subscription',
-    preheaderFr: 'Confirmation de votre abonnement mensuel.',
-    preheaderEn: 'Confirmation of your monthly subscription.',
-    fr: {
-      heading: 'Merci — voici votre reçu',
-      lead: 'Votre abonnement mensuel à Nota a été confirmé.',
-      bodyHtml: para(
-        'Il s’agit d’un abonnement fixe pour l’accès à la place de marché. Le détail complet (montant, taxes, date) est disponible sur la facture Stripe qui accompagne ce reçu.'
-      ),
-      textLines: ['Abonnement mensuel confirmé. Facture détaillée fournie par Stripe.'],
-      ctaLabel: 'Voir mon compte',
-    },
-    en: {
-      heading: 'Thank you — here is your receipt',
-      lead: 'Your monthly Nota subscription has been confirmed.',
-      bodyHtml: para(
-        'This is a flat subscription for marketplace access. The full details (amount, taxes, date) are on the Stripe invoice that accompanies this receipt.'
-      ),
-      textLines: ['Monthly subscription confirmed. Detailed invoice provided by Stripe.'],
-      ctaLabel: 'View my account',
-    },
-    ctaUrl: linksFor(ctx.baseUrl).compte,
-    unsubscribeUrl: ctx.unsubscribeUrl,
-  });
-}
-
-function subRenewalReminder(ctx) {
-  return build({
-    subjectFr: 'Votre abonnement se renouvelle bientôt',
-    subjectEn: 'Your subscription renews soon',
-    preheaderFr: 'Aucune action requise — voici un rappel avant le renouvellement.',
-    preheaderEn: 'No action needed — a reminder ahead of the renewal.',
-    fr: {
-      heading: 'Votre abonnement se renouvelle bientôt',
-      lead: 'Votre abonnement mensuel à Nota sera renouvelé automatiquement sous peu.',
-      bodyHtml: para(
-        'Aucune action n’est nécessaire si vous souhaitez continuer. Vous pouvez gérer ou annuler votre abonnement à tout moment depuis votre compte.'
-      ),
-      textLines: ['Renouvellement automatique à venir. Gérez votre abonnement quand vous voulez.'],
-      ctaLabel: 'Gérer mon abonnement',
-    },
-    en: {
-      heading: 'Your subscription renews soon',
-      lead: 'Your monthly Nota subscription will renew automatically shortly.',
-      bodyHtml: para(
-        'No action is needed if you wish to continue. You can manage or cancel your subscription at any time from your account.'
-      ),
-      textLines: ['Automatic renewal coming up. Manage your subscription whenever you like.'],
-      ctaLabel: 'Manage my subscription',
-    },
-    ctaUrl: linksFor(ctx.baseUrl).compte,
-    unsubscribeUrl: ctx.unsubscribeUrl,
-  });
-}
-
-// Dunning — recover a churning subscription after a failed payment.
-function subPaymentFailed(ctx) {
-  return build({
-    subjectFr: 'Action requise : votre paiement a été refusé',
-    subjectEn: 'Action required: your payment was declined',
-    preheaderFr: 'Mettez à jour votre paiement pour conserver l’accès au carnet.',
-    preheaderEn: 'Update your payment to keep access to the carnet.',
-    fr: {
-      heading: 'Nous n’avons pas pu renouveler votre abonnement',
-      lead: 'Le dernier paiement de votre abonnement Nota a échoué.',
-      bodyHtml: para(
-        'Pour conserver l’accès aux demandes du carnet, mettez à jour votre moyen de paiement. Nous réessaierons automatiquement, mais une mise à jour évite toute interruption.'
-      ),
-      textLines: ['Paiement refusé. Mettez à jour votre moyen de paiement pour éviter une interruption.'],
-      ctaLabel: 'Mettre à jour mon paiement',
-    },
-    en: {
-      heading: 'We could not renew your subscription',
-      lead: 'The latest payment for your Nota subscription failed.',
-      bodyHtml: para(
-        'To keep access to the carnet’s requests, update your payment method. We will retry automatically, but updating it avoids any interruption.'
-      ),
-      textLines: ['Payment declined. Update your payment method to avoid an interruption.'],
-      ctaLabel: 'Update my payment',
-    },
-    ctaUrl: linksFor(ctx.baseUrl).compte,
-    unsubscribeUrl: ctx.unsubscribeUrl,
-  });
-}
-
-function subCanceledWinback(ctx) {
+// Win-back after the notary disconnects their payment account from Nota.
+function notaryDisconnectedWinback(ctx) {
   return build({
     subjectFr: 'Votre place sur Nota vous attend',
     subjectEn: 'Your spot on Nota is waiting',
-    preheaderFr: 'Réactivez votre abonnement quand vous voulez — rien n’est perdu.',
-    preheaderEn: 'Reactivate your subscription anytime — nothing is lost.',
+    preheaderFr: 'Reconnectez votre compte quand vous voulez — rien n’est perdu.',
+    preheaderEn: 'Reconnect your account anytime — nothing is lost.',
     fr: {
       heading: 'On vous garde une place',
-      lead: 'Votre abonnement à Nota est résilié, mais vous pouvez le réactiver à tout moment.',
+      lead: 'Votre compte de paiement est déconnecté de Nota, mais vous pouvez le reconnecter à tout moment.',
       bodyHtml: para(
-        'Les demandes continuent d’arriver sur le carnet chaque jour. Réabonnez-vous en un instant pour recommencer à les retenir — toujours au même abonnement fixe, sans frais par dossier.'
+        'Les demandes continuent d’arriver sur le carnet chaque jour. Reconnectez votre compte en un instant pour recommencer à les retenir — toujours sans frais fixes, une commission seulement sur les actes complétés.'
       ),
-      textLines: ['Réactivez votre abonnement quand vous voulez.'],
-      ctaLabel: 'Réactiver mon abonnement',
+      textLines: ['Reconnectez votre compte quand vous voulez. Sans frais fixes — une commission seulement sur les actes complétés.'],
+      ctaLabel: 'Reconnecter mon compte',
     },
     en: {
       heading: 'We are keeping you a spot',
-      lead: 'Your Nota subscription is canceled, but you can reactivate it at any time.',
+      lead: 'Your payment account is disconnected from Nota, but you can reconnect it at any time.',
       bodyHtml: para(
-        'Requests keep arriving on the carnet every day. Resubscribe in an instant to start taking them again — always the same flat subscription, no per-file fees.'
+        'Requests keep arriving on the carnet every day. Reconnect your account in an instant to start taking them again — still no fixed fees, a commission only on completed acts.'
       ),
-      textLines: ['Reactivate your subscription whenever you like.'],
-      ctaLabel: 'Reactivate my subscription',
+      textLines: ['Reconnect your account whenever you like. No fixed fees — a commission only on completed acts.'],
+      ctaLabel: 'Reconnect my account',
     },
     ctaUrl: linksFor(ctx.baseUrl).notaires,
     unsubscribeUrl: ctx.unsubscribeUrl,
@@ -1144,24 +1028,24 @@ function adminMagicLink(ctx) {
 // OPERATOR (Nota) templates
 // =============================================================================
 
-function operatorNotarySubscribed(ctx) {
+function operatorNotaryActive(ctx) {
   return build({
-    subjectFr: 'Nouveau notaire abonné',
-    subjectEn: 'New notary subscriber' + (ctx.notaryEmail ? ': ' + ctx.notaryEmail : ''),
-    preheaderFr: 'Un notaire vient de s’abonner à Nota.',
-    preheaderEn: 'A notary just subscribed to Nota.',
+    subjectFr: 'Nouveau notaire actif',
+    subjectEn: 'New active notary' + (ctx.notaryEmail ? ': ' + ctx.notaryEmail : ''),
+    preheaderFr: 'Un notaire vient d’activer son compte sur Nota.',
+    preheaderEn: 'A notary just activated their account on Nota.',
     fr: {
-      heading: 'Un notaire vient de s’abonner',
-      lead: 'Un nouvel abonnement notaire vient d’être activé.',
+      heading: 'Un notaire vient d’activer son compte',
+      lead: 'Un nouveau compte notaire vient de compléter son intégration de paiement.',
       bodyHtml: callout('Courriel : ' + (ctx.notaryEmail || '—')),
-      textLines: ['Nouveau notaire abonné : ' + (ctx.notaryEmail || '—')],
+      textLines: ['Nouveau notaire actif : ' + (ctx.notaryEmail || '—')],
       ctaLabel: 'Ouvrir Nota',
     },
     en: {
-      heading: 'A notary just subscribed',
-      lead: 'A new notary subscription has just been activated.',
+      heading: 'A notary just activated their account',
+      lead: 'A new notary account has just completed its payment onboarding.',
       bodyHtml: callout('Email: ' + (ctx.notaryEmail || '—')),
-      textLines: ['New notary subscriber: ' + (ctx.notaryEmail || '—')],
+      textLines: ['New active notary: ' + (ctx.notaryEmail || '—')],
       ctaLabel: 'Open Nota',
     },
     ctaUrl: linksFor(ctx.baseUrl).carnet,
@@ -1242,16 +1126,11 @@ const TEMPLATES = {
   notaryOnboardingStarted,
   notaryActive,
   actPaidNotary,
-  // notary — subscription lifecycle (legacy Stripe billing events)
-  subWelcome,
-  subReceipt,
-  subRenewalReminder,
-  subPaymentFailed,
-  subCanceledWinback,
+  notaryDisconnectedWinback,
   // admin console
   adminMagicLink,
   // operator alerts
-  operatorNotarySubscribed,
+  operatorNotaryActive,
   operatorNewLead,
   operatorActCompleted,
 };

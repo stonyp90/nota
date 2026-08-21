@@ -82,15 +82,15 @@ When('la même offre est republiée', async function () {
   await this.flush();
 });
 
-// --- When: subscription webhook ---------------------------------------------
+// --- When: Stripe account webhook --------------------------------------------
 
 When(
-  'un notaire {string} complète son abonnement via le webhook {string}',
-  async function (email, eventType) {
+  'le webhook Stripe {string} arrive pour le courriel {string}',
+  async function (eventType, email) {
     const body = JSON.stringify({
       id: 'evt_' + this.today + '_' + eventType,
       type: eventType,
-      data: { object: { client_reference_id: 'notary-1', customer_email: email, subscription: 'sub_1' } },
+      data: { object: { customer_email: email, metadata: { notaryId: 'notary-1' } } },
     });
     await this.request({
       method: 'POST',

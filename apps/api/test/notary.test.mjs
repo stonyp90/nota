@@ -73,7 +73,7 @@ test('POST /notary/session refuses a notary WITHOUT an active subscription (403)
   const a = app();
   const res = await a.handle({ method: 'POST', path: '/notary/session', body: JSON.stringify({ email: 'me@notaire.ca' }) });
   assert.equal(res.statusCode, 403);
-  assert.equal(parse(res).errors[0].code, 'abonnement_requis');
+  assert.equal(parse(res).errors[0].code, 'compte_requis');
 });
 
 test('POST /notary/session issues session + feed tokens for an ACTIVE notary (200)', async () => {

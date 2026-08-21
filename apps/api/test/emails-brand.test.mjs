@@ -26,7 +26,7 @@ const names = Object.keys(emails.TEMPLATES);
 
 test('the brand palette exposes the Nota hunter green', () => {
   // Guards against a palette drift away from the brand primary.
-  assert.ok(names.length >= 13, 'expected the full lifecycle set of templates');
+  assert.ok(names.length >= 11, 'expected the full lifecycle set of templates');
 });
 
 // --- per-template brand + compliance assertions ------------------------------

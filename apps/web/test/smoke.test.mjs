@@ -585,10 +585,10 @@ test('gate continue-action branches a new notary into the signup step, and back'
   assert.equal($(doc, 'notary-gate-step-email').hidden, false);
   assert.equal($(doc, 'notary-signup-prompt').hidden, true);
 
-  // The API answers: this email has no account yet (403 abonnement_requis).
+  // The API answers: this email has no account yet (403 compte_requis).
   win.fetch = () => Promise.resolve({
     status: 403, ok: false,
-    json: async () => ({ errors: [{ code: 'abonnement_requis', message: 'Abonnement requis.' }] }),
+    json: async () => ({ errors: [{ code: 'compte_requis', message: 'Abonnement requis.' }] }),
   });
   $(doc, 'nc-email').value = 'nouveau@etude.ca';
   const res = await Nota.notary.signIn('nouveau@etude.ca');
@@ -647,7 +647,7 @@ test('signup CTA posts the pending email to /notaries/connect', async () => {
   win.fetch = (url, opts) => {
     const u = String(url);
     if (u.endsWith('/notary/session')) {
-      return Promise.resolve({ status: 403, ok: false, json: async () => ({ errors: [{ code: 'abonnement_requis', message: 'Abonnement requis.' }] }) });
+      return Promise.resolve({ status: 403, ok: false, json: async () => ({ errors: [{ code: 'compte_requis', message: 'Abonnement requis.' }] }) });
     }
     if (u.endsWith('/notaries/connect')) {
       captured = JSON.parse(opts.body);

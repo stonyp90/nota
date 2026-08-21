@@ -128,24 +128,26 @@ paths:
                 errors:
                   - code: sous_prix_depart
                     message: L’offre doit être d’au moins 495 $.
-  /notaries/subscribe:
+  /notaries/connect:
     post:
-      operationId: startSubscription
-      summary: Start a notary's flat monthly subscription.
+      operationId: startConnectOnboarding
+      summary: Start a notary's FREE Stripe Connect onboarding.
       description: >-
-        Opens a Stripe Checkout Session (`mode: subscription`) for the single
-        flat monthly price and returns the hosted URL the client redirects to.
-        Card data never touches this server. Billing is a flat subscription for
-        marketplace access — never a commission or share of an acte.
+        Opens a Stripe Connect onboarding link and returns the hosted URL the
+        notary redirects to. Joining is free — there is no subscription; Nota
+        collects a commission (a configurable share of the acte's value) only
+        when a retained act completes, as an application fee on a destination
+        charge. Card data never touches this server. The account becomes ACTIVE
+        via the `account.updated` webhook once charges are enabled.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/SubscribeInput"
+              $ref: "#/components/schemas/ConnectInput"
       responses:
         "200":
-          description: Checkout Session created; redirect the client to `url`.
+          description: Onboarding link created; redirect the notary to `url`.
           content:
             application/json:
               schema:
@@ -171,12 +173,16 @@ paths:
   /stripe/webhook:
     post:
       operationId: stripeWebhook
-      summary: Stripe webhook receiver (subscription lifecycle).
+      summary: Stripe webhook receiver (account + payment lifecycle).
       description: >-
         Verifies the raw request body against the webhook signing secret using
-        the `stripe-signature` header, then advances the notary's subscription
-        state (`active` / `canceled` / `past_due`). Processing is idempotent by
-        event id, so a redelivered event is a no-op. Not called by browsers.
+        the `stripe-signature` header, then applies the event — `account.updated`
+        flips the notary ACTIVE once charges are enabled,
+        `account.application.deauthorized` restricts them, and
+        `checkout.session.completed` / `checkout.session.expired` /
+        `payment_intent.canceled` bind or void a client's offer authorization.
+        Processing is idempotent by event id, so a redelivered event is a no-op.
+        Not called by browsers.
       parameters:
         - name: stripe-signature
           in: header
@@ -260,7 +266,7 @@ components:
     ServiceId:
       type: string
       enum: [testament, procuration, refinancement]
-    SubscribeInput:
+    ConnectInput:
       type: object
       required: [email]
       properties:

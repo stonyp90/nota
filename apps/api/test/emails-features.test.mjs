@@ -36,17 +36,12 @@ const FEATURE_TEMPLATES = [
   'notaryOnboardingStarted',
   'notaryActive',
   'actPaidNotary',
-  // notary — subscription lifecycle (legacy Stripe billing events)
-  'subWelcome',
-  'subReceipt',
-  'subRenewalReminder',
-  'subPaymentFailed',
-  'subCanceledWinback',
+  'notaryDisconnectedWinback',
   // admin console
   'adminMagicLink',
   // operator alerts
   'operatorNewLead',
-  'operatorNotarySubscribed',
+  'operatorNotaryActive',
   'operatorActCompleted',
 ];
 
@@ -160,8 +155,8 @@ test('account.updated for an ACTIVE notary sends notaryActive exactly once', asy
   const { mailer, notifier } = setup();
   const event = { id: 'evt_a', type: 'account.updated', data: { object: {} } };
   const notary = { id: 'n-1', email: 'notaire@example.ca', status: 'active' };
-  await notifier.onSubscription(event, notary);
-  await notifier.onSubscription(event, notary); // webhook redelivery — no double-send
+  await notifier.onAccountEvent(event, notary);
+  await notifier.onAccountEvent(event, notary); // webhook redelivery — no double-send
   const got = mailer.sent.filter((m) => m.to === 'notaire@example.ca');
   assert.equal(got.length, 1, 'notary should be welcomed exactly once');
   assert.ok(got[0].subject.includes(' / '), 'bilingual subject expected');
@@ -170,14 +165,14 @@ test('account.updated for an ACTIVE notary sends notaryActive exactly once', asy
 test('account.updated for a notary still onboarding sends nothing', async () => {
   const { mailer, notifier } = setup();
   const event = { id: 'evt_b', type: 'account.updated', data: { object: {} } };
-  await notifier.onSubscription(event, { id: 'n-2', email: 'notaire@example.ca', status: 'onboarding' });
+  await notifier.onAccountEvent(event, { id: 'n-2', email: 'notaire@example.ca', status: 'onboarding' });
   assert.equal(mailer.sent.length, 0);
 });
 
 test('checkout.session.completed with the authorized bid mails offerAuthorized to the client', async () => {
   const { mailer, notifier } = setup();
   const event = { id: 'evt_c', type: 'checkout.session.completed', data: { object: {} } };
-  await notifier.onSubscription(event, null, pendingBid());
+  await notifier.onAccountEvent(event, null, pendingBid());
   const got = mailer.sent.filter((m) => m.to === 'client@example.ca');
   assert.equal(got.length, 1);
 });
@@ -185,14 +180,14 @@ test('checkout.session.completed with the authorized bid mails offerAuthorized t
 test('checkout.session.completed without a bid still sends nothing (no notary welcome)', async () => {
   const { mailer, notifier } = setup();
   const event = { id: 'evt_d', type: 'checkout.session.completed', data: { object: {} } };
-  await notifier.onSubscription(event, null);
+  await notifier.onAccountEvent(event, null);
   assert.equal(mailer.sent.length, 0);
 });
 
 test('checkout.session.expired with the voided bid mails offerAuthorizationVoided', async () => {
   const { mailer, notifier } = setup();
   const event = { id: 'evt_e', type: 'checkout.session.expired', data: { object: {} } };
-  await notifier.onSubscription(event, null, pendingBid());
+  await notifier.onAccountEvent(event, null, pendingBid());
   const got = mailer.sent.filter((m) => m.to === 'client@example.ca');
   assert.equal(got.length, 1);
 });
