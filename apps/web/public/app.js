@@ -2878,8 +2878,8 @@
     var j = {}; try { j = await r.json(); } catch (e) {}
     if (r.status !== 200) {
       // Not a registered/active notary → this email just needs to sign up (free).
-      // Offer onboarding right here instead of a dead-end "abonnement requis".
-      if (r.status === 403 && j.errors && j.errors[0] && j.errors[0].code === 'abonnement_requis') {
+      // Offer onboarding right here instead of a dead-end "compte requis".
+      if (r.status === 403 && j.errors && j.errors[0] && j.errors[0].code === 'compte_requis') {
         ncShowSignup(email);
         return { ok: false, signup: true };
       }

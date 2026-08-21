@@ -12,8 +12,9 @@
  *
  * NOTE: a share of a notarial acte is fee-sharing the Québec Code de déontologie
  * restricts; this model is an explicit owner decision and needs a legal review
- * with the Chambre before launch. The commission concept lives ONLY here in the
- * billing layer — the @nota/domain pricing logic stays free of it.
+ * with the Chambre before launch — see docs/decisions/0008-free-commission-
+ * marketplace.md (supersedes ADRs 0001/0005). The commission concept lives ONLY
+ * here in the billing layer — the @nota/domain pricing logic stays free of it.
  */
 
 const {

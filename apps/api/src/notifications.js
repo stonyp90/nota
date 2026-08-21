@@ -154,21 +154,21 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
     });
   }
 
-  // --- Subscription lifecycle (notary + operator) --------------------------
+  // --- Account lifecycle (notary + operator, commission model) --------------
   // Driven from the Stripe webhook route with the verified event + affected
   // notary. Switches on event type; unknown types produce nothing.
-  async function onSubscription(event, notary) {
+  async function onAccountEvent(event, notary) {
     const type = event && event.type;
     const obj = (event && event.data && event.data.object) || {};
     const email = (notary && notary.email) || obj.customer_email || obj.email || null;
-    const subId =
-      (notary && notary.id) || obj.client_reference_id || obj.subscription || (event && event.id) || 'sub';
+    const refId =
+      (notary && notary.id) || (obj.metadata && obj.metadata.notaryId) || (event && event.id) || 'account';
     const results = [];
 
     async function toNotary(kind, tmpl) {
       results.push(
         await sendOnce({
-          refId: subId,
+          refId,
           kind,
           to: email,
           buildTemplate: (env) => tmpl({ email, ...env }),
@@ -179,7 +179,7 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
       if (!operatorEmail) return;
       results.push(
         await sendOnce({
-          refId: subId,
+          refId,
           kind,
           to: operatorEmail,
           buildTemplate: (env) => tmpl({ ...(extra || {}), ...env }),
@@ -192,24 +192,21 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
         // Under the pay-on-accept COMMISSION model there are no notary subscription
         // checkouts: checkout.session.completed is the CLIENT authorizing their offer
         // card (bound in billing.applyEvent). It must NOT trigger a notary
-        // subscription welcome/receipt or a "notaire abonné" operator alert.
-        case 'invoice.paid':
-        case 'invoice.payment_succeeded':
-          await toNotary('subReceipt', emails.subReceipt);
-          break;
-        case 'invoice.upcoming':
-          await toNotary('subRenewalReminder', emails.subRenewalReminder);
-          break;
-        case 'invoice.payment_failed':
-          await toNotary('subPaymentFailed', emails.subPaymentFailed);
-          break;
-        case 'customer.subscription.updated':
-          if (obj.status === 'past_due' || obj.status === 'unpaid') {
-            await toNotary('subPaymentFailed', emails.subPaymentFailed);
+        // welcome or a "notaire actif" operator alert.
+        // Connect onboarding complete — the account can accept charges. Stripe
+        // redelivers account.updated on every account change; sendOnce's
+        // (refId, kind) ledger keeps the welcome to exactly one per notary.
+        case 'account.updated':
+          if (obj.charges_enabled) {
+            await toNotary('notaryAccountActive', emails.notaryAccountActive);
+            await toOperator('operatorNotaryActive', emails.operatorNotaryActive, {
+              notaryEmail: email,
+            });
           }
           break;
-        case 'customer.subscription.deleted':
-          await toNotary('subCanceledWinback', emails.subCanceledWinback);
+        // Notary disconnected their payment account from the platform.
+        case 'account.application.deauthorized':
+          await toNotary('notaryDisconnectedWinback', emails.notaryDisconnectedWinback);
           break;
         default:
           break;
@@ -233,7 +230,7 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
     onOfferRetained,
     onClientSignup,
     onReminderDue,
-    onSubscription,
+    onAccountEvent,
     unsubscribe,
     unsubscribeUrl,
   };

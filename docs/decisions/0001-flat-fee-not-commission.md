@@ -1,6 +1,6 @@
 # 1. Charge a flat subscription, not a commission
 
-- Status: Accepted
+- Status: Superseded by [0008](0008-free-commission-marketplace.md) (2026-08-21)
 - Date: 2026-08-12
 
 ## Context

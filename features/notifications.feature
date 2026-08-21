@@ -19,7 +19,7 @@ Fonctionnalité: Cycle de vie des notifications
     Et l'opérateur reçoit le courriel "nouveau lead"
 
   Scénario: le webhook « checkout.session.completed » n'accueille pas de notaire (modèle à la commission)
-    Quand un notaire "notaire@exemple.ca" complète son abonnement via le webhook "checkout.session.completed"
+    Quand le webhook Stripe "checkout.session.completed" arrive pour le courriel "notaire@exemple.ca"
     Alors la réponse a le statut 200
     Et le notaire "notaire@exemple.ca" ne reçoit aucun courriel
 

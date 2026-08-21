@@ -22,10 +22,17 @@ business rules in one place and the merge boundaries clean.
    import the *same* module (`require('@nota/domain')` in Node,
    `window.NotaDomain` in the browser).
 
-2. **Flat fee, never a commission.** Nota charges notaries a flat subscription.
-   Never introduce a percentage/commission of the *acte*, in code, copy or
-   docs — the *Code de déontologie* forbids fee-sharing with a non-notaire. See
-   `docs/decisions/0001-flat-fee-not-commission.md`.
+2. **Free marketplace, commission on completed acts — billing layer only.**
+   Notaries join and browse for free; Nota collects a configurable commission
+   (`NOTA_COMMISSION_RATE`) on a retained act's value, only when the act
+   completes, as a Stripe Connect application fee. The commission concept lives
+   ONLY in `apps/api/src/billing.js` — `packages/domain` must never expose a
+   commission, cut, or percentage concept (asserted by
+   `features/deontologie.feature`). The *Code de déontologie* restricts sharing
+   professional fees with a non-notaire: this model is an explicit owner
+   decision and requires a legal review with the Chambre des notaires before
+   launch. See `docs/decisions/0008-free-commission-marketplace.md`
+   (supersedes 0001 and 0005).
 
 3. **fr-CA is the product language.** All user-facing copy is Quebec French.
    Technical docs and code identifiers are English.

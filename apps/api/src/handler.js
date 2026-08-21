@@ -470,11 +470,11 @@ function createApp(repo, opts = {}) {
         return json(400, { errors: [{ code: 'signature_invalide', message: 'Signature Stripe invalide.' }] });
       }
 
-      // Fire the matching subscription lifecycle email (welcome/receipt/dunning/
-      // win-back + operator alert). Best-effort; skipped on a redelivered event.
+      // Fire the matching account lifecycle email (activation welcome/win-back
+      // + operator alert). Best-effort; skipped on a redelivered event.
       const n = notifier();
       if (n && result.event && !result.duplicate) {
-        Promise.resolve(n.onSubscription(result.event, result.notary)).catch(() => {});
+        Promise.resolve(n.onAccountEvent(result.event, result.notary)).catch(() => {});
       }
 
       return json(200, { received: true });
@@ -498,9 +498,9 @@ function createApp(repo, opts = {}) {
 
     // --- Notary console -----------------------------------------------------
     // A notary signs in with an email and receives signed tokens. Access is
-    // gated on an ACTIVE subscription: issuing a token to any valid email would
-    // let anyone accept bids and read a client's courriel + dossier. The flat
-    // subscription is what grants console access.
+    // gated on an ACTIVE account (free Stripe Connect onboarding complete):
+    // issuing a token to any valid email would let anyone accept bids and read
+    // a client's courriel + dossier.
     if (route === '/notary/session' && method === 'POST') {
       let payload;
       try {
@@ -516,16 +516,16 @@ function createApp(repo, opts = {}) {
       const existing = await repo.getNotary(notaryId);
 
       // Demo escape hatch, OFF by default: setting NOTA_DEMO_OPEN=true skips the
-      // subscription gate so an operator can run an open demo. DEMO ONLY — never
-      // set this in real production; it lets any valid email into the console.
+      // active-account gate so an operator can run an open demo. DEMO ONLY —
+      // never set this in real production; it lets any valid email into the
+      // console.
       const demoOpen = process.env.NOTA_DEMO_OPEN === 'true';
-      // Accept either an explicit `status:'active'` (seeded/admin) or the Stripe
-      // webhook's `subscriptionStatus:'active'`, so a genuinely subscribed notary
-      // unlocks the console.
-      const active = !!(existing && (existing.status === 'active' || existing.subscriptionStatus === 'active'));
+      // ACTIVE means the notary's free Connect onboarding completed (the
+      // account.updated webhook flipped `status`, or it was seeded by an admin).
+      const active = !!(existing && existing.status === 'active');
       if (!demoOpen && !active) {
         return json(403, {
-          errors: [{ code: 'abonnement_requis', message: 'Un abonnement actif est requis pour accéder à la console.' }],
+          errors: [{ code: 'compte_requis', message: 'Un compte notaire actif est requis pour accéder à la console. L’inscription est gratuite.' }],
         });
       }
 
