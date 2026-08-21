@@ -1797,9 +1797,14 @@ body:has(dialog[open]) { overflow: hidden; }
 .nc-auth .form-row input { width: 100%; }
 .nc-auth-cta { width: 100%; }
 .nc-auth-fine { margin-top: 10px; }
-/* New-notary welcome: sign-in and sign-up share one email field; this callout
-   offers free onboarding when the address has no account yet. */
+/* New-notary welcome: the gate's second step. It REPLACES the email step (the
+   "Continuer" action branched here), so it must read as a welcome, not as an
+   error bolted under a login form. The "Première visite" marker is the same
+   outline pill as "Bientôt" — labelled, never alarming. */
 .nc-signup { margin-top: 16px; max-width: 560px; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; border: 1px solid var(--brand); border-radius: var(--radius); background: var(--surface-inset); }
+.nc-signup:focus { outline: none; }
+.nc-signup-tag { margin: 0; align-self: flex-start; padding: 1px 9px; border: 1px solid var(--brand); border-radius: 999px; font-size: 11px; font-weight: 800; letter-spacing: .03em; color: var(--brand); text-transform: uppercase; }
+.nc-signup-back { align-self: flex-start; }
 .nc-signup-lead { margin: 0; font-size: 14px; line-height: 1.5; color: var(--ink); }
 .nc-signup-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; line-height: 1.45; color: var(--ink); }
 .nc-bar {
