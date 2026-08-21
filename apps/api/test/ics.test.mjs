@@ -37,3 +37,21 @@ test('EDGE (logic): the notary feed omits DTSTAMP gracefully when no stamp is pa
   assert.ok(!s.includes('DTSTAMP:'), 'no stamp arg -> no empty DTSTAMP line');
   assert.match(s, /SUMMARY:Signature notari/);
 });
+
+// --- bilingual feeds: French SUMMARY, English DESCRIPTION, FR / EN CALNAME ----
+
+test('the notary feed keeps the French SUMMARY and adds the English DESCRIPTION', () => {
+  const s = buildNotaryFeed([{ id: 'n1', dateISO: '2026-08-20', serviceId: 'testament' }], '20260101T000000Z');
+  assert.match(s, /SUMMARY:Signature notariée — Testament/);
+  assert.match(s, /DESCRIPTION:Notarized signing — Will and protection mandate/);
+  assert.ok(s.includes('X-WR-CALNAME:Nota — signatures retenues / retained signings'));
+});
+
+test('the carnet feed lines are bilingual with domain money on each side', () => {
+  const s = buildCarnetFeed([{ id: 'c1', dateISO: '2026-08-20', serviceId: 'refinancement', montant: 1500 }], '20260101T000000Z');
+  // fr-CA SUMMARY: no-break space thousands + trailing $ (comma-free, so no escaping needed).
+  assert.ok(s.includes('SUMMARY:Refinancement hypothécaire — 1 500 $'));
+  // en-CA DESCRIPTION: leading $, comma thousands — the comma must be escaped per RFC 5545.
+  assert.ok(s.includes('DESCRIPTION:Mortgage refinancing — $1\\,500'));
+  assert.ok(s.includes('X-WR-CALNAME:Nota — carnet public / public carnet (Québec)'));
+});

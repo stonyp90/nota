@@ -1127,12 +1127,14 @@ test('the hero pulse shows the month median per service and filters the carnet',
     id, serviceId, dateISO: iso, montant, tier: 'standard',
     status: status || ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso,
   });
-  // testament: 700 / 900 / 2000 -> median 900, one of them retained.
-  // procuration: a single 400 offer. refinancement: none this month.
+  // testament: 1400 / 1800 / 2600 -> median 1800, one of them retained.
+  // procuration: a single 400 offer — LEGACY data under today's 750 floor, so
+  // its médiane must clamp up to the floor (never reading below the "à partir
+  // de" beside it). refinancement: none this month.
   await reseed(ctx, [
-    mk('t1', 'testament', 700),
-    mk('t2', 'testament', 900, ctx.D.STATUS.RETENUE),
-    mk('t3', 'testament', 2000),
+    mk('t1', 'testament', 1400),
+    mk('t2', 'testament', 1800, ctx.D.STATUS.RETENUE),
+    mk('t3', 'testament', 2600),
     mk('p1', 'procuration', 400),
   ]);
 
@@ -1149,15 +1151,16 @@ test('the hero pulse shows the month median per service and filters the carnet',
   ]);
   const floorOf = (id) => ctx.D.money(ctx.D.serviceById(id).prixDepart);
 
-  // The median (not the mean: 1200) is what a client is shown.
+  // The median (not the mean: 1933) is what a client is shown.
   assert.deepEqual(figs(byId.testament), [
     ['à partir de', floorOf('testament')],
-    ['médiane', ctx.D.money(900)],
+    ['médiane', ctx.D.money(1800)],
   ]);
   assert.match(byId.testament.querySelector('.pulse-meta').textContent, /3 offres · 1 retenue$/);
+  // Below-floor history never shows a médiane under the floor beside it.
   assert.deepEqual(figs(byId.procuration), [
     ['à partir de', floorOf('procuration')],
-    ['médiane', ctx.D.money(400)],
+    ['médiane', floorOf('procuration')],
   ]);
 
   // An act with no offer this month still shows its floor; the median is simply
@@ -1182,7 +1185,7 @@ test('the hero pulse shows the month median per service and filters the carnet',
   // The pulse itself keeps reading the WHOLE month — it is the reference, not a result.
   assert.equal(
     ctx.doc.querySelectorAll('#pulse-rows .pulse-row[data-svc="testament"] .pulse-fig-v')[1].textContent,
-    ctx.D.money(900),
+    ctx.D.money(1800),
   );
 
   // Clicking the active row again returns to every act, the carnet's resting

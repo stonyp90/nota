@@ -691,6 +691,7 @@
 
     const services = SERVICES.map((s) => {
       const mine = list.filter((b) => b.serviceId === s.id);
+      const m = median(mine.map((b) => Math.round(Number(b.montant) || 0)));
       return {
         id: s.id,
         nom: s.nom,
@@ -698,7 +699,12 @@
         total: mine.length,
         ouvertes: mine.filter(isOpen).length,
         retenues: mine.filter((b) => !isOpen(b)).length,
-        median: median(mine.map((b) => Math.round(Number(b.montant) || 0))),
+        // The médiane is shown BESIDE "à partir de": it must never read below
+        // the price the service starts at. New offers are validated above the
+        // floor, so only legacy data (bids priced under an older, lower floor)
+        // can push the raw median under it — clamp that history to today's floor
+        // rather than display a self-contradicting pair.
+        median: m == null ? null : Math.max(m, s.prixDepart),
       };
     });
 

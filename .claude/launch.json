@@ -9,6 +9,20 @@
       "autoPort": true
     },
     {
+      "name": "nota-api-demo",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["NOTA_DEMO_OPEN=true", "node", "apps/api/local-server.js"],
+      "port": 8788,
+      "autoPort": true
+    },
+    {
+      "name": "nota-web-demo",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["NOTA_API_BASE=http://localhost:8788", "node", "apps/web/run-local.mjs"],
+      "port": 4175,
+      "autoPort": true
+    },
+    {
       "name": "nota-admin-api",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "admin:local"],

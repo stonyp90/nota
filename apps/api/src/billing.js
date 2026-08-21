@@ -343,12 +343,12 @@ function createBilling({
     }
 
     if (await repo.wasEventProcessed(event.id)) {
-      return { ok: true, handled: false, duplicate: true, type: event.type, event, notary: null };
+      return { ok: true, handled: false, duplicate: true, type: event.type, event, notary: null, bid: null };
     }
 
-    const { handled, notary } = await applyEvent(event);
+    const { handled, notary, bid } = await applyEvent(event);
     await repo.markEventProcessed(event.id, clock());
-    return { ok: true, handled, duplicate: false, type: event.type, event, notary };
+    return { ok: true, handled, duplicate: false, type: event.type, event, notary, bid: bid || null };
   }
 
   return { connectNotary, authorizeOffer, payNotaryOnAccept, completeAct, handleWebhook, commissionRate: rate };

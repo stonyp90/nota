@@ -60,43 +60,63 @@ test('carnetPulse: counts split open vs retained and the retention rate', () => 
 
 test('carnetPulse: median is the middle proposed amount, averaged on an even count', () => {
   const odd = D.carnetPulse(
-    [bid({ montant: 700 }), bid({ montant: 900 }), bid({ montant: 2000 })],
+    [bid({ montant: 1700 }), bid({ montant: 1900 }), bid({ montant: 3000 })],
     TODAY,
   );
-  assert.equal(odd.services.find((s) => s.id === 'testament').median, 900);
+  assert.equal(odd.services.find((s) => s.id === 'testament').median, 1900);
 
   const even = D.carnetPulse(
-    [bid({ montant: 700 }), bid({ montant: 900 }), bid({ montant: 1000 }), bid({ montant: 2000 })],
+    [bid({ montant: 1700 }), bid({ montant: 1900 }), bid({ montant: 2000 }), bid({ montant: 3000 })],
     TODAY,
   );
-  // (900 + 1000) / 2, rounded to a whole dollar
-  assert.equal(even.services.find((s) => s.id === 'testament').median, 950);
+  // (1900 + 2000) / 2, rounded to a whole dollar
+  assert.equal(even.services.find((s) => s.id === 'testament').median, 1950);
 });
 
 test('carnetPulse: retained offers count toward the median — they are what the market cleared at', () => {
   const p = D.carnetPulse(
-    [bid({ montant: 700 }), bid({ montant: 900, status: D.STATUS.RETENUE }), bid({ montant: 1100 })],
+    [bid({ montant: 1700 }), bid({ montant: 1900, status: D.STATUS.RETENUE }), bid({ montant: 2100 })],
     TODAY,
   );
   const t = p.services.find((s) => s.id === 'testament');
-  assert.equal(t.median, 900);
+  assert.equal(t.median, 1900);
   assert.equal(t.total, 3);
   assert.equal(t.ouvertes, 2);
+});
+
+test('carnetPulse: a median never reads below the service price beside it', () => {
+  // Legacy data (bids priced under an older, lower floor) must not surface a
+  // médiane under the "à partir de" figure shown next to it — the pair would
+  // contradict itself. Below-floor history clamps to today's floor.
+  const p = D.carnetPulse(
+    [
+      bid({ montant: 700 }),
+      bid({ montant: 900, status: D.STATUS.RETENUE }),
+      bid({ serviceId: 'procuration', montant: 400 }),
+    ],
+    TODAY,
+  );
+  const t = p.services.find((s) => s.id === 'testament');
+  const pr = p.services.find((s) => s.id === 'procuration');
+  assert.equal(t.median, D.serviceById('testament').prixDepart);
+  assert.equal(pr.median, D.serviceById('procuration').prixDepart);
+  // The floor only guards the lower bound — a genuine market median above the
+  // floor passes through untouched (covered by the arithmetic tests above).
 });
 
 test('carnetPulse: per-service rows carry their own counts', () => {
   const p = D.carnetPulse(
     [
       bid({ serviceId: 'testament' }),
-      bid({ serviceId: 'procuration', montant: 400 }),
-      bid({ serviceId: 'procuration', montant: 600, status: D.STATUS.RETENUE }),
+      bid({ serviceId: 'procuration', montant: 800 }),
+      bid({ serviceId: 'procuration', montant: 1000, status: D.STATUS.RETENUE }),
     ],
     TODAY,
   );
   const proc = p.services.find((s) => s.id === 'procuration');
   assert.equal(proc.total, 2);
   assert.equal(proc.ouvertes, 1);
-  assert.equal(proc.median, 500);
+  assert.equal(proc.median, 900);
   assert.equal(p.services.find((s) => s.id === 'refinancement').total, 0);
 });
 
@@ -130,7 +150,9 @@ test('carnetPulse: the demo fixtures produce a populated, coherent pulse', () =>
   assert.ok(p.total > 0);
   assert.ok(p.tauxRetenue >= 0 && p.tauxRetenue <= 100);
   for (const s of p.services) {
-    if (s.median != null) assert.ok(s.median >= s.prixDepart, `${s.id} median at or above its floor`);
+    // Strictly above: demo data must show a market that clears ABOVE the entry
+    // price, never a médiane equal to (or under) the "à partir de" beside it.
+    if (s.median != null) assert.ok(s.median > s.prixDepart, `${s.id} median above its floor`);
   }
 });
 

@@ -1339,9 +1339,10 @@ dialog {
   background: var(--surface); color: var(--ink); max-width: 440px; width: 92vw; box-shadow: var(--shadow-lg);
 }
 dialog::backdrop { background: var(--backdrop); }
-/* A modal owns the scroll: without this the page keeps scrolling under the
-   wheel/touch behind the open dialog. */
-body:has(dialog[open]) { overflow: hidden; }
+/* A modal owns the scroll. The lock must sit on <html>: the root element is
+   the page's scroller, so hiding overflow on <body> alone still lets the page
+   drift (and lose its place) under the wheel/touch behind the open dialog. */
+html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 .dialog-pad { padding: 22px; }
 .dialog-pad h3 { font-size: 18px; margin-bottom: 8px; }
 .dialog-pad p { color: var(--ink-muted); font-size: 14px; margin: 0 0 16px; }
@@ -1495,6 +1496,11 @@ body:has(dialog[open]) { overflow: hidden; }
    column signed-in) so the open demands are the first thing on screen. */
 #pane-notaires > .wrap:has(#notary-authed:not([hidden])) .intro--hero p { display: none; }
 #pane-notaires > .wrap:has(#notary-authed:not([hidden])) .intro--hero { margin-bottom: 0; }
+/* Signed-in, the headline is a room label, not a pitch: it shrinks and the
+   intro's air tightens so the first CONFIRMABLE demand lands on the first
+   screen at every width. */
+#pane-notaires > .wrap:has(#notary-authed:not([hidden])) .intro--hero h1 { font-size: 18px; }
+#pane-notaires > .wrap:has(#notary-authed:not([hidden])) .intro { padding-bottom: 6px; }
 #pane-notaires > .wrap:has(#notary-authed:not([hidden])) .notary-carnet { order: 1; }
 #pane-notaires > .wrap:has(#notary-authed:not([hidden])) .nota-guarantee { order: 2; }
 /* Narrow screens: one column, in selling order — a line of pitch, the open
@@ -1802,21 +1808,27 @@ body:has(dialog[open]) { overflow: hidden; }
 .nc-signup { margin-top: 16px; max-width: 560px; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; border: 1px solid var(--brand); border-radius: var(--radius); background: var(--surface-inset); }
 .nc-signup-lead { margin: 0; font-size: 14px; line-height: 1.5; color: var(--ink); }
 .nc-signup-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; line-height: 1.45; color: var(--ink); }
+/* Identity bar — session meta, never the focus: one slim row at every width.
+   nowrap + a shrinking email keep Rafraîchir/Se déconnecter from wrapping the
+   bar into a tall block that pushes the open demands below the phone's fold. */
 .nc-bar {
-  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  padding: 12px 14px; margin-bottom: 18px;
+  display: flex; align-items: center; gap: 10px; flex-wrap: nowrap;
+  padding: 8px 12px; margin-bottom: 14px;
   background: var(--surface-inset); border: 1px solid var(--border); border-radius: var(--radius);
 }
-.nc-id { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
+.nc-id { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; flex: 1 1 auto; }
 .nc-id-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-muted); }
-.nc-id strong { font-size: 14px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 46vw; }
+.nc-id strong { font-size: 14px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.nc-bar .btn { flex: none; }
 .nc-h { font-size: 14px; font-weight: 800; letter-spacing: -0.01em; margin: 18px 0 10px; }
 .nc-list { display: flex; flex-direction: column; gap: 10px; }
 /* Console lists are grids: a 1240px-wide strip per demand wastes the row and
    caps how many dossiers fit one screen. Open demands pack ~3-up; retained
    cards carry the client dossier and the completion form, so they get a wider
    2-up track. Cards stretch to equal row height, actions pinned to the foot. */
-.nc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr)); gap: 10px; }
+/* 320px track: two demands fit side by side from tablet width (768px) up —
+   the more open bids on one screen, the stronger the pane's one message. */
+.nc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); gap: 10px; }
 .nc-grid--wide { grid-template-columns: repeat(auto-fill, minmax(min(480px, 100%), 1fr)); }
 
 .nc-card {
@@ -1847,7 +1859,11 @@ body:has(dialog[open]) { overflow: hidden; }
   background: var(--surface-inset); color: var(--ink-muted); border: 1px solid var(--border-strong);
 }
 .nc-ready[data-ready='true'] { color: var(--ok); border-color: var(--ok); }
-.nc-card-actions { display: flex; gap: 8px; margin-top: auto; padding-top: 12px; }
+.nc-card-actions { display: flex; align-items: center; gap: 8px; margin-top: auto; padding-top: 12px; }
+/* Retenir owns the card foot at every width — the confirm is the card's one
+   job; Décliner and the agenda chip tuck beside it as small secondaries. The
+   cap keeps it a button, not a banner, when a card runs wide. */
+.nc-card-actions .nc-accept { flex: 1 1 auto; max-width: 340px; }
 
 .nc-dossier { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
 .nc-dossier-h { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--brand); margin-bottom: 8px; }

@@ -183,6 +183,7 @@
   "Se déconnecter": "Sign out",
   "Mon profil": "My profile",
   "Mes offres": "My offers",
+  "Mon dossier": "My file",
   "Publier une offre": "Post an offer",
   "Votre signature est aujourd’hui": "Your signing is today",
   "Un notaire a retenu votre demande 🎉": "A notary has taken on your request 🎉",

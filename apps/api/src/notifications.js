@@ -154,10 +154,68 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
     });
   }
 
-  // --- Subscription lifecycle (notary + operator) --------------------------
-  // Driven from the Stripe webhook route with the verified event + affected
-  // notary. Switches on event type; unknown types produce nothing.
-  async function onSubscription(event, notary) {
+  // --- Notary onboarding (free Stripe Connect) ------------------------------
+  // Fired from POST /notaries/connect (fire-and-forget). Backs up the hosted
+  // onboarding link into the notary's inbox so a closed tab is recoverable.
+  // Idempotent per address: a double-click never double-sends.
+  async function onNotaryConnected(email, onboardingUrl) {
+    const to = String(email || '').trim().toLowerCase();
+    if (!to) return { ok: true, results: [] };
+    try {
+      const r = await sendOnce({
+        refId: to,
+        kind: 'notaryOnboardingStarted',
+        to,
+        buildTemplate: (env) => emails.notaryOnboardingStarted({ onboardingUrl, ...env }),
+      });
+      return { ok: true, results: [r] };
+    } catch (err) {
+      return { ok: false, error: String((err && err.message) || err), results: [] };
+    }
+  }
+
+  // --- Act paid (capture + transfer done) -----------------------------------
+  // Fired after payNotaryOnAccept / completeAct succeeds. Statement to the
+  // notary + revenue alert to the operator, at most once per bid.
+  async function onActPaid({ notaryId, bid, actAmount } = {}) {
+    if (!bid || !bid.id) return { ok: true, results: [] };
+    const results = [];
+    try {
+      const notary =
+        notaryId && typeof repo.getNotary === 'function' ? await repo.getNotary(notaryId) : null;
+      const ctx = { ...bidCtx(bid), actAmount };
+      if (notary && notary.email) {
+        results.push(
+          await sendOnce({
+            refId: bid.id,
+            kind: 'actPaidNotary',
+            to: notary.email,
+            buildTemplate: (env) => emails.actPaidNotary({ ...ctx, ...env }),
+          })
+        );
+      }
+      if (operatorEmail) {
+        results.push(
+          await sendOnce({
+            refId: bid.id,
+            kind: 'operatorActCompleted',
+            to: operatorEmail,
+            buildTemplate: (env) =>
+              emails.operatorActCompleted({ ...ctx, notaryEmail: notary && notary.email, ...env }),
+          })
+        );
+      }
+    } catch (err) {
+      return { ok: false, error: String((err && err.message) || err), results };
+    }
+    return { ok: true, results };
+  }
+
+  // --- Stripe lifecycle (notary + client + operator) ------------------------
+  // Driven from the Stripe webhook route with the verified event, the affected
+  // notary, and — for pay-on-accept events — the affected bid. Switches on
+  // event type; unknown types produce nothing.
+  async function onSubscription(event, notary, bid) {
     const type = event && event.type;
     const obj = (event && event.data && event.data.object) || {};
     const email = (notary && notary.email) || obj.customer_email || obj.email || null;
@@ -189,10 +247,45 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
 
     try {
       switch (type) {
-        // Under the pay-on-accept COMMISSION model there are no notary subscription
-        // checkouts: checkout.session.completed is the CLIENT authorizing their offer
-        // card (bound in billing.applyEvent). It must NOT trigger a notary
-        // subscription welcome/receipt or a "notaire abonné" operator alert.
+        // Connect onboarding cleared — the notary can now take requests and be
+        // paid. Welcomed at most once ever (the SENT ledger), so later
+        // account.updated deliveries never re-send.
+        case 'account.updated':
+          if (notary && notary.status === 'active') {
+            await toNotary('notaryActive', emails.notaryActive);
+          }
+          break;
+        // Under the pay-on-accept model, checkout.session.completed is the CLIENT
+        // authorizing their offer card (bound in billing.applyEvent). It must NOT
+        // trigger a notary subscription welcome/receipt or a "notaire abonné"
+        // operator alert — it confirms to the CLIENT that their offer is live.
+        case 'checkout.session.completed':
+          if (bid && bid.courriel) {
+            results.push(
+              await sendOnce({
+                refId: bid.id,
+                kind: 'offerAuthorized',
+                to: bid.courriel,
+                buildTemplate: (env) => emails.offerAuthorized({ ...bidCtx(bid), ...env }),
+              })
+            );
+          }
+          break;
+        // The hold lapsed or was cancelled before any notary accepted — the offer
+        // silently dropped off the carnet, so tell the client how to come back.
+        case 'checkout.session.expired':
+        case 'payment_intent.canceled':
+          if (bid && bid.courriel) {
+            results.push(
+              await sendOnce({
+                refId: bid.id,
+                kind: 'offerAuthorizationVoided',
+                to: bid.courriel,
+                buildTemplate: (env) => emails.offerAuthorizationVoided({ ...bidCtx(bid), ...env }),
+              })
+            );
+          }
+          break;
         case 'invoice.paid':
         case 'invoice.payment_succeeded':
           await toNotary('subReceipt', emails.subReceipt);
@@ -233,6 +326,8 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
     onOfferRetained,
     onClientSignup,
     onReminderDue,
+    onNotaryConnected,
+    onActPaid,
     onSubscription,
     unsubscribe,
     unsubscribeUrl,

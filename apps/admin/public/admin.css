@@ -90,6 +90,9 @@ a:hover { text-decoration: underline; }
 .icon-btn:hover { background: var(--neutral-wash); }
 .icon-btn:active { transform: scale(0.94); }
 .icon-btn svg { display: block; }
+/* Language toggle: an icon-btn carrying two letters ("EN"/"FR") instead of an
+   svg. Labelled by i18n.js. */
+.lang-btn { font-size: 12px; font-weight: 650; letter-spacing: 0.04em; }
 
 /* --- Buttons --------------------------------------------------------------
    House rule: every button stays outline/transparent — no button ever carries a

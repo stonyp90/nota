@@ -66,13 +66,14 @@ manifest['tokens.css'] = hashRename('tokens.css');
 patch('admin.css', { 'tokens.css': manifest['tokens.css'] });
 
 // 2) Hash the assets index.html references directly.
-for (const name of ['admin-theme.js', 'admin.css', 'admin.js']) manifest[name] = hashRename(name);
+for (const name of ['admin-theme.js', 'admin.css', 'admin.js', 'i18n.js']) manifest[name] = hashRename(name);
 
 // 3) Rewrite index.html to the hashed filenames.
 patch('index.html', {
   'admin-theme.js': manifest['admin-theme.js'],
   'admin.css': manifest['admin.css'],
   'admin.js': manifest['admin.js'],
+  'i18n.js': manifest['i18n.js'],
 });
 
 console.log('Built dist/ ->', distDir);

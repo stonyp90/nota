@@ -432,6 +432,10 @@ function createApp(repo, opts = {}) {
       }
       const result = await billing().connectNotary({ email: payload.email });
       if (!result.ok) return json(422, { errors: result.errors });
+      // Back the hosted onboarding link up into the notary's inbox so a closed
+      // tab is recoverable. Fire-and-forget — never blocks or fails the response.
+      const cn = notifier();
+      if (cn) Promise.resolve(cn.onNotaryConnected(payload.email, result.url)).catch(() => {});
       return json(200, { url: result.url });
     }
 
@@ -457,6 +461,9 @@ function createApp(repo, opts = {}) {
       }
       const result = await billing().completeAct({ notaryId, bidId: payload.bidId, actAmount: payload.actAmount });
       if (!result.ok) return json(422, { errors: result.errors });
+      // Payout statement + operator alert, once per bid (fire-and-forget).
+      const an = notifier();
+      if (an) Promise.resolve(an.onActPaid({ notaryId, bid, actAmount: payload.actAmount })).catch(() => {});
       return json(200, { ok: true, commissionCents: result.commissionCents });
     }
 
@@ -470,11 +477,12 @@ function createApp(repo, opts = {}) {
         return json(400, { errors: [{ code: 'signature_invalide', message: 'Signature Stripe invalide.' }] });
       }
 
-      // Fire the matching subscription lifecycle email (welcome/receipt/dunning/
-      // win-back + operator alert). Best-effort; skipped on a redelivered event.
+      // Fire the matching lifecycle email (notary active / offer authorized or
+      // voided / receipt / dunning / win-back + operator alert). Best-effort;
+      // skipped on a redelivered event.
       const n = notifier();
       if (n && result.event && !result.duplicate) {
-        Promise.resolve(n.onSubscription(result.event, result.notary)).catch(() => {});
+        Promise.resolve(n.onSubscription(result.event, result.notary, result.bid)).catch(() => {});
       }
 
       return json(200, { received: true });
@@ -596,7 +604,14 @@ function createApp(repo, opts = {}) {
       // (shared act ledger), so a re-accept or double-submit never pays twice.
       async function payout(b) {
         if (!billingConfigured || !b || !b.paymentIntentId) return null;
-        return billing().payNotaryOnAccept({ notaryId, bidId: b.id, actAmount: b.montant, paymentIntentId: b.paymentIntentId });
+        const pay = await billing().payNotaryOnAccept({ notaryId, bidId: b.id, actAmount: b.montant, paymentIntentId: b.paymentIntentId });
+        // Statement to the notary + revenue alert to the operator, once per bid
+        // (the notifier's SENT ledger dedupes an idempotent re-accept).
+        if (pay && pay.ok && !pay.alreadyPaid) {
+          const pn = notifier();
+          if (pn) Promise.resolve(pn.onActPaid({ notaryId, bid: b, actAmount: b.montant })).catch(() => {});
+        }
+        return pay;
       }
       const withPayout = (base, pay) => !pay ? base
         : pay.ok ? { ...base, paid: true, commissionCents: pay.commissionCents, netCents: pay.netCents }

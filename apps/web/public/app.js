@@ -129,6 +129,10 @@
   // choice the client made, so it must not light the badge or spring the panel.
   var FILTER_DEFAULTS = { service: '', statut: 'ouverte', min: null, max: null, sort: 'montant-desc' };
 
+  // The app's panes, in nav order. Shared by setTab (show/hide) and the URL
+  // hash (`t` param) so every pane is deep-linkable and Back walks panes.
+  var PANES = ['carnet', 'dossier', 'notaires', 'profil', 'confidentialite', 'conditions', 'charte'];
+
   var state = {
     anchor: firstOfMonth(todayISO()),
     monthBids: [],
@@ -773,7 +777,11 @@
     var headerAuth = $('header-auth'); if (headerAuth) headerAuth.hidden = role !== 'anon';
     // The mobile drawer mirrors the header pair: auth buttons only while anonymous.
     var mnavAuth = $('mnav-auth'); if (mnavAuth) mnavAuth.hidden = role !== 'anon';
-    var acctWrap = document.querySelector('.acct-wrap'); if (acctWrap) acctWrap.hidden = role === 'anon';
+    // An email is optional on publish, so an anonymous visitor can hold live
+    // offers: keep their bell — offers, dossier and notifications all derive
+    // from this device and must stay reachable without signing in.
+    var hasOffers = myOffers().length > 0;
+    var acctWrap = document.querySelector('.acct-wrap'); if (acctWrap) acctWrap.hidden = role === 'anon' && !hasOffers;
     // Agenda sync is a NOTARY tool: it subscribes a working calendar to the
     // carnet feed. A client books a date, they do not follow the whole month, so
     // showing them four calendar buttons and a mailing form is noise on the one
@@ -810,16 +818,34 @@
       actions.appendChild(onbAcctRow());
       actions.appendChild(acctAction('signout', 'Se déconnecter', function () { ncSignOut(); renderAccountMenu(); toggleNotifPanel(false); }));
     } else if (role === 'client') {
+      // Two DISTINCT rows: the profile (offers table + contact details) and the
+      // dossier (document checklist). The dossier row is the pane's permanent
+      // door — without it the only entry is the one-shot post-publish card.
       actions.appendChild(acctAction('profil', 'Mon profil', function () { toggleNotifPanel(false); setTab('profil'); }));
-      actions.appendChild(acctAction('offers', 'Mes offres', function () { toggleNotifPanel(false); setTab('profil'); }));
+      actions.appendChild(acctAction('dossiers', 'Mon dossier', function () { toggleNotifPanel(false); openDossier(myDossierServiceId()); }));
       actions.appendChild(onbAcctRow());
       actions.appendChild(acctAction('signout', 'Se déconnecter', clientSignOut));
     } else {
       // The identity head IS the "Se connecter / s’inscrire" trigger — don't repeat it.
+      if (hasOffers) {
+        actions.appendChild(acctAction('offers', 'Mes offres', function () { toggleNotifPanel(false); setTab('profil'); }));
+        actions.appendChild(acctAction('dossiers', 'Mon dossier', function () { toggleNotifPanel(false); openDossier(myDossierServiceId()); }));
+      }
       actions.appendChild(acctAction('publier', 'Publier une offre', openOfferFlow));
       actions.appendChild(acctAction('notaire', 'Espace notaire', function () { toggleNotifPanel(false); setTab('notaires'); }));
       actions.appendChild(onbAcctRow());
     }
+  }
+
+  // The dossier opens on the act the client is actually preparing: the soonest
+  // upcoming offer's service, else the most recent one (openDossier keeps the
+  // current selection when this returns null).
+  function myDossierServiceId() {
+    var today = todayISO();
+    var offers = myOffers().slice().sort(function (a, b) { return String(a.dateISO).localeCompare(String(b.dateISO)); });
+    var up = offers.filter(function (o) { return D.daysBetween(today, o.dateISO) >= 0; });
+    var pick = up[0] || offers[offers.length - 1];
+    return pick ? pick.serviceId : null;
   }
   // Derive notifications from this browser's offers: local date-approaching, and
   // "retained" by matching each offer id against its month's public bids.
@@ -1259,7 +1285,6 @@
 
   function pulseRow(s, active, busiest) {
     var short = s.nom.split(' ')[0];
-    var priced = s.median == null ? s.prixDepart : s.median;
     var row = el('button', 'pulse-row' + (active ? ' is-on' : ''));
     row.type = 'button';
     row.dataset.svc = s.id;
@@ -1669,8 +1694,9 @@
     if (h.has('max')) state.filters.max = num(h.get('max'));
     if (h.has('tri') && SORTS.indexOf(h.get('tri')) >= 0) state.filters.sort = h.get('tri');
     if (h.has('jour') && D.isISODate(h.get('jour'))) { state.selectedDate = h.get('jour'); state.focusDate = h.get('jour'); state.anchor = firstOfMonth(h.get('jour')); }
+    if (h.has('t') && PANES.indexOf(h.get('t')) >= 0) state.tab = h.get('t');
   }
-  function writeHash() {
+  function writeHash(opts) {
     var h = new URLSearchParams();
     var f = state.filters;
     if (f.service) h.set('svc', f.service);
@@ -1679,8 +1705,13 @@
     if (f.max != null) h.set('max', f.max);
     if (f.sort && f.sort !== 'montant-desc') h.set('tri', f.sort);
     if (state.selectedDate) h.set('jour', state.selectedDate);
+    // The default pane keeps a clean URL; every other pane is addressable.
+    if (state.tab && state.tab !== 'carnet') h.set('t', state.tab);
     var s = h.toString();
-    history.replaceState(null, '', s ? '#' + s : location.pathname);
+    var url = s ? '#' + s : location.pathname;
+    // Pane changes push (the Back button walks panes); filter tweaks replace.
+    if (opts && opts.push) history.pushState(null, '', url);
+    else history.replaceState(null, '', url);
   }
   function num(v) { var n = Number(v); return Number.isFinite(n) ? n : null; }
 
@@ -2122,8 +2153,8 @@
     if (res.checkoutUrl) {
       submit.removeAttribute('aria-busy'); submit.textContent = 'Redirection vers le paiement…';
       profileSet({ courriel: payload.courriel, prefixe: payload.prefixe, nom: payload.nom || '', anonyme: payload.anonyme });
-      renderAccountMenu(); // an offer that carries an email signs the client in
       addMyOffer(res.bid);
+      renderAccountMenu(); // an offer signs the client in (or keeps the anon bell)
       window.location.href = res.checkoutUrl;
       return;
     }
@@ -2137,9 +2168,10 @@
     // Remember the client's coordinates in their profile for next time — an offer
     // that carries an email implicitly signs the client in on this device.
     profileSet({ courriel: payload.courriel, prefixe: payload.prefixe, nom: payload.nom || '', anonyme: payload.anonyme });
-    renderAccountMenu();
-    // Track this offer + raise the in-app "published" notification (email is sent by the API).
+    // Track this offer BEFORE repainting the menu: even without an email the
+    // device now holds an offer, which is what keeps the account bell visible.
     addMyOffer(res.bid);
+    renderAccountMenu();
     addNotif({
       key: 'published:' + res.bid.id,
       kind: 'published',
@@ -3515,7 +3547,9 @@
     }
 
     var actions = el('div', 'nc-card-actions');
-    var acc = el('button', 'btn btn-sm btn-primary nc-accept', 'Retenir'); acc.type = 'button';
+    // Retenir is THE action of the pane — full-size primary; everything else on
+    // the row (decline, agenda) stays small so the confirm reads first.
+    var acc = el('button', 'btn btn-primary nc-accept', 'Retenir'); acc.type = 'button';
     var dec = el('button', 'btn btn-sm nc-decline', 'Décliner'); dec.type = 'button';
     actions.appendChild(acc); actions.appendChild(dec);
     // Block the date before deciding: the signing day, straight into the
@@ -3651,12 +3685,17 @@
       t.appendChild(el('div', 'nc-stat-k', k));
       return t;
     }
-    var grid = el('div', 'nc-stats');
-    grid.appendChild(tile('Actes complétés', String(e.done)));
-    grid.appendChild(tile('Valeur réalisée', D.money(e.realized)));
-    grid.appendChild(tile('Commission Nota', D.money(e.commission)));
-    grid.appendChild(tile('Net à vous', D.money(e.net), 'nc-stat-net'));
-    box.appendChild(grid);
+    // The tile grid only exists once there is money to show: a wall of zero
+    // tiles under the open demands would compete with the working surface —
+    // the confirmable bids — for nothing.
+    if (e.done) {
+      var grid = el('div', 'nc-stats');
+      grid.appendChild(tile('Actes complétés', String(e.done)));
+      grid.appendChild(tile('Valeur réalisée', D.money(e.realized)));
+      grid.appendChild(tile('Commission Nota', D.money(e.commission)));
+      grid.appendChild(tile('Net à vous', D.money(e.net), 'nc-stat-net'));
+      box.appendChild(grid);
+    }
     if (e.pending) {
       box.appendChild(el('p', 'help', e.pending + ' dossier' + (e.pending > 1 ? 's' : '') + ' à compléter · valeur estimée ' + D.money(e.pendingVal) + '. La commission n’est prélevée qu’à la signature, sur la valeur confirmée.'));
     } else if (!e.done) {
@@ -3712,9 +3751,10 @@
 
   function setTab(tab, opts) {
     opts = opts || {};
+    var prev = state.tab;
     state.tab = tab;
     syncNavTabs(tab);
-    ['carnet', 'dossier', 'notaires', 'profil', 'confidentialite', 'conditions', 'charte'].forEach(function (t) {
+    PANES.forEach(function (t) {
       var pane = $('pane-' + t);
       if (!pane) return;
       var active = t === tab;
@@ -3733,6 +3773,9 @@
       var h = activePane && activePane.querySelector('h1');
       if (h) { h.setAttribute('tabindex', '-1'); try { h.focus({ preventScroll: true }); } catch (e) { h.focus(); } }
     }
+    // Each pane change is a history entry (deep-linkable, Back walks panes
+    // instead of leaving the site). fromHistory guards the popstate round-trip.
+    if (tab !== prev && !opts.fromHistory) writeHash({ push: true });
   }
 
   // ---------------------------------------------------------------------------
@@ -3961,6 +4004,15 @@
       var g = e.target.closest && e.target.closest('.goto-link[data-goto]');
       if (!g) return;
       e.preventDefault(); setTab(g.dataset.goto); toggleNotifPanel(false);
+    });
+    // Back/forward re-applies the pane recorded in that history entry's hash
+    // (setTab pushes one entry per pane change). fromHistory stops the
+    // round-trip from pushing again.
+    window.addEventListener('popstate', function () {
+      var h = new URLSearchParams(location.hash.replace(/^#/, ''));
+      var t = h.get('t') || 'carnet';
+      if (PANES.indexOf(t) < 0) t = 'carnet';
+      if (t !== state.tab) setTab(t, { fromHistory: true });
     });
     document.addEventListener('click', function () { toggleNotifPanel(false); });
     // Escape closes the account menu AND hands focus back to its trigger —

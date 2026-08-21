@@ -62,6 +62,56 @@ for (const name of names) {
   });
 }
 
+// --- bilingual contract (FR first, EN second, same message) ------------------
+const NB = ' '; // fr-CA no-break space in money()
+
+test('every template is bilingual: FR / EN subject, both footers, text separator', () => {
+  for (const name of names) {
+    const out = emails.TEMPLATES[name](CTX);
+
+    // Subject reads 'FR / EN'.
+    assert.ok(out.subject.includes(' / '), `${name}: subject is not bilingual (no ' / '): ${out.subject}`);
+
+    // Unsubscribe is labeled in both languages, HTML and text.
+    assert.ok(out.html.includes('Se désabonner'), `${name}: HTML missing French unsubscribe label`);
+    assert.ok(out.html.includes('Unsubscribe'), `${name}: HTML missing English unsubscribe label`);
+    assert.ok(out.text.includes('Se désabonner'), `${name}: text missing French unsubscribe label`);
+    assert.ok(out.text.includes('Unsubscribe'), `${name}: text missing English unsubscribe label`);
+
+    // Plain text carries the FR block, a '----' separator, then the EN block.
+    assert.ok(out.text.includes('----'), `${name}: text missing the FR/EN separator`);
+  }
+});
+
+test('offerPublished carries the full French block first, then the full English block', () => {
+  const out = emails.offerPublished(CTX);
+
+  const fr = out.html.indexOf('Votre offre est publiée');
+  const en = out.html.indexOf('Your offer is posted');
+  assert.ok(fr !== -1, 'HTML missing the French heading');
+  assert.ok(en !== -1, 'HTML missing the English heading');
+  assert.ok(fr < en, 'the French block must come before the English block');
+
+  // Amounts: domain.money() on the French side, domain.moneyEn() on the English side.
+  assert.ok(out.html.includes('1' + NB + '500' + NB + '$'), 'HTML missing the fr-CA amount');
+  assert.ok(out.html.includes('$1,500'), 'HTML missing the en-CA amount');
+
+  // Service names from the domain, per language — never hardcoded.
+  assert.ok(out.html.includes('Refinancement'), 'HTML missing the French service name');
+  assert.ok(out.html.includes('Mortgage refinancing'), 'HTML missing the English service name');
+
+  // Two CTA buttons (one per language) pointing at the same URL.
+  const ctaCount = (out.html.match(new RegExp('href="' + BASE + '/#dossier"', 'g')) || []).length;
+  assert.equal(ctaCount, 2, 'expected one FR and one EN CTA on the same URL');
+
+  // Text alternative mirrors the order: FR, separator, EN.
+  const tFr = out.text.indexOf('Votre offre est publiée');
+  const tSep = out.text.indexOf('----');
+  const tEn = out.text.indexOf('Your offer is posted');
+  assert.ok(tFr !== -1 && tSep !== -1 && tEn !== -1, 'text missing FR block, separator, or EN block');
+  assert.ok(tFr < tSep && tSep < tEn, 'text order must be FR, separator, EN');
+});
+
 // --- shared layout structure -------------------------------------------------
 test('every template shares the branded, email-safe layout wrapper', () => {
   for (const name of names) {

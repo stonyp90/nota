@@ -6,7 +6,11 @@
  * into a multi-event VCALENDAR a notary can subscribe to over webcal. Pure: it
  * takes plain event rows and returns a string, no I/O and no clock.
  *
- * Service names come from @nota/domain so the summary matches the public carnet.
+ * The feeds are bilingual without breaking calendar UIs: each VEVENT keeps its
+ * French SUMMARY and carries the English equivalent in DESCRIPTION, and the
+ * X-WR-CALNAME reads 'FR / EN'. Service names come from @nota/domain (nom for
+ * French, nomEn for English) so both sides match the public carnet; amounts go
+ * through domain.money() / domain.moneyEn().
  */
 const domain = require('@nota/domain');
 
@@ -15,14 +19,15 @@ function compact(dateISO) {
 }
 
 // RFC 5545 §3.3.11: escape backslash, comma, semicolon and newlines in TEXT
-// values, so a comma in a service name or an fr-CA "1 500,00 $" never truncates
-// the SUMMARY or breaks the parse.
+// values, so a comma in a service name or an en-CA "$1,500" never truncates
+// the SUMMARY/DESCRIPTION or breaks the parse.
 function escText(s) {
   return String(s).replace(/([\\,;])/g, '\\$1').replace(/\r?\n/g, '\\n');
 }
 
 // A retained event is `{ id, dateISO, serviceId }` (extra fields ignored). Each
-// becomes an all-day event 'Signature notariée — <service>' spanning one day.
+// becomes an all-day event: SUMMARY 'Signature notariée — <service>' (fr) with
+// DESCRIPTION 'Notarized signing — <service>' (en), spanning one day.
 function buildNotaryFeed(events = [], stamp) {
   const lines = [
     'BEGIN:VCALENDAR',
@@ -30,11 +35,12 @@ function buildNotaryFeed(events = [], stamp) {
     'PRODID:-//Nota//Console notaire//FR-CA',
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
-    'X-WR-CALNAME:Nota — signatures retenues',
+    'X-WR-CALNAME:' + escText('Nota — signatures retenues / retained signings'),
   ];
   for (const e of events) {
     const svc = domain.serviceById(e.serviceId);
     const name = svc ? svc.nom : e.serviceId;
+    const nameEn = svc ? svc.nomEn : e.serviceId;
     lines.push(
       'BEGIN:VEVENT',
       'UID:' + e.id + '@nota',
@@ -42,6 +48,7 @@ function buildNotaryFeed(events = [], stamp) {
       'DTSTART;VALUE=DATE:' + compact(e.dateISO),
       'DTEND;VALUE=DATE:' + compact(domain.addDays(e.dateISO, 1)),
       'SUMMARY:' + escText('Signature notariée — ' + name),
+      'DESCRIPTION:' + escText('Notarized signing — ' + nameEn),
       'END:VEVENT'
     );
   }
@@ -53,6 +60,7 @@ function buildNotaryFeed(events = [], stamp) {
 // customer (or anyone) can subscribe to the whole carnet in Google / Outlook /
 // Apple over webcal. Each `bid` is the SAME public projection GET /bids exposes
 // — id, dateISO, serviceId, montant — so this can never leak courriel/dossier.
+// French SUMMARY, English DESCRIPTION, same event either way.
 function buildCarnetFeed(bids = [], stamp) {
   const lines = [
     'BEGIN:VCALENDAR',
@@ -60,11 +68,12 @@ function buildCarnetFeed(bids = [], stamp) {
     'PRODID:-//Nota//Carnet public//FR-CA',
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
-    'X-WR-CALNAME:Nota — carnet public (Québec)',
+    'X-WR-CALNAME:' + escText('Nota — carnet public / public carnet (Québec)'),
   ];
   for (const b of bids) {
     const svc = domain.serviceById(b.serviceId);
     const name = svc ? svc.nom : b.serviceId;
+    const nameEn = svc ? svc.nomEn : b.serviceId;
     lines.push(
       'BEGIN:VEVENT',
       'UID:' + b.id + '@nota',
@@ -72,6 +81,7 @@ function buildCarnetFeed(bids = [], stamp) {
       'DTSTART;VALUE=DATE:' + compact(b.dateISO),
       'DTEND;VALUE=DATE:' + compact(domain.addDays(b.dateISO, 1)),
       'SUMMARY:' + escText(name + ' — ' + domain.money(b.montant)),
+      'DESCRIPTION:' + escText(nameEn + ' — ' + domain.moneyEn(b.montant)),
       'END:VEVENT'
     );
   }

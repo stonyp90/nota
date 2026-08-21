@@ -13,6 +13,19 @@ const here = dirname(fileURLToPath(import.meta.url));
 const publicDir = join(here, 'public');
 const domainSrc = join(here, '..', '..', 'packages', 'domain', 'index.js');
 const PORT = Number(process.env.PORT || 4173);
+// Optional API override: NOTA_API_BASE=http://localhost:XXXX points the served
+// app at any local API instance via the app's own window.__NOTA_API__ hook
+// (app.js falls back to :8788 on localhost when unset).
+const API_BASE = process.env.NOTA_API_BASE || '';
+
+function serveHtml(res, file) {
+  let html = readFileSync(file, 'utf8');
+  if (API_BASE) {
+    html = html.replace('<head>', '<head><script>window.__NOTA_API__=' + JSON.stringify(API_BASE) + ';</script>');
+  }
+  res.writeHead(200, { 'content-type': TYPES['.html'] });
+  res.end(html);
+}
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -39,14 +52,14 @@ const server = createServer((req, res) => {
   if (!file.startsWith(publicDir)) { res.writeHead(403); res.end('Forbidden'); return; }
 
   if (existsSync(file) && statSync(file).isFile()) {
+    if (extname(file) === '.html') { serveHtml(res, file); return log(req, 200, start); }
     res.writeHead(200, { 'content-type': TYPES[extname(file)] || 'application/octet-stream' });
     res.end(readFileSync(file));
     return log(req, 200, start);
   }
 
   // SPA fallback
-  res.writeHead(200, { 'content-type': TYPES['.html'] });
-  res.end(readFileSync(join(publicDir, 'index.html')));
+  serveHtml(res, join(publicDir, 'index.html'));
   log(req, 200, start);
 });
 

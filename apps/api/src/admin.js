@@ -22,6 +22,7 @@
  */
 const domain = require('@nota/domain');
 const authDefaults = require('./admin-auth');
+const emails = require('./emails');
 
 // What each role may do. Re-derived from the server-side role on every request;
 // the client is shown these only to hide controls it cannot use.
@@ -152,15 +153,20 @@ function createAdmin({
 
     if (mailer) {
       try {
-        await mailer.send({
-          to: clean,
-          subject: 'Votre lien de connexion — Nota Admin',
-          text:
-            'Connectez-vous à la console d’administration Nota :\n\n' +
-            link +
-            '\n\nCe lien est valide 15 minutes et à usage unique. ' +
-            'Si vous n’avez pas demandé cette connexion, ignorez ce courriel.',
+        // The shared branded bilingual template (emails.js) — never an inline
+        // one-off. Auth email = transactional; the unsubscribe mechanism is the
+        // support mailbox (there is no public unsubscribe route on this domain).
+        const msg = emails.adminMagicLink({
+          link,
+          ttlMinutes: Math.round(CHALLENGE_TTL_MS / 60000),
+          baseUrl,
+          unsubscribeUrl:
+            'mailto:' +
+            emails.SENDER.supportEmail +
+            '?subject=' +
+            encodeURIComponent('Désabonnement / Unsubscribe'),
         });
+        await mailer.send({ to: clean, subject: msg.subject, html: msg.html, text: msg.text });
       } catch {
         // Best-effort send; the operator can request another link.
       }

@@ -28,10 +28,11 @@ test('every cacheable asset is emitted with a content-hashed filename', () => {
   one(/^admin\.[0-9a-f]{10}\.css$/, 'admin.css');
   one(/^tokens\.[0-9a-f]{10}\.css$/, 'tokens.css');
   one(/^admin-theme\.[0-9a-f]{10}\.js$/, 'admin-theme.js');
+  one(/^i18n\.[0-9a-f]{10}\.js$/, 'i18n.js');
 });
 
 test('no un-hashed cacheable asset ships in dist', () => {
-  for (const bare of ['admin.js', 'admin.css', 'tokens.css', 'admin-theme.js']) {
+  for (const bare of ['admin.js', 'admin.css', 'tokens.css', 'admin-theme.js', 'i18n.js']) {
     assert.ok(!files.includes(bare), 'dist still contains un-hashed ' + bare);
   }
 });
@@ -40,7 +41,8 @@ test('index.html references only the hashed asset filenames', () => {
   assert.match(html, /src="admin-theme\.[0-9a-f]{10}\.js"/, 'lost hashed admin-theme.js ref');
   assert.match(html, /href="admin\.[0-9a-f]{10}\.css"/, 'lost hashed admin.css ref');
   assert.match(html, /src="admin\.[0-9a-f]{10}\.js"/, 'lost hashed admin.js ref');
-  assert.doesNotMatch(html, /(src|href)="(admin-theme\.js|admin\.css|admin\.js)"/, 'index.html still points at an un-hashed asset');
+  assert.match(html, /src="i18n\.[0-9a-f]{10}\.js"/, 'lost hashed i18n.js ref');
+  assert.doesNotMatch(html, /(src|href)="(admin-theme\.js|admin\.css|admin\.js|i18n\.js)"/, 'index.html still points at an un-hashed asset');
 });
 
 test('admin.css @import resolves to the hashed tokens.css (not the bare name)', () => {

@@ -27,7 +27,18 @@ business rules in one place and the merge boundaries clean.
    docs — the *Code de déontologie* forbids fee-sharing with a non-notaire. See
    `docs/decisions/0001-flat-fee-not-commission.md`.
 
-3. **fr-CA is the product language.** All user-facing copy is Quebec French.
+3. **The product is bilingual; fr-CA is canonical.** All user-facing copy is
+   written in Quebec French in the source. English comes from:
+   - `apps/web/public/i18n.js` and `apps/admin/public/i18n.js` — FR→EN
+     dictionaries plus pattern rules, applied to the DOM at runtime (EN/FR
+     toggle in each header; persisted under `nota.lang`; `?lang=en|fr` forces
+     and persists it). When you add or change user-facing French copy,
+     add/update its English entry — `apps/web/test/i18n.test.mjs` and
+     `apps/admin/test/i18n.test.mjs` fail CI on any uncovered string.
+   - Emails (`apps/api/src/emails.js`) and ICS feeds (`apps/api/src/ics.js`)
+     are bilingual in one message: French first, English below. Service/tier
+     English names come from the domain's `nomEn`/`nomCourtEn` fields, money
+     from `money()` / `moneyEn()` — never inline.
    Technical docs and code identifiers are English.
 
 4. **Money goes through `money()`.** Every user-facing amount is formatted by
