@@ -2753,15 +2753,37 @@
     });
   }
 
+  // The gate is a two-step branch behind ONE "Continuer" action: the email step
+  // (everyone starts there) or the signup step (a NEW notary's welcome). Exactly
+  // one is visible at a time — the swap is what keeps a first visit from reading
+  // as a failed login.
+  function ncShowGateStep(which) {
+    var email = $('notary-gate-step-email'); if (email) email.hidden = which !== 'email';
+    var signup = $('notary-signup-prompt'); if (signup) signup.hidden = which !== 'signup';
+  }
+
   // A valid email with no active subscription isn't an error — it's a NEW notary.
-  // Offer free signup (which is what opens the console) instead of a dead end.
+  // Swap in the welcome/free-signup step (which is what opens the console).
   function ncShowSignup(email) {
     ncSetErrors([]);
     nc.pendingSignupEmail = email;
     var who = $('notary-signup-email'); if (who) who.textContent = email;
     var errs = $('notary-signup-errors'); if (errs) errs.hidden = true;
-    var btn = $('notary-signup-btn'); if (btn) { btn.disabled = false; btn.textContent = 'M’inscrire gratuitement →'; }
-    var prompt = $('notary-signup-prompt'); if (prompt) { prompt.hidden = false; prompt.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+    var btn = $('notary-signup-btn'); if (btn) { btn.disabled = false; btn.textContent = 'Créer mon compte gratuit →'; }
+    ncShowGateStep('signup');
+    var prompt = $('notary-signup-prompt');
+    if (prompt) {
+      if (prompt.scrollIntoView) { try { prompt.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) {} }
+      try { prompt.focus({ preventScroll: true }); } catch (e) { try { prompt.focus(); } catch (e2) {} }
+    }
+  }
+
+  // Back out of the signup branch ("use another email"): the address stays in
+  // the field so a typo costs one edit, not a retype.
+  function ncShowEmailStep() {
+    ncShowGateStep('email');
+    var inp = $('nc-email');
+    if (inp) { try { inp.focus({ preventScroll: true }); } catch (e) { try { inp.focus(); } catch (e2) {} } }
   }
 
   // ---------------------------------------------------------------------------
@@ -2899,7 +2921,7 @@
 
   async function ncSignIn(email) {
     email = (email || '').trim();
-    var signup = $('notary-signup-prompt'); if (signup) signup.hidden = true; // reset on each attempt
+    ncShowGateStep('email'); // every attempt starts from the email step
     var r;
     try {
       r = await fetch(API_BASE + '/notary/session', {
@@ -3017,7 +3039,11 @@
   // desktop card width; every narrower grid just wraps.
   var NC_LIVE_MAX = 8;
   function ncFocusGate() {
-    var inp = $('nc-email'); if (!inp) return;
+    // Land on whichever gate step is showing: the signup CTA mid-branch,
+    // otherwise the email field.
+    var signup = $('notary-signup-prompt');
+    var inp = (signup && !signup.hidden) ? ($('notary-signup-btn') || signup) : $('nc-email');
+    if (!inp) return;
     if (inp.scrollIntoView) { try { inp.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {} }
     try { inp.focus({ preventScroll: true }); } catch (e) { inp.focus(); }
   }
@@ -3489,6 +3515,7 @@
     var form = $('notary-auth-form'); var view = $('notary-authed');
     if (form) form.hidden = authed;
     if (view) view.hidden = !authed;
+    if (!authed) ncShowGateStep('email'); // never resurface a stale signup branch
     renderNotaryLive(); // the teaser follows the gate: shown signed-out, gone signed-in
     if (authed) {
       var lbl = $('notary-email-label'); if (lbl) lbl.textContent = nc.email || '';
@@ -4140,11 +4167,14 @@
       try { if (email) lsSave(LS_NC_EMAIL, email); } catch (e) {} // remember for the return from Stripe
       ncSignup.disabled = true; ncSignup.textContent = 'Redirection vers l’inscription…';
       ncStartOnboard(email, function (msg) {
-        ncSignup.disabled = false; ncSignup.textContent = 'M’inscrire gratuitement →';
+        ncSignup.disabled = false; ncSignup.textContent = 'Créer mon compte gratuit →';
         var box = $('notary-signup-errors');
         if (box) { clear(box); box.hidden = false; box.appendChild(el('li', null, msg)); }
       });
     });
+    // The branch's exit: back to the email step, address kept.
+    var ncBack = $('notary-signup-back');
+    if (ncBack) ncBack.addEventListener('click', ncShowEmailStep);
     var ncOut = $('notary-signout'); if (ncOut) ncOut.addEventListener('click', ncSignOut);
     var ncRef = $('notary-refresh'); if (ncRef) ncRef.addEventListener('click', function () { ncLoadBids().then(function (ok) { if (ok) toast('Demandes rafraîchies.'); }); });
 

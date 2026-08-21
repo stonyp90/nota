@@ -505,28 +505,37 @@
                 <span class="nc-opp-tag">En jeu ce mois à Québec</span>
                 <span class="nc-opp-stat"><strong id="notary-opp-count">—</strong> demandes ouvertes <span class="nc-opp-sep" aria-hidden="true">·</span> <strong id="notary-opp-total">—</strong> à retenir</span>
               </p>
-              <h2 class="h-sub">Accédez aux demandes</h2>
-              <div class="form-row">
-                <label class="lbl" for="nc-email">Courriel professionnel</label>
-                <input type="email" id="nc-email" inputmode="email" autocomplete="email" placeholder="vous@etude.ca" aria-describedby="notary-console-errors" required />
+              <!-- Step 1 — ONE neutral door for everyone. "Continuer" promises the
+                   right next step to both audiences, so the gate never reads as a
+                   members-only login that a first-time notary fails. -->
+              <div id="notary-gate-step-email">
+                <h2 class="h-sub">Accédez aux demandes</h2>
+                <div class="form-row">
+                  <label class="lbl" for="nc-email">Courriel professionnel</label>
+                  <input type="email" id="nc-email" inputmode="email" autocomplete="email" placeholder="vous@etude.ca" aria-describedby="notary-console-errors" required />
+                </div>
+                <ul class="errors" id="notary-console-errors" role="alert" aria-atomic="true" hidden></ul>
+                <button type="submit" class="btn btn-primary btn-lg nc-auth-cta" id="notary-console-signin">Continuer avec mon courriel professionnel →</button>
+                <p class="help nc-auth-fine">Sans mot de passe.</p>
               </div>
-              <ul class="errors" id="notary-console-errors" role="alert" aria-atomic="true" hidden></ul>
-              <button type="submit" class="btn btn-primary btn-lg nc-auth-cta" id="notary-console-signin">Voir les demandes ouvertes →</button>
-              <p class="help nc-auth-fine">Sans mot de passe. Première visite ou retour, c’est le même courriel. Si aucun compte n’existe encore, l’inscription gratuite se propose ici même.</p>
-              <p class="nc-soon" id="notary-phase2-note"><span class="nc-soon-tag">Bientôt</span>Vérification d’identité, inscription et <strong>réalisation complète de l’acte en ligne</strong> : recevez la demande, rencontrez le client et signez à distance. Tout le parcours notaire, de bout en bout, sans quitter Nota.</p>
 
-              <!-- Shown when the email has no account yet: sign-in and sign-up are the
-                   same door — a new notary is offered free onboarding right here. -->
+              <!-- Step 2 (new notaries) — the continue action branches HERE when the
+                   email has no account: the email step swaps out for an explicit
+                   welcome + free signup, never an error under a login form. -->
               <div id="notary-signup-prompt" class="nc-signup" tabindex="-1" hidden>
-                <p class="nc-signup-lead"><strong>Bienvenue !</strong> <span id="notary-signup-email"></span> n’a pas encore de compte. L’inscription est <strong>gratuite et sans engagement</strong>, en deux étapes :</p>
+                <p class="nc-signup-tag">Première visite</p>
+                <p class="nc-signup-lead"><strong>Bienvenue !</strong> Créez votre compte gratuit pour <strong id="notary-signup-email"></strong>, en deux étapes et sans engagement :</p>
                 <ol class="nc-signup-steps">
                   <li>Vous créez votre compte de paiement sécurisé via <strong>Stripe</strong>, notre partenaire (~2 min).</li>
                   <li>Votre console s’ouvre aussitôt. Vous voyez les demandes et en retenez.</li>
                 </ol>
                 <ul class="errors" id="notary-signup-errors" role="alert" aria-atomic="true" hidden></ul>
-                <button type="button" class="btn btn-primary btn-lg nc-auth-cta" id="notary-signup-btn">M’inscrire gratuitement →</button>
+                <button type="button" class="btn btn-primary btn-lg nc-auth-cta" id="notary-signup-btn">Créer mon compte gratuit →</button>
                 <p class="help nc-auth-fine">Stripe vous demandera une pièce d’identité et un compte bancaire pour vos versements. Ces informations restent chez Stripe, Nota ne les voit jamais. Vous êtes ensuite ramené ici.</p>
+                <button type="button" class="btn btn-sm btn-ghost nc-signup-back" id="notary-signup-back">← Utiliser un autre courriel</button>
               </div>
+
+              <p class="nc-soon" id="notary-phase2-note"><span class="nc-soon-tag">Bientôt</span>Vérification d’identité, inscription et <strong>réalisation complète de l’acte en ligne</strong> : recevez la demande, rencontrez le client et signez à distance. Tout le parcours notaire, de bout en bout, sans quitter Nota.</p>
               </div>
             </form>
 

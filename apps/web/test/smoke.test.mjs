@@ -573,6 +573,97 @@ test('notaires landing teases open demands and funnels each card to sign-in', as
   assert.equal(doc.activeElement, $(doc, 'nc-email'), 'clicking a card should focus the sign-in field');
 });
 
+// 13c. First-time notary: the gate's single "Continuer" action branches into an
+//      explicit welcome/signup step. The email step swaps OUT — the branch must
+//      never read as an error under a login form — and a back action returns.
+test('gate continue-action branches a new notary into the signup step, and back', async () => {
+  const { win, doc, Nota } = await boot();
+
+  // The gate leads with one neutral action for both audiences, not a
+  // members-only door ("Voir les demandes" implied an existing account).
+  assert.match($(doc, 'notary-console-signin').textContent, /Continuer avec mon courriel/);
+  assert.equal($(doc, 'notary-gate-step-email').hidden, false);
+  assert.equal($(doc, 'notary-signup-prompt').hidden, true);
+
+  // The API answers: this email has no account yet (403 abonnement_requis).
+  win.fetch = () => Promise.resolve({
+    status: 403, ok: false,
+    json: async () => ({ errors: [{ code: 'abonnement_requis', message: 'Abonnement requis.' }] }),
+  });
+  $(doc, 'nc-email').value = 'nouveau@etude.ca';
+  const res = await Nota.notary.signIn('nouveau@etude.ca');
+  assert.equal(res.ok, false);
+  assert.equal(res.signup, true);
+
+  // The signup step REPLACES the email step: welcome framing, the address it
+  // will register, focus on the branch — and NO error list anywhere.
+  assert.equal($(doc, 'notary-gate-step-email').hidden, true);
+  assert.equal($(doc, 'notary-signup-prompt').hidden, false);
+  assert.equal($(doc, 'notary-signup-email').textContent, 'nouveau@etude.ca');
+  assert.equal($(doc, 'notary-console-errors').hidden, true);
+  assert.equal($(doc, 'notary-signup-errors').hidden, true);
+  assert.match($(doc, 'notary-signup-prompt').textContent, /Bienvenue/);
+  assert.equal(doc.activeElement, $(doc, 'notary-signup-prompt'), 'focus should land on the branch');
+
+  // "Use another email" returns to step 1 with the address still editable.
+  $(doc, 'notary-signup-back').click();
+  assert.equal($(doc, 'notary-gate-step-email').hidden, false);
+  assert.equal($(doc, 'notary-signup-prompt').hidden, true);
+  assert.equal($(doc, 'nc-email').value, 'nouveau@etude.ca');
+  assert.equal(doc.activeElement, $(doc, 'nc-email'), 'focus should return to the email field');
+});
+
+// 13d. Returning notary: the SAME continue action opens the console directly
+//      (the "welcome back" branch), and signing out re-arms the email step.
+test('gate continue-action signs an existing notary straight into the console', async () => {
+  const { win, doc, Nota } = await boot();
+  win.fetch = (url) => {
+    const u = String(url);
+    if (u.endsWith('/notary/session')) {
+      return Promise.resolve({ status: 200, ok: true, json: async () => ({ token: 'sess.tok', feedToken: 'feed.tok' }) });
+    }
+    if (u.endsWith('/notary/bids')) {
+      return Promise.resolve({ status: 200, ok: true, json: async () => ({ bids: [] }) });
+    }
+    return Promise.reject(new Error('offline'));
+  };
+  const res = await Nota.notary.signIn('retour@etude.ca');
+  assert.equal(res.ok, true);
+  assert.equal($(doc, 'notary-auth-form').hidden, true, 'gate should give way to the console');
+  assert.equal($(doc, 'notary-authed').hidden, false);
+
+  // Signing out returns the gate to its FIRST step, never a stale branch.
+  $(doc, 'notary-signout').click();
+  assert.equal($(doc, 'notary-auth-form').hidden, false);
+  assert.equal($(doc, 'notary-gate-step-email').hidden, false);
+  assert.equal($(doc, 'notary-signup-prompt').hidden, true);
+});
+
+// 13e. The signup CTA drives Stripe onboarding with the pending email; a
+//      failure surfaces in the branch's own error list and re-arms the CTA.
+test('signup CTA posts the pending email to /notaries/connect', async () => {
+  const { win, doc, Nota } = await boot();
+  let captured = null;
+  win.fetch = (url, opts) => {
+    const u = String(url);
+    if (u.endsWith('/notary/session')) {
+      return Promise.resolve({ status: 403, ok: false, json: async () => ({ errors: [{ code: 'abonnement_requis', message: 'Abonnement requis.' }] }) });
+    }
+    if (u.endsWith('/notaries/connect')) {
+      captured = JSON.parse(opts.body);
+      return Promise.resolve({ status: 503, ok: false, json: async () => ({ errors: [{ message: 'Inscription indisponible pour le moment.' }] }) });
+    }
+    return Promise.reject(new Error('offline'));
+  };
+  await Nota.notary.signIn('nouveau@etude.ca');
+  $(doc, 'notary-signup-btn').click();
+  await wait(20);
+  assert.ok(captured, 'the CTA should call /notaries/connect');
+  assert.equal(captured.email, 'nouveau@etude.ca');
+  assert.equal($(doc, 'notary-signup-errors').hidden, false, 'failure shows in the branch');
+  assert.equal($(doc, 'notary-signup-btn').disabled, false, 'CTA re-armed after failure');
+});
+
 // 14. The footer legal links open their dedicated panes (Loi 25 confidentialité,
 //     conditions d'utilisation / TOS, charte des droits).
 test('footer legal links open the confidentialité / conditions / charte panes', async () => {
