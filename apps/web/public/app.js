@@ -2835,7 +2835,9 @@
     var p = profileGet();
     if (!$('ct-nom').value) $('ct-nom').value = p.nom || '';
     if (!$('ct-courriel').value) $('ct-courriel').value = p.courriel || (o && o.courriel) || '';
-    if (o) $('ct-sujet').value = 'Aide avec une offre';
+    // The subject follows the door: offer-scoped help from an offer, the
+    // default otherwise — a previous visit's choice must not linger.
+    $('ct-sujet').value = o ? 'Aide avec une offre' : 'Question générale';
     var ctx = $('ct-context');
     ctx.hidden = !o;
     ctx.textContent = o ? 'À propos de votre ' + T(svcName(o.serviceId)).toLowerCase() + ' du ' + dayTitle(o.dateISO) + '.' : '';

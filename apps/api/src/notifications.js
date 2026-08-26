@@ -139,6 +139,14 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
   async function onReferralRetained(bid) {
     const results = [];
     if (typeof repo.getPartner !== 'function') return results;
+    // Same FRAUD BARRIER the earning ledger enforces (see recordReferralEarnings
+    // in handler.js): a reward mail is a payout instruction to the operator, so
+    // it may only fire on a LIVE demand — one whose card was authorized, or where
+    // billing is off (no paymentStatus, every bid live). A bid still `pending`
+    // (never taken through Checkout) is a staged demand and earns no mail on
+    // either track. Kept identical to the handler's isLive so the two never drift.
+    const isLive = bid.paymentStatus !== 'pending' && bid.paymentStatus !== 'voided';
+    if (!isLive) return results;
 
     if (bid.parrain) {
       const partner = await repo.getPartner(bid.parrain);

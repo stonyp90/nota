@@ -1853,6 +1853,16 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
   align-items: start;
 }
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .nc-landing-head { grid-area: livehead; margin-top: var(--space-2); }
+/* A month with nothing open (renderNotaryLive hides the inventory): no header
+   for an inventory that is not there, and no half-empty two-column spread —
+   the pane folds into one centred column: gate, then agenda. */
+#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])):has(#notary-live[hidden]) {
+  grid-template-columns: minmax(0, 520px);
+  grid-template-areas: "hero" "console" "carnet" "guarantee";
+  justify-content: center;
+}
+#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])):has(#notary-live[hidden]) .nc-landing-head { display: none; }
+#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])):has(#notary-live[hidden]) #notary-console { margin-top: var(--space-6); }
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .intro--hero   { grid-area: hero; margin: 0; }
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .intro-main     { max-width: none; }
 /* Keep a readable measure on the lede without capping the whole hero block. */
@@ -1917,6 +1927,14 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
    auto-FIT (not fill): a sparse month collapses the empty tracks, so three
    tiles widen into a full, deliberate row instead of huddling beside a void. */
 .nc-live-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(215px, 100%), 1fr)); grid-auto-rows: 1fr; gap: var(--space-5); }
+/* Phones: a 2-up compact grid — eight single-column cards pushed the sign-in
+   a full screen down; four short rows keep the funnel's gate in reach. */
+@media (max-width: 640px) {
+  .nc-live-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
+  .nc-live-card { padding: var(--space-5) var(--space-6); gap: 5px; }
+  .nc-live-amt { font-size: 17px; }
+  .nc-live-meta { font-size: 11px; }
+}
 .nc-live-card {
   display: flex; flex-direction: column; align-items: stretch; gap: 7px; min-width: 0;
   padding: var(--pad-card); text-align: left; font: inherit; color: var(--ink);
@@ -2616,7 +2634,7 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   .site-footer a, .brand { min-height: 44px; display: inline-flex; align-items: center; }
   .mini-btn { width: 44px; height: 44px; }
   .cal-nav .btn { min-width: 44px; }
-  .icon-btn, .day-close { width: 44px; height: 44px; }
+  .icon-btn { width: 44px; height: 44px; }
 }
 @media (max-width: 420px) {
   .nav-tabs { gap: 0; }

@@ -309,6 +309,15 @@ function createApp(repo, opts = {}) {
   // retain; the live window still shows recent earnings while a heal catches up.
   async function recordReferralEarnings(bid, notaryId, profile) {
     if (typeof repo.recordReferralEarning !== 'function') return;
+    // FRAUD BARRIER (ADR 0011): an earning may only accrue on a demand that is
+    // actually LIVE — i.e. the client's card was authorized (pay-on-accept) or
+    // billing is off entirely (legacy/demo, where every bid is live). The ADR's
+    // whole defence against staged referrals is "under pay-on-accept a retention
+    // authorises real money, so a fake 'accepted' demand is not free to stage";
+    // a bid still `pending` (never taken through Checkout) is exactly that fake,
+    // so it earns nothing on EITHER track. This is the payment barrier the ADR
+    // relies on, enforced at the one place money is recorded.
+    if (!isLive(bid)) return;
     try {
       // Client track: the retained bid carries the partner code -> flat
       // REFERRAL.client, once per bid.
@@ -799,9 +808,11 @@ function createApp(repo, opts = {}) {
 
       // Demo escape hatch, OFF by default: setting NOTA_DEMO_OPEN=true skips the
       // active-account gate so an operator can run an open demo. DEMO ONLY —
-      // never set this in real production; it lets any valid email into the
-      // console.
-      const demoOpen = process.env.NOTA_DEMO_OPEN === 'true';
+      // it lets any valid email into the console and self-seeds a charge-enabled
+      // notary, which would let anyone retain demands and farm referral rewards.
+      // So it is HARD-DISABLED in production regardless of the env var: a config
+      // slip must never open the notary surface on the real deployment.
+      const demoOpen = process.env.NOTA_DEMO_OPEN === 'true' && process.env.NODE_ENV !== 'production';
       // ACTIVE means the notary's free Connect onboarding completed (the
       // account.updated webhook flipped `status`, or it was seeded by an admin).
       const active = !!(existing && existing.status === 'active');
