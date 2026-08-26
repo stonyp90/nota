@@ -94,14 +94,22 @@ const REC = JSON.stringify({
 // 1. The claim persists nota.partner.v1
 // ---------------------------------------------------------------------------
 
-test('a 201 claim persists the partner record in nota.partner.v1', async () => {
+test('a verified claim persists the partner record in nota.partner.v1', async () => {
+  // Email-verified (ADR 0011): POST only pends (200 + dev echo); the confirmed
+  // record comes back from /partenaires/verify, and only THEN is it persisted.
   const ctx = await boot({
-    routes: [{
-      match: (u, init) => u.endsWith('/partenaires') && init.method === 'POST',
-      reply: () => jsonRes(201, {
-        partenaire: { code: 'EVEROY', type: 'agent_immobilier', courriel: 'eve@agence.ca', createdAt: '2026-08-26T09:00:00.000Z' },
-      }),
-    }],
+    routes: [
+      {
+        match: (u, init) => u.endsWith('/partenaires') && init.method === 'POST',
+        reply: () => jsonRes(200, { ok: true, devToken: 'DEV' }),
+      },
+      {
+        match: (u) => u.endsWith('/partenaires/verify'),
+        reply: () => jsonRes(201, {
+          partenaire: { code: 'EVEROY', type: 'agent_immobilier', courriel: 'eve@agence.ca', createdAt: '2026-08-26T09:00:00.000Z' },
+        }),
+      },
+    ],
   });
   await claim(ctx, 'eve-roy');
   const rec = JSON.parse(ctx.win.localStorage.getItem('nota.partner.v1'));
@@ -112,11 +120,12 @@ test('a 201 claim persists the partner record in nota.partner.v1', async () => {
   assert.equal(rec.createdAt, '2026-08-26T09:00:00.000Z');
 });
 
-test('the owner\'s idempotent 200 re-claim persists too, from the API record', async () => {
+test('the owner\'s idempotent re-request (confirmed) persists too, from the API record', async () => {
   const ctx = await boot({
     routes: [{
       match: (u, init) => u.endsWith('/partenaires') && init.method === 'POST',
       reply: () => jsonRes(200, {
+        confirmed: true,
         partenaire: { code: 'EVEROY', type: 'courtier_hypothecaire', courriel: 'eve@agence.ca', createdAt: '2026-07-01T08:00:00.000Z' },
       }),
     }],
@@ -125,6 +134,18 @@ test('the owner\'s idempotent 200 re-claim persists too, from the API record', a
   const rec = JSON.parse(ctx.win.localStorage.getItem('nota.partner.v1'));
   assert.equal(rec.code, 'EVEROY');
   assert.equal(rec.createdAt, '2026-07-01T08:00:00.000Z', 'what is on file wins over the resubmit');
+});
+
+test('a pending claim persists nothing until it is confirmed', async () => {
+  // Production shape: POST pends with no dev echo, so nothing is stored yet.
+  const ctx = await boot({
+    routes: [{
+      match: (u, init) => u.endsWith('/partenaires') && init.method === 'POST',
+      reply: () => jsonRes(200, { ok: true }),
+    }],
+  });
+  await claim(ctx, 'eve-roy');
+  assert.equal(ctx.win.localStorage.getItem('nota.partner.v1'), null, 'an unconfirmed claim is never persisted');
 });
 
 test('a failed claim persists nothing', async () => {

@@ -33,8 +33,10 @@ if (useDynamo) {
     i % 5 === 0 ? { ...b, parrain: i % 10 === 0 ? 'EVEROY' : 'COURTIER1' } : b,
   );
   repo = createMemoryRepo(fixtures);
-  repo.createPartner({ code: 'EVEROY', type: 'agent_immobilier', courriel: 'eve.roy@agence.demo', createdAt: today });
-  repo.createPartner({ code: 'COURTIER1', type: 'courtier_hypothecaire', courriel: 'marc.courtier@hypotheque.demo', createdAt: today });
+  // Seeded as CONFIRMED (email-verified, ADR 0011) so the demo's owned codes
+  // answer 409 to a foreign claim and appear as payees in the referral ledger.
+  repo.createPartner({ code: 'EVEROY', type: 'agent_immobilier', courriel: 'eve.roy@agence.demo', createdAt: today, confirmedAt: today });
+  repo.createPartner({ code: 'COURTIER1', type: 'courtier_hypothecaire', courriel: 'marc.courtier@hypotheque.demo', createdAt: today, confirmedAt: today });
 }
 
 // In-memory demo: a Stripe stand-in so the FULL lifecycle (retain, complete,

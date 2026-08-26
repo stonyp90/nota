@@ -206,34 +206,41 @@ function createAnalytics({ repo, now, gaugeHorizonMonths, commissionRate } = {})
     for (const row of byCode.values()) {
       row.du = row.retenues * domain.REFERRAL.client + row.notairesActifs * domain.REFERRAL.notaire;
     }
-    // Every CLAIMED code is a row, even with zero referrals — the operator
-    // must see a partner the moment they register, not the day they earn.
+    // Every CONFIRMED code is a row, even with zero referrals — the operator
+    // must see a partner the moment they confirm, not the day they earn. A
+    // pending/unconfirmed claim is NOT a partner of record (ADR 0011
+    // fraud-hardening): a squatted-but-unconfirmed code must never appear as
+    // owned, so only records stamped `confirmedAt` are folded in.
     // (Partners claimed before the sparse GSI overload are not listed until
     // their item is rewritten; their rows still appear from activity above.)
     if (typeof repo.listPartners === 'function') {
       try {
         for (const p of (await repo.listPartners()) || []) {
-          const code = domain.normalizeReferralCode(p && p.code);
+          if (!p || !p.confirmedAt) continue;
+          const code = domain.normalizeReferralCode(p.code);
           if (domain.isReferralCode(code) && !byCode.has(code)) byCode.set(code, emptyRow(code));
         }
       } catch {
         /* enumeration is a visibility nicety — never break the overview */
       }
     }
-    // Join the partner REGISTRY (POST /partenaires) onto each ledger row so the
-    // operator sees WHO to pay — type + courriel when the code was claimed.
-    // Attribution works without registration (an unclaimed code still tallies,
-    // with null identity): the money owed is a fact of the carnet, the
-    // registry only says where to send it. One GetItem per code actually in
-    // the ledger, fired concurrently. Same sort as the domain fold: dollars
-    // owed first, then code.
+    // Join the partner REGISTRY (POST /partenaires + verify) onto each ledger
+    // row so the operator sees WHO to pay — type + courriel when the code was
+    // CONFIRMED. Attribution works without registration (an unclaimed code still
+    // tallies, with null identity), and a pending/unconfirmed claim binds NO
+    // identity either — only a confirmed (`confirmedAt`) partner is the owner of
+    // record. One GetItem per code actually in the ledger, fired concurrently.
+    // Same sort as the domain fold: dollars owed first, then code.
     const rows = [...byCode.values()].sort((a, b) => b.du - a.du || a.code.localeCompare(b.code));
     const codes = await Promise.all(
       rows.map(async (row) => {
         let partenaire = null;
         if (typeof repo.getPartner === 'function') {
           try {
-            partenaire = await repo.getPartner(row.code);
+            const p = await repo.getPartner(row.code);
+            // Only a CONFIRMED partner is bound as the owner of record; an
+            // unconfirmed claim is treated as no registered partner for payout.
+            partenaire = p && p.confirmedAt ? p : null;
           } catch {
             partenaire = null;
           }

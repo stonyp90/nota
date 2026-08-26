@@ -176,7 +176,36 @@ const PARTNER_SK = 'PARTNER';
 // Query — a partner with zero referrals is still a row the operator must see.
 // Items written before this overload lack the attributes and simply do not
 // appear until rewritten; the ledger degrades to activity-only rows for them.
+// A PARTNER# item is written ONLY once the claimant's email is verified (it
+// carries a `confirmedAt` stamp): claiming a code is a two-step, mailbox-proven
+// act (see the claim challenge below), so a squatter's unverified claim never
+// becomes a PARTNER# record, an owner-of-record, or a payee.
 const PARTNER_GSI1PK = 'PARTNER';
+
+// --- Partner code claim: email verification (ADR 0011, fraud-hardening) -------
+// Claiming a code is a TWO-step, mailbox-proven handshake — mirroring the notary
+// magic link — so an unverified claim never becomes the payee of record. It
+// closes two referral fraud vectors: CODE SQUATTING (grabbing a real broker's
+// obvious code before they register, then collecting their genuine referrals)
+// and HARVEST-THEN-CLAIM (farming earnings on a vanity code, then claiming it):
+//   • POST /partenaires        mints a single-use challenge tied to (code,email)
+//     and emails a confirmation link. NO PARTNER# record is written yet.
+//   • POST /partenaires/verify redeems the link, atomically consumes the
+//     challenge, and only THEN writes the confirmed PARTNER# record.
+// The challenge lives on the MAIN table under its own prefix (distinct from the
+// notary NOTARY_LOGIN#/NRL# records, so a notary and a partner challenge can
+// never be confused). Keyed by the challenge id so verify consumes it by cid.
+//   PK = PARTNER_CLAIM#<cid>   SK = PARTNER_CLAIM   (a single-use claim; TTL)
+//   PK = PRL#<scope>#<key>     SK = PRL#<window>    (a per-IP claim rate limit; TTL)
+function partnerClaimPK(cid) {
+  return 'PARTNER_CLAIM#' + String(cid);
+}
+const PARTNER_CLAIM_SK = 'PARTNER_CLAIM';
+
+function partnerRlPK(scope, key) {
+  return `PRL#${scope}#${String(key).trim().toLowerCase()}`;
+}
+const PARTNER_RL_SK = 'PRL';
 
 // --- Durable referral earnings (ADR 0011) -------------------------------------
 // The money owed to a partner is recorded at EVENT time — the retain — as a
@@ -291,6 +320,10 @@ module.exports = {
   partnerPK,
   PARTNER_SK,
   PARTNER_GSI1PK,
+  partnerClaimPK,
+  PARTNER_CLAIM_SK,
+  partnerRlPK,
+  PARTNER_RL_SK,
   referralEarnSK,
   REFEARN_PREFIX,
   REFEARN_GSI1PK,

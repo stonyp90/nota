@@ -27,6 +27,10 @@ const {
   partnerPK,
   PARTNER_SK,
   PARTNER_GSI1PK,
+  partnerClaimPK,
+  PARTNER_CLAIM_SK,
+  partnerRlPK,
+  PARTNER_RL_SK,
   referralEarnSK,
   REFEARN_GSI1PK,
   referralEarnGSI1SK,
@@ -428,6 +432,65 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
         new UpdateCommand({
           TableName: tableName,
           Key: { PK: notaryRlPK(scope, key), SK: `${NOTARY_RL_SK}#${windowStart}` },
+          UpdateExpression: 'ADD #c :one SET #ttl = :ttl',
+          ExpressionAttributeNames: { '#c': 'count', '#ttl': 'ttl' },
+          ExpressionAttributeValues: {
+            ':one': 1,
+            ':ttl': (windowStart + 1) * windowSec + 60,
+          },
+          ReturnValues: 'UPDATED_NEW',
+        })
+      );
+      return (out.Attributes && out.Attributes.count) || 1;
+    },
+
+    // --- Partner code claim (email verification, ADR 0011 fraud-hardening) ---
+    // On the MAIN table (see keys.js), under its own PARTNER_CLAIM#/PRL# prefix
+    // so a partner claim and a notary login can never be confused. Same
+    // conditional-consume + TTL design as the notary/admin login challenge.
+    async putPartnerClaim(claim) {
+      await doc.send(
+        new PutCommand({
+          TableName: tableName,
+          Item: {
+            PK: partnerClaimPK(claim.challengeId),
+            SK: PARTNER_CLAIM_SK,
+            type: 'partner_claim',
+            ...claim,
+          },
+        })
+      );
+    },
+    // Atomic single-use consume: SET consumed only while it is still false and
+    // unexpired. A replay (or expired link) trips the condition -> null. Mirrors
+    // consumeNotaryLoginChallenge — `consumed` is a reserved word, so alias it.
+    async consumePartnerClaim(challengeId, nowMs) {
+      try {
+        const out = await doc.send(
+          new UpdateCommand({
+            TableName: tableName,
+            Key: { PK: partnerClaimPK(challengeId), SK: PARTNER_CLAIM_SK },
+            UpdateExpression: 'SET #consumed = :true',
+            ConditionExpression: 'attribute_exists(PK) AND #consumed = :false AND #expiresAt > :now',
+            ExpressionAttributeNames: { '#consumed': 'consumed', '#expiresAt': 'expiresAt' },
+            ExpressionAttributeValues: { ':true': true, ':false': false, ':now': Number(nowMs) || 0 },
+            ReturnValues: 'ALL_NEW',
+          })
+        );
+        const { PK, SK, type, ...rec } = out.Attributes || {};
+        return rec;
+      } catch (err) {
+        if (err && err.name === 'ConditionalCheckFailedException') return null;
+        throw err;
+      }
+    },
+    // Fixed-window per-IP counter for the claim request, with a TTL per window.
+    async incrPartnerRateCounter(scope, key, windowSec, nowMs) {
+      const windowStart = Math.floor(nowMs / 1000 / windowSec);
+      const out = await doc.send(
+        new UpdateCommand({
+          TableName: tableName,
+          Key: { PK: partnerRlPK(scope, key), SK: `${PARTNER_RL_SK}#${windowStart}` },
           UpdateExpression: 'ADD #c :one SET #ttl = :ttl',
           ExpressionAttributeNames: { '#c': 'count', '#ttl': 'ttl' },
           ExpressionAttributeValues: {

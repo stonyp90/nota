@@ -1346,6 +1346,49 @@ function partnerWelcome(ctx) {
   });
 }
 
+// Context: { code, link, ttlMinutes } — right after POST /partenaires. Claiming
+// a code is now email-verified: the claim is only PENDING until the recipient
+// opens this single-use link, so the code cannot be squatted by someone who does
+// not control the address. Single CTA per language = the confirmation link.
+function partnerClaimLink(ctx) {
+  const code = ctx.code || '—';
+  const ttl = ctx.ttlMinutes || 30;
+  return build({
+    subjectFr: 'Confirmez votre code partenaire : ' + code,
+    subjectEn: 'Confirm your partner code: ' + code,
+    preheaderFr: 'Lien à usage unique, valide ' + ttl + ' minutes.',
+    preheaderEn: 'Single-use link, valid for ' + ttl + ' minutes.',
+    fr: {
+      heading: 'Confirmez votre code partenaire',
+      lead:
+        'Une réclamation du code ' + code +
+        ' a été faite avec ce courriel. Confirmez-la pour l’activer :',
+      bodyHtml: para(
+        'Ce lien est valide ' +
+          ttl +
+          ' minutes et à usage unique. Votre code reste inactif tant qu’il n’est pas confirmé. Si vous n’avez pas fait cette réclamation, ignorez ce courriel — personne ne peut activer le code sans ce lien.'
+      ),
+      textLines: ['Confirmez le code ' + code + ' — lien à usage unique, valide ' + ttl + ' minutes.'],
+      ctaLabel: 'Confirmer mon code',
+    },
+    en: {
+      heading: 'Confirm your partner code',
+      lead:
+        'A claim on the code ' + code +
+        ' was made with this email. Confirm it to activate the code:',
+      bodyHtml: para(
+        'This link is valid for ' +
+          ttl +
+          ' minutes and single-use. Your code stays inactive until it is confirmed. If you did not make this claim, ignore this email — no one can activate the code without this link.'
+      ),
+      textLines: ['Confirm the code ' + code + ' — single-use link, valid for ' + ttl + ' minutes.'],
+      ctaLabel: 'Confirm my code',
+    },
+    ctaUrl: ctx.link || linksFor(ctx.baseUrl).carnet,
+    unsubscribeUrl: ctx.unsubscribeUrl,
+  });
+}
+
 // Context: the referred bid's fields (+ `code`) — a demand the partner referred
 // was just RETAINED, the moment their client reward is earned.
 function referralRewardClient(ctx) {
@@ -1629,6 +1672,7 @@ const TEMPLATES = {
   // admin console
   adminMagicLink,
   // partner referrals (ADR 0011)
+  partnerClaimLink,
   partnerWelcome,
   referralRewardClient,
   referralRewardNotary,

@@ -134,8 +134,9 @@ test('parrainages: a referred demand earns at RETENTION; a referred notary earns
   await repo.putNotary({ id: 'N2', email: 'n2@notaire.ca', status: 'active' });
   // The act ledger still feeds the informational `completes` column.
   await repo.markActCompleted('r1', { bidId: 'r1', commissionCents: 20000, completedAt: TODAY });
-  // EVEROY claimed their code through POST /partenaires; BROKER1 never registered.
-  await repo.createPartner({ code: 'EVEROY', type: 'courtier_hypothecaire', courriel: 'eve@courtage.ca', createdAt: TODAY });
+  // EVEROY claimed AND confirmed their code (email-verified, ADR 0011); BROKER1
+  // never registered. Only a `confirmedAt` partner binds identity in the ledger.
+  await repo.createPartner({ code: 'EVEROY', type: 'courtier_hypothecaire', courriel: 'eve@courtage.ca', createdAt: TODAY, confirmedAt: TODAY });
 
   // Count the completion joins: ONLY the bids that carry a parrain code may be
   // looked up (efficiency is part of the contract — never one read per carnet bid).

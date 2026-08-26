@@ -87,6 +87,16 @@ test('notaryMagicLink renders the console sign-in link in both blocks', () => {
   assert.ok(out.text.includes(link));
 });
 
+test('partnerClaimLink renders the single-use confirmation link in both blocks', () => {
+  const link = BASE + '/#pauth=t0k3n';
+  const out = emails.partnerClaimLink({ link, code: 'EVEROY', ttlMinutes: 30, unsubscribeUrl: UNSUB, baseUrl: BASE });
+  assert.ok(out.subject.includes(' / '), 'subject must be bilingual');
+  assert.match(out.subject, /EVEROY/);
+  const ctas = (out.html.match(new RegExp('href="' + link.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '"', 'g')) || []).length;
+  assert.equal(ctas, 2, 'expected one FR and one EN CTA on the confirmation link');
+  assert.ok(out.text.includes(link), 'text alternative must carry the link');
+});
+
 // --- notary onboarding (free Stripe Connect) ---------------------------------
 
 test('notaryOnboardingStarted drives to the hosted onboarding link', () => {
