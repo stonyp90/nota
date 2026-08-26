@@ -168,6 +168,49 @@ test('parrainages: a referred demand earns at RETENTION; a referred notary earns
   ]);
 });
 
+test('parrainages: durable earnings recorded at event time survive the window (all-time, monotonic)', async () => {
+  // NOTHING lives in the forward month window — the earnings happened long ago
+  // and the durable ledger is the only trace left. `du` must not shrink to 0.
+  const repo = createMemoryRepo([]);
+  await repo.recordReferralEarning({ code: 'EVEROY', track: 'client', refId: 'old-bid', montant: domain.REFERRAL.client, at: '2026-01-10' });
+  await repo.recordReferralEarning({ code: 'EVEROY', track: 'notaire', refId: 'N9', montant: domain.REFERRAL.notaire, at: '2026-02-01' });
+  const o = await createAnalytics({ repo, now: () => TODAY }).overview();
+  assert.deepEqual(o.parrainages.codes, [
+    {
+      code: 'EVEROY', demandes: 0, retenues: 1, completes: 0, notaires: 1, notairesActifs: 1,
+      du: domain.REFERRAL.client + domain.REFERRAL.notaire, type: null, courriel: null,
+    },
+  ]);
+});
+
+test('parrainages: an earning seen BOTH live and durably counts once (max, never sum)', async () => {
+  // The normal live case: the retained referred bid is inside the window AND
+  // its event-time earning was recorded. The two sources must reconcile, not add.
+  const repo = createMemoryRepo([
+    { id: 'r1', serviceId: 'refinancement', dateISO: '2026-08-20', status: 'retenue', notaryId: 'N1', parrain: 'EVEROY' },
+  ]);
+  await repo.putNotary({ id: 'N1', email: 'n1@notaire.ca', status: 'active', parrain: 'EVEROY' });
+  await repo.recordReferralEarning({ code: 'EVEROY', track: 'client', refId: 'r1', montant: domain.REFERRAL.client, at: TODAY });
+  await repo.recordReferralEarning({ code: 'EVEROY', track: 'notaire', refId: 'N1', montant: domain.REFERRAL.notaire, at: TODAY });
+  const o = await createAnalytics({ repo, now: () => TODAY }).overview();
+  assert.deepEqual(o.parrainages.codes, [
+    {
+      code: 'EVEROY', demandes: 1, retenues: 1, completes: 0, notaires: 1, notairesActifs: 1,
+      du: domain.REFERRAL.client + domain.REFERRAL.notaire, type: null, courriel: null,
+    },
+  ]);
+});
+
+test('recordReferralEarning is write-once per (code, track, ref): the replay returns false and counts once', async () => {
+  const repo = createMemoryRepo([]);
+  const earn = { code: 'eve-roy', track: 'client', refId: 'b1', montant: 50, at: TODAY };
+  assert.equal(await repo.recordReferralEarning(earn), true, 'the first write earns');
+  assert.equal(await repo.recordReferralEarning(earn), false, 'the replay is a no-op');
+  const events = await repo.listReferralEarnings();
+  assert.equal(events.length, 1);
+  assert.equal(events[0].code, 'EVEROY', 'the code is stored NORMALIZED');
+});
+
 test('parrainages degrades gracefully on a repo without the act-ledger or registry reads', async () => {
   const repo = createMemoryRepo([
     { id: 'r1', serviceId: 'refinancement', dateISO: '2026-08-20', status: 'retenue', parrain: 'EVEROY' },

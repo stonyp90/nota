@@ -291,11 +291,53 @@ function createApp(repo, opts = {}) {
       montant: retained.montant,
     });
     await recordStats(statsDeltasForRetain(retained, now()));
+    await recordReferralEarnings(retained, notaryId, profile);
     // Tell the client a notary retained their offer (fire-and-forget; never blocks
     // or fails the response), mirroring the onOfferCreated call in POST /bids.
     const rn = notifier();
     if (rn) Promise.resolve(rn.onOfferRetained(retained)).catch(() => {});
     return retained;
+  }
+
+  // Durable referral earnings (ADR 0011): retention is the earning moment for
+  // BOTH reward tracks, so the money owed is recorded here, at event time —
+  // the admin ledger reads these back as ALL-TIME truth instead of losing an
+  // earning the day its signing date scrolls out of the live month window.
+  // Write-once per (code, track, ref) in the repo, so the handler never needs
+  // its own replay guard. Best-effort, same contract as recordStats: a ledger
+  // failure — including an older repo without the method — can NEVER break the
+  // retain; the live window still shows recent earnings while a heal catches up.
+  async function recordReferralEarnings(bid, notaryId, profile) {
+    if (typeof repo.recordReferralEarning !== 'function') return;
+    try {
+      // Client track: the retained bid carries the partner code -> flat
+      // REFERRAL.client, once per bid.
+      if (domain.isReferralCode(bid.parrain)) {
+        await repo.recordReferralEarning({
+          code: domain.normalizeReferralCode(bid.parrain),
+          track: 'client',
+          refId: bid.id,
+          montant: domain.REFERRAL.client,
+          at: now(),
+        });
+      }
+      // Notaire track: the retaining notary was referred -> flat
+      // REFERRAL.notaire on their FIRST retained act, once ever per notary
+      // (the write-once earning IS that rule). The profile is stamped with the
+      // durable premierActe marker so the fact also lives on the record itself.
+      if (profile && domain.isReferralCode(profile.parrain) && !profile.premierActe) {
+        const first = await repo.recordReferralEarning({
+          code: domain.normalizeReferralCode(profile.parrain),
+          track: 'notaire',
+          refId: notaryId,
+          montant: domain.REFERRAL.notaire,
+          at: now(),
+        });
+        if (first) await repo.putNotary({ ...profile, premierActe: true, premierActeAt: now() });
+      }
+    } catch {
+      /* swallow: the referral ledger must never affect the retain path */
+    }
   }
 
   // The list of month strings (YYYY-MM) the notary open-bid feed scans, starting

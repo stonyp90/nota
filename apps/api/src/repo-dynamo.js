@@ -22,6 +22,10 @@ const {
   ACT_SK,
   partnerPK,
   PARTNER_SK,
+  PARTNER_GSI1PK,
+  referralEarnSK,
+  REFEARN_GSI1PK,
+  referralEarnGSI1SK,
   adminPK,
   ADMIN_SK,
   adminLoginPK,
@@ -37,7 +41,7 @@ const {
   OPENBID_GSI1PK,
   openBidGSI1SK,
 } = require('./keys');
-const { STATUS } = require('@nota/domain');
+const { STATUS, normalizeReferralCode } = require('@nota/domain');
 
 /**
  * DynamoDB implementation of the Repo port.
@@ -415,7 +419,16 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
         await doc.send(
           new PutCommand({
             TableName: tableName,
-            Item: { PK: partnerPK(partner.code), SK: PARTNER_SK, ...partner },
+            // Sparse PARTNER GSI1 overload: every claimed code is enumerable by
+            // the admin ledger (listPartners) even with zero referrals. Items
+            // claimed before this overload lack the attributes until rewritten.
+            Item: {
+              PK: partnerPK(partner.code),
+              SK: PARTNER_SK,
+              [GSI1_PK]: PARTNER_GSI1PK,
+              [GSI1_SK]: String(partner.code).trim().toUpperCase(),
+              ...partner,
+            },
             ConditionExpression: 'attribute_not_exists(PK)',
           })
         );
@@ -430,8 +443,91 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
         new GetCommand({ TableName: tableName, Key: { PK: partnerPK(code), SK: PARTNER_SK } })
       );
       if (!out.Item) return null;
-      const { PK, SK, ...partner } = out.Item;
+      const { PK, SK, [GSI1_PK]: _gpk, [GSI1_SK]: _gsk, ...partner } = out.Item;
       return partner;
+    },
+    // Every CLAIMED code — one paginated Query on the sparse PARTNER overload.
+    // A pre-overload partner item is invisible here (no GSI attributes) until
+    // its code is rewritten; the ledger then shows it from its activity only.
+    async listPartners() {
+      const partners = [];
+      let ExclusiveStartKey;
+      do {
+        const out = await doc.send(
+          new QueryCommand({
+            TableName: tableName,
+            IndexName: 'GSI1',
+            KeyConditionExpression: '#g = :pk',
+            ExpressionAttributeNames: { '#g': GSI1_PK },
+            ExpressionAttributeValues: { ':pk': PARTNER_GSI1PK },
+            ExclusiveStartKey,
+          })
+        );
+        (out.Items || []).forEach((it) => {
+          const { PK, SK, [GSI1_PK]: _gpk, [GSI1_SK]: _gsk, ...partner } = it;
+          partners.push(partner);
+        });
+        ExclusiveStartKey = out.LastEvaluatedKey;
+      } while (ExclusiveStartKey);
+      return partners;
+    },
+
+    // --- Durable referral earnings (ADR 0011) -------------------------------
+    // The money owed is recorded at EVENT time (the retain) as a write-once
+    // item in the partner's partition — the key IS the idempotency, so a
+    // replayed accept trips the condition and earns nothing twice. Returns true
+    // only on the FIRST write. See keys.js for the EARN#/REFEARN shapes.
+    async recordReferralEarning({ code, track, refId, montant, at } = {}) {
+      // Same normalization as the domain ("eve-roy" IS "EVEROY"), so the
+      // earning always lands in the SAME partition as the registered code.
+      const clean = normalizeReferralCode(code);
+      try {
+        await doc.send(
+          new PutCommand({
+            TableName: tableName,
+            Item: {
+              PK: partnerPK(clean),
+              SK: referralEarnSK(track, refId),
+              type: 'refearn',
+              [GSI1_PK]: REFEARN_GSI1PK,
+              [GSI1_SK]: referralEarnGSI1SK(clean, track, refId),
+              code: clean,
+              track,
+              refId,
+              montant,
+              at,
+            },
+            ConditionExpression: 'attribute_not_exists(PK)',
+          })
+        );
+        return true;
+      } catch (err) {
+        if (err && err.name === 'ConditionalCheckFailedException') return false;
+        throw err;
+      }
+    },
+    // All earnings ever recorded — one paginated Query on the sparse REFEARN
+    // overload, bounded by the number of real-money events, never a table walk.
+    async listReferralEarnings() {
+      const events = [];
+      let ExclusiveStartKey;
+      do {
+        const out = await doc.send(
+          new QueryCommand({
+            TableName: tableName,
+            IndexName: 'GSI1',
+            KeyConditionExpression: '#g = :pk',
+            ExpressionAttributeNames: { '#g': GSI1_PK },
+            ExpressionAttributeValues: { ':pk': REFEARN_GSI1PK },
+            ExclusiveStartKey,
+          })
+        );
+        (out.Items || []).forEach((it) =>
+          events.push({ code: it.code, track: it.track, refId: it.refId, montant: it.montant, at: it.at })
+        );
+        ExclusiveStartKey = out.LastEvaluatedKey;
+      } while (ExclusiveStartKey);
+      return events;
     },
 
     // --- Analytics rollups (STATS#) -----------------------------------------

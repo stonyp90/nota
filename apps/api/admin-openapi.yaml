@@ -334,11 +334,16 @@ paths:
                   parrainages:
                     type: object
                     description: >-
-                      Partner referral ledger (ADR 0011), derived from the
-                      records — never stored state. `client` / `notaire` are the
-                      flat per-track reward amounts in DOLLARS; each code row is
-                      joined with the POST /partenaires registry (type, courriel,
-                      typeNom/typeNomEn present only when the code was claimed).
+                      Partner referral ledger (ADR 0011). Amounts due (`du`,
+                      `retenues`, `notairesActifs`) are ALL-TIME and monotonic:
+                      they read the durable earning events recorded at retain
+                      time, reconciled (max, never summed) with the live month
+                      window that still enriches the softer columns (`demandes`,
+                      `completes`). `client` / `notaire` are the flat per-track
+                      reward amounts in DOLLARS; each code row is joined with
+                      the POST /partenaires registry (type, courriel,
+                      typeNom/typeNomEn present only when the code was claimed),
+                      and every registered code appears even with zero activity.
                     required: [client, notaire, codes]
                     properties:
                       client:
