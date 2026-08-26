@@ -1452,6 +1452,11 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 
 .profil-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 14px; padding: 20px 0 16px; }
 .profil-empty-text { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--ink-muted); max-width: 48ch; }
+/* Parrainage — the claimed code, big enough to read out loud; the link row
+   reuses .partner-link-row from the Partenaires pane. */
+.parr-code-row { display: flex; align-items: baseline; gap: 10px; }
+.parr-code-lbl { font-size: 12px; font-weight: 600; color: var(--ink-muted); }
+.parr-code { font-family: var(--font-mono); font-size: 18px; letter-spacing: 0.06em; color: var(--ink); }
 .doc-row { border: 1px solid var(--border); border-radius: var(--radius); padding: 11px 13px; display: flex; flex-direction: column; gap: 6px; }
 /* Push the control to the bottom so every card in a row ends on the same line,
    whatever the length of its help text. */

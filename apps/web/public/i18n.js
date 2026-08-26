@@ -703,6 +703,13 @@
   "vous@agence.ca": "you@agency.ca",
   "EVEROY": "EVEROY",
 
+  // --- Profil: the Parrainage card (claimed code resurfaced) ----------------
+  "Parrainage": "Referrals",
+  "Référez des clients ou des notaires et soyez récompensé.": "Refer clients or notaries and be rewarded.",
+  "Les récompenses vous parviennent par courriel — rien à surveiller ici.": "Your rewards reach you by email — nothing to track here.",
+  "Votre code": "Your code",
+  "Devenir partenaire": "Become a partner",
+
   // --- Legal: partner program + private referral data (ADR 0011) ------------
   "Programme partenaires.": "Partner program.",
   "Téléphone.": "Telephone.",
@@ -1107,6 +1114,11 @@
     "pattern": "^Votre lien : (.+)$",
     "flags": "",
     "replacement": "Your link: $1"
+  },
+  {
+    "pattern": "^(.+) par client référé retenu, (.+) au premier acte d’un notaire référé\\.$",
+    "flags": "",
+    "replacement": "$1 per referred client whose request is retained, $2 at a referred notary’s first act."
   },
   {
     "pattern": "^Demande retenue et payée — net viré : (.+)\\. Dossier du client débloqué\\.$",
