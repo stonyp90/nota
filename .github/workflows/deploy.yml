@@ -37,7 +37,7 @@ env:
 
 jobs:
   test:
-    name: Tests (domain + api + BDD + web)
+    name: Tests (domain + api + contract + BDD + web + admin)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -63,9 +63,44 @@ jobs:
       - name: Admin console tests (jsdom + dev proxy)
         run: npm test --workspace @nota/admin
 
+  # L6 — the only slow layer, kept OFF pull requests (see ci.yml) and run here
+  # on the push to main, BEFORE the deploy job, so a broken critical journey
+  # blocks the ship. Playwright boots the demo API + web itself (webServer in
+  # playwright.config.js); CI=true makes it start fresh servers on clean ports.
+  e2e:
+    name: E2E browser journeys (Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install workspaces
+        run: npm ci
+
+      - name: Install Playwright chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run critical journeys (client booking, notary sign-in, partner claim, home numbers)
+        run: npm run test:e2e
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
   deploy:
     name: Build + deploy to AWS
-    needs: test
+    # Gate the ship on BOTH the fast suite and the browser journeys: a red in
+    # either means nothing reaches production.
+    needs: [test, e2e]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:

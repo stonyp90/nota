@@ -734,6 +734,16 @@ html.nav-open, html.nav-open body { overflow: hidden; }
 /* The fill eases to its level when the month's data lands — the motion is the
    "live" cue. Decelerating curve, so it settles rather than snaps. */
 .pulse-bar > span { display: block; height: 100%; border-radius: inherit; min-width: 2px; transition: width .45s cubic-bezier(.22, 1, .36, 1); }
+/* Phones: name + two figures + gaps outgrow the row (they collided at 320px),
+   so the row stacks — name, then counts left / figures right, then the bar
+   full-width. Nothing shares a line it cannot afford. */
+@media (max-width: 480px) {
+  .pulse-row { grid-template-columns: minmax(0, 1fr) auto; gap: 3px 10px; }
+  .pulse-svc { grid-column: 1 / -1; grid-row: 1; }
+  .pulse-meta { grid-column: 1; grid-row: 2; align-self: end; padding-left: 22px; }
+  .pulse-figs { grid-column: 2; grid-row: 2; gap: 14px; }
+  .pulse-bar { grid-column: 1 / -1; grid-row: 3; margin-left: 22px; margin-top: 3px; }
+}
 
 /* One column below 900px: the aside stacks under the copy, still chromeless —
    separated by space alone, and with roomier rows for touch. */
@@ -2576,7 +2586,10 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   .cal-dow { font-size: 10px; }
   .filters { padding: 10px 14px; gap: 8px; }
   .field { flex: 1 1 40%; }
-  select, input[type='text'], input[type='email'], input[type='tel'], input[type='number'], input[type='date'] { min-width: 0; width: 100%; }
+  /* :not(.visually-hidden): this attribute selector outranks the class, and a
+     full-width HIDDEN date input was silently widening the booking sheet's
+     scroll box by 16px on phones. */
+  select:not(.visually-hidden), input[type='text'], input[type='email'], input[type='tel'], input[type='number'], input[type='date']:not(.visually-hidden) { min-width: 0; width: 100%; }
   .cards { grid-template-columns: 1fr; }
   .section { padding: 28px 0; }
   #day-dialog, dialog { width: 96vw; }

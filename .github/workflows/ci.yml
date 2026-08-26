@@ -15,8 +15,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # The fast gate (L1 domain · L2 api · L3 contract · L4 dom · L5 BDD). The
+  # Playwright browser layer (L6) is deliberately NOT here — it is the only slow
+  # layer and runs on the push to main in deploy.yml, before the ship. Keeping
+  # it off PRs holds this gate near ~15s so it never discourages a push.
   test:
-    name: Tests (domain + api + BDD + web + admin)
+    name: Tests (domain + api + contract + BDD + web + admin)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
