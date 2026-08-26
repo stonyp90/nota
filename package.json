@@ -19,9 +19,13 @@
     "dev": "npm run dev --workspace @nota/web",
     "dev:admin": "npm run dev --workspace @nota/admin",
     "api:local": "npm run start --workspace @nota/api",
-    "admin:local": "npm run start:admin --workspace @nota/api"
+    "admin:local": "npm run start:admin --workspace @nota/api",
+    "test:e2e": "playwright test"
   },
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1"
   }
 }

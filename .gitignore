@@ -8,6 +8,12 @@ apps/admin/dist/
 apps/api/build/
 infra/build/
 
+# Playwright E2E artifacts
+test-results/
+playwright-report/
+/blob-report/
+.playwright/
+
 # Terraform
 infra/.terraform/
 infra/.terraform.lock.hcl
