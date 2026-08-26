@@ -26,6 +26,6 @@ Fonctionnalité: Tarification et paliers de temps
 
     Exemples:
       | jours | multiplicateur |
-      | 0     | 9              |
-      | 1     | 7              |
-      | 2     | 3.5            |
+      | 0     | 2              |
+      | 1     | 1.6            |
+      | 2     | 1.35           |

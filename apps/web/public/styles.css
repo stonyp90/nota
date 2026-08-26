@@ -1014,7 +1014,8 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
   .cal-avg { font-size: 0; }
   .cal-avg::after { content: attr(data-compact); font-size: 12.5px; font-weight: 800; letter-spacing: -0.02em; }
 }
-/* The in-flow urgency badge is 75px at its widest ("dès 18 000 $") and needs an
+/* The in-flow urgency badge is ~66px at its widest ("dès 4 000 $", the 2× same-day
+   ceiling on the 2 000 $ floor) and needs an
    ~84px cell — a 620px seven-column grid — or its nowrap text runs into the
    next day (measured 1-20px of bleed from 710px down to 500px viewports).
    Under that, swap it to the compact figure (data-compact, the same pattern as
@@ -1074,7 +1075,7 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
   .cal-urgency::after { content: none; }
 }
 /* The very smallest screens (≤~350px): three-column cells drop under 83px and
-   the widest label ("dès 18 000 $", 75px) no longer fits — back to compact. */
+   the widest label ("dès 4 000 $", ~66px) no longer fits — back to compact. */
 @container cal (max-width: 265px) {
   .cal-urgency { font-size: 0; }
   .cal-urgency::after { content: attr(data-compact); font-size: 11px; font-weight: 800; letter-spacing: .01em; }

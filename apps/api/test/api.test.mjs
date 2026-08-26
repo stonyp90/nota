@@ -70,7 +70,7 @@ test('server revalidates: below starting price is 422, not stored', async () => 
   assert.equal((await a.repo._all()).length, 0);
 });
 
-test('server revalidates: above 10x premium cap is 422', async () => {
+test('server revalidates: above 3x premium cap is 422', async () => {
   const res = await post(app(), { serviceId: 'refinancement', dateISO: '2026-08-13', montant: 28000 });
   assert.equal(res.statusCode, 422);
   assert.ok(parse(res).errors.some((e) => e.code === 'plafond_depasse'));

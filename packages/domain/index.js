@@ -377,13 +377,16 @@
   // Five steps, because the last week is where the price actually moves and a
   // client deciding between "today" and "in three days" needs to see the
   // difference. Each band's MIDPOINT is the multiple a client is offered by
-  // default (tierMultiplier), so the ladder reads 1,2× · 1,6× · 3,5× · 7× · 9×.
+  // default (tierMultiplier), so the ladder reads a realistic urgency surcharge
+  // 1× · 1,15× · 1,35× · 1,6× · 2× — +0/+15/+35/+60/+100 % over the floor. The
+  // standard band is pinned to 1× so the calm-date price on the calendar is the
+  // very "à partir de" the hero already shows: one number, no contradiction.
   const TIERS = [
-    { id: 'standard',    nom: 'Standard',    nomEn: 'Standard', maxJours: null, apercuMin: 1.0, apercuMax: 1.4,  eleve: false },
-    { id: 'rapide',      nom: 'Rapide',      nomEn: 'Fast',     maxJours: 14,   apercuMin: 1.4, apercuMax: 1.8,  eleve: false },
-    { id: 'prioritaire', nom: 'Prioritaire', nomEn: 'Priority', maxJours: 3,    apercuMin: 3.0, apercuMax: 4.0,  eleve: true },
-    { id: 'urgence',     nom: 'Urgent',      nomEn: 'Urgent',   maxJours: 1,    apercuMin: 6.0, apercuMax: 8.0,  eleve: true },
-    { id: 'extreme',     nom: 'Extrême',     nomEn: 'Extreme',  maxJours: 0,    apercuMin: 8.0, apercuMax: 10.0, eleve: true },
+    { id: 'standard',    nom: 'Standard',    nomEn: 'Standard', maxJours: null, apercuMin: 1.0,  apercuMax: 1.0,  eleve: false },
+    { id: 'rapide',      nom: 'Rapide',      nomEn: 'Fast',     maxJours: 14,   apercuMin: 1.1,  apercuMax: 1.2,  eleve: false },
+    { id: 'prioritaire', nom: 'Prioritaire', nomEn: 'Priority', maxJours: 3,    apercuMin: 1.25, apercuMax: 1.45, eleve: true },
+    { id: 'urgence',     nom: 'Urgent',      nomEn: 'Urgent',   maxJours: 1,    apercuMin: 1.45, apercuMax: 1.75, eleve: true },
+    { id: 'extreme',     nom: 'Extrême',     nomEn: 'Extreme',  maxJours: 0,    apercuMin: 1.8,  apercuMax: 2.2,  eleve: true },
   ];
 
   // What a client is actually asked to pay at a given notice, as a multiple of
@@ -478,10 +481,11 @@
   }
 
   // --- Premium cap -----------------------------------------------------------
-  // A client may offer up to 10x the service's starting price. The cap is a
-  // product rule, enforced identically on the client and, authoritatively, on
-  // the server.
-  const PREMIUM_CAP = 10;
+  // A client may offer up to 3x the service's starting price — a sane ceiling
+  // just above the 2x a same-day signing commands. A client offering more than
+  // that for a notary act is not a real market. The cap is a product rule,
+  // enforced identically on the client and, authoritatively, on the server.
+  const PREMIUM_CAP = 3;
 
   // --- Offer statuses --------------------------------------------------------
   const STATUS = { OUVERTE: 'ouverte', RETENUE: 'retenue', ANNULEE: 'annulee' };
@@ -630,7 +634,7 @@
   }
 
   // A proposition is only meaningful ABOVE what the client already offers, and
-  // never above the same 10× cap the client is held to.
+  // never above the same premium cap the client is held to.
   function validateCounterOffer(input) {
     input = input || {};
     const errors = [];
@@ -1019,7 +1023,7 @@
   // --- Recommended offer (one-tap booking) -----------------------------------
   // The single biggest step for a client is deciding "how much do I offer?".
   // Given the date, suggest the middle of that tier's market-acceptance range ×
-  // the service floor (rounded to $5, clamped to [floor, 10× floor]). The UI
+  // the service floor (rounded to $5, clamped to [floor, PREMIUM_CAP× floor]). The UI
   // pre-fills this so a client can book with one tap instead of a decision.
   // `bids` (optional) is the carnet's history: when supplied, the pre-fill uses
   // the TUNED multiplier learned from retained offers instead of the static
