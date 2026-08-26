@@ -1198,15 +1198,16 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(min(320px, 100%), 420px);
   grid-template-areas: 'pitch form' 'more form'; align-content: start;
   /* 1fr auto: the form spans both rows and is the tallest thing on the page,
-     so its slack has to land SOMEWHERE. In row 1 it becomes air between the
-     reward cards (top) and the fine print (pinned to the form's last line) —
-     the column reads composed instead of ending in a hole (owner's call,
-     2026-08-26: « improve the space »). */
+     so its slack has to land SOMEWHERE. In row 1 it is the vignette's stage —
+     the reward story plays in what used to be empty air, and the fine print
+     stays pinned to the form's last line (owner's call, 2026-08-26:
+     « a clean animation instead » of the hole). */
   grid-template-rows: 1fr auto;
   gap: var(--gap); align-items: start;
 }
 .pr-more { align-self: end; }
-.pr-pitch { grid-area: pitch; min-width: 0; }
+/* The pitch stretches through row 1 so the vignette can center in its slack. */
+.pr-pitch { grid-area: pitch; min-width: 0; align-self: stretch; display: flex; flex-direction: column; }
 /* The form panel: standard card padding (strict pass — the extra air the old
    space-12 bought said nothing), every field spans it — one column, one
    width, one CTA. The bare-span label ("Vous êtes") dresses like real ones. */
@@ -1229,6 +1230,94 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .pr-kicker { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-muted); }
 .pr-amount { font-size: clamp(28px, 3vw, 38px); font-weight: 800; letter-spacing: -0.02em; color: var(--brand); font-variant-numeric: tabular-nums; }
 .pr-when { margin: 0; font-size: 13px; color: var(--ink-muted); }
+/* The reward vignette — the referral story played out in the pitch column's
+   slack, on one clean 8s CSS loop: the code chip settles in, a dot runs the
+   wire, the client's demand lands and is stamped retenue, the fixed reward
+   pops. It spans the column like the reward cards above it — chip left, card
+   centre, payoff right, the wires flexing to fill — and its type rhymes with
+   theirs (.pr-kicker on the chip, near-.pr-amount on the payoff). Base styles
+   ARE the ending (chip, card, stamp, reward all visible); the keyframes only
+   add the hidden phases — so prefers-reduced-motion gets the finished story,
+   never a blank strip. Tokens only. */
+.pr-vig {
+  flex: 1; display: flex; align-items: center;
+  gap: var(--space-6); padding: var(--space-8) 0;
+}
+.pr-vig-chip { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; animation: pr-vig-chip 8s ease infinite; }
+.pr-vig-code {
+  padding: 8px 16px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  background: var(--surface); font-size: 17px; font-weight: 800; letter-spacing: .08em; color: var(--ink);
+}
+/* The wires: elastic dotted runs with a traveling brand dot (`left` animates
+   because the run's length is fluid). The dot has no ending to freeze on —
+   it stays parked at opacity 0 under reduced motion. */
+.pr-vig-track { position: relative; flex: 1 1 32px; min-width: 24px; height: 10px; }
+.pr-vig-track::before { content: ''; position: absolute; left: 0; right: 0; top: 4px; border-top: 2px dotted var(--border-strong); }
+.pr-vig-dot { position: absolute; left: 0; top: 1px; width: 8px; height: 8px; border-radius: 50%; background: var(--brand-bright); opacity: 0; animation: pr-vig-dot1 8s ease-in-out infinite; }
+.pr-vig-track--2 .pr-vig-dot { animation-name: pr-vig-dot2; }
+.pr-vig-card {
+  display: flex; flex-direction: column; gap: 5px; min-width: 0;
+  padding: var(--space-8) 20px; border: 1px solid var(--border-strong); border-radius: var(--radius);
+  background: var(--surface); animation: pr-vig-card 8s ease infinite;
+}
+.pr-vig-name { font-size: 15px; font-weight: 700; color: var(--ink); }
+.pr-vig-stamp { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--ink-muted); animation: pr-vig-stamp 8s ease infinite; }
+.pr-vig-check { font-weight: 800; color: var(--brand); }
+.pr-vig-amt {
+  font-size: clamp(24px, 2.6vw, 34px); font-weight: 800; letter-spacing: -0.02em;
+  color: var(--brand); font-variant-numeric: tabular-nums; white-space: nowrap;
+  animation: pr-vig-amt 8s cubic-bezier(.2, 1.2, .4, 1) infinite;
+}
+.pr-vig-amt::before { content: '+ '; }
+/* One shared 8s clock; every part holds its ending until the group fades. */
+@keyframes pr-vig-chip {
+  0% { opacity: 0; transform: translateY(6px); }
+  5%, 92% { opacity: 1; transform: none; }
+  97%, 100% { opacity: 0; transform: none; }
+}
+@keyframes pr-vig-dot1 {
+  0%, 6% { opacity: 0; left: 0; }
+  8% { opacity: 1; }
+  16% { opacity: 1; left: calc(100% - 8px); }
+  18%, 100% { opacity: 0; left: calc(100% - 8px); }
+}
+@keyframes pr-vig-card {
+  0%, 16% { opacity: 0; transform: translateY(8px) scale(.97); }
+  22%, 92% { opacity: 1; transform: none; }
+  97%, 100% { opacity: 0; transform: none; }
+}
+@keyframes pr-vig-stamp {
+  0%, 32% { opacity: 0; transform: translateY(4px); }
+  38%, 100% { opacity: 1; transform: none; }
+}
+@keyframes pr-vig-dot2 {
+  0%, 44% { opacity: 0; left: 0; }
+  46% { opacity: 1; }
+  54% { opacity: 1; left: calc(100% - 8px); }
+  56%, 100% { opacity: 0; left: calc(100% - 8px); }
+}
+@keyframes pr-vig-amt {
+  0%, 56% { opacity: 0; transform: translateY(6px) scale(.9); }
+  63%, 92% { opacity: 1; transform: none; }
+  97%, 100% { opacity: 0; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pr-vig-chip, .pr-vig-dot, .pr-vig-card, .pr-vig-stamp, .pr-vig-amt { animation: none; }
+}
+/* A narrower pitch column (the form keeps its 420px) compacts the strip one
+   notch before the stacked cutoff — same story, smaller stage. */
+@media (max-width: 1100px) {
+  .pr-vig { gap: var(--space-5); }
+  .pr-vig-code { padding: 5px 12px; font-size: 14px; }
+  .pr-vig-card { padding: var(--space-6) var(--space-8); }
+  .pr-vig-name { font-size: 13px; }
+  .pr-vig-stamp { font-size: 11.5px; }
+  .pr-vig-amt { font-size: 22px; }
+}
+/* The stacked layout (≤900px) has no slack to fill, and the three steps sit
+   right below telling the same story — the decoration would only push the
+   claim form further from the pitch. */
+@media (max-width: 900px) { .pr-vig { display: none; } }
 /* The fine print: three lines with counter dots — the whole "how it works". */
 .pr-steps { list-style: none; counter-reset: prstep; margin: 0; padding: 0; display: grid; gap: var(--space-4); }
 .pr-steps li { counter-increment: prstep; position: relative; padding-left: 26px; font-size: 13px; line-height: 1.5; color: var(--ink-muted); }

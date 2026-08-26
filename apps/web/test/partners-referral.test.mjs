@@ -314,23 +314,40 @@ test('a taken code surfaces the friendly typed error, and the CTA re-arms', asyn
 });
 
 // ---------------------------------------------------------------------------
-// 3. The pane stays strict: cards + form + fine print, nothing decorative
+// 3. The pane stays strict — and the air carries ONE clean vignette
 // ---------------------------------------------------------------------------
 
-test('the Partenaires pane is strict: no vignette, no per-card mechanics, one guarantee', async () => {
+test('the reward vignette fills the pitch air: decorative, domain-priced, motion-safe', async () => {
+  // Owner's call (2026-08-26): the slack between the reward cards and the
+  // fine print carries a clean animation instead of empty air — the referral
+  // story played out (your code → the client's demand retained → the reward).
+  const { doc, D } = await boot();
+  const vig = doc.querySelector('#pane-partenaires .pr-pitch .pr-vig');
+  assert.ok(vig, 'the vignette lives in the pitch column, under the reward cards');
+  assert.equal(vig.getAttribute('aria-hidden'), 'true', 'decorative — invisible to AT');
+  // The payoff figure is DOMAIN data (renderPartnerPane), never a markup literal.
+  assert.equal($(doc, 'pr-vig-amt').textContent, D.money(D.REFERRAL.client));
+  assert.ok(!/pr-vig-amt"[^>]*>[^<]*\d/.test(HTML_SRC), 'no literal amount baked in the markup');
+  // Pure CSS loop: frozen on its FINAL state under reduced motion (base styles
+  // are the ending, keyframes only add the hidden phases) — never a blank strip.
+  const rmBlocks = CSS_SRC.split('@media (prefers-reduced-motion: reduce)').slice(1);
+  assert.ok(rmBlocks.some((b) => /\.pr-vig[^}]*animation: none/.test(b.slice(0, b.indexOf('}') + 1))),
+    'the vignette sits still under prefers-reduced-motion');
+  assert.match(CSS_SRC, /\.pr-vig\b/, 'the vignette is styled');
+});
+
+test('otherwise the pane stays strict: no per-card mechanics, one guarantee', async () => {
   // Owner's ask (2026-08-25): thin and focused. The pitch is the two amounts,
-  // the action is the claim form — everything decorative or repeated goes.
+  // the action is the claim form — repetition stays gone; the vignette above
+  // is the ONE decorative element the pane carries.
   const { doc } = await boot();
-  assert.equal(doc.querySelector('#pane-partenaires .pr-vignette'), null,
-    'the animated referral vignette is gone');
-  assert.equal($(doc, 'pr-reward-amt'), null, 'no orphaned vignette figure');
   assert.equal(doc.querySelector('#pane-partenaires .pr-how'), null,
     'a card is kicker + amount + when — the mechanics live in the three steps');
   // The guarantee is stated ONCE: the fine-print line, never again in the intro.
   const intro = doc.querySelector('#pane-partenaires .intro p').textContent;
   assert.ok(!/prix du client/.test(intro), 'the intro no longer duplicates the guarantee');
   assert.ok(doc.querySelector('#pane-partenaires .nota-guarantee'), 'the guarantee stays in the fine print');
-  // No stray keyframes or vignette rules survive in the stylesheet.
+  // The RETIRED 2026-08-25 vignette's classes never come back from the dead.
   assert.ok(!/pr-vignette|pr-scene|pr-w[1-4]/.test(CSS_SRC), 'no dead vignette CSS');
   // The fine-print note reads as a quiet line, not another boxed card.
   assert.match(CSS_SRC, /\.pr-more \.note\s*\{[^}]*border-left:\s*0/,

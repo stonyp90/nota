@@ -5489,6 +5489,9 @@
     if (amtClient) amtClient.textContent = D.money(D.REFERRAL.client);
     var amtNotaire = $('pr-amount-notaire');
     if (amtNotaire) amtNotaire.textContent = D.money(D.REFERRAL.notaire);
+    // The vignette's payoff is the same domain figure — never a markup literal.
+    var vigAmt = $('pr-vig-amt');
+    if (vigAmt) vigAmt.textContent = D.money(D.REFERRAL.client);
     // One chip per partner category, from the domain.
     var wrap = $('partner-type');
     if (wrap && !wrap.children.length) {

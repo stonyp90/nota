@@ -702,6 +702,7 @@
   "La récompense de référence est un coût de marketing de Nota, payée à même sa propre commission — jamais ajoutée au prix du client, jamais retranchée des honoraires du notaire.": "The referral reward is a Nota marketing cost, paid out of its own commission — never added to the client’s price, never taken from the notary’s fees.",
   "vous@agence.ca": "you@agency.ca",
   "EVEROY": "EVEROY",
+  "La demande de votre client": "Your client’s request",
 
   // --- Profil: the Parrainage card (claimed code resurfaced) ----------------
   "Parrainage": "Referrals",
