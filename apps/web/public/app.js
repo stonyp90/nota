@@ -2529,6 +2529,7 @@
   var IC_COORD = '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>';
   var IC_NOTIF = '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>';
   var IC_DOCS = '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>';
+  var IC_PARR = '<path d="M20 12v10H4V12"/><path d="M2 7h20v5H2z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>';
   function profilHead(iconPaths, title) {
     var head = el('div', 'profil-card-head');
     var ic = el('span', 'profil-card-ic');
@@ -2919,6 +2920,48 @@
     return d > 0 ? 'dans ' + plural(d, 'jour') : 'il y a ' + plural(-d, 'jour');
   }
 
+  // One line, both amounts — always the DOMAIN's figures (D.REFERRAL via
+  // D.money), the same ones the Partenaires pane advertises. Never hardcoded.
+  function referralRewardLine() {
+    return D.money(D.REFERRAL.client) + ' par client référé retenu, '
+      + D.money(D.REFERRAL.notaire) + ' au premier acte d’un notaire référé.';
+  }
+
+  // Parrainage card — the partner's claimed code, resurfaced. The claim is
+  // made on the Partenaires pane; once made, the code and its share link live
+  // here so closing the tab never loses them. Rewards are announced by
+  // courriel (ADR 0011) — deliberately no earnings dashboard.
+  function buildReferralCard() {
+    var card = el('div', 'profil-card');
+    card.appendChild(profilHead(IC_PARR, 'Parrainage'));
+    var rec = partnerGet();
+    if (!rec) {
+      // Not a partner yet: the pitch (domain amounts) and the door to the form.
+      var empty = el('div', 'profil-empty');
+      empty.appendChild(el('p', 'profil-empty-text', 'Référez des clients ou des notaires et soyez récompensé.'));
+      empty.appendChild(el('p', 'help', referralRewardLine()));
+      var cta = el('button', 'btn btn-primary btn-sm', 'Devenir partenaire'); cta.type = 'button';
+      cta.addEventListener('click', function () { toggleNotifPanel(false); setTab('partenaires'); });
+      empty.appendChild(cta);
+      card.appendChild(empty);
+      return card;
+    }
+    card.appendChild(el('p', 'help', referralRewardLine()));
+    card.appendChild(el('p', 'help', 'Les récompenses vous parviennent par courriel — rien à surveiller ici.'));
+    var codeRow = el('div', 'parr-code-row');
+    codeRow.appendChild(el('span', 'parr-code-lbl', 'Votre code'));
+    codeRow.appendChild(el('strong', 'parr-code', rec.code));
+    card.appendChild(codeRow);
+    var linkRow = el('div', 'partner-link-row');
+    var link = el('code', null, partnerShareLink(rec.code));
+    linkRow.appendChild(link);
+    var copy = el('button', 'btn btn-sm', 'Copier le lien'); copy.type = 'button';
+    copy.addEventListener('click', function () { copyLinkText(link.textContent); });
+    linkRow.appendChild(copy);
+    card.appendChild(linkRow);
+    return card;
+  }
+
   function renderProfil() {
     var body = $('profil-body'); if (!body) return; clear(body);
     var p = profileGet();
@@ -3014,6 +3057,9 @@
     });
     renderProfilDocs(dbox, D.SERVICES[0].id);
     body.appendChild(dCard);
+
+    // Parrainage — the referral program's place in the profile, closing the page.
+    body.appendChild(buildReferralCard());
   }
 
   // Render the per-service document checklist into `container`: each item can be
@@ -5422,6 +5468,18 @@
   // is rendered with D.money like every other figure in the app.
   var partnerState = { type: '' };
 
+  // The partner's OWN claimed record — the outbound side of the program
+  // (LS_REF above is the inbound code: who referred THIS device). Persisted on
+  // a successful claim so the profile's Parrainage card can resurface the code
+  // and link after the tab closes. A convenience copy only — the API stays the
+  // source of truth, and rewards travel by courriel (ADR 0011).
+  var LS_PARTNER = 'nota.partner.v1';
+  function partnerGet() {
+    var p = lsLoad(LS_PARTNER);
+    return p && p.code && D.isReferralCode(p.code) ? p : null;
+  }
+  function partnerSet(rec) { lsSave(LS_PARTNER, rec); }
+
   function partnerShareLink(code) { return location.origin + '/?ref=' + code; }
 
   function renderPartnerPane() {
@@ -5511,11 +5569,22 @@
     submit.removeAttribute('aria-busy'); submit.textContent = 'Code réclamé ✓'; // stays disabled → no duplicate claim
     var box = $('partner-success'); if (box) box.hidden = false;
     var link = $('partner-link'); if (link) link.textContent = partnerShareLink((j.partenaire && j.partenaire.code) || code);
+    // Keep the claim on this device — what the API has on file wins over the
+    // resubmitted values (the idempotent 200 answers with the original record).
+    var saved = j.partenaire || {};
+    partnerSet({
+      code: saved.code || code,
+      type: saved.type || partnerState.type,
+      courriel: saved.courriel || $('partner-courriel').value.trim(),
+      createdAt: saved.createdAt || new Date().toISOString(),
+    });
+    if (state.tab === 'profil') renderProfil();
   }
 
-  function partnerCopyLink() {
-    var link = $('partner-link'); if (!link || !link.textContent) return;
-    var text = link.textContent;
+  // Clipboard with visible feedback either way — shared by the Partenaires
+  // pane's copy button and the profile's Parrainage card.
+  function copyLinkText(text) {
+    if (!text) return;
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).then(
@@ -5526,6 +5595,11 @@
       }
     } catch (e) {}
     toast('Copie impossible — sélectionnez le lien.');
+  }
+
+  function partnerCopyLink() {
+    var link = $('partner-link');
+    copyLinkText(link ? link.textContent : '');
   }
 
   function handleCheckoutReturn() {
