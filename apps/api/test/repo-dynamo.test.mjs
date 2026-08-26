@@ -156,3 +156,118 @@ test('listOpenBids Queries the sparse GSI1, paginates, and strips index attrs', 
   assert.equal(doc.startKeys[0], undefined);
   assert.deepEqual(doc.startKeys[1], lastKey);
 });
+
+// --- Durable referral ledger + partner enumeration (ADR 0011) ----------------
+
+test('recordReferralEarning writes a write-once EARN item under the partner partition, indexed on REFEARN', async () => {
+  const sent = [];
+  const doc = { async send(cmd) { sent.push(cmd); return {}; } };
+  const repo = createDynamoRepo({ tableName: 't', doc });
+
+  const first = await repo.recordReferralEarning({ code: 'eve-roy', track: 'client', refId: 'b1', montant: 50, at: '2026-08-12' });
+  assert.equal(first, true);
+  const input = sent[0].input;
+  assert.equal(input.Item.PK, 'PARTNER#EVEROY', 'the earning lives in the partner partition, code NORMALIZED');
+  assert.equal(input.Item.SK, 'EARN#CLIENT#b1', 'keyed by track + ref, so the key IS the idempotency');
+  assert.equal(input.Item.GSI1PK, 'REFEARN', 'sparse GSI1 overload: all earnings, one Query');
+  assert.equal(input.Item.GSI1SK, 'EVEROY#CLIENT#b1');
+  assert.equal(input.Item.code, 'EVEROY');
+  assert.equal(input.Item.track, 'client');
+  assert.equal(input.Item.montant, 50);
+  assert.equal(input.ConditionExpression, 'attribute_not_exists(PK)', 'a replay must not double-count');
+});
+
+test('recordReferralEarning returns false when the earning already exists (conditional replay)', async () => {
+  const doc = {
+    async send() {
+      const e = new Error('conditional check failed');
+      e.name = 'ConditionalCheckFailedException';
+      throw e;
+    },
+  };
+  const repo = createDynamoRepo({ tableName: 't', doc });
+  assert.equal(await repo.recordReferralEarning({ code: 'EVEROY', track: 'notaire', refId: 'N1', montant: 250, at: '2026-08-12' }), false);
+});
+
+test('listReferralEarnings Queries the sparse REFEARN GSI1, paginates, and strips the storage keys', async () => {
+  const e1 = {
+    PK: 'PARTNER#EVEROY', SK: 'EARN#CLIENT#b1', type: 'refearn',
+    GSI1PK: 'REFEARN', GSI1SK: 'EVEROY#CLIENT#b1',
+    code: 'EVEROY', track: 'client', refId: 'b1', montant: 50, at: '2026-08-12',
+  };
+  const e2 = {
+    PK: 'PARTNER#MARCQC', SK: 'EARN#NOTAIRE#N1', type: 'refearn',
+    GSI1PK: 'REFEARN', GSI1SK: 'MARCQC#NOTAIRE#N1',
+    code: 'MARCQC', track: 'notaire', refId: 'N1', montant: 250, at: '2026-08-13',
+  };
+  const lastKey = { GSI1PK: 'REFEARN', GSI1SK: 'EVEROY#CLIENT#b1' };
+  const doc = fakeDoc([
+    { Items: [e1], LastEvaluatedKey: lastKey }, // page 1 not the end
+    { Items: [e2] }, // page 2 stops
+  ]);
+  const repo = createDynamoRepo({ tableName: 't', doc });
+  const events = await repo.listReferralEarnings();
+  assert.deepEqual(events, [
+    { code: 'EVEROY', track: 'client', refId: 'b1', montant: 50, at: '2026-08-12' },
+    { code: 'MARCQC', track: 'notaire', refId: 'N1', montant: 250, at: '2026-08-13' },
+  ]);
+  const q = doc.sentInputs[0];
+  assert.equal(q.IndexName, 'GSI1');
+  assert.equal(q.ExpressionAttributeNames['#g'], 'GSI1PK');
+  assert.equal(q.ExpressionAttributeValues[':pk'], 'REFEARN');
+  assert.equal(doc.startKeys[0], undefined);
+  assert.deepEqual(doc.startKeys[1], lastKey);
+});
+
+test('createPartner stamps PARTNER GSI1 attrs so a registered code is enumerable with zero referrals', async () => {
+  const sent = [];
+  const doc = { async send(cmd) { sent.push(cmd); return {}; } };
+  const repo = createDynamoRepo({ tableName: 't', doc });
+  await repo.createPartner({ code: 'ZOEQC', type: 'agent_immobilier', courriel: 'zoe@agence.ca', createdAt: '2026-08-12' });
+  const item = sent[0].input.Item;
+  assert.equal(item.GSI1PK, 'PARTNER');
+  assert.equal(item.GSI1SK, 'ZOEQC');
+});
+
+test('listPartners Queries GSI1PK=PARTNER, paginates, and strips storage + index attrs', async () => {
+  const p1 = {
+    PK: 'PARTNER#EVEROY', SK: 'PARTNER', GSI1PK: 'PARTNER', GSI1SK: 'EVEROY',
+    code: 'EVEROY', type: 'courtier_hypothecaire', courriel: 'eve@courtage.ca', createdAt: '2026-08-01',
+  };
+  const p2 = {
+    PK: 'PARTNER#ZOEQC', SK: 'PARTNER', GSI1PK: 'PARTNER', GSI1SK: 'ZOEQC',
+    code: 'ZOEQC', type: 'agent_immobilier', courriel: 'zoe@agence.ca', createdAt: '2026-08-12',
+  };
+  const lastKey = { GSI1PK: 'PARTNER', GSI1SK: 'EVEROY' };
+  const doc = fakeDoc([
+    { Items: [p1], LastEvaluatedKey: lastKey },
+    { Items: [p2] },
+  ]);
+  const repo = createDynamoRepo({ tableName: 't', doc });
+  const partners = await repo.listPartners();
+  assert.deepEqual(partners, [
+    { code: 'EVEROY', type: 'courtier_hypothecaire', courriel: 'eve@courtage.ca', createdAt: '2026-08-01' },
+    { code: 'ZOEQC', type: 'agent_immobilier', courriel: 'zoe@agence.ca', createdAt: '2026-08-12' },
+  ]);
+  const q = doc.sentInputs[0];
+  assert.equal(q.IndexName, 'GSI1');
+  assert.equal(q.ExpressionAttributeValues[':pk'], 'PARTNER');
+  assert.deepEqual(doc.startKeys[1], lastKey);
+});
+
+test('getPartner strips the GSI1 attrs a registered partner item now carries', async () => {
+  const doc = {
+    async send() {
+      return {
+        Item: {
+          PK: 'PARTNER#EVEROY', SK: 'PARTNER', GSI1PK: 'PARTNER', GSI1SK: 'EVEROY',
+          code: 'EVEROY', type: 'courtier_hypothecaire', courriel: 'eve@courtage.ca', createdAt: '2026-08-01',
+        },
+      };
+    },
+  };
+  const repo = createDynamoRepo({ tableName: 't', doc });
+  assert.deepEqual(await repo.getPartner('eve-roy'), {
+    code: 'EVEROY', type: 'courtier_hypothecaire', courriel: 'eve@courtage.ca', createdAt: '2026-08-01',
+  });
+});

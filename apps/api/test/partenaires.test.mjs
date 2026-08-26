@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const { createApp } = require('../src/handler.js');
+const { createAnalytics } = require('../src/analytics.js');
 const { createMemoryRepo } = require('../src/repo-memory.js');
 const { createBilling } = require('../src/billing.js');
 const { createFakeMailer } = require('../src/notify-port.js');
@@ -301,4 +302,91 @@ test('a referred notary retaining their FIRST act mails the partner once ever (k
   assert.equal((await accept(b2)).statusCode, 200);
   await flush();
   assert.equal(notaryRewards().length, 1, 'once per referred notary, ever');
+});
+
+// --- durable ledger: the money owed never evaporates ---------------------------
+// The admin ledger claims ALL-TIME totals, but the live walk only sees the
+// forward month window. Earnings are therefore recorded durably at EVENT time
+// (the retain), so a signing date scrolling out of the window can never shrink
+// what is due (monotonicity). These read the same overview the console renders.
+
+const overviewAt = (a, day) => createAnalytics({ repo: a.repo, now: () => day }).overview();
+const rowFor = (o, code) => o.parrainages.codes.find((c) => c.code === code);
+
+test('a retained referred demand still owes 50 $ once its date is far outside the 4-month window', async () => {
+  const a = app();
+  await register(a, { type: 'courtier_hypothecaire', courriel: 'eve@courtage.ca', code: 'EVEROY' });
+  const bid = await seedRetainable(a, { parrain: 'EVEROY' });
+  const token = await session(a, 'me@notaire.ca');
+  const res = await a.handle({
+    method: 'POST', path: '/notary/bids/accept', headers: bearer(token),
+    body: JSON.stringify({ id: bid.id, dateISO: bid.dateISO }),
+  });
+  assert.equal(res.statusCode, 200, res.body);
+
+  // Months later the signing (2026-08-20) is invisible to the live window —
+  // the durable ledger must still owe the partner their client reward.
+  const row = rowFor(await overviewAt(a, '2027-03-01'), 'EVEROY');
+  assert.ok(row, 'the code keeps its ledger row after the window scrolls past');
+  assert.equal(row.retenues, 1, 'the all-time retained count is monotonic');
+  assert.equal(row.du, domain.REFERRAL.client);
+  assert.equal(row.courriel, 'eve@courtage.ca', 'the registry join still identifies who to pay');
+});
+
+test("a referred notary's long-past first retained act still owes 250 $ (durable premierActe)", async () => {
+  const a = app();
+  await register(a, { type: 'agent_immobilier', courriel: 'marc@agence.ca', code: 'MARCQC' });
+  const id = notaryIdForEmail('ref@notaire.ca');
+  await a.repo.putNotary({ id, email: 'ref@notaire.ca', status: 'active', parrain: 'MARCQC' });
+  const token = await session(a, 'ref@notaire.ca');
+  const b1 = await seedRetainable(a, {});
+  const res = await a.handle({
+    method: 'POST', path: '/notary/bids/accept', headers: bearer(token),
+    body: JSON.stringify({ id: b1.id, dateISO: b1.dateISO }),
+  });
+  assert.equal(res.statusCode, 200, res.body);
+
+  // The first-retained-act fact is stamped durably on the notary record...
+  const profile = await a.repo.getNotary(id);
+  assert.equal(profile.premierActe, true, 'the first retained act is marked on the profile');
+  assert.ok(profile.premierActeAt, 'with the moment it happened');
+
+  // ...so the notaire reward survives long after the act left the window.
+  const row = rowFor(await overviewAt(a, '2027-03-01'), 'MARCQC');
+  assert.ok(row, 'the code keeps its ledger row');
+  assert.equal(row.notairesActifs, 1);
+  assert.equal(row.du, domain.REFERRAL.notaire);
+});
+
+test('replaying the accept never double-counts the durable earnings', async () => {
+  const a = app();
+  await register(a, { type: 'courtier_hypothecaire', courriel: 'eve@courtage.ca', code: 'EVEROY' });
+  // The retaining notary is ALSO referred by the same partner — both tracks fire.
+  const id = notaryIdForEmail('ref@notaire.ca');
+  await a.repo.putNotary({ id, email: 'ref@notaire.ca', status: 'active', parrain: 'EVEROY' });
+  const token = await session(a, 'ref@notaire.ca');
+  const bid = await seedRetainable(a, { parrain: 'EVEROY' });
+  const accept = () =>
+    a.handle({ method: 'POST', path: '/notary/bids/accept', headers: bearer(token), body: JSON.stringify({ id: bid.id, dateISO: bid.dateISO }) });
+  assert.equal((await accept()).statusCode, 200);
+  // A double-submit by the same notary is idempotent at the HTTP layer — and
+  // must be idempotent in the money ledger too.
+  assert.equal((await accept()).statusCode, 200);
+
+  const row = rowFor(await overviewAt(a, '2027-03-01'), 'EVEROY');
+  assert.equal(row.retenues, 1, 'the client earning is counted once per bid');
+  assert.equal(row.notairesActifs, 1, 'the notaire earning is counted once per notary, ever');
+  assert.equal(row.du, domain.REFERRAL.client + domain.REFERRAL.notaire);
+});
+
+test('a freshly registered partner with ZERO referrals is visible in the ledger (du 0)', async () => {
+  const a = app();
+  await register(a, { type: 'agent_immobilier', courriel: 'zoe@agence.ca', code: 'ZOEQC' });
+  const row = rowFor(await overviewAt(a, TODAY), 'ZOEQC');
+  assert.ok(row, 'a claimed code appears even before any referral');
+  assert.deepEqual(row, {
+    code: 'ZOEQC', demandes: 0, retenues: 0, completes: 0, notaires: 0, notairesActifs: 0, du: 0,
+    type: 'agent_immobilier', courriel: 'zoe@agence.ca',
+    typeNom: 'Agent immobilier', typeNomEn: 'Real-estate agent',
+  });
 });

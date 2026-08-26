@@ -1,7 +1,7 @@
 'use strict';
 
 const { monthOf, STATS_GAUGE_PK, STATS_GAUGE_SK } = require('./keys');
-const { STATUS } = require('@nota/domain');
+const { STATUS, normalizeReferralCode } = require('@nota/domain');
 
 /**
  * In-memory implementation of the Repo port. Used by the test suite and by the
@@ -19,6 +19,7 @@ function createMemoryRepo(seed = []) {
   const events = new Map();
   const acts = new Map(); // bidId -> completed-act record (idempotency ledger)
   const partners = new Map(); // CODE -> registered referral partner (ADR 0011)
+  const referralEarnings = new Map(); // `${CODE}#${TRACK}#${refId}` -> durable earning event
 
   // Notification ledgers: sent (idempotency) and unsubscribe (suppression).
   const notified = new Map(); // `${refId}#${kind}` -> timestamp
@@ -140,6 +141,32 @@ function createMemoryRepo(seed = []) {
     async getPartner(code) {
       const p = partners.get(String(code).trim().toUpperCase());
       return p ? { ...p } : null;
+    },
+    // Every CLAIMED code, for the admin ledger — a partner with zero referrals
+    // is still a row the operator must see. The dynamo adapter serves the same
+    // set from the sparse PARTNER GSI1 overload; here it is the whole map.
+    async listPartners() {
+      return [...partners.values()]
+        .map((p) => ({ ...p }))
+        .sort((a, b) => a.code.localeCompare(b.code));
+    },
+    // Durable referral earnings (ADR 0011): the money owed is recorded at EVENT
+    // time (the retain), write-once per (code, track, ref) — the key IS the
+    // idempotency, mirroring the DynamoDB attribute_not_exists guard. Returns
+    // true only on the FIRST write, so the caller knows a replay earned nothing.
+    async recordReferralEarning({ code, track, refId, montant, at } = {}) {
+      const clean = normalizeReferralCode(code);
+      const key = `${clean}#${String(track).toUpperCase()}#${refId}`;
+      if (referralEarnings.has(key)) return false;
+      referralEarnings.set(key, { code: clean, track, refId, montant, at });
+      return true;
+    },
+    // All earnings ever recorded — the ledger's durable truth. Bounded by the
+    // number of real-money events, never a table walk (sparse GSI1 in dynamo).
+    async listReferralEarnings() {
+      return [...referralEarnings.values()]
+        .map((e) => ({ ...e }))
+        .sort((a, b) => a.code.localeCompare(b.code) || String(a.refId).localeCompare(String(b.refId)));
     },
     async putNotary(notary) {
       byNotary.set(notary.id, { ...notary });

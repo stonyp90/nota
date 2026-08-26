@@ -119,24 +119,26 @@ function createAnalytics({ repo, now, gaugeHorizonMonths, commissionRate } = {})
     return { open, retained, referred, retainedBy };
   }
 
-  // The partner referral ledger (ADR 0011), derived — never kept as state — by
-  // folding the referred records through domain.referralLedger. Two reward
-  // tracks, each earned by the ledger itself:
+  // The partner referral ledger (ADR 0011). The amounts DUE come from the
+  // DURABLE earning events the retain path records at event time (write-once
+  // per (code, track, ref) — see keys.js EARN#/REFEARN), so `du` is ALL-TIME
+  // and monotonic: a signing date scrolling out of the live month window can
+  // never shrink what a partner is owed. Two reward tracks:
   //   • client (REFERRAL.client): earned the moment a referred demand is
-  //     RETAINED — the status is already on the bids we walked, no join needed;
-  //   • notaire (REFERRAL.notaire): earned once when a referred notary retains
-  //     their FIRST act. We derive `premierActe` from data already in hand —
-  //     the notaryIds seen on retained bids in the window — and read each such
-  //     notary's profile to learn its (private) `parrain`. A referred notary
-  //     who has retained nothing yet has, by construction, no retained bid to
-  //     find them through, so they appear in the ledger only once they earn;
-  //     the Scan-less design trades that visibility for bounded reads.
-  // Completions are still joined on (getActCompletion, ONLY for bids that
-  // carry a parrain code — a lookup per referred bid, fired concurrently,
-  // never one per carnet bid) so the ledger's `completes` column stays honest
-  // information even though it no longer triggers the earning. An older repo
-  // without a method, or any lookup failure, degrades gracefully rather than
-  // breaking the overview.
+  //     RETAINED — one durable event per bid;
+  //   • notaire (REFERRAL.notaire): earned once ever, when a referred notary
+  //     retains their FIRST act — one durable event per notary.
+  // The live window still enriches the softer columns (demandes, completes)
+  // and doubles as a SAFETY NET: the earned counts are the MAX of the durable
+  // and window-derived views, never their sum — so a best-effort durable write
+  // that failed still shows while its bid is in the window, and nothing is
+  // ever counted twice. Completions are joined on (getActCompletion, ONLY for
+  // bids that carry a parrain code — a lookup per referred bid, fired
+  // concurrently, never one per carnet bid) as honest information, not a
+  // trigger. Registered partners with ZERO referrals are folded in from
+  // listPartners so the operator sees every claimed code. An older repo
+  // without any of these methods degrades gracefully rather than breaking the
+  // overview.
   async function referralSection(referred, retainedBy) {
     const joined = await Promise.all(
       (referred || []).map(async (b) => {
@@ -167,13 +169,65 @@ function createAnalytics({ repo, now, gaugeHorizonMonths, commissionRate } = {})
         .filter((n) => n && domain.isReferralCode(n.parrain))
         .map((n) => ({ parrain: n.parrain, premierActe: true }));
     }
+    // The durable earning events — the ledger's all-time truth. Folded into
+    // per-code per-track counts; a repo without the method (or a failed read)
+    // leaves the map empty and the window-derived view stands alone.
+    let earnings = [];
+    if (typeof repo.listReferralEarnings === 'function') {
+      try {
+        earnings = (await repo.listReferralEarnings()) || [];
+      } catch {
+        earnings = [];
+      }
+    }
+    const durable = new Map(); // CODE -> { client, notaire } earned-event counts
+    for (const e of earnings) {
+      if (!e || !domain.isReferralCode(e.code)) continue;
+      const code = domain.normalizeReferralCode(e.code);
+      const d = durable.get(code) || { client: 0, notaire: 0 };
+      if (e.track === 'client') d.client += 1;
+      else if (e.track === 'notaire') d.notaire += 1;
+      durable.set(code, d);
+    }
+    // Fold the live window through the domain as before, then reconcile each
+    // row's earned counts against the durable events: MAX per track (a bid can
+    // be seen by both sources — reconcile, never add), and `du` recomputed
+    // from the reconciled counts so it can only grow as time passes.
+    const windowRows = domain.referralLedger(joined, notaires);
+    const byCode = new Map(windowRows.map((r) => [r.code, r]));
+    const emptyRow = (code) => ({ code, demandes: 0, retenues: 0, completes: 0, notaires: 0, notairesActifs: 0, du: 0 });
+    for (const [code, d] of durable) {
+      const row = byCode.get(code) || emptyRow(code);
+      row.retenues = Math.max(row.retenues, d.client);
+      row.notairesActifs = Math.max(row.notairesActifs, d.notaire);
+      row.notaires = Math.max(row.notaires, row.notairesActifs);
+      byCode.set(code, row);
+    }
+    for (const row of byCode.values()) {
+      row.du = row.retenues * domain.REFERRAL.client + row.notairesActifs * domain.REFERRAL.notaire;
+    }
+    // Every CLAIMED code is a row, even with zero referrals — the operator
+    // must see a partner the moment they register, not the day they earn.
+    // (Partners claimed before the sparse GSI overload are not listed until
+    // their item is rewritten; their rows still appear from activity above.)
+    if (typeof repo.listPartners === 'function') {
+      try {
+        for (const p of (await repo.listPartners()) || []) {
+          const code = domain.normalizeReferralCode(p && p.code);
+          if (domain.isReferralCode(code) && !byCode.has(code)) byCode.set(code, emptyRow(code));
+        }
+      } catch {
+        /* enumeration is a visibility nicety — never break the overview */
+      }
+    }
     // Join the partner REGISTRY (POST /partenaires) onto each ledger row so the
     // operator sees WHO to pay — type + courriel when the code was claimed.
     // Attribution works without registration (an unclaimed code still tallies,
     // with null identity): the money owed is a fact of the carnet, the
     // registry only says where to send it. One GetItem per code actually in
-    // the ledger, fired concurrently.
-    const rows = domain.referralLedger(joined, notaires);
+    // the ledger, fired concurrently. Same sort as the domain fold: dollars
+    // owed first, then code.
+    const rows = [...byCode.values()].sort((a, b) => b.du - a.du || a.code.localeCompare(b.code));
     const codes = await Promise.all(
       rows.map(async (row) => {
         let partenaire = null;

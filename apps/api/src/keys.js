@@ -150,6 +150,37 @@ function partnerPK(code) {
 }
 const PARTNER_SK = 'PARTNER';
 
+// Registered partners also carry sparse GSI1 attributes (GSI1PK = 'PARTNER',
+// GSI1SK = code) so the admin ledger can enumerate every CLAIMED code with one
+// Query — a partner with zero referrals is still a row the operator must see.
+// Items written before this overload lack the attributes and simply do not
+// appear until rewritten; the ledger degrades to activity-only rows for them.
+const PARTNER_GSI1PK = 'PARTNER';
+
+// --- Durable referral earnings (ADR 0011) -------------------------------------
+// The money owed to a partner is recorded at EVENT time — the retain — as a
+// write-once item in the partner's own partition, so the admin ledger is
+// ALL-TIME and monotonic instead of an artifact of the live month window:
+//
+//   PK = PARTNER#<CODE>   SK = EARN#CLIENT#<bidId>     (a referred demand was
+//                                                       retained: +REFERRAL.client)
+//   PK = PARTNER#<CODE>   SK = EARN#NOTAIRE#<notaryId> (a referred notary retained
+//                                                       their FIRST act:
+//                                                       +REFERRAL.notaire, once ever)
+//
+// The key IS the idempotency: attribute_not_exists rejects a replayed accept.
+// Every earning also joins a second sparse GSI1 overload (GSI1PK = 'REFEARN',
+// GSI1SK = <CODE>#<TRACK>#<ref>) so the ledger reads all earnings in one
+// bounded Query — earnings are rare, real-money events, never a table walk.
+function referralEarnSK(track, refId) {
+  return `EARN#${String(track).toUpperCase()}#${refId}`;
+}
+const REFEARN_PREFIX = 'EARN#';
+const REFEARN_GSI1PK = 'REFEARN';
+function referralEarnGSI1SK(code, track, refId) {
+  return `${String(code).trim().toUpperCase()}#${String(track).toUpperCase()}#${refId}`;
+}
+
 // --- Admin table (admin.nota.ca) ---------------------------------------------
 // Identity, revocable sessions, single-use magic-link challenges, the immutable
 // audit log and rate-limit counters live in a SEPARATE `nota-admin` table, so
@@ -234,6 +265,11 @@ module.exports = {
   ACT_SK,
   partnerPK,
   PARTNER_SK,
+  PARTNER_GSI1PK,
+  referralEarnSK,
+  REFEARN_PREFIX,
+  REFEARN_GSI1PK,
+  referralEarnGSI1SK,
   // analytics rollups (write-sharded day counters)
   STATS_SHARDS,
   statsGlobalPK,
