@@ -325,3 +325,60 @@ test('incrNotaryRateCounter ADDs on a TTL window on the MAIN table and returns t
   assert.equal(input.Key.PK, 'NRL#notary_login#1.2.3.4');
   assert.ok(String(input.UpdateExpression).includes('ADD'));
 });
+
+// --- Partner code claim: email verification (ADR 0011 fraud-hardening) --------
+// Same conditional single-use consume + TTL design as the notary login, under a
+// DISTINCT prefix so a partner claim and a notary challenge never collide.
+
+test('putPartnerClaim writes the claim under the PARTNER_CLAIM# prefix on the MAIN table', async () => {
+  const sent = [];
+  const doc = { async send(cmd) { sent.push(cmd); return {}; } };
+  const repo = createDynamoRepo({ tableName: 'nota-main', doc });
+  await repo.putPartnerClaim({ challengeId: 'c1', code: 'EVEROY', type: 'courtier_hypothecaire', courriel: 'eve@courtage.ca', consumed: false, expiresAt: 9, ttl: 1 });
+  const input = sent[0].input;
+  assert.equal(input.TableName, 'nota-main');
+  assert.equal(input.Item.PK, 'PARTNER_CLAIM#c1');
+  assert.equal(input.Item.SK, 'PARTNER_CLAIM');
+  assert.equal(input.Item.code, 'EVEROY');
+});
+
+test('consumePartnerClaim is a conditional single-use consume: a replay/expiry returns null', async () => {
+  const doc = {
+    async send() {
+      const e = new Error('conditional check failed');
+      e.name = 'ConditionalCheckFailedException';
+      throw e;
+    },
+  };
+  const repo = createDynamoRepo({ tableName: 'nota-main', doc });
+  assert.equal(await repo.consumePartnerClaim('c1', 123), null);
+});
+
+test('consumePartnerClaim returns the record (PK/SK/type stripped) on the winning consume', async () => {
+  const sent = [];
+  const doc = {
+    async send(cmd) {
+      sent.push(cmd);
+      return { Attributes: { PK: 'PARTNER_CLAIM#c1', SK: 'PARTNER_CLAIM', type: 'partner_claim', code: 'EVEROY', courriel: 'eve@courtage.ca', consumed: true } };
+    },
+  };
+  const repo = createDynamoRepo({ tableName: 'nota-main', doc });
+  const rec = await repo.consumePartnerClaim('c1', 123);
+  assert.deepEqual(rec, { code: 'EVEROY', courriel: 'eve@courtage.ca', consumed: true });
+  const input = sent[0].input;
+  assert.equal(input.TableName, 'nota-main');
+  // `consumed` is a reserved word — it MUST be aliased, like the notary consume.
+  assert.equal(input.ExpressionAttributeNames['#consumed'], 'consumed');
+});
+
+test('incrPartnerRateCounter ADDs on a TTL window under the PRL# prefix and returns the running count', async () => {
+  const sent = [];
+  const doc = { async send(cmd) { sent.push(cmd); return { Attributes: { count: 2 } }; } };
+  const repo = createDynamoRepo({ tableName: 'nota-main', doc });
+  const n = await repo.incrPartnerRateCounter('partner_claim', '1.2.3.4', 900, 1_700_000_000_000);
+  assert.equal(n, 2);
+  const input = sent[0].input;
+  assert.equal(input.TableName, 'nota-main');
+  assert.equal(input.Key.PK, 'PRL#partner_claim#1.2.3.4');
+  assert.ok(String(input.UpdateExpression).includes('ADD'));
+});

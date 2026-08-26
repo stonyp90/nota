@@ -66,6 +66,28 @@ function createApp(repo, opts = {}) {
   const NOTARY_LOGIN_DEV_ECHO =
     opts.notaryLoginDevEcho != null ? !!opts.notaryLoginDevEcho : process.env.NODE_ENV !== 'production';
 
+  // --- Partner code claim: email verification (ADR 0011 fraud-hardening) -----
+  // Claiming a referral code is a TWO-step, mailbox-proven handshake, mirroring
+  // the notary magic link above: POST /partenaires mints a single-use challenge
+  // and emails a confirmation link; POST /partenaires/verify redeems it and only
+  // THEN writes the confirmed partner record. This closes code squatting (an
+  // unverified claim never becomes the payee) and harvest-then-claim (a code is
+  // never owned until its email is proven). All windows are injectable.
+  const PARTNER_CLAIM_TTL_MS = opts.partnerClaimTtlMs || 30 * 60 * 1000; // 30 min
+  const PARTNER_CLAIM_RL_WINDOW_SEC = opts.partnerClaimRlWindowSec || 15 * 60; // 15 min window
+  const PARTNER_CLAIM_RL_MAX = opts.partnerClaimRlMax || 5; // links / window / IP
+  // The site the confirmation link points back at (the Partenaires pane lives on
+  // the main site, opened via a `#pauth=<token>` hash the web app consumes on load).
+  const PARTNER_CLAIM_URL = String(
+    opts.partnerClaimUrl || process.env.NOTA_BASE_URL || opts.siteUrl || process.env.NOTA_SITE_URL || ''
+  ).replace(/\/+$/, '');
+  // Outside production, echo the link/token so the test suite and `npm run
+  // api:local` confirm a code with no mailbox. NEVER in production — there the
+  // emailed link is the only way through. An explicit opt wins so a test can
+  // assert the production (no-echo) shape.
+  const PARTNER_CLAIM_DEV_ECHO =
+    opts.partnerClaimDevEcho != null ? !!opts.partnerClaimDevEcho : process.env.NODE_ENV !== 'production';
+
   // Billing is injected so tests pass a fake (no Stripe package, no network).
   // In production it is built LAZILY on first use from a real Stripe adapter,
   // so existing tests — which never pass `billing` and never hit its routes —
@@ -684,19 +706,42 @@ function createApp(repo, opts = {}) {
       return json(201, { bid: publicBid(bid), clientToken });
     }
 
-    // The referral program's front door (ADR 0011): a professional claims their
-    // code self-serve — partner type, courriel, desired code. Public and
-    // unauthenticated like POST /bids: the program's whole risk model is that a
-    // code EARNS only on a completed, notarized act, so registering costs an
-    // abuser nothing and gains them nothing. Everything is validated through
-    // the domain (the categories and code shape are data there, never retyped
-    // here), the code is stored NORMALIZED, and uniqueness rides on the repo's
-    // write-once create: first claim wins, the same courriel re-claiming its
-    // own code is idempotent (200), anyone else's claim is a 409. The registry
-    // is never exposed publicly — only the admin ledger joins it.
+    // The referral program's front door (ADR 0011), now EMAIL-VERIFIED to close
+    // two fraud vectors: CODE SQUATTING (grabbing a real broker's obvious code
+    // before they register, then collecting their genuine referrals — reward
+    // mail follows the registered courriel) and HARVEST-THEN-CLAIM (farming
+    // earnings on a vanity code, then claiming it to become the payee). Claiming
+    // is now a TWO-step, mailbox-proven handshake mirroring the notary sign-in:
+    //   • Step 1 (here) — validate type/courriel/code, per-IP rate-limit, then
+    //     mint a single-use challenge tied to (code, email) and EMAIL a
+    //     confirmation link. NO partner record is written yet, so an unverified
+    //     claim never becomes the payee and never permanently blocks the real
+    //     owner.
+    //   • Step 2 (/partenaires/verify) — redeem the link, atomically consume the
+    //     challenge, and only THEN write the confirmed partner record.
+    // Enumeration honesty: a code already CONFIRMED by someone else answers 409
+    // (you cannot claim a taken code — the one unavoidable disclosure, matching
+    // the old UX); a FREE code and a merely-PENDING code are indistinguishable —
+    // both get the generic { ok: true } (+ dev echo outside production). A bad
+    // code still never costs anything (422 only on a malformed request).
     if (route === '/partenaires' && method === 'POST') {
       const { payload, error } = parseBody(request);
       if (error) return error;
+
+      // Throttle FIRST, keyed on the trusted source IP, so a hostile client
+      // cannot spam confirmation links regardless of which codes it guesses.
+      // Fail OPEN on a counter error — availability over strictness, exactly like
+      // the notary login path.
+      const ip = clientIp(request);
+      let count = 1;
+      try {
+        count = await repo.incrPartnerRateCounter('partner_claim', ip || 'unknown', PARTNER_CLAIM_RL_WINDOW_SEC, nowMs());
+      } catch {
+        count = 1;
+      }
+      if (count > PARTNER_CLAIM_RL_MAX) {
+        return json(429, { ok: true, throttled: true });
+      }
 
       const errors = [];
       const type = String(payload.type || '').trim();
@@ -713,25 +758,108 @@ function createApp(repo, opts = {}) {
       }
       if (errors.length) return json(422, { errors });
 
-      const partenaire = { code, type, courriel, createdAt: now() };
+      // A CONFIRMED (mailbox-proven) owner already holds this code?
+      //  • same courriel  -> the owner re-visiting: idempotent 200 with what is
+      //    on file (re-fire the welcome) — no re-verification needed.
+      //  • other courriel -> the code is owned; 409 code_deja_pris.
+      // A pending-only claim is NOT a confirmed owner, so it does not block here.
+      const existing = await repo.getPartner(code);
+      if (existing && existing.confirmedAt) {
+        if (existing.courriel === courriel) {
+          const pn = notifier();
+          if (pn) Promise.resolve(pn.onPartnerRegistered(existing)).catch(() => {});
+          return json(200, {
+            partenaire: { code: existing.code, type: existing.type, courriel: existing.courriel, createdAt: existing.createdAt },
+            confirmed: true,
+          });
+        }
+        return json(409, { errors: [{ code: 'code_deja_pris', message: 'Ce code est déjà réservé. Choisissez-en un autre.' }] });
+      }
+
+      // Free or merely-pending: mint a single-use claim challenge tied to (code,
+      // email) and email the confirmation link. NO PARTNER# record is written —
+      // only /partenaires/verify writes it. Several pending claims on a free code
+      // can coexist; whoever VERIFIES first wins (createPartner is write-once).
+      const cid = newId();
+      const exp = nowMs() + PARTNER_CLAIM_TTL_MS;
+      await repo.putPartnerClaim({
+        challengeId: cid,
+        code,
+        type,
+        courriel,
+        createdAt: new Date(nowMs()).toISOString(),
+        expiresAt: exp,
+        consumed: false,
+        ttl: Math.floor(exp / 1000) + 60, // let DynamoDB reap it shortly after expiry
+      });
+
+      // The link carries the CHALLENGE token in the hash (never a query string,
+      // which is logged); the web app consumes `#pauth=` on load and calls verify.
+      // `sub` is the code, so verify can cross-check the consumed claim.
+      const token = signChallengeToken(code, cid, exp);
+      const link = PARTNER_CLAIM_URL + '/#pauth=' + encodeURIComponent(token);
+
+      // Best-effort send on the shared branded template; a mail failure never
+      // changes the (generic) response — the partner can request another link.
+      const pn = notifier();
+      if (pn && typeof pn.onPartnerClaimRequested === 'function') {
+        Promise.resolve(
+          pn.onPartnerClaimRequested({ email: courriel, link, code, ttlMinutes: Math.round(PARTNER_CLAIM_TTL_MS / 60000) })
+        ).catch(() => {});
+      }
+
+      // Dev echo (never in production): hand the link + raw token back so tests
+      // and `npm run api:local` confirm a code with no mailbox.
+      const body = { ok: true };
+      if (PARTNER_CLAIM_DEV_ECHO) {
+        body.devLink = link;
+        body.devToken = token;
+      }
+      return json(200, body);
+    }
+
+    // Step 2 — redeem the confirmation link and WRITE the confirmed partner
+    // record. Single-use: the challenge is atomically consumed, so a replayed or
+    // expired link is rejected, and a forged/tampered token never verifies. Only
+    // here does a code become a payee of record (write-once createPartner + the
+    // sparse GSI1 attrs + a `confirmedAt` stamp), and only here is the welcome/
+    // operator mail sent — mirroring /notary/session/verify.
+    if (route === '/partenaires/verify' && method === 'POST') {
+      const { payload, error } = parseBody(request);
+      if (error) return error;
+
+      const claims = verifyToken(String(payload.token || ''), nowMs());
+      if (!claims || claims.scope !== SCOPES.CHALLENGE || !claims.cid) {
+        return json(401, { errors: [{ code: 'lien_invalide', message: 'Lien invalide ou expiré.' }] });
+      }
+
+      // Atomic single-use consume: the FIRST redemption wins, a replay gets null.
+      const claim = await repo.consumePartnerClaim(claims.cid, nowMs());
+      if (!claim || domain.normalizeReferralCode(claim.code) !== claims.sub) {
+        return json(401, { errors: [{ code: 'lien_invalide', message: 'Lien invalide ou déjà utilisé.' }] });
+      }
+
+      const code = domain.normalizeReferralCode(claim.code);
+      const partenaire = { code, type: claim.type, courriel: claim.courriel, createdAt: now(), confirmedAt: now() };
       if (await repo.createPartner(partenaire)) {
         // Welcome the partner (their shareable link + the reward tracks) and
-        // alert the operator. Fire-and-forget, like every send-point: mail
-        // must never break the registration response.
+        // alert the operator. Fire-and-forget, like every send-point: mail must
+        // never break the confirmation response.
         const pn = notifier();
         if (pn) Promise.resolve(pn.onPartnerRegistered(partenaire)).catch(() => {});
         return json(201, { partenaire });
       }
-      // The code exists. Same courriel -> the owner re-submitting their own
-      // registration (double-click, page refresh): idempotent 200 with what is
-      // on file. Any other courriel -> the code belongs to someone else.
-      const existing = await repo.getPartner(code);
-      if (existing && existing.courriel === courriel) {
-        // Re-fire the welcome: the SENT ledger makes it a no-op when the first
-        // send succeeded, and a natural retry when it did not.
+      // Someone else CONFIRMED this code between the request and this verify (the
+      // write-once create lost the race). Same courriel -> idempotent 200; anyone
+      // else -> the code now belongs to the other, verified owner.
+      const owner = await repo.getPartner(code);
+      if (owner && owner.courriel === partenaire.courriel) {
         const pn = notifier();
-        if (pn) Promise.resolve(pn.onPartnerRegistered(existing)).catch(() => {});
-        return json(200, { partenaire: { code: existing.code, type: existing.type, courriel: existing.courriel, createdAt: existing.createdAt } });
+        if (pn) Promise.resolve(pn.onPartnerRegistered(owner)).catch(() => {});
+        return json(200, {
+          partenaire: { code: owner.code, type: owner.type, courriel: owner.courriel, createdAt: owner.createdAt },
+          confirmed: true,
+        });
       }
       return json(409, { errors: [{ code: 'code_deja_pris', message: 'Ce code est déjà réservé. Choisissez-en un autre.' }] });
     }

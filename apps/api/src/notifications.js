@@ -127,10 +127,18 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
     }
   }
 
+  // A reward mail is a payout instruction, so it may bind ONLY a CONFIRMED
+  // partner (email-verified, ADR 0011 fraud-hardening) — a pending/unconfirmed
+  // claim is never a payee. In practice a PARTNER# record only exists once
+  // confirmed, but the `confirmedAt` check is made explicit here so an
+  // unconfirmed record can never receive reward mail.
+  const isConfirmedPartner = (p) => !!(p && p.courriel && p.confirmedAt);
+
   // --- Partner referral rewards (ADR 0011) ----------------------------------
-  // A reward mail goes only to a partner who actually REGISTERED their code
-  // (POST /partenaires gives us a courriel); an unregistered code still earns
-  // in the admin ledger, there is just nowhere to send the news. Two tracks:
+  // A reward mail goes only to a partner who actually CONFIRMED their code
+  // (POST /partenaires + /partenaires/verify gives us a verified courriel); an
+  // unregistered or unconfirmed code still earns in the admin ledger, there is
+  // just nowhere to send the news. Two tracks:
   //   • client: the retained bid carries `parrain` -> one mail per bid
   //     (refId = bid id, kind referral_client);
   //   • notaire: the retaining notary's profile carries `parrain` -> one mail
@@ -150,7 +158,7 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
 
     if (bid.parrain) {
       const partner = await repo.getPartner(bid.parrain);
-      if (partner && partner.courriel) {
+      if (isConfirmedPartner(partner)) {
         results.push(
           await sendOnce({
             refId: bid.id,
@@ -166,7 +174,7 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
       bid.notaryId && typeof repo.getNotary === 'function' ? await repo.getNotary(bid.notaryId) : null;
     if (notary && notary.parrain) {
       const partner = await repo.getPartner(notary.parrain);
-      if (partner && partner.courriel) {
+      if (isConfirmedPartner(partner)) {
         results.push(
           await sendOnce({
             refId: notary.id,
@@ -586,6 +594,31 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
     }
   }
 
+  // --- Partner code claim (email verification, ADR 0011 fraud-hardening) -----
+  // Fired from POST /partenaires (fire-and-forget). Emails the single-use
+  // confirmation link on the shared branded template. Like the notary magic link
+  // this bypasses sendOnce: a verification link is TRANSACTIONAL — it must resend
+  // on each request (a fresh single-use link every time) and must never be
+  // suppressed by an unsubscribe or a dedupe ledger. Best-effort: a mail failure
+  // must never break the request response (which stays generic anyway).
+  async function onPartnerClaimRequested({ email, link, code, ttlMinutes } = {}) {
+    const to = String(email || '').trim().toLowerCase();
+    if (!to || !link) return { ok: true, sent: false };
+    try {
+      const msg = emails.partnerClaimLink({
+        link,
+        code,
+        ttlMinutes,
+        baseUrl: base,
+        unsubscribeUrl: unsubscribeUrl(to),
+      });
+      await mailer.send({ to, subject: msg.subject, html: msg.html, text: msg.text });
+      return { ok: true, sent: true, to };
+    } catch (err) {
+      return { ok: false, sent: false, error: String((err && err.message) || err) };
+    }
+  }
+
   // Record an opt-out (used by GET /unsubscribe).
   async function unsubscribe(email) {
     const clean = String(email || '').trim().toLowerCase();
@@ -597,6 +630,7 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
   return {
     onOfferCreated,
     onOfferRetained,
+    onPartnerClaimRequested,
     onPartnerRegistered,
     onCounterOfferProposed,
     onDocumentsRequested,

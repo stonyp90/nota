@@ -46,12 +46,24 @@ When(
 );
 
 Given('le partenaire inscrit {string} avec le courriel {string}', async function (code, courriel) {
+  // Claiming a code is now email-verified (ADR 0011 fraud-hardening): the
+  // request only PENDS the claim; the confirmation link (echoed as devToken
+  // outside production) must be redeemed at /partenaires/verify to become the
+  // partner of record. Drive the whole two-step handshake here.
   await this.request({
     method: 'POST',
     path: '/partenaires',
     body: JSON.stringify({ type: 'agent_immobilier', courriel, code }),
   });
-  assert.equal(this.response.statusCode, 201, 'inscription du partenaire: ' + this.response.body);
+  assert.equal(this.response.statusCode, 200, 'demande de réclamation: ' + this.response.body);
+  const devToken = this.responseJson.devToken;
+  assert.ok(devToken, 'le lien de confirmation (devToken) doit être fourni hors production');
+  await this.request({
+    method: 'POST',
+    path: '/partenaires/verify',
+    body: JSON.stringify({ token: devToken }),
+  });
+  assert.equal(this.response.statusCode, 201, 'confirmation du partenaire: ' + this.response.body);
 });
 
 When(

@@ -69,8 +69,10 @@ function createLocalAdminApp({ today } = {}) {
       i % 5 === 0 ? { ...b, parrain: i % 10 === 0 ? 'EVEROY' : 'COURTIER1' } : b,
     );
     repo = createMemoryRepo(fixtures);
-    repo.createPartner({ code: 'EVEROY', type: 'agent_immobilier', courriel: 'eve.roy@agence.demo', createdAt: todayISO });
-    repo.createPartner({ code: 'COURTIER1', type: 'courtier_hypothecaire', courriel: 'marc.courtier@hypotheque.demo', createdAt: todayISO });
+    // Seeded as CONFIRMED (email-verified, ADR 0011) so the admin referral
+    // ledger shows these demo codes as owned payees, not unconfirmed claims.
+    repo.createPartner({ code: 'EVEROY', type: 'agent_immobilier', courriel: 'eve.roy@agence.demo', createdAt: todayISO, confirmedAt: todayISO });
+    repo.createPartner({ code: 'COURTIER1', type: 'courtier_hypothecaire', courriel: 'marc.courtier@hypotheque.demo', createdAt: todayISO, confirmedAt: todayISO });
   }
 
   const emails = (process.env.NOTA_ADMIN_EMAILS || '')

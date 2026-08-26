@@ -253,12 +253,22 @@ test('the claim form previews the normalized shareable link as the partner types
   assert.equal(prev.dataset.state, 'warn', 'a short code warns instead of previewing');
 });
 
-test('a 201 claim shows the shareable link and a copy button; editing re-arms the form', async () => {
+// The claim is EMAIL-VERIFIED (ADR 0011): POST /partenaires only pends (200 +
+// dev echo), then the web finishes verification in place with the echoed token.
+const claimRoutes = (verify) => [
+  {
+    match: (u, init) => u.endsWith('/partenaires') && (init.method === 'POST'),
+    reply: () => jsonRes(200, { ok: true, devToken: 'DEV-EVEROY' }),
+  },
+  {
+    match: (u) => u.endsWith('/partenaires/verify'),
+    reply: () => verify,
+  },
+];
+
+test('a verified claim shows the shareable link and a copy button; editing re-arms the form', async () => {
   const { win, doc, Nota, calls } = await boot({
-    routes: [{
-      match: (u) => u.endsWith('/partenaires'),
-      reply: () => jsonRes(201, { partenaire: { code: 'EVEROY' } }),
-    }],
+    routes: claimRoutes(jsonRes(201, { partenaire: { code: 'EVEROY' } })),
   });
   Nota.setTab('partenaires');
   doc.querySelector('#partner-type .chip').click();
@@ -267,22 +277,25 @@ test('a 201 claim shows the shareable link and a copy button; editing re-arms th
   assert.equal($(doc, 'partner-submit').disabled, false, 'type + courriel + code arm the CTA');
   fire(win, $(doc, 'partner-form'), 'submit');
   await wait(20);
-  const post = calls.find((c) => c.url.endsWith('/partenaires'));
+  const post = calls.find((c) => c.url.endsWith('/partenaires') && c.init.method === 'POST');
   assert.ok(post, 'POST /partenaires');
   const body = JSON.parse(post.init.body);
   assert.equal(body.code, 'EVEROY', 'the claim posts the normalized code');
   assert.equal(body.courriel, 'eve@agence.ca');
   assert.equal(body.type, doc.querySelector('#partner-type .chip').dataset.type);
+  // The echoed token was redeemed at /partenaires/verify.
+  assert.ok(calls.find((c) => c.url.endsWith('/partenaires/verify')), 'POST /partenaires/verify');
   assert.equal($(doc, 'partner-success').hidden, false);
   assert.equal($(doc, 'partner-link').textContent, 'https://nota.example/?ref=EVEROY');
   assert.ok($(doc, 'partner-copy'), 'a copy button beside the link');
 });
 
-test("the owner re-claiming their own code (idempotent 200) still gets their link — never an error", async () => {
+test("the owner re-requesting their own confirmed code still gets their link — never an error", async () => {
+  // The API short-circuits an already-confirmed owner with { confirmed: true }.
   const { win, doc, Nota } = await boot({
     routes: [{
-      match: (u) => u.endsWith('/partenaires'),
-      reply: () => jsonRes(200, { partenaire: { code: 'EVEROY' } }),
+      match: (u, init) => u.endsWith('/partenaires') && init.method === 'POST',
+      reply: () => jsonRes(200, { confirmed: true, partenaire: { code: 'EVEROY' } }),
     }],
   });
   Nota.setTab('partenaires');
@@ -291,8 +304,41 @@ test("the owner re-claiming their own code (idempotent 200) still gets their lin
   const code = $(doc, 'partner-code'); code.value = 'everoy'; fire(win, code, 'input');
   fire(win, $(doc, 'partner-form'), 'submit');
   await wait(20);
-  assert.equal($(doc, 'partner-errors').hidden, true, 'a double-submit is not an error');
+  assert.equal($(doc, 'partner-errors').hidden, true, 'a re-request is not an error');
   assert.equal($(doc, 'partner-success').hidden, false);
+  assert.equal($(doc, 'partner-link').textContent, 'https://nota.example/?ref=EVEROY');
+});
+
+test('a pending claim (production, no dev echo) shows the "check your email" state', async () => {
+  const { win, doc, Nota } = await boot({
+    routes: [{
+      match: (u, init) => u.endsWith('/partenaires') && init.method === 'POST',
+      reply: () => jsonRes(200, { ok: true }), // no devToken -> production shape
+    }],
+  });
+  Nota.setTab('partenaires');
+  doc.querySelector('#partner-type .chip').click();
+  const mail = $(doc, 'partner-courriel'); mail.value = 'eve@agence.ca'; fire(win, mail, 'input');
+  const code = $(doc, 'partner-code'); code.value = 'eve-roy'; fire(win, code, 'input');
+  fire(win, $(doc, 'partner-form'), 'submit');
+  await wait(20);
+  assert.equal($(doc, 'partner-pending').hidden, false, 'the pending state is shown until the link is opened');
+  assert.equal($(doc, 'partner-success').hidden, true, 'no shareable link before confirmation');
+  assert.equal($(doc, 'partner-errors').hidden, true, 'pending is not an error');
+});
+
+test('a #pauth= confirmation link is consumed on boot: it verifies and reveals the link', async () => {
+  const { win, doc, calls } = await boot({
+    url: '#pauth=DEV-EVEROY',
+    routes: [{
+      match: (u) => u.endsWith('/partenaires/verify'),
+      reply: () => jsonRes(201, { partenaire: { code: 'EVEROY' } }),
+    }],
+  });
+  await wait(30);
+  assert.ok(calls.find((c) => c.url.endsWith('/partenaires/verify')), 'the boot consumes the #pauth token');
+  assert.ok(!/pauth/.test(win.location.hash), 'the token never lingers in the URL (a refresh cannot replay it)');
+  assert.equal($(doc, 'partner-success').hidden, false, 'the shareable link is revealed');
   assert.equal($(doc, 'partner-link').textContent, 'https://nota.example/?ref=EVEROY');
 });
 

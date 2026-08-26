@@ -11,6 +11,7 @@ const { createFakeMailer } = require('../src/notify-port.js');
 const { createNotifier } = require('../src/notifications.js');
 const { notaryIdForEmail } = require('../src/notary-auth.js');
 import { notarySignIn } from '../test-support/notary-session.mjs';
+import { claimPartner } from '../test-support/partner-claim.mjs';
 const domain = require('@nota/domain');
 
 // POST /partenaires — the referral program's self-serve front door (ADR 0011) —
@@ -66,9 +67,17 @@ const bearer = (token) => ({ authorization: 'Bearer ' + token });
 
 // --- registration -------------------------------------------------------------
 
-test('POST /partenaires claims a code: normalized storage, 201 echo, welcome + operator mails', async () => {
+test('claiming a code is email-verified: request pends, verify confirms with normalized storage + welcome/operator mails', async () => {
   const a = app();
-  const res = await register(a, { type: 'courtier_hypothecaire', courriel: 'Eve@Courtage.CA', code: 'eve-roy' });
+  // Step 1 — the request only PENDS: nothing is stored, no welcome yet.
+  const req = await register(a, { type: 'courtier_hypothecaire', courriel: 'Eve@Courtage.CA', code: 'eve-roy' });
+  assert.equal(req.statusCode, 200, req.body);
+  const { devToken } = parse(req);
+  assert.ok(devToken, 'the dev echo carries the verification token');
+  assert.equal(await a.repo.getPartner('everoy'), null, 'no partner record before verification');
+
+  // Step 2 — verify writes the confirmed partner (normalized) and echoes it.
+  const res = await a.handle({ method: 'POST', path: '/partenaires/verify', body: JSON.stringify({ token: devToken }) });
   assert.equal(res.statusCode, 201, res.body);
   const { partenaire } = parse(res);
   assert.equal(partenaire.code, 'EVEROY', 'the code is stored NORMALIZED');
@@ -78,11 +87,11 @@ test('POST /partenaires claims a code: normalized storage, 201 echo, welcome + o
   const stored = await a.repo.getPartner('everoy');
   assert.equal(stored.code, 'EVEROY');
   assert.equal(stored.createdAt, TODAY);
+  assert.ok(stored.confirmedAt, 'the stored partner is explicitly confirmed');
 
   await flush();
-  const welcome = a.mailer.sent.find((m) => m.to === 'eve@courtage.ca');
-  assert.ok(welcome, 'the partner gets their welcome mail');
-  assert.ok(welcome.html.includes(BASE + '/?ref=EVEROY'), 'the welcome carries the shareable link');
+  const welcome = a.mailer.sent.find((m) => m.to === 'eve@courtage.ca' && m.html.includes(BASE + '/?ref=EVEROY'));
+  assert.ok(welcome, 'the partner gets their welcome mail, carrying the shareable link');
   const ops = a.mailer.sent.find((m) => m.to === 'ops@nota.ca');
   assert.ok(ops, 'the operator is alerted');
   assert.ok(ops.subject.includes('EVEROY'));
@@ -102,9 +111,9 @@ test('POST /partenaires: each typed validation error (type_inconnu, courriel_inv
   assert.ok(parse(await register(a, { type: 'nope', courriel: 'a@b.ca', code: 'GOODCODE' })).errors.some((e) => e.code === 'type_inconnu'));
 });
 
-test('POST /partenaires: a foreign claim on a taken code is 409; the owner re-claiming is idempotent 200', async () => {
+test('a foreign claim on a CONFIRMED code is 409; the owner re-requesting is idempotent 200', async () => {
   const a = app();
-  assert.equal((await register(a, { type: 'agent_immobilier', courriel: 'eve@agence.ca', code: 'EVEROY' })).statusCode, 201);
+  await claimPartner(a, { type: 'agent_immobilier', courriel: 'eve@agence.ca', code: 'EVEROY' }, { ip: '1.1.1.1' });
 
   // Someone else wants the same code (even spelled differently): 409, nothing overwritten.
   const stolen = await register(a, { type: 'courtier_hypothecaire', courriel: 'pirate@x.ca', code: 'eve.roy' });
@@ -112,14 +121,17 @@ test('POST /partenaires: a foreign claim on a taken code is 409; the owner re-cl
   assert.equal(parse(stolen).errors[0].code, 'code_deja_pris');
   assert.equal((await a.repo.getPartner('EVEROY')).courriel, 'eve@agence.ca');
 
-  // The owner re-submitting (refresh, double-click): 200 with what is on file.
+  // The owner re-requesting their own confirmed code (refresh, double-click):
+  // idempotent 200 with what is on file — no second verification needed.
   const again = await register(a, { type: 'agent_immobilier', courriel: 'EVE@agence.ca', code: 'EVEROY' });
   assert.equal(again.statusCode, 200);
+  assert.equal(parse(again).confirmed, true);
   assert.equal(parse(again).partenaire.code, 'EVEROY');
 
-  // The welcome was sent at most once (SENT ledger), even after the re-claim.
+  // The welcome (kind partnerWelcome) was sent at most once (SENT ledger), even
+  // after the re-request — the confirmation link is a separate transactional mail.
   await flush();
-  assert.equal(a.mailer.sent.filter((m) => m.to === 'eve@agence.ca').length, 1);
+  assert.equal(a.mailer.sent.filter((m) => m.to === 'eve@agence.ca' && m.html.includes(BASE + '/?ref=EVEROY')).length, 1);
 });
 
 // --- notary referral attribution (signup) --------------------------------------
@@ -163,7 +175,7 @@ test('the notary sign-in flow never exposes a stored parrain', async () => {
 
 test('POST /bids drops a self-referral: the partner booking with their own code earns nothing', async () => {
   const a = app();
-  await register(a, { type: 'courtier_hypothecaire', courriel: 'eve@courtage.ca', code: 'EVEROY' });
+  await claimPartner(a, { type: 'courtier_hypothecaire', courriel: 'eve@courtage.ca', code: 'EVEROY' });
   const res = await a.handle({
     method: 'POST', path: '/bids',
     body: JSON.stringify({
@@ -181,7 +193,7 @@ test('POST /bids drops a self-referral: the partner booking with their own code 
 
 test("POST /bids keeps the attribution when the booker is NOT the code's owner", async () => {
   const a = app();
-  await register(a, { type: 'courtier_hypothecaire', courriel: 'eve@courtage.ca', code: 'EVEROY' });
+  await claimPartner(a, { type: 'courtier_hypothecaire', courriel: 'eve@courtage.ca', code: 'EVEROY' });
   const res = await a.handle({
     method: 'POST', path: '/bids',
     body: JSON.stringify({
@@ -212,7 +224,7 @@ test('POST /bids: an anonymous booking (no courriel) with an UNREGISTERED code k
 
 test('POST /notaries/connect drops a self-referral: a partner cannot refer themselves as a notary', async () => {
   const a = app();
-  await register(a, { type: 'agent_immobilier', courriel: 'marc@agence.ca', code: 'MARCQC' });
+  await claimPartner(a, { type: 'agent_immobilier', courriel: 'marc@agence.ca', code: 'MARCQC' });
   const res = await a.handle({
     method: 'POST', path: '/notaries/connect',
     body: JSON.stringify({ email: 'Marc@Agence.CA', parrain: 'MARCQC' }),
@@ -243,7 +255,7 @@ async function session(a, email) {
 
 test('a retained referred demand mails the REGISTERED partner exactly once (kind referral_client)', async () => {
   const a = app();
-  await register(a, { type: 'courtier_hypothecaire', courriel: 'eve@courtage.ca', code: 'EVEROY' });
+  await claimPartner(a, { type: 'courtier_hypothecaire', courriel: 'eve@courtage.ca', code: 'EVEROY' });
   const bid = await seedRetainable(a, { parrain: 'EVEROY' });
   const token = await session(a, 'me@notaire.ca');
 
@@ -279,7 +291,7 @@ test('an UNREGISTERED parrain earns silently: no reward mail goes anywhere', asy
 
 test('a referred notary retaining their FIRST act mails the partner once ever (kind referral_notaire)', async () => {
   const a = app();
-  await register(a, { type: 'agent_immobilier', courriel: 'marc@agence.ca', code: 'MARCQC' });
+  await claimPartner(a, { type: 'agent_immobilier', courriel: 'marc@agence.ca', code: 'MARCQC' });
   // The notary signed up through a MARCQC link; the code sits privately on the profile.
   const id = notaryIdForEmail('ref@notaire.ca');
   await a.repo.putNotary({ id, email: 'ref@notaire.ca', status: 'active', parrain: 'MARCQC' });
@@ -313,7 +325,7 @@ const rowFor = (o, code) => o.parrainages.codes.find((c) => c.code === code);
 
 test('a retained referred demand still owes 50 $ once its date is far outside the 4-month window', async () => {
   const a = app();
-  await register(a, { type: 'courtier_hypothecaire', courriel: 'eve@courtage.ca', code: 'EVEROY' });
+  await claimPartner(a, { type: 'courtier_hypothecaire', courriel: 'eve@courtage.ca', code: 'EVEROY' });
   const bid = await seedRetainable(a, { parrain: 'EVEROY' });
   const token = await session(a, 'me@notaire.ca');
   const res = await a.handle({
@@ -333,7 +345,7 @@ test('a retained referred demand still owes 50 $ once its date is far outside th
 
 test("a referred notary's long-past first retained act still owes 250 $ (durable premierActe)", async () => {
   const a = app();
-  await register(a, { type: 'agent_immobilier', courriel: 'marc@agence.ca', code: 'MARCQC' });
+  await claimPartner(a, { type: 'agent_immobilier', courriel: 'marc@agence.ca', code: 'MARCQC' });
   const id = notaryIdForEmail('ref@notaire.ca');
   await a.repo.putNotary({ id, email: 'ref@notaire.ca', status: 'active', parrain: 'MARCQC' });
   const token = await session(a, 'ref@notaire.ca');
@@ -358,7 +370,7 @@ test("a referred notary's long-past first retained act still owes 250 $ (durable
 
 test('replaying the accept never double-counts the durable earnings', async () => {
   const a = app();
-  await register(a, { type: 'courtier_hypothecaire', courriel: 'eve@courtage.ca', code: 'EVEROY' });
+  await claimPartner(a, { type: 'courtier_hypothecaire', courriel: 'eve@courtage.ca', code: 'EVEROY' });
   // The retaining notary is ALSO referred by the same partner — both tracks fire.
   const id = notaryIdForEmail('ref@notaire.ca');
   await a.repo.putNotary({ id, email: 'ref@notaire.ca', status: 'active', parrain: 'EVEROY' });
@@ -379,7 +391,7 @@ test('replaying the accept never double-counts the durable earnings', async () =
 
 test('a freshly registered partner with ZERO referrals is visible in the ledger (du 0)', async () => {
   const a = app();
-  await register(a, { type: 'agent_immobilier', courriel: 'zoe@agence.ca', code: 'ZOEQC' });
+  await claimPartner(a, { type: 'agent_immobilier', courriel: 'zoe@agence.ca', code: 'ZOEQC' });
   const row = rowFor(await overviewAt(a, TODAY), 'ZOEQC');
   assert.ok(row, 'a claimed code appears even before any referral');
   assert.deepEqual(row, {

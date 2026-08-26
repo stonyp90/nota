@@ -11,6 +11,7 @@ const { createFakeMailer } = require('../src/notify-port.js');
 const { createNotifier } = require('../src/notifications.js');
 const { notaryIdForEmail } = require('../src/notary-auth.js');
 import { notarySignIn } from '../test-support/notary-session.mjs';
+import { claimPartner } from '../test-support/partner-claim.mjs';
 const domain = require('@nota/domain');
 
 // Fraud-hardening for the referral rail (ADR 0011). The program pays real money
@@ -64,9 +65,6 @@ function app(opts = {}) {
   };
 }
 
-const register = (a, body) =>
-  a.handle({ method: 'POST', path: '/partenaires', body: JSON.stringify(body) });
-
 // Post a referred demand under billing. It comes back PENDING (the client has
 // not authorized their card yet) — exactly the state a fabricated demand sits in.
 async function postReferredBid(a, parrain, over = {}) {
@@ -97,7 +95,7 @@ async function ledgerFor(a, code) {
 
 test('a referred demand the client never paid earns NOTHING when retained (billing on)', async () => {
   const a = app();
-  await register(a, { type: 'courtier_hypothecaire', courriel: 'eve@courtage.ca', code: 'EVEROY' });
+  await claimPartner(a, { type: 'courtier_hypothecaire', courriel: 'eve@courtage.ca', code: 'EVEROY' });
   const bid = await postReferredBid(a, 'EVEROY'); // pending — no Checkout completed
   const token = await activeSession(a, 'me@notaire.ca');
 
@@ -113,7 +111,7 @@ test('a referred demand the client never paid earns NOTHING when retained (billi
 
 test('a referred demand the client PAID earns the flat client amount when retained (billing on)', async () => {
   const a = app();
-  await register(a, { type: 'courtier_hypothecaire', courriel: 'eve@courtage.ca', code: 'EVEROY' });
+  await claimPartner(a, { type: 'courtier_hypothecaire', courriel: 'eve@courtage.ca', code: 'EVEROY' });
   const bid = await postReferredBid(a, 'EVEROY');
   // The client completes hosted Checkout — the webhook binds the PaymentIntent
   // and the demand goes live. This is the real path a genuine referral follows.
@@ -130,7 +128,7 @@ test('a referred demand the client PAID earns the flat client amount when retain
 
 test('the notaire track also ignores an unpaid first act (billing on)', async () => {
   const a = app();
-  await register(a, { type: 'agent_immobilier', courriel: 'marc@agence.ca', code: 'MARCQC' });
+  await claimPartner(a, { type: 'agent_immobilier', courriel: 'marc@agence.ca', code: 'MARCQC' });
   const id = notaryIdForEmail('ref@notaire.ca');
   await a.repo.putNotary({ id, email: 'ref@notaire.ca', status: 'active', chargesEnabled: true, connectAccountId: 'acct_ref', parrain: 'MARCQC' });
   const token = await activeSession(a, 'ref@notaire.ca');

@@ -730,6 +730,12 @@
                 </div>
                 <ul class="errors" id="partner-errors" role="alert" aria-atomic="true" hidden></ul>
                 <button type="submit" class="btn btn-primary btn-lg" id="partner-submit" disabled>Réclamer mon code →</button>
+                <!-- Email verification (ADR 0011): in production the claim only
+                     PENDS until the emailed link is opened, so the code cannot be
+                     squatted by someone who does not control the address. -->
+                <div id="partner-pending" class="partner-success" hidden aria-live="polite">
+                  <p class="help"><strong>Vérifiez votre courriel.</strong> Nous avons envoyé un lien à usage unique pour confirmer votre code — il devient actif dès que vous l’ouvrez.</p>
+                </div>
                 <div id="partner-success" class="partner-success" hidden>
                   <p class="help"><strong>Code réclamé.</strong> Partagez ce lien — chaque demande publiée par lui vous est attribuée :</p>
                   <div class="partner-link-row">

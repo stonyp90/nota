@@ -5600,59 +5600,131 @@
       else { prev.dataset.state = 'warn'; prev.textContent = 'Code invalide — entre 4 et 12 lettres ou chiffres.'; }
     }
     var mailOk = !!(mailInp && D.isEmail(mailInp.value.trim()));
-    // Editing after a claim resets the CTA out of its success state.
+    // Editing after a claim resets the CTA out of its success/pending state.
     if (!submit.getAttribute('aria-busy') && submit.textContent.trim() !== 'Réclamer mon code →') {
       submit.textContent = 'Réclamer mon code →';
       var succ = $('partner-success'); if (succ) succ.hidden = true;
+      var pend0 = $('partner-pending'); if (pend0) pend0.hidden = true;
     }
     submit.disabled = !(partnerState.type && mailOk && okCode);
   }
 
+  // Claiming a code is EMAIL-VERIFIED (ADR 0011 fraud-hardening): a claim only
+  // PENDS until the emailed confirmation link is opened, so a code can never be
+  // squatted by someone who does not control the address. Step 1 posts the
+  // claim; step 2 (partnerVerify, from the dev echo here or the emailed
+  // `#pauth=` link) confirms it and reveals the shareable link. Only a CONFIRMED
+  // claim persists nota.partner.v1 and surfaces the profile Parrainage card.
   async function onPartnerSubmit(e) {
     e.preventDefault();
     var submit = $('partner-submit');
     if (!submit || submit.disabled) return;
     var errs = $('partner-errors');
     var code = D.normalizeReferralCode($('partner-code').value);
+    var courriel = $('partner-courriel').value.trim();
+    var type = partnerState.type;
     submit.disabled = true; submit.setAttribute('aria-busy', 'true'); submit.textContent = 'Réclamation…';
-    function fail(msgs) {
-      if (errs) { clear(errs); errs.hidden = false; msgs.forEach(function (m) { errs.appendChild(el('li', null, m)); }); }
-      submit.textContent = 'Réclamer mon code →'; submit.removeAttribute('aria-busy');
-      partnerValidateUI();
-    }
     var r = null;
     try {
       r = await fetch(API_BASE + '/partenaires', {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ type: partnerState.type, courriel: $('partner-courriel').value.trim(), code: code }),
+        body: JSON.stringify({ type: type, courriel: courriel, code: code }),
       });
-    } catch (err) { fail(['Hors ligne. Réessayez une fois en ligne.']); return; }
+    } catch (err) { partnerFail(['Hors ligne. Réessayez une fois en ligne.']); return; }
     var j = {}; try { j = await r.json(); } catch (err) {}
-    // 201 = claimed; 200 = the owner re-claiming their own code (refresh,
-    // double-click) — the API answers idempotently with what is on file, and
-    // both deserve the same success: the shareable link, never an error.
-    if (r.status !== 201 && r.status !== 200) {
+    // 429 = throttled; 409/422 = typed errors; anything else non-200 = failure.
+    if (r.status === 429) { partnerFail(['Trop de tentatives. Réessayez dans quelques minutes.']); return; }
+    if (r.status !== 200) {
       // The API's typed errors carry their own French messages; the one worth
       // a friendlier phrasing here is the taken code.
       var known = { code_deja_pris: 'Ce code est déjà pris — essayez une variante.' };
       var list = (j.errors && j.errors.length) ? j.errors : [{ message: 'Inscription impossible pour le moment. Réessayez.' }];
-      fail(list.map(function (x) { return known[x.code] || x.message || 'Erreur serveur. Réessayez.'; }));
+      partnerFail(list.map(function (x) { return known[x.code] || x.message || 'Erreur serveur. Réessayez.'; }));
       return;
     }
     if (errs) errs.hidden = true;
-    submit.removeAttribute('aria-busy'); submit.textContent = 'Code réclamé ✓'; // stays disabled → no duplicate claim
+    var hint = { code: code, type: type, courriel: courriel };
+    // The owner re-requesting an ALREADY-confirmed code short-circuits: the API
+    // answers with the confirmed record, so it is an immediate success.
+    if (j.confirmed && j.partenaire) { partnerClaimConfirmed(j.partenaire, hint); return; }
+    // Dev/test path: the echoed token lets us finish verification in place, so
+    // the claim completes offline (local dev + the web test stubs).
+    if (j.devToken) { await partnerVerify(j.devToken, hint); return; }
+    // Production path: the confirmation link is in the partner's inbox.
+    submit.removeAttribute('aria-busy'); submit.textContent = 'Lien envoyé ✓'; // stays disabled
+    var box0 = $('partner-success'); if (box0) box0.hidden = true;
+    var pend = $('partner-pending'); if (pend) pend.hidden = false;
+  }
+
+  // Step 2 — redeem a claim challenge token (from the dev echo or the emailed
+  // `#pauth=` link) for a CONFIRMED partner. `hint` carries the values the
+  // request used, so the boot-from-link path (no hint) still resolves from the
+  // API's own record.
+  async function partnerVerify(token, hint) {
+    var r;
+    try {
+      r = await fetch(API_BASE + '/partenaires/verify', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ token: token }),
+      });
+    } catch (e) { partnerFail(['Hors ligne. Réessayez une fois en ligne.']); return { ok: false }; }
+    var j = {}; try { j = await r.json(); } catch (e) {}
+    // 201 = confirmed; 200 = the owner's idempotent re-confirm — both succeed.
+    if (r.status !== 201 && r.status !== 200) {
+      partnerFail((j.errors || [{ message: 'Lien invalide ou expiré. Redemandez un lien.' }]).map(function (x) { return x.message; }));
+      return { ok: false };
+    }
+    partnerClaimConfirmed(j.partenaire || {}, hint || {});
+    return { ok: true };
+  }
+
+  // A confirmed claim: reveal the shareable link, persist the record on this
+  // device (what the API has on file wins over the resubmitted values), and
+  // refresh the profile's Parrainage card.
+  function partnerClaimConfirmed(saved, hint) {
+    hint = hint || {};
+    var submit = $('partner-submit');
+    if (submit) { submit.removeAttribute('aria-busy'); submit.textContent = 'Code réclamé ✓'; submit.disabled = true; }
+    var errs = $('partner-errors'); if (errs) errs.hidden = true;
+    var pend = $('partner-pending'); if (pend) pend.hidden = true;
     var box = $('partner-success'); if (box) box.hidden = false;
-    var link = $('partner-link'); if (link) link.textContent = partnerShareLink((j.partenaire && j.partenaire.code) || code);
-    // Keep the claim on this device — what the API has on file wins over the
-    // resubmitted values (the idempotent 200 answers with the original record).
-    var saved = j.partenaire || {};
+    var code = saved.code || hint.code;
+    var link = $('partner-link'); if (link) link.textContent = partnerShareLink(code);
     partnerSet({
-      code: saved.code || code,
-      type: saved.type || partnerState.type,
-      courriel: saved.courriel || $('partner-courriel').value.trim(),
+      code: code,
+      type: saved.type || hint.type || partnerState.type,
+      courriel: saved.courriel || hint.courriel,
       createdAt: saved.createdAt || new Date().toISOString(),
     });
     if (state.tab === 'profil') renderProfil();
+  }
+
+  // Shared failure rendering for both the claim request and the verify step:
+  // surface the messages, clear the pending state, and re-arm the CTA.
+  function partnerFail(msgs) {
+    var errs = $('partner-errors');
+    if (errs) { clear(errs); errs.hidden = false; msgs.forEach(function (m) { errs.appendChild(el('li', null, m)); }); }
+    var pend = $('partner-pending'); if (pend) pend.hidden = true;
+    var submit = $('partner-submit');
+    if (submit) { submit.removeAttribute('aria-busy'); submit.textContent = 'Réclamer mon code →'; }
+    partnerValidateUI();
+  }
+
+  // A confirmation link opens the site with the claim token in the URL hash.
+  // Consume it once on boot: strip it from the URL (so a refresh / shared copy
+  // can never replay it, and it never lingers in history), land on the
+  // Partenaires pane, verify. Mirrors ncConsumeMagicHash for the notary link.
+  function partnerConsumeClaimHash() {
+    var params;
+    try { params = new URLSearchParams(String(location.hash || '').replace(/^#/, '')); } catch (e) { return false; }
+    var token = params.get('pauth');
+    if (!token) return false;
+    params.delete('pauth');
+    var rest = params.toString();
+    try { history.replaceState(null, '', location.pathname + location.search + (rest ? '#' + rest : '')); } catch (e) {}
+    setTab('partenaires', { focus: false });
+    partnerVerify(token, null);
+    return true;
   }
 
   // Clipboard with visible feedback either way — shared by the Partenaires
@@ -5724,6 +5796,9 @@
     ncRestore();
     // A magic link (#nauth=…) takes over: consume it and open the console.
     ncConsumeMagicHash();
+    // A partner confirmation link (#pauth=…) confirms an email-verified code:
+    // consume it, open the Partenaires pane, and reveal the shareable link.
+    partnerConsumeClaimHash();
 
     // In-app notifications: render what's stored, then derive fresh events
     // (date-approaching / retained) from this browser's own offers.

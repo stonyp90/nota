@@ -35,6 +35,12 @@ function createMemoryRepo(seed = []) {
   const notaryChallenges = new Map(); // challengeId -> record
   const notaryRateCounters = new Map(); // `${scope}#${key}#${windowStart}` -> count
 
+  // Partner code claim (email verification): single-use claim challenges and a
+  // per-IP request rate-limit counter — kept apart from the notary equivalents
+  // so a notary and a partner challenge can never be confused (ADR 0011).
+  const partnerClaims = new Map(); // challengeId -> pending claim record
+  const partnerRateCounters = new Map(); // `${scope}#${key}#${windowStart}` -> count
+
   // Analytics rollups (STATS#): counter items keyed by `${pk}\x00${sk}`.
   const stats = new Map();
   const statKey = (pk, sk) => `${pk}\x00${sk}`;
@@ -255,6 +261,32 @@ function createMemoryRepo(seed = []) {
       const k = `${scope}#${String(key).toLowerCase()}#${windowStart}`;
       const count = (notaryRateCounters.get(k) || 0) + 1;
       notaryRateCounters.set(k, count);
+      return count;
+    },
+
+    // --- Partner code claim (email verification, ADR 0011 fraud-hardening) ---
+    // The two-step claim's single-use challenge + per-IP rate limit. Symmetric
+    // with the notary login above (own maps, so a notary and a partner challenge
+    // never share state), mirroring the DynamoDB conditional-consume + TTL.
+    async putPartnerClaim(claim) {
+      partnerClaims.set(claim.challengeId, { ...claim });
+    },
+    // Atomic single-use consume: return the claim only if it exists, is
+    // unconsumed and unexpired; flip it consumed so a replay gets null.
+    async consumePartnerClaim(challengeId, nowMs) {
+      const c = partnerClaims.get(challengeId);
+      if (!c || c.consumed) return null;
+      if (typeof nowMs === 'number' && nowMs >= Number(c.expiresAt)) return null;
+      c.consumed = true;
+      partnerClaims.set(challengeId, c);
+      return { ...c };
+    },
+    // Fixed-window per-IP counter for the claim request, on its own map.
+    async incrPartnerRateCounter(scope, key, windowSec, nowMs) {
+      const windowStart = Math.floor(nowMs / 1000 / windowSec);
+      const k = `${scope}#${String(key).toLowerCase()}#${windowStart}`;
+      const count = (partnerRateCounters.get(k) || 0) + 1;
+      partnerRateCounters.set(k, count);
       return count;
     },
 
