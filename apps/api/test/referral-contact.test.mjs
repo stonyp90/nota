@@ -6,6 +6,7 @@ const require = createRequire(import.meta.url);
 const { createApp } = require('../src/handler.js');
 const { createMemoryRepo } = require('../src/repo-memory.js');
 const { notaryIdForEmail } = require('../src/notary-auth.js');
+import { notarySignIn } from '../test-support/notary-session.mjs';
 const domain = require('@nota/domain');
 
 // The two privacy-critical features of the financing pivot, end to end:
@@ -54,9 +55,7 @@ const postBid = (a, over = {}) =>
 
 async function session(a, email) {
   await a.repo.putNotary({ id: notaryIdForEmail(email), email, status: 'active', label: 'Étude ' + email });
-  const res = await a.handle({ method: 'POST', path: '/notary/session', body: JSON.stringify({ email }) });
-  assert.equal(res.statusCode, 200, res.body);
-  return parse(res).token;
+  return (await notarySignIn(a, email)).token;
 }
 
 const listNotaryBids = (a, token) =>

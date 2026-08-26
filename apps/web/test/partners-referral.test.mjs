@@ -180,7 +180,8 @@ test('the captured code rides as `parrain` on the notary signup too', async () =
     }
     return Promise.reject(new Error('offline'));
   };
-  await Nota.notary.signIn('nouveau@etude.ca');
+  $(doc, 'nc-email').value = 'nouveau@etude.ca';
+  $(doc, 'notary-signup-link').click(); // self-select the signup branch
   // Transparent here too: the signup prompt's referral field shows the code.
   assert.equal($(doc, 'nc-signup-parrain').value, 'EVEROY', 'the signup field is pre-filled from ?ref');
   $(doc, 'notary-signup-btn').click();
@@ -203,7 +204,8 @@ test('a notary can type a spoken referral code on the signup prompt', async () =
     }
     return Promise.reject(new Error('offline'));
   };
-  await Nota.notary.signIn('nouveau@etude.ca');
+  $(doc, 'nc-email').value = 'nouveau@etude.ca';
+  $(doc, 'notary-signup-link').click(); // self-select the signup branch
   $(doc, 'nc-signup-parrain').value = ' marc qc ';
   $(doc, 'notary-signup-btn').click();
   await wait(20);

@@ -6,14 +6,20 @@
  * A token is `base64url(payload) + '.' + base64url(HMAC-SHA256(payload))`, where
  * payload is a compact JSON `{ sub: <notaryId>, exp: <epoch ms>, scope }`. The
  * `scope` narrows what the token authorizes:
- *   - 'session' — the full console (list, accept, decline, read dossier).
- *   - 'feed'    — a READ-ONLY calendar token, safe to embed in a webcal URL; it
- *                 grants nothing but the .ics feed and can never accept a bid or
- *                 read a dossier.
- *   - 'client'  — a per-bid client token (sub = bid id) issued by POST /bids;
- *                 grants only the /client/* routes for that bid.
+ *   - 'session'   — the full console (list, accept, decline, read dossier).
+ *   - 'feed'      — a READ-ONLY calendar token, safe to embed in a webcal URL; it
+ *                   grants nothing but the .ics feed and can never accept a bid or
+ *                   read a dossier.
+ *   - 'client'    — a per-bid client token (sub = bid id) issued by POST /bids;
+ *                   grants only the /client/* routes for that bid.
+ *   - 'challenge' — a single-use magic-link token (carries `cid`), good only to
+ *                   exchange for a session once the caller proves they own the
+ *                   mailbox it was emailed to. Short-lived; mirrors admin-auth's
+ *                   CHALLENGE scope so notary sign-in is no longer a bare-email
+ *                   token mint (the "known weakness" this closes).
  * Verification recomputes the HMAC with a timing-safe compare and rejects a
- * tampered or expired token, returning `{ sub, scope }` on success.
+ * tampered or expired token, returning `{ sub, scope }` (plus `cid` on a
+ * challenge token) on success.
  *
  * The signing secret comes from NOTA_NOTARY_SECRET and fails CLOSED: in
  * production a missing/empty secret throws (signing with a public constant would
@@ -30,7 +36,7 @@ const crypto = require('node:crypto');
 // the per-bid token a client (who has no account) receives when posting an
 // offer: its `sub` is the BID id, and it only authorizes the /client/* routes
 // for that one bid (see and answer propositions, update the dossier).
-const SCOPES = { SESSION: 'session', FEED: 'feed', CLIENT: 'client' };
+const SCOPES = { SESSION: 'session', FEED: 'feed', CLIENT: 'client', CHALLENGE: 'challenge' };
 
 // Never a production secret — only so tests and `npm run api:local` work with no
 // configuration. Production MUST set NOTA_NOTARY_SECRET (see infra/lambda.tf);
@@ -73,6 +79,19 @@ function signToken(sub, exp, scope = SCOPES.SESSION, sec = secret()) {
   return payload + '.' + sig;
 }
 
+// Sign a single-use CHALLENGE token for the passwordless magic link. It carries
+// the challenge id (`cid`, mirroring admin-auth) so verify can atomically consume
+// the matching server-side login record — a valid signature alone is NOT enough
+// to open the console; the caller must present a link that was emailed to the
+// mailbox and has not yet been redeemed. Short `exp` (epoch ms) set by the caller.
+function signChallengeToken(sub, cid, exp, sec = secret()) {
+  const payload = b64url(
+    JSON.stringify({ sub: String(sub), cid: String(cid), exp: Number(exp), scope: SCOPES.CHALLENGE })
+  );
+  const sig = crypto.createHmac('sha256', sec).update(payload).digest('base64url');
+  return payload + '.' + sig;
+}
+
 // Returns `{ sub, scope }` for a valid, unexpired token, else null. `nowMs` is
 // the current time in epoch milliseconds (injected for determinism). A token
 // minted before scopes existed (no scope claim) is treated as a full 'session'
@@ -99,7 +118,12 @@ function verifyToken(token, nowMs, sec = secret()) {
   if (typeof claims.exp !== 'number' || !Number.isFinite(claims.exp)) return null;
   if (Number(nowMs) >= claims.exp) return null; // expired
   const scope = typeof claims.scope === 'string' ? claims.scope : SCOPES.SESSION;
-  return { sub: claims.sub, scope };
+  // Only a challenge token carries a `cid`; surface it when present so verify can
+  // consume the matching record. Session/feed/client tokens keep the exact
+  // `{ sub, scope }` shape they always had (no undefined `cid` key added).
+  const out = { sub: claims.sub, scope };
+  if (typeof claims.cid === 'string' && claims.cid) out.cid = claims.cid;
+  return out;
 }
 
-module.exports = { signToken, verifyToken, notaryIdForEmail, DEV_FALLBACK_SECRET, SCOPES };
+module.exports = { signToken, signChallengeToken, verifyToken, notaryIdForEmail, DEV_FALLBACK_SECRET, SCOPES };

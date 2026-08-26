@@ -66,7 +66,8 @@ const server = http.createServer(async (req, res) => {
     const query = Object.fromEntries(url.searchParams);
     let body = '';
     for await (const chunk of req) body += chunk;
-    const out = await app.handle({ method: req.method, path: url.pathname, query, headers: req.headers, body });
+    const sourceIp = req.socket && req.socket.remoteAddress;
+    const out = await app.handle({ method: req.method, path: url.pathname, query, headers: req.headers, body, sourceIp });
     res.writeHead(out.statusCode, out.headers);
     res.end(out.body);
   } catch (err) {

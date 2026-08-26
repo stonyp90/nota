@@ -29,6 +29,12 @@ function createMemoryRepo(seed = []) {
   const declines = new Set(); // `${notaryId}#${bidId}`
   const retained = new Map(); // `${notaryId}#${bidId}` -> { id, dateISO, serviceId, montant }
 
+  // Notary magic-link login: single-use challenges (main table) and a per-IP
+  // login rate-limit counter, kept apart from the admin equivalents above so an
+  // admin and a notary challenge can never be confused.
+  const notaryChallenges = new Map(); // challengeId -> record
+  const notaryRateCounters = new Map(); // `${scope}#${key}#${windowStart}` -> count
+
   // Analytics rollups (STATS#): counter items keyed by `${pk}\x00${sk}`.
   const stats = new Map();
   const statKey = (pk, sk) => `${pk}\x00${sk}`;
@@ -223,6 +229,33 @@ function createMemoryRepo(seed = []) {
         .filter(([k]) => k.startsWith(`${notaryId}#`))
         .map(([, v]) => v)
         .sort((a, b) => a.dateISO.localeCompare(b.dateISO) || String(a.id).localeCompare(String(b.id)));
+    },
+
+    // --- Notary magic-link login (single-use challenges + rate limit) -------
+    // Symmetric with the admin login challenge, but on the MAIN table (see
+    // keys.js): the public API Lambda cannot reach the admin table, so the
+    // notary console keeps its own challenge/rate-limit records here.
+    async putNotaryLoginChallenge(challenge) {
+      notaryChallenges.set(challenge.challengeId, { ...challenge });
+    },
+    // Atomic single-use consume: return the challenge only if it exists, is
+    // unconsumed and unexpired; flip it consumed so a replay gets null.
+    async consumeNotaryLoginChallenge(challengeId, nowMs) {
+      const c = notaryChallenges.get(challengeId);
+      if (!c || c.consumed) return null;
+      if (typeof nowMs === 'number' && nowMs >= Number(c.expiresAt)) return null;
+      c.consumed = true;
+      notaryChallenges.set(challengeId, c);
+      return { ...c };
+    },
+    // Fixed-window counter, same shape as incrRateCounter but on its own map so a
+    // notary login attempt never shares a window with an admin one.
+    async incrNotaryRateCounter(scope, key, windowSec, nowMs) {
+      const windowStart = Math.floor(nowMs / 1000 / windowSec);
+      const k = `${scope}#${String(key).toLowerCase()}#${windowStart}`;
+      const count = (notaryRateCounters.get(k) || 0) + 1;
+      notaryRateCounters.set(k, count);
+      return count;
     },
 
     // --- Analytics rollups (STATS#) -----------------------------------------

@@ -13,6 +13,7 @@ const { createMemoryRepo } = require('../src/repo-memory.js');
 const { createFakeMailer } = require('../src/notify-port.js');
 const { createNotifier } = require('../src/notifications.js');
 const { notaryIdForEmail } = require('../src/notary-auth.js');
+import { notarySignIn } from '../test-support/notary-session.mjs';
 const domain = require('@nota/domain');
 
 const TODAY = '2026-08-12';
@@ -58,9 +59,7 @@ async function seedBid(a, over = {}) {
 
 async function session(a, email) {
   await a.repo.putNotary({ id: notaryIdForEmail(email), email, status: 'active', label: 'Étude ' + email });
-  const res = await a.handle({ method: 'POST', path: '/notary/session', body: JSON.stringify({ email }) });
-  assert.equal(res.statusCode, 200, res.body);
-  return parse(res).token;
+  return (await notarySignIn(a, email)).token;
 }
 
 const cancel = (a, token, body) =>

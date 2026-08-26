@@ -645,7 +645,7 @@
       if (dlg && dlg.close) { try { dlg.close(); } catch (e) {} }
       setTab('notaires', { focus: false });
       var ncEmail = $('nc-email'); if (ncEmail) ncEmail.value = val;
-      ncSignIn(val); // existing /notary/session flow (offers free signup when new)
+      ncSignIn(val); // passwordless request → verify (magic link); signup one click away
       return;
     }
     profileSet({ courriel: val });               // client identity is device-local
@@ -3483,7 +3483,18 @@
   // as a failed login.
   function ncShowGateStep(which) {
     var email = $('notary-gate-step-email'); if (email) email.hidden = which !== 'email';
+    var sent = $('notary-gate-step-sent'); if (sent) sent.hidden = which !== 'sent';
     var signup = $('notary-signup-prompt'); if (signup) signup.hidden = which !== 'signup';
+  }
+
+  // "Check your inbox" — shown after a link request in production (no dev echo).
+  // Enumeration-safe: it says nothing about whether the address is a notary.
+  function ncShowSentStep(email) {
+    ncSetErrors([]);
+    var who = $('notary-sent-email'); if (who) who.textContent = email;
+    ncShowGateStep('sent');
+    var box = $('notary-gate-step-sent');
+    if (box) { try { box.focus({ preventScroll: true }); } catch (e) { try { box.focus(); } catch (e2) {} } }
   }
 
   // A valid email with no active subscription isn't an error — it's a NEW notary.
@@ -3634,28 +3645,60 @@
     if (msg) toast(msg);
   }
 
+  // Step 1 of passwordless sign-in: request a single-use magic link. The API is
+  // ENUMERATION-SAFE — an active notary, an inactive one and a stranger all get
+  // the same generic ok, so this never tells us whether the address is a notary.
+  // Outside production the API echoes the challenge token (devToken), so the
+  // handshake completes with no mailbox (local dev + the web test stubs); in
+  // production the notary opens the emailed link, which boots into ncVerifyMagic.
   async function ncSignIn(email) {
     email = (email || '').trim();
     ncShowGateStep('email'); // every attempt starts from the email step
     var r;
     try {
-      r = await fetch(API_BASE + '/notary/session', {
+      r = await fetch(API_BASE + '/notary/session/request', {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ email: email }),
       });
     } catch (e) { ncSetErrors(['Console indisponible hors ligne. Réessayez une fois en ligne.']); return { ok: false }; }
     var j = {}; try { j = await r.json(); } catch (e) {}
+    if (r.status === 422) {
+      ncSetErrors((j.errors || [{ message: 'Entrez un courriel valide.' }]).map(function (x) { return x.message; }));
+      return { ok: false };
+    }
     if (r.status !== 200) {
-      // Not a registered/active notary → this email just needs to sign up (free).
-      // Offer onboarding right here instead of a dead-end "compte requis".
-      if (r.status === 403 && j.errors && j.errors[0] && j.errors[0].code === 'compte_requis') {
-        ncShowSignup(email);
-        return { ok: false, signup: true };
-      }
       ncSetErrors((j.errors || [{ message: 'Connexion refusée.' }]).map(function (x) { return x.message; }));
       return { ok: false };
     }
     ncSetErrors([]);
+    // Dev/test path: the echoed token lets us finish the handshake in place, so
+    // Nota.notary.signIn stays a one-call end-to-end sign-in offline.
+    if (j.devToken) return ncVerifyMagic(j.devToken, email);
+    // Production path: the link is in the notary's inbox. Confirm and wait.
+    ncShowSentStep(email);
+    return { ok: true, pending: true };
+  }
+
+  // Step 2: redeem a challenge token (from the dev echo or the emailed link) for
+  // a real session. `emailHint` is the address the request used; the API also
+  // returns the notary's own email on the authenticated response, which the
+  // boot-from-link path (no hint) relies on to key the retained store.
+  async function ncVerifyMagic(token, emailHint) {
+    var r;
+    try {
+      r = await fetch(API_BASE + '/notary/session/verify', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ token: token }),
+      });
+    } catch (e) { ncSetErrors(['Console indisponible hors ligne. Réessayez une fois en ligne.']); return { ok: false }; }
+    var j = {}; try { j = await r.json(); } catch (e) {}
+    if (r.status !== 200) {
+      ncShowGateStep('email');
+      ncSetErrors((j.errors || [{ message: 'Lien invalide ou expiré. Redemandez un lien.' }]).map(function (x) { return x.message; }));
+      return { ok: false };
+    }
+    ncSetErrors([]);
+    var email = j.email || emailHint || nc.email;
     nc.token = j.token; nc.feedToken = j.feedToken || null; nc.email = email;
     lsSave(LS_NC_TOKEN, j.token); lsSave(LS_NC_FEED_TOKEN, nc.feedToken); lsSave(LS_NC_EMAIL, email);
     ncRenderAuthState();
@@ -3663,6 +3706,23 @@
     var loaded = await ncLoadBids();
     if (loaded) toast('Console ouverte pour ' + email + '.');
     return { ok: true };
+  }
+
+  // A magic link opens the site with the challenge token in the URL hash. Consume
+  // it once on boot: strip it from the URL (so a refresh / shared copy can never
+  // replay it, and it never lingers in history), land on the notary tab, verify.
+  function ncConsumeMagicHash() {
+    var params;
+    try { params = new URLSearchParams(String(location.hash || '').replace(/^#/, '')); } catch (e) { return false; }
+    var token = params.get('nauth');
+    if (!token) return false;
+    params.delete('nauth');
+    var rest = params.toString();
+    try { history.replaceState(null, '', location.pathname + location.search + (rest ? '#' + rest : '')); } catch (e) {}
+    setTab('notaires', { focus: false });
+    ncShowGateStep('email');
+    ncVerifyMagic(token, null);
+    return true;
   }
 
   async function ncLoadBids() {
@@ -5329,6 +5389,15 @@
     // The branch's exit: back to the email step, address kept.
     var ncBack = $('notary-signup-back');
     if (ncBack) ncBack.addEventListener('click', ncShowEmailStep);
+    // "First time? Create a free account": the signup branch is user-initiated
+    // now that the request is enumeration-safe (the server never routes here).
+    var ncSignupLink = $('notary-signup-link');
+    if (ncSignupLink) ncSignupLink.addEventListener('click', function () {
+      ncShowSignup(($('nc-email') && $('nc-email').value.trim()) || '');
+    });
+    // "Use another email" from the check-your-inbox step returns to step 1.
+    var ncSentBack = $('notary-sent-back');
+    if (ncSentBack) ncSentBack.addEventListener('click', ncShowEmailStep);
     var ncOut = $('notary-signout'); if (ncOut) ncOut.addEventListener('click', ncSignOut);
     var ncRef = $('notary-refresh'); if (ncRef) ncRef.addEventListener('click', function () { ncLoadBids().then(function (ok) { if (ok) toast('Demandes rafraîchies.'); }); });
 
@@ -5653,6 +5722,8 @@
 
     // Restore a stored notary session (no fetch unless a token is present).
     ncRestore();
+    // A magic link (#nauth=…) takes over: consume it and open the console.
+    ncConsumeMagicHash();
 
     // In-app notifications: render what's stored, then derive fresh events
     // (date-approaching / retained) from this browser's own offers.
@@ -5687,6 +5758,7 @@
     notary: {
       state: nc,
       signIn: ncSignIn,
+      verifyMagic: ncVerifyMagic,
       signOut: ncSignOut,
       loadBids: ncLoadBids,
       accept: ncAccept,
