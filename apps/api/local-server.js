@@ -8,6 +8,7 @@
  */
 const http = require('node:http');
 const { createApp } = require('./src/handler');
+const { createBilling } = require('./src/billing');
 const { createMemoryRepo } = require('./src/repo-memory');
 const { createDynamoRepo } = require('./src/repo-dynamo');
 const domain = require('@nota/domain');
@@ -24,10 +25,40 @@ if (useDynamo) {
   });
 } else {
   const today = new Date().toISOString().slice(0, 10);
-  repo = createMemoryRepo(domain.makeFixtures(today));
+  // Same demo referral slice as admin-local-server.js: a deterministic subset
+  // of the fixtures arrives via partner links and the two demo partners are
+  // registered, so POST /partenaires' idempotent/409 paths and the referral
+  // field are exercisable against this server out of the box.
+  const fixtures = domain.makeFixtures(today).map((b, i) =>
+    i % 5 === 0 ? { ...b, parrain: i % 10 === 0 ? 'EVEROY' : 'COURTIER1' } : b,
+  );
+  repo = createMemoryRepo(fixtures);
+  repo.createPartner({ code: 'EVEROY', type: 'agent_immobilier', courriel: 'eve.roy@agence.demo', createdAt: today });
+  repo.createPartner({ code: 'COURTIER1', type: 'courtier_hypothecaire', courriel: 'marc.courtier@hypotheque.demo', createdAt: today });
 }
 
-const app = createApp(repo);
+// In-memory demo: a Stripe stand-in so the FULL lifecycle (retain, complete,
+// commission) is walkable with zero configuration — every call succeeds with
+// deterministic ids and no network. `billingConfigured: false` keeps the
+// pre-billing offer flow (no hosted checkout), exactly like the BDD world.
+// With TABLE_NAME (a real deployment shape) nothing is injected: billing is
+// built lazily from the real Stripe env, and completing an act without keys
+// fails loudly rather than pretending money moved.
+const demoBilling = useDynamo ? null : createBilling({
+  repo,
+  stripe: {
+    async createConnectAccount() { return { id: 'acct_demo' }; },
+    async createOnboardingLink({ accountId }) { return { url: 'http://localhost:' + PORT + '/demo-onboarding/' + accountId }; },
+    async createOfferAuthorization({ bidId }) { return { sessionId: 'cs_demo_' + bidId, url: 'http://localhost:' + PORT + '/demo-checkout/' + bidId }; },
+    async captureAndTransfer({ bidId }) { return { id: 'pi_demo_' + bidId }; },
+    async chargeActCommission({ bidId }) { return { id: 'ch_demo_' + bidId }; },
+    async cancelOfferAuthorization({ bidId }) { return { id: 'pi_demo_' + bidId, canceled: true }; },
+    constructEvent() { throw new Error('demo mode: no Stripe webhooks'); },
+  },
+  now: () => new Date().toISOString(),
+});
+
+const app = createApp(repo, demoBilling ? { billing: demoBilling, billingConfigured: false } : {});
 
 const server = http.createServer(async (req, res) => {
   try {
@@ -39,7 +70,14 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(out.statusCode, out.headers);
     res.end(out.body);
   } catch (err) {
-    res.writeHead(500, { 'content-type': 'application/json' });
+    // CORS on the failure path too: without these headers the browser cannot
+    // read the error and the web app misreports a server fault as "offline".
+    res.writeHead(500, {
+      'content-type': 'application/json',
+      'access-control-allow-origin': '*',
+      'access-control-allow-methods': 'GET,POST,OPTIONS',
+      'access-control-allow-headers': 'content-type,authorization',
+    });
     res.end(JSON.stringify({ errors: [{ code: 'erreur_serveur', message: String(err && err.message || err) }] }));
   }
 });

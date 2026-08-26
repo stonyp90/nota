@@ -15,7 +15,7 @@ const CTX = {
   montant: 1500,
   tier: 'prioritaire',
   days: 7,
-  bids: [{ serviceId: 'testament', dateISO: '2026-08-20', montant: 700, tier: 'rapide' }],
+  bids: [{ serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2400, tier: 'rapide' }],
   notaryEmail: 'notaire@example.ca',
   email: 'client@example.ca',
   baseUrl: BASE,

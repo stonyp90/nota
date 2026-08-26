@@ -23,6 +23,7 @@ const {
   statsDeltasForNotaryActive,
   statsDeltasForGauge,
 } = require('./stats');
+const { notaryIdForEmail } = require('./notary-auth');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -39,13 +40,12 @@ const NOTARY_STATUS = {
 const DEFAULT_COMMISSION_RATE = 0.10;
 
 function createBilling({
-  repo, stripe, newId, now,
+  repo, stripe, now,
   onboardingReturnUrl, onboardingRefreshUrl, commissionRate,
 } = {}) {
   if (!repo) throw new Error('createBilling: repo is required');
   if (!stripe) throw new Error('createBilling: stripe adapter is required');
 
-  const genId = newId || (() => require('crypto').randomUUID());
   const clock = now || (() => new Date().toISOString());
   const rate = typeof commissionRate === 'number' ? commissionRate : DEFAULT_COMMISSION_RATE;
 
@@ -70,13 +70,41 @@ function createBilling({
    * Connect account + a hosted onboarding link, and record an ONBOARDING profile
    * keyed by the same id stamped on the Connect account. Returns `{ ok, url }`.
    */
-  async function connectNotary({ email } = {}) {
+  async function connectNotary({ email, parrain } = {}) {
     const clean = String(email == null ? '' : email).trim().toLowerCase();
     if (!clean || clean.length > 254 || !EMAIL_RE.test(clean)) {
       return { ok: false, errors: [{ code: 'courriel_invalide', message: 'Un courriel valide est requis.' }] };
     }
 
-    const id = genId();
+    // ONE identity per email: the notary record is keyed by the SAME
+    // deterministic id `/notary/session` derives (notaryIdForEmail), so the
+    // ACTIVE flip from `account.updated` opens the console gate for the notary
+    // who onboarded. A random id here would strand the activation on a record
+    // the session lookup never reads — signup would never unlock sign-in.
+    const id = notaryIdForEmail(clean);
+    const existing = await repo.getNotary(id);
+
+    // Re-connect for an email that ALREADY has a Connect account (double
+    // submit, lost tab, or an active notary re-opening their dashboard link):
+    // reuse the account and hand back a fresh onboarding link. Never resets
+    // status/chargesEnabled or the commission accumulator, and never creates a
+    // second Stripe account for the same notary.
+    if (existing && existing.connectAccountId) {
+      const { url } = await stripe.createOnboardingLink({
+        accountId: existing.connectAccountId, notaryId: id,
+        returnUrl: onboardingReturnUrl || '',
+        refreshUrl: onboardingRefreshUrl || '',
+      });
+      await repo.putNotary({
+        ...existing,
+        // First-touch referral attribution: an already-attributed notary keeps
+        // their original partner; an unattributed one may gain a code.
+        parrain: existing.parrain || parrain || null,
+        updatedAt: clock(),
+      });
+      return { ok: true, url, existing: true };
+    }
+
     const { accountId } = await stripe.createConnectAccount({ email: clean, notaryId: id });
     const { url } = await stripe.createOnboardingLink({
       accountId, notaryId: id,
@@ -86,12 +114,21 @@ function createBilling({
 
     const at = clock();
     await repo.putNotary({
+      // Preserve any session-upserted profile fields (label, createdAt) while
+      // stamping the billing identity on the same record.
+      ...(existing || {}),
       id, email: clean,
       status: NOTARY_STATUS.ONBOARDING,
       connectAccountId: accountId,
       chargesEnabled: false,
-      commissionCentsCollected: 0,
-      createdAt: at, updatedAt: at,
+      commissionCentsCollected: (existing && existing.commissionCentsCollected) || 0,
+      // PRIVATE referral attribution (ADR 0011): the already-normalized partner
+      // code the route layer validated through the domain (null otherwise). A
+      // referred notary earns their partner REFERRAL.notaire once, when they
+      // retain their first act — read back only by the admin ledger, never by
+      // any notary-facing or public payload.
+      parrain: (existing && existing.parrain) || parrain || null,
+      createdAt: (existing && existing.createdAt) || at, updatedAt: at,
     });
     await recordStats(statsDeltasForNotaryOnboarding());
 
@@ -128,13 +165,22 @@ function createBilling({
     }
 
     const fee = feeCents(amount);
-    const charge = await stripe.chargeActCommission({
-      connectAccountId: notary.connectAccountId,
-      amountCents: Math.round(amount * 100),
-      applicationFeeCents: fee,
-      currency: 'cad',
-      bidId, notaryId,
-    });
+    // A Stripe failure (decline, outage) is a typed, retryable error — never an
+    // unhandled throw that turns the route into a 5xx with no payload. Nothing
+    // was written yet, so a retry starts clean; the Stripe idempotency key
+    // (act:<bidId>) keeps that retry from double-charging.
+    let charge;
+    try {
+      charge = await stripe.chargeActCommission({
+        connectAccountId: notary.connectAccountId,
+        amountCents: Math.round(amount * 100),
+        applicationFeeCents: fee,
+        currency: 'cad',
+        bidId, notaryId,
+      });
+    } catch (err) {
+      return { ok: false, errors: [{ code: 'paiement_echoue', message: 'Le paiement n’a pas pu être traité. Réessayez ou contactez Nota.' }] };
+    }
 
     // markActCompleted returns true only on the FIRST write (write-once ledger).
     // A concurrent double-submit whose guard read missed the other in-flight
@@ -217,14 +263,25 @@ function createBilling({
     }
 
     const fee = feeCents(amount);
-    const result = await stripe.captureAndTransfer({
-      paymentIntentId,
-      connectAccountId: notary.connectAccountId,
-      amountCents: Math.round(amount * 100),
-      applicationFeeCents: fee,
-      currency: 'cad',
-      bidId, notaryId,
-    });
+    // A capture decline AFTER a notary accepted must never dead-end the accept
+    // as an unhandled 5xx: the retain already happened, and the notary must
+    // still receive the dossier. Surface a typed error the route folds into
+    // `{ paid:false, paymentError }`; a re-accept retries the capture (Stripe
+    // idempotency key capture:<bidId>), and settlement can also fall back to
+    // /notary/acts/complete.
+    let result;
+    try {
+      result = await stripe.captureAndTransfer({
+        paymentIntentId,
+        connectAccountId: notary.connectAccountId,
+        amountCents: Math.round(amount * 100),
+        applicationFeeCents: fee,
+        currency: 'cad',
+        bidId, notaryId,
+      });
+    } catch (err) {
+      return { ok: false, errors: [{ code: 'paiement_echoue', message: 'Le paiement du client n’a pas pu être capturé. L’acte vous reste confié; Nota fera le suivi du paiement.' }] };
+    }
 
     let firstWrite = true;
     if (bidId && typeof repo.markActCompleted === 'function') {
@@ -246,6 +303,27 @@ function createBilling({
     }
 
     return { ok: true, commissionCents: fee, netCents: result.netCents, transferId: result.transferId, chargeId: result.chargeId };
+  }
+
+  /**
+   * Release a card hold that will never be captured — e.g. the ORIGINAL
+   * authorization after a client accepts a notary's proposition at a NEW
+   * amount (the hold was taken for the old one, so it cannot settle it).
+   * Without this the client's card stays blocked for up to ~7 days until
+   * Stripe expires the hold on its own. Best-effort and idempotent (Stripe
+   * cancel of an already-canceled intent is caught): the caller fires and
+   * forgets. Returns `{ ok }`.
+   */
+  async function cancelAuthorization({ paymentIntentId, bidId } = {}) {
+    if (!paymentIntentId || typeof stripe.cancelOfferAuthorization !== 'function') {
+      return { ok: false };
+    }
+    try {
+      await stripe.cancelOfferAuthorization({ paymentIntentId, bidId });
+      return { ok: true };
+    } catch {
+      return { ok: false };
+    }
   }
 
   // Persist a status transition for the notary the event points at.
@@ -352,7 +430,7 @@ function createBilling({
     return { ok: true, handled, duplicate: false, type: event.type, event, notary, bid: bid || null };
   }
 
-  return { connectNotary, authorizeOffer, payNotaryOnAccept, completeAct, handleWebhook, commissionRate: rate };
+  return { connectNotary, authorizeOffer, payNotaryOnAccept, completeAct, cancelAuthorization, handleWebhook, commissionRate: rate };
 }
 
 module.exports = { createBilling, NOTARY_STATUS, DEFAULT_COMMISSION_RATE };

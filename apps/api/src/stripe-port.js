@@ -156,6 +156,21 @@ function createStripeAdapter({ secretKey, webhookSecret } = {}) {
     },
 
     /**
+     * Cancel an uncaptured authorization, releasing the client's card hold
+     * immediately instead of letting it expire on its own (~7 days). Used when
+     * a proposition accept retains the bid at a NEW amount the old hold cannot
+     * settle. Idempotent per bid via the cancel:<bidId> key.
+     */
+    async cancelOfferAuthorization({ paymentIntentId, bidId }) {
+      const intent = await stripe.paymentIntents.cancel(
+        paymentIntentId,
+        { cancellation_reason: 'abandoned' },
+        bidId ? { idempotencyKey: `cancel:${bidId}` } : undefined
+      );
+      return { id: intent.id, status: intent.status };
+    },
+
+    /**
      * Verify a webhook payload against the signing secret and return the parsed
      * event. Throws when the signature does not match — the route turns that
      * into a 400.

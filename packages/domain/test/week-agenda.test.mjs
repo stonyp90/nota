@@ -11,9 +11,9 @@ const TODAY = '2026-08-12';
 function bid(over) {
   return {
     id: 'b' + Math.random().toString(36).slice(2),
-    serviceId: 'testament',
+    serviceId: 'refinancement',
     dateISO: D.addDays(TODAY, 1), // Thursday
-    montant: 800,
+    montant: 2400,
     status: D.STATUS.OUVERTE,
     ...over,
   };
@@ -56,12 +56,12 @@ test('weekAgenda: items carry the weekday column (0=Mon … 4=Fri) of their real
 test('weekAgenda: soonest first, capped per day and overall, total sums the batch', () => {
   const bids = [];
   // Three demands on the same Thursday: only two may land in one column.
-  for (let i = 0; i < 3; i++) bids.push(bid({ id: 'thu' + i, montant: 500 + i }));
+  for (let i = 0; i < 3; i++) bids.push(bid({ id: 'thu' + i, montant: 2500 + i }));
   // Enough weekday demands to overflow the overall cap of 8.
-  for (let i = 0; i < 10; i++) bids.push(bid({ id: 'mon' + i, dateISO: '2026-08-17', montant: 100 }));
-  for (let i = 0; i < 10; i++) bids.push(bid({ id: 'tue' + i, dateISO: '2026-08-18', montant: 100 }));
-  for (let i = 0; i < 10; i++) bids.push(bid({ id: 'wed' + i, dateISO: '2026-08-19', montant: 100 }));
-  for (let i = 0; i < 10; i++) bids.push(bid({ id: 'fri' + i, dateISO: '2026-08-21', montant: 100 }));
+  for (let i = 0; i < 10; i++) bids.push(bid({ id: 'mon' + i, dateISO: '2026-08-17', montant: 2100 }));
+  for (let i = 0; i < 10; i++) bids.push(bid({ id: 'tue' + i, dateISO: '2026-08-18', montant: 2100 }));
+  for (let i = 0; i < 10; i++) bids.push(bid({ id: 'wed' + i, dateISO: '2026-08-19', montant: 2100 }));
+  for (let i = 0; i < 10; i++) bids.push(bid({ id: 'fri' + i, dateISO: '2026-08-21', montant: 2100 }));
   const a = D.weekAgenda(bids, TODAY);
   assert.equal(a.items.length, 8);
   const perDay = a.items.reduce((m, i) => ((m[i.day] = (m[i.day] || 0) + 1), m), {});
@@ -85,7 +85,7 @@ test('weekAgenda: offset rotates the batch through the pool and wraps around', (
 test('weekAgenda: retenues option includes taken demands, flagged with their étude', () => {
   const bids = [
     bid({ id: 'open1' }),
-    bid({ id: 'taken1', status: D.STATUS.RETENUE, etude: 'Étude Laval', montant: 900 }),
+    bid({ id: 'taken1', status: D.STATUS.RETENUE, etude: 'Étude Laval', montant: 2900 }),
   ];
   const without = D.weekAgenda(bids, TODAY);
   assert.deepEqual(without.items.map((i) => i.id), ['open1']);
@@ -99,9 +99,9 @@ test('weekAgenda: retenues option includes taken demands, flagged with their ét
 });
 
 test('weekAgenda: items expose what the vignette renders (service label, amount, date)', () => {
-  const a = D.weekAgenda([bid({ id: 'x', serviceId: 'procuration', montant: 990 })], TODAY);
-  assert.equal(a.items[0].serviceId, 'procuration');
-  assert.equal(a.items[0].nomCourt, D.serviceById('procuration').nomCourt);
-  assert.equal(a.items[0].montant, 990);
+  const a = D.weekAgenda([bid({ id: 'x', montant: 2990 })], TODAY);
+  assert.equal(a.items[0].serviceId, 'refinancement');
+  assert.equal(a.items[0].nomCourt, D.serviceById('refinancement').nomCourt);
+  assert.equal(a.items[0].montant, 2990);
   assert.equal(D.isISODate(a.items[0].dateISO), true);
 });

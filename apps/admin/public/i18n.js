@@ -85,12 +85,28 @@
   "Offres et rétention par service": "Offers and retention by service",
   "Aucune donnée pour cette période.": "No data for this period.",
   "Aucune offre, rétention ou commission n’a été enregistrée sur l’intervalle sélectionné. Essayez une période plus large.": "No offers, retention, or commission were recorded over the selected interval. Try a wider period.",
+  "Parrainages": "Referrals",
+  "Récompenses des partenaires référents — dû à la rétention (clients) et au premier acte (notaires).": "Referring-partner rewards — owed at retention (clients) and at the first act (notaries).",
+  "Partenaire": "Partner",
+  "Demandes": "Requests",
+  "Complétés": "Completed",
+  "Actifs": "Active",
+  "Dû": "Owed",
+  "Non inscrit": "Not registered",
+  "Agent immobilier": "Real-estate agent",
+  "Courtier hypothécaire": "Mortgage broker",
+  "Autre professionnel": "Other professional",
   "Impossible de charger les données.": "Unable to load the data.",
   "Le service n’a pas répondu correctement. Vérifiez votre connexion, puis réessayez.": "The service did not respond correctly. Check your connection, then try again.",
   "Données chargées.": "Data loaded."
 };
   var HTML = {};
   var RULES = compileRules([
+  {
+    "pattern": "^Récompenses des partenaires référents — (.+) à la rétention \\(client\\), (.+) au premier acte \\(notaire\\)\\.$",
+    "flags": "",
+    "replacement": "Referring-partner rewards — $1 at retention (client), $2 at the first act (notary)."
+  },
   {
     "pattern": "^(\\d+) jours$",
     "flags": "",
@@ -202,11 +218,6 @@
     "replacement": "$1\u00a0$"
   },
   {
-    "pattern": "Testament et mandat de protection(?![A-Za-zà-ÿ])",
-    "flags": "g",
-    "replacement": "Will and protection mandate"
-  },
-  {
     "pattern": "Refinancement hypothécaire(?![A-Za-zà-ÿ])",
     "flags": "g",
     "replacement": "Mortgage refinancing"
@@ -217,19 +228,9 @@
     "replacement": "Refinancing"
   },
   {
-    "pattern": "Procuration(?![A-Za-zà-ÿ])",
-    "flags": "g",
-    "replacement": "Power of attorney"
-  },
-  {
     "pattern": "Prioritaire(?![A-Za-zà-ÿ])",
     "flags": "g",
     "replacement": "Priority"
-  },
-  {
-    "pattern": "Testament(?![A-Za-zà-ÿ])",
-    "flags": "g",
-    "replacement": "Will"
   },
   {
     "pattern": "Extrême(?![A-Za-zà-ÿ])",

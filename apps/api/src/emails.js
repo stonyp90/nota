@@ -133,6 +133,8 @@ function linksFor(baseUrl) {
     dossier: (b || '') + '/#dossier',
     notaires: (b || '') + '/#notaires',
     compte: (b || '') + '/#notaires',
+    // The client's own space (their offer, propositions, document requests).
+    profil: (b || '') + '/#t=profil',
   };
 }
 
@@ -1107,6 +1109,493 @@ function operatorActCompleted(ctx) {
   });
 }
 
+// =============================================================================
+// NOTARY ACTIONS on an open offer — propositions (a higher price) and document
+// requests. The client has no account: the CTA leads to their profil/dossier.
+// =============================================================================
+
+// Context: the bid fields + `proposition: { montant, delta, message, etude }`.
+function propositionRecue(ctx) {
+  const p = ctx.proposition || {};
+  const amount = Number.isFinite(Number(p.montant)) ? Number(p.montant) : ctx.montant;
+  const delta = Number.isFinite(Number(p.delta)) ? Number(p.delta) : null;
+  const etude = p.etude || null;
+  const line = offerLine(ctx);
+  const lineEn = offerLineEn(ctx);
+  const prop = 'Proposition du notaire : ' + money(amount) + (delta != null ? ' (+' + money(delta) + ')' : '');
+  const propEn = 'Notary’s proposal: ' + moneyEn(amount) + (delta != null ? ' (+' + moneyEn(delta) + ')' : '');
+  return build({
+    subjectFr: 'Un notaire vous propose ' + money(amount),
+    subjectEn: 'A notary proposes ' + moneyEn(amount),
+    preheaderFr: 'Acceptez ou déclinez la proposition depuis votre profil.',
+    preheaderEn: 'Accept or decline the proposal from your profile.',
+    fr: {
+      heading: 'Un notaire a répondu à votre offre',
+      lead:
+        (etude ? etude + ' propose' : 'Un notaire propose') +
+        ' de signer votre ' + svcNom(ctx.serviceId) + ' le ' + fmtDate(ctx.dateISO) +
+        ' à un prix différent du vôtre.',
+      bodyHtml:
+        callout(prop) +
+        para('Votre offre actuelle : ' + line + '.') +
+        (p.message ? para('Message du notaire : « ' + p.message + ' »') : '') +
+        para('Si vous acceptez, votre demande est retenue par ce notaire à ce nouveau montant. Sinon, votre offre reste en ligne telle quelle.'),
+      textLines: [prop, 'Votre offre actuelle : ' + line].concat(p.message ? ['Message du notaire : ' + p.message] : []),
+      ctaLabel: 'Voir la proposition',
+    },
+    en: {
+      heading: 'A notary answered your offer',
+      lead:
+        (etude ? etude + ' proposes' : 'A notary proposes') +
+        ' to sign your ' + svcNomEn(ctx.serviceId) + ' on ' + fmtDateEn(ctx.dateISO) +
+        ' at a different price than yours.',
+      bodyHtml:
+        callout(propEn) +
+        para('Your current offer: ' + lineEn + '.') +
+        (p.message ? para('Message from the notary: “' + p.message + '”') : '') +
+        para('If you accept, your request is taken by this notary at the new amount. Otherwise your offer stays live as it is.'),
+      textLines: [propEn, 'Your current offer: ' + lineEn].concat(p.message ? ['Message from the notary: ' + p.message] : []),
+      ctaLabel: 'See the proposal',
+    },
+    ctaUrl: linksFor(ctx.baseUrl).profil,
+    unsubscribeUrl: ctx.unsubscribeUrl,
+  });
+}
+
+// Context: the bid fields + `demande: { documents: [{ id, nom }], message, etude }`.
+function documentsDemandes(ctx) {
+  const d = ctx.demande || {};
+  const items = Array.isArray(d.documents) ? d.documents.map((x) => (x && x.nom) || String(x)) : [];
+  const etude = d.etude || null;
+  const listHtml = items.length
+    ? '<ul style="margin:0 0 16px;padding-left:20px;font-family:' + FONT + ';font-size:15px;line-height:1.6;color:' + PALETTE.ink + ';">' +
+      items.map((n) => '<li>' + esc(n) + '</li>').join('') +
+      '</ul>'
+    : '';
+  const listText = items.map((n) => '- ' + n);
+  return build({
+    subjectFr: 'Un notaire vous demande des documents',
+    subjectEn: 'A notary is asking you for documents',
+    preheaderFr: 'Ajoutez les éléments demandés à votre dossier pour faire avancer votre demande.',
+    preheaderEn: 'Add the requested items to your file to move your request forward.',
+    fr: {
+      heading: 'Des documents sont demandés',
+      lead:
+        (etude ? etude + ' a besoin' : 'Un notaire a besoin') +
+        ' des éléments suivants pour votre ' + svcNom(ctx.serviceId) + ' le ' + fmtDate(ctx.dateISO) + '.',
+      bodyHtml:
+        listHtml +
+        (d.message ? para('Message du notaire : « ' + d.message + ' »') : '') +
+        callout(offerLine(ctx)) +
+        para('Ajoutez-les à votre dossier : un dossier complet est retenu beaucoup plus vite.'),
+      textLines: listText.concat(d.message ? ['Message du notaire : ' + d.message] : [], [offerLine(ctx)]),
+      ctaLabel: 'Compléter mon dossier',
+    },
+    en: {
+      heading: 'Documents are requested',
+      lead:
+        (etude ? etude + ' needs' : 'A notary needs') +
+        ' the following items for your ' + svcNomEn(ctx.serviceId) + ' on ' + fmtDateEn(ctx.dateISO) + '.',
+      bodyHtml:
+        listHtml +
+        (d.message ? para('Message from the notary: “' + d.message + '”') : '') +
+        callout(offerLineEn(ctx)) +
+        para('Add them to your file: a complete file gets taken much faster.'),
+      textLines: listText.concat(d.message ? ['Message from the notary: ' + d.message] : [], [offerLineEn(ctx)]),
+      ctaLabel: 'Complete my file',
+    },
+    ctaUrl: linksFor(ctx.baseUrl).dossier,
+    unsubscribeUrl: ctx.unsubscribeUrl,
+  });
+}
+
+// To the notary: the client accepted their proposition — the offer is now
+// retained by them at the proposed amount. Context: bid fields (montant = the
+// new amount) + `proposition: { montant }`.
+function propositionAcceptee(ctx) {
+  const p = ctx.proposition || {};
+  const amount = Number.isFinite(Number(p.montant)) ? Number(p.montant) : ctx.montant;
+  const line = svcNom(ctx.serviceId) + ' · ' + fmtDate(ctx.dateISO) + ' · ' + money(amount);
+  const lineEn = svcNomEn(ctx.serviceId) + ' · ' + fmtDateEn(ctx.dateISO) + ' · ' + moneyEn(amount);
+  return build({
+    subjectFr: 'Proposition acceptée : ' + money(amount),
+    subjectEn: 'Proposal accepted: ' + moneyEn(amount),
+    preheaderFr: 'La demande vous est confiée au montant proposé.',
+    preheaderEn: 'The request is yours at the proposed amount.',
+    fr: {
+      heading: 'Le client a accepté votre proposition',
+      lead: 'La demande de ' + svcNom(ctx.serviceId) + ' le ' + fmtDate(ctx.dateISO) + ' vous est maintenant confiée.',
+      bodyHtml:
+        callout(line) +
+        para('Le dossier et le courriel du client sont disponibles dans votre console. Contactez-le pour organiser la signature.'),
+      textLines: [line, 'Le dossier du client est disponible dans votre console.'],
+      ctaLabel: 'Ouvrir ma console',
+    },
+    en: {
+      heading: 'The client accepted your proposal',
+      lead: 'The ' + svcNomEn(ctx.serviceId) + ' request on ' + fmtDateEn(ctx.dateISO) + ' is now yours.',
+      bodyHtml:
+        callout(lineEn) +
+        para('The client’s file and email are available in your console. Contact them to arrange the signing.'),
+      textLines: [lineEn, 'The client’s file is available in your console.'],
+      ctaLabel: 'Open my console',
+    },
+    ctaUrl: linksFor(ctx.baseUrl).notaires,
+    unsubscribeUrl: ctx.unsubscribeUrl,
+  });
+}
+
+// To the notary: the client declined. The offer stays open at its price.
+function propositionRefusee(ctx) {
+  const p = ctx.proposition || {};
+  const amount = Number.isFinite(Number(p.montant)) ? Number(p.montant) : ctx.montant;
+  const line = offerLine(ctx);
+  const lineEn = offerLineEn(ctx);
+  return build({
+    subjectFr: 'Proposition déclinée : ' + money(amount),
+    subjectEn: 'Proposal declined: ' + moneyEn(amount),
+    preheaderFr: 'L’offre reste ouverte au prix du client.',
+    preheaderEn: 'The offer stays open at the client’s price.',
+    fr: {
+      heading: 'Le client a décliné votre proposition',
+      lead: 'Votre proposition de ' + money(amount) + ' pour le ' + svcNom(ctx.serviceId) + ' le ' + fmtDate(ctx.dateISO) + ' n’a pas été retenue.',
+      bodyHtml:
+        callout(line) +
+        para('L’offre reste en ligne au prix du client. Vous pouvez toujours la retenir telle quelle depuis votre console.'),
+      textLines: [line, 'L’offre reste en ligne au prix du client.'],
+      ctaLabel: 'Ouvrir ma console',
+    },
+    en: {
+      heading: 'The client declined your proposal',
+      lead: 'Your proposal of ' + moneyEn(amount) + ' for the ' + svcNomEn(ctx.serviceId) + ' on ' + fmtDateEn(ctx.dateISO) + ' was not taken.',
+      bodyHtml:
+        callout(lineEn) +
+        para('The offer stays live at the client’s price. You can still take it as is from your console.'),
+      textLines: [lineEn, 'The offer stays live at the client’s price.'],
+      ctaLabel: 'Open my console',
+    },
+    ctaUrl: linksFor(ctx.baseUrl).notaires,
+    unsubscribeUrl: ctx.unsubscribeUrl,
+  });
+}
+
+// =============================================================================
+// PARTNER REFERRALS (ADR 0011) — the professionals (agent immobilier, courtier
+// hypothécaire) who send Nota its demand. Two reward tracks, both flat amounts
+// that live in domain.REFERRAL — never a literal here: `client` when a referred
+// demand is RETAINED, `notaire` once when a referred notary retains their
+// first act. Kept deliberately lean (owner: "only relevant information").
+// =============================================================================
+
+// The partner-type labels come from the domain's own partner list.
+function partnerTypeNom(id) {
+  const p = domain.REFERRAL.partners.find((x) => x.id === id);
+  return p ? p.nom : '';
+}
+function partnerTypeNomEn(id) {
+  const p = domain.REFERRAL.partners.find((x) => x.id === id);
+  return p ? p.nomEn : '';
+}
+// The shareable attribution link a partner puts in front of clients.
+function refLink(baseUrl, code) {
+  return linksFor(baseUrl).carnet + '?ref=' + String(code || '');
+}
+
+// Context: { code, type } — right after POST /partenaires. The whole pitch in
+// one screen: the link to share, and what each track pays, when.
+function partnerWelcome(ctx) {
+  const code = ctx.code || '—';
+  const link = refLink(ctx.baseUrl, ctx.code);
+  const rewards =
+    money(domain.REFERRAL.client) + ' par demande référée retenue par un notaire · ' +
+    money(domain.REFERRAL.notaire) + ' quand un notaire référé retient son premier acte';
+  const rewardsEn =
+    moneyEn(domain.REFERRAL.client) + ' per referred request taken by a notary · ' +
+    moneyEn(domain.REFERRAL.notaire) + ' when a referred notary takes their first act';
+  return build({
+    subjectFr: 'Votre code partenaire est prêt : ' + code,
+    subjectEn: 'Your partner code is ready: ' + code,
+    preheaderFr: 'Partagez votre lien — chaque référence retenue vous est créditée.',
+    preheaderEn: 'Share your link — every retained referral is credited to you.',
+    fr: {
+      heading: 'Bienvenue parmi les partenaires Nota',
+      lead:
+        'Votre code ' + code +
+        (partnerTypeNom(ctx.type) ? ' (' + partnerTypeNom(ctx.type) + ')' : '') +
+        ' est enregistré. Partagez ce lien avec vos clients :',
+      bodyHtml:
+        callout(link) +
+        para(rewards + '. Le montant du client et les honoraires du notaire ne changent jamais — la récompense vient de Nota.'),
+      textLines: [link, rewards],
+      ctaLabel: 'Ouvrir mon lien',
+    },
+    en: {
+      heading: 'Welcome to the Nota partners',
+      lead:
+        'Your code ' + code +
+        (partnerTypeNomEn(ctx.type) ? ' (' + partnerTypeNomEn(ctx.type) + ')' : '') +
+        ' is registered. Share this link with your clients:',
+      bodyHtml:
+        callout(link) +
+        para(rewardsEn + '. The client’s amount and the notary’s fee never change — the reward comes from Nota.'),
+      textLines: [link, rewardsEn],
+      ctaLabel: 'Open my link',
+    },
+    ctaUrl: link,
+    unsubscribeUrl: ctx.unsubscribeUrl,
+  });
+}
+
+// Context: the referred bid's fields (+ `code`) — a demand the partner referred
+// was just RETAINED, the moment their client reward is earned.
+function referralRewardClient(ctx) {
+  const amount = domain.REFERRAL.client;
+  return build({
+    subjectFr: money(amount) + ' de référence gagnés — demande retenue',
+    subjectEn: moneyEn(amount) + ' referral earned — request taken',
+    preheaderFr: 'Une demande envoyée avec votre code vient d’être retenue par un notaire.',
+    preheaderEn: 'A request sent with your code was just taken by a notary.',
+    fr: {
+      heading: 'Votre référence a été retenue',
+      lead: 'Une demande envoyée avec votre code' + (ctx.code ? ' ' + ctx.code : '') + ' vient d’être retenue par un notaire.',
+      bodyHtml:
+        callout(money(amount) + ' vous sont crédités — ' + offerLine(ctx)),
+      textLines: [money(amount) + ' crédités · ' + offerLine(ctx)],
+      ctaLabel: 'Voir le carnet',
+    },
+    en: {
+      heading: 'Your referral was taken',
+      lead: 'A request sent with your code' + (ctx.code ? ' ' + ctx.code : '') + ' was just taken by a notary.',
+      bodyHtml:
+        callout(moneyEn(amount) + ' is credited to you — ' + offerLineEn(ctx)),
+      textLines: [moneyEn(amount) + ' credited · ' + offerLineEn(ctx)],
+      ctaLabel: 'View the carnet',
+    },
+    ctaUrl: linksFor(ctx.baseUrl).carnet,
+    unsubscribeUrl: ctx.unsubscribeUrl,
+  });
+}
+
+// Context: { code } — the notary this partner referred just retained their
+// FIRST act. Paid once per notary, by ledger design.
+function referralRewardNotary(ctx) {
+  const amount = domain.REFERRAL.notaire;
+  return build({
+    subjectFr: money(amount) + ' de référence gagnés — notaire actif',
+    subjectEn: moneyEn(amount) + ' referral earned — notary active',
+    preheaderFr: 'Le notaire que vous avez référé vient de retenir son premier acte.',
+    preheaderEn: 'The notary you referred just took their first act.',
+    fr: {
+      heading: 'Votre notaire référé est actif',
+      lead: 'Un notaire inscrit avec votre code' + (ctx.code ? ' ' + ctx.code : '') + ' vient de retenir son premier acte sur Nota.',
+      bodyHtml: callout(money(amount) + ' vous sont crédités — une seule fois par notaire référé.'),
+      textLines: [money(amount) + ' crédités — une seule fois par notaire référé.'],
+      ctaLabel: 'Voir le carnet',
+    },
+    en: {
+      heading: 'Your referred notary is active',
+      lead: 'A notary who signed up with your code' + (ctx.code ? ' ' + ctx.code : '') + ' just took their first act on Nota.',
+      bodyHtml: callout(moneyEn(amount) + ' is credited to you — once per referred notary.'),
+      textLines: [moneyEn(amount) + ' credited — once per referred notary.'],
+      ctaLabel: 'View the carnet',
+    },
+    ctaUrl: linksFor(ctx.baseUrl).carnet,
+    unsubscribeUrl: ctx.unsubscribeUrl,
+  });
+}
+
+// Operator alert mirroring operatorNewLead: a partner just claimed a code.
+function operatorNewPartner(ctx) {
+  const line =
+    (ctx.code || '—') +
+    (partnerTypeNom(ctx.type) ? ' · ' + partnerTypeNom(ctx.type) : '') +
+    ' · ' + (ctx.courriel || '—');
+  const lineEn =
+    (ctx.code || '—') +
+    (partnerTypeNomEn(ctx.type) ? ' · ' + partnerTypeNomEn(ctx.type) : '') +
+    ' · ' + (ctx.courriel || '—');
+  return build({
+    subjectFr: 'Nouveau partenaire : ' + (ctx.code || '—'),
+    subjectEn: 'New partner: ' + (ctx.code || '—'),
+    preheaderFr: 'Un professionnel vient de réserver son code de référence.',
+    preheaderEn: 'A professional just claimed their referral code.',
+    fr: {
+      heading: 'Nouveau partenaire inscrit',
+      lead: 'Un professionnel vient de réserver son code de référence sur Nota.',
+      bodyHtml: callout(line),
+      textLines: [line],
+      ctaLabel: 'Ouvrir Nota',
+    },
+    en: {
+      heading: 'New partner registered',
+      lead: 'A professional just claimed their referral code on Nota.',
+      bodyHtml: callout(lineEn),
+      textLines: [lineEn],
+      ctaLabel: 'Open Nota',
+    },
+    ctaUrl: linksFor(ctx.baseUrl).carnet,
+    unsubscribeUrl: ctx.unsubscribeUrl,
+  });
+}
+
+// =============================================================================
+// Cancellation (a client withdraws their offer)
+// =============================================================================
+
+// Acknowledgement to the client — their own withdrawal, so the tone is
+// confirmation, not bad news; the CTA invites a fresh date.
+function offerCancelled(ctx) {
+  return build({
+    subjectFr: 'Offre annulée : ' + money(ctx.montant),
+    subjectEn: 'Offer cancelled: ' + moneyEn(ctx.montant),
+    preheaderFr: 'Votre offre a été retirée du carnet.',
+    preheaderEn: 'Your offer was removed from the carnet.',
+    fr: {
+      heading: 'Votre offre est annulée',
+      lead: 'Votre offre — ' + svcNom(ctx.serviceId) + ' le ' + fmtDate(ctx.dateISO) + ' — a été retirée du carnet.',
+      bodyHtml:
+        callout(offerLine(ctx)) +
+        para('Plus aucun notaire ne peut la retenir. Vos documents restent sur votre appareil ; rien n’est transmis. Si vous changez d’avis, publiez une nouvelle date en quelques gestes.'),
+      textLines: [offerLine(ctx), 'Plus aucun notaire ne peut la retenir.'],
+      ctaLabel: 'Choisir une nouvelle date',
+    },
+    en: {
+      heading: 'Your offer is cancelled',
+      lead: 'Your offer — ' + svcNomEn(ctx.serviceId) + ' on ' + fmtDateEn(ctx.dateISO) + ' — was removed from the carnet.',
+      bodyHtml:
+        callout(offerLineEn(ctx)) +
+        para('No notary can take it anymore. Your documents stay on your device; nothing is shared. If you change your mind, publish a new date in a few taps.'),
+      textLines: [offerLineEn(ctx), 'No notary can take it anymore.'],
+      ctaLabel: 'Pick a new date',
+    },
+    ctaUrl: linksFor(ctx.baseUrl).carnet,
+    unsubscribeUrl: ctx.unsubscribeUrl,
+  });
+}
+
+// To the notary whose retained demand was just withdrawn — a mise en relation
+// is being unwound, so this must land fast and say exactly which one.
+function offerCancelledNotary(ctx) {
+  return build({
+    subjectFr: 'Demande annulée par le client : ' + money(ctx.montant),
+    subjectEn: 'Request cancelled by the client: ' + moneyEn(ctx.montant),
+    preheaderFr: 'La demande que vous aviez retenue vient d’être retirée.',
+    preheaderEn: 'The request you had taken was just withdrawn.',
+    fr: {
+      heading: 'Le client a annulé sa demande',
+      lead: 'La demande que vous aviez retenue — ' + svcNom(ctx.serviceId) + ' le ' + fmtDate(ctx.dateISO) + ' — vient d’être annulée par le client.',
+      bodyHtml:
+        callout(offerLine(ctx)) +
+        para('Le rendez-vous est libéré dans votre agenda. Si un paiement était engagé, notre équipe vous écrit sans délai pour le régulariser.'),
+      textLines: [offerLine(ctx), 'Le rendez-vous est libéré dans votre agenda.'],
+      ctaLabel: 'Ouvrir ma console',
+    },
+    en: {
+      heading: 'The client cancelled their request',
+      lead: 'The request you had taken — ' + svcNomEn(ctx.serviceId) + ' on ' + fmtDateEn(ctx.dateISO) + ' — was just cancelled by the client.',
+      bodyHtml:
+        callout(offerLineEn(ctx)) +
+        para('The appointment is freed in your agenda. If a payment was engaged, our team will write to you promptly to settle it.'),
+      textLines: [offerLineEn(ctx), 'The appointment is freed in your agenda.'],
+      ctaLabel: 'Open my console',
+    },
+    ctaUrl: linksFor(ctx.baseUrl).notaires,
+    unsubscribeUrl: ctx.unsubscribeUrl,
+  });
+}
+
+// Operator alert: a RETAINED demand was withdrawn — money may be in flight
+// (hold, capture, payout), so a human checks the ledger.
+function operatorOfferCancelled(ctx) {
+  const line = offerLine(ctx) + (ctx.etude ? ' · ' + ctx.etude : '');
+  const lineEn = offerLineEn(ctx) + (ctx.etude ? ' · ' + ctx.etude : '');
+  return build({
+    subjectFr: 'Annulation d’une demande retenue : ' + money(ctx.montant),
+    subjectEn: 'Retained request cancelled: ' + moneyEn(ctx.montant),
+    preheaderFr: 'Vérifier le paiement et la mise en relation.',
+    preheaderEn: 'Check the payment and the match.',
+    fr: {
+      heading: 'Demande retenue annulée',
+      lead: 'Un client vient d’annuler une demande déjà retenue. Vérifier le paiement (autorisation, capture, virement) et prévenir les parties au besoin.',
+      bodyHtml: callout(line),
+      textLines: [line],
+      ctaLabel: 'Ouvrir Nota',
+    },
+    en: {
+      heading: 'Retained request cancelled',
+      lead: 'A client just cancelled a request that was already taken. Check the payment (authorization, capture, transfer) and follow up with the parties as needed.',
+      bodyHtml: callout(lineEn),
+      textLines: [lineEn],
+      ctaLabel: 'Open Nota',
+    },
+    ctaUrl: linksFor(ctx.baseUrl).carnet,
+    unsubscribeUrl: ctx.unsubscribeUrl,
+  });
+}
+
+// =============================================================================
+// Contact form (nous joindre)
+// =============================================================================
+
+// Acknowledgement to the sender: their message is in human hands.
+function contactRecu(ctx) {
+  return build({
+    subjectFr: 'Message bien reçu',
+    subjectEn: 'Message received',
+    preheaderFr: 'Une personne de l’équipe Nota vous répond rapidement.',
+    preheaderEn: 'Someone from the Nota team will get back to you shortly.',
+    fr: {
+      heading: 'Nous avons bien reçu votre message',
+      lead: (ctx.nom ? ctx.nom + ', merci' : 'Merci') + ' de nous avoir écrit. Une personne de l’équipe vous répond à cette adresse, normalement le jour même.',
+      bodyHtml: ctx.message ? callout(ctx.message) : para('Votre message est entre les mains de l’équipe.'),
+      textLines: [ctx.message || 'Votre message est entre les mains de l’équipe.'],
+      ctaLabel: 'Retourner sur Nota',
+    },
+    en: {
+      heading: 'We received your message',
+      lead: (ctx.nom ? ctx.nom + ', thank you' : 'Thank you') + ' for writing to us. Someone from the team will reply to this address, normally the same day.',
+      bodyHtml: ctx.message ? callout(ctx.message) : para('Your message is in the team’s hands.'),
+      textLines: [ctx.message || 'Your message is in the team’s hands.'],
+      ctaLabel: 'Back to Nota',
+    },
+    ctaUrl: linksFor(ctx.baseUrl).carnet,
+    unsubscribeUrl: ctx.unsubscribeUrl,
+  });
+}
+
+// The message itself, to the operator — reply-to is in the body on purpose so
+// a forward keeps the whole context.
+function operatorContactMessage(ctx) {
+  const who = (ctx.nom ? ctx.nom + ' · ' : '') + (ctx.email || ctx.courriel || '—');
+  const body =
+    callout(who + (ctx.sujet ? ' · ' + ctx.sujet : '')) +
+    (ctx.message ? para(ctx.message) : '') +
+    (ctx.bidId ? para('Offre liée : ' + ctx.bidId) : '');
+  const textLines = [who + (ctx.sujet ? ' · ' + ctx.sujet : ''), ctx.message || ''].concat(ctx.bidId ? ['Offre liée : ' + ctx.bidId] : []);
+  return build({
+    subjectFr: 'Nous joindre : ' + (ctx.sujet || 'nouveau message'),
+    subjectEn: 'Contact form: ' + (ctx.sujet || 'new message'),
+    preheaderFr: 'Un message vient d’arriver par le formulaire.',
+    preheaderEn: 'A message just arrived through the form.',
+    fr: {
+      heading: 'Nouveau message via le formulaire',
+      lead: 'Répondre directement au courriel indiqué ci-dessous.',
+      bodyHtml: body,
+      textLines,
+      ctaLabel: 'Ouvrir Nota',
+    },
+    en: {
+      heading: 'New message via the form',
+      lead: 'Reply directly to the email address below.',
+      bodyHtml: body,
+      textLines,
+      ctaLabel: 'Open Nota',
+    },
+    ctaUrl: linksFor(ctx.baseUrl).carnet,
+    unsubscribeUrl: ctx.unsubscribeUrl,
+  });
+}
+
 // Registry — the notifier looks templates up by name; tests iterate it to assert
 // every template carries a bilingual subject, an unsubscribe link and sender ID.
 const TEMPLATES = {
@@ -1117,9 +1606,19 @@ const TEMPLATES = {
   dateApproaching,
   offerRetained,
   dateMissedNoUptake,
+  offerCancelled,
   // client — pay-on-accept lifecycle
   offerAuthorized,
   offerAuthorizationVoided,
+  // client — notary actions on an open offer
+  propositionRecue,
+  documentsDemandes,
+  // notary — answers to their proposition
+  propositionAcceptee,
+  propositionRefusee,
+  offerCancelledNotary,
+  // contact form (nous joindre)
+  contactRecu,
   // notary — marketplace lifecycle
   newMatchingBids,
   notaryMagicLink,
@@ -1129,10 +1628,17 @@ const TEMPLATES = {
   notaryDisconnectedWinback,
   // admin console
   adminMagicLink,
+  // partner referrals (ADR 0011)
+  partnerWelcome,
+  referralRewardClient,
+  referralRewardNotary,
   // operator alerts
   operatorNotaryActive,
   operatorNewLead,
   operatorActCompleted,
+  operatorNewPartner,
+  operatorOfferCancelled,
+  operatorContactMessage,
 };
 
 module.exports = {

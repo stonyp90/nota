@@ -7,6 +7,10 @@ const D = require('../index.js');
 
 const TODAY = '2026-08-12';
 
+// Fully-answered mandatory pricing params that keep refinancement at its
+// 2 000 $ base — the standard fixture for a valid offer since ADR 0010.
+const PRICING = { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue' };
+
 // fr-CA separates thousands and the sign with a NO-BREAK space (U+00A0), so an
 // amount never wraps mid-number or leaves its "$" stranded on the next line.
 const NB = '\u00A0';
@@ -41,19 +45,27 @@ test('moneyEn: rounds and handles junk exactly like money()', () => {
   assert.equal(D.moneyEn('nope'), '$0');
 });
 
-test('services: exactly the three bounded-intake acts', () => {
-  assert.equal(D.SERVICES.length, 3);
-  assert.deepEqual(D.SERVICES.map((s) => s.id).sort(), ['procuration', 'refinancement', 'testament']);
+test('services: the catalogue is the financing family — refinancement then financement (ADR 0010)', () => {
+  // The urgency ladder prices a deadline, and financing is the family that has
+  // one. testament and procuration were retired by ADR 0010; financement (the
+  // loan act for a NEW hypothec) is exactly the financing sibling that ADR
+  // foresaw. Order matters: refinancement leads and stays the default.
+  assert.deepEqual(D.SERVICES.map((s) => s.id), ['refinancement', 'financement']);
 });
 
 test('services: acte de vente is intentionally absent', () => {
   assert.equal(D.serviceById('acte_vente'), null);
 });
 
-test('services: starting prices are the canonical values', () => {
-  assert.equal(D.serviceById('testament').prixDepart, 1250);
-  assert.equal(D.serviceById('procuration').prixDepart, 750);
+test('services: the retired acts are gone, not aliased (ADR 0010)', () => {
+  assert.equal(D.serviceById('testament'), null);
+  assert.equal(D.serviceById('procuration'), null);
+});
+
+test('services: the starting prices are the canonical values (ADR 0006)', () => {
   assert.equal(D.serviceById('refinancement').prixDepart, 2000);
+  // Slightly under refinancement: no old hypothec to discharge.
+  assert.equal(D.serviceById('financement').prixDepart, 1800);
 });
 
 test('services: every service has documents and fields with help text', () => {
@@ -132,19 +144,19 @@ test('validateOffer: a clean prioritaire offer', () => {
 });
 
 test('validateOffer: rejects below starting price', () => {
-  const r = D.validateOffer({ serviceId: 'testament', dateISO: '2026-09-30', montant: 400, todayISO: TODAY });
+  const r = D.validateOffer({ serviceId: 'refinancement', dateISO: '2026-09-30', montant: 1400, todayISO: TODAY, pricing: PRICING });
   assert.equal(r.ok, false);
   assert.ok(r.errors.some((e) => e.code === 'sous_prix_depart'));
 });
 
 test('validateOffer: rejects above the 10x premium cap', () => {
-  const r = D.validateOffer({ serviceId: 'testament', dateISO: '2026-08-13', montant: 13000, todayISO: TODAY });
+  const r = D.validateOffer({ serviceId: 'refinancement', dateISO: '2026-08-13', montant: 25000, todayISO: TODAY, pricing: PRICING });
   assert.equal(r.ok, false);
   assert.ok(r.errors.some((e) => e.code === 'plafond_depasse'));
 });
 
 test('validateOffer: exactly 10x is allowed', () => {
-  const r = D.validateOffer({ serviceId: 'testament', dateISO: '2026-08-13', montant: 6500, todayISO: TODAY, pricing: { who_for: 'solo', fiducie_needed: 'non' } });
+  const r = D.validateOffer({ serviceId: 'refinancement', dateISO: '2026-08-13', montant: 20000, todayISO: TODAY, pricing: PRICING });
   assert.equal(r.ok, true);
 });
 
@@ -155,40 +167,40 @@ test('validateOffer: rejects an unknown service', () => {
 });
 
 test('validateOffer: rejects a past date', () => {
-  const r = D.validateOffer({ serviceId: 'procuration', dateISO: '2026-08-01', montant: 300, todayISO: TODAY });
+  const r = D.validateOffer({ serviceId: 'refinancement', dateISO: '2026-08-01', montant: 2500, todayISO: TODAY, pricing: PRICING });
   assert.equal(r.ok, false);
   assert.ok(r.errors.some((e) => e.code === 'date_passee'));
 });
 
 test('validateOffer: rejects a malformed date', () => {
-  const r = D.validateOffer({ serviceId: 'procuration', dateISO: 'demain', montant: 300, todayISO: TODAY });
+  const r = D.validateOffer({ serviceId: 'refinancement', dateISO: 'demain', montant: 2500, todayISO: TODAY, pricing: PRICING });
   assert.equal(r.ok, false);
   assert.ok(r.errors.some((e) => e.code === 'date_invalide'));
 });
 
 test('validateOffer: a missing/invalid todayISO is rejected, not silently skipped', () => {
-  const missing = D.validateOffer({ serviceId: 'procuration', dateISO: '2026-09-01', montant: 300 });
+  const missing = D.validateOffer({ serviceId: 'refinancement', dateISO: '2026-09-01', montant: 2500, pricing: PRICING });
   assert.equal(missing.ok, false);
   assert.ok(missing.errors.some((e) => e.code === 'date_invalide'));
   assert.equal(missing.tier, null);
 
-  const invalid = D.validateOffer({ serviceId: 'procuration', dateISO: '2026-09-01', montant: 300, todayISO: 'hier' });
+  const invalid = D.validateOffer({ serviceId: 'refinancement', dateISO: '2026-09-01', montant: 2500, todayISO: 'hier', pricing: PRICING });
   assert.equal(invalid.ok, false);
   assert.ok(invalid.errors.some((e) => e.code === 'date_invalide'));
 });
 
 test('validateOffer: rejects non-positive amount', () => {
-  const r = D.validateOffer({ serviceId: 'procuration', dateISO: '2026-09-01', montant: 0, todayISO: TODAY });
+  const r = D.validateOffer({ serviceId: 'refinancement', dateISO: '2026-09-01', montant: 0, todayISO: TODAY, pricing: PRICING });
   assert.equal(r.ok, false);
   assert.ok(r.errors.some((e) => e.code === 'montant_invalide'));
 });
 
 test('rankOf: highest amount is 1st, retenue excluded from totals', () => {
   const bids = [
-    { id: 'a', serviceId: 'testament', dateISO: '2026-08-20', montant: 600, status: 'ouverte' },
-    { id: 'b', serviceId: 'testament', dateISO: '2026-08-20', montant: 900, status: 'ouverte' },
-    { id: 'c', serviceId: 'testament', dateISO: '2026-08-20', montant: 700, status: 'retenue' },
-    { id: 'd', serviceId: 'testament', dateISO: '2026-08-21', montant: 999, status: 'ouverte' },
+    { id: 'a', serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2600, status: 'ouverte' },
+    { id: 'b', serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2900, status: 'ouverte' },
+    { id: 'c', serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2700, status: 'retenue' },
+    { id: 'd', serviceId: 'refinancement', dateISO: '2026-08-21', montant: 2999, status: 'ouverte' },
   ];
   assert.deepEqual(D.rankOf(bids[1], bids), { rang: 1, total: 2 });
   assert.deepEqual(D.rankOf(bids[0], bids), { rang: 2, total: 2 });
@@ -209,20 +221,48 @@ test('makeFixtures: every fixture is a valid offer', () => {
   }
 });
 
-test('leadReadiness: sellable only when dossier complete AND consent given', () => {
-  const svc = D.serviceById('procuration');
-  const ids = [...svc.documents, ...svc.champs].map((x) => x.id);
+test('leadReadiness: price before documents — required answers + consent make it sellable (ADR 0010)', () => {
+  // None of the documents changes the price; the price is a pure function of
+  // the pricing answers. So the gate is: required answers (under __pricing)
+  // AND consent — a demand is ready even with ZERO documents provided.
+  assert.equal(D.leadReadiness('refinancement', {}).ready, false);
 
-  assert.equal(D.leadReadiness('procuration', {}).ready, false);
+  const answered = { __pricing: { ...PRICING } };
+  const noConsent = D.leadReadiness('refinancement', answered);
+  assert.equal(noConsent.requis.length, 0, 'every required question answered');
+  assert.equal(noConsent.ready, false, 'consent still gates');
 
-  const filled = {};
-  ids.forEach((id) => { filled[id] = 'ok'; });
-  const noConsent = D.leadReadiness('procuration', filled);
-  assert.equal(noConsent.missing.length, 0);
-  assert.equal(noConsent.ready, false); // complete but no consent
+  const r = D.leadReadiness('refinancement', { ...answered, __consent: true });
+  assert.equal(r.ready, true, 'sellable with an empty document checklist');
+  assert.equal(r.done, 0);
+  assert.ok(r.missing.length > 0, 'the checklist still reports preparation progress');
+});
 
-  filled.__consent = true;
-  assert.equal(D.leadReadiness('procuration', filled).ready, true);
+test('leadReadiness: requis lists the unanswered required pricing questions, by label', () => {
+  const required = D.serviceById('refinancement').pricing.criteria
+    .filter((c) => c.required)
+    .map((c) => c.label);
+  assert.ok(required.length >= 3, 'refinancement has required pricing questions');
+
+  const none = D.leadReadiness('refinancement', { __consent: true });
+  assert.deepEqual(none.requis, required);
+  assert.equal(none.ready, false, 'consent alone does not sell an unpriced demand');
+
+  const partial = D.leadReadiness('refinancement', { __consent: true, __pricing: { valeur_pret: 250000 } });
+  assert.deepEqual(partial.requis, required.slice(1), 'an answered question leaves the list');
+});
+
+test('leadReadiness: documents are progress, and "transmis autrement" counts as provided (ADR 0010)', () => {
+  // After the mise en relation a document can flow through the notary's own
+  // channel; marking it DOSSIER_TRANSMIS completes the checklist item.
+  assert.equal(D.DOSSIER_TRANSMIS, 'transmis_autrement');
+  const svc = D.serviceById('refinancement');
+  const saved = { piece_identite: 'data:image/png;…', offre_preteur: D.DOSSIER_TRANSMIS };
+  const r = D.leadReadiness('refinancement', saved);
+  assert.equal(r.total, svc.documents.length + svc.champs.length);
+  assert.equal(r.done, 2, 'the item sent outside Nota counts as provided');
+  assert.ok(!r.missing.includes('Offre de financement du prêteur'));
+  assert.ok(r.missing.includes('Certificat de localisation'));
 });
 
 test('leadReadiness: identity document is a required intake item', () => {
@@ -249,20 +289,20 @@ test('isEmail: accepts plausible addresses, rejects garbage', () => {
 });
 
 test('validateOffer: courriel is optional — absent/empty is still ok', () => {
-  const base = { serviceId: 'testament', dateISO: '2026-08-20', montant: 1400, todayISO: TODAY, pricing: { who_for: 'solo', fiducie_needed: 'non' } };
+  const base = { serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2500, todayISO: TODAY, pricing: PRICING };
   assert.equal(D.validateOffer(base).ok, true);
   assert.equal(D.validateOffer(base).courriel, null);
   assert.equal(D.validateOffer({ ...base, courriel: '' }).ok, true);
 });
 
 test('validateOffer: a valid courriel passes and is echoed back trimmed', () => {
-  const r = D.validateOffer({ serviceId: 'testament', dateISO: '2026-08-20', montant: 1400, todayISO: TODAY, courriel: '  Client@Example.CA ', pricing: { who_for: 'solo', fiducie_needed: 'non' } });
+  const r = D.validateOffer({ serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2500, todayISO: TODAY, courriel: '  Client@Example.CA ', pricing: PRICING });
   assert.equal(r.ok, true);
   assert.equal(r.courriel, 'Client@Example.CA');
 });
 
 test('validateOffer: an invalid courriel is rejected with courriel_invalide', () => {
-  const r = D.validateOffer({ serviceId: 'testament', dateISO: '2026-08-20', montant: 700, todayISO: TODAY, courriel: 'not-an-email' });
+  const r = D.validateOffer({ serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2500, todayISO: TODAY, courriel: 'not-an-email', pricing: PRICING });
   assert.equal(r.ok, false);
   assert.ok(r.errors.some((e) => e.code === 'courriel_invalide'));
 });
@@ -274,29 +314,29 @@ test('REMINDER_OFFSETS is the 7/3/1 cadence', () => {
 });
 
 test('dueReminders: fires the matching kind exactly on 7/3/1 days out', () => {
-  const open = (dateISO) => ({ id: 'b', serviceId: 'testament', dateISO, montant: 700, status: 'ouverte' });
+  const open = (dateISO) => ({ id: 'b', serviceId: 'refinancement', dateISO, montant: 2500, status: 'ouverte' });
   assert.deepEqual(D.dueReminders(open(D.addDays(TODAY, 7)), TODAY), ['j7']);
   assert.deepEqual(D.dueReminders(open(D.addDays(TODAY, 3)), TODAY), ['j3']);
   assert.deepEqual(D.dueReminders(open(D.addDays(TODAY, 1)), TODAY), ['j1']);
 });
 
 test('dueReminders: nothing on a non-cadence day', () => {
-  const open = { id: 'b', serviceId: 'testament', dateISO: D.addDays(TODAY, 5), montant: 700, status: 'ouverte' };
+  const open = { id: 'b', serviceId: 'refinancement', dateISO: D.addDays(TODAY, 5), montant: 2500, status: 'ouverte' };
   assert.deepEqual(D.dueReminders(open, TODAY), []);
 });
 
 test('dueReminders: nothing for a retained bid, even on a cadence day', () => {
-  const retenue = { id: 'b', serviceId: 'testament', dateISO: D.addDays(TODAY, 7), montant: 700, status: 'retenue' };
+  const retenue = { id: 'b', serviceId: 'refinancement', dateISO: D.addDays(TODAY, 7), montant: 2500, status: 'retenue' };
   assert.deepEqual(D.dueReminders(retenue, TODAY), []);
 });
 
 test('dueReminders: nothing for a bid whose signing date has passed', () => {
-  const past = { id: 'b', serviceId: 'testament', dateISO: D.addDays(TODAY, -1), montant: 700, status: 'ouverte' };
+  const past = { id: 'b', serviceId: 'refinancement', dateISO: D.addDays(TODAY, -1), montant: 2500, status: 'ouverte' };
   assert.deepEqual(D.dueReminders(past, TODAY), []);
 });
 
 test('dueReminders: the dossier_incomplet hook fires for an incomplete open lead', () => {
-  const incomplete = { id: 'b', serviceId: 'testament', dateISO: D.addDays(TODAY, 10), montant: 700, status: 'ouverte', dossierReady: false };
+  const incomplete = { id: 'b', serviceId: 'refinancement', dateISO: D.addDays(TODAY, 10), montant: 2500, status: 'ouverte', dossierReady: false };
   assert.deepEqual(D.dueReminders(incomplete, TODAY), ['dossier_incomplet']);
   // On a cadence day it stacks with the date-approaching kind.
   const both = { ...incomplete, dateISO: D.addDays(TODAY, 3) };
@@ -318,7 +358,7 @@ test('recommendedAmount: mid-tier default, within bounds, one-tap booking', () =
   }
   // unknown service / bad date -> null
   assert.equal(D.recommendedAmount('bad', '2026-09-01', TODAY), null);
-  assert.equal(D.recommendedAmount('testament', 'nope', TODAY), null);
+  assert.equal(D.recommendedAmount('refinancement', 'nope', TODAY), null);
 });
 
 test('obtainChance: high with lead time, low last-minute', () => {

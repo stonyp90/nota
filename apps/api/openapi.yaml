@@ -87,8 +87,11 @@ paths:
       summary: Post a bid on a date.
       description: >-
         Revalidates the offer through @nota/domain. `anonyme` defaults to true;
-        `nom` is stored only when `anonyme` is false and is never returned for an
-        anonymous bid.
+        `nom` is never returned for an anonymous bid (it is stored privately for
+        the mise en relation with the retaining notary, ADR 0010 §4). The
+        write-only `telephone` (private contact) and `parrain` (partner
+        referral code, ADR 0011) ride along here and are never echoed by any
+        response.
       requestBody:
         required: true
         content:
@@ -97,15 +100,29 @@ paths:
               $ref: "#/components/schemas/OfferInput"
       responses:
         "201":
-          description: Bid created (public projection).
+          description: >-
+            Bid created (public projection) plus the client's per-bid token.
+            The client has no account: `clientToken` (scope `client`, valid
+            ~400 days, `sub` = bid id) is their only key to the `/client/*`
+            routes — it is returned ONCE here and never echoed again. With
+            billing on, `paymentStatus` (pending) and `checkoutUrl` are added.
           content:
             application/json:
               schema:
                 type: object
-                required: [bid]
+                required: [bid, clientToken]
                 properties:
                   bid:
                     $ref: "#/components/schemas/Bid"
+                  clientToken:
+                    type: string
+                    description: Per-bid client token; sent as a Bearer Authorization header.
+                  paymentStatus:
+                    type: string
+                    enum: [pending]
+                  checkoutUrl:
+                    type: string
+                    format: uri
         "400":
           description: Body was not valid JSON.
           content:
@@ -127,7 +144,75 @@ paths:
               example:
                 errors:
                   - code: sous_prix_depart
-                    message: L’offre doit être d’au moins 495 $.
+                    message: L’offre doit être d’au moins 2 000 $.
+  /partenaires:
+    post:
+      operationId: registerPartner
+      summary: Claim a partner referral code (self-serve, ADR 0011).
+      description: >-
+        The referral program's front door. A professional (agent immobilier,
+        courtier hypothécaire, …) registers their partner type, courriel and
+        desired code; the code is normalized (uppercased, separators dropped)
+        and stored once — first claim wins. Re-submitting the SAME courriel for
+        its own code is idempotent (200); claiming a code registered to someone
+        else answers 409 `code_deja_pris`. Public and unauthenticated like
+        `POST /bids`: a code earns only on a completed act, so registration
+        alone gains nothing. The registry is never listed publicly — it only
+        surfaces, joined per code, in the admin referral ledger.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, courriel, code]
+              properties:
+                type:
+                  type: string
+                  description: Partner category id from the domain's REFERRAL.partners.
+                  enum: [agent_immobilier, courtier_hypothecaire, autre_professionnel]
+                courriel:
+                  type: string
+                  format: email
+                  maxLength: 254
+                  description: The partner's contact email (lowercased server-side).
+                code:
+                  type: string
+                  description: Desired referral code — 4–12 letters/digits, case-insensitive, separators ignored.
+                  example: eve-roy
+      responses:
+        "201":
+          description: Code claimed; the stored (normalized) registration is echoed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartnerRegistration"
+        "200":
+          description: Idempotent re-claim by the same courriel; what is on file is echoed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartnerRegistration"
+        "400":
+          description: Body was not valid JSON.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: The code is registered to another courriel (`code_deja_pris`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: >-
+            Typed validation errors: `type_inconnu`, `courriel_invalide`,
+            `code_invalide`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /notaries/connect:
     post:
       operationId: startConnectOnboarding
@@ -222,6 +307,504 @@ paths:
                 errors:
                   - code: signature_invalide
                     message: Signature Stripe invalide.
+  /notary/bids:
+    get:
+      operationId: listNotaryBids
+      summary: Open bids for the notary console (+ this notary's retained bids).
+      security:
+        - notarySession: []
+      parameters:
+        - name: service
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/ServiceId"
+      responses:
+        "200":
+          description: >-
+            Open, live bids in the forward month window (minus the ones this
+            notary declined), each with THIS notary's own latest proposition
+            and document request (never another notary's) and the dossier items
+            still missing. `retained` lists the bids in the window retained by
+            this notary — including those retained through a proposition the
+            client accepted (`viaProposition`), which the console never
+            accepted itself — each with the `client` contact block (mise en
+            relation, ADR 0010 §4). Open bids never carry client contact.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [bids, retained]
+                properties:
+                  bids:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/NotaryBid"
+                  retained:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/RetainedBid"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /notary/bids/propose:
+    post:
+      operationId: proposeCounterOffer
+      summary: Propose a higher price to the client (proposition de prix).
+      description: >-
+        Validated by the domain (`validateCounterOffer`): the amount must exceed
+        the client's offer and stay under the premium cap; the date must not be
+        past. A new proposition by the same notary marks their previous
+        `en_attente` one `remplacee`. The client is emailed (`propositionRecue`)
+        and answers through `/client/propositions/accept|decline`.
+      security:
+        - notarySession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, dateISO, montant]
+              properties:
+                id:
+                  type: string
+                dateISO:
+                  type: string
+                  format: date
+                montant:
+                  type: integer
+                  minimum: 1
+                message:
+                  type: string
+                  maxLength: 500
+                token:
+                  type: string
+                  description: Session token fallback when no Authorization header is sent.
+      responses:
+        "200":
+          description: Proposition recorded (notary projection).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [proposition]
+                properties:
+                  proposition:
+                    $ref: "#/components/schemas/NotaryProposition"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/AlreadyRetained"
+        "422":
+          description: >-
+            Domain errors: `offre_non_ouverte`, `montant_invalide`, `date_passee`,
+            `proposition_inferieure`, `plafond_depasse`, `message_trop_long`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /notary/bids/documents:
+    post:
+      operationId: requestDocuments
+      summary: Ask the client for dossier documents/fields (demande de documents).
+      description: >-
+        `documents` are ids from the service's requestable items (documents and
+        intake fields). Allowed while the bid is open, or when THIS notary
+        retained it; a bid retained by another notary answers 409. The client
+        is emailed the list (`documentsDemandes`).
+      security:
+        - notarySession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, dateISO, documents]
+              properties:
+                id:
+                  type: string
+                dateISO:
+                  type: string
+                  format: date
+                documents:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: string
+                message:
+                  type: string
+                  maxLength: 500
+                token:
+                  type: string
+      responses:
+        "200":
+          description: Request recorded (notary projection).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [demande]
+                properties:
+                  demande:
+                    $ref: "#/components/schemas/NotaryDemande"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/AlreadyRetained"
+        "422":
+          description: >-
+            Domain errors: `service_inconnu`, `documents_requis`,
+            `document_inconnu`, `message_trop_long`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /client/bid:
+    get:
+      operationId: getClientBid
+      summary: The client's own offer, propositions, document requests and readiness.
+      description: >-
+        Requires the per-bid client token whose `sub` equals `id` (any other
+        token -> 403 `interdit`). Propositions marked `remplacee` are hidden.
+        The client sees each notary's `etude`, never a `notaryId`.
+      security:
+        - clientToken: []
+      parameters:
+        - name: id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: dateISO
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: The client's view of their bid.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [bid, notaire, propositions, demandes, readiness]
+                properties:
+                  bid:
+                    $ref: "#/components/schemas/Bid"
+                  notaire:
+                    description: >-
+                      The notary half of the mise en relation (ADR 0010 §4):
+                      once the bid is RETAINED, the retaining notary's étude
+                      and courriel. Null while the bid is open — contact flows
+                      in neither direction before retention.
+                    oneOf:
+                      - type: "null"
+                      - type: object
+                        required: [etude, courriel]
+                        properties:
+                          etude:
+                            type: [string, "null"]
+                          courriel:
+                            type: [string, "null"]
+                  propositions:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ClientProposition"
+                  demandes:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ClientDemande"
+                  readiness:
+                    $ref: "#/components/schemas/Readiness"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /client/propositions/accept:
+    post:
+      operationId: acceptProposition
+      summary: Accept a notary's proposition — the bid is retained at that price.
+      description: >-
+        Sets `montant` to the proposition's amount (premium recomputed against
+        the bid's floor), marks the proposition `acceptee` and every other
+        pending one `refusee`, then retains the bid for that notary through the
+        SAME conditional retain path as `/notary/bids/accept` (calendar pointer,
+        analytics, "offer retained" email). The proposing notary is emailed
+        (`propositionAcceptee`).
+
+
+        PAY-ON-ACCEPT: nothing is captured here — the card hold was authorized
+        for the ORIGINAL amount. With billing on, the bid is flagged
+        `paymentStatus` = `a_reautoriser` and settlement is left to
+        `/notary/acts/complete`.
+      security:
+        - clientToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PropositionAnswerInput"
+      responses:
+        "200":
+          description: The bid is now retained at the new amount.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [bid, proposition]
+                properties:
+                  bid:
+                    $ref: "#/components/schemas/Bid"
+                  proposition:
+                    $ref: "#/components/schemas/ClientProposition"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Bid (`introuvable`) or proposition (`proposition_introuvable`) not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          $ref: "#/components/responses/AlreadyRetained"
+        "422":
+          description: The proposition is no longer pending (`proposition_close`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /client/propositions/decline:
+    post:
+      operationId: declineProposition
+      summary: Decline a notary's proposition — the bid stays open at the client's price.
+      description: The proposition becomes `refusee`; the notary is emailed (`propositionRefusee`).
+      security:
+        - clientToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PropositionAnswerInput"
+      responses:
+        "200":
+          description: Proposition declined.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [proposition]
+                properties:
+                  proposition:
+                    $ref: "#/components/schemas/ClientProposition"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Bid (`introuvable`) or proposition (`proposition_introuvable`) not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          $ref: "#/components/responses/AlreadyRetained"
+        "422":
+          description: The proposition is no longer pending (`proposition_close`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /client/dossier:
+    post:
+      operationId: updateClientDossier
+      summary: Replace the client's dossier (answer to a document request).
+      description: >-
+        Always allowed for the bid's owner, open or retained. `dossier` must be
+        a plain object (else 422 `dossier_invalide`). Answers with the fresh
+        domain readiness and each demande's `fournie` flag.
+      security:
+        - clientToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, dateISO, dossier]
+              properties:
+                id:
+                  type: string
+                dateISO:
+                  type: string
+                  format: date
+                dossier:
+                  type: object
+                  additionalProperties: true
+      responses:
+        "200":
+          description: Dossier replaced.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [readiness, demandes]
+                properties:
+                  readiness:
+                    $ref: "#/components/schemas/Readiness"
+                  demandes:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ClientDemande"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: "`dossier_invalide`: the dossier is not a plain object."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /client/bid/cancel:
+    post:
+      operationId: cancelClientBid
+      summary: Withdraw an offer — open or already retained.
+      description: >-
+        Guarded by the bid's own CLIENT token. Idempotent: cancelling an
+        already-cancelled offer answers 200 with the final state. An OPEN offer
+        simply leaves the carnet (a pending pay-on-accept card hold is
+        released). A RETAINED offer unwinds the mise en relation: the retaining
+        notary and the operator are notified, and the signing leaves the
+        notary's calendar feed. Every market surface hides the bid afterwards;
+        only the owner keeps reading it via GET /client/bid.
+      security:
+        - clientToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, dateISO]
+              properties:
+                id:
+                  type: string
+                dateISO:
+                  type: string
+                  format: date
+      responses:
+        "200":
+          description: The offer is cancelled (status `annulee`).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [bid]
+                properties:
+                  bid:
+                    $ref: "#/components/schemas/Bid"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /client/welcome:
+    post:
+      operationId: clientWelcome
+      summary: Passwordless client signup — send the welcome email.
+      description: >-
+        The one client-signup call, reached from the sign-in modal and from the
+        discreet « Créer mon compte » opt-in of the bid dialog. Fire-and-forget:
+        a valid address triggers the (idempotent-per-address) welcome email; a
+        missing or invalid one is a silent no-op. Always answers 200 {ok:true}
+        so the UI never blocks on mail, and no data is echoed back.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                courriel:
+                  type: string
+                  format: email
+      responses:
+        "200":
+          description: Acknowledged (whether or not an email was sent).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+        "400":
+          description: Invalid JSON body.
+  /contact:
+    post:
+      operationId: sendContactMessage
+      summary: Send a message to the Nota team (nous joindre form).
+      description: >-
+        No auth — anyone stuck deserves a way to reach a human. The domain
+        validates (`courriel_invalide`, `message_requis`, `message_trop_long`);
+        the operator receives the message and the sender an acknowledgement.
+        `bidId` optionally ties the message to an offer for faster triage.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [courriel, message]
+              properties:
+                nom:
+                  type: string
+                  maxLength: 150
+                courriel:
+                  type: string
+                  format: email
+                sujet:
+                  type: string
+                  maxLength: 150
+                message:
+                  type: string
+                  maxLength: 2000
+                bidId:
+                  type: string
+                  description: Optional id of the offer the message is about.
+      responses:
+        "202":
+          description: Message accepted and forwarded.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [recu]
+                properties:
+                  recu:
+                    type: boolean
+        "422":
+          description: Validation errors from the domain.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /unsubscribe:
     get:
       operationId: unsubscribe
@@ -254,18 +837,321 @@ paths:
               schema:
                 type: string
 components:
+  securitySchemes:
+    notarySession:
+      type: http
+      scheme: bearer
+      description: Notary SESSION token from POST /notary/session.
+    clientToken:
+      type: http
+      scheme: bearer
+      description: Per-bid CLIENT token returned once by POST /bids (`sub` = bid id).
+  responses:
+    Unauthorized:
+      description: Missing, invalid, expired or wrong-scope token (`non_autorise`).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: The client token belongs to another bid (`interdit`).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Unknown bid (`introuvable`).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    AlreadyRetained:
+      description: The bid is already retained (`deja_retenue`).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
   schemas:
+    PropositionStatus:
+      type: string
+      description: >-
+        Lifecycle of a notary's proposition. `remplacee` = superseded by a newer
+        proposition from the same notary (hidden from the client).
+      enum: [en_attente, acceptee, refusee, remplacee]
+    RequestedItem:
+      type: object
+      required: [id, nom, kind]
+      properties:
+        id:
+          type: string
+        nom:
+          type: string
+          description: The label the client saw in the dossier (fr-CA).
+        kind:
+          type: string
+          enum: [document, champ]
+    NotaryProposition:
+      type: object
+      description: A proposition as seen by the notary who made it.
+      required: [id, montant, delta, status, createdAt]
+      properties:
+        id:
+          type: string
+        montant:
+          type: integer
+        delta:
+          type: integer
+          description: montant minus the client's offer at proposal time.
+        message:
+          type: [string, "null"]
+        status:
+          $ref: "#/components/schemas/PropositionStatus"
+        createdAt:
+          type: string
+          format: date
+    ClientProposition:
+      type: object
+      description: A proposition as seen by the client — the étude, never the notaryId.
+      required: [id, etude, montant, delta, status, createdAt]
+      properties:
+        id:
+          type: string
+        etude:
+          type: [string, "null"]
+        montant:
+          type: integer
+        delta:
+          type: integer
+        message:
+          type: [string, "null"]
+        status:
+          $ref: "#/components/schemas/PropositionStatus"
+        createdAt:
+          type: string
+          format: date
+    NotaryDemande:
+      type: object
+      required: [id, documents, createdAt, fournie]
+      properties:
+        id:
+          type: string
+        documents:
+          type: array
+          items:
+            $ref: "#/components/schemas/RequestedItem"
+        message:
+          type: [string, "null"]
+        createdAt:
+          type: string
+          format: date
+        fournie:
+          type: boolean
+          description: True once every requested id is present in the client's dossier.
+    ClientDemande:
+      type: object
+      required: [id, etude, documents, createdAt, fournie]
+      properties:
+        id:
+          type: string
+        etude:
+          type: [string, "null"]
+        documents:
+          type: array
+          items:
+            $ref: "#/components/schemas/RequestedItem"
+        message:
+          type: [string, "null"]
+        createdAt:
+          type: string
+          format: date
+        fournie:
+          type: boolean
+    Readiness:
+      type: object
+      description: >-
+        Domain `leadReadiness` of the dossier. Since ADR 0010 ("price before
+        documents"), `ready` gates on the REQUIRED pricing answers plus
+        consent; the document checklist (`total`/`done`/`missing`) is reported
+        as preparation progress, never a barrier. A dossier item whose value is
+        `transmis_autrement` counts as provided (sent through the notary's own
+        channel).
+      required: [total, done, missing, requis, consent, ready]
+      properties:
+        total:
+          type: integer
+        done:
+          type: integer
+        missing:
+          type: array
+          items:
+            type: string
+          description: Names of the documents/fields still missing (progress, not a gate).
+        requis:
+          type: array
+          items:
+            type: string
+          description: Labels of the unanswered REQUIRED pricing questions — the only content gate.
+        consent:
+          type: boolean
+        ready:
+          type: boolean
+          description: True once every required pricing answer is in and consent is given.
+    PropositionAnswerInput:
+      type: object
+      required: [id, dateISO, propositionId]
+      properties:
+        id:
+          type: string
+        dateISO:
+          type: string
+          format: date
+        propositionId:
+          type: string
+    NotaryBid:
+      type: object
+      description: Notary-facing projection of an open bid (never the dossier or courriel).
+      required: [id, serviceId, dateISO, montant, tier, premium, ready, proposition, demande, missing]
+      properties:
+        id:
+          type: string
+        serviceId:
+          $ref: "#/components/schemas/ServiceId"
+        dateISO:
+          type: string
+          format: date
+        montant:
+          type: integer
+        tier:
+          $ref: "#/components/schemas/Tier"
+        premium:
+          type: number
+        prefixe:
+          type: [string, "null"]
+        ready:
+          type: boolean
+        complexity:
+          type: object
+          additionalProperties: true
+        proposition:
+          description: This notary's latest non-superseded proposition, or null.
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [id, montant, delta, status, createdAt]
+              properties:
+                id:
+                  type: string
+                montant:
+                  type: integer
+                delta:
+                  type: integer
+                status:
+                  $ref: "#/components/schemas/PropositionStatus"
+                createdAt:
+                  type: string
+                  format: date
+        demande:
+          description: This notary's latest document request, or null.
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [id, documents, createdAt, fournie]
+              properties:
+                id:
+                  type: string
+                documents:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/RequestedItem"
+                createdAt:
+                  type: string
+                  format: date
+                fournie:
+                  type: boolean
+        missing:
+          type: array
+          items:
+            type: string
+    ClientContact:
+      type: object
+      description: >-
+        The client half of the mise en relation (ADR 0010 §4), released ONLY to
+        the notary who retained the bid. `nom` is present even when the public
+        bid was anonymous — anonymity is a carnet promise, not a blackout on
+        the person the notary is meeting.
+      required: [nom, courriel, telephone]
+      properties:
+        nom:
+          type: [string, "null"]
+        courriel:
+          type: [string, "null"]
+        telephone:
+          type: [string, "null"]
+          description: As typed by the client (trimmed); use domain telHref() for a dial string.
+    RetainedBid:
+      type: object
+      description: A bid retained by the requesting notary (the dossier is theirs to see).
+      required: [id, dateISO, serviceId, montant, tier, client, viaProposition]
+      properties:
+        id:
+          type: string
+        dateISO:
+          type: string
+          format: date
+        serviceId:
+          $ref: "#/components/schemas/ServiceId"
+        montant:
+          type: integer
+        tier:
+          $ref: "#/components/schemas/Tier"
+        prefixe:
+          type: [string, "null"]
+        courriel:
+          type: [string, "null"]
+        dossier:
+          type: [object, "null"]
+          additionalProperties: true
+        client:
+          $ref: "#/components/schemas/ClientContact"
+        viaProposition:
+          type: boolean
+          description: True when retention came from the client accepting this notary's proposition.
     Tier:
       type: string
       description: Timing tier derived from days-to-date (ascending urgency).
       enum: [standard, rapide, prioritaire, urgence, extreme]
     Status:
       type: string
-      description: Lifecycle of a bid.
-      enum: [ouverte, retenue]
+      description: Lifecycle of a bid. `annulee` = withdrawn by the client.
+      enum: [ouverte, retenue, annulee]
     ServiceId:
       type: string
-      enum: [testament, procuration, refinancement]
+      description: >-
+        The catalogue is the financing family — `refinancement` and
+        `financement` (ADR 0010: testament and procuration were retired;
+        historical bids for retired acts are filtered out rather than served).
+      enum: [refinancement, financement]
+    PartnerRegistration:
+      type: object
+      required: [partenaire]
+      properties:
+        partenaire:
+          type: object
+          required: [code, type, courriel]
+          properties:
+            code:
+              type: string
+              description: The NORMALIZED code (uppercased, separators dropped).
+              example: EVEROY
+            type:
+              type: string
+              enum: [agent_immobilier, courtier_hypothecaire, autre_professionnel]
+            courriel:
+              type: string
+              format: email
+            createdAt:
+              type: string
+              format: date
     ConnectInput:
       type: object
       required: [email]
@@ -276,6 +1162,21 @@ components:
           maxLength: 254
           description: The notary's email; used as the Stripe customer email.
           example: notaire@example.ca
+        parrain:
+          type: string
+          writeOnly: true
+          description: >-
+            OPTIONAL, PRIVATE (write-only). Partner referral code from a
+            `?ref=CODE` link or typed by hand (ADR 0011), same rules as on
+            POST /bids: normalized server-side, stored on the notary record
+            only when valid, silently dropped otherwise — a broken referral
+            link must never fail a signup. A SELF-REFERRAL (the code's
+            registered partner signing up with their own email) is likewise
+            silently dropped. Never exposed in any notary-facing or public
+            payload; a referred notary earns their partner the flat notary
+            reward once, when they retain their first act. Surfaces only,
+            aggregated, in the admin referral ledger.
+          example: EVEROY
     OfferInput:
       type: object
       required: [serviceId, dateISO, montant]
@@ -291,9 +1192,11 @@ components:
           type: integer
           minimum: 1
           description: >-
-            Offer in whole Canadian dollars. Must be >= the service's prix de
-            départ and <= 10× it (the premium cap).
-          example: 640
+            Offer in whole Canadian dollars. Must be >= the offer's dynamic
+            floor (the service base plus the pricing-criteria adds; 2 000 $ for
+            an uncomplicated refinancement) and <= 10× that floor (the premium
+            cap).
+          example: 2400
         anonyme:
           type: boolean
           default: true
@@ -317,6 +1220,33 @@ components:
             a non-empty value must be a valid email or the offer is rejected with
             `courriel_invalide`.
           example: client@example.ca
+        telephone:
+          type: string
+          writeOnly: true
+          description: >-
+            OPTIONAL, PRIVATE (write-only). The client's phone for the mise en
+            relation (ADR 0010 §4): released ONLY to the notary who retains the
+            bid, alongside the dossier — never in the public Bid projection,
+            never to a notary browsing open bids, never echoed back. Loose
+            validation: after stripping formatting, 10–11 digits are required
+            (else 422 `telephone_invalide`); the value is stored as typed,
+            trimmed.
+          example: "418 555-1234"
+        parrain:
+          type: string
+          writeOnly: true
+          description: >-
+            OPTIONAL, PRIVATE (write-only). Partner referral code from a
+            `?ref=CODE` link or typed by hand in the booking form (ADR 0011)
+            — 4–12 letters/digits, case-insensitive, separators ignored.
+            Normalized and stored on the bid only when valid; an INVALID code
+            is silently dropped (a broken referral link must never fail a
+            booking), and a SELF-REFERRAL (the code's registered partner
+            booking with their own email) is likewise dropped. Never present in any
+            response: not on the public carnet, not in notary projections, not
+            echoed on POST /bids or GET /client/bid. It only ever surfaces,
+            aggregated, in the admin referral ledger.
+          example: EVEROY
     Bid:
       type: object
       description: Public projection of a bid. Private dossier data is never included.
@@ -370,6 +1300,22 @@ components:
             - courriel_invalide
             - signature_invalide
             - introuvable
+            - non_autorise
+            - interdit
+            - deja_retenue
+            - offre_non_ouverte
+            - proposition_inferieure
+            - message_trop_long
+            - documents_requis
+            - document_inconnu
+            - proposition_introuvable
+            - proposition_close
+            - dossier_invalide
+            - parametre_requis
+            - telephone_invalide
+            - type_inconnu
+            - code_invalide
+            - code_deja_pris
         message:
           type: string
           description: Human-readable message (fr-CA).

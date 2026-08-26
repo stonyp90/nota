@@ -54,12 +54,14 @@
   --tier-rapide-ink: var(--tier-rapide); --tier-prioritaire-ink: var(--tier-prioritaire);
   --tier-urgence-ink: var(--tier-urgence); --tier-extreme-ink: var(--tier-extreme);
 
-  /* Per-service categorical hues (blue / violet / teal) — deliberately distinct
-     from the green brand and the green→red tier ramp; used only as calendar
-     data-viz fills (the per-service mix bar + its legend). */
-  --svc-testament: #2563eb;
-  --svc-procuration: #7c3aed;
+  /* Per-service categorical hues — deliberately distinct from the green brand
+     and the green→red tier ramp; used only as calendar data-viz fills (the
+     per-service mix bar + its legend). TWO acts of the financing family
+     (ADR 0010): each act owns its token here, and every theme block below
+     redefines BOTH — a service colour must never fall back to a light value
+     in the dark themes. */
   --svc-refinancement: #0f766e; /* darker teal → AA (>=4.5:1) for the small per-service count text */
+  --svc-financement: #4f46e5; /* indigo → AA on light surfaces; clearly apart from the teal sibling */
 
   /* Offer status: waiting for a notary vs. retained by one. var() aliases, so
      they track the theme automatically — do not duplicate into the dark blocks. */
@@ -91,13 +93,16 @@
   --space-5: 10px; --space-6: 12px;  --space-7: 14px;  --space-8: 16px;
   --space-9: 18px; --space-10: 20px; --space-12: 24px; --space-14: 28px;
   --space-16: 32px;
+  /* The intro's responsive breathing room, shared with anything that must
+     top-align with the intro's first line (e.g. the notary sign-in card). */
+  --intro-pad-top: clamp(10px, 1.2vw, 16px);
   /* The three decisions everything else derives from. */
   --pad-card: var(--space-6) var(--space-7);
   --pad-card-lg: var(--space-8) var(--space-9);
   --pad-dialog: var(--space-12);
 
-  --header-h: 62px;   /* sticky .site-header height */
-  --sticky-top: 82px; /* header height + breathing gap — used for scroll-padding / scroll-margin */
+  --header-h: 52px;   /* sticky .site-header height — thin band, submenus carry the rest */
+  --sticky-top: 72px; /* header height + breathing gap — used for scroll-padding / scroll-margin */
 
   /* Fixed third-party brand-mark colours (Google / Outlook calendar logos).
      These are brand IDENTITY constants, NOT theme tokens: they must render
@@ -147,7 +152,8 @@
     --tier-urgence: #c2410c;
     --tier-extreme: #b42318;
     --tier-rapide-ink: #78c282; --tier-prioritaire-ink: #e0b44a; --tier-urgence-ink: #f0894c; --tier-extreme-ink: #f97066;
-    --svc-testament: #60a5fa; --svc-procuration: #a78bfa; --svc-refinancement: #2dd4bf;
+    --svc-refinancement: #2dd4bf;
+    --svc-financement: #818cf8;
 
     /* Dark shadows are cast in black, not light ink, so they read on #0a0a0a. */
     --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.5);
@@ -190,7 +196,8 @@
   --tier-urgence: #c2410c;
   --tier-extreme: #b42318;
   --tier-rapide-ink: #78c282; --tier-prioritaire-ink: #e0b44a; --tier-urgence-ink: #f0894c; --tier-extreme-ink: #f97066;
-  --svc-testament: #60a5fa; --svc-procuration: #a78bfa; --svc-refinancement: #2dd4bf;
+  --svc-refinancement: #2dd4bf;
+  --svc-financement: #818cf8;
 
   /* Dark shadows are cast in black, not light ink, so they read on #0a0a0a. */
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.5);
@@ -225,8 +232,9 @@ body {
 }
 
 /* Takes the slack in the body column, so the footer is pushed to the bottom on
-   short pages and simply follows the content on long ones. */
-#main { flex: 1 0 auto; }
+   short pages and simply follows the content on long ones. The bottom padding
+   keeps every pane's last card off the footer rule. */
+#main { flex: 1 0 auto; padding-bottom: var(--space-14); }
 
 h1, h2, h3 { letter-spacing: -0.02em; line-height: 1.15; margin: 0; }
 
@@ -250,16 +258,16 @@ a:hover { text-decoration: underline; }
   position: sticky; top: 0; z-index: 40;
 }
 .site-header .wrap {
-  display: flex; align-items: center; gap: 16px;
-  height: 62px;
+  display: flex; align-items: center; gap: 12px;
+  height: var(--header-h);
 }
 .brand {
-  display: flex; align-items: center; gap: 10px;
-  font-weight: 800; font-size: 20px; letter-spacing: -0.03em; color: var(--ink);
+  display: flex; align-items: center; gap: 8px;
+  font-weight: 800; font-size: 18px; letter-spacing: -0.03em; color: var(--ink);
 }
 .brand:hover { text-decoration: none; }
-.brand-mark { width: 30px; height: 30px; display: grid; place-items: center; }
-.brand-mark img { display: block; filter: drop-shadow(var(--logo-shadow)); }
+.brand-mark { width: 26px; height: 26px; display: grid; place-items: center; }
+.brand-mark img { display: block; width: 26px; height: 26px; filter: drop-shadow(var(--logo-shadow)); }
 .brand-word { font-weight: 800; }
 .brand-sub {
   color: var(--brand); font-weight: 700; font-size: 10px; text-transform: uppercase;
@@ -273,12 +281,16 @@ a:hover { text-decoration: underline; }
 .cal-avail[hidden] { display: none; }
 .header-spacer { flex: 1; }
 
-.nav-tabs { display: flex; gap: 2px; }
+/* flex:none — the tab strip never shrinks below its labels: a squeezed header
+   must slim its paddings (compact band below), never wrap a label to two lines.
+   Three flat doors (ADR 0010 §2) — no submenu layer, so no wrappers either. */
+.nav-tabs { display: flex; gap: 2px; flex: none; }
 .nav-tab {
   appearance: none; border: 1px solid transparent; background: transparent;
-  color: var(--ink-muted); font: inherit; font-weight: 600; font-size: 14px;
-  padding: 8px 14px; border-radius: var(--radius); cursor: pointer;
+  color: var(--ink-muted); font: inherit; font-weight: 600; font-size: 13.5px;
+  padding: 6px 11px; border-radius: var(--radius); cursor: pointer;
   display: inline-flex; align-items: center; gap: 8px;
+  white-space: nowrap;
 }
 .nav-tab:hover { background: var(--surface-inset); color: var(--ink); }
 .nav-tab[aria-selected='true'] {
@@ -291,18 +303,45 @@ a:hover { text-decoration: underline; }
 }
 .tab-badge[data-complete='true'] { background: var(--ok); }
 
+/* Header compact band: between the drawer threshold (720) and a roomy desktop
+   (900) the full control set — brand, two tabs, language, theme, both auth
+   buttons, avatar — only fits by slimming chrome: tighter gaps and paddings,
+   and the QUÉBEC pill steps aside. Labels never wrap (nowrap above); this band
+   is what guarantees they also never overflow. */
+@media (min-width: 720px) and (max-width: 899.98px) {
+  .site-header .wrap { gap: 8px; }
+  .brand-sub { display: none; }
+  .nav-tab { padding: 6px 8px; }
+  .header-auth .btn { padding-left: 9px; padding-right: 9px; }
+  /* The tool cluster tightens with the band: buttons touch inside the pill. */
+  .header-tools { gap: 0; padding: 1px; }
+}
+
 .icon-btn {
   appearance: none; border: 1px solid transparent; background: transparent;
-  color: var(--ink); width: 38px; height: 38px; border-radius: var(--radius);
+  color: var(--ink); width: 34px; height: 34px; border-radius: var(--radius);
   cursor: pointer; display: grid; place-items: center; font-size: 16px;
 }
 .icon-btn:hover { background: var(--surface-inset); }
 .icon-btn[aria-pressed='true'] { background: transparent; color: var(--brand); border-color: var(--brand); }
 .icon-btn svg { display: block; }
 .icon-btn:active { transform: scale(0.94); }
+/* .icon-btn sets display:grid, which outranks the UA's [hidden] rule — an
+   author display always wins over the user-agent sheet. Without this the
+   signed-in guide "?" (hidden by renderAccountMenu) would keep rendering. */
+.icon-btn[hidden] { display: none; }
 /* Language toggle: an icon-btn carrying two letters ("EN"/"FR") instead of an
    svg, keeping the icon row's rhythm. Labelled by NotaI18N.wireToggles(). */
 .lang-btn { font-size: 12.5px; font-weight: 650; letter-spacing: 0.04em; }
+/* Header tool cluster: guide "?" · language · theme regroup into ONE quiet
+   pill (owner's ask, 2026-08-25) so the header reads as brand / doors / tools
+   / auth instead of a scatter of loose icons. Same border voice as .acct-btn,
+   so the cluster and the avatar sit as one family on the right. */
+.header-tools {
+  display: inline-flex; align-items: center; gap: 2px; flex: none;
+  padding: 2px; border: 1px solid var(--border); border-radius: 999px;
+}
+.header-tools .icon-btn { width: 30px; height: 30px; border-radius: 999px; }
 
 /* --- Notifications (bell + dropdown, paired with the email the API sends) -- */
 .notif-wrap { position: relative; }
@@ -383,8 +422,9 @@ a:hover { text-decoration: underline; }
 /* Notifications belong to a signed-in person — hidden entirely when anonymous. */
 #notif-panel[data-role='anon'] #acct-notifs { display: none; }
 /* Logged-out auth buttons (login + signup); the avatar takes over once signed in. */
-.header-auth { display: inline-flex; align-items: center; gap: 6px; }
+.header-auth { display: inline-flex; align-items: center; gap: 6px; flex: none; }
 .header-auth[hidden] { display: none; }
+.header-auth .btn { white-space: nowrap; }
 /* Safety cap so a long notifications list can never push the menu past the
    viewport. The cap subtracts the sticky header the panel hangs from (plus its
    8px gap and an 8px floor margin) — a bare 88vh ignored that offset and let
@@ -418,37 +458,60 @@ a:hover { text-decoration: underline; }
 .mnav.is-open { transform: none; visibility: visible; transition: transform .24s cubic-bezier(.2, .8, .2, 1); }
 /* No page scroll behind the open drawer. */
 html.nav-open, html.nav-open body { overflow: hidden; }
-.mnav-head { display: flex; align-items: center; gap: 10px; padding: var(--space-2) var(--space-2) var(--space-4); }
+/* Sticky for the same reason as the dialogs' ✕: the drawer scrolls, its close
+   button must not. Background so links slide under it, not through it. */
+.mnav-head { position: sticky; top: 0; z-index: 2; background: var(--surface); display: flex; align-items: center; gap: 10px; padding: var(--space-2) var(--space-2) var(--space-4); }
 .mnav-title { font-weight: 800; font-size: 15px; letter-spacing: -0.01em; }
 .mnav-group { display: flex; flex-direction: column; }
 .mnav-link {
   display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
   appearance: none; background: transparent; border: 0; border-radius: var(--radius);
-  padding: var(--space-6) var(--space-6); font: inherit; font-size: 15px; font-weight: 600;
+  padding: var(--space-5) var(--space-6); font: inherit; font-size: 14.5px; font-weight: 600;
   color: var(--ink); cursor: pointer; transition: background .12s, color .12s;
 }
 .mnav-link:hover { background: var(--surface-inset); text-decoration: none; color: var(--ink); }
 .mnav-link.is-on { background: var(--surface-inset); color: var(--brand); }
 .mnav-link svg { flex: none; color: var(--ink-muted); }
 .mnav-link.is-on svg { color: var(--brand); }
+.mnav-link--primary { color: var(--brand); }
+/* Focus ring drawn INSIDE the row: the drawer's rows are full-bleed, so the
+   default outer ring painted a giant box around the first row on open. */
+.mnav-link:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+/* The legal fold — the drawer's one expandable row: icon + label left,
+   chevron right. Only the CHEVRON rotates on expand — the row icon sits still.
+   The section links themselves are flat (ADR 0010 §2), no accordions. */
+.mnav-expandrow { justify-content: space-between; }
+.mnav-row-l { display: flex; align-items: center; gap: 10px; }
+.mnav-row-l svg { flex: none; color: var(--ink-muted); }
+.mnav-chevron { transition: transform .16s; }
+.mnav-expandrow[aria-expanded='true'] .mnav-chevron { transform: rotate(180deg); }
+/* Sub-rows hang off a thin rail so they read as children of their row. */
+.mnav-sub {
+  display: flex; flex-direction: column; padding: 0 0 var(--space-3);
+  margin-left: var(--space-6); border-left: 1px solid var(--border);
+}
+.mnav-sub[hidden] { display: none; }
+.mnav-subitem {
+  display: flex; flex-direction: column; gap: 2px; width: 100%; text-align: left;
+  appearance: none; background: transparent; border: 0; border-radius: 0 var(--radius) var(--radius) 0;
+  padding: var(--space-4) var(--space-6) var(--space-4) var(--space-5);
+  font: inherit; color: var(--ink); cursor: pointer;
+}
+.mnav-subitem:hover { background: var(--surface-inset); text-decoration: none; color: var(--ink); }
+.mnav-subitem:focus-visible { background: var(--surface-inset); outline: 2px solid var(--ring); outline-offset: -2px; }
 .mnav-sep { height: 1px; background: var(--border); margin: var(--space-5) var(--space-2); flex: none; }
 .mnav-auth { gap: var(--space-4); padding: 0 var(--space-2); }
 .mnav-auth .btn { width: 100%; }
 /* When the auth pair hides (signed in), its trailing separator must go with it
    or two hairlines stack. */
 #mnav-auth[hidden] + .mnav-auth-sep { display: none; }
-.mnav-legal .mnav-link { font-size: 13.5px; font-weight: 500; color: var(--ink-muted); padding-block: var(--space-5); }
-.mnav-legal .mnav-link:hover { color: var(--ink); }
+.mnav-legal .mnav-subitem { font-size: 13.5px; font-weight: 500; color: var(--ink-muted); padding-block: var(--space-4); }
+.mnav-legal .mnav-subitem:hover { color: var(--ink); }
 
 /* --- Sign-in / sign-up modal -------------------------------------------- */
 .auth-modal { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); color: var(--ink); box-shadow: var(--shadow-lg); padding: 0; width: min(420px, 92vw); max-height: 92vh; overflow: auto; }
 .auth-modal::backdrop { background: rgb(0 0 0 / 0.6); backdrop-filter: blur(2px); }
-.auth-x-form { position: absolute; top: 10px; right: 10px; margin: 0; z-index: 1; }
-.auth-x { appearance: none; border: 0; background: transparent; color: var(--ink-muted); cursor: pointer; padding: 6px; border-radius: var(--radius-sm); display: grid; place-items: center; }
-/* 18px glyph + 6px padding is a 30px target — under the touch minimum. Give
-   fingers the full 44px without changing what a mouse sees. */
-@media (pointer: coarse) { .auth-x { padding: 13px; } }
-.auth-x:hover { background: var(--surface-inset); color: var(--ink); }
+/* Close ✕: the shared .dlg-x construction — see the base dialog rules. */
 .auth-body { padding: 30px 26px 24px; display: flex; flex-direction: column; }
 .auth-mark { display: grid; place-items: center; margin-bottom: 12px; }
 .auth-mark .brand-badge { width: 46px; height: 46px; border-radius: 13px; display: grid; place-items: center; background: var(--surface-inset); border: 1px solid var(--border); }
@@ -466,15 +529,6 @@ html.nav-open, html.nav-open body { overflow: hidden; }
    sunken. --surface-hover stays lighter than the track in both themes; the
    strong hairline and the bigger shadow are what separate it from a hover. */
 .auth-role .seg-btn.is-on { background: var(--surface-hover); border-color: var(--border-strong); box-shadow: var(--shadow); }
-.auth-social { display: flex; flex-direction: column; gap: 9px; }
-.auth-oauth { justify-content: center; gap: 10px; width: 100%; padding: 11px 14px; font-weight: 600; }
-.auth-oauth .brand-ic { flex: none; }
-/* Social login is not wired yet — shown but disabled with a "Bientôt" tag. */
-.auth-oauth[disabled] { opacity: .5; cursor: not-allowed; }
-.auth-oauth[disabled]:hover { transform: none; background: transparent; border-color: var(--border); }
-.auth-soon { margin-left: auto; font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-muted); border: 1px solid var(--border); border-radius: 999px; padding: 1px 7px; }
-.auth-divider { display: flex; align-items: center; gap: 12px; margin: 16px 0; color: var(--ink-muted); font-size: 12px; }
-.auth-divider::before, .auth-divider::after { content: ''; height: 1px; background: var(--border); flex: 1; }
 .auth-email { display: flex; flex-direction: column; gap: 8px; }
 .auth-email .lbl { font-size: 12px; margin-bottom: 0; }
 .auth-email input { width: 100%; }
@@ -484,7 +538,12 @@ html.nav-open, html.nav-open body { overflow: hidden; }
 /* --- First-visit onboarding guide --------------------------------------- */
 /* Reuses the .auth-modal shell (card + backdrop); two views live in the DOM
    and are shown/hidden. Tokens only, so it tracks every theme automatically. */
-.onb-modal { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); color: var(--ink); box-shadow: var(--shadow-lg); padding: 0; width: min(440px, 94vw); max-height: 92vh; overflow: auto; }
+/* 560px: wide enough for the week vignette's five columns to carry an act's
+   name and the exact amount — "Refinancement" ellipsizes, still named by its
+   glyph, colour and tooltip. The ≤380px container fallback covers phones,
+   where 94vw wins. max-width included: the base `dialog` rule caps every
+   dialog at 440px and would clamp it back. */
+.onb-modal { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); color: var(--ink); box-shadow: var(--shadow-lg); padding: 0; width: min(560px, 94vw); max-width: 560px; max-height: 92vh; overflow: auto; }
 .onb-modal::backdrop { background: rgb(0 0 0 / 0.6); backdrop-filter: blur(2px); }
 .onb-body { padding: 30px 26px 24px; display: flex; flex-direction: column; }
 .onb-title { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; text-align: center; margin: 0; }
@@ -498,6 +557,7 @@ html.nav-open, html.nav-open body { overflow: hidden; }
 .onb-choice-ic { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 11px; background: var(--surface-inset); border: 1px solid var(--border); color: var(--brand); }
 .onb-choice-t { font-size: 14.5px; font-weight: 700; letter-spacing: -0.01em; }
 .onb-choice-d { font-size: 12.5px; color: var(--ink-muted); line-height: 1.45; }
+.onb-choice-live { font-size: 12px; font-weight: 650; color: var(--brand); margin-top: 2px; }
 
 /* VIEW 2 — a numbered steps list with a brand-outline number chip. */
 .onb-steps-title { margin-top: 2px; }
@@ -568,7 +628,7 @@ html.nav-open, html.nav-open body { overflow: hidden; }
 .hero-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 22px; }
 /* margin-top:auto pins the buttons to the BOTTOM of the copy column, so the
    two hero columns end on the same line instead of one trailing off. */
-.hero-cta { display: flex; gap: var(--space-5); flex-wrap: wrap; margin-top: auto; padding-top: var(--space-9); }
+.hero-cta { display: flex; align-items: center; gap: var(--space-5); flex-wrap: wrap; margin-top: auto; padding-top: var(--space-9); }
 /* A slim, equal pair: ONE set height rather than padding-derived boxes, so the
    filled and the outlined button can never drift apart by a border or a wrap.
    Wide screens only — under 681px the pair keeps its full touch height. */
@@ -588,7 +648,7 @@ html.nav-open, html.nav-open body { overflow: hidden; }
 /* --- Hero / intro -------------------------------------------------------- */
 /* A touch more floor than ceiling: the hero hands off to a PANEL below, and
    the seam between an open surface and a card needs the larger share of air. */
-.intro { padding: clamp(10px, 1.2vw, 16px) 0 clamp(16px, 2.2vw, 26px); }
+.intro { padding: var(--intro-pad-top) 0 clamp(16px, 2.2vw, 26px); }
 /* Split hero: copy on the left, live content on the right — the market pulse on
    Carnet, the "how it works" steps on Notaires. Both asides are CHROMELESS (no
    card, no border, no fill): the hero is one continuous surface, and the two
@@ -613,18 +673,18 @@ html.nav-open, html.nav-open body { overflow: hidden; }
    heading its opening capital without touching the month. */
 .pulse-month { font-size: 12px; font-weight: 600; color: var(--ink-muted); }
 .pulse-month::first-letter { text-transform: uppercase; }
-/* Rows fill the column so BOTH hero sides end on the same line — but the
-   spread is capped, so the gaps can never balloon when the copy column grows
-   tall (the failure mode that once pushed rows 80px apart). */
-.pulse-rows { display: grid; gap: var(--space-2); margin-top: var(--space-3); flex: 1; align-content: space-between; max-height: 380px; }
+/* Rows hug their content at every viewport — no stretching to match the copy
+   column. Distributing them over the hero's height (space-between + flex:1)
+   opened huge gaps whenever the copy column was tall or the hero stacked. */
+.pulse-rows { display: grid; gap: var(--space-2); margin-top: var(--space-3); align-content: start; }
 /* The filter button takes the width; the book button sits at its right edge. */
 .pulse-item { display: flex; align-items: center; gap: 2px; }
-/* Grid and flex items default to min-width:auto, so .pulse-item refused to shrink
-   below its min-content and pushed the 44px book button 53px past a 320px
-   viewport, scrolling the WHOLE page sideways and squeezing the carnet with it.
-   The figures ellipsis instead of shoving. Measured 53px -> 0 at 320. */
-.pulse-item, .pulse-figs, .pulse-fig, .pulse-fig-v { min-width: 0; }
-.pulse-fig-v { overflow: hidden; text-overflow: ellipsis; }
+/* The ROW may shrink (min-width:0, else it pushed the book button past a
+   320px viewport) — but the FIGURES may not: an amount that shrinks either
+   clips or paints over its neighbour, and a price must always be whole. Their
+   min-content width is the floor; the hero stacks (≤767.98) before any
+   viewport gets narrow enough to challenge it. */
+.pulse-item { min-width: 0; }
 .pulse-item .pulse-row { flex: 1; min-width: 0; }
 .pulse-item .mini-btn { margin-right: -8px; }
 /* The book action wakes with the row: brand colour plus a 2px nudge toward
@@ -651,9 +711,8 @@ html.nav-open, html.nav-open body { overflow: hidden; }
 .svc-ic { flex: none; display: block; }
 .chip-svc { display: inline-flex; align-items: center; gap: 6px; }
 .chip-svc .svc-ic { color: var(--svc-fallback, currentColor); }
-.chip-svc[data-svc='testament'] .svc-ic { color: var(--svc-testament); }
-.chip-svc[data-svc='procuration'] .svc-ic { color: var(--svc-procuration); }
 .chip-svc[data-svc='refinancement'] .svc-ic { color: var(--svc-refinancement); }
+.chip-svc[data-svc='financement'] .svc-ic { color: var(--svc-financement); }
 .chip-svc.is-on .svc-ic { color: currentColor; }
 .legend-item .svc-ic, .legend-status-item .svc-ic { margin-right: 1px; }
 /* Two figures per act, because they answer two questions: the floor the server
@@ -725,7 +784,7 @@ html.nav-open, html.nav-open body { overflow: hidden; }
 .filters { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 18px; }
 .field { display: flex; flex-direction: column; gap: 4px; }
 .field > label { font-size: 11px; font-weight: 600; color: var(--ink-muted); text-transform: uppercase; letter-spacing: .04em; }
-select, input[type='text'], input[type='email'], input[type='number'], input[type='date'] {
+select, input[type='text'], input[type='email'], input[type='tel'], input[type='number'], input[type='date'] {
   font: inherit; padding: 8px 10px; border: 1px solid var(--border-strong);
   border-radius: var(--radius); background: var(--surface); color: var(--ink); min-width: 120px;
 }
@@ -773,7 +832,6 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 .cal-nav { display: inline-flex; gap: var(--space-4); }
 .cal-title { font-weight: 700; font-size: 15px; white-space: nowrap; }
 .cal-title::first-letter { text-transform: uppercase; }
-.btn-icon { padding-left: 9px; padding-right: 9px; }
 /* Active-filter count riding on the Filtres toggle. */
 .filter-count {
   display: inline-grid; place-items: center; min-width: 17px; height: 17px; margin-left: 6px;
@@ -820,17 +878,23 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
    already prints, so a marker there is noise. Elevated dates get a named label
    plus a matching left edge — colour reinforces the word, it never carries the
    meaning alone. */
+/* IN FLOW at every width, between the date and the prices (it is what the
+   price MEANS, so it reads before it). It was absolutely positioned top-right
+   and printed over the day number on every mid-width grid (tablet, narrow
+   desktop) — a badge in flow can never overlap anything, at any resolution. */
 .cal-urgency {
-  position: absolute; top: 6px; right: 26px;
+  position: static; align-self: flex-start; order: 1;
   font-size: 11px; font-weight: 800; letter-spacing: .01em; white-space: nowrap;
   color: var(--ink-muted);
 }
+.cal-svc-bids, .cal-avg { order: 2; }
+.cal-more { order: 3; }
 .cal-urgency[data-tier='rapide'] { color: var(--tier-rapide-ink); }
 .cal-urgency[data-tier='prioritaire'] { color: var(--tier-prioritaire-ink); }
 .cal-urgency[data-tier='urgence'] { color: var(--tier-urgence-ink); }
 /* The steepest step is the one a client must not miss, so it is the only one
    that fills rather than tints. */
-.cal-urgency[data-tier='extreme'] { color: var(--on-accent, #fff); background: var(--tier-extreme); padding: 1px 5px; border-radius: 999px; box-shadow: var(--shadow-sm); }
+.cal-urgency[data-tier='extreme'] { color: var(--on-accent, #fff); background: var(--tier-extreme); padding: 0 var(--space-1); border-radius: 999px; box-shadow: var(--shadow-sm); }
 .legend-mult { font-weight: 800; }
 .cal-cell[data-tier]::before {
   content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
@@ -841,7 +905,11 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 .cal-cell[data-tier='prioritaire']::before { background: var(--tier-prioritaire); }
 .cal-cell[data-tier='urgence']::before { background: var(--tier-urgence); }
 .cal-cell[data-tier='extreme']::before { background: var(--tier-extreme); width: 4px; }
-.cal-daynum { font-size: 12px; font-weight: 600; color: var(--ink-muted); }
+/* align-self keeps the box on the text: a stretched flex item would span the
+   whole cell and sit under the (absolute) chevron for no reason. min-height
+   clears the chevron's 26px hit circle (top:4), so the in-flow price badge on
+   the next line can never slide under it, however narrow the cell gets. */
+.cal-daynum { font-size: 12px; font-weight: 600; color: var(--ink-muted); align-self: flex-start; min-height: 24px; }
 /* The rolling window carries a month seam inside the grid: the 1st names its
    month beside the number ("1 sept"), the way every booking calendar labels it. */
 .cal-daynum[data-month]::after {
@@ -946,6 +1014,16 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
   .cal-avg { font-size: 0; }
   .cal-avg::after { content: attr(data-compact); font-size: 12.5px; font-weight: 800; letter-spacing: -0.02em; }
 }
+/* The in-flow urgency badge is 75px at its widest ("dès 18 000 $") and needs an
+   ~84px cell — a 620px seven-column grid — or its nowrap text runs into the
+   next day (measured 1-20px of bleed from 710px down to 500px viewports).
+   Under that, swap it to the compact figure (data-compact, the same pattern as
+   the amounts above). The full label stays in the DOM and in the badge's
+   title, so screen readers and hover keep the exact price. */
+@container cal (max-width: 620px) {
+  .cal-urgency { font-size: 0; }
+  .cal-urgency::after { content: attr(data-compact); font-size: 11px; font-weight: 800; letter-spacing: .01em; }
+}
 /* Phones. Seven columns are not negotiable, so on a 320px screen a cell is 34px
    wide with a 26px content box, and a glyph + gap + compact amount laid out in a
    ROW needs 45px. The row was clamped to the box while its text carried on
@@ -954,18 +1032,6 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
    a fine pointer, so here the cell can safely contain its own content again.
    Measured at 320/375/414: every act still prints its price, and nothing leaves
    its cell. The cost is height (87px -> 127px at 320), which a phone scrolls. */
-/* Pinned right:26px to clear the chevron, the multiplier escaped the left edge
-   of a narrow cell and printed on the previous day's number — up to 17px out at
-   320px, and still overlapping until a cell can spare ~65px. In flow it cannot.
-   Order puts it between the date and the price: it is what the price MEANS, so
-   it has to be read before it, and the DOM appends it last (app.js:928). */
-@container cal (max-width: 650px) {
-  .cal-urgency { position: static; align-self: flex-start; order: 1; }
-  .cal-svc-bids, .cal-avg { order: 2; }
-  /* Appended after .cal-svc-bids, so without this it outranks both above. */
-  .cal-more { order: 3; }
-  .cal-urgency[data-tier='extreme'] { padding: 0 var(--space-1); }
-}
 /* PHONES: the month grid drops from 7 columns to 3.
    Seven columns on a 320px screen give a 34px cell, which cannot carry a glyph
    and a price side by side however the content is tuned — the previous attempt
@@ -1002,6 +1068,16 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
   /* An 82px cell fits "1 900 $" (57px with its glyph). Undo the compaction. */
   .cal-svc-bids .svc-bid-amount { font-size: 11.5px; }
   .cal-svc-bids .svc-bid-amount::after { content: none; }
+  /* Three-column cells are ≥93px down to a ~350px screen: the full urgency
+     label fits again. */
+  .cal-urgency { font-size: 11px; }
+  .cal-urgency::after { content: none; }
+}
+/* The very smallest screens (≤~350px): three-column cells drop under 83px and
+   the widest label ("dès 18 000 $", 75px) no longer fits — back to compact. */
+@container cal (max-width: 265px) {
+  .cal-urgency { font-size: 0; }
+  .cal-urgency::after { content: attr(data-compact); font-size: 11px; font-weight: 800; letter-spacing: .01em; }
 }
 
 /* --- Agenda / bid list --------------------------------------------------- */
@@ -1068,21 +1144,39 @@ select:focus, input:focus { border-color: var(--ring); outline: none; box-shadow
 .form-row label.lbl { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; margin-bottom: 8px; }
 .help { font-size: 12px; color: var(--ink-muted); margin-top: 4px; }
 
-.tier-preview {
-  display: flex; align-items: center; gap: 10px; padding: 12px;
-  background: var(--surface-inset); border-radius: var(--radius); margin-bottom: 14px;
-}
-.tier-preview .pill { font-size: 12px; }
+/* Inside step 3, right above the amount: WHY it is pre-filled (delay tier +
+   going range). Compact and muted — context, never a competing price signal. */
+.tier-preview { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tier-preview .pill { font-size: 11px; }
 .tier-preview .tp-text { font-size: 12px; color: var(--ink-muted); }
 
 .slider-row { display: flex; align-items: center; gap: 12px; }
 input[type='range'] { flex: 1; accent-color: var(--brand); }
+/* The slider's typed twin: a client who knows their number types it. */
+.amount-input-wrap { display: inline-flex; align-items: center; gap: 4px; flex: none; }
+.amount-input { width: 7ch; padding: 6px 8px; font: inherit; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; border: 1px solid var(--border-strong); border-radius: var(--radius-sm, 8px); background: var(--surface); color: var(--ink); }
+.amount-input:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+.amount-input-unit { font-size: 13px; font-weight: 700; color: var(--ink-muted); }
+/* Where the slider starts and stops, in dollars, under its two ends. */
+.slider-bounds { display: flex; justify-content: space-between; margin-top: 2px; font-size: 11.5px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+/* The reason the publish button is dead, said before it is pressed. */
+.offer-hint { margin: 0 0 8px; font-size: 12.5px; font-weight: 600; color: var(--warn); }
+/* Law 25 small print directly under the CTA: always visible, quiet. The
+   negative margin tucks it against the button despite the form's flex gap. */
+.consent-line { font-size: 11.5px; line-height: 1.5; }
+.day-book > .consent-line { margin-top: -12px; }
 .amount-big { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; }
-.mult-note { font-size: 12px; color: var(--ink-muted); }
 
 .gauge { height: 8px; border-radius: 999px; background: var(--surface-inset); overflow: hidden; margin: 8px 0 4px; }
 .gauge-fill { width: 0; height: 100%; background: linear-gradient(90deg, var(--tier-rapide), var(--tier-prioritaire), var(--tier-urgence)); }
 .gauge-label { font-size: 12px; font-weight: 600; }
+
+/* Discreet inline checkbox (the bid dialog's account opt-in): plain row, no
+   switch chrome — the option must read as one more optional field, not a step. */
+.check-line { display: flex; align-items: center; gap: 8px; font-size: 13.5px; cursor: pointer; }
+.check-line input { width: 16px; height: 16px; margin: 0; flex: none; accent-color: var(--brand); }
+.check-line input:disabled { cursor: not-allowed; }
+.check-line:has(input:disabled) { color: var(--ink-muted); cursor: not-allowed; }
 
 .switch-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; }
 .switch { position: relative; width: 42px; height: 24px; flex: none; }
@@ -1096,35 +1190,128 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .errors { list-style: none; margin: 8px 0 0; padding: 0; }
 .errors li { color: var(--danger); font-size: 13px; padding: 2px 0; }
 
+/* --- Partenaires (ADR 0011) ---------------------------------------------- */
+/* Conversion-first layout: the pitch (rewards + vignette) beside the claim
+   form, the fine print (steps + guarantee) tucked under the pitch. One screen
+   to the CTA on desktop; narrow screens stack pitch → form → fine print. */
+.pr-grid {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(min(320px, 100%), 420px);
+  grid-template-areas: 'pitch form' 'more form'; align-content: start;
+  /* 1fr auto: the form spans both rows and is the tallest thing on the page,
+     so its slack has to land SOMEWHERE. In row 1 it becomes air between the
+     reward cards (top) and the fine print (pinned to the form's last line) —
+     the column reads composed instead of ending in a hole (owner's call,
+     2026-08-26: « improve the space »). */
+  grid-template-rows: 1fr auto;
+  gap: var(--gap); align-items: start;
+}
+.pr-more { align-self: end; }
+.pr-pitch { grid-area: pitch; min-width: 0; }
+/* The form panel: standard card padding (strict pass — the extra air the old
+   space-12 bought said nothing), every field spans it — one column, one
+   width, one CTA. The bare-span label ("Vous êtes") dresses like real ones. */
+.pr-form-panel { grid-area: form; padding: var(--pad-card-lg); }
+.pr-form-panel input { width: 100%; }
+.pr-form-panel .form-row { margin-bottom: var(--space-6); }
+.pr-form-panel span.lbl { display: block; font-size: 14px; font-weight: 700; margin-bottom: 8px; }
+.pr-more { grid-area: more; min-width: 0; }
+@media (max-width: 900px) {
+  .pr-grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'pitch' 'form' 'more'; grid-template-rows: auto; }
+  .pr-more { align-self: start; }
+}
+/* Two reward tracks, one card each: kicker, amount, when. They carry the
+   page's argument alone now, so the amount is a headline figure and the card
+   breathes (owner's call, 2026-08-26). The notary track pays more and keeps
+   the highlight (brand border + tint) — tokens only. */
+.pr-rewards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr)); gap: var(--space-6); margin: 0 0 var(--space-6); }
+.pr-card { display: flex; flex-direction: column; gap: 4px; padding: var(--pad-card-lg); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+.pr-card--notaire { border-color: var(--brand); background: var(--brand-tint); }
+.pr-kicker { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-muted); }
+.pr-amount { font-size: clamp(28px, 3vw, 38px); font-weight: 800; letter-spacing: -0.02em; color: var(--brand); font-variant-numeric: tabular-nums; }
+.pr-when { margin: 0; font-size: 13px; color: var(--ink-muted); }
+/* The fine print: three lines with counter dots — the whole "how it works". */
+.pr-steps { list-style: none; counter-reset: prstep; margin: 0; padding: 0; display: grid; gap: var(--space-4); }
+.pr-steps li { counter-increment: prstep; position: relative; padding-left: 26px; font-size: 13px; line-height: 1.5; color: var(--ink-muted); }
+.pr-steps li::before {
+  content: counter(prstep); position: absolute; left: 0; top: 1px;
+  width: 18px; height: 18px; border-radius: 50%; background: var(--brand-tint);
+  color: var(--brand); font-size: 11px; font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+}
+/* Inside this pane the guarantee is a quiet closing line, not another boxed
+   card — the boxed .note voice stays for panes that need a warning register. */
+.pr-more .note { border-left: 0; background: transparent; padding: 0; }
+
+/* The claim form's payoff: the shareable link, ready to copy. The CTA spans
+   the panel — in the form column it IS the point of the page. */
+#partner-form .btn-lg { margin-top: var(--space-4); width: 100%; }
+.partner-success { margin-top: var(--space-5); padding: var(--space-5) var(--space-6); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-inset); }
+.partner-success[hidden] { display: none; }
+.partner-link-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.partner-link-row code { font-family: var(--font-mono); font-size: 13px; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); overflow-wrap: anywhere; }
+
 /* --- Dossier ------------------------------------------------------------- */
-.dossier-progress { padding: 14px 18px; }
 .dossier-bar { height: 8px; background: var(--surface-inset); border-radius: 999px; overflow: hidden; margin: 8px 0; }
 .dossier-bar > span { display: block; width: 0; height: 100%; background: var(--brand); }
-.dossier-missing { font-size: 13px; color: var(--ink-muted); }
+/* The gate line (what's left before the demand is sellable) renders inside
+   the consent card — right where the gate completes (ADR 0010 §3). */
+.dossier-missing { font-size: 13px; color: var(--ink-muted); margin-top: 8px; }
+.dossier-missing:empty { display: none; }
 .dossier-missing[data-ready='true'] { color: var(--ok); font-weight: 700; }
+/* Heading over the preparation checklist — carries the 0/N count and bar of
+   the list it measures (progress, never a gate, ADR 0010 §3). */
+.dossier-prep-h { display: flex; flex-direction: column; gap: 2px; padding: 10px 2px 0; }
+.dossier-prep-h strong { font-size: 14px; letter-spacing: -0.01em; }
+.dossier-prep-count { font-size: 13px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+/* Upload and "already sent" side by side — two channels, one row. */
+.doc-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+/* "Transmis autrement" (ADR 0010 §4): a distinct provided-state — the ok hue
+   says done, the undo keeps it reversible. */
+.doc-transmis { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.doc-transmis-lbl { font-size: 13px; font-weight: 700; color: var(--ok); }
 .consent-toggle { display: inline-flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; font-weight: 600; cursor: pointer; }
 .consent-toggle input { width: 18px; height: 18px; accent-color: var(--brand); cursor: pointer; }
-/* Dossier: a light 2-column grid of compact cards (uses the horizontal space,
-   far less heavy than full-width stacked rows). */
-.dossier-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 12px; padding: 6px 0; align-items: start; }
+/* Dossier: ONE column, top to bottom — price card, consent, then a compact
+   document checklist. A card grid made 8 pieces read like 8 decisions; a
+   list reads as one errand. */
+.dossier-list { display: flex; flex-direction: column; gap: 10px; padding: 6px 0; }
 .dossier-item { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
-.dossier-consent { grid-column: 1 / -1; }
-.dossier-pricing { grid-column: 1 / -1; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
-.dossier-pricing .o-criteria { margin-top: 10px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 12px 20px; align-items: start; }
+/* Checklist line: name + help left, the action (upload / already-sent, or the
+   answer field) right — no per-item card ceremony. */
+.dossier-row .dossier-body { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 18px; align-items: center; }
+.dossier-row .doc-actions, .dossier-row .doc-transmis { grid-column: 2; grid-row: 1 / span 2; justify-self: end; margin-top: 0; }
+.dossier-row .dossier-body > input[type='text'] { grid-column: 2; grid-row: 1 / span 2; justify-self: end; width: min(280px, 100%); margin-top: 0; }
+.dossier-row .file-note { grid-column: 1 / -1; }
+@media (max-width: 720px) {
+  .dossier-row .dossier-body { grid-template-columns: minmax(0, 1fr); }
+  .dossier-row .doc-actions, .dossier-row .doc-transmis,
+  .dossier-row .dossier-body > input[type='text'] { grid-column: 1; grid-row: auto; justify-self: start; width: 100%; margin-top: 8px; }
+}
+.dossier-pricing { padding: var(--space-7) var(--space-8); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+/* Capped at 3 tracks: auto-fit on a wide screen spread 6 questions into one
+   ragged row of uneven heights — 3×2 keeps the rows balanced and the help
+   text wrapping instead of a dead right half. */
+.dossier-pricing .o-criteria { margin-top: 12px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-7) var(--space-10); align-items: start; }
+@media (max-width: 1100px) { .dossier-pricing .o-criteria { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 680px) { .dossier-pricing .o-criteria { grid-template-columns: minmax(0, 1fr); } }
 /* Booking dialog step-2 criteria go two-up (id beats the generic .o-criteria flex); the optional expander stays full width. */
 #o-criteria { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px 22px; }
 #o-criteria > .crit-more { grid-column: 1 / -1; margin: 4px 0 0; }
 #o-criteria > .crit-more .o-criteria { padding: 10px 14px 14px; gap: 14px; }
-.dossier-price { margin-top: 12px; font-weight: 600; color: var(--brand); font-size: 14px; }
+/* The card's payoff — the determined price — separated from the questions and
+   said a size louder, not buried in the bottom-left corner. */
+.dossier-price { margin-top: var(--space-7); padding-top: var(--space-6); border-top: 1px dashed var(--border); font-weight: 700; color: var(--brand); font-size: 15px; font-variant-numeric: tabular-nums; }
 /* Profile: a top row of at-a-glance / set-once cards (offers · coordinates ·
    notifications) that auto-fit across the width, then a full-width documents
    work area below — no tall-thin void, honest use of the horizontal space. */
 .profil-stack { display: flex; flex-direction: column; gap: 12px; }
 /* Every section is a full-width band whose content lays out in a grid that
    fills the width (auto-fit) — no empty right half, no ragged inter-card void. */
-/* Third track is 128px: the shared input rule has min-width:120px, so a
-   narrower track would be overflowed by its own field. */
-.profil-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 128px; gap: 10px 18px; align-items: end; }
+/* Three equal tracks: the téléphone (mise en relation) field is a full peer of
+   nom/courriel — a fixed narrow third track squeezed it into a wrapping label
+   over a sliver of input. Short values (code postal) simply breathe in theirs. */
+.profil-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 18px; align-items: end; }
+@media (max-width: 900px) { .profil-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 560px) { .profil-fields { grid-template-columns: 1fr; } }
 .profil-fields .form-row { margin: 0; }
 /* Fill the cell: capped at 460px the inputs left ~100px of dead track beside
@@ -1197,8 +1384,32 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .my-offers .c-date { width: 24%; min-width: 120px; }
 .my-offers .c-montant { width: 16%; min-width: 92px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .my-offers .c-statut { width: 14%; min-width: 96px; }
-.my-offer-day { display: block; }
+/* The date is a door to that day on the carnet: a real button, styled as a link. */
+.my-offer-day { display: block; padding: 0; border: 0; background: none; font: inherit; font-weight: 600; color: var(--brand); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; text-align: left; }
+.my-offer-day:hover { color: var(--ink); }
+.my-offer-day:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 3px; }
 .my-offer-rel { display: block; margin-top: 1px; font-size: 12px; color: var(--ink-muted); }
+/* Under each row: the next step, the agenda links, and what a notary sent back. */
+.my-offer-detail td { padding: 4px 10px 12px; }
+.my-offer-next { display: flex; flex-wrap: wrap; gap: 4px 8px; font-size: 12.5px; line-height: 1.45; }
+.my-offer-next-k { font-weight: 700; color: var(--ink-muted); text-transform: uppercase; font-size: 10.5px; letter-spacing: .03em; align-self: center; }
+.my-offer-next-v { color: var(--ink); }
+.my-offer-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+/* Mise en relation (ADR 0010 §4): whom to contact once the offer is retained. */
+.my-offer-contact { margin-top: 8px; font-size: 13px; line-height: 1.5; }
+.my-offer-contact-mail { color: var(--brand); font-weight: 600; }
+/* A notary's proposition / document request: the block that asks for a decision. */
+.my-offer-prop, .my-offer-demande {
+  margin-top: 10px; padding: 10px 12px; border-radius: var(--radius);
+  border: 1px solid var(--brand); border-left-width: 4px; background: var(--surface-inset);
+}
+.my-offer-prop[data-status='acceptee'] { border-color: var(--ok); }
+.my-offer-prop[data-status='refusee'], .my-offer-demande[data-fournie='true'] { border-color: var(--border); opacity: .8; }
+.my-offer-prop-text { font-size: 13.5px; line-height: 1.45; }
+.my-offer-prop-msg { margin: 6px 0 0; font-size: 12.5px; color: var(--ink-muted); font-style: italic; }
+.my-offer-prop-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.my-offer-prop-state { margin-top: 6px; font-size: 12.5px; font-weight: 700; color: var(--ink-muted); }
+.my-offer-prop-state.is-done { color: var(--ok); }
 .my-offer-status {
   display: inline-block; padding: 2px 9px; border-radius: 999px;
   border: 1px solid var(--border); color: var(--ink-muted);
@@ -1213,22 +1424,28 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .my-offers-past tbody tr { opacity: .7; }
 
 /* Below this a table cannot hold four columns without wrapping the act name to
-   three lines, so each row becomes a card. */
+   three lines, so each row becomes a card. The status pill gets its OWN row and
+   may wrap: pinned beside the act name it forced the card past a 320px screen
+   ("Ouverte — en attente d’un notaire" is 200px that must never be cut). */
 @media (max-width: 860px) {
   .my-offers, .my-offers tbody, .my-offers tr, .my-offers td { display: block; width: auto; }
   .my-offers thead { display: none; }
   .my-offers tbody { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 8px; }
   .my-offers tbody tr {
     display: grid; grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas: 'acte statut' 'date montant';
+    grid-template-areas: 'acte acte' 'date montant' 'statut statut';
     gap: 4px 10px; align-items: center;
     padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius);
   }
-  .my-offers td { padding: 0; border: 0; }
+  .my-offers td { padding: 0; border: 0; min-width: 0; }
+  /* The detail band joins its row's card on a phone (one card per offer). */
+  .my-offers tbody tr.my-offer { border-bottom: 0; border-radius: var(--radius) var(--radius) 0 0; }
+  .my-offers tbody tr.my-offer-detail { display: block; margin-top: -8px; padding: 0 12px 10px; border: 1px solid var(--border); border-top: 0; border-radius: 0 0 var(--radius) var(--radius); }
   .my-offers .c-acte { grid-area: acte; }
-  .my-offers .c-statut { grid-area: statut; justify-self: end; }
+  .my-offers .c-statut { grid-area: statut; justify-self: start; }
   .my-offers .c-date { grid-area: date; }
   .my-offers .c-montant { grid-area: montant; }
+  .my-offer-status { white-space: normal; }
 }
 @media (max-width: 560px) { .my-offers tbody { grid-template-columns: minmax(0, 1fr); } }
 @media (pointer: coarse) { .my-offers-past-sum { min-height: 44px; display: flex; align-items: center; } }
@@ -1246,7 +1463,9 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .doc-valid input { accent-color: var(--brand); }
 .doc-file { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12.5px; color: var(--ink-muted); }
 .doc-file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dossier-check { flex: none; margin-top: 2px; width: 18px; height: 18px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); display: grid; place-items: center; color: var(--brand); font-weight: 800; font-size: 12px; }
+/* The ✓ only shows once the item is actually provided — a green check on
+   every empty row made 0/8 read as done. */
+.dossier-check { flex: none; margin-top: 2px; width: 18px; height: 18px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); display: grid; place-items: center; color: transparent; font-weight: 800; font-size: 12px; }
 .dossier-check[data-on='true'] { background: transparent; color: var(--brand); border-color: var(--brand); }
 .dossier-body { flex: 1; min-width: 0; }
 .dossier-name { font-weight: 600; font-size: 13.5px; }
@@ -1339,6 +1558,17 @@ dialog {
   background: var(--surface); color: var(--ink); max-width: 440px; width: 92vw; box-shadow: var(--shadow-lg);
 }
 dialog::backdrop { background: var(--backdrop); }
+/* Every popup is built the same way: its first child is
+   <form method="dialog" class="dlg-x-form"> holding one ✕ button. The form is
+   sticky against the dialog's own scroll box with height:0, so the ✕ stays
+   pinned to the top-right corner while the dialog scrolls and costs no layout.
+   The filled circle keeps the glyph legible over whatever slides beneath it. */
+.dlg-x-form { position: sticky; top: 0; height: 0; margin: 0; z-index: 6; display: flex; justify-content: flex-end; }
+.dlg-x { appearance: none; border: 0; background: var(--surface-inset); color: var(--ink-muted); cursor: pointer; width: 34px; height: 34px; margin: 10px 10px 0 0; border-radius: 999px; display: grid; place-items: center; flex: none; }
+.dlg-x:hover { background: var(--surface-hover); color: var(--ink); }
+/* 34px is under the touch minimum — give fingers 44px without changing what a
+   mouse sees. */
+@media (pointer: coarse) { .dlg-x { width: 44px; height: 44px; } }
 /* A modal owns the scroll. The lock must sit on <html>: the root element is
    the page's scroller, so hiding overflow on <body> alone still lets the page
    drift (and lose its place) under the wheel/touch behind the open dialog. */
@@ -1347,35 +1577,46 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 .dialog-pad h3 { font-size: 18px; margin-bottom: 8px; }
 .dialog-pad p { color: var(--ink-muted); font-size: 14px; margin: 0 0 16px; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+/* Destructive confirm (cancel an offer): quiet red outline, filled on hover —
+   visible enough to read as consequence, never louder than the safe way out. */
+.btn-danger { color: var(--danger); border-color: var(--danger); }
+.btn-danger:hover { background: var(--danger); border-color: var(--danger); color: var(--surface); }
+.btn-offer-cancel { color: var(--danger); }
+/* Per-offer help door sits at the end of the action row, styled as a link. */
+.my-offer-help { margin-left: auto; align-self: center; }
+/* The « ou écrivez-nous » quick line under the contact form's submit. */
+#ct-quick { margin-top: 12px; text-align: center; }
+#ct-quick:empty { display: none; }
 
 /* --- Day detail dialog (enlarged day over a dimmed backdrop) -------------- */
 #day-dialog { max-width: 620px; width: 94vw; max-height: 90vh; overflow-y: auto; overscroll-behavior: contain; }
 #day-dialog::backdrop { background: var(--backdrop); backdrop-filter: blur(2px); }
-.day-head { display: flex; align-items: flex-start; gap: 12px; padding: 22px 24px 16px; }
-.day-head .header-spacer { flex: 1; }
+/* Sticky like the ✕ above it: the date being booked stays readable while the
+   long booking form scrolls. padding-right clears the pinned ✕. */
+.day-head { position: sticky; top: 0; z-index: 5; background: var(--surface); display: flex; align-items: flex-start; gap: 12px; padding: 22px 64px 12px 24px; border-bottom: 1px solid var(--border); }
 .day-title { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
 .day-title::first-letter { text-transform: uppercase; }
 .day-sub { font-size: 13px; color: var(--ink-muted); margin-top: 2px; }
-.day-close { appearance: none; border: 0; background: var(--surface-inset); color: var(--ink); width: 34px; height: 34px; border-radius: 999px; cursor: pointer; font-size: 18px; line-height: 1; flex: none; }
-.day-close:hover { background: var(--surface-hover); }
 
 /* --- Day booking surface (acte → offre à battre → book, all in one dialog) - */
-/* Act-scoped market context: the offer to beat FOR THE SELECTED ACT. Lives
-   inside the form, right under the act chips, because it changes with them —
-   the inset card makes that dependency read at a glance. */
-.day-market { background: var(--surface-inset); border-radius: var(--radius); overflow: hidden; }
-.day-value { padding: 12px 14px 10px; }
+/* Act-scoped market context: the offer to beat FOR THE SELECTED ACT — one
+   quiet strip inside step 1 (it changes with the chips), so step 3 keeps the
+   only big number in the dialog. */
+.day-market { background: var(--surface-inset); border-radius: var(--radius-sm); padding: 8px 12px; overflow: hidden; }
+.day-market-line { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+/* No open offer for the act → the line is hidden outright (every date is
+   bookable, so there is no bar to print); the hint below owns the message. */
+.day-market-line[hidden] { display: none; }
 .day-value-k { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-muted); }
-.day-value-v { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; color: var(--ink); }
-/* « Libre » — no open offer to beat is an opportunity, so it reads in green. */
-.day-value-v.is-free { color: var(--ok); }
+.day-value-v { font-size: 15px; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; }
 .day-value-note { font-size: 12px; color: var(--ink-muted); margin: 2px 0 0; }
+.day-value-note:empty { display: none; }
 /* The live line flips green the moment the slider clears the bar. */
 .day-value-note.is-ahead { color: var(--ok); font-weight: 600; }
-/* One tap over the bar. */
+/* One tap over the bar — small, inline, at the end of the strip's line. */
 .day-beat {
-  appearance: none; font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer;
-  margin-top: 8px; padding: 6px 14px; border-radius: 999px;
+  appearance: none; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+  margin-left: auto; padding: 3px 10px; border-radius: 999px;
   border: 1px solid var(--brand); background: transparent; color: var(--brand);
   transition: background .15s, color .15s;
 }
@@ -1390,6 +1631,9 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
    header — it depends on the DATE, not on the act chosen below. */
 .day-chance { font-size: 12px; color: var(--ink-muted); margin: 0; padding: 0 24px 16px; line-height: 1.5; }
 .day-bids { max-height: 30vh; overflow: auto; overscroll-behavior: contain; border-top: 1px solid var(--border); }
+/* Inside the market strip the list bleeds to the edges, so its border-top
+   spans the strip and the rows keep their own gutters. */
+.day-market .day-bids { margin: 8px -12px -8px; }
 .day-bids:empty { display: none; }
 .day-bids .bid-row:first-child { border-top: 0; }
 .day-bids-more { padding: var(--space-4) var(--space-12); font-size: 12px; color: var(--ink-muted); border-top: 1px solid var(--border); }
@@ -1399,8 +1643,11 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
    booked, and how many that date carries in all. */
 .day-bids-count { padding: var(--space-4) var(--space-12); font-size: 12px; color: var(--ink-muted); line-height: 1.5; }
 /* Scale guard: a day-group caps its rows and links to the full day view. */
-.day-book { padding: 20px 24px 24px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 20px; }
-.book-step { display: flex; flex-direction: column; gap: 10px; }
+.day-book { padding: 20px 24px 24px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 16px; }
+/* Each step is its own bordered card so the three-beat flow reads at a glance. */
+.book-step { display: flex; flex-direction: column; gap: 10px; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+/* Step 3 — the offer — is the decision, so it is the dominant card. */
+.book-step-offer { border-color: var(--border-strong); background: var(--surface-inset); }
 /* Pricing criteria woven into the booking flow (dossier merged with the process). */
 .o-criteria { display: flex; flex-direction: column; gap: 14px; }
 .crit-row { display: flex; flex-direction: column; gap: 6px; }
@@ -1410,19 +1657,22 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 .crit-label { font-size: 13.5px; font-weight: 600; color: var(--ink); }
 .crit-choices { display: flex; gap: 6px; flex-wrap: wrap; }
 .crit-row input[type='number'] { max-width: 180px; }
-#o-base-note { color: var(--brand); font-weight: 600; }
+/* Flat dollar effect of an answer, printed on the answer itself; inherits the
+   chip's on-state colour so it stays readable on the accent background. */
+.crit-add { margin-left: 6px; font-size: 11px; font-weight: 600; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+.chip.is-on .crit-add { color: inherit; }
 .book-step-lbl { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; color: var(--ink); }
 .book-opt { color: var(--ink-muted); font-weight: 600; font-size: 12px; }
 #o-service-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 /* Booking chips are two lines — the act, then its own offre à battre for the
-   date — so the acts compare at a glance before one is chosen. */
+   date (no offer → no sub line: every act is always bookable, so only an
+   amount is worth a line) — so the acts compare at a glance before one is
+   chosen. */
 #o-service-chips .chip { flex: 1 1 auto; justify-content: center; flex-direction: column; align-items: center; gap: 3px; padding: 8px 14px; border-radius: var(--radius); }
 .chip-svc-main { display: inline-flex; align-items: center; gap: 6px; }
 .chip-svc-sub { font-size: 11px; font-weight: 600; color: var(--ink-muted); }
 .chip-svc-sub:empty { display: none; }
-.chip-svc-sub.is-free { color: var(--ok); }
 #o-service-chips .chip.is-on .chip-svc-sub { color: inherit; }
-.day-book .tier-preview { margin: 0; }
 .book-options { margin: 0; }
 .book-options .form-row:last-of-type { margin-bottom: 0; }
 
@@ -1454,37 +1704,45 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
    • SIGNED-IN → the working console (demand lists + two-column prefs grid) needs
      room, so it uses a single wide column. */
 #pane-notaires > .wrap { display: flex; flex-direction: column; }
-/* The value grid only belongs to the signed-out LANDING; hidden in the working console. */
-.nc-why { display: none; }
 /* Signed-out: the INVENTORY is the pitch. One line of copy, then the live open
    demands, with the sign-in sticky beside them — everything else (value grid,
    agenda band, guarantee) is supporting material, full width below the fold. */
+/* The hero owns the full first row; ONE header row (inventory title left,
+   month totals right) spans both columns; the demand grid and the gate card
+   then start on the SAME grid line — aligned by construction, no measured
+   margins (owner's calls, 2026-08-25: the card crowded the headline, then its
+   edge floated between the heading and the cards). */
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 420px);
   grid-template-areas:
-    "hero      console"
+    "hero      hero"
+    "livehead  livehead"
     "live      console"
-    "why       why"
-    "carnet    carnet"
+    "live      carnet"
     "guarantee guarantee";
   column-gap: clamp(32px, 5vw, 80px);
   row-gap: 0;
   align-items: start;
 }
+#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .nc-landing-head { grid-area: livehead; margin-top: var(--space-2); }
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .intro--hero   { grid-area: hero; margin: 0; }
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .intro-main     { max-width: none; }
 /* Keep a readable measure on the lede without capping the whole hero block. */
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .intro p { max-width: 78ch; }
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .nc-live        { grid-area: live; align-self: start; }
-#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .nc-why         { grid-area: why; display: grid; margin-top: var(--space-8); }
-#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-carnet  { grid-area: carnet; }
-/* The console anchors to the TOP of the column so the sign-in — the page's one
-   action — is on screen immediately instead of centred into the fold, and stays
-   pinned (sticky, under the sticky header) while the teaser scrolls beside it. */
+/* The agenda band lives in the RIGHT column, under the gate card, at the
+   card's own width (owner's call, 2026-08-25: as a full-width band it was
+   air; the column also lost its three loose value blurbs the same day). */
+#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-carnet  { grid-area: carnet; align-self: start; margin-top: var(--space-6); }
+/* The console anchors to the TOP of its column so the sign-in — the page's one
+   action — is on screen immediately instead of centred into the fold. It
+   scrolls with the page like every other card (owner's call, 2026-08-25: a
+   pinned money panel followed the reader around). No margin: it shares its
+   grid row with the demand grid, so their top edges align by construction. */
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) #notary-console {
-  grid-area: console; align-self: start; margin: 0;
-  position: sticky; top: calc(var(--header-h) + 16px);
+  grid-area: console; align-self: start;
+  margin: 0;
 }
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .nota-guarantee { grid-area: guarantee; }
 /* Hero collapses to a single column on THIS pane only (the client carnet hero
@@ -1508,68 +1766,62 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 @media (max-width: 900px) {
   #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) {
     grid-template-columns: minmax(0, 620px);
-    grid-template-areas: "hero" "live" "console" "why" "carnet" "guarantee";
+    grid-template-areas: "hero" "livehead" "live" "console" "carnet" "guarantee";
     justify-content: center;
   }
-  /* The two-column rule zeroes this margin so the console top-aligns beside
-     the hero. Stacked, that leaves it flush against the subscribe card, the
-     one seam in the ladder with no space at all. Longhand so the other
-     three sides of the shorthand survive. Sticky belongs to the two-column
-     layout only — pinning a full-width card in a stack would cover content. */
-  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) #notary-console { align-self: stretch; margin-top: var(--space-6); position: static; }
+  /* The two-column rule sizes this margin to seat the console on the hero
+     H1's line. Stacked, the card steps down the page on the same --space-10
+     beat as every other section instead. Longhand so the other three sides
+     of the shorthand survive. */
+  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) #notary-console { align-self: stretch; margin-top: var(--space-10); }
 }
-/* Value grid — the supporting argument, one full-width row below the inventory. */
-.nc-why { grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr)); gap: 18px 28px; margin-top: 8px; }
-.nc-why-item { display: flex; gap: 11px; }
-.nc-why-ic { flex: none; color: var(--brand); font-size: 11px; line-height: 1.7; }
-.nc-why-t { font-weight: 700; font-size: 14px; color: var(--ink); margin-bottom: 3px; letter-spacing: -0.01em; }
-.nc-why-p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink-muted); }
 
 /* The landing's centrepiece: the live open inventory, directly under the one
    line of pitch. Cards mirror the console's .nc-card surface; the whole card
    is a button into the sign-in. */
-.nc-live { margin-top: 4px; }
 .nc-live[hidden] { display: none; }
-.nc-live-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.nc-live-head { display: flex; align-items: baseline; gap: var(--space-6); flex-wrap: wrap; margin-bottom: var(--space-5); }
 .nc-live-h { font-size: 15px; font-weight: 800; letter-spacing: -0.01em; margin: 0; }
-.nc-live-sub { margin: 0; font-size: 12.5px; color: var(--ink-muted); }
-.nc-live-sub strong { color: var(--brand); font-weight: 800; }
-.nc-live-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(215px, 100%), 1fr)); gap: 10px; }
+/* Signed-in the wrap is a flex column and the inventory is the console's own
+   list — the landing header row has nothing to head. */
+#pane-notaires > .wrap:has(#notary-authed:not([hidden])) .nc-landing-head { display: none; }
+/* auto-rows 1fr: every row — including the lone "+N autres" overflow card on
+   narrow grids — shares the same height, so no card breaks the row format.
+   auto-FIT (not fill): a sparse month collapses the empty tracks, so three
+   tiles widen into a full, deliberate row instead of huddling beside a void. */
+.nc-live-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(215px, 100%), 1fr)); grid-auto-rows: 1fr; gap: var(--space-5); }
 .nc-live-card {
   display: flex; flex-direction: column; align-items: stretch; gap: 7px; min-width: 0;
-  padding: 12px 14px; text-align: left; font: inherit; color: var(--ink);
+  padding: var(--pad-card); text-align: left; font: inherit; color: var(--ink);
   border: 1px solid var(--border); border-radius: var(--radius-lg);
   background: var(--surface-inset); cursor: pointer;
-  transition: transform .14s, background-color .14s, border-color .14s;
+  transition: transform .14s, background-color .14s, border-color .14s, box-shadow .14s;
 }
-.nc-live-card:hover { transform: translateY(-1px); background: var(--surface-hover); border-color: var(--border-strong); }
+.nc-live-card:hover { transform: translateY(-2px); background: var(--surface-hover); border-color: var(--border-strong); box-shadow: var(--shadow); }
+.nc-live-card:hover .nc-live-amt { color: var(--brand); }
+.nc-live-card:active { transform: translateY(0); box-shadow: var(--shadow-sm); }
 .nc-live-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
 /* The span's colour is the act's --svc-* token (set inline) — it paints the
    glyph via currentColor; the act's NAME stays ink. Same grammar as the carnet. */
 .nc-live-svc { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .nc-live-svc-name { font-size: 12.5px; font-weight: 700; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.nc-live-amt { font-size: 19px; font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.nc-live-amt { font-size: 19px; font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; transition: color .14s; }
 .nc-live-meta { font-size: 12px; color: var(--ink-muted); }
-/* Overflow card: "+N autres" — dashed, centred, brand-inked, same footprint. */
+/* Overflow card: "+N autres" — dashed, centred, brand-inked, same footprint.
+   On hover the dashes resolve into a solid brand door with a faint wash — the
+   card reads as the entrance it is, not a disabled placeholder. */
 .nc-live-more {
   align-items: center; justify-content: center; text-align: center; gap: 4px;
-  border-style: dashed; background: transparent; color: var(--brand);
+  border-style: dashed; border-color: var(--border-strong); background: transparent; color: var(--brand);
 }
+.nc-live-more:hover { border-style: solid; border-color: var(--brand); background: var(--brand-tint); }
 .nc-live-more strong { font-size: 14px; font-weight: 800; }
 .nc-live-more .nc-live-meta { color: inherit; opacity: .85; }
 
-/* Client-hero trust points: fill the gap the taller pulse panel leaves between
-   the lede and the CTAs with the site's existing promises. The lede itself
-   reads a notch larger on this hero only. */
-#pane-carnet .intro--hero .intro-main > p { font-size: 16px; }
-.hero-points { list-style: none; margin: 18px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
-.hero-points li { font-size: 14px; line-height: 1.5; color: var(--ink-muted); }
-.hero-points li strong { color: var(--ink); }
-.hero-points li::before { content: '◆'; color: var(--brand); font-size: 10.5px; margin-right: 9px; }
-/* One clean line under the phone h1. The ≤720px hero drops the full pitch
-   paragraph, and before this nothing on a phone said what Nota IS — the h1 and
-   two buttons assumed you knew. Hidden wherever the full paragraph shows. */
-.hero-tagline { display: none; font-size: 14.5px; line-height: 1.55; color: var(--ink-muted); margin: 2px 0 4px; }
+/* The hero's ONE pitch line, shown at every width. The old full paragraph and
+   the numbered step list repeated what this line (and the guide) already
+   say — one sentence carries the model, the CTAs carry the action. */
+.hero-tagline { font-size: 16px; line-height: 1.55; color: var(--ink-muted); margin: 2px 0 4px; }
 .hero-tagline strong { color: var(--ink); }
 
 /* Week vignette — the marketplace played out with live data, in the onboarding
@@ -1578,6 +1830,9 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
    Borderless: the inset surface alone seats it. */
 .nc-week[hidden] { display: none; }
 .nc-week {
+  /* ONE height for filled chips and empty ghost slots — a half-filled column
+     must read as one grid, never as two misaligned ones. */
+  --wk-cell-h: 46px;
   display: flex; flex-direction: column; gap: 12px;
   padding: 16px 18px 13px;
   border-radius: var(--radius);
@@ -1590,17 +1845,19 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 /* A small pop each time money lands on the board. */
 .nc-week-total strong.is-tick { animation: nc-week-tick .35s ease; }
 @keyframes nc-week-tick { 40% { transform: scale(1.12); } }
-/* The landed amount floats up off the counter and dissolves. */
+/* The landed amount floats up off the counter and dissolves. Its whole travel
+   (top offset + peak translate) stays under the box's 16px top padding, so the
+   float never escapes the vignette onto whatever sits above it. */
 .nc-week-delta {
-  position: absolute; right: 0; top: -8px;
+  position: absolute; right: 0; top: -3px;
   font-size: 11px; font-weight: 800; color: var(--brand);
   white-space: nowrap; opacity: 0; pointer-events: none;
 }
 .nc-week-delta.is-live { animation: nc-week-delta .8s ease forwards; }
 @keyframes nc-week-delta {
-  0% { opacity: 0; transform: translateY(3px); }
+  0% { opacity: 0; transform: translateY(4px); }
   25% { opacity: 1; }
-  100% { opacity: 0; transform: translateY(-14px); }
+  100% { opacity: 0; transform: translateY(-10px); }
 }
 /* The board leaves with a little weight, not a flat fade. */
 .nc-week-board { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; transition: opacity .45s ease, transform .45s ease; }
@@ -1611,12 +1868,12 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 .nc-week-day.is-hit { animation: nc-week-day-hit .5s ease; }
 @keyframes nc-week-day-hit { 30% { color: var(--brand); } }
 /* Ghost slot: the empty half-hour a demand has not claimed (yet). */
-.nc-week-slot { height: 46px; border: 1px dashed var(--border); border-radius: 8px; }
+.nc-week-slot { height: var(--wk-cell-h); border: 1px dashed var(--border); border-radius: 8px; }
 /* A demand chip. `color` carries the act's --svc-* token (set inline) and the
    DOT says the service — the same visual grammar as the carnet's cells, where
    coloured borders belong to urgency, never to the act. */
 .nc-week-chip {
-  position: relative; height: 46px; padding: 0 8px; min-width: 0;
+  position: relative; height: var(--wk-cell-h); padding: 0 7px; min-width: 0;
   display: flex; flex-direction: column; justify-content: center; gap: 1px;
   border: 1px solid var(--border-strong); border-radius: 8px;
   background: var(--surface);
@@ -1629,9 +1886,12 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
   transition: opacity .28s ease, transform .55s cubic-bezier(.18, 1.5, .35, 1);
 }
 .nc-week-chip.is-in:hover { transform: translateY(-1px); box-shadow: var(--shadow); transition: transform .15s ease, box-shadow .15s ease; }
-.nc-week-chip-top { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.nc-week-chip-top { display: flex; align-items: center; gap: 4px; min-width: 0; }
 .nc-week-chip-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
-.nc-week-chip-name { font-size: 10.5px; font-weight: 600; color: var(--ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 10px + tight tracking: a short act name fits a five-column dialog cell
+   whole; longer ones ("Refinancement") ellipsize, with the glyph, colour and
+   tooltip still naming them. */
+.nc-week-chip-name { font-size: 10px; letter-spacing: -0.01em; font-weight: 600; color: var(--ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nc-week-chip-amt { font-size: 12.5px; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; }
 /* A taken demand flips once the board settles: the chip calms down and its ✓
    appears — the marketplace clearing, shown rather than claimed. */
@@ -1655,28 +1915,24 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
   .nc-week-total strong.is-tick, .nc-week-delta.is-live, .nc-week-day.is-hit { animation: none; }
 }
 /* In the welcome dialog: sits under both views, left-aligned against the
-   dialog's centred text. Modal columns are narrow, so the glyph + amount say it
-   all and the tooltip keeps the act's name. The vignette is a container so the
-   chips can re-lay by the DIALOG's width, not the viewport's. */
+   dialog's centred text. At dialog width the chip keeps the base two-line
+   grammar — glyph + act name over the EXACT amount — so the board says what
+   is sold and for how much without a hover. The vignette is a container so
+   the chips re-lay by the DIALOG's width, not the viewport's. */
 .nc-week--onb { margin-top: 18px; text-align: left; container: ncweek / inline-size; }
-.nc-week--onb .nc-week-chip-name { display: none; }
-/* Nameless chips read as one line: glyph + amount, on a shorter row. */
-.nc-week--onb .nc-week-chip { flex-direction: row; align-items: center; gap: 7px; height: 38px; padding: 0 8px; overflow: hidden; }
-.nc-week--onb .nc-week-slot { height: 38px; }
-/* Five columns in a ≤440px modal cannot carry "2 860 $" beside a glyph: the
-   amount swaps to the calendar's compact form (data-compact, "2,9k"). The
-   exact figure stays in the DOM and in the chip's tooltip. */
-.nc-week--onb .nc-week-chip-amt { font-size: 0; white-space: nowrap; }
-.nc-week--onb .nc-week-chip-amt::after { content: attr(data-compact); font-size: 12px; font-weight: 800; letter-spacing: -0.01em; }
-/* At every realistic dialog width (a 440px modal gives a ~374px container),
-   five columns fit neither glyph BESIDE amount nor full padding once the
-   compact form hits four characters ("9,9k") — the glyph stacks over the
-   amount, both centred, logos intact. The row layout above remains for any
-   future wider host of the same vignette. */
+.nc-week--onb .nc-week-chip { overflow: hidden; }
+/* Only a phone-narrow container trades words for the compact form: the name
+   goes (the glyph + colour still say the act, the tooltip keeps the words),
+   the amount swaps to the calendar's data-compact ("2,9k"), and the glyph
+   stacks centred over it on a shorter cell — slots shrink with the chips
+   through the shared --wk-cell-h, so the grid never splits in two. */
 @container ncweek (max-width: 380px) {
+  .nc-week--onb { --wk-cell-h: 38px; }
   .nc-week--onb .nc-week-board { gap: 5px; }
-  .nc-week--onb .nc-week-chip { flex-direction: column; justify-content: center; gap: 2px; padding: 0 4px; }
-  .nc-week--onb .nc-week-chip-amt::after { font-size: 10.5px; }
+  .nc-week--onb .nc-week-chip { align-items: center; gap: 2px; padding: 0 4px; }
+  .nc-week--onb .nc-week-chip-name { display: none; }
+  .nc-week--onb .nc-week-chip-amt { font-size: 0; white-space: nowrap; }
+  .nc-week--onb .nc-week-chip-amt::after { content: attr(data-compact); font-size: 10.5px; font-weight: 800; letter-spacing: -0.01em; }
 }
 /* Notary flavour only: the same board also lands in their agenda. Decorative
    (it lives inside the aria-hidden vignette) — brand marks + one muted line. */
@@ -1743,29 +1999,6 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
   .ob-bid-amt.is-tick, .nc-week-providers.is-live .brand-ic { animation: none; }
 }
 
-/* "Follow the carnet" card under the client calendar — same public feed as the
-   notaires landing card, framed for a client watching the dates. */
-/* No margin-top. .carnet-sub is a grid item of .wrap.layout, whose row-gap
-   already spaces it, and a grid gap does not collapse with a margin — the
-   two ADDED, making this the one seam on the page at 30/31/36px where the
-   gap declares 14/15/20. */
-/* Two ways to follow: the calendar buttons on the left, the courriel form on
-   the right, split by a hairline. Under 900px they stack and the divider
-   becomes a top border. */
-@media (min-width: 900px) {
-  .carnet-sub .sub-card { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 380px); gap: 24px; }
-  .carnet-sub .sub-card-mail { border-left: 1px solid var(--border); padding-left: 24px; }
-}
-@media (max-width: 899.98px) {
-  .carnet-sub .sub-card-mail { border-top: 1px solid var(--border); margin-top: 14px; padding-top: 14px; }
-}
-.sub-mail-form { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
-.sub-mail-form[hidden] { display: none; }
-.sub-mail-form input { flex: 1 1 auto; min-width: 0; }
-.sub-card-mail .help { margin-top: 8px; }
-.sub-mail-done { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--ink); margin-top: 10px; }
-.sub-mail-done[hidden] { display: none; }
-
 #notary-console { margin-top: 12px; max-width: none; }
 /* Sign-in gate: ONE narrow column, shown as a solid card that anchors the right
    column of the landing (no bare floating field). The signed-in view keeps the
@@ -1775,28 +2008,12 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 /* Panes move focus to their <h1> on navigation so screen readers announce the new
    page; that programmatic focus must NOT paint a ring on a non-interactive heading. */
 .tab-pane h1:focus, .intro h1:focus { outline: none; box-shadow: none; }
-/* Live demand proof as one tight line pinned directly above the field — the payoff
-   is the last thing seen before typing. Hidden until populated (no data → no line). */
-.nc-opp-line { margin: 0 0 16px; padding-bottom: 14px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 3px; }
-.nc-opp-line[hidden] { display: none; }
-.nc-opp-tag { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--brand); }
-.nc-opp-stat { font-size: 14px; color: var(--ink-muted); }
-.nc-opp-stat strong { color: var(--brand); font-weight: 800; }
-.nc-opp-sep { color: var(--border-strong); margin: 0 3px; }
-/* Phase-2 teaser: full onboarding coming online. The "Bientôt" marker is an OUTLINE
-   pill (brand border + text, transparent fill) — never a colour-filled badge. */
 /* Live echo of what the carnet will publish for this bid, colour-keyed to the
    state of the entry (valid Quebec sector / still typing / off-format). */
 .prefix-preview { margin: 6px 0 0; font-size: 12px; line-height: 1.5; color: var(--ink-muted); }
 .prefix-preview:empty { display: none; }
 .prefix-preview[data-state='ok'] { color: var(--brand); }
 .prefix-preview[data-state='warn'] { color: var(--status-retenue); }
-/* The client-facing "coming soon" sits above the publish button, so it needs a
-   little more air than the notary-side note it borrows its styling from. */
-.soon-online { margin-bottom: 12px; }
-
-.nc-soon { margin: 12px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--ink-muted); }
-.nc-soon-tag { display: inline-block; margin-right: 8px; padding: 1px 9px; border: 1px solid var(--brand); border-radius: 999px; font-size: 11px; font-weight: 800; letter-spacing: .03em; color: var(--brand); text-transform: uppercase; }
 .nc-auth .form-row { margin-bottom: 12px; }
 /* The email field matches the button under it: at 120px it sat in the middle of
    an otherwise empty column. */
@@ -1840,10 +2057,10 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
   display: flex; flex-direction: column;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  background: var(--surface-inset); padding: 14px;
-  transition: transform .14s, background-color .14s, border-color .14s;
+  background: var(--surface-inset); padding: var(--space-7);
+  transition: transform .14s, background-color .14s, border-color .14s, box-shadow .14s;
 }
-.nc-card:hover { transform: translateY(-1px); background: var(--surface-hover); border-color: var(--border-strong); }
+.nc-card:hover { transform: translateY(-1px); background: var(--surface-hover); border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
 .nc-card.is-retained { border-left: 3px solid var(--brand); }
 .nc-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .nc-card-title { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
@@ -1869,6 +2086,79 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
    job; Décliner and the agenda chip tuck beside it as small secondaries. The
    cap keeps it a button, not a banner, when a card runs wide. */
 .nc-card-actions .nc-accept { flex: 1 1 auto; max-width: 340px; }
+.nc-card-actions .nc-accept-amt { white-space: nowrap; }
+
+/* --- Open agenda: by day, then by act ------------------------------------ */
+/* The open list is no longer a flat grid: one section per signing day with a
+   sticky header (date + money on the table), one group per act inside it,
+   and the act's cards in the familiar ~3-up grid. */
+.nc-filter { margin: 0 0 12px; }
+.nc-filter[hidden] { display: none; }
+.nc-filter .chip-svc-sub { margin-left: 2px; }
+.nc-h .nc-h-amt { font-weight: 800; color: var(--brand); }
+.nc-h .nc-h-sum { font-weight: 600; color: var(--ink-muted); }
+.nc-agenda-list { gap: 22px; }
+.nc-day { display: flex; flex-direction: column; gap: 12px; }
+.nc-day-head {
+  position: sticky; top: 0; z-index: 2;
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding: 8px 0; background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.nc-day-when { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.nc-day-title { font-size: 15px; font-weight: 800; letter-spacing: -0.01em; }
+.nc-day-title::first-letter { text-transform: uppercase; }
+.nc-day-rel { font-size: 12px; color: var(--ink-muted); }
+.nc-day-sum { font-size: 12px; font-weight: 600; color: var(--ink-muted); white-space: nowrap; }
+.nc-day-sum .nc-day-total { font-size: 14px; font-weight: 800; color: var(--brand); }
+.nc-svc { display: flex; flex-direction: column; gap: 8px; }
+.nc-svc-head { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--ink-muted); }
+.nc-svc-head .svc-ic { color: var(--svc-fallback, currentColor); }
+.nc-svc[data-service='refinancement'] .svc-ic { color: var(--svc-refinancement); }
+.nc-svc[data-service='financement'] .svc-ic { color: var(--svc-financement); }
+.nc-svc-n { font-weight: 800; padding: 0 7px; border-radius: 999px; background: var(--surface-inset); border: 1px solid var(--border); }
+
+/* --- Card: status pills, secondary actions, inline forms ------------------ */
+.nc-status { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.nc-pill {
+  font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px; white-space: nowrap;
+  background: var(--surface-inset); color: var(--ink-muted); border: 1px solid var(--border-strong);
+}
+.nc-prop-pill[data-status='en_attente'] { color: var(--brand); border-color: var(--brand); }
+.nc-prop-pill[data-status='acceptee'], .nc-docs-pill[data-fournie='true'], .nc-via-prop { color: var(--ok); border-color: var(--ok); }
+.nc-prop-pill[data-status='refusee'] { color: var(--danger); border-color: var(--danger); }
+.nc-card-more { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
+.nc-card.is-declining { opacity: .75; }
+.nc-undo-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; padding-top: 12px; }
+.nc-undo-lbl { font-size: 12px; font-weight: 700; color: var(--ink-muted); }
+
+/* Agenda ▾ menu: a <details> that drops the three deeplinks under its button. */
+.nc-agenda { position: relative; margin-left: auto; }
+.nc-agenda > summary { list-style: none; cursor: pointer; }
+.nc-agenda > summary::-webkit-details-marker { display: none; }
+.nc-agenda > summary::after { content: ' ▾'; font-size: 10px; }
+.nc-agenda-menu {
+  position: absolute; right: 0; top: calc(100% + 4px); z-index: 3; min-width: 140px;
+  display: flex; flex-direction: column; padding: 4px;
+  background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.nc-agenda-item { display: block; padding: 7px 10px; font-size: 13px; font-weight: 600; color: var(--ink); text-decoration: none; border-radius: var(--radius-sm); }
+.nc-agenda-item:hover { background: var(--surface-hover); }
+
+/* Inline forms (proposition / documents) open under the card's actions. */
+.nc-inline { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+.nc-form-h { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--brand); }
+.nc-form-row { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
+.nc-form-lbl { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: var(--ink-muted); }
+.nc-propose-amt { max-width: 140px; }
+.nc-propose-delta { font-size: 13px; font-weight: 800; color: var(--ok); padding-bottom: 8px; }
+.nc-form-msg { width: 100%; resize: vertical; font: inherit; font-size: 13px; }
+.nc-form-foot { display: flex; align-items: center; gap: 8px; }
+.nc-form-errors[hidden] { display: none; }
+.nc-docs-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr)); gap: 6px; }
+.nc-docs-item { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
+.nc-docs-name { flex: 1; min-width: 0; }
+.nc-missing { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--danger); border: 1px solid var(--danger); border-radius: 999px; padding: 0 6px; }
 
 .nc-dossier { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
 .nc-dossier-h { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--brand); margin-bottom: 8px; }
@@ -2017,18 +2307,12 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
 .sub-card-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
 .sub-card-actions .btn { flex: 1 1 auto; gap: 6px; padding-left: 10px; padding-right: 10px; }
 .brand-ic { flex: none; display: block; }
-/* On the Notaires page the same subscribe card sits as a full-width band —
-   pitch on the left, the four calendar buttons grow to fill the right side so
-   the row reads full-width with no dead gap between them. */
 /* Sits under the footer tagline now (no auto margin — the grid places it). */
 .footer-contact { display: flex; align-items: center; gap: 2px; margin-top: 8px; }
 .nc-card-actions .mini-btn { margin-left: auto; }
+/* Compact card everywhere: on the signed-out landing the grid places it in
+   the right column under the gate; signed-in it keeps this small step down. */
 .notary-carnet { margin-top: 12px; }
-/* The full-width band breathes more than the compact card. */
-.notary-carnet .sub-card { display: flex; align-items: center; flex-wrap: wrap; gap: 14px 32px; padding: 22px 26px; }
-.notary-carnet .sub-card-head { flex: 1 1 300px; }
-.notary-carnet .sub-card-actions { margin-top: 0; flex: 2 1 520px; }
-.notary-carnet .sub-card-actions .btn { flex: 1 1 0; justify-content: center; }
 /* Borderless notification bell in the header. */
 
 /* Calendar loading: an indeterminate top bar while the carnet fetches (real
@@ -2057,23 +2341,19 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   .intro { padding: var(--space-7) 0 var(--space-6); }
 }
 /* THE HERO'S TWO-COLUMN THRESHOLD, and everything that follows from it.
-   Below this the market panel cannot sit beside the copy, so it stacks under it
-   and the hero doubles in height: measured 543px at 768 against 340px at 1280,
-   which pushed the carnet to 735px, further down than it sits on a PHONE. The
-   old threshold was 900px, so every iPad portrait width paid that cost. 720px
-   is where two columns still leave the pulse ~300px, its comfortable minimum.
+   Below this the market panel cannot sit beside the copy, so it stacks under
+   it. 768px is where two columns still leave the pulse ~340px: enough for the
+   act name, its two fr-CA amounts ("1 250 $ · 1 950 $") AND the volume bar on
+   one row. At 720–767 a column is ~300px, and the amounts painted over the
+   bar and each other — prices must never jam, so the hero stacks instead.
 
-   Below it the pitch is trimmed instead: the prose goes (the h1 and the two
-   CTAs still say what this is) and the market panel keeps its FIGURES and drops
-   its captions, so the carnet lands at the fold rather than under a wall of
-   copy. Measured 1194px -> 637px at 320, and 735px -> 588px at 768. */
-@media (max-width: 719.98px) {
+   Below it the pitch is trimmed: the eyebrow goes (the h1, the tagline and
+   the two CTAs still say what this is) and the market panel keeps its
+   FIGURES and drops its counts caption, so the carnet lands near the fold. */
+@media (max-width: 767.98px) {
   .intro--hero { grid-template-columns: 1fr; gap: clamp(18px, 3vw, 26px); }
-  .intro .eyebrow, .intro-main > p, .hero-points { display: none; }
-  /* ...except the one-line tagline, which replaces the prose it drops. */
-  .intro-main > p.hero-tagline { display: block; }
-  /* The notary lede is already a single line — it IS the phone copy. */
-  .intro-main > p.nc-lede { display: block; }
+  /* The tagline (and the notary lede) IS the phone copy; only the eyebrow goes. */
+  .intro .eyebrow { display: none; }
   /* Side by side rather than stacked. */
   .hero-cta { flex-direction: row; }
   /* flex:1 alone still refuses to go under min-content, so two btn-lg wrapped
@@ -2085,14 +2365,21 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   .pulse-fig-k { font-size: 10px; }
   .pulse-figs { flex-direction: row; gap: var(--space-5); align-items: baseline; }
   .pulse-item { gap: var(--space-3); }
-  /* A "maximize" toggle means nothing on a touch device, and is inert on iOS. */
-  #cal-maximize { display: none; }
-
-  /* The header hands everything to the hamburger drawer: tabs, BOTH auth
-     buttons and the theme toggle live there now — the phone header is brand +
-     burger (plus the avatar, which only exists once signed in). */
+}
+/* The DRAWER threshold stays at 720: above it the header carries the full
+   control set (compact band 720–899.98); below it everything hands off to the
+   hamburger — the phone header is brand → guide "?" → avatar → burger. Theme
+   and language keep their drawer rows (#mnav-theme / #mnav-lang), so hiding
+   them here loses nothing; the "?" stays because the guide must remain one
+   tap away while signed out (see ux-nav.test.mjs). */
+@media (max-width: 719.98px) {
   .nav-burger { display: grid; }
   .nav-tabs, .header-auth, #theme-toggle { display: none; }
+  #lang-toggle { display: none; }
+  /* Only the "?" can remain — a one-icon pill reads as clutter, so the
+     cluster sheds its chrome and the icon returns to touch size. */
+  .header-tools { border: 0; padding: 0; gap: 0; }
+  .header-tools .icon-btn { width: 34px; height: 34px; }
 }
 /* Above the drawer threshold the drawer can never appear, open class or not. */
 @media (min-width: 720px) {
@@ -2116,13 +2403,13 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   /* Longhand: a shorthand would reset .layout's vertical padding to 0 and the
      carnet would butt against the hero and against the footer. */
   .wrap { padding-inline: var(--space-8); }
-  .site-header .wrap { height: 56px; gap: 8px; }
+  .site-header .wrap { gap: 8px; } /* height follows --header-h below */
   /* The header shrinks here, so the scroll offset it feeds must shrink with it,
-     or a scrolled-to cell lands 25px under the header instead of 19. */
-  :root { --header-h: 56px; --sticky-top: 76px; }
+     or a scrolled-to cell lands under the header instead of below the gap. */
+  :root { --header-h: 48px; --sticky-top: 68px; }
   .brand-sub { display: none; }
-  .brand { font-size: 18px; }
-  .nav-tab { padding: 7px 10px; font-size: 13px; }
+  .brand { font-size: 17px; }
+  .nav-tab { padding: 6px 9px; font-size: 13px; }
   .intro h1 { font-size: clamp(20px, 5.6vw, 25px); }
   /* No padding here. The cal container queries own cell padding, and a
      viewport rule this late in the file silently outranks all of them. */
@@ -2143,7 +2430,7 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   .cal-dow { font-size: 10px; }
   .filters { padding: 10px 14px; gap: 8px; }
   .field { flex: 1 1 40%; }
-  select, input[type='text'], input[type='email'], input[type='number'], input[type='date'] { min-width: 0; width: 100%; }
+  select, input[type='text'], input[type='email'], input[type='tel'], input[type='number'], input[type='date'] { min-width: 0; width: 100%; }
   .cards { grid-template-columns: 1fr; }
   .section { padding: 28px 0; }
   #day-dialog, dialog { width: 96vw; }
@@ -2151,12 +2438,11 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
      slides up). Ordered after the 96vw rule so width:100% wins. */
   #day-dialog { margin: 0; inset: auto 0 0 0; width: 100%; max-width: 100%; max-height: 92dvh; border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
   #day-dialog[open] { animation: sheetUp .28s cubic-bezier(.2, .8, .2, 1) both; }
-  .day-head { padding: 16px 16px 12px; }
+  .day-head { padding: 16px 60px 10px 16px; }
   /* The offer rows shrink with the bands that bracket them; the 2px difference
      compensates .bid-row's own left border. */
   .day-bids .bid-row { padding-left: 14px; padding-right: var(--space-8); }
   .day-bids-count, .day-bids-more { padding-left: var(--space-8); padding-right: var(--space-8); }
-  .day-value { padding: 10px 12px 8px; }
   .day-chance { padding: 0 16px 12px; }
   .day-book { padding: 14px 16px 18px; }
   /* The day dialog becomes a full-width sheet on phones, so its rows are as tight
@@ -2202,7 +2488,7 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
      footer row keeps its alignment. */
   .site-footer a, .brand { min-height: 44px; display: inline-flex; align-items: center; }
   .mini-btn { width: 44px; height: 44px; }
-  .btn-icon, .cal-nav .btn { min-width: 44px; }
+  .cal-nav .btn { min-width: 44px; }
   .icon-btn, .day-close { width: 44px; height: 44px; }
 }
 @media (max-width: 420px) {

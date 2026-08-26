@@ -10,6 +10,8 @@
  *   - 'feed'    — a READ-ONLY calendar token, safe to embed in a webcal URL; it
  *                 grants nothing but the .ics feed and can never accept a bid or
  *                 read a dossier.
+ *   - 'client'  — a per-bid client token (sub = bid id) issued by POST /bids;
+ *                 grants only the /client/* routes for that bid.
  * Verification recomputes the HMAC with a timing-safe compare and rejects a
  * tampered or expired token, returning `{ sub, scope }` on success.
  *
@@ -24,8 +26,11 @@
 const crypto = require('node:crypto');
 
 // Token scopes. SESSION authorizes the full console; FEED is read-only calendar
-// access, safe to place in a URL because it authorizes nothing else.
-const SCOPES = { SESSION: 'session', FEED: 'feed' };
+// access, safe to place in a URL because it authorizes nothing else. CLIENT is
+// the per-bid token a client (who has no account) receives when posting an
+// offer: its `sub` is the BID id, and it only authorizes the /client/* routes
+// for that one bid (see and answer propositions, update the dossier).
+const SCOPES = { SESSION: 'session', FEED: 'feed', CLIENT: 'client' };
 
 // Never a production secret — only so tests and `npm run api:local` work with no
 // configuration. Production MUST set NOTA_NOTARY_SECRET (see infra/lambda.tf);

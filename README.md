@@ -6,24 +6,35 @@ it; notaries watch a public calendar (the *carnet*) and pick up the work that
 fits their schedule. Closer dates command a higher premium — the market prices
 urgency.
 
-> **How Nota makes money — the one rule that shapes everything.** Nota charges
-> notaries a **flat subscription**. It never takes a percentage or commission of
-> the *acte*. Quebec's *Code de déontologie des notaires* (Chambre des notaires
-> du Québec) forbids sharing professional fees with a non-notaire, so a
-> commission model is not an option. See
-> [`docs/decisions/0001-flat-fee-not-commission.md`](docs/decisions/0001-flat-fee-not-commission.md).
+> **How Nota makes money — the one rule that shapes everything.** Notaries
+> join and browse for **free**; Nota collects a configurable **commission on
+> completed acts** (a Stripe Connect application fee), and nothing else. The
+> commission concept lives only in the billing layer — never in the domain.
+> Quebec's *Code de déontologie des notaires* restricts sharing professional
+> fees with a non-notaire, so this model is an explicit owner decision that
+> requires a legal review before launch. See
+> [`docs/decisions/0008-free-commission-marketplace.md`](docs/decisions/0008-free-commission-marketplace.md).
 
 ## Services and pricing
 
-Three acts, each with a bounded, client-assemblable intake (a short document
-checklist a client can complete alone). Amounts are the **starting price**
-(*prix de départ*); the client may offer more, up to a hard **10× cap**.
+Nota is **financing-first**: the catalogue is the acts a lender's deadline
+presses on. Testament and procuration were retired — see
+[`docs/decisions/0010-financing-first-catalogue.md`](docs/decisions/0010-financing-first-catalogue.md).
+The price is derived from a handful of answers (never from uploaded
+documents); the base amount below is the **starting price** (*prix de
+départ*), and the client may offer more, up to a hard **10× cap**.
 
 | Service | `serviceId` | Prix de départ |
 | --- | --- | --- |
-| Testament et mandat de protection | `testament` | **650 $** |
-| Procuration | `procuration` | **295 $** |
-| Refinancement hypothécaire | `refinancement` | **950 $** |
+| Refinancement hypothécaire | `refinancement` | **2 000 $** |
+
+Referring professionals (agents immobiliers, courtiers hypothécaires) earn
+flat rewards on two tracks — **50 $** when a referred client's demand is
+retained by a notary, **250 $** when a referred notary retains their first
+act. Attribution is one personal code with two faces — a private `?ref=CODE`
+link, or the code typed by hand in the booking/signup form's optional
+« Code de référence » field (industry pattern: Wealthsimple, Uber); see
+[`docs/decisions/0011-partner-referral-commission.md`](docs/decisions/0011-partner-referral-commission.md).
 
 Amounts are formatted fr-CA through `money()` — a space thousands separator and a
 trailing ` $` (e.g. `1 350 $`). All prices, tiers and the cap live in
@@ -37,11 +48,11 @@ the premium the market will bear.
 
 | Tier | Days to date | Indicative premium |
 | --- | --- | --- |
-| `standard` | 15+ | 1.0×–1.2× |
-| `rapide` | 8–14 | 1.2×–1.5× |
-| `prioritaire` | 4–7 | 1.6×–2.2× |
-| `urgence` | 2–3 | 2.5×–4.0× |
-| `extreme` | 0–1 | 4.0×–10.0× |
+| `standard` | 15+ | 1.0×–1.4× |
+| `rapide` | 4–14 | 1.4×–1.8× |
+| `prioritaire` | 2–3 | 3.0×–4.0× |
+| `urgence` | 1 | 6.0×–8.0× |
+| `extreme` | 0 | 8.0×–10.0× |
 
 `tierForDays(days)` is the single source of truth for this mapping.
 
@@ -91,7 +102,18 @@ needs no CORS.
 | --- | --- | --- |
 | `GET` | `/health` | `200 { ok, today }` |
 | `GET` | `/bids?month=YYYY-MM` | `200 { month, bids }` |
-| `POST` | `/bids` | `201 { bid }` · `422 { errors }` · `400 { errors }` |
+| `POST` | `/bids` | `201 { bid, clientToken }` · `422 { errors }` · `400 { errors }` |
+| `POST` | `/notary/session` | `200 { token, feedToken, expiresAt }` · `403 compte_requis` |
+| `GET` | `/notary/bids` | `200 { bids, retained }` — open demands (with this notary's own `proposition` / `demande` / `missing`) and the demands they retained |
+| `POST` | `/notary/bids/accept` · `/decline` | retain (conditional, one winner) · hide a demand |
+| `POST` | `/notary/bids/propose` | `200 { proposition }` — suggest a higher price · `422` `proposition_inferieure` / `plafond_depasse` |
+| `POST` | `/notary/bids/documents` | `200 { demande }` — ask the client for specific documents · `422` `document_inconnu` |
+| `GET` | `/client/bid?id&dateISO` | `200 { bid, propositions, demandes, readiness }` (Bearer `clientToken`) |
+| `POST` | `/client/propositions/accept` · `/decline` | answer a notary's proposition; accepting retains the demand at the new amount |
+| `POST` | `/client/dossier` | push an updated dossier so a document request becomes `fournie` |
+
+The notary actions and the client token are described in
+[`docs/decisions/0009-notary-propositions-and-document-requests.md`](docs/decisions/0009-notary-propositions-and-document-requests.md).
 
 `POST /bids` accepts `{ serviceId, dateISO, montant, anonyme, nom?, prefixe? }`.
 Validation error codes: `service_inconnu`, `montant_invalide`, `date_invalide`,

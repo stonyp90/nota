@@ -16,10 +16,10 @@ function app(seed = []) {
 }
 
 // Default mandatory pricing params per service, so a POST validates unless a
-// test overrides `pricing` explicitly.
+// test overrides `pricing` explicitly. These answers keep the dynamic base at
+// the flat 2000 $ floor (valeur_pret <= 300000, no succession, bank approval
+// obtained — every add is 0).
 const DEFAULT_PRICING = {
-  testament: { who_for: 'solo', fiducie_needed: 'non' },
-  procuration: { scope: 'specifique', realEstate: 'non' },
   refinancement: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue' },
 };
 const post = (a, obj) =>
@@ -46,17 +46,17 @@ test('POST /bids accepts a valid offer and echoes the derived tier', async () =>
 
 test('POST then GET: the new bid shows up in its month partition', async () => {
   const a = app();
-  await post(a, { serviceId: 'testament', dateISO: '2026-08-20', montant: 1400 });
+  await post(a, { serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2800 });
   const res = await getBids(a, '2026-08');
   const { bids } = parse(res);
   assert.equal(bids.length, 1);
-  assert.equal(bids[0].serviceId, 'testament');
+  assert.equal(bids[0].serviceId, 'refinancement');
 });
 
 test('GET /bids defaults to the current month and reads one month only', async () => {
   const a = app();
-  await post(a, { serviceId: 'testament', dateISO: '2026-08-20', montant: 1400 });
-  await post(a, { serviceId: 'testament', dateISO: '2026-09-20', montant: 1400 });
+  await post(a, { serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2800 });
+  await post(a, { serviceId: 'refinancement', dateISO: '2026-09-20', montant: 2800 });
   assert.equal(parse(await getBids(a, '2026-08')).bids.length, 1);
   assert.equal(parse(await getBids(a, '2026-09')).bids.length, 1);
   assert.equal(parse(await getBids(a)).bids.length, 1); // defaults to 2026-08
@@ -64,20 +64,20 @@ test('GET /bids defaults to the current month and reads one month only', async (
 
 test('server revalidates: below starting price is 422, not stored', async () => {
   const a = app();
-  const res = await post(a, { serviceId: 'testament', dateISO: '2026-09-30', montant: 400 });
+  const res = await post(a, { serviceId: 'refinancement', dateISO: '2026-09-30', montant: 1400 });
   assert.equal(res.statusCode, 422);
   assert.ok(parse(res).errors.some((e) => e.code === 'sous_prix_depart'));
   assert.equal((await a.repo._all()).length, 0);
 });
 
 test('server revalidates: above 10x premium cap is 422', async () => {
-  const res = await post(app(), { serviceId: 'testament', dateISO: '2026-08-13', montant: 14000 });
+  const res = await post(app(), { serviceId: 'refinancement', dateISO: '2026-08-13', montant: 28000 });
   assert.equal(res.statusCode, 422);
   assert.ok(parse(res).errors.some((e) => e.code === 'plafond_depasse'));
 });
 
 test('server revalidates: a past date is 422', async () => {
-  const res = await post(app(), { serviceId: 'procuration', dateISO: '2026-08-01', montant: 300 });
+  const res = await post(app(), { serviceId: 'refinancement', dateISO: '2026-08-01', montant: 2500 });
   assert.equal(res.statusCode, 422);
   assert.ok(parse(res).errors.some((e) => e.code === 'date_passee'));
 });
@@ -93,7 +93,7 @@ test('server never trusts a client-sent tier or premium', async () => {
 
 test('anonymity is enforced server-side: name never leaks when anonyme', async () => {
   const a = app();
-  await post(a, { serviceId: 'testament', dateISO: '2026-08-20', montant: 1400, anonyme: true, nom: 'Marie-Ève Tremblay', prefixe: 'g1r' });
+  await post(a, { serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2800, anonyme: true, nom: 'Marie-Ève Tremblay', prefixe: 'g1r' });
   const bid = parse(await getBids(a, '2026-08')).bids[0];
   assert.equal(bid.anonyme, true);
   assert.equal(bid.nom, null);
@@ -102,7 +102,7 @@ test('anonymity is enforced server-side: name never leaks when anonyme', async (
 
 test('a named bid keeps its name public', async () => {
   const a = app();
-  await post(a, { serviceId: 'testament', dateISO: '2026-08-20', montant: 1400, anonyme: false, nom: 'Luc Gagné' });
+  await post(a, { serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2800, anonyme: false, nom: 'Luc Gagné' });
   const bid = parse(await getBids(a, '2026-08')).bids[0];
   assert.equal(bid.nom, 'Luc Gagné');
 });
@@ -120,9 +120,9 @@ test('unknown route is 404', async () => {
 test('courriel is stored privately and NEVER leaks in the public projection', async () => {
   const a = app();
   const res = await post(a, {
-    serviceId: 'testament',
+    serviceId: 'refinancement',
     dateISO: '2026-08-20',
-    montant: 1400,
+    montant: 2800,
     courriel: 'Client@Example.CA',
   });
   assert.equal(res.statusCode, 201);
@@ -138,7 +138,7 @@ test('courriel is stored privately and NEVER leaks in the public projection', as
 
 test('an invalid courriel is rejected with courriel_invalide and nothing is stored', async () => {
   const a = app();
-  const res = await post(a, { serviceId: 'testament', dateISO: '2026-08-20', montant: 1400, courriel: 'nope' });
+  const res = await post(a, { serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2800, courriel: 'nope' });
   assert.equal(res.statusCode, 422);
   assert.ok(parse(res).errors.some((e) => e.code === 'courriel_invalide'));
   assert.equal((await a.repo._all()).length, 0);
@@ -164,7 +164,7 @@ test('a POST body at the size cap is not rejected as oversized', async () => {
   // Exactly 64KB of valid JSON must pass the guard (it is rejected later only on
   // its own merits, here a domain validation 201/422 — never 413).
   const a = app();
-  const base = { serviceId: 'testament', dateISO: '2026-08-20', montant: 1400 };
+  const base = { serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2800 };
   const pad = 64 * 1024 - JSON.stringify({ ...base, _p: '' }).length;
   const body = JSON.stringify({ ...base, _p: 'x'.repeat(pad) });
   assert.equal(Buffer.byteLength(body), 64 * 1024);
@@ -172,13 +172,14 @@ test('a POST body at the size cap is not rejected as oversized', async () => {
   assert.notEqual(res.statusCode, 413);
 });
 
-test('the public projection omits every private field (dossier, pricing, basePrice, courriel)', async () => {
+test('the public projection omits every private field (dossier, pricing, basePrice, courriel, telephone, parrain)', async () => {
   // Even if a raw item carries them, GET /bids must expose none of these.
   const repo = createMemoryRepo([
     {
-      id: 'x', serviceId: 'testament', dateISO: '2026-08-20', montant: 1400, status: 'ouverte', anonyme: true, prefixe: 'G1R',
+      id: 'x', serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2800, status: 'ouverte', anonyme: true, prefixe: 'G1R',
       documents: { secret: 'leak' }, dossier: { secret: 'leak' }, courriel: 'client@example.ca',
-      pricing: { who_for: 'couple', fiducie_needed: 'oui' }, basePrice: 1250, createdAt: TODAY,
+      pricing: { valeur_pret: 850000, succession: 'oui' }, basePrice: 2750, createdAt: TODAY,
+      telephone: '418 555-1234', parrain: 'EVEROY',
     },
   ]);
   const a = { ...createApp(repo, { now: () => TODAY }) };
@@ -190,6 +191,9 @@ test('the public projection omits every private field (dossier, pricing, basePri
   // The pricing answers (succession, loan value, bank approval) must NEVER leak.
   assert.equal(bid.pricing, undefined, 'pricing answers must never appear in the public projection');
   assert.equal(Object.prototype.hasOwnProperty.call(bid, 'pricing'), false);
-  // Public premium is anchored on prixDepart, not the private base (700/650).
-  assert.ok(Math.abs(bid.premium - 1400 / 1250) < 1e-9);
+  // Nor the mise en relation phone (ADR 0010) or the referral code (ADR 0011).
+  assert.equal(bid.telephone, undefined, 'telephone must never appear in the public projection');
+  assert.equal(bid.parrain, undefined, 'parrain must never appear in the public projection');
+  // Public premium is anchored on prixDepart (2000), not the private base (2750).
+  assert.ok(Math.abs(bid.premium - 2800 / 2000) < 1e-9);
 });

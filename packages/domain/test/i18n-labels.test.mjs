@@ -10,17 +10,16 @@ import { createRequire } from 'node:module';
 const D = createRequire(import.meta.url)('../index.js');
 
 test('every service carries English names', () => {
+  // The financing family (ADR 0010) — the walker covers whatever the catalogue holds.
   const expected = {
-    testament: ['Will and protection mandate', 'Will'],
-    procuration: ['Power of attorney', 'Power of attorney'],
     refinancement: ['Mortgage refinancing', 'Refinancing'],
+    financement: ['Mortgage financing', 'Financing'],
   };
   for (const s of D.SERVICES) {
     assert.ok(s.nomEn && s.nomCourtEn, `service ${s.id} is missing nomEn/nomCourtEn`);
-    if (expected[s.id]) {
-      assert.equal(s.nomEn, expected[s.id][0]);
-      assert.equal(s.nomCourtEn, expected[s.id][1]);
-    }
+    assert.ok(expected[s.id], `service ${s.id} has pinned English names`);
+    assert.equal(s.nomEn, expected[s.id][0]);
+    assert.equal(s.nomCourtEn, expected[s.id][1]);
   }
 });
 

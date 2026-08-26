@@ -13,6 +13,11 @@ const TEMPLATE_SUBJECT = {
   bienvenue: 'Bienvenue sur Nota',
   'nouveau notaire abonné': 'Nouveau notaire abonné',
   'date approche': 'Votre signature approche',
+  'proposition reçue': 'Un notaire vous propose',
+  'proposition acceptée': 'Proposition acceptée',
+  'proposition déclinée': 'Proposition déclinée',
+  'documents demandés': 'Un notaire vous demande des documents',
+  'offre retenue': 'Un notaire a retenu votre demande',
 };
 
 function subjectNeedle(label) {
@@ -31,6 +36,14 @@ function summary(msgs) {
   return JSON.stringify(msgs.map((m) => ({ to: m.to, subject: m.subject })));
 }
 
+// Valid mandatory pricing answers per service (the ADR 0010 financing family),
+// chosen so a seeded publication validates at each act's flat base
+// (refinancement 2000 $, financement 1800 $).
+const PRICING_VALIDE = {
+  refinancement: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue' },
+  financement: { valeur_pret: 250000, contexte: 'propriete_detenue', approbation_bancaire: 'obtenue' },
+};
+
 // --- Given ------------------------------------------------------------------
 
 Given('l\'adresse {string} s\'est désabonnée', async function (email) {
@@ -44,7 +57,7 @@ Given(
   'une offre ouverte avec le courriel {string} pour {string} à {int} dans {int} jours',
   async function (courriel, serviceId, montant, jours) {
     const dateISO = this.domain.addDays(this.today, jours);
-    await this.request({ method: 'POST', path: '/bids', body: JSON.stringify({ serviceId, dateISO, montant, courriel, pricing: { testament: { who_for: "solo", fiducie_needed: "non" }, procuration: { scope: "specifique", realEstate: "non" }, refinancement: { valeur_pret: 250000, succession: "non", approbation_bancaire: "obtenue" } }[serviceId] }) });
+    await this.request({ method: 'POST', path: '/bids', body: JSON.stringify({ serviceId, dateISO, montant, courriel, pricing: PRICING_VALIDE[serviceId] }) });
     assert.equal(this.response.statusCode, 201, 'la publication de départ a échoué: ' + this.response.body);
     this.lastBidId = this.responseJson.bid.id;
   }
@@ -56,9 +69,11 @@ When(
   'un client publie une offre avec le courriel {string} pour {string} à {int} dans {int} jours',
   async function (courriel, serviceId, montant, jours) {
     const dateISO = this.domain.addDays(this.today, jours);
-    await this.request({ method: 'POST', path: '/bids', body: JSON.stringify({ serviceId, dateISO, montant, courriel, pricing: { testament: { who_for: "solo", fiducie_needed: "non" }, procuration: { scope: "specifique", realEstate: "non" }, refinancement: { valeur_pret: 250000, succession: "non", approbation_bancaire: "obtenue" } }[serviceId] }) });
+    await this.request({ method: 'POST', path: '/bids', body: JSON.stringify({ serviceId, dateISO, montant, courriel, pricing: PRICING_VALIDE[serviceId] }) });
     const j = this.responseJson;
     this.lastBidId = j.bid ? j.bid.id : null;
+    this.lastBid = j.bid || null;
+    this.clientToken = j.clientToken || null;
   }
 );
 
@@ -66,7 +81,7 @@ When(
   'un client publie une offre sans courriel pour {string} à {int} dans {int} jours',
   async function (serviceId, montant, jours) {
     const dateISO = this.domain.addDays(this.today, jours);
-    await this.request({ method: 'POST', path: '/bids', body: JSON.stringify({ serviceId, dateISO, montant, pricing: { testament: { who_for: 'solo', fiducie_needed: 'non' }, procuration: { scope: 'specifique', realEstate: 'non' }, refinancement: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue' } }[serviceId] }) });
+    await this.request({ method: 'POST', path: '/bids', body: JSON.stringify({ serviceId, dateISO, montant, pricing: PRICING_VALIDE[serviceId] }) });
     const j = this.responseJson;
     this.lastBidId = j.bid ? j.bid.id : null;
   }

@@ -95,9 +95,9 @@ test('tuning: tierMultiplier(id, bids) is the tuned value — one definition for
 test('tuning: recommendedAmount follows the tuned multiplier when history is supplied', () => {
   const TODAY = '2026-08-12';
   const bids = Array.from({ length: 40 }, () => settled('prioritaire', 3.9));
-  const plain = D.recommendedAmount('testament', '2026-08-14', TODAY);   // 2 days = prioritaire
-  const tunedRec = D.recommendedAmount('testament', '2026-08-14', TODAY, null, bids);
+  const plain = D.recommendedAmount('refinancement', '2026-08-14', TODAY);   // 2 days = prioritaire
+  const tunedRec = D.recommendedAmount('refinancement', '2026-08-14', TODAY, null, bids);
   assert.ok(tunedRec > plain, 'a hotter observed market recommends a higher offer');
-  const svc = D.serviceById('testament');
+  const svc = D.serviceById('refinancement');
   assert.ok(tunedRec <= svc.prixDepart * D.PREMIUM_CAP, 'still capped at 10x');
 });

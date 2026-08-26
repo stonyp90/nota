@@ -255,7 +255,7 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [range, kpis, gauge, series]
+                required: [range, kpis, gauge, series, parrainages]
                 properties:
                   range:
                     type: object
@@ -271,7 +271,7 @@ paths:
                         type: integer
                   kpis:
                     type: object
-                    required: [offersPosted, offersRetained, retentionRate, commissionCents, actsCompleted]
+                    required: [offersPosted, offersRetained, retentionRate, commissionCents, commissionRate, actsCompleted]
                     properties:
                       offersPosted:
                         type: integer
@@ -282,6 +282,12 @@ paths:
                         description: 0..1 fraction (the console also accepts 0..100).
                       commissionCents:
                         type: integer
+                      commissionRate:
+                        type: number
+                        description: >-
+                          The configured platform commission rate (0..1 fraction,
+                          NOTA_COMMISSION_RATE) behind commissionCents — surfaced
+                          so the console never hardcodes it.
                       actsCompleted:
                         type: integer
                   gauge:
@@ -325,5 +331,53 @@ paths:
                               type: integer
                             retained:
                               type: integer
+                  parrainages:
+                    type: object
+                    description: >-
+                      Partner referral ledger (ADR 0011), derived from the
+                      records — never stored state. `client` / `notaire` are the
+                      flat per-track reward amounts in DOLLARS; each code row is
+                      joined with the POST /partenaires registry (type, courriel,
+                      typeNom/typeNomEn present only when the code was claimed).
+                    required: [client, notaire, codes]
+                    properties:
+                      client:
+                        type: integer
+                        description: Flat reward (in dollars) per referred demand retained.
+                      notaire:
+                        type: integer
+                        description: Flat reward (in dollars) when a referred notary retains their first act.
+                      codes:
+                        type: array
+                        items:
+                          type: object
+                          required: [code, demandes, retenues, completes, notaires, notairesActifs, du, type, courriel]
+                          properties:
+                            code:
+                              type: string
+                            demandes:
+                              type: integer
+                            retenues:
+                              type: integer
+                            completes:
+                              type: integer
+                            notaires:
+                              type: integer
+                            notairesActifs:
+                              type: integer
+                            du:
+                              type: integer
+                              description: Total owed to this partner, in DOLLARS.
+                            type:
+                              type: string
+                              nullable: true
+                              description: REFERRAL.partners id, null while unclaimed.
+                            courriel:
+                              type: string
+                              nullable: true
+                            typeNom:
+                              type: string
+                            typeNomEn:
+                              type: string
         "401":
           $ref: "#/components/responses/Unauthorized"

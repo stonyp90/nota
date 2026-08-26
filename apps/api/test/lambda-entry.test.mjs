@@ -31,7 +31,7 @@ test('a base64-encoded body is decoded before the handler parses it', async () =
   // json_invalide. A 422 domain rejection (date_passee) instead proves the body
   // was decoded and parsed as valid JSON — and this path returns before any
   // repo.put, so it never touches DynamoDB.
-  const offer = JSON.stringify({ serviceId: 'testament', dateISO: '2020-01-01', montant: 1400 });
+  const offer = JSON.stringify({ serviceId: 'refinancement', dateISO: '2020-01-01', montant: 2800 });
   const res = await handler({
     requestContext: { http: { method: 'POST' } },
     rawPath: '/api/bids',

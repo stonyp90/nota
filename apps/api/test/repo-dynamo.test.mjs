@@ -60,7 +60,7 @@ test('retain writes with an "ouverte" ConditionExpression and returns the bid on
   const sent = [];
   const doc = { async send(cmd) { sent.push(cmd); return {}; } };
   const repo = createDynamoRepo({ tableName: 't', doc });
-  const bid = { id: 'a', dateISO: '2026-08-20', serviceId: 'testament', montant: 800, status: 'retenue', notaryId: 'N1' };
+  const bid = { id: 'a', dateISO: '2026-08-20', serviceId: 'refinancement', montant: 800, status: 'retenue', notaryId: 'N1' };
 
   const out = await repo.retain(bid, 'N1');
   assert.equal(out, bid);
@@ -101,7 +101,7 @@ test('put stamps GSI1 attributes on an OPEN bid so it joins the sparse index', a
   const doc = { async send(cmd) { sent.push(cmd); return {}; } };
   const repo = createDynamoRepo({ tableName: 't', doc });
 
-  await repo.put({ id: 'a', dateISO: '2026-08-20', serviceId: 'testament', montant: 800, status: 'ouverte' });
+  await repo.put({ id: 'a', dateISO: '2026-08-20', serviceId: 'refinancement', montant: 800, status: 'ouverte' });
 
   const item = sent[0].input.Item;
   assert.equal(item.GSI1PK, 'OPENBID');
@@ -113,7 +113,7 @@ test('a RETAINED bid carries NO GSI1 attributes, so it drops out of the index', 
   const doc = { async send(cmd) { sent.push(cmd); return {}; } };
   const repo = createDynamoRepo({ tableName: 't', doc });
 
-  await repo.retain({ id: 'a', dateISO: '2026-08-20', serviceId: 'testament', montant: 800, status: 'retenue' }, 'N1');
+  await repo.retain({ id: 'a', dateISO: '2026-08-20', serviceId: 'refinancement', montant: 800, status: 'retenue' }, 'N1');
 
   const item = sent[0].input.Item;
   assert.equal('GSI1PK' in item, false, 'retained bids are not indexed');

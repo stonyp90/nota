@@ -31,9 +31,8 @@ Then('l\'affichage est {string}', function (affichage) {
 When('je valide une offre de {int} $ pour une date valide', function (montant) {
   const dateISO = this.domain.addDays(this.today, 10); // 10 jours -> palier rapide
   const P = {
-    testament: { who_for: 'solo', fiducie_needed: 'non' },
-    procuration: { scope: 'specifique', realEstate: 'non' },
     refinancement: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue' },
+    financement: { valeur_pret: 250000, contexte: 'propriete_detenue', approbation_bancaire: 'obtenue' },
   };
   this.result = this.domain.validateOffer({
     serviceId: this.input.serviceId,

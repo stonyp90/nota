@@ -20,9 +20,8 @@ function app(seed = []) {
 }
 
 const parse = (res) => JSON.parse(res.body);
+// The zero-add refinancement answers: the dynamic base stays at the flat 2000 $.
 const DEFAULT_PRICING = {
-  testament: { who_for: 'solo', fiducie_needed: 'non' },
-  procuration: { scope: 'specifique', realEstate: 'non' },
   refinancement: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue' },
 };
 const postBid = (a, obj) =>
@@ -52,13 +51,13 @@ const decline = (a, token, id, dateISO) =>
 const dossier = (a, token, id, dateISO) =>
   a.handle({ method: 'GET', path: '/notary/dossier', headers: bearer(token), query: { id, dateISO } });
 
-const SAMPLE_DOSSIER = { liquidateur: 'Marie Roy', beneficiaires: 'Les enfants', __consent: true };
+const SAMPLE_DOSSIER = { adresse: '10 rue des Érables, Québec', preteur: 'Banque du Fleuve', __consent: true };
 
 async function seedBid(a, over = {}) {
   const res = await postBid(a, {
-    serviceId: 'testament',
+    serviceId: 'refinancement',
     dateISO: '2026-08-20',
-    montant: 1400,
+    montant: 2800,
     courriel: 'client@example.ca',
     dossier: SAMPLE_DOSSIER,
     ...over,
@@ -129,7 +128,8 @@ test('GET /notary/bids reads the token from the Authorization header (no query t
   assert.equal(bids[0].courriel, undefined);
   assert.equal(bids[0].dossier, undefined);
   assert.equal(typeof bids[0].ready, 'boolean');
-  // The case-complexity signal is exposed to the notary (default testament = simple).
+  // The case-complexity signal is exposed to the notary (the default zero-add
+  // refinancement answers weigh nothing = simple).
   assert.ok(bids[0].complexity && bids[0].complexity.level, 'complexity exposed to notary');
   assert.equal(bids[0].complexity.level, 'simple');
 });
@@ -151,8 +151,8 @@ test('GET /notary/bids labels a hard file "complexe" with its factors', async ()
 
 test('GET /notary/bids excludes bids this notary declined and supports ?service=', async () => {
   const a = app();
-  const b1 = await seedBid(a, { serviceId: 'testament', dateISO: '2026-08-20' });
-  const b2 = await seedBid(a, { serviceId: 'procuration', dateISO: '2026-08-21', montant: 900 });
+  const b1 = await seedBid(a, { dateISO: '2026-08-20' });
+  const b2 = await seedBid(a, { dateISO: '2026-08-21', montant: 2900 });
   const { token } = await session(a, 'me@notaire.ca');
 
   // Decline b1 -> it drops from the list.
@@ -160,10 +160,10 @@ test('GET /notary/bids excludes bids this notary declined and supports ?service=
   let ids = parse(await listBids(a, token)).bids.map((b) => b.id);
   assert.deepEqual(ids, [b2.id]);
 
-  // ?service filter narrows to one service.
-  ids = parse(await listBids(a, token, 'procuration')).bids.map((b) => b.id);
+  // ?service filter matches the (one-act) catalogue; an unknown act filters everything out.
+  ids = parse(await listBids(a, token, 'refinancement')).bids.map((b) => b.id);
   assert.deepEqual(ids, [b2.id]);
-  assert.equal(parse(await listBids(a, token, 'testament')).bids.length, 0); // b1 declined
+  assert.equal(parse(await listBids(a, token, 'testament')).bids.length, 0); // retired act: nothing listed
 });
 
 test('accept flips to retenue, releases the dossier, and is access-controlled', async () => {
@@ -261,10 +261,10 @@ test('GET /carnet/feed.ics is PUBLIC (no token) and never leaks private data', a
   assert.match(res.body, /BEGIN:VCALENDAR/);
   assert.ok(res.body.includes('UID:' + bid.id + '@nota'), 'feed is missing the seeded offer');
   assert.ok(res.body.includes('DTSTART;VALUE=DATE:20260820'), 'feed has the wrong event date');
-  assert.match(res.body, /SUMMARY:.*Testament/, 'feed SUMMARY should carry the domain service name');
+  assert.match(res.body, /SUMMARY:.*Refinancement/, 'feed SUMMARY should carry the domain service name');
   // The public feed MUST NEVER expose the client courriel or dossier.
   assert.ok(!res.body.includes('client@example.ca'), 'public feed leaked a courriel');
-  assert.ok(!/liquidateur|Marie Roy/.test(res.body), 'public feed leaked dossier content');
+  assert.ok(!/Érables|Banque du Fleuve/.test(res.body), 'public feed leaked dossier content');
 });
 
 // --- Fix 4: conditional accept closes the TOCTOU race -----------------------

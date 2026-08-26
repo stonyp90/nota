@@ -181,6 +181,43 @@ test('every user-facing domain string has an English translation', () => {
   assert.deepEqual([...new Set(missing)], [], 'domain strings with no English entry');
 });
 
+// The notary card composes two runtime lines the static DOM scan cannot see:
+// the readiness badge and the complexity factors ("stripped label : option").
+// Enumerate every factor the domain can produce — one answered criterion at a
+// time, through the public complexity() door — and require an English entry
+// for each, so an English boot never shows a French factor.
+test('notary-card composed lines (readiness badge, factors) have English translations', () => {
+  I18N.force('en');
+  const missing = [];
+  const check = (s) => {
+    const n = I18N.normalize(s);
+    if (needsTranslation(n) && !I18N.covered(n)) missing.push(n);
+  };
+  ['Dossier prêt', 'Dossier en préparation'].forEach(check);
+  for (const svc of D.SERVICES) {
+    for (const c of (svc.pricing && svc.pricing.criteria) || []) {
+      const answersFor = [];
+      if (c.type === 'choice') for (const o of c.options || []) answersFor.push(o.id);
+      if (c.type === 'flag') answersFor.push(true);
+      if (c.type === 'bracket') for (const b of c.brackets || []) answersFor.push(b.max == null ? 1e9 : b.max);
+      for (const a of answersFor) {
+        const answers = {}; answers[c.id] = a;
+        for (const f of D.complexity(svc.id, answers).factors) check(f);
+      }
+    }
+  }
+  assert.deepEqual([...new Set(missing)], [], 'composed notary-card strings with no English entry');
+
+  // The act picker's option label is composed too ("nom — à partir de …"):
+  // the frame rule translates "à partir de", and the service NAME inside the
+  // capture must come out English as well — a fragment rule, not a leak.
+  for (const svc of D.SERVICES) {
+    const en = I18N.tEn(svc.nom + ' — à partir de ' + D.money(svc.prixDepart));
+    assert.ok(en.startsWith(svc.nomEn + ' — from'),
+      `composed act option should open with "${svc.nomEn} — from": ${en}`);
+  }
+});
+
 test('web translations agree with the domain’s English labels', () => {
   I18N.force('en');
   for (const s of D.SERVICES) {

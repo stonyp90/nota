@@ -62,7 +62,15 @@ function createLocalAdminApp({ today } = {}) {
       region: process.env.AWS_REGION || 'ca-central-1',
     });
   } else {
-    repo = createMemoryRepo(domain.makeFixtures(todayISO));
+    // A deterministic slice of the fixtures arrives via demo partner links, so
+    // the overview's Parrainages ledger renders populated out of the box (the
+    // card hides itself when the program has no activity).
+    const fixtures = domain.makeFixtures(todayISO).map((b, i) =>
+      i % 5 === 0 ? { ...b, parrain: i % 10 === 0 ? 'EVEROY' : 'COURTIER1' } : b,
+    );
+    repo = createMemoryRepo(fixtures);
+    repo.createPartner({ code: 'EVEROY', type: 'agent_immobilier', courriel: 'eve.roy@agence.demo', createdAt: todayISO });
+    repo.createPartner({ code: 'COURTIER1', type: 'courtier_hypothecaire', courriel: 'marc.courtier@hypotheque.demo', createdAt: todayISO });
   }
 
   const emails = (process.env.NOTA_ADMIN_EMAILS || '')

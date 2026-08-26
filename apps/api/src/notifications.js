@@ -103,17 +103,266 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
   }
 
   async function onOfferRetained(bid) {
-    if (!bid || !bid.courriel) return { ok: true, results: [] };
+    if (!bid) return { ok: true, results: [] };
+    const results = [];
+    try {
+      if (bid.courriel) {
+        results.push(
+          await sendOnce({
+            refId: bid.id,
+            kind: 'offerRetained',
+            to: bid.courriel,
+            buildTemplate: (env) => emails.offerRetained({ ...bidCtx(bid), ...env }),
+          })
+        );
+      }
+      // Referral rewards (ADR 0011) — retention is the earning moment for the
+      // client track, and the first retained act is the earning moment for the
+      // notary track, so BOTH are checked here, on the one retain path every
+      // flow funnels through (accept and proposition-accept alike).
+      results.push(...(await onReferralRetained(bid)));
+      return { ok: true, results };
+    } catch (err) {
+      return { ok: false, error: String((err && err.message) || err), results };
+    }
+  }
+
+  // --- Partner referral rewards (ADR 0011) ----------------------------------
+  // A reward mail goes only to a partner who actually REGISTERED their code
+  // (POST /partenaires gives us a courriel); an unregistered code still earns
+  // in the admin ledger, there is just nowhere to send the news. Two tracks:
+  //   • client: the retained bid carries `parrain` -> one mail per bid
+  //     (refId = bid id, kind referral_client);
+  //   • notaire: the retaining notary's profile carries `parrain` -> one mail
+  //     EVER per notary (refId = notary id, kind referral_notaire) — the SENT
+  //     ledger is exactly the "first retained act" rule, no counting needed.
+  async function onReferralRetained(bid) {
+    const results = [];
+    if (typeof repo.getPartner !== 'function') return results;
+
+    if (bid.parrain) {
+      const partner = await repo.getPartner(bid.parrain);
+      if (partner && partner.courriel) {
+        results.push(
+          await sendOnce({
+            refId: bid.id,
+            kind: 'referral_client',
+            to: partner.courriel,
+            buildTemplate: (env) => emails.referralRewardClient({ ...bidCtx(bid), code: partner.code, ...env }),
+          })
+        );
+      }
+    }
+
+    const notary =
+      bid.notaryId && typeof repo.getNotary === 'function' ? await repo.getNotary(bid.notaryId) : null;
+    if (notary && notary.parrain) {
+      const partner = await repo.getPartner(notary.parrain);
+      if (partner && partner.courriel) {
+        results.push(
+          await sendOnce({
+            refId: notary.id,
+            kind: 'referral_notaire',
+            to: partner.courriel,
+            buildTemplate: (env) => emails.referralRewardNotary({ code: partner.code, ...env }),
+          })
+        );
+      }
+    }
+    return results;
+  }
+
+  // Fired from POST /partenaires (fire-and-forget): welcome the partner with
+  // their shareable link + alert the operator, each at most once per code.
+  async function onPartnerRegistered(partner) {
+    if (!partner || !partner.code) return { ok: true, results: [] };
+    const results = [];
+    try {
+      if (partner.courriel) {
+        results.push(
+          await sendOnce({
+            refId: partner.code,
+            kind: 'partnerWelcome',
+            to: partner.courriel,
+            buildTemplate: (env) => emails.partnerWelcome({ code: partner.code, type: partner.type, ...env }),
+          })
+        );
+      }
+      if (operatorEmail) {
+        results.push(
+          await sendOnce({
+            refId: partner.code,
+            kind: 'operatorNewPartner',
+            to: operatorEmail,
+            buildTemplate: (env) =>
+              emails.operatorNewPartner({ code: partner.code, type: partner.type, courriel: partner.courriel, ...env }),
+          })
+        );
+      }
+    } catch (err) {
+      return { ok: false, error: String((err && err.message) || err), results };
+    }
+    return { ok: true, results };
+  }
+
+  // --- Notary actions on an open offer ---------------------------------------
+  // Fired fire-and-forget from POST /notary/bids/propose: the client (no account,
+  // per-bid token) learns a notary proposed a higher price. Idempotent per
+  // proposition id.
+  async function onCounterOfferProposed(bid, proposition) {
+    if (!bid || !bid.courriel || !proposition) return { ok: true, results: [] };
     try {
       const r = await sendOnce({
-        refId: bid.id,
-        kind: 'offerRetained',
+        refId: proposition.id,
+        kind: 'propositionRecue',
         to: bid.courriel,
-        buildTemplate: (env) => emails.offerRetained({ ...bidCtx(bid), ...env }),
+        buildTemplate: (env) =>
+          emails.propositionRecue({
+            ...bidCtx(bid),
+            proposition: { montant: proposition.montant, delta: proposition.delta, message: proposition.message, etude: proposition.etude },
+            ...env,
+          }),
       });
       return { ok: true, results: [r] };
     } catch (err) {
       return { ok: false, error: String((err && err.message) || err), results: [] };
+    }
+  }
+
+  // Fired from POST /notary/bids/documents: the client is mailed the list of
+  // requested items. Idempotent per demande id.
+  async function onDocumentsRequested(bid, demande) {
+    if (!bid || !bid.courriel || !demande) return { ok: true, results: [] };
+    try {
+      const r = await sendOnce({
+        refId: demande.id,
+        kind: 'documentsDemandes',
+        to: bid.courriel,
+        buildTemplate: (env) =>
+          emails.documentsDemandes({
+            ...bidCtx(bid),
+            demande: { documents: demande.documents, message: demande.message, etude: demande.etude },
+            ...env,
+          }),
+      });
+      return { ok: true, results: [r] };
+    } catch (err) {
+      return { ok: false, error: String((err && err.message) || err), results: [] };
+    }
+  }
+
+  // Fired from POST /client/propositions/accept|decline: tells the notary who
+  // made the proposition how the client answered. `notary` is their profile
+  // (repo.getNotary); resolved here when the caller did not pass it. One mail
+  // per proposition: the kind follows the final status.
+  async function onCounterOfferAnswered(bid, proposition, notary) {
+    if (!bid || !proposition) return { ok: true, results: [] };
+    try {
+      const profile =
+        notary || (proposition.notaryId && typeof repo.getNotary === 'function' ? await repo.getNotary(proposition.notaryId) : null);
+      const to = profile && profile.email;
+      const accepted = proposition.status === 'acceptee';
+      const r = await sendOnce({
+        refId: proposition.id,
+        kind: accepted ? 'propositionAcceptee' : 'propositionRefusee',
+        to,
+        buildTemplate: (env) =>
+          (accepted ? emails.propositionAcceptee : emails.propositionRefusee)({
+            ...bidCtx(bid),
+            proposition: { montant: proposition.montant, delta: proposition.delta },
+            ...env,
+          }),
+      });
+      return { ok: true, results: [r] };
+    } catch (err) {
+      return { ok: false, error: String((err && err.message) || err), results: [] };
+    }
+  }
+
+  // Fired from POST /client/bid/cancel: the client withdrew their offer. The
+  // client always gets a confirmation; when the bid was RETAINED, the notary
+  // who held it and the operator are told too — a mise en relation (and maybe
+  // money) is being unwound. Idempotent per bid and audience.
+  async function onOfferCancelled(bid, { notary, wasRetained } = {}) {
+    if (!bid) return { ok: true, results: [] };
+    const results = [];
+    try {
+      if (bid.courriel) {
+        results.push(
+          await sendOnce({
+            refId: bid.id,
+            kind: 'offerCancelled',
+            to: bid.courriel,
+            buildTemplate: (env) => emails.offerCancelled({ ...bidCtx(bid), ...env }),
+          })
+        );
+      }
+      if (wasRetained) {
+        const to = notary && notary.email;
+        results.push(
+          await sendOnce({
+            refId: bid.id,
+            kind: 'offerCancelledNotary',
+            to,
+            buildTemplate: (env) => emails.offerCancelledNotary({ ...bidCtx(bid), ...env }),
+          })
+        );
+        if (operatorEmail) {
+          results.push(
+            await sendOnce({
+              refId: bid.id,
+              kind: 'operatorOfferCancelled',
+              to: operatorEmail,
+              buildTemplate: (env) => emails.operatorOfferCancelled({ ...bidCtx(bid), etude: bid.etude, ...env }),
+            })
+          );
+        }
+      }
+      return { ok: true, results };
+    } catch (err) {
+      return { ok: false, error: String((err && err.message) || err), results };
+    }
+  }
+
+  // --- Contact form (nous joindre) ------------------------------------------
+  // Fired from POST /contact. The operator gets the message and the sender an
+  // acknowledgement; the sender's unsubscribe silences only their own ack —
+  // their message still reaches the operator, because writing the form IS the
+  // request to be contacted. refId is the contact id minted per submission, so
+  // the same person can write twice.
+  async function onContactMessage(msg) {
+    if (!msg || !msg.courriel || !msg.message) return { ok: true, results: [] };
+    const results = [];
+    try {
+      if (operatorEmail) {
+        results.push(
+          await sendOnce({
+            refId: msg.id,
+            kind: 'operatorContactMessage',
+            to: operatorEmail,
+            buildTemplate: (env) =>
+              emails.operatorContactMessage({
+                nom: msg.nom,
+                email: msg.courriel,
+                sujet: msg.sujet,
+                message: msg.message,
+                bidId: msg.bidId,
+                ...env,
+              }),
+          })
+        );
+      }
+      results.push(
+        await sendOnce({
+          refId: msg.id,
+          kind: 'contactRecu',
+          to: msg.courriel,
+          buildTemplate: (env) => emails.contactRecu({ nom: msg.nom, message: msg.message, ...env }),
+        })
+      );
+      return { ok: true, results };
+    } catch (err) {
+      return { ok: false, error: String((err && err.message) || err), results };
     }
   }
 
@@ -316,6 +565,12 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
   return {
     onOfferCreated,
     onOfferRetained,
+    onPartnerRegistered,
+    onCounterOfferProposed,
+    onDocumentsRequested,
+    onCounterOfferAnswered,
+    onOfferCancelled,
+    onContactMessage,
     onClientSignup,
     onReminderDue,
     onNotaryConnected,

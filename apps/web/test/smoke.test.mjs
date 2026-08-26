@@ -29,7 +29,7 @@ const HTML_SRC = readFileSync(fileURLToPath(new URL('../public/index.html', impo
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Same formulas the app uses, so "today"/"anchor" match without pinning the clock.
-const todayISO = () => new Date().toISOString().slice(0, 10);
+const todayISO = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); }; // LOCAL date, like app.js — the UTC slice rolls to tomorrow every evening in UTC-4/-5
 const firstOfMonth = (iso) => iso.slice(0, 7) + '-01';
 const monthKey = (iso) => iso.slice(0, 7);
 function daysInMonthUTC(anchor) {
@@ -243,7 +243,9 @@ test('a day with bids shows the best open offer per act', async () => {
 test('offer form: services populated, anon default on, slider capped at prixDepart*10', async () => {
   const { win, doc, D, Nota } = await boot();
   assert.equal($(doc, 'o-service').options.length, D.SERVICES.length);
-  assert.equal(D.SERVICES.length, 3);
+  // TWO acts of the financing family (ADR 0010 §1 amended): refinancement
+  // (default) + financement. Pinned so a retired act never lingers in the form.
+  assert.equal(D.SERVICES.length, 2);
 
   assert.equal($(doc, 'o-anon').checked, true);
   assert.equal(Nota.state.offer.anonyme, true);
@@ -295,7 +297,7 @@ test('dossier tab lists first service intake items and badge shows 0/N', async (
   const expected = svc.documents.length + svc.champs.length;
   // The intake items, excluding the appended consent row.
   assert.equal(all(doc, '#dossier-list .dossier-item:not(.dossier-consent)').length, expected);
-  assert.equal(expected, 6); // testament: 2 docs + 4 champs
+  assert.equal(expected, 8); // refinancement (first act): 5 docs + 3 champs
   assert.equal(all(doc, '#dossier-list .dossier-consent').length, 1); // consent row present
 });
 
@@ -303,11 +305,11 @@ test('dossier tab lists first service intake items and badge shows 0/N', async (
 test('profile documents: upload sets it, then it can be removed', async () => {
   const { win, doc, D, Nota } = await boot();
   Nota.setTab('profil');
-  const chip = doc.querySelector('.profil-doc-chips .chip[data-svc="testament"]');
+  const chip = doc.querySelector('.profil-doc-chips .chip[data-svc="financement"]');
   assert.ok(chip, 'document service chip rendered in the profile');
   chip.click();
   const rows = all(doc, '.profil-doc-list .doc-row');
-  const expected = D.serviceById('testament').documents.length + D.serviceById('testament').champs.length;
+  const expected = D.serviceById('financement').documents.length + D.serviceById('financement').champs.length;
   assert.equal(rows.length, expected);
   // A field row exists; no "validé" affordance until it has a value.
   assert.equal(all(doc, '.profil-doc-list .doc-valid').length, 0);
@@ -447,8 +449,8 @@ test('profile persists coordinates and prefills the offer form', async () => {
 // 12d. The single account menu (avatar) merges profile + notifications + menu.
 test('account menu opens and navigates to the profile', async () => {
   const { win, doc } = await boot();
-  // Only two primary tabs remain (Carnet, Notaires) — the rest moved into the menu.
-  assert.equal(doc.querySelectorAll('.nav-tabs .nav-tab').length, 2);
+  // Three flat doors (ADR 0010 §2): Carnet · Espace notaire · Partenaires.
+  assert.equal(doc.querySelectorAll('.nav-tabs .nav-tab').length, 3);
 
   // A signed-in client (has a courriel): the identity head routes to their profile.
   win.localStorage.setItem('nota.profile.v1', JSON.stringify({ courriel: 'marie@example.ca' }));
@@ -476,7 +478,8 @@ test('anonymous visitor sees no notifications', async () => {
   // The sign-in / sign-up modal exists as the anonymous entry point.
   assert.ok($(doc, 'auth-dialog'), 'sign-in modal is present');
   assert.equal(doc.querySelectorAll('#auth-role .seg-btn').length, 2); // client / notary
-  assert.equal(doc.querySelectorAll('.auth-oauth').length, 3); // Google / Facebook / LinkedIn
+  // No dead "coming soon" social buttons: the modal is role + courriel, nothing else.
+  assert.equal(doc.querySelectorAll('.auth-oauth').length, 0);
 });
 
 // 12e. Mes offres: the profile lists the client's posted offers with their status.
@@ -484,8 +487,8 @@ test('profile "Mes offres" is a table, soonest first, past offers folded away', 
   const { win, doc, D, Nota } = await boot();
   const at = (n) => D.addDays(todayISO(), n);
   win.localStorage.setItem('nota.myoffers.v1', JSON.stringify([
-    { id: 'far',  dateISO: at(20), serviceId: 'testament',     montant: 900 },
-    { id: 'soon', dateISO: at(2),  serviceId: 'procuration',   montant: 700 },
+    { id: 'far',  dateISO: at(20), serviceId: 'financement',     montant: 900 },
+    { id: 'soon', dateISO: at(2),  serviceId: 'refinancement',   montant: 700 },
     { id: 'old',  dateISO: at(-5), serviceId: 'refinancement', montant: 4000 },
   ]));
   Nota.setTab('profil');
@@ -497,19 +500,24 @@ test('profile "Mes offres" is a table, soonest first, past offers folded away', 
     ['Acte', 'Date', 'Montant', 'Statut'],
   );
 
-  // The client's question is temporal, so live offers run soonest first.
-  assert.deepEqual(all(doc, '#my-offers-live tr').map((r) => r.dataset.id), ['soon', 'far']);
+  // The client's question is temporal, so live offers run soonest first. Each
+  // offer row is followed by its detail band (next step, agenda, what a notary
+  // sent back), so only `.my-offer` rows carry an id.
+  assert.deepEqual(all(doc, '#my-offers-live tr.my-offer').map((r) => r.dataset.id), ['soon', 'far']);
+  assert.deepEqual(all(doc, '#my-offers-live tr.my-offer-detail').map((r) => r.dataset.for), ['soon', 'far']);
 
   // A past offer can never change again, so it does not dilute the live list.
   const past = doc.querySelector('.my-offers-past');
   assert.ok(past, 'past offers are folded away');
   assert.equal(past.open, false, 'and collapsed by default');
   assert.match(past.querySelector('.my-offers-past-sum').textContent, /1 offre passée/);
-  assert.deepEqual(all(doc, '#my-offers-past tr').map((r) => r.dataset.id), ['old']);
+  assert.deepEqual(all(doc, '#my-offers-past tr.my-offer').map((r) => r.dataset.id), ['old']);
 
-  // Status is per row, and amounts still go through money().
+  // Status is per row — in plain words — and amounts still go through money().
   const soon = doc.querySelector('#my-offers-live tr[data-id="soon"]');
   assert.equal(soon.querySelector('.my-offer-status').dataset.status, 'pending');
+  assert.equal(soon.querySelector('.my-offer-status').textContent, 'Ouverte — en attente d’un notaire');
+  assert.equal(doc.querySelector('#my-offers-past tr[data-id="old"] .my-offer-status').textContent, 'Date passée');
   assert.equal(soon.querySelector('.c-montant').textContent, D.money(700));
   assert.equal(soon.querySelector('.my-offer-rel').textContent, 'dans 2 jours');
 });
@@ -546,7 +554,10 @@ test('notaires landing teases open demands and funnels each card to sign-in', as
     .sort((a, b) => (a.dateISO < b.dateISO ? -1 : a.dateISO > b.dateISO ? 1 : 0));
   const cards = all(doc, '#notary-live-grid .nc-live-card:not(.nc-live-more)');
   assert.ok(cards.length > 0, 'teaser should render demand cards');
-  assert.equal(cards.length, Math.min(open.length, 8));
+  // On overflow the "+N autres" card takes the LAST slot of the 8-tile block
+  // (7 demands + 1 lead-in card) — never an orphan row of its own.
+  const shown = open.length > 8 ? 7 : open.length;
+  assert.equal(cards.length, shown);
 
   // Soonest first, each card carrying the demand's real amount.
   cards.forEach((card, i) => {
@@ -557,20 +568,48 @@ test('notaires landing teases open demands and funnels each card to sign-in', as
   const more = doc.querySelector('#notary-live-grid .nc-live-more');
   if (open.length > 8) {
     assert.ok(more, 'overflow card missing');
-    assert.ok(more.textContent.includes(String(open.length - 8)));
+    assert.ok(more.textContent.includes(String(open.length - shown)));
+    assert.equal(all(doc, '#notary-live-grid .nc-live-card').length, 8, 'demands + lead card fill the block exactly');
   } else {
     assert.equal(more, null);
   }
 
-  // The section header counts the whole open month, not just the visible cards.
-  const sub = $(doc, 'notary-live-sub');
-  const total = open.reduce((s, b) => s + b.montant, 0);
-  assert.ok(sub.textContent.includes(String(open.length)));
-  assert.ok(sub.textContent.includes(D.money(total)));
+  // The month's money-at-stake line is retired outright (owner's call,
+  // 2026-08-26): the demand cards ARE the money — no stats line anywhere.
+  assert.equal($(doc, 'notary-live-sub'), null, 'no stats line under the section header');
+  assert.equal($(doc, 'notary-opportunity'), null, 'the « En jeu ce mois » line is retired');
+  assert.ok(!/à retenir/.test(box.textContent), 'the teaser carries no totals');
 
   // A card is a button that lands focus on the sign-in email field.
   cards[0].click();
   assert.equal(doc.activeElement, $(doc, 'nc-email'), 'clicking a card should focus the sign-in field');
+});
+
+// 13b-bis. The landing sells each fact once: the lede stops at the pitch (the
+//          h1 already says "Payé à la signature"), and the fee facts live in
+//          THREE non-overlapping value props.
+test('notaires landing: each selling point is made once', async () => {
+  const { doc } = await boot();
+  doc.querySelector('.nav-tab[data-tab="notaires"]').click();
+  const lede = doc.querySelector('#pane-notaires .nc-lede').textContent;
+  assert.ok(!/Inscription gratuite/.test(lede), 'the fee fact lives in the value grid, not the lede');
+  assert.ok(!/payé en entier/i.test(lede), 'the h1 already says it');
+  // Owner's call (2026-08-25): no value grid — the inventory is the pitch,
+  // the fee facts live in the sign-up branch and the guarantee line.
+  assert.equal(all(doc, '#pane-notaires .nc-why-item').length, 0, 'the value grid is retired');
+});
+
+// 13b-ter. The prospecting band works signed OUT — the carnet feed is public by
+//          design (a notary can prospect before ever creating an account) — and
+//          its four doors are actually wired at boot.
+test('notaires landing: the agenda prospecting band is wired for a signed-out visitor', async () => {
+  const { doc } = await boot();
+  doc.querySelector('.nav-tab[data-tab="notaires"]').click();
+  assert.equal($(doc, 'notary-carnet').hidden, false, 'the band shows while signed out');
+  assert.match($(doc, 'sub-ics').href, /\/carnet\/feed\.ics$/);
+  assert.match($(doc, 'sub-apple').href, /^webcal:/);
+  assert.match($(doc, 'sub-google').href, /^https:\/\/calendar\.google\.com\/calendar\/render\?cid=/);
+  assert.match($(doc, 'sub-outlook').href, /^https:\/\/outlook\.live\.com\/calendar\/0\/addfromweb\?url=/);
 });
 
 // 13c. First-time notary: the gate's single "Continuer" action branches into an
@@ -765,17 +804,11 @@ test('filters stay hidden until the toggle opens them, with an active-count badg
   assert.ok(toggle.classList.contains('has-active'), 'toggle should mark itself active');
 });
 
-// 18. Expand button requests true full screen on the calendar panel.
-test('expand button requests fullscreen on the calendar panel', async () => {
+// 18. The toolbar stays basic: no fullscreen control competing with the
+//     navigation — the calendar is the page, not an app inside the page.
+test('the calendar toolbar carries no fullscreen button', async () => {
   const { doc } = await boot();
-  const panel = $(doc, 'carnet-panel');
-  const btn = $(doc, 'cal-maximize');
-  let called = 0;
-  panel.requestFullscreen = function () { called++; return Promise.resolve(); };
-  assert.equal(btn.getAttribute('aria-pressed'), 'false');
-
-  btn.click();
-  assert.equal(called, 1, 'clicking expand should request fullscreen on the calendar panel');
+  assert.equal($(doc, 'cal-maximize'), null, 'the expand/fullscreen control is gone');
 });
 
 // --- EDGE CASES (UI) — status marking + empty states -------------------------
@@ -801,7 +834,7 @@ test('the toolbar surfaces the next availability (soonest open date)', async () 
   const today = todayISO();
   // One open offer dated today (always >= today) → it is the next availability.
   await reseed(ctx, [{
-    id: 'a1', serviceId: 'testament', dateISO: today, montant: 900,
+    id: 'a1', serviceId: 'financement', dateISO: today, montant: 900,
     tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: today,
   }]);
   const av = ctx.doc.getElementById('cal-avail');
@@ -811,7 +844,7 @@ test('the toolbar surfaces the next availability (soonest open date)', async () 
 
   // When that same offer is retained (none open), the pill hides.
   await reseed(ctx, [{
-    id: 'a1', serviceId: 'testament', dateISO: today, montant: 900,
+    id: 'a1', serviceId: 'financement', dateISO: today, montant: 900,
     tier: 'standard', status: ctx.D.STATUS.RETENUE, etude: 'Étude X', anonyme: true, createdAt: today,
   }]);
   const av2 = ctx.doc.getElementById('cal-avail');
@@ -823,7 +856,7 @@ test('EDGE (UI): a fully-retained day marks the cell taken and names the notary 
   const iso = ctx.D.addDays(ctx.today, 2); // future date (the list only shows today onward)
   const longEtude = 'Notaires du Vieux-Québec et Associés SENCRL s.r.l.';
   await reseed(ctx, [{
-    id: 'r1', serviceId: 'testament', dateISO: iso, montant: 1800,
+    id: 'r1', serviceId: 'financement', dateISO: iso, montant: 1800,
     tier: 'standard', status: ctx.D.STATUS.RETENUE, etude: longEtude, anonyme: true, createdAt: iso,
   }]);
 
@@ -908,15 +941,15 @@ test('HASH: an unknown act or status falls back instead of emptying the carnet',
   assert.equal(bogus.Nota.state.filters.sort, 'montant-desc', 'unknown sort falls back to the default');
 
   // A legitimate deep link still works.
-  const good = await bootSeeded({}, '#svc=procuration&statut=retenue');
-  assert.equal(good.Nota.state.filters.service, 'procuration');
+  const good = await bootSeeded({}, '#svc=refinancement&statut=retenue');
+  assert.equal(good.Nota.state.filters.service, 'refinancement');
   assert.equal(good.Nota.state.filters.statut, 'retenue');
 });
 
 test('FILTERS: reset returns to the resting state, not to a state with no act', async () => {
   const ctx = await boot();
   ctx.Nota.state.filters.min = 500;
-  ctx.Nota.state.filters.service = 'procuration';
+  ctx.Nota.state.filters.service = 'refinancement';
   ctx.Nota.state.filters.statut = 'retenue';
   ctx.doc.querySelector('#filters-reset').click();
 
@@ -962,10 +995,12 @@ test('URGENCY: every upcoming day prices its own notice, from the domain', async
     // The number shown must be the number the booking form pre-fills, or the
     // calendar quotes a price the form then contradicts. It is the TUNED
     // multiplier — learned from the month's retained offers — not the static
-    // ladder midpoint.
+    // ladder midpoint — applied to the carnet's act, and said in DOLLARS: a
+    // client thinks in dollars, not in multiples.
     const m = ctx.D.tierMultiplier(tierId, ctx.Nota.state.monthBids);
-    const shown = Number(mark.textContent.replace('×', '').replace(',', '.'));
-    assert.equal(shown, Math.round(m * 10) / 10, 'the cell quotes the tuned domain multiplier');
+    const svc = ctx.D.serviceById(ctx.D.DEFAULT_SERVICE_ID);
+    assert.equal(mark.textContent, 'dès ' + ctx.D.money(Math.round(svc.prixDepart * m)), 'the cell quotes the tuned price in dollars');
+    assert.ok(!mark.textContent.includes('×'), 'no multiplier jargon on the grid');
   });
 
   // A near date must cost strictly more than a distant one, or the whole
@@ -980,8 +1015,9 @@ test('URGENCY: every upcoming day prices its own notice, from the domain', async
     .find((n) => /Prioritaire/.test(n.textContent));
   assert.ok(key, 'the legend keys each tier');
   const legendMult = ctx.D.tierMultiplier('prioritaire', ctx.Nota.state.monthBids);
-  const legendLabel = String(Math.round(legendMult * 10) / 10).replace('.', ',') + '×';
-  assert.ok(key.textContent.includes(legendLabel), 'with its (tuned) multiplier, not just a name');
+  const legendSvc = ctx.D.serviceById(ctx.D.DEFAULT_SERVICE_ID);
+  const legendLabel = 'dès ' + ctx.D.money(Math.round(legendSvc.prixDepart * legendMult));
+  assert.ok(key.textContent.includes(legendLabel), 'with its (tuned) price in dollars, not just a name');
 });
 
 
@@ -993,7 +1029,11 @@ test('LEGEND: the service key decodes the price colours, and says where detail l
   const txt = note.textContent;
   assert.match(txt, /meilleure offre encore ouverte/, 'names what the figure is');
   assert.match(txt, /couleur/, 'points at the service key above it');
-  assert.match(txt, /multiple du prix de départ/, 'says what the multiplier means');
+  assert.match(txt, /prix indicatif/, 'says what the « dès » price means');
+  // The urgency sentence lives ONLY in the day dialog, where the date is being
+  // chosen — repeating it under the grid was the same lecture twice per screen.
+  assert.ok(!/Plus la date est proche/.test(txt), 'no urgency lecture duplicated in the legend');
+  assert.ok(!txt.includes('×'), 'no multiplier jargon');
   // The percentage it used to explain is no longer on the compact surface.
   assert.ok(!/chances d’obtenir/.test(txt), 'no longer explains an odds percentage');
 
@@ -1017,9 +1057,10 @@ test('DAY: the booking dialog says what the calendar % means for that date', asy
   const expected = ctx.D.obtainChance(iso, ctx.today);
   assert.ok(line.textContent.includes(expected + '\u00A0%'),
     'quotes the domain value for THIS date (' + expected + ' %): ' + line.textContent);
-  const days = ctx.D.daysBetween(ctx.today, iso);
-  const when = days === 1 ? 'demain' : 'dans ' + days + ' jours';
-  assert.ok(line.textContent.includes(when), 'and states the lead time driving it (' + when + ')');
+  assert.match(line.textContent, /Plus la date est proche, plus il faut offrir et moins un notaire est disponible\./,
+    'the one urgency sentence lives here, at the decision point');
+  // The lead time is already printed in #day-sub right above \u2014 not repeated here.
+  assert.ok(!/La date est/.test(line.textContent), 'no duplicate lead-time sentence');
   // The odds live ONLY here now, where the sentence says what drives them — the
   // compact cell shows prices instead, which need no explaining.
   assert.equal(cell.querySelector('.cal-chance'), null, 'no unexplained % on the cell');
@@ -1031,7 +1072,7 @@ test('DAY: opens on the domain default act, showing only its best offer + totals
   await reseed(ctx, [
     { id: 'r1', serviceId: 'refinancement', dateISO: iso, montant: 4000, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
     { id: 'r2', serviceId: 'refinancement', dateISO: iso, montant: 2500, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
-    { id: 't1', serviceId: 'testament', dateISO: iso, montant: 9000, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
+    { id: 't1', serviceId: 'financement', dateISO: iso, montant: 9000, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
   ]);
   const cell = ctx.doc.querySelector('.cal-cell[data-date="' + iso + '"]');
   cell.click();
@@ -1056,31 +1097,96 @@ test('DAY: opens on the domain default act, showing only its best offer + totals
   assert.match(count, /3 offres ce jour/, 'and the whole day');
 });
 
+test('DAY: when the selected act holds the whole day, the totals are said once', async () => {
+  const ctx = await boot();
+  const iso = ctx.D.addDays(ctx.today, 5);
+  await reseed(ctx, [
+    { id: 'r1', serviceId: 'refinancement', dateISO: iso, montant: 4000, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
+  ]);
+  ctx.doc.querySelector('.cal-cell[data-date="' + iso + '"]').click();
+  await wait(30);
+  const count = ctx.doc.querySelector('#day-bids .day-bids-count').textContent;
+  assert.match(count, /1 offre en refinancement/, 'counts the act');
+  assert.ok(!/tous actes confondus/.test(count),
+    'no "all acts combined" segment when it would repeat the same number: ' + count);
+});
+
 test('DAY: switching the act re-scopes the headline offer and the totals', async () => {
   const ctx = await boot();
   const iso = ctx.D.addDays(ctx.today, 5);
   await reseed(ctx, [
     { id: 'r1', serviceId: 'refinancement', dateISO: iso, montant: 4000, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
-    { id: 't1', serviceId: 'testament', dateISO: iso, montant: 9000, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
-  ]);
+    { id: 'f1', serviceId: 'financement', dateISO: iso, montant: 9000, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
+  ], 'refinancement');
   ctx.doc.querySelector('.cal-cell[data-date="' + iso + '"]').click();
   await wait(30);
   assert.equal($(ctx.doc, 'day-best').textContent, ctx.D.money(4000));
 
-  ctx.doc.querySelector('#o-service-chips .chip[data-svc="testament"]').click();
+  ctx.doc.querySelector('#o-service-chips .chip[data-svc="financement"]').click();
   await wait(30);
   const rows = ctx.doc.querySelectorAll('#day-bids > .bid-row');
   assert.equal(rows.length, 1, 'still a single headline offer');
-  assert.equal($(ctx.doc, 'day-best').textContent, ctx.D.money(9000), 'now the testament best');
-  assert.match($(ctx.doc, 'day-hint').textContent, /9\s*000/, 'the bar to clear follows too');
+  assert.equal($(ctx.doc, 'day-best').textContent, ctx.D.money(9000), 'now the financement best');
+  assert.equal($(ctx.doc, 'day-best').closest('.day-market-line').hidden, false,
+    'a real bar to clear keeps the market line visible');
+  assert.match($(ctx.doc, 'day-beat').textContent, /9\s*000/, 'the one-tap match follows too');
+});
 
-  // An act with nothing on the day says so rather than showing another act's offer.
-  ctx.doc.querySelector('#o-service-chips .chip[data-svc="procuration"]').click();
+test('DAY: an act with nothing on the day hides the bar and invites the first offer', async () => {
+  const ctx = await boot();
+  const iso = ctx.D.addDays(ctx.today, 5);
+  // Two refinancement offers hold the day; financement has nothing.
+  await reseed(ctx, [
+    { id: 'r1', serviceId: 'refinancement', dateISO: iso, montant: 4000, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
+    { id: 'r2', serviceId: 'refinancement', dateISO: iso, montant: 3000, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
+  ]);
+  ctx.doc.querySelector('.cal-cell[data-date="' + iso + '"]').click();
+  await wait(30);
+  ctx.doc.querySelector('#o-service-chips .chip[data-svc="financement"]').click();
   await wait(30);
   assert.equal(ctx.doc.querySelectorAll('#day-bids > .bid-row').length, 0);
-  assert.equal($(ctx.doc, 'day-best').textContent, 'Libre');
+  // No open offer → the market line disappears entirely. Every date is open
+  // by definition, so a « Libre » badge carried no information — the hint
+  // below owns the empty state.
+  assert.equal($(ctx.doc, 'day-best').closest('.day-market-line').hidden, true,
+    'no bar to clear → no market line');
   assert.match($(ctx.doc, 'day-hint').textContent, /Soyez le premier/);
-  assert.match(ctx.doc.querySelector('#day-bids .day-bids-count').textContent, /Aucune offre en procuration/);
+  // The empty-act fact is said ONCE, in #day-hint. The totals strip keeps only
+  // what adds context — the all-acts figure — never an "Aucune offre en
+  // financement" echo of the sentence right above it.
+  const count = ctx.doc.querySelector('#day-bids .day-bids-count');
+  assert.ok(count, 'the all-acts total still gives context (the other act holds the day)');
+  assert.ok(!/Aucune offre/.test(count.textContent),
+    'the empty-act message is not repeated in the totals: ' + count.textContent);
+  assert.match(count.textContent, /2 offres ce jour, tous actes confondus/);
+});
+
+test('DAY: an empty day says it once — the lead time up top, the invitation in the hint', async () => {
+  const ctx = await boot();
+  const iso = ctx.D.addDays(ctx.today, 5);
+  await reseed(ctx, []);
+  ctx.doc.querySelector('.cal-cell[data-date="' + iso + '"]').click();
+  await wait(30);
+
+  // #day-sub no longer editorializes: with zero offers it states the lead time
+  // only, capitalized ("Dans 5 jours" / "Aujourd’hui") — a fact, not a pitch.
+  const days = ctx.D.daysBetween(ctx.today, iso);
+  assert.equal($(ctx.doc, 'day-sub').textContent, 'Dans ' + days + ' jours',
+    'the subtitle is just the capitalized lead time');
+  assert.ok(!/aucune offre/i.test($(ctx.doc, 'day-sub').textContent), 'no empty-state in the subtitle');
+  assert.ok(!/soyez le premier/i.test($(ctx.doc, 'day-sub').textContent), 'no invitation in the subtitle');
+
+  // The one "be the first" sentence lives in #day-hint, at the decision point.
+  assert.match($(ctx.doc, 'day-hint').textContent,
+    /Aucune offre en .+ pour cette date\. Soyez le premier/);
+  // Zero offers for the act AND zero for the day: a totals strip would carry
+  // no information at all, so it is not rendered.
+  assert.equal(ctx.doc.querySelector('#day-bids .day-bids-count'), null,
+    'no totals strip on a day with nothing to count');
+  // The whole dialog states the empty day exactly once.
+  const dlgTxt = $(ctx.doc, 'day-dialog').textContent;
+  assert.equal((dlgTxt.match(/Aucune offre/g) || []).length, 1,
+    'the empty state is said exactly once in the dialog');
 });
 
 test('DAY: each act chip carries its own offre à battre for the date', async () => {
@@ -1089,15 +1195,15 @@ test('DAY: each act chip carries its own offre à battre for the date', async ()
   await reseed(ctx, [
     { id: 'r1', serviceId: 'refinancement', dateISO: iso, montant: 4000, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
     { id: 'r2', serviceId: 'refinancement', dateISO: iso, montant: 6000, tier: 'standard', status: ctx.D.STATUS.RETENUE, anonyme: true, createdAt: iso },
-    { id: 't1', serviceId: 'testament', dateISO: iso, montant: 9000, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
-  ]);
+  ], 'refinancement');
   ctx.doc.querySelector('.cal-cell[data-date="' + iso + '"]').click();
   await wait(30);
   const sub = (svc) => ctx.doc.querySelector('#o-service-chips .chip[data-svc="' + svc + '"] .chip-svc-sub').textContent;
   // Open offers only: the retained 6000 must not raise the refinancement bar.
   assert.match(sub('refinancement'), /4\s*000/);
-  assert.match(sub('testament'), /9\s*000/);
-  assert.equal(sub('procuration'), 'libre');
+  // No open offer → empty sub (the CSS :empty rule hides it). Every act is
+  // always bookable, so « libre » said nothing — only an amount is a fact.
+  assert.equal(sub('financement'), '');
 });
 
 test('DAY: « Passer devant » lifts the offer just above the act’s best', async () => {
@@ -1110,30 +1216,36 @@ test('DAY: « Passer devant » lifts the offer just above the act’s best', asy
   await wait(30);
   const amt = $(ctx.doc, 'o-amount');
   const btn = $(ctx.doc, 'day-beat');
-  // Trail the bar on purpose: the shortcut shows and the hint names the bar.
+  // Trail the bar on purpose: the one-tap shortcut shows and names the bar.
+  // The hint stays EMPTY while trailing — the headline right above already
+  // prints the reference, so a sentence restating it was pure duplication.
   amt.value = amt.min; fire(ctx.win, amt, 'input');
   assert.equal(btn.hidden, false, 'the shortcut shows while the offer trails');
-  assert.match($(ctx.doc, 'day-hint').textContent, /4\s*000/);
+  assert.match(btn.textContent, /4\s*000/, 'the shortcut names the reference');
+  assert.equal($(ctx.doc, 'day-hint').textContent, '', 'no sentence duplicating the headline');
   btn.click();
-  assert.ok(Number(amt.value) > 4000, 'one tap clears the bar');
+  assert.ok(Number(amt.value) >= 4000, 'one tap matches the reference');
   assert.equal(btn.hidden, true, 'nothing left to beat');
-  assert.match($(ctx.doc, 'day-hint').textContent, /passe devant/i);
+  assert.match($(ctx.doc, 'day-hint').textContent, /au niveau/i);
 });
 
-test('DAY: an act whose only offer is already retained still reads « Libre »', async () => {
+test('DAY: an act whose only offer is already retained hides the bar and says why', async () => {
   const ctx = await boot();
   const iso = ctx.D.addDays(ctx.today, 5);
   await reseed(ctx, [
-    { id: 'p1', serviceId: 'procuration', dateISO: iso, montant: 5000, tier: 'standard', status: ctx.D.STATUS.RETENUE, anonyme: true, createdAt: iso },
+    { id: 'f1', serviceId: 'financement', dateISO: iso, montant: 5000, tier: 'standard', status: ctx.D.STATUS.RETENUE, anonyme: true, createdAt: iso },
   ]);
   ctx.doc.querySelector('.cal-cell[data-date="' + iso + '"]').click();
   await wait(30);
-  ctx.doc.querySelector('#o-service-chips .chip[data-svc="procuration"]').click();
+  ctx.doc.querySelector('#o-service-chips .chip[data-svc="financement"]').click();
   await wait(30);
-  // No OPEN offer to beat — but the reason differs from an empty day, and the
-  // copy says so: the existing offer is already retained.
-  assert.equal($(ctx.doc, 'day-best').textContent, 'Libre');
-  assert.match($(ctx.doc, 'day-hint').textContent, /retenue/);
+  // No OPEN offer to beat → no market line at all (« libre » is the default
+  // state of every date, not a fact) — but the reason differs from an empty
+  // day, and the hint says so: the existing offer is already retained.
+  assert.equal($(ctx.doc, 'day-best').closest('.day-market-line').hidden, true);
+  assert.match($(ctx.doc, 'day-hint').textContent, /retenue — fixez votre prix\./);
+  assert.ok(!/\blibre\b/i.test($(ctx.doc, 'day-dialog').textContent),
+    'the word « libre » is gone from the booking dialog');
   assert.equal($(ctx.doc, 'day-beat').hidden, true);
 });
 
@@ -1170,18 +1282,13 @@ test('POSTAL: the sector field normalizes as you type and previews what is publi
   assert.equal(prev.textContent, '');
 });
 
-test('COMING SOON: both audiences are told the act will be doable fully online', async () => {
+test('no future-feature advertising inside the working flows', async () => {
   const { doc } = await boot();
-  const client = doc.querySelector('.soon-online');
-  assert.ok(client, 'the booking flow carries the notice');
-  assert.match(client.textContent, /Bientôt/, 'it is labelled as not yet available');
-  assert.match(client.textContent, /entièrement en ligne/);
-  assert.ok(doc.getElementById('offer-submit'), 'and it sits with the publish action');
-
-  const notary = doc.getElementById('notary-phase2-note');
-  assert.ok(notary, 'the notary side carries it too');
-  assert.match(notary.textContent, /Bientôt/);
-  assert.match(notary.textContent, /en ligne/);
+  // The booking form and the notary gate sell what exists today; roadmap
+  // notices ("Bientôt…") in the middle of a flow only distract from the action.
+  assert.equal(doc.querySelector('.soon-online'), null, 'no notice inside the booking flow');
+  assert.equal(doc.getElementById('notary-phase2-note'), null, 'no notice under the notary gate');
+  assert.ok(doc.getElementById('offer-submit'), 'the publish action stands alone');
 });
 
 
@@ -1189,8 +1296,8 @@ test('EDGE (UI): a mixed open/retained day stays available with the open average
   const ctx = await boot();
   const iso = ctx.D.addDays(ctx.today, 2); // future date (past cells are blanked)
   await reseed(ctx, [
-    { id: 'o1', serviceId: 'testament', dateISO: iso, montant: 1400, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
-    { id: 'r2', serviceId: 'testament', dateISO: iso, montant: 1300, tier: 'standard', status: ctx.D.STATUS.RETENUE, etude: 'Étude X', anonyme: true, createdAt: iso },
+    { id: 'o1', serviceId: 'financement', dateISO: iso, montant: 1400, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
+    { id: 'r2', serviceId: 'financement', dateISO: iso, montant: 1300, tier: 'standard', status: ctx.D.STATUS.RETENUE, etude: 'Étude X', anonyme: true, createdAt: iso },
   ]);
   const cell = ctx.doc.querySelector('.cal-cell[data-date="' + iso + '"]');
   assert.ok(cell.classList.contains('is-avail'), 'mixed day still has an open offer -> available');
@@ -1218,15 +1325,15 @@ test('the hero pulse shows the month median per service and filters the carnet',
     id, serviceId, dateISO: iso, montant, tier: 'standard',
     status: status || ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso,
   });
-  // testament: 1400 / 1800 / 2600 -> median 1800, one of them retained.
-  // procuration: a single 400 offer — LEGACY data under today's 750 floor, so
+  // financement: 1400 / 1800 / 2600 -> median 1800, one of them retained.
+  // refinancement: a single 400 offer — LEGACY data under today's floor, so
   // its médiane must clamp up to the floor (never reading below the "à partir
-  // de" beside it). refinancement: none this month.
+  // de" beside it).
   await reseed(ctx, [
-    mk('t1', 'testament', 1400),
-    mk('t2', 'testament', 1800, ctx.D.STATUS.RETENUE),
-    mk('t3', 'testament', 2600),
-    mk('p1', 'procuration', 400),
+    mk('t1', 'financement', 1400),
+    mk('t2', 'financement', 1800, ctx.D.STATUS.RETENUE),
+    mk('t3', 'financement', 2600),
+    mk('p1', 'refinancement', 400),
   ]);
 
   const rows = [...ctx.doc.querySelectorAll('#pulse-rows .pulse-row')];
@@ -1243,23 +1350,16 @@ test('the hero pulse shows the month median per service and filters the carnet',
   const floorOf = (id) => ctx.D.money(ctx.D.serviceById(id).prixDepart);
 
   // The median (not the mean: 1933) is what a client is shown.
-  assert.deepEqual(figs(byId.testament), [
-    ['à partir de', floorOf('testament')],
+  assert.deepEqual(figs(byId.financement), [
+    ['à partir de', floorOf('financement')],
     ['médiane', ctx.D.money(1800)],
   ]);
-  assert.match(byId.testament.querySelector('.pulse-meta').textContent, /3 offres · 1 retenue$/);
+  assert.match(byId.financement.querySelector('.pulse-meta').textContent, /3 offres · 1 retenue$/);
   // Below-floor history never shows a médiane under the floor beside it.
-  assert.deepEqual(figs(byId.procuration), [
-    ['à partir de', floorOf('procuration')],
-    ['médiane', floorOf('procuration')],
+  assert.deepEqual(figs(byId.refinancement), [
+    ['à partir de', floorOf('refinancement')],
+    ['médiane', floorOf('refinancement')],
   ]);
-
-  // An act with no offer this month still shows its floor; the median is simply
-  // absent rather than the floor masquerading as a market fact.
-  const refi = byId.refinancement;
-  assert.deepEqual(figs(refi), [['à partir de', floorOf('refinancement')], ['médiane', '—']]);
-  assert.ok(refi.querySelectorAll('.pulse-fig-v')[1].classList.contains('is-empty'));
-  assert.match(refi.querySelector('.pulse-meta').textContent, /aucune offre/);
 
   // The foot line was removed — the rows carry the whole story; nothing may
   // resurrect it below the pulse.
@@ -1267,15 +1367,15 @@ test('the hero pulse shows the month median per service and filters the carnet',
   assert.match(ctx.doc.getElementById('pulse-month').textContent, /\d{4}$/, 'names the displayed month');
 
   // Clicking a row filters the carnet to that service, and syncs the chip group.
-  byId.procuration.click();
+  byId.refinancement.click();
   await wait(30);
   assert.equal(ctx.doc.getElementById('result-count').textContent, '1 offre au carnet');
-  assert.equal(ctx.doc.querySelector('#chips-service .chip[data-svc="procuration"]').getAttribute('aria-pressed'), 'true');
-  const onRow = ctx.doc.querySelector('#pulse-rows .pulse-row[data-svc="procuration"]');
+  assert.equal(ctx.doc.querySelector('#chips-service .chip[data-svc="refinancement"]').getAttribute('aria-pressed'), 'true');
+  const onRow = ctx.doc.querySelector('#pulse-rows .pulse-row[data-svc="refinancement"]');
   assert.equal(onRow.getAttribute('aria-pressed'), 'true');
   // The pulse itself keeps reading the WHOLE month — it is the reference, not a result.
   assert.equal(
-    ctx.doc.querySelectorAll('#pulse-rows .pulse-row[data-svc="testament"] .pulse-fig-v')[1].textContent,
+    ctx.doc.querySelectorAll('#pulse-rows .pulse-row[data-svc="financement"] .pulse-fig-v')[1].textContent,
     ctx.D.money(1800),
   );
 
@@ -1285,6 +1385,14 @@ test('the hero pulse shows the month median per service and filters the carnet',
   await wait(30);
   assert.equal(ctx.doc.getElementById('result-count').textContent, '3 offres au carnet');
   assert.equal(ctx.doc.querySelector('#chips-service .chip[data-svc=""]').getAttribute('aria-pressed'), 'true');
+
+  // An act with no offer this month still shows its floor; the median is simply
+  // absent rather than the floor masquerading as a market fact.
+  await reseed(ctx, [mk('f9', 'financement', 2600)]);
+  const refi = ctx.doc.querySelector('#pulse-rows .pulse-row[data-svc="refinancement"]');
+  assert.deepEqual(figs(refi), [['à partir de', floorOf('refinancement')], ['médiane', '—']]);
+  assert.ok(refi.querySelectorAll('.pulse-fig-v')[1].classList.contains('is-empty'));
+  assert.match(refi.querySelector('.pulse-meta').textContent, /aucune offre/);
 });
 
 
@@ -1292,11 +1400,14 @@ test('each pulse row has a book button that opens the dialog on that service', a
   const ctx = await boot();
   const iso = dayOf(ctx.anchor, '15');
   await reseed(ctx, [{
-    id: 'a1', serviceId: 'testament', dateISO: iso, montant: 900,
+    id: 'a1', serviceId: 'financement', dateISO: iso, montant: 900,
     tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso,
   }]);
   ctx.Nota.selectDate(iso);
-  const item = ctx.doc.querySelector('.pulse-item .mini-reserver');
+  // The financement row's own button — the NON-default act, so the preselect
+  // assertion below proves the button carries its act rather than the default.
+  const item = ctx.doc.querySelector('.pulse-row[data-svc="financement"]')
+    .parentElement.querySelector('.mini-reserver');
   assert.ok(item, 'the book button sits beside the filter row, not inside it');
   // A button may never nest in a button — the filter row IS a button.
   assert.equal(ctx.doc.querySelector('.pulse-row button'), null);
@@ -1304,8 +1415,8 @@ test('each pulse row has a book button that opens the dialog on that service', a
   item.click();
   await wait(30);
   assert.ok(ctx.doc.getElementById('day-dialog').open, 'the booking dialog opened');
-  assert.equal(ctx.Nota.state.filters.service, 'testament', 'preselected the act it was clicked from');
-  assert.equal(ctx.doc.getElementById('o-service').value, 'testament');
+  assert.equal(ctx.Nota.state.filters.service, 'financement', 'preselected the act it was clicked from');
+  assert.equal(ctx.doc.getElementById('o-service').value, 'financement');
 });
 
 test('the footer exposes the domain contact email, and no phone until one exists', async () => {
@@ -1365,7 +1476,7 @@ test('account menu shows the anonymous sign-in invitation by default', async () 
 test('clientSignOut clears the device-local identity and offer history', async () => {
   const { win, Nota } = await boot();
   win.localStorage.setItem('nota.profile.v1', JSON.stringify({ courriel: 'client@example.ca' }));
-  win.localStorage.setItem('nota.myoffers.v1', JSON.stringify([{ id: 'o1', dateISO: todayISO(), serviceId: 'testament', montant: 900 }]));
+  win.localStorage.setItem('nota.myoffers.v1', JSON.stringify([{ id: 'o1', dateISO: todayISO(), serviceId: 'financement', montant: 900 }]));
   win.confirm = () => true; // approve the "forget me on this device" guard
   assert.equal(Nota.account.role(), 'client');
   Nota.account.signOut();
@@ -1439,7 +1550,7 @@ test('onboarding: choosing the notary role renders its 3 steps + CTA, and back r
   const { doc } = await boot();
   doc.querySelector('#onb-view-role .onb-choice[data-role="notary"]').click();
   const titles = all(doc, '#onb-steps .onb-step .onb-step-t').map((n) => n.textContent);
-  assert.deepEqual(titles, ['Voyez les demandes ouvertes', 'Retenez celle qui vous convient', 'Complétez l’acte']);
+  assert.deepEqual(titles, ['Voyez les demandes ouvertes', 'Retenez — ou négociez', 'Complétez l’acte']);
   assert.equal($(doc, 'onb-cta').textContent, 'Voir les demandes →');
   // "← Changer" swaps back to the role choice.
   $(doc, 'onb-back').click();
@@ -1610,6 +1721,23 @@ test('onboarding: labelling, progress and focus follow the active view', async (
   assert.equal(dlg.getAttribute('data-role'), null, 'the parked role is cleared on back');
 });
 
+// 34b. The role choice is ONE question. The animated vignettes are step-2 sales
+//      material — on VIEW 1 nothing competes with the two cards (whose live
+//      proof lines already carry the market).
+test('onboarding: no vignette competes with the role choice', async () => {
+  const { doc } = await boot();
+  assert.equal($(doc, 'onboarding-dialog').open, true, 'the guide greets a first visit');
+  assert.equal($(doc, 'ob-week').hidden, true, 'the week board waits for the notary steps');
+  assert.equal($(doc, 'ob-bid').hidden, true, 'the bid vignette waits for the client steps');
+  doc.querySelector('#onb-view-role .onb-choice[data-role="client"]').click();
+  assert.equal($(doc, 'ob-bid').hidden, false, 'the client steps play one bid out');
+  $(doc, 'onb-back').click();
+  assert.equal($(doc, 'ob-week').hidden, true, 'back to the one question — no board');
+  assert.equal($(doc, 'ob-bid').hidden, true, 'and no bid vignette either');
+  doc.querySelector('#onb-view-role .onb-choice[data-role="notary"]').click();
+  assert.equal($(doc, 'ob-week').hidden, false, 'the notary steps show the week paying out');
+});
+
 // 35. A second, softer exit: look around the carnet without being thrown into a
 //     modal. The old client CTA chained straight into the day dialog.
 test('onboarding: the secondary CTA lands on the carnet without opening a modal', async () => {
@@ -1648,6 +1776,59 @@ test('onboarding: survives a localStorage that refuses to write', async () => {
   $(doc, 'onb-skip').click();
   assert.equal($(doc, 'onboarding-dialog').open, false, 'dismissal still works');
   assert.equal(win.Nota.onboarding.seen(), true, 'and is remembered in memory for this session');
+});
+
+// 39. The role choice is skippable in one explicit click — "Passer" must not
+//     live only behind the second view.
+test('onboarding: VIEW 1 carries the explicit "Passer" exit and it flags onboarded', async () => {
+  const { doc, win } = await boot();
+  assert.equal($(doc, 'onb-view-role').hidden, false, 'at the role choice');
+  const skip = $(doc, 'onb-skip');
+  let vis = true;
+  for (let n = skip; n; n = n.parentElement) if (n.hidden) vis = false;
+  assert.equal(vis, true, 'Passer is visible on the role view');
+  skip.click();
+  assert.equal(win.localStorage.getItem('nota.onboarded.v1'), '1', 'an explicit skip decides');
+  assert.equal($(doc, 'onboarding-dialog').open, false);
+});
+
+// 40. A shared deep link is a destination, not a first visit: never interrupt it.
+test('onboarding: does not auto-show over a deep link (t= or jour=)', async () => {
+  const day = await bootSeeded({}, '#jour=' + todayISO());
+  assert.equal($(day.doc, 'onboarding-dialog').open, false, 'a day link is not interrupted');
+  const pane = await bootSeeded({}, '#t=notaires');
+  assert.equal($(pane.doc, 'onboarding-dialog').open, false, 'a pane link is not interrupted');
+  const plain = await bootSeeded({}, '');
+  assert.equal($(plain.doc, 'onboarding-dialog').open, true, 'a plain first visit still is greeted');
+});
+
+// 41. A device that already published an offer has been onboarded by reality.
+test('onboarding: does not auto-show for a visitor with published offers', async () => {
+  const offer = { id: 'ob1', dateISO: todayISO(), serviceId: 'financement', montant: 1400 };
+  const { doc } = await bootSeeded({ 'nota.myoffers.v1': JSON.stringify([offer]) });
+  assert.equal($(doc, 'onboarding-dialog').open, false);
+});
+
+// 42. The role cards carry live proof from the carnet, not just copy: real
+//     counts for the client, real money for the notary.
+test('onboarding: role cards show live market lines once the month is loaded', async () => {
+  const { doc } = await boot();
+  const client = doc.querySelector('.onb-choice[data-role="client"] .onb-choice-live');
+  const notary = doc.querySelector('.onb-choice[data-role="notary"] .onb-choice-live');
+  assert.ok(client && notary, 'both cards carry a live line');
+  assert.match(client.textContent, /\d/, 'the client line carries a real count');
+  assert.match(notary.textContent, /\$/, 'the notary line carries real money');
+});
+
+// 43. "Explorer d'abord" follows the chosen role: a notary explores the open
+//     demands, not the client carnet.
+test('onboarding: the notary secondary CTA lands on the notaires pane', async () => {
+  const { doc, Nota } = await boot();
+  doc.querySelector('#onb-view-role .onb-choice[data-role="notary"]').click();
+  assert.equal($(doc, 'onb-alt').textContent, 'Explorer les demandes d’abord');
+  $(doc, 'onb-alt').click();
+  assert.equal(Nota.state.tab, 'notaires', 'a notary explores the demands');
+  assert.equal($(doc, 'day-dialog').open, false);
 });
 
 // 38. Client sign-in fires a fire-and-forget welcome email (POST /client/welcome).
@@ -1715,7 +1896,7 @@ function heavyBids(D, anchor, days) {
 
 test('no data: the calendar still renders a full month and claims nothing', async () => {
   const ctx = await boot();
-  await reseed(ctx, [], 'testament');
+  await reseed(ctx, [], 'financement');
   // Wholly-past week rows are dropped on purpose, so a month is not 28+ cells.
   // What must hold is that every remaining day of the month has one.
   const cells = all(ctx.doc, '#cal-grid .cal-cell');
@@ -1743,7 +1924,7 @@ test('lots of data: every cell stays inside the shape the narrow layouts assume'
   const D = ctx.D;
   const anchor = firstOfMonth(todayISO());
   const days = daysInMonthUTC(anchor);
-  await reseed(ctx, heavyBids(D, anchor, days), 'testament');
+  await reseed(ctx, heavyBids(D, anchor, days), 'financement');
 
   const cells = all(ctx.doc, '#cal-grid .cal-cell').filter((c) => !c.classList.contains('is-out'));
   const remaining = daysInMonthUTC(anchor) - Number(todayISO().slice(8)) + 1;
@@ -1859,11 +2040,13 @@ test('header tabs: roving tabindex and arrow-key activation', async () => {
   assert.equal(tabs[0].tabIndex, -1);
   assert.equal(doc.activeElement, tabs[1], 'focus follows the activation');
 
-  key(win, tabs[1], 'ArrowRight'); // wraps around
+  key(win, tabs[1], 'ArrowRight'); // third door
+  assert.equal(Nota.state.tab, 'partenaires');
+  key(win, tabs[2], 'ArrowRight'); // wraps around
   assert.equal(Nota.state.tab, 'carnet');
   key(win, tabs[0], 'End');
-  assert.equal(Nota.state.tab, 'notaires');
-  key(win, tabs[1], 'Home');
+  assert.equal(Nota.state.tab, 'partenaires');
+  key(win, tabs[2], 'Home');
   assert.equal(Nota.state.tab, 'carnet');
 
   // A pane with no header tab (profil) must not strand the tablist at -1/-1.
@@ -1988,6 +2171,78 @@ test('a future adjacent-month day moves the calendar to its own month', async ()
 // (a bare vh cap overflowed short landscape viewports), and the phone-visible
 // controls must sit on the 44px coarse-pointer floor — including the auth
 // button, whose ≤680px rule outranks the plain .btn floor on specificity.
+// Header labels never wrap to two lines: the tabs and auth buttons are nowrap,
+// and a compact band (720–899.98px) slims paddings so the full EN/FR control
+// set still fits on the single 62px row between the drawer threshold and a
+// roomy desktop.
+// Every act's categorical colour must exist in EVERY theme block — the app
+// paints `var(--svc-<id>)` dynamically, so a token missing from a dark block
+// silently falls back to the light value (or to nothing) for that act.
+test('service CSS: every act has its colour token in all three theme blocks', async () => {
+  const css = readFileSync(fileURLToPath(new URL('../public/styles.css', import.meta.url)), 'utf8');
+  const { D } = await boot();
+  for (const svc of D.SERVICES) {
+    const hits = css.match(new RegExp('--svc-' + svc.id + ':', 'g')) || [];
+    assert.ok(hits.length >= 3,
+      `--svc-${svc.id} must be defined in :root, the system-dark block and the [data-theme=dark] block (found ${hits.length})`);
+  }
+});
+
+test('header CSS: one-line labels at every width (nowrap + compact band)', () => {
+  const css = readFileSync(fileURLToPath(new URL('../public/styles.css', import.meta.url)), 'utf8');
+  assert.match(css, /\.nav-tab\s*\{[^}]*white-space:\s*nowrap/, 'tab labels never wrap');
+  assert.match(css, /\.header-auth \.btn\s*\{\s*white-space:\s*nowrap/, 'auth labels never wrap');
+  assert.match(css, /@media \(min-width: 720px\) and \(max-width: 899\.98px\)/, 'the compact band exists');
+});
+
+// A pulse amount is a PRICE: it may never shrink, clip or ellipsize. The hero
+// stacks to one column (≤767.98px) before any viewport can squeeze the figures
+// into the volume bar or into each other.
+test('pulse CSS: amounts never ellipsize; the hero stacks before they could jam', () => {
+  const css = readFileSync(fileURLToPath(new URL('../public/styles.css', import.meta.url)), 'utf8');
+  assert.ok(!/\.pulse-fig-v\s*\{[^}]*text-overflow:\s*ellipsis/.test(css),
+    'no ellipsis on a price figure');
+  assert.ok(!/\.pulse-figs[^{]*\{[^}]*min-width:\s*0/.test(css) &&
+    !/min-width:\s*0[^}]*\}[^.]*\.pulse-figs/.test(css.match(/\.pulse-item[^;]*;/)?.[0] || ''),
+    'the figures keep their min-content floor');
+  const at = css.indexOf('@media (max-width: 767.98px)');
+  assert.ok(at !== -1, 'the hero stacking threshold sits at 768');
+  let i = css.indexOf('{', at), depth = 0, block = '';
+  for (let j = i; j < css.length; j++) {
+    if (css[j] === '{') depth++;
+    else if (css[j] === '}' && --depth === 0) { block = css.slice(i, j + 1); break; }
+  }
+  assert.match(block, /\.intro--hero\s*\{[^}]*grid-template-columns:\s*1fr/, 'the hero stacks inside it');
+});
+
+// On card layouts (≤860px) the status pill owns a full row and may wrap:
+// pinned beside the act name, its 200px nowrap label pushed the card past a
+// 320px screen. The label itself stays untouched — plain words, never cut.
+test('my-offers CSS: the status pill gets its own wrapping row on cards', () => {
+  const css = readFileSync(fileURLToPath(new URL('../public/styles.css', import.meta.url)), 'utf8');
+  const at = css.indexOf('@media (max-width: 860px)');
+  assert.ok(at !== -1, 'the card threshold block exists');
+  let i = css.indexOf('{', at), depth = 0, block = '';
+  for (let j = i; j < css.length; j++) {
+    if (css[j] === '{') depth++;
+    else if (css[j] === '}' && --depth === 0) { block = css.slice(i, j + 1); break; }
+  }
+  assert.match(block, /'statut statut'/, 'the status area spans the card row');
+  assert.match(block, /\.my-offer-status\s*\{[^}]*white-space:\s*normal/, 'the pill may wrap instead of overflowing');
+});
+
+// The price badge used to be absolutely positioned (top-right) and printed
+// over the day number on every mid-width grid (tablet, narrow desktop). In
+// flow it can never overlap anything, at any resolution.
+test('calendar CSS: the urgency price badge flows, it is never absolutely positioned', () => {
+  const css = readFileSync(fileURLToPath(new URL('../public/styles.css', import.meta.url)), 'utf8');
+  const rules = [...css.matchAll(/\.cal-urgency[^{,]*\{[^}]*\}/g)].map((m) => m[0]);
+  assert.ok(rules.length, 'the badge is styled');
+  for (const r of rules) {
+    assert.ok(!/position:\s*absolute/.test(r), 'no absolute positioning on .cal-urgency: ' + r);
+  }
+});
+
 test('menu CSS: panel viewport cap and coarse-pointer touch floors hold', () => {
   const css = readFileSync(fileURLToPath(new URL('../public/styles.css', import.meta.url)), 'utf8');
   assert.match(css, /\.acct-panel\s*\{[^}]*max-height:\s*min\(calc\(100dvh - var\(--header-h\)/,
@@ -2008,26 +2263,21 @@ test('menu CSS: panel viewport cap and coarse-pointer touch floors hold', () => 
   assert.match(block, /\.notif-x\s*\{[^}]*44px/, 'the notification dismiss is on the 44px floor');
 });
 
-// The ≤720px hero drops the full pitch paragraph, and before this NOTHING on a
-// phone said what Nota actually is — the h1 and two buttons assumed you knew.
-// A one-line tagline fills that gap on phones only; desktop keeps the full
-// paragraph and never shows both.
-test('the phone hero carries a one-line product description', async () => {
+// The hero is ONE pitch at every width: title + a single tagline + the two
+// CTAs. The old desktop paragraph and the numbered step list said the same
+// thing the tagline (and the guide dialog) already say.
+test('the hero carries one product description, shown at every width', async () => {
   const { doc } = await boot();
   const tag = doc.querySelector('#pane-carnet .intro--hero .hero-tagline');
   assert.ok(tag, 'the hero has a tagline');
   assert.ok(tag.textContent.trim().length >= 40, 'it actually describes the product');
+  // The duplicates are gone: no second pitch paragraph, no inline step list.
+  assert.equal(doc.querySelector('#pane-carnet .intro--hero .hero-points'), null,
+    'the hero step list is gone (the steps live in the guide)');
+  const paras = doc.querySelectorAll('#pane-carnet .intro--hero .intro-main > p');
+  assert.equal(paras.length, 1, 'one paragraph: the tagline');
 
   const css = readFileSync(fileURLToPath(new URL('../public/styles.css', import.meta.url)), 'utf8');
-  assert.match(css, /\.hero-tagline\s*\{[^}]*display:\s*none/,
-    'hidden by default: desktop shows the full pitch instead');
-  const at = css.indexOf('@media (max-width: 719.98px)');
-  assert.ok(at !== -1, 'the hero phone threshold block exists');
-  let i = css.indexOf('{', at), depth = 0, block = '';
-  for (let j = i; j < css.length; j++) {
-    if (css[j] === '{') depth++;
-    else if (css[j] === '}' && --depth === 0) { block = css.slice(i, j + 1); break; }
-  }
-  assert.match(block, /\.hero-tagline\s*\{[^}]*display:\s*block/,
-    'shown inside the block that hides the full paragraph');
+  assert.ok(!/\.hero-tagline\s*\{[^}]*display:\s*none/.test(css),
+    'the tagline is never display:none — it is the hero copy at every width');
 });

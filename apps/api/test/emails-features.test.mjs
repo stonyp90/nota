@@ -27,6 +27,7 @@ const FEATURE_TEMPLATES = [
   'dateApproaching',
   'offerRetained',
   'dateMissedNoUptake',
+  'offerCancelled',
   // client — pay-on-accept lifecycle
   'offerAuthorized',
   'offerAuthorizationVoided',
@@ -37,12 +38,22 @@ const FEATURE_TEMPLATES = [
   'notaryActive',
   'actPaidNotary',
   'notaryDisconnectedWinback',
+  'offerCancelledNotary',
+  // contact form (nous joindre)
+  'contactRecu',
   // admin console
   'adminMagicLink',
+  // partner referrals (ADR 0011)
+  'partnerWelcome',
+  'referralRewardClient',
+  'referralRewardNotary',
   // operator alerts
   'operatorNewLead',
   'operatorNotaryActive',
   'operatorActCompleted',
+  'operatorNewPartner',
+  'operatorOfferCancelled',
+  'operatorContactMessage',
 ];
 
 test('every marketplace feature has its dedicated template in the registry', () => {
@@ -132,6 +143,47 @@ test('operatorActCompleted alerts the operator with the act line', () => {
   assert.ok(out.html.includes('1' + NB + '500' + NB + '$'));
 });
 
+// --- partner referrals (ADR 0011) --------------------------------------------
+// The amounts always come from domain.REFERRAL — a change there must flow into
+// the mails with no template edit.
+
+const domain = require('@nota/domain');
+
+test('partnerWelcome carries the shareable link, both reward amounts from the domain, and the type label', () => {
+  const out = emails.partnerWelcome({ code: 'EVEROY', type: 'courtier_hypothecaire', baseUrl: BASE, unsubscribeUrl: UNSUB });
+  assert.ok(out.subject.includes('EVEROY'));
+  const link = BASE + '/?ref=EVEROY';
+  const ctas = (out.html.match(new RegExp('href="' + link.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '"', 'g')) || []).length;
+  assert.ok(ctas >= 2, 'both language CTAs must point at the ?ref link');
+  assert.ok(out.text.includes(link));
+  // Amounts from domain.REFERRAL via money()/moneyEn(), never literals.
+  assert.ok(out.html.includes(domain.money(domain.REFERRAL.client)), 'missing the fr client reward');
+  assert.ok(out.html.includes(domain.moneyEn(domain.REFERRAL.notaire)), 'missing the en notary reward');
+  // The partner-type label comes from the domain list.
+  assert.ok(out.html.includes('Courtier hypothécaire'));
+  assert.ok(out.html.includes('Mortgage broker'));
+});
+
+test('referralRewardClient announces the flat client reward with the retained demand line', () => {
+  const out = emails.referralRewardClient({ ...BID_CTX, code: 'EVEROY' });
+  assert.ok(out.subject.includes(domain.money(domain.REFERRAL.client)));
+  assert.ok(out.html.includes(domain.moneyEn(domain.REFERRAL.client)));
+  assert.ok(out.html.includes('Refinancement'), 'the demand line names the act');
+});
+
+test('referralRewardNotary announces the flat notary reward, once-per-notary', () => {
+  const out = emails.referralRewardNotary({ code: 'EVEROY', baseUrl: BASE, unsubscribeUrl: UNSUB });
+  assert.ok(out.subject.includes(domain.money(domain.REFERRAL.notaire)));
+  assert.ok(out.html.includes(domain.moneyEn(domain.REFERRAL.notaire)));
+});
+
+test('operatorNewPartner mirrors the operator-alert style with code, type and courriel', () => {
+  const out = emails.operatorNewPartner({ code: 'EVEROY', type: 'agent_immobilier', courriel: 'eve@agence.ca', baseUrl: BASE, unsubscribeUrl: UNSUB });
+  assert.ok(out.subject.includes('EVEROY'));
+  assert.ok(out.html.includes('Agent immobilier'));
+  assert.ok(out.html.includes('eve@agence.ca'));
+});
+
 // --- notifier wiring ---------------------------------------------------------
 
 function setup() {
@@ -143,9 +195,9 @@ function setup() {
 
 const pendingBid = (over = {}) => ({
   id: 'b1',
-  serviceId: 'testament',
+  serviceId: 'refinancement',
   dateISO: '2026-08-20',
-  montant: 1400,
+  montant: 2800,
   tier: 'rapide',
   courriel: 'client@example.ca',
   ...over,

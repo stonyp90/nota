@@ -139,6 +139,17 @@ function actPK(bidId) {
 }
 const ACT_SK = 'ACT';
 
+// --- Partner referral registry (ADR 0011) ------------------------------------
+// A professional claiming their referral code self-serve (POST /partenaires):
+// one item per code, keyed by the NORMALIZED code so uniqueness is the key
+// itself — the write-once conditional put IS the "already taken" check, no
+// Query needed. Never exposed publicly; the admin ledger joins it by GetItem.
+//   PK = PARTNER#<CODE>   SK = PARTNER
+function partnerPK(code) {
+  return 'PARTNER#' + String(code).trim().toUpperCase();
+}
+const PARTNER_SK = 'PARTNER';
+
 // --- Admin table (admin.nota.ca) ---------------------------------------------
 // Identity, revocable sessions, single-use magic-link challenges, the immutable
 // audit log and rate-limit counters live in a SEPARATE `nota-admin` table, so
@@ -219,6 +230,10 @@ module.exports = {
   DECLINE_SK,
   retainedSK,
   RETAINED_PREFIX,
+  actPK,
+  ACT_SK,
+  partnerPK,
+  PARTNER_SK,
   // analytics rollups (write-sharded day counters)
   STATS_SHARDS,
   statsGlobalPK,

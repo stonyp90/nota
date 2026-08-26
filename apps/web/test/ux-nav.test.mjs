@@ -77,7 +77,7 @@ const activePane = (doc) => {
 // ---------------------------------------------------------------------------
 
 test('client account menu carries a permanent "Mon dossier" row that opens the dossier pane', async () => {
-  const offer = { id: 'o1', dateISO: todayISO(), serviceId: 'procuration', montant: 900 };
+  const offer = { id: 'o1', dateISO: todayISO(), serviceId: 'financement', montant: 900 };
   const { doc, Nota } = await boot({
     seed: {
       'nota.profile.v1': JSON.stringify({ courriel: 'client@example.ca' }),
@@ -97,7 +97,7 @@ test('client account menu carries a permanent "Mon dossier" row that opens the d
   await wait(10);
   assert.equal(activePane(doc), 'pane-dossier');
   // The dossier opens on the service of the client's live offer, not a default.
-  assert.equal($(doc, 'd-service').value, 'procuration');
+  assert.equal($(doc, 'd-service').value, 'financement');
 });
 
 // ---------------------------------------------------------------------------
@@ -105,7 +105,7 @@ test('client account menu carries a permanent "Mon dossier" row that opens the d
 // ---------------------------------------------------------------------------
 
 test('anonymous visitor with published offers keeps the account bell and reaches "Mes offres"', async () => {
-  const offer = { id: 'o2', dateISO: todayISO(), serviceId: 'testament', montant: 1400 };
+  const offer = { id: 'o2', dateISO: todayISO(), serviceId: 'refinancement', montant: 1400 };
   const { doc, Nota } = await boot({ seed: { 'nota.myoffers.v1': JSON.stringify([offer]) } });
   Nota.account.render();
   assert.equal(Nota.account.role(), 'anon');
@@ -179,11 +179,233 @@ test('the dialog scroll lock targets the <html> scroller, not only <body>', () =
 });
 
 // ---------------------------------------------------------------------------
+// 5. Three-click reachability for every destination, for every role
+// ---------------------------------------------------------------------------
+
+const visible = (node) => {
+  for (let n = node; n; n = n.parentElement) if (n.hidden) return false;
+  return true;
+};
+
+test('the dossier has a door before any offer exists (footer link, anonymous visitor)', async () => {
+  const { doc } = await boot();
+  const link = doc.querySelector('.site-footer .goto-link[data-goto="dossier"]');
+  assert.ok(link, 'footer carries "Préparer mon dossier"');
+  link.click();
+  await wait(10);
+  assert.equal(activePane(doc), 'pane-dossier');
+});
+
+test('the notary door is named for what it is, not as a directory of notaries', async () => {
+  const { doc } = await boot();
+  assert.equal($(doc, 'tab-notaires').textContent.trim(), 'Espace notaire');
+  assert.equal(doc.querySelector('#mobile-nav [data-tab="notaires"]').textContent.trim(), 'Espace notaire');
+});
+
+test('the guide and the offer flow stay within three taps of the phone drawer', async () => {
+  // The drawer mirrors the three flat doors (ADR 0010 §2) — no guide/publish
+  // rows of its own. The guide is ONE tap from anywhere while signed out (the
+  // compact header icon); the offer flow is burger → Carnet → hero CTA.
+  const { doc } = await boot();
+  $(doc, 'nav-guide').click();
+  await wait(10);
+  assert.equal($(doc, 'onboarding-dialog').open, true, 'the guide opens from the header icon');
+  $(doc, 'onboarding-dialog').close();
+  $(doc, 'nav-burger').click();
+  await wait(10);
+  doc.querySelector('#mobile-nav .mnav-link[data-tab="carnet"]').click();
+  await wait(10);
+  assert.equal(activePane(doc), 'pane-carnet');
+  assert.equal($(doc, 'mobile-nav').classList.contains('is-open'), false, 'choosing a door closes the drawer');
+  $(doc, 'cta-reserver').click();
+  await wait(30);
+  assert.equal($(doc, 'day-dialog').open, true, 'the offer flow opens from the hero CTA');
+});
+
+test('sign-in and sign-up are different doors: sign-up opens the role choice', async () => {
+  const { doc } = await boot();
+  $(doc, 'header-signup').click();
+  await wait(10);
+  assert.equal($(doc, 'onboarding-dialog').open, true, 'S’inscrire → who are you?');
+  assert.notEqual($(doc, 'auth-dialog').open, true);
+  $(doc, 'onboarding-dialog').close();
+  $(doc, 'header-login').click();
+  await wait(10);
+  assert.equal($(doc, 'auth-dialog').open, true, 'Se connecter → courriel');
+});
+
+test('a shared day link reopens that day on boot, and Back closes it', async () => {
+  const iso = todayISO();
+  const { win, doc } = await boot({ hash: '#jour=' + iso });
+  await wait(80);
+  assert.equal($(doc, 'day-dialog').open, true, 'the day dialog is restored from the hash');
+  win.history.pushState(null, '', '#t=charte');
+  win.dispatchEvent(new win.PopStateEvent('popstate'));
+  await wait(30);
+  assert.notEqual($(doc, 'day-dialog').open, true, 'navigating history never leaves a modal orphaned');
+});
+
+test('signed-in notary: retain is within two clicks of the landing (tab → Retenir → Confirmer)', async () => {
+  const bid = { id: 'n1', serviceId: 'refinancement', dateISO: todayISO(), montant: 1400, tier: 'extreme', ready: true, missing: [] };
+  const { win, doc, Nota } = await boot({
+    seed: { 'nota.notary.token': JSON.stringify('sess.tok'), 'nota.notary.email': JSON.stringify('n@etude.ca') },
+  });
+  const calls = [];
+  win.fetch = (url, opts) => {
+    calls.push({ url: String(url), opts });
+    const json = (body) => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
+    if (String(url).includes('/notary/bids/accept')) return json({ id: 'n1', courriel: null, dossier: null });
+    if (String(url).includes('/notary/bids')) return json({ bids: [bid], retained: [] });
+    return Promise.reject(new Error('offline'));
+  };
+  await Nota.notary.loadBids();
+  $(doc, 'tab-notaires').click();
+  await wait(10);
+  assert.equal(activePane(doc), 'pane-notaires');
+  assert.ok(visible($(doc, 'notary-authed')), 'the console is already open for a restored session');
+  const acc = doc.querySelector('.nc-card[data-id="n1"] .nc-accept');
+  acc.click();
+  await wait(10);
+  assert.equal(calls.filter((c) => c.url.includes('/accept')).length, 0, 'the first click only arms');
+  doc.querySelector('.nc-card[data-id="n1"] .nc-accept').click();
+  await wait(30);
+  assert.equal(calls.filter((c) => c.url.includes('/accept')).length, 1, 'the second click retains');
+});
+
+// ---------------------------------------------------------------------------
+// 6. Three flat doors — no submenu layer anywhere (ADR 0010 §2)
+// ---------------------------------------------------------------------------
+
+test('desktop nav: exactly three flat doors, and no submenu machinery survives', async () => {
+  const { doc } = await boot();
+  const tabs = Array.from(doc.querySelectorAll('.nav-tabs .nav-tab'));
+  assert.deepEqual(tabs.map((t) => t.dataset.tab), ['carnet', 'notaires', 'partenaires'],
+    'Carnet · Espace notaire · Partenaires — in that order, nothing else');
+  // The retired chevron/submenu layer must not linger in any form.
+  assert.equal(doc.querySelector('.nav-more'), null, 'no chevron toggles');
+  assert.equal(doc.querySelector('[id^="submenu-"]'), null, 'no desktop submenus');
+  assert.equal(doc.querySelector('.mnav-more'), null, 'no drawer accordions');
+  assert.equal(doc.querySelector('#mobile-nav [id^="msub-"]:not(#msub-legal)'), null,
+    'the only drawer fold is the legal one');
+  // No "Services" door either — the catalogue lives inside the carnet.
+  assert.ok(!tabs.some((t) => /services/i.test(t.textContent)), 'no Services tab');
+});
+
+test('the Partenaires door opens the partner pane with domain-driven rewards', async () => {
+  const { win, doc } = await boot();
+  $(doc, 'tab-partenaires').click();
+  await wait(10);
+  assert.equal(activePane(doc), 'pane-partenaires');
+  const D = win.NotaDomain;
+  // The two flat amounts are ALWAYS the domain's — never markup literals.
+  assert.equal($(doc, 'pr-amount-client').textContent, D.money(D.REFERRAL.client));
+  assert.equal($(doc, 'pr-amount-notaire').textContent, D.money(D.REFERRAL.notaire));
+});
+
+test('the dossier is not a header door: reached from flows, never from the menu', async () => {
+  const { doc } = await boot();
+  // Not in the desktop tabs, not in the phone drawer sections. It stays
+  // reachable from flows: the footer test above covers the anonymous case,
+  // and the booking flow post-publish card is pinned by the smoke tests.
+  assert.equal(doc.querySelector('.nav-tabs [data-tab="dossier"]'), null);
+  assert.equal(doc.querySelector('#mobile-nav [data-tab="dossier"]'), null);
+});
+
+test('phone drawer: the trio plus auth, theme, language and the legal fold', async () => {
+  const { doc } = await boot();
+  $(doc, 'nav-burger').click();
+  await wait(10);
+  const drawer = $(doc, 'mobile-nav');
+  const doors = Array.from(drawer.querySelectorAll('.mnav-link[data-tab]'));
+  assert.deepEqual(doors.map((d) => d.dataset.tab), ['carnet', 'notaires', 'partenaires'],
+    'the drawer mirrors the three flat doors');
+  assert.ok($(doc, 'mnav-auth'), 'the auth group exists (shown while anonymous)');
+  assert.ok($(doc, 'mnav-theme'), 'theme toggle row');
+  assert.ok($(doc, 'mnav-lang'), 'language toggle row');
+  assert.ok(drawer.querySelector('.mnav-expandrow[aria-controls="msub-legal"]'), 'the one legal fold');
+  // A door click closes the drawer.
+  doors[2].click();
+  await wait(10);
+  assert.equal(activePane(doc), 'pane-partenaires');
+  assert.equal(drawer.classList.contains('is-open'), false);
+});
+
+test('phone drawer: legal links fold behind one thin expandable row', async () => {
+  const { doc } = await boot();
+  $(doc, 'nav-burger').click();
+  await wait(10);
+  const toggle = doc.querySelector('.mnav-expandrow[aria-controls="msub-legal"]');
+  assert.ok(toggle, 'one row stands in for the three legal links');
+  assert.equal($(doc, 'msub-legal').hidden, true);
+  toggle.click();
+  await wait(10);
+  assert.equal($(doc, 'msub-legal').hidden, false);
+  assert.ok($(doc, 'mobile-nav').classList.contains('is-open'), 'expanding legal keeps the drawer open');
+  doc.querySelector('#msub-legal .goto-link[data-goto="confidentialite"]').click();
+  await wait(10);
+  assert.equal(activePane(doc), 'pane-confidentialite');
+  assert.equal($(doc, 'mobile-nav').classList.contains('is-open'), false);
+});
+
+test('the header is thin: 52px desktop band, 48px phone band', () => {
+  assert.match(CSS_SRC, /--header-h:\s*52px/, 'desktop header height token');
+  assert.match(CSS_SRC, /--header-h:\s*48px/, 'phone header height token');
+});
+
+// ---------------------------------------------------------------------------
+// Header tool cluster — the loose icons regroup, and every band trims itself
+// ---------------------------------------------------------------------------
+
+test('the guide, language and theme icons share one header cluster; the burger closes the row', async () => {
+  const { doc } = await boot();
+  const tools = doc.querySelector('.site-header .header-tools');
+  assert.ok(tools, 'one .header-tools cluster instead of a scatter of icons');
+  assert.deepEqual(
+    Array.from(tools.children).map((b) => b.id),
+    ['nav-guide', 'lang-toggle', 'theme-toggle'],
+    'guide · language · theme — in that order, nothing else'
+  );
+  const wrap = doc.querySelector('.site-header .wrap');
+  assert.equal(wrap.lastElementChild.id, 'nav-burger',
+    'the burger is the last control, so the phone header reads brand → ? → avatar → burger');
+});
+
+test('each band trims the header; the drawer covers what the phone hides', () => {
+  assert.match(CSS_SRC, /\.header-tools\s*\{[^}]*border/, 'the cluster is drawn as one group');
+  assert.match(CSS_SRC, /\.icon-btn\[hidden\]\s*\{\s*display:\s*none/,
+    'a hidden icon (the signed-in guide) must actually disappear — .icon-btn sets display:grid');
+  // Tablet compact band (720–899.98) slims chrome so the full set still fits.
+  assert.match(CSS_SRC, /@media \(min-width: 720px\) and \(max-width: 899\.98px\)/);
+  // Phone: tabs, auth, theme AND the inline language toggle hand off to the
+  // drawer (#mnav-theme / #mnav-lang, pinned above) — only the "?" guide keeps
+  // its one-tap header spot while signed out.
+  const phone = CSS_SRC.slice(CSS_SRC.indexOf('@media (max-width: 719.98px)'));
+  assert.notEqual(phone.length, CSS_SRC.length, 'phone header band exists');
+  assert.match(phone, /#lang-toggle\s*\{[^}]*display:\s*none/,
+    'the inline language toggle yields to the drawer row on phones');
+});
+
+// ---------------------------------------------------------------------------
 // New menu copy stays bilingual
 // ---------------------------------------------------------------------------
 
 test('"Mon dossier" carries an English entry', () => {
   I18N.force('en');
   assert.equal(I18N.t('Mon dossier'), 'My file');
+  I18N.force('fr');
+});
+
+test('the three doors and the partner claim form carry English entries', () => {
+  I18N.force('en');
+  for (const fr of [
+    'Espace notaire',
+    'Partenaires',
+    'Référez, et soyez récompensé.',
+    'Réclamez votre code',
+    'Code souhaité',
+    'Copier le lien',
+  ]) {
+    assert.notEqual(I18N.t(fr), fr, 'missing EN entry for: ' + fr);
+  }
   I18N.force('fr');
 });

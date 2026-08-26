@@ -20,6 +20,8 @@ const {
   STATS_GAUGE_SK,
   actPK,
   ACT_SK,
+  partnerPK,
+  PARTNER_SK,
   adminPK,
   ADMIN_SK,
   adminLoginPK,
@@ -55,7 +57,7 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
   // did not inject its own document client.
   // No ScanCommand: the reminder worker now reads open bids via a GSI1 Query,
   // so this repo performs no table Scans at all.
-  const { PutCommand, GetCommand, QueryCommand, UpdateCommand } = require('@aws-sdk/lib-dynamodb');
+  const { PutCommand, GetCommand, QueryCommand, UpdateCommand, DeleteCommand } = require('@aws-sdk/lib-dynamodb');
 
   // The admin surface's identity/session/audit items live in a SEPARATE table
   // (blast-radius isolation). Only the admin Lambda passes adminTableName; the
@@ -87,7 +89,7 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
     // whole table. A retained bid omits these attributes — and because every bid
     // mutation rewrites the full item (PutCommand), retaining a bid drops it out
     // of the index automatically.
-    if (bid.status !== STATUS.RETENUE) {
+    if (bid.status !== STATUS.RETENUE && bid.status !== STATUS.ANNULEE) {
       item[GSI1_PK] = OPENBID_GSI1PK;
       item[GSI1_SK] = openBidGSI1SK(bid);
     }
@@ -130,6 +132,17 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
       return fromItem(out.Item);
     },
     async put(bid) {
+      await doc.send(new PutCommand({ TableName: tableName, Item: toItem(bid) }));
+      return bid;
+    },
+    // General overwrite of a mutated bid (propositions, demandes, dossier): a
+    // full-item PutCommand on the same composite key as put()/get(). LIMITATION:
+    // last-writer-wins — two notaries proposing on the same bid at the same
+    // instant could drop one proposition (no ConditionExpression here; moving
+    // propositions to their own items would fix it). Retention stays on the
+    // conditional retain() so the retained state itself can never be clobbered
+    // by a stale proposition write racing an accept.
+    async update(bid) {
       await doc.send(new PutCommand({ TableName: tableName, Item: toItem(bid) }));
       return bid;
     },
@@ -185,8 +198,26 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
       );
       const bid = fromItem(out.Item);
       if (!bid) return null;
+      // Never void a RETAINED bid: after a proposition accept the ORIGINAL hold
+      // is canceled (or expires), and Stripe's payment_intent.canceled webhook
+      // must not flip the live mise en relation to 'void' and hide it. The
+      // conditional Put closes the read-write race against a concurrent retain.
+      if (bid.status === STATUS.RETENUE) return null;
       const updated = { ...bid, paymentStatus: 'void', voidedAt: (patch && patch.voidedAt) || null };
-      await doc.send(new PutCommand({ TableName: tableName, Item: toItem(updated) }));
+      try {
+        await doc.send(
+          new PutCommand({
+            TableName: tableName,
+            Item: toItem(updated),
+            ConditionExpression: '#s <> :retenue',
+            ExpressionAttributeNames: { '#s': 'status' },
+            ExpressionAttributeValues: { ':retenue': STATUS.RETENUE },
+          })
+        );
+      } catch (err) {
+        if (err && err.name === 'ConditionalCheckFailedException') return null;
+        throw err;
+      }
       return updated;
     },
 
@@ -314,6 +345,13 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
         })
       );
     },
+    // A client cancelled a retained bid: the signing no longer exists, so the
+    // pointer leaves the notary's calendar feed with it.
+    async removeRetained(notaryId, event) {
+      await doc.send(
+        new DeleteCommand({ TableName: tableName, Key: { PK: notaryPK(notaryId), SK: retainedSK(event.dateISO, event.id) } })
+      );
+    },
     // One Query on the notary's partition for the SK RETAINED# range, paginated.
     async listRetainedByNotary(notaryId) {
       const events = [];
@@ -361,6 +399,39 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
       if (!out.Item) return null;
       const { PK, SK, type, ...rec } = out.Item;
       return rec;
+    },
+
+    // --- Partner referral registry (ADR 0011) -------------------------------
+    // Write-once by NORMALIZED code: the code IS the partition key, so the
+    // attribute_not_exists condition is the whole uniqueness story — claiming a
+    // taken code fails the condition and surfaces as `false` for the handler
+    // to arbitrate (same owner -> idempotent, someone else -> 409). NOTE: the
+    // usual `type: '<entity>'` discriminator attribute is deliberately absent —
+    // the partner's own field is literally named `type` (their professional
+    // category, one of REFERRAL.partners) and must round-trip unclobbered; the
+    // PARTNER sort key already discriminates the item shape.
+    async createPartner(partner) {
+      try {
+        await doc.send(
+          new PutCommand({
+            TableName: tableName,
+            Item: { PK: partnerPK(partner.code), SK: PARTNER_SK, ...partner },
+            ConditionExpression: 'attribute_not_exists(PK)',
+          })
+        );
+        return true;
+      } catch (err) {
+        if (err && err.name === 'ConditionalCheckFailedException') return false;
+        throw err;
+      }
+    },
+    async getPartner(code) {
+      const out = await doc.send(
+        new GetCommand({ TableName: tableName, Key: { PK: partnerPK(code), SK: PARTNER_SK } })
+      );
+      if (!out.Item) return null;
+      const { PK, SK, ...partner } = out.Item;
+      return partner;
     },
 
     // --- Analytics rollups (STATS#) -----------------------------------------

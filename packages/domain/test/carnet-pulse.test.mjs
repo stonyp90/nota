@@ -10,9 +10,9 @@ const TODAY = '2026-08-12';
 function bid(over) {
   return {
     id: 'b' + Math.random().toString(36).slice(2),
-    serviceId: 'testament',
+    serviceId: 'refinancement',
     dateISO: D.addDays(TODAY, 5),
-    montant: 800,
+    montant: 2400,
     status: D.STATUS.OUVERTE,
     ...over,
   };
@@ -26,7 +26,7 @@ test('carnetPulse: empty carnet reports zeros, no median, no next date', () => {
   assert.equal(p.tauxRetenue, 0);
   assert.equal(p.prochaineDispo, null);
   assert.equal(p.meilleure, null);
-  // The three services are always present so the panel keeps a stable shape.
+  // Every catalogued service is always present so the panel keeps a stable shape.
   assert.deepEqual(p.services.map((s) => s.id), D.SERVICES.map((s) => s.id));
   for (const s of p.services) {
     assert.equal(s.total, 0);
@@ -48,7 +48,7 @@ test('carnetPulse: counts split open vs retained and the retention rate', () => 
       bid({}),
       bid({}),
       bid({ status: D.STATUS.RETENUE }),
-      bid({ serviceId: 'procuration', montant: 400, status: D.STATUS.RETENUE }),
+      bid({ montant: 2900, status: D.STATUS.RETENUE }),
     ],
     TODAY,
   );
@@ -60,26 +60,26 @@ test('carnetPulse: counts split open vs retained and the retention rate', () => 
 
 test('carnetPulse: median is the middle proposed amount, averaged on an even count', () => {
   const odd = D.carnetPulse(
-    [bid({ montant: 1700 }), bid({ montant: 1900 }), bid({ montant: 3000 })],
+    [bid({ montant: 2700 }), bid({ montant: 2900 }), bid({ montant: 4000 })],
     TODAY,
   );
-  assert.equal(odd.services.find((s) => s.id === 'testament').median, 1900);
+  assert.equal(odd.services.find((s) => s.id === 'refinancement').median, 2900);
 
   const even = D.carnetPulse(
-    [bid({ montant: 1700 }), bid({ montant: 1900 }), bid({ montant: 2000 }), bid({ montant: 3000 })],
+    [bid({ montant: 2700 }), bid({ montant: 2900 }), bid({ montant: 3000 }), bid({ montant: 4000 })],
     TODAY,
   );
-  // (1900 + 2000) / 2, rounded to a whole dollar
-  assert.equal(even.services.find((s) => s.id === 'testament').median, 1950);
+  // (2900 + 3000) / 2, rounded to a whole dollar
+  assert.equal(even.services.find((s) => s.id === 'refinancement').median, 2950);
 });
 
 test('carnetPulse: retained offers count toward the median — they are what the market cleared at', () => {
   const p = D.carnetPulse(
-    [bid({ montant: 1700 }), bid({ montant: 1900, status: D.STATUS.RETENUE }), bid({ montant: 2100 })],
+    [bid({ montant: 2700 }), bid({ montant: 2900, status: D.STATUS.RETENUE }), bid({ montant: 3100 })],
     TODAY,
   );
-  const t = p.services.find((s) => s.id === 'testament');
-  assert.equal(t.median, 1900);
+  const t = p.services.find((s) => s.id === 'refinancement');
+  assert.equal(t.median, 2900);
   assert.equal(t.total, 3);
   assert.equal(t.ouvertes, 2);
 });
@@ -92,32 +92,32 @@ test('carnetPulse: a median never reads below the service price beside it', () =
     [
       bid({ montant: 700 }),
       bid({ montant: 900, status: D.STATUS.RETENUE }),
-      bid({ serviceId: 'procuration', montant: 400 }),
     ],
     TODAY,
   );
-  const t = p.services.find((s) => s.id === 'testament');
-  const pr = p.services.find((s) => s.id === 'procuration');
-  assert.equal(t.median, D.serviceById('testament').prixDepart);
-  assert.equal(pr.median, D.serviceById('procuration').prixDepart);
+  const r = p.services.find((s) => s.id === 'refinancement');
+  assert.equal(r.median, D.serviceById('refinancement').prixDepart);
   // The floor only guards the lower bound — a genuine market median above the
   // floor passes through untouched (covered by the arithmetic tests above).
 });
 
-test('carnetPulse: per-service rows carry their own counts', () => {
+test('carnetPulse: the service row carries its own counts; a retired act never gets a row', () => {
   const p = D.carnetPulse(
     [
-      bid({ serviceId: 'testament' }),
-      bid({ serviceId: 'procuration', montant: 800 }),
-      bid({ serviceId: 'procuration', montant: 1000, status: D.STATUS.RETENUE }),
+      bid({ montant: 2800 }),
+      bid({ montant: 3000, status: D.STATUS.RETENUE }),
+      // A legacy bid for a retired act (ADR 0010) is filtered, not crashed on.
+      bid({ serviceId: 'testament', montant: 1300 }),
     ],
     TODAY,
   );
-  const proc = p.services.find((s) => s.id === 'procuration');
-  assert.equal(proc.total, 2);
-  assert.equal(proc.ouvertes, 1);
-  assert.equal(proc.median, 900);
-  assert.equal(p.services.find((s) => s.id === 'refinancement').total, 0);
+  assert.deepEqual(p.services.map((s) => s.id), D.SERVICES.map((s) => s.id), 'rows mirror the catalogue');
+  const r = p.services.find((s) => s.id === 'refinancement');
+  assert.equal(r.total, 2);
+  assert.equal(r.ouvertes, 1);
+  assert.equal(r.retenues, 1);
+  assert.equal(r.median, 2900);
+  assert.equal(p.total, 2, 'the retired act’s bid is not counted anywhere');
 });
 
 test('carnetPulse: prochaineDispo is the soonest upcoming date still open', () => {

@@ -104,6 +104,11 @@ CTA button: hunter-green fill, white 16px/600 label, `14px 32px` padding
 | Dossier incomplete | `dossierIncomplete` | client | daily reminder scheduler |
 | Date approaching (J-7/3/1) | `dateApproaching` | client | daily reminder scheduler |
 | Offer retained | `offerRetained` | client | `POST /notary/bids/accept` |
+| Offer cancelled (ack) | `offerCancelled` | client | `POST /client/bid/cancel` |
+| Retained offer cancelled | `offerCancelledNotary` | notary | `POST /client/bid/cancel` (retained bid) |
+| Retained offer cancelled (operator) | `operatorOfferCancelled` | operator | `POST /client/bid/cancel` (retained bid) |
+| Contact form (ack) | `contactRecu` | sender | `POST /contact` |
+| Contact form (message) | `operatorContactMessage` | operator | `POST /contact` |
 | Date near, no uptake | `dateMissedNoUptake` | client | daily reminder scheduler |
 | Notary onboarding opened | `notaryOnboardingStarted` | notary | `POST /notaries/connect` |
 | Notary account active | `notaryActive` | notary | webhook `account.updated` (once) |

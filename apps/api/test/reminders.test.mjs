@@ -16,11 +16,11 @@ const TODAY = '2026-08-12';
 function bidAt(id, offset, over = {}) {
   return {
     id,
-    serviceId: 'testament',
+    serviceId: 'refinancement',
     dateISO: domain.addDays(TODAY, offset),
-    montant: 700,
+    montant: 2400,
     tier: domain.tierForDays(Math.max(0, offset)),
-    premium: 700 / 650,
+    premium: 2400 / 2000,
     status: 'ouverte',
     anonyme: true,
     courriel: id + '@example.ca',

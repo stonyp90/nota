@@ -49,6 +49,9 @@
   // --- Services --------------------------------------------------------------
   // Only acts with a bounded, client-assemblable intake are listed. Acte de
   // vente was removed deliberately — see docs/decisions/0003-bounded-intake.md.
+  // The catalogue is the FINANCING family: testament and procuration were
+  // retired (docs/decisions/0010-financing-first-catalogue.md) — the urgency
+  // ladder prices a deadline, and financing is the act that has one.
   // Each service carries its own document checklist and info fields, with
   // plain-language help text (fr-CA) used by both the Dossier UI and the
   // text-to-speech reader.
@@ -79,126 +82,14 @@
 
   const SERVICES = [
     {
-      id: 'testament',
-      nom: 'Testament et mandat de protection',
-      // English names for server-side consumers (emails, ICS feeds); the web
-      // app's i18n dictionary is asserted to agree with these.
-      nomEn: 'Will and protection mandate',
-      nomCourtEn: 'Will',
-      // What fits a calendar cell. The full `nom` is used wherever there is
-      // room for it (list cards, the day dialog, the legend's own key).
-      nomCourt: 'Testament',
-      // Nota starting price for the two-act bundle (will + protection mandate).
-      prixDepart: 1250,
-      description:
-        'Testament notarié et mandat de protection en cas d’inaptitude.',
-      // Dynamic base price = base + the flat add-on of each answered criterion.
-      // Criteria are DATA (edit here, no code change) and are collected as part
-      // of the dossier — the same questions the notary needs (see computeBasePrice).
-      // 2 mandatory questions (scale + complexity-flip), the rest optional
-      // behind an "affiner" expander (see the research model). Weights (poids)
-      // drive the notary's complexity label.
-      pricing: {
-        base: 1250,
-        criteria: [
-          {
-            id: 'who_for', type: 'choice', required: true, label: 'Le testament est pour qui ?',
-            aide: 'Un couple = deux testaments miroirs + deux mandats.',
-            options: [
-              { id: 'solo', label: 'Moi seul', add: 0, poids: 0 },
-              { id: 'couple', label: 'Couple', add: 450, poids: 0 },
-            ],
-          },
-          {
-            id: 'fiducie_needed', type: 'choice', required: true, label: 'Un héritier a-t-il besoin d’être protégé ?',
-            aide: 'Enfant mineur, proche à charge ou handicapé, ou remise de l’héritage à un âge précis.',
-            options: [
-              { id: 'non', label: 'Non', add: 0, poids: 0 },
-              { id: 'oui', label: 'Oui', add: 600, poids: 2 },
-            ],
-          },
-          {
-            id: 'include_mandate', type: 'choice', optional: true, label: 'Inclure le mandat de protection ?',
-            aide: 'Le forfait standard réunit le testament et le mandat d’inaptitude.',
-            options: [
-              { id: 'oui', label: 'Oui (forfait)', add: 0, poids: 0 },
-              { id: 'non', label: 'Testament seul', add: -150, poids: 0 },
-            ],
-          },
-          { id: 'famille_recomposee', type: 'flag', optional: true, label: 'Famille recomposée', aide: 'Conjoint et enfants d’unions différentes.', add: 150, poids: 1 },
-          { id: 'business_assets', type: 'flag', optional: true, label: 'Entreprise, société ou ferme', aide: 'Actions, convention d’actionnaires, gel successoral.', add: 300, poids: 2 },
-          { id: 'foreign_assets', type: 'flag', optional: true, label: 'Biens importants à l’étranger', aide: 'Immeuble ou comptes hors Canada.', add: 250, poids: 2 },
-        ],
-      },
-      documents: [
-        { id: 'piece_identite', nom: 'Pièce d’identité avec photo', aide: 'Permis de conduire, passeport ou carte d’assurance maladie valide.' },
-        { id: 'liste_biens', nom: 'Liste sommaire des biens', aide: 'Immeubles, comptes, placements. Une estimation suffit à cette étape.' },
-      ],
-      champs: [
-        { id: 'liquidateur', label: 'Liquidateur (exécuteur) pressenti', aide: 'La personne qui réglera la succession. Nom complet et lien avec vous.' },
-        { id: 'beneficiaires', label: 'Bénéficiaires principaux', aide: 'Qui hérite, et dans quelles proportions approximatives.' },
-        { id: 'mandataire', label: 'Mandataire en cas d’inaptitude', aide: 'La personne qui vous représenterait si vous perdiez vos capacités.' },
-        { id: 'tuteur', label: 'Tuteur des enfants mineurs', aide: 'Si vous avez des enfants mineurs, qui en prendrait soin. Écrivez « aucun » s’il n’y a pas d’enfant mineur.' },
-      ],
-    },
-    {
-      id: 'procuration',
-      nom: 'Procuration',
-      nomCourt: 'Procuration',
-      nomEn: 'Power of attorney',
-      nomCourtEn: 'Power of attorney',
-      prixDepart: 750,
-      description:
-        'Procuration générale ou spéciale pour agir en votre nom.',
-      pricing: {
-        base: 750,
-        criteria: [
-          {
-            id: 'scope', type: 'choice', required: true, label: 'Étendue de la procuration',
-            aide: 'Un acte précis, ou la gestion générale de vos biens.',
-            options: [
-              { id: 'specifique', label: 'Un acte précis', add: 0, poids: 0 },
-              { id: 'generale', label: 'Gestion générale', add: 100, poids: 0 },
-            ],
-          },
-          {
-            id: 'realEstate', type: 'choice', required: true, label: 'Vise-t-elle un immeuble ?',
-            aide: 'Pouvoir de vendre, acheter ou hypothéquer une propriété — encadré strictement par la loi.',
-            options: [
-              { id: 'non', label: 'Non', add: 0, poids: 0 },
-              { id: 'oui', label: 'Oui', add: 200, poids: 2 },
-            ],
-          },
-          {
-            id: 'usage', type: 'choice', optional: true, label: 'Où sera-t-elle utilisée ?',
-            aide: 'À l’étranger : apostille ou traduction requise.',
-            options: [
-              { id: 'qc_canada', label: 'Québec / Canada', add: 0, poids: 0 },
-              { id: 'etranger', label: 'À l’étranger', add: 150, poids: 1 },
-            ],
-          },
-          { id: 'langue', type: 'flag', optional: true, label: 'En anglais / traduction', aide: 'Version anglaise ou traduite requise.', add: 100, poids: 1 },
-        ],
-      },
-      documents: [
-        { id: 'piece_identite', nom: 'Pièce d’identité avec photo', aide: 'Permis de conduire, passeport ou carte d’assurance maladie valide.' },
-      ],
-      champs: [
-        { id: 'mandataire', label: 'Personne mandatée', aide: 'Nom complet de la personne qui pourra agir en votre nom.' },
-        { id: 'portee', label: 'Portée de la procuration', aide: 'Générale (tous vos biens) ou spéciale. Écrivez « aucune limite » si générale.' },
-        { id: 'duree', label: 'Durée ou échéance', aide: 'Jusqu’à quand la procuration doit valoir. Écrivez « indéterminée » si sans fin prévue.' },
-      ],
-    },
-    {
       id: 'refinancement',
       nom: 'Refinancement hypothécaire',
       nomCourt: 'Refinancement',
       nomEn: 'Mortgage refinancing',
       nomCourtEn: 'Refinancing',
-      // Refinancement is priced well above the other acts: it is the most work
-      // (loan act + hypothec publication + title/certificate review) and carries
-      // real value at stake, so the floor starts at 2000 $ and rises with the
-      // loan value below.
+      // The most substantial act Nota lists (loan act + hypothec publication +
+      // title/certificate review) with real value at stake, so the floor starts
+      // at 2000 $ and rises with the loan value below.
       prixDepart: 2000,
       description:
         'Acte de prêt et publication de l’hypothèque lors d’un refinancement.',
@@ -262,6 +153,81 @@
       champs: [
         { id: 'adresse', label: 'Adresse de l’immeuble', aide: 'Adresse civique complète de la propriété refinancée.' },
         { id: 'preteur', label: 'Prêteur', aide: 'Le nom de l’institution qui accorde le nouveau prêt.' },
+        { id: 'date_echeance_taux', label: 'Échéance du taux', aide: 'La date avant laquelle le taux offert doit être signé, si connue.' },
+      ],
+    },
+    {
+      id: 'financement',
+      nom: 'Financement hypothécaire',
+      nomCourt: 'Financement',
+      nomEn: 'Mortgage financing',
+      nomCourtEn: 'Financing',
+      // The loan act for a NEW hypothec — a purchase or a first loan on a
+      // property already owned. Slightly under refinancement's floor because
+      // there is no old hypothec to discharge; the loan-value brackets are the
+      // same ladder.
+      prixDepart: 1800,
+      description:
+        'Acte de prêt et publication de l’hypothèque pour un nouveau financement.',
+      pricing: {
+        base: 1800,
+        criteria: [
+          {
+            id: 'valeur_pret', type: 'bracket', required: true, label: 'Montant du prêt', aide: 'Le montant du nouveau prêt hypothécaire.', unit: '$',
+            brackets: [
+              { max: 300000, add: 0, poids: 0 },
+              { max: 600000, add: 150, poids: 0 },
+              { max: 1000000, add: 350, poids: 1 },
+              { max: null, add: 600, poids: 1 },
+            ],
+          },
+          {
+            id: 'contexte', type: 'choice', required: true, label: 'Le prêt finance quoi ?',
+            aide: 'Un achat exige de coordonner l’acte de prêt avec la vente chez le notaire instrumentant.',
+            options: [
+              { id: 'propriete_detenue', label: 'Une propriété que je possède', add: 0, poids: 0 },
+              { id: 'achat', label: 'L’achat d’une propriété', add: 200, poids: 1 },
+            ],
+          },
+          {
+            id: 'approbation_bancaire', type: 'choice', required: true, label: 'Approbation bancaire',
+            aide: 'Où en êtes-vous avec le prêteur ? Sans instructions, le notaire ne peut signer à la date visée.',
+            options: [
+              { id: 'obtenue', label: 'Obtenue', add: 0, poids: 0 },
+              { id: 'en_cours', label: 'En cours', add: 100, poids: 1 },
+              { id: 'non', label: 'Pas encore', add: 200, poids: 2 },
+            ],
+          },
+          { id: 'coemprunteur', type: 'flag', optional: true, label: 'Co-emprunteur / indivision', aide: 'Plus de deux propriétaires inscrits.', add: 150, poids: 1 },
+          {
+            id: 'assurance_habitation', type: 'choice', optional: true, label: 'Assurance habitation à jour ?',
+            aide: 'Le prêteur exige une assurance en vigueur. Sans elle, le financement ne peut se conclure.',
+            options: [
+              { id: 'oui', label: 'Oui, en vigueur', add: 0, poids: 0 },
+              { id: 'a_renouveler', label: 'À renouveler', add: 0, poids: 1 },
+              { id: 'non', label: 'Aucune', add: 0, poids: 2 },
+            ],
+          },
+          {
+            id: 'certificat_localisation', type: 'choice', optional: true, label: 'Certificat de localisation',
+            aide: 'Un certificat périmé ou absent retarde souvent le dossier.',
+            options: [
+              { id: 'a_jour', label: 'À jour', add: 0, poids: 0 },
+              { id: 'inconnu', label: 'Je ne sais pas', add: 0, poids: 1 },
+              { id: 'perime', label: 'Périmé / absent', add: 100, poids: 1 },
+            ],
+          },
+        ],
+      },
+      documents: [
+        { id: 'piece_identite', nom: 'Pièce d’identité avec photo', aide: 'Permis de conduire, passeport ou carte d’assurance maladie valide.' },
+        { id: 'offre_preteur', nom: 'Offre de financement du prêteur', aide: 'Le document d’engagement de la banque, avec le taux et le montant.' },
+        { id: 'compte_taxes', nom: 'Compte de taxes municipales', aide: 'Le compte le plus récent de la municipalité.' },
+        { id: 'certificat_localisation', nom: 'Certificat de localisation', aide: 'Le plan de l’arpenteur-géomètre. C’est souvent le document qui retarde un dossier — vérifiez qu’il est à jour.' },
+      ],
+      champs: [
+        { id: 'adresse', label: 'Adresse de l’immeuble', aide: 'Adresse civique complète de la propriété financée.' },
+        { id: 'preteur', label: 'Prêteur', aide: 'Le nom de l’institution qui accorde le prêt.' },
         { id: 'date_echeance_taux', label: 'Échéance du taux', aide: 'La date avant laquelle le taux offert doit être signé, si connue.' },
       ],
     },
@@ -454,7 +420,12 @@
   // so without it two tiers could quote the same multiple).
   const TUNING_MIN_STEP = 0.05;
 
+  // THE median helper — one definition for the whole module. Exact (no
+  // rounding): the tuner feeds it premium multipliers where a half-step
+  // matters; dollar surfaces round the result themselves. Null on empty so a
+  // caller can distinguish "no data" from zero.
   function median(values) {
+    if (!values.length) return null;
     const s = values.slice().sort((a, b) => a - b);
     const mid = Math.floor(s.length / 2);
     return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
@@ -513,7 +484,12 @@
   const PREMIUM_CAP = 10;
 
   // --- Offer statuses --------------------------------------------------------
-  const STATUS = { OUVERTE: 'ouverte', RETENUE: 'retenue' };
+  const STATUS = { OUVERTE: 'ouverte', RETENUE: 'retenue', ANNULEE: 'annulee' };
+
+  // Open = still on the market. A retained bid left it by success, a cancelled
+  // one by withdrawal — every market surface treats both as gone. A bid with no
+  // status at all (older records) counts as open, as it always has.
+  const isOpenBid = (b) => !!b && b.status !== STATUS.RETENUE && b.status !== STATUS.ANNULEE;
 
   // --- Dates -----------------------------------------------------------------
   // State stores ISO YYYY-MM-DD strings; parse at UTC midnight so day math is
@@ -632,11 +608,135 @@
   // highest amount first. Powers the "3e sur 7" scarcity signal.
   function rankOf(bid, bids) {
     const peers = bids
-      .filter((b) => b.dateISO === bid.dateISO && b.serviceId === bid.serviceId && b.status !== STATUS.RETENUE)
+      .filter((b) => b.dateISO === bid.dateISO && b.serviceId === bid.serviceId && isOpenBid(b))
       .sort((a, b) => b.montant - a.montant || String(a.id).localeCompare(String(b.id)));
     const total = peers.length;
     const idx = peers.findIndex((b) => b.id === bid.id);
     return { rang: idx < 0 ? null : idx + 1, total };
+  }
+
+  // --- Notary actions on an open bid -----------------------------------------
+  // Beyond retaining or declining, a notary can answer an open demand with a
+  // PROPOSITION (a higher price) or a DEMANDE DE DOCUMENTS. Both are validated
+  // here — the API is authoritative, the console mirrors the same rules inline.
+
+  // The floor a bid was validated against: its own dynamic base when the server
+  // recorded one, else the service's public starting price.
+  function bidFloor(bid) {
+    const svc = bid && serviceById(bid.serviceId);
+    const own = bid && Number(bid.basePrice);
+    if (Number.isFinite(own) && own > 0) return own;
+    return svc ? svc.prixDepart : null;
+  }
+
+  // A proposition is only meaningful ABOVE what the client already offers, and
+  // never above the same 10× cap the client is held to.
+  function validateCounterOffer(input) {
+    input = input || {};
+    const errors = [];
+    const bid = input.bid;
+    const isOpen = isOpenBid(bid) && serviceById(bid.serviceId);
+    if (!isOpen) errors.push({ code: 'offre_non_ouverte', message: 'Cette offre n’est plus ouverte.' });
+
+    const montant = Math.round(Number(input.montant));
+    const montantValide = Number.isFinite(montant) && montant > 0;
+    if (!montantValide) errors.push({ code: 'montant_invalide', message: 'Le montant doit être un nombre positif.' });
+
+    if (isOpen && isISODate(bid.dateISO) && isISODate(input.todayISO) && daysBetween(input.todayISO, bid.dateISO) < 0) {
+      errors.push({ code: 'date_passee', message: 'La date de signature est déjà passée.' });
+    }
+
+    let delta = null;
+    if (isOpen && montantValide) {
+      const current = Math.round(Number(bid.montant)) || 0;
+      if (montant <= current) {
+        errors.push({ code: 'proposition_inferieure', message: `La proposition doit dépasser l’offre du client (${money(current)}).` });
+      }
+      const floor = bidFloor(bid);
+      if (floor && montant > floor * PREMIUM_CAP) {
+        errors.push({ code: 'plafond_depasse', message: `La proposition ne peut dépasser ${money(floor * PREMIUM_CAP)} (${PREMIUM_CAP}×).` });
+      }
+      delta = montant - current;
+    }
+    return { ok: errors.length === 0, errors, montant: montantValide ? montant : null, delta };
+  }
+
+  // The amount the console pre-fills when a notary opens the proposition form:
+  // roughly one tier's worth above the client, rounded to a figure a person
+  // would type, clamped to the cap so the default is always submittable.
+  const COUNTER_OFFER_STEP = 0.2;
+  function suggestedCounterOffer(bid) {
+    const current = Math.round(Number(bid && bid.montant)) || 0;
+    const floor = bidFloor(bid);
+    const cap = floor ? floor * PREMIUM_CAP : Infinity;
+    const raw = Math.ceil((current * (1 + COUNTER_OFFER_STEP)) / 10) * 10;
+    return Math.min(Math.max(raw, current + 10), cap);
+  }
+
+  // Everything a notary may ask a client for: the service's documents and its
+  // intake fields, by id, with the label the client already saw in the dossier.
+  const DOCUMENT_REQUEST_MESSAGE_MAX = 500;
+  function requestableItems(serviceId) {
+    const svc = serviceById(serviceId);
+    if (!svc) return [];
+    return svc.documents
+      .map((d) => ({ id: d.id, nom: d.nom, kind: 'document' }))
+      .concat(svc.champs.map((c) => ({ id: c.id, nom: c.label, kind: 'champ' })));
+  }
+
+  function validateDocumentRequest(input) {
+    input = input || {};
+    const errors = [];
+    const svc = serviceById(input.serviceId);
+    if (!svc) errors.push({ code: 'service_inconnu', message: 'Service inconnu.' });
+
+    const ids = Array.isArray(input.documents) ? input.documents.map(String) : [];
+    const unique = ids.filter((id, i) => ids.indexOf(id) === i);
+    if (!unique.length) errors.push({ code: 'documents_requis', message: 'Choisissez au moins un document à demander.' });
+
+    const known = requestableItems(input.serviceId);
+    const documents = [];
+    for (const id of unique) {
+      const item = known.find((k) => k.id === id);
+      if (item) documents.push(item);
+      else if (svc) errors.push({ code: 'document_inconnu', message: `Document inconnu : ${id}.`, document: id });
+    }
+
+    const message = input.message == null ? '' : String(input.message).trim();
+    if (message.length > DOCUMENT_REQUEST_MESSAGE_MAX) {
+      errors.push({ code: 'message_trop_long', message: `Le message ne peut dépasser ${DOCUMENT_REQUEST_MESSAGE_MAX} caractères.` });
+    }
+    return { ok: errors.length === 0, errors, documents, message: message || null };
+  }
+
+  // --- Notary agenda ---------------------------------------------------------
+  // The console's working view: the open demands of the carnet as a notary
+  // plans a week — by signing date, then by act, best offer first — with the
+  // money on the table per day. Retained and malformed bids are left out.
+  function agendaByDate(bids) {
+    const list = (Array.isArray(bids) ? bids : []).filter(
+      (b) => isOpenBid(b) && isISODate(b.dateISO) && serviceById(b.serviceId),
+    );
+    const byDate = new Map();
+    for (const b of list) {
+      if (!byDate.has(b.dateISO)) byDate.set(b.dateISO, []);
+      byDate.get(b.dateISO).push(b);
+    }
+    return [...byDate.keys()].sort().map((dateISO) => {
+      const day = byDate.get(dateISO);
+      const services = SERVICES.map((s) => {
+        const mine = day
+          .filter((b) => b.serviceId === s.id)
+          .sort((a, b) => (Number(b.montant) || 0) - (Number(a.montant) || 0) || String(a.id).localeCompare(String(b.id)));
+        return { serviceId: s.id, nom: s.nom, nomCourt: s.nomCourt, bids: mine, best: mine.length ? Number(mine[0].montant) || 0 : null };
+      }).filter((s) => s.bids.length);
+      return {
+        dateISO,
+        count: day.length,
+        total: day.reduce((sum, b) => sum + (Math.round(Number(b.montant)) || 0), 0),
+        services,
+      };
+    });
   }
 
   // --- Contact points --------------------------------------------------------
@@ -649,6 +749,41 @@
     confidentialite: 'confidentialite@nota.ca',
     telephone: null,
   };
+
+  // A message a human sends Nota through the contact form. The courriel is the
+  // reply channel, so it is the one hard requirement besides the message
+  // itself; name and subject help a human triage but never block a call for
+  // help. Same authoritative-validator pattern as the offer and the
+  // proposition: the API enforces this, the form mirrors it inline.
+  const CONTACT_MESSAGE_MAX = 2000;
+  const CONTACT_FIELD_MAX = 150;
+  function validateContactMessage(input) {
+    input = input || {};
+    const errors = [];
+
+    const courriel = String(input.courriel == null ? '' : input.courriel).trim().toLowerCase();
+    if (!isEmail(courriel)) {
+      errors.push({ code: 'courriel_invalide', message: 'Un courriel valide est requis pour vous répondre.' });
+    }
+
+    const message = String(input.message == null ? '' : input.message).trim();
+    if (!message) errors.push({ code: 'message_requis', message: 'Écrivez-nous quelques mots.' });
+    if (message.length > CONTACT_MESSAGE_MAX) {
+      errors.push({ code: 'message_trop_long', message: `Le message ne peut dépasser ${CONTACT_MESSAGE_MAX} caractères.` });
+    }
+
+    const nom = String(input.nom == null ? '' : input.nom).trim().slice(0, CONTACT_FIELD_MAX);
+    const sujet = String(input.sujet == null ? '' : input.sujet).trim().slice(0, CONTACT_FIELD_MAX);
+
+    return {
+      ok: errors.length === 0,
+      errors,
+      nom: nom || null,
+      courriel: isEmail(courriel) ? courriel : null,
+      sujet: sujet || null,
+      message: message || null,
+    };
+  }
 
   // A dial string for a tel: href — digits only, keeping a leading + and
   // assuming +1 (Canada) when the number is written without a country code.
@@ -672,26 +807,19 @@
   // refinancing must not drag the typical testament price upward. Retained
   // offers stay in the median — they are precisely the amounts that cleared —
   // but availability and the best open amount count open offers only.
-  function median(values) {
-    if (!values.length) return null;
-    const sorted = values.slice().sort((a, b) => a - b);
-    const mid = sorted.length >> 1;
-    return sorted.length % 2
-      ? sorted[mid]
-      : Math.round((sorted[mid - 1] + sorted[mid]) / 2);
-  }
-
   function carnetPulse(bids, todayISO) {
     const list = (Array.isArray(bids) ? bids : []).filter(
-      (b) => b && isISODate(b.dateISO) && serviceById(b.serviceId),
+      (b) => b && b.status !== STATUS.ANNULEE && isISODate(b.dateISO) && serviceById(b.serviceId),
     );
-    const isOpen = (b) => b.status !== STATUS.RETENUE;
+    const isOpen = isOpenBid;
     const open = list.filter(isOpen);
     const today = isISODate(todayISO) ? todayISO : null;
 
     const services = SERVICES.map((s) => {
       const mine = list.filter((b) => b.serviceId === s.id);
-      const m = median(mine.map((b) => Math.round(Number(b.montant) || 0)));
+      // Whole dollars on a public surface: round the exact median here.
+      const raw = median(mine.map((b) => Math.round(Number(b.montant) || 0)));
+      const m = raw == null ? null : Math.round(raw);
       return {
         id: s.id,
         nom: s.nom,
@@ -753,6 +881,7 @@
       .filter(
         (b) =>
           b &&
+          b.status !== STATUS.ANNULEE &&
           (withRetenues || b.status !== STATUS.RETENUE) &&
           isISODate(b.dateISO) &&
           serviceById(b.serviceId) &&
@@ -861,21 +990,20 @@
     return bids;
   }
 
-  function clampMontant(svc, montant) {
-    const min = svc.prixDepart;
-    const max = svc.prixDepart * PREMIUM_CAP;
-    return Math.min(max, Math.max(min, montant));
-  }
-
   // Plausible mandatory-param answers for a demo fixture, so it validates and
   // shows a realistic mix of simple/standard/complexe cases on the carnet.
   function fixturePricing(svc, rng) {
-    if (svc.id === 'testament') return { who_for: rng() > 0.6 ? 'couple' : 'solo', fiducie_needed: rng() > 0.82 ? 'oui' : 'non' };
-    if (svc.id === 'procuration') return { scope: rng() > 0.5 ? 'generale' : 'specifique', realEstate: rng() > 0.72 ? 'oui' : 'non' };
     if (svc.id === 'refinancement') {
       return {
         valeur_pret: 150000 + Math.floor(rng() * 700000),
         succession: rng() > 0.85 ? 'oui' : 'non',
+        approbation_bancaire: ['obtenue', 'en_cours', 'non'][Math.floor(rng() * 3)],
+      };
+    }
+    if (svc.id === 'financement') {
+      return {
+        valeur_pret: 150000 + Math.floor(rng() * 700000),
+        contexte: rng() > 0.45 ? 'achat' : 'propriete_detenue',
         approbation_bancaire: ['obtenue', 'en_cours', 'non'][Math.floor(rng() * 3)],
       };
     }
@@ -902,9 +1030,10 @@
     const days = isISODate(todayISO) ? Math.max(0, daysBetween(todayISO, dateISO)) : 0;
     const t = tierById(tierForDays(days));
     const mult = tierMultiplier(t.id, bids);
-    // Anchor the recommendation on Nota's quoted price (1.5× the market rate, with
-    // the client's pricing answers), so a more complex act recommends a
-    // proportionally higher offer and the posted price sits above market.
+    // Anchor the recommendation on Nota's quoted price (notaPrice — the base
+    // derived from the client's pricing answers, times the single market
+    // multiplier knob), so a more complex act recommends a proportionally
+    // higher offer.
     const base = notaPrice(serviceId, answers);
     const min = base;
     const max = base * PREMIUM_CAP;
@@ -923,28 +1052,110 @@
   }
 
   // --- Lead qualification ----------------------------------------------------
-  // A lead is "sellable" to a notary only once the client has assembled every
-  // required document and field for the service AND consented to share the
-  // dossier with the notary who retains the request. Identity verification
-  // itself is performed by the notary at signing (in person / by video, per
-  // Québec rules) — Nota collects the ID document, it does not verify identity.
+  // PRICE BEFORE DOCUMENTS (docs/decisions/0010-financing-first-catalogue.md):
+  // a lead is "sellable" once the client has answered the REQUIRED pricing
+  // criteria (the answers the price is derived from, kept under `__pricing`)
+  // AND consented to share the dossier with the notary who retains the
+  // request. The document checklist is preparation progress — reported here so
+  // the UI can show it, never a barrier to posting: documents flow after the
+  // mise en relation, through Nota or the notary's own channel (an item marked
+  // DOSSIER_TRANSMIS counts as provided). Identity verification itself is
+  // performed by the notary at signing (in person / by video, per Québec
+  // rules) — Nota collects the ID document, it does not verify identity.
   // `saved` is the per-service intake map; consent is stored under `__consent`.
+  const DOSSIER_TRANSMIS = 'transmis_autrement';
   function leadReadiness(serviceId, saved) {
     saved = saved || {};
     const svc = serviceById(serviceId);
-    if (!svc) return { total: 0, done: 0, missing: [], consent: false, ready: false };
+    if (!svc) return { total: 0, done: 0, missing: [], requis: [], consent: false, ready: false };
     const items = svc.documents
       .map((d) => ({ id: d.id, nom: d.nom }))
       .concat(svc.champs.map((c) => ({ id: c.id, nom: c.label })));
     const missing = items.filter((it) => !saved[it.id]).map((it) => it.nom);
     const consent = !!saved.__consent;
+    const requis = missingRequired(serviceId, saved.__pricing || {}).map((m) => m.label);
     return {
       total: items.length,
       done: items.length - missing.length,
       missing,
+      // The unanswered required pricing questions — the only content gate.
+      requis,
       consent,
-      ready: missing.length === 0 && consent,
+      ready: requis.length === 0 && consent,
     };
+  }
+
+  // --- Partner referrals ------------------------------------------------------
+  // The professionals who know a homeowner needs a notary TODAY (agent
+  // immobilier, courtier hypothécaire) send people through a `?ref=CODE` link
+  // and earn a flat thank-you — never a share of the fee, and never a public
+  // fact on the carnet. TWO reward tracks, each with its own trigger:
+  //   • client:  a referred client's demand is RETAINED by a notary — the
+  //     moment the marketplace visibly worked for that client;
+  //   • notaire: a referred notary retains their FIRST act — worth far more
+  //     (a notary is recurring supply), rewarded once per notary.
+  // Attribution lives privately on the bid / notary record (`parrain`); the
+  // amounts are data here, asserted by a test, and the ledger is always
+  // derived from the records rather than kept as its own state.
+  // See docs/decisions/0011-partner-referral-commission.md.
+  const REFERRAL = {
+    client: 50,
+    notaire: 250,
+    partners: [
+      { id: 'agent_immobilier', nom: 'Agent immobilier', nomEn: 'Real-estate agent' },
+      { id: 'courtier_hypothecaire', nom: 'Courtier hypothécaire', nomEn: 'Mortgage broker' },
+      { id: 'autre_professionnel', nom: 'Autre professionnel', nomEn: 'Other professional' },
+    ],
+  };
+
+  // A code is 4–12 letters/digits, case-insensitive; separators are dropped so
+  // "eve-roy" and "EVEROY" are the same partner. Anything else is not a code.
+  const REFERRAL_CODE_RE = /^[A-Z0-9]{4,12}$/;
+  function normalizeReferralCode(value) {
+    return String(value == null ? '' : value).toUpperCase().replace(/[^A-Z0-9]/g, '');
+  }
+  function isReferralCode(value) {
+    return REFERRAL_CODE_RE.test(normalizeReferralCode(value));
+  }
+
+  // Fold referred records into per-code totals. `bids` may carry `parrain`; a
+  // referred bid earns REFERRAL.client the moment it is RETAINED (completes is
+  // still counted, as information). `notaires` (optional) are referred notary
+  // records carrying `parrain`; one earns REFERRAL.notaire once, when the
+  // caller has marked that they retained their first act (`premierActe`
+  // truthy) — the domain never guesses at either join.
+  function referralLedger(bids, notaires) {
+    const byCode = new Map();
+    const entryFor = (code) => {
+      if (!byCode.has(code)) {
+        byCode.set(code, { code, demandes: 0, retenues: 0, completes: 0, notaires: 0, notairesActifs: 0, du: 0 });
+      }
+      return byCode.get(code);
+    };
+    for (const b of Array.isArray(bids) ? bids : []) {
+      if (!b) continue;
+      const code = normalizeReferralCode(b.parrain);
+      if (!REFERRAL_CODE_RE.test(code)) continue;
+      const entry = entryFor(code);
+      entry.demandes++;
+      if (b.status === STATUS.RETENUE) {
+        entry.retenues++;
+        entry.du += REFERRAL.client;
+      }
+      if (b.acte || b.completed === true) entry.completes++;
+    }
+    for (const n of Array.isArray(notaires) ? notaires : []) {
+      if (!n) continue;
+      const code = normalizeReferralCode(n.parrain);
+      if (!REFERRAL_CODE_RE.test(code)) continue;
+      const entry = entryFor(code);
+      entry.notaires++;
+      if (n.premierActe) {
+        entry.notairesActifs++;
+        entry.du += REFERRAL.notaire;
+      }
+    }
+    return [...byCode.values()].sort((a, b) => b.du - a.du || a.code.localeCompare(b.code));
   }
 
   // --- Reminder schedule -----------------------------------------------------
@@ -982,7 +1193,7 @@
   // (not sending the same kind twice); this only says what is due.
   function dueReminders(bid, todayISO) {
     const due = [];
-    if (!bid || bid.status === STATUS.RETENUE) return due;
+    if (!isOpenBid(bid)) return due;
     if (!isISODate(bid.dateISO) || !isISODate(todayISO)) return due;
 
     const days = daysBetween(todayISO, bid.dateISO);
@@ -1034,15 +1245,27 @@
     daysBetween,
     addDays,
     validateOffer,
+    validateCounterOffer,
+    suggestedCounterOffer,
+    validateDocumentRequest,
+    requestableItems,
+    agendaByDate,
     rankOf,
     carnetPulse,
     weekAgenda,
     CONTACT,
+    CONTACT_MESSAGE_MAX,
+    validateContactMessage,
     telHref,
     makeFixtures,
     seedSignature,
     bidLabel,
     leadReadiness,
+    DOSSIER_TRANSMIS,
+    REFERRAL,
+    normalizeReferralCode,
+    isReferralCode,
+    referralLedger,
     recommendedAmount,
     obtainChance,
     REMINDER_OFFSETS,

@@ -100,6 +100,52 @@ test('a ?lang=en link boots English with no stored preference', async () => {
   assert.equal(win.localStorage.getItem('nota.lang'), 'en', 'the link choice persists');
 });
 
+test('English boot never leaks French domain labels into composed lines', async () => {
+  const win = await boot('en');
+  const doc = win.document;
+  const D = win.NotaDomain;
+
+  // 1. The dossier's gate line (price questions + consent, ADR 0010 §3)
+  //    composes the required question labels in English, prefix included.
+  win.Nota.setTab('dossier');
+  await wait(30);
+  const missing = doc.getElementById('dossier-missing').textContent;
+  const svc = D.serviceById(doc.getElementById('d-service').value);
+  const required = (svc.pricing.criteria || []).filter((c) => c.required);
+  for (const c of required) {
+    assert.ok(missing.includes(I18N.tEn(c.label)),
+      `"${missing}" should name "${I18N.tEn(c.label)}" in English`);
+    assert.ok(!missing.includes(c.label) || c.label === I18N.tEn(c.label),
+      `no French question label may remain: ${missing}`);
+  }
+  assert.match(missing, /^price questions to answer: /, `the composed prefix is translated: ${missing}`);
+  assert.match(missing, /sharing consent required\.$/, `the consent tail is translated: ${missing}`);
+
+  // 2. The booking form's "Answer: …" hint lists the notary's questions in English.
+  win.Nota.setTab('carnet');
+  doc.getElementById('cta-reserver').click();
+  await wait(50);
+  const hint = doc.getElementById('offer-hint').textContent;
+  if (hint) {
+    const svcO = D.serviceById(doc.getElementById('o-service').value);
+    const required = ((svcO.pricing && svcO.pricing.criteria) || []).filter((c) => c.required);
+    for (const c of required) {
+      if (hint.includes(I18N.tEn(c.label))) continue;
+      assert.ok(!hint.includes(c.label) || c.label === I18N.tEn(c.label),
+        `French question label leaked into the hint: ${hint}`);
+    }
+    assert.match(hint, /^Answer: /, `the hint prefix is translated: ${hint}`);
+  }
+
+  // 3. The calendar's urgency badge title composes tier + act + amount; the
+  //    tier's display name must come out English too ("Same day", never
+  //    "Même jour").
+  for (const u of doc.querySelectorAll('.cal-urgency')) {
+    assert.ok(!/Même jour|À ce délai/.test(u.title),
+      `French fragment leaked into an urgency title: ${u.title}`);
+  }
+});
+
 test('French boot stays French and offers English', async () => {
   const win = await boot('fr');
   const doc = win.document;

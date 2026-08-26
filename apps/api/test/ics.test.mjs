@@ -32,7 +32,7 @@ test('EDGE (logic): SUMMARY escapes comma/semicolon and every VEVENT carries DTS
 });
 
 test('EDGE (logic): the notary feed omits DTSTAMP gracefully when no stamp is passed', () => {
-  const s = buildNotaryFeed([{ id: 'n1', dateISO: '2026-08-20', serviceId: 'testament' }]);
+  const s = buildNotaryFeed([{ id: 'n1', dateISO: '2026-08-20', serviceId: 'refinancement' }]);
   assert.equal(events(s), 1);
   assert.ok(!s.includes('DTSTAMP:'), 'no stamp arg -> no empty DTSTAMP line');
   assert.match(s, /SUMMARY:Signature notari/);
@@ -41,9 +41,9 @@ test('EDGE (logic): the notary feed omits DTSTAMP gracefully when no stamp is pa
 // --- bilingual feeds: French SUMMARY, English DESCRIPTION, FR / EN CALNAME ----
 
 test('the notary feed keeps the French SUMMARY and adds the English DESCRIPTION', () => {
-  const s = buildNotaryFeed([{ id: 'n1', dateISO: '2026-08-20', serviceId: 'testament' }], '20260101T000000Z');
-  assert.match(s, /SUMMARY:Signature notariée — Testament/);
-  assert.match(s, /DESCRIPTION:Notarized signing — Will and protection mandate/);
+  const s = buildNotaryFeed([{ id: 'n1', dateISO: '2026-08-20', serviceId: 'refinancement' }], '20260101T000000Z');
+  assert.match(s, /SUMMARY:Signature notariée — Refinancement hypothécaire/);
+  assert.match(s, /DESCRIPTION:Notarized signing — Mortgage refinancing/);
   assert.ok(s.includes('X-WR-CALNAME:Nota — signatures retenues / retained signings'));
 });
 

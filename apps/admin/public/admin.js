@@ -519,6 +519,10 @@
       view.appendChild(buildStatTiles(data, false));
       view.appendChild(buildCharts(data));
     }
+    // Parrainages are all-time (ledger, not range series): shown in either
+    // branch whenever the program has activity.
+    var parr = buildParrainages(data.parrainages);
+    if (parr) view.appendChild(parr);
     container.appendChild(view);
   }
 
@@ -587,6 +591,65 @@
     grid.appendChild(barCard);
 
     return grid;
+  }
+
+  // --- Parrainages ------------------------------------------------------------
+  // The partner-referral ledger (ADR 0011): one row per code, both reward
+  // tracks. All-time (derived from the records, not the range) — so it renders
+  // even when the selected period is empty. Returns null when there is nothing
+  // to show: an empty program is not information the overview needs.
+  function buildParrainages(section) {
+    // The API sends { client, notaire, codes: [...] } — the two flat reward
+    // amounts (domain data, echoed so this app never hardcodes them) and one
+    // row per code. A bare array is tolerated for older payloads.
+    var rows = section && Array.isArray(section.codes) ? section.codes : Array.isArray(section) ? section : [];
+    if (!rows.length) return null;
+    var card = el('div', 'chart-card');
+    var head = el('div', 'chart-card-head');
+    var ht = el('div');
+    ht.appendChild(el('div', 'chart-card-title', 'Parrainages'));
+    var sub = section && section.client && section.notaire
+      ? 'Récompenses des partenaires référents — ' + moneyCents(section.client * 100) + ' à la rétention (client), ' + moneyCents(section.notaire * 100) + ' au premier acte (notaire).'
+      : 'Récompenses des partenaires référents — dû à la rétention (clients) et au premier acte (notaires).';
+    ht.appendChild(el('div', 'chart-card-sub', sub));
+    head.appendChild(ht);
+    card.appendChild(head);
+
+    var scroll = el('div', 'chart-scroll');
+    var table = el('table', 'ptable');
+    var thead = el('thead');
+    var hr = el('tr');
+    ['Code', 'Partenaire', 'Demandes', 'Retenues', 'Complétés', 'Notaires', 'Actifs', 'Dû'].forEach(function (h, i) {
+      var th = el('th', i >= 2 ? 'is-num' : null, h);
+      hr.appendChild(th);
+    });
+    thead.appendChild(hr);
+    table.appendChild(thead);
+
+    var tbody = el('tbody');
+    rows.forEach(function (r) {
+      var tr = el('tr');
+      tr.appendChild(el('td', 'ptable-code', r.code || '—'));
+      // Registered partners carry their category label + courriel from the
+      // registry join; an unregistered code still earns, shown bare.
+      var who = el('td');
+      who.appendChild(el('div', null, r.typeNom || 'Non inscrit'));
+      if (r.courriel) who.appendChild(el('div', 'ptable-sub', r.courriel));
+      tr.appendChild(who);
+      tr.appendChild(el('td', 'is-num', num(r.demandes || 0)));
+      tr.appendChild(el('td', 'is-num', num(r.retenues || 0)));
+      // Information only (the reward is earned at retention, ADR 0011) — but
+      // the operator paying out by hand wants to see completion at a glance.
+      tr.appendChild(el('td', 'is-num', num(r.completes || 0)));
+      tr.appendChild(el('td', 'is-num', num(r.notaires || 0)));
+      tr.appendChild(el('td', 'is-num', num(r.notairesActifs || 0)));
+      tr.appendChild(el('td', 'is-num ptable-du', moneyCents((r.du || 0) * 100)));
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    scroll.appendChild(table);
+    card.appendChild(scroll);
+    return card;
   }
 
   function buildLegend() {
