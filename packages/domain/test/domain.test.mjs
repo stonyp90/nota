@@ -89,7 +89,8 @@ test('tiers: the ladder is strictly more expensive as the date closes in', () =>
   for (let i = 1; i < mults.length; i++) {
     assert.ok(mults[i] > mults[i - 1], D.TIERS[i].id + ' must cost more than ' + D.TIERS[i - 1].id);
   }
-  assert.deepEqual(mults, [1.2, 1.6, 3.5, 7, 9]);
+  // Realistic urgency surcharges: +0/+15/+35/+60/+100 % over the floor.
+  assert.deepEqual(mults, [1.0, 1.15, 1.35, 1.6, 2.0]);
   // ...and the steepest step still fits under the hard cap the server enforces.
   assert.ok(mults[mults.length - 1] <= D.PREMIUM_CAP);
 });
@@ -106,8 +107,8 @@ test('tierForDays: boundaries', () => {
   assert.equal(D.tierForDays(90), 'standard');
 });
 
-test('premium cap is 10', () => {
-  assert.equal(D.PREMIUM_CAP, 10);
+test('premium cap is 3', () => {
+  assert.equal(D.PREMIUM_CAP, 3);
 });
 
 test('dates: ISO validation', () => {
@@ -133,14 +134,14 @@ test('dates: daysBetween and addDays are inverse and tz-stable', () => {
 });
 
 test('validateOffer: a clean prioritaire offer', () => {
-  // 3 days out is the top of the prioritaire band.
-  const r = D.validateOffer({ serviceId: 'refinancement', dateISO: '2026-08-15', montant: 3000, todayISO: TODAY, pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue' } });
+  // 3 days out is prioritaire; 2 700 $ is the band's midpoint (1,35× the floor).
+  const r = D.validateOffer({ serviceId: 'refinancement', dateISO: '2026-08-15', montant: 2700, todayISO: TODAY, pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue' } });
   assert.equal(r.ok, true);
   assert.equal(r.errors.length, 0);
   assert.equal(r.tier, 'prioritaire');
   assert.equal(r.days, 3);
   assert.equal(r.prixDepart, 2000);
-  assert.ok(Math.abs(r.premium - 3000 / 2000) < 1e-9);
+  assert.ok(Math.abs(r.premium - 2700 / 2000) < 1e-9);
 });
 
 test('validateOffer: rejects below starting price', () => {
@@ -149,14 +150,14 @@ test('validateOffer: rejects below starting price', () => {
   assert.ok(r.errors.some((e) => e.code === 'sous_prix_depart'));
 });
 
-test('validateOffer: rejects above the 10x premium cap', () => {
-  const r = D.validateOffer({ serviceId: 'refinancement', dateISO: '2026-08-13', montant: 25000, todayISO: TODAY, pricing: PRICING });
+test('validateOffer: rejects above the 3x premium cap', () => {
+  const r = D.validateOffer({ serviceId: 'refinancement', dateISO: '2026-08-13', montant: 6001, todayISO: TODAY, pricing: PRICING });
   assert.equal(r.ok, false);
   assert.ok(r.errors.some((e) => e.code === 'plafond_depasse'));
 });
 
-test('validateOffer: exactly 10x is allowed', () => {
-  const r = D.validateOffer({ serviceId: 'refinancement', dateISO: '2026-08-13', montant: 20000, todayISO: TODAY, pricing: PRICING });
+test('validateOffer: exactly 3x is allowed', () => {
+  const r = D.validateOffer({ serviceId: 'refinancement', dateISO: '2026-08-13', montant: 6000, todayISO: TODAY, pricing: PRICING });
   assert.equal(r.ok, true);
 });
 
@@ -344,17 +345,17 @@ test('dueReminders: the dossier_incomplet hook fires for an incomplete open lead
 });
 
 test('recommendedAmount: mid-tier default, within bounds, one-tap booking', () => {
-  // 2 days out -> prioritaire, whose band is centred on 3.5.
+  // 2 days out -> prioritaire, whose band is centred on 1.35.
   const t = D.tierById('prioritaire');
-  assert.equal((t.apercuMin + t.apercuMax) / 2, 3.5, 'prioritaire defaults to 3.5x');
+  assert.equal((t.apercuMin + t.apercuMax) / 2, 1.35, 'prioritaire defaults to 1.35x');
   const base = D.notaPrice('refinancement');
   const expected = Math.round((base * (t.apercuMin + t.apercuMax) / 2) / 5) * 5;
   assert.equal(D.recommendedAmount('refinancement', '2026-08-14', TODAY), expected);
-  // always within [Nota floor, 10x floor]
+  // always within [Nota floor, PREMIUM_CAP× floor]
   for (const s of D.SERVICES) {
     const r = D.recommendedAmount(s.id, '2026-08-13', TODAY); // 1 day = urgence
     const floor = D.notaPrice(s.id);
-    assert.ok(r >= floor && r <= floor * 10, `${s.id} recommended in bounds`);
+    assert.ok(r >= floor && r <= floor * D.PREMIUM_CAP, `${s.id} recommended in bounds`);
   }
   // unknown service / bad date -> null
   assert.equal(D.recommendedAmount('bad', '2026-09-01', TODAY), null);
@@ -436,9 +437,9 @@ test('tierMultiplier is the number recommendedAmount actually uses', () => {
   D.TIERS.forEach((t) => {
     assert.equal(D.tierMultiplier(t.id), (t.apercuMin + t.apercuMax) / 2);
   });
-  assert.equal(D.tierMultiplier('prioritaire'), 3.5);
-  assert.equal(D.tierMultiplier('urgence'), 7.0, 'tomorrow costs 7x');
-  assert.equal(D.tierMultiplier('extreme'), 9.0, 'today costs 9x');
+  assert.equal(D.tierMultiplier('prioritaire'), 1.35);
+  assert.equal(D.tierMultiplier('urgence'), 1.6, 'tomorrow costs 1.6x');
+  assert.equal(D.tierMultiplier('extreme'), 2.0, 'today costs 2x');
   assert.equal(D.tierMultiplier('nope'), null);
 
   // The number a cell shows must be the number the booking form pre-fills, or

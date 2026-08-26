@@ -40,8 +40,8 @@ for (const N of [5, 10, 100, 1000]) {
     assert.equal(bids.length, N, `GET should return exactly ${N} bids`);
     // ranking/aggregation must not blow up at scale
     assert.ok(bids.every((b) => b.tier && b.montant >= 2000), 'every bid server-validated');
-    // amounts within the refinancement cap (base 2000 -> 10x = 20000)
-    assert.ok(bids.every((b) => b.montant <= 20000), 'no bid exceeds the 10x cap');
+    // amounts within the refinancement cap (base 2000 -> 3x = 6000)
+    assert.ok(bids.every((b) => b.montant <= 6000), 'no bid exceeds the 3x cap');
   });
 }
 

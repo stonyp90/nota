@@ -22,7 +22,7 @@ presses on. Testament and procuration were retired — see
 [`docs/decisions/0010-financing-first-catalogue.md`](docs/decisions/0010-financing-first-catalogue.md).
 The price is derived from a handful of answers (never from uploaded
 documents); the base amount below is the **starting price** (*prix de
-départ*), and the client may offer more, up to a hard **10× cap**.
+départ*), and the client may offer more, up to a hard **3× cap**.
 
 | Service | `serviceId` | Prix de départ |
 | --- | --- | --- |

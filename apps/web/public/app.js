@@ -1275,7 +1275,7 @@
           var urg = el('span', 'cal-urgency', tierFromLabel(tier.id, svcC));
           urg.dataset.tier = tier.id;
           // Narrow cells swap to this compact figure (same data-compact pattern
-          // as .cal-avg) — "dès 18 000 $" is 75px and paints over the next day
+          // as .cal-avg) — "dès 4 000 $" is ~66px and paints over the next day
           // on any cell under ~84px. The full amount stays in the DOM and in
           // the title below, so hover and screen readers keep the exact price.
           urg.dataset.compact = compactMoney(tierAmount(tier.id, svcC));

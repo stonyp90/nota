@@ -1427,7 +1427,7 @@ components:
           description: >-
             Offer in whole Canadian dollars. Must be >= the offer's dynamic
             floor (the service base plus the pricing-criteria adds; 2 000 $ for
-            an uncomplicated refinancement) and <= 10× that floor (the premium
+            an uncomplicated refinancement) and <= 3× that floor (the premium
             cap).
           example: 2400
         anonyme:

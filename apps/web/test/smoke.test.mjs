@@ -240,7 +240,7 @@ test('a day with bids shows the best open offer per act', async () => {
 
 // 7. Offer form: 3 service options, anonymity on by default, service selection
 //    enables the slider and caps it at prixDepart * PREMIUM_CAP.
-test('offer form: services populated, anon default on, slider capped at prixDepart*10', async () => {
+test('offer form: services populated, anon default on, slider capped at prixDepart*3', async () => {
   const { win, doc, D, Nota } = await boot();
   assert.equal($(doc, 'o-service').options.length, D.SERVICES.length);
   // TWO acts of the financing family (ADR 0010 §1 amended): refinancement
@@ -256,9 +256,9 @@ test('offer form: services populated, anon default on, slider capped at prixDepa
 
   const amt = $(doc, 'o-amount');
   assert.equal(amt.disabled, false);
-  // The form quotes Nota's starting price; the slider caps at notaPrice × 10.
-  assert.equal(amt.max, String(D.notaPrice('refinancement') * D.PREMIUM_CAP)); // 2000 * 10 = 20000
-  assert.equal(amt.max, '20000');
+  // The form quotes Nota's starting price; the slider caps at notaPrice × 3.
+  assert.equal(amt.max, String(D.notaPrice('refinancement') * D.PREMIUM_CAP)); // 2000 * 3 = 6000
+  assert.equal(amt.max, '6000');
 });
 
 // 8. A valid service+date+amount combination enables the submit button.
@@ -277,7 +277,7 @@ test('a valid offer combination enables #offer-submit', async () => {
   fire(win, date, 'input');
 
   const amt = $(doc, 'o-amount');
-  amt.value = '2000'; // at the refinancement floor (2000), within the 20000 cap
+  amt.value = '2000'; // at the refinancement floor (2000), within the 6000 cap
   fire(win, amt, 'input');
 
   // The 3 mandatory refinancement params must be answered before submit enables.
@@ -416,12 +416,12 @@ test('offer criteria render and a flag raises the dynamic floor', async () => {
   assert.ok(coemp, 'co-borrower flag rendered');
 
   const amt = $(doc, 'o-amount');
-  assert.equal(Number(amt.min), D.notaPrice('refinancement')); // Nota floor (3000) before any criterion
+  assert.equal(Number(amt.min), D.notaPrice('refinancement')); // Nota floor (2000) before any criterion
 
   coemp.checked = true;
   fire(win, coemp, 'change'); // +150 market -> Nota floor rises
-  assert.equal(Number(amt.min), D.notaPrice('refinancement', { coemprunteur: true })); // 3225
-  assert.equal(Number(amt.max), D.notaPrice('refinancement', { coemprunteur: true }) * 10); // 32250
+  assert.equal(Number(amt.min), D.notaPrice('refinancement', { coemprunteur: true })); // 2150
+  assert.equal(Number(amt.max), D.notaPrice('refinancement', { coemprunteur: true }) * D.PREMIUM_CAP); // 2150 * 3 = 6450
 });
 
 // 12c. The profile saves coordinates + notification prefs and prefills the offer.
@@ -1155,7 +1155,7 @@ test('DAY: switching the act re-scopes the headline offer and the totals', async
   const iso = ctx.D.addDays(ctx.today, 5);
   await reseed(ctx, [
     { id: 'r1', serviceId: 'refinancement', dateISO: iso, montant: 4000, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
-    { id: 'f1', serviceId: 'financement', dateISO: iso, montant: 9000, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
+    { id: 'f1', serviceId: 'financement', dateISO: iso, montant: 5000, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
   ], 'refinancement');
   ctx.doc.querySelector('.cal-cell[data-date="' + iso + '"]').click();
   await wait(30);
@@ -1165,10 +1165,10 @@ test('DAY: switching the act re-scopes the headline offer and the totals', async
   await wait(30);
   const rows = ctx.doc.querySelectorAll('#day-bids > .bid-row');
   assert.equal(rows.length, 1, 'still a single headline offer');
-  assert.equal($(ctx.doc, 'day-best').textContent, ctx.D.money(9000), 'now the financement best');
+  assert.equal($(ctx.doc, 'day-best').textContent, ctx.D.money(5000), 'now the financement best');
   assert.equal($(ctx.doc, 'day-best').closest('.day-market-line').hidden, false,
     'a real bar to clear keeps the market line visible');
-  assert.match($(ctx.doc, 'day-beat').textContent, /9\s*000/, 'the one-tap match follows too');
+  assert.match($(ctx.doc, 'day-beat').textContent, /5\s*000/, 'the one-tap match follows too');
 });
 
 test('DAY: an act with nothing on the day hides the bar and invites the first offer', async () => {
