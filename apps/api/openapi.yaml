@@ -573,6 +573,64 @@ paths:
                       $ref: "#/components/schemas/RetainedBid"
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /notary/bids/accept:
+    post:
+      operationId: acceptBid
+      summary: Retain an open bid at the client's price (accepter l'offre).
+      description: >-
+        The console's one-click retain. A conditional retain (`retainFor`) closes
+        the TOCTOU race — two notaries accepting the same open bid concurrently
+        both read `ouverte`, but only ONE write wins; the loser gets 409
+        `deja_retenue`. Idempotent for the winner: a re-accept by the SAME notary
+        re-returns the released dossier (settling a pending pay-on-accept capture
+        if billing is on). The response hands the retaining notary the dossier
+        and the mise en relation `client` contact block (ADR 0010 §4); `courriel`
+        stays at the top level for existing callers. With billing configured and
+        an authorized card, the payout fields (`paid` + `commissionCents`/
+        `netCents`, or `paid:false` + `paymentError`) are added.
+      security:
+        - notarySession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, dateISO]
+              properties:
+                id:
+                  type: string
+                dateISO:
+                  type: string
+                  format: date
+                token:
+                  type: string
+                  description: Session token fallback when no Authorization header is sent.
+      responses:
+        "200":
+          description: The bid is retained by this notary; the released dossier is returned.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedBid"
+        "400":
+          description: Body was not valid JSON.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/AlreadyRetained"
+        "410":
+          description: The bid was cancelled by the client (`offre_annulee`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /notary/bids/propose:
     post:
       operationId: proposeCounterOffer
@@ -1343,6 +1401,37 @@ components:
         viaProposition:
           type: boolean
           description: True when retention came from the client accepting this notary's proposition.
+    AcceptedBid:
+      type: object
+      description: >-
+        What POST /notary/bids/accept hands the retaining notary: the released
+        dossier plus the mise en relation `client` contact block (ADR 0010 §4).
+        The payout fields are present only with billing configured and an
+        authorized card.
+      required: [id, courriel, dossier, client]
+      properties:
+        id:
+          type: string
+        courriel:
+          type: [string, "null"]
+          description: The client's private email, released on retention (also inside `client`).
+        dossier:
+          type: [object, "null"]
+          additionalProperties: true
+        client:
+          $ref: "#/components/schemas/ClientContact"
+        paid:
+          type: boolean
+          description: Present with billing on — true when the pay-on-accept capture succeeded.
+        commissionCents:
+          type: integer
+          description: Nota's commission on the captured act, in cents (present when `paid` is true).
+        netCents:
+          type: integer
+          description: The amount transferred to the notary, in cents (present when `paid` is true).
+        paymentError:
+          type: string
+          description: A machine-readable capture-failure code (present when `paid` is false).
     Tier:
       type: string
       description: Timing tier derived from days-to-date (ascending urgency).
@@ -1549,6 +1638,13 @@ components:
             - type_inconnu
             - code_invalide
             - code_deja_pris
+            - lien_invalide
+            - compte_requis
+            - message_requis
+            - offre_annulee
+            - corps_trop_grand
+            - id_manquant
+            - acte_non_autorise
         message:
           type: string
           description: Human-readable message (fr-CA).

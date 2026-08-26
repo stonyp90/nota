@@ -12,6 +12,7 @@
     "test": "npm test --workspace @nota/domain && npm test --workspace @nota/api",
     "test:domain": "npm test --workspace @nota/domain",
     "test:api": "npm test --workspace @nota/api",
+    "test:contract": "node --test apps/api/test/contract/*.test.mjs",
     "test:web": "npm test --workspace @nota/web",
     "test:admin": "npm test --workspace @nota/admin",
     "build": "npm run build --workspace @nota/web",
