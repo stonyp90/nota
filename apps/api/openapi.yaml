@@ -307,6 +307,142 @@ paths:
                 errors:
                   - code: signature_invalide
                     message: Signature Stripe invalide.
+  /notary/session/request:
+    post:
+      operationId: requestNotarySignInLink
+      summary: Request a passwordless sign-in link for the notary console (step 1 of 2).
+      description: >-
+        Step 1 of the notary console sign-in. Proves mailbox ownership BEFORE any
+        session token is minted (the old one-shot route trusted a bare, unverified
+        request email). Per-IP rate-limited and ENUMERATION-SAFE: an active
+        notary, an inactive one and a stranger all receive the SAME generic
+        `{ ok: true }`, so the response never reveals whether an address is a
+        notary. Only an ACTIVE notary (or the dev/demo hatch) actually mints a
+        single-use, ~15-minute challenge and is emailed the link. Outside
+        production the response also carries `devLink`/`devToken` so local dev and
+        the test suite complete the flow with no mailbox; NEVER in production.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  description: The notary's professional email.
+      responses:
+        "200":
+          description: >-
+            Generic acknowledgement — identical whether or not the address is a
+            notary. `throttled` is never true here (the rate limit maps to 429).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+                  devLink:
+                    type: string
+                    description: NON-PRODUCTION ONLY — the full magic link, for local dev/tests.
+                  devToken:
+                    type: string
+                    description: NON-PRODUCTION ONLY — the raw challenge token, redeemed at /notary/session/verify.
+              example:
+                ok: true
+        "422":
+          description: The email failed validation (leaks nothing about who is a notary).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                errors:
+                  - code: courriel_invalide
+                    message: Le courriel n’est pas valide.
+        "429":
+          description: Per-IP rate limit exceeded.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+                  throttled:
+                    type: boolean
+                    const: true
+              example:
+                ok: true
+                throttled: true
+  /notary/session/verify:
+    post:
+      operationId: verifyNotarySignInLink
+      summary: Redeem a magic link for a notary session (step 2 of 2).
+      description: >-
+        Step 2 of the notary console sign-in. Verifies the single-use CHALLENGE
+        token, atomically consumes it (a replay or an expired link is rejected),
+        re-checks the notary is still ACTIVE, then issues the stateless SESSION +
+        FEED tokens. Preserves the notary profile upsert (stable étude label).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+                  description: The CHALLENGE token from the emailed link (or the dev echo).
+      responses:
+        "200":
+          description: The link was valid and unredeemed; a session is issued.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [token, feedToken, email, expiresAt]
+                properties:
+                  token:
+                    type: string
+                    description: SESSION token — sent in the Authorization header, never in a URL.
+                  feedToken:
+                    type: string
+                    description: Read-only FEED token, safe to embed in a webcal URL.
+                  email:
+                    type: string
+                    format: email
+                    description: The authenticated notary's own address.
+                  expiresAt:
+                    type: string
+                    format: date-time
+        "401":
+          description: The token is invalid, expired, tampered, or already used.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                errors:
+                  - code: lien_invalide
+                    message: Lien invalide ou déjà utilisé.
+        "403":
+          description: The notary is no longer active (deactivated between request and verify).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                errors:
+                  - code: compte_requis
+                    message: Un compte notaire actif est requis pour accéder à la console. L’inscription est gratuite.
   /notary/bids:
     get:
       operationId: listNotaryBids
@@ -841,7 +977,7 @@ components:
     notarySession:
       type: http
       scheme: bearer
-      description: Notary SESSION token from POST /notary/session.
+      description: Notary SESSION token from POST /notary/session/verify.
     clientToken:
       type: http
       scheme: bearer

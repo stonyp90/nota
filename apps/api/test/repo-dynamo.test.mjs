@@ -271,3 +271,57 @@ test('getPartner strips the GSI1 attrs a registered partner item now carries', a
     code: 'EVEROY', type: 'courtier_hypothecaire', courriel: 'eve@courtage.ca', createdAt: '2026-08-01',
   });
 });
+
+// --- Notary magic-link login (MAIN table, single-use conditional consume) ----
+
+test('putNotaryLoginChallenge writes the challenge to the MAIN table (not the admin one)', async () => {
+  const sent = [];
+  const doc = { async send(cmd) { sent.push(cmd); return {}; } };
+  const repo = createDynamoRepo({ tableName: 'nota-main', doc });
+  await repo.putNotaryLoginChallenge({ challengeId: 'c1', notaryId: 'N1', email: 'me@notaire.ca', consumed: false, expiresAt: 9, ttl: 1 });
+  const input = sent[0].input;
+  assert.equal(input.TableName, 'nota-main');
+  assert.equal(input.Item.PK, 'NOTARY_LOGIN#c1');
+  assert.equal(input.Item.SK, 'NOTARY_LOGIN');
+});
+
+test('consumeNotaryLoginChallenge is a conditional single-use consume: a replay/expiry returns null', async () => {
+  const doc = {
+    async send() {
+      const e = new Error('conditional check failed');
+      e.name = 'ConditionalCheckFailedException';
+      throw e;
+    },
+  };
+  const repo = createDynamoRepo({ tableName: 'nota-main', doc });
+  assert.equal(await repo.consumeNotaryLoginChallenge('c1', 123), null);
+});
+
+test('consumeNotaryLoginChallenge returns the record (PK/SK/type stripped) on the winning consume', async () => {
+  const sent = [];
+  const doc = {
+    async send(cmd) {
+      sent.push(cmd);
+      return { Attributes: { PK: 'NOTARY_LOGIN#c1', SK: 'NOTARY_LOGIN', type: 'notary_login', notaryId: 'N1', email: 'me@notaire.ca', consumed: true } };
+    },
+  };
+  const repo = createDynamoRepo({ tableName: 'nota-main', doc });
+  const rec = await repo.consumeNotaryLoginChallenge('c1', 123);
+  assert.deepEqual(rec, { notaryId: 'N1', email: 'me@notaire.ca', consumed: true });
+  const input = sent[0].input;
+  assert.equal(input.TableName, 'nota-main');
+  // `consumed` is a reserved word — it MUST be aliased, like the admin consume.
+  assert.equal(input.ExpressionAttributeNames['#consumed'], 'consumed');
+});
+
+test('incrNotaryRateCounter ADDs on a TTL window on the MAIN table and returns the running count', async () => {
+  const sent = [];
+  const doc = { async send(cmd) { sent.push(cmd); return { Attributes: { count: 3 } }; } };
+  const repo = createDynamoRepo({ tableName: 'nota-main', doc });
+  const n = await repo.incrNotaryRateCounter('notary_login', '1.2.3.4', 900, 1_700_000_000_000);
+  assert.equal(n, 3);
+  const input = sent[0].input;
+  assert.equal(input.TableName, 'nota-main');
+  assert.equal(input.Key.PK, 'NRL#notary_login#1.2.3.4');
+  assert.ok(String(input.UpdateExpression).includes('ADD'));
+});

@@ -8,6 +8,7 @@ const { createApp } = require('../src/handler.js');
 const { createMemoryRepo } = require('../src/repo-memory.js');
 const { createBilling, NOTARY_STATUS } = require('../src/billing.js');
 const { notaryIdForEmail, signToken, SCOPES } = require('../src/notary-auth.js');
+import { notarySignIn } from '../test-support/notary-session.mjs';
 
 const NOW = '2026-08-12T00:00:00.000Z';
 const NOW_MS = 1_760_000_000_000;
@@ -134,7 +135,7 @@ test('account.updated (charges enabled) marks the notary ACTIVE; a redelivery is
   assert.equal(notary.status, NOTARY_STATUS.RESTRICTED);
 });
 
-test('GATING CONSISTENCY: free Connect onboarding then activation opens the /notary/session gate', async () => {
+test('GATING CONSISTENCY: free Connect onboarding then activation opens the sign-in gate', async () => {
   const { app, stripe } = setup();
   const email = 'nouveau@notaire.ca';
 
@@ -142,10 +143,12 @@ test('GATING CONSISTENCY: free Connect onboarding then activation opens the /not
   const connect = await app.handle({ method: 'POST', path: '/notaries/connect', body: JSON.stringify({ email }) });
   assert.equal(connect.statusCode, 200);
 
-  // 2) Before activation the console gate stays closed.
-  const early = await app.handle({ method: 'POST', path: '/notary/session', body: JSON.stringify({ email }) });
-  assert.equal(early.statusCode, 403);
-  assert.equal(parse(early).errors[0].code, 'compte_requis');
+  // 2) Before activation the console gate stays closed: the request is
+  //    enumeration-safe (generic ok) but mints NO usable link (no devToken), so
+  //    there is nothing to redeem into a session.
+  const early = await app.handle({ method: 'POST', path: '/notary/session/request', body: JSON.stringify({ email }) });
+  assert.equal(early.statusCode, 200);
+  assert.equal(parse(early).devToken, undefined);
 
   // 3) Stripe reports charges enabled for the account created at signup — the
   //    metadata id comes from the REAL account creation call.
@@ -157,9 +160,8 @@ test('GATING CONSISTENCY: free Connect onboarding then activation opens the /not
 
   // 4) The SAME email now signs in: the activation landed on the record the
   //    session lookup reads (one identity, no orphaned billing record).
-  const sess = await app.handle({ method: 'POST', path: '/notary/session', body: JSON.stringify({ email }) });
-  assert.equal(sess.statusCode, 200);
-  assert.ok(parse(sess).token);
+  const sess = await notarySignIn(app, email);
+  assert.ok(sess.token);
 });
 
 // --- commission on a completed act -------------------------------------------
@@ -234,7 +236,7 @@ test('POST /notary/acts/complete: session-gated, verifies bid ownership, then ch
   const email = 'a@notaire.ca';
   const id = notaryIdForEmail(email);
   await repo.putNotary({ id, email, status: 'active', chargesEnabled: true, connectAccountId: 'acct_x', commissionCentsCollected: 0 });
-  const sess = parse(await app.handle({ method: 'POST', path: '/notary/session', body: JSON.stringify({ email }) }));
+  const sess = await notarySignIn(app, email);
   const auth = { authorization: 'Bearer ' + sess.token };
 
   // SECURITY: a bid this notary did NOT retain is rejected (no ledger poisoning).
@@ -447,7 +449,7 @@ test('end-to-end: post → pending (hidden) → authorize → accept pays the no
   const email = 'a@notaire.ca';
   const id = notaryIdForEmail(email);
   await repo.putNotary({ id, email, status: 'active', chargesEnabled: true, connectAccountId: 'acct_x', commissionCentsCollected: 0 });
-  const sess = parse(await app.handle({ method: 'POST', path: '/notary/session', body: JSON.stringify({ email }) }));
+  const sess = await notarySignIn(app, email);
   const acc = parse(await app.handle({
     method: 'POST', path: '/notary/bids/accept',
     headers: { authorization: 'Bearer ' + sess.token },
@@ -477,7 +479,7 @@ async function activeSession(app, stripe, email) {
     method: 'POST', path: '/stripe/webhook', headers: { 'stripe-signature': 'good' },
     body: JSON.stringify(accountUpdated('evt_act_' + notaryId, notaryId, true)),
   });
-  const sess = parse(await app.handle({ method: 'POST', path: '/notary/session', body: JSON.stringify({ email }) }));
+  const sess = await notarySignIn(app, email);
   return { notaryId, auth: { authorization: 'Bearer ' + sess.token } };
 }
 

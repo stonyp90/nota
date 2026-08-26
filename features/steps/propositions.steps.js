@@ -6,12 +6,17 @@ const { notaryIdForEmail } = require('../../apps/api/src/notary-auth.js');
 
 // --- Helpers ----------------------------------------------------------------
 
-// Sign a notary in through the real /notary/session route and cache the
-// session token per email on the world.
+// Sign a notary in through the real passwordless handshake (request → verify)
+// and cache the session token per email on the world. Outside production the
+// request echoes the single-use challenge token, so the flow needs no mailbox.
 async function notarySession(world, email) {
   world.notaryTokens = world.notaryTokens || {};
   if (world.notaryTokens[email]) return world.notaryTokens[email];
-  const res = await world.app.handle({ method: 'POST', path: '/notary/session', body: JSON.stringify({ email }) });
+  const req = await world.app.handle({ method: 'POST', path: '/notary/session/request', body: JSON.stringify({ email }) });
+  assert.equal(req.statusCode, 200, 'demande de lien notaire: ' + req.body);
+  const devToken = JSON.parse(req.body).devToken;
+  assert.ok(devToken, 'le lien de connexion doit être renvoyé hors production: ' + req.body);
+  const res = await world.app.handle({ method: 'POST', path: '/notary/session/verify', body: JSON.stringify({ token: devToken }) });
   assert.equal(res.statusCode, 200, 'ouverture de session notaire: ' + res.body);
   world.notaryTokens[email] = JSON.parse(res.body).token;
   return world.notaryTokens[email];

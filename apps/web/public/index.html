@@ -517,6 +517,21 @@
                 <ul class="errors" id="notary-console-errors" role="alert" aria-atomic="true" hidden></ul>
                 <button type="submit" class="btn btn-primary btn-lg nc-auth-cta" id="notary-console-signin">Continuer avec mon courriel professionnel →</button>
                 <p class="help nc-auth-fine">Sans mot de passe.</p>
+                <!-- The signup branch is user-initiated, never revealed by the
+                     server: the request is enumeration-safe, so a first-time
+                     notary self-selects the free-account path here. -->
+                <button type="button" class="btn btn-sm btn-ghost nc-signup-open" id="notary-signup-link">Première visite ? Créer un compte gratuit</button>
+              </div>
+
+              <!-- Step 1b — "check your inbox". After Continue we NEVER say whether
+                   the address is a notary (no enumeration); an active notary finds
+                   the single-use link in their mailbox, and the first-timer takes
+                   the signup branch above. -->
+              <div id="notary-gate-step-sent" tabindex="-1" hidden>
+                <h2 class="h-sub">Vérifiez votre boîte courriel</h2>
+                <p class="nc-sent-lead">Nous venons d’envoyer un lien de connexion sécurisé à <strong id="notary-sent-email"></strong>.</p>
+                <p class="help nc-auth-fine">Ouvrez ce lien pour accéder à votre console. Il est valide 15 minutes et à usage unique. Pensez à vérifier vos indésirables.</p>
+                <button type="button" class="btn btn-sm btn-ghost nc-signup-back" id="notary-sent-back">← Utiliser un autre courriel</button>
               </div>
 
               <!-- Step 2 (new notaries) — the continue action branches HERE when the

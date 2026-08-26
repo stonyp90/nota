@@ -12,6 +12,10 @@ const {
   SENT_SK,
   unsubPK,
   UNSUB_SK,
+  notaryLoginPK,
+  NOTARY_LOGIN_SK,
+  notaryRlPK,
+  NOTARY_RL_SK,
   declinePK,
   DECLINE_SK,
   retainedSK,
@@ -375,6 +379,65 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
         ExclusiveStartKey = out.LastEvaluatedKey;
       } while (ExclusiveStartKey);
       return events;
+    },
+
+    // --- Notary magic-link login (single-use challenges + rate limit) -------
+    // On the MAIN table (see keys.js): the public API Lambda cannot reach the
+    // admin table, so the notary console keeps its own challenge/rate-limit
+    // records here. Same conditional-consume + TTL design as the admin login.
+    async putNotaryLoginChallenge(challenge) {
+      await doc.send(
+        new PutCommand({
+          TableName: tableName,
+          Item: {
+            PK: notaryLoginPK(challenge.challengeId),
+            SK: NOTARY_LOGIN_SK,
+            type: 'notary_login',
+            ...challenge,
+          },
+        })
+      );
+    },
+    // Atomic single-use consume: SET consumed only while it is still false and
+    // unexpired. A replay (or expired link) trips the condition -> null. Mirrors
+    // consumeLoginChallenge — `consumed` is a reserved word, so alias it.
+    async consumeNotaryLoginChallenge(challengeId, nowMs) {
+      try {
+        const out = await doc.send(
+          new UpdateCommand({
+            TableName: tableName,
+            Key: { PK: notaryLoginPK(challengeId), SK: NOTARY_LOGIN_SK },
+            UpdateExpression: 'SET #consumed = :true',
+            ConditionExpression: 'attribute_exists(PK) AND #consumed = :false AND #expiresAt > :now',
+            ExpressionAttributeNames: { '#consumed': 'consumed', '#expiresAt': 'expiresAt' },
+            ExpressionAttributeValues: { ':true': true, ':false': false, ':now': Number(nowMs) || 0 },
+            ReturnValues: 'ALL_NEW',
+          })
+        );
+        const { PK, SK, type, ...rec } = out.Attributes || {};
+        return rec;
+      } catch (err) {
+        if (err && err.name === 'ConditionalCheckFailedException') return null;
+        throw err;
+      }
+    },
+    // Fixed-window per-IP login counter with a TTL per window, on the main table.
+    async incrNotaryRateCounter(scope, key, windowSec, nowMs) {
+      const windowStart = Math.floor(nowMs / 1000 / windowSec);
+      const out = await doc.send(
+        new UpdateCommand({
+          TableName: tableName,
+          Key: { PK: notaryRlPK(scope, key), SK: `${NOTARY_RL_SK}#${windowStart}` },
+          UpdateExpression: 'ADD #c :one SET #ttl = :ttl',
+          ExpressionAttributeNames: { '#c': 'count', '#ttl': 'ttl' },
+          ExpressionAttributeValues: {
+            ':one': 1,
+            ':ttl': (windowStart + 1) * windowSec + 60,
+          },
+          ReturnValues: 'UPDATED_NEW',
+        })
+      );
+      return (out.Attributes && out.Attributes.count) || 1;
     },
 
     // --- Completed-act ledger (idempotency) ---------------------------------

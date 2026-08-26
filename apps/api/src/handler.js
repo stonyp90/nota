@@ -3,7 +3,7 @@
 const domain = require('@nota/domain');
 const { createBilling } = require('./billing');
 const { decodeUnsubToken } = require('./notifications');
-const { signToken, verifyToken, notaryIdForEmail, SCOPES } = require('./notary-auth');
+const { signToken, signChallengeToken, verifyToken, notaryIdForEmail, SCOPES } = require('./notary-auth');
 const { buildNotaryFeed, buildCarnetFeed } = require('./ics');
 const { statsDeltasForOffer, statsDeltasForRetain } = require('./stats');
 
@@ -46,6 +46,25 @@ function createApp(repo, opts = {}) {
   // How many months forward the notary open-bid feed scans, one Query per month
   // (the API role has no Scan). Configurable; default the current month + 3.
   const NOTARY_HORIZON_MONTHS = opts.notaryHorizonMonths || 4;
+
+  // --- Notary passwordless sign-in (magic link) -----------------------------
+  // Sign-in is a TWO step handshake that proves mailbox ownership before any
+  // session token is minted (the old one-shot route trusted a bare request
+  // email — see admin.js:6-9). All windows are injectable, none baked in.
+  const NOTARY_CHALLENGE_TTL_MS = opts.notaryChallengeTtlMs || 15 * 60 * 1000; // 15 min
+  const NOTARY_LOGIN_RL_WINDOW_SEC = opts.notaryLoginRlWindowSec || 15 * 60; // 15 min window
+  const NOTARY_LOGIN_RL_MAX = opts.notaryLoginRlMax || 5; // links / window / IP
+  // The site the magic link points back at (the notary console lives on the main
+  // site, opened via a `#nauth=<token>` hash the web app consumes on load).
+  const NOTARY_CONSOLE_URL = String(
+    opts.notaryConsoleUrl || process.env.NOTA_BASE_URL || opts.siteUrl || process.env.NOTA_SITE_URL || ''
+  ).replace(/\/+$/, '');
+  // Outside production, echo the link/token in the response so the test suite and
+  // `npm run api:local` complete sign-in with no mailbox. NEVER in production —
+  // there the emailed link is the only way through. An explicit opt wins so a
+  // test can assert the production (no-echo) shape.
+  const NOTARY_LOGIN_DEV_ECHO =
+    opts.notaryLoginDevEcho != null ? !!opts.notaryLoginDevEcho : process.env.NODE_ENV !== 'production';
 
   // Billing is injected so tests pass a fake (no Stripe package, no network).
   // In production it is built LAZILY on first use from a real Stripe adapter,
@@ -141,6 +160,55 @@ function createApp(repo, opts = {}) {
     const raw = header(request.headers, 'authorization');
     const m = /^Bearer\s+(.+)$/i.exec(String(raw || '').trim());
     return m ? m[1].trim() : '';
+  }
+
+  // The caller IP for login rate-limiting. MUST be a trusted value: prefer the
+  // platform-supplied sourceIp (unspoofable), else the RIGHTMOST X-Forwarded-For
+  // hop (the one the trusted proxy appended). NEVER the leftmost token — that is
+  // client-controlled and would let an attacker mint a fresh rate-limit key per
+  // request. Mirrors admin-handler.js's clientIp.
+  function clientIp(request) {
+    if (request && request.sourceIp) return String(request.sourceIp);
+    const parts = String(header(request.headers, 'x-forwarded-for') || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return parts.length ? parts[parts.length - 1] : null;
+  }
+
+  // Resolve the active-account gate for a notary email. Shared by the sign-in
+  // request (to decide whether to mint a challenge) and verify (to re-check
+  // before issuing a session). NOTA_DEMO_OPEN skips the gate for an open demo but
+  // is HARD-DISABLED in production regardless of the env var — a config slip must
+  // never open the notary surface on the real deployment.
+  async function notaryGate(email) {
+    const notaryId = notaryIdForEmail(email);
+    const existing = await repo.getNotary(notaryId);
+    const demoOpen = process.env.NOTA_DEMO_OPEN === 'true' && process.env.NODE_ENV !== 'production';
+    const active = !!(existing && existing.status === 'active');
+    return { notaryId, existing, demoOpen, active, allowed: demoOpen || active };
+  }
+
+  // Upsert the notary profile so accept can stamp a stable étude label. Spreads
+  // `existing` first so status/subscription fields are never clobbered. Under the
+  // demo hatch a brand-new account is seeded fully onboarded so the open demo can
+  // walk the WHOLE lifecycle (retain, complete, commission) with no real Stripe.
+  async function upsertNotaryProfile(gate, email) {
+    const { notaryId, existing, demoOpen, active } = gate;
+    const label = (existing && existing.label) || email;
+    const demoActivation =
+      demoOpen && !active
+        ? { status: 'active', chargesEnabled: true, connectAccountId: 'acct_demo_' + notaryId.slice(0, 12) }
+        : {};
+    await repo.putNotary({
+      ...(existing || {}),
+      ...demoActivation,
+      id: notaryId,
+      email,
+      label,
+      role: 'notary',
+      createdAt: (existing && existing.createdAt) || new Date(nowMs()).toISOString(),
+    });
   }
 
   // Verify a token AND require a specific scope. Returns the notaryId (sub) only
@@ -787,12 +855,20 @@ function createApp(repo, opts = {}) {
       );
     }
 
-    // --- Notary console -----------------------------------------------------
-    // A notary signs in with an email and receives signed tokens. Access is
-    // gated on an ACTIVE account (free Stripe Connect onboarding complete):
-    // issuing a token to any valid email would let anyone accept bids and read
-    // a client's courriel + dossier.
-    if (route === '/notary/session' && method === 'POST') {
+    // --- Notary console: passwordless sign-in (magic link) ------------------
+    // TWO steps. The old one-shot POST /notary/session minted a full session
+    // token straight from a bare, UNVERIFIED request email — anyone who knew an
+    // active notary's public address could impersonate them and read a client's
+    // courriel + private dossier (admin.js:6-9 calls this a known weakness).
+    // Now the caller must PROVE mailbox ownership: /request emails a single-use
+    // link; /verify redeems it for the same stateless session token as before.
+    // Mirrors the admin console (admin.js requestLogin / verifyMagic).
+
+    // Step 1 — request a link. Per-IP rate-limited, NO account enumeration: an
+    // active notary, an inactive one and a stranger all get the SAME generic
+    // { ok: true }, so the response never reveals who is a notary. Only an
+    // eligible address actually mints a challenge and gets a link emailed.
+    if (route === '/notary/session/request' && method === 'POST') {
       let payload;
       try {
         payload = typeof request.body === 'string' ? JSON.parse(request.body || '{}') : request.body || {};
@@ -800,54 +876,115 @@ function createApp(repo, opts = {}) {
         return json(400, { errors: [{ code: 'json_invalide', message: 'Corps JSON invalide.' }] });
       }
       const email = String(payload.email || '').trim().toLowerCase();
+
+      // Throttle FIRST, keyed on the trusted source IP, so a hostile client
+      // cannot spam links regardless of which addresses it guesses. Fail OPEN on
+      // a counter error — availability over strictness for the login path.
+      const ip = clientIp(request);
+      let count = 1;
+      try {
+        count = await repo.incrNotaryRateCounter('notary_login', ip || email || 'unknown', NOTARY_LOGIN_RL_WINDOW_SEC, nowMs());
+      } catch {
+        count = 1;
+      }
+      if (count > NOTARY_LOGIN_RL_MAX) {
+        return json(429, { ok: true, throttled: true });
+      }
+
+      // A syntactically invalid email is not an account of any kind — rejecting
+      // it leaks nothing about who is a notary (and keeps the 422 the web app
+      // and existing callers expect). Enumeration only matters for well-formed
+      // addresses, which the generic ok below makes indistinguishable.
       if (!domain.isEmail(email)) {
         return json(422, { errors: [{ code: 'courriel_invalide', message: 'Le courriel n’est pas valide.' }] });
       }
-      const notaryId = notaryIdForEmail(email);
-      const existing = await repo.getNotary(notaryId);
 
-      // Demo escape hatch, OFF by default: setting NOTA_DEMO_OPEN=true skips the
-      // active-account gate so an operator can run an open demo. DEMO ONLY —
-      // it lets any valid email into the console and self-seeds a charge-enabled
-      // notary, which would let anyone retain demands and farm referral rewards.
-      // So it is HARD-DISABLED in production regardless of the env var: a config
-      // slip must never open the notary surface on the real deployment.
-      const demoOpen = process.env.NOTA_DEMO_OPEN === 'true' && process.env.NODE_ENV !== 'production';
-      // ACTIVE means the notary's free Connect onboarding completed (the
-      // account.updated webhook flipped `status`, or it was seeded by an admin).
-      const active = !!(existing && existing.status === 'active');
-      if (!demoOpen && !active) {
+      const gate = await notaryGate(email);
+      if (!gate.allowed) {
+        // Same shape as the happy path: the BODY never distinguishes a notary
+        // from a stranger. Nothing is minted and nothing is emailed.
+        return json(200, { ok: true });
+      }
+
+      const cid = newId();
+      const exp = nowMs() + NOTARY_CHALLENGE_TTL_MS;
+      await repo.putNotaryLoginChallenge({
+        challengeId: cid,
+        notaryId: gate.notaryId,
+        email,
+        createdAt: new Date(nowMs()).toISOString(),
+        expiresAt: exp,
+        consumed: false,
+        ttl: Math.floor(exp / 1000) + 60, // let DynamoDB reap it shortly after expiry
+      });
+
+      // The link carries the CHALLENGE token in the hash (never a query string,
+      // which is logged); the web app consumes `#nauth=` on load and calls verify.
+      const token = signChallengeToken(gate.notaryId, cid, exp);
+      const link = NOTARY_CONSOLE_URL + '/#nauth=' + encodeURIComponent(token);
+
+      // Best-effort send on the shared branded template; a mail failure never
+      // changes the (generic) response — the notary can request another link.
+      const n = notifier();
+      if (n && typeof n.onNotaryLoginRequested === 'function') {
+        Promise.resolve(
+          n.onNotaryLoginRequested({ email, link, ttlMinutes: Math.round(NOTARY_CHALLENGE_TTL_MS / 60000) })
+        ).catch(() => {});
+      }
+
+      // Dev echo (never in production): hand the link + raw token back so tests
+      // and `npm run api:local` complete sign-in with no mailbox.
+      const body = { ok: true };
+      if (NOTARY_LOGIN_DEV_ECHO) {
+        body.devLink = link;
+        body.devToken = token;
+      }
+      return json(200, body);
+    }
+
+    // Step 2 — redeem the link for a session. Single-use: the challenge is
+    // atomically consumed, so a replayed link is rejected. Re-checks the gate at
+    // REDEMPTION time (a notary deactivated between request and verify must not
+    // slip through), then issues the SAME stateless session + feed tokens the old
+    // route did, after the identical profile upsert (stable étude label).
+    if (route === '/notary/session/verify' && method === 'POST') {
+      let payload;
+      try {
+        payload = typeof request.body === 'string' ? JSON.parse(request.body || '{}') : request.body || {};
+      } catch {
+        return json(400, { errors: [{ code: 'json_invalide', message: 'Corps JSON invalide.' }] });
+      }
+      const claims = verifyToken(String(payload.token || ''), nowMs());
+      if (!claims || claims.scope !== SCOPES.CHALLENGE || !claims.cid) {
+        return json(401, { errors: [{ code: 'lien_invalide', message: 'Lien invalide ou expiré.' }] });
+      }
+
+      // Atomic single-use consume: the FIRST redemption wins, a replay gets null.
+      const challenge = await repo.consumeNotaryLoginChallenge(claims.cid, nowMs());
+      if (!challenge || challenge.notaryId !== claims.sub) {
+        return json(401, { errors: [{ code: 'lien_invalide', message: 'Lien invalide ou déjà utilisé.' }] });
+      }
+
+      const email = challenge.email;
+      const gate = await notaryGate(email);
+      if (!gate.allowed) {
         return json(403, {
           errors: [{ code: 'compte_requis', message: 'Un compte notaire actif est requis pour accéder à la console. L’inscription est gratuite.' }],
         });
       }
 
-      // Upsert the notary profile so accept can stamp a stable étude label.
-      // Spread `existing` first so we never clobber status/subscription fields.
-      const label = (existing && existing.label) || email;
-      // Under the demo escape hatch, seed the account as fully onboarded too —
-      // an open demo must be able to walk the WHOLE lifecycle (retain, complete,
-      // commission) without a real Stripe onboarding. Never touches an account
-      // that is already active, and never runs outside NOTA_DEMO_OPEN.
-      const demoActivation = demoOpen && !active
-        ? { status: 'active', chargesEnabled: true, connectAccountId: 'acct_demo_' + notaryId.slice(0, 12) }
-        : {};
-      await repo.putNotary({
-        ...(existing || {}),
-        ...demoActivation,
-        id: notaryId,
-        email,
-        label,
-        role: 'notary',
-        createdAt: (existing && existing.createdAt) || new Date(nowMs()).toISOString(),
-      });
+      await upsertNotaryProfile(gate, email);
       const exp = nowMs() + NOTARY_TOKEN_TTL_MS;
       return json(200, {
         // Full-console token: sent in the Authorization header, never in a URL.
-        token: signToken(notaryId, exp, SCOPES.SESSION),
+        token: signToken(gate.notaryId, exp, SCOPES.SESSION),
         // Read-only calendar token, safe to embed in the webcal URL. It cannot
         // accept a bid or read a dossier.
-        feedToken: signToken(notaryId, exp, SCOPES.FEED),
+        feedToken: signToken(gate.notaryId, exp, SCOPES.FEED),
+        // The notary's own address, so a client that redeemed a link on a fresh
+        // device (nothing in localStorage) can key its console to it. The caller
+        // just proved ownership of this mailbox, so it is theirs to receive.
+        email,
         expiresAt: new Date(exp).toISOString(),
       });
     }

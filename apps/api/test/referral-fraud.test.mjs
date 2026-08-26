@@ -10,6 +10,7 @@ const { createBilling } = require('../src/billing.js');
 const { createFakeMailer } = require('../src/notify-port.js');
 const { createNotifier } = require('../src/notifications.js');
 const { notaryIdForEmail } = require('../src/notary-auth.js');
+import { notarySignIn } from '../test-support/notary-session.mjs';
 const domain = require('@nota/domain');
 
 // Fraud-hardening for the referral rail (ADR 0011). The program pays real money
@@ -80,9 +81,7 @@ async function postReferredBid(a, parrain, over = {}) {
 async function activeSession(a, email) {
   const existing = await a.repo.getNotary(notaryIdForEmail(email));
   await a.repo.putNotary({ ...(existing || {}), id: notaryIdForEmail(email), email, status: 'active', chargesEnabled: true, connectAccountId: 'acct_x' });
-  const res = await a.handle({ method: 'POST', path: '/notary/session', body: JSON.stringify({ email }) });
-  assert.equal(res.statusCode, 200, res.body);
-  return parse(res).token;
+  return (await notarySignIn(a, email)).token;
 }
 
 const accept = (a, token, bid) =>
@@ -155,9 +154,15 @@ test('NOTA_DEMO_OPEN does NOT open the notary console in production', async () =
   process.env.NOTA_DEMO_OPEN = 'true';
   try {
     const a = app();
-    const res = await a.handle({ method: 'POST', path: '/notary/session', body: JSON.stringify({ email: 'stranger@nowhere.ca' }) });
-    assert.equal(res.statusCode, 403, 'an unknown email must not self-activate a notary session in production');
-    assert.equal(parse(res).errors[0].code, 'compte_requis');
+    const res = await a.handle({ method: 'POST', path: '/notary/session/request', body: JSON.stringify({ email: 'stranger@nowhere.ca' }) });
+    // The request is enumeration-safe: a stranger gets the SAME generic ok as a
+    // notary — but in production NOTA_DEMO_OPEN is inert, so NO challenge is
+    // minted and NO usable link (devToken) is handed back. Nothing to redeem.
+    assert.equal(res.statusCode, 200, 'the request stays generic, never a 403 that would enumerate');
+    const body = parse(res);
+    assert.equal(body.ok, true);
+    assert.equal(body.devToken, undefined, 'an unknown email must not self-activate a notary session in production');
+    assert.equal(body.devLink, undefined);
   } finally {
     process.env.NODE_ENV = prevEnv;
     if (prevDemo === undefined) delete process.env.NOTA_DEMO_OPEN; else process.env.NOTA_DEMO_OPEN = prevDemo;
@@ -171,8 +176,8 @@ test('NOTA_DEMO_OPEN still opens the console outside production (demo/dev)', asy
   process.env.NOTA_DEMO_OPEN = 'true';
   try {
     const a = app();
-    const res = await a.handle({ method: 'POST', path: '/notary/session', body: JSON.stringify({ email: 'demo@guest.ca' }) });
-    assert.equal(res.statusCode, 200, 'the demo hatch still works where it is meant to');
+    const body = await notarySignIn(a, 'demo@guest.ca');
+    assert.ok(body.token, 'the demo hatch still works where it is meant to');
   } finally {
     process.env.NODE_ENV = prevEnv;
     if (prevDemo === undefined) delete process.env.NOTA_DEMO_OPEN; else process.env.NOTA_DEMO_OPEN = prevDemo;

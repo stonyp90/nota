@@ -6,6 +6,7 @@ const require = createRequire(import.meta.url);
 const { createApp } = require('../src/handler.js');
 const { createMemoryRepo } = require('../src/repo-memory.js');
 const { signToken, notaryIdForEmail } = require('../src/notary-auth.js');
+import { notarySignIn } from '../test-support/notary-session.mjs';
 
 const TODAY = '2026-08-12';
 const NOW_MS = 1_760_000_000_000; // fixed wall clock for deterministic tokens
@@ -27,17 +28,16 @@ const DEFAULT_PRICING = {
 const postBid = (a, obj) =>
   a.handle({ method: 'POST', path: '/bids', body: JSON.stringify({ pricing: DEFAULT_PRICING[obj.serviceId], ...obj }) });
 
-// Seed an ACTIVE subscription for this email so the /notary/session gate passes.
+// Seed an ACTIVE subscription for this email so the sign-in gate passes.
 async function seedActive(a, email) {
   await a.repo.putNotary({ id: notaryIdForEmail(email), email, status: 'active' });
 }
 
-// Sign in an ACTIVE notary. Returns the full body { token, feedToken, expiresAt }.
+// Sign in an ACTIVE notary through the passwordless request → verify handshake.
+// Returns the full session body { token, feedToken, expiresAt }.
 async function session(a, email) {
   await seedActive(a, email);
-  const res = await a.handle({ method: 'POST', path: '/notary/session', body: JSON.stringify({ email }) });
-  assert.equal(res.statusCode, 200, 'session body: ' + res.body);
-  return parse(res);
+  return notarySignIn(a, email);
 }
 
 // Console calls carry the SESSION token in the Authorization header (not a URL).
@@ -68,19 +68,21 @@ async function seedBid(a, over = {}) {
 
 // --- Fix 2: the subscription gate -------------------------------------------
 
-test('POST /notary/session refuses a notary WITHOUT an active subscription (403)', async () => {
+test('a request for a notary WITHOUT an active subscription mints no usable link (no enumeration)', async () => {
   const a = app();
-  const res = await a.handle({ method: 'POST', path: '/notary/session', body: JSON.stringify({ email: 'me@notaire.ca' }) });
-  assert.equal(res.statusCode, 403);
-  assert.equal(parse(res).errors[0].code, 'compte_requis');
-});
-
-test('POST /notary/session issues session + feed tokens for an ACTIVE notary (200)', async () => {
-  const a = app();
-  await seedActive(a, 'me@notaire.ca');
-  const res = await a.handle({ method: 'POST', path: '/notary/session', body: JSON.stringify({ email: 'me@notaire.ca' }) });
+  const res = await a.handle({ method: 'POST', path: '/notary/session/request', body: JSON.stringify({ email: 'me@notaire.ca' }) });
+  // Generic ok — the body never reveals that this address is not an active
+  // notary — and crucially NO devToken, so no session can be forged from it.
   assert.equal(res.statusCode, 200);
   const body = parse(res);
+  assert.equal(body.ok, true);
+  assert.equal(body.devToken, undefined);
+});
+
+test('the request → verify handshake issues session + feed tokens for an ACTIVE notary (200)', async () => {
+  const a = app();
+  await seedActive(a, 'me@notaire.ca');
+  const body = await notarySignIn(a, 'me@notaire.ca');
   assert.equal(typeof body.token, 'string');
   assert.ok(body.token.includes('.'));
   assert.equal(typeof body.feedToken, 'string');
@@ -88,14 +90,12 @@ test('POST /notary/session issues session + feed tokens for an ACTIVE notary (20
   assert.ok(Date.parse(body.expiresAt) > NOW_MS);
 });
 
-test('POST /notary/session with NOTA_DEMO_OPEN=true bypasses the gate (200)', async () => {
+test('sign-in with NOTA_DEMO_OPEN=true bypasses the gate (200)', async () => {
   const a = app();
   const prev = process.env.NOTA_DEMO_OPEN;
   process.env.NOTA_DEMO_OPEN = 'true';
   try {
-    const res = await a.handle({ method: 'POST', path: '/notary/session', body: JSON.stringify({ email: 'demo@notaire.ca' }) });
-    assert.equal(res.statusCode, 200);
-    const body = parse(res);
+    const body = await notarySignIn(a, 'demo@notaire.ca');
     assert.equal(typeof body.token, 'string');
     assert.equal(typeof body.feedToken, 'string');
   } finally {
@@ -104,9 +104,9 @@ test('POST /notary/session with NOTA_DEMO_OPEN=true bypasses the gate (200)', as
   }
 });
 
-test('POST /notary/session rejects a bad email before the gate (422)', async () => {
+test('the request rejects a bad email before the gate (422)', async () => {
   const a = app();
-  const res = await a.handle({ method: 'POST', path: '/notary/session', body: JSON.stringify({ email: 'nope' }) });
+  const res = await a.handle({ method: 'POST', path: '/notary/session/request', body: JSON.stringify({ email: 'nope' }) });
   assert.equal(res.statusCode, 422);
 });
 

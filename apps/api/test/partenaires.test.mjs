@@ -10,6 +10,7 @@ const { createBilling } = require('../src/billing.js');
 const { createFakeMailer } = require('../src/notify-port.js');
 const { createNotifier } = require('../src/notifications.js');
 const { notaryIdForEmail } = require('../src/notary-auth.js');
+import { notarySignIn } from '../test-support/notary-session.mjs';
 const domain = require('@nota/domain');
 
 // POST /partenaires — the referral program's self-serve front door (ADR 0011) —
@@ -146,13 +147,12 @@ test('POST /notaries/connect silently drops an invalid parrain — signup never 
   assert.equal((await a.repo.getNotary(notaryIdForEmail('new@notaire.ca'))).parrain, null);
 });
 
-test('the notary session flow never exposes a stored parrain', async () => {
+test('the notary sign-in flow never exposes a stored parrain', async () => {
   const a = app();
   const id = notaryIdForEmail('me@notaire.ca');
   await a.repo.putNotary({ id, email: 'me@notaire.ca', status: 'active', parrain: 'EVEROY' });
-  const res = await a.handle({ method: 'POST', path: '/notary/session', body: JSON.stringify({ email: 'me@notaire.ca' }) });
-  assert.equal(res.statusCode, 200);
-  assert.equal(res.body.includes('EVEROY'), false, 'the session response leaked the referral code');
+  const body = await notarySignIn(a, 'me@notaire.ca');
+  assert.equal(JSON.stringify(body).includes('EVEROY'), false, 'the session response leaked the referral code');
   // The upsert must not clobber the stored attribution either.
   assert.equal((await a.repo.getNotary(id)).parrain, 'EVEROY');
 });
@@ -238,9 +238,7 @@ async function seedRetainable(a, over = {}) {
 async function session(a, email) {
   const existing = await a.repo.getNotary(notaryIdForEmail(email));
   await a.repo.putNotary({ ...(existing || {}), id: notaryIdForEmail(email), email, status: 'active' });
-  const res = await a.handle({ method: 'POST', path: '/notary/session', body: JSON.stringify({ email }) });
-  assert.equal(res.statusCode, 200, res.body);
-  return parse(res).token;
+  return (await notarySignIn(a, email)).token;
 }
 
 test('a retained referred demand mails the REGISTERED partner exactly once (kind referral_client)', async () => {

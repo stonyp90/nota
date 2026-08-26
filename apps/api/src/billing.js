@@ -77,7 +77,7 @@ function createBilling({
     }
 
     // ONE identity per email: the notary record is keyed by the SAME
-    // deterministic id `/notary/session` derives (notaryIdForEmail), so the
+    // deterministic id the console sign-in derives (notaryIdForEmail), so the
     // ACTIVE flip from `account.updated` opens the console gate for the notary
     // who onboarded. A random id here would strand the activation on a record
     // the session lookup never reads — signup would never unlock sign-in.

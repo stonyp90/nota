@@ -612,11 +612,13 @@ test('notaires landing: the agenda prospecting band is wired for a signed-out vi
   assert.match($(doc, 'sub-outlook').href, /^https:\/\/outlook\.live\.com\/calendar\/0\/addfromweb\?url=/);
 });
 
-// 13c. First-time notary: the gate's single "Continuer" action branches into an
-//      explicit welcome/signup step. The email step swaps OUT — the branch must
-//      never read as an error under a login form — and a back action returns.
-test('gate continue-action branches a new notary into the signup step, and back', async () => {
-  const { win, doc, Nota } = await boot();
+// 13c. First-time notary: the gate offers a user-initiated signup branch (the
+//      passwordless request is enumeration-safe, so the server never routes a
+//      "new" email anywhere). Choosing it swaps the email step OUT for the
+//      explicit welcome/signup step — never an error under a login form — and a
+//      back action returns.
+test('the gate branches a new notary into the signup step on request, and back', async () => {
+  const { doc } = await boot();
 
   // The gate leads with one neutral action for both audiences, not a
   // members-only door ("Voir les demandes" implied an existing account).
@@ -624,15 +626,9 @@ test('gate continue-action branches a new notary into the signup step, and back'
   assert.equal($(doc, 'notary-gate-step-email').hidden, false);
   assert.equal($(doc, 'notary-signup-prompt').hidden, true);
 
-  // The API answers: this email has no account yet (403 compte_requis).
-  win.fetch = () => Promise.resolve({
-    status: 403, ok: false,
-    json: async () => ({ errors: [{ code: 'compte_requis', message: 'Abonnement requis.' }] }),
-  });
+  // A first-time notary self-selects the free-account path.
   $(doc, 'nc-email').value = 'nouveau@etude.ca';
-  const res = await Nota.notary.signIn('nouveau@etude.ca');
-  assert.equal(res.ok, false);
-  assert.equal(res.signup, true);
+  $(doc, 'notary-signup-link').click();
 
   // The signup step REPLACES the email step: welcome framing, the address it
   // will register, focus on the branch — and NO error list anywhere.
@@ -652,14 +648,58 @@ test('gate continue-action branches a new notary into the signup step, and back'
   assert.equal(doc.activeElement, $(doc, 'nc-email'), 'focus should return to the email field');
 });
 
+// 13c-bis. Production path (no dev echo): a request lands on the "check your
+//          inbox" confirmation, which reveals nothing about the address, and
+//          "use another email" returns to step 1.
+test('a link request with no dev echo lands on the check-your-inbox step', async () => {
+  const { win, doc, Nota } = await boot();
+  win.fetch = (url) => {
+    if (String(url).endsWith('/notary/session/request')) {
+      return Promise.resolve({ status: 200, ok: true, json: async () => ({ ok: true }) });
+    }
+    return Promise.reject(new Error('offline'));
+  };
+  const res = await Nota.notary.signIn('retour@etude.ca');
+  assert.equal(res.pending, true);
+  assert.equal($(doc, 'notary-gate-step-sent').hidden, false);
+  assert.equal($(doc, 'notary-gate-step-email').hidden, true);
+  assert.equal($(doc, 'notary-sent-email').textContent, 'retour@etude.ca');
+  $(doc, 'notary-sent-back').click();
+  assert.equal($(doc, 'notary-gate-step-email').hidden, false);
+  assert.equal($(doc, 'notary-gate-step-sent').hidden, true);
+});
+
+// 13c-ter. A magic-link token (from the emailed link, consumed on boot) verifies
+//          straight into the console and keys it to the address the API returns.
+test('a magic-link token verifies straight into the console', async () => {
+  const { win, doc, Nota } = await boot();
+  win.fetch = (url) => {
+    const u = String(url);
+    if (u.endsWith('/notary/session/verify')) {
+      return Promise.resolve({ status: 200, ok: true, json: async () => ({ token: 'sess.tok', feedToken: 'feed.tok', email: 'link@etude.ca' }) });
+    }
+    if (u.endsWith('/notary/bids')) return Promise.resolve({ status: 200, ok: true, json: async () => ({ bids: [] }) });
+    return Promise.reject(new Error('offline'));
+  };
+  const res = await Nota.notary.verifyMagic('chal.tok', null);
+  assert.equal(res.ok, true);
+  assert.equal($(doc, 'notary-authed').hidden, false, 'the console opens');
+  assert.equal(Nota.notary.state.email, 'link@etude.ca', 'keyed to the API-returned address');
+});
+
 // 13d. Returning notary: the SAME continue action opens the console directly
 //      (the "welcome back" branch), and signing out re-arms the email step.
 test('gate continue-action signs an existing notary straight into the console', async () => {
   const { win, doc, Nota } = await boot();
   win.fetch = (url) => {
     const u = String(url);
-    if (u.endsWith('/notary/session')) {
-      return Promise.resolve({ status: 200, ok: true, json: async () => ({ token: 'sess.tok', feedToken: 'feed.tok' }) });
+    // Two-step passwordless sign-in: request echoes a challenge token (dev),
+    // verify redeems it for the session.
+    if (u.endsWith('/notary/session/request')) {
+      return Promise.resolve({ status: 200, ok: true, json: async () => ({ ok: true, devToken: 'chal.tok' }) });
+    }
+    if (u.endsWith('/notary/session/verify')) {
+      return Promise.resolve({ status: 200, ok: true, json: async () => ({ token: 'sess.tok', feedToken: 'feed.tok', email: 'retour@etude.ca' }) });
     }
     if (u.endsWith('/notary/bids')) {
       return Promise.resolve({ status: 200, ok: true, json: async () => ({ bids: [] }) });
@@ -681,20 +721,19 @@ test('gate continue-action signs an existing notary straight into the console', 
 // 13e. The signup CTA drives Stripe onboarding with the pending email; a
 //      failure surfaces in the branch's own error list and re-arms the CTA.
 test('signup CTA posts the pending email to /notaries/connect', async () => {
-  const { win, doc, Nota } = await boot();
+  const { win, doc } = await boot();
   let captured = null;
   win.fetch = (url, opts) => {
     const u = String(url);
-    if (u.endsWith('/notary/session')) {
-      return Promise.resolve({ status: 403, ok: false, json: async () => ({ errors: [{ code: 'compte_requis', message: 'Abonnement requis.' }] }) });
-    }
     if (u.endsWith('/notaries/connect')) {
       captured = JSON.parse(opts.body);
       return Promise.resolve({ status: 503, ok: false, json: async () => ({ errors: [{ message: 'Inscription indisponible pour le moment.' }] }) });
     }
     return Promise.reject(new Error('offline'));
   };
-  await Nota.notary.signIn('nouveau@etude.ca');
+  // A first-time notary self-selects the signup branch, then hits the CTA.
+  $(doc, 'nc-email').value = 'nouveau@etude.ca';
+  $(doc, 'notary-signup-link').click();
   $(doc, 'notary-signup-btn').click();
   await wait(20);
   assert.ok(captured, 'the CTA should call /notaries/connect');

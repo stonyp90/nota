@@ -89,6 +89,27 @@ function retainedSK(dateISO, bidId) {
 }
 const RETAINED_PREFIX = 'RETAINED#';
 
+// --- Notary console magic-link login (MAIN table) ----------------------------
+// A single-use passwordless challenge that proves a notary owns the mailbox
+// BEFORE any session token is minted (the old sign-in trusted a bare request
+// email — see admin.js:6-9). These live in the MAIN `nota-main` table (the
+// public API Lambda's own table) — deliberately NOT the admin LOGIN#/RL# records
+// in the separate `nota-admin` table, which the public Lambda cannot reach. The
+// distinct `NOTARY_LOGIN#`/`NRL#` prefixes also mean an admin and a notary
+// challenge can never be confused for one another.
+//
+//   PK = NOTARY_LOGIN#<cid>   SK = NOTARY_LOGIN   (a single-use magic link; TTL)
+//   PK = NRL#<scope>#<key>    SK = NRL#<window>   (a login rate-limit counter; TTL)
+function notaryLoginPK(cid) {
+  return 'NOTARY_LOGIN#' + String(cid);
+}
+const NOTARY_LOGIN_SK = 'NOTARY_LOGIN';
+
+function notaryRlPK(scope, key) {
+  return `NRL#${scope}#${String(key).trim().toLowerCase()}`;
+}
+const NOTARY_RL_SK = 'NRL';
+
 // --- Analytics rollups (STATS#) ----------------------------------------------
 // Admin analytics are computed WITHOUT a Scan (the API role deliberately lacks
 // it). Marketplace history is folded into rollup items on the SAME main table
@@ -257,6 +278,10 @@ module.exports = {
   SENT_SK,
   unsubPK,
   UNSUB_SK,
+  notaryLoginPK,
+  NOTARY_LOGIN_SK,
+  notaryRlPK,
+  NOTARY_RL_SK,
   declinePK,
   DECLINE_SK,
   retainedSK,

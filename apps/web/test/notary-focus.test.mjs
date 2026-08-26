@@ -70,7 +70,10 @@ function stubNotaryApi(win, bids, extra = {}) {
     const body = init.body ? JSON.parse(init.body) : null;
     calls.push({ path, method: init.method || 'GET', body });
     const json = (body, status = 200) => Promise.resolve({ ok: status < 400, status, json: () => Promise.resolve(body) });
-    if (path.includes('/notary/session')) return json({ token: 'sess.tok', feedToken: 'feed.tok' });
+    // Two-step passwordless sign-in: request echoes a challenge token (dev),
+    // verify redeems it for the session + feed tokens.
+    if (path.includes('/notary/session/request')) return json({ ok: true, devToken: 'chal.tok' });
+    if (path.includes('/notary/session/verify')) return json({ token: 'sess.tok', feedToken: 'feed.tok', email: 'demo@etude.ca' });
     if (path.includes('/notary/bids/propose')) {
       return json({ proposition: { id: 'prop-1', montant: body.montant, delta: 0, message: body.message || null, status: 'en_attente', createdAt: '2026-08-12T10:00:00Z' } });
     }

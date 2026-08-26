@@ -562,6 +562,30 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
     return { ok: true, results };
   }
 
+  // --- Notary console sign-in (passwordless magic link) ---------------------
+  // Fired from POST /notary/session/request (fire-and-forget). Emails the
+  // single-use sign-in link on the shared branded template. Unlike every other
+  // notifier this bypasses sendOnce: an auth link is TRANSACTIONAL — it must
+  // resend on each request (a fresh single-use link every time) and must never
+  // be suppressed by an unsubscribe or a dedupe ledger. Best-effort: a mail
+  // failure must never break the request response (which stays generic anyway).
+  async function onNotaryLoginRequested({ email, link, ttlMinutes } = {}) {
+    const to = String(email || '').trim().toLowerCase();
+    if (!to || !link) return { ok: true, sent: false };
+    try {
+      const msg = emails.notaryMagicLink({
+        link,
+        ttlMinutes,
+        baseUrl: base,
+        unsubscribeUrl: unsubscribeUrl(to),
+      });
+      await mailer.send({ to, subject: msg.subject, html: msg.html, text: msg.text });
+      return { ok: true, sent: true, to };
+    } catch (err) {
+      return { ok: false, sent: false, error: String((err && err.message) || err) };
+    }
+  }
+
   // Record an opt-out (used by GET /unsubscribe).
   async function unsubscribe(email) {
     const clean = String(email || '').trim().toLowerCase();
@@ -582,6 +606,7 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
     onClientSignup,
     onReminderDue,
     onNotaryConnected,
+    onNotaryLoginRequested,
     onActPaid,
     onAccountEvent,
     unsubscribe,
