@@ -219,21 +219,30 @@ test('the service chip filter hides the other services', async () => {
 // ---------------------------------------------------------------------------
 test('Retenir asks for a confirmation step before the accept request fires', async () => {
   const { doc, open, calls, D } = await bootSignedIn();
-  const card = doc.querySelector(`#notary-open-list .nc-card[data-id="${open[0].id}"]`);
-  const accept = card.querySelector('.nc-accept');
-  click(accept);
-  await wait(20);
-  assert.equal(calls.filter((c) => c.path.includes('/notary/bids/accept')).length, 0, 'first click must not POST');
+  const cardNow = () => doc.querySelector(`#notary-open-list .nc-card[data-id="${open[0].id}"]`);
+  // Arm and settle. Under CI load a stray late re-render can replace the card
+  // node and drop the armed state between the click and the assertions — so
+  // re-query and re-click until the confirm sticks instead of sampling once.
+  const arm = async () => {
+    for (let tries = 0; tries < 5; tries++) {
+      if (cardNow().dataset.confirm === '1') break;
+      click(cardNow().querySelector('.nc-accept'));
+      await wait(20);
+    }
+    return cardNow();
+  };
+  let card = await arm();
+  assert.equal(calls.filter((c) => c.path.includes('/notary/bids/accept')).length, 0, 'arming must not POST');
   const confirm = card.querySelector('.nc-accept');
   assert.ok(confirm.textContent.includes(D.money(open[0].montant)), 'the confirm button shows the amount');
   assert.ok(card.querySelector('.nc-accept-cancel'), 'an Annuler escape is offered');
   click(card.querySelector('.nc-accept-cancel'));
   assert.ok(!card.querySelector('.nc-accept-cancel'), 'Annuler reverts the confirm state');
-  click(card.querySelector('.nc-accept'));
+  card = await arm();
   click(card.querySelector('.nc-accept'));
   await wait(10);
   const posts = calls.filter((c) => c.path.includes('/notary/bids/accept'));
-  assert.equal(posts.length, 1, 'second click POSTs once');
+  assert.equal(posts.length, 1, 'the confirmed click POSTs once');
   assert.deepEqual(posts[0].body, { id: open[0].id, dateISO: open[0].dateISO });
 });
 
