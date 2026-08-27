@@ -143,6 +143,11 @@
   "Le notaire se déplace chez moi — jusqu’à 25 km": "The notary travels to me — up to 25 km",
   "Le notaire se déplace chez moi — jusqu’à 50 km": "The notary travels to me — up to 50 km",
   "Urgence — signature 100 % en ligne": "Urgency — 100 % online signing",
+  // The two segmented bars of the same catalogue (where it signs × radius);
+  // the « ≤/< N km » radius labels are language-neutral and need no entry.
+  "À l’étude": "At the office",
+  "Chez moi": "At my home",
+  "Urgence en ligne": "Online urgency",
   // Composed notary-card factors, one per band (finite compositions).
   "Déplacement pour la signature : Je me déplace à l’étude — jusqu’à 50 km": "Travel for the signing: I can travel to the notary’s office — up to 50 km",
   "Déplacement pour la signature : Je me déplace à l’étude — jusqu’à 25 km": "Travel for the signing: I can travel to the notary’s office — up to 25 km",

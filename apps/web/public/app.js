@@ -2390,6 +2390,90 @@
       if (c.aide) txt.appendChild(el('span', 'help', c.aide));
       lab.appendChild(txt);
       row.appendChild(lab);
+    } else if (c.type === 'choice' && c.id === D.DEPLACEMENT_CRITERION_ID) {
+      // The déplacement band splits into TWO CHIP ROWS — who travels, then
+      // the radius for that direction — so all six bands read at a glance
+      // with no menu to open. A visually-hidden native select stays the
+      // source of truth (the o-service pattern): every write — chip click,
+      // test, dossier sync — sets sel.value and dispatches `change`.
+      row.appendChild(el('span', 'crit-label', c.label));
+      var dsel = document.createElement('select');
+      dsel.id = idPrefix + c.id; dsel.className = 'visually-hidden';
+      dsel.tabIndex = -1; dsel.setAttribute('aria-hidden', 'true');
+      var dph = document.createElement('option');
+      dph.value = ''; dph.textContent = 'Choisir…';
+      dsel.appendChild(dph);
+      D.DEPLACEMENTS.forEach(function (d) {
+        var o = document.createElement('option');
+        o.value = d.id; o.textContent = d.nom;
+        dsel.appendChild(o);
+      });
+      if (current != null) dsel.value = current;
+      row.appendChild(dsel);
+
+      // Two compact SEGMENTED BARS (the header-toggle register), left to
+      // right: where it signs, then the radius. No wall of stacked pills.
+      var depRows = el('div', 'crit-dep');
+      var quiRow = el('div', 'seg crit-dep-qui');
+      quiRow.setAttribute('role', 'group');
+      var kmRow = el('div', 'seg crit-dep-km');
+      kmRow.setAttribute('role', 'group');
+      depRows.appendChild(quiRow); depRows.appendChild(kmRow);
+      row.appendChild(depRows);
+
+      var depCommit = function (id) {
+        dsel.value = id;
+        dsel.dispatchEvent(new Event('change', { bubbles: true }));
+      };
+      var bandsOf = function (quiId) {
+        return D.DEPLACEMENTS.filter(function (d) { return d.qui === quiId; });
+      };
+      // Who travels: an urgence direction carries its single band's price on
+      // the chip itself; the others price on the radius row below.
+      D.DEPLACEMENT_QUI.forEach(function (q) {
+        var b = el('button', 'seg-btn', q.nom);
+        b.type = 'button'; b.id = idPrefix + c.id + '__qui_' + q.id;
+        if (q.urgence) {
+          var uAdd = critAddBadge((bandsOf(q.id)[0] || {}).add);
+          if (uAdd) b.appendChild(uAdd);
+        }
+        b.addEventListener('click', function () {
+          var cur = D.deplacementById(dsel.value);
+          if (cur && cur.qui === q.id) return;
+          // Land on the direction's cheapest band; the radius row refines.
+          var first = bandsOf(q.id).slice().sort(function (a, z) { return a.add - z.add; })[0];
+          if (first) depCommit(first.id);
+        });
+        quiRow.appendChild(b);
+      });
+      var paintDep = function () {
+        var cur = D.deplacementById(dsel.value);
+        var quiId = cur ? cur.qui : null;
+        quiRow.querySelectorAll('.seg-btn').forEach(function (x, i) {
+          var on = !!quiId && D.DEPLACEMENT_QUI[i].id === quiId;
+          x.classList.toggle('is-on', on); x.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+        clear(kmRow);
+        var q = D.DEPLACEMENT_QUI.find(function (x) { return x.id === quiId; });
+        kmRow.hidden = !q || q.urgence;
+        if (kmRow.hidden) return;
+        bandsOf(quiId).forEach(function (d) {
+          var b = el('button', 'seg-btn', d.nomCourt);
+          var add = critAddBadge(d.add);
+          if (add) b.appendChild(add);
+          b.type = 'button'; b.id = idPrefix + c.id + '__' + d.id;
+          var on = dsel.value === d.id;
+          b.classList.toggle('is-on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false');
+          b.addEventListener('click', function () { depCommit(d.id); });
+          kmRow.appendChild(b);
+        });
+      };
+      dsel.addEventListener('change', function () {
+        paintDep();
+        onChange(dsel.value === '' ? undefined : dsel.value);
+      });
+      paintDep();
+      if (c.aide) row.appendChild(el('span', 'help', c.aide));
     } else if (c.type === 'choice' && c.ui === 'select') {
       // A long option list (the lender catalogue) renders as a <select> — the
       // domain marks it `ui: 'select'`; chips would be a wall. The dollar

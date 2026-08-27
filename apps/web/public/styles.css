@@ -2107,6 +2107,10 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 .crit-text { display: flex; flex-direction: column; gap: 1px; }
 .crit-label { font-size: 13.5px; font-weight: 600; color: var(--ink); }
 .crit-choices { display: flex; gap: 6px; flex-wrap: wrap; }
+/* Déplacement: two compact segmented bars — where it signs, then the radius. */
+.crit-dep { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.crit-dep .seg { flex-wrap: wrap; }
+.crit-dep-km[hidden] { display: none; }
 .crit-row input[type='number'] { max-width: 180px; }
 /* The bracket figure and its unit read as one control (like the offer box). */
 .crit-unit-wrap { display: inline-flex; align-items: center; gap: 6px; }

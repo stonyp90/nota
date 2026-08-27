@@ -176,13 +176,26 @@
   // (notaryCanServe). The km values are declarations framing the mise en
   // relation — not computed distances (no notary location exists yet).
   // The list is data — adapters render it, never re-declare it.
+  // `nomCourt` is the radius half of the sentence, for renderers that split
+  // the band into two choices (who travels × how far) instead of one select.
   const DEPLACEMENTS = [
-    { id: 'client_50', nom: 'Je me déplace à l’étude — jusqu’à 50 km', qui: 'client', km: 50, add: 0, poids: 0, urgence: false },
-    { id: 'client_25', nom: 'Je me déplace à l’étude — jusqu’à 25 km', qui: 'client', km: 25, add: 50, poids: 0, urgence: false },
-    { id: 'client_10', nom: 'Je me déplace à l’étude — moins de 10 km', qui: 'client', km: 10, add: 100, poids: 1, urgence: false },
-    { id: 'notaire_25', nom: 'Le notaire se déplace chez moi — jusqu’à 25 km', qui: 'notaire', km: 25, add: 150, poids: 1, urgence: false },
-    { id: 'notaire_50', nom: 'Le notaire se déplace chez moi — jusqu’à 50 km', qui: 'notaire', km: 50, add: 250, poids: 2, urgence: false },
-    { id: 'urgence_en_ligne', nom: 'Urgence — signature 100 % en ligne', qui: 'en_ligne', km: 0, add: 400, poids: 2, urgence: true },
+    { id: 'client_50', nom: 'Je me déplace à l’étude — jusqu’à 50 km', nomCourt: '≤ 50 km', qui: 'client', km: 50, add: 0, poids: 0, urgence: false },
+    { id: 'client_25', nom: 'Je me déplace à l’étude — jusqu’à 25 km', nomCourt: '≤ 25 km', qui: 'client', km: 25, add: 50, poids: 0, urgence: false },
+    { id: 'client_10', nom: 'Je me déplace à l’étude — moins de 10 km', nomCourt: '< 10 km', qui: 'client', km: 10, add: 100, poids: 1, urgence: false },
+    { id: 'notaire_25', nom: 'Le notaire se déplace chez moi — jusqu’à 25 km', nomCourt: '≤ 25 km', qui: 'notaire', km: 25, add: 150, poids: 1, urgence: false },
+    { id: 'notaire_50', nom: 'Le notaire se déplace chez moi — jusqu’à 50 km', nomCourt: '≤ 50 km', qui: 'notaire', km: 50, add: 250, poids: 2, urgence: false },
+    { id: 'urgence_en_ligne', nom: 'Urgence — signature 100 % en ligne', nomCourt: 'Urgence — 100 % en ligne', qui: 'en_ligne', km: 0, add: 400, poids: 2, urgence: true },
+  ];
+
+  // The « who travels » half of the same split. The list is data — adapters
+  // render it, never re-declare it. An `urgence` direction has a single band,
+  // so renderers need no radius row for it.
+  // The labels answer « où se signe l'acte ? » in the client's own register —
+  // the same words as the notary-card pill (« À l'étude · ≤ 50 km »).
+  const DEPLACEMENT_QUI = [
+    { id: 'client', nom: 'À l’étude', urgence: false },
+    { id: 'notaire', nom: 'Chez moi', urgence: false },
+    { id: 'en_ligne', nom: 'Urgence en ligne', urgence: true },
   ];
 
   function deplacementById(id) {
@@ -1686,6 +1699,7 @@
     lenderOtherName,
     bidLender,
     DEPLACEMENTS,
+    DEPLACEMENT_QUI,
     deplacementById,
     DEPLACEMENT_CRITERION_ID,
     DEPLACEMENT_URGENCE_ID,
