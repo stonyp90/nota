@@ -561,7 +561,7 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [bids, retained]
+                required: [bids, retained, rating]
                 properties:
                   bids:
                     type: array
@@ -571,6 +571,8 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/RetainedBid"
+                  rating:
+                    $ref: "#/components/schemas/NotaryRating"
         "401":
           $ref: "#/components/responses/Unauthorized"
   /notary/bids/accept:
@@ -911,6 +913,8 @@ paths:
                             type: [string, "null"]
                           courriel:
                             type: [string, "null"]
+                          rating:
+                            $ref: "#/components/schemas/NotaryRating"
                   propositions:
                     type: array
                     items:
@@ -1452,6 +1456,8 @@ components:
         createdAt:
           type: string
           format: date
+        rating:
+          $ref: "#/components/schemas/NotaryRating"
     NotaryDemande:
       type: object
       required: [id, documents, createdAt, fournie]
@@ -1934,6 +1940,19 @@ components:
         message:
           type: string
           description: Human-readable message (fr-CA).
+    NotaryRating:
+      type: [object, "null"]
+      description: >-
+        Public evaluation average of a notary — null before the first
+        evaluation (never zero stars). `note` is the one-decimal mean.
+      properties:
+        note:
+          type: number
+          minimum: 1
+          maximum: 5
+        avis:
+          type: integer
+          minimum: 1
     EvaluationResponse:
       type: object
       required: [evaluation]

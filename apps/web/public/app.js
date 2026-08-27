@@ -487,6 +487,17 @@
   }
   function svcName(id) { var s = D.serviceById(id); return s ? s.nom : id; }
 
+  // « ★ 4,5 (12 avis) » — the public face of a notary's evaluations. fr-CA
+  // decimal comma; the i18n rule flips it to the EN shape. Null rating → null:
+  // no fake zero-star badge, ever.
+  function ratingSpan(rating) {
+    if (!rating || rating.note == null) return null;
+    var txt = '★ ' + String(rating.note).replace('.', ',') + ' (' + rating.avis + ' avis)';
+    var sp = el('span', 'rating-badge', txt);
+    sp.setAttribute('aria-label', 'Note moyenne ' + String(rating.note).replace('.', ',') + ' sur 5, ' + rating.avis + ' avis');
+    return sp;
+  }
+
   // --- Client profile --------------------------------------------------------
   // Created with sensible defaults on first read (all notifications on). Held on
   // this device; reused across the offer flow and the dossier.
@@ -2898,6 +2909,8 @@
     if (st === 'approved' && noti && (noti.etude || noti.courriel)) {
       var mr = el('div', 'my-offer-contact');
       mr.appendChild(el('strong', null, 'Retenue par ' + (noti.etude || 'votre notaire')));
+      var nstars = ratingSpan(noti.rating);
+      if (nstars) { mr.appendChild(document.createTextNode(' ')); mr.appendChild(nstars); }
       if (noti.courriel) {
         mr.appendChild(document.createTextNode(' — '));
         var mail = el('a', 'my-offer-contact-mail', noti.courriel);
@@ -2973,6 +2986,8 @@
       var head = el('div', 'my-offer-prop-text');
       var delta = Number(p.delta != null ? p.delta : (p.montant - o.montant));
       head.appendChild(el('strong', null, 'Un notaire' + (p.etude ? ' (' + p.etude + ')' : '') + ' vous propose ' + D.money(p.montant)));
+      var pstars = ratingSpan(p.rating);
+      if (pstars) { head.appendChild(document.createTextNode(' ')); head.appendChild(pstars); }
       head.appendChild(document.createTextNode(' (' + (delta >= 0 ? '+' : '−') + D.money(Math.abs(delta)) + ')'));
       block.appendChild(head);
       if (p.message) block.appendChild(el('p', 'my-offer-prop-msg', p.message));
@@ -4179,6 +4194,7 @@
     if (r.status === 401) { ncExpire('Session expirée. Reconnectez-vous.'); return false; }
     var j = {}; try { j = await r.json(); } catch (e) {}
     nc.open = j.bids || [];
+    nc.rating = j.rating || null; // the notary's own public average
     ncRenderOpen();
     if (j.retained && j.retained.length) { ncRetainedMerge(nc.email, j.retained); ncRenderRetained(); }
     return true;
@@ -5461,6 +5477,15 @@
   function ncRenderEarnings() {
     var box = $('notary-earnings'); if (!box) return; clear(box);
     var e = ncEarnings(nc.email);
+    // The notary's own evaluation average — clients see it on every
+    // proposition, so the console shows the same number, first.
+    var own = ratingSpan(nc.rating);
+    if (own) {
+      var rrow = el('div', 'nc-own-rating');
+      rrow.appendChild(own);
+      rrow.appendChild(el('span', 'help', ' Votre note, telle que les clients la voient.'));
+      box.appendChild(rrow);
+    }
     function tile(k, v, cls) {
       var t = el('div', 'nc-stat' + (cls ? ' ' + cls : ''));
       t.appendChild(el('div', 'nc-stat-v', v));

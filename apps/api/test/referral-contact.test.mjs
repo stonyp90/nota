@@ -196,7 +196,7 @@ test('after retention: the client sees the retaining notary étude + courriel; a
   await accept(a, tokenA, posted.bid.id, posted.bid.dateISO);
 
   const own = parse(await clientBid(a, posted.clientToken, posted.bid.id, posted.bid.dateISO));
-  assert.deepEqual(own.notaire, { etude: 'Étude a@notaire.ca', courriel: 'a@notaire.ca' });
+  assert.deepEqual(own.notaire, { etude: 'Étude a@notaire.ca', courriel: 'a@notaire.ca', rating: null });
   assert.equal(JSON.stringify(own).includes(notaryIdForEmail('a@notaire.ca')), false, 'the internal notaryId must never reach the client');
 
   // The losing notary's console lists nothing — no contact leak sideways.

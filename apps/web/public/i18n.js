@@ -829,6 +829,7 @@
   "Impossible d’enregistrer l’évaluation. Réessayez.": "Unable to save the evaluation. Please try again.",
   "Merci — elle aide les prochains clients.": "Thank you — it helps the next clients.",
   "Note de 1 à 5": "Rating from 1 to 5",
+  "Votre note, telle que les clients la voient.": "Your rating, as clients see it.",
   "Aucun notaire disponible ?": "No notary available?",
   "Messagerie vocale": "Voicemail",
   "« On vous rappelle… »": "“We’ll call you back…”",
@@ -886,6 +887,16 @@
   "<span class=\"nc-soon-tag\">Bientôt</span>Les notaires pourront réaliser l’acte <strong>entièrement en ligne</strong> sur Nota, signature à distance comprise, sans déplacement. Aujourd’hui, vous convenez du lieu avec le notaire qui vous retient.": "<span class=\"nc-soon-tag\">Coming soon</span>Notaries will soon complete the act <strong>entirely online</strong> on Nota, remote signing included, no travel needed. For now, you agree on the location with the notary who takes you on."
 };
   var RULES = compileRules([
+  {
+    "pattern": "^★ ([0-9]+(?:,[0-9])?) \\(([0-9]+) avis\\)$",
+    "flags": "",
+    "replacement": "★ $1 ($2 reviews)"
+  },
+  {
+    "pattern": "^Note moyenne ([0-9]+(?:,[0-9])?) sur 5, ([0-9]+) avis$",
+    "flags": "",
+    "replacement": "Average rating $1 out of 5, $2 reviews"
+  },
   {
     "pattern": "^Votre évaluation : ([★☆]+)$",
     "flags": "",

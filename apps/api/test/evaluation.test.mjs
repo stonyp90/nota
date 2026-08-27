@@ -112,3 +112,38 @@ test('the settlement invites the client to evaluate (one mail, once)', async () 
   const invite = a.mailer.sent.find((m) => m.to === 'client@example.ca' && /évalu/i.test(m.subject));
   assert.ok(invite, 'evaluation invite missing: ' + JSON.stringify(a.mailer.sent.map((m) => [m.to, m.subject])));
 });
+
+test('the rating average surfaces publicly: on the retained notaire block, on propositions, and in the console', async () => {
+  const a = app();
+  const bid = await seed(a);
+  // Two past evaluations on other bids give the notary a 4.5 average.
+  await a.repo.putNotary({ ...(await a.repo.getNotary(NOTARY)), ratingCount: 2, ratingSum: 9 });
+
+  // 1) The client's retained view names the notary WITH their stars.
+  const mine = parse(await a.handle({ method: 'GET', path: '/client/bid', headers: bearer(clientToken(bid.id)), query: { id: bid.id, dateISO: bid.dateISO } }));
+  assert.deepEqual(mine.notaire.rating, { note: 4.5, avis: 2 });
+
+  // 2) A proposition from that notary carries the same rating.
+  await a.repo.update({
+    ...(await a.repo.get(bid.id, bid.dateISO)),
+    status: domain.STATUS.OUVERTE, notaryId: null,
+    propositions: [{ id: 'p1', notaryId: NOTARY, etude: 'Étude N', montant: 3200, delta: 400, status: 'en_attente', createdAt: TODAY }],
+  });
+  const withProp = parse(await a.handle({ method: 'GET', path: '/client/bid', headers: bearer(clientToken(bid.id)), query: { id: bid.id, dateISO: bid.dateISO } }));
+  assert.deepEqual(withProp.propositions[0].rating, { note: 4.5, avis: 2 });
+
+  // 3) The console hands the notary their own average.
+  const token = signToken(NOTARY, NOW_MS + 60_000, SCOPES.SESSION);
+  const console_ = parse(await a.handle({ method: 'GET', path: '/notary/bids', headers: bearer(token), query: {} }));
+  assert.deepEqual(console_.rating, { note: 4.5, avis: 2 });
+});
+
+test('no ratings yet → rating is null everywhere, never zero stars', async () => {
+  const a = app();
+  const bid = await seed(a);
+  const mine = parse(await a.handle({ method: 'GET', path: '/client/bid', headers: bearer(clientToken(bid.id)), query: { id: bid.id, dateISO: bid.dateISO } }));
+  assert.equal(mine.notaire.rating, null);
+  const token = signToken(NOTARY, NOW_MS + 60_000, SCOPES.SESSION);
+  const console_ = parse(await a.handle({ method: 'GET', path: '/notary/bids', headers: bearer(token), query: {} }));
+  assert.equal(console_.rating, null);
+});

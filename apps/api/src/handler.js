@@ -336,6 +336,12 @@ function createApp(repo, opts = {}) {
   const notaryProposition = (p) => ({ id: p.id, montant: p.montant, delta: p.delta, message: p.message || null, status: p.status, createdAt: p.createdAt });
   const notaryDemande = (b, d) => ({ id: d.id, documents: d.documents, message: d.message || null, createdAt: d.createdAt, fournie: demandeFournie(b, d) });
   const clientProposition = (p) => ({ id: p.id, etude: p.etude || null, montant: p.montant, delta: p.delta, message: p.message || null, status: p.status, createdAt: p.createdAt });
+  // The public face of a notary's evaluations: the one-decimal average and the
+  // count — null before the first one, so the UI never paints fake stars.
+  const notaryRating = (profile) => {
+    const note = profile ? domain.ratingAverage(profile.ratingSum, profile.ratingCount) : null;
+    return note == null ? null : { note, avis: profile.ratingCount };
+  };
   const clientDemande = (b, d) => ({ id: d.id, etude: d.etude || null, documents: d.documents, message: d.message || null, createdAt: d.createdAt, fournie: demandeFournie(b, d) });
   // This notary's latest proposition that was not superseded (or null).
   function latestPropositionFor(b, notaryId) {
@@ -1225,7 +1231,10 @@ function createApp(repo, opts = {}) {
           });
         }
       }
-      return json(200, { bids: out, retained });
+      // The notary's own public average rides along so the console can show
+      // it where the earnings live.
+      const ownProfile = await repo.getNotary(notaryId);
+      return json(200, { bids: out, retained, rating: notaryRating(ownProfile) });
     }
 
     if (route === '/notary/bids/accept' && method === 'POST') {
@@ -1381,16 +1390,27 @@ function createApp(repo, opts = {}) {
         notaire = {
           etude: bid.etude || (profile && profile.label) || null,
           courriel: (profile && profile.email) || null,
+          // Public evaluation average (never the internal notaryId).
+          rating: notaryRating(profile),
         };
       }
       // Act + evaluation state (ADR 0015): once the ACT# ledger has settled
       // the signing, the client may evaluate the notary — the UI keys on
       // `acte.complete`.
       const completion = typeof repo.getActCompletion === 'function' ? await repo.getActCompletion(bid.id) : null;
+      // Each pending proposition carries its notary's public rating: the one
+      // fact a client has to weigh a higher price from a stranger. Profiles
+      // are fetched once per distinct proposer.
+      const props = propositionsOf(bid).filter((p) => p.status !== PROPOSITION.REMPLACEE);
+      const proposerIds = [...new Set(props.map((p) => p.notaryId).filter(Boolean))];
+      const ratingsById = {};
+      for (const nid of proposerIds) {
+        ratingsById[nid] = notaryRating(await repo.getNotary(nid));
+      }
       return json(200, {
         bid: publicBid(bid),
         notaire,
-        propositions: propositionsOf(bid).filter((p) => p.status !== PROPOSITION.REMPLACEE).map(clientProposition),
+        propositions: props.map((p) => ({ ...clientProposition(p), rating: ratingsById[p.notaryId] || null })),
         demandes: demandesOf(bid).map((d) => clientDemande(bid, d)),
         readiness: domain.leadReadiness(bid.serviceId, bid.dossier || {}),
         // The retained-act conversation. Empty until a notary retains the bid.

@@ -1344,8 +1344,9 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
    width, one CTA. The bare-span label ("Vous êtes") dresses like real ones. */
 .pr-form-panel { grid-area: form; padding: var(--pad-card-lg); }
 .pr-form-panel input { width: 100%; }
-.pr-form-panel .form-row { margin-bottom: var(--space-6); }
-.pr-form-panel span.lbl { display: block; font-size: 14px; font-weight: 700; margin-bottom: 8px; }
+.pr-form-panel .h-sub { margin-bottom: var(--space-8); }
+.pr-form-panel .form-row { margin-bottom: var(--space-7); }
+.pr-form-panel span.lbl { display: block; font-size: 14px; font-weight: 700; margin-bottom: var(--space-4); }
 .pr-more { grid-area: more; min-width: 0; }
 @media (max-width: 900px) {
   .pr-grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'pitch' 'form' 'more'; grid-template-rows: auto; }
@@ -1364,7 +1365,7 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 }
 .pr-card {
   display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center;
-  gap: 2px var(--space-8); padding: var(--space-6) var(--space-8);
+  gap: 2px var(--space-8); padding: var(--space-7) var(--space-9);
   border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface);
 }
 .pr-card--notaire { border-color: var(--brand); background: var(--brand-tint); }
@@ -1512,7 +1513,7 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 
 /* The claim form's payoff: the shareable link, ready to copy. The CTA spans
    the panel — in the form column it IS the point of the page. */
-#partner-form .btn-lg { margin-top: var(--space-4); width: 100%; }
+#partner-form .btn-lg { margin-top: var(--space-6); width: 100%; }
 .partner-success { margin-top: var(--space-5); padding: var(--space-5) var(--space-6); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-inset); }
 .partner-success[hidden] { display: none; }
 .partner-link-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
@@ -1860,6 +1861,10 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 .dialog-pad h3 { font-size: 18px; margin-bottom: 8px; }
 .dialog-pad p { color: var(--ink-muted); font-size: 14px; margin: 0 0 16px; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+/* The public rating badge — brand star, tabular figures, quiet count. */
+.rating-badge { color: var(--brand); font-weight: 700; font-size: 12.5px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.nc-own-rating { margin-bottom: var(--space-4); }
+
 /* --- Notary evaluation (after the signed act, ADR 0015) ------------------- */
 .my-offer-eval { margin-top: var(--space-6); padding: var(--pad-card); background: var(--surface-inset); border-radius: var(--radius); display: flex; flex-direction: column; gap: var(--space-4); }
 .my-offer-eval-t { font-size: 13.5px; }

@@ -276,3 +276,38 @@ test('no evaluation block before the act is settled', async () => {
   await wait(40);
   assert.equal(doc.querySelector('.my-offer-eval'), null);
 });
+
+test('a notary’s public rating shows on their proposition and on the retained contact line', async () => {
+  const status = {
+    ...openStatus(),
+    bid: { ...openStatus().bid, status: 'retenue', etude: 'Étude Tremblay' },
+    notaire: { etude: 'Étude Tremblay', courriel: 'n@etude.ca', rating: { note: 4.5, avis: 12 } },
+    propositions: [{ id: 'p1', etude: 'Étude Roy', montant: 1200, delta: 200, message: '', status: 'en_attente', createdAt: '2026-08-01', rating: { note: 4.8, avis: 7 } }],
+    acte: { complete: false },
+  };
+  const { doc, Nota } = await boot({
+    seed: { 'nota.myoffers.v1': JSON.stringify([{ ...OFFER, retained: true, etude: 'Étude Tremblay' }]) },
+    routes: [statusRoute(status), monthRoute()],
+  });
+  Nota.setTab('profil');
+  await wait(40);
+  const badges = Array.from(doc.querySelectorAll('.rating-badge')).map((b) => b.textContent);
+  assert.ok(badges.includes('★ 4,5 (12 avis)'), 'retained contact badge missing: ' + badges);
+  assert.ok(badges.includes('★ 4,8 (7 avis)'), 'proposition badge missing: ' + badges);
+});
+
+test('no rating → no badge, never zero stars', async () => {
+  const status = {
+    ...openStatus(),
+    bid: { ...openStatus().bid, status: 'retenue', etude: 'Étude Neuve' },
+    notaire: { etude: 'Étude Neuve', courriel: 'n@etude.ca', rating: null },
+    acte: { complete: false },
+  };
+  const { doc, Nota } = await boot({
+    seed: { 'nota.myoffers.v1': JSON.stringify([{ ...OFFER, retained: true, etude: 'Étude Neuve' }]) },
+    routes: [statusRoute(status), monthRoute()],
+  });
+  Nota.setTab('profil');
+  await wait(40);
+  assert.equal(doc.querySelector('.rating-badge'), null);
+});
