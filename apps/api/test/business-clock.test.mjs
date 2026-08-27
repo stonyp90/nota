@@ -15,7 +15,7 @@ const { runReminders } = require('../src/reminders.js');
 // 2026-08-26 21:30 in Québec (EDT, UTC-4) — already the 27th in UTC.
 const QUEBEC_EVENING_MS = Date.parse('2026-08-27T01:30:00.000Z');
 
-const PRICING = { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue' };
+const PRICING = { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale' };
 
 test('default clock: /health reports the Québec day, not the UTC day', (t) => {
   t.mock.timers.enable({ apis: ['Date'], now: QUEBEC_EVENING_MS });
