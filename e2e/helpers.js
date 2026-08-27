@@ -16,6 +16,12 @@ const HOME_EN = '/?lang=en';
  *   guide never auto-opens — for the journeys that don't test the guide itself.
  */
 async function gotoHome(page, opts = {}) {
+  // The intro-gate films greet a truly fresh browser (app.js: 'nota.introSeen')
+  // BEFORE the onboarding guide. Every journey boots past them — the gate has
+  // its own spec (intro-gate.spec.js), where this seed is deliberately absent.
+  await page.addInitScript(() => {
+    try { localStorage.setItem('nota.introSeen', '1'); } catch (e) {}
+  });
   if (opts.suppressOnboarding) {
     await page.addInitScript(() => {
       try {
