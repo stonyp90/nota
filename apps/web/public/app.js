@@ -342,7 +342,7 @@
     // `notaire` is the client's half of the mise en relation (ADR 0010 §4):
     // the retaining notary's étude + courriel, served by GET /client/bid once
     // the offer is retained. Cached so "Mes offres" shows whom to contact.
-    c[id] = { bid: status.bid || null, notaire: status.notaire || null, propositions: status.propositions || [], demandes: status.demandes || [], readiness: status.readiness || null, messages: status.messages || [], fetchedAt: Date.now() };
+    c[id] = { bid: status.bid || null, notaire: status.notaire || null, propositions: status.propositions || [], demandes: status.demandes || [], readiness: status.readiness || null, messages: status.messages || [], acte: status.acte || null, evaluation: status.evaluation || null, fetchedAt: Date.now() };
     lsSave(LS_OFFERSTATUS, c);
     return c[id];
   }
@@ -746,7 +746,7 @@
       steps: [
         { icon: 'calendrier', t: 'Choisissez votre date', d: 'sur le calendrier public.' },
         { icon: 'prix', t: 'Proposez votre prix', d: 'plus la date est proche, plus il faut offrir.' },
-        { icon: 'retenu', t: 'Un notaire vous retient', d: 'ou vous propose un prix — vous restez libre. Gratuit pour vous.' },
+        { icon: 'retenu', t: 'Un notaire vous retient', d: 'ou vous propose un prix — vous restez libre. Vous payez votre prix affiché à la signature, rien de plus.' },
       ],
     },
     notary: {
@@ -2906,6 +2906,12 @@
       }
       cell.appendChild(mr);
     }
+    // The act is signed and settled (ADR 0015): the client's last gesture is
+    // the evaluation — five stars, an optional word. One per act; once sent,
+    // the block shows what was said and thanks them.
+    if (st === 'approved' && status && status.acte && status.acte.complete) {
+      cell.appendChild(evaluationBlock(o, status));
+    }
     // The retained-act conversation: once a notary holds the act, the two
     // parties talk here — instructions, dates, the details that decide whether
     // the file holds. Refreshed on focus/tab switches and after every send.
@@ -3005,6 +3011,68 @@
       }
       cell.appendChild(block);
     });
+  }
+
+  // The evaluation block under a signed act: five star buttons (radio-like,
+  // aria-pressed), an optional comment, one submit. Already evaluated → a
+  // read-only echo of the note. POSTs /client/evaluation with the bid token.
+  function evaluationBlock(o, status) {
+    var box = el('div', 'my-offer-eval');
+    if (status.evaluation) {
+      var done = el('div', 'my-offer-eval-done');
+      done.appendChild(el('strong', null, 'Votre évaluation : ' + '★'.repeat(status.evaluation.note) + '☆'.repeat(5 - status.evaluation.note)));
+      done.appendChild(el('span', 'help', ' Merci — elle aide les prochains clients.'));
+      box.appendChild(done);
+      return box;
+    }
+    box.appendChild(el('strong', 'my-offer-eval-t', 'Acte signé — évaluez votre notaire'));
+    var stars = el('div', 'eval-stars');
+    stars.setAttribute('role', 'group');
+    stars.setAttribute('aria-label', 'Note de 1 à 5');
+    var picked = 0;
+    var btns = [];
+    function paint() {
+      btns.forEach(function (b, i) {
+        b.textContent = i < picked ? '★' : '☆';
+        b.setAttribute('aria-pressed', i < picked ? 'true' : 'false');
+      });
+      submit.disabled = picked === 0;
+    }
+    for (var i = 1; i <= 5; i++) {
+      (function (n) {
+        var b = el('button', 'eval-star', '☆');
+        b.type = 'button';
+        b.setAttribute('aria-label', n + ' étoile' + (n > 1 ? 's' : ''));
+        b.addEventListener('click', function () { picked = n; paint(); });
+        btns.push(b); stars.appendChild(b);
+      })(i);
+    }
+    box.appendChild(stars);
+    var comment = el('textarea', 'eval-comment');
+    comment.rows = 2; comment.maxLength = D.EVALUATION_COMMENT_MAX;
+    comment.placeholder = 'Un mot sur votre expérience (optionnel)';
+    box.appendChild(comment);
+    var submit = el('button', 'btn btn-primary btn-sm eval-submit', 'Envoyer mon évaluation');
+    submit.type = 'button'; submit.disabled = true;
+    submit.addEventListener('click', function () {
+      submit.disabled = true; submit.setAttribute('aria-busy', 'true');
+      fetch(API_BASE + '/client/evaluation', {
+        method: 'POST', headers: clientHeaders(o, true),
+        body: JSON.stringify({ id: o.id, dateISO: o.dateISO, note: picked, commentaire: comment.value }),
+      }).then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); }).then(function (j) {
+        var st2 = offerStatusGet(o.id) || {};
+        st2.evaluation = j.evaluation;
+        offerStatusSet(o.id, st2);
+        toast('Merci ! Votre évaluation est enregistrée.');
+        if (state.tab === 'profil') renderProfil();
+      }).catch(function () {
+        submit.disabled = false; submit.removeAttribute('aria-busy');
+        toast('Impossible d’enregistrer l’évaluation. Réessayez.');
+      });
+    });
+    box.appendChild(submit);
+    paint();
+    return box;
   }
 
   // Accept / decline a notary's proposition. Accepting retains the offer at
@@ -4119,28 +4187,14 @@
       tier: bidMeta.tier, prefixe: bidMeta.prefixe || null,
       courriel: j.courriel || null, dossier: j.dossier || null,
     };
-    // PAY-ON-ACCEPT (ADR 0008): a card-authorized offer is captured and the
-    // net transferred the instant it is retained — the API says so with
-    // `paid` + the REAL server-charged commission. Record the act as
-    // completed right here so « Vos revenus » counts it immediately and the
-    // console never asks the notary to "complete" an act already paid.
-    if (j.paid === true) {
-      entry.completed = true;
-      entry.actAmount = bidMeta.montant;
-      entry.commissionCents = Number(j.commissionCents) || 0;
-    }
+    // PAID AT SIGNING (ADR 0015): accepting retains — no money moves here.
+    // The settlement (capture + net transfer, or the commission fallback)
+    // happens when the notary confirms the signed act (« Acte signé »), and
+    // « Vos revenus » counts it at that moment.
     ncRetainedAdd(nc.email, entry);
     ncDropOpen(id);
     ncRenderOpen(); ncRenderRetained(); ncRenderEarnings();
-    if (j.paid === true) {
-      toast('Demande retenue et payée — net viré : ' + D.money((Number(j.netCents) || 0) / 100) + '. Dossier du client débloqué.');
-    } else if (j.paid === false) {
-      // Retained but the capture failed — the retain stands; the payment is
-      // retried server-side. Say so instead of pretending nothing happened.
-      toast('Demande retenue. Le paiement sera réglé sous peu — voyez « Paiements ».');
-    } else {
-      toast('Demande retenue. Dossier du client débloqué.');
-    }
+    toast('Demande retenue. Dossier du client débloqué — le règlement se fait à la signature.');
   }
 
   async function ncDecline(id, dateISO) {
@@ -6317,10 +6371,12 @@
   }
 
 
-  // ===== Intro gate — the first-arrival pitch films (clients / notaires). =====
-  // Shows once per browser (nota.introSeen), never over a deep link, never
-  // under prefers-reduced-motion; ?intro=1 forces it back for review. The
-  // chosen film routes to its pane when it ends or is skipped.
+  // ===== Intro gate — the arrival pitch films (clients / notaires). =====
+  // Greets EVERY arrival until the visitor explicitly waves it away (skip,
+  // « Entrer sur le site » or Escape set nota.introSeen; merely watching a
+  // film to its end does not). Never over a deep link, never under
+  // prefers-reduced-motion; ?intro=1 forces it back for review. The chosen
+  // film routes to its pane when it ends or is skipped.
   var LS_INTRO = 'nota.introSeen';
   var igTimer = null;
   function igShouldShow() {
@@ -6343,13 +6399,13 @@
     var tab = film === 'client' ? 'carnet' : 'notaires';
     $('ig-skip').dataset.tab = tab;
     clearTimeout(igTimer);
-    igTimer = setTimeout(function () { igDismiss(tab); }, film === 'client' ? 20600 : 15600);
+    igTimer = setTimeout(function () { igDismiss(tab, false); }, film === 'client' ? 20600 : 15600);
   }
-  function igDismiss(tab) {
+  function igDismiss(tab, explicit) {
     clearTimeout(igTimer);
     var gate = $('intro-gate');
     if (!gate || gate.hidden) return;
-    flagSet(LS_INTRO, '1');
+    if (explicit !== false) flagSet(LS_INTRO, '1');
     gate.classList.add('ig-out');
     setTimeout(function () { gate.hidden = true; gate.classList.remove('ig-out'); }, 320);
     document.body.classList.remove('ig-open');
@@ -6360,9 +6416,9 @@
     if (!gate || !igShouldShow()) return false;
     $('ig-door-client').addEventListener('click', function () { igPlay('client'); });
     $('ig-door-notaire').addEventListener('click', function () { igPlay('notaire'); });
-    $('ig-enter').addEventListener('click', function () { igDismiss(null); });
-    $('ig-skip').addEventListener('click', function () { igDismiss($('ig-skip').dataset.tab || null); });
-    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !gate.hidden) igDismiss(null); });
+    $('ig-enter').addEventListener('click', function () { igDismiss(null, true); });
+    $('ig-skip').addEventListener('click', function () { igDismiss($('ig-skip').dataset.tab || null, true); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !gate.hidden) igDismiss(null, true); });
     gate.hidden = false;
     document.body.classList.add('ig-open');
     return true;

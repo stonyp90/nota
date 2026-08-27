@@ -1872,8 +1872,18 @@ test('intro gate: fresh first visit shows the gate, a door plays, skip routes', 
   assert.equal($(doc, 'ig-frame').hidden, false, 'the film frame opens');
   assert.ok($(doc, 'ig-stage-notaire').classList.contains('run'), 'the notaire film runs');
   $(doc, 'ig-skip').click();
-  assert.equal(win.localStorage.getItem('nota.introSeen'), '1', 'seen once, never again');
+  assert.equal(win.localStorage.getItem('nota.introSeen'), '1', 'an explicit skip waves the gate away for good');
   assert.equal(Nota.state.tab, 'notaires', 'skip lands on the chosen pane');
+});
+
+// 40b'. Watching a film to its end is NOT a dismissal: the gate greets the
+//       next arrival again — only an explicit skip sets the flag.
+test('intro gate: a film that ends on its own does not flag the gate away', async () => {
+  const { doc, win, Nota } = await boot({ intro: true });
+  $(doc, 'ig-door-client').click();
+  Nota.intro.dismiss('carnet', false); // what the end-of-film timer calls
+  assert.equal(win.localStorage.getItem('nota.introSeen'), null, 'no flag: the gate returns next visit');
+  assert.equal(Nota.state.tab, 'carnet', 'the film still lands on its pane');
 });
 
 // 40c. The gate never interrupts a deep link and never greets twice.
