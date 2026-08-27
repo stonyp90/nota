@@ -92,7 +92,15 @@ function stubNotaryApi(win, bids, extra = {}) {
       const bid = bids.find((b) => b.id === body.id) || {};
       return json({ bid: { ...bid, status: 'ouverte', etude: null } });
     }
-    if (path.includes('/notary/bids')) return json({ bids, retained: extra.retained || [] });
+    if (path.includes('/notary/profile')) return json({ profil: { lienCNQ: (body && body.lienCNQ) || null } });
+    if (path.includes('/notary/bids')) {
+      return json({
+        bids, retained: extra.retained || [],
+        rating: extra.rating || null,
+        profil: extra.profil || { lienCNQ: null },
+        commission: extra.commission || null,
+      });
+    }
     return Promise.reject(new Error('offline'));
   };
   return calls;
@@ -383,4 +391,62 @@ test('an accept never books earnings — settlement waits for « Acte signé » 
   // the settlement (and « Vos revenus ») happens.
   const toast = $(doc, 'toast').textContent;
   assert.ok(/signature/.test(toast), 'the toast says settlement happens at signing: ' + toast);
+});
+
+// --- The public profile & the rating-earned commission (ADR 0016) ------------
+
+test('the console names the effective commission and the next tier to reach', async () => {
+  const { doc } = await bootSignedIn(null, {
+    rating: { note: 4.5, avis: 10 },
+    commission: {
+      taux: 0.10, tauxEffectif: 0.09, bonus: 0.01,
+      prochain: { note: 4.8, avis: 10, tauxEffectif: 0.08 },
+    },
+  });
+  const earnings = $(doc, 'notary-earnings');
+  const lines = Array.from(earnings.querySelectorAll('.nc-commission')).map((n) => n.textContent);
+  assert.ok(lines.some((t) => t.includes('9 %') && t.includes('au lieu de 10 %')), 'the earned rate must show against the base: ' + lines);
+  assert.ok(lines.some((t) => t.includes('4,8') && t.includes('10 avis') && t.includes('8 %')), 'the next tier must be named: ' + lines);
+});
+
+test('at the base rate the console shows the rate and no phantom bonus', async () => {
+  const { doc } = await bootSignedIn(null, {
+    commission: { taux: 0.10, tauxEffectif: 0.10, bonus: 0, prochain: { note: 4.5, avis: 5, tauxEffectif: 0.09 } },
+  });
+  const earnings = $(doc, 'notary-earnings');
+  const lines = Array.from(earnings.querySelectorAll('.nc-commission')).map((n) => n.textContent);
+  assert.ok(lines.some((t) => t.includes('10 %') && !t.includes('au lieu de')), 'the base rate shows plainly: ' + lines);
+  assert.ok(lines.some((t) => t.includes('4,5') && t.includes('5 avis') && t.includes('9 %')), 'the first tier is the visible lever: ' + lines);
+});
+
+test('without a commission block (billing off) the earnings show no rate line', async () => {
+  const { doc } = await bootSignedIn();
+  assert.equal($(doc, 'notary-earnings').querySelector('.nc-commission'), null);
+});
+
+test('the profile form prefills the stored fiche, validates through the domain, and POSTs on save', async () => {
+  const FICHE = 'https://www.cnq.org/trouver-un-notaire/fiche/42/';
+  const { doc, calls } = await bootSignedIn(null, { profil: { lienCNQ: FICHE } });
+  const inp = $(doc, 'nc-cnq');
+  assert.ok(inp, 'the CNQ link input must exist in the console');
+  assert.equal(inp.value, FICHE, 'the stored fiche prefills the form');
+
+  // A lookalike host is refused by the DOMAIN before any network call.
+  const before = calls.filter((c) => c.path.includes('/notary/profile')).length;
+  input(inp, 'https://cnq.org.evil.ca/fiche');
+  submit($(doc, 'nc-profil-form'));
+  await wait(10);
+  const errs = $(doc, 'nc-profil-errors');
+  assert.equal(errs.hidden, false, 'the domain refusal must surface');
+  assert.equal(calls.filter((c) => c.path.includes('/notary/profile')).length, before, 'no POST on an invalid link');
+
+  // A real fiche is saved through POST /notary/profile.
+  input(inp, FICHE);
+  submit($(doc, 'nc-profil-form'));
+  await wait(10);
+  const posts = calls.filter((c) => c.path.includes('/notary/profile'));
+  assert.equal(posts.length, before + 1, 'one POST per save');
+  assert.equal(posts[posts.length - 1].body.lienCNQ, FICHE);
+  assert.equal(errs.hidden, true, 'errors clear on success');
+  assert.equal($(doc, 'nc-profil-saved').hidden, false, 'the saved note confirms');
 });

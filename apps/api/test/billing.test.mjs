@@ -353,7 +353,7 @@ const checkoutExpired = (id, bidId, bidDate) => ({
   data: { object: { metadata: { bidId, bidDate } } },
 });
 // Zero-add refinancement answers: the dynamic base stays at the flat 2000 $.
-const DEFAULT_PRICING = { refinancement: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale' } };
+const DEFAULT_PRICING = { refinancement: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale', deplacement: 'client_50' } };
 
 test('authorizeOffer opens a hosted Checkout to authorize the client card', async () => {
   const { stripe, billing } = setup();
@@ -610,4 +610,90 @@ test('the act commission lives ONLY in billing — the domain pricing stays free
   const billing = createBilling({ repo: createMemoryRepo(), stripe: fakeStripe(), commissionRate: RATE });
   assert.equal(typeof billing.completeAct, 'function');
   assert.equal(billing.commissionRate, RATE);
+});
+
+// --- Rating-earned commission bonus (ADR 0016) --------------------------------
+// The default rate is bonified by the notary's evaluations: each tier is a
+// minimum average note + a minimum number of avis → a rate reduction, floored.
+
+async function activeNotaryWithRating(billing, repo, email, { sum, count } = {}) {
+  const id = NID(email);
+  await billing.connectNotary({ email });
+  await billing.handleWebhook(JSON.stringify(accountUpdated('evt_' + id, id, true)), 'good');
+  if (count) await repo.putNotary({ ...(await repo.getNotary(id)), ratingSum: sum, ratingCount: count });
+  return id;
+}
+
+test('a strong rating lowers the commission actually charged — both settlement paths', async () => {
+  const { repo, stripe, billing } = setup();
+  // note 4.8 over 10 avis → top default tier: 10% − 2 pts = 8%.
+  const id = await activeNotaryWithRating(billing, repo, 'top@example.ca', { sum: 48, count: 10 });
+
+  const done = await billing.completeAct({ notaryId: id, bidId: 'BID#T1', actAmount: 2000 });
+  assert.equal(done.commissionCents, Math.round(2000 * 100 * 0.08));
+  assert.equal(stripe.calls.charges[0].applicationFeeCents, 16000);
+
+  const paid = await billing.payNotaryOnAccept({ notaryId: id, bidId: 'BID#T2', actAmount: 1000, paymentIntentId: 'pi_t' });
+  assert.equal(paid.commissionCents, Math.round(1000 * 100 * 0.08));
+  assert.equal(stripe.calls.transfers[0].applicationFeeCents, 8000);
+});
+
+test('the middle tier and the guard rails: 4.5/5 avis → −1 pt; a great note on too few avis → base rate', async () => {
+  const { repo, stripe, billing } = setup();
+  const mid = await activeNotaryWithRating(billing, repo, 'mid@example.ca', { sum: 45, count: 10 }); // 4.5 avg
+  const few = await activeNotaryWithRating(billing, repo, 'few@example.ca', { sum: 15, count: 3 });  // 5.0 avg, 3 avis
+  const none = await activeNotaryWithRating(billing, repo, 'none@example.ca');
+
+  assert.equal((await billing.completeAct({ notaryId: mid, bidId: 'm', actAmount: 2000 })).commissionCents, 18000); // 9%
+  assert.equal((await billing.completeAct({ notaryId: few, bidId: 'f', actAmount: 2000 })).commissionCents, 20000); // 10%
+  assert.equal((await billing.completeAct({ notaryId: none, bidId: 'n', actAmount: 2000 })).commissionCents, 20000);
+});
+
+test('the schedule and the floor are configurable — a bonus can never cross the floor', async () => {
+  const repo = createMemoryRepo();
+  const stripe = fakeStripe();
+  const billing = createBilling({
+    repo, stripe, now: () => NOW, commissionRate: 0.06,
+    commissionBonusTiers: [{ note: 4, avis: 1, bonus: 0.03 }],
+    commissionRateFloor: 0.05,
+  });
+  const id = await activeNotaryWithRating(billing, repo, 'floor@example.ca', { sum: 5, count: 1 });
+  // 6% − 3 pts would be 3% — the floor holds it at 5%.
+  assert.equal((await billing.completeAct({ notaryId: id, bidId: 'fl', actAmount: 1000 })).commissionCents, 5000);
+});
+
+test('commissionFor names the effective rate and the next reachable tier', async () => {
+  const { repo, billing } = setup();
+  const id = await activeNotaryWithRating(billing, repo, 'cf@example.ca', { sum: 45, count: 10 });
+
+  const c = billing.commissionFor(await repo.getNotary(id));
+  assert.equal(c.taux, RATE);
+  assert.equal(c.tauxEffectif, 0.09);
+  assert.equal(c.bonus, 0.01);
+  // The next step up: note ≥ 4.8 with ≥ 10 avis → 8%.
+  assert.deepEqual(c.prochain, { note: 4.8, avis: 10, tauxEffectif: 0.08 });
+
+  // At the top tier there is nothing further to reach.
+  await repo.putNotary({ ...(await repo.getNotary(id)), ratingSum: 50, ratingCount: 10 });
+  const top = billing.commissionFor(await repo.getNotary(id));
+  assert.equal(top.tauxEffectif, 0.08);
+  assert.equal(top.prochain, null);
+
+  // A brand-new notary pays the base rate and sees the first tier as next.
+  const fresh = billing.commissionFor({ ratingSum: 0, ratingCount: 0 });
+  assert.equal(fresh.tauxEffectif, RATE);
+  assert.deepEqual(fresh.prochain, { note: 4.5, avis: 5, tauxEffectif: 0.09 });
+});
+
+test('an idempotent replay keeps the ledger amount even if the rating moved between attempts', async () => {
+  const { repo, billing } = setup();
+  const id = await activeNotaryWithRating(billing, repo, 'replay@example.ca', { sum: 48, count: 10 });
+  const first = await billing.completeAct({ notaryId: id, bidId: 'RP', actAmount: 2000 });
+  assert.equal(first.commissionCents, 16000);
+  // A harsh new evaluation drops the average below the tier…
+  await repo.putNotary({ ...(await repo.getNotary(id)), ratingSum: 30, ratingCount: 10 });
+  // …but the replay answers with what was actually charged.
+  const again = await billing.completeAct({ notaryId: id, bidId: 'RP', actAmount: 2000 });
+  assert.equal(again.alreadyCompleted, true);
+  assert.equal(again.commissionCents, 16000);
 });

@@ -299,6 +299,7 @@ test('a valid offer combination enables #offer-submit', async () => {
   $(doc, 'crit-succession__non').click();
   $(doc, 'crit-approbation_bancaire__obtenue').click();
   const selPreteur = $(doc, 'crit-preteur'); selPreteur.value = 'banque_nationale'; fire(win, selPreteur, 'change');
+  const selDeplacement = $(doc, 'crit-deplacement'); selDeplacement.value = 'client_50'; fire(win, selDeplacement, 'change');
 
   assert.equal(submit.disabled, false);
 });
@@ -313,6 +314,8 @@ test('dossier tab lists first service intake items and badge shows 0/N', async (
   assert.equal(all(doc, '#dossier-list .dossier-item:not(.dossier-consent)').length, expected);
   assert.equal(expected, 7); // refinancement (first act): 5 docs + 2 champs (the lender moved into the pricing questions)
   assert.equal(all(doc, '#dossier-list .dossier-consent').length, 1); // consent row present
+  // The checklist is a compact card grid, not one full-width line per item.
+  assert.equal(all(doc, '#dossier-list .dossier-grid > .dossier-row').length, expected);
 });
 
 // 9c. The profile is the ONE place for documents: upload / remove / mark-validated.
@@ -405,13 +408,14 @@ test('courriel field is optional and stays private in the local store', async ()
   $(doc, 'crit-succession__non').click();
   $(doc, 'crit-approbation_bancaire__obtenue').click();
   const selPreteur = $(doc, 'crit-preteur'); selPreteur.value = 'banque_nationale'; fire(win, selPreteur, 'change');
+  const selDeplacement = $(doc, 'crit-deplacement'); selDeplacement.value = 'client_50'; fire(win, selDeplacement, 'change');
   assert.equal($(doc, 'offer-submit').disabled, false);
 
   // Creating a bid with a courriel offline must not surface it on the bid.
   const res = await Nota.store.createBid({
     serviceId: 'refinancement', dateISO: D.addDays(todayISO(), 5), montant: 2000,
     anonyme: true, courriel: 'client@example.ca',
-    pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale' },
+    pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale', deplacement: 'client_50' },
   });
   assert.equal(res.ok, true);
   assert.equal(res.bid.courriel, undefined);
@@ -806,6 +810,7 @@ test('submitting an offer attaches the saved dossier snapshot and courriel', asy
   $(doc, 'crit-succession__non').click();
   $(doc, 'crit-approbation_bancaire__obtenue').click();
   const selPreteur = $(doc, 'crit-preteur'); selPreteur.value = 'banque_nationale'; fire(win, selPreteur, 'change');
+  const selDeplacement = $(doc, 'crit-deplacement'); selDeplacement.value = 'client_50'; fire(win, selDeplacement, 'change');
   $(doc, 'o-courriel').value = 'client@example.ca'; fire(win, $(doc, 'o-courriel'), 'input');
   fire(win, $(doc, 'offer-form'), 'submit');
   await wait(10);

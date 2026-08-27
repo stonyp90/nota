@@ -164,6 +164,70 @@
     return nom ? { ...l, nom } : l;
   }
 
+  // --- Déplacement catalogue (qui se déplace pour la signature) --------------
+  // The act signs IN PERSON within a declared perimeter (ADR 0017): the client
+  // travels to the étude, or the notary travels to the client. The band is a
+  // price lever both ways — the most mobile client is the baseline (add 0, the
+  // very « à partir de » the hero shows) and the price rises as the pool of
+  // reachable notaries shrinks or as kilometres are asked of the notary,
+  // mirroring how travelling notaries price call-outs (flat fee per radius
+  // band). The one exception is a DECLARED urgency: 100 % online, the firmest
+  // premium of the ladder, and only served by a notary who opted in
+  // (notaryCanServe). The km values are declarations framing the mise en
+  // relation — not computed distances (no notary location exists yet).
+  // The list is data — adapters render it, never re-declare it.
+  const DEPLACEMENTS = [
+    { id: 'client_50', nom: 'Je me déplace à l’étude — jusqu’à 50 km', qui: 'client', km: 50, add: 0, poids: 0, urgence: false },
+    { id: 'client_25', nom: 'Je me déplace à l’étude — jusqu’à 25 km', qui: 'client', km: 25, add: 50, poids: 0, urgence: false },
+    { id: 'client_10', nom: 'Je me déplace à l’étude — moins de 10 km', qui: 'client', km: 10, add: 100, poids: 1, urgence: false },
+    { id: 'notaire_25', nom: 'Le notaire se déplace chez moi — jusqu’à 25 km', qui: 'notaire', km: 25, add: 150, poids: 1, urgence: false },
+    { id: 'notaire_50', nom: 'Le notaire se déplace chez moi — jusqu’à 50 km', qui: 'notaire', km: 50, add: 250, poids: 2, urgence: false },
+    { id: 'urgence_en_ligne', nom: 'Urgence — signature 100 % en ligne', qui: 'en_ligne', km: 0, add: 400, poids: 2, urgence: true },
+  ];
+
+  function deplacementById(id) {
+    return DEPLACEMENTS.find((d) => d.id === id) || null;
+  }
+
+  // The déplacement question both financing acts ask. Same engine shape as the
+  // lender: a required `choice` whose options ARE the catalogue, rendered as a
+  // select (six sentence-length bands are too long for chips).
+  const DEPLACEMENT_CRITERION_ID = 'deplacement';
+  const DEPLACEMENT_URGENCE_ID = 'urgence_en_ligne';
+  function deplacementCriterion() {
+    return {
+      id: DEPLACEMENT_CRITERION_ID, type: 'choice', required: true, ui: 'select',
+      label: 'Déplacement pour la signature',
+      aide: 'L’acte se signe en personne. Plus vous pouvez vous déplacer, plus de notaires peuvent vous servir. L’urgence 100 % en ligne exige un notaire qui l’accepte — le prix vient avec.',
+      options: DEPLACEMENTS.map((d) => ({ id: d.id, label: d.nom, add: d.add, poids: d.poids })),
+    };
+  }
+
+  // The band behind a bid, read from its pricing answers. Null when the bid
+  // predates the déplacement question (legacy tolerance, like the lender).
+  function bidDeplacement(bid) {
+    const answers = (bid && bid.pricing) || {};
+    return deplacementById(answers[DEPLACEMENT_CRITERION_ID]);
+  }
+
+  // The radii a notary can declare (their profile's `rayonKm`). 0 is the
+  // conservative default — a notary who said nothing travels nowhere.
+  const NOTARY_RADII = [0, 25, 50];
+
+  // Whether a notary's profile covers a bid's declared band. The feed and the
+  // accept gate both go through here: client-travel bands reach everyone (the
+  // client comes to the étude), notary-travel bands need a radius that covers
+  // the ask, and a declared urgency reaches only the notaries who opted in.
+  // A null/unknown band (a bid predating the question) reaches everyone.
+  function notaryCanServe(deplacementId, profil) {
+    const d = deplacementById(deplacementId);
+    if (!d) return true;
+    const p = profil || {};
+    if (d.urgence) return p.urgences === true;
+    if (d.qui === 'notaire') return (Number(p.rayonKm) || 0) >= d.km;
+    return true;
+  }
+
   const SERVICES = [
     {
       id: 'refinancement',
@@ -207,6 +271,7 @@
             ],
           },
           lenderCriterion(),
+          deplacementCriterion(),
           { id: 'coemprunteur', type: 'flag', optional: true, label: 'Co-emprunteur / indivision', aide: 'Plus de deux propriétaires inscrits.', add: 150, poids: 1 },
           {
             id: 'assurance_habitation', type: 'choice', optional: true, label: 'Assurance habitation à jour ?',
@@ -285,6 +350,7 @@
             ],
           },
           lenderCriterion(),
+          deplacementCriterion(),
           { id: 'coemprunteur', type: 'flag', optional: true, label: 'Co-emprunteur / indivision', aide: 'Plus de deux propriétaires inscrits.', add: 150, poids: 1 },
           {
             id: 'assurance_habitation', type: 'choice', optional: true, label: 'Assurance habitation à jour ?',
@@ -985,6 +1051,58 @@
     return Math.round((Number(sum) / c) * 10) / 10;
   }
 
+  // --- Notary public profile -------------------------------------------------
+  // The one authority on a notary's notoriety is the Chambre des notaires du
+  // Québec (ADR 0016): a notary may attach the link of their official fiche in
+  // the Chambre's public directory. Only an https URL on the cnq.org host (or a
+  // subdomain) is a fiche — anything else never earns the « CNQ » badge.
+  const CNQ = {
+    host: 'cnq.org',
+    annuaire: 'https://www.cnq.org/trouver-un-notaire/',
+  };
+  const CNQ_LINK_MAX = 300;
+  function validateNotaryProfile(input) {
+    input = input || {};
+    const errors = [];
+    const raw = String(input.lienCNQ == null ? '' : input.lienCNQ).trim();
+
+    // Empty is valid: the notary clears their fiche (and loses the badge).
+    let lienCNQ = null;
+    if (raw) {
+      let valid = raw.length <= CNQ_LINK_MAX;
+      if (valid) {
+        try {
+          const url = new URL(raw);
+          const host = url.hostname.toLowerCase();
+          valid = url.protocol === 'https:' && (host === CNQ.host || host.endsWith('.' + CNQ.host));
+        } catch (e) {
+          valid = false;
+        }
+      }
+      if (!valid) {
+        errors.push({ code: 'lien_cnq_invalide', message: 'Le lien doit être votre fiche officielle sur cnq.org (adresse https de la Chambre des notaires du Québec).' });
+      }
+      lienCNQ = valid ? raw : null;
+    }
+
+    // The travel radius (ADR 0017): one of the declared bands, 0 when absent —
+    // a notary who said nothing travels nowhere. Forms send strings; coerce.
+    let rayonKm = 0;
+    if (input.rayonKm != null && String(input.rayonKm).trim() !== '') {
+      const r = Number(input.rayonKm);
+      if (NOTARY_RADII.indexOf(r) === -1) {
+        errors.push({ code: 'rayon_invalide', message: 'Le rayon de déplacement doit être 0, 25 ou 50 km.' });
+      } else {
+        rayonKm = r;
+      }
+    }
+
+    // The online-urgency opt-in: strictly boolean true, never a truthy string.
+    const urgences = input.urgences === true;
+
+    return { ok: errors.length === 0, errors, lienCNQ, rayonKm, urgences };
+  }
+
   // A dial string for a tel: href — digits only, keeping a leading + and
   // assuming +1 (Canada) when the number is written without a country code.
   function telHref(raw) {
@@ -1154,6 +1272,9 @@
       // +100 $ virtual surcharge retired, say) shifts the fixture bases, so the
       // catalogue's pricing shape is part of the fingerprint too.
       LENDERS.map((l) => l.id + ':' + l.add).join(','),
+      // Same for the déplacement bands (ADR 0017): a band add changing shifts
+      // the fixture bases, so the ladder's pricing shape is fingerprinted too.
+      DEPLACEMENTS.map((d) => d.id + ':' + d.add).join(','),
     ].join('|');
   }
 
@@ -1205,6 +1326,9 @@
     // unchanged; only the bases/montants of add>0 lenders shift. An « autre »
     // draw carries its typed name — fixtures must be VALID offers.
     const lenderFor = (valeur) => LENDERS[valeur % LENDERS.length].id;
+    // The déplacement band is derived from the loan value too (ADR 0017), for
+    // the same reason: the draw stream stays unchanged, only the bases shift.
+    const deplacementFor = (valeur) => DEPLACEMENTS[valeur % DEPLACEMENTS.length].id;
     const withOtherName = (pricing) =>
       pricing.preteur === LENDER_OTHER_ID ? { ...pricing, [LENDER_OTHER_FIELD]: 'Fiducie du Vieux-Port' } : pricing;
     if (svc.id === 'refinancement') {
@@ -1214,6 +1338,7 @@
         succession: rng() > 0.85 ? 'oui' : 'non',
         approbation_bancaire: ['obtenue', 'en_cours', 'non'][Math.floor(rng() * 3)],
         preteur: lenderFor(valeur),
+        deplacement: deplacementFor(valeur),
       });
     }
     if (svc.id === 'financement') {
@@ -1223,6 +1348,7 @@
         contexte: rng() > 0.45 ? 'achat' : 'propriete_detenue',
         approbation_bancaire: ['obtenue', 'en_cours', 'non'][Math.floor(rng() * 3)],
         preteur: lenderFor(valeur),
+        deplacement: deplacementFor(valeur),
       });
     }
     return {};
@@ -1539,6 +1665,13 @@
     LENDER_OTHER_FIELD,
     lenderOtherName,
     bidLender,
+    DEPLACEMENTS,
+    deplacementById,
+    DEPLACEMENT_CRITERION_ID,
+    DEPLACEMENT_URGENCE_ID,
+    bidDeplacement,
+    NOTARY_RADII,
+    notaryCanServe,
     QC_POSTAL_LETTERS,
     normalizePostalPrefix,
     isPostalPrefix,
@@ -1582,6 +1715,9 @@
     EVALUATION_COMMENT_MAX,
     validateEvaluation,
     ratingAverage,
+    CNQ,
+    CNQ_LINK_MAX,
+    validateNotaryProfile,
     telHref,
     makeFixtures,
     seedSignature,

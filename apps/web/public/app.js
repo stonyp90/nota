@@ -498,6 +498,21 @@
     return sp;
   }
 
+  // « CNQ ✓ » — the notary has attached their official fiche in the Chambre
+  // des notaires directory (ADR 0016). A membership badge only: the fiche URL
+  // itself never travels before retention.
+  function cnqBadge() {
+    var sp = el('span', 'cnq-badge', 'CNQ ✓');
+    sp.setAttribute('title', 'Membre de la Chambre des notaires du Québec');
+    sp.setAttribute('aria-label', 'Membre de la Chambre des notaires du Québec');
+    return sp;
+  }
+
+  // Percent display for a commission rate, fr-CA: 0.09 → « 9 % », 0.125 → « 12,5 % ».
+  function pctLabel(rate) {
+    return String(Math.round(rate * 1000) / 10).replace('.', ',') + ' %';
+  }
+
   // --- Client profile --------------------------------------------------------
   // Created with sensible defaults on first read (all notifications on). Held on
   // this device; reused across the offer flow and the dossier.
@@ -2917,6 +2932,16 @@
         mail.href = 'mailto:' + noti.courriel;
         mr.appendChild(mail);
       }
+      // The retained notary's official fiche (ADR 0016): the client can verify
+      // the notoriety at the Chambre itself. Only here — never pre-retention.
+      if (noti.lienCNQ) {
+        mr.appendChild(document.createTextNode(' — '));
+        var fiche = el('a', 'cnq-link', 'Fiche Chambre des notaires ↗');
+        fiche.href = noti.lienCNQ;
+        fiche.target = '_blank';
+        fiche.setAttribute('rel', 'noopener');
+        mr.appendChild(fiche);
+      }
       cell.appendChild(mr);
     }
     // The act is signed and settled (ADR 0015): the client's last gesture is
@@ -2988,6 +3013,7 @@
       head.appendChild(el('strong', null, 'Un notaire' + (p.etude ? ' (' + p.etude + ')' : '') + ' vous propose ' + D.money(p.montant)));
       var pstars = ratingSpan(p.rating);
       if (pstars) { head.appendChild(document.createTextNode(' ')); head.appendChild(pstars); }
+      if (p.cnq) { head.appendChild(document.createTextNode(' ')); head.appendChild(cnqBadge()); }
       head.appendChild(document.createTextNode(' (' + (delta >= 0 ? '+' : '−') + D.money(Math.abs(delta)) + ')'));
       block.appendChild(head);
       if (p.message) block.appendChild(el('p', 'my-offer-prop-msg', p.message));
@@ -3314,6 +3340,13 @@
     var copy = el('button', 'btn btn-sm', 'Copier le lien'); copy.type = 'button';
     copy.addEventListener('click', function () { copyLinkText(link.textContent); });
     linkRow.appendChild(copy);
+    // Same affordance as the Partenaires success box: native share where the
+    // platform has a sheet — the button only exists when navigator.share does.
+    if (typeof navigator.share === 'function') {
+      var share = el('button', 'btn btn-sm', 'Partager'); share.type = 'button';
+      share.addEventListener('click', function () { shareLinkNative(link.textContent); });
+      linkRow.appendChild(share);
+    }
     card.appendChild(linkRow);
     return card;
   }
@@ -3686,9 +3719,13 @@
     prep.appendChild(el('div', 'help', 'Rien ici ne bloque votre demande. Chaque pièce peut être téléversée, ou marquée déjà transmise au notaire par un autre canal.'));
     list.appendChild(prep);
 
+    // The checklist packs into a card grid — several small pieces per row,
+    // not one full-width line each. The consent and pricing cards above keep
+    // their own full-width shape.
+    var grid = el('div', 'dossier-grid');
+    list.appendChild(grid);
+
     dossierItems(svc).forEach(function (it) {
-      // .dossier-row lays the item out as ONE checklist line (name left,
-      // action right) — the consent and pricing cards keep their own shape.
       var row = el('div', 'dossier-item dossier-row');
       row.dataset.done = saved[it.id] ? 'true' : 'false';
 
@@ -3716,7 +3753,7 @@
           tstate.appendChild(undo);
           body.appendChild(tstate);
           row.appendChild(check); row.appendChild(body);
-          list.appendChild(row);
+          grid.appendChild(row);
           return;
         }
         var fileLbl = el('label', 'file-field');
@@ -3805,7 +3842,7 @@
       if (input) input.setAttribute('aria-label', it.nom);
 
       row.appendChild(check); row.appendChild(body);
-      list.appendChild(row);
+      grid.appendChild(row);
     });
 
     updateDossierBar();
@@ -3991,7 +4028,7 @@
   // feedToken -> FEED scope (read-only), the only token placed in the webcal URL.
   // filter -> client-side view state over `open` (service chip + complete-file
   // toggle); it never changes what the API returned, only what is drawn.
-  var nc = { token: null, feedToken: null, email: null, open: [], filter: { service: 'all', readyOnly: false } };
+  var nc = { token: null, feedToken: null, email: null, open: [], filter: { service: 'all', readyOnly: false }, rating: null, profil: { lienCNQ: null }, commission: null };
 
   // Pending declines: id -> { timer, dateISO }. A decline collapses the card
   // into an undo line first and only POSTs once the window closes (or a test
@@ -4086,6 +4123,8 @@
   // 401 -> the token is dead: drop it and return to the sign-in gate.
   function ncExpire(msg) {
     nc.token = null; nc.feedToken = null; nc.email = null; nc.open = [];
+    nc.rating = null; nc.profil = { lienCNQ: null, rayonKm: 0, urgences: false }; nc.commission = null;
+    ncRenderProfil(); // the form must never keep another notary's fiche
     try {
       localStorage.removeItem(LS_NC_TOKEN);
       localStorage.removeItem(LS_NC_FEED_TOKEN);
@@ -4195,6 +4234,10 @@
     var j = {}; try { j = await r.json(); } catch (e) {}
     nc.open = j.bids || [];
     nc.rating = j.rating || null; // the notary's own public average
+    nc.profil = j.profil || { lienCNQ: null, rayonKm: 0, urgences: false };
+    nc.commission = j.commission || null; // null when billing is off — no fake rate
+    ncRenderProfil();
+    ncRenderEarnings(); // the commission line lives with the money
     ncRenderOpen();
     if (j.retained && j.retained.length) { ncRetainedMerge(nc.email, j.retained); ncRenderRetained(); }
     return true;
@@ -4884,6 +4927,20 @@
     pill.title = 'Prêteur hypothécaire';
     return pill;
   }
+  // Who travels for the in-person signature (ADR 0017) — the perimeter signal
+  // read beside the lender before retaining. The urgency band is the outlier
+  // (100 % online) and only ever reaches notaries who opted in, so it gets its
+  // own accent. Six fixed compositions — each has its i18n entry.
+  function ncDeplacementPill(dep) {
+    if (!dep) return null;
+    var txt = dep.urgence ? 'Urgence · 100 % en ligne'
+      : (dep.qui === 'notaire' ? 'Chez le client' : 'À l’étude') + ' · ' +
+        (dep.km < 25 ? 'moins de ' + dep.km + ' km' : '≤ ' + dep.km + ' km');
+    var pill = el('span', 'nc-deplacement', txt);
+    if (dep.urgence) pill.dataset.urgence = 'true';
+    pill.title = 'Déplacement pour la signature';
+    return pill;
+  }
 
   function ncOpenCard(b) {
     var svc = D.serviceById(b.serviceId);
@@ -4901,6 +4958,8 @@
     meta.appendChild(ncReadyBadge(b.ready));
     var lender = ncLenderPill(b.preteur);
     if (lender) meta.appendChild(lender);
+    var dep = ncDeplacementPill(b.deplacement);
+    if (dep) meta.appendChild(dep);
     if (b.complexity) meta.appendChild(ncComplexityPill(b.complexity));
     card.appendChild(meta);
 
@@ -5301,6 +5360,8 @@
     meta.appendChild(el('span', 'pill pill-retenue', 'Retenue'));
     var lender = ncLenderPill(entry.preteur);
     if (lender) meta.appendChild(lender);
+    var dep = ncDeplacementPill(entry.deplacement);
+    if (dep) meta.appendChild(dep);
     if (entry.viaProposition) meta.appendChild(el('span', 'nc-pill nc-via-prop', 'Prix accepté sur proposition'));
     card.appendChild(meta);
     var status = ncStatusRow({ demande: entry.demande });
@@ -5508,6 +5569,72 @@
     } else if (!e.done) {
       box.appendChild(el('p', 'help', 'Vos revenus et la commission Nota s’afficheront ici dès votre premier acte complété.'));
     }
+    // The rating-earned commission (ADR 0016): the rate the notary pays today,
+    // shown against the base when a bonus is earned — and the next tier, so a
+    // better note reads as a reachable lever, never a hidden rule. Absent when
+    // billing is off: no fake rate.
+    var c = nc.commission;
+    if (c) {
+      box.appendChild(el('p', 'help nc-commission', c.bonus > 0
+        ? 'Commission Nota : ' + pctLabel(c.tauxEffectif) + ' au lieu de ' + pctLabel(c.taux) + ' — bonus mérité par vos évaluations.'
+        : 'Commission Nota : ' + pctLabel(c.taux) + '.'));
+      if (c.prochain) {
+        box.appendChild(el('p', 'help nc-commission', 'Prochain palier : note ' + String(c.prochain.note).replace('.', ',') + ' et ' + c.prochain.avis + ' avis → commission ' + pctLabel(c.prochain.tauxEffectif) + '.'));
+      }
+    }
+  }
+
+  // --- Notary public profile (ADR 0016) --------------------------------------
+  // One field: the official fiche at the Chambre des notaires. The domain is
+  // the gatekeeper (cnq.org, https) — the API re-validates, of course.
+  function ncRenderProfil() {
+    var inp = $('nc-cnq'); if (!inp) return;
+    inp.value = (nc.profil && nc.profil.lienCNQ) || '';
+    // Travel radius + online-urgency opt-in (ADR 0017). The radius options ARE
+    // the domain's NOTARY_RADII — filled here, never re-declared in the HTML;
+    // the nselect rebuilds its list from the native options on every open.
+    var sel = $('nc-rayon');
+    if (sel) {
+      if (!sel.options.length) {
+        D.NOTARY_RADII.forEach(function (r) {
+          var o = document.createElement('option');
+          o.value = String(r);
+          o.textContent = r === 0 ? 'Je ne me déplace pas' : 'Jusqu’à ' + r + ' km';
+          sel.appendChild(o);
+        });
+      }
+      sel.value = String((nc.profil && nc.profil.rayonKm) || 0);
+      sel.dispatchEvent(new Event('change', { bubbles: true })); // repaint the nselect label
+    }
+    var urg = $('nc-urgences');
+    if (urg) urg.checked = !!(nc.profil && nc.profil.urgences);
+  }
+  async function ncSaveProfil() {
+    var inp = $('nc-cnq'); if (!inp) return;
+    var sel = $('nc-rayon');
+    var urg = $('nc-urgences');
+    var errBox = $('nc-profil-errors');
+    var saved = $('nc-profil-saved');
+    if (saved) saved.hidden = true;
+    var v = D.validateNotaryProfile({
+      lienCNQ: inp.value,
+      rayonKm: sel ? sel.value : 0,
+      urgences: !!(urg && urg.checked),
+    });
+    if (!v.ok) {
+      if (errBox) { clear(errBox); errBox.hidden = false; v.errors.forEach(function (x) { errBox.appendChild(el('li', null, x.message)); }); }
+      return;
+    }
+    var res = await ncPost('/notary/profile', { lienCNQ: v.lienCNQ || '', rayonKm: v.rayonKm, urgences: v.urgences });
+    if (!res) return;
+    if (res.status !== 200) {
+      if (errBox) { clear(errBox); errBox.hidden = false; (res.json.errors || [{ message: 'Échec de l’enregistrement du profil.' }]).forEach(function (x) { errBox.appendChild(el('li', null, x.message)); }); }
+      return;
+    }
+    nc.profil = res.json.profil || { lienCNQ: v.lienCNQ, rayonKm: v.rayonKm, urgences: v.urgences };
+    if (errBox) { clear(errBox); errBox.hidden = true; }
+    if (saved) saved.hidden = false;
+    toast('Profil enregistré.');
   }
 
   // Explicit sign-out purges the cached retained client PII (courriel/dossier),
@@ -5715,6 +5842,7 @@
     var pMail = $('partner-courriel'); if (pMail) pMail.addEventListener('input', partnerValidateUI);
     var pForm = $('partner-form'); if (pForm) pForm.addEventListener('submit', onPartnerSubmit);
     var pCopy = $('partner-copy'); if (pCopy) pCopy.addEventListener('click', partnerCopyLink);
+    var pShare = $('partner-share'); if (pShare) pShare.addEventListener('click', partnerShareClick);
 
     $('theme-toggle').addEventListener('click', function () {
       var cur = document.documentElement.getAttribute('data-theme');
@@ -6041,6 +6169,8 @@
     var ncSentBack = $('notary-sent-back');
     if (ncSentBack) ncSentBack.addEventListener('click', ncShowEmailStep);
     var ncOut = $('notary-signout'); if (ncOut) ncOut.addEventListener('click', ncSignOut);
+    var ncProfilForm = $('nc-profil-form');
+    if (ncProfilForm) ncProfilForm.addEventListener('submit', function (e) { e.preventDefault(); ncSaveProfil(); });
     var ncRef = $('notary-refresh'); if (ncRef) ncRef.addEventListener('click', function () { ncLoadBids().then(function (ok) { if (ok) toast('Demandes rafraîchies.'); }); });
 
     // Lead-delivery preferences — every control saves on change (per notary).
@@ -6267,9 +6397,6 @@
     if (amtClient) amtClient.textContent = D.money(D.REFERRAL.client);
     var amtNotaire = $('pr-amount-notaire');
     if (amtNotaire) amtNotaire.textContent = D.money(D.REFERRAL.notaire);
-    // The vignette's payoff is the same domain figure — never a markup literal.
-    var vigAmt = $('pr-vig-amt');
-    if (vigAmt) vigAmt.textContent = D.money(D.REFERRAL.client);
     // One chip per partner category, from the domain.
     var wrap = $('partner-type');
     if (wrap && !wrap.children.length) {
@@ -6282,12 +6409,9 @@
     // A RETURNING partner lands on their code, never a blank claim form: the
     // confirmed record (nota.partner.v1) reopens the share box, retitles the
     // panel, and pre-fills the form — so editing any field re-arms the normal
-    // claim flow (partnerValidateUI) for a variant. The vignette tells the
-    // story with their OWN code; prospects keep the EVEROY sample.
+    // claim flow (partnerValidateUI) for a variant.
     var rec = partnerGet();
     if (rec) {
-      var vigCode = $('pr-vig-code');
-      if (vigCode) vigCode.textContent = rec.code;
       var title = $('partner-form-title');
       if (title) title.textContent = 'Votre code partenaire';
       partnerState.type = rec.type || partnerState.type;
@@ -6328,7 +6452,10 @@
     }
     var mailOk = !!(mailInp && D.isEmail(mailInp.value.trim()));
     // Editing after a claim resets the CTA out of its success/pending state.
-    if (!submit.getAttribute('aria-busy') && submit.textContent.trim() !== 'Réclamer mon code →') {
+    // The state rides data-state, never the label — the English layer rewrites
+    // labels in place, so a text comparison would misfire in English mode.
+    if (!submit.getAttribute('aria-busy') && submit.dataset.state) {
+      delete submit.dataset.state;
       submit.textContent = 'Réclamer mon code →';
       var succ = $('partner-success'); if (succ) succ.hidden = true;
       var pend0 = $('partner-pending'); if (pend0) pend0.hidden = true;
@@ -6378,7 +6505,8 @@
     // the claim completes offline (local dev + the web test stubs).
     if (j.devToken) { await partnerVerify(j.devToken, hint); return; }
     // Production path: the confirmation link is in the partner's inbox.
-    submit.removeAttribute('aria-busy'); submit.textContent = 'Lien envoyé ✓'; // stays disabled
+    submit.removeAttribute('aria-busy'); submit.dataset.state = 'sent';
+    submit.textContent = 'Lien envoyé ✓'; // stays disabled
     var box0 = $('partner-success'); if (box0) box0.hidden = true;
     var pend = $('partner-pending'); if (pend) pend.hidden = false;
   }
@@ -6411,12 +6539,15 @@
   function partnerClaimConfirmed(saved, hint) {
     hint = hint || {};
     var submit = $('partner-submit');
-    if (submit) { submit.removeAttribute('aria-busy'); submit.textContent = 'Code réclamé ✓'; submit.disabled = true; }
+    if (submit) { submit.removeAttribute('aria-busy'); submit.dataset.state = 'claimed'; submit.textContent = 'Code réclamé ✓'; submit.disabled = true; }
     var errs = $('partner-errors'); if (errs) errs.hidden = true;
     var pend = $('partner-pending'); if (pend) pend.hidden = true;
     var box = $('partner-success'); if (box) box.hidden = false;
     var code = saved.code || hint.code;
     var link = $('partner-link'); if (link) link.textContent = partnerShareLink(code);
+    // Native share only where the platform has a sheet — everywhere else the
+    // copy button stands alone, exactly as before.
+    var share = $('partner-share'); if (share) share.hidden = typeof navigator.share !== 'function';
     partnerSet({
       code: code,
       type: saved.type || hint.type || partnerState.type,
@@ -6433,7 +6564,7 @@
     if (errs) { clear(errs); errs.hidden = false; msgs.forEach(function (m) { errs.appendChild(el('li', null, m)); }); }
     var pend = $('partner-pending'); if (pend) pend.hidden = true;
     var submit = $('partner-submit');
-    if (submit) { submit.removeAttribute('aria-busy'); submit.textContent = 'Réclamer mon code →'; }
+    if (submit) { submit.removeAttribute('aria-busy'); delete submit.dataset.state; submit.textContent = 'Réclamer mon code →'; }
     partnerValidateUI();
   }
 
@@ -6473,6 +6604,20 @@
   function partnerCopyLink() {
     var link = $('partner-link');
     copyLinkText(link ? link.textContent : '');
+  }
+
+  // Native share where the platform has a sheet (phones): the agent hands the
+  // link over in the very conversation where the referral is happening. A
+  // dismissed sheet is a choice, not an error — nothing to toast. Shared by
+  // the Partenaires success box and the profile's Parrainage card.
+  function shareLinkNative(text) {
+    if (!text || typeof navigator.share !== 'function') return;
+    try { navigator.share({ title: 'Nota', url: text }).catch(function () {}); } catch (e) {}
+  }
+
+  function partnerShareClick() {
+    var link = $('partner-link');
+    shareLinkNative(link ? link.textContent : '');
   }
 
   function handleCheckoutReturn() {

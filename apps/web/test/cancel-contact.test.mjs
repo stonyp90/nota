@@ -311,3 +311,46 @@ test('no rating → no badge, never zero stars', async () => {
   await wait(40);
   assert.equal(doc.querySelector('.rating-badge'), null);
 });
+
+test('a CNQ fiche shows as a badge on the proposition and as the full link once retained (ADR 0016)', async () => {
+  const FICHE = 'https://www.cnq.org/trouver-un-notaire/fiche/42/';
+  const status = {
+    ...openStatus(),
+    bid: { ...openStatus().bid, status: 'retenue', etude: 'Étude Tremblay' },
+    notaire: { etude: 'Étude Tremblay', courriel: 'n@etude.ca', rating: { note: 4.5, avis: 12 }, lienCNQ: FICHE },
+    propositions: [{ id: 'p1', etude: 'Étude Roy', montant: 1200, delta: 200, message: '', status: 'en_attente', createdAt: '2026-08-01', rating: null, cnq: true }],
+    acte: { complete: false },
+  };
+  const { doc } = await boot({
+    seed: { 'nota.myoffers.v1': JSON.stringify([{ ...OFFER, retained: true, etude: 'Étude Tremblay' }]) },
+    routes: [statusRoute(status), monthRoute()],
+  });
+  doc.defaultView.Nota.setTab('profil');
+  await wait(40);
+  // The proposing notary earns the membership badge — never the URL itself.
+  assert.ok(doc.querySelector('.cnq-badge'), 'the proposition must carry the CNQ badge');
+  // The retained contact block carries the full fiche link, new-tab safe.
+  const link = doc.querySelector('a.cnq-link');
+  assert.ok(link, 'the retained contact must link the official fiche');
+  assert.equal(link.getAttribute('href'), FICHE);
+  assert.equal(link.getAttribute('target'), '_blank');
+  assert.equal(link.getAttribute('rel'), 'noopener');
+});
+
+test('no fiche → no CNQ badge and no fiche link', async () => {
+  const status = {
+    ...openStatus(),
+    bid: { ...openStatus().bid, status: 'retenue', etude: 'Étude Neuve' },
+    notaire: { etude: 'Étude Neuve', courriel: 'n@etude.ca', rating: null, lienCNQ: null },
+    propositions: [{ id: 'p1', etude: 'Étude Roy', montant: 1200, delta: 200, message: '', status: 'en_attente', createdAt: '2026-08-01', rating: null, cnq: false }],
+    acte: { complete: false },
+  };
+  const { doc } = await boot({
+    seed: { 'nota.myoffers.v1': JSON.stringify([{ ...OFFER, retained: true, etude: 'Étude Neuve' }]) },
+    routes: [statusRoute(status), monthRoute()],
+  });
+  doc.defaultView.Nota.setTab('profil');
+  await wait(40);
+  assert.equal(doc.querySelector('.cnq-badge'), null);
+  assert.equal(doc.querySelector('a.cnq-link'), null);
+});

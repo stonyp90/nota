@@ -24,7 +24,7 @@ function app(opts = {}) {
 
 const parse = (res) => JSON.parse(res.body);
 const bearer = (token) => ({ authorization: 'Bearer ' + token });
-const PRICING = { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale' };
+const PRICING = { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale', deplacement: 'client_50' };
 
 async function seedBid(a, over = {}) {
   const res = await a.handle({

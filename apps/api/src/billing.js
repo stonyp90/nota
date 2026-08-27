@@ -40,9 +40,25 @@ const NOTARY_STATUS = {
 // Configurable via NOTA_COMMISSION_RATE so the rate is never baked into logic.
 const DEFAULT_COMMISSION_RATE = 0.10;
 
+// Rating-earned commission bonus (ADR 0016): a notary whose client evaluations
+// are strong keeps more of each act. Each tier is a minimum one-decimal average
+// (`note`), a minimum number of evaluations (`avis`), and the rate REDUCTION it
+// earns (`bonus`). The single best attained tier applies; the effective rate
+// never goes below the floor. Configurable via NOTA_COMMISSION_BONUS_TIERS
+// (JSON array of tiers) and NOTA_COMMISSION_RATE_FLOOR.
+const DEFAULT_COMMISSION_BONUS_TIERS = [
+  { note: 4.5, avis: 5, bonus: 0.01 },
+  { note: 4.8, avis: 10, bonus: 0.02 },
+];
+const DEFAULT_COMMISSION_RATE_FLOOR = 0.05;
+
+// Kill float dust in rate arithmetic (0.10 − 0.02 must be 0.08, not …002).
+const roundRate = (x) => Math.round(x * 10000) / 10000;
+
 function createBilling({
   repo, stripe, now, timeZone,
   onboardingReturnUrl, onboardingRefreshUrl, commissionRate,
+  commissionBonusTiers, commissionRateFloor,
 } = {}) {
   if (!repo) throw new Error('createBilling: repo is required');
   if (!stripe) throw new Error('createBilling: stripe adapter is required');
@@ -52,10 +68,44 @@ function createBilling({
   // completion instant — a UTC slice booked evening completions on tomorrow.
   const statsDay = () => domain.businessDay(clock(), timeZone || process.env.NOTA_TIMEZONE);
   const rate = typeof commissionRate === 'number' ? commissionRate : DEFAULT_COMMISSION_RATE;
+  const bonusTiers = Array.isArray(commissionBonusTiers) ? commissionBonusTiers : DEFAULT_COMMISSION_BONUS_TIERS;
+  const rateFloor = typeof commissionRateFloor === 'number' ? commissionRateFloor : DEFAULT_COMMISSION_RATE_FLOOR;
 
-  // Nota's share of an act, in cents, from the act's dollar value.
-  function feeCents(actAmount) {
-    return Math.round(Number(actAmount) * 100 * rate);
+  // What a tier would price the commission at, floored.
+  const tierRate = (bonus) => Math.max(rateFloor, roundRate(rate - bonus));
+
+  /**
+   * The commission a given notary earns TODAY (ADR 0016): the base rate, the
+   * effective rate after the best rating-earned bonus, and the next reachable
+   * tier (null at the top) — so the console can show the rate as a lever, not
+   * a hidden rule. Pure read: only the profile's rating aggregates matter.
+   */
+  function commissionFor(notary) {
+    const note = domain.ratingAverage(notary && notary.ratingSum, notary && notary.ratingCount);
+    const avis = (notary && Number(notary.ratingCount)) || 0;
+    let earned = 0;
+    for (const t of bonusTiers) {
+      if (note != null && note >= t.note && avis >= t.avis && t.bonus > earned) earned = t.bonus;
+    }
+    const tauxEffectif = tierRate(earned);
+    // The least-demanding tier that would still lower the rate from here.
+    let next = null;
+    for (const t of bonusTiers) {
+      if (tierRate(t.bonus) >= tauxEffectif) continue;
+      if (!next || t.bonus < next.bonus) next = t;
+    }
+    return {
+      taux: rate,
+      tauxEffectif,
+      bonus: roundRate(rate - tauxEffectif),
+      prochain: next ? { note: next.note, avis: next.avis, tauxEffectif: tierRate(next.bonus) } : null,
+    };
+  }
+
+  // Nota's share of an act, in cents, from the act's dollar value — at the
+  // notary's rating-earned effective rate.
+  function feeCents(actAmount, notary) {
+    return Math.round(Number(actAmount) * 100 * commissionFor(notary).tauxEffectif);
   }
 
   // Best-effort analytics rollups (see keys.js STATS#). A rollup failure must
@@ -168,7 +218,7 @@ function createBilling({
       }
     }
 
-    const fee = feeCents(amount);
+    const fee = feeCents(amount, notary);
     // A Stripe failure (decline, outage) is a typed, retryable error — never an
     // unhandled throw that turns the route into a 5xx with no payload. Nothing
     // was written yet, so a retry starts clean; the Stripe idempotency key
@@ -268,7 +318,7 @@ function createBilling({
       }
     }
 
-    const fee = feeCents(amount);
+    const fee = feeCents(amount, notary);
     // A capture decline AFTER a notary accepted must never dead-end the accept
     // as an unhandled 5xx: the retain already happened, and the notary must
     // still receive the dossier. Surface a typed error the route folds into
@@ -436,7 +486,10 @@ function createBilling({
     return { ok: true, handled, duplicate: false, type: event.type, event, notary, bid: bid || null };
   }
 
-  return { connectNotary, authorizeOffer, payNotaryOnAccept, completeAct, cancelAuthorization, handleWebhook, commissionRate: rate };
+  return { connectNotary, authorizeOffer, payNotaryOnAccept, completeAct, cancelAuthorization, handleWebhook, commissionFor, commissionRate: rate };
 }
 
-module.exports = { createBilling, NOTARY_STATUS, DEFAULT_COMMISSION_RATE };
+module.exports = {
+  createBilling, NOTARY_STATUS,
+  DEFAULT_COMMISSION_RATE, DEFAULT_COMMISSION_BONUS_TIERS, DEFAULT_COMMISSION_RATE_FLOOR,
+};

@@ -42,8 +42,8 @@ Then('aucun prêteur du catalogue ne majore le prix, sauf le prêteur privé', f
 
 Then('le prix de base {string} avec le prêteur {string} est {int}', function (serviceId, preteur, attendu) {
   const answers = {
-    refinancement: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue' },
-    financement: { valeur_pret: 250000, contexte: 'propriete_detenue', approbation_bancaire: 'obtenue' },
+    refinancement: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', deplacement: 'client_50' },
+    financement: { valeur_pret: 250000, contexte: 'propriete_detenue', approbation_bancaire: 'obtenue', deplacement: 'client_50' },
   }[serviceId];
   assert.equal(this.domain.computeBasePrice(serviceId, { ...answers, preteur }), attendu);
 });
@@ -55,7 +55,7 @@ When('je valide une offre à {int} $ sans nommer de prêteur', function (montant
     dateISO,
     montant,
     todayISO: this.today,
-    pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue' },
+    pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', deplacement: 'client_50' },
   });
 });
 
@@ -66,7 +66,7 @@ When('je valide une offre à {int} $ avec le prêteur {string} sans nom', functi
     dateISO,
     montant,
     todayISO: this.today,
-    pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur },
+    pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur, deplacement: 'client_50' },
   });
 });
 
@@ -79,7 +79,7 @@ When('un client publie une offre avec le prêteur {string} à {int} dans {int} j
     path: '/bids',
     body: JSON.stringify({
       serviceId: 'refinancement', dateISO, montant, courriel: 'client@exemple.ca',
-      pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur },
+      pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur, deplacement: 'client_50' },
     }),
   });
   assert.equal(this.response.statusCode, 201, 'publication: ' + this.response.body);
@@ -110,7 +110,7 @@ When('un client publie une offre avec le prêteur {string} nommé {string} à {i
     path: '/bids',
     body: JSON.stringify({
       serviceId: 'refinancement', dateISO, montant, courriel: 'client@exemple.ca',
-      pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur, preteur_autre: nom },
+      pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur, preteur_autre: nom, deplacement: 'client_50' },
     }),
   });
   assert.equal(this.response.statusCode, 201, 'publication: ' + this.response.body);

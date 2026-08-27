@@ -11,7 +11,7 @@ const { Given, When, Then } = require('@cucumber/cucumber');
 Given('un dossier {string} avec les réponses tarifaires obligatoires', function (serviceId) {
   this.dossierServiceId = serviceId;
   this.dossierSaved = {
-    __pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale' },
+    __pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale', deplacement: 'client_50' },
   };
 });
 

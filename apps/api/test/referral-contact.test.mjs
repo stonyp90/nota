@@ -37,7 +37,7 @@ const parse = (res) => JSON.parse(res.body);
 const bearer = (token) => ({ authorization: 'Bearer ' + token });
 
 // Zero-add refinancement answers: the dynamic base stays at the flat 2000 $.
-const PRICING = { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale' };
+const PRICING = { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale', deplacement: 'client_50' };
 
 const postBid = (a, over = {}) =>
   a.handle({
@@ -196,7 +196,7 @@ test('after retention: the client sees the retaining notary étude + courriel; a
   await accept(a, tokenA, posted.bid.id, posted.bid.dateISO);
 
   const own = parse(await clientBid(a, posted.clientToken, posted.bid.id, posted.bid.dateISO));
-  assert.deepEqual(own.notaire, { etude: 'Étude a@notaire.ca', courriel: 'a@notaire.ca', rating: null });
+  assert.deepEqual(own.notaire, { etude: 'Étude a@notaire.ca', courriel: 'a@notaire.ca', rating: null, lienCNQ: null });
   assert.equal(JSON.stringify(own).includes(notaryIdForEmail('a@notaire.ca')), false, 'the internal notaryId must never reach the client');
 
   // The losing notary's console lists nothing — no contact leak sideways.

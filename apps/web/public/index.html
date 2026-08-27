@@ -763,6 +763,35 @@
               <h2 class="nc-h">Vos revenus</h2>
               <div class="nc-earn" id="notary-earnings"></div>
 
+              <!-- Public profile (ADR 0016 + 0017): the notary's official fiche
+                   in the Chambre des notaires directory, plus how far they
+                   travel for in-person signings and whether they take 100 %
+                   online urgencies. The domain validates everything; the feed
+                   only shows what the profile can serve (notaryCanServe). -->
+              <details class="nc-prefs" id="notary-profil">
+                <summary class="nc-prefs-sum">
+                  <h2 class="nc-h">Votre profil public</h2>
+                  <span class="nc-prefs-hint">fiche CNQ, déplacement, urgences</span>
+                </summary>
+                <p class="help">Ajoutez le lien de votre fiche officielle à la Chambre des notaires du Québec (cnq.org). Les clients voient un badge « CNQ » sur vos propositions et peuvent consulter votre fiche une fois votre étude retenue.</p>
+                <form id="nc-profil-form">
+                  <div class="form-row">
+                    <label class="lbl" for="nc-cnq">Votre fiche officielle (cnq.org)</label>
+                    <input type="url" id="nc-cnq" inputmode="url" autocomplete="url" placeholder="https://www.cnq.org/trouver-un-notaire/…" />
+                  </div>
+                  <div class="form-row">
+                    <label class="lbl" for="nc-rayon">Rayon de déplacement — signature chez le client</label>
+                    <!-- Options come from the domain's NOTARY_RADII (ADR 0017), filled by ncRenderProfil — never re-declared here. -->
+                    <select id="nc-rayon"></select>
+                    <p class="help">Un rayon plus large fait apparaître plus de demandes dans votre fil — et le déplacement est payé par la demande.</p>
+                  </div>
+                  <label class="switch-row"><span class="nc-pref-lbl">J’accepte les urgences — signature 100 % en ligne</span><span class="switch"><input type="checkbox" id="nc-urgences" /><span class="track"></span></span></label>
+                  <ul class="errors" id="nc-profil-errors" role="alert" aria-atomic="true" hidden></ul>
+                  <button type="submit" class="btn btn-sm">Enregistrer mon profil</button>
+                  <p class="help nc-prefs-saved" id="nc-profil-saved" role="status" aria-live="polite" hidden>✓ Profil enregistré.</p>
+                </form>
+              </details>
+
               <!-- Lead-delivery preferences: HOW (in-app / email / SMS) and at what PACE
                    Nota alerts this notary about new matching demands. Collapsed by
                    default — settings, not the working surface. -->
@@ -843,58 +872,62 @@
            renderPartnerPane() — never a literal in this markup. -->
       <section class="tab-pane" id="pane-partenaires" role="tabpanel" aria-labelledby="tab-partenaires" hidden>
         <div class="wrap">
-          <div class="intro">
-            <span class="eyebrow">Partenaires</span>
-            <h1>Référez, et soyez récompensé.</h1>
-            <!-- One line, one idea. The « prix du client » guarantee lives ONCE,
-                 in the fine print below — never repeated here. -->
-            <p>Agents immobiliers, courtiers hypothécaires : chaque mise en relation qui aboutit est récompensée.</p>
-          </div>
+          <!-- The hero band (2026-08-27 redesign): the pitch and the two flat
+               rewards share ONE washed panel, so the whole offer lands in a
+               single glance before anything scrolls. The « prix du client »
+               guarantee still lives ONCE, in the fine print below. -->
+          <header class="pr-hero">
+            <div class="pr-hero-copy">
+              <span class="eyebrow">Partenaires</span>
+              <h1>Référez, et soyez récompensé.</h1>
+              <p>Agents immobiliers, courtiers hypothécaires : chaque mise en relation qui aboutit est récompensée.</p>
+            </div>
+            <!-- Two tracks, one stat card each: kicker, amount, when. The
+                 mechanics live in the steps below — never repeated per card.
+                 The notary track pays more, so it carries the highlight.
+                 Amounts come from renderPartnerPane() (domain). -->
+            <div class="pr-rewards" aria-label="Les récompenses">
+              <div class="pr-card" id="pr-card-client">
+                <div class="pr-kicker">Référez un client</div>
+                <div class="pr-amount" id="pr-amount-client"></div>
+                <p class="pr-when">Versée dès qu’un notaire retient la demande.</p>
+              </div>
+              <div class="pr-card pr-card--notaire" id="pr-card-notaire">
+                <div class="pr-kicker">Référez un notaire</div>
+                <div class="pr-amount" id="pr-amount-notaire"></div>
+                <p class="pr-when">Versée à son premier acte retenu.</p>
+              </div>
+            </div>
+          </header>
 
-          <!-- Conversion-first: the rewards (the pitch) beside the claim form
-               (the action), one screen, no scroll to the CTA. Grid areas keep
-               the narrow-screen order rewards → form → fine print. -->
+          <!-- How-it-works beside the claim form: the story on the left, the
+               action pinned on the right (sticky on desktop), stacking
+               story → form on narrow screens. -->
           <div class="pr-grid">
             <div class="pr-pitch">
-              <!-- Two tracks, one thin card each: kicker, amount, when. The
-                   mechanics live in the three steps below — never repeated per
-                   card. The notary track pays more, so it carries the
-                   highlight. Amounts come from renderPartnerPane() (domain). -->
-              <section class="pr-rewards" aria-label="Les récompenses">
-                <div class="pr-card" id="pr-card-client">
-                  <div class="pr-kicker">Référez un client</div>
-                  <div class="pr-amount" id="pr-amount-client"></div>
-                  <p class="pr-when">Versée dès qu’un notaire retient la demande.</p>
-                </div>
-                <div class="pr-card pr-card--notaire" id="pr-card-notaire">
-                  <div class="pr-kicker">Référez un notaire</div>
-                  <div class="pr-amount" id="pr-amount-notaire"></div>
-                  <p class="pr-when">Versée à son premier acte retenu.</p>
-                </div>
-              </section>
+              <h2 class="h-sub pr-how-title">Comment ça marche</h2>
+              <!-- The three steps as a connected timeline — each one a bold
+                   verb line plus its single caveat, replacing the old
+                   one-line fine print. -->
+              <ol class="pr-steps">
+                <li>
+                  <strong>Réclamez votre code</strong>
+                  <span>Une minute, sans frais — activé par un lien envoyé à votre courriel.</span>
+                </li>
+                <li>
+                  <strong>Partagez votre lien</strong>
+                  <span>Le code voyage en privé — jamais affiché au carnet ni montré aux notaires.</span>
+                </li>
+                <li>
+                  <strong>Soyez récompensé quand ça aboutit</strong>
+                  <span>Un montant fixe, jamais un pourcentage.</span>
+                </li>
+              </ol>
 
-              <!-- The referral story played out in the column's air (owner's
-                   call, 2026-08-26: a clean animation instead of empty space):
-                   your code sends a dot down the wire, the client's demand is
-                   retained, the fixed reward pops. Decorative (aria-hidden),
-                   pure CSS, one pass per visit then the finished tableau
-                   holds; the payoff figure is DOMAIN data, filled by
-                   renderPartnerPane() — never a literal here. -->
-              <div class="pr-vig" aria-hidden="true">
-                <div class="pr-vig-chip">
-                  <span class="pr-kicker">Votre code</span>
-                  <!-- The sample code — swapped for the partner's OWN code by
-                       renderPartnerPane() once one is claimed on this device. -->
-                  <code class="pr-vig-code" id="pr-vig-code">EVEROY</code>
-                </div>
-                <span class="pr-vig-track"><span class="pr-vig-dot"></span></span>
-                <div class="pr-vig-card">
-                  <span class="pr-vig-name">La demande de votre client</span>
-                  <span class="pr-vig-stamp"><span class="pr-vig-check">✓</span> Retenue par un notaire</span>
-                </div>
-                <span class="pr-vig-track pr-vig-track--2"><span class="pr-vig-dot"></span></span>
-                <strong class="pr-vig-amt" id="pr-vig-amt"></strong>
-              </div>
+              <!-- The fine print: the guarantee stays a quiet closing line. -->
+              <p class="note nota-guarantee">
+                <strong>Le prix du client n’y touche jamais.</strong> La récompense de référence est un coût de marketing de Nota, payée à même sa propre commission — jamais ajoutée au prix du client, jamais retranchée des honoraires du notaire.
+              </p>
             </div>
 
             <div class="panel pr-form-panel">
@@ -925,28 +958,24 @@
                      squatted by someone who does not control the address. -->
                 <div id="partner-pending" class="partner-success" hidden aria-live="polite">
                   <p class="help"><strong>Vérifiez votre courriel.</strong> Nous avons envoyé un lien à usage unique pour confirmer votre code — il devient actif dès que vous l’ouvrez.</p>
+                  <!-- The likeliest failures are a junk-folder detour and a
+                       typo'd courriel — and editing a field is exactly what
+                       re-arms the form, so the recovery line says so. -->
+                  <p class="help">Rien reçu ? Vérifiez vos indésirables — ou corrigez votre courriel et soumettez à nouveau.</p>
                 </div>
-                <div id="partner-success" class="partner-success" hidden>
+                <!-- aria-live: the link is revealed asynchronously (verify
+                     round-trip, or the #pauth boot with no user gesture). -->
+                <div id="partner-success" class="partner-success" hidden aria-live="polite">
                   <p class="help"><strong>Code réclamé.</strong> Partagez ce lien — chaque demande publiée par lui vous est attribuée :</p>
                   <div class="partner-link-row">
                     <code id="partner-link"></code>
                     <button type="button" class="btn btn-sm" id="partner-copy">Copier le lien</button>
+                    <!-- Revealed by partnerClaimConfirmed() only where the
+                         platform has a share sheet (navigator.share). -->
+                    <button type="button" class="btn btn-sm" id="partner-share" hidden>Partager</button>
                   </div>
                 </div>
               </form>
-            </div>
-
-            <div class="pr-more">
-              <!-- The fine print, compressed to three lines — the big cards it
-                   replaces said the same thing at three times the height. -->
-              <ol class="pr-steps">
-                <li>Réclamez votre code — une minute, sans frais.</li>
-                <li>Partagez votre lien — le code voyage en privé, jamais affiché au carnet ni montré aux notaires.</li>
-                <li>Récompensé quand ça aboutit — un montant fixe, jamais un pourcentage.</li>
-              </ol>
-              <p class="note nota-guarantee">
-                <strong>Le prix du client n’y touche jamais.</strong> La récompense de référence est un coût de marketing de Nota, payée à même sa propre commission — jamais ajoutée au prix du client, jamais retranchée des honoraires du notaire.
-              </p>
             </div>
           </div>
         </div>

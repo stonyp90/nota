@@ -218,6 +218,24 @@ test('notary-card composed lines (readiness badge, factors) have English transla
   }
 });
 
+// The Terms' « Programme partenaires » clause is composed at runtime
+// (renderPartnerPane fills in the domain's reward amounts), so the exact-match
+// dictionary can never carry it — a full-sentence rule must, with the amounts
+// riding the captures into the trailing money conversion.
+test('the composed Terms partner clause reads fully in English', () => {
+  I18N.force('en');
+  const fr = 'Un professionnel qui réfère reçoit une récompense fixe de Nota : '
+    + D.money(D.REFERRAL.client) + ' quand la demande d’un client référé est retenue, et '
+    + D.money(D.REFERRAL.notaire) + ', une seule fois, quand un notaire référé retient son premier acte. '
+    + 'Payée par Nota à même ses propres fonds, elle ne change jamais le prix du client ni les honoraires du notaire. '
+    + 'Le professionnel encadré (OACIQ notamment) demeure responsable de divulguer cette récompense à son client lorsque son code de déontologie l’exige.';
+  const en = I18N.tEn(fr);
+  assert.ok(!/référé|récompense|notaire retient/.test(en), 'no French residue: ' + en);
+  assert.ok(en.includes(I18N.tEn(D.money(D.REFERRAL.client))), 'the client amount rides through, money-converted');
+  assert.ok(en.includes(I18N.tEn(D.money(D.REFERRAL.notaire))), 'the notary amount rides through, money-converted');
+  assert.match(en, /OACIQ/, 'the disclosure duty survives translation');
+});
+
 test('web translations agree with the domain’s English labels', () => {
   I18N.force('en');
   for (const s of D.SERVICES) {

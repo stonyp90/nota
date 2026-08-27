@@ -10,8 +10,8 @@ const TODAY = '2026-08-14';
 // Fully-answered mandatory params that keep each act at its BASE price.
 // (The catalogue is the financing family only — ADR 0010.)
 const BASE_ANSWERS = {
-  refinancement: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale' },
-  financement: { valeur_pret: 250000, contexte: 'propriete_detenue', approbation_bancaire: 'obtenue', preteur: 'banque_nationale' },
+  refinancement: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale', deplacement: 'client_50' },
+  financement: { valeur_pret: 250000, contexte: 'propriete_detenue', approbation_bancaire: 'obtenue', preteur: 'banque_nationale', deplacement: 'client_50' },
 };
 
 test('with NO answers a service returns its flat base (== prixDepart)', () => {
@@ -69,8 +69,8 @@ test('financement: the loan act for a NEW hypothec — same bracket ladder, acha
 // --- Mandatory parameters ----------------------------------------------------
 
 test('missingRequired lists the unanswered mandatory params', () => {
-  assert.deepEqual(missingRequired('refinancement', {}).map((m) => m.id), ['valeur_pret', 'succession', 'approbation_bancaire', 'preteur']);
-  assert.deepEqual(missingRequired('financement', {}).map((m) => m.id), ['valeur_pret', 'contexte', 'approbation_bancaire', 'preteur']);
+  assert.deepEqual(missingRequired('refinancement', {}).map((m) => m.id), ['valeur_pret', 'succession', 'approbation_bancaire', 'preteur', 'deplacement']);
+  assert.deepEqual(missingRequired('financement', {}).map((m) => m.id), ['valeur_pret', 'contexte', 'approbation_bancaire', 'preteur', 'deplacement']);
   // A loan value must be a real positive number — a crafted blank cannot skip it.
   assert.deepEqual(missingRequired('refinancement', { ...BASE_ANSWERS.refinancement, valeur_pret: '' }).map((m) => m.id), ['valeur_pret']);
   // Fully answered -> nothing missing.

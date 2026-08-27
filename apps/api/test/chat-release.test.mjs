@@ -26,7 +26,7 @@ function app(seed = []) {
 
 const parse = (res) => JSON.parse(res.body);
 const bearer = (token) => ({ authorization: 'Bearer ' + token });
-const PRICING = { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'tangerine' };
+const PRICING = { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'tangerine', deplacement: 'client_50' };
 
 async function session(a, email) {
   await a.repo.putNotary({ id: notaryIdForEmail(email), email, status: 'active', label: 'Étude Test' });

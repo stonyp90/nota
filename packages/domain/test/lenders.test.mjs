@@ -77,18 +77,18 @@ test('the lender no longer moves the price; complexity still names it', () => {
 });
 
 test('a bid cannot be posted without naming the lender', () => {
-  const missing = D.missingRequired('financement', { valeur_pret: 250000, contexte: 'propriete_detenue', approbation_bancaire: 'obtenue' });
+  const missing = D.missingRequired('financement', { valeur_pret: 250000, contexte: 'propriete_detenue', approbation_bancaire: 'obtenue', deplacement: 'client_50' });
   assert.deepEqual(missing.map((m) => m.id), ['preteur']);
   const r = D.validateOffer({
     serviceId: 'financement', dateISO: '2026-09-20', montant: 2500, todayISO: '2026-08-26',
-    pricing: { valeur_pret: 250000, contexte: 'propriete_detenue', approbation_bancaire: 'obtenue' },
+    pricing: { valeur_pret: 250000, contexte: 'propriete_detenue', approbation_bancaire: 'obtenue', deplacement: 'client_50' },
   });
   assert.equal(r.ok, false);
   assert.ok(r.errors.some((e) => e.code === 'parametre_requis' && e.param === 'preteur'));
 });
 
 test('« Autre prêteur » requires the name — an unlisted lender is added, not left blank', () => {
-  const answers = { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'autre' };
+  const answers = { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'autre', deplacement: 'client_50' };
   const missing = D.missingRequired('refinancement', answers);
   assert.deepEqual(missing.map((m) => m.id), ['preteur_autre'], 'the blank name is the one missing answer');
   assert.equal(missing[0].label, 'Nom du prêteur');

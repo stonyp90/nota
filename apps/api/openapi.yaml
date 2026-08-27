@@ -552,7 +552,11 @@ paths:
             Open, live bids in the forward month window (minus the ones this
             notary declined), each with THIS notary's own latest proposition
             and document request (never another notary's) and the dossier items
-            still missing. `retained` lists the bids in the window retained by
+            still missing. The feed only offers what this notary can serve
+            (ADR 0017, `notaryCanServe`): a travel band beyond their declared
+            `rayonKm`, or an online urgency they never opted into, is filtered
+            out server-side; bids predating the déplacement question reach
+            everyone. `retained` lists the bids in the window retained by
             this notary — including those retained through a proposition the
             client accepted (`viaProposition`), which the console never
             accepted itself — each with the `client` contact block (mise en
@@ -561,7 +565,7 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [bids, retained, rating]
+                required: [bids, retained, rating, profil, commission]
                 properties:
                   bids:
                     type: array
@@ -573,8 +577,73 @@ paths:
                       $ref: "#/components/schemas/RetainedBid"
                   rating:
                     $ref: "#/components/schemas/NotaryRating"
+                  profil:
+                    $ref: "#/components/schemas/NotaryProfil"
+                  commission:
+                    $ref: "#/components/schemas/NotaryCommission"
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /notary/profile:
+    post:
+      operationId: updateNotaryProfile
+      summary: Update the notary's profile — CNQ fiche, travel radius, urgency opt-in.
+      description: >-
+        The editable fields of the notary's profile. `lienCNQ` (ADR 0016) is
+        the link of their official fiche in the Chambre des notaires du Québec
+        directory — the domain is the authority on what counts as a fiche
+        (https on the `cnq.org` host or a subdomain, nothing else), and an
+        empty value clears the fiche (and the « CNQ » badge clients see).
+        `rayonKm` and `urgences` (ADR 0017) declare how far the notary travels
+        for in-person signatures and whether they take 100 %-online urgency
+        acts — the two levers that widen (or narrow) the demandes the feed
+        offers them. The write spreads the existing profile record, so the
+        billing identity and the rating aggregates survive.
+      security:
+        - notarySession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                lienCNQ:
+                  type: [string, "null"]
+                  description: Official fiche URL on cnq.org, or empty to clear.
+                rayonKm:
+                  type: integer
+                  enum: [0, 25, 50]
+                  default: 0
+                  description: Declared travel radius in km (NOTARY_RADII); absent means 0.
+                urgences:
+                  type: boolean
+                  default: false
+                  description: Opt into 100 %-online urgency acts (strictly boolean true).
+                token:
+                  type: string
+                  description: Session token fallback when the Authorization header is absent.
+      responses:
+        "200":
+          description: The stored profile.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [profil]
+                properties:
+                  profil:
+                    $ref: "#/components/schemas/NotaryProfil"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          description: >-
+            The link is not a fiche on the Chambre's own site
+            (`lien_cnq_invalide`), or the radius is not 0, 25 or 50
+            (`rayon_invalide`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Errors"
   /notary/bids/accept:
     post:
       operationId: acceptBid
@@ -623,6 +692,20 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: >-
+            The bid's déplacement band is beyond this notary's declared radius,
+            or an online urgency they never opted into (ADR 0017,
+            `deplacement_non_couvert`). A notary who already retained the bid
+            keeps the idempotent re-accept regardless.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                errors:
+                  - code: deplacement_non_couvert
+                    message: Cette demande exige un déplacement ou une urgence en ligne que votre profil ne couvre pas.
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -680,6 +763,19 @@ paths:
                     $ref: "#/components/schemas/NotaryProposition"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: >-
+            The bid's déplacement band is beyond this notary's declared radius,
+            or an online urgency they never opted into (ADR 0017,
+            `deplacement_non_couvert`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                errors:
+                  - code: deplacement_non_couvert
+                    message: Cette demande exige un déplacement ou une urgence en ligne que votre profil ne couvre pas.
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -915,6 +1011,12 @@ paths:
                             type: [string, "null"]
                           rating:
                             $ref: "#/components/schemas/NotaryRating"
+                          lienCNQ:
+                            type: [string, "null"]
+                            description: >-
+                              The retaining notary's official fiche in the
+                              Chambre des notaires directory (ADR 0016) — like
+                              `courriel`, only present once retained.
                   propositions:
                     type: array
                     items:
@@ -1458,6 +1560,13 @@ components:
           format: date
         rating:
           $ref: "#/components/schemas/NotaryRating"
+        cnq:
+          type: boolean
+          description: >-
+            True when the proposing notary has attached their official fiche
+            in the Chambre des notaires directory (ADR 0016). A boolean only —
+            the fiche URL never rides an open bid (it lists the notary's
+            phone; contact flows only after retention).
     NotaryDemande:
       type: object
       required: [id, documents, createdAt, fournie]
@@ -1553,6 +1662,27 @@ components:
           type: string
         virtuel:
           type: boolean
+    DeplacementInfo:
+      type: object
+      description: >-
+        The déplacement band behind a bid (from the domain's DEPLACEMENTS
+        catalogue, ADR 0017): who moves for the in-person signature — the
+        client to the étude, the notary to the client — how far, and whether
+        the client declared a 100 %-online urgency. Shown to notaries before
+        they retain, propose, or pass. Null on bids that predate the question.
+      required: [id, nom, qui, km, urgence]
+      properties:
+        id:
+          type: string
+        nom:
+          type: string
+        qui:
+          type: string
+          enum: [client, notaire, en_ligne]
+        km:
+          type: integer
+        urgence:
+          type: boolean
     ChatMessage:
       type: object
       description: >-
@@ -1572,7 +1702,7 @@ components:
     NotaryBid:
       type: object
       description: Notary-facing projection of an open bid (never the dossier or courriel).
-      required: [id, serviceId, dateISO, montant, tier, premium, ready, preteur, proposition, demande, missing]
+      required: [id, serviceId, dateISO, montant, tier, premium, ready, preteur, deplacement, proposition, demande, missing]
       properties:
         id:
           type: string
@@ -1595,6 +1725,10 @@ components:
           oneOf:
             - type: "null"
             - $ref: "#/components/schemas/LenderInfo"
+        deplacement:
+          oneOf:
+            - type: "null"
+            - $ref: "#/components/schemas/DeplacementInfo"
         complexity:
           type: object
           additionalProperties: true
@@ -1683,6 +1817,10 @@ components:
           oneOf:
             - type: "null"
             - $ref: "#/components/schemas/LenderInfo"
+        deplacement:
+          oneOf:
+            - type: "null"
+            - $ref: "#/components/schemas/DeplacementInfo"
         messages:
           type: array
           description: The live thread with the client (see /notary/bids/message).
@@ -1953,6 +2091,55 @@ components:
         avis:
           type: integer
           minimum: 1
+    NotaryProfil:
+      type: object
+      description: >-
+        The notary's own profile, as the console edits it: the CNQ fiche link
+        (ADR 0016) plus the declared travel radius and online-urgency opt-in
+        (ADR 0017) that gate which demandes the feed offers.
+      required: [lienCNQ, rayonKm, urgences]
+      properties:
+        lienCNQ:
+          type: [string, "null"]
+          description: Official fiche URL on cnq.org, null when none is attached.
+        rayonKm:
+          type: integer
+          enum: [0, 25, 50]
+          default: 0
+          description: >-
+            Declared travel radius in km (NOTARY_RADII). 0 — the default — a
+            notary who said nothing travels nowhere.
+        urgences:
+          type: boolean
+          default: false
+          description: True when the notary opted into 100 %-online urgency acts.
+    NotaryCommission:
+      type: [object, "null"]
+      description: >-
+        The commission this notary earns today (ADR 0016): the configured base
+        rate, the effective rate after the best rating-earned bonus, and the
+        next reachable tier (null at the top). Null when billing is not
+        configured — never a fake rate.
+      properties:
+        taux:
+          type: number
+          description: Base commission rate (NOTA_COMMISSION_RATE).
+        tauxEffectif:
+          type: number
+          description: Rate actually charged, after the rating-earned bonus, floored.
+        bonus:
+          type: number
+          description: The reduction earned (taux − tauxEffectif).
+        prochain:
+          type: [object, "null"]
+          description: The least-demanding tier that would still lower the rate.
+          properties:
+            note:
+              type: number
+            avis:
+              type: integer
+            tauxEffectif:
+              type: number
     EvaluationResponse:
       type: object
       required: [evaluation]

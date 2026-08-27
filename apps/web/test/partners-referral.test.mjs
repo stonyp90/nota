@@ -113,6 +113,7 @@ async function submitOffer({ win, doc, D, Nota }, tweak) {
   $(doc, 'crit-succession__non').click();
   $(doc, 'crit-approbation_bancaire__obtenue').click();
   const selPreteur = $(doc, 'crit-preteur'); selPreteur.value = 'banque_nationale'; fire(win, selPreteur, 'change');
+  const selDeplacement = $(doc, 'crit-deplacement'); selDeplacement.value = 'client_50'; fire(win, selDeplacement, 'change');
   if (tweak) tweak();
   fire(win, $(doc, 'offer-form'), 'submit');
   await wait(10);
@@ -343,6 +344,58 @@ test('a #pauth= confirmation link is consumed on boot: it verifies and reveals t
   assert.equal($(doc, 'partner-link').textContent, 'https://nota.example/?ref=EVEROY');
 });
 
+// The pending state must not dead-end: the likeliest failures are a typo'd
+// courriel and a junk-folder detour, and EDITING a field is what re-arms the
+// form — so the box has to say exactly that. The success box, in turn, is
+// revealed asynchronously (dev echo, or the #pauth boot with no user gesture
+// at all), so it has to announce itself to assistive tech.
+test('the pending state offers a recovery path, and the revealed link announces itself', async () => {
+  const { doc } = await boot();
+  assert.match($(doc, 'partner-pending').textContent, /indésirables/,
+    'the junk-folder / fix-your-courriel recovery line is part of the pending state');
+  assert.equal($(doc, 'partner-success').getAttribute('aria-live'), 'polite',
+    'the success reveal is announced');
+});
+
+// Native share — the agent's real gesture is handing the link over in the
+// conversation where the referral is happening, usually on a phone. The
+// button only surfaces where the platform has a share sheet; everywhere else
+// the copy button stands alone, exactly as before.
+test('a claimed link offers the native share sheet where the platform has one', async () => {
+  const { win, doc, Nota } = await boot({
+    routes: claimRoutes(jsonRes(201, { partenaire: { code: 'EVEROY' } })),
+  });
+  const shares = [];
+  win.navigator.share = (data) => { shares.push(data); return Promise.resolve(); };
+  Nota.setTab('partenaires');
+  doc.querySelector('#partner-type .chip').click();
+  const mail = $(doc, 'partner-courriel'); mail.value = 'eve@agence.ca'; fire(win, mail, 'input');
+  const code = $(doc, 'partner-code'); code.value = 'eve-roy'; fire(win, code, 'input');
+  fire(win, $(doc, 'partner-form'), 'submit');
+  await wait(20);
+  const share = $(doc, 'partner-share');
+  assert.ok(share, 'a share button exists in the success box');
+  assert.equal(share.hidden, false, 'it surfaces when navigator.share exists');
+  share.click();
+  await wait(10);
+  assert.equal(shares.length, 1, 'one share-sheet call');
+  assert.equal(shares[0].url, 'https://nota.example/?ref=EVEROY');
+});
+
+test('without navigator.share the copy button stands alone', async () => {
+  const { win, doc, Nota } = await boot({
+    routes: claimRoutes(jsonRes(201, { partenaire: { code: 'EVEROY' } })),
+  });
+  Nota.setTab('partenaires');
+  doc.querySelector('#partner-type .chip').click();
+  const mail = $(doc, 'partner-courriel'); mail.value = 'eve@agence.ca'; fire(win, mail, 'input');
+  const code = $(doc, 'partner-code'); code.value = 'eve-roy'; fire(win, code, 'input');
+  fire(win, $(doc, 'partner-form'), 'submit');
+  await wait(20);
+  assert.equal($(doc, 'partner-success').hidden, false, 'the claim still succeeds');
+  assert.equal($(doc, 'partner-share').hidden, true, 'no share sheet, no button');
+});
+
 test('a taken code surfaces the friendly typed error, and the CTA re-arms', async () => {
   const { win, doc, Nota } = await boot({
     routes: [{
@@ -398,54 +451,28 @@ test('editing a field re-arms the returning partner’s form for a fresh claim',
   assert.equal($(doc, 'partner-submit').disabled, false, 'type + courriel carry over — ready to resubmit');
 });
 
-test('the vignette plays the returning partner’s OWN code — EVEROY stays for prospects', async () => {
-  const fresh = await boot();
-  assert.equal($(fresh.doc, 'pr-vig-code').textContent, 'EVEROY', 'the prospect sees the sample code');
-  const { doc } = await boot({
-    seed: { 'nota.partner.v1': JSON.stringify({ code: 'MARCQC', type: 'courtier_hypothecaire', courriel: 'm@qc.ca' }) },
-  });
-  assert.equal($(doc, 'pr-vig-code').textContent, 'MARCQC', 'the partner sees their own code in the story');
-});
-
 // ---------------------------------------------------------------------------
-// 3. The pane stays strict — and the air carries ONE clean vignette
+// 3. The pane stays strict
 // ---------------------------------------------------------------------------
 
-test('the reward vignette fills the pitch air: decorative, domain-priced, motion-safe', async () => {
-  // Owner's call (2026-08-26): the slack between the reward cards and the
-  // fine print carries a clean animation instead of empty air — the referral
-  // story played out (your code → the client's demand retained → the reward).
-  const { doc, D } = await boot();
-  const vig = doc.querySelector('#pane-partenaires .pr-pitch .pr-vig');
-  assert.ok(vig, 'the vignette lives in the pitch column, under the reward cards');
-  assert.equal(vig.getAttribute('aria-hidden'), 'true', 'decorative — invisible to AT');
-  // The payoff figure is DOMAIN data (renderPartnerPane), never a markup literal.
-  assert.equal($(doc, 'pr-vig-amt').textContent, D.money(D.REFERRAL.client));
-  assert.ok(!/pr-vig-amt"[^>]*>[^<]*\d/.test(HTML_SRC), 'no literal amount baked in the markup');
-  // Pure CSS, one pass that holds its FINAL state (base styles are the ending,
-  // keyframes only add the hidden phases) — and frozen on that same finished
-  // tableau under reduced motion: never a blank strip, payoff always lands.
-  const rmBlocks = CSS_SRC.split('@media (prefers-reduced-motion: reduce)').slice(1);
-  assert.ok(rmBlocks.some((b) => /\.pr-vig[^}]*animation: none/.test(b.slice(0, b.indexOf('}') + 1))),
-    'the vignette sits still under prefers-reduced-motion');
-  assert.match(CSS_SRC, /\.pr-vig\b/, 'the vignette is styled');
-});
-
-test('otherwise the pane stays strict: no per-card mechanics, one guarantee', async () => {
+test('the pane stays strict: no per-card mechanics, one guarantee, no vignette', async () => {
   // Owner's ask (2026-08-25): thin and focused. The pitch is the two amounts,
-  // the action is the claim form — repetition stays gone; the vignette above
-  // is the ONE decorative element the pane carries.
+  // the action is the claim form — repetition stays gone.
   const { doc } = await boot();
   assert.equal(doc.querySelector('#pane-partenaires .pr-how'), null,
     'a card is kicker + amount + when — the mechanics live in the three steps');
-  // The guarantee is stated ONCE: the fine-print line, never again in the intro.
-  const intro = doc.querySelector('#pane-partenaires .intro p').textContent;
-  assert.ok(!/prix du client/.test(intro), 'the intro no longer duplicates the guarantee');
+  // The guarantee is stated ONCE: the fine-print line, never again in the
+  // hero's pitch line (the 2026-08-27 hero band replaced the plain .intro).
+  const pitch = doc.querySelector('#pane-partenaires .pr-hero-copy p').textContent;
+  assert.ok(!/prix du client/.test(pitch), 'the hero pitch no longer duplicates the guarantee');
   assert.ok(doc.querySelector('#pane-partenaires .nota-guarantee'), 'the guarantee stays in the fine print');
-  // The RETIRED 2026-08-25 vignette's classes never come back from the dead.
-  assert.ok(!/pr-vignette|pr-scene|pr-w[1-4]/.test(CSS_SRC), 'no dead vignette CSS');
+  // The RETIRED vignettes' classes never come back from the dead — neither the
+  // 2026-08-25 scene nor the 2026-08-27 animated strip (owner's call: removed).
+  assert.equal(doc.querySelector('#pane-partenaires .pr-vig'), null, 'the animated strip is gone from the pane');
+  assert.ok(!/pr-vignette|pr-scene|pr-w[1-4]|pr-vig/.test(CSS_SRC), 'no dead vignette CSS');
+  assert.ok(!/pr-vig/.test(HTML_SRC), 'no dead vignette markup');
   // The fine-print note reads as a quiet line, not another boxed card.
-  assert.match(CSS_SRC, /\.pr-more \.note\s*\{[^}]*border-left:\s*0/,
+  assert.match(CSS_SRC, /\.pr-pitch \.note\s*\{[^}]*border-left:\s*0/,
     'the guarantee sheds the boxed .note chrome inside the pane');
 });
 

@@ -1307,209 +1307,89 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .errors li { color: var(--danger); font-size: 13px; padding: 2px 0; }
 
 /* --- Partenaires (ADR 0011) ---------------------------------------------- */
-/* Conversion-first layout: the pitch (rewards + vignette) beside the claim
-   form, the fine print (steps + guarantee) tucked under the pitch. One screen
-   to the CTA on desktop; narrow screens stack pitch → form → fine print. */
+/* 2026-08-27 redesign: one washed hero band carries the pitch AND the two
+   reward stats (the whole offer in a single glance), then how-it-works — a
+   connected timeline — beside the claim form, sticky on desktop so the CTA
+   rides along the story. Narrow screens stack hero → story → form. */
+.pr-hero {
+  display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: clamp(var(--gap), 3vw, 48px); align-items: center;
+  margin-top: var(--intro-pad-top);
+  padding: clamp(20px, 3vw, 40px) clamp(20px, 3vw, 44px);
+  border: 1px solid var(--border); border-radius: var(--radius-lg);
+  /* The wash: a brand tint pooled in the rewards' corner over the plain
+     surface — tokens only, readable in every theme. */
+  background: radial-gradient(120% 180% at 100% 0%, var(--brand-tint), transparent 55%), var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+/* Display type for the one headline that sells the program — larger than the
+   utilitarian .intro h1 the other panes keep. */
+.pr-hero h1 { font-size: clamp(24px, 2.6vw, 38px); font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; margin-top: 4px; }
+.pr-hero p { color: var(--ink-muted); max-width: 52ch; margin: 10px 0 0; font-size: 15px; line-height: 1.55; }
+@media (max-width: 980px) {
+  .pr-hero { grid-template-columns: minmax(0, 1fr); align-items: start; }
+}
+/* Two tracks, one stat card each: kicker, big figure, when. The mechanics
+   live in the timeline — never repeated per card. The notary track pays more
+   and carries the highlight (brand border + tint) — tokens only. */
+.pr-rewards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: var(--gap); }
+.pr-card {
+  display: flex; flex-direction: column; gap: var(--space-3);
+  padding: var(--space-9) var(--space-10);
+  border: 1px solid var(--border); border-radius: var(--radius-lg);
+  background: var(--surface); box-shadow: var(--shadow-sm);
+}
+.pr-card--notaire {
+  border-color: var(--brand);
+  /* The tint layered over the surface, not instead of it — the translucent
+     token alone would let the hero's wash bleed through. */
+  background: linear-gradient(var(--brand-tint), var(--brand-tint)), var(--surface);
+}
+.pr-kicker { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-muted); }
+.pr-amount { font-size: clamp(28px, 2.6vw, 38px); font-weight: 800; letter-spacing: -0.02em; color: var(--brand); font-variant-numeric: tabular-nums; line-height: 1.05; }
+.pr-when { margin: 2px 0 0; font-size: 13px; color: var(--ink-muted); line-height: 1.45; }
+
+/* Story beside the claim form. The form column keeps a real reading width;
+   sticky so the CTA stays in reach while the story scrolls (static again when
+   stacked — a pinned form over its own column is pointless). */
 .pr-grid {
-  display: grid; grid-template-columns: minmax(0, 1fr) minmax(min(320px, 100%), 420px);
-  grid-template-areas: 'pitch form' 'more form'; align-content: start;
-  /* 1fr auto: the form spans both rows and is the tallest thing on the page,
-     so its slack has to land SOMEWHERE. In row 1 it is the vignette's stage —
-     the reward story plays in what used to be empty air, and the fine print
-     stays pinned to the form's last line (owner's call, 2026-08-26:
-     « a clean animation instead » of the hole). */
-  grid-template-rows: 1fr auto;
-  gap: var(--gap); align-items: start;
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(min(340px, 100%), 440px);
+  gap: var(--gap); align-items: start; margin-top: var(--gap);
 }
-.pr-more { align-self: end; }
-/* The pitch stretches through row 1. At the site's full --maxw the old
-   stacked pitch (rewards row, then the vignette) stretched every component
-   into one long horizontal run (owner, 2026-08-26: « très large, longue
-   ligne » — keep the width, fix the components). So on wide screens the
-   pitch splits in two: the reward tracks stack into a thin rail on the
-   left — the carnet's market-row construction at market-row width — and
-   the vignette plays beside them, both centred against the tall form.
-   Below 1400px there is no room for the rail, and the stacked pitch
-   returns. */
-.pr-pitch {
-  grid-area: pitch; min-width: 0; align-self: stretch;
-  display: grid; grid-template-columns: minmax(280px, 400px) minmax(0, 1fr);
-  gap: var(--gap); align-items: center;
-}
-@media (max-width: 1400px) {
-  .pr-pitch { display: flex; flex-direction: column; align-items: stretch; }
-}
-/* The form panel: standard card padding (strict pass — the extra air the old
-   space-12 bought said nothing), every field spans it — one column, one
-   width, one CTA. The bare-span label ("Vous êtes") dresses like real ones. */
-.pr-form-panel { grid-area: form; padding: var(--pad-card-lg); }
+.pr-pitch { min-width: 0; }
+.pr-how-title { margin: var(--space-4) 0 var(--space-9); font-size: 18px; letter-spacing: -0.01em; }
+.pr-form-panel { position: sticky; top: var(--sticky-top); padding: var(--pad-card-lg); border-top: 3px solid var(--brand); }
 .pr-form-panel input { width: 100%; }
-.pr-form-panel .h-sub { margin-bottom: var(--space-8); }
+.pr-form-panel .h-sub { margin-bottom: var(--space-8); font-size: 18px; letter-spacing: -0.01em; }
 .pr-form-panel .form-row { margin-bottom: var(--space-7); }
 .pr-form-panel span.lbl { display: block; font-size: 14px; font-weight: 700; margin-bottom: var(--space-4); }
-.pr-more { grid-area: more; min-width: 0; }
 @media (max-width: 900px) {
-  .pr-grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'pitch' 'form' 'more'; grid-template-rows: auto; }
-  .pr-more { align-self: start; }
+  .pr-grid { grid-template-columns: minmax(0, 1fr); }
+  .pr-form-panel { position: static; }
 }
-/* Two reward tracks, one THIN band each (owner's call, 2026-08-26: the tall
-   squares read as dead air once the vignette below started carrying the
-   story). Same construction as the carnet's market rows — words left, figure
-   right — so the whole product prices things in one voice. They stack into
-   the pitch's left rail on wide screens (the ≤1400px pitch lays them back
-   side by side). The notary track pays more and keeps the highlight (brand
-   border + tint) — tokens only. */
-.pr-rewards { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-6); }
-@media (max-width: 1400px) {
-  .pr-rewards { grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr)); }
-}
-.pr-card {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center;
-  gap: 2px var(--space-8); padding: var(--space-7) var(--space-9);
-  border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface);
-}
-.pr-card--notaire { border-color: var(--brand); background: var(--brand-tint); }
-.pr-kicker { grid-column: 1; grid-row: 1; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-muted); }
-.pr-amount { grid-column: 2; grid-row: 1 / 3; font-size: clamp(22px, 2.2vw, 28px); font-weight: 800; letter-spacing: -0.02em; color: var(--brand); font-variant-numeric: tabular-nums; }
-.pr-when { grid-column: 1; grid-row: 2; margin: 0; font-size: 13px; color: var(--ink-muted); }
-/* The reward vignette — the referral story played out in the pitch column's
-   slack, on one clean 6s CSS pass: the code chip settles in, a dot runs the
-   wire, the client's demand lands and is stamped retenue, the fixed reward
-   pops. It plays ONCE per visit (the pane's [hidden] display:none restarts
-   the clock each time Partenaires opens) and then HOLDS the finished tableau
-   — an endless loop kept tearing the payoff down for most of every cycle,
-   right beside the claim form. It spans the column like the reward cards
-   above it — chip left, card centre, payoff right, the wires flexing to fill
-   — and its type rhymes with theirs (.pr-kicker on the chip, near-.pr-amount
-   on the payoff). Base styles ARE the ending (chip, card, stamp, reward all
-   visible) and every keyframe track resolves to them, so the single pass
-   freezes there — and prefers-reduced-motion gets the finished story, never
-   a blank strip. Tokens only. */
-.pr-vig {
-  flex: 1; display: flex; align-items: center;
-  gap: var(--space-6); padding: var(--space-8) 0;
-}
-.pr-vig-chip { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; animation: pr-vig-chip 6s ease; }
-.pr-vig-code {
-  padding: 8px 16px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
-  background: var(--surface); font-size: 17px; font-weight: 800; letter-spacing: .08em; color: var(--ink);
-  animation: pr-vig-code 6s ease;
-}
-/* The wires: elastic dotted runs. A brand overlay (::after) grows behind the
-   traveling dot, so the covered path stays lit — the finished tableau shows
-   both wires lit end to end. `left`/width animate because the runs are
-   fluid-length. The dot has no ending to freeze on — it parks at opacity 0
-   after its run (and under reduced motion). */
-.pr-vig-track { position: relative; flex: 1 1 32px; min-width: 24px; height: 10px; }
-.pr-vig-track::before { content: ''; position: absolute; left: 0; right: 0; top: 4px; border-top: 2px dotted var(--border-strong); }
-.pr-vig-track::after { content: ''; position: absolute; left: 0; top: 4px; width: 100%; border-top: 2px dotted var(--brand-bright); animation: pr-vig-wire1 6s ease-in-out; }
-.pr-vig-dot { position: absolute; left: 0; top: 1px; width: 8px; height: 8px; border-radius: 50%; background: var(--brand-bright); opacity: 0; animation: pr-vig-dot1 6s ease-in-out; }
-.pr-vig-track--2::after { animation-name: pr-vig-wire2; }
-.pr-vig-track--2 .pr-vig-dot { animation-name: pr-vig-dot2; }
-.pr-vig-card {
-  display: flex; flex-direction: column; gap: 5px; min-width: 0;
-  padding: var(--space-8) 20px; border: 1px solid var(--border-strong); border-radius: var(--radius);
-  background: var(--surface); animation: pr-vig-card 6s ease;
-}
-.pr-vig-name { font-size: 15px; font-weight: 700; color: var(--ink); }
-.pr-vig-stamp { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--ink-muted); animation: pr-vig-stamp 6s ease; }
-.pr-vig-check { display: inline-block; font-weight: 800; color: var(--brand); animation: pr-vig-check 6s ease; }
-.pr-vig-amt {
-  font-size: clamp(24px, 2.6vw, 34px); font-weight: 800; letter-spacing: -0.02em;
-  color: var(--brand); font-variant-numeric: tabular-nums; white-space: nowrap;
-  animation: pr-vig-amt 6s ease;
-}
-.pr-vig-amt::before { content: '+ '; }
-/* One shared 6s clock, one pass. The beats: chip in (0–7) and its pill
-   flashes as it sends (8–15); wire 1 lights under the dot (10–20); the
-   demand lands (20–27) and RINGS as the retenue stamp + check pop on
-   (32–42, the ob-bid idiom); wire 2 (45–56); the payoff overshoots in
-   (58–68). Every track ends on the base state, so the tableau simply
-   holds when the clock runs out — no exit, no re-telling. */
-@keyframes pr-vig-chip {
-  0% { opacity: 0; transform: translateY(6px); }
-  7%, 100% { opacity: 1; transform: none; }
-}
-@keyframes pr-vig-code {
-  0%, 8% { border-color: var(--border-strong); transform: none; }
-  11% { border-color: var(--brand-bright); transform: scale(1.04); }
-  15%, 100% { border-color: var(--border-strong); transform: none; }
-}
-@keyframes pr-vig-wire1 {
-  0%, 10% { width: 0; }
-  20%, 100% { width: 100%; }
-}
-@keyframes pr-vig-dot1 {
-  0%, 8% { opacity: 0; left: 0; }
-  10% { opacity: 1; }
-  20% { opacity: 1; left: calc(100% - 8px); }
-  23%, 100% { opacity: 0; left: calc(100% - 8px); }
-}
-@keyframes pr-vig-card {
-  0%, 20% { opacity: 0; transform: translateY(8px) scale(.97); border-color: var(--border-strong); box-shadow: none; }
-  27%, 32% { opacity: 1; transform: none; border-color: var(--border-strong); box-shadow: none; }
-  37% { border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-tint); }
-  42%, 100% { opacity: 1; transform: none; border-color: var(--border-strong); box-shadow: none; }
-}
-@keyframes pr-vig-stamp {
-  0%, 32% { opacity: 0; transform: translateY(4px); }
-  39%, 100% { opacity: 1; transform: none; }
-}
-@keyframes pr-vig-check {
-  0%, 32% { transform: scale(0); }
-  38% { transform: scale(1.3); }
-  42%, 100% { transform: none; }
-}
-@keyframes pr-vig-wire2 {
-  0%, 45% { width: 0; }
-  56%, 100% { width: 100%; }
-}
-@keyframes pr-vig-dot2 {
-  0%, 45% { opacity: 0; left: 0; }
-  47% { opacity: 1; }
-  56% { opacity: 1; left: calc(100% - 8px); }
-  58%, 100% { opacity: 0; left: calc(100% - 8px); }
-}
-@keyframes pr-vig-amt {
-  0%, 58% { opacity: 0; transform: translateY(6px) scale(.85); }
-  64% { opacity: 1; transform: scale(1.06); }
-  68%, 100% { opacity: 1; transform: none; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .pr-vig-chip, .pr-vig-code, .pr-vig-dot, .pr-vig-card, .pr-vig-stamp, .pr-vig-check, .pr-vig-amt, .pr-vig-track::after { animation: none; }
-}
-/* A narrower pitch column (the form keeps its 420px) compacts the strip one
-   notch before the stacked cutoff — same story, smaller stage. */
-@media (max-width: 1100px) {
-  .pr-vig { gap: var(--space-5); }
-  .pr-vig-code { padding: 5px 12px; font-size: 14px; }
-  .pr-vig-card { padding: var(--space-6) var(--space-8); }
-  .pr-vig-name { font-size: 13px; }
-  .pr-vig-stamp { font-size: 11.5px; }
-  .pr-vig-amt { font-size: 22px; }
-}
-/* The stacked layout (≤900px) has no slack to fill, and the three steps sit
-   right below telling the same story — the decoration would only push the
-   claim form further from the pitch. */
-@media (max-width: 900px) { .pr-vig { display: none; } }
-/* The fine print: three counter-dot steps — the whole "how it works". Three
-   columns across the pitch's width (the same fix as the rail: use the air
-   horizontally, not as one tall stack); the stacked ≤900px layout re-piles
-   them into the single column they came from. */
-.pr-steps { list-style: none; counter-reset: prstep; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4) var(--gap); }
-@media (max-width: 900px) { .pr-steps { grid-template-columns: minmax(0, 1fr); } }
-.pr-steps li { counter-increment: prstep; position: relative; padding-left: 26px; font-size: 13px; line-height: 1.5; color: var(--ink-muted); }
+
+/* The three steps as a connected timeline: numbered discs on a dotted spine,
+   a bold verb line plus its single caveat per step. */
+.pr-steps { list-style: none; counter-reset: prstep; margin: 0; padding: 0; display: grid; gap: var(--space-9); }
+.pr-steps li { counter-increment: prstep; position: relative; padding-left: 44px; display: grid; gap: 2px; }
 .pr-steps li::before {
-  content: counter(prstep); position: absolute; left: 0; top: 1px;
-  width: 18px; height: 18px; border-radius: 50%; background: var(--brand-tint);
-  color: var(--brand); font-size: 11px; font-weight: 800;
+  content: counter(prstep); position: absolute; left: 0; top: -2px;
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--brand-tint); border: 1px solid var(--brand);
+  color: var(--brand); font-size: 13px; font-weight: 800;
   display: flex; align-items: center; justify-content: center;
 }
+.pr-steps li:not(:last-child)::after {
+  content: ''; position: absolute; left: 14px; top: 30px; bottom: calc(-1 * var(--space-9) + 2px);
+  border-left: 2px dotted var(--border-strong);
+}
+.pr-steps strong { font-size: 15px; letter-spacing: -0.01em; }
+.pr-steps span { font-size: 13px; color: var(--ink-muted); line-height: 1.5; }
 /* Inside this pane the guarantee is a quiet closing line, not another boxed
    card — the boxed .note voice stays for panes that need a warning register.
    Its measure is capped like the intro's: fine print that runs the pitch's
    full width is one more « longue ligne ». */
-.pr-more .note { border-left: 0; background: transparent; padding: 0; max-width: 92ch; }
+.pr-pitch .note { margin-top: var(--gap); border-left: 0; background: transparent; padding: 0; max-width: 92ch; }
 
 /* The claim form's payoff: the shareable link, ready to copy. The CTA spans
    the panel — in the form column it IS the point of the page. */
@@ -1540,22 +1420,19 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .doc-transmis-lbl { font-size: 13px; font-weight: 700; color: var(--ok); }
 .consent-toggle { display: inline-flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; font-weight: 600; cursor: pointer; }
 .consent-toggle input { width: 18px; height: 18px; accent-color: var(--brand); cursor: pointer; }
-/* Dossier: ONE column, top to bottom — price card, consent, then a compact
-   document checklist. A card grid made 8 pieces read like 8 decisions; a
-   list reads as one errand. */
+/* Dossier: price card, consent, then the document checklist. The checklist
+   packs into a card GRID — several small pieces per row instead of one
+   full-width line each, so 7 items don't scroll for a screen and a half. */
 .dossier-list { display: flex; flex-direction: column; gap: 10px; padding: 6px 0; }
 .dossier-item { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
-/* Checklist line: name + help left, the action (upload / already-sent, or the
-   answer field) right — no per-item card ceremony. */
-.dossier-row .dossier-body { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 18px; align-items: center; }
-.dossier-row .doc-actions, .dossier-row .doc-transmis { grid-column: 2; grid-row: 1 / span 2; justify-self: end; margin-top: 0; }
-.dossier-row .dossier-body > input[type='text'] { grid-column: 2; grid-row: 1 / span 2; justify-self: end; width: min(280px, 100%); margin-top: 0; }
-.dossier-row .file-note, .dossier-row .doc-file, .dossier-row .file-error { grid-column: 1 / -1; }
-@media (max-width: 720px) {
-  .dossier-row .dossier-body { grid-template-columns: minmax(0, 1fr); }
-  .dossier-row .doc-actions, .dossier-row .doc-transmis,
-  .dossier-row .dossier-body > input[type='text'] { grid-column: 1; grid-row: auto; justify-self: start; width: 100%; margin-top: 8px; }
-}
+.dossier-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
+/* Each checklist card: name + help on top, the action (upload / already-sent,
+   or the answer field) pinned to the bottom so neighbouring cards end on the
+   same line whatever the length of their help text. */
+.dossier-row .dossier-body { display: flex; flex-direction: column; align-self: stretch; }
+.dossier-row .doc-actions, .dossier-row .doc-transmis,
+.dossier-row .dossier-body > input[type='text'] { margin-top: auto; }
+.dossier-row .dossier-body > .help { margin-bottom: 10px; }
 .dossier-pricing { padding: var(--space-7) var(--space-8); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
 /* Capped at 3 tracks: auto-fit on a wide screen spread 6 questions into one
    ragged row of uneven heights — 3×2 keeps the rows balanced and the help
@@ -1864,6 +1741,17 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 /* The public rating badge — brand star, tabular figures, quiet count. */
 .rating-badge { color: var(--brand); font-weight: 700; font-size: 12.5px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .nc-own-rating { margin-bottom: var(--space-4); }
+
+/* The CNQ membership pill and the official fiche link (ADR 0016). */
+.cnq-badge {
+  display: inline-block; padding: 0 6px; border: 1px solid var(--brand); border-radius: 999px;
+  color: var(--brand); background: var(--brand-tint); font-weight: 700; font-size: 11px;
+  line-height: 18px; white-space: nowrap; vertical-align: middle;
+}
+.cnq-link { font-size: 12.5px; white-space: nowrap; }
+.nc-commission { font-variant-numeric: tabular-nums; }
+#notary-profil .form-row { margin-bottom: var(--space-4); }
+#nc-profil-form .btn { margin-top: var(--space-3); }
 
 /* --- Notary evaluation (after the signed act, ADR 0015) ------------------- */
 .my-offer-eval { margin-top: var(--space-6); padding: var(--pad-card); background: var(--surface-inset); border-radius: var(--radius); display: flex; flex-direction: column; gap: var(--space-4); }
@@ -2466,6 +2354,14 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
   border: 1px solid currentColor;
 }
 .chip-lender-virt { margin-left: 6px; }
+/* Who travels for the in-person signature (ADR 0017). The 100 %-online urgency
+   band is the outlier a notary opted into — it earns the warning accent. */
+.nc-deplacement {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px; white-space: nowrap;
+  background: var(--surface-inset); color: var(--ink); border: 1px solid var(--border-strong);
+}
+.nc-deplacement[data-urgence='true'] { color: var(--warn, var(--ink-muted)); border-color: currentColor; }
 .nc-prop-pill[data-status='en_attente'] { color: var(--brand); border-color: var(--brand); }
 .nc-prop-pill[data-status='acceptee'], .nc-docs-pill[data-fournie='true'], .nc-via-prop { color: var(--ok); border-color: var(--ok); }
 .nc-prop-pill[data-status='refusee'] { color: var(--danger); border-color: var(--danger); }

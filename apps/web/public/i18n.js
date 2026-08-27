@@ -137,6 +137,40 @@
   "Prêteur hypothécaire : Prêteur privé": "Mortgage lender: Private lender",
   "Prêteur hypothécaire : Autre prêteur": "Mortgage lender: Other lender",
   "Réponse requise : Prêteur hypothécaire.": "Answer required: Mortgage lender.",
+  // Déplacement pour la signature — who travels (ADR 0017, domain DEPLACEMENTS).
+  "Déplacement pour la signature": "Travel for the signing",
+  "L’acte se signe en personne. Plus vous pouvez vous déplacer, plus de notaires peuvent vous servir. L’urgence 100 % en ligne exige un notaire qui l’accepte — le prix vient avec.": "The act is signed in person. The farther you can travel, the more notaries can serve you. A 100 % online urgency requires a notary who accepts it — priced accordingly.",
+  "Je me déplace à l’étude — jusqu’à 50 km": "I can travel to the notary’s office — up to 50 km",
+  "Je me déplace à l’étude — jusqu’à 25 km": "I can travel to the notary’s office — up to 25 km",
+  "Je me déplace à l’étude — moins de 10 km": "I can travel to the notary’s office — under 10 km",
+  "Le notaire se déplace chez moi — jusqu’à 25 km": "The notary travels to me — up to 25 km",
+  "Le notaire se déplace chez moi — jusqu’à 50 km": "The notary travels to me — up to 50 km",
+  "Urgence — signature 100 % en ligne": "Urgency — 100 % online signing",
+  // Composed notary-card factors, one per band (finite compositions).
+  "Déplacement pour la signature : Je me déplace à l’étude — jusqu’à 50 km": "Travel for the signing: I can travel to the notary’s office — up to 50 km",
+  "Déplacement pour la signature : Je me déplace à l’étude — jusqu’à 25 km": "Travel for the signing: I can travel to the notary’s office — up to 25 km",
+  "Déplacement pour la signature : Je me déplace à l’étude — moins de 10 km": "Travel for the signing: I can travel to the notary’s office — under 10 km",
+  "Déplacement pour la signature : Le notaire se déplace chez moi — jusqu’à 25 km": "Travel for the signing: The notary travels to me — up to 25 km",
+  "Déplacement pour la signature : Le notaire se déplace chez moi — jusqu’à 50 km": "Travel for the signing: The notary travels to me — up to 50 km",
+  "Déplacement pour la signature : Urgence — signature 100 % en ligne": "Travel for the signing: Urgency — 100 % online signing",
+  "Réponse requise : Déplacement pour la signature.": "Answer required: Travel for the signing.",
+  // The notary-card déplacement chip (six fixed compositions, ncDeplacementPill).
+  "Urgence · 100 % en ligne": "Urgency · 100 % online",
+  "À l’étude · ≤ 25 km": "At the office · ≤ 25 km",
+  "À l’étude · ≤ 50 km": "At the office · ≤ 50 km",
+  "À l’étude · moins de 10 km": "At the office · under 10 km",
+  "Chez le client · ≤ 25 km": "At the client’s · ≤ 25 km",
+  "Chez le client · ≤ 50 km": "At the client’s · ≤ 50 km",
+  // The notary profile's travel fields (ADR 0017).
+  "Rayon de déplacement — signature chez le client": "Travel radius — signing at the client’s",
+  "Je ne me déplace pas": "I don’t travel",
+  "Jusqu’à 25 km": "Up to 25 km",
+  "Jusqu’à 50 km": "Up to 50 km",
+  "J’accepte les urgences — signature 100 % en ligne": "I take urgencies — 100 % online signing",
+  "Un rayon plus large fait apparaître plus de demandes dans votre fil — et le déplacement est payé par la demande.": "A wider radius surfaces more requests in your feed — and the travel is paid by the request.",
+  "fiche CNQ, déplacement, urgences": "CNQ profile, travel, urgencies",
+  "Le rayon de déplacement doit être 0, 25 ou 50 km.": "The travel radius must be 0, 25 or 50 km.",
+  "Cette demande exige un déplacement ou une urgence en ligne que votre profil ne couvre pas.": "This request asks for travel or an online urgency your profile doesn’t cover.",
   "Choisir…": "Choose…",
   "Rapide": "Fast",
   "Prioritaire": "Priority",
@@ -745,9 +779,12 @@
   "Versée dès qu’un notaire retient la demande.": "Paid as soon as a notary takes on the request.",
   "Référez un notaire": "Refer a notary",
   "Versée à son premier acte retenu.": "Paid on their first act taken on.",
-  "Réclamez votre code — une minute, sans frais.": "Claim your code — one minute, no cost.",
-  "Partagez votre lien — le code voyage en privé, jamais affiché au carnet ni montré aux notaires.": "Share your link — the code travels privately, never displayed on the carnet nor shown to notaries.",
-  "Récompensé quand ça aboutit — un montant fixe, jamais un pourcentage.": "Rewarded when it comes through — a flat amount, never a percentage.",
+  // The how-it-works timeline: a bold verb line + its caveat per step.
+  "Une minute, sans frais — activé par un lien envoyé à votre courriel.": "One minute, no cost — activated by a link sent to your email.",
+  "Partagez votre lien": "Share your link",
+  "Le code voyage en privé — jamais affiché au carnet ni montré aux notaires.": "The code travels privately — never displayed on the carnet nor shown to notaries.",
+  "Soyez récompensé quand ça aboutit": "Be rewarded when it comes through",
+  "Un montant fixe, jamais un pourcentage.": "A flat amount, never a percentage.",
   "Réclamez votre code": "Claim your code",
   "Votre code partenaire": "Your partner code",
   "Code souhaité": "Desired code",
@@ -760,10 +797,12 @@
   // Email verification of a partner code claim (ADR 0011 fraud-hardening).
   "Vérifiez votre courriel.": "Check your email.",
   "Nous avons envoyé un lien à usage unique pour confirmer votre code — il devient actif dès que vous l’ouvrez.": "We sent a single-use link to confirm your code — it becomes active as soon as you open it.",
+  "Rien reçu ? Vérifiez vos indésirables — ou corrigez votre courriel et soumettez à nouveau.": "Nothing received? Check your junk folder — or fix your email and submit again.",
   "Trop de tentatives. Réessayez dans quelques minutes.": "Too many attempts. Try again in a few minutes.",
   "Lien invalide ou expiré. Redemandez un lien.": "Invalid or expired link. Request a new one.",
   "Partagez ce lien — chaque demande publiée par lui vous est attribuée :": "Share this link — every request posted through it is credited to you:",
   "Copier le lien": "Copy the link",
+  "Partager": "Share",
   "Lien copié.": "Link copied.",
   "Copie impossible — sélectionnez le lien.": "Copy failed — select the link.",
   "Code invalide — entre 4 et 12 lettres ou chiffres.": "Invalid code — 4 to 12 letters or digits.",
@@ -779,7 +818,6 @@
   "La récompense de référence est un coût de marketing de Nota, payée à même sa propre commission — jamais ajoutée au prix du client, jamais retranchée des honoraires du notaire.": "The referral reward is a Nota marketing cost, paid out of its own commission — never added to the client’s price, never taken from the notary’s fees.",
   "vous@agence.ca": "you@agency.ca",
   "EVEROY": "EVEROY",
-  "La demande de votre client": "Your client’s request",
 
   // --- Profil: the Parrainage card (claimed code resurfaced) ----------------
   "Parrainage": "Referrals",
@@ -830,6 +868,18 @@
   "Merci — elle aide les prochains clients.": "Thank you — it helps the next clients.",
   "Note de 1 à 5": "Rating from 1 to 5",
   "Votre note, telle que les clients la voient.": "Your rating, as clients see it.",
+  "Votre profil public": "Your public profile",
+  "fiche CNQ, notoriété": "CNQ listing, notoriety",
+  "Ajoutez le lien de votre fiche officielle à la Chambre des notaires du Québec (cnq.org). Les clients voient un badge « CNQ » sur vos propositions et peuvent consulter votre fiche une fois votre étude retenue.": "Add the link of your official listing at the Chambre des notaires du Québec (cnq.org). Clients see a “CNQ” badge on your propositions and can open your listing once your firm is retained.",
+  "Votre fiche officielle (cnq.org)": "Your official listing (cnq.org)",
+  "https://www.cnq.org/trouver-un-notaire/…": "https://www.cnq.org/trouver-un-notaire/…",
+  "Enregistrer mon profil": "Save my profile",
+  "✓ Profil enregistré.": "✓ Profile saved.",
+  "Profil enregistré.": "Profile saved.",
+  "Échec de l’enregistrement du profil.": "The profile could not be saved.",
+  "Le lien doit être votre fiche officielle sur cnq.org (adresse https de la Chambre des notaires du Québec).": "The link must be your official listing on cnq.org (an https address at the Chambre des notaires du Québec).",
+  "Fiche Chambre des notaires ↗": "Chambre des notaires listing ↗",
+  "Membre de la Chambre des notaires du Québec": "Member of the Chambre des notaires du Québec",
   "Aucun notaire disponible ?": "No notary available?",
   "Messagerie vocale": "Voicemail",
   "« On vous rappelle… »": "“We’ll call you back…”",
@@ -887,6 +937,21 @@
   "<span class=\"nc-soon-tag\">Bientôt</span>Les notaires pourront réaliser l’acte <strong>entièrement en ligne</strong> sur Nota, signature à distance comprise, sans déplacement. Aujourd’hui, vous convenez du lieu avec le notaire qui vous retient.": "<span class=\"nc-soon-tag\">Coming soon</span>Notaries will soon complete the act <strong>entirely online</strong> on Nota, remote signing included, no travel needed. For now, you agree on the location with the notary who takes you on."
 };
   var RULES = compileRules([
+  {
+    "pattern": "^Commission Nota : ([0-9]+(?:,[0-9]+)?) % au lieu de ([0-9]+(?:,[0-9]+)?) % — bonus mérité par vos évaluations\\.$",
+    "flags": "",
+    "replacement": "Nota commission: $1% instead of $2% — a bonus earned by your evaluations."
+  },
+  {
+    "pattern": "^Commission Nota : ([0-9]+(?:,[0-9]+)?) %\\.$",
+    "flags": "",
+    "replacement": "Nota commission: $1%."
+  },
+  {
+    "pattern": "^Prochain palier : note ([0-9]+(?:,[0-9]+)?) et ([0-9]+) avis → commission ([0-9]+(?:,[0-9]+)?) %\\.$",
+    "flags": "",
+    "replacement": "Next tier: rating $1 with $2 reviews → $3% commission."
+  },
   {
     "pattern": "^★ ([0-9]+(?:,[0-9])?) \\(([0-9]+) avis\\)$",
     "flags": "",
@@ -1283,6 +1348,11 @@
     "replacement": "$1 per referred client whose request is taken on, $2 at a referred notary’s first act."
   },
   {
+    "pattern": "^Un professionnel qui réfère reçoit une récompense fixe de Nota : (.+) quand la demande d’un client référé est retenue, et (.+), une seule fois, quand un notaire référé retient son premier acte\\. Payée par Nota à même ses propres fonds, elle ne change jamais le prix du client ni les honoraires du notaire\\. Le professionnel encadré \\(OACIQ notamment\\) demeure responsable de divulguer cette récompense à son client lorsque son code de déontologie l’exige\\.$",
+    "flags": "",
+    "replacement": "A referring professional receives a flat reward from Nota: $1 when a referred client’s request is taken on, and $2, once, when a referred notary takes on their first act. Paid by Nota from its own funds, it never changes the client’s price nor the notary’s fees. A regulated professional (notably OACIQ) remains responsible for disclosing this reward to their client when their code of ethics requires it."
+  },
+  {
     "pattern": "^Acte complété\\. Commission Nota : (.+)\\.$",
     "flags": "",
     "replacement": "Act completed. Nota commission: $1."
@@ -1566,6 +1636,36 @@
     "pattern": "Prêteur privé(?![A-Za-zà-ÿ])",
     "flags": "g",
     "replacement": "Private lender"
+  },
+  {
+    "pattern": "Je me déplace à l’étude — jusqu’à 50 km(?![A-Za-zà-ÿ])",
+    "flags": "g",
+    "replacement": "I can travel to the notary’s office — up to 50 km"
+  },
+  {
+    "pattern": "Je me déplace à l’étude — jusqu’à 25 km(?![A-Za-zà-ÿ])",
+    "flags": "g",
+    "replacement": "I can travel to the notary’s office — up to 25 km"
+  },
+  {
+    "pattern": "Je me déplace à l’étude — moins de 10 km(?![A-Za-zà-ÿ])",
+    "flags": "g",
+    "replacement": "I can travel to the notary’s office — under 10 km"
+  },
+  {
+    "pattern": "Le notaire se déplace chez moi — jusqu’à 25 km(?![A-Za-zà-ÿ])",
+    "flags": "g",
+    "replacement": "The notary travels to me — up to 25 km"
+  },
+  {
+    "pattern": "Le notaire se déplace chez moi — jusqu’à 50 km(?![A-Za-zà-ÿ])",
+    "flags": "g",
+    "replacement": "The notary travels to me — up to 50 km"
+  },
+  {
+    "pattern": "Urgence — signature 100\\s*% en ligne(?![A-Za-zà-ÿ])",
+    "flags": "g",
+    "replacement": "Urgency — 100 % online signing"
   },
   {
     "pattern": "Testament et mandat de protection(?![A-Za-zà-ÿ])",

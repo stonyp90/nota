@@ -20,7 +20,7 @@ function app(seed = []) {
 // the flat 2000 $ floor (valeur_pret <= 300000, no succession, bank approval
 // obtained — every add is 0).
 const DEFAULT_PRICING = {
-  refinancement: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale' },
+  refinancement: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale', deplacement: 'client_50' },
 };
 const post = (a, obj) =>
   a.handle({ method: 'POST', path: '/bids', body: JSON.stringify({ pricing: DEFAULT_PRICING[obj.serviceId], ...obj }) });

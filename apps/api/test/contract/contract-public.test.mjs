@@ -28,7 +28,7 @@ const BASE = 'https://nota.example';
 
 // The zero-add refinancement: the dynamic floor stays at the flat 2 000 $.
 const DEFAULT_PRICING = {
-  refinancement: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale' },
+  refinancement: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale', deplacement: 'client_50' },
 };
 
 // Minimal fake Stripe, so the Connect/webhook/act routes are DRIVABLE in the

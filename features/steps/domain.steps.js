@@ -31,8 +31,8 @@ Then('l\'affichage est {string}', function (affichage) {
 When('je valide une offre de {int} $ pour une date valide', function (montant) {
   const dateISO = this.domain.addDays(this.today, 10); // 10 jours -> palier rapide
   const P = {
-    refinancement: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale' },
-    financement: { valeur_pret: 250000, contexte: 'propriete_detenue', approbation_bancaire: 'obtenue', preteur: 'banque_nationale' },
+    refinancement: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale', deplacement: 'client_50' },
+    financement: { valeur_pret: 250000, contexte: 'propriete_detenue', approbation_bancaire: 'obtenue', preteur: 'banque_nationale', deplacement: 'client_50' },
   };
   this.result = this.domain.validateOffer({
     serviceId: this.input.serviceId,

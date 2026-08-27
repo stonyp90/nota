@@ -291,6 +291,16 @@ function createApp(repo, opts = {}) {
     return l ? { id: l.id, nom: l.nom, virtuel: l.virtuel } : null;
   }
 
+  // The déplacement band behind a bid, as notaries see it (ADR 0017): who
+  // moves for the in-person signature, how far, and whether the client
+  // declared a 100 %-online urgency — the notary must know the travel (or the
+  // scramble) before they decide to retain, propose, or pass. Null on bids
+  // that predate the question.
+  function bidDeplacementInfo(b) {
+    const d = domain.bidDeplacement(b);
+    return d ? { id: d.id, nom: d.nom, qui: d.qui, km: d.km, urgence: d.urgence } : null;
+  }
+
   function notaryBid(b) {
     const r = domain.leadReadiness(b.serviceId, b.dossier || {});
     return {
@@ -303,6 +313,7 @@ function createApp(repo, opts = {}) {
       prefixe: b.prefixe || null,
       ready: r.ready,
       preteur: bidLenderInfo(b),
+      deplacement: bidDeplacementInfo(b),
       // The case-complexity signal (easy/hard) + the factors that drive it, so a
       // notary can judge whether the posted price fits the file before retaining.
       complexity: domain.complexity(b.serviceId, b.pricing || null),
@@ -1181,6 +1192,9 @@ function createApp(repo, opts = {}) {
       if (!notaryId) return json(401, { errors: [{ code: 'non_autorise', message: 'Jeton invalide ou expiré.' }] });
 
       const months = monthWindow(now().slice(0, 7), NOTARY_HORIZON_MONTHS);
+      // Loaded before the walk: the profile now gates which open bids the
+      // feed may offer at all (ADR 0017), not just the console's own block.
+      const ownProfile = await repo.getNotary(notaryId);
       const seen = new Set();
       const out = [];
       // Bids in the window retained BY THIS notary — including those retained
@@ -1207,6 +1221,7 @@ function createApp(repo, opts = {}) {
                 // so they see whom to contact — never present on open bids.
                 client: clientContact(b),
                 preteur: bidLenderInfo(b),
+                deplacement: bidDeplacementInfo(b),
                 // The live thread with the client — the place details surface
                 // (and the reason a notary may still withdraw, see /release).
                 messages: messagesOf(b).map(chatMessage),
@@ -1219,6 +1234,10 @@ function createApp(repo, opts = {}) {
           if (!isLive(b)) continue; // hide offers whose card authorization is still pending/void
           if (query.service && b.serviceId !== query.service) continue;
           if (await repo.wasDeclined(notaryId, b.id)) continue;
+          // ADR 0017: the feed only offers what this notary can serve — a travel band
+          // beyond their declared radius, or an online urgency they never opted into,
+          // is not their demande. Legacy bids without a band reach everyone.
+          if (!domain.notaryCanServe((b.pricing || {}).deplacement, ownProfile)) continue;
           seen.add(b.id);
           const mine = latestPropositionFor(b, notaryId);
           const ask = latestDemandeFor(b, notaryId);
@@ -1231,10 +1250,52 @@ function createApp(repo, opts = {}) {
           });
         }
       }
-      // The notary's own public average rides along so the console can show
-      // it where the earnings live.
-      const ownProfile = await repo.getNotary(notaryId);
-      return json(200, { bids: out, retained, rating: notaryRating(ownProfile) });
+      // The notary's own public average, profile and commission ride along so
+      // the console can show them where the earnings live. The commission block
+      // (ADR 0016: base rate, rating-earned effective rate, next tier) only
+      // exists when billing is configured — never a fake rate.
+      let commission = null;
+      if (billingInstance || billingConfigured) {
+        const b = billing();
+        if (typeof b.commissionFor === 'function') commission = b.commissionFor(ownProfile);
+      }
+      return json(200, {
+        bids: out, retained,
+        rating: notaryRating(ownProfile),
+        profil: {
+          lienCNQ: (ownProfile && ownProfile.lienCNQ) || null,
+          rayonKm: (ownProfile && Number(ownProfile.rayonKm)) || 0,
+          urgences: !!(ownProfile && ownProfile.urgences),
+        },
+        commission,
+      });
+    }
+
+    // The notary's public profile (ADR 0016): attach — or clear — the link of
+    // their official fiche in the Chambre des notaires directory. The domain
+    // is the authority on what counts as a fiche (https, cnq.org host only).
+    if (route === '/notary/profile' && method === 'POST') {
+      const { payload, error } = parseBody(request);
+      if (error) return error;
+      // Session-scoped token: Authorization header preferred, POST-body `token`
+      // accepted as a fallback (same pattern as accept).
+      const notaryId = requireScope(bearer(request) || payload.token, SCOPES.SESSION);
+      if (!notaryId) return json(401, { errors: [{ code: 'non_autorise', message: 'Jeton invalide ou expiré.' }] });
+      const v = domain.validateNotaryProfile(payload);
+      if (!v.ok) return json(422, { errors: v.errors });
+      // Spread the existing record first — the billing identity, the rating
+      // aggregates and the commission accumulator must all survive this write.
+      const existing = await repo.getNotary(notaryId);
+      await repo.putNotary({
+        ...(existing || { id: notaryId, createdAt: now() }),
+        lienCNQ: v.lienCNQ,
+        // ADR 0017: the declared travel radius and the online-urgency opt-in —
+        // the two levers that widen (or narrow) the feed this notary sees.
+        rayonKm: v.rayonKm,
+        urgences: v.urgences,
+        updatedAt: now(),
+      });
+      return json(200, { profil: { lienCNQ: v.lienCNQ, rayonKm: v.rayonKm, urgences: v.urgences } });
     }
 
     if (route === '/notary/bids/accept' && method === 'POST') {
@@ -1272,6 +1333,16 @@ function createApp(repo, opts = {}) {
         return json(409, { errors: [{ code: 'deja_retenue', message: 'Cette offre est déjà retenue.' }] });
       }
 
+      // ADR 0017: a notary can only take what they can serve (radius / urgency
+      // opt-in). Placed after the idempotent re-accept above — a notary who
+      // already holds the act keeps their dossier even if their profile
+      // narrowed since — and before the retain, so a refused accept never
+      // flips the bid.
+      const profil = await repo.getNotary(notaryId);
+      if (!domain.notaryCanServe((bid.pricing || {}).deplacement, profil)) {
+        return json(403, { errors: [{ code: 'deplacement_non_couvert', message: 'Cette demande exige un déplacement ou une urgence en ligne que votre profil ne couvre pas.' }] });
+      }
+
       // Conditional retain (retainFor) closes the TOCTOU race: two notaries
       // accepting the same open bid concurrently both read status=ouverte, but
       // only ONE write succeeds — the repo flips the bid only while it is still
@@ -1307,6 +1378,15 @@ function createApp(repo, opts = {}) {
       if (bid.status === domain.STATUS.RETENUE) {
         return json(409, { errors: [{ code: 'deja_retenue', message: 'Cette offre est déjà retenue.' }] });
       }
+
+      // ADR 0017: a notary can only take what they can serve (radius / urgency
+      // opt-in) — a proposition on an unserveable demande is refused like an
+      // accept would be.
+      const profil = await repo.getNotary(notaryId);
+      if (!domain.notaryCanServe((bid.pricing || {}).deplacement, profil)) {
+        return json(403, { errors: [{ code: 'deplacement_non_couvert', message: 'Cette demande exige un déplacement ou une urgence en ligne que votre profil ne couvre pas.' }] });
+      }
+
       const v = domain.validateCounterOffer({ bid, montant: payload.montant, todayISO: now() });
       const errors = [...v.errors];
       const message = payload.message == null ? '' : String(payload.message).trim();
@@ -1315,11 +1395,10 @@ function createApp(repo, opts = {}) {
       }
       if (errors.length) return json(422, { errors });
 
-      const profile = await repo.getNotary(notaryId);
       const proposition = {
         id: newId(),
         notaryId,
-        etude: (profile && profile.label) || notaryId,
+        etude: (profil && profil.label) || notaryId,
         montant: v.montant,
         delta: v.delta,
         message: message || null,
@@ -1392,25 +1471,34 @@ function createApp(repo, opts = {}) {
           courriel: (profile && profile.email) || null,
           // Public evaluation average (never the internal notaryId).
           rating: notaryRating(profile),
+          // The notary's own fiche in the Chambre's directory (ADR 0016) —
+          // like `courriel`, the link only travels once retained.
+          lienCNQ: (profile && profile.lienCNQ) || null,
         };
       }
       // Act + evaluation state (ADR 0015): once the ACT# ledger has settled
       // the signing, the client may evaluate the notary — the UI keys on
       // `acte.complete`.
       const completion = typeof repo.getActCompletion === 'function' ? await repo.getActCompletion(bid.id) : null;
-      // Each pending proposition carries its notary's public rating: the one
-      // fact a client has to weigh a higher price from a stranger. Profiles
-      // are fetched once per distinct proposer.
+      // Each pending proposition carries its notary's public rating and CNQ
+      // membership badge: the facts a client has to weigh a higher price from
+      // a stranger. Profiles are fetched once per distinct proposer. The badge
+      // is a boolean — the fiche URL itself never rides an open bid (it lists
+      // the notary's phone; contact flows only after retention).
       const props = propositionsOf(bid).filter((p) => p.status !== PROPOSITION.REMPLACEE);
       const proposerIds = [...new Set(props.map((p) => p.notaryId).filter(Boolean))];
-      const ratingsById = {};
+      const proposersById = {};
       for (const nid of proposerIds) {
-        ratingsById[nid] = notaryRating(await repo.getNotary(nid));
+        proposersById[nid] = await repo.getNotary(nid);
       }
       return json(200, {
         bid: publicBid(bid),
         notaire,
-        propositions: props.map((p) => ({ ...clientProposition(p), rating: ratingsById[p.notaryId] || null })),
+        propositions: props.map((p) => ({
+          ...clientProposition(p),
+          rating: notaryRating(proposersById[p.notaryId]),
+          cnq: !!(proposersById[p.notaryId] && proposersById[p.notaryId].lienCNQ),
+        })),
         demandes: demandesOf(bid).map((d) => clientDemande(bid, d)),
         readiness: domain.leadReadiness(bid.serviceId, bid.dossier || {}),
         // The retained-act conversation. Empty until a notary retains the bid.

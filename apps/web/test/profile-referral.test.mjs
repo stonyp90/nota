@@ -192,6 +192,21 @@ test('the copy button writes the share link to the clipboard', async () => {
   assert.deepEqual(copied, ['https://nota.example/?ref=EVEROY']);
 });
 
+// Same affordance as the Partenaires success box: where the platform has a
+// share sheet (phones), the card offers it beside copy — nothing elsewhere.
+test('the card offers the native share sheet where the platform has one', async () => {
+  const { win, doc, Nota } = await boot({ seed: { 'nota.partner.v1': REC } });
+  const shares = [];
+  win.navigator.share = (data) => { shares.push(data); return Promise.resolve(); };
+  Nota.setTab('profil');
+  const share = [...parrCard(doc).querySelectorAll('button')].find((b) => /Partager/.test(b.textContent));
+  assert.ok(share, 'a share button sits beside copy when navigator.share exists');
+  share.click();
+  await wait(10);
+  assert.equal(shares.length, 1);
+  assert.equal(shares[0].url, 'https://nota.example/?ref=EVEROY');
+});
+
 test('the reward amounts on the card are the domain\'s, via D.money', async () => {
   const { doc, Nota, D } = await boot({ seed: { 'nota.partner.v1': REC } });
   Nota.setTab('profil');
