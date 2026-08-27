@@ -179,7 +179,7 @@
   "Proposez votre prix": "Propose your price",
   "plus la date est proche, plus il faut offrir.": "the closer the date, the more you need to offer.",
   "Un notaire vous retient": "A notary takes on your request",
-  "ou vous propose un prix — vous restez libre. Gratuit pour vous.": "or proposes a price — you stay free to decide. Free for you.",
+  "ou vous propose un prix — vous restez libre. Vous payez votre prix affiché à la signature, rien de plus.": "or proposes a price — you stay free to choose. You pay your posted price at signing, nothing more.",
   "Recevez des dossiers en 3 étapes": "Receive files in 3 steps",
   "Vous choisissez les demandes qui vous conviennent.": "You choose the requests that suit you.",
   "Voir les demandes →": "See the requests →",
@@ -297,6 +297,9 @@
   "Remplacer le fichier": "Replace the file",
   "Choisir un fichier": "Choose a file",
   "Retirer": "Remove",
+  "Format non accepté — utilisez un PDF ou une photo (JPG, PNG, HEIC).": "Format not accepted — use a PDF or a photo (JPG, PNG, HEIC).",
+  "Reste sur votre appareil jusqu’à la mise en relation.": "Stays on your device until the match.",
+  "ou glissez votre fichier ici": "or drag your file here",
   "Votre réponse": "Your answer",
   "Questions qui déterminent le prix": "Questions that determine the price",
   "Enregistrées dans votre profil. Elles ajustent le prix de départ de cet acte.": "Saved in your profile. They adjust this act's starting price.",
@@ -333,7 +336,7 @@
   "Cette offre a déjà été retenue par un autre notaire.": "This offer has already been taken by another notary.",
   "Offre introuvable, elle a peut-être expiré.": "Offer not found — it may have expired.",
   "Impossible de retenir cette demande.": "Unable to take on this request.",
-  "Demande retenue. Dossier du client débloqué.": "Request taken. Client file unlocked.",
+  "Demande retenue. Dossier du client débloqué — le règlement se fait à la signature.": "Request taken. Client file unlocked — settlement happens at signing.",
   "Impossible de décliner la demande.": "Unable to decline the request.",
   "Demande déclinée.": "Request declined.",
   "Inscrivez-vous pour tout voir": "Sign up to see everything",
@@ -564,9 +567,8 @@
   "Aucun dossier retenu pour l’instant.": "No files taken at the moment.",
   "Vos revenus": "Your earnings",
   "Paiements": "Payments",
-  "Connectez un compte de paiement sécurisé (Stripe) pour recevoir vos versements. Le client autorise le paiement dès la publication ; le net vous est viré dès que vous retenez la demande, commission Nota déduite. Jamais de frais fixes.": "Connect a secure payment account (Stripe) to receive your payouts. The client authorizes the payment at publication; the net is wired to you as soon as you take on the request, Nota's commission deducted. Never any fixed fees.",
-  "Demande retenue. Le paiement sera réglé sous peu — voyez « Paiements ».": "Request taken. The payment will settle shortly — see “Payments”.",
-  "Vos signatures dans votre agenda": "Your signings in your calendar",
+  "Connectez un compte de paiement sécurisé (Stripe) pour recevoir vos versements. Le client autorise le paiement dès la publication ; le net vous est viré à la signature, commission Nota déduite. Jamais de frais fixes.": "Connect a secure payment account (Stripe) to receive your payouts. The client authorizes the payment at publication; the net is wired to you at signing, Nota's commission deducted. Never a fixed fee.",
+    "Vos signatures dans votre agenda": "Your signings in your calendar",
   "Vos dossiers retenus, à jour automatiquement (webcal).": "Your taken files, automatically up to date (webcal).",
   "Ouvertes en ce moment": "Open right now",
   "Vous gardez la main.": "You stay in control.",
@@ -820,6 +822,13 @@
   "Annulée": "Cancelled",
   "Vous avez annulé cette offre. Si vous changez d’avis, choisissez une nouvelle date au carnet.": "You cancelled this offer. If you change your mind, pick a new date on the carnet.",
   "Offre annulée. Elle a été retirée du carnet.": "Offer cancelled. It has been removed from the carnet.",
+  "Acte signé — évaluez votre notaire": "Act signed — rate your notary",
+  "Un mot sur votre expérience (optionnel)": "A word about your experience (optional)",
+  "Envoyer mon évaluation": "Send my evaluation",
+  "Merci ! Votre évaluation est enregistrée.": "Thank you! Your evaluation is saved.",
+  "Impossible d’enregistrer l’évaluation. Réessayez.": "Unable to save the evaluation. Please try again.",
+  "Merci — elle aide les prochains clients.": "Thank you — it helps the next clients.",
+  "Note de 1 à 5": "Rating from 1 to 5",
   "Aucun notaire disponible ?": "No notary available?",
   "Messagerie vocale": "Voicemail",
   "« On vous rappelle… »": "“We’ll call you back…”",
@@ -877,6 +886,16 @@
   "<span class=\"nc-soon-tag\">Bientôt</span>Les notaires pourront réaliser l’acte <strong>entièrement en ligne</strong> sur Nota, signature à distance comprise, sans déplacement. Aujourd’hui, vous convenez du lieu avec le notaire qui vous retient.": "<span class=\"nc-soon-tag\">Coming soon</span>Notaries will soon complete the act <strong>entirely online</strong> on Nota, remote signing included, no travel needed. For now, you agree on the location with the notary who takes you on."
 };
   var RULES = compileRules([
+  {
+    "pattern": "^Votre évaluation : ([★☆]+)$",
+    "flags": "",
+    "replacement": "Your evaluation: $1"
+  },
+  {
+    "pattern": "^([0-9]) étoiles?$",
+    "flags": "",
+    "replacement": "$1 star(s)"
+  },
   {
     "pattern": "^Cette offre a été retenue par (.+)\\. L’annuler libère le rendez-vous et le notaire en sera avisé par courriel\\.$",
     "flags": "",
@@ -1208,6 +1227,16 @@
     "replacement": "Selected: $1. Stays on your device."
   },
   {
+    "pattern": "^Fichier trop lourd — maximum ([0-9]+) Mo\\.$",
+    "flags": "",
+    "replacement": "File too large — maximum $1 MB."
+  },
+  {
+    "pattern": "^Réutiliser : (.+)$",
+    "flags": "",
+    "replacement": "Reuse: $1"
+  },
+  {
     "pattern": "^Prix de départ déterminé : (.+)\\.$",
     "flags": "",
     "replacement": "Determined starting price: $1."
@@ -1241,11 +1270,6 @@
     "pattern": "^(.+) par client référé retenu, (.+) au premier acte d’un notaire référé\\.$",
     "flags": "",
     "replacement": "$1 per referred client whose request is taken on, $2 at a referred notary’s first act."
-  },
-  {
-    "pattern": "^Demande retenue et payée — net viré : (.+)\\. Dossier du client débloqué\\.$",
-    "flags": "",
-    "replacement": "Request taken and paid — net wired: $1. Client file unlocked."
   },
   {
     "pattern": "^Acte complété\\. Commission Nota : (.+)\\.$",

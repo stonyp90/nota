@@ -1087,8 +1087,12 @@ paths:
       summary: Replace the client's dossier (answer to a document request).
       description: >-
         Always allowed for the bid's owner, open or retained. `dossier` must be
-        a plain object (else 422 `dossier_invalide`). Answers with the fresh
-        domain readiness and each demande's `fournie` flag.
+        a plain object (else 422 `dossier_invalide`). The stored dossier is
+        CLEANED (domain.cleanDossier): only the service's own document/field
+        ids, the `__consent` flag and the known `__pricing` answers persist,
+        each value bounded — unknown keys and local UI state (`__validated`)
+        are dropped. Answers with the fresh domain readiness and each
+        demande's `fournie` flag.
       security:
         - clientToken: []
       requestBody:
@@ -1211,6 +1215,70 @@ paths:
                     type: boolean
         "400":
           description: Invalid JSON body.
+  /client/evaluation:
+    post:
+      operationId: evaluateNotary
+      summary: Rate the retaining notary once the act is signed (ADR 0015).
+      description: >-
+        Guarded by the bid's own CLIENT token. Opens only after the act has
+        settled (the ACT# ledger has an entry) — before that, 409
+        `acte_non_complete`. One evaluation per bid: a re-submit answers 200
+        with what is on file (the first note stands). The note feeds the
+        notary profile's rating aggregate (`ratingCount`/`ratingSum`; the
+        public average is `domain.ratingAverage`).
+      security:
+        - clientToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, dateISO, note]
+              properties:
+                id:
+                  type: string
+                dateISO:
+                  type: string
+                  format: date
+                note:
+                  type: integer
+                  minimum: 1
+                  maximum: 5
+                commentaire:
+                  type: string
+                  maxLength: 500
+      responses:
+        "201":
+          description: Evaluation recorded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EvaluationResponse"
+        "200":
+          description: Already evaluated — the evaluation on file is echoed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EvaluationResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`acte_non_complete`: the act is not settled yet."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Validation errors from the domain (`note_invalide`, `commentaire_trop_long`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /contact:
     post:
       operationId: sendContactMessage
@@ -1866,6 +1934,20 @@ components:
         message:
           type: string
           description: Human-readable message (fr-CA).
+    EvaluationResponse:
+      type: object
+      required: [evaluation]
+      properties:
+        evaluation:
+          type: object
+          required: [note]
+          properties:
+            note:
+              type: integer
+              minimum: 1
+              maximum: 5
+            commentaire:
+              type: [string, "null"]
     ErrorResponse:
       type: object
       required: [errors]

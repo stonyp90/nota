@@ -954,6 +954,37 @@
     };
   }
 
+  // --- Notary evaluation -----------------------------------------------------
+  // After the act is signed and settled (ADR 0015), the client rates the
+  // notary: a 1–5 note, plus an optional comment. Same authoritative-validator
+  // pattern as the offer and the contact form.
+  const EVALUATION_COMMENT_MAX = 500;
+  function validateEvaluation(input) {
+    input = input || {};
+    const errors = [];
+    const note = Number(input.note);
+    const noteValide = Number.isInteger(note) && note >= 1 && note <= 5;
+    if (!noteValide) errors.push({ code: 'note_invalide', message: 'La note doit être un entier de 1 à 5.' });
+    const commentaire = String(input.commentaire == null ? '' : input.commentaire).trim();
+    if (commentaire.length > EVALUATION_COMMENT_MAX) {
+      errors.push({ code: 'commentaire_trop_long', message: `Le commentaire ne peut dépasser ${EVALUATION_COMMENT_MAX} caractères.` });
+    }
+    return {
+      ok: errors.length === 0,
+      errors,
+      note: noteValide ? note : null,
+      commentaire: commentaire || null,
+    };
+  }
+
+  // The public shape of a notary's ratings: one decimal, null before the first
+  // evaluation — never a fake 0-star average.
+  function ratingAverage(sum, count) {
+    const c = Number(count) || 0;
+    if (c <= 0) return null;
+    return Math.round((Number(sum) / c) * 10) / 10;
+  }
+
   // A dial string for a tel: href — digits only, keeping a leading + and
   // assuming +1 (Canada) when the number is written without a country code.
   function telHref(raw) {
@@ -1272,6 +1303,97 @@
     };
   }
 
+  // --- Dossier file intake ----------------------------------------------------
+  // The dossier NEVER carries file bytes (ADR 0010 §4: Nota is not the pipe —
+  // after the mise en relation the documents flow through the notary's channel
+  // or at signing). What travels is the DECLARED name of the file the client
+  // picked, plus their typed answers. These shared rules bound that intake on
+  // both sides: the browser refuses early with a human message, and the API
+  // cleans whatever arrives so the stored dossier is always small and shaped.
+  const DOSSIER_FILE = {
+    // What a notary can actually open: PDF or a photo of the paper.
+    extensions: ['pdf', 'jpg', 'jpeg', 'png', 'heic', 'heif', 'webp'],
+    // <input accept> — PDF plus images, so a phone offers « prendre une photo ».
+    accept: 'application/pdf,image/*',
+    maxBytes: 15 * 1024 * 1024,
+    maxNameLength: 120,
+  };
+  const DOSSIER_VALUE_MAX = 200; // any single typed answer
+
+  // A declared name is a BARE, bounded filename: no path (C:\fakepath\…,
+  // ../../), no control characters, extension preserved when truncating.
+  function sanitizeFileName(name) {
+    let s = String(name == null ? '' : name);
+    s = s.slice(s.lastIndexOf('/') + 1);
+    s = s.slice(s.lastIndexOf('\\') + 1);
+    s = s.replace(/\s+/g, ' ').replace(/[\u0000-\u001f\u007f]/g, '').trim();
+    if (s.length > DOSSIER_FILE.maxNameLength) {
+      const dot = s.lastIndexOf('.');
+      const ext = dot > 0 ? s.slice(dot) : '';
+      s = s.slice(0, Math.max(1, DOSSIER_FILE.maxNameLength - ext.length)) + ext;
+    }
+    return s;
+  }
+
+  // The browser-side gate: is this a file the notary could open, small enough
+  // to travel by any channel? Returns the cleaned name on ok, a French human
+  // message on refusal (the web layer shows it as-is; i18n translates).
+  function validateDossierFile(file) {
+    const name = sanitizeFileName(file && file.name);
+    const dot = name.lastIndexOf('.');
+    const ext = dot > 0 ? name.slice(dot + 1).toLowerCase() : '';
+    if (!name || DOSSIER_FILE.extensions.indexOf(ext) === -1) {
+      return { ok: false, code: 'format', message: 'Format non accepté — utilisez un PDF ou une photo (JPG, PNG, HEIC).' };
+    }
+    const size = file && file.size;
+    if (typeof size === 'number' && size > DOSSIER_FILE.maxBytes) {
+      const mo = Math.round(DOSSIER_FILE.maxBytes / (1024 * 1024));
+      return { ok: false, code: 'taille', message: 'Fichier trop lourd — maximum ' + mo + ' Mo.' };
+    }
+    return { ok: true, name };
+  }
+
+  // The API-side twin: whatever the payload carries, the STORED dossier holds
+  // only the service's own items (documents through sanitizeFileName, champs
+  // bounded), the consent flag, and the pricing answers for known criteria.
+  // Unknown keys and local UI state (__validated) never reach the record a
+  // notary later receives.
+  function cleanDossier(serviceId, dossier) {
+    const svc = serviceById(serviceId);
+    const src = dossier && typeof dossier === 'object' && !Array.isArray(dossier) ? dossier : {};
+    const out = {};
+    if (!svc) return out;
+    const bounded = (v, max) =>
+      typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, max) : '';
+    svc.documents.forEach((d) => {
+      const v = src[d.id] === DOSSIER_TRANSMIS ? DOSSIER_TRANSMIS : sanitizeFileName(bounded(src[d.id], 1000));
+      if (v) out[d.id] = v;
+    });
+    svc.champs.forEach((c) => {
+      const v = bounded(src[c.id], DOSSIER_VALUE_MAX);
+      if (v) out[c.id] = v;
+    });
+    if (src.__consent) out.__consent = '1';
+    const critIds = [];
+    (((svc.pricing || {}).criteria) || []).forEach((c) => {
+      critIds.push(c.id);
+      if (c.autre && c.autre.champ) critIds.push(c.autre.champ);
+    });
+    const pricing = src.__pricing && typeof src.__pricing === 'object' && !Array.isArray(src.__pricing) ? src.__pricing : {};
+    const p = {};
+    critIds.forEach((id) => {
+      const v = pricing[id];
+      if (typeof v === 'number' && isFinite(v)) p[id] = v;
+      else if (typeof v === 'boolean') p[id] = v;
+      else {
+        const s = bounded(v, DOSSIER_VALUE_MAX);
+        if (s) p[id] = s;
+      }
+    });
+    if (Object.keys(p).length) out.__pricing = p;
+    return out;
+  }
+
   // --- Partner referrals ------------------------------------------------------
   // The professionals who know a homeowner needs a notary TODAY (agent
   // immobilier, courtier hypothécaire) send people through a `?ref=CODE` link
@@ -1457,12 +1579,20 @@
     CONTACT,
     CONTACT_MESSAGE_MAX,
     validateContactMessage,
+    EVALUATION_COMMENT_MAX,
+    validateEvaluation,
+    ratingAverage,
     telHref,
     makeFixtures,
     seedSignature,
     bidLabel,
     leadReadiness,
     DOSSIER_TRANSMIS,
+    DOSSIER_FILE,
+    DOSSIER_VALUE_MAX,
+    sanitizeFileName,
+    validateDossierFile,
+    cleanDossier,
     REFERRAL,
     normalizeReferralCode,
     isReferralCode,

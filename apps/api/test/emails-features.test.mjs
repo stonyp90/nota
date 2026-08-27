@@ -28,6 +28,7 @@ const FEATURE_TEMPLATES = [
   'offerRetained',
   'dateMissedNoUptake',
   'offerCancelled',
+  'evaluationInvite',
   // client — pay-on-accept lifecycle
   'offerAuthorized',
   'offerAuthorizationVoided',

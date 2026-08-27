@@ -808,10 +808,11 @@
 
               <div class="nc-pay">
                 <h2 class="nc-h">Paiements</h2>
-                <!-- The one payment story (ADR 0008, pay-on-accept): the client's
-                     card is authorized at publication; retaining captures it and
-                     wires the net at once, commission deducted — no fixed fees. -->
-                <p class="help">Connectez un compte de paiement sécurisé (Stripe) pour recevoir vos versements. Le client autorise le paiement dès la publication ; le net vous est viré dès que vous retenez la demande, commission Nota déduite. Jamais de frais fixes.</p>
+                <!-- The one payment story (ADR 0015, paid at signing): the
+                     client's card is authorized at publication; the settlement
+                     — net wired, commission deducted — happens once the act is
+                     signed and confirmed. No fixed fees. -->
+                <p class="help">Connectez un compte de paiement sécurisé (Stripe) pour recevoir vos versements. Le client autorise le paiement dès la publication ; le net vous est viré à la signature, commission Nota déduite. Jamais de frais fixes.</p>
                 <ul class="errors" id="notary-connect-errors" role="alert" aria-atomic="true" hidden></ul>
                 <button type="button" class="btn btn-sm" id="notary-connect">Connecter mon compte de paiement</button>
               </div>

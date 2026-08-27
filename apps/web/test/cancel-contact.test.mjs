@@ -213,3 +213,66 @@ test('« Besoin d’aide ? » on an offer prefills the subject and ties the bid 
   assert.ok(call, 'POST /contact missing');
   assert.equal(JSON.parse(call.init.body).bidId, 'o1');
 });
+
+// --- 4. Evaluation (ADR 0015) ------------------------------------------------
+
+test('a signed act offers the five stars; submitting POSTs /client/evaluation and thanks the client', async () => {
+  const status = {
+    ...openStatus(),
+    bid: { ...openStatus().bid, status: 'retenue', etude: 'Étude Tremblay' },
+    acte: { complete: true },
+    evaluation: null,
+  };
+  const { doc, Nota, calls } = await boot({
+    seed: { 'nota.myoffers.v1': JSON.stringify([{ ...OFFER, retained: true, etude: 'Étude Tremblay' }]) },
+    routes: [
+      statusRoute(status), monthRoute(),
+      {
+        match: (u) => u.endsWith('/client/evaluation'),
+        reply: () => {
+          status.evaluation = { note: 4, commentaire: 'Très bien.' }; // the live status now carries it
+          return jsonRes(201, { evaluation: status.evaluation });
+        },
+      },
+    ],
+  });
+  Nota.setTab('profil');
+  await wait(40);
+
+  const box = doc.querySelector('.my-offer-eval');
+  assert.ok(box, 'evaluation block missing on a completed act');
+  const stars = box.querySelectorAll('.eval-star');
+  assert.equal(stars.length, 5);
+  const submit = box.querySelector('.eval-submit');
+  assert.equal(submit.disabled, true, 'submit stays off until a note is picked');
+
+  stars[3].click(); // 4 stars
+  assert.equal(submit.disabled, false);
+  assert.equal(stars[3].getAttribute('aria-pressed'), 'true');
+  box.querySelector('.eval-comment').value = 'Très bien.';
+  submit.click();
+  await wait(40);
+
+  const call = calls.find((c) => c.url.endsWith('/client/evaluation'));
+  assert.ok(call, 'POST /client/evaluation missing');
+  const body = JSON.parse(call.init.body);
+  assert.equal(body.note, 4);
+  assert.equal(body.commentaire, 'Très bien.');
+  const auth = call.headers.Authorization || call.headers.authorization;
+  assert.equal(auth, 'Bearer tok-o1');
+
+  const done = doc.querySelector('.my-offer-eval-done');
+  assert.ok(done, 'the thank-you echo did not render');
+  assert.ok(done.textContent.includes('★★★★☆'), done.textContent);
+});
+
+test('no evaluation block before the act is settled', async () => {
+  const status = { ...openStatus(), bid: { ...openStatus().bid, status: 'retenue' }, acte: { complete: false } };
+  const { doc, Nota } = await boot({
+    seed: { 'nota.myoffers.v1': JSON.stringify([{ ...OFFER, retained: true }]) },
+    routes: [statusRoute(status), monthRoute()],
+  });
+  Nota.setTab('profil');
+  await wait(40);
+  assert.equal(doc.querySelector('.my-offer-eval'), null);
+});

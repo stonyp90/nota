@@ -105,6 +105,7 @@ CTA button: hunter-green fill, white 16px/600 label, `14px 32px` padding
 | Date approaching (J-7/3/1) | `dateApproaching` | client | daily reminder scheduler |
 | Offer retained | `offerRetained` | client | `POST /notary/bids/accept` |
 | Offer cancelled (ack) | `offerCancelled` | client | `POST /client/bid/cancel` |
+| Act signed → rate the notary | `evaluationInvite` | client | `POST /notary/acts/complete` |
 | Retained offer cancelled | `offerCancelledNotary` | notary | `POST /client/bid/cancel` (retained bid) |
 | Retained offer cancelled (operator) | `operatorOfferCancelled` | operator | `POST /client/bid/cancel` (retained bid) |
 | Contact form (ack) | `contactRecu` | sender | `POST /contact` |

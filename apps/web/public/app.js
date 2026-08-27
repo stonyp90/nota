@@ -439,7 +439,7 @@
       try {
         fetch(API_BASE + '/client/dossier', {
           method: 'POST', headers: clientHeaders(o, true),
-          body: JSON.stringify({ id: o.id, dateISO: o.dateISO, dossier: dossierFor(serviceId) }),
+          body: JSON.stringify({ id: o.id, dateISO: o.dateISO, dossier: dossierWire(serviceId) }),
         }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
           if (!j) return;
           var st = offerStatusGet(o.id) || {};
@@ -2664,7 +2664,7 @@
     // service (field values + document filenames + consent), so an accepting
     // notary sees real data. Stored privately by the API; never in publicBid().
     // The files themselves are not sent here — only the values already saved.
-    var snapshot = dossierFor(o.serviceId);
+    var snapshot = dossierWire(o.serviceId);
     if (snapshot && Object.keys(snapshot).length) payload.dossier = snapshot;
     // The pricing criteria the client answered (part of the dossier); the API
     // recomputes the floor from these and stores them privately on the bid.
@@ -3472,19 +3472,43 @@
       } else if (it.kind === 'doc') {
         var fl = el('label', 'file-field');
         var fi = document.createElement('input'); fi.type = 'file'; fi.className = 'file-native';
+        fi.accept = D.DOSSIER_FILE.accept;
         var cta = el('span', 'file-cta', provided ? 'Remplacer le fichier' : 'Choisir un fichier');
-        fi.addEventListener('change', function () {
-          var name = this.files && this.files[0] ? this.files[0].name : '';
-          dossierSet(sid, it.id, name);
+        var ferr = el('div', 'file-error'); ferr.hidden = true; ferr.setAttribute('role', 'status');
+        // Same intake door as the dossier pane: picked or dropped, through the
+        // domain gate; a refusal shows in place and saves NOTHING.
+        var takeFile = function (f) {
+          if (!f) return; // cancelled dialog — the picked document stays
+          var v = D.validateDossierFile(f);
+          if (!v.ok) { ferr.textContent = v.message; ferr.hidden = false; return; }
+          dossierSet(sid, it.id, v.name);
           renderProfilDocs(container, sid);
+        };
+        fi.addEventListener('change', function () {
+          var f = this.files && this.files[0];
+          this.value = '';
+          takeFile(f);
         });
         fl.appendChild(fi); fl.appendChild(cta);
         var facts = el('div', 'doc-actions');
         facts.appendChild(fl);
+        var reuse = !provided && dossierReusable(sid, it.id);
+        if (reuse) {
+          var rb = el('button', 'btn btn-sm btn-ghost doc-reuse-btn', 'Réutiliser : ' + reuse.value); rb.type = 'button';
+          rb.addEventListener('click', function () { dossierSet(sid, it.id, reuse.value); renderProfilDocs(container, sid); });
+          facts.appendChild(rb);
+        }
         var already = el('button', 'btn btn-sm btn-ghost doc-transmis-btn', 'Déjà transmis au notaire'); already.type = 'button';
         already.addEventListener('click', function () { dossierSet(sid, it.id, D.DOSSIER_TRANSMIS); renderProfilDocs(container, sid); });
         facts.appendChild(already);
         row.appendChild(facts);
+        row.appendChild(ferr);
+        row.addEventListener('dragover', function (e) { e.preventDefault(); row.dataset.drop = 'true'; });
+        row.addEventListener('dragleave', function () { delete row.dataset.drop; });
+        row.addEventListener('drop', function (e) {
+          e.preventDefault(); delete row.dataset.drop;
+          takeFile(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]);
+        });
         if (provided) {
           var meta = el('div', 'doc-file');
           meta.appendChild(el('span', 'doc-file-name', '📎 ' + saved[it.id]));
@@ -3540,6 +3564,27 @@
     svc.documents.forEach(function (x) { items.push({ kind: 'doc', id: x.id, nom: x.nom, aide: x.aide }); });
     svc.champs.forEach(function (x) { items.push({ kind: 'field', id: x.id, nom: x.label, aide: x.aide }); });
     return items;
+  }
+  // The same document, already provided for ANOTHER act (both financing acts
+  // share ids like piece_identite) — surfaced so the client never hunts for a
+  // file twice. The DOSSIER_TRANSMIS sentinel is a per-notary declaration and
+  // is never carried over.
+  function dossierReusable(sid, itemId) {
+    var found = null;
+    D.SERVICES.forEach(function (s) {
+      if (s.id === sid || found) return;
+      var v = dossierFor(s.id)[itemId];
+      if (v && v !== D.DOSSIER_TRANSMIS) found = { from: s.id, value: v };
+    });
+    return found;
+  }
+  // What goes ON THE WIRE for a service: the saved dossier minus __validated —
+  // the profile's local « validé » ticks are UI state, never the notary's
+  // business (the API drops them too; not sending them is the privacy line).
+  function dossierWire(sid) {
+    var d = Object.assign({}, dossierFor(sid));
+    delete d.__validated;
+    return d;
   }
 
   function renderDossier() {
@@ -3628,6 +3673,7 @@
       // .dossier-row lays the item out as ONE checklist line (name left,
       // action right) — the consent and pricing cards keep their own shape.
       var row = el('div', 'dossier-item dossier-row');
+      row.dataset.done = saved[it.id] ? 'true' : 'false';
 
       var check = el('div', 'dossier-check', '✓');
       check.dataset.on = saved[it.id] ? 'true' : 'false';
@@ -3658,21 +3704,39 @@
         }
         var fileLbl = el('label', 'file-field');
         input = document.createElement('input'); input.type = 'file'; input.className = 'file-native';
+        // Only what a notary can open — and on a phone, « prendre une photo ».
+        input.accept = D.DOSSIER_FILE.accept;
         var fileCta = el('span', 'file-cta', saved[it.id] ? 'Remplacer le fichier' : 'Choisir un fichier');
+        var ferr = el('div', 'file-error'); ferr.hidden = true; ferr.setAttribute('role', 'status');
+        // The ONE intake door for this row: picked or dropped, the file goes
+        // through the domain gate; a refusal shows in place and saves NOTHING.
+        var takeFile = function (f) {
+          if (!f) return; // cancelled dialog — the picked document stays
+          var v = D.validateDossierFile(f);
+          if (!v.ok) { ferr.textContent = v.message; ferr.hidden = false; return; }
+          dossierSet(svc.id, it.id, v.name);
+          renderDossier();
+        };
         input.addEventListener('change', function () {
-          var name = this.files && this.files[0] ? this.files[0].name : '';
-          dossierSet(svc.id, it.id, name);
-          check.dataset.on = name ? 'true' : 'false';
-          row.dataset.done = name ? 'true' : 'false';
-          fileCta.textContent = name ? 'Remplacer le fichier' : 'Choisir un fichier';
-          var note = body.querySelector('.file-note');
-          if (name) { if (!note) { note = el('div', 'file-note'); body.appendChild(note); } note.textContent = 'Sélectionné : ' + name + '. Reste sur votre appareil.'; }
-          else if (note) { note.remove(); }
-          updateDossierBar();
+          var f = this.files && this.files[0];
+          this.value = ''; // re-picking the same file must fire change again
+          takeFile(f);
         });
         fileLbl.appendChild(input); fileLbl.appendChild(fileCta);
         var docActions = el('div', 'doc-actions');
         docActions.appendChild(fileLbl);
+        // The same document, already picked for the OTHER act — one click
+        // instead of finding the file again. Sentinels are per-notary
+        // declarations, never offered.
+        var reuse = !saved[it.id] && dossierReusable(svc.id, it.id);
+        if (reuse) {
+          var rb = el('button', 'btn btn-sm btn-ghost doc-reuse-btn', 'Réutiliser : ' + reuse.value); rb.type = 'button';
+          rb.addEventListener('click', function () {
+            dossierSet(svc.id, it.id, reuse.value);
+            renderDossier();
+          });
+          docActions.appendChild(rb);
+        }
         // The other channel, beside the upload — never instead of it.
         var already = el('button', 'btn btn-sm btn-ghost doc-transmis-btn', 'Déjà transmis au notaire'); already.type = 'button';
         already.addEventListener('click', function () {
@@ -3681,7 +3745,29 @@
         });
         docActions.appendChild(already);
         body.appendChild(docActions);
-        if (saved[it.id]) { var fn = el('div', 'file-note', 'Sélectionné : ' + saved[it.id] + '. Reste sur votre appareil.'); body.appendChild(fn); }
+        if (saved[it.id]) {
+          var meta = el('div', 'doc-file');
+          meta.appendChild(el('span', 'doc-file-name', '📎 ' + saved[it.id]));
+          var rm = el('button', 'btn btn-sm btn-ghost', 'Retirer'); rm.type = 'button';
+          rm.addEventListener('click', function () {
+            dossierSet(svc.id, it.id, '');
+            renderDossier();
+          });
+          meta.appendChild(rm);
+          body.appendChild(meta);
+          body.appendChild(el('div', 'file-note', 'Reste sur votre appareil jusqu’à la mise en relation.'));
+        } else {
+          // Desktop affordance only — CSS hides it on touch/small screens.
+          body.appendChild(el('div', 'file-note file-hint', 'ou glissez votre fichier ici'));
+        }
+        body.appendChild(ferr);
+        // The whole row is the drop target — pick or drop, same gate.
+        row.addEventListener('dragover', function (e) { e.preventDefault(); row.dataset.drop = 'true'; });
+        row.addEventListener('dragleave', function () { delete row.dataset.drop; });
+        row.addEventListener('drop', function (e) {
+          e.preventDefault(); delete row.dataset.drop;
+          takeFile(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]);
+        });
       } else {
         input = document.createElement('input'); input.type = 'text';
         input.value = saved[it.id] || '';
@@ -3689,6 +3775,7 @@
         input.addEventListener('input', function () {
           dossierSet(svc.id, it.id, this.value.trim());
           check.dataset.on = this.value.trim() ? 'true' : 'false';
+          row.dataset.done = this.value.trim() ? 'true' : 'false';
           updateDossierBar();
         });
         body.appendChild(input);

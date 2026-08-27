@@ -422,7 +422,7 @@ test('payNotaryOnAccept refuses a not-ready notary and a missing authorization',
   assert.equal(noPay.errors[0].code, 'paiement_absent');
 });
 
-test('end-to-end: post → pending (hidden) → authorize → accept pays the notary in full', async () => {
+test('end-to-end (ADR 0015): post → authorize → accept retains WITHOUT paying → completion captures and pays the notary', async () => {
   const { repo, stripe, app } = setup();
 
   // 1) Post an offer — PENDING, returns a Checkout URL, hidden from the carnet.
@@ -445,7 +445,9 @@ test('end-to-end: post → pending (hidden) → authorize → accept pays the no
   assert.equal(feed.bids.length, 1);
   const montant = feed.bids[0].montant;
 
-  // 3) A charge-ready notary signs in and accepts → paid in full, net of commission.
+  // 3) A charge-ready notary signs in and accepts → the dossier is released
+  //    but NO money moves (paid at signing, ADR 0015): no capture, no transfer,
+  //    the hold stays intact for the settlement at completion.
   const email = 'a@notaire.ca';
   const id = notaryIdForEmail(email);
   await repo.putNotary({ id, email, status: 'active', chargesEnabled: true, connectAccountId: 'acct_x', commissionCentsCollected: 0 });
@@ -455,14 +457,26 @@ test('end-to-end: post → pending (hidden) → authorize → accept pays the no
     headers: { authorization: 'Bearer ' + sess.token },
     body: JSON.stringify({ id: 'x', dateISO: '2026-08-20' }),
   }));
+  assert.equal(acc.paid, undefined, 'accept must not settle anything');
+  assert.equal(stripe.calls.transfers.length, 0, 'no capture at accept');
+  assert.equal(await repo.getActCompletion('x'), null, 'no ledger entry before signing');
+
+  // 4) The act is signed: completion captures the hold and transfers the net.
   const cents = Math.round(montant * 100);
   const fee = Math.round(montant * 100 * RATE);
-  assert.equal(acc.paid, true);
-  assert.equal(acc.commissionCents, fee);
-  assert.equal(acc.netCents, cents - fee);
+  const done = parse(await app.handle({
+    method: 'POST', path: '/notary/acts/complete',
+    headers: { authorization: 'Bearer ' + sess.token },
+    body: JSON.stringify({ bidId: 'x', dateISO: '2026-08-20', actAmount: montant }),
+  }));
+  assert.equal(done.ok, true);
+  assert.equal(done.paid, true);
+  assert.equal(done.commissionCents, fee);
+  assert.equal(done.netCents, cents - fee);
   assert.equal(stripe.calls.transfers.length, 1);
   assert.equal(stripe.calls.transfers[0].paymentIntentId, 'pi_x');
   assert.equal(stripe.calls.transfers[0].amountCents, cents);
+  assert.equal(stripe.calls.charges.length, 0, 'the capture path never also charges the notary');
 });
 
 // --- authorize → capture/void lifecycle: no dead ends ------------------------
@@ -483,36 +497,28 @@ async function activeSession(app, stripe, email) {
   return { notaryId, auth: { authorization: 'Bearer ' + sess.token } };
 }
 
-test('DECLINE-AFTER-ACCEPT: a capture failure never dead-ends the accept — dossier released, typed paymentError, retry settles', async () => {
+test('CAPTURE FAILURE AT COMPLETION (ADR 0015): a lapsed/declined hold falls back to the commission charge — the act never dead-ends', async () => {
   const { repo, stripe, app } = setup();
-  const { auth } = await activeSession(app, stripe, 'a@notaire.ca');
+  const { auth, notaryId } = await activeSession(app, stripe, 'a@notaire.ca');
   await repo.put({
     id: 'y1', dateISO: '2026-08-20', serviceId: 'refinancement', montant: 2400,
-    status: 'ouverte', paymentStatus: 'authorized', paymentIntentId: 'pi_y', courriel: 'client@x.ca',
+    status: 'retenue', notaryId, paymentStatus: 'authorized', paymentIntentId: 'pi_y', courriel: 'client@x.ca',
   });
 
-  const realCapture = stripe.captureAndTransfer.bind(stripe);
   stripe.captureAndTransfer = async () => { throw new Error('card_declined'); };
 
   const res = await app.handle({
-    method: 'POST', path: '/notary/bids/accept', headers: auth,
-    body: JSON.stringify({ id: 'y1', dateISO: '2026-08-20' }),
+    method: 'POST', path: '/notary/acts/complete', headers: auth,
+    body: JSON.stringify({ bidId: 'y1', dateISO: '2026-08-20', actAmount: 2400 }),
   });
-  assert.equal(res.statusCode, 200, 'a Stripe decline must not turn the accept into a 5xx');
+  assert.equal(res.statusCode, 200, 'a Stripe decline must not dead-end the completion');
   const body = parse(res);
-  assert.equal(body.paid, false);
-  assert.equal(body.paymentError, 'paiement_echoue');
-  assert.equal(body.courriel, 'client@x.ca', 'the dossier is still released to the retaining notary');
-  assert.equal((await repo.get('y1', '2026-08-20')).status, 'retenue');
-  assert.equal(await repo.getActCompletion('y1'), null, 'no ledger entry for an uncaptured payment');
-
-  // Stripe recovers (or the card unblocks): the idempotent re-accept settles.
-  stripe.captureAndTransfer = realCapture;
-  const retry = parse(await app.handle({
-    method: 'POST', path: '/notary/bids/accept', headers: auth,
-    body: JSON.stringify({ id: 'y1', dateISO: '2026-08-20' }),
-  }));
-  assert.equal(retry.paid, true);
+  assert.equal(body.ok, true);
+  assert.equal(body.paid, undefined, 'the fallback settles the fee only — the client paid the notary directly');
+  assert.equal(body.commissionCents, Math.round(2400 * 100 * RATE));
+  assert.equal(stripe.calls.charges.length, 1, 'the commission model took over');
+  const ledger = await repo.getActCompletion('y1');
+  assert.ok(ledger, 'the act ledger settled exactly once, via the fallback');
   assert.ok(await repo.getActCompletion('y1'));
 });
 
@@ -562,7 +568,7 @@ test('A_REAUTORISER (ADR 0009): accepting a proposition releases the ORIGINAL ho
   assert.equal(stripe.calls.cancels[0].bidId, 'x1');
 });
 
-test('a normal accept never cancels the hold it is about to capture', async () => {
+test('a normal accept neither cancels nor captures the hold — it waits for the signing (ADR 0015)', async () => {
   const { repo, stripe, app } = setup();
   const { auth } = await activeSession(app, stripe, 'q@notaire.ca');
   await repo.put({
@@ -574,8 +580,11 @@ test('a normal accept never cancels the hold it is about to capture', async () =
     body: JSON.stringify({ id: 'z1', dateISO: '2026-08-20' }),
   }));
   await flush();
-  assert.equal(res.paid, true);
-  assert.equal(stripe.calls.cancels.length, 0);
+  assert.equal(res.courriel, 'c@x.ca', 'the dossier is released');
+  assert.equal(stripe.calls.cancels.length, 0, 'the hold is kept for the settlement at signing');
+  assert.equal(stripe.calls.transfers.length, 0, 'nothing is captured at accept');
+  const bid = await repo.get('z1', '2026-08-20');
+  assert.equal(bid.paymentStatus, 'authorized', 'the authorization survives the accept untouched');
 });
 
 test('the act commission lives ONLY in billing — the domain pricing stays free of it', () => {

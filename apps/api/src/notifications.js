@@ -513,6 +513,18 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
           })
         );
       }
+      // The signed act closes the loop for the CLIENT too: invite them to
+      // evaluate their notary (ADR 0015 — evaluation follows the settlement).
+      if (bid.courriel) {
+        results.push(
+          await sendOnce({
+            refId: bid.id,
+            kind: 'evaluationInvite',
+            to: bid.courriel,
+            buildTemplate: (env) => emails.evaluationInvite({ ...bidCtx(bid), ...env }),
+          })
+        );
+      }
     } catch (err) {
       return { ok: false, error: String((err && err.message) || err), results };
     }

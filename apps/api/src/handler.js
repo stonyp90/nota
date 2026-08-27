@@ -665,9 +665,13 @@ function createApp(repo, opts = {}) {
         // PRIVATE: the structured intake the client assembled (field values +
         // any documents/consent). Released ONLY to the notary who retains the
         // bid; it MUST NEVER appear in publicBid() / GET /bids.
+        // Whatever the payload carries, only the service's own items, consent
+        // and known pricing answers are stored, each value bounded
+        // (domain.cleanDossier) — unknown keys and local UI state never reach
+        // the record the retaining notary receives.
         dossier:
           payload.dossier && typeof payload.dossier === 'object' && !Array.isArray(payload.dossier)
-            ? payload.dossier
+            ? domain.cleanDossier(payload.serviceId, payload.dossier)
             : null,
         // PRIVATE: the pricing criteria answers (part of the dossier — "the
         // document merged with the process"). Released with the dossier to the
@@ -940,8 +944,14 @@ function createApp(repo, opts = {}) {
       return json(200, { url: result.url });
     }
 
-    // A notary marks a retained act completed with its final value; Nota charges
-    // its commission as a Stripe Connect application fee. Session-scoped.
+    // A notary marks a retained act completed with its final value — THE
+    // settlement moment (ADR 0015, paid at signing). With a live client
+    // authorization Nota captures it and transfers the net (value −
+    // commission) to the notary; otherwise — billing off, `a_reautoriser`
+    // after a proposition accept, or a lapsed/declined hold — the commission
+    // model applies as fallback: the client paid the notary directly and Nota
+    // charges the notary its fee. Both paths share the write-once act ledger,
+    // so the act settles exactly once. Session-scoped.
     if (route === '/notary/acts/complete' && method === 'POST') {
       const notaryId = requireScope(bearer(request), SCOPES.SESSION);
       if (!notaryId) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
@@ -960,12 +970,31 @@ function createApp(repo, opts = {}) {
       if (!bid || bid.status !== domain.STATUS.RETENUE || bid.notaryId !== notaryId) {
         return json(403, { errors: [{ code: 'acte_non_autorise', message: 'Cet acte ne vous a pas été confié.' }] });
       }
-      const result = await billing().completeAct({ notaryId, bidId: payload.bidId, actAmount: payload.actAmount });
+      let result = null;
+      const canCapture = billingConfigured && bid.paymentIntentId && bid.paymentStatus === 'authorized';
+      if (canCapture) {
+        // Historical name (pay-on-accept era): the mechanics — capture the
+        // client's card, keep the commission, transfer the net — are exactly
+        // the paid-at-signing settlement, now invoked here instead.
+        result = await billing().payNotaryOnAccept({
+          notaryId, bidId: payload.bidId, actAmount: payload.actAmount, paymentIntentId: bid.paymentIntentId,
+        });
+      }
+      if (!result || !result.ok) {
+        // No capturable hold, or the capture failed (lapsed past Stripe's
+        // ~7-day window, declined): the act still settles on the commission
+        // model — the client paid the notary directly at signing.
+        result = await billing().completeAct({ notaryId, bidId: payload.bidId, actAmount: payload.actAmount });
+      }
       if (!result.ok) return json(422, { errors: result.errors });
       // Payout statement + operator alert, once per bid (fire-and-forget).
       const an = notifier();
       if (an) Promise.resolve(an.onActPaid({ notaryId, bid, actAmount: payload.actAmount })).catch(() => {});
-      return json(200, { ok: true, commissionCents: result.commissionCents });
+      return json(200, {
+        ok: true,
+        commissionCents: result.commissionCents,
+        ...(result.netCents != null ? { paid: true, netCents: result.netCents } : {}),
+      });
     }
 
     // Stripe webhook. The raw request body and the `stripe-signature` header are
@@ -1215,36 +1244,21 @@ function createApp(repo, opts = {}) {
       if (!bid) return json(404, { errors: [{ code: 'introuvable', message: 'Offre introuvable.' }] });
       if (bid.status === domain.STATUS.ANNULEE) return goneCancelled();
 
-      // PAY-ON-ACCEPT: capture the client's authorized card and transfer the net
-      // (act value − commission) to the notary the instant they accept. A no-op
-      // without billing or without an authorized payment; idempotent per bid
-      // (shared act ledger), so a re-accept or double-submit never pays twice.
-      async function payout(b) {
-        if (!billingConfigured || !b || !b.paymentIntentId) return null;
-        const pay = await billing().payNotaryOnAccept({ notaryId, bidId: b.id, actAmount: b.montant, paymentIntentId: b.paymentIntentId });
-        // Statement to the notary + revenue alert to the operator, once per bid
-        // (the notifier's SENT ledger dedupes an idempotent re-accept).
-        if (pay && pay.ok && !pay.alreadyPaid) {
-          const pn = notifier();
-          if (pn) Promise.resolve(pn.onActPaid({ notaryId, bid: b, actAmount: b.montant })).catch(() => {});
-        }
-        return pay;
-      }
-      const withPayout = (base, pay) => !pay ? base
-        : pay.ok ? { ...base, paid: true, commissionCents: pay.commissionCents, netCents: pay.netCents }
-          : { ...base, paid: false, paymentError: (pay.errors && pay.errors[0] && pay.errors[0].code) || 'paiement_echoue' };
+      // PAID AT SIGNING (ADR 0015): accepting retains — it never charges.
+      // The client's hold stays untouched; every payment (capture + transfer,
+      // or the commission fallback) happens in /notary/acts/complete once the
+      // act is actually signed.
 
       // What an accept hands the winning notary: the released dossier plus the
       // mise en relation contact block (ADR 0010 §4). `courriel` stays at the
       // top level for existing callers; `client` is the full contact shape.
       const released = (b) => ({ id: b.id, courriel: b.courriel || null, dossier: b.dossier || null, client: clientContact(b) });
 
-      // Idempotent + access-controlled: re-accept by the SAME notary returns the
-      // dossier (settling payment if it had not been); another notary -> 409.
+      // Idempotent + access-controlled: re-accept by the SAME notary returns
+      // the dossier again; another notary -> 409.
       if (bid.status === domain.STATUS.RETENUE) {
         if (bid.notaryId === notaryId) {
-          const pay = await payout(bid);
-          return json(200, withPayout(released(bid), pay));
+          return json(200, released(bid));
         }
         return json(409, { errors: [{ code: 'deja_retenue', message: 'Cette offre est déjà retenue.' }] });
       }
@@ -1252,8 +1266,7 @@ function createApp(repo, opts = {}) {
       // Conditional retain (retainFor) closes the TOCTOU race: two notaries
       // accepting the same open bid concurrently both read status=ouverte, but
       // only ONE write succeeds — the repo flips the bid only while it is still
-      // ouverte. Because only the winner reaches the payout below, the client's
-      // card is captured exactly once.
+      // ouverte.
       const retained = await retainFor(bid, notaryId);
       if (!retained) {
         // Lost the race. Re-read to answer precisely: if WE ended up the winner
@@ -1261,13 +1274,11 @@ function createApp(repo, opts = {}) {
         // bid is now held by someone else -> 409.
         const fresh = await repo.get(payload.id, payload.dateISO);
         if (fresh && fresh.status === domain.STATUS.RETENUE && fresh.notaryId === notaryId) {
-          const pay = await payout(fresh);
-          return json(200, withPayout(released(fresh), pay));
+          return json(200, released(fresh));
         }
         return json(409, { errors: [{ code: 'deja_retenue', message: 'Cette offre est déjà retenue.' }] });
       }
-      const pay = await payout(retained);
-      return json(200, withPayout(released(retained), pay));
+      return json(200, released(retained));
     }
 
     // A notary answers an open offer with a PROPOSITION: a higher price than
@@ -1372,6 +1383,10 @@ function createApp(repo, opts = {}) {
           courriel: (profile && profile.email) || null,
         };
       }
+      // Act + evaluation state (ADR 0015): once the ACT# ledger has settled
+      // the signing, the client may evaluate the notary — the UI keys on
+      // `acte.complete`.
+      const completion = typeof repo.getActCompletion === 'function' ? await repo.getActCompletion(bid.id) : null;
       return json(200, {
         bid: publicBid(bid),
         notaire,
@@ -1380,7 +1395,47 @@ function createApp(repo, opts = {}) {
         readiness: domain.leadReadiness(bid.serviceId, bid.dossier || {}),
         // The retained-act conversation. Empty until a notary retains the bid.
         messages: messagesOf(bid).map(chatMessage),
+        acte: { complete: !!completion },
+        evaluation: bid.evaluation ? { note: bid.evaluation.note, commentaire: bid.evaluation.commentaire || null } : null,
       });
+    }
+
+    // The client evaluates the notary — once, after the act is signed and
+    // settled (the ACT# ledger gates it). The note feeds the notary profile's
+    // rating aggregate; a re-submit answers idempotently with what is on file.
+    if (route === '/client/evaluation' && method === 'POST') {
+      const { payload, error } = parseBody(request);
+      if (error) return error;
+      const auth = requireClient(request, payload.id);
+      if (auth.error) return auth.error;
+      const bid = await repo.get(payload.id, payload.dateISO);
+      if (!bid) return json(404, { errors: [{ code: 'introuvable', message: 'Offre introuvable.' }] });
+      if (bid.evaluation) {
+        return json(200, { evaluation: { note: bid.evaluation.note, commentaire: bid.evaluation.commentaire || null } });
+      }
+      if (bid.status !== domain.STATUS.RETENUE || !bid.notaryId) {
+        return json(409, { errors: [{ code: 'acte_non_complete', message: 'L’évaluation s’ouvre une fois l’acte signé.' }] });
+      }
+      const completion = typeof repo.getActCompletion === 'function' ? await repo.getActCompletion(bid.id) : null;
+      if (!completion) {
+        return json(409, { errors: [{ code: 'acte_non_complete', message: 'L’évaluation s’ouvre une fois l’acte signé.' }] });
+      }
+      const v = domain.validateEvaluation(payload);
+      if (!v.ok) return json(422, { errors: v.errors });
+
+      const evaluation = { note: v.note, commentaire: v.commentaire, createdAt: now() };
+      await repo.update({ ...bid, evaluation });
+      // Aggregate on the notary profile — the domain turns (sum, count) into
+      // the public one-decimal average wherever it is displayed.
+      const profile = await repo.getNotary(bid.notaryId);
+      if (profile) {
+        await repo.putNotary({
+          ...profile,
+          ratingCount: (profile.ratingCount || 0) + 1,
+          ratingSum: (profile.ratingSum || 0) + v.note,
+        });
+      }
+      return json(201, { evaluation: { note: evaluation.note, commentaire: evaluation.commentaire } });
     }
 
     // The client answers a proposition. ACCEPT retains the bid for that notary
@@ -1465,10 +1520,14 @@ function createApp(repo, opts = {}) {
       if (auth.error) return auth.error;
       const bid = await repo.get(payload.id, payload.dateISO);
       if (!bid) return json(404, { errors: [{ code: 'introuvable', message: 'Offre introuvable.' }] });
-      const dossier = payload.dossier;
-      if (!dossier || typeof dossier !== 'object' || Array.isArray(dossier)) {
+      const raw = payload.dossier;
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
         return json(422, { errors: [{ code: 'dossier_invalide', message: 'Le dossier doit être un objet.' }] });
       }
+      // Store the CLEANED dossier (domain.cleanDossier): only the service's
+      // own items, consent and known pricing answers, each value bounded.
+      // Unknown keys and local UI state (__validated) never persist.
+      const dossier = domain.cleanDossier(bid.serviceId, raw);
       const updated = { ...bid, dossier };
       await repo.update(updated);
       return json(200, {

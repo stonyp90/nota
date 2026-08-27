@@ -369,32 +369,18 @@ test('retained entries from the API hydrate the retained list', async () => {
 // settled (`paid: true` + the REAL server-charged commission), the console must
 // book the act as completed on the spot — « Vos revenus » counts it, and the
 // notary is never asked to "complete" an act that has already paid out.
-test('a paid accept books the act into « Vos revenus » immediately', async () => {
-  const { doc, open, calls, D, Nota, win } = await bootSignedIn();
+test('an accept never books earnings — settlement waits for « Acte signé » (ADR 0015)', async () => {
+  const { doc, open, Nota } = await bootSignedIn();
   const target = open[0];
-  // Override the accept route: this bid was card-authorized, so retaining it
-  // captures and pays instantly.
-  const prevFetch = win.fetch;
-  win.fetch = (url, init = {}) => {
-    if (String(url).includes('/notary/bids/accept')) {
-      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({
-        id: target.id, courriel: 'client@example.com', dossier: {},
-        paid: true, commissionCents: 12500, netCents: target.montant * 100 - 12500,
-      }) });
-    }
-    return prevFetch(url, init);
-  };
   const card = doc.querySelector(`#notary-open-list .nc-card[data-id="${target.id}"]`);
   click(card.querySelector('.nc-accept'));
   click(card.querySelector('.nc-accept'));
   await wait(10);
   const entry = Nota.notary.retainedFor('demo@etude.ca').find((e) => e.id === target.id);
   assert.ok(entry, 'the accept landed in the retained store');
-  assert.equal(entry.completed, true, 'a paid act is booked as completed');
-  assert.equal(entry.actAmount, target.montant);
-  assert.equal(entry.commissionCents, 12500, 'the REAL server-charged commission, never a client-side rate');
-  // The earnings block reflects it without any further action.
-  const earn = $(doc, 'notary-earnings').textContent;
-  assert.ok(earn.includes(D.money(target.montant)), 'realized value counted');
-  assert.ok(earn.includes(D.money(125)), 'commission shown from the server figure');
+  assert.notEqual(entry.completed, true, 'no act is booked as completed at accept — money moves at signing');
+  // The retained card still offers the « Acte signé » path — that is where
+  // the settlement (and « Vos revenus ») happens.
+  const toast = $(doc, 'toast').textContent;
+  assert.ok(/signature/.test(toast), 'the toast says settlement happens at signing: ' + toast);
 });

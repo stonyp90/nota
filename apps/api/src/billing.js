@@ -233,10 +233,12 @@ function createBilling({
   }
 
   /**
-   * PAY-ON-ACCEPT, step 2 — when a notary accepts a retained act, CAPTURE the
-   * client's authorized payment and TRANSFER the net (value − commission) to the
-   * notary immediately. Nota keeps the commission. Requires a bound
-   * `paymentIntentId` (the client authorized at post) and a charge-ready notary.
+   * PAID-AT-SIGNING settlement (ADR 0015) — CAPTURE the client's authorized
+   * payment and TRANSFER the net (value − commission) to the notary. Nota
+   * keeps the commission. Requires a bound `paymentIntentId` (the client
+   * authorized at post) and a charge-ready notary. Called from
+   * /notary/acts/complete when the act is signed — the historical name dates
+   * from the pay-on-accept era; only the call site moved.
    *
    * Idempotent: writes the SAME write-once act ledger as completeAct, so a later
    * completeAct call for the same bid is a no-op — the act is only ever paid once.

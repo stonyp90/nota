@@ -51,7 +51,11 @@ const decline = (a, token, id, dateISO) =>
 const dossier = (a, token, id, dateISO) =>
   a.handle({ method: 'GET', path: '/notary/dossier', headers: bearer(token), query: { id, dateISO } });
 
-const SAMPLE_DOSSIER = { adresse: '10 rue des Érables, Québec', preteur: 'Banque du Fleuve', __consent: true };
+// Canonical dossier shape (what the web app actually saves): item values at
+// the top, pricing answers under __pricing, the consent flag as '1'. The API
+// stores the CLEANED dossier (domain.cleanDossier), so only this shape
+// round-trips to the retaining notary.
+const SAMPLE_DOSSIER = { adresse: '10 rue des Érables, Québec', __pricing: { preteur: 'banque_nationale' }, __consent: '1' };
 
 async function seedBid(a, over = {}) {
   const res = await postBid(a, {

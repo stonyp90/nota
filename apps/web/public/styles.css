@@ -1322,8 +1322,23 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
   gap: var(--gap); align-items: start;
 }
 .pr-more { align-self: end; }
-/* The pitch stretches through row 1 so the vignette can center in its slack. */
-.pr-pitch { grid-area: pitch; min-width: 0; align-self: stretch; display: flex; flex-direction: column; }
+/* The pitch stretches through row 1. At the site's full --maxw the old
+   stacked pitch (rewards row, then the vignette) stretched every component
+   into one long horizontal run (owner, 2026-08-26: « très large, longue
+   ligne » — keep the width, fix the components). So on wide screens the
+   pitch splits in two: the reward tracks stack into a thin rail on the
+   left — the carnet's market-row construction at market-row width — and
+   the vignette plays beside them, both centred against the tall form.
+   Below 1400px there is no room for the rail, and the stacked pitch
+   returns. */
+.pr-pitch {
+  grid-area: pitch; min-width: 0; align-self: stretch;
+  display: grid; grid-template-columns: minmax(280px, 400px) minmax(0, 1fr);
+  gap: var(--gap); align-items: center;
+}
+@media (max-width: 1400px) {
+  .pr-pitch { display: flex; flex-direction: column; align-items: stretch; }
+}
 /* The form panel: standard card padding (strict pass — the extra air the old
    space-12 bought said nothing), every field spans it — one column, one
    width, one CTA. The bare-span label ("Vous êtes") dresses like real ones. */
@@ -1339,9 +1354,14 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 /* Two reward tracks, one THIN band each (owner's call, 2026-08-26: the tall
    squares read as dead air once the vignette below started carrying the
    story). Same construction as the carnet's market rows — words left, figure
-   right — so the whole product prices things in one voice. The notary track
-   pays more and keeps the highlight (brand border + tint) — tokens only. */
-.pr-rewards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr)); gap: var(--space-6); margin: 0 0 var(--space-6); }
+   right — so the whole product prices things in one voice. They stack into
+   the pitch's left rail on wide screens (the ≤1400px pitch lays them back
+   side by side). The notary track pays more and keeps the highlight (brand
+   border + tint) — tokens only. */
+.pr-rewards { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-6); }
+@media (max-width: 1400px) {
+  .pr-rewards { grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr)); }
+}
 .pr-card {
   display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center;
   gap: 2px var(--space-8); padding: var(--space-6) var(--space-8);
@@ -1471,8 +1491,12 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
    right below telling the same story — the decoration would only push the
    claim form further from the pitch. */
 @media (max-width: 900px) { .pr-vig { display: none; } }
-/* The fine print: three lines with counter dots — the whole "how it works". */
-.pr-steps { list-style: none; counter-reset: prstep; margin: 0; padding: 0; display: grid; gap: var(--space-4); }
+/* The fine print: three counter-dot steps — the whole "how it works". Three
+   columns across the pitch's width (the same fix as the rail: use the air
+   horizontally, not as one tall stack); the stacked ≤900px layout re-piles
+   them into the single column they came from. */
+.pr-steps { list-style: none; counter-reset: prstep; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4) var(--gap); }
+@media (max-width: 900px) { .pr-steps { grid-template-columns: minmax(0, 1fr); } }
 .pr-steps li { counter-increment: prstep; position: relative; padding-left: 26px; font-size: 13px; line-height: 1.5; color: var(--ink-muted); }
 .pr-steps li::before {
   content: counter(prstep); position: absolute; left: 0; top: 1px;
@@ -1481,8 +1505,10 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
   display: flex; align-items: center; justify-content: center;
 }
 /* Inside this pane the guarantee is a quiet closing line, not another boxed
-   card — the boxed .note voice stays for panes that need a warning register. */
-.pr-more .note { border-left: 0; background: transparent; padding: 0; }
+   card — the boxed .note voice stays for panes that need a warning register.
+   Its measure is capped like the intro's: fine print that runs the pitch's
+   full width is one more « longue ligne ». */
+.pr-more .note { border-left: 0; background: transparent; padding: 0; max-width: 92ch; }
 
 /* The claim form's payoff: the shareable link, ready to copy. The CTA spans
    the panel — in the form column it IS the point of the page. */
@@ -1523,7 +1549,7 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .dossier-row .dossier-body { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 18px; align-items: center; }
 .dossier-row .doc-actions, .dossier-row .doc-transmis { grid-column: 2; grid-row: 1 / span 2; justify-self: end; margin-top: 0; }
 .dossier-row .dossier-body > input[type='text'] { grid-column: 2; grid-row: 1 / span 2; justify-self: end; width: min(280px, 100%); margin-top: 0; }
-.dossier-row .file-note { grid-column: 1 / -1; }
+.dossier-row .file-note, .dossier-row .doc-file, .dossier-row .file-error { grid-column: 1 / -1; }
 @media (max-width: 720px) {
   .dossier-row .dossier-body { grid-template-columns: minmax(0, 1fr); }
   .dossier-row .doc-actions, .dossier-row .doc-transmis,
@@ -1727,6 +1753,13 @@ input.file-native { position: absolute; width: 1px; height: 1px; opacity: 0; mar
 .file-field:hover .file-cta { border-color: var(--brand); color: var(--ink); }
 .file-native:focus-visible + .file-cta { outline: 2px solid var(--ring); outline-offset: 2px; }
 .file-note { font-size: 12px; color: var(--ink-muted); margin-top: 6px; }
+/* A refusal (format the notary could not open, oversize) is explained IN
+   PLACE, in the danger hue — nothing is saved, nothing else moves. */
+.file-error { font-size: 12.5px; font-weight: 600; color: var(--danger); margin-top: 6px; }
+/* The whole checklist row is a drop target while a file hovers it. */
+.dossier-item[data-drop='true'], .doc-row[data-drop='true'] { border-color: var(--brand); background: var(--surface-inset); }
+/* The drag affordance is desktop prose — touch has no drag to speak of. */
+@media (max-width: 720px), (pointer: coarse) { .file-hint { display: none; } }
 
 /* --- Model / footer sections -------------------------------------------- */
 .section { padding: clamp(24px, 4vw, 40px) 0; border-top: 1px solid var(--border); }
@@ -1827,6 +1860,17 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 .dialog-pad h3 { font-size: 18px; margin-bottom: 8px; }
 .dialog-pad p { color: var(--ink-muted); font-size: 14px; margin: 0 0 16px; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+/* --- Notary evaluation (after the signed act, ADR 0015) ------------------- */
+.my-offer-eval { margin-top: var(--space-6); padding: var(--pad-card); background: var(--surface-inset); border-radius: var(--radius); display: flex; flex-direction: column; gap: var(--space-4); }
+.my-offer-eval-t { font-size: 13.5px; }
+.eval-stars { display: flex; gap: 2px; }
+.eval-star { appearance: none; border: 0; background: transparent; cursor: pointer; font-size: 24px; line-height: 1; padding: 2px 4px; color: var(--brand); }
+.eval-star:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; border-radius: var(--radius-sm); }
+.eval-comment { resize: vertical; }
+.eval-submit { align-self: flex-start; }
+.my-offer-eval-done { font-size: 13.5px; }
+.my-offer-eval-done strong { color: var(--brand); }
+
 /* Destructive confirm (cancel an offer): quiet red outline, filled on hover —
    visible enough to read as consequence, never louder than the safe way out. */
 .btn-danger { color: var(--danger); border-color: var(--danger); }
@@ -1877,8 +1921,9 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 .amount-big.flash { animation: day-best-in .45s ease-out; }
 @media (prefers-reduced-motion: reduce) { .day-value-v.pulse, .amount-big.flash { animation: none; } }
 /* Says what the calendar's % means, for the date being booked. Sits under the
-   header — it depends on the DATE, not on the act chosen below. */
-.day-chance { font-size: 12px; color: var(--ink-muted); margin: 0; padding: 0 24px 16px; line-height: 1.5; }
+   header — it depends on the DATE, not on the act chosen below. Top padding
+   keeps it off the sticky header's border. */
+.day-chance { font-size: 12px; color: var(--ink-muted); margin: 0; padding: var(--space-7) var(--space-12) var(--space-8); line-height: 1.5; }
 .day-bids { max-height: 30vh; overflow: auto; overscroll-behavior: contain; border-top: 1px solid var(--border); }
 /* Inside the market strip the list bleeds to the edges, so its border-top
    spans the strip and the rows keep their own gutters. */
@@ -1894,7 +1939,7 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 /* Scale guard: a day-group caps its rows and links to the full day view. */
 .day-book { padding: 20px 24px 24px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 16px; }
 /* Each step is its own bordered card so the three-beat flow reads at a glance. */
-.book-step { display: flex; flex-direction: column; gap: 10px; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.book-step { display: flex; flex-direction: column; gap: var(--space-5); padding: var(--pad-card-lg); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
 /* Step 3 — the offer — is the decision, so it is the dominant card. */
 .book-step-offer { border-color: var(--border-strong); background: var(--surface-inset); }
 /* Pricing criteria woven into the booking flow (dossier merged with the process). */
@@ -2802,7 +2847,7 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
      compensates .bid-row's own left border. */
   .day-bids .bid-row { padding-left: 14px; padding-right: var(--space-8); }
   .day-bids-count, .day-bids-more { padding-left: var(--space-8); padding-right: var(--space-8); }
-  .day-chance { padding: 0 16px 12px; }
+  .day-chance { padding: var(--space-6) var(--space-8); }
   .day-book { padding: 14px 16px 18px; }
   /* The day dialog becomes a full-width sheet on phones, so its rows are as tight
      as the list cards — give them the same two-line treatment. */

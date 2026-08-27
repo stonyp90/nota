@@ -806,11 +806,11 @@ function clientWelcome(ctx) {
       heading: 'Bienvenue sur Nota',
       lead: 'Vous êtes à quelques clics d’un notaire à Québec, à la date qui vous convient.',
       bodyHtml: para(
-        'Choisissez votre date sur le carnet public, proposez votre prix, et un notaire de la région retient votre demande. Plus votre échéance est proche, plus votre offre se démarque. Vous payez le prix que vous avez affiché, au moment où un notaire retient votre demande — utiliser Nota ne vous coûte rien de plus.'
+        'Choisissez votre date sur le carnet public, proposez votre prix, et un notaire de la région retient votre demande. Plus votre échéance est proche, plus votre offre se démarque. Vous payez le prix que vous avez affiché, à la signature — utiliser Nota ne vous coûte rien de plus.'
       ),
       textLines: [
         '1) Choisissez votre date. 2) Proposez votre prix. 3) Un notaire retient votre demande.',
-        'Utiliser Nota ne vous coûte rien de plus : vous payez le prix affiché, à la mise en relation.',
+        'Utiliser Nota ne vous coûte rien de plus : vous payez le prix affiché, à la signature.',
       ],
       ctaLabel: 'Publier ma demande',
     },
@@ -818,11 +818,11 @@ function clientWelcome(ctx) {
       heading: 'Welcome to Nota',
       lead: 'You are a few clicks away from a notary in Québec, on the date that suits you.',
       bodyHtml: para(
-        'Pick your date on the public carnet, name your price, and a notary in the region takes your request. The closer your deadline, the more your offer stands out. You pay the price you posted, at the moment a notary takes your request — using Nota costs you nothing extra.'
+        'Pick your date on the public carnet, name your price, and a notary in the region takes your request. The closer your deadline, the more your offer stands out. You pay the price you posted, at signing — using Nota costs you nothing extra.'
       ),
       textLines: [
         '1) Pick your date. 2) Name your price. 3) A notary takes your request.',
-        'Using Nota costs you nothing extra: you pay the posted price when the match is made.',
+        'Using Nota costs you nothing extra: you pay the posted price at signing.',
       ],
       ctaLabel: 'Post my request',
     },
@@ -1651,6 +1651,38 @@ function operatorActReleased(ctx) {
   });
 }
 
+// The act is signed and settled: invite the client to evaluate their notary
+// (ADR 0015 — evaluation is the step after payment). CTA lands on « Mes
+// offres », where the stars live.
+function evaluationInvite(ctx) {
+  return build({
+    subjectFr: 'Votre acte est signé — évaluez votre notaire',
+    subjectEn: 'Your act is signed — rate your notary',
+    preheaderFr: 'Deux gestes : une note de 1 à 5, un mot si vous voulez.',
+    preheaderEn: 'Two taps: a 1-to-5 rating, a word if you like.',
+    fr: {
+      heading: 'Votre acte est signé',
+      lead: 'Votre ' + svcNom(ctx.serviceId) + ' du ' + fmtDate(ctx.dateISO) + ' est conclu. Merci d’avoir utilisé Nota.',
+      bodyHtml: para(
+        'Un dernier geste, qui compte : évaluez votre notaire — une note de 1 à 5, et un commentaire si vous le souhaitez. Votre évaluation aide les prochains clients à choisir en confiance.'
+      ),
+      textLines: [offerLine(ctx), 'Évaluez votre notaire : une note de 1 à 5, un commentaire si vous voulez.'],
+      ctaLabel: 'Évaluer mon notaire',
+    },
+    en: {
+      heading: 'Your act is signed',
+      lead: 'Your ' + svcNomEn(ctx.serviceId) + ' of ' + fmtDateEn(ctx.dateISO) + ' is done. Thank you for using Nota.',
+      bodyHtml: para(
+        'One last gesture, and it matters: rate your notary — 1 to 5, with a comment if you like. Your evaluation helps the next clients choose with confidence.'
+      ),
+      textLines: [offerLineEn(ctx), 'Rate your notary: 1 to 5, with a comment if you like.'],
+      ctaLabel: 'Rate my notary',
+    },
+    ctaUrl: linksFor(ctx.baseUrl).profil,
+    unsubscribeUrl: ctx.unsubscribeUrl,
+  });
+}
+
 // =============================================================================
 // Contact form (nous joindre)
 // =============================================================================
@@ -1733,6 +1765,7 @@ const TEMPLATES = {
   offerRetained,
   dateMissedNoUptake,
   offerCancelled,
+  evaluationInvite,
   actReleased,
   // client — pay-on-accept lifecycle
   offerAuthorized,
