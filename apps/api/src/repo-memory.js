@@ -25,6 +25,10 @@ function createMemoryRepo(seed = []) {
   const notified = new Map(); // `${refId}#${kind}` -> timestamp
   const unsubscribed = new Set(); // lowercased emails
 
+  // Admin-editable email subject overrides (ADR 0018): one record per template
+  // key, mirroring the CONFIG#EMAIL / TPL#<key> partition on the main table.
+  const emailOverrides = new Map(); // templateKey -> { key, enabled, subjectFr, subjectEn, updatedAt }
+
   // Notary console: declines (per notary+bid) and retained pointers (per notary).
   const declines = new Set(); // `${notaryId}#${bidId}`
   const retained = new Map(); // `${notaryId}#${bidId}` -> { id, dateISO, serviceId, montant }
@@ -184,6 +188,10 @@ function createMemoryRepo(seed = []) {
       byNotary.set(notary.id, { ...notary });
       return notary;
     },
+    // Mirrors the Dynamo sparse-GSI1 read: only ACTIVE notaries are enumerable.
+    async listActiveNotaries() {
+      return [...byNotary.values()].filter((n) => n.status === 'active').map((n) => ({ ...n }));
+    },
     async getNotary(id) {
       const n = byNotary.get(id);
       return n ? { ...n } : null;
@@ -208,6 +216,39 @@ function createMemoryRepo(seed = []) {
     },
     async isUnsubscribed(email) {
       return unsubscribed.has(String(email).trim().toLowerCase());
+    },
+
+    // --- Admin-editable email subject overrides (ADR 0018) -------------------
+    // Same normalization contract as the dynamo adapter: empty-string subjects
+    // are stored as null (the consumption side treats a half-configured pair as
+    // not configured), `enabled` is a real boolean, and updatedAt is stamped by
+    // the caller-supplied clock — never Date.now().
+    async getEmailOverride(key) {
+      const o = emailOverrides.get(String(key));
+      return o ? { ...o } : null;
+    },
+    async putEmailOverride(override, nowISO) {
+      const subj = (v) => {
+        const s = typeof v === 'string' ? v.trim() : '';
+        return s || null;
+      };
+      const stored = {
+        key: String(override.key),
+        enabled: override.enabled !== false,
+        subjectFr: subj(override.subjectFr),
+        subjectEn: subj(override.subjectEn),
+        updatedAt: nowISO,
+      };
+      emailOverrides.set(stored.key, stored);
+      return { ...stored };
+    },
+    async deleteEmailOverride(key) {
+      emailOverrides.delete(String(key));
+    },
+    async listEmailOverrides() {
+      return [...emailOverrides.values()]
+        .map((o) => ({ ...o }))
+        .sort((a, b) => a.key.localeCompare(b.key));
     },
 
     // --- Notary console (declines + retained calendar pointers) -------------

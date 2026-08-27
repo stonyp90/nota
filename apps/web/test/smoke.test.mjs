@@ -251,6 +251,31 @@ test('a day with bids shows the best open offer per act', async () => {
   assert.equal(doc.querySelectorAll('#cal-grid .cal-chance').length, 0);
 });
 
+// The hover bubble must never read as transparent (owner, 2026-08-27:
+// « While hover no transparency »): hovering lifts the cell with a
+// transform, and a transformed cell becomes a stacking context that traps
+// the bubble's z-index — the DOM-later neighbour then painted OVER the
+// bubble. The hovered cell therefore carries a z-index of its own, so the
+// cell and its bubble rise above every later sibling.
+test('the hovered calendar cell rises above its later siblings, bubble included', () => {
+  const css = readFileSync(fileURLToPath(new URL('../public/styles.css', import.meta.url)), 'utf8');
+  assert.match(css, /\.cal-cell:hover\s*\{[^}]*z-index:/,
+    'the hover lift carries a z-index so the tooltip clears the next cell');
+});
+
+// The market strip's line must never strand its one-tap pill on an orphan
+// row with dead space beside it (owner, 2026-08-27: « improve the UI UX
+// align ») — the label is the flexible column that wraps within itself, so
+// the reference figure and the pill hold the right rail of the SAME row at
+// every dialog width.
+test('DAY: the market line keeps its figure and one-tap pill on one aligned row', () => {
+  const css = readFileSync(fileURLToPath(new URL('../public/styles.css', import.meta.url)), 'utf8');
+  assert.match(css, /\.day-market-line\s*\{[^}]*align-items:\s*center/,
+    'the line centres its mixed-height controls');
+  assert.match(css, /\.day-value-k\s*\{[^}]*flex:\s*1[^}]*min-width:\s*0/,
+    'the label is the flexible, wrappable column — the figure and pill never wrap away');
+});
+
 // 7. Offer form: 3 service options, anonymity on by default, service selection
 //    enables the slider and caps it at prixDepart * PREMIUM_CAP.
 test('offer form: services populated, anon default on, slider capped at prixDepart*3', async () => {
@@ -1221,6 +1246,48 @@ test('DAY: an act with nothing on the day hides the bar and invites the first of
   assert.match(count.textContent, /2 offres ce jour, tous actes confondus/);
 });
 
+// Owner (2026-08-27): « optimiser le UX — compacter les sections ». The door to
+// the day's other offers is ONE quiet line: the count and the toggle share a
+// row, never a stacked count + full-width button block eating the empty state.
+test('DAY: the other-offers door is one line — the toggle sits inside the totals', async () => {
+  const ctx = await boot();
+  const iso = ctx.D.addDays(ctx.today, 5);
+  // Refinancement holds the day; the selected act (financement) has nothing.
+  await reseed(ctx, [
+    { id: 'r1', serviceId: 'refinancement', dateISO: iso, montant: 4000, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
+    { id: 'r2', serviceId: 'refinancement', dateISO: iso, montant: 3000, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
+  ]);
+  ctx.doc.querySelector('.cal-cell[data-date="' + iso + '"]').click();
+  await wait(30);
+  ctx.doc.querySelector('#o-service-chips .chip[data-svc="financement"]').click();
+  await wait(30);
+  const count = ctx.doc.querySelector('#day-bids .day-bids-count');
+  const toggle = count && count.querySelector('.day-bids-toggle');
+  assert.ok(toggle, 'the toggle lives inside the totals line');
+  assert.equal(ctx.doc.querySelector('#day-bids > .day-bids-toggle'), null,
+    'no free-standing toggle stacked under the list');
+  // The door still opens and closes the rest of the day.
+  const rest = ctx.doc.querySelector('#day-bids .day-bids-rest');
+  assert.equal(rest.hidden, true, 'folded by default');
+  toggle.click();
+  assert.equal(rest.hidden, false, 'the other offers unfold');
+  assert.equal(rest.querySelectorAll('.bid-row').length, 2);
+  assert.match(toggle.textContent, /Voir moins/);
+  toggle.click();
+  assert.equal(rest.hidden, true, 'and fold back');
+});
+
+// The compaction is structural, not ad hoc: steps drop to the regular card
+// padding and the inline door loses its full-width button chrome, so the
+// offer slider and « Publier » land above the fold.
+test('DAY: the booking dialog is compact — regular card padding, inline door', () => {
+  const css = readFileSync(fileURLToPath(new URL('../public/styles.css', import.meta.url)), 'utf8');
+  assert.match(css, /\.book-step\s*\{[^}]*padding:\s*var\(--pad-card\)[;\s]/,
+    'steps use the regular card padding, not the large one');
+  assert.ok(!/\.day-bids-toggle\s*\{[^}]*width:\s*100%/.test(css),
+    'the other-offers toggle is an inline door, not a full-width button');
+});
+
 test('DAY: an empty day says it once — the lead time up top, the invitation in the hint', async () => {
   const ctx = await boot();
   const iso = ctx.D.addDays(ctx.today, 5);
@@ -1287,6 +1354,25 @@ test('DAY: « Passer devant » lifts the offer just above the act’s best', asy
   assert.ok(Number(amt.value) >= 4000, 'one tap matches the reference');
   assert.equal(btn.hidden, true, 'nothing left to beat');
   assert.match($(ctx.doc, 'day-hint').textContent, /au niveau/i);
+});
+
+test('DAY: a reference above the act’s own range says why the shortcut is absent', async () => {
+  // Another dossier's surcharges can push ITS total past this act's slider
+  // ceiling: there is nothing to tap, but the strip must not go silent —
+  // a printed bar with no shortcut and no word looked broken (owner,
+  // 2026-08-27: « ensure we are covering all the cases »).
+  const ctx = await boot();
+  const iso = ctx.D.addDays(ctx.today, 5);
+  await reseed(ctx, [
+    { id: 'r1', serviceId: 'refinancement', dateISO: iso, montant: 99999, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
+  ]);
+  ctx.doc.querySelector('.cal-cell[data-date="' + iso + '"]').click();
+  await wait(30);
+  const amt = $(ctx.doc, 'o-amount');
+  amt.value = amt.min; fire(ctx.win, amt, 'input');
+  assert.equal($(ctx.doc, 'day-beat').hidden, true, 'nothing to tap — the bar sits out of range');
+  assert.match($(ctx.doc, 'day-hint').textContent, /dépasse votre plage/,
+    'the strip says why instead of going silent');
 });
 
 test('DAY: an act whose only offer is already retained hides the bar and says why', async () => {
@@ -1891,6 +1977,27 @@ test('intro gate: a film that ends on its own does not flag the gate away', asyn
   assert.equal(Nota.state.tab, 'carnet', 'the film still lands on its pane');
 });
 
+// 40b''. Every page floats over the ambient backdrop — the Nota mark, twenty
+//        times, adrift behind ALL content (owner, 2026-08-27: « on all
+//        background, smoothly »). The gate keeps a copy of its own above its
+//        opaque overlay; both are decorative and invisible to AT.
+test('ambient backdrop: twenty Nota marks drift behind every page and the gate', async () => {
+  const { doc } = await boot({ intro: true });
+  const site = $(doc, 'site-bg');
+  assert.ok(site, 'the site-wide layer exists');
+  assert.equal(site.getAttribute('aria-hidden'), 'true', 'decorative: hidden from AT');
+  const dice = site.querySelectorAll(':scope > i');
+  assert.equal(dice.length, 20, 'twenty dice adrift');
+  // Owner (2026-08-27): « they must look as a full dice » — each mark is a
+  // real cube, six logo faces around one tumbling body.
+  assert.equal(dice[0].querySelectorAll('.cube > svg').length, 6, 'each die carries six faces');
+  assert.ok(site.classList.contains('mark-drift--site'), 'the fixed, behind-everything variant');
+  assert.ok($(doc, 'ig-bg'), 'the gate still builds its own above the opaque overlay');
+  const again = await boot();
+  assert.equal($(again.doc, 'ig-bg'), null, 'no gate backdrop when the gate stays shut');
+  assert.ok($(again.doc, 'site-bg'), 'the site backdrop greets every arrival');
+});
+
 // 40c. The gate never interrupts a deep link and never greets twice.
 test('intro gate: never over a deep link, never on a repeat visit', async () => {
   const deep = await bootSeeded({ 'nota.introSeen': '' }, '#t=notaires');
@@ -2053,6 +2160,100 @@ test('lots of data: every cell stays inside the shape the narrow layouts assume'
   future.forEach((c) => {
     assert.ok(c.querySelector('.cal-urgency'), 'future cell ' + c.dataset.date + ' prints its multiplier');
   });
+});
+
+test('ambient gradients live on the background; every component is flat and opaque', () => {
+  // Owner (2026-08-27, superseding the morning's « gradient on every
+  // component »): « the gradient and the opacity are for the REST, not the
+  // component themselves ». The system now has one home for atmosphere —
+  // the background layers (body fade, --wash-glow, #site-bg) — while every
+  // component (panel, card, dialog, popup) is a flat, fully opaque surface:
+  // steady contrast (WCAG: translucent fills shift with what scrolls
+  // beneath), crisp text, no bleed-through.
+  const css = readFileSync(fileURLToPath(new URL('../public/styles.css', import.meta.url)), 'utf8');
+  assert.ok(!/--surface-grad/.test(css), 'the per-component surface gradient is retired');
+  assert.match(css, /--wash-glow:\s*radial-gradient/, 'the section glow stays a background token');
+  // A selector can head several rules (.doc-row is also sized under
+  // .profil-doc-list): the guarantee is that at least ONE of them paints the
+  // gradient — the others are layout-only.
+  const blocks = (sel) => {
+    const re = new RegExp('(?:^|[,\\s])' + sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*\\{[^}]*\\}', 'gm');
+    const list = css.match(re);
+    assert.ok(list && list.length, sel + ' rule exists');
+    return list;
+  };
+  // The page glow must run EDGE TO EDGE (owner, 2026-08-27: a centred
+  // fixed-width blob « clash[es] with black margin » on wide screens) — a
+  // 180deg fade has no lateral falloff, so no seam can exist.
+  assert.ok(blocks('body').some((b) => /linear-gradient\(180deg,\s*var\(--brand-tint\)/.test(b)),
+    'the page ambient is a full-width top fade');
+  assert.ok(!blocks('.intro').some((b) => /var\(--wash-glow\)/.test(b)),
+    'the intro paints no boxed wash of its own — its column edge would seam against the gutter');
+  for (const sel of ['.panel', '.card', '.dossier-item', '.doc-row', '.dossier-pricing', 'dialog']) {
+    assert.ok(blocks(sel).some((b) => /background:\s*var\(--surface\)/.test(b)),
+      sel + ' is a flat opaque surface');
+    assert.ok(!blocks(sel).some((b) => /gradient\(/.test(b)), sel + ' carries no gradient of its own');
+  }
+  // The menu is its OWN layer above the page (owner, 2026-08-27: « there
+  // must be a bigger diff in between menu and body ») — and, since the same
+  // day's opacity rule (« components carry no opacity — the background
+  // does »), it is a SOLID bar: opaque surface + a real shadow carry the
+  // separation, never translucency or blur. Still no hairline (the earlier
+  // « clash »).
+  const header = blocks('.site-header')[0];
+  assert.ok(!/border-bottom:\s*1px/.test(header), 'still no hairline under the menu');
+  assert.match(header, /background:\s*var\(--surface\)/, 'the menu is an opaque surface');
+  assert.ok(!/backdrop-filter[^}]*\.site-header|\.site-header[^{]*\{[^}]*backdrop-filter/.test(css),
+    'no blur on the menu — nothing shows through an opaque bar');
+  assert.ok(!/--surface-glass/.test(css), 'the retired glass token does not linger');
+  // And the calendar's .panel draws no ring against the tinted band (owner:
+  // « ensure there is no clash with the calendar ») — the gradient surface
+  // and shadow carry it, like every other big container.
+  assert.ok(blocks('.panel').some((b) => /var\(--surface\)/.test(b) && !/border:\s*1px/.test(b)),
+    'the panel base is borderless on its flat surface');
+  // The calendar wears the shared skin, now at 95 % (owner, 2026-08-27:
+  // « blanc c'est très beau… mais on pourrait mettre un tout petit peu
+  // d'opacité, genre quatre-vingt-quinze pour cent » — superseding the
+  // earlier 90 % call). The register is one token, --surface-veil, and it
+  // is ALWAYS paired with a backdrop blur so what bleeds through reads as
+  // light, never as marks under the grid.
+  // Element opacity stays banned — the veil lives in the background alpha.
+  assert.match(css, /--surface-veil:\s*color-mix\(in srgb,\s*var\(--surface\)\s*var\(--surface-veil-mix\),\s*transparent\)/,
+    'the veil is one shared token, mixed from the theme surface');
+  assert.match(css, /--surface-veil-mix:\s*95%/, 'the veil stays a light touch — 95 %');
+  assert.ok(blocks('#carnet-panel').some((b) => /background:\s*var\(--surface-veil\)/.test(b) && /backdrop-filter:\s*blur/.test(b)),
+    'the carnet panel wears the veil, blurred so the grid stays legible');
+  assert.ok(!blocks('#carnet-panel').some((b) => /(?<!b)opacity:/.test(b)),
+    'no element opacity — the veil is background alpha, text stays crisp');
+  // The market rows' hover wash (Refinancement / Financement on the landing)
+  // follows the same register: the hover surface mixes down through the veil
+  // instead of landing as an opaque card over the drifting background
+  // (owner, 2026-08-27: « le hover sur le financement est bizarre »).
+  assert.match(css, /--surface-hover-veil:\s*color-mix\(in srgb,\s*var\(--surface-hover\)\s*var\(--surface-veil-mix\),\s*transparent\)/,
+    'a hover veil token exists, mixed from the theme hover surface');
+  assert.ok(blocks('.pulse-row:hover').some((b) => /background:\s*var\(--surface-hover-veil\)/.test(b)),
+    'the market row hover wears the translucent hover veil, not the opaque wash');
+  // Components that wear the brand wash sit DIRECTLY on the drifting page
+  // background — their fill must be the OPAQUE tint (mixed down to the
+  // surface), never the translucent --brand-tint, which stays reserved for
+  // the background layers (body fade, --wash-glow, the intro film).
+  assert.match(css, /--brand-tint-solid:\s*color-mix/, 'an opaque brand tint exists for component fills');
+  for (const sel of ['.pr-steps li::before', '.cnq-badge', '.nc-live-more:hover']) {
+    assert.ok(blocks(sel).some((b) => /var\(--brand-tint-solid\)/.test(b)),
+      sel + ' fills with the opaque tint');
+    assert.ok(!blocks(sel).some((b) => /var\(--brand-tint\)[^-]/.test(b)),
+      sel + ' never wears the translucent tint');
+  }
+});
+
+test('the today pill keeps a gap between its weekday and its day number', () => {
+  // Phones print the weekday INSIDE the cell (.cal-daynum::before, "JEU 27");
+  // today's date-circle turns the daynum into a flex box, and flex layout
+  // drops the ::before's trailing space from the flow — "JEU27". The pill
+  // must carry its own gap so the two never fuse.
+  const css = readFileSync(fileURLToPath(new URL('../public/styles.css', import.meta.url)), 'utf8');
+  assert.match(css, /\.cal-cell\.is-today \.cal-daynum\s*\{[^}]*gap:/,
+    'the today pill declares a flex gap of its own');
 });
 
 test('no @media rule may outrank a calendar @container rule on the same property', () => {

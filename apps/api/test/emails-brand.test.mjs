@@ -133,6 +133,15 @@ test('every template shares the branded, email-safe layout wrapper', () => {
     // The "N" logo mark square is rendered in brand green (no external image/SVG).
     assert.ok(!/<img/i.test(html), `${name}: relies on an external <img>`);
     assert.ok(!/<svg/i.test(html), `${name}: relies on an inline <svg>`);
+
+    // The card is deliberately light-only; the color-scheme metas tell Apple
+    // Mail (and friends) not to auto-invert it in dark mode.
+    assert.ok(html.includes('name="color-scheme" content="light"'), `${name}: missing color-scheme meta`);
+    assert.ok(html.includes('name="supported-color-schemes" content="light"'), `${name}: missing supported-color-schemes meta`);
+
+    // Screen readers: the document is fr-CA; the English block switches lang.
+    assert.ok(html.includes('lang="fr-CA"'), `${name}: missing fr-CA document lang`);
+    assert.ok(html.includes('lang="en-CA"'), `${name}: English block missing lang="en-CA"`);
   }
 });
 

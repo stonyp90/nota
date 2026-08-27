@@ -222,6 +222,22 @@ test('POST /client/welcome with an invalid/blank email is a 200 no-op', async ()
   assert.equal(mailer.sent.length, 0);
 });
 
+// --- reminder kind → template mapping ---------------------------------------
+
+test('onReminderDue maps j7/j3/j1 → dateApproaching, j0 → dateMissedNoUptake, dossier_incomplet → dossierIncomplete', async () => {
+  const { mailer, notifier } = setup();
+  const bid = bidWithEmail({ dateISO: TODAY }); // days = 0 for the j0 case
+
+  await notifier.onReminderDue(bidWithEmail({ id: 'r1' }), 'j7', TODAY);
+  await notifier.onReminderDue(bidWithEmail({ id: 'r2' }), 'j0', TODAY);
+  await notifier.onReminderDue(bid, 'dossier_incomplet', TODAY);
+
+  assert.equal(mailer.sent.length, 3);
+  assert.match(mailer.sent[0].subject, /Votre signature approche/);
+  assert.match(mailer.sent[1].subject, /aucune offre retenue/, 'j0 must send the raise-your-offer nudge');
+  assert.match(mailer.sent[2].subject, /dossier/i);
+});
+
 // --- unsubscribe route -------------------------------------------------------
 
 test('GET /unsubscribe records the opt-out and returns an HTML confirmation', async () => {
@@ -235,11 +251,62 @@ test('GET /unsubscribe records the opt-out and returns an HTML confirmation', as
   assert.equal(await repo.isUnsubscribed('client@example.ca'), true);
 });
 
+test('GET /unsubscribe normalizes the decoded address (trim + lowercase) before recording it', async () => {
+  const repo = createMemoryRepo();
+  const app = createApp(repo, { now: () => TODAY });
+  // A token minted from a case-variant, padded address — the suppression record
+  // must land normalized, so the notifier's isUnsubscribed check matches it.
+  // The memory repo normalizes defensively on its own, so capture what the
+  // ROUTE hands the port: that is what the dynamo adapter would store.
+  const seen = [];
+  const orig = repo.putUnsubscribe.bind(repo);
+  repo.putUnsubscribe = (email, at) => { seen.push(email); return orig(email, at); };
+  const token = encodeUnsubToken('  Client@Example.CA ');
+
+  const res = await app.handle({ method: 'GET', path: '/unsubscribe', query: { token } });
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(seen, ['client@example.ca'], 'the route must normalize before writing the opt-out');
+  assert.equal(await repo.isUnsubscribed('client@example.ca'), true);
+});
+
 test('GET /unsubscribe with a bad token is 400 and records nothing', async () => {
   const repo = createMemoryRepo();
   const app = createApp(repo, { now: () => TODAY });
   const res = await app.handle({ method: 'GET', path: '/unsubscribe', query: { token: '%%%' } });
   assert.equal(res.statusCode, 400);
+});
+
+// RFC 8058 one-click: mailbox providers POST to the List-Unsubscribe URL with
+// no user interaction — the route must accept POST and record the opt-out.
+test('POST /unsubscribe (one-click, RFC 8058) records the opt-out', async () => {
+  const repo = createMemoryRepo();
+  const app = createApp(repo, { now: () => TODAY });
+  const token = encodeUnsubToken('client@example.ca');
+
+  const res = await app.handle({ method: 'POST', path: '/unsubscribe', query: { token } });
+  assert.equal(res.statusCode, 200);
+  assert.equal(await repo.isUnsubscribed('client@example.ca'), true);
+});
+
+test('POST /unsubscribe with a bad token is 400 and records nothing', async () => {
+  const repo = createMemoryRepo();
+  const app = createApp(repo, { now: () => TODAY });
+  const res = await app.handle({ method: 'POST', path: '/unsubscribe', query: { token: '%%%' } });
+  assert.equal(res.statusCode, 400);
+});
+
+// --- List-Unsubscribe plumbing: the notifier hands the mailer the URL --------
+
+test('every mailer.send carries the recipient unsubscribe URL for List-Unsubscribe headers', async () => {
+  const { mailer, notifier } = setup();
+  await notifier.onOfferCreated(bidWithEmail());
+  await notifier.onNotaryLoginRequested({ email: 'n@example.ca', link: BASE + '/n/verify?t=x' });
+
+  assert.ok(mailer.sent.length >= 2);
+  for (const m of mailer.sent) {
+    const expected = BASE + '/unsubscribe?token=' + encodeUnsubToken(m.to);
+    assert.equal(m.unsubscribeUrl, expected, `send to ${m.to} must carry its unsubscribe URL`);
+  }
 });
 
 // --- fire-and-forget resilience: a mail failure never breaks POST /bids ------

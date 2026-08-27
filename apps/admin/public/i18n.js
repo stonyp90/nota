@@ -98,7 +98,28 @@
   "Autre professionnel": "Other professional",
   "Impossible de charger les données.": "Unable to load the data.",
   "Le service n’a pas répondu correctement. Vérifiez votre connexion, puis réessayez.": "The service did not respond correctly. Check your connection, then try again.",
-  "Données chargées.": "Data loaded."
+  "Données chargées.": "Data loaded.",
+  "Courriels": "Emails",
+  "Sujets et activation des modèles de courriels. Les corps restent gérés par le code.": "Email template subjects and activation. Bodies remain managed by code.",
+  "— la modification des modèles est réservée à l’administrateur principal.": "— editing templates is reserved for the primary administrator.",
+  "Partenaires": "Partners",
+  "Opérateur": "Operator",
+  "Console admin": "Admin console",
+  "Désactivé": "Disabled",
+  "Modifié": "Customized",
+  "Modifier": "Edit",
+  "Détails": "Details",
+  "Envoi activé": "Sending enabled",
+  "Sujet (FR)": "Subject (FR)",
+  "Sujet (EN)": "Subject (EN)",
+  "Jetons permis": "Allowed tokens",
+  "Aucun jeton pour ce modèle.": "No tokens for this template.",
+  "Videz les deux sujets pour revenir aux sujets par défaut. Le corps du courriel n’est pas modifiable.": "Clear both subjects to return to the default subjects. The email body is not editable.",
+  "Enregistrer": "Save",
+  "Réinitialiser": "Reset",
+  "Modèle enregistré.": "Template saved.",
+  "Modèle réinitialisé.": "Template reset.",
+  "Impossible d’enregistrer le modèle.": "Unable to save the template."
 };
   var HTML = {};
   var RULES = compileRules([
@@ -111,6 +132,11 @@
     "pattern": "^(\\d+) jours$",
     "flags": "",
     "replacement": "$1 days"
+  },
+  {
+    "pattern": "^(\\d+) modèles$",
+    "flags": "",
+    "replacement": "$1 templates"
   },
   {
     "pattern": "^(−?[\\d ]+) retenues sur (−?[\\d ]+) publiées$",

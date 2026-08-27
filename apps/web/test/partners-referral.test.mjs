@@ -255,6 +255,35 @@ test('the claim form previews the normalized shareable link as the partner types
   assert.equal(prev.dataset.state, 'warn', 'a short code warns instead of previewing');
 });
 
+// Conversion: the code is SUGGESTED from the courriel, so the happy path is
+// chip + courriel + submit — the partner never has to invent a valid code.
+test('typing the courriel suggests a code; a typed code is never overwritten', async () => {
+  const { win, doc, Nota } = await boot();
+  Nota.setTab('partenaires');
+  const mail = $(doc, 'partner-courriel'), code = $(doc, 'partner-code');
+
+  mail.value = 'eve.roy@agence.ca'; fire(win, mail, 'input');
+  assert.equal(code.value, 'EVEROY', 'the local part becomes the suggested code');
+  assert.equal($(doc, 'partner-code-preview').dataset.state, 'ok', 'the suggestion previews its link');
+
+  // Refining the courriel re-derives while the code is still the suggestion.
+  mail.value = 'eve.roy22@agence.ca'; fire(win, mail, 'input');
+  assert.equal(code.value, 'EVEROY22');
+
+  // A hand-typed code wins — later courriel edits leave it alone.
+  code.value = 'MONCODE'; fire(win, code, 'input');
+  mail.value = 'autre@agence.ca'; fire(win, mail, 'input');
+  assert.equal(code.value, 'MONCODE', 'a manual code survives courriel edits');
+});
+
+test('a too-short local part suggests nothing', async () => {
+  const { win, doc, Nota } = await boot();
+  Nota.setTab('partenaires');
+  const mail = $(doc, 'partner-courriel'), code = $(doc, 'partner-code');
+  mail.value = 'eve@agence.ca'; fire(win, mail, 'input');
+  assert.equal(code.value, '', 'EVE (3 chars) is not a valid code — no suggestion');
+});
+
 // The claim is EMAIL-VERIFIED (ADR 0011): POST /partenaires only pends (200 +
 // dev echo), then the web finishes verification in place with the echoed token.
 const claimRoutes = (verify) => [
@@ -474,6 +503,134 @@ test('the pane stays strict: no per-card mechanics, one guarantee, no vignette',
   // The fine-print note reads as a quiet line, not another boxed card.
   assert.match(CSS_SRC, /\.pr-pitch \.note\s*\{[^}]*border-left:\s*0/,
     'the guarantee sheds the boxed .note chrome inside the pane');
+});
+
+test('the hero rides the site-wide drift — no private backdrop of its own', async () => {
+  // Owner (2026-08-27): the hero's own clipped layer « cut rough » at the
+  // band's edges. The marks now drift behind ALL content on one fixed
+  // site-wide layer (#site-bg, smoke test 40b'') — never doubled, and never
+  // sliced by a band boundary again.
+  const { doc } = await boot();
+  assert.equal(doc.querySelector('#pane-partenaires .pr-hero .mark-drift'), null,
+    'one scene: no second layer clipped inside the hero');
+  assert.ok($(doc, 'site-bg'), 'the site-wide layer carries this pane too');
+});
+
+test('the FAQ fills the story column: collapsed disclosures, no literal amounts', async () => {
+  // 2026-08-27 follow-up: the pitch column ran dry after three steps while
+  // the sticky form ran tall. The pre-claim questions a courtier or agent
+  // actually has (tracking, payout moment, limits, OACIQ disclosure) fill it —
+  // as native <details> in the existing .disclosure idiom, collapsed so the
+  // pane stays thin.
+  const { doc } = await boot();
+  const faq = doc.querySelector('#pane-partenaires .pr-faq');
+  assert.ok(faq, 'the FAQ block exists in the Partenaires pane');
+  assert.ok(faq.closest('.pr-pitch'), 'it lives in the story column, beside the form');
+  const items = [...faq.querySelectorAll('details.disclosure')];
+  assert.ok(items.length >= 3, 'at least three questions');
+  for (const d of items) {
+    assert.ok(d.querySelector('summary'), 'each item is a native disclosure');
+  }
+  // Owner (2026-08-27, evening): the first TWO answers greet the reader
+  // open — the column reads as content, not as a wall of closed drawers —
+  // and the rest stay collapsed so the pane stays thin. Two open at once
+  // means NO shared name: the exclusive-accordion idiom would slam the
+  // first shut the moment the second opens.
+  assert.equal(items[0].open, true, 'the first answer is open on arrival');
+  assert.equal(items[1].open, true, 'so is the second');
+  for (const d of items.slice(2)) {
+    assert.equal(d.open, false, 'the rest stay collapsed — the pane stays thin');
+  }
+  for (const d of items) {
+    assert.ok(!d.hasAttribute('name'), 'no exclusive accordion — two answers must coexist open');
+  }
+  // The two reward figures render from D.REFERRAL — never a literal in copy.
+  assert.ok(!/\d\s*\$/.test(faq.textContent), 'no hardcoded dollar amount in the FAQ');
+  // The guarantee keeps its place as the quiet closing line, under the FAQ.
+  const note = doc.querySelector('#pane-partenaires .pr-pitch .nota-guarantee');
+  assert.ok(faq.compareDocumentPosition(note) & 4, 'the fine print still closes the column');
+});
+
+test('the pane is flat: the big containers carry no border', () => {
+  // Owner (2026-08-27): « remove those big borders ». The hero band, the two
+  // reward cards and the claim form shed their outlines — the wash, the brand
+  // tint and the shadows carry each region. Hairlines stay only on small
+  // controls (FAQ disclosures, inputs) where the affordance needs an edge.
+  const block = (sel) => {
+    const m = CSS_SRC.match(new RegExp(sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*\\{[^}]*\\}'));
+    assert.ok(m, sel + ' rule exists');
+    return m[0];
+  };
+  assert.ok(!/border:(?!\s*0)|border-color/.test(block('.pr-hero')), 'the hero band has no border');
+  assert.ok(!/border:(?!\s*0)|border-color/.test(block('.pr-card')), 'a reward card has no border');
+  assert.ok(!/border/.test(block('.pr-card--notaire')), 'the highlight is the tint, not a ring');
+  assert.match(block('.pr-form-panel'), /border:\s*0/, 'the form strips the .panel ring and the top accent');
+});
+
+test('the hero dissolves: soft gradients, no boxed surface, no seam', () => {
+  // Owner (2026-08-27): « add some gradient… no corner… smooth for the eyes ».
+  // The hero stops being a rectangle on the page: no surface backing, no
+  // shadow — only brand-tint glows that fade to transparent well inside the
+  // band, so there is no edge for the eye to catch.
+  const m = CSS_SRC.match(/\.pr-hero\s*\{[^}]*\}/);
+  assert.ok(m, '.pr-hero rule exists');
+  assert.match(m[0], /radial-gradient|var\(--wash-glow\)/, 'the band is painted with gradients');
+  assert.ok(!/var\(--surface\)/.test(m[0]), 'no opaque surface backing — nothing to draw a seam');
+  assert.ok(!/box-shadow/.test(m[0]), 'no shadow — a shadow re-draws the box');
+  // The FAQ opens smoothly (progressive enhancement), guarded for motion.
+  assert.match(CSS_SRC, /::details-content/, 'the disclosure body animates open');
+  assert.match(CSS_SRC, /prefers-reduced-motion[^{]*\{[^]*?::details-content/,
+    'the animation lives behind the motion preference');
+});
+
+test('wide screens densify the story column: steps 3-up, FAQ 2-up', () => {
+  // The follow-up to the FAQ (owner, 2026-08-27): beside the tall form the
+  // column's content huddled top-left — steps and FAQ stacked in one narrow
+  // strip, dead space everywhere else. Wide screens reflow the timeline to a
+  // 3-across row and the FAQ to two columns; narrow screens keep the stack.
+  assert.match(CSS_SRC, /\.pr-steps\s*\{[^}]*repeat\(3,\s*minmax\(0,\s*1fr\)\)/,
+    'the three steps ride one row on wide screens');
+  assert.match(CSS_SRC, /\.pr-faq\s*\{[^}]*repeat\(2,\s*minmax\(0,\s*1fr\)\)/,
+    'the FAQ splits into two columns on wide screens');
+});
+
+test('the page reads hero → story beside the form', async () => {
+  // Owner (2026-08-27, evening pass): the full-width steps band spread three
+  // short lines across the whole page and pushed the claim form below the
+  // fold, dead space beside the FAQ. The pane folds to TWO regions: the hero,
+  // then one grid — the story column (steps, FAQ, fine print) on the left,
+  // the claim form docked top-right like the notary gate. Nothing sticky and
+  // no CSS order juggling: phones read the markup as written (story, then
+  // form), and the hero CTA still jumps straight to the form.
+  const { doc } = await boot();
+  const bands = [...doc.querySelectorAll('#pane-partenaires .wrap > *')];
+  assert.deepEqual(bands.map((e) => e.classList[0]), ['pr-hero', 'pr-grid'],
+    'two regions in reading order');
+  const grid = bands[1];
+  assert.ok(grid.firstElementChild.classList.contains('pr-pitch'),
+    'the story leads the grid in DOM order');
+  assert.ok(grid.querySelector('.pr-pitch .pr-steps'), 'the timeline opens the story column');
+  assert.ok(grid.lastElementChild.classList.contains('pr-form-panel'),
+    'the form closes the grid — the right column on wide screens');
+  assert.ok(!/\.pr-form-panel\s*\{[^}]*((?<!b)order:|position:\s*sticky)/.test(CSS_SRC),
+    'no order swap, no sticky — the grid reads as written');
+  assert.match(CSS_SRC, /\.pr-grid\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(min\(340px,\s*100%\),\s*440px\)/,
+    'the story keeps the wide left track, the form a tight right one');
+  assert.ok(grid.querySelector('.pr-pitch .pr-faq'), 'the FAQ fills the story column under the steps');
+});
+
+test('the hero carries one CTA that lands the visitor on the claim form', async () => {
+  // On a phone the form sits below the steps AND the FAQ — the hero needs its
+  // own door to the action (three-click rule). Clicking it must put the
+  // visitor IN the form: first field focused, ready to type.
+  const { doc } = await boot();
+  const cta = doc.querySelector('#pane-partenaires .pr-hero .pr-hero-cta');
+  assert.ok(cta, 'the hero offers « Réclamer mon code → »');
+  assert.equal(cta.tagName, 'BUTTON');
+  assert.equal(cta.type, 'button', 'never a submit — it only travels');
+  cta.click();
+  assert.equal(doc.activeElement, $(doc, 'partner-courriel'),
+    'the visitor lands in the form, courriel focused');
 });
 
 // ---------------------------------------------------------------------------

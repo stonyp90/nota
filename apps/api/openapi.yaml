@@ -1465,6 +1465,35 @@ paths:
             text/html:
               schema:
                 type: string
+    post:
+      operationId: unsubscribeOneClick
+      summary: One-click email opt-out (RFC 8058).
+      description: >-
+        The target of the `List-Unsubscribe` / `List-Unsubscribe-Post` headers
+        carried on every outbound email. Mailbox providers (Gmail, Yahoo) POST
+        here with no user interaction; the opt-out is recorded exactly as with
+        GET. Idempotent.
+      parameters:
+        - name: token
+          in: query
+          required: true
+          description: Base64url-encoded recipient email from the email headers.
+          schema:
+            type: string
+          example: Y2xpZW50QGV4YW1wbGUuY2E
+      responses:
+        "200":
+          description: Opt-out recorded.
+          content:
+            text/html:
+              schema:
+                type: string
+        "400":
+          description: The token is missing or does not decode to a valid email.
+          content:
+            text/html:
+              schema:
+                type: string
 components:
   securitySchemes:
     notarySession:

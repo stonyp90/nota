@@ -47,6 +47,66 @@ components:
                 type: string
               message:
                 type: string
+    EmailOverride:
+      type: object
+      description: >-
+        The stored per-template override (ADR 0018). `enabled: false` is a
+        kill-switch for the template; `subjectFr`/`subjectEn` (both non-null,
+        or both null) replace the built-in bilingual subject with `{{token}}`
+        interpolation over the template's declared placeholder vocabulary.
+        Bodies are never editable — the branded layout, CASL footer and
+        unsubscribe plumbing stay guaranteed by code.
+      required: [key, enabled, subjectFr, subjectEn, updatedAt]
+      properties:
+        key:
+          type: string
+        enabled:
+          type: boolean
+        subjectFr:
+          type: [string, "null"]
+        subjectEn:
+          type: [string, "null"]
+        updatedAt:
+          type: [string, "null"]
+          description: ISO datetime of the last change.
+    EmailTemplate:
+      type: object
+      description: One registry entry (emails.js TEMPLATE_META) merged with its stored override.
+      required: [key, audience, labelFr, labelEn, defaultSubjectFr, defaultSubjectEn, placeholders, override]
+      properties:
+        key:
+          type: string
+        audience:
+          type: string
+          enum: [client, notaire, partenaire, operateur, admin]
+        labelFr:
+          type: string
+        labelEn:
+          type: string
+        defaultSubjectFr:
+          type: string
+        defaultSubjectEn:
+          type: string
+        placeholders:
+          type: array
+          description: The only `{{token}}` names a subject override may use.
+          items:
+            type: string
+            enum: [montant, service, date, code, n, note, etude, email]
+        override:
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [enabled, subjectFr, subjectEn, updatedAt]
+              properties:
+                enabled:
+                  type: boolean
+                subjectFr:
+                  type: [string, "null"]
+                subjectEn:
+                  type: [string, "null"]
+                updatedAt:
+                  type: [string, "null"]
     SessionGrant:
       type: object
       required: [ok, session, expiresAt]
@@ -75,6 +135,26 @@ components:
             errors:
               - code: non_autorise
                 message: Session invalide ou expirée.
+    Forbidden:
+      description: Authenticated, but the role lacks the required permission.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Errors"
+          example:
+            errors:
+              - code: interdit
+                message: Réservé à l’administrateur principal.
+    TemplateNotFound:
+      description: The template key is not in the registry (emails.js TEMPLATE_META).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Errors"
+          example:
+            errors:
+              - code: modele_inconnu
+                message: "Modèle de courriel inconnu : nope."
 paths:
   /admin/auth/request:
     post:
@@ -223,6 +303,139 @@ paths:
                       type: string
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /admin/notifications/templates:
+    get:
+      operationId: listAdminEmailTemplates
+      summary: The email-template registry merged with the stored overrides.
+      description: >-
+        Every template in the emails.js registry (TEMPLATE_META) — audience,
+        bilingual labels, default subjects and allowed `{{token}}` placeholders
+        — each carrying its stored override, or `null` when the built-in
+        behaviour stands. Open to ANY authenticated admin: an analyst sees the
+        state read-only; only super_admin can write (ADR 0018 §3).
+      security:
+        - adminSession: []
+      responses:
+        "200":
+          description: The merged template list.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [templates]
+                properties:
+                  templates:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/EmailTemplate"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /admin/notifications/templates/{key}:
+    put:
+      operationId: putAdminEmailTemplate
+      summary: Store (replace) one template's override.
+      description: >-
+        super_admin only (`notifications:write`) — an analyst gets 403. The
+        body is a FULL replacement: `enabled` defaults to `true` when omitted,
+        subjects must be provided both-or-neither (the notifier's bilingual
+        contract needs both sides), each at most 200 characters and using only
+        that template's declared `{{token}}` placeholders. Every change is
+        audit-logged with its before/after.
+      security:
+        - adminSession: []
+      parameters:
+        - name: key
+          in: path
+          required: true
+          description: A template key from the registry (e.g. `offerPublished`).
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled:
+                  type: boolean
+                  description: "`false` disables the template entirely (kill-switch)."
+                subjectFr:
+                  type: string
+                  maxLength: 200
+                subjectEn:
+                  type: string
+                  maxLength: 200
+      responses:
+        "200":
+          description: The stored override.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, override]
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+                  override:
+                    $ref: "#/components/schemas/EmailOverride"
+        "400":
+          description: Malformed JSON body.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Errors"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/TemplateNotFound"
+        "422":
+          description: >-
+            Invalid override: non-boolean `enabled`, a subject over 200
+            characters, an unknown `{{token}}` for this template, or a subject
+            provided in only one language.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Errors"
+    delete:
+      operationId: resetAdminEmailTemplate
+      summary: Remove one template's override (reset to the built-in behaviour).
+      description: >-
+        super_admin only (`notifications:write`). Idempotent; audit-logged with
+        the removed record as `before`.
+      security:
+        - adminSession: []
+      parameters:
+        - name: key
+          in: path
+          required: true
+          description: A template key from the registry.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Override removed (or none existed).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, key]
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+                  key:
+                    type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/TemplateNotFound"
   /admin/metrics/overview:
     get:
       operationId: getAdminMetricsOverview

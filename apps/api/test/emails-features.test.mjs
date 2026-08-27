@@ -32,6 +32,12 @@ const FEATURE_TEMPLATES = [
   // client — pay-on-accept lifecycle
   'offerAuthorized',
   'offerAuthorizationVoided',
+  // retained-act conversation (chat)
+  'messageDuNotaire',
+  'messageDuClient',
+  // evaluation feedback loop (ADR 0015/0016)
+  'evaluationRecueNotaire',
+  'operatorLowRating',
   // notary — marketplace lifecycle
   'newMatchingBids',
   'notaryMagicLink',

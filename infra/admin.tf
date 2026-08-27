@@ -11,7 +11,9 @@
 # Blast-radius isolation (Law 25): the admin surface has its OWN Lambda, its OWN
 # DynamoDB table (nota-admin — admin identities / sessions / login-challenges /
 # audit log / rate-limit items), its OWN CloudFront + WAF + deploy role. The
-# admin Lambda can only READ the main customer table — never write, never Scan.
+# admin Lambda can only READ the main customer table — never Scan, and its only
+# write is the item-scoped CONFIG#EMAIL partition (email-template overrides,
+# ADR 0018 §6 — see the LeadingKeys-conditioned statement below).
 ###############################################################################
 
 locals {
@@ -132,6 +134,34 @@ data "aws_iam_policy_document" "admin_lambda" {
       aws_dynamodb_table.main.arn,
       "${aws_dynamodb_table.main.arn}/index/*",
     ]
+  }
+
+  # The ONE write door on the MAIN table (ADR 0018 §6): admin-editable email
+  # template overrides live under the single 'CONFIG#EMAIL' partition
+  # (SK = TPL#<templateKey>, see apps/api/src/keys.js). The
+  # dynamodb:LeadingKeys condition confines EVERY action in this statement to
+  # items whose partition key is exactly 'CONFIG#EMAIL', so the admin console
+  # can edit product configuration but still cannot read, write or delete a
+  # single customer item — the read-only statement above remains its only
+  # access to the rest of the table. No index resource on purpose: the
+  # LeadingKeys condition key does not apply to GSI queries, and the overrides
+  # are read/written by primary key only.
+  statement {
+    sid    = "MainTableEmailConfigWrite"
+    effect = "Allow"
+    actions = [
+      "dynamodb:GetItem",
+      "dynamodb:PutItem",
+      "dynamodb:DeleteItem",
+      "dynamodb:Query",
+    ]
+    resources = [aws_dynamodb_table.main.arn]
+
+    condition {
+      test     = "ForAllValues:StringEquals"
+      variable = "dynamodb:LeadingKeys"
+      values   = ["CONFIG#EMAIL"]
+    }
   }
 
   # SES send for admin login-challenge / notification email. Scoped to the

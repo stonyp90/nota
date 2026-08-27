@@ -8,9 +8,10 @@
  * acting as the public API even if it were ever mis-routed.
  *
  * It shares the repo port with the public handler but is wired in its OWN Lambda
- * (apps/api/admin.js) whose IAM role is read-only on the customer table and
- * read/write on the separate nota-admin table — the admin surface can never
- * mutate customer data.
+ * (apps/api/admin.js) whose IAM role is read-only on the customer table (plus
+ * one item-scoped write door: the CONFIG#EMAIL partition holding the email
+ * template overrides, ADR 0018 §6) and read/write on the separate nota-admin
+ * table — the admin surface can never mutate customer data.
  */
 const domain = require('@nota/domain');
 const { createAdmin } = require('./admin');
@@ -78,7 +79,7 @@ function createAdminApp(repo, opts = {}) {
   function baseHeaders() {
     return {
       'access-control-allow-origin': adminOrigin || 'null',
-      'access-control-allow-methods': 'GET,POST,OPTIONS',
+      'access-control-allow-methods': 'GET,POST,PUT,DELETE,OPTIONS',
       'access-control-allow-headers': 'content-type,authorization',
       'vary': 'origin',
       'x-robots-tag': 'noindex, nofollow',
@@ -164,6 +165,39 @@ function createAdminApp(repo, opts = {}) {
       if (!principal) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
       const data = await analytics.overview({ from: query.from, to: query.to });
       return json(200, data);
+    }
+
+    // --- Email templates (ADR 0018 §3) ---------------------------------------
+    // GET is open to any authenticated admin (analysts see the state read-only);
+    // PUT/DELETE require 'notifications:write' — enforced in admin.js, which
+    // also audit-logs every change with its before/after.
+    if (route === '/admin/notifications/templates' && method === 'GET') {
+      const result = await admin.listEmailTemplates(bearer(request), { ip: clientIp(request) });
+      if (!result.ok) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+      return json(200, { templates: result.templates });
+    }
+
+    // contract: /admin/notifications/templates/{key}
+    const tplMatch = /^\/admin\/notifications\/templates\/([^/]+)$/.exec(route);
+    if (tplMatch && (method === 'PUT' || method === 'DELETE')) {
+      const key = decodeURIComponent(tplMatch[1]);
+      let result;
+      if (method === 'PUT') {
+        let payload;
+        try {
+          payload = parseBody(request);
+        } catch {
+          return json(400, { errors: [{ code: 'json_invalide', message: 'Corps JSON invalide.' }] });
+        }
+        result = await admin.putEmailTemplate(bearer(request), key, payload, { ip: clientIp(request) });
+      } else {
+        result = await admin.resetEmailTemplate(bearer(request), key, { ip: clientIp(request) });
+      }
+      if (!result.ok) {
+        if (result.status === 401) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+        return json(result.status, { errors: result.errors });
+      }
+      return json(200, method === 'PUT' ? { ok: true, override: result.override } : { ok: true, key: result.key });
     }
 
     return json(404, { errors: [{ code: 'introuvable', message: 'Route inconnue.' }] });

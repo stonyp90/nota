@@ -34,6 +34,9 @@ const {
   referralEarnSK,
   REFEARN_GSI1PK,
   referralEarnGSI1SK,
+  emailOverridePK,
+  emailOverrideSK,
+  EMAIL_OVERRIDE_PREFIX,
   adminPK,
   ADMIN_SK,
   adminLoginPK,
@@ -48,6 +51,8 @@ const {
   GSI1_SK,
   OPENBID_GSI1PK,
   openBidGSI1SK,
+  NOTARY_GSI1PK,
+  notaryGSI1SK,
 } = require('./keys');
 const { STATUS, normalizeReferralCode } = require('@nota/domain');
 
@@ -261,12 +266,15 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
     // Same single table, distinct key prefixes (see keys.js). Only GetItem and
     // PutItem are used, so the least-privilege IAM policy is unchanged.
     async putNotary(notary) {
-      await doc.send(
-        new PutCommand({
-          TableName: tableName,
-          Item: { PK: notaryPK(notary.id), SK: NOTARY_SK, type: 'notary', ...notary },
-        })
-      );
+      // Sparse GSI1 membership: only an ACTIVE notary is enumerable (daily
+      // carnet digest). A pending/deauthorized profile omits the attributes
+      // and falls out of the index on this very write.
+      const item = { PK: notaryPK(notary.id), SK: NOTARY_SK, type: 'notary', ...notary };
+      if (notary.status === 'active') {
+        item[GSI1_PK] = NOTARY_GSI1PK;
+        item[GSI1_SK] = notaryGSI1SK(notary);
+      }
+      await doc.send(new PutCommand({ TableName: tableName, Item: item }));
       return notary;
     },
     async getNotary(id) {
@@ -274,8 +282,34 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
         new GetCommand({ TableName: tableName, Key: { PK: notaryPK(id), SK: NOTARY_SK } })
       );
       if (!out.Item) return null;
-      const { PK, SK, type, ...notary } = out.Item;
+      const { PK, SK, type, [GSI1_PK]: _gpk, [GSI1_SK]: _gsk, ...notary } = out.Item;
       return notary;
+    },
+    // Every ACTIVE notary, via the sparse GSI1 — one Query/day for the carnet
+    // digest, cost proportional to the roster, never a Scan. Profiles written
+    // before this index existed appear after their next putNotary (any profile
+    // update); the early-stage roster makes a backfill unnecessary.
+    async listActiveNotaries() {
+      const notaries = [];
+      let ExclusiveStartKey;
+      do {
+        const out = await doc.send(
+          new QueryCommand({
+            TableName: tableName,
+            IndexName: 'GSI1',
+            KeyConditionExpression: '#g = :n',
+            ExpressionAttributeNames: { '#g': GSI1_PK },
+            ExpressionAttributeValues: { ':n': NOTARY_GSI1PK },
+            ExclusiveStartKey,
+          })
+        );
+        (out.Items || []).forEach((i) => {
+          const { PK, SK, type, [GSI1_PK]: _gpk, [GSI1_SK]: _gsk, ...notary } = i;
+          notaries.push(notary);
+        });
+        ExclusiveStartKey = out.LastEvaluatedKey;
+      } while (ExclusiveStartKey);
+      return notaries;
     },
     async markEventProcessed(stripeEventId, at) {
       await doc.send(
@@ -321,6 +355,68 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
         new GetCommand({ TableName: tableName, Key: { PK: unsubPK(email), SK: UNSUB_SK } })
       );
       return !!out.Item;
+    },
+
+    // --- Admin-editable email subject overrides (ADR 0018) -------------------
+    // One small CONFIG#EMAIL partition on the MAIN table (see keys.js): the
+    // notifier reads it through the repo it already owns; the admin Lambda's
+    // scoped LeadingKeys grant (infra/admin.tf) is the only write door. Empty
+    // subjects are stored as null so the consumption side's both-or-neither
+    // contract reads unambiguously off the item itself.
+    async getEmailOverride(key) {
+      const out = await doc.send(
+        new GetCommand({ TableName: tableName, Key: { PK: emailOverridePK(), SK: emailOverrideSK(key) } })
+      );
+      if (!out.Item) return null;
+      const { PK, SK, type, ...rec } = out.Item;
+      return rec;
+    },
+    async putEmailOverride(override, nowISO) {
+      const subj = (v) => {
+        const s = typeof v === 'string' ? v.trim() : '';
+        return s || null;
+      };
+      const stored = {
+        key: String(override.key),
+        enabled: override.enabled !== false,
+        subjectFr: subj(override.subjectFr),
+        subjectEn: subj(override.subjectEn),
+        updatedAt: nowISO,
+      };
+      await doc.send(
+        new PutCommand({
+          TableName: tableName,
+          Item: { PK: emailOverridePK(), SK: emailOverrideSK(stored.key), type: 'email_override', ...stored },
+        })
+      );
+      return stored;
+    },
+    async deleteEmailOverride(key) {
+      await doc.send(
+        new DeleteCommand({ TableName: tableName, Key: { PK: emailOverridePK(), SK: emailOverrideSK(key) } })
+      );
+    },
+    // Every stored override — one Query over the single CONFIG#EMAIL partition
+    // (bounded by the template registry size, a few dozen items at most).
+    async listEmailOverrides() {
+      const overrides = [];
+      let ExclusiveStartKey;
+      do {
+        const out = await doc.send(
+          new QueryCommand({
+            TableName: tableName,
+            KeyConditionExpression: 'PK = :pk AND begins_with(SK, :b)',
+            ExpressionAttributeValues: { ':pk': emailOverridePK(), ':b': EMAIL_OVERRIDE_PREFIX },
+            ExclusiveStartKey,
+          })
+        );
+        (out.Items || []).forEach((i) => {
+          const { PK, SK, type, ...rec } = i;
+          overrides.push(rec);
+        });
+        ExclusiveStartKey = out.LastEvaluatedKey;
+      } while (ExclusiveStartKey);
+      return overrides;
     },
 
     // --- Notary console (declines + retained calendar pointers) -------------

@@ -142,6 +142,49 @@ test('the admin error envelope validates on a 401', async () => {
   assertValid('/admin/metrics/overview', 'GET', 401, body);
 });
 
+// --- Email templates (ADR 0018) ----------------------------------------------
+
+test('GET /admin/notifications/templates — 200 merged list validates', async () => {
+  const h = make();
+  const session = await login(h);
+  await h.call('PUT', '/admin/notifications/templates/offerPublished', {
+    bearer: session,
+    body: { enabled: true, subjectFr: 'Offre {{montant}}', subjectEn: 'Offer {{montant}}' },
+  });
+  const res = await h.call('GET', '/admin/notifications/templates', { bearer: session });
+  assert.equal(res.statusCode, 200, res.body);
+  const body = parse(res);
+  assert.ok(Array.isArray(body.templates) && body.templates.length > 0);
+  assertValid('/admin/notifications/templates', 'GET', 200, body);
+});
+
+test('PUT + DELETE /admin/notifications/templates/{key} — 200/404/422 shapes validate', async () => {
+  const h = make();
+  const session = await login(h);
+
+  const put = await h.call('PUT', '/admin/notifications/templates/offerPublished', {
+    bearer: session,
+    body: { enabled: false },
+  });
+  assert.equal(put.statusCode, 200, put.body);
+  assertValid('/admin/notifications/templates/{key}', 'PUT', 200, parse(put));
+
+  const unknown = await h.call('PUT', '/admin/notifications/templates/nope', { bearer: session, body: {} });
+  assert.equal(unknown.statusCode, 404, unknown.body);
+  assertValid('/admin/notifications/templates/{key}', 'PUT', 404, parse(unknown));
+
+  const badToken = await h.call('PUT', '/admin/notifications/templates/offerPublished', {
+    bearer: session,
+    body: { subjectFr: 'X {{code}}', subjectEn: 'Y {{code}}' },
+  });
+  assert.equal(badToken.statusCode, 422, badToken.body);
+  assertValid('/admin/notifications/templates/{key}', 'PUT', 422, parse(badToken));
+
+  const del = await h.call('DELETE', '/admin/notifications/templates/offerPublished', { bearer: session });
+  assert.equal(del.statusCode, 200, del.body);
+  assertValid('/admin/notifications/templates/{key}', 'DELETE', 200, parse(del));
+});
+
 // --- Drift sweep : every documented admin path is routed ---------------------
 
 test('every path in admin-openapi.yaml is routed (no "route inconnue" fall-through)', async () => {
@@ -158,7 +201,13 @@ test('every path in admin-openapi.yaml is routed (no "route inconnue" fall-throu
 
 test('the admin handler routes exactly the documented set (no undocumented route)', async () => {
   const src = fs.readFileSync(path.join(import.meta.dirname, '..', '..', 'src', 'admin-handler.js'), 'utf8');
-  const routed = new Set([...src.matchAll(/route === '([^']+)'/g)].map((m) => m[1]));
+  // Exact-match routes are `route === '...'`; a parameterized route is matched
+  // by regex in the handler and declares its documented shape with a
+  // `// contract: /admin/...` marker right above the regex.
+  const routed = new Set([
+    ...[...src.matchAll(/route === '([^']+)'/g)].map((m) => m[1]),
+    ...[...src.matchAll(/\/\/ contract: (\S+)/g)].map((m) => m[1]),
+  ]);
   const documented = new Set(contract.documentedRoutes().map((r) => r.path));
 
   assert.deepEqual([...documented].filter((p) => !routed.has(p)), [], 'admin-openapi.yaml documents a path the app does not route');

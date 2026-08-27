@@ -315,14 +315,21 @@ test('REMINDER_OFFSETS is the 7/3/1 cadence', () => {
 });
 
 test('dueReminders: fires the matching kind exactly on 7/3/1 days out', () => {
-  const open = (dateISO) => ({ id: 'b', serviceId: 'refinancement', dateISO, montant: 2500, status: 'ouverte' });
+  const open = (dateISO) => ({ id: 'b', serviceId: 'refinancement', dateISO, montant: 2500, status: 'ouverte', dossierReady: true });
   assert.deepEqual(D.dueReminders(open(D.addDays(TODAY, 7)), TODAY), ['j7']);
   assert.deepEqual(D.dueReminders(open(D.addDays(TODAY, 3)), TODAY), ['j3']);
   assert.deepEqual(D.dueReminders(open(D.addDays(TODAY, 1)), TODAY), ['j1']);
 });
 
+test('dueReminders: the date is TODAY and still no notary — j0 fires', () => {
+  const open = { id: 'b', serviceId: 'refinancement', dateISO: TODAY, montant: 2500, status: 'ouverte', dossierReady: true };
+  assert.deepEqual(D.dueReminders(open, TODAY), ['j0']);
+  assert.equal(D.REMINDER_KINDS.J0, 'j0');
+  assert.equal(D.reminderKindForDays(0), 'j0');
+});
+
 test('dueReminders: nothing on a non-cadence day', () => {
-  const open = { id: 'b', serviceId: 'refinancement', dateISO: D.addDays(TODAY, 5), montant: 2500, status: 'ouverte' };
+  const open = { id: 'b', serviceId: 'refinancement', dateISO: D.addDays(TODAY, 5), montant: 2500, status: 'ouverte', dossierReady: true };
   assert.deepEqual(D.dueReminders(open, TODAY), []);
 });
 
@@ -342,6 +349,22 @@ test('dueReminders: the dossier_incomplet hook fires for an incomplete open lead
   // On a cadence day it stacks with the date-approaching kind.
   const both = { ...incomplete, dateISO: D.addDays(TODAY, 3) };
   assert.deepEqual(D.dueReminders(both, TODAY), ['j3', 'dossier_incomplet']);
+});
+
+test('dueReminders: without an explicit dossierReady flag, readiness is derived from the dossier itself', () => {
+  // No flag, no dossier — leadReadiness says the file is not ready.
+  const bare = { id: 'b', serviceId: 'refinancement', dateISO: D.addDays(TODAY, 10), montant: 2500, status: 'ouverte' };
+  assert.deepEqual(D.dueReminders(bare, TODAY), ['dossier_incomplet']);
+
+  // No flag, but the dossier IS ready (required pricing answered + consent):
+  // the derived readiness silences the nudge.
+  const ready = { ...bare, dossier: { __consent: true, __pricing: PRICING } };
+  assert.equal(D.leadReadiness('refinancement', ready.dossier).ready, true, 'fixture must be a ready file');
+  assert.deepEqual(D.dueReminders(ready, TODAY), []);
+
+  // An explicit flag remains an override in BOTH directions.
+  assert.deepEqual(D.dueReminders({ ...bare, dossierReady: true }, TODAY), []);
+  assert.deepEqual(D.dueReminders({ ...ready, dossierReady: false }, TODAY), ['dossier_incomplet']);
 });
 
 test('recommendedAmount: mid-tier default, within bounds, one-tap booking', () => {
@@ -452,4 +475,44 @@ test('tierMultiplier is the number recommendedAmount actually uses', () => {
     const expected = Math.round((base * D.tierMultiplier(D.tierForDays(days))) / 5) * 5;
     assert.equal(D.recommendedAmount(svc, dateISO, '2026-08-12'), expected, t.id);
   });
+});
+
+// --- Conversion defaults (booking form) --------------------------------------
+// A required question whose dominant answer costs nothing carries `defaut`: the
+// renderer pre-declares it so the client only touches what genuinely varies.
+test('criteria defaults: dominant zero-cost answers are declared, and only those', () => {
+  // The déplacement baseline (most mobile client, add 0) on both acts.
+  for (const sid of ['refinancement', 'financement']) {
+    const dep = D.serviceById(sid).pricing.criteria.find((c) => c.id === 'deplacement');
+    assert.equal(dep.defaut, 'client_50', sid + ': the +0 band is the default');
+  }
+  // Succession (refinancement): the rare, expensive case is the exception.
+  const succ = D.serviceById('refinancement').pricing.criteria.find((c) => c.id === 'succession');
+  assert.equal(succ.defaut, 'non');
+  // Invariant: a default may NEVER silently add money — and questions that
+  // genuinely vary (approbation, prêteur, contexte, montant) carry no default.
+  for (const svc of D.SERVICES) {
+    for (const c of svc.pricing.criteria) {
+      if (c.defaut == null) continue;
+      const opt = (c.options || []).find((o) => o.id === c.defaut);
+      assert.ok(opt, svc.id + ':' + c.id + ' default is a real option');
+      assert.equal(opt.add, 0, svc.id + ':' + c.id + ' default adds 0 $');
+    }
+    for (const id of ['valeur_pret', 'approbation_bancaire', 'preteur', 'contexte']) {
+      const c = svc.pricing.criteria.find((x) => x.id === id);
+      if (c) assert.equal(c.defaut, undefined, svc.id + ':' + id + ' has no default');
+    }
+  }
+});
+
+test('criteria order: questions needing input come before pre-answered ones', () => {
+  for (const svc of D.SERVICES) {
+    const req = svc.pricing.criteria.filter((c) => c.required);
+    const firstDefaulted = req.findIndex((c) => c.defaut != null);
+    if (firstDefaulted === -1) continue;
+    for (let i = firstDefaulted; i < req.length; i++) {
+      assert.ok(req[i].defaut != null,
+        svc.id + ': ' + req[i].id + ' (no default) must come before the defaulted block');
+    }
+  }
 });

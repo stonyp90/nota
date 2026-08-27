@@ -199,3 +199,14 @@ test('the profile pane refuses a wrong format the same way', async () => {
   const err = doc.querySelector('.profil-doc-list .file-error');
   assert.ok(err && !err.hidden && /Format/.test(err.textContent));
 });
+
+test('the file CTA is square like every other action button — never a pill', () => {
+  // Owner (2026-08-27): « make it more square ». « Choisir un fichier » was
+  // the one pill among the app's rectangular verbs (.btn all sit on
+  // var(--radius)); it joins the system. Pills stay for chips and badges.
+  const css = readFileSync(fileURLToPath(new URL('../public/styles.css', import.meta.url)), 'utf8');
+  const m = css.match(/\.file-cta\s*\{[^}]*\}/);
+  assert.ok(m, '.file-cta rule exists');
+  assert.match(m[0], /border-radius:\s*var\(--radius\)/, 'the CTA sits on the shared radius token');
+  assert.ok(!/999px/.test(m[0]), 'no pill radius');
+});

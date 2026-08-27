@@ -13,6 +13,8 @@ const TODAY = '2026-08-12';
 
 // A bid at `offset` days from TODAY, open by default, with a courriel so it is
 // mailable. Uses the domain's own addDays so boundaries match exactly.
+// dossierReady: true keeps the date-cadence fixtures out of the (now derived)
+// dossier_incomplet nudge — its own behavior is proven separately.
 function bidAt(id, offset, over = {}) {
   return {
     id,
@@ -25,6 +27,7 @@ function bidAt(id, offset, over = {}) {
     anonyme: true,
     courriel: id + '@example.ca',
     createdAt: TODAY,
+    dossierReady: true,
     ...over,
   };
 }
@@ -64,7 +67,8 @@ test('the scheduler sends exactly the due reminders for a seeded set of bids', a
 
 test('the scheduler mails dateApproaching for exactly the on-cadence offsets and stays silent off-cadence', async () => {
   // A multi-bid table straddling every reminder boundary. dueReminders fires
-  // only at 7/3/1 days out; 8/6/4/2/0 are off-cadence and must send nothing.
+  // at 7/3/1 days out (dateApproaching) and at 0 (the j0 "still no notary"
+  // nudge — dateMissedNoUptake); 8/6/4/2 are off-cadence and must send nothing.
   // Boundaries themselves are proven in the domain suite — here we assert the
   // notifier + scheduler send exactly the due set, with the right template.
   const seed = [
@@ -84,20 +88,47 @@ test('the scheduler mails dateApproaching for exactly the on-cadence offsets and
   const res = await runReminders({ repo, notifier, now: () => TODAY });
 
   assert.equal(res.openBids, seed.length);
-  assert.equal(res.due, 3, 'exactly the 7/3/1 offsets are due');
-  assert.equal(res.sent, 3);
+  assert.equal(res.due, 4, 'exactly the 7/3/1/0 offsets are due');
+  assert.equal(res.sent, 4);
 
   const recipients = mailer.sent.map((m) => m.to).sort();
-  assert.deepEqual(recipients, ['d1@example.ca', 'd3@example.ca', 'd7@example.ca']);
+  assert.deepEqual(recipients, ['d0@example.ca', 'd1@example.ca', 'd3@example.ca', 'd7@example.ca']);
 
-  // Every message is the tier-aware date-approaching template.
-  for (const m of mailer.sent) {
+  // 7/3/1 get the tier-aware date-approaching template.
+  for (const m of mailer.sent.filter((x) => x.to !== 'd0@example.ca')) {
     assert.ok(m.subject.startsWith('Votre signature approche'), 'unexpected template: ' + m.subject);
   }
+  // Day 0 (the date is today, still no notary) gets the raise-your-offer nudge.
+  const j0 = mailer.sent.find((m) => m.to === 'd0@example.ca');
+  assert.ok(/aucune offre retenue/.test(j0.subject), 'j0 must send dateMissedNoUptake: ' + j0.subject);
   // The off-cadence bids are never mailed.
-  for (const who of ['d8', 'd6', 'd4', 'd2', 'd0']) {
+  for (const who of ['d8', 'd6', 'd4', 'd2']) {
     assert.equal(mailer.sent.some((m) => m.to === who + '@example.ca'), false, who + ' should be silent');
   }
+});
+
+test('an open lead with no dossierReady flag derives its dossier_incomplet nudge from the file itself', async () => {
+  // No flag at all (legacy record, nothing saved): the domain derives "not
+  // ready" via leadReadiness and the finish-your-file nudge goes out once.
+  const bare = bidAt('bare', 10);
+  delete bare.dossierReady;
+  // Same, but the client's saved dossier IS ready (required pricing + consent):
+  // no nudge.
+  const ready = bidAt('ready', 10, {
+    dossier: { __consent: true, __pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale', deplacement: 'client_50' } },
+  });
+  delete ready.dossierReady;
+
+  const repo = createMemoryRepo([bare, ready]);
+  const mailer = createFakeMailer();
+  const notifier = createNotifier({ repo, mailer, baseUrl: 'https://nota.example', operatorEmail: null, now: () => TODAY });
+
+  const res = await runReminders({ repo, notifier, now: () => TODAY });
+  assert.equal(res.due, 1);
+  assert.equal(res.sent, 1);
+  assert.equal(mailer.sent.length, 1);
+  assert.equal(mailer.sent[0].to, 'bare@example.ca');
+  assert.match(mailer.sent[0].subject, /dossier/i);
 });
 
 test('the scheduler is idempotent: a second run the same day sends nothing new', async () => {

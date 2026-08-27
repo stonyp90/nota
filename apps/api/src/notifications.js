@@ -45,15 +45,65 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
     return b + '/unsubscribe?token=' + encodeUnsubToken(email);
   }
 
+  // --- Admin-parametrizable templates (consumption side) ---------------------
+  // The admin console may store a per-template override: { key, enabled,
+  // subjectFr, subjectEn, updatedAt }. The port is OPTIONAL — repos without
+  // repo.getEmailOverride keep the built-in behaviour untouched. Overrides are
+  // read through a small TTL cache so a burst of sends (the reminder batch, a
+  // busy webhook) costs one repo read per template per minute, not one per mail.
+  //
+  // NON-OVERRIDABLE mail, on purpose: the direct mailer.send bypasses
+  // (onNotaryLoginRequested, onPartnerClaimRequested) and the admin console's
+  // own magic link never consult an override. Those are AUTH-CRITICAL
+  // transactional messages — silently disabling one would lock people out, and
+  // rewording one blind could break the trust cues (validity, single-use)
+  // around a sign-in link. They stay hard-coded.
+  const OVERRIDE_TTL_MS = 60_000;
+  const overrideCache = new Map(); // templateKey -> { value, fetchedAt }
+  function clockMs() {
+    // The injected clock returns an ISO string (tests freeze it); parse it so
+    // the cache TTL follows the same fake time. Fall back to real time when the
+    // clock's output is not parseable.
+    const ms = Date.parse(clock());
+    return Number.isFinite(ms) ? ms : Date.now();
+  }
+  async function getOverride(templateKey) {
+    if (!templateKey || typeof repo.getEmailOverride !== 'function') return null;
+    const nowMs = clockMs();
+    const hit = overrideCache.get(templateKey);
+    if (hit && nowMs - hit.fetchedAt < OVERRIDE_TTL_MS) return hit.value;
+    let value = null;
+    try {
+      value = (await repo.getEmailOverride(templateKey)) || null;
+    } catch {
+      value = null; // a broken override store must never block mail
+    }
+    overrideCache.set(templateKey, { value, fetchedAt: nowMs });
+    return value;
+  }
+
   // Send one message at most once, honoring suppression. Returns a small result
   // describing what happened (sent, or why not) so callers/tests can assert.
-  async function sendOnce({ refId, kind, to, buildTemplate }) {
+  // `templateKey` names the emails.js registry entry behind `buildTemplate` and
+  // `ctx` is the same context object handed to it — together they let a stored
+  // admin override disable the template or reword its subject.
+  async function sendOnce({ refId, kind, to, buildTemplate, templateKey, ctx }) {
     if (!to) return { sent: false, reason: 'no-address', kind };
     if (await repo.isUnsubscribed(to)) return { sent: false, reason: 'unsubscribed', kind };
     if (await repo.wasNotificationSent(refId, kind)) return { sent: false, reason: 'duplicate', kind };
 
-    const msg = buildTemplate({ unsubscribeUrl: unsubscribeUrl(to), baseUrl: base });
-    await mailer.send({ to, subject: msg.subject, html: msg.html, text: msg.text });
+    const override = await getOverride(templateKey);
+    if (override && override.enabled === false) return { sent: false, reason: 'disabled', kind };
+
+    const unsub = unsubscribeUrl(to);
+    const msg = buildTemplate({ unsubscribeUrl: unsub, baseUrl: base });
+    if (override) {
+      const subject = emails.renderSubjectOverride(override, ctx || {});
+      if (subject != null) msg.subject = subject;
+    }
+    // unsubscribeUrl rides along so the mailer can emit the RFC 8058
+    // List-Unsubscribe / List-Unsubscribe-Post headers.
+    await mailer.send({ to, subject: msg.subject, html: msg.html, text: msg.text, unsubscribeUrl: unsub });
     await repo.markNotificationSent(refId, kind, clock());
     return { sent: true, kind, to };
   }
@@ -76,22 +126,28 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
     const results = [];
     try {
       if (bid.courriel) {
+        const ctx = bidCtx(bid);
         results.push(
           await sendOnce({
             refId: bid.id,
             kind: 'offerPublished',
             to: bid.courriel,
-            buildTemplate: (env) => emails.offerPublished({ ...bidCtx(bid), ...env }),
+            templateKey: 'offerPublished',
+            ctx,
+            buildTemplate: (env) => emails.offerPublished({ ...ctx, ...env }),
           })
         );
       }
       if (operatorEmail) {
+        const ctx = bidCtx(bid);
         results.push(
           await sendOnce({
             refId: bid.id,
             kind: 'operatorNewLead',
             to: operatorEmail,
-            buildTemplate: (env) => emails.operatorNewLead({ ...bidCtx(bid), ...env }),
+            templateKey: 'operatorNewLead',
+            ctx,
+            buildTemplate: (env) => emails.operatorNewLead({ ...ctx, ...env }),
           })
         );
       }
@@ -107,12 +163,15 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
     const results = [];
     try {
       if (bid.courriel) {
+        const ctx = bidCtx(bid);
         results.push(
           await sendOnce({
             refId: bid.id,
             kind: 'offerRetained',
             to: bid.courriel,
-            buildTemplate: (env) => emails.offerRetained({ ...bidCtx(bid), ...env }),
+            templateKey: 'offerRetained',
+            ctx,
+            buildTemplate: (env) => emails.offerRetained({ ...ctx, ...env }),
           })
         );
       }
@@ -152,19 +211,23 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
     // it may only fire on a LIVE demand — one whose card was authorized, or where
     // billing is off (no paymentStatus, every bid live). A bid still `pending`
     // (never taken through Checkout) is a staged demand and earns no mail on
-    // either track. Kept identical to the handler's isLive so the two never drift.
-    const isLive = bid.paymentStatus !== 'pending' && bid.paymentStatus !== 'voided';
+    // either track. Kept identical to the handler's isLive so the two never
+    // drift — the canonical voided value is 'void' (repo markAuthorizationVoided).
+    const isLive = bid.paymentStatus !== 'pending' && bid.paymentStatus !== 'void';
     if (!isLive) return results;
 
     if (bid.parrain) {
       const partner = await repo.getPartner(bid.parrain);
       if (isConfirmedPartner(partner)) {
+        const ctx = { ...bidCtx(bid), code: partner.code };
         results.push(
           await sendOnce({
             refId: bid.id,
             kind: 'referral_client',
             to: partner.courriel,
-            buildTemplate: (env) => emails.referralRewardClient({ ...bidCtx(bid), code: partner.code, ...env }),
+            templateKey: 'referralRewardClient',
+            ctx,
+            buildTemplate: (env) => emails.referralRewardClient({ ...ctx, ...env }),
           })
         );
       }
@@ -175,12 +238,15 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
     if (notary && notary.parrain) {
       const partner = await repo.getPartner(notary.parrain);
       if (isConfirmedPartner(partner)) {
+        const ctx = { code: partner.code };
         results.push(
           await sendOnce({
             refId: notary.id,
             kind: 'referral_notaire',
             to: partner.courriel,
-            buildTemplate: (env) => emails.referralRewardNotary({ code: partner.code, ...env }),
+            templateKey: 'referralRewardNotary',
+            ctx,
+            buildTemplate: (env) => emails.referralRewardNotary({ ...ctx, ...env }),
           })
         );
       }
@@ -195,23 +261,28 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
     const results = [];
     try {
       if (partner.courriel) {
+        const ctx = { code: partner.code, type: partner.type };
         results.push(
           await sendOnce({
             refId: partner.code,
             kind: 'partnerWelcome',
             to: partner.courriel,
-            buildTemplate: (env) => emails.partnerWelcome({ code: partner.code, type: partner.type, ...env }),
+            templateKey: 'partnerWelcome',
+            ctx,
+            buildTemplate: (env) => emails.partnerWelcome({ ...ctx, ...env }),
           })
         );
       }
       if (operatorEmail) {
+        const ctx = { code: partner.code, type: partner.type, courriel: partner.courriel };
         results.push(
           await sendOnce({
             refId: partner.code,
             kind: 'operatorNewPartner',
             to: operatorEmail,
-            buildTemplate: (env) =>
-              emails.operatorNewPartner({ code: partner.code, type: partner.type, courriel: partner.courriel, ...env }),
+            templateKey: 'operatorNewPartner',
+            ctx,
+            buildTemplate: (env) => emails.operatorNewPartner({ ...ctx, ...env }),
           })
         );
       }
@@ -228,16 +299,18 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
   async function onCounterOfferProposed(bid, proposition) {
     if (!bid || !bid.courriel || !proposition) return { ok: true, results: [] };
     try {
+      const ctx = {
+        ...bidCtx(bid),
+        etude: proposition.etude || null,
+        proposition: { montant: proposition.montant, delta: proposition.delta, message: proposition.message, etude: proposition.etude },
+      };
       const r = await sendOnce({
         refId: proposition.id,
         kind: 'propositionRecue',
         to: bid.courriel,
-        buildTemplate: (env) =>
-          emails.propositionRecue({
-            ...bidCtx(bid),
-            proposition: { montant: proposition.montant, delta: proposition.delta, message: proposition.message, etude: proposition.etude },
-            ...env,
-          }),
+        templateKey: 'propositionRecue',
+        ctx,
+        buildTemplate: (env) => emails.propositionRecue({ ...ctx, ...env }),
       });
       return { ok: true, results: [r] };
     } catch (err) {
@@ -250,16 +323,18 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
   async function onDocumentsRequested(bid, demande) {
     if (!bid || !bid.courriel || !demande) return { ok: true, results: [] };
     try {
+      const ctx = {
+        ...bidCtx(bid),
+        etude: demande.etude || null,
+        demande: { documents: demande.documents, message: demande.message, etude: demande.etude },
+      };
       const r = await sendOnce({
         refId: demande.id,
         kind: 'documentsDemandes',
         to: bid.courriel,
-        buildTemplate: (env) =>
-          emails.documentsDemandes({
-            ...bidCtx(bid),
-            demande: { documents: demande.documents, message: demande.message, etude: demande.etude },
-            ...env,
-          }),
+        templateKey: 'documentsDemandes',
+        ctx,
+        buildTemplate: (env) => emails.documentsDemandes({ ...ctx, ...env }),
       });
       return { ok: true, results: [r] };
     } catch (err) {
@@ -278,16 +353,15 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
         notary || (proposition.notaryId && typeof repo.getNotary === 'function' ? await repo.getNotary(proposition.notaryId) : null);
       const to = profile && profile.email;
       const accepted = proposition.status === 'acceptee';
+      const key = accepted ? 'propositionAcceptee' : 'propositionRefusee';
+      const ctx = { ...bidCtx(bid), proposition: { montant: proposition.montant, delta: proposition.delta } };
       const r = await sendOnce({
         refId: proposition.id,
-        kind: accepted ? 'propositionAcceptee' : 'propositionRefusee',
+        kind: key,
         to,
-        buildTemplate: (env) =>
-          (accepted ? emails.propositionAcceptee : emails.propositionRefusee)({
-            ...bidCtx(bid),
-            proposition: { montant: proposition.montant, delta: proposition.delta },
-            ...env,
-          }),
+        templateKey: key,
+        ctx,
+        buildTemplate: (env) => (accepted ? emails.propositionAcceptee : emails.propositionRefusee)({ ...ctx, ...env }),
       });
       return { ok: true, results: [r] };
     } catch (err) {
@@ -304,32 +378,41 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
     const results = [];
     try {
       if (bid.courriel) {
+        const ctx = bidCtx(bid);
         results.push(
           await sendOnce({
             refId: bid.id,
             kind: 'offerCancelled',
             to: bid.courriel,
-            buildTemplate: (env) => emails.offerCancelled({ ...bidCtx(bid), ...env }),
+            templateKey: 'offerCancelled',
+            ctx,
+            buildTemplate: (env) => emails.offerCancelled({ ...ctx, ...env }),
           })
         );
       }
       if (wasRetained) {
         const to = notary && notary.email;
+        const ctx = bidCtx(bid);
         results.push(
           await sendOnce({
             refId: bid.id,
             kind: 'offerCancelledNotary',
             to,
-            buildTemplate: (env) => emails.offerCancelledNotary({ ...bidCtx(bid), ...env }),
+            templateKey: 'offerCancelledNotary',
+            ctx,
+            buildTemplate: (env) => emails.offerCancelledNotary({ ...ctx, ...env }),
           })
         );
         if (operatorEmail) {
+          const opCtx = { ...bidCtx(bid), etude: bid.etude };
           results.push(
             await sendOnce({
               refId: bid.id,
               kind: 'operatorOfferCancelled',
               to: operatorEmail,
-              buildTemplate: (env) => emails.operatorOfferCancelled({ ...bidCtx(bid), etude: bid.etude, ...env }),
+              templateKey: 'operatorOfferCancelled',
+              ctx: opCtx,
+              buildTemplate: (env) => emails.operatorOfferCancelled({ ...opCtx, ...env }),
             })
           );
         }
@@ -350,30 +433,34 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
     const results = [];
     try {
       if (bid.courriel) {
+        const ctx = bidCtx(bid);
         results.push(
           await sendOnce({
             refId: bid.id,
             kind: 'actReleased',
             to: bid.courriel,
-            buildTemplate: (env) => emails.actReleased({ ...bidCtx(bid), ...env }),
+            templateKey: 'actReleased',
+            ctx,
+            buildTemplate: (env) => emails.actReleased({ ...ctx, ...env }),
           })
         );
       }
       if (operatorEmail && (paidOrHeld || message)) {
+        const ctx = {
+          ...bidCtx(bid),
+          etude: etude || (notary && notary.label) || null,
+          notaireEmail: (notary && notary.email) || null,
+          messageNotaire: message || null,
+          paidOrHeld: !!paidOrHeld,
+        };
         results.push(
           await sendOnce({
             refId: bid.id,
             kind: 'operatorActReleased',
             to: operatorEmail,
-            buildTemplate: (env) =>
-              emails.operatorActReleased({
-                ...bidCtx(bid),
-                etude: etude || (notary && notary.label) || null,
-                notaireEmail: (notary && notary.email) || null,
-                messageNotaire: message || null,
-                paidOrHeld: !!paidOrHeld,
-                ...env,
-              }),
+            templateKey: 'operatorActReleased',
+            ctx,
+            buildTemplate: (env) => emails.operatorActReleased({ ...ctx, ...env }),
           })
         );
       }
@@ -394,31 +481,31 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
     const results = [];
     try {
       if (operatorEmail) {
+        const ctx = { nom: msg.nom, email: msg.courriel, sujet: msg.sujet, message: msg.message, bidId: msg.bidId };
         results.push(
           await sendOnce({
             refId: msg.id,
             kind: 'operatorContactMessage',
             to: operatorEmail,
-            buildTemplate: (env) =>
-              emails.operatorContactMessage({
-                nom: msg.nom,
-                email: msg.courriel,
-                sujet: msg.sujet,
-                message: msg.message,
-                bidId: msg.bidId,
-                ...env,
-              }),
+            templateKey: 'operatorContactMessage',
+            ctx,
+            buildTemplate: (env) => emails.operatorContactMessage({ ...ctx, ...env }),
           })
         );
       }
-      results.push(
-        await sendOnce({
-          refId: msg.id,
-          kind: 'contactRecu',
-          to: msg.courriel,
-          buildTemplate: (env) => emails.contactRecu({ nom: msg.nom, message: msg.message, ...env }),
-        })
-      );
+      {
+        const ctx = { nom: msg.nom, message: msg.message };
+        results.push(
+          await sendOnce({
+            refId: msg.id,
+            kind: 'contactRecu',
+            to: msg.courriel,
+            templateKey: 'contactRecu',
+            ctx,
+            buildTemplate: (env) => emails.contactRecu({ ...ctx, ...env }),
+          })
+        );
+      }
       return { ok: true, results };
     } catch (err) {
       return { ok: false, error: String((err && err.message) || err), results };
@@ -438,6 +525,8 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
         refId: to,
         kind: 'clientWelcome',
         to,
+        templateKey: 'clientWelcome',
+        ctx: { email: to },
         buildTemplate: (env) => emails.clientWelcome({ ...env }),
       });
       return { ok: true, results: [r] };
@@ -448,18 +537,144 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
 
   // --- Reminder cadence (called by the daily scheduler) --------------------
   // Maps a domain reminder kind to its template. j7/j3/j1 share the tier-aware
-  // dateApproaching template; dossier_incomplet uses the dossierIncomplete nudge.
+  // dateApproaching template; j0 (the date is today and still no notary) is the
+  // dateMissedNoUptake "raise your offer" nudge; dossier_incomplet uses the
+  // dossierIncomplete nudge.
   async function onReminderDue(bid, kind, todayISO) {
     if (!bid || !bid.courriel) return { sent: false, reason: 'no-address', kind };
     const days = require('@nota/domain').daysBetween(todayISO, bid.dateISO);
-    const template =
-      kind === 'dossier_incomplet' ? emails.dossierIncomplete : emails.dateApproaching;
+    const templateKey =
+      kind === 'dossier_incomplet' ? 'dossierIncomplete' : kind === 'j0' ? 'dateMissedNoUptake' : 'dateApproaching';
+    const ctx = bidCtx(bid, { days });
     return sendOnce({
       refId: bid.id,
       kind,
       to: bid.courriel,
-      buildTemplate: (env) => template({ ...bidCtx(bid, { days }), ...env }),
+      templateKey,
+      ctx,
+      buildTemplate: (env) => emails[templateKey]({ ...ctx, ...env }),
     });
+  }
+
+  // --- Daily carnet digest (called by the same scheduler) --------------------
+  // Yesterday's fresh live demands, already filtered to what THIS notary can
+  // serve (ADR 0017) by the caller. The kind carries the day, so the SENT
+  // ledger yields at most one digest per notary per day and re-arms tomorrow.
+  async function onNotaryDigest(notary, bids, todayISO) {
+    if (!notary || !notary.email || !Array.isArray(bids) || bids.length === 0) {
+      return { sent: false, reason: 'nothing-to-digest', kind: 'newMatchingBids' };
+    }
+    // Subject counts every matching demand; the table shows the top 8 by
+    // montant — the same fixed block the carnet teaser holds on the site.
+    const top = [...bids].sort((a, b) => (b.montant || 0) - (a.montant || 0)).slice(0, 8);
+    const ctx = { bids: top, n: bids.length };
+    return sendOnce({
+      refId: notary.id,
+      kind: 'newMatchingBids#' + todayISO,
+      to: notary.email,
+      templateKey: 'newMatchingBids',
+      ctx,
+      buildTemplate: (env) => emails.newMatchingBids({ ...ctx, ...env }),
+    });
+  }
+
+  // --- Retained-act conversation (client ↔ notaire) --------------------------
+  // Fired fire-and-forget from POST /notary/bids/message and POST
+  // /client/bid/message: the other party learns a message landed in the dossier
+  // thread. Idempotent PER MESSAGE (refId = message.id), so every message
+  // notifies exactly once — a retry or double-post never re-mails, and the next
+  // message in the thread mails again. Direction decides everything:
+  //   notaire → client : bid.courriel gets messageDuNotaire;
+  //   client → notaire : the retaining notary's email gets messageDuClient
+  //                      (profile resolved via repo.getNotary when not passed).
+  async function onChatMessage(bid, message, { notary } = {}) {
+    if (!bid || !message || !message.id || !message.texte) return { ok: true, results: [] };
+    const domain = require('@nota/domain');
+    try {
+      if (message.de === domain.CHAT_FROM.NOTAIRE) {
+        const profile =
+          notary || (bid.notaryId && typeof repo.getNotary === 'function' ? await repo.getNotary(bid.notaryId) : null);
+        const ctx = {
+          ...bidCtx(bid),
+          etude: (profile && profile.label) || bid.etude || null,
+          message: message.texte,
+        };
+        const r = await sendOnce({
+          refId: message.id,
+          kind: 'messageDuNotaire',
+          to: bid.courriel,
+          templateKey: 'messageDuNotaire',
+          ctx,
+          buildTemplate: (env) => emails.messageDuNotaire({ ...ctx, ...env }),
+        });
+        return { ok: true, results: [r] };
+      }
+      if (message.de === domain.CHAT_FROM.CLIENT) {
+        const profile =
+          notary || (bid.notaryId && typeof repo.getNotary === 'function' ? await repo.getNotary(bid.notaryId) : null);
+        const ctx = { ...bidCtx(bid), message: message.texte };
+        const r = await sendOnce({
+          refId: message.id,
+          kind: 'messageDuClient',
+          to: profile && profile.email,
+          templateKey: 'messageDuClient',
+          ctx,
+          buildTemplate: (env) => emails.messageDuClient({ ...ctx, ...env }),
+        });
+        return { ok: true, results: [r] };
+      }
+      return { ok: true, results: [] };
+    } catch (err) {
+      return { ok: false, error: String((err && err.message) || err), results: [] };
+    }
+  }
+
+  // --- Evaluation feedback loop (ADR 0015/0016) ------------------------------
+  // Fired fire-and-forget from POST /client/evaluation after the write: the
+  // rated notary hears about their new evaluation (their public average moved),
+  // and a LOW note (<= 2) alerts the operator — a churn/moderation signal a
+  // human should read. Idempotent per bid: the evaluation itself is write-once.
+  async function onEvaluationSubmitted(bid, evaluation) {
+    if (!bid || !evaluation || !Number.isFinite(Number(evaluation.note))) return { ok: true, results: [] };
+    const results = [];
+    try {
+      const notary =
+        bid.notaryId && typeof repo.getNotary === 'function' ? await repo.getNotary(bid.notaryId) : null;
+      const ctx = {
+        ...bidCtx(bid),
+        note: Number(evaluation.note),
+        commentaire: evaluation.commentaire || null,
+        etude: (notary && notary.label) || bid.etude || null,
+      };
+      if (notary && notary.email) {
+        results.push(
+          await sendOnce({
+            refId: bid.id,
+            kind: 'evaluationRecueNotaire',
+            to: notary.email,
+            templateKey: 'evaluationRecueNotaire',
+            ctx,
+            buildTemplate: (env) => emails.evaluationRecueNotaire({ ...ctx, ...env }),
+          })
+        );
+      }
+      if (operatorEmail && Number(evaluation.note) <= 2) {
+        const opCtx = { ...ctx, notaireEmail: (notary && notary.email) || null };
+        results.push(
+          await sendOnce({
+            refId: bid.id,
+            kind: 'operatorLowRating',
+            to: operatorEmail,
+            templateKey: 'operatorLowRating',
+            ctx: opCtx,
+            buildTemplate: (env) => emails.operatorLowRating({ ...opCtx, ...env }),
+          })
+        );
+      }
+      return { ok: true, results };
+    } catch (err) {
+      return { ok: false, error: String((err && err.message) || err), results };
+    }
   }
 
   // --- Notary onboarding (free Stripe Connect) ------------------------------
@@ -470,11 +685,14 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
     const to = String(email || '').trim().toLowerCase();
     if (!to) return { ok: true, results: [] };
     try {
+      const ctx = { onboardingUrl, email: to };
       const r = await sendOnce({
         refId: to,
         kind: 'notaryOnboardingStarted',
         to,
-        buildTemplate: (env) => emails.notaryOnboardingStarted({ onboardingUrl, ...env }),
+        templateKey: 'notaryOnboardingStarted',
+        ctx,
+        buildTemplate: (env) => emails.notaryOnboardingStarted({ ...ctx, ...env }),
       });
       return { ok: true, results: [r] };
     } catch (err) {
@@ -498,30 +716,37 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
             refId: bid.id,
             kind: 'actPaidNotary',
             to: notary.email,
+            templateKey: 'actPaidNotary',
+            ctx,
             buildTemplate: (env) => emails.actPaidNotary({ ...ctx, ...env }),
           })
         );
       }
       if (operatorEmail) {
+        const opCtx = { ...ctx, notaryEmail: notary && notary.email };
         results.push(
           await sendOnce({
             refId: bid.id,
             kind: 'operatorActCompleted',
             to: operatorEmail,
-            buildTemplate: (env) =>
-              emails.operatorActCompleted({ ...ctx, notaryEmail: notary && notary.email, ...env }),
+            templateKey: 'operatorActCompleted',
+            ctx: opCtx,
+            buildTemplate: (env) => emails.operatorActCompleted({ ...opCtx, ...env }),
           })
         );
       }
       // The signed act closes the loop for the CLIENT too: invite them to
       // evaluate their notary (ADR 0015 — evaluation follows the settlement).
       if (bid.courriel) {
+        const inviteCtx = bidCtx(bid);
         results.push(
           await sendOnce({
             refId: bid.id,
             kind: 'evaluationInvite',
             to: bid.courriel,
-            buildTemplate: (env) => emails.evaluationInvite({ ...bidCtx(bid), ...env }),
+            templateKey: 'evaluationInvite',
+            ctx: inviteCtx,
+            buildTemplate: (env) => emails.evaluationInvite({ ...inviteCtx, ...env }),
           })
         );
       }
@@ -543,24 +768,32 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
       (notary && notary.id) || (obj.metadata && obj.metadata.notaryId) || (event && event.id) || 'account';
     const results = [];
 
+    // The `kind` used in the SENT ledger doubles as the emails.js registry key
+    // for every event handled below, so it also names the admin override.
     async function toNotary(kind, tmpl) {
+      const ctx = { email };
       results.push(
         await sendOnce({
           refId,
           kind,
           to: email,
-          buildTemplate: (env) => tmpl({ email, ...env }),
+          templateKey: kind,
+          ctx,
+          buildTemplate: (env) => tmpl({ ...ctx, ...env }),
         })
       );
     }
     async function toOperator(kind, tmpl, extra) {
       if (!operatorEmail) return;
+      const ctx = { ...(extra || {}) };
       results.push(
         await sendOnce({
           refId,
           kind,
           to: operatorEmail,
-          buildTemplate: (env) => tmpl({ ...(extra || {}), ...env }),
+          templateKey: kind,
+          ctx,
+          buildTemplate: (env) => tmpl({ ...ctx, ...env }),
         })
       );
     }
@@ -575,6 +808,7 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
             await toNotary('notaryActive', emails.notaryActive);
             await toOperator('operatorNotaryActive', emails.operatorNotaryActive, {
               notaryEmail: email,
+              email, // {{email}} token for a subject override
             });
           }
           break;
@@ -589,12 +823,15 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
         // operator alert — it confirms to the CLIENT that their offer is live.
         case 'checkout.session.completed':
           if (bid && bid.courriel) {
+            const ctx = bidCtx(bid);
             results.push(
               await sendOnce({
                 refId: bid.id,
                 kind: 'offerAuthorized',
                 to: bid.courriel,
-                buildTemplate: (env) => emails.offerAuthorized({ ...bidCtx(bid), ...env }),
+                templateKey: 'offerAuthorized',
+                ctx,
+                buildTemplate: (env) => emails.offerAuthorized({ ...ctx, ...env }),
               })
             );
           }
@@ -604,12 +841,15 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
         case 'checkout.session.expired':
         case 'payment_intent.canceled':
           if (bid && bid.courriel) {
+            const ctx = bidCtx(bid);
             results.push(
               await sendOnce({
                 refId: bid.id,
                 kind: 'offerAuthorizationVoided',
                 to: bid.courriel,
-                buildTemplate: (env) => emails.offerAuthorizationVoided({ ...bidCtx(bid), ...env }),
+                templateKey: 'offerAuthorizationVoided',
+                ctx,
+                buildTemplate: (env) => emails.offerAuthorizationVoided({ ...ctx, ...env }),
               })
             );
           }
@@ -636,13 +876,14 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
     const to = String(email || '').trim().toLowerCase();
     if (!to || !link) return { ok: true, sent: false };
     try {
+      const unsub = unsubscribeUrl(to);
       const msg = emails.notaryMagicLink({
         link,
         ttlMinutes,
         baseUrl: base,
-        unsubscribeUrl: unsubscribeUrl(to),
+        unsubscribeUrl: unsub,
       });
-      await mailer.send({ to, subject: msg.subject, html: msg.html, text: msg.text });
+      await mailer.send({ to, subject: msg.subject, html: msg.html, text: msg.text, unsubscribeUrl: unsub });
       return { ok: true, sent: true, to };
     } catch (err) {
       return { ok: false, sent: false, error: String((err && err.message) || err) };
@@ -660,14 +901,15 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
     const to = String(email || '').trim().toLowerCase();
     if (!to || !link) return { ok: true, sent: false };
     try {
+      const unsub = unsubscribeUrl(to);
       const msg = emails.partnerClaimLink({
         link,
         code,
         ttlMinutes,
         baseUrl: base,
-        unsubscribeUrl: unsubscribeUrl(to),
+        unsubscribeUrl: unsub,
       });
-      await mailer.send({ to, subject: msg.subject, html: msg.html, text: msg.text });
+      await mailer.send({ to, subject: msg.subject, html: msg.html, text: msg.text, unsubscribeUrl: unsub });
       return { ok: true, sent: true, to };
     } catch (err) {
       return { ok: false, sent: false, error: String((err && err.message) || err) };
@@ -694,7 +936,10 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
     onActReleased,
     onContactMessage,
     onClientSignup,
+    onChatMessage,
+    onEvaluationSubmitted,
     onReminderDue,
+    onNotaryDigest,
     onNotaryConnected,
     onNotaryLoginRequested,
     onActPaid,

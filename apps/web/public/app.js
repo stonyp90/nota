@@ -321,6 +321,18 @@
     });
     if (changed) lsSave(LS_MYOFFERS, a);
   }
+  // A notary released the act: the offer is back on the carnet, exactly as
+  // posted. Undo what markMyOfferRetained persisted (never on a cancelled
+  // offer — a withdrawn offer stays withdrawn on this device).
+  function markMyOfferReleased(id) {
+    var a = myOffers(); var changed = false;
+    a.forEach(function (o) {
+      if (o.id !== id || o.cancelled) return;
+      if (o.retained) { o.retained = false; changed = true; }
+      if (o.etude) { delete o.etude; changed = true; }
+    });
+    if (changed) lsSave(LS_MYOFFERS, a);
+  }
   // The live offer (date not passed) this browser holds for an act, with the
   // token that lets it talk to the API about it — or null.
   function myLiveOfferFor(serviceId) {
@@ -360,9 +372,37 @@
       var r = await fetch(API_BASE + '/client/bid?id=' + encodeURIComponent(o.id) + '&dateISO=' + encodeURIComponent(o.dateISO), { headers: clientHeaders(o) });
       if (!r.ok) return null;
       var j = await r.json();
+      // The PREVIOUS snapshot, before this poll overwrites it: comparing the
+      // two is how a notary's release is detected (retained → open again).
+      var prev = offerStatusGet(o.id);
       var st = offerStatusSet(o.id, j || {});
       if (st.bid && st.bid.status === D.STATUS.RETENUE) markMyOfferRetained(o.id, { etude: st.bid.etude, montant: st.bid.montant });
       if (st.bid && st.bid.status === D.STATUS.ANNULEE) markMyOfferCancelled(o.id);
+      // Release (ADR 0012): the last snapshot showed the offer retained and it
+      // is now OPEN again (a cancellation is not a release). Announce it, undo
+      // the device's retained state, and retire the stale « retenu » entry so
+      // the bell stops contradicting the carnet. The previous snapshot's
+      // timestamp keys the event: one entry per release, never re-rung by the
+      // next poll, yet a later release rings anew.
+      if (prev && prev.bid && prev.bid.status === D.STATUS.RETENUE && st.bid && st.bid.status === D.STATUS.OUVERTE) {
+        markMyOfferReleased(o.id);
+        markNotifRead('retained:' + o.id);
+        addNotif({
+          key: 'released:' + o.id + ':' + (prev.fetchedAt || o.id), kind: 'released',
+          title: 'Le notaire s’est désisté — votre demande est de retour au carnet',
+          body: dayTitle(o.dateISO) + ' · ' + T(svcName(o.serviceId)), dateISO: o.dateISO,
+        });
+      }
+      // Acte signé (ADR 0015): once the ledger settles the signing, invite the
+      // client to evaluate — until the evaluation exists, then retire the invite.
+      if (st.acte && st.acte.complete && !st.evaluation) {
+        addNotif({
+          key: 'acte:' + o.id, kind: 'acte',
+          title: 'Acte signé — évaluez votre notaire',
+          body: dayTitle(o.dateISO) + ' · ' + T(svcName(o.serviceId)), dateISO: null,
+        });
+      }
+      if (st.evaluation) markNotifRead('acte:' + o.id);
       st.propositions.forEach(function (p) {
         if (p.status !== 'en_attente') return;
         addNotif({
@@ -517,7 +557,23 @@
   // Created with sensible defaults on first read (all notifications on). Held on
   // this device; reused across the offer flow and the dossier.
   var LS_PROFILE = 'nota.profile.v1';
-  var PROFILE_NOTIF_DEFAULTS = { published: true, reminders: true, retained: true };
+  // EVERY kind addNotif() can ring, with the label of its profile toggle — the
+  // notifications card renders one switch per entry and the defaults derive
+  // from this same list, so a new kind cannot ship without its toggle. All on
+  // by default; a kind toggled off is silenced in notifAllowed().
+  var PROFILE_NOTIF_KINDS = [
+    { key: 'published', label: 'Confirmation de publication d’une offre' },
+    { key: 'reminders', label: 'Rappels à l’approche de la date' },
+    { key: 'retained', label: 'Avis quand un notaire retient votre offre' },
+    { key: 'proposition', label: 'Propositions de prix des notaires' },
+    { key: 'documents', label: 'Demandes de documents du notaire' },
+    { key: 'message', label: 'Messages de votre notaire' },
+    { key: 'cancelled', label: 'Confirmation d’annulation d’une offre' },
+    { key: 'acte', label: 'Acte signé — invitation à évaluer' },
+    { key: 'released', label: 'Avis si le notaire se désiste' },
+  ];
+  var PROFILE_NOTIF_DEFAULTS = {};
+  PROFILE_NOTIF_KINDS.forEach(function (k) { PROFILE_NOTIF_DEFAULTS[k.key] = true; });
   function profileGet() {
     var p = lsLoad(LS_PROFILE) || {};
     return {
@@ -554,6 +610,13 @@
     a.forEach(function (x) { if (x.key === key) { x.dismissed = true; x.read = true; } });
     notifSave(a);
     renderNotifs();
+  }
+  // Quietly retire one entry by key (read, not dismissed): the event it
+  // announced has been superseded — the bell must stop contradicting reality.
+  function markNotifRead(key) {
+    var a = notifLoad(); var changed = false;
+    a.forEach(function (x) { if (x.key === key && !x.read) { x.read = true; changed = true; } });
+    if (changed) { notifSave(a); renderNotifs(); }
   }
   function renderNotifs() {
     var list = $('notif-list'); if (!list) return;
@@ -680,6 +743,7 @@
   function openAuthModal(role) {
     authSetRole(role || roleGet() || 'client'); // honour what they told the guide
     var errs = $('auth-errors'); if (errs) errs.hidden = true;
+    var socNote = $('auth-soc-note'); if (socNote) { socNote.hidden = true; socNote.textContent = ''; }
     var em = $('auth-email'); if (em) em.value = profileGet().courriel || '';
     var dlg = $('auth-dialog');
     toggleNotifPanel(false);
@@ -1119,8 +1183,20 @@
     }
     // What notaries sent back (propositions, document requests) on the offers
     // this browser can read: in parallel, failures silent.
-    await Promise.all(offers.filter(function (o) { return o.clientToken && D.daysBetween(todayISO(), o.dateISO) >= 0; }).map(fetchOfferStatus));
+    await Promise.all(offers.filter(offerNeedsStatusPoll).map(fetchOfferStatus));
     renderNotifs();
+  }
+  // Which of this browser's offers are worth a GET /client/bid on this pass:
+  // every live tokened offer — and, past the date, a retained act whose
+  // evaluation is still pending, so « Acte signé » reaches the bell without
+  // the client having to open Mes offres (the settlement lands AFTER the
+  // signing day). Once the evaluation is on file, the polling stops.
+  function offerNeedsStatusPoll(o) {
+    if (!o || !o.clientToken) return false;
+    if (D.daysBetween(todayISO(), o.dateISO) >= 0) return true;
+    if (o.cancelled || !o.retained) return false;
+    var st = offerStatusGet(o.id);
+    return !(st && st.evaluation);
   }
 
   // ---------------------------------------------------------------------------
@@ -1813,16 +1889,19 @@
     if ((!svc || dayAll.length !== matching.length) && dayAll.length > 0) {
       counts.push(dayAll.length + ' offre' + (dayAll.length > 1 ? 's' : '') + ' ce jour, tous actes confondus');
     }
-    if (counts.length) list.appendChild(el('div', 'day-bids-count', counts.join(' · ')));
+    var countEl = counts.length ? el('div', 'day-bids-count', counts.join(' · ')) : null;
+    if (countEl) list.appendChild(countEl);
 
-    // Everything not shown above, on demand.
+    // Everything not shown above, on demand — behind an INLINE door on the
+    // totals line itself (owner, 2026-08-27: « compacter les sections »): the
+    // count and its toggle share one row instead of stacking a full-width
+    // button under the list.
     var others = dayAll.filter(function (b) { return b !== matching[0]; }).slice(0, DAY_CAP);
     if (others.length) {
       var rest = el('div', 'day-bids-rest'); rest.hidden = true;
       others.forEach(function (b) { rest.appendChild(bidRow(b)); });
-      list.appendChild(rest);
       var label = 'Voir les ' + others.length + ' autre' + (others.length > 1 ? 's' : '') + ' offre' + (others.length > 1 ? 's' : '');
-      var toggle = el('button', 'btn btn-sm day-bids-toggle', label); toggle.type = 'button';
+      var toggle = el('button', 'day-bids-toggle', label); toggle.type = 'button';
       toggle.setAttribute('aria-expanded', 'false');
       toggle.addEventListener('click', function () {
         var opening = rest.hidden;
@@ -1830,7 +1909,8 @@
         toggle.setAttribute('aria-expanded', opening ? 'true' : 'false');
         toggle.textContent = opening ? 'Voir moins' : label;
       });
-      list.appendChild(toggle);
+      (countEl || list).appendChild(toggle);
+      list.appendChild(rest);
     }
 
     // Headline figure + the bar to clear, both scoped to the selected act. The
@@ -1884,9 +1964,15 @@
     // reference. While the offer trails, the headline above and the one-tap
     // button already carry the number — a sentence restating it was noise.
     var level = Number($('o-amount').value) >= state.dayTop;
-    hint.textContent = level ? 'Votre offre est au niveau de ce que d’autres offrent ce jour-là.' : '';
-    hint.classList.toggle('is-ahead', level);
     var t = beatAmount();
+    // Trailing with a reachable bar: silence (the headline and the button
+    // carry the number). Trailing with the bar OUT of this act's own range —
+    // another dossier's surcharges can push its total past the ceiling —
+    // there is nothing to tap, so say why instead of going silent.
+    hint.textContent = level
+      ? 'Votre offre est au niveau de ce que d’autres offrent ce jour-là.'
+      : (t == null ? 'Cette référence dépasse votre plage pour cet acte.' : '');
+    hint.classList.toggle('is-ahead', level);
     btn.hidden = level || t == null;
     if (!btn.hidden) btn.textContent = 'Offrir autant · ' + D.money(t);
   }
@@ -2379,7 +2465,15 @@
       inp.inputMode = 'numeric'; inp.placeholder = c.unit === '$' ? '350 000' : '';
       if (current != null) inp.value = current;
       inp.addEventListener('input', function () { onChange(inp.value === '' ? undefined : Number(inp.value)); });
-      row.appendChild(inp);
+      if (c.unit === '$') {
+        // The unit rides beside the figure, like the offer's amount box.
+        var uw = el('span', 'crit-unit-wrap');
+        uw.appendChild(inp);
+        uw.appendChild(el('span', 'crit-unit', '$'));
+        row.appendChild(uw);
+      } else {
+        row.appendChild(inp);
+      }
       if (c.aide) row.appendChild(el('span', 'help', c.aide));
     }
     return row;
@@ -2451,6 +2545,18 @@
     // Seed pricing from the client's PROFILE (dossier) for this act, so answers
     // given on the Dossier page pre-fill and drive the offer floor here too.
     state.offer.pricing = svc ? Object.assign({}, dossierPricing(svc.id)) : {};
+    // Conversion defaults (domain `defaut`): the dominant zero-cost answer
+    // arrives pre-declared, so the client only touches what genuinely varies.
+    // A dossier answer always wins; the write goes through the dossier so the
+    // Dossier page shows the same declared answer.
+    if (svc) {
+      ((svc.pricing && svc.pricing.criteria) || []).forEach(function (c) {
+        if (c.defaut != null && state.offer.pricing[c.id] == null) {
+          state.offer.pricing[c.id] = c.defaut;
+          dossierSetPricing(svc.id, c.id, c.defaut);
+        }
+      });
+    }
     $('o-service-help').textContent = svc ? svc.description : '';
     renderOfferCriteria(state.offer.serviceId);
     var amt = $('o-amount');
@@ -3395,13 +3501,11 @@
     // The toggles sit in a grid so they fill the width instead of stacking thin.
     var nCard = el('div', 'profil-card');
     nCard.appendChild(profilHead(IC_NOTIF, 'Notifications'));
-    nCard.appendChild(el('p', 'help', 'Par courriel et dans l’application. Activées par défaut.'));
+    // Honest copy: these switches govern ONLY the in-app bell — the emails the
+    // API sends are transactional, managed by each email's unsubscribe link.
+    nCard.appendChild(el('p', 'help', 'Ces réglages contrôlent la cloche dans l’application ; les courriels sont gérés par le lien de désabonnement de chaque courriel.'));
     var nGrid = el('div', 'profil-switches');
-    [
-      { key: 'published', label: 'Confirmation de publication d’une offre' },
-      { key: 'reminders', label: 'Rappels à l’approche de la date' },
-      { key: 'retained', label: 'Avis quand un notaire retient votre offre' },
-    ].forEach(function (t) {
+    PROFILE_NOTIF_KINDS.forEach(function (t) {
       var row = el('div', 'switch-row');
       var lab = el('label', 'switch');
       var cb = document.createElement('input'); cb.type = 'checkbox'; cb.setAttribute('role', 'switch');
@@ -4942,6 +5046,20 @@
     return pill;
   }
 
+  // The quiet facts line under the signal pills: who lends, who travels for
+  // the signature, the file code — context to read, not badges to compare.
+  // The signals (tier / complexity / readiness) stay pills; these don't.
+  function ncFactsRow(b) {
+    var row = el('div', 'nc-card-facts');
+    if (b.dateISO && b.showDate) row.appendChild(el('span', 'nc-date', dayTitle(b.dateISO)));
+    var lender = ncLenderPill(b.preteur);
+    if (lender) row.appendChild(lender);
+    var dep = ncDeplacementPill(b.deplacement);
+    if (dep) row.appendChild(dep);
+    if (b.prefixe) row.appendChild(el('span', 'nc-prefixe', b.prefixe));
+    return row.childNodes.length ? row : null;
+  }
+
   function ncOpenCard(b) {
     var svc = D.serviceById(b.serviceId);
     var card = el('div', 'nc-card'); card.dataset.id = b.id;
@@ -4951,17 +5069,15 @@
     head.appendChild(el('div', 'nc-card-amount', D.money(b.montant)));
     card.appendChild(head);
 
+    // Signals first — the retain-or-not read. The date is NOT here: the card
+    // lives under its day section's header, repeating it was pure noise.
     var meta = el('div', 'nc-card-meta');
-    meta.appendChild(el('span', 'nc-date', dayTitle(b.dateISO)));
-    if (b.prefixe) meta.appendChild(el('span', 'nc-prefixe', b.prefixe));
     meta.appendChild(ncTierPill(b.tier));
-    meta.appendChild(ncReadyBadge(b.ready));
-    var lender = ncLenderPill(b.preteur);
-    if (lender) meta.appendChild(lender);
-    var dep = ncDeplacementPill(b.deplacement);
-    if (dep) meta.appendChild(dep);
     if (b.complexity) meta.appendChild(ncComplexityPill(b.complexity));
+    meta.appendChild(ncReadyBadge(b.ready));
     card.appendChild(meta);
+    var facts = ncFactsRow(b);
+    if (facts) card.appendChild(facts);
 
     // The parameters that make this file easy or hard — so the notary knows if
     // the posted price fits a simple or a complex case before retaining it.
@@ -4969,8 +5085,15 @@
       // Each factor is a composed domain string ("label : option") — translate
       // it whole (the dictionary carries every composition) so an English boot
       // never shows a French factor; the "Facteurs :" prefix is the DOM
-      // layer's pattern.
-      card.appendChild(el('div', 'nc-factors', 'Facteurs : ' + b.complexity.factors.map(T).join(' · ')));
+      // layer's pattern. The lender and déplacement factors are skipped: the
+      // facts line above already states both — repeating them in prose was
+      // the card's longest noise.
+      var factors = b.complexity.factors.filter(function (f) {
+        if (b.preteur && /^Prêteur hypothécaire :/.test(f)) return false;
+        if (b.deplacement && /^Déplacement pour la signature :/.test(f)) return false;
+        return true;
+      });
+      if (factors.length) card.appendChild(el('div', 'nc-factors', 'Facteurs : ' + factors.map(T).join(' · ')));
     }
 
     // What the notary already did on this demand: a proposition in flight and
@@ -4989,16 +5112,9 @@
       return card;
     }
 
-    var actions = el('div', 'nc-card-actions');
-    // Retenir is THE action of the pane — full-size primary; everything else on
-    // the row (decline, agenda) stays small so the confirm reads first. The
-    // first click arms a confirm step (ncArmAccept); the second one accepts.
-    var acc = el('button', 'btn btn-primary nc-accept', 'Retenir'); acc.type = 'button';
-    var dec = el('button', 'btn btn-sm nc-decline', 'Décliner'); dec.type = 'button';
-    actions.appendChild(acc); actions.appendChild(dec);
-    card.appendChild(actions);
-
-    // Second row: make-more-money / de-risk actions, then the agenda menu.
+    // Quiet toolbar first (make-more-money / de-risk, then the agenda menu),
+    // so the primary Retenir row terminates the card — the eye lands on the
+    // confirm last, and no small button dangles under it.
     var more = el('div', 'nc-card-more');
     if (!b.proposition || b.proposition.status === 'refusee') {
       var prop = el('button', 'btn btn-sm nc-propose-btn', 'Proposer un prix'); prop.type = 'button';
@@ -5010,6 +5126,15 @@
     more.appendChild(docs);
     more.appendChild(ncAgendaMenu(b));
     card.appendChild(more);
+
+    var actions = el('div', 'nc-card-actions');
+    // Retenir is THE action of the pane — full-size primary; everything else
+    // stays small so the confirm reads first. The first click arms a confirm
+    // step (ncArmAccept); the second one accepts.
+    var acc = el('button', 'btn btn-primary nc-accept', 'Retenir'); acc.type = 'button';
+    var dec = el('button', 'btn btn-sm nc-decline', 'Décliner'); dec.type = 'button';
+    actions.appendChild(acc); actions.appendChild(dec);
+    card.appendChild(actions);
     return card;
   }
 
@@ -5258,10 +5383,15 @@
     if (empty) empty.hidden = true;
     days.forEach(function (day) {
       var sec = el('section', 'nc-day'); sec.dataset.date = day.dateISO;
+      // 3+ demands: widen the tile (CSS caps this to wide viewports).
+      if (day.count >= 3) sec.classList.add('nc-day--span');
       var h = el('header', 'nc-day-head');
       var t = el('div', 'nc-day-when');
       t.appendChild(el('span', 'nc-day-title', dayTitle(day.dateISO)));
-      t.appendChild(el('span', 'nc-day-rel', relativeDay(day.dateISO)));
+      var rel = el('span', 'nc-day-rel', relativeDay(day.dateISO));
+      // Today is the day a notary can still fill — its marker gets the accent.
+      if (day.dateISO === todayISO()) rel.dataset.today = 'true';
+      t.appendChild(rel);
       h.appendChild(t);
       var sum = el('div', 'nc-day-sum');
       sum.appendChild(el('span', 'nc-day-count', String(day.count)));
@@ -5354,16 +5484,17 @@
     head.appendChild(el('div', 'nc-card-amount', D.money(entry.montant)));
     card.appendChild(head);
     var meta = el('div', 'nc-card-meta');
-    meta.appendChild(el('span', 'nc-date', dayTitle(entry.dateISO)));
-    if (entry.prefixe) meta.appendChild(el('span', 'nc-prefixe', entry.prefixe));
     meta.appendChild(ncTierPill(entry.tier));
     meta.appendChild(el('span', 'pill pill-retenue', 'Retenue'));
-    var lender = ncLenderPill(entry.preteur);
-    if (lender) meta.appendChild(lender);
-    var dep = ncDeplacementPill(entry.deplacement);
-    if (dep) meta.appendChild(dep);
     if (entry.viaProposition) meta.appendChild(el('span', 'nc-pill nc-via-prop', 'Prix accepté sur proposition'));
     card.appendChild(meta);
+    // Retained cards live in a flat list (no day sections), so the signing
+    // date leads their facts line.
+    var facts = ncFactsRow({
+      dateISO: entry.dateISO, showDate: true,
+      preteur: entry.preteur, deplacement: entry.deplacement, prefixe: entry.prefixe
+    });
+    if (facts) card.appendChild(facts);
     var status = ncStatusRow({ demande: entry.demande });
     if (status) card.appendChild(status);
     card.appendChild(ncDossierBlock(entry));
@@ -5838,11 +5969,45 @@
       setGroupActive(pType, b);
       partnerValidateUI();
     });
-    var pCode = $('partner-code'); if (pCode) pCode.addEventListener('input', partnerValidateUI);
-    var pMail = $('partner-courriel'); if (pMail) pMail.addEventListener('input', partnerValidateUI);
+    // Conversion: the courriel SUGGESTS the code (its local part, normalized),
+    // so the happy path never invents one. The suggestion is remembered in
+    // data-auto and only ever replaces itself — a hand-typed code wins, and
+    // typing in the code field retires the suggestion for good.
+    var pCode = $('partner-code'); if (pCode) pCode.addEventListener('input', function () {
+      delete pCode.dataset.auto;
+      partnerValidateUI();
+    });
+    var pMail = $('partner-courriel'); if (pMail) pMail.addEventListener('input', function () {
+      if (pCode && (pCode.value === '' || pCode.value === pCode.dataset.auto)) {
+        var local = (pMail.value.split('@')[0] || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 12);
+        if (D.isReferralCode(local)) {
+          pCode.value = local; pCode.dataset.auto = local;
+        } else if (pCode.dataset.auto) {
+          pCode.value = ''; delete pCode.dataset.auto;
+        }
+      }
+      partnerValidateUI();
+    });
     var pForm = $('partner-form'); if (pForm) pForm.addEventListener('submit', onPartnerSubmit);
     var pCopy = $('partner-copy'); if (pCopy) pCopy.addEventListener('click', partnerCopyLink);
     var pShare = $('partner-share'); if (pShare) pShare.addEventListener('click', partnerShareClick);
+    // The hero's CTA travels to the claim form — it never submits anything.
+    // The two reward cards take the same trip: on this pane every surface
+    // that sells the program lands the visitor in the form, courriel focused
+    // (three-click rule). The cards stay plain stats to the keyboard and the
+    // screen reader — the CTA is the accessible door.
+    var goPartnerClaim = function () {
+      var panel = document.querySelector('.pr-form-panel');
+      if (panel && panel.scrollIntoView) { try { panel.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (e) {} }
+      var inp = $('partner-courriel');
+      if (inp) { try { inp.focus({ preventScroll: true }); } catch (e) { inp.focus(); } }
+    };
+    var pHero = $('pr-hero-cta');
+    if (pHero) pHero.addEventListener('click', goPartnerClaim);
+    ['pr-card-client', 'pr-card-notaire'].forEach(function (id) {
+      var card = $(id);
+      if (card) card.addEventListener('click', goPartnerClaim);
+    });
 
     $('theme-toggle').addEventListener('click', function () {
       var cur = document.documentElement.getAttribute('data-theme');
@@ -5952,6 +6117,20 @@
       b.addEventListener('click', function () { authSetRole(b.dataset.role); });
     });
     var authForm = $('auth-email-form'); if (authForm) authForm.addEventListener('submit', authSubmitEmail);
+    // Social doors: OAuth is not wired yet, so a click surfaces the coming-soon
+    // line INSIDE the modal (a toast would paint under the <dialog> top layer)
+    // and hands focus to the courriel field, the one live door. T() at compose
+    // time: the sentence is assembled at runtime, per provider.
+    document.querySelectorAll('#auth-dialog .auth-soc-btn').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var note = $('auth-soc-note');
+        if (note) {
+          note.textContent = T('La connexion avec ' + b.dataset.provider + ' arrive bientôt — continuez avec votre courriel.');
+          note.hidden = false;
+        }
+        var em = $('auth-email'); if (em) { try { em.focus(); } catch (er) {} }
+      });
+    });
     var hLogin = $('header-login'); if (hLogin) hLogin.addEventListener('click', function () { openAuthModal(); });
     var hSignup = $('header-signup'); if (hSignup) hSignup.addEventListener('click', function () { onbOpen(); });
     renderAccountMenu(); // set the initial logged-out (auth buttons) / signed-in (avatar) state
@@ -6390,6 +6569,74 @@
 
   function partnerShareLink(code) { return location.origin + '/?ref=' + code; }
 
+  // ===== Ambient mark drift — the Nota logo, twenty times, adrift. =====
+  // Born on the intro gate (2026-08-27), then promoted the same day to ONE
+  // fixed site-wide layer behind all content (the hero's own clipped copy
+  // « cut rough » at the band's edges). The builder deals each copy its own
+  // place, size, drift and tempo, and a negative delay starts every one
+  // mid-flight so the scene is alive from the first frame. Decorative only:
+  // aria-hidden, pointer-blind. The mark is verbatim the chooser's logo.
+  var DRIFT_MARK_SVG =
+    '<svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">' +
+    '<rect width="64" height="64" rx="12" fill="#2c5f34"/>' +
+    '<g fill="#ffffff">' +
+    '<rect x="16" y="15" width="7.5" height="34" rx="2.5"/>' +
+    '<rect x="40.5" y="15" width="7.5" height="34" rx="2.5"/>' +
+    '<polygon points="16,15 24,15 48,49 40,49"/>' +
+    '</g>' +
+    '<circle cx="48" cy="16" r="8" fill="#50b848" stroke="#2c5f34" stroke-width="3"/>' +
+    '</svg>';
+  // A full die (owner: « they must look as a full dice ») — six logo faces
+  // around one body; CSS folds them into a cube and tumbles the whole thing.
+  var DRIFT_DIE_HTML = (function () {
+    var faces = '';
+    for (var f = 0; f < 6; f++) faces += DRIFT_MARK_SVG;
+    return '<span class="cube">' + faces + '</span>';
+  })();
+  function driftBuild(host, id, variant) {
+    if (!host || $(id)) return;
+    var bg = document.createElement('div');
+    bg.id = id;
+    bg.className = 'mark-drift' + (variant ? ' ' + variant : '');
+    bg.setAttribute('aria-hidden', 'true');
+    for (var i = 0; i < 20; i++) {
+      var m = document.createElement('i');
+      // A jittered 5×4 grid spreads the twenty marks evenly — no clumps, no
+      // bare corners — while the jitter keeps the lattice invisible.
+      var col = i % 5, row = (i / 5) | 0;
+      m.style.setProperty('--x', (col * 20 + 2 + Math.random() * 16).toFixed(1) + '%');
+      m.style.setProperty('--y', (row * 25 + 2 + Math.random() * 21).toFixed(1) + '%');
+      // One depth draw drives the whole parallax: near marks are bigger,
+      // sharper, a touch bolder and wander farther; far ones shrink, soften
+      // behind a light blur and barely stir.
+      var t = Math.random();
+      var amp = 40 + t * 120;
+      m.style.setProperty('--s', (22 + t * 58).toFixed(0) + 'px');
+      m.style.setProperty('--o', (0.04 + t * 0.05).toFixed(3));
+      m.style.setProperty('--blur', ((1 - t) * 1.6).toFixed(1) + 'px');
+      m.style.setProperty('--d', (14 + Math.random() * 14).toFixed(1) + 's');
+      m.style.setProperty('--dl', (-Math.random() * 28).toFixed(1) + 's');
+      // Two waypoints per loop (mark-wander) make the path a wander, not a
+      // shuttle — out, across, and home, never retracing itself.
+      m.style.setProperty('--dx1', ((Math.random() * 2 - 1) * amp).toFixed(0) + 'px');
+      m.style.setProperty('--dy1', ((Math.random() * 2 - 1) * amp).toFixed(0) + 'px');
+      m.style.setProperty('--dx2', ((Math.random() * 2 - 1) * amp).toFixed(0) + 'px');
+      m.style.setProperty('--dy2', ((Math.random() * 2 - 1) * amp).toFixed(0) + 'px');
+      // The tumble (owner: « like dice »): one full, even turn around a
+      // random 3D axis — every mark flips and rolls its own way, half
+      // clockwise, half counter. The X floor keeps the axis honest so no
+      // mark degenerates into a flat 2D spin.
+      m.style.setProperty('--ax', (0.4 + Math.random() * 0.6).toFixed(2));
+      m.style.setProperty('--ay', (Math.random() * 2 - 1).toFixed(2));
+      m.style.setProperty('--az', (Math.random() * 2 - 1).toFixed(2));
+      m.style.setProperty('--sd', (4 + Math.random() * 5).toFixed(1) + 's');
+      m.style.setProperty('--spin', (Math.random() < 0.5 ? -360 : 360) + 'deg');
+      m.innerHTML = DRIFT_DIE_HTML;
+      bg.appendChild(m);
+    }
+    host.insertBefore(bg, host.firstChild);
+  }
+
   function renderPartnerPane() {
     // Two tracks, two flat amounts — both DOMAIN data (D.REFERRAL.client /
     // D.REFERRAL.notaire), formatted like every other figure in the app.
@@ -6414,6 +6661,9 @@
     if (rec) {
       var title = $('partner-form-title');
       if (title) title.textContent = 'Votre code partenaire';
+      // The hero CTA stops promising a claim the partner already made.
+      var heroCta = $('pr-hero-cta');
+      if (heroCta) heroCta.textContent = 'Voir mon code →';
       partnerState.type = rec.type || partnerState.type;
       var onChip = wrap ? wrap.querySelector('.chip[data-type="' + partnerState.type + '"]') : null;
       if (onChip) setGroupActive(wrap, onChip);
@@ -6682,12 +6932,16 @@
     $('ig-enter').addEventListener('click', function () { igDismiss(null, true); });
     $('ig-skip').addEventListener('click', function () { igDismiss($('ig-skip').dataset.tab || null, true); });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !gate.hidden) igDismiss(null, true); });
+    driftBuild(gate, 'ig-bg');
     gate.hidden = false;
     document.body.classList.add('ig-open');
     return true;
   }
 
   async function boot() {
+    // The ambient scene first: one fixed layer of drifting marks behind ALL
+    // content, alive before the first pane paints.
+    driftBuild(document.body, 'site-bg', 'mark-drift--site');
     populateServiceSelects();
     buildServiceChips();
     buildBookingChips();

@@ -25,10 +25,13 @@ async function runReminders({ repo, notifier, now } = {}) {
   let sent = 0;
   const errors = [];
 
+  // Pay-on-accept: an offer that never went live — its card authorization is
+  // still pending, or it lapsed/was voided — is invisible to clients AND to
+  // the notary digest alike.
+  const isLive = (bid) => bid.paymentStatus !== 'pending' && bid.paymentStatus !== 'void';
+
   for (const bid of open) {
-    // Pay-on-accept: never remind a client about an offer that never went live —
-    // its card authorization is still pending, or it lapsed/was voided.
-    if (bid.paymentStatus === 'pending' || bid.paymentStatus === 'void') continue;
+    if (!isLive(bid)) continue;
     const kinds = domain.dueReminders(bid, todayISO);
     for (const kind of kinds) {
       due += 1;
@@ -42,7 +45,40 @@ async function runReminders({ repo, notifier, now } = {}) {
     }
   }
 
-  return { todayISO, openBids: open.length, due, sent, errors };
+  // --- Daily carnet digest (newMatchingBids) --------------------------------
+  // Yesterday's live demands, mailed once per active notary per day, filtered
+  // to each notary's déplacement perimeter (ADR 0017). "Yesterday" — the
+  // Québec business day of createdAt — gives exactly-once membership: a
+  // demand posted after this morning's run waits for tomorrow's digest rather
+  // than appearing twice. Guarded so an older repo without the sparse notary
+  // index simply skips the digest.
+  const digest = { notaries: 0, sent: 0 };
+  if (typeof repo.listActiveNotaries === 'function' && typeof notifier.onNotaryDigest === 'function') {
+    const yesterdayISO = domain.addDays(todayISO, -1);
+    const tz = process.env.NOTA_TIMEZONE;
+    const fresh = open.filter(
+      (bid) => isLive(bid) && bid.createdAt && domain.businessDay(bid.createdAt, tz) === yesterdayISO
+    );
+    if (fresh.length) {
+      const notaries = await repo.listActiveNotaries();
+      for (const notary of notaries) {
+        if (!notary || !notary.email) continue;
+        const mine = fresh.filter((bid) =>
+          domain.notaryCanServe((bid.pricing || {})[domain.DEPLACEMENT_CRITERION_ID], notary)
+        );
+        if (!mine.length) continue;
+        digest.notaries += 1;
+        try {
+          const r = await notifier.onNotaryDigest(notary, mine, todayISO);
+          if (r && r.sent) digest.sent += 1;
+        } catch (err) {
+          errors.push({ notaryId: notary.id, kind: 'newMatchingBids', error: String((err && err.message) || err) });
+        }
+      }
+    }
+  }
+
+  return { todayISO, openBids: open.length, due, sent, digest, errors };
 }
 
 module.exports = { runReminders };

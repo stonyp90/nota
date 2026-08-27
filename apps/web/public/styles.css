@@ -27,7 +27,10 @@
   --on-accent: #ffffff; /* text/knob on saturated accents (tier pills, toggle) — white in every theme */
 
   --bg: #eef2ef; /* subtle tint so borderless white panels float cleanly */
-  --surface: #ffffff;
+  /* A whisper off pure white (owner, 2026-08-27 evening: « the white is too
+     intense ») — the faintest green cast keeps components clearly readable
+     on the washed background without the clinical glare of #fff. */
+  --surface: #fcfdfc;
   --surface-inset: #f4f7f4;
   --surface-hover: #e9f1e9;
   --ink: #0b1220;
@@ -40,8 +43,38 @@
   --warn: #b54708;
   --ok: var(--hunter-600);
   --danger-solid: #b42318; /* solid deep red for badge fills — dark --danger is a light salmon that fails white-text contrast */
-  --brand-tint: rgb(80 184 72 / 0.08); /* faint brand wash — demand-day calendar cells */
-  --surface-glass: rgb(255 255 255 / 0.8); /* the sticky menu's glass tone */
+  /* The tint pair (owner, 2026-08-27: « components carry no opacity — the
+     background does »): --brand-tint keeps its alpha and is RESERVED for the
+     background layers (the body's top fade, --wash-glow, the intro film),
+     where translucency lets the drifting marks live. --brand-tint-solid is
+     the SAME wash mixed down to the surface — fully opaque — and is what
+     components (chips, badges, step discs, hover fills) paint with, so
+     nothing ever bleeds through a component. Auto-follows each theme:
+     the mix resolves against that theme's --brand-bright / --surface. */
+  --brand-tint: rgb(80 184 72 / 0.08); /* faint brand wash — background layers only */
+  --brand-tint-mix: 8%;
+  --brand-tint-solid: color-mix(in srgb, var(--brand-bright) var(--brand-tint-mix), var(--surface));
+  /* The HIGHLIGHT tint: one step richer than the component wash, for the one
+     card a pane singles out (the notaire reward). Own mix, because the dark
+     themes need a much deeper pour — at the component mix the highlight
+     reads as washed grey on near-black, not as brand. */
+  --brand-tint-mix-strong: 12%;
+  --brand-tint-solid-strong: color-mix(in srgb, var(--brand-bright) var(--brand-tint-mix-strong), var(--surface));
+  /* The 95 % skin (owner, 2026-08-27: « blanc c'est très beau… mais on
+     pourrait mettre un tout petit peu d'opacité, genre quatre-vingt-quinze
+     pour cent » — superseding the earlier 90 %) — the shared translucent
+     surface for the LARGE landing panels (calendar, reward cards, gate
+     cards), always paired with a backdrop blur so what bleeds through
+     reads as light, not marks. Small controls (buttons, chips, inputs) and
+     anything stacked (dialogs, dropdowns, sticky header) stay fully opaque.
+     An alias like --brand-tint-solid: auto-follows each theme's --surface. */
+  --surface-veil-mix: 95%;
+  --surface-veil: color-mix(in srgb, var(--surface) var(--surface-veil-mix), transparent);
+  /* The hover wash at the same register — for rows that light up OVER a
+     veiled panel (the landing's market rows): an opaque hover card over a
+     translucent panel read as a pasted-on sticker (owner: « le hover sur le
+     financement est bizarre »). Auto-follows each theme's --surface-hover. */
+  --surface-hover-veil: color-mix(in srgb, var(--surface-hover) var(--surface-veil-mix), transparent);
 
   /* Tier accent ramp — cool (calm) to warm (urgent).
      All five are dark enough for white .pill text to meet WCAG AA (>=4.5:1). */
@@ -96,16 +129,21 @@
   --space-16: 32px;
   /* The intro's responsive breathing room, shared with anything that must
      top-align with the intro's first line (e.g. the notary sign-in card). */
-  --intro-pad-top: clamp(10px, 1.2vw, 16px);
-  /* Ambient gradients (owner, 2026-08-27: « add some gradient … in each and
-     every page section and component »). Derived ENTIRELY from theme tokens,
-     so this single definition follows light and dark: --surface-grad is the
-     top-lit card surface, --wash-glow the soft brand light behind a section.
-     Neither ever draws an edge — smooth for the eyes. */
-  --surface-grad: linear-gradient(180deg, var(--surface-hover), var(--surface) 58%);
+  --intro-pad-top: clamp(16px, 1.8vw, 24px);
+  /* Ambient gradients (owner, 2026-08-27, superseding the morning's
+     « gradient on every component »: « the gradient and the opacity are for
+     the REST, not the component themselves »). Atmosphere lives ONLY on the
+     background layers — the body's top fade, --wash-glow behind sections,
+     the #site-bg drift. Components are flat, fully opaque surfaces
+     (--surface / --surface-inset / --brand-tint-solid): their contrast
+     never shifts with what sits beneath, and nothing bleeds through. */
+  /* Each glow must reach full transparency BEFORE every edge of the box it
+     paints (nearest-edge distance / radius >= the fade stop on all four
+     sides), otherwise the box boundary slices the light and draws the very
+     edge this token exists to avoid. */
   --wash-glow:
-    radial-gradient(90% 130% at 85% 0%, var(--brand-tint), transparent 62%),
-    radial-gradient(70% 110% at 8% 85%, var(--brand-tint), transparent 58%);
+    radial-gradient(38% 52% at 72% 38%, var(--brand-tint) 26%, transparent 72%),
+    radial-gradient(30% 52% at 22% 62%, var(--brand-tint) 26%, transparent 72%);
   /* The three decisions everything else derives from. */
   --pad-card: var(--space-6) var(--space-7);
   --pad-card-lg: var(--space-8) var(--space-9);
@@ -140,14 +178,18 @@
     --brand-ink: #08130a;
     --brand-hover: var(--hunter-400);
 
-    --bg: #0a0a0a;
-    --surface: #121412;
-    --surface-inset: #171a17;
-    --surface-hover: #1d211d;
+    /* Lifted off true black (owner, 2026-08-27 evening: « the black on the
+       dark theme is too intense ») — the whole dark ramp steps up one notch
+       and leans hunter-green, so components sit visibly on the glow instead
+       of dissolving into a void. */
+    --bg: #0d110e;
+    --surface: #151a16;
+    --surface-inset: #1b211c;
+    --surface-hover: #232a24;
     --ink: #f8fafc;
     --ink-muted: #aab6b0;
-    --border: #2a2f2a;
-    --border-strong: #3d443d;
+    --border: #2f3730;
+    --border-strong: #454e46;
     --ring: var(--hunter-400);
 
     --danger: #f97066;
@@ -155,7 +197,8 @@
     --ok: var(--hunter-500);
     --danger-solid: #b42318;
     --brand-tint: rgb(80 184 72 / 0.14);
-    --surface-glass: rgb(18 20 18 / 0.82);
+    --brand-tint-mix: 14%;
+    --brand-tint-mix-strong: 26%; /* deep pour: on near-black the 14% mix greys out */
 
     --tier-standard: #64748b;
     --tier-rapide: #357f30;
@@ -185,14 +228,18 @@
   --brand-ink: #08130a;
   --brand-hover: var(--hunter-400);
 
-  --bg: #0a0a0a;
-  --surface: #121412;
-  --surface-inset: #171a17;
-  --surface-hover: #1d211d;
+  /* Lifted off true black (owner, 2026-08-27 evening: « the black on the
+     dark theme is too intense ») — the whole dark ramp steps up one notch
+     and leans hunter-green, so components sit visibly on the glow instead
+     of dissolving into a void. */
+  --bg: #0d110e;
+  --surface: #151a16;
+  --surface-inset: #1b211c;
+  --surface-hover: #232a24;
   --ink: #f8fafc;
   --ink-muted: #aab6b0;
-  --border: #2a2f2a;
-  --border-strong: #3d443d;
+  --border: #2f3730;
+  --border-strong: #454e46;
   --ring: var(--hunter-400);
 
   --danger: #f97066;
@@ -200,7 +247,8 @@
   --ok: var(--hunter-500);
   --danger-solid: #b42318;
   --brand-tint: rgb(80 184 72 / 0.14);
-  --surface-glass: rgb(18 20 18 / 0.82);
+  --brand-tint-mix: 14%;
+  --brand-tint-mix-strong: 26%; /* deep pour: on near-black the 14% mix greys out */
 
   --tier-standard: #64748b;
   --tier-rapide: #357f30;
@@ -270,19 +318,15 @@ a:hover { text-decoration: underline; }
 /* --- Header -------------------------------------------------------------- */
 .site-header {
   /* The menu is its OWN layer above the page (owner, 2026-08-27: « a bigger
-     diff in between menu and body ») — a glass bar: theme-toned
-     translucency, backdrop blur, a real shadow. Distinct without ever
-     drawing a hairline. Solid surface where backdrop-filter is missing. */
+     diff in between menu and body ») — and a SOLID one (same day, later:
+     « components carry no opacity — the background does »): opaque surface
+     plus a real shadow carry the separation. The former glass tone + blur
+     let the page smear through the bar; WCAG-wise a translucent chrome's
+     contrast shifts with whatever scrolls beneath — solid never does.
+     Distinct without ever drawing a hairline. */
   background: var(--surface);
   box-shadow: var(--shadow);
   position: sticky; top: 0; z-index: 40;
-}
-@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
-  .site-header {
-    background: var(--surface-glass);
-    -webkit-backdrop-filter: blur(12px) saturate(1.15);
-    backdrop-filter: blur(12px) saturate(1.15);
-  }
 }
 .site-header .wrap {
   display: flex; align-items: center; gap: 12px;
@@ -324,12 +368,6 @@ a:hover { text-decoration: underline; }
   background: var(--surface-inset); color: var(--brand);
   border-color: var(--border);
 }
-.tab-badge {
-  font-size: 11px; font-weight: 700; padding: 1px 7px;
-  background: var(--brand); color: var(--brand-ink); border-radius: 999px;
-}
-.tab-badge[data-complete='true'] { background: var(--ok); }
-
 /* Header compact band: between the drawer threshold (720) and a roomy desktop
    (900) the full control set — brand, two tabs, language, theme, both auth
    buttons, avatar — only fits by slimming chrome: tighter gaps and paddings,
@@ -452,10 +490,9 @@ a:hover { text-decoration: underline; }
   position: absolute; top: 8px; right: 6px; display: grid; place-items: center;
   width: 24px; height: 24px; padding: 0; appearance: none; border: 0; border-radius: 50%;
   background: transparent; color: var(--ink-muted); font-size: 11px; line-height: 1; cursor: pointer;
-  opacity: .6;
 }
-.notif-x:hover { background: var(--surface-hover); color: var(--ink); opacity: 1; }
-.notif-x:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; opacity: 1; }
+.notif-x:hover { background: var(--surface-hover); color: var(--ink); }
+.notif-x:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
 .notif-item:last-child { border-bottom: 0; }
 .notif-item[role='button'] { cursor: pointer; }
 .notif-item[role='button']:hover { background: var(--surface-inset); }
@@ -549,7 +586,6 @@ html.nav-open, html.nav-open body { overflow: hidden; }
 .mnav-link.is-on { background: var(--surface-inset); color: var(--brand); }
 .mnav-link svg { flex: none; color: var(--ink-muted); }
 .mnav-link.is-on svg { color: var(--brand); }
-.mnav-link--primary { color: var(--brand); }
 /* Focus ring drawn INSIDE the row: the drawer's rows are full-bleed, so the
    default outer ring painted a giant box around the first row on open. */
 .mnav-link:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
@@ -614,6 +650,22 @@ html.nav-open, html.nav-open body { overflow: hidden; }
    sunken. --surface-hover stays lighter than the track in both themes; the
    strong hairline and the bigger shadow are what separate it from a hover. */
 .auth-role .seg-btn.is-on { background: var(--surface-hover); border-color: var(--border-strong); box-shadow: var(--shadow); }
+/* Social doors — visible but « Arrive bientôt » : muted label + a chip on the
+   right announce the state before the click; the courriel path below stays the
+   one live door, so these never take the primary look. */
+.auth-social { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.auth-soc-btn { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-inset); color: var(--ink-muted); font-weight: 600; font-size: 13.5px; text-align: left; }
+.auth-soc-btn:hover { background: var(--surface-hover); color: var(--ink); }
+.auth-soc-ic { flex: none; opacity: 0.75; }
+.auth-soc-label { flex: 1; min-width: 0; }
+.auth-soon { flex: none; font-size: 10.5px; font-weight: 700; letter-spacing: 0.02em; padding: 2px 8px; border-radius: 999px; background: var(--brand-tint-solid-strong); color: var(--brand); border: 1px solid var(--border); white-space: nowrap; }
+/* The coming-soon line a social click surfaces — inside the modal, since a
+   toast would paint under the <dialog> top layer. */
+.auth-soc-note { font-size: 12px; color: var(--brand); background: var(--brand-tint-solid); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 7px 10px; margin: 2px 0 0; text-align: center; line-height: 1.45; }
+/* « ou » — the hairline pair centers the word between the doors and the form. */
+.auth-or { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; color: var(--ink-muted); font-size: 12px; }
+.auth-or::before, .auth-or::after { content: ''; flex: 1; border-top: 1px solid var(--border); }
+
 .auth-email { display: flex; flex-direction: column; gap: 8px; }
 .auth-email .lbl { font-size: 12px; margin-bottom: 0; }
 .auth-email input { width: 100%; }
@@ -705,11 +757,12 @@ html.nav-open, html.nav-open body { overflow: hidden; }
 .mini-btn svg { display: block; }
 /* Actions stay quiet until the row they belong to is hovered or focused —
    the data reads first, the tools appear when you go for them. */
-.btn:disabled { opacity: .5; cursor: not-allowed; }
+/* Disabled reads through TOKENS, never element opacity (a half-transparent
+   button lets the page bleed through it): inset surface, muted ink, flat. */
+.btn:disabled { cursor: not-allowed; background: var(--surface-inset); border-color: var(--border); color: var(--ink-muted); box-shadow: none; }
 .btn svg { flex: none; }
 
 /* Hero call-to-action — the buyer's first, obvious action */
-.hero-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 22px; }
 /* margin-top:auto pins the buttons to the BOTTOM of the copy column, so the
    two hero columns end on the same line instead of one trailing off. */
 .hero-cta { display: flex; align-items: center; gap: var(--space-5); flex-wrap: wrap; margin-top: auto; padding-top: var(--space-9); }
@@ -771,7 +824,11 @@ html.nav-open, html.nav-open body { overflow: hidden; }
    min-content width is the floor; the hero stacks (≤767.98) before any
    viewport gets narrow enough to challenge it. */
 .pulse-item { min-width: 0; }
-.pulse-item .pulse-row { flex: 1; min-width: 0; }
+/* The right padding/margin grow in LOCKSTEP (34px = 2px gap + 30px button +
+   its 8px overhang), so the figures stay put while the row's veil runs on
+   under the book arrow: the hover card must contain the arrow it points to,
+   not stop 10px short and leave it floating beside the card. */
+.pulse-item .pulse-row { flex: 1; min-width: 0; padding-right: 34px; margin-right: -34px; }
 .pulse-item .mini-btn { margin-right: -8px; }
 /* The book action wakes with the row: brand colour plus a 2px nudge toward
    where the click leads. transform joins the mini-btn transition below. */
@@ -788,10 +845,19 @@ html.nav-open, html.nav-open body { overflow: hidden; }
   font: inherit; color: inherit; cursor: pointer;
   transition: background-color .12s ease;
 }
-.pulse-row:hover { background: var(--surface-hover); }
+/* One veil for the whole gesture: the row and its book arrow are SIBLINGS, so
+   a veil keyed on the row alone dropped the instant the pointer crossed onto
+   the arrow — the item-level :hover holds it steady, and :focus-within gives
+   the keyboard the same wash. The veil carries the register's blur (a veil is
+   always paired with one), so the drifting marks behind read as light, not
+   shapes. A retained row keeps its inset — the wash only visits the others. */
+.pulse-item:hover .pulse-row:not(.is-on), .pulse-item:focus-within .pulse-row:not(.is-on), .pulse-row:hover {
+  background: var(--surface-hover-veil);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+}
 .pulse-row.is-on { background: var(--surface-inset); }
-.pulse-row:hover .pulse-svc, .pulse-row.is-on .pulse-svc { color: var(--brand); }
-.pulse-svc { grid-column: 1 / 3; grid-row: 1; display: flex; align-items: center; gap: 7px; min-width: 0; font-size: 14px; font-weight: 700; }
+.pulse-item:hover .pulse-svc, .pulse-item:focus-within .pulse-svc, .pulse-row.is-on .pulse-svc { color: var(--brand); }
+.pulse-svc { grid-column: 1 / 3; grid-row: 1; display: flex; align-items: center; gap: 7px; min-width: 0; font-size: 14px; font-weight: 700; transition: color .12s ease; }
 .pulse-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
 /* One glyph per act, so a service is recognised before its name is read. */
 .svc-ic { flex: none; display: block; }
@@ -814,21 +880,35 @@ html.nav-open, html.nav-open body { overflow: hidden; }
    fill level stays readable instead of ending in a stub. */
 .pulse-bar {
   grid-column: 2; grid-row: 2; align-self: center; justify-self: stretch;
-  height: 3px; border-radius: 2px;
-  background: var(--surface-inset); overflow: hidden; margin-left: 12px;
+  height: 6px; border-radius: 3px;
+  /* The track is --border, not --surface-inset: on dark the inset is a near
+     twin of the page and the gauge read as a lone underline. The hairline
+     token is tuned to stay visible against every surface in both themes, so
+     the empty share of the month is a shape, not a guess. */
+  background: var(--border); overflow: hidden; margin-left: 12px;
 }
 /* The fill eases to its level when the month's data lands — the motion is the
    "live" cue. Decelerating curve, so it settles rather than snaps. */
-.pulse-bar > span { display: block; height: 100%; border-radius: inherit; min-width: 2px; transition: width .45s cubic-bezier(.22, 1, .36, 1); }
+.pulse-bar > span { display: block; height: 100%; border-radius: inherit; min-width: 4px; transition: width .45s cubic-bezier(.22, 1, .36, 1); }
 /* Phones: name + two figures + gaps outgrow the row (they collided at 320px),
-   so the row stacks — name, then counts left / figures right, then the bar
-   full-width. Nothing shares a line it cannot afford. */
+   so the row stacks — name, then the two figures sharing one full line, then
+   the bar full-width. Nothing shares a line it cannot afford. The counts
+   caption is already gone below 768 (see the hero threshold block), so the
+   figures OWN their line: space-between, indented 22px like the bar, instead
+   of huddling right and leaving half the row dead. */
 @media (max-width: 480px) {
   .pulse-row { grid-template-columns: minmax(0, 1fr) auto; gap: 3px 10px; }
   .pulse-svc { grid-column: 1 / -1; grid-row: 1; }
-  .pulse-meta { grid-column: 1; grid-row: 2; align-self: end; padding-left: 22px; }
-  .pulse-figs { grid-column: 2; grid-row: 2; gap: 14px; }
+  .pulse-figs { grid-column: 1 / -1; grid-row: 2; justify-content: space-between; padding-left: 22px; }
+  /* The leading figure anchors the row's LEFT edge, so its caption and value
+     left-align; the trailing one keeps its right alignment at the row's edge. */
+  .pulse-figs .pulse-fig:first-child { align-items: flex-start; }
   .pulse-bar { grid-column: 1 / -1; grid-row: 3; margin-left: 22px; margin-top: 3px; }
+  /* The book arrow lines up with the FIGURES, not the stack's middle: above
+     the figures sit 24px (21px name line + 3px gap), below only 12px (3px gap
+     + 3px margin + 6px bar) — half that 12px difference recentres the arrow
+     on the figures line. `translate` composes with the hover translateX. */
+  .pulse-item .mini-btn { translate: 0 6px; }
 }
 
 /* One column below 900px: the aside stacks under the copy, still chromeless —
@@ -865,19 +945,20 @@ html.nav-open, html.nav-open body { overflow: hidden; }
 #carnet-panel:fullscreen .cal-cell, #carnet-panel:-webkit-full-screen .cal-cell { min-height: clamp(88px, 11vh, 128px); }
 
 .panel {
-  background: var(--surface-grad);
+  background: var(--surface);
   /* Ringless (owner: « ensure there is no clash with the calendar ») — a 1px
      border against the tinted band read as a box again; the gradient surface
      and the shadow carry every panel now. */
   border: 0;
   border-radius: var(--radius-lg); box-shadow: var(--shadow);
 }
-.panel-pad { padding: 18px; }
-.panel-head {
-  display: flex; align-items: center; gap: 12px; padding: 18px 18px 4px;
-}
-.panel-head h2 { font-size: 16px; font-weight: 700; }
-.panel-head .header-spacer { flex: 1; }
+/* The calendar wears the shared 90 % skin (owner, 2026-08-27 evening: « une
+   petite touche d'opacité pour le calendrier, environ 90 % » — superseding the
+   morning's fully-opaque call, which had itself retired an 80 % backing). The
+   backdrop blur keeps every cell legible: the drifting dice read as soft
+   light through the veil, never as marks under the grid. */
+#carnet-panel { background: var(--surface-veil); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+.panel-pad { padding: var(--space-9); }
 
 /* --- Filters ------------------------------------------------------------- */
 .filters { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 18px; }
@@ -965,12 +1046,6 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--brand); }
 
 /* --- Calendar ------------------------------------------------------------ */
 .cal-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; row-gap: 8px; padding: 10px 14px; }
-/* Narrow toolbar: a flex:1 spacer inside a wrapping row is unpredictable, so turn it
-   into a clean full-width row break, and give the view switcher its own full-width
-   row with equal buttons — no ragged wraps at ~400-640px. */
-@media (max-width: 680px) {
-  .cal-toolbar .header-spacer { flex: 0 0 100%; height: 0; }
-}
 /* 44px targets 4px apart still mis-tap: 8px is the floor between neighbours. */
 .cal-nav { display: inline-flex; gap: var(--space-4); }
 .cal-title { font-weight: 700; font-size: 15px; white-space: nowrap; }
@@ -997,7 +1072,10 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--brand); }
   text-align: left; font: inherit; color: var(--ink);
   transition: transform .1s ease, box-shadow .1s ease, border-color .1s;
 }
-.cal-cell:hover { background: var(--surface-hover); border-color: var(--border-strong); transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+/* z-index rides the lift: the transform makes the hovered cell a stacking
+   context, which traps the .svc-tip bubble's own z-index — without this the
+   DOM-later neighbour paints over the bubble mid-hover. */
+.cal-cell:hover { background: var(--surface-hover); border-color: var(--border-strong); transform: translateY(-1px); box-shadow: var(--shadow-sm); z-index: 5; }
 /* Adjacent-month days: present and readable, but clearly not this month. No
    border, no prices, and the date sits at the same weight a past day does.
    A future one navigates to its own month, so it takes a pointer. */
@@ -1037,7 +1115,7 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--brand); }
 .cal-urgency[data-tier='urgence'] { color: var(--tier-urgence-ink); }
 /* The steepest step is the one a client must not miss, so it is the only one
    that fills rather than tints. */
-.cal-urgency[data-tier='extreme'] { color: var(--on-accent, #fff); background: var(--tier-extreme); padding: 0 var(--space-1); border-radius: 999px; box-shadow: var(--shadow-sm); }
+.cal-urgency[data-tier='extreme'] { color: var(--on-accent); background: var(--tier-extreme); padding: 0 var(--space-1); border-radius: 999px; box-shadow: var(--shadow-sm); }
 .legend-mult { font-weight: 800; }
 .cal-cell[data-tier]::before {
   content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
@@ -1135,6 +1213,12 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--brand); }
 }
 .cell-chevron:hover { background: var(--surface-inset); color: var(--ink); }
 .cell-chevron[aria-expanded='true'] { transform: rotate(180deg); }
+/* Touch: 26px alone is a mis-tap magnet. A transparent halo grows the hit
+   circle to 40×40 without moving a pixel of layout — the glyph (and its
+   expanded-state rotation, which the pseudo simply follows) stays put. */
+@media (pointer: coarse) {
+  .cell-chevron::after { content: ''; position: absolute; inset: -7px; border-radius: 50%; }
+}
 
 /* What the chevron reveals. */
 .cal-more { display: none; }
@@ -1212,7 +1296,16 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--brand); }
    the ≤560 compact-money swap is still matching — but the CELL is now 82px, and
    grid width no longer implies cell width once the column count changes. */
 @container cal (max-width: 440px) {
-  .cal-cell { padding: 6px 8px 10px; gap: 2px; overflow: hidden; }
+  .cal-cell { padding: 7px 9px 10px; gap: 3px; overflow: hidden; }
+  /* One stable header row: the label owns the cell's width and ellipsizes
+     ("MAR 1 SE…") instead of wrapping under the chevron. The chevron corner is
+     reserved only on offer days (the only cells that carry one), and never for
+     today's date-circle — a padded pill would smear its fill sideways; the
+     pill is short ("MER 27") and clears the glyph on its own. */
+  .cal-daynum { align-self: stretch; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cal-cell.has-bids:not(.is-today) .cal-daynum { padding-right: 30px; }
+  /* Offer lines breathe the same whether the day holds one or three. */
+  .cal-svc-bids { gap: 3px; }
   .cal-daynum::before {
     content: attr(data-dow) " ";
     font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
@@ -1306,7 +1399,7 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--brand); }
 input[type='range'] { flex: 1; accent-color: var(--brand); }
 /* The slider's typed twin: a client who knows their number types it. */
 .amount-input-wrap { display: inline-flex; align-items: center; gap: 4px; flex: none; }
-.amount-input { width: 7ch; padding: 6px 8px; font: inherit; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; border: 1px solid var(--border-strong); border-radius: var(--radius-sm, 8px); background: var(--surface); color: var(--ink); }
+.amount-input { width: 7ch; padding: 6px 8px; font: inherit; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); }
 .amount-input:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
 .amount-input-unit { font-size: 13px; font-weight: 700; color: var(--ink-muted); }
 /* Where the slider starts and stops, in dollars, under its two ends. */
@@ -1351,7 +1444,10 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
   display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
   gap: clamp(var(--gap), 3vw, 48px); align-items: center;
   margin-top: var(--intro-pad-top);
-  padding: clamp(20px, 3vw, 40px) clamp(20px, 3vw, 44px);
+  /* Vertical breathing only (owner, 2026-08-27: « move to left ») — no side
+     padding, so the copy starts flush on the wrap's left edge exactly like
+     the intro of every other pane. */
+  padding: clamp(20px, 3vw, 40px) 0;
   border-radius: var(--radius-lg);
   /* No box at all (owner, 2026-08-27: « add some gradient… no corner…
      smooth for the eyes ») — no surface backing, no shadow, no seam. The
@@ -1360,18 +1456,20 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
      only — the tint carries both themes. */
   background: var(--wash-glow);
 }
-/* Display type for the one headline that sells the program — larger than the
-   utilitarian .intro h1 the other panes keep. */
-.pr-hero h1 { font-size: clamp(26px, 3vw, 44px); font-weight: 800; line-height: 1.08; letter-spacing: -0.025em; margin-top: 4px; }
-.pr-hero p { color: var(--ink-muted); max-width: 52ch; margin: 10px 0 0; font-size: 15px; line-height: 1.55; }
+/* Same voice as every other pane (owner, 2026-08-27: « même taille et même
+   style que espace notaire ») — the headline and lede mirror .intro h1/.intro p
+   exactly, so the three doors open on one consistent register. */
+.pr-hero h1 { font-size: clamp(21px, 2.4vw, 28px); font-weight: 800; line-height: 1.15; margin-top: 4px; }
+.pr-hero p { color: var(--ink-muted); max-width: 52ch; margin: 8px 0 0; font-size: 14.5px; line-height: 1.5; }
 /* The hero's own door to the claim form — the one action the pane sells. */
 .pr-hero-cta { margin-top: var(--space-8); align-self: flex-start; }
-@media (max-width: 980px) {
+@media (max-width: 900px) {
   .pr-hero { grid-template-columns: minmax(0, 1fr); align-items: start; }
 }
 /* Two tracks, one stat card each: kicker, big figure, when. The mechanics
    live in the timeline — never repeated per card. The notary track pays more
-   and carries the highlight (brand border + tint) — tokens only. */
+   and carries the highlight (the STRONGER brand tint — never a ring) — tokens
+   only. */
 .pr-rewards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: var(--gap); }
 .pr-card {
   display: flex; flex-direction: column; gap: var(--space-3);
@@ -1380,36 +1478,106 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
   /* Borderless (owner: « remove those big borders ») — the card reads as a
      plain island against the hero's wash, lifted only by its shadow. The FULL
      shadow token, not -sm: in light mode the card is white inside a white
-     band, and the faint -sm float is all but invisible there. */
-  background: var(--surface-grad); box-shadow: var(--shadow);
+     band, and the faint -sm float is all but invisible there.
+     The shared 90 % skin (owner, 2026-08-27: « we can do like 95 or 90
+     opacity ») lets the hero's wash seat the cards into the band instead of
+     punching two hard islands out of it.
+     BOTH cards pour brand tint (owner, 2026-08-27 soir: « these are looking
+     weird » — on the dark themes the plain-surface sibling read as a black
+     hole beside the tinted one, two unrelated slabs). The pair now shares
+     one green register; the notaire highlight is carried by DEPTH of pour
+     (the strong mix below), never by a different kind of skin. */
+  background: color-mix(in srgb, var(--brand-tint-solid) var(--surface-veil-mix), transparent);
+  box-shadow: var(--shadow);
+  /* Blur what bleeds through: the drifting site-bg marks pass behind the
+     cards, and unblurred they read as stains through the 90% skin. */
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  /* The stat is a door too: clicking either reward lands in the claim form
+     (wired beside the hero CTA), so the card must read as pressable — pointer
+     plus a hover lift. Keyboard users keep the CTA; the cards stay plain
+     stats to a screen reader. */
+  cursor: pointer;
+  transition: transform .14s ease, box-shadow .14s ease;
+  /* Anchors the corner « → » below — the only positioned child. */
+  position: relative;
+}
+.pr-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
+.pr-card:active { transform: translateY(0); }
+/* The quiet door marker: a generated « → » in the top corner, speaking the
+   same arrow language as the pulse rows' .mini-reserver — muted at rest,
+   brand colour plus the 2px nudge toward where the click leads when the card
+   wakes. CSS-generated content ONLY (with the alt-text form blanking it
+   where supported): the card stays a plain stat to a screen reader — the
+   keyboard/AT door to the form is the hero CTA. */
+.pr-card::after {
+  content: "→";
+  content: "→" / "";
+  position: absolute; top: var(--space-9); right: var(--space-10);
+  font-size: 15px; font-weight: 700; line-height: 1;
+  color: var(--ink-muted);
+  transition: color .14s ease, transform .14s ease;
+}
+.pr-card:hover::after { color: var(--brand); transform: translateX(2px); }
+@media (prefers-reduced-motion: reduce) {
+  /* Same register as the .mini-reserver rules: the nudge and lift go still,
+     the colour and shadow state changes remain. */
+  .pr-card, .pr-card::after { transition: none; }
+  .pr-card:hover { transform: none; }
+  .pr-card:hover::after { transform: none; }
 }
 .pr-card--notaire {
-  /* The highlight is the tint alone, never a ring. Layered over the surface
-     gradient, not instead of it — the translucent token alone would let the
-     hero's glow bleed through. */
-  background: linear-gradient(var(--brand-tint), var(--brand-tint)), var(--surface-grad);
+  /* The highlight is the tint alone, never a ring — the OPAQUE tint token,
+     so the hero's glow can never bleed through the card. The STRONG pour:
+     at the component mix the dark themes rendered this card as washed grey
+     beside its --surface sibling (owner, 2026-08-27: « this background look
+     weird ») — the deep mix keeps it unmistakably brand-green in both. Same
+     90 % skin as its sibling, so the pair sits into the band on one finish. */
+  background: color-mix(in srgb, var(--brand-tint-solid-strong) var(--surface-veil-mix), transparent);
 }
-.pr-kicker { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-muted); }
-.pr-amount { font-size: clamp(28px, 2.6vw, 38px); font-weight: 800; letter-spacing: -0.02em; color: var(--brand); font-variant-numeric: tabular-nums; line-height: 1.05; }
-.pr-when { margin: 2px 0 0; font-size: 13px; color: var(--ink-muted); line-height: 1.45; }
+/* The kicker is a label with intent, not a whisper: brand ink (the readable
+   pairing .auth-soon already proves over the strong tint in both themes) and
+   a wider track. The right padding keeps it clear of the corner « → » on the
+   narrowest card. */
+.pr-kicker { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; color: var(--brand); padding-right: var(--space-12); }
+/* The figure is the card: a touch larger and tighter than before, so the
+   pair reads amount-first at a glance. */
+.pr-amount { font-size: clamp(28px, 2.7vw, 38px); font-weight: 800; letter-spacing: -0.03em; color: var(--brand); font-variant-numeric: tabular-nums; line-height: 1.05; }
+/* Pinned to the card foot (margin-top auto in the flex column): the grid
+   stretches the pair to one height, so the one-line and two-line bodies end
+   on the same base line instead of leaving the shorter card bottom-empty. */
+.pr-when { margin: auto 0 0; font-size: 13px; color: var(--ink-muted); line-height: 1.45; }
 
-/* Story beside the claim form. The form column keeps a real reading width;
-   sticky so the CTA stays in reach while the story scrolls (static again when
-   stacked — a pinned form over its own column is pointless). */
+/* The reorganisation (owner, 2026-08-27, evening pass: « reorder the
+   components »): the full-width steps band spread three short lines across
+   the whole page and pushed the claim form below the fold. ONE grid now sits
+   under the hero — the story column (steps, then FAQ, then the fine print)
+   on the left, the claim form docked top-right like the notary gate, on
+   screen from the first scroll. No sticky and no order swaps — phones read
+   the markup as written: story first, the hero CTA jumping to the form. */
+.pr-steps-band { container: prsteps / inline-size; }
 .pr-grid {
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(min(340px, 100%), 440px);
-  gap: var(--gap); align-items: start; margin-top: var(--gap);
+  gap: clamp(var(--gap), 3vw, 56px); align-items: start; margin-top: var(--gap);
 }
 .pr-pitch { min-width: 0; container: prpitch / inline-size; }
-.pr-how-title { margin: var(--space-4) 0 var(--space-9); font-size: 18px; letter-spacing: -0.01em; }
-.pr-form-panel { position: sticky; top: var(--sticky-top); padding: var(--pad-card-lg); border: 0; }
+/* The story column breathes on one beat: steps, FAQ, fine print. */
+.pr-pitch .pr-faq { margin-top: var(--space-10); }
+/* Top margin = the form panel's own top padding (--pad-card-lg), so « Comment
+   ça marche » seats on the same line as « Réclamez votre code » across the
+   grid — the text-to-text alignment every pane's two columns share. */
+.pr-how-title { margin: var(--space-8) 0 var(--space-8); font-size: 18px; letter-spacing: -0.01em; }
+.pr-form-panel {
+  padding: var(--pad-card-lg); border: 0; scroll-margin-top: var(--sticky-top);
+  /* The landing-panel register: the 90 % skin over the ambient glow. */
+  background: var(--surface-veil);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+}
 .pr-form-panel input { width: 100%; }
 .pr-form-panel .h-sub { margin-bottom: var(--space-8); font-size: 18px; letter-spacing: -0.01em; }
 .pr-form-panel .form-row { margin-bottom: var(--space-7); }
 .pr-form-panel span.lbl { display: block; font-size: 14px; font-weight: 700; margin-bottom: var(--space-4); }
 @media (max-width: 900px) {
   .pr-grid { grid-template-columns: minmax(0, 1fr); }
-  .pr-form-panel { position: static; }
 }
 
 /* The three steps as a connected timeline: numbered discs on a dotted spine,
@@ -1419,7 +1587,7 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .pr-steps li::before {
   content: counter(prstep); position: absolute; left: 0; top: -2px;
   width: 28px; height: 28px; border-radius: 50%;
-  background: var(--brand-tint); border: 1px solid var(--brand);
+  background: var(--brand-tint-solid); border: 1px solid var(--brand);
   color: var(--brand); font-size: 13px; font-weight: 800;
   display: flex; align-items: center; justify-content: center;
 }
@@ -1434,7 +1602,7 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
    job is to sell the program, not to whisper) — sized like the steps' own
    verb + caveat pair. A grid so the wide reflow below only swaps the column
    count; align-items so an opened answer never stretches its row neighbour. */
-.pr-faq { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); align-items: start; margin-top: var(--gap); }
+.pr-faq { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); align-items: start; }
 .pr-faq-title { grid-column: 1 / -1; margin: 0 0 var(--space-2); font-size: 18px; letter-spacing: -0.01em; }
 .pr-faq .disclosure { margin: 0; background: var(--surface); }
 .pr-faq .disclosure > summary { font-size: 14px; font-weight: 700; color: var(--ink); padding: 11px 14px; }
@@ -1450,13 +1618,11 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
   }
   .pr-faq .disclosure[open]::details-content { opacity: 1; block-size: auto; }
 }
-/* Beside the tall sticky form the stacked story huddles top-left, leaving a
-   dead middle (owner, 2026-08-27). When the COLUMN is wide enough — a
-   container query on .pr-pitch, not the viewport: just past the 900px
-   docking point the column is ~420px and a 3-up would crush the captions —
-   the story densifies: the timeline rides ONE row (discs on top, no spine —
-   sequence is carried by the numbers) and the FAQ splits in two. */
-@container prpitch (min-width: 640px) {
+/* When its band is wide enough the timeline rides ONE row (discs on top,
+   no spine — sequence is carried by the numbers); narrow widths keep the
+   stacked spine. Container queries, not the viewport, so each region judges
+   its own room. The FAQ column splits in two on the same logic. */
+@container prsteps (min-width: 640px) {
   .pr-steps { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--gap); }
   .pr-steps li { padding-left: 0; padding-top: 38px; }
   .pr-steps li::before { top: 0; }
@@ -1505,7 +1671,7 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
    packs into a card GRID — several small pieces per row instead of one
    full-width line each, so 7 items don't scroll for a screen and a half. */
 .dossier-list { display: flex; flex-direction: column; gap: 10px; padding: 6px 0; }
-.dossier-item { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-grad); }
+.dossier-item { display: flex; gap: 10px; align-items: flex-start; padding: var(--pad-card); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
 .dossier-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
 /* Each checklist card: name + help on top, the action (upload / already-sent,
    or the answer field) pinned to the bottom so neighbouring cards end on the
@@ -1514,7 +1680,7 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .dossier-row .doc-actions, .dossier-row .doc-transmis,
 .dossier-row .dossier-body > input[type='text'] { margin-top: auto; }
 .dossier-row .dossier-body > .help { margin-bottom: 10px; }
-.dossier-pricing { padding: var(--space-7) var(--space-8); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-grad); }
+.dossier-pricing { padding: var(--space-7) var(--space-8); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
 /* Capped at 3 tracks: auto-fit on a wide screen spread 6 questions into one
    ragged row of uneven heights — 3×2 keeps the rows balanced and the help
    text wrapping instead of a dead right half. */
@@ -1522,7 +1688,7 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 @media (max-width: 1100px) { .dossier-pricing .o-criteria { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 680px) { .dossier-pricing .o-criteria { grid-template-columns: minmax(0, 1fr); } }
 /* Booking dialog step-2 criteria go two-up (id beats the generic .o-criteria flex); the optional expander stays full width. */
-#o-criteria { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px 22px; }
+#o-criteria { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px 18px; }
 #o-criteria > .crit-more { grid-column: 1 / -1; margin: 4px 0 0; }
 #o-criteria > .crit-more .o-criteria { padding: 10px 14px 14px; gap: 14px; }
 /* The card's payoff — the determined price — separated from the questions and
@@ -1631,7 +1797,8 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
   border: 1px solid var(--brand); border-left-width: 4px; background: var(--surface-inset);
 }
 .my-offer-prop[data-status='acceptee'] { border-color: var(--ok); }
-.my-offer-prop[data-status='refusee'], .my-offer-demande[data-fournie='true'] { border-color: var(--border); opacity: .8; }
+/* Settled blocks recede through muted ink, never element opacity. */
+.my-offer-prop[data-status='refusee'], .my-offer-demande[data-fournie='true'] { border-color: var(--border); color: var(--ink-muted); }
 .my-offer-prop-text { font-size: 13.5px; line-height: 1.45; }
 .my-offer-prop-msg { margin: 6px 0 0; font-size: 12.5px; color: var(--ink-muted); font-style: italic; }
 .my-offer-prop-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
@@ -1648,7 +1815,7 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 /* Offers whose date has passed are present, never diluting the live list. */
 .my-offers-past { margin-top: 6px; }
 .my-offers-past-sum { padding: 8px 0; font-size: 12.5px; color: var(--ink-muted); cursor: pointer; }
-.my-offers-past tbody tr { opacity: .7; }
+.my-offers-past tbody tr { color: var(--ink-muted); }
 
 /* Below this a table cannot hold four columns without wrapping the act name to
    three lines, so each row becomes a card. The status pill gets its OWN row and
@@ -1684,7 +1851,7 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .parr-code-row { display: flex; align-items: baseline; gap: 10px; }
 .parr-code-lbl { font-size: 12px; font-weight: 600; color: var(--ink-muted); }
 .parr-code { font-family: var(--font-mono); font-size: 18px; letter-spacing: 0.06em; color: var(--ink); }
-.doc-row { border: 1px solid var(--border); border-radius: var(--radius); padding: 11px 13px; display: flex; flex-direction: column; gap: 6px; background: var(--surface-grad); }
+.doc-row { border: 1px solid var(--border); border-radius: var(--radius); padding: 11px 13px; display: flex; flex-direction: column; gap: 6px; background: var(--surface); }
 /* Push the control to the bottom so every card in a row ends on the same line,
    whatever the length of its help text. */
 .doc-row > .file-field, .doc-row > input[type='text'] { margin-top: auto; }
@@ -1727,7 +1894,7 @@ input.file-native { position: absolute; width: 1px; height: 1px; opacity: 0; mar
 .section h2 { font-size: 22px; font-weight: 800; margin-bottom: 8px; }
 .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 20px; }
 @media (max-width: 780px) { .cards { grid-template-columns: 1fr; } }
-.card { border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 18px; background: var(--surface-grad); box-shadow: var(--shadow-sm); }
+.card { border: 1px solid var(--border); border-radius: var(--radius-lg); padding: var(--space-9); background: var(--surface); box-shadow: var(--shadow-sm); }
 .card h3 { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
 .card p { color: var(--ink-muted); font-size: 14px; margin: 0; }
 .price { font-size: 22px; font-weight: 800; color: var(--brand); }
@@ -1796,7 +1963,7 @@ input.file-native { position: absolute; width: 1px; height: 1px; opacity: 0; mar
 /* --- Dialog -------------------------------------------------------------- */
 dialog {
   border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 0;
-  background: var(--surface-grad); color: var(--ink); max-width: 440px; width: 92vw; box-shadow: var(--shadow-lg);
+  background: var(--surface); color: var(--ink); max-width: 440px; width: 92vw; box-shadow: var(--shadow-lg);
 }
 /* ONE scrim for every dialog — the token plus the same soft blur. Scoped
    overrides drifted (two dialogs carried a hardcoded black): the shared shell
@@ -1828,7 +1995,7 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 /* The CNQ membership pill and the official fiche link (ADR 0016). */
 .cnq-badge {
   display: inline-block; padding: 0 6px; border: 1px solid var(--brand); border-radius: 999px;
-  color: var(--brand); background: var(--brand-tint); font-weight: 700; font-size: 11px;
+  color: var(--brand); background: var(--brand-tint-solid); font-weight: 700; font-size: 11px;
   line-height: 18px; white-space: nowrap; vertical-align: middle;
 }
 .cnq-link { font-size: 12.5px; white-space: nowrap; }
@@ -1862,7 +2029,7 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 #day-dialog { max-width: 620px; width: 94vw; max-height: 90vh; overflow-y: auto; overscroll-behavior: contain; }
 /* Sticky like the ✕ above it: the date being booked stays readable while the
    long booking form scrolls. padding-right clears the pinned ✕. */
-.day-head { position: sticky; top: 0; z-index: 5; background: var(--surface); display: flex; align-items: flex-start; gap: 12px; padding: 22px 64px 12px 24px; border-bottom: 1px solid var(--border); }
+.day-head { position: sticky; top: 0; z-index: 5; background: var(--surface); display: flex; align-items: flex-start; gap: 12px; padding: var(--space-8) 64px var(--space-5) var(--space-10); border-bottom: 1px solid var(--border); }
 .day-title { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
 .day-title::first-letter { text-transform: uppercase; }
 .day-sub { font-size: 13px; color: var(--ink-muted); margin-top: 2px; }
@@ -1872,11 +2039,15 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
    quiet strip inside step 1 (it changes with the chips), so step 3 keeps the
    only big number in the dialog. */
 .day-market { background: var(--surface-inset); border-radius: var(--radius-sm); padding: 8px 12px; overflow: hidden; }
-.day-market-line { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+/* Centre-aligned, and the LABEL is the flexible column (it wraps within
+   itself): the reference figure and the one-tap pill hold the right rail of
+   the same row at every dialog width — the pill never strands on an orphan
+   row with dead space beside it (owner, 2026-08-27: « align »). */
+.day-market-line { display: flex; align-items: center; gap: 4px 10px; flex-wrap: wrap; }
 /* No open offer for the act → the line is hidden outright (every date is
    bookable, so there is no bar to print); the hint below owns the message. */
 .day-market-line[hidden] { display: none; }
-.day-value-k { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-muted); }
+.day-value-k { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-muted); flex: 1 1 12ch; min-width: 0; }
 .day-value-v { font-size: 15px; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; }
 .day-value-note { font-size: 12px; color: var(--ink-muted); margin: 2px 0 0; }
 .day-value-note:empty { display: none; }
@@ -1899,27 +2070,37 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 /* Says what the calendar's % means, for the date being booked. Sits under the
    header — it depends on the DATE, not on the act chosen below. Top padding
    keeps it off the sticky header's border. */
-.day-chance { font-size: 12px; color: var(--ink-muted); margin: 0; padding: var(--space-7) var(--space-12) var(--space-8); line-height: 1.5; }
+.day-chance { font-size: 12px; color: var(--ink-muted); margin: 0; padding: var(--space-4) var(--space-10) var(--space-5); line-height: 1.5; }
 .day-bids { max-height: 30vh; overflow: auto; overscroll-behavior: contain; border-top: 1px solid var(--border); }
 /* Inside the market strip the list bleeds to the edges, so its border-top
    spans the strip and the rows keep their own gutters. */
 .day-market .day-bids { margin: 8px -12px -8px; }
 .day-bids:empty { display: none; }
 .day-bids .bid-row:first-child { border-top: 0; }
-.day-bids-more { padding: var(--space-4) var(--space-12); font-size: 12px; color: var(--ink-muted); border-top: 1px solid var(--border); }
 .day-bids-rest[hidden] { display: none; }
-.day-bids-toggle { width: 100%; margin: 6px 0 2px; justify-content: center; }
+/* The door to the rest of the day is INLINE on the totals line (owner,
+   2026-08-27: « compacter ») — a quiet link-weight button holding the right
+   rail of the count's own row, never a stacked full-width bar. */
+.day-bids-toggle {
+  appearance: none; border: 0; background: none; font: inherit; cursor: pointer;
+  font-size: 12px; font-weight: 700; color: var(--brand);
+  padding: 0; margin-left: auto; white-space: nowrap;
+}
+.day-bids-toggle:hover { text-decoration: underline; }
 /* The day's totals under the single headline offer: how many for the act being
-   booked, and how many that date carries in all. */
-.day-bids-count { padding: var(--space-4) var(--space-12); font-size: 12px; color: var(--ink-muted); line-height: 1.5; }
+   booked, and how many that date carries in all — with the unfold door at the
+   end of the same line. */
+.day-bids-count { display: flex; align-items: center; gap: 4px 12px; flex-wrap: wrap; padding: var(--space-4) var(--space-12); font-size: 12px; color: var(--ink-muted); line-height: 1.5; }
 /* Scale guard: a day-group caps its rows and links to the full day view. */
-.day-book { padding: 20px 24px 24px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 16px; }
-/* Each step is its own bordered card so the three-beat flow reads at a glance. */
-.book-step { display: flex; flex-direction: column; gap: var(--space-5); padding: var(--pad-card-lg); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.day-book { padding: var(--space-7) var(--space-10) var(--space-10); border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: var(--space-6); }
+/* Each step is its own bordered card so the three-beat flow reads at a glance.
+   Regular card padding — the dialog is a working surface, not a brochure
+   (owner, 2026-08-27: « compacter toutes les sections »). */
+.book-step { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--pad-card); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
 /* Step 3 — the offer — is the decision, so it is the dominant card. */
 .book-step-offer { border-color: var(--border-strong); background: var(--surface-inset); }
 /* Pricing criteria woven into the booking flow (dossier merged with the process). */
-.o-criteria { display: flex; flex-direction: column; gap: 14px; }
+.o-criteria { display: flex; flex-direction: column; gap: 10px; }
 .crit-row { display: flex; flex-direction: column; gap: 6px; }
 .crit-flag { display: flex; align-items: flex-start; gap: 9px; cursor: pointer; }
 .crit-flag input { margin-top: 3px; flex: none; accent-color: var(--brand); }
@@ -1927,6 +2108,9 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 .crit-label { font-size: 13.5px; font-weight: 600; color: var(--ink); }
 .crit-choices { display: flex; gap: 6px; flex-wrap: wrap; }
 .crit-row input[type='number'] { max-width: 180px; }
+/* The bracket figure and its unit read as one control (like the offer box). */
+.crit-unit-wrap { display: inline-flex; align-items: center; gap: 6px; }
+.crit-unit { font-size: 13px; font-weight: 700; color: var(--ink-muted); }
 /* Long option lists (the lender catalogue) render as a select (domain ui hint),
    enhanced into a Nota select — the width cap rides on the wrapper. */
 .crit-row .nselect { max-width: 320px; }
@@ -1958,7 +2142,6 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 .w-full { width: 100%; }
 .uppercase { text-transform: uppercase; }
 .mb-xl { margin-bottom: 32px; }
-.mb-sm { margin-bottom: 12px; }
 .mt-sm { margin-top: 14px; }
 .mt-md { margin-top: 16px; }
 .row-between { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
@@ -1985,11 +2168,12 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 /* Signed-out: the INVENTORY is the pitch. One line of copy, then the live open
    demands, with the sign-in sticky beside them — everything else (value grid,
    agenda band, guarantee) is supporting material, full width below the fold. */
-/* The hero owns the full first row; ONE header row (inventory title left,
-   month totals right) spans both columns; the demand grid and the gate card
-   then start on the SAME grid line — aligned by construction, no measured
-   margins (owner's calls, 2026-08-25: the card crowded the headline, then its
-   edge floated between the heading and the cards). */
+/* The gate card seats ON the demand grid's own top line (owner's call,
+   2026-08-27 evening: « Accédez aux demandes semble haut et pas aligné avec
+   le reste » — superseding the morning's « must go up »). The hero owns the
+   full first row; the right column then opens level with the first row of
+   cards, edge to edge with them, so the gate reads as part of the inventory
+   grid instead of floating alone beside the headline. */
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 420px);
@@ -1999,7 +2183,7 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
      the agenda card still seats directly under the gate on the right. */
   grid-template-areas:
     "hero      hero"
-    "livehead  livehead"
+    "livehead  ."
     "live      console"
     "live      carnet"
     "guarantee carnet";
@@ -2027,14 +2211,21 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
    card's own width (owner's call, 2026-08-25: as a full-width band it was
    air; the column also lost its three loose value blurbs the same day). */
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-carnet  { grid-area: carnet; align-self: start; margin-top: var(--space-6); }
-/* The console anchors to the TOP of its column so the sign-in — the page's one
-   action — is on screen immediately instead of centred into the fold. It
-   scrolls with the page like every other card (owner's call, 2026-08-25: a
-   pinned money panel followed the reader around). No margin: it shares its
-   grid row with the demand grid, so their top edges align by construction. */
+/* The console anchors to the TOP of the "live" row — no margin at all: its
+   top edge sits exactly on the first demand cards' top edge (card aligned to
+   cards, the strongest line on the page), and it scrolls with the page like
+   every other card (owner's call, 2026-08-25: a pinned money panel followed
+   the reader around). */
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) #notary-console {
   grid-area: console; align-self: start;
   margin: 0;
+  /* The gate is the page's ONE door, seated beside a grid of money — on the
+     plain 90 % skin it read as furniture (owner, 2026-08-27: « ça semble
+     faible versus la partie à gauche »). It takes the partner card's strong
+     brand pour instead: tint alone, never a ring, same 90 % skin. Signed in,
+     the console is a workspace and stays fully opaque. */
+  background: color-mix(in srgb, var(--brand-tint-solid-strong) var(--surface-veil-mix), transparent);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
 }
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .nota-guarantee { grid-area: guarantee; }
 /* Hero collapses to a single column on THIS pane only (the client carnet hero
@@ -2114,14 +2305,13 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
   align-items: center; justify-content: center; text-align: center; gap: 4px;
   border-style: dashed; border-color: var(--border-strong); background: transparent; color: var(--brand);
 }
-.nc-live-more:hover { border-style: solid; border-color: var(--brand); background: var(--brand-tint); }
+.nc-live-more:hover { border-style: solid; border-color: var(--brand); background: var(--brand-tint-solid); }
 .nc-live-more strong { font-size: 14px; font-weight: 800; }
-.nc-live-more .nc-live-meta { color: inherit; opacity: .85; }
+.nc-live-more .nc-live-meta { color: inherit; }
 
 /* The hero's ONE pitch line, shown at every width. The old full paragraph and
    the numbered step list repeated what this line (and the guide) already
    say — one sentence carries the model, the CTAs carry the action. */
-.hero-tagline { font-size: 16px; line-height: 1.55; color: var(--ink-muted); margin: 2px 0 4px; }
 .hero-tagline strong { color: var(--ink); }
 
 /* Week vignette — the marketplace played out with live data, in the onboarding
@@ -2134,7 +2324,7 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
      must read as one grid, never as two misaligned ones. */
   --wk-cell-h: 46px;
   display: flex; flex-direction: column; gap: 12px;
-  padding: 16px 18px 13px;
+  padding: var(--space-8) var(--space-9) 13px;
   border-radius: var(--radius);
   background: var(--surface-inset);
 }
@@ -2168,14 +2358,14 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 .nc-week-day.is-hit { animation: nc-week-day-hit .5s ease; }
 @keyframes nc-week-day-hit { 30% { color: var(--brand); } }
 /* Ghost slot: the empty half-hour a demand has not claimed (yet). */
-.nc-week-slot { height: var(--wk-cell-h); border: 1px dashed var(--border); border-radius: 8px; }
+.nc-week-slot { height: var(--wk-cell-h); border: 1px dashed var(--border); border-radius: var(--radius); }
 /* A demand chip. `color` carries the act's --svc-* token (set inline) and the
    DOT says the service — the same visual grammar as the carnet's cells, where
    coloured borders belong to urgency, never to the act. */
 .nc-week-chip {
   position: relative; height: var(--wk-cell-h); padding: 0 7px; min-width: 0;
   display: flex; flex-direction: column; justify-content: center; gap: 1px;
-  border: 1px solid var(--border-strong); border-radius: 8px;
+  border: 1px solid var(--border-strong); border-radius: var(--radius);
   background: var(--surface);
   /* --tilt (set per chip by the builder) gives each drop its own slight lean,
      so eight landings read as eight objects instead of one stamped pattern. */
@@ -2252,7 +2442,7 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 .ob-bid[hidden] { display: none; }
 .ob-bid {
   display: flex; flex-direction: column; gap: 12px;
-  margin-top: 18px; padding: 16px 18px 14px;
+  margin-top: 18px; padding: var(--space-8) var(--space-9) var(--space-7);
   border-radius: var(--radius);
   background: var(--surface-inset);
   text-align: left;
@@ -2263,7 +2453,7 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 .ob-bid-card {
   display: flex; align-items: center; gap: 10px; min-width: 0;
   padding: 10px 12px;
-  border: 1px solid var(--border-strong); border-radius: 8px;
+  border: 1px solid var(--border-strong); border-radius: var(--radius);
   background: var(--surface);
 }
 /* Each bid's card settles in fresh… */
@@ -2300,11 +2490,21 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 }
 
 #notary-console { margin-top: 12px; max-width: none; }
+/* Gate headings (« Accédez aux demandes », « Vérifiez votre boîte courriel »)
+   speak in the panel-heading register the partners form panel set: 18px,
+   tightened, with the same breath below before the form begins. */
+#notary-console .h-sub { font-size: 18px; letter-spacing: -0.01em; margin-bottom: var(--space-8); }
 /* Sign-in gate: ONE narrow column, shown as a solid card that anchors the right
    column of the landing (no bare floating field). The signed-in view keeps the
    same .panel .panel-pad card. */
 .nc-gate { display: block; max-width: 440px; }
 .nc-gate-main { min-width: 0; }
+/* The gate's brand kicker — same grammar as the carnet card's « Votre outil
+   de prospection », so the right column speaks with one voice. */
+.nc-gate-kicker { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--brand); margin-bottom: var(--space-3); }
+/* On the brand-poured card the gate heading carries the column: a step up
+   from the console's working 18px, still under the hero's h1. */
+#notary-console .nc-gate .h-sub { font-size: 21px; margin-bottom: var(--space-7); }
 /* Panes move focus to their <h1> on navigation so screen readers announce the new
    page; that programmatic focus must NOT paint a ring on a non-interactive heading. */
 .tab-pane h1:focus, .intro h1:focus { outline: none; box-shadow: none; }
@@ -2314,17 +2514,20 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 .prefix-preview:empty { display: none; }
 .prefix-preview[data-state='ok'] { color: var(--brand); }
 .prefix-preview[data-state='warn'] { color: var(--status-retenue); }
-.nc-auth .form-row { margin-bottom: 12px; }
+.nc-auth .form-row { margin-bottom: var(--space-7); }
 /* The email field matches the button under it: at 120px it sat in the middle of
-   an otherwise empty column. */
-.nc-auth .form-row input { width: 100%; }
-.nc-auth-cta { width: 100%; }
+   an otherwise empty column. Field and CTA share one taller, 15px register —
+   the pair must weigh as much as a demand card across the gap. */
+.nc-auth .form-row input { width: 100%; padding: 10px 12px; font-size: 15px; }
+/* Opaque surface under the brand outline: on the poured card a transparent
+   button let the tint bleed through and the door dissolved into its wall. */
+.nc-auth-cta { width: 100%; padding: 10px 16px; font-size: 15px; background: var(--surface); }
 .nc-auth-fine { margin-top: 10px; }
 /* New-notary welcome: the gate's second step. It REPLACES the email step (the
    "Continuer" action branched here), so it must read as a welcome, not as an
    error bolted under a login form. The "Première visite" marker is the same
    outline pill as "Bientôt" — labelled, never alarming. */
-.nc-signup { margin-top: 16px; max-width: 560px; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; border: 1px solid var(--brand); border-radius: var(--radius); background: var(--surface-inset); }
+.nc-signup { margin-top: 16px; max-width: 560px; padding: var(--pad-card-lg); display: flex; flex-direction: column; gap: 12px; border: 1px solid var(--brand); border-radius: var(--radius); background: var(--surface-inset); }
 .nc-signup:focus { outline: none; }
 .nc-signup-tag { margin: 0; align-self: flex-start; padding: 1px 9px; border: 1px solid var(--brand); border-radius: 999px; font-size: 11px; font-weight: 800; letter-spacing: .03em; color: var(--brand); text-transform: uppercase; }
 .nc-signup-back { align-self: flex-start; }
@@ -2342,7 +2545,7 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 .nc-id-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-muted); }
 .nc-id strong { font-size: 14px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 .nc-bar .btn { flex: none; }
-.nc-h { font-size: 14px; font-weight: 800; letter-spacing: -0.01em; margin: 18px 0 10px; }
+.nc-h { font-size: 15px; font-weight: 800; letter-spacing: -0.01em; margin: 18px 0 10px; }
 .nc-list { display: flex; flex-direction: column; gap: 10px; }
 /* Console lists are grids: a 1240px-wide strip per demand wastes the row and
    caps how many dossiers fit one screen. Open demands pack ~3-up; retained
@@ -2350,7 +2553,7 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
    2-up track. Cards stretch to equal row height, actions pinned to the foot. */
 /* 320px track: two demands fit side by side from tablet width (768px) up —
    the more open bids on one screen, the stronger the pane's one message. */
-.nc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); gap: 10px; }
+.nc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); gap: 12px; }
 .nc-grid--wide { grid-template-columns: repeat(auto-fill, minmax(min(480px, 100%), 1fr)); }
 
 .nc-card {
@@ -2364,14 +2567,36 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 .nc-card.is-retained { border-left: 3px solid var(--brand); }
 .nc-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .nc-card-title { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
-.nc-card-amount { font-size: 18px; font-weight: 800; letter-spacing: -0.02em; white-space: nowrap; }
-.nc-card-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.nc-card-amount { font-size: 19px; font-weight: 800; letter-spacing: -0.02em; white-space: nowrap; }
+/* Signals row: tier / complexity / readiness — the only pills on the card.
+   Everything descriptive (lender, perimeter, code) drops to the quiet facts
+   line below, so the pills that remain actually mean "compare me". */
+.nc-card-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; }
 .nc-date { font-size: 12px; color: var(--ink-muted); }
 /* Case-complexity signal on a notary's open-bid card (outline, colour by level). */
 .nc-complexity { font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--ink-muted); }
 .nc-complexity[data-level='simple'] { color: var(--ok); border-color: var(--ok); }
 .nc-complexity[data-level='complexe'] { color: var(--danger); border-color: var(--danger); }
-.nc-factors { font-size: 12px; color: var(--ink-muted); margin-top: 6px; }
+/* The facts line: one muted sentence-row, dot-separated — reads as context,
+   never competes with the signal pills. Children keep their classes (tests,
+   urgence accent) but shed the pill chrome here. */
+.nc-card-facts { margin-top: 7px; font-size: 12px; line-height: 1.6; color: var(--ink-muted); }
+.nc-card-facts > * + *::before { content: '·'; margin: 0 7px 0 3px; color: var(--border-strong); font-weight: 400; }
+.nc-card-facts .nc-lender, .nc-card-facts .nc-deplacement, .nc-card-facts .nc-prefixe, .nc-card-facts .nc-date {
+  display: inline-block; padding: 0; border: 0; background: none;
+  font-size: 12px; font-weight: 600; color: var(--ink-muted); white-space: nowrap;
+}
+.nc-card-facts .nc-date { font-weight: 700; color: var(--ink); }
+.nc-card-facts .nc-date::first-letter { text-transform: uppercase; }
+.nc-card-facts .nc-lender-virt { margin-left: 5px; }
+.nc-card-facts .nc-deplacement[data-urgence='true'] { font-weight: 700; }
+/* The complexity answers, quoted under the facts: a hairline rule instead of
+   a floating paragraph, so the block reads as "the file says…". */
+.nc-factors {
+  margin-top: 8px; padding: 2px 0 2px 10px;
+  border-left: 2px solid var(--border-strong);
+  font-size: 12px; line-height: 1.55; color: var(--ink-muted);
+}
 .nc-prefixe {
   font-size: 11px; font-weight: 700; color: var(--ink-muted);
   border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); padding: 1px 6px;
@@ -2381,10 +2606,15 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
   background: var(--surface-inset); color: var(--ink-muted); border: 1px solid var(--border-strong);
 }
 .nc-ready[data-ready='true'] { color: var(--ok); border-color: var(--ok); }
-.nc-card-actions { display: flex; align-items: center; gap: 8px; margin-top: auto; padding-top: 12px; }
+/* Retenir owns the card FOOT — the quiet toolbar (.nc-card-more) sits just
+   above it, so the primary confirm is the last thing the card says. The
+   auto-margin that pins the foot rides the toolbar (it comes first in DOM)
+   and only in the open agenda: retained cards keep flowing content. */
+.nc-card-actions { display: flex; align-items: center; gap: 8px; padding-top: 8px; }
+#notary-open-list .nc-card-more { margin-top: auto; }
 /* Retenir owns the card foot at every width — the confirm is the card's one
-   job; Décliner and the agenda chip tuck beside it as small secondaries. The
-   cap keeps it a button, not a banner, when a card runs wide. */
+   job; Décliner tucks beside it as a small secondary. The cap keeps it a
+   button, not a banner, when a card runs wide. */
 .nc-card-actions .nc-accept { flex: 1 1 auto; max-width: 340px; }
 .nc-card-actions .nc-accept-amt { white-space: nowrap; }
 
@@ -2397,7 +2627,22 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 .nc-filter .chip-svc-sub { margin-left: 2px; }
 .nc-h .nc-h-amt { font-weight: 800; color: var(--brand); }
 .nc-h .nc-h-sum { font-weight: 600; color: var(--ink-muted); }
-.nc-agenda-list { gap: 22px; }
+/* Day sections tile: one full-width strip per day wasted the row whenever a
+   day carried a single demand — most rows were empty space. auto-fill packs
+   the days side by side in date order; align-items:start keeps a tall day
+   from stretching its light neighbours. */
+.nc-agenda-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(360px, 100%), 1fr));
+  gap: 22px 18px;
+  align-items: start;
+}
+/* A day loaded with 3+ demands earns a double tile so its own cards can go
+   2-up instead of piling into one tall column. Guarded to widths where the
+   agenda really has ≥2 tracks — a span on a 1-track grid would force one. */
+@media (min-width: 900px) {
+  .nc-day--span { grid-column: span 2; }
+}
 .nc-day { display: flex; flex-direction: column; gap: 12px; }
 .nc-day-head {
   position: sticky; top: 0; z-index: 2;
@@ -2406,9 +2651,19 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
   border-bottom: 1px solid var(--border);
 }
 .nc-day-when { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-.nc-day-title { font-size: 15px; font-weight: 800; letter-spacing: -0.01em; }
+.nc-day-title { font-size: 16px; font-weight: 800; letter-spacing: -0.01em; }
 .nc-day-title::first-letter { text-transform: uppercase; }
-.nc-day-rel { font-size: 12px; color: var(--ink-muted); }
+/* The distance-to-day marker is a soft pill; "today" earns the brand tint —
+   it's the day a notary can still fill. */
+.nc-day-rel {
+  font-size: 11px; font-weight: 700; color: var(--ink-muted);
+  padding: 1px 8px; border-radius: 999px;
+  background: var(--surface-inset); border: 1px solid var(--border);
+}
+.nc-day-rel[data-today='true'] {
+  color: var(--brand); border-color: color-mix(in srgb, var(--brand) 45%, transparent);
+  background: color-mix(in srgb, var(--brand) 10%, transparent);
+}
 .nc-day-sum { font-size: 12px; font-weight: 600; color: var(--ink-muted); white-space: nowrap; }
 .nc-day-sum .nc-day-total { font-size: 14px; font-weight: 800; color: var(--brand); }
 .nc-svc { display: flex; flex-direction: column; gap: 8px; }
@@ -2448,7 +2703,18 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 .nc-prop-pill[data-status='en_attente'] { color: var(--brand); border-color: var(--brand); }
 .nc-prop-pill[data-status='acceptee'], .nc-docs-pill[data-fournie='true'], .nc-via-prop { color: var(--ok); border-color: var(--ok); }
 .nc-prop-pill[data-status='refusee'] { color: var(--danger); border-color: var(--danger); }
-.nc-card-more { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
+/* Secondary actions read as a quiet toolbar — link-weight ghosts, no borders:
+   three outlined buttons under an outlined primary was four boxes fighting.
+   Hover restores the affordance. */
+.nc-card-more { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin-top: 10px; }
+.nc-card-more .btn {
+  border-color: transparent; background: transparent;
+  color: var(--ink-muted); font-weight: 600; padding-inline: 9px;
+}
+.nc-card-more .btn:not(:disabled):hover { background: var(--surface-hover); color: var(--ink); }
+/* In the toolbar the agenda flows with its siblings — pushed right it dangled
+   alone whenever the row wrapped. */
+.nc-card-more .nc-agenda { margin-left: 0; }
 .nc-card.is-declining { opacity: .75; }
 .nc-undo-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; padding-top: 12px; }
 .nc-undo-lbl { font-size: 12px; font-weight: 700; color: var(--ink-muted); }
@@ -2511,7 +2777,7 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 /* Lead-delivery preferences — how (in-app/email/SMS) + pace + which acts. */
 /* Alert preferences — settings, not the working surface: a collapsed panel
    below the money. The summary row is the whole control; a chevron flips open. */
-.nc-prefs { margin: 18px 0 8px; padding: 12px 18px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-inset); }
+.nc-prefs { margin: 18px 0 8px; padding: var(--space-6) var(--space-9); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-inset); }
 .nc-prefs[open] { padding-bottom: 16px; }
 .nc-prefs-sum { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; cursor: pointer; list-style: none; }
 .nc-prefs-sum::-webkit-details-marker { display: none; }
@@ -2522,7 +2788,7 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 .nc-prefs > .help { margin-top: 10px; }
 .nc-prefs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: 8px 36px; margin-top: 8px; align-items: start; }
 .nc-pref-block { min-width: 0; }
-.nc-pref-title { font-size: 11.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-muted); margin-bottom: 4px; }
+.nc-pref-title { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-muted); margin-bottom: 4px; }
 .nc-pref-title--sub { margin-top: 14px; }
 .nc-pref-lbl { font-size: 13.5px; }
 .nc-pref-hint { font-size: 11px; color: var(--brand); font-weight: 700; margin-left: 6px; }
@@ -2546,7 +2812,7 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 .chat-bubble {
   max-width: 85%; padding: 7px 11px; font-size: 13.5px; line-height: 1.45;
   background: var(--surface-inset); color: var(--ink);
-  border: 1px solid var(--border); border-radius: 12px 12px 12px 4px;
+  border: 1px solid var(--border); border-radius: var(--radius-lg) var(--radius-lg) var(--radius-lg) 4px;
   white-space: pre-wrap; overflow-wrap: anywhere;
 }
 .chat-msg.is-mine .chat-bubble {
@@ -2557,7 +2823,7 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 .chat-when { font-size: 10.5px; color: var(--ink-muted); }
 .chat-row { display: flex; align-items: flex-end; gap: 8px; }
 .chat-input { flex: 1 1 auto; resize: vertical; min-height: 40px; }
-.nc-chat .nc-dossier-h, .my-offer-chat-h { font-size: 11.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-muted); }
+.nc-chat .nc-dossier-h, .my-offer-chat-h { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-muted); }
 
 /* --- Withdrawal (désistement) after acceptance --------------------------- */
 .nc-release { margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--border); }
@@ -2621,7 +2887,6 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
 .dossier-check { transition: background .15s, border-color .15s, transform .15s; }
 .dossier-check[data-on='true'] { animation: pop .2s ease; }
 .btn, .nav-tab, .icon-btn, .cal-cell, .pill { transition: background .14s, border-color .14s, color .14s, transform .1s, box-shadow .14s; }
-.btn-primary:not(:disabled):hover { box-shadow: var(--shadow-brand); transform: translateY(-1px); }
 .card { transition: transform .14s, box-shadow .14s, border-color .14s; }
 .card:hover { transform: translateY(-2px); border-color: var(--border-strong); box-shadow: var(--shadow); }
 
@@ -2676,7 +2941,8 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
 /* Subscribe card — borderless floating panel (white surface, soft shadow):
    the "Le carnet dans votre agenda" band on the Notaires page. */
 .sub-card {
-  background: var(--surface);
+  background: var(--surface-veil);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
   padding: var(--pad-card-lg);
@@ -2684,7 +2950,7 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
 .sub-card-head { display: flex; align-items: center; gap: 11px; }
 .sub-card-logo { flex: none; display: grid; place-items: center; }
 .sub-card-logo img { display: block; }
-.sub-card-kicker { font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--brand); margin-bottom: 3px; }
+.sub-card-kicker { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--brand); margin-bottom: 3px; }
 .sub-card-title { font-weight: 700; font-size: 13.5px; line-height: 1.2; }
 .sub-card-sub { font-size: 12px; color: var(--ink-muted); margin-top: 2px; line-height: 1.45; }
 .sub-card-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
@@ -2737,6 +3003,7 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   .intro--hero { grid-template-columns: 1fr; gap: clamp(18px, 3vw, 26px); }
   /* The tagline (and the notary lede) IS the phone copy; only the eyebrow goes. */
   .intro .eyebrow { display: none; }
+  .pr-hero .eyebrow { display: none; }
   /* Side by side rather than stacked. */
   .hero-cta { flex-direction: row; }
   /* flex:1 alone still refuses to go under min-content, so two btn-lg wrapped
@@ -2793,7 +3060,7 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   .brand-sub { display: none; }
   .brand { font-size: 17px; }
   .nav-tab { padding: 6px 9px; font-size: 13px; }
-  .intro h1 { font-size: clamp(20px, 5.6vw, 25px); }
+  .intro h1, .pr-hero h1 { font-size: clamp(20px, 5.6vw, 25px); }
   /* No padding here. The cal container queries own cell padding, and a
      viewport rule this late in the file silently outranks all of them. */
   /* No min-height: @container cal owns cell sizing, and a viewport rule this
@@ -2830,7 +3097,7 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   /* The offer rows shrink with the bands that bracket them; the 2px difference
      compensates .bid-row's own left border. */
   .day-bids .bid-row { padding-left: 14px; padding-right: var(--space-8); }
-  .day-bids-count, .day-bids-more { padding-left: var(--space-8); padding-right: var(--space-8); }
+  .day-bids-count { padding-left: var(--space-8); padding-right: var(--space-8); }
   .day-chance { padding: var(--space-6) var(--space-8); }
   .day-book { padding: 14px 16px 18px; }
   /* The day dialog becomes a full-width sheet on phones, so its rows are as tight
@@ -2955,9 +3222,68 @@ html { scroll-behavior: smooth; scroll-padding-top: var(--sticky-top); }
 }
 .ig.ig-out { opacity: 0; transition: opacity 0.3s ease; }
 body.ig-open { overflow: hidden; }
-/* Near-full-screen: the 16:9 stage grows to whatever the viewport allows,
-   bounded by its height so the film never overflows vertically. */
-.ig-inner { width: min(97vw, calc((100vh - 28px) * 16 / 9)); display: flex; flex-direction: column; align-items: center; }
+/* Ambient mark drift — the Nota logo, twenty times, adrift far behind the
+   content (app.js driftBuild deals each copy its place and tempo). One fixed
+   site-wide layer (#site-bg) rides behind ALL panes — no band boundary ever
+   slices a mark again — and the intro gate keeps a copy of its own (#ig-bg)
+   above its opaque overlay. Whisper-faint so neither theme loses contrast;
+   still under prefers-reduced-motion. */
+.mark-drift { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+/* Behind everything, edge to edge, and it arrives smoothly — a slow fade-in
+   so the scene breathes into place instead of popping. */
+.mark-drift--site { position: fixed; z-index: -1; animation: mark-fade 1.6s ease-out both; }
+@keyframes mark-fade { from { opacity: 0; } to { opacity: 1; } }
+/* Two clocks per mark, both endless and seamless: the wrapper wanders a
+   closed loop through two waypoints (out, across, home — never retracing
+   itself) while the mark itself tumbles like a thrown die — one full, even
+   turn around its own random 3D axis (linear — a roll has no resting point
+   to ease toward). Splitting them keeps both loops smooth. Depth (app.js:
+   one draw per mark) sets the size, the weight (--o), the softness (--blur)
+   and how far it roams — near marks glide boldly in front of small,
+   blurred, barely-stirring distant ones: parallax from a single random
+   number. */
+.mark-drift i {
+  position: absolute; left: var(--x); top: var(--y);
+  width: var(--s); height: var(--s);
+  /* Half the die's edge — every face folds out to this depth. */
+  --h: calc(var(--s) / 2);
+  opacity: var(--o, 0.06);
+  filter: blur(var(--blur, 0px));
+  /* The stage depth that turns the tumble from a flat spin into a die
+     rolling toward and away from the eye. */
+  perspective: 400px;
+  animation: mark-wander var(--d) ease-in-out var(--dl) infinite;
+}
+/* The die's body: six faces folded into a cube, tumbling as one. Hidden
+   backfaces keep it reading as a solid object, not layered glass. */
+.mark-drift .cube {
+  position: absolute; inset: 0;
+  transform-style: preserve-3d;
+  animation: mark-tumble var(--sd) linear var(--dl) infinite;
+}
+.mark-drift .cube svg {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  backface-visibility: hidden;
+}
+.mark-drift .cube svg:nth-child(1) { transform: translateZ(var(--h)); }
+.mark-drift .cube svg:nth-child(2) { transform: rotateY(180deg) translateZ(var(--h)); }
+.mark-drift .cube svg:nth-child(3) { transform: rotateY(90deg) translateZ(var(--h)); }
+.mark-drift .cube svg:nth-child(4) { transform: rotateY(-90deg) translateZ(var(--h)); }
+.mark-drift .cube svg:nth-child(5) { transform: rotateX(90deg) translateZ(var(--h)); }
+.mark-drift .cube svg:nth-child(6) { transform: rotateX(-90deg) translateZ(var(--h)); }
+@keyframes mark-wander {
+  0%, 100% { transform: translate(0, 0); }
+  33% { transform: translate(var(--dx1), var(--dy1)); }
+  66% { transform: translate(var(--dx2), var(--dy2)); }
+}
+@keyframes mark-tumble {
+  from { transform: rotate3d(var(--ax), var(--ay), var(--az), 0); }
+  to { transform: rotate3d(var(--ax), var(--ay), var(--az), var(--spin)); }
+}
+@media (prefers-reduced-motion: reduce) { .mark-drift i, .mark-drift .cube { animation: none; } }
+/* The in-flow column hosts only the CHOOSER (the film frame is its own
+   fixed, full-viewport layer) — a plain centred measure is enough. */
+.ig-inner { position: relative; z-index: 1; width: min(1040px, 96vw); display: flex; flex-direction: column; align-items: center; }
 
 .ig-chooser { display: flex; flex-direction: column; align-items: center; gap: 18px; text-align: center; }
 .ig-mark { width: 64px; height: 64px; }
@@ -2982,13 +3308,26 @@ body.ig-open { overflow: hidden; }
 .ig-enter:hover { color: var(--ink); }
 .ig-enter:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; border-radius: 8px; }
 
-.ig-frame { position: relative; width: 100%; }
+/* TRULY full screen (owner, 2026-08-27: « full screen ») — while a film
+   plays the frame is its own fixed, edge-to-edge viewport layer: no
+   gutters, no rounded card, no border, no shadow. A column: the stage takes
+   every pixel above the skip bar, and « Passer → » rides BELOW the film in
+   normal flow (intro-gate-ui.test.mjs pins it out of the picture). */
+.ig-frame {
+  position: fixed; inset: 0;
+  display: flex; flex-direction: column; align-items: center;
+  background: var(--surface);
+}
+.ig-frame[hidden] { display: none; }
 .ig-stage {
   container-type: inline-size;
-  aspect-ratio: 16 / 9;
+  flex: 1; min-height: 0; width: 100%;
+  /* Ultra-wide guard: the compositions size in cqw, so the stage's width
+     stays bounded by the viewport height (≈16:9). Past that the film
+     centres on the frame's identical surface — still edge to edge to the
+     eye, and the type never outgrows the screen's height. */
+  max-width: calc(100vh * 16 / 9);
   background: var(--surface);
-  border: 1px solid var(--border); border-radius: 14px;
-  box-shadow: var(--shadow);
   position: relative; overflow: hidden;
 }
 .ig-stage::before {
@@ -3001,8 +3340,12 @@ body.ig-open { overflow: hidden; }
     radial-gradient(60cqw 45cqw at 82% 12%, var(--brand-tint), transparent 65%),
     radial-gradient(52cqw 40cqw at 6% 94%, var(--brand-tint), transparent 62%);
 }
+/* Below the stage, in flow, pushed right — display:block + margin-left:auto,
+   NEVER position:absolute: the skip must never cover the film (owner rule,
+   pinned by intro-gate-ui.test.mjs). The auto margin also opts the button
+   out of the column's stretch, so it stays content-sized. */
 .ig-skip {
-  position: absolute; right: 12px; bottom: 12px; z-index: 6;
+  display: block; margin-left: auto; margin-right: 14px; margin-block: 10px 12px;
   font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
   color: var(--ink-muted); background: var(--surface);
   border: 1px solid var(--border); border-radius: 99px; padding: 7px 16px;
@@ -3275,8 +3618,10 @@ body.ig-open { overflow: hidden; }
   .ig-inner { width: 100%; }
   .ig-door { min-width: 0; width: 100%; }
   .ig-doors { width: 100%; flex-direction: column; }
-  /* Phones: the films read better as the validated square composition. */
-  .ig-stage { aspect-ratio: 1 / 1; }
+  /* Phones keep the validated « square cut » readability for free: the
+     scenes size in cqw (stage WIDTH), so the full-height portrait stage
+     renders exactly the composition the square cut validated, centred —
+     with more vertical room, never less. */
 }
 @media (prefers-reduced-motion: reduce) {
   .ig { display: none; }

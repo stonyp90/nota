@@ -117,7 +117,9 @@ test('English boot never leaks French domain labels into composed lines', async 
   await wait(30);
   const missing = doc.getElementById('dossier-missing').textContent;
   const svc = D.serviceById(doc.getElementById('d-service').value);
-  const required = (svc.pricing.criteria || []).filter((c) => c.required);
+  // Criteria carrying a conversion default (`defaut`) arrive pre-answered, so
+  // the gate line only names the questions that still need input.
+  const required = (svc.pricing.criteria || []).filter((c) => c.required && c.defaut == null);
   for (const c of required) {
     assert.ok(missing.includes(I18N.tEn(c.label)),
       `"${missing}" should name "${I18N.tEn(c.label)}" in English`);

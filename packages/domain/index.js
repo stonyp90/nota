@@ -127,7 +127,7 @@
     return {
       id: LENDER_CRITERION_ID, type: 'choice', required: true, ui: 'select',
       label: 'Prêteur hypothécaire',
-      aide: 'L’institution qui accorde le prêt. Un prêteur virtuel (sans succursale) demande plus de coordination au notaire.',
+      aide: 'Un prêteur virtuel (sans succursale) demande plus de coordination au notaire.',
       options: LENDERS.map((l) => ({ id: l.id, label: l.nom, add: l.add, poids: l.poids })),
       // « Autre prêteur » opens a free-text companion: the client ADDS their
       // lender by name instead of leaving the notary guessing. Renderers show
@@ -198,7 +198,10 @@
     return {
       id: DEPLACEMENT_CRITERION_ID, type: 'choice', required: true, ui: 'select',
       label: 'Déplacement pour la signature',
-      aide: 'L’acte se signe en personne. Plus vous pouvez vous déplacer, plus de notaires peuvent vous servir. L’urgence 100 % en ligne exige un notaire qui l’accepte — le prix vient avec.',
+      // Conversion default (`defaut`): the dominant answer costs nothing, so
+      // renderers pre-declare it and the client only touches the exceptions.
+      defaut: 'client_50',
+      aide: 'L’acte se signe en personne. Plus vous êtes mobile, plus de notaires peuvent vous servir.',
       options: DEPLACEMENTS.map((d) => ({ id: d.id, label: d.nom, add: d.add, poids: d.poids })),
     };
   }
@@ -244,8 +247,12 @@
       pricing: {
         base: 2000,
         criteria: [
+          // Order is the layout: the three questions that genuinely vary
+          // (montant, approbation, prêteur) come first; the two carrying a
+          // zero-cost default (succession, déplacement) close the block
+          // pre-answered — a typical client touches three controls, not five.
           {
-            id: 'valeur_pret', type: 'bracket', required: true, label: 'Montant du nouveau prêt', aide: 'Le montant du refinancement.', unit: '$',
+            id: 'valeur_pret', type: 'bracket', required: true, label: 'Montant du nouveau prêt', unit: '$',
             brackets: [
               { max: 300000, add: 0, poids: 0 },
               { max: 600000, add: 150, poids: 0 },
@@ -254,16 +261,8 @@
             ],
           },
           {
-            id: 'succession', type: 'choice', required: true, label: 'La propriété fait-elle partie d’une succession ?',
-            aide: 'Héritiers, liquidateur : dossier nettement plus complexe.',
-            options: [
-              { id: 'non', label: 'Non', add: 0, poids: 0 },
-              { id: 'oui', label: 'Oui', add: 400, poids: 2 },
-            ],
-          },
-          {
             id: 'approbation_bancaire', type: 'choice', required: true, label: 'Approbation bancaire',
-            aide: 'Où en êtes-vous avec le prêteur ? Sans instructions, le notaire ne peut signer à la date visée.',
+            aide: 'Sans les instructions du prêteur, le notaire ne peut signer à la date visée.',
             options: [
               { id: 'obtenue', label: 'Obtenue', add: 0, poids: 0 },
               { id: 'en_cours', label: 'En cours', add: 100, poids: 1 },
@@ -271,11 +270,20 @@
             ],
           },
           lenderCriterion(),
+          {
+            id: 'succession', type: 'choice', required: true, label: 'La propriété fait-elle partie d’une succession ?',
+            defaut: 'non',
+            aide: 'Héritiers, liquidateur : dossier nettement plus complexe.',
+            options: [
+              { id: 'non', label: 'Non', add: 0, poids: 0 },
+              { id: 'oui', label: 'Oui', add: 400, poids: 2 },
+            ],
+          },
           deplacementCriterion(),
           { id: 'coemprunteur', type: 'flag', optional: true, label: 'Co-emprunteur / indivision', aide: 'Plus de deux propriétaires inscrits.', add: 150, poids: 1 },
           {
             id: 'assurance_habitation', type: 'choice', optional: true, label: 'Assurance habitation à jour ?',
-            aide: 'Le prêteur exige une assurance en vigueur (feu, dégât d’eau, foudre…). Sans elle, le refinancement ne peut se conclure.',
+            aide: 'Le prêteur exige une assurance habitation en vigueur.',
             options: [
               { id: 'oui', label: 'Oui, en vigueur', add: 0, poids: 0 },
               { id: 'a_renouveler', label: 'À renouveler', add: 0, poids: 1 },
@@ -324,7 +332,7 @@
         base: 1800,
         criteria: [
           {
-            id: 'valeur_pret', type: 'bracket', required: true, label: 'Montant du prêt', aide: 'Le montant du nouveau prêt hypothécaire.', unit: '$',
+            id: 'valeur_pret', type: 'bracket', required: true, label: 'Montant du prêt', unit: '$',
             brackets: [
               { max: 300000, add: 0, poids: 0 },
               { max: 600000, add: 150, poids: 0 },
@@ -342,7 +350,7 @@
           },
           {
             id: 'approbation_bancaire', type: 'choice', required: true, label: 'Approbation bancaire',
-            aide: 'Où en êtes-vous avec le prêteur ? Sans instructions, le notaire ne peut signer à la date visée.',
+            aide: 'Sans les instructions du prêteur, le notaire ne peut signer à la date visée.',
             options: [
               { id: 'obtenue', label: 'Obtenue', add: 0, poids: 0 },
               { id: 'en_cours', label: 'En cours', add: 100, poids: 1 },
@@ -354,7 +362,7 @@
           { id: 'coemprunteur', type: 'flag', optional: true, label: 'Co-emprunteur / indivision', aide: 'Plus de deux propriétaires inscrits.', add: 150, poids: 1 },
           {
             id: 'assurance_habitation', type: 'choice', optional: true, label: 'Assurance habitation à jour ?',
-            aide: 'Le prêteur exige une assurance en vigueur. Sans elle, le financement ne peut se conclure.',
+            aide: 'Le prêteur exige une assurance habitation en vigueur.',
             options: [
               { id: 'oui', label: 'Oui, en vigueur', add: 0, poids: 0 },
               { id: 'a_renouveler', label: 'À renouveler', add: 0, poids: 1 },
@@ -1602,13 +1610,17 @@
   const REMINDER_OFFSETS = [7, 3, 1];
 
   // The kinds of reminder a bid can be due for. j7/j3/j1 are the date-approaching
-  // nudges (one per offset). dossier_incomplet is the "finish your file" nudge,
-  // the #1 conversion lever, and is due whenever an open lead is known to be
-  // incomplete (bid.dossierReady === false) — a hook the app can flip on.
+  // nudges (one per offset). j0 is the day-of nudge: the signing date is TODAY
+  // and no notary has retained the offer (a retained bid is already excluded by
+  // isOpenBid), so the client's one lever left is to raise their offer.
+  // dossier_incomplet is the "finish your file" nudge, the #1 conversion lever,
+  // due whenever an open lead's file is not ready — either flagged explicitly
+  // (bid.dossierReady === false) or derived from the dossier via leadReadiness.
   const REMINDER_KINDS = {
     J7: 'j7',
     J3: 'j3',
     J1: 'j1',
+    J0: 'j0',
     DOSSIER_INCOMPLET: 'dossier_incomplet',
   };
 
@@ -1618,6 +1630,7 @@
     if (days === 7) return REMINDER_KINDS.J7;
     if (days === 3) return REMINDER_KINDS.J3;
     if (days === 1) return REMINDER_KINDS.J1;
+    if (days === 0) return REMINDER_KINDS.J0;
     return null;
   }
 
@@ -1637,10 +1650,17 @@
     const dateKind = reminderKindForDays(days);
     if (dateKind) due.push(dateKind);
 
-    // Dossier-incompletion hook: an open lead we know to be incomplete gets a
-    // "finish your file" nudge. Kept separate from the date cadence so it can
-    // fire independently; the sender's SENT ledger prevents daily repeats.
-    if (bid.dossierReady === false) due.push(REMINDER_KINDS.DOSSIER_INCOMPLET);
+    // Dossier-incompletion hook: an open lead whose file is not ready gets a
+    // "finish your file" nudge. An explicit bid.dossierReady (true/false) is an
+    // override; when it is absent the truth is derived from the dossier itself
+    // via leadReadiness — the same gate the API reports to the client. Kept
+    // separate from the date cadence so it can fire independently; the sender's
+    // SENT ledger prevents daily repeats.
+    const dossierReady =
+      typeof bid.dossierReady === 'boolean'
+        ? bid.dossierReady
+        : leadReadiness(bid.serviceId, bid.dossier || {}).ready;
+    if (!dossierReady) due.push(REMINDER_KINDS.DOSSIER_INCOMPLET);
 
     return due;
   }

@@ -292,6 +292,10 @@ function layout({ preheader, fr, en, ctaUrl, unsubscribeUrl }) {
   return (
     '<!doctype html><html lang="fr-CA"><head><meta charset="utf-8" />' +
     '<meta name="viewport" content="width=device-width, initial-scale=1" />' +
+    // The card is deliberately light-only (stable, legible everywhere); these
+    // metas tell Apple Mail and friends not to auto-invert it in dark mode.
+    '<meta name="color-scheme" content="light" />' +
+    '<meta name="supported-color-schemes" content="light" />' +
     '<title>' + esc(fr.heading || 'Nota') + ' — Nota</title></head><body style="margin:0;padding:0;">' +
     preheaderHtml(preheader || '') +
     '<div style="background-color:' +
@@ -317,7 +321,11 @@ function layout({ preheader, fr, en, ctaUrl, unsubscribeUrl }) {
     '<tr><td style="padding:26px 30px 30px;">' +
     sectionHtml(fr, ctaUrl) +
     divider() +
+    // The document is fr-CA; the English block declares its own language so
+    // screen readers switch pronunciation.
+    '<div lang="en-CA">' +
     sectionHtml(en, ctaUrl) +
+    '</div>' +
     '</td></tr>' +
     footer(unsubscribeUrl) +
     '</table>' +
@@ -765,7 +773,9 @@ function bidTable(bids, lang) {
 }
 function newMatchingBids(ctx) {
   const bids = Array.isArray(ctx.bids) ? ctx.bids : [];
-  const n = bids.length;
+  // The subject announces every matching demand (ctx.n) even when the table
+  // shows only the top rows the sender chose to list.
+  const n = Number.isFinite(ctx.n) ? ctx.n : bids.length;
   return build({
     subjectFr: (n || 'De') + ' nouvelle' + (n === 1 ? '' : 's') + ' demande' + (n === 1 ? '' : 's') + ' sur le carnet',
     subjectEn: (n === 1 ? '1 new request' : (n ? n + ' new requests' : 'New requests')) + ' on the carnet',
@@ -1289,6 +1299,93 @@ function propositionRefusee(ctx) {
 }
 
 // =============================================================================
+// RETAINED-ACT CONVERSATION (chat) — the dossier thread between the client and
+// the notary who holds the act. Each side is alerted when the other writes; the
+// excerpt rides in a callout and the CTA opens the thread where it lives.
+// =============================================================================
+
+// A bounded excerpt of a chat message for the callout — the mail teases the
+// thread, it never replaces it. esc() is applied by callout()/para().
+const CHAT_EXCERPT_MAX = 300;
+function chatExcerpt(texte) {
+  const t = String(texte == null ? '' : texte).trim();
+  return t.length > CHAT_EXCERPT_MAX ? t.slice(0, CHAT_EXCERPT_MAX - 1) + '…' : t;
+}
+
+// To the CLIENT: their notary wrote in the dossier thread. Context: the bid
+// fields + `etude` (the study's name, when known) + `message` (the text).
+function messageDuNotaire(ctx) {
+  const etude = ctx.etude || null;
+  const excerpt = chatExcerpt(ctx.message);
+  return build({
+    subjectFr: 'Message de votre notaire',
+    subjectEn: 'A message from your notary',
+    preheaderFr: 'Répondez depuis votre espace — la conversation reste au dossier.',
+    preheaderEn: 'Reply from your space — the conversation stays with your file.',
+    fr: {
+      heading: 'Votre notaire vous a écrit',
+      lead:
+        (etude ? etude + ' vous a écrit' : 'Votre notaire vous a écrit') +
+        ' au sujet de votre ' + svcNom(ctx.serviceId) + ' du ' + fmtDate(ctx.dateISO) + '.',
+      bodyHtml:
+        (excerpt ? callout('« ' + excerpt + ' »') : '') +
+        para('Répondez directement depuis votre espace : la conversation reste attachée à votre dossier, avec vos documents et votre rendez-vous.'),
+      textLines: [excerpt ? '« ' + excerpt + ' »' : '', offerLine(ctx)].filter(Boolean),
+      ctaLabel: 'Répondre à mon notaire',
+    },
+    en: {
+      heading: 'Your notary wrote to you',
+      lead:
+        (etude ? etude + ' wrote to you' : 'Your notary wrote to you') +
+        ' about your ' + svcNomEn(ctx.serviceId) + ' of ' + fmtDateEn(ctx.dateISO) + '.',
+      bodyHtml:
+        (excerpt ? callout('“' + excerpt + '”') : '') +
+        para('Reply directly from your space: the conversation stays attached to your file, with your documents and your appointment.'),
+      textLines: [excerpt ? '“' + excerpt + '”' : '', offerLineEn(ctx)].filter(Boolean),
+      ctaLabel: 'Reply to my notary',
+    },
+    ctaUrl: linksFor(ctx.baseUrl).profil,
+    unsubscribeUrl: ctx.unsubscribeUrl,
+  });
+}
+
+// To the NOTARY: the client replied in the thread of the act they hold.
+// Context: the bid fields + `message` (the text).
+function messageDuClient(ctx) {
+  const excerpt = chatExcerpt(ctx.message);
+  return build({
+    subjectFr: 'Réponse de votre client — ' + money(ctx.montant),
+    subjectEn: 'Your client replied — ' + moneyEn(ctx.montant),
+    preheaderFr: 'Un message est arrivé dans la conversation de l’acte.',
+    preheaderEn: 'A message just landed in the act’s conversation.',
+    fr: {
+      heading: 'Votre client vous a répondu',
+      lead:
+        'Un message vient d’arriver dans la conversation de l’acte que vous avez retenu — ' +
+        svcNom(ctx.serviceId) + ' le ' + fmtDate(ctx.dateISO) + '.',
+      bodyHtml:
+        (excerpt ? callout('« ' + excerpt + ' »') : '') +
+        para('Répondez depuis votre console : le fil complet reste attaché à l’acte, à côté du dossier du client.'),
+      textLines: [excerpt ? '« ' + excerpt + ' »' : '', offerLine(ctx)].filter(Boolean),
+      ctaLabel: 'Ouvrir ma console',
+    },
+    en: {
+      heading: 'Your client replied',
+      lead:
+        'A message just arrived in the conversation of the act you hold — ' +
+        svcNomEn(ctx.serviceId) + ' on ' + fmtDateEn(ctx.dateISO) + '.',
+      bodyHtml:
+        (excerpt ? callout('“' + excerpt + '”') : '') +
+        para('Reply from your console: the whole thread stays attached to the act, next to the client’s file.'),
+      textLines: [excerpt ? '“' + excerpt + '”' : '', offerLineEn(ctx)].filter(Boolean),
+      ctaLabel: 'Open my console',
+    },
+    ctaUrl: linksFor(ctx.baseUrl).notaires,
+    unsubscribeUrl: ctx.unsubscribeUrl,
+  });
+}
+
+// =============================================================================
 // PARTNER REFERRALS (ADR 0011) — the professionals (agent immobilier, courtier
 // hypothécaire) who send Nota its demand. Two reward tracks, both flat amounts
 // that live in domain.REFERRAL — never a literal here: `client` when a referred
@@ -1683,6 +1780,83 @@ function evaluationInvite(ctx) {
   });
 }
 
+// To the NOTARY: a client just rated them (ADR 0015/0016 — the average is
+// public beside every proposition). Context: the bid fields + `note` (1-5) +
+// optional `commentaire`. The note may be absent in generic renders; the copy
+// degrades to the fact without the number.
+function evaluationRecueNotaire(ctx) {
+  const note = Number.isFinite(Number(ctx.note)) ? Number(ctx.note) : null;
+  const comment = ctx.commentaire ? chatExcerpt(ctx.commentaire) : null;
+  const line = (note != null ? 'Note : ' + note + '/5 — ' : '') + offerLine(ctx);
+  const lineEn = (note != null ? 'Rating: ' + note + '/5 — ' : '') + offerLineEn(ctx);
+  return build({
+    subjectFr: 'Vous avez reçu une évaluation' + (note != null ? ' : ' + note + '/5' : ''),
+    subjectEn: 'You received a rating' + (note != null ? ': ' + note + '/5' : ''),
+    preheaderFr: 'Votre moyenne publique vient d’être mise à jour.',
+    preheaderEn: 'Your public average was just updated.',
+    fr: {
+      heading: 'Un client vous a évalué',
+      lead:
+        'Le client de votre ' + svcNom(ctx.serviceId) + ' du ' + fmtDate(ctx.dateISO) +
+        ' vient de déposer son évaluation.',
+      bodyHtml:
+        callout(line) +
+        (comment ? para('Commentaire du client : « ' + comment + ' »') : '') +
+        para('Votre moyenne publique est mise à jour — elle accompagne désormais chacune de vos propositions et votre fiche auprès des clients.'),
+      textLines: [line].concat(comment ? ['Commentaire : « ' + comment + ' »'] : []),
+      ctaLabel: 'Ouvrir ma console',
+    },
+    en: {
+      heading: 'A client rated you',
+      lead:
+        'The client of your ' + svcNomEn(ctx.serviceId) + ' of ' + fmtDateEn(ctx.dateISO) +
+        ' just submitted their evaluation.',
+      bodyHtml:
+        callout(lineEn) +
+        (comment ? para('Client’s comment: “' + comment + '”') : '') +
+        para('Your public average is updated — it now travels with every proposition you make and with your profile.'),
+      textLines: [lineEn].concat(comment ? ['Comment: “' + comment + '”'] : []),
+      ctaLabel: 'Open my console',
+    },
+    ctaUrl: linksFor(ctx.baseUrl).notaires,
+    unsubscribeUrl: ctx.unsubscribeUrl,
+  });
+}
+
+// Operator alert: a LOW rating (note <= 2) landed — a churn/moderation signal a
+// human should follow up on. Context: the bid fields + `note` + optional
+// `commentaire` + `notaireEmail`.
+function operatorLowRating(ctx) {
+  const note = Number.isFinite(Number(ctx.note)) ? Number(ctx.note) : null;
+  const comment = ctx.commentaire ? chatExcerpt(ctx.commentaire) : null;
+  const line =
+    (note != null ? note + '/5 · ' : '') + offerLine(ctx) + (ctx.notaireEmail ? ' · ' + ctx.notaireEmail : '');
+  const lineEn =
+    (note != null ? note + '/5 · ' : '') + offerLineEn(ctx) + (ctx.notaireEmail ? ' · ' + ctx.notaireEmail : '');
+  return build({
+    subjectFr: 'Évaluation faible' + (note != null ? ' : ' + note + '/5' : '') + ' · ' + svcNomCourt(ctx.serviceId),
+    subjectEn: 'Low rating' + (note != null ? ': ' + note + '/5' : '') + ' · ' + svcNomCourtEn(ctx.serviceId),
+    preheaderFr: 'Un suivi humain est recommandé auprès du client et du notaire.',
+    preheaderEn: 'A human follow-up with the client and the notary is recommended.',
+    fr: {
+      heading: 'Une évaluation faible vient d’arriver',
+      lead: 'Un client vient de noter son notaire sous la barre — à lire et à suivre (rétention, modération).',
+      bodyHtml: callout(line) + (comment ? para('Commentaire du client : « ' + comment + ' »') : ''),
+      textLines: [line].concat(comment ? ['Commentaire : « ' + comment + ' »'] : []),
+      ctaLabel: 'Ouvrir Nota',
+    },
+    en: {
+      heading: 'A low rating just landed',
+      lead: 'A client just rated their notary below the bar — read it and follow up (retention, moderation).',
+      bodyHtml: callout(lineEn) + (comment ? para('Client’s comment: “' + comment + '”') : ''),
+      textLines: [lineEn].concat(comment ? ['Comment: “' + comment + '”'] : []),
+      ctaLabel: 'Open Nota',
+    },
+    ctaUrl: linksFor(ctx.baseUrl).carnet,
+    unsubscribeUrl: ctx.unsubscribeUrl,
+  });
+}
+
 // =============================================================================
 // Contact form (nous joindre)
 // =============================================================================
@@ -1773,10 +1947,15 @@ const TEMPLATES = {
   // client — notary actions on an open offer
   propositionRecue,
   documentsDemandes,
+  // retained-act conversation (chat)
+  messageDuNotaire,
+  messageDuClient,
   // notary — answers to their proposition
   propositionAcceptee,
   propositionRefusee,
   offerCancelledNotary,
+  // evaluation feedback loop (ADR 0015/0016)
+  evaluationRecueNotaire,
   // contact form (nous joindre)
   contactRecu,
   // notary — marketplace lifecycle
@@ -1801,11 +1980,314 @@ const TEMPLATES = {
   operatorOfferCancelled,
   operatorActReleased,
   operatorContactMessage,
+  operatorLowRating,
 };
+
+// =============================================================================
+// Admin-parametrizable subjects (consumption side)
+// =============================================================================
+// The admin console can store, per template key, an override record:
+//   { key, enabled, subjectFr, subjectEn, updatedAt }
+// TEMPLATE_META describes every registry key for that console: who receives it,
+// a human label per language, the DEFAULT subject shown with {{token}}
+// placeholders, and exactly which tokens that template's ctx can interpolate.
+// The token vocabulary (nothing else interpolates):
+//   montant  — the bid amount, via domain money() (FR) / moneyEn() (EN)
+//   service  — the service name, via nom (FR) / nomEn (EN)
+//   date     — the signing date, via the fr-CA / en-CA long formatters
+//   code     — a partner referral code
+//   n        — a count (e.g. bids in a digest)
+//   note     — an evaluation note (1-5)
+//   etude    — the notary study's display name
+//   email    — the relevant email address
+const TEMPLATE_META = {
+  // --- client — offer lifecycle ---------------------------------------------
+  clientWelcome: {
+    audience: 'client',
+    labelFr: 'Bienvenue client', labelEn: 'Client welcome',
+    defaultSubjectFr: 'Bienvenue sur Nota', defaultSubjectEn: 'Welcome to Nota',
+    placeholders: ['email'],
+  },
+  offerPublished: {
+    audience: 'client',
+    labelFr: 'Offre publiée', labelEn: 'Offer posted',
+    defaultSubjectFr: 'Votre offre est en ligne : {{montant}}', defaultSubjectEn: 'Your offer is live: {{montant}}',
+    placeholders: ['montant', 'service', 'date'],
+  },
+  dossierIncomplete: {
+    audience: 'client',
+    labelFr: 'Dossier incomplet (rappel)', labelEn: 'File incomplete (reminder)',
+    defaultSubjectFr: 'Il reste une étape à votre dossier', defaultSubjectEn: 'One step left in your file',
+    placeholders: ['montant', 'service', 'date'],
+  },
+  dateApproaching: {
+    audience: 'client',
+    labelFr: 'Date qui approche (J-7/3/1)', labelEn: 'Date approaching (J-7/3/1)',
+    defaultSubjectFr: 'Votre signature approche', defaultSubjectEn: 'Your signing is coming up',
+    placeholders: ['montant', 'service', 'date'],
+  },
+  offerRetained: {
+    audience: 'client',
+    labelFr: 'Demande retenue', labelEn: 'Request taken',
+    defaultSubjectFr: 'Un notaire a retenu votre demande', defaultSubjectEn: 'A notary has taken your request',
+    placeholders: ['montant', 'service', 'date'],
+  },
+  dateMissedNoUptake: {
+    audience: 'client',
+    labelFr: 'Date proche sans preneur (J-0)', labelEn: 'Date near, no uptake (J-0)',
+    defaultSubjectFr: 'Votre date approche — aucune offre retenue', defaultSubjectEn: 'Your date is near — no offer taken yet',
+    placeholders: ['montant', 'service', 'date'],
+  },
+  offerCancelled: {
+    audience: 'client',
+    labelFr: 'Offre annulée (accusé)', labelEn: 'Offer cancelled (ack)',
+    defaultSubjectFr: 'Offre annulée : {{montant}}', defaultSubjectEn: 'Offer cancelled: {{montant}}',
+    placeholders: ['montant', 'service', 'date'],
+  },
+  evaluationInvite: {
+    audience: 'client',
+    labelFr: 'Invitation à évaluer', labelEn: 'Evaluation invite',
+    defaultSubjectFr: 'Votre acte est signé — évaluez votre notaire', defaultSubjectEn: 'Your act is signed — rate your notary',
+    placeholders: ['montant', 'service', 'date'],
+  },
+  actReleased: {
+    audience: 'client',
+    labelFr: 'Désistement du notaire', labelEn: 'Notary withdrew',
+    defaultSubjectFr: 'Votre demande est de retour au carnet : {{montant}}', defaultSubjectEn: 'Your request is back on the carnet: {{montant}}',
+    placeholders: ['montant', 'service', 'date'],
+  },
+  // --- client — pay-on-accept lifecycle -------------------------------------
+  offerAuthorized: {
+    audience: 'client',
+    labelFr: 'Paiement autorisé', labelEn: 'Payment authorized',
+    defaultSubjectFr: 'Paiement autorisé — votre offre est visible', defaultSubjectEn: 'Payment authorized — your offer is visible',
+    placeholders: ['montant', 'service', 'date'],
+  },
+  offerAuthorizationVoided: {
+    audience: 'client',
+    labelFr: 'Autorisation expirée', labelEn: 'Authorization lapsed',
+    defaultSubjectFr: 'Votre offre n’est plus visible', defaultSubjectEn: 'Your offer is no longer visible',
+    placeholders: ['montant', 'service', 'date'],
+  },
+  // --- client — notary actions on an open offer -----------------------------
+  propositionRecue: {
+    audience: 'client',
+    labelFr: 'Proposition reçue', labelEn: 'Proposal received',
+    defaultSubjectFr: 'Un notaire vous propose {{montant}}', defaultSubjectEn: 'A notary proposes {{montant}}',
+    placeholders: ['montant', 'service', 'date', 'etude'],
+  },
+  documentsDemandes: {
+    audience: 'client',
+    labelFr: 'Documents demandés', labelEn: 'Documents requested',
+    defaultSubjectFr: 'Un notaire vous demande des documents', defaultSubjectEn: 'A notary is asking you for documents',
+    placeholders: ['montant', 'service', 'date', 'etude'],
+  },
+  // --- retained-act conversation (chat) --------------------------------------
+  messageDuNotaire: {
+    audience: 'client',
+    labelFr: 'Message du notaire (fil du dossier)', labelEn: 'Message from the notary (file thread)',
+    defaultSubjectFr: 'Message de votre notaire', defaultSubjectEn: 'A message from your notary',
+    placeholders: ['montant', 'service', 'date', 'etude'],
+  },
+  messageDuClient: {
+    audience: 'notaire',
+    labelFr: 'Réponse du client (fil du dossier)', labelEn: 'Client reply (file thread)',
+    defaultSubjectFr: 'Réponse de votre client — {{montant}}', defaultSubjectEn: 'Your client replied — {{montant}}',
+    placeholders: ['montant', 'service', 'date'],
+  },
+  // --- notary — answers to their proposition --------------------------------
+  propositionAcceptee: {
+    audience: 'notaire',
+    labelFr: 'Proposition acceptée', labelEn: 'Proposal accepted',
+    defaultSubjectFr: 'Proposition acceptée : {{montant}}', defaultSubjectEn: 'Proposal accepted: {{montant}}',
+    placeholders: ['montant', 'service', 'date'],
+  },
+  propositionRefusee: {
+    audience: 'notaire',
+    labelFr: 'Proposition déclinée', labelEn: 'Proposal declined',
+    defaultSubjectFr: 'Proposition déclinée : {{montant}}', defaultSubjectEn: 'Proposal declined: {{montant}}',
+    placeholders: ['montant', 'service', 'date'],
+  },
+  offerCancelledNotary: {
+    audience: 'notaire',
+    labelFr: 'Demande retenue annulée par le client', labelEn: 'Retained request cancelled by the client',
+    defaultSubjectFr: 'Demande annulée par le client : {{montant}}', defaultSubjectEn: 'Request cancelled by the client: {{montant}}',
+    placeholders: ['montant', 'service', 'date'],
+  },
+  // --- evaluation feedback loop (ADR 0015/0016) ------------------------------
+  evaluationRecueNotaire: {
+    audience: 'notaire',
+    labelFr: 'Évaluation reçue', labelEn: 'Rating received',
+    defaultSubjectFr: 'Vous avez reçu une évaluation : {{note}}/5', defaultSubjectEn: 'You received a rating: {{note}}/5',
+    placeholders: ['note', 'montant', 'service', 'date', 'etude'],
+  },
+  // --- contact form (nous joindre) -------------------------------------------
+  contactRecu: {
+    audience: 'client',
+    labelFr: 'Message bien reçu (accusé)', labelEn: 'Message received (ack)',
+    defaultSubjectFr: 'Message bien reçu', defaultSubjectEn: 'Message received',
+    placeholders: [],
+  },
+  // --- notary — marketplace lifecycle ----------------------------------------
+  newMatchingBids: {
+    audience: 'notaire',
+    labelFr: 'Digest des demandes ouvertes', labelEn: 'Open-requests digest',
+    defaultSubjectFr: '{{n}} nouvelles demandes sur le carnet', defaultSubjectEn: '{{n}} new requests on the carnet',
+    placeholders: ['n'],
+  },
+  notaryMagicLink: {
+    audience: 'notaire',
+    labelFr: 'Lien de connexion (espace notaire)', labelEn: 'Sign-in link (notary console)',
+    defaultSubjectFr: 'Votre lien de connexion — Espace notaire', defaultSubjectEn: 'Your sign-in link — Notary console',
+    placeholders: [],
+  },
+  notaryOnboardingStarted: {
+    audience: 'notaire',
+    labelFr: 'Inscription à terminer', labelEn: 'Registration to finish',
+    defaultSubjectFr: 'Terminez votre inscription à Nota', defaultSubjectEn: 'Finish your Nota registration',
+    placeholders: ['email'],
+  },
+  notaryActive: {
+    audience: 'notaire',
+    labelFr: 'Compte notaire actif', labelEn: 'Notary account active',
+    defaultSubjectFr: 'Votre compte notaire est actif', defaultSubjectEn: 'Your notary account is active',
+    placeholders: ['email'],
+  },
+  actPaidNotary: {
+    audience: 'notaire',
+    labelFr: 'Acte payé (relevé)', labelEn: 'Act paid (statement)',
+    defaultSubjectFr: 'Acte payé — versement en route', defaultSubjectEn: 'Payout on the way',
+    placeholders: ['montant', 'service', 'date'],
+  },
+  notaryDisconnectedWinback: {
+    audience: 'notaire',
+    labelFr: 'Compte déconnecté (relance)', labelEn: 'Account disconnected (win-back)',
+    defaultSubjectFr: 'Votre place sur Nota vous attend', defaultSubjectEn: 'Your spot on Nota is waiting',
+    placeholders: ['email'],
+  },
+  // --- admin console ----------------------------------------------------------
+  adminMagicLink: {
+    audience: 'admin',
+    labelFr: 'Lien de connexion (console admin)', labelEn: 'Sign-in link (admin console)',
+    defaultSubjectFr: 'Votre lien de connexion — Nota Admin', defaultSubjectEn: 'Your sign-in link — Nota Admin',
+    placeholders: [],
+  },
+  // --- partner referrals (ADR 0011) ------------------------------------------
+  partnerClaimLink: {
+    audience: 'partenaire',
+    labelFr: 'Confirmation du code (lien)', labelEn: 'Code confirmation (link)',
+    defaultSubjectFr: 'Confirmez votre code partenaire : {{code}}', defaultSubjectEn: 'Confirm your partner code: {{code}}',
+    placeholders: ['code'],
+  },
+  partnerWelcome: {
+    audience: 'partenaire',
+    labelFr: 'Bienvenue partenaire', labelEn: 'Partner welcome',
+    defaultSubjectFr: 'Votre code partenaire est prêt : {{code}}', defaultSubjectEn: 'Your partner code is ready: {{code}}',
+    placeholders: ['code'],
+  },
+  referralRewardClient: {
+    audience: 'partenaire',
+    labelFr: 'Prime — demande référée retenue', labelEn: 'Reward — referred request taken',
+    defaultSubjectFr: 'Prime de référence gagnée — demande retenue', defaultSubjectEn: 'Referral reward earned — request taken',
+    placeholders: ['code', 'montant', 'service', 'date'],
+  },
+  referralRewardNotary: {
+    audience: 'partenaire',
+    labelFr: 'Prime — notaire référé actif', labelEn: 'Reward — referred notary active',
+    defaultSubjectFr: 'Prime de référence gagnée — notaire actif', defaultSubjectEn: 'Referral reward earned — notary active',
+    placeholders: ['code'],
+  },
+  // --- operator alerts --------------------------------------------------------
+  operatorNotaryActive: {
+    audience: 'operateur',
+    labelFr: 'Nouveau notaire actif', labelEn: 'New active notary',
+    defaultSubjectFr: 'Nouveau notaire actif : {{email}}', defaultSubjectEn: 'New active notary: {{email}}',
+    placeholders: ['email'],
+  },
+  operatorNewLead: {
+    audience: 'operateur',
+    labelFr: 'Nouvelle offre publiée', labelEn: 'New offer posted',
+    defaultSubjectFr: 'Nouvelle offre : {{montant}} · {{service}}', defaultSubjectEn: 'New offer: {{montant}} · {{service}}',
+    placeholders: ['montant', 'service', 'date'],
+  },
+  operatorActCompleted: {
+    audience: 'operateur',
+    labelFr: 'Acte complété', labelEn: 'Act completed',
+    defaultSubjectFr: 'Acte complété : {{montant}} · {{service}}', defaultSubjectEn: 'Act completed: {{montant}} · {{service}}',
+    placeholders: ['montant', 'service', 'date'],
+  },
+  operatorNewPartner: {
+    audience: 'operateur',
+    labelFr: 'Nouveau partenaire', labelEn: 'New partner',
+    defaultSubjectFr: 'Nouveau partenaire : {{code}}', defaultSubjectEn: 'New partner: {{code}}',
+    placeholders: ['code'],
+  },
+  operatorOfferCancelled: {
+    audience: 'operateur',
+    labelFr: 'Demande retenue annulée', labelEn: 'Retained request cancelled',
+    defaultSubjectFr: 'Annulation d’une demande retenue : {{montant}}', defaultSubjectEn: 'Retained request cancelled: {{montant}}',
+    placeholders: ['montant', 'service', 'date', 'etude'],
+  },
+  operatorActReleased: {
+    audience: 'operateur',
+    labelFr: 'Désistement d’un notaire', labelEn: 'Notary withdrawal',
+    defaultSubjectFr: 'Désistement d’un notaire sur une demande retenue : {{montant}}', defaultSubjectEn: 'Notary withdrew from a retained request: {{montant}}',
+    placeholders: ['montant', 'service', 'date', 'etude'],
+  },
+  operatorContactMessage: {
+    audience: 'operateur',
+    labelFr: 'Message du formulaire', labelEn: 'Contact-form message',
+    defaultSubjectFr: 'Nous joindre : nouveau message', defaultSubjectEn: 'Contact form',
+    placeholders: ['email'],
+  },
+  operatorLowRating: {
+    audience: 'operateur',
+    labelFr: 'Évaluation faible (alerte)', labelEn: 'Low rating (alert)',
+    defaultSubjectFr: 'Évaluation faible : {{note}}/5 · {{service}}', defaultSubjectEn: 'Low rating: {{note}}/5 · {{service}}',
+    placeholders: ['note', 'montant', 'service', 'date', 'etude'],
+  },
+};
+
+// Interpolate one override side. Unknown or missing tokens render as '' —
+// subjects are plain text headers, so nothing is escaped, but newlines are
+// stripped (a header must stay a single line).
+function interpolateSubject(raw, ctx, lang) {
+  const en = lang === 'en';
+  const tokens = {
+    montant: () => (ctx.montant == null ? '' : en ? moneyEn(ctx.montant) : money(ctx.montant)),
+    service: () => (ctx.serviceId ? (en ? svcNomEn(ctx.serviceId) : svcNom(ctx.serviceId)) : ''),
+    date: () => (ctx.dateISO ? (en ? fmtDateEn(ctx.dateISO) : fmtDate(ctx.dateISO)) : ''),
+    code: () => (ctx.code == null ? '' : String(ctx.code)),
+    n: () => (ctx.n != null ? String(ctx.n) : Array.isArray(ctx.bids) ? String(ctx.bids.length) : ''),
+    note: () => (ctx.note == null ? '' : String(ctx.note)),
+    etude: () => (ctx.etude == null ? '' : String(ctx.etude)),
+    email: () => (ctx.email == null ? '' : String(ctx.email)),
+  };
+  return String(raw)
+    .replace(/\{\{\s*([a-zA-Z_]+)\s*\}\}/g, (m, name) => (tokens[name] ? tokens[name]() : ''))
+    .replace(/[\r\n]+/g, ' ')
+    .trim();
+}
+
+// Turn a stored override into the final bilingual subject, or null when the
+// built-in subject should stand. DELIBERATELY all-or-nothing: BOTH subjectFr
+// and subjectEn must be non-empty strings, otherwise null is returned and the
+// caller keeps the template's built subject — a half-translated override would
+// break the 'FR / EN' bilingual contract, so it is treated as not configured.
+function renderSubjectOverride(override, ctx) {
+  if (!override) return null;
+  const fr = typeof override.subjectFr === 'string' ? override.subjectFr.trim() : '';
+  const en = typeof override.subjectEn === 'string' ? override.subjectEn.trim() : '';
+  if (!fr || !en) return null;
+  const c = ctx || {};
+  return interpolateSubject(fr, c, 'fr') + ' / ' + interpolateSubject(en, c, 'en');
+}
 
 module.exports = {
   SENDER,
   TEMPLATES,
+  TEMPLATE_META,
+  renderSubjectOverride,
   fmtDate,
   fmtDateEn,
   ...TEMPLATES,

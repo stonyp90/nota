@@ -1038,8 +1038,13 @@ function createApp(repo, opts = {}) {
     // CASL / Law 25 opt-out. The email footer links here with a token that
     // encodes the recipient's address; we record the opt-out and the sender
     // checks it before every future send. Opening it in a browser shows a page.
-    if (route === '/unsubscribe' && method === 'GET') {
-      const email = decodeUnsubToken(query.token || '');
+    // POST is the RFC 8058 one-click target (List-Unsubscribe-Post): mailbox
+    // providers POST here with no user interaction, so it must opt out too.
+    if (route === '/unsubscribe' && (method === 'GET' || method === 'POST')) {
+      // Normalize the decoded address (trim + lowercase) so the suppression
+      // record always matches what the notifier checks — isUnsubscribed lookups
+      // normalize the same way, and a case-variant token must not slip past.
+      const email = decodeUnsubToken(query.token || '').trim().toLowerCase();
       if (!email || !domain.isEmail(email)) {
         return htmlPage(400, 'Lien invalide', 'Ce lien de désabonnement est invalide ou incomplet.');
       }
@@ -1543,6 +1548,12 @@ function createApp(repo, opts = {}) {
           ratingSum: (profile.ratingSum || 0) + v.note,
         });
       }
+      // Close the feedback loop (fire-and-forget): the rated notary hears about
+      // it, and a low note alerts the operator for a human follow-up.
+      const ev = notifier();
+      if (ev && typeof ev.onEvaluationSubmitted === 'function') {
+        Promise.resolve(ev.onEvaluationSubmitted(bid, evaluation)).catch(() => {});
+      }
       return json(201, { evaluation: { note: evaluation.note, commentaire: evaluation.commentaire } });
     }
 
@@ -1743,6 +1754,11 @@ function createApp(repo, opts = {}) {
       if (!v.ok) return json(422, { errors: v.errors });
       const message = { id: newId(), de: domain.CHAT_FROM.NOTAIRE, texte: v.texte, createdAt: new Date(nowMs()).toISOString() };
       await repo.update({ ...bid, messages: [...messagesOf(bid), message] });
+      // Tell the client their notary wrote (fire-and-forget, once per message).
+      const mn = notifier();
+      if (mn && typeof mn.onChatMessage === 'function') {
+        Promise.resolve(mn.onChatMessage(bid, message)).catch(() => {});
+      }
       return json(200, { message: chatMessage(message) });
     }
 
@@ -1760,6 +1776,12 @@ function createApp(repo, opts = {}) {
       if (!v.ok) return json(422, { errors: v.errors });
       const message = { id: newId(), de: domain.CHAT_FROM.CLIENT, texte: v.texte, createdAt: new Date(nowMs()).toISOString() };
       await repo.update({ ...bid, messages: [...messagesOf(bid), message] });
+      // Tell the retaining notary their client replied (fire-and-forget, once
+      // per message — the notifier resolves the notary from bid.notaryId).
+      const mc = notifier();
+      if (mc && typeof mc.onChatMessage === 'function') {
+        Promise.resolve(mc.onChatMessage(bid, message)).catch(() => {});
+      }
       return json(200, { message: chatMessage(message) });
     }
 

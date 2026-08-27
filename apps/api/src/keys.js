@@ -231,6 +231,25 @@ function referralEarnGSI1SK(code, track, refId) {
   return `${String(code).trim().toUpperCase()}#${String(track).toUpperCase()}#${refId}`;
 }
 
+// --- Admin-editable email subject overrides (ADR 0018) -------------------------
+// One item per template key, all under a single CONFIG#EMAIL partition. Product
+// configuration lives WITH the product data on the MAIN table on purpose: the
+// notifier runs inside the public API Lambda, which already reads this table on
+// every send, so an override lookup is a same-table GetItem — no cross-table
+// plumbing, no second repo. The admin Lambda (read-only on customer data) gets
+// a narrowly-SCOPED write door instead: its IAM policy allows writes only when
+// dynamodb:LeadingKeys = ["CONFIG#EMAIL"] (infra/admin.tf, ADR 0018 §6), so the
+// admin console can edit templates but can never touch a customer item.
+//
+//   PK = CONFIG#EMAIL   SK = TPL#<templateKey>
+function emailOverridePK() {
+  return 'CONFIG#EMAIL';
+}
+function emailOverrideSK(key) {
+  return 'TPL#' + String(key);
+}
+const EMAIL_OVERRIDE_PREFIX = 'TPL#';
+
 // --- Admin table (admin.nota.ca) ---------------------------------------------
 // Identity, revocable sessions, single-use magic-link challenges, the immutable
 // audit log and rate-limit counters live in a SEPARATE `nota-admin` table, so
@@ -294,6 +313,19 @@ function openBidGSI1SK(bid) {
   return `${bid.dateISO}#${bid.id}`;
 }
 
+// --- Active-notary enumeration (daily carnet digest, no Scan) -----------------
+// The daily digest worker needs "every ACTIVE notary" to mail them the new
+// matching demands. Same sparse-GSI1 overload pattern as OPENBID/PARTNER:
+// only a notary whose status is 'active' carries the attributes, so a pending
+// or deauthorized profile falls out of the index automatically on its next
+// putNotary. One partition is fine — the roster is read once a day.
+//
+//   GSI1PK = "NOTARY"    GSI1SK = "<id>"
+const NOTARY_GSI1PK = 'NOTARY';
+function notaryGSI1SK(notary) {
+  return String(notary.id);
+}
+
 module.exports = {
   monthOf,
   bidPK,
@@ -336,6 +368,10 @@ module.exports = {
   STATS_DAY_PREFIX,
   STATS_GAUGE_PK,
   STATS_GAUGE_SK,
+  // admin-editable email overrides (ADR 0018)
+  emailOverridePK,
+  emailOverrideSK,
+  EMAIL_OVERRIDE_PREFIX,
   // admin table
   adminPK,
   ADMIN_SK,
@@ -351,4 +387,6 @@ module.exports = {
   GSI1_SK,
   OPENBID_GSI1PK,
   openBidGSI1SK,
+  NOTARY_GSI1PK,
+  notaryGSI1SK,
 };

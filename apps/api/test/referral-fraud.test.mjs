@@ -143,6 +143,31 @@ test('the notaire track also ignores an unpaid first act (billing on)', async ()
   assert.ok(!row || row.du === 0, 'the 250 $ notaire reward is not owed on an unpaid act');
 });
 
+test("a VOIDED demand (paymentStatus 'void' — the canonical repo value) earns no reward mail", async () => {
+  // Regression: the notifier's live-demand barrier once checked 'voided' while
+  // the repo writes 'void' (markAuthorizationVoided) — a lapsed/cancelled hold
+  // would still have mailed the partner a payout instruction.
+  const repo = createMemoryRepo([]);
+  const mailer = createFakeMailer();
+  const notifier = createNotifier({ repo, mailer, baseUrl: BASE, operatorEmail: 'ops@nota.ca', now: () => TODAY });
+  await repo.createPartner({ code: 'EVEROY', type: 'courtier_hypothecaire', courriel: 'eve@courtage.ca', confirmedAt: TODAY });
+
+  const bid = (over) => ({
+    id: 'b-void', serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2800,
+    tier: 'rapide', status: 'retenue', parrain: 'EVEROY', courriel: null, ...over,
+  });
+
+  await notifier.onOfferRetained(bid({ paymentStatus: 'void' }));
+  assert.equal(
+    mailer.sent.filter((m) => m.to === 'eve@courtage.ca').length, 0,
+    "a bid whose authorization was voided must never mail a reward"
+  );
+
+  // Sanity: the same demand with a live payment DOES mail the reward once.
+  await notifier.onOfferRetained(bid({ id: 'b-live', paymentStatus: 'authorized' }));
+  assert.equal(mailer.sent.filter((m) => m.to === 'eve@courtage.ca').length, 1);
+});
+
 // --- Barrier 2: the demo escape hatch is inert in production -------------------
 
 test('NOTA_DEMO_OPEN does NOT open the notary console in production', async () => {

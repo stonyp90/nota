@@ -211,6 +211,7 @@
     var hash = location.hash || '';
     if (hash.indexOf('#/auth') === 0) { handleAuthRoute(hash); return; }
     if (!session) { renderAuthRequest({}); return; }
+    if (hash.indexOf('#/courriels') === 0) { renderCourriels(); return; }
     renderOverview(); // '#/' and any unknown authed route land on the overview
   }
   function focusTitle() {
@@ -397,6 +398,15 @@
     if (active === 'overview') overview.setAttribute('aria-current', 'page');
     overview.addEventListener('click', function () { go('#/'); });
     rail.appendChild(overview);
+
+    // Courriels — the admin-editable email templates (ADR 0018).
+    var mails = el('button', 'admin-rail-link');
+    mails.type = 'button';
+    mails.appendChild(iconMail());
+    mails.appendChild(document.createTextNode('Courriels'));
+    if (active === 'courriels') mails.setAttribute('aria-current', 'page');
+    mails.addEventListener('click', function () { go('#/courriels'); });
+    rail.appendChild(mails);
 
     // Phase-2 placeholders — visible but disabled, so the console reads as a
     // console without shipping dead links.
@@ -757,6 +767,260 @@
     return svg;
   }
 
+  // ---------------------------------------------------------------------------
+  // Courriels page — admin-editable email templates (ADR 0018 §3).
+  // GET /notifications/templates lists the registry merged with the stored
+  // overrides; PUT/DELETE per key edit them. Writing needs the
+  // 'notifications:write' permission (super_admin) — an analyst sees the same
+  // rows read-only, with no save controls. Subjects only: bodies stay code.
+  // ---------------------------------------------------------------------------
+  var AUDIENCE_ORDER = ['client', 'notaire', 'partenaire', 'operateur', 'admin'];
+  var AUDIENCE_LABELS = {
+    client: 'Clients',
+    notaire: 'Notaires',
+    partenaire: 'Partenaires',
+    operateur: 'Opérateur',
+    admin: 'Console admin',
+  };
+  var courrielsBody = null;
+
+  function isEnglish() {
+    try { return !!(window.NotaI18N && window.NotaI18N.lang && window.NotaI18N.lang() === 'en'); }
+    catch (e) { return false; }
+  }
+  function canWriteNotifications() {
+    return !!(me && me.permissions && me.permissions.indexOf('notifications:write') >= 0);
+  }
+
+  async function renderCourriels() {
+    if (!me || !me.email) {
+      var loaded = await loadMe();
+      if (!loaded.ok) {
+        if (loaded.status !== 401) renderFatal('Impossible de charger votre profil.', renderCourriels);
+        return;
+      }
+    }
+    renderUserbar();
+
+    var content = el('div', 'admin-content');
+    var head = el('div', 'page-head view-enter');
+    var titleWrap = el('div');
+    titleWrap.appendChild(el('span', 'page-eyebrow', 'Notifications'));
+    titleWrap.appendChild(el('h1', 'page-title', 'Courriels'));
+    titleWrap.appendChild(el('p', 'page-sub',
+      'Sujets et activation des modèles de courriels. Les corps restent gérés par le code.'));
+    head.appendChild(titleWrap);
+    content.appendChild(head);
+
+    courrielsBody = el('div');
+    content.appendChild(courrielsBody);
+
+    mountAuthed('courriels', content);
+    focusTitle();
+    await loadTemplatesInto(courrielsBody);
+  }
+
+  async function loadTemplatesInto(container) {
+    clear(container);
+    var skel = el('div', 'stat-grid');
+    for (var i = 0; i < 4; i++) skel.appendChild(el('div', 'skeleton skeleton-tile'));
+    container.appendChild(skel);
+
+    var r = await call('GET', '/notifications/templates');
+    if (r.status === 401) return; // handled by call()
+    clear(container);
+    if (!r.ok || !r.json || !Array.isArray(r.json.templates)) {
+      container.appendChild(buildErrorBanner(function () { loadTemplatesInto(container); }));
+      return;
+    }
+
+    var view = el('div', 'view-enter');
+    if (!canWriteNotifications()) {
+      var note = el('div', 'tpl-readonly-note');
+      note.appendChild(el('strong', null, 'Lecture seule'));
+      note.appendChild(document.createTextNode(' — la modification des modèles est réservée à l’administrateur principal.'));
+      view.appendChild(note);
+    }
+    var byAudience = {};
+    r.json.templates.forEach(function (t) {
+      (byAudience[t.audience] = byAudience[t.audience] || []).push(t);
+    });
+    AUDIENCE_ORDER.forEach(function (aud) {
+      var rows = byAudience[aud];
+      if (rows && rows.length) view.appendChild(buildTemplateGroup(aud, rows, container));
+    });
+    container.appendChild(view);
+  }
+
+  function buildTemplateGroup(audience, templates, container) {
+    var card = el('div', 'chart-card tpl-group');
+    var head = el('div', 'chart-card-head');
+    var ht = el('div');
+    ht.appendChild(el('div', 'chart-card-title', AUDIENCE_LABELS[audience] || audience));
+    ht.appendChild(el('div', 'chart-card-sub', templates.length + ' modèles'));
+    head.appendChild(ht);
+    card.appendChild(head);
+    templates.forEach(function (t) { card.appendChild(buildTemplateRow(t, container)); });
+    return card;
+  }
+
+  function overrideBadges(t) {
+    var wrap = el('span', 'tpl-badges');
+    var o = t.override;
+    if (o && o.enabled === false) wrap.appendChild(el('span', 'tpl-badge is-off', 'Désactivé'));
+    if (o && (o.subjectFr || o.subjectEn)) wrap.appendChild(el('span', 'tpl-badge is-custom', 'Modifié'));
+    return wrap;
+  }
+
+  function buildTemplateRow(t, container) {
+    var en = isEnglish();
+    var row = el('div', 'tpl-row');
+
+    var head = el('div', 'tpl-row-head');
+    var info = el('div', 'tpl-info');
+    var labelLine = el('div', 'tpl-label-line');
+    // The label is picked per current language from the API's bilingual pair;
+    // data-i18n-skip keeps the DOM translator from re-walking API content.
+    var label = el('span', 'tpl-label', en ? t.labelEn : t.labelFr);
+    label.setAttribute('data-i18n-skip', '');
+    labelLine.appendChild(label);
+    labelLine.appendChild(overrideBadges(t));
+    info.appendChild(labelLine);
+
+    // Default (or overridden) subject per language, always both.
+    var subj = el('div', 'tpl-subjects');
+    [['FR', t.defaultSubjectFr, t.override && t.override.subjectFr],
+     ['EN', t.defaultSubjectEn, t.override && t.override.subjectEn]].forEach(function (p) {
+      var line = el('div', 'tpl-subject');
+      line.appendChild(el('span', 'tpl-subject-lang', p[0]));
+      var val = el('span', p[2] ? 'tpl-subject-val is-overridden' : 'tpl-subject-val', p[2] || p[1]);
+      val.setAttribute('data-i18n-skip', '');
+      line.appendChild(val);
+      subj.appendChild(line);
+    });
+    info.appendChild(subj);
+    head.appendChild(info);
+
+    var edit = el('button', 'btn btn-sm tpl-edit', canWriteNotifications() ? 'Modifier' : 'Détails');
+    edit.type = 'button';
+    edit.setAttribute('aria-expanded', 'false');
+    head.appendChild(edit);
+    row.appendChild(head);
+
+    var editor = null;
+    edit.addEventListener('click', function () {
+      if (editor) {
+        var open = editor.hidden;
+        editor.hidden = !open;
+        edit.setAttribute('aria-expanded', open ? 'true' : 'false');
+        return;
+      }
+      editor = buildTemplateEditor(t, container);
+      row.appendChild(editor);
+      edit.setAttribute('aria-expanded', 'true');
+    });
+    return row;
+  }
+
+  function buildTemplateEditor(t, container) {
+    var writable = canWriteNotifications();
+    var box = el('div', 'tpl-editor');
+
+    // Kill-switch toggle.
+    var toggleWrap = el('label', 'tpl-toggle');
+    var toggle = el('input');
+    toggle.type = 'checkbox';
+    toggle.checked = !(t.override && t.override.enabled === false);
+    toggle.disabled = !writable;
+    toggleWrap.appendChild(toggle);
+    toggleWrap.appendChild(el('span', null, 'Envoi activé'));
+    box.appendChild(toggleWrap);
+
+    // Bilingual subject inputs — both-or-neither (enforced by the API too).
+    var fields = el('div', 'tpl-fields');
+    function subjectField(labelText, defaultSubject, current) {
+      var field = el('div', 'field');
+      var lab = el('label', null, labelText);
+      var input = el('input', 'input');
+      input.type = 'text';
+      input.maxLength = 200;
+      input.placeholder = defaultSubject;
+      input.setAttribute('data-i18n-skip', '');
+      input.value = current || '';
+      input.disabled = !writable;
+      field.appendChild(lab);
+      field.appendChild(input);
+      fields.appendChild(field);
+      return input;
+    }
+    var frInput = subjectField('Sujet (FR)', t.defaultSubjectFr, t.override && t.override.subjectFr);
+    var enInput = subjectField('Sujet (EN)', t.defaultSubjectEn, t.override && t.override.subjectEn);
+    box.appendChild(fields);
+
+    // The allowed {{token}} vocabulary for THIS template, as hint chips.
+    var hints = el('div', 'tpl-chips');
+    if (t.placeholders && t.placeholders.length) {
+      hints.appendChild(el('span', 'tpl-chips-label', 'Jetons permis'));
+      t.placeholders.forEach(function (p) {
+        var chip = el('span', 'tpl-chip', '{{' + p + '}}');
+        chip.setAttribute('data-i18n-skip', '');
+        hints.appendChild(chip);
+      });
+    } else {
+      hints.appendChild(el('span', 'tpl-chips-label', 'Aucun jeton pour ce modèle.'));
+    }
+    box.appendChild(hints);
+
+    box.appendChild(el('p', 'tpl-note',
+      'Videz les deux sujets pour revenir aux sujets par défaut. Le corps du courriel n’est pas modifiable.'));
+
+    var error = el('div', 'tpl-error');
+    error.hidden = true;
+    box.appendChild(error);
+
+    if (!writable) return box;
+
+    var actions = el('div', 'tpl-actions');
+    var save = el('button', 'btn btn-sm btn-primary', 'Enregistrer');
+    save.type = 'button';
+    actions.appendChild(save);
+    if (t.override) {
+      var reset = el('button', 'btn btn-sm', 'Réinitialiser');
+      reset.type = 'button';
+      actions.appendChild(reset);
+      reset.addEventListener('click', function () {
+        submitTemplate('DELETE', t.key, null, [save, reset], error, container, 'Modèle réinitialisé.');
+      });
+    }
+    box.appendChild(actions);
+
+    save.addEventListener('click', function () {
+      var body = {
+        enabled: toggle.checked,
+        subjectFr: frInput.value.trim(),
+        subjectEn: enInput.value.trim(),
+      };
+      submitTemplate('PUT', t.key, body, [save], error, container, 'Modèle enregistré.');
+    });
+    return box;
+  }
+
+  async function submitTemplate(method, key, body, buttons, error, container, okMsg) {
+    buttons.forEach(function (b) { b.disabled = true; });
+    var r = await call(method, '/notifications/templates/' + encodeURIComponent(key), body === null ? undefined : body);
+    buttons.forEach(function (b) { b.disabled = false; });
+    if (r.status === 401) return; // handled by call()
+    if (!r.ok) {
+      error.hidden = false;
+      clear(error);
+      var msg = r.json && r.json.errors && r.json.errors[0] && r.json.errors[0].message;
+      error.appendChild(el('strong', null, msg || 'Impossible d’enregistrer le modèle.'));
+      return;
+    }
+    toast(okMsg);
+    await loadTemplatesInto(container);
+  }
+
   // --- Loading / empty / error ----------------------------------------------
   function buildSkeletons() {
     var wrap = el('div');
@@ -804,6 +1068,13 @@
     [['3','3','7','7'], ['14','3','7','7'], ['14','14','7','7'], ['3','14','7','7']].forEach(function (r) {
       s.appendChild(svgEl('rect', { x: r[0], y: r[1], width: r[2], height: r[3], rx: 1 }));
     });
+    return s;
+  }
+  function iconMail() {
+    var s = svgEl('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none',
+      stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' });
+    s.appendChild(svgEl('rect', { x: 3, y: 5, width: 18, height: 14, rx: 2 }));
+    s.appendChild(svgEl('path', { d: 'M3 7l9 6 9-6' }));
     return s;
   }
   function iconDot() {

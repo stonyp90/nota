@@ -450,3 +450,34 @@ test('the profile form prefills the stored fiche, validates through the domain, 
   assert.equal(errs.hidden, true, 'errors clear on success');
   assert.equal($(doc, 'nc-profil-saved').hidden, false, 'the saved note confirms');
 });
+
+// The open agenda packs the width: day sections tile side by side instead of
+// each burning a full row (a 1-demand day used to leave the rest of the row
+// empty), and a day carrying 3+ demands earns a double-width tile so its own
+// cards can go 2-up. Layout itself is CSS (pinned by regex, like the header
+// heights in ux-nav); what the DOM must provide is the span marker.
+const CSS_SRC = readFileSync(fileURLToPath(new URL('../public/styles.css', import.meta.url)), 'utf8');
+const addDays = (iso, n) => { const d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+
+test('the open agenda tiles day sections and widens the loaded days', async () => {
+  assert.match(
+    CSS_SRC,
+    /\.nc-agenda-list\s*{[^}]*grid-template-columns:\s*repeat\(auto-fill/,
+    'the day list is an auto-fill grid — day sections must share rows'
+  );
+  assert.match(CSS_SRC, /\.nc-day--span\s*{[^}]*grid-column:\s*span 2/, 'a loaded day spans two tracks');
+
+  // One heavy day (3 demands) and one light day (1): only the heavy day
+  // carries the span marker.
+  const heavy = addDays(todayISO(), 2), light = addDays(todayISO(), 5);
+  // Clone one open bid: late in a month the seed may hold too few future
+  // demands to shape two days from real fixtures.
+  const { doc } = await bootSignedIn((seedOpen) =>
+    [0, 1, 2, 3].map((i) => ({ ...seedOpen[0], id: 'tile-' + i, dateISO: i < 3 ? heavy : light }))
+  );
+  const days = [...doc.querySelectorAll('#notary-open-list .nc-day')];
+  assert.equal(days.length, 2, 'two day sections');
+  const byDate = Object.fromEntries(days.map((s) => [s.dataset.date, s]));
+  assert.ok(byDate[heavy].classList.contains('nc-day--span'), 'the 3-demand day is widened');
+  assert.ok(!byDate[light].classList.contains('nc-day--span'), 'the 1-demand day stays one track');
+});

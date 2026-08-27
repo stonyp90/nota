@@ -69,7 +69,9 @@ test('financement: the loan act for a NEW hypothec — same bracket ladder, acha
 // --- Mandatory parameters ----------------------------------------------------
 
 test('missingRequired lists the unanswered mandatory params', () => {
-  assert.deepEqual(missingRequired('refinancement', {}).map((m) => m.id), ['valeur_pret', 'succession', 'approbation_bancaire', 'preteur', 'deplacement']);
+  // Layout order: the questions that genuinely vary first, the zero-cost
+  // defaults (succession, déplacement) close the block.
+  assert.deepEqual(missingRequired('refinancement', {}).map((m) => m.id), ['valeur_pret', 'approbation_bancaire', 'preteur', 'succession', 'deplacement']);
   assert.deepEqual(missingRequired('financement', {}).map((m) => m.id), ['valeur_pret', 'contexte', 'approbation_bancaire', 'preteur', 'deplacement']);
   // A loan value must be a real positive number — a crafted blank cannot skip it.
   assert.deepEqual(missingRequired('refinancement', { ...BASE_ANSWERS.refinancement, valeur_pret: '' }).map((m) => m.id), ['valeur_pret']);

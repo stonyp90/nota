@@ -27,7 +27,7 @@ const emails = require('./emails');
 // What each role may do. Re-derived from the server-side role on every request;
 // the client is shown these only to hide controls it cannot use.
 const PERMISSIONS = {
-  [authDefaults.ROLES.SUPER_ADMIN]: ['analytics:read', 'pii:read', 'moderation:write', 'settings:write'],
+  [authDefaults.ROLES.SUPER_ADMIN]: ['analytics:read', 'pii:read', 'moderation:write', 'settings:write', 'notifications:write'],
   [authDefaults.ROLES.ANALYST]: ['analytics:read'],
 };
 function permissionsFor(role) {
@@ -156,17 +156,19 @@ function createAdmin({
         // The shared branded bilingual template (emails.js) — never an inline
         // one-off. Auth email = transactional; the unsubscribe mechanism is the
         // support mailbox (there is no public unsubscribe route on this domain).
+        // mailto: still yields a List-Unsubscribe header (no one-click POST).
+        const unsubscribeUrl =
+          'mailto:' +
+          emails.SENDER.supportEmail +
+          '?subject=' +
+          encodeURIComponent('Désabonnement / Unsubscribe');
         const msg = emails.adminMagicLink({
           link,
           ttlMinutes: Math.round(CHALLENGE_TTL_MS / 60000),
           baseUrl,
-          unsubscribeUrl:
-            'mailto:' +
-            emails.SENDER.supportEmail +
-            '?subject=' +
-            encodeURIComponent('Désabonnement / Unsubscribe'),
+          unsubscribeUrl,
         });
-        await mailer.send({ to: clean, subject: msg.subject, html: msg.html, text: msg.text });
+        await mailer.send({ to: clean, subject: msg.subject, html: msg.html, text: msg.text, unsubscribeUrl });
       } catch {
         // Best-effort send; the operator can request another link.
       }
@@ -299,7 +301,151 @@ function createAdmin({
     return { ok: true };
   }
 
-  return { requestLogin, verifyMagic, requireAdmin, me, refresh, logout, permissionsFor };
+  // ---------------------------------------------------------------------------
+  // Admin-editable email templates (ADR 0018 §3).
+  //
+  // The registry of record is emails.TEMPLATE_META; the store is the main
+  // table's CONFIG#EMAIL partition (repo.getEmailOverride & co — the notifier
+  // consumes the same records through the repo port). Reading the merged list
+  // is open to any authenticated admin (an analyst sees the state); WRITING
+  // requires the 'notifications:write' permission, which only super_admin
+  // carries. Every change is audit-logged with its before/after.
+  // ---------------------------------------------------------------------------
+  const SUBJECT_MAX = 200;
+
+  function overrideView(o) {
+    if (!o) return null;
+    return {
+      enabled: o.enabled !== false,
+      subjectFr: o.subjectFr || null,
+      subjectEn: o.subjectEn || null,
+      updatedAt: o.updatedAt || null,
+    };
+  }
+
+  // Validate one subject side against the template's declared placeholder
+  // vocabulary. Returns an error object, or null when the subject is clean.
+  function subjectError(side, raw, placeholders) {
+    if (raw === undefined || raw === null) return null;
+    if (typeof raw !== 'string') {
+      return { code: 'sujet_invalide', message: `${side} doit être une chaîne de caractères.` };
+    }
+    if (raw.length > SUBJECT_MAX) {
+      return { code: 'sujet_trop_long', message: `${side} dépasse ${SUBJECT_MAX} caractères.` };
+    }
+    for (const [, tok] of raw.matchAll(/\{\{\s*([a-zA-Z_]+)\s*\}\}/g)) {
+      if (!placeholders.includes(tok)) {
+        return {
+          code: 'jeton_inconnu',
+          message:
+            `${side} : le jeton {{${tok}}} n’existe pas pour ce modèle. ` +
+            (placeholders.length ? `Jetons permis : ${placeholders.map((p) => `{{${p}}}`).join(', ')}.` : 'Ce modèle n’accepte aucun jeton.'),
+        };
+      }
+    }
+    return null;
+  }
+
+  // GET — the merged registry: every template with its stored override (or null).
+  async function listEmailTemplates(token, { ip } = {}) {
+    const p = await requireAdmin(token, { ip });
+    if (!p) return { ok: false, status: 401 };
+    const overrides = typeof repo.listEmailOverrides === 'function' ? await repo.listEmailOverrides() : [];
+    const byKey = new Map(overrides.map((o) => [o.key, o]));
+    const templates = Object.entries(emails.TEMPLATE_META).map(([key, m]) => ({
+      key,
+      audience: m.audience,
+      labelFr: m.labelFr,
+      labelEn: m.labelEn,
+      defaultSubjectFr: m.defaultSubjectFr,
+      defaultSubjectEn: m.defaultSubjectEn,
+      placeholders: m.placeholders,
+      override: overrideView(byKey.get(key)),
+    }));
+    return { ok: true, templates };
+  }
+
+  // PUT — store (replace) one template's override. super_admin only.
+  async function putEmailTemplate(token, key, body, { ip } = {}) {
+    const p = await requireAdmin(token, { ip });
+    if (!p) return { ok: false, status: 401 };
+    if (!p.permissions.includes('notifications:write')) {
+      return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Réservé à l’administrateur principal.' }] };
+    }
+    const meta = emails.TEMPLATE_META[key];
+    if (!meta) {
+      return { ok: false, status: 404, errors: [{ code: 'modele_inconnu', message: `Modèle de courriel inconnu : ${key}.` }] };
+    }
+
+    const b = body || {};
+    if (b.enabled !== undefined && typeof b.enabled !== 'boolean') {
+      return { ok: false, status: 422, errors: [{ code: 'champ_invalide', message: 'enabled doit être un booléen.' }] };
+    }
+    for (const [side, raw] of [['subjectFr', b.subjectFr], ['subjectEn', b.subjectEn]]) {
+      const err = subjectError(side, raw, meta.placeholders || []);
+      if (err) return { ok: false, status: 422, errors: [err] };
+    }
+    // Both-or-neither: the notifier's bilingual contract needs BOTH sides to
+    // override a subject — a half-configured pair would silently do nothing,
+    // so it is rejected loudly here instead.
+    const fr = typeof b.subjectFr === 'string' ? b.subjectFr.trim() : '';
+    const en = typeof b.subjectEn === 'string' ? b.subjectEn.trim() : '';
+    if ((fr && !en) || (!fr && en)) {
+      return {
+        ok: false,
+        status: 422,
+        errors: [{ code: 'sujet_bilingue', message: 'Le sujet doit être fourni dans les deux langues (FR et EN), ou dans aucune.' }],
+      };
+    }
+
+    const before = overrideView(await repo.getEmailOverride(key));
+    const stored = await repo.putEmailOverride(
+      { key, enabled: b.enabled !== false, subjectFr: fr, subjectEn: en },
+      clockIso()
+    );
+    const after = overrideView(stored);
+    await appendAudit('email_template_updated', {
+      adminId: p.adminId,
+      email: p.email,
+      ip,
+      meta: { key, before, after },
+    });
+    return { ok: true, override: { key, ...after } };
+  }
+
+  // DELETE — remove the override entirely (back to the built-in behaviour).
+  async function resetEmailTemplate(token, key, { ip } = {}) {
+    const p = await requireAdmin(token, { ip });
+    if (!p) return { ok: false, status: 401 };
+    if (!p.permissions.includes('notifications:write')) {
+      return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Réservé à l’administrateur principal.' }] };
+    }
+    if (!emails.TEMPLATE_META[key]) {
+      return { ok: false, status: 404, errors: [{ code: 'modele_inconnu', message: `Modèle de courriel inconnu : ${key}.` }] };
+    }
+    const before = overrideView(await repo.getEmailOverride(key));
+    await repo.deleteEmailOverride(key);
+    await appendAudit('email_template_reset', {
+      adminId: p.adminId,
+      email: p.email,
+      ip,
+      meta: { key, before, after: null },
+    });
+    return { ok: true, key };
+  }
+
+  return {
+    requestLogin,
+    verifyMagic,
+    requireAdmin,
+    me,
+    refresh,
+    logout,
+    permissionsFor,
+    listEmailTemplates,
+    putEmailTemplate,
+    resetEmailTemplate,
+  };
 }
 
 module.exports = { createAdmin, permissionsFor, PERMISSIONS };

@@ -21,10 +21,22 @@ anything.
 4. **Survives hostile clients.** Table-based layout, all CSS inline (clients
    strip `<style>`), no `<img>`, no `<svg>` — the logo is pure CSS/text so the
    brand shows even with images blocked. An MSO ghost table pins Outlook to
-   600px; everywhere else the card is fluid.
+   600px; everywhere else the card is fluid. `color-scheme` /
+   `supported-color-schemes` metas declare the card light-only so Apple Mail
+   does not auto-invert it in dark mode, and the English block carries
+   `lang="en-CA"` inside the `fr-CA` document so screen readers switch
+   pronunciation.
 5. **Compliant on every message.** CASL / Law 25 footer with sender name,
    registered mailing address, a plain-language reason, and a working
    `Se désabonner / Unsubscribe` link — on transactional messages too.
+6. **One-click unsubscribe at the header level.** Every send carries its
+   `unsubscribeUrl` through the mailer port; the SES adapter emits
+   `List-Unsubscribe: <url>` and, for http(s) URLs, `List-Unsubscribe-Post:
+   List-Unsubscribe=One-Click` (RFC 8058 — required by Gmail/Yahoo for bulk
+   senders). `POST /unsubscribe` is the one-click target and records the
+   opt-out exactly like GET. The admin magic link uses a `mailto:` URL
+   (no public unsubscribe route on that domain), which yields the
+   `List-Unsubscribe` header only.
 
 ## Anatomy
 
@@ -94,6 +106,10 @@ CTA button: hunter-green fill, white 16px/600 label, `14px 32px` padding
 
 ## Template inventory — every feature has its dedicated email
 
+This is the actual `TEMPLATES` registry in `apps/api/src/emails.js` (the
+generic suites iterate it, so a row here without a registry entry — or the
+reverse — fails a test).
+
 | Feature | Template(s) | Recipient | Trigger (send-point) |
 | --- | --- | --- | --- |
 | Client sign-up | `clientWelcome` | client | `POST /client/welcome` |
@@ -101,29 +117,87 @@ CTA button: hunter-green fill, white 16px/600 label, `14px 32px` padding
 | Offer posted (operator) | `operatorNewLead` | operator | `POST /bids` |
 | Card authorized → offer live | `offerAuthorized` | client | webhook `checkout.session.completed` |
 | Authorization lapsed | `offerAuthorizationVoided` | client | webhook `checkout.session.expired` / `payment_intent.canceled` |
-| Dossier incomplete | `dossierIncomplete` | client | daily reminder scheduler |
-| Date approaching (J-7/3/1) | `dateApproaching` | client | daily reminder scheduler |
+| Dossier incomplete | `dossierIncomplete` | client | daily reminder scheduler (`dossier_incomplet` — an explicit `dossierReady` flag, or derived via `leadReadiness` when the flag is absent) |
+| Date approaching (J-7/3/1) | `dateApproaching` | client | daily reminder scheduler (`j7`/`j3`/`j1`) |
+| Date is today, no uptake (J-0) | `dateMissedNoUptake` | client | daily reminder scheduler (`j0` — the date is today and no notary retained the offer) |
 | Offer retained | `offerRetained` | client | `POST /notary/bids/accept` |
+| Proposition received | `propositionRecue` | client | `POST /notary/bids/propose` |
+| Documents requested | `documentsDemandes` | client | `POST /notary/bids/documents` |
+| Chat — notary wrote | `messageDuNotaire` | client | `POST /notary/bids/message` (once per message) |
+| Chat — client replied | `messageDuClient` | notary | `POST /client/bid/message` (once per message) |
+| Proposition answered | `propositionAcceptee` / `propositionRefusee` | notary | `POST /client/propositions/accept` / `decline` |
 | Offer cancelled (ack) | `offerCancelled` | client | `POST /client/bid/cancel` |
-| Act signed → rate the notary | `evaluationInvite` | client | `POST /notary/acts/complete` |
 | Retained offer cancelled | `offerCancelledNotary` | notary | `POST /client/bid/cancel` (retained bid) |
 | Retained offer cancelled (operator) | `operatorOfferCancelled` | operator | `POST /client/bid/cancel` (retained bid) |
+| Notary withdrew (act released) | `actReleased` | client | `POST /notary/bids/release` |
+| Notary withdrew (operator) | `operatorActReleased` | operator | `POST /notary/bids/release` (payment in flight, or a reason left) |
+| Act signed → rate the notary | `evaluationInvite` | client | `POST /notary/acts/complete` |
+| Evaluation received | `evaluationRecueNotaire` | notary | `POST /client/evaluation` |
+| Low rating alert (note ≤ 2) | `operatorLowRating` | operator | `POST /client/evaluation` |
 | Contact form (ack) | `contactRecu` | sender | `POST /contact` |
 | Contact form (message) | `operatorContactMessage` | operator | `POST /contact` |
-| Date near, no uptake | `dateMissedNoUptake` | client | daily reminder scheduler |
 | Notary onboarding opened | `notaryOnboardingStarted` | notary | `POST /notaries/connect` |
 | Notary account active | `notaryActive` | notary | webhook `account.updated` (once) |
-| Matching open bids digest | `newMatchingBids` | notary | digest scheduler |
+| Notary account active (operator) | `operatorNotaryActive` | operator | webhook `account.updated` (once) |
+| Notary disconnected (win-back) | `notaryDisconnectedWinback` | notary | webhook `account.application.deauthorized` |
+| Matching open bids digest | `newMatchingBids` | notary | daily reminder Lambda — yesterday's live demands each active notary can serve (ADR 0017 perimeter), top 8 by montant, once per notary per day |
 | Act paid / payout | `actPaidNotary` | notary | accept payout & `POST /notary/acts/complete` |
 | Act paid (operator) | `operatorActCompleted` | operator | same as above |
-| Notary console sign-in | `notaryMagicLink` | notary | **registry-ready, not yet wired** — the notary session flow does not email a link today |
+| Notary console sign-in | `notaryMagicLink` | notary | `POST /notary/session/request` (magic-link flow) |
 | Admin console sign-in | `adminMagicLink` | admin | `requestLogin` in `apps/api/src/admin.js` |
-| Subscription lifecycle (legacy) | `subWelcome`, `subReceipt`, `subRenewalReminder`, `subPaymentFailed`, `subCanceledWinback`, `operatorNotarySubscribed` | notary/operator | Stripe invoice/subscription events |
+| Partner code confirmation | `partnerClaimLink` | partner | `POST /partenaires` (email-verified claim) |
+| Partner welcome | `partnerWelcome` | partner | partner claim confirmed (`/partenaires/verify`) |
+| Referral reward — client track | `referralRewardClient` | partner | referred demand retained (live payment only) |
+| Referral reward — notary track | `referralRewardNotary` | partner | referred notary's first retained act (once ever) |
+| New partner (operator) | `operatorNewPartner` | operator | partner claim confirmed |
 
-The subscription set predates the pay-on-accept model in
-`apps/api/src/billing.js` and only fires on Stripe invoice/subscription events;
-it is kept until the business model question (AGENTS.md rule 2 vs the
-2026-08-14 note in `billing.js`) is settled.
+The legacy subscription set (`subWelcome`, `subReceipt`, `subRenewalReminder`,
+`subPaymentFailed`, `subCanceledWinback`, `operatorNotarySubscribed`) was
+retired with the pay-on-accept/commission model — those templates no longer
+exist in the registry and the Stripe invoice/subscription events are
+deliberately ignored.
+
+## Admin-parametrizable subjects (overrides)
+
+The notifier can consume a per-template override stored by the admin console.
+Everything lives on the consumption side in `emails.js` + `notifications.js`;
+the storage is a repo port:
+
+```
+repo.getEmailOverride(key)
+  -> Promise<{ key, enabled, subjectFr, subjectEn, updatedAt } | null>
+```
+
+- **Optional port.** Guarded with `typeof repo.getEmailOverride === 'function'`
+  — repos without it behave exactly as before.
+- **Cached.** `sendOnce` reads overrides through a 60-second TTL cache keyed on
+  the injected clock (`Date.parse(now())`), so a reminder batch costs one read
+  per template, not one per mail.
+- **Disable.** `enabled: false` short-circuits the send with
+  `{ sent: false, reason: 'disabled' }` — and does **not** mark the SENT
+  ledger, so re-enabling lets the pending mail go out later.
+- **Subject rewording.** `emails.renderSubjectOverride(override, ctx)` builds
+  the final `'FR / EN'` subject. It is all-or-nothing: BOTH `subjectFr` and
+  `subjectEn` must be non-empty, otherwise it returns `null` and the template's
+  built subject stands (a half-translated override would break the bilingual
+  contract). Newlines are stripped; nothing is HTML-escaped (subjects are plain
+  text headers).
+- **Placeholder vocabulary** — `{{token}}`, interpolated per language; unknown
+  or missing tokens render as `''`:
+  `montant` (domain `money()` fr / `moneyEn()` en), `service` (`nom`/`nomEn`),
+  `date` (fr-CA / en-CA long date), `code`, `n`, `note`, `etude`, `email`.
+- **`TEMPLATE_META`** (exported from `emails.js`) describes every registry key
+  for the console: `{ audience, labelFr, labelEn, defaultSubjectFr,
+  defaultSubjectEn, placeholders }` — the defaults show the subject with its
+  `{{token}}` placeholders, and `placeholders` lists only the tokens that
+  template's ctx actually carries. A test asserts it covers exactly
+  `Object.keys(TEMPLATES)`.
+- **Non-overridable, on purpose:** the direct `mailer.send` bypasses
+  (`notaryMagicLink` via `onNotaryLoginRequested`, `partnerClaimLink` via
+  `onPartnerClaimRequested`) and the admin console's own `adminMagicLink`.
+  These are auth-critical transactional messages — disabling one would silently
+  lock people out, and rewording one blind could break the trust cues (validity
+  window, single-use) around a sign-in link.
 
 ## Adding a new template
 
@@ -137,14 +211,16 @@ it is kept until the business model question (AGENTS.md rule 2 vs the
    the bilingual contract, brand color, Inter stack, no-`<style>`/`<img>`/
    `<svg>`, preheader, CASL footer and unsubscribe link automatically.
 4. Wire it in `notifications.js` through `sendOnce()` — consent (suppression
-   list) and idempotency (the `(refId, kind)` SENT ledger) come for free.
+   list) and idempotency (the `(refId, kind)` SENT ledger) come for free. Pass
+   `templateKey` (the registry key) and `ctx` (the same context object handed
+   to the template) so the admin override system can disable or reword it.
    Send-points in `handler.js` are fire-and-forget: mail must never break a
    response.
+5. Describe it in `TEMPLATE_META` (audience, labels, default subjects with
+   `{{token}}` placeholders, and the tokens its ctx carries) — the coverage
+   test fails until the entry exists.
 
 ## Before go-live
 
 - `SENDER.address` in `emails.js` is a **placeholder**; CASL requires the real
   registered mailing address.
-- The notary sign-in flow should start emailing `notaryMagicLink` instead of
-  minting a session from a bare email (known weakness noted in
-  `notary-auth.js`).

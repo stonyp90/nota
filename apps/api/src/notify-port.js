@@ -11,11 +11,16 @@
  *
  * The port surface is a single method:
  *
- *   send({ to, subject, html, text }) -> { id }
+ *   send({ to, subject, html, text, unsubscribeUrl }) -> { id }
  *
  * `html` and `text` are both provided by every template (a plain-text
  * alternative alongside the HTML), which improves deliverability and gives
  * screen-reader / plain-text clients a first-class body.
+ *
+ * `unsubscribeUrl` (optional) becomes the List-Unsubscribe header; an https
+ * URL additionally gets List-Unsubscribe-Post (RFC 8058 one-click), which
+ * Gmail and Yahoo expect from bulk senders. The POST /unsubscribe route
+ * records the opt-out with no user interaction.
  */
 function createSesAdapter({ from, region, configurationSet } = {}) {
   if (!from) throw new Error('createSesAdapter: from is required');
@@ -25,11 +30,20 @@ function createSesAdapter({ from, region, configurationSet } = {}) {
   const client = new SESv2Client({ ...(region ? { region } : {}) });
 
   return {
-    async send({ to, subject, html, text }) {
+    async send({ to, subject, html, text, unsubscribeUrl }) {
       if (!to) throw new Error('send: a recipient (to) is required');
       const body = {};
       if (html) body.Html = { Data: html, Charset: 'UTF-8' };
       if (text) body.Text = { Data: text, Charset: 'UTF-8' };
+
+      const headers = [];
+      if (unsubscribeUrl) {
+        headers.push({ Name: 'List-Unsubscribe', Value: '<' + unsubscribeUrl + '>' });
+        // One-click (RFC 8058) only makes sense for an http(s) endpoint.
+        if (/^https?:/i.test(unsubscribeUrl)) {
+          headers.push({ Name: 'List-Unsubscribe-Post', Value: 'List-Unsubscribe=One-Click' });
+        }
+      }
 
       const out = await client.send(
         new SendEmailCommand({
@@ -40,6 +54,7 @@ function createSesAdapter({ from, region, configurationSet } = {}) {
             Simple: {
               Subject: { Data: subject, Charset: 'UTF-8' },
               Body: body,
+              ...(headers.length ? { Headers: headers } : {}),
             },
           },
         })
