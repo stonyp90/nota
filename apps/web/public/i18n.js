@@ -100,6 +100,44 @@
   "Le prêteur exige une assurance en vigueur. Sans elle, le financement ne peut se conclure.": "The lender requires insurance in force. Without it, the financing cannot close.",
   "Adresse civique complète de la propriété financée.": "Full civic address of the property being financed.",
   "Le nom de l’institution qui accorde le prêt.": "The name of the institution granting the loan.",
+  // Prêteur hypothécaire — the lender question (domain LENDERS catalogue).
+  // Proper names identical in English still get an entry: covered() is exact.
+  "Prêteur hypothécaire": "Mortgage lender",
+  "L’institution qui accorde le prêt. Un prêteur virtuel (sans succursale) demande plus de coordination au notaire.": "The institution granting the loan. A virtual lender (no branches) means more coordination for the notary.",
+  "Banque Nationale": "National Bank",
+  "Desjardins": "Desjardins",
+  "RBC Banque Royale": "RBC Royal Bank",
+  "TD Canada Trust": "TD Canada Trust",
+  "BMO Banque de Montréal": "BMO Bank of Montreal",
+  "Banque Scotia": "Scotiabank",
+  "CIBC": "CIBC",
+  "Banque Laurentienne": "Laurentian Bank",
+  "Tangerine": "Tangerine",
+  "Simplii Financial": "Simplii Financial",
+  "Banque EQ": "EQ Bank",
+  "nesto": "nesto",
+  "First National": "First National",
+  "MCAP": "MCAP",
+  "Banque Manuvie": "Manulife Bank",
+  "Prêteur privé": "Private lender",
+  "Autre prêteur": "Other lender",
+  // The free-text companion of « Autre prêteur » — the client adds their
+  // lender by name when it is not in the catalogue.
+  "Nom du prêteur": "Lender name",
+  "Votre prêteur n’est pas dans la liste ? Inscrivez son nom.": "Your lender isn’t in the list? Write its name.",
+  "Réponse requise : Nom du prêteur.": "Answer required: Lender name.",
+  // Composed notary-card factors: only poids>0 lenders ever appear as factors.
+  "Prêteur hypothécaire : Tangerine": "Mortgage lender: Tangerine",
+  "Prêteur hypothécaire : Simplii Financial": "Mortgage lender: Simplii Financial",
+  "Prêteur hypothécaire : Banque EQ": "Mortgage lender: EQ Bank",
+  "Prêteur hypothécaire : nesto": "Mortgage lender: nesto",
+  "Prêteur hypothécaire : First National": "Mortgage lender: First National",
+  "Prêteur hypothécaire : MCAP": "Mortgage lender: MCAP",
+  "Prêteur hypothécaire : Banque Manuvie": "Mortgage lender: Manulife Bank",
+  "Prêteur hypothécaire : Prêteur privé": "Mortgage lender: Private lender",
+  "Prêteur hypothécaire : Autre prêteur": "Mortgage lender: Other lender",
+  "Réponse requise : Prêteur hypothécaire.": "Answer required: Mortgage lender.",
+  "Choisir…": "Choose…",
   "Rapide": "Fast",
   "Prioritaire": "Priority",
   "Extrême": "Extreme",
@@ -140,22 +178,21 @@
   "sur le calendrier public.": "on the public calendar.",
   "Proposez votre prix": "Propose your price",
   "plus la date est proche, plus il faut offrir.": "the closer the date, the more you need to offer.",
-  "Un notaire vous retient": "A notary takes you on",
+  "Un notaire vous retient": "A notary takes on your request",
   "ou vous propose un prix — vous restez libre. Gratuit pour vous.": "or proposes a price — you stay free to decide. Free for you.",
   "Recevez des dossiers en 3 étapes": "Receive files in 3 steps",
   "Vous choisissez les demandes qui vous conviennent.": "You choose the requests that suit you.",
   "Voir les demandes →": "See the requests →",
   "Voyez les demandes ouvertes": "See the open requests",
   "à Québec, par date de signature.": "in Québec, by signing date.",
-  "Retenez celle qui vous convient": "Take on the one that suits you",
-  "proposez votre prix, demandez des documents ; le dossier s’ouvre dès que vous retenez.": "propose your price or ask for documents; the file opens as soon as you take it on.",
+  "proposez votre prix ou demandez des documents ; le dossier s’ouvre dès que vous retenez.": "propose your price or ask for documents; the file opens as soon as you take it on.",
   "Retenez — ou négociez": "Take it on — or negotiate",
   "Complétez l’acte": "Complete the act",
   "commission seulement sur ce qui se conclut.": "commission only on what closes.",
   "Se déconnecter effacera de cet appareil vos coordonnées, vos offres publiées, votre dossier et vos notifications. Continuer ?": "Signing out will erase your contact details, published offers, file and notifications from this device. Continue?",
   "Vous êtes déconnecté.": "You are signed out.",
   "Espace notaire": "Notary space",
-  "Vos demandes et vos dossiers retenus": "Your requests and your retained files",
+  "Vos demandes et vos dossiers retenus": "Your requests and your taken files",
   "Mon compte": "My account",
   "Se connecter / s’inscrire": "Sign in / sign up",
   "Publiez une demande, ou ouvrez l’espace notaire": "Post a request, or open the notary space",
@@ -207,8 +244,7 @@
   "Le notaire vous contacte pour convenir du lieu. Ajoutez la date à votre agenda.": "The notary will contact you to agree on the location. Add the date to your calendar.",
   "Un notaire vous propose un autre prix : acceptez ou refusez ci-dessous.": "A notary is proposing a different price: accept or decline below.",
   "Un notaire attend des documents : complétez votre dossier ci-dessous.": "A notary is waiting for documents: complete your file below.",
-  "En attendant qu’un notaire la retienne, complétez votre dossier : les demandes complètes sont retenues en priorité.": "While you wait for a notary to take it on, complete your file: complete requests are taken on first.",
-  "Votre dossier est complet. Un notaire de Québec peut retenir votre demande à tout moment — vous serez prévenu ici.": "Your file is complete. A Québec notary can take on your request at any time — you will be notified here.",
+  "Tout est prêt. Un notaire de Québec peut retenir votre demande à tout moment — vous serez prévenu ici.": "Your file is complete. A Québec notary can take on your request at any time — you will be notified here.",
   "Agenda": "Calendar",
   "Ajouter la date à Google Agenda": "Add the date to Google Calendar",
   "Télécharger le fichier .ics (Outlook, Apple)": "Download the .ics file (Outlook, Apple)",
@@ -229,7 +265,7 @@
   "Sous la fourchette du marché, peu susceptible d’être retenue.": "Below the market range, unlikely to be taken.",
   "Dans la fourchette qui se conclut à ce délai.": "Within the range that closes at this notice.",
   "Offre généreuse, susceptible d’être retenue rapidement.": "Generous offer, likely to be taken quickly.",
-  "Publier mon offre": "Publish my offer",
+  "Publier mon offre": "Post my offer",
   "Affichée comme « Client · secteur postal ».": "Displayed as “Client · postal sector”.",
   "Votre nom sera visible publiquement sur le carnet.": "Your name will be publicly visible on the carnet.",
   "Publication…": "Publishing…",
@@ -266,7 +302,7 @@
   "Enregistrées dans votre profil. Elles ajustent le prix de départ de cet acte.": "Saved in your profile. They adjust this act's starting price.",
   "Consentement de partage": "Sharing consent",
   "Le notaire qui retient votre demande vérifiera votre identité à la signature. Rien n’est transmis avant.": "The notary who takes on your request will verify your identity at signing. Nothing is shared before then.",
-  "J’autorise le partage de mon dossier avec le notaire retenu.": "I authorize sharing my file with the retained notary.",
+  "J’autorise le partage de mon dossier avec le notaire retenu.": "I authorize sharing my file with the notary who takes it on.",
   "✓ Prêt à être retenu par un notaire. Votre identité sera vérifiée à la signature.": "✓ Ready to be taken on by a notary. Your identity will be verified at signing.",
   "consentement de partage requis.": "sharing consent required.",
   "Dossier complet ✓": "File complete ✓",
@@ -296,9 +332,9 @@
   "Impossible de charger les demandes (hors ligne). Réessayez.": "Unable to load requests (offline). Try again.",
   "Cette offre a déjà été retenue par un autre notaire.": "This offer has already been taken by another notary.",
   "Offre introuvable, elle a peut-être expiré.": "Offer not found — it may have expired.",
-  "Échec de la prise en charge.": "Failed to take on the request.",
+  "Impossible de retenir cette demande.": "Unable to take on this request.",
   "Demande retenue. Dossier du client débloqué.": "Request taken. Client file unlocked.",
-  "Échec du refus.": "Failed to decline.",
+  "Impossible de décliner la demande.": "Unable to decline the request.",
   "Demande déclinée.": "Request declined.",
   "Inscrivez-vous pour tout voir": "Sign up to see everything",
   "Des demandes réelles — retenues en un clic": "Real requests — taken in one click",
@@ -345,6 +381,32 @@
   "Documents fournis": "Documents provided",
   "Demande de documents envoyée au client.": "Document request sent to the client.",
   "Échec de l’envoi de la demande.": "Failed to send the request.",
+  // Retained-act conversation (client ↔ notaire) + the withdrawal.
+  "Virtuel": "Virtual",
+  "virtuel": "virtual",
+  "Vos prêteurs habituels": "Your usual lenders",
+  "Prêteurs hypothécaires": "Mortgage lenders",
+  "Décochez les prêteurs avec lesquels vous ne fermez pas : leurs demandes n’apparaîtront plus dans votre fil. Les prêteurs virtuels (sans succursale) sont signalés.": "Uncheck the lenders you don’t close with: their requests will no longer appear in your feed. Virtual lenders (no branches) are flagged.",
+  "Conversation avec le client": "Conversation with the client",
+  "Aucun message pour l’instant. Écrivez le premier.": "No messages yet. Write the first one.",
+  "Écrire au client…": "Write to the client…",
+  "Écrire au client": "Write to the client",
+  "Messages avec votre notaire": "Messages with your notary",
+  "Écrire à votre notaire…": "Write to your notary…",
+  "Écrire à votre notaire": "Write to your notary",
+  "Écrivez un message.": "Write a message.",
+  "Message impossible (hors ligne).": "Message failed (offline).",
+  "Message impossible.": "Message failed.",
+  "Votre notaire vous a écrit": "Your notary wrote to you",
+  "Un détail rend ce dossier impossible ? Me désister": "A detail makes this file impossible? Withdraw",
+  "L’acte retourne au carnet tel que publié (même date, même montant) et le client est prévenu. Vous ne verrez plus cette demande.": "The act returns to the carnet as published (same date, same amount) and the client is notified. You will no longer see this request.",
+  "Motif (facultatif — transmis à l’équipe Nota, jamais publié)": "Reason (optional — sent to the Nota team, never published)",
+  "Motif du désistement": "Reason for the withdrawal",
+  "Confirmer le désistement": "Confirm the withdrawal",
+  "Garder l’acte": "Keep the act",
+  "Acte remis au carnet. Le client est prévenu.": "Act returned to the carnet. The client has been notified.",
+  "Désistement impossible (hors ligne).": "Withdrawal failed (offline).",
+  "Désistement impossible.": "Withdrawal failed.",
   "Agenda": "Calendar",
   ".ics": ".ics",
   "Prix accepté sur proposition": "Price accepted on proposal",
@@ -364,7 +426,7 @@
   "Redirection vers l’inscription…": "Redirecting to sign-up…",
   "Demandes rafraîchies.": "Requests refreshed.",
   "Paiement autorisé. Votre offre est en cours de publication.": "Payment authorized. Your offer is being published.",
-  "Paiement annulé. Votre offre n’a pas été publiée.": "Payment canceled. Your offer was not published.",
+  "Paiement annulé. Votre offre n’a pas été publiée.": "Payment cancelled. Your offer was not published.",
   "Nota — le carnet public des actes notariés à Québec": "Nota — the public carnet of notarized acts in Québec",
   "Notaire à Québec pour votre financement ou refinancement hypothécaire, à la date voulue. Affichez votre date et votre prix, un notaire retient rapidement votre demande. Gratuit.": "A Québec notary for your mortgage financing or refinancing, on the date you need. Post your date and your price, and a notary quickly takes on your request. Free.",
   "Choisissez votre date, nommez votre prix pour votre financement ou refinancement hypothécaire. Un notaire de Québec retient votre demande. Gratuit pour le client.": "Choose your date, name your price for your mortgage financing or refinancing. A Québec notary takes on your request. Free for the client.",
@@ -378,8 +440,10 @@
   "Notaires": "Notaries",
   "Ouvrir le menu": "Open the menu",
   "Options": "Options",
-  "Thème clair / sombre": "Light / dark theme",
-  "Changer de thème": "Switch theme",
+  "Langue": "Language",
+  "Thème": "Theme",
+  "Thème sombre": "Dark theme",
+  "Préférences": "Preferences",
   "Se connecter": "Sign in",
   "S’inscrire": "Sign up",
   "Compte et notifications": "Account and notifications",
@@ -398,7 +462,7 @@
   "Plus d’options — Carnet": "More options — Carnet",
   "Plus d’options — Espace notaire": "More options — Notary space",
   "Choisissez la date et le prix — les notaires répondent.": "Pick the date and the price — notaries respond.",
-  "Le guide pas à pas, du prix à la signature.": "The step-by-step guide, from price to signature.",
+  "Le guide pas à pas, du prix à la signature.": "The step-by-step guide, from price to signing.",
   "Les documents à réunir, expliqués simplement.": "The documents to gather, explained simply.",
   "Les demandes de Québec, triées par date de signature.": "Québec’s requests, sorted by signing date.",
   "Google, Outlook ou Apple — à jour automatiquement.": "Google, Outlook or Apple — updated automatically.",
@@ -636,7 +700,7 @@
   "Comment souhaitez-vous utiliser Nota ?": "How would you like to use Nota?",
   "Étape 1 sur 2": "Step 1 of 2",
   "Je cherche un notaire": "I'm looking for a notary",
-  "Publiez votre demande — date et prix\u00a0; un notaire la retient.": "Publish your request — date and price; a notary takes it on.",
+  "Publiez votre demande — date et prix\u00a0; un notaire la retient.": "Post your request — date and price; a notary takes it on.",
   "Voyez les demandes ouvertes à Québec.": "See the open requests in Québec.",
   "Changer": "Change",
   "Étape 2 sur 2": "Step 2 of 2",
@@ -654,8 +718,8 @@
   "À préparer — après la mise en relation": "To prepare — after the match",
   "Rien ici ne bloque votre demande. Chaque pièce peut être téléversée, ou marquée déjà transmise au notaire par un autre canal.": "Nothing here blocks your request. Each item can be uploaded, or marked as already sent to the notary through another channel.",
   "✓ Prête à être retenue : questions de prix répondues, partage consenti. Les documents se préparent après la mise en relation.": "✓ Ready to be taken on: price questions answered, sharing consented. The documents are prepared after the match.",
-  "Consentez au partage de votre dossier (dans votre Dossier) pour qu’il soit transmis dès qu’un notaire vous retient.": "Consent to sharing your file (in your File) so it is sent as soon as a notary takes you on.",
-  "En attendant qu’un notaire la retienne, préparez vos documents — ils seront transmis après la mise en relation, rien ne bloque votre demande.": "While a notary takes it on, prepare your documents — they will be sent after the match; nothing blocks your request.",
+  "Autorisez le partage de votre dossier depuis la page « Mon dossier » — il sera transmis dès qu’un notaire retient votre demande.": "Authorize sharing your file from the “My file” page — it will be sent as soon as a notary takes your request.",
+  "En attendant qu’un notaire la retienne, préparez vos documents — ils seront transmis après la mise en relation, rien ne bloque votre demande.": "While you wait for a notary to take it on, prepare your documents — they will be sent after the match; nothing blocks your request.",
   "Pendant l’attente, préparez vos documents.": "While you wait, prepare your documents.",
   "Préparez vos documents": "Prepare your documents",
   "À transmettre après la mise en relation — rien ne bloque votre demande.": "To send after the match — nothing blocks your request.",
@@ -678,11 +742,12 @@
   "Référez un client": "Refer a client",
   "Versée dès qu’un notaire retient la demande.": "Paid as soon as a notary takes on the request.",
   "Référez un notaire": "Refer a notary",
-  "Versée à son premier acte retenu.": "Paid at their first retained act.",
+  "Versée à son premier acte retenu.": "Paid on their first act taken on.",
   "Réclamez votre code — une minute, sans frais.": "Claim your code — one minute, no cost.",
   "Partagez votre lien — le code voyage en privé, jamais affiché au carnet ni montré aux notaires.": "Share your link — the code travels privately, never displayed on the carnet nor shown to notaries.",
   "Récompensé quand ça aboutit — un montant fixe, jamais un pourcentage.": "Rewarded when it comes through — a flat amount, never a percentage.",
   "Réclamez votre code": "Claim your code",
+  "Votre code partenaire": "Your partner code",
   "Code souhaité": "Desired code",
   "4 à 12 lettres ou chiffres, sans distinction de casse.": "4 to 12 letters or digits, case-insensitive.",
   "Réclamer mon code →": "Claim my code →",
@@ -755,6 +820,52 @@
   "Annulée": "Cancelled",
   "Vous avez annulé cette offre. Si vous changez d’avis, choisissez une nouvelle date au carnet.": "You cancelled this offer. If you change your mind, pick a new date on the carnet.",
   "Offre annulée. Elle a été retirée du carnet.": "Offer cancelled. It has been removed from the carnet.",
+  "Aucun notaire disponible ?": "No notary available?",
+  "Messagerie vocale": "Voicemail",
+  "« On vous rappelle… »": "“We’ll call you back…”",
+  "Complet ce mois-ci": "Fully booked this month",
+  "Gratuit pour vous · publié en 2 minutes": "Free for you · published in 2 minutes",
+  "Votre prix, selon votre urgence.": "Your price, set by your urgency.",
+  "Urgence": "Urgent",
+  "Signature": "Signing",
+  "ven. 12 sept.": "Fri., Sept. 12",
+  "mar. 16 sept.": "Tue., Sept. 16",
+  "enchère": "bid",
+  "Plus c’est urgent, plus votre offre pèse — et passe devant.": "The more urgent it is, the more your offer weighs — and jumps the line.",
+  "Un notaire accepte votre offre.": "A notary accepts your offer.",
+  "Offre acceptée — 2 200 $": "Offer accepted — $2,200",
+  "Mise en relation immédiate sur la plateforme.": "Connected immediately on the platform.",
+  "Il peut accepter ou refuser — vous décidez.": "They can accept or decline — you decide.",
+  "Messages · Documents · Suivi": "Messages · Documents · Tracking",
+  "Complétez tout sur la plateforme.": "Complete everything on the platform.",
+  "Bonjour ! Votre dossier est reçu — tout est en ordre.": "Hello! Your file is in — everything is in order.",
+  "Parfait. On signe toujours vendredi ?": "Perfect. Are we still signing on Friday?",
+  "Gratuit pour vous — Nota est payé à la fin, à la signature.": "Free for you — Nota is paid at the end, at signing.",
+  "nota.quebec · Publiez votre offre en 2 minutes": "nota.quebec · Publish your offer in 2 minutes",
+  "Refinancement · Financement": "Refinancing · Financing",
+  "Vous êtes notaire": "You are a notary",
+  "Des trous dans votre semaine ?": "Holes in your week?",
+  "Lun": "Mon",
+  "Mar": "Tue",
+  "Mer": "Wed",
+  "Jeu": "Thu",
+  "Ven": "Fri",
+  "Sur Nota, la demande vous attend": "On Nota, demand is waiting for you",
+  "Des clients affichent date et prix.": "Clients post date and price.",
+  "+ 6 autres demandes cette semaine à Québec": "+ 6 more requests this week in Québec",
+  "Acceptez en un clic.": "Accept in one click.",
+  "Accepter — 2 200 $": "Accept — $2,200",
+  "Demande retenue": "Request taken",
+  "Payé à la signature — et votre part grandit avec votre note": "Paid at signing — and your share grows with your rating",
+  "Remplissez votre semaine.": "Fill your week.",
+  "nota.quebec · Inscription gratuite pour les notaires": "nota.quebec · Free sign-up for notaries",
+  "Je cherche un notaire": "I’m looking for a notary",
+  "Je suis notaire": "I’m a notary",
+  "Voir comment ça marche — 20 s": "See how it works — 20 s",
+  "Remplir ma semaine — 15 s": "Fill my week — 15 s",
+  "Entrer sur le site →": "Enter the site →",
+  "Passer →": "Skip →",
+  "Nota": "Nota",
   "Elle a été retirée du carnet.": "It has been removed from the carnet.",
 };
   var HTML = {
@@ -1009,7 +1120,7 @@
   {
     "pattern": "^Proposition refusée\\. Votre offre reste ouverte à (.+)\\.$",
     "flags": "",
-    "replacement": "Proposition declined. Your offer stays open at $1."
+    "replacement": "Proposal declined. Your offer stays open at $1."
   },
   {
     "pattern": "^Prochaine dispo · (.+)$",
@@ -1129,7 +1240,7 @@
   {
     "pattern": "^(.+) par client référé retenu, (.+) au premier acte d’un notaire référé\\.$",
     "flags": "",
-    "replacement": "$1 per referred client whose request is retained, $2 at a referred notary’s first act."
+    "replacement": "$1 per referred client whose request is taken on, $2 at a referred notary’s first act."
   },
   {
     "pattern": "^Demande retenue et payée — net viré : (.+)\\. Dossier du client débloqué\\.$",
@@ -1417,6 +1528,11 @@
     "replacement": "Answer required: $1"
   },
   {
+    "pattern": "Prêteur privé(?![A-Za-zà-ÿ])",
+    "flags": "g",
+    "replacement": "Private lender"
+  },
+  {
     "pattern": "Testament et mandat de protection(?![A-Za-zà-ÿ])",
     "flags": "g",
     "replacement": "Will and protection mandate"
@@ -1675,27 +1791,19 @@
   }
 
   // --- Language toggle -------------------------------------------------------
-  // Buttons carry data-lang-toggle (value "short" shows "EN"/"FR", anything
-  // else the full name) and data-i18n-skip so the walker leaves them alone.
+  // Each [data-lang-seg] group carries one button per language
+  // ([data-set-lang="fr"|"en"]): BOTH stay visible, the CURRENT one is marked
+  // pressed, clicking the other switches. The groups sit under data-i18n-skip
+  // so the walker leaves their two-letter labels alone.
   function wireToggles() {
-    var els = document.querySelectorAll('[data-lang-toggle]');
-    for (var i = 0; i < els.length; i++) {
-      (function (el) {
-        var short = el.getAttribute('data-lang-toggle') === 'short';
-        var target = current === 'en' ? 'fr' : 'en';
-        // A toggle may carry an icon: the label then lives in its own span
-        // ([data-lang-label]) so writing the text never wipes the icon.
-        var label = el.querySelector('[data-lang-label]') || el;
-        label.textContent = short
-          ? (target === 'en' ? 'EN' : 'FR')
-          : (target === 'en' ? 'English' : 'Français');
-        el.setAttribute('lang', target === 'en' ? 'en-CA' : 'fr-CA');
-        el.setAttribute(
-          'aria-label',
-          target === 'en' ? 'Switch to English' : 'Passer au français'
-        );
-        el.addEventListener('click', function () { setLang(target); });
-      })(els[i]);
+    var btns = document.querySelectorAll('[data-lang-seg] [data-set-lang]');
+    for (var i = 0; i < btns.length; i++) {
+      (function (btn) {
+        var l = btn.getAttribute('data-set-lang') === 'en' ? 'en' : 'fr';
+        btn.setAttribute('aria-pressed', l === current ? 'true' : 'false');
+        btn.setAttribute('aria-label', l === 'en' ? 'English' : 'Français');
+        btn.addEventListener('click', function () { if (l !== current) setLang(l); });
+      })(btns[i]);
     }
   }
 

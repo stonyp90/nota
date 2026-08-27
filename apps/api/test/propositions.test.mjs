@@ -33,7 +33,7 @@ const flush = async () => {
   await new Promise((r) => setImmediate(r));
 };
 // Zero-add refinancement answers: the dynamic base stays at the flat 2000 $.
-const PRICING = { refinancement: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue' } };
+const PRICING = { refinancement: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale' } };
 const bearer = (token) => ({ authorization: 'Bearer ' + token });
 
 async function session(a, email) {

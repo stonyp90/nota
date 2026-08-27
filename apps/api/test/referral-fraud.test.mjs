@@ -26,7 +26,7 @@ const domain = require('@nota/domain');
 const TODAY = '2026-08-12';
 const NOW_MS = 1_760_000_000_000;
 const BASE = 'https://nota.example';
-const PRICING = { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue' };
+const PRICING = { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale' };
 const parse = (res) => JSON.parse(res.body);
 const bearer = (token) => ({ authorization: 'Bearer ' + token });
 const flush = async () => { await new Promise((r) => setImmediate(r)); await new Promise((r) => setImmediate(r)); };

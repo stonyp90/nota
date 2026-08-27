@@ -23,7 +23,7 @@ function app(seed = []) {
 const parse = (res) => JSON.parse(res.body);
 // The zero-add refinancement answers: the dynamic base stays at the flat 2000 $.
 const DEFAULT_PRICING = {
-  refinancement: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue' },
+  refinancement: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale' },
 };
 const postBid = (a, obj) =>
   a.handle({ method: 'POST', path: '/bids', body: JSON.stringify({ pricing: DEFAULT_PRICING[obj.serviceId], ...obj }) });
@@ -139,7 +139,7 @@ test('GET /notary/bids labels a hard file "complexe" with its factors', async ()
   // A refinancement in a succession with no bank approval is a hard file.
   await postBid(a, {
     serviceId: 'refinancement', dateISO: '2026-08-25', montant: 3000,
-    pricing: { valeur_pret: 250000, succession: 'oui', approbation_bancaire: 'non' },
+    pricing: { valeur_pret: 250000, succession: 'oui', approbation_bancaire: 'non', preteur: 'banque_nationale' },
   });
   const { token } = await session(a, 'complexe@notaire.ca');
   const { bids } = parse(await listBids(a, token));

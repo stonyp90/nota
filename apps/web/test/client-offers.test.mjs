@@ -261,7 +261,9 @@ test('a dossier change for an act with a live tokened offer is pushed to the API
   Nota.setTab('dossier');
   await wait(20);
   calls.length = 0;
-  const inp = doc.querySelector('#dossier-list input[type="text"]');
+  // Scoped to the intake items: the pricing card above them now carries its
+  // own text input (« Nom du prêteur », hidden until « Autre prêteur »).
+  const inp = doc.querySelector('#dossier-list .dossier-item input[type="text"]');
   inp.value = 'Jean Tremblay';
   inp.dispatchEvent(new win.Event('input', { bubbles: true }));
   await wait(700);

@@ -25,7 +25,10 @@ const PORT = Number(process.env.PORT || 8811);
 // Effectively unthrottled for the test run; still a finite guard.
 const RL_MAX = Number(process.env.E2E_RL_MAX || 100000);
 
-const today = new Date().toISOString().slice(0, 10);
+// LOCAL date, like app.js's todayISO(): the raw UTC slice rolls to tomorrow
+// every evening in UTC-4/-5, and the whole run then rejects the sheet's
+// default same-day booking as date_passee.
+const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 // Same demo referral slice as apps/api/local-server.js so the two seeded demo
 // partners (EVEROY / COURTIER1) exist and the referral paths are exercisable.
 const fixtures = domain.makeFixtures(today).map((b, i) =>
@@ -52,6 +55,10 @@ const demoBilling = createBilling({
 const app = createApp(repo, {
   billing: demoBilling,
   billingConfigured: false,
+  // Same LOCAL-date clock as the fixtures above and the web client's
+  // todayISO() — otherwise every evening (UTC-4/-5) the handler's UTC default
+  // is already "tomorrow" and rejects same-day bookings as date_passee.
+  now: () => today,
   // The one E2E-specific tweak: don't let the shared-IP suite hit the throttle.
   notaryLoginRlMax: RL_MAX,
   partnerClaimRlMax: RL_MAX,

@@ -14,8 +14,8 @@ Given('le service {string}', function (serviceId) {
 // Default mandatory pricing params per service so a publication validates unless
 // a scenario explicitly overrides them.
 const DEFAULT_PRICING = {
-  refinancement: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue' },
-  financement: { valeur_pret: 250000, contexte: 'propriete_detenue', approbation_bancaire: 'obtenue' },
+  refinancement: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale' },
+  financement: { valeur_pret: 250000, contexte: 'propriete_detenue', approbation_bancaire: 'obtenue', preteur: 'banque_nationale' },
 };
 async function publish(world, body) {
   await world.request({

@@ -40,8 +40,8 @@ function summary(msgs) {
 // chosen so a seeded publication validates at each act's flat base
 // (refinancement 2000 $, financement 1800 $).
 const PRICING_VALIDE = {
-  refinancement: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue' },
-  financement: { valeur_pret: 250000, contexte: 'propriete_detenue', approbation_bancaire: 'obtenue' },
+  refinancement: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale' },
+  financement: { valeur_pret: 250000, contexte: 'propriete_detenue', approbation_bancaire: 'obtenue', preteur: 'banque_nationale' },
 };
 
 // --- Given ------------------------------------------------------------------

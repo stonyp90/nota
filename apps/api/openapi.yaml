@@ -749,6 +749,120 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /notary/bids/message:
+    post:
+      operationId: notarySendMessage
+      summary: Write to the client of a retained act (conversation de l'acte retenu).
+      description: >-
+        The retained-act thread (domain `validateChatMessage`): it only exists
+        while the bid is RETAINED, and only for the notary who holds it (any
+        other notary -> 403 `interdit`). The thread is read back on
+        `GET /notary/bids` (retained entries) and `GET /client/bid`; both
+        consoles poll it — messages trigger no email.
+      security:
+        - notarySession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, dateISO, texte]
+              properties:
+                id:
+                  type: string
+                dateISO:
+                  type: string
+                  format: date
+                texte:
+                  type: string
+                  maxLength: 500
+                token:
+                  type: string
+                  description: Session token fallback when no Authorization header is sent.
+      responses:
+        "200":
+          description: Message appended to the thread.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message:
+                    $ref: "#/components/schemas/ChatMessage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: >-
+            Domain errors: `message_requis`, `message_trop_long`,
+            `offre_non_retenue`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /notary/bids/release:
+    post:
+      operationId: releaseRetainedBid
+      summary: Withdraw AFTER accepting — the act returns to the open market (désistement).
+      description: >-
+        A notary who retained an act may still withdraw when a surfaced detail
+        (an unfamiliar lender, a conflict) makes the file impossible on their
+        side (domain `validateRelease`). The bid returns to the carnet exactly
+        as the client posted it (same date, amount, dossier); the withdrawing
+        notary stops seeing it (decline marker) and their calendar pointer is
+        dropped. The client is emailed (`actReleased`); the operator is alerted
+        when a payment may be in flight or a reason was given.
+      security:
+        - notarySession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, dateISO]
+              properties:
+                id:
+                  type: string
+                dateISO:
+                  type: string
+                  format: date
+                message:
+                  type: string
+                  maxLength: 500
+                  description: Optional reason, relayed to the operator (never shown publicly).
+                token:
+                  type: string
+      responses:
+        "200":
+          description: The bid, back on the open market (public projection).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [bid]
+                properties:
+                  bid:
+                    $ref: "#/components/schemas/Bid"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: >-
+            Domain errors: `offre_non_retenue` (the bid is not retained),
+            `message_trop_long`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /client/bid:
     get:
       operationId: getClientBid
@@ -807,12 +921,68 @@ paths:
                       $ref: "#/components/schemas/ClientDemande"
                   readiness:
                     $ref: "#/components/schemas/Readiness"
+                  messages:
+                    type: array
+                    description: The retained-act conversation. Empty until a notary retains the bid.
+                    items:
+                      $ref: "#/components/schemas/ChatMessage"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+  /client/bid/message:
+    post:
+      operationId: clientSendMessage
+      summary: Answer the retaining notary in the retained-act thread.
+      description: >-
+        Same thread as `/notary/bids/message`, from the client side, guarded by
+        the per-bid client token. Only exists while the bid is RETAINED
+        (domain `validateChatMessage` -> 422 `offre_non_retenue` otherwise).
+      security:
+        - clientToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, dateISO, texte]
+              properties:
+                id:
+                  type: string
+                dateISO:
+                  type: string
+                  format: date
+                texte:
+                  type: string
+                  maxLength: 500
+      responses:
+        "200":
+          description: Message appended to the thread.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message:
+                    $ref: "#/components/schemas/ChatMessage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: >-
+            Domain errors: `message_requis`, `message_trop_long`,
+            `offre_non_retenue`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /client/propositions/accept:
     post:
       operationId: acceptProposition
@@ -1292,10 +1462,43 @@ components:
           format: date
         propositionId:
           type: string
+    LenderInfo:
+      type: object
+      description: >-
+        The lender behind a bid (from the domain's LENDERS catalogue), shown to
+        notaries so they can decide before retaining — a notary only closes
+        with the institutions they normally work with. `virtuel` flags a
+        branchless lender (remote instructions, extra coordination). For an
+        « Autre prêteur » answer, `nom` is the lender name the client typed
+        (the id stays `autre`). Null on bids that predate the lender question.
+      required: [id, nom, virtuel]
+      properties:
+        id:
+          type: string
+        nom:
+          type: string
+        virtuel:
+          type: boolean
+    ChatMessage:
+      type: object
+      description: >-
+        One message of the retained-act conversation (client <-> retaining
+        notary). `de` names the sending role; the thread lives on the bid.
+      required: [id, de, texte, createdAt]
+      properties:
+        id:
+          type: string
+        de:
+          type: string
+          enum: [client, notaire]
+        texte:
+          type: string
+        createdAt:
+          type: string
     NotaryBid:
       type: object
       description: Notary-facing projection of an open bid (never the dossier or courriel).
-      required: [id, serviceId, dateISO, montant, tier, premium, ready, proposition, demande, missing]
+      required: [id, serviceId, dateISO, montant, tier, premium, ready, preteur, proposition, demande, missing]
       properties:
         id:
           type: string
@@ -1314,6 +1517,10 @@ components:
           type: [string, "null"]
         ready:
           type: boolean
+        preteur:
+          oneOf:
+            - type: "null"
+            - $ref: "#/components/schemas/LenderInfo"
         complexity:
           type: object
           additionalProperties: true
@@ -1398,6 +1605,15 @@ components:
           additionalProperties: true
         client:
           $ref: "#/components/schemas/ClientContact"
+        preteur:
+          oneOf:
+            - type: "null"
+            - $ref: "#/components/schemas/LenderInfo"
+        messages:
+          type: array
+          description: The live thread with the client (see /notary/bids/message).
+          items:
+            $ref: "#/components/schemas/ChatMessage"
         viaProposition:
           type: boolean
           description: True when retention came from the client accepting this notary's proposition.
@@ -1645,6 +1861,8 @@ components:
             - corps_trop_grand
             - id_manquant
             - acte_non_autorise
+            - offre_non_retenue
+            - expediteur_invalide
         message:
           type: string
           description: Human-readable message (fr-CA).

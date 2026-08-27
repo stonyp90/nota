@@ -93,6 +93,7 @@ function fillValidOffer(win, doc, D) {
   const lv = $(doc, 'crit-valeur_pret'); lv.value = '300000'; fire(win, lv, 'input');
   $(doc, 'crit-succession__non').click();
   $(doc, 'crit-approbation_bancaire__obtenue').click();
+  const selPreteur = $(doc, 'crit-preteur'); selPreteur.value = 'banque_nationale'; fire(win, selPreteur, 'change');
 }
 
 const welcomeCalls = (calls) => calls.filter((c) => c.url.includes('/client/welcome'));

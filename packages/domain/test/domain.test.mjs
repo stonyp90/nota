@@ -9,7 +9,7 @@ const TODAY = '2026-08-12';
 
 // Fully-answered mandatory pricing params that keep refinancement at its
 // 2 000 $ base — the standard fixture for a valid offer since ADR 0010.
-const PRICING = { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue' };
+const PRICING = { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale' };
 
 // fr-CA separates thousands and the sign with a NO-BREAK space (U+00A0), so an
 // amount never wraps mid-number or leaves its "$" stranded on the next line.
@@ -135,7 +135,7 @@ test('dates: daysBetween and addDays are inverse and tz-stable', () => {
 
 test('validateOffer: a clean prioritaire offer', () => {
   // 3 days out is prioritaire; 2 700 $ is the band's midpoint (1,35× the floor).
-  const r = D.validateOffer({ serviceId: 'refinancement', dateISO: '2026-08-15', montant: 2700, todayISO: TODAY, pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue' } });
+  const r = D.validateOffer({ serviceId: 'refinancement', dateISO: '2026-08-15', montant: 2700, todayISO: TODAY, pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale' } });
   assert.equal(r.ok, true);
   assert.equal(r.errors.length, 0);
   assert.equal(r.tier, 'prioritaire');

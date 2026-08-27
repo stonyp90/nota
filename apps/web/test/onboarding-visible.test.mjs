@@ -70,13 +70,14 @@ test('the landing has no standing #how-it-works section — the guide owns onboa
   assert.ok($(doc, 'onboarding-dialog'), 'the guide dialog itself remains');
 });
 
-test('the guide icon greets visitors only: hidden once signed in, guide stays in the account menu', async () => {
-  // A signed-in client already knows the platform — the header icon retires;
-  // the account menu's "Comment ça marche" row stays as the way back.
+test('the guide icon is always in the header — signed in included', async () => {
+  // The "?" is the ONE standing way back into the guide (owner's ask,
+  // 2026-08-26): it no longer retires on sign-in, and the account menu no
+  // longer carries a duplicate "Comment ça marche" row.
   const { doc } = await boot({
     seed: { 'nota.profile.v1': JSON.stringify({ courriel: 'eve@client.ca', nom: 'Eve Roy' }) },
   });
-  assert.equal($(doc, 'nav-guide').hidden, true, 'signed in, the icon is gone');
+  assert.equal($(doc, 'nav-guide').hidden, false, 'signed in, the icon stays');
 });
 
 test('the guide opens from the header icon in one tap', async () => {

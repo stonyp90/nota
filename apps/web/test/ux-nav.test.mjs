@@ -320,8 +320,16 @@ test('phone drawer: the trio plus auth, theme, language and the legal fold', asy
   assert.deepEqual(doors.map((d) => d.dataset.tab), ['carnet', 'notaires', 'partenaires'],
     'the drawer mirrors the three flat doors');
   assert.ok($(doc, 'mnav-auth'), 'the auth group exists (shown while anonymous)');
-  assert.ok($(doc, 'mnav-theme'), 'theme toggle row');
-  assert.ok($(doc, 'mnav-lang'), 'language toggle row');
+  // Language and theme are PREFERENCE rows — label left, small toggle right —
+  // grouped apart from the navigation rows.
+  const prefs = drawer.querySelector('.mnav-prefs');
+  assert.ok(prefs, 'one preferences group (language + theme)');
+  assert.ok(prefs.contains($(doc, 'mnav-theme')) && prefs.contains($(doc, 'mnav-lang')),
+    'language and theme both live in the preferences group');
+  assert.equal($(doc, 'mnav-theme').getAttribute('role'), 'switch', 'theme is a real switch');
+  assert.deepEqual(
+    Array.from($(doc, 'mnav-lang').querySelectorAll('button[data-set-lang]')).map((b) => b.dataset.setLang),
+    ['fr', 'en'], 'the drawer language control offers both languages');
   assert.ok(drawer.querySelector('.mnav-expandrow[aria-controls="msub-legal"]'), 'the one legal fold');
   // A door click closes the drawer.
   doors[2].click();
@@ -365,15 +373,38 @@ test('the guide, language and theme icons share one header cluster; the burger c
     ['nav-guide', 'lang-toggle', 'theme-toggle'],
     'guide · language · theme — in that order, nothing else'
   );
+  // The "?" guide is ALWAYS visible (owner's ask, 2026-08-26) — it no longer
+  // retires on sign-in, so it never carries the hidden attribute.
+  assert.equal($(doc, 'nav-guide').hidden, false, 'the guide icon shows from first paint');
+  // Language and theme show their STATE: a FR | EN segment (marked by
+  // i18n.js) and a sun/moon switch — no more bare icons hiding the answer.
+  assert.deepEqual(
+    Array.from($(doc, 'lang-toggle').querySelectorAll('button[data-set-lang]')).map((b) => b.dataset.setLang),
+    ['fr', 'en'], 'the header language control offers both languages');
+  assert.equal($(doc, 'theme-toggle').getAttribute('role'), 'switch', 'the header theme control is a switch');
   const wrap = doc.querySelector('.site-header .wrap');
   assert.equal(wrap.lastElementChild.id, 'nav-burger',
     'the burger is the last control, so the phone header reads brand → ? → avatar → burger');
 });
 
 test('each band trims the header; the drawer covers what the phone hides', () => {
-  assert.match(CSS_SRC, /\.header-tools\s*\{[^}]*border/, 'the cluster is drawn as one group');
-  assert.match(CSS_SRC, /\.icon-btn\[hidden\]\s*\{\s*display:\s*none/,
-    'a hidden icon (the signed-in guide) must actually disappear — .icon-btn sets display:grid');
+  // The three controls sit TOGETHER on one shared track, all the same 28px
+  // height (owner's ask, 2026-08-26: « les mettre ensemble et même
+  // grosseur ») — a quiet background, never a border.
+  assert.match(CSS_SRC, /\.header-tools\s*\{[^}]*background:\s*var\(--surface-inset\)/,
+    'one shared track holds guide, language and theme');
+  assert.doesNotMatch(CSS_SRC, /\.header-tools\s*\{[^}]*border:\s*1px/,
+    'no border drawn around the header tool group');
+  assert.match(CSS_SRC, /\.header-tools \.icon-btn\s*\{[^}]*height:\s*28px/,
+    'the "?" matches the shared 28px height');
+  assert.match(CSS_SRC, /\.mini-seg\s*\{[^}]*height:\s*28px/,
+    'the FR | EN segment matches the shared 28px height');
+  assert.match(CSS_SRC, /\.tswitch\s*\{[^}]*height:\s*28px/,
+    'the theme switch matches the shared 28px height');
+  // …and the strip is SEGMENTED in three: a thin hairline before each
+  // control after the first (guide | language | theme).
+  assert.match(CSS_SRC, /\.header-tools > \* \+ \*::after\s*\{[^}]*width:\s*1px/,
+    'hairlines split the strip into three segments');
   // Tablet compact band (720–899.98) slims chrome so the full set still fits.
   assert.match(CSS_SRC, /@media \(min-width: 720px\) and \(max-width: 899\.98px\)/);
   // Phone: tabs, auth, theme AND the inline language toggle hand off to the
@@ -383,6 +414,30 @@ test('each band trims the header; the drawer covers what the phone hides', () =>
   assert.notEqual(phone.length, CSS_SRC.length, 'phone header band exists');
   assert.match(phone, /#lang-toggle\s*\{[^}]*display:\s*none/,
     'the inline language toggle yields to the drawer row on phones');
+});
+
+test('theme switches show the current theme, stay in sync, and never close the drawer', async () => {
+  const { doc } = await boot();
+  const header = $(doc, 'theme-toggle');
+  const drawerSwitch = $(doc, 'mnav-theme');
+  // Dark is the boot default; both switches must say so (checked = dark).
+  assert.equal(doc.documentElement.getAttribute('data-theme'), 'dark');
+  assert.equal(header.getAttribute('aria-checked'), 'true');
+  assert.equal(drawerSwitch.getAttribute('aria-checked'), 'true');
+  header.click();
+  assert.equal(doc.documentElement.getAttribute('data-theme'), 'light');
+  assert.equal(header.getAttribute('aria-checked'), 'false', 'the header switch reflects the flip');
+  assert.equal(drawerSwitch.getAttribute('aria-checked'), 'false', 'the drawer twin follows');
+  // The drawer's switch drives the same state — and adjusting a preference is
+  // not a navigation choice, so the drawer must stay open.
+  $(doc, 'nav-burger').click();
+  await wait(10);
+  drawerSwitch.click();
+  await wait(10);
+  assert.equal(doc.documentElement.getAttribute('data-theme'), 'dark');
+  assert.equal(header.getAttribute('aria-checked'), 'true');
+  assert.equal($(doc, 'mobile-nav').classList.contains('is-open'), true,
+    'flipping the theme keeps the drawer open');
 });
 
 // ---------------------------------------------------------------------------
@@ -402,6 +457,7 @@ test('the three doors and the partner claim form carry English entries', () => {
     'Partenaires',
     'Référez, et soyez récompensé.',
     'Réclamez votre code',
+    'Votre code partenaire',
     'Code souhaité',
     'Copier le lien',
   ]) {

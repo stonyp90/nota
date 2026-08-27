@@ -112,6 +112,7 @@ async function submitOffer({ win, doc, D, Nota }, tweak) {
   $(doc, 'crit-valeur_pret').value = '300000'; fire(win, $(doc, 'crit-valeur_pret'), 'input');
   $(doc, 'crit-succession__non').click();
   $(doc, 'crit-approbation_bancaire__obtenue').click();
+  const selPreteur = $(doc, 'crit-preteur'); selPreteur.value = 'banque_nationale'; fire(win, selPreteur, 'change');
   if (tweak) tweak();
   fire(win, $(doc, 'offer-form'), 'submit');
   await wait(10);
@@ -362,6 +363,51 @@ test('a taken code surfaces the friendly typed error, and the CTA re-arms', asyn
 });
 
 // ---------------------------------------------------------------------------
+// 2b. The returning partner — the pane resurfaces the claimed code
+// ---------------------------------------------------------------------------
+
+// A confirmed claim persisted by a previous visit (nota.partner.v1).
+const CLAIMED = JSON.stringify({
+  code: 'EVEROY', type: 'agent_immobilier', courriel: 'eve@agence.ca',
+  createdAt: '2026-08-01T12:00:00.000Z',
+});
+
+test('a returning partner lands on their code — never a blank claim form', async () => {
+  const { doc, Nota } = await boot({ seed: { 'nota.partner.v1': CLAIMED } });
+  Nota.setTab('partenaires');
+  // The share box is already open, exactly as the claim left it.
+  assert.equal($(doc, 'partner-success').hidden, false, 'the share box is open on arrival');
+  assert.equal($(doc, 'partner-link').textContent, 'https://nota.example/?ref=EVEROY');
+  // The panel reads as THEIR code now, not a fresh claim.
+  assert.equal($(doc, 'partner-form-title').textContent, 'Votre code partenaire');
+  assert.equal($(doc, 'partner-submit').textContent.trim(), 'Code réclamé ✓');
+  assert.equal($(doc, 'partner-submit').disabled, true);
+  // The form is pre-filled from the record, so an edit starts from it.
+  assert.equal($(doc, 'partner-code').value, 'EVEROY');
+  assert.equal($(doc, 'partner-courriel').value, 'eve@agence.ca');
+  const on = doc.querySelector('#partner-type .chip[aria-pressed="true"]');
+  assert.equal(on && on.dataset.type, 'agent_immobilier', 'their category chip is selected');
+});
+
+test('editing a field re-arms the returning partner’s form for a fresh claim', async () => {
+  const { win, doc, Nota } = await boot({ seed: { 'nota.partner.v1': CLAIMED } });
+  Nota.setTab('partenaires');
+  const code = $(doc, 'partner-code'); code.value = 'eve-roy-2'; fire(win, code, 'input');
+  assert.equal($(doc, 'partner-success').hidden, true, 'the share box folds away');
+  assert.equal($(doc, 'partner-submit').textContent.trim(), 'Réclamer mon code →');
+  assert.equal($(doc, 'partner-submit').disabled, false, 'type + courriel carry over — ready to resubmit');
+});
+
+test('the vignette plays the returning partner’s OWN code — EVEROY stays for prospects', async () => {
+  const fresh = await boot();
+  assert.equal($(fresh.doc, 'pr-vig-code').textContent, 'EVEROY', 'the prospect sees the sample code');
+  const { doc } = await boot({
+    seed: { 'nota.partner.v1': JSON.stringify({ code: 'MARCQC', type: 'courtier_hypothecaire', courriel: 'm@qc.ca' }) },
+  });
+  assert.equal($(doc, 'pr-vig-code').textContent, 'MARCQC', 'the partner sees their own code in the story');
+});
+
+// ---------------------------------------------------------------------------
 // 3. The pane stays strict — and the air carries ONE clean vignette
 // ---------------------------------------------------------------------------
 
@@ -376,8 +422,9 @@ test('the reward vignette fills the pitch air: decorative, domain-priced, motion
   // The payoff figure is DOMAIN data (renderPartnerPane), never a markup literal.
   assert.equal($(doc, 'pr-vig-amt').textContent, D.money(D.REFERRAL.client));
   assert.ok(!/pr-vig-amt"[^>]*>[^<]*\d/.test(HTML_SRC), 'no literal amount baked in the markup');
-  // Pure CSS loop: frozen on its FINAL state under reduced motion (base styles
-  // are the ending, keyframes only add the hidden phases) — never a blank strip.
+  // Pure CSS, one pass that holds its FINAL state (base styles are the ending,
+  // keyframes only add the hidden phases) — and frozen on that same finished
+  // tableau under reduced motion: never a blank strip, payoff always lands.
   const rmBlocks = CSS_SRC.split('@media (prefers-reduced-motion: reduce)').slice(1);
   assert.ok(rmBlocks.some((b) => /\.pr-vig[^}]*animation: none/.test(b.slice(0, b.indexOf('}') + 1))),
     'the vignette sits still under prefers-reduced-motion');

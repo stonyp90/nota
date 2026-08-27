@@ -68,9 +68,15 @@ test('English boot translates the static shell and head', async () => {
     'manifest.en.webmanifest'
   );
 
-  // The toggle offers the OTHER language.
-  assert.equal(doc.getElementById('lang-toggle').textContent, 'FR');
-  assert.equal(doc.getElementById('mnav-lang').textContent, 'Français');
+  // The language control is a FR | EN segment: BOTH options stay visible and
+  // the CURRENT one is marked pressed — state at a glance, header and drawer.
+  for (const id of ['lang-toggle', 'mnav-lang']) {
+    const seg = doc.getElementById(id);
+    assert.equal(seg.querySelector('[data-set-lang="en"]').getAttribute('aria-pressed'), 'true',
+      `${id}: the EN segment is pressed on an English boot`);
+    assert.equal(seg.querySelector('[data-set-lang="fr"]').getAttribute('aria-pressed'), 'false',
+      `${id}: the FR segment is not`);
+  }
 });
 
 test('English boot renders dynamic content in English', async () => {
@@ -157,8 +163,13 @@ test('French boot stays French and offers English', async () => {
     doc.querySelector('link[rel="manifest"]').getAttribute('href'),
     'manifest.webmanifest'
   );
-  assert.equal(doc.getElementById('lang-toggle').textContent, 'EN');
-  assert.equal(doc.getElementById('mnav-lang').textContent, 'English');
+  for (const id of ['lang-toggle', 'mnav-lang']) {
+    const seg = doc.getElementById(id);
+    assert.equal(seg.querySelector('[data-set-lang="fr"]').getAttribute('aria-pressed'), 'true',
+      `${id}: the FR segment is pressed on a French boot`);
+    assert.equal(seg.querySelector('[data-set-lang="en"]').getAttribute('aria-pressed'), 'false',
+      `${id}: the EN segment is not`);
+  }
 
   const pulse = doc.getElementById('pulse-rows').textContent;
   assert.match(pulse, /\d\u00a0\$/, 'French boot keeps Quebec money format');

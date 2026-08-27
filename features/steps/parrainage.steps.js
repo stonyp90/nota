@@ -39,7 +39,7 @@ When(
         montant,
         parrain: code,
         ref: code,
-        pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue' },
+        pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale' },
       }),
     });
   }
@@ -78,7 +78,7 @@ When(
         montant,
         courriel,
         parrain: code,
-        pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue' },
+        pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale' },
       }),
     });
   }

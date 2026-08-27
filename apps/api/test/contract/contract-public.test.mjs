@@ -28,7 +28,7 @@ const BASE = 'https://nota.example';
 
 // The zero-add refinancement: the dynamic floor stays at the flat 2 000 $.
 const DEFAULT_PRICING = {
-  refinancement: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue' },
+  refinancement: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale' },
 };
 
 // Minimal fake Stripe, so the Connect/webhook/act routes are DRIVABLE in the
@@ -208,6 +208,38 @@ test('the shared error envelope validates on a 401 (Unauthorized $ref response)'
   const body = parse(res);
   assert.equal(body.errors[0].code, 'non_autorise');
   assertValid('/notary/bids', 'GET', 401, body);
+});
+
+// --- The retained-act thread + the notary withdrawal -------------------------
+
+test('chat + release — message, client view (with thread) and released bid shapes validate', async () => {
+  const a = app();
+  const posted = parse(await postBid(a, { serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2400, courriel: 'client@example.ca' }));
+  const { token } = await session(a, 'chat@notaire.ca');
+  const ref = { id: posted.bid.id, dateISO: posted.bid.dateISO };
+  await a.handle({ method: 'POST', path: '/notary/bids/accept', headers: bearer(token), body: JSON.stringify(ref) });
+
+  const sent = await a.handle({ method: 'POST', path: '/notary/bids/message', headers: bearer(token), body: JSON.stringify({ ...ref, texte: 'Bonjour !' }) });
+  assert.equal(sent.statusCode, 200, sent.body);
+  assertValid('/notary/bids/message', 'POST', 200, parse(sent));
+
+  const answered = await a.handle({ method: 'POST', path: '/client/bid/message', headers: bearer(posted.clientToken), body: JSON.stringify({ ...ref, texte: 'Bonjour, merci.' }) });
+  assert.equal(answered.statusCode, 200, answered.body);
+  assertValid('/client/bid/message', 'POST', 200, parse(answered));
+
+  const view = await a.handle({ method: 'GET', path: '/client/bid', headers: bearer(posted.clientToken), query: ref });
+  assert.equal(view.statusCode, 200, view.body);
+  assert.equal(parse(view).messages.length, 2);
+  assertValid('/client/bid', 'GET', 200, parse(view));
+
+  const released = await a.handle({ method: 'POST', path: '/notary/bids/release', headers: bearer(token), body: JSON.stringify({ ...ref, message: 'Prêteur hors de mes habitudes.' }) });
+  assert.equal(released.statusCode, 200, released.body);
+  assertValid('/notary/bids/release', 'POST', 200, parse(released));
+
+  // Released while open -> the domain's offre_non_retenue in the shared envelope.
+  const again = await a.handle({ method: 'POST', path: '/notary/bids/release', headers: bearer(token), body: JSON.stringify(ref) });
+  assert.equal(again.statusCode, 422);
+  assertValid('/notary/bids/release', 'POST', 422, parse(again));
 });
 
 // --- Drift sweep : every documented path is actually ROUTED ------------------

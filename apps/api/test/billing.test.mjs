@@ -353,7 +353,7 @@ const checkoutExpired = (id, bidId, bidDate) => ({
   data: { object: { metadata: { bidId, bidDate } } },
 });
 // Zero-add refinancement answers: the dynamic base stays at the flat 2000 $.
-const DEFAULT_PRICING = { refinancement: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue' } };
+const DEFAULT_PRICING = { refinancement: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale' } };
 
 test('authorizeOffer opens a hosted Checkout to authorize the client card', async () => {
   const { stripe, billing } = setup();

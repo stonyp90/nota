@@ -85,6 +85,13 @@ function stubNotaryApi(win, bids, extra = {}) {
     }
     if (path.includes('/notary/bids/accept')) return json({ id: body.id, courriel: 'client@example.com', dossier: {} });
     if (path.includes('/notary/bids/decline')) return json({ ok: true });
+    if (path.includes('/notary/bids/message')) {
+      return json({ message: { id: 'msg-' + calls.length, de: 'notaire', texte: body.texte, createdAt: '2026-08-12T10:00:00Z' } });
+    }
+    if (path.includes('/notary/bids/release')) {
+      const bid = bids.find((b) => b.id === body.id) || {};
+      return json({ bid: { ...bid, status: 'ouverte', etude: null } });
+    }
     if (path.includes('/notary/bids')) return json({ bids, retained: extra.retained || [] });
     return Promise.reject(new Error('offline'));
   };

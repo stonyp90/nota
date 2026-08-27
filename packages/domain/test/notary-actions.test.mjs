@@ -86,9 +86,9 @@ test('validateDocumentRequest: known documents of the service are accepted and l
 });
 
 test('validateDocumentRequest: a field (champ) of the service may be requested too', () => {
-  const r = D.validateDocumentRequest({ serviceId: 'refinancement', documents: ['preteur'] });
+  const r = D.validateDocumentRequest({ serviceId: 'refinancement', documents: ['adresse'] });
   assert.equal(r.ok, true);
-  assert.equal(r.documents[0].nom, 'Prêteur');
+  assert.equal(r.documents[0].nom, 'Adresse de l’immeuble');
 });
 
 test('validateDocumentRequest: rejects unknown service, empty list, unknown ids, and dedupes', () => {

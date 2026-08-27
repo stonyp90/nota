@@ -37,11 +37,13 @@ test('a client publishes a financing offer end to end', async ({ page }) => {
   await expect(sheet.locator('#o-service-chips button[data-svc="financement"]')).toHaveAttribute('aria-pressed', 'true');
 
   // Step 2 — the notary's REQUIRED questions for financement: loan amount,
-  // what the loan finances, and the bank-approval stage. Answering all three
-  // is what lifts the submit gate (D.validateOffer → parametre_requis).
+  // what the loan finances, the bank-approval stage, and the LENDER (the
+  // catalogue select). Answering all four is what lifts the submit gate
+  // (D.validateOffer → parametre_requis).
   await sheet.locator('#crit-valeur_pret').fill('350000');
   await sheet.locator('#crit-contexte__propriete_detenue').click();
   await sheet.locator('#crit-approbation_bancaire__obtenue').click();
+  await sheet.locator('#crit-preteur').selectOption('banque_nationale');
 
   // Step 3 — the offer is pre-filled to a valid amount within the act's range.
   const submit = sheet.locator('#offer-submit');
@@ -61,7 +63,7 @@ test('a client publishes a financing offer end to end', async ({ page }) => {
     submit.click(),
   ]);
   // POST /bids answers 201 Created on success.
-  expect(resp.ok(), `POST /bids should succeed, got ${resp.status()}`).toBeTruthy();
+  expect(resp.ok(), `POST /bids should succeed, got ${resp.status()}: ${await resp.text()}`).toBeTruthy();
 
   // The success card unhides, the CTA flips to its confirmed label, and a toast
   // reports the published amount.

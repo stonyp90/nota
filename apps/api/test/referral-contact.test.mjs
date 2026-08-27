@@ -37,7 +37,7 @@ const parse = (res) => JSON.parse(res.body);
 const bearer = (token) => ({ authorization: 'Bearer ' + token });
 
 // Zero-add refinancement answers: the dynamic base stays at the flat 2000 $.
-const PRICING = { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue' };
+const PRICING = { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale' };
 
 const postBid = (a, over = {}) =>
   a.handle({

@@ -340,6 +340,49 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
     }
   }
 
+  // Fired from POST /notary/bids/release: the retaining notary WITHDREW (a
+  // detail — often the lender — made the file impossible on their side) and
+  // the act is back on the open market. The client is told right away (their
+  // date still stands, other notaries can retain it); the operator is alerted
+  // when a payment may be in flight, same posture as a cancelled retained bid.
+  async function onActReleased(bid, { notary, etude, message, paidOrHeld } = {}) {
+    if (!bid) return { ok: true, results: [] };
+    const results = [];
+    try {
+      if (bid.courriel) {
+        results.push(
+          await sendOnce({
+            refId: bid.id,
+            kind: 'actReleased',
+            to: bid.courriel,
+            buildTemplate: (env) => emails.actReleased({ ...bidCtx(bid), ...env }),
+          })
+        );
+      }
+      if (operatorEmail && (paidOrHeld || message)) {
+        results.push(
+          await sendOnce({
+            refId: bid.id,
+            kind: 'operatorActReleased',
+            to: operatorEmail,
+            buildTemplate: (env) =>
+              emails.operatorActReleased({
+                ...bidCtx(bid),
+                etude: etude || (notary && notary.label) || null,
+                notaireEmail: (notary && notary.email) || null,
+                messageNotaire: message || null,
+                paidOrHeld: !!paidOrHeld,
+                ...env,
+              }),
+          })
+        );
+      }
+      return { ok: true, results };
+    } catch (err) {
+      return { ok: false, error: String((err && err.message) || err), results };
+    }
+  }
+
   // --- Contact form (nous joindre) ------------------------------------------
   // Fired from POST /contact. The operator gets the message and the sender an
   // acknowledgement; the sender's unsubscribe silences only their own ack —
@@ -636,6 +679,7 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
     onDocumentsRequested,
     onCounterOfferAnswered,
     onOfferCancelled,
+    onActReleased,
     onContactMessage,
     onClientSignup,
     onReminderDue,

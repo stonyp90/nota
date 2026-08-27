@@ -342,7 +342,7 @@
     // `notaire` is the client's half of the mise en relation (ADR 0010 §4):
     // the retaining notary's étude + courriel, served by GET /client/bid once
     // the offer is retained. Cached so "Mes offres" shows whom to contact.
-    c[id] = { bid: status.bid || null, notaire: status.notaire || null, propositions: status.propositions || [], demandes: status.demandes || [], readiness: status.readiness || null, fetchedAt: Date.now() };
+    c[id] = { bid: status.bid || null, notaire: status.notaire || null, propositions: status.propositions || [], demandes: status.demandes || [], readiness: status.readiness || null, messages: status.messages || [], fetchedAt: Date.now() };
     lsSave(LS_OFFERSTATUS, c);
     return c[id];
   }
@@ -379,9 +379,46 @@
           body: (d.documents || []).map(function (x) { return T(x.nom); }).join(', '), dateISO: null,
         });
       });
+      // The retained-act conversation: ring once per notary message (addNotif
+      // dedupes by key), pointing at Mes offres where the thread lives.
+      (st.messages || []).forEach(function (m) {
+        if (m.de !== 'notaire') return;
+        addNotif({
+          key: 'message:' + m.id, kind: 'message',
+          title: 'Votre notaire vous a écrit',
+          body: m.texte, dateISO: null,
+        });
+      });
       return st;
     } catch (e) { return null; }
   }
+  // Send one client message into the retained-act thread, then repaint from
+  // the refreshed cache (the send response is the appended message).
+  async function clientChatSend(o, input, btn) {
+    var texte = String((input && input.value) || '').trim();
+    if (!texte) { toast('Écrivez un message.'); return; }
+    if (btn) btn.disabled = true;
+    var r;
+    try {
+      r = await fetch(API_BASE + '/client/bid/message', {
+        method: 'POST', headers: clientHeaders(o, true),
+        body: JSON.stringify({ id: o.id, dateISO: o.dateISO, texte: texte }),
+      });
+    } catch (e) { toast('Message impossible (hors ligne).'); if (btn) btn.disabled = false; return; }
+    var j = {}; try { j = await r.json(); } catch (e) {}
+    if (btn) btn.disabled = false;
+    if (!r.ok || !j.message) {
+      toast((j.errors && j.errors[0] && j.errors[0].message) || 'Message impossible.');
+      return;
+    }
+    var st = offerStatusGet(o.id) || {};
+    offerStatusSet(o.id, Object.assign({}, st, { messages: (st.messages || []).concat([j.message]) }));
+    if (input) input.value = '';
+    if (state.tab === 'profil') renderProfil();
+    // Pull the thread fresh (the notary may have written meanwhile).
+    fetchOfferStatus(o).then(function () { if (state.tab === 'profil') renderProfil(); });
+  }
+
   async function clientPropositionReply(o, propositionId, verb) {
     var r = await fetch(API_BASE + '/client/propositions/' + verb, {
       method: 'POST', headers: clientHeaders(o, true),
@@ -444,7 +481,7 @@
     // the only remaining gate is the sharing consent; the documents are
     // preparation for after the mise en relation, never a barrier.
     var r = D.leadReadiness(o.serviceId, dossierFor(o.serviceId));
-    if (!r.ready) return 'Consentez au partage de votre dossier (dans votre Dossier) pour qu’il soit transmis dès qu’un notaire vous retient.';
+    if (!r.ready) return 'Autorisez le partage de votre dossier depuis la page « Mon dossier » — il sera transmis dès qu’un notaire retient votre demande.';
     if (r.missing.length) return 'En attendant qu’un notaire la retienne, préparez vos documents — ils seront transmis après la mise en relation, rien ne bloque votre demande.';
     return 'Tout est prêt. Un notaire de Québec peut retenir votre demande à tout moment — vous serez prévenu ici.';
   }
@@ -719,7 +756,7 @@
       alt: 'Explorer les demandes d’abord',
       steps: [
         { icon: 'liste', t: 'Voyez les demandes ouvertes', d: 'à Québec, par date de signature.' },
-        { icon: 'main', t: 'Retenez — ou négociez', d: 'proposez votre prix, demandez des documents ; le dossier s’ouvre dès que vous retenez.' },
+        { icon: 'main', t: 'Retenez — ou négociez', d: 'proposez votre prix ou demandez des documents ; le dossier s’ouvre dès que vous retenez.' },
         { icon: 'acte', t: 'Complétez l’acte', d: 'commission seulement sur ce qui se conclut.' },
       ],
     },
@@ -960,9 +997,9 @@
     // Best practice: logged-out shows explicit login/signup; the avatar/account
     // menu is for the signed-in state only.
     var headerAuth = $('header-auth'); if (headerAuth) headerAuth.hidden = role !== 'anon';
-    // The header's "?" guide icon greets visitors only: whoever signed up
-    // already knows the platform (the guide stays in the account menu + footer).
-    var navGuide = $('nav-guide'); if (navGuide) navGuide.hidden = role !== 'anon';
+    // The header's "?" guide icon is ALWAYS visible (owner's ask, 2026-08-26):
+    // it is the one standing way back into the guide, so the account menu
+    // carries no duplicate row and no role ever hides it.
     // The mobile drawer mirrors the header pair: auth buttons only while anonymous.
     var mnavAuth = $('mnav-auth'); if (mnavAuth) mnavAuth.hidden = role !== 'anon';
     // An email is optional on publish, so an anonymous visitor can hold live
@@ -988,14 +1025,11 @@
 
     var actions = $('acct-actions'); if (!actions) return;
     clear(actions);
-    // The guide auto-shows once and then never again; a footer link is not a
-    // discoverable way back, so every account state carries an explicit row.
-    function onbAcctRow() {
-      return acctAction('guide', 'Comment ça marche', function () { toggleNotifPanel(false); onbOpen(); });
-    }
+    // No guide row here: the header "?" icon is always visible (owner's ask,
+    // 2026-08-26) and the footer link remains — a menu row would be a third
+    // door to the same dialog.
     if (role === 'notary') {
       actions.appendChild(acctAction('dossiers', 'Mes demandes et dossiers', function () { toggleNotifPanel(false); setTab('notaires'); }));
-      actions.appendChild(onbAcctRow());
       actions.appendChild(acctAction('signout', 'Se déconnecter', function () { ncSignOut(); renderAccountMenu(); toggleNotifPanel(false); }));
     } else if (role === 'client') {
       // Two DISTINCT rows: the profile (offers table + contact details) and the
@@ -1003,7 +1037,6 @@
       // door — without it the only entry is the one-shot post-publish card.
       actions.appendChild(acctAction('profil', 'Mon profil', function () { toggleNotifPanel(false); setTab('profil'); }));
       actions.appendChild(acctAction('dossiers', 'Mon dossier', function () { toggleNotifPanel(false); openDossier(myDossierServiceId()); }));
-      actions.appendChild(onbAcctRow());
       actions.appendChild(acctAction('signout', 'Se déconnecter', clientSignOut));
     } else {
       // The identity head IS the "Se connecter / s’inscrire" trigger — don't repeat it.
@@ -1013,7 +1046,6 @@
       }
       actions.appendChild(acctAction('publier', 'Publier une offre', openOfferFlow));
       actions.appendChild(acctAction('notaire', 'Espace notaire', function () { toggleNotifPanel(false); setTab('notaires'); }));
-      actions.appendChild(onbAcctRow());
     }
   }
 
@@ -1370,7 +1402,7 @@
       var amount = entry.amount;
       var item = el('span', 'svc-bid');
       item.style.color = 'var(--svc-' + svc.id + ')';
-      // Carried for the CSS tooltip a calendar cell shows on hover, where there
+      // Carried for the tooltip a calendar cell shows on hover, where there
       // is no room to print the name.
       item.dataset.name = T(svc.nom);
       // The bubble's second line says what the cell cannot: how deep the
@@ -1383,6 +1415,20 @@
         if (pct > 0) detail += ' · +' + pct + PCT;
       }
       item.dataset.detail = T(detail);
+      // The hover bubble is a real node rather than a ::after so it can carry
+      // the act's icon next to its name. aria-hidden: screen readers get the
+      // same words from the visually-hidden span below.
+      if (!showName) {
+        var tip = el('span', 'svc-tip');
+        tip.setAttribute('aria-hidden', 'true');
+        var head = el('span', 'svc-tip-head');
+        var tipIc = svcIcon(svc.id, 16);
+        if (tipIc) head.appendChild(tipIc);
+        head.appendChild(el('span', 'svc-tip-name', T(svc.nom)));
+        tip.appendChild(head);
+        tip.appendChild(el('span', 'svc-tip-detail', T(detail)));
+        item.appendChild(tip);
+      }
       var ic = svcIcon(svc.id, 12);
       if (ic) item.appendChild(ic);
       else {
@@ -1993,6 +2039,7 @@
         sel.appendChild(o);
       });
     });
+    buildDossierChips();
   }
 
   // The carnet opens showing EVERY act, so a first visit shows the whole market
@@ -2031,6 +2078,27 @@
     });
   }
 
+  // Same component in the Dossier: chips drive the hidden #d-service select.
+  // renderDossier() re-syncs the pressed chip, so every code path that sets the
+  // select's value (deep links, openDossier) lights the right chip for free.
+  function buildDossierChips() {
+    var wrap = $('d-service-chips'); if (!wrap) return; clear(wrap);
+    D.SERVICES.forEach(function (s) {
+      var b = el('button', 'chip chip-svc');
+      b.type = 'button'; b.dataset.svc = s.id; b.setAttribute('aria-pressed', 'false');
+      var main = el('span', 'chip-svc-main');
+      var ic = svcIcon(s.id); if (ic) main.appendChild(ic);
+      main.appendChild(document.createTextNode(s.nomCourt));
+      b.appendChild(main);
+      wrap.appendChild(b);
+    });
+  }
+  function syncDossierChips(serviceId) {
+    var wrap = $('d-service-chips'); if (!wrap) return;
+    var b = wrap.querySelector('[data-svc="' + serviceId + '"]');
+    if (b) setGroupActive(wrap, b);
+  }
+
   // The dynamic floor for the current offer, from the client's pricing answers
   // (== the flat base when nothing is answered). Everything in the booking form
   // — slider bounds, the recommended pre-fill, the "× base" note — reads this.
@@ -2063,7 +2131,138 @@
     return el('span', 'crit-add', (add > 0 ? '+' : '−') + D.money(Math.abs(add)));
   }
 
-  function buildCriterionRow(c, current, onChange, idPrefix) {
+  // ---------------------------------------------------------------------------
+  // Nota select — a brand-styled dropdown drawn over a native <select>. The OS
+  // paints the native popup (macOS Chrome follows the OS appearance, not the
+  // page's color-scheme), so a dark Nota page could open a white system menu.
+  // The native control STAYS in the DOM as the single source of truth: forms,
+  // tests and i18n keep talking to it. Picking an option writes sel.value and
+  // fires a bubbling change; a programmatic sel.value write (the contact
+  // prefill) repaints the button label through the intercepted setter.
+  // Skipped for the visually-hidden a11y mirrors — they never open a popup.
+  // ---------------------------------------------------------------------------
+  function enhanceSelect(sel) {
+    if (!sel || sel.dataset.enhanced || sel.classList.contains('visually-hidden') ||
+        sel.getAttribute('aria-hidden') === 'true') return sel;
+    sel.dataset.enhanced = 'true';
+
+    var wrap = el('div', 'nselect');
+    sel.parentNode.insertBefore(wrap, sel);
+    wrap.appendChild(sel);
+    sel.classList.add('nselect-native');
+    sel.tabIndex = -1;
+    sel.setAttribute('aria-hidden', 'true');
+
+    var btn = el('button', 'nselect-btn');
+    btn.type = 'button';
+    if (sel.id) btn.id = sel.id + '__btn';
+    btn.setAttribute('aria-haspopup', 'listbox');
+    btn.setAttribute('aria-expanded', 'false');
+    var val = el('span', 'nselect-value');
+    btn.appendChild(val);
+    wrap.appendChild(btn);
+
+    var list = el('ul', 'nselect-list');
+    list.setAttribute('role', 'listbox');
+    if (sel.id) list.id = sel.id + '__list';
+    list.hidden = true;
+    wrap.appendChild(list);
+
+    // The field label follows the visible control, so clicking it focuses the
+    // button. getRootNode: the criterion rows are built detached, the label is
+    // a sibling in the same not-yet-inserted tree.
+    var root = sel.getRootNode ? sel.getRootNode() : document;
+    var lab = sel.id && root.querySelector ? root.querySelector('label[for="' + sel.id + '"]') : null;
+    if (lab && btn.id) lab.setAttribute('for', btn.id);
+
+    function paintLabel() {
+      var o = sel.options[sel.selectedIndex];
+      val.textContent = o ? o.textContent : '';
+      val.classList.toggle('is-placeholder', !o || o.value === '');
+    }
+    // Contract: a programmatic value write is followed by a bubbling change
+    // event (the contact prefill does; tests already do) — that is the one
+    // signal the label listens to. No property interception: jsdom's element
+    // proxies silently drop instance accessors.
+    sel.addEventListener('change', paintLabel);
+
+    var active = -1;
+    function paintActive() {
+      var items = list.children;
+      for (var i = 0; i < items.length; i++) items[i].classList.toggle('is-active', i === active);
+      var on = items[active];
+      if (on) {
+        btn.setAttribute('aria-activedescendant', on.id || '');
+        if (typeof on.scrollIntoView === 'function') on.scrollIntoView({ block: 'nearest' });
+      }
+    }
+    // Rebuilt on every open, so option edits and i18n passes are always current.
+    function buildList() {
+      clear(list);
+      Array.prototype.forEach.call(sel.options, function (opt, i) {
+        var li = el('li', 'nselect-opt', opt.textContent);
+        li.setAttribute('role', 'option');
+        if (list.id) li.id = list.id + '_' + i;
+        li.setAttribute('aria-selected', i === sel.selectedIndex ? 'true' : 'false');
+        li.addEventListener('click', function () { commit(i); });
+        list.appendChild(li);
+      });
+    }
+    function openList() {
+      buildList();
+      list.hidden = false;
+      wrap.classList.add('is-open');
+      btn.setAttribute('aria-expanded', 'true');
+      active = sel.selectedIndex >= 0 ? sel.selectedIndex : 0;
+      paintActive();
+    }
+    function closeList() {
+      list.hidden = true;
+      wrap.classList.remove('is-open');
+      btn.setAttribute('aria-expanded', 'false');
+      btn.removeAttribute('aria-activedescendant');
+    }
+    function commit(i) {
+      var opt = sel.options[i];
+      if (!opt) return;
+      sel.value = opt.value; // through the intercepted setter → label repaints
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+      closeList();
+      btn.focus();
+    }
+
+    btn.addEventListener('click', function () { if (list.hidden) openList(); else closeList(); });
+    btn.addEventListener('keydown', function (e) {
+      var k = e.key;
+      if (list.hidden) {
+        if (k === 'ArrowDown' || k === 'ArrowUp' || k === 'Enter' || k === ' ') { e.preventDefault(); openList(); }
+        return;
+      }
+      if (k === 'ArrowDown') { e.preventDefault(); active = Math.min(active + 1, sel.options.length - 1); paintActive(); }
+      else if (k === 'ArrowUp') { e.preventDefault(); active = Math.max(active - 1, 0); paintActive(); }
+      else if (k === 'Home') { e.preventDefault(); active = 0; paintActive(); }
+      else if (k === 'End') { e.preventDefault(); active = sel.options.length - 1; paintActive(); }
+      else if (k === 'Enter' || k === ' ') { e.preventDefault(); commit(active); }
+      else if (k === 'Escape') { e.preventDefault(); closeList(); }
+      else if (k === 'Tab') { closeList(); }
+    });
+    document.addEventListener('click', function (e) {
+      if (!list.hidden && !wrap.contains(e.target)) closeList();
+    });
+
+    paintLabel();
+    return sel;
+  }
+  // Every visible select on the static page (the hidden mirrors are skipped by
+  // the guard above). Dynamically built selects call enhanceSelect themselves.
+  function enhanceSelects() {
+    Array.prototype.forEach.call(document.querySelectorAll('select:not(.visually-hidden)'), enhanceSelect);
+  }
+
+  // `other` (optional) wires a select criterion's free-text companion (domain
+  // `c.autre` — « Autre prêteur » + name): { value, onChange } for the
+  // companion field, revealed only while the opening option is chosen.
+  function buildCriterionRow(c, current, onChange, idPrefix, other) {
     var row = el('div', 'crit-row');
     if (c.type === 'flag') {
       var lab = el('label', 'crit-flag');
@@ -2079,6 +2278,51 @@
       if (c.aide) txt.appendChild(el('span', 'help', c.aide));
       lab.appendChild(txt);
       row.appendChild(lab);
+    } else if (c.type === 'choice' && c.ui === 'select') {
+      // A long option list (the lender catalogue) renders as a <select> — the
+      // domain marks it `ui: 'select'`; chips would be a wall. The dollar
+      // effect rides in the option text ("Tangerine (+100 $)") since a select
+      // cannot carry the .crit-add badge.
+      var selLbl = el('label', 'crit-label', c.label);
+      selLbl.setAttribute('for', idPrefix + c.id);
+      row.appendChild(selLbl);
+      var sel = document.createElement('select');
+      sel.id = idPrefix + c.id; sel.className = 'crit-select';
+      var ph = document.createElement('option');
+      ph.value = ''; ph.textContent = 'Choisir…';
+      sel.appendChild(ph);
+      (c.options || []).forEach(function (opt) {
+        var o = document.createElement('option');
+        o.value = opt.id;
+        var add = Number(opt.add) || 0;
+        o.textContent = add ? opt.label + ' (+' + D.money(add) + ')' : opt.label;
+        sel.appendChild(o);
+      });
+      if (current != null) sel.value = current;
+      sel.addEventListener('change', function () { onChange(sel.value === '' ? undefined : sel.value); });
+      row.appendChild(sel);
+      enhanceSelect(sel);
+      if (c.aide) row.appendChild(el('span', 'help', c.aide));
+      // The free-text companion (« Autre prêteur » → « Nom du prêteur ») —
+      // the client ADDS their lender by name when it is not in the catalogue.
+      if (c.autre) {
+        var obox = el('div', 'crit-other');
+        var olbl = el('label', 'crit-label', c.autre.label);
+        olbl.setAttribute('for', idPrefix + c.autre.champ);
+        obox.appendChild(olbl);
+        var oinp = document.createElement('input');
+        oinp.type = 'text'; oinp.id = idPrefix + c.autre.champ; oinp.maxLength = 80;
+        if (other && other.value != null) oinp.value = other.value;
+        oinp.addEventListener('input', function () {
+          if (other) other.onChange(oinp.value === '' ? undefined : oinp.value);
+        });
+        obox.appendChild(oinp);
+        if (c.autre.aide) obox.appendChild(el('span', 'help', c.autre.aide));
+        var syncOther = function () { obox.hidden = sel.value !== c.autre.option; };
+        syncOther();
+        sel.addEventListener('change', syncOther);
+        row.appendChild(obox);
+      }
     } else if (c.type === 'choice') {
       row.appendChild(el('span', 'crit-label', c.label));
       var grp = el('div', 'crit-choices');
@@ -2124,7 +2368,8 @@
     var criteria = (svc && svc.pricing && svc.pricing.criteria) || [];
     if (step) step.hidden = criteria.length === 0;
     var mkRow = function (c) {
-      return buildCriterionRow(c, state.offer.pricing[c.id], function (val) { setCriterion(c.id, val); }, 'crit-');
+      return buildCriterionRow(c, state.offer.pricing[c.id], function (val) { setCriterion(c.id, val); }, 'crit-',
+        c.autre ? { value: state.offer.pricing[c.autre.champ], onChange: function (val) { setCriterion(c.autre.champ, val); } } : null);
     };
     // Mandatory questions shown directly; optional "hardeners" behind an expander
     // so the happy path stays ~3 clicks.
@@ -2321,8 +2566,11 @@
       // DOM pass can only translate its prefix — the labels must arrive
       // already in the interface language.
       var labels = (v.errors || []).filter(function (e) { return e.code === 'parametre_requis'; }).map(function (e) {
-        var c = svc && svc.pricing && (svc.pricing.criteria || []).filter(function (x) { return x.id === e.param; })[0];
-        return c ? T(c.label) : e.param;
+        // A param is either a criterion or a criterion's free-text companion
+        // (« Autre prêteur » → « Nom du prêteur »).
+        var c = svc && svc.pricing && (svc.pricing.criteria || []).filter(function (x) { return x.id === e.param || (x.autre && x.autre.champ === e.param); })[0];
+        if (!c) return e.param;
+        return T(c.id === e.param ? c.label : c.autre.label);
       });
       hint.hidden = !labels.length;
       hint.textContent = labels.length ? 'Répondez à : ' + labels.join(' · ') : '';
@@ -2658,6 +2906,27 @@
       }
       cell.appendChild(mr);
     }
+    // The retained-act conversation: once a notary holds the act, the two
+    // parties talk here — instructions, dates, the details that decide whether
+    // the file holds. Refreshed on focus/tab switches and after every send.
+    if (st === 'approved' && o.clientToken) {
+      var chat = el('div', 'my-offer-chat chat'); chat.dataset.id = o.id;
+      chat.appendChild(el('div', 'my-offer-chat-h', 'Messages avec votre notaire'));
+      chat.appendChild(chatThread((status && status.messages) || [], 'client'));
+      var crow = el('div', 'chat-row');
+      var cin = el('textarea', 'chat-input');
+      cin.rows = 2; cin.maxLength = 500;
+      cin.placeholder = 'Écrire à votre notaire…';
+      cin.setAttribute('aria-label', 'Écrire à votre notaire');
+      var csend = el('button', 'btn btn-sm btn-primary client-chat-send', 'Envoyer'); csend.type = 'button';
+      csend.addEventListener('click', function () { clientChatSend(o, cin, csend); });
+      cin.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); clientChatSend(o, cin, csend); }
+      });
+      crow.appendChild(cin); crow.appendChild(csend);
+      chat.appendChild(crow);
+      cell.appendChild(chat);
+    }
 
     var acts = el('div', 'my-offer-actions');
     if (st !== 'expired' && st !== 'cancelled') {
@@ -2836,8 +3105,10 @@
     if (!$('ct-nom').value) $('ct-nom').value = p.nom || '';
     if (!$('ct-courriel').value) $('ct-courriel').value = p.courriel || (o && o.courriel) || '';
     // The subject follows the door: offer-scoped help from an offer, the
-    // default otherwise — a previous visit's choice must not linger.
+    // default otherwise — a previous visit's choice must not linger. The
+    // change event keeps the enhanced Nota select's label in sync.
     $('ct-sujet').value = o ? 'Aide avec une offre' : 'Question générale';
+    $('ct-sujet').dispatchEvent(new Event('change', { bubbles: true }));
     var ctx = $('ct-context');
     ctx.hidden = !o;
     ctx.textContent = o ? 'À propos de votre ' + T(svcName(o.serviceId)).toLowerCase() + ' du ' + dayTitle(o.dateISO) + '.' : '';
@@ -3206,6 +3477,7 @@
   function renderDossier() {
     var svc = D.serviceById($('d-service').value) || D.SERVICES[0];
     $('d-service').value = svc.id;
+    syncDossierChips(svc.id);
     var list = $('dossier-list'); clear(list);
     var saved = dossierFor(svc.id);
 
@@ -3223,7 +3495,10 @@
         pbox.appendChild(buildCriterionRow(c, pans[c.id], function (val) {
           dossierSetPricing(svc.id, c.id, val);
           updateDossierPrice(svc);
-        }, 'dcrit-'));
+        }, 'dcrit-', c.autre ? { value: pans[c.autre.champ], onChange: function (val) {
+          dossierSetPricing(svc.id, c.autre.champ, val);
+          updateDossierPrice(svc);
+        } } : null));
       });
       pbody.appendChild(pbox);
       var priceEl = el('div', 'dossier-price'); priceEl.id = 'dossier-price';
@@ -3838,7 +4113,7 @@
     var j = {}; try { j = await r.json(); } catch (e) {}
     if (r.status === 409) { toast('Cette offre a déjà été retenue par un autre notaire.'); ncDropOpen(id); ncRenderOpen(); return; }
     if (r.status === 404) { toast('Offre introuvable, elle a peut-être expiré.'); ncDropOpen(id); ncRenderOpen(); return; }
-    if (r.status !== 200) { toast('Échec de la prise en charge.'); return; }
+    if (r.status !== 200) { toast('Impossible de retenir cette demande.'); return; }
     var entry = {
       id: j.id, dateISO: dateISO, serviceId: bidMeta.serviceId, montant: bidMeta.montant,
       tier: bidMeta.tier, prefixe: bidMeta.prefixe || null,
@@ -3879,7 +4154,7 @@
       });
     } catch (e) { toast('Action impossible (hors ligne).'); return; }
     if (r.status === 401) { ncExpire('Session expirée. Reconnectez-vous.'); return; }
-    if (r.status !== 200) { toast('Échec du refus.'); return; }
+    if (r.status !== 200) { toast('Impossible de décliner la demande.'); return; }
     ncDropOpen(id);
     ncRenderOpen();
     toast('Demande déclinée.');
@@ -3892,10 +4167,12 @@
   // Capped — the full list is the payoff of signing in; overflow collapses into
   // one "+N autres" card. Hidden signed-in (the console's open list takes over)
   // and when the month has nothing open (no data → no empty section).
-  // The teaser is an 8-tile block: with overflow, 7 demands + the "+N autres"
-  // card in the LAST slot — the lead-in sits bottom right of a full grid, never
-  // on an orphan row. A month with 8 or fewer open demands shows them all.
-  var NC_LIVE_MAX = 8;
+  // The teaser is a 12-tile block (owner's call, 2026-08-26: at 8 the left
+  // column stopped a row short of the gate+agenda column and left a hole):
+  // with overflow, 11 demands + the "+N autres" card in the LAST slot — the
+  // lead-in sits bottom right of a full grid, never on an orphan row. A month
+  // with 12 or fewer open demands shows them all.
+  var NC_LIVE_MAX = 12;
   function ncFocusGate() {
     // Land on whichever gate step is showing: the signup CTA mid-branch,
     // otherwise the email field.
@@ -4328,12 +4605,18 @@
   var ncPrefsSavedT = null;
   function ncDefaultPrefs() {
     var svc = {}; D.SERVICES.forEach(function (s) { svc[s.id] = true; });
-    return { email: true, sms: false, phone: '', pace: 'instant', urgent: false, services: svc };
+    // Every catalogued lender starts ACCEPTED: refusing is the notary's explicit
+    // choice ("je ne ferme pas avec ce prêteur"), never a default.
+    var lend = {}; D.LENDERS.forEach(function (l) { lend[l.id] = true; });
+    return { email: true, sms: false, phone: '', pace: 'instant', urgent: false, services: svc, lenders: lend };
   }
   function ncPrefsGet(email) {
     var d = ncDefaultPrefs();
     var stored = (lsLoad(LS_NC_PREFS) || {})[email] || {};
-    return Object.assign(d, stored, { services: Object.assign(d.services, stored.services || {}) });
+    return Object.assign(d, stored, {
+      services: Object.assign(d.services, stored.services || {}),
+      lenders: Object.assign(d.lenders, stored.lenders || {}),
+    });
   }
   function ncPrefsSave(email, prefs) {
     var all = lsLoad(LS_NC_PREFS) || {}; all[email] = prefs; lsSave(LS_NC_PREFS, all);
@@ -4361,6 +4644,30 @@
     if (svcWrap) svcWrap.querySelectorAll('.chip').forEach(function (c) {
       var on = p.services[c.dataset.svc] !== false; c.classList.toggle('is-on', on); c.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
+    // The lender roster — the refusal axis: a notary only closes with the
+    // institutions they know, so unchecking a lender HIDES its demands from
+    // their feed (ncFilteredOpen). Virtual lenders are tagged so the extra
+    // coordination is visible where the choice is made.
+    var lendWrap = $('pref-lenders');
+    if (lendWrap && !lendWrap.children.length) {
+      D.LENDERS.forEach(function (l) {
+        var c = el('button', 'chip chip-lender', l.nom);
+        c.type = 'button'; c.dataset.lender = l.id;
+        if (l.virtuel) c.appendChild(el('span', 'chip-lender-virt', 'virtuel'));
+        lendWrap.appendChild(c);
+      });
+    }
+    if (lendWrap) lendWrap.querySelectorAll('.chip').forEach(function (c) {
+      var on = p.lenders[c.dataset.lender] !== false;
+      c.classList.toggle('is-on', on); c.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+  }
+
+  // Does this notary work with the bid's lender? A bid that predates the lender
+  // question (preteur null) always passes — refusal needs a named lender.
+  function ncLenderAccepted(b) {
+    if (!b || !b.preteur || !nc.email) return true;
+    return ncPrefsGet(nc.email).lenders[b.preteur.id] !== false;
   }
 
   function ncRenderAuthState() {
@@ -4405,6 +4712,15 @@
     var pill = el('span', 'pill', t.nom); pill.dataset.tier = t.id || 'standard';
     return pill;
   }
+  // The lender behind the demand — the decide-before-retaining signal a notary
+  // reads first (do I close with them?), with the virtual (branchless) flag.
+  function ncLenderPill(preteur) {
+    if (!preteur) return null;
+    var pill = el('span', 'nc-lender', preteur.nom);
+    if (preteur.virtuel) pill.appendChild(el('span', 'nc-lender-virt', 'Virtuel'));
+    pill.title = 'Prêteur hypothécaire';
+    return pill;
+  }
 
   function ncOpenCard(b) {
     var svc = D.serviceById(b.serviceId);
@@ -4420,6 +4736,8 @@
     if (b.prefixe) meta.appendChild(el('span', 'nc-prefixe', b.prefixe));
     meta.appendChild(ncTierPill(b.tier));
     meta.appendChild(ncReadyBadge(b.ready));
+    var lender = ncLenderPill(b.preteur);
+    if (lender) meta.appendChild(lender);
     if (b.complexity) meta.appendChild(ncComplexityPill(b.complexity));
     card.appendChild(meta);
 
@@ -4682,6 +5000,9 @@
     return nc.open.filter(function (b) {
       if (f.service !== 'all' && b.serviceId !== f.service) return false;
       if (f.readyOnly && !b.ready) return false;
+      // The lender roster (préférences) is a standing refusal: demands from a
+      // lender this notary unchecked never reach their working surface.
+      if (!ncLenderAccepted(b)) return false;
       return true;
     });
   }
@@ -4815,11 +5136,16 @@
     if (entry.prefixe) meta.appendChild(el('span', 'nc-prefixe', entry.prefixe));
     meta.appendChild(ncTierPill(entry.tier));
     meta.appendChild(el('span', 'pill pill-retenue', 'Retenue'));
+    var lender = ncLenderPill(entry.preteur);
+    if (lender) meta.appendChild(lender);
     if (entry.viaProposition) meta.appendChild(el('span', 'nc-pill nc-via-prop', 'Prix accepté sur proposition'));
     card.appendChild(meta);
     var status = ncStatusRow({ demande: entry.demande });
     if (status) card.appendChild(status);
     card.appendChild(ncDossierBlock(entry));
+    // The retained-act conversation: the details that decide whether the file
+    // holds (lender instructions, dates) surface HERE, before the signing.
+    card.appendChild(ncChatBlock(entry));
     // A retaining notary may still ask for what the dossier lacks, and block
     // the day in their own agenda.
     var more = el('div', 'nc-card-more');
@@ -4829,7 +5155,130 @@
     more.appendChild(ncAgendaMenu(entry));
     card.appendChild(more);
     card.appendChild(ncCompleteBlock(entry));
+    // Withdrawing stays possible until the act completes: a surfaced detail
+    // (prêteur inhabituel, conflit) can still make the file impossible.
+    if (!entry.completed) card.appendChild(ncReleaseBlock(entry));
     return card;
+  }
+
+  // --- The retained-act conversation (client ↔ notaire) ----------------------
+  // Rendered from the entry's server-merged `messages`; refreshed by every
+  // ncLoadBids (sign-in, tab switch, window focus, Rafraîchir, after a send).
+  function chatThread(messages, mineRole) {
+    var box = el('div', 'chat-thread');
+    var list = Array.isArray(messages) ? messages : [];
+    if (!list.length) {
+      box.appendChild(el('p', 'chat-empty', 'Aucun message pour l’instant. Écrivez le premier.'));
+      return box;
+    }
+    list.forEach(function (m) {
+      var row = el('div', 'chat-msg');
+      row.dataset.de = m.de;
+      row.classList.toggle('is-mine', m.de === mineRole);
+      var bubble = el('div', 'chat-bubble', m.texte);
+      row.appendChild(bubble);
+      var when = String(m.createdAt || '').slice(0, 10);
+      if (when) row.appendChild(el('span', 'chat-when', dayShort(when)));
+      box.appendChild(row);
+    });
+    return box;
+  }
+
+  function ncChatBlock(entry) {
+    var wrap = el('div', 'nc-chat chat'); wrap.dataset.id = entry.id;
+    wrap.appendChild(el('div', 'nc-dossier-h', 'Conversation avec le client'));
+    wrap.appendChild(chatThread(entry.messages, 'notaire'));
+    var row = el('div', 'chat-row');
+    var input = el('textarea', 'chat-input');
+    input.rows = 2; input.maxLength = 500;
+    input.placeholder = 'Écrire au client…';
+    input.setAttribute('aria-label', 'Écrire au client');
+    var send = el('button', 'btn btn-sm btn-primary nc-chat-send', 'Envoyer'); send.type = 'button';
+    row.appendChild(input); row.appendChild(send);
+    wrap.appendChild(row);
+    return wrap;
+  }
+
+  async function ncChatSend(entry, texte, btn) {
+    if (!nc.token) return;
+    texte = String(texte || '').trim();
+    if (!texte) { toast('Écrivez un message.'); return; }
+    if (btn) btn.disabled = true;
+    var r;
+    try {
+      r = await fetch(API_BASE + '/notary/bids/message', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer ' + nc.token },
+        body: JSON.stringify({ id: entry.id, dateISO: entry.dateISO, texte: texte }),
+      });
+    } catch (e) { toast('Message impossible (hors ligne).'); if (btn) btn.disabled = false; return; }
+    if (r.status === 401) { ncExpire('Session expirée. Reconnectez-vous.'); return; }
+    var j = {}; try { j = await r.json(); } catch (e) {}
+    if (btn) btn.disabled = false;
+    if (r.status !== 200 || !j.message) {
+      toast((j.errors && j.errors[0] && j.errors[0].message) || 'Message impossible.');
+      return;
+    }
+    var messages = (entry.messages || []).concat([j.message]);
+    ncRetainedUpdate(nc.email, entry.id, { messages: messages });
+    ncRenderRetained();
+    // Pull the thread fresh (the client may have written meanwhile).
+    ncLoadBids();
+  }
+
+  // --- The withdrawal (désistement) ------------------------------------------
+  // Armed like a decline: the first click opens an inline confirm with an
+  // optional reason; only "Confirmer le désistement" posts. The act returns to
+  // the open market untouched and this console stops seeing it.
+  function ncReleaseBlock(entry) {
+    var wrap = el('div', 'nc-release'); wrap.dataset.id = entry.id;
+    var open = el('button', 'link-btn nc-release-open', 'Un détail rend ce dossier impossible ? Me désister');
+    open.type = 'button'; open.setAttribute('aria-expanded', 'false');
+    wrap.appendChild(open);
+    var form = el('div', 'nc-release-form'); form.hidden = true;
+    form.appendChild(el('p', 'help', 'L’acte retourne au carnet tel que publié (même date, même montant) et le client est prévenu. Vous ne verrez plus cette demande.'));
+    var motif = el('textarea', 'nc-release-motif');
+    motif.rows = 2; motif.maxLength = 500;
+    motif.placeholder = 'Motif (facultatif — transmis à l’équipe Nota, jamais publié)';
+    motif.setAttribute('aria-label', 'Motif du désistement');
+    form.appendChild(motif);
+    var acts = el('div', 'nc-release-actions');
+    var go = el('button', 'btn btn-sm btn-danger nc-release-confirm', 'Confirmer le désistement'); go.type = 'button';
+    var no = el('button', 'btn btn-sm nc-release-cancel', 'Garder l’acte'); no.type = 'button';
+    acts.appendChild(go); acts.appendChild(no);
+    form.appendChild(acts);
+    wrap.appendChild(form);
+    return wrap;
+  }
+
+  async function ncRelease(entry, message, btn) {
+    if (!nc.token) return;
+    if (btn) { btn.disabled = true; btn.textContent = 'Envoi…'; }
+    var r;
+    try {
+      r = await fetch(API_BASE + '/notary/bids/release', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer ' + nc.token },
+        body: JSON.stringify({ id: entry.id, dateISO: entry.dateISO, message: String(message || '').trim() || undefined }),
+      });
+    } catch (e) {
+      toast('Désistement impossible (hors ligne).');
+      if (btn) { btn.disabled = false; btn.textContent = 'Confirmer le désistement'; }
+      return;
+    }
+    if (r.status === 401) { ncExpire('Session expirée. Reconnectez-vous.'); return; }
+    var j = {}; try { j = await r.json(); } catch (e) {}
+    if (r.status !== 200) {
+      toast((j.errors && j.errors[0] && j.errors[0].message) || 'Désistement impossible.');
+      if (btn) { btn.disabled = false; btn.textContent = 'Confirmer le désistement'; }
+      return;
+    }
+    // Gone from this console: local retained entry dropped, feed reloaded
+    // (the decline marker keeps the demand out of it server-side).
+    ncRetainedSave(nc.email, ncRetainedFor(nc.email).filter(function (e) { return e.id !== entry.id; }));
+    ncRenderRetained();
+    ncLoadBids();
+    toast('Acte remis au carnet. Le client est prévenu.');
   }
 
   function ncRenderRetained() {
@@ -5005,6 +5454,17 @@
   function setTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
     lsSave('nota.theme', theme);
+    syncThemeSwitches();
+  }
+  // Both theme switches (header pill + drawer preference row) mirror the one
+  // source of truth, html[data-theme] — checked means dark. CSS positions the
+  // knob from the same attribute, so this only has to keep AT in the loop.
+  function syncThemeSwitches() {
+    var dark = document.documentElement.getAttribute('data-theme') === 'dark';
+    ['theme-toggle', 'mnav-theme'].forEach(function (id) {
+      var el = $(id);
+      if (el) el.setAttribute('aria-checked', dark ? 'true' : 'false');
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -5065,8 +5525,8 @@
     // The menu is three flat doors (ADR 0010 §2) — no submenu layer to wire.
     // The former submenu destinations live inside the panes: publishing is
     // the hero CTA, the agenda band sits in the notary pane. The guide is the
-    // header's compact "?" icon — pre-signup only (renderAccountMenu() hides
-    // it once a session exists); footer and account menu keep it afterwards.
+    // header's compact "?" icon, always visible (owner's ask, 2026-08-26);
+    // the footer link is the in-page fallback.
     var navGuide = $('nav-guide');
     if (navGuide) navGuide.addEventListener('click', function () { onbOpen(); });
 
@@ -5088,6 +5548,9 @@
       var cur = document.documentElement.getAttribute('data-theme');
       setTheme(cur === 'dark' ? 'light' : 'dark');
     });
+    // First paint: the switches were authored checked (dark); a saved light
+    // theme was applied to <html> before boot, so align aria-checked with it.
+    syncThemeSwitches();
 
     // Mobile nav drawer (hamburger). Same actions as the header — setTab, the
     // auth modal, the theme switch — behind phone chrome. The goto-link legal
@@ -5367,6 +5830,13 @@
 
     // Dossier
     $('d-service').addEventListener('change', renderDossier);
+    // Dossier act chips drive the hidden select — same pattern as the booking form.
+    var dChips = $('d-service-chips');
+    if (dChips) dChips.addEventListener('click', function (e) {
+      var b = e.target.closest('.chip'); if (!b) return;
+      $('d-service').value = b.dataset.svc;
+      renderDossier(); // re-syncs the pressed chip itself
+    });
 
     // Notary
     var ncPay = $('notary-connect'); if (ncPay) ncPay.addEventListener('click', ncConnectPayout);
@@ -5452,17 +5922,72 @@
     }
 
     var ncRetList = $('notary-retained-list');
-    if (ncRetList) ncRetList.addEventListener('click', function (e) {
-      var card = e.target.closest('.nc-card'); if (!card) return;
-      var docsBtn = e.target.closest('.nc-docs-btn');
-      if (docsBtn) {
-        var entry = ncRetainedFor(nc.email).filter(function (x) { return x.id === card.dataset.id; })[0];
-        if (entry) ncToggleForm(card, docsBtn, 'nc-docs', function () { return ncDocsForm(entry); });
-        return;
-      }
-      var btn = e.target.closest('.nc-complete-btn'); if (!btn) return;
-      var input = card.querySelector('.nc-actval');
-      ncCompleteAct(card.dataset.id, card.dataset.date, input ? input.value : '', btn);
+    if (ncRetList) {
+      ncRetList.addEventListener('click', function (e) {
+        var card = e.target.closest('.nc-card'); if (!card) return;
+        var entryOf = function () {
+          return ncRetainedFor(nc.email).filter(function (x) { return x.id === card.dataset.id; })[0];
+        };
+        var docsBtn = e.target.closest('.nc-docs-btn');
+        if (docsBtn) {
+          var entry = entryOf();
+          if (entry) ncToggleForm(card, docsBtn, 'nc-docs', function () { return ncDocsForm(entry); });
+          return;
+        }
+        // The conversation: send what the textarea holds.
+        var sendBtn = e.target.closest('.nc-chat-send');
+        if (sendBtn) {
+          var chat = e.target.closest('.nc-chat');
+          var input = chat && chat.querySelector('.chat-input');
+          var entry2 = entryOf();
+          if (entry2 && input) ncChatSend(entry2, input.value, sendBtn);
+          return;
+        }
+        // The withdrawal: open/close the inline confirm, then post it.
+        var relOpen = e.target.closest('.nc-release-open');
+        if (relOpen) {
+          var f = card.querySelector('.nc-release-form');
+          if (f) { f.hidden = !f.hidden; relOpen.setAttribute('aria-expanded', f.hidden ? 'false' : 'true'); }
+          return;
+        }
+        if (e.target.closest('.nc-release-cancel')) {
+          var f2 = card.querySelector('.nc-release-form');
+          var o2 = card.querySelector('.nc-release-open');
+          if (f2) f2.hidden = true;
+          if (o2) o2.setAttribute('aria-expanded', 'false');
+          return;
+        }
+        var relGo = e.target.closest('.nc-release-confirm');
+        if (relGo) {
+          var entry3 = entryOf();
+          var motif = card.querySelector('.nc-release-motif');
+          if (entry3) ncRelease(entry3, motif ? motif.value : '', relGo);
+          return;
+        }
+        var btn = e.target.closest('.nc-complete-btn'); if (!btn) return;
+        var input2 = card.querySelector('.nc-actval');
+        ncCompleteAct(card.dataset.id, card.dataset.date, input2 ? input2.value : '', btn);
+      });
+      // Enter (without Shift) in a chat box sends, like every messenger.
+      ncRetList.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter' || e.shiftKey) return;
+        var input = e.target.closest('.chat-input'); if (!input) return;
+        e.preventDefault();
+        var card = input.closest('.nc-card');
+        var send = card && card.querySelector('.nc-chat-send');
+        if (send) send.click();
+      });
+    }
+    // Lender roster chips (préférences): toggling one immediately re-filters
+    // the open feed — an unchecked lender's demands disappear from the surface.
+    var ncLend = $('pref-lenders');
+    if (ncLend) ncLend.addEventListener('click', function (e) {
+      var c = e.target.closest('.chip'); if (!c) return;
+      var on = !c.classList.contains('is-on');
+      c.classList.toggle('is-on', on); c.setAttribute('aria-pressed', on ? 'true' : 'false');
+      var lenders = ncPrefsGet(nc.email).lenders; lenders[c.dataset.lender] = on;
+      ncPrefsPatch({ lenders: lenders });
+      ncRenderOpen();
     });
 
     // Hero CTAs — orient the buyer immediately
@@ -5475,6 +6000,16 @@
     if (ctaV) ctaV.addEventListener('click', function () {
       var panel = $('carnet-panel');
       if (panel) panel.scrollIntoView({ behavior: 'auto', block: 'center' });
+    });
+
+    // Near-live conversations without a background poller (the repo runs no
+    // intervals): returning to the tab re-pulls the notary feed and the
+    // client's offer statuses — the moments a person actually looks.
+    window.addEventListener('focus', function () {
+      if (nc.token) ncLoadBids();
+      Promise.resolve(computeNotifications()).then(function () {
+        if (state.tab === 'profil') renderProfil();
+      }).catch(function () {});
     });
   }
 
@@ -5571,6 +6106,26 @@
         b.type = 'button'; b.dataset.type = p.id; b.setAttribute('aria-pressed', 'false');
         wrap.appendChild(b);
       });
+    }
+    // A RETURNING partner lands on their code, never a blank claim form: the
+    // confirmed record (nota.partner.v1) reopens the share box, retitles the
+    // panel, and pre-fills the form — so editing any field re-arms the normal
+    // claim flow (partnerValidateUI) for a variant. The vignette tells the
+    // story with their OWN code; prospects keep the EVEROY sample.
+    var rec = partnerGet();
+    if (rec) {
+      var vigCode = $('pr-vig-code');
+      if (vigCode) vigCode.textContent = rec.code;
+      var title = $('partner-form-title');
+      if (title) title.textContent = 'Votre code partenaire';
+      partnerState.type = rec.type || partnerState.type;
+      var onChip = wrap ? wrap.querySelector('.chip[data-type="' + partnerState.type + '"]') : null;
+      if (onChip) setGroupActive(wrap, onChip);
+      var mailInp = $('partner-courriel');
+      if (mailInp && rec.courriel) mailInp.value = rec.courriel;
+      var codeInp = $('partner-code');
+      if (codeInp) codeInp.value = rec.code;
+      partnerClaimConfirmed(rec, rec);
     }
     // The TOS clause carries the same two amounts — filled here so the legal
     // pane can never drift from the domain's figures.
@@ -5761,6 +6316,58 @@
     history.replaceState(null, '', location.pathname + (qs ? '?' + qs : '') + location.hash);
   }
 
+
+  // ===== Intro gate — the first-arrival pitch films (clients / notaires). =====
+  // Shows once per browser (nota.introSeen), never over a deep link, never
+  // under prefers-reduced-motion; ?intro=1 forces it back for review. The
+  // chosen film routes to its pane when it ends or is skipped.
+  var LS_INTRO = 'nota.introSeen';
+  var igTimer = null;
+  function igShouldShow() {
+    if (/[?&]intro=1/.test(location.search)) return true;
+    if (flagGet(LS_INTRO)) return false;
+    if (location.hash && location.hash.length > 1) return false;
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return false;
+    return true;
+  }
+  function igPlay(film) {
+    var stage = $('ig-stage-' + film);
+    var other = $(film === 'client' ? 'ig-stage-notaire' : 'ig-stage-client');
+    $('ig-chooser').hidden = true;
+    $('ig-frame').hidden = false;
+    other.hidden = true;
+    stage.hidden = false;
+    stage.classList.remove('run');
+    void stage.offsetWidth; /* restart the CSS timeline */
+    stage.classList.add('run');
+    var tab = film === 'client' ? 'carnet' : 'notaires';
+    $('ig-skip').dataset.tab = tab;
+    clearTimeout(igTimer);
+    igTimer = setTimeout(function () { igDismiss(tab); }, film === 'client' ? 20600 : 15600);
+  }
+  function igDismiss(tab) {
+    clearTimeout(igTimer);
+    var gate = $('intro-gate');
+    if (!gate || gate.hidden) return;
+    flagSet(LS_INTRO, '1');
+    gate.classList.add('ig-out');
+    setTimeout(function () { gate.hidden = true; gate.classList.remove('ig-out'); }, 320);
+    document.body.classList.remove('ig-open');
+    if (tab) setTab(tab, { scroll: false });
+  }
+  function igMaybeShow() {
+    var gate = $('intro-gate');
+    if (!gate || !igShouldShow()) return false;
+    $('ig-door-client').addEventListener('click', function () { igPlay('client'); });
+    $('ig-door-notaire').addEventListener('click', function () { igPlay('notaire'); });
+    $('ig-enter').addEventListener('click', function () { igDismiss(null); });
+    $('ig-skip').addEventListener('click', function () { igDismiss($('ig-skip').dataset.tab || null); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !gate.hidden) igDismiss(null); });
+    gate.hidden = false;
+    document.body.classList.add('ig-open');
+    return true;
+  }
+
   async function boot() {
     populateServiceSelects();
     buildServiceChips();
@@ -5777,6 +6384,7 @@
     renderPartnerPane(); // rewards, type chips and the TOS amounts — domain data
     wire();
     wireCarnetSubscribe();
+    enhanceSelects();
 
     // Restore theme preference
     var savedTheme = lsLoad('nota.theme'); if (savedTheme) setTheme(savedTheme);
@@ -5808,8 +6416,9 @@
     // scroll:false so loading on a phone never scrolls past the calendar.
     setTab(state.tab, { scroll: false });
 
-    // First visit only: greet with the tiny onboarding guide (VIEW 1).
-    maybeShowOnboarding();
+    // First arrival: the intro films own the first paint; the onboarding
+    // guide yields whenever the gate is shown (it will greet a later visit).
+    if (!igMaybeShow()) maybeShowOnboarding();
 
     // Register the service worker (installable PWA + offline shell). Skip on
     // localhost so the dev server's live edits aren't served from cache, and on
@@ -5847,6 +6456,9 @@
       feedUrl: ncFeedUrl,
       retainedFor: ncRetainedFor,
       renderOpen: ncRenderOpen,
+      chatSend: ncChatSend,
+      release: ncRelease,
+      prefsGet: ncPrefsGet,
     },
     // Unified account hub (client + notary) hooks for tests and integration.
     account: {
@@ -5857,6 +6469,12 @@
     },
     // First-visit onboarding guide: open() shows VIEW 1, reset() clears the flag
     // (both the persisted and the in-session copy), seen() reports the flag.
+    intro: {
+      show: igMaybeShow,
+      play: igPlay,
+      dismiss: igDismiss,
+      reset: function () { flagClear(LS_INTRO); },
+    },
     onboarding: {
       open: onbOpen,
       role: roleGet,

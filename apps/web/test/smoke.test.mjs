@@ -73,6 +73,10 @@ async function boot(opts = {}) {
 
   const win = dom.window;
 
+  // The intro gate owns a truly fresh first paint; every test that is not
+  // about the gate itself boots past it (opts.intro = true keeps it live).
+  if (!opts.intro) win.localStorage.setItem('nota.introSeen', '1');
+
   // 1) domain -> window.NotaDomain
   win.eval(DOMAIN_SRC);
   const D = win.NotaDomain;
@@ -228,6 +232,15 @@ test('a day with bids shows the best open offer per act', async () => {
       // printed figure reads as high or low at a glance.
       assert.match(it.dataset.detail, /^\d+ offres? ouvertes? · départ .+\$/,
         'the tooltip carries depth + starting price, got: ' + it.dataset.detail);
+      // The hover bubble is a real node (not a ::after) so it can open with
+      // the act's icon; it is aria-hidden because the visually-hidden span
+      // below already carries the same words.
+      const tip = it.querySelector('.svc-tip');
+      assert.ok(tip, 'the hover bubble is in the DOM');
+      assert.equal(tip.getAttribute('aria-hidden'), 'true');
+      assert.ok(tip.querySelector('.svc-tip-head .svc-ic'), 'the bubble opens with the act icon');
+      assert.equal(tip.querySelector('.svc-tip-name').textContent, it.dataset.name);
+      assert.equal(tip.querySelector('.svc-tip-detail').textContent, it.dataset.detail);
       // Screen readers hear exactly what a hovering reader sees.
       const sr = it.querySelector('.visually-hidden');
       assert.ok(sr, 'the act is named for assistive tech');
@@ -285,6 +298,7 @@ test('a valid offer combination enables #offer-submit', async () => {
   const lv = $(doc, 'crit-valeur_pret'); lv.value = '300000'; fire(win, lv, 'input');
   $(doc, 'crit-succession__non').click();
   $(doc, 'crit-approbation_bancaire__obtenue').click();
+  const selPreteur = $(doc, 'crit-preteur'); selPreteur.value = 'banque_nationale'; fire(win, selPreteur, 'change');
 
   assert.equal(submit.disabled, false);
 });
@@ -297,7 +311,7 @@ test('dossier tab lists first service intake items and badge shows 0/N', async (
   const expected = svc.documents.length + svc.champs.length;
   // The intake items, excluding the appended consent row.
   assert.equal(all(doc, '#dossier-list .dossier-item:not(.dossier-consent)').length, expected);
-  assert.equal(expected, 8); // refinancement (first act): 5 docs + 3 champs
+  assert.equal(expected, 7); // refinancement (first act): 5 docs + 2 champs (the lender moved into the pricing questions)
   assert.equal(all(doc, '#dossier-list .dossier-consent').length, 1); // consent row present
 });
 
@@ -390,13 +404,14 @@ test('courriel field is optional and stays private in the local store', async ()
   $(doc, 'crit-valeur_pret').value = '300000'; fire(win, $(doc, 'crit-valeur_pret'), 'input');
   $(doc, 'crit-succession__non').click();
   $(doc, 'crit-approbation_bancaire__obtenue').click();
+  const selPreteur = $(doc, 'crit-preteur'); selPreteur.value = 'banque_nationale'; fire(win, selPreteur, 'change');
   assert.equal($(doc, 'offer-submit').disabled, false);
 
   // Creating a bid with a courriel offline must not surface it on the bid.
   const res = await Nota.store.createBid({
     serviceId: 'refinancement', dateISO: D.addDays(todayISO(), 5), montant: 2000,
     anonyme: true, courriel: 'client@example.ca',
-    pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue' },
+    pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale' },
   });
   assert.equal(res.ok, true);
   assert.equal(res.bid.courriel, undefined);
@@ -556,7 +571,7 @@ test('notaires landing teases open demands and funnels each card to sign-in', as
   assert.ok(cards.length > 0, 'teaser should render demand cards');
   // On overflow the "+N autres" card takes the LAST slot of the 8-tile block
   // (7 demands + 1 lead-in card) — never an orphan row of its own.
-  const shown = open.length > 8 ? 7 : open.length;
+  const shown = open.length > 12 ? 11 : open.length; // 12-tile block (2026-08-26)
   assert.equal(cards.length, shown);
 
   // Soonest first, each card carrying the demand's real amount.
@@ -566,10 +581,10 @@ test('notaires landing teases open demands and funnels each card to sign-in', as
 
   // Overflow collapses into a "+N autres" card (only when there IS overflow).
   const more = doc.querySelector('#notary-live-grid .nc-live-more');
-  if (open.length > 8) {
+  if (open.length > 12) {
     assert.ok(more, 'overflow card missing');
     assert.ok(more.textContent.includes(String(open.length - shown)));
-    assert.equal(all(doc, '#notary-live-grid .nc-live-card').length, 8, 'demands + lead card fill the block exactly');
+    assert.equal(all(doc, "#notary-live-grid .nc-live-card").length, 12, 'demands + lead card fill the block exactly');
   } else {
     assert.equal(more, null);
   }
@@ -790,6 +805,7 @@ test('submitting an offer attaches the saved dossier snapshot and courriel', asy
   $(doc, 'crit-valeur_pret').value = '300000'; fire(win, $(doc, 'crit-valeur_pret'), 'input');
   $(doc, 'crit-succession__non').click();
   $(doc, 'crit-approbation_bancaire__obtenue').click();
+  const selPreteur = $(doc, 'crit-preteur'); selPreteur.value = 'banque_nationale'; fire(win, selPreteur, 'change');
   $(doc, 'o-courriel').value = 'client@example.ca'; fire(win, $(doc, 'o-courriel'), 'input');
   fire(win, $(doc, 'offer-form'), 'submit');
   await wait(10);
@@ -1666,6 +1682,7 @@ async function bootSeeded(seed, hash) {
       window.scrollTo = () => {};
       if (!window.HTMLDialogElement.prototype.showModal) window.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
       if (!window.HTMLDialogElement.prototype.close) window.HTMLDialogElement.prototype.close = function () { this.open = false; };
+      window.localStorage.setItem('nota.introSeen', '1'); // gate off unless the seed says otherwise
       Object.keys(seed || {}).forEach((k) => window.localStorage.setItem(k, seed[k]));
     },
   });
@@ -1792,15 +1809,18 @@ test('onboarding: the secondary CTA lands on the carnet without opening a modal'
   assert.equal($(doc, 'day-dialog').open, false, 'and NOT chained into a second modal');
 });
 
-// 36. The guide stays reachable from the account menu, not just a footer link a
-//     first-time visitor will never look for.
-test('onboarding: the account menu offers a way back into the guide', async () => {
+// 36. The guide stays one tap away for EVERYONE: the header "?" icon never
+//     retires (owner's ask, 2026-08-26), so the account menu carries no
+//     duplicate "Comment ça marche" row.
+test('onboarding: the always-visible header "?" is the way back into the guide', async () => {
   const { doc, win } = await bootSeeded({ 'nota.profile.v1': JSON.stringify({ courriel: 'a@b.ca' }) });
   win.Nota.account.render();
+  assert.equal($(doc, 'nav-guide').hidden, false, 'signed in, the header icon stays');
   const row = Array.from(doc.querySelectorAll('#acct-actions button, #acct-actions a'))
     .find((b) => /Comment ça marche/.test(b.textContent));
-  assert.ok(row, 'the account menu has a "Comment ça marche" row');
-  row.click();
+  assert.equal(row, undefined, 'no duplicate guide row in the account menu');
+  $(doc, 'nav-guide').click();
+  await wait(10);
   assert.equal($(doc, 'onboarding-dialog').open, true, 'it re-opens the guide');
   assert.equal($(doc, 'onb-view-role').hidden, false, 'at VIEW 1');
 });
@@ -1839,6 +1859,29 @@ test('onboarding: does not auto-show over a deep link (t= or jour=)', async () =
   assert.equal($(pane.doc, 'onboarding-dialog').open, false, 'a pane link is not interrupted');
   const plain = await bootSeeded({}, '');
   assert.equal($(plain.doc, 'onboarding-dialog').open, true, 'a plain first visit still is greeted');
+});
+
+// 40b. The intro gate owns a truly fresh first paint: it shows, the onboarding
+//      guide yields, a door plays its film, and skipping lands on the pane.
+test('intro gate: fresh first visit shows the gate, a door plays, skip routes', async () => {
+  const { doc, win, Nota } = await boot({ intro: true });
+  assert.equal($(doc, 'intro-gate').hidden, false, 'the gate shows');
+  assert.equal($(doc, 'onboarding-dialog').open, false, 'the guide yields to the gate');
+  assert.equal(typeof Nota.intro.play, 'function', 'documented handle');
+  $(doc, 'ig-door-notaire').click();
+  assert.equal($(doc, 'ig-frame').hidden, false, 'the film frame opens');
+  assert.ok($(doc, 'ig-stage-notaire').classList.contains('run'), 'the notaire film runs');
+  $(doc, 'ig-skip').click();
+  assert.equal(win.localStorage.getItem('nota.introSeen'), '1', 'seen once, never again');
+  assert.equal(Nota.state.tab, 'notaires', 'skip lands on the chosen pane');
+});
+
+// 40c. The gate never interrupts a deep link and never greets twice.
+test('intro gate: never over a deep link, never on a repeat visit', async () => {
+  const deep = await bootSeeded({ 'nota.introSeen': '' }, '#t=notaires');
+  assert.equal($(deep.doc, 'intro-gate').hidden, true, 'a deep link is not interrupted');
+  const again = await boot();
+  assert.equal($(again.doc, 'intro-gate').hidden, true, 'a repeat visit goes straight in');
 });
 
 // 41. A device that already published an offer has been onboarded by reality.

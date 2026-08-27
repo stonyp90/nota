@@ -62,7 +62,7 @@ const flush = async () => {
 };
 const register = (a, body) =>
   a.handle({ method: 'POST', path: '/partenaires', body: JSON.stringify(body) });
-const PRICING = { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue' };
+const PRICING = { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale' };
 const bearer = (token) => ({ authorization: 'Bearer ' + token });
 
 // --- registration -------------------------------------------------------------

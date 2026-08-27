@@ -80,6 +80,90 @@
   // named here and asserted by a test rather than typed into the UI.
   const DEFAULT_SERVICE_ID = 'refinancement';
 
+  // --- Lender catalogue (prêteurs hypothécaires) -----------------------------
+  // The institutions that normally lend to Quebec borrowers. The lender is
+  // INFORMATION and a refusal axis — a notary can decline to instrument an
+  // act when the lender is not one they normally close with — but choosing
+  // one costs the client nothing: `add` stays 0 across the catalogue except
+  // the private lender, the one deliberate surcharge (manual instructions,
+  // more diligence). A lender without branches (`virtuel: true` — remote
+  // instructions and disbursement) still weighs on complexity via `poids`
+  // so the notary sees the coordination, without a price effect. A lender
+  // missing from the list is typed in by the client (« Autre prêteur » +
+  // name — see lenderCriterion().autre), never left anonymous.
+  // The list is data — adapters render it, never re-declare it.
+  const LENDERS = [
+    { id: 'banque_nationale', nom: 'Banque Nationale', virtuel: false, add: 0, poids: 0 },
+    { id: 'desjardins', nom: 'Desjardins', virtuel: false, add: 0, poids: 0 },
+    { id: 'rbc', nom: 'RBC Banque Royale', virtuel: false, add: 0, poids: 0 },
+    { id: 'td', nom: 'TD Canada Trust', virtuel: false, add: 0, poids: 0 },
+    { id: 'bmo', nom: 'BMO Banque de Montréal', virtuel: false, add: 0, poids: 0 },
+    { id: 'scotia', nom: 'Banque Scotia', virtuel: false, add: 0, poids: 0 },
+    { id: 'cibc', nom: 'CIBC', virtuel: false, add: 0, poids: 0 },
+    { id: 'laurentienne', nom: 'Banque Laurentienne', virtuel: false, add: 0, poids: 0 },
+    { id: 'tangerine', nom: 'Tangerine', virtuel: true, add: 0, poids: 1 },
+    { id: 'simplii', nom: 'Simplii Financial', virtuel: true, add: 0, poids: 1 },
+    { id: 'eq', nom: 'Banque EQ', virtuel: true, add: 0, poids: 1 },
+    { id: 'nesto', nom: 'nesto', virtuel: true, add: 0, poids: 1 },
+    { id: 'first_national', nom: 'First National', virtuel: true, add: 0, poids: 1 },
+    { id: 'mcap', nom: 'MCAP', virtuel: true, add: 0, poids: 1 },
+    { id: 'manuvie', nom: 'Banque Manuvie', virtuel: true, add: 0, poids: 1 },
+    { id: 'prive', nom: 'Prêteur privé', virtuel: false, add: 300, poids: 2 },
+    { id: 'autre', nom: 'Autre prêteur', virtuel: false, add: 0, poids: 1 },
+  ];
+
+  function lenderById(id) {
+    return LENDERS.find((l) => l.id === id) || null;
+  }
+
+  // The lender question both financing acts ask. A `choice` criterion whose
+  // options ARE the catalogue, so the pricing engine (criterionAdd, complexity,
+  // missingRequired) needs no new type; `ui: 'select'` tells renderers the list
+  // is too long for chips.
+  const LENDER_CRITERION_ID = 'preteur';
+  const LENDER_OTHER_ID = 'autre';
+  const LENDER_OTHER_FIELD = 'preteur_autre';
+  function lenderCriterion() {
+    return {
+      id: LENDER_CRITERION_ID, type: 'choice', required: true, ui: 'select',
+      label: 'Prêteur hypothécaire',
+      aide: 'L’institution qui accorde le prêt. Un prêteur virtuel (sans succursale) demande plus de coordination au notaire.',
+      options: LENDERS.map((l) => ({ id: l.id, label: l.nom, add: l.add, poids: l.poids })),
+      // « Autre prêteur » opens a free-text companion: the client ADDS their
+      // lender by name instead of leaving the notary guessing. Renderers show
+      // the field only when this option is chosen; missingRequired() gates on
+      // it the same way it gates the choice itself.
+      autre: {
+        option: LENDER_OTHER_ID,
+        champ: LENDER_OTHER_FIELD,
+        label: 'Nom du prêteur',
+        aide: 'Votre prêteur n’est pas dans la liste ? Inscrivez son nom.',
+      },
+    };
+  }
+
+  // The typed name behind an « Autre prêteur » answer: whitespace collapsed
+  // and capped, so a crafted payload cannot smuggle an essay into the
+  // notary's feed. Null when absent or blank.
+  function lenderOtherName(answers) {
+    const raw = answers && answers[LENDER_OTHER_FIELD];
+    if (typeof raw !== 'string') return null;
+    const nom = raw.replace(/\s+/g, ' ').trim().slice(0, 80).trim();
+    return nom || null;
+  }
+
+  // The lender behind a bid, read from its pricing answers. Null when the bid
+  // predates the lender question or names none. For « Autre prêteur », `nom`
+  // is the name the client typed (the id stays the catalogue slug so the
+  // notary's refusal roster keeps working).
+  function bidLender(bid) {
+    const answers = (bid && bid.pricing) || {};
+    const l = lenderById(answers[LENDER_CRITERION_ID]);
+    if (!l || l.id !== LENDER_OTHER_ID) return l;
+    const nom = lenderOtherName(answers);
+    return nom ? { ...l, nom } : l;
+  }
+
   const SERVICES = [
     {
       id: 'refinancement',
@@ -122,6 +206,7 @@
               { id: 'non', label: 'Pas encore', add: 200, poids: 2 },
             ],
           },
+          lenderCriterion(),
           { id: 'coemprunteur', type: 'flag', optional: true, label: 'Co-emprunteur / indivision', aide: 'Plus de deux propriétaires inscrits.', add: 150, poids: 1 },
           {
             id: 'assurance_habitation', type: 'choice', optional: true, label: 'Assurance habitation à jour ?',
@@ -151,8 +236,9 @@
         { id: 'certificat_localisation', nom: 'Certificat de localisation', aide: 'Le plan de l’arpenteur-géomètre. C’est souvent le document qui retarde un dossier — vérifiez qu’il est à jour.' },
       ],
       champs: [
+        // Le prêteur n'est plus un champ libre : c'est le critère de prix
+        // `preteur` (la question obligatoire du carnet), répondu dans __pricing.
         { id: 'adresse', label: 'Adresse de l’immeuble', aide: 'Adresse civique complète de la propriété refinancée.' },
-        { id: 'preteur', label: 'Prêteur', aide: 'Le nom de l’institution qui accorde le nouveau prêt.' },
         { id: 'date_echeance_taux', label: 'Échéance du taux', aide: 'La date avant laquelle le taux offert doit être signé, si connue.' },
       ],
     },
@@ -198,6 +284,7 @@
               { id: 'non', label: 'Pas encore', add: 200, poids: 2 },
             ],
           },
+          lenderCriterion(),
           { id: 'coemprunteur', type: 'flag', optional: true, label: 'Co-emprunteur / indivision', aide: 'Plus de deux propriétaires inscrits.', add: 150, poids: 1 },
           {
             id: 'assurance_habitation', type: 'choice', optional: true, label: 'Assurance habitation à jour ?',
@@ -227,7 +314,6 @@
       ],
       champs: [
         { id: 'adresse', label: 'Adresse de l’immeuble', aide: 'Adresse civique complète de la propriété financée.' },
-        { id: 'preteur', label: 'Prêteur', aide: 'Le nom de l’institution qui accorde le prêt.' },
         { id: 'date_echeance_taux', label: 'Échéance du taux', aide: 'La date avant laquelle le taux offert doit être signé, si connue.' },
       ],
     },
@@ -361,6 +447,13 @@
       } else if (c.type === 'flag') ok = a === true;
       else ok = true;
       if (!ok) missing.push({ id: c.id, label: c.label });
+      // A choice with a free-text companion (« Autre prêteur » + name): picking
+      // the opening option makes the companion text required too — an "other"
+      // without a name tells the notary nothing.
+      if (ok && c.type === 'choice' && c.autre && a === c.autre.option) {
+        const nom = typeof answers[c.autre.champ] === 'string' ? answers[c.autre.champ].trim() : '';
+        if (!nom) missing.push({ id: c.autre.champ, label: c.autre.label });
+      }
     }
     return missing;
   }
@@ -713,6 +806,55 @@
     return { ok: errors.length === 0, errors, documents, message: message || null };
   }
 
+  // --- Retained-act conversation (client ↔ notaire) --------------------------
+  // Once a notary retains an act the two parties must be able to talk INSIDE
+  // Nota: instructions arrive, details surface, and the notary either confirms
+  // or withdraws. A message is plain text from one of the two roles; the API
+  // stores the thread on the bid and both consoles poll it.
+  const CHAT_MESSAGE_MAX = 500;
+  const CHAT_FROM = { CLIENT: 'client', NOTAIRE: 'notaire' };
+
+  function validateChatMessage(input) {
+    input = input || {};
+    const errors = [];
+    const de = input.de;
+    if (de !== CHAT_FROM.CLIENT && de !== CHAT_FROM.NOTAIRE) {
+      errors.push({ code: 'expediteur_invalide', message: 'L’expéditeur doit être le client ou le notaire.' });
+    }
+    const texte = input.texte == null ? '' : String(input.texte).trim();
+    if (!texte) errors.push({ code: 'message_requis', message: 'Écrivez un message.' });
+    if (texte.length > CHAT_MESSAGE_MAX) {
+      errors.push({ code: 'message_trop_long', message: `Le message ne peut dépasser ${CHAT_MESSAGE_MAX} caractères.` });
+    }
+    // The conversation only exists while a notary holds the act.
+    if (!input.bid || input.bid.status !== STATUS.RETENUE) {
+      errors.push({ code: 'offre_non_retenue', message: 'La conversation s’ouvre lorsqu’un notaire retient l’acte.' });
+    }
+    return { ok: errors.length === 0, errors, texte: texte || null };
+  }
+
+  // A notary who retained an act may still WITHDRAW when a detail surfaced in
+  // the conversation makes the file impossible on their side (an unfamiliar
+  // lender, a conflict, a date that no longer works). Withdrawing returns the
+  // act to the open market — the client keeps their date and offer.
+  function validateRelease(input) {
+    input = input || {};
+    const errors = [];
+    if (!input.bid || input.bid.status !== STATUS.RETENUE) {
+      errors.push({ code: 'offre_non_retenue', message: 'Seul un acte retenu peut être remis au carnet.' });
+    }
+    const message = input.message == null ? '' : String(input.message).trim();
+    if (message.length > CHAT_MESSAGE_MAX) {
+      errors.push({ code: 'message_trop_long', message: `Le message ne peut dépasser ${CHAT_MESSAGE_MAX} caractères.` });
+    }
+    return { ok: errors.length === 0, errors, message: message || null };
+  }
+
+  // The released bid, back on the market exactly as the client posted it.
+  function releasedBid(bid) {
+    return { ...bid, status: STATUS.OUVERTE, etude: null, notaryId: null };
+  }
+
   // --- Notary agenda ---------------------------------------------------------
   // The console's working view: the open demands of the carnet as a notary
   // plans a week — by signing date, then by act, best offer first — with the
@@ -949,8 +1091,15 @@
       'v1',
       FIXTURE_SEED.toString(16),
       PREMIUM_CAP,
-      SERVICES.map((s) => s.id + ':' + s.prixDepart).join(','),
+      // The criteria ids are part of the shape: adding a pricing question (the
+      // lender, say) changes what fixturePricing answers AND the bases the
+      // montants sit on, so demo data made without it must be rebuilt.
+      SERVICES.map((s) => s.id + ':' + s.prixDepart + ':' + ((s.pricing && s.pricing.criteria) || []).map((c) => c.id).join('+')).join(','),
       TIERS.map((t) => t.id + ':' + t.apercuMin + '-' + t.apercuMax).join(','),
+      // The lender catalogue feeds fixturePricing: a lender add changing (the
+      // +100 $ virtual surcharge retired, say) shifts the fixture bases, so the
+      // catalogue's pricing shape is part of the fingerprint too.
+      LENDERS.map((l) => l.id + ':' + l.add).join(','),
     ].join('|');
   }
 
@@ -997,19 +1146,30 @@
   // Plausible mandatory-param answers for a demo fixture, so it validates and
   // shows a realistic mix of simple/standard/complexe cases on the carnet.
   function fixturePricing(svc, rng) {
+    // The lender is derived from the already-drawn loan value instead of a new
+    // rng() draw, so the draw stream (dates, names, prefixes, statuses) is
+    // unchanged; only the bases/montants of add>0 lenders shift. An « autre »
+    // draw carries its typed name — fixtures must be VALID offers.
+    const lenderFor = (valeur) => LENDERS[valeur % LENDERS.length].id;
+    const withOtherName = (pricing) =>
+      pricing.preteur === LENDER_OTHER_ID ? { ...pricing, [LENDER_OTHER_FIELD]: 'Fiducie du Vieux-Port' } : pricing;
     if (svc.id === 'refinancement') {
-      return {
-        valeur_pret: 150000 + Math.floor(rng() * 700000),
+      const valeur = 150000 + Math.floor(rng() * 700000);
+      return withOtherName({
+        valeur_pret: valeur,
         succession: rng() > 0.85 ? 'oui' : 'non',
         approbation_bancaire: ['obtenue', 'en_cours', 'non'][Math.floor(rng() * 3)],
-      };
+        preteur: lenderFor(valeur),
+      });
     }
     if (svc.id === 'financement') {
-      return {
-        valeur_pret: 150000 + Math.floor(rng() * 700000),
+      const valeur = 150000 + Math.floor(rng() * 700000);
+      return withOtherName({
+        valeur_pret: valeur,
         contexte: rng() > 0.45 ? 'achat' : 'propriete_detenue',
         approbation_bancaire: ['obtenue', 'en_cours', 'non'][Math.floor(rng() * 3)],
-      };
+        preteur: lenderFor(valeur),
+      });
     }
     return {};
   }
@@ -1227,6 +1387,13 @@
     moneyEn,
     SERVICES,
     DEFAULT_SERVICE_ID,
+    LENDERS,
+    lenderById,
+    LENDER_CRITERION_ID,
+    LENDER_OTHER_ID,
+    LENDER_OTHER_FIELD,
+    lenderOtherName,
+    bidLender,
     QC_POSTAL_LETTERS,
     normalizePostalPrefix,
     isPostalPrefix,
@@ -1253,6 +1420,11 @@
     suggestedCounterOffer,
     validateDocumentRequest,
     requestableItems,
+    CHAT_MESSAGE_MAX,
+    CHAT_FROM,
+    validateChatMessage,
+    validateRelease,
+    releasedBid,
     agendaByDate,
     rankOf,
     carnetPulse,

@@ -412,9 +412,9 @@ function offerPublished(ctx) {
       bodyHtml:
         callout(offerLine(ctx)) +
         para(
-          'Un notaire retient une demande d’autant plus vite qu’elle est prête. Complétez votre dossier (documents et consentement de partage) pour être retenu rapidement — votre identité, elle, sera vérifiée par le notaire à la signature.'
+          'Un notaire retient une demande d’autant plus vite qu’elle est prête. Complétez votre dossier (documents et consentement de partage) pour que votre demande soit retenue rapidement — votre identité, elle, sera vérifiée par le notaire à la signature.'
         ),
-      textLines: [offerLine(ctx), 'Complétez votre dossier pour être retenu plus vite.'],
+      textLines: [offerLine(ctx), 'Complétez votre dossier pour que votre demande soit retenue plus vite.'],
       ctaLabel: 'Compléter mon dossier',
     },
     en: {
@@ -437,7 +437,7 @@ function dossierIncomplete(ctx) {
   return build({
     subjectFr: 'Il reste une étape à votre dossier',
     subjectEn: 'One step left in your file',
-    preheaderFr: 'Terminez vos documents et le consentement pour devenir retenable.',
+    preheaderFr: 'Terminez vos documents et le consentement pour que votre demande puisse être retenue.',
     preheaderEn: 'Finish your documents and consent so a notary can take you on.',
     fr: {
       heading: 'Votre dossier est presque prêt',
@@ -471,13 +471,18 @@ function dateApproaching(ctx) {
   const dLabel = days <= 0 ? 'aujourd’hui' : days === 1 ? 'demain' : 'dans ' + days + ' jours';
   const dLabelEn = days <= 0 ? 'today' : days === 1 ? 'tomorrow' : 'in ' + days + ' days';
   const t = domain.tierById(ctx.tier);
-  const dec = (n) => n.toFixed(1).replace('.', ','); // fr-CA decimal comma
-  const decEn = (n) => n.toFixed(1); // en-CA decimal point
-  const range = t ? dec(t.apercuMin) + '× à ' + dec(t.apercuMax) + '×' : '';
-  const rangeEn = t ? decEn(t.apercuMin) + '× to ' + decEn(t.apercuMax) + '×' : '';
+  // Two decimals, trailing zero trimmed: 1.25 stays « 1,25 », 1.7 stays « 1,7 » —
+  // toFixed(1) used to round the tier bands (1,25 → « 1,3 ») and misquote the market.
+  const dec = (n) => n.toFixed(2).replace(/0$/, '').replace('.', ','); // fr-CA decimal comma
+  const decEn = (n) => n.toFixed(2).replace(/0$/, ''); // en-CA decimal point
+  // A flat band (min === max, the standard tier) is not a range — say « au prix
+  // de départ » instead of « entre 1× et 1× ».
+  const flat = t && t.apercuMin === t.apercuMax;
+  const range = t && !flat ? dec(t.apercuMin) + '× et ' + dec(t.apercuMax) + '×' : '';
+  const rangeEn = t && !flat ? decEn(t.apercuMin) + '× and ' + decEn(t.apercuMax) + '×' : '';
   return build({
-    subjectFr: 'Votre signature approche — ' + dLabel,
-    subjectEn: 'Your signing is coming up — ' + dLabelEn,
+    subjectFr: days <= 0 ? 'Votre signature est aujourd’hui' : 'Votre signature approche — ' + dLabel,
+    subjectEn: days <= 0 ? 'Your signing is today' : 'Your signing is coming up — ' + dLabelEn,
     preheaderFr: 'Une offre plus forte est retenue plus vite. Vérifiez la vôtre.',
     preheaderEn: 'A stronger offer gets taken faster. Check yours.',
     fr: {
@@ -489,15 +494,17 @@ function dateApproaching(ctx) {
         dLabel +
         ' (' +
         fmtDate(ctx.dateISO) +
-        '). Votre date approche; une offre plus forte est retenue plus vite.',
+        ').',
       bodyHtml:
         callout(offerLine(ctx) + (tierNom(ctx.tier) ? ' · palier ' + tierNom(ctx.tier) : '')) +
         para(
           range
             ? 'À ce délai, le marché se conclut généralement entre ' +
                 range +
-                ' le prix de départ. Si votre offre est sous cette fourchette, la bonifier augmente nettement vos chances d’être retenu à temps.'
-            : 'Si aucune offre n’est encore retenue, la bonifier augmente vos chances d’être retenu à temps.'
+                ' le prix de départ. Si votre offre est sous cette fourchette, la bonifier augmente nettement vos chances que votre demande soit retenue à temps.'
+            : flat
+              ? 'À ce délai, le marché se conclut généralement au prix de départ. Une offre plus forte est retenue plus vite.'
+              : 'Si aucune offre n’est encore retenue, la bonifier augmente vos chances que votre demande soit retenue à temps.'
         ),
       textLines: [
         offerLine(ctx),
@@ -515,15 +522,17 @@ function dateApproaching(ctx) {
         dLabelEn +
         ' (' +
         fmtDateEn(ctx.dateISO) +
-        '). Your date is approaching; a stronger offer gets taken faster.',
+        ').',
       bodyHtml:
         callout(offerLineEn(ctx) + (tierNomEn(ctx.tier) ? ' · ' + tierNomEn(ctx.tier) + ' tier' : '')) +
         para(
           rangeEn
             ? 'At this notice, the market usually settles between ' +
                 rangeEn +
-                ' the starting price. If your offer sits below that range, raising it sharply improves your chances of being taken in time.'
-            : 'If no offer has been taken yet, raising yours improves your chances of being taken in time.'
+                ' of the starting price. If your offer sits below that range, raising it markedly improves your chances of being taken in time.'
+            : flat
+              ? 'At this notice, the market usually settles at the starting price. A stronger offer gets taken faster.'
+              : 'If no offer has been taken yet, raising yours improves your chances of being taken in time.'
         ),
       textLines: [
         offerLineEn(ctx),
@@ -532,7 +541,7 @@ function dateApproaching(ctx) {
       ].filter(Boolean),
       ctaLabel: 'Check my offer',
     },
-    ctaUrl: linksFor(ctx.baseUrl).carnet,
+    ctaUrl: linksFor(ctx.baseUrl).profil,
     unsubscribeUrl: ctx.unsubscribeUrl,
   });
 }
@@ -613,12 +622,12 @@ function dateMissedNoUptake(ctx) {
       bodyHtml:
         callout(offerLineEn(ctx)) +
         para(
-          'At close dates, a more generous offer gets taken much faster. You can raise your offer in seconds — within the allowed cap.'
+          'When the date is close, a more generous offer gets taken much faster. You can raise your offer in seconds — within the allowed cap.'
         ),
       textLines: [offerLineEn(ctx), 'Raise your offer to attract a notary in time.'],
       ctaLabel: 'Raise my offer',
     },
-    ctaUrl: linksFor(ctx.baseUrl).carnet,
+    ctaUrl: linksFor(ctx.baseUrl).profil,
     unsubscribeUrl: ctx.unsubscribeUrl,
   });
 }
@@ -630,7 +639,7 @@ function offerAuthorized(ctx) {
   return build({
     subjectFr: 'Paiement autorisé — votre offre est visible',
     subjectEn: 'Payment authorized — your offer is visible',
-    preheaderFr: 'Rien n’est débité tant qu’un notaire n’accepte pas votre demande.',
+    preheaderFr: 'Rien n’est débité tant qu’un notaire n’a pas retenu votre demande.',
     preheaderEn: 'Nothing is charged until a notary accepts your request.',
     fr: {
       heading: 'Votre offre est maintenant visible',
@@ -709,7 +718,7 @@ function offerAuthorizationVoided(ctx) {
       textLines: [offerLineEn(ctx), 'Nothing was charged. Repost to return to the carnet.'],
       ctaLabel: 'Repost my request',
     },
-    ctaUrl: linksFor(ctx.baseUrl).carnet,
+    ctaUrl: linksFor(ctx.baseUrl).profil,
     unsubscribeUrl: ctx.unsubscribeUrl,
   });
 }
@@ -789,19 +798,19 @@ function newMatchingBids(ctx) {
 // (publish a demand). Sent once per email (idempotent in the notifier).
 function clientWelcome(ctx) {
   return build({
-    subjectFr: 'Bienvenue sur Nota — un notaire à la date qu’il vous faut',
-    subjectEn: 'Welcome to Nota — a notary on the date you need',
+    subjectFr: 'Bienvenue sur Nota',
+    subjectEn: 'Welcome to Nota',
     preheaderFr: 'Publiez votre première demande en quelques minutes — gratuit pour vous.',
     preheaderEn: 'Post your first request in minutes — free for you.',
     fr: {
       heading: 'Bienvenue sur Nota',
       lead: 'Vous êtes à quelques clics d’un notaire à Québec, à la date qui vous convient.',
       bodyHtml: para(
-        'Choisissez votre date sur le carnet public, proposez votre prix, et un notaire de la région retient votre demande. Plus votre échéance est proche, plus votre offre se démarque. Vous ne payez que le notaire, à la signature — utiliser Nota est gratuit.'
+        'Choisissez votre date sur le carnet public, proposez votre prix, et un notaire de la région retient votre demande. Plus votre échéance est proche, plus votre offre se démarque. Vous payez le prix que vous avez affiché, au moment où un notaire retient votre demande — utiliser Nota ne vous coûte rien de plus.'
       ),
       textLines: [
-        '1) Choisissez votre date.  2) Proposez votre prix.  3) Un notaire vous retient.',
-        'Gratuit pour vous — vous payez le notaire à la signature.',
+        '1) Choisissez votre date. 2) Proposez votre prix. 3) Un notaire retient votre demande.',
+        'Utiliser Nota ne vous coûte rien de plus : vous payez le prix affiché, à la mise en relation.',
       ],
       ctaLabel: 'Publier ma demande',
     },
@@ -809,11 +818,11 @@ function clientWelcome(ctx) {
       heading: 'Welcome to Nota',
       lead: 'You are a few clicks away from a notary in Québec, on the date that suits you.',
       bodyHtml: para(
-        'Pick your date on the public carnet, name your price, and a notary in the region takes your request. The closer your deadline, the more your offer stands out. You only pay the notary, at signing — using Nota is free.'
+        'Pick your date on the public carnet, name your price, and a notary in the region takes your request. The closer your deadline, the more your offer stands out. You pay the price you posted, at the moment a notary takes your request — using Nota costs you nothing extra.'
       ),
       textLines: [
-        '1) Pick your date.  2) Name your price.  3) A notary takes you on.',
-        'Free for you — you pay the notary at signing.',
+        '1) Pick your date. 2) Name your price. 3) A notary takes your request.',
+        'Using Nota costs you nothing extra: you pay the posted price when the match is made.',
       ],
       ctaLabel: 'Post my request',
     },
@@ -897,7 +906,7 @@ function notaryActive(ctx) {
         'Choisissez les demandes qui conviennent à votre horaire et soyez payé à la signature. Ajustez vos préférences de réception pour être averti dès qu’une demande vous correspond.'
       ),
       textLines: ['Retenez les demandes qui conviennent à votre horaire. Payé à la signature.'],
-      ctaLabel: 'Ouvrir le carnet',
+      ctaLabel: 'Ouvrir ma console',
     },
     en: {
       heading: 'Welcome — your account is active',
@@ -921,7 +930,7 @@ function actPaidNotary(ctx) {
   const line = svcNom(ctx.serviceId) + ' · ' + fmtDate(ctx.dateISO) + ' · ' + money(amount);
   const lineEn = svcNomEn(ctx.serviceId) + ' · ' + fmtDateEn(ctx.dateISO) + ' · ' + moneyEn(amount);
   return build({
-    subjectFr: 'Versement en route : ' + money(amount),
+    subjectFr: 'Acte payé — versement en route',
     subjectEn: 'Payout on the way: ' + moneyEn(amount),
     preheaderFr: 'L’acte est payé — votre versement arrive à votre compte.',
     preheaderEn: 'The act is paid — your transfer is heading to your account.',
@@ -976,7 +985,7 @@ function notaryMagicLink(ctx) {
       bodyHtml: para(
         'This link is valid for ' +
           ttl +
-          ' minutes and single-use. If you did not request this sign-in, ignore this email — no one can sign in without it.'
+          ' minutes and can be used only once. If you did not request this sign-in, ignore this email — no one can sign in without it.'
       ),
       textLines: ['Single-use link, valid for ' + ttl + ' minutes.'],
       ctaLabel: 'Open my console',
@@ -1016,7 +1025,7 @@ function adminMagicLink(ctx) {
       bodyHtml: para(
         'This link is valid for ' +
           ttl +
-          ' minutes and single-use. If you did not request this sign-in, ignore this email — no one can sign in without it.'
+          ' minutes and can be used only once. If you did not request this sign-in, ignore this email — no one can sign in without it.'
       ),
       textLines: ['Single-use link, valid for ' + ttl + ' minutes.'],
       ctaLabel: 'Open the console',
@@ -1032,13 +1041,13 @@ function adminMagicLink(ctx) {
 
 function operatorNotaryActive(ctx) {
   return build({
-    subjectFr: 'Nouveau notaire actif',
+    subjectFr: 'Nouveau notaire actif' + (ctx.notaryEmail ? ' : ' + ctx.notaryEmail : ''),
     subjectEn: 'New active notary' + (ctx.notaryEmail ? ': ' + ctx.notaryEmail : ''),
     preheaderFr: 'Un notaire vient d’activer son compte sur Nota.',
     preheaderEn: 'A notary just activated their account on Nota.',
     fr: {
       heading: 'Un notaire vient d’activer son compte',
-      lead: 'Un nouveau compte notaire vient de compléter son intégration de paiement.',
+      lead: 'Un nouveau compte notaire vient de terminer sa configuration de paiement.',
       bodyHtml: callout('Courriel : ' + (ctx.notaryEmail || '—')),
       textLines: ['Nouveau notaire actif : ' + (ctx.notaryEmail || '—')],
       ctaLabel: 'Ouvrir Nota',
@@ -1187,7 +1196,7 @@ function documentsDemandes(ctx) {
         listHtml +
         (d.message ? para('Message du notaire : « ' + d.message + ' »') : '') +
         callout(offerLine(ctx)) +
-        para('Ajoutez-les à votre dossier : un dossier complet est retenu beaucoup plus vite.'),
+        para('Ajoutez-les à votre dossier : une demande complète est retenue beaucoup plus vite.'),
       textLines: listText.concat(d.message ? ['Message du notaire : ' + d.message] : [], [offerLine(ctx)]),
       ctaLabel: 'Compléter mon dossier',
     },
@@ -1200,7 +1209,7 @@ function documentsDemandes(ctx) {
         listHtml +
         (d.message ? para('Message from the notary: “' + d.message + '”') : '') +
         callout(offerLineEn(ctx)) +
-        para('Add them to your file: a complete file gets taken much faster.'),
+        para('Add them to your file: a complete request gets taken much faster.'),
       textLines: listText.concat(d.message ? ['Message from the notary: ' + d.message] : [], [offerLineEn(ctx)]),
       ctaLabel: 'Complete my file',
     },
@@ -1258,7 +1267,7 @@ function propositionRefusee(ctx) {
     preheaderEn: 'The offer stays open at the client’s price.',
     fr: {
       heading: 'Le client a décliné votre proposition',
-      lead: 'Votre proposition de ' + money(amount) + ' pour le ' + svcNom(ctx.serviceId) + ' le ' + fmtDate(ctx.dateISO) + ' n’a pas été retenue.',
+      lead: 'Votre proposition de ' + money(amount) + ' pour le ' + svcNom(ctx.serviceId) + ' du ' + fmtDate(ctx.dateISO) + ' n’a pas été acceptée.',
       bodyHtml:
         callout(line) +
         para('L’offre reste en ligne au prix du client. Vous pouvez toujours la retenir telle quelle depuis votre console.'),
@@ -1267,7 +1276,7 @@ function propositionRefusee(ctx) {
     },
     en: {
       heading: 'The client declined your proposal',
-      lead: 'Your proposal of ' + moneyEn(amount) + ' for the ' + svcNomEn(ctx.serviceId) + ' on ' + fmtDateEn(ctx.dateISO) + ' was not taken.',
+      lead: 'Your proposal of ' + moneyEn(amount) + ' for the ' + svcNomEn(ctx.serviceId) + ' of ' + fmtDateEn(ctx.dateISO) + ' was declined.',
       bodyHtml:
         callout(lineEn) +
         para('The offer stays live at the client’s price. You can still take it as is from your console.'),
@@ -1330,7 +1339,7 @@ function partnerWelcome(ctx) {
       ctaLabel: 'Ouvrir mon lien',
     },
     en: {
-      heading: 'Welcome to the Nota partners',
+      heading: 'Welcome to the Nota partner program',
       lead:
         'Your code ' + code +
         (partnerTypeNomEn(ctx.type) ? ' (' + partnerTypeNomEn(ctx.type) + ')' : '') +
@@ -1361,7 +1370,7 @@ function partnerClaimLink(ctx) {
     fr: {
       heading: 'Confirmez votre code partenaire',
       lead:
-        'Une réclamation du code ' + code +
+        'Une réservation du code ' + code +
         ' a été faite avec ce courriel. Confirmez-la pour l’activer :',
       bodyHtml: para(
         'Ce lien est valide ' +
@@ -1379,7 +1388,7 @@ function partnerClaimLink(ctx) {
       bodyHtml: para(
         'This link is valid for ' +
           ttl +
-          ' minutes and single-use. Your code stays inactive until it is confirmed. If you did not make this claim, ignore this email — no one can activate the code without this link.'
+          ' minutes and can be used only once. Your code stays inactive until it is confirmed. If you did not make this claim, ignore this email — no one can activate the code without this link.'
       ),
       textLines: ['Confirm the code ' + code + ' — single-use link, valid for ' + ttl + ' minutes.'],
       ctaLabel: 'Confirm my code',
@@ -1498,7 +1507,7 @@ function offerCancelled(ctx) {
       lead: 'Votre offre — ' + svcNom(ctx.serviceId) + ' le ' + fmtDate(ctx.dateISO) + ' — a été retirée du carnet.',
       bodyHtml:
         callout(offerLine(ctx)) +
-        para('Plus aucun notaire ne peut la retenir. Vos documents restent sur votre appareil ; rien n’est transmis. Si vous changez d’avis, publiez une nouvelle date en quelques gestes.'),
+        para('Plus aucun notaire ne peut la retenir et votre dossier n’est plus partagé. Si vous changez d’avis, publiez une nouvelle date en quelques gestes.'),
       textLines: [offerLine(ctx), 'Plus aucun notaire ne peut la retenir.'],
       ctaLabel: 'Choisir une nouvelle date',
     },
@@ -1507,7 +1516,7 @@ function offerCancelled(ctx) {
       lead: 'Your offer — ' + svcNomEn(ctx.serviceId) + ' on ' + fmtDateEn(ctx.dateISO) + ' — was removed from the carnet.',
       bodyHtml:
         callout(offerLineEn(ctx)) +
-        para('No notary can take it anymore. Your documents stay on your device; nothing is shared. If you change your mind, publish a new date in a few taps.'),
+        para('No notary can take it anymore and your file is no longer shared. If you change your mind, publish a new date in a few taps.'),
       textLines: [offerLineEn(ctx), 'No notary can take it anymore.'],
       ctaLabel: 'Pick a new date',
     },
@@ -1538,8 +1547,8 @@ function offerCancelledNotary(ctx) {
       lead: 'The request you had taken — ' + svcNomEn(ctx.serviceId) + ' on ' + fmtDateEn(ctx.dateISO) + ' — was just cancelled by the client.',
       bodyHtml:
         callout(offerLineEn(ctx)) +
-        para('The appointment is freed in your agenda. If a payment was engaged, our team will write to you promptly to settle it.'),
-      textLines: [offerLineEn(ctx), 'The appointment is freed in your agenda.'],
+        para('The appointment is freed up in your calendar. If a payment was already in flight, our team will contact you promptly to settle it.'),
+      textLines: [offerLineEn(ctx), 'The appointment is freed up in your calendar.'],
       ctaLabel: 'Open my console',
     },
     ctaUrl: linksFor(ctx.baseUrl).notaires,
@@ -1569,6 +1578,72 @@ function operatorOfferCancelled(ctx) {
       lead: 'A client just cancelled a request that was already taken. Check the payment (authorization, capture, transfer) and follow up with the parties as needed.',
       bodyHtml: callout(lineEn),
       textLines: [lineEn],
+      ctaLabel: 'Open Nota',
+    },
+    ctaUrl: linksFor(ctx.baseUrl).carnet,
+    unsubscribeUrl: ctx.unsubscribeUrl,
+  });
+}
+
+// To the client whose retained act was just RELEASED by the notary: their
+// offer is untouched and back on the carnet, so the message leads with what
+// still stands (the date, the amount) before what changed.
+function actReleased(ctx) {
+  return build({
+    subjectFr: 'Votre demande est de retour au carnet : ' + money(ctx.montant),
+    subjectEn: 'Your request is back on the carnet: ' + moneyEn(ctx.montant),
+    preheaderFr: 'Le notaire s’est désisté — votre offre reste publiée telle quelle.',
+    preheaderEn: 'The notary withdrew — your offer stays published as is.',
+    fr: {
+      heading: 'Le notaire s’est désisté',
+      lead: 'Le notaire qui avait retenu votre demande — ' + svcNom(ctx.serviceId) + ' le ' + fmtDate(ctx.dateISO) + ' — s’est désisté. Certains dossiers ne conviennent pas à toutes les études (prêteur inhabituel, conflit d’intérêts).',
+      bodyHtml:
+        callout(offerLine(ctx)) +
+        para('Votre offre est de retour au carnet, telle que vous l’aviez publiée : même date, même montant. Les autres notaires la voient déjà et peuvent la retenir. Vous n’avez rien à refaire.'),
+      textLines: [offerLine(ctx), 'Votre offre est de retour au carnet, telle que publiée.'],
+      ctaLabel: 'Suivre mon offre',
+    },
+    en: {
+      heading: 'The notary withdrew',
+      lead: 'The notary who had taken your request — ' + svcNomEn(ctx.serviceId) + ' on ' + fmtDateEn(ctx.dateISO) + ' — has withdrawn. Some files do not suit every practice (an unusual lender, a conflict of interest).',
+      bodyHtml:
+        callout(offerLineEn(ctx)) +
+        para('Your offer is back on the carnet exactly as you published it: same date, same amount. Other notaries can already see and take it. Nothing to redo on your side.'),
+      textLines: [offerLineEn(ctx), 'Your offer is back on the carnet as published.'],
+      ctaLabel: 'Track my offer',
+    },
+    ctaUrl: linksFor(ctx.baseUrl).profil,
+    unsubscribeUrl: ctx.unsubscribeUrl,
+  });
+}
+
+// Operator alert: a notary withdrew from a RETAINED act. Sent when money may
+// be in flight (hold, capture, payout) or the notary left a reason a human
+// should read — same posture as operatorOfferCancelled.
+function operatorActReleased(ctx) {
+  const line = offerLine(ctx) + (ctx.etude ? ' · ' + ctx.etude : '') + (ctx.notaireEmail ? ' · ' + ctx.notaireEmail : '');
+  const lineEn = offerLineEn(ctx) + (ctx.etude ? ' · ' + ctx.etude : '') + (ctx.notaireEmail ? ' · ' + ctx.notaireEmail : '');
+  return build({
+    subjectFr: 'Désistement d’un notaire sur une demande retenue : ' + money(ctx.montant),
+    subjectEn: 'Notary withdrew from a retained request: ' + moneyEn(ctx.montant),
+    preheaderFr: 'Vérifier le paiement et la remise au carnet.',
+    preheaderEn: 'Check the payment and the return to the carnet.',
+    fr: {
+      heading: 'Désistement sur une demande retenue',
+      lead: (ctx.paidOrHeld
+        ? 'Un paiement peut être engagé (autorisation, capture, virement) — vérifier le registre et régulariser au besoin. '
+        : '') + 'La demande est remise au carnet ; le client est prévenu.',
+      bodyHtml: callout(line) + (ctx.messageNotaire ? para('Motif du notaire : ' + ctx.messageNotaire) : ''),
+      textLines: [line].concat(ctx.messageNotaire ? ['Motif du notaire : ' + ctx.messageNotaire] : []),
+      ctaLabel: 'Ouvrir Nota',
+    },
+    en: {
+      heading: 'Withdrawal from a retained request',
+      lead: (ctx.paidOrHeld
+        ? 'A payment may be in flight (authorization, capture, transfer) — check the ledger and settle as needed. '
+        : '') + 'The request is back on the carnet; the client has been notified.',
+      bodyHtml: callout(lineEn) + (ctx.messageNotaire ? para('Notary’s reason: ' + ctx.messageNotaire) : ''),
+      textLines: [lineEn].concat(ctx.messageNotaire ? ['Notary’s reason: ' + ctx.messageNotaire] : []),
       ctaLabel: 'Open Nota',
     },
     ctaUrl: linksFor(ctx.baseUrl).carnet,
@@ -1610,28 +1685,36 @@ function contactRecu(ctx) {
 // a forward keeps the whole context.
 function operatorContactMessage(ctx) {
   const who = (ctx.nom ? ctx.nom + ' · ' : '') + (ctx.email || ctx.courriel || '—');
-  const body =
-    callout(who + (ctx.sujet ? ' · ' + ctx.sujet : '')) +
+  const line = who + (ctx.sujet ? ' · ' + ctx.sujet : '');
+  const bodyFr =
+    callout(line) +
     (ctx.message ? para(ctx.message) : '') +
     (ctx.bidId ? para('Offre liée : ' + ctx.bidId) : '');
-  const textLines = [who + (ctx.sujet ? ' · ' + ctx.sujet : ''), ctx.message || ''].concat(ctx.bidId ? ['Offre liée : ' + ctx.bidId] : []);
+  const bodyEn =
+    callout(line) +
+    (ctx.message ? para(ctx.message) : '') +
+    (ctx.bidId ? para('Linked offer: ' + ctx.bidId) : '');
+  const textLinesFr = [line, ctx.message || ''].concat(ctx.bidId ? ['Offre liée : ' + ctx.bidId] : []);
+  const textLinesEn = [line, ctx.message || ''].concat(ctx.bidId ? ['Linked offer: ' + ctx.bidId] : []);
   return build({
-    subjectFr: 'Nous joindre : ' + (ctx.sujet || 'nouveau message'),
-    subjectEn: 'Contact form: ' + (ctx.sujet || 'new message'),
+    // The sujet is user-supplied (up to 150 chars): keep it on the FR side,
+    // trimmed, and keep the EN side fixed so the combined subject stays short.
+    subjectFr: 'Nous joindre : ' + String(ctx.sujet || 'nouveau message').slice(0, 60),
+    subjectEn: 'Contact form',
     preheaderFr: 'Un message vient d’arriver par le formulaire.',
     preheaderEn: 'A message just arrived through the form.',
     fr: {
       heading: 'Nouveau message via le formulaire',
       lead: 'Répondre directement au courriel indiqué ci-dessous.',
-      bodyHtml: body,
-      textLines,
+      bodyHtml: bodyFr,
+      textLines: textLinesFr,
       ctaLabel: 'Ouvrir Nota',
     },
     en: {
       heading: 'New message via the form',
       lead: 'Reply directly to the email address below.',
-      bodyHtml: body,
-      textLines,
+      bodyHtml: bodyEn,
+      textLines: textLinesEn,
       ctaLabel: 'Open Nota',
     },
     ctaUrl: linksFor(ctx.baseUrl).carnet,
@@ -1650,6 +1733,7 @@ const TEMPLATES = {
   offerRetained,
   dateMissedNoUptake,
   offerCancelled,
+  actReleased,
   // client — pay-on-accept lifecycle
   offerAuthorized,
   offerAuthorizationVoided,
@@ -1682,6 +1766,7 @@ const TEMPLATES = {
   operatorActCompleted,
   operatorNewPartner,
   operatorOfferCancelled,
+  operatorActReleased,
   operatorContactMessage,
 };
 

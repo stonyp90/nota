@@ -277,6 +277,15 @@ function createApp(repo, opts = {}) {
   // Notary-facing projection of a bid: enough to decide on, never the private
   // dossier or courriel. `ready` tells the notary the client's file is complete
   // (every required document/field assembled + consent), computed by the domain.
+  // The lender behind a bid, as notaries see it. A notary only closes with the
+  // institutions they normally work with, so the feed must NAME the lender —
+  // and flag a virtual (branchless) one — before they decide to retain,
+  // propose, or pass. Null on bids that predate the lender question.
+  function bidLenderInfo(b) {
+    const l = domain.bidLender(b);
+    return l ? { id: l.id, nom: l.nom, virtuel: l.virtuel } : null;
+  }
+
   function notaryBid(b) {
     const r = domain.leadReadiness(b.serviceId, b.dossier || {});
     return {
@@ -288,6 +297,7 @@ function createApp(repo, opts = {}) {
       premium: b.premium,
       prefixe: b.prefixe || null,
       ready: r.ready,
+      preteur: bidLenderInfo(b),
       // The case-complexity signal (easy/hard) + the factors that drive it, so a
       // notary can judge whether the posted price fits the file before retaining.
       complexity: domain.complexity(b.serviceId, b.pricing || null),
@@ -331,6 +341,13 @@ function createApp(repo, opts = {}) {
     const mine = demandesOf(b).filter((d) => d.notaryId === notaryId);
     return mine.length ? mine[mine.length - 1] : null;
   }
+
+  // --- Retained-act conversation (client ↔ notaire) --------------------------
+  // Stored shape (private, on the bid record): { id, de, texte, createdAt }
+  // where `de` is domain.CHAT_FROM.CLIENT | .NOTAIRE. Both parties see the same
+  // thread once the bid is retained — never before, never another notary.
+  const messagesOf = (b) => (Array.isArray(b.messages) ? b.messages : []);
+  const chatMessage = (m) => ({ id: m.id, de: m.de, texte: m.texte, createdAt: m.createdAt });
 
   // Parse a JSON body; returns { payload } or { error: <400 response> }.
   function parseBody(request) {
@@ -1149,6 +1166,10 @@ function createApp(repo, opts = {}) {
                 // Mise en relation (ADR 0010 §4): this notary retained the bid,
                 // so they see whom to contact — never present on open bids.
                 client: clientContact(b),
+                preteur: bidLenderInfo(b),
+                // The live thread with the client — the place details surface
+                // (and the reason a notary may still withdraw, see /release).
+                messages: messagesOf(b).map(chatMessage),
                 viaProposition: propositionsOf(b).some((p) => p.status === PROPOSITION.ACCEPTEE && p.notaryId === notaryId),
               });
             }
@@ -1352,6 +1373,8 @@ function createApp(repo, opts = {}) {
         propositions: propositionsOf(bid).filter((p) => p.status !== PROPOSITION.REMPLACEE).map(clientProposition),
         demandes: demandesOf(bid).map((d) => clientDemande(bid, d)),
         readiness: domain.leadReadiness(bid.serviceId, bid.dossier || {}),
+        // The retained-act conversation. Empty until a notary retains the bid.
+        messages: messagesOf(bid).map(chatMessage),
       });
     }
 
@@ -1530,6 +1553,82 @@ function createApp(repo, opts = {}) {
       return json(200, { declined: true });
     }
 
+    // The retaining notary writes to their client. The thread lives on the bid
+    // and only exists while the act is retained (domain.validateChatMessage) —
+    // and only for the notary who holds it, never a bystander.
+    if (route === '/notary/bids/message' && method === 'POST') {
+      const { payload, error } = parseBody(request);
+      if (error) return error;
+      const notaryId = requireScope(bearer(request) || payload.token, SCOPES.SESSION);
+      if (!notaryId) return json(401, { errors: [{ code: 'non_autorise', message: 'Jeton invalide ou expiré.' }] });
+      const bid = await repo.get(payload.id, payload.dateISO);
+      if (!bid) return json(404, { errors: [{ code: 'introuvable', message: 'Offre introuvable.' }] });
+      if (bid.status === domain.STATUS.ANNULEE) return goneCancelled();
+      if (bid.notaryId !== notaryId) {
+        return json(403, { errors: [{ code: 'interdit', message: 'Conversation réservée au notaire qui a retenu l’offre.' }] });
+      }
+      const v = domain.validateChatMessage({ bid, de: domain.CHAT_FROM.NOTAIRE, texte: payload.texte });
+      if (!v.ok) return json(422, { errors: v.errors });
+      const message = { id: newId(), de: domain.CHAT_FROM.NOTAIRE, texte: v.texte, createdAt: new Date(nowMs()).toISOString() };
+      await repo.update({ ...bid, messages: [...messagesOf(bid), message] });
+      return json(200, { message: chatMessage(message) });
+    }
+
+    // The client answers in the same thread, proving ownership with their
+    // per-bid token like every other client route.
+    if (route === '/client/bid/message' && method === 'POST') {
+      const { payload, error } = parseBody(request);
+      if (error) return error;
+      const auth = requireClient(request, payload.id);
+      if (auth.error) return auth.error;
+      const bid = await repo.get(payload.id, payload.dateISO);
+      if (!bid) return json(404, { errors: [{ code: 'introuvable', message: 'Offre introuvable.' }] });
+      if (bid.status === domain.STATUS.ANNULEE) return goneCancelled();
+      const v = domain.validateChatMessage({ bid, de: domain.CHAT_FROM.CLIENT, texte: payload.texte });
+      if (!v.ok) return json(422, { errors: v.errors });
+      const message = { id: newId(), de: domain.CHAT_FROM.CLIENT, texte: v.texte, createdAt: new Date(nowMs()).toISOString() };
+      await repo.update({ ...bid, messages: [...messagesOf(bid), message] });
+      return json(200, { message: chatMessage(message) });
+    }
+
+    // The retaining notary WITHDRAWS after accepting — a detail surfaced in the
+    // conversation (an unfamiliar lender, a conflict) makes the file impossible
+    // on their side. The act returns to the open market exactly as the client
+    // posted it (domain.releasedBid); the withdrawing notary stops seeing it
+    // (decline marker), their calendar pointer is dropped, and the client (and
+    // the operator, when money may be in flight) are notified.
+    if (route === '/notary/bids/release' && method === 'POST') {
+      const { payload, error } = parseBody(request);
+      if (error) return error;
+      const notaryId = requireScope(bearer(request) || payload.token, SCOPES.SESSION);
+      if (!notaryId) return json(401, { errors: [{ code: 'non_autorise', message: 'Jeton invalide ou expiré.' }] });
+      const bid = await repo.get(payload.id, payload.dateISO);
+      if (!bid) return json(404, { errors: [{ code: 'introuvable', message: 'Offre introuvable.' }] });
+      if (bid.status === domain.STATUS.ANNULEE) return goneCancelled();
+      if (bid.status === domain.STATUS.RETENUE && bid.notaryId !== notaryId) {
+        return json(403, { errors: [{ code: 'interdit', message: 'Seul le notaire qui a retenu l’offre peut se désister.' }] });
+      }
+      const v = domain.validateRelease({ bid, message: payload.message });
+      if (!v.ok) return json(422, { errors: v.errors });
+
+      const released = domain.releasedBid(bid);
+      await repo.update(released);
+      // The withdrawing notary never sees this act again in their feed, and the
+      // signing leaves their calendar.
+      await repo.putDecline(notaryId, bid.id);
+      if (typeof repo.removeRetained === 'function') {
+        await repo.removeRetained(notaryId, { id: bid.id, dateISO: bid.dateISO });
+      }
+
+      const rn = notifier();
+      if (rn && typeof rn.onActReleased === 'function') {
+        Promise.resolve(repo.getNotary(notaryId))
+          .then((notary) => rn.onActReleased(released, { notary, etude: bid.etude, message: v.message, paidOrHeld: !!bid.paymentIntentId }))
+          .catch(() => {});
+      }
+      return json(200, { bid: publicBid(released) });
+    }
+
     if (route === '/notary/dossier' && method === 'GET') {
       // Session-scoped token from the Authorization header — the dossier holds
       // the client's private courriel + file, so a feed token is rejected here.
@@ -1542,7 +1641,14 @@ function createApp(repo, opts = {}) {
       if (bid.notaryId !== notaryId) {
         return json(403, { errors: [{ code: 'interdit', message: 'Dossier réservé au notaire qui a retenu l’offre.' }] });
       }
-      return json(200, { id: bid.id, courriel: bid.courriel || null, dossier: bid.dossier || null, client: clientContact(bid) });
+      return json(200, {
+        id: bid.id,
+        courriel: bid.courriel || null,
+        dossier: bid.dossier || null,
+        client: clientContact(bid),
+        preteur: bidLenderInfo(bid),
+        messages: messagesOf(bid).map(chatMessage),
+      });
     }
 
     // Webcal feed of this notary's retained signings, for calendar subscription.
