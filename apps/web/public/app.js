@@ -3498,9 +3498,11 @@
           rb.addEventListener('click', function () { dossierSet(sid, it.id, reuse.value); renderProfilDocs(container, sid); });
           facts.appendChild(rb);
         }
-        var already = el('button', 'btn btn-sm btn-ghost doc-transmis-btn', 'Déjà transmis au notaire'); already.type = 'button';
-        already.addEventListener('click', function () { dossierSet(sid, it.id, D.DOSSIER_TRANSMIS); renderProfilDocs(container, sid); });
-        facts.appendChild(already);
+        if (!provided) {
+          var already = el('button', 'btn btn-sm btn-ghost doc-transmis-btn', 'Déjà transmis au notaire'); already.type = 'button';
+          already.addEventListener('click', function () { dossierSet(sid, it.id, D.DOSSIER_TRANSMIS); renderProfilDocs(container, sid); });
+          facts.appendChild(already);
+        }
         row.appendChild(facts);
         row.appendChild(ferr);
         row.addEventListener('dragover', function (e) { e.preventDefault(); row.dataset.drop = 'true'; });
@@ -3737,13 +3739,17 @@
           });
           docActions.appendChild(rb);
         }
-        // The other channel, beside the upload — never instead of it.
-        var already = el('button', 'btn btn-sm btn-ghost doc-transmis-btn', 'Déjà transmis au notaire'); already.type = 'button';
-        already.addEventListener('click', function () {
-          dossierSet(svc.id, it.id, D.DOSSIER_TRANSMIS);
-          renderDossier();
-        });
-        docActions.appendChild(already);
+        // The other channel, beside the upload — never instead of it. Once a
+        // file IS picked the row's second action is Retirer; offering the
+        // sentinel too would be three verbs for one line.
+        if (!saved[it.id]) {
+          var already = el('button', 'btn btn-sm btn-ghost doc-transmis-btn', 'Déjà transmis au notaire'); already.type = 'button';
+          already.addEventListener('click', function () {
+            dossierSet(svc.id, it.id, D.DOSSIER_TRANSMIS);
+            renderDossier();
+          });
+          docActions.appendChild(already);
+        }
         body.appendChild(docActions);
         if (saved[it.id]) {
           var meta = el('div', 'doc-file');
