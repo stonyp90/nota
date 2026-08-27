@@ -13,6 +13,7 @@
  *   NOTA_BASE_URL       - public site origin, for CTA + unsubscribe links
  *   NOTA_OPERATOR_EMAIL - Nota's own inbox for operator notifications
  */
+const domain = require('@nota/domain');
 const { createDynamoRepo } = require('./src/repo-dynamo');
 const { createSesAdapter } = require('./src/notify-port');
 const { createNotifier } = require('./src/notifications');
@@ -37,7 +38,9 @@ exports.handler = async () => {
   const result = await runReminders({
     repo,
     notifier,
-    now: () => new Date().toISOString().slice(0, 10),
+    // The Québec civil day — a UTC slice here fired "demain" reminders a day
+    // early every evening (the Lambda host runs at UTC).
+    now: () => domain.businessDay(null, process.env.NOTA_TIMEZONE),
   });
   console.log('reminders:', JSON.stringify(result));
   return result;

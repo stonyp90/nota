@@ -16,7 +16,9 @@ const domain = require('@nota/domain');
 async function runReminders({ repo, notifier, now } = {}) {
   if (!repo) throw new Error('runReminders: repo is required');
   if (!notifier) throw new Error('runReminders: notifier is required');
-  const todayISO = (now || (() => new Date().toISOString().slice(0, 10)))();
+  // Default clock = the Québec civil day (not the UTC day of the Lambda host),
+  // so "J-1 demain" reminders fire on the client's calendar, not UTC's.
+  const todayISO = (now || (() => domain.businessDay(null, process.env.NOTA_TIMEZONE)))();
 
   const open = await repo.listOpenBids();
   let due = 0;

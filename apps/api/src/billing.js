@@ -24,6 +24,7 @@ const {
   statsDeltasForGauge,
 } = require('./stats');
 const { notaryIdForEmail } = require('./notary-auth');
+const domain = require('@nota/domain');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -40,13 +41,16 @@ const NOTARY_STATUS = {
 const DEFAULT_COMMISSION_RATE = 0.10;
 
 function createBilling({
-  repo, stripe, now,
+  repo, stripe, now, timeZone,
   onboardingReturnUrl, onboardingRefreshUrl, commissionRate,
 } = {}) {
   if (!repo) throw new Error('createBilling: repo is required');
   if (!stripe) throw new Error('createBilling: stripe adapter is required');
 
   const clock = now || (() => new Date().toISOString());
+  // The STATS# day an act's commission lands on is the Québec civil day of the
+  // completion instant — a UTC slice booked evening completions on tomorrow.
+  const statsDay = () => domain.businessDay(clock(), timeZone || process.env.NOTA_TIMEZONE);
   const rate = typeof commissionRate === 'number' ? commissionRate : DEFAULT_COMMISSION_RATE;
 
   // Nota's share of an act, in cents, from the act's dollar value.
@@ -203,7 +207,7 @@ function createBilling({
         commissionCentsCollected: (notary.commissionCentsCollected || 0) + fee,
         updatedAt: clock(),
       });
-      await recordStats(statsDeltasForComplete({ completedAt: String(clock()).slice(0, 10), commissionCents: fee }));
+      await recordStats(statsDeltasForComplete({ completedAt: statsDay(), commissionCents: fee }));
     }
 
     return { ok: true, commissionCents: fee, chargeId: charge && charge.id };
@@ -299,7 +303,7 @@ function createBilling({
         commissionCentsCollected: (notary.commissionCentsCollected || 0) + fee,
         updatedAt: clock(),
       });
-      await recordStats(statsDeltasForComplete({ completedAt: String(clock()).slice(0, 10), commissionCents: fee }));
+      await recordStats(statsDeltasForComplete({ completedAt: statsDay(), commissionCents: fee }));
     }
 
     return { ok: true, commissionCents: fee, netCents: result.netCents, transferId: result.transferId, chargeId: result.chargeId };

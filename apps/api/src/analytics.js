@@ -48,7 +48,9 @@ function num(v) {
 
 function createAnalytics({ repo, now, gaugeHorizonMonths, commissionRate } = {}) {
   if (!repo) throw new Error('createAnalytics: repo is required');
-  const today = now || (() => new Date().toISOString().slice(0, 10));
+  // Default clock = the Québec civil day, matching the handler that feeds the
+  // STATS# counters — a UTC day here would misalign the live gauge every evening.
+  const today = now || (() => domain.businessDay(null, process.env.NOTA_TIMEZONE));
   const HORIZON = gaugeHorizonMonths || 4;
   // The platform commission rate the admin console displays next to the cents
   // actually collected. Same knob billing charges with (NOTA_COMMISSION_RATE),

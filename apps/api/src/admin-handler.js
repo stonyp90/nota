@@ -12,13 +12,17 @@
  * read/write on the separate nota-admin table — the admin surface can never
  * mutate customer data.
  */
+const domain = require('@nota/domain');
 const { createAdmin } = require('./admin');
 const { createAnalytics } = require('./analytics');
 
 const MAX_BODY_BYTES = 32 * 1024;
 
 function createAdminApp(repo, opts = {}) {
-  const now = opts.now || (() => new Date().toISOString().slice(0, 10));
+  // Same business-day clock as the public handler: "today" is the Québec civil
+  // day, not the UTC day of the Lambda host (see domain.businessDay).
+  const TIME_ZONE = opts.timeZone || process.env.NOTA_TIMEZONE || domain.BUSINESS_TIMEZONE;
+  const now = opts.now || (() => domain.businessDay(null, TIME_ZONE));
   const nowMs = opts.nowMs || (() => Date.now());
   const newId = opts.newId || (() => require('node:crypto').randomUUID());
 
