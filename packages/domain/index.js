@@ -529,6 +529,29 @@
     return Math.round((b - a) / 86400000);
   }
 
+  // --- Business day ----------------------------------------------------------
+  // "Today" for the marketplace is the civil day in Québec, NOT the UTC day of
+  // whatever machine runs the code. Lambda runs at UTC: every evening after
+  // ~20:00 in Québec the UTC date has already rolled to tomorrow, so a
+  // UTC-derived clock rejects a same-day booking as date_passee and shifts
+  // reminder/stats day math by one. Every server-side default clock derives its
+  // date here; the zone is this named product constant, overridable per call.
+  const BUSINESS_TIMEZONE = 'America/Toronto';
+
+  // One formatter per zone — Intl.DateTimeFormat construction is costly and
+  // now() runs on every request. en-CA's numeric form is exactly YYYY-MM-DD.
+  const businessDayFormatters = {};
+
+  // The YYYY-MM-DD civil date of instant `at` (Date, epoch ms, or ISO string;
+  // default: now) in `timeZone` (IANA name; default: BUSINESS_TIMEZONE).
+  function businessDay(at, timeZone) {
+    const zone = timeZone || BUSINESS_TIMEZONE;
+    const fmt = (businessDayFormatters[zone] =
+      businessDayFormatters[zone] ||
+      new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' }));
+    return fmt.format(at == null ? new Date() : new Date(at));
+  }
+
   // --- Offer validation ------------------------------------------------------
   // The one function the API must call before persisting anything. Returns the
   // derived tier and premium so the caller never recomputes them, and a list of
@@ -1248,6 +1271,8 @@
     isEmail,
     daysBetween,
     addDays,
+    BUSINESS_TIMEZONE,
+    businessDay,
     validateOffer,
     validateCounterOffer,
     suggestedCounterOffer,

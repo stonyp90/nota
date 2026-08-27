@@ -24,7 +24,11 @@ const { statsDeltasForOffer, statsDeltasForRetain } = require('./stats');
 const MAX_BODY_BYTES = 64 * 1024;
 
 function createApp(repo, opts = {}) {
-  const now = opts.now || (() => new Date().toISOString().slice(0, 10));
+  // "Today" is the Québec civil day (domain.BUSINESS_TIMEZONE), not the UTC
+  // day: on Lambda (UTC) a plain toISOString() rolls to tomorrow every evening
+  // after ~20:00 in Québec and wrongly 422s a same-day booking as date_passee.
+  const TIME_ZONE = opts.timeZone || process.env.NOTA_TIMEZONE || domain.BUSINESS_TIMEZONE;
+  const now = opts.now || (() => domain.businessDay(null, TIME_ZONE));
   const newId = opts.newId || (() => require('crypto').randomUUID());
 
   // Wall-clock source for notary token expiry, in epoch milliseconds. Separate
@@ -104,6 +108,7 @@ function createApp(repo, opts = {}) {
       repo,
       stripe,
       now: () => new Date().toISOString(),
+      timeZone: TIME_ZONE,
       onboardingReturnUrl: process.env.NOTA_ONBOARDING_RETURN_URL,
       onboardingRefreshUrl: process.env.NOTA_ONBOARDING_REFRESH_URL,
       commissionRate: process.env.NOTA_COMMISSION_RATE ? Number(process.env.NOTA_COMMISSION_RATE) : undefined,

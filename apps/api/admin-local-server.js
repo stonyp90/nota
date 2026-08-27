@@ -50,7 +50,8 @@ async function seedDevStats(repo, bids, todayISO) {
  * transport-agnostic handler the HTTP loop below serves.
  */
 function createLocalAdminApp({ today } = {}) {
-  const todayISO = today || new Date().toISOString().slice(0, 10);
+  // Québec business day, matching the admin handler's default clock.
+  const todayISO = today || domain.businessDay(null, process.env.NOTA_TIMEZONE);
   const useDynamo = !!process.env.TABLE_NAME;
 
   let repo;

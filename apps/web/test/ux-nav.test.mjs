@@ -37,7 +37,7 @@ const I18N = (() => {
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const $ = (doc, id) => doc.getElementById(id);
-const todayISO = () => new Date().toISOString().slice(0, 10);
+const todayISO = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); }; // LOCAL date, like app.js — the UTC slice rolls to tomorrow every evening in UTC-4/-5
 
 async function boot({ hash = '', seed = {} } = {}) {
   const dom = new JSDOM(HTML_SRC, {

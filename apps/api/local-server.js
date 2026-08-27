@@ -24,7 +24,9 @@ if (useDynamo) {
     region: process.env.AWS_REGION || 'ca-central-1',
   });
 } else {
-  const today = new Date().toISOString().slice(0, 10);
+  // Seed on the same Québec business day the handler's default clock uses —
+  // a UTC slice here would seed "tomorrow" every evening and desync the carnet.
+  const today = domain.businessDay(null, process.env.NOTA_TIMEZONE);
   // Same demo referral slice as admin-local-server.js: a deterministic subset
   // of the fixtures arrives via partner links and the two demo partners are
   // registered, so POST /partenaires' idempotent/409 paths and the referral
