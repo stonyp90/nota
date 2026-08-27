@@ -41,6 +41,7 @@
   --ok: var(--hunter-600);
   --danger-solid: #b42318; /* solid deep red for badge fills — dark --danger is a light salmon that fails white-text contrast */
   --brand-tint: rgb(80 184 72 / 0.08); /* faint brand wash — demand-day calendar cells */
+  --surface-glass: rgb(255 255 255 / 0.8); /* the sticky menu's glass tone */
 
   /* Tier accent ramp — cool (calm) to warm (urgent).
      All five are dark enough for white .pill text to meet WCAG AA (>=4.5:1). */
@@ -96,6 +97,15 @@
   /* The intro's responsive breathing room, shared with anything that must
      top-align with the intro's first line (e.g. the notary sign-in card). */
   --intro-pad-top: clamp(10px, 1.2vw, 16px);
+  /* Ambient gradients (owner, 2026-08-27: « add some gradient … in each and
+     every page section and component »). Derived ENTIRELY from theme tokens,
+     so this single definition follows light and dark: --surface-grad is the
+     top-lit card surface, --wash-glow the soft brand light behind a section.
+     Neither ever draws an edge — smooth for the eyes. */
+  --surface-grad: linear-gradient(180deg, var(--surface-hover), var(--surface) 58%);
+  --wash-glow:
+    radial-gradient(90% 130% at 85% 0%, var(--brand-tint), transparent 62%),
+    radial-gradient(70% 110% at 8% 85%, var(--brand-tint), transparent 58%);
   /* The three decisions everything else derives from. */
   --pad-card: var(--space-6) var(--space-7);
   --pad-card-lg: var(--space-8) var(--space-9);
@@ -145,6 +155,7 @@
     --ok: var(--hunter-500);
     --danger-solid: #b42318;
     --brand-tint: rgb(80 184 72 / 0.14);
+    --surface-glass: rgb(18 20 18 / 0.82);
 
     --tier-standard: #64748b;
     --tier-rapide: #357f30;
@@ -189,6 +200,7 @@
   --ok: var(--hunter-500);
   --danger-solid: #b42318;
   --brand-tint: rgb(80 184 72 / 0.14);
+  --surface-glass: rgb(18 20 18 / 0.82);
 
   --tier-standard: #64748b;
   --tier-rapide: #357f30;
@@ -224,7 +236,11 @@ body {
   flex-direction: column;
   font-family: var(--font-sans);
   font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
-  background: var(--bg);
+  /* The page's ambient light: a full-width fade bleeding down from the top
+     edge, over the flat token — every pane opens under it. 180deg only: a
+     centred radial pooled in the middle of a wide screen and left the
+     margins flat black (owner: « clash with black margin »). */
+  background: linear-gradient(180deg, var(--brand-tint), transparent 460px) no-repeat, var(--bg);
   color: var(--ink);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
@@ -253,9 +269,20 @@ a:hover { text-decoration: underline; }
 
 /* --- Header -------------------------------------------------------------- */
 .site-header {
-  border-bottom: 1px solid var(--border);
+  /* The menu is its OWN layer above the page (owner, 2026-08-27: « a bigger
+     diff in between menu and body ») — a glass bar: theme-toned
+     translucency, backdrop blur, a real shadow. Distinct without ever
+     drawing a hairline. Solid surface where backdrop-filter is missing. */
   background: var(--surface);
+  box-shadow: var(--shadow);
   position: sticky; top: 0; z-index: 40;
+}
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .site-header {
+    background: var(--surface-glass);
+    -webkit-backdrop-filter: blur(12px) saturate(1.15);
+    backdrop-filter: blur(12px) saturate(1.15);
+  }
 }
 .site-header .wrap {
   display: flex; align-items: center; gap: 12px;
@@ -705,6 +732,8 @@ html.nav-open, html.nav-open body { overflow: hidden; }
 /* --- Hero / intro -------------------------------------------------------- */
 /* A touch more floor than ceiling: the hero hands off to a PANEL below, and
    the seam between an open surface and a card needs the larger share of air. */
+/* No wash of its own: the intro sits under the body's edge-to-edge fade — a
+   boxed glow here ends at the content column and seams against the gutter. */
 .intro { padding: var(--intro-pad-top) 0 clamp(16px, 2.2vw, 26px); }
 /* Split hero: copy on the left, live content on the right — the market pulse on
    Carnet, the "how it works" steps on Notaires. Both asides are CHROMELESS (no
@@ -836,8 +865,11 @@ html.nav-open, html.nav-open body { overflow: hidden; }
 #carnet-panel:fullscreen .cal-cell, #carnet-panel:-webkit-full-screen .cal-cell { min-height: clamp(88px, 11vh, 128px); }
 
 .panel {
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: var(--surface-grad);
+  /* Ringless (owner: « ensure there is no clash with the calendar ») — a 1px
+     border against the tinted band read as a box again; the gradient surface
+     and the shadow carry every panel now. */
+  border: 0;
   border-radius: var(--radius-lg); box-shadow: var(--shadow);
 }
 .panel-pad { padding: 18px; }
@@ -1034,6 +1066,10 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--brand); }
   align-self: flex-start; display: inline-flex; align-items: center; justify-content: center;
   min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px;
   background: var(--brand); color: var(--on-accent); font-weight: 800;
+  /* The phone grid prints the weekday as ::before with a trailing space —
+     flex layout drops that space from the flow, fusing « JEU27 ». The pill
+     carries its own gap (inert on desktop, where no ::before exists). */
+  gap: 4px;
 }
 /* Cell content: the day's AVERAGE offer (headline) + a plain availability chip. */
 .cal-avg { font-size: 16px; font-weight: 800; letter-spacing: -0.02em; margin-top: auto; white-space: nowrap; color: var(--ink); }
@@ -1316,16 +1352,20 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
   gap: clamp(var(--gap), 3vw, 48px); align-items: center;
   margin-top: var(--intro-pad-top);
   padding: clamp(20px, 3vw, 40px) clamp(20px, 3vw, 44px);
-  border: 1px solid var(--border); border-radius: var(--radius-lg);
-  /* The wash: a brand tint pooled in the rewards' corner over the plain
-     surface — tokens only, readable in every theme. */
-  background: radial-gradient(120% 180% at 100% 0%, var(--brand-tint), transparent 55%), var(--surface);
-  box-shadow: var(--shadow-sm);
+  border-radius: var(--radius-lg);
+  /* No box at all (owner, 2026-08-27: « add some gradient… no corner…
+     smooth for the eyes ») — no surface backing, no shadow, no seam. The
+     band is only light: two brand-tint glows that fade to transparent well
+     inside the bounds, so there is no edge for the eye to catch. Tokens
+     only — the tint carries both themes. */
+  background: var(--wash-glow);
 }
 /* Display type for the one headline that sells the program — larger than the
    utilitarian .intro h1 the other panes keep. */
-.pr-hero h1 { font-size: clamp(24px, 2.6vw, 38px); font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; margin-top: 4px; }
+.pr-hero h1 { font-size: clamp(26px, 3vw, 44px); font-weight: 800; line-height: 1.08; letter-spacing: -0.025em; margin-top: 4px; }
 .pr-hero p { color: var(--ink-muted); max-width: 52ch; margin: 10px 0 0; font-size: 15px; line-height: 1.55; }
+/* The hero's own door to the claim form — the one action the pane sells. */
+.pr-hero-cta { margin-top: var(--space-8); align-self: flex-start; }
 @media (max-width: 980px) {
   .pr-hero { grid-template-columns: minmax(0, 1fr); align-items: start; }
 }
@@ -1336,14 +1376,18 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .pr-card {
   display: flex; flex-direction: column; gap: var(--space-3);
   padding: var(--space-9) var(--space-10);
-  border: 1px solid var(--border); border-radius: var(--radius-lg);
-  background: var(--surface); box-shadow: var(--shadow-sm);
+  border-radius: var(--radius-lg);
+  /* Borderless (owner: « remove those big borders ») — the card reads as a
+     plain island against the hero's wash, lifted only by its shadow. The FULL
+     shadow token, not -sm: in light mode the card is white inside a white
+     band, and the faint -sm float is all but invisible there. */
+  background: var(--surface-grad); box-shadow: var(--shadow);
 }
 .pr-card--notaire {
-  border-color: var(--brand);
-  /* The tint layered over the surface, not instead of it — the translucent
-     token alone would let the hero's wash bleed through. */
-  background: linear-gradient(var(--brand-tint), var(--brand-tint)), var(--surface);
+  /* The highlight is the tint alone, never a ring. Layered over the surface
+     gradient, not instead of it — the translucent token alone would let the
+     hero's glow bleed through. */
+  background: linear-gradient(var(--brand-tint), var(--brand-tint)), var(--surface-grad);
 }
 .pr-kicker { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-muted); }
 .pr-amount { font-size: clamp(28px, 2.6vw, 38px); font-weight: 800; letter-spacing: -0.02em; color: var(--brand); font-variant-numeric: tabular-nums; line-height: 1.05; }
@@ -1356,9 +1400,9 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(min(340px, 100%), 440px);
   gap: var(--gap); align-items: start; margin-top: var(--gap);
 }
-.pr-pitch { min-width: 0; }
+.pr-pitch { min-width: 0; container: prpitch / inline-size; }
 .pr-how-title { margin: var(--space-4) 0 var(--space-9); font-size: 18px; letter-spacing: -0.01em; }
-.pr-form-panel { position: sticky; top: var(--sticky-top); padding: var(--pad-card-lg); border-top: 3px solid var(--brand); }
+.pr-form-panel { position: sticky; top: var(--sticky-top); padding: var(--pad-card-lg); border: 0; }
 .pr-form-panel input { width: 100%; }
 .pr-form-panel .h-sub { margin-bottom: var(--space-8); font-size: 18px; letter-spacing: -0.01em; }
 .pr-form-panel .form-row { margin-bottom: var(--space-7); }
@@ -1385,6 +1429,43 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 }
 .pr-steps strong { font-size: 15px; letter-spacing: -0.01em; }
 .pr-steps span { font-size: 13px; color: var(--ink-muted); line-height: 1.5; }
+/* The FAQ under the steps: the pre-claim questions in the shared .disclosure
+   idiom, promoted from fine-print register to content register (the column's
+   job is to sell the program, not to whisper) — sized like the steps' own
+   verb + caveat pair. A grid so the wide reflow below only swaps the column
+   count; align-items so an opened answer never stretches its row neighbour. */
+.pr-faq { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); align-items: start; margin-top: var(--gap); }
+.pr-faq-title { grid-column: 1 / -1; margin: 0 0 var(--space-2); font-size: 18px; letter-spacing: -0.01em; }
+.pr-faq .disclosure { margin: 0; background: var(--surface); }
+.pr-faq .disclosure > summary { font-size: 14px; font-weight: 700; color: var(--ink); padding: 11px 14px; }
+.pr-faq .disclosure-body p { font-size: 13px; color: var(--ink-muted); line-height: 1.5; }
+/* An answer eases open instead of snapping (owner: « smooth for the eyes »).
+   Progressive enhancement — browsers without interpolate-size /
+   ::details-content keep the instant native toggle — and motion-guarded. */
+@media (prefers-reduced-motion: no-preference) {
+  .pr-faq .disclosure { interpolate-size: allow-keywords; }
+  .pr-faq .disclosure::details-content {
+    opacity: 0; block-size: 0; overflow-y: clip;
+    transition: content-visibility .25s allow-discrete, opacity .25s ease, block-size .25s ease;
+  }
+  .pr-faq .disclosure[open]::details-content { opacity: 1; block-size: auto; }
+}
+/* Beside the tall sticky form the stacked story huddles top-left, leaving a
+   dead middle (owner, 2026-08-27). When the COLUMN is wide enough — a
+   container query on .pr-pitch, not the viewport: just past the 900px
+   docking point the column is ~420px and a 3-up would crush the captions —
+   the story densifies: the timeline rides ONE row (discs on top, no spine —
+   sequence is carried by the numbers) and the FAQ splits in two. */
+@container prpitch (min-width: 640px) {
+  .pr-steps { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--gap); }
+  .pr-steps li { padding-left: 0; padding-top: 38px; }
+  .pr-steps li::before { top: 0; }
+  .pr-steps li:not(:last-child)::after { content: none; }
+}
+@container prpitch (min-width: 560px) {
+  .pr-faq { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 /* Inside this pane the guarantee is a quiet closing line, not another boxed
    card — the boxed .note voice stays for panes that need a warning register.
    Its measure is capped like the intro's: fine print that runs the pitch's
@@ -1424,7 +1505,7 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
    packs into a card GRID — several small pieces per row instead of one
    full-width line each, so 7 items don't scroll for a screen and a half. */
 .dossier-list { display: flex; flex-direction: column; gap: 10px; padding: 6px 0; }
-.dossier-item { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.dossier-item { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-grad); }
 .dossier-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
 /* Each checklist card: name + help on top, the action (upload / already-sent,
    or the answer field) pinned to the bottom so neighbouring cards end on the
@@ -1433,7 +1514,7 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .dossier-row .doc-actions, .dossier-row .doc-transmis,
 .dossier-row .dossier-body > input[type='text'] { margin-top: auto; }
 .dossier-row .dossier-body > .help { margin-bottom: 10px; }
-.dossier-pricing { padding: var(--space-7) var(--space-8); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.dossier-pricing { padding: var(--space-7) var(--space-8); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-grad); }
 /* Capped at 3 tracks: auto-fit on a wide screen spread 6 questions into one
    ragged row of uneven heights — 3×2 keeps the rows balanced and the help
    text wrapping instead of a dead right half. */
@@ -1603,7 +1684,7 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .parr-code-row { display: flex; align-items: baseline; gap: 10px; }
 .parr-code-lbl { font-size: 12px; font-weight: 600; color: var(--ink-muted); }
 .parr-code { font-family: var(--font-mono); font-size: 18px; letter-spacing: 0.06em; color: var(--ink); }
-.doc-row { border: 1px solid var(--border); border-radius: var(--radius); padding: 11px 13px; display: flex; flex-direction: column; gap: 6px; }
+.doc-row { border: 1px solid var(--border); border-radius: var(--radius); padding: 11px 13px; display: flex; flex-direction: column; gap: 6px; background: var(--surface-grad); }
 /* Push the control to the bottom so every card in a row ends on the same line,
    whatever the length of its help text. */
 .doc-row > .file-field, .doc-row > input[type='text'] { margin-top: auto; }
@@ -1627,7 +1708,9 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 /* Themed file picker — hides the raw OS "Choose File" chrome. */
 .file-field { display: inline-flex; align-items: center; gap: 8px; margin-top: 8px; cursor: pointer; }
 input.file-native { position: absolute; width: 1px; height: 1px; opacity: 0; margin: 0; padding: 0; }
-.file-cta { display: inline-flex; align-items: center; padding: 7px 14px; border-radius: 999px; border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--ink-muted); font-weight: 600; font-size: 13px; transition: border-color .15s, color .15s; }
+/* Square like every other action button (owner, 2026-08-27: « make it more
+   square ») — the shared radius token, never a pill; pills stay for chips. */
+.file-cta { display: inline-flex; align-items: center; padding: 7px 14px; border-radius: var(--radius); border: 1.5px solid var(--border-strong); background: var(--surface); color: var(--ink-muted); font-weight: 600; font-size: 13px; transition: border-color .15s, color .15s; }
 .file-field:hover .file-cta { border-color: var(--brand); color: var(--ink); }
 .file-native:focus-visible + .file-cta { outline: 2px solid var(--ring); outline-offset: 2px; }
 .file-note { font-size: 12px; color: var(--ink-muted); margin-top: 6px; }
@@ -1644,7 +1727,7 @@ input.file-native { position: absolute; width: 1px; height: 1px; opacity: 0; mar
 .section h2 { font-size: 22px; font-weight: 800; margin-bottom: 8px; }
 .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 20px; }
 @media (max-width: 780px) { .cards { grid-template-columns: 1fr; } }
-.card { border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 18px; background: var(--surface); box-shadow: var(--shadow-sm); }
+.card { border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 18px; background: var(--surface-grad); box-shadow: var(--shadow-sm); }
 .card h3 { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
 .card p { color: var(--ink-muted); font-size: 14px; margin: 0; }
 .price { font-size: 22px; font-weight: 800; color: var(--brand); }
@@ -1713,7 +1796,7 @@ input.file-native { position: absolute; width: 1px; height: 1px; opacity: 0; mar
 /* --- Dialog -------------------------------------------------------------- */
 dialog {
   border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 0;
-  background: var(--surface); color: var(--ink); max-width: 440px; width: 92vw; box-shadow: var(--shadow-lg);
+  background: var(--surface-grad); color: var(--ink); max-width: 440px; width: 92vw; box-shadow: var(--shadow-lg);
 }
 /* ONE scrim for every dialog — the token plus the same soft blur. Scoped
    overrides drifted (two dialogs carried a hardcoded black): the shared shell
@@ -2868,11 +2951,13 @@ html { scroll-behavior: smooth; scroll-padding-top: var(--sticky-top); }
   position: fixed; inset: 0; z-index: 200;
   background: var(--bg);
   display: flex; align-items: center; justify-content: center;
-  padding: 24px;
+  padding: 14px;
 }
 .ig.ig-out { opacity: 0; transition: opacity 0.3s ease; }
 body.ig-open { overflow: hidden; }
-.ig-inner { width: min(1040px, 96vw); display: flex; flex-direction: column; align-items: center; }
+/* Near-full-screen: the 16:9 stage grows to whatever the viewport allows,
+   bounded by its height so the film never overflows vertically. */
+.ig-inner { width: min(97vw, calc((100vh - 28px) * 16 / 9)); display: flex; flex-direction: column; align-items: center; }
 
 .ig-chooser { display: flex; flex-direction: column; align-items: center; gap: 18px; text-align: center; }
 .ig-mark { width: 64px; height: 64px; }
@@ -3186,9 +3271,12 @@ body.ig-open { overflow: hidden; }
 .run .ig-n4 .ig-cta { animation: igSoft 0.45s ease 12.95s both; }
 
 @media (max-width: 640px) {
-  .ig { padding: 12px; }
+  .ig { padding: 10px; }
+  .ig-inner { width: 100%; }
   .ig-door { min-width: 0; width: 100%; }
   .ig-doors { width: 100%; flex-direction: column; }
+  /* Phones: the films read better as the validated square composition. */
+  .ig-stage { aspect-ratio: 1 / 1; }
 }
 @media (prefers-reduced-motion: reduce) {
   .ig { display: none; }
