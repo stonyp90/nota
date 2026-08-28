@@ -98,7 +98,7 @@ function stubNotaryApi(win, bids, extra = {}) {
       const bid = bids.find((b) => b.id === body.id) || {};
       return json({ bid: { ...bid, status: 'ouverte', etude: null } });
     }
-    if (path.includes('/notary/profile')) return json({ profil: { lienCNQ: (body && body.lienCNQ) || null } });
+    if (path.includes('/notary/profile')) return json({ profil: { lienCNQ: (body && body.lienCNQ) || null, rayonKm: (body && body.rayonKm) || 0, urgences: !!(body && body.urgences), prefixe: (body && body.prefixe) || null } });
     if (path.includes('/notary/bids')) {
       return json({
         bids, retained: extra.retained || [],
@@ -459,6 +459,48 @@ test('the profile form prefills the stored fiche, validates through the domain, 
   assert.equal(posts[posts.length - 1].body.lienCNQ, FICHE);
   assert.equal(errs.hidden, true, 'errors clear on success');
   assert.equal($(doc, 'nc-profil-saved').hidden, false, 'the saved note confirms');
+});
+
+// The étude's sector (ADR 0025): prefilled from the stored profile, validated
+// through the domain before any network call, sent on save.
+test('the profile form carries the étude sector — prefilled, domain-validated, POSTed', async () => {
+  const { doc, calls } = await bootSignedIn(null, { profil: { lienCNQ: null, rayonKm: 25, urgences: false, prefixe: 'G1V' } });
+  const pre = $(doc, 'nc-prefixe');
+  assert.ok(pre, 'the étude-sector input must exist in the console');
+  assert.equal(pre.value, 'G1V', 'the stored sector prefills the form');
+
+  // A malformed sector is refused by the DOMAIN before any network call.
+  const before = calls.filter((c) => c.path.includes('/notary/profile')).length;
+  input(pre, '123');
+  submit($(doc, 'nc-profil-form'));
+  await wait(10);
+  assert.equal($(doc, 'nc-profil-errors').hidden, false, 'the domain refusal must surface');
+  assert.equal(calls.filter((c) => c.path.includes('/notary/profile')).length, before, 'no POST on a bad sector');
+
+  // A real sector is normalized and rides the save.
+  input(pre, ' g1r ');
+  submit($(doc, 'nc-profil-form'));
+  await wait(10);
+  const posts = calls.filter((c) => c.path.includes('/notary/profile'));
+  assert.equal(posts.length, before + 1, 'one POST per save');
+  assert.equal(posts[posts.length - 1].body.prefixe, 'G1R', 'normalized like the bid sector');
+});
+
+// The measured distance rides the card's facts row (ADR 0025) — only when the
+// API could compute it; a feed without sectors shows no phantom kilometres.
+test('a demand card shows « ≈ N km » when the API measured it, nothing otherwise', async () => {
+  const { doc } = await bootSignedIn((seedOpen) => [
+    { ...seedOpen[0], id: 'near', distanceKm: 6 },
+    { ...seedOpen[1], id: 'nodist', distanceKm: null },
+  ]);
+  const nearCard = doc.querySelector('#notary-open-list .nc-card[data-id="near"]') ||
+    [...doc.querySelectorAll('#notary-open-list .nc-card')].find((c) => c.textContent.includes('≈ 6 km'));
+  assert.ok(nearCard, 'the measured card exists');
+  const dist = nearCard.querySelector('.nc-distance');
+  assert.ok(dist, 'the distance fact renders');
+  assert.equal(dist.textContent, '≈ 6 km', 'approximate by design — the sign says so');
+  const others = [...doc.querySelectorAll('#notary-open-list .nc-card')].filter((c) => c !== nearCard);
+  assert.ok(others.every((c) => !c.querySelector('.nc-distance')), 'no phantom kilometres without a measure');
 });
 
 // The date is an attribute of the card, not a layout axis (ADR 0020): no day

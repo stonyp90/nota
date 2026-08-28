@@ -10,7 +10,8 @@ the Chambre des notaires has not been convinced to let Nota's acts close 100 %
 online (owner, 2026-08-27). That makes the perimeter primordial: someone has
 to travel — the client to the notary's étude, or the notary to the client —
 and today the product models none of it. The only location signal is the
-bid's optional 3-letter postal prefix; the notary record has no location, no
+bid's optional 3-letter postal prefix (made **required** by ADR 0024, owner's
+ask 2026-08-28); the notary record has no location, no
 travel radius, and no way to say « I take online urgencies ».
 
 The owner's monetization intent, in three rules:
@@ -94,8 +95,11 @@ criterion adds on the floor (the « prêteur privé +300 $ » precedent, ADR
    no geocoding allowed (`apps/web` zero-dependency rule), the km bands are
    declarations that frame the mise en relation — not computed distances.
    A real client↔notary distance check needs a notary location field and an
-   FSA centroid table in the domain; that is future work, noted here so the
-   band ids (`*_25`, `*_50`) already carry the km they will one day enforce.
+   FSA centroid table in the domain; that was future work when written, and
+   is now DELIVERED by ADR 0025 (2026-08-28): the domain carries the centroid
+   table, the notary declares their étude's sector, and the measured distance
+   decides whenever both sectors are known — these declarative rules remain
+   the fallback.
    The 100 %-online urgency path operates under the owner's explicit legal
    risk: like ADR 0008's commission, it requires review with the Chambre des
    notaires before launch.

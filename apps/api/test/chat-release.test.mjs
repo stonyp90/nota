@@ -39,7 +39,7 @@ async function postBid(a, over = {}) {
     path: '/bids',
     body: JSON.stringify({
       serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2900,
-      courriel: 'client@example.ca', pricing: PRICING, ...over,
+      courriel: 'client@example.ca', prefixe: 'G1R', pricing: PRICING, ...over,
     }),
   });
   assert.equal(res.statusCode, 201, res.body);

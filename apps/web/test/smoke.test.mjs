@@ -332,6 +332,10 @@ test('a valid offer combination enables #offer-submit', async () => {
   const selPreteur = $(doc, 'crit-preteur'); selPreteur.value = 'banque_nationale'; fire(win, selPreteur, 'change');
   const selDeplacement = $(doc, 'crit-deplacement'); selDeplacement.value = 'client_50'; fire(win, selDeplacement, 'change');
 
+  // The REQUIRED postal sector is the last gate (domain: prefixe_requis).
+  assert.equal(submit.disabled, true, 'still blocked without the postal sector');
+  const pre = $(doc, 'o-prefix'); pre.value = 'G1R'; fire(win, pre, 'input');
+
   assert.equal(submit.disabled, false);
 });
 
@@ -440,12 +444,13 @@ test('courriel field is optional and stays private in the local store', async ()
   $(doc, 'crit-approbation_bancaire__obtenue').click();
   const selPreteur = $(doc, 'crit-preteur'); selPreteur.value = 'banque_nationale'; fire(win, selPreteur, 'change');
   const selDeplacement = $(doc, 'crit-deplacement'); selDeplacement.value = 'client_50'; fire(win, selDeplacement, 'change');
+  const pre = $(doc, 'o-prefix'); pre.value = 'G1R'; fire(win, pre, 'input'); // REQUIRED sector
   assert.equal($(doc, 'offer-submit').disabled, false);
 
   // Creating a bid with a courriel offline must not surface it on the bid.
   const res = await Nota.store.createBid({
     serviceId: 'refinancement', dateISO: D.addDays(todayISO(), 5), montant: 2000,
-    anonyme: true, courriel: 'client@example.ca',
+    anonyme: true, courriel: 'client@example.ca', prefixe: 'G1R',
     pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale', deplacement: 'client_50' },
   });
   assert.equal(res.ok, true);
@@ -845,6 +850,7 @@ test('submitting an offer attaches the saved dossier snapshot and courriel', asy
   $(doc, 'crit-approbation_bancaire__obtenue').click();
   const selPreteur = $(doc, 'crit-preteur'); selPreteur.value = 'banque_nationale'; fire(win, selPreteur, 'change');
   const selDeplacement = $(doc, 'crit-deplacement'); selDeplacement.value = 'client_50'; fire(win, selDeplacement, 'change');
+  const pre = $(doc, 'o-prefix'); pre.value = 'G1R'; fire(win, pre, 'input'); // REQUIRED sector
   $(doc, 'o-courriel').value = 'client@example.ca'; fire(win, $(doc, 'o-courriel'), 'input');
   fire(win, $(doc, 'offer-form'), 'submit');
   await wait(10);
@@ -1434,6 +1440,8 @@ test('POSTAL: the sector field normalizes as you type and previews what is publi
   const inp = $(ctx.doc, 'o-prefix');
   const prev = $(ctx.doc, 'prefix-preview');
   assert.ok(inp && prev, 'the field and its preview exist');
+  assert.equal(inp.required, true, 'the sector is REQUIRED (domain: prefixe_requis)');
+  assert.equal(inp.closest('details'), null, 'a required field never hides in the folded options');
   assert.equal(inp.getAttribute('autocomplete'), 'postal-code', 'browsers can autofill it');
   assert.ok(ctx.doc.getElementById('prefix-help'), 'the field explains why it is asked');
   assert.equal(inp.getAttribute('aria-describedby'), 'prefix-help');
@@ -1445,7 +1453,8 @@ test('POSTAL: the sector field normalizes as you type and previews what is publi
   assert.equal(prev.dataset.state, 'ok');
   assert.match(prev.textContent, /Client · G1R/, 'previews the exact public label');
 
-  // Still typing is not an error — the field is optional.
+  // Still typing is calm guidance, not an error — the submit gate and its
+  // hint carry the requirement while the entry is incomplete.
   inp.value = 'G1';
   fire(ctx.win, inp, 'input');
   assert.equal(prev.dataset.state, 'pending');

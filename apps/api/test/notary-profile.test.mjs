@@ -124,5 +124,5 @@ test('without billing configured the console gets no commission block (never a f
   await seedNotary(a);
   const view = parse(await a.handle({ method: 'GET', path: '/notary/bids', headers: bearer(sessionToken()), query: {} }));
   assert.equal(view.commission, null);
-  assert.deepEqual(view.profil, { lienCNQ: null, rayonKm: 0, urgences: false });
+  assert.deepEqual(view.profil, { lienCNQ: null, rayonKm: 0, urgences: false, prefixe: null });
 });

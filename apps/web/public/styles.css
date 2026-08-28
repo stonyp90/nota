@@ -26,13 +26,13 @@
   --brand-hover: var(--hunter-800);
   --on-accent: #ffffff; /* text/knob on saturated accents (tier pills, toggle) — white in every theme */
 
-  --bg: #eef2ef; /* subtle tint so borderless white panels float cleanly */
+  --bg: #eff1f2; /* subtle NEUTRAL tint (owner, 2026-08-28: « moins vert ») so panels float cleanly */
   /* A whisper off pure white (owner, 2026-08-27 evening: « the white is too
      intense ») — the faintest green cast keeps components clearly readable
      on the washed background without the clinical glare of #fff. */
-  --surface: #fcfdfc;
-  --surface-inset: #f4f7f4;
-  --surface-hover: #e9f1e9;
+  --surface: #fcfcfd;
+  --surface-inset: #f4f5f6;
+  --surface-hover: #eaedee;
   --ink: #0b1220;
   --ink-muted: #4d5b6e; /* darker than slate-500 for AA on white */
   --border: #dbe2ea;
@@ -51,8 +51,8 @@
      components (chips, badges, step discs, hover fills) paint with, so
      nothing ever bleeds through a component. Auto-follows each theme:
      the mix resolves against that theme's --brand-bright / --surface. */
-  --brand-tint: rgb(80 184 72 / 0.08); /* faint brand wash — background layers only */
-  --brand-tint-mix: 8%;
+  --brand-tint: rgb(80 184 72 / 0.05); /* faint brand wash — background layers only (softened 2026-08-28) */
+  --brand-tint-mix: 6%;
   --brand-tint-solid: color-mix(in srgb, var(--brand-bright) var(--brand-tint-mix), var(--surface));
   /* The HIGHLIGHT tint: one step richer than the component wash, for the one
      card a pane singles out (the notaire reward). Own mix, because the dark
@@ -84,8 +84,11 @@
   --tier-urgence: #c2410c;
   --tier-extreme: #b42318;
   /* Outline text/border tint per tier — light = base, dark = brighter for AA
-     (the dark values live in BOTH dark blocks below; keep all three in sync). */
-  --tier-rapide-ink: var(--tier-rapide); --tier-prioritaire-ink: var(--tier-prioritaire);
+     (the dark values live in BOTH dark blocks below; keep all three in sync).
+     Rapide is the CALM baseline and covers most of a month's cells, so its ink
+     is NEUTRAL (owner, 2026-08-28, twice: « trop vert ») — the cell's tier bar
+     and the legend dot keep the green; the saturated ramp starts at urgency. */
+  --tier-rapide-ink: var(--ink-muted); --tier-prioritaire-ink: var(--tier-prioritaire);
   --tier-urgence-ink: var(--tier-urgence); --tier-extreme-ink: var(--tier-extreme);
 
   /* Per-service categorical hues — deliberately distinct from the green brand
@@ -185,24 +188,24 @@
 
     /* Lifted off true black (owner, 2026-08-27 evening: « the black on the
        dark theme is too intense ») — the whole dark ramp steps up one notch
-       and leans hunter-green, so components sit visibly on the glow instead
-       of dissolving into a void. */
-    --bg: #0d110e;
-    --surface: #151a16;
-    --surface-inset: #1b211c;
-    --surface-hover: #232a24;
+       and stays NEUTRAL graphite (owner, 2026-08-28: « trop vert » — the
+       green cast is gone; brand green lives on controls, not the canvas). */
+    --bg: #0e1012;
+    --surface: #16181b;
+    --surface-inset: #1c1f22;
+    --surface-hover: #24272b;
     --ink: #f8fafc;
-    --ink-muted: #aab6b0;
-    --border: #2f3730;
-    --border-strong: #454e46;
+    --ink-muted: #a9b1ba;
+    --border: #2f3338;
+    --border-strong: #464b52;
     --ring: var(--hunter-400);
 
     --danger: #f97066;
     --warn: #f79009;
     --ok: var(--hunter-500);
     --danger-solid: #b42318;
-    --brand-tint: rgb(80 184 72 / 0.14);
-    --brand-tint-mix: 14%;
+    --brand-tint: rgb(80 184 72 / 0.06); /* softened twice (owner, 2026-08-28: « trop vert ») */
+    --brand-tint-mix: 8%;
     --brand-tint-mix-strong: 26%; /* deep pour: on near-black the 14% mix greys out */
 
     --tier-standard: #64748b;
@@ -210,7 +213,7 @@
     --tier-prioritaire: #906800;
     --tier-urgence: #c2410c;
     --tier-extreme: #b42318;
-    --tier-rapide-ink: #78c282; --tier-prioritaire-ink: #e0b44a; --tier-urgence-ink: #f0894c; --tier-extreme-ink: #f97066;
+    --tier-rapide-ink: var(--ink-muted); /* NEUTRAL — the green cast was too much (owner, 2026-08-28) */ --tier-prioritaire-ink: #e0b44a; --tier-urgence-ink: #f0894c; --tier-extreme-ink: #f97066;
     --svc-refinancement: #2dd4bf;
     --svc-financement: #818cf8;
 
@@ -235,24 +238,24 @@
 
   /* Lifted off true black (owner, 2026-08-27 evening: « the black on the
      dark theme is too intense ») — the whole dark ramp steps up one notch
-     and leans hunter-green, so components sit visibly on the glow instead
-     of dissolving into a void. */
-  --bg: #0d110e;
-  --surface: #151a16;
-  --surface-inset: #1b211c;
-  --surface-hover: #232a24;
+     and stays NEUTRAL graphite (owner, 2026-08-28: « trop vert » — the
+     green cast is gone; brand green lives on controls, not the canvas). */
+  --bg: #0e1012;
+  --surface: #16181b;
+  --surface-inset: #1c1f22;
+  --surface-hover: #24272b;
   --ink: #f8fafc;
-  --ink-muted: #aab6b0;
-  --border: #2f3730;
-  --border-strong: #454e46;
+  --ink-muted: #a9b1ba;
+  --border: #2f3338;
+  --border-strong: #464b52;
   --ring: var(--hunter-400);
 
   --danger: #f97066;
   --warn: #f79009;
   --ok: var(--hunter-500);
   --danger-solid: #b42318;
-  --brand-tint: rgb(80 184 72 / 0.14);
-  --brand-tint-mix: 14%;
+  --brand-tint: rgb(80 184 72 / 0.06); /* softened twice (owner, 2026-08-28: « trop vert ») */
+  --brand-tint-mix: 8%;
   --brand-tint-mix-strong: 26%; /* deep pour: on near-black the 14% mix greys out */
 
   --tier-standard: #64748b;
@@ -260,7 +263,7 @@
   --tier-prioritaire: #906800;
   --tier-urgence: #c2410c;
   --tier-extreme: #b42318;
-  --tier-rapide-ink: #78c282; --tier-prioritaire-ink: #e0b44a; --tier-urgence-ink: #f0894c; --tier-extreme-ink: #f97066;
+  --tier-rapide-ink: var(--ink-muted); /* NEUTRAL — the green cast was too much (owner, 2026-08-28) */ --tier-prioritaire-ink: #e0b44a; --tier-urgence-ink: #f0894c; --tier-extreme-ink: #f97066;
   --svc-refinancement: #2dd4bf;
   --svc-financement: #818cf8;
 
@@ -2692,7 +2695,7 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
    urgence accent) but shed the pill chrome here. */
 .nc-card-facts { margin-top: 7px; font-size: 12px; line-height: 1.6; color: var(--ink-muted); }
 .nc-card-facts > * + *::before { content: '·'; margin: 0 7px 0 3px; color: var(--border-strong); font-weight: 400; }
-.nc-card-facts .nc-lender, .nc-card-facts .nc-deplacement, .nc-card-facts .nc-prefixe, .nc-card-facts .nc-date {
+.nc-card-facts .nc-lender, .nc-card-facts .nc-deplacement, .nc-card-facts .nc-prefixe, .nc-card-facts .nc-distance, .nc-card-facts .nc-date {
   display: inline-block; padding: 0; border: 0; background: none;
   font-size: 12px; font-weight: 600; color: var(--ink-muted); white-space: nowrap;
 }

@@ -59,7 +59,7 @@ async function seedAuthorized(t, { jours = 3, montant = 2800 } = {}) {
   const res = await t.app.handle({
     method: 'POST',
     path: '/bids',
-    body: JSON.stringify({ serviceId: 'refinancement', dateISO, montant, courriel: 'client@example.ca', pricing: PRICING }),
+    body: JSON.stringify({ serviceId: 'refinancement', dateISO, montant, courriel: 'client@example.ca', prefixe: 'G1R', pricing: PRICING }),
   });
   assert.equal(res.statusCode, 201, res.body);
   const { bid, clientToken } = parse(res);
@@ -135,7 +135,7 @@ test('a hold that was never authorized is never captured — pending payment can
   const dateISO = domain.addDays(TODAY, 1);
   const res = await t.app.handle({
     method: 'POST', path: '/bids',
-    body: JSON.stringify({ serviceId: 'refinancement', dateISO, montant: 2800, courriel: 'client@example.ca', pricing: PRICING }),
+    body: JSON.stringify({ serviceId: 'refinancement', dateISO, montant: 2800, courriel: 'client@example.ca', prefixe: 'G1R', pricing: PRICING }),
   });
   const { bid, clientToken } = parse(res);
   assert.equal(parse(res).bid.status ?? 'ouverte', 'ouverte');
@@ -150,7 +150,7 @@ test('without billing configured the cancel is free — no fee outside the Strip
   const app = createApp(repo, { now: () => TODAY, nowMs: () => NOW_MS, newId: () => 'bid-' + ++n });
   const res = await app.handle({
     method: 'POST', path: '/bids',
-    body: JSON.stringify({ serviceId: 'refinancement', dateISO: domain.addDays(TODAY, 1), montant: 2800, courriel: 'client@example.ca', pricing: PRICING }),
+    body: JSON.stringify({ serviceId: 'refinancement', dateISO: domain.addDays(TODAY, 1), montant: 2800, courriel: 'client@example.ca', prefixe: 'G1R', pricing: PRICING }),
   });
   const { bid, clientToken } = parse(res);
   const t = { app, repo };

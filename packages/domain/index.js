@@ -230,16 +230,72 @@
   // conservative default — a notary who said nothing travels nowhere.
   const NOTARY_RADII = [0, 25, 50];
 
+  // --- FSA centroids (ADR 0025) ---------------------------------------------
+  // The real-distance upgrade ADR 0017 announced as future work: every offer
+  // now carries its postal sector (ADR 0024), so the mise en relation can
+  // measure an actual client↔étude distance instead of trusting the declared
+  // proxy. Centroids are NEIGHBOURHOOD-LEVEL approximations (±1–2 km) of the
+  // Québec-metro FSAs — band-level accuracy (10/25/50 km) is all the rules
+  // need, never street precision, and every rendered figure says « ≈ ».
+  // Swapping in Statistics Canada's official centroid file is a drop-in data
+  // upgrade; an FSA absent from this table falls back to the declarative
+  // rule. [latitude, longitude].
+  const FSA_CENTROIDS = {
+    // Québec — rive nord
+    G1A: [46.808, -71.214], G1B: [46.885, -71.155], G1C: [46.862, -71.185],
+    G1E: [46.843, -71.192], G1G: [46.868, -71.263], G1H: [46.848, -71.266],
+    G1J: [46.828, -71.208], G1K: [46.818, -71.221], G1L: [46.838, -71.233],
+    G1M: [46.830, -71.259], G1N: [46.810, -71.253], G1P: [46.828, -71.290],
+    G1R: [46.807, -71.222], G1S: [46.793, -71.248], G1T: [46.782, -71.268],
+    G1V: [46.772, -71.288], G1W: [46.757, -71.305], G1X: [46.766, -71.330],
+    G1Y: [46.755, -71.348],
+    G2A: [46.876, -71.347], G2B: [46.853, -71.345], G2C: [46.848, -71.317],
+    G2E: [46.802, -71.336], G2G: [46.788, -71.365], G2J: [46.850, -71.286],
+    G2K: [46.842, -71.301], G2L: [46.856, -71.243], G2M: [46.884, -71.317],
+    G2N: [46.917, -71.372],
+    G3A: [46.741, -71.457], G3B: [46.940, -71.288], G3E: [46.917, -71.176],
+    G3G: [46.905, -71.290], G3J: [46.885, -71.395], G3K: [46.906, -71.428],
+    // Lévis — rive sud
+    G6V: [46.810, -71.175], G6W: [46.775, -71.205], G6X: [46.722, -71.263],
+    G6Y: [46.722, -71.212], G6Z: [46.703, -71.300], G7A: [46.700, -71.385],
+  };
+
+  // Great-circle distance between two known sectors, rounded to the km (the
+  // data is coarser than that). Null when either sector is missing, malformed
+  // or outside the table — callers then fall back to the declarative rules.
+  function fsaDistanceKm(a, b) {
+    const pa = FSA_CENTROIDS[normalizePostalPrefix(a)];
+    const pb = FSA_CENTROIDS[normalizePostalPrefix(b)];
+    if (!pa || !pb) return null;
+    const rad = Math.PI / 180;
+    const dLat = (pb[0] - pa[0]) * rad;
+    const dLon = (pb[1] - pa[1]) * rad;
+    const h = Math.sin(dLat / 2) ** 2 +
+      Math.cos(pa[0] * rad) * Math.cos(pb[0] * rad) * Math.sin(dLon / 2) ** 2;
+    return Math.round(2 * 6371 * Math.asin(Math.sqrt(h)));
+  }
+
   // Whether a notary's profile covers a bid's declared band. The feed and the
-  // accept gate both go through here: client-travel bands reach everyone (the
-  // client comes to the étude), notary-travel bands need a radius that covers
-  // the ask, and a declared urgency reaches only the notaries who opted in.
-  // A null/unknown band (a bid predating the question) reaches everyone.
-  function notaryCanServe(deplacementId, profil) {
+  // accept gate both go through here. A null/unknown band (a bid predating
+  // the question) reaches everyone; a declared urgency reaches only the
+  // notaries who opted in (100 % online — distance never enters it).
+  //
+  // When BOTH sectors are known — the bid's (required since ADR 0024) and the
+  // étude's — the MEASURED distance decides (ADR 0025): the kilometres must
+  // fit the band the client priced, and, when the notary travels, their
+  // declared radius must cover the actual drive. When either sector is
+  // missing, the declarative proxy of ADR 0017 still applies: client-travel
+  // bands reach everyone, notary-travel bands need rayon ≥ band.
+  function notaryCanServe(deplacementId, profil, clientPrefixe) {
     const d = deplacementById(deplacementId);
     if (!d) return true;
     const p = profil || {};
     if (d.urgence) return p.urgences === true;
+    const dist = fsaDistanceKm(clientPrefixe, p.prefixe);
+    if (dist != null) {
+      if (d.qui === 'notaire') return dist <= d.km && (Number(p.rayonKm) || 0) >= dist;
+      return dist <= d.km;
+    }
     if (d.qui === 'notaire') return (Number(p.rayonKm) || 0) >= d.km;
     return true;
   }
@@ -795,6 +851,19 @@
       errors.push({ code: 'courriel_invalide', message: 'Le courriel n’est pas valide.' });
     }
 
+    // The postal sector (FSA prefix) is REQUIRED: it is the bid's only location
+    // signal, and without it the déplacement the client declares cannot be
+    // related to a notary's service radius — the distance to the signature
+    // would be unknowable. Format only (letter-digit-letter); a non-Quebec
+    // sector stays a UI warning, never a rejection.
+    const prefixeNorm = normalizePostalPrefix(input.prefixe);
+    const prefixeValide = isPostalPrefix(prefixeNorm);
+    if (!prefixeNorm) {
+      errors.push({ code: 'prefixe_requis', message: 'Le secteur postal est requis (les 3 premiers caractères de votre code postal).' });
+    } else if (!prefixeValide) {
+      errors.push({ code: 'prefixe_invalide', message: 'Le secteur postal doit être une lettre, un chiffre, une lettre, comme « G1R ».' });
+    }
+
     return {
       ok: errors.length === 0,
       errors,
@@ -807,6 +876,8 @@
       basePrice: base,
       montant: montantValide ? montant : null,
       courriel: courrielRaw || null,
+      // The normalized sector the caller must persist (null when missing/invalid).
+      prefixe: prefixeValide ? prefixeNorm : null,
     };
   }
 
@@ -1151,7 +1222,20 @@
     // The online-urgency opt-in: strictly boolean true, never a truthy string.
     const urgences = input.urgences === true;
 
-    return { ok: errors.length === 0, errors, lienCNQ, rayonKm, urgences };
+    // The étude's postal sector (ADR 0025): optional — empty clears it and the
+    // feed falls back to the declarative travel rules — but a non-empty value
+    // must be a real FSA, same code as the bid side.
+    let prefixe = null;
+    const prefRaw = normalizePostalPrefix(input.prefixe);
+    if (prefRaw) {
+      if (!isPostalPrefix(prefRaw)) {
+        errors.push({ code: 'prefixe_invalide', message: 'Le secteur postal doit être une lettre, un chiffre, une lettre, comme « G1V ».' });
+      } else {
+        prefixe = prefRaw;
+      }
+    }
+
+    return { ok: errors.length === 0, errors, lienCNQ, rayonKm, urgences, prefixe };
   }
 
   // A dial string for a tel: href — digits only, keeping a leading + and
@@ -1735,6 +1819,8 @@
     DEPLACEMENT_URGENCE_ID,
     bidDeplacement,
     NOTARY_RADII,
+    FSA_CENTROIDS,
+    fsaDistanceKm,
     notaryCanServe,
     QC_POSTAL_LETTERS,
     normalizePostalPrefix,

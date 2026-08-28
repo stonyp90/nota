@@ -52,7 +52,7 @@ async function postBid(a, deplacement, over = {}) {
     path: '/bids',
     body: JSON.stringify({
       serviceId: 'refinancement', dateISO: '2026-08-20', montant: 3000,
-      courriel: 'client@example.ca', pricing: pricing(deplacement), ...over,
+      courriel: 'client@example.ca', prefixe: 'G1R', pricing: pricing(deplacement), ...over,
     }),
   });
   assert.equal(res.statusCode, 201, res.body);
@@ -79,7 +79,7 @@ test('POST /notary/profile stores rayonKm and urgences; /notary/bids reads them 
 
   const res = await postProfile(a, sessionToken(), { rayonKm: 50, urgences: true });
   assert.equal(res.statusCode, 200, res.body);
-  assert.deepEqual(parse(res).profil, { lienCNQ: null, rayonKm: 50, urgences: true });
+  assert.deepEqual(parse(res).profil, { lienCNQ: null, rayonKm: 50, urgences: true, prefixe: null });
 
   // The write is a spread on the existing record — identity survives.
   const notary = await a.repo.getNotary(NOTARY);
@@ -89,7 +89,7 @@ test('POST /notary/profile stores rayonKm and urgences; /notary/bids reads them 
   assert.equal(notary.ratingSum, 9);
 
   const view = await feed(a);
-  assert.deepEqual(view.profil, { lienCNQ: null, rayonKm: 50, urgences: true });
+  assert.deepEqual(view.profil, { lienCNQ: null, rayonKm: 50, urgences: true, prefixe: null });
 });
 
 test('the conservative defaults: a notary who said nothing travels nowhere, takes no urgency', async () => {
@@ -98,12 +98,12 @@ test('the conservative defaults: a notary who said nothing travels nowhere, take
 
   // No profile write at all: the console still reads honest defaults.
   const before = await feed(a);
-  assert.deepEqual(before.profil, { lienCNQ: null, rayonKm: 0, urgences: false });
+  assert.deepEqual(before.profil, { lienCNQ: null, rayonKm: 0, urgences: false, prefixe: null });
 
   // An empty profile write stores the same defaults.
   const res = await postProfile(a, sessionToken(), {});
   assert.equal(res.statusCode, 200, res.body);
-  assert.deepEqual(parse(res).profil, { lienCNQ: null, rayonKm: 0, urgences: false });
+  assert.deepEqual(parse(res).profil, { lienCNQ: null, rayonKm: 0, urgences: false, prefixe: null });
   const notary = await a.repo.getNotary(NOTARY);
   assert.equal(notary.rayonKm, 0);
   assert.equal(notary.urgences, false);
@@ -214,4 +214,73 @@ test('a retained entry carries the deplacement projection beside the lender', as
     qui: 'notaire', km: 25, urgence: false,
   });
   assert.equal(view.retained[0].preteur.id, 'desjardins');
+});
+
+// --- Real distance (ADR 0025): the étude's sector turns declarations into km --
+
+test('POST /notary/profile stores the étude sector; garbage is refused, empty clears', async () => {
+  const a = app();
+  await seedNotary(a);
+
+  const res = await postProfile(a, sessionToken(), { rayonKm: 25, prefixe: ' g1v ' });
+  assert.equal(res.statusCode, 200, res.body);
+  assert.equal(parse(res).profil.prefixe, 'G1V', 'normalized like the bid sector');
+  assert.equal((await a.repo.getNotary(NOTARY)).prefixe, 'G1V');
+  assert.equal((await feed(a)).profil.prefixe, 'G1V');
+
+  const bad = await postProfile(a, sessionToken(), { rayonKm: 25, prefixe: '123' });
+  assert.equal(bad.statusCode, 422);
+  assert.equal(parse(bad).errors[0].code, 'prefixe_invalide');
+  assert.equal((await a.repo.getNotary(NOTARY)).prefixe, 'G1V', 'a refused sector never overwrites');
+
+  const clear = await postProfile(a, sessionToken(), { rayonKm: 25 });
+  assert.equal(clear.statusCode, 200);
+  assert.equal(parse(clear).profil.prefixe, null, 'empty clears — back to the declarative rules');
+});
+
+test('feed by measured distance: a nearby notaire_50 demand reaches a 25 km notary; a far client_10 does not', async () => {
+  const a = app();
+  await seedNotary(a);
+  await postProfile(a, sessionToken(), { rayonKm: 25, prefixe: 'G1V' }); // étude à Sainte-Foy
+  // ~6 km away, the client asks the notary to come (band 50): the old proxy
+  // (rayon 25 < band 50) wrongly hid this demande; the measured 6 km serves it.
+  const near = await postBid(a, 'notaire_50', { dateISO: '2026-08-20', prefixe: 'G1R' });
+  // ~20 km away, the client only travels 10 km: their sector cannot reach this étude.
+  const far = await postBid(a, 'client_10', { dateISO: '2026-08-21', prefixe: 'G3A' });
+  // Sector outside the centroid table: fall back to the declarative rule (client bands reach everyone).
+  const unknown = await postBid(a, 'client_10', { dateISO: '2026-08-22', prefixe: 'G9Z' });
+
+  const view = await feed(a);
+  const ids = view.bids.map((b) => b.id).sort();
+  assert.deepEqual(ids, [near.id, unknown.id].sort(), 'measured km decide; unknown sectors stay declarative');
+  const shown = view.bids.find((b) => b.id === near.id);
+  assert.ok(shown.distanceKm >= 3 && shown.distanceKm <= 9, `≈ 6 km rides the projection, got ${shown.distanceKm}`);
+  assert.equal(view.bids.find((b) => b.id === unknown.id).distanceKm, null, 'no guess without a centroid');
+});
+
+test('accept and propose enforce the measured distance with the same 403', async () => {
+  const a = app();
+  await seedNotary(a);
+  await postProfile(a, sessionToken(), { rayonKm: 0, prefixe: 'G1R' }); // étude au centre, ne se déplace pas
+  const far = await postBid(a, 'client_10', { dateISO: '2026-08-20', prefixe: 'G3A' }); // ~20 km
+
+  const acc = await accept(a, far);
+  assert.equal(acc.statusCode, 403);
+  assert.equal(parse(acc).errors[0].code, 'deplacement_non_couvert');
+  const prop = await propose(a, far, 3200);
+  assert.equal(prop.statusCode, 403);
+  assert.equal(parse(prop).errors[0].code, 'deplacement_non_couvert');
+
+  // The same demande from a couple of kilometres away is honest work.
+  const near = await postBid(a, 'client_10', { dateISO: '2026-08-21', prefixe: 'G1K' });
+  assert.equal((await accept(a, near)).statusCode, 200);
+});
+
+test('distanceKm stays null while the notary has no étude sector', async () => {
+  const a = app();
+  await seedNotary(a);
+  await postProfile(a, sessionToken(), { rayonKm: 50 });
+  const b = await postBid(a, 'client_25', { dateISO: '2026-08-20', prefixe: 'G1R' });
+  const view = await feed(a);
+  assert.equal(view.bids.find((x) => x.id === b.id).distanceKm, null);
 });

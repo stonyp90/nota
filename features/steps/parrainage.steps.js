@@ -38,6 +38,7 @@ When(
         dateISO,
         montant,
         parrain: code,
+        prefixe: 'G1R',
         ref: code,
         pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale', deplacement: 'client_50' },
       }),
@@ -78,6 +79,7 @@ When(
         montant,
         courriel,
         parrain: code,
+        prefixe: 'G1R',
         pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale', deplacement: 'client_50' },
       }),
     });

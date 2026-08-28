@@ -103,7 +103,7 @@ test('« Autre prêteur » requires the name — an unlisted lender is added, no
   assert.ok(r.errors.some((e) => e.code === 'parametre_requis' && e.param === 'preteur_autre'));
   const ok = D.validateOffer({
     serviceId: 'refinancement', dateISO: '2026-09-20', montant: 2500, todayISO: '2026-08-26',
-    pricing: { ...answers, preteur_autre: 'Fiducie Familiale Roy' },
+    pricing: { ...answers, preteur_autre: 'Fiducie Familiale Roy' }, prefixe: 'G1R',
   });
   assert.equal(ok.ok, true, 'named, the offer is valid: ' + JSON.stringify(ok.errors));
 });

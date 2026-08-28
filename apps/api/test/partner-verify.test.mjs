@@ -163,7 +163,7 @@ test("a squatter's UNCONFIRMED claim never becomes the payee and never blocks th
   // A referred demand retained now pays the REAL owner, never the squatter.
   const bidRes = await a.handle({
     method: 'POST', path: '/bids',
-    body: JSON.stringify({ serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2800, courriel: 'client@example.ca', parrain: 'SILVIA', pricing: PRICING }),
+    body: JSON.stringify({ serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2800, courriel: 'client@example.ca', parrain: 'SILVIA', prefixe: 'G1R', pricing: PRICING }),
   });
   const bid = parse(bidRes).bid;
   const id = notaryIdForEmail('me@notaire.ca');
@@ -190,7 +190,7 @@ test('an UNCONFIRMED claim is never shown as the owner in the admin ledger, even
   await requestClaim(a, { type: 'agent_immobilier', courriel: 'harvester@evil.ca', code: 'VANITY7' }, '6.6.6.6');
   const bidRes = await a.handle({
     method: 'POST', path: '/bids',
-    body: JSON.stringify({ serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2800, courriel: 'client@example.ca', parrain: 'VANITY7', pricing: PRICING }),
+    body: JSON.stringify({ serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2800, courriel: 'client@example.ca', parrain: 'VANITY7', prefixe: 'G1R', pricing: PRICING }),
   });
   const bid = parse(bidRes).bid;
   const id = notaryIdForEmail('me@notaire.ca');

@@ -50,6 +50,7 @@ async function seedBid(a, over = {}) {
       dateISO: '2026-08-20',
       montant: 2800,
       courriel: 'client@example.ca',
+      prefixe: 'G1R',
       pricing: PRICING.refinancement,
       dossier: { adresse: '10 rue des Érables, Québec' },
       ...over,

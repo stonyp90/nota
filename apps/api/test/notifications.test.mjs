@@ -322,7 +322,7 @@ test('POST /bids still returns 201 when the notifier throws', async () => {
   const res = await app.handle({
     method: 'POST',
     path: '/bids',
-    body: JSON.stringify({ serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2400, courriel: 'client@example.ca', pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale', deplacement: 'client_50' } }),
+    body: JSON.stringify({ serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2400, courriel: 'client@example.ca', prefixe: 'G1R', pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale', deplacement: 'client_50' } }),
   });
   assert.equal(res.statusCode, 201);
 });

@@ -799,6 +799,15 @@
                     <select id="nc-rayon"></select>
                     <p class="help">Un rayon plus large fait apparaître plus de demandes dans votre fil — et le déplacement est payé par la demande.</p>
                   </div>
+                  <!-- ADR 0025: the étude's sector turns the feed's declarative
+                       travel rules into measured client↔étude distances. -->
+                  <div class="form-row">
+                    <label class="lbl" for="nc-prefixe">Secteur de votre étude</label>
+                    <input type="text" id="nc-prefixe" maxlength="3" placeholder="G1V" class="uppercase"
+                           autocomplete="postal-code" inputmode="text" spellcheck="false"
+                           pattern="[A-Za-z][0-9][A-Za-z]" aria-describedby="nc-prefixe-help" />
+                    <p class="help" id="nc-prefixe-help">Les 3 premiers caractères du code postal de votre étude. Chaque demande affiche alors sa distance réelle (≈ km), et votre fil ne montre que ce qui est vraiment à votre portée.</p>
+                  </div>
                   <label class="switch-row"><span class="nc-pref-lbl">J’accepte les urgences — signature 100 % en ligne</span><span class="switch"><input type="checkbox" id="nc-urgences" /><span class="track"></span></span></label>
                   <ul class="errors" id="nc-profil-errors" role="alert" aria-atomic="true" hidden></ul>
                   <button type="submit" class="btn btn-sm">Enregistrer mon profil</button>
@@ -1285,6 +1294,18 @@
           <div class="gauge"><div class="gauge-fill" id="gauge-fill"></div></div>
           <div class="gauge-label" id="gauge-label">Choisissez un acte.</div>
         </div>
+        <!-- REQUIRED (domain: prefixe_requis): the bid's only location signal.
+             It lives in the open flow, not the folded options — without it the
+             déplacement declared above cannot be related to any notary's
+             travel radius, so the offer is not publishable. -->
+        <div class="form-row" id="prefix-row">
+          <label class="lbl" for="o-prefix">Secteur postal</label>
+          <input type="text" id="o-prefix" maxlength="3" placeholder="G1R" class="uppercase" required
+                 autocomplete="postal-code" inputmode="text" spellcheck="false"
+                 pattern="[A-Za-z][0-9][A-Za-z]" aria-describedby="prefix-help" />
+          <p class="help" id="prefix-help">Les 3 premiers caractères de votre code postal — requis pour situer le déplacement du notaire. Il indique votre secteur sans révéler votre adresse.</p>
+          <p class="prefix-preview" id="prefix-preview" aria-live="polite"></p>
+        </div>
         <ul class="errors" id="offer-errors" role="alert" aria-atomic="true" hidden></ul>
         <p class="offer-hint" id="offer-hint" aria-live="polite" hidden></p>
         <button type="submit" class="btn btn-primary w-full btn-lg" id="offer-submit" disabled>Publier mon offre</button>
@@ -1303,14 +1324,6 @@
             <div class="form-row" id="name-row" hidden>
               <label class="lbl" for="o-name">Nom affiché publiquement</label>
               <input type="text" id="o-name" placeholder="Prénom Nom" autocomplete="name" />
-            </div>
-            <div class="form-row">
-              <label class="lbl" for="o-prefix">Secteur postal</label>
-              <input type="text" id="o-prefix" maxlength="3" placeholder="G1R" class="uppercase"
-                     autocomplete="postal-code" inputmode="text" spellcheck="false"
-                     pattern="[A-Za-z][0-9][A-Za-z]" aria-describedby="prefix-help" />
-              <p class="help" id="prefix-help">Les 3 premiers caractères de votre code postal, le seul repère de lieu que voient les notaires. Il indique votre secteur sans révéler votre adresse.</p>
-              <p class="prefix-preview" id="prefix-preview" aria-live="polite"></p>
             </div>
             <div class="form-row">
               <label class="lbl" for="o-courriel">Courriel (optionnel)</label>

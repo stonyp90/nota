@@ -26,7 +26,7 @@ const DEFAULT_PRICING = {
   refinancement: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale', deplacement: 'client_50' },
 };
 const postBid = (a, obj) =>
-  a.handle({ method: 'POST', path: '/bids', body: JSON.stringify({ pricing: DEFAULT_PRICING[obj.serviceId], ...obj }) });
+  a.handle({ method: 'POST', path: '/bids', body: JSON.stringify({ pricing: DEFAULT_PRICING[obj.serviceId], prefixe: 'G1R', ...obj }) });
 
 // Seed an ACTIVE subscription for this email so the sign-in gate passes.
 async function seedActive(a, email) {

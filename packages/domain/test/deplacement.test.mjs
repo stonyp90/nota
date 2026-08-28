@@ -86,7 +86,7 @@ test('a bid cannot be posted without declaring who travels', () => {
   assert.ok(r.errors.some((e) => e.code === 'parametre_requis' && e.param === 'deplacement'));
   const ok = D.validateOffer({
     serviceId: 'financement', dateISO: '2026-09-20', montant: 2500, todayISO: '2026-08-26',
-    pricing: { ...answers, deplacement: 'client_50' },
+    pricing: { ...answers, deplacement: 'client_50' }, prefixe: 'G1R',
   });
   assert.equal(ok.ok, true, 'banded, the offer is valid: ' + JSON.stringify(ok.errors));
 });
@@ -156,4 +156,90 @@ test('fixtures declare who travels, so demo bids stay valid offers', () => {
   assert.deepEqual(D.makeFixtures('2026-08-26'), bids, 'fixtures stay deterministic');
   assert.ok(D.seedSignature().includes('deplacement'), 'seedSignature carries the criteria shape');
   assert.ok(D.seedSignature().includes('urgence_en_ligne:'), 'seedSignature carries the déplacement pricing shape');
+});
+
+// --- Real distance (ADR 0025): FSA centroids turn the declarations into km ---
+// Every offer carries its postal sector (ADR 0024) and a notary may declare
+// their étude's sector — when both are known, the ACTUAL distance decides who
+// the demand reaches; when either is missing, the declarative proxy of ADR
+// 0017 still applies (legacy bids, notaries without a sector).
+
+test('FSA_CENTROIDS: a Québec-metro table, every entry a sane [lat, lon]', () => {
+  const entries = Object.entries(D.FSA_CENTROIDS);
+  assert.ok(entries.length >= 30, 'covers the metro service area');
+  for (const [fsa, pt] of entries) {
+    assert.match(fsa, /^[A-Z]\d[A-Z]$/, `${fsa} is a normalized FSA`);
+    assert.equal(fsa.charAt(0), 'G', `${fsa} sits in the Québec service area`);
+    assert.ok(Array.isArray(pt) && pt.length === 2, `${fsa} is a [lat, lon] pair`);
+    const [lat, lon] = pt;
+    assert.ok(lat > 46.6 && lat < 47.05, `${fsa} latitude in the metro box (${lat})`);
+    assert.ok(lon > -71.55 && lon < -71.05, `${fsa} longitude in the metro box (${lon})`);
+  }
+});
+
+test('fsaDistanceKm: whole-km approximations that match the geography', () => {
+  // Sainte-Foy ↔ Vieux-Québec: a handful of kilometres.
+  const stFoy = D.fsaDistanceKm('G1V', 'G1R');
+  assert.ok(stFoy >= 3 && stFoy <= 9, `G1V–G1R ≈ 6 km, got ${stFoy}`);
+  // Across the river (Lévis) stays close — the bridge is the notary's problem.
+  const levis = D.fsaDistanceKm('G1R', 'G6V');
+  assert.ok(levis >= 1 && levis <= 8, `G1R–G6V ≈ 4 km, got ${levis}`);
+  // Saint-Augustin is a real drive.
+  const stAug = D.fsaDistanceKm('G3A', 'G1R');
+  assert.ok(stAug >= 14 && stAug <= 26, `G3A–G1R ≈ 20 km, got ${stAug}`);
+  // Symmetric, zero on itself, normalized input.
+  assert.equal(D.fsaDistanceKm('G1V', 'G1R'), D.fsaDistanceKm('G1R', 'G1V'));
+  assert.equal(D.fsaDistanceKm('G1R', 'G1R'), 0);
+  assert.equal(D.fsaDistanceKm(' g1v ', 'g1r'), stFoy, 'inputs are normalized');
+  // Unknown or missing sector → null, never a guess.
+  assert.equal(D.fsaDistanceKm('M5V', 'G1R'), null);
+  assert.equal(D.fsaDistanceKm('', 'G1R'), null);
+  assert.equal(D.fsaDistanceKm(null, undefined), null);
+});
+
+test('notaryCanServe: the measured distance replaces the declared proxy when both sectors are known', () => {
+  const etudeSainteFoy = { rayonKm: 25, urgences: false, prefixe: 'G1V' };
+  // notaire_50 asked by a client ~6 km away: the 25 km notary CAN serve —
+  // under the old proxy (rayon 25 < band 50) they were wrongly excluded.
+  assert.equal(D.notaryCanServe('notaire_50', etudeSainteFoy, 'G1R'), true,
+    'the actual 6 km is inside both the band and the radius');
+  // The same band asked from Saint-Augustin (~17 km): still fine at rayon 25…
+  assert.equal(D.notaryCanServe('notaire_50', etudeSainteFoy, 'G3A'), true);
+  // …but not for a notary who travels nowhere.
+  assert.equal(D.notaryCanServe('notaire_50', { rayonKm: 0, prefixe: 'G1V' }, 'G3A'), false,
+    'the notary must actually cover the measured kilometres');
+  // client_10: the client only travels 10 km — an étude ~20 km away is out of
+  // reach, even though the old rule said client bands reach everyone.
+  assert.equal(D.notaryCanServe('client_10', { rayonKm: 0, prefixe: 'G1R' }, 'G3A'), false);
+  assert.equal(D.notaryCanServe('client_10', { rayonKm: 0, prefixe: 'G1R' }, 'G1K'), true,
+    'a client a couple of kilometres away reaches the étude');
+});
+
+test('notaryCanServe: falls back to the declarative rule when a sector is missing', () => {
+  // No étude sector → old behaviour, band km vs declared radius.
+  assert.equal(D.notaryCanServe('notaire_50', { rayonKm: 25 }, 'G1R'), false);
+  assert.equal(D.notaryCanServe('notaire_50', { rayonKm: 50 }, 'G1R'), true);
+  assert.equal(D.notaryCanServe('client_10', { rayonKm: 0 }, 'G3A'), true, 'client bands reach everyone declaratively');
+  // Legacy bid without a sector → same fallback.
+  assert.equal(D.notaryCanServe('notaire_25', { rayonKm: 25, prefixe: 'G1V' }, null), true);
+  // Sector outside the centroid table (valid FSA, not metro) → fallback too.
+  assert.equal(D.notaryCanServe('client_10', { rayonKm: 0, prefixe: 'G1R' }, 'G9Z'), true);
+  // The urgency stays an opt-in, distance never enters it.
+  assert.equal(D.notaryCanServe('urgence_en_ligne', { urgences: true, prefixe: 'G1V' }, 'G3A'), true);
+  assert.equal(D.notaryCanServe('urgence_en_ligne', { urgences: false, prefixe: 'G1V' }, 'G1R'), false);
+});
+
+test('validateNotaryProfile: the étude sector is optional but must be a real FSA', () => {
+  const ok = D.validateNotaryProfile({ rayonKm: 25, prefixe: ' g1v ' });
+  assert.equal(ok.ok, true);
+  assert.equal(ok.prefixe, 'G1V', 'normalized like the bid sector');
+  // Empty clears it — the notary falls back to the declarative rules.
+  const empty = D.validateNotaryProfile({ rayonKm: 25 });
+  assert.equal(empty.ok, true);
+  assert.equal(empty.prefixe, null);
+  assert.equal(D.validateNotaryProfile({ prefixe: '' }).prefixe, null);
+  // Garbage is a typed refusal, same code as the bid side.
+  const bad = D.validateNotaryProfile({ prefixe: '123' });
+  assert.equal(bad.ok, false);
+  assert.ok(bad.errors.some((e) => e.code === 'prefixe_invalide'));
 });

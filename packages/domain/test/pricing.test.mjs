@@ -84,7 +84,7 @@ test('validateOffer BLOCKS a bid until the mandatory params are answered', () =>
   assert.equal(noParams.ok, false);
   assert.ok(noParams.errors.some((e) => e.code === 'parametre_requis' && e.param === 'succession'));
 
-  const ok = validateOffer({ serviceId: 'refinancement', dateISO: '2026-09-20', montant: 2500, todayISO: TODAY, pricing: BASE_ANSWERS.refinancement });
+  const ok = validateOffer({ serviceId: 'refinancement', dateISO: '2026-09-20', montant: 2500, todayISO: TODAY, pricing: BASE_ANSWERS.refinancement, prefixe: 'G1R' });
   assert.equal(ok.ok, true);
   assert.equal(ok.basePrice, 2000);
 });

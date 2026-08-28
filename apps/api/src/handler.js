@@ -635,6 +635,9 @@ function createApp(repo, opts = {}) {
         dateISO: payload.dateISO,
         montant: payload.montant,
         courriel: payload.courriel,
+        // REQUIRED: the bid's only location signal (see domain.validateOffer —
+        // without it the déplacement band cannot be related to a notary radius).
+        prefixe: payload.prefixe,
         // Dynamic pricing criteria (part of the dossier): the server recomputes
         // the floor from these, never trusting the client's base/total.
         pricing: payload.pricing,
@@ -691,7 +694,7 @@ function createApp(repo, opts = {}) {
         // know who they are meeting, exactly like the dossier and courriel are
         // released to the retaining notary only (ADR 0010 §4).
         nom: String(payload.nom || '').trim().slice(0, 120) || null,
-        prefixe: String(payload.prefixe || '').trim().toUpperCase().slice(0, 3) || null,
+        prefixe: v.prefixe, // normalized by validateOffer; never null past the 422 gate
         // PRIVATE: used only for notifications and the mise en relation, never
         // surfaced by publicBid().
         courriel: v.courriel ? v.courriel.toLowerCase() : null,
@@ -1266,6 +1269,7 @@ function createApp(repo, opts = {}) {
                 client: clientContact(b),
                 preteur: bidLenderInfo(b),
                 deplacement: bidDeplacementInfo(b),
+                distanceKm: domain.fsaDistanceKm(b.prefixe, ownProfile && ownProfile.prefixe),
                 // The live thread with the client — the place details surface
                 // (and the reason a notary may still withdraw, see /release).
                 messages: messagesOf(b).map(chatMessage),
@@ -1278,15 +1282,19 @@ function createApp(repo, opts = {}) {
           if (!isLive(b)) continue; // hide offers whose card authorization is still pending/void
           if (query.service && b.serviceId !== query.service) continue;
           if (await repo.wasDeclined(notaryId, b.id)) continue;
-          // ADR 0017: the feed only offers what this notary can serve — a travel band
-          // beyond their declared radius, or an online urgency they never opted into,
-          // is not their demande. Legacy bids without a band reach everyone.
-          if (!domain.notaryCanServe((b.pricing || {}).deplacement, ownProfile)) continue;
+          // ADR 0017/0025: the feed only offers what this notary can serve — a
+          // travel band beyond their reach, or an online urgency they never
+          // opted into, is not their demande. With both sectors known the
+          // MEASURED distance decides; legacy bids without a band reach everyone.
+          if (!domain.notaryCanServe((b.pricing || {}).deplacement, ownProfile, b.prefixe)) continue;
           seen.add(b.id);
           const mine = latestPropositionFor(b, notaryId);
           const ask = latestDemandeFor(b, notaryId);
           out.push({
             ...notaryBid(b),
+            // ≈ km between the bid's sector and the étude's (ADR 0025) — null
+            // when either sector is unknown. Approximate by design.
+            distanceKm: domain.fsaDistanceKm(b.prefixe, ownProfile && ownProfile.prefixe),
             // ONLY this notary's own proposition/demande — never another's.
             proposition: mine ? { id: mine.id, montant: mine.montant, delta: mine.delta, status: mine.status, createdAt: mine.createdAt } : null,
             demande: ask ? { id: ask.id, documents: ask.documents, createdAt: ask.createdAt, fournie: demandeFournie(b, ask) } : null,
@@ -1310,6 +1318,7 @@ function createApp(repo, opts = {}) {
           lienCNQ: (ownProfile && ownProfile.lienCNQ) || null,
           rayonKm: (ownProfile && Number(ownProfile.rayonKm)) || 0,
           urgences: !!(ownProfile && ownProfile.urgences),
+          prefixe: (ownProfile && ownProfile.prefixe) || null,
         },
         commission,
       });
@@ -1357,9 +1366,12 @@ function createApp(repo, opts = {}) {
         // the two levers that widen (or narrow) the feed this notary sees.
         rayonKm: v.rayonKm,
         urgences: v.urgences,
+        // ADR 0025: the étude's sector — what turns the feed's declarative
+        // travel rules into measured distances.
+        prefixe: v.prefixe,
         updatedAt: now(),
       });
-      return json(200, { profil: { lienCNQ: v.lienCNQ, rayonKm: v.rayonKm, urgences: v.urgences } });
+      return json(200, { profil: { lienCNQ: v.lienCNQ, rayonKm: v.rayonKm, urgences: v.urgences, prefixe: v.prefixe } });
     }
 
     if (route === '/notary/bids/accept' && method === 'POST') {
@@ -1403,7 +1415,7 @@ function createApp(repo, opts = {}) {
       // narrowed since — and before the retain, so a refused accept never
       // flips the bid.
       const profil = await repo.getNotary(notaryId);
-      if (!domain.notaryCanServe((bid.pricing || {}).deplacement, profil)) {
+      if (!domain.notaryCanServe((bid.pricing || {}).deplacement, profil, bid.prefixe)) {
         return json(403, { errors: [{ code: 'deplacement_non_couvert', message: 'Cette demande exige un déplacement ou une urgence en ligne que votre profil ne couvre pas.' }] });
       }
 
@@ -1447,7 +1459,7 @@ function createApp(repo, opts = {}) {
       // opt-in) — a proposition on an unserveable demande is refused like an
       // accept would be.
       const profil = await repo.getNotary(notaryId);
-      if (!domain.notaryCanServe((bid.pricing || {}).deplacement, profil)) {
+      if (!domain.notaryCanServe((bid.pricing || {}).deplacement, profil, bid.prefixe)) {
         return json(403, { errors: [{ code: 'deplacement_non_couvert', message: 'Cette demande exige un déplacement ou une urgence en ligne que votre profil ne couvre pas.' }] });
       }
 

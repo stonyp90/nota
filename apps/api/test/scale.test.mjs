@@ -23,7 +23,7 @@ async function postN(a, n) {
     const res = await a.handle({
       method: 'POST',
       path: '/bids',
-      body: JSON.stringify({ serviceId: 'refinancement', dateISO: '2026-09-' + day, montant: 2000 + (i % 60) * 10, pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale', deplacement: 'client_50' } }),
+      body: JSON.stringify({ serviceId: 'refinancement', dateISO: '2026-09-' + day, montant: 2000 + (i % 60) * 10, prefixe: 'G1R', pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale', deplacement: 'client_50' } }),
     });
     if (res.statusCode === 201) ok++;
   }

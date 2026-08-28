@@ -78,7 +78,7 @@ When('un client publie une offre avec le prêteur {string} à {int} dans {int} j
     method: 'POST',
     path: '/bids',
     body: JSON.stringify({
-      serviceId: 'refinancement', dateISO, montant, courriel: 'client@exemple.ca',
+      serviceId: 'refinancement', dateISO, montant, courriel: 'client@exemple.ca', prefixe: 'G1R',
       pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur, deplacement: 'client_50' },
     }),
   });
@@ -109,7 +109,7 @@ When('un client publie une offre avec le prêteur {string} nommé {string} à {i
     method: 'POST',
     path: '/bids',
     body: JSON.stringify({
-      serviceId: 'refinancement', dateISO, montant, courriel: 'client@exemple.ca',
+      serviceId: 'refinancement', dateISO, montant, courriel: 'client@exemple.ca', prefixe: 'G1R',
       pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur, preteur_autre: nom, deplacement: 'client_50' },
     }),
   });

@@ -25,6 +25,14 @@ Fonctionnalité: Validation d'offre via l'API
     Alors la réponse a le statut 422
     Et la réponse contient le code d'erreur "service_inconnu"
 
+  Scénario: une offre sans secteur postal est refusée
+    # Le secteur postal (3 premiers caractères du code postal) est le seul
+    # repère de lieu d'une offre : sans lui, le déplacement déclaré ne peut
+    # être rapproché du rayon d'aucun notaire.
+    Quand je publie une enchère sans secteur postal pour "refinancement" le "2026-08-20" à 2500
+    Alors la réponse a le statut 422
+    Et la réponse contient le code d'erreur "prefixe_requis"
+
   Scénario: une offre propre est acceptée et apparaît dans le carnet
     Quand je publie une enchère pour "refinancement" le "2026-08-20" à 2500
     Alors la réponse a le statut 201

@@ -61,7 +61,7 @@ Given(
   'une offre ouverte avec le courriel {string} pour {string} à {int} dans {int} jours',
   async function (courriel, serviceId, montant, jours) {
     const dateISO = this.domain.addDays(this.today, jours);
-    await this.request({ method: 'POST', path: '/bids', body: JSON.stringify({ serviceId, dateISO, montant, courriel, pricing: PRICING_VALIDE[serviceId] }) });
+    await this.request({ method: 'POST', path: '/bids', body: JSON.stringify({ serviceId, dateISO, montant, courriel, prefixe: 'G1R', pricing: PRICING_VALIDE[serviceId] }) });
     assert.equal(this.response.statusCode, 201, 'la publication de départ a échoué: ' + this.response.body);
     this.lastBidId = this.responseJson.bid.id;
   }
@@ -73,7 +73,7 @@ When(
   'un client publie une offre avec le courriel {string} pour {string} à {int} dans {int} jours',
   async function (courriel, serviceId, montant, jours) {
     const dateISO = this.domain.addDays(this.today, jours);
-    await this.request({ method: 'POST', path: '/bids', body: JSON.stringify({ serviceId, dateISO, montant, courriel, pricing: PRICING_VALIDE[serviceId] }) });
+    await this.request({ method: 'POST', path: '/bids', body: JSON.stringify({ serviceId, dateISO, montant, courriel, prefixe: 'G1R', pricing: PRICING_VALIDE[serviceId] }) });
     const j = this.responseJson;
     this.lastBidId = j.bid ? j.bid.id : null;
     this.lastBid = j.bid || null;
@@ -85,7 +85,7 @@ When(
   'un client publie une offre sans courriel pour {string} à {int} dans {int} jours',
   async function (serviceId, montant, jours) {
     const dateISO = this.domain.addDays(this.today, jours);
-    await this.request({ method: 'POST', path: '/bids', body: JSON.stringify({ serviceId, dateISO, montant, pricing: PRICING_VALIDE[serviceId] }) });
+    await this.request({ method: 'POST', path: '/bids', body: JSON.stringify({ serviceId, dateISO, montant, prefixe: 'G1R', pricing: PRICING_VALIDE[serviceId] }) });
     const j = this.responseJson;
     this.lastBidId = j.bid ? j.bid.id : null;
   }

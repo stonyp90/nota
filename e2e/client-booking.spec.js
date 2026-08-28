@@ -47,8 +47,12 @@ test('a client publishes a financing offer end to end', async ({ page }) => {
   await sheet.locator('#crit-preteur').selectOption('banque_nationale');
   await sheet.locator('#crit-deplacement').selectOption('client_50');
 
-  // Step 3 — the offer is pre-filled to a valid amount within the act's range.
+  // The REQUIRED postal sector (domain: prefixe_requis) — the last gate.
   const submit = sheet.locator('#offer-submit');
+  await expect(submit).toBeDisabled();
+  await sheet.locator('#o-prefix').fill('G1R');
+
+  // Step 3 — the offer is pre-filled to a valid amount within the act's range.
   await expect(submit).toBeEnabled();
 
   // Sanity-check the pre-filled amount really is a valid, above-floor offer.

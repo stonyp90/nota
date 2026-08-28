@@ -135,7 +135,7 @@ test('dates: daysBetween and addDays are inverse and tz-stable', () => {
 
 test('validateOffer: a clean prioritaire offer', () => {
   // 3 days out is prioritaire; 2 700 $ is the band's midpoint (1,35× the floor).
-  const r = D.validateOffer({ serviceId: 'refinancement', dateISO: '2026-08-15', montant: 2700, todayISO: TODAY, pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale', deplacement: 'client_50' } });
+  const r = D.validateOffer({ serviceId: 'refinancement', dateISO: '2026-08-15', montant: 2700, todayISO: TODAY, prefixe: 'G1R', pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale', deplacement: 'client_50' } });
   assert.equal(r.ok, true);
   assert.equal(r.errors.length, 0);
   assert.equal(r.tier, 'prioritaire');
@@ -157,7 +157,7 @@ test('validateOffer: rejects above the 3x premium cap', () => {
 });
 
 test('validateOffer: exactly 3x is allowed', () => {
-  const r = D.validateOffer({ serviceId: 'refinancement', dateISO: '2026-08-13', montant: 6000, todayISO: TODAY, pricing: PRICING });
+  const r = D.validateOffer({ serviceId: 'refinancement', dateISO: '2026-08-13', montant: 6000, todayISO: TODAY, pricing: PRICING, prefixe: 'G1R' });
   assert.equal(r.ok, true);
 });
 
@@ -217,7 +217,7 @@ test('makeFixtures: deterministic across calls', () => {
 test('makeFixtures: every fixture is a valid offer', () => {
   const fx = D.makeFixtures(TODAY);
   for (const b of fx) {
-    const r = D.validateOffer({ serviceId: b.serviceId, dateISO: b.dateISO, montant: b.montant, todayISO: TODAY, pricing: b.pricing });
+    const r = D.validateOffer({ serviceId: b.serviceId, dateISO: b.dateISO, montant: b.montant, todayISO: TODAY, pricing: b.pricing, prefixe: b.prefixe });
     assert.equal(r.ok, true, `${b.id} ${b.serviceId} ${b.montant} on ${b.dateISO}`);
   }
 });
@@ -290,22 +290,51 @@ test('isEmail: accepts plausible addresses, rejects garbage', () => {
 });
 
 test('validateOffer: courriel is optional — absent/empty is still ok', () => {
-  const base = { serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2500, todayISO: TODAY, pricing: PRICING };
+  const base = { serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2500, todayISO: TODAY, pricing: PRICING, prefixe: 'G1R' };
   assert.equal(D.validateOffer(base).ok, true);
   assert.equal(D.validateOffer(base).courriel, null);
   assert.equal(D.validateOffer({ ...base, courriel: '' }).ok, true);
 });
 
 test('validateOffer: a valid courriel passes and is echoed back trimmed', () => {
-  const r = D.validateOffer({ serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2500, todayISO: TODAY, courriel: '  Client@Example.CA ', pricing: PRICING });
+  const r = D.validateOffer({ serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2500, todayISO: TODAY, courriel: '  Client@Example.CA ', pricing: PRICING, prefixe: 'G1R' });
   assert.equal(r.ok, true);
   assert.equal(r.courriel, 'Client@Example.CA');
 });
 
 test('validateOffer: an invalid courriel is rejected with courriel_invalide', () => {
-  const r = D.validateOffer({ serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2500, todayISO: TODAY, courriel: 'not-an-email', pricing: PRICING });
+  const r = D.validateOffer({ serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2500, todayISO: TODAY, courriel: 'not-an-email', pricing: PRICING, prefixe: 'G1R' });
   assert.equal(r.ok, false);
   assert.ok(r.errors.some((e) => e.code === 'courriel_invalide'));
+});
+
+// The postal sector (FSA prefix) is the bid's ONLY location signal: without it
+// the déplacement declared by the client cannot be related to any notary's
+// radius, so an offer without it is not publishable.
+test('validateOffer: the postal sector is REQUIRED — absent/empty is prefixe_requis', () => {
+  const base = { serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2500, todayISO: TODAY, pricing: PRICING };
+  for (const prefixe of [undefined, null, '', '   ']) {
+    const r = D.validateOffer({ ...base, prefixe });
+    assert.equal(r.ok, false);
+    assert.ok(r.errors.some((e) => e.code === 'prefixe_requis'), JSON.stringify(prefixe));
+    assert.equal(r.prefixe, null);
+  }
+});
+
+test('validateOffer: a malformed postal sector is prefixe_invalide', () => {
+  const base = { serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2500, todayISO: TODAY, pricing: PRICING };
+  for (const prefixe of ['1AB', 'GGG', 'G1', '123']) {
+    const r = D.validateOffer({ ...base, prefixe });
+    assert.equal(r.ok, false, prefixe);
+    assert.ok(r.errors.some((e) => e.code === 'prefixe_invalide'), prefixe);
+    assert.equal(r.prefixe, null);
+  }
+});
+
+test('validateOffer: the postal sector is normalized and echoed back', () => {
+  const r = D.validateOffer({ serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2500, todayISO: TODAY, pricing: PRICING, prefixe: ' g1r ' });
+  assert.equal(r.ok, true);
+  assert.equal(r.prefixe, 'G1R');
 });
 
 // --- reminder schedule -------------------------------------------------------

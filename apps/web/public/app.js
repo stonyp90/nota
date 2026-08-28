@@ -83,7 +83,7 @@
     async createBid(payload) {
       var v = D.validateOffer({
         serviceId: payload.serviceId, dateISO: payload.dateISO,
-        montant: payload.montant, pricing: payload.pricing, todayISO: todayISO(),
+        montant: payload.montant, pricing: payload.pricing, prefixe: payload.prefixe, todayISO: todayISO(),
       });
       if (!v.ok) return { ok: false, errors: v.errors };
 
@@ -1105,11 +1105,13 @@
     // carries no duplicate row and no role ever hides it.
     // The mobile drawer mirrors the header pair: auth buttons only while anonymous.
     var mnavAuth = $('mnav-auth'); if (mnavAuth) mnavAuth.hidden = role !== 'anon';
-    // An email is optional on publish, so an anonymous visitor can hold live
-    // offers: keep their bell — offers, dossier and notifications all derive
-    // from this device and must stay reachable without signing in.
+    // The account bell belongs to the SIGNED-IN state only (owner's ask,
+    // 2026-08-28): an anonymous visitor never sees it — even one holding
+    // offers published from this device. Their offers and dossier stay
+    // reachable through the post-publish card and the #t= deep links; the
+    // header shows the explicit login/signup pair instead.
     var hasOffers = myOffers().length > 0;
-    var acctWrap = document.querySelector('.acct-wrap'); if (acctWrap) acctWrap.hidden = role === 'anon' && !hasOffers;
+    var acctWrap = document.querySelector('.acct-wrap'); if (acctWrap) acctWrap.hidden = role === 'anon';
     var p = profileGet();
 
     if (role === 'notary') {
@@ -2866,7 +2868,8 @@
       acct.disabled = !D.isEmail(courriel);
       if (acct.disabled) acct.checked = false;
     }
-    var v = D.validateOffer({ serviceId: o.serviceId, dateISO: o.dateISO, montant: o.montant, courriel: courriel, pricing: o.pricing, todayISO: todayISO() });
+    var prefixe = ($('o-prefix') && $('o-prefix').value || '').trim();
+    var v = D.validateOffer({ serviceId: o.serviceId, dateISO: o.dateISO, montant: o.montant, courriel: courriel, prefixe: prefixe, pricing: o.pricing, todayISO: todayISO() });
     var s = $('offer-submit');
     // Editing after a publish resets the CTA out of its success/busy state.
     if (!s.getAttribute('aria-busy') && s.textContent.trim() !== 'Publier mon offre') {
@@ -2890,15 +2893,22 @@
         if (!c) return { critId: e.param, label: e.param };
         return { critId: c.id, label: T(c.id === e.param ? c.label : c.autre.label) };
       });
-      hint.hidden = !missing.length;
+      // The REQUIRED postal sector joins the same hint: one line names
+      // everything still blocking the publish, each name a door to its field.
+      var prefixeDue = (v.errors || []).some(function (e) { return e.code === 'prefixe_requis' || e.code === 'prefixe_invalide'; });
+      var due = prefixeDue ? missing.concat([{ critId: '__prefixe', label: T('Secteur postal') }]) : missing;
+      hint.hidden = !due.length;
       clear(hint);
-      if (missing.length) {
+      if (due.length) {
         hint.appendChild(document.createTextNode('Répondez à : '));
-        missing.forEach(function (m, i) {
+        due.forEach(function (m, i) {
           if (i) hint.appendChild(document.createTextNode(' · '));
           var b = el('button', 'offer-hint-link', m.label);
           b.type = 'button';
-          b.addEventListener('click', function () { focusCriterionRow(m.critId); });
+          b.addEventListener('click', function () {
+            if (m.critId === '__prefixe') focusPrefixField();
+            else focusCriterionRow(m.critId);
+          });
           hint.appendChild(b);
         });
       }
@@ -2937,10 +2947,19 @@
     row.classList.add('crit-attn');
   }
 
-  // The postal prefix is the one piece of location a bid publishes, so the field
-  // normalizes as you type (domain-owned format) and previews the exact public
-  // string. An incomplete entry is not an error — the field is optional — so it
-  // is flagged only once three characters are in.
+  // The hint's door to the REQUIRED postal sector: bring the field into view,
+  // hand it focus, and let its own preview line explain the format.
+  function focusPrefixField() {
+    var inp = $('o-prefix'); if (!inp) return;
+    if (inp.scrollIntoView) inp.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    try { inp.focus({ preventScroll: true }); } catch (e) { inp.focus(); }
+  }
+
+  // The postal prefix is the one piece of location a bid publishes — REQUIRED
+  // (domain: prefixe_requis), since it anchors the déplacement band to a real
+  // sector. The field normalizes as you type (domain-owned format) and
+  // previews the exact public string; while incomplete, the submit gate and
+  // its hint carry the requirement, so the preview stays calm.
   function onPrefixInput() {
     var inp = $('o-prefix'); if (!inp) return;
     var norm = D.normalizePostalPrefix(inp.value);
@@ -3049,7 +3068,7 @@
       profileSet({ courriel: payload.courriel, telephone: payload.telephone, prefixe: payload.prefixe, nom: payload.nom || '', anonyme: payload.anonyme });
       if (wantsAccount) clientWelcome(payload.courriel);
       addMyOffer(res.bid, res.clientToken);
-      renderAccountMenu(); // an offer signs the client in (or keeps the anon bell)
+      renderAccountMenu(); // an offer with a courriel signs the client in on this device
       window.location.href = res.checkoutUrl;
       return;
     }
@@ -3064,8 +3083,8 @@
     // that carries an email implicitly signs the client in on this device.
     profileSet({ courriel: payload.courriel, telephone: payload.telephone, prefixe: payload.prefixe, nom: payload.nom || '', anonyme: payload.anonyme });
     if (wantsAccount) clientWelcome(payload.courriel);
-    // Track this offer BEFORE repainting the menu: even without an email the
-    // device now holds an offer, which is what keeps the account bell visible.
+    // Track this offer BEFORE repainting the menu: with a courriel the device
+    // is now signed in as a client and the account bell appears.
     addMyOffer(res.bid, res.clientToken);
     renderAccountMenu();
     addNotif({
@@ -5370,6 +5389,13 @@
     var dep = ncDeplacementPill(b.deplacement);
     if (dep) row.appendChild(dep);
     if (b.prefixe) row.appendChild(el('span', 'nc-prefixe', b.prefixe));
+    // ≈ km between the demand's sector and the étude's (ADR 0025) — only when
+    // the API could measure it. Approximate by design, so the sign says so.
+    if (b.distanceKm != null) {
+      var dist = el('span', 'nc-distance', '≈ ' + b.distanceKm + ' km');
+      dist.title = 'Distance approximative de votre étude';
+      row.appendChild(dist);
+    }
     return row.childNodes.length ? row : null;
   }
 
@@ -6223,6 +6249,10 @@
     }
     var urg = $('nc-urgences');
     if (urg) urg.checked = !!(nc.profil && nc.profil.urgences);
+    // ADR 0025: the étude's sector — what turns the feed's declarative travel
+    // rules into measured distances.
+    var pre = $('nc-prefixe');
+    if (pre) pre.value = (nc.profil && nc.profil.prefixe) || '';
   }
   async function ncSaveProfil() {
     var inp = $('nc-cnq'); if (!inp) return;
@@ -6231,22 +6261,24 @@
     var errBox = $('nc-profil-errors');
     var saved = $('nc-profil-saved');
     if (saved) saved.hidden = true;
+    var pre = $('nc-prefixe');
     var v = D.validateNotaryProfile({
       lienCNQ: inp.value,
       rayonKm: sel ? sel.value : 0,
       urgences: !!(urg && urg.checked),
+      prefixe: pre ? pre.value : '',
     });
     if (!v.ok) {
       if (errBox) { clear(errBox); errBox.hidden = false; v.errors.forEach(function (x) { errBox.appendChild(el('li', null, x.message)); }); }
       return;
     }
-    var res = await ncPost('/notary/profile', { lienCNQ: v.lienCNQ || '', rayonKm: v.rayonKm, urgences: v.urgences });
+    var res = await ncPost('/notary/profile', { lienCNQ: v.lienCNQ || '', rayonKm: v.rayonKm, urgences: v.urgences, prefixe: v.prefixe || '' });
     if (!res) return;
     if (res.status !== 200) {
       if (errBox) { clear(errBox); errBox.hidden = false; (res.json.errors || [{ message: 'Échec de l’enregistrement du profil.' }]).forEach(function (x) { errBox.appendChild(el('li', null, x.message)); }); }
       return;
     }
-    nc.profil = res.json.profil || { lienCNQ: v.lienCNQ, rayonKm: v.rayonKm, urgences: v.urgences };
+    nc.profil = res.json.profil || { lienCNQ: v.lienCNQ, rayonKm: v.rayonKm, urgences: v.urgences, prefixe: v.prefixe };
     if (errBox) { clear(errBox); errBox.hidden = true; }
     if (saved) saved.hidden = false;
     toast('Profil enregistré.');

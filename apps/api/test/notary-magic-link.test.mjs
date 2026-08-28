@@ -138,6 +138,7 @@ test('the SESSION token from verify authorizes POST /notary/bids/accept', async 
       dateISO: '2026-08-20',
       montant: 2800,
       courriel: 'client@example.ca',
+      prefixe: 'G1R',
       dossier: { adresse: '10 rue des Érables', preteur: 'Banque du Fleuve', __consent: true },
       pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale', deplacement: 'client_50' },
     }),

@@ -70,7 +70,7 @@ function app(opts = {}) {
 async function postReferredBid(a, parrain, over = {}) {
   const res = await a.handle({
     method: 'POST', path: '/bids',
-    body: JSON.stringify({ serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2800, courriel: 'client@example.ca', pricing: PRICING, parrain, ...over }),
+    body: JSON.stringify({ serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2800, courriel: 'client@example.ca', prefixe: 'G1R', pricing: PRICING, parrain, ...over }),
   });
   assert.equal(res.statusCode, 201, res.body);
   return parse(res).bid;

@@ -46,7 +46,7 @@ async function postBid(a, over = {}) {
   const res = await a.handle({
     method: 'POST',
     path: '/bids',
-    body: JSON.stringify({ serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2900, courriel: 'client@example.ca', pricing: PRICING, ...over }),
+    body: JSON.stringify({ serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2900, courriel: 'client@example.ca', prefixe: 'G1R', pricing: PRICING, ...over }),
   });
   assert.equal(res.statusCode, 201, res.body);
   return parse(res); // { bid, clientToken }

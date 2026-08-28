@@ -30,6 +30,12 @@ test('a client cancels their published offer end to end', async ({ page }) => {
   await sheet.locator('#crit-approbation_bancaire__obtenue').click();
   await sheet.locator('#crit-preteur').selectOption('banque_nationale');
   await sheet.locator('#crit-deplacement').selectOption('client_50');
+  await sheet.locator('#o-prefix').fill('G1R'); // REQUIRED postal sector
+
+  // The account bell is signed-in only: give a courriel so the publish signs
+  // this device in as a client — the cancel journey then runs from the bell.
+  await sheet.locator('.book-options summary').click();
+  await sheet.locator('#o-courriel').fill('client@exemple.ca');
 
   const submit = sheet.locator('#offer-submit');
   await expect(submit).toBeEnabled();
@@ -41,11 +47,12 @@ test('a client cancels their published offer end to end', async ({ page }) => {
   await expect(sheet.locator('#offer-success')).toBeVisible();
   await page.keyboard.press('Escape');
 
-  // --- Cancel from « My offers » ----------------------------------------------
-  // The bell opens the account panel; its « My offers » door lands on the
-  // profil tab, where the offer card carries « Annuler cette offre ».
+  // --- Cancel from the profile -------------------------------------------------
+  // The bell (signed-in client) opens the account panel; its « My profile »
+  // door lands on the profil tab, where the offers card carries
+  // « Annuler cette offre ».
   await page.locator('#notif-bell').click();
-  await page.locator('#notif-panel .acct-action', { hasText: 'My offers' }).click();
+  await page.locator('#notif-panel .acct-action', { hasText: 'My profile' }).click();
   const cancelBtn = page.locator('.btn-offer-cancel').first();
   await expect(cancelBtn).toBeVisible();
   await cancelBtn.click();

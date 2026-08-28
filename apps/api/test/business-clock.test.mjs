@@ -32,7 +32,7 @@ test('a same-day booking posted in the Québec evening is NOT date_passee', asyn
   const res = await app.handle({
     method: 'POST',
     path: '/bids',
-    body: JSON.stringify({ serviceId: 'refinancement', dateISO: '2026-08-26', montant: 6000, pricing: PRICING }),
+    body: JSON.stringify({ serviceId: 'refinancement', dateISO: '2026-08-26', montant: 6000, prefixe: 'G1R', pricing: PRICING }),
   });
   assert.equal(res.statusCode, 201, res.body);
   assert.equal(JSON.parse(res.body).bid.tier, 'extreme');

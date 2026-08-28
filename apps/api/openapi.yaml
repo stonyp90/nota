@@ -553,10 +553,15 @@ paths:
             notary declined), each with THIS notary's own latest proposition
             and document request (never another notary's) and the dossier items
             still missing. The feed only offers what this notary can serve
-            (ADR 0017, `notaryCanServe`): a travel band beyond their declared
-            `rayonKm`, or an online urgency they never opted into, is filtered
-            out server-side; bids predating the déplacement question reach
-            everyone. `retained` lists the bids in the window retained by
+            (ADR 0017/0025, `notaryCanServe`): when both the bid's postal
+            sector and the étude's are known, the MEASURED distance decides
+            (it must fit the declared band, and the notary's `rayonKm` when
+            the notary travels); otherwise the declarative proxy applies — a
+            travel band beyond the declared `rayonKm`, or an online urgency
+            they never opted into, is filtered out server-side; bids predating
+            the déplacement question reach everyone. Each bid carries
+            `distanceKm`, the ≈ km between the two sectors (null when either
+            sector is unknown). `retained` lists the bids in the window retained by
             this notary — including those retained through a proposition the
             client accepted (`viaProposition`), which the console never
             accepted itself — each with the `client` contact block (mise en
@@ -641,8 +646,11 @@ paths:
         `rayonKm` and `urgences` (ADR 0017) declare how far the notary travels
         for in-person signatures and whether they take 100 %-online urgency
         acts — the two levers that widen (or narrow) the demandes the feed
-        offers them. The write spreads the existing profile record, so the
-        billing identity and the rating aggregates survive.
+        offers them. `prefixe` (ADR 0025) is the étude's postal sector (FSA):
+        optional — empty clears it — but when present it turns the feed's
+        declarative travel rules into measured client↔étude distances. The
+        write spreads the existing profile record, so the billing identity
+        and the rating aggregates survive.
       security:
         - notarySession: []
       requestBody:
@@ -664,6 +672,13 @@ paths:
                   type: boolean
                   default: false
                   description: Opt into 100 %-online urgency acts (strictly boolean true).
+                prefixe:
+                  type: [string, "null"]
+                  maxLength: 3
+                  description: >-
+                    The étude's postal sector (FSA, e.g. "G1V"), normalized
+                    server-side; empty/absent clears it. Malformed → 422
+                    `prefixe_invalide`.
                 token:
                   type: string
                   description: Session token fallback when the Authorization header is absent.
@@ -683,8 +698,9 @@ paths:
         "422":
           description: >-
             The link is not a fiche on the Chambre's own site
-            (`lien_cnq_invalide`), or the radius is not 0, 25 or 50
-            (`rayon_invalide`).
+            (`lien_cnq_invalide`), the radius is not 0, 25 or 50
+            (`rayon_invalide`), or the étude sector is not letter-digit-letter
+            (`prefixe_invalide`).
           content:
             application/json:
               schema:
@@ -1917,6 +1933,11 @@ components:
           oneOf:
             - type: "null"
             - $ref: "#/components/schemas/DeplacementInfo"
+        distanceKm:
+          type: [integer, "null"]
+          description: >-
+            ≈ km between the bid's sector and the étude's (ADR 0025, FSA
+            centroids); null when either sector is unknown.
         complexity:
           type: object
           additionalProperties: true
@@ -2009,6 +2030,11 @@ components:
           oneOf:
             - type: "null"
             - $ref: "#/components/schemas/DeplacementInfo"
+        distanceKm:
+          type: [integer, "null"]
+          description: >-
+            ≈ km between the bid's sector and the étude's (ADR 0025, FSA
+            centroids); null when either sector is unknown.
         messages:
           type: array
           description: The live thread with the client (see /notary/bids/message).
@@ -2129,7 +2155,7 @@ components:
           example: EVEROY
     OfferInput:
       type: object
-      required: [serviceId, dateISO, montant]
+      required: [serviceId, dateISO, montant, prefixe]
       properties:
         serviceId:
           $ref: "#/components/schemas/ServiceId"
@@ -2157,8 +2183,16 @@ components:
           description: Display name; stored only when anonyme is false.
         prefixe:
           type: string
+          minLength: 3
           maxLength: 3
-          description: Postal-code prefix shown for anonymous bids (e.g. "G1R").
+          pattern: "^[A-Za-z][0-9][A-Za-z]$"
+          description: >-
+            REQUIRED postal sector (the FSA — first 3 characters of the
+            client's postal code, e.g. "G1R"). The bid's only location signal:
+            it anchors the declared déplacement band to a real sector so a
+            notary's travel radius means something. Normalized to uppercase
+            server-side; missing → 422 `prefixe_requis`, malformed → 422
+            `prefixe_invalide`.
         courriel:
           type: string
           format: email
@@ -2330,6 +2364,11 @@ components:
           type: boolean
           default: false
           description: True when the notary opted into 100 %-online urgency acts.
+        prefixe:
+          type: [string, "null"]
+          description: >-
+            The étude's postal sector (FSA, ADR 0025), null when none is
+            declared — the feed then keeps the declarative travel rules.
     NotaryCommission:
       type: [object, "null"]
       description: >-

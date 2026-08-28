@@ -21,12 +21,18 @@ async function publish(world, body) {
   await world.request({
     method: 'POST',
     path: '/bids',
-    body: JSON.stringify({ pricing: DEFAULT_PRICING[body.serviceId], ...body }),
+    // The postal sector is REQUIRED (prefixe_requis): default a valid one so a
+    // publication validates unless a scenario explicitly removes it.
+    body: JSON.stringify({ prefixe: 'G1R', pricing: DEFAULT_PRICING[body.serviceId], ...body }),
   });
 }
 
 When('je publie une enchère pour {string} le {string} à {int}', async function (serviceId, dateISO, montant) {
   await publish(this, { serviceId, dateISO, montant });
+});
+
+When('je publie une enchère sans secteur postal pour {string} le {string} à {int}', async function (serviceId, dateISO, montant) {
+  await publish(this, { serviceId, dateISO, montant, prefixe: '' });
 });
 
 When(

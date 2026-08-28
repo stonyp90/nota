@@ -92,7 +92,7 @@ const postBid = (a, obj) =>
   a.handle({
     method: 'POST',
     path: '/bids',
-    body: JSON.stringify({ pricing: DEFAULT_PRICING[obj.serviceId], ...obj }),
+    body: JSON.stringify({ pricing: DEFAULT_PRICING[obj.serviceId], prefixe: 'G1R', ...obj }),
   });
 
 async function seedActive(a, email) {

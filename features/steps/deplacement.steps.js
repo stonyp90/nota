@@ -93,3 +93,34 @@ Then('le profil retient un rayon de {int} km', function (rayonKm) {
   assert.equal(this.result.ok, true, 'erreurs: ' + JSON.stringify(this.result.errors));
   assert.equal(this.result.rayonKm, rayonKm, 'la chaîne du formulaire devient un nombre');
 });
+
+// --- La distance mesurée (ADR 0025) ------------------------------------------
+
+Then('la distance entre les secteurs {string} et {string} est d\'environ {int} km', function (a, b, km) {
+  const d = this.domain.fsaDistanceKm(a, b);
+  assert.ok(d != null, `les deux secteurs doivent être au catalogue des centroïdes (${a}, ${b})`);
+  assert.ok(Math.abs(d - km) <= 3, `≈ ${km} km attendu, obtenu ${d}`);
+});
+
+Given('un notaire au rayon de {int} km dont l\'étude est au secteur {string}', function (rayonKm, prefixe) {
+  this.profil = { rayonKm, urgences: false, prefixe };
+});
+
+Then('le notaire peut servir la bande {string} pour un client au secteur {string}', function (id, prefixe) {
+  assert.equal(this.domain.notaryCanServe(id, this.profil, prefixe), true,
+    id + ' devrait atteindre ce notaire depuis ' + prefixe);
+});
+
+Then('le notaire ne peut pas servir la bande {string} pour un client au secteur {string}', function (id, prefixe) {
+  assert.equal(this.domain.notaryCanServe(id, this.profil, prefixe), false,
+    id + ' ne devrait pas atteindre ce notaire depuis ' + prefixe);
+});
+
+When('un notaire déclare le secteur d\'étude {string}', function (prefixe) {
+  this.result = this.domain.validateNotaryProfile({ prefixe });
+});
+
+Then('le profil retient le secteur d\'étude {string}', function (prefixe) {
+  assert.equal(this.result.ok, true, 'erreurs: ' + JSON.stringify(this.result.errors));
+  assert.equal(this.result.prefixe, prefixe, 'normalisé comme le secteur des offres');
+});

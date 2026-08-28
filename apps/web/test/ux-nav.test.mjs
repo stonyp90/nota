@@ -107,25 +107,18 @@ test('client account menu carries a permanent "Mon dossier" row that opens the d
 });
 
 // ---------------------------------------------------------------------------
-// 2. Anonymous publishers keep their account door
+// 2. The account bell is for the signed-in state ONLY (owner's ask, 2026-08-28)
 // ---------------------------------------------------------------------------
 
-test('anonymous visitor with published offers keeps the account bell and reaches "Mes offres"', async () => {
+test('anonymous visitor with published offers still gets NO account bell — only the auth pair', async () => {
   const offer = { id: 'o2', dateISO: todayISO(), serviceId: 'refinancement', montant: 1400 };
   const { doc, Nota } = await boot({ seed: { 'nota.myoffers.v1': JSON.stringify([offer]) } });
   Nota.account.render();
   assert.equal(Nota.account.role(), 'anon');
-  assert.equal(doc.querySelector('.acct-wrap').hidden, false,
-    'the bell stays: notifications and offers derive from this device');
-  const labels = acctLabels(doc);
-  assert.ok(labels.includes('Mes offres'), 'a route to the offers: ' + labels.join(' | '));
-  assert.ok(labels.includes('Mon dossier'), 'a route to the dossier');
-
-  const row = Array.from(doc.querySelectorAll('#acct-actions .acct-action'))
-    .find((b) => b.textContent.includes('Mes offres'));
-  row.click();
-  await wait(10);
-  assert.equal(activePane(doc), 'pane-profil');
+  assert.equal(doc.querySelector('.acct-wrap').hidden, true,
+    'signed-out means no bell, even with offers published from this device');
+  assert.equal($(doc, 'header-auth').hidden, false,
+    'the explicit login/signup pair is the signed-out door');
 });
 
 test('anonymous visitor with no offers still gets no account bell', async () => {

@@ -115,9 +115,13 @@ needs no CORS.
 The notary actions and the client token are described in
 [`docs/decisions/0009-notary-propositions-and-document-requests.md`](docs/decisions/0009-notary-propositions-and-document-requests.md).
 
-`POST /bids` accepts `{ serviceId, dateISO, montant, anonyme, nom?, prefixe? }`.
+`POST /bids` accepts `{ serviceId, dateISO, montant, prefixe, anonyme, nom? }`.
+The postal sector `prefixe` (FSA, e.g. `G1R`) is **required** — it is the bid's
+only location signal, the anchor that lets the declared travel band mean
+something against a notary's radius (see ADR 0024).
 Validation error codes: `service_inconnu`, `montant_invalide`, `date_invalide`,
-`date_passee`, `sous_prix_depart`, `plafond_depasse`. A public bid **never**
+`date_passee`, `sous_prix_depart`, `plafond_depasse`, `prefixe_requis`,
+`prefixe_invalide`. A public bid **never**
 leaks `nom` when `anonyme` is set — anonymity is enforced server-side, not just
 in the UI. The full contract lives in
 [`apps/api/openapi.yaml`](apps/api/openapi.yaml).

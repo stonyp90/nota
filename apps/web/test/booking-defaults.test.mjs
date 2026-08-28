@@ -75,7 +75,7 @@ test('succession and déplacement arrive pre-answered with their zero-cost defau
   assert.ok(!/Déplacement/.test(hint.textContent), 'déplacement is pre-answered');
 });
 
-test('three inputs left: answering montant + approbation + prêteur enables the CTA', async () => {
+test('four inputs left: montant + approbation + prêteur + secteur postal enable the CTA', async () => {
   const { win, doc } = await boot();
   await openRefinancement(win, doc);
   const fire = (el, type) => el.dispatchEvent(new win.Event(type, { bubbles: true }));
@@ -84,7 +84,11 @@ test('three inputs left: answering montant + approbation + prêteur enables the 
   $(doc, 'crit-approbation_bancaire__obtenue').click();
   const selPreteur = $(doc, 'crit-preteur'); selPreteur.value = 'banque_nationale'; fire(selPreteur, 'change');
 
-  assert.equal($(doc, 'offer-submit').disabled, false, 'defaults + 3 answers = publishable');
+  // The REQUIRED postal sector is the last gate (domain: prefixe_requis).
+  assert.equal($(doc, 'offer-submit').disabled, true, 'still blocked without the postal sector');
+  const pre = $(doc, 'o-prefix'); pre.value = 'G1R'; fire(pre, 'input');
+
+  assert.equal($(doc, 'offer-submit').disabled, false, 'defaults + 4 answers = publishable');
 });
 
 test('a dossier answer wins over the default', async () => {

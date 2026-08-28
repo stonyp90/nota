@@ -23,7 +23,7 @@ const DEFAULT_PRICING = {
   refinancement: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale', deplacement: 'client_50' },
 };
 const post = (a, obj) =>
-  a.handle({ method: 'POST', path: '/bids', body: JSON.stringify({ pricing: DEFAULT_PRICING[obj.serviceId], ...obj }) });
+  a.handle({ method: 'POST', path: '/bids', body: JSON.stringify({ pricing: DEFAULT_PRICING[obj.serviceId], prefixe: 'G1R', ...obj }) });
 const getBids = (a, month) => a.handle({ method: 'GET', path: '/bids', query: month ? { month } : {} });
 const parse = (res) => JSON.parse(res.body);
 
@@ -98,6 +98,20 @@ test('anonymity is enforced server-side: name never leaks when anonyme', async (
   assert.equal(bid.anonyme, true);
   assert.equal(bid.nom, null);
   assert.equal(bid.prefixe, 'G1R'); // normalized, still shown for locality
+});
+
+test('the postal sector is REQUIRED: absent → 422 prefixe_requis, malformed → 422 prefixe_invalide', async () => {
+  const a = app();
+  // The `post` helper injects a valid prefixe by default — override it away.
+  const missing = await post(a, { serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2800, prefixe: '' });
+  assert.equal(missing.statusCode, 422);
+  assert.ok(parse(missing).errors.some((e) => e.code === 'prefixe_requis'));
+
+  const malformed = await post(a, { serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2800, prefixe: '123' });
+  assert.equal(malformed.statusCode, 422);
+  assert.ok(parse(malformed).errors.some((e) => e.code === 'prefixe_invalide'));
+
+  assert.equal((await a.repo._all()).length, 0, 'nothing persisted without a sector');
 });
 
 test('a named bid keeps its name public', async () => {

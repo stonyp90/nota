@@ -85,7 +85,7 @@ const ALLOW = new Set([
   'Apple', 'iCal', 'Menu', 'Notifications', 'Standard', 'FR', 'EN',
   'Français', 'English', 'Stripe', 'Interac', 'Couple', 'Urgent',
   // Addresses and sample postal prefixes are not prose.
-  'confidentialite@nota.ca', 'info@nota.ca', 'G1R',
+  'confidentialite@nota.ca', 'info@nota.ca', 'G1R', 'G1V',
 ]);
 
 function decodeEntities(s) {

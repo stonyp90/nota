@@ -40,6 +40,7 @@ When('je valide une offre de {int} $ pour une date valide', function (montant) {
     montant,
     todayISO: this.today,
     pricing: P[this.input.serviceId],
+    prefixe: 'G1R', // required sector — these scenarios exercise the price rails
   });
 });
 

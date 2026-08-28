@@ -181,7 +181,7 @@ test('POST /bids drops a self-referral: the partner booking with their own code 
     body: JSON.stringify({
       serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2800,
       // Same person, different casing — the guard must match normalized emails.
-      courriel: 'Eve@Courtage.CA', parrain: 'eve-roy', pricing: PRICING,
+      courriel: 'Eve@Courtage.CA', parrain: 'eve-roy', pricing: PRICING, prefixe: 'G1R',
     }),
   });
   assert.equal(res.statusCode, 201, 'the booking itself always succeeds: ' + res.body);
@@ -198,7 +198,7 @@ test("POST /bids keeps the attribution when the booker is NOT the code's owner",
     method: 'POST', path: '/bids',
     body: JSON.stringify({
       serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2800,
-      courriel: 'client@example.ca', parrain: 'EVEROY', pricing: PRICING,
+      courriel: 'client@example.ca', parrain: 'EVEROY', pricing: PRICING, prefixe: 'G1R',
     }),
   });
   assert.equal(res.statusCode, 201, res.body);
@@ -214,7 +214,7 @@ test('POST /bids: an anonymous booking (no courriel) with an UNREGISTERED code k
     method: 'POST', path: '/bids',
     body: JSON.stringify({
       serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2800,
-      parrain: 'GHOST1', pricing: PRICING,
+      parrain: 'GHOST1', pricing: PRICING, prefixe: 'G1R',
     }),
   });
   assert.equal(res.statusCode, 201, res.body);
@@ -240,7 +240,7 @@ async function seedRetainable(a, over = {}) {
     method: 'POST', path: '/bids',
     body: JSON.stringify({
       serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2800,
-      courriel: 'client@example.ca', pricing: PRICING, ...over,
+      courriel: 'client@example.ca', prefixe: 'G1R', pricing: PRICING, ...over,
     }),
   });
   assert.equal(res.statusCode, 201, res.body);

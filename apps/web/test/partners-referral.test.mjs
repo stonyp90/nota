@@ -114,6 +114,7 @@ async function submitOffer({ win, doc, D, Nota }, tweak) {
   $(doc, 'crit-approbation_bancaire__obtenue').click();
   const selPreteur = $(doc, 'crit-preteur'); selPreteur.value = 'banque_nationale'; fire(win, selPreteur, 'change');
   const selDeplacement = $(doc, 'crit-deplacement'); selDeplacement.value = 'client_50'; fire(win, selDeplacement, 'change');
+  const pre = $(doc, 'o-prefix'); pre.value = 'G1R'; fire(win, pre, 'input'); // REQUIRED sector
   if (tweak) tweak();
   fire(win, $(doc, 'offer-form'), 'submit');
   await wait(10);
