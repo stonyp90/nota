@@ -1609,6 +1609,151 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /support/messages:
+    post:
+      operationId: sendSupportMessage
+      summary: Live chat — a visitor's message (mints the thread on first send).
+      description: >-
+        The site's chat widget (ADR 0026). No auth to start: the first message
+        mints the thread and returns its signed SUPPORT `token` (the widget
+        keeps it and continues the thread with it, via Authorization Bearer or
+        the `token` body field). Every visitor message emails the operator with
+        a signed reply link, so the answer is one tap from the inbox and lands
+        live in the widget. `courriel` is optional — it only adds an offline
+        copy of the reply. A stale/tampered token is 401 (never a silent new
+        thread); domain validation errors are 422 (`message_requis`,
+        `message_trop_long`, `courriel_invalide`).
+      security:
+        - {}
+        - supportToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [texte]
+              properties:
+                texte:
+                  type: string
+                  maxLength: 2000
+                courriel:
+                  type: string
+                  format: email
+                  description: Optional — an offline copy of the reply, nothing more.
+                token:
+                  type: string
+                  description: Thread token fallback when the Authorization header is absent.
+      responses:
+        "201":
+          description: Message appended (thread minted on the first one).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [threadId, token, message]
+                properties:
+                  threadId:
+                    type: string
+                  token:
+                    type: string
+                    description: Signed SUPPORT thread token — keep it to continue and poll.
+                  message:
+                    $ref: "#/components/schemas/SupportMessage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: The token's thread no longer exists.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Validation errors from the domain.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /support/thread:
+    get:
+      operationId: getSupportThread
+      summary: Live chat — the thread behind a SUPPORT or SUPPORT_OP token.
+      description: >-
+        The widget polls here while its panel is open; the operator's reply box
+        reads the same thread through the emailed link's SUPPORT_OP token.
+      security:
+        - supportToken: []
+      responses:
+        "200":
+          description: Every message of the thread, oldest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [messages]
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SupportMessage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: The token's thread no longer exists.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /support/reply:
+    post:
+      operationId: sendSupportReply
+      summary: Live chat — the operator's reply, through the emailed link token.
+      description: >-
+        Requires the SUPPORT_OP scope carried by the notification email's reply
+        link — a visitor's SUPPORT token is 401 here, so a visitor can never
+        speak as Nota. The reply lands in the thread (the widget polls it up)
+        and is copied to the visitor's courriel when they left one.
+      security:
+        - supportToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [texte]
+              properties:
+                texte:
+                  type: string
+                  maxLength: 2000
+                token:
+                  type: string
+                  description: SUPPORT_OP token fallback when the Authorization header is absent.
+      responses:
+        "200":
+          description: Reply appended to the thread.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message:
+                    $ref: "#/components/schemas/SupportMessage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: The token's thread no longer exists.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Validation errors from the domain.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /unsubscribe:
     get:
       operationId: unsubscribe
@@ -1679,6 +1824,13 @@ components:
       type: http
       scheme: bearer
       description: Per-bid CLIENT token returned once by POST /bids (`sub` = bid id).
+    supportToken:
+      type: http
+      scheme: bearer
+      description: >-
+        Per-thread live-chat token (ADR 0026): SUPPORT scope for the widget
+        (returned by POST /support/messages), SUPPORT_OP scope for the
+        operator's emailed reply link. `sub` = thread id in both.
   responses:
     Unauthorized:
       description: Missing, invalid, expired or wrong-scope token (`non_autorise`).
@@ -1899,6 +2051,22 @@ components:
         de:
           type: string
           enum: [client, notaire]
+        texte:
+          type: string
+        createdAt:
+          type: string
+    SupportMessage:
+      type: object
+      description: >-
+        One message of a live-chat thread (ADR 0026). `de` names the sending
+        side — the visitor, or Nota answering through the emailed reply link.
+      required: [id, de, texte, createdAt]
+      properties:
+        id:
+          type: string
+        de:
+          type: string
+          enum: [visiteur, nota]
         texte:
           type: string
         createdAt:

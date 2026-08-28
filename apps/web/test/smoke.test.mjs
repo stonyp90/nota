@@ -1651,15 +1651,15 @@ test('account menu reflects the client identity when the profile has an email', 
   assert.ok(labels.some((t) => /déconnecter/i.test(t)), 'a sign-out action');
 });
 
-test('account menu shows the anonymous sign-in invitation by default', async () => {
+test('anonymous visitors get no account menu — the wrap hides, the auth pair shows', async () => {
   const { doc, Nota } = await boot();
   assert.equal(Nota.account.role(), 'anon');
   Nota.account.render();
-  assert.equal($(doc, 'acct-role').hidden, true);
-  assert.match($(doc, 'acct-name').textContent, /connecter/i);
-  const labels = acctActionLabels(doc);
-  assert.ok(labels.some((t) => /Publier une offre/i.test(t)), 'an offer-flow entry');
-  assert.ok(labels.some((t) => /Espace notaire/i.test(t)), 'a notary entry');
+  // The bell and its panel live inside .acct-wrap, hidden while signed out —
+  // the explicit login/signup pair is the one anonymous door (owner, 2026-08-28).
+  assert.equal(doc.querySelector('.acct-wrap').hidden, true);
+  assert.equal($(doc, 'header-auth').hidden, false);
+  assert.equal(acctActionLabels(doc).length, 0, 'no menu rows are painted for a hidden wrap');
 });
 
 test('clientSignOut clears the device-local identity and offer history', async () => {

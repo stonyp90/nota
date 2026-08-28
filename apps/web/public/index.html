@@ -1632,6 +1632,53 @@
       </div>
     </dialog>
 
+    <!-- Live support chat (ADR 0026): a visitor's question lands live with the
+         operator — email with a signed reply link — and the answer lands live
+         back here. The thread token lives on this device (localStorage). -->
+    <div class="chat-wrap" id="chat-wrap">
+      <section class="chat-panel" id="chat-panel" role="dialog" aria-label="Messagerie Nota" hidden>
+        <header class="chat-head">
+          <div class="chat-head-txt">
+            <div class="chat-title">Une question ?</div>
+            <p class="chat-sub">Écrivez-nous — on vous répond en direct, ici même.</p>
+          </div>
+          <button type="button" class="chat-close" id="chat-close" aria-label="Fermer la messagerie">✕</button>
+        </header>
+        <div class="chat-log" id="chat-log" aria-live="polite"></div>
+        <form id="chat-form" novalidate>
+          <input type="email" id="chat-courriel" class="chat-courriel" placeholder="Courriel (optionnel)" autocomplete="email" inputmode="email" aria-label="Courriel (optionnel), pour recevoir la réponse aussi par courriel" title="Pour recevoir la réponse aussi par courriel" />
+          <div class="chat-input-row">
+            <textarea id="chat-text" rows="2" maxlength="2000" placeholder="Écrivez votre question…" aria-label="Votre message"></textarea>
+            <button type="submit" class="btn btn-primary chat-send" id="chat-send">Envoyer</button>
+          </div>
+          <p class="chat-error" id="chat-error" role="alert" hidden></p>
+        </form>
+      </section>
+      <button type="button" class="chat-fab" id="chat-fab" aria-haspopup="dialog" aria-expanded="false" aria-label="Messagerie — posez votre question">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      </button>
+    </div>
+
+    <!-- The operator's reply box, opened by the emailed link's #reponse= hash. -->
+    <dialog class="dialog" id="chat-reply-dialog" aria-labelledby="chat-reply-title">
+      <form method="dialog" class="dlg-x-form"><button class="dlg-x" value="close" aria-label="Fermer">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button></form>
+      <div class="dialog-pad">
+        <h2 id="chat-reply-title">Répondre au visiteur</h2>
+        <div class="chat-log chat-log-op" id="chat-reply-log"></div>
+        <form id="chat-reply-form" novalidate>
+          <textarea id="chat-reply-text" rows="3" maxlength="2000" placeholder="Votre réponse…" aria-label="Votre réponse"></textarea>
+          <p class="chat-error" id="chat-reply-error" role="alert" hidden></p>
+          <div class="dialog-actions">
+            <button type="button" class="btn" id="chat-reply-close">Fermer</button>
+            <button type="submit" class="btn btn-primary" id="chat-reply-send">Envoyer la réponse</button>
+          </div>
+        </form>
+        <p class="help" id="chat-reply-sent" role="status" hidden>✓ Réponse envoyée — le visiteur la voit en direct dans la messagerie.</p>
+      </div>
+    </dialog>
+
     <!-- @nota/domain, copied in by the build/dev step; exposes window.NotaDomain -->
     <!-- i18n first: app.js reads NotaI18N.locale() for its date formatters, and
      the English DOM pass must land before app.js renders. -->

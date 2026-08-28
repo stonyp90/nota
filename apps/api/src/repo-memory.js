@@ -20,6 +20,7 @@ function createMemoryRepo(seed = []) {
   const acts = new Map(); // bidId -> completed-act record (idempotency ledger)
   const partners = new Map(); // CODE -> registered referral partner (ADR 0011)
   const referralEarnings = new Map(); // `${CODE}#${TRACK}#${refId}` -> durable earning event
+  const supportThreads = new Map(); // threadId -> live support thread (ADR 0026)
 
   // Notification ledgers: sent (idempotency) and unsubscribe (suppression).
   const notified = new Map(); // `${refId}#${kind}` -> timestamp
@@ -156,6 +157,18 @@ function createMemoryRepo(seed = []) {
     async getActCompletion(bidId) {
       const a = acts.get(bidId);
       return a ? { ...a } : null;
+    },
+
+    // --- Live support threads (ADR 0026) ------------------------------------
+    // One record per chat thread, addressed by the id its signed token
+    // carries — mirrors the SUPPORT#<id> GetItem in the dynamo adapter.
+    async putSupportThread(thread) {
+      supportThreads.set(String(thread.id), { ...thread });
+      return thread;
+    },
+    async getSupportThread(id) {
+      const t = supportThreads.get(String(id));
+      return t ? { ...t } : null;
     },
 
     // --- Partner referral registry (ADR 0011) -------------------------------

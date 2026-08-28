@@ -70,6 +70,21 @@
     return String(value == null ? '' : value).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3);
   }
   function isPostalPrefix(value) { return POSTAL_PREFIX_RE.test(normalizePostalPrefix(value)); }
+  // The ONE prefixe gate both validators share (offer: required; notary
+  // profile: optional). Returns { value, error } — value is the normalized
+  // sector or null, error a typed entry or null. One message, one i18n entry.
+  function validatePrefixe(raw, { required } = {}) {
+    const norm = normalizePostalPrefix(raw);
+    if (!norm) {
+      return required
+        ? { value: null, error: { code: 'prefixe_requis', message: 'Le secteur postal est requis (les 3 premiers caractères de votre code postal).' } }
+        : { value: null, error: null };
+    }
+    if (!POSTAL_PREFIX_RE.test(norm)) {
+      return { value: null, error: { code: 'prefixe_invalide', message: 'Le secteur postal doit être une lettre, un chiffre, une lettre, comme « G1R ».' } };
+    }
+    return { value: norm, error: null };
+  }
   function isQuebecPostalPrefix(value) {
     const p = normalizePostalPrefix(value);
     return isPostalPrefix(p) && QC_POSTAL_LETTERS.indexOf(p.charAt(0)) !== -1;
@@ -856,13 +871,8 @@
     // related to a notary's service radius — the distance to the signature
     // would be unknowable. Format only (letter-digit-letter); a non-Quebec
     // sector stays a UI warning, never a rejection.
-    const prefixeNorm = normalizePostalPrefix(input.prefixe);
-    const prefixeValide = isPostalPrefix(prefixeNorm);
-    if (!prefixeNorm) {
-      errors.push({ code: 'prefixe_requis', message: 'Le secteur postal est requis (les 3 premiers caractères de votre code postal).' });
-    } else if (!prefixeValide) {
-      errors.push({ code: 'prefixe_invalide', message: 'Le secteur postal doit être une lettre, un chiffre, une lettre, comme « G1R ».' });
-    }
+    const prefixeV = validatePrefixe(input.prefixe, { required: true });
+    if (prefixeV.error) errors.push(prefixeV.error);
 
     return {
       ok: errors.length === 0,
@@ -877,7 +887,7 @@
       montant: montantValide ? montant : null,
       courriel: courrielRaw || null,
       // The normalized sector the caller must persist (null when missing/invalid).
-      prefixe: prefixeValide ? prefixeNorm : null,
+      prefixe: prefixeV.value,
     };
   }
 
@@ -1112,6 +1122,37 @@
     };
   }
 
+  // --- Live support messaging (ADR 0026) -------------------------------------
+  // A visitor with a question opens the site's chat widget; each message lands
+  // live with the operator (email with a signed reply link), and the reply
+  // shows up in the widget. One thread per device, message-by-message. The
+  // courriel is OPTIONAL here — the widget is the reply channel; the courriel
+  // only adds an offline copy of the answer.
+  const SUPPORT_FROM = { VISITEUR: 'visiteur', NOTA: 'nota' };
+  const SUPPORT_MESSAGE_MAX = CONTACT_MESSAGE_MAX;
+  function validateSupportMessage(input) {
+    input = input || {};
+    const errors = [];
+
+    const texte = String(input.texte == null ? '' : input.texte).trim();
+    if (!texte) errors.push({ code: 'message_requis', message: 'Écrivez-nous quelques mots.' });
+    if (texte.length > SUPPORT_MESSAGE_MAX) {
+      errors.push({ code: 'message_trop_long', message: `Le message ne peut dépasser ${SUPPORT_MESSAGE_MAX} caractères.` });
+    }
+
+    const courrielRaw = String(input.courriel == null ? '' : input.courriel).trim().toLowerCase();
+    if (courrielRaw !== '' && !isEmail(courrielRaw)) {
+      errors.push({ code: 'courriel_invalide', message: 'Le courriel n’est pas valide.' });
+    }
+
+    return {
+      ok: errors.length === 0,
+      errors,
+      texte: texte || null,
+      courriel: isEmail(courrielRaw) ? courrielRaw : null,
+    };
+  }
+
   // --- Notary evaluation -----------------------------------------------------
   // After the act is signed and settled (ADR 0015), the client rates the
   // notary: a 1–5 note, plus an optional comment. Same authoritative-validator
@@ -1224,18 +1265,11 @@
 
     // The étude's postal sector (ADR 0025): optional — empty clears it and the
     // feed falls back to the declarative travel rules — but a non-empty value
-    // must be a real FSA, same code as the bid side.
-    let prefixe = null;
-    const prefRaw = normalizePostalPrefix(input.prefixe);
-    if (prefRaw) {
-      if (!isPostalPrefix(prefRaw)) {
-        errors.push({ code: 'prefixe_invalide', message: 'Le secteur postal doit être une lettre, un chiffre, une lettre, comme « G1V ».' });
-      } else {
-        prefixe = prefRaw;
-      }
-    }
+    // must be a real FSA, same gate and message as the bid side.
+    const prefixeV = validatePrefixe(input.prefixe);
+    if (prefixeV.error) errors.push(prefixeV.error);
 
-    return { ok: errors.length === 0, errors, lienCNQ, rayonKm, urgences, prefixe };
+    return { ok: errors.length === 0, errors, lienCNQ, rayonKm, urgences, prefixe: prefixeV.value };
   }
 
   // A dial string for a tel: href — digits only, keeping a leading + and
@@ -1862,6 +1896,9 @@
     CONTACT,
     CONTACT_MESSAGE_MAX,
     validateContactMessage,
+    SUPPORT_FROM,
+    SUPPORT_MESSAGE_MAX,
+    validateSupportMessage,
     EVALUATION_COMMENT_MAX,
     validateEvaluation,
     ACT_VALUE_BOUNDS,

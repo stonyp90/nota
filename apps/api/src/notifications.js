@@ -512,6 +512,56 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
     }
   }
 
+  // --- Live support messaging (ADR 0026) -----------------------------------
+  // Every visitor message lands live with the operator: one email per message
+  // (idempotent by message id) whose CTA is the signed reply link. Wired
+  // fire-and-forget from POST /support/messages — never throws to the caller.
+  async function onSupportMessage({ message, courriel, replyUrl } = {}) {
+    if (!message || !message.texte) return { ok: true, results: [] };
+    const results = [];
+    try {
+      if (operatorEmail) {
+        const ctx = { courriel: courriel || null, texte: message.texte, replyUrl };
+        results.push(
+          await sendOnce({
+            refId: message.id,
+            kind: 'operatorSupportMessage',
+            to: operatorEmail,
+            templateKey: 'operatorSupportMessage',
+            ctx,
+            buildTemplate: (env) => emails.operatorSupportMessage({ ...ctx, ...env }),
+          })
+        );
+      }
+      return { ok: true, results };
+    } catch (err) {
+      return { ok: false, error: String((err && err.message) || err), results };
+    }
+  }
+
+  // The operator's reply, copied to the visitor's inbox when they left a
+  // courriel — the widget already shows it live. Idempotent by message id.
+  async function onSupportReply({ message, courriel } = {}) {
+    if (!message || !message.texte || !courriel) return { ok: true, results: [] };
+    const results = [];
+    try {
+      const ctx = { texte: message.texte };
+      results.push(
+        await sendOnce({
+          refId: message.id,
+          kind: 'supportReponse',
+          to: courriel,
+          templateKey: 'supportReponse',
+          ctx,
+          buildTemplate: (env) => emails.supportReponse({ ...ctx, ...env }),
+        })
+      );
+      return { ok: true, results };
+    } catch (err) {
+      return { ok: false, error: String((err && err.message) || err), results };
+    }
+  }
+
   // --- Client onboarding ---------------------------------------------------
   // Fired when a client signs up (email captured in the sign-in modal, no offer
   // yet). One warm welcome, conversion-first (publish a demand). Idempotent per
@@ -935,6 +985,8 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
     onOfferCancelled,
     onActReleased,
     onContactMessage,
+    onSupportMessage,
+    onSupportReply,
     onClientSignup,
     onChatMessage,
     onEvaluationSubmitted,

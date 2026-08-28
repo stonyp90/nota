@@ -149,3 +149,19 @@ test('a repo without listActiveNotaries keeps the reminder run working (no diges
   assert.equal(digestMails(mailer).length, 0);
   assert.equal(summary.digest.sent, 0);
 });
+
+test('the digest applies the same MEASURED reach as the live feed (ADR 0025)', async () => {
+  // Étude at Sainte-Foy, 25 km radius; client ~6 km away asks the notary to
+  // come (band 50). The old declarative proxy (rayon 25 < bande 50) hid this
+  // demand from the digest while the feed showed it — the two must agree.
+  const near = freshBid('near', { prefixe: 'G1R', pricing: { [domain.DEPLACEMENT_CRITERION_ID]: 'notaire_50' } });
+  // A client ~20 km away who only travels 10 km cannot reach this étude —
+  // priced higher so the digest could not hide it by the 8-demand cap.
+  const far = freshBid('far', { montant: 3000, prefixe: 'G3A', pricing: { [domain.DEPLACEMENT_CRITERION_ID]: 'client_10' } });
+  const { mailer } = await run([near, far], [activeNotary('n1', { rayonKm: 25, prefixe: 'G1V' })]);
+  const digests = digestMails(mailer);
+  assert.equal(digests.length, 1);
+  assert.match(digests[0].subject, /1 nouvelle demande/);
+  assert.ok(digests[0].html.includes(domain.money(2400)), 'the reachable demand is in');
+  assert.ok(!digests[0].html.includes(domain.money(3000)), 'the out-of-reach demand stays out');
+});

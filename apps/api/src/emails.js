@@ -1928,6 +1928,65 @@ function operatorContactMessage(ctx) {
   });
 }
 
+// A visitor's live-chat question, to the operator (ADR 0026). The CTA is the
+// signed reply link: one tap from the inbox opens the on-site reply box, and
+// the visitor sees the answer live in their widget.
+function operatorSupportMessage(ctx) {
+  const who = ctx.courriel || 'Visiteur (sans courriel)';
+  const bodyFr = callout(who) + (ctx.texte ? para(ctx.texte) : '');
+  const bodyEn = callout(who) + (ctx.texte ? para(ctx.texte) : '');
+  return build({
+    subjectFr: 'Messagerie : nouvelle question',
+    subjectEn: 'Live chat: new question',
+    preheaderFr: 'Un visiteur vient de vous écrire sur le site.',
+    preheaderEn: 'A visitor just wrote to you on the site.',
+    fr: {
+      heading: 'Nouvelle question sur le site',
+      lead: 'Répondez d’un geste — le visiteur voit votre réponse en direct dans la messagerie du site.',
+      bodyHtml: bodyFr,
+      textLines: [who, ctx.texte || ''],
+      ctaLabel: 'Répondre',
+    },
+    en: {
+      heading: 'New question on the site',
+      lead: 'Reply in one tap — the visitor sees your answer live in the site’s chat.',
+      bodyHtml: bodyEn,
+      textLines: [who, ctx.texte || ''],
+      ctaLabel: 'Reply',
+    },
+    ctaUrl: ctx.replyUrl || linksFor(ctx.baseUrl).carnet,
+    unsubscribeUrl: ctx.unsubscribeUrl,
+  });
+}
+
+// The operator's reply, forwarded to a visitor who left a courriel — the
+// widget already shows it live; this is the offline copy (ADR 0026).
+function supportReponse(ctx) {
+  const bodyFr = ctx.texte ? para(ctx.texte) : '';
+  return build({
+    subjectFr: 'Nota vous a répondu',
+    subjectEn: 'Nota replied to you',
+    preheaderFr: 'Votre question a reçu une réponse.',
+    preheaderEn: 'Your question got an answer.',
+    fr: {
+      heading: 'Nota vous a répondu',
+      lead: 'Voici la réponse à votre question — la conversation continue dans la messagerie du site.',
+      bodyHtml: bodyFr,
+      textLines: [ctx.texte || ''],
+      ctaLabel: 'Ouvrir la conversation',
+    },
+    en: {
+      heading: 'Nota replied to you',
+      lead: 'Here is the answer to your question — the conversation continues in the site’s chat.',
+      bodyHtml: bodyFr,
+      textLines: [ctx.texte || ''],
+      ctaLabel: 'Open the conversation',
+    },
+    ctaUrl: ctx.chatUrl || linksFor(ctx.baseUrl).carnet,
+    unsubscribeUrl: ctx.unsubscribeUrl,
+  });
+}
+
 // Registry — the notifier looks templates up by name; tests iterate it to assert
 // every template carries a bilingual subject, an unsubscribe link and sender ID.
 const TEMPLATES = {
@@ -1981,6 +2040,9 @@ const TEMPLATES = {
   operatorActReleased,
   operatorContactMessage,
   operatorLowRating,
+  // live support messaging (ADR 0026)
+  operatorSupportMessage,
+  supportReponse,
 };
 
 // =============================================================================
@@ -2239,6 +2301,18 @@ const TEMPLATE_META = {
     labelFr: 'Message du formulaire', labelEn: 'Contact-form message',
     defaultSubjectFr: 'Nous joindre : nouveau message', defaultSubjectEn: 'Contact form',
     placeholders: ['email'],
+  },
+  operatorSupportMessage: {
+    audience: 'operateur',
+    labelFr: 'Messagerie : question d’un visiteur', labelEn: 'Live chat: visitor question',
+    defaultSubjectFr: 'Messagerie : nouvelle question', defaultSubjectEn: 'Live chat: new question',
+    placeholders: ['email'],
+  },
+  supportReponse: {
+    audience: 'client',
+    labelFr: 'Messagerie : réponse de Nota', labelEn: 'Live chat: Nota replied',
+    defaultSubjectFr: 'Nota vous a répondu', defaultSubjectEn: 'Nota replied to you',
+    placeholders: [],
   },
   operatorLowRating: {
     audience: 'operateur',

@@ -63,8 +63,11 @@ async function runReminders({ repo, notifier, now } = {}) {
       const notaries = await repo.listActiveNotaries();
       for (const notary of notaries) {
         if (!notary || !notary.email) continue;
+        // Same three-argument reach rule as the live feed (ADR 0025): with
+        // both sectors known the measured distance decides — the digest must
+        // never email a demand the feed would hide, nor hide one it shows.
         const mine = fresh.filter((bid) =>
-          domain.notaryCanServe((bid.pricing || {})[domain.DEPLACEMENT_CRITERION_ID], notary)
+          domain.notaryCanServe((bid.pricing || {})[domain.DEPLACEMENT_CRITERION_ID], notary, bid.prefixe)
         );
         if (!mine.length) continue;
         digest.notaries += 1;

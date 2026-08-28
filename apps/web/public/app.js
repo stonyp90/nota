@@ -676,16 +676,13 @@
       if (first) { try { first.focus(); } catch (e) {} }
     }
   }
-  // The rows a keyboard user can walk inside the account panel, in DOM order.
-  // Skips disabled/hidden rows and, for an anonymous visitor, the notifications
-  // block that the CSS hides (jsdom sees no computed styles, so check the state).
+  // The rows a keyboard user can walk inside the account panel, in DOM order,
+  // skipping disabled/hidden rows. No anon case: the panel lives inside the
+  // account wrap, hidden whenever the visitor is signed out.
   function acctMenuItems() {
     var panel = $('notif-panel'); if (!panel) return [];
-    var anon = panel.dataset.role === 'anon';
-    var notifs = $('acct-notifs');
     return Array.prototype.filter.call(panel.querySelectorAll('button, .notif-item[role="button"]'), function (b) {
       if (b.disabled || b.hidden) return false;
-      if (anon && notifs && notifs.contains(b)) return false;
       var n = b.parentElement;
       while (n && n !== panel) { if (n.hidden) return false; n = n.parentElement; }
       return true;
@@ -1081,13 +1078,12 @@
     toast('Vous êtes déconnecté.');
   }
 
-  // The identity head reacts to the role: notary → their console, client → their
-  // profile, anonymous → the sign-in (email) field.
+  // The identity head reacts to the role: notary → their console, client →
+  // their profile. No anon path: the panel lives inside the account wrap,
+  // hidden whenever the visitor is signed out.
   function onAcctHeadClick() {
-    var role = accountRole();
-    if (role === 'notary') { toggleNotifPanel(false); setTab('notaires'); return; }
-    if (role === 'client') { toggleNotifPanel(false); setTab('profil'); return; }
-    openClientSignIn();
+    toggleNotifPanel(false);
+    setTab(accountRole() === 'notary' ? 'notaires' : 'profil');
   }
 
   // Role-aware account menu: the ONE place a client or a notary signs in, sees who
@@ -1109,23 +1105,20 @@
     // 2026-08-28): an anonymous visitor never sees it — even one holding
     // offers published from this device. Their offers and dossier stay
     // reachable through the post-publish card and the #t= deep links; the
-    // header shows the explicit login/signup pair instead.
-    var hasOffers = myOffers().length > 0;
+    // header shows the explicit login/signup pair instead. Everything below
+    // paints the inside of the wrap, so the anon render stops here.
     var acctWrap = document.querySelector('.acct-wrap'); if (acctWrap) acctWrap.hidden = role === 'anon';
+    if (role === 'anon') return;
     var p = profileGet();
 
     if (role === 'notary') {
       if (name) name.textContent = nc.email || 'Espace notaire';
       if (email) email.textContent = 'Vos demandes et vos dossiers retenus';
       if (roleTag) { roleTag.textContent = 'Espace notaire'; roleTag.hidden = false; }
-    } else if (role === 'client') {
+    } else {
       if (name) name.textContent = p.nom || 'Mon compte';
       if (email) email.textContent = p.courriel;
       if (roleTag) { roleTag.textContent = 'Client'; roleTag.hidden = false; }
-    } else {
-      if (name) name.textContent = 'Se connecter / s’inscrire';
-      if (email) email.textContent = 'Publiez une demande, ou ouvrez l’espace notaire';
-      if (roleTag) { roleTag.hidden = true; roleTag.textContent = ''; }
     }
 
     var actions = $('acct-actions'); if (!actions) return;
@@ -1136,21 +1129,13 @@
     if (role === 'notary') {
       actions.appendChild(acctAction('dossiers', 'Mes demandes et dossiers', function () { toggleNotifPanel(false); setTab('notaires'); }));
       actions.appendChild(acctAction('signout', 'Se déconnecter', function () { ncSignOut(); renderAccountMenu(); toggleNotifPanel(false); }));
-    } else if (role === 'client') {
+    } else {
       // Two DISTINCT rows: the profile (offers table + contact details) and the
       // dossier (document checklist). The dossier row is the pane's permanent
       // door — without it the only entry is the one-shot post-publish card.
       actions.appendChild(acctAction('profil', 'Mon profil', function () { toggleNotifPanel(false); setTab('profil'); }));
       actions.appendChild(acctAction('dossiers', 'Mon dossier', function () { toggleNotifPanel(false); openDossier(myDossierServiceId()); }));
       actions.appendChild(acctAction('signout', 'Se déconnecter', clientSignOut));
-    } else {
-      // The identity head IS the "Se connecter / s’inscrire" trigger — don't repeat it.
-      if (hasOffers) {
-        actions.appendChild(acctAction('offers', 'Mes offres', function () { toggleNotifPanel(false); setTab('profil'); }));
-        actions.appendChild(acctAction('dossiers', 'Mon dossier', function () { toggleNotifPanel(false); openDossier(myDossierServiceId()); }));
-      }
-      actions.appendChild(acctAction('publier', 'Publier une offre', openOfferFlow));
-      actions.appendChild(acctAction('notaire', 'Espace notaire', function () { toggleNotifPanel(false); setTab('notaires'); }));
     }
   }
 
@@ -2325,7 +2310,15 @@
       var on = items[active];
       if (on) {
         btn.setAttribute('aria-activedescendant', on.id || '');
-        if (typeof on.scrollIntoView === 'function') on.scrollIntoView({ block: 'nearest' });
+        // Scroll ONLY the list, never the page: scrollIntoView would also
+        // scroll every scrollable ancestor (the booking dialog), so opening
+        // the dropdown made the whole sheet jump (owner, 2026-08-28: « do not
+        // move while dropdown »). The list is the one thing allowed to move.
+        if (on.offsetTop < list.scrollTop) {
+          list.scrollTop = on.offsetTop;
+        } else if (on.offsetTop + on.offsetHeight > list.scrollTop + list.clientHeight) {
+          list.scrollTop = on.offsetTop + on.offsetHeight - list.clientHeight;
+        }
       }
     }
     // Rebuilt on every open, so option edits and i18n passes are always current.
@@ -2868,8 +2861,8 @@
       acct.disabled = !D.isEmail(courriel);
       if (acct.disabled) acct.checked = false;
     }
-    var prefixe = ($('o-prefix') && $('o-prefix').value || '').trim();
-    var v = D.validateOffer({ serviceId: o.serviceId, dateISO: o.dateISO, montant: o.montant, courriel: courriel, prefixe: prefixe, pricing: o.pricing, todayISO: todayISO() });
+    // Raw field value: validateOffer owns the normalization (domain rule).
+    var v = D.validateOffer({ serviceId: o.serviceId, dateISO: o.dateISO, montant: o.montant, courriel: courriel, prefixe: $('o-prefix') && $('o-prefix').value, pricing: o.pricing, todayISO: todayISO() });
     var s = $('offer-submit');
     // Editing after a publish resets the CTA out of its success/busy state.
     if (!s.getAttribute('aria-busy') && s.textContent.trim() !== 'Publier mon offre') {
@@ -2894,9 +2887,13 @@
         return { critId: c.id, label: T(c.id === e.param ? c.label : c.autre.label) };
       });
       // The REQUIRED postal sector joins the same hint: one line names
-      // everything still blocking the publish, each name a door to its field.
+      // everything still blocking the publish, and each entry carries its own
+      // door — a focus callback — so the loop stays free of special cases.
+      var due = missing.map(function (m) {
+        return { label: m.label, focus: function () { focusCriterionRow(m.critId); } };
+      });
       var prefixeDue = (v.errors || []).some(function (e) { return e.code === 'prefixe_requis' || e.code === 'prefixe_invalide'; });
-      var due = prefixeDue ? missing.concat([{ critId: '__prefixe', label: T('Secteur postal') }]) : missing;
+      if (prefixeDue) due.push({ label: T('Secteur postal'), focus: focusPrefixField });
       hint.hidden = !due.length;
       clear(hint);
       if (due.length) {
@@ -2905,10 +2902,7 @@
           if (i) hint.appendChild(document.createTextNode(' · '));
           var b = el('button', 'offer-hint-link', m.label);
           b.type = 'button';
-          b.addEventListener('click', function () {
-            if (m.critId === '__prefixe') focusPrefixField();
-            else focusCriterionRow(m.critId);
-          });
+          b.addEventListener('click', m.focus);
           hint.appendChild(b);
         });
       }
@@ -7499,6 +7493,155 @@
     return true;
   }
 
+  // ---------------------------------------------------------------------------
+  // Live support chat (ADR 0026)
+  // ---------------------------------------------------------------------------
+  // A floating chat button; the first message mints a thread on the API and its
+  // signed token lives on this device. While the panel is open, the thread is
+  // polled so the operator's reply lands live. The operator answers through the
+  // emailed link (#reponse=<token>), which opens the reply dialog below.
+  var LS_SUPPORT = 'nota.support.v1';
+  var CHAT_POLL_MS = 8000;
+  var chatPollTimer = null;
+
+  function chatSession() { return lsLoad(LS_SUPPORT) || null; }
+  function chatApi(path, opts) {
+    opts = opts || {};
+    var headers = { 'content-type': 'application/json' };
+    if (opts.token) headers.authorization = 'Bearer ' + opts.token;
+    return fetch(API_BASE + path, {
+      method: opts.method || 'GET',
+      headers: headers,
+      body: opts.body ? JSON.stringify(opts.body) : undefined,
+    }).then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { status: r.status, json: j }; }); });
+  }
+
+  function chatRenderMessages(log, messages) {
+    if (!log) return;
+    clear(log);
+    if (!messages.length) {
+      log.appendChild(el('div', 'chat-empty', 'Posez votre question — l’équipe Nota vous répond en direct.'));
+      return;
+    }
+    messages.forEach(function (m) {
+      var row = el('div', 'chat-msg');
+      row.dataset.de = m.de;
+      row.appendChild(el('div', 'chat-bubble', m.texte));
+      log.appendChild(row);
+    });
+    log.scrollTop = log.scrollHeight;
+  }
+
+  async function chatRefresh() {
+    var s = chatSession(); if (!s || !s.token) return;
+    var res = await chatApi('/support/thread', { token: s.token }).catch(function () { return null; });
+    if (!res) return;
+    // A stale/expired token: forget it — the next message starts fresh.
+    if (res.status === 401 || res.status === 404) { try { localStorage.removeItem(LS_SUPPORT); } catch (e) {} return; }
+    if (res.status === 200) chatRenderMessages($('chat-log'), res.json.messages || []);
+  }
+
+  function chatToggle(open) {
+    var panel = $('chat-panel'), fab = $('chat-fab');
+    if (!panel || !fab) return;
+    var show = open != null ? open : panel.hidden;
+    panel.hidden = !show;
+    fab.setAttribute('aria-expanded', show ? 'true' : 'false');
+    if (chatPollTimer) { clearInterval(chatPollTimer); chatPollTimer = null; }
+    if (show) {
+      chatRenderMessages($('chat-log'), []);
+      chatRefresh();
+      // Poll only while the panel is open — the reply must land live.
+      chatPollTimer = setInterval(chatRefresh, CHAT_POLL_MS);
+      var inp = $('chat-text'); if (inp) { try { inp.focus(); } catch (e) {} }
+    }
+  }
+
+  async function onChatSubmit(e) {
+    e.preventDefault();
+    var text = $('chat-text'), send = $('chat-send'), err = $('chat-error');
+    var courrielInp = $('chat-courriel');
+    var texte = (text && text.value || '').trim();
+    var courriel = (courrielInp && courrielInp.value || '').trim();
+    // The domain is the gate — mirror it inline before any network call.
+    var v = D.validateSupportMessage({ texte: texte, courriel: courriel });
+    if (err) err.hidden = true;
+    if (!v.ok) {
+      if (err) { err.textContent = v.errors[0].message; err.hidden = false; }
+      return;
+    }
+    if (send) send.disabled = true;
+    var s = chatSession();
+    var body = { texte: v.texte };
+    if (v.courriel) body.courriel = v.courriel;
+    var res = await chatApi('/support/messages', { method: 'POST', token: s && s.token, body: body }).catch(function () { return null; });
+    // A dead token never loses the message: forget it and mint a fresh thread.
+    if (res && res.status === 401 && s) {
+      try { localStorage.removeItem(LS_SUPPORT); } catch (e2) {}
+      res = await chatApi('/support/messages', { method: 'POST', body: body }).catch(function () { return null; });
+    }
+    if (send) send.disabled = false;
+    if (!res || res.status !== 201) {
+      if (err) {
+        err.textContent = res && res.json && res.json.errors && res.json.errors[0]
+          ? res.json.errors[0].message
+          : 'La messagerie est momentanément indisponible. Réessayez, ou écrivez-nous par le formulaire « Nous joindre ».';
+        err.hidden = false;
+      }
+      return;
+    }
+    lsSave(LS_SUPPORT, { threadId: res.json.threadId, token: res.json.token });
+    if (text) text.value = '';
+    chatRefresh();
+  }
+
+  // --- The operator's reply box, opened by the emailed #reponse= link --------
+  async function chatOpenReply(opToken) {
+    var dlg = $('chat-reply-dialog'); if (!dlg) return;
+    var res = await chatApi('/support/thread', { token: opToken }).catch(function () { return null; });
+    if (!res || res.status !== 200) { toast('Lien de réponse invalide ou expiré.'); return; }
+    chatRenderMessages($('chat-reply-log'), res.json.messages || []);
+    var sent = $('chat-reply-sent'); if (sent) sent.hidden = true;
+    var form = $('chat-reply-form'); if (form) form.hidden = false;
+    dlg.dataset.token = opToken;
+    try { dlg.showModal(); } catch (e) { dlg.open = true; }
+  }
+  async function onChatReplySubmit(e) {
+    e.preventDefault();
+    var dlg = $('chat-reply-dialog'), text = $('chat-reply-text'), err = $('chat-reply-error');
+    var texte = (text && text.value || '').trim();
+    var v = D.validateSupportMessage({ texte: texte });
+    if (err) err.hidden = true;
+    if (!v.ok) { if (err) { err.textContent = v.errors[0].message; err.hidden = false; } return; }
+    var res = await chatApi('/support/reply', { method: 'POST', token: dlg && dlg.dataset.token, body: { texte: v.texte } }).catch(function () { return null; });
+    if (!res || res.status !== 200) {
+      if (err) { err.textContent = 'Envoi impossible — le lien est peut-être expiré.'; err.hidden = false; }
+      return;
+    }
+    if (text) text.value = '';
+    var r2 = await chatApi('/support/thread', { token: dlg.dataset.token }).catch(function () { return null; });
+    if (r2 && r2.status === 200) chatRenderMessages($('chat-reply-log'), r2.json.messages || []);
+    var sent = $('chat-reply-sent'); if (sent) sent.hidden = false;
+  }
+
+  function supportBoot() {
+    var fab = $('chat-fab'); if (!fab) return;
+    fab.addEventListener('click', function () { chatToggle(); });
+    var close = $('chat-close'); if (close) close.addEventListener('click', function () { chatToggle(false); });
+    var form = $('chat-form'); if (form) form.addEventListener('submit', onChatSubmit);
+    var rForm = $('chat-reply-form'); if (rForm) rForm.addEventListener('submit', onChatReplySubmit);
+    var rClose = $('chat-reply-close');
+    if (rClose) rClose.addEventListener('click', function () { var d = $('chat-reply-dialog'); try { d.close(); } catch (e) { d.open = false; } });
+    // The operator's emailed link: consume the hash so the token never lingers
+    // in the address bar (same pattern as #nauth=/#pauth=).
+    var m = /(^|[#&])reponse=([^&]+)/.exec(location.hash || '');
+    if (m) {
+      var tok = decodeURIComponent(m[2]);
+      try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+      chatOpenReply(tok);
+    }
+  }
+
   async function boot() {
     // The ambient scene first: one fixed layer of drifting marks behind ALL
     // content, alive before the first pane paints.
@@ -7519,6 +7662,7 @@
     wire();
     wireCarnetSubscribe();
     enhanceSelects();
+    supportBoot();
 
     // Restore theme preference
     var savedTheme = lsLoad('nota.theme'); if (savedTheme) setTheme(savedTheme);
@@ -7594,6 +7738,12 @@
       chatSend: ncChatSend,
       release: ncRelease,
       prefsGet: ncPrefsGet,
+    },
+    // Live support chat (ADR 0026) hooks for tests.
+    support: {
+      toggle: chatToggle,
+      refresh: chatRefresh,
+      openReply: chatOpenReply,
     },
     // Unified account hub (client + notary) hooks for tests and integration.
     account: {

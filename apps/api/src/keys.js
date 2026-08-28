@@ -172,6 +172,16 @@ function actPK(bidId) {
 }
 const ACT_SK = 'ACT';
 
+// --- Live support messaging (ADR 0026) ----------------------------------------
+// One item per chat thread, keyed by the thread id minted at the first message;
+// the widget's signed token carries that id, so reads are a single GetItem and
+// no listing index is needed.
+//   PK = SUPPORT#<id>   SK = THREAD
+function supportPK(id) {
+  return 'SUPPORT#' + String(id);
+}
+const SUPPORT_SK = 'THREAD';
+
 // --- Partner referral registry (ADR 0011) ------------------------------------
 // A professional claiming their referral code self-serve (POST /partenaires):
 // one item per code, keyed by the NORMALIZED code so uniqueness is the key
@@ -389,6 +399,8 @@ module.exports = {
   NOTARY_EVAL_PREFIX,
   actPK,
   ACT_SK,
+  supportPK,
+  SUPPORT_SK,
   partnerPK,
   PARTNER_SK,
   PARTNER_GSI1PK,

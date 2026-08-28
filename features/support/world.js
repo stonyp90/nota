@@ -92,6 +92,8 @@ class NotaWorld extends World {
       // live the instant they are posted), so pay-on-accept stays off unless
       // a scenario says « la facturation Stripe est configurée ».
       billingConfigured: this.billingOn === true,
+      // The live-chat reply link points back at the site (ADR 0026).
+      supportUrl: BASE,
     });
 
     this.billingOn = false;

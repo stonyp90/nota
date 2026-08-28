@@ -71,6 +71,19 @@ function createApp(repo, opts = {}) {
   const NOTARY_LOGIN_DEV_ECHO =
     opts.notaryLoginDevEcho != null ? !!opts.notaryLoginDevEcho : process.env.NODE_ENV !== 'production';
 
+  // --- Live support messaging (ADR 0026) -------------------------------------
+  // The widget's thread token lives on the visitor's device for a season; the
+  // operator's reply link stays valid long enough to answer from any inbox.
+  // Same site-URL pattern as the notary console: the reply link opens the main
+  // site with a `#reponse=<token>` hash the web app consumes on load.
+  const SUPPORT_TOKEN_TTL_MS = opts.supportTokenTtlMs || 90 * 24 * 60 * 60 * 1000; // 90 days
+  const SUPPORT_OP_TTL_MS = opts.supportOpTtlMs || 30 * 24 * 60 * 60 * 1000; // 30 days
+  const SUPPORT_URL = String(
+    opts.supportUrl || process.env.NOTA_BASE_URL || opts.siteUrl || process.env.NOTA_SITE_URL || ''
+  ).replace(/\/+$/, '');
+  // The wire shape of one chat message — an allow-list, like publicBid().
+  const supportMessageView = (m) => ({ id: m.id, de: m.de, texte: m.texte, createdAt: m.createdAt });
+
   // --- Partner code claim: email verification (ADR 0011 fraud-hardening) -----
   // Claiming a referral code is a TWO-step, mailbox-proven handshake, mirroring
   // the notary magic link above: POST /partenaires mints a single-use challenge
@@ -1234,6 +1247,9 @@ function createApp(repo, opts = {}) {
       // Loaded before the walk: the profile now gates which open bids the
       // feed may offer at all (ADR 0017), not just the console's own block.
       const ownProfile = await repo.getNotary(notaryId);
+      // ≈ km between a bid's sector and the étude's (ADR 0025) — null when
+      // either sector is unknown. One definition for both open and retained.
+      const distKm = (b) => domain.fsaDistanceKm(b.prefixe, ownProfile && ownProfile.prefixe);
       const seen = new Set();
       const out = [];
       // Bids in the window retained BY THIS notary — including those retained
@@ -1269,7 +1285,7 @@ function createApp(repo, opts = {}) {
                 client: clientContact(b),
                 preteur: bidLenderInfo(b),
                 deplacement: bidDeplacementInfo(b),
-                distanceKm: domain.fsaDistanceKm(b.prefixe, ownProfile && ownProfile.prefixe),
+                distanceKm: distKm(b),
                 // The live thread with the client — the place details surface
                 // (and the reason a notary may still withdraw, see /release).
                 messages: messagesOf(b).map(chatMessage),
@@ -1281,20 +1297,19 @@ function createApp(repo, opts = {}) {
           if (b.status !== domain.STATUS.OUVERTE) continue;
           if (!isLive(b)) continue; // hide offers whose card authorization is still pending/void
           if (query.service && b.serviceId !== query.service) continue;
-          if (await repo.wasDeclined(notaryId, b.id)) continue;
           // ADR 0017/0025: the feed only offers what this notary can serve — a
           // travel band beyond their reach, or an online urgency they never
           // opted into, is not their demande. With both sectors known the
           // MEASURED distance decides; legacy bids without a band reach everyone.
+          // This pure check runs BEFORE the per-bid declined lookup (real I/O).
           if (!domain.notaryCanServe((b.pricing || {}).deplacement, ownProfile, b.prefixe)) continue;
+          if (await repo.wasDeclined(notaryId, b.id)) continue;
           seen.add(b.id);
           const mine = latestPropositionFor(b, notaryId);
           const ask = latestDemandeFor(b, notaryId);
           out.push({
             ...notaryBid(b),
-            // ≈ km between the bid's sector and the étude's (ADR 0025) — null
-            // when either sector is unknown. Approximate by design.
-            distanceKm: domain.fsaDistanceKm(b.prefixe, ownProfile && ownProfile.prefixe),
+            distanceKm: distKm(b),
             // ONLY this notary's own proposition/demande — never another's.
             proposition: mine ? { id: mine.id, montant: mine.montant, delta: mine.delta, status: mine.status, createdAt: mine.createdAt } : null,
             demande: ask ? { id: ask.id, documents: ask.documents, createdAt: ask.createdAt, fournie: demandeFournie(b, ask) } : null,
@@ -1835,6 +1850,83 @@ function createApp(repo, opts = {}) {
       const kn = notifier();
       if (kn) Promise.resolve(kn.onContactMessage(msg)).catch(() => {});
       return json(202, { recu: true });
+    }
+
+    // --- Live support messaging (ADR 0026) ----------------------------------
+    // The site's chat widget: no auth to start — anyone with a question
+    // deserves a live answer. The first message mints the thread and its
+    // signed SUPPORT token (the widget keeps it and polls with it); every
+    // visitor message emails the operator with a signed SUPPORT_OP reply link,
+    // so the answer is one tap away from the inbox and lands live in the
+    // widget. The courriel is optional: it only adds an offline copy of the
+    // reply — the widget itself is the channel.
+    if (route === '/support/messages' && method === 'POST') {
+      const { payload, error } = parseBody(request);
+      if (error) return error;
+      const v = domain.validateSupportMessage(payload);
+      if (!v.ok) return json(422, { errors: v.errors });
+      // A token continues its thread; none starts one. A stale or tampered
+      // token is refused (the widget clears it and starts fresh) rather than
+      // silently splitting the conversation.
+      let thread = null;
+      const raw = bearer(request) || payload.token;
+      if (raw) {
+        const id = requireScope(raw, SCOPES.SUPPORT);
+        if (!id) return json(401, { errors: [{ code: 'non_autorise', message: 'Jeton invalide ou expiré.' }] });
+        thread = await repo.getSupportThread(id);
+        if (!thread) return json(404, { errors: [{ code: 'introuvable', message: 'Conversation introuvable.' }] });
+      }
+      const message = { id: newId(), de: domain.SUPPORT_FROM.VISITEUR, texte: v.texte, createdAt: new Date(nowMs()).toISOString() };
+      if (!thread) thread = { id: newId(), courriel: null, createdAt: now(), messages: [] };
+      if (v.courriel) thread.courriel = v.courriel;
+      thread.messages = [...(thread.messages || []), message];
+      await repo.putSupportThread(thread);
+      const sn = notifier();
+      if (sn && typeof sn.onSupportMessage === 'function') {
+        const replyUrl = SUPPORT_URL
+          ? SUPPORT_URL + '/#reponse=' + encodeURIComponent(signToken(thread.id, nowMs() + SUPPORT_OP_TTL_MS, SCOPES.SUPPORT_OP))
+          : null;
+        Promise.resolve(sn.onSupportMessage({ message, courriel: thread.courriel, replyUrl })).catch(() => {});
+      }
+      return json(201, {
+        threadId: thread.id,
+        token: signToken(thread.id, nowMs() + SUPPORT_TOKEN_TTL_MS, SCOPES.SUPPORT),
+        message: supportMessageView(message),
+      });
+    }
+
+    // The widget polls here while open; the operator's reply box reads the
+    // same thread through its SUPPORT_OP link token.
+    if (route === '/support/thread' && method === 'GET') {
+      const raw = bearer(request);
+      const id = requireScope(raw, SCOPES.SUPPORT) || requireScope(raw, SCOPES.SUPPORT_OP);
+      if (!id) return json(401, { errors: [{ code: 'non_autorise', message: 'Jeton invalide ou expiré.' }] });
+      const thread = await repo.getSupportThread(id);
+      if (!thread) return json(404, { errors: [{ code: 'introuvable', message: 'Conversation introuvable.' }] });
+      return json(200, { messages: (thread.messages || []).map(supportMessageView) });
+    }
+
+    // The operator answers through the emailed link's SUPPORT_OP token — a
+    // visitor token can never speak as Nota. The reply lands in the thread
+    // (the widget polls it up) and is copied to the visitor's courriel when
+    // they left one.
+    if (route === '/support/reply' && method === 'POST') {
+      const { payload, error } = parseBody(request);
+      if (error) return error;
+      const id = requireScope(bearer(request) || payload.token, SCOPES.SUPPORT_OP);
+      if (!id) return json(401, { errors: [{ code: 'non_autorise', message: 'Jeton invalide ou expiré.' }] });
+      const thread = await repo.getSupportThread(id);
+      if (!thread) return json(404, { errors: [{ code: 'introuvable', message: 'Conversation introuvable.' }] });
+      const v = domain.validateSupportMessage({ texte: payload.texte });
+      if (!v.ok) return json(422, { errors: v.errors });
+      const message = { id: newId(), de: domain.SUPPORT_FROM.NOTA, texte: v.texte, createdAt: new Date(nowMs()).toISOString() };
+      thread.messages = [...(thread.messages || []), message];
+      await repo.putSupportThread(thread);
+      const rn = notifier();
+      if (rn && typeof rn.onSupportReply === 'function' && thread.courriel) {
+        Promise.resolve(rn.onSupportReply({ message, courriel: thread.courriel })).catch(() => {});
+      }
+      return json(200, { message: supportMessageView(message) });
     }
 
     if (route === '/notary/bids/decline' && method === 'POST') {

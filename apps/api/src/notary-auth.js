@@ -36,7 +36,12 @@ const crypto = require('node:crypto');
 // the per-bid token a client (who has no account) receives when posting an
 // offer: its `sub` is the BID id, and it only authorizes the /client/* routes
 // for that one bid (see and answer propositions, update the dossier).
-const SCOPES = { SESSION: 'session', FEED: 'feed', CLIENT: 'client', CHALLENGE: 'challenge' };
+// SUPPORT is the per-thread token the chat widget holds (sub = thread id;
+// read the thread, post visitor messages). SUPPORT_OP is the operator's
+// per-thread reply token, carried by the notification email's reply link
+// (read the thread, post the « nota » reply) — distinct scopes so a visitor
+// token can never speak as Nota (ADR 0026).
+const SCOPES = { SESSION: 'session', FEED: 'feed', CLIENT: 'client', CHALLENGE: 'challenge', SUPPORT: 'support', SUPPORT_OP: 'support_op' };
 
 // Never a production secret — only so tests and `npm run api:local` work with no
 // configuration. Production MUST set NOTA_NOTARY_SECRET (see infra/lambda.tf);

@@ -26,6 +26,8 @@ const {
   STATS_GAUGE_SK,
   actPK,
   ACT_SK,
+  supportPK,
+  SUPPORT_SK,
   partnerPK,
   PARTNER_SK,
   PARTNER_GSI1PK,
@@ -782,6 +784,27 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
       if (!out.Item) return null;
       const { PK, SK, [GSI1_PK]: _gpk, [GSI1_SK]: _gsk, ...partner } = out.Item;
       return partner;
+    },
+    // --- Live support threads (ADR 0026) ------------------------------------
+    // One item per thread, addressed by the id its signed token carries — a
+    // GetItem each way, no index. Last write wins: the thread is only ever
+    // rewritten by appending a message to its own latest read.
+    async putSupportThread(thread) {
+      await doc.send(
+        new PutCommand({
+          TableName: tableName,
+          Item: { PK: supportPK(thread.id), SK: SUPPORT_SK, type: 'support', ...thread },
+        })
+      );
+      return thread;
+    },
+    async getSupportThread(id) {
+      const out = await doc.send(
+        new GetCommand({ TableName: tableName, Key: { PK: supportPK(id), SK: SUPPORT_SK } })
+      );
+      if (!out.Item) return null;
+      const { PK, SK, ...thread } = out.Item;
+      return thread;
     },
     // Every CLAIMED code — one paginated Query on the sparse PARTNER overload.
     // A pre-overload partner item is invisible here (no GSI attributes) until

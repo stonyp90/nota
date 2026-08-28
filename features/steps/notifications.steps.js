@@ -22,6 +22,9 @@ const TEMPLATE_SUBJECT = {
   'demande annulée par le client': 'Demande annulée par le client',
   "annulation d'une demande retenue": 'Annulation d’une demande retenue',
   'acte payé': 'Acte payé',
+  // Live support messaging (ADR 0026)
+  'messagerie : nouvelle question': 'Messagerie : nouvelle question',
+  'messagerie : réponse de Nota': 'Nota vous a répondu',
 };
 
 function subjectNeedle(label) {
