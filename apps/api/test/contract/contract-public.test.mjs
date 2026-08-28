@@ -263,13 +263,13 @@ test('every path documented in openapi.yaml is routed by the app (no "route inco
 // --- Drift flag : routed-but-undocumented routes -----------------------------
 
 // Parsed straight from the handler source so a NEW route added there without a
-// matching openapi.yaml entry trips this test. These five are known and
+// matching openapi.yaml entry trips this test. These four are known and
 // intentionally OUT of the public JSON contract for now (the two *.ics feeds
-// answer text/calendar, not JSON; decline/dossier/acts-complete are secondary
-// notary routes). If you route a new path, either document it in openapi.yaml
+// answer text/calendar, not JSON; decline/dossier are secondary notary
+// routes; acts/complete graduated to the spec when settlement gained its
+// domain bound). If you route a new path, either document it in openapi.yaml
 // or add it here with a reason.
 const KNOWN_UNDOCUMENTED = new Set([
-  '/notary/acts/complete',
   '/notary/bids/decline',
   '/notary/dossier',
   '/notary/feed.ics',

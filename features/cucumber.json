@@ -1,6 +1,7 @@
 {
   "default": {
     "paths": ["*.feature"],
+    "tags": "not @decision",
     "require": ["support/**/*.js", "steps/**/*.js"],
     "publishQuiet": true,
     "format": ["summary", "progress"]

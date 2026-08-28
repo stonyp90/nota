@@ -20,6 +20,8 @@ const {
   DECLINE_SK,
   retainedSK,
   RETAINED_PREFIX,
+  notaryEvalSK,
+  NOTARY_EVAL_PREFIX,
   STATS_GAUGE_PK,
   STATS_GAUGE_SK,
   actPK,
@@ -37,6 +39,10 @@ const {
   emailOverridePK,
   emailOverrideSK,
   EMAIL_OVERRIDE_PREFIX,
+  commissionConfigPK,
+  COMMISSION_CONFIG_SK,
+  cancellationConfigPK,
+  CANCELLATION_CONFIG_SK,
   adminPK,
   ADMIN_SK,
   adminLoginPK,
@@ -396,6 +402,69 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
         new DeleteCommand({ TableName: tableName, Key: { PK: emailOverridePK(), SK: emailOverrideSK(key) } })
       );
     },
+    // --- Admin-decided commission barème (ADR 0021) --------------------------
+    // ONE item on the MAIN table — billing reads it through the repo it already
+    // owns at every pricing; the admin Lambda's LeadingKeys-scoped write door
+    // (infra/admin.tf) is the only way it changes.
+    async getCommissionConfig() {
+      const out = await doc.send(
+        new GetCommand({ TableName: tableName, Key: { PK: commissionConfigPK(), SK: COMMISSION_CONFIG_SK } })
+      );
+      if (!out.Item) return null;
+      const { PK, SK, type, ...cfg } = out.Item;
+      return cfg;
+    },
+    async putCommissionConfig(cfg, nowISO) {
+      const stored = {
+        taux: cfg.taux,
+        plancher: cfg.plancher,
+        paliers: (cfg.paliers || []).map((p) => ({ note: p.note, avis: p.avis, bonus: p.bonus })),
+        updatedAt: nowISO,
+      };
+      await doc.send(
+        new PutCommand({
+          TableName: tableName,
+          Item: { PK: commissionConfigPK(), SK: COMMISSION_CONFIG_SK, type: 'commission_config', ...stored },
+        })
+      );
+      return stored;
+    },
+    async deleteCommissionConfig() {
+      await doc.send(
+        new DeleteCommand({ TableName: tableName, Key: { PK: commissionConfigPK(), SK: COMMISSION_CONFIG_SK } })
+      );
+    },
+    // --- Admin-decided cancellation fee barème (ADR 0023) --------------------
+    // ONE item on the MAIN table — the cancel route reads it through the repo
+    // it already owns; the admin Lambda's LeadingKeys-scoped write door
+    // (infra/admin.tf) is the only way it changes.
+    async getCancellationConfig() {
+      const out = await doc.send(
+        new GetCommand({ TableName: tableName, Key: { PK: cancellationConfigPK(), SK: CANCELLATION_CONFIG_SK } })
+      );
+      if (!out.Item) return null;
+      const { PK, SK, type, ...cfg } = out.Item;
+      return cfg;
+    },
+    async putCancellationConfig(cfg, nowISO) {
+      const stored = {
+        paliers: (cfg.paliers || []).map((p) => ({ maxJours: p.maxJours, taux: p.taux })),
+        updatedAt: nowISO,
+      };
+      await doc.send(
+        new PutCommand({
+          TableName: tableName,
+          Item: { PK: cancellationConfigPK(), SK: CANCELLATION_CONFIG_SK, type: 'cancellation_config', ...stored },
+        })
+      );
+      return stored;
+    },
+    async deleteCancellationConfig() {
+      await doc.send(
+        new DeleteCommand({ TableName: tableName, Key: { PK: cancellationConfigPK(), SK: CANCELLATION_CONFIG_SK } })
+      );
+    },
+
     // Every stored override — one Query over the single CONFIG#EMAIL partition
     // (bounded by the template registry size, a few dozen items at most).
     async listEmailOverrides() {
@@ -479,6 +548,52 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
         ExclusiveStartKey = out.LastEvaluatedKey;
       } while (ExclusiveStartKey);
       return events;
+    },
+
+    // --- Notary evaluation ledger (ADR 0021) --------------------------------
+    // The anonymized track record under the notary's own partition: one Put at
+    // evaluation submit, one backwards Query (newest first) to list it all.
+    async addNotaryEvaluation(notaryId, evaluation) {
+      await doc.send(
+        new PutCommand({
+          TableName: tableName,
+          Item: {
+            PK: notaryPK(notaryId),
+            SK: notaryEvalSK(evaluation.createdAt, evaluation.bidId),
+            type: 'evaluation',
+            notaryId,
+            bidId: evaluation.bidId,
+            dateISO: evaluation.dateISO,
+            serviceId: evaluation.serviceId,
+            note: evaluation.note,
+            commentaire: evaluation.commentaire || null,
+            createdAt: evaluation.createdAt,
+          },
+        })
+      );
+    },
+    async listNotaryEvaluations(notaryId) {
+      const evaluations = [];
+      let ExclusiveStartKey;
+      do {
+        const out = await doc.send(
+          new QueryCommand({
+            TableName: tableName,
+            KeyConditionExpression: 'PK = :pk AND begins_with(SK, :b)',
+            ExpressionAttributeValues: { ':pk': notaryPK(notaryId), ':b': NOTARY_EVAL_PREFIX },
+            // createdAt leads the SK, so walking the range backwards IS
+            // newest-first — no client-side sort.
+            ScanIndexForward: false,
+            ExclusiveStartKey,
+          })
+        );
+        (out.Items || []).forEach((i) => {
+          const { PK, SK, type, ...evaluation } = i;
+          evaluations.push(evaluation);
+        });
+        ExclusiveStartKey = out.LastEvaluatedKey;
+      } while (ExclusiveStartKey);
+      return evaluations;
     },
 
     // --- Notary magic-link login (single-use challenges + rate limit) -------

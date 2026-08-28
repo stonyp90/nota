@@ -225,7 +225,7 @@
             </section>
             <section class="ig-scene ig-c3" aria-hidden="true">
               <p class="ig-h">Un notaire accepte votre offre.</p>
-              <span class="ig-burst" aria-hidden="true"><i style="--dx:-18cqw;--dy:-10cqw;--rot:-50deg"></i><i style="--dx:-9cqw;--dy:-14cqw;--rot:35deg"></i><i style="--dx:0cqw;--dy:-16cqw;--rot:-25deg"></i><i style="--dx:9cqw;--dy:-14cqw;--rot:45deg"></i><i style="--dx:18cqw;--dy:-9cqw;--rot:-35deg"></i><i style="--dx:-14cqw;--dy:5cqw;--rot:30deg"></i><i style="--dx:14cqw;--dy:5cqw;--rot:-40deg"></i><i style="--dx:0cqw;--dy:8cqw;--rot:20deg"></i></span>
+              <span class="ig-burst" aria-hidden="true"><i style="--dx:calc(-18 * var(--igu));--dy:calc(-10 * var(--igu));--rot:-50deg"></i><i style="--dx:calc(-9 * var(--igu));--dy:calc(-14 * var(--igu));--rot:35deg"></i><i style="--dx:calc(0 * var(--igu));--dy:calc(-16 * var(--igu));--rot:-25deg"></i><i style="--dx:calc(9 * var(--igu));--dy:calc(-14 * var(--igu));--rot:45deg"></i><i style="--dx:calc(18 * var(--igu));--dy:calc(-9 * var(--igu));--rot:-35deg"></i><i style="--dx:calc(-14 * var(--igu));--dy:calc(5 * var(--igu));--rot:30deg"></i><i style="--dx:calc(14 * var(--igu));--dy:calc(5 * var(--igu));--rot:-40deg"></i><i style="--dx:calc(0 * var(--igu));--dy:calc(8 * var(--igu));--rot:20deg"></i></span>
               <div class="ig-notif">
                 <span class="ig-check" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 12.5 9.5 18 20 6.5" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
                 <span class="ig-notif-x"><span class="ig-t1">Offre acceptée — 2&nbsp;200&nbsp;$</span><span class="ig-t2">Mise en relation immédiate sur la plateforme.</span></span>
@@ -330,16 +330,11 @@
           <button class="nav-tab" role="tab" id="tab-partenaires" aria-controls="pane-partenaires" data-tab="partenaires" aria-selected="false">Partenaires</button>
         </nav>
         <!-- Utility controls on ONE shared 28px strip (owner's ask,
-             2026-08-26: « ensemble et même grosseur »): guide "?" · FR | EN
-             segment · theme switch. Phones keep only the "?" (language and
-             theme live in the drawer). -->
+             2026-08-26: « ensemble et même grosseur »): FR | EN segment ·
+             theme switch. The guide « ? » is the fixed bottom-right bubble
+             (.guide-fab), never in a menu; phones move language and theme
+             into the drawer. -->
         <div class="header-tools" role="group" aria-label="Options">
-          <!-- The guide, compact: a "?" icon, ALWAYS visible (owner's ask,
-               2026-08-26) — signed in or out, it is the one standing way back
-               into the guide; the account menu carries no duplicate row. -->
-          <button class="icon-btn" id="nav-guide" title="Comment ça marche" aria-label="Comment ça marche">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
-          </button>
           <!-- Language: one FR | EN segment — BOTH options visible, the
                current one pressed. Marked and wired by i18n.js wireToggles();
                data-i18n-skip keeps the translator's DOM walker away. -->
@@ -741,23 +736,24 @@
               </div>
             </form>
 
-            <!-- Authenticated view -->
+            <!-- Authenticated view. No identity bar here: the header account
+                 menu already says who is connected and carries Se déconnecter —
+                 repeating it left a dead band over the agenda (owner,
+                 2026-08-27). The console opens straight on the demands. -->
             <div id="notary-authed" hidden>
-              <div class="nc-bar">
-                <div class="nc-id">
-                  <span class="nc-id-label">Connecté</span>
-                  <strong id="notary-email-label"></strong>
-                </div>
-                <span class="header-spacer"></span>
-                <button class="btn btn-sm" id="notary-refresh">Rafraîchir</button>
-                <button class="btn btn-sm btn-ghost" id="notary-signout">Se déconnecter</button>
-              </div>
-
               <h2 class="nc-h" id="notary-open-h">Demandes ouvertes</h2>
               <!-- Client-side filter over the open agenda: one chip per act + a
                    "complete file only" toggle. Filled by the console (services
-                   come from the domain, never hardcoded here). -->
-              <div class="chip-group nc-filter" id="notary-open-filter" role="group" aria-label="Filtrer les demandes"></div>
+                   come from the domain, never hardcoded here). Beside it, the
+                   disclosure seg: « L’essentiel » keeps every card folded to
+                   its decision row, « Tout afficher » unfolds the whole feed. -->
+              <div class="nc-open-tools">
+                <div class="chip-group nc-filter" id="notary-open-filter" role="group" aria-label="Filtrer les demandes"></div>
+                <div class="seg nc-view-seg" id="notary-open-view" role="group" aria-label="Niveau de détail" hidden>
+                  <button type="button" class="seg-btn is-on" data-view="compact" aria-pressed="true">L’essentiel</button>
+                  <button type="button" class="seg-btn" data-view="detail" aria-pressed="false">Tout afficher</button>
+                </div>
+              </div>
               <div class="nc-list nc-agenda-list" id="notary-open-list"></div>
               <p class="help" id="notary-open-empty" hidden>Aucune demande ouverte pour l’instant.</p>
 
@@ -767,6 +763,19 @@
 
               <h2 class="nc-h">Vos revenus</h2>
               <div class="nc-earn" id="notary-earnings"></div>
+
+              <!-- The notary's own track record (ADR 0021): every client
+                   evaluation — note, comment, act, date — anonymized by the
+                   ledger itself. Collapsed by default (ADR 0019's register:
+                   history folds, the working surface doesn't); the list is
+                   fetched on first open, never before. -->
+              <details class="nc-prefs" id="notary-evals">
+                <summary class="nc-prefs-sum">
+                  <h2 class="nc-h">Vos évaluations</h2>
+                  <span class="nc-prefs-hint">notes et commentaires des clients</span>
+                </summary>
+                <div class="nc-evals" id="nc-evals-list"></div>
+              </details>
 
               <!-- Public profile (ADR 0016 + 0017): the notary's official fiche
                    in the Chambre des notaires directory, plus how far they
@@ -853,11 +862,13 @@
 
               <div class="nc-cal">
                 <div class="nc-cal-h">Vos signatures dans votre agenda</div>
+                <!-- Same branded buttons as the public carnet card: the two
+                     calendar-sync rows are one register, not two designs. -->
                 <div class="sub-card-actions">
-                  <a class="btn btn-sm" id="notary-google" target="_blank" rel="noopener">Google</a>
-                  <a class="btn btn-sm" id="notary-outlook" target="_blank" rel="noopener">Outlook</a>
-                  <a class="btn btn-sm" id="notary-apple">Apple</a>
-                  <a class="btn btn-sm" id="notary-webcal" download="nota-signatures.ics">iCal</a>
+                  <a class="btn btn-sm sub-btn" id="notary-google" target="_blank" rel="noopener"><svg class="brand-ic" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="var(--logo-google-blue)" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.8z"/><path fill="var(--logo-google-green)" d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1A12 12 0 0 0 12 24z"/><path fill="var(--logo-google-yellow)" d="M5.3 14.3a7.2 7.2 0 0 1 0-4.6V6.6H1.3a12 12 0 0 0 0 10.8l4-3.1z"/><path fill="var(--logo-google-red)" d="M12 4.8c1.8 0 3.3.6 4.6 1.8l3.4-3.4A12 12 0 0 0 12 0 12 12 0 0 0 1.3 6.6l4 3.1C6.2 6.9 8.9 4.8 12 4.8z"/></svg>Google</a>
+                  <a class="btn btn-sm sub-btn" id="notary-outlook" target="_blank" rel="noopener"><svg class="brand-ic" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="var(--logo-outlook-blue)" d="M2 6.2 9 4.9v14.2L2 17.8z"/><path fill="var(--logo-on-brand)" d="M5.5 9.2c-1 0-1.7.9-1.7 2.3s.7 2.3 1.7 2.3 1.7-.9 1.7-2.3-.7-2.3-1.7-2.3zm0 1c.4 0 .7.5.7 1.3s-.3 1.3-.7 1.3-.7-.5-.7-1.3.3-1.3.7-1.3z"/><rect x="9.5" y="5.5" width="12.5" height="13" rx="1.5" fill="var(--logo-outlook-blue)"/><path fill="var(--logo-on-brand)" d="M15.7 8.6a3 3 0 1 0 0 6 3 3 0 0 0 0-6zm0 1.6a1.4 1.4 0 1 1 0 2.8 1.4 1.4 0 0 1 0-2.8z"/></svg>Outlook</a>
+                  <a class="btn btn-sm sub-btn" id="notary-apple"><svg class="brand-ic" viewBox="0 0 384 512" width="13" height="13" aria-hidden="true" fill="currentColor"><path d="M318.7 268c-.3-36 16.4-63 50-83-18.8-27-47-42-84-45-35-3-73 20-87 20s-52-19-79-19c-56 1-114 43-114 130 0 26 5 53 15 81 13 37 60 128 109 126 26-1 44-19 78-19s50 18 78 18c50-1 92-83 105-120-67-32-64-93-64-95zM256 84c17-20 15-49 14-59-14 1-40 9-56 29-14 17-19 43-16 58 16 1 41-8 58-28z"/></svg>Apple</a>
+                  <a class="btn btn-sm sub-btn" id="notary-webcal" download="nota-signatures.ics"><svg class="brand-ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>iCal</a>
                 </div>
                 <p class="help">Vos dossiers retenus, à jour automatiquement (webcal).</p>
               </div>
@@ -892,19 +903,24 @@
                    relabels it « Voir mon code → » for a returning partner. -->
               <button type="button" class="btn btn-primary btn-lg pr-hero-cta" id="pr-hero-cta">Réclamer mon code →</button>
             </div>
-            <!-- Two tracks, one stat card each: kicker, amount, when. The
-                 mechanics live in the steps below — never repeated per card.
+            <!-- Two tracks, one stat card each: kicker, amount + cadence tag,
+                 when. The HOW lives in the steps below — never repeated per
+                 card — but the cadence (repeats forever vs once per notary)
+                 is what actually separates the two offers, so it rides the
+                 amount row instead of hiding in a collapsed FAQ answer.
                  The notary track pays more, so it carries the highlight.
                  Amounts come from renderPartnerPane() (domain). -->
             <div class="pr-rewards" aria-label="Les récompenses">
               <div class="pr-card" id="pr-card-client">
                 <div class="pr-kicker">Référez un client</div>
                 <div class="pr-amount" id="pr-amount-client"></div>
+                <span class="pr-freq">Sans limite</span>
                 <p class="pr-when">Versée dès qu’un notaire retient la demande.</p>
               </div>
               <div class="pr-card pr-card--notaire" id="pr-card-notaire">
                 <div class="pr-kicker">Référez un notaire</div>
                 <div class="pr-amount" id="pr-amount-notaire"></div>
+                <span class="pr-freq">Une fois par notaire</span>
                 <p class="pr-when">Versée à son premier acte retenu.</p>
               </div>
             </div>
@@ -920,19 +936,23 @@
             <div class="pr-pitch">
               <section class="pr-steps-band">
                 <h2 class="h-sub pr-how-title">Comment ça marche</h2>
-                <!-- The three steps as a connected timeline — each one a bold
-                     verb line plus its single caveat, replacing the old
-                     one-line fine print. -->
+                <!-- The three steps as a connected timeline — each one a
+                     glyph chip (its order tag on the shoulder), a bold verb
+                     line plus its single caveat, replacing the old one-line
+                     fine print. -->
                 <ol class="pr-steps">
                   <li>
+                    <span class="pr-step-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7.5 9 6 9-6"/></svg></span>
                     <strong>Réclamez votre code</strong>
                     <span>Une minute, sans frais — activé par un lien envoyé à votre courriel.</span>
                   </li>
                   <li>
+                    <span class="pr-step-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span>
                     <strong>Partagez votre lien</strong>
                     <span>Le code voyage en privé — jamais affiché au carnet ni montré aux notaires.</span>
                   </li>
                   <li>
+                    <span class="pr-step-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8.5" r="5.5"/><path d="M15.4 12.9 17 22l-5-2.8L7 22l1.6-9.1"/></svg></span>
                     <strong>Soyez récompensé quand ça aboutit</strong>
                     <span>Un montant fixe, jamais un pourcentage.</span>
                   </li>
@@ -1201,7 +1221,15 @@
       </div>
     </footer>
 
-    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <!-- The guide, standalone (owner's asks, 2026-08-26 + 2026-08-27): the « ? »
+     must stay one tap from anywhere so people understand the product, but it
+     never sits inside a menu — its own fixed bubble, bottom-right, on every
+     band, signed in or out. The account menu carries no duplicate row; the
+     footer link is the in-page fallback. -->
+<button class="icon-btn guide-fab" id="guide-fab" title="Comment ça marche" aria-label="Comment ça marche">
+  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
+</button>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <dialog id="day-dialog" aria-label="Réserver cette date">
       <form method="dialog" class="dlg-x-form"><button class="dlg-x" id="day-close" value="close" aria-label="Fermer">
@@ -1235,7 +1263,10 @@
         </div>
         <input type="date" id="o-date" class="visually-hidden" required tabindex="-1" aria-hidden="true" />
         <div class="book-step" id="o-criteria-step" hidden>
-          <div class="book-step-lbl"><span class="step">2</span> Les questions du notaire <span class="book-opt">(elles ajustent le prix)</span></div>
+          <div class="book-step-lbl"><span class="step">2</span> Les questions du notaire <span class="book-opt">(elles ajustent le prix)</span>
+            <!-- Live tally kept by validateOfferUI: how many required answers
+                 the notary still awaits, then a quiet « ✓ complet ». -->
+            <span class="crit-count" id="o-criteria-count" aria-live="polite" hidden></span></div>
           <div id="o-criteria" class="o-criteria"></div>
         </div>
         <div class="book-step book-step-offer">
@@ -1529,6 +1560,10 @@
       <div class="dialog-pad">
         <h3 id="cancel-title">Annuler cette offre ?</h3>
         <p id="cancel-text">Votre offre sera retirée du carnet. Plus aucun notaire ne pourra la retenir.</p>
+        <!-- ADR 0023: the late-cancellation fee, disclosed BEFORE the client
+             confirms. Filled by app.js from the GET /client/bid prevision;
+             hidden whenever the cancellation is free. -->
+        <p id="cancel-fee" class="note" hidden></p>
         <div class="dialog-actions">
           <button class="btn" id="cancel-keep">Garder mon offre</button>
           <button class="btn btn-danger" id="cancel-confirm">Annuler mon offre</button>

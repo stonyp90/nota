@@ -666,7 +666,7 @@ test('commissionFor names the effective rate and the next reachable tier', async
   const { repo, billing } = setup();
   const id = await activeNotaryWithRating(billing, repo, 'cf@example.ca', { sum: 45, count: 10 });
 
-  const c = billing.commissionFor(await repo.getNotary(id));
+  const c = await billing.commissionFor(await repo.getNotary(id));
   assert.equal(c.taux, RATE);
   assert.equal(c.tauxEffectif, 0.09);
   assert.equal(c.bonus, 0.01);
@@ -675,14 +675,35 @@ test('commissionFor names the effective rate and the next reachable tier', async
 
   // At the top tier there is nothing further to reach.
   await repo.putNotary({ ...(await repo.getNotary(id)), ratingSum: 50, ratingCount: 10 });
-  const top = billing.commissionFor(await repo.getNotary(id));
+  const top = await billing.commissionFor(await repo.getNotary(id));
   assert.equal(top.tauxEffectif, 0.08);
   assert.equal(top.prochain, null);
 
   // A brand-new notary pays the base rate and sees the first tier as next.
-  const fresh = billing.commissionFor({ ratingSum: 0, ratingCount: 0 });
+  const fresh = await billing.commissionFor({ ratingSum: 0, ratingCount: 0 });
   assert.equal(fresh.tauxEffectif, RATE);
   assert.deepEqual(fresh.prochain, { note: 4.5, avis: 5, tauxEffectif: 0.09 });
+});
+
+test('a barème stored by the admin (ADR 0021) reprices the very next act; a reset returns to the defaults', async () => {
+  const { repo, billing } = setup();
+  const id = await activeNotaryWithRating(billing, repo, 'bareme@example.ca', { sum: 40, count: 10 }); // 4.0 avg
+  // Under the default schedule 4.0/10 earns nothing → 10 %.
+  assert.equal((await billing.completeAct({ notaryId: id, bidId: 'bar1', actAmount: 1000 })).commissionCents, 10000);
+
+  // Nota decides: base 12 %, and a reachable 4.0/3 tier worth −2 pts.
+  await repo.putCommissionConfig({ taux: 0.12, plancher: 0.06, paliers: [{ note: 4, avis: 3, bonus: 0.02 }] }, NOW);
+  const c = await billing.commissionFor(await repo.getNotary(id));
+  assert.equal(c.taux, 0.12);
+  assert.equal(c.tauxEffectif, 0.10);
+  assert.equal(c.bonus, 0.02);
+  assert.equal((await billing.completeAct({ notaryId: id, bidId: 'bar2', actAmount: 1000 })).commissionCents, 10000);
+
+  // Reset: the stored barème is gone, the environment defaults rule again.
+  await repo.deleteCommissionConfig();
+  const back = await billing.commissionFor(await repo.getNotary(id));
+  assert.equal(back.taux, RATE);
+  assert.equal(back.tauxEffectif, RATE);
 });
 
 test('an idempotent replay keeps the ledger amount even if the rating moved between attempts', async () => {

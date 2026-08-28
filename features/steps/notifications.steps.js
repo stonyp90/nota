@@ -18,6 +18,10 @@ const TEMPLATE_SUBJECT = {
   'proposition déclinée': 'Proposition déclinée',
   'documents demandés': 'Un notaire vous demande des documents',
   'offre retenue': 'Un notaire a retenu votre demande',
+  'offre annulée': 'Offre annulée',
+  'demande annulée par le client': 'Demande annulée par le client',
+  "annulation d'une demande retenue": 'Annulation d’une demande retenue',
+  'acte payé': 'Acte payé',
 };
 
 function subjectNeedle(label) {

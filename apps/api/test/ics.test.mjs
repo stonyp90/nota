@@ -55,3 +55,96 @@ test('the carnet feed lines are bilingual with domain money on each side', () =>
   assert.ok(s.includes('DESCRIPTION:Mortgage refinancing — $1\\,500'));
   assert.ok(s.includes('X-WR-CALNAME:Nota — carnet public / public carnet (Québec)'));
 });
+
+// --- decision-complete notary events (montant, déplacement, prêteur, dossier) --
+
+// Unfold per RFC 5545 §3.1 (CRLF + single space/tab), for round-trip checks.
+const unfold = (s) => s.replace(/\r\n[ \t]/g, '');
+
+const FULL_EVENT = {
+  id: 'n9',
+  dateISO: '2026-08-20',
+  serviceId: 'refinancement',
+  montant: 3285,
+  preteur: { nom: 'Banque Nationale', virtuel: false },
+  deplacement: { qui: 'notaire', km: 25, urgence: false },
+  ready: true,
+  clientNom: 'Marie Tremblay',
+  prefixe: 'G2B',
+};
+
+test('a notary VEVENT carries every decision detail, bilingually', () => {
+  const s = unfold(buildNotaryFeed([FULL_EVENT], '20260101T000000Z'));
+  // The amount sits in the SUMMARY (fr) and in the English title line.
+  assert.match(s, /SUMMARY:Signature notariée — Refinancement hypothécaire — 3\u{a0}285\u{a0}\$/u);
+  assert.ok(s.includes('DESCRIPTION:Notarized signing — Mortgage refinancing — $3\\,285'));
+  // One fact per line, FR — EN, in the notary-card register.
+  assert.ok(s.includes('Déplacement : Chez le client · ≤ 25 km — Travel: At the client’s · ≤ 25 km'));
+  assert.ok(s.includes('Prêteur : Banque Nationale — Lender: Banque Nationale'));
+  assert.ok(s.includes('Dossier prêt — File ready'));
+  assert.ok(s.includes('Client : Marie Tremblay'));
+  assert.ok(s.includes('Réf. : G2B'));
+  // The déplacement band doubles as the calendar LOCATION (fr register).
+  assert.ok(s.includes('LOCATION:Chez le client · ≤ 25 km'));
+});
+
+test('an urgence band reads « 100 % en ligne » and a virtual lender is flagged', () => {
+  const s = unfold(buildNotaryFeed([
+    {
+      ...FULL_EVENT,
+      preteur: { nom: 'Tangerine', virtuel: true },
+      deplacement: { qui: 'en_ligne', km: 0, urgence: true },
+      ready: false,
+    },
+  ], '20260101T000000Z'));
+  assert.ok(s.includes('LOCATION:Urgence · 100 % en ligne'));
+  assert.ok(s.includes('Déplacement : Urgence · 100 % en ligne — Travel: Urgency · 100 % online'));
+  assert.ok(s.includes('Prêteur : Tangerine (virtuel) — Lender: Tangerine (virtual)'));
+  assert.ok(s.includes('Dossier en préparation — File in preparation'));
+});
+
+test('a sub-25 km band reads « moins de N km » on both sides', () => {
+  const s = unfold(buildNotaryFeed([
+    { ...FULL_EVENT, deplacement: { qui: 'client', km: 10, urgence: false } },
+  ], '20260101T000000Z'));
+  assert.ok(s.includes('LOCATION:À l’étude · moins de 10 km'));
+  assert.ok(s.includes('Travel: At the office · under 10 km'));
+});
+
+test('a bare pointer (legacy retained event) still builds a valid VEVENT', () => {
+  // Pointers written before the detail hydration carry only id/date/service.
+  const s = unfold(buildNotaryFeed([{ id: 'n1', dateISO: '2026-08-20', serviceId: 'refinancement' }], '20260101T000000Z'));
+  assert.equal(events(s), 1);
+  assert.ok(s.includes('SUMMARY:Signature notariée — Refinancement hypothécaire'));
+  assert.ok(!s.includes('LOCATION:'), 'no déplacement -> no LOCATION line');
+  assert.ok(!s.includes('Prêteur'), 'no lender -> no lender line');
+});
+
+// --- RFC 5545 §3.1 line folding: every calendar client must parse the feed ----
+
+test('EDGE (logic): every physical line stays ≤ 75 octets and unfolds losslessly', () => {
+  const long = {
+    ...FULL_EVENT,
+    clientNom: 'Marie-Ève de la Chevrotière-Beauséjour de Sainte-Anne-de-Bellevue',
+    preteur: { nom: 'Fiducie du Vieux-Port de Montréal et de la Rive-Sud', virtuel: false },
+  };
+  const folded = buildNotaryFeed([long, FULL_EVENT], '20260101T000000Z');
+  for (const line of folded.split('\r\n')) {
+    assert.ok(Buffer.byteLength(line, 'utf8') <= 75, `line over 75 octets: ${line}`);
+  }
+  // Folding must never split a UTF-8 sequence: unfolding restores intact text.
+  const back = unfold(folded);
+  assert.ok(back.includes('Chevrotière-Beauséjour de Sainte-Anne-de-Bellevue'));
+  assert.ok(back.includes('Fiducie du Vieux-Port de Montréal et de la Rive-Sud'));
+  assert.ok(!back.includes('�'), 'no replacement character after unfold');
+});
+
+test('EDGE (logic): the carnet feed folds too', () => {
+  const s = buildCarnetFeed(
+    [{ id: 'c1', dateISO: '2026-08-20', serviceId: 'Acte à rallonge — un service au nom démesurément long pour plier la ligne', montant: 1500 }],
+    '20260101T000000Z'
+  );
+  for (const line of s.split('\r\n')) {
+    assert.ok(Buffer.byteLength(line, 'utf8') <= 75, `line over 75 octets: ${line}`);
+  }
+});

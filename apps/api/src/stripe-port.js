@@ -156,6 +156,24 @@ function createStripeAdapter({ secretKey, webhookSecret } = {}) {
     },
 
     /**
+     * ADR 0023 — keep a cancellation fee out of the client's card hold by
+     * PARTIAL capture: `amount_to_capture` takes the fee onto the platform and
+     * Stripe releases the remainder of the authorization immediately. No new
+     * payment, no new consent — the hold was posted for more than this. The
+     * funds stay on the platform (no transfer: compensating the notary is a
+     * separate product decision). Idempotent per bid via cancelfee:<bidId>.
+     */
+    async captureCancellationFee({ paymentIntentId, amountCents, bidId }) {
+      const captured = await stripe.paymentIntents.capture(
+        paymentIntentId,
+        { amount_to_capture: amountCents },
+        bidId ? { idempotencyKey: `cancelfee:${bidId}` } : undefined
+      );
+      const chargeId = captured && (typeof captured.latest_charge === 'string' ? captured.latest_charge : captured.latest_charge && captured.latest_charge.id);
+      return { paymentIntentId, chargeId: chargeId || null };
+    },
+
+    /**
      * Cancel an uncaptured authorization, releasing the client's card hold
      * immediately instead of letting it expire on its own (~7 days). Used when
      * a proposition accept retains the bid at a NEW amount the old hold cannot

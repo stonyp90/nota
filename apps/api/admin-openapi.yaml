@@ -47,6 +47,82 @@ components:
                 type: string
               message:
                 type: string
+    CommissionBareme:
+      type: object
+      description: >-
+        The rating-earned commission schedule (ADR 0016/0020): the base rate,
+        the floor a bonus can never cross, and the tiers — each a minimum
+        one-decimal average (`note`), a minimum number of evaluations (`avis`)
+        and the rate reduction it earns (`bonus`). Rates are fractions
+        (0.10 = 10 %).
+      required: [taux, plancher, paliers]
+      properties:
+        taux:
+          type: number
+          exclusiveMinimum: 0
+          exclusiveMaximum: 1
+        plancher:
+          type: number
+          minimum: 0
+        paliers:
+          type: array
+          maxItems: 10
+          items:
+            type: object
+            required: [note, avis, bonus]
+            properties:
+              note:
+                type: number
+                minimum: 1
+                maximum: 5
+              avis:
+                type: integer
+                minimum: 1
+              bonus:
+                type: number
+                exclusiveMinimum: 0
+    CommissionBaremeStored:
+      allOf:
+        - $ref: "#/components/schemas/CommissionBareme"
+        - type: object
+          required: [updatedAt]
+          properties:
+            updatedAt:
+              type: [string, "null"]
+              description: ISO datetime of the last change.
+    CancellationBareme:
+      type: object
+      description: >-
+        The late-cancellation fee schedule (ADR 0023): ascending tiers, each a
+        maximum number of days left before the signing (`maxJours`) and the
+        fraction of the agreed montant retained (`taux`, 0.30 = 30 %). Beyond
+        the last tier cancellation is free; an EMPTY list makes cancellation
+        free everywhere (the kill-switch is data, not a flag).
+      required: [paliers]
+      properties:
+        paliers:
+          type: array
+          maxItems: 10
+          items:
+            type: object
+            required: [maxJours, taux]
+            properties:
+              maxJours:
+                type: integer
+                minimum: 0
+              taux:
+                type: number
+                exclusiveMinimum: 0
+                exclusiveMaximum: 1
+    CancellationBaremeStored:
+      allOf:
+        - $ref: "#/components/schemas/CancellationBareme"
+        - type: object
+          required: [updatedAt]
+          properties:
+            updatedAt:
+              type: [string, "null"]
+              description: ISO datetime of the last change.
     EmailOverride:
       type: object
       description: >-
@@ -436,6 +512,218 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/TemplateNotFound"
+  /admin/commission:
+    get:
+      operationId: getAdminCommissionSchedule
+      summary: The commission barème — defaults, stored override, and what is in force.
+      description: >-
+        ADR 0021 §4. `defaut` is the deployment's schedule (built-ins overlaid
+        by the `NOTA_COMMISSION_*` environment); `override` is the barème Nota
+        stored from this console, or `null`; `effectif` is whichever of the two
+        billing prices with right now. Open to ANY authenticated admin — an
+        analyst sees the state read-only.
+      security:
+        - adminSession: []
+      responses:
+        "200":
+          description: The barème as billing resolves it.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [defaut, override, effectif]
+                properties:
+                  defaut:
+                    $ref: "#/components/schemas/CommissionBareme"
+                  override:
+                    oneOf:
+                      - $ref: "#/components/schemas/CommissionBaremeStored"
+                      - type: "null"
+                  effectif:
+                    $ref: "#/components/schemas/CommissionBareme"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    put:
+      operationId: putAdminCommissionSchedule
+      summary: Store (replace) the barème Nota decides.
+      description: >-
+        super_admin only (`settings:write`) — an analyst gets 403. The body is
+        a FULL replacement, validated loudly: `taux` in (0, 1), `plancher`
+        between 0 and the taux, at most 10 paliers, each with a `note` between
+        1 and 5, an integer `avis` ≥ 1 and a `bonus` in (0, taux]. Takes
+        effect at the next pricing — no deploy. Audit-logged with its
+        before/after.
+      security:
+        - adminSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommissionBareme"
+      responses:
+        "200":
+          description: The stored barème.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, override]
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+                  override:
+                    $ref: "#/components/schemas/CommissionBaremeStored"
+        "400":
+          description: Malformed JSON body.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Errors"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          description: >-
+            Invalid barème: `taux_invalide`, `plancher_invalide`,
+            `paliers_invalides` (not a list of at most 10) or `palier_invalide`
+            (a malformed tier).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Errors"
+    delete:
+      operationId: resetAdminCommissionSchedule
+      summary: Remove the stored barème (back to the environment defaults).
+      description: >-
+        super_admin only (`settings:write`). Idempotent; audit-logged with the
+        removed barème as `before`.
+      security:
+        - adminSession: []
+      responses:
+        "200":
+          description: Barème removed (or none existed).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /admin/annulation:
+    get:
+      operationId: getAdminCancellationSchedule
+      summary: The cancellation-fee barème — defaults, stored override, and what is in force.
+      description: >-
+        ADR 0023 §2. `defaut` is the deployment's schedule (built-ins overlaid
+        by the `NOTA_CANCELLATION_TIERS` environment); `override` is the barème
+        Nota stored from this console, or `null`; `effectif` is whichever of
+        the two the public cancel route resolves with right now. Open to ANY
+        authenticated admin — an analyst sees the state read-only.
+      security:
+        - adminSession: []
+      responses:
+        "200":
+          description: The barème as the cancel route resolves it.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [defaut, override, effectif]
+                properties:
+                  defaut:
+                    $ref: "#/components/schemas/CancellationBareme"
+                  override:
+                    oneOf:
+                      - $ref: "#/components/schemas/CancellationBaremeStored"
+                      - type: "null"
+                  effectif:
+                    $ref: "#/components/schemas/CancellationBareme"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    put:
+      operationId: putAdminCancellationSchedule
+      summary: Store (replace) the barème Nota decides.
+      description: >-
+        super_admin only (`settings:write`) — an analyst gets 403. The body is
+        a FULL replacement, validated loudly: at most 10 paliers, each with an
+        integer `maxJours` ≥ 0 and a `taux` in (0, 1), `maxJours` strictly
+        ascending. An EMPTY list is valid — it makes cancellation free
+        everywhere. Takes effect at the next cancellation — no deploy.
+        Audit-logged with its before/after.
+      security:
+        - adminSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CancellationBareme"
+      responses:
+        "200":
+          description: The stored barème.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, override]
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+                  override:
+                    $ref: "#/components/schemas/CancellationBaremeStored"
+        "400":
+          description: Malformed JSON body.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Errors"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          description: >-
+            Invalid barème: `paliers_invalides` (not a list of at most 10),
+            `palier_invalide` (a malformed tier) or `paliers_desordonnes`
+            (days not strictly ascending).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Errors"
+    delete:
+      operationId: resetAdminCancellationSchedule
+      summary: Remove the stored barème (back to the environment defaults).
+      description: >-
+        super_admin only (`settings:write`). Idempotent; audit-logged with the
+        removed barème as `before`.
+      security:
+        - adminSession: []
+      responses:
+        "200":
+          description: Barème removed (or none existed).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
   /admin/metrics/overview:
     get:
       operationId: getAdminMetricsOverview

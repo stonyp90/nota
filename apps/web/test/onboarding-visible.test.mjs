@@ -58,31 +58,33 @@ test('the landing has no standing #how-it-works section — the guide owns onboa
   assert.equal($(doc, 'how-it-works'), null, 'the section is gone from the landing');
   assert.equal(doc.querySelector('.how-card'), null, 'no stray role cards either');
   // The hero entry is gone too (owner's ask, 2026-08-25): pre-signup the guide
-  // is a SMALL header icon — visible without eating hero space; the footer
-  // link remains as the always-there fallback.
+  // is a SMALL « ? » bubble — visible without eating hero space; the footer
+  // link remains as the always-there fallback. Since 2026-08-27 the bubble is
+  // STANDALONE (fixed, bottom-right), never part of the header menu.
   assert.equal($(doc, 'hero-guide'), null, 'no wide guide button in the hero CTA row');
-  const guide = $(doc, 'nav-guide');
-  assert.ok(guide, 'the header carries the compact guide icon');
+  const guide = $(doc, 'guide-fab');
+  assert.ok(guide, 'the standalone guide bubble exists');
   assert.ok(guide.classList.contains('icon-btn'), 'it is an icon button, not a text door');
   assert.ok(guide.querySelector('svg'), 'it carries the "?" glyph');
-  assert.equal(guide.hidden, false, 'signed out (anon), the icon shows');
+  assert.equal(guide.hidden, false, 'signed out (anon), the bubble shows');
+  assert.equal(guide.closest('.site-header'), null, 'it does not live in the header menu');
   assert.ok($(doc, 'footer-guide'), 'the footer still offers the guide');
   assert.ok($(doc, 'onboarding-dialog'), 'the guide dialog itself remains');
 });
 
-test('the guide icon is always in the header — signed in included', async () => {
+test('the guide bubble is always there — signed in included', async () => {
   // The "?" is the ONE standing way back into the guide (owner's ask,
-  // 2026-08-26): it no longer retires on sign-in, and the account menu no
-  // longer carries a duplicate "Comment ça marche" row.
+  // 2026-08-26): it never retires on sign-in, and the account menu carries
+  // no duplicate "Comment ça marche" row.
   const { doc } = await boot({
     seed: { 'nota.profile.v1': JSON.stringify({ courriel: 'eve@client.ca', nom: 'Eve Roy' }) },
   });
-  assert.equal($(doc, 'nav-guide').hidden, false, 'signed in, the icon stays');
+  assert.equal($(doc, 'guide-fab').hidden, false, 'signed in, the bubble stays');
 });
 
-test('the guide opens from the header icon in one tap', async () => {
+test('the guide opens from the standalone bubble in one tap', async () => {
   const { doc } = await boot();
-  $(doc, 'nav-guide').click();
+  $(doc, 'guide-fab').click();
   await wait(10);
   assert.equal($(doc, 'onboarding-dialog').open, true);
 });

@@ -36,21 +36,13 @@ const NOTARY_STATUS = {
   RESTRICTED: 'restricted',
 };
 
-// Default platform commission on a completed act (share of the acte's value).
-// Configurable via NOTA_COMMISSION_RATE so the rate is never baked into logic.
-const DEFAULT_COMMISSION_RATE = 0.10;
-
-// Rating-earned commission bonus (ADR 0016): a notary whose client evaluations
-// are strong keeps more of each act. Each tier is a minimum one-decimal average
-// (`note`), a minimum number of evaluations (`avis`), and the rate REDUCTION it
-// earns (`bonus`). The single best attained tier applies; the effective rate
-// never goes below the floor. Configurable via NOTA_COMMISSION_BONUS_TIERS
-// (JSON array of tiers) and NOTA_COMMISSION_RATE_FLOOR.
-const DEFAULT_COMMISSION_BONUS_TIERS = [
-  { note: 4.5, avis: 5, bonus: 0.01 },
-  { note: 4.8, avis: 10, bonus: 0.02 },
-];
-const DEFAULT_COMMISSION_RATE_FLOOR = 0.05;
+// The commission barème's defaults now live in commission-config.js (ADR
+// 0020) — one authority shared with the admin write door. The historical
+// names stay exported below for callers that read them.
+const commissionConfig = require('./commission-config');
+const DEFAULT_COMMISSION_RATE = commissionConfig.DEFAULT_RATE;
+const DEFAULT_COMMISSION_BONUS_TIERS = commissionConfig.DEFAULT_TIERS;
+const DEFAULT_COMMISSION_RATE_FLOOR = commissionConfig.DEFAULT_FLOOR;
 
 // Kill float dust in rate arithmetic (0.10 − 0.02 must be 0.08, not …002).
 const roundRate = (x) => Math.round(x * 10000) / 10000;
@@ -71,41 +63,62 @@ function createBilling({
   const bonusTiers = Array.isArray(commissionBonusTiers) ? commissionBonusTiers : DEFAULT_COMMISSION_BONUS_TIERS;
   const rateFloor = typeof commissionRateFloor === 'number' ? commissionRateFloor : DEFAULT_COMMISSION_RATE_FLOOR;
 
-  // What a tier would price the commission at, floored.
-  const tierRate = (bonus) => Math.max(rateFloor, roundRate(rate - bonus));
+  /**
+   * The barème pricing runs on RIGHT NOW (ADR 0021): the item Nota stored from
+   * the admin console when one exists, the instance defaults (opts, i.e. the
+   * environment) otherwise. Read at every pricing, so an admin edit takes
+   * effect on the next act with no deploy; a repo without the method (old
+   * fakes) simply prices on the defaults.
+   */
+  async function resolveBareme() {
+    const stored = typeof repo.getCommissionConfig === 'function' ? await repo.getCommissionConfig() : null;
+    return {
+      taux: stored && typeof stored.taux === 'number' ? stored.taux : rate,
+      plancher: stored && typeof stored.plancher === 'number' ? stored.plancher : rateFloor,
+      paliers: stored && Array.isArray(stored.paliers) ? stored.paliers : bonusTiers,
+    };
+  }
 
   /**
-   * The commission a given notary earns TODAY (ADR 0016): the base rate, the
-   * effective rate after the best rating-earned bonus, and the next reachable
-   * tier (null at the top) — so the console can show the rate as a lever, not
-   * a hidden rule. Pure read: only the profile's rating aggregates matter.
+   * The commission a given notary earns under a given barème (ADR 0016): the
+   * base rate, the effective rate after the best rating-earned bonus, and the
+   * next reachable tier (null at the top) — so the console can show the rate
+   * as a lever, not a hidden rule. Pure: only the barème and the profile's
+   * rating aggregates matter.
    */
-  function commissionFor(notary) {
+  function commissionWith(bareme, notary) {
+    // What a tier would price the commission at, floored.
+    const tierRate = (bonus) => Math.max(bareme.plancher, roundRate(bareme.taux - bonus));
     const note = domain.ratingAverage(notary && notary.ratingSum, notary && notary.ratingCount);
     const avis = (notary && Number(notary.ratingCount)) || 0;
     let earned = 0;
-    for (const t of bonusTiers) {
+    for (const t of bareme.paliers) {
       if (note != null && note >= t.note && avis >= t.avis && t.bonus > earned) earned = t.bonus;
     }
     const tauxEffectif = tierRate(earned);
     // The least-demanding tier that would still lower the rate from here.
     let next = null;
-    for (const t of bonusTiers) {
+    for (const t of bareme.paliers) {
       if (tierRate(t.bonus) >= tauxEffectif) continue;
       if (!next || t.bonus < next.bonus) next = t;
     }
     return {
-      taux: rate,
+      taux: bareme.taux,
       tauxEffectif,
-      bonus: roundRate(rate - tauxEffectif),
+      bonus: roundRate(bareme.taux - tauxEffectif),
       prochain: next ? { note: next.note, avis: next.avis, tauxEffectif: tierRate(next.bonus) } : null,
     };
   }
 
+  // The commission a given notary earns TODAY, under the barème in force.
+  async function commissionFor(notary) {
+    return commissionWith(await resolveBareme(), notary);
+  }
+
   // Nota's share of an act, in cents, from the act's dollar value — at the
-  // notary's rating-earned effective rate.
-  function feeCents(actAmount, notary) {
-    return Math.round(Number(actAmount) * 100 * commissionFor(notary).tauxEffectif);
+  // notary's rating-earned effective rate under the barème in force.
+  async function feeCents(actAmount, notary) {
+    return Math.round(Number(actAmount) * 100 * (await commissionFor(notary)).tauxEffectif);
   }
 
   // Best-effort analytics rollups (see keys.js STATS#). A rollup failure must
@@ -214,11 +227,11 @@ function createBilling({
     if (bidId && typeof repo.getActCompletion === 'function') {
       const prior = await repo.getActCompletion(bidId);
       if (prior) {
-        return { ok: true, commissionCents: prior.commissionCents, chargeId: prior.chargeId, alreadyCompleted: true };
+        return { ok: true, actAmount: prior.actAmount, commissionCents: prior.commissionCents, chargeId: prior.chargeId, alreadyCompleted: true };
       }
     }
 
-    const fee = feeCents(amount, notary);
+    const fee = await feeCents(amount, notary);
     // A Stripe failure (decline, outage) is a typed, retryable error — never an
     // unhandled throw that turns the route into a 5xx with no payload. Nothing
     // was written yet, so a retry starts clean; the Stripe idempotency key
@@ -260,7 +273,7 @@ function createBilling({
       await recordStats(statsDeltasForComplete({ completedAt: statsDay(), commissionCents: fee }));
     }
 
-    return { ok: true, commissionCents: fee, chargeId: charge && charge.id };
+    return { ok: true, actAmount: amount, commissionCents: fee, chargeId: charge && charge.id };
   }
 
   /**
@@ -314,11 +327,11 @@ function createBilling({
     if (bidId && typeof repo.getActCompletion === 'function') {
       const prior = await repo.getActCompletion(bidId);
       if (prior) {
-        return { ok: true, commissionCents: prior.commissionCents, netCents: prior.netCents, transferId: prior.transferId, chargeId: prior.chargeId, alreadyPaid: true };
+        return { ok: true, actAmount: prior.actAmount, commissionCents: prior.commissionCents, netCents: prior.netCents, transferId: prior.transferId, chargeId: prior.chargeId, alreadyPaid: true };
       }
     }
 
-    const fee = feeCents(amount, notary);
+    const fee = await feeCents(amount, notary);
     // A capture decline AFTER a notary accepted must never dead-end the accept
     // as an unhandled 5xx: the retain already happened, and the notary must
     // still receive the dossier. Surface a typed error the route folds into
@@ -358,7 +371,7 @@ function createBilling({
       await recordStats(statsDeltasForComplete({ completedAt: statsDay(), commissionCents: fee }));
     }
 
-    return { ok: true, commissionCents: fee, netCents: result.netCents, transferId: result.transferId, chargeId: result.chargeId };
+    return { ok: true, actAmount: amount, commissionCents: fee, netCents: result.netCents, transferId: result.transferId, chargeId: result.chargeId };
   }
 
   /**
@@ -370,6 +383,26 @@ function createBilling({
    * cancel of an already-canceled intent is caught): the caller fires and
    * forgets. Returns `{ ok }`.
    */
+  /**
+   * ADR 0023 — collect a cancellation fee by PARTIAL capture of the live
+   * authorization (the remainder is released by Stripe immediately). The
+   * amount is decided by the caller (cancellation-config.js is the authority
+   * on the barème); this method only moves the money. Returns
+   * `{ ok, chargeId }`, `{ ok: false }` on any failure — the caller then
+   * releases the hold whole so the client is never left blocked.
+   */
+  async function chargeCancellationFee({ paymentIntentId, bidId, amountCents } = {}) {
+    if (!paymentIntentId || !(amountCents > 0) || typeof stripe.captureCancellationFee !== 'function') {
+      return { ok: false };
+    }
+    try {
+      const out = await stripe.captureCancellationFee({ paymentIntentId, amountCents, bidId });
+      return { ok: true, chargeId: (out && out.chargeId) || null };
+    } catch {
+      return { ok: false };
+    }
+  }
+
   async function cancelAuthorization({ paymentIntentId, bidId } = {}) {
     if (!paymentIntentId || typeof stripe.cancelOfferAuthorization !== 'function') {
       return { ok: false };
@@ -486,7 +519,7 @@ function createBilling({
     return { ok: true, handled, duplicate: false, type: event.type, event, notary, bid: bid || null };
   }
 
-  return { connectNotary, authorizeOffer, payNotaryOnAccept, completeAct, cancelAuthorization, handleWebhook, commissionFor, commissionRate: rate };
+  return { connectNotary, authorizeOffer, payNotaryOnAccept, completeAct, cancelAuthorization, chargeCancellationFee, handleWebhook, commissionFor, commissionRate: rate };
 }
 
 module.exports = {

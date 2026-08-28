@@ -232,6 +232,16 @@ test('the reward cards always read from the domain', async () => {
   assert.ok($(doc, 'tos-partenaires').textContent.includes(D.money(D.REFERRAL.notaire)));
 });
 
+test('each reward card states its cadence — the difference the amounts alone hide', async () => {
+  const { doc, Nota } = await boot();
+  Nota.setTab('partenaires');
+  // 50 $ repeats forever; 250 $ pays once per referred notary. The cadence
+  // tag sits on the amount row so the pair is comparable at a glance instead
+  // of burying the distinction in a collapsed FAQ answer.
+  assert.equal($(doc, 'pr-card-client').querySelector('.pr-freq').textContent, 'Sans limite');
+  assert.equal($(doc, 'pr-card-notaire').querySelector('.pr-freq').textContent, 'Une fois par notaire');
+});
+
 test('one type chip per domain partner category', async () => {
   const { doc, D, Nota } = await boot();
   Nota.setTab('partenaires');

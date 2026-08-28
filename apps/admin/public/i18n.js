@@ -119,10 +119,65 @@
   "Réinitialiser": "Reset",
   "Modèle enregistré.": "Template saved.",
   "Modèle réinitialisé.": "Template reset.",
-  "Impossible d’enregistrer le modèle.": "Unable to save the template."
+  "Impossible d’enregistrer le modèle.": "Unable to save the template.",
+  "Facturation": "Billing",
+  "Barème décidé par Nota — taux de base, plancher et bonification par évaluations.": "Schedule decided by Nota — base rate, floor and rating-earned bonus.",
+  "— la modification du barème est réservée à l’administrateur principal.": "— editing the schedule is reserved for the primary administrator.",
+  "Taux de base": "Base rate",
+  "de commission sur chaque acte": "of commission on each act",
+  "Plancher": "Floor",
+  "jamais franchi par la bonification": "never crossed by the bonus",
+  "Paliers": "Tiers",
+  "de bonification par évaluations": "of rating-earned bonus",
+  "Barème en vigueur": "Schedule in force",
+  "Valeurs par défaut du déploiement — aucun barème enregistré.": "Deployment defaults — no schedule stored.",
+  "Aucun palier — le taux de base s’applique toujours.": "No tiers — the base rate always applies.",
+  "Note moyenne": "Average rating",
+  "Avis requis": "Reviews required",
+  "Réduction": "Reduction",
+  "Taux résultant": "Resulting rate",
+  "Modifier le barème": "Edit the schedule",
+  "Les valeurs sont saisies en pourcentage — « 12 » signifie 12 %.": "Values are entered as percentages — “12” means 12%.",
+  "Taux de base (%)": "Base rate (%)",
+  "Plancher (%)": "Floor (%)",
+  "Paliers de bonification": "Bonus tiers",
+  "Note minimale": "Minimum rating",
+  "Avis minimum": "Minimum reviews",
+  "Réduction (%)": "Reduction (%)",
+  "Ajouter un palier": "Add a tier",
+  "Retirer": "Remove",
+  "Enregistrer le barème": "Save the schedule",
+  "Revenir aux valeurs par défaut": "Return to the default values",
+  "Le barème enregistré sera supprimé — les valeurs par défaut reprendront effet dès le prochain acte.": "The stored schedule will be deleted — the default values take effect again at the next act.",
+  "Confirmer la réinitialisation": "Confirm the reset",
+  "Annuler": "Cancel",
+  "Barème enregistré.": "Schedule saved.",
+  "Barème réinitialisé.": "Schedule reset.",
+  "Impossible d’enregistrer le barème.": "Unable to save the schedule.",
+  "Annulation": "Cancellation",
+  "Barème décidé par Nota — frais d’annulation tardive selon les jours restants avant la signature.": "Schedule decided by Nota — late-cancellation fees by days left before the signing.",
+  "Dernière minute": "Last minute",
+  "retenu la veille de la signature": "retained on the eve of the signing",
+  "de frais selon les jours restants": "of fees by days remaining",
+  "Gratuit dès": "Free from",
+  "avant la signature": "before the signing",
+  "Aucun palier — l’annulation est gratuite partout.": "No tiers — cancellation is free everywhere.",
+  "Jours avant la signature": "Days before the signing",
+  "Taux retenu": "Rate retained",
+  "Au-delà du dernier palier, l’annulation est gratuite.": "Beyond the last tier, cancellation is free.",
+  "Les taux sont saisis en pourcentage — « 30 » signifie 30 %. Un barème sans palier rend l’annulation gratuite partout.": "Rates are entered as percentages — “30” means 30%. A schedule with no tiers makes cancellation free everywhere.",
+  "Paliers de frais": "Fee tiers",
+  "Jours restants (max)": "Days left (max)",
+  "Taux retenu (%)": "Rate retained (%)",
+  "Le barème enregistré sera supprimé — les valeurs par défaut reprendront effet dès la prochaine annulation.": "The stored schedule will be deleted — the default values take effect again at the next cancellation."
 };
   var HTML = {};
   var RULES = compileRules([
+  {
+    "pattern": "^Barème décidé par Nota — modifié le (.+)\\.$",
+    "flags": "",
+    "replacement": "Schedule decided by Nota — updated $1."
+  },
   {
     "pattern": "^Récompenses des partenaires référents — (.+) à la rétention \\(client\\), (.+) au premier acte \\(notaire\\)\\.$",
     "flags": "",
@@ -132,6 +187,16 @@
     "pattern": "^(\\d+) jours$",
     "flags": "",
     "replacement": "$1 days"
+  },
+  {
+    "pattern": "^(\\d+) jour$",
+    "flags": "",
+    "replacement": "$1 day"
+  },
+  {
+    "pattern": "^(\\d+)–(\\d+) jours$",
+    "flags": "",
+    "replacement": "$1–$2 days"
   },
   {
     "pattern": "^(\\d+) modèles$",

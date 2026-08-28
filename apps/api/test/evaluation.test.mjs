@@ -138,6 +138,55 @@ test('the rating average surfaces publicly: on the retained notaire block, on pr
   assert.deepEqual(console_.rating, { note: 4.5, avis: 2 });
 });
 
+// --- ADR 0021: the evaluation also lands on the notary's own ledger ---------
+
+test('an evaluation writes the notary’s ledger — anonymized — and /notary/evaluations returns it', async () => {
+  const a = app();
+  const bid = await seed(a);
+  await evaluate(a, clientToken(bid.id), { id: bid.id, dateISO: bid.dateISO, note: 5, commentaire: 'Impeccable.' });
+
+  // The ledger item carries the act, never the client.
+  const ledger = await a.repo.listNotaryEvaluations(NOTARY);
+  assert.equal(ledger.length, 1);
+  assert.equal(ledger[0].note, 5);
+  assert.equal(ledger[0].commentaire, 'Impeccable.');
+  assert.equal(ledger[0].serviceId, 'refinancement');
+  assert.equal(ledger[0].dateISO, '2026-08-20');
+  assert.equal(ledger[0].courriel, undefined, 'no client email on the ledger');
+
+  const token = signToken(NOTARY, NOW_MS + 60_000, SCOPES.SESSION);
+  const res = await a.handle({ method: 'GET', path: '/notary/evaluations', headers: bearer(token) });
+  assert.equal(res.statusCode, 200, res.body);
+  const body = parse(res);
+  assert.deepEqual(body.rating, { note: 5, avis: 1 });
+  assert.deepEqual(body.evaluations, [
+    { note: 5, commentaire: 'Impeccable.', serviceId: 'refinancement', dateISO: '2026-08-20', createdAt: TODAY },
+  ]);
+});
+
+test('/notary/evaluations: newest first, session token only, empty history is an empty list', async () => {
+  const a = app();
+  await seed(a);
+  // Two ledger entries with distinct instants — newest must come first.
+  await a.repo.addNotaryEvaluation(NOTARY, { bidId: 'old', dateISO: '2026-07-02', serviceId: 'financement', note: 3, commentaire: null, createdAt: '2026-07-03T10:00:00.000Z' });
+  await a.repo.addNotaryEvaluation(NOTARY, { bidId: 'new', dateISO: '2026-08-11', serviceId: 'refinancement', note: 5, commentaire: 'Rapide.', createdAt: '2026-08-12T10:00:00.000Z' });
+
+  const token = signToken(NOTARY, NOW_MS + 60_000, SCOPES.SESSION);
+  const body = parse(await a.handle({ method: 'GET', path: '/notary/evaluations', headers: bearer(token) }));
+  assert.deepEqual(body.evaluations.map((e) => e.note), [5, 3]);
+
+  // A feed-scoped (calendar) token cannot read the history.
+  const feed = signToken(NOTARY, NOW_MS + 60_000, SCOPES.FEED);
+  assert.equal((await a.handle({ method: 'GET', path: '/notary/evaluations', headers: bearer(feed) })).statusCode, 401);
+  assert.equal((await a.handle({ method: 'GET', path: '/notary/evaluations' })).statusCode, 401);
+
+  // A notary with no history gets an empty list, never an error.
+  const other = signToken(notaryIdForEmail('autre@etude.ca'), NOW_MS + 60_000, SCOPES.SESSION);
+  const empty = parse(await a.handle({ method: 'GET', path: '/notary/evaluations', headers: bearer(other) }));
+  assert.deepEqual(empty.evaluations, []);
+  assert.equal(empty.rating, null);
+});
+
 test('no ratings yet → rating is null everywhere, never zero stars', async () => {
   const a = app();
   const bid = await seed(a);

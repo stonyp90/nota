@@ -16,7 +16,7 @@
  * monthBids a fixed, fully computable set. All expected values are derived from
  * the same window.NotaDomain instance — nothing about the app is hardcoded here.
  */
-import test from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -25,6 +25,11 @@ import { JSDOM } from 'jsdom';
 const DOMAIN_SRC = readFileSync(fileURLToPath(new URL('../../../packages/domain/index.js', import.meta.url)), 'utf8');
 const APP_SRC = readFileSync(fileURLToPath(new URL('../public/app.js', import.meta.url)), 'utf8');
 const HTML_SRC = readFileSync(fileURLToPath(new URL('../public/index.html', import.meta.url)), 'utf8');
+
+// The console's live-feed poll is a jsdom timer that would hold the runner's
+// process open — close every window once the suite ends so it can exit.
+const DOMS = [];
+after(() => { for (const d of DOMS) { try { d.window.close(); } catch {} } });
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -71,6 +76,7 @@ async function boot(opts = {}) {
     },
   });
 
+  DOMS.push(dom);
   const win = dom.window;
 
   // The intro gate owns a truly fresh first paint; every test that is not
@@ -756,7 +762,10 @@ test('gate continue-action signs an existing notary straight into the console', 
   assert.equal($(doc, 'notary-authed').hidden, false);
 
   // Signing out returns the gate to its FIRST step, never a stale branch.
-  $(doc, 'notary-signout').click();
+  // The sign-out door lives in the header account menu (the panel bar is gone).
+  const signOutBtn = [...doc.querySelectorAll('#acct-actions .acct-action')].find((b) => b.textContent.includes('Se déconnecter'));
+  assert.ok(signOutBtn, 'the account menu carries Se déconnecter');
+  signOutBtn.click();
   assert.equal($(doc, 'notary-auth-form').hidden, false);
   assert.equal($(doc, 'notary-gate-step-email').hidden, false);
   assert.equal($(doc, 'notary-signup-prompt').hidden, true);
@@ -1129,11 +1138,15 @@ test('LEGEND: the service key decodes the price colours, and says where detail l
 
 test('DAY: the booking dialog says what the calendar % means for that date', async () => {
   const ctx = await boot();
-  // Any upcoming day with offers — avoids assuming today + N stays in-month.
-  const cell = [...ctx.doc.querySelectorAll('#cal-grid .cal-cell.has-bids')]
-    .find((c) => c.dataset.date > ctx.today);
+  // Seed the upcoming offer ourselves: the default fixtures stop seeding late
+  // in the month, so "any upcoming cell with offers" flakes near month-end.
+  // The seam-wrapping grid (ADR 0022) renders today + 5 whatever the month.
+  const iso = ctx.D.addDays(ctx.today, 5);
+  await reseed(ctx, [
+    { id: 'c1', serviceId: 'refinancement', dateISO: iso, montant: 4000, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
+  ]);
+  const cell = ctx.doc.querySelector('#cal-grid .cal-cell.has-bids[data-date="' + iso + '"]');
   assert.ok(cell, 'expected an upcoming cell with offers');
-  const iso = cell.dataset.date;
   cell.click();
   await wait(30);
 
@@ -1275,6 +1288,27 @@ test('DAY: the other-offers door is one line — the toggle sits inside the tota
   assert.match(toggle.textContent, /Voir moins/);
   toggle.click();
   assert.equal(rest.hidden, true, 'and fold back');
+});
+
+// One hidden offer is « l’autre offre », never « les 1 autre offre » — the
+// door reads like French at every count.
+test('DAY: the other-offers door speaks French in the singular', async () => {
+  const ctx = await boot();
+  const iso = ctx.D.addDays(ctx.today, 5);
+  await reseed(ctx, [
+    { id: 'r1', serviceId: 'refinancement', dateISO: iso, montant: 4000, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
+  ]);
+  ctx.doc.querySelector('.cal-cell[data-date="' + iso + '"]').click();
+  await wait(30);
+  ctx.doc.querySelector('#o-service-chips .chip[data-svc="financement"]').click();
+  await wait(30);
+  const toggle = ctx.doc.querySelector('#day-bids .day-bids-toggle');
+  assert.ok(toggle, 'one hidden offer still gets its door');
+  assert.equal(toggle.textContent, 'Voir l’autre offre');
+  toggle.click();
+  assert.match(toggle.textContent, /Voir moins/);
+  toggle.click();
+  assert.equal(toggle.textContent, 'Voir l’autre offre', 'the label survives a fold cycle');
 });
 
 // The compaction is structural, not ad hoc: steps drop to the regular card
@@ -1667,6 +1701,7 @@ test('onboarding does not auto-show when nota.onboarded.v1 is already set', asyn
       window.localStorage.setItem('nota.onboarded.v1', '1');
     },
   });
+  DOMS.push(dom);
   const win = dom.window;
   win.eval(DOMAIN_SRC);
   win.eval(APP_SRC);
@@ -1777,6 +1812,7 @@ async function bootSeeded(seed, hash) {
       Object.keys(seed || {}).forEach((k) => window.localStorage.setItem(k, seed[k]));
     },
   });
+  DOMS.push(dom);
   const win = dom.window;
   win.eval(DOMAIN_SRC);
   win.eval(APP_SRC);
@@ -1900,17 +1936,18 @@ test('onboarding: the secondary CTA lands on the carnet without opening a modal'
   assert.equal($(doc, 'day-dialog').open, false, 'and NOT chained into a second modal');
 });
 
-// 36. The guide stays one tap away for EVERYONE: the header "?" icon never
-//     retires (owner's ask, 2026-08-26), so the account menu carries no
-//     duplicate "Comment ça marche" row.
-test('onboarding: the always-visible header "?" is the way back into the guide', async () => {
+// 36. The guide stays one tap away for EVERYONE: the standalone "?" bubble
+//     never retires (owner's asks, 2026-08-26 + 2026-08-27: accessible, but
+//     never inside a menu), so the account menu carries no duplicate
+//     "Comment ça marche" row.
+test('onboarding: the standalone "?" bubble is the way back into the guide', async () => {
   const { doc, win } = await bootSeeded({ 'nota.profile.v1': JSON.stringify({ courriel: 'a@b.ca' }) });
   win.Nota.account.render();
-  assert.equal($(doc, 'nav-guide').hidden, false, 'signed in, the header icon stays');
+  assert.equal($(doc, 'guide-fab').hidden, false, 'signed in, the bubble stays');
   const row = Array.from(doc.querySelectorAll('#acct-actions button, #acct-actions a'))
     .find((b) => /Comment ça marche/.test(b.textContent));
   assert.equal(row, undefined, 'no duplicate guide row in the account menu');
-  $(doc, 'nav-guide').click();
+  $(doc, 'guide-fab').click();
   await wait(10);
   assert.equal($(doc, 'onboarding-dialog').open, true, 'it re-opens the guide');
   assert.equal($(doc, 'onb-view-role').hidden, false, 'at VIEW 1');
@@ -2238,8 +2275,8 @@ test('ambient gradients live on the background; every component is flat and opaq
   // surface), never the translucent --brand-tint, which stays reserved for
   // the background layers (body fade, --wash-glow, the intro film).
   assert.match(css, /--brand-tint-solid:\s*color-mix/, 'an opaque brand tint exists for component fills');
-  for (const sel of ['.pr-steps li::before', '.cnq-badge', '.nc-live-more:hover']) {
-    assert.ok(blocks(sel).some((b) => /var\(--brand-tint-solid\)/.test(b)),
+  for (const sel of ['.pr-step-ic', '.cnq-badge', '.nc-live-more:hover']) {
+    assert.ok(blocks(sel).some((b) => /var\(--brand-tint-solid(-strong)?\)/.test(b)),
       sel + ' fills with the opaque tint');
     assert.ok(!blocks(sel).some((b) => /var\(--brand-tint\)[^-]/.test(b)),
       sel + ' never wears the translucent tint');

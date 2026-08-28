@@ -23,6 +23,8 @@
 const domain = require('@nota/domain');
 const authDefaults = require('./admin-auth');
 const emails = require('./emails');
+const commissionCfg = require('./commission-config');
+const cancellationCfg = require('./cancellation-config');
 
 // What each role may do. Re-derived from the server-side role on every request;
 // the client is shown these only to hide controls it cannot use.
@@ -434,6 +436,146 @@ function createAdmin({
     return { ok: true, key };
   }
 
+  // ---------------------------------------------------------------------------
+  // The commission barème — Nota's to decide (ADR 0021 §4).
+  //
+  // The authority on shape and validation is commission-config.js, shared with
+  // billing so the editor and the pricer can never disagree. The store is the
+  // main table's single CONFIG#COMMISSION item. Reading is open to any
+  // authenticated admin; WRITING requires 'settings:write' (super_admin only).
+  // Every change is audit-logged with its before/after.
+  // ---------------------------------------------------------------------------
+  function baremeView(o) {
+    if (!o) return null;
+    return {
+      taux: o.taux,
+      plancher: o.plancher,
+      paliers: (o.paliers || []).map((p) => ({ note: p.note, avis: p.avis, bonus: p.bonus })),
+      updatedAt: o.updatedAt || null,
+    };
+  }
+
+  // GET — the deployment's defaults (built-ins + environment), the stored
+  // barème when Nota decided one, and whichever of the two is in force.
+  async function getCommissionSchedule(token, { ip } = {}) {
+    const p = await requireAdmin(token, { ip });
+    if (!p) return { ok: false, status: 401 };
+    const defaut = commissionCfg.envDefaults(process.env);
+    const override = baremeView(typeof repo.getCommissionConfig === 'function' ? await repo.getCommissionConfig() : null);
+    const effectif = override
+      ? { taux: override.taux, plancher: override.plancher, paliers: override.paliers }
+      : defaut;
+    return { ok: true, defaut, override, effectif };
+  }
+
+  // PUT — store (replace) the barème. super_admin only, validated loudly.
+  async function putCommissionSchedule(token, body, { ip } = {}) {
+    const p = await requireAdmin(token, { ip });
+    if (!p) return { ok: false, status: 401 };
+    if (!p.permissions.includes('settings:write')) {
+      return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Réservé à l’administrateur principal.' }] };
+    }
+    const v = commissionCfg.validateSchedule(body || {});
+    if (!v.ok) return { ok: false, status: 422, errors: v.errors };
+    const before = baremeView(await repo.getCommissionConfig());
+    const stored = await repo.putCommissionConfig({ taux: v.taux, plancher: v.plancher, paliers: v.paliers }, clockIso());
+    const after = baremeView(stored);
+    await appendAudit('commission_schedule_updated', {
+      adminId: p.adminId,
+      email: p.email,
+      ip,
+      meta: { before, after },
+    });
+    return { ok: true, override: after };
+  }
+
+  // DELETE — back to the environment defaults, on the next pricing.
+  async function resetCommissionSchedule(token, { ip } = {}) {
+    const p = await requireAdmin(token, { ip });
+    if (!p) return { ok: false, status: 401 };
+    if (!p.permissions.includes('settings:write')) {
+      return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Réservé à l’administrateur principal.' }] };
+    }
+    const before = baremeView(await repo.getCommissionConfig());
+    await repo.deleteCommissionConfig();
+    await appendAudit('commission_schedule_reset', {
+      adminId: p.adminId,
+      email: p.email,
+      ip,
+      meta: { before, after: null },
+    });
+    return { ok: true };
+  }
+
+  // ---------------------------------------------------------------------------
+  // The cancellation-fee barème — Nota's to decide (ADR 0023 §2).
+  //
+  // The authority on shape and validation is cancellation-config.js, shared
+  // with the public cancel route so the editor and the fee arithmetic can
+  // never disagree. The store is the main table's single CONFIG#ANNULATION
+  // item. Reading is open to any authenticated admin; WRITING requires
+  // 'settings:write' (super_admin only). Every change is audit-logged with
+  // its before/after. An EMPTY barème is a valid override — it makes
+  // cancellation free everywhere (the kill-switch is data, not a flag).
+  // ---------------------------------------------------------------------------
+  function annulationView(o) {
+    if (!o) return null;
+    return {
+      paliers: (o.paliers || []).map((p) => ({ maxJours: p.maxJours, taux: p.taux })),
+      updatedAt: o.updatedAt || null,
+    };
+  }
+
+  // GET — the deployment's defaults (built-ins + environment), the stored
+  // barème when Nota decided one, and whichever of the two is in force.
+  async function getCancellationSchedule(token, { ip } = {}) {
+    const p = await requireAdmin(token, { ip });
+    if (!p) return { ok: false, status: 401 };
+    const defaut = cancellationCfg.envDefaults(process.env);
+    const override = annulationView(typeof repo.getCancellationConfig === 'function' ? await repo.getCancellationConfig() : null);
+    const effectif = override ? { paliers: override.paliers } : defaut;
+    return { ok: true, defaut, override, effectif };
+  }
+
+  // PUT — store (replace) the barème. super_admin only, validated loudly.
+  async function putCancellationSchedule(token, body, { ip } = {}) {
+    const p = await requireAdmin(token, { ip });
+    if (!p) return { ok: false, status: 401 };
+    if (!p.permissions.includes('settings:write')) {
+      return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Réservé à l’administrateur principal.' }] };
+    }
+    const v = cancellationCfg.validateSchedule(body || {});
+    if (!v.ok) return { ok: false, status: 422, errors: v.errors };
+    const before = annulationView(await repo.getCancellationConfig());
+    const stored = await repo.putCancellationConfig({ paliers: v.paliers }, clockIso());
+    const after = annulationView(stored);
+    await appendAudit('cancellation_schedule_updated', {
+      adminId: p.adminId,
+      email: p.email,
+      ip,
+      meta: { before, after },
+    });
+    return { ok: true, override: after };
+  }
+
+  // DELETE — back to the environment defaults, on the next cancellation.
+  async function resetCancellationSchedule(token, { ip } = {}) {
+    const p = await requireAdmin(token, { ip });
+    if (!p) return { ok: false, status: 401 };
+    if (!p.permissions.includes('settings:write')) {
+      return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Réservé à l’administrateur principal.' }] };
+    }
+    const before = annulationView(await repo.getCancellationConfig());
+    await repo.deleteCancellationConfig();
+    await appendAudit('cancellation_schedule_reset', {
+      adminId: p.adminId,
+      email: p.email,
+      ip,
+      meta: { before, after: null },
+    });
+    return { ok: true };
+  }
+
   return {
     requestLogin,
     verifyMagic,
@@ -445,6 +587,12 @@ function createAdmin({
     listEmailTemplates,
     putEmailTemplate,
     resetEmailTemplate,
+    getCommissionSchedule,
+    putCommissionSchedule,
+    resetCommissionSchedule,
+    getCancellationSchedule,
+    putCancellationSchedule,
+    resetCancellationSchedule,
   };
 }
 

@@ -2,6 +2,7 @@
 
 const domain = require('@nota/domain');
 const { createBilling } = require('./billing');
+const cancellationCfg = require('./cancellation-config');
 const { decodeUnsubToken } = require('./notifications');
 const { signToken, signChallengeToken, verifyToken, notaryIdForEmail, SCOPES } = require('./notary-auth');
 const { buildNotaryFeed, buildCarnetFeed } = require('./ics');
@@ -112,6 +113,11 @@ function createApp(repo, opts = {}) {
       onboardingReturnUrl: process.env.NOTA_ONBOARDING_RETURN_URL,
       onboardingRefreshUrl: process.env.NOTA_ONBOARDING_REFRESH_URL,
       commissionRate: process.env.NOTA_COMMISSION_RATE ? Number(process.env.NOTA_COMMISSION_RATE) : undefined,
+      // ADR 0021: the environment's schedule and floor are the DEFAULTS —
+      // actually read now (the ADR 0016 gap) — and the barème Nota stored from
+      // the admin console, when one exists, overrides them at every pricing.
+      commissionBonusTiers: require('./commission-config').parseTiers(process.env.NOTA_COMMISSION_BONUS_TIERS),
+      commissionRateFloor: process.env.NOTA_COMMISSION_RATE_FLOOR ? Number(process.env.NOTA_COMMISSION_RATE_FLOOR) : undefined,
     });
     return billingInstance;
   }
@@ -276,7 +282,23 @@ function createApp(repo, opts = {}) {
       nom: b.anonyme ? null : b.nom || null,
       prefixe: b.prefixe || null,
       createdAt: b.createdAt,
+      // ADR 0023 — what a cancellation actually kept, on a cancelled bid.
+      annulation: b.annulation || null,
     };
+  }
+
+  // ADR 0023 — the fee cancelling this RETAINED bid would carry today, under
+  // the barème in force (the admin-stored CONFIG#ANNULATION item, else the
+  // environment defaults — resolved at every call, like the commission). Only
+  // a live authorized hold can pay a fee: without one (demo, tests, pending or
+  // voided payment) the answer is null and the cancel is free.
+  async function annulationFeeFor(bid) {
+    if (!billingConfigured || bid.status !== domain.STATUS.RETENUE) return null;
+    if (bid.paymentStatus !== 'authorized' || !bid.paymentIntentId) return null;
+    const stored = typeof repo.getCancellationConfig === 'function' ? await repo.getCancellationConfig() : null;
+    const paliers = stored && Array.isArray(stored.paliers) ? stored.paliers : cancellationCfg.envDefaults().paliers;
+    const fee = cancellationCfg.feeFor({ montant: bid.montant, joursAvant: domain.daysBetween(now(), bid.dateISO), paliers });
+    return fee.fraisCents > 0 ? fee : null;
   }
 
   // Notary-facing projection of a bid: enough to decide on, never the private
@@ -514,12 +536,12 @@ function createApp(repo, opts = {}) {
   // A text/calendar (iCalendar) response for a webcal feed. Content-Disposition
   // makes a direct browser navigation download the .ics with a filename;
   // webcal/Google/Outlook subscribe paths fetch server-side and ignore it.
-  function calendar(statusCode, body) {
+  function calendar(statusCode, body, filename = 'nota-carnet.ics') {
     return {
       statusCode,
       headers: {
         'content-type': 'text/calendar; charset=utf-8',
-        'content-disposition': 'attachment; filename="nota-carnet.ics"',
+        'content-disposition': `attachment; filename="${filename}"`,
         ...corsHeaders(),
         'cache-control': 'no-store',
       },
@@ -987,6 +1009,12 @@ function createApp(repo, opts = {}) {
       if (!bid || bid.status !== domain.STATUS.RETENUE || bid.notaryId !== notaryId) {
         return json(403, { errors: [{ code: 'acte_non_autorise', message: 'Cet acte ne vous a pas été confié.' }] });
       }
+      // The ledger below is write-once: a value that passes here is permanent.
+      // The domain bounds it against the retained offer so a fat-fingered
+      // figure (the offer typed twice, a lost digit) dies in validation.
+      const valued = domain.validateActValue({ actAmount: payload.actAmount, retainedMontant: bid.montant });
+      if (!valued.ok) return json(422, { errors: valued.errors });
+      payload.actAmount = valued.actAmount;
       let result = null;
       const canCapture = billingConfigured && bid.paymentIntentId && bid.paymentStatus === 'authorized';
       if (canCapture) {
@@ -1009,6 +1037,9 @@ function createApp(repo, opts = {}) {
       if (an) Promise.resolve(an.onActPaid({ notaryId, bid, actAmount: payload.actAmount })).catch(() => {});
       return json(200, {
         ok: true,
+        // The SETTLED value — on a duplicate submit, the ledger's original
+        // figure, never the retried one — so the console renders the truth.
+        actAmount: result.actAmount != null ? result.actAmount : valued.actAmount,
         commissionCents: result.commissionCents,
         ...(result.netCents != null ? { paid: true, netCents: result.netCents } : {}),
       });
@@ -1213,7 +1244,15 @@ function createApp(repo, opts = {}) {
           if (b.status === domain.STATUS.RETENUE) {
             if (b.notaryId === notaryId) {
               seen.add(b.id);
+              // The write-once act ledger rides along: a settled act renders
+              // « Acte complété » in ANY session — the console must never
+              // re-offer the settlement button (nor forget the revenue).
+              const completion = typeof repo.getActCompletion === 'function'
+                ? await repo.getActCompletion(b.id) : null;
               retained.push({
+                completed: !!completion,
+                actAmount: completion ? completion.actAmount : null,
+                commissionCents: completion ? completion.commissionCents : null,
                 id: b.id,
                 dateISO: b.dateISO,
                 serviceId: b.serviceId,
@@ -1262,7 +1301,7 @@ function createApp(repo, opts = {}) {
       let commission = null;
       if (billingInstance || billingConfigured) {
         const b = billing();
-        if (typeof b.commissionFor === 'function') commission = b.commissionFor(ownProfile);
+        if (typeof b.commissionFor === 'function') commission = await b.commissionFor(ownProfile);
       }
       return json(200, {
         bids: out, retained,
@@ -1273,6 +1312,26 @@ function createApp(repo, opts = {}) {
           urgences: !!(ownProfile && ownProfile.urgences),
         },
         commission,
+      });
+    }
+
+    // The notary's own track record (ADR 0021): every client evaluation, note
+    // and comment included, newest first — not just the average. Anonymized at
+    // the source: the ledger items never carried the client.
+    if (route === '/notary/evaluations' && method === 'GET') {
+      const notaryId = requireScope(bearer(request), SCOPES.SESSION);
+      if (!notaryId) return json(401, { errors: [{ code: 'non_autorise', message: 'Jeton invalide ou expiré.' }] });
+      const profile = await repo.getNotary(notaryId);
+      const ledger = typeof repo.listNotaryEvaluations === 'function' ? await repo.listNotaryEvaluations(notaryId) : [];
+      return json(200, {
+        rating: notaryRating(profile),
+        evaluations: ledger.map((e) => ({
+          note: e.note,
+          commentaire: e.commentaire || null,
+          serviceId: e.serviceId || null,
+          dateISO: e.dateISO || null,
+          createdAt: e.createdAt || null,
+        })),
       });
     }
 
@@ -1510,6 +1569,14 @@ function createApp(repo, opts = {}) {
         messages: messagesOf(bid).map(chatMessage),
         acte: { complete: !!completion },
         evaluation: bid.evaluation ? { note: bid.evaluation.note, commentaire: bid.evaluation.commentaire || null } : null,
+        // ADR 0023 — what cancelling TODAY would cost, disclosed BEFORE the
+        // client confirms. Null when the cancel would be free (open offer, no
+        // live hold, free window) or impossible (settled act).
+        annulation: await (async () => {
+          if (completion) return null;
+          const fee = await annulationFeeFor(bid);
+          return fee ? { taux: fee.taux, frais: fee.frais, joursAvant: fee.joursAvant } : null;
+        })(),
       });
     }
 
@@ -1547,6 +1614,21 @@ function createApp(repo, opts = {}) {
           ratingCount: (profile.ratingCount || 0) + 1,
           ratingSum: (profile.ratingSum || 0) + v.note,
         });
+      }
+      // The notary's own ledger (ADR 0021): the anonymized track record their
+      // console lists. Best-effort — the bid stays the source of truth, and a
+      // lost pointer must never cost the client their 201.
+      if (typeof repo.addNotaryEvaluation === 'function') {
+        try {
+          await repo.addNotaryEvaluation(bid.notaryId, {
+            bidId: bid.id,
+            dateISO: bid.dateISO,
+            serviceId: bid.serviceId,
+            note: v.note,
+            commentaire: v.commentaire,
+            createdAt: evaluation.createdAt,
+          });
+        } catch { /* the aggregate and the bid already carry the note */ }
       }
       // Close the feedback loop (fire-and-forget): the rated notary hears about
       // it, and a low note alerts the operator for a human follow-up.
@@ -1657,10 +1739,11 @@ function createApp(repo, opts = {}) {
 
     // The client withdraws their offer — open OR already retained. Guarded by
     // the same per-bid CLIENT token as every other client route; idempotent.
-    // Retained case: the mise en relation is unwound, so the retaining notary
-    // (and the operator) are notified. Open case with a live card hold
-    // (pay-on-accept): the hold is released, same fire-and-forget contract as
-    // the proposition-accept path.
+    // Retained case: the mise en relation is unwound, the retaining notary
+    // (and the operator) are notified, and a LATE cancellation carries a fee
+    // kept by partial capture of the live hold (ADR 0023). Every path that
+    // captures no fee releases the hold whole — open or retained — so a card
+    // is never left blocked. A settled act (ACT# ledger) refuses outright.
     if (route === '/client/bid/cancel' && method === 'POST') {
       const { payload, error } = parseBody(request);
       if (error) return error;
@@ -1670,8 +1753,27 @@ function createApp(repo, opts = {}) {
       if (!bid) return json(404, { errors: [{ code: 'introuvable', message: 'Offre introuvable.' }] });
       if (bid.status === domain.STATUS.ANNULEE) return json(200, { bid: publicBid(bid) });
 
+      const completion = typeof repo.getActCompletion === 'function' ? await repo.getActCompletion(bid.id) : null;
+      if (completion) {
+        return json(409, { errors: [{ code: 'acte_complete', message: 'Cet acte est signé et réglé — il ne peut plus être annulé.' }] });
+      }
+
       const wasRetained = bid.status === domain.STATUS.RETENUE;
-      const cancelled = { ...bid, status: domain.STATUS.ANNULEE, cancelledAt: now() };
+
+      // The fee is charged BEFORE the flip: a capture that fails must leave
+      // the client free (hold released below), never blocked or double-billed
+      // — the cancelfee:<bidId> idempotency key guards the Stripe side too.
+      let annulation = null;
+      const fee = wasRetained ? await annulationFeeFor(bid) : null;
+      if (fee) {
+        const b = billing();
+        const charge = b && typeof b.chargeCancellationFee === 'function'
+          ? await b.chargeCancellationFee({ paymentIntentId: bid.paymentIntentId, bidId: bid.id, amountCents: fee.fraisCents })
+          : { ok: false };
+        if (charge.ok) annulation = { taux: fee.taux, frais: fee.frais, joursAvant: fee.joursAvant, chargeId: charge.chargeId || null };
+      }
+
+      const cancelled = { ...bid, status: domain.STATUS.ANNULEE, cancelledAt: now(), annulation };
       await repo.update(cancelled);
       // The signing no longer exists: drop it from the retaining notary's
       // calendar-feed pointers too (older repos may not have the method).
@@ -1679,7 +1781,10 @@ function createApp(repo, opts = {}) {
         await repo.removeRetained(bid.notaryId, { id: bid.id, dateISO: bid.dateISO });
       }
 
-      if (!wasRetained && billingConfigured && bid.paymentIntentId) {
+      // No fee captured — free window, no live hold, or a failed capture: the
+      // remaining authorization is released, retained case included (a partial
+      // capture already released its remainder, so never on top of one).
+      if (!annulation && billingConfigured && bid.paymentIntentId && bid.paymentStatus !== 'void') {
         const b = billing();
         if (b && typeof b.cancelAuthorization === 'function') {
           Promise.resolve(b.cancelAuthorization({ paymentIntentId: bid.paymentIntentId, bidId: bid.id })).catch(() => {});
@@ -1853,7 +1958,37 @@ function createApp(repo, opts = {}) {
       const notaryId = requireScope(query.token, SCOPES.FEED);
       if (!notaryId) return json(401, { errors: [{ code: 'non_autorise', message: 'Jeton invalide ou expiré.' }] });
       const events = await repo.listRetainedByNotary(notaryId);
-      return calendar(200, buildNotaryFeed(events, icsStamp()));
+      // Hydrate each pointer into the decision details the retaining notary is
+      // already entitled to (montant, prêteur, déplacement, readiness, client
+      // NAME — the mise en relation, never the courriel or dossier content).
+      // A pointer whose bid record is gone still renders from its own fields.
+      const rows = [];
+      for (const e of events) {
+        let bid = null;
+        try {
+          bid = await repo.get(e.id, e.dateISO);
+        } catch {
+          /* enrichment only: the pointer alone still makes a valid event */
+        }
+        rows.push(
+          bid
+            ? {
+                id: e.id,
+                dateISO: e.dateISO,
+                serviceId: bid.serviceId,
+                montant: bid.montant,
+                preteur: bidLenderInfo(bid),
+                deplacement: bidDeplacementInfo(bid),
+                ready: domain.leadReadiness(bid.serviceId, bid.dossier || {}).ready,
+                clientNom: bid.nom || null,
+                prefixe: bid.prefixe || null,
+              }
+            : e
+        );
+      }
+      // The cross-origin download honours the HEADER filename (the anchor's
+      // download attribute is ignored cross-origin), so name it here.
+      return calendar(200, buildNotaryFeed(rows, icsStamp()), 'nota-signatures.ics');
     }
 
     // PUBLIC carnet feed — no token. Anyone can subscribe to the whole carnet in

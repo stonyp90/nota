@@ -33,6 +33,18 @@ function createMemoryRepo(seed = []) {
   const declines = new Set(); // `${notaryId}#${bidId}`
   const retained = new Map(); // `${notaryId}#${bidId}` -> { id, dateISO, serviceId, montant }
 
+  // The notary's anonymized evaluation ledger (ADR 0021), mirroring the
+  // NOTARY#<id> / EVAL#<createdAt>#<bidId> items on the main table.
+  const notaryEvals = new Map(); // notaryId -> [{ bidId, dateISO, serviceId, note, commentaire, createdAt }]
+
+  // The admin-decided commission barème (ADR 0021), mirroring the single
+  // CONFIG#COMMISSION / BAREME item. Null until Nota stores one.
+  let commissionCfg = null;
+
+  // The admin-decided cancellation fee barème (ADR 0023), mirroring the single
+  // CONFIG#ANNULATION / BAREME item. Null until Nota stores one.
+  let cancellationCfg = null;
+
   // Notary magic-link login: single-use challenges (main table) and a per-IP
   // login rate-limit counter, kept apart from the admin equivalents above so an
   // admin and a notary challenge can never be confused.
@@ -93,11 +105,13 @@ function createMemoryRepo(seed = []) {
       byId.set(bid.id, bid);
       return bid;
     },
-    // Every open (not-retained) bid across all months — the reminder scheduler
-    // asks the domain which of these are due for a reminder today. The dynamo
-    // adapter serves the same set from a sparse GSI1 Query; here it is a filter.
+    // Every open bid across all months — the reminder scheduler asks the
+    // domain which of these are due for a reminder today. Open means neither
+    // retained NOR cancelled (domain.isOpenBid): the dynamo adapter serves the
+    // same set from a sparse GSI1 Query that drops both, and a cancelled offer
+    // must never reach the notary digest; here it is a filter.
     async listOpenBids() {
-      return [...byId.values()].filter((b) => b.status !== STATUS.RETENUE);
+      return [...byId.values()].filter((b) => b.status !== STATUS.RETENUE && b.status !== STATUS.ANNULEE);
     },
 
     // --- Pay-on-accept authorization ----------------------------------------
@@ -249,6 +263,57 @@ function createMemoryRepo(seed = []) {
       return [...emailOverrides.values()]
         .map((o) => ({ ...o }))
         .sort((a, b) => a.key.localeCompare(b.key));
+    },
+
+    // --- Admin-decided commission barème (ADR 0021) --------------------------
+    // Same contract as the dynamo adapter: one record, updatedAt stamped by the
+    // caller-supplied clock, absent reads as null (billing then falls back to
+    // the environment defaults).
+    async getCommissionConfig() {
+      return commissionCfg ? { ...commissionCfg, paliers: commissionCfg.paliers.map((p) => ({ ...p })) } : null;
+    },
+    async putCommissionConfig(cfg, nowISO) {
+      commissionCfg = {
+        taux: cfg.taux,
+        plancher: cfg.plancher,
+        paliers: (cfg.paliers || []).map((p) => ({ ...p })),
+        updatedAt: nowISO,
+      };
+      return { ...commissionCfg, paliers: commissionCfg.paliers.map((p) => ({ ...p })) };
+    },
+    async deleteCommissionConfig() {
+      commissionCfg = null;
+    },
+
+    // --- Admin-decided cancellation fee barème (ADR 0023) --------------------
+    // Same contract as the dynamo adapter: one record, updatedAt stamped by the
+    // caller-supplied clock, absent reads as null (the cancel route then falls
+    // back to the environment defaults).
+    async getCancellationConfig() {
+      return cancellationCfg ? { ...cancellationCfg, paliers: cancellationCfg.paliers.map((p) => ({ ...p })) } : null;
+    },
+    async putCancellationConfig(cfg, nowISO) {
+      cancellationCfg = {
+        paliers: (cfg.paliers || []).map((p) => ({ ...p })),
+        updatedAt: nowISO,
+      };
+      return { ...cancellationCfg, paliers: cancellationCfg.paliers.map((p) => ({ ...p })) };
+    },
+    async deleteCancellationConfig() {
+      cancellationCfg = null;
+    },
+
+    // --- Notary evaluation ledger (ADR 0021) ---------------------------------
+    async addNotaryEvaluation(notaryId, evaluation) {
+      const list = notaryEvals.get(notaryId) || [];
+      list.push({ ...evaluation });
+      notaryEvals.set(notaryId, list);
+    },
+    // Newest first — the dynamo Query walks the EVAL# range backwards.
+    async listNotaryEvaluations(notaryId) {
+      return (notaryEvals.get(notaryId) || [])
+        .map((e) => ({ ...e }))
+        .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)) || String(b.bidId).localeCompare(String(a.bidId)));
     },
 
     // --- Notary console (declines + retained calendar pointers) -------------

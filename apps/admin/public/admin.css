@@ -61,7 +61,7 @@ a:hover { text-decoration: underline; }
 .admin-brand-sub {
   font-weight: 700; font-size: 10px; text-transform: uppercase; letter-spacing: .1em;
   color: var(--brand); padding: 2px 7px; background: var(--surface-inset);
-  border: 1px solid var(--border); border-radius: 999px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
 }
 .admin-spacer { flex: 1; }
 
@@ -73,7 +73,7 @@ a:hover { text-decoration: underline; }
 }
 .role-pill {
   font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em;
-  padding: 3px 9px; border-radius: 999px; white-space: nowrap;
+  padding: 3px 9px; border-radius: var(--radius-sm); white-space: nowrap;
   background: transparent; color: var(--ink-muted); border: 1px solid var(--border-strong);
 }
 /* Outline accent (never a solid brand fill) to mark elevated access. */
@@ -139,7 +139,7 @@ a:hover { text-decoration: underline; }
 .seg { display: inline-flex; gap: 6px; }
 .seg-btn {
   appearance: none; font: inherit; font-weight: 600; font-size: 12.5px; cursor: pointer;
-  padding: 6px 13px; border-radius: 999px;
+  padding: 6px 13px; border-radius: var(--radius);
   border: 1px solid var(--border); background: transparent; color: var(--ink-muted);
   transition: background .15s, color .15s, border-color .15s;
 }
@@ -180,7 +180,7 @@ a:hover { text-decoration: underline; }
 .admin-rail-soon {
   margin-left: auto; font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
   color: var(--ink-muted); background: var(--surface); border: 1px solid var(--border);
-  border-radius: 999px; padding: 1px 6px;
+  border-radius: var(--radius-sm); padding: 1px 6px;
 }
 .admin-content { min-width: 0; }
 
@@ -312,7 +312,7 @@ a:hover { text-decoration: underline; }
 .tpl-badges { display: inline-flex; gap: 6px; }
 .tpl-badge {
   font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em;
-  padding: 2px 8px; border-radius: 999px; white-space: nowrap;
+  padding: 2px 8px; border-radius: var(--radius-sm); white-space: nowrap;
   border: 1px solid var(--border-strong); color: var(--ink-muted); background: transparent;
 }
 .tpl-badge.is-custom { color: var(--brand); border-color: var(--brand); background: var(--brand-wash); }
@@ -346,7 +346,7 @@ a:hover { text-decoration: underline; }
 .tpl-chips-label { font-size: 12px; font-weight: 600; color: var(--ink-muted); margin-right: 2px; }
 .tpl-chip {
   font-family: var(--font-mono); font-size: 11.5px; color: var(--ink);
-  padding: 2px 8px; border: 1px solid var(--border-strong); border-radius: 999px;
+  padding: 2px 8px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
   background: var(--surface);
 }
 .tpl-note { margin: 0; font-size: 12px; color: var(--ink-muted); }
@@ -356,6 +356,34 @@ a:hover { text-decoration: underline; }
 }
 .tpl-error strong { color: var(--danger); font-weight: 600; }
 .tpl-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* --- Commission (barème, ADR 0021) -----------------------------------------
+   The read view reuses the stat tiles and a .ptable of tiers; the edit form
+   reuses .field/.input/.tpl-fields/.tpl-error/.tpl-actions. Only the tier-row
+   grid, the reset strip and its in-page confirm are new. */
+.bareme-form { display: flex; flex-direction: column; gap: 14px; }
+.bareme-paliers { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.bareme-paliers-label {
+  font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--ink-muted);
+}
+.bareme-rows { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+.bareme-palier {
+  display: grid; gap: 10px; align-items: end;
+  grid-template-columns: repeat(3, minmax(min(90px, 100%), 1fr)) auto;
+}
+.bareme-reset {
+  margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 10px; align-items: flex-start;
+}
+.bareme-confirm {
+  width: 100%; padding: 12px 14px; font-size: 13px; color: var(--ink);
+  background: var(--surface-inset); border-left: 3px solid var(--danger); border-radius: var(--radius);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.bareme-confirm-text { margin: 0; }
+/* Danger = the same outline register as .btn-primary, in the danger ink. */
+.btn-danger { color: var(--danger); border-color: var(--danger); font-weight: 600; }
 
 /* --- Loading skeletons ---------------------------------------------------- */
 .skeleton {
@@ -370,7 +398,7 @@ a:hover { text-decoration: underline; }
 }
 .skeleton-tile { height: 96px; border: 1px solid var(--border); border-radius: var(--radius-lg); }
 .skeleton-chart { height: 260px; border: 1px solid var(--border); border-radius: var(--radius-lg); }
-.skeleton-line { height: 12px; border-radius: 999px; }
+.skeleton-line { height: 12px; border-radius: var(--radius-xs); }
 .skeleton-line.is-sm { width: 40%; }
 .skeleton-line.is-lg { width: 70%; }
 

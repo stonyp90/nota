@@ -89,6 +89,18 @@ function retainedSK(dateISO, bidId) {
 }
 const RETAINED_PREFIX = 'RETAINED#';
 
+// A client evaluation, anonymized, under the rated notary's own partition
+// (ADR 0021): their whole track record is one Query (begins_with, newest
+// first) — no Scan, no month walk over BID items. `createdAt` leads the SK so
+// lexical order IS chronological order; `bidId` keeps two same-instant
+// evaluations distinct.
+//
+//   PK = NOTARY#<notaryId>   SK = EVAL#<createdAt>#<bidId>
+function notaryEvalSK(createdAt, bidId) {
+  return `EVAL#${createdAt}#${bidId}`;
+}
+const NOTARY_EVAL_PREFIX = 'EVAL#';
+
 // --- Notary console magic-link login (MAIN table) ----------------------------
 // A single-use passwordless challenge that proves a notary owns the mailbox
 // BEFORE any session token is minted (the old sign-in trusted a bare request
@@ -250,6 +262,31 @@ function emailOverrideSK(key) {
 }
 const EMAIL_OVERRIDE_PREFIX = 'TPL#';
 
+// --- Admin-decided commission barème (ADR 0021) --------------------------------
+// ONE item: the base rate, the floor, and the rating-earned bonus tiers billing
+// prices every settlement with. Same design as CONFIG#EMAIL — product
+// configuration lives with the product data on the MAIN table (billing already
+// reads it on every settlement), and the admin Lambda's LeadingKeys-scoped
+// write door gains exactly this partition (infra/admin.tf).
+//
+//   PK = CONFIG#COMMISSION   SK = BAREME
+function commissionConfigPK() {
+  return 'CONFIG#COMMISSION';
+}
+const COMMISSION_CONFIG_SK = 'BAREME';
+
+// --- Admin-decided cancellation fee barème (ADR 0023) --------------------------
+// ONE item: the days-before-signing paliers the cancel route prices a retained
+// withdrawal with. Same design as CONFIG#COMMISSION — the cancel route reads it
+// through the repo it already owns, and the admin Lambda's LeadingKeys-scoped
+// write door gains exactly this partition (infra/admin.tf).
+//
+//   PK = CONFIG#ANNULATION   SK = BAREME
+function cancellationConfigPK() {
+  return 'CONFIG#ANNULATION';
+}
+const CANCELLATION_CONFIG_SK = 'BAREME';
+
 // --- Admin table (admin.nota.ca) ---------------------------------------------
 // Identity, revocable sessions, single-use magic-link challenges, the immutable
 // audit log and rate-limit counters live in a SEPARATE `nota-admin` table, so
@@ -347,6 +384,9 @@ module.exports = {
   DECLINE_SK,
   retainedSK,
   RETAINED_PREFIX,
+  // notary evaluation ledger (ADR 0021)
+  notaryEvalSK,
+  NOTARY_EVAL_PREFIX,
   actPK,
   ACT_SK,
   partnerPK,
@@ -372,6 +412,11 @@ module.exports = {
   emailOverridePK,
   emailOverrideSK,
   EMAIL_OVERRIDE_PREFIX,
+  // admin-decided commission barème (ADR 0021)
+  commissionConfigPK,
+  COMMISSION_CONFIG_SK,
+  cancellationConfigPK,
+  CANCELLATION_CONFIG_SK,
   // admin table
   adminPK,
   ADMIN_SK,

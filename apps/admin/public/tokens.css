@@ -58,9 +58,12 @@
   --status-ouverte: var(--brand-bright);
   --status-retenue: var(--ink-muted);
 
-  /* Geometry — softened, but not pill-round (a bit more square) */
+  /* Geometry — ONE square scale, mirroring the web app (owner's ask,
+     2026-08-27: « tout garder le même style carré »): controls --radius,
+     badges --radius-sm, thin bars --radius-xs. No pills. */
   --radius: 8px;
   --radius-sm: 6px;
+  --radius-xs: 3px;
   --radius-lg: 12px;
 
   --shadow-sm: 0 1px 2px rgb(15 23 42 / 0.05);

@@ -263,6 +263,7 @@
   "Afficher le détail": "Show details",
   "Masquer le détail": "Hide details",
   "Voir moins": "See less",
+  "Voir l’autre offre": "See the other offer",
   "Ce que d’autres offrent ce jour-là": "What others are offering that day",
   "Offrir autant": "Offer as much",
   "Votre offre est au niveau de ce que d’autres offrent ce jour-là.": "Your offer matches what others are offering that day.",
@@ -274,6 +275,11 @@
   "Montant de l’offre en dollars": "Offer amount in dollars",
   "Les questions du notaire": "The notary’s questions",
   "(elles ajustent le prix)": "(they adjust the price)",
+  // Step 2's live tally and the hint line's prefix (the labels after it are
+  // T()'d at composition, so only the prefix reaches the DOM in French).
+  "Répondez à :": "Answer:",
+  "1 réponse attendue": "1 answer expected",
+  "✓ complet": "✓ complete",
   "Ouverte — en attente d’un notaire": "Open — waiting for a notary",
   "Date passée": "Date passed",
   "Prochaine étape": "Next step",
@@ -344,7 +350,7 @@
   "Retirer": "Remove",
   "Format non accepté — utilisez un PDF ou une photo (JPG, PNG, HEIC).": "Format not accepted — use a PDF or a photo (JPG, PNG, HEIC).",
   "Reste sur votre appareil jusqu’à la mise en relation.": "Stays on your device until the match.",
-  "ou glissez votre fichier ici": "or drag your file here",
+  "ou glissez-le ici": "or drag it here",
   "Votre réponse": "Your answer",
   "Questions qui déterminent le prix": "Questions that determine the price",
   "Enregistrées dans votre profil. Elles ajustent le prix de départ de cet acte.": "Saved in your profile. They adjust this act's starting price.",
@@ -402,8 +408,16 @@
   "Cas complexe": "Complex case",
   "Demandes ouvertes": "Open requests",
   "Filtrer les demandes": "Filter requests",
+  "Filtrer par jour": "Filter by day",
+  "Dossier prêt seulement": "Complete file only",
   "Tous": "All",
   "Dossier complet seulement": "Complete file only",
+  // Feed disclosure (ADR 0019): essential rows by default, details on demand.
+  "Niveau de détail": "Level of detail",
+  "L’essentiel": "Essentials",
+  "Tout afficher": "Show everything",
+  "Détails": "Details",
+  "Réduire": "Collapse",
   "Aucune demande ne correspond à ce filtre.": "No request matches this filter.",
   "demande": "request",
   "demandes": "requests",
@@ -472,8 +486,7 @@
   "Quitter le plein écran": "Exit full screen",
   "Plein écran": "Full screen",
   "Redirection vers l’inscription…": "Redirecting to sign-up…",
-  "Demandes rafraîchies.": "Requests refreshed.",
-  "Paiement autorisé. Votre offre est en cours de publication.": "Payment authorized. Your offer is being published.",
+    "Paiement autorisé. Votre offre est en cours de publication.": "Payment authorized. Your offer is being published.",
   "Paiement annulé. Votre offre n’a pas été publiée.": "Payment cancelled. Your offer was not published.",
   "Nota — le carnet public des actes notariés à Québec": "Nota — the public carnet of notarized acts in Québec",
   "Notaire à Québec pour votre financement ou refinancement hypothécaire, à la date voulue. Affichez votre date et votre prix, un notaire retient rapidement votre demande. Gratuit.": "A Québec notary for your mortgage financing or refinancing, on the date you need. Post your date and your price, and a notary quickly takes on your request. Free.",
@@ -590,8 +603,7 @@
   "Votre console s’ouvre aussitôt. Vous voyez les demandes et en retenez.": "Your console opens right away. You see the requests and take them on.",
   "Stripe vous demandera une pièce d’identité et un compte bancaire pour vos versements. Ces informations restent chez Stripe, Nota ne les voit jamais. Vous êtes ensuite ramené ici.": "Stripe will ask you for photo ID and a bank account for your payouts. That information stays with Stripe — Nota never sees it. You are then brought back here.",
   "Connecté": "Signed in",
-  "Rafraîchir": "Refresh",
-  "Recevez vos demandes à votre rythme": "Receive your requests at your own pace",
+    "Recevez vos demandes à votre rythme": "Receive your requests at your own pace",
   "Choisissez comment et à quelle fréquence Nota vous prévient des nouvelles demandes qui vous conviennent. Modifiable à tout moment.": "Choose how and how often Nota alerts you to new requests that suit you. Adjustable at any time.",
   "Comment vous prévenir": "How to reach you",
   "Dans l’application": "In the app",
@@ -794,8 +806,10 @@
   "Les récompenses": "The rewards",
   "Référez un client": "Refer a client",
   "Versée dès qu’un notaire retient la demande.": "Paid as soon as a notary takes on the request.",
+  "Sans limite": "No limit",
   "Référez un notaire": "Refer a notary",
   "Versée à son premier acte retenu.": "Paid on their first act taken on.",
+  "Une fois par notaire": "Once per notary",
   // The how-it-works timeline: a bold verb line + its caveat per step.
   "Une minute, sans frais — activé par un lien envoyé à votre courriel.": "One minute, no cost — activated by a link sent to your email.",
   "Partagez votre lien": "Share your link",
@@ -888,6 +902,7 @@
   "Annulée": "Cancelled",
   "Vous avez annulé cette offre. Si vous changez d’avis, choisissez une nouvelle date au carnet.": "You cancelled this offer. If you change your mind, pick a new date on the carnet.",
   "Offre annulée. Elle a été retirée du carnet.": "Offer cancelled. It has been removed from the carnet.",
+  "Cet acte est signé et réglé — il ne peut plus être annulé.": "This act is signed and settled — it can no longer be cancelled.",
   "Acte signé — évaluez votre notaire": "Act signed — rate your notary",
   "Un mot sur votre expérience (optionnel)": "A word about your experience (optional)",
   "Envoyer mon évaluation": "Send my evaluation",
@@ -896,6 +911,12 @@
   "Merci — elle aide les prochains clients.": "Thank you — it helps the next clients.",
   "Note de 1 à 5": "Rating from 1 to 5",
   "Votre note, telle que les clients la voient.": "Your rating, as clients see it.",
+  "Vos évaluations": "Your evaluations",
+  "notes et commentaires des clients": "clients’ ratings and comments",
+  "Vos évaluations, telles que les clients les ont laissées.": "Your evaluations, as clients left them.",
+  "Vos évaluations s’afficheront ici après vos premiers actes signés.": "Your evaluations will appear here after your first signed acts.",
+  "Impossible de charger vos évaluations. Réessayez.": "Unable to load your evaluations. Please try again.",
+  "Impossible de charger vos évaluations (hors ligne). Réessayez.": "Unable to load your evaluations (offline). Please try again.",
   "Votre profil public": "Your public profile",
   "fiche CNQ, notoriété": "CNQ listing, notoriety",
   "Ajoutez le lien de votre fiche officielle à la Chambre des notaires du Québec (cnq.org). Les clients voient un badge « CNQ » sur vos propositions et peuvent consulter votre fiche une fois votre étude retenue.": "Add the link of your official listing at the Chambre des notaires du Québec (cnq.org). Clients see a “CNQ” badge on your propositions and can open your listing once your firm is retained.",
@@ -966,6 +987,11 @@
 };
   var RULES = compileRules([
   {
+    "pattern": "^le ([A-Za-z][A-Za-z.]* [0-9]{1,2})$",
+    "flags": "",
+    "replacement": "on $1"
+  },
+  {
     "pattern": "^Commission Nota : ([0-9]+(?:,[0-9]+)?) % au lieu de ([0-9]+(?:,[0-9]+)?) % — bonus mérité par vos évaluations\\.$",
     "flags": "",
     "replacement": "Nota commission: $1% instead of $2% — a bonus earned by your evaluations."
@@ -991,6 +1017,11 @@
     "replacement": "Average rating $1 out of 5, $2 reviews"
   },
   {
+    "pattern": "^Note ([1-5]) sur 5$",
+    "flags": "",
+    "replacement": "Rating $1 out of 5"
+  },
+  {
     "pattern": "^Votre évaluation : ([★☆]+)$",
     "flags": "",
     "replacement": "Your evaluation: $1"
@@ -1009,6 +1040,26 @@
     "pattern": "^Votre offre du (.+) est annulée$",
     "flags": "",
     "replacement": "Your offer of $1 is cancelled"
+  },
+  {
+    "pattern": "^Annuler maintenant retient des frais de (.+?) \\((.+?) du montant convenu\\) sur votre caution\\. Le reste vous est libéré immédiatement\\.$",
+    "flags": "",
+    "replacement": "Cancelling now keeps a fee of $1 ($2 of the agreed amount) from your deposit. The rest is released to you immediately."
+  },
+  {
+    "pattern": "^Offre annulée\\. Des frais de (.+?) \\((.+?)\\) ont été retenus sur votre caution\\.$",
+    "flags": "",
+    "replacement": "Offer cancelled. A fee of $1 ($2) was kept from your deposit."
+  },
+  {
+    "pattern": "^Des frais de (.+?) \\((.+?)\\) ont été retenus sur votre caution\\.$",
+    "flags": "",
+    "replacement": "A fee of $1 ($2) was kept from your deposit."
+  },
+  {
+    "pattern": "^Vous avez annulé cette offre\\. Des frais de (.+?) \\((.+?)\\) ont été retenus sur votre caution\\. Si vous changez d’avis, choisissez une nouvelle date au carnet\\.$",
+    "flags": "",
+    "replacement": "You cancelled this offer. A fee of $1 ($2) was kept from your deposit. If you change your mind, pick a new date on the carnet."
   },
   {
     "pattern": "^À propos de votre (.+) du (.+)\\.$",
@@ -1201,9 +1252,19 @@
     "replacement": "Signing $1 · at this notice, offers close between $2 and $3."
   },
   {
+    "pattern": "^Signature (.+?) · à ce délai, les offres se concluent autour de (.+?)\\.$",
+    "flags": "",
+    "replacement": "Signing $1 · at this notice, offers close around $2."
+  },
+  {
     "pattern": "^Répondez à : (.+)$",
     "flags": "",
     "replacement": "Answer: $1"
+  },
+  {
+    "pattern": "^(\\d+) réponses attendues$",
+    "flags": "",
+    "replacement": "$1 answers expected"
   },
   {
     "pattern": "^Voir le (.+) au carnet$",

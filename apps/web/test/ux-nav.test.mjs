@@ -17,7 +17,7 @@
  *
  * Boot harness mirrors smoke.test.mjs: eval domain then app inside jsdom.
  */
-import test from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -26,6 +26,11 @@ import { JSDOM } from 'jsdom';
 const DOMAIN_SRC = readFileSync(fileURLToPath(new URL('../../../packages/domain/index.js', import.meta.url)), 'utf8');
 const APP_SRC = readFileSync(fileURLToPath(new URL('../public/app.js', import.meta.url)), 'utf8');
 const HTML_SRC = readFileSync(fileURLToPath(new URL('../public/index.html', import.meta.url)), 'utf8');
+
+// The console's live-feed poll is a jsdom timer that would hold the runner's
+// process open — close every window once the suite ends so it can exit.
+const DOMS = [];
+after(() => { for (const d of DOMS) { try { d.window.close(); } catch {} } });
 const CSS_SRC = readFileSync(fileURLToPath(new URL('../public/styles.css', import.meta.url)), 'utf8');
 
 const I18N = (() => {
@@ -56,6 +61,7 @@ async function boot({ hash = '', seed = {} } = {}) {
       Object.keys(seed).forEach((k) => window.localStorage.setItem(k, seed[k]));
     },
   });
+  DOMS.push(dom);
   const win = dom.window;
   win.eval(DOMAIN_SRC);
   win.eval(APP_SRC);
@@ -204,12 +210,12 @@ test('the notary door is named for what it is, not as a directory of notaries', 
 
 test('the guide and the offer flow stay within three taps of the phone drawer', async () => {
   // The drawer mirrors the three flat doors (ADR 0010 §2) — no guide/publish
-  // rows of its own. The guide is ONE tap from anywhere while signed out (the
-  // compact header icon); the offer flow is burger → Carnet → hero CTA.
+  // rows of its own. The guide is ONE tap from anywhere (the standalone « ? »
+  // bubble, owner 2026-08-27); the offer flow is burger → Carnet → hero CTA.
   const { doc } = await boot();
-  $(doc, 'nav-guide').click();
+  $(doc, 'guide-fab').click();
   await wait(10);
-  assert.equal($(doc, 'onboarding-dialog').open, true, 'the guide opens from the header icon');
+  assert.equal($(doc, 'onboarding-dialog').open, true, 'the guide opens from the standalone bubble');
   $(doc, 'onboarding-dialog').close();
   $(doc, 'nav-burger').click();
   await wait(10);
@@ -364,18 +370,23 @@ test('the header is thin: 52px desktop band, 48px phone band', () => {
 // Header tool cluster — the loose icons regroup, and every band trims itself
 // ---------------------------------------------------------------------------
 
-test('the guide, language and theme icons share one header cluster; the burger closes the row', async () => {
+test('language and theme share the header cluster; the guide floats on its own', async () => {
   const { doc } = await boot();
   const tools = doc.querySelector('.site-header .header-tools');
   assert.ok(tools, 'one .header-tools cluster instead of a scatter of icons');
   assert.deepEqual(
     Array.from(tools.children).map((b) => b.id),
-    ['nav-guide', 'lang-toggle', 'theme-toggle'],
-    'guide · language · theme — in that order, nothing else'
+    ['lang-toggle', 'theme-toggle'],
+    'language · theme — in that order, nothing else'
   );
-  // The "?" guide is ALWAYS visible (owner's ask, 2026-08-26) — it no longer
-  // retires on sign-in, so it never carries the hidden attribute.
-  assert.equal($(doc, 'nav-guide').hidden, false, 'the guide icon shows from first paint');
+  // The "?" guide is ALWAYS reachable but NEVER part of that menu (owner's
+  // ask, 2026-08-27): it lives in its own standalone bubble outside the
+  // header, visible from first paint, signed in or out.
+  const fab = $(doc, 'guide-fab');
+  assert.ok(fab, 'the standalone guide bubble exists');
+  assert.equal(fab.hidden, false, 'the guide bubble shows from first paint');
+  assert.equal(fab.closest('.site-header'), null, 'the guide does not sit in the header menu');
+  assert.equal(fab.closest('#mobile-nav'), null, 'nor in the phone drawer');
   // Language and theme show their STATE: a FR | EN segment (marked by
   // i18n.js) and a sun/moon switch — no more bare icons hiding the answer.
   assert.deepEqual(
@@ -395,16 +406,18 @@ test('each band trims the header; the drawer covers what the phone hides', () =>
     'one shared track holds guide, language and theme');
   assert.doesNotMatch(CSS_SRC, /\.header-tools\s*\{[^}]*border:\s*1px/,
     'no border drawn around the header tool group');
-  assert.match(CSS_SRC, /\.header-tools \.icon-btn\s*\{[^}]*height:\s*28px/,
-    'the "?" matches the shared 28px height');
   assert.match(CSS_SRC, /\.mini-seg\s*\{[^}]*height:\s*28px/,
     'the FR | EN segment matches the shared 28px height');
   assert.match(CSS_SRC, /\.tswitch\s*\{[^}]*height:\s*28px/,
     'the theme switch matches the shared 28px height');
-  // …and the strip is SEGMENTED in three: a thin hairline before each
-  // control after the first (guide | language | theme).
+  // …and the strip stays SEGMENTED: a thin hairline before each control
+  // after the first (language | theme).
   assert.match(CSS_SRC, /\.header-tools > \* \+ \*::after\s*\{[^}]*width:\s*1px/,
-    'hairlines split the strip into three segments');
+    'hairlines split the strip into segments');
+  // The « ? » is its own fixed bubble, bottom-right, on every band — help is
+  // one tap from anywhere without living in any menu (owner, 2026-08-27).
+  assert.match(CSS_SRC, /\.guide-fab\s*\{[^}]*position:\s*fixed/,
+    'the guide bubble is pinned to the viewport');
   // Tablet compact band (720–899.98) slims chrome so the full set still fits.
   assert.match(CSS_SRC, /@media \(min-width: 720px\) and \(max-width: 899\.98px\)/);
   // Phone: tabs, auth, theme AND the inline language toggle hand off to the

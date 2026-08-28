@@ -11,6 +11,10 @@
  * X-WR-CALNAME reads 'FR / EN'. Service names come from @nota/domain (nom for
  * French, nomEn for English) so both sides match the public carnet; amounts go
  * through domain.money() / domain.moneyEn().
+ *
+ * Every physical line is folded at 75 octets (RFC 5545 §3.1) on a UTF-8
+ * character boundary, so strict clients (Outlook desktop, older CalDAV
+ * servers) parse the feed as well as Google and Apple do.
  */
 const domain = require('@nota/domain');
 
@@ -25,9 +29,54 @@ function escText(s) {
   return String(s).replace(/([\\,;])/g, '\\$1').replace(/\r?\n/g, '\\n');
 }
 
-// A retained event is `{ id, dateISO, serviceId }` (extra fields ignored). Each
-// becomes an all-day event: SUMMARY 'Signature notariée — <service>' (fr) with
-// DESCRIPTION 'Notarized signing — <service>' (en), spanning one day.
+// RFC 5545 §3.1: fold a content line into physical lines of at most 75 octets;
+// each continuation starts with a single space. The cut lands on a character
+// boundary (never inside a UTF-8 sequence), counting octets, not code points.
+function fold(line) {
+  const out = [];
+  let cur = '';
+  let curBytes = 0;
+  // The continuation lead (' ') costs one octet on every folded line.
+  let budget = 75;
+  for (const ch of line) {
+    const w = Buffer.byteLength(ch, 'utf8');
+    if (curBytes + w > budget) {
+      out.push(cur);
+      cur = ' ';
+      curBytes = 1;
+      budget = 75;
+    }
+    cur += ch;
+    curBytes += w;
+  }
+  out.push(cur);
+  return out;
+}
+
+function render(lines) {
+  return lines.flatMap(fold).join('\r\n');
+}
+
+// The déplacement band in the NOTARY register — the same six compositions as
+// the console card pill (ncDeplacementPill): who hosts the signature, then the
+// radius. `d` is { qui, km, urgence }.
+function deplacementFr(d) {
+  if (d.urgence) return 'Urgence · 100 % en ligne';
+  const qui = d.qui === 'notaire' ? 'Chez le client' : 'À l’étude';
+  return qui + ' · ' + (d.km < 25 ? 'moins de ' + d.km + ' km' : '≤ ' + d.km + ' km');
+}
+function deplacementEn(d) {
+  if (d.urgence) return 'Urgency · 100 % online';
+  const qui = d.qui === 'notaire' ? 'At the client’s' : 'At the office';
+  return qui + ' · ' + (d.km < 25 ? 'under ' + d.km + ' km' : '≤ ' + d.km + ' km');
+}
+
+// A retained event is `{ id, dateISO, serviceId }` plus, when the handler could
+// hydrate the bid, the decision details: montant, preteur { nom, virtuel },
+// deplacement { qui, km, urgence }, ready, clientNom, prefixe. Each becomes an
+// all-day event: French SUMMARY (service + amount), the déplacement band as
+// LOCATION, and a DESCRIPTION of one fact per line, FR — EN. Details are all
+// optional so a pointer written before the hydration still renders.
 function buildNotaryFeed(events = [], stamp) {
   const lines = [
     'BEGIN:VCALENDAR',
@@ -41,19 +90,35 @@ function buildNotaryFeed(events = [], stamp) {
     const svc = domain.serviceById(e.serviceId);
     const name = svc ? svc.nom : e.serviceId;
     const nameEn = svc ? svc.nomEn : e.serviceId;
+    const hasMontant = typeof e.montant === 'number';
+    const desc = [
+      'Notarized signing — ' + nameEn + (hasMontant ? ' — ' + domain.moneyEn(e.montant) : ''),
+    ];
+    if (e.deplacement) desc.push('Déplacement : ' + deplacementFr(e.deplacement) + ' — Travel: ' + deplacementEn(e.deplacement));
+    if (e.preteur && e.preteur.nom) {
+      const flagFr = e.preteur.virtuel ? ' (virtuel)' : '';
+      const flagEn = e.preteur.virtuel ? ' (virtual)' : '';
+      desc.push('Prêteur : ' + e.preteur.nom + flagFr + ' — Lender: ' + e.preteur.nom + flagEn);
+    }
+    if (typeof e.ready === 'boolean') {
+      desc.push(e.ready ? 'Dossier prêt — File ready' : 'Dossier en préparation — File in preparation');
+    }
+    if (e.clientNom) desc.push('Client : ' + e.clientNom);
+    if (e.prefixe) desc.push('Réf. : ' + e.prefixe);
     lines.push(
       'BEGIN:VEVENT',
       'UID:' + e.id + '@nota',
       ...(stamp ? ['DTSTAMP:' + stamp] : []),
       'DTSTART;VALUE=DATE:' + compact(e.dateISO),
       'DTEND;VALUE=DATE:' + compact(domain.addDays(e.dateISO, 1)),
-      'SUMMARY:' + escText('Signature notariée — ' + name),
-      'DESCRIPTION:' + escText('Notarized signing — ' + nameEn),
+      'SUMMARY:' + escText('Signature notariée — ' + name + (hasMontant ? ' — ' + domain.money(e.montant) : '')),
+      ...(e.deplacement ? ['LOCATION:' + escText(deplacementFr(e.deplacement))] : []),
+      'DESCRIPTION:' + escText(desc.join('\n')),
       'END:VEVENT'
     );
   }
   lines.push('END:VCALENDAR');
-  return lines.join('\r\n');
+  return render(lines);
 }
 
 // The PUBLIC carnet feed: every open/retained offer as an all-day event, so a
@@ -86,7 +151,7 @@ function buildCarnetFeed(bids = [], stamp) {
     );
   }
   lines.push('END:VCALENDAR');
-  return lines.join('\r\n');
+  return render(lines);
 }
 
 module.exports = { buildNotaryFeed, buildCarnetFeed };

@@ -13,7 +13,7 @@
  * Boot mirrors notary-focus.test.mjs: jsdom outside-only, domain then app,
  * offline store seeded deterministically, URL-routing fetch stub.
  */
-import test from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -22,6 +22,11 @@ import { JSDOM } from 'jsdom';
 const DOMAIN_SRC = readFileSync(fileURLToPath(new URL('../../../packages/domain/index.js', import.meta.url)), 'utf8');
 const APP_SRC = readFileSync(fileURLToPath(new URL('../public/app.js', import.meta.url)), 'utf8');
 const HTML_SRC = readFileSync(fileURLToPath(new URL('../public/index.html', import.meta.url)), 'utf8');
+
+// The console's live-feed poll is a jsdom timer that would hold the runner's
+// process open — close every window once the suite ends so it can exit.
+const DOMS = [];
+after(() => { for (const d of DOMS) { try { d.window.close(); } catch {} } });
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const todayISO = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
@@ -44,6 +49,7 @@ async function boot() {
       }
     },
   });
+  DOMS.push(dom);
   const win = dom.window;
   win.eval(DOMAIN_SRC);
   const D = win.NotaDomain;

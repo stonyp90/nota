@@ -248,6 +248,28 @@ test('GET /notary/feed.ics accepts ONLY a feed token and returns a VCALENDAR', a
   assert.ok(res.body.includes('DTSTART;VALUE=DATE:20260820'));
 });
 
+test('the notary feed carries the decision details of the hydrated bid', async () => {
+  const a = app();
+  const bid = await seedBid(a, { nom: 'Marie Tremblay' });
+  const { token, feedToken } = await session(a, 'a@notaire.ca');
+  await accept(a, token, bid.id, bid.dateISO);
+
+  const res = await a.handle({ method: 'GET', path: '/notary/feed.ics', query: { token: feedToken } });
+  assert.equal(res.statusCode, 200);
+  // Unfold (RFC 5545 §3.1) before matching: long lines are folded at 75 octets.
+  const body = res.body.replace(/\r\n[ \t]/g, '');
+  // Montant in the French SUMMARY, lender / déplacement / dossier state / client
+  // in the DESCRIPTION — everything the retaining notary needs at a glance.
+  assert.match(body, /SUMMARY:Signature notariée — Refinancement hypothécaire — 2\u{a0}800\u{a0}\$/u);
+  assert.ok(body.includes('Prêteur : Banque Nationale'), 'missing the lender line');
+  assert.ok(body.includes('LOCATION:À l’étude · ≤ 50 km'), 'missing the déplacement LOCATION');
+  assert.ok(body.includes('Client : Marie Tremblay'), 'missing the client name');
+  assert.ok(/Dossier (prêt|en préparation)/.test(body), 'missing the dossier readiness line');
+  // The feed stays read-only: never the courriel, never the dossier content.
+  assert.ok(!body.includes('client@example.ca'), 'feed leaked the client courriel');
+  assert.ok(!body.includes('Érables'), 'feed leaked dossier content');
+});
+
 test('feed.ics and dossier reject an invalid token with 401', async () => {
   const a = app();
   assert.equal((await a.handle({ method: 'GET', path: '/notary/feed.ics', query: { token: 'x' } })).statusCode, 401);

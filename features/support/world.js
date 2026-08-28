@@ -10,6 +10,7 @@ const { createMemoryRepo } = require('../../apps/api/src/repo-memory.js');
 const { createNotifier } = require('../../apps/api/src/notifications.js');
 const { createFakeMailer } = require('../../apps/api/src/notify-port.js');
 const { runReminders: runRemindersUseCase } = require('../../apps/api/src/reminders.js');
+const { createBilling } = require('../../apps/api/src/billing.js');
 
 // Frozen clock so every scenario is deterministic (matches the task spec).
 const TODAY = '2026-08-12';
@@ -64,16 +65,46 @@ class NotaWorld extends World {
       },
     };
 
-    this.app = createApp(this.repo, {
+    // A no-SDK, no-network Stripe recorder for the money scenarios: every
+    // authorization, capture (full or partial), transfer and hold release is
+    // pushed onto `.calls` so a step can assert exactly what moved. Inert
+    // until a scenario turns billing on (see `enableBilling`).
+    this.stripe = {
+      calls: { authorizations: [], transfers: [], cancels: [], feeCaptures: [], commissions: [] },
+    };
+    const calls = this.stripe.calls;
+    Object.assign(this.stripe, {
+      async createOfferAuthorization(args) { calls.authorizations.push(args); return { sessionId: 'cs_' + args.bidId, url: BASE + '/checkout/' + args.bidId }; },
+      async captureAndTransfer(args) { calls.transfers.push(args); return { paymentIntentId: args.paymentIntentId, chargeId: 'ch_' + args.bidId, transferId: 'tr_' + args.bidId, applicationFeeCents: args.applicationFeeCents, netCents: args.amountCents - args.applicationFeeCents }; },
+      async captureCancellationFee(args) { calls.feeCaptures.push(args); return { paymentIntentId: args.paymentIntentId, chargeId: 'chfee_' + args.bidId }; },
+      async cancelOfferAuthorization(args) { calls.cancels.push(args); return { id: args.paymentIntentId, status: 'canceled' }; },
+      async chargeActCommission(args) { calls.commissions.push(args); return { id: 'pi_' + (args.bidId || 'x'), applicationFeeCents: args.applicationFeeCents }; },
+      constructEvent(rawBody) { return JSON.parse(rawBody || '{}'); },
+    });
+
+    const buildApp = () => createApp(this.repo, {
       now: () => TODAY,
       newId: () => 'bid-' + ++seq,
       notifier: this.notifier,
       billing: this.billing,
-      // The fake billing exists only to serve the Stripe webhook route; the
-      // acceptance suites document the pre-billing offer flow (offers go live the
-      // instant they are posted), so pay-on-accept stays off here.
-      billingConfigured: false,
+      // The default fake billing exists only to serve the Stripe webhook
+      // route; most suites document the pre-billing offer flow (offers go
+      // live the instant they are posted), so pay-on-accept stays off unless
+      // a scenario says « la facturation Stripe est configurée ».
+      billingConfigured: this.billingOn === true,
     });
+
+    this.billingOn = false;
+    this.app = buildApp();
+
+    // Money scenarios (ADR 0015/0023) run the REAL billing use-cases over the
+    // Stripe recorder above — only the network is fake. The app is rebuilt on
+    // the same repo/notifier, so anything already seeded survives the switch.
+    this.enableBilling = () => {
+      this.billingOn = true;
+      this.billing = createBilling({ repo: this.repo, stripe: this.stripe, now: () => TODAY });
+      this.app = buildApp();
+    };
 
     // Scratch state shared between steps of one scenario.
     this.input = {};

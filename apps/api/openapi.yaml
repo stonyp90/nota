@@ -583,6 +583,51 @@ paths:
                     $ref: "#/components/schemas/NotaryCommission"
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /notary/evaluations:
+    get:
+      operationId: listNotaryEvaluations
+      summary: The notary's own track record — every client evaluation, newest first.
+      description: >-
+        The anonymized evaluation ledger (ADR 0021): each entry is the note,
+        the optional comment, the act's service and date, and the instant the
+        client submitted it — never the client's identity. Evaluations
+        submitted before the ledger existed are not backfilled; they remain
+        counted in `rating`.
+      security:
+        - notarySession: []
+      responses:
+        "200":
+          description: The aggregate the clients see, and the entries behind it.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [rating, evaluations]
+                properties:
+                  rating:
+                    $ref: "#/components/schemas/NotaryRating"
+                  evaluations:
+                    type: array
+                    items:
+                      type: object
+                      required: [note]
+                      properties:
+                        note:
+                          type: integer
+                          minimum: 1
+                          maximum: 5
+                        commentaire:
+                          type: [string, "null"]
+                        serviceId:
+                          type: [string, "null"]
+                        dateISO:
+                          type: [string, "null"]
+                          description: The act's date (the signing the note rates).
+                        createdAt:
+                          type: [string, "null"]
+                          description: When the client submitted the evaluation.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
   /notary/profile:
     post:
       operationId: updateNotaryProfile
@@ -961,6 +1006,74 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /notary/acts/complete:
+    post:
+      operationId: completeRetainedAct
+      summary: Settle a retained act at its confirmed value — THE payment moment (ADR 0015).
+      description: >-
+        The notary who retained the bid confirms the act signed and its final
+        value. With a live client authorization Nota captures it and transfers
+        the net; otherwise the commission model applies as fallback. The act
+        ledger is write-once: a duplicate submit answers with the ORIGINAL
+        settled figures and never charges twice. The domain bounds the value
+        against the retained offer (`validateActValue`, `ACT_VALUE_BOUNDS`) —
+        a figure far outside it is a typo, refused before the ledger.
+      security:
+        - notarySession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [bidId, dateISO, actAmount]
+              properties:
+                bidId:
+                  type: string
+                dateISO:
+                  type: string
+                  format: date
+                actAmount:
+                  type: number
+                  description: The value confirmed at signing, in dollars.
+      responses:
+        "200":
+          description: The act is settled (now, or already — same figures either way).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, actAmount, commissionCents]
+                properties:
+                  ok:
+                    type: boolean
+                  actAmount:
+                    type: integer
+                    description: The SETTLED value — the ledger's original figure on a duplicate submit.
+                  commissionCents:
+                    type: integer
+                  paid:
+                    type: boolean
+                    description: Present when the client's authorization was captured.
+                  netCents:
+                    type: integer
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: This act was not retained by the requesting notary (`acte_non_autorise`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: >-
+            Domain errors: `montant_invalide`, `montant_hors_bornes` (value far
+            outside the retained offer), or a billing refusal
+            (`compte_incomplet`, `paiement_echoue`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /client/bid:
     get:
       operationId: getClientBid
@@ -1032,6 +1145,37 @@ paths:
                     description: The retained-act conversation. Empty until a notary retains the bid.
                     items:
                       $ref: "#/components/schemas/ChatMessage"
+                  acte:
+                    type: object
+                    description: >-
+                      Act settlement state (ADR 0015) — `complete` flips once
+                      the ACT# ledger has settled the signing; the UI keys the
+                      evaluation door on it.
+                    properties:
+                      complete:
+                        type: boolean
+                  evaluation:
+                    type: [object, "null"]
+                    description: The client's evaluation, once submitted (ADR 0021).
+                    properties:
+                      note:
+                        type: integer
+                      commentaire:
+                        type: [string, "null"]
+                  annulation:
+                    type: [object, "null"]
+                    description: >-
+                      What cancelling TODAY would cost (ADR 0023), disclosed
+                      before the client confirms. Null when the cancel would be
+                      free (open offer, no live hold, free window) or
+                      impossible (settled act).
+                    properties:
+                      taux:
+                        type: number
+                      frais:
+                        type: number
+                      joursAvant:
+                        type: integer
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -1250,12 +1394,19 @@ paths:
       summary: Withdraw an offer — open or already retained.
       description: >-
         Guarded by the bid's own CLIENT token. Idempotent: cancelling an
-        already-cancelled offer answers 200 with the final state. An OPEN offer
-        simply leaves the carnet (a pending pay-on-accept card hold is
-        released). A RETAINED offer unwinds the mise en relation: the retaining
-        notary and the operator are notified, and the signing leaves the
-        notary's calendar feed. Every market surface hides the bid afterwards;
-        only the owner keeps reading it via GET /client/bid.
+        already-cancelled offer answers 200 with the final state (and never
+        charges twice). An OPEN offer simply leaves the carnet (a live card
+        hold is released). A RETAINED offer unwinds the mise en relation: the
+        retaining notary and the operator are notified, and the signing leaves
+        the notary's calendar feed. A LATE cancellation of a retained offer
+        carries a fee (ADR 0023) kept by PARTIAL capture of the client's
+        existing hold — the barème (days-before-signing paliers) is decided by
+        Nota from the admin console; the remainder of the hold is released
+        immediately. Every path that keeps no fee releases the hold whole. The
+        fee actually kept rides back on `bid.annulation`. A settled act (ACT#
+        ledger) refuses with 409 `acte_complete`. Every market surface hides
+        the bid afterwards; only the owner keeps reading it via GET
+        /client/bid.
       security:
         - clientToken: []
       requestBody:
@@ -1288,6 +1439,14 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "409":
+          description: >-
+            The act is signed and settled (`acte_complete`) — it can no longer
+            be cancelled.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /client/welcome:
     post:
       operationId: clientWelcome
@@ -1858,6 +2017,18 @@ components:
         viaProposition:
           type: boolean
           description: True when retention came from the client accepting this notary's proposition.
+        completed:
+          type: boolean
+          description: >-
+            True once the write-once act ledger holds this act's settlement —
+            the console renders « Acte complété » in ANY session and never
+            re-offers the settlement button.
+        actAmount:
+          type: [integer, "null"]
+          description: The value the act settled at (null until completed).
+        commissionCents:
+          type: [integer, "null"]
+          description: Nota's commission on the settled act (null until completed).
     AcceptedBid:
       type: object
       description: >-
@@ -2060,6 +2231,23 @@ components:
         createdAt:
           type: string
           format: date
+        annulation:
+          type: [object, "null"]
+          description: >-
+            What a cancellation actually kept (ADR 0023) — only on a cancelled
+            bid whose late withdrawal carried a fee, null everywhere else.
+          properties:
+            taux:
+              type: number
+              description: Share of the retained montant kept (e.g. 0.3).
+            frais:
+              type: number
+              description: Fee kept, in dollars.
+            joursAvant:
+              type: integer
+              description: Civil days left before the signing at cancel time.
+            chargeId:
+              type: [string, "null"]
     Error:
       type: object
       required: [code, message]

@@ -212,6 +212,8 @@
     if (hash.indexOf('#/auth') === 0) { handleAuthRoute(hash); return; }
     if (!session) { renderAuthRequest({}); return; }
     if (hash.indexOf('#/courriels') === 0) { renderCourriels(); return; }
+    if (hash.indexOf('#/commission') === 0) { renderCommission(); return; }
+    if (hash.indexOf('#/annulation') === 0) { renderAnnulation(); return; }
     renderOverview(); // '#/' and any unknown authed route land on the overview
   }
   function focusTitle() {
@@ -407,6 +409,24 @@
     if (active === 'courriels') mails.setAttribute('aria-current', 'page');
     mails.addEventListener('click', function () { go('#/courriels'); });
     rail.appendChild(mails);
+
+    // Commission — the rating-earned barème Nota decides (ADR 0021 §4).
+    var comm = el('button', 'admin-rail-link');
+    comm.type = 'button';
+    comm.appendChild(iconPercent());
+    comm.appendChild(document.createTextNode('Commission'));
+    if (active === 'commission') comm.setAttribute('aria-current', 'page');
+    comm.addEventListener('click', function () { go('#/commission'); });
+    rail.appendChild(comm);
+
+    // Annulation — the late-cancellation fee barème Nota decides (ADR 0023 §2).
+    var annul = el('button', 'admin-rail-link');
+    annul.type = 'button';
+    annul.appendChild(iconCalendarX());
+    annul.appendChild(document.createTextNode('Annulation'));
+    if (active === 'annulation') annul.setAttribute('aria-current', 'page');
+    annul.addEventListener('click', function () { go('#/annulation'); });
+    rail.appendChild(annul);
 
     // Phase-2 placeholders — visible but disabled, so the console reads as a
     // console without shipping dead links.
@@ -1021,6 +1041,578 @@
     await loadTemplatesInto(container);
   }
 
+  // ---------------------------------------------------------------------------
+  // Commission page — the rating-earned commission barème (ADR 0021 §4).
+  // GET /commission returns { defaut, override, effectif }; PUT stores a FULL
+  // replacement; DELETE returns billing to the deployment defaults. Writing
+  // needs the 'settings:write' permission (super_admin) — an analyst sees the
+  // barème in force read-only, with no form (the API re-enforces server-side).
+  // Rates travel as FRACTIONS (0.10 = 10 %); the form speaks percent
+  // (« 12 » = 12 %) and converts on save. Client-side parsing stays minimal on
+  // purpose: a non-numeric field goes through as null and the API's loud
+  // validation (422) answers in the inline error region.
+  // ---------------------------------------------------------------------------
+  var commissionBody = null;
+  var MAX_PALIERS = 10;
+
+  function canWriteSettings() {
+    return !!(me && me.permissions && me.permissions.indexOf('settings:write') >= 0);
+  }
+
+  // « 12 » or « 12,5 » (percent, comma or point) → 0.125 fraction.
+  function pctToFrac(v) {
+    var s = String(v == null ? '' : v).trim().replace(',', '.');
+    if (!s) return NaN;
+    var n = Number(s);
+    return isFinite(n) ? Math.round(n * 10000) / 1000000 : NaN;
+  }
+  // 0.125 fraction → « 12,5 » (percent, decimal comma) for seeding inputs.
+  function fracToPct(f) {
+    var p = Math.round((Number(f) || 0) * 1000000) / 10000;
+    return String(p).replace('.', ',');
+  }
+  function pctLabel(f) { return fracToPct(f) + ' %'; }
+  // 4.5 → « 4,5 » (decimal comma display); the inverse accepts both separators.
+  function decLabel(n) { return String(Number(n) || 0).replace('.', ','); }
+  function decToNum(v) {
+    var s = String(v == null ? '' : v).trim().replace(',', '.');
+    if (!s) return NaN;
+    var n = Number(s);
+    return isFinite(n) ? n : NaN;
+  }
+  // updatedAt ISO → a quiet locale-neutral « 2026-08-27 12:00 ».
+  function baremeDate(iso) {
+    if (!iso) return '—';
+    var s = String(iso);
+    return s.slice(0, 10) + (s.length > 16 ? ' ' + s.slice(11, 16) : '');
+  }
+
+  async function renderCommission() {
+    if (!me || !me.email) {
+      var loaded = await loadMe();
+      if (!loaded.ok) {
+        if (loaded.status !== 401) renderFatal('Impossible de charger votre profil.', renderCommission);
+        return;
+      }
+    }
+    renderUserbar();
+
+    var content = el('div', 'admin-content');
+    var head = el('div', 'page-head view-enter');
+    var titleWrap = el('div');
+    titleWrap.appendChild(el('span', 'page-eyebrow', 'Facturation'));
+    titleWrap.appendChild(el('h1', 'page-title', 'Commission'));
+    titleWrap.appendChild(el('p', 'page-sub',
+      'Barème décidé par Nota — taux de base, plancher et bonification par évaluations.'));
+    head.appendChild(titleWrap);
+    content.appendChild(head);
+
+    commissionBody = el('div');
+    content.appendChild(commissionBody);
+
+    mountAuthed('commission', content);
+    focusTitle();
+    await loadCommissionInto(commissionBody);
+  }
+
+  async function loadCommissionInto(container) {
+    clear(container);
+    var skel = el('div', 'stat-grid');
+    for (var i = 0; i < 3; i++) skel.appendChild(el('div', 'skeleton skeleton-tile'));
+    container.appendChild(skel);
+
+    var r = await call('GET', '/commission');
+    if (r.status === 401) return; // handled by call()
+    clear(container);
+    if (!r.ok || !r.json || !r.json.effectif) {
+      container.appendChild(buildErrorBanner(function () { loadCommissionInto(container); }));
+      return;
+    }
+
+    var view = el('div', 'view-enter');
+    if (!canWriteSettings()) {
+      var note = el('div', 'tpl-readonly-note');
+      note.appendChild(el('strong', null, 'Lecture seule'));
+      note.appendChild(document.createTextNode(' — la modification du barème est réservée à l’administrateur principal.'));
+      view.appendChild(note);
+    }
+    view.appendChild(buildBaremeView(r.json));
+    if (canWriteSettings()) view.appendChild(buildBaremeForm(r.json, container));
+    container.appendChild(view);
+  }
+
+  // --- Read view: what billing prices with right now -------------------------
+  function buildBaremeView(data) {
+    var eff = data.effectif;
+    var wrap = el('div');
+
+    var grid = el('div', 'stat-grid');
+    grid.appendChild(tile('Taux de base', pctLabel(eff.taux), 'de commission sur chaque acte', false));
+    grid.appendChild(tile('Plancher', pctLabel(eff.plancher), 'jamais franchi par la bonification', false));
+    grid.appendChild(tile('Paliers', num((eff.paliers || []).length), 'de bonification par évaluations', false));
+    wrap.appendChild(grid);
+
+    var card = el('div', 'chart-card tpl-group bareme-card');
+    var head = el('div', 'chart-card-head');
+    var ht = el('div');
+    ht.appendChild(el('div', 'chart-card-title', 'Barème en vigueur'));
+    // Quietly say WHICH barème rules: the stored override (with its date) or
+    // the deployment defaults.
+    var src = data.override
+      ? 'Barème décidé par Nota — modifié le ' + baremeDate(data.override.updatedAt) + '.'
+      : 'Valeurs par défaut du déploiement — aucun barème enregistré.';
+    ht.appendChild(el('div', 'chart-card-sub', src));
+    head.appendChild(ht);
+    card.appendChild(head);
+
+    var paliers = eff.paliers || [];
+    if (!paliers.length) {
+      card.appendChild(el('p', 'tpl-note', 'Aucun palier — le taux de base s’applique toujours.'));
+    } else {
+      var scroll = el('div', 'chart-scroll');
+      var table = el('table', 'ptable');
+      var thead = el('thead');
+      var hr = el('tr');
+      ['Note moyenne', 'Avis requis', 'Réduction', 'Taux résultant'].forEach(function (h, i) {
+        hr.appendChild(el('th', i >= 1 ? 'is-num' : null, h));
+      });
+      thead.appendChild(hr);
+      table.appendChild(thead);
+      var tbody = el('tbody');
+      paliers.forEach(function (p) {
+        var tr = el('tr');
+        tr.appendChild(el('td', 'ptable-code', decLabel(p.note)));
+        tr.appendChild(el('td', 'is-num', num(p.avis)));
+        tr.appendChild(el('td', 'is-num', '− ' + pctLabel(p.bonus)));
+        tr.appendChild(el('td', 'is-num ptable-du',
+          pctLabel(Math.max(Number(eff.plancher) || 0, (Number(eff.taux) || 0) - (Number(p.bonus) || 0)))));
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      scroll.appendChild(table);
+      card.appendChild(scroll);
+    }
+    wrap.appendChild(card);
+    return wrap;
+  }
+
+  // --- Edit form (super_admin only) ------------------------------------------
+  function buildBaremeForm(data, container) {
+    var eff = data.effectif;
+    var card = el('div', 'chart-card');
+    var head = el('div', 'chart-card-head');
+    var ht = el('div');
+    ht.appendChild(el('div', 'chart-card-title', 'Modifier le barème'));
+    ht.appendChild(el('div', 'chart-card-sub', 'Les valeurs sont saisies en pourcentage — « 12 » signifie 12 %.'));
+    head.appendChild(ht);
+    card.appendChild(head);
+
+    function fld(labelText, value) {
+      var field = el('div', 'field');
+      field.appendChild(el('label', null, labelText));
+      var input = el('input', 'input');
+      input.type = 'text';
+      input.inputMode = 'decimal';
+      input.setAttribute('data-i18n-skip', '');
+      input.value = value;
+      field.appendChild(input);
+      return { field: field, input: input };
+    }
+
+    var form = el('form', 'bareme-form');
+    form.noValidate = true;
+
+    var top = el('div', 'tpl-fields');
+    var taux = fld('Taux de base (%)', fracToPct(eff.taux));
+    var plancher = fld('Plancher (%)', fracToPct(eff.plancher));
+    top.appendChild(taux.field);
+    top.appendChild(plancher.field);
+    form.appendChild(top);
+
+    // Editable tier rows, capped at MAX_PALIERS (mirrors the API's ceiling).
+    var listWrap = el('div', 'bareme-paliers');
+    listWrap.appendChild(el('div', 'bareme-paliers-label', 'Paliers de bonification'));
+    var rowsBox = el('div', 'bareme-rows');
+    listWrap.appendChild(rowsBox);
+    var addBtn = el('button', 'btn btn-sm', 'Ajouter un palier');
+    addBtn.type = 'button';
+    listWrap.appendChild(addBtn);
+    form.appendChild(listWrap);
+
+    function syncAdd() { addBtn.disabled = rowsBox.children.length >= MAX_PALIERS; }
+    function addRow(p) {
+      if (rowsBox.children.length >= MAX_PALIERS) return;
+      var row = el('div', 'bareme-palier');
+      row.appendChild(fld('Note minimale', p ? decLabel(p.note) : '').field);
+      row.appendChild(fld('Avis minimum', p ? String(p.avis) : '').field);
+      row.appendChild(fld('Réduction (%)', p ? fracToPct(p.bonus) : '').field);
+      var rm = el('button', 'btn btn-sm bareme-remove', 'Retirer');
+      rm.type = 'button';
+      rm.addEventListener('click', function () { rowsBox.removeChild(row); syncAdd(); });
+      row.appendChild(rm);
+      rowsBox.appendChild(row);
+      syncAdd();
+    }
+    (eff.paliers || []).forEach(function (p) { addRow(p); });
+    syncAdd();
+    addBtn.addEventListener('click', function () { addRow(null); });
+
+    var error = el('div', 'tpl-error');
+    error.hidden = true;
+    form.appendChild(error);
+
+    var actions = el('div', 'tpl-actions');
+    var save = el('button', 'btn btn-sm btn-primary', 'Enregistrer le barème');
+    save.type = 'submit';
+    actions.appendChild(save);
+    form.appendChild(actions);
+    card.appendChild(form);
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var body = {
+        taux: pctToFrac(taux.input.value),
+        plancher: pctToFrac(plancher.input.value),
+        paliers: [].map.call(rowsBox.children, function (row) {
+          var ins = row.querySelectorAll('input');
+          return {
+            note: decToNum(ins[0].value),
+            avis: decToNum(ins[1].value), // the API enforces the integer ≥ 1
+            bonus: pctToFrac(ins[2].value),
+          };
+        }),
+      };
+      submitBareme('PUT', body, [save], error, container, 'Barème enregistré.');
+    });
+
+    // The reset is offered only when an override is actually stored (same
+    // idiom as the Courriels Réinitialiser), behind an in-page confirm step.
+    if (data.override) card.appendChild(buildBaremeReset(error, container));
+    return card;
+  }
+
+  function buildBaremeReset(error, container) {
+    var wrap = el('div', 'bareme-reset');
+    var open = el('button', 'btn btn-sm', 'Revenir aux valeurs par défaut');
+    open.type = 'button';
+    wrap.appendChild(open);
+
+    var confirmBox = el('div', 'bareme-confirm');
+    confirmBox.hidden = true;
+    confirmBox.appendChild(el('p', 'bareme-confirm-text',
+      'Le barème enregistré sera supprimé — les valeurs par défaut reprendront effet dès le prochain acte.'));
+    var confirmActions = el('div', 'tpl-actions');
+    var yes = el('button', 'btn btn-sm btn-danger', 'Confirmer la réinitialisation');
+    yes.type = 'button';
+    var no = el('button', 'btn btn-sm btn-ghost', 'Annuler');
+    no.type = 'button';
+    confirmActions.appendChild(yes);
+    confirmActions.appendChild(no);
+    confirmBox.appendChild(confirmActions);
+    wrap.appendChild(confirmBox);
+
+    open.addEventListener('click', function () { confirmBox.hidden = false; open.hidden = true; });
+    no.addEventListener('click', function () { confirmBox.hidden = true; open.hidden = false; });
+    yes.addEventListener('click', function () {
+      submitBareme('DELETE', null, [yes, no], error, container, 'Barème réinitialisé.');
+    });
+    return wrap;
+  }
+
+  async function submitBareme(method, body, buttons, error, container, okMsg) {
+    buttons.forEach(function (b) { b.disabled = true; });
+    var r = await call(method, '/commission', body === null ? undefined : body);
+    buttons.forEach(function (b) { b.disabled = false; });
+    if (r.status === 401) return; // handled by call()
+    if (!r.ok) {
+      error.hidden = false;
+      clear(error);
+      var errs = (r.json && r.json.errors && r.json.errors.length)
+        ? r.json.errors
+        : [{ message: 'Impossible d’enregistrer le barème.' }];
+      errs.forEach(function (er) {
+        var line = el('div', 'tpl-error-line');
+        line.appendChild(el('strong', null, er.message || er.code || 'Erreur.'));
+        error.appendChild(line);
+      });
+      return;
+    }
+    toast(okMsg);
+    await loadCommissionInto(container);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Annulation page — the late-cancellation fee barème (ADR 0023 §2).
+  // GET /annulation returns { defaut, override, effectif }; PUT stores a FULL
+  // replacement; DELETE returns the cancel route to the deployment defaults.
+  // Writing needs the 'settings:write' permission (super_admin) — an analyst
+  // sees the barème in force read-only, with no form (the API re-enforces
+  // server-side). A palier: at most `maxJours` days left before the signing →
+  // `taux` of the agreed montant retained; beyond the last palier the
+  // cancellation is free, and an EMPTY barème is a valid override that makes
+  // it free everywhere (the kill-switch is data). Rates travel as FRACTIONS
+  // (0.30 = 30 %); the form speaks percent and converts on save, exactly like
+  // the Commission page.
+  // ---------------------------------------------------------------------------
+  var annulationBody = null;
+
+  // The rate a cancellation at `jours` days out would carry under `paliers`.
+  function annulationRateAt(jours, paliers) {
+    for (var i = 0; i < (paliers || []).length; i++) {
+      if (jours <= paliers[i].maxJours) return paliers[i].taux;
+    }
+    return 0;
+  }
+  // « 0–3 jours » / « 4–14 jours » — the band a palier covers, self-explaining.
+  function annulationBandLabel(p, prev) {
+    var lo = prev === null ? 0 : prev + 1;
+    return (lo === p.maxJours ? String(p.maxJours) : lo + '–' + p.maxJours) + (p.maxJours > 1 ? ' jours' : ' jour');
+  }
+
+  async function renderAnnulation() {
+    if (!me || !me.email) {
+      var loaded = await loadMe();
+      if (!loaded.ok) {
+        if (loaded.status !== 401) renderFatal('Impossible de charger votre profil.', renderAnnulation);
+        return;
+      }
+    }
+    renderUserbar();
+
+    var content = el('div', 'admin-content');
+    var head = el('div', 'page-head view-enter');
+    var titleWrap = el('div');
+    titleWrap.appendChild(el('span', 'page-eyebrow', 'Facturation'));
+    titleWrap.appendChild(el('h1', 'page-title', 'Annulation'));
+    titleWrap.appendChild(el('p', 'page-sub',
+      'Barème décidé par Nota — frais d’annulation tardive selon les jours restants avant la signature.'));
+    head.appendChild(titleWrap);
+    content.appendChild(head);
+
+    annulationBody = el('div');
+    content.appendChild(annulationBody);
+
+    mountAuthed('annulation', content);
+    focusTitle();
+    await loadAnnulationInto(annulationBody);
+  }
+
+  async function loadAnnulationInto(container) {
+    clear(container);
+    var skel = el('div', 'stat-grid');
+    for (var i = 0; i < 3; i++) skel.appendChild(el('div', 'skeleton skeleton-tile'));
+    container.appendChild(skel);
+
+    var r = await call('GET', '/annulation');
+    if (r.status === 401) return; // handled by call()
+    clear(container);
+    if (!r.ok || !r.json || !r.json.effectif) {
+      container.appendChild(buildErrorBanner(function () { loadAnnulationInto(container); }));
+      return;
+    }
+
+    var view = el('div', 'view-enter');
+    if (!canWriteSettings()) {
+      var note = el('div', 'tpl-readonly-note');
+      note.appendChild(el('strong', null, 'Lecture seule'));
+      note.appendChild(document.createTextNode(' — la modification du barème est réservée à l’administrateur principal.'));
+      view.appendChild(note);
+    }
+    view.appendChild(buildAnnulationView(r.json));
+    if (canWriteSettings()) view.appendChild(buildAnnulationForm(r.json, container));
+    container.appendChild(view);
+  }
+
+  // --- Read view: what the cancel route prices with right now ----------------
+  function buildAnnulationView(data) {
+    var eff = data.effectif;
+    var paliers = eff.paliers || [];
+    var wrap = el('div');
+
+    var grid = el('div', 'stat-grid');
+    grid.appendChild(tile('Dernière minute', pctLabel(annulationRateAt(0, paliers)), 'retenu la veille de la signature', false));
+    grid.appendChild(tile('Paliers', num(paliers.length), 'de frais selon les jours restants', false));
+    var freeFrom = paliers.length ? paliers[paliers.length - 1].maxJours + 1 : 0;
+    grid.appendChild(tile('Gratuit dès', num(freeFrom) + (freeFrom > 1 ? ' jours' : ' jour'), 'avant la signature', false));
+    wrap.appendChild(grid);
+
+    var card = el('div', 'chart-card tpl-group bareme-card');
+    var head = el('div', 'chart-card-head');
+    var ht = el('div');
+    ht.appendChild(el('div', 'chart-card-title', 'Barème en vigueur'));
+    // Quietly say WHICH barème rules: the stored override (with its date) or
+    // the deployment defaults.
+    var src = data.override
+      ? 'Barème décidé par Nota — modifié le ' + baremeDate(data.override.updatedAt) + '.'
+      : 'Valeurs par défaut du déploiement — aucun barème enregistré.';
+    ht.appendChild(el('div', 'chart-card-sub', src));
+    head.appendChild(ht);
+    card.appendChild(head);
+
+    if (!paliers.length) {
+      card.appendChild(el('p', 'tpl-note', 'Aucun palier — l’annulation est gratuite partout.'));
+    } else {
+      var scroll = el('div', 'chart-scroll');
+      var table = el('table', 'ptable');
+      var thead = el('thead');
+      var hr = el('tr');
+      ['Jours avant la signature', 'Taux retenu'].forEach(function (h, i) {
+        hr.appendChild(el('th', i >= 1 ? 'is-num' : null, h));
+      });
+      thead.appendChild(hr);
+      table.appendChild(thead);
+      var tbody = el('tbody');
+      var prev = null;
+      paliers.forEach(function (p) {
+        var tr = el('tr');
+        tr.appendChild(el('td', 'ptable-code', annulationBandLabel(p, prev)));
+        tr.appendChild(el('td', 'is-num ptable-du', pctLabel(p.taux)));
+        tbody.appendChild(tr);
+        prev = p.maxJours;
+      });
+      table.appendChild(tbody);
+      scroll.appendChild(table);
+      card.appendChild(scroll);
+      card.appendChild(el('p', 'tpl-note', 'Au-delà du dernier palier, l’annulation est gratuite.'));
+    }
+    wrap.appendChild(card);
+    return wrap;
+  }
+
+  // --- Edit form (super_admin only) ------------------------------------------
+  function buildAnnulationForm(data, container) {
+    var eff = data.effectif;
+    var card = el('div', 'chart-card');
+    var head = el('div', 'chart-card-head');
+    var ht = el('div');
+    ht.appendChild(el('div', 'chart-card-title', 'Modifier le barème'));
+    ht.appendChild(el('div', 'chart-card-sub', 'Les taux sont saisis en pourcentage — « 30 » signifie 30 %. Un barème sans palier rend l’annulation gratuite partout.'));
+    head.appendChild(ht);
+    card.appendChild(head);
+
+    function fld(labelText, value) {
+      var field = el('div', 'field');
+      field.appendChild(el('label', null, labelText));
+      var input = el('input', 'input');
+      input.type = 'text';
+      input.inputMode = 'decimal';
+      input.setAttribute('data-i18n-skip', '');
+      input.value = value;
+      field.appendChild(input);
+      return { field: field, input: input };
+    }
+
+    var form = el('form', 'bareme-form');
+    form.noValidate = true;
+
+    // Editable tier rows, capped at MAX_PALIERS (mirrors the API's ceiling).
+    var listWrap = el('div', 'bareme-paliers');
+    listWrap.appendChild(el('div', 'bareme-paliers-label', 'Paliers de frais'));
+    var rowsBox = el('div', 'bareme-rows');
+    listWrap.appendChild(rowsBox);
+    var addBtn = el('button', 'btn btn-sm', 'Ajouter un palier');
+    addBtn.type = 'button';
+    listWrap.appendChild(addBtn);
+    form.appendChild(listWrap);
+
+    function syncAdd() { addBtn.disabled = rowsBox.children.length >= MAX_PALIERS; }
+    function addRow(p) {
+      if (rowsBox.children.length >= MAX_PALIERS) return;
+      var row = el('div', 'bareme-palier');
+      row.appendChild(fld('Jours restants (max)', p ? String(p.maxJours) : '').field);
+      row.appendChild(fld('Taux retenu (%)', p ? fracToPct(p.taux) : '').field);
+      var rm = el('button', 'btn btn-sm bareme-remove', 'Retirer');
+      rm.type = 'button';
+      rm.addEventListener('click', function () { rowsBox.removeChild(row); syncAdd(); });
+      row.appendChild(rm);
+      rowsBox.appendChild(row);
+      syncAdd();
+    }
+    (eff.paliers || []).forEach(function (p) { addRow(p); });
+    syncAdd();
+    addBtn.addEventListener('click', function () { addRow(null); });
+
+    var error = el('div', 'tpl-error');
+    error.hidden = true;
+    form.appendChild(error);
+
+    var actions = el('div', 'tpl-actions');
+    var save = el('button', 'btn btn-sm btn-primary', 'Enregistrer le barème');
+    save.type = 'submit';
+    actions.appendChild(save);
+    form.appendChild(actions);
+    card.appendChild(form);
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var body = {
+        paliers: [].map.call(rowsBox.children, function (row) {
+          var ins = row.querySelectorAll('input');
+          return {
+            maxJours: decToNum(ins[0].value), // the API enforces the integer ≥ 0
+            taux: pctToFrac(ins[1].value),
+          };
+        }),
+      };
+      submitAnnulation('PUT', body, [save], error, container, 'Barème enregistré.');
+    });
+
+    // The reset is offered only when an override is actually stored (same
+    // idiom as the Commission page), behind an in-page confirm step.
+    if (data.override) card.appendChild(buildAnnulationReset(error, container));
+    return card;
+  }
+
+  function buildAnnulationReset(error, container) {
+    var wrap = el('div', 'bareme-reset');
+    var open = el('button', 'btn btn-sm', 'Revenir aux valeurs par défaut');
+    open.type = 'button';
+    wrap.appendChild(open);
+
+    var confirmBox = el('div', 'bareme-confirm');
+    confirmBox.hidden = true;
+    confirmBox.appendChild(el('p', 'bareme-confirm-text',
+      'Le barème enregistré sera supprimé — les valeurs par défaut reprendront effet dès la prochaine annulation.'));
+    var confirmActions = el('div', 'tpl-actions');
+    var yes = el('button', 'btn btn-sm btn-danger', 'Confirmer la réinitialisation');
+    yes.type = 'button';
+    var no = el('button', 'btn btn-sm btn-ghost', 'Annuler');
+    no.type = 'button';
+    confirmActions.appendChild(yes);
+    confirmActions.appendChild(no);
+    confirmBox.appendChild(confirmActions);
+    wrap.appendChild(confirmBox);
+
+    open.addEventListener('click', function () { confirmBox.hidden = false; open.hidden = true; });
+    no.addEventListener('click', function () { confirmBox.hidden = true; open.hidden = false; });
+    yes.addEventListener('click', function () {
+      submitAnnulation('DELETE', null, [yes, no], error, container, 'Barème réinitialisé.');
+    });
+    return wrap;
+  }
+
+  async function submitAnnulation(method, body, buttons, error, container, okMsg) {
+    buttons.forEach(function (b) { b.disabled = true; });
+    var r = await call(method, '/annulation', body === null ? undefined : body);
+    buttons.forEach(function (b) { b.disabled = false; });
+    if (r.status === 401) return; // handled by call()
+    if (!r.ok) {
+      error.hidden = false;
+      clear(error);
+      var errs = (r.json && r.json.errors && r.json.errors.length)
+        ? r.json.errors
+        : [{ message: 'Impossible d’enregistrer le barème.' }];
+      errs.forEach(function (er) {
+        var line = el('div', 'tpl-error-line');
+        line.appendChild(el('strong', null, er.message || er.code || 'Erreur.'));
+        error.appendChild(line);
+      });
+      return;
+    }
+    toast(okMsg);
+    await loadAnnulationInto(container);
+  }
+
   // --- Loading / empty / error ----------------------------------------------
   function buildSkeletons() {
     var wrap = el('div');
@@ -1075,6 +1667,24 @@
       stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' });
     s.appendChild(svgEl('rect', { x: 3, y: 5, width: 18, height: 14, rx: 2 }));
     s.appendChild(svgEl('path', { d: 'M3 7l9 6 9-6' }));
+    return s;
+  }
+  function iconPercent() {
+    var s = svgEl('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none',
+      stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' });
+    s.appendChild(svgEl('line', { x1: 19, y1: 5, x2: 5, y2: 19 }));
+    s.appendChild(svgEl('circle', { cx: 6.5, cy: 6.5, r: 2.5 }));
+    s.appendChild(svgEl('circle', { cx: 17.5, cy: 17.5, r: 2.5 }));
+    return s;
+  }
+  function iconCalendarX() {
+    var s = svgEl('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none',
+      stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' });
+    s.appendChild(svgEl('rect', { x: 3, y: 5, width: 18, height: 16, rx: 2 }));
+    s.appendChild(svgEl('line', { x1: 8, y1: 3, x2: 8, y2: 7 }));
+    s.appendChild(svgEl('line', { x1: 16, y1: 3, x2: 16, y2: 7 }));
+    s.appendChild(svgEl('line', { x1: 9.5, y1: 12, x2: 14.5, y2: 17 }));
+    s.appendChild(svgEl('line', { x1: 14.5, y1: 12, x2: 9.5, y2: 17 }));
     return s;
   }
   function iconDot() {

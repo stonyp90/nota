@@ -429,3 +429,20 @@ test('the tier dollar band follows the act and its answers, never a stale floor'
   assert.ok($(doc, 'tp-text').textContent.includes(D.money(Math.round(after * t.apercuMin))),
     'answering a price question re-quotes the band');
 });
+
+test('a calm date quotes ONE figure — never « entre X et X »', async () => {
+  // The standard tier is pinned to 1× (apercuMin === apercuMax), which is every
+  // date two weeks out or more — the degenerate range read as a bug on the most
+  // common booking. One bound → one number, « autour de X ».
+  const { doc, D } = await boot();
+  const iso = addDays(todayISO(), 20);
+  doc.querySelector('.cal-cell[data-date="' + iso + '"]').click();
+  await wait(40);
+  doc.querySelector('#o-service-chips .chip[data-svc="financement"]').click();
+  await wait(20);
+  const t = D.tierById(D.tierForDays(D.daysBetween(todayISO(), iso)));
+  assert.equal(t.apercuMin, t.apercuMax, 'precondition: the calm tier is a single point');
+  const text = $(doc, 'tp-text').textContent;
+  assert.match(text, /se concluent autour de /, 'a point band collapses to one figure: ' + text);
+  assert.ok(!/entre .+ et .+/.test(text), 'no degenerate « entre X et X »: ' + text);
+});

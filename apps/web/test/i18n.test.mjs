@@ -236,6 +236,18 @@ test('the composed Terms partner clause reads fully in English', () => {
   assert.match(en, /OACIQ/, 'the disclosure duty survives translation');
 });
 
+// The demande pill stamps its request date at runtime (« Documents demandés ·
+// 4 · le 27 août »); under the English locale the date half comes out of Intl
+// as "Aug 27", so the exact-match dictionary can never carry « le Aug 27 » —
+// a rule must turn the French article into "on".
+test('the composed « le <date> » demande stamp reads in English', () => {
+  assert.equal(I18N.tEn('le Aug 27'), 'on Aug 27');
+  assert.equal(I18N.tEn('le Sept. 5'), 'on Sept. 5');
+  // French dates in French mode are untouched (the rule only fires on the
+  // English-locale composition).
+  assert.equal(I18N.tEn('le carnet'), 'le carnet');
+});
+
 test('web translations agree with the domain’s English labels', () => {
   I18N.force('en');
   for (const s of D.SERVICES) {

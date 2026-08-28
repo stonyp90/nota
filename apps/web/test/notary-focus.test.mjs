@@ -16,7 +16,7 @@
  * store seeded deterministically. The notary session is driven through the
  * real sign-in path with a URL-routing fetch stub.
  */
-import test from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -25,6 +25,11 @@ import { JSDOM } from 'jsdom';
 const DOMAIN_SRC = readFileSync(fileURLToPath(new URL('../../../packages/domain/index.js', import.meta.url)), 'utf8');
 const APP_SRC = readFileSync(fileURLToPath(new URL('../public/app.js', import.meta.url)), 'utf8');
 const HTML_SRC = readFileSync(fileURLToPath(new URL('../public/index.html', import.meta.url)), 'utf8');
+
+// The console's live-feed poll is a jsdom timer that would hold the runner's
+// process open — close every window once the suite ends so it can exit.
+const DOMS = [];
+after(() => { for (const d of DOMS) { try { d.window.close(); } catch {} } });
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const todayISO = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); }; // LOCAL date, like app.js — the UTC slice rolls to tomorrow every evening in UTC-4/-5
@@ -46,6 +51,7 @@ async function boot() {
       }
     },
   });
+  DOMS.push(dom);
   const win = dom.window;
   win.eval(DOMAIN_SRC);
   const D = win.NotaDomain;
@@ -188,29 +194,33 @@ test('earnings with nothing completed render no tile grid, only the help line', 
 });
 
 // ---------------------------------------------------------------------------
-// The by-date agenda: a notary plans a week, so the open list is grouped by
-// signing day (ascending), then by act, with the money on the table per day.
+// The by-date agenda (ADR 0020): the date is data ON the card, not a layout
+// axis — one grid packs the width chronologically (soonest day first, best
+// offer leading its act), and the slim day strip above it carries each
+// signing day's count and money where a full-width band per day used to.
 // ---------------------------------------------------------------------------
-test('open demands are grouped by date, then by service, with per-day totals', async () => {
+test('open demands render chronologically in one grid; the day strip totals each day', async () => {
   const { doc, open, D } = await bootSignedIn((seedOpen) => seedOpen.slice(0, 8));
-  const days = [...doc.querySelectorAll('#notary-open-list .nc-day[data-date]')];
   const agenda = D.agendaByDate(open);
-  assert.equal(days.length, agenda.length, 'one .nc-day section per signing day');
-  const dates = days.map((d) => d.dataset.date);
-  assert.deepEqual(dates, [...dates].sort(), 'days render in ascending date order');
-  days.forEach((day, i) => {
+  const grids = doc.querySelectorAll('#notary-open-list .nc-agenda-grid');
+  assert.equal(grids.length, 1, 'exactly one flat grid holds the feed');
+  const cards = [...grids[0].querySelectorAll('.nc-card')];
+  // Array.from: the domain ran inside the jsdom realm, so its arrays carry
+  // another prototype — strict deepEqual would reject them for that alone.
+  const expected = Array.from(agenda).flatMap((d) => Array.from(d.services).flatMap((s) => Array.from(s.bids, (b) => b.id)));
+  assert.deepEqual(cards.map((c) => c.dataset.id), expected, 'cards run soonest day first, best offer leading its act');
+  for (const card of cards) {
+    const b = open.find((x) => x.id === card.dataset.id);
+    assert.equal(card.dataset.date, b.dateISO, 'each card carries its signing date');
+    assert.ok(card.querySelector('.nc-card-when .nc-when-date'), 'the date reads on the card itself');
+  }
+  const tiles = [...doc.querySelectorAll('#notary-open-list .nc-days .nc-daytile')];
+  assert.equal(tiles.length, agenda.length, 'one day tile per signing day');
+  tiles.forEach((tile, i) => {
     const exp = agenda[i];
-    assert.equal(day.dataset.date, exp.dateISO);
-    assert.equal(day.querySelector('.nc-day-total').textContent, D.money(exp.total), 'per-day total via money()');
-    assert.equal(day.querySelector('.nc-day-count').textContent, String(exp.count), 'per-day count');
-    const svcs = [...day.querySelectorAll('.nc-svc[data-service]')];
-    // Array.from: the domain ran inside the jsdom realm, so its arrays carry
-    // another prototype — strict deepEqual would reject them for that alone.
-    assert.deepEqual(svcs.map((s) => s.dataset.service), Array.from(exp.services, (s) => s.serviceId), 'one .nc-svc per service');
-    svcs.forEach((s, j) => {
-      assert.equal(s.querySelectorAll('.nc-card').length, exp.services[j].bids.length, 'cards live inside their service group');
-      assert.equal(s.querySelector('.nc-card').dataset.id, exp.services[j].bids[0].id, 'best offer leads the service group');
-    });
+    assert.equal(tile.dataset.date, exp.dateISO, 'day tiles run in ascending date order');
+    assert.equal(tile.querySelector('.nc-day-total').textContent, D.money(exp.total), 'per-day total via money()');
+    assert.equal(tile.querySelector('.nc-day-count').textContent, String(exp.count), 'per-day count');
   });
   const head = $(doc, 'notary-open-h');
   const total = open.reduce((s, b) => s + b.montant, 0);
@@ -227,7 +237,7 @@ test('the service chip filter hides the other services', async () => {
   click(chip);
   const shown = [...doc.querySelectorAll('#notary-open-list .nc-card')];
   assert.equal(shown.length, open.filter((b) => b.serviceId === svcIds[0]).length);
-  assert.ok(doc.querySelectorAll(`#notary-open-list .nc-svc[data-service]:not([data-service="${svcIds[0]}"])`).length === 0, 'no other service group remains');
+  assert.ok(shown.every((c) => open.find((b) => b.id === c.dataset.id).serviceId === svcIds[0]), 'no other act’s card remains');
   click(doc.querySelector('#notary-open-filter .chip[data-svc="all"]'));
   assert.equal(doc.querySelectorAll('#notary-open-list .nc-card').length, open.length, 'Tous restores the full list');
 });
@@ -451,33 +461,30 @@ test('the profile form prefills the stored fiche, validates through the domain, 
   assert.equal($(doc, 'nc-profil-saved').hidden, false, 'the saved note confirms');
 });
 
-// The open agenda packs the width: day sections tile side by side instead of
-// each burning a full row (a 1-demand day used to leave the rest of the row
-// empty), and a day carrying 3+ demands earns a double-width tile so its own
-// cards can go 2-up. Layout itself is CSS (pinned by regex, like the header
-// heights in ux-nav); what the DOM must provide is the span marker.
-const CSS_SRC = readFileSync(fileURLToPath(new URL('../public/styles.css', import.meta.url)), 'utf8');
+// The date is an attribute of the card, not a layout axis (ADR 0020): no day
+// sections survive — one grid packs the width — and the day strip doubles as
+// a per-day filter. The disclosure behaviour itself is covered by
+// notary-feed-simple.test.mjs.
 const addDays = (iso, n) => { const d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 
-test('the open agenda tiles day sections and widens the loaded days', async () => {
-  assert.match(
-    CSS_SRC,
-    /\.nc-agenda-list\s*{[^}]*grid-template-columns:\s*repeat\(auto-fill/,
-    'the day list is an auto-fill grid — day sections must share rows'
-  );
-  assert.match(CSS_SRC, /\.nc-day--span\s*{[^}]*grid-column:\s*span 2/, 'a loaded day spans two tracks');
-
-  // One heavy day (3 demands) and one light day (1): only the heavy day
-  // carries the span marker.
+test('one grid, no day sections; a day tile filters to its day and back', async () => {
   const heavy = addDays(todayISO(), 2), light = addDays(todayISO(), 5);
   // Clone one open bid: late in a month the seed may hold too few future
   // demands to shape two days from real fixtures.
   const { doc } = await bootSignedIn((seedOpen) =>
     [0, 1, 2, 3].map((i) => ({ ...seedOpen[0], id: 'tile-' + i, dateISO: i < 3 ? heavy : light }))
   );
-  const days = [...doc.querySelectorAll('#notary-open-list .nc-day')];
-  assert.equal(days.length, 2, 'two day sections');
-  const byDate = Object.fromEntries(days.map((s) => [s.dataset.date, s]));
-  assert.ok(byDate[heavy].classList.contains('nc-day--span'), 'the 3-demand day is widened');
-  assert.ok(!byDate[light].classList.contains('nc-day--span'), 'the 1-demand day stays one track');
+  assert.equal(doc.querySelectorAll('#notary-open-list .nc-day').length, 0, 'no day section survives');
+  const grids = doc.querySelectorAll('#notary-open-list .nc-agenda-grid');
+  assert.equal(grids.length, 1, 'exactly one grid holds the feed');
+  assert.equal(grids[0].querySelectorAll('.nc-card').length, 4, 'every card lives in the one grid');
+  const tiles = [...doc.querySelectorAll('#notary-open-list .nc-daytile')];
+  assert.deepEqual(tiles.map((t) => t.dataset.date), [heavy, light], 'day tiles run soonest first');
+
+  click(tiles[1]);
+  assert.equal(doc.querySelectorAll('#notary-open-list .nc-card').length, 1, 'a day tile narrows the grid to its day');
+  const on = doc.querySelector(`#notary-open-list .nc-daytile[data-date="${light}"]`);
+  assert.equal(on.getAttribute('aria-pressed'), 'true', 'the active day reads pressed');
+  click(on);
+  assert.equal(doc.querySelectorAll('#notary-open-list .nc-card').length, 4, 'pressing again restores every day');
 });

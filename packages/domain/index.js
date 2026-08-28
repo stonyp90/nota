@@ -1064,6 +1064,36 @@
     };
   }
 
+  // --- Act value at settlement -----------------------------------------------
+  // The value confirmed at signing is what the act settles on, and the act
+  // ledger is write-once — a typo is permanent. The domain therefore bounds the
+  // confirmed value against the retained offer: a signing can adjust the price,
+  // never rewrite its magnitude. Outside the band, the notary is asked to
+  // re-check or contact Nota — the ledger stays clean.
+  const ACT_VALUE_BOUNDS = { minRatio: 0.25, maxRatio: 3 };
+  function validateActValue(input) {
+    input = input || {};
+    const errors = [];
+    const amount = Number(input.actAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      errors.push({ code: 'montant_invalide', message: 'Montant de l’acte invalide.' });
+      return { ok: false, errors, actAmount: null };
+    }
+    const ref = Number(input.retainedMontant);
+    if (Number.isFinite(ref) && ref > 0) {
+      const lo = Math.round(ref * ACT_VALUE_BOUNDS.minRatio);
+      const hi = Math.round(ref * ACT_VALUE_BOUNDS.maxRatio);
+      if (amount < lo || amount > hi) {
+        errors.push({
+          code: 'montant_hors_bornes',
+          message: 'La valeur confirmée (' + money(amount) + ') est trop loin de l’offre retenue (' + money(ref) +
+            '). Vérifiez le montant — attendu entre ' + money(lo) + ' et ' + money(hi) + ' — ou contactez Nota.',
+        });
+      }
+    }
+    return { ok: errors.length === 0, errors, actAmount: errors.length ? null : Math.round(amount) };
+  }
+
   // The public shape of a notary's ratings: one decimal, null before the first
   // evaluation — never a fake 0-star average.
   function ratingAverage(sum, count) {
@@ -1748,6 +1778,8 @@
     validateContactMessage,
     EVALUATION_COMMENT_MAX,
     validateEvaluation,
+    ACT_VALUE_BOUNDS,
+    validateActValue,
     ratingAverage,
     CNQ,
     CNQ_LINK_MAX,

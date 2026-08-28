@@ -36,13 +36,16 @@ test('gate form: request a link and the console opens (devToken echoed)', async 
   expect(body.devLink, 'dev link is the #nauth magic link').toContain('#nauth=');
 
   // The app redeems the echoed token and the authenticated console renders.
+  // The identity reads in the header account menu (#acct-name sits in the
+  // hidden account panel; toHaveText reads textContent without visibility).
   await expect(page.locator('#notary-authed')).toBeVisible();
-  await expect(page.locator('#notary-email-label')).toHaveText(NOTARY_EMAIL);
+  await expect(page.locator('#acct-name')).toHaveText(NOTARY_EMAIL);
 
-  // The open agenda is the point of the console: real demands (grouped into
-  // per-date sections), each funnelling into a retain control ("Take on").
+  // The open agenda is the point of the console: real demands in one
+  // chronological grid (ADR 0020), each funnelling into a retain control
+  // ("Take on").
   const openList = page.locator('#notary-open-list');
-  await expect(openList.locator('section.nc-day').first()).toBeVisible();
+  await expect(openList.locator('.nc-agenda-grid .nc-card').first()).toBeVisible();
   const takeOn = openList.getByRole('button', { name: /Take on/i }).first();
   await expect(takeOn, 'each open demand funnels into a retain action').toBeVisible();
 });
@@ -68,7 +71,8 @@ test('magic link: booting with #nauth=<token> opens the console', async ({ page 
   await page.goto(`/?lang=en&e2e=${Date.now()}#nauth=${encodeURIComponent(devToken)}`);
 
   await expect(page.locator('#notary-authed')).toBeVisible();
-  await expect(page.locator('#notary-email-label')).toHaveText(NOTARY_EMAIL);
+  // Identity now reads in the header account menu, not an in-panel bar.
+  await expect(page.locator('#acct-name')).toHaveText(NOTARY_EMAIL);
   // The single-use token is stripped from the URL so a refresh can't replay it.
   await expect.poll(() => page.evaluate(() => location.hash)).not.toContain('nauth');
 });

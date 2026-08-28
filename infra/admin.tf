@@ -136,18 +136,20 @@ data "aws_iam_policy_document" "admin_lambda" {
     ]
   }
 
-  # The ONE write door on the MAIN table (ADR 0018 §6): admin-editable email
-  # template overrides live under the single 'CONFIG#EMAIL' partition
-  # (SK = TPL#<templateKey>, see apps/api/src/keys.js). The
-  # dynamodb:LeadingKeys condition confines EVERY action in this statement to
-  # items whose partition key is exactly 'CONFIG#EMAIL', so the admin console
-  # can edit product configuration but still cannot read, write or delete a
-  # single customer item — the read-only statement above remains its only
-  # access to the rest of the table. No index resource on purpose: the
-  # LeadingKeys condition key does not apply to GSI queries, and the overrides
-  # are read/written by primary key only.
+  # The write door on the MAIN table, item-scoped to product CONFIGURATION
+  # partitions only: the admin-editable email template overrides (ADR 0018 §6,
+  # PK = 'CONFIG#EMAIL', SK = TPL#<templateKey>), the admin-decided commission
+  # barème (ADR 0021 §4, PK = 'CONFIG#COMMISSION', SK = BAREME) and the
+  # admin-decided cancellation-fee barème (ADR 0023 §2, PK = 'CONFIG#ANNULATION',
+  # SK = BAREME) — see apps/api/src/keys.js. The dynamodb:LeadingKeys condition
+  # confines EVERY action in this statement to items whose partition key is one
+  # of those values, so the admin console can edit product configuration but
+  # still cannot read, write or delete a single customer item — the read-only
+  # statement above remains its only access to the rest of the table. No index
+  # resource on purpose: the LeadingKeys condition key does not apply to GSI
+  # queries, and every config is read/written by primary key only.
   statement {
-    sid    = "MainTableEmailConfigWrite"
+    sid    = "MainTableConfigWrite"
     effect = "Allow"
     actions = [
       "dynamodb:GetItem",
@@ -160,7 +162,7 @@ data "aws_iam_policy_document" "admin_lambda" {
     condition {
       test     = "ForAllValues:StringEquals"
       variable = "dynamodb:LeadingKeys"
-      values   = ["CONFIG#EMAIL"]
+      values   = ["CONFIG#EMAIL", "CONFIG#COMMISSION", "CONFIG#ANNULATION"]
     }
   }
 

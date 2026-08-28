@@ -82,6 +82,18 @@ test('film: the frame is a fixed, edge-to-edge viewport layer with no card chrom
   assert.ok(stage.some((b) => /flex:\s*1/.test(b)), 'the stage takes every pixel above the skip bar');
   assert.ok(!stage.some((b) => /border-radius|box-shadow|aspect-ratio|border:\s*1px/.test(b)),
     'the stage wears no card chrome (border/radius/shadow) and no fixed aspect box');
+  // Owner (2026-08-27, round two): « s'assurer que c'est vraiment l'écran
+  // complet » — the stage itself spans the frame, no 16:9 max-width leaving
+  // gutters beside the film on wide monitors.
+  assert.ok(!stage.some((b) => /max-width/.test(b)),
+    'the stage has no max-width — the film paints edge to edge');
+  // And the composition survives it: the stage measures BOTH axes and the
+  // scenes size in --igu, a unit capped by width AND height, so the type
+  // never outgrows a short-and-wide screen.
+  assert.ok(stage.some((b) => /container-type:\s*size/.test(b)),
+    'the stage is a size container (cqw AND cqh available)');
+  assert.ok(stage.some((b) => /--igu:\s*min\(\s*1cqw\s*,\s*[\d.]+cqh\s*\)/.test(b)),
+    'the film unit --igu is min(1cqw, k·cqh) — height caps the scale');
 });
 
 test('backdrop: the gate floats on theme tokens — no hardcoded paint hides the dice', () => {

@@ -200,6 +200,64 @@ function createAdminApp(repo, opts = {}) {
       return json(200, method === 'PUT' ? { ok: true, override: result.override } : { ok: true, key: result.key });
     }
 
+    // --- Commission barème (ADR 0021 §4) -------------------------------------
+    // GET open to any authenticated admin; PUT/DELETE require 'settings:write'
+    // — enforced in admin.js, which also audit-logs every change.
+    if (route === '/admin/commission' && method === 'GET') {
+      const result = await admin.getCommissionSchedule(bearer(request), { ip: clientIp(request) });
+      if (!result.ok) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+      return json(200, { defaut: result.defaut, override: result.override, effectif: result.effectif });
+    }
+
+    if (route === '/admin/commission' && (method === 'PUT' || method === 'DELETE')) {
+      let result;
+      if (method === 'PUT') {
+        let payload;
+        try {
+          payload = parseBody(request);
+        } catch {
+          return json(400, { errors: [{ code: 'json_invalide', message: 'Corps JSON invalide.' }] });
+        }
+        result = await admin.putCommissionSchedule(bearer(request), payload, { ip: clientIp(request) });
+      } else {
+        result = await admin.resetCommissionSchedule(bearer(request), { ip: clientIp(request) });
+      }
+      if (!result.ok) {
+        if (result.status === 401) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+        return json(result.status, { errors: result.errors });
+      }
+      return json(200, method === 'PUT' ? { ok: true, override: result.override } : { ok: true });
+    }
+
+    // --- Cancellation-fee barème (ADR 0023 §2) -------------------------------
+    // GET open to any authenticated admin; PUT/DELETE require 'settings:write'
+    // — enforced in admin.js, which also audit-logs every change.
+    if (route === '/admin/annulation' && method === 'GET') {
+      const result = await admin.getCancellationSchedule(bearer(request), { ip: clientIp(request) });
+      if (!result.ok) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+      return json(200, { defaut: result.defaut, override: result.override, effectif: result.effectif });
+    }
+
+    if (route === '/admin/annulation' && (method === 'PUT' || method === 'DELETE')) {
+      let result;
+      if (method === 'PUT') {
+        let payload;
+        try {
+          payload = parseBody(request);
+        } catch {
+          return json(400, { errors: [{ code: 'json_invalide', message: 'Corps JSON invalide.' }] });
+        }
+        result = await admin.putCancellationSchedule(bearer(request), payload, { ip: clientIp(request) });
+      } else {
+        result = await admin.resetCancellationSchedule(bearer(request), { ip: clientIp(request) });
+      }
+      if (!result.ok) {
+        if (result.status === 401) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+        return json(result.status, { errors: result.errors });
+      }
+      return json(200, method === 'PUT' ? { ok: true, override: result.override } : { ok: true });
+    }
+
     return json(404, { errors: [{ code: 'introuvable', message: 'Route inconnue.' }] });
   }
 
