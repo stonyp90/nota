@@ -304,7 +304,9 @@ test('every mailer.send carries the recipient unsubscribe URL for List-Unsubscri
 
   assert.ok(mailer.sent.length >= 2);
   for (const m of mailer.sent) {
-    const expected = BASE + '/unsubscribe?token=' + encodeUnsubToken(m.to);
+    // Le lien passe par /api : c'est le seul chemin que CloudFront route vers
+    // la Lambda (le routeur SPA avale les autres). Voir desabonnement-lien.test.mjs.
+    const expected = BASE + '/api/unsubscribe?token=' + encodeUnsubToken(m.to);
     assert.equal(m.unsubscribeUrl, expected, `send to ${m.to} must carry its unsubscribe URL`);
   }
 });

@@ -128,8 +128,14 @@ resource "aws_lambda_function" "api" {
       STRIPE_SECRET_KEY     = var.stripe_secret_key
       STRIPE_WEBHOOK_SECRET = var.stripe_webhook_secret
 
-      # Commission the platform takes on a completed act (share of its value).
-      NOTA_COMMISSION_RATE = tostring(var.commission_rate)
+      # What Nota keeps on a completed act (ADR 0028). The rate is the START of
+      # the ladder — at most 15 % — the floor is what the best cotes reach, and
+      # the tiers are the rungs in between. An empty tiers string leaves the
+      # built-in ladder in force; the admin console can still override all three
+      # at runtime (CONFIG#COMMISSION), which is what ADR 0021 made possible.
+      NOTA_COMMISSION_RATE       = tostring(var.commission_rate)
+      NOTA_COMMISSION_RATE_FLOOR = tostring(var.commission_rate_floor)
+      NOTA_COMMISSION_TIERS      = var.commission_tiers
       # Where Stripe returns the notary after Connect onboarding (hash routes to
       # the Notaires tab; base_url falls back to the CloudFront domain).
       NOTA_ONBOARDING_RETURN_URL  = "${var.base_url}/#notaires"
@@ -145,6 +151,10 @@ resource "aws_lambda_function" "api" {
       NOTA_FROM_EMAIL     = var.from_email
       NOTA_OPERATOR_EMAIL = var.operator_email
       NOTA_BASE_URL       = var.base_url
+      # LCAP: full identification of the sender. Empty leaves the recognizable
+      # placeholder in emails.js, which a test refuses in production — a
+      # commercial message must carry a REAL mailing address.
+      NOTA_SENDER_ADDRESS = var.sender_address
     }
   }
 }

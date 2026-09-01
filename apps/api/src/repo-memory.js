@@ -219,6 +219,12 @@ function createMemoryRepo(seed = []) {
     async listActiveNotaries() {
       return [...byNotary.values()].filter((n) => n.status === 'active').map((n) => ({ ...n }));
     },
+    // Le registre de la console admin : TOUS les notaires, y compris ceux qui
+    // n'ont pas fini leur inscription — un opérateur doit voir qui frappe à la
+    // porte, pas seulement qui est déjà payable.
+    async listNotaries() {
+      return [...byNotary.values()].map((n) => ({ ...n }));
+    },
     async getNotary(id) {
       const n = byNotary.get(id);
       return n ? { ...n } : null;
@@ -482,8 +488,21 @@ function createMemoryRepo(seed = []) {
     },
 
     // --- Audit log (append-only) --------------------------------------------
+    // La paire « transactions » : même journal, écrite par la porte publique.
+    // L'adaptateur DynamoDB, lui, les range dans la table PRINCIPALE — la
+    // Lambda publique n'a aucun accès à la table admin.
+    async appendTxAudit(entry) {
+      return this.appendAudit(entry);
+    },
+    async queryTxAuditByDay(dayISO) {
+      return this.queryAuditByDay(dayISO);
+    },
     async appendAudit(entry) {
-      audit.push({ ...entry, day: String(entry.ts || '').slice(0, 10) });
+      // Le seau du journal est le JOUR OUVRABLE québécois quand l'appelant le
+      // nomme (le handler public le fait : un règlement du soir appartient à la
+      // journée d'affaires en cours, pas au lendemain UTC) ; sinon, la date de
+      // l'horodatage. L'instant, lui, reste toujours vrai.
+      audit.push({ ...entry, day: entry.day || String(entry.ts || '').slice(0, 10) });
     },
     async queryAuditByDay(dayISO) {
       return audit.filter((e) => e.day === dayISO).map((e) => ({ ...e }));

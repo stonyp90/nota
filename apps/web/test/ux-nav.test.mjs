@@ -221,16 +221,16 @@ test('the guide and the offer flow stay within three taps of the phone drawer', 
   assert.equal($(doc, 'day-dialog').open, true, 'the offer flow opens from the hero CTA');
 });
 
-test('sign-in and sign-up are different doors: sign-up opens the role choice', async () => {
+test('sign-in and sign-up open the SAME door (owner, 2026-08-28) — never the pedagogical guide', async () => {
   const { doc } = await boot();
   $(doc, 'header-signup').click();
   await wait(10);
-  assert.equal($(doc, 'onboarding-dialog').open, true, 'S’inscrire → who are you?');
-  assert.notEqual($(doc, 'auth-dialog').open, true);
-  $(doc, 'onboarding-dialog').close();
+  assert.equal($(doc, 'auth-dialog').open, true, 'S’inscrire → the signup form, like a traditional site');
+  assert.notEqual($(doc, 'onboarding-dialog').open, true, 'the guide stays on the « ? » and the footer');
+  $(doc, 'auth-dialog').close();
   $(doc, 'header-login').click();
   await wait(10);
-  assert.equal($(doc, 'auth-dialog').open, true, 'Se connecter → courriel');
+  assert.equal($(doc, 'auth-dialog').open, true, 'Se connecter → the same door, titled Connexion');
 });
 
 test('a shared day link reopens that day on boot, and Back closes it', async () => {

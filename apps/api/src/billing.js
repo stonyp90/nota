@@ -25,6 +25,7 @@ const {
 } = require('./stats');
 const { notaryIdForEmail } = require('./notary-auth');
 const domain = require('@nota/domain');
+const coteAdapter = require('./cote');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -47,10 +48,23 @@ const DEFAULT_COMMISSION_RATE_FLOOR = commissionConfig.DEFAULT_FLOOR;
 // Kill float dust in rate arithmetic (0.10 − 0.02 must be 0.08, not …002).
 const roundRate = (x) => Math.round(x * 10000) / 10000;
 
+// One more completed act on one service (ADR 0028's « services rendus » axis).
+// An act settled without a service id — a legacy ledger row — leaves the map
+// untouched rather than inventing a bucket.
+function actsPlusOne(map, serviceId) {
+  const current = map && typeof map === 'object' ? { ...map } : {};
+  if (!serviceId) return current;
+  current[serviceId] = (Number(current[serviceId]) || 0) + 1;
+  return current;
+}
+
 function createBilling({
   repo, stripe, now, timeZone,
   onboardingReturnUrl, onboardingRefreshUrl, commissionRate,
-  commissionBonusTiers, commissionRateFloor,
+  // ADR 0028 renamed the option with the shape it carries — a ladder of
+  // `{ cote, taux }` rungs, not bonuses. The old name still binds so an
+  // existing caller keeps working.
+  commissionTiers, commissionBonusTiers, commissionRateFloor,
 } = {}) {
   if (!repo) throw new Error('createBilling: repo is required');
   if (!stripe) throw new Error('createBilling: stripe adapter is required');
@@ -60,7 +74,9 @@ function createBilling({
   // completion instant — a UTC slice booked evening completions on tomorrow.
   const statsDay = () => domain.businessDay(clock(), timeZone || process.env.NOTA_TIMEZONE);
   const rate = typeof commissionRate === 'number' ? commissionRate : DEFAULT_COMMISSION_RATE;
-  const bonusTiers = Array.isArray(commissionBonusTiers) ? commissionBonusTiers : DEFAULT_COMMISSION_BONUS_TIERS;
+  const bonusTiers = Array.isArray(commissionTiers)
+    ? commissionTiers
+    : (Array.isArray(commissionBonusTiers) ? commissionBonusTiers : DEFAULT_COMMISSION_BONUS_TIERS);
   const rateFloor = typeof commissionRateFloor === 'number' ? commissionRateFloor : DEFAULT_COMMISSION_RATE_FLOOR;
 
   /**
@@ -80,45 +96,95 @@ function createBilling({
   }
 
   /**
-   * The commission a given notary earns under a given barème (ADR 0016): the
-   * base rate, the effective rate after the best rating-earned bonus, and the
-   * next reachable tier (null at the top) — so the console can show the rate
-   * as a lever, not a hidden rule. Pure: only the barème and the profile's
-   * rating aggregates matter.
+   * The split a given notary earns under a given barème (ADR 0027, ADR 0028):
+   * the base rate, the effective rate their COTE earns, the share that stays
+   * with the notary, the cote itself with its four axes, and the next rung —
+   * so the console can show the split as a lever, not a hidden rule.
+   *
+   * ADR 0028 replaced the scattered axes (note / avis / actes) with the ONE
+   * measure the domain computes: `domain.notaryScore`. Everything a notary can
+   * do to move the line — be liked, deliver acts across the catalogue, answer
+   * the feed, keep a real presence — is inside that number, and the number is
+   * published beside the rate it earns.
    */
-  function commissionWith(bareme, notary) {
-    // What a tier would price the commission at, floored.
-    const tierRate = (bonus) => Math.max(bareme.plancher, roundRate(bareme.taux - bonus));
-    const note = domain.ratingAverage(notary && notary.ratingSum, notary && notary.ratingCount);
-    const avis = (notary && Number(notary.ratingCount)) || 0;
-    let earned = 0;
-    for (const t of bareme.paliers) {
-      if (note != null && note >= t.note && avis >= t.avis && t.bonus > earned) earned = t.bonus;
+  function commissionWith(bareme, notary, atMs) {
+    // What a rung would price the fee at, floored — and never above the base
+    // rate. A barème whose plancher was configured above its taux (an env typo,
+    // a half-applied rollout) must not charge MORE than the base: merit only
+    // ever moves the rate toward the notary.
+    const borne = (taux) => Math.min(bareme.taux, Math.max(bareme.plancher, roundRate(taux)));
+    // The notary's side of the same number — stated, never left to a caller to
+    // recompute (and get wrong by a float).
+    const share = (taux) => roundRate(1 - taux);
+    const score = coteAdapter.coteFor(notary, typeof atMs === 'number' ? atMs : Date.parse(clock()));
+    const cote = score.cote;
+    // The best rung the cote has actually reached.
+    let taux = bareme.taux;
+    for (const p of bareme.paliers || []) {
+      if (cote >= p.cote && p.taux < taux) taux = p.taux;
     }
-    const tauxEffectif = tierRate(earned);
-    // The least-demanding tier that would still lower the rate from here.
+    const tauxEffectif = borne(taux);
+    // The nearest rung ABOVE this cote that would still lower the rate — the
+    // one honest « next step », with the points that separate it from today.
     let next = null;
-    for (const t of bareme.paliers) {
-      if (tierRate(t.bonus) >= tauxEffectif) continue;
-      if (!next || t.bonus < next.bonus) next = t;
+    for (const p of bareme.paliers || []) {
+      if (p.cote <= cote || borne(p.taux) >= tauxEffectif) continue;
+      if (!next || p.cote < next.cote) next = p;
     }
     return {
       taux: bareme.taux,
+      plancher: bareme.plancher,
       tauxEffectif,
+      part: share(tauxEffectif),
       bonus: roundRate(bareme.taux - tauxEffectif),
-      prochain: next ? { note: next.note, avis: next.avis, tauxEffectif: tierRate(next.bonus) } : null,
+      cote,
+      axes: score.axes,
+      paliers: (bareme.paliers || []).map((p) => ({ cote: p.cote, taux: borne(p.taux), part: share(borne(p.taux)) })),
+      prochain: next
+        ? {
+            cote: next.cote,
+            manque: Math.max(0, next.cote - cote),
+            tauxEffectif: borne(next.taux),
+            part: share(borne(next.taux)),
+          }
+        : null,
     };
   }
 
   // The commission a given notary earns TODAY, under the barème in force.
-  async function commissionFor(notary) {
-    return commissionWith(await resolveBareme(), notary);
+  async function commissionFor(notary, atMs) {
+    return commissionWith(await resolveBareme(), notary, atMs);
   }
 
   // Nota's share of an act, in cents, from the act's dollar value — at the
-  // notary's rating-earned effective rate under the barème in force.
-  async function feeCents(actAmount, notary) {
-    return Math.round(Number(actAmount) * 100 * (await commissionFor(notary)).tauxEffectif);
+  // effective rate the notary's cote earns under the barème in force.
+  async function feeCents(actAmount, notary, tauxPlafond) {
+    return (await priceAct(actAmount, notary, tauxPlafond)).fee;
+  }
+
+  // The whole pricing DECISION for one act, kept together so the ledger can
+  // record WHY it charged what it charged (ADR 0028's disclosure): the fee in
+  // cents, the effective rate, and the cote that earned it. An act whose rate
+  // cannot be explained is not auditable — and every commission must be.
+  async function priceAct(actAmount, notary, tauxPlafond) {
+    const c = await commissionFor(notary);
+    // Le taux promis quand le notaire s'est engagé (handler.retainFor) est un
+    // PLAFOND : le règlement applique le meilleur des deux pour le notaire. Une
+    // cote qui monte entre l'engagement et la signature profite encore ; une
+    // cote qui baisse ne renchérit jamais un acte déjà promis. Un plafond
+    // aberrant (barème modifié, donnée bricolée) est ignoré sous le plancher.
+    const plafond = Number(tauxPlafond);
+    const taux = Number.isFinite(plafond) && plafond >= 0
+      ? Math.max(await floorRate(), Math.min(c.tauxEffectif, plafond))
+      : c.tauxEffectif;
+    return { fee: Math.round(Number(actAmount) * 100 * taux), taux, cote: c.cote, tauxRetenu: Number.isFinite(plafond) ? plafond : null };
+  }
+
+  // Le plancher du barème en vigueur — la seule borne basse qui tienne, quelle
+  // que soit l'empreinte portée par l'offre.
+  async function floorRate() {
+    const b = await resolveBareme();
+    return typeof b.plancher === 'number' ? b.plancher : 0;
   }
 
   // Best-effort analytics rollups (see keys.js STATS#). A rollup failure must
@@ -203,12 +269,23 @@ function createBilling({
   }
 
   /**
-   * Collect Nota's commission when a retained act completes: the client's act
-   * payment is a destination charge to the notary's connected account, and Nota
-   * keeps `application_fee_amount` = rate × value. The notary must have finished
-   * onboarding (charges enabled). Returns `{ ok, commissionCents }`.
+   * Settle a retained act when NO live hold can be captured — the fallback path
+   * of ADR 0015: the client paid the notary DIRECTLY at signing, outside Nota.
+   *
+   * There is nothing for Nota to capture here: no customer, no payment method,
+   * no authorization. The honest outcome is therefore a RECEIVABLE, not a
+   * payment — Nota's service fee is recorded as owed by the notary, the act
+   * ledger says `paye: false`, and the collected accumulator does NOT move.
+   *
+   * (Before 2026-09-01 this path called `stripe.chargeActCommission`, which
+   * created a PaymentIntent with no payment method and no `confirm`: it moved
+   * no money, yet the ledger, the accumulator and the « acte payé » email all
+   * claimed it had. A ledger that asserts a payment nobody made is worse than
+   * an unpaid invoice — see docs/compliance/piste-audit-transactions.md.)
+   *
+   * Returns `{ ok, actAmount, commissionCents, paye: false, du }`.
    */
-  async function completeAct({ notaryId, bidId, actAmount } = {}) {
+  async function completeAct({ notaryId, bidId, actAmount, serviceId, tauxPlafond } = {}) {
     const notary = notaryId ? await repo.getNotary(notaryId) : null;
     if (!notary) {
       return { ok: false, errors: [{ code: 'notaire_introuvable', message: 'Notaire introuvable.' }] };
@@ -227,27 +304,20 @@ function createBilling({
     if (bidId && typeof repo.getActCompletion === 'function') {
       const prior = await repo.getActCompletion(bidId);
       if (prior) {
-        return { ok: true, actAmount: prior.actAmount, commissionCents: prior.commissionCents, chargeId: prior.chargeId, alreadyCompleted: true };
+        return {
+          ok: true, actAmount: prior.actAmount, commissionCents: prior.commissionCents,
+          chargeId: prior.chargeId || null,
+          paye: prior.netCents != null || !!prior.transferId,
+          alreadyCompleted: true,
+        };
       }
     }
 
-    const fee = await feeCents(amount, notary);
-    // A Stripe failure (decline, outage) is a typed, retryable error — never an
-    // unhandled throw that turns the route into a 5xx with no payload. Nothing
-    // was written yet, so a retry starts clean; the Stripe idempotency key
-    // (act:<bidId>) keeps that retry from double-charging.
-    let charge;
-    try {
-      charge = await stripe.chargeActCommission({
-        connectAccountId: notary.connectAccountId,
-        amountCents: Math.round(amount * 100),
-        applicationFeeCents: fee,
-        currency: 'cad',
-        bidId, notaryId,
-      });
-    } catch (err) {
-      return { ok: false, errors: [{ code: 'paiement_echoue', message: 'Le paiement n’a pas pu être traité. Réessayez ou contactez Nota.' }] };
-    }
+    const prix = await priceAct(amount, notary, tauxPlafond);
+    const fee = prix.fee;
+    // No Stripe call: there is nothing here to charge. The act is recorded, the
+    // fee is recorded as OWED, and collecting it is a separate, deliberate act
+    // of Nota's — never something a settlement silently claims to have done.
 
     // markActCompleted returns true only on the FIRST write (write-once ledger).
     // A concurrent double-submit whose guard read missed the other in-flight
@@ -257,7 +327,13 @@ function createBilling({
     if (bidId && typeof repo.markActCompleted === 'function') {
       firstWrite = await repo.markActCompleted(bidId, {
         bidId, notaryId, actAmount: amount, commissionCents: fee,
-        chargeId: charge && charge.id, completedAt: clock(),
+        // ADR 0028 — the disclosure rides IN the write-once ledger: the rate
+        // applied and the cote that earned it, frozen with the money. A later
+        // barème change can never rewrite what this act was charged.
+        taux: prix.taux, cote: prix.cote, tauxRetenu: prix.tauxRetenu, serviceId: serviceId || null,
+        // Settled, but not paid through Nota: the fee is a receivable.
+        paye: false, commissionCentsDue: fee,
+        completedAt: clock(),
       });
     }
 
@@ -267,13 +343,21 @@ function createBilling({
     if (firstWrite) {
       await repo.putNotary({
         ...notary,
-        commissionCentsCollected: (notary.commissionCentsCollected || 0) + fee,
+        // OWED, not collected. The two accumulators must never be confused:
+        // `commissionCentsCollected` is money Nota actually has.
+        commissionCentsDue: (notary.commissionCentsDue || 0) + fee,
+        // ADR 0024's notoriety axis, ADR 0028's « services rendus ». Bumped
+        // under the same write-once guard as the money, so a replay can never
+        // inflate a notary's standing — and counted BY SERVICE, because the
+        // cote rewards the breadth of the catalogue a notary actually serves.
+        actsCompleted: (Number(notary.actsCompleted) || 0) + 1,
+        actsByService: actsPlusOne(notary.actsByService, serviceId),
         updatedAt: clock(),
       });
       await recordStats(statsDeltasForComplete({ completedAt: statsDay(), commissionCents: fee }));
     }
 
-    return { ok: true, actAmount: amount, commissionCents: fee, chargeId: charge && charge.id };
+    return { ok: true, actAmount: amount, commissionCents: fee, paye: false, du: Math.round(fee) / 100 };
   }
 
   /**
@@ -307,7 +391,7 @@ function createBilling({
    * completeAct call for the same bid is a no-op — the act is only ever paid once.
    * Returns `{ ok, commissionCents, netCents, transferId, chargeId }`.
    */
-  async function payNotaryOnAccept({ notaryId, bidId, actAmount, paymentIntentId } = {}) {
+  async function payNotaryOnAccept({ notaryId, bidId, actAmount, paymentIntentId, serviceId, tauxPlafond } = {}) {
     const notary = notaryId ? await repo.getNotary(notaryId) : null;
     if (!notary) {
       return { ok: false, errors: [{ code: 'notaire_introuvable', message: 'Notaire introuvable.' }] };
@@ -331,7 +415,8 @@ function createBilling({
       }
     }
 
-    const fee = await feeCents(amount, notary);
+    const prix = await priceAct(amount, notary, tauxPlafond);
+    const fee = prix.fee;
     // A capture decline AFTER a notary accepted must never dead-end the accept
     // as an unhandled 5xx: the retain already happened, and the notary must
     // still receive the dossier. Surface a typed error the route folds into
@@ -356,6 +441,8 @@ function createBilling({
     if (bidId && typeof repo.markActCompleted === 'function') {
       firstWrite = await repo.markActCompleted(bidId, {
         bidId, notaryId, actAmount: amount, commissionCents: fee,
+        // Same disclosure as the other settlement path — one ledger, one shape.
+        taux: prix.taux, cote: prix.cote, tauxRetenu: prix.tauxRetenu, serviceId: serviceId || null,
         netCents: result.netCents, transferId: result.transferId, chargeId: result.chargeId,
         paidOnAccept: true, completedAt: clock(),
       });
@@ -366,6 +453,12 @@ function createBilling({
       await repo.putNotary({
         ...notary,
         commissionCentsCollected: (notary.commissionCentsCollected || 0) + fee,
+        // ADR 0024's notoriety axis, ADR 0028's « services rendus ». Bumped
+        // under the same write-once guard as the money, so a replay can never
+        // inflate a notary's standing — and counted BY SERVICE, because the
+        // cote rewards the breadth of the catalogue a notary actually serves.
+        actsCompleted: (Number(notary.actsCompleted) || 0) + 1,
+        actsByService: actsPlusOne(notary.actsByService, serviceId),
         updatedAt: clock(),
       });
       await recordStats(statsDeltasForComplete({ completedAt: statsDay(), commissionCents: fee }));

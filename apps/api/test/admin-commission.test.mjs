@@ -24,10 +24,11 @@ const TODAY = '2026-08-27';
 const START = 1_700_000_000_000;
 const NOW_ISO = new Date(START).toISOString();
 
+// ADR 0028: un palier est désormais UNE cote atteinte → le taux que Nota garde.
 const BAREME = {
   taux: 0.12,
   plancher: 0.06,
-  paliers: [{ note: 4, avis: 3, bonus: 0.02 }],
+  paliers: [{ cote: 70, taux: 0.08 }],
 };
 
 // ============================================================================
@@ -35,28 +36,39 @@ const BAREME = {
 // ============================================================================
 
 test('envDefaults: built-ins when the environment is silent; the env vars are actually read (ADR 0016 gap)', () => {
+  // ADR 0028: le défaut expédié est l'échelle de la cote — 15 % au départ,
+  // 5 % au sommet, et le notaire garde donc de 85 % à 95 %.
   assert.deepEqual(commissionConfig.envDefaults({}), {
-    taux: 0.10,
+    taux: 0.15,
     plancher: 0.05,
-    paliers: [{ note: 4.5, avis: 5, bonus: 0.01 }, { note: 4.8, avis: 10, bonus: 0.02 }],
+    paliers: [
+      { cote: 60, taux: 0.12 },
+      { cote: 70, taux: 0.10 },
+      { cote: 80, taux: 0.08 },
+      { cote: 90, taux: 0.05 },
+    ],
   });
   const env = {
     NOTA_COMMISSION_RATE: '0.08',
     NOTA_COMMISSION_RATE_FLOOR: '0.04',
-    NOTA_COMMISSION_BONUS_TIERS: '[{"note":4,"avis":2,"bonus":0.02}]',
+    NOTA_COMMISSION_TIERS: '[{"cote":75,"taux":0.06}]',
   };
   assert.deepEqual(commissionConfig.envDefaults(env), {
     taux: 0.08,
     plancher: 0.04,
-    paliers: [{ note: 4, avis: 2, bonus: 0.02 }],
+    paliers: [{ cote: 75, taux: 0.06 }],
   });
   // Garbage in the tiers env var falls back to the defaults — never a crash.
-  const broken = commissionConfig.envDefaults({ NOTA_COMMISSION_BONUS_TIERS: '{oops' });
-  assert.equal(broken.paliers.length, 2);
+  const broken = commissionConfig.envDefaults({ NOTA_COMMISSION_TIERS: '{oops' });
+  assert.equal(broken.paliers.length, commissionConfig.DEFAULT_TIERS.length);
+  // Et la forme d'avant l'ADR 0028 n'est plus un barème : elle se lit comme
+  // absente, jamais comme une grille à moitié comprise.
+  const perime = commissionConfig.envDefaults({ NOTA_COMMISSION_TIERS: '[{"note":4,"avis":2,"bonus":0.02}]' });
+  assert.deepEqual(perime.paliers, commissionConfig.DEFAULT_TIERS);
 });
 
 test('validateSchedule: a clean barème normalizes; every malformed field is a typed error', () => {
-  const ok = commissionConfig.validateSchedule({ taux: '0.12', plancher: 0.06, paliers: [{ note: '4', avis: 3, bonus: 0.02 }] });
+  const ok = commissionConfig.validateSchedule({ taux: '0.12', plancher: 0.06, paliers: [{ cote: '70', taux: 0.08 }] });
   assert.equal(ok.ok, true);
   assert.deepEqual({ taux: ok.taux, plancher: ok.plancher, paliers: ok.paliers }, BAREME);
 
@@ -64,10 +76,12 @@ test('validateSchedule: a clean barème normalizes; every malformed field is a t
   assert.ok(codes({ taux: 1.2, plancher: 0.05, paliers: [] }).includes('taux_invalide'), 'taux ≥ 1');
   assert.ok(codes({ taux: 0.1, plancher: 0.2, paliers: [] }).includes('plancher_invalide'), 'floor above the rate');
   assert.ok(codes({ taux: 0.1, plancher: 0.05 }).includes('paliers_invalides'), 'paliers must be a list');
-  assert.ok(codes({ taux: 0.1, plancher: 0.05, paliers: [{ note: 6, avis: 1, bonus: 0.01 }] }).includes('palier_invalide'), 'note 6');
-  assert.ok(codes({ taux: 0.1, plancher: 0.05, paliers: [{ note: 4, avis: 0, bonus: 0.01 }] }).includes('palier_invalide'), 'avis 0');
-  assert.ok(codes({ taux: 0.1, plancher: 0.05, paliers: [{ note: 4, avis: 2.5, bonus: 0.01 }] }).includes('palier_invalide'), 'fractional avis');
-  assert.ok(codes({ taux: 0.1, plancher: 0.05, paliers: [{ note: 4, avis: 1, bonus: 0.5 }] }).includes('palier_invalide'), 'bonus above the rate');
+  assert.ok(codes({ taux: 0.1, plancher: 0.05, paliers: [{ cote: 0, taux: 0.08 }] }).includes('palier_invalide'), 'cote 0');
+  assert.ok(codes({ taux: 0.1, plancher: 0.05, paliers: [{ cote: 101, taux: 0.08 }] }).includes('palier_invalide'), 'cote 101');
+  assert.ok(codes({ taux: 0.1, plancher: 0.05, paliers: [{ cote: 70.5, taux: 0.08 }] }).includes('palier_invalide'), 'cote fractionnaire');
+  assert.ok(codes({ taux: 0.1, plancher: 0.05, paliers: [{ cote: 70, taux: 0.02 }] }).includes('palier_invalide'), 'sous le plancher');
+  assert.ok(codes({ taux: 0.1, plancher: 0.05, paliers: [{ cote: 70, taux: 0.5 }] }).includes('palier_invalide'), 'au-dessus du taux de base');
+  assert.ok(codes({ taux: 0.1, plancher: 0.05, paliers: [{ cote: 60, taux: 0.07 }, { cote: 80, taux: 0.09 }] }).includes('paliers_invalides'), 'une cote plus haute ne coûte jamais plus cher');
 });
 
 // ============================================================================
@@ -192,7 +206,10 @@ test('GET shows the defaults and no override; an analyst may read but never writ
   const h = make();
   const analyst = await loginAnalyst(h);
   const body = parse(await h.call('GET', '/admin/commission', { bearer: analyst }));
-  assert.equal(body.defaut.taux, 0.10);
+  assert.equal(body.defaut.taux, 0.15, 'Nota ne prend jamais plus de 15 %');
+  assert.equal(body.defaut.plancher, 0.05, 'et jamais moins de 5 %');
+  assert.deepEqual(body.defaut.paliers[body.defaut.paliers.length - 1], { cote: 90, taux: 0.05 },
+    'au-dessus de 90, le notaire garde 95 %');
   assert.equal(body.override, null);
   assert.deepEqual(body.effectif, body.defaut, 'no override → the defaults rule');
 

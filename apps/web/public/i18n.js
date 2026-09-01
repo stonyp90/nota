@@ -226,7 +226,7 @@
   "Ignorer": "Dismiss",
   "Accédez aux demandes ouvertes à Québec. Sans mot de passe.": "Access open requests in Québec. No password required.",
   "Accéder à l’espace notaire →": "Go to the notary space →",
-  "Publiez une demande et suivez vos offres. Vos renseignements restent sur cet appareil.": "Post a request and track your offers. Your information stays on this device.",
+  "Publiez une demande et suivez vos offres. Votre courriel est transmis à Nota pour le lien de suivi et les avis. Le contenu de vos documents, lui, ne quitte jamais cet appareil.": "Post a request and follow your offers. Your email address is sent to Nota for the tracking link and notices. The contents of your documents never leave this device.",
   "Continuer →": "Continue →",
   "Entrez un courriel valide.": "Enter a valid email.",
   "Trouvez votre notaire en 3 étapes": "Find your notary in 3 steps",
@@ -409,6 +409,7 @@
   "Désabonné.": "Unsubscribed.",
   "Console indisponible hors ligne. Réessayez une fois en ligne.": "Console unavailable offline. Try again once you're back online.",
   "Connexion refusée.": "Sign-in refused.",
+  "Impossible de charger les demandes. Réessayez.": "Unable to load requests. Try again.",
   "Impossible de charger les demandes (hors ligne). Réessayez.": "Unable to load requests (offline). Try again.",
   "Cette offre a déjà été retenue par un autre notaire.": "This offer has already been taken by another notary.",
   "Offre introuvable, elle a peut-être expiré.": "Offer not found — it may have expired.",
@@ -504,9 +505,46 @@
   "Valeur de l’acte": "Act value",
   "Nota prélève sa commission uniquement à cette étape, sur la valeur confirmée.": "Nota charges its commission only at this step, on the confirmed value.",
   "Actes complétés": "Acts completed",
+  "Vos honoraires": "Your fees",
+  "Payé par les clients": "Paid by clients",
+  "Frais de service Nota": "Nota service fee",
   "Valeur réalisée": "Value realized",
   "Commission Nota": "Nota commission",
   "Net à vous": "Net to you",
+  // === ADR 0028 — la cote sur 100 et le partage qu'elle décide. ===========
+  "Votre cote": "Your score",
+  "Votre relevé d’actes": "Your act statement",
+  "montant, taux, frais Nota, net": "amount, rate, Nota fee, net",
+  "Le barème, au complet": "The full scale",
+  "Ce que vous portez, service par service": "What you carry, service by service",
+  "pas encore d’avis": "no reviews yet",
+  "Aucun avis": "No reviews",
+  "Satisfaction des clients": "Client satisfaction",
+  "Services rendus": "Acts delivered",
+  "Disponibilité": "Availability",
+  "Présence sur Nota": "Presence on Nota",
+  "Urgences en ligne : oui": "Online urgencies: yes",
+  "Urgences en ligne : non": "Online urgencies: no",
+  "Fiche CNQ : oui": "CNQ record: yes",
+  "Fiche CNQ : non": "CNQ record: no",
+  "Secteur postal : oui": "Postal sector: yes",
+  "Secteur postal : non": "Postal sector: no",
+  "Décliner compte comme une réponse ; seul le silence coûte des points.": "Declining counts as an answer; only silence costs points.",
+  "Se spécialiser ne coûte rien : l’éventail n’entre pas dans la cote.": "Specializing costs nothing: breadth of catalogue does not count toward the score.",
+  "Activité aujourd’hui": "Active today",
+  "Membre depuis aujourd’hui": "Member since today",
+  "Taux": "Rate",
+  "Frais Nota": "Nota fee",
+  "Net": "Net",
+  "Total": "Total",
+  "Votre relevé s’ouvrira ici dès votre premier acte réglé.": "Your statement will open here after your first settled act.",
+  "Chaque ligne porte le taux que votre cote valait au règlement de l’acte.": "Every line carries the rate your score was worth when the act settled.",
+  // ADR 0029 — un règlement hors plateforme est une créance, pas une recette.
+  "Frais de service à percevoir": "Service fee still owed",
+  "Sur cet acte, le client vous a payé directement à la signature : Nota n’a rien encaissé et les frais de service restent dus.": "On this act the client paid you directly at signing: Nota collected nothing and the service fee remains owed.",
+  "Sur ces actes, le client vous a payé directement à la signature : Nota n’a rien encaissé et les frais de service restent dus.": "On these acts the client paid you directly at signing: Nota collected nothing and the service fee remains owed.",
+  "Impossible de charger votre relevé. Réessayez.": "Could not load your statement. Try again.",
+  "Impossible de charger votre relevé (hors ligne). Réessayez.": "Could not load your statement (offline). Try again.",
   "Vos revenus et la commission Nota s’afficheront ici dès votre premier acte complété.": "Your earnings and the Nota commission will appear here after your first completed act.",
   "Déconnecté.": "Signed out.",
   "Quitter le plein écran": "Exit full screen",
@@ -688,7 +726,7 @@
   "Vous restez maître": "You stay in charge",
   "Vous fixez la date, le montant et votre niveau d’anonymat. Aucune obligation : vous pouvez retirer une offre tant qu’aucun notaire ne l’a retenue.": "You set the date, the amount and your level of anonymity. No obligation: you can withdraw an offer as long as no notary has taken it.",
   "Gratuit pour le client": "Free for the client",
-  "Publier une offre est gratuit. Nota se rémunère par une commission versée par le notaire, uniquement sur les actes complétés.": "Publishing an offer is free. Nota earns a commission paid by the notary, only on completed acts.",
+  "Publier une offre est gratuit. Sur un acte complété, Nota conserve au plus 15 % de votre montant pour son service et le notaire garde de 85 % à 95 % selon sa cote sur 100 — jamais un dollar de plus que ce que vous avez offert.": "Publishing an offer is free. On a completed act Nota keeps at most 15% of your amount for its service and the notary keeps 85% to 95% depending on their score out of 100 — never a dollar more than what you offered.",
   "Les conditions": "The terms",
   "Rôle de Nota.": "Nota's role.",
   "Nota fournit une plateforme de mise en relation. Nous ne rédigeons pas d’actes, ne donnons aucun conseil juridique, fiscal ou financier, et ne sommes pas partie au mandat entre vous et le notaire.": "Nota provides a matchmaking platform. We do not draft acts, give no legal, tax or financial advice, and are not a party to the mandate between you and the notary.",
@@ -696,8 +734,27 @@
   "Le notaire qui retient votre demande agit en toute indépendance : il fixe ses honoraires, vérifie votre identité et rédige l’acte selon la loi. Nota n’intervient jamais dans l’acte notarié.": "The notary who takes on your request acts fully independently: they set their fees, verify your identity and draft the act according to the law. Nota never intervenes in the notarized act.",
   "Vos engagements.": "Your commitments.",
   "Vous fournissez des renseignements exacts et n’utilisez pas le service à des fins illégales ou trompeuses. Une offre publiée est un engagement de bonne foi à procéder à la date convenue.": "You provide accurate information and do not use the service for illegal or misleading purposes. A published offer is a good-faith commitment to proceed on the agreed date.",
+  // Art. 68 — le badge dit une DÉCLARATION du notaire, jamais un contrôle de Nota.
+  "Fiche déclarée": "Listing declared",
+  "Fiche déclarée à la Chambre": "Listing declared to the Chambre",
+  "Fiche déclarée par le notaire dans l’annuaire de la Chambre des notaires du Québec. Nota ne vérifie pas cette déclaration.": "Listing declared by the notary in the Chambre des notaires du Québec directory. Nota does not verify this declaration.",
+  "Vérifier un notaire dans l’annuaire de la Chambre des notaires du Québec ↗": "Look up a notary in the Chambre des notaires du Québec directory ↗",
+  "Vérifier sa fiche à la Chambre ↗": "Check their listing at the Chambre ↗",
+  "Ouvre la fiche déclarée par ce notaire dans l’annuaire de la Chambre des notaires du Québec.": "Opens the listing this notary declared in the Chambre des notaires du Québec directory.",
+  // Données de démonstration : déclarées des deux côtés de la langue.
+  "Données de démonstration": "Demonstration data",
+  "Le carnet réel n’a pas pu être chargé. Ces offres et ces montants sont fictifs.": "The real carnet could not be loaded. These offers and amounts are fictional.",
+  "démonstration": "demonstration",
+  "Chiffres de démonstration : le carnet réel n’a pas pu être chargé.": "Demonstration figures: the real carnet could not be loaded.",
+  "Rien n’a été publié. Le carnet réel est injoignable : cette offre n’existe que sur cet appareil, et aucun notaire ne la verra.": "Nothing was published. The real carnet is unreachable: this offer exists only on this device, and no notary will see it.",
+  "Enregistrée sur cet appareil seulement.": "Saved on this device only.",
+  // Affirmations corrigées (audit 2026-09-01) : ce que le code fait vraiment.
+  "Votre courriel est transmis à Nota pour le lien de suivi et les avis. Le contenu de vos documents, lui, ne quitte jamais cet appareil.": "Your email address is sent to Nota for the tracking link and notices. The contents of your documents never leave this device.",
+  "Première visite ou retour, c’est le même geste.": "First visit or return, it is the same gesture.",
+  "Publiez une demande et suivez vos offres.": "Post a request and follow your offers.",
+  "Plus la date est éloignée, plus de notaires ont la latitude de s’organiser pour la prendre ; une date rapprochée en laisse moins.": "The further out the date, the more notaries have room to arrange to take it; a nearer date leaves fewer.",
   "Prix et commission.": "Price and commission.",
-  "Le montant que vous offrez est celui que le notaire reçoit pour l’acte. La commission de Nota est prélevée auprès du notaire sur les actes complétés ; elle ne s’ajoute pas à votre montant.": "The amount you offer is what the notary receives for the act. Nota's commission is collected from the notary on completed acts; it is never added to your amount.",
+  "Le montant que vous offrez est le total, tout compris : rien ne s’y ajoute. Il se partage à la signature — Nota garde au plus 15 % pour trouver le notaire, monter le dossier et opérer la transaction, et le notaire garde de 85 % à 95 % pour l’acte, selon sa cote sur 100.": "The amount you offer is the all-in total: nothing is added to it. It splits at signing — Nota keeps at most 15% for finding the notary, assembling the file and running the transaction, and the notary keeps 85% to 95% for the act, depending on their score out of 100.",
   "Disponibilité.": "Availability.",
   "Le service est fourni « tel quel ». Nous visons une haute disponibilité sans garantir l’absence d’interruption. Nota peut suspendre ou refuser une offre contraire à ces conditions.": "The service is provided “as is”. We aim for high availability without guaranteeing uninterrupted service. Nota may suspend or refuse an offer that violates these terms.",
   "Responsabilité.": "Liability.",
@@ -774,22 +831,19 @@
   "Rester anonyme": "Stay anonymous",
   "Afficher mon nom": "Show my name",
   "Bienvenue sur Nota": "Welcome to Nota",
-  "Connectez-vous ou créez votre compte, sans mot de passe.": "Sign in or create your account — no password.",
+  "Créer votre compte": "Create your account",
+  "Connexion": "Sign in",
+  "Sans mot de passe — votre courriel suffit.": "No password — your email is enough.",
+  "Créer mon compte": "Create my account",
+  "Me connecter": "Sign in",
+  "Recevoir mon lien de connexion →": "Get my sign-in link →",
+  "Un lien sécurisé arrive par courriel — un clic et vous êtes dans l’espace notaire.": "A secure link lands in your inbox — one click and you are in the notary space.",
   "Vous êtes": "You are",
   "Je suis client": "I'm a client",
   "Je suis notaire": "I'm a notary",
-  "Continuer avec Google": "Continue with Google",
-  "Continuer avec Facebook": "Continue with Facebook",
-  "Continuer avec LinkedIn": "Continue with LinkedIn",
   "Bientôt": "Coming soon",
-  "Arrive bientôt": "Coming soon",
-  "Connexion avec un compte externe": "Sign in with an external account",
-  "La connexion avec Google arrive bientôt — continuez avec votre courriel.": "Signing in with Google is coming soon — continue with your email.",
-  "La connexion avec Facebook arrive bientôt — continuez avec votre courriel.": "Signing in with Facebook is coming soon — continue with your email.",
-  "La connexion avec LinkedIn arrive bientôt — continuez avec votre courriel.": "Signing in with LinkedIn is coming soon — continue with your email.",
-  "ou": "or",
   "vous@courriel.ca": "you@email.ca",
-  "Première visite ou retour, c’est le même geste. Vos renseignements restent sur cet appareil.": "First visit or returning, it's the same motion. Your information stays on this device.",
+  "Première visite ou retour, c’est le même geste. Votre courriel est transmis à Nota pour le lien de suivi et les avis. Le contenu de vos documents, lui, ne quitte jamais cet appareil.": "First visit or return, it is the same gesture. Your email address is sent to Nota for the tracking link and notices. The contents of your documents never leave this device.",
   "Comment souhaitez-vous utiliser Nota\u00a0?": "How would you like to use Nota?",
   "Comment souhaitez-vous utiliser Nota ?": "How would you like to use Nota?",
   "Étape 1 sur 2": "Step 1 of 2",
@@ -956,13 +1010,11 @@
   "Profil enregistré.": "Profile saved.",
   "Échec de l’enregistrement du profil.": "The profile could not be saved.",
   "Le lien doit être votre fiche officielle sur cnq.org (adresse https de la Chambre des notaires du Québec).": "The link must be your official listing on cnq.org (an https address at the Chambre des notaires du Québec).",
-  "Fiche Chambre des notaires ↗": "Chambre des notaires listing ↗",
-  "Membre de la Chambre des notaires du Québec": "Member of the Chambre des notaires du Québec",
   "Aucun notaire disponible ?": "No notary available?",
   "Messagerie vocale": "Voicemail",
   "« On vous rappelle… »": "“We’ll call you back…”",
   "Complet ce mois-ci": "Fully booked this month",
-  "Gratuit pour vous · publié en 2 minutes": "Free for you · published in 2 minutes",
+  "Exemple · gratuit pour vous, publié en 2 minutes": "Example · free for you, posted in 2 minutes",
   "Votre prix, selon votre urgence.": "Your price, set by your urgency.",
   "Urgence": "Urgent",
   "Signature": "Signing",
@@ -990,11 +1042,11 @@
   "Ven": "Fri",
   "Sur Nota, la demande vous attend": "On Nota, demand is waiting for you",
   "Des clients affichent date et prix.": "Clients post date and price.",
-  "+ 6 autres demandes cette semaine à Québec": "+ 6 more requests this week in Québec",
+  "Exemple — d’autres demandes s’affichent la même semaine": "Example — other requests appear the same week",
   "Acceptez en un clic.": "Accept in one click.",
   "Accepter — 2 200 $": "Accept — $2,200",
   "Demande retenue": "Request taken",
-  "Payé à la signature — et votre part grandit avec votre note": "Paid at signing — and your share grows with your rating",
+  "Payé à la signature — et votre part grandit avec votre cote": "Paid at signing — and your share grows with your cote",
   "Remplissez votre semaine.": "Fill your week.",
   "nota.quebec · Inscription gratuite pour les notaires": "nota.quebec · Free sign-up for notaries",
   "Je cherche un notaire": "I’m looking for a notary",
@@ -1009,7 +1061,7 @@
   var HTML = {
   "<strong>Gratuit pour vous</strong> : Nota se rémunère auprès du notaire.": "<strong>Free for you</strong>: Nota is paid by the notary.",
   "<span class=\"nc-soon-tag\">Bientôt</span>Vérification d’identité, inscription et <strong>réalisation complète de l’acte en ligne</strong> : recevez la demande, rencontrez le client et signez à distance. Tout le parcours notaire, de bout en bout, sans quitter Nota.": "<span class=\"nc-soon-tag\">Coming soon</span>Identity verification, onboarding and <strong>completing the entire act online</strong>: receive the request, meet the client and sign remotely. The whole notary journey, end to end, without leaving Nota.",
-  "Vos données sont conservées sur des serveurs canadiens (Amazon Web Services, région <strong>ca-central-1</strong>, Montréal). Elles ne quittent pas le pays.": "Your data is stored on Canadian servers (Amazon Web Services, <strong>ca-central-1</strong> region, Montréal). It never leaves the country.",
+  "Au repos, vos données sont conservées sur des serveurs canadiens (Amazon Web Services, région <strong>ca-central-1</strong>, Montréal). En transit, elles passent par un réseau de diffusion dont les points de présence sont aussi aux États-Unis et en Europe, et par des prestataires tiers : Stripe pour le paiement, rsms.me pour la police de caractères.": "At rest, your data is stored on Canadian servers (Amazon Web Services, <strong>ca-central-1</strong> region, Montréal). In transit it passes through a content delivery network whose edge locations are also in the United States and Europe, and through third-party providers: Stripe for payment, rsms.me for the typeface.",
   "<strong>Conservation.</strong> Une offre et son dossier sont conservés au plus <strong>12 mois</strong> après la date de signature, puis supprimés automatiquement. Le courriel de notification est effacé dès que l’offre est close ou expirée.": "<strong>Retention.</strong> An offer and its file are kept at most <strong>12 months</strong> after the signing date, then deleted automatically. The notification email is erased as soon as the offer is closed or expired.",
   "Les réponses de votre <strong>Dossier</strong> accompagnent l’offre. Les documents ne sont partagés qu’après qu’un notaire a retenu votre demande.": "The answers in your <strong>File</strong> travel with the offer. Documents are only shared after a notary has taken on your request.",
   "<span class=\"nc-soon-tag\">Bientôt</span>Les notaires pourront réaliser l’acte <strong>entièrement en ligne</strong> sur Nota, signature à distance comprise, sans déplacement. Aujourd’hui, vous convenez du lieu avec le notaire qui vous retient.": "<span class=\"nc-soon-tag\">Coming soon</span>Notaries will soon complete the act <strong>entirely online</strong> on Nota, remote signing included, no travel needed. For now, you agree on the location with the notary who takes you on."
@@ -1021,19 +1073,154 @@
     "replacement": "on $1"
   },
   {
-    "pattern": "^Commission Nota : ([0-9]+(?:,[0-9]+)?) % au lieu de ([0-9]+(?:,[0-9]+)?) % — bonus mérité par vos évaluations\\.$",
+    "pattern": "^Vous gardez ([0-9]+(?:,[0-9]+)?) % de ce que le client paie, au lieu de ([0-9]+(?:,[0-9]+)?) % — mérité par votre cote\\.$",
     "flags": "",
-    "replacement": "Nota commission: $1% instead of $2% — a bonus earned by your evaluations."
+    "replacement": "You keep $1% of what the client pays, instead of $2% — earned by your score."
   },
   {
-    "pattern": "^Commission Nota : ([0-9]+(?:,[0-9]+)?) %\\.$",
+    "pattern": "^Vous gardez ([0-9]+(?:,[0-9]+)?) % de ce que le client paie\\. Frais de service Nota : ([0-9]+(?:,[0-9]+)?) %\\.$",
     "flags": "",
-    "replacement": "Nota commission: $1%."
+    "replacement": "You keep $1% of what the client pays. Nota service fee: $2%."
   },
   {
-    "pattern": "^Prochain palier : note ([0-9]+(?:,[0-9]+)?) et ([0-9]+) avis → commission ([0-9]+(?:,[0-9]+)?) %\\.$",
+    "pattern": "^Cote ([0-9]+) → vous gardez ([0-9]+(?:,[0-9]+)?) % — il vous manque ([0-9]+) points?\\.$",
     "flags": "",
-    "replacement": "Next tier: rating $1 with $2 reviews → $3% commission."
+    "replacement": "Score $1 → you keep $2% — $3 point(s) short."
+  },
+  {
+    "pattern": "^Au départ → vous gardez ([0-9]+(?:,[0-9]+)?) % \\(frais Nota ([0-9]+(?:,[0-9]+)?) %\\)$",
+    "flags": "",
+    "replacement": "From the start → you keep $1% (Nota fee $2%)"
+  },
+  {
+    "pattern": "^Cote ([0-9]+) → vous gardez ([0-9]+(?:,[0-9]+)?) % \\(frais Nota ([0-9]+(?:,[0-9]+)?) %\\)$",
+    "flags": "",
+    "replacement": "Score $1 → you keep $2% (Nota fee $3%)"
+  },
+  {
+    "pattern": "^Réglé hors plateforme — (.+) de frais Nota à percevoir$",
+    "flags": "",
+    "replacement": "Settled off the platform — $1 of Nota fees still owed"
+  },
+  {
+    "pattern": "^1 acte signé via Nota$",
+    "flags": "",
+    "replacement": "1 act signed through Nota"
+  },
+  {
+    "pattern": "^([0-9]+) actes signés via Nota$",
+    "flags": "",
+    "replacement": "$1 acts signed through Nota"
+  },
+  {
+    "pattern": "^Cote ([0-9]+) sur 100$",
+    "flags": "",
+    "replacement": "Score $1 out of 100"
+  },
+  {
+    "pattern": "^([0-9]+),([0-9]) / ([0-9]+)$",
+    "flags": "",
+    "replacement": "$1.$2 / $3"
+  },
+  {
+    "pattern": "^1 acte$",
+    "flags": "",
+    "replacement": "1 act"
+  },
+  {
+    "pattern": "^([0-9]+) actes$",
+    "flags": "",
+    "replacement": "$1 acts"
+  },
+  {
+    "pattern": "^([01]) acte porté$",
+    "flags": "",
+    "replacement": "$1 act carried"
+  },
+  {
+    "pattern": "^([0-9]+) actes portés$",
+    "flags": "",
+    "replacement": "$1 acts carried"
+  },
+  {
+    "pattern": "^Cible ([0-9]+) actes$",
+    "flags": "",
+    "replacement": "Target $1 acts"
+  },
+  {
+    "pattern": "^Cible ([0-9]+(?:,[0-9])?) sur 5$",
+    "flags": "",
+    "replacement": "Target $1 out of 5"
+  },
+  {
+    "pattern": "^Note pondérée ([0-9]+(?:,[0-9])?) sur 5$",
+    "flags": "",
+    "replacement": "Weighted rating $1 out of 5"
+  },
+  {
+    "pattern": "^([0-9]+) avis$",
+    "flags": "",
+    "replacement": "$1 reviews"
+  },
+  {
+    "pattern": "^([0-9]+) service rendu sur ([0-9]+)$",
+    "flags": "",
+    "replacement": "$1 of $2 services delivered"
+  },
+  {
+    "pattern": "^([0-9]+) services rendus sur ([0-9]+)$",
+    "flags": "",
+    "replacement": "$1 of $2 services delivered"
+  },
+  {
+    "pattern": "^Aucune réponse donnée sur ([0-9]+) visées$",
+    "flags": "",
+    "replacement": "No answer given yet, out of $1 aimed for"
+  },
+  {
+    "pattern": "^1 réponse donnée sur ([0-9]+) visées$",
+    "flags": "",
+    "replacement": "1 answer given out of $1 aimed for"
+  },
+  {
+    "pattern": "^([0-9]+) réponses données sur ([0-9]+) visées$",
+    "flags": "",
+    "replacement": "$1 answers given out of $2 aimed for"
+  },
+  {
+    "pattern": "^1 proposition ou acceptation$",
+    "flags": "",
+    "replacement": "1 proposal or acceptance"
+  },
+  {
+    "pattern": "^([0-9]+) propositions ou acceptations$",
+    "flags": "",
+    "replacement": "$1 proposals or acceptances"
+  },
+  {
+    "pattern": "^1 déclin$",
+    "flags": "",
+    "replacement": "1 decline"
+  },
+  {
+    "pattern": "^([0-9]+) déclins$",
+    "flags": "",
+    "replacement": "$1 declines"
+  },
+  {
+    "pattern": "^Rayon ([0-9]+) km$",
+    "flags": "",
+    "replacement": "Radius $1 km"
+  },
+  {
+    "pattern": "^Activité il y a ([0-9]+) jours?$",
+    "flags": "",
+    "replacement": "Active $1 day(s) ago"
+  },
+  {
+    "pattern": "^Membre depuis ([0-9]+) jours?$",
+    "flags": "",
+    "replacement": "Member for $1 day(s)"
   },
   {
     "pattern": "^★ ([0-9]+(?:,[0-9])?) \\(([0-9]+) avis\\)$",
@@ -1046,7 +1233,7 @@
     "replacement": "Average rating $1 out of 5, $2 reviews"
   },
   {
-    "pattern": "^Note ([1-5]) sur 5$",
+    "pattern": "^Note ([1-5](?:,[0-9])?) sur 5$",
     "flags": "",
     "replacement": "Rating $1 out of 5"
   },
@@ -1269,11 +1456,6 @@
     "pattern": "^(.+?)\\. À ce délai, une offre en (.+?) se conclut autour de (.+)\\.$",
     "flags": "",
     "replacement": "$1. At this notice, an offer for $2 closes around $3."
-  },
-  {
-    "pattern": "^Chances d’obtenir un notaire : ([0-9]+)[  ]%\\. Plus la date est proche, plus il faut offrir et moins un notaire est disponible\\.$",
-    "flags": "",
-    "replacement": "Chances of getting a notary: $1%. The closer the date, the more you need to offer, and the less a notary is available."
   },
   {
     "pattern": "^Signature (.+?) · à ce délai, les offres se concluent entre (.+?) et (.+?)\\.$",

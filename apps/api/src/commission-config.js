@@ -1,43 +1,56 @@
 'use strict';
 
 /**
- * The commission barème — Nota's operating lever (ADR 0021).
+ * Le barème du partage — le levier d'exploitation de Nota (ADR 0021, 0027, 0028).
  *
- * ADR 0016 made the commission rating-earned; ADR 0021 makes the schedule a
- * runtime document Nota edits from the admin console instead of a deploy-time
- * constant. This module is the ONE authority on the barème's shape: the
- * built-in defaults, the environment overrides (now actually read — the ADR
- * 0016 gap), and the validation the admin write door applies. It is shared by
- * billing.js (pricing) and admin.js (editing) precisely so the two can never
- * disagree; it deliberately lives in the billing layer, NOT the domain — the
- * domain still has no commission concept (ADR 0008's deontology boundary).
+ * ADR 0016 a rendu la part méritée ; ADR 0021 en a fait un document d'exécution
+ * que Nota édite depuis la console admin plutôt qu'une constante de déploiement ;
+ * ADR 0028 remplace les axes épars (note / avis / actes) par UNE mesure —
+ * la cote sur 100 du domaine — et fixe l'échelle décidée par le propriétaire :
+ *
+ *   Nota prend AU PLUS 15 % ; les meilleurs notaires ne laissent que 5 %.
+ *
+ * Ce module est la SEULE autorité sur la forme du barème : les défauts
+ * intégrés, les surcharges d'environnement, et la validation qu'applique la
+ * porte d'écriture admin. Il est partagé par billing.js (tarification) et
+ * admin.js (édition) précisément pour que les deux ne puissent jamais diverger ;
+ * il vit délibérément dans la couche facturation, PAS dans le domaine — le
+ * domaine n'a toujours aucune notion de commission (frontière de l'ADR 0008).
  */
 
-// Default platform commission on a completed act (share of the acte's value).
-const DEFAULT_RATE = 0.10;
+// Part de service par défaut sur un acte complété : 15 %, le notaire garde 85 %.
+// C'est le point de DÉPART, celui d'un notaire sans historique.
+const DEFAULT_RATE = 0.15;
 
-// Each tier: a minimum one-decimal average (`note`), a minimum number of
-// evaluations (`avis`), and the rate REDUCTION it earns (`bonus`). The single
-// best attained tier applies; the floor is never crossed.
-const DEFAULT_TIERS = [
-  { note: 4.5, avis: 5, bonus: 0.01 },
-  { note: 4.8, avis: 10, bonus: 0.02 },
-];
+// Le plancher : jamais moins de 5 % pour Nota, donc jamais plus de 95 % pour
+// le notaire — le sommet décidé par le propriétaire (2026-09-01).
 const DEFAULT_FLOOR = 0.05;
+
+// L'échelle : une cote atteinte (domain.notaryScore) → la part que Nota garde.
+// Un palier est atteint dès que la cote l'égale. Le meilleur palier atteint
+// s'applique ; le plancher n'est jamais franchi.
+const DEFAULT_TIERS = [
+  { cote: 60, taux: 0.12 },  // le notaire garde 88 %
+  { cote: 70, taux: 0.10 },  // 90 %
+  { cote: 80, taux: 0.08 },  // 92 %
+  { cote: 90, taux: 0.05 },  // 95 % — le sommet
+];
 
 const TIERS_MAX = 10;
 
-// A finite number, or undefined — env vars and stored items both go through
-// this so "0.08" and 0.08 read the same and garbage reads as absent.
+// Un nombre fini, ou undefined — les variables d'environnement et les items
+// stockés passent tous par là, pour que "0.08" et 0.08 se lisent pareil et que
+// n'importe quoi d'autre se lise comme absent.
 function num(v) {
   if (v === undefined || v === null || v === '') return undefined;
   const n = Number(v);
   return Number.isFinite(n) ? n : undefined;
 }
 
-// NOTA_COMMISSION_BONUS_TIERS is a JSON array of tiers. Anything else —
-// unparsable JSON, a non-array, a malformed tier — reads as absent: a broken
-// env var must fall back to the defaults, never crash pricing.
+// NOTA_COMMISSION_TIERS est un tableau JSON de paliers `{ cote, taux }`. Tout
+// le reste — JSON illisible, non-tableau, palier malformé, barème d'avant
+// l'ADR 0028 (note/avis/bonus) — se lit comme ABSENT : un barème périmé doit
+// retomber sur les défauts, jamais faire tomber la tarification.
 function parseTiers(raw) {
   if (raw === undefined || raw === null || raw === '') return undefined;
   if (Array.isArray(raw)) return normalizeTiers(raw);
@@ -51,22 +64,22 @@ function normalizeTiers(arr) {
   if (!Array.isArray(arr)) return undefined;
   const tiers = [];
   for (const t of arr) {
-    const note = num(t && t.note);
-    const avis = num(t && t.avis);
-    const bonus = num(t && t.bonus);
-    if (note === undefined || avis === undefined || bonus === undefined) return undefined;
-    tiers.push({ note, avis, bonus });
+    const cote = num(t && t.cote);
+    const taux = num(t && t.taux);
+    if (cote === undefined || taux === undefined) return undefined;
+    tiers.push({ cote, taux });
   }
-  return tiers;
+  return tiers.sort((a, b) => a.cote - b.cote);
 }
 
-// The deployment's defaults: built-ins, overlaid by whatever the environment
-// declares. This is what pricing uses when no stored barème exists — and what
-// the admin console shows as « the default » a reset returns to.
+// Les défauts du déploiement : les intégrés, recouverts par ce que déclare
+// l'environnement. C'est ce que la tarification utilise quand aucun barème
+// n'est stocké — et ce que la console admin montre comme « le défaut » auquel
+// une remise à zéro revient.
 function envDefaults(env = process.env) {
   const taux = num(env.NOTA_COMMISSION_RATE);
   const plancher = num(env.NOTA_COMMISSION_RATE_FLOOR);
-  const paliers = parseTiers(env.NOTA_COMMISSION_BONUS_TIERS);
+  const paliers = parseTiers(env.NOTA_COMMISSION_TIERS);
   return {
     taux: taux !== undefined ? taux : DEFAULT_RATE,
     plancher: plancher !== undefined ? plancher : DEFAULT_FLOOR,
@@ -75,16 +88,19 @@ function envDefaults(env = process.env) {
 }
 
 /**
- * Validate a barème the admin proposes. Loud and typed, like the domain's
- * validators: `{ ok, errors, taux, plancher, paliers }`. Rules: 0 < taux < 1,
- * 0 ≤ plancher ≤ taux, at most TIERS_MAX paliers, each with a real note
- * (1–5), an integer avis ≥ 1 and a bonus in (0, taux].
+ * Valider un barème que l'admin propose. Bruyant et typé, comme les
+ * validateurs du domaine : `{ ok, errors, taux, plancher, paliers }`.
+ *
+ * Règles : 0 < taux < 1 ; 0 ≤ plancher ≤ taux ; au plus TIERS_MAX paliers,
+ * chacun avec une cote entière de 1 à 100 et un taux entre le plancher et le
+ * taux de base ; une cote ne se répète pas ; et le taux ne remonte JAMAIS
+ * quand la cote monte — le mérite ne déplace la ligne que vers le notaire.
  */
 function validateSchedule(payload = {}) {
   const errors = [];
   const taux = num(payload.taux);
   if (taux === undefined || !(taux > 0 && taux < 1)) {
-    errors.push({ code: 'taux_invalide', message: 'Le taux de commission doit être un nombre entre 0 et 1 (ex. 0,10 pour 10 %).' });
+    errors.push({ code: 'taux_invalide', message: 'Le taux de base doit être un nombre entre 0 et 1 (ex. 0,15 pour 15 %).' });
   }
   const plancher = num(payload.plancher);
   if (plancher === undefined || plancher < 0 || (taux !== undefined && plancher > taux)) {
@@ -95,20 +111,33 @@ function validateSchedule(payload = {}) {
     errors.push({ code: 'paliers_invalides', message: `Les paliers doivent être une liste d’au plus ${TIERS_MAX} éléments.` });
   } else {
     paliers = [];
-    payload.paliers.forEach((t, i) => {
-      const note = num(t && t.note);
-      const avis = num(t && t.avis);
-      const bonus = num(t && t.bonus);
+    payload.paliers.forEach((p, i) => {
+      const cote = num(p && p.cote);
+      const t = num(p && p.taux);
       const bad =
-        note === undefined || note < 1 || note > 5 ||
-        avis === undefined || !Number.isInteger(avis) || avis < 1 ||
-        bonus === undefined || bonus <= 0 || (taux !== undefined && bonus > taux);
+        cote === undefined || !Number.isInteger(cote) || cote < 1 || cote > 100 ||
+        t === undefined || t < 0 || t >= 1 ||
+        (plancher !== undefined && t < plancher) ||
+        (taux !== undefined && t > taux);
       if (bad) {
-        errors.push({ code: 'palier_invalide', message: `Palier ${i + 1} : il faut une note entre 1 et 5, un nombre d’avis entier ≥ 1 et un bonus entre 0 et le taux.` });
+        errors.push({ code: 'palier_invalide', message: `Palier ${i + 1} : il faut une cote entière de 1 à 100 et un taux entre le plancher et le taux de base.` });
       } else {
-        paliers.push({ note, avis, bonus });
+        paliers.push({ cote, taux: t });
       }
     });
+    if (paliers.length === payload.paliers.length) {
+      paliers.sort((a, b) => a.cote - b.cote);
+      for (let i = 1; i < paliers.length; i++) {
+        if (paliers[i].cote === paliers[i - 1].cote) {
+          errors.push({ code: 'paliers_invalides', message: `Deux paliers ne peuvent pas viser la même cote (${paliers[i].cote}).` });
+          break;
+        }
+        if (paliers[i].taux > paliers[i - 1].taux) {
+          errors.push({ code: 'paliers_invalides', message: 'Une cote plus haute ne peut jamais coûter plus cher au notaire.' });
+          break;
+        }
+      }
+    }
   }
   if (errors.length) return { ok: false, errors };
   return { ok: true, errors: [], taux, plancher, paliers };

@@ -277,12 +277,18 @@ test('no evaluation block before the act is settled', async () => {
   assert.equal(doc.querySelector('.my-offer-eval'), null);
 });
 
-test('a notary’s public rating shows on their proposition and on the retained contact line', async () => {
+// Art. 70, C. déont. notaires (N-3, r. 2): a notary may not use « ou permettre
+// que soit utilisé » a testimonial about themselves — no exception for
+// authentic reviews. These two tests once REQUIRED a public rating badge on
+// the client’s screen; they are inverted, not deleted, so the reversal stays
+// legible. The API no longer serves `rating` here either.
+test('a notary’s rating is NEVER published on their proposition or on the retained contact line (art. 70)', async () => {
   const status = {
     ...openStatus(),
     bid: { ...openStatus().bid, status: 'retenue', etude: 'Étude Tremblay' },
-    notaire: { etude: 'Étude Tremblay', courriel: 'n@etude.ca', rating: { note: 4.5, avis: 12 } },
-    propositions: [{ id: 'p1', etude: 'Étude Roy', montant: 1200, delta: 200, message: '', status: 'en_attente', createdAt: '2026-08-01', rating: { note: 4.8, avis: 7 } }],
+    // Even if a stale payload still carried an appreciation, nothing may render it.
+    notaire: { etude: 'Étude Tremblay', courriel: 'n@etude.ca', rating: { note: 4.5, avis: 12 }, cote: 91, actes: 12 },
+    propositions: [{ id: 'p1', etude: 'Étude Roy', montant: 1200, delta: 200, message: '', status: 'en_attente', createdAt: '2026-08-01', rating: { note: 4.8, avis: 7 }, cote: 88, actes: 37 }],
     acte: { complete: false },
   };
   const { doc, Nota } = await boot({
@@ -291,16 +297,23 @@ test('a notary’s public rating shows on their proposition and on the retained 
   });
   Nota.setTab('profil');
   await wait(40);
-  const badges = Array.from(doc.querySelectorAll('.rating-badge')).map((b) => b.textContent);
-  assert.ok(badges.includes('★ 4,5 (12 avis)'), 'retained contact badge missing: ' + badges);
-  assert.ok(badges.includes('★ 4,8 (7 avis)'), 'proposition badge missing: ' + badges);
+  assert.equal(doc.querySelector('.my-offer-prop .rating-badge'), null, 'no star badge on a proposition');
+  assert.equal(doc.querySelector('.my-offer-contact .rating-badge'), null, 'nor on the retained contact line');
+  assert.equal(doc.querySelector('.cote-badge'), null, 'and no cote pill anywhere on the client side');
+  for (const node of [doc.querySelector('.my-offer-prop'), doc.querySelector('.my-offer-contact')]) {
+    assert.ok(!/★|☆/.test(node.textContent), 'no star: ' + node.textContent);
+    assert.ok(!/\bavis\b|\bcote\b/i.test(node.textContent), 'no review count, no cote: ' + node.textContent);
+  }
+  // What replaces them: the verifiable facts.
+  assert.match(doc.querySelector('.my-offer-prop').textContent, /37 actes signés via Nota/);
+  assert.match(doc.querySelector('.my-offer-contact').textContent, /12 actes signés via Nota/);
 });
 
-test('no rating → no badge, never zero stars', async () => {
+test('a notary with no acts gets no badge at all — never a zero, never an empty pill', async () => {
   const status = {
     ...openStatus(),
     bid: { ...openStatus().bid, status: 'retenue', etude: 'Étude Neuve' },
-    notaire: { etude: 'Étude Neuve', courriel: 'n@etude.ca', rating: null },
+    notaire: { etude: 'Étude Neuve', courriel: 'n@etude.ca', cnq: false, actes: 0 },
     acte: { complete: false },
   };
   const { doc, Nota } = await boot({
@@ -309,7 +322,9 @@ test('no rating → no badge, never zero stars', async () => {
   });
   Nota.setTab('profil');
   await wait(40);
-  assert.equal(doc.querySelector('.rating-badge'), null);
+  assert.equal(doc.querySelector('.rating-badge'), null, 'no rating badge');
+  assert.equal(doc.querySelector('.my-offer-acts'), null, 'no acts fact at zero');
+  assert.ok(!/0 acte/.test(doc.querySelector('.my-offer-contact').textContent), 'and no « 0 acte » to read as a demerit');
 });
 
 test('a CNQ fiche shows as a badge on the proposition and as the full link once retained (ADR 0016)', async () => {
@@ -317,8 +332,8 @@ test('a CNQ fiche shows as a badge on the proposition and as the full link once 
   const status = {
     ...openStatus(),
     bid: { ...openStatus().bid, status: 'retenue', etude: 'Étude Tremblay' },
-    notaire: { etude: 'Étude Tremblay', courriel: 'n@etude.ca', rating: { note: 4.5, avis: 12 }, lienCNQ: FICHE },
-    propositions: [{ id: 'p1', etude: 'Étude Roy', montant: 1200, delta: 200, message: '', status: 'en_attente', createdAt: '2026-08-01', rating: null, cnq: true }],
+    notaire: { etude: 'Étude Tremblay', courriel: 'n@etude.ca', cnq: true, actes: 12, lienCNQ: FICHE },
+    propositions: [{ id: 'p1', etude: 'Étude Roy', montant: 1200, delta: 200, message: '', status: 'en_attente', createdAt: '2026-08-01', cnq: true, actes: 4 }],
     acte: { complete: false },
   };
   const { doc } = await boot({

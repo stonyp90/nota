@@ -197,7 +197,9 @@ test('after retention: the client sees the retaining notary étude + courriel; a
   await accept(a, tokenA, posted.bid.id, posted.bid.dateISO);
 
   const own = parse(await clientBid(a, posted.clientToken, posted.bid.id, posted.bid.dateISO));
-  assert.deepEqual(own.notaire, { etude: 'Étude a@notaire.ca', courriel: 'a@notaire.ca', rating: null, lienCNQ: null });
+  // ADR 0030 : le bloc notaire porte la mise en relation et des FAITS — jamais
+  // une moyenne ni une cote (art. 70 du Code de déontologie).
+  assert.deepEqual(own.notaire, { etude: 'Étude a@notaire.ca', courriel: 'a@notaire.ca', lienCNQ: null, actes: 0 });
   assert.equal(JSON.stringify(own).includes(notaryIdForEmail('a@notaire.ca')), false, 'the internal notaryId must never reach the client');
 
   // The losing notary's console lists nothing — no contact leak sideways.

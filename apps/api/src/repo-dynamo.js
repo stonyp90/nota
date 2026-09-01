@@ -128,6 +128,31 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
     return bid;
   }
 
+  // Le balayage GSI1 des profils notaires — une seule définition, partagée par
+  // les deux noms de lecture (le registre admin et la liste de diffusion).
+  async function queryAllNotaries() {
+    const notaries = [];
+    let ExclusiveStartKey;
+    do {
+      const out = await doc.send(
+        new QueryCommand({
+          TableName: tableName,
+          IndexName: 'GSI1',
+          KeyConditionExpression: '#g = :n',
+          ExpressionAttributeNames: { '#g': GSI1_PK },
+          ExpressionAttributeValues: { ':n': NOTARY_GSI1PK },
+          ExclusiveStartKey,
+        })
+      );
+      (out.Items || []).forEach((i) => {
+        const { PK, SK, type, [GSI1_PK]: _gpk, [GSI1_SK]: _gsk, ...notary } = i;
+        notaries.push(notary);
+      });
+      ExclusiveStartKey = out.LastEvaluatedKey;
+    } while (ExclusiveStartKey);
+    return notaries;
+  }
+
   return {
     async listByMonth(month) {
       // A month partition can exceed DynamoDB's 1MB page, so follow
@@ -274,11 +299,15 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
     // Same single table, distinct key prefixes (see keys.js). Only GetItem and
     // PutItem are used, so the least-privilege IAM policy is unchanged.
     async putNotary(notary) {
-      // Sparse GSI1 membership: only an ACTIVE notary is enumerable (daily
-      // carnet digest). A pending/deauthorized profile omits the attributes
-      // and falls out of the index on this very write.
+      // GSI1 énumère TOUS les notaires — actifs, en inscription, restreints.
+      // Avant le 2026-09-01, l'index était creux (actifs seulement) : le
+      // registre admin ne voyait donc pas les notaires en inscription, ni la
+      // créance de celui qui part. Le filtre par statut vit maintenant dans
+      // `listActiveNotaries`, la seule lecture qui exige des actifs (le digest
+      // quotidien) — un filtre est visible et testable, un index creux ne
+      // l'est pas.
       const item = { PK: notaryPK(notary.id), SK: NOTARY_SK, type: 'notary', ...notary };
-      if (notary.status === 'active') {
+      {
         item[GSI1_PK] = NOTARY_GSI1PK;
         item[GSI1_SK] = notaryGSI1SK(notary);
       }
@@ -297,27 +326,14 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
     // digest, cost proportional to the roster, never a Scan. Profiles written
     // before this index existed appear after their next putNotary (any profile
     // update); the early-stage roster makes a backfill unnecessary.
+    // Le registre complet de la console admin. Même balayage GSI1 que
+    // listActiveNotaries — l'index porte déjà tous les profils notaires ; les
+    // deux noms existent pour que l'appelant dise ce qu'il veut lire.
+    async listNotaries() {
+      return queryAllNotaries();
+    },
     async listActiveNotaries() {
-      const notaries = [];
-      let ExclusiveStartKey;
-      do {
-        const out = await doc.send(
-          new QueryCommand({
-            TableName: tableName,
-            IndexName: 'GSI1',
-            KeyConditionExpression: '#g = :n',
-            ExpressionAttributeNames: { '#g': GSI1_PK },
-            ExpressionAttributeValues: { ':n': NOTARY_GSI1PK },
-            ExclusiveStartKey,
-          })
-        );
-        (out.Items || []).forEach((i) => {
-          const { PK, SK, type, [GSI1_PK]: _gpk, [GSI1_SK]: _gsk, ...notary } = i;
-          notaries.push(notary);
-        });
-        ExclusiveStartKey = out.LastEvaluatedKey;
-      } while (ExclusiveStartKey);
-      return notaries;
+      return (await queryAllNotaries()).filter((n) => n.status === 'active');
     },
     async markEventProcessed(stripeEventId, at) {
       await doc.send(
@@ -420,7 +436,7 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
       const stored = {
         taux: cfg.taux,
         plancher: cfg.plancher,
-        paliers: (cfg.paliers || []).map((p) => ({ note: p.note, avis: p.avis, bonus: p.bonus })),
+        paliers: (cfg.paliers || []).map((p) => ({ cote: p.cote, taux: p.taux })),
         updatedAt: nowISO,
       };
       await doc.send(
@@ -1053,9 +1069,52 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
       });
     },
 
+    // --- Piste d'audit des TRANSACTIONS, sur la table PRINCIPALE -------------
+    // Le journal administratif vit dans la table admin, à laquelle la Lambda
+    // publique n'a — délibérément — aucun accès. Une trace de règlement écrite
+    // là-bas ne s'écrit donc jamais en production : l'appel lève, le `catch`
+    // best-effort l'avale, et l'audit n'existe que dans les tests. Les
+    // événements d'argent vivent donc ici, dans la table principale, où la
+    // Lambda publique a déjà `PutItem` — et la console admin, qui lit cette
+    // table, les fusionne avec son propre journal.
+    async appendTxAudit(entry) {
+      const day = entry.day || String(entry.ts || '').slice(0, 10);
+      await doc.send(
+        new PutCommand({
+          TableName: tableName,
+          Item: { PK: auditPK(day), SK: auditSK(entry.ts, entry.id), type: 'audit', day, ...entry },
+          ConditionExpression: 'attribute_not_exists(PK) OR attribute_not_exists(SK)',
+        })
+      ).catch((err) => {
+        if (!(err && err.name === 'ConditionalCheckFailedException')) throw err;
+      });
+    },
+    async queryTxAuditByDay(dayISO) {
+      const items = [];
+      let ExclusiveStartKey;
+      do {
+        const out = await doc.send(
+          new QueryCommand({
+            TableName: tableName,
+            KeyConditionExpression: 'PK = :pk',
+            ExpressionAttributeValues: { ':pk': auditPK(dayISO) },
+            ExclusiveStartKey,
+          })
+        );
+        (out.Items || []).forEach((i) => {
+          const { PK, SK, type, ...entry } = i;
+          items.push(entry);
+        });
+        ExclusiveStartKey = out.LastEvaluatedKey;
+      } while (ExclusiveStartKey);
+      return items;
+    },
+
     // --- Audit log (append-only) --------------------------------------------
     async appendAudit(entry) {
-      const day = String(entry.ts || '').slice(0, 10);
+      // Même règle que l'adaptateur mémoire : le jour ouvrable nommé par
+      // l'appelant fait foi, l'horodatage sinon.
+      const day = entry.day || String(entry.ts || '').slice(0, 10);
       await doc.send(
         new PutCommand({
           TableName: adminTable(),

@@ -6,18 +6,36 @@
    ========================================================================== */
 
 :root {
-  /* Hunter green — the Tablix brand ramp */
-  --hunter-50: #f0f9f0;
-  --hunter-100: #dcf0dc;
-  --hunter-200: #afdbb4;
-  --hunter-300: #78c282;
-  --hunter-400: #5ab455;
-  --hunter-500: #50b848;
-  --hunter-600: #429c3c;
-  --hunter-700: #2c5f34;
-  --hunter-800: #244c2a;
-  --hunter-900: #1b331f;
-  --hunter-950: #0d1a10;
+  /* Fir green — the brand ramp (owner, 2026-09-01: « le vert est trop
+     intense »). Rebuilt in OKLCH on ONE hue axis (150→158, a fir/sage green)
+     instead of the old ramp's yellow-green 142 with a chroma spike of 0.179
+     at step 500 — a near-gamut-edge kelly that burns on the dark canvas.
+     Chroma is now capped at 0.092 (a 48 % cut) and PEAKS on steps 400/500,
+     the two the single vivid accent (--brand-bright) resolves to; every
+     other step is quieter still, so borders, status ink and bars read as
+     ink-with-a-hue rather than paint. Lightness is monotonic, which the old
+     ramp was not (400 and 500 sat 0.005 apart and differed only in chroma).
+     Method: Radix's 12-step role split (1-2 backgrounds, 3-5 component
+     fills, 6-8 borders, 9-10 solids, 11-12 text) mapped onto this 50-950
+     scale; the cooler hue also pulls the green away from the warm alert
+     ramp under deuteranopia (dE 6.6 -> 26.4 on the worst pair). */
+  --hunter-50: #f0f8f1;
+  --hunter-100: #ddeee0;
+  --hunter-200: #bbd9c2;
+  --hunter-300: #97c0a2;
+  --hunter-400: #73b189;
+  --hunter-500: #599a71;
+  --hunter-600: #467759;
+  --hunter-700: #315b43;
+  --hunter-800: #254633;
+  --hunter-900: #183123;
+  --hunter-950: #0b1911;
+  /* Channel-only copies of the three steps that alpha tokens below need
+     (shadows, focus glow, background wash). rgb() cannot take a hex var, so
+     these exist so no ramp value is ever retyped as a literal downstream. */
+  --hunter-400-rgb: 115 177 137;
+  --hunter-500-rgb: 89 154 113;
+  --hunter-700-rgb: 49 91 67;
 
   /* Semantic tokens (light) */
   --brand: var(--hunter-700);
@@ -51,7 +69,7 @@
      components (chips, badges, step discs, hover fills) paint with, so
      nothing ever bleeds through a component. Auto-follows each theme:
      the mix resolves against that theme's --brand-bright / --surface. */
-  --brand-tint: rgb(80 184 72 / 0.05); /* faint brand wash — background layers only (softened 2026-08-28) */
+  --brand-tint: rgb(var(--hunter-500-rgb) / 0.05); /* faint brand wash — background layers only */
   --brand-tint-mix: 6%;
   --brand-tint-solid: color-mix(in srgb, var(--brand-bright) var(--brand-tint-mix), var(--surface));
   /* The HIGHLIGHT tint: one step richer than the component wash, for the one
@@ -60,6 +78,12 @@
      reads as washed grey on near-black, not as brand. */
   --brand-tint-mix-strong: 12%;
   --brand-tint-solid-strong: color-mix(in srgb, var(--brand-bright) var(--brand-tint-mix-strong), var(--surface));
+  /* The ink the highlight card writes with. On light the deep --brand clears
+     AA over the strong tint; on dark it does not (the tint is a POUR of the
+     accent, so ink and ground converge), so the dark themes step up to the
+     accent itself. One token, so .pr-kicker / .pr-amount / .pr-step-ic never
+     have to know which theme they are in. */
+  --brand-on-tint-strong: var(--brand);
   /* The 95 % skin (owner, 2026-08-27: « blanc c'est très beau… mais on
      pourrait mettre un tout petit peu d'opacité, genre quatre-vingt-quinze
      pour cent » — superseding the earlier 90 %) — the shared translucent
@@ -79,7 +103,7 @@
   /* Tier accent ramp — cool (calm) to warm (urgent).
      All five are dark enough for white .pill text to meet WCAG AA (>=4.5:1). */
   --tier-standard: #64748b;
-  --tier-rapide: #357f30;
+  --tier-rapide: #3f654d;
   --tier-prioritaire: #906800;
   --tier-urgence: #c2410c;
   --tier-extreme: #b42318;
@@ -118,10 +142,10 @@
   color-scheme: light;
   --shadow-sm: 0 1px 2px rgb(17 22 20 / 0.05);
   --shadow: 0 6px 20px -8px rgb(17 22 20 / 0.12);
-  --shadow-lg: 0 24px 50px -16px rgb(44 95 52 / 0.24);
-  --shadow-brand: 0 6px 16px -6px rgb(44 95 52 / 0.5); /* brand-primary hover lift */
+  --shadow-lg: 0 24px 50px -16px rgb(var(--hunter-700-rgb) / 0.24);
+  --shadow-brand: 0 6px 16px -6px rgb(var(--hunter-700-rgb) / 0.5); /* brand-primary hover lift */
   --logo-shadow: 0 1px 2px rgb(17 22 20 / 0.15);       /* header brand mark */
-  --focus-ring: rgb(80 184 72 / 0.3);                  /* brand focus glow (3px) */
+  --focus-ring: rgb(var(--hunter-500-rgb) / 0.3);      /* brand focus glow (3px) */
   --backdrop: rgb(13 18 15 / 0.55);                    /* dialog scrim */
 
   --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -169,8 +193,6 @@
   --logo-google-yellow: #fbbc05;
   --logo-google-red: #ea4335;
   --logo-outlook-blue: #0f6cbd;
-  --logo-facebook: #1877f2;
-  --logo-linkedin: #0a66c2;
   --logo-on-brand: #ffffff;
 }
 
@@ -193,7 +215,7 @@
     --bg: #0f110f;
     --surface: #171918;
     --surface-inset: #1d201e;
-    --surface-hover: #252827;
+    --surface-hover: #232624; /* one notch down (2026-09-01): at #252827 the quieter --brand ink on a hovered row measured 4.45:1, just under AA */
     --ink: #f6f9f7;
     --ink-muted: #a8b1ab;
     --border: #2e332f;
@@ -204,25 +226,26 @@
     --warn: #f79009;
     --ok: var(--hunter-500);
     --danger-solid: #b42318;
-    --brand-tint: rgb(80 184 72 / 0.06); /* softened twice (owner, 2026-08-28: « trop vert ») */
+    --brand-tint: rgb(var(--hunter-400-rgb) / 0.06); /* softened three times (owner, 2026-08-28 « trop vert », 2026-09-01 « trop intense ») */
     --brand-tint-mix: 8%;
-    --brand-tint-mix-strong: 26%; /* deep pour: on near-black the 14% mix greys out */
+    --brand-tint-mix-strong: 20%; /* deep pour: on near-black a component-level mix greys out — but 26 % pushed --brand ink on the highlight card below AA, so the card now carries --brand-on-tint-strong instead */
+    --brand-on-tint-strong: var(--brand-bright);
 
     --tier-standard: #64748b;
-    --tier-rapide: #357f30;
+    --tier-rapide: #3f654d;
     --tier-prioritaire: #906800;
     --tier-urgence: #c2410c;
     --tier-extreme: #b42318;
     --tier-rapide-ink: var(--ink-muted); /* NEUTRAL — the green cast was too much (owner, 2026-08-28) */ --tier-prioritaire-ink: #e0b44a; --tier-urgence-ink: #f0894c; --tier-extreme-ink: #f97066;
-    --svc-refinancement: #2dd4bf;
+    --svc-refinancement: #6dc3b9;
     --svc-financement: #818cf8;
 
     /* Dark shadows are cast in black, not light ink, so they read on #0a0a0a. */
     --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.5);
     --shadow: 0 8px 24px -10px rgb(0 0 0 / 0.6);
     --shadow-lg: 0 20px 40px -12px rgb(0 0 0 / 0.6);
-    --shadow-brand: 0 6px 16px -6px rgb(80 184 72 / 0.4);
-    --focus-ring: rgb(80 184 72 / 0.45);
+    --shadow-brand: 0 6px 16px -6px rgb(var(--hunter-400-rgb) / 0.4);
+    --focus-ring: rgb(var(--hunter-400-rgb) / 0.45);
     color-scheme: dark;
   }
 }
@@ -243,7 +266,7 @@
   --bg: #0f110f;
   --surface: #171918;
   --surface-inset: #1d201e;
-  --surface-hover: #252827;
+  --surface-hover: #232624; /* one notch down (2026-09-01): at #252827 the quieter --brand ink on a hovered row measured 4.45:1, just under AA */
   --ink: #f6f9f7;
   --ink-muted: #a8b1ab;
   --border: #2e332f;
@@ -254,25 +277,26 @@
   --warn: #f79009;
   --ok: var(--hunter-500);
   --danger-solid: #b42318;
-  --brand-tint: rgb(80 184 72 / 0.06); /* softened twice (owner, 2026-08-28: « trop vert ») */
+  --brand-tint: rgb(var(--hunter-400-rgb) / 0.06); /* softened three times (owner, 2026-08-28 « trop vert », 2026-09-01 « trop intense ») */
   --brand-tint-mix: 8%;
-  --brand-tint-mix-strong: 26%; /* deep pour: on near-black the 14% mix greys out */
+  --brand-tint-mix-strong: 20%; /* deep pour: on near-black a component-level mix greys out — but 26 % pushed --brand ink on the highlight card below AA, so the card now carries --brand-on-tint-strong instead */
+  --brand-on-tint-strong: var(--brand-bright);
 
   --tier-standard: #64748b;
-  --tier-rapide: #357f30;
+  --tier-rapide: #3f654d;
   --tier-prioritaire: #906800;
   --tier-urgence: #c2410c;
   --tier-extreme: #b42318;
   --tier-rapide-ink: var(--ink-muted); /* NEUTRAL — the green cast was too much (owner, 2026-08-28) */ --tier-prioritaire-ink: #e0b44a; --tier-urgence-ink: #f0894c; --tier-extreme-ink: #f97066;
-  --svc-refinancement: #2dd4bf;
+  --svc-refinancement: #6dc3b9;
   --svc-financement: #818cf8;
 
   /* Dark shadows are cast in black, not light ink, so they read on #0a0a0a. */
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.5);
   --shadow: 0 8px 24px -10px rgb(0 0 0 / 0.6);
   --shadow-lg: 0 20px 40px -12px rgb(0 0 0 / 0.6);
-  --shadow-brand: 0 6px 16px -6px rgb(80 184 72 / 0.4);
-  --focus-ring: rgb(80 184 72 / 0.45);
+  --shadow-brand: 0 6px 16px -6px rgb(var(--hunter-400-rgb) / 0.4);
+  --focus-ring: rgb(var(--hunter-400-rgb) / 0.45);
   color-scheme: dark;
 }
 
@@ -672,22 +696,6 @@ html.nav-open, html.nav-open body { overflow: hidden; }
    sunken. --surface-hover stays lighter than the track in both themes; the
    strong hairline and the bigger shadow are what separate it from a hover. */
 .auth-role .seg-btn.is-on { background: var(--surface-hover); border-color: var(--border-strong); box-shadow: var(--shadow); }
-/* Social doors — visible but « Arrive bientôt » : muted label + a chip on the
-   right announce the state before the click; the courriel path below stays the
-   one live door, so these never take the primary look. */
-.auth-social { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
-.auth-soc-btn { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-inset); color: var(--ink-muted); font-weight: 600; font-size: 13.5px; text-align: left; }
-.auth-soc-btn:hover { background: var(--surface-hover); color: var(--ink); }
-.auth-soc-ic { flex: none; opacity: 0.75; }
-.auth-soc-label { flex: 1; min-width: 0; }
-.auth-soon { flex: none; font-size: 10.5px; font-weight: 700; letter-spacing: 0.02em; padding: 2px 8px; border-radius: var(--radius-sm); background: var(--brand-tint-solid-strong); color: var(--brand); border: 1px solid var(--border); white-space: nowrap; }
-/* The coming-soon line a social click surfaces — inside the modal, since a
-   toast would paint under the <dialog> top layer. */
-.auth-soc-note { font-size: 12px; color: var(--brand); background: var(--brand-tint-solid); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 7px 10px; margin: 2px 0 0; text-align: center; line-height: 1.45; }
-/* « ou » — the hairline pair centers the word between the doors and the form. */
-.auth-or { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; color: var(--ink-muted); font-size: 12px; }
-.auth-or::before, .auth-or::after { content: ''; flex: 1; border-top: 1px solid var(--border); }
-
 .auth-email { display: flex; flex-direction: column; gap: 8px; }
 .auth-email .lbl { font-size: 12px; margin-bottom: 0; }
 .auth-email input { width: 100%; }
@@ -1556,10 +1564,10 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
    pairing .auth-soon already proves over the strong tint in both themes) and
    a wider track. The right padding keeps it clear of the corner « → » on the
    narrowest card. */
-.pr-kicker { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; color: var(--brand); padding-right: var(--space-12); }
+.pr-kicker { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; color: var(--brand-on-tint-strong); padding-right: var(--space-12); }
 /* The figure IS the card (owner, 2026-08-27: « do better for 50 and 250 ») —
    display size, dense tracking, on its own line. */
-.pr-amount { margin-top: var(--space-2); font-size: clamp(36px, 3.6vw, 50px); font-weight: 800; letter-spacing: -0.035em; color: var(--brand); font-variant-numeric: tabular-nums; line-height: 1; }
+.pr-amount { margin-top: var(--space-2); font-size: clamp(36px, 3.6vw, 50px); font-weight: 800; letter-spacing: -0.035em; color: var(--brand-on-tint-strong); font-variant-numeric: tabular-nums; line-height: 1; }
 /* The cadence tag — the one fact that separates the two offers (the 50 $
    repeats forever, the 250 $ pays once per referred notary), surfaced from
    the FAQ into the card. STACKED under the amount on both cards: the two
@@ -1637,8 +1645,8 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .pr-step-ic {
   grid-row: 1 / span 2; position: relative; width: 40px; height: 40px;
   border-radius: var(--radius);
-  background: var(--brand-tint-solid-strong); border: 1px solid var(--brand);
-  color: var(--brand); display: flex; align-items: center; justify-content: center;
+  background: var(--brand-tint-solid-strong); border: 1px solid var(--brand-on-tint-strong);
+  color: var(--brand-on-tint-strong); display: flex; align-items: center; justify-content: center;
 }
 .pr-step-ic svg { width: 20px; height: 20px; }
 /* The order tag rides the chip's shoulder — solid brand, like the header's
@@ -2088,6 +2096,12 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
   line-height: 18px; white-space: nowrap; vertical-align: middle;
 }
 .cnq-link { font-size: 12.5px; white-space: nowrap; }
+/* ADR 0030 — la pastille de cote et sa note d'explication ont été retirées des
+   vues client : l'art. 70 du Code de déontologie interdit au notaire de
+   permettre qu'un témoignage d'appui le concernant soit utilisé, et une note
+   affichée transforme un annuaire en recommandation. Ce qui reste à côté du
+   badge CNQ est un FAIT : le nombre d'actes portés sur Nota. */
+.my-offer-acts { white-space: nowrap; }
 .nc-commission { font-variant-numeric: tabular-nums; }
 #notary-profil .form-row { margin-bottom: var(--space-4); }
 #nc-profil-form .btn { margin-top: var(--space-3); }
@@ -3008,6 +3022,119 @@ body.is-notary-session #tab-notaires { pointer-events: none; }
    one quiet block, not three floating paragraphs. */
 .nc-earn .help { margin: 8px 0 0; }
 
+/* --- « Votre cote » (ADR 0028) -------------------------------------------
+   The measure that decides the split, published whole. The number leads at
+   display size; the axes are the arithmetic under it; the barème closes the
+   panel as a public scale. Square register throughout — no pill, no circle;
+   every colour is a token. */
+.nc-cote { margin-top: var(--space-3); }
+.nc-cote-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--space-3) var(--space-8); }
+.nc-cote-n {
+  display: inline-flex; align-items: baseline; gap: var(--space-1);
+  padding: var(--space-2) var(--space-6);
+  border: 1px solid var(--brand); border-radius: var(--radius);
+  background: var(--brand-tint-solid); color: var(--brand);
+}
+.nc-cote-v { font-size: 34px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; }
+.nc-cote-max { font-size: 14px; font-weight: 600; color: var(--ink-muted); }
+.nc-cote-head .help { margin: 0; flex: 1 1 240px; }
+
+.nc-cote-axes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: var(--space-5); margin-top: var(--space-6); }
+.nc-cote-axe { border: 1px solid var(--border); border-radius: var(--radius); padding: var(--space-5) var(--space-6); background: var(--surface); }
+.nc-cote-axe-h { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-4); }
+.nc-cote-axe-nom { font-size: 13px; font-weight: 600; color: var(--ink); }
+.nc-cote-axe-pts { font-size: 13px; font-weight: 700; color: var(--brand); font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* A thin bar, not a gauge: it ranks the four axes at a glance, the figures
+   below carry the truth. --radius-xs keeps it in the square register. */
+.nc-cote-bar { height: 5px; margin-top: var(--space-3); border-radius: var(--radius-xs); background: var(--surface-inset); overflow: hidden; }
+.nc-cote-bar-fill { display: block; height: 100%; border-radius: var(--radius-xs); background: var(--brand-bright); }
+.nc-cote-detail { margin-top: var(--space-3); font-size: 12px; line-height: 1.6; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+/* The separator is CSS, never a text node: the figures stay translatable
+   fragment by fragment. */
+.nc-cote-f + .nc-cote-f::before { content: ' · '; color: var(--border-strong); }
+
+.nc-cote-next { margin: var(--space-6) 0 0; font-weight: 600; color: var(--ink); }
+.nc-bareme { margin-top: var(--space-6); border-top: 1px solid var(--border); padding-top: var(--space-5); }
+.nc-bareme-h { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-muted); }
+.nc-bareme-row {
+  margin-top: var(--space-3); padding: var(--space-2) var(--space-5);
+  border-left: 2px solid var(--border); border-radius: var(--radius-xs);
+  font-size: 13px; color: var(--ink-muted); font-variant-numeric: tabular-nums;
+}
+.nc-bareme-row.is-current { border-left-color: var(--brand); background: var(--brand-tint-solid); color: var(--ink); font-weight: 600; }
+
+/* The per-service record, inside « Vos évaluations ». */
+.nc-svc { margin-top: var(--space-6); border-top: 1px solid var(--border); padding-top: var(--space-5); }
+.nc-svc-h { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-muted); }
+.nc-svc-row { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--space-3) var(--space-6); margin-top: var(--space-4); }
+.nc-svc-nom { font-size: 13px; font-weight: 600; color: var(--ink); }
+.nc-svc-actes { font-size: 12.5px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+.nc-svc-none { font-size: 12.5px; color: var(--ink-muted); font-style: italic; }
+
+/* The act-by-act statement: the full commission disclosure. Wide content
+   scrolls inside its own box — the console never scrolls sideways. */
+.nc-actes { margin-top: var(--space-5); overflow-x: auto; }
+.nc-actes-table { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.nc-actes-table th, .nc-actes-table td { padding: var(--space-3) var(--space-5); text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.nc-actes-table thead th { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-muted); }
+.nc-acte-num { text-align: right; }
+.nc-acte-net { font-weight: 700; color: var(--brand); }
+.nc-acte-total th, .nc-acte-total td { border-bottom: 0; border-top: 2px solid var(--border-strong); font-weight: 700; color: var(--ink); }
+/* ADR 0029 — a line settled OFF the platform. The money never reached Nota and
+   the service fee is still owed, so the net must not read as money banked: the
+   figure drops out of brand ink into the quiet register the rest of the row
+   speaks in. No new shape, no new colour — the same weight, one tone down. */
+.nc-actes-table .nc-acte-row[data-paye='false'] .nc-acte-net { color: var(--ink-muted); }
+/* The marker stacks UNDER the act's name inside a `white-space: nowrap` cell,
+   so it has to opt back into wrapping and take a measure of its own — without
+   one it sets the column's width and pushes the money columns off the box. */
+.nc-acte-etat { white-space: normal; max-width: 30ch; }
+/* « Frais de service à percevoir » is a total that has NOT been settled. It
+   keeps the totals row's geometry but steps down twice — a hairline instead of
+   the strong rule, muted instead of full ink — so the eye reads it as an
+   appendix to the settled totals rather than a sixth column of takings. */
+.nc-acte-du th, .nc-acte-du td { border-top: 1px solid var(--border); color: var(--ink-muted); }
+.nc-actes .help { margin: var(--space-4) 0 0; }
+
+/* --- Demonstration data, declared ---------------------------------------
+   store.listMonth falls back to domain fixtures when the API is unreachable.
+   That is legitimate; being indistinguishable from the real market is not.
+   The register is deliberately NOT an alarm — --warn carries "read this",
+   --danger would carry "something broke". Square, tokens only. */
+.demo-banner {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2) var(--space-5);
+  margin: var(--space-5) auto 0; width: min(1200px, calc(100% - var(--space-12)));
+  padding: var(--space-4) var(--space-7);
+  border: 1px solid var(--border); border-left: 3px solid var(--warn);
+  border-radius: var(--radius); background: var(--surface-inset);
+}
+.demo-banner[hidden] { display: none; }
+.demo-banner-t { font-size: 12.5px; font-weight: 800; letter-spacing: 0.02em; color: var(--warn); }
+.demo-banner-b { font-size: 12.5px; line-height: 1.5; color: var(--ink-muted); }
+
+/* The per-region mark: an aggregate figure is never bare. Small, quiet, and
+   right where the numbers are. */
+.demo-mark {
+  display: inline-block; padding: 0 var(--space-3);
+  border: 1px solid var(--warn); border-radius: var(--radius-sm);
+  font-size: 10.5px; font-weight: 800; letter-spacing: 0.04em;
+  line-height: 16px; white-space: nowrap; vertical-align: middle;
+  color: var(--warn); background: var(--surface);
+}
+
+/* Mark slots: they take no room until a mark lands in them. */
+.nc-live-head:empty, .onb-live-host:empty { display: none; }
+.nc-live-head, .onb-live-host { margin: 0 0 var(--space-4); }
+.day-head .demo-mark { margin-left: var(--space-4); }
+
+/* The offline "publication" note: nothing left the device. */
+.demo-note {
+  margin: var(--space-4) 0 0; padding: var(--space-4) var(--space-5);
+  border-left: 3px solid var(--warn); border-radius: var(--radius-xs);
+  background: var(--surface-inset);
+  font-size: 12.5px; line-height: 1.55; color: var(--ink-muted);
+}
+
 /* --- Privacy (Law 25) list ---------------------------------------------- */
 /* Two-column on wide screens so the long-form list fills the panel width
    (readable measure per item) instead of leaving a big blank right side. */
@@ -3618,7 +3745,7 @@ body.ig-open { overflow: hidden; }
 }
 .ig-roll { display: block; }
 .ig-roll span { display: block; height: calc(4.2 * var(--igu)); line-height: calc(4.2 * var(--igu)); }
-.ig-up { display: inline-flex; align-items: center; gap: calc(0.8 * var(--igu)); font-size: calc(1.8 * var(--igu)); font-weight: 800; color: var(--brand-bright); }
+.ig-up { display: inline-flex; align-items: center; gap: calc(0.8 * var(--igu)); font-size: calc(1.8 * var(--igu)); font-weight: 800; color: var(--brand); }
 .ig-up svg { width: calc(2 * var(--igu)); height: calc(2 * var(--igu)); }
 
 .ig-burst { position: absolute; left: 50%; top: 45%; width: 0; height: 0; pointer-events: none; z-index: 0; }

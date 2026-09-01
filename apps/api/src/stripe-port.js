@@ -14,9 +14,22 @@ const STRIPE_LOCALE = process.env.NOTA_STRIPE_LOCALE || 'fr-CA';
  * Card data never touches our servers: Stripe hosts onboarding and payment.
  *
  * MODEL: Nota is a Connect PLATFORM. Notaries onboard a connected (Express)
- * account for free; when a retained act completes, the client's payment is a
- * destination charge to that account and Nota keeps an `application_fee_amount`
- * (its commission). No subscription. See billing.js for the compliance note.
+ * account for free. The client's money moves in the « separate charges and
+ * transfers » shape, and the DIRECTION matters more than the mechanics:
+ *
+ *   1. At publication, the client's card is authorized by a Checkout session on
+ *      NOTA'S OWN account — no connected account, no `on_behalf_of`, no
+ *      `transfer_data`. The client pays the platform.
+ *   2. At signing, `captureAndTransfer` captures on the platform, keeps Nota's
+ *      share and TRANSFERS THE NET to the notary's connected account.
+ *
+ * Nota's share therefore never transits the notary's account. (Until 2026-09-01
+ * a fallback did the opposite — a destination charge with an
+ * `application_fee_amount` — but it created a PaymentIntent with no payment
+ * method and no `confirm`, so it moved nothing at all; ADR 0029 removed it.)
+ * No subscription. See billing.js and docs/legal/ for the deontology note: the
+ * open question is the legal QUALIFICATION of Nota's share, not the direction
+ * the money travels.
  */
 function createStripeAdapter({ secretKey, webhookSecret } = {}) {
   if (!secretKey) throw new Error('createStripeAdapter: secretKey is required');
@@ -65,24 +78,14 @@ function createStripeAdapter({ secretKey, webhookSecret } = {}) {
       return { url: link.url };
     },
 
-    /**
-     * Charge a completed act as a destination charge to the notary's connected
-     * account, keeping `application_fee_amount` (Nota's commission). Idempotent
-     * per bid so a retried completion never double-charges.
-     */
-    async chargeActCommission({ connectAccountId, amountCents, applicationFeeCents, currency, bidId }) {
-      const intent = await stripe.paymentIntents.create(
-        {
-          amount: amountCents,
-          currency: currency || 'cad',
-          application_fee_amount: applicationFeeCents,
-          transfer_data: { destination: connectAccountId },
-          metadata: { bidId: bidId || '' },
-        },
-        bidId ? { idempotencyKey: `act:${bidId}` } : undefined
-      );
-      return { id: intent.id, applicationFeeCents };
-    },
+    // NOTE (ADR 0029) — `chargeActCommission` a été retiré le 2026-09-01.
+    // C'était une charge de destination sur le compte connecté du notaire, avec
+    // Nota en frais d'application : elle créait un PaymentIntent sans moyen de
+    // paiement ni `confirm`, donc ne déplaçait jamais un dollar, tout en
+    // faisant croire au contraire à l'appelant. Le seul chemin de règlement est
+    // désormais `captureAndTransfer` ci-dessous : le client paie la PLATEFORME,
+    // Nota garde sa part et vire le net au notaire. Ne pas la ressusciter sans
+    // relire l'ADR 0029 et l'avis déontologique.
 
     /**
      * PAY-ON-ACCEPT, step 1 — authorize the client's card for a posted offer.

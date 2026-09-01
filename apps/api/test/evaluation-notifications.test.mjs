@@ -59,7 +59,7 @@ const ratingMailTo = (a, to) => a.mailer.sent.filter((m) => m.to === to && /éva
 
 // --- templates ----------------------------------------------------------------
 
-test('evaluationRecueNotaire shows the note, the comment excerpt, and the public-average mention', () => {
+test('evaluationRecueNotaire shows the note, the comment excerpt — and never promises a public average', () => {
   const out = emails.evaluationRecueNotaire({
     serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2800,
     note: 4, commentaire: 'Très <pro> et rapide.',
@@ -68,8 +68,14 @@ test('evaluationRecueNotaire shows the note, the comment excerpt, and the public
   assert.ok(out.subject.includes(' / '), 'bilingual subject');
   assert.match(out.subject, /4\/5/);
   assert.ok(out.html.includes('Très &lt;pro&gt; et rapide.'), 'comment esc()ed');
-  assert.ok(/moyenne publique/.test(out.html), 'FR mentions the public average');
-  assert.ok(/public average/.test(out.html), 'EN mentions the public average');
+  // ADR 0030 — promettre une « moyenne publique » à un notaire, c'est lui
+  // promettre un manquement à l'art. 70 du Code de déontologie. Le courriel dit
+  // ce qui est vrai : l'évaluation nourrit sa cote, et n'est montrée à personne.
+  assert.ok(!/moyenne publique|public average/.test(out.html), 'aucune promesse de publication');
+  assert.ok(/cote sur 100/.test(out.html), 'FR: ce que l’évaluation nourrit vraiment');
+  assert.ok(/cote out of 100/.test(out.html), 'EN: same');
+  assert.ok(/montrée à aucun client/.test(out.html), 'FR: et ce qu’elle ne fait pas');
+  assert.ok(/shown to no client/.test(out.html), 'EN: same');
   const ctas = (out.html.match(new RegExp('href="' + BASE + '/#notaires"', 'g')) || []).length;
   assert.equal(ctas, 2, 'CTA opens the console in both languages');
 });

@@ -89,8 +89,9 @@ test('tiers: the ladder is strictly more expensive as the date closes in', () =>
   for (let i = 1; i < mults.length; i++) {
     assert.ok(mults[i] > mults[i - 1], D.TIERS[i].id + ' must cost more than ' + D.TIERS[i - 1].id);
   }
-  // Realistic urgency surcharges: +0/+15/+35/+60/+100 % over the floor.
-  assert.deepEqual(mults, [1.0, 1.15, 1.35, 1.6, 2.0]);
+  // The raised ladder (owner, 2026-08-28: prices were too low): ×2 inside the
+  // second week, ×3 inside the first, ×3.5 the eve, ×4 the same day.
+  assert.deepEqual(mults, [1.0, 2.0, 3.0, 3.5, 4.0]);
   // ...and the steepest step still fits under the hard cap the server enforces.
   assert.ok(mults[mults.length - 1] <= D.PREMIUM_CAP);
 });
@@ -99,16 +100,15 @@ test('tierForDays: boundaries', () => {
   assert.equal(D.tierForDays(0), 'extreme');      // signing today
   assert.equal(D.tierForDays(1), 'urgence');      // tomorrow
   assert.equal(D.tierForDays(2), 'prioritaire');
-  assert.equal(D.tierForDays(3), 'prioritaire');
-  assert.equal(D.tierForDays(4), 'rapide');
-  assert.equal(D.tierForDays(8), 'rapide');
+  assert.equal(D.tierForDays(7), 'prioritaire');  // the whole first week
+  assert.equal(D.tierForDays(8), 'rapide');       // the second week
   assert.equal(D.tierForDays(14), 'rapide');
   assert.equal(D.tierForDays(15), 'standard');
   assert.equal(D.tierForDays(90), 'standard');
 });
 
-test('premium cap is 3', () => {
-  assert.equal(D.PREMIUM_CAP, 3);
+test('premium cap is 5 — air above the ×4 a same-day signing commands', () => {
+  assert.equal(D.PREMIUM_CAP, 5);
 });
 
 test('dates: ISO validation', () => {
@@ -150,14 +150,14 @@ test('validateOffer: rejects below starting price', () => {
   assert.ok(r.errors.some((e) => e.code === 'sous_prix_depart'));
 });
 
-test('validateOffer: rejects above the 3x premium cap', () => {
-  const r = D.validateOffer({ serviceId: 'refinancement', dateISO: '2026-08-13', montant: 6001, todayISO: TODAY, pricing: PRICING });
+test('validateOffer: rejects above the 5x premium cap', () => {
+  const r = D.validateOffer({ serviceId: 'refinancement', dateISO: '2026-08-13', montant: 10001, todayISO: TODAY, pricing: PRICING });
   assert.equal(r.ok, false);
   assert.ok(r.errors.some((e) => e.code === 'plafond_depasse'));
 });
 
-test('validateOffer: exactly 3x is allowed', () => {
-  const r = D.validateOffer({ serviceId: 'refinancement', dateISO: '2026-08-13', montant: 6000, todayISO: TODAY, pricing: PRICING, prefixe: 'G1R' });
+test('validateOffer: exactly 5x is allowed', () => {
+  const r = D.validateOffer({ serviceId: 'refinancement', dateISO: '2026-08-13', montant: 10000, todayISO: TODAY, pricing: PRICING, prefixe: 'G1R' });
   assert.equal(r.ok, true);
 });
 
@@ -397,9 +397,10 @@ test('dueReminders: without an explicit dossierReady flag, readiness is derived 
 });
 
 test('recommendedAmount: mid-tier default, within bounds, one-tap booking', () => {
-  // 2 days out -> prioritaire, whose band is centred on 1.35.
+  // 2 days out -> prioritaire, whose band is centred on ×3 (the raised
+  // first-week multiplier, owner 2026-08-28).
   const t = D.tierById('prioritaire');
-  assert.equal((t.apercuMin + t.apercuMax) / 2, 1.35, 'prioritaire defaults to 1.35x');
+  assert.equal((t.apercuMin + t.apercuMax) / 2, 3.0, 'prioritaire defaults to 3x');
   const base = D.notaPrice('refinancement');
   const expected = Math.round((base * (t.apercuMin + t.apercuMax) / 2) / 5) * 5;
   assert.equal(D.recommendedAmount('refinancement', '2026-08-14', TODAY), expected);
@@ -489,9 +490,9 @@ test('tierMultiplier is the number recommendedAmount actually uses', () => {
   D.TIERS.forEach((t) => {
     assert.equal(D.tierMultiplier(t.id), (t.apercuMin + t.apercuMax) / 2);
   });
-  assert.equal(D.tierMultiplier('prioritaire'), 1.35);
-  assert.equal(D.tierMultiplier('urgence'), 1.6, 'tomorrow costs 1.6x');
-  assert.equal(D.tierMultiplier('extreme'), 2.0, 'today costs 2x');
+  assert.equal(D.tierMultiplier('prioritaire'), 3.0, 'the first week costs 3x');
+  assert.equal(D.tierMultiplier('urgence'), 3.5, 'tomorrow costs 3.5x');
+  assert.equal(D.tierMultiplier('extreme'), 4.0, 'today costs 4x');
   assert.equal(D.tierMultiplier('nope'), null);
 
   // The number a cell shows must be the number the booking form pre-fills, or

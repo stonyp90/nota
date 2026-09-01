@@ -11,18 +11,27 @@
    ========================================================================== */
 
 :root {
-  /* Hunter green — the Tablix brand ramp */
-  --hunter-50: #f0f9f0;
-  --hunter-100: #dcf0dc;
-  --hunter-200: #afdbb4;
-  --hunter-300: #78c282;
-  --hunter-400: #5ab455;
-  --hunter-500: #50b848;
-  --hunter-600: #429c3c;
-  --hunter-700: #2c5f34;
-  --hunter-800: #244c2a;
-  --hunter-900: #1b331f;
-  --hunter-950: #0d1a10;
+  /* Fir green — the brand ramp, kept in lockstep with apps/web/public/styles.css
+     (owner, 2026-09-01: « le vert est trop intense »). Rebuilt in OKLCH on one
+     hue axis (150→158) with chroma capped at 0.092 — roughly half the old kelly
+     ramp — and the peak parked on 400/500, the two steps --brand-bright uses. */
+  --hunter-50: #f0f8f1;
+  --hunter-100: #ddeee0;
+  --hunter-200: #bbd9c2;
+  --hunter-300: #97c0a2;
+  --hunter-400: #73b189;
+  --hunter-500: #599a71;
+  --hunter-600: #467759;
+  --hunter-700: #315b43;
+  --hunter-800: #254633;
+  --hunter-900: #183123;
+  --hunter-950: #0b1911;
+  /* Channel-only copies for the alpha tokens further down (washes, focus glow,
+     shadow): rgb() cannot take a hex var, so no ramp value is retyped as a
+     literal downstream. */
+  --hunter-400-rgb: 115 177 137;
+  --hunter-500-rgb: 89 154 113;
+  --hunter-700-rgb: 49 91 67;
 
   /* Semantic tokens (light) */
   --brand: var(--hunter-700);
@@ -31,14 +40,14 @@
   --brand-hover: var(--hunter-800);
   --on-accent: #ffffff; /* text/knob on saturated accents (tier pills, toggle) — white in every theme */
 
-  --bg: #eef2ef; /* subtle tint so borderless white panels float cleanly */
-  --surface: #ffffff;
-  --surface-inset: #f4f7f4;
-  --surface-hover: #e9f1e9;
-  --ink: #0b1220;
-  --ink-muted: #4d5b6e; /* darker than slate-500 for AA on white */
-  --border: #dbe2ea;
-  --border-strong: #b8c2cf;
+  --bg: #f0f2f1; /* neutral canvas with a whisper of the brand hue — panels float cleanly */
+  --surface: #fdfdfd;
+  --surface-inset: #f3f5f4;
+  --surface-hover: #e9edeb;
+  --ink: #111614; /* hunter-black: the brand hue at near-zero chroma, not a blue slate */
+  --ink-muted: #4f5e57; /* fir-grey, AA (>=6.7:1) on every light surface */
+  --border: #dde2df;
+  --border-strong: #b9c2bc;
   --ring: var(--hunter-600);
 
   --danger: #b42318;
@@ -48,7 +57,7 @@
   /* Tier accent ramp — cool (calm) to warm (urgent).
      All five are dark enough for white .pill text to meet WCAG AA (>=4.5:1). */
   --tier-standard: #64748b;
-  --tier-rapide: #357f30;
+  --tier-rapide: #3f654d;
   --tier-prioritaire: #906800;
   --tier-urgence: #c2410c;
   --tier-extreme: #b42318;
@@ -66,9 +75,9 @@
   --radius-xs: 3px;
   --radius-lg: 12px;
 
-  --shadow-sm: 0 1px 2px rgb(15 23 42 / 0.05);
-  --shadow: 0 6px 20px -8px rgb(15 23 42 / 0.12);
-  --shadow-lg: 0 24px 50px -16px rgb(44 95 52 / 0.24);
+  --shadow-sm: 0 1px 2px rgb(17 22 20 / 0.05);
+  --shadow: 0 6px 20px -8px rgb(17 22 20 / 0.12);
+  --shadow-lg: 0 24px 50px -16px rgb(var(--hunter-700-rgb) / 0.24);
 
   --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
@@ -92,22 +101,22 @@
     --brand-ink: #08130a;
     --brand-hover: var(--hunter-400);
 
-    --bg: #0a0a0a;
-    --surface: #121412;
-    --surface-inset: #171a17;
-    --surface-hover: #1d211d;
-    --ink: #f8fafc;
-    --ink-muted: #aab6b0;
-    --border: #2a2f2a;
-    --border-strong: #3d443d;
+    --bg: #0f110f;
+    --surface: #171918;
+    --surface-inset: #1d201e;
+    --surface-hover: #232624; /* one notch down (2026-09-01): at #252827 the quieter --brand ink on a hovered row measured 4.45:1, just under AA */
+    --ink: #f6f9f7;
+    --ink-muted: #a8b1ab;
+    --border: #2e332f;
+    --border-strong: #474c48;
     --ring: var(--hunter-400);
 
     --danger: #f97066;
     --warn: #f79009;
-    --ok: var(--hunter-600);
+    --ok: var(--hunter-500);
 
     --tier-standard: #64748b;
-    --tier-rapide: #357f30;
+    --tier-rapide: #3f654d;
     --tier-prioritaire: #906800;
     --tier-urgence: #c2410c;
     --tier-extreme: #b42318;
@@ -125,22 +134,22 @@
   --brand-ink: #08130a;
   --brand-hover: var(--hunter-400);
 
-  --bg: #0a0a0a;
-  --surface: #121412;
-  --surface-inset: #171a17;
-  --surface-hover: #1d211d;
-  --ink: #f8fafc;
-  --ink-muted: #aab6b0;
-  --border: #2a2f2a;
-  --border-strong: #3d443d;
+  --bg: #0f110f;
+  --surface: #171918;
+  --surface-inset: #1d201e;
+  --surface-hover: #232624; /* one notch down (2026-09-01): at #252827 the quieter --brand ink on a hovered row measured 4.45:1, just under AA */
+  --ink: #f6f9f7;
+  --ink-muted: #a8b1ab;
+  --border: #2e332f;
+  --border-strong: #474c48;
   --ring: var(--hunter-400);
 
   --danger: #f97066;
   --warn: #f79009;
-  --ok: var(--hunter-600);
+  --ok: var(--hunter-500);
 
   --tier-standard: #64748b;
-  --tier-rapide: #357f30;
+  --tier-rapide: #3f654d;
   --tier-prioritaire: #906800;
   --tier-urgence: #c2410c;
   --tier-extreme: #b42318;
@@ -164,8 +173,8 @@
      background a button shows on interaction. Green channel is hunter-500
      (80 184 72), faint enough to read the same in light and dark. --neutral-wash
      is a theme-neutral ink veil for non-brand controls. */
-  --brand-wash: rgb(80 184 72 / 0.10);
-  --brand-wash-strong: rgb(80 184 72 / 0.18);
+  --brand-wash: rgb(var(--hunter-500-rgb) / 0.10);
+  --brand-wash-strong: rgb(var(--hunter-500-rgb) / 0.18);
   --neutral-wash: rgb(120 130 120 / 0.10);
-  --focus-ring: rgb(80 184 72 / 0.15); /* input/control focus glow (3px) — theme-neutral, same as the washes */
+  --focus-ring: rgb(var(--hunter-500-rgb) / 0.15); /* input/control focus glow (3px) — theme-neutral, same as the washes */
 }

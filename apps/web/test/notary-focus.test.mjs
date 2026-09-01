@@ -104,6 +104,9 @@ function stubNotaryApi(win, bids, extra = {}) {
         bids, retained: extra.retained || [],
         rating: extra.rating || null,
         profil: extra.profil || { lienCNQ: null },
+        // ADR 0028: the cote travels with every feed load — always there,
+        // barème or not.
+        cote: extra.cote || null,
         commission: extra.commission || null,
       });
     }
@@ -403,35 +406,63 @@ test('an accept never books earnings — settlement waits for « Acte signé » 
   assert.ok(/signature/.test(toast), 'the toast says settlement happens at signing: ' + toast);
 });
 
-// --- The public profile & the rating-earned commission (ADR 0016) ------------
+// --- The public profile & the cote-earned commission (ADR 0016 → ADR 0028) ---
+// Since ADR 0028 ONE measure decides the share, so the share sentence moved
+// where that measure is published: « Votre cote », right under « Vos revenus ».
 
-test('the console names the effective commission and the next tier to reach', async () => {
+// A cote payload with the four axes — enough for the panel to render around
+// the share sentences these tests are about.
+const COTE_STUB = {
+  cote: 83,
+  axes: [
+    { id: 'satisfaction', nom: 'Satisfaction des clients', points: 33, max: 40, detail: { note: 4.5, avis: 10, notePonderee: 4.3, cible: 4.8 } },
+    { id: 'services', nom: 'Services rendus', points: 17, max: 25, detail: { actes: 14, cible: 50, servicesRendus: 2, catalogue: 2 } },
+    { id: 'disponibilite', nom: 'Disponibilité', points: 19, max: 20, detail: { repondu: 40, declinees: 2, reponses: 42, cibleReponses: 20, rayonKm: 50, urgences: true } },
+    { id: 'presence', nom: 'Présence sur Nota', points: 14, max: 15, detail: { fiche: true, secteur: true, joursDepuisActivite: 1, joursMembre: 400 } },
+  ],
+};
+
+test('the console names the share the notary keeps and the next rung to reach (ADR 0028)', async () => {
   const { doc } = await bootSignedIn(null, {
     rating: { note: 4.5, avis: 10 },
+    cote: COTE_STUB,
     commission: {
-      taux: 0.10, tauxEffectif: 0.09, bonus: 0.01,
-      prochain: { note: 4.8, avis: 10, tauxEffectif: 0.08 },
+      taux: 0.15, plancher: 0.05, tauxEffectif: 0.08, part: 0.92, bonus: 0.07, cote: 83,
+      axes: COTE_STUB.axes,
+      paliers: [{ cote: 80, taux: 0.08, part: 0.92 }, { cote: 90, taux: 0.05, part: 0.95 }],
+      prochain: { cote: 90, manque: 7, tauxEffectif: 0.05, part: 0.95 },
     },
   });
-  const earnings = $(doc, 'notary-earnings');
-  const lines = Array.from(earnings.querySelectorAll('.nc-commission')).map((n) => n.textContent);
-  assert.ok(lines.some((t) => t.includes('9 %') && t.includes('au lieu de 10 %')), 'the earned rate must show against the base: ' + lines);
-  assert.ok(lines.some((t) => t.includes('4,8') && t.includes('10 avis') && t.includes('8 %')), 'the next tier must be named: ' + lines);
+  const cote = $(doc, 'notary-cote');
+  const lines = Array.from(cote.querySelectorAll('.nc-commission, .nc-cote-next')).map((n) => n.textContent);
+  assert.ok(lines.some((t) => t.includes('92 %') && t.includes('au lieu de 85 %')), 'the earned share must show against the base: ' + lines);
+  assert.ok(lines.some((t) => t.includes('Cote 90') && t.includes('95 %')), 'the next rung names the cote it takes and what it pays: ' + lines);
+  assert.ok(lines.some((t) => t.includes('7 points')), 'what is still missing is counted, not left to arithmetic: ' + lines);
 });
 
-test('at the base rate the console shows the rate and no phantom bonus', async () => {
+test('at the base split the console shows 85/15 and no phantom bonus', async () => {
   const { doc } = await bootSignedIn(null, {
-    commission: { taux: 0.10, tauxEffectif: 0.10, bonus: 0, prochain: { note: 4.5, avis: 5, tauxEffectif: 0.09 } },
+    cote: COTE_STUB,
+    commission: {
+      taux: 0.15, plancher: 0.05, tauxEffectif: 0.15, part: 0.85, bonus: 0, cote: 42,
+      axes: COTE_STUB.axes,
+      paliers: [{ cote: 60, taux: 0.12, part: 0.88 }],
+      prochain: { cote: 60, manque: 18, tauxEffectif: 0.12, part: 0.88 },
+    },
   });
-  const earnings = $(doc, 'notary-earnings');
-  const lines = Array.from(earnings.querySelectorAll('.nc-commission')).map((n) => n.textContent);
-  assert.ok(lines.some((t) => t.includes('10 %') && !t.includes('au lieu de')), 'the base rate shows plainly: ' + lines);
-  assert.ok(lines.some((t) => t.includes('4,5') && t.includes('5 avis') && t.includes('9 %')), 'the first tier is the visible lever: ' + lines);
+  const cote = $(doc, 'notary-cote');
+  const lines = Array.from(cote.querySelectorAll('.nc-commission, .nc-cote-next')).map((n) => n.textContent);
+  assert.ok(lines.some((t) => t.includes('85 %') && t.includes('15 %') && !t.includes('au lieu de')), 'the base split shows plainly, both sides: ' + lines);
+  assert.ok(lines.some((t) => t.includes('Cote 60') && t.includes('88 %') && t.includes('18 points')), 'the first rung is the visible lever: ' + lines);
 });
 
-test('without a commission block (billing off) the earnings show no rate line', async () => {
-  const { doc } = await bootSignedIn();
-  assert.equal($(doc, 'notary-earnings').querySelector('.nc-commission'), null);
+test('without a commission block (billing off) no rate line is invented anywhere', async () => {
+  const { doc } = await bootSignedIn(null, { cote: COTE_STUB });
+  assert.equal($(doc, 'notary-earnings').querySelector('.nc-commission'), null, 'not with the money');
+  assert.equal($(doc, 'notary-cote').querySelector('.nc-commission'), null, 'nor with the cote');
+  assert.equal($(doc, 'notary-cote').querySelector('.nc-cote-next'), null, 'and no phantom next rung');
+  // The cote itself still stands: a notary has one with or without billing.
+  assert.match($(doc, 'notary-cote').querySelector('.nc-cote-n').textContent, /83/);
 });
 
 test('the profile form prefills the stored fiche, validates through the domain, and POSTs on save', async () => {

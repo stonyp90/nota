@@ -70,6 +70,12 @@
 
   var store = {
     online: false,
+    // How many listMonth calls have fallen back to the fixtures. refreshMonthData
+    // loads several months CONCURRENTLY (the rolling window crosses seams), and
+    // `online` is last-writer-wins: if month A succeeds and month B falls back,
+    // the flag ends up reflecting whichever settled last. A monotonic counter is
+    // order-independent — any fallback in a batch marks the whole screen.
+    demoLoads: 0,
     async listMonth(month) {
       try {
         var r = await fetch(API_BASE + '/bids?month=' + encodeURIComponent(month), {
@@ -78,6 +84,7 @@
         if (r.ok) { this.online = true; var j = await r.json(); return j.bids || []; }
       } catch (e) { /* offline */ }
       this.online = false;
+      this.demoLoads++;
       return ensureSeed().filter(function (b) { return b.dateISO.slice(0, 7) === month; });
     },
     async createBid(payload) {
@@ -137,6 +144,9 @@
 
   var state = {
     anchor: firstOfMonth(todayISO()),
+    // True when the month on screen came from the fixtures, not from the API.
+    // Everything derived from monthBids is then invented and must say so.
+    demo: false,
     monthBids: [],
     filters: Object.assign({}, FILTER_DEFAULTS),
     selectedDate: null,
@@ -198,6 +208,81 @@
     return Math.round((svc && svc.prixDepart || 0) * (m || 1));
   }
   function tierFromLabel(tierId, svc) { return 'dès ' + D.money(tierAmount(tierId, svc)); }
+  // ---------------------------------------------------------------------------
+  // Demonstration data — declared, never disguised
+  // ---------------------------------------------------------------------------
+  // store.listMonth falls back to D.makeFixtures whenever the API is
+  // unreachable or answers anything but 200. That capability is legitimate
+  // (marketing, the intro film, offline development); presenting an invented
+  // carnet EXACTLY like the real one is not — an outage would silently turn
+  // the site into a fictional marketplace, medians and all.
+  //
+  // So: a persistent banner, plus a visible mark on every region that shows an
+  // aggregate. Regions carry data-demo="true" so a figure added later inside
+  // one is covered without anybody remembering to mark it. We declare, we do
+  // not hide: nothing is blanked, nothing is blocked.
+  var DEMO_REGIONS = [
+    { region: 'carnet-pulse', slot: '.pulse-head' },   // médianes, volumes, retenues
+    { region: 'carnet-panel', slot: '.cal-toolbar' },  // le compteur du carnet, et les prix par jour
+    // The booking dialog. The worst of the lot: besides the figures it SHOWS
+    // (offre à battre, aperçu du palier), D.recommendedAmount pre-fills the
+    // amount from state.monthBids — a fictional calibration for a real
+    // publication. Marked at the head, above every step of the form.
+    { region: 'day-dialog', slot: '.day-head' },
+    { region: 'onboarding-dialog', slot: '.onb-live-host' }, // « N demandes publiées ce mois-ci · N retenues »
+    { region: 'notary-live', slot: '.nc-live-head' },        // le fil du notaire
+  ];
+  function demoMark() {
+    var sp = el('span', 'demo-mark', 'démonstration');
+    sp.setAttribute('title', 'Chiffres de démonstration : le carnet réel n’a pas pu être chargé.');
+    return sp;
+  }
+  function renderDemoState() {
+    var on = !!state.demo;
+    var banner = $('demo-banner');
+    if (banner) banner.hidden = !on;
+    DEMO_REGIONS.forEach(function (d) {
+      var region = $(d.region); if (!region) return;
+      if (on) region.dataset.demo = 'true'; else delete region.dataset.demo;
+      var slot = region.querySelector(d.slot) || region;
+      var mark = slot.querySelector('.demo-mark');
+      if (on && !mark) slot.appendChild(demoMark());
+      else if (!on && mark) mark.parentNode.removeChild(mark);
+    });
+  }
+
+  // The « Offre publiée » screen after an OFFLINE publish. createBid kept the
+  // offer in localStorage only: nothing reached the carnet and no notary will
+  // ever see it. The toast already whispers « (démo locale) »; the screen that
+  // follows must say it outright rather than congratulate the client.
+  function renderOfferSuccessOrigin() {
+    var box = $('offer-success'); if (!box) return;
+    var old = $('offer-success-demo');
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+    var lead = $('offer-success-lead');
+    if (store.online) {
+      if (lead) {
+        clear(lead);
+        var okStrong = el('strong', null, 'Offre publiée.');
+        lead.appendChild(okStrong);
+        lead.appendChild(document.createTextNode(' Pendant l’attente, préparez vos documents.'));
+      }
+      return;
+    }
+    if (lead) {
+      clear(lead);
+      lead.appendChild(el('strong', null, 'Enregistrée sur cet appareil seulement.'));
+      lead.appendChild(document.createTextNode(' Pendant l’attente, préparez vos documents.'));
+    }
+    var note = el('p', 'demo-note', 'Rien n’a été publié. Le carnet réel est injoignable : cette offre n’existe que sur cet appareil, et aucun notaire ne la verra.');
+    note.id = 'offer-success-demo';
+    (box.querySelector('.offer-success-head') || box).appendChild(note);
+  }
+  function showOfferSuccess() {
+    renderOfferSuccessOrigin();
+    var box = $('offer-success'); if (box) box.hidden = false;
+  }
+
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
 
@@ -551,19 +636,68 @@
     return sp;
   }
 
-  // « CNQ ✓ » — the notary has attached their official fiche in the Chambre
-  // des notaires directory (ADR 0016). A membership badge only: the fiche URL
-  // itself never travels before retention.
-  function cnqBadge() {
-    var sp = el('span', 'cnq-badge', 'CNQ ✓');
-    sp.setAttribute('title', 'Membre de la Chambre des notaires du Québec');
-    sp.setAttribute('aria-label', 'Membre de la Chambre des notaires du Québec');
+  // The fiche the notary DECLARED in the Chambre's directory (ADR 0016) — and
+  // the badge has to say exactly that much, no more.
+  //
+  // Nota verifies nothing here: domain.validateNotaryProfile only checks the
+  // SHAPE of the URL (https, cnq.org host). Nobody confirms the fiche exists,
+  // belongs to this notary, or that they are in good standing. Since ADR 0030
+  // stripped the reviews and the cote, this is one of only two signals a client
+  // sees — so a « CNQ ✓ » would read as « Nota checked », which is precisely
+  // the « renseignement faux ou trompeur » of art. 68. The check mark is gone;
+  // the label names the declarer, and the tooltip disclaims the verification.
+  // Two lengths, one warning. A dense proposition list (price, badge, act
+  // count, delta on one row) gets the short label; the retained notary's own
+  // line has the room for the full one. `complet` picks the label — and ONLY
+  // the label: the title and the accessible name are identical in both cases,
+  // because the shortcut must never shorten the disclaimer.
+  var CNQ_DECLAREE = 'Fiche déclarée par le notaire dans l’annuaire de la Chambre des notaires du Québec. Nota ne vérifie pas cette déclaration.';
+  function cnqBadge(complet) {
+    var sp = el('span', 'cnq-badge', complet ? 'Fiche déclarée à la Chambre' : 'Fiche déclarée');
+    sp.setAttribute('title', CNQ_DECLAREE);
+    sp.setAttribute('aria-label', CNQ_DECLAREE);
     return sp;
+  }
+
+  // Where a client can check for themselves. Before retention the API serves
+  // only a boolean — the fiche URL carries the notary's phone and contact does
+  // not flow before retention (ADR 0016) — so Nota cannot hand over THE fiche.
+  // It can hand over the Chambre's public directory, which is the real answer
+  // to « says who? ». The address is the domain's, never a literal here.
+  function cnqAnnuaireLink() {
+    var a = el('a', 'help my-offer-cnq-annuaire', 'Vérifier un notaire dans l’annuaire de la Chambre des notaires du Québec ↗');
+    a.href = D.CNQ.annuaire;
+    a.target = '_blank';
+    a.setAttribute('rel', 'noopener');
+    return a;
   }
 
   // Percent display for a commission rate, fr-CA: 0.09 → « 9 % », 0.125 → « 12,5 % ».
   function pctLabel(rate) {
     return String(Math.round(rate * 1000) / 10).replace('.', ',') + ' %';
+  }
+
+  // fr-CA decimal for the cote's figures: 35.6 → « 35,6 », 40 → « 40 ».
+  function decLabel(n) { return String(Math.round(Number(n) * 10) / 10).replace('.', ','); }
+
+  // « 37 actes signés via Nota » — a verifiable FACT about a named notary, and
+  // the only kind of thing a client-facing view may say about one.
+  //
+  // Article 70 du Code de déontologie des notaires (N-3, r. 2): « Le notaire ne
+  // peut, dans sa publicité, utiliser OU PERMETTRE QUE SOIT UTILISÉ un
+  // témoignage d'appui ou de reconnaissance qui le concerne » — sans exception
+  // pour les avis authentiques. A notary listed here would be "permitting the
+  // use" of any evaluation Nota published about them, and a displayed score
+  // turns a directory into a recommendation (NYSBA 1132 v. Avvo). So: no stars,
+  // no average, no review count, no cote on ANY client surface. A count of acts
+  // is not a testimonial — it is a fact the notary carried.
+  //
+  // Zero acts renders NOTHING: « 0 acte » beside a price reads as a demerit,
+  // and a demerit is an appreciation by the back door.
+  function actsFact(actes) {
+    var n = Math.floor(Number(actes));
+    if (!isFinite(n) || n <= 0) return null;
+    return el('span', 'help my-offer-acts', n + (n === 1 ? ' acte signé via Nota' : ' actes signés via Nota'));
   }
 
   // --- Client profile --------------------------------------------------------
@@ -742,18 +876,30 @@
       b.classList.toggle('is-on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
     var fine = $('auth-fine'), cont = $('auth-continue');
+    var title = $('auth-title');
+    // The title matches the button that opened the door (traditional site
+    // expectation); the CTA names the exact action so the click count is
+    // honest: client = signed in on THIS click, notary = a link is coming.
+    if (title) title.textContent = authMode === 'signin' ? 'Connexion' : 'Créer votre compte';
     if (authRole === 'notary') {
-      if (fine) fine.textContent = 'Accédez aux demandes ouvertes à Québec. Sans mot de passe.';
-      if (cont) cont.textContent = 'Accéder à l’espace notaire →';
+      if (fine) fine.textContent = 'Un lien sécurisé arrive par courriel — un clic et vous êtes dans l’espace notaire.';
+      if (cont) cont.textContent = 'Recevoir mon lien de connexion →';
     } else {
-      if (fine) fine.textContent = 'Publiez une demande et suivez vos offres. Vos renseignements restent sur cet appareil.';
-      if (cont) cont.textContent = 'Continuer →';
+      // The courriel DOES leave the device: the button below calls
+      // clientWelcome(), which POSTs it to /client/welcome, and the API keeps
+      // it in a SENT# record keyed on the address. So the copy states the
+      // transmission, and narrows what stays local to what really does — file
+      // CONTENTS. The dossier's answers and document filenames travel with an
+      // offer (payload.dossier), so they are deliberately not promised here.
+      if (fine) fine.textContent = 'Publiez une demande et suivez vos offres. Votre courriel est transmis à Nota pour le lien de suivi et les avis. Le contenu de vos documents, lui, ne quitte jamais cet appareil.';
+      if (cont) cont.textContent = authMode === 'signin' ? 'Me connecter' : 'Créer mon compte';
     }
   }
-  function openAuthModal(role) {
+  var authMode = 'signup';
+  function openAuthModal(role, mode) {
+    authMode = mode === 'signin' ? 'signin' : 'signup';
     authSetRole(role || roleGet() || 'client'); // honour what they told the guide
     var errs = $('auth-errors'); if (errs) errs.hidden = true;
-    var socNote = $('auth-soc-note'); if (socNote) { socNote.hidden = true; socNote.textContent = ''; }
     var em = $('auth-email'); if (em) em.value = profileGet().courriel || '';
     var dlg = $('auth-dialog');
     toggleNotifPanel(false);
@@ -766,7 +912,7 @@
     }
   }
   // Kept as the anonymous "sign in" entry point (name referenced elsewhere).
-  function openClientSignIn() { openAuthModal('client'); }
+  function openClientSignIn() { openAuthModal('client', 'signin'); }
 
   function authSubmitEmail(e) {
     if (e && e.preventDefault) e.preventDefault();
@@ -1414,7 +1560,9 @@
           // the title below, so hover and screen readers keep the exact price.
           urg.dataset.compact = compactMoney(tierAmount(tier.id, svcC));
           urg.title = T(tierName(tier)) + '. À ce délai, une offre en ' + T(svcC.nom).toLowerCase()
-            + ' se conclut autour de ' + D.money(tierAmount(tier.id, svcC)) + '.';
+            + ' se conclut autour de ' + D.money(tierAmount(tier.id, svcC)) + '.'
+            // Tuned on state.monthBids: invented when the month is.
+            + (state.demo ? ' Chiffre de démonstration.' : '');
           cell.appendChild(urg);
         }
       }
@@ -1816,14 +1964,20 @@
     var succ = $('offer-success'); if (succ) succ.hidden = true;
     var eb = $('offer-errors'); if (eb) { eb.hidden = true; clear(eb); }
     renderDayBids(iso);
-    // Name the calendar's % where the date is actually chosen. ONE urgency
-    // sentence, said only here — the lead time itself is already printed in
-    // #day-sub right above, so it is not repeated.
+    // ONE sentence about lead time, said only here — the lead time itself is
+    // already printed in #day-sub right above, so it is not repeated.
+    //
+    // It used to quote the domain's hand-written obtain-chance table as an
+    // « … un notaire : 95 % » headline. That table has never been measured — not one
+    // act has been completed on the platform — and it appeared exactly where
+    // the client picks a date and a price. A percentage presented as an
+    // observed probability when nothing has been observed is the worst kind of
+    // claim, so it is gone. What replaces it is the MECHANISM, which is true
+    // and checkable. No number, and no « élevées / faibles » scale either:
+    // a qualitative ladder still mimics a measurement. The figure may come
+    // back the day it is actually measured.
     var chanceEl = $('day-chance');
-    if (chanceEl) {
-      chanceEl.textContent = 'Chances d’obtenir un notaire : ' + D.obtainChance(iso, todayISO())
-        + PCT + '. Plus la date est proche, plus il faut offrir et moins un notaire est disponible.';
-    }
+    if (chanceEl) chanceEl.textContent = 'Plus la date est éloignée, plus de notaires ont la latitude de s’organiser pour la prendre ; une date rapprochée en laisse moins.';
     validateOfferUI();
 
     renderActiveView();
@@ -3069,7 +3223,7 @@
     submit.removeAttribute('aria-busy'); submit.textContent = 'Offre publiée ✓'; // stays disabled → no duplicate submit
     toast('Offre publiée : ' + D.money(payload.montant) + (store.online ? '' : ' (démo locale)'));
     buildCalendarLinks(res.bid);
-    $('offer-success').hidden = false;
+    showOfferSuccess(); // states, when offline, that nothing was actually published
     // The dossier is what makes this lead sellable — show its real progress here
     // and give a one-tap path to finish it for THIS service.
     fillDossierNext(res.bid.serviceId);
@@ -3270,12 +3424,19 @@
     // client can now talk to — étude + courriel (mailto), straight from
     // GET /client/bid. Documents then flow through Nota or the notary's own
     // channel; Nota does not insist on being the pipe.
+    // Is any notary named in this band? The « says who? » line is owed exactly
+    // when one is — and exactly once, however many propositions there are.
+    var named = false;
     var noti = status && status.notaire;
     if (st === 'approved' && noti && (noti.etude || noti.courriel)) {
+      named = true;
       var mr = el('div', 'my-offer-contact');
       mr.appendChild(el('strong', null, 'Retenue par ' + (noti.etude || 'votre notaire')));
-      var nstars = ratingSpan(noti.rating);
-      if (nstars) { mr.appendChild(document.createTextNode(' ')); mr.appendChild(nstars); }
+      // Facts about the notary, never an appreciation of them (art. 70): the
+      // roll of the Chambre, and the acts they have carried on Nota.
+      if (noti.cnq) { mr.appendChild(document.createTextNode(' ')); mr.appendChild(cnqBadge(true)); }
+      var nactes = actsFact(noti.actes);
+      if (nactes) { mr.appendChild(document.createTextNode(' ')); mr.appendChild(nactes); }
       if (noti.courriel) {
         mr.appendChild(document.createTextNode(' — '));
         var mail = el('a', 'my-offer-contact-mail', noti.courriel);
@@ -3286,10 +3447,13 @@
       // the notoriety at the Chambre itself. Only here — never pre-retention.
       if (noti.lienCNQ) {
         mr.appendChild(document.createTextNode(' — '));
-        var fiche = el('a', 'cnq-link', 'Fiche Chambre des notaires ↗');
+        // Labelled as the ACT of verifying, not as a decoration: Nota
+        // confirmed nothing — the Chambre's own page is the authority.
+        var fiche = el('a', 'cnq-link', 'Vérifier sa fiche à la Chambre ↗');
         fiche.href = noti.lienCNQ;
         fiche.target = '_blank';
         fiche.setAttribute('rel', 'noopener');
+        fiche.setAttribute('title', 'Ouvre la fiche déclarée par ce notaire dans l’annuaire de la Chambre des notaires du Québec.');
         mr.appendChild(fiche);
       }
       cell.appendChild(mr);
@@ -3358,12 +3522,15 @@
       var block = el('div', 'my-offer-prop');
       block.dataset.propId = p.id;
       block.dataset.status = p.status;
+      named = true;
       var head = el('div', 'my-offer-prop-text');
       var delta = Number(p.delta != null ? p.delta : (p.montant - o.montant));
       head.appendChild(el('strong', null, 'Un notaire' + (p.etude ? ' (' + p.etude + ')' : '') + ' vous propose ' + D.money(p.montant)));
-      var pstars = ratingSpan(p.rating);
-      if (pstars) { head.appendChild(document.createTextNode(' ')); head.appendChild(pstars); }
+      // The two facts a client may weigh a stranger's price with — membership
+      // of the Chambre, and acts carried on Nota. Nothing evaluative (art. 70).
       if (p.cnq) { head.appendChild(document.createTextNode(' ')); head.appendChild(cnqBadge()); }
+      var pactes = actsFact(p.actes);
+      if (pactes) { head.appendChild(document.createTextNode(' ')); head.appendChild(pactes); }
       head.appendChild(document.createTextNode(' (' + (delta >= 0 ? '+' : '−') + D.money(Math.abs(delta)) + ')'));
       block.appendChild(head);
       if (p.message) block.appendChild(el('p', 'my-offer-prop-msg', p.message));
@@ -3402,6 +3569,10 @@
       }
       cell.appendChild(block);
     });
+
+    // Said once, at the foot of the band: what Nota shows about a notary is a
+    // declaration and a count, and the Chambre is where it can be checked.
+    if (named) cell.appendChild(cnqAnnuaireLink());
   }
 
   // The evaluation block under a signed act: five star buttons (radio-like,
@@ -4421,7 +4592,7 @@
   // toggle); it never changes what the API returned, only what is drawn.
   // openDetails: ids the notary unfolded by hand in the compact view — kept
   // across re-renders (refresh, filter) so a studied card never snaps shut.
-  var nc = { token: null, feedToken: null, email: null, open: [], filter: { service: 'all', readyOnly: false, day: null }, openDetails: {}, rating: null, profil: { lienCNQ: null }, commission: null };
+  var nc = { token: null, feedToken: null, email: null, open: [], filter: { service: 'all', readyOnly: false, day: null }, openDetails: {}, rating: null, profil: { lienCNQ: null }, commission: null, cote: null };
 
   // Pending declines: id -> { timer, dateISO }. A decline collapses the card
   // into an undo line first and only POSTs once the window closes (or a test
@@ -4520,12 +4691,19 @@
     ncPollStop(); // the live feed dies with the session
     nc.token = null; nc.feedToken = null; nc.email = null; nc.open = [];
     nc.rating = null; nc.profil = { lienCNQ: null, rayonKm: 0, urgences: false }; nc.commission = null;
+    nc.cote = null;
     ncRenderProfil(); // the form must never keep another notary's fiche
+    ncRenderCote();   // another notary must never inherit this one's cote
     // The evaluations cache dies with the session: fold the panel, empty the
     // list — the next sign-in re-fetches ITS OWN history on first open.
     ncEvalsFor = null;
     var evDetails = $('notary-evals'); if (evDetails) evDetails.open = false;
     var evList = $('nc-evals-list'); if (evList) clear(evList);
+    // Same rule for the act-by-act statement: the money history of a session
+    // never survives it.
+    ncActsFor = null;
+    var acDetails = $('notary-actes'); if (acDetails) { acDetails.open = false; acDetails.hidden = false; }
+    var acList = $('nc-actes-list'); if (acList) clear(acList);
     try {
       localStorage.removeItem(LS_NC_TOKEN);
       localStorage.removeItem(LS_NC_FEED_TOKEN);
@@ -4656,13 +4834,24 @@
       return false;
     }
     if (r.status === 401) { ncExpire('Session expirée. Reconnectez-vous.'); return false; }
+    // Anything else that is not a success must NOT be read as one. Without this,
+    // a 500 parsed to {} and blanked the console — no open demands, no rating,
+    // no cote, no commission — while returning true, so callers toasted success.
+    if (!r.ok) {
+      nc.open = []; ncRenderOpen();
+      var errEmpty = $('notary-open-empty');
+      if (errEmpty) { errEmpty.textContent = 'Impossible de charger les demandes. Réessayez.'; errEmpty.hidden = false; }
+      return false;
+    }
     var j = {}; try { j = await r.json(); } catch (e) {}
     nc.open = j.bids || [];
     nc.rating = j.rating || null; // the notary's own public average
     nc.profil = j.profil || { lienCNQ: null, rayonKm: 0, urgences: false };
     nc.commission = j.commission || null; // null when billing is off — no fake rate
+    nc.cote = j.cote || null;             // ADR 0028: always there, barème or not
     ncRenderProfil();
-    ncRenderEarnings(); // the commission line lives with the money
+    ncRenderEarnings(); // the money tiles
+    ncRenderCote();     // …and, right under them, what decides the share
     ncRenderOpen();
     if (j.retained && j.retained.length) { ncRetainedMerge(nc.email, j.retained); ncRenderRetained(); }
     return true;
@@ -6126,10 +6315,13 @@
     // the confirmable bids — for nothing.
     if (e.done) {
       var grid = el('div', 'nc-stats');
+      // ADR 0024 order: what the notary KEEPS reads first. The client's total
+      // and Nota's share sit beside it as the arithmetic — never as the
+      // headline, and never omitted.
+      grid.appendChild(tile('Vos honoraires', D.money(e.net), 'nc-stat-net'));
+      grid.appendChild(tile('Payé par les clients', D.money(e.realized)));
+      grid.appendChild(tile('Frais de service Nota', D.money(e.commission)));
       grid.appendChild(tile('Actes complétés', String(e.done)));
-      grid.appendChild(tile('Valeur réalisée', D.money(e.realized)));
-      grid.appendChild(tile('Commission Nota', D.money(e.commission)));
-      grid.appendChild(tile('Net à vous', D.money(e.net), 'nc-stat-net'));
       box.appendChild(grid);
     }
     if (e.pending) {
@@ -6137,19 +6329,147 @@
     } else if (!e.done) {
       box.appendChild(el('p', 'help', 'Vos revenus et la commission Nota s’afficheront ici dès votre premier acte complété.'));
     }
-    // The rating-earned commission (ADR 0016): the rate the notary pays today,
-    // shown against the base when a bonus is earned — and the next tier, so a
-    // better note reads as a reachable lever, never a hidden rule. Absent when
-    // billing is off: no fake rate.
-    var c = nc.commission;
-    if (c) {
-      box.appendChild(el('p', 'help nc-commission', c.bonus > 0
-        ? 'Commission Nota : ' + pctLabel(c.tauxEffectif) + ' au lieu de ' + pctLabel(c.taux) + ' — bonus mérité par vos évaluations.'
-        : 'Commission Nota : ' + pctLabel(c.taux) + '.'));
-      if (c.prochain) {
-        box.appendChild(el('p', 'help nc-commission', 'Prochain palier : note ' + String(c.prochain.note).replace('.', ',') + ' et ' + c.prochain.avis + ' avis → commission ' + pctLabel(c.prochain.tauxEffectif) + '.'));
-      }
+    // The share itself is NOT here: since ADR 0028 one measure decides it, so
+    // it is published whole in « Votre cote », just below — one place, one
+    // arithmetic, nothing to reconcile between two panels.
+  }
+
+  // --- « Votre cote » (ADR 0028) ---------------------------------------------
+  // The one measure that decides the split, published entirely: the number on
+  // 100, the money sentence it earns, the four axes WITH their figures (a
+  // notary must be able to redo the total by hand), the next rung and the
+  // points still missing, and the whole barème as a public scale.
+  //
+  // `nc.cote` always exists; `nc.commission` is null when billing is off — and
+  // then not a single rate is invented.
+
+  // One axis `detail` → the short figures that produced its points. Each
+  // fragment is its own text node so the i18n rules can translate them one by
+  // one instead of matching a whole composed sentence.
+  function ncCoteFigures(id, d) {
+    d = d || {};
+    var f = [];
+    if (id === 'satisfaction') {
+      // « Aucun avis » already says the count — no « 0 avis » after it.
+      f.push(d.note == null ? 'Aucun avis' : 'Note ' + decLabel(d.note) + ' sur 5');
+      if (d.avis > 0) f.push(d.avis + (d.avis === 1 ? ' avis' : ' avis'));
+      f.push('Note pondérée ' + decLabel(d.notePonderee) + ' sur 5');
+      f.push('Cible ' + decLabel(d.cible) + ' sur 5');
+    } else if (id === 'services') {
+      // Only the VOLUME earns points here. The catalogue coverage is served by
+      // the domain and shown as information — but the line has to say, in
+      // words, that breadth is out of the score: the Code tells a notary to
+      // refuse a mandate beyond their knowledge, so specializing must not read
+      // as a deficit (ADR 0028, « deux sanctions déontologiquement à l'envers »).
+      var actes = d.actes || 0;
+      f.push(actes + (actes <= 1 ? ' acte porté' : ' actes portés'));
+      f.push('Cible ' + (d.cible || 0) + ' actes');
+      var rendus = d.servicesRendus || 0;
+      f.push(rendus + (rendus <= 1 ? ' service rendu sur ' : ' services rendus sur ') + (d.catalogue || 0));
+      f.push('Se spécialiser ne coûte rien : l’éventail n’entre pas dans la cote.');
+    } else if (id === 'disponibilite') {
+      // What earns the points is HAVING ANSWERED — proposing, accepting and
+      // declining are all answers, and only silence costs. The count leads,
+      // the honest breakdown follows, and the rule is spelled out so a notary
+      // reads it BEFORE their first decline, not after losing a rung to it.
+      var rep = d.reponses || 0;
+      var cible = d.cibleReponses || 0;
+      f.push(rep === 0
+        ? 'Aucune réponse donnée sur ' + cible + ' visées'
+        : rep + (rep === 1 ? ' réponse donnée sur ' : ' réponses données sur ') + cible + ' visées');
+      if (d.repondu > 0) f.push(d.repondu + (d.repondu === 1 ? ' proposition ou acceptation' : ' propositions ou acceptations'));
+      if (d.declinees > 0) f.push(d.declinees + (d.declinees === 1 ? ' déclin' : ' déclins'));
+      f.push('Décliner compte comme une réponse ; seul le silence coûte des points.');
+      f.push('Rayon ' + (d.rayonKm || 0) + ' km');
+      f.push(d.urgences ? 'Urgences en ligne : oui' : 'Urgences en ligne : non');
+    } else if (id === 'presence') {
+      f.push(d.fiche ? 'Fiche CNQ : oui' : 'Fiche CNQ : non');
+      f.push(d.secteur ? 'Secteur postal : oui' : 'Secteur postal : non');
+      // Day zero reads in words: « Activité il y a 0 jours » is a riddle.
+      var depuis = d.joursDepuisActivite || 0;
+      f.push(depuis === 0 ? 'Activité aujourd’hui' : 'Activité il y a ' + depuis + (depuis === 1 ? ' jour' : ' jours'));
+      var membre = d.joursMembre || 0;
+      f.push(membre === 0 ? 'Membre depuis aujourd’hui' : 'Membre depuis ' + membre + (membre === 1 ? ' jour' : ' jours'));
     }
+    return f;
+  }
+
+  // One line of the public barème: « Cote 60 → vous gardez 88 % (frais Nota
+  // 12 %) ». The rung actually in force is marked, so the notary reads their
+  // own position on the scale, not just the scale.
+  function ncBaremeRow(label, part, taux, cote, current) {
+    var row = el('div', 'nc-bareme-row', label + ' → vous gardez ' + pctLabel(part) + ' (frais Nota ' + pctLabel(taux) + ')');
+    row.dataset.cote = String(cote);
+    if (current) { row.classList.add('is-current'); row.setAttribute('aria-current', 'true'); }
+    return row;
+  }
+
+  function ncRenderCote() {
+    var box = $('notary-cote'); if (!box) return; clear(box);
+    var score = nc.cote;
+    if (!score || !score.axes || !score.axes.length) return; // signed out, or nothing to publish yet
+    var c = nc.commission;
+
+    // The number, big, on 100 — and the sentence that ties it to money.
+    var head = el('div', 'nc-cote-head');
+    var n = el('div', 'nc-cote-n');
+    n.appendChild(el('span', 'nc-cote-v', String(score.cote)));
+    n.appendChild(el('span', 'nc-cote-max', ' / 100'));
+    n.setAttribute('aria-label', 'Cote ' + score.cote + ' sur 100');
+    head.appendChild(n);
+    if (c) {
+      // A merited rung is stated against what it beats — otherwise the base
+      // split is stated plainly, both sides of it.
+      head.appendChild(el('p', 'help nc-commission', c.bonus > 0
+        ? 'Vous gardez ' + pctLabel(c.part) + ' de ce que le client paie, au lieu de ' + pctLabel(1 - c.taux) + ' — mérité par votre cote.'
+        : 'Vous gardez ' + pctLabel(c.part) + ' de ce que le client paie. Frais de service Nota : ' + pctLabel(c.taux) + '.'));
+    }
+    box.appendChild(head);
+
+    // The four axes: name, points against the max, a quiet bar, and the
+    // figures behind them. Names and maxima come from the payload — the UI
+    // never re-declares the pondération.
+    var axes = el('div', 'nc-cote-axes');
+    score.axes.forEach(function (a) {
+      var row = el('div', 'nc-cote-axe');
+      row.dataset.axe = a.id;
+      var h = el('div', 'nc-cote-axe-h');
+      h.appendChild(el('span', 'nc-cote-axe-nom', a.nom));
+      h.appendChild(el('span', 'nc-cote-axe-pts', decLabel(a.points) + ' / ' + decLabel(a.max)));
+      row.appendChild(h);
+      var bar = el('div', 'nc-cote-bar');
+      var fill = el('span', 'nc-cote-bar-fill');
+      fill.style.width = (a.max > 0 ? Math.round((a.points / a.max) * 100) : 0) + '%';
+      bar.appendChild(fill);
+      row.appendChild(bar);
+      var det = el('div', 'nc-cote-detail');
+      ncCoteFigures(a.id, a.detail).forEach(function (t) { det.appendChild(el('span', 'nc-cote-f', t)); });
+      row.appendChild(det);
+      axes.appendChild(row);
+    });
+    box.appendChild(axes);
+
+    if (!c) return; // no barème configured → no rung, no scale, no invented rate
+
+    // The next rung, and exactly how many points separate the notary from it.
+    if (c.prochain) {
+      box.appendChild(el('p', 'help nc-cote-next',
+        'Cote ' + c.prochain.cote + ' → vous gardez ' + pctLabel(c.prochain.part)
+        + ' — il vous manque ' + c.prochain.manque + (c.prochain.manque === 1 ? ' point' : ' points') + '.'));
+    }
+
+    // The whole scale, published: the starting share first, then every rung.
+    var paliers = (c.paliers || []).slice().sort(function (x, y) { return x.cote - y.cote; });
+    var atteint = 0; // the highest rung the cote has actually reached
+    paliers.forEach(function (p) { if (c.cote >= p.cote) atteint = p.cote; });
+    var scale = el('div', 'nc-bareme');
+    scale.appendChild(el('div', 'nc-bareme-h', 'Le barème, au complet'));
+    scale.appendChild(ncBaremeRow('Au départ', 1 - c.taux, c.taux, 0, atteint === 0));
+    paliers.forEach(function (p) {
+      var part = p.part != null ? p.part : 1 - p.taux;
+      scale.appendChild(ncBaremeRow('Cote ' + p.cote, part, p.taux, p.cote, atteint === p.cote));
+    });
+    box.appendChild(scale);
   }
 
   // --- Notary evaluations (ADR 0021) -----------------------------------------
@@ -6168,10 +6488,33 @@
     sp.setAttribute('aria-label', 'Note ' + n + ' sur 5');
     return sp;
   }
-  function ncRenderEvals(rating, evaluations) {
+  // The per-service record (ADR 0028, GET /notary/evaluations → services):
+  // ONE line per catalogue service — the acts actually carried and what the
+  // clients said about them. A service without a single review says so in
+  // words; the domain never invents an average, and neither does this.
+  function ncRenderServices(box, services) {
+    if (!services || !services.length) return;
+    var wrap = el('div', 'nc-svc');
+    wrap.appendChild(el('div', 'nc-svc-h', 'Ce que vous portez, service par service'));
+    services.forEach(function (s) {
+      var row = el('div', 'nc-svc-row');
+      row.dataset.service = s.serviceId;
+      row.appendChild(el('span', 'nc-svc-nom', s.nom));
+      var actes = Number(s.actes) || 0;
+      row.appendChild(el('span', 'nc-svc-actes', actes + (actes > 1 ? ' actes' : ' acte')));
+      var badge = ratingSpan({ note: s.note, avis: s.avis });
+      if (badge) row.appendChild(badge);
+      else row.appendChild(el('span', 'nc-svc-none', 'pas encore d’avis'));
+      wrap.appendChild(row);
+    });
+    box.appendChild(wrap);
+  }
+
+  function ncRenderEvals(rating, evaluations, services) {
     var box = $('nc-evals-list'); if (!box) return; clear(box);
     if (!evaluations || !evaluations.length) {
       box.appendChild(el('p', 'help', 'Vos évaluations s’afficheront ici après vos premiers actes signés.'));
+      ncRenderServices(box, services);
       return;
     }
     // The aggregate first — the same badge clients see on every proposition —
@@ -6192,6 +6535,7 @@
       if (ev.commentaire) row.appendChild(el('p', 'nc-eval-comment', ev.commentaire));
       box.appendChild(row);
     });
+    ncRenderServices(box, services);
   }
   async function ncLoadEvals() {
     if (!nc.token) return;
@@ -6216,7 +6560,128 @@
       return;
     }
     ncEvalsFor = nc.email;
-    ncRenderEvals(j.rating || null, j.evaluations || []);
+    ncRenderEvals(j.rating || null, j.evaluations || [], j.services || null);
+  }
+
+  // --- The act-by-act statement (full commission disclosure, 2026-09-01) -----
+  // Nothing aggregated only: ONE line per settled act — what the client paid,
+  // at which rate, what Nota kept and the net — then the totals. Fetched from
+  // GET /notary/acts on the panel's FIRST open, cached for the session like
+  // the evaluations. The door may not be deployed everywhere yet, so a 404
+  // retires the whole panel instead of promising a statement Nota cannot show.
+  var ncActsFor = null; // email the statement was loaded for; null = not loaded
+  function ncRenderActs(payload) {
+    var box = $('nc-actes-list'); if (!box) return; clear(box);
+    var actes = (payload && payload.actes) || [];
+    if (!actes.length) {
+      box.appendChild(el('p', 'help', 'Votre relevé s’ouvrira ici dès votre premier acte réglé.'));
+      return;
+    }
+    var table = el('table', 'nc-actes-table');
+    var head = el('tr');
+    ['Date', 'Acte', 'Montant', 'Taux', 'Frais Nota', 'Net'].forEach(function (h) { head.appendChild(el('th', null, h)); });
+    var thead = el('thead'); thead.appendChild(head); table.appendChild(thead);
+    var body = el('tbody');
+    var duLignes = 0; // lines settled off the platform — the fee is still owed
+    actes.forEach(function (a) {
+      var row = el('tr', 'nc-acte-row');
+      row.dataset.bid = a.bidId || '';
+      // ADR 0029: « payé » means the money actually moved (capture + virement).
+      // Anything else is a debt, and the row says which it is — a state the
+      // eye reads and a hook a style can key on.
+      var paye = a.paye !== false;
+      var du = Number(a.du) || 0;
+      row.dataset.paye = paye ? 'true' : 'false';
+      row.appendChild(el('td', 'nc-acte-date', a.dateISO ? dayTitle(a.dateISO) : '—'));
+      var svc = el('td', 'nc-acte-svc');
+      svc.appendChild(el('span', 'nc-acte-nom', a.service || svcName(a.serviceId)));
+      if (!paye && du > 0) {
+        // No new shape and no new colour: the truth in words, in the console's
+        // existing quiet register.
+        duLignes++;
+        // A div, not a span: the cell is `white-space: nowrap`, so the marker
+        // has to stack UNDER the act's name instead of stretching the row.
+        svc.appendChild(el('div', 'help nc-acte-etat', 'Réglé hors plateforme — ' + D.money(du) + ' de frais Nota à percevoir'));
+      }
+      row.appendChild(svc);
+      row.appendChild(el('td', 'nc-acte-num', D.money(a.montant)));
+      row.appendChild(el('td', 'nc-acte-num', pctLabel(a.taux)));
+      row.appendChild(el('td', 'nc-acte-num', D.money(a.commission)));
+      row.appendChild(el('td', 'nc-acte-num nc-acte-net', D.money(a.net)));
+      body.appendChild(row);
+    });
+    table.appendChild(body);
+    var t = (payload && payload.totaux) || {};
+    var foot = el('tfoot');
+    var total = el('tr', 'nc-acte-total');
+    total.appendChild(el('th', null, 'Total'));
+    var n = Number(t.actes) || 0;
+    total.appendChild(el('td', null, n + (n > 1 ? ' actes' : ' acte')));
+    total.appendChild(el('td', 'nc-acte-num', D.money(t.montant || 0)));
+    total.appendChild(el('td', 'nc-acte-num', '—'));
+    total.appendChild(el('td', 'nc-acte-num', D.money(t.commission || 0)));
+    total.appendChild(el('td', 'nc-acte-num nc-acte-net', D.money(t.net || 0)));
+    foot.appendChild(total);
+    // What is still owed, beside the other totals and never mixed into them:
+    // « perçu » means Nota has the money. It only exists when there IS a debt.
+    var duTotal = Number(t.du) || 0;
+    if (duTotal > 0) {
+      var due = el('tr', 'nc-acte-total nc-acte-du');
+      due.dataset.total = 'du';
+      var label = el('th', null, 'Frais de service à percevoir');
+      label.colSpan = 4;
+      due.appendChild(label);
+      due.appendChild(el('td', 'nc-acte-num', D.money(duTotal)));
+      due.appendChild(el('td', 'nc-acte-num', '—'));
+      foot.appendChild(due);
+    }
+    table.appendChild(foot);
+    box.appendChild(table);
+    box.appendChild(el('p', 'help', 'Chaque ligne porte le taux que votre cote valait au règlement de l’acte.'));
+    // Said once, under the table: what an unpaid line actually means. ADR 0029
+    // leaves recovery OPEN — nothing in the product can collect this yet — so
+    // this sentence states the fact and promises no mechanism, no deadline and
+    // no way to pay that does not exist.
+    if (duLignes > 0) {
+      box.appendChild(el('p', 'help nc-acte-du-note',
+        duLignes > 1
+          ? 'Sur ces actes, le client vous a payé directement à la signature : Nota n’a rien encaissé et les frais de service restent dus.'
+          : 'Sur cet acte, le client vous a payé directement à la signature : Nota n’a rien encaissé et les frais de service restent dus.'));
+    }
+  }
+  async function ncLoadActs() {
+    if (!nc.token) return;
+    if (ncActsFor === nc.email) return; // cached for this session
+    var box = $('nc-actes-list'); if (!box) return;
+    var panel = $('notary-actes');
+    var r;
+    try {
+      r = await fetch(API_BASE + '/notary/acts', {
+        headers: { accept: 'application/json', authorization: 'Bearer ' + nc.token },
+      });
+    } catch (e) {
+      // Offline is an error, never « you have settled nothing ».
+      clear(box);
+      box.appendChild(el('p', 'help', 'Impossible de charger votre relevé (hors ligne). Réessayez.'));
+      return;
+    }
+    if (r.status === 401) { ncExpire('Session expirée. Reconnectez-vous.'); return; }
+    if (r.status === 404) {
+      // The door is not there: retire the panel rather than show an empty
+      // promise of disclosure. The next session tries again from scratch.
+      ncActsFor = nc.email;
+      clear(box);
+      if (panel) { panel.open = false; panel.hidden = true; }
+      return;
+    }
+    var j = {}; try { j = await r.json(); } catch (e) {}
+    if (r.status !== 200) {
+      clear(box);
+      box.appendChild(el('p', 'help', 'Impossible de charger votre relevé. Réessayez.'));
+      return;
+    }
+    ncActsFor = nc.email;
+    ncRenderActs(j);
   }
 
   // --- Notary public profile (ADR 0016) --------------------------------------
@@ -6427,11 +6892,17 @@
       for (var wm = win ? firstOfMonth(win.start) : null; wm && wm <= win.end; wm = addMonths(wm, 1)) {
         if (months.indexOf(monthKey(wm)) < 0) months.push(monthKey(wm));
       }
+      // Count fallbacks ACROSS the whole batch: `store.online` alone would let a
+      // month that failed be masked by another that succeeded later.
+      var demoBefore = store.demoLoads;
       var lists = await Promise.all(months.map(function (m) { return store.listMonth(m); }));
       state.monthBids = Array.prototype.concat.apply([], lists);
+      // One invented month is enough: everything drawn from monthBids is mixed.
+      state.demo = store.demoLoads > demoBefore;
     } finally {
       if (panel) panel.classList.remove('is-loading');
     }
+    renderDemoState(); // before anything reads monthBids: no bare invented figure
     renderNotaryLive(); // the landing's open-demand teaser
     renderOnbWeekAnim(); // and the welcome dialog's live week board, if open
     renderLegend(); // the legend's multipliers are tuned on the freshly loaded month
@@ -6580,8 +7051,8 @@
         var cur = document.documentElement.getAttribute('data-theme');
         setTheme(cur === 'dark' ? 'light' : 'dark');
       });
-      var mLogin = $('mnav-login'); if (mLogin) mLogin.addEventListener('click', function () { openAuthModal(); });
-      var mSignup = $('mnav-signup'); if (mSignup) mSignup.addEventListener('click', function () { onbOpen(); });
+      var mLogin = $('mnav-login'); if (mLogin) mLogin.addEventListener('click', function () { openAuthModal(null, 'signin'); });
+      var mSignup = $('mnav-signup'); if (mSignup) mSignup.addEventListener('click', function () { openAuthModal(null, 'signup'); });
       // Any committed choice closes the drawer (links navigate via their own
       // handlers; the auth buttons open a modal above the page). Expand rows
       // and chevrons are not choices — they must keep the drawer open.
@@ -6634,18 +7105,11 @@
     // line INSIDE the modal (a toast would paint under the <dialog> top layer)
     // and hands focus to the courriel field, the one live door. T() at compose
     // time: the sentence is assembled at runtime, per provider.
-    document.querySelectorAll('#auth-dialog .auth-soc-btn').forEach(function (b) {
-      b.addEventListener('click', function () {
-        var note = $('auth-soc-note');
-        if (note) {
-          note.textContent = T('La connexion avec ' + b.dataset.provider + ' arrive bientôt — continuez avec votre courriel.');
-          note.hidden = false;
-        }
-        var em = $('auth-email'); if (em) { try { em.focus(); } catch (er) {} }
-      });
-    });
-    var hLogin = $('header-login'); if (hLogin) hLogin.addEventListener('click', function () { openAuthModal(); });
-    var hSignup = $('header-signup'); if (hSignup) hSignup.addEventListener('click', function () { onbOpen(); });
+    // ONE door for both header buttons (owner, 2026-08-28: « comme un site
+    // traditionnel, en trois clics ») — same modal, honest title per button.
+    // The pedagogical guide stays on the header « ? » and the footer link.
+    var hLogin = $('header-login'); if (hLogin) hLogin.addEventListener('click', function () { openAuthModal(null, 'signin'); });
+    var hSignup = $('header-signup'); if (hSignup) hSignup.addEventListener('click', function () { openAuthModal(null, 'signup'); });
     renderAccountMenu(); // set the initial logged-out (auth buttons) / signed-in (avatar) state
     // Click the backdrop (outside the body) to dismiss.
     var authDlg = $('auth-dialog');
@@ -6869,6 +7333,11 @@
     // list is fetched on the panel's FIRST open and costs nothing until asked.
     var ncEvalsBox = $('notary-evals');
     if (ncEvalsBox) ncEvalsBox.addEventListener('toggle', function () { if (ncEvalsBox.open) ncLoadEvals(); });
+
+    // « Votre relevé d’actes » — same register, same first-open fetch: the
+    // full commission disclosure costs nothing until the notary asks for it.
+    var ncActsBox = $('notary-actes');
+    if (ncActsBox) ncActsBox.addEventListener('toggle', function () { if (ncActsBox.open) ncLoadActs(); });
 
     // Lead-delivery preferences — every control saves on change (per notary).
     if ($('pref-ch-email')) $('pref-ch-email').addEventListener('change', function () { ncPrefsPatch({ email: this.checked }); });
@@ -7715,6 +8184,10 @@
     setTab: setTab,
     selectDate: selectDate,
     reload: reloadAndRender,
+    refreshMonthData: refreshMonthData,
+    // The success screen, revealed through the helper that declares an offline
+    // "publication" for what it is.
+    showOfferSuccess: showOfferSuccess,
     dossierState: dossierState,
     // Notary console hooks for tests and future integration.
     notary: {
@@ -7735,6 +8208,7 @@
       retainedFor: ncRetainedFor,
       renderOpen: ncRenderOpen,
       loadEvals: ncLoadEvals,
+      loadActs: ncLoadActs,
       chatSend: ncChatSend,
       release: ncRelease,
       prefsGet: ncPrefsGet,

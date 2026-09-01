@@ -53,6 +53,11 @@ function app(opts = {}) {
     ...createApp(repo, {
       now: () => TODAY,
       nowMs: () => NOW_MS,
+      // Un hôte configuré : sans lui, les portes qui envoient un lien refusent
+      // désormais de le faire (configuration-liens.test.mjs). Ces scénarios-ci
+      // portent sur la fraude au parrainage, pas sur la configuration.
+      notaryConsoleUrl: BASE,
+      partnerClaimUrl: BASE,
       newId: () => 'id-' + ++n,
       notifier,
       billing,

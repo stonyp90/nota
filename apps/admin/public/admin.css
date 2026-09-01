@@ -357,10 +357,10 @@ a:hover { text-decoration: underline; }
 .tpl-error strong { color: var(--danger); font-weight: 600; }
 .tpl-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 
-/* --- Commission (barème, ADR 0021) -----------------------------------------
+/* --- Commission (barème, ADR 0021 / 0028) ----------------------------------
    The read view reuses the stat tiles and a .ptable of tiers; the edit form
    reuses .field/.input/.tpl-fields/.tpl-error/.tpl-actions. Only the tier-row
-   grid, the reset strip and its in-page confirm are new. */
+   grid, the cote simulator, the reset strip and its in-page confirm are new. */
 .bareme-form { display: flex; flex-direction: column; gap: 14px; }
 .bareme-paliers { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
 .bareme-paliers-label {
@@ -372,6 +372,38 @@ a:hover { text-decoration: underline; }
   display: grid; gap: 10px; align-items: end;
   grid-template-columns: repeat(3, minmax(min(90px, 100%), 1fr)) auto;
 }
+/* Un palier de cote : deux champs, puis la moitié du notaire — dérivée, donc
+   affichée et non saisie. */
+.bareme-palier-cote { grid-template-columns: repeat(2, minmax(min(110px, 100%), 1fr)) minmax(min(110px, 100%), 1fr) auto; }
+.bareme-part {
+  display: flex; flex-direction: column; gap: 6px; padding-bottom: 9px;
+}
+.bareme-part-k {
+  font-size: 12px; font-weight: 600; color: var(--ink-muted);
+}
+.bareme-part-v {
+  font-size: 15px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums;
+}
+
+/* Simulateur : une cote saisie, les deux moitiés du partage en regard. */
+.bareme-sim-field { max-width: 260px; }
+.bareme-sim-out {
+  margin-top: 14px; display: grid; gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
+}
+.bareme-sim-fig {
+  padding: 12px 14px; background: var(--surface-inset);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  display: flex; flex-direction: column; gap: 4px;
+}
+.bareme-sim-k {
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--ink-muted);
+}
+.bareme-sim-v { font-size: 26px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+/* La moitié du notaire porte l'accent de marque : c'est elle qui se négocie. */
+.bareme-sim-notaire { color: var(--brand); }
+.bareme-sim-note { margin-top: 10px; }
 .bareme-reset {
   margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border);
   display: flex; flex-direction: column; gap: 10px; align-items: flex-start;
@@ -384,6 +416,74 @@ a:hover { text-decoration: underline; }
 .bareme-confirm-text { margin: 0; }
 /* Danger = the same outline register as .btn-primary, in the danger ink. */
 .btn-danger { color: var(--danger); border-color: var(--danger); font-weight: 600; }
+
+/* --- Notaires (tableau d'honneur, ADR 0028) --------------------------------
+   Le tableau réutilise .ptable ; seuls la pastille carrée de statut, le bouton
+   de dépli et la grille des quatre axes sont neufs. */
+.ntable .nrow-etude { font-weight: 600; color: var(--ink); }
+.nrow-note { font-weight: 700; }
+.nrow-toggle { margin-top: 6px; }
+.nstatut {
+  display: inline-block; font-size: 10px; font-weight: 800;
+  text-transform: uppercase; letter-spacing: .05em; white-space: nowrap;
+  padding: 2px 8px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong); color: var(--ink-muted); background: transparent;
+}
+.nstatut.is-active { color: var(--ok); border-color: var(--ok); background: var(--brand-wash); }
+.nstatut.is-onboarding { color: var(--warn); border-color: var(--warn); }
+.nstatut.is-restricted { color: var(--danger); border-color: var(--danger); }
+
+/* Le dépli : les quatre axes côte à côte, chacun avec ses chiffres nus — de
+   quoi refaire une cote contestée à la main, devant le notaire. */
+.naxes-row > td { background: var(--surface-inset); }
+.naxes {
+  display: grid; gap: 12px; padding: 4px 0;
+  grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr));
+}
+.naxe {
+  padding: 12px 14px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius);
+}
+.naxe-nom { font-size: 13px; font-weight: 700; color: var(--ink); }
+.naxe-points {
+  margin-top: 2px; font-size: 12px; font-weight: 600; color: var(--brand);
+  font-variant-numeric: tabular-nums;
+}
+.naxe-lines { margin-top: 8px; display: flex; flex-direction: column; gap: 3px; }
+.naxe-line { display: flex; align-items: baseline; gap: 8px; font-size: 12px; }
+.naxe-k { color: var(--ink-muted); }
+.naxe-v { margin-left: auto; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+/* --- Audit (journal append-only, pièce SOC 2) ------------------------------
+   Une entrée par geste : l'heure, l'action, qui — puis la phrase d'argent pour
+   un acte réglé, ou la meta telle quelle pour le reste. */
+.audit-day-field { min-width: 170px; }
+.audit-list { display: flex; flex-direction: column; gap: 10px; }
+.audit-entry {
+  padding: 12px 14px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius);
+}
+.audit-entry-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
+.audit-ts {
+  font-family: var(--font-mono); font-size: 12px; color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+.audit-action { font-size: 13.5px; font-weight: 700; color: var(--ink); }
+.audit-who { margin-left: auto; display: flex; gap: 10px; font-size: 12px; color: var(--ink-muted); }
+.audit-ip { font-family: var(--font-mono); }
+/* LA divulgation : elle se lit seule, sans le JSON qui la sous-tend. */
+.audit-money {
+  margin: 8px 0 0; font-size: 14px; font-weight: 600; color: var(--ink);
+  border-left: 3px solid var(--brand); padding-left: 10px;
+}
+.audit-facts {
+  margin-top: 4px; padding-left: 13px; font-family: var(--font-mono);
+  font-size: 11.5px; color: var(--ink-muted); overflow-wrap: anywhere;
+}
+.audit-meta { margin-top: 8px; display: flex; flex-direction: column; gap: 3px; }
+.audit-meta-line { display: flex; align-items: baseline; gap: 8px; font-size: 12px; min-width: 0; }
+.audit-meta-k { flex: none; font-weight: 600; color: var(--ink-muted); }
+.audit-meta-v { font-family: var(--font-mono); color: var(--ink); overflow-wrap: anywhere; }
 
 /* --- Loading skeletons ---------------------------------------------------- */
 .skeleton {

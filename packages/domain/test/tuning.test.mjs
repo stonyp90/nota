@@ -21,23 +21,23 @@ test('tuning: with no history the tuned ladder IS the default ladder', () => {
 });
 
 test('tuning: retained premiums pull a tier toward what the market actually paid', () => {
-  // Six retained prioritaire deals all cleared at 1.44x — near the top of the
-  // band, above the 1.35x midpoint. The tuned value must move up, but not all
+  // Six retained prioritaire deals all cleared at 3.25x — near the top of the
+  // band, above the 3.0x midpoint. The tuned value must move up, but not all
   // the way (the prior still counts), and stay inside the advertised band.
-  const bids = Array.from({ length: 6 }, () => settled('prioritaire', 1.44));
+  const bids = Array.from({ length: 6 }, () => settled('prioritaire', 3.25));
   const tuned = D.tunedTierMultipliers(bids);
   const prior = D.tierMultiplier('prioritaire');
   assert.ok(tuned.prioritaire > prior, 'moves above the prior');
-  assert.ok(tuned.prioritaire < 1.44, 'shrinkage keeps it below the raw observation');
+  assert.ok(tuned.prioritaire < 3.25, 'shrinkage keeps it below the raw observation');
   const t = D.tierById('prioritaire');
   assert.ok(tuned.prioritaire >= t.apercuMin && tuned.prioritaire <= t.apercuMax, 'stays in band');
 });
 
 test('tuning: more data moves the estimate further (converges on the observed median)', () => {
-  const few = D.tunedTierMultipliers(Array.from({ length: 3 }, () => settled('urgence', 1.7)));
-  const many = D.tunedTierMultipliers(Array.from({ length: 60 }, () => settled('urgence', 1.7)));
+  const few = D.tunedTierMultipliers(Array.from({ length: 3 }, () => settled('urgence', 3.65)));
+  const many = D.tunedTierMultipliers(Array.from({ length: 60 }, () => settled('urgence', 3.65)));
   assert.ok(many.urgence > few.urgence, 'a bigger sample outweighs the prior');
-  assert.ok(Math.abs(many.urgence - 1.7) < 0.1, 'a large sample lands near the observed premium');
+  assert.ok(Math.abs(many.urgence - 3.65) < 0.1, 'a large sample lands near the observed premium');
 });
 
 test('tuning: only RETAINED offers teach — open asks are wishes, not prices', () => {
@@ -98,10 +98,10 @@ test('tuning: tierMultiplier(id, bids) is the tuned value — one definition for
 
 test('tuning: recommendedAmount follows the tuned multiplier when history is supplied', () => {
   const TODAY = '2026-08-12';
-  const bids = Array.from({ length: 40 }, () => settled('prioritaire', 1.44));
+  const bids = Array.from({ length: 40 }, () => settled('prioritaire', 3.25));
   const plain = D.recommendedAmount('refinancement', '2026-08-14', TODAY);   // 2 days = prioritaire
   const tunedRec = D.recommendedAmount('refinancement', '2026-08-14', TODAY, null, bids);
   assert.ok(tunedRec > plain, 'a hotter observed market recommends a higher offer');
   const svc = D.serviceById('refinancement');
-  assert.ok(tunedRec <= svc.prixDepart * D.PREMIUM_CAP, 'still capped at 3x');
+  assert.ok(tunedRec <= svc.prixDepart * D.PREMIUM_CAP, 'still capped at 5x');
 });

@@ -212,7 +212,7 @@
               </div>
             </section>
             <section class="ig-scene ig-c2" aria-hidden="true">
-              <span class="ig-kicker">Gratuit pour vous · publié en 2 minutes</span>
+              <span class="ig-kicker">Exemple · gratuit pour vous, publié en 2 minutes</span>
               <p class="ig-h">Votre prix, selon votre urgence.</p>
               <div class="ig-useg"><span>Standard</span><span>Prioritaire</span><span>Urgence</span></div>
               <div class="ig-demand">
@@ -276,7 +276,7 @@
                 <div class="ig-frow ig-refi"><span class="ig-svc">Refinancement</span><span class="ig-when">ven. 12 sept.</span><span class="ig-amt">2&nbsp;200&nbsp;$</span></div>
                 <div class="ig-frow ig-fin"><span class="ig-svc">Financement</span><span class="ig-when">mar. 16 sept.</span><span class="ig-amt">1&nbsp;950&nbsp;$</span></div>
               </div>
-              <span class="ig-more">+ 6 autres demandes cette semaine à Québec</span>
+              <span class="ig-more">Exemple — d’autres demandes s’affichent la même semaine</span>
             </section>
             <section class="ig-scene ig-n3" aria-hidden="true">
               <p class="ig-h">Acceptez en un clic.</p>
@@ -285,7 +285,7 @@
                 <span class="ig-idle">Accepter — 2&nbsp;200&nbsp;$</span>
                 <span class="ig-done"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 12.5 9.5 18 20 6.5" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Demande retenue</span>
               </span>
-              <span class="ig-pill">Payé à la signature — et votre part grandit avec votre note</span>
+              <span class="ig-pill">Payé à la signature — et votre part grandit avec votre cote</span>
             </section>
             <section class="ig-scene ig-n4" aria-hidden="true">
               <div class="ig-logo-row"><svg class="ig-mark ig-mark-final" viewBox="0 0 64 64" role="img" aria-label="Nota">
@@ -490,6 +490,16 @@
     </nav>
 
     <main id="main">
+      <!-- Demonstration data is legitimate (marketing, the intro film, offline
+           development); being INDISTINGUISHABLE from the real market is not.
+           store.listMonth falls back to domain fixtures whenever the API is
+           unreachable, so this banner declares it — persistent, not a toast,
+           a status and not an alarm. Shown/hidden by renderDemoState(); the
+           carnet keeps rendering underneath: we declare, we do not hide. -->
+      <div class="demo-banner" id="demo-banner" role="status" hidden>
+        <span class="demo-banner-t">Données de démonstration</span>
+        <span class="demo-banner-b">Le carnet réel n’a pas pu être chargé. Ces offres et ces montants sont fictifs.</span>
+      </div>
       <!-- ================= CARNET ================= -->
       <section class="tab-pane is-active" id="pane-carnet" role="tabpanel" aria-labelledby="tab-carnet">
         <div class="wrap">
@@ -642,6 +652,10 @@
                sign-in gate. Filled by renderNotaryLive(); hidden signed-in —
                the console's own open list takes over. -->
           <section class="nc-live" id="notary-live" aria-labelledby="notary-live-h" hidden>
+            <!-- Slot for the « démonstration » mark: these cards quote the
+                 month's real dates and amounts, which are invented whenever
+                 the carnet fell back to fixtures. Empty otherwise. -->
+            <div class="nc-live-head"></div>
             <div class="nc-live-grid" id="notary-live-grid"></div>
           </section>
 
@@ -763,6 +777,31 @@
 
               <h2 class="nc-h">Vos revenus</h2>
               <div class="nc-earn" id="notary-earnings"></div>
+
+              <!-- « Votre cote » (ADR 0028). ONE measure on 100 decides the
+                   share: Nota keeps at most 15 %, the notary 85 % to 95 %. A
+                   lever a notary cannot recompute would be a slogan, so the
+                   whole computation is published here — the number, the money
+                   sentence it earns, the four axes with their arithmetic, the
+                   next rung, and the barème as a PUBLIC scale. Filled by
+                   ncRenderCote() from the /notary/bids payload: no extra call,
+                   and it stands even when billing is off (the cote is always
+                   there; the rate only exists with a barème). -->
+              <h2 class="nc-h">Votre cote</h2>
+              <div class="nc-cote" id="notary-cote"></div>
+
+              <!-- The full commission disclosure (2026-09-01): act by act,
+                   what the client paid, at which rate, what Nota kept and the
+                   net. Fetched from GET /notary/acts on first open — a door
+                   that may not be deployed yet, so a 404 hides the panel
+                   whole rather than promising a statement Nota cannot show. -->
+              <details class="nc-prefs" id="notary-actes">
+                <summary class="nc-prefs-sum">
+                  <h2 class="nc-h">Votre relevé d’actes</h2>
+                  <span class="nc-prefs-hint">montant, taux, frais Nota, net</span>
+                </summary>
+                <div class="nc-actes" id="nc-actes-list"></div>
+              </details>
 
               <!-- The notary's own track record (ADR 0021): every client
                    evaluation — note, comment, act, date — anonymized by the
@@ -1088,7 +1127,7 @@
             </div>
             <div class="card">
               <h3>Hébergé au Canada</h3>
-              <p>Vos données sont conservées sur des serveurs canadiens (Amazon Web Services, région <strong>ca-central-1</strong>, Montréal). Elles ne quittent pas le pays.</p>
+              <p>Au repos, vos données sont conservées sur des serveurs canadiens (Amazon Web Services, région <strong>ca-central-1</strong>, Montréal). En transit, elles passent par un réseau de diffusion dont les points de présence sont aussi aux États-Unis et en Europe, et par des prestataires tiers : Stripe pour le paiement, rsms.me pour la police de caractères.</p>
             </div>
             <div class="card">
               <h3>Anonyme par défaut</h3>
@@ -1132,7 +1171,7 @@
             </div>
             <div class="card">
               <h3>Gratuit pour le client</h3>
-              <p>Publier une offre est gratuit. Nota se rémunère par une commission versée par le notaire, uniquement sur les actes complétés.</p>
+              <p>Publier une offre est gratuit. Sur un acte complété, Nota conserve au plus 15 % de votre montant pour son service et le notaire garde de 85 % à 95 % selon sa cote sur 100 — jamais un dollar de plus que ce que vous avez offert.</p>
             </div>
           </div>
 
@@ -1142,7 +1181,7 @@
               <li><strong>Rôle de Nota.</strong> Nota fournit une plateforme de mise en relation. Nous ne rédigeons pas d’actes, ne donnons aucun conseil juridique, fiscal ou financier, et ne sommes pas partie au mandat entre vous et le notaire.</li>
               <li><strong>Indépendance du notaire.</strong> Le notaire qui retient votre demande agit en toute indépendance : il fixe ses honoraires, vérifie votre identité et rédige l’acte selon la loi. Nota n’intervient jamais dans l’acte notarié.</li>
               <li><strong>Vos engagements.</strong> Vous fournissez des renseignements exacts et n’utilisez pas le service à des fins illégales ou trompeuses. Une offre publiée est un engagement de bonne foi à procéder à la date convenue.</li>
-              <li><strong>Prix et commission.</strong> Le montant que vous offrez est celui que le notaire reçoit pour l’acte. La commission de Nota est prélevée auprès du notaire sur les actes complétés ; elle ne s’ajoute pas à votre montant.</li>
+              <li><strong>Prix et commission.</strong> Le montant que vous offrez est le total, tout compris : rien ne s’y ajoute. Il se partage à la signature — Nota garde au plus 15 % pour trouver le notaire, monter le dossier et opérer la transaction, et le notaire garde de 85 % à 95 % pour l’acte, selon sa cote sur 100.</li>
               <!-- The reward amounts are DOMAIN data — renderPartnerPane()
                    fills this sentence with money(D.REFERRAL.*), never a
                    literal in the markup. -->
@@ -1365,7 +1404,7 @@
         <div id="offer-success" class="offer-success" hidden>
           <div class="offer-success-head">
             <img class="offer-success-logo" src="favicon.svg" width="26" height="26" alt="Nota" />
-            <p class="help mt-sm"><strong>Offre publiée.</strong> Pendant l’attente, préparez vos documents.</p>
+            <p class="help mt-sm" id="offer-success-lead"><strong>Offre publiée.</strong> Pendant l’attente, préparez vos documents.</p>
           </div>
           <!-- Price before documents (ADR 0010 §3): the demand is already
                sellable — this card is preparation progress for AFTER the mise
@@ -1420,51 +1459,28 @@
       <form method="dialog" class="dlg-x-form"><button class="dlg-x" value="close" aria-label="Fermer">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
       </button></form>
+      <!-- ONE clean door (owner, 2026-08-28: « ça ressemble au site web
+           traditionnel… en trois clics ») : title says which button opened it,
+           a role toggle, the courriel, ONE primary CTA that names the action.
+           No dead social doors — they return the day OAuth is actually wired. -->
       <div class="auth-body">
         <div class="auth-mark" aria-hidden="true"><span class="brand-badge"><img src="favicon.svg" width="26" height="26" alt="" /></span></div>
-        <h2 id="auth-title" class="auth-title">Bienvenue sur Nota</h2>
-        <p class="auth-sub">Connectez-vous ou créez votre compte, sans mot de passe.</p>
+        <h2 id="auth-title" class="auth-title">Créer votre compte</h2>
+        <p class="auth-sub" id="auth-sub">Sans mot de passe — votre courriel suffit.</p>
 
         <div class="seg auth-role" id="auth-role" role="group" aria-label="Vous êtes">
           <button type="button" class="seg-btn is-on" data-role="client" aria-pressed="true">Je suis client</button>
           <button type="button" class="seg-btn" data-role="notary" aria-pressed="false">Je suis notaire</button>
         </div>
 
-        <!-- Social doors, announced up front as « Arrive bientôt » : the OAuth
-             flows are not wired yet, so the buttons are aria-disabled and a
-             click toasts the coming-soon line then hands focus to the courriel
-             path below — the one real door. Brand marks use the --logo-*
-             tokens (declared in styles.css), never literal colors here. -->
-        <div class="auth-social" role="group" aria-label="Connexion avec un compte externe">
-          <button type="button" class="auth-soc-btn" data-provider="Google" aria-disabled="true">
-            <svg class="auth-soc-ic" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="var(--logo-google-blue)" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.8z"/><path fill="var(--logo-google-green)" d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1A12 12 0 0 0 12 24z"/><path fill="var(--logo-google-yellow)" d="M5.3 14.3a7.2 7.2 0 0 1 0-4.6V6.6H1.3a12 12 0 0 0 0 10.8l4-3.1z"/><path fill="var(--logo-google-red)" d="M12 4.8c1.8 0 3.3.6 4.6 1.8l3.4-3.4A12 12 0 0 0 12 0 12 12 0 0 0 1.3 6.6l4 3.1C6.2 6.9 8.9 4.8 12 4.8z"/></svg>
-            <span class="auth-soc-label">Continuer avec Google</span>
-            <span class="auth-soon">Arrive bientôt</span>
-          </button>
-          <button type="button" class="auth-soc-btn" data-provider="Facebook" aria-disabled="true">
-            <svg class="auth-soc-ic" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="12" fill="var(--logo-facebook)"/><path fill="var(--logo-on-brand)" d="M16.7 15.5 17.2 12h-3.4V9.7c0-1 .5-1.9 2-1.9h1.5V4.8s-1.4-.2-2.7-.2c-2.7 0-4.5 1.6-4.5 4.7V12H6.9v3.5h3.2v8.4a12.2 12.2 0 0 0 3.7 0v-8.4h2.9z"/></svg>
-            <span class="auth-soc-label">Continuer avec Facebook</span>
-            <span class="auth-soon">Arrive bientôt</span>
-          </button>
-          <button type="button" class="auth-soc-btn" data-provider="LinkedIn" aria-disabled="true">
-            <svg class="auth-soc-ic" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="0" y="0" width="24" height="24" rx="4" fill="var(--logo-linkedin)"/><path fill="var(--logo-on-brand)" d="M6.94 8.61H3.9V20.4h3.04V8.61zM5.42 3.6a1.77 1.77 0 1 0 0 3.54 1.77 1.77 0 0 0 0-3.54zM13.1 12.87c0-1.1.63-1.9 1.8-1.9 1.1 0 1.66.75 1.66 1.9v7.53h3.04v-7.9c0-2.8-1.5-4.15-3.7-4.15-1.7 0-2.5.94-2.94 1.6h-.06l-.14-1.34H9.9c.04.85 0 11.79 0 11.79h3.2v-7.53z"/></svg>
-            <span class="auth-soc-label">Continuer avec LinkedIn</span>
-            <span class="auth-soon">Arrive bientôt</span>
-          </button>
-          <!-- The coming-soon line lands HERE, inside the modal: a toast would
-               paint under the <dialog> top layer and never be seen. -->
-          <p class="auth-soc-note" id="auth-soc-note" role="status" aria-atomic="true" hidden></p>
-        </div>
-        <div class="auth-or" aria-hidden="true"><span>ou</span></div>
-
         <form id="auth-email-form" class="auth-email" novalidate>
           <label class="lbl" for="auth-email">Courriel</label>
           <input type="email" id="auth-email" inputmode="email" autocomplete="email" placeholder="vous@courriel.ca" required />
           <ul class="errors" id="auth-errors" role="alert" aria-atomic="true" hidden></ul>
-          <button type="submit" class="btn btn-primary btn-lg auth-continue" id="auth-continue">Continuer →</button>
+          <button type="submit" class="btn btn-primary btn-lg auth-continue" id="auth-continue">Créer mon compte</button>
         </form>
 
-        <p class="auth-fine" id="auth-fine">Première visite ou retour, c’est le même geste. Vos renseignements restent sur cet appareil.</p>
+        <p class="auth-fine" id="auth-fine">Première visite ou retour, c’est le même geste. Votre courriel est transmis à Nota pour le lien de suivi et les avis. Le contenu de vos documents, lui, ne quitte jamais cet appareil.</p>
       </div>
     </dialog>
 
@@ -1484,6 +1500,9 @@
           <h2 id="onb-title" class="onb-title">Bienvenue sur Nota</h2>
           <p class="onb-sub">Comment souhaitez-vous utiliser Nota&nbsp;?</p>
           <p class="onb-progress" id="onb-progress">Étape 1 sur 2</p>
+          <!-- Slot for the « démonstration » mark: the two live-proof lines on
+               the role cards below count the month's demands. -->
+          <p class="onb-live-host"></p>
 
           <div class="onb-choices" role="group" aria-label="Comment souhaitez-vous utiliser Nota ?" aria-describedby="onb-progress">
             <button type="button" class="onb-choice" data-role="client">

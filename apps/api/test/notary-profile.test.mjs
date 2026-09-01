@@ -107,16 +107,55 @@ test('clients see the badge on propositions and the link only once retained', as
   assert.equal(bare.notaire.lienCNQ, null);
 });
 
-test('/notary/bids names the commission the notary earns — and the next tier to reach', async () => {
-  const billing = createBilling({ repo: createMemoryRepo(), stripe: {}, commissionRate: 0.10 });
+test('/notary/bids names the split the notary earns — the cote behind it, and the next rung', async () => {
+  // Le barème expédié (ADR 0028) : 15 % au départ, 5 % au sommet, et c'est LA
+  // cote sur 100 qui décide.
+  const billing = createBilling({ repo: createMemoryRepo(), stripe: {} });
   const a = app({ billing });
-  await seedNotary(a, { ratingSum: 45, ratingCount: 10 }); // 4.5 over 10 avis → 9%
+  // Un notaire aimé mais tout neuf : rien porté, rien répondu, aucune fiche.
+  await seedNotary(a, { ratingSum: 45, ratingCount: 10, actsCompleted: 0, createdAt: '2026-08-10T00:00:00.000Z' });
 
   const view = parse(await a.handle({ method: 'GET', path: '/notary/bids', headers: bearer(sessionToken()), query: {} }));
-  assert.deepEqual(view.commission, {
-    taux: 0.10, tauxEffectif: 0.09, bonus: 0.01,
-    prochain: { note: 4.8, avis: 10, tauxEffectif: 0.08 },
+  const c = view.commission;
+  assert.equal(c.taux, 0.15, 'Nota ne prend jamais plus de 15 %');
+  assert.equal(c.plancher, 0.05);
+  assert.equal(c.tauxEffectif, 0.15, 'sans historique, le taux de base');
+  assert.equal(c.part, 0.85);
+  assert.equal(c.bonus, 0);
+  assert.ok(c.cote > 0 && c.cote < 60, 'une cote réelle, ni zéro ni sommet : ' + c.cote);
+  assert.equal(c.axes.length, 4, 'les quatre axes voyagent avec le taux');
+  assert.deepEqual(c.paliers, [
+    { cote: 60, taux: 0.12, part: 0.88 },
+    { cote: 70, taux: 0.10, part: 0.90 },
+    { cote: 80, taux: 0.08, part: 0.92 },
+    { cote: 90, taux: 0.05, part: 0.95 },
+  ], 'toute l’échelle est publiée — un barème, pas une règle cachée');
+  assert.deepEqual(c.prochain, { cote: 60, manque: 60 - c.cote, tauxEffectif: 0.12, part: 0.88 });
+
+  // La console reçoit aussi la cote toute seule, avec ses axes détaillés.
+  assert.equal(view.cote.cote, c.cote);
+  assert.deepEqual(view.cote.axes.map((x) => x.id), ['satisfaction', 'services', 'disponibilite', 'presence']);
+});
+
+test('/notary/bids reflects a climbed cote: the notary keeps 95 % at the top', async () => {
+  const billing = createBilling({ repo: createMemoryRepo(), stripe: {} });
+  const a = app({ billing });
+  // Le dossier complet : aimé, volumineux sur tout le catalogue, disponible,
+  // présent — la cote passe 90 et le partage devient 95/5.
+  await seedNotary(a, {
+    ratingSum: 4.9 * 40, ratingCount: 40,
+    actsCompleted: 80, actsByService: { refinancement: 50, financement: 30 },
+    proposalsCount: 60, acceptsCount: 0, declinesCount: 3,
+    rayonKm: 50, urgences: true,
+    lienCNQ: FICHE, prefixe: 'G1R',
+    createdAt: '2025-01-01T00:00:00.000Z', lastSeenAt: '2026-08-12T00:00:00.000Z',
   });
+
+  const view = parse(await a.handle({ method: 'GET', path: '/notary/bids', headers: bearer(sessionToken()), query: {} }));
+  assert.ok(view.commission.cote > 90, 'la cote passe 90 : ' + view.commission.cote);
+  assert.equal(view.commission.tauxEffectif, 0.05);
+  assert.equal(view.commission.part, 0.95);
+  assert.equal(view.commission.prochain, null, 'plus rien à atteindre');
 });
 
 test('without billing configured the console gets no commission block (never a fake rate)', async () => {

@@ -31,6 +31,11 @@ function harness(opts = {}) {
     now: () => TODAY,
     nowMs: () => clock.ms,
     newId: () => 'id-' + ++n,
+    // Un hôte configuré : c'est la condition d'un lien cliquable, et la porte
+    // refuse désormais d'en émettre un sans (configuration-liens.test.mjs).
+    // Ces scénarios-ci portent sur l'énumération, l'écho et la limitation de
+    // débit — pas sur la configuration.
+    notaryConsoleUrl: 'https://nota.example',
     ...opts,
   });
   return { app, repo, clock };

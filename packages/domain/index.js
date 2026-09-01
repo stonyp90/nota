@@ -632,12 +632,16 @@
   // 1× · 1,15× · 1,35× · 1,6× · 2× — +0/+15/+35/+60/+100 % over the floor. The
   // standard band is pinned to 1× so the calm-date price on the calendar is the
   // very "à partir de" the hero already shows: one number, no contradiction.
+  // The urgency ladder (owner, 2026-08-28: « les prix sont trop bas » —
+  // multipliers raised hard): the second week commands ×2, the FIRST week ×3,
+  // the eve ×3.5 and the same day ×4 (band midpoints; the market tunes within
+  // each band below). Standard notice stays the advertised floor.
   const TIERS = [
-    { id: 'standard',    nom: 'Standard',    nomEn: 'Standard', maxJours: null, apercuMin: 1.0,  apercuMax: 1.0,  eleve: false },
-    { id: 'rapide',      nom: 'Rapide',      nomEn: 'Fast',     maxJours: 14,   apercuMin: 1.1,  apercuMax: 1.2,  eleve: false },
-    { id: 'prioritaire', nom: 'Prioritaire', nomEn: 'Priority', maxJours: 3,    apercuMin: 1.25, apercuMax: 1.45, eleve: true },
-    { id: 'urgence',     nom: 'Urgent',      nomEn: 'Urgent',   maxJours: 1,    apercuMin: 1.45, apercuMax: 1.75, eleve: true },
-    { id: 'extreme',     nom: 'Extrême',     nomEn: 'Extreme',  maxJours: 0,    apercuMin: 1.8,  apercuMax: 2.2,  eleve: true },
+    { id: 'standard',    nom: 'Standard',    nomEn: 'Standard', maxJours: null, apercuMin: 1.0, apercuMax: 1.0, eleve: false },
+    { id: 'rapide',      nom: 'Rapide',      nomEn: 'Fast',     maxJours: 14,   apercuMin: 1.8, apercuMax: 2.2, eleve: false },
+    { id: 'prioritaire', nom: 'Prioritaire', nomEn: 'Priority', maxJours: 7,    apercuMin: 2.7, apercuMax: 3.3, eleve: true },
+    { id: 'urgence',     nom: 'Urgent',      nomEn: 'Urgent',   maxJours: 1,    apercuMin: 3.3, apercuMax: 3.7, eleve: true },
+    { id: 'extreme',     nom: 'Extrême',     nomEn: 'Extreme',  maxJours: 0,    apercuMin: 3.7, apercuMax: 4.3, eleve: true },
   ];
 
   // What a client is actually asked to pay at a given notice, as a multiple of
@@ -720,23 +724,24 @@
     return TIERS.find((t) => t.id === id) || null;
   }
 
-  // Days away -> tier id. 0-1 day = extreme (overnight/weekend rescue),
-  // 2-3 = urgence, 4-7 = prioritaire, 8-14 = rapide, 15+ = standard.
+  // Days away -> tier id. Same day = extreme, the eve = urgence, the FIRST
+  // week (2-7) = prioritaire, the second week (8-14) = rapide, 15+ = standard.
   function tierForDays(days) {
     const d = Math.max(0, Math.floor(Number(days)));
     if (d <= 0) return 'extreme';       // signing today
     if (d <= 1) return 'urgence';       // tomorrow
-    if (d <= 3) return 'prioritaire';
-    if (d <= 14) return 'rapide';
+    if (d <= 7) return 'prioritaire';   // inside the first week
+    if (d <= 14) return 'rapide';       // inside the second week
     return 'standard';
   }
 
   // --- Premium cap -----------------------------------------------------------
-  // A client may offer up to 3x the service's starting price — a sane ceiling
-  // just above the 2x a same-day signing commands. A client offering more than
-  // that for a notary act is not a real market. The cap is a product rule,
-  // enforced identically on the client and, authoritatively, on the server.
-  const PREMIUM_CAP = 3;
+  // A client may offer up to 5x the service's starting price — a sane ceiling
+  // just above the ×4 a same-day signing now commands (owner, 2026-08-28).
+  // A client offering more than that for a notary act is not a real market.
+  // The cap is a product rule, enforced identically on the client and,
+  // authoritatively, on the server.
+  const PREMIUM_CAP = 5;
 
   // --- Offer statuses --------------------------------------------------------
   const STATUS = { OUVERTE: 'ouverte', RETENUE: 'retenue', ANNULEE: 'annulee' };
@@ -1214,6 +1219,180 @@
     return Math.round((Number(sum) / c) * 10) / 10;
   }
 
+  // --- La cote du notaire, sur 100 (ADR 0028) --------------------------------
+  // Le propriétaire (2026-09-01) : « les notaires ont un système d'évaluation
+  // par les différents services qu'ils rendent, leur présence sur Nota, leur
+  // disponibilité, le feedback des clients — et l'ensemble leur donne une cote
+  // sur cent ». Quatre axes, quatre maxima qui font exactement 100.
+  //
+  // Le domaine produit UN NOMBRE et son explication ; il ignore tout du partage
+  // des honoraires (frontière déontologique de l'ADR 0008). C'est la couche
+  // facturation qui traduit la cote en pourcentages.
+  //
+  // Toute la pondération est ce document — jamais une constante enfouie dans un
+  // calcul. `notaryScore(stats, ponderation)` accepte un barème de rechange,
+  // ce qui permet à Nota de l'ajuster sans redéployer le domaine.
+  const COTE = {
+    // Ce que les clients ont dit. Moyenne BAYÉSIENNE : la note observée est
+    // tirée vers un a priori (4,0 sur 5 avis fictifs) tant que les avis sont
+    // rares — cinq complaisances n'achètent pas le sommet, et un notaire neuf
+    // n'est pas puni d'un zéro qu'il n'a pas mérité. La note est ensuite
+    // étalée entre un plancher (3,0 = rien) et une cible (4,8 = plein).
+    satisfaction: { max: 40, apriori: { note: 4.0, poids: 5 }, plancher: 3.0, cible: 4.8 },
+    // Les actes réellement portés : le volume, à rendement décroissant (en
+    // racine — les dix premiers actes pèsent plus que les dix suivants).
+    //
+    // Il y avait ici un sous-axe « éventail » qui récompensait le nombre de
+    // services du catalogue effectivement rendus. Retiré le 2026-09-01 : le
+    // Code de déontologie commande au notaire de tenir compte des limites de
+    // ses connaissances avant d'accepter un mandat, donc se spécialiser n'est
+    // pas un défaut de service — et aucune des plateformes étudiées ne
+    // récompense l'étendue de gamme (voir la veille en go-to-market). Ses
+    // points sont reversés au volume, à calibrage constant.
+    services: { max: 25, volume: 25, cible: 50 },
+    // La disponibilité offerte au marché. Deux choses, et deux seulement :
+    // RÉPONDRE, et la portée déclarée (rayon, urgences en ligne).
+    //
+    // Répondre, c'est proposer un montant, accepter la demande — ou la
+    // décliner. Un déclin est une RÉPONSE, jamais une pénalité : le notaire est
+    // un officier public à qui le Code impose de refuser un mandat qu'il ne
+    // peut pas porter, et une plateforme qui lui coûte de l'argent pour l'avoir
+    // fait le pousse à mal faire son métier. (DoorDash a fini par retirer le
+    // taux d'acceptation de ses critères pour exactement cette raison ; Airbnb
+    // mesure « accept OR decline within 24 h ».) Ce qui coûte des points, c'est
+    // le silence — ne jamais répondre à rien.
+    disponibilite: { max: 20, reponse: 12, cibleReponses: 20, portee: 6, rayonCible: 50, urgences: 2 },
+    // La présence tenue : la fiche officielle, le secteur de l'étude, une
+    // activité récente dans la console, et l'ancienneté.
+    presence: { max: 15, fiche: 5, secteur: 3, activite: 4, activiteJours: 30, activiteNulleJours: 90, anciennete: 3, ancienneteJours: 365 },
+  };
+
+  const clamp01 = (x) => (Number.isFinite(x) ? Math.min(1, Math.max(0, x)) : 0);
+  const nombre = (v) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : 0; };
+  const dixieme = (x) => Math.round(x * 10) / 10;
+
+  // Combien de services du catalogue ce notaire a-t-il réellement rendus.
+  function servicesRendus(parService) {
+    const m = parService && typeof parService === 'object' ? parService : {};
+    return SERVICES.filter((s) => nombre(m[s.id]) > 0).length;
+  }
+
+  function coteSatisfaction(stats, w) {
+    const e = (stats && stats.evaluations) || {};
+    const avis = Math.max(0, Math.floor(nombre(e.avis)));
+    const note = Number(e.note);
+    const observee = avis > 0 && Number.isFinite(note) ? note : null;
+    const a = w.apriori;
+    const ponderee = ((observee == null ? 0 : observee * avis) + a.note * a.poids) / (avis + a.poids);
+    const part = clamp01((ponderee - w.plancher) / (w.cible - w.plancher));
+    return {
+      points: dixieme(w.max * part),
+      detail: { note: observee, avis, notePonderee: dixieme(ponderee), cible: w.cible },
+    };
+  }
+
+  function coteServices(stats, w) {
+    const a = (stats && stats.actes) || {};
+    const total = Math.floor(nombre(a.total));
+    const rendus = servicesRendus(a.parService);
+    return {
+      points: dixieme(w.volume * clamp01(Math.sqrt(total / w.cible))),
+      // L'éventail ne compte plus dans la note, mais il reste une information :
+      // la console et le registre montrent ce que le notaire rend réellement.
+      detail: { actes: total, cible: w.cible, servicesRendus: rendus, catalogue: SERVICES.length },
+    };
+  }
+
+  function coteDisponibilite(stats, w) {
+    const d = (stats && stats.disponibilite) || {};
+    const repondu = Math.floor(nombre(d.repondu));
+    const declinees = Math.floor(nombre(d.declinees));
+    // Toutes les réponses comptent, quelle qu'en soit la teneur — rendement
+    // décroissant, comme le volume d'actes : les premières réponses valent le
+    // plus. Décliner ne retire JAMAIS de points ; ne rien répondre en vaut zéro.
+    const reponses = repondu + declinees;
+    const rayonKm = nombre(d.rayonKm);
+    const portee = w.portee * clamp01(rayonKm / w.rayonCible) + (d.urgences === true ? w.urgences : 0);
+    return {
+      points: dixieme(w.reponse * clamp01(Math.sqrt(reponses / w.cibleReponses)) + portee),
+      detail: {
+        repondu, declinees, reponses, cibleReponses: w.cibleReponses,
+        rayonKm, urgences: d.urgences === true,
+      },
+    };
+  }
+
+  function cotePresence(stats, w) {
+    const p = (stats && stats.presence) || {};
+    const fiche = p.fiche === true ? w.fiche : 0;
+    const secteur = p.secteur === true ? w.secteur : 0;
+    const jours = nombre(p.joursDepuisActivite);
+    const fenetre = Math.max(1, w.activiteNulleJours - w.activiteJours);
+    const activite = w.activite * clamp01(1 - Math.max(0, jours - w.activiteJours) / fenetre);
+    const anciennete = w.anciennete * clamp01(nombre(p.joursMembre) / w.ancienneteJours);
+    return {
+      points: dixieme(fiche + secteur + activite + anciennete),
+      detail: {
+        fiche: p.fiche === true,
+        secteur: p.secteur === true,
+        joursDepuisActivite: Math.round(jours),
+        joursMembre: Math.round(nombre(p.joursMembre)),
+      },
+    };
+  }
+
+  const COTE_AXES = [
+    { id: 'satisfaction', nom: 'Satisfaction des clients', nomEn: 'Client satisfaction', calcul: coteSatisfaction },
+    { id: 'services', nom: 'Services rendus', nomEn: 'Acts delivered', calcul: coteServices },
+    { id: 'disponibilite', nom: 'Disponibilité', nomEn: 'Availability', calcul: coteDisponibilite },
+    { id: 'presence', nom: 'Présence sur Nota', nomEn: 'Presence on Nota', calcul: cotePresence },
+  ];
+
+  /**
+   * La cote d'un notaire : `{ cote, axes: [{ id, nom, nomEn, points, max,
+   * detail }] }`. La cote est la somme des axes, arrondie — rien d'autre, pour
+   * qu'un notaire puisse la refaire à la main depuis son écran.
+   */
+  function notaryScore(stats, ponderation) {
+    const axes = COTE_AXES.map((axe) => {
+      const w = { ...COTE[axe.id], ...((ponderation && ponderation[axe.id]) || {}) };
+      const r = axe.calcul(stats, w);
+      return {
+        id: axe.id, nom: axe.nom, nomEn: axe.nomEn,
+        points: Math.min(w.max, Math.max(0, r.points)),
+        max: w.max,
+        detail: r.detail,
+      };
+    });
+    const somme = axes.reduce((t, a) => t + a.points, 0);
+    return { cote: Math.max(0, Math.min(100, Math.round(somme))), axes };
+  }
+
+  /**
+   * Le palmarès service par service : pour CHAQUE service du catalogue, les
+   * actes portés et ce que les clients en ont dit. Un service jamais rendu se
+   * lit à zéro, jamais avec une fausse moyenne.
+   */
+  function notaryServiceRecord(evaluations, actesParService) {
+    const ledger = Array.isArray(evaluations) ? evaluations : [];
+    const actes = actesParService && typeof actesParService === 'object' ? actesParService : {};
+    return SERVICES.map((s) => {
+      let sum = 0, avis = 0;
+      for (const e of ledger) {
+        if (!e || e.serviceId !== s.id) continue;
+        const n = Number(e.note);
+        if (!Number.isFinite(n)) continue;
+        sum += n; avis += 1;
+      }
+      return {
+        serviceId: s.id, nom: s.nom, nomEn: s.nomEn || s.nom,
+        actes: Math.floor(nombre(actes[s.id])),
+        avis,
+        note: ratingAverage(sum, avis),
+      };
+    });
+  }
+
   // --- Notary public profile -------------------------------------------------
   // The one authority on a notary's notoriety is the Chambre des notaires du
   // Québec (ADR 0016): a notary may attach the link of their official fiche in
@@ -1553,9 +1732,20 @@
     return Math.min(max, Math.max(min, Math.round((base * mult) / 5) * 5));
   }
 
-  // The realistic chance (a %) that a client gets a notary to take a given date:
-  // the more lead time, the easier it is. Keyed to the same urgency tier as the
-  // pricing, so a far-off date reads as high-chance and a last-minute one as low.
+  // ⚠️ UNE HYPOTHÈSE, PAS UNE MESURE — et elle ne doit JAMAIS être affichée
+  // comme un pourcentage à un client (audit des affirmations, 2026-09-01).
+  //
+  // Cette table est écrite à la main. Aucun acte n'a encore été conclu sur la
+  // plateforme : il n'existe donc aucune observation dont ces nombres seraient
+  // la synthèse. Présentés à l'écran comme « chances d'obtenir un notaire :
+  // 95 % », au moment exact où le client choisit sa date et son prix, ils
+  // affirment une probabilité que personne n'a mesurée. La copie client dit
+  // désormais le MÉCANISME — plus de délai, plus de notaires peuvent
+  // s'organiser — et aucun chiffre.
+  //
+  // Ce qui reste légitime : s'en servir en interne pour ORDONNER des dates
+  // entre elles. Le jour où le taux de rétention par palier sera mesuré, cette
+  // table sera remplacée par la mesure, et le chiffre pourra revenir à l'écran.
   const OBTAIN_CHANCE = { standard: 95, rapide: 88, prioritaire: 62, urgence: 40, extreme: 25 };
   function obtainChance(dateISO, todayISO) {
     if (!isISODate(dateISO)) return null;
@@ -1904,6 +2094,9 @@
     ACT_VALUE_BOUNDS,
     validateActValue,
     ratingAverage,
+    COTE,
+    notaryScore,
+    notaryServiceRecord,
     CNQ,
     CNQ_LINK_MAX,
     validateNotaryProfile,

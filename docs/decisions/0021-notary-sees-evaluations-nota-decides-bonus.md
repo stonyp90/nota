@@ -1,7 +1,15 @@
 # 20. The track record belongs to the notary — every evaluation is theirs to read, and the bonus schedule is Nota's to decide
 
-- Status: Accepted
+- Status: Accepted — **restricted by [ADR 0030](0030-la-deontologie-prime-la-cote-ne-se-publie-pas.md) on 2026-09-01**
 - Date: 2026-08-27
+
+> **Restriction du 2026-09-01.** Ce qui survit : le notaire lit chaque
+> évaluation qui le concerne, Nota décide le barème, et le registre
+> `NOTARY#/EVAL#` reste écrit. Ce qui est retiré : la publication de la moyenne
+> et du nombre d'avis **vers un client**, sur les propositions comme sur le bloc
+> du notaire retenu. L'article 70 du *Code de déontologie des notaires*
+> interdit au notaire d'« utiliser ou permettre que soit utilisé » un témoignage
+> d'appui qui le concerne, sans exception pour les avis authentiques.
 
 ## Context
 

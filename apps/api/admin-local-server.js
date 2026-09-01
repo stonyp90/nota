@@ -44,6 +44,51 @@ async function seedDevStats(repo, bids, todayISO) {
   await repo.applyStatsDeltas(deltas);
 }
 
+// Quatre notaires de démonstration, étalés sur toute l'échelle de la cote
+// (ADR 0028) : le registre et le journal d'audit ne se jugent pas sur un
+// tableau vide. Mémoire seulement — jamais quand TABLE_NAME pointe une vraie
+// table. Les dates sont dérivées du jour ouvrable, donc le rendu est stable.
+function seedDevNotaries(repo, todayISO) {
+  const jours = (n) => new Date(Date.parse(todayISO + 'T12:00:00.000Z') - n * 86400000).toISOString();
+  const profils = [
+    {
+      id: 'Ndemo-chevronne', email: 'chevronne@etude.demo', label: 'Étude Bourassa & Associés',
+      ratingSum: 4.9 * 40, ratingCount: 40,
+      actsCompleted: 80, actsByService: { refinancement: 50, financement: 30 },
+      proposalsCount: 58, acceptsCount: 22, declinesCount: 3,
+      rayonKm: 50, urgences: true, lienCNQ: 'https://www.cnq.org/trouver-un-notaire/', prefixe: 'G1R',
+      commissionCentsCollected: 1_284_00,
+      createdAt: jours(520), lastSeenAt: jours(0),
+    },
+    {
+      id: 'Ndemo-etabli', email: 'etabli@etude.demo', label: 'Notaires du Vieux-Port',
+      ratingSum: 4.7 * 18, ratingCount: 18,
+      actsCompleted: 25, actsByService: { refinancement: 18, financement: 7 },
+      proposalsCount: 24, acceptsCount: 8, declinesCount: 6,
+      rayonKm: 50, urgences: false, lienCNQ: 'https://www.cnq.org/trouver-un-notaire/', prefixe: 'G1K',
+      commissionCentsCollected: 402_00, commissionCentsDue: 168_00,
+      createdAt: jours(210), lastSeenAt: jours(1),
+    },
+    {
+      id: 'Ndemo-jeune', email: 'jeune@etude.demo', label: 'Me Sophie Bergeron',
+      ratingSum: 4.6 * 6, ratingCount: 6,
+      actsCompleted: 8, actsByService: { refinancement: 8 },
+      proposalsCount: 11, acceptsCount: 3, declinesCount: 3,
+      rayonKm: 25, urgences: false, lienCNQ: 'https://www.cnq.org/trouver-un-notaire/', prefixe: 'G2B',
+      commissionCentsCollected: 96_00,
+      createdAt: jours(95), lastSeenAt: jours(2),
+    },
+    {
+      id: 'Ndemo-nouveau', email: 'nouveau@etude.demo', label: 'Me Luc Gagné',
+      status: 'onboarding', chargesEnabled: false,
+      createdAt: jours(2), lastSeenAt: jours(2),
+    },
+  ];
+  profils.forEach((p) => {
+    repo.putNotary({ status: 'active', chargesEnabled: true, connectAccountId: 'acct_' + p.id, role: 'notary', ...p });
+  });
+}
+
 /**
  * Composition root, extracted so tests can drive the exact server wiring.
  * Returns { app, repo, email, mode } — `app.handle(request)` is the same
@@ -74,6 +119,7 @@ function createLocalAdminApp({ today } = {}) {
     // ledger shows these demo codes as owned payees, not unconfirmed claims.
     repo.createPartner({ code: 'EVEROY', type: 'agent_immobilier', courriel: 'eve.roy@agence.demo', createdAt: todayISO, confirmedAt: todayISO });
     repo.createPartner({ code: 'COURTIER1', type: 'courtier_hypothecaire', courriel: 'marc.courtier@hypotheque.demo', createdAt: todayISO, confirmedAt: todayISO });
+    seedDevNotaries(repo, todayISO);
   }
 
   const emails = (process.env.NOTA_ADMIN_EMAILS || '')
@@ -140,4 +186,4 @@ function startServer() {
 
 if (require.main === module) startServer();
 
-module.exports = { createLocalAdminApp, seedDevStats, DEV_ADMIN_EMAIL };
+module.exports = { createLocalAdminApp, seedDevStats, seedDevNotaries, DEV_ADMIN_EMAIL };

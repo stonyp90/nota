@@ -39,11 +39,15 @@
 const domain = require('@nota/domain');
 
 // --- Sender identity (CASL requirement (a)) ----------------------------------
-// A real mailing address is legally required in commercial email. This is a
-// PLACEHOLDER; replace with Nota's registered mailing address before go-live.
+// A real mailing address is legally required in commercial email (LCAP /
+// CASL: full identification of the sender). `NOTA_SENDER_ADDRESS` supplies it;
+// the fallback below is a PLACEHOLDER and is deliberately recognizable so a
+// test can refuse it — an audit found the previous test locking the
+// placeholder IN, checking only that *some* address was present.
+const PLACEHOLDER_ADDRESS = 'Nota — 000, rue à confirmer, bureau 000, Québec (Québec) G0X 0X0, Canada';
 const SENDER = {
   name: 'Nota',
-  address: 'Nota — 000, rue à confirmer, bureau 000, Québec (Québec) G0X 0X0, Canada',
+  address: process.env.NOTA_SENDER_ADDRESS || PLACEHOLDER_ADDRESS,
   supportEmail: 'bonjour@nota.ca',
   privacyEmail: 'confidentialite@nota.ca',
 };
@@ -1761,7 +1765,7 @@ function evaluationInvite(ctx) {
       heading: 'Votre acte est signé',
       lead: 'Votre ' + svcNom(ctx.serviceId) + ' du ' + fmtDate(ctx.dateISO) + ' est conclu. Merci d’avoir utilisé Nota.',
       bodyHtml: para(
-        'Un dernier geste, qui compte : évaluez votre notaire — une note de 1 à 5, et un commentaire si vous le souhaitez. Votre évaluation aide les prochains clients à choisir en confiance.'
+        'Un dernier geste, qui compte : évaluez votre notaire — une note de 1 à 5, et un commentaire si vous le souhaitez. Votre évaluation entre dans sa cote sur 100, donc dans la part qu’il garde sur ses prochains actes. Elle n’est publiée nulle part : le Code de déontologie interdit qu’un témoignage concernant un notaire soit utilisé publiquement.'
       ),
       textLines: [offerLine(ctx), 'Évaluez votre notaire : une note de 1 à 5, un commentaire si vous voulez.'],
       ctaLabel: 'Évaluer mon notaire',
@@ -1770,7 +1774,7 @@ function evaluationInvite(ctx) {
       heading: 'Your act is signed',
       lead: 'Your ' + svcNomEn(ctx.serviceId) + ' of ' + fmtDateEn(ctx.dateISO) + ' is done. Thank you for using Nota.',
       bodyHtml: para(
-        'One last gesture, and it matters: rate your notary — 1 to 5, with a comment if you like. Your evaluation helps the next clients choose with confidence.'
+        'One last gesture, and it matters: rate your notary — 1 to 5, with a comment if you like. Your evaluation feeds their cote out of 100, and therefore the share they keep on their next acts. It is published nowhere: the Code de déontologie forbids a testimonial concerning a notary from being used publicly.'
       ),
       textLines: [offerLineEn(ctx), 'Rate your notary: 1 to 5, with a comment if you like.'],
       ctaLabel: 'Rate my notary',
@@ -1780,10 +1784,15 @@ function evaluationInvite(ctx) {
   });
 }
 
-// To the NOTARY: a client just rated them (ADR 0015/0016 — the average is
-// public beside every proposition). Context: the bid fields + `note` (1-5) +
-// optional `commentaire`. The note may be absent in generic renders; the copy
-// degrades to the fact without the number.
+// To the NOTARY: a client just rated them (ADR 0015/0016). Context: the bid
+// fields + `note` (1-5) + optional `commentaire`. The note may be absent in
+// generic renders; the copy degrades to the fact without the number.
+//
+// ADR 0030 — cette évaluation n'est PAS publiée auprès des clients : l'art. 70
+// du Code de déontologie interdit au notaire de permettre qu'un témoignage
+// d'appui le concernant soit utilisé. Elle nourrit sa cote (donc sa part) et
+// son propre dossier. Le courriel doit le dire tel quel : promettre une
+// « moyenne publique » à un notaire, c'est lui promettre un manquement.
 function evaluationRecueNotaire(ctx) {
   const note = Number.isFinite(Number(ctx.note)) ? Number(ctx.note) : null;
   const comment = ctx.commentaire ? chatExcerpt(ctx.commentaire) : null;
@@ -1792,8 +1801,8 @@ function evaluationRecueNotaire(ctx) {
   return build({
     subjectFr: 'Vous avez reçu une évaluation' + (note != null ? ' : ' + note + '/5' : ''),
     subjectEn: 'You received a rating' + (note != null ? ': ' + note + '/5' : ''),
-    preheaderFr: 'Votre moyenne publique vient d’être mise à jour.',
-    preheaderEn: 'Your public average was just updated.',
+    preheaderFr: 'Elle nourrit votre cote — et reste entre vous et Nota.',
+    preheaderEn: 'It feeds your cote — and stays between you and Nota.',
     fr: {
       heading: 'Un client vous a évalué',
       lead:
@@ -1802,7 +1811,7 @@ function evaluationRecueNotaire(ctx) {
       bodyHtml:
         callout(line) +
         (comment ? para('Commentaire du client : « ' + comment + ' »') : '') +
-        para('Votre moyenne publique est mise à jour — elle accompagne désormais chacune de vos propositions et votre fiche auprès des clients.'),
+        para('Elle entre dans votre cote sur 100, donc dans la part que vous gardez sur vos prochains actes. Elle n’est montrée à aucun client : le Code de déontologie interdit qu’un témoignage vous concernant soit utilisé publiquement. Votre moyenne et chaque commentaire restent lisibles dans votre console.'),
       textLines: [line].concat(comment ? ['Commentaire : « ' + comment + ' »'] : []),
       ctaLabel: 'Ouvrir ma console',
     },
@@ -1814,7 +1823,7 @@ function evaluationRecueNotaire(ctx) {
       bodyHtml:
         callout(lineEn) +
         (comment ? para('Client’s comment: “' + comment + '”') : '') +
-        para('Your public average is updated — it now travels with every proposition you make and with your profile.'),
+        para('It feeds your cote out of 100, and therefore the share you keep on your next acts. It is shown to no client: the Code de déontologie forbids a testimonial concerning you from being used publicly. Your average and every comment stay readable in your console.'),
       textLines: [lineEn].concat(comment ? ['Comment: “' + comment + '”'] : []),
       ctaLabel: 'Open my console',
     },
@@ -2358,6 +2367,7 @@ function renderSubjectOverride(override, ctx) {
 }
 
 module.exports = {
+  PLACEHOLDER_ADDRESS,
   SENDER,
   TEMPLATES,
   TEMPLATE_META,

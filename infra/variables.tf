@@ -47,15 +47,38 @@ variable "stripe_webhook_secret" {
   default     = ""
 }
 
+variable "sender_address" {
+  description = "The registered mailing address that identifies Nota in every email (LCAP / CASL). Empty leaves the placeholder, which the email suite refuses in production."
+  type        = string
+  default     = ""
+}
+
 variable "commission_rate" {
-  description = "Platform commission on a completed act, as a fraction (0.10 = 10%). Set via TF_VAR_commission_rate."
+  description = "Nota's share of a completed act at the START of the ladder, as a fraction (ADR 0028: 0.15 = 15%, the most Nota ever takes). Set via TF_VAR_commission_rate."
   type        = number
-  default     = 0.10
+  default     = 0.15
 
   validation {
     condition     = var.commission_rate >= 0 && var.commission_rate < 1
     error_message = "commission_rate must be a fraction in [0, 1)."
   }
+}
+
+variable "commission_rate_floor" {
+  description = "The floor Nota's share never crosses, however high a notary's cote (ADR 0028: 0.05 = 5%, so the best notaries keep 95%)."
+  type        = number
+  default     = 0.05
+
+  validation {
+    condition     = var.commission_rate_floor >= 0 && var.commission_rate_floor < 1
+    error_message = "commission_rate_floor must be a fraction in [0, 1)."
+  }
+}
+
+variable "commission_tiers" {
+  description = "The cote ladder as JSON, each rung `{cote, taux}` (ADR 0028). Empty string keeps the built-in defaults: 60→12%, 70→10%, 80→8%, 90→5%."
+  type        = string
+  default     = ""
 }
 
 # --- Notary console auth -----------------------------------------------------

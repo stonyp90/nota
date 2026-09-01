@@ -50,11 +50,11 @@ components:
     CommissionBareme:
       type: object
       description: >-
-        The rating-earned commission schedule (ADR 0016/0020): the base rate,
-        the floor a bonus can never cross, and the tiers — each a minimum
-        one-decimal average (`note`), a minimum number of evaluations (`avis`)
-        and the rate reduction it earns (`bonus`). Rates are fractions
-        (0.10 = 10 %).
+        The cote-earned split (ADR 0028): the base rate Nota keeps on a
+        completed act (at most 15 %), the floor it never crosses however high a
+        notary's cote (5 %, so the best notaries keep 95 %), and the ladder —
+        each rung a `cote` out of 100 and the `taux` it earns. Rates are
+        fractions (0.15 = 15 %).
       required: [taux, plancher, paliers]
       properties:
         taux:
@@ -69,18 +69,16 @@ components:
           maxItems: 10
           items:
             type: object
-            required: [note, avis, bonus]
+            required: [cote, taux]
             properties:
-              note:
-                type: number
-                minimum: 1
-                maximum: 5
-              avis:
+              cote:
                 type: integer
                 minimum: 1
-              bonus:
+                maximum: 100
+              taux:
                 type: number
-                exclusiveMinimum: 0
+                minimum: 0
+                exclusiveMaximum: 1
     CommissionBaremeStored:
       allOf:
         - $ref: "#/components/schemas/CommissionBareme"
@@ -549,9 +547,10 @@ paths:
       description: >-
         super_admin only (`settings:write`) — an analyst gets 403. The body is
         a FULL replacement, validated loudly: `taux` in (0, 1), `plancher`
-        between 0 and the taux, at most 10 paliers, each with a `note` between
-        1 and 5, an integer `avis` ≥ 1 and a `bonus` in (0, taux]. Takes
-        effect at the next pricing — no deploy. Audit-logged with its
+        between 0 and the taux, at most 10 paliers, each with an integer `cote`
+        from 1 to 100 and a `taux` between the plancher and the base taux; no
+        two rungs share a cote, and a higher cote never costs the notary more.
+        Takes effect at the next pricing — no deploy. Audit-logged with its
         before/after.
       security:
         - adminSession: []
@@ -618,6 +617,159 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+  /admin/notaries:
+    get:
+      operationId: listAdminNotaries
+      summary: The notary register — who is on Nota, what cote they carry, what Nota billed them.
+      description: >-
+        The operator's counterpart to the disclosure the notary gets (ADR 0028).
+        Every notary — onboarding ones included — with the cote out of 100 and
+        its four axes (so a contested cote can be recomputed by hand), the rate
+        that cote earns under the barème in force, the acts carried, what
+        clients said, and the commission Nota actually collected. Nominative
+        and financial: requires `pii:read` (super_admin); an analyst gets 403.
+        Sorted by cote, highest first.
+      security:
+        - adminSession: []
+      responses:
+        "200":
+          description: The register, and the barème it was priced under.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [notaires, bareme]
+                properties:
+                  notaires:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, cote, axes, tauxEffectif, part, actes, avis]
+                      properties:
+                        id:
+                          type: string
+                        email:
+                          type: [string, "null"]
+                        etude:
+                          type: [string, "null"]
+                        statut:
+                          type: [string, "null"]
+                          description: onboarding | active | restricted.
+                        cote:
+                          type: integer
+                          minimum: 0
+                          maximum: 100
+                        axes:
+                          type: array
+                          description: The four axes, points and max, exactly as the notary sees them.
+                          items:
+                            type: object
+                        tauxEffectif:
+                          type: number
+                          description: What Nota keeps on this notary's next act.
+                        part:
+                          type: number
+                          description: What the notary keeps — the complement.
+                        actes:
+                          type: integer
+                        actesParService:
+                          type: object
+                          additionalProperties:
+                            type: integer
+                        note:
+                          type: [number, "null"]
+                          description: One-decimal average, null before the first evaluation.
+                        avis:
+                          type: integer
+                        commissionPercue:
+                          type: number
+                          description: Commission Nota has collected from this notary, in dollars.
+                        commissionDue:
+                          type: number
+                          description: >-
+                            What this notary still owes Nota, in dollars — acts
+                            settled outside the platform (the client paid the
+                            notary directly at signing). Collected and owed are
+                            never conflated.
+                        rayonKm:
+                          type: integer
+                        urgences:
+                          type: boolean
+                        cnq:
+                          type: boolean
+                        depuis:
+                          type: [string, "null"]
+                        vuLe:
+                          type: [string, "null"]
+                  bareme:
+                    $ref: "#/components/schemas/CommissionBareme"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /admin/audit:
+    get:
+      operationId: readAdminAudit
+      summary: Read one day of the append-only audit log.
+      description: >-
+        A trail nobody can read is not an audit trail. Every meaningful action —
+        admin logins, barème changes, and every settled act (`acte_regle`, with
+        the amount, the rate applied, the cote that earned it, Nota's share and
+        the notary's net) — bucketed on the Québec business day. Requires
+        `pii:read` (super_admin); an analyst gets 403. Newest first.
+      security:
+        - adminSession: []
+      parameters:
+        - name: jour
+          in: query
+          required: true
+          description: The business day to read, as an ISO date (YYYY-MM-DD).
+          schema:
+            type: string
+            pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+      responses:
+        "200":
+          description: That day's entries — an empty list for a quiet day, never an error.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [jour, entrees]
+                properties:
+                  jour:
+                    type: string
+                  entrees:
+                    type: array
+                    items:
+                      type: object
+                      required: [action]
+                      properties:
+                        id:
+                          type: string
+                        ts:
+                          type: string
+                        day:
+                          type: string
+                        action:
+                          type: string
+                        adminId:
+                          type: [string, "null"]
+                        email:
+                          type: [string, "null"]
+                        ip:
+                          type: [string, "null"]
+                        meta:
+                          type: [object, "null"]
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          description: The `jour` parameter is not an ISO date.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Errors"
   /admin/annulation:
     get:
       operationId: getAdminCancellationSchedule

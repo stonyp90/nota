@@ -301,8 +301,8 @@ test('offer form: services populated, anon default on, slider capped at prixDepa
   const amt = $(doc, 'o-amount');
   assert.equal(amt.disabled, false);
   // The form quotes Nota's starting price; the slider caps at notaPrice × 3.
-  assert.equal(amt.max, String(D.notaPrice('refinancement') * D.PREMIUM_CAP)); // 2000 * 3 = 6000
-  assert.equal(amt.max, '6000');
+  assert.equal(amt.max, String(D.notaPrice('refinancement') * D.PREMIUM_CAP)); // 2000 * 5 = 10000
+  assert.equal(amt.max, '10000');
 });
 
 // 8. A valid service+date+amount combination enables the submit button.
@@ -321,7 +321,7 @@ test('a valid offer combination enables #offer-submit', async () => {
   fire(win, date, 'input');
 
   const amt = $(doc, 'o-amount');
-  amt.value = '2000'; // at the refinancement floor (2000), within the 6000 cap
+  amt.value = '2000'; // at the refinancement floor (2000), within the 10000 cap
   fire(win, amt, 'input');
 
   // The 3 mandatory refinancement params must be answered before submit enables.
@@ -476,7 +476,7 @@ test('offer criteria render and a flag raises the dynamic floor', async () => {
   coemp.checked = true;
   fire(win, coemp, 'change'); // +150 market -> Nota floor rises
   assert.equal(Number(amt.min), D.notaPrice('refinancement', { coemprunteur: true })); // 2150
-  assert.equal(Number(amt.max), D.notaPrice('refinancement', { coemprunteur: true }) * D.PREMIUM_CAP); // 2150 * 3 = 6450
+  assert.equal(Number(amt.max), D.notaPrice('refinancement', { coemprunteur: true }) * D.PREMIUM_CAP); // 2150 * 5 = 10750
 });
 
 // 12c. The profile saves coordinates + notification prefs and prefills the offer.
@@ -1157,12 +1157,15 @@ test('DAY: the booking dialog says what the calendar % means for that date', asy
   await wait(30);
 
   const line = $(ctx.doc, 'day-chance');
-  assert.ok(line, 'the day dialog carries a chance explainer');
-  const expected = ctx.D.obtainChance(iso, ctx.today);
-  assert.ok(line.textContent.includes(expected + '\u00A0%'),
-    'quotes the domain value for THIS date (' + expected + ' %): ' + line.textContent);
-  assert.match(line.textContent, /Plus la date est proche, plus il faut offrir et moins un notaire est disponible\./,
-    'the one urgency sentence lives here, at the decision point');
+  assert.ok(line, 'the day dialog carries a lead-time explainer');
+  // domain.obtainChance was a hand-written table that had never been measured,
+  // printed as a probability exactly where the client picks a date and a price.
+  // The line now carries the MECHANISM and no figure — not even a qualitative
+  // scale, which would still mimic a measurement.
+  assert.ok(!/\d|%/.test(line.textContent), 'no figure survives: ' + line.textContent);
+  assert.match(line.textContent, /Plus la date est éloignée/,
+    'the one lead-time sentence lives here, at the decision point');
+  assert.match(line.textContent, /rapprochée en laisse moins/, line.textContent);
   // The lead time is already printed in #day-sub right above \u2014 not repeated here.
   assert.ok(!/La date est/.test(line.textContent), 'no duplicate lead-time sentence');
   // The odds live ONLY here now, where the sentence says what drives them — the
@@ -1219,21 +1222,21 @@ test('DAY: switching the act re-scopes the headline offer and the totals', async
   const ctx = await boot();
   const iso = ctx.D.addDays(ctx.today, 5);
   await reseed(ctx, [
-    { id: 'r1', serviceId: 'refinancement', dateISO: iso, montant: 4000, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
-    { id: 'f1', serviceId: 'financement', dateISO: iso, montant: 5000, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
+    { id: 'r1', serviceId: 'refinancement', dateISO: iso, montant: 7000, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
+    { id: 'f1', serviceId: 'financement', dateISO: iso, montant: 8000, tier: 'standard', status: ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso },
   ], 'refinancement');
   ctx.doc.querySelector('.cal-cell[data-date="' + iso + '"]').click();
   await wait(30);
-  assert.equal($(ctx.doc, 'day-best').textContent, ctx.D.money(4000));
+  assert.equal($(ctx.doc, 'day-best').textContent, ctx.D.money(7000));
 
   ctx.doc.querySelector('#o-service-chips .chip[data-svc="financement"]').click();
   await wait(30);
   const rows = ctx.doc.querySelectorAll('#day-bids > .bid-row');
   assert.equal(rows.length, 1, 'still a single headline offer');
-  assert.equal($(ctx.doc, 'day-best').textContent, ctx.D.money(5000), 'now the financement best');
+  assert.equal($(ctx.doc, 'day-best').textContent, ctx.D.money(8000), 'now the financement best');
   assert.equal($(ctx.doc, 'day-best').closest('.day-market-line').hidden, false,
     'a real bar to clear keeps the market line visible');
-  assert.match($(ctx.doc, 'day-beat').textContent, /5\s*000/, 'the one-tap match follows too');
+  assert.match($(ctx.doc, 'day-beat').textContent, /8\s*000/, 'the one-tap match follows too');
 });
 
 test('DAY: an act with nothing on the day hides the bar and invites the first offer', async () => {
@@ -1850,7 +1853,7 @@ test('onboarding: the remembered role pre-selects the auth modal', async () => {
   const on = doc.querySelector('#auth-role .seg-btn.is-on');
   assert.ok(on, 'a role segment is selected');
   assert.equal(on.dataset.role, 'notary', 'the auth modal opens on the remembered role');
-  assert.equal($(doc, 'auth-continue').textContent, 'Accéder à l’espace notaire →');
+  assert.equal($(doc, 'auth-continue').textContent, 'Recevoir mon lien de connexion →');
 });
 
 // 30. An accidental dismissal (Escape / backdrop / ✕) must not burn the guide

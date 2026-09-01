@@ -19,30 +19,79 @@
 
 const emails = require('./emails');
 
-// Unsubscribe token: base64url of the email. The GET /unsubscribe route decodes
-// it and records the opt-out. CASL requires a *working* mechanism, not a signed
-// one; this is reversible and carries no secret.
+// Unsubscribe token: `base64url(email).signature`, HMAC-SHA-256 over the
+// encoded address. The /unsubscribe route (GET and the RFC 8058 one-click POST)
+// verifies before recording the opt-out.
+//
+// It used to be the bare base64url of the address, on the reasoning that CASL
+// requires a *working* mechanism, not a signed one. True — but anyone who could
+// guess an address (that is, anyone) could unsubscribe its owner, and the harm
+// is real: a client silenced that way stops receiving the notices about THEIR
+// OWN act — a proposition received, the notary who took it, the eve of the
+// signing. The signature does not replace the mechanism; it makes sure the
+// opt-out recorded is the one the recipient actually asked for.
+//
+// The secret is shared with the notary tokens (NOTA_NOTARY_SECRET): one secret
+// to rotate, and the same fail-closed rule in production.
+const { createHmac, timingSafeEqual } = require('crypto');
+
+const UNSUB_DEV_SECRET = 'nota-dev-unsub-secret-do-not-use-in-prod';
+function unsubSecret() {
+  const configured = process.env.NOTA_NOTARY_SECRET;
+  if (configured) return configured;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('NOTA_NOTARY_SECRET is required in production (refusing to sign unsubscribe links with the dev fallback).');
+  }
+  return UNSUB_DEV_SECRET;
+}
+function unsubSignature(payload) {
+  return createHmac('sha256', unsubSecret()).update(payload).digest('base64url');
+}
 function encodeUnsubToken(email) {
-  return Buffer.from(String(email || ''), 'utf8').toString('base64url');
+  const payload = Buffer.from(String(email || ''), 'utf8').toString('base64url');
+  return payload + '.' + unsubSignature(payload);
 }
 function decodeUnsubToken(token) {
+  const raw = String(token || '');
+  const dot = raw.lastIndexOf('.');
+  if (dot <= 0) return '';
+  const payload = raw.slice(0, dot);
+  const given = raw.slice(dot + 1);
+  let expected;
   try {
-    return Buffer.from(String(token || ''), 'base64url').toString('utf8');
+    expected = unsubSignature(payload);
+  } catch {
+    return '';
+  }
+  // Constant-time, and length-guarded: timingSafeEqual throws on a mismatch.
+  const a = Buffer.from(given, 'utf8');
+  const b = Buffer.from(expected, 'utf8');
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return '';
+  try {
+    return Buffer.from(payload, 'base64url').toString('utf8');
   } catch {
     return '';
   }
 }
 
-function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
+function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now } = {}) {
   if (!repo) throw new Error('createNotifier: repo is required');
   if (!mailer) throw new Error('createNotifier: mailer is required');
 
   const clock = now || (() => new Date().toISOString());
   const base = baseUrl || '';
 
+  // Le lien de retrait DOIT aboutir sur la route de l'API, pas sur l'application
+  // web. Site et API partagent une origine derrière CloudFront, l'API sous
+  // `/api/*` ; et la fonction `spa_router` (infra/cloudfront.tf) réécrit tout
+  // chemin sans extension qui n'est PAS sous /api vers /index.html. Un lien
+  // `<base>/unsubscribe` renvoyait donc l'application en 200 et n'enregistrait
+  // rien — sur les 41 gabarits, c'est le SEUL mécanisme de retrait, et la LCAP
+  // en exige un qui fonctionne. `apiBaseUrl` permet à un déploiement dont l'API
+  // vit ailleurs (le serveur local, par exemple) de le dire.
+  const apiBase = String(apiBaseUrl || String(base).replace(/\/+$/, '') + '/api').replace(/\/+$/, '');
   function unsubscribeUrl(email) {
-    const b = String(base).replace(/\/+$/, '');
-    return b + '/unsubscribe?token=' + encodeUnsubToken(email);
+    return apiBase + '/unsubscribe?token=' + encodeUnsubToken(email);
   }
 
   // --- Admin-parametrizable templates (consumption side) ---------------------
@@ -681,7 +730,8 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
 
   // --- Evaluation feedback loop (ADR 0015/0016) ------------------------------
   // Fired fire-and-forget from POST /client/evaluation after the write: the
-  // rated notary hears about their new evaluation (their public average moved),
+  // rated notary hears about their new evaluation (it moved their cote — never
+  // a public average, ADR 0030),
   // and a LOW note (<= 2) alerts the operator — a churn/moderation signal a
   // human should read. Idempotent per bid: the evaluation itself is write-once.
   async function onEvaluationSubmitted(bid, evaluation) {
@@ -753,14 +803,20 @@ function createNotifier({ repo, mailer, baseUrl, operatorEmail, now } = {}) {
   // --- Act paid (capture + transfer done) -----------------------------------
   // Fired after payNotaryOnAccept / completeAct succeeds. Statement to the
   // notary + revenue alert to the operator, at most once per bid.
-  async function onActPaid({ notaryId, bid, actAmount } = {}) {
+  // `paye` says whether money actually moved through Nota. On the ADR 0015
+  // fallback (no capturable hold — the client paid the notary directly), the
+  // act settles but nothing is transferred: the notary must NOT receive a
+  // « votre acte est payé » statement for a payment that never happened. The
+  // operator alert and the client's evaluation invitation still go out, because
+  // the act itself really was signed.
+  async function onActPaid({ notaryId, bid, actAmount, paye = true } = {}) {
     if (!bid || !bid.id) return { ok: true, results: [] };
     const results = [];
     try {
       const notary =
         notaryId && typeof repo.getNotary === 'function' ? await repo.getNotary(notaryId) : null;
       const ctx = { ...bidCtx(bid), actAmount };
-      if (notary && notary.email) {
+      if (paye && notary && notary.email) {
         results.push(
           await sendOnce({
             refId: bid.id,

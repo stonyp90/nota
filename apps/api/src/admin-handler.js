@@ -200,6 +200,31 @@ function createAdminApp(repo, opts = {}) {
       return json(200, method === 'PUT' ? { ok: true, override: result.override } : { ok: true, key: result.key });
     }
 
+    // --- Le registre des notaires (2026-09-01) -------------------------------
+    // Nominatif et financier : 'pii:read' (super_admin), enforced in admin.js.
+    // C'est la contrepartie opérateur de la divulgation faite au notaire —
+    // qui est là, quelle cote, quel taux, ce que Nota a encaissé.
+    if (route === '/admin/notaries' && method === 'GET') {
+      const result = await admin.listNotaries(bearer(request), { ip: clientIp(request) });
+      if (!result.ok) {
+        if (result.status === 401) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+        return json(result.status, { errors: result.errors });
+      }
+      return json(200, { notaires: result.notaires, bareme: result.bareme });
+    }
+
+    // --- Le journal d'audit, relu par jour -----------------------------------
+    // Une piste que personne ne peut relire n'est pas une piste d'audit.
+    // 'pii:read' également : les entrées portent des courriels et des montants.
+    if (route === '/admin/audit' && method === 'GET') {
+      const result = await admin.readAudit(bearer(request), query.jour, { ip: clientIp(request) });
+      if (!result.ok) {
+        if (result.status === 401) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+        return json(result.status, { errors: result.errors });
+      }
+      return json(200, { jour: result.jour, entrees: result.entrees });
+    }
+
     // --- Commission barème (ADR 0021 §4) -------------------------------------
     // GET open to any authenticated admin; PUT/DELETE require 'settings:write'
     // — enforced in admin.js, which also audit-logs every change.

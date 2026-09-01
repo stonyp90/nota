@@ -1,6 +1,6 @@
 # 16. Notoriety is verifiable and rewarded — the CNQ profile link and the rating-earned commission bonus
 
-- Status: Accepted
+- Status: Accepted — **the public display of the rating is withdrawn by [ADR 0030](0030-la-deontologie-prime-la-cote-ne-se-publie-pas.md) (2026-09-01)**
 - Date: 2026-08-27
 
 ## Context

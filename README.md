@@ -7,13 +7,70 @@ fits their schedule. Closer dates command a higher premium — the market prices
 urgency.
 
 > **How Nota makes money — the one rule that shapes everything.** Notaries
-> join and browse for **free**; Nota collects a configurable **commission on
-> completed acts** (a Stripe Connect application fee), and nothing else. The
+> join and browse for **free**. The amount a client offers is an all-in total
+> that splits at signing, charged only on completed acts and never as a fixed
+> or per-lead cost. **Nota keeps at most 15 % and at least 5 %**, decided by
+> one number: the notary's **cote out of 100**. A notary with no history starts
+> at 15 % and keeps **85 %**; above a cote of 90 they leave only 5 % and keep
+> **95 %**. The share **rises with merit and never falls** — the effective rate
+> is bounded by the base rate and by the floor, so merit only ever moves the
+> line toward the notary. The whole split, the cote and its four axes are
+> visible **to the notary, before they commit** — and the rate is frozen at
+> retention, so it can never worsen between the engagement and the signing. The
 > commission concept lives only in the billing layer — never in the domain.
+>
 > Quebec's *Code de déontologie des notaires* restricts sharing professional
-> fees with a non-notaire, so this model is an explicit owner decision that
-> requires a legal review before launch. See
-> [`docs/decisions/0008-free-commission-marketplace.md`](docs/decisions/0008-free-commission-marketplace.md).
+> fees with a non-notaire, which is why the fee is structured as a client-side
+> charge for a service Nota renders to the client. On the Stripe wire the client
+> pays **the platform** — the hold is a Checkout session on Nota's own account —
+> and at signing Nota captures, keeps its share and transfers the net to the
+> notary. What remains open is the legal **qualification**, not the direction of
+> the money: art. 32.1 of the *Loi sur le notariat* presumes usurpation by an
+> intermediary who obtains from a notary the abandonment of part of their fees.
+> **A written legal review is required before launch**, and since ADR 0030 its
+> scope also covers displaying evaluations and the cote itself.
+> See [`docs/decisions/0028-la-cote-sur-100-decide-le-partage.md`](docs/decisions/0028-la-cote-sur-100-decide-le-partage.md)
+> (revises [`0027`](docs/decisions/0027-partage-75-25-cote-client.md), which
+> superseded [`0008`](docs/decisions/0008-free-commission-marketplace.md)).
+
+## The cote — one number out of 100
+
+`domain.notaryScore(stats)` scores a notary on four axes whose maxima add up to
+exactly 100. The cote is the sum, rounded — nothing else, so a notary can redo
+it by hand from their own screen.
+
+| Axis | Max | What feeds it |
+| --- | ---: | --- |
+| `satisfaction` | **40** | Bayesian mean of client evaluations (prior 4.0 over 5 reviews), stretched between 3.0 (nothing) and 4.8 (full) |
+| `services` | **25** | Acts delivered — volume on a square root, target 50. Breadth of the catalogue is shown but **scores nothing**: the Code tells a notary to weigh the limits of their competence, so specialising is not a fault |
+| `disponibilite` | **20** | Answers given — proposing, accepting **or declining**, all answers, on a square root toward 20 (12) — plus the declared reach: travel radius (6) and online urgencies (2). A decline never costs points; only silence does |
+| `presence` | **15** | CNQ fiche (5), the étude's postal sector (3), recent console activity (4), tenure (3) |
+
+The Bayesian mean means a brand-new notary does not start at zero stars, and
+five flattering reviews do not buy the top. The square root on volume means the
+first ten acts weigh more than the next ten.
+
+**The cote is never shown to a client.** Art. 70 of the *Code de déontologie*
+forbids a notary from using "or allowing to be used" a testimonial concerning
+them, with no exception for authentic reviews — and a displayed score turns a
+directory into a recommendation. A client sees facts about a named notary (the
+étude, the price, membership of the Chambre, acts carried on Nota), never an
+appreciation. The notary sees everything about themselves; so does Nota. See
+[`ADR 0030`](docs/decisions/0030-la-deontologie-prime-la-cote-ne-se-publie-pas.md).
+
+The cote earns a rate through the barème (`apps/api/src/commission-config.js`):
+**60 → 12 %, 70 → 10 %, 80 → 8 %, 90 → 5 %** — the notary keeps 88 %, 90 %, 92 %,
+95 %. The best rung reached applies. Nota edits the barème from the admin console
+without a deploy (ADR 0021); the deployment defaults come from the environment:
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `NOTA_COMMISSION_RATE` | `0.15` | Base rate — what Nota keeps from a notary with no history |
+| `NOTA_COMMISSION_RATE_FLOOR` | `0.05` | Floor — Nota never keeps less, the notary never keeps more than 95 % |
+| `NOTA_COMMISSION_TIERS` | see above | JSON array of `{ cote, taux }` rungs. A schedule in the pre-0028 shape (`note`/`avis`/`actes`/`bonus`) reads as **absent** and pricing falls back to the defaults |
+
+The domain knows nothing of the split: it produces the number, the billing layer
+turns it into percentages.
 
 ## Services and pricing
 
@@ -22,7 +79,7 @@ presses on. Testament and procuration were retired — see
 [`docs/decisions/0010-financing-first-catalogue.md`](docs/decisions/0010-financing-first-catalogue.md).
 The price is derived from a handful of answers (never from uploaded
 documents); the base amount below is the **starting price** (*prix de
-départ*), and the client may offer more, up to a hard **3× cap**.
+départ*), and the client may offer more, up to a hard **5× cap**.
 
 | Service | `serviceId` | Prix de départ |
 | --- | --- | --- |
@@ -48,11 +105,11 @@ the premium the market will bear.
 
 | Tier | Days to date | Indicative premium |
 | --- | --- | --- |
-| `standard` | 15+ | 1.0×–1.4× |
-| `rapide` | 4–14 | 1.4×–1.8× |
-| `prioritaire` | 2–3 | 3.0×–4.0× |
-| `urgence` | 1 | 6.0×–8.0× |
-| `extreme` | 0 | 8.0×–10.0× |
+| `standard` | 15+ | 1.0× |
+| `rapide` | 8–14 | 1.8×–2.2× (≈×2) |
+| `prioritaire` | 2–7 | 2.7×–3.3× (≈×3) |
+| `urgence` | 1 | 3.3×–3.7× (≈×3.5) |
+| `extreme` | 0 | 3.7×–4.3× (≈×4) |
 
 `tierForDays(days)` is the single source of truth for this mapping.
 
@@ -104,11 +161,14 @@ needs no CORS.
 | `GET` | `/bids?month=YYYY-MM` | `200 { month, bids }` |
 | `POST` | `/bids` | `201 { bid, clientToken }` · `422 { errors }` · `400 { errors }` |
 | `POST` | `/notary/session` | `200 { token, feedToken, expiresAt }` · `403 compte_requis` |
-| `GET` | `/notary/bids` | `200 { bids, retained }` — open demands (with this notary's own `proposition` / `demande` / `missing`) and the demands they retained |
+| `GET` | `/notary/bids` | `200 { bids, retained, rating, cote, profil, commission }` — open demands (with this notary's own `proposition` / `demande` / `missing`), the demands they retained, and the cote with the rate it earns |
+| `GET` | `/notary/evaluations` | `200 { rating, cote, services, evaluations }` — the anonymized evaluation ledger and the record service by service |
+| `GET` | `/notary/acts` | `200 { actes, totaux }` — the settled-act statement: amount, rate, Nota's share, net and what is still owed, act by act |
+| `GET` | `/admin/notaries` · `/admin/audit?jour=` | the notary register (cote, axes, rate, acts, collected and owed) and one day of the append-only log — `pii:read`, super_admin only |
 | `POST` | `/notary/bids/accept` · `/decline` | retain (conditional, one winner) · hide a demand |
 | `POST` | `/notary/bids/propose` | `200 { proposition }` — suggest a higher price · `422` `proposition_inferieure` / `plafond_depasse` |
 | `POST` | `/notary/bids/documents` | `200 { demande }` — ask the client for specific documents · `422` `document_inconnu` |
-| `GET` | `/client/bid?id&dateISO` | `200 { bid, propositions, demandes, readiness }` (Bearer `clientToken`) |
+| `GET` | `/client/bid?id&dateISO` | `200 { bid, notaire, propositions, demandes, readiness, acte }` (Bearer `clientToken`). ADR 0030: a named notary is described by **facts** — étude, `cnq`, `actes` — never by a rating or a cote |
 | `POST` | `/client/propositions/accept` · `/decline` | answer a notary's proposition; accepting retains the demand at the new amount |
 | `POST` | `/client/dossier` | push an updated dossier so a document request becomes `fournie` |
 

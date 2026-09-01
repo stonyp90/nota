@@ -318,7 +318,11 @@ test('the offer dialog uses plain words: what others offer, offer as much, a dol
   doc.querySelector('.cal-cell[data-date="' + iso + '"]').click();
   await wait(40);
   assert.match($(doc, 'day-best-k').textContent, /Ce que d’autres offrent ce jour-là/);
-  assert.match($(doc, 'day-chance').textContent, /Plus la date est proche, plus il faut offrir et moins un notaire est disponible\./);
+  // The invented « Chances … : 95 % » is gone (never measured); the line now
+  // states the mechanism, with no figure at all.
+  const chance = $(doc, 'day-chance').textContent;
+  assert.match(chance, /Plus la date est éloignée/);
+  assert.ok(!/\d|%/.test(chance), 'no figure in the lead-time line: ' + chance);
   const tp = $(doc, 'tp-text').textContent;
   assert.match(tp, /\$/);
   assert.ok(!tp.includes('×'), tp);

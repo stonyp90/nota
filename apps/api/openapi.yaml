@@ -228,7 +228,11 @@ paths:
         "422":
           description: >-
             Typed validation errors: `type_inconnu`, `courriel_invalide`,
-            `code_invalide`.
+            `code_invalide` — and `notaire_non_admissible` when the courriel
+            already belongs to a notary. ADR 0030: art. 33 of the Code de
+            déontologie forbids a notary from receiving "any other advantage"
+            related to practising, and a referral reward is one; the claim is
+            refused rather than turned into a breach.
           content:
             application/json:
               schema:
@@ -249,6 +253,17 @@ paths:
               example:
                 ok: true
                 throttled: true
+        "503":
+          description: >-
+            The deployment cannot build a usable link (no site URL configured),
+            so no email is sent — `configuration_incomplete`. A link with no
+            host is unusable from an inbox, and outside development the emailed
+            link is the only way in; failing loudly beats sending a dead promise.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /partenaires/verify:
     post:
       operationId: verifyPartnerClaim
@@ -311,7 +326,8 @@ paths:
       description: >-
         Opens a Stripe Connect onboarding link and returns the hosted URL the
         notary redirects to. Joining is free — there is no subscription; Nota
-        collects a commission (a configurable share of the acte's value) only
+        collects a service fee (a configurable share of the acte's value — at
+        most 15 %, falling to 5 % as the notary's cote earns it; ADR 0028) only
         when a retained act completes, as an application fee on a destination
         charge. Card data never touches this server. The account becomes ACTIVE
         via the `account.updated` webhook once charges are enabled.
@@ -472,6 +488,17 @@ paths:
               example:
                 ok: true
                 throttled: true
+        "503":
+          description: >-
+            The deployment cannot build a usable link (no site URL configured),
+            so no email is sent — `configuration_incomplete`. A link with no
+            host is unusable from an inbox, and outside development the emailed
+            link is the only way in; failing loudly beats sending a dead promise.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /notary/session/verify:
     post:
       operationId: verifyNotarySignInLink
@@ -570,7 +597,7 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [bids, retained, rating, profil, commission]
+                required: [bids, retained, rating, cote, profil, commission]
                 properties:
                   bids:
                     type: array
@@ -582,6 +609,8 @@ paths:
                       $ref: "#/components/schemas/RetainedBid"
                   rating:
                     $ref: "#/components/schemas/NotaryRating"
+                  cote:
+                    $ref: "#/components/schemas/NotaryCote"
                   profil:
                     $ref: "#/components/schemas/NotaryProfil"
                   commission:
@@ -597,7 +626,8 @@ paths:
         the optional comment, the act's service and date, and the instant the
         client submitted it — never the client's identity. Evaluations
         submitted before the ledger existed are not backfilled; they remain
-        counted in `rating`.
+        counted in `rating`. The response also carries the notary's `cote`
+        (ADR 0028) and, service by service, the record behind it.
       security:
         - notarySession: []
       responses:
@@ -607,10 +637,38 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [rating, evaluations]
+                required: [rating, cote, services, evaluations]
                 properties:
                   rating:
                     $ref: "#/components/schemas/NotaryRating"
+                  cote:
+                    $ref: "#/components/schemas/NotaryCote"
+                  services:
+                    type: array
+                    description: >-
+                      One row per catalogue service (`domain.notaryServiceRecord`),
+                      always the WHOLE catalogue: a service never rendered reads
+                      at zero acts and zero reviews, never with a fake average.
+                    items:
+                      type: object
+                      required: [serviceId, nom, nomEn, actes, avis, note]
+                      properties:
+                        serviceId:
+                          $ref: "#/components/schemas/ServiceId"
+                        nom:
+                          type: string
+                        nomEn:
+                          type: string
+                        actes:
+                          type: integer
+                          minimum: 0
+                          description: Acts this notary settled for that service.
+                        avis:
+                          type: integer
+                          minimum: 0
+                        note:
+                          type: [number, "null"]
+                          description: One-decimal mean for that service, null with no review.
                   evaluations:
                     type: array
                     items:
@@ -1022,6 +1080,98 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /notary/acts:
+    get:
+      operationId: listNotaryActs
+      summary: The notary's statement — every settled act, and what Nota kept on each.
+      description: >-
+        Full disclosure of the split, act by act (owner, 2026-09-01): what the
+        client paid, the rate applied, Nota's share, the net, and the cote that
+        earned that rate. Nothing aggregate-only — the per-act line IS the
+        disclosure; `totaux` merely sums the lines shown. The figures come from
+        the write-once ACT# ledger, frozen at settlement: a later barème edit
+        never rewrites an act already paid. Acts settled before ADR 0028 carry
+        no stored `taux` — it is then derived from what was actually charged,
+        never from today's barème — and their `cote` is null. Newest first, by
+        settlement then by signing date.
+      security:
+        - notarySession: []
+      responses:
+        "200":
+          description: The settled acts of the signed-in notary, and their totals.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [actes, totaux]
+                properties:
+                  actes:
+                    type: array
+                    items:
+                      type: object
+                      required: [bidId, dateISO, serviceId, service, montant, taux, commission, net, cote, completedAt, paye, du]
+                      properties:
+                        bidId:
+                          type: string
+                        dateISO:
+                          type: [string, "null"]
+                          format: date
+                          description: The signing date of the act.
+                        serviceId:
+                          type: [string, "null"]
+                        service:
+                          type: [string, "null"]
+                          description: The service's fr-CA label, null when the id is unknown.
+                        montant:
+                          type: number
+                          description: The value settled at signing, in dollars.
+                        taux:
+                          type: number
+                          description: >-
+                            The rate applied to THIS act. Stored at settlement
+                            since ADR 0028; derived from the commission actually
+                            charged for older acts.
+                        commission:
+                          type: number
+                          description: Nota's share of this act, in dollars.
+                        net:
+                          type: number
+                          description: What the notary keeps (montant − commission).
+                        cote:
+                          type: [integer, "null"]
+                          minimum: 0
+                          maximum: 100
+                          description: The cote at the moment of settlement; null before ADR 0028.
+                        completedAt:
+                          type: [string, "null"]
+                          description: When the act was settled.
+                        paye:
+                          type: boolean
+                          description: True once the money actually moved (capture or transfer).
+                        du:
+                          type: number
+                          description: >-
+                            What the notary still owes Nota on this act — the
+                            fee of an act settled OUTSIDE the platform (no
+                            capturable hold: the client paid the notary
+                            directly at signing). 0 once the money moved.
+                  totaux:
+                    type: object
+                    required: [actes, montant, commission, net, du]
+                    properties:
+                      actes:
+                        type: integer
+                      montant:
+                        type: number
+                      commission:
+                        type: number
+                      net:
+                        type: number
+                      du:
+                        type: number
+                        description: The sum still owed to Nota across the statement.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
   /notary/acts/complete:
     post:
       operationId: completeRetainedAct
@@ -1138,14 +1288,24 @@ paths:
                             type: [string, "null"]
                           courriel:
                             type: [string, "null"]
-                          rating:
-                            $ref: "#/components/schemas/NotaryRating"
                           lienCNQ:
                             type: [string, "null"]
                             description: >-
                               The retaining notary's official fiche in the
                               Chambre des notaires directory (ADR 0016) — like
                               `courriel`, only present once retained.
+                          actes:
+                            type: integer
+                            minimum: 0
+                            description: >-
+                              Acts this notary has carried on Nota. ADR 0030:
+                              the client-facing block carries FACTS about a
+                              named notary — membership and volume — never an
+                              appreciation. The star average and the cote were
+                              removed from here (art. 70 of the Code de
+                              déontologie: a notary may not use "or allow to be
+                              used" a testimonial concerning them); both stay
+                              visible to the notary and to Nota.
                   propositions:
                     type: array
                     items:
@@ -1166,10 +1326,26 @@ paths:
                     description: >-
                       Act settlement state (ADR 0015) — `complete` flips once
                       the ACT# ledger has settled the signing; the UI keys the
-                      evaluation door on it.
+                      evaluation door on it. Once settled, ADR 0028's
+                      transparency runs both ways: the client also sees how
+                      THEIR amount split, straight from the write-once ledger.
+                      The money fields are absent while `complete` is false.
+                    required: [complete]
                     properties:
                       complete:
                         type: boolean
+                      montant:
+                        type: number
+                        description: The act value the signing settled on, in dollars.
+                      partNota:
+                        type: number
+                        description: What Nota kept, in dollars.
+                      partNotaire:
+                        type: number
+                        description: What went to the notary, in dollars — the two add up to `montant`.
+                      taux:
+                        type: [number, "null"]
+                        description: The rate applied, frozen at settlement (null on a pre-ADR-0028 act).
                   evaluation:
                     type: [object, "null"]
                     description: The client's evaluation, once submitted (ADR 0021).
@@ -1914,8 +2090,6 @@ components:
         createdAt:
           type: string
           format: date
-        rating:
-          $ref: "#/components/schemas/NotaryRating"
         cnq:
           type: boolean
           description: >-
@@ -1923,6 +2097,17 @@ components:
             in the Chambre des notaires directory (ADR 0016). A boolean only —
             the fiche URL never rides an open bid (it lists the notary's
             phone; contact flows only after retention).
+        actes:
+          type: integer
+          minimum: 0
+          description: >-
+            Acts this notary has carried on Nota. ADR 0030: a client-facing
+            payload may carry FACTS about a named notary, never an appreciation
+            — art. 70 of the Code de déontologie forbids a notary from using
+            "or allowing to be used" a testimonial concerning them, and a
+            displayed score turns a directory into a recommendation. The star
+            average (`rating`) and the cote were removed from here for that
+            reason; both remain visible to the notary and to Nota.
     NotaryDemande:
       type: object
       required: [id, documents, createdAt, fournie]
@@ -2338,7 +2523,7 @@ components:
           description: >-
             Offer in whole Canadian dollars. Must be >= the offer's dynamic
             floor (the service base plus the pricing-criteria adds; 2 000 $ for
-            an uncomplicated refinancement) and <= 3× that floor (the premium
+            an uncomplicated refinancement) and <= 5× that floor (the premium
             cap).
           example: 2400
         anonyme:
@@ -2537,33 +2722,132 @@ components:
           description: >-
             The étude's postal sector (FSA, ADR 0025), null when none is
             declared — the feed then keeps the declarative travel rules.
+    NotaryCote:
+      type: object
+      description: >-
+        A notary's cote out of 100 and the four axes behind it (ADR 0028,
+        `domain.notaryScore`). The cote is the SUM of the axes, rounded —
+        nothing else, so a notary can redo it by hand from their screen. Unlike
+        `rating` it always exists: a notary with no evaluation still has a
+        presence, an availability and a track record.
+      required: [cote, axes]
+      properties:
+        cote:
+          type: integer
+          minimum: 0
+          maximum: 100
+        axes:
+          type: array
+          description: The four axes, in order — their maxima add up to exactly 100.
+          items:
+            type: object
+            required: [id, nom, nomEn, points, max, detail]
+            properties:
+              id:
+                type: string
+                enum: [satisfaction, services, disponibilite, presence]
+              nom:
+                type: string
+                description: fr-CA label.
+              nomEn:
+                type: string
+              points:
+                type: number
+                description: Points earned on that axis, one decimal, never above `max`.
+              max:
+                type: integer
+                description: >-
+                  The axis weight: satisfaction 40, services 25, disponibilité
+                  20, présence 15.
+              detail:
+                type: object
+                description: >-
+                  The raw figures the axis was computed from — shape depends on
+                  the axis, so the console can explain the number rather than
+                  assert it. `satisfaction`: note, avis, notePonderee, cible.
+                  `services`: actes, cible, servicesRendus, catalogue.
+                  `disponibilite`: repondu, declinees, tauxReponse, rayonKm,
+                  urgences. `presence`: fiche, secteur, joursDepuisActivite,
+                  joursMembre.
+                additionalProperties: true
     NotaryCommission:
       type: [object, "null"]
       description: >-
-        The commission this notary earns today (ADR 0016): the configured base
-        rate, the effective rate after the best rating-earned bonus, and the
-        next reachable tier (null at the top). Null when billing is not
-        configured — never a fake rate.
+        The split this notary earns today (ADR 0016, ADR 0027, ADR 0028): the
+        configured base rate, the floor, the effective rate their COTE earns,
+        the share the notary KEEPS, the cote itself with its four axes, the
+        whole ladder, and the next reachable rung (null at the top). ONE measure
+        moves the rate — the cote out of 100 — and it only ever moves it toward
+        the notary. Null when billing is not configured — never a fake rate.
       properties:
         taux:
           type: number
-          description: Base commission rate (NOTA_COMMISSION_RATE).
+          description: Base platform rate (NOTA_COMMISSION_RATE; 0.15 by default).
+        plancher:
+          type: number
+          description: >-
+            The floor (NOTA_COMMISSION_RATE_FLOOR; 0.05 by default) — Nota never
+            keeps less, so the notary never keeps more than 95 %.
         tauxEffectif:
           type: number
-          description: Rate actually charged, after the rating-earned bonus, floored.
+          description: >-
+            Rate actually charged: the best rung the cote has reached, floored
+            at `plancher` and capped at `taux`. A floor misconfigured above the
+            base never charges MORE than the base.
+        part:
+          type: number
+          description: The share the notary keeps (1 − tauxEffectif; 0.85 at the base, up to 0.95).
         bonus:
           type: number
           description: The reduction earned (taux − tauxEffectif).
+        cote:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: The cote that earned this rate — the same number the client sees.
+        axes:
+          type: array
+          description: The cote's four axes, as in `NotaryCote.axes`.
+          items:
+            type: object
+            additionalProperties: true
+        paliers:
+          type: array
+          description: >-
+            The whole ladder, bounded the same way the effective rate is — the
+            console shows the climb, not just the current rung.
+          items:
+            type: object
+            required: [cote, taux, part]
+            properties:
+              cote:
+                type: integer
+                minimum: 1
+                maximum: 100
+                description: The cote that reaches this rung.
+              taux:
+                type: number
+              part:
+                type: number
+                description: The share the notary keeps at that rung.
         prochain:
           type: [object, "null"]
-          description: The least-demanding tier that would still lower the rate.
+          description: >-
+            The nearest rung ABOVE this cote that would still lower the rate,
+            with the points that separate it from today. Null at the top.
           properties:
-            note:
-              type: number
-            avis:
+            cote:
               type: integer
+              description: The cote to reach.
+            manque:
+              type: integer
+              minimum: 0
+              description: Points still missing (cote of the rung − today's cote).
             tauxEffectif:
               type: number
+            part:
+              type: number
+              description: The share the notary would keep at that rung.
     EvaluationResponse:
       type: object
       required: [evaluation]

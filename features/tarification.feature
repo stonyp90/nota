@@ -14,8 +14,8 @@ Fonctionnalité: Tarification et paliers de temps
       | 0     | extreme     |
       | 1     | urgence     |
       | 2     | prioritaire |
-      | 3     | prioritaire |
-      | 4     | rapide      |
+      | 7     | prioritaire |
+      | 8     | rapide      |
       | 14    | rapide      |
       | 15    | standard    |
       | 30    | standard    |
@@ -26,6 +26,6 @@ Fonctionnalité: Tarification et paliers de temps
 
     Exemples:
       | jours | multiplicateur |
-      | 0     | 2              |
-      | 1     | 1.6            |
-      | 2     | 1.35           |
+      | 0     | 4              |
+      | 1     | 3.5            |
+      | 2     | 3              |

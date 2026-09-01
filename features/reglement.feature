@@ -2,7 +2,8 @@
 Fonctionnalité: Règlement de l'acte et évaluation du notaire
   Le client paie À LA SIGNATURE (ADR 0015) : la caution posée à la publication
   est capturée quand le notaire marque l'acte complété — Nota garde sa
-  commission, le notaire reçoit le net. Le registre ACT# est write-once : la
+  part de service (au plus 15 %), le notaire garde le reste — de 85 % à 95 %
+  selon sa cote sur 100 (ADR 0028). Le registre ACT# est write-once : la
   valeur d'acte est bornée avant d'y entrer, et compléter deux fois ne paie
   qu'une fois. L'évaluation du client s'ouvre seulement une fois l'acte réglé
   (ADR 0021). L'horloge est figée au 2026-08-12.
@@ -15,10 +16,10 @@ Fonctionnalité: Règlement de l'acte et évaluation du notaire
     Et la caution du client est autorisée
     Et le notaire "notaire@exemple.ca" retient l'offre
 
-  Scénario: l'acte complété capture la caution, Nota garde 10 %, le notaire reçoit le net
+  Scénario: l'acte complété capture la caution, le notaire garde 85 %, Nota 15 %
     Quand le notaire "notaire@exemple.ca" marque l'acte complété à 2800
     Alors la réponse a le statut 200
-    Et la caution est capturée et le notaire reçoit 2520 $ net, Nota gardant 280 $
+    Et la caution est capturée et le notaire reçoit 2380 $ net, Nota gardant 420 $
     Et le notaire "notaire@exemple.ca" reçoit le courriel "acte payé"
 
   Scénario: la valeur d'acte est bornée — un montant fou meurt avant le registre write-once

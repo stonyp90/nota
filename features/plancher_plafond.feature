@@ -13,13 +13,13 @@ Fonctionnalité: Plancher et plafond de l'offre
 
   Scénario: une offre au-dessus de 3x est refusée
     Soit le service "refinancement"
-    Quand je valide une offre de 6001 $ pour une date valide
+    Quand je valide une offre de 10001 $ pour une date valide
     Alors l'offre est refusée
     Et l'erreur "plafond_depasse" est présente
 
-  Scénario: une offre exactement à 3x est acceptée
+  Scénario: une offre exactement à 5x est acceptée
     Soit le service "refinancement"
-    Quand je valide une offre de 6000 $ pour une date valide
+    Quand je valide une offre de 10000 $ pour une date valide
     Alors l'offre est acceptée
     Et le palier calculé n'est pas vide
 

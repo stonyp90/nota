@@ -48,6 +48,12 @@ function setup() {
     repo, stripe,
     now: () => NOW,
     commissionRate: RATE,
+    // Pinned here rather than inherited from the defaults: ADR 0028 moved the
+    // barème to the cote sur 100 (15 % → 5 %), and these tests exercise the
+    // MECHANISM (rungs, floor, idempotency), not the barème in force. The
+    // shipped defaults have their own file, bareme-cote.test.mjs.
+    commissionBonusTiers: [{ cote: 50, taux: 0.09 }, { cote: 80, taux: 0.08 }],
+    commissionRateFloor: 0.05,
     onboardingReturnUrl: 'https://nota.test/notaires?ok=1',
     onboardingRefreshUrl: 'https://nota.test/notaires?refresh=1',
   });
@@ -166,7 +172,13 @@ test('GATING CONSISTENCY: free Connect onboarding then activation opens the sign
 
 // --- commission on a completed act -------------------------------------------
 
-test('completeAct charges the commission (application fee = rate × value) and tallies it', async () => {
+// Le repli de l'ADR 0015 : aucune caution à capturer (le client a payé le
+// notaire directement à la signature). Rien ne peut être encaissé ici — et
+// c'est exactement ce que le registre doit dire. Avant le 2026-09-01, ce
+// chemin appelait Stripe pour créer un PaymentIntent sans moyen de paiement
+// et sans `confirm` : aucun argent ne bougeait, mais le registre, le compteur
+// et le courriel « acte payé » affirmaient le contraire.
+test('completeAct settles WITHOUT charging — the fee is recorded as owed, never as collected', async () => {
   const { repo, stripe, billing } = setup();
   const id = NID('notaire@example.ca');
   await billing.connectNotary({ email: 'notaire@example.ca' });
@@ -175,15 +187,21 @@ test('completeAct charges the commission (application fee = rate × value) and t
   const res = await billing.completeAct({ notaryId: id, bidId: 'BID#1', actAmount: 2000 });
   assert.equal(res.ok, true);
   assert.equal(res.commissionCents, Math.round(2000 * 100 * RATE)); // 20000
+  assert.equal(res.paye, false, 'the settlement never claims a payment it did not make');
+  assert.equal(res.du, 200, 'what the notary owes Nota, in dollars');
 
-  // The destination charge carried the act value + our application fee.
-  const charge = stripe.calls.charges[0];
-  assert.equal(charge.connectAccountId, 'acct_' + id);
-  assert.equal(charge.amountCents, 200000);
-  assert.equal(charge.applicationFeeCents, 20000);
+  // No Stripe call at all: there is no customer, no payment method, nothing to
+  // charge. A call that cannot move money must not be made to look like one.
+  assert.equal(stripe.calls.charges.length, 0);
 
   const notary = await repo.getNotary(id);
-  assert.equal(notary.commissionCentsCollected, 20000);
+  assert.equal(notary.commissionCentsCollected || 0, 0, 'collected means Nota HAS the money');
+  assert.equal(notary.commissionCentsDue, 20000, 'owed, and visible as owed');
+
+  // The ledger says the same thing, permanently.
+  const ledger = await repo.getActCompletion('BID#1');
+  assert.equal(ledger.paye, false);
+  assert.equal(ledger.commissionCentsDue, 20000);
 });
 
 test('completeAct refuses a notary that has not finished onboarding, and a bad amount', async () => {
@@ -308,38 +326,41 @@ test('EDGE (logic): a very large act value does not overflow the fee', async () 
 });
 
 test('EDGE (logic): a custom commission rate is honored end-to-end', async () => {
-  const { billing, stripe } = await activeBilling(0.15);
+  const { repo, billing } = await activeBilling(0.15);
   const r = await billing.completeAct({ notaryId: EDGE_ID, bidId: 'b', actAmount: 2000 });
   assert.equal(r.commissionCents, Math.round(2000 * 100 * 0.15)); // 30000
-  assert.equal(stripe.calls.charges[0].applicationFeeCents, 30000);
+  assert.equal((await repo.getNotary(EDGE_ID)).commissionCentsDue, 30000);
 });
 
-test('EDGE (logic): re-completing the SAME bid is idempotent — exactly one charge, one tally', async () => {
-  const { repo, billing, stripe } = await activeBilling(RATE);
+test('EDGE (logic): re-completing the SAME bid is idempotent — one ledger row, one tally', async () => {
+  const { repo, billing } = await activeBilling(RATE);
   const first = await billing.completeAct({ notaryId: EDGE_ID, bidId: 'dup', actAmount: 1000 });
   const second = await billing.completeAct({ notaryId: EDGE_ID, bidId: 'dup', actAmount: 1000 });
 
-  // The write-once ACT ledger must short-circuit the second call BEFORE Stripe.
-  assert.equal(stripe.calls.charges.length, 1); // never charged twice
+  // The write-once ACT ledger short-circuits the second call.
   assert.equal(second.alreadyCompleted, true);
   assert.equal(second.commissionCents, first.commissionCents);
-  assert.equal(second.chargeId, first.chargeId);
+  assert.equal(second.paye, false);
 
-  // And the commission is tallied exactly once on the notary.
+  // And the fee owed is tallied exactly once on the notary.
   const notary = await repo.getNotary(EDGE_ID);
-  assert.equal(notary.commissionCentsCollected, first.commissionCents);
+  assert.equal(notary.commissionCentsDue, first.commissionCents);
 });
 
-test('completeAct surfaces a Stripe failure as a typed, retryable error — never an unhandled throw', async () => {
+// Le repli ne touche plus Stripe du tout : il ne peut donc plus échouer sur un
+// refus de carte. Ce qui doit rester vrai, c'est qu'un règlement sans argent
+// n'écrive jamais un encaissement — et que le notaire reçoive quand même son
+// acte au registre.
+test('completeAct never reports a Stripe payment on the fallback path', async () => {
   const { repo, stripe, billing } = await activeBilling(RATE);
-  stripe.chargeActCommission = async () => { throw new Error('card_declined'); };
+  stripe.chargeActCommission = async () => { throw new Error('ne doit jamais être appelé'); };
 
   const r = await billing.completeAct({ notaryId: EDGE_ID, bidId: 'BID#F', actAmount: 1000 });
-  assert.equal(r.ok, false);
-  assert.equal(r.errors[0].code, 'paiement_echoue');
-  // Nothing written: the ledger stays clean so a retry starts from scratch.
-  assert.equal(await repo.getActCompletion('BID#F'), null);
-  assert.equal((await repo.getNotary(EDGE_ID)).commissionCentsCollected, 0);
+  assert.equal(r.ok, true);
+  assert.equal(r.paye, false);
+  assert.equal(stripe.calls.charges.length, 0);
+  assert.equal((await repo.getActCompletion('BID#F')).paye, false);
+  assert.equal((await repo.getNotary(EDGE_ID)).commissionCentsCollected || 0, 0);
 });
 
 // --- PAY-ON-ACCEPT: authorize at post, capture + pay the notary on accept ----
@@ -497,7 +518,7 @@ async function activeSession(app, stripe, email) {
   return { notaryId, auth: { authorization: 'Bearer ' + sess.token } };
 }
 
-test('CAPTURE FAILURE AT COMPLETION (ADR 0015): a lapsed/declined hold falls back to the commission charge — the act never dead-ends', async () => {
+test('CAPTURE FAILURE AT COMPLETION (ADR 0015): a lapsed/declined hold settles the act as an UNPAID fee — never a dead end, never a phantom payment', async () => {
   const { repo, stripe, app } = setup();
   const { auth, notaryId } = await activeSession(app, stripe, 'a@notaire.ca');
   await repo.put({
@@ -514,12 +535,14 @@ test('CAPTURE FAILURE AT COMPLETION (ADR 0015): a lapsed/declined hold falls bac
   assert.equal(res.statusCode, 200, 'a Stripe decline must not dead-end the completion');
   const body = parse(res);
   assert.equal(body.ok, true);
-  assert.equal(body.paid, undefined, 'the fallback settles the fee only — the client paid the notary directly');
+  assert.equal(body.paid, undefined, 'nothing was paid through Nota on this path');
   assert.equal(body.commissionCents, Math.round(2400 * 100 * RATE));
-  assert.equal(stripe.calls.charges.length, 1, 'the commission model took over');
+  assert.equal(stripe.calls.charges.length, 0, 'no charge is attempted: there is nothing to charge');
   const ledger = await repo.getActCompletion('y1');
   assert.ok(ledger, 'the act ledger settled exactly once, via the fallback');
-  assert.ok(await repo.getActCompletion('y1'));
+  assert.equal(ledger.paye, false, 'and it says so: settled, not paid');
+  assert.equal(ledger.commissionCentsDue, Math.round(2400 * 100 * RATE), 'the fee is owed by the notary');
+  assert.equal((await repo.getNotary(notaryId)).commissionCentsCollected || 0, 0);
 });
 
 test('payment_intent.canceled arriving AFTER retention never voids the live mise en relation', async () => {
@@ -612,87 +635,136 @@ test('the act commission lives ONLY in billing — the domain pricing stays free
   assert.equal(billing.commissionRate, RATE);
 });
 
-// --- Rating-earned commission bonus (ADR 0016) --------------------------------
-// The default rate is bonified by the notary's evaluations: each tier is a
-// minimum average note + a minimum number of avis → a rate reduction, floored.
+// --- The cote earns the split (ADR 0016, ADR 0028) ---------------------------
+// The rate is no longer a grid of scattered axes: it is the ONE cote sur 100
+// the domain computes from what clients said, the acts carried, the
+// availability offered and the presence kept. These tests hold the MECHANISM —
+// rungs, floor, guard rails, idempotency — on a pinned barème; the shipped
+// defaults live in bareme-cote.test.mjs.
 
-async function activeNotaryWithRating(billing, repo, email, { sum, count } = {}) {
+// A notary onboarded through the real Stripe path, then given the record the
+// cote actually reads.
+async function activeNotaryWithRecord(billing, repo, email, record = {}) {
   const id = NID(email);
   await billing.connectNotary({ email });
   await billing.handleWebhook(JSON.stringify(accountUpdated('evt_' + id, id, true)), 'good');
-  if (count) await repo.putNotary({ ...(await repo.getNotary(id)), ratingSum: sum, ratingCount: count });
+  if (Object.keys(record).length) {
+    await repo.putNotary({ ...(await repo.getNotary(id)), ...record });
+  }
   return id;
 }
 
-test('a strong rating lowers the commission actually charged — both settlement paths', async () => {
+// A record that scores comfortably past a given cote, built from real signals.
+const FORT = {
+  ratingSum: 4.9 * 40, ratingCount: 40,
+  actsCompleted: 80, actsByService: { refinancement: 50, financement: 30 },
+  proposalsCount: 60, acceptsCount: 0, declinesCount: 3,
+  rayonKm: 50, urgences: true,
+  lienCNQ: 'https://www.cnq.org/fiche/9/', prefixe: 'G1R',
+  createdAt: '2025-01-01T00:00:00.000Z', lastSeenAt: NOW,
+};
+// The same notary, minus everything the cote rewards.
+const FAIBLE = {
+  ratingSum: 0, ratingCount: 0, actsCompleted: 0, actsByService: {},
+  proposalsCount: 0, acceptsCount: 0, declinesCount: 12,
+  rayonKm: 0, urgences: false, lienCNQ: null, prefixe: null,
+  createdAt: NOW, lastSeenAt: NOW,
+};
+
+test('a high cote lowers the commission actually charged — both settlement paths', async () => {
   const { repo, stripe, billing } = setup();
-  // note 4.8 over 10 avis → top default tier: 10% − 2 pts = 8%.
-  const id = await activeNotaryWithRating(billing, repo, 'top@example.ca', { sum: 48, count: 10 });
+  const id = await activeNotaryWithRecord(billing, repo, 'top@example.ca', FORT);
+  const c = await billing.commissionFor(await repo.getNotary(id));
+  assert.ok(c.cote >= 80, 'the strong record clears the top pinned rung: ' + c.cote);
 
   const done = await billing.completeAct({ notaryId: id, bidId: 'BID#T1', actAmount: 2000 });
   assert.equal(done.commissionCents, Math.round(2000 * 100 * 0.08));
-  assert.equal(stripe.calls.charges[0].applicationFeeCents, 16000);
+  assert.equal(done.paye, false, 'the fallback records a fee owed, never a payment');
+  assert.equal((await repo.getNotary(id)).commissionCentsDue, 16000);
 
   const paid = await billing.payNotaryOnAccept({ notaryId: id, bidId: 'BID#T2', actAmount: 1000, paymentIntentId: 'pi_t' });
   assert.equal(paid.commissionCents, Math.round(1000 * 100 * 0.08));
   assert.equal(stripe.calls.transfers[0].applicationFeeCents, 8000);
 });
 
-test('the middle tier and the guard rails: 4.5/5 avis → −1 pt; a great note on too few avis → base rate', async () => {
-  const { repo, stripe, billing } = setup();
-  const mid = await activeNotaryWithRating(billing, repo, 'mid@example.ca', { sum: 45, count: 10 }); // 4.5 avg
-  const few = await activeNotaryWithRating(billing, repo, 'few@example.ca', { sum: 15, count: 3 });  // 5.0 avg, 3 avis
-  const none = await activeNotaryWithRating(billing, repo, 'none@example.ca');
+test('the rungs are a ladder: the middle cote earns the middle rate, a bare record pays the base', async () => {
+  const { repo, billing } = setup();
+  // A real, ordinary notary: liked, a handful of acts, answers his feed.
+  const milieu = await activeNotaryWithRecord(billing, repo, 'mid@example.ca', {
+    ratingSum: 4.6 * 8, ratingCount: 8,
+    actsCompleted: 6, actsByService: { refinancement: 6 },
+    proposalsCount: 10, declinesCount: 2, rayonKm: 25,
+    lienCNQ: 'https://www.cnq.org/fiche/2/', prefixe: 'G1R',
+    createdAt: '2026-06-01T00:00:00.000Z', lastSeenAt: NOW,
+  });
+  const nul = await activeNotaryWithRecord(billing, repo, 'none@example.ca', FAIBLE);
 
-  assert.equal((await billing.completeAct({ notaryId: mid, bidId: 'm', actAmount: 2000 })).commissionCents, 18000); // 9%
-  assert.equal((await billing.completeAct({ notaryId: few, bidId: 'f', actAmount: 2000 })).commissionCents, 20000); // 10%
-  assert.equal((await billing.completeAct({ notaryId: none, bidId: 'n', actAmount: 2000 })).commissionCents, 20000);
+  const cm = await billing.commissionFor(await repo.getNotary(milieu));
+  assert.ok(cm.cote >= 50 && cm.cote < 80, 'the ordinary notary sits on the first rung: ' + cm.cote);
+  assert.equal((await billing.completeAct({ notaryId: milieu, bidId: 'm', actAmount: 2000 })).commissionCents, 18000); // 9 %
+
+  const cn = await billing.commissionFor(await repo.getNotary(nul));
+  assert.ok(cn.cote < 50, 'no acts, no reviews, declines everything, reaches nowhere: ' + cn.cote);
+  assert.equal((await billing.completeAct({ notaryId: nul, bidId: 'n', actAmount: 2000 })).commissionCents, 20000); // base
 });
 
-test('the schedule and the floor are configurable — a bonus can never cross the floor', async () => {
+test('the schedule and the floor are configurable — a rung can never cross the floor', async () => {
   const repo = createMemoryRepo();
   const stripe = fakeStripe();
   const billing = createBilling({
     repo, stripe, now: () => NOW, commissionRate: 0.06,
-    commissionBonusTiers: [{ note: 4, avis: 1, bonus: 0.03 }],
+    commissionBonusTiers: [{ cote: 10, taux: 0.03 }],
     commissionRateFloor: 0.05,
   });
-  const id = await activeNotaryWithRating(billing, repo, 'floor@example.ca', { sum: 5, count: 1 });
-  // 6% − 3 pts would be 3% — the floor holds it at 5%.
+  const id = await activeNotaryWithRecord(billing, repo, 'floor@example.ca', FORT);
+  // A rung priced at 3 % — the floor holds it at 5 %.
   assert.equal((await billing.completeAct({ notaryId: id, bidId: 'fl', actAmount: 1000 })).commissionCents, 5000);
 });
 
-test('commissionFor names the effective rate and the next reachable tier', async () => {
+test('commissionFor names the effective rate, the cote behind it, and the next rung', async () => {
   const { repo, billing } = setup();
-  const id = await activeNotaryWithRating(billing, repo, 'cf@example.ca', { sum: 45, count: 10 });
+  const id = await activeNotaryWithRecord(billing, repo, 'cf@example.ca', {
+    ratingSum: 4.6 * 8, ratingCount: 8,
+    actsCompleted: 6, actsByService: { refinancement: 6 },
+    proposalsCount: 10, declinesCount: 2, rayonKm: 25,
+    lienCNQ: 'https://www.cnq.org/fiche/3/', prefixe: 'G1R',
+    createdAt: '2026-06-01T00:00:00.000Z', lastSeenAt: NOW,
+  });
 
   const c = await billing.commissionFor(await repo.getNotary(id));
   assert.equal(c.taux, RATE);
   assert.equal(c.tauxEffectif, 0.09);
   assert.equal(c.bonus, 0.01);
-  // The next step up: note ≥ 4.8 with ≥ 10 avis → 8%.
-  assert.deepEqual(c.prochain, { note: 4.8, avis: 10, tauxEffectif: 0.08 });
+  assert.equal(c.part, 0.91);
+  assert.equal(c.axes.length, 4, 'the four axes ride along with the rate');
+  // The next step up is a cote, and the points that separate it from today.
+  assert.equal(c.prochain.cote, 80);
+  assert.equal(c.prochain.manque, 80 - c.cote);
+  assert.equal(c.prochain.tauxEffectif, 0.08);
+  assert.equal(c.prochain.part, 0.92);
 
-  // At the top tier there is nothing further to reach.
-  await repo.putNotary({ ...(await repo.getNotary(id)), ratingSum: 50, ratingCount: 10 });
+  // At the top rung there is nothing further to reach.
+  await repo.putNotary({ ...(await repo.getNotary(id)), ...FORT });
   const top = await billing.commissionFor(await repo.getNotary(id));
   assert.equal(top.tauxEffectif, 0.08);
   assert.equal(top.prochain, null);
 
-  // A brand-new notary pays the base rate and sees the first tier as next.
-  const fresh = await billing.commissionFor({ ratingSum: 0, ratingCount: 0 });
+  // A brand-new notary pays the base rate and sees the first rung as next.
+  const fresh = await billing.commissionFor({ ...FAIBLE, declinesCount: 0 });
   assert.equal(fresh.tauxEffectif, RATE);
-  assert.deepEqual(fresh.prochain, { note: 4.5, avis: 5, tauxEffectif: 0.09 });
+  assert.equal(fresh.prochain.cote, 50);
+  assert.equal(fresh.prochain.tauxEffectif, 0.09);
 });
 
 test('a barème stored by the admin (ADR 0021) reprices the very next act; a reset returns to the defaults', async () => {
   const { repo, billing } = setup();
-  const id = await activeNotaryWithRating(billing, repo, 'bareme@example.ca', { sum: 40, count: 10 }); // 4.0 avg
-  // Under the default schedule 4.0/10 earns nothing → 10 %.
+  const id = await activeNotaryWithRecord(billing, repo, 'bareme@example.ca', FAIBLE);
+  // Under the pinned schedule this record reaches no rung → the base rate.
   assert.equal((await billing.completeAct({ notaryId: id, bidId: 'bar1', actAmount: 1000 })).commissionCents, 10000);
 
-  // Nota decides: base 12 %, and a reachable 4.0/3 tier worth −2 pts.
-  await repo.putCommissionConfig({ taux: 0.12, plancher: 0.06, paliers: [{ note: 4, avis: 3, bonus: 0.02 }] }, NOW);
+  // Nota decides: base 12 %, and a rung this very record already clears.
+  const cote = (await billing.commissionFor(await repo.getNotary(id))).cote;
+  await repo.putCommissionConfig({ taux: 0.12, plancher: 0.06, paliers: [{ cote: Math.max(1, cote), taux: 0.10 }] }, NOW);
   const c = await billing.commissionFor(await repo.getNotary(id));
   assert.equal(c.taux, 0.12);
   assert.equal(c.tauxEffectif, 0.10);
@@ -706,13 +778,13 @@ test('a barème stored by the admin (ADR 0021) reprices the very next act; a res
   assert.equal(back.tauxEffectif, RATE);
 });
 
-test('an idempotent replay keeps the ledger amount even if the rating moved between attempts', async () => {
+test('an idempotent replay keeps the ledger amount even if the cote moved between attempts', async () => {
   const { repo, billing } = setup();
-  const id = await activeNotaryWithRating(billing, repo, 'replay@example.ca', { sum: 48, count: 10 });
+  const id = await activeNotaryWithRecord(billing, repo, 'replay@example.ca', FORT);
   const first = await billing.completeAct({ notaryId: id, bidId: 'RP', actAmount: 2000 });
   assert.equal(first.commissionCents, 16000);
-  // A harsh new evaluation drops the average below the tier…
-  await repo.putNotary({ ...(await repo.getNotary(id)), ratingSum: 30, ratingCount: 10 });
+  // A harsh run of new evaluations drops the cote below the rung…
+  await repo.putNotary({ ...(await repo.getNotary(id)), ratingSum: 2 * 40, ratingCount: 40 });
   // …but the replay answers with what was actually charged.
   const again = await billing.completeAct({ notaryId: id, bidId: 'RP', actAmount: 2000 });
   assert.equal(again.alreadyCompleted, true);

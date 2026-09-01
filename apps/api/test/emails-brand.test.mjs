@@ -178,3 +178,39 @@ test('the domain the API actually resolves is current, not a stale copy', () => 
     'the API resolves a different service list than packages/domain'
   );
 });
+
+// L'audit des affirmations (2026-09-01) : l'adresse postale des 41 gabarits est
+// un texte de remplacement — « 000, rue à confirmer » — et le test ci-dessus ne
+// vérifiait que sa PRÉSENCE. Il verrouillait donc le défaut au lieu de le
+// signaler. La LCAP exige l'identification complète de l'expéditeur : une
+// adresse inventée ne l'est pas.
+test('la production refuse l’adresse postale de remplacement', () => {
+  // En développement, le repli reste toléré — sinon toute la suite exige une
+  // configuration. C'est en production qu'il devient un défaut de conformité.
+  assert.equal(
+    emails.SENDER.address === emails.PLACEHOLDER_ADDRESS && process.env.NODE_ENV === 'production',
+    false,
+    'NOTA_SENDER_ADDRESS doit porter l’adresse postale réelle de l’entreprise avant tout envoi'
+  );
+  // Et le repli doit rester reconnaissable, pour que ce test puisse le voir.
+  assert.match(emails.PLACEHOLDER_ADDRESS, /à confirmer/);
+});
+
+test('une adresse configurée voyage bien jusque dans le courriel', async () => {
+  const { createRequire: cr } = await import('node:module');
+  const req = cr(import.meta.url);
+  const before = process.env.NOTA_SENDER_ADDRESS;
+  process.env.NOTA_SENDER_ADDRESS = 'Gestion A.Paquet inc. — 1, rue Réelle, Québec (Québec) G1R 1A1, Canada';
+  try {
+    // Le module lit l'environnement au chargement : on le recharge isolément.
+    delete req.cache[req.resolve('../src/emails.js')];
+    const fresh = req('../src/emails.js');
+    assert.equal(fresh.SENDER.address, process.env.NOTA_SENDER_ADDRESS);
+    const out = fresh.offerPublished({ serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2800, baseUrl: 'https://nota.example', unsubscribeUrl: 'https://nota.example/api/unsubscribe?token=x' });
+    assert.ok(out.html.includes(process.env.NOTA_SENDER_ADDRESS), 'l’adresse configurée doit apparaître dans le HTML');
+  } finally {
+    if (before === undefined) delete process.env.NOTA_SENDER_ADDRESS;
+    else process.env.NOTA_SENDER_ADDRESS = before;
+    delete req.cache[req.resolve('../src/emails.js')];
+  }
+});

@@ -24,6 +24,7 @@ const domain = require('@nota/domain');
 const authDefaults = require('./admin-auth');
 const emails = require('./emails');
 const commissionCfg = require('./commission-config');
+const cote = require('./cote');
 const cancellationCfg = require('./cancellation-config');
 
 // What each role may do. Re-derived from the server-side role on every request;
@@ -450,7 +451,7 @@ function createAdmin({
     return {
       taux: o.taux,
       plancher: o.plancher,
-      paliers: (o.paliers || []).map((p) => ({ note: p.note, avis: p.avis, bonus: p.bonus })),
+      paliers: (o.paliers || []).map((p) => ({ cote: p.cote, taux: p.taux })),
       updatedAt: o.updatedAt || null,
     };
   }
@@ -576,6 +577,116 @@ function createAdmin({
     return { ok: true };
   }
 
+  // ---------------------------------------------------------------------------
+  // Le registre des notaires (2026-09-01) — la contrepartie opérateur de la
+  // divulgation faite au notaire (ADR 0028). Pour chaque notaire : sa cote et
+  // ses quatre axes (une cote contestée doit pouvoir être refaite à la main),
+  // le taux qu'elle lui vaut aujourd'hui, ce qu'il a porté, et ce que Nota a
+  // réellement encaissé de lui. Nominatif : exige 'pii:read', donc super_admin.
+  // ---------------------------------------------------------------------------
+  async function listNotaries(token, { ip } = {}) {
+    const p = await requireAdmin(token, { ip });
+    if (!p) return { ok: false, status: 401 };
+    if (!p.permissions.includes('pii:read')) {
+      return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Réservé à l’administrateur principal.' }] };
+    }
+    const profils = typeof repo.listNotaries === 'function'
+      ? await repo.listNotaries()
+      : (typeof repo.listActiveNotaries === 'function' ? await repo.listActiveNotaries() : []);
+    // Le barème en vigueur, résolu UNE fois pour tout le registre : deux
+    // notaires doivent être comparés sous la même règle.
+    const bareme = await resolveBareme();
+    const nowMs = clockMs();
+    const notaires = profils.map((n) => {
+      const score = cote.coteFor(n, nowMs);
+      const tauxEffectif = rateForCote(bareme, score.cote);
+      return {
+        id: n.id,
+        email: n.email || null,
+        etude: n.label || null,
+        statut: n.status || null,
+        cote: score.cote,
+        axes: score.axes,
+        tauxEffectif,
+        part: Math.round((1 - tauxEffectif) * 10000) / 10000,
+        actes: Number(n.actsCompleted) || 0,
+        actesParService: n.actsByService || {},
+        note: domain.ratingAverage(n.ratingSum, n.ratingCount),
+        avis: Number(n.ratingCount) || 0,
+        commissionPercue: Math.round(Number(n.commissionCentsCollected) || 0) / 100,
+        // Ce que ce notaire DOIT encore à Nota : les actes réglés hors
+        // plateforme (le client l'a payé directement à la signature). Un
+        // encaissement et une créance ne se confondent jamais.
+        commissionDue: Math.round(Number(n.commissionCentsDue) || 0) / 100,
+        rayonKm: Number(n.rayonKm) || 0,
+        urgences: n.urgences === true,
+        cnq: !!n.lienCNQ,
+        depuis: n.createdAt || null,
+        vuLe: n.lastSeenAt || null,
+      };
+    });
+    // Par cote décroissante : le registre est d'abord un tableau d'honneur.
+    notaires.sort((a, b) => b.cote - a.cote || String(a.etude || '').localeCompare(String(b.etude || '')));
+    return { ok: true, notaires, bareme };
+  }
+
+  // Le barème en vigueur, vu depuis la console : l'item stocké s'il existe, les
+  // défauts d'environnement sinon. Même résolution que la facturation — c'est
+  // volontairement la MÊME lecture, pour que le registre ne mente jamais sur le
+  // taux qui sera réellement appliqué.
+  async function resolveBareme() {
+    const stored = typeof repo.getCommissionConfig === 'function' ? await repo.getCommissionConfig() : null;
+    const defaut = commissionCfg.envDefaults(process.env);
+    return {
+      taux: stored && typeof stored.taux === 'number' ? stored.taux : defaut.taux,
+      plancher: stored && typeof stored.plancher === 'number' ? stored.plancher : defaut.plancher,
+      paliers: stored && Array.isArray(stored.paliers) ? stored.paliers : defaut.paliers,
+    };
+  }
+
+  // Le meilleur palier atteint par une cote, borné par le plancher ET par le
+  // taux de base — la même règle que billing.commissionWith.
+  function rateForCote(bareme, valeur) {
+    let taux = bareme.taux;
+    for (const palier of bareme.paliers || []) {
+      if (valeur >= palier.cote && palier.taux < taux) taux = palier.taux;
+    }
+    return Math.min(bareme.taux, Math.max(bareme.plancher, Math.round(taux * 10000) / 10000));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Le journal d'audit, relu par jour. Écrire une piste que personne ne peut
+  // relire n'est pas une piste d'audit : c'est un fichier. Nominatif et
+  // financier — 'pii:read', donc super_admin.
+  // ---------------------------------------------------------------------------
+  async function readAudit(token, jour, { ip } = {}) {
+    const p = await requireAdmin(token, { ip });
+    if (!p) return { ok: false, status: 401 };
+    if (!p.permissions.includes('pii:read')) {
+      return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Réservé à l’administrateur principal.' }] };
+    }
+    const j = String(jour || '').trim();
+    if (!domain.isISODate(j)) {
+      return { ok: false, status: 422, errors: [{ code: 'jour_invalide', message: 'Le jour doit être une date ISO (AAAA-MM-JJ).' }] };
+    }
+    // DEUX journaux, un seul écran : les gestes d'administration vivent dans la
+    // table admin, les mouvements d'argent dans la table principale (la Lambda
+    // publique n'a pas accès à la première). Un auditeur ne doit pas avoir à
+    // savoir ça — on fusionne, on dédoublonne par id, on trie.
+    const [admins, transactions] = await Promise.all([
+      typeof repo.queryAuditByDay === 'function' ? repo.queryAuditByDay(j) : [],
+      typeof repo.queryTxAuditByDay === 'function' ? repo.queryTxAuditByDay(j) : [],
+    ]);
+    const parId = new Map();
+    for (const e of [...(admins || []), ...(transactions || [])]) {
+      if (e && !parId.has(e.id)) parId.set(e.id, e);
+    }
+    const entrees = [...parId.values()];
+    // Le plus récent d'abord, comme partout ailleurs dans la console.
+    entrees.sort((a, b) => String(b.ts || '').localeCompare(String(a.ts || '')));
+    return { ok: true, jour: j, entrees };
+  }
+
   return {
     requestLogin,
     verifyMagic,
@@ -593,6 +704,8 @@ function createAdmin({
     getCancellationSchedule,
     putCancellationSchedule,
     resetCancellationSchedule,
+    listNotaries,
+    readAudit,
   };
 }
 

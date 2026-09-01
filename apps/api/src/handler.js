@@ -1,6 +1,7 @@
 'use strict';
 
 const domain = require('@nota/domain');
+const cote = require('./cote');
 const { createBilling } = require('./billing');
 const cancellationCfg = require('./cancellation-config');
 const { decodeUnsubToken } = require('./notifications');
@@ -129,7 +130,10 @@ function createApp(repo, opts = {}) {
       // ADR 0021: the environment's schedule and floor are the DEFAULTS —
       // actually read now (the ADR 0016 gap) — and the barème Nota stored from
       // the admin console, when one exists, overrides them at every pricing.
-      commissionBonusTiers: require('./commission-config').parseTiers(process.env.NOTA_COMMISSION_BONUS_TIERS),
+      // ADR 0028 renamed the variable with the shape it carries: the paliers
+      // are `{ cote, taux }`, not bonuses. ONE door — commission-config.js is
+      // the authority, and reading anything else is how the two drift apart.
+      commissionTiers: require('./commission-config').envDefaults(process.env).paliers,
       commissionRateFloor: process.env.NOTA_COMMISSION_RATE_FLOOR ? Number(process.env.NOTA_COMMISSION_RATE_FLOOR) : undefined,
     });
     return billingInstance;
@@ -169,6 +173,10 @@ function createApp(repo, opts = {}) {
       repo,
       mailer,
       baseUrl: process.env.NOTA_BASE_URL,
+      // Où vit réellement l'API vue de l'extérieur. Par défaut `<base>/api`,
+      // le chemin que CloudFront route vers la Lambda ; surchargeable pour un
+      // déploiement dont l'API a sa propre adresse.
+      apiBaseUrl: process.env.NOTA_API_BASE_URL,
       operatorEmail: process.env.NOTA_OPERATOR_EMAIL,
     });
     return notifierInstance;
@@ -256,6 +264,71 @@ function createApp(repo, opts = {}) {
       createdAt: (existing && existing.createdAt) || new Date(nowMs()).toISOString(),
     });
   }
+
+  // --- The cote's live signals (ADR 0028) ------------------------------------
+  // Everything the cote reads lives on the notary's own record, so the score is
+  // one item away at pricing time. These two writers keep it true:
+  //
+  //   bumpNotary   — add to a counter the moment the act happens (a proposition
+  //                  sent, a demande accepted or declined).
+  //   touchNotary  — stamp the console's last visit, AT MOST ONCE A DAY: the
+  //                  feed is polled live (ADR 0021) and a write per poll would
+  //                  be a write storm for a signal measured in days.
+  //
+  // Both are best-effort: a counter that fails to move must never break the
+  // action the notary actually asked for.
+  async function bumpNotary(notaryId, field, by = 1) {
+    try {
+      const profile = await repo.getNotary(notaryId);
+      if (!profile) return;
+      await repo.putNotary({ ...profile, [field]: (Number(profile[field]) || 0) + by, updatedAt: now() });
+    } catch { /* the cote is not worth failing a retain over */ }
+  }
+  async function touchNotary(notaryId, profile) {
+    try {
+      const p = profile || (await repo.getNotary(notaryId));
+      if (!p) return;
+      const today = now().slice(0, 10);
+      if (String(p.lastSeenAt || '').slice(0, 10) === today) return;
+      await repo.putNotary({ ...p, lastSeenAt: new Date(nowMs()).toISOString() });
+    } catch { /* presence is a signal, never a gate */ }
+  }
+
+  // --- La piste d'audit des transactions (2026-09-01) ------------------------
+  // Chaque règlement laisse une entrée append-only : qui, quel acte, combien le
+  // client a payé, à quel taux, la part de Nota, le net du notaire et la cote
+  // qui a mérité ce taux. Même contrat que la console admin (admin.js), même
+  // registre — et strictement best-effort : une écriture d'audit qui échoue ne
+  // doit jamais empêcher un notaire d'être payé. Le registre ACT# reste
+  // l'autorité comptable ; ceci en est la trace lisible par un auditeur.
+  async function appendAudit(action, meta) {
+    // `appendTxAudit` écrit dans la table PRINCIPALE : la Lambda publique n'a
+    // aucun accès à la table admin, et une trace écrite là-bas ne s'écrirait
+    // jamais en production (l'appel lève, le catch ci-dessous l'avale).
+    const write = typeof repo.appendTxAudit === 'function' ? repo.appendTxAudit : repo.appendAudit;
+    if (typeof write !== 'function') return;
+    try {
+      await write.call(repo, { id: newId(), ts: new Date(nowMs()).toISOString(), day: now(), action, adminId: null, email: null, ip: null, meta: meta || null });
+    } catch { /* l'audit ne bloque jamais l'argent */ }
+  }
+
+  // --- Un lien qu'on ne peut pas cliquer ne part pas (2026-09-01) ------------
+  // Les liens des courriels sont bâtis sur NOTA_BASE_URL. Vérification faite sur
+  // la Lambda réelle : elle est VIDE, donc le lien magique du notaire vaut
+  // « /#nauth=<jeton> » — un chemin relatif, sans hôte, inutilisable depuis une
+  // boîte de réception. Et l'écho de développement étant coupé en production,
+  // ce lien est le seul chemin d'entrée : personne ne peut ouvrir sa console.
+  //
+  // Plutôt qu'envoyer une promesse morte, la porte se ferme et le dit. Le
+  // remède est une variable d'environnement, pas un correctif de code — mais
+  // une panne visible vaut mieux qu'un courriel qui trahit.
+  const CONFIG_INCOMPLETE = {
+    code: 'configuration_incomplete',
+    message: 'Ce service est momentanément indisponible : sa configuration est incomplète. Écrivez-nous et nous vous ouvrons l’accès à la main.',
+  };
+  // Vrai quand aucune adresse de site n'est configurée ET que l'écho de
+  // développement ne peut pas prendre le relais.
+  const lienImpossible = (base, echo) => !String(base || '').trim() && !echo;
 
   // Verify a token AND require a specific scope. Returns the notaryId (sub) only
   // when the signature is valid, the token is unexpired, and its scope matches;
@@ -382,8 +455,14 @@ function createApp(repo, opts = {}) {
   const notaryProposition = (p) => ({ id: p.id, montant: p.montant, delta: p.delta, message: p.message || null, status: p.status, createdAt: p.createdAt });
   const notaryDemande = (b, d) => ({ id: d.id, documents: d.documents, message: d.message || null, createdAt: d.createdAt, fournie: demandeFournie(b, d) });
   const clientProposition = (p) => ({ id: p.id, etude: p.etude || null, montant: p.montant, delta: p.delta, message: p.message || null, status: p.status, createdAt: p.createdAt });
-  // The public face of a notary's evaluations: the one-decimal average and the
-  // count — null before the first one, so the UI never paints fake stars.
+  // A notary's evaluations, as a one-decimal average and a count — null before
+  // the first one, so the UI never paints fake stars.
+  //
+  // ADR 0030 — ceci ne voyage QUE vers le notaire lui-même (sa console) et vers
+  // Nota. Jamais vers un client : l'art. 70 du Code de déontologie interdit au
+  // notaire d'utiliser « ou de permettre que soit utilisé » un témoignage
+  // d'appui qui le concerne, et il n'y a aucune exception pour les avis
+  // authentiques. Si vous ajoutez un appelant, vérifiez qui le lit.
   const notaryRating = (profile) => {
     const note = profile ? domain.ratingAverage(profile.ratingSum, profile.ratingCount) : null;
     return note == null ? null : { note, avis: profile.ratingCount };
@@ -446,8 +525,37 @@ function createApp(repo, opts = {}) {
       notaryId,
       etude: (profile && profile.label) || notaryId,
     };
+    // L'INSTANT de l'engagement. Sans lui, la piste d'audit ne peut pas dire
+    // quand un notaire s'est engagé — seulement qu'il l'a fait.
+    updated.retainedAt = new Date(nowMs()).toISOString();
+    // LE TAUX DE L'ENGAGEMENT (2026-09-01). La cote se relit à chaque
+    // tarification ; sans cette empreinte, un notaire pouvait retenir en voyant
+    // 8 % et payer 10 % à la signature parce qu'un déclin ou une évaluation
+    // avait bougé entre-temps. Le taux gravé ici devient un PLAFOND : le
+    // règlement applique le meilleur des deux, donc une cote qui monte profite
+    // encore, et une cote qui baisse ne renchérit jamais un acte déjà promis.
+    if (billingInstance || billingConfigured) {
+      try {
+        const b = billing();
+        if (b && typeof b.commissionFor === 'function') {
+          const c = await b.commissionFor(profile, nowMs());
+          updated.tauxRetenu = c.tauxEffectif;
+          updated.coteRetenue = c.cote;
+        }
+      } catch { /* une empreinte manquante retombe simplement sur le taux du jour */ }
+    }
     const retained = await repo.retain(updated, notaryId);
     if (!retained) return null;
+    await appendAudit('acte_retenu', {
+      bidId: retained.id,
+      dateISO: retained.dateISO,
+      notaryId,
+      serviceId: retained.serviceId || null,
+      montant: retained.montant,
+      etude: retained.etude || null,
+      tauxRetenu: retained.tauxRetenu != null ? retained.tauxRetenu : null,
+      coteRetenue: retained.coteRetenue != null ? retained.coteRetenue : null,
+    });
     await repo.putRetained(notaryId, {
       id: retained.id,
       dateISO: retained.dateISO,
@@ -806,6 +914,7 @@ function createApp(repo, opts = {}) {
     // both get the generic { ok: true } (+ dev echo outside production). A bad
     // code still never costs anything (422 only on a malformed request).
     if (route === '/partenaires' && method === 'POST') {
+      if (lienImpossible(PARTNER_CLAIM_URL, PARTNER_CLAIM_DEV_ECHO)) return json(503, { errors: [CONFIG_INCOMPLETE] });
       const { payload, error } = parseBody(request);
       if (error) return error;
 
@@ -838,6 +947,24 @@ function createApp(repo, opts = {}) {
         errors.push({ code: 'code_invalide', message: 'Le code doit compter de 4 à 12 lettres ou chiffres.' });
       }
       if (errors.length) return json(422, { errors });
+
+      // ADR 0030 — art. 33 du Code de déontologie des notaires : hors la
+      // rémunération et les commissions auxquelles il a droit, le notaire ne
+      // peut ni verser ni recevoir « tout autre avantage » relatif à l'exercice
+      // de sa profession. Une récompense de parrainage en est un. Un notaire
+      // qui réclame un code serait donc mis en défaut PAR NOUS — le produit
+      // refuse la réclamation, en disant pourquoi. Le courriel est la seule
+      // clé dont nous disposons ; ce n'est pas un contrôle infaillible, c'est
+      // celui qui ne coûte rien à un partenaire qui n'est pas notaire.
+      const dejaNotaire = await repo.getNotary(notaryIdForEmail(courriel));
+      if (dejaNotaire) {
+        return json(422, {
+          errors: [{
+            code: 'notaire_non_admissible',
+            message: 'Le programme de parrainage n’est pas ouvert aux notaires : le Code de déontologie interdit au notaire de recevoir un avantage lié à l’exercice de sa profession. Votre espace notaire, lui, reste ouvert.',
+          }],
+        });
+      }
 
       // A CONFIRMED (mailbox-proven) owner already holds this code?
       //  • same courriel  -> the owner re-visiting: idempotent 200 with what is
@@ -921,6 +1048,20 @@ function createApp(repo, opts = {}) {
       }
 
       const code = domain.normalizeReferralCode(claim.code);
+
+      // ADR 0030 (art. 33) — le refus posé à l'étape 1 ne suffit pas : c'est
+      // ICI qu'un code devient le PAYEUR DE RECORD, et le profil notaire a pu
+      // naître entre la réclamation et sa confirmation. On revérifie donc au
+      // moment qui compte, celui de l'écriture.
+      if (await repo.getNotary(notaryIdForEmail(claim.courriel))) {
+        return json(422, {
+          errors: [{
+            code: 'notaire_non_admissible',
+            message: 'Le programme de parrainage n’est pas ouvert aux notaires : le Code de déontologie interdit au notaire de recevoir un avantage lié à l’exercice de sa profession. Votre espace notaire, lui, reste ouvert.',
+          }],
+        });
+      }
+
       const partenaire = { code, type: claim.type, courriel: claim.courriel, createdAt: now(), confirmedAt: now() };
       if (await repo.createPartner(partenaire)) {
         // Welcome the partner (their shareable link + the reward tracks) and
@@ -1039,18 +1180,57 @@ function createApp(repo, opts = {}) {
         // the paid-at-signing settlement, now invoked here instead.
         result = await billing().payNotaryOnAccept({
           notaryId, bidId: payload.bidId, actAmount: payload.actAmount, paymentIntentId: bid.paymentIntentId,
+          // ADR 0028: the settled act is counted on its own service, so the
+          // cote can reward the breadth of the catalogue a notary serves.
+          serviceId: bid.serviceId,
+          // Le taux promis à l'engagement — un plafond, jamais un tarif.
+          tauxPlafond: bid.tauxRetenu,
         });
       }
       if (!result || !result.ok) {
         // No capturable hold, or the capture failed (lapsed past Stripe's
         // ~7-day window, declined): the act still settles on the commission
         // model — the client paid the notary directly at signing.
-        result = await billing().completeAct({ notaryId, bidId: payload.bidId, actAmount: payload.actAmount });
+        result = await billing().completeAct({
+          notaryId, bidId: payload.bidId, actAmount: payload.actAmount, serviceId: bid.serviceId,
+          tauxPlafond: bid.tauxRetenu,
+        });
       }
       if (!result.ok) return json(422, { errors: result.errors });
+      // La piste d'audit de la transaction : écrite depuis le registre ACT#
+      // lui-même (l'autorité comptable), et seulement au PREMIER règlement —
+      // une reprise idempotente ne doit pas doubler la trace.
+      if (!result.alreadyCompleted && !result.alreadyPaid) {
+        const regle = typeof repo.getActCompletion === 'function' ? await repo.getActCompletion(payload.bidId) : null;
+        if (regle) {
+          const commission = Math.round(Number(regle.commissionCents) || 0) / 100;
+          await appendAudit('acte_regle', {
+            bidId: payload.bidId,
+            dateISO: bid.dateISO,
+            notaryId,
+            serviceId: bid.serviceId || null,
+            montant: regle.actAmount,
+            taux: regle.taux != null ? regle.taux : null,
+            cote: regle.cote != null ? regle.cote : null,
+            commission,
+            net: Math.round((Number(regle.actAmount) - commission) * 100) / 100,
+            chargeId: regle.chargeId || null,
+            transferId: regle.transferId || null,
+          });
+        }
+      }
+
       // Payout statement + operator alert, once per bid (fire-and-forget).
       const an = notifier();
-      if (an) Promise.resolve(an.onActPaid({ notaryId, bid, actAmount: payload.actAmount })).catch(() => {});
+      if (an) {
+        Promise.resolve(
+          an.onActPaid({
+            notaryId, bid, actAmount: payload.actAmount,
+            // Only a real transfer earns the « acte payé » statement.
+            paye: result.netCents != null,
+          })
+        ).catch(() => {});
+      }
       return json(200, {
         ok: true,
         // The SETTLED value — on a duplicate submit, the ledger's original
@@ -1117,6 +1297,7 @@ function createApp(repo, opts = {}) {
     // { ok: true }, so the response never reveals who is a notary. Only an
     // eligible address actually mints a challenge and gets a link emailed.
     if (route === '/notary/session/request' && method === 'POST') {
+      if (lienImpossible(NOTARY_CONSOLE_URL, NOTARY_LOGIN_DEV_ECHO)) return json(503, { errors: [CONFIG_INCOMPLETE] });
       let payload;
       try {
         payload = typeof request.body === 'string' ? JSON.parse(request.body || '{}') : request.body || {};
@@ -1247,6 +1428,9 @@ function createApp(repo, opts = {}) {
       // Loaded before the walk: the profile now gates which open bids the
       // feed may offer at all (ADR 0017), not just the console's own block.
       const ownProfile = await repo.getNotary(notaryId);
+      // ADR 0028: opening the console IS the presence signal — stamped here,
+      // once a day, on the profile the cote reads.
+      await touchNotary(notaryId, ownProfile);
       // ≈ km between a bid's sector and the étude's (ADR 0025) — null when
       // either sector is unknown. One definition for both open and retained.
       const distKm = (b) => domain.fsaDistanceKm(b.prefixe, ownProfile && ownProfile.prefixe);
@@ -1317,7 +1501,8 @@ function createApp(repo, opts = {}) {
           });
         }
       }
-      // The notary's own public average, profile and commission ride along so
+      // The notary's OWN average (never a client's view of it — ADR 0030),
+      // profile and commission ride along so
       // the console can show them where the earnings live. The commission block
       // (ADR 0016: base rate, rating-earned effective rate, next tier) only
       // exists when billing is configured — never a fake rate.
@@ -1329,6 +1514,9 @@ function createApp(repo, opts = {}) {
       return json(200, {
         bids: out, retained,
         rating: notaryRating(ownProfile),
+        // ADR 0028: the cote sur 100 and its four axes — the console's own
+        // copy, present even when billing is off (a notary always has a cote).
+        cote: cote.coteFor(ownProfile, nowMs()),
         profil: {
           lienCNQ: (ownProfile && ownProfile.lienCNQ) || null,
           rayonKm: (ownProfile && Number(ownProfile.rayonKm)) || 0,
@@ -1349,6 +1537,10 @@ function createApp(repo, opts = {}) {
       const ledger = typeof repo.listNotaryEvaluations === 'function' ? await repo.listNotaryEvaluations(notaryId) : [];
       return json(200, {
         rating: notaryRating(profile),
+        // ADR 0028: the cote and, service by service, what this notary
+        // actually renders — acts carried and what clients said about them.
+        cote: cote.coteFor(profile, nowMs()),
+        services: domain.notaryServiceRecord(ledger, profile && profile.actsByService),
         evaluations: ledger.map((e) => ({
           note: e.note,
           commentaire: e.commentaire || null,
@@ -1356,6 +1548,67 @@ function createApp(repo, opts = {}) {
           dateISO: e.dateISO || null,
           createdAt: e.createdAt || null,
         })),
+      });
+    }
+
+    // Le relevé du notaire (propriétaire, 2026-09-01) : CHAQUE acte réglé, avec
+    // ce que le client a payé, le taux appliqué, la part de Nota, le net et la
+    // cote qui a mérité ce taux. Rien d'agrégé seulement — la ligne par acte
+    // EST la divulgation. Les chiffres viennent du registre write-once ACT#,
+    // figés au règlement : un changement de barème ne réécrit jamais un acte
+    // déjà payé.
+    if (route === '/notary/acts' && method === 'GET') {
+      const notaryId = requireScope(bearer(request), SCOPES.SESSION);
+      if (!notaryId) return json(401, { errors: [{ code: 'non_autorise', message: 'Jeton invalide ou expiré.' }] });
+
+      // Les actes du notaire se lisent par ses pointeurs de rétention : un acte
+      // réglé a forcément été retenu. Aucun index supplémentaire n'est requis.
+      const pointeurs = typeof repo.listRetainedByNotary === 'function' ? await repo.listRetainedByNotary(notaryId) : [];
+      const lignes = [];
+      for (const e of pointeurs) {
+        const regle = typeof repo.getActCompletion === 'function' ? await repo.getActCompletion(e.id) : null;
+        // Pas encore signé, ou réglé par quelqu'un d'autre : hors relevé.
+        if (!regle || (regle.notaryId && regle.notaryId !== notaryId)) continue;
+        const montant = Number(regle.actAmount) || 0;
+        const commission = Math.round(Number(regle.commissionCents) || 0) / 100;
+        const serviceId = regle.serviceId || e.serviceId || null;
+        const svc = serviceId ? domain.serviceById(serviceId) : null;
+        lignes.push({
+          bidId: e.id,
+          dateISO: e.dateISO || null,
+          serviceId,
+          service: svc ? svc.nom : null,
+          montant,
+          // Le taux tel qu'appliqué. Un acte d'avant l'ADR 0028 n'en porte pas :
+          // il se déduit alors de ce qui a réellement été facturé, jamais du
+          // barème d'aujourd'hui.
+          taux: regle.taux != null ? regle.taux : (montant > 0 ? Math.round((commission / montant) * 10000) / 10000 : 0),
+          cote: regle.cote != null ? regle.cote : null,
+          commission,
+          net: Math.round((montant - commission) * 100) / 100,
+          completedAt: regle.completedAt || null,
+          paye: regle.netCents != null || !!regle.transferId,
+          // Ce qu'il reste à verser à Nota quand l'acte s'est réglé hors
+          // plateforme (le client a payé le notaire directement) : la ligne le
+          // dit, plutôt que de laisser croire à un encaissement.
+          du: regle.netCents != null || regle.transferId ? 0 : commission,
+        });
+      }
+      // Le plus récent d'abord : par règlement, puis par date de signature.
+      lignes.sort((a, b) =>
+        String(b.completedAt || '').localeCompare(String(a.completedAt || '')) ||
+        String(b.dateISO || '').localeCompare(String(a.dateISO || '')));
+
+      const somme = (f) => Math.round(lignes.reduce((t, l) => t + l[f], 0) * 100) / 100;
+      return json(200, {
+        actes: lignes,
+        totaux: {
+          actes: lignes.length,
+          montant: somme('montant'),
+          commission: somme('commission'),
+          net: somme('net'),
+          du: somme('du'),
+        },
       });
     }
 
@@ -1449,6 +1702,9 @@ function createApp(repo, opts = {}) {
         }
         return json(409, { errors: [{ code: 'deja_retenue', message: 'Cette offre est déjà retenue.' }] });
       }
+      // ADR 0028: taking the demande as it stands is an answer too — counted
+      // once, on the write that actually won the race.
+      await bumpNotary(notaryId, 'acceptsCount');
       return json(200, released(retained));
     }
 
@@ -1501,6 +1757,9 @@ function createApp(repo, opts = {}) {
       );
       propositions.push(proposition);
       await repo.update({ ...bid, propositions });
+
+      // ADR 0028: answering with a price is the strongest availability signal.
+      await bumpNotary(notaryId, 'proposalsCount');
 
       const pn = notifier();
       if (pn) Promise.resolve(pn.onCounterOfferProposed(bid, proposition)).catch(() => {});
@@ -1560,11 +1819,12 @@ function createApp(repo, opts = {}) {
         notaire = {
           etude: bid.etude || (profile && profile.label) || null,
           courriel: (profile && profile.email) || null,
-          // Public evaluation average (never the internal notaryId).
-          rating: notaryRating(profile),
-          // The notary's own fiche in the Chambre's directory (ADR 0016) —
-          // like `courriel`, the link only travels once retained.
+          // ADR 0030 — art. 70 du Code de déontologie : ni moyenne d'étoiles ni
+          // cote ne voyagent vers le client. Ce qui reste sont des FAITS
+          // vérifiables : l'inscription au tableau de la Chambre (ADR 0016) et
+          // le nombre d'actes portés sur Nota. Un fait n'est pas un témoignage.
           lienCNQ: (profile && profile.lienCNQ) || null,
+          actes: (profile && Number(profile.actsCompleted)) || 0,
         };
       }
       // Act + evaluation state (ADR 0015): once the ACT# ledger has settled
@@ -1585,16 +1845,33 @@ function createApp(repo, opts = {}) {
       return json(200, {
         bid: publicBid(bid),
         notaire,
+        // ADR 0030 — ce qu'une proposition dit du notaire qui la fait : son
+        // étude, son prix, son appartenance à l'Ordre et le nombre d'actes
+        // qu'il a portés. Des faits. Jamais une note, une moyenne ou une cote :
+        // l'art. 70 du Code de déontologie interdit au notaire de PERMETTRE
+        // QUE SOIT UTILISÉ un témoignage d'appui qui le concerne, et une note
+        // affichée transforme un annuaire en recommandation.
         propositions: props.map((p) => ({
           ...clientProposition(p),
-          rating: notaryRating(proposersById[p.notaryId]),
           cnq: !!(proposersById[p.notaryId] && proposersById[p.notaryId].lienCNQ),
+          actes: (proposersById[p.notaryId] && Number(proposersById[p.notaryId].actsCompleted)) || 0,
         })),
         demandes: demandesOf(bid).map((d) => clientDemande(bid, d)),
         readiness: domain.leadReadiness(bid.serviceId, bid.dossier || {}),
         // The retained-act conversation. Empty until a notary retains the bid.
         messages: messagesOf(bid).map(chatMessage),
-        acte: { complete: !!completion },
+        // ADR 0028 — la transparence va dans les DEUX sens : une fois l'acte
+        // signé et réglé, le client voit comment SON montant s'est partagé.
+        // Rien d'inventé : les chiffres sortent du registre write-once.
+        acte: completion
+          ? {
+              complete: true,
+              montant: completion.actAmount,
+              partNota: Math.round(Number(completion.commissionCents) || 0) / 100,
+              partNotaire: Math.round((Number(completion.actAmount) * 100 - (Number(completion.commissionCents) || 0))) / 100,
+              taux: completion.taux != null ? completion.taux : null,
+            }
+          : { complete: false },
         evaluation: bid.evaluation ? { note: bid.evaluation.note, commentaire: bid.evaluation.commentaire || null } : null,
         // ADR 0023 — what cancelling TODAY would cost, disclosed BEFORE the
         // client confirms. Null when the cancel would be free (open offer, no
@@ -1797,7 +2074,21 @@ function createApp(repo, opts = {}) {
         const charge = b && typeof b.chargeCancellationFee === 'function'
           ? await b.chargeCancellationFee({ paymentIntentId: bid.paymentIntentId, bidId: bid.id, amountCents: fee.fraisCents })
           : { ok: false };
-        if (charge.ok) annulation = { taux: fee.taux, frais: fee.frais, joursAvant: fee.joursAvant, chargeId: charge.chargeId || null };
+        if (charge.ok) {
+          annulation = { taux: fee.taux, frais: fee.frais, joursAvant: fee.joursAvant, chargeId: charge.chargeId || null };
+          // Une capture partielle est un mouvement d'argent : elle laisse une
+          // trace, comme le règlement d'un acte (ADR 0023 + piste d'audit).
+          await appendAudit('annulation_frais', {
+            bidId: bid.id,
+            dateISO: bid.dateISO,
+            notaryId: bid.notaryId || null,
+            montant: bid.montant,
+            taux: fee.taux,
+            frais: fee.frais,
+            joursAvant: fee.joursAvant,
+            chargeId: charge.chargeId || null,
+          });
+        }
       }
 
       const cancelled = { ...bid, status: domain.STATUS.ANNULEE, cancelledAt: now(), annulation };
@@ -1942,6 +2233,9 @@ function createApp(repo, opts = {}) {
       if (!notaryId) return json(401, { errors: [{ code: 'non_autorise', message: 'Jeton invalide ou expiré.' }] });
       if (!payload.id) return json(422, { errors: [{ code: 'id_manquant', message: 'L’identifiant de l’offre est requis.' }] });
       await repo.putDecline(notaryId, payload.id);
+      // ADR 0028: declining is a real answer — it just lowers the availability
+      // axis. Counted, never punished twice.
+      await bumpNotary(notaryId, 'declinesCount');
       return json(200, { declined: true });
     }
 

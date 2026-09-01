@@ -86,6 +86,12 @@
     var frac = rem ? (',' + String(rem).padStart(2, '0')) : '';
     return (neg ? '−' : '') + digits + frac + ' $';
   }
+  // 4.7 → « 4,7 » : un nombre à virgule décimale, sans zéro inutile (deux
+  // décimales au plus, ce que servent les axes de la cote).
+  function dec(v) {
+    var n = Math.round((Number(v) || 0) * 100) / 100;
+    return String(n).replace('.', ',');
+  }
   // Retention rate → "42 %" / "42,5 %". Accepts a 0..1 fraction or a 0..100
   // percent (see the API assumption in the file header / task report).
   function formatRate(v) {
@@ -214,6 +220,8 @@
     if (hash.indexOf('#/courriels') === 0) { renderCourriels(); return; }
     if (hash.indexOf('#/commission') === 0) { renderCommission(); return; }
     if (hash.indexOf('#/annulation') === 0) { renderAnnulation(); return; }
+    if (hash.indexOf('#/notaires') === 0) { renderNotaires(); return; }
+    if (hash.indexOf('#/audit') === 0) { renderAudit(); return; }
     renderOverview(); // '#/' and any unknown authed route land on the overview
   }
   function focusTitle() {
@@ -428,17 +436,43 @@
     annul.addEventListener('click', function () { go('#/annulation'); });
     rail.appendChild(annul);
 
-    // Phase-2 placeholders — visible but disabled, so the console reads as a
-    // console without shipping dead links.
-    ['Offres', 'Notaires'].forEach(function (name) {
-      var b = el('button', 'admin-rail-link', null);
-      b.type = 'button'; b.disabled = true;
-      b.appendChild(iconDot());
-      b.appendChild(document.createTextNode(name));
-      b.appendChild(el('span', 'admin-rail-soon', 'Bientôt'));
-      rail.appendChild(b);
-    });
+    // Notaires — le tableau d'honneur des cotes (ADR 0028) — et Audit — le
+    // journal append-only. Les deux exposent des données personnelles : la
+    // porte est 'pii:read', donc l'administrateur principal. Pour un analyste
+    // l'entrée reste VISIBLE mais fermée, comme les autres contrôles réservés :
+    // la console garde sa forme et dit pourquoi, plutôt que d'escamoter une
+    // section et de laisser croire qu'elle n'existe pas.
+    var reserved = !canReadPii();
+    rail.appendChild(railLink('Notaires', iconUsers(), 'notaires', '#/notaires', active, reserved));
+    rail.appendChild(railLink('Audit', iconShield(), 'audit', '#/audit', active, reserved));
+
+    // Phase-2 placeholder — visible but disabled, so the console reads as a
+    // console without shipping a dead link.
+    var soon = el('button', 'admin-rail-link', null);
+    soon.type = 'button'; soon.disabled = true;
+    soon.appendChild(iconDot());
+    soon.appendChild(document.createTextNode('Offres'));
+    soon.appendChild(el('span', 'admin-rail-soon', 'Bientôt'));
+    rail.appendChild(soon);
     return rail;
+  }
+
+  // Une entrée de rail qui peut être fermée : désactivée et estampillée
+  // « Réservé » quand la permission manque, active et routante sinon.
+  function railLink(name, icon, key, hash, active, reserved) {
+    var b = el('button', 'admin-rail-link');
+    b.type = 'button';
+    b.appendChild(icon);
+    b.appendChild(document.createTextNode(name));
+    if (reserved) {
+      b.disabled = true;
+      b.appendChild(el('span', 'admin-rail-soon', 'Réservé'));
+      b.title = 'Réservé à l’administrateur principal.';
+      return b;
+    }
+    if (active === key) b.setAttribute('aria-current', 'page');
+    b.addEventListener('click', function () { go(hash); });
+    return b;
   }
 
   function mountAuthed(active, content) {
@@ -1042,18 +1076,62 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Commission page — the rating-earned commission barème (ADR 0021 §4).
-  // GET /commission returns { defaut, override, effectif }; PUT stores a FULL
-  // replacement; DELETE returns billing to the deployment defaults. Writing
-  // needs the 'settings:write' permission (super_admin) — an analyst sees the
-  // barème in force read-only, with no form (the API re-enforces server-side).
-  // Rates travel as FRACTIONS (0.10 = 10 %); the form speaks percent
-  // (« 12 » = 12 %) and converts on save. Client-side parsing stays minimal on
-  // purpose: a non-numeric field goes through as null and the API's loud
-  // validation (422) answers in the inline error region.
+  // Commission — le barème du partage (ADR 0021 §4, réécrit par l'ADR 0028).
+  // GET /commission renvoie { defaut, override, effectif } ; PUT enregistre un
+  // barème COMPLET ; DELETE rend la facturation aux défauts du déploiement.
+  // Écrire exige la permission 'settings:write' (super_admin) — l'analyste lit
+  // le barème en vigueur sans formulaire (l'API le réimpose côté serveur).
+  //
+  // Depuis l'ADR 0028 un palier est `{ cote, taux }` : UNE mesure, la cote sur
+  // 100 du notaire, décide la part de Nota. L'écran parle donc toujours des
+  // DEUX moitiés — ce que Nota garde et ce que le NOTAIRE garde (1 − taux),
+  // parce que c'est cette moitié-là qui se négocie.
+  //
+  // Les taux voyagent en FRACTIONS (0,10 = 10 %) ; le formulaire parle en
+  // pourcentage (« 12 » = 12 %) et convertit à l'enregistrement. Le serveur
+  // reste l'autorité (le 422 s'affiche dans la région d'erreur en ligne), mais
+  // l'écran refuse d'expédier une évidence : validateBareme() rejoue mot pour
+  // mot les règles de commission-config.js avant le premier octet réseau.
   // ---------------------------------------------------------------------------
   var commissionBody = null;
   var MAX_PALIERS = 10;
+
+  // Le même arrondi que la facturation (billing.js roundRate) : quatre
+  // décimales, pour que « 12 % » saisi ici et le taux appliqué là-bas soient
+  // le même nombre, jamais deux flottants voisins.
+  function roundRate(x) { return Math.round(x * 10000) / 10000; }
+  // La part qui reste au notaire — énoncée, jamais laissée à recalculer.
+  function partNotaire(taux) { return roundRate(1 - taux); }
+  // Un taux de palier tel que la facturation l'appliquerait : borné par le
+  // plancher et par le taux de base. Un barème d'environnement mal réglé ne
+  // doit pas s'afficher plus cher que le taux de base — le mérite ne déplace
+  // la ligne que vers le notaire.
+  function borneTaux(taux, bareme) {
+    return Math.min(Number(bareme.taux) || 0, Math.max(Number(bareme.plancher) || 0, roundRate(Number(taux) || 0)));
+  }
+  // Le taux qu'une cote vaut sous un barème — copie fidèle de commissionWith()
+  // (apps/api/src/billing.js) : le MEILLEUR palier atteint s'applique, borné.
+  function tauxPourCote(cote, bareme) {
+    var taux = Number(bareme.taux) || 0;
+    (bareme.paliers || []).forEach(function (p) {
+      if (cote >= p.cote && Number(p.taux) < taux) taux = Number(p.taux);
+    });
+    return borneTaux(taux, bareme);
+  }
+  // Le palier effectivement atteint par une cote (le plus haut), ou null.
+  function palierPourCote(cote, bareme) {
+    var best = null;
+    (bareme.paliers || []).forEach(function (p) {
+      if (cote >= p.cote && (!best || p.cote > best.cote)) best = p;
+    });
+    return best;
+  }
+
+  // La porte des données personnelles : le bottin des notaires et le journal
+  // d'audit. 'pii:read' n'est donné qu'à l'administrateur principal.
+  function canReadPii() {
+    return !!(me && me.permissions && me.permissions.indexOf('pii:read') >= 0);
+  }
 
   function canWriteSettings() {
     return !!(me && me.permissions && me.permissions.indexOf('settings:write') >= 0);
@@ -1072,8 +1150,7 @@
     return String(p).replace('.', ',');
   }
   function pctLabel(f) { return fracToPct(f) + ' %'; }
-  // 4.5 → « 4,5 » (decimal comma display); the inverse accepts both separators.
-  function decLabel(n) { return String(Number(n) || 0).replace('.', ','); }
+  // « 60 » / « 60,5 » (virgule décimale acceptée à la saisie) → un nombre.
   function decToNum(v) {
     var s = String(v == null ? '' : v).trim().replace(',', '.');
     if (!s) return NaN;
@@ -1103,7 +1180,7 @@
     titleWrap.appendChild(el('span', 'page-eyebrow', 'Facturation'));
     titleWrap.appendChild(el('h1', 'page-title', 'Commission'));
     titleWrap.appendChild(el('p', 'page-sub',
-      'Barème décidé par Nota — taux de base, plancher et bonification par évaluations.'));
+      'Barème décidé par Nota — la cote sur 100 du notaire décide le partage.'));
     head.appendChild(titleWrap);
     content.appendChild(head);
 
@@ -1137,6 +1214,9 @@
       view.appendChild(note);
     }
     view.appendChild(buildBaremeView(r.json));
+    // Le simulateur est une LECTURE : l'analyste y a droit comme le
+    // propriétaire, puisqu'il ne fait que rejouer le barème en vigueur.
+    view.appendChild(buildBaremeSim(r.json.effectif));
     if (canWriteSettings()) view.appendChild(buildBaremeForm(r.json, container));
     container.appendChild(view);
   }
@@ -1147,9 +1227,12 @@
     var wrap = el('div');
 
     var grid = el('div', 'stat-grid');
-    grid.appendChild(tile('Taux de base', pctLabel(eff.taux), 'de commission sur chaque acte', false));
-    grid.appendChild(tile('Plancher', pctLabel(eff.plancher), 'jamais franchi par la bonification', false));
-    grid.appendChild(tile('Paliers', num((eff.paliers || []).length), 'de bonification par évaluations', false));
+    grid.appendChild(tile('Taux de base', pctLabel(eff.taux), 'la part de Nota sans historique', false));
+    grid.appendChild(tile('Plancher', pctLabel(eff.plancher), 'jamais franchi, quelle que soit la cote', false));
+    // Le sommet du barème, énoncé : c'est le chiffre que le notaire retient.
+    grid.appendChild(tile('Au mieux, le notaire garde', pctLabel(partNotaire(tauxPourCote(100, eff))),
+      'à la cote la plus haute du barème', false));
+    grid.appendChild(tile('Paliers', num((eff.paliers || []).length), 'de cote qui abaissent la part de Nota', false));
     wrap.appendChild(grid);
 
     var card = el('div', 'chart-card tpl-group bareme-card');
@@ -1173,27 +1256,99 @@
       var table = el('table', 'ptable');
       var thead = el('thead');
       var hr = el('tr');
-      ['Note moyenne', 'Avis requis', 'Réduction', 'Taux résultant'].forEach(function (h, i) {
+      ['Cote atteinte', 'Part de Nota', 'Le notaire garde'].forEach(function (h, i) {
         hr.appendChild(el('th', i >= 1 ? 'is-num' : null, h));
       });
       thead.appendChild(hr);
       table.appendChild(thead);
       var tbody = el('tbody');
       paliers.forEach(function (p) {
+        var taux = borneTaux(p.taux, eff);
         var tr = el('tr');
-        tr.appendChild(el('td', 'ptable-code', decLabel(p.note)));
-        tr.appendChild(el('td', 'is-num', num(p.avis)));
-        tr.appendChild(el('td', 'is-num', '− ' + pctLabel(p.bonus)));
-        tr.appendChild(el('td', 'is-num ptable-du',
-          pctLabel(Math.max(Number(eff.plancher) || 0, (Number(eff.taux) || 0) - (Number(p.bonus) || 0)))));
+        tr.appendChild(el('td', 'ptable-code', num(p.cote)));
+        tr.appendChild(el('td', 'is-num', pctLabel(taux)));
+        // La moitié qui se négocie porte l'accent.
+        tr.appendChild(el('td', 'is-num ptable-du', pctLabel(partNotaire(taux))));
         tbody.appendChild(tr);
       });
       table.appendChild(tbody);
       scroll.appendChild(table);
       card.appendChild(scroll);
+      // Sous le premier palier, c'est le taux de base qui parle — dit ici pour
+      // que le tableau n'ait pas besoin d'une ligne « départ » silencieuse.
+      var foot = el('p', 'tpl-note');
+      foot.appendChild(document.createTextNode(
+        'Sous le premier palier, le taux de base s’applique — le notaire garde '));
+      foot.appendChild(el('span', null, pctLabel(partNotaire(Number(eff.taux) || 0))));
+      foot.appendChild(document.createTextNode('.'));
+      card.appendChild(foot);
     }
     wrap.appendChild(card);
     return wrap;
+  }
+
+  // --- Simulateur : une cote, le partage qu'elle vaut ------------------------
+  // Le barème est un document ; le simulateur en est la lecture. Il rejoue
+  // exactement tauxPourCote() — la copie fidèle de la facturation — pour que
+  // « et à 78, ça donne quoi ? » se réponde ici, pas dans un tableur.
+  function buildBaremeSim(eff) {
+    var card = el('div', 'chart-card bareme-sim');
+    var head = el('div', 'chart-card-head');
+    var ht = el('div');
+    ht.appendChild(el('div', 'chart-card-title', 'Simulateur'));
+    ht.appendChild(el('div', 'chart-card-sub', 'Une cote, et le partage qu’elle vaut sous le barème en vigueur.'));
+    head.appendChild(ht);
+    card.appendChild(head);
+
+    var field = el('div', 'field bareme-sim-field');
+    field.appendChild(el('label', null, 'Cote du notaire (0 à 100)'));
+    var input = el('input', 'input bareme-sim-input');
+    input.type = 'text';
+    input.inputMode = 'numeric';
+    input.setAttribute('data-i18n-skip', '');
+    input.value = '75';
+    field.appendChild(input);
+    card.appendChild(field);
+
+    var out = el('div', 'bareme-sim-out');
+    function fig(k, cls) {
+      var f = el('div', 'bareme-sim-fig');
+      f.appendChild(el('div', 'bareme-sim-k', k));
+      var v = el('div', 'bareme-sim-v ' + cls, '—');
+      f.appendChild(v);
+      out.appendChild(f);
+      return v;
+    }
+    var vNota = fig('Nota garde', 'bareme-sim-nota');
+    var vNotaire = fig('Le notaire garde', 'bareme-sim-notaire');
+    card.appendChild(out);
+
+    var note = el('p', 'tpl-note bareme-sim-note');
+    card.appendChild(note);
+
+    function refresh() {
+      clear(note);
+      var cote = decToNum(input.value);
+      if (!isFinite(cote) || cote < 0 || cote > 100) {
+        vNota.textContent = '—';
+        vNotaire.textContent = '—';
+        note.appendChild(document.createTextNode('Entrez une cote de 0 à 100.'));
+        return;
+      }
+      var taux = tauxPourCote(cote, eff);
+      vNota.textContent = pctLabel(taux);
+      vNotaire.textContent = pctLabel(partNotaire(taux));
+      var p = palierPourCote(cote, eff);
+      if (!p) {
+        note.appendChild(document.createTextNode('Aucun palier atteint — le taux de base s’applique.'));
+      } else {
+        note.appendChild(document.createTextNode('Palier atteint : cote '));
+        note.appendChild(el('span', null, num(p.cote)));
+      }
+    }
+    input.addEventListener('input', refresh);
+    refresh();
+    return card;
   }
 
   // --- Edit form (super_admin only) ------------------------------------------
@@ -1231,7 +1386,7 @@
 
     // Editable tier rows, capped at MAX_PALIERS (mirrors the API's ceiling).
     var listWrap = el('div', 'bareme-paliers');
-    listWrap.appendChild(el('div', 'bareme-paliers-label', 'Paliers de bonification'));
+    listWrap.appendChild(el('div', 'bareme-paliers-label', 'Paliers de cote'));
     var rowsBox = el('div', 'bareme-rows');
     listWrap.appendChild(rowsBox);
     var addBtn = el('button', 'btn btn-sm', 'Ajouter un palier');
@@ -1242,10 +1397,22 @@
     function syncAdd() { addBtn.disabled = rowsBox.children.length >= MAX_PALIERS; }
     function addRow(p) {
       if (rowsBox.children.length >= MAX_PALIERS) return;
-      var row = el('div', 'bareme-palier');
-      row.appendChild(fld('Note minimale', p ? decLabel(p.note) : '').field);
-      row.appendChild(fld('Avis minimum', p ? String(p.avis) : '').field);
-      row.appendChild(fld('Réduction (%)', p ? fracToPct(p.bonus) : '').field);
+      var row = el('div', 'bareme-palier bareme-palier-cote');
+      row.appendChild(fld('Cote atteinte', p ? String(p.cote) : '').field);
+      var taux = fld('Part de Nota (%)', p ? fracToPct(p.taux) : '');
+      row.appendChild(taux.field);
+      // L'autre moitié, en direct : c'est elle qui se négocie avec le notaire.
+      var part = el('div', 'bareme-part');
+      part.appendChild(el('div', 'bareme-part-k', 'Le notaire garde'));
+      var partV = el('div', 'bareme-part-v', '—');
+      part.appendChild(partV);
+      row.appendChild(part);
+      function syncPart() {
+        var f = pctToFrac(taux.input.value);
+        partV.textContent = isFinite(f) ? pctLabel(partNotaire(f)) : '—';
+      }
+      taux.input.addEventListener('input', syncPart);
+      syncPart();
       var rm = el('button', 'btn btn-sm bareme-remove', 'Retirer');
       rm.type = 'button';
       rm.addEventListener('click', function () { rowsBox.removeChild(row); syncAdd(); });
@@ -1276,12 +1443,14 @@
         paliers: [].map.call(rowsBox.children, function (row) {
           var ins = row.querySelectorAll('input');
           return {
-            note: decToNum(ins[0].value),
-            avis: decToNum(ins[1].value), // the API enforces the integer ≥ 1
-            bonus: pctToFrac(ins[2].value),
+            cote: decToNum(ins[0].value), // l'entier 1–100 est revalidé plus bas, puis par l'API
+            taux: pctToFrac(ins[1].value),
           };
         }),
       };
+      // Le serveur reste l'autorité, mais une évidence ne part pas sur le fil.
+      var errs = validateBareme(body);
+      if (errs.length) { showErrorLines(error, errs); return; }
       submitBareme('PUT', body, [save], error, container, 'Barème enregistré.');
     });
 
@@ -1319,24 +1488,81 @@
     return wrap;
   }
 
+  // Les mêmes règles, les mêmes mots que commission-config.js (validateSchedule)
+  // — l'écran ne doit jamais refuser autre chose que ce que le serveur refuse,
+  // ni le formuler autrement. Un 422 reste possible : c'est lui qui tranche.
+  function validateBareme(body) {
+    var errors = [];
+    var taux = body.taux;
+    if (!isFinite(taux) || !(taux > 0 && taux < 1)) {
+      errors.push({ code: 'taux_invalide', message: 'Le taux de base doit être un nombre entre 0 et 1 (ex. 0,15 pour 15 %).' });
+      taux = undefined;
+    }
+    var plancher = body.plancher;
+    if (!isFinite(plancher) || plancher < 0 || (taux !== undefined && plancher > taux)) {
+      errors.push({ code: 'plancher_invalide', message: 'Le plancher doit être un nombre entre 0 et le taux de base.' });
+      plancher = undefined;
+    }
+    var paliers = body.paliers || [];
+    if (paliers.length > MAX_PALIERS) {
+      errors.push({ code: 'paliers_invalides', message: 'Les paliers doivent être une liste d’au plus ' + MAX_PALIERS + ' éléments.' });
+      return errors;
+    }
+    var clean = [];
+    paliers.forEach(function (p, i) {
+      var cote = p.cote, t = p.taux;
+      var bad =
+        !isFinite(cote) || Math.floor(cote) !== cote || cote < 1 || cote > 100 ||
+        !isFinite(t) || t < 0 || t >= 1 ||
+        (plancher !== undefined && t < plancher) ||
+        (taux !== undefined && t > taux);
+      if (bad) {
+        errors.push({ code: 'palier_invalide', message: 'Palier ' + (i + 1) + ' : il faut une cote entière de 1 à 100 et un taux entre le plancher et le taux de base.' });
+      } else {
+        clean.push({ cote: cote, taux: t });
+      }
+    });
+    if (clean.length !== paliers.length) return errors;
+    // Trié par cote, une cote ne se répète pas et le taux ne remonte jamais.
+    clean.sort(function (a, b) { return a.cote - b.cote; });
+    for (var i = 1; i < clean.length; i++) {
+      if (clean[i].cote === clean[i - 1].cote) {
+        errors.push({ code: 'paliers_invalides', message: 'Deux paliers ne peuvent pas viser la même cote (' + clean[i].cote + ').' });
+        break;
+      }
+      if (clean[i].taux > clean[i - 1].taux) {
+        errors.push({ code: 'paliers_invalides', message: 'Une cote plus haute ne peut jamais coûter plus cher au notaire.' });
+        break;
+      }
+    }
+    return errors;
+  }
+
+  // La région d'erreur en ligne, partagée par le refus local, le 422 du barème
+  // et celui du journal d'audit : un message par ligne, jamais un JSON brut.
+  function showErrorLines(error, errs) {
+    error.hidden = false;
+    clear(error);
+    errs.forEach(function (er) {
+      var line = el('div', 'tpl-error-line');
+      line.appendChild(el('strong', null, er.message || er.code || 'Erreur.'));
+      error.appendChild(line);
+    });
+  }
+
   async function submitBareme(method, body, buttons, error, container, okMsg) {
     buttons.forEach(function (b) { b.disabled = true; });
     var r = await call(method, '/commission', body === null ? undefined : body);
     buttons.forEach(function (b) { b.disabled = false; });
     if (r.status === 401) return; // handled by call()
     if (!r.ok) {
-      error.hidden = false;
-      clear(error);
-      var errs = (r.json && r.json.errors && r.json.errors.length)
+      showErrorLines(error, (r.json && r.json.errors && r.json.errors.length)
         ? r.json.errors
-        : [{ message: 'Impossible d’enregistrer le barème.' }];
-      errs.forEach(function (er) {
-        var line = el('div', 'tpl-error-line');
-        line.appendChild(el('strong', null, er.message || er.code || 'Erreur.'));
-        error.appendChild(line);
-      });
+        : [{ message: 'Impossible d’enregistrer le barème.' }]);
       return;
     }
+    error.hidden = true; // un barème accepté ne laisse pas traîner l'ancien refus
+    clear(error);
     toast(okMsg);
     await loadCommissionInto(container);
   }
@@ -1613,6 +1839,485 @@
     await loadAnnulationInto(container);
   }
 
+  // ---------------------------------------------------------------------------
+  // Notaires — le tableau d'honneur (ADR 0028).
+  //
+  // GET /notaries renvoie { notaires: [...], bareme }, déjà trié par cote
+  // décroissante. La porte est 'pii:read' (l'administrateur principal) : le
+  // bottin porte des courriels et des montants nominatifs. L'analyste voit
+  // l'entrée de rail fermée et, s'il force la route, la note « Accès réservé » —
+  // aucun appel n'est tenté, et un 403 du serveur atterrit au même endroit.
+  //
+  // L'écran ne recalcule RIEN : la cote, ses quatre axes, le taux effectif et
+  // la part viennent du serveur. Il les met en forme et rend chaque chiffre
+  // recomposable à la main, parce qu'un notaire qui conteste sa cote a droit
+  // au détail, pas à un score opaque.
+  // ---------------------------------------------------------------------------
+  var notairesBody = null;
+
+  var STATUT_LABELS = {
+    onboarding: 'En intégration',
+    active: 'Actif',
+    restricted: 'Restreint',
+  };
+  // Les libellés des chiffres derrière chaque axe — TOUS traduits (un libellé
+  // resté en français au milieu d'une colonne anglaise se lit comme une fuite).
+  // Une clé inconnue retombe sur son nom brut : le domaine peut ajouter une
+  // mesure sans casser l'écran.
+  var DETAIL_LABELS = {
+    note: 'Note moyenne',
+    avis: 'Avis reçus',
+    notePonderee: 'Note pondérée',
+    cible: 'Cible',
+    actes: 'Actes complétés',
+    // L'éventail du catalogue ne vaut plus de points (ADR 0028, complément) :
+    // les deux lignes restent servies, le libellé dit qu'elles n'entrent pas
+    // dans la note — se spécialiser ne coûte rien.
+    servicesRendus: 'Services rendus (information)',
+    catalogue: 'Services au catalogue (information)',
+    // La disponibilité mesure le fait de RÉPONDRE, plus le taux d'acceptation :
+    // proposer, accepter et décliner sont toutes des réponses ; seul le silence
+    // coûte des points.
+    reponses: 'Réponses données',
+    cibleReponses: 'Réponses visées',
+    repondu: 'Propositions et acceptations',
+    declinees: 'Déclins (sans pénalité)',
+    rayonKm: 'Rayon',
+    urgences: 'Urgences en ligne',
+    fiche: 'Fiche CNQ',
+    secteur: 'Secteur postal',
+    joursDepuisActivite: 'Jours depuis la dernière visite',
+    joursMembre: 'Jours sur Nota',
+  };
+  // Les deux renversements déontologiques de l'ADR 0028, dits sur l'axe même :
+  // un opérateur qui ouvre la cote devant un notaire doit pouvoir répondre à
+  // « pourquoi mes refus me coûtent-ils ? » par « ils ne coûtent rien ».
+  var AXE_NOTES = {
+    services: 'Ces deux lignes sont affichées pour information : se spécialiser ne retire aucun point.',
+    disponibilite: 'Répondre est ce qui compte — décliner EST une réponse. Seul le silence coûte des points.',
+  };
+  // La clé seule ne suffit pas toujours : `cible` vaut une NOTE visée sur l'axe
+  // satisfaction (4,8 sur 5) et un VOLUME d'actes sur l'axe services (50). Le
+  // libellé suit donc l'axe partout où le sens en dépend ; ailleurs, la table
+  // commune parle.
+  var DETAIL_LABELS_PAR_AXE = {
+    satisfaction: { cible: 'Note visée' },
+    services: { cible: 'Volume visé' },
+  };
+  function detailLabel(axeId, k) {
+    var parAxe = DETAIL_LABELS_PAR_AXE[axeId];
+    if (parAxe && parAxe[k]) return parAxe[k];
+    return DETAIL_LABELS[k] || k;
+  }
+
+  // Un chiffre du détail, mis en français : un booléen se dit oui/non, un rayon
+  // ses km, et toute clé `taux…` son % (la convention du dépôt — plus aucun axe
+  // n'en sert depuis que le taux de réponse a disparu, mais la prochaine sera
+  // formatée juste). Rien n'est inventé pour une valeur absente.
+  function detailValue(k, v) {
+    if (typeof v === 'boolean') return v ? 'oui' : 'non';
+    if (typeof v === 'number') {
+      if (/^taux/.test(k)) return dec(v) + ' %';
+      if (/Km$/.test(k)) return num(v) + ' km';
+      return dec(v);
+    }
+    return v == null ? '—' : String(v);
+  }
+
+  // La porte fermée, dite proprement — même registre que « Lecture seule ».
+  function buildDenied() {
+    var note = el('div', 'tpl-readonly-note admin-denied');
+    note.appendChild(el('strong', null, 'Accès réservé'));
+    note.appendChild(document.createTextNode(' — cette section est réservée à l’administrateur principal.'));
+    return note;
+  }
+
+  async function renderNotaires() {
+    if (!me || !me.email) {
+      var loaded = await loadMe();
+      if (!loaded.ok) {
+        if (loaded.status !== 401) renderFatal('Impossible de charger votre profil.', renderNotaires);
+        return;
+      }
+    }
+    renderUserbar();
+
+    var content = el('div', 'admin-content');
+    var head = el('div', 'page-head view-enter');
+    var titleWrap = el('div');
+    titleWrap.appendChild(el('span', 'page-eyebrow', 'Réseau'));
+    titleWrap.appendChild(el('h1', 'page-title', 'Notaires'));
+    titleWrap.appendChild(el('p', 'page-sub',
+      'Tableau d’honneur — la cote sur 100 décide la part que chaque notaire garde.'));
+    head.appendChild(titleWrap);
+    content.appendChild(head);
+
+    notairesBody = el('div');
+    content.appendChild(notairesBody);
+
+    mountAuthed('notaires', content);
+    focusTitle();
+    // La porte se ferme AVANT le réseau : on ne frappe pas à une porte connue
+    // close, et l'analyste lit pourquoi plutôt qu'un 403 muet.
+    if (!canReadPii()) { notairesBody.appendChild(buildDenied()); return; }
+    await loadNotairesInto(notairesBody);
+  }
+
+  async function loadNotairesInto(container) {
+    clear(container);
+    var skel = el('div', 'stat-grid');
+    for (var i = 0; i < 3; i++) skel.appendChild(el('div', 'skeleton skeleton-tile'));
+    container.appendChild(skel);
+
+    var r = await call('GET', '/notaries');
+    if (r.status === 401) return; // handled by call()
+    clear(container);
+    // Un refus n'est pas une panne : les permissions du jeton et celles de /me
+    // peuvent diverger, et l'écran doit encaisser ça sans bannière technique.
+    if (r.status === 403) { container.appendChild(buildDenied()); return; }
+    if (!r.ok || !r.json || !Array.isArray(r.json.notaires)) {
+      container.appendChild(buildErrorBanner(function () { loadNotairesInto(container); }));
+      return;
+    }
+    var view = el('div', 'view-enter');
+    view.appendChild(buildNotairesView(r.json));
+    container.appendChild(view);
+  }
+
+  function buildNotairesView(data) {
+    var rows = data.notaires || [];
+    var wrap = el('div');
+    var card = el('div', 'chart-card');
+    var head = el('div', 'chart-card-head');
+    var ht = el('div');
+    ht.appendChild(el('div', 'chart-card-title', 'Tableau d’honneur'));
+    ht.appendChild(el('div', 'chart-card-sub', 'Trié par cote — la meilleure d’abord.'));
+    head.appendChild(ht);
+    card.appendChild(head);
+
+    if (!rows.length) {
+      card.appendChild(el('p', 'tpl-note', 'Aucun notaire inscrit pour le moment.'));
+      wrap.appendChild(card);
+      return wrap;
+    }
+
+    var scroll = el('div', 'chart-scroll');
+    var table = el('table', 'ptable ntable');
+    var thead = el('thead');
+    var hr = el('tr');
+    ['Étude', 'Statut', 'Cote', 'Le notaire garde', 'Actes', 'Note', 'Commission perçue', 'Dernière visite']
+      .forEach(function (h, i) { hr.appendChild(el('th', i >= 2 ? 'is-num' : null, h)); });
+    thead.appendChild(hr);
+    table.appendChild(thead);
+    var tbody = el('tbody');
+    rows.forEach(function (n) { buildNotaireRow(n, tbody); });
+    table.appendChild(tbody);
+    scroll.appendChild(table);
+    card.appendChild(scroll);
+
+    // Le barème qui explique la colonne « Le notaire garde », rappelé sous le
+    // tableau : sans lui, la colonne est un chiffre sans cause.
+    var b = data.bareme;
+    if (b && typeof b.taux === 'number') {
+      card.appendChild(el('p', 'tpl-note',
+        'Barème en vigueur : Nota garde de ' + pctLabel(b.taux) + ' à ' + pctLabel(tauxPourCote(100, b)) + ' selon la cote.'));
+    }
+    wrap.appendChild(card);
+    return wrap;
+  }
+
+  function buildNotaireRow(n, tbody) {
+    var tr = el('tr', 'nrow');
+
+    // Étude + courriel, et le bouton qui déplie la cote.
+    var who = el('td');
+    var etude = el('div', 'nrow-etude', n.etude || '—');
+    etude.setAttribute('data-i18n-skip', ''); // raison sociale : contenu d'API
+    who.appendChild(etude);
+    if (n.email) {
+      var mail = el('div', 'ptable-sub', n.email);
+      mail.setAttribute('data-i18n-skip', '');
+      who.appendChild(mail);
+    }
+    var toggle = el('button', 'btn btn-sm nrow-toggle', 'Axes');
+    toggle.type = 'button';
+    toggle.setAttribute('aria-expanded', 'false');
+    who.appendChild(toggle);
+    tr.appendChild(who);
+
+    var st = el('td');
+    st.appendChild(el('span', 'nstatut is-' + (n.statut || 'inconnu'),
+      STATUT_LABELS[n.statut] || n.statut || '—'));
+    tr.appendChild(st);
+
+    tr.appendChild(el('td', 'is-num ptable-code', num(n.cote)));
+
+    // La part du notaire telle que servie ; à défaut, déduite du taux. Jamais
+    // un 0 % inventé quand la facturation n'a rien dit.
+    var part = typeof n.part === 'number' ? n.part
+      : (typeof n.tauxEffectif === 'number' ? partNotaire(n.tauxEffectif) : null);
+    tr.appendChild(el('td', 'is-num ptable-du', part === null ? '—' : pctLabel(part)));
+
+    tr.appendChild(el('td', 'is-num', num(n.actes || 0)));
+
+    // Aucune fausse note : sans avis, la case le dit.
+    var noteCell = el('td', 'is-num');
+    if (typeof n.note === 'number' && (n.avis || 0) > 0) {
+      noteCell.appendChild(el('div', 'nrow-note', dec(n.note)));
+      noteCell.appendChild(el('div', 'ptable-sub', num(n.avis) + ' avis'));
+    } else {
+      noteCell.appendChild(el('span', 'ptable-sub', 'aucun avis'));
+    }
+    tr.appendChild(noteCell);
+
+    tr.appendChild(el('td', 'is-num', moneyCents((n.commissionPercue || 0) * 100)));
+
+    var vu = el('td', 'is-num');
+    if (n.vuLe) {
+      var d = el('span', null, String(n.vuLe).slice(0, 10));
+      d.setAttribute('data-i18n-skip', '');
+      vu.appendChild(d);
+    } else {
+      vu.appendChild(el('span', 'ptable-sub', 'jamais'));
+    }
+    tr.appendChild(vu);
+    tbody.appendChild(tr);
+
+    // Le dépli vit dans le tableau, juste sous sa ligne, et disparaît quand on
+    // le referme : rien de caché qui traîne dans le DOM.
+    var detail = null;
+    toggle.addEventListener('click', function () {
+      if (detail) {
+        tbody.removeChild(detail);
+        detail = null;
+        toggle.setAttribute('aria-expanded', 'false');
+        return;
+      }
+      detail = buildAxesRow(n);
+      tbody.insertBefore(detail, tr.nextSibling);
+      toggle.setAttribute('aria-expanded', 'true');
+    });
+  }
+
+  function buildAxesRow(n) {
+    var tr = el('tr', 'naxes-row');
+    var td = el('td');
+    td.colSpan = 8;
+    var box = el('div', 'naxes');
+    (n.axes || []).forEach(function (a) {
+      var axe = el('div', 'naxe');
+      // Le nom vient de l'API dans les deux langues : on choisit, le traducteur
+      // DOM ne repasse pas derrière.
+      var nom = el('div', 'naxe-nom', (isEnglish() && a.nomEn) ? a.nomEn : (a.nom || a.id || '—'));
+      nom.setAttribute('data-i18n-skip', '');
+      axe.appendChild(nom);
+      axe.appendChild(el('div', 'naxe-points', dec(a.points) + ' sur ' + num(a.max)));
+      var lines = el('div', 'naxe-lines');
+      var detail = a.detail || {};
+      Object.keys(detail).forEach(function (k) {
+        var line = el('div', 'naxe-line');
+        line.appendChild(el('span', 'naxe-k', detailLabel(a.id, k)));
+        line.appendChild(el('span', 'naxe-v', detailValue(k, detail[k])));
+        lines.appendChild(line);
+      });
+      axe.appendChild(lines);
+      if (AXE_NOTES[a.id]) axe.appendChild(el('p', 'tpl-note naxe-note', AXE_NOTES[a.id]));
+      box.appendChild(axe);
+    });
+    td.appendChild(box);
+    tr.appendChild(td);
+    return tr;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Audit — le journal append-only, jour par jour (pièce SOC 2).
+  //
+  // GET /audit?jour=AAAA-MM-JJ renvoie { jour, entrees } du plus récent au plus
+  // ancien ; 422 si le jour n'est pas une date ISO ; 403 pour l'analyste (même
+  // porte 'pii:read' que le bottin : les entrées portent courriels et IP).
+  //
+  // La règle de l'écran : une entrée financière doit se lire SANS connaître le
+  // JSON. Un acte réglé sort donc en une phrase — payé, taux, part de Nota,
+  // part du notaire, cote — et les identifiants (bid, Stripe) restent à côté,
+  // lisibles mais discrets. Les autres gestes montrent leur meta telle quelle :
+  // là, le JSON EST l'information.
+  // ---------------------------------------------------------------------------
+  var auditBody = null;
+  var auditJour = null;
+  var auditGen = 0; // garde de séquence : un jour lent ne recouvre pas le suivant
+
+  var AUDIT_LABELS = {
+    acte_regle: 'Acte réglé',
+    commission_schedule_updated: 'Barème de commission modifié',
+    commission_schedule_reset: 'Barème de commission réinitialisé',
+    cancellation_schedule_updated: 'Barème d’annulation modifié',
+    cancellation_schedule_reset: 'Barème d’annulation réinitialisé',
+    email_template_updated: 'Modèle de courriel modifié',
+    email_template_reset: 'Modèle de courriel réinitialisé',
+    login_requested: 'Lien de connexion demandé',
+    login_requested_unknown: 'Lien demandé par une adresse inconnue',
+    login_throttled: 'Connexion freinée',
+    login_success: 'Connexion réussie',
+    logout: 'Déconnexion',
+    session_refreshed: 'Session prolongée',
+  };
+
+  async function renderAudit() {
+    if (!me || !me.email) {
+      var loaded = await loadMe();
+      if (!loaded.ok) {
+        if (loaded.status !== 401) renderFatal('Impossible de charger votre profil.', renderAudit);
+        return;
+      }
+    }
+    renderUserbar();
+    if (!auditJour) auditJour = todayISO();
+
+    var content = el('div', 'admin-content');
+    var head = el('div', 'page-head view-enter');
+    var titleWrap = el('div');
+    titleWrap.appendChild(el('span', 'page-eyebrow', 'Conformité'));
+    titleWrap.appendChild(el('h1', 'page-title', 'Audit'));
+    titleWrap.appendChild(el('p', 'page-sub',
+      'Journal append-only — chaque geste d’administration et chaque acte réglé, jour par jour.'));
+    head.appendChild(titleWrap);
+    head.appendChild(el('span', 'admin-spacer'));
+
+    auditBody = el('div');
+    // Le sélecteur vit dans l'en-tête, pas dans le corps rechargé : une date
+    // refusée par le serveur doit rester corrigeable.
+    if (canReadPii()) head.appendChild(buildAuditDayControl());
+    content.appendChild(head);
+    content.appendChild(auditBody);
+
+    mountAuthed('audit', content);
+    focusTitle();
+    if (!canReadPii()) { auditBody.appendChild(buildDenied()); return; }
+    await loadAuditInto(auditBody);
+  }
+
+  function buildAuditDayControl() {
+    var wrap = el('div', 'range-control');
+    var field = el('div', 'field audit-day-field');
+    var label = el('label', null, 'Jour');
+    label.setAttribute('for', 'audit-day');
+    var input = el('input', 'input audit-day');
+    input.type = 'date';
+    input.id = 'audit-day';
+    input.value = auditJour;
+    input.setAttribute('value', auditJour); // survit aussi à une relecture du DOM
+    input.max = todayISO(); // un journal n'a rien à dire du futur
+    input.setAttribute('data-i18n-skip', '');
+    input.addEventListener('change', function () {
+      auditJour = input.value || todayISO();
+      if (auditBody) loadAuditInto(auditBody);
+    });
+    field.appendChild(label);
+    field.appendChild(input);
+    wrap.appendChild(field);
+    return wrap;
+  }
+
+  async function loadAuditInto(container) {
+    var gen = ++auditGen;
+    clear(container);
+    var skel = el('div');
+    for (var i = 0; i < 3; i++) skel.appendChild(el('div', 'skeleton skeleton-tile'));
+    container.appendChild(skel);
+
+    var r = await call('GET', '/audit?jour=' + encodeURIComponent(auditJour));
+    if (gen !== auditGen) return; // un autre jour a été choigi entre-temps
+    if (r.status === 401) return; // handled by call()
+    clear(container);
+    if (r.status === 403) { container.appendChild(buildDenied()); return; }
+    // 422 : la date est illisible pour le serveur — c'est SA phrase qui
+    // s'affiche, sous le sélecteur qui permet de la corriger.
+    if (r.status === 422) {
+      var box = el('div', 'tpl-error');
+      showErrorLines(box, (r.json && r.json.errors && r.json.errors.length)
+        ? r.json.errors
+        : [{ message: 'Le jour demandé est illisible.' }]);
+      container.appendChild(box);
+      return;
+    }
+    if (!r.ok || !r.json || !Array.isArray(r.json.entrees)) {
+      container.appendChild(buildErrorBanner(function () { loadAuditInto(container); }));
+      return;
+    }
+
+    var view = el('div', 'view-enter');
+    var entrees = r.json.entrees;
+    if (!entrees.length) {
+      view.appendChild(buildAuditEmpty());
+    } else {
+      var list = el('div', 'audit-list');
+      entrees.forEach(function (e) { list.appendChild(buildAuditEntry(e)); });
+      view.appendChild(list);
+    }
+    container.appendChild(view);
+  }
+
+  function buildAuditEmpty() {
+    var e = el('div', 'empty-state');
+    e.appendChild(el('div', 'empty-state-title', 'Aucune entrée pour ce jour.'));
+    e.appendChild(el('div', 'empty-state-text',
+      'Ni geste d’administration ni acte réglé n’a été journalisé à cette date.'));
+    return e;
+  }
+
+  function buildAuditEntry(e) {
+    var row = el('div', 'audit-entry');
+    var head = el('div', 'audit-entry-head');
+    var ts = el('span', 'audit-ts', String(e.ts || '').slice(11, 16) || '—:—');
+    ts.setAttribute('data-i18n-skip', '');
+    head.appendChild(ts);
+    var action = el('span', 'audit-action', AUDIT_LABELS[e.action] || e.action || '—');
+    if (!AUDIT_LABELS[e.action]) action.setAttribute('data-i18n-skip', ''); // code brut : pas à traduire
+    head.appendChild(action);
+    var who = el('span', 'audit-who');
+    var qui = e.email || 'système';
+    var quiEl = el('span', null, qui);
+    if (e.email) quiEl.setAttribute('data-i18n-skip', '');
+    who.appendChild(quiEl);
+    if (e.ip) {
+      var ip = el('span', 'audit-ip', e.ip);
+      ip.setAttribute('data-i18n-skip', '');
+      who.appendChild(ip);
+    }
+    head.appendChild(who);
+    row.appendChild(head);
+
+    var m = e.meta || {};
+    if (e.action === 'acte_regle' && typeof m.montant === 'number'
+        && typeof m.commission === 'number' && typeof m.net === 'number') {
+      // LA divulgation : ce que le client a payé, ce que Nota a gardé, à quel
+      // taux, ce qui reste au notaire, et la cote qui l'a décidé.
+      row.appendChild(el('p', 'audit-money',
+        moneyCents(m.montant * 100) + ' payés · ' + pctLabel(m.taux) + ' · ' +
+        moneyCents(m.commission * 100) + ' à Nota · ' + moneyCents(m.net * 100) + ' au notaire · ' +
+        'cote ' + num(m.cote)));
+      var facts = el('div', 'audit-facts');
+      facts.setAttribute('data-i18n-skip', ''); // identifiants et codes de service
+      facts.textContent = [m.serviceId, m.dateISO, m.bidId, m.notaryId, m.chargeId, m.transferId]
+        .filter(function (x) { return x; }).join(' · ');
+      row.appendChild(facts);
+    } else if (Object.keys(m).length) {
+      // Les autres gestes : la meta telle quelle, une ligne par clé. Ici le
+      // JSON EST la pièce — on ne prétend pas le raconter.
+      var meta = el('div', 'audit-meta');
+      Object.keys(m).forEach(function (k) {
+        var line = el('div', 'audit-meta-line');
+        line.appendChild(el('span', 'audit-meta-k', k));
+        var v = el('span', 'audit-meta-v', typeof m[k] === 'string' ? m[k] : JSON.stringify(m[k]));
+        v.setAttribute('data-i18n-skip', '');
+        line.appendChild(v);
+        meta.appendChild(line);
+      });
+      row.appendChild(meta);
+    }
+    return row;
+  }
+
   // --- Loading / empty / error ----------------------------------------------
   function buildSkeletons() {
     var wrap = el('div');
@@ -1685,6 +2390,22 @@
     s.appendChild(svgEl('line', { x1: 16, y1: 3, x2: 16, y2: 7 }));
     s.appendChild(svgEl('line', { x1: 9.5, y1: 12, x2: 14.5, y2: 17 }));
     s.appendChild(svgEl('line', { x1: 14.5, y1: 12, x2: 9.5, y2: 17 }));
+    return s;
+  }
+  function iconUsers() {
+    var s = svgEl('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none',
+      stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' });
+    s.appendChild(svgEl('path', { d: 'M16 20v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2' }));
+    s.appendChild(svgEl('circle', { cx: 9, cy: 7, r: 3 }));
+    s.appendChild(svgEl('path', { d: 'M17 4.5a3 3 0 0 1 0 5.8' }));
+    s.appendChild(svgEl('path', { d: 'M22 20v-2a4 4 0 0 0-3-3.8' }));
+    return s;
+  }
+  function iconShield() {
+    var s = svgEl('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none',
+      stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' });
+    s.appendChild(svgEl('path', { d: 'M12 3l8 3v6c0 4.6-3.2 8.4-8 9.5-4.8-1.1-8-4.9-8-9.5V6l8-3z' }));
+    s.appendChild(svgEl('path', { d: 'M9 12l2 2 4-4' }));
     return s;
   }
   function iconDot() {

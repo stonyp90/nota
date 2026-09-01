@@ -113,26 +113,33 @@ test('the settlement invites the client to evaluate (one mail, once)', async () 
   assert.ok(invite, 'evaluation invite missing: ' + JSON.stringify(a.mailer.sent.map((m) => [m.to, m.subject])));
 });
 
-test('the rating average surfaces publicly: on the retained notaire block, on propositions, and in the console', async () => {
+test('ADR 0030 — la moyenne ne surface QUE pour le notaire; le client voit des faits', async () => {
   const a = app();
   const bid = await seed(a);
-  // Two past evaluations on other bids give the notary a 4.5 average.
-  await a.repo.putNotary({ ...(await a.repo.getNotary(NOTARY)), ratingCount: 2, ratingSum: 9 });
+  // Deux évaluations passées donnent au notaire une moyenne de 4,5.
+  await a.repo.putNotary({ ...(await a.repo.getNotary(NOTARY)), ratingCount: 2, ratingSum: 9, actsCompleted: 11 });
 
-  // 1) The client's retained view names the notary WITH their stars.
+  // 1) La vue client du dossier retenu nomme le notaire — sans étoiles.
+  //    Art. 70 du Code de déontologie : le notaire ne peut permettre que soit
+  //    utilisé un témoignage d'appui qui le concerne, et il n'y a pas
+  //    d'exception pour les avis authentiques.
   const mine = parse(await a.handle({ method: 'GET', path: '/client/bid', headers: bearer(clientToken(bid.id)), query: { id: bid.id, dateISO: bid.dateISO } }));
-  assert.deepEqual(mine.notaire.rating, { note: 4.5, avis: 2 });
+  assert.equal(mine.notaire.rating, undefined, 'aucune moyenne côté client');
+  assert.equal(mine.notaire.cote, undefined, 'aucune cote non plus');
+  assert.equal(mine.notaire.actes, 11, 'le nombre d’actes portés, lui, est un fait');
 
-  // 2) A proposition from that notary carries the same rating.
+  // 2) Une proposition du même notaire ne porte pas davantage.
   await a.repo.update({
     ...(await a.repo.get(bid.id, bid.dateISO)),
     status: domain.STATUS.OUVERTE, notaryId: null,
     propositions: [{ id: 'p1', notaryId: NOTARY, etude: 'Étude N', montant: 3200, delta: 400, status: 'en_attente', createdAt: TODAY }],
   });
   const withProp = parse(await a.handle({ method: 'GET', path: '/client/bid', headers: bearer(clientToken(bid.id)), query: { id: bid.id, dateISO: bid.dateISO } }));
-  assert.deepEqual(withProp.propositions[0].rating, { note: 4.5, avis: 2 });
+  assert.equal(withProp.propositions[0].rating, undefined);
+  assert.equal(withProp.propositions[0].actes, 11);
 
-  // 3) The console hands the notary their own average.
+  // 3) La console rend au notaire SA propre moyenne — ce n'est pas de la
+  //    publicité, c'est son dossier.
   const token = signToken(NOTARY, NOW_MS + 60_000, SCOPES.SESSION);
   const console_ = parse(await a.handle({ method: 'GET', path: '/notary/bids', headers: bearer(token), query: {} }));
   assert.deepEqual(console_.rating, { note: 4.5, avis: 2 });
@@ -187,11 +194,13 @@ test('/notary/evaluations: newest first, session token only, empty history is an
   assert.equal(empty.rating, null);
 });
 
-test('no ratings yet → rating is null everywhere, never zero stars', async () => {
+test('no ratings yet → the notary\'s own rating is null, never zero stars', async () => {
   const a = app();
   const bid = await seed(a);
+  // Côté client : rien à afficher de toute façon depuis l'ADR 0030.
   const mine = parse(await a.handle({ method: 'GET', path: '/client/bid', headers: bearer(clientToken(bid.id)), query: { id: bid.id, dateISO: bid.dateISO } }));
-  assert.equal(mine.notaire.rating, null);
+  assert.equal(mine.notaire.rating, undefined);
+  assert.equal(mine.notaire.actes, 0, 'zéro acte est un fait, pas une fausse étoile');
   const token = signToken(NOTARY, NOW_MS + 60_000, SCOPES.SESSION);
   const console_ = parse(await a.handle({ method: 'GET', path: '/notary/bids', headers: bearer(token), query: {} }));
   assert.equal(console_.rating, null);
