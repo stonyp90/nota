@@ -153,6 +153,17 @@ resource "aws_lambda_function" "reminders" {
       NOTA_BASE_URL       = var.base_url
     }
   }
+
+  # LE CODE APPARTIENT À LA CI, PAS À TERRAFORM (2026-09-01).
+  # `archive_file` empaquette `apps/api` tel quel ; le déploiement, lui, VENDORE
+  # d'abord @nota/domain dans apps/api/node_modules (voir
+  # .github/workflows/deploy.yml). Un `terraform apply` qui reprend la main sur
+  # le code livrerait donc une Lambda incapable de résoudre le domaine — une
+  # panne totale, déclenchée par un changement de configuration sans rapport.
+  # Terraform possède l'infrastructure ; la CI possède le code.
+  lifecycle {
+    ignore_changes = [filename, source_code_hash]
+  }
 }
 
 # --- EventBridge Scheduler: fire the reminder Lambda daily -------------------
