@@ -2709,7 +2709,7 @@ function createApp(repo, opts = {}) {
       }
       // The cross-origin download honours the HEADER filename (the anchor's
       // download attribute is ignored cross-origin), so name it here.
-      return calendar(200, buildNotaryFeed(rows, icsStamp()), 'nota-signatures.ics');
+      return calendar(200, buildNotaryFeed(rows, icsStamp(), siteUrl), 'nota-signatures.ics');
     }
 
     // PUBLIC carnet feed — no token. Anyone can subscribe to the whole carnet in
@@ -2726,7 +2726,7 @@ function createApp(repo, opts = {}) {
           if (isLive(b) && b.status !== domain.STATUS.ANNULEE) bids.push(publicBid(b));
         }
       }
-      return calendar(200, buildCarnetFeed(bids, icsStamp()));
+      return calendar(200, buildCarnetFeed(bids, icsStamp(), siteUrl));
     }
 
     return json(404, { errors: [{ code: 'introuvable', message: 'Route inconnue.' }] });

@@ -77,7 +77,21 @@ function deplacementEn(d) {
 // all-day event: French SUMMARY (service + amount), the déplacement band as
 // LOCATION, and a DESCRIPTION of one fact per line, FR — EN. Details are all
 // optional so a pointer written before the hydration still renders.
-function buildNotaryFeed(events = [], stamp) {
+// L'origine publique, normalisée : sans barre oblique finale, ou `null` si elle
+// n'est pas configurée. Un événement sans lien vaut mieux qu'un lien faux.
+function origine(baseUrl) {
+  const u = String(baseUrl == null ? '' : baseUrl).trim().replace(/\/+$/, '');
+  return /^https?:\/\//.test(u) ? u : null;
+}
+
+// RFC 5545 §3.8.4.6 — URL porte un URI, pas du TEXT : il ne passe donc pas par
+// `escText`, qui échapperait les deux-points et casserait le lien.
+function urlLine(base, suffixe) {
+  return base ? ['URL:' + base + '/' + (suffixe || '')] : [];
+}
+
+function buildNotaryFeed(events = [], stamp, baseUrl) {
+  const lien = urlLine(origine(baseUrl), '#notaires');
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
@@ -114,6 +128,7 @@ function buildNotaryFeed(events = [], stamp) {
       'SUMMARY:' + escText('Signature notariée — ' + name + (hasMontant ? ' — ' + domain.money(e.montant) : '')),
       ...(e.deplacement ? ['LOCATION:' + escText(deplacementFr(e.deplacement))] : []),
       'DESCRIPTION:' + escText(desc.join('\n')),
+      ...lien,
       'END:VEVENT'
     );
   }
@@ -126,7 +141,8 @@ function buildNotaryFeed(events = [], stamp) {
 // Apple over webcal. Each `bid` is the SAME public projection GET /bids exposes
 // — id, dateISO, serviceId, montant — so this can never leak courriel/dossier.
 // French SUMMARY, English DESCRIPTION, same event either way.
-function buildCarnetFeed(bids = [], stamp) {
+function buildCarnetFeed(bids = [], stamp, baseUrl) {
+  const lien = urlLine(origine(baseUrl), '');
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
@@ -147,6 +163,7 @@ function buildCarnetFeed(bids = [], stamp) {
       'DTEND;VALUE=DATE:' + compact(domain.addDays(b.dateISO, 1)),
       'SUMMARY:' + escText(name + ' — ' + domain.money(b.montant)),
       'DESCRIPTION:' + escText(nameEn + ' — ' + domain.moneyEn(b.montant)),
+      ...lien,
       'END:VEVENT'
     );
   }
