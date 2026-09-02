@@ -134,7 +134,7 @@ jobs:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Package + deploy the Lambda
+      - name: Package + deploy the Lambdas (api + reminders)
         shell: bash
         run: |
           set -euo pipefail
@@ -146,6 +146,22 @@ jobs:
           ( cd apps/api && zip -qr /tmp/api.zip . -x '*.git*' )
           aws lambda update-function-code \
             --function-name nota-api \
+            --zip-file fileb:///tmp/api.zip \
+            --publish
+
+          # LES RAPPELS TOURNAIENT DU CODE FIGÉ (corrigé le 2026-09-02).
+          #
+          # `nota-reminders` porte `ignore_changes = [filename, source_code_hash]`
+          # dans infra/notifications.tf — Terraform ne touche donc jamais à son
+          # code, c'est délibéré et c'est la bonne règle. Mais AUCUN workflow ne
+          # le mettait à jour non plus : son code datait du dernier `apply`
+          # antérieur, et il envoyait chaque jour des courriels écrits à partir
+          # d'un gabarit que le dépôt avait déjà corrigé.
+          #
+          # Le même paquet sert les deux fonctions : `reminders.js` vit dans
+          # apps/api et importe le même domaine vendoré ci-dessus.
+          aws lambda update-function-code \
+            --function-name nota-reminders \
             --zip-file fileb:///tmp/api.zip \
             --publish
 

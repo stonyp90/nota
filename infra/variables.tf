@@ -166,18 +166,6 @@ variable "admin_domain_name" {
   default     = ""
 }
 
-variable "admin_allowed_cidrs" {
-  description = "WAF IPv4 CIDR allowlist for the admin surface. EMPTY (the default) means the WAF blocks EVERYONE — the admin surface is unreachable (safe closed default). Admins on dynamic IPs must keep this current."
-  type        = list(string)
-  default     = []
-}
-
-variable "admin_allowed_cidrs_v6" {
-  description = "WAF IPv6 CIDR allowlist for the admin surface. The distribution serves IPv6 (is_ipv6_enabled) and modern browsers prefer it, so an IPv4-only allowlist silently blocks IPv6 viewers. EMPTY keeps IPv6 fully blocked (safe closed default); allowlist the admin's /64 prefix to admit them."
-  type        = list(string)
-  default     = []
-}
-
 variable "admin_emails" {
   description = "Allowlisted admin login email addresses (injected as NOTA_ADMIN_EMAILS). Empty means no one can log in."
   type        = list(string)

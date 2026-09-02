@@ -214,115 +214,31 @@ resource "aws_cloudfront_response_headers_policy" "admin_security" {
 }
 
 # ---------------------------------------------------------------------------
-# WAFv2 (scope CLOUDFRONT => created via aws.us_east_1) — IP allowlist with a
-# default action of BLOCK. Only source IPs in var.admin_allowed_cidrs pass.
+# PAS de WAF, PAS de liste blanche d'adresses IP (retiré le 2026-09-02).
 #
-# SAFE CLOSED DEFAULT: an EMPTY var.admin_allowed_cidrs means the allow rule
-# matches nothing, so the default BLOCK applies to everyone — the admin surface
-# is reachable by NOBODY. Admins on dynamic IPs MUST keep this allowlist current
-# (a changed home/office IP locks them out until the list is updated).
+# La console était fermée par une liste d'adresses IP. Elle ne protégeait
+# pourtant pas grand-chose : elle posait une couche RÉSEAU devant une porte
+# déjà AUTHENTIFIÉE — liste blanche d'adresses de courriel (NOTA_ADMIN_EMAILS),
+# lien à usage unique de 15 minutes, session signée plafonnée à 12 h avec
+# expiration d'inactivité, et un limiteur de 5 demandes par quart d'heure et par
+# IP (apps/api/src/admin.js). C'est exactement le modèle de la console notaire,
+# publique depuis toujours.
+#
+# Et elle coûtait cher en usage : une adresse résidentielle change, et
+# l'opérateur se retrouve dehors jusqu'à ce qu'un `terraform apply` remette la
+# liste à jour. Une sécurité qui verrouille son propre administrateur finit par
+# être désactivée dans l'urgence — ce qui est pire que de ne l'avoir jamais
+# posée.
+#
+# Ce qui ne change pas : rien n'indexe cette console (X-Robots-Tag), et
+# l'authentification est désormais la seule frontière. C'est délibéré, et c'est
+# aussi ce qui la rend vérifiable depuis n'importe où.
 # ---------------------------------------------------------------------------
-resource "aws_wafv2_ip_set" "admin_allowlist" {
-  count              = local.admin_enabled
-  provider           = aws.us_east_1
-  name               = "${var.project_name}-admin-allowlist"
-  description        = "IPv4 CIDRs permitted to reach the admin surface. EMPTY = nobody by default."
-  scope              = "CLOUDFRONT"
-  ip_address_version = "IPV4"
-  addresses          = var.admin_allowed_cidrs
-}
-
-# IPv6 companion allowlist. The distribution serves IPv6 (is_ipv6_enabled) and
-# Happy-Eyeballs browsers reach CloudFront over IPv6 when available, so the WAF
-# sees a v6 source address that the IPv4 set can never match. Without this rule
-# an IPv6 viewer is blocked even when their IPv4 is allowlisted. EMPTY = nobody.
-resource "aws_wafv2_ip_set" "admin_allowlist_v6" {
-  count              = local.admin_enabled
-  provider           = aws.us_east_1
-  name               = "${var.project_name}-admin-allowlist-v6"
-  description        = "IPv6 CIDRs permitted to reach the admin surface. EMPTY = nobody by default."
-  scope              = "CLOUDFRONT"
-  ip_address_version = "IPV6"
-  addresses          = var.admin_allowed_cidrs_v6
-}
-
-resource "aws_wafv2_web_acl" "admin" {
-  count       = local.admin_enabled
-  provider    = aws.us_east_1
-  name        = "${var.project_name}-admin-acl"
-  scope       = "CLOUDFRONT"
-  description = "Default-BLOCK web ACL for the admin surface - only allowlisted IPs pass."
-
-  # Closed by default: block everything that doesn't match the allow rule below.
-  # The blocked 403 is the ONLY response a crawler ever sees (WAF runs before
-  # CloudFront behaviors, so the response-headers policy never applies to it) —
-  # stamp the noindex directive on the block itself so search/LLM crawlers get
-  # it regardless of their 403/robots semantics.
-  default_action {
-    block {
-      custom_response {
-        response_code = 403
-
-        response_header {
-          name  = "X-Robots-Tag"
-          value = "noindex, nofollow"
-        }
-      }
-    }
-  }
-
-  rule {
-    name     = "allow-allowlisted-ips"
-    priority = 0
-
-    action {
-      allow {}
-    }
-
-    statement {
-      ip_set_reference_statement {
-        arn = aws_wafv2_ip_set.admin_allowlist[0].arn
-      }
-    }
-
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "${var.project_name}-admin-ipallow"
-      sampled_requests_enabled   = true
-    }
-  }
-
-  rule {
-    name     = "allow-allowlisted-ips-v6"
-    priority = 1
-
-    action {
-      allow {}
-    }
-
-    statement {
-      ip_set_reference_statement {
-        arn = aws_wafv2_ip_set.admin_allowlist_v6[0].arn
-      }
-    }
-
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "${var.project_name}-admin-ipallow-v6"
-      sampled_requests_enabled   = true
-    }
-  }
-
-  visibility_config {
-    cloudwatch_metrics_enabled = true
-    metric_name                = "${var.project_name}-admin-acl"
-    sampled_requests_enabled   = true
-  }
-}
 
 # ---------------------------------------------------------------------------
 # Admin CloudFront distribution: SPA from S3 (default) + admin API from the
-# admin HTTP API (/api/admin/*). WAF-gated by IP. Mirrors the public
+# admin HTTP API (/api/admin/*). Protégée par l'AUTHENTIFICATION seule,
+# jamais par l'adresse réseau. Mirrors the public
 # distribution's origin/behavior wiring (cloudfront.tf).
 # ---------------------------------------------------------------------------
 resource "aws_cloudfront_distribution" "admin" {
@@ -332,9 +248,6 @@ resource "aws_cloudfront_distribution" "admin" {
   comment             = "${var.project_name} admin SPA + admin API"
   default_root_object = "index.html"
   price_class         = "PriceClass_100"
-
-  # IP allowlist enforcement. Empty allowlist => WAF blocks everyone.
-  web_acl_id = aws_wafv2_web_acl.admin[0].arn
 
   # --- Origin 1: private admin S3 bucket via OAC -------------------------
   origin {

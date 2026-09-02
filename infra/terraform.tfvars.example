@@ -19,7 +19,6 @@ project_name = "nota"
 # domain, so admin reuses hosted_zone_id above for its ACM validation + DNS.
 # enable_admin        = true
 # admin_domain_name   = "admin.nota.ca"
-# admin_allowed_cidrs = ["203.0.113.7/32"]        # EMPTY = admin unreachable (safe default)
 # admin_emails        = ["you@nota.ca"]           # allowlisted admin logins
 #
 # The admin Lambda reuses the public SES sender (from_email). Verify it in SES
