@@ -272,22 +272,25 @@ function emailOverrideSK(key) {
 }
 const EMAIL_OVERRIDE_PREFIX = 'TPL#';
 
-// --- Admin-decided commission barème (ADR 0021) --------------------------------
-// ONE item: the base rate, the floor, and the rating-earned bonus tiers billing
-// prices every settlement with. Same design as CONFIG#EMAIL — product
-// configuration lives with the product data on the MAIN table (billing already
-// reads it on every settlement), and the admin Lambda's LeadingKeys-scoped
-// write door gains exactly this partition (infra/admin.tf).
+// --- Le prix de Nota, décidé par Nota (ADR 0031) -------------------------------
+// UN item : le montant fixe, en cents, que la tarification ajoute à toute offre.
+// Ce partition remplace CONFIG#COMMISSION, qui portait un barème de taux :
+// l'art. 29.1 du Code de déontologie interdit au notaire toute convention
+// mettant en péril son désintéressement, et un prix indexé sur sa cote en était
+// une. Même dessin que CONFIG#EMAIL — la configuration produit vit avec les
+// données produit sur la table PRINCIPALE (la facturation la lit à chaque
+// tarification), et la porte d'écriture de la Lambda admin, bornée par
+// LeadingKeys, gagne exactement cette partition (infra/admin.tf).
 //
-//   PK = CONFIG#COMMISSION   SK = BAREME
-function commissionConfigPK() {
-  return 'CONFIG#COMMISSION';
+//   PK = CONFIG#PRIX   SK = PRIX
+function prixConfigPK() {
+  return 'CONFIG#PRIX';
 }
-const COMMISSION_CONFIG_SK = 'BAREME';
+const PRIX_CONFIG_SK = 'PRIX';
 
 // --- Admin-decided cancellation fee barème (ADR 0023) --------------------------
 // ONE item: the days-before-signing paliers the cancel route prices a retained
-// withdrawal with. Same design as CONFIG#COMMISSION — the cancel route reads it
+// withdrawal with. Same design as CONFIG#PRIX — the cancel route reads it
 // through the repo it already owns, and the admin Lambda's LeadingKeys-scoped
 // write door gains exactly this partition (infra/admin.tf).
 //
@@ -296,6 +299,55 @@ function cancellationConfigPK() {
   return 'CONFIG#ANNULATION';
 }
 const CANCELLATION_CONFIG_SK = 'BAREME';
+
+// --- Campagnes ciblées (segments.js) ------------------------------------------
+// Trois familles d'items, TOUTES sur la table PRINCIPALE et toutes rangées sous
+// une partition FIXE — un seul item par identifiant/adresse, adressé par sa clé
+// de tri. Le dessin n'est pas un choix de commodité : la porte d'écriture de la
+// Lambda admin est bornée par `dynamodb:LeadingKeys` (infra/admin.tf), une
+// condition qui compare la clé de PARTITION à une liste de valeurs exactes. Une
+// clé par adresse (`CAMPAGNE#<courriel>`, à la manière d'UNSUB#) serait donc
+// impossible à autoriser sans ouvrir la table entière — c'est-à-dire sans
+// défaire l'isolement qui fait que la console ne peut pas toucher un item
+// client. Le prix de ce dessin est une partition qui grossit ; il est
+// acceptable ici parce que chaque lecture est adressée par clé complète
+// (GetItem / BatchGetItem), jamais par un parcours de la partition.
+//
+//   PK = AUDIENCE#GROUPES   SK = GROUP#<id>       (une liste de destinataires)
+//   PK = CONSENT#COURRIEL   SK = EMAIL#<courriel> (la base de consentement LCAP)
+//   PK = CAMPAGNE#ENVOIS    SK = EMAIL#<courriel> (la dernière campagne reçue)
+//
+// Le groupe d'AUDIENCE n'est pas le groupe RBAC (GROUPS / GROUP#<id>, table
+// admin) : l'un réunit des permissions d'administrateurs, l'autre des adresses
+// de destinataires. Deux partitions, deux tables, et jamais le même item.
+//
+// Le registre des envois est ce qui donne son sens au plafond de fréquence de
+// segments.js — art. 56 1° du Code de déontologie, « inciter quelqu'un de façon
+// pressante ou répétée ». Un seul item par adresse, écrasé à chaque campagne,
+// comme UNSUB# : ce qu'on doit savoir, c'est la DERNIÈRE fois, pas l'historique.
+const normalizedEmail = (email) => String(email == null ? '' : email).trim().toLowerCase();
+
+function audienceGroupsPK() {
+  return 'AUDIENCE#GROUPES';
+}
+function audienceGroupSK(groupId) {
+  return 'GROUP#' + String(groupId);
+}
+const AUDIENCE_GROUP_PREFIX = 'GROUP#';
+
+function emailConsentPK() {
+  return 'CONSENT#COURRIEL';
+}
+function emailConsentSK(email) {
+  return 'EMAIL#' + normalizedEmail(email);
+}
+
+function campaignLogPK() {
+  return 'CAMPAGNE#ENVOIS';
+}
+function campaignLogSK(email) {
+  return 'EMAIL#' + normalizedEmail(email);
+}
 
 // --- Admin table (admin.nota.ca) ---------------------------------------------
 // Identity, revocable sessions, single-use magic-link challenges, the immutable
@@ -308,6 +360,27 @@ const CANCELLATION_CONFIG_SK = 'BAREME';
 //   PK = SESSION#<sessionId> SK = SESSION            (a revocable session; TTL)
 //   PK = AUDIT#<YYYY-MM-DD>  SK = <isoTs>#<id>       (append-only action log)
 //   PK = RL#<scope>#<key>    SK = RL                 (a rate-limit counter; TTL)
+// --- Groupes d'administrateurs (RBAC découplé) ------------------------------
+// Un groupe réunit des permissions et s'attribue à des utilisateurs. Il vit sur
+// la table ADMIN, avec les identités : un groupe EST une donnée d'identité, et
+// la table principale — celle des offres, lisible par la Lambda publique — ne
+// doit jamais porter de quoi décider d'une autorisation.
+//
+// UNE seule partition, un item par groupe :
+//   PK = GROUPS   SK = GROUP#<id>
+//
+// Même dessin que CONFIG#EMAIL : la liste se lit par UNE Query sur une
+// partition, jamais par un Scan. Le dépôt n'en fait aucun, et ce n'est pas un
+// détail de performance — un Scan sur la table des identités élargirait la
+// permission IAM de la Lambda admin à toute la table.
+function groupsPK() {
+  return 'GROUPS';
+}
+function groupSK(groupId) {
+  return 'GROUP#' + String(groupId);
+}
+const GROUP_PREFIX = 'GROUP#';
+
 function adminPK(adminId) {
   return 'ADMIN#' + String(adminId);
 }
@@ -424,14 +497,25 @@ module.exports = {
   emailOverridePK,
   emailOverrideSK,
   EMAIL_OVERRIDE_PREFIX,
-  // admin-decided commission barème (ADR 0021)
-  commissionConfigPK,
-  COMMISSION_CONFIG_SK,
+  // le prix de Nota, décidé par Nota (ADR 0031)
+  prixConfigPK,
+  PRIX_CONFIG_SK,
   cancellationConfigPK,
   CANCELLATION_CONFIG_SK,
+  // campagnes ciblées (segments.js)
+  audienceGroupsPK,
+  audienceGroupSK,
+  AUDIENCE_GROUP_PREFIX,
+  emailConsentPK,
+  emailConsentSK,
+  campaignLogPK,
+  campaignLogSK,
   // admin table
   adminPK,
   ADMIN_SK,
+  groupsPK,
+  groupSK,
+  GROUP_PREFIX,
   adminLoginPK,
   ADMIN_LOGIN_SK,
   adminSessionPK,

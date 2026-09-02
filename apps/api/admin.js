@@ -17,33 +17,30 @@ const repo = createDynamoRepo({
   region: process.env.AWS_REGION,
 });
 
-// Minimal SES v2 mailer for the magic-link email. Built lazily so a cold start
-// that only serves analytics never loads the SES client. Best-effort: the admin
-// use-case swallows a send failure (the operator can request another link).
-// Sends BOTH bodies like createSesAdapter (notify-port.js): the branded HTML
-// built by emails.adminMagicLink plus the plain-text alternative — dropping
-// either one degrades the operator's inbox for no reason.
-let sesClient = null;
+// L'expéditeur de la console — le MÊME adaptateur que le notifieur public
+// (`notify-port.createSesAdapter`), et pas une seconde implémentation.
+//
+// Il y en avait deux, et la copie d'ici perdait l'en-tête `List-Unsubscribe` :
+// tant qu'elle ne servait qu'au lien magique, la conséquence était nulle. Elle
+// ne l'est plus — la console peut désormais envoyer des campagnes, et la LCAP
+// (art. 6) exige un mécanisme d'exclusion FONCTIONNEL sur tout message
+// électronique commercial. Un second chemin d'envoi est exactement la manière
+// dont une garantie se perd : elle tient sur l'un, pas sur l'autre.
+//
+// Construit paresseusement : un démarrage à froid qui ne sert que des
+// statistiques ne charge jamais le client SES.
+let sesMailer = null;
 const mailer = {
-  async send({ to, subject, html, text }) {
+  async send(message) {
     if (!process.env.NOTA_FROM_EMAIL) return;
-    const { SESv2Client, SendEmailCommand } = require('@aws-sdk/client-sesv2');
-    if (!sesClient) sesClient = new SESv2Client({ region: process.env.AWS_REGION });
-    const body = {};
-    if (html) body.Html = { Data: html, Charset: 'UTF-8' };
-    if (text) body.Text = { Data: text, Charset: 'UTF-8' };
-    await sesClient.send(
-      new SendEmailCommand({
-        FromEmailAddress: process.env.NOTA_FROM_EMAIL,
-        Destination: { ToAddresses: [to] },
-        Content: {
-          Simple: {
-            Subject: { Data: subject, Charset: 'UTF-8' },
-            Body: body,
-          },
-        },
-      })
-    );
+    if (!sesMailer) {
+      const { createSesAdapter } = require('./src/notify-port.js');
+      sesMailer = createSesAdapter({
+        from: process.env.NOTA_FROM_EMAIL,
+        region: process.env.AWS_REGION,
+      });
+    }
+    return sesMailer.send(message);
   },
 };
 

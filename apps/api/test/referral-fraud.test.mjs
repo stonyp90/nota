@@ -51,6 +51,9 @@ function app(opts = {}) {
   const analytics = createAnalytics({ repo, now: () => TODAY });
   return {
     ...createApp(repo, {
+      // Le chemin PAYANT exige une origine de retour : sans elle, Stripe n'a
+      // pas où renvoyer le client, et `POST /bids` refuse franchement.
+      siteUrl: 'https://nota.test',
       now: () => TODAY,
       nowMs: () => NOW_MS,
       // Un hôte configuré : sans lui, les portes qui envoient un lien refusent

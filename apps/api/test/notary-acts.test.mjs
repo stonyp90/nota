@@ -16,6 +16,7 @@ const { createMemoryRepo } = require('../src/repo-memory.js');
 const { createBilling } = require('../src/billing.js');
 const { notaryIdForEmail, signToken, SCOPES } = require('../src/notary-auth.js');
 const domain = require('@nota/domain');
+const { DEFAULT_PRIX_CENTS: PRIX } = require('../src/prix-nota-config.js');
 
 const TODAY = '2026-08-12';
 const NOW_MS = Date.parse('2026-08-12T15:00:00.000Z');
@@ -79,10 +80,10 @@ test('un notaire sans acte réglé voit un relevé vide, jamais une erreur', asy
   assert.equal(res.statusCode, 200);
   const body = parse(res);
   assert.deepEqual(body.actes, []);
-  assert.deepEqual(body.totaux, { actes: 0, montant: 0, commission: 0, net: 0, du: 0 });
+  assert.deepEqual(body.totaux, { actes: 0, montant: 0, honoraires: 0, prixNota: 0, net: 0, du: 0 });
 });
 
-test('chaque acte réglé est divulgué ligne à ligne : montant, taux, part de Nota, net, cote', async () => {
+test('chaque acte réglé est divulgué ligne à ligne : honoraires entiers, prix de Nota, net', async () => {
   const a = app();
   await notaireActif(a);
   await offreRetenue(a, { id: 'b1', dateISO: '2026-08-20', montant: 2000 });
@@ -95,32 +96,50 @@ test('chaque acte réglé est divulgué ligne à ligne : montant, taux, part de 
   assert.equal(l.dateISO, '2026-08-20');
   assert.equal(l.serviceId, 'refinancement');
   assert.equal(l.service, domain.serviceById('refinancement').nom, 'le nom lisible du service voyage');
-  assert.equal(l.montant, 2000, 'ce que le client a payé');
-  assert.equal(l.taux, 0.15, 'le taux appliqué, au départ de l’échelle');
-  assert.equal(l.commission, 300, 'la part de Nota, en dollars');
-  assert.equal(l.net, 1700, 'ce qui reste au notaire');
-  assert.equal(l.montant, l.commission + l.net, 'la ligne s’additionne — rien ne se perd');
-  assert.ok(Number.isInteger(l.cote), 'la cote qui a mérité ce taux est figée avec l’acte');
+  assert.equal(l.montant, 2000, 'la valeur de l’acte');
+  assert.equal(l.honoraires, 2000, 'ART. 32.1 2° — les honoraires du notaire, ENTIERS');
+  assert.equal(l.net, 2000, 'le notaire ne cède rien : son net EST ses honoraires');
+  assert.equal(l.prixNota, PRIX / 100, 'le prix du service de Nota, payé par le client');
   assert.equal(l.completedAt, TODAY);
 
-  // Réglé hors plateforme (aucune caution à capturer) : les 300 $ sont DUS,
-  // pas encaissés — et le relevé le dit.
+  // Réglé hors plateforme (aucune caution à capturer) : le prix de Nota n'a
+  // pas été encaissé, et le relevé le dit — sans jamais l'imputer aux
+  // honoraires du notaire.
   assert.equal(l.paye, false);
-  assert.equal(l.du, 300);
-  assert.deepEqual(body.totaux, { actes: 1, montant: 2000, commission: 300, net: 1700, du: 300 });
+  assert.equal(l.du, PRIX / 100);
+  assert.deepEqual(body.totaux, {
+    actes: 1, montant: 2000, honoraires: 2000, prixNota: PRIX / 100, net: 2000, du: PRIX / 100,
+  });
 });
 
-test('le taux figé au règlement survit à un changement de barème', async () => {
+test('ART. 29.1 — aucune ligne d’argent ne porte de taux ni de cote', async () => {
   const a = app();
   await notaireActif(a);
   await offreRetenue(a, { id: 'b1', dateISO: '2026-08-20', montant: 2000 });
   await a.billing.completeAct({ notaryId: NOTARY, bidId: 'b1', actAmount: 2000, serviceId: 'refinancement' });
 
-  // Nota change son barème après coup : l'acte déjà réglé garde SON taux.
-  await a.repo.putCommissionConfig({ taux: 0.05, plancher: 0.05, paliers: [] }, '2026-08-21T00:00:00.000Z');
+  const body = parse(await getActs(a));
+  const l = body.actes[0];
+  // Un revenu de notaire indexé sur une note attribuée par une entreprise
+  // privée est une convention qui met en péril son indépendance. Le relevé ne
+  // doit donc même pas SUGGÉRER qu'une cote a touché l'argent.
+  assert.equal(l.taux, undefined, 'plus de taux sur une ligne d’argent');
+  assert.equal(l.cote, undefined, 'la cote ne touche plus à un dollar');
+  assert.equal(/"taux"|"cote"/.test(JSON.stringify(body)), false,
+    'ni dans les lignes, ni dans les totaux, ni nulle part dans le relevé');
+});
+
+test('le prix de Nota figé au règlement ne bouge plus jamais', async () => {
+  const a = app();
+  await notaireActif(a);
+  await offreRetenue(a, { id: 'b1', dateISO: '2026-08-20', montant: 2000 });
+  await a.billing.completeAct({ notaryId: NOTARY, bidId: 'b1', actAmount: 2000, serviceId: 'refinancement' });
+
+  // Le registre est en écriture unique : ce que l'acte a coûté est figé avec
+  // l'argent, et aucun changement de prix ultérieur ne le réécrit.
   const l = parse(await getActs(a)).actes[0];
-  assert.equal(l.taux, 0.15);
-  assert.equal(l.commission, 300);
+  assert.equal(l.prixNota, PRIX / 100);
+  assert.equal(l.honoraires, 2000);
 });
 
 test('le relevé additionne plusieurs actes et ne montre que les siens', async () => {
@@ -139,8 +158,9 @@ test('le relevé additionne plusieurs actes et ne montre que les siens', async (
   assert.deepEqual(body.actes.map((l) => l.bidId), ['b2', 'b1'], 'le plus récent d’abord');
   assert.equal(body.totaux.actes, 2);
   assert.equal(body.totaux.montant, 3800);
-  assert.equal(body.totaux.commission, 300 + 270);
-  assert.equal(body.totaux.net, 3800 - 570);
+  assert.equal(body.totaux.honoraires, 3800, 'la somme des honoraires, intacte');
+  assert.equal(body.totaux.net, 3800, 'rien n’est retranché');
+  assert.equal(body.totaux.prixNota, 2 * (PRIX / 100), 'un prix fixe, une fois par acte');
   assert.equal(JSON.stringify(body).includes('b3'), false, 'jamais l’acte d’un autre notaire');
 });
 
@@ -167,14 +187,16 @@ test('un règlement écrit une entrée d’audit — la piste de la transaction'
   assert.equal(regle.meta.bidId, 'b1');
   assert.equal(regle.meta.notaryId, NOTARY);
   assert.equal(regle.meta.montant, 2000);
-  assert.equal(regle.meta.commission, 300);
-  assert.equal(regle.meta.net, 1700);
-  assert.equal(regle.meta.taux, 0.15);
-  assert.ok(Number.isInteger(regle.meta.cote));
+  assert.equal(regle.meta.honoraires, 2000, 'les honoraires du notaire, entiers');
+  assert.equal(regle.meta.prixNota, PRIX / 100, 'le prix de Nota, à côté');
+  // La piste d'audit est la pièce qu'un syndic lirait : elle ne doit porter
+  // NI taux NI cote, sous peine de décrire un partage qui n'existe plus.
+  assert.equal(regle.meta.taux, undefined);
+  assert.equal(regle.meta.cote, undefined);
   assert.ok(regle.ts, 'horodatée');
 });
 
-test('le client voit comment SON montant s’est partagé, une fois l’acte réglé', async () => {
+test('le client voit les DEUX lignes de ce qu’il a payé, une fois l’acte réglé', async () => {
   const a = app();
   await notaireActif(a);
   const bid = await offreRetenue(a, { id: 'b1', dateISO: '2026-08-20', montant: 2000 });
@@ -189,10 +211,14 @@ test('le client voit comment SON montant s’est partagé, une fois l’acte ré
   const apres = parse(await a.handle({ method: 'GET', path: '/client/bid', headers: bearer(clientToken), query: { id: 'b1', dateISO: '2026-08-20' } }));
   assert.equal(apres.acte.complete, true);
   assert.equal(apres.acte.montant, 2000);
-  assert.equal(apres.acte.partNota, 300);
-  assert.equal(apres.acte.partNotaire, 1700);
-  assert.equal(apres.acte.taux, 0.15);
-  assert.equal(apres.acte.partNota + apres.acte.partNotaire, apres.acte.montant, 'le partage s’additionne au total payé');
+  assert.equal(apres.acte.honoraires, 2000, 'ce qui revient au notaire, en entier');
+  assert.equal(apres.acte.prixNota, PRIX / 100, 'le service de Nota, sa propre ligne');
+  assert.equal(apres.acte.total, 2000 + PRIX / 100, 'ce que le client a réellement payé');
+  // Le client ne doit jamais lire que « son » montant s'est PARTAGÉ : il n'y a
+  // pas de partage, il y a deux achats distincts.
+  assert.equal(apres.acte.taux, undefined);
+  assert.equal(apres.acte.partNota, undefined);
+  assert.equal(apres.acte.partNotaire, undefined);
 });
 
 test('la rétention horodate l’engagement et laisse une trace', async () => {

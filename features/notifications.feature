@@ -18,7 +18,11 @@ Fonctionnalité: Cycle de vie des notifications
     Et aucun courriel client n'est tenté
     Et l'opérateur reçoit le courriel "nouveau lead"
 
-  Scénario: le webhook « checkout.session.completed » n'accueille pas de notaire (modèle à la commission)
+  # Un notaire ne paie rien pour être sur Nota : il n'y a pas d'abonnement, et
+  # une session de paiement est TOUJOURS un client qui autorise sa carte — jamais
+  # un notaire qui s'inscrit. L'accueillir comme tel serait une erreur de
+  # destinataire (et, depuis l'ADR 0031, un prix de Nota facturé au mauvais bout).
+  Scénario: le webhook « checkout.session.completed » n'accueille pas de notaire (aucun abonnement)
     Quand le webhook Stripe "checkout.session.completed" arrive pour le courriel "notaire@exemple.ca"
     Alors la réponse a le statut 200
     Et le notaire "notaire@exemple.ca" ne reçoit aucun courriel

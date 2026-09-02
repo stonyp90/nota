@@ -355,12 +355,28 @@ a:hover { text-decoration: underline; }
   background: var(--surface); border-left: 3px solid var(--danger); border-radius: var(--radius);
 }
 .tpl-error strong { color: var(--danger); font-weight: 600; }
+.tpl-error-line + .tpl-error-line { margin-top: 8px; }
+/* Le mot du serveur, sous le nôtre : le détail sans le ton de l'alarme. */
+.tpl-error-detail { margin-top: 3px; font-size: 12px; color: var(--ink-muted); }
 .tpl-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 
-/* --- Commission (barème, ADR 0021 / 0028) ----------------------------------
-   The read view reuses the stat tiles and a .ptable of tiers; the edit form
-   reuses .field/.input/.tpl-fields/.tpl-error/.tpl-actions. Only the tier-row
-   grid, the cote simulator, the reset strip and its in-page confirm are new. */
+/* L'interrupteur d'envoi et sa raison (art. 68 / art. 56 1°), puis les quatre
+   paires bilingues — chacune avec sa propre région d'erreur, sous ses champs. */
+.tpl-switch, .tpl-pair { display: flex; flex-direction: column; gap: 8px; }
+.tpl-nature { max-width: 78ch; }
+.tpl-textarea { min-height: 92px; resize: vertical; line-height: 1.45; }
+.tpl-count {
+  align-self: flex-end; font-size: 11px; color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+.tpl-badge.is-transactionnel { background: var(--neutral-wash); }
+.input[aria-invalid='true'] { border-color: var(--danger); }
+
+/* --- Prix (ADR 0031) et Annulation (barème, ADR 0023) ----------------------
+   Les vues de lecture réutilisent les tuiles de statistiques et la .ptable ;
+   les formulaires réutilisent .field/.input/.tpl-fields/.tpl-error/.tpl-actions.
+   Seuls la grille d'un palier d'annulation, la bande de réinitialisation et sa
+   confirmation en page sont propres à ces écrans. */
 .bareme-form { display: flex; flex-direction: column; gap: 14px; }
 .bareme-paliers { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
 .bareme-paliers-label {
@@ -372,38 +388,6 @@ a:hover { text-decoration: underline; }
   display: grid; gap: 10px; align-items: end;
   grid-template-columns: repeat(3, minmax(min(90px, 100%), 1fr)) auto;
 }
-/* Un palier de cote : deux champs, puis la moitié du notaire — dérivée, donc
-   affichée et non saisie. */
-.bareme-palier-cote { grid-template-columns: repeat(2, minmax(min(110px, 100%), 1fr)) minmax(min(110px, 100%), 1fr) auto; }
-.bareme-part {
-  display: flex; flex-direction: column; gap: 6px; padding-bottom: 9px;
-}
-.bareme-part-k {
-  font-size: 12px; font-weight: 600; color: var(--ink-muted);
-}
-.bareme-part-v {
-  font-size: 15px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums;
-}
-
-/* Simulateur : une cote saisie, les deux moitiés du partage en regard. */
-.bareme-sim-field { max-width: 260px; }
-.bareme-sim-out {
-  margin-top: 14px; display: grid; gap: 12px;
-  grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
-}
-.bareme-sim-fig {
-  padding: 12px 14px; background: var(--surface-inset);
-  border: 1px solid var(--border); border-radius: var(--radius);
-  display: flex; flex-direction: column; gap: 4px;
-}
-.bareme-sim-k {
-  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
-  color: var(--ink-muted);
-}
-.bareme-sim-v { font-size: 26px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
-/* La moitié du notaire porte l'accent de marque : c'est elle qui se négocie. */
-.bareme-sim-notaire { color: var(--brand); }
-.bareme-sim-note { margin-top: 10px; }
 .bareme-reset {
   margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border);
   display: flex; flex-direction: column; gap: 10px; align-items: flex-start;
@@ -561,3 +545,59 @@ a:hover { text-decoration: underline; }
     transition-duration: .001ms !important; scroll-behavior: auto !important;
   }
 }
+
+/* --- Accès : utilisateurs, groupes, permissions ----------------------------
+   Trois concepts découplés, et l'écran doit les faire LIRE comme tels : un
+   groupe est un bloc, une personne est un bloc, et la liste de permissions se
+   lit en mots — jamais en clés brutes. Aucune couleur d'accent : accorder une
+   capacité n'est ni une bonne ni une mauvaise nouvelle, c'est une décision. */
+.acces-groupes, .acces-users { display: grid; gap: 14px; margin-top: 16px; }
+.acces-groupe, .acces-user {
+  padding: 12px 14px; border: 1px solid var(--border);
+  border-radius: var(--radius); background: var(--surface-inset);
+}
+.acces-groupe-h, .acces-user-h { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.acces-perm-list { margin: 8px 0 10px; padding-left: 18px; font-size: 13px; }
+.acces-perm-list li { line-height: 1.7; }
+.acces-groupe-form, .acces-user-form { display: grid; gap: 12px; margin-top: 14px; }
+.acces-perms, .acces-user-groupes, .acces-user-perms {
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 10px 12px; display: grid; gap: 4px; min-width: 0;
+}
+.acces-perms legend, .acces-user-groupes legend, .acces-user-perms legend {
+  font-size: 12px; font-weight: 600; color: var(--ink-muted); padding: 0 4px;
+}
+.check-line { display: flex; align-items: center; gap: 8px; font-size: 13.5px; cursor: pointer; }
+.check-line input { width: 16px; height: 16px; margin: 0; flex: none; accent-color: var(--ring); }
+/* L'erreur du serveur se lit là où la décision a été prise. Un 409
+   « dernier administrateur » n'est pas une panne : c'est un refus motivé, et
+   l'escamoter ferait croire à un bogue. */
+.acces-erreur { margin: 0; padding-left: 18px; font-size: 13px; color: var(--danger, var(--ink)); }
+.acces-erreur li { line-height: 1.6; }
+
+/* --- Campagnes (LCAP art. 6 et 10 ; art. 56 1° du Code de déontologie) ------
+   L'écran réutilise la carte, les champs, le contrôle segmenté, la .ptable et
+   la confirmation en page. Ne lui appartiennent en propre que le rythme des
+   étapes, la phrase qui nomme la NATURE de l'envoi, et les deux listes
+   (avertissements servis, échantillon masqué). */
+.camp-cadre, .camp-form, .camp-apercu, .camp-resultat {
+  display: grid; gap: 14px; margin-bottom: var(--admin-gap);
+}
+/* La carte porte déjà le rythme : son entête ne le double pas. */
+.camp-apercu .chart-card-head, .camp-resultat .chart-card-head { margin-bottom: 0; }
+.camp-etape, .camp-cible-panneau, .camp-echantillon { display: grid; gap: 10px; }
+.camp-segment-vise, .camp-gabarit-nature { max-width: 78ch; }
+/* Le cadre juridique se lit, il ne se devine pas : ce n'est pas une note de bas
+   de page en gris pâle, c'est ce qui rend l'envoi défendable. */
+.camp-cadre-texte { margin: 0; font-size: 13px; color: var(--ink); max-width: 90ch; }
+/* La ligne qui dit laquelle des deux natures part : elle se lit seule. */
+.camp-nature {
+  margin: 0; font-size: 13.5px; color: var(--ink);
+  border-left: 3px solid var(--brand); padding-left: 10px;
+}
+.camp-nature strong { font-weight: 700; }
+.camp-confirm .bareme-confirm-text { display: grid; gap: 4px; }
+.camp-confirm-nature { font-weight: 600; }
+.camp-avert-list, .camp-echantillon-list { margin: 6px 0 0; padding-left: 18px; }
+.camp-avert-list li, .camp-echantillon-list li { margin-top: 3px; }
+.camp-echantillon-list { font-family: var(--font-mono); font-size: 12px; color: var(--ink-muted); }

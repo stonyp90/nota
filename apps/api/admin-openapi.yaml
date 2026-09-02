@@ -33,6 +33,44 @@ components:
         necessary but not sufficient — the server-side session must exist, be
         un-revoked, inside its 12 h absolute window and not idle past 30 min.
   schemas:
+    AdminGroup:
+      type: object
+      required: [id, nom, permissions]
+      properties:
+        id: { type: string }
+        nom: { type: string }
+        description: { type: string }
+        permissions:
+          type: array
+          items: { type: string }
+        updatedAt: { type: string, format: date-time }
+    AdminUser:
+      type: object
+      required: [email, id, groupes, permissions, effectives, disabled]
+      properties:
+        email: { type: string, format: email }
+        id: { type: string }
+        role:
+          oneOf:
+            - type: string
+            - type: "null"
+        disabled: { type: boolean }
+        groupes:
+          type: array
+          items: { type: string }
+        permissions:
+          description: Les permissions accordees DIRECTEMENT a la personne.
+          type: array
+          items: { type: string }
+        effectives:
+          description: L'union du role, des grants directs et de chaque groupe.
+          type: array
+          items: { type: string }
+        derniereConnexion:
+          oneOf:
+            - type: string
+              format: date-time
+            - type: "null"
     Errors:
       type: object
       required: [errors]
@@ -88,6 +126,30 @@ components:
             updatedAt:
               type: [string, "null"]
               description: ISO datetime of the last change.
+    PrixNota:
+      type: object
+      description: >-
+        Le prix du service de Nota (ADR 0031) : un montant FIXE, en cents,
+        ajoute a toute offre et encaisse comme frais d'application Stripe. Ni
+        pourcentage, ni fonction de la valeur de l'acte, ni fonction du
+        notaire — l'art. 29.1 du Code de deontologie interdit au notaire toute
+        convention mettant en peril son desinteressement, et un prix indexe sur
+        une note attribuee par Nota en serait une.
+      required: [prixCents]
+      properties:
+        prixCents:
+          type: integer
+          minimum: 1
+          description: Le prix, en cents (40000 = 400,00 $).
+    PrixNotaStored:
+      allOf:
+        - $ref: "#/components/schemas/PrixNota"
+        - type: object
+          required: [updatedAt]
+          properties:
+            updatedAt:
+              type: [string, "null"]
+              description: ISO datetime of the last change.
     CancellationBareme:
       type: object
       description: >-
@@ -124,21 +186,40 @@ components:
     EmailOverride:
       type: object
       description: >-
-        The stored per-template override (ADR 0018). `enabled: false` is a
-        kill-switch for the template; `subjectFr`/`subjectEn` (both non-null,
-        or both null) replace the built-in bilingual subject with `{{token}}`
-        interpolation over the template's declared placeholder vocabulary.
-        Bodies are never editable — the branded layout, CASL footer and
-        unsubscribe plumbing stay guaranteed by code.
-      required: [key, enabled, subjectFr, subjectEn, updatedAt]
+        The stored per-template override (ADR 0018). `actif: false` is a
+        kill-switch — REFUSED on a transactional template, whose suppression
+        would be "incomplete" advertising under art. 68 of the Code de
+        deontologie. Four bilingual pairs are editable — subject, preheader,
+        body paragraph and CTA label — each all-or-nothing across FR/EN, with
+        `{{token}}` interpolation limited to the template's declared
+        placeholders. HTML is refused at validation AND escaped at render. What
+        stays code-guaranteed: the branded layout, the button URL, the CASL
+        footer and the unsubscribe plumbing. `enabled` is a deprecated alias of
+        `actif`, kept so an already-deployed client does not break.
+      required: [key, actif, subjectFr, subjectEn, updatedAt]
       properties:
         key:
           type: string
+        actif:
+          type: boolean
         enabled:
           type: boolean
+          deprecated: true
         subjectFr:
           type: [string, "null"]
         subjectEn:
+          type: [string, "null"]
+        preheaderFr:
+          type: [string, "null"]
+        preheaderEn:
+          type: [string, "null"]
+        corpsFr:
+          type: [string, "null"]
+        corpsEn:
+          type: [string, "null"]
+        ctaFr:
+          type: [string, "null"]
+        ctaEn:
           type: [string, "null"]
         updatedAt:
           type: [string, "null"]
@@ -146,7 +227,7 @@ components:
     EmailTemplate:
       type: object
       description: One registry entry (emails.js TEMPLATE_META) merged with its stored override.
-      required: [key, audience, labelFr, labelEn, defaultSubjectFr, defaultSubjectEn, placeholders, override]
+      required: [key, audience, labelFr, labelEn, defaultSubjectFr, defaultSubjectEn, placeholders, transactionnel, override]
       properties:
         key:
           type: string
@@ -167,20 +248,127 @@ components:
           items:
             type: string
             enum: [montant, service, date, code, n, note, etude, email]
+        transactionnel:
+          type: boolean
+          description: >-
+            True when the template is the SOLE notice of a fact its recipient
+            must know or act on. Such a template cannot be switched off; it can
+            still be reworded.
         override:
           oneOf:
             - type: "null"
             - type: object
-              required: [enabled, subjectFr, subjectEn, updatedAt]
+              required: [actif, subjectFr, subjectEn, updatedAt]
               properties:
+                actif:
+                  type: boolean
                 enabled:
                   type: boolean
+                  deprecated: true
                 subjectFr:
                   type: [string, "null"]
                 subjectEn:
                   type: [string, "null"]
+                preheaderFr:
+                  type: [string, "null"]
+                preheaderEn:
+                  type: [string, "null"]
+                corpsFr:
+                  type: [string, "null"]
+                corpsEn:
+                  type: [string, "null"]
+                ctaFr:
+                  type: [string, "null"]
+                ctaEn:
+                  type: [string, "null"]
                 updatedAt:
                   type: [string, "null"]
+    Segment:
+      type: object
+      description: >-
+        Un segment CALCULE du catalogue de `apps/api/src/segments.js`. La
+        console ne code aucun identifiant en dur : elle lit cette liste. `vise`
+        dit qui le segment attrape et pourquoi ; `nature` decide si une base de
+        consentement LCAP est exigee (commercial) ou non (transactionnel).
+      required: [id, libelle, libelleEn, vise, audience, nature, params]
+      properties:
+        id: { type: string }
+        libelle: { type: string }
+        libelleEn: { type: string }
+        vise: { type: string }
+        audience:
+          type: string
+          enum: [notaire, client]
+        nature:
+          type: string
+          enum: [commercial, transactionnel]
+        params:
+          description: Les seuils du segment, bornes. Un seuil hors bornes est refuse, jamais rabattu.
+          type: array
+          items:
+            type: object
+            required: [nom, defaut, min, max]
+            properties:
+              nom: { type: string }
+              defaut: { type: integer }
+              min: { type: integer }
+              max: { type: integer }
+              libelle: { type: string }
+              libelleEn: { type: string }
+    AudienceCible:
+      description: >-
+        Une cible : une personne nommee, un groupe d'audience stocke, ou un
+        segment calcule. `POST /admin/campaigns` accepte aussi un TABLEAU de
+        cibles, dont l'union est dedupliquee par adresse.
+      oneOf:
+        - type: object
+          required: [type, email]
+          properties:
+            type: { type: string, const: user }
+            email: { type: string, format: email }
+            nature:
+              type: string
+              enum: [commercial, transactionnel]
+        - type: object
+          required: [type, groupId]
+          properties:
+            type: { type: string, const: group }
+            groupId: { type: string }
+        - type: object
+          required: [type, segmentId]
+          properties:
+            type: { type: string, const: segment }
+            segmentId: { type: string }
+            params:
+              type: object
+              additionalProperties: { type: integer }
+    AudienceSpec:
+      oneOf:
+        - $ref: "#/components/schemas/AudienceCible"
+        - type: array
+          items: { $ref: "#/components/schemas/AudienceCible" }
+    CampaignExclusions:
+      type: object
+      description: >-
+        Qui n'a PAS ete atteint, et pourquoi. On refuse en disant combien,
+        jamais en cachant combien.
+      required: [desabonnes, sansConsentement, frequence, doublons, sansCourriel]
+      properties:
+        desabonnes:
+          type: integer
+          description: Adresse retiree (LCAP art. 11 / Loi 25). Le retrait l'emporte sur toute nature.
+        sansConsentement:
+          type: integer
+          description: Aucune base de consentement, expresse ni tacite (LCAP art. 10).
+        frequence:
+          type: integer
+          description: Deja jointe dans la fenetre (art. 56 1 du Code de deontologie).
+        doublons:
+          type: integer
+          description: Presente dans plusieurs cibles ; ecrite une seule fois.
+        sansCourriel:
+          type: integer
+          description: Dans la cible mais injoignable ; comptee, jamais devinee.
     SessionGrant:
       type: object
       required: [ok, session, expiresAt]
@@ -219,6 +407,18 @@ components:
             errors:
               - code: interdit
                 message: Réservé à l’administrateur principal.
+    NotFound:
+      description: La ressource nommee n'existe pas.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Errors"
+    ValidationError:
+      description: Le corps est mal forme ou refuse par la validation.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Errors"
     TemplateNotFound:
       description: The template key is not in the registry (emails.js TEMPLATE_META).
       content:
@@ -396,8 +596,20 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [templates]
+                required: [templates, limites]
                 properties:
+                  limites:
+                    type: object
+                    description: >-
+                      Les bornes de longueur, servies par le serveur pour que la
+                      console pose ses `maxlength` sans recopier des valeurs qui
+                      driveraient.
+                    required: [sujet, preheader, corps, cta]
+                    properties:
+                      sujet: { type: integer }
+                      preheader: { type: integer }
+                      corps: { type: integer }
+                      cta: { type: integer }
                   templates:
                     type: array
                     items:
@@ -431,15 +643,23 @@ paths:
             schema:
               type: object
               properties:
+                actif:
+                  type: boolean
+                  description: >-
+                    `false` switches the template off. REFUSED when the template
+                    is transactional.
                 enabled:
                   type: boolean
-                  description: "`false` disables the template entirely (kill-switch)."
-                subjectFr:
-                  type: string
-                  maxLength: 200
-                subjectEn:
-                  type: string
-                  maxLength: 200
+                  deprecated: true
+                  description: Alias of `actif`, kept for already-deployed clients.
+                subjectFr: { type: string, maxLength: 200 }
+                subjectEn: { type: string, maxLength: 200 }
+                preheaderFr: { type: string, maxLength: 200 }
+                preheaderEn: { type: string, maxLength: 200 }
+                corpsFr: { type: string, maxLength: 1200 }
+                corpsEn: { type: string, maxLength: 1200 }
+                ctaFr: { type: string, maxLength: 60 }
+                ctaEn: { type: string, maxLength: 60 }
       responses:
         "200":
           description: The stored override.
@@ -468,9 +688,10 @@ paths:
           $ref: "#/components/responses/TemplateNotFound"
         "422":
           description: >-
-            Invalid override: non-boolean `enabled`, a subject over 200
-            characters, an unknown `{{token}}` for this template, or a subject
-            provided in only one language.
+            Invalid override: a non-boolean switch, a text over its limit
+            (subject/preheader 200, body 1200, CTA 60), an unknown `{{token}}`,
+            HTML in a text field, a half-filled bilingual pair, an unknown
+            field, or switching off a TRANSACTIONAL template.
           content:
             application/json:
               schema:
@@ -510,48 +731,78 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/TemplateNotFound"
-  /admin/commission:
+  /admin/permissions:
     get:
-      operationId: getAdminCommissionSchedule
-      summary: The commission barème — defaults, stored override, and what is in force.
+      operationId: listAdminPermissions
+      summary: Le catalogue des permissions, en deux langues.
       description: >-
-        ADR 0021 §4. `defaut` is the deployment's schedule (built-ins overlaid
-        by the `NOTA_COMMISSION_*` environment); `override` is the barème Nota
-        stored from this console, or `null`; `effectif` is whichever of the two
-        billing prices with right now. Open to ANY authenticated admin — an
-        analyst sees the state read-only.
+        Le catalogue publie EST celui que le serveur applique (`rbac.can`). Une
+        cle absente d'ici n'est jamais verifiee ; une cle verifiee sans etre ici
+        serait invisible a la console. Ouvert a tout admin authentifie.
       security:
         - adminSession: []
       responses:
         "200":
-          description: The barème as billing resolves it.
+          description: Les permissions connues.
           content:
             application/json:
               schema:
                 type: object
-                required: [defaut, override, effectif]
+                required: [ok, permissions]
                 properties:
-                  defaut:
-                    $ref: "#/components/schemas/CommissionBareme"
-                  override:
-                    oneOf:
-                      - $ref: "#/components/schemas/CommissionBaremeStored"
-                      - type: "null"
-                  effectif:
-                    $ref: "#/components/schemas/CommissionBareme"
+                  ok: { type: boolean }
+                  permissions:
+                    type: array
+                    items:
+                      type: object
+                      required: [cle, libelle, libelleEn]
+                      properties:
+                        cle: { type: string }
+                        libelle: { type: string }
+                        libelleEn: { type: string }
         "401":
           $ref: "#/components/responses/Unauthorized"
+
+  /admin/groups:
+    get:
+      operationId: listAdminGroups
+      summary: Les groupes et les permissions qu'ils portent.
+      description: Requiert `groups:read`.
+      security:
+        - adminSession: []
+      responses:
+        "200":
+          description: Les groupes connus.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, groupes]
+                properties:
+                  ok: { type: boolean }
+                  groupes:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AdminGroup"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /admin/groups/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+        description: Identifiant du groupe (minuscules, sans espace).
     put:
-      operationId: putAdminCommissionSchedule
-      summary: Store (replace) the barème Nota decides.
+      operationId: putAdminGroup
+      summary: Creer ou modifier un groupe.
       description: >-
-        super_admin only (`settings:write`) — an analyst gets 403. The body is
-        a FULL replacement, validated loudly: `taux` in (0, 1), `plancher`
-        between 0 and the taux, at most 10 paliers, each with an integer `cote`
-        from 1 to 100 and a `taux` between the plancher and the base taux; no
-        two rungs share a cote, and a higher cote never costs the notary more.
-        Takes effect at the next pricing — no deploy. Audit-logged with its
-        before/after.
+        Requiert `groups:write`. Le joker `*` est REFUSE sur un groupe : il se
+        donne nommement a une personne, sinon il se propage silencieusement a
+        chaque nouveau membre. Journalise avec son etat avant et apres.
       security:
         - adminSession: []
       requestBody:
@@ -559,10 +810,199 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CommissionBareme"
+              type: object
+              required: [nom]
+              properties:
+                nom: { type: string, maxLength: 80 }
+                description: { type: string, maxLength: 240 }
+                permissions:
+                  type: array
+                  items: { type: string }
       responses:
         "200":
-          description: The stored barème.
+          description: Le groupe enregistre.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, groupe]
+                properties:
+                  ok: { type: boolean }
+                  groupe:
+                    $ref: "#/components/schemas/AdminGroup"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+    delete:
+      operationId: deleteAdminGroup
+      summary: Supprimer un groupe.
+      description: >-
+        Requiert `groups:write`. Ses permissions disparaissent immediatement de
+        ses membres — elles sont resolues a chaque requete, jamais figees.
+      security:
+        - adminSession: []
+      responses:
+        "200":
+          description: Supprime.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { type: boolean }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /admin/users:
+    get:
+      operationId: listAdminUsers
+      summary: Les comptes d'administration et leurs acces effectifs.
+      description: >-
+        Requiert `users:read`. La liste vient de la liste blanche de
+        l'environnement (`NOTA_ADMIN_EMAILS`), qui reste la porte exterieure :
+        une console compromise ne doit pas pouvoir se fabriquer des
+        administrateurs. Ce qui se configure ici, c'est ce que chacun PEUT.
+      security:
+        - adminSession: []
+      responses:
+        "200":
+          description: Les comptes connus.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, utilisateurs]
+                properties:
+                  ok: { type: boolean }
+                  utilisateurs:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AdminUser"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /admin/users/{email}:
+    parameters:
+      - name: email
+        in: path
+        required: true
+        schema: { type: string, format: email }
+    put:
+      operationId: putAdminUserAccess
+      summary: Attribuer groupes, permissions directes, role et etat d'un compte.
+      description: >-
+        Requiert `users:write`. Un champ absent du corps est LAISSE INTACT.
+        Repond 409 `dernier_administrateur` si le changement laisserait la
+        console sans aucun compte actif capable de l'administrer — une porte
+        d'administration sans issue de secours est une panne, pas une politique.
+      security:
+        - adminSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role:
+                  oneOf:
+                    - type: string
+                      enum: [super_admin, analyst]
+                    - type: "null"
+                groupes:
+                  type: array
+                  items: { type: string }
+                permissions:
+                  type: array
+                  items: { type: string }
+                disabled: { type: boolean }
+      responses:
+        "200":
+          description: Les acces enregistres.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, utilisateur]
+                properties:
+                  ok: { type: boolean }
+                  utilisateur:
+                    $ref: "#/components/schemas/AdminUser"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Le dernier compte capable d'administrer la console.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Errors"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /admin/prix:
+    get:
+      operationId: getAdminPrixNota
+      summary: Le prix de Nota — defaut du deploiement, prix stocke, prix en vigueur.
+      description: >-
+        ADR 0031. `defaut` est le prix du deploiement (integre, surcharge par
+        `NOTA_PRIX_CENTS`) ; `override` est le prix que Nota a enregistre depuis
+        cette console, ou `null` ; `effectif` est celui des deux avec lequel la
+        facturation tarife en ce moment. Ouvert a TOUT admin authentifie —
+        l'analyste voit l'etat en lecture seule.
+      security:
+        - adminSession: []
+      responses:
+        "200":
+          description: Le prix tel que la facturation le resout.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [defaut, override, effectif]
+                properties:
+                  defaut:
+                    $ref: "#/components/schemas/PrixNota"
+                  override:
+                    oneOf:
+                      - $ref: "#/components/schemas/PrixNotaStored"
+                      - type: "null"
+                  effectif:
+                    $ref: "#/components/schemas/PrixNota"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    put:
+      operationId: putAdminPrixNota
+      summary: Enregistrer (remplacer) le prix que Nota decide.
+      description: >-
+        super_admin seulement (`settings:write`) — un analyste recoit 403. La
+        regle tient en une ligne : `prixCents` doit etre un entier de cents
+        strictement positif. Effet a la prochaine tarification, sans deploiement.
+        Journalise avec son avant/apres.
+      security:
+        - adminSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PrixNota"
+      responses:
+        "200":
+          description: Le prix enregistre.
           content:
             application/json:
               schema:
@@ -573,7 +1013,7 @@ paths:
                     type: boolean
                     const: true
                   override:
-                    $ref: "#/components/schemas/CommissionBaremeStored"
+                    $ref: "#/components/schemas/PrixNotaStored"
         "400":
           description: Malformed JSON body.
           content:
@@ -585,25 +1025,22 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
         "422":
-          description: >-
-            Invalid barème: `taux_invalide`, `plancher_invalide`,
-            `paliers_invalides` (not a list of at most 10) or `palier_invalide`
-            (a malformed tier).
+          description: "Prix invalide : `prix_invalide`."
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Errors"
     delete:
-      operationId: resetAdminCommissionSchedule
-      summary: Remove the stored barème (back to the environment defaults).
+      operationId: resetAdminPrixNota
+      summary: Retirer le prix enregistre (retour au defaut du deploiement).
       description: >-
-        super_admin only (`settings:write`). Idempotent; audit-logged with the
-        removed barème as `before`.
+        super_admin seulement (`settings:write`). Idempotent ; journalise avec
+        le prix retire comme `before`.
       security:
         - adminSession: []
       responses:
         "200":
-          description: Barème removed (or none existed).
+          description: Prix retire (ou aucun n'existait).
           content:
             application/json:
               schema:
@@ -924,7 +1361,7 @@ paths:
                         type: integer
                   kpis:
                     type: object
-                    required: [offersPosted, offersRetained, retentionRate, commissionCents, commissionRate, actsCompleted]
+                    required: [offersPosted, offersRetained, retentionRate, commissionCents, actsCompleted]
                     properties:
                       offersPosted:
                         type: integer
@@ -935,12 +1372,10 @@ paths:
                         description: 0..1 fraction (the console also accepts 0..100).
                       commissionCents:
                         type: integer
-                      commissionRate:
-                        type: number
                         description: >-
-                          The configured platform commission rate (0..1 fraction,
-                          NOTA_COMMISSION_RATE) behind commissionCents — surfaced
-                          so the console never hardcodes it.
+                          ADR 0031 — les cents que Nota a facturés pour SON
+                          service. Nom hérité : ce n'est plus une part des
+                          honoraires du notaire, et aucun taux ne l'accompagne.
                       actsCompleted:
                         type: integer
                   gauge:
@@ -1039,3 +1474,210 @@ paths:
                               type: string
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /admin/segments:
+    get:
+      operationId: getAdminSegments
+      summary: Le catalogue des segments d'audience, dans les deux langues.
+      description: >-
+        La specification EST cette liste (`apps/api/src/segments.js`) : ajouter
+        un segment coute une entree, jamais une branche, et la console n'en code
+        aucun en dur. Demande `analytics:read` — regarder une audience n'est pas
+        lui ecrire.
+      security:
+        - adminSession: []
+      responses:
+        "200":
+          description: Le catalogue tel que le serveur l'applique.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, segments]
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+                  segments:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Segment"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /admin/campaigns/preview:
+    post:
+      operationId: previewAdminCampaign
+      summary: Resoudre une audience A BLANC — le compte, les exclusions, un echantillon masque.
+      description: >-
+        Essai a blanc : la resolution compte, detaille et montre, mais ne
+        prepare RIEN d'envoyable et n'ecrit nulle part — regarder une audience
+        ne consomme pas le quota de ses membres. L'echantillon est masque
+        (`a...@etude.ca`) : reconnaissable, pas expediable. `plafond.depasse`
+        annonce ce que l'envoi exigera de confirmer. Demande `analytics:read`.
+      security:
+        - adminSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [audience, templateKey]
+              properties:
+                audience:
+                  $ref: "#/components/schemas/AudienceSpec"
+                templateKey:
+                  type: string
+                  description: Une cle du registre `emails.TEMPLATE_META`.
+      responses:
+        "200":
+          description: Ce que la campagne ferait.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, total, exclus, echantillon, plafond, nature, avertissements]
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+                  total:
+                    type: integer
+                    description: Le nombre REEL de destinataires retenus.
+                  exclus:
+                    $ref: "#/components/schemas/CampaignExclusions"
+                  echantillon:
+                    type: array
+                    description: Adresse masquee et raison MESUREE, au plus cinq lignes.
+                    items:
+                      type: string
+                  plafond:
+                    type: object
+                    required: [limite, depasse]
+                    properties:
+                      limite:
+                        type: integer
+                      depasse:
+                        type: boolean
+                  nature:
+                    type: string
+                    enum: [commercial, transactionnel]
+                    description: La plus stricte des natures de la cible.
+                  avertissements:
+                    type: array
+                    items:
+                      type: string
+        "400":
+          description: Malformed JSON body.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Errors"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/TemplateNotFound"
+        "422":
+          description: >-
+            Cible refusee (`spec_invalide`, `type_inconnu`, `segment_inconnu`,
+            `groupe_inconnu`, `courriel_invalide`, `parametre_inconnu`,
+            `parametre_invalide`) ou gabarit transactionnel detourne en reclame
+            (`gabarit_transactionnel`, art. 68 du Code de deontologie).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Errors"
+  /admin/campaigns:
+    post:
+      operationId: sendAdminCampaign
+      summary: Envoyer la campagne.
+      description: >-
+        Demande `campaigns:send` — une capacite a part entiere, jamais un
+        corollaire de `notifications:write` : ecrire un gabarit et l'envoyer a
+        cent personnes ne sont pas la meme decision. L'envoi passe par
+        `notifications.js`, seul chemin qui honore la liste de suppression et
+        pose l'en-tete de retrait RFC 8058. Apres chaque envoi COMMERCIAL
+        reussi, l'adresse est inscrite au registre de frequence (art. 56 1 du
+        Code de deontologie : inciter de facon pressante ou repetee est
+        derogatoire) ; sans cette ecriture le plafond serait decoratif. Chaque
+        campagne est journalisee : qui, quelle audience, combien atteints,
+        combien exclus et pourquoi.
+      security:
+        - adminSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [audience, templateKey]
+              properties:
+                audience:
+                  $ref: "#/components/schemas/AudienceSpec"
+                templateKey:
+                  type: string
+                  description: >-
+                    Une cle du registre `emails.TEMPLATE_META`. Un gabarit
+                    TRANSACTIONNEL est refuse pour une campagne commerciale.
+                confirme:
+                  type: boolean
+                  description: Confirmation explicite exigee quand le plafond de taille est franchi.
+      responses:
+        "200":
+          description: La campagne est partie.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, envoyes, exclus, campagneId]
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+                  envoyes:
+                    type: integer
+                  exclus:
+                    $ref: "#/components/schemas/CampaignExclusions"
+                  campagneId:
+                    type: string
+                    description: L'identifiant que porte l'entree d'audit.
+        "400":
+          description: Malformed JSON body.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Errors"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/TemplateNotFound"
+        "409":
+          description: >-
+            `confirmation_requise` — l'audience depasse le plafond de taille.
+            La demande est bien formee ; c'est l'ETAT de l'audience qui exige un
+            second geste. L'erreur porte `total` et `limite`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Errors"
+        "422":
+          description: >-
+            Cible refusee, ou gabarit transactionnel detourne en reclame
+            (`gabarit_transactionnel`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Errors"
+        "503":
+          description: >-
+            `envoi_indisponible` — aucun expediteur n'est cable sur cette
+            console. Rien n'a ete envoye et aucun quota n'a ete consomme.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Errors"

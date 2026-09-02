@@ -30,6 +30,19 @@ function createMemoryRepo(seed = []) {
   // key, mirroring the CONFIG#EMAIL / TPL#<key> partition on the main table.
   const emailOverrides = new Map(); // templateKey -> { key, enabled, subjectFr, subjectEn, updatedAt }
 
+  // Groupes d'administrateurs (RBAC découplé) : un groupe réunit des
+  // permissions et s'attribue à des utilisateurs. Miroir de la partition
+  // GROUPS / GROUP#<id> de la table admin.
+  const groupes = new Map(); // id -> { id, nom, description, permissions[], updatedAt }
+
+  // Campagnes ciblées (segments.js). TROIS registres distincts, et la distinction
+  // porte : `audienceGroupes` est une liste de DESTINATAIRES — rien à voir avec
+  // `groupes` juste au-dessus, qui réunit des permissions d'administrateurs.
+  const audienceGroupes = new Map(); // id -> { id, libelle, audience, nature, membres[] }
+  const consentements = new Map(); // courriel -> { email, base, at, source }
+  const campagnes = new Map(); // courriel -> { email, at, campagneId }
+  const courriel = (e) => String(e == null ? '' : e).trim().toLowerCase();
+
   // Notary console: declines (per notary+bid) and retained pointers (per notary).
   const declines = new Set(); // `${notaryId}#${bidId}`
   const retained = new Map(); // `${notaryId}#${bidId}` -> { id, dateISO, serviceId, montant }
@@ -38,9 +51,9 @@ function createMemoryRepo(seed = []) {
   // NOTARY#<id> / EVAL#<createdAt>#<bidId> items on the main table.
   const notaryEvals = new Map(); // notaryId -> [{ bidId, dateISO, serviceId, note, commentaire, createdAt }]
 
-  // The admin-decided commission barème (ADR 0021), mirroring the single
-  // CONFIG#COMMISSION / BAREME item. Null until Nota stores one.
-  let commissionCfg = null;
+  // Le prix de Nota décidé par Nota (ADR 0031), reflet de l'unique item
+  // CONFIG#PRIX / PRIX. Null tant que Nota n'en a stocké aucun.
+  let prixCfg = null;
 
   // The admin-decided cancellation fee barème (ADR 0023), mirroring the single
   // CONFIG#ANNULATION / BAREME item. Null until Nota stores one.
@@ -261,15 +274,27 @@ function createMemoryRepo(seed = []) {
       return o ? { ...o } : null;
     },
     async putEmailOverride(override, nowISO) {
-      const subj = (v) => {
+      // Un champ vide se STOCKE comme absent : une paire à moitié remplie n'est
+      // pas une surcharge, et la lecture doit pouvoir le voir sans deviner.
+      const txt = (v) => {
         const s = typeof v === 'string' ? v.trim() : '';
         return s || null;
       };
       const stored = {
         key: String(override.key),
-        enabled: override.enabled !== false,
-        subjectFr: subj(override.subjectFr),
-        subjectEn: subj(override.subjectEn),
+        // `actif` est le nom du produit, `enabled` l'alias historique : les deux
+        // portent la même décision, et un gabarit transactionnel ne peut pas
+        // être éteint (la règle vit dans emails.validateOverride).
+        actif: override.actif !== false && override.enabled !== false,
+        enabled: override.actif !== false && override.enabled !== false,
+        subjectFr: txt(override.subjectFr),
+        subjectEn: txt(override.subjectEn),
+        preheaderFr: txt(override.preheaderFr),
+        preheaderEn: txt(override.preheaderEn),
+        corpsFr: txt(override.corpsFr),
+        corpsEn: txt(override.corpsEn),
+        ctaFr: txt(override.ctaFr),
+        ctaEn: txt(override.ctaEn),
         updatedAt: nowISO,
       };
       emailOverrides.set(stored.key, stored);
@@ -284,24 +309,19 @@ function createMemoryRepo(seed = []) {
         .sort((a, b) => a.key.localeCompare(b.key));
     },
 
-    // --- Admin-decided commission barème (ADR 0021) --------------------------
-    // Same contract as the dynamo adapter: one record, updatedAt stamped by the
-    // caller-supplied clock, absent reads as null (billing then falls back to
-    // the environment defaults).
-    async getCommissionConfig() {
-      return commissionCfg ? { ...commissionCfg, paliers: commissionCfg.paliers.map((p) => ({ ...p })) } : null;
+    // --- Le prix de Nota, décidé par Nota (ADR 0031) -------------------------
+    // Même contrat que l'adaptateur dynamo : un seul enregistrement, updatedAt
+    // estampillé par l'horloge de l'appelant, absent se lit null (la
+    // facturation retombe alors sur les défauts du déploiement).
+    async getPrixNotaConfig() {
+      return prixCfg ? { ...prixCfg } : null;
     },
-    async putCommissionConfig(cfg, nowISO) {
-      commissionCfg = {
-        taux: cfg.taux,
-        plancher: cfg.plancher,
-        paliers: (cfg.paliers || []).map((p) => ({ ...p })),
-        updatedAt: nowISO,
-      };
-      return { ...commissionCfg, paliers: commissionCfg.paliers.map((p) => ({ ...p })) };
+    async putPrixNotaConfig(cfg, nowISO) {
+      prixCfg = { prixCents: cfg.prixCents, updatedAt: nowISO };
+      return { ...prixCfg };
     },
-    async deleteCommissionConfig() {
-      commissionCfg = null;
+    async deletePrixNotaConfig() {
+      prixCfg = null;
     },
 
     // --- Admin-decided cancellation fee barème (ADR 0023) --------------------
@@ -448,6 +468,93 @@ function createMemoryRepo(seed = []) {
     async putAdmin(admin) {
       admins.set(admin.id, { ...admin });
       return admin;
+    },
+
+    // --- Groupes d'administrateurs (RBAC découplé) --------------------------
+    async getGroup(id) {
+      const g = groupes.get(String(id));
+      return g ? { ...g } : null;
+    },
+    async putGroup(groupe, updatedAt) {
+      const item = { ...groupe, updatedAt };
+      groupes.set(String(groupe.id), item);
+      return { ...item };
+    },
+    async deleteGroup(id) {
+      groupes.delete(String(id));
+    },
+    async listGroups() {
+      return [...groupes.values()].map((g) => ({ ...g })).sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    },
+
+    // --- Campagnes ciblées : audience, consentement, fréquence ---------------
+    // Même contrat que l'adaptateur dynamo. Les adresses sont normalisées à
+    // l'écriture ET à la lecture : une campagne ne doit pas rater un plafond de
+    // fréquence parce que l'opérateur a tapé une majuscule.
+    async getAudienceGroup(id) {
+      const g = audienceGroupes.get(String(id));
+      return g ? { ...g, membres: [...g.membres] } : null;
+    },
+    async putAudienceGroup(groupe, updatedAt) {
+      const item = {
+        id: String(groupe.id),
+        libelle: groupe.libelle || null,
+        audience: groupe.audience || null,
+        nature: groupe.nature || null,
+        membres: (groupe.membres || []).map(courriel).filter(Boolean),
+        updatedAt,
+      };
+      audienceGroupes.set(item.id, item);
+      return { ...item, membres: [...item.membres] };
+    },
+    async deleteAudienceGroup(id) {
+      audienceGroupes.delete(String(id));
+    },
+    async listAudienceGroups() {
+      return [...audienceGroupes.values()]
+        .map((g) => ({ ...g, membres: [...g.membres] }))
+        .sort((a, b) => a.id.localeCompare(b.id));
+    },
+
+    async getEmailConsent(email) {
+      const c = consentements.get(courriel(email));
+      return c ? { ...c } : null;
+    },
+    async putEmailConsent(email, consent) {
+      const item = {
+        email: courriel(email),
+        base: (consent && consent.base) || null,
+        at: (consent && consent.at) || null,
+        source: (consent && consent.source) || null,
+      };
+      consentements.set(item.email, item);
+      return { ...item };
+    },
+
+    // Art. 56 1° — le registre qui donne sa force au plafond de fréquence. UN
+    // item par adresse, écrasé : ce qui compte est la DERNIÈRE campagne reçue.
+    async markCampaignSent(email, atISO, campaignId) {
+      const clean = courriel(email);
+      if (!clean) return null;
+      const item = { email: clean, at: atISO, campagneId: campaignId || null };
+      campagnes.set(clean, item);
+      return { ...item };
+    },
+    async lastCampaignAt(email) {
+      const c = campagnes.get(courriel(email));
+      return c ? c.at : null;
+    },
+    // La porte préférée : UNE lecture pour toute l'audience. Toute adresse
+    // demandée est présente dans la réponse — `null` DIT « jamais écrit », là
+    // où une clé absente laisserait l'appelant deviner.
+    async lastCampaignAtMany(adresses) {
+      const out = {};
+      for (const a of adresses || []) {
+        const clean = courriel(a);
+        const c = campagnes.get(clean);
+        out[clean] = c ? c.at : null;
+      }
+      return out;
     },
 
     // --- Admin login challenges (single-use magic links) --------------------

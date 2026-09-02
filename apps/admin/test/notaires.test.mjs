@@ -149,14 +149,17 @@ test('the rail carries an enabled Notaires entry that routes to the tableau d’
   assert.ok(text(doc.querySelector('.admin-rail-link[aria-current="page"]')).includes('Notaires'));
 });
 
-test('the table reads as a tableau d’honneur — cote, the share kept, no invented rating', async () => {
+test('ART. 29.1 — le registre nomme la cote et les actes, jamais une part gardée', async () => {
   const { win, doc } = await boot(api(), '#/auth?token=T');
   await waitFor(win, '.admin-rail');
   win.location.hash = '#/notaires';
   await waitFor(win, '.ntable');
 
   const heads = [...doc.querySelectorAll('.ntable thead th')].map(text);
-  assert.deepEqual(heads, ['Étude', 'Statut', 'Cote', 'Le notaire garde', 'Actes', 'Note', 'Commission perçue', 'Dernière visite']);
+  // ADR 0031 — plus de colonne « Le notaire garde » : il garde tout. Publier
+  // un pourcentage, fût-ce dans une console interne, décrirait la convention
+  // que l'art. 29.1 du Code de déontologie interdit au notaire de conclure.
+  assert.deepEqual(heads, ['Étude', 'Statut', 'Cote', 'Actes', 'Note', 'Facturé par Nota', 'Dernière visite']);
 
   const rows = [...doc.querySelectorAll('.ntable tbody tr.nrow')];
   assert.equal(rows.length, 2, 'one row per notary, in the order the API served (cote desc)');
@@ -166,22 +169,24 @@ test('the table reads as a tableau d’honneur — cote, the share kept, no inve
   assert.match(first[0], /m\.tremblay@etude\.ca/, 'the courriel rides under the étude');
   assert.match(first[1], /Actif/);
   assert.match(first[2], /93/);
-  assert.match(first[3], /95 %/, 'the notary’s half is the one stated');
-  assert.match(first[4], /40/);
-  assert.match(first[5], /4,7/);
-  assert.match(first[5], /30 avis/);
-  assert.match(first[6], /4 820 \$/);
-  assert.match(first[7], /2026-08-31/);
+  assert.match(first[3], /40/, 'les actes portés');
+  assert.match(first[4], /4,7/);
+  assert.match(first[4], /30 avis/);
+  assert.match(first[5], /4 820 \$/, 'ce que le CLIENT a payé à Nota, jamais une retenue');
+  assert.match(first[6], /2026-08-31/);
+  assert.ok(!/%/.test(first.join(' ')), 'aucun pourcentage sur la ligne : ' + first.join(' | '));
 
   // Le nouveau venu : aucune fausse note, aucune fausse visite.
   const second = cells(rows[1]);
   assert.match(second[1], /En intégration/);
-  assert.match(second[5], /aucun avis/, 'note: null reads « aucun avis »');
-  assert.ok(!/\b0\b/.test(second[5]), 'never a 0 out of 5');
-  assert.match(second[7], /jamais/, 'vuLe: null reads « jamais »');
+  assert.match(second[4], /aucun avis/, 'note: null reads « aucun avis »');
+  assert.ok(!/\b0\b/.test(second[4]), 'never a 0 out of 5');
+  assert.match(second[6], /jamais/, 'vuLe: null reads « jamais »');
 
-  // Le barème en vigueur est rappelé : c'est lui qui explique la colonne.
-  assert.match(text(doc.querySelector('.admin-content')), /Barème en vigueur/);
+  // Ce qui remplace le barème : la phrase qui dit que le notaire garde tout.
+  const pied = text(doc.querySelector('.admin-content'));
+  assert.match(pied, /garde la totalité de ses honoraires/);
+  assert.ok(!/Barème en vigueur/.test(pied), 'aucun barème n’est rappelé');
 });
 
 test('a row unfolds onto the four axes, points and every figure behind them', async () => {
@@ -295,7 +300,7 @@ test('the roster crosses into English — columns, statuses and axis labels', as
   await settle(win);
 
   const heads = [...doc.querySelectorAll('.ntable thead th')].map(text);
-  assert.deepEqual(heads, ['Firm', 'Status', 'Cote', 'The notary keeps', 'Acts', 'Rating', 'Commission collected', 'Last visit']);
+  assert.deepEqual(heads, ['Firm', 'Status', 'Cote', 'Acts', 'Rating', 'Billed by Nota', 'Last visit']);
   const rows = [...doc.querySelectorAll('.ntable tbody tr.nrow')];
   assert.match(text(rows[1]), /no reviews/, 'the missing rating stays honest in English');
   assert.match(text(rows[1]), /Onboarding/);

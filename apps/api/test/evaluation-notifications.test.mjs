@@ -76,6 +76,16 @@ test('evaluationRecueNotaire shows the note, the comment excerpt — and never p
   assert.ok(/cote out of 100/.test(out.html), 'EN: same');
   assert.ok(/montrée à aucun client/.test(out.html), 'FR: et ce qu’elle ne fait pas');
   assert.ok(/shown to no client/.test(out.html), 'EN: same');
+
+  // ADR 0031 — la cote survit, mais elle ne décide plus d'un dollar. L'art. 29.1
+  // interdit au notaire toute convention mettant en péril son indépendance : un
+  // revenu indexé sur une note attribuée par Nota en était une. Le courriel ne
+  // peut donc plus lier l'évaluation à « la part que vous gardez » — il dit
+  // l'inverse, et c'est ce qui rassure : le montant offert revient en entier.
+  assert.ok(!/part que vous gardez|share you keep/.test(out.html), 'aucune part liée à la cote');
+  assert.ok(!/commission/i.test(out.html), 'Nota ne prélève plus rien sur les honoraires');
+  assert.ok(/ne touche pas à votre rémunération/.test(out.html), 'FR: la cote et l’argent sont déliés');
+  assert.ok(/does not touch your pay/.test(out.html), 'EN: same');
   const ctas = (out.html.match(new RegExp('href="' + BASE + '/#notaires"', 'g')) || []).length;
   assert.equal(ctas, 2, 'CTA opens the console in both languages');
 });

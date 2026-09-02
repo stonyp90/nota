@@ -81,29 +81,48 @@ notaires du Québec** (`cnq.org`) ; un badge « CNQ » est alors affiché
 
 ## 3. Ce que le notaire reçoit
 
-**Le montant offert par le client est un total, tout compris.** Il se partage à
-la signature.
+**Le notaire reçoit la totalité du montant que le client a offert.** Nota ne
+prélève rien sur ses honoraires, ne lui demande d'en abandonner aucune part, et
+ne fait dépendre son revenu d'aucune note, cote ou classement.
 
-**Le notaire reçoit de 85 % à 95 % de ce montant**, selon sa cote sur 100 :
+Une offre porte **deux lignes distinctes**, que le client voit séparément avant
+de s'engager :
 
-| Cote atteinte | Le notaire reçoit | Nota conserve |
-| ---: | ---: | ---: |
-| Aucun historique | **85 %** | 15 % |
-| 60 | 88 % | 12 % |
-| 70 | 90 % | 10 % |
-| 80 | 92 % | 8 % |
-| 90 et plus | **95 %** | 5 % |
+| Ligne | Qui l'encaisse | Ce qui la détermine |
+| --- | --- | --- |
+| **Honoraires** | **Le notaire, en entier** | Le montant offert par le client |
+| **Prix de Nota** | Nota | Un **montant fixe**, identique pour tous |
 
-**Nota ne conserve jamais plus de 15 %.** La part du notaire ne peut que monter :
-un barème dont le plancher serait mal configuré ne peut pas facturer au-dessus du
-taux de base (`apps/api/src/billing.js:105-121`).
+La carte du client autorise le **total** des deux lignes ; à la signature, la
+capture prélève ce total, les frais d'application Stripe **sont** le prix de
+Nota, et le net viré au notaire est exactement le montant qui lui a été offert
+(`apps/api/src/billing.js:183-186`, `:355-357`).
 
-*(Source : `apps/api/src/commission-config.js:23, 27, 32-37`.)*
+**Le prix de Nota ne dépend de rien qui touche au notaire** — ni de sa cote, ni
+de son historique, ni de la valeur de l'acte. C'est un invariant testé
+(`apps/api/test/prix-nota-separe.test.mjs`), et c'est une obligation : l'art.
+29.1 du *Code de déontologie* interdit au notaire toute convention mettant en
+péril son indépendance et son désintéressement, et un revenu indexé sur une note
+attribuée par une entreprise privée en serait une.
 
-### Comment la cote se calcule
+*(Prix par défaut : 400 $ — `apps/api/src/prix-nota-config.js:41`. Décision :
+`docs/decisions/0031-le-prix-de-nota-est-celui-de-nota.md`.)*
 
-La cote sur 100 est établie à partir de quatre axes, tous visibles par le notaire
-dans sa console (`apps/api/src/cote.js:32-59`) :
+> **Ce qui a changé, et pourquoi.** Jusqu'au 1<sup>er</sup> septembre 2026, Nota
+> conservait de 5 % à 15 % du montant offert, selon la cote du notaire. Ce
+> modèle est **retiré**. Trois textes le condamnaient ensemble : l'art. 32.1 2°
+> de la *Loi sur le notariat* (est présumée usurper les fonctions de notaire la
+> personne qui « obtient d'un notaire qu'il abandonne une partie de ses
+> honoraires et frais »), l'art. 32 du *Code de déontologie* (le notaire ne peut
+> partager ses honoraires avec un non-membre d'un ordre) et l'art. 29.1. Aucun
+> notaire n'a été facturé sous l'ancien modèle : aucun acte n'a encore été porté
+> sur la plateforme.
+
+### La cote sur 100 — ce qu'elle fait, et ce qu'elle ne fait plus
+
+La cote **ne touche plus à un dollar**. Elle subsiste comme signal de service,
+calculée sur quatre axes visibles par le notaire dans sa console
+(`apps/api/src/cote.js:32-59`) :
 
 | Axe | Ce qui le compose |
 | --- | --- |
@@ -112,26 +131,15 @@ dans sa console (`apps/api/src/cote.js:32-59`) :
 | **Disponibilité** | **toutes** les demandes auxquelles le notaire répond — proposition, acceptation **ou refus, sans distinction** — son rayon de déplacement, son ouverture aux urgences. Seul le silence vaut zéro |
 | **Présence** | fiche CNQ renseignée, secteur déclaré, activité récente, ancienneté |
 
-Le barème et la cote sont **publiés au notaire dans sa console**, avec le
-prochain palier et les points qui l'en séparent (`apps/api/src/billing.js:122-146`,
-`handler.js:1367-1385`). Nota s'engage à ce que la part ne soit jamais une règle
-cachée.
+**Refuser un mandat ne coûte rien.** C'est délibéré : l'art. 8 du *Code de
+déontologie* commande au notaire de tenir compte des limites de ses aptitudes et
+de ses moyens **avant** de convenir d'un contrat de service, et l'art. 26 lui
+impose de cesser d'agir pour un motif sérieux. Une plateforme qui pénaliserait
+un refus le pousserait à contrevenir à son propre code.
 
-### Modification du barème
-
-Nota peut modifier le barème. Toute modification est **journalisée avec son état
-avant et après** (`apps/api/src/admin.js:483, 501`) et prend effet au règlement
-suivant, sans effet rétroactif sur un acte déjà réglé.
-
-> ✅ **Corrigé** (1er septembre 2026). Le registre de règlement fige désormais
-> **le taux et la cote avec l'argent**, dans l'item en écriture unique
-> (`apps/api/src/billing.js:314-317` et `:428-429`). Une modification ultérieure
-> du barème ne peut plus réécrire ce qu'un acte a été facturé, et le notaire lit
-> son relevé acte par acte — montant, taux, cote, part de Nota, net — par
-> `GET /notary/acts` (`apps/api/src/handler.js:1477-1517`).
->
-> ⚠️ **Reste à stipuler.** Aucun **préavis écrit** avant une modification
-> défavorable du barème n'est prévu, ni dans le contrat ni dans le produit.
+La cote n'est **jamais publiée sur une surface client** : l'art. 70 interdit au
+notaire d'utiliser un témoignage d'appui ou de reconnaissance dans sa publicité
+(`docs/decisions/0030-la-deontologie-prime-la-cote-ne-se-publie-pas.md`).
 
 ---
 

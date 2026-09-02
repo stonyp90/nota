@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { createAdmin, permissionsFor } = require('../src/admin.js');
+const { createAdmin } = require('../src/admin.js');
+const rbac = require('../src/rbac.js');
 const { createMemoryRepo } = require('../src/repo-memory.js');
 const { signAdminToken, SCOPES, ROLES } = require('../src/admin-auth.js');
 
@@ -68,7 +69,11 @@ test('verifyMagic redeems the link once, bootstraps a super_admin, and issues a 
 
   const who = await h.admin.me(res.session);
   assert.equal(who.email, 'ops@nota.ca');
-  assert.deepEqual(who.permissions, permissionsFor(ROLES.SUPER_ADMIN));
+  // Le rôle d'amorçage résout au JOKER : le premier à franchir la liste
+  // blanche doit pouvoir ouvrir la console, y compris pour accorder des accès
+  // à d'autres. La granularité vient ensuite des groupes et des grants.
+  assert.deepEqual(who.permissions, [rbac.WILDCARD]);
+  assert.equal(rbac.can(who.permissions, 'notifications:write'), true);
 
   // Single-use: replaying the SAME magic link is rejected.
   const replay = await h.admin.verifyMagic({ token });

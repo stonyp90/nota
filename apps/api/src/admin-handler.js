@@ -14,6 +14,7 @@
  * table — the admin surface can never mutate customer data.
  */
 const domain = require('@nota/domain');
+const rbac = require('./rbac');
 const { createAdmin } = require('./admin');
 const { createAnalytics } = require('./analytics');
 
@@ -30,6 +31,29 @@ function createAdminApp(repo, opts = {}) {
   // The exact origin the admin SPA is served from; also the CORS allow-origin.
   const adminOrigin = opts.adminBaseUrl || process.env.NOTA_ADMIN_BASE_URL || '';
 
+  // Le port d'envoi des campagnes. Son unique implémentation est
+  // `notifications.js` — celle qui honore déjà la liste de suppression et pose
+  // l'en-tête de retrait RFC 8058. La console n'écrit PAS un second chemin
+  // d'envoi : si le notifieur n'expose pas encore la porte `sendCampaign`, la
+  // route d'envoi répond 503 et le dit, plutôt que d'improviser.
+  function campaignNotifier() {
+    if (opts.notifier !== undefined) return opts.notifier;
+    if (!opts.mailer) return null;
+    try {
+      const { createNotifier } = require('./notifications');
+      const n = createNotifier({
+        repo,
+        mailer: opts.mailer,
+        baseUrl: process.env.NOTA_BASE_URL || '',
+        apiBaseUrl: process.env.NOTA_API_BASE_URL || undefined,
+        now: () => new Date(nowMs()).toISOString(),
+      });
+      return typeof n.sendCampaign === 'function' ? n : null;
+    } catch {
+      return null;
+    }
+  }
+
   // Admin + analytics use-cases are injectable (tests pass fakes / fixed clocks).
   // In production they are built here from the environment.
   const admin =
@@ -37,6 +61,7 @@ function createAdminApp(repo, opts = {}) {
     createAdmin({
       repo,
       mailer: opts.mailer || null,
+      notifier: campaignNotifier(),
       newId,
       now: () => new Date(nowMs()).toISOString(),
       nowMs,
@@ -174,7 +199,9 @@ function createAdminApp(repo, opts = {}) {
     if (route === '/admin/notifications/templates' && method === 'GET') {
       const result = await admin.listEmailTemplates(bearer(request), { ip: clientIp(request) });
       if (!result.ok) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
-      return json(200, { templates: result.templates });
+      // `limites` voyage avec le registre : la console pose ses `maxlength`
+      // depuis le serveur plutôt que de recopier des bornes qui dériveraient.
+      return json(200, { templates: result.templates, limites: result.limites });
     }
 
     // contract: /admin/notifications/templates/{key}
@@ -225,16 +252,19 @@ function createAdminApp(repo, opts = {}) {
       return json(200, { jour: result.jour, entrees: result.entrees });
     }
 
-    // --- Commission barème (ADR 0021 §4) -------------------------------------
-    // GET open to any authenticated admin; PUT/DELETE require 'settings:write'
-    // — enforced in admin.js, which also audit-logs every change.
-    if (route === '/admin/commission' && method === 'GET') {
-      const result = await admin.getCommissionSchedule(bearer(request), { ip: clientIp(request) });
+    // --- Le prix de Nota (ADR 0031) ------------------------------------------
+    // Remplace la porte du barème de commission : Nota vend son service à son
+    // propre prix, un montant fixe, et non plus une part des honoraires du
+    // notaire. Lecture ouverte à tout admin authentifié ; PUT/DELETE exigent
+    // 'settings:write' — appliqué dans admin.js, qui journalise chaque
+    // changement avec son avant/après.
+    if (route === '/admin/prix' && method === 'GET') {
+      const result = await admin.getPrixNota(bearer(request), { ip: clientIp(request) });
       if (!result.ok) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
       return json(200, { defaut: result.defaut, override: result.override, effectif: result.effectif });
     }
 
-    if (route === '/admin/commission' && (method === 'PUT' || method === 'DELETE')) {
+    if (route === '/admin/prix' && (method === 'PUT' || method === 'DELETE')) {
       let result;
       if (method === 'PUT') {
         let payload;
@@ -243,15 +273,86 @@ function createAdminApp(repo, opts = {}) {
         } catch {
           return json(400, { errors: [{ code: 'json_invalide', message: 'Corps JSON invalide.' }] });
         }
-        result = await admin.putCommissionSchedule(bearer(request), payload, { ip: clientIp(request) });
+        result = await admin.putPrixNota(bearer(request), payload, { ip: clientIp(request) });
       } else {
-        result = await admin.resetCommissionSchedule(bearer(request), { ip: clientIp(request) });
+        result = await admin.resetPrixNota(bearer(request), { ip: clientIp(request) });
       }
       if (!result.ok) {
         if (result.status === 401) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
         return json(result.status, { errors: result.errors });
       }
       return json(200, method === 'PUT' ? { ok: true, override: result.override } : { ok: true });
+    }
+
+    // --- RBAC : catalogue, groupes, accès ------------------------------------
+    // Trois concepts découplés. La permission de LIRE est distincte de celle
+    // d'ÉCRIRE, pour qu'on puisse ouvrir la consultation d'un annuaire sans
+    // ouvrir le droit d'y toucher. Chaque écriture est journalisée avec son
+    // état avant et après : accorder une capacité est une décision, pas un
+    // réglage.
+    if (route === '/admin/permissions' && method === 'GET') {
+      const p = await admin.requireAdmin(bearer(request), { ip: clientIp(request) });
+      if (!p) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+      return json(200, admin.listPermissions());
+    }
+
+    if (route === '/admin/groups' && method === 'GET') {
+      const p = await admin.requireAdmin(bearer(request), { ip: clientIp(request) });
+      if (!p) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+      if (!rbac.can(p.permissions, 'groups:read')) return json(403, { errors: [{ code: 'interdit', message: 'Lecture des groupes non autorisée.' }] });
+      return json(200, await admin.listGroups());
+    }
+
+    // contract: /admin/groups/{id}
+    const groupMatch = route.match(/^\/admin\/groups\/([^/]+)$/);
+    if (groupMatch && (method === 'PUT' || method === 'DELETE')) {
+      const p = await admin.requireAdmin(bearer(request), { ip: clientIp(request) });
+      if (!p) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+      if (!rbac.can(p.permissions, 'groups:write')) return json(403, { errors: [{ code: 'interdit', message: 'Modification des groupes non autorisée.' }] });
+      const id = decodeURIComponent(groupMatch[1]);
+      let result;
+      if (method === 'PUT') {
+        let payload;
+        try {
+          payload = parseBody(request);
+        } catch {
+          return json(400, { errors: [{ code: 'json_invalide', message: 'Corps JSON invalide.' }] });
+        }
+        result = await admin.putGroup(id, payload, { actor: p.email });
+      } else {
+        result = await admin.deleteGroup(id, { actor: p.email });
+      }
+      if (!result.ok) return json(result.errors.some((e) => e.code === 'groupe_introuvable') ? 404 : 422, { errors: result.errors });
+      return json(200, method === 'PUT' ? { ok: true, groupe: result.groupe } : { ok: true });
+    }
+
+    if (route === '/admin/users' && method === 'GET') {
+      const p = await admin.requireAdmin(bearer(request), { ip: clientIp(request) });
+      if (!p) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+      if (!rbac.can(p.permissions, 'users:read')) return json(403, { errors: [{ code: 'interdit', message: 'Lecture des utilisateurs non autorisée.' }] });
+      return json(200, await admin.listUsers());
+    }
+
+    // contract: /admin/users/{email}
+    const userMatch = route.match(/^\/admin\/users\/([^/]+)$/);
+    if (userMatch && method === 'PUT') {
+      const p = await admin.requireAdmin(bearer(request), { ip: clientIp(request) });
+      if (!p) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+      if (!rbac.can(p.permissions, 'users:write')) return json(403, { errors: [{ code: 'interdit', message: 'Attribution des accès non autorisée.' }] });
+      let payload;
+      try {
+        payload = parseBody(request);
+      } catch {
+        return json(400, { errors: [{ code: 'json_invalide', message: 'Corps JSON invalide.' }] });
+      }
+      const result = await admin.putUserAccess(decodeURIComponent(userMatch[1]), payload, { actor: p.email });
+      if (!result.ok) {
+        // 409 : la demande est bien formée, mais l'état du système la refuse —
+        // retirer le dernier administrateur laisserait la console sans issue.
+        if (result.code === 'dernier_administrateur') return json(409, { errors: result.errors });
+        return json(result.errors.some((e) => e.code === 'utilisateur_inconnu') ? 404 : 422, { errors: result.errors });
+      }
+      return json(200, { ok: true, utilisateur: result.utilisateur });
     }
 
     // --- Cancellation-fee barème (ADR 0023 §2) -------------------------------
@@ -281,6 +382,55 @@ function createAdminApp(repo, opts = {}) {
         return json(result.status, { errors: result.errors });
       }
       return json(200, method === 'PUT' ? { ok: true, override: result.override } : { ok: true });
+    }
+
+    // --- Campagnes ciblées (segments.js) -------------------------------------
+    // Trois portes, deux permissions. REGARDER une audience (le catalogue, la
+    // prévisualisation) demande 'analytics:read' ; l'ENVOYER demande
+    // 'campaigns:send' — une capacité à part entière, jamais un corollaire de
+    // 'notifications:write'. Tout est appliqué dans admin.js par `rbac.can`,
+    // pour que le joker « * » passe et que chaque envoi soit journalisé.
+    //
+    // Les garde-fous juridiques — base de consentement LCAP, plafond de
+    // fréquence de l'art. 56 1°, refus d'un gabarit transactionnel comme
+    // réclame — vivent dans segments.js et admin.js, PAS ici : une garde que
+    // l'on contourne en appelant l'API autrement n'est pas une garde.
+    if (route === '/admin/segments' && method === 'GET') {
+      const result = await admin.listSegments(bearer(request), { ip: clientIp(request) });
+      if (!result.ok) {
+        if (result.status === 401) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+        return json(result.status, { errors: result.errors });
+      }
+      return json(200, { ok: true, segments: result.segments });
+    }
+
+    if ((route === '/admin/campaigns/preview' || route === '/admin/campaigns') && method === 'POST') {
+      let payload;
+      try {
+        payload = parseBody(request);
+      } catch {
+        return json(400, { errors: [{ code: 'json_invalide', message: 'Corps JSON invalide.' }] });
+      }
+      const essai = route === '/admin/campaigns/preview';
+      const result = essai
+        ? await admin.previewCampaign(bearer(request), payload, { ip: clientIp(request) })
+        : await admin.sendCampaign(bearer(request), payload, { ip: clientIp(request) });
+      if (!result.ok) {
+        if (result.status === 401) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+        return json(result.status, { errors: result.errors });
+      }
+      if (essai) {
+        return json(200, {
+          ok: true,
+          total: result.total,
+          exclus: result.exclus,
+          echantillon: result.echantillon,
+          plafond: result.plafond,
+          nature: result.nature,
+          avertissements: result.avertissements,
+        });
+      }
+      return json(200, { ok: true, envoyes: result.envoyes, exclus: result.exclus, campagneId: result.campagneId });
     }
 
     return json(404, { errors: [{ code: 'introuvable', message: 'Route inconnue.' }] });

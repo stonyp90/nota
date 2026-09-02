@@ -95,11 +95,16 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now 
   }
 
   // --- Admin-parametrizable templates (consumption side) ---------------------
-  // The admin console may store a per-template override: { key, enabled,
-  // subjectFr, subjectEn, updatedAt }. The port is OPTIONAL — repos without
-  // repo.getEmailOverride keep the built-in behaviour untouched. Overrides are
-  // read through a small TTL cache so a burst of sends (the reminder batch, a
-  // busy webhook) costs one repo read per template per minute, not one per mail.
+  // The admin console may store a per-template override: { key, actif,
+  // subjectFr/En, preheaderFr/En, corpsFr/En, ctaFr/En, updatedAt }. The port is
+  // OPTIONAL — repos without repo.getEmailOverride keep the built-in behaviour
+  // untouched. Overrides are read through a small TTL cache so a burst of sends
+  // (the reminder batch, a busy webhook) costs one repo read per template per
+  // minute, not one per mail.
+  //
+  // The record is handed to the template as `__override`; emails.js `build()`
+  // is the single place it turns into copy. The notifier decides only ONE
+  // thing here: whether the record silences the send at all.
   //
   // NON-OVERRIDABLE mail, on purpose: the direct mailer.send bypasses
   // (onNotaryLoginRequested, onPartnerClaimRequested) and the admin console's
@@ -134,27 +139,74 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now 
   // Send one message at most once, honoring suppression. Returns a small result
   // describing what happened (sent, or why not) so callers/tests can assert.
   // `templateKey` names the emails.js registry entry behind `buildTemplate` and
-  // `ctx` is the same context object handed to it — together they let a stored
-  // admin override disable the template or reword its subject.
+  // `ctx` is the context that template reads; both ride into the build so a
+  // stored override can silence the send or reword its copy.
   async function sendOnce({ refId, kind, to, buildTemplate, templateKey, ctx }) {
     if (!to) return { sent: false, reason: 'no-address', kind };
     if (await repo.isUnsubscribed(to)) return { sent: false, reason: 'unsubscribed', kind };
     if (await repo.wasNotificationSent(refId, kind)) return { sent: false, reason: 'duplicate', kind };
 
+    // Art. 68 — un gabarit transactionnel ne s'éteint pas : emails.js seul sait
+    // lesquels, et un enregistrement qui prétend le contraire est sans effet.
     const override = await getOverride(templateKey);
-    if (override && override.enabled === false) return { sent: false, reason: 'disabled', kind };
+    if (emails.isOverrideDisabled(templateKey, override)) return { sent: false, reason: 'disabled', kind };
 
     const unsub = unsubscribeUrl(to);
-    const msg = buildTemplate({ unsubscribeUrl: unsub, baseUrl: base });
-    if (override) {
-      const subject = emails.renderSubjectOverride(override, ctx || {});
-      if (subject != null) msg.subject = subject;
-    }
+    // `ctx` rides in the environment too: the override's {{jetons}} are
+    // interpolated inside the template, and a couple of call sites hand the
+    // template less than they declare here (onClientSignup and its {{email}}).
+    const msg = buildTemplate({ ...(ctx || {}), unsubscribeUrl: unsub, baseUrl: base, __override: override });
     // unsubscribeUrl rides along so the mailer can emit the RFC 8058
     // List-Unsubscribe / List-Unsubscribe-Post headers.
     await mailer.send({ to, subject: msg.subject, html: msg.html, text: msg.text, unsubscribeUrl: unsub });
     await repo.markNotificationSent(refId, kind, clock());
     return { sent: true, kind, to };
+  }
+
+  /**
+   * L'ENVOI D'UNE CAMPAGNE — la seule porte générique du notifieur.
+   *
+   * `segments.resolveAudience` a déjà décidé QUI : consentement LCAP,
+   * désabonnements, doublons et plafond de fréquence sont tranchés en amont.
+   * Cette porte fait l'envoi, et rien de plus — mais elle refait la
+   * vérification du désabonnement, parce qu'une garde qui ne tient qu'à
+   * l'appelant n'en est pas une : `sendOnce` la refait aussi.
+   *
+   * Ce qu'elle NE fait PAS, délibérément :
+   *
+   *   • elle n'écrit pas dans le registre `SENT#`. Sa clé de partition varie
+   *     avec le destinataire (`sentPK(refId, kind)`), donc elle est impossible
+   *     à borner par `dynamodb:LeadingKeys` : la Lambda admin partirait en
+   *     AccessDenied APRÈS avoir envoyé le courriel — le pire moment. Une
+   *     campagne est idempotente par `markCampaignSent`, dont la partition est
+   *     fixe et autorisable.
+   *   • elle ne dédoublonne pas en silence. Un destinataire écarté doit l'être
+   *     en amont, avec sa raison, là où l'opérateur la lit.
+   *
+   * Ce qu'elle garantit, elle : le retrait fonctionnel (RFC 8058), l'extinction
+   * décidée par l'admin (art. 68 — un gabarit transactionnel ne s'éteint pas,
+   * et `emails.js` seul sait lesquels), et un verdict lisible plutôt qu'un
+   * silence.
+   */
+  async function sendCampaign({ to, templateKey, ctx }) {
+    if (!to) return { sent: false, reason: 'no-address' };
+    const build = emails.TEMPLATES && emails.TEMPLATES[templateKey];
+    if (typeof build !== 'function') return { sent: false, reason: 'unknown-template' };
+    if (await repo.isUnsubscribed(to)) return { sent: false, reason: 'unsubscribed' };
+
+    const override = await getOverride(templateKey);
+    if (emails.isOverrideDisabled(templateKey, override)) return { sent: false, reason: 'disabled' };
+
+    const unsub = unsubscribeUrl(to);
+    const msg = build({ ...(ctx || {}), unsubscribeUrl: unsub, baseUrl: base, __override: override });
+    try {
+      await mailer.send({ to, subject: msg.subject, html: msg.html, text: msg.text, unsubscribeUrl: unsub });
+    } catch {
+      // Un destinataire perdu ne doit pas emporter la campagne : l'appelant
+      // compte l'échec et poursuit.
+      return { sent: false, reason: 'send-failed' };
+    }
+    return { sent: true, to };
   }
 
   function bidCtx(bid, extra) {
@@ -686,6 +738,55 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now 
   //   notaire → client : bid.courriel gets messageDuNotaire;
   //   client → notaire : the retaining notary's email gets messageDuClient
   //                      (profile resolved via repo.getNotary when not passed).
+  /**
+   * Un document déposé dans le fil (ADR 0032). Prévenir est le point : sans
+   * cela, un document n'est qu'un événement de second rang qu'on découvre en
+   * rouvrant la page — et une pièce attendue dormirait pendant que la date
+   * approche.
+   *
+   * Le NOM du fichier voyage, jamais son contenu ni un lien direct : le
+   * document se lit derrière l'authentification, par une autorisation brève.
+   */
+  async function onChatDocument(bid, document, { notary } = {}) {
+    if (!bid || !document || !document.id || document.etat !== 'pret') return { ok: true, results: [] };
+    const domain = require('@nota/domain');
+    try {
+      const profile =
+        notary || (bid.notaryId && typeof repo.getNotary === 'function' ? await repo.getNotary(bid.notaryId) : null);
+      if (document.de === domain.CHAT_FROM.NOTAIRE) {
+        const ctx = {
+          ...bidCtx(bid),
+          etude: (profile && profile.label) || bid.etude || null,
+          document: document.nom,
+        };
+        const r = await sendOnce({
+          refId: document.id,
+          kind: 'documentDuNotaire',
+          to: bid.courriel,
+          templateKey: 'documentDuNotaire',
+          ctx,
+          buildTemplate: (env) => emails.documentDuNotaire({ ...ctx, ...env }),
+        });
+        return { ok: true, results: [r] };
+      }
+      if (document.de === domain.CHAT_FROM.CLIENT) {
+        const ctx = { ...bidCtx(bid), document: document.nom };
+        const r = await sendOnce({
+          refId: document.id,
+          kind: 'documentDuClient',
+          to: profile && profile.email,
+          templateKey: 'documentDuClient',
+          ctx,
+          buildTemplate: (env) => emails.documentDuClient({ ...ctx, ...env }),
+        });
+        return { ok: true, results: [r] };
+      }
+      return { ok: true, results: [] };
+    } catch (err) {
+      return { ok: false, error: String((err && err.message) || err), results: [] };
+    }
+  }
+
   async function onChatMessage(bid, message, { notary } = {}) {
     if (!bid || !message || !message.id || !message.texte) return { ok: true, results: [] };
     const domain = require('@nota/domain');
@@ -1045,6 +1146,7 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now 
     onSupportReply,
     onClientSignup,
     onChatMessage,
+    onChatDocument,
     onEvaluationSubmitted,
     onReminderDue,
     onNotaryDigest,
@@ -1052,6 +1154,7 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now 
     onNotaryLoginRequested,
     onActPaid,
     onAccountEvent,
+    sendCampaign,
     unsubscribe,
     unsubscribeUrl,
   };

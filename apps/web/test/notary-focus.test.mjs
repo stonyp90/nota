@@ -422,7 +422,14 @@ const COTE_STUB = {
   ],
 };
 
-test('the console names the share the notary keeps and the next rung to reach (ADR 0028)', async () => {
+test('ART. 29.1 — la console ne nomme AUCUNE part, même si le serveur en envoyait une', async () => {
+  // Le serveur a cessé d'envoyer un barème (ADR 0031), mais la console doit
+  // rester muette même si un déploiement plus ancien en renvoyait un : le
+  // client d'une API ne se protège pas en supposant que le serveur est à jour.
+  // L'art. 29.1 du Code de déontologie interdit au notaire « aucune convention
+  // ayant pour effet de mettre en péril l'indépendance, le désintéressement,
+  // l'objectivité et l'intégrité » : un revenu indexé sur une note attribuée
+  // par une entreprise privée en est une, et l'AFFICHER la rend opposable.
   const { doc } = await bootSignedIn(null, {
     rating: { note: 4.5, avis: 10 },
     cote: COTE_STUB,
@@ -434,26 +441,19 @@ test('the console names the share the notary keeps and the next rung to reach (A
     },
   });
   const cote = $(doc, 'notary-cote');
-  const lines = Array.from(cote.querySelectorAll('.nc-commission, .nc-cote-next')).map((n) => n.textContent);
-  assert.ok(lines.some((t) => t.includes('92 %') && t.includes('au lieu de 85 %')), 'the earned share must show against the base: ' + lines);
-  assert.ok(lines.some((t) => t.includes('Cote 90') && t.includes('95 %')), 'the next rung names the cote it takes and what it pays: ' + lines);
-  assert.ok(lines.some((t) => t.includes('7 points')), 'what is still missing is counted, not left to arithmetic: ' + lines);
+  assert.equal(cote.querySelectorAll('.nc-commission').length, 0, 'aucune phrase d’argent');
+  assert.equal(cote.querySelector('.nc-cote-next'), null, 'aucun palier suivant');
+  assert.equal(cote.querySelectorAll('.nc-bareme-row').length, 0, 'aucun barème');
+  assert.ok(!/gardez|au lieu de|%/.test(cote.textContent.replace(/\d+\s?\/\s?\d+/g, '')),
+    'ni pourcentage, ni part : ' + cote.textContent.slice(0, 200));
 });
 
-test('at the base split the console shows 85/15 and no phantom bonus', async () => {
-  const { doc } = await bootSignedIn(null, {
-    cote: COTE_STUB,
-    commission: {
-      taux: 0.15, plancher: 0.05, tauxEffectif: 0.15, part: 0.85, bonus: 0, cote: 42,
-      axes: COTE_STUB.axes,
-      paliers: [{ cote: 60, taux: 0.12, part: 0.88 }],
-      prochain: { cote: 60, manque: 18, tauxEffectif: 0.12, part: 0.88 },
-    },
-  });
-  const cote = $(doc, 'notary-cote');
-  const lines = Array.from(cote.querySelectorAll('.nc-commission, .nc-cote-next')).map((n) => n.textContent);
-  assert.ok(lines.some((t) => t.includes('85 %') && t.includes('15 %') && !t.includes('au lieu de')), 'the base split shows plainly, both sides: ' + lines);
-  assert.ok(lines.some((t) => t.includes('Cote 60') && t.includes('88 %') && t.includes('18 points')), 'the first rung is the visible lever: ' + lines);
+test('la console dit ce que la cote NE fait PAS', async () => {
+  const { doc } = await bootSignedIn(null, { cote: COTE_STUB });
+  const note = $(doc, 'notary-cote').querySelector('.nc-cote-note');
+  assert.ok(note, 'une phrase accompagne la cote');
+  assert.match(note.textContent, /en entier/, note.textContent);
+  assert.match(note.textContent, /jamais à ce que vous gagnez/, note.textContent);
 });
 
 test('without a commission block (billing off) no rate line is invented anywhere', async () => {

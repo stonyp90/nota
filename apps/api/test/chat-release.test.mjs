@@ -149,7 +149,9 @@ test('the retaining notary can withdraw: the act returns to the market as posted
   assert.equal(res.statusCode, 200, res.body);
   const out = parse(res).bid;
   assert.equal(out.status, 'ouverte');
-  assert.equal(out.etude, null);
+  // ART. 37 — le carnet public ne porte plus le nom de l'étude, ni quand une
+  // offre est retenue ni quand elle est relâchée.
+  assert.equal(out.etude, undefined);
   assert.equal(out.montant, 2900, 'the client’s offer is untouched');
   assert.equal(out.dateISO, '2026-08-20', 'the client keeps their date');
 

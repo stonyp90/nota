@@ -45,7 +45,7 @@ function setup(stripeOpts) {
   const repo = createMemoryRepo([]);
   const stripe = fakeStripe(stripeOpts);
   const billing = createBilling({ repo, stripe, now: () => TODAY });
-  const app = createApp(repo, { now: () => TODAY, nowMs: () => NOW_MS, newId: () => 'bid-' + ++n, billing });
+  const app = createApp(repo, { siteUrl: 'https://nota.test', now: () => TODAY, nowMs: () => NOW_MS, newId: () => 'bid-' + ++n, billing });
   return { repo, stripe, app };
 }
 
@@ -147,7 +147,7 @@ test('a hold that was never authorized is never captured — pending payment can
 test('without billing configured the cancel is free — no fee outside the Stripe consent', async () => {
   let n = 0;
   const repo = createMemoryRepo([]);
-  const app = createApp(repo, { now: () => TODAY, nowMs: () => NOW_MS, newId: () => 'bid-' + ++n });
+  const app = createApp(repo, { siteUrl: 'https://nota.test', now: () => TODAY, nowMs: () => NOW_MS, newId: () => 'bid-' + ++n });
   const res = await app.handle({
     method: 'POST', path: '/bids',
     body: JSON.stringify({ serviceId: 'refinancement', dateISO: domain.addDays(TODAY, 1), montant: 2800, courriel: 'client@example.ca', prefixe: 'G1R', pricing: PRICING }),

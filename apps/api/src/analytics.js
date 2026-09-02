@@ -16,7 +16,6 @@
  */
 const domain = require('@nota/domain');
 const { STATS_SHARDS, statsGlobalPK, statsServicePK, statsDaySK } = require('./keys');
-const { DEFAULT_COMMISSION_RATE } = require('./billing');
 
 // Inclusive list of YYYY-MM-DD dates from `fromISO` to `toISO`, capped so a
 // pathological range can never build an unbounded array.
@@ -46,22 +45,12 @@ function num(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
-function createAnalytics({ repo, now, gaugeHorizonMonths, commissionRate } = {}) {
+function createAnalytics({ repo, now, gaugeHorizonMonths } = {}) {
   if (!repo) throw new Error('createAnalytics: repo is required');
   // Default clock = the Québec civil day, matching the handler that feeds the
   // STATS# counters — a UTC day here would misalign the live gauge every evening.
   const today = now || (() => domain.businessDay(null, process.env.NOTA_TIMEZONE));
   const HORIZON = gaugeHorizonMonths || 4;
-  // The platform commission rate the admin console displays next to the cents
-  // actually collected. Same knob billing charges with (NOTA_COMMISSION_RATE),
-  // resolved identically so the shown rate can never drift from the charged one.
-  const envRate = Number(process.env.NOTA_COMMISSION_RATE);
-  const rate =
-    typeof commissionRate === 'number'
-      ? commissionRate
-      : Number.isFinite(envRate) && process.env.NOTA_COMMISSION_RATE
-        ? envRate
-        : DEFAULT_COMMISSION_RATE;
 
   // Sum a counter family's day items over [fromISO,toISO] ACROSS ALL SHARDS,
   // returning a map of day -> { offers, retenues, actes, commissionCents }. The
@@ -320,10 +309,10 @@ function createAnalytics({ repo, now, gaugeHorizonMonths, commissionRate } = {})
         offersPosted,
         offersRetained,
         retentionRate: offersPosted > 0 ? Math.round((offersRetained / offersPosted) * 1000) / 1000 : 0,
+        // ADR 0031 — les cents que Nota a facturés pour SON service. Aucun
+        // taux ne les accompagne : il n'y en a plus, et en publier un
+        // décrirait une part des honoraires du notaire (art. 32 C.déont.).
         commissionCents,
-        // The configured platform rate (0..1) behind those cents — surfaced so
-        // the console never hardcodes it and an operator sees the active knob.
-        commissionRate: rate,
         actsCompleted,
       },
       gauge: {

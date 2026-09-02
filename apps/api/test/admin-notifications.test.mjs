@@ -39,11 +39,21 @@ test('memory repo: putEmailOverride stores the normalized record and getEmailOve
     { key: 'offerPublished', enabled: true, subjectFr: ' Offre {{montant}} ', subjectEn: 'Offer {{montant}}' },
     NOW_ISO
   );
+  // Une surcharge porte désormais quatre paires bilingues et un interrupteur.
+  // Un champ absent se stocke à `null` — une paire à moitié remplie n'est pas
+  // une surcharge, et la lecture doit pouvoir le constater sans deviner.
   assert.deepEqual(stored, {
     key: 'offerPublished',
+    actif: true,
     enabled: true,
     subjectFr: 'Offre {{montant}}',
     subjectEn: 'Offer {{montant}}',
+    preheaderFr: null,
+    preheaderEn: null,
+    corpsFr: null,
+    corpsEn: null,
+    ctaFr: null,
+    ctaEn: null,
     updatedAt: NOW_ISO,
   });
   assert.deepEqual(await repo.getEmailOverride('offerPublished'), stored);
@@ -72,13 +82,12 @@ test('the REAL memory repo satisfies the notifier consumption contract (disable 
   const repo = createMemoryRepo();
   const mailer = createFakeMailer();
   const notifier = createNotifier({ repo, mailer, baseUrl: 'https://nota.example', operatorEmail: null, now: () => TODAY + 'T09:00:00.000Z' });
-  const bid = {
-    id: 'b1', serviceId: 'refinancement', dateISO: '2026-08-19', montant: 1500,
-    tier: 'prioritaire', status: 'ouverte', courriel: 'client@example.ca',
-  };
-  await repo.putEmailOverride({ key: 'offerPublished', enabled: false }, NOW_ISO);
-  const r = await notifier.onOfferCreated(bid);
-  assert.deepEqual(r.results[0], { sent: false, reason: 'disabled', kind: 'offerPublished' });
+  // L'interrupteur ne coupe que le RELATIONNEL : `offerPublished` est
+  // transactionnel (art. 68), et emails.isOverrideDisabled ignore un
+  // enregistrement qui prétendrait l'éteindre. La bienvenue, elle, se coupe.
+  await repo.putEmailOverride({ key: 'clientWelcome', enabled: false }, NOW_ISO);
+  const r = await notifier.onClientSignup('client@example.ca');
+  assert.deepEqual(r.results[0], { sent: false, reason: 'disabled', kind: 'clientWelcome' });
   assert.equal(mailer.sent.length, 0);
 });
 
@@ -226,10 +235,14 @@ test('every template route is 401 without a session', async () => {
 test('super_admin carries notifications:write; analyst does not (via /admin/me)', async () => {
   const h = make();
   const superMe = parse(await h.call('GET', '/admin/me', { bearer: await login(h) }));
-  assert.ok(superMe.permissions.includes('notifications:write'));
+  // Le super_admin porte le JOKER, pas une liste énumérée : `can()` est le seul
+  // test valide — un `includes` littéral raterait le joker et cacherait des
+  // commandes que l'API accepterait.
+  const rbac = require('../src/rbac.js');
+  assert.equal(rbac.can(superMe.permissions, 'notifications:write'), true);
   const analystMe = parse(await h.call('GET', '/admin/me', { bearer: await loginAnalyst(h) }));
   assert.equal(analystMe.role, 'analyst');
-  assert.ok(!analystMe.permissions.includes('notifications:write'));
+  assert.equal(rbac.can(analystMe.permissions, 'notifications:write'), false);
   assert.ok(analystMe.permissions.includes('analytics:read'), 'analyst keeps read');
 });
 
@@ -353,16 +366,19 @@ test('an analyst can read the list but PUT/DELETE are 403 (and change nothing)',
 test('DELETE resets the override to the built-in behaviour', async () => {
   const h = make();
   const session = await login(h);
-  await h.call('PUT', '/admin/notifications/templates/offerPublished', { bearer: session, body: { enabled: false } });
-  assert.ok(await h.repo.getEmailOverride('offerPublished'));
+  // `clientWelcome` et non `offerPublished` : ce dernier est TRANSACTIONNEL et
+  // ne peut plus être éteint — le couper serait une publicité « incomplète »
+  // au sens de l'art. 68 du Code de déontologie.
+  await h.call('PUT', '/admin/notifications/templates/clientWelcome', { bearer: session, body: { actif: false } });
+  assert.ok(await h.repo.getEmailOverride('clientWelcome'));
 
-  const del = await h.call('DELETE', '/admin/notifications/templates/offerPublished', { bearer: session });
+  const del = await h.call('DELETE', '/admin/notifications/templates/clientWelcome', { bearer: session });
   assert.equal(del.statusCode, 200);
-  assert.deepEqual(parse(del), { ok: true, key: 'offerPublished' });
-  assert.equal(await h.repo.getEmailOverride('offerPublished'), null);
+  assert.deepEqual(parse(del), { ok: true, key: 'clientWelcome' });
+  assert.equal(await h.repo.getEmailOverride('clientWelcome'), null);
 
   const { templates } = parse(await h.call('GET', '/admin/notifications/templates', { bearer: session }));
-  assert.equal(templates.find((t) => t.key === 'offerPublished').override, null);
+  assert.equal(templates.find((t) => t.key === 'clientWelcome').override, null);
 });
 
 test('every write is audit-logged with before/after; a rejected write is not', async () => {
@@ -372,7 +388,12 @@ test('every write is audit-logged with before/after; a rejected write is not', a
     bearer: session,
     body: { subjectFr: 'A {{montant}}', subjectEn: 'B {{montant}}' },
   });
-  await h.call('PUT', '/admin/notifications/templates/offerPublished', { bearer: session, body: { enabled: false } });
+  // Deuxième écriture : un préheader, désormais surchargeable. (Éteindre
+  // `offerPublished` n'est plus possible — il est transactionnel.)
+  await h.call('PUT', '/admin/notifications/templates/offerPublished', {
+    bearer: session,
+    body: { preheaderFr: 'Votre offre est en ligne.', preheaderEn: 'Your offer is live.' },
+  });
   await h.call('DELETE', '/admin/notifications/templates/offerPublished', { bearer: session });
   // Rejected: unknown token — must NOT append an audit entry.
   await h.call('PUT', '/admin/notifications/templates/offerPublished', {
@@ -389,9 +410,9 @@ test('every write is audit-logged with before/after; a rejected write is not', a
   assert.equal(first.meta.before, null, 'first write starts from no override');
   assert.equal(first.meta.after.subjectFr, 'A {{montant}}');
   assert.equal(second.meta.before.subjectFr, 'A {{montant}}', 'second write carries the previous record as before');
-  assert.equal(second.meta.after.enabled, false);
+  assert.equal(second.meta.after.preheaderFr, 'Votre offre est en ligne.');
   assert.equal(second.meta.after.subjectFr, null, 'PUT is a full replacement');
   assert.equal(reset.meta.after, null);
-  assert.equal(reset.meta.before.enabled, false);
+  assert.equal(reset.meta.before.preheaderFr, 'Votre offre est en ligne.');
   assert.equal(entries[0].email, 'ops@nota.ca', 'the acting admin is recorded');
 });

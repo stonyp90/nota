@@ -338,26 +338,61 @@ test('no public surface still promises the retired 75/25 split', () => {
   }
 });
 
-test('the public texts state the new split: total all-in, Nota at most 15 %, the notary 85 % to 95 %', () => {
-  const flat = HTML_SRC.replace(/[  ]/g, ' ').replace(/\s+/g, ' ');
-  assert.match(flat, /au plus 15 %/, 'Nota’s ceiling is stated');
-  assert.match(flat, /de 85 % à 95 %/, 'the notary’s band is stated');
-  assert.match(flat, /cote sur 100/, 'and the lever is named');
-  assert.match(flat, /total, tout compris|total tout compris/, 'the amount offered stays an all-in total');
-  assert.match(flat, /se partage à la signature/, 'the split happens at signing');
+test('ART. 32 — aucune surface publique ne décrit plus un partage d’honoraires', () => {
+  // L'ADR 0031 a retiré le partage : le notaire garde 100 % de ses honoraires
+  // et Nota facture son propre service au client. Toute phrase qui décrit
+  // encore une part retenue sur les honoraires décrit l'opération que
+  // l'art. 32 du Code de déontologie interdit au notaire — et l'art. 32.1 2°
+  // de la Loi sur le notariat frappe l'intermédiaire qui l'obtient. Une telle
+  // phrase, publiée par Nota, est une pièce écrite contre elle-même.
+  for (const [name, src] of Object.entries(PUBLIC_SOURCES)) {
+    const flat = src.replace(/[\u202f\u00a0]/g, ' ');
+    assert.ok(!/au plus 15 %/.test(flat), name + ' promet encore un plafond de 15 %');
+    assert.ok(!/de 85 % à 95 %/.test(flat), name + ' promet encore une part de 85 à 95 %');
+    assert.ok(!/se partage à la signature/.test(flat), name + ' décrit encore un partage');
+    assert.ok(!/selon sa cote sur 100/.test(flat), name + ' indexe encore de l’argent sur la cote');
+  }
 });
 
-test('the new public sentences are translated into English', () => {
+test('ART. 68 — les surfaces publiques annoncent les DEUX lignes', () => {
+  const flat = HTML_SRC.replace(/[\u202f\u00a0]/g, ' ').replace(/\s+/g, ' ');
+  assert.match(flat, /honoraires du notaire/i, 'la première ligne est nommée');
+  assert.match(flat, /prix du service de Nota/i, 'la seconde aussi');
+  assert.match(flat, /qui lui revient en entier|vous reviennent en entier|lui revient en entier/,
+    'et il est dit que le notaire garde tout');
+  // ART. 71 3° — les taxes et débours ne sont pas compris, et il faut le dire.
+  assert.match(flat, /ne sont pas compris/, 'les taxes et débours sont déclarés exclus');
+  assert.match(flat, /RDPRM/, 'les débours sont nommés');
+  // ART. 68 — le « tout compris » est faux depuis que le prix de Nota s'ajoute.
+  assert.ok(!/tout compris ?: ?rien ne s’y ajoute/.test(flat),
+    'plus aucune promesse de « tout compris »');
+});
+
+test('les nouvelles phrases publiques sont traduites', () => {
   I18N.force('en');
-  const flat = HTML_SRC.replace(/[  ]/g, ' ');
-  // Every sentence in index.html that carries the new split must translate.
-  const sentences = [...flat.matchAll(/>([^<>]*(?:au plus 15 %|de 85 % à 95 %)[^<>]*)</g)].map((m) => I18N.normalize(m[1]));
-  assert.ok(sentences.length >= 2, 'the split is stated on at least the FAQ card and the Terms');
+  // Les blocs <script> (JSON-LD) ne sont pas de la copie traduite : le
+  // balisage structuré porte sa propre paire FR/EN de questions.
+  const flat = HTML_SRC.replace(/<script[\s\S]*?<\/script>/g, '')
+    .replace(/[\u202f\u00a0]/g, ' ');
+  const sentences = [...flat.matchAll(/>([^<>]*(?:honoraires du notaire|prix du service de Nota)[^<>]*)</g)]
+    .map((m) => I18N.normalize(m[1]))
+    .filter(Boolean);
+  assert.ok(sentences.length >= 1, 'les deux lignes sont énoncées quelque part');
+  // Une phrase coupée par du balisage inline est traduite d'un bloc, par
+  // l'entrée innerHTML : ses fragments sont donc couverts sans figurer seuls
+  // au dictionnaire. Même règle que le garde-fou de i18n.test.mjs.
+  const excuses = new Set();
+  for (const cle of Object.keys(I18N.dictionaries().html)) {
+    for (const frag of cle.replace(/<[^>]+>/g, '\u0000').split('\u0000')) {
+      const n = I18N.normalize(frag);
+      if (n) excuses.add(n);
+    }
+  }
   for (const s of sentences) {
-    assert.ok(I18N.covered(s), 'no English entry for: ' + s);
+    if (excuses.has(s)) continue;
+    assert.ok(I18N.covered(s), 'aucune entrée anglaise pour : ' + s);
     const en = I18N.tEn(s);
-    assert.ok(!/notaire|garde|partage/.test(en), 'French residue in: ' + en);
-    assert.match(en, /15%|15 %/, 'the ceiling survives translation: ' + en);
+    assert.ok(!/notaire|honoraires|partage/.test(en), 'résidu français dans : ' + en);
   }
 });
 
@@ -366,20 +401,20 @@ test('the new public sentences are translated into English', () => {
 test('the off-platform debt reads in English, and still promises nothing', () => {
   I18N.force('en');
   const D = require('../../../packages/domain/index.js');
-  const marker = I18N.tEn('Réglé hors plateforme — ' + D.money(180) + ' de frais Nota à percevoir');
+  const marker = I18N.tEn('Réglé hors plateforme — ' + D.money(180) + ' de service Nota à percevoir');
   assert.match(marker, /^Settled off the platform/, marker);
   assert.match(marker, /still owed/, marker);
   assert.match(marker, /\$180/, 'the amount is money-converted: ' + marker);
 
-  assert.equal(I18N.tEn('Frais de service à percevoir'), 'Service fee still owed');
-  const note = I18N.tEn('Sur cet acte, le client vous a payé directement à la signature : Nota n’a rien encaissé et les frais de service restent dus.');
+  assert.equal(I18N.tEn('Service Nota à percevoir'), 'Nota service still owed');
+  const note = I18N.tEn('Sur cet acte, le client vous a payé directement à la signature : Nota n’a rien encaissé, et le prix de son service reste à percevoir.');
   assert.match(note, /paid you directly at signing/, note);
   assert.match(note, /collected nothing/, note);
-  assert.match(note, /remains owed/, note);
+  assert.match(note, /still owed/, note);
   for (const invented of ['invoice', 'bill you', 'due date', 'deadline', 'debit', 'reminder', 'within', 'deducted']) {
     assert.ok(!note.toLowerCase().includes(invented), 'invents a recovery mechanism (« ' + invented + ' »): ' + note);
   }
-  assert.ok(I18N.covered('Sur ces actes, le client vous a payé directement à la signature : Nota n’a rien encaissé et les frais de service restent dus.'), 'the plural form is covered too');
+  assert.ok(I18N.covered('Sur ces actes, le client vous a payé directement à la signature : Nota n’a rien encaissé, et le prix de son service reste à percevoir.'), 'the plural form is covered too');
 });
 
 // ADR 0028 (révision du 2026-09-01) — the axis vocabulary changed with the
@@ -449,11 +484,23 @@ test('the composed console strings read in English — and the retired client on
   // « Membre de la Chambre » asserted a membership Nota never checked.
   assert.ok(!I18N.covered('Membre de la Chambre des notaires du Québec'), 'the unverified membership claim is out of the dictionary');
   assert.ok(!I18N.covered('Fiche Chambre des notaires ↗'), 'the decorative fiche label is out of the dictionary');
-  assert.match(I18N.tEn('Cote 90 → vous gardez 95 % — il vous manque 3 points.'), /^Score 90 → you keep 95%/);
-  assert.match(I18N.tEn('Au départ → vous gardez 85 % (frais Nota 15 %)'), /^From the start → you keep 85%/);
-  assert.match(I18N.tEn('Cote 60 → vous gardez 88 % (frais Nota 12 %)'), /^Score 60 → you keep 88%/);
+  // ADR 0031 — le barème a disparu de la console : la cote ne décide plus d'un
+  // dollar (art. 29.1). Les règles qui traduisaient « vous gardez X % » ne
+  // doivent pas rester en dormance — une entrée de dictionnaire est une copie
+  // prête à revenir.
+  // Le dictionnaire lui-même ne doit plus contenir une seule règle qui parle
+  // d'une part gardée : `covered()` ne suffirait pas à le prouver (la règle de
+  // format monétaire touche toute chaîne portant un « % »), donc on regarde
+  // les motifs.
+  const src = PUBLIC_SOURCES['i18n.js'];
+  assert.ok(src, 'la source du dictionnaire est lisible');
+  // « Vous gardez la main » reste légitime : ce qui doit disparaître, c'est
+  // « vous gardez X % », la part d'honoraires.
+  assert.ok(!/vous gardez [^.\n]*%/i.test(src), 'aucune entrée ne parle encore d’une part gardée');
+  assert.ok(!/frais Nota/i.test(src), 'ni de « frais Nota » comme pourcentage');
+  assert.ok(!/Commission Nota/i.test(src), 'ni d’une commission');
+
+  assert.ok(!/Le barème/.test(src), 'ni du barème');
   assert.equal(I18N.tEn('pas encore d’avis'), 'no reviews yet');
   assert.equal(I18N.tEn('25 actes'), '25 acts');
-  assert.match(I18N.tEn('Vous gardez 92 % de ce que le client paie, au lieu de 85 % — mérité par votre cote.'),
-    /^You keep 92% of what the client pays, instead of 85%/);
 });

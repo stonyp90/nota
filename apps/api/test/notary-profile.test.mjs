@@ -2,7 +2,8 @@
 // official fiche in the Chambre des notaires directory (ADR 0016). Clients see
 // the membership as a badge on propositions (`cnq`), and the full link only on
 // the retained notaire block — like `courriel`, never before the retention.
-// /notary/bids hands the console its own `profil` and the commission it earns.
+// /notary/bids hands the console its own `profil`, sa cote et le TARIF que le
+// client paie à Nota — jamais une part de ses honoraires (ADR 0031).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
@@ -12,6 +13,7 @@ const { createApp } = require('../src/handler.js');
 const { createMemoryRepo } = require('../src/repo-memory.js');
 const { createBilling } = require('../src/billing.js');
 const { notaryIdForEmail, signToken, SCOPES } = require('../src/notary-auth.js');
+const { DEFAULT_PRIX_CENTS: PRIX } = require('../src/prix-nota-config.js');
 const domain = require('@nota/domain');
 
 const TODAY = '2026-08-12';
@@ -107,41 +109,35 @@ test('clients see the badge on propositions and the link only once retained', as
   assert.equal(bare.notaire.lienCNQ, null);
 });
 
-test('/notary/bids names the split the notary earns — the cote behind it, and the next rung', async () => {
-  // Le barème expédié (ADR 0028) : 15 % au départ, 5 % au sommet, et c'est LA
-  // cote sur 100 qui décide.
+test('/notary/bids ne montre PLUS aucun partage — le tarif du client, et la cote à part', async () => {
+  // ADR 0031. Jusqu'au 1er septembre 2026 la console recevait un barème (taux
+  // de base, taux effectif mérité par la cote, palier suivant) et l'écran en
+  // tirait « vous gardez X % de ce que le client paie ». L'art. 29.1 du Code de
+  // déontologie interdit au notaire toute convention mettant en péril son
+  // indépendance et son désintéressement : un revenu indexé sur une note
+  // attribuée par Nota en est une. Le notaire garde 100 % de ses honoraires, et
+  // ce qu'il voit à la place est le prix que le CLIENT paie à Nota.
   const billing = createBilling({ repo: createMemoryRepo(), stripe: {} });
   const a = app({ billing });
-  // Un notaire aimé mais tout neuf : rien porté, rien répondu, aucune fiche.
   await seedNotary(a, { ratingSum: 45, ratingCount: 10, actsCompleted: 0, createdAt: '2026-08-10T00:00:00.000Z' });
 
   const view = parse(await a.handle({ method: 'GET', path: '/notary/bids', headers: bearer(sessionToken()), query: {} }));
-  const c = view.commission;
-  assert.equal(c.taux, 0.15, 'Nota ne prend jamais plus de 15 %');
-  assert.equal(c.plancher, 0.05);
-  assert.equal(c.tauxEffectif, 0.15, 'sans historique, le taux de base');
-  assert.equal(c.part, 0.85);
-  assert.equal(c.bonus, 0);
-  assert.ok(c.cote > 0 && c.cote < 60, 'une cote réelle, ni zéro ni sommet : ' + c.cote);
-  assert.equal(c.axes.length, 4, 'les quatre axes voyagent avec le taux');
-  assert.deepEqual(c.paliers, [
-    { cote: 60, taux: 0.12, part: 0.88 },
-    { cote: 70, taux: 0.10, part: 0.90 },
-    { cote: 80, taux: 0.08, part: 0.92 },
-    { cote: 90, taux: 0.05, part: 0.95 },
-  ], 'toute l’échelle est publiée — un barème, pas une règle cachée');
-  assert.deepEqual(c.prochain, { cote: 60, manque: 60 - c.cote, tauxEffectif: 0.12, part: 0.88 });
+  assert.equal(view.commission, undefined, 'plus aucun bloc de partage ne descend à la console');
+  assert.equal(view.tarif.prixNotaCents, PRIX, 'le prix que le client paie à Nota, en cents');
+  // Ni pourcentage, ni part, ni palier : rien à recalculer, rien à négocier.
+  assert.deepEqual(Object.keys(view.tarif).sort(), ['deboursInclus', 'prixNotaCents', 'taxesIncluses']);
 
-  // La console reçoit aussi la cote toute seule, avec ses axes détaillés.
-  assert.equal(view.cote.cote, c.cote);
+  // La cote survit intacte — elle classe, elle ouvre des dossiers, elle ne
+  // touche simplement plus à un dollar.
+  assert.ok(view.cote.cote > 0 && view.cote.cote < 100, 'une cote réelle : ' + view.cote.cote);
   assert.deepEqual(view.cote.axes.map((x) => x.id), ['satisfaction', 'services', 'disponibilite', 'presence']);
 });
 
-test('/notary/bids reflects a climbed cote: the notary keeps 95 % at the top', async () => {
+test('ART. 29.1 — la cote peut grimper au sommet, le tarif ne bouge pas d’un cent', async () => {
   const billing = createBilling({ repo: createMemoryRepo(), stripe: {} });
   const a = app({ billing });
   // Le dossier complet : aimé, volumineux sur tout le catalogue, disponible,
-  // présent — la cote passe 90 et le partage devient 95/5.
+  // présent. Sa cote passe 90 — et le prix reste exactement le même.
   await seedNotary(a, {
     ratingSum: 4.9 * 40, ratingCount: 40,
     actsCompleted: 80, actsByService: { refinancement: 50, financement: 30 },
@@ -152,16 +148,17 @@ test('/notary/bids reflects a climbed cote: the notary keeps 95 % at the top', a
   });
 
   const view = parse(await a.handle({ method: 'GET', path: '/notary/bids', headers: bearer(sessionToken()), query: {} }));
-  assert.ok(view.commission.cote > 90, 'la cote passe 90 : ' + view.commission.cote);
-  assert.equal(view.commission.tauxEffectif, 0.05);
-  assert.equal(view.commission.part, 0.95);
-  assert.equal(view.commission.prochain, null, 'plus rien à atteindre');
+  assert.ok(view.cote.cote > 90, 'la cote passe 90 : ' + view.cote.cote);
+  assert.equal(view.tarif.prixNotaCents, PRIX, 'le même prix que pour un notaire tout neuf');
+  assert.equal(view.commission, undefined);
 });
 
-test('without billing configured the console gets no commission block (never a fake rate)', async () => {
+test('sans facturation configurée, la console reçoit quand même le tarif et sa cote', async () => {
   const a = app();
   await seedNotary(a);
   const view = parse(await a.handle({ method: 'GET', path: '/notary/bids', headers: bearer(sessionToken()), query: {} }));
-  assert.equal(view.commission, null);
+  // Le prix ne dépend d'aucun compte Stripe : il se lit du déploiement.
+  assert.equal(view.tarif.prixNotaCents, PRIX);
+  assert.equal(view.commission, undefined);
   assert.deepEqual(view.profil, { lienCNQ: null, rayonKm: 0, urgences: false, prefixe: null });
 });

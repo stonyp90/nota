@@ -8,6 +8,13 @@
  * every shown median sits at or above its act's floor. Fixtures are randomized
  * per server boot, so this asserts INVARIANTS (floors, ceilings) — never exact
  * medians.
+ *
+ * The figures are read from the pulse row's own STRUCTURE (`.pulse-fig-v`, in
+ * render order: the floor, then the median) rather than parsed out of its
+ * aria-label sentence. The label is copy — it is rewritten whenever the pricing
+ * story changes, and it exists in two languages; the two `.pulse-fig-v` nodes
+ * are the data. `parseMoney` reads "$2,000" and "2 000 $" alike, so these
+ * assertions hold in either dictionary.
  */
 const { test, expect } = require('@playwright/test');
 const { gotoHome, parseMoney, visibleAmounts } = require('./helpers');
@@ -15,31 +22,35 @@ const { gotoHome, parseMoney, visibleAmounts } = require('./helpers');
 // Floor per act, straight from the domain catalogue (ADR 0010/0011).
 const FLOORS = { refinancement: 2000, financement: 1800 };
 
-// Pull "from $X … median offer $Y" out of a pulse row's aria-label — the app
-// composes it there from domain data, so it is the stable source of both figures.
-function readPulseLabel(label) {
-  const from = label.match(/from\s+\$?([\d.,]+)/i);
-  const median = label.match(/median offer\s+\$?([\d.,]+)/i);
-  return {
-    from: from ? parseMoney(from[1]) : NaN,
-    median: median ? parseMoney(median[1]) : NaN,
-  };
+/**
+ * The two figures a pulse row publishes, read positionally from the DOM:
+ * `à partir de` / `from` first, the month's median second. A row with no offers
+ * this month renders an em dash on the median (`.is-empty`), which parses to
+ * NaN — the callers below treat that as "not shown", never as zero.
+ */
+async function readPulseFigures(page, svc) {
+  const values = page.locator(`.pulse-row[data-svc="${svc}"] .pulse-fig-v`);
+  await values.first().waitFor({ state: 'visible' });
+  const texts = await values.allInnerTexts();
+  expect(texts.length, `${svc} should publish a floor and a median`).toBeGreaterThanOrEqual(2);
+  return { from: parseMoney(texts[0]), median: parseMoney(texts[1]), texts };
 }
 
 test.describe('home pricing numbers', () => {
   test('refinancement and financement "from" floors are exact', async ({ page }) => {
     await gotoHome(page, { suppressOnboarding: true });
 
-    const refi = await page.locator('.pulse-row[data-svc="refinancement"]').getAttribute('aria-label');
-    const fin = await page.locator('.pulse-row[data-svc="financement"]').getAttribute('aria-label');
-
-    expect(readPulseLabel(refi).from, `refinancement floor, from aria-label: ${refi}`).toBe(FLOORS.refinancement);
-    expect(readPulseLabel(fin).from, `financement floor, from aria-label: ${fin}`).toBe(FLOORS.financement);
+    for (const [svc, floor] of Object.entries(FLOORS)) {
+      const { from, texts } = await readPulseFigures(page, svc);
+      expect(from, `${svc} floor, from pulse figures: ${JSON.stringify(texts)}`).toBe(floor);
+    }
   });
 
   test('no visible price is anywhere near five figures ($18,000 regression)', async ({ page }) => {
     await gotoHome(page, { suppressOnboarding: true });
 
+    // Scoped to the carnet surface: the booking sheet's quote block states
+    // Nota's own price and a card total, which are not calendar prices.
     const amounts = await visibleAmounts(page);
     expect(amounts.length, 'the home should render at least some prices').toBeGreaterThan(0);
 
@@ -50,13 +61,12 @@ test.describe('home pricing numbers', () => {
   test('each shown median is at or above its act floor', async ({ page }) => {
     await gotoHome(page, { suppressOnboarding: true });
 
-    for (const svc of Object.keys(FLOORS)) {
-      const label = await page.locator(`.pulse-row[data-svc="${svc}"]`).getAttribute('aria-label');
-      const { median } = readPulseLabel(label);
-      // A month can legitimately have no offers for an act ("no offers this
-      // month" instead of a median) — only assert when a median is shown.
+    for (const [svc, floor] of Object.entries(FLOORS)) {
+      const { median, texts } = await readPulseFigures(page, svc);
+      // A month can legitimately have no offers for an act (an em dash instead
+      // of a median) — only assert when a median is actually shown.
       if (!Number.isNaN(median)) {
-        expect(median, `${svc} median must be >= floor; aria-label: ${label}`).toBeGreaterThanOrEqual(FLOORS[svc]);
+        expect(median, `${svc} median must be >= floor; figures: ${JSON.stringify(texts)}`).toBeGreaterThanOrEqual(floor);
       }
     }
   });

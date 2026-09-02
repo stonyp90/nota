@@ -46,15 +46,19 @@ test('overview KPIs sum the rollups within the trailing-30-day window only', asy
   assert.equal(o.kpis.retentionRate, 0.2);
 });
 
-test('the overview surfaces the configured commission rate next to the cents collected', async () => {
+test('ART. 32 — les KPI portent les cents facturés, jamais un taux', async () => {
   const repo = await seed();
-  // Default: the same DEFAULT_COMMISSION_RATE billing charges with.
-  const { DEFAULT_COMMISSION_RATE } = require('../src/billing.js');
-  const o1 = await createAnalytics({ repo, now: () => TODAY }).overview();
-  assert.equal(o1.kpis.commissionRate, DEFAULT_COMMISSION_RATE);
-  // Configured: the injected knob wins (mirrors NOTA_COMMISSION_RATE wiring).
-  const o2 = await createAnalytics({ repo, now: () => TODAY, commissionRate: 0.15 }).overview();
-  assert.equal(o2.kpis.commissionRate, 0.15);
+  const o = await createAnalytics({ repo, now: () => TODAY }).overview();
+  // `commissionCents` reste l'alias historique du prix de Nota — le montant
+  // est juste, le mot est hérité (ADR 0031, conséquence n° 3). Ce qui devait
+  // disparaître, c'est le TAUX : publier un pourcentage à côté de ces cents
+  // décrirait une part des honoraires du notaire, que l'art. 32 du Code de
+  // déontologie interdit de partager avec un non-membre d'un ordre.
+  assert.equal(o.kpis.commissionRate, undefined, 'aucun taux dans les KPI');
+  // `retentionRate` (part des offres retenues) reste : ce n'est pas un taux
+  // d'honoraires, c'est une mesure du marché.
+  assert.equal(/commissionRate|taux|part\b/.test(JSON.stringify(o.kpis)), false, JSON.stringify(o.kpis));
+  assert.equal(typeof o.kpis.commissionCents, 'number', 'les cents facturés restent');
 });
 
 test('offersPerDay is zero-filled across the range and carries the counts on their days', async () => {

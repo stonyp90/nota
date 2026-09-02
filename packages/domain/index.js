@@ -1029,6 +1029,95 @@
     return { ok: errors.length === 0, errors, texte: texte || null };
   }
 
+  // --- Les documents de la conversation (ADR 0032) ---------------------------
+  //
+  // La messagerie porte désormais des fichiers. Le domaine décide de ce qui est
+  // recevable ; le stockage et les routes ne font qu'appliquer.
+  //
+  // Les contraintes sont celles du dossier — PDF ou photo, 15 Mo, nom assaini —
+  // pour deux raisons distinctes. La première est utilitaire : un notaire doit
+  // pouvoir OUVRIR ce qu'il reçoit. La seconde est la seule protection dont le
+  // produit dispose : il n'existe aucune analyse antivirale, et un format inerte
+  // téléchargé en pièce jointe est ce qui tient lieu de garde-fou (ADR 0032,
+  // « ce que cette décision ne règle pas »). Élargir cette liste, c'est retirer
+  // cette protection — jamais un simple ajout de confort.
+  const CHAT_DOCUMENTS_MAX = 30;
+
+  // Le type MIME attendu pour chaque extension. Il sert deux fois : à REFUSER
+  // un type déclaré qui contredit le nom, et à figer le content-type dans
+  // l'autorisation signée. Si les deux divergeaient, c'est le stockage qui
+  // porterait le mensonge — et le navigateur qui l'exécuterait.
+  const DOCUMENT_TYPES = {
+    pdf: ['application/pdf'],
+    jpg: ['image/jpeg'], jpeg: ['image/jpeg'],
+    png: ['image/png'],
+    heic: ['image/heic'], heif: ['image/heif'],
+    webp: ['image/webp'],
+  };
+
+  function extensionDe(nom) {
+    const dot = String(nom || '').lastIndexOf('.');
+    return dot > 0 ? String(nom).slice(dot + 1).toLowerCase() : '';
+  }
+
+  /**
+   * La CLÉ de stockage d'un document. Elle est DÉRIVÉE, jamais fournie : un
+   * appelant ne choisit pas où il écrit. Tout ce qui vient de l'extérieur est
+   * réduit à des caractères sûrs, donc aucune traversée n'est représentable —
+   * c'est pour cela que la fonction ne « nettoie » pas une clé reçue, elle en
+   * fabrique une.
+   */
+  function documentStorageKey(bidId, documentId, nom) {
+    const sur = (v) => String(v == null ? '' : v).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64) || 'x';
+    const ext = DOCUMENT_TYPES[extensionDe(nom)] ? extensionDe(nom) : 'bin';
+    return 'offres/' + sur(bidId) + '/' + sur(documentId) + '.' + ext;
+  }
+
+  /**
+   * Ce qu'une partie a le droit de déposer dans la conversation. Le refus est
+   * LOCAL et arrive avant toute autorisation : faire échouer un téléversement
+   * de 15 Mo après coup est la pire des réponses possibles.
+   */
+  function validateChatDocument(input) {
+    input = input || {};
+    const errors = [];
+    const de = input.de;
+    if (de !== CHAT_FROM.CLIENT && de !== CHAT_FROM.NOTAIRE) {
+      errors.push({ code: 'expediteur_invalide', message: 'L’expéditeur doit être le client ou le notaire.' });
+    }
+    if (!input.bid || input.bid.status !== STATUS.RETENUE) {
+      errors.push({ code: 'offre_non_retenue', message: 'La conversation s’ouvre lorsqu’un notaire retient l’acte.' });
+    }
+
+    const nom = sanitizeFileName(input.nom);
+    const ext = extensionDe(nom);
+    const types = DOCUMENT_TYPES[ext];
+    if (!nom || !types) {
+      errors.push({ code: 'format_refuse', message: 'Format non accepté — utilisez un PDF ou une photo (JPG, PNG, HEIC).' });
+    }
+
+    const type = String(input.type || '').toLowerCase().split(';')[0].trim();
+    if (types && type && types.indexOf(type) === -1) {
+      errors.push({ code: 'type_incoherent', message: 'Le type du fichier ne correspond pas à son nom.' });
+    }
+
+    // Une taille absente est un refus : l'autorisation de dépôt fige une borne,
+    // et signer sans borne reviendrait à en offrir aucune.
+    const taille = Number(input.taille);
+    if (!Number.isFinite(taille) || taille <= 0 || taille > DOSSIER_FILE.maxBytes) {
+      const mo = Math.round(DOSSIER_FILE.maxBytes / (1024 * 1024));
+      errors.push({ code: 'taille_refusee', message: 'Fichier trop lourd ou taille inconnue — maximum ' + mo + ' Mo.' });
+    }
+
+    const deja = Array.isArray(input.bid && input.bid.documents) ? input.bid.documents.length : 0;
+    if (deja >= CHAT_DOCUMENTS_MAX) {
+      errors.push({ code: 'trop_de_documents', message: `Cette conversation a atteint ${CHAT_DOCUMENTS_MAX} documents.` });
+    }
+
+    if (errors.length) return { ok: false, errors };
+    return { ok: true, errors: [], nom, contentType: types[0], taille };
+  }
+
   // A notary who retained an act may still WITHDRAW when a detail surfaced in
   // the conversation makes the file impossible on their side (an unfamiliar
   // lender, a conflict, a date that no longer works). Withdrawing returns the
@@ -1047,8 +1136,30 @@
   }
 
   // The released bid, back on the market exactly as the client posted it.
+  /**
+   * L'offre retourne au carnet — et la CONVERSATION MEURT AVEC LA RELATION.
+   *
+   * **Art. 37 du Code de déontologie** : « Le notaire ne doit pas, à moins que
+   * la nature du cas ne l'exige, révéler qu'une personne a fait appel à ses
+   * services. » Un autre notaire va retenir cette offre. Si le fil survivait,
+   * il apprendrait qu'un confrère a été consulté, ce que le client lui a
+   * écrit, et il recevrait les pièces transmises — relevé de prêt, compte de
+   * taxes, pièce d'identité. La nature du cas n'exige rien de tel : le second
+   * notaire a besoin de la demande, pas de son histoire.
+   *
+   * Le DOSSIER, lui, voyage : il appartient au client et c'est l'objet même de
+   * l'offre. Seul l'échange avec CE notaire disparaît.
+   */
   function releasedBid(bid) {
-    return { ...bid, status: STATUS.OUVERTE, etude: null, notaryId: null };
+    return { ...bid, status: STATUS.OUVERTE, etude: null, notaryId: null, messages: [], documents: [] };
+  }
+
+  // Les clés de stockage que le désistement rend inatteignables. Le domaine ne
+  // supprime rien — il n'a pas de stockage — mais laisser des octets chiffrés
+  // que plus personne ne peut atteindre est un risque qui ne rapporte rien.
+  function releasedDocumentKeys(bid) {
+    const docs = bid && Array.isArray(bid.documents) ? bid.documents : [];
+    return docs.map((d) => d && d.cle).filter(Boolean);
   }
 
   // --- Notary agenda ---------------------------------------------------------
@@ -2077,8 +2188,13 @@
     CHAT_MESSAGE_MAX,
     CHAT_FROM,
     validateChatMessage,
+    validateChatDocument,
+    documentStorageKey,
+    CHAT_DOCUMENTS_MAX,
+    DOCUMENT_TYPES,
     validateRelease,
     releasedBid,
+    releasedDocumentKeys,
     agendaByDate,
     rankOf,
     carnetPulse,

@@ -224,3 +224,9 @@ variable "admin_memory_size" {
   type        = number
   default     = 512
 }
+
+variable "prix_nota_cents" {
+  description = "Le prix du service de Nota, en cents (ADR 0031). Vide = le défaut intégré de 400 $ ; la console admin le surcharge à l'exécution via CONFIG#PRIX."
+  type        = string
+  default     = ""
+}

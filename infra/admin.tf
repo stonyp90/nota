@@ -139,9 +139,10 @@ data "aws_iam_policy_document" "admin_lambda" {
   # The write door on the MAIN table, item-scoped to product CONFIGURATION
   # partitions only: the admin-editable email template overrides (ADR 0018 §6,
   # PK = 'CONFIG#EMAIL', SK = TPL#<templateKey>), the admin-decided commission
-  # barème (ADR 0021 §4, PK = 'CONFIG#COMMISSION', SK = BAREME) and the
-  # admin-decided cancellation-fee barème (ADR 0023 §2, PK = 'CONFIG#ANNULATION',
-  # SK = BAREME) — see apps/api/src/keys.js. The dynamodb:LeadingKeys condition
+  # price of Nota (ADR 0031, PK = 'CONFIG#PRIX', SK = PRIX — this replaced
+  # CONFIG#COMMISSION, whose rate schedule art. 29.1 of the Code de déontologie
+  # ruled out) and the admin-decided cancellation-fee barème (ADR 0023 §2,
+  # PK = 'CONFIG#ANNULATION', SK = BAREME) — see apps/api/src/keys.js. The dynamodb:LeadingKeys condition
   # confines EVERY action in this statement to items whose partition key is one
   # of those values, so the admin console can edit product configuration but
   # still cannot read, write or delete a single customer item — the read-only
@@ -162,7 +163,56 @@ data "aws_iam_policy_document" "admin_lambda" {
     condition {
       test     = "ForAllValues:StringEquals"
       variable = "dynamodb:LeadingKeys"
-      values   = ["CONFIG#EMAIL", "CONFIG#COMMISSION", "CONFIG#ANNULATION"]
+      values   = ["CONFIG#EMAIL", "CONFIG#PRIX", "CONFIG#ANNULATION"]
+    }
+  }
+
+  # The SECOND write door on the MAIN table: targeted campaigns
+  # (apps/api/src/segments.js + the /admin/campaigns routes). Three fixed
+  # partitions, and the same LeadingKeys confinement as the configuration door
+  # above — see apps/api/src/keys.js:
+  #
+  #   AUDIENCE#GROUPES  SK = GROUP#<id>       a stored list of RECIPIENTS. NOT
+  #                                           the RBAC group (GROUPS on the
+  #                                           admin table), which bundles admin
+  #                                           permissions — two partitions on
+  #                                           two tables, never the same item.
+  #   CONSENT#COURRIEL  SK = EMAIL#<address>  the CASL consent basis of one
+  #                                           address (S.C. 2010, c. 23, s. 10).
+  #   CAMPAGNE#ENVOIS   SK = EMAIL#<address>  the last commercial campaign that
+  #                                           address received.
+  #
+  # The last one is not bookkeeping: it is what makes the frequency cap real.
+  # Art. 56 1° of the Code de déontologie des notaires makes it derogatory to
+  # solicit someone "de façon pressante ou répétée"; segments.js caps how often
+  # an address can be mailed, and the cap only means something because the send
+  # WRITES here afterwards. Without this grant every campaign send would fail
+  # with AccessDenied on that write, and the guard would be decorative in
+  # production while looking green in the tests.
+  #
+  # A separate statement rather than three more values on the one above, because
+  # the intent differs: that one lets the console edit product CONFIGURATION,
+  # this one lets it record who was written to. Reads need nothing here — the
+  # MainTableReadOnly statement already covers GetItem / Query / BatchGetItem,
+  # which is exactly what lastCampaignAtMany uses. No index resource: the
+  # LeadingKeys condition key does not apply to GSI queries, and every one of
+  # these items is read and written by primary key only.
+  statement {
+    sid    = "MainTableCampaignWrite"
+    effect = "Allow"
+    actions = [
+      "dynamodb:GetItem",
+      "dynamodb:PutItem",
+      "dynamodb:DeleteItem",
+      "dynamodb:Query",
+      "dynamodb:BatchGetItem",
+    ]
+    resources = [aws_dynamodb_table.main.arn]
+
+    condition {
+      test     = "ForAllValues:StringEquals"
+      variable = "dynamodb:LeadingKeys"
+      values   = ["AUDIENCE#GROUPES", "CONSENT#COURRIEL", "CAMPAGNE#ENVOIS"]
     }
   }
 

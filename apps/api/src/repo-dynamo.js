@@ -41,12 +41,22 @@ const {
   emailOverridePK,
   emailOverrideSK,
   EMAIL_OVERRIDE_PREFIX,
-  commissionConfigPK,
-  COMMISSION_CONFIG_SK,
+  prixConfigPK,
+  PRIX_CONFIG_SK,
   cancellationConfigPK,
   CANCELLATION_CONFIG_SK,
+  audienceGroupsPK,
+  audienceGroupSK,
+  AUDIENCE_GROUP_PREFIX,
+  emailConsentPK,
+  emailConsentSK,
+  campaignLogPK,
+  campaignLogSK,
   adminPK,
   ADMIN_SK,
+  groupsPK,
+  groupSK,
+  GROUP_PREFIX,
   adminLoginPK,
   ADMIN_LOGIN_SK,
   adminSessionPK,
@@ -82,7 +92,14 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
   // did not inject its own document client.
   // No ScanCommand: the reminder worker now reads open bids via a GSI1 Query,
   // so this repo performs no table Scans at all.
-  const { PutCommand, GetCommand, QueryCommand, UpdateCommand, DeleteCommand } = require('@aws-sdk/lib-dynamodb');
+  const {
+    PutCommand,
+    GetCommand,
+    QueryCommand,
+    UpdateCommand,
+    DeleteCommand,
+    BatchGetCommand,
+  } = require('@aws-sdk/lib-dynamodb');
 
   // The admin surface's identity/session/audit items live in a SEPARATE table
   // (blast-radius isolation). Only the admin Lambda passes adminTableName; the
@@ -106,6 +123,11 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
       marshallOptions: { removeUndefinedValues: true },
     });
   }
+
+  // Une adresse est une CLÉ ici (SK des items de campagne et de consentement) :
+  // elle se range toujours sous la même forme, sinon une même personne occupe
+  // deux items et le plafond de fréquence la manque.
+  const lowerEmail = (email) => String(email == null ? '' : email).trim().toLowerCase();
 
   function toItem(bid) {
     const item = { PK: bidPK(bid.dateISO), SK: bidSK(bid), type: 'bid', ...bid };
@@ -396,15 +418,29 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
       return rec;
     },
     async putEmailOverride(override, nowISO) {
-      const subj = (v) => {
+      // Un champ vide se STOCKE comme absent : une paire à moitié remplie n'est
+      // pas une surcharge, et la lecture doit pouvoir le voir sans deviner.
+      const txt = (v) => {
         const s = typeof v === 'string' ? v.trim() : '';
         return s || null;
       };
       const stored = {
         key: String(override.key),
-        enabled: override.enabled !== false,
-        subjectFr: subj(override.subjectFr),
-        subjectEn: subj(override.subjectEn),
+        // `actif` est le nom du produit, `enabled` l'alias historique : la même
+        // décision sous deux noms, écrite une fois. Un gabarit transactionnel
+        // ne peut pas être éteint — la règle vit dans emails.validateOverride,
+        // et sendOnce la revérifie pour qu'un item écrit à la main ne l'éteigne
+        // pas non plus.
+        actif: override.actif !== false && override.enabled !== false,
+        enabled: override.actif !== false && override.enabled !== false,
+        subjectFr: txt(override.subjectFr),
+        subjectEn: txt(override.subjectEn),
+        preheaderFr: txt(override.preheaderFr),
+        preheaderEn: txt(override.preheaderEn),
+        corpsFr: txt(override.corpsFr),
+        corpsEn: txt(override.corpsEn),
+        ctaFr: txt(override.ctaFr),
+        ctaEn: txt(override.ctaEn),
         updatedAt: nowISO,
       };
       await doc.send(
@@ -420,36 +456,34 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
         new DeleteCommand({ TableName: tableName, Key: { PK: emailOverridePK(), SK: emailOverrideSK(key) } })
       );
     },
-    // --- Admin-decided commission barème (ADR 0021) --------------------------
-    // ONE item on the MAIN table — billing reads it through the repo it already
-    // owns at every pricing; the admin Lambda's LeadingKeys-scoped write door
-    // (infra/admin.tf) is the only way it changes.
-    async getCommissionConfig() {
+    // --- Le prix de Nota, décidé par Nota (ADR 0031) -------------------------
+    // UN item sur la table PRINCIPALE — la facturation le lit par le repo
+    // qu'elle possède déjà, à chaque tarification ; la porte d'écriture de la
+    // Lambda admin, bornée par LeadingKeys (infra/admin.tf), est la seule qui
+    // le change. Un entier de cents, jamais un taux : l'art. 29.1 du Code de
+    // déontologie interdit au notaire une convention où son revenu dépendrait
+    // d'une note que Nota lui attribue.
+    async getPrixNotaConfig() {
       const out = await doc.send(
-        new GetCommand({ TableName: tableName, Key: { PK: commissionConfigPK(), SK: COMMISSION_CONFIG_SK } })
+        new GetCommand({ TableName: tableName, Key: { PK: prixConfigPK(), SK: PRIX_CONFIG_SK } })
       );
       if (!out.Item) return null;
       const { PK, SK, type, ...cfg } = out.Item;
       return cfg;
     },
-    async putCommissionConfig(cfg, nowISO) {
-      const stored = {
-        taux: cfg.taux,
-        plancher: cfg.plancher,
-        paliers: (cfg.paliers || []).map((p) => ({ cote: p.cote, taux: p.taux })),
-        updatedAt: nowISO,
-      };
+    async putPrixNotaConfig(cfg, nowISO) {
+      const stored = { prixCents: cfg.prixCents, updatedAt: nowISO };
       await doc.send(
         new PutCommand({
           TableName: tableName,
-          Item: { PK: commissionConfigPK(), SK: COMMISSION_CONFIG_SK, type: 'commission_config', ...stored },
+          Item: { PK: prixConfigPK(), SK: PRIX_CONFIG_SK, type: 'prix_nota_config', ...stored },
         })
       );
       return stored;
     },
-    async deleteCommissionConfig() {
+    async deletePrixNotaConfig() {
       await doc.send(
-        new DeleteCommand({ TableName: tableName, Key: { PK: commissionConfigPK(), SK: COMMISSION_CONFIG_SK } })
+        new DeleteCommand({ TableName: tableName, Key: { PK: prixConfigPK(), SK: PRIX_CONFIG_SK } })
       );
     },
     // --- Admin-decided cancellation fee barème (ADR 0023) --------------------
@@ -504,6 +538,144 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
         ExclusiveStartKey = out.LastEvaluatedKey;
       } while (ExclusiveStartKey);
       return overrides;
+    },
+
+    // --- Campagnes ciblées : audience, consentement, fréquence ---------------
+    // Trois partitions FIXES sur la table principale (voir keys.js). Aucune de
+    // ces portes ne Scanne : un groupe se lit par GetItem, la liste par une
+    // Query sur SA partition, et le registre des campagnes par BatchGetItem sur
+    // les seules adresses de l'audience. Le coût suit la campagne, pas
+    // l'historique — et surtout, la Lambda admin n'a jamais besoin d'un droit
+    // de parcours sur la table client.
+
+    async getAudienceGroup(id) {
+      const out = await doc.send(
+        new GetCommand({ TableName: tableName, Key: { PK: audienceGroupsPK(), SK: audienceGroupSK(id) } })
+      );
+      if (!out.Item) return null;
+      const { PK, SK, type, ...groupe } = out.Item;
+      return { ...groupe, membres: groupe.membres || [] };
+    },
+    async putAudienceGroup(groupe, updatedAt) {
+      const stored = {
+        id: String(groupe.id),
+        libelle: groupe.libelle || null,
+        audience: groupe.audience || null,
+        nature: groupe.nature || null,
+        membres: (groupe.membres || []).map(lowerEmail).filter(Boolean),
+        updatedAt,
+      };
+      await doc.send(
+        new PutCommand({
+          TableName: tableName,
+          Item: { PK: audienceGroupsPK(), SK: audienceGroupSK(stored.id), type: 'audience_group', ...stored },
+        })
+      );
+      return stored;
+    },
+    async deleteAudienceGroup(id) {
+      await doc.send(
+        new DeleteCommand({ TableName: tableName, Key: { PK: audienceGroupsPK(), SK: audienceGroupSK(id) } })
+      );
+    },
+    async listAudienceGroups() {
+      const groupes = [];
+      let ExclusiveStartKey;
+      do {
+        const out = await doc.send(
+          new QueryCommand({
+            TableName: tableName,
+            KeyConditionExpression: 'PK = :pk AND begins_with(SK, :b)',
+            ExpressionAttributeValues: { ':pk': audienceGroupsPK(), ':b': AUDIENCE_GROUP_PREFIX },
+            ExclusiveStartKey,
+          })
+        );
+        (out.Items || []).forEach((i) => {
+          const { PK, SK, type, ...groupe } = i;
+          groupes.push({ ...groupe, membres: groupe.membres || [] });
+        });
+        ExclusiveStartKey = out.LastEvaluatedKey;
+      } while (ExclusiveStartKey);
+      return groupes;
+    },
+
+    // La base de consentement LCAP d'une adresse. Le registre n'a pas encore de
+    // porte d'écriture publique — quand il en aura une, c'est cet item qu'elle
+    // écrira, et `segments.js` le préférera d'office à sa déduction.
+    async getEmailConsent(email) {
+      const out = await doc.send(
+        new GetCommand({ TableName: tableName, Key: { PK: emailConsentPK(), SK: emailConsentSK(email) } })
+      );
+      if (!out.Item) return null;
+      const { PK, SK, type, ...consent } = out.Item;
+      return consent;
+    },
+    async putEmailConsent(email, consent) {
+      const stored = {
+        email: lowerEmail(email),
+        base: (consent && consent.base) || null,
+        at: (consent && consent.at) || null,
+        source: (consent && consent.source) || null,
+      };
+      await doc.send(
+        new PutCommand({
+          TableName: tableName,
+          Item: { PK: emailConsentPK(), SK: emailConsentSK(stored.email), type: 'email_consent', ...stored },
+        })
+      );
+      return stored;
+    },
+
+    // Art. 56 1° : le registre du plafond de fréquence. UN item par adresse,
+    // écrasé à chaque campagne — comme UNSUB#, ce qui compte est la DERNIÈRE
+    // fois, jamais la collection de toutes les fois.
+    async markCampaignSent(email, atISO, campaignId) {
+      const clean = lowerEmail(email);
+      if (!clean) return null;
+      const stored = { email: clean, at: atISO, campagneId: campaignId || null };
+      await doc.send(
+        new PutCommand({
+          TableName: tableName,
+          Item: { PK: campaignLogPK(), SK: campaignLogSK(clean), type: 'campaign_sent', ...stored },
+        })
+      );
+      return stored;
+    },
+    async lastCampaignAt(email) {
+      const out = await doc.send(
+        new GetCommand({ TableName: tableName, Key: { PK: campaignLogPK(), SK: campaignLogSK(email) } })
+      );
+      return out.Item ? out.Item.at || null : null;
+    },
+    // UNE lecture par campagne. BatchGetItem plafonne à 100 clés, donc une
+    // audience plus large se découpe — le coût reste celui de l'audience, pas
+    // celui de tout ce que Nota a déjà envoyé. Un lot inachevé (UnprocessedKeys)
+    // est REPRIS : DynamoDB peut en rendre une partie sous charge, et l'oublier
+    // ferait passer un destinataire déjà relancé pour un destinataire neuf —
+    // exactement ce que l'art. 56 1° interdit.
+    async lastCampaignAtMany(adresses) {
+      const out = {};
+      const wanted = [];
+      for (const a of adresses || []) {
+        const clean = lowerEmail(a);
+        if (!clean || Object.prototype.hasOwnProperty.call(out, clean)) continue;
+        out[clean] = null;
+        wanted.push(clean);
+      }
+      for (let i = 0; i < wanted.length; i += 100) {
+        let keys = wanted.slice(i, i + 100).map((e) => ({ PK: campaignLogPK(), SK: campaignLogSK(e) }));
+        // Borne dure sur la reprise : un lot qui ne se viderait jamais doit
+        // rendre la main plutôt que boucler à l'infini dans une Lambda.
+        for (let essai = 0; essai < 5 && keys.length; essai += 1) {
+          const res = await doc.send(new BatchGetCommand({ RequestItems: { [tableName]: { Keys: keys } } }));
+          for (const item of (res.Responses && res.Responses[tableName]) || []) {
+            const email = item.email || String(item.SK || '').replace(/^EMAIL#/, '');
+            if (email) out[email] = item.at || null;
+          }
+          keys = ((res.UnprocessedKeys || {})[tableName] || {}).Keys || [];
+        }
+      }
+      return out;
     },
 
     // --- Notary console (declines + retained calendar pointers) -------------
@@ -978,6 +1150,52 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
         new PutCommand({ TableName: adminTable(), Item: { PK: adminPK(admin.id), SK: ADMIN_SK, type: 'admin', ...admin } })
       );
       return admin;
+    },
+
+    // --- Groupes d'administrateurs (RBAC découplé) --------------------------
+    // Une seule partition, un item par groupe : la liste se lit par UNE Query,
+    // jamais par un Scan — la Lambda admin ne doit pas avoir la permission de
+    // parcourir toute la table des identités pour afficher trois groupes.
+    async getGroup(id) {
+      const out = await doc.send(
+        new GetCommand({ TableName: adminTable(), Key: { PK: groupsPK(), SK: groupSK(id) } })
+      );
+      if (!out.Item) return null;
+      const { PK, SK, type, ...groupe } = out.Item;
+      return groupe;
+    },
+    async putGroup(groupe, updatedAt) {
+      const item = { ...groupe, updatedAt };
+      await doc.send(
+        new PutCommand({
+          TableName: adminTable(),
+          Item: { PK: groupsPK(), SK: groupSK(groupe.id), type: 'admin_group', ...item },
+        })
+      );
+      return item;
+    },
+    async deleteGroup(id) {
+      await doc.send(new DeleteCommand({ TableName: adminTable(), Key: { PK: groupsPK(), SK: groupSK(id) } }));
+    },
+    async listGroups() {
+      const groupes = [];
+      let ExclusiveStartKey;
+      do {
+        const out = await doc.send(
+          new QueryCommand({
+            TableName: adminTable(),
+            KeyConditionExpression: 'PK = :pk AND begins_with(SK, :b)',
+            ExpressionAttributeValues: { ':pk': groupsPK(), ':b': GROUP_PREFIX },
+            ExclusiveStartKey,
+          })
+        );
+        (out.Items || []).forEach((i) => {
+          const { PK, SK, type, ...rec } = i;
+          groupes.push(rec);
+        });
+        ExclusiveStartKey = out.LastEvaluatedKey;
+      } while (ExclusiveStartKey);
+      return groupes;
     },
 
     // --- Admin login challenges (single-use magic links) --------------------

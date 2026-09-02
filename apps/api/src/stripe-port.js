@@ -31,13 +31,15 @@ const STRIPE_LOCALE = process.env.NOTA_STRIPE_LOCALE || 'fr-CA';
  * open question is the legal QUALIFICATION of Nota's share, not the direction
  * the money travels.
  */
-function createStripeAdapter({ secretKey, webhookSecret } = {}) {
+function createStripeAdapter({ secretKey, webhookSecret, stripe: injected } = {}) {
   if (!secretKey) throw new Error('createStripeAdapter: secretKey is required');
   if (!webhookSecret) throw new Error('createStripeAdapter: webhookSecret is required');
 
   // Lazy import keeps the Stripe SDK out of the dependency graph for tests.
-  const Stripe = require('stripe');
-  const stripe = new Stripe(secretKey);
+  // `stripe` may be injected instead — the port's own seam, so the ARGUMENTS
+  // this adapter sends to Stripe can be asserted without a network or a key.
+  // Everything above this line is the contract; everything below is plumbing.
+  const stripe = injected || new (require('stripe'))(secretKey);
 
   return {
     /**
@@ -137,9 +139,18 @@ function createStripeAdapter({ secretKey, webhookSecret } = {}) {
      * Idempotent per bid end-to-end via the capture/transfer idempotency keys.
      */
     async captureAndTransfer({ paymentIntentId, connectAccountId, amountCents, applicationFeeCents, currency, bidId }) {
+      // PARTIAL capture — `amount_to_capture`, never the whole hold. The hold
+      // was posted on the offer; the settlement is priced on the act's declared
+      // value, which the notary may set lower (domain.validateActValue allows
+      // 0,25×). Capturing the full hold while transferring the lower net would
+      // leave the difference on the platform — and that difference is a slice
+      // of the notary's fees: art. 32.1 2° L.N. (« obtient d'un notaire qu'il
+      // abandonne une partie de ses honoraires ») and art. 32 C.déont. Stripe
+      // releases the remainder of the authorization on its own.
+      // What Nota keeps is its price, and only ever its price.
       const captured = await stripe.paymentIntents.capture(
         paymentIntentId,
-        {},
+        { amount_to_capture: amountCents },
         bidId ? { idempotencyKey: `capture:${bidId}` } : undefined
       );
       const chargeId = captured && (typeof captured.latest_charge === 'string' ? captured.latest_charge : captured.latest_charge && captured.latest_charge.id);

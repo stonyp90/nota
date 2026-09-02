@@ -5,6 +5,11 @@
  * DOM. Covers: the rail entry + route, the grouped template list with the
  * override badges, the inline editor (PUT on save, DELETE on reset, API
  * validation errors surfaced inline), and the analyst read-only view.
+ *
+ * Depuis l'enrichissement du formulaire, la surcharge porte QUATRE paires
+ * bilingues (sujet, ligne d'aperçu, corps, bouton) plus l'interrupteur `actif`,
+ * les bornes de longueur viennent du serveur (`limites`), et un gabarit
+ * TRANSACTIONNEL ne peut pas être éteint (art. 68 du Code de déontologie).
  */
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -73,31 +78,35 @@ const futureISO = () => new Date(Date.now() + 3600000).toISOString();
 const click = (win, node) => node.dispatchEvent(new win.Event('click', { bubbles: true }));
 
 // A small but audience-spanning template payload.
+// Les bornes servies par l'API — la console ne doit jamais en inventer.
+const LIMITES = { sujet: 200, preheader: 200, corps: 1200, cta: 60 };
+
 function sampleTemplates() {
   return {
+    limites: LIMITES,
     templates: [
       {
-        key: 'offerPublished', audience: 'client',
+        key: 'offerPublished', audience: 'client', transactionnel: true,
         labelFr: 'Offre publiée', labelEn: 'Offer posted',
         defaultSubjectFr: 'Votre offre est en ligne : {{montant}}', defaultSubjectEn: 'Your offer is live: {{montant}}',
         placeholders: ['montant', 'service', 'date'], override: null,
       },
       {
-        key: 'clientWelcome', audience: 'client',
+        key: 'clientWelcome', audience: 'client', transactionnel: false,
         labelFr: 'Bienvenue client', labelEn: 'Client welcome',
         defaultSubjectFr: 'Bienvenue sur Nota', defaultSubjectEn: 'Welcome to Nota',
         placeholders: ['email'],
         override: { enabled: true, subjectFr: 'Allo {{email}}', subjectEn: 'Hi {{email}}', updatedAt: '2026-08-27T12:00:00.000Z' },
       },
       {
-        key: 'propositionAcceptee', audience: 'notaire',
-        labelFr: 'Proposition acceptée', labelEn: 'Proposal accepted',
-        defaultSubjectFr: 'Proposition acceptée : {{montant}}', defaultSubjectEn: 'Proposal accepted: {{montant}}',
-        placeholders: ['montant', 'service', 'date'],
-        override: { enabled: false, subjectFr: null, subjectEn: null, updatedAt: '2026-08-27T12:00:00.000Z' },
+        key: 'newMatchingBids', audience: 'notaire', transactionnel: false,
+        labelFr: 'Digest des demandes ouvertes', labelEn: 'Open-requests digest',
+        defaultSubjectFr: '{{n}} nouvelles demandes sur le carnet', defaultSubjectEn: '{{n}} new requests on the carnet',
+        placeholders: ['n'],
+        override: { actif: false, subjectFr: null, subjectEn: null, updatedAt: '2026-08-27T12:00:00.000Z' },
       },
       {
-        key: 'operatorNewLead', audience: 'operateur',
+        key: 'operatorNewLead', audience: 'operateur', transactionnel: false,
         labelFr: 'Nouvelle offre publiée', labelEn: 'New offer posted',
         defaultSubjectFr: 'Nouvelle offre : {{montant}}', defaultSubjectEn: 'New offer: {{montant}}',
         placeholders: ['montant', 'service', 'date'], override: null,
@@ -162,22 +171,45 @@ test('templates render grouped by audience, with default subjects and override b
   const offerRow = rows.find((r) => text(r.querySelector('.tpl-label')) === 'Offre publiée');
   assert.match(text(offerRow), /Votre offre est en ligne : \{\{montant\}\}/, 'the FR default subject shows');
   assert.match(text(offerRow), /Your offer is live: \{\{montant\}\}/, 'the EN default subject shows');
-  assert.equal(offerRow.querySelectorAll('.tpl-badge').length, 0, 'no badge without an override');
+  // Transactionnel : la pastille se lit AVANT d'ouvrir l'éditeur.
+  assert.deepEqual([...offerRow.querySelectorAll('.tpl-badge')].map(text), ['Transactionnel']);
 
   const welcomeRow = rows.find((r) => text(r.querySelector('.tpl-label')) === 'Bienvenue client');
   assert.equal(text(welcomeRow.querySelector('.tpl-badge.is-custom')), 'Modifié');
   assert.match(text(welcomeRow), /Allo \{\{email\}\}/, 'the overridden subject replaces the default in the row');
 
-  const disabledRow = rows.find((r) => text(r.querySelector('.tpl-label')) === 'Proposition acceptée');
+  const disabledRow = rows.find((r) => text(r.querySelector('.tpl-label')) === 'Digest des demandes ouvertes');
   assert.equal(text(disabledRow.querySelector('.tpl-badge.is-off')), 'Désactivé');
 });
 
-test('the editor opens with the template vocabulary as chips and PUTs the full override on save', async () => {
+test('un enregistrement qui éteindrait un gabarit transactionnel ne se lit jamais « Désactivé »', async () => {
+  // Le serveur IGNORE un tel enregistrement (isOverrideDisabled) : le courriel
+  // part quand même. L'écran doit dire l'état réel, pas l'enregistrement.
+  const payload = sampleTemplates();
+  payload.templates[0].override = { actif: false, subjectFr: null, subjectEn: null, updatedAt: '2026-08-27T12:00:00.000Z' };
+  const { win, doc } = await boot(api({ templates: payload }), '#/auth?token=T');
+  await waitFor(win, '.admin-rail');
+  win.location.hash = '#/courriels';
+  await waitFor(win, '.tpl-row');
+  const row = [...doc.querySelectorAll('.tpl-row')].find((r) => text(r.querySelector('.tpl-label')) === 'Offre publiée');
+  assert.equal(row.querySelector('.tpl-badge.is-off'), null, 'aucun « Désactivé » sur un courriel qui part quand même');
+  assert.ok(row.querySelector('.tpl-badge.is-transactionnel'), 'la pastille transactionnelle reste');
+  click(win, row.querySelector('.tpl-edit'));
+  const toggle = row.querySelector('.tpl-toggle input');
+  assert.equal(toggle.checked, true, 'l’interrupteur montre l’envoi actif');
+  assert.equal(toggle.disabled, true, 'et reste fermé');
+});
+
+// Les champs d'une paire, par le nom que porte l'input (= le nom du champ API).
+const champ = (editor, nom) => editor.querySelector('[name="' + nom + '"]');
+const slotErreur = (editor, cle) => editor.querySelector('.tpl-error[data-erreur="' + cle + '"]');
+
+test('the editor opens with the template vocabulary as chips and PUTs the four bilingual pairs on save', async () => {
   const writes = [];
   const handler = api({
     onWrite(method, url, body) {
       writes.push({ method, url, body });
-      return [200, { ok: true, override: { key: 'offerPublished', enabled: true, subjectFr: body.subjectFr, subjectEn: body.subjectEn, updatedAt: futureISO() } }];
+      return [200, { ok: true, override: { key: 'offerPublished', actif: true, subjectFr: body.subjectFr, subjectEn: body.subjectEn, updatedAt: futureISO() } }];
     },
   });
   const { win, doc } = await boot(handler, '#/auth?token=T');
@@ -193,10 +225,17 @@ test('the editor opens with the template vocabulary as chips and PUTs the full o
   const chips = [...editor.querySelectorAll('.tpl-chip')].map(text);
   assert.deepEqual(chips, ['{{montant}}', '{{service}}', '{{date}}'], 'the allowed tokens show as hint chips');
 
+  // Les quatre paires sont là, dans l'ordre, et le corps est une zone de texte.
+  assert.deepEqual([...editor.querySelectorAll('.tpl-pair')].map((p) => p.getAttribute('data-paire')),
+    ['sujet', 'preheader', 'corps', 'cta']);
+  assert.equal(champ(editor, 'corpsFr').tagName, 'TEXTAREA', 'le corps se saisit sur plusieurs lignes');
+
   const [frInput, enInput] = editor.querySelectorAll('input.input');
   assert.equal(frInput.placeholder, 'Votre offre est en ligne : {{montant}}', 'the default subject is the placeholder');
   frInput.value = ' Nouvelle offre {{montant}} ';
   enInput.value = 'New offer {{montant}}';
+  champ(editor, 'corpsFr').value = 'Votre offre est publiée.';
+  champ(editor, 'corpsEn').value = 'Your offer is live.';
   const save = [...editor.querySelectorAll('button')].find((b) => text(b) === 'Enregistrer');
   click(win, save);
   await settle(win);
@@ -204,13 +243,153 @@ test('the editor opens with the template vocabulary as chips and PUTs the full o
   assert.equal(writes.length, 1);
   assert.equal(writes[0].method, 'PUT');
   assert.match(writes[0].url, /\/notifications\/templates\/offerPublished$/);
+  // Un PUT REMPLACE : les huit cases voyagent, vides comprises.
   assert.deepEqual(writes[0].body, {
-    enabled: true,
+    actif: true,
     subjectFr: 'Nouvelle offre {{montant}}', // trimmed client-side
     subjectEn: 'New offer {{montant}}',
+    preheaderFr: '', preheaderEn: '',
+    corpsFr: 'Votre offre est publiée.', corpsEn: 'Your offer is live.',
+    ctaFr: '', ctaEn: '',
   });
   await waitFor(win, '.tpl-row'); // the list reloads after a save
   assert.match(text(doc.querySelector('#toast')), /Modèle enregistré/);
+});
+
+test('les bornes de longueur viennent du serveur — jamais de la console', async () => {
+  const { win, doc } = await boot(api(), '#/auth?token=T');
+  await waitFor(win, '.admin-rail');
+  win.location.hash = '#/courriels';
+  await waitFor(win, '.tpl-row');
+  const row = [...doc.querySelectorAll('.tpl-row')].find((r) => text(r.querySelector('.tpl-label')) === 'Bienvenue client');
+  click(win, row.querySelector('.tpl-edit'));
+  const editor = row.querySelector('.tpl-editor');
+
+  assert.equal(champ(editor, 'subjectFr').maxLength, LIMITES.sujet);
+  assert.equal(champ(editor, 'preheaderEn').maxLength, LIMITES.preheader);
+  assert.equal(champ(editor, 'corpsFr').maxLength, LIMITES.corps);
+  assert.equal(champ(editor, 'ctaEn').maxLength, LIMITES.cta);
+  // Le compteur rend la borne servie visible pendant la frappe.
+  const compteurs = [...editor.querySelectorAll('.tpl-count')].map(text);
+  assert.equal(compteurs.length, 8, 'un compteur par côté');
+  assert.equal(compteurs[0], 'Allo {{email}}'.length + ' / ' + LIMITES.sujet);
+});
+
+test('sans « limites » servies, aucun maxlength n’est inventé', async () => {
+  const payload = sampleTemplates();
+  delete payload.limites;
+  const { win, doc } = await boot(api({ templates: payload }), '#/auth?token=T');
+  await waitFor(win, '.admin-rail');
+  win.location.hash = '#/courriels';
+  await waitFor(win, '.tpl-row');
+  const row = [...doc.querySelectorAll('.tpl-row')].find((r) => text(r.querySelector('.tpl-label')) === 'Bienvenue client');
+  click(win, row.querySelector('.tpl-edit'));
+  const editor = row.querySelector('.tpl-editor');
+  assert.equal(champ(editor, 'subjectFr').getAttribute('maxlength'), null, 'pas de borne inventée');
+  assert.equal(editor.querySelectorAll('.tpl-count').length, 0, 'et pas de compteur qui mentirait');
+});
+
+test('un courriel transactionnel ne peut pas être éteint, et l’écran dit pourquoi', async () => {
+  const { win, doc } = await boot(api(), '#/auth?token=T');
+  await waitFor(win, '.admin-rail');
+  win.location.hash = '#/courriels';
+  await waitFor(win, '.tpl-row');
+  const rows = [...doc.querySelectorAll('.tpl-row')];
+
+  const tr = rows.find((r) => text(r.querySelector('.tpl-label')) === 'Offre publiée');
+  click(win, tr.querySelector('.tpl-edit'));
+  const trEditor = tr.querySelector('.tpl-editor');
+  const trToggle = trEditor.querySelector('.tpl-toggle input');
+  assert.equal(trToggle.disabled, true, 'l’interrupteur est fermé');
+  assert.equal(trToggle.checked, true, 'et montre l’envoi actif');
+  const raison = text(trEditor.querySelector('.tpl-nature'));
+  assert.match(raison, /transactionnel/i);
+  assert.match(raison, /art\. 68/, 'la raison cite l’article, pas un « non » nu');
+  assert.match(raison, /reformulation/, 'et dit ce qui reste permis');
+
+  // Un commercial, lui, se coupe — et l'écran nomme l'article qui l'exige.
+  const co = rows.find((r) => text(r.querySelector('.tpl-label')) === 'Bienvenue client');
+  click(win, co.querySelector('.tpl-edit'));
+  const coEditor = co.querySelector('.tpl-editor');
+  assert.equal(coEditor.querySelector('.tpl-toggle input').disabled, false);
+  assert.match(text(coEditor.querySelector('.tpl-nature')), /art\. 56 1°/);
+});
+
+test('une nature non déclarée par l’API ne se lit pas « commercial » : elle se dit inconnue', async () => {
+  // Un serveur qui ne sert pas le drapeau ne rend pas ce courriel commercial.
+  // L'écran laisse l'interrupteur ouvert — on ne ferme pas ce qu'on ne peut pas
+  // justifier — mais il ne qualifie rien.
+  const payload = sampleTemplates();
+  delete payload.templates[1].transactionnel; // clientWelcome
+  const { win, doc } = await boot(api({ templates: payload }), '#/auth?token=T');
+  await waitFor(win, '.admin-rail');
+  win.location.hash = '#/courriels';
+  await waitFor(win, '.tpl-row');
+  const row = [...doc.querySelectorAll('.tpl-row')].find((r) => text(r.querySelector('.tpl-label')) === 'Bienvenue client');
+  click(win, row.querySelector('.tpl-edit'));
+  const editor = row.querySelector('.tpl-editor');
+  assert.equal(editor.querySelector('.tpl-toggle input').disabled, false, 'l’interrupteur reste ouvert');
+  const nature = text(editor.querySelector('.tpl-nature'));
+  assert.match(nature, /non déclarée/);
+  assert.doesNotMatch(nature, /^Courriel commercial/);
+  assert.match(nature, /art\. 68/, 'et rappelle le risque avant de couper');
+});
+
+test('une paire à moitié remplie est refusée AVANT l’envoi, sous son propre champ', async () => {
+  const { win, doc, calls } = await boot(api(), '#/auth?token=T');
+  await waitFor(win, '.admin-rail');
+  win.location.hash = '#/courriels';
+  await waitFor(win, '.tpl-row');
+  const row = [...doc.querySelectorAll('.tpl-row')].find((r) => text(r.querySelector('.tpl-label')) === 'Bienvenue client');
+  click(win, row.querySelector('.tpl-edit'));
+  const editor = row.querySelector('.tpl-editor');
+
+  champ(editor, 'corpsFr').value = 'Un corps en français seulement.';
+  const avant = calls.length;
+  click(win, [...editor.querySelectorAll('button')].find((b) => text(b) === 'Enregistrer'));
+  await settle(win);
+
+  assert.equal(calls.length, avant, 'aucune requête n’est partie');
+  const slot = slotErreur(editor, 'corps');
+  assert.equal(slot.hidden, false, 'le refus se lit sous la paire visée');
+  assert.match(text(slot), /les deux langues vont ensemble/);
+  assert.equal(slotErreur(editor, 'sujet').hidden, true, 'et pas sous les autres');
+  assert.equal(champ(editor, 'corpsFr').getAttribute('aria-invalid'), 'true', 'le champ porte la marque');
+});
+
+test('les codes de refus du serveur se lisent en clair, sous le champ qu’ils visent', async () => {
+  const handler = api({
+    onWrite() {
+      return [422, { errors: [
+        { code: 'jeton_inconnu', message: 'subjectFr : le jeton {{code}} n’existe pas pour ce modèle. Jetons permis : {{email}}.' },
+        { code: 'html_interdit', message: 'corpsEn : le HTML n’est pas permis — écrivez du texte, la mise en forme vient du gabarit.' },
+        { code: 'cta_trop_long', message: 'ctaFr dépasse 60 caractères.' },
+        { code: 'champ_inconnu', message: 'Champ inconnu : couleur.' },
+      ] }];
+    },
+  });
+  const { win, doc } = await boot(handler, '#/auth?token=T');
+  await waitFor(win, '.admin-rail');
+  win.location.hash = '#/courriels';
+  await waitFor(win, '.tpl-row');
+  const row = [...doc.querySelectorAll('.tpl-row')].find((r) => text(r.querySelector('.tpl-label')) === 'Bienvenue client');
+  click(win, row.querySelector('.tpl-edit'));
+  const editor = row.querySelector('.tpl-editor');
+  click(win, [...editor.querySelectorAll('button')].find((b) => text(b) === 'Enregistrer'));
+  await settle(win);
+
+  // Chaque code atterrit sous SON champ, en français clair — et le mot du
+  // serveur reste dessous pour le détail (quel jeton, quelle borne).
+  const sujet = slotErreur(editor, 'sujet');
+  assert.equal(sujet.hidden, false);
+  assert.match(text(sujet), /Jeton inconnu/);
+  assert.match(text(sujet.querySelector('.tpl-error-detail')), /\{\{code\}\}/);
+
+  assert.match(text(slotErreur(editor, 'corps')), /HTML refusé/);
+  assert.match(text(slotErreur(editor, 'cta')), /Libellé de bouton trop long/);
+  // Ce qui ne vise aucun champ tombe dans la région commune — jamais la console.
+  assert.match(text(slotErreur(editor, 'autre')), /Champ inconnu/);
+  assert.equal(slotErreur(editor, 'preheader').hidden, true);
 });
 
 test('Réinitialiser DELETEs the override; a 422 from the API surfaces inline without reloading', async () => {
@@ -234,7 +413,7 @@ test('Réinitialiser DELETEs the override; a 422 from the API surfaces inline wi
   const save = [...editor.querySelectorAll('button')].find((b) => text(b) === 'Enregistrer');
   click(win, save);
   await settle(win);
-  const err = editor.querySelector('.tpl-error');
+  const err = slotErreur(editor, 'sujet'); // le refus nomme subjectFr : il rentre par là
   assert.equal(err.hidden, false);
   assert.match(text(err), /jeton \{\{code\}\} n’existe pas/);
 
@@ -276,7 +455,7 @@ test('an analyst sees the list read-only: banner, no save controls, disabled inp
   const editor = row.querySelector('.tpl-editor');
   assert.ok(editor, 'the analyst can still inspect the template');
   assert.equal(editor.querySelectorAll('.tpl-actions button').length, 0, 'no save/reset controls');
-  for (const input of editor.querySelectorAll('input')) {
+  for (const input of editor.querySelectorAll('input, textarea')) {
     assert.equal(input.disabled, true, 'inputs are disabled for the analyst');
   }
 });

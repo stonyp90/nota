@@ -322,3 +322,138 @@ test('the admin sign-in email uses the branded bilingual template, not an inline
   assert.ok(m.html.includes(res.devLink), 'HTML CTA must carry the magic link');
   assert.ok(m.text.includes(res.devLink), 'text alternative must carry the magic link');
 });
+
+// =============================================================================
+// ADR 0031 — aucun courriel ne peut décrire un partage d'honoraires
+// =============================================================================
+//
+// Art. 32 du Code de déontologie des notaires : « Le notaire ne peut partager
+// ses honoraires avec une personne qui n'est pas membre d'un ordre
+// professionnel régi par le Code des professions ». Art. 32.1 2° de la Loi sur
+// le notariat : est présumée usurper les fonctions de notaire la personne,
+// autre qu'un membre de l'Ordre, agissant comme intermédiaire, qui « obtient
+// d'un notaire qu'il abandonne une partie de ses honoraires et frais ».
+//
+// Depuis l'ADR 0031, Nota ne prélève plus rien sur le montant offert — le
+// notaire le reçoit en entier — et facture son propre prix, fixe, au client.
+// Une copie qui reparle de « commission », d'un pourcentage de partage ou de
+// « la part que le notaire garde » décrirait donc à la fois une infraction et
+// une opération que le code ne fait plus. Ce contrat tient la porte fermée sur
+// l'ensemble du registre, pas seulement sur les gabarits corrigés une fois.
+//
+// Art. 68 (publicité incomplète) tient l'autre bout : le client paie DEUX
+// lignes, et aucun courriel ne peut lui promettre que la seconde n'existe pas.
+
+// Le texte que l'oeil voit : le HTML sans ses balises (« width="100%" » n'est
+// pas une affirmation), plus l'alternative texte et le sujet.
+function visible(out) {
+  return (
+    out.html.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ') +
+    ' ' + out.text + ' ' + out.subject
+  );
+}
+
+const RENDER_CTX = {
+  serviceId: 'refinancement',
+  dateISO: '2026-08-19',
+  montant: 1500,
+  tier: 'prioritaire',
+  days: 7,
+  bids: [{ serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2400, tier: 'rapide' }],
+  notaryEmail: 'notaire@example.ca',
+  email: 'client@example.ca',
+  note: 4,
+  commentaire: 'Merci.',
+  link: BASE + '/#auth?token=t0k3n',
+  code: 'EVEROY',
+  baseUrl: BASE,
+  unsubscribeUrl: UNSUB,
+};
+
+test('ADR 0031 — aucun gabarit ne parle de commission ni d’un pourcentage de partage', () => {
+  for (const [name, render] of Object.entries(emails.TEMPLATES)) {
+    const v = visible(render(RENDER_CTX));
+
+    // Le mot lui-même : Nota ne prélève aucune commission (art. 32, art. 32.1 2°).
+    assert.ok(
+      !/commission/i.test(v),
+      `${name}: « commission » est réapparu dans un courriel — Nota ne prélève plus rien sur les honoraires (ADR 0031)`
+    );
+
+    // Un pourcentage, quel qu'il soit : le prix de Nota est un montant fixe, pas
+    // un taux, et la cote ne décide plus d'un dollar (art. 29.1).
+    const pct = v.match(/\d+(?:[.,]\d+)?\s*%/);
+    assert.ok(
+      !pct,
+      `${name}: un pourcentage (${pct && pct[0]}) est réapparu — le prix de Nota est un montant fixe, jamais un taux`
+    );
+
+    // La périphrase qui disait la même chose sans le mot.
+    assert.ok(
+      !/part qu[e’']|share (?:they|you) keep|honoraires partagés|fee split/i.test(v),
+      `${name}: la copie décrit encore une part prélevée sur les honoraires du notaire`
+    );
+  }
+});
+
+test('ADR 0031 + art. 68 — aucun courriel client ne promet que Nota ne coûte rien de plus', () => {
+  const clients = Object.keys(emails.TEMPLATES).filter(
+    (n) => emails.TEMPLATE_META[n] && emails.TEMPLATE_META[n].audience === 'client'
+  );
+  assert.ok(clients.length >= 10, 'le registre client doit rester couvert en entier');
+
+  for (const name of clients) {
+    const v = visible(emails.TEMPLATES[name](RENDER_CTX));
+    assert.ok(
+      !/rien de plus|nothing extra|no extra (?:cost|fee)|sans frais suppl/i.test(v),
+      `${name}: le client paie son offre PLUS le prix du service de Nota — le promettre gratuit est une publicité incomplète (art. 68)`
+    );
+  }
+});
+
+test('clientWelcome nomme les deux lignes que le client paie, dans les deux langues', () => {
+  // Le pendant positif du test précédent : retirer « rien de plus » ne suffit
+  // pas, encore faut-il que la seconde ligne soit dite (art. 68).
+  const out = emails.clientWelcome(RENDER_CTX);
+  const v = visible(out);
+  assert.match(v, /va en entier au notaire/, 'FR: la première ligne revient au notaire');
+  assert.match(v, /prix du service de Nota/, 'FR: la seconde ligne est celle de Nota');
+  assert.match(v, /goes to the notary in full/, 'EN: same');
+  assert.match(v, /price of Nota’s service/, 'EN: same');
+  // Le prix lui-même est configurable (`prix-nota-config.js`) : il ne doit pas
+  // être gravé dans une chaîne de courriel.
+  assert.ok(!/400\s*(?:,00)?\s*\$|\$\s*400/.test(v), 'le montant du prix de Nota ne se code pas en dur');
+});
+
+// --- art. 68 et art. 14 — aucune promesse de vitesse jamais mesurée ---------
+//
+// Art. 68 : aucune publicité fausse, trompeuse ou incomplète. Art. 14 : aucune
+// fausse représentation « quant à l'efficacité de ses propres services ».
+// Aucun acte n'a encore été conclu sur la plateforme : « retenu beaucoup plus
+// vite », « le marché se conclut généralement à » et « augmente vos chances »
+// n'ont aucune observation derrière eux. La copie dit le mécanisme — plus de
+// préavis, plus de notaires peuvent s'organiser — et rien de plus fort. Même
+// règle que le commentaire au-dessus d'`OBTAIN_CHANCE` dans le domaine.
+test('art. 68 / art. 14 — aucun courriel client ne promet une vitesse ou un marché non mesurés', () => {
+  const clients = Object.keys(emails.TEMPLATES).filter(
+    (n) => emails.TEMPLATE_META[n] && emails.TEMPLATE_META[n].audience === 'client'
+  );
+  for (const name of clients) {
+    // dateApproaching change de branche selon le palier : les trois sont tenues.
+    for (const tier of ['standard', 'rapide', 'prioritaire', 'urgence', 'extreme']) {
+      const v = visible(emails.TEMPLATES[name](Object.assign({}, RENDER_CTX, { tier })));
+      assert.ok(
+        !/plus vite|plus rapidement|gets taken faster|attracts a notary faster|much faster/i.test(v),
+        `${name} (${tier}): une promesse de vitesse comparative, qu'aucune donnée n'appuie`
+      );
+      assert.ok(
+        !/le marché se conclut|the market usually settles/i.test(v),
+        `${name} (${tier}): un comportement de marché affirmé alors qu'aucun acte n'a encore été conclu`
+      );
+      assert.ok(
+        !/augmente (?:nettement )?vos chances|improves your chances/i.test(v),
+        `${name} (${tier}): une probabilité annoncée que personne n'a mesurée`
+      );
+    }
+  }
+});

@@ -76,12 +76,23 @@
     // the flag ends up reflecting whichever settled last. A monotonic counter is
     // order-independent — any fallback in a batch marks the whole screen.
     demoLoads: 0,
+    // Le tarif de Nota, tel que le carnet l'annonce (ADR 0031). Il reste NUL
+    // tant qu'aucune réponse réelle ne l'a porté : hors ligne, le devis dit
+    // qu'un prix s'ajoute sans jamais en inventer le montant. Un chiffre faux
+    // serait pire que pas de chiffre — c'est exactement ce que l'art. 68 du
+    // Code de déontologie nomme « trompeur ».
+    tarif: null,
     async listMonth(month) {
       try {
         var r = await fetch(API_BASE + '/bids?month=' + encodeURIComponent(month), {
           headers: { accept: 'application/json' },
         });
-        if (r.ok) { this.online = true; var j = await r.json(); return j.bids || []; }
+        if (r.ok) {
+          this.online = true;
+          var j = await r.json();
+          if (j.tarif && typeof j.tarif.prixNotaCents === 'number') this.tarif = j.tarif;
+          return j.bids || [];
+        }
       } catch (e) { /* offline */ }
       this.online = false;
       this.demoLoads++;
@@ -672,7 +683,8 @@
     return a;
   }
 
-  // Percent display for a commission rate, fr-CA: 0.09 → « 9 % », 0.125 → « 12,5 % ».
+  // Affichage d'un pourcentage, fr-CA : 0,09 → « 9 % ». Ne sert plus qu'au
+  // barème d'annulation (ADR 0023) — jamais à une part d'honoraires.
   function pctLabel(rate) {
     return String(Math.round(rate * 1000) / 10).replace('.', ',') + ' %';
   }
@@ -1003,7 +1015,7 @@
       steps: [
         { icon: 'liste', t: 'Voyez les demandes ouvertes', d: 'à Québec, par date de signature.' },
         { icon: 'main', t: 'Retenez — ou négociez', d: 'proposez votre prix ou demandez des documents ; le dossier s’ouvre dès que vous retenez.' },
-        { icon: 'acte', t: 'Complétez l’acte', d: 'commission seulement sur ce qui se conclut.' },
+        { icon: 'acte', t: 'Complétez l’acte', d: 'vos honoraires vous sont virés en entier.' },
       ],
     },
   };
@@ -2989,8 +3001,61 @@
       $('gauge-fill').style.width = '0%';
       $('gauge-label').textContent = 'Choisissez une date et un montant.';
     }
+    renderDevis();
     updateBeatUI();
     validateOfferUI();
+  }
+
+  /**
+   * LE DEVIS — ce que le client paiera vraiment, avant qu'il ne s'engage.
+   *
+   * L'autorisation portée à la carte est le TOTAL de deux lignes : les
+   * honoraires offerts au notaire, qui lui reviennent en entier, et le prix du
+   * service de Nota (ADR 0031). Tant que la seconde n'était affichée nulle
+   * part, le client la découvrait sur la page de paiement — l'art. 68 du Code
+   * de déontologie interdit la publicité « incomplète », et une omission au
+   * moment du paiement en est le cas d'école.
+   *
+   * Deux lignes, jamais un partage : Nota ne prélève rien sur les honoraires
+   * du notaire (art. 32 C.déont., art. 32.1 2° L.N.). La formulation compte
+   * autant que le chiffre.
+   *
+   * La note finale existe parce que l'art. 71 3° oblige quiconque annonce des
+   * honoraires à indiquer si les débours et les taxes sont ou non inclus. Elle
+   * est écrite depuis les drapeaux du serveur, pas depuis une opinion : le jour
+   * où les taxes seront calculées, la phrase changera d'elle-même.
+   */
+  function renderDevis() {
+    var box = $('offer-devis');
+    if (!box) return;
+    var svc = D.serviceById(state.offer.serviceId);
+    var honoraires = Number(state.offer.montant) || 0;
+    if (!svc || !honoraires) { box.hidden = true; return; }
+    box.hidden = false;
+
+    var tarif = store.tarif;
+    var prix = tarif ? Math.round(tarif.prixNotaCents) / 100 : null;
+    $('devis-hon').textContent = D.money(honoraires);
+    $('devis-nota').textContent = prix != null ? D.money(prix) : '—';
+    $('devis-total').textContent = prix != null ? D.money(honoraires + prix) : '—';
+
+    // Chaque phrase est son PROPRE noeud de texte : la couche i18n traduit par
+    // correspondance exacte, et une phrase concaténée avec ses voisines ne se
+    // retrouverait dans aucun dictionnaire.
+    var note = [];
+    if (prix == null) {
+      // Hors ligne, le carnet vient des fixtures : le montant du service de
+      // Nota est inconnu, et le taire vaut mieux que l'inventer.
+      note.push('Le prix du service de Nota s’ajoute à ce montant ; il vous est confirmé avant tout paiement.');
+    }
+    if (!tarif || !tarif.taxesIncluses) note.push('Taxes en sus.');
+    if (!tarif || !tarif.deboursInclus) note.push('Débours en sus (droits de publication, RDPRM).');
+    var box2 = $('devis-note');
+    box2.textContent = '';
+    note.forEach(function (phrase, i) {
+      if (i) box2.appendChild(document.createTextNode(' '));
+      box2.appendChild(el('span', '', phrase));
+    });
   }
 
   function acceptance(mult, tierId) {
@@ -3483,6 +3548,33 @@
       });
       crow.appendChild(cin); crow.appendChild(csend);
       chat.appendChild(crow);
+      // Les documents, sous le fil : ce que l'un envoie, l'autre le lit au même
+      // endroit. Un document n'est pas un événement de second rang qu'on
+      // découvrirait en rouvrant la page.
+      chat.appendChild(documentsBlock({
+        id: o.id,
+        dateISO: o.dateISO,
+        routes: { depot: '/client/bid/documents', confirme: '/client/bid/documents/confirme', lecture: '/client/bid/documents' },
+        appel: async function (method, route, body) {
+          var r;
+          try {
+            r = await fetch(API_BASE + route, {
+              method: method,
+              headers: body
+                ? { 'content-type': 'application/json', authorization: 'Bearer ' + o.clientToken }
+                : { authorization: 'Bearer ' + o.clientToken },
+              body: body ? JSON.stringify(body) : undefined,
+            });
+          } catch (e) { return { ok: false, message: 'Hors ligne.' }; }
+          var j = {}; try { j = await r.json(); } catch (e) {}
+          if (!r.ok) return { ok: false, message: (j.errors && j.errors[0] && j.errors[0].message) || 'Action impossible.' };
+          return { ok: true, json: j };
+        },
+      }, (status && status.documents) || [], function () {
+        // Relire l'état de l'offre : le document doit apparaître dans le fil, du
+        // même mouvement qu'un message envoyé.
+        fetchOfferStatus(o).then(function () { if (state.tab === 'profil') renderProfil(); });
+      }));
       cell.appendChild(chat);
     }
 
@@ -4592,7 +4684,7 @@
   // toggle); it never changes what the API returned, only what is drawn.
   // openDetails: ids the notary unfolded by hand in the compact view — kept
   // across re-renders (refresh, filter) so a studied card never snaps shut.
-  var nc = { token: null, feedToken: null, email: null, open: [], filter: { service: 'all', readyOnly: false, day: null }, openDetails: {}, rating: null, profil: { lienCNQ: null }, commission: null, cote: null };
+  var nc = { token: null, feedToken: null, email: null, open: [], filter: { service: 'all', readyOnly: false, day: null }, openDetails: {}, rating: null, profil: { lienCNQ: null }, tarif: null, cote: null };
 
   // Pending declines: id -> { timer, dateISO }. A decline collapses the card
   // into an undo line first and only POSTs once the window closes (or a test
@@ -4654,7 +4746,7 @@
     // ledger's original figure, never the retried one.
     ncRetainedUpdate(nc.email, id, { completed: true, actAmount: j.actAmount != null ? j.actAmount : amt, commissionCents: j.commissionCents || 0 });
     ncRenderRetained();
-    toast('Acte complété. Commission Nota : ' + D.money((j.commissionCents || 0) / 100) + '.');
+    toast('Acte complété. Vos honoraires : ' + D.money(j.honorairesCents != null ? j.honorairesCents / 100 : (j.actAmount != null ? j.actAmount : amt)) + ', virés en entier.');
   }
 
   // Build the webcal:// subscription URL from the API base. A relative '/api'
@@ -4690,7 +4782,7 @@
   function ncExpire(msg) {
     ncPollStop(); // the live feed dies with the session
     nc.token = null; nc.feedToken = null; nc.email = null; nc.open = [];
-    nc.rating = null; nc.profil = { lienCNQ: null, rayonKm: 0, urgences: false }; nc.commission = null;
+    nc.rating = null; nc.profil = { lienCNQ: null, rayonKm: 0, urgences: false }; nc.tarif = null;
     nc.cote = null;
     ncRenderProfil(); // the form must never keep another notary's fiche
     ncRenderCote();   // another notary must never inherit this one's cote
@@ -4847,7 +4939,7 @@
     nc.open = j.bids || [];
     nc.rating = j.rating || null; // the notary's own public average
     nc.profil = j.profil || { lienCNQ: null, rayonKm: 0, urgences: false };
-    nc.commission = j.commission || null; // null when billing is off — no fake rate
+    nc.tarif = j.tarif || null;           // ADR 0031 : le prix que le CLIENT paie à Nota
     nc.cote = j.cote || null;             // ADR 0028: always there, barème or not
     ncRenderProfil();
     ncRenderEarnings(); // the money tiles
@@ -6068,14 +6160,14 @@
   }
 
   // The "mark act completed" block on each retained dossier card. Once done, it
-  // shows a badge with the true commission the API charged.
+  // montre les deux lignes que l'API a réellement inscrites au registre.
   function ncCompleteBlock(entry) {
     var wrap = el('div', 'nc-complete');
     if (entry.completed) {
       var done = el('div', 'nc-complete-done');
       done.appendChild(el('span', 'nc-done-badge', 'Acte complété'));
       done.appendChild(el('span', 'nc-done-fee',
-        'Valeur ' + D.money(entry.actAmount) + ' · commission Nota ' + D.money((entry.commissionCents || 0) / 100)));
+        'Vos honoraires ' + D.money(entry.actAmount) + ' · service Nota payé par le client ' + D.money((entry.commissionCents || 0) / 100)));
       wrap.appendChild(done);
       return wrap;
     }
@@ -6099,7 +6191,7 @@
     btn.type = 'button';
     row.appendChild(lbl); row.appendChild(btn);
     wrap.appendChild(row);
-    wrap.appendChild(el('p', 'help', 'Nota prélève sa commission uniquement à cette étape, sur la valeur confirmée.'));
+    wrap.appendChild(el('p', 'help', 'À cette étape, vos honoraires vous sont virés en entier. Nota facture son service au client, séparément.'));
     return wrap;
   }
   function ncRetainedCard(entry) {
@@ -6165,10 +6257,147 @@
     return box;
   }
 
+  // --- Les documents de la conversation (ADR 0032) ---------------------------
+  //
+  // UN seul chemin pour les deux parties : le client et le notaire font
+  // exactement la même chose, et deux implémentations divergeraient le jour où
+  // l'une des deux gagne un garde-fou.
+  //
+  // Le fichier ne passe JAMAIS par l'API. Le navigateur demande une
+  // autorisation, téléverse directement vers le stockage, puis dit au serveur
+  // de CONSTATER le dépôt. Tant que ce constat n'a pas eu lieu, l'autre partie
+  // ne voit rien : une pièce annoncée n'est pas une pièce reçue.
+  //
+  // Le refus de format ou de taille est LOCAL, avant tout téléversement — faire
+  // échouer 15 Mo après coup est la pire réponse possible.
+  async function envoyerDocument(ctx, file, onEtat) {
+    var v = D.validateDossierFile(file);
+    if (!v.ok) { onEtat({ erreur: v.message }); return null; }
+
+    onEtat({ etape: 'autorisation' });
+    var ouverture = await ctx.appel('POST', ctx.routes.depot, {
+      id: ctx.id, dateISO: ctx.dateISO, nom: v.name, taille: file.size, type: file.type,
+    });
+    if (!ouverture.ok) { onEtat({ erreur: ouverture.message }); return null; }
+
+    onEtat({ etape: 'televersement' });
+    try {
+      var mise = await fetch(ouverture.json.depot.url, {
+        method: ouverture.json.depot.methode || 'PUT',
+        headers: ouverture.json.depot.entetes || {},
+        body: file,
+      });
+      if (!mise.ok) throw new Error('depot');
+    } catch (e) {
+      // Le document reste « en attente » côté serveur et n'apparaît nulle part.
+      onEtat({ erreur: 'Le téléversement a échoué. Réessayez.' });
+      return null;
+    }
+
+    onEtat({ etape: 'confirmation' });
+    var conf = await ctx.appel('POST', ctx.routes.confirme, {
+      id: ctx.id, dateISO: ctx.dateISO, documentId: ouverture.json.document.id,
+    });
+    if (!conf.ok) { onEtat({ erreur: conf.message }); return null; }
+    onEtat({ etape: 'fini', document: conf.json.document });
+    return conf.json.document;
+  }
+
+  // La lecture : le serveur décide, puis émet une autorisation brève. Le lien
+  // n'est jamais gardé en mémoire ni mis en signet — il expire en deux minutes.
+  async function ouvrirDocument(ctx, documentId) {
+    var r = await ctx.appel('GET', ctx.routes.lecture
+      + '?id=' + encodeURIComponent(ctx.id)
+      + '&dateISO=' + encodeURIComponent(ctx.dateISO)
+      + '&documentId=' + encodeURIComponent(documentId));
+    if (!r.ok) { toast(r.message || 'Document indisponible.'); return; }
+    window.open(r.json.lecture.url, '_blank', 'noopener');
+  }
+
+  // La liste des documents d'une conversation, et le bouton qui en ajoute un.
+  // Le même rendu des deux côtés : ce que l'un envoie, l'autre le lit au même
+  // endroit, sous la même forme.
+  function documentsBlock(ctx, documents, onAjout) {
+    var box = el('div', 'chat-docs');
+    var liste = el('ul', 'chat-doc-list');
+    (documents || []).forEach(function (d) {
+      var li = el('li', 'chat-doc');
+      li.dataset.doc = d.id;
+      var b = el('button', 'chat-doc-open', d.nom);
+      b.type = 'button';
+      b.addEventListener('click', function () { ouvrirDocument(ctx, d.id); });
+      li.appendChild(b);
+      li.appendChild(el('span', 'chat-doc-meta',
+        d.de === 'client' ? 'Envoyé par le client' : 'Envoyé par le notaire'));
+      liste.appendChild(li);
+    });
+    if (!(documents || []).length) {
+      liste.appendChild(el('li', 'chat-doc-vide', 'Aucun document échangé.'));
+    }
+    box.appendChild(liste);
+
+    var etat = el('p', 'chat-doc-etat');
+    etat.setAttribute('aria-live', 'polite');
+    var input = el('input', 'chat-doc-input');
+    input.type = 'file';
+    input.accept = D.DOSSIER_FILE.accept;
+    var bouton = el('button', 'btn btn-sm chat-doc-add', 'Joindre un document');
+    bouton.type = 'button';
+    bouton.addEventListener('click', function () { input.click(); });
+    input.addEventListener('change', async function () {
+      var file = input.files && input.files[0];
+      if (!file) return;
+      bouton.disabled = true;
+      var doc = await envoyerDocument(ctx, file, function (e) {
+        if (e.erreur) { etat.textContent = e.erreur; etat.dataset.etat = 'erreur'; return; }
+        etat.dataset.etat = e.etape;
+        etat.textContent = e.etape === 'autorisation' ? 'Préparation…'
+          : e.etape === 'televersement' ? 'Envoi en cours…'
+          : e.etape === 'confirmation' ? 'Vérification…' : 'Document envoyé.';
+      });
+      bouton.disabled = false;
+      input.value = '';
+      if (doc && onAjout) onAjout(doc);
+    });
+    box.appendChild(bouton);
+    box.appendChild(input);
+    box.appendChild(etat);
+    return box;
+  }
+
+  // Le contexte de document du NOTAIRE : ses routes et son jeton de session.
+  function ncDocCtx(entry) {
+    return {
+      id: entry.id,
+      dateISO: entry.dateISO,
+      routes: { depot: '/notary/bids/documents/depot', confirme: '/notary/bids/documents/confirme', lecture: '/notary/bids/documents' },
+      appel: async function (method, route, body) {
+        var r;
+        try {
+          r = await fetch(API_BASE + route, {
+            method: method,
+            headers: body
+              ? { 'content-type': 'application/json', authorization: 'Bearer ' + nc.token }
+              : { authorization: 'Bearer ' + nc.token },
+            body: body ? JSON.stringify(body) : undefined,
+          });
+        } catch (e) { return { ok: false, message: 'Hors ligne.' }; }
+        if (r.status === 401) { ncExpire('Session expirée. Reconnectez-vous.'); return { ok: false, message: 'Session expirée.' }; }
+        var j = {}; try { j = await r.json(); } catch (e) {}
+        if (!r.ok) return { ok: false, message: (j.errors && j.errors[0] && j.errors[0].message) || 'Action impossible.' };
+        return { ok: true, json: j };
+      },
+    };
+  }
+
   function ncChatBlock(entry) {
     var wrap = el('div', 'nc-chat chat'); wrap.dataset.id = entry.id;
     wrap.appendChild(el('div', 'nc-dossier-h', 'Conversation avec le client'));
     wrap.appendChild(chatThread(entry.messages, 'notaire'));
+    wrap.appendChild(documentsBlock(ncDocCtx(entry), entry.documents, function (doc) {
+      ncRetainedUpdate(nc.email, entry.id, { documents: (entry.documents || []).concat([doc]) });
+      ncRenderRetained();
+    }));
     var row = el('div', 'chat-row');
     var input = el('textarea', 'chat-input');
     input.rows = 2; input.maxLength = 500;
@@ -6273,23 +6502,24 @@
       .forEach(function (e) { list.appendChild(ncRetainedCard(e)); });
   }
 
-  // Earnings roll-up so the notary sees exactly what they realised, what Nota
-  // took as commission (the real server-charged fee), and their net — plus what
-  // is still in progress. All figures come from the completed retained acts.
+  // Le cumul des revenus du notaire (ADR 0031) : ses HONORAIRES, entiers.
+  // Rien n'est soustrait — le prix de Nota est une ligne du client, payée à
+  // côté, jamais une retenue sur les honoraires (art. 32.1 2° L.N., art. 32
+  // C.déont.). `prixNota` est donc reporté comme un FAIT sur le dossier, pas
+  // comme un terme d'une soustraction.
   function ncEarnings(email) {
     var items = email ? ncRetainedFor(email) : [];
-    var e = { done: 0, realized: 0, commission: 0, net: 0, pending: 0, pendingVal: 0 };
+    var e = { done: 0, honoraires: 0, prixNota: 0, pending: 0, pendingVal: 0 };
     items.forEach(function (it) {
       if (it.completed) {
         e.done++;
-        e.realized += Number(it.actAmount) || 0;
-        e.commission += (Number(it.commissionCents) || 0) / 100;
+        e.honoraires += Number(it.actAmount) || 0;
+        e.prixNota += (Number(it.commissionCents) || 0) / 100;
       } else {
         e.pending++;
         e.pendingVal += Number(it.montant) || 0;
       }
     });
-    e.net = e.realized - e.commission;
     return e;
   }
   function ncRenderEarnings() {
@@ -6315,23 +6545,21 @@
     // the confirmable bids — for nothing.
     if (e.done) {
       var grid = el('div', 'nc-stats');
-      // ADR 0024 order: what the notary KEEPS reads first. The client's total
-      // and Nota's share sit beside it as the arithmetic — never as the
-      // headline, and never omitted.
-      grid.appendChild(tile('Vos honoraires', D.money(e.net), 'nc-stat-net'));
-      grid.appendChild(tile('Payé par les clients', D.money(e.realized)));
-      grid.appendChild(tile('Frais de service Nota', D.money(e.commission)));
+      // Ce que le notaire GARDE se lit en premier — et c'est tout ce qu'il a
+      // gagné : il n'y a pas de seconde moitié à réconcilier.
+      grid.appendChild(tile('Vos honoraires', D.money(e.honoraires), 'nc-stat-net'));
       grid.appendChild(tile('Actes complétés', String(e.done)));
       box.appendChild(grid);
+      // Ce que le CLIENT a payé à Nota, dit comme un fait et nommé comme tel.
+      // Le notaire a le droit de le savoir — il répond de ce que la plateforme
+      // facture en son nom — mais ce n'est pas une ligne de SON compte.
+      box.appendChild(el('p', 'help', 'Vos clients ont payé ' + D.money(e.prixNota) + ' à Nota pour le service de la plateforme, en plus de vos honoraires. Rien n’a été retranché de ce qui vous revient.'));
     }
     if (e.pending) {
-      box.appendChild(el('p', 'help', e.pending + ' dossier' + (e.pending > 1 ? 's' : '') + ' à compléter · valeur estimée ' + D.money(e.pendingVal) + '. La commission n’est prélevée qu’à la signature, sur la valeur confirmée.'));
+      box.appendChild(el('p', 'help', e.pending + ' dossier' + (e.pending > 1 ? 's' : '') + ' à compléter · valeur estimée ' + D.money(e.pendingVal) + '. Vos honoraires vous sont virés à la signature, en entier.'));
     } else if (!e.done) {
-      box.appendChild(el('p', 'help', 'Vos revenus et la commission Nota s’afficheront ici dès votre premier acte complété.'));
+      box.appendChild(el('p', 'help', 'Vos honoraires s’afficheront ici dès votre premier acte complété.'));
     }
-    // The share itself is NOT here: since ADR 0028 one measure decides it, so
-    // it is published whole in « Votre cote », just below — one place, one
-    // arithmetic, nothing to reconcile between two panels.
   }
 
   // --- « Votre cote » (ADR 0028) ---------------------------------------------
@@ -6340,7 +6568,7 @@
   // notary must be able to redo the total by hand), the next rung and the
   // points still missing, and the whole barème as a public scale.
   //
-  // `nc.cote` always exists; `nc.commission` is null when billing is off — and
+  // `nc.cote` existe toujours ; la cote ne décide plus d'un dollar (ADR 0031) et
   // then not a single rate is invented.
 
   // One axis `detail` → the short figures that produced its points. Each
@@ -6394,36 +6622,26 @@
     return f;
   }
 
-  // One line of the public barème: « Cote 60 → vous gardez 88 % (frais Nota
-  // 12 %) ». The rung actually in force is marked, so the notary reads their
-  // own position on the scale, not just the scale.
-  function ncBaremeRow(label, part, taux, cote, current) {
-    var row = el('div', 'nc-bareme-row', label + ' → vous gardez ' + pctLabel(part) + ' (frais Nota ' + pctLabel(taux) + ')');
-    row.dataset.cote = String(cote);
-    if (current) { row.classList.add('is-current'); row.setAttribute('aria-current', 'true'); }
-    return row;
-  }
-
   function ncRenderCote() {
     var box = $('notary-cote'); if (!box) return; clear(box);
     var score = nc.cote;
     if (!score || !score.axes || !score.axes.length) return; // signed out, or nothing to publish yet
-    var c = nc.commission;
 
-    // The number, big, on 100 — and the sentence that ties it to money.
+    // Le nombre, en grand, sur 100 — et RIEN qui le rattache à l'argent.
     var head = el('div', 'nc-cote-head');
     var n = el('div', 'nc-cote-n');
     n.appendChild(el('span', 'nc-cote-v', String(score.cote)));
     n.appendChild(el('span', 'nc-cote-max', ' / 100'));
     n.setAttribute('aria-label', 'Cote ' + score.cote + ' sur 100');
     head.appendChild(n);
-    if (c) {
-      // A merited rung is stated against what it beats — otherwise the base
-      // split is stated plainly, both sides of it.
-      head.appendChild(el('p', 'help nc-commission', c.bonus > 0
-        ? 'Vous gardez ' + pctLabel(c.part) + ' de ce que le client paie, au lieu de ' + pctLabel(1 - c.taux) + ' — mérité par votre cote.'
-        : 'Vous gardez ' + pctLabel(c.part) + ' de ce que le client paie. Frais de service Nota : ' + pctLabel(c.taux) + '.'));
-    }
+    // ADR 0031 — la cote ne décide plus d'un dollar, et la console ne doit même
+    // pas le suggérer. L'art. 29.1 du Code de déontologie interdit au notaire
+    // « aucune convention ayant pour effet de mettre en péril l'indépendance,
+    // le désintéressement, l'objectivité et l'intégrité requis pour l'exercice
+    // de la profession » : un revenu indexé sur une note attribuée par une
+    // entreprise privée en est une, et l'AFFICHER suffit à la rendre opposable.
+    head.appendChild(el('p', 'help nc-cote-note',
+      'Vos honoraires vous reviennent en entier, quelle que soit votre cote. Cette mesure sert au service — jamais à ce que vous gagnez.'));
     box.appendChild(head);
 
     // The four axes: name, points against the max, a quiet bar, and the
@@ -6448,28 +6666,6 @@
       axes.appendChild(row);
     });
     box.appendChild(axes);
-
-    if (!c) return; // no barème configured → no rung, no scale, no invented rate
-
-    // The next rung, and exactly how many points separate the notary from it.
-    if (c.prochain) {
-      box.appendChild(el('p', 'help nc-cote-next',
-        'Cote ' + c.prochain.cote + ' → vous gardez ' + pctLabel(c.prochain.part)
-        + ' — il vous manque ' + c.prochain.manque + (c.prochain.manque === 1 ? ' point' : ' points') + '.'));
-    }
-
-    // The whole scale, published: the starting share first, then every rung.
-    var paliers = (c.paliers || []).slice().sort(function (x, y) { return x.cote - y.cote; });
-    var atteint = 0; // the highest rung the cote has actually reached
-    paliers.forEach(function (p) { if (c.cote >= p.cote) atteint = p.cote; });
-    var scale = el('div', 'nc-bareme');
-    scale.appendChild(el('div', 'nc-bareme-h', 'Le barème, au complet'));
-    scale.appendChild(ncBaremeRow('Au départ', 1 - c.taux, c.taux, 0, atteint === 0));
-    paliers.forEach(function (p) {
-      var part = p.part != null ? p.part : 1 - p.taux;
-      scale.appendChild(ncBaremeRow('Cote ' + p.cote, part, p.taux, p.cote, atteint === p.cote));
-    });
-    box.appendChild(scale);
   }
 
   // --- Notary evaluations (ADR 0021) -----------------------------------------
@@ -6563,7 +6759,7 @@
     ncRenderEvals(j.rating || null, j.evaluations || [], j.services || null);
   }
 
-  // --- The act-by-act statement (full commission disclosure, 2026-09-01) -----
+  // --- Le relevé, acte par acte (ADR 0031 : les deux lignes, jamais un taux) --
   // Nothing aggregated only: ONE line per settled act — what the client paid,
   // at which rate, what Nota kept and the net — then the totals. Fetched from
   // GET /notary/acts on the panel's FIRST open, cached for the session like
@@ -6579,7 +6775,11 @@
     }
     var table = el('table', 'nc-actes-table');
     var head = el('tr');
-    ['Date', 'Acte', 'Montant', 'Taux', 'Frais Nota', 'Net'].forEach(function (h) { head.appendChild(el('th', null, h)); });
+    // ADR 0031 — plus de colonne « Taux ». Le relevé porte les deux lignes de
+    // l'acte : les honoraires du notaire, entiers, et le prix que le CLIENT a
+    // payé à Nota. Une colonne de pourcentage décrirait un partage que
+    // l'art. 32 du Code de déontologie interdit au notaire.
+    ['Date', 'Acte', 'Vos honoraires', 'Payé à Nota par le client'].forEach(function (h) { head.appendChild(el('th', null, h)); });
     var thead = el('thead'); thead.appendChild(head); table.appendChild(thead);
     var body = el('tbody');
     var duLignes = 0; // lines settled off the platform — the fee is still owed
@@ -6601,13 +6801,11 @@
         duLignes++;
         // A div, not a span: the cell is `white-space: nowrap`, so the marker
         // has to stack UNDER the act's name instead of stretching the row.
-        svc.appendChild(el('div', 'help nc-acte-etat', 'Réglé hors plateforme — ' + D.money(du) + ' de frais Nota à percevoir'));
+        svc.appendChild(el('div', 'help nc-acte-etat', 'Réglé hors plateforme — ' + D.money(du) + ' de service Nota à percevoir'));
       }
       row.appendChild(svc);
-      row.appendChild(el('td', 'nc-acte-num', D.money(a.montant)));
-      row.appendChild(el('td', 'nc-acte-num', pctLabel(a.taux)));
-      row.appendChild(el('td', 'nc-acte-num', D.money(a.commission)));
-      row.appendChild(el('td', 'nc-acte-num nc-acte-net', D.money(a.net)));
+      row.appendChild(el('td', 'nc-acte-num nc-acte-net', D.money(a.honoraires != null ? a.honoraires : a.montant)));
+      row.appendChild(el('td', 'nc-acte-num', D.money(a.prixNota != null ? a.prixNota : 0)));
       body.appendChild(row);
     });
     table.appendChild(body);
@@ -6617,10 +6815,8 @@
     total.appendChild(el('th', null, 'Total'));
     var n = Number(t.actes) || 0;
     total.appendChild(el('td', null, n + (n > 1 ? ' actes' : ' acte')));
-    total.appendChild(el('td', 'nc-acte-num', D.money(t.montant || 0)));
-    total.appendChild(el('td', 'nc-acte-num', '—'));
-    total.appendChild(el('td', 'nc-acte-num', D.money(t.commission || 0)));
-    total.appendChild(el('td', 'nc-acte-num nc-acte-net', D.money(t.net || 0)));
+    total.appendChild(el('td', 'nc-acte-num nc-acte-net', D.money(t.honoraires != null ? t.honoraires : (t.montant || 0))));
+    total.appendChild(el('td', 'nc-acte-num', D.money(t.prixNota || 0)));
     foot.appendChild(total);
     // What is still owed, beside the other totals and never mixed into them:
     // « perçu » means Nota has the money. It only exists when there IS a debt.
@@ -6628,16 +6824,15 @@
     if (duTotal > 0) {
       var due = el('tr', 'nc-acte-total nc-acte-du');
       due.dataset.total = 'du';
-      var label = el('th', null, 'Frais de service à percevoir');
-      label.colSpan = 4;
+      var label = el('th', null, 'Service Nota à percevoir');
+      label.colSpan = 3;
       due.appendChild(label);
       due.appendChild(el('td', 'nc-acte-num', D.money(duTotal)));
-      due.appendChild(el('td', 'nc-acte-num', '—'));
       foot.appendChild(due);
     }
     table.appendChild(foot);
     box.appendChild(table);
-    box.appendChild(el('p', 'help', 'Chaque ligne porte le taux que votre cote valait au règlement de l’acte.'));
+    box.appendChild(el('p', 'help', 'Vos honoraires vous reviennent en entier. Le prix du service de Nota est payé par le client, en plus — il n’est jamais retranché de ce qui vous est dû.'));
     // Said once, under the table: what an unpaid line actually means. ADR 0029
     // leaves recovery OPEN — nothing in the product can collect this yet — so
     // this sentence states the fact and promises no mechanism, no deadline and
@@ -6645,8 +6840,8 @@
     if (duLignes > 0) {
       box.appendChild(el('p', 'help nc-acte-du-note',
         duLignes > 1
-          ? 'Sur ces actes, le client vous a payé directement à la signature : Nota n’a rien encaissé et les frais de service restent dus.'
-          : 'Sur cet acte, le client vous a payé directement à la signature : Nota n’a rien encaissé et les frais de service restent dus.'));
+          ? 'Sur ces actes, le client vous a payé directement à la signature : Nota n’a rien encaissé, et le prix de son service reste à percevoir.'
+          : 'Sur cet acte, le client vous a payé directement à la signature : Nota n’a rien encaissé, et le prix de son service reste à percevoir.'));
     }
   }
   async function ncLoadActs() {

@@ -4,6 +4,14 @@ Date : 2026-09-01
 
 Statut : accepté — révise l'[ADR 0027](0027-partage-75-25-cote-client.md)
 
+> **REMPLACÉ le 2026-09-02** par l'[ADR 0031](0031-le-prix-de-nota-est-celui-de-nota.md).
+> La mécanique de rémunération décrite ici — une part des honoraires du notaire,
+> indexée sur sa cote — est **retirée** : elle tombait sous l'art. 32.1 2° de la
+> *Loi sur le notariat*, l'art. 32 et l'art. 29.1 du *Code de déontologie*. Ce qui
+> survit de l'ADR 0028, c'est la cote elle-même et ses quatre axes ; elle ne décide
+> plus d'un dollar. Document conservé tel quel : une décision ne se réécrit pas.
+
+
 ## Contexte
 
 L'ADR 0027 a posé la bonne structure — le client paie un total tout compris, qui

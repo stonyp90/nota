@@ -174,3 +174,77 @@ Deux implications pour le produit :
 [Ownright — Law Times sur l'admission au programme d'innovation](https://www.lawtimesnews.com/practice-areas/real-estate/ontario-regulator-approves-real-estate-legal-tech-firm-doormat-as-part-of-innovation-program/377793) ·
 [Ownright — levée de 4,5 M$](https://www.fintech.ca/2025/03/18/ownright-digital-real-estate-law-services/) ·
 [Fournisseurs technologiques CNQ](https://www.cnq.org/fournisseurs-de-solutions-technologiques-aux-notaires/)
+
+---
+
+## Les comparables hors notariat — enquête du 1<sup>er</sup> septembre
+
+Le bon angle n'est pas « qui fait la même chose » mais **comment une plateforme
+est payée quand elle donne accès à une profession réglementée**. Élargi aux
+autres professions, le paysage devient beaucoup plus net.
+
+### L'interdiction n'est pas une particularité notariale
+
+**Code de déontologie des avocats, art. 107** — l'avocat ne peut partager ses
+honoraires qu'avec un membre du Barreau, un barreau hors Québec, le cabinet où
+il exerce, ou une personne avec qui il est autorisé à exercer. **Art. 106** — il
+ne peut verser à un non-avocat « une ristourne, une commission ou un autre
+avantage » lié au mandat d'un client.
+
+C'est mot pour mot la même architecture que les art. 32 et 33 du Code des
+notaires. **Aucune plateforme québécoise ne peut prélever un pourcentage des
+honoraires d'un professionnel réglementé, quelle que soit la profession.** Ce
+n'est donc pas un obstacle à contourner par une meilleure rédaction : c'est le
+socle du système professionnel québécois.
+
+D'où le constat qui traverse tous les comparables : **chaque survivant fait
+l'une de deux choses** — il facture le client pour son propre service, ou il
+*est* l'entité professionnelle. Il n'existe pas de troisième voie.
+
+### Bonjour-santé — le comparable le plus proche, et le plus instructif
+
+PME de Boucherville. Le patient cherche gratuitement un rendez-vous médical ;
+si aucun n'est disponible dans sa clinique habituelle, Bonjour-santé facture
+**17,25 $ au patient**. Le médecin, lui, est payé par la RAMQ — sa rémunération
+n'est jamais touchée.
+
+C'est exactement la structure de l'ADR 0031 : le professionnel encaisse
+intégralement, la plateforme vend son propre service au client. Et ça opère au
+Québec depuis des années, contre une profession réglementée.
+
+**Mais** — et c'est la trouvaille qui compte — Bonjour-santé fait l'objet d'une
+**action collective** visant à faire cesser la pratique et à récupérer les frais
+« perçus illégalement ». Le reproche n'est pas déontologique : c'est que les
+cliniques sont déjà rémunérées par l'État, donc facturer le patient pour l'accès
+serait indu.
+
+**Deux leçons pour Nota :**
+
+1. **Le risque ne disparaît pas avec la restructuration — il se déplace.** Il
+   quitte le terrain disciplinaire pour celui du droit de la consommation.
+   Nota est mieux placé sur cet axe précis : les honoraires notariaux ne sont
+   pas publics, il n'y a pas de RAMQ, et le client n'a droit à aucune date en
+   particulier. Mais la question « que vend exactement la plateforme ? » doit
+   pouvoir se répondre en une phrase vérifiable.
+2. **La critique du « système à deux vitesses » vise Nota directement.** On
+   reproche à Bonjour-santé que ses abonnés voient plus de disponibilités que
+   les autres. C'est exactement ce qu'un classement piloté par la cote
+   produirait s'il devenait visible du client. L'ADR 0030 a déjà fermé
+   l'affichage ; le classement, lui, reste à examiner sous cet angle.
+
+### Ownright — vraisemblablement le cabinet lui-même
+
+« All transactions are handled by lawyers, and correspondences come directly
+from members of their legal team. » Ce n'est pas le langage d'une place de
+marché : c'est celui d'un cabinet. Cohérent avec l'option « entité
+professionnelle » — et cohérent avec le fait qu'aucun partage n'a à être
+justifié quand il n'y a pas deux parties.
+
+La structure de rémunération de **Deeded** n'a pas pu être établie publiquement.
+
+### Ce que ça confirme pour l'ADR 0031
+
+Le virage était le bon, et il est le seul disponible : **facturer le client pour
+le service de Nota**. Reste à rendre ce service décrit, distinct et démontrable
+— parce que c'est là, et non plus sur le partage d'honoraires, que la prochaine
+contestation viendra.

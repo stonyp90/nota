@@ -538,3 +538,119 @@ tests le verrouillent (§5).
   et annonce des recours.
 - **Aucun acte ne devrait être porté sur Nota avant l'avis écrit**, désormais
   élargi aux quatre volets ci-dessus.
+
+---
+
+## Art. 49 — la fixation des honoraires appartient au notaire (ajouté 2026-09-01)
+
+Signalé par Antoine Leclerc (Stein Monast). **Texte vérifié mot pour mot** à
+Légis Québec :
+
+> **49.** Le notaire doit exiger des honoraires justes et raisonnables qui sont
+> justifiés par les circonstances et proportionnels aux services rendus et doit
+> **s'interdire toute compétition déloyale envers ses confrères** à cet égard.
+>
+> Il doit notamment tenir compte des facteurs suivants pour la fixation de ses
+> honoraires : 1° son expérience ou son expertise ; 2° le temps consacré ;
+> 3° la difficulté et l'importance du service ; 4° la prestation de services
+> inhabituels ou exigeant une compétence particulière ou **une célérité
+> exceptionnelle** ; 5° l'importance de la responsabilité assumée ; 6° le
+> résultat obtenu dans une affaire présentant des difficultés spéciales.
+
+### Le cadeau : 49(4°) nomme la célérité
+
+**La prime d'urgence n'est pas étrangère au Code — elle y est énumérée.** Le
+4° invite expressément le notaire à tenir compte d'« une célérité
+exceptionnelle » pour fixer ses honoraires. La thèse de Nota — une date
+rapprochée vaut plus cher — a donc un ancrage réglementaire, ce qui est
+exactement l'inverse de ce qu'on pouvait craindre. À citer devant la Chambre.
+
+### Le danger : le moteur de prix parle à la place du notaire
+
+Les six facteurs sont ceux **du notaire**. Or le domaine de Nota ne se contente
+pas d'héberger le chiffre d'un client : il le **calcule** — `prixDepart`,
+`pricing.base`, paliers sur la valeur du prêt, approbation bancaire, succession,
+co-emprunteur, déplacement, puis les multiplicateurs de date de 1,0× à 10×.
+C'est un algorithme qui produit un montant pour un acte notarié, dans la voix de
+Nota, avant qu'aucun notaire ne l'ait vu.
+
+Plusieurs entrées correspondent aux facteurs (difficulté → succession et
+co-emprunteur ; célérité → palier de date). **Mais la pondération est faite par
+Nota, pas par le notaire.** C'est l'exposition, et elle est structurelle :
+c'est le moteur de prix, c'est-à-dire le coeur du domaine.
+
+**Direction d'atténuation** — le nombre doit être une *indication de marché qui
+aide le client à formuler une offre*, jamais une détermination d'honoraires :
+
+- ne jamais présenter le montant comme « le prix de l'acte » ni comme « les
+  honoraires » — c'est **ce que le client offre** ;
+- la contre-offre du notaire doit rester de plein droit et sans friction (déjà
+  supporté : accepter / contre-offrir / passer) ;
+- envisager d'afficher une **fourchette de marché** plutôt qu'un nombre unique ;
+- l'acceptation par le notaire doit être un acte de fixation d'honoraires
+  documenté, pas un simple clic.
+
+### Le troisième volet, que personne n'avait relevé
+
+« **s'interdire toute compétition déloyale envers ses confrères** ». Un carnet
+public où les prix acceptés sont visibles, et où un client magasine par prix,
+peut être décrit comme induisant une concurrence déloyale entre confrères.
+C'est un risque distinct de tous les autres du registre — il ne vise ni le
+partage, ni l'indépendance, mais la **structure même d'un marché affiché**.
+À ajouter au mandat de l'avis juridique.
+
+### ⚠️ Ce que l'ADR 0031 vient de faire à l'art. 49 (constaté 2026-09-02)
+
+L'atténuation écrite ci-dessus — « ne jamais présenter le montant comme les
+honoraires : c'est **ce que le client offre** » — a été rédigée le
+1<sup>er</sup> septembre, sous le modèle en pourcentage. **Elle n'est plus
+disponible telle quelle.**
+
+L'ADR 0031 a fait du montant offert la totalité des honoraires du notaire :
+
+- `apps/api/src/billing.js:184` — `honorairesCents = Math.round(actAmount * 100)`,
+  où `actAmount` **est** l'offre du client ;
+- `packages/domain/index.js:1719-1732` — `recommendedAmount` **pré-remplit**
+  cette offre : `notaPrice` (base du service + les adds du barème) × le
+  multiplicateur du palier de date.
+
+Autrement dit, la chaîne complète est désormais : **un algorithme de Nota
+produit un nombre, ce nombre est pré-rempli dans le formulaire du client, et ce
+nombre devient au dollar près les honoraires du notaire.** La ligne de défense
+« ce n'est pas un prix, c'est une offre » tenait tant qu'une part revenait à
+Nota et qu'une négociation implicite subsistait ; elle est plus mince quand le
+code lui-même nomme le résultat `honoraires`.
+
+**Ce n'est pas un argument contre l'ADR 0031** — sans lui, l'art. 32.1 2° et
+l'art. 32 restent frontalement violés, et ces deux textes sont plus lourds que
+l'art. 49. C'est le constat que **la conformité s'est déplacée, pas dissoute** :
+la restructuration a fermé le partage d'honoraires et a, du même geste, tendu
+l'exposition à l'art. 49.
+
+**Ce qui reste vrai et acquis.** Les surfaces client parlent déjà d'« offre » et
+de « prix », jamais d'« honoraires » (`apps/web/public/index.html:512, 603,
+1170`), la copie notaire dit expressément « Vous fixez vos honoraires »
+(`:926, 1182`), et la contre-offre existe de plein droit (« Proposer un prix »,
+`apps/web/public/app.js:5664, 5830`). Le vocabulaire est donc déjà du bon côté.
+**Ce qui manque est structurel, pas lexical.**
+
+**Les trois pistes, par coût croissant, à trancher par le propriétaire :**
+
+1. **La fourchette.** `recommendedAmount` retourne un intervalle plutôt qu'un
+   nombre, et le formulaire n'est pas pré-rempli. Nota indique un marché ; le
+   client choisit. Coût : le « une seule tape pour réserver » disparaît.
+2. **L'acceptation comme acte de fixation.** Retenir cesse d'être un clic : le
+   notaire confirme le montant *en tant que ses honoraires*, en vue des
+   facteurs de l'art. 49 — les `facteurs` de complexité déjà calculés
+   (`domain.complexity`) sont exactement les 3° et 4°. Le registre write-once
+   en garde la trace. Coût : une friction sur l'action principale du notaire.
+3. **Ne rien changer et faire qualifier.** L'art. 49 vise **le notaire**, pas
+   Nota : c'est un risque pour le membre, que Nota induit, et non une infraction
+   propre à Nota. À poser tel quel au mandat.
+
+**Ajout au mandat de l'avis juridique (5<sup>e</sup> volet).** Un notaire qui
+accepte un montant calculé par un tiers, dans un carnet où les prix retenus sont
+publics, respecte-t-il l'art. 49 — la fixation d'honoraires justes et
+raisonnables selon *ses* six facteurs, et l'interdiction de la compétition
+déloyale envers ses confrères ? Et la plateforme qui produit ce montant
+aide-t-elle le notaire à contrevenir (art. 156 du *Code des professions*) ?

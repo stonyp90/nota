@@ -64,7 +64,8 @@ When('le notaire {string} consulte son relevé', async function (email) {
 });
 
 // Le client rouvre son offre avec son propre jeton : c'est là qu'il voit qui
-// lui propose quoi — et, depuis l'ADR 0028, la cote de chacun.
+// lui propose quoi. Jamais une cote, jamais une note — art. 70 C.déont.,
+// ADR 0030 : ce qui descend vers le client est FACTUEL.
 When('le client consulte son offre', async function () {
   assert.ok(this.clientToken, "aucun jeton client — l'offre doit être publiée avec un courriel");
   const bid = this.lastBid;
@@ -77,7 +78,7 @@ When('le client consulte son offre', async function () {
   assert.equal(this.response.statusCode, 200, this.response.body);
 });
 
-// --- Alors : la cote, le partage, l'échelle ---------------------------------
+// --- Alors : la cote, telle que le notaire la lit ---------------------------
 
 Then('sa cote est inférieure à {int}', function (seuil) {
   assert.ok(this.console.cote.cote < seuil, 'cote = ' + this.console.cote.cote);
@@ -85,23 +86,6 @@ Then('sa cote est inférieure à {int}', function (seuil) {
 
 Then('sa cote est supérieure à {int}', function (seuil) {
   assert.ok(this.console.cote.cote > seuil, 'cote = ' + this.console.cote.cote);
-});
-
-Then('il garde {int} % de ce que le client paie', function (pct) {
-  assert.equal(Math.round(this.console.commission.part * 100), pct);
-  assert.equal(Math.round(this.console.commission.tauxEffectif * 100), 100 - pct, 'la part de Nota est le complément exact');
-});
-
-Then('le prochain palier lui est nommé avec les points qui lui manquent', function () {
-  const p = this.console.commission.prochain;
-  assert.ok(p, 'un notaire qui peut monter doit voir où');
-  assert.ok(Number.isInteger(p.cote) && p.cote > this.console.cote.cote);
-  assert.equal(p.manque, p.cote - this.console.cote.cote);
-  assert.ok(p.part > this.console.commission.part, 'le palier suivant lui laisse davantage');
-});
-
-Then('aucun palier ne reste à atteindre', function () {
-  assert.equal(this.console.commission.prochain, null);
 });
 
 Then('sa cote détaille les axes {string}', function (liste) {
@@ -122,40 +106,11 @@ Then('le total des maximums est {int}', function (total) {
   assert.equal(this.console.cote.axes.reduce((t, a) => t + a.max, 0), total);
 });
 
-Then("l'échelle publiée est:", function (table) {
-  const attendu = table.hashes().map((r) => ({ cote: Number(r.cote), garde: Number(r.garde) }));
-  const publie = this.console.commission.paliers.map((p) => ({ cote: p.cote, garde: Math.round(p.part * 100) }));
-  assert.deepEqual(publie, attendu);
-});
-
-// --- Alors : la divulgation et l'audit --------------------------------------
+// --- Alors : le relevé du notaire -------------------------------------------
 
 Then('le relevé porte {int} acte', function (n) {
   assert.equal(this.releve.actes.length, n);
   assert.equal(this.releve.totaux.actes, n);
-});
-
-Then('la ligne du relevé montre {int} $ payés, {int} % retenus, {int} $ à Nota et {int} $ au notaire', function (montant, pct, commission, net) {
-  const l = this.releve.actes[0];
-  assert.equal(l.montant, montant);
-  assert.equal(Math.round(l.taux * 100), pct);
-  assert.equal(l.commission, commission);
-  assert.equal(l.net, net);
-  assert.equal(l.commission + l.net, l.montant, 'la ligne s’additionne — rien ne se perd');
-});
-
-Then('la ligne du relevé nomme la cote qui a mérité ce taux', function () {
-  assert.ok(Number.isInteger(this.releve.actes[0].cote), 'la cote est figée avec l’acte');
-});
-
-Then("une entrée d'audit {string} existe avec {int} $, un taux et une cote", async function (action, montant) {
-  const entries = await this.repo.queryAuditByDay(this.today);
-  const e = entries.find((x) => x.action === action);
-  assert.ok(e, 'aucune entrée d’audit « ' + action + ' » : ' + JSON.stringify(entries.map((x) => x.action)));
-  assert.equal(e.meta.montant, montant);
-  assert.ok(typeof e.meta.taux === 'number');
-  assert.ok(Number.isInteger(e.meta.cote));
-  assert.equal(e.meta.commission + e.meta.net, montant, 'la trace s’additionne');
 });
 
 // ADR 0030 — l'article 70 du Code de déontologie interdit au notaire de
@@ -199,17 +154,10 @@ Then('son axe {string} compte {int} acte', function (id, actes) {
   assert.ok(axe.points > 0, 'un acte porté vaut des points');
 });
 
-// --- Le taux gravé à l'engagement -------------------------------------------
-
-Then("l'offre porte le taux de l'engagement", async function () {
-  const bid = await this.repo.get(this.lastBid.id, this.lastBid.dateISO);
-  assert.ok(typeof bid.tauxRetenu === 'number', 'aucun taux gravé sur l’offre');
-  assert.ok(Number.isInteger(bid.coteRetenue), 'ni la cote qui l’a mérité');
-  this.tauxRetenu = bid.tauxRetenu;
-});
-
 // Une volée de mauvaises notes et de déclins, entre l'engagement et la
-// signature : la cote s'effondre, le taux promis ne bouge pas.
+// signature. Avant l'ADR 0031 il fallait s'en protéger — la rétention gravait
+// un taux sur l'offre. Aujourd'hui le prix ne dépend plus du notaire : la cote
+// peut s'effondrer, l'argent ne bouge pas (art. 29.1 C.déont.).
 When("la cote du notaire {string} s'effondre", async function (email) {
   const id = notaryIdForEmail(email);
   const profile = await this.repo.getNotary(id);

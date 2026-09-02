@@ -35,6 +35,10 @@ const PERMISSIONS = Object.freeze([
   'notifications:write', // customize notification templates / channels
   'billing:write', // Stripe / commission configuration
   'audit:read', // read the audit log
+  // Envoyer une campagne ciblée (un utilisateur, un groupe, un segment). C'est
+  // une capacité à part, jamais un corollaire de `notifications:write` : écrire
+  // un gabarit et l'envoyer à mille personnes ne sont pas la même décision.
+  'campaigns:send',
 ]);
 
 // Legacy role → permission bundle. Kept ONLY so an admin created before groups

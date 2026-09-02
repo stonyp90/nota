@@ -53,10 +53,14 @@ test('home and booking load with no severe console errors or failed requests', a
   expect(bidsStatus, 'GET /bids should serve the carnet').toBe(200);
 
   // --- Booking sheet ----------------------------------------------------------
-  // Open a real booking from the home pulse (the "Book a financement" mini CTA).
+  // Open a real booking from the home pulse. The mini CTA is addressed by its
+  // own class (`.mini-reserver`, the sibling button of the filter row) rather
+  // than by its accessible NAME: that name is copy, it is translated, and it is
+  // rewritten whenever the pricing story changes. What this spec cares about is
+  // that a real booking opens with a clean console, not what the button says.
   await page.locator('.pulse-row[data-svc="financement"]').first().waitFor();
   await page.locator('.pulse-item', { has: page.locator('[data-svc="financement"]') })
-    .getByRole('button', { name: /Book a financement/i }).click();
+    .locator('.mini-reserver').click();
   await expect(page.locator('#day-dialog')).toBeVisible();
   // Let any lazy render / late fetch settle before the final assertion.
   await page.waitForLoadState('networkidle');

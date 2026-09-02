@@ -23,23 +23,36 @@
 const domain = require('@nota/domain');
 const authDefaults = require('./admin-auth');
 const emails = require('./emails');
-const commissionCfg = require('./commission-config');
+const prixCfg = require('./prix-nota-config');
 const cote = require('./cote');
 const cancellationCfg = require('./cancellation-config');
+const rbac = require('./rbac');
+const segments = require('./segments');
 
-// What each role may do. Re-derived from the server-side role on every request;
-// the client is shown these only to hide controls it cannot use.
-const PERMISSIONS = {
-  [authDefaults.ROLES.SUPER_ADMIN]: ['analytics:read', 'pii:read', 'moderation:write', 'settings:write', 'notifications:write'],
-  [authDefaults.ROLES.ANALYST]: ['analytics:read'],
-};
-function permissionsFor(role) {
-  return PERMISSIONS[role] || [];
-}
+// Les permissions ne sont plus une table figée `rôle → capacités`. Elles se
+// RÉSOLVENT à chaque requête par `rbac.resolvePermissions` : l'union du paquet
+// hérité du rôle, des permissions accordées directement à l'utilisateur, et de
+// celles de chacun de ses groupes.
+//
+// Pourquoi trois concepts et pas un : un rôle est un raccourci, et un raccourci
+// finit toujours par mal décrire quelqu'un. Un opérateur doit pouvoir ouvrir
+// une capacité — lire le journal d'audit, écrire une campagne — sans promouvoir
+// personne, et la refermer sans rétrograder personne. Le rôle survit comme
+// paquet de compatibilité pour les comptes créés avant les groupes.
+//
+// Le module `rbac.js` est PUR (aucune E/S) : il décide, il ne charge rien.
+// Charger les groupes est le travail de cette couche.
 
 function createAdmin({
   repo,
   mailer, // { send({ to, subject, text, html }) } — optional; best-effort
+  // Le port d'ENVOI d'une campagne, et son unique implémentation attendue est
+  // `notifications.js` : lui seul honore déjà la liste de suppression et pose
+  // l'en-tête RFC 8058 du retrait. La console n'ouvre PAS un second chemin
+  // d'envoi ; sans ce port câblé, elle refuse l'envoi (503) au lieu d'en
+  // improviser un.
+  //   notifier.sendCampaign({ to, templateKey, ctx }) -> { sent, reason? }
+  notifier,
   signToken = authDefaults.signAdminToken,
   verifyToken = authDefaults.verifyAdminToken,
   adminIdForEmail = authDefaults.adminIdForEmail,
@@ -198,11 +211,23 @@ function createAdmin({
       return { ok: false, errors: [{ code: 'lien_invalide', message: 'Lien invalide ou déjà utilisé.' }] };
     }
 
-    // Bootstrap / refresh the identity record on first successful login.
+    // Amorçage / rafraîchissement de l'identité à la connexion.
+    //
+    // ⚠️ Une connexion ne doit RIEN décider des accès. Elle horodate, et c'est
+    // tout. Ce bloc réécrivait l'enregistrement complet : chaque connexion
+    // effaçait donc les groupes et les permissions accordés depuis la console,
+    // et un compte volontairement rétrogradé redevenait administrateur au
+    // prochain lien magique. Les accès sont une décision explicite
+    // (`putUserAccess`), jamais un effet de bord d'une ouverture de session.
     const adminId = claims.sub;
     const existing = await repo.getAdmin(adminId);
-    const role = (existing && existing.role) || challenge.role || ROLES.SUPER_ADMIN;
+    // Le rôle d'AMORÇAGE ne s'applique qu'à un compte qui n'existe pas encore :
+    // la liste blanche de l'environnement est la porte extérieure, et le premier
+    // à la franchir doit pouvoir ouvrir la console. Un compte déjà connu garde
+    // le sien, fût-il null — c'est alors les groupes et les grants qui parlent.
+    const role = existing ? existing.role : (challenge.role || ROLES.SUPER_ADMIN);
     await repo.putAdmin({
+      ...(existing || {}),
       id: adminId,
       email: challenge.email,
       role,
@@ -264,8 +289,31 @@ function createAdmin({
       role: admin.role || session.role,
       sid: claims.sid,
       absoluteExpiresAt: Number(session.absoluteExpiresAt),
-      permissions: permissionsFor(admin.role || session.role),
+      // Relues à CHAQUE requête, jamais figées dans le jeton : retirer un
+      // groupe ou supprimer une permission doit mordre immédiatement, y compris
+      // sur une session déjà ouverte. Un jeton qui porterait ses droits
+      // survivrait à la décision de les retirer.
+      permissions: await effectivePermissions(admin, session),
     };
+  }
+
+  /**
+   * L'union rôle + grants directs + groupes, pour un compte donné.
+   * Un groupe supprimé disparaît simplement de la liste chargée : aucune
+   * permission fantôme ne survit à la disparition de sa source.
+   */
+  async function effectivePermissions(admin, session) {
+    const ids = Array.isArray(admin && admin.groupes) ? admin.groupes : [];
+    const groups = [];
+    for (const id of ids) {
+      const g = typeof repo.getGroup === 'function' ? await repo.getGroup(id) : null;
+      if (g) groups.push(g);
+    }
+    return rbac.resolvePermissions({
+      role: (admin && admin.role) || (session && session.role),
+      directPermissions: (admin && admin.permissions) || [],
+      groups,
+    });
   }
 
   async function me(token) {
@@ -314,40 +362,26 @@ function createAdmin({
   // requires the 'notifications:write' permission, which only super_admin
   // carries. Every change is audit-logged with its before/after.
   // ---------------------------------------------------------------------------
-  const SUBJECT_MAX = 200;
 
   function overrideView(o) {
     if (!o) return null;
     return {
-      enabled: o.enabled !== false,
+      // `actif` est le nom du produit ; `enabled` reste exposé en alias pour ne
+      // pas casser un client déjà déployé.
+      actif: o.actif !== false && o.enabled !== false,
+      enabled: o.actif !== false && o.enabled !== false,
       subjectFr: o.subjectFr || null,
       subjectEn: o.subjectEn || null,
+      preheaderFr: o.preheaderFr || null,
+      preheaderEn: o.preheaderEn || null,
+      corpsFr: o.corpsFr || null,
+      corpsEn: o.corpsEn || null,
+      ctaFr: o.ctaFr || null,
+      ctaEn: o.ctaEn || null,
       updatedAt: o.updatedAt || null,
     };
   }
 
-  // Validate one subject side against the template's declared placeholder
-  // vocabulary. Returns an error object, or null when the subject is clean.
-  function subjectError(side, raw, placeholders) {
-    if (raw === undefined || raw === null) return null;
-    if (typeof raw !== 'string') {
-      return { code: 'sujet_invalide', message: `${side} doit être une chaîne de caractères.` };
-    }
-    if (raw.length > SUBJECT_MAX) {
-      return { code: 'sujet_trop_long', message: `${side} dépasse ${SUBJECT_MAX} caractères.` };
-    }
-    for (const [, tok] of raw.matchAll(/\{\{\s*([a-zA-Z_]+)\s*\}\}/g)) {
-      if (!placeholders.includes(tok)) {
-        return {
-          code: 'jeton_inconnu',
-          message:
-            `${side} : le jeton {{${tok}}} n’existe pas pour ce modèle. ` +
-            (placeholders.length ? `Jetons permis : ${placeholders.map((p) => `{{${p}}}`).join(', ')}.` : 'Ce modèle n’accepte aucun jeton.'),
-        };
-      }
-    }
-    return null;
-  }
 
   // GET — the merged registry: every template with its stored override (or null).
   async function listEmailTemplates(token, { ip } = {}) {
@@ -363,16 +397,21 @@ function createAdmin({
       defaultSubjectFr: m.defaultSubjectFr,
       defaultSubjectEn: m.defaultSubjectEn,
       placeholders: m.placeholders,
+      // Un courriel TRANSACTIONNEL ne peut pas être éteint : le couper serait
+      // une publicité « incomplète » au sens de l'art. 68 du Code de
+      // déontologie. La console grise l'interrupteur plutôt que de laisser
+      // découvrir le refus à l'enregistrement.
+      transactionnel: m.transactionnel === true,
       override: overrideView(byKey.get(key)),
     }));
-    return { ok: true, templates };
+    return { ok: true, templates, limites: emails.OVERRIDE_LIMITS };
   }
 
   // PUT — store (replace) one template's override. super_admin only.
   async function putEmailTemplate(token, key, body, { ip } = {}) {
     const p = await requireAdmin(token, { ip });
     if (!p) return { ok: false, status: 401 };
-    if (!p.permissions.includes('notifications:write')) {
+    if (!rbac.can(p.permissions, 'notifications:write')) {
       return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Réservé à l’administrateur principal.' }] };
     }
     const meta = emails.TEMPLATE_META[key];
@@ -380,32 +419,15 @@ function createAdmin({
       return { ok: false, status: 404, errors: [{ code: 'modele_inconnu', message: `Modèle de courriel inconnu : ${key}.` }] };
     }
 
-    const b = body || {};
-    if (b.enabled !== undefined && typeof b.enabled !== 'boolean') {
-      return { ok: false, status: 422, errors: [{ code: 'champ_invalide', message: 'enabled doit être un booléen.' }] };
-    }
-    for (const [side, raw] of [['subjectFr', b.subjectFr], ['subjectEn', b.subjectEn]]) {
-      const err = subjectError(side, raw, meta.placeholders || []);
-      if (err) return { ok: false, status: 422, errors: [err] };
-    }
-    // Both-or-neither: the notifier's bilingual contract needs BOTH sides to
-    // override a subject — a half-configured pair would silently do nothing,
-    // so it is rejected loudly here instead.
-    const fr = typeof b.subjectFr === 'string' ? b.subjectFr.trim() : '';
-    const en = typeof b.subjectEn === 'string' ? b.subjectEn.trim() : '';
-    if ((fr && !en) || (!fr && en)) {
-      return {
-        ok: false,
-        status: 422,
-        errors: [{ code: 'sujet_bilingue', message: 'Le sujet doit être fourni dans les deux langues (FR et EN), ou dans aucune.' }],
-      };
-    }
+    // TOUTE la règle vit dans `emails.validateOverride` : les quatre paires
+    // bilingues, les bornes, le vocabulaire de jetons du gabarit, le refus du
+    // HTML et l'interdiction d'éteindre un courriel transactionnel. Rejouer
+    // cette règle ici la ferait diverger le jour où l'une des deux bouge.
+    const v = emails.validateOverride(key, body || {});
+    if (!v.ok) return { ok: false, status: 422, errors: v.errors };
 
     const before = overrideView(await repo.getEmailOverride(key));
-    const stored = await repo.putEmailOverride(
-      { key, enabled: b.enabled !== false, subjectFr: fr, subjectEn: en },
-      clockIso()
-    );
+    const stored = await repo.putEmailOverride(v.override, clockIso());
     const after = overrideView(stored);
     await appendAudit('email_template_updated', {
       adminId: p.adminId,
@@ -420,7 +442,7 @@ function createAdmin({
   async function resetEmailTemplate(token, key, { ip } = {}) {
     const p = await requireAdmin(token, { ip });
     if (!p) return { ok: false, status: 401 };
-    if (!p.permissions.includes('notifications:write')) {
+    if (!rbac.can(p.permissions, 'notifications:write')) {
       return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Réservé à l’administrateur principal.' }] };
     }
     if (!emails.TEMPLATE_META[key]) {
@@ -438,50 +460,52 @@ function createAdmin({
   }
 
   // ---------------------------------------------------------------------------
-  // The commission barème — Nota's to decide (ADR 0021 §4).
+  // Le PRIX DE NOTA — celui de Nota, décidé par Nota (ADR 0031).
   //
-  // The authority on shape and validation is commission-config.js, shared with
-  // billing so the editor and the pricer can never disagree. The store is the
-  // main table's single CONFIG#COMMISSION item. Reading is open to any
-  // authenticated admin; WRITING requires 'settings:write' (super_admin only).
-  // Every change is audit-logged with its before/after.
+  // Cette porte remplace celle du barème de commission. Nota ne prélève plus
+  // une part des honoraires du notaire : elle vend son service à son propre
+  // prix, un montant fixe identique pour tous. L'art. 29.1 du Code de
+  // déontologie interdit au notaire toute convention mettant en péril son
+  // indépendance et son désintéressement — un prix qui bougerait selon la cote
+  // que Nota lui attribue en serait une. Il n'y a donc RIEN à paramétrer ici
+  // qui touche au notaire : un entier de cents, et c'est tout.
+  //
+  // L'autorité sur la forme et la validation est prix-nota-config.js, partagée
+  // avec la facturation pour que l'éditeur et le tarificateur ne puissent
+  // jamais diverger. Le stockage est l'unique item CONFIG#PRIX de la table
+  // principale. La LECTURE est ouverte à tout admin authentifié ; l'ÉCRITURE
+  // exige 'settings:write' (super_admin). Chaque changement est journalisé
+  // avec son avant/après.
   // ---------------------------------------------------------------------------
-  function baremeView(o) {
+  function prixView(o) {
     if (!o) return null;
-    return {
-      taux: o.taux,
-      plancher: o.plancher,
-      paliers: (o.paliers || []).map((p) => ({ cote: p.cote, taux: p.taux })),
-      updatedAt: o.updatedAt || null,
-    };
+    return { prixCents: o.prixCents, updatedAt: o.updatedAt || null };
   }
 
-  // GET — the deployment's defaults (built-ins + environment), the stored
-  // barème when Nota decided one, and whichever of the two is in force.
-  async function getCommissionSchedule(token, { ip } = {}) {
+  // GET — le défaut du déploiement (intégré + environnement), le prix stocké
+  // quand Nota en a décidé un, et celui des deux qui est en vigueur.
+  async function getPrixNota(token, { ip } = {}) {
     const p = await requireAdmin(token, { ip });
     if (!p) return { ok: false, status: 401 };
-    const defaut = commissionCfg.envDefaults(process.env);
-    const override = baremeView(typeof repo.getCommissionConfig === 'function' ? await repo.getCommissionConfig() : null);
-    const effectif = override
-      ? { taux: override.taux, plancher: override.plancher, paliers: override.paliers }
-      : defaut;
+    const defaut = prixCfg.envDefaults(process.env);
+    const override = prixView(typeof repo.getPrixNotaConfig === 'function' ? await repo.getPrixNotaConfig() : null);
+    const effectif = override ? { prixCents: override.prixCents } : defaut;
     return { ok: true, defaut, override, effectif };
   }
 
-  // PUT — store (replace) the barème. super_admin only, validated loudly.
-  async function putCommissionSchedule(token, body, { ip } = {}) {
+  // PUT — enregistrer (remplacer) le prix. super_admin seulement, validé fort.
+  async function putPrixNota(token, body, { ip } = {}) {
     const p = await requireAdmin(token, { ip });
     if (!p) return { ok: false, status: 401 };
-    if (!p.permissions.includes('settings:write')) {
+    if (!rbac.can(p.permissions, 'settings:write')) {
       return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Réservé à l’administrateur principal.' }] };
     }
-    const v = commissionCfg.validateSchedule(body || {});
+    const v = prixCfg.validatePrix(body || {});
     if (!v.ok) return { ok: false, status: 422, errors: v.errors };
-    const before = baremeView(await repo.getCommissionConfig());
-    const stored = await repo.putCommissionConfig({ taux: v.taux, plancher: v.plancher, paliers: v.paliers }, clockIso());
-    const after = baremeView(stored);
-    await appendAudit('commission_schedule_updated', {
+    const before = prixView(await repo.getPrixNotaConfig());
+    const stored = await repo.putPrixNotaConfig({ prixCents: v.prixCents }, clockIso());
+    const after = prixView(stored);
+    await appendAudit('prix_nota_updated', {
       adminId: p.adminId,
       email: p.email,
       ip,
@@ -490,16 +514,16 @@ function createAdmin({
     return { ok: true, override: after };
   }
 
-  // DELETE — back to the environment defaults, on the next pricing.
-  async function resetCommissionSchedule(token, { ip } = {}) {
+  // DELETE — retour au défaut du déploiement, dès la prochaine tarification.
+  async function resetPrixNota(token, { ip } = {}) {
     const p = await requireAdmin(token, { ip });
     if (!p) return { ok: false, status: 401 };
-    if (!p.permissions.includes('settings:write')) {
+    if (!rbac.can(p.permissions, 'settings:write')) {
       return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Réservé à l’administrateur principal.' }] };
     }
-    const before = baremeView(await repo.getCommissionConfig());
-    await repo.deleteCommissionConfig();
-    await appendAudit('commission_schedule_reset', {
+    const before = prixView(await repo.getPrixNotaConfig());
+    await repo.deletePrixNotaConfig();
+    await appendAudit('prix_nota_reset', {
       adminId: p.adminId,
       email: p.email,
       ip,
@@ -542,7 +566,7 @@ function createAdmin({
   async function putCancellationSchedule(token, body, { ip } = {}) {
     const p = await requireAdmin(token, { ip });
     if (!p) return { ok: false, status: 401 };
-    if (!p.permissions.includes('settings:write')) {
+    if (!rbac.can(p.permissions, 'settings:write')) {
       return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Réservé à l’administrateur principal.' }] };
     }
     const v = cancellationCfg.validateSchedule(body || {});
@@ -563,7 +587,7 @@ function createAdmin({
   async function resetCancellationSchedule(token, { ip } = {}) {
     const p = await requireAdmin(token, { ip });
     if (!p) return { ok: false, status: 401 };
-    if (!p.permissions.includes('settings:write')) {
+    if (!rbac.can(p.permissions, 'settings:write')) {
       return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Réservé à l’administrateur principal.' }] };
     }
     const before = annulationView(await repo.getCancellationConfig());
@@ -587,19 +611,15 @@ function createAdmin({
   async function listNotaries(token, { ip } = {}) {
     const p = await requireAdmin(token, { ip });
     if (!p) return { ok: false, status: 401 };
-    if (!p.permissions.includes('pii:read')) {
+    if (!rbac.can(p.permissions, 'pii:read')) {
       return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Réservé à l’administrateur principal.' }] };
     }
     const profils = typeof repo.listNotaries === 'function'
       ? await repo.listNotaries()
       : (typeof repo.listActiveNotaries === 'function' ? await repo.listActiveNotaries() : []);
-    // Le barème en vigueur, résolu UNE fois pour tout le registre : deux
-    // notaires doivent être comparés sous la même règle.
-    const bareme = await resolveBareme();
     const nowMs = clockMs();
     const notaires = profils.map((n) => {
       const score = cote.coteFor(n, nowMs);
-      const tauxEffectif = rateForCote(bareme, score.cote);
       return {
         id: n.id,
         email: n.email || null,
@@ -607,8 +627,11 @@ function createAdmin({
         statut: n.status || null,
         cote: score.cote,
         axes: score.axes,
-        tauxEffectif,
-        part: Math.round((1 - tauxEffectif) * 10000) / 10000,
+        // ADR 0031 — plus de `tauxEffectif`, plus de `part`. Le notaire garde
+        // 100 % de ses honoraires, et publier une colonne « le notaire garde
+        // X % » — fût-ce dans une console interne — décrirait la convention que
+        // l'art. 29.1 du Code de déontologie interdit. Ce qui reste est ce que
+        // Nota a facturé au client pour son propre service.
         actes: Number(n.actsCompleted) || 0,
         actesParService: n.actsByService || {},
         note: domain.ratingAverage(n.ratingSum, n.ratingCount),
@@ -627,32 +650,10 @@ function createAdmin({
     });
     // Par cote décroissante : le registre est d'abord un tableau d'honneur.
     notaires.sort((a, b) => b.cote - a.cote || String(a.etude || '').localeCompare(String(b.etude || '')));
-    return { ok: true, notaires, bareme };
+    return { ok: true, notaires };
   }
 
-  // Le barème en vigueur, vu depuis la console : l'item stocké s'il existe, les
-  // défauts d'environnement sinon. Même résolution que la facturation — c'est
-  // volontairement la MÊME lecture, pour que le registre ne mente jamais sur le
-  // taux qui sera réellement appliqué.
-  async function resolveBareme() {
-    const stored = typeof repo.getCommissionConfig === 'function' ? await repo.getCommissionConfig() : null;
-    const defaut = commissionCfg.envDefaults(process.env);
-    return {
-      taux: stored && typeof stored.taux === 'number' ? stored.taux : defaut.taux,
-      plancher: stored && typeof stored.plancher === 'number' ? stored.plancher : defaut.plancher,
-      paliers: stored && Array.isArray(stored.paliers) ? stored.paliers : defaut.paliers,
-    };
-  }
 
-  // Le meilleur palier atteint par une cote, borné par le plancher ET par le
-  // taux de base — la même règle que billing.commissionWith.
-  function rateForCote(bareme, valeur) {
-    let taux = bareme.taux;
-    for (const palier of bareme.paliers || []) {
-      if (valeur >= palier.cote && palier.taux < taux) taux = palier.taux;
-    }
-    return Math.min(bareme.taux, Math.max(bareme.plancher, Math.round(taux * 10000) / 10000));
-  }
 
   // ---------------------------------------------------------------------------
   // Le journal d'audit, relu par jour. Écrire une piste que personne ne peut
@@ -662,7 +663,12 @@ function createAdmin({
   async function readAudit(token, jour, { ip } = {}) {
     const p = await requireAdmin(token, { ip });
     if (!p) return { ok: false, status: 401 };
-    if (!p.permissions.includes('pii:read')) {
+    // `audit:read`, et non `pii:read` : le catalogue publiait les deux clés, et
+    // seule la seconde était appliquée — un catalogue qui décrit autre chose que
+    // ce qui est appliqué est pire qu'aucun catalogue. Lire le journal et lever
+    // l'anonymat d'un client sont deux capacités distinctes, et on doit pouvoir
+    // ouvrir la première sans la seconde.
+    if (!rbac.can(p.permissions, 'audit:read')) {
       return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Réservé à l’administrateur principal.' }] };
     }
     const j = String(jour || '').trim();
@@ -687,20 +693,506 @@ function createAdmin({
     return { ok: true, jour: j, entrees };
   }
 
+  // ---------------------------------------------------------------------------
+  // RBAC — le catalogue, les groupes, les accès.
+  //
+  // Trois concepts indépendants : une permission est une capacité, un groupe en
+  // réunit, un utilisateur reçoit des groupes ET des permissions directes. Le
+  // catalogue publié ici EST celui que `rbac.can()` applique — un catalogue qui
+  // décrirait autre chose que ce qui est appliqué serait pire qu'aucun.
+  // ---------------------------------------------------------------------------
+
+  // Ce que chaque clé autorise, en deux langues. La console n'invente aucun
+  // libellé : sans entrée ici, une permission ne s'affiche pas.
+  const PERMISSION_LABELS = {
+    'analytics:read': ['Lire les tableaux de bord', 'Read the dashboards'],
+    'pii:read': ['Voir les renseignements personnels', 'See personal information'],
+    'moderation:write': ['Modérer les offres et les notaires', 'Moderate offers and notaries'],
+    'settings:write': ['Modifier les réglages du produit', 'Change product settings'],
+    'users:read': ['Voir les utilisateurs', 'See users'],
+    'users:write': ['Attribuer groupes et permissions', 'Assign groups and permissions'],
+    'groups:read': ['Voir les groupes', 'See groups'],
+    'groups:write': ['Créer et modifier les groupes', 'Create and edit groups'],
+    'permissions:read': ['Lire le catalogue des permissions', 'Read the permission catalog'],
+    'services:write': ['Modifier le catalogue des actes', 'Edit the catalogue of acts'],
+    'notifications:write': ['Modifier les courriels et notifications', 'Edit emails and notifications'],
+    'billing:write': ['Configurer le paiement et le prix', 'Configure payment and price'],
+    'audit:read': ['Lire le journal d’audit', 'Read the audit log'],
+    'campaigns:send': ['Envoyer une campagne ciblée', 'Send a targeted campaign'],
+  };
+
+  function listPermissions() {
+    return {
+      ok: true,
+      permissions: rbac.PERMISSIONS.map((cle) => ({
+        cle,
+        libelle: (PERMISSION_LABELS[cle] || [cle, cle])[0],
+        libelleEn: (PERMISSION_LABELS[cle] || [cle, cle])[1],
+      })),
+    };
+  }
+
+  const GROUP_ID = /^[a-z0-9][a-z0-9_-]{0,39}$/;
+  const NAME_MAX = 80;
+
+  function validateGroup(id, payload = {}) {
+    const errors = [];
+    if (!GROUP_ID.test(String(id || ''))) {
+      errors.push({ code: 'identifiant_invalide', message: 'L’identifiant doit être en minuscules, sans espace (lettres, chiffres, - et _), 40 caractères au plus.' });
+    }
+    const nom = typeof payload.nom === 'string' ? payload.nom.trim() : '';
+    if (!nom || nom.length > NAME_MAX) {
+      errors.push({ code: 'nom_invalide', message: `Le nom du groupe est obligatoire et fait au plus ${NAME_MAX} caractères.` });
+    }
+    const perms = Array.isArray(payload.permissions) ? payload.permissions : [];
+    for (const p of perms) {
+      // Le joker se donne à un utilisateur, jamais à un groupe : un groupe qui
+      // porte « tout » se propage silencieusement à chaque nouveau membre.
+      if (p === rbac.WILDCARD) {
+        errors.push({ code: 'joker_interdit', message: 'Le joker « * » ne s’accorde pas à un groupe : accordez-le nommément à une personne.' });
+      } else if (!rbac.isKnownPermission(p)) {
+        errors.push({ code: 'permission_inconnue', message: `« ${p} » n’est pas une permission connue.` });
+      }
+    }
+    if (errors.length) return { ok: false, errors };
+    return {
+      ok: true,
+      errors: [],
+      groupe: {
+        id: String(id),
+        nom,
+        description: typeof payload.description === 'string' ? payload.description.trim().slice(0, 240) : '',
+        permissions: [...new Set(perms)],
+      },
+    };
+  }
+
+  async function listGroups() {
+    const groupes = typeof repo.listGroups === 'function' ? await repo.listGroups() : [];
+    return { ok: true, groupes };
+  }
+
+  async function putGroup(id, payload, { actor } = {}) {
+    const v = validateGroup(id, payload);
+    if (!v.ok) return v;
+    const avant = typeof repo.getGroup === 'function' ? await repo.getGroup(id) : null;
+    const groupe = await repo.putGroup(v.groupe, clockIso());
+    await appendAudit('groupe_modifie', { email: actor || null, meta: { groupeId: String(id), avant, apres: groupe } });
+    return { ok: true, errors: [], groupe };
+  }
+
+  async function deleteGroup(id, { actor } = {}) {
+    const avant = typeof repo.getGroup === 'function' ? await repo.getGroup(id) : null;
+    if (!avant) return { ok: false, errors: [{ code: 'groupe_introuvable', message: 'Ce groupe n’existe pas.' }] };
+    await repo.deleteGroup(id);
+    await appendAudit('groupe_supprime', { email: actor || null, meta: { groupeId: String(id), avant, apres: null } });
+    return { ok: true, errors: [] };
+  }
+
+  // Les comptes que la console peut administrer : la liste blanche de
+  // l'environnement est la porte extérieure, et elle reste une décision de
+  // déploiement — une console compromise ne doit pas pouvoir se fabriquer des
+  // administrateurs. Ce que l'on configure ici, c'est ce que chacun PEUT, pas
+  // qui existe.
+  async function listUsers() {
+    const utilisateurs = [];
+    for (const email of allowlist) {
+      const id = adminIdForEmail(email);
+      const rec = (await repo.getAdmin(id)) || null;
+      const groupes = (rec && rec.groupes) || [];
+      const charges = [];
+      for (const gid of groupes) {
+        const g = typeof repo.getGroup === 'function' ? await repo.getGroup(gid) : null;
+        if (g) charges.push(g);
+      }
+      utilisateurs.push({
+        email,
+        id,
+        role: (rec && rec.role) || null,
+        disabled: !!(rec && rec.disabled),
+        groupes,
+        permissions: (rec && rec.permissions) || [],
+        effectives: rbac.resolvePermissions({
+          role: rec && rec.role,
+          directPermissions: (rec && rec.permissions) || [],
+          groups: charges,
+        }),
+        derniereConnexion: (rec && rec.lastLoginAt) || null,
+      });
+    }
+    return { ok: true, utilisateurs };
+  }
+
+  // Combien de comptes ACTIFS détiennent encore le joker, une fois le
+  // changement proposé appliqué. C'est la seule question qui protège la console
+  // d'un verrouillage : une porte d'administration sans personne pour l'ouvrir
+  // n'est pas une politique de sécurité, c'est une panne.
+  async function jokersApres(emailCible, projete) {
+    let n = 0;
+    for (const email of allowlist) {
+      const id = adminIdForEmail(email);
+      const rec = (await repo.getAdmin(id)) || null;
+      const eff = email === emailCible ? projete : {
+        role: rec && rec.role,
+        directPermissions: (rec && rec.permissions) || [],
+        disabled: !!(rec && rec.disabled),
+      };
+      if (eff.disabled) continue;
+      if (rbac.can(rbac.resolvePermissions({ role: eff.role, directPermissions: eff.directPermissions }), rbac.WILDCARD)) n += 1;
+    }
+    return n;
+  }
+
+  async function putUserAccess(email, payload = {}, { actor } = {}) {
+    const clean = String(email || '').trim().toLowerCase();
+    if (!allowlist.has(clean)) {
+      return { ok: false, errors: [{ code: 'utilisateur_inconnu', message: 'Cette adresse n’est pas un compte d’administration.' }] };
+    }
+    const id = adminIdForEmail(clean);
+    const avant = (await repo.getAdmin(id)) || null;
+
+    const errors = [];
+    const perms = payload.permissions === undefined
+      ? ((avant && avant.permissions) || [])
+      : (Array.isArray(payload.permissions) ? payload.permissions : []);
+    for (const p of perms) {
+      if (p !== rbac.WILDCARD && !rbac.isKnownPermission(p)) {
+        errors.push({ code: 'permission_inconnue', message: `« ${p} » n’est pas une permission connue.` });
+      }
+    }
+    const groupes = payload.groupes === undefined
+      ? ((avant && avant.groupes) || [])
+      : (Array.isArray(payload.groupes) ? payload.groupes : []);
+    for (const gid of groupes) {
+      const g = typeof repo.getGroup === 'function' ? await repo.getGroup(gid) : null;
+      if (!g) errors.push({ code: 'groupe_introuvable', message: `Le groupe « ${gid} » n’existe pas.` });
+    }
+    const role = payload.role === undefined ? (avant && avant.role) || null : payload.role;
+    if (role !== null && !authDefaults.isRole(role)) {
+      errors.push({ code: 'role_invalide', message: 'Rôle inconnu.' });
+    }
+    const disabled = payload.disabled === undefined ? !!(avant && avant.disabled) : !!payload.disabled;
+    if (errors.length) return { ok: false, errors };
+
+    const restants = await jokersApres(clean, { role, directPermissions: perms, disabled });
+    if (restants === 0) {
+      return {
+        ok: false,
+        code: 'dernier_administrateur',
+        errors: [{
+          code: 'dernier_administrateur',
+          message: 'Impossible : plus aucun compte actif ne pourrait administrer la console. Accordez d’abord l’accès complet à quelqu’un d’autre.',
+        }],
+      };
+    }
+
+    const apres = {
+      id,
+      email: clean,
+      role,
+      disabled,
+      groupes: [...new Set(groupes)],
+      permissions: [...new Set(perms)],
+      createdAt: (avant && avant.createdAt) || clockIso(),
+      lastLoginAt: (avant && avant.lastLoginAt) || null,
+    };
+    await repo.putAdmin(apres);
+    await appendAudit('acces_modifie', { email: actor || null, meta: { cible: clean, avant, apres } });
+    return { ok: true, errors: [], utilisateur: apres };
+  }
+
+  // ---------------------------------------------------------------------------
+  // LES CAMPAGNES — viser quelqu'un, et pouvoir le justifier après coup.
+  //
+  // La résolution d'audience appartient entièrement à `segments.js` : le
+  // catalogue, la déduplication, la suppression des désabonnés, la base de
+  // consentement LCAP et le plafond de fréquence de l'art. 56 1° y vivent, et
+  // cette couche ne les rejoue pas — elle les APPELLE. Une garde qu'on
+  // contournerait en passant par la route au lieu du module ne serait pas une
+  // garde, alors la route n'a aucun chemin qui saute la résolution.
+  //
+  // Ce que cette couche ajoute, et qui n'appartenait à personne :
+  //   • la permission (`analytics:read` pour regarder, `campaigns:send` pour
+  //     envoyer — deux décisions distinctes) ;
+  //   • le refus d'un gabarit TRANSACTIONNEL comme réclame (art. 68) ;
+  //   • l'écriture du registre de fréquence après chaque envoi réussi, sans
+  //     laquelle le plafond de l'art. 56 1° serait purement décoratif ;
+  //   • le journal d'audit : qui, quelle audience, combien atteints, combien
+  //     exclus et pourquoi.
+  // ---------------------------------------------------------------------------
+
+  // Le catalogue tel que la console le consomme : les libellés à plat, les
+  // seuils en LISTE. La console ne code aucun identifiant de segment en dur —
+  // elle lit celui-ci, et publié == appliqué par construction.
+  function segmentView(s) {
+    return {
+      id: s.id,
+      libelle: s.libelle.fr,
+      libelleEn: s.libelle.en,
+      vise: s.vise,
+      audience: s.audience,
+      nature: s.nature,
+      params: Object.entries(s.params || {}).map(([nom, p]) => ({
+        nom,
+        defaut: p.defaut,
+        min: p.min,
+        max: p.max,
+        libelle: p.libelle.fr,
+        libelleEn: p.libelle.en,
+      })),
+    };
+  }
+
+  async function listSegments(token, { ip } = {}) {
+    const p = await requireAdmin(token, { ip });
+    if (!p) return { ok: false, status: 401 };
+    if (!rbac.can(p.permissions, 'analytics:read')) {
+      return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Lecture des segments non autorisée.' }] };
+    }
+    return { ok: true, segments: segments.describeSegments().map(segmentView) };
+  }
+
+  const PLAFOND_CAMPAGNE = config.campagnePlafond || segments.GARDES.plafondAudience;
+  const FENETRE_CAMPAGNE = config.campagneFenetreHeures || segments.GARDES.fenetreHeures;
+
+  // Le gabarit, contrôlé AVANT toute résolution — un refus doit coûter zéro
+  // lecture, et surtout zéro envoi.
+  function verifierGabarit(templateKey) {
+    const meta = emails.TEMPLATE_META[templateKey];
+    if (!meta) {
+      return { ok: false, status: 404, errors: [{ code: 'modele_inconnu', message: `Modèle de courriel inconnu : ${templateKey}.` }] };
+    }
+    return { ok: true, meta };
+  }
+
+  // Art. 68 : un gabarit transactionnel est le seul avis d'un fait que son
+  // destinataire a le droit de connaître. Le détourner en campagne commerciale
+  // ferait d'un avis de service une réclame — et l'inverse, éteindre l'avis,
+  // est déjà refusé côté surcharges. La nature de la campagne est celle que la
+  // résolution a calculée, jamais celle que l'opérateur déclare.
+  function verifierNature(meta, templateKey, nature) {
+    if (nature === segments.NATURE.COMMERCIAL && meta.transactionnel === true) {
+      return {
+        ok: false,
+        status: 422,
+        errors: [{
+          code: 'gabarit_transactionnel',
+          message: `« ${templateKey} » est un avis transactionnel : il ne peut pas servir de campagne commerciale (art. 68 du Code de déontologie).`,
+        }],
+      };
+    }
+    return { ok: true };
+  }
+
+  // Le contexte qu'une campagne peut donner à un gabarit. Une campagne ne part
+  // d'aucune offre et d'aucun acte : elle ne connaît que l'adresse visée. Tout
+  // jeton qui demanderait un montant, un service ou une date resterait vide.
+  const CTX_CAMPAGNE = ['email'];
+
+  // Les avertissements que l'opérateur doit lire, en clair — et en clair veut
+  // dire AVANT l'envoi, pas dans un courriel déjà parti. Ceux de la résolution
+  // (le registre de fréquence absent, par exemple) plus les deux que seule
+  // cette couche peut voir : un gabarit adressé à une autre audience que celle
+  // qu'on vient de résoudre, et un gabarit dont les jetons ne peuvent pas être
+  // remplis par une campagne.
+  function avertissementsDe(resolution, meta, templateKey) {
+    const out = resolution.avertissements.map((a) => a.message);
+
+    const visees = new Set(resolution.destinataires.map((d) => d.audience));
+    for (const e of resolution.echantillon) visees.add(e.audience);
+    if (visees.size && meta.audience && !visees.has(meta.audience)) {
+      out.push(
+        `Le gabarit « ${templateKey} » s’adresse à « ${meta.audience} », alors que l’audience résolue vise « ${[...visees].join(', ')} ».`
+      );
+    }
+
+    const orphelins = (meta.placeholders || []).filter((j) => !CTX_CAMPAGNE.includes(j));
+    if (orphelins.length) {
+      out.push(
+        `Le gabarit « ${templateKey} » interpole ${orphelins.map((j) => `{{${j}}}`).join(', ')}, qu’une campagne ne peut pas renseigner : ces jetons resteront vides.`
+      );
+    }
+    return out;
+  }
+
+  // L'échantillon voyage en CHAÎNES : l'adresse masquée et la raison mesurée.
+  // Reconnaissable, jamais expédiable — une prévisualisation ne doit pas
+  // pouvoir servir de liste d'envoi.
+  const echantillonView = (r) => r.echantillon.map((e) => `${e.email} — ${e.raison}`);
+
+  const exclusView = (x) => ({
+    desabonnes: x.desabonnes,
+    sansConsentement: x.sansConsentement,
+    frequence: x.frequence,
+    doublons: x.doublons,
+    sansCourriel: x.sansCourriel,
+  });
+
+  function resoudre(audience, { dryRun, confirme }) {
+    return segments.resolveAudience(audience, {
+      repo,
+      now: clockIso,
+      plafond: PLAFOND_CAMPAGNE,
+      fenetreHeures: FENETRE_CAMPAGNE,
+      dryRun,
+      confirme,
+    });
+  }
+
+  // ESSAI À BLANC. Il compte, il détaille, il montre — il ne prépare rien
+  // d'envoyable et n'écrit nulle part, pas même dans le registre de fréquence :
+  // regarder une audience ne doit pas consommer le quota de ses membres.
+  async function previewCampaign(token, body, { ip } = {}) {
+    const p = await requireAdmin(token, { ip });
+    if (!p) return { ok: false, status: 401 };
+    if (!rbac.can(p.permissions, 'analytics:read')) {
+      return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Lecture des campagnes non autorisée.' }] };
+    }
+
+    const payload = body || {};
+    const gabarit = verifierGabarit(payload.templateKey);
+    if (!gabarit.ok) return gabarit;
+
+    const r = await resoudre(payload.audience, { dryRun: true });
+    if (!r.ok) return { ok: false, status: 422, errors: r.errors };
+
+    const nature = verifierNature(gabarit.meta, payload.templateKey, r.nature);
+    if (!nature.ok) return nature;
+
+    return {
+      ok: true,
+      total: r.total,
+      exclus: exclusView(r.exclus),
+      echantillon: echantillonView(r),
+      plafond: { limite: r.plafond.limite, depasse: r.plafond.depasse },
+      nature: r.nature,
+      avertissements: avertissementsDe(r, gabarit.meta, payload.templateKey),
+    };
+  }
+
+  // L'ENVOI. `campaigns:send` et rien d'autre : écrire un gabarit
+  // (`notifications:write`) et l'envoyer à cent personnes ne sont pas la même
+  // décision, donc pas la même permission.
+  async function sendCampaign(token, body, { ip } = {}) {
+    const p = await requireAdmin(token, { ip });
+    if (!p) return { ok: false, status: 401 };
+    if (!rbac.can(p.permissions, 'campaigns:send')) {
+      return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Envoi de campagnes non autorisé.' }] };
+    }
+
+    const payload = body || {};
+    const gabarit = verifierGabarit(payload.templateKey);
+    if (!gabarit.ok) return gabarit;
+
+    const r = await resoudre(payload.audience, { dryRun: false, confirme: payload.confirme === true });
+    if (!r.ok) {
+      // Le plafond franchi sans confirmation n'est pas une donnée invalide : la
+      // demande est bien formée, c'est l'ÉTAT de l'audience qui exige un second
+      // geste. 409, et le décompte voyage avec le refus.
+      if (r.errors.some((e) => e.code === 'confirmation_requise')) {
+        return { ok: false, status: 409, errors: r.errors };
+      }
+      return { ok: false, status: 422, errors: r.errors };
+    }
+
+    const nature = verifierNature(gabarit.meta, payload.templateKey, r.nature);
+    if (!nature.ok) return nature;
+
+    if (!notifier || typeof notifier.sendCampaign !== 'function') {
+      // Aucun chemin d'envoi câblé. On le DIT, plutôt que d'en écrire un second
+      // ici : celui de `notifications.js` honore déjà la suppression et le
+      // retrait RFC 8058, et un doublon divergerait le jour où l'un des deux
+      // bouge. Rien n'est marqué : aucun quota consommé pour un envoi qui n'a
+      // pas eu lieu.
+      await appendAudit('campagne_refusee', {
+        adminId: p.adminId, email: p.email, ip,
+        meta: { templateKey: payload.templateKey, total: r.total, motif: 'envoi_indisponible' },
+      });
+      return {
+        ok: false,
+        status: 503,
+        errors: [{ code: 'envoi_indisponible', message: 'Aucun expéditeur n’est câblé sur cette console : la campagne n’a pas été envoyée.' }],
+      };
+    }
+
+    const campagneId = genId();
+    const echecs = [];
+    let envoyes = 0;
+    for (const d of r.destinataires) {
+      let out;
+      try {
+        out = await notifier.sendCampaign({
+          to: d.email,
+          templateKey: payload.templateKey,
+          ctx: { email: d.email, campagneId },
+        });
+      } catch (err) {
+        echecs.push({ email: d.email, raison: String((err && err.message) || err) });
+        continue;
+      }
+      if (!out || out.sent !== true) {
+        echecs.push({ email: d.email, raison: (out && out.reason) || 'refuse' });
+        continue;
+      }
+      envoyes += 1;
+      // Art. 56 1° — SANS cette écriture, le plafond de fréquence ne vaut rien :
+      // la campagne suivante retrouverait la même personne comme si de rien
+      // n'était. Elle ne se pose que sur le COMMERCIAL : un avis de service
+      // n'est pas une sollicitation et ne doit pas consommer le quota de son
+      // destinataire. Best-effort — un registre en panne ne doit pas rejouer un
+      // envoi déjà parti.
+      if (r.nature === segments.NATURE.COMMERCIAL && typeof repo.markCampaignSent === 'function') {
+        try {
+          await repo.markCampaignSent(d.email, clockIso(), campagneId);
+        } catch {
+          echecs.push({ email: d.email, raison: 'registre_frequence_indisponible' });
+        }
+      }
+    }
+
+    const cibles = Array.isArray(payload.audience) ? payload.audience : [payload.audience];
+    await appendAudit('campagne_envoyee', {
+      adminId: p.adminId,
+      email: p.email,
+      ip,
+      meta: {
+        campagneId,
+        audience: cibles,
+        templateKey: payload.templateKey,
+        nature: r.nature,
+        envoyes,
+        total: r.total,
+        exclus: exclusView(r.exclus),
+        echecs,
+        garde: r.garde,
+      },
+    });
+
+    return { ok: true, envoyes, exclus: exclusView(r.exclus), campagneId };
+  }
+
   return {
     requestLogin,
     verifyMagic,
     requireAdmin,
+    listSegments,
+    previewCampaign,
+    sendCampaign,
     me,
     refresh,
     logout,
-    permissionsFor,
+    listPermissions,
+    listGroups,
+    putGroup,
+    deleteGroup,
+    listUsers,
+    putUserAccess,
     listEmailTemplates,
     putEmailTemplate,
     resetEmailTemplate,
-    getCommissionSchedule,
-    putCommissionSchedule,
-    resetCommissionSchedule,
+    getPrixNota,
+    putPrixNota,
+    resetPrixNota,
     getCancellationSchedule,
     putCancellationSchedule,
     resetCancellationSchedule,
@@ -709,4 +1201,4 @@ function createAdmin({
   };
 }
 
-module.exports = { createAdmin, permissionsFor, PERMISSIONS };
+module.exports = { createAdmin };

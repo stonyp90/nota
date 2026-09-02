@@ -45,10 +45,21 @@ function parseMoney(raw) {
   return digits ? Number(digits) : NaN;
 }
 
-// Every visible "$N" / "N $" amount on the page, as numbers. Used to guard the
-// "$18,000" pricing regression (no cell should read anywhere near five figures).
-async function visibleAmounts(page) {
-  const text = await page.locator('body').innerText();
+/**
+ * Every visible "$N" / "N $" amount inside `scope`, as numbers. Used to guard
+ * the "$18,000" pricing regression (no calendar cell should read anywhere near
+ * five figures).
+ *
+ * The scope defaults to `#main` — the carnet, the pulse and the calendar — and
+ * NOT `body`, deliberately. The booking sheet (`#day-dialog`, a sibling of
+ * `<main>`) now carries the DEVIS: the notary's fees, Nota's own price and the
+ * total authorized on the card (ADR 0031). Those are legitimate figures that
+ * are not calendar prices, and a body-wide scrape would fold them into a guard
+ * written for something else. Scoping keeps the guard pointed at what it was
+ * written to catch, whatever the sheet grows next.
+ */
+async function visibleAmounts(page, scope = '#main') {
+  const text = await page.locator(scope).innerText();
   const out = [];
   // $-prefixed (English) OR N-then-$ (French). Allow digit-group separators
   // including thin / non-breaking spaces the app uses in French formatting.

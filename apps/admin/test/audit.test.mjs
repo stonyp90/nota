@@ -84,13 +84,15 @@ function sampleDay(jour) {
   return {
     jour: jour,
     entrees: [
-      { id: 'a2', ts: jour + 'T18:11:03.000Z', day: jour, action: 'commission_schedule_updated',
+      { id: 'a2', ts: jour + 'T18:11:03.000Z', day: jour, action: 'prix_nota_updated',
         adminId: 'ad1', email: 'ops@nota.ca', ip: '24.201.10.4',
-        meta: { before: { taux: 0.15 }, after: { taux: 0.14 } } },
+        meta: { before: { prixCents: 40000 }, after: { prixCents: 25000 } } },
+      // ADR 0031 — un acte réglé porte DEUX lignes : les honoraires du notaire,
+      // entiers, et le prix de Nota à côté. Ni taux, ni cote, ni « net ».
       { id: 'a1', ts: jour + 'T14:02:00.000Z', day: jour, action: 'acte_regle',
         adminId: null, email: null, ip: null,
         meta: { bidId: 'b1', dateISO: '2026-08-20', notaryId: 'n1', serviceId: 'refinancement',
-                montant: 2800, taux: 0.15, cote: 51, commission: 420, net: 2380,
+                montant: 2800, honoraires: 2800, prixNota: 400,
                 chargeId: 'ch_1', transferId: 'tr_1' } },
     ],
   };
@@ -150,7 +152,7 @@ test('a settled act reads as a sentence, newest first, without ever showing JSON
 
   const entries = [...doc.querySelectorAll('.audit-entry')];
   assert.equal(entries.length, 2, 'both entries render, in the order served (newest first)');
-  assert.match(text(entries[0].querySelector('.audit-action')), /Barème de commission modifié/,
+  assert.match(text(entries[0].querySelector('.audit-action')), /Prix de Nota modifié/,
     'a known action reads in French, never as its raw code');
   assert.match(text(entries[0]), /ops@nota\.ca/);
   assert.match(text(entries[0]), /24\.201\.10\.4/);
@@ -160,7 +162,7 @@ test('a settled act reads as a sentence, newest first, without ever showing JSON
   assert.match(text(acte.querySelector('.audit-action')), /Acte réglé/);
   assert.equal(
     text(acte.querySelector('.audit-money')),
-    '2 800 $ payés · 15 % · 420 $ à Nota · 2 380 $ au notaire · cote 51',
+    '2 800 $ au notaire · 400 $ à Nota',
     'the money line is the disclosure — it must read on its own');
   // Les identifiants restent lisibles à côté, sans noyer la phrase.
   const facts = text(acte.querySelector('.audit-facts'));
@@ -242,6 +244,6 @@ test('the money line crosses into English with the money reformatted', async () 
   await settle(win);
 
   const money = [...doc.querySelectorAll('.audit-money')][0];
-  assert.equal(text(money), '$2,800 paid · 15% · $420 to Nota · $2,380 to the notary · cote 51');
-  assert.match(text(doc.querySelector('.audit-action')), /Commission schedule updated/);
+  assert.equal(text(money), '$2,800 to the notary · $400 to Nota');
+  assert.match(text(doc.querySelector('.audit-action')), /Nota’s price updated/);
 });

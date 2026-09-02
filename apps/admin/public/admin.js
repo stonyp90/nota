@@ -218,7 +218,9 @@
     if (hash.indexOf('#/auth') === 0) { handleAuthRoute(hash); return; }
     if (!session) { renderAuthRequest({}); return; }
     if (hash.indexOf('#/courriels') === 0) { renderCourriels(); return; }
-    if (hash.indexOf('#/commission') === 0) { renderCommission(); return; }
+    if (hash.indexOf('#/campagnes') === 0) { renderCampagnes(); return; }
+    if (hash.indexOf('#/prix') === 0) { renderPrix(); return; }
+    if (hash.indexOf('#/acces') === 0) { renderAcces(); return; }
     if (hash.indexOf('#/annulation') === 0) { renderAnnulation(); return; }
     if (hash.indexOf('#/notaires') === 0) { renderNotaires(); return; }
     if (hash.indexOf('#/audit') === 0) { renderAudit(); return; }
@@ -418,14 +420,41 @@
     mails.addEventListener('click', function () { go('#/courriels'); });
     rail.appendChild(mails);
 
-    // Commission — the rating-earned barème Nota decides (ADR 0021 §4).
-    var comm = el('button', 'admin-rail-link');
-    comm.type = 'button';
-    comm.appendChild(iconPercent());
-    comm.appendChild(document.createTextNode('Commission'));
-    if (active === 'commission') comm.setAttribute('aria-current', 'page');
-    comm.addEventListener('click', function () { go('#/commission'); });
-    rail.appendChild(comm);
+    // Campagnes — les envois ciblés (une personne, un groupe, un segment).
+    // L'entrée reste ACTIVE sans « campaigns:send » : l'écran s'ouvre en
+    // lecture seule et dit pourquoi l'envoi est fermé, comme partout ailleurs
+    // dans la console.
+    var camp = el('button', 'admin-rail-link');
+    camp.type = 'button';
+    camp.appendChild(iconSend());
+    camp.appendChild(document.createTextNode('Campagnes'));
+    if (active === 'campagnes') camp.setAttribute('aria-current', 'page');
+    camp.addEventListener('click', function () { go('#/campagnes'); });
+    rail.appendChild(camp);
+
+    // Prix — le prix du service de Nota, un montant fixe (ADR 0031). Cette
+    // entrée remplace « Commission » : Nota ne prélève plus une part des
+    // honoraires du notaire, elle vend son service à son propre prix.
+    var prix = el('button', 'admin-rail-link');
+    prix.type = 'button';
+    prix.appendChild(iconTag());
+    prix.appendChild(document.createTextNode('Prix'));
+    if (active === 'prix') prix.setAttribute('aria-current', 'page');
+    prix.addEventListener('click', function () { go('#/prix'); });
+    rail.appendChild(prix);
+
+    // Accès — utilisateurs, groupes, permissions. Trois concepts découplés :
+    // une permission est une capacité, un groupe en réunit, une personne reçoit
+    // des groupes ET des permissions directes. Le rôle survit comme raccourci
+    // de compatibilité, jamais comme la seule granularité offerte : on doit
+    // pouvoir ouvrir une capacité sans promouvoir personne.
+    var acces = el('button', 'admin-rail-link');
+    acces.type = 'button';
+    acces.appendChild(iconUsers());
+    acces.appendChild(document.createTextNode('Accès'));
+    if (active === 'acces') acces.setAttribute('aria-current', 'page');
+    acces.addEventListener('click', function () { go('#/acces'); });
+    rail.appendChild(acces);
 
     // Annulation — the late-cancellation fee barème Nota decides (ADR 0023 §2).
     var annul = el('button', 'admin-rail-link');
@@ -826,7 +855,19 @@
   // GET /notifications/templates lists the registry merged with the stored
   // overrides; PUT/DELETE per key edit them. Writing needs the
   // 'notifications:write' permission (super_admin) — an analyst sees the same
-  // rows read-only, with no save controls. Subjects only: bodies stay code.
+  // rows read-only, with no save controls.
+  //
+  // La surcharge porte QUATRE paires bilingues — sujet, ligne d'aperçu, corps,
+  // bouton — plus l'interrupteur d'envoi. Trois règles de l'API que cet écran
+  // rend visibles AVANT l'enregistrement, plutôt que de les laisser découvrir
+  // par un refus :
+  //   • les bornes de longueur viennent du serveur (`limites`), jamais d'ici :
+  //     une borne recopiée diverge le jour où l'API bouge la sienne ;
+  //   • une paire est tout-ou-rien — le français sans l'anglais est refusé ;
+  //   • un courriel TRANSACTIONNEL ne peut pas être éteint. Il annonce un fait
+  //     que son destinataire doit connaître ; le couper serait une publicité
+  //     « incomplète » au sens de l'art. 68 du Code de déontologie. L'écran
+  //     grise l'interrupteur ET écrit pourquoi.
   // ---------------------------------------------------------------------------
   var AUDIENCE_ORDER = ['client', 'notaire', 'partenaire', 'operateur', 'admin'];
   var AUDIENCE_LABELS = {
@@ -837,13 +878,36 @@
     admin: 'Console admin',
   };
   var courrielsBody = null;
+  // Les bornes SERVIES par l'API (`limites: { sujet, preheader, corps, cta }`).
+  // Vide tant qu'aucune réponse ne les porte : un champ sans borne connue part
+  // sans `maxlength` et c'est le serveur qui tranche — mieux qu'un nombre
+  // inventé ici, qui mentirait le jour où l'API change le sien.
+  var courrielsLimites = {};
+  function limiteDe(code) {
+    var n = Number(courrielsLimites && courrielsLimites[code]);
+    return isFinite(n) && n > 0 ? Math.floor(n) : 0;
+  }
+
+  // Les quatre paires bilingues, dans l'ordre où l'écran les pose. `code` est
+  // aussi la clé de la borne servie et le préfixe des codes d'erreur de l'API
+  // (`sujet_bilingue`, `corps_trop_long`, …) : un seul mot relie le champ, sa
+  // borne et son refus.
+  var TPL_PAIRES = [
+    { code: 'sujet', fr: 'subjectFr', en: 'subjectEn', libFr: 'Sujet (FR)', libEn: 'Sujet (EN)', multi: false },
+    { code: 'preheader', fr: 'preheaderFr', en: 'preheaderEn', libFr: 'Ligne d’aperçu (FR)', libEn: 'Ligne d’aperçu (EN)', multi: false },
+    { code: 'corps', fr: 'corpsFr', en: 'corpsEn', libFr: 'Corps (FR)', libEn: 'Corps (EN)', multi: true },
+    { code: 'cta', fr: 'ctaFr', en: 'ctaEn', libFr: 'Bouton (FR)', libEn: 'Bouton (EN)', multi: false },
+  ];
+  // subjectFr → 'sujet' : par quel champ un refus nominatif entre.
+  var TPL_CHAMP_PAIRE = {};
+  TPL_PAIRES.forEach(function (p) { TPL_CHAMP_PAIRE[p.fr] = p.code; TPL_CHAMP_PAIRE[p.en] = p.code; });
 
   function isEnglish() {
     try { return !!(window.NotaI18N && window.NotaI18N.lang && window.NotaI18N.lang() === 'en'); }
     catch (e) { return false; }
   }
   function canWriteNotifications() {
-    return !!(me && me.permissions && me.permissions.indexOf('notifications:write') >= 0);
+    return can('notifications:write');
   }
 
   async function renderCourriels() {
@@ -862,7 +926,7 @@
     titleWrap.appendChild(el('span', 'page-eyebrow', 'Notifications'));
     titleWrap.appendChild(el('h1', 'page-title', 'Courriels'));
     titleWrap.appendChild(el('p', 'page-sub',
-      'Sujets et activation des modèles de courriels. Les corps restent gérés par le code.'));
+      'Sujet, ligne d’aperçu, corps et bouton de chaque modèle, dans les deux langues. Un courriel transactionnel ne peut pas être éteint.'));
     head.appendChild(titleWrap);
     content.appendChild(head);
 
@@ -887,6 +951,9 @@
       container.appendChild(buildErrorBanner(function () { loadTemplatesInto(container); }));
       return;
     }
+    // Les bornes voyagent à la RACINE de la réponse, une seule fois pour tous
+    // les gabarits. Absentes, on n'en invente pas.
+    courrielsLimites = (r.json.limites && typeof r.json.limites === 'object') ? r.json.limites : {};
 
     var view = el('div', 'view-enter');
     if (!canWriteNotifications()) {
@@ -918,11 +985,36 @@
     return card;
   }
 
+  // Éteint AU SENS DU SERVEUR. `actif` est le nom du produit, `enabled`
+  // l'ancien, encore servi — mais surtout : un enregistrement qui couperait un
+  // gabarit TRANSACTIONNEL est sans effet côté API (`isOverrideDisabled`
+  // l'ignore). L'écran ne doit donc jamais estampiller « Désactivé » un
+  // courriel qui part quand même : ce serait mentir sur l'état du système.
+  function templateEteint(t) {
+    if (!t || t.transactionnel === true) return false;
+    var o = t.override;
+    return !!o && (o.actif === false || o.enabled === false);
+  }
+  // Modifié dès qu'UNE des huit cases porte du texte — pas seulement le sujet.
+  function overrideModifie(o) {
+    if (!o) return false;
+    for (var i = 0; i < TPL_PAIRES.length; i++) {
+      if (o[TPL_PAIRES[i].fr] || o[TPL_PAIRES[i].en]) return true;
+    }
+    return false;
+  }
+
   function overrideBadges(t) {
     var wrap = el('span', 'tpl-badges');
+    // Se lit AVANT d'ouvrir l'éditeur : ce courriel-là ne s'éteint pas.
+    if (t.transactionnel === true) {
+      var tr = el('span', 'tpl-badge is-transactionnel', 'Transactionnel');
+      tr.title = 'Annonce un fait à son destinataire : ne peut pas être désactivé.';
+      wrap.appendChild(tr);
+    }
     var o = t.override;
-    if (o && o.enabled === false) wrap.appendChild(el('span', 'tpl-badge is-off', 'Désactivé'));
-    if (o && (o.subjectFr || o.subjectEn)) wrap.appendChild(el('span', 'tpl-badge is-custom', 'Modifié'));
+    if (templateEteint(t)) wrap.appendChild(el('span', 'tpl-badge is-off', 'Désactivé'));
+    if (overrideModifie(o)) wrap.appendChild(el('span', 'tpl-badge is-custom', 'Modifié'));
     return wrap;
   }
 
@@ -978,38 +1070,60 @@
 
   function buildTemplateEditor(t, container) {
     var writable = canWriteNotifications();
+    var transactionnel = t.transactionnel === true;
     var box = el('div', 'tpl-editor');
+    // Une région d'erreur PAR paire, plus une pour l'interrupteur et une pour
+    // ce qui ne vise aucun champ : un refus se lit sous le champ qu'il vise.
+    var slots = {};
+    function slot(cle, parent) {
+      var s = el('div', 'tpl-error');
+      s.hidden = true;
+      s.setAttribute('data-erreur', cle);
+      slots[cle] = s;
+      parent.appendChild(s);
+      return s;
+    }
 
-    // Kill-switch toggle.
+    // --- L'interrupteur d'envoi ------------------------------------------------
+    var sw = el('div', 'tpl-switch');
     var toggleWrap = el('label', 'tpl-toggle');
     var toggle = el('input');
     toggle.type = 'checkbox';
-    toggle.checked = !(t.override && t.override.enabled === false);
-    toggle.disabled = !writable;
+    toggle.checked = !templateEteint(t);
+    // Art. 68 — la publicité incomplète. La porte est fermée ICI, pas au
+    // moment de l'enregistrement : l'opérateur doit lire pourquoi avant
+    // d'essayer, pas récolter un refus après coup.
+    toggle.disabled = !writable || transactionnel;
     toggleWrap.appendChild(toggle);
     toggleWrap.appendChild(el('span', null, 'Envoi activé'));
-    box.appendChild(toggleWrap);
+    sw.appendChild(toggleWrap);
+    // Trois états, pas deux : transactionnel, commercial, ou NON DÉCLARÉ. Un
+    // serveur qui ne sert pas le drapeau ne rend pas ce courriel commercial —
+    // et l'affirmer serait inventer un fait juridique. On laisse alors
+    // l'interrupteur ouvert (ne pas fermer ce qu'on ne peut pas justifier) en
+    // disant que la nature n'est pas connue.
+    sw.appendChild(el('p', 'tpl-note tpl-nature',
+      transactionnel
+        ? 'Courriel transactionnel — il annonce à son destinataire un fait qu’il doit connaître : un accusé, un mouvement d’argent, un acte qui change de mains, un lien de connexion. L’éteindre laisserait la personne sans ce fait, ce qui est une publicité incomplète au sens de l’art. 68 du Code de déontologie. L’envoi ne peut donc pas être coupé ; la reformulation, elle, reste permise.'
+        : (typeof t.transactionnel === 'boolean'
+          ? 'Courriel commercial — relance, digest, invitation, reconquête. L’art. 56 1° du Code de déontologie tient l’autre bout : inciter quelqu’un de façon pressante ou répétée est dérogatoire, donc celui-ci doit pouvoir être coupé.'
+          : 'Nature non déclarée par l’API pour ce modèle. L’interrupteur reste ouvert, mais vérifiez avant de couper : éteindre un courriel transactionnel serait une publicité incomplète au sens de l’art. 68 du Code de déontologie.')));
+    slot('actif', sw);
+    box.appendChild(sw);
 
-    // Bilingual subject inputs — both-or-neither (enforced by the API too).
-    var fields = el('div', 'tpl-fields');
-    function subjectField(labelText, defaultSubject, current) {
-      var field = el('div', 'field');
-      var lab = el('label', null, labelText);
-      var input = el('input', 'input');
-      input.type = 'text';
-      input.maxLength = 200;
-      input.placeholder = defaultSubject;
-      input.setAttribute('data-i18n-skip', '');
-      input.value = current || '';
-      input.disabled = !writable;
-      field.appendChild(lab);
-      field.appendChild(input);
-      fields.appendChild(field);
-      return input;
-    }
-    var frInput = subjectField('Sujet (FR)', t.defaultSubjectFr, t.override && t.override.subjectFr);
-    var enInput = subjectField('Sujet (EN)', t.defaultSubjectEn, t.override && t.override.subjectEn);
-    box.appendChild(fields);
+    // --- Les quatre paires bilingues ------------------------------------------
+    var champs = {};
+    TPL_PAIRES.forEach(function (paire) {
+      var bloc = el('div', 'tpl-pair');
+      bloc.setAttribute('data-paire', paire.code);
+      var fields = el('div', 'tpl-fields');
+      [['fr', paire.libFr], ['en', paire.libEn]].forEach(function (cote) {
+        fields.appendChild(buildTemplateChamp(t, paire, cote[0], cote[1], writable, champs));
+      });
+      bloc.appendChild(fields);
+      slot(paire.code, bloc);
+      box.appendChild(bloc);
+    });
 
     // The allowed {{token}} vocabulary for THIS template, as hint chips.
     var hints = el('div', 'tpl-chips');
@@ -1026,11 +1140,9 @@
     box.appendChild(hints);
 
     box.appendChild(el('p', 'tpl-note',
-      'Videz les deux sujets pour revenir aux sujets par défaut. Le corps du courriel n’est pas modifiable.'));
+      'Un champ laissé vide garde le texte du gabarit. Les deux langues d’une même ligne vont ensemble : remplissez le français ET l’anglais, ou aucun des deux.'));
 
-    var error = el('div', 'tpl-error');
-    error.hidden = true;
-    box.appendChild(error);
+    slot('autre', box);
 
     if (!writable) return box;
 
@@ -1043,98 +1155,1248 @@
       reset.type = 'button';
       actions.appendChild(reset);
       reset.addEventListener('click', function () {
-        submitTemplate('DELETE', t.key, null, [save, reset], error, container, 'Modèle réinitialisé.');
+        submitTemplate('DELETE', t.key, null, [save, reset], slots, container, 'Modèle réinitialisé.');
       });
     }
     box.appendChild(actions);
 
     save.addEventListener('click', function () {
-      var body = {
-        enabled: toggle.checked,
-        subjectFr: frInput.value.trim(),
-        subjectEn: enInput.value.trim(),
-      };
-      submitTemplate('PUT', t.key, body, [save], error, container, 'Modèle enregistré.');
+      var body = { actif: toggle.checked };
+      TPL_PAIRES.forEach(function (paire) {
+        body[paire.fr] = champs[paire.fr].value.trim();
+        body[paire.en] = champs[paire.en].value.trim();
+      });
+      // Le serveur reste l'autorité ; ce qu'il refusera à coup sûr se dit
+      // AVANT le voyage, avec ses mots à lui.
+      var errs = validerModele(t, body);
+      if (errs.length) { afficherErreursModele(slots, champs, errs); return; }
+      submitTemplate('PUT', t.key, body, [save], slots, container, 'Modèle enregistré.');
     });
     return box;
   }
 
-  async function submitTemplate(method, key, body, buttons, error, container, okMsg) {
+  // Un côté d'une paire : son libellé, son champ, et le compteur qui rend la
+  // borne servie visible pendant la frappe.
+  function buildTemplateChamp(t, paire, cote, libelle, writable, champs) {
+    var nom = cote === 'fr' ? paire.fr : paire.en;
+    var field = el('div', 'field');
+    var id = 'tpl-' + t.key + '-' + nom;
+    var lab = el('label', null, libelle);
+    lab.setAttribute('for', id);
+    field.appendChild(lab);
+
+    var input = el(paire.multi ? 'textarea' : 'input', paire.multi ? 'input tpl-textarea' : 'input');
+    input.id = id;
+    input.name = nom;
+    if (paire.multi) input.rows = 4; else input.type = 'text';
+    // La borne vient du serveur — jamais d'un nombre écrit ici.
+    var max = limiteDe(paire.code);
+    if (max) input.maxLength = max;
+    // Seul le sujet a un défaut servi : lui seul peut le montrer en filigrane.
+    if (paire.code === 'sujet') input.placeholder = cote === 'fr' ? t.defaultSubjectFr : t.defaultSubjectEn;
+    input.setAttribute('data-i18n-skip', '');
+    var o = t.override || {};
+    input.value = o[nom] || '';
+    input.disabled = !writable;
+    field.appendChild(input);
+    champs[nom] = input;
+
+    if (max) {
+      var compteur = el('span', 'tpl-count');
+      compteur.setAttribute('data-i18n-skip', '');
+      var maj = function () { compteur.textContent = input.value.length + ' / ' + max; };
+      input.addEventListener('input', maj);
+      maj();
+      field.appendChild(compteur);
+    }
+    return field;
+  }
+
+  // Ce que la console refuse elle-même, dans les mots exacts de l'API : un
+  // gabarit transactionnel qu'on éteindrait (art. 68), et une paire à moitié
+  // remplie. Les bornes, elles, sont déjà tenues par `maxlength` quand le
+  // serveur les a servies ; sinon c'est lui qui tranche.
+  function validerModele(t, body) {
+    var errs = [];
+    if (!body.actif && t.transactionnel === true) errs.push({ code: 'desactivation_interdite' });
+    TPL_PAIRES.forEach(function (paire) {
+      var fr = body[paire.fr];
+      var en = body[paire.en];
+      if ((fr && !en) || (!fr && en)) errs.push({ code: paire.code + '_bilingue' });
+    });
+    return errs;
+  }
+
+  // Par quel champ un refus entre. Les codes de paire le disent d'eux-mêmes ;
+  // les refus nominatifs (jeton, HTML, partage) nomment leur champ en tête de
+  // message — « subjectFr : … » — et c'est ce préfixe qui les ramène au bon
+  // endroit. Le reste tombe dans la région commune, jamais dans la console.
+  function tplPaireDeLErreur(err) {
+    var code = String((err && err.code) || '');
+    if (code === 'desactivation_interdite') return 'actif';
+    for (var i = 0; i < TPL_PAIRES.length; i++) {
+      var c = TPL_PAIRES[i].code;
+      if (code === c + '_bilingue' || code === c + '_trop_long') return c;
+    }
+    var m = /^\s*([A-Za-z]+)\s*:/.exec(String((err && err.message) || ''));
+    if (m && TPL_CHAMP_PAIRE[m[1]]) return TPL_CHAMP_PAIRE[m[1]];
+    return 'autre';
+  }
+
+  function afficherErreursModele(slots, champs, errs) {
+    Object.keys(slots).forEach(function (k) { slots[k].hidden = true; clear(slots[k]); });
+    Object.keys(champs || {}).forEach(function (n) { champs[n].removeAttribute('aria-invalid'); });
+    if (!errs || !errs.length) return;
+
+    var par = {};
+    errs.forEach(function (er) {
+      var cle = tplPaireDeLErreur(er);
+      if (!slots[cle]) cle = 'autre';
+      (par[cle] = par[cle] || []).push(er);
+    });
+    Object.keys(par).forEach(function (cle) {
+      showErrorLines(slots[cle], par[cle]);
+      // Le champ lui-même porte la marque : l'œil va au champ, pas au bas du
+      // formulaire.
+      TPL_PAIRES.forEach(function (paire) {
+        if (paire.code !== cle || !champs) return;
+        [paire.fr, paire.en].forEach(function (n) {
+          if (champs[n]) champs[n].setAttribute('aria-invalid', 'true');
+        });
+      });
+    });
+  }
+
+  async function submitTemplate(method, key, body, buttons, slots, container, okMsg) {
     buttons.forEach(function (b) { b.disabled = true; });
     var r = await call(method, '/notifications/templates/' + encodeURIComponent(key), body === null ? undefined : body);
     buttons.forEach(function (b) { b.disabled = false; });
     if (r.status === 401) return; // handled by call()
     if (!r.ok) {
-      error.hidden = false;
-      clear(error);
-      var msg = r.json && r.json.errors && r.json.errors[0] && r.json.errors[0].message;
-      error.appendChild(el('strong', null, msg || 'Impossible d’enregistrer le modèle.'));
+      afficherErreursModele(slots, null, (r.json && r.json.errors && r.json.errors.length)
+        ? r.json.errors
+        : [{ message: 'Impossible d’enregistrer le modèle.' }]);
       return;
     }
+    afficherErreursModele(slots, null, []); // un modèle accepté ne laisse pas traîner l'ancien refus
     toast(okMsg);
     await loadTemplatesInto(container);
   }
 
   // ---------------------------------------------------------------------------
-  // Commission — le barème du partage (ADR 0021 §4, réécrit par l'ADR 0028).
-  // GET /commission renvoie { defaut, override, effectif } ; PUT enregistre un
-  // barème COMPLET ; DELETE rend la facturation aux défauts du déploiement.
-  // Écrire exige la permission 'settings:write' (super_admin) — l'analyste lit
-  // le barème en vigueur sans formulaire (l'API le réimpose côté serveur).
+  // Campagnes — à qui Nota écrit, et pourquoi celui-là.
   //
-  // Depuis l'ADR 0028 un palier est `{ cote, taux }` : UNE mesure, la cote sur
-  // 100 du notaire, décide la part de Nota. L'écran parle donc toujours des
-  // DEUX moitiés — ce que Nota garde et ce que le NOTAIRE garde (1 − taux),
-  // parce que c'est cette moitié-là qui se négocie.
+  // Trois cibles : une personne nommée, un groupe, ou un SEGMENT calculé dont
+  // les seuils s'éditent dans les bornes servies par le serveur. L'écran ne
+  // connaît aucun segment en dur : le catalogue vient de GET /segments, comme
+  // le catalogue des permissions vient de GET /permissions.
   //
-  // Les taux voyagent en FRACTIONS (0,10 = 10 %) ; le formulaire parle en
-  // pourcentage (« 12 » = 12 %) et convertit à l'enregistrement. Le serveur
-  // reste l'autorité (le 422 s'affiche dans la région d'erreur en ligne), mais
-  // l'écran refuse d'expédier une évidence : validateBareme() rejoue mot pour
-  // mot les règles de commission-config.js avant le premier octet réseau.
+  // Deux textes commandent cet écran, et il doit les rendre LISIBLES plutôt que
+  // de les appliquer en silence :
+  //
+  //   • LCAP (L.C. 2010, ch. 23, art. 6 et 10) — un message COMMERCIAL exige une
+  //     base de consentement, l'identification de l'expéditeur et un mécanisme
+  //     d'exclusion qui fonctionne. Une campagne commerciale n'est pas une
+  //     notification transactionnelle : confirmer une offre qu'un client vient
+  //     de déposer n'est pas une réclame ; relancer un notaire parti depuis
+  //     quarante jours en est une. L'écran nomme donc la nature de ce qu'il
+  //     s'apprête à envoyer, AVANT l'envoi.
+  //
+  //   • Art. 56 1° du Code de déontologie des notaires — est dérogatoire à la
+  //     dignité de la profession le fait « d'inciter quelqu'un de façon
+  //     pressante ou répétée à recourir à ses services professionnels ». Le
+  //     plafond de fréquence et le décompte des exclus sont la réponse produit.
+  //     Un opérateur qui ne voit pas ses exclusions ne sait pas ce qu'il a fait :
+  //     les cinq exclusions sont donc rendues UNE PAR UNE, avec leur raison, y
+  //     compris celles qui valent zéro.
+  //
+  // L'ordre compte et l'écran l'impose : cible → gabarit → APERÇU → envoi
+  // derrière une confirmation en page qui répète le nombre. Changer un seul
+  // paramètre périme l'aperçu et referme l'envoi ; un décompte qui ne
+  // correspond plus à la cible est pire que pas de décompte.
   // ---------------------------------------------------------------------------
-  var commissionBody = null;
-  var MAX_PALIERS = 10;
+  var campagnesBody = null;
+  var campEtat = null;
+  var campNoeuds = null;
 
-  // Le même arrondi que la facturation (billing.js roundRate) : quatre
-  // décimales, pour que « 12 % » saisi ici et le taux appliqué là-bas soient
-  // le même nombre, jamais deux flottants voisins.
-  function roundRate(x) { return Math.round(x * 10000) / 10000; }
-  // La part qui reste au notaire — énoncée, jamais laissée à recalculer.
-  function partNotaire(taux) { return roundRate(1 - taux); }
-  // Un taux de palier tel que la facturation l'appliquerait : borné par le
-  // plancher et par le taux de base. Un barème d'environnement mal réglé ne
-  // doit pas s'afficher plus cher que le taux de base — le mérite ne déplace
-  // la ligne que vers le notaire.
-  function borneTaux(taux, bareme) {
-    return Math.min(Number(bareme.taux) || 0, Math.max(Number(bareme.plancher) || 0, roundRate(Number(taux) || 0)));
+  function canSendCampaigns() { return can('campaigns:send'); }
+  function canPreviewCampaigns() { return can('analytics:read'); }
+
+  // Les trois formes de cible, dans l'ordre où l'écran les propose.
+  var CAMP_CIBLES = [
+    { type: 'segment', libelle: 'Un segment' },
+    { type: 'group', libelle: 'Un groupe' },
+    { type: 'user', libelle: 'Une personne' },
+  ];
+  // …mais l'écran les affiche du plus étroit au plus large : une personne, un
+  // groupe, un segment. `CAMP_CIBLES` garde l'ordre de DÉFAUT (segment) ;
+  // celui-ci est l'ordre de LECTURE.
+  var CAMP_CIBLES_AFFICHAGE = ['user', 'group', 'segment'];
+  var CAMP_CIBLE_LABEL = { user: 'Une personne', group: 'Un groupe', segment: 'Un segment' };
+
+  // Les cinq exclusions, dans l'ordre où la résolution les applique, chacune
+  // avec la RAISON qui la justifie. L'étiquette seule ne se vérifie pas ; la
+  // raison, oui.
+  var CAMP_EXCLUS = [
+    { cle: 'sansCourriel', libelle: 'Sans adresse courriel',
+      raison: 'Aucune adresse au dossier — il n’y a personne à joindre.' },
+    { cle: 'doublons', libelle: 'Doublons',
+      raison: 'La même adresse visée par plusieurs parties de l’audience, comptée une seule fois.' },
+    { cle: 'desabonnes', libelle: 'Désabonnés',
+      raison: 'Retrait demandé. La LCAP (art. 6) exige un mécanisme d’exclusion qui fonctionne.' },
+    { cle: 'sansConsentement', libelle: 'Sans base de consentement',
+      raison: 'Ni consentement exprès ni relation d’affaires en cours pour un message commercial (LCAP, art. 10).' },
+    { cle: 'frequence', libelle: 'Plafond de fréquence',
+      raison: 'Déjà joints dans la fenêtre. Art. 56 1° : ne pas inciter de façon pressante ou répétée.' },
+  ];
+
+  var CAMP_NATURE = {
+    commercial: {
+      libelle: 'Campagne commerciale',
+      note: 'Message commercial au sens de la LCAP : il exige une base de consentement, l’identification de l’expéditeur et un lien de retrait. Ce n’est PAS une notification transactionnelle.',
+    },
+    transactionnel: {
+      libelle: 'Notification transactionnelle',
+      note: 'Avis de service : il annonce à son destinataire un fait qu’il doit connaître. Ni la base de consentement commerciale ni le plafond de fréquence ne s’y appliquent.',
+    },
+  };
+
+  // --- Normalisation du catalogue --------------------------------------------
+  // Le contrat HTTP sert des libellés à plat (`libelle` / `libelleEn`) et des
+  // paramètres en TABLEAU ; le module segments.js, lui, décrit `libelle:
+  // {fr,en}` et des paramètres en OBJET. Les deux formes sont lues ici, une
+  // fois, plutôt que d'être devinées à dix endroits — et le jour où l'API se
+  // fixe sur l'une, l'autre branche meurt sans que l'écran bouge.
+  // « joursSilence » → « Jours silence ». Le contrat HTTP ne sert pas toujours
+  // un libellé ; afficher le nom de champ nu ferait lire du code à l'opérateur.
+  function humaniser(nom) {
+    var s = String(nom || '').replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').toLowerCase().trim();
+    return s ? s.charAt(0).toUpperCase() + s.slice(1) : String(nom || '');
   }
-  // Le taux qu'une cote vaut sous un barème — copie fidèle de commissionWith()
-  // (apps/api/src/billing.js) : le MEILLEUR palier atteint s'applique, borné.
-  function tauxPourCote(cote, bareme) {
-    var taux = Number(bareme.taux) || 0;
-    (bareme.paliers || []).forEach(function (p) {
-      if (cote >= p.cote && Number(p.taux) < taux) taux = Number(p.taux);
+  function normaliserParamSegment(nom, p) {
+    var lib = p && p.libelle;
+    var libFr = (lib && typeof lib === 'object') ? lib.fr : lib;
+    var libEn = (lib && typeof lib === 'object') ? lib.en : (p && p.libelleEn);
+    var borne = function (v) { var n = Number(v); return (v == null || v === '' || !isFinite(n)) ? null : n; };
+    return {
+      nom: String(nom),
+      libelle: libFr || humaniser(nom),
+      libelleEn: libEn || '',
+      defaut: borne(p && p.defaut),
+      min: borne(p && p.min),
+      max: borne(p && p.max),
+    };
+  }
+  function normaliserSegment(s) {
+    var lib = s && s.libelle;
+    var out = {
+      id: String((s && s.id) || ''),
+      libelle: (lib && typeof lib === 'object') ? (lib.fr || lib.en || s.id) : (lib || (s && s.id) || ''),
+      libelleEn: (s && s.libelleEn) || (lib && typeof lib === 'object' ? lib.en : '') || '',
+      vise: (s && s.vise) || '',
+      audience: (s && s.audience) || '',
+      nature: (s && s.nature) || '',
+      params: [],
+    };
+    var p = s && s.params;
+    if (Array.isArray(p)) {
+      p.forEach(function (x) { out.params.push(normaliserParamSegment(x && x.nom, x)); });
+    } else if (p && typeof p === 'object') {
+      Object.keys(p).forEach(function (nom) { out.params.push(normaliserParamSegment(nom, p[nom])); });
+    }
+    return out;
+  }
+  function campLibelle(o) { return (isEnglish() && o.libelleEn) ? o.libelleEn : o.libelle; }
+
+  // --- La page ----------------------------------------------------------------
+  async function renderCampagnes() {
+    if (!me || !me.email) {
+      var loaded = await loadMe();
+      if (!loaded.ok) {
+        if (loaded.status !== 401) renderFatal('Impossible de charger votre profil.', renderCampagnes);
+        return;
+      }
+    }
+    renderUserbar();
+
+    var content = el('div', 'admin-content');
+    var head = el('div', 'page-head view-enter');
+    var titleWrap = el('div');
+    titleWrap.appendChild(el('span', 'page-eyebrow', 'Notifications'));
+    titleWrap.appendChild(el('h1', 'page-title', 'Campagnes'));
+    titleWrap.appendChild(el('p', 'page-sub',
+      'À qui Nota écrit, et pourquoi celui-là. Prévisualisez toujours avant d’envoyer : le décompte et les exclusions sont ce qui rend l’envoi défendable.'));
+    head.appendChild(titleWrap);
+    content.appendChild(head);
+
+    campagnesBody = el('div');
+    content.appendChild(campagnesBody);
+    mountAuthed('campagnes', content);
+    focusTitle();
+    await loadCampagnesInto(campagnesBody);
+  }
+
+  async function loadCampagnesInto(container) {
+    clear(container);
+    var skel = el('div', 'stat-grid');
+    for (var i = 0; i < 3; i++) skel.appendChild(el('div', 'skeleton skeleton-tile'));
+    container.appendChild(skel);
+
+    var segs = await call('GET', '/segments');
+    if (segs.status === 401) return; // handled by call()
+    var groupes = await call('GET', '/groups');
+    var gabarits = await call('GET', '/notifications/templates');
+    clear(container);
+    // Sans catalogue de segments il n'y a pas d'écran : le reste ne sert à rien.
+    if (!segs.ok || !segs.json || !Array.isArray(segs.json.segments)) {
+      container.appendChild(buildErrorBanner(function () { loadCampagnesInto(container); }));
+      return;
+    }
+
+    campEtat = {
+      segments: segs.json.segments.map(normaliserSegment),
+      // Une porte fermée n'est pas une panne : sans « groups:read » la cible
+      // « groupe » reste offerte, vide, et le dit.
+      groupes: (groupes.ok && groupes.json && groupes.json.groupes) || [],
+      gabarits: (gabarits.ok && gabarits.json && Array.isArray(gabarits.json.templates)) ? gabarits.json.templates : [],
+      cible: 'segment',
+      email: '',
+      groupId: '',
+      segmentId: '',
+      templateKey: '',
+      apercu: null,       // { signature, data }
+      resultat: null,
+    };
+    if (campEtat.segments.length) campEtat.segmentId = campEtat.segments[0].id;
+    if (campEtat.groupes.length) campEtat.groupId = campEtat.groupes[0].id;
+
+    var view = el('div', 'view-enter');
+    if (!canSendCampaigns()) {
+      var note = el('div', 'tpl-readonly-note');
+      note.appendChild(el('strong', null, 'Lecture seule'));
+      note.appendChild(document.createTextNode(
+        ' — l’envoi d’une campagne demande la permission « Envoyer une campagne ciblée ». La prévisualisation, elle, reste ouverte.'));
+      view.appendChild(note);
+    }
+    view.appendChild(buildCampCadre());
+    view.appendChild(buildCampForm(container));
+    campNoeuds.sortie = el('div', 'camp-sortie');
+    view.appendChild(campNoeuds.sortie);
+    container.appendChild(view);
+  }
+
+  // Le cadre juridique, en tête et non en note de bas de page.
+  function buildCampCadre() {
+    var card = el('section', 'chart-card camp-cadre');
+    card.appendChild(el('div', 'chart-card-title', 'Ce qu’un envoi engage'));
+    card.appendChild(el('p', 'camp-cadre-texte',
+      'LCAP (L.C. 2010, ch. 23, art. 6 et 10) — un message commercial exige une base de consentement, l’identification de l’expéditeur et un mécanisme d’exclusion qui fonctionne. Une campagne commerciale n’est pas une notification transactionnelle : l’aperçu dit laquelle des deux part.'));
+    card.appendChild(el('p', 'camp-cadre-texte',
+      'Art. 56 1° du Code de déontologie des notaires — est dérogatoire le fait d’inciter quelqu’un de façon pressante ou répétée à recourir à ses services. Le plafond de fréquence et le décompte des exclus sont la réponse ; c’est pourquoi ils sont affichés, exclusion par exclusion.'));
+    return card;
+  }
+
+  // --- Le formulaire ----------------------------------------------------------
+  function buildCampForm(container) {
+    campNoeuds = { container: container };
+    var card = el('section', 'chart-card camp-form');
+
+    // (1) La cible
+    var e1 = el('div', 'camp-etape');
+    e1.appendChild(el('div', 'chart-card-title', '1 · La cible'));
+    var seg = el('div', 'seg camp-cible');
+    seg.setAttribute('role', 'group');
+    seg.setAttribute('aria-label', 'Forme de la cible');
+    CAMP_CIBLES_AFFICHAGE.forEach(function (type) {
+      var b = el('button', 'seg-btn' + (type === campEtat.cible ? ' is-on' : ''), CAMP_CIBLE_LABEL[type]);
+      b.type = 'button';
+      b.setAttribute('aria-pressed', type === campEtat.cible ? 'true' : 'false');
+      b.addEventListener('click', function () {
+        if (campEtat.cible === type) return;
+        campEtat.cible = type;
+        seg.querySelectorAll('.seg-btn').forEach(function (x) {
+          var on = x === b;
+          x.classList.toggle('is-on', on);
+          x.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+        buildCampCiblePanneau();
+        campPerimer();
+      });
+      seg.appendChild(b);
     });
-    return borneTaux(taux, bareme);
-  }
-  // Le palier effectivement atteint par une cote (le plus haut), ou null.
-  function palierPourCote(cote, bareme) {
-    var best = null;
-    (bareme.paliers || []).forEach(function (p) {
-      if (cote >= p.cote && (!best || p.cote > best.cote)) best = p;
+    e1.appendChild(seg);
+    campNoeuds.panneau = el('div', 'camp-cible-panneau');
+    e1.appendChild(campNoeuds.panneau);
+    card.appendChild(e1);
+
+    // (2) Le gabarit
+    var e2 = el('div', 'camp-etape');
+    e2.appendChild(el('div', 'chart-card-title', '2 · Le gabarit'));
+    var field = el('div', 'field');
+    field.appendChild(el('label', null, 'Courriel à envoyer'));
+    var select = el('select', 'input');
+    select.name = 'templateKey';
+    // Aucun gabarit pré-choisi : une campagne ne se déclenche pas sur un défaut.
+    var vide = el('option', null, '— Choisissez un gabarit —');
+    vide.value = '';
+    select.appendChild(vide);
+    var parAudience = {};
+    campEtat.gabarits.forEach(function (t) { (parAudience[t.audience] = parAudience[t.audience] || []).push(t); });
+    AUDIENCE_ORDER.forEach(function (aud) {
+      var liste = parAudience[aud];
+      if (!liste || !liste.length) return;
+      var grp = el('optgroup');
+      grp.label = AUDIENCE_LABELS[aud] || aud;
+      liste.forEach(function (t) {
+        var o = el('option', null, isEnglish() ? t.labelEn : t.labelFr);
+        o.value = t.key;
+        o.setAttribute('data-i18n-skip', '');
+        grp.appendChild(o);
+      });
+      select.appendChild(grp);
     });
-    return best;
+    select.addEventListener('change', function () {
+      campEtat.templateKey = select.value;
+      campNatureGabarit();
+      campPerimer();
+    });
+    field.appendChild(select);
+    e2.appendChild(field);
+    campNoeuds.gabaritNature = el('p', 'tpl-note camp-gabarit-nature');
+    e2.appendChild(campNoeuds.gabaritNature);
+    card.appendChild(e2);
+
+    // (3) Erreurs, actions, confirmation
+    campNoeuds.erreur = el('div', 'tpl-error camp-erreur');
+    campNoeuds.erreur.hidden = true;
+    card.appendChild(campNoeuds.erreur);
+
+    var actions = el('div', 'tpl-actions');
+    campNoeuds.previsualiser = el('button', 'btn btn-sm btn-primary camp-previsualiser', 'Prévisualiser');
+    campNoeuds.previsualiser.type = 'button';
+    campNoeuds.previsualiser.disabled = !canPreviewCampaigns();
+    campNoeuds.previsualiser.addEventListener('click', function () { previsualiserCampagne(); });
+    actions.appendChild(campNoeuds.previsualiser);
+
+    // Visible et fermé plutôt qu'escamoté : la console garde sa forme et dit
+    // pourquoi la commande ne s'ouvre pas.
+    campNoeuds.envoyer = el('button', 'btn btn-sm camp-envoyer', 'Envoyer la campagne');
+    campNoeuds.envoyer.type = 'button';
+    campNoeuds.envoyer.addEventListener('click', function () { campOuvrirConfirmation(); });
+    actions.appendChild(campNoeuds.envoyer);
+    card.appendChild(actions);
+
+    campNoeuds.perime = el('p', 'tpl-note camp-perime');
+    card.appendChild(campNoeuds.perime);
+    if (!canPreviewCampaigns()) {
+      card.appendChild(el('p', 'tpl-note',
+        'La prévisualisation demande la permission « Lire les statistiques ».'));
+    }
+
+    campNoeuds.confirm = el('div', 'bareme-confirm camp-confirm');
+    campNoeuds.confirm.hidden = true;
+    campNoeuds.confirmTexte = el('p', 'bareme-confirm-text');
+    campNoeuds.confirm.appendChild(campNoeuds.confirmTexte);
+    var cActions = el('div', 'tpl-actions');
+    var oui = el('button', 'btn btn-sm btn-primary camp-confirmer', 'Confirmer l’envoi');
+    oui.type = 'button';
+    var non = el('button', 'btn btn-sm btn-ghost camp-annuler', 'Annuler');
+    non.type = 'button';
+    oui.addEventListener('click', function () { envoyerCampagne(false); });
+    non.addEventListener('click', function () { campNoeuds.confirm.hidden = true; });
+    cActions.appendChild(oui);
+    cActions.appendChild(non);
+    campNoeuds.confirm.appendChild(cActions);
+    card.appendChild(campNoeuds.confirm);
+
+    buildCampCiblePanneau();
+    campNatureGabarit();
+    campMajEnvoi();
+    return card;
   }
+
+  // Le panneau de la cible courante — reconstruit à chaque changement de forme.
+  function buildCampCiblePanneau() {
+    var box = campNoeuds.panneau;
+    clear(box);
+    if (campEtat.cible === 'user') {
+      var f = el('div', 'field');
+      f.appendChild(el('label', null, 'Adresse courriel'));
+      var input = el('input', 'input');
+      input.type = 'email';
+      input.name = 'cibleEmail';
+      input.placeholder = 'personne@exemple.ca';
+      input.value = campEtat.email;
+      input.addEventListener('input', function () { campEtat.email = input.value; campPerimer(); });
+      f.appendChild(input);
+      box.appendChild(f);
+      box.appendChild(el('p', 'tpl-note',
+        'Un envoi nominatif reste un envoi : les mêmes exclusions s’appliquent, et l’aperçu les montre.'));
+      return;
+    }
+    if (campEtat.cible === 'group') {
+      var fg = el('div', 'field');
+      fg.appendChild(el('label', null, 'Groupe'));
+      if (!campEtat.groupes.length) {
+        fg.appendChild(el('p', 'tpl-note', 'Aucun groupe lisible avec vos accès.'));
+        box.appendChild(fg);
+        return;
+      }
+      var sel = el('select', 'input');
+      sel.name = 'cibleGroupe';
+      campEtat.groupes.forEach(function (g) {
+        var o = el('option', null, g.nom || g.id);
+        o.value = g.id;
+        o.setAttribute('data-i18n-skip', '');
+        sel.appendChild(o);
+      });
+      sel.value = campEtat.groupId;
+      sel.addEventListener('change', function () { campEtat.groupId = sel.value; campPerimer(); });
+      fg.appendChild(sel);
+      box.appendChild(fg);
+      return;
+    }
+
+    // Segment : le choix, ce qu'il vise, et ses seuils dans leurs bornes.
+    var fs = el('div', 'field');
+    fs.appendChild(el('label', null, 'Segment'));
+    if (!campEtat.segments.length) {
+      fs.appendChild(el('p', 'tpl-note', 'Aucun segment au catalogue.'));
+      box.appendChild(fs);
+      return;
+    }
+    var ss = el('select', 'input');
+    ss.name = 'cibleSegment';
+    campEtat.segments.forEach(function (s) {
+      var o = el('option', null, campLibelle(s));
+      o.value = s.id;
+      o.setAttribute('data-i18n-skip', '');
+      ss.appendChild(o);
+    });
+    ss.value = campEtat.segmentId;
+    ss.addEventListener('change', function () {
+      campEtat.segmentId = ss.value;
+      buildCampCiblePanneau();
+      campPerimer();
+    });
+    fs.appendChild(ss);
+    box.appendChild(fs);
+
+    var seg = campSegmentCourant();
+    if (!seg) return;
+    // Ce que le segment vise, en toutes lettres : un seuil sans sa définition
+    // est un nombre qu'on règle à l'aveugle.
+    var vise = el('p', 'tpl-note camp-segment-vise', seg.vise);
+    vise.setAttribute('data-i18n-skip', '');
+    box.appendChild(vise);
+    box.appendChild(el('p', 'tpl-note camp-segment-nature',
+      (CAMP_NATURE[seg.nature] ? CAMP_NATURE[seg.nature].libelle : seg.nature)));
+
+    if (!seg.params.length) return;
+    var grille = el('div', 'tpl-fields camp-params');
+    seg.params.forEach(function (p) {
+      var f = el('div', 'field');
+      var id = 'camp-param-' + p.nom;
+      var lab = el('label', null, (isEnglish() && p.libelleEn) ? p.libelleEn : p.libelle);
+      lab.setAttribute('for', id);
+      lab.setAttribute('data-i18n-skip', '');
+      f.appendChild(lab);
+      var input = el('input', 'input');
+      input.type = 'number';
+      input.id = id;
+      input.name = 'param-' + p.nom;
+      // Les bornes viennent du catalogue servi, jamais d'ici.
+      if (p.min != null) input.min = String(p.min);
+      if (p.max != null) input.max = String(p.max);
+      input.value = p.defaut == null ? '' : String(p.defaut);
+      input.addEventListener('input', function () { campPerimer(); });
+      f.appendChild(input);
+      if (p.min != null && p.max != null) {
+        var borne = el('span', 'tpl-count', p.min + ' – ' + p.max);
+        borne.setAttribute('data-i18n-skip', '');
+        f.appendChild(borne);
+      }
+      grille.appendChild(f);
+    });
+    box.appendChild(grille);
+  }
+
+  function campSegmentCourant() {
+    for (var i = 0; i < campEtat.segments.length; i++) {
+      if (campEtat.segments[i].id === campEtat.segmentId) return campEtat.segments[i];
+    }
+    return null;
+  }
+  function campGabaritCourant() {
+    for (var i = 0; i < campEtat.gabarits.length; i++) {
+      if (campEtat.gabarits[i].key === campEtat.templateKey) return campEtat.gabarits[i];
+    }
+    return null;
+  }
+
+  // La nature du GABARIT choisi, dite dès le choix — avant même l'aperçu.
+  function campNatureGabarit() {
+    var n = campNoeuds.gabaritNature;
+    clear(n);
+    var t = campGabaritCourant();
+    if (!t) {
+      n.textContent = 'Aucun gabarit choisi — une campagne ne part jamais sur un défaut.';
+      return;
+    }
+    n.textContent = t.transactionnel === true
+      ? 'Ce gabarit est transactionnel : il annonce un fait à son destinataire.'
+      : (typeof t.transactionnel === 'boolean'
+        ? 'Ce gabarit est commercial : la LCAP exige une base de consentement pour chaque destinataire.'
+        // Non déclarée ≠ commerciale. On applique la règle la plus stricte en
+        // le disant, plutôt que d'affirmer une qualification qu'on n'a pas.
+        : 'Nature non déclarée par l’API pour ce gabarit — traitez-le comme commercial, la règle la plus stricte.');
+  }
+
+  // --- L'audience sur le fil ---------------------------------------------------
+  function campParams() {
+    var seg = campSegmentCourant();
+    var out = {};
+    if (!seg) return out;
+    seg.params.forEach(function (p) {
+      var input = document.querySelector('[name="param-' + p.nom + '"]');
+      var brut = input ? input.value : (p.defaut == null ? '' : String(p.defaut));
+      var n = Number(String(brut).trim().replace(',', '.'));
+      out[p.nom] = isFinite(n) ? n : NaN;
+    });
+    return out;
+  }
+  function campAudience() {
+    if (campEtat.cible === 'user') return { type: 'user', email: String(campEtat.email || '').trim() };
+    if (campEtat.cible === 'group') return { type: 'group', groupId: campEtat.groupId };
+    return { type: 'segment', segmentId: campEtat.segmentId, params: campParams() };
+  }
+  function campSignature() {
+    try { return JSON.stringify([campAudience(), campEtat.templateKey]); }
+    catch (e) { return 'x' + Date.now(); }
+  }
+
+  // Ce que la console refuse elle-même — les évidences, pas les règles du
+  // serveur : lui seul sait qui est désabonné ou déjà joint.
+  function validerCampagne() {
+    var errs = [];
+    var a = campAudience();
+    if (a.type === 'user' && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(a.email)) {
+      errs.push({ code: 'cible_sans_adresse' });
+    }
+    if (a.type === 'group' && !a.groupId) errs.push({ code: 'cible_sans_groupe' });
+    if (a.type === 'segment') {
+      if (!a.segmentId) errs.push({ code: 'cible_sans_segment' });
+      var seg = campSegmentCourant();
+      if (seg) {
+        seg.params.forEach(function (p) {
+          var v = a.params[p.nom];
+          var hors = !isFinite(v)
+            || (p.min != null && v < p.min)
+            || (p.max != null && v > p.max);
+          if (hors) {
+            errs.push({
+              code: 'parametre_hors_bornes',
+              message: p.libelle + ' : ' + (p.min == null ? '?' : p.min) + ' – ' + (p.max == null ? '?' : p.max) + '.',
+            });
+          }
+        });
+      }
+    }
+    if (!campEtat.templateKey) errs.push({ code: 'gabarit_manquant' });
+    return errs;
+  }
+
+  // --- Aperçu ------------------------------------------------------------------
+  function campApercuValide() {
+    return !!(campEtat.apercu && campEtat.apercu.signature === campSignature());
+  }
+  // Un aperçu qui ne correspond plus à la cible est pire que pas d'aperçu.
+  function campPerimer() {
+    campEtat.apercu = null;
+    campEtat.resultat = null;
+    if (campNoeuds.confirm) campNoeuds.confirm.hidden = true;
+    if (campNoeuds.sortie) clear(campNoeuds.sortie);
+    campMajEnvoi();
+  }
+  function campMajEnvoi() {
+    var pret = campApercuValide() && canSendCampaigns();
+    campNoeuds.envoyer.disabled = !pret;
+    campNoeuds.envoyer.classList.toggle('btn-primary', pret);
+    campNoeuds.perime.textContent = campApercuValide()
+      ? (canSendCampaigns()
+        ? 'Le décompte ci-dessous correspond à la cible actuelle. Changez un paramètre et il faudra prévisualiser de nouveau.'
+        : 'Le décompte est à jour ; l’envoi demande la permission « Envoyer une campagne ciblée ».')
+      : 'Prévisualisez d’abord : l’envoi ne s’ouvre qu’une fois le décompte affiché.';
+  }
+
+  async function previsualiserCampagne() {
+    var errs = validerCampagne();
+    if (errs.length) { showErrorLines(campNoeuds.erreur, errs); return; }
+    campNoeuds.erreur.hidden = true;
+    clear(campNoeuds.erreur);
+
+    var signature = campSignature();
+    var body = { audience: campAudience(), templateKey: campEtat.templateKey };
+    campNoeuds.previsualiser.disabled = true;
+    var r = await call('POST', '/campaigns/preview', body);
+    campNoeuds.previsualiser.disabled = !canPreviewCampaigns();
+    if (r.status === 401) return; // handled by call()
+    if (!r.ok || !r.json) {
+      showErrorLines(campNoeuds.erreur, (r.json && r.json.errors && r.json.errors.length)
+        ? r.json.errors
+        : [{ message: 'La prévisualisation n’a pas abouti.' }]);
+      return;
+    }
+    campEtat.apercu = { signature: signature, data: r.json };
+    campEtat.resultat = null;
+    clear(campNoeuds.sortie);
+    campNoeuds.sortie.appendChild(buildCampApercu(r.json));
+    campMajEnvoi();
+  }
+
+  function buildCampApercu(d) {
+    var card = el('section', 'chart-card camp-apercu view-enter');
+    var head = el('div', 'chart-card-head');
+    var ht = el('div');
+    ht.appendChild(el('div', 'chart-card-title', 'Aperçu de l’envoi'));
+    ht.appendChild(el('div', 'chart-card-sub', 'Rien n’est parti — c’est un décompte.'));
+    head.appendChild(ht);
+    card.appendChild(head);
+
+    var exclus = d.exclus || {};
+    var totalExclus = 0;
+    CAMP_EXCLUS.forEach(function (x) { totalExclus += Number(exclus[x.cle]) || 0; });
+
+    var grid = el('div', 'stat-grid');
+    var t1 = tile('Destinataires retenus', num(d.total || 0), 'ce que l’envoi atteindrait', false);
+    t1.classList.add('camp-total');
+    grid.appendChild(t1);
+    grid.appendChild(tile('Écartés', num(totalExclus), 'et pourquoi, ligne par ligne', false));
+    card.appendChild(grid);
+
+    // LA phrase : laquelle des deux natures part.
+    var nat = CAMP_NATURE[d.nature] || null;
+    // Le nom et l'explication sont DEUX nœuds : collés en une seule chaîne, le
+    // tiret de tête empêcherait la phrase de correspondre au dictionnaire et
+    // l'écran anglais mélangerait les deux langues sur la même ligne.
+    var pn = el('p', 'camp-nature');
+    pn.appendChild(el('strong', null, nat ? nat.libelle : 'Nature inconnue'));
+    pn.appendChild(document.createTextNode(' — '));
+    pn.appendChild(el('span', null, nat ? nat.note
+      : 'Le serveur n’a pas qualifié cette campagne ; traitez-la comme commerciale.'));
+    card.appendChild(pn);
+
+    // Le plafond de fréquence : la borne, et si on la dépasse.
+    var pl = d.plafond || {};
+    var pp = el('p', 'tpl-note camp-plafond');
+    pp.textContent = pl.depasse
+      ? 'Plafond d’audience dépassé (' + num(pl.limite || 0) + ') — l’envoi demandera une confirmation explicite.'
+      : 'Plafond d’audience : ' + num(pl.limite || 0) + ' destinataires. Cette audience tient dessous.';
+    card.appendChild(pp);
+
+    // Ce sur quoi l'envoi repose vraiment.
+    if (Array.isArray(d.avertissements) && d.avertissements.length) {
+      var av = el('div', 'tpl-readonly-note camp-avertissements');
+      av.appendChild(el('strong', null, 'À savoir avant d’envoyer'));
+      var ul = el('ul', 'camp-avert-list');
+      d.avertissements.forEach(function (a) {
+        var li = el('li', null, String(a));
+        li.setAttribute('data-i18n-skip', '');
+        ul.appendChild(li);
+      });
+      av.appendChild(ul);
+      card.appendChild(av);
+    }
+
+    card.appendChild(buildCampExclus(exclus));
+
+    // L'échantillon, masqué : reconnaissable, pas expédiable.
+    var ech = el('div', 'camp-echantillon');
+    ech.appendChild(el('div', 'chart-card-sub', 'Échantillon'));
+    if (Array.isArray(d.echantillon) && d.echantillon.length) {
+      var liste = el('ul', 'camp-echantillon-list');
+      d.echantillon.forEach(function (e) {
+        var li = el('li', null, String(e));
+        li.setAttribute('data-i18n-skip', '');
+        liste.appendChild(li);
+      });
+      ech.appendChild(liste);
+      ech.appendChild(el('p', 'tpl-note', 'Adresses masquées : reconnaissables, pas expédiables.'));
+    } else {
+      ech.appendChild(el('p', 'tpl-note', 'Aucun destinataire à montrer.'));
+    }
+    card.appendChild(ech);
+    return card;
+  }
+
+  // Les cinq exclusions, TOUTES rendues — celles à zéro comprises. Une
+  // exclusion qu'on ne voit pas est une exclusion qu'on ne sait pas avoir faite.
+  function buildCampExclus(exclus) {
+    var wrap = el('div', 'chart-scroll camp-exclus-wrap');
+    var table = el('table', 'ptable camp-exclus');
+    var thead = el('thead');
+    var htr = el('tr');
+    [['Écartés', ''], ['Nombre', 'is-num'], ['Pourquoi', '']].forEach(function (h) {
+      htr.appendChild(el('th', h[1], h[0]));
+    });
+    thead.appendChild(htr);
+    table.appendChild(thead);
+    var tbody = el('tbody');
+    CAMP_EXCLUS.forEach(function (x) {
+      var tr = el('tr');
+      tr.setAttribute('data-exclu', x.cle);
+      tr.appendChild(el('td', null, x.libelle));
+      tr.appendChild(el('td', 'is-num', num(exclus[x.cle] || 0)));
+      tr.appendChild(el('td', 'ptable-sub', x.raison));
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    wrap.appendChild(table);
+    return wrap;
+  }
+
+  // --- Envoi -------------------------------------------------------------------
+  function campOuvrirConfirmation() {
+    if (!campApercuValide() || !canSendCampaigns()) return;
+    var total = num((campEtat.apercu.data && campEtat.apercu.data.total) || 0);
+    var nat = CAMP_NATURE[campEtat.apercu.data && campEtat.apercu.data.nature];
+    clear(campNoeuds.confirmTexte);
+    // Le nombre est répété ICI, dans la phrase qu'on confirme — jamais laissé
+    // à la mémoire de qui clique.
+    campNoeuds.confirmTexte.appendChild(el('strong', null, 'Envoyer à ' + total + ' destinataires ?'));
+    campNoeuds.confirmTexte.appendChild(el('span', 'camp-confirm-nature',
+      nat ? nat.libelle : 'Nature inconnue'));
+    campNoeuds.confirmTexte.appendChild(el('span', null,
+      'L’envoi est immédiat et ne se rappelle pas.'));
+    campNoeuds.confirm.hidden = false;
+  }
+
+  async function envoyerCampagne(confirme) {
+    if (!campApercuValide() || !canSendCampaigns()) return;
+    var body = { audience: campAudience(), templateKey: campEtat.templateKey };
+    if (confirme) body.confirme = true;
+
+    var boutons = [campNoeuds.envoyer, campNoeuds.previsualiser];
+    boutons.forEach(function (b) { b.disabled = true; });
+    var r = await call('POST', '/campaigns', body);
+    // Rendre les boutons à leur état de DROIT, pas à « ouvert » : une requête
+    // terminée ne doit pas déverrouiller une commande que la permission ferme.
+    campNoeuds.previsualiser.disabled = !canPreviewCampaigns();
+    campMajEnvoi();
+    if (r.status === 401) return; // handled by call()
+
+    if (!r.ok) {
+      var errs = (r.json && r.json.errors && r.json.errors.length)
+        ? r.json.errors
+        : [{ message: 'L’envoi n’a pas abouti.' }];
+      showErrorLines(campNoeuds.erreur, errs);
+      // Un 409 « confirmation_requise » n'est pas une impasse : le serveur
+      // demande un geste explicite, l'écran offre ce geste-là et rien d'autre.
+      var besoin = errs.some(function (e) { return e && e.code === 'confirmation_requise'; });
+      if (besoin && !confirme) {
+        var forcer = el('button', 'btn btn-sm btn-danger camp-forcer', 'Confirmer et envoyer quand même');
+        forcer.type = 'button';
+        forcer.addEventListener('click', function () { envoyerCampagne(true); });
+        campNoeuds.erreur.appendChild(forcer);
+      }
+      return;
+    }
+
+    campNoeuds.erreur.hidden = true;
+    clear(campNoeuds.erreur);
+    campNoeuds.confirm.hidden = true;
+    campEtat.resultat = r.json;
+    clear(campNoeuds.sortie);
+    campNoeuds.sortie.appendChild(buildCampResultat(r.json));
+    campEtat.apercu = null; // un envoi consomme son aperçu
+    campMajEnvoi();
+    toast('Campagne envoyée.');
+  }
+
+  function buildCampResultat(d) {
+    var card = el('section', 'chart-card camp-resultat view-enter');
+    var head = el('div', 'chart-card-head');
+    var ht = el('div');
+    ht.appendChild(el('div', 'chart-card-title', 'Campagne envoyée'));
+    var id = el('div', 'chart-card-sub', 'Référence');
+    var ref = el('span', null, ' ' + String(d.campagneId || '—'));
+    ref.setAttribute('data-i18n-skip', '');
+    id.appendChild(ref);
+    ht.appendChild(id);
+    head.appendChild(ht);
+    card.appendChild(head);
+
+    var grid = el('div', 'stat-grid');
+    grid.appendChild(tile('Envoyés', num(d.envoyes || 0), 'destinataires joints', false));
+    card.appendChild(grid);
+    card.appendChild(buildCampExclus(d.exclus || {}));
+    card.appendChild(el('p', 'tpl-note',
+      'Prévisualisez de nouveau avant tout autre envoi : le décompte précédent a été consommé.'));
+    return card;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Accès — utilisateurs, groupes, permissions.
+  //
+  // Le découplage est le sujet, pas un détail d'implémentation : une PERMISSION
+  // est une capacité, un GROUPE en réunit, une PERSONNE reçoit des groupes ET
+  // des permissions directes. Ses accès effectifs sont l'union des trois, et le
+  // serveur les recalcule à chaque requête — retirer un groupe mord tout de
+  // suite, y compris sur une session déjà ouverte.
+  //
+  // Deux règles que l'écran rend visibles plutôt que de les cacher :
+  //   • le joker « accès complet » ne s'offre PAS sur un groupe. Un groupe qui
+  //     porte « tout » se propagerait en silence à chaque nouveau membre ; il se
+  //     donne nommément à une personne, et se lit sur sa ligne.
+  //   • retirer le dernier accès complet est refusé par le serveur (409). Le
+  //     message est rendu près du formulaire, en clair : une console
+  //     d'administration sans personne pour l'ouvrir est une panne.
+  //
+  // Le catalogue des permissions vient du SERVEUR (GET /permissions). La console
+  // n'en déclare aucune : une clé qu'elle inventerait serait refusée à
+  // l'écriture, et une clé qu'elle oublierait deviendrait invisible.
+  // ---------------------------------------------------------------------------
+  var accesBody = null;
+  var accesEtat = { catalogue: [], groupes: [], utilisateurs: [], edition: null };
+
+  function canWriteUsers() { return can('users:write'); }
+  function canWriteGroups() { return can('groups:write'); }
+
+  async function renderAcces() {
+    if (!me || !me.email) {
+      var loaded = await loadMe();
+      if (!loaded.ok) {
+        if (loaded.status !== 401) renderFatal('Impossible de charger votre profil.', renderAcces);
+        return;
+      }
+    }
+    renderUserbar();
+
+    var content = el('div', 'admin-content');
+    var head = el('div', 'page-head view-enter');
+    var titleWrap = el('div');
+    titleWrap.appendChild(el('span', 'page-eyebrow', 'Console'));
+    titleWrap.appendChild(el('h1', 'page-title', 'Accès'));
+    titleWrap.appendChild(el('p', 'page-sub',
+      'Qui peut quoi. Une permission est une capacité, un groupe en réunit, une personne reçoit des groupes et des permissions directes.'));
+    head.appendChild(titleWrap);
+    content.appendChild(head);
+
+    accesBody = el('div');
+    content.appendChild(accesBody);
+    mountAuthed('acces', content);
+    focusTitle();
+    await loadAccesInto(accesBody);
+  }
+
+  async function loadAccesInto(container) {
+    clear(container);
+    var skel = el('div', 'stat-grid');
+    for (var i = 0; i < 3; i++) skel.appendChild(el('div', 'skeleton skeleton-tile'));
+    container.appendChild(skel);
+
+    var perms = await call('GET', '/permissions');
+    if (perms.status === 401) return;
+    var groupes = await call('GET', '/groups');
+    var users = await call('GET', '/users');
+    clear(container);
+    if (!perms.ok || !perms.json) {
+      container.appendChild(buildErrorBanner(function () { loadAccesInto(container); }));
+      return;
+    }
+    accesEtat.catalogue = perms.json.permissions || [];
+    // Une porte fermée n'est pas une panne : un compte sans « groups:read » voit
+    // la section, vide, et la raison — la console garde sa forme.
+    accesEtat.groupes = (groupes.ok && groupes.json && groupes.json.groupes) || [];
+    accesEtat.utilisateurs = (users.ok && users.json && users.json.utilisateurs) || [];
+
+    var view = el('div', 'view-enter');
+    if (!canWriteUsers() && !canWriteGroups()) {
+      var note = el('div', 'tpl-readonly-note');
+      note.appendChild(el('strong', null, 'Lecture seule'));
+      note.appendChild(document.createTextNode(
+        ' — attribuer des accès demande la permission « Attribuer groupes et permissions ».'));
+      view.appendChild(note);
+    }
+    view.appendChild(buildGroupesCard());
+    view.appendChild(buildUsersCard());
+    container.appendChild(view);
+  }
+
+  // Le libellé lisible d'une clé de permission. Sans entrée au catalogue on
+  // affiche la clé : mieux vaut une clé brute qu'une capacité silencieuse.
+  function permLabel(cle) {
+    for (var i = 0; i < accesEtat.catalogue.length; i++) {
+      if (accesEtat.catalogue[i].cle === cle) return accesEtat.catalogue[i].libelle;
+    }
+    return cle;
+  }
+
+  function buildGroupesCard() {
+    var card = el('section', 'chart-card acces-groupes');
+    card.appendChild(el('div', 'chart-card-title', 'Groupes'));
+    card.appendChild(el('p', 'tpl-note',
+      'Un groupe réunit des permissions et s’attribue à des personnes. Le supprimer retire ses permissions à tous ses membres, immédiatement.'));
+
+    if (!accesEtat.groupes.length) {
+      card.appendChild(el('p', 'tpl-note', 'Aucun groupe pour le moment.'));
+    }
+    accesEtat.groupes.forEach(function (g) {
+      var row = el('div', 'acces-groupe');
+      var h = el('div', 'acces-groupe-h');
+      h.appendChild(el('strong', null, g.nom));
+      h.appendChild(el('span', 'ptable-sub', ' · ' + g.id));
+      row.appendChild(h);
+      if (g.description) row.appendChild(el('p', 'ptable-sub', g.description));
+      var ul = el('ul', 'acces-perm-list');
+      (g.permissions || []).forEach(function (p) { ul.appendChild(el('li', null, permLabel(p))); });
+      if (!(g.permissions || []).length) ul.appendChild(el('li', 'ptable-sub', 'Aucune permission'));
+      row.appendChild(ul);
+      if (canWriteGroups()) {
+        var del = el('button', 'btn btn-sm acces-groupe-del', 'Supprimer');
+        del.type = 'button';
+        del.addEventListener('click', function () { supprimerGroupe(g.id); });
+        row.appendChild(del);
+      }
+      card.appendChild(row);
+    });
+
+    if (canWriteGroups()) card.appendChild(buildGroupeForm());
+    return card;
+  }
+
+  function buildGroupeForm() {
+    var form = el('form', 'acces-groupe-form');
+    form.appendChild(el('div', 'chart-card-sub', 'Nouveau groupe'));
+
+    var idRow = el('div', 'field');
+    idRow.appendChild(el('label', null, 'Identifiant'));
+    var id = el('input', 'input');
+    id.name = 'id'; id.type = 'text'; id.placeholder = 'soutien';
+    idRow.appendChild(id);
+    form.appendChild(idRow);
+
+    var nomRow = el('div', 'field');
+    nomRow.appendChild(el('label', null, 'Nom'));
+    var nom = el('input', 'input');
+    nom.name = 'nom'; nom.type = 'text'; nom.placeholder = 'Soutien';
+    nomRow.appendChild(nom);
+    form.appendChild(nomRow);
+
+    var permsBox = el('fieldset', 'acces-perms');
+    permsBox.appendChild(el('legend', null, 'Permissions'));
+    accesEtat.catalogue.forEach(function (p) {
+      // Le joker ne figure JAMAIS au catalogue offert sur un groupe.
+      if (p.cle === '*') return;
+      var line = el('label', 'check-line');
+      var cb = el('input');
+      cb.type = 'checkbox'; cb.value = p.cle;
+      line.appendChild(cb);
+      line.appendChild(document.createTextNode(' ' + p.libelle));
+      permsBox.appendChild(line);
+    });
+    form.appendChild(permsBox);
+
+    var err = el('ul', 'acces-erreur');
+    err.hidden = true;
+    form.appendChild(err);
+
+    var submit = el('button', 'btn btn-primary', 'Créer le groupe');
+    submit.type = 'submit';
+    form.appendChild(submit);
+
+    form.addEventListener('submit', async function (ev) {
+      if (ev.preventDefault) ev.preventDefault();
+      clear(err); err.hidden = true;
+      var permissions = [];
+      permsBox.querySelectorAll('input[type="checkbox"]').forEach(function (cb) {
+        if (cb.checked) permissions.push(cb.value);
+      });
+      var r = await call('PUT', '/groups/' + encodeURIComponent(id.value.trim()), {
+        nom: nom.value.trim(),
+        permissions: permissions,
+      });
+      if (!r.ok) { montrerErreurs(err, r); return; }
+      toast('Groupe enregistré.');
+      await loadAccesInto(accesBody);
+    });
+    return form;
+  }
+
+  async function supprimerGroupe(id) {
+    var r = await call('DELETE', '/groups/' + encodeURIComponent(id));
+    if (!r.ok) { toast('Suppression impossible.'); return; }
+    toast('Groupe supprimé.');
+    await loadAccesInto(accesBody);
+  }
+
+  function buildUsersCard() {
+    var card = el('section', 'chart-card acces-users');
+    card.appendChild(el('div', 'chart-card-title', 'Utilisateurs'));
+    card.appendChild(el('p', 'tpl-note',
+      'Les comptes viennent de la liste blanche du déploiement — elle reste la porte extérieure. Ce qui se règle ici, c’est ce que chacun peut.'));
+
+    accesEtat.utilisateurs.forEach(function (u) {
+      var row = el('div', 'acces-user');
+      row.dataset.email = u.email;
+      var h = el('div', 'acces-user-h');
+      var mail = el('strong', null, u.email);
+      mail.setAttribute('data-i18n-skip', '');
+      h.appendChild(mail);
+      if (u.disabled) h.appendChild(el('span', 'nstatut is-suspendu', ' Désactivé'));
+      row.appendChild(h);
+
+      var resume = el('p', 'ptable-sub');
+      if ((u.effectives || []).indexOf('*') >= 0) {
+        resume.appendChild(document.createTextNode('Accès complet'));
+      } else if (!(u.effectives || []).length) {
+        resume.appendChild(document.createTextNode('Aucun accès'));
+      } else {
+        resume.appendChild(document.createTextNode(u.effectives.map(permLabel).join(' · ')));
+      }
+      row.appendChild(resume);
+
+      if ((u.groupes || []).length) {
+        var gl = el('p', 'ptable-sub');
+        gl.appendChild(document.createTextNode('Groupes : ' + u.groupes.map(nomGroupe).join(', ')));
+        row.appendChild(gl);
+      }
+
+      if (canWriteUsers()) {
+        var edit = el('button', 'btn btn-sm acces-user-edit', 'Modifier');
+        edit.type = 'button';
+        edit.addEventListener('click', function () {
+          accesEtat.edition = u.email;
+          var existant = row.querySelector('.acces-user-form');
+          if (existant) { existant.remove(); return; }
+          row.appendChild(buildUserForm(u));
+        });
+        row.appendChild(edit);
+      }
+      card.appendChild(row);
+    });
+    return card;
+  }
+
+  function nomGroupe(id) {
+    for (var i = 0; i < accesEtat.groupes.length; i++) {
+      if (accesEtat.groupes[i].id === id) return accesEtat.groupes[i].nom;
+    }
+    return id;
+  }
+
+  function buildUserForm(u) {
+    var form = el('form', 'acces-user-form');
+
+    // L'accès complet se donne et se retire NOMMÉMENT, sur une personne.
+    var jokerLine = el('label', 'check-line');
+    var joker = el('input');
+    joker.type = 'checkbox'; joker.name = 'complet';
+    joker.checked = (u.permissions || []).indexOf('*') >= 0;
+    jokerLine.appendChild(joker);
+    jokerLine.appendChild(document.createTextNode(' Accès complet à la console'));
+    form.appendChild(jokerLine);
+
+    var gBox = el('fieldset', 'acces-user-groupes');
+    gBox.appendChild(el('legend', null, 'Groupes'));
+    accesEtat.groupes.forEach(function (g) {
+      var line = el('label', 'check-line');
+      var cb = el('input');
+      cb.type = 'checkbox'; cb.value = g.id; cb.className = 'acces-user-groupe';
+      cb.checked = (u.groupes || []).indexOf(g.id) >= 0;
+      line.appendChild(cb);
+      line.appendChild(document.createTextNode(' ' + g.nom));
+      gBox.appendChild(line);
+    });
+    if (!accesEtat.groupes.length) gBox.appendChild(el('p', 'ptable-sub', 'Aucun groupe à attribuer.'));
+    form.appendChild(gBox);
+
+    var pBox = el('fieldset', 'acces-user-perms');
+    pBox.appendChild(el('legend', null, 'Permissions directes'));
+    accesEtat.catalogue.forEach(function (p) {
+      var line = el('label', 'check-line');
+      var cb = el('input');
+      cb.type = 'checkbox'; cb.value = p.cle; cb.className = 'acces-user-perm';
+      cb.checked = (u.permissions || []).indexOf(p.cle) >= 0;
+      line.appendChild(cb);
+      line.appendChild(document.createTextNode(' ' + p.libelle));
+      pBox.appendChild(line);
+    });
+    form.appendChild(pBox);
+
+    var err = el('ul', 'acces-erreur');
+    err.hidden = true;
+    form.appendChild(err);
+
+    var save = el('button', 'btn btn-primary', 'Enregistrer');
+    save.type = 'submit';
+    form.appendChild(save);
+
+    form.addEventListener('submit', async function (ev) {
+      if (ev.preventDefault) ev.preventDefault();
+      clear(err); err.hidden = true;
+      var permissions = [];
+      if (joker.checked) permissions.push('*');
+      pBox.querySelectorAll('.acces-user-perm').forEach(function (cb) { if (cb.checked) permissions.push(cb.value); });
+      var groupes = [];
+      gBox.querySelectorAll('.acces-user-groupe').forEach(function (cb) { if (cb.checked) groupes.push(cb.value); });
+
+      var r = await call('PUT', '/users/' + encodeURIComponent(u.email), { groupes: groupes, permissions: permissions });
+      if (!r.ok) { montrerErreurs(err, r); return; }
+      toast('Accès enregistrés.');
+      await loadAccesInto(accesBody);
+    });
+    return form;
+  }
+
+  // Les messages du serveur, rendus près du formulaire. Un 409
+  // « dernier_administrateur » n'est pas une panne : c'est une décision du
+  // serveur qui doit se lire, sinon l'opérateur croit à un bogue.
+  function montrerErreurs(box, r) {
+    clear(box);
+    var errs = (r.json && r.json.errors) || [{ message: 'Enregistrement impossible.' }];
+    errs.forEach(function (e) { box.appendChild(el('li', null, e.message)); });
+    box.hidden = false;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Prix — le prix du service de Nota (ADR 0031).
+  // GET /prix renvoie { defaut, override, effectif } ; PUT enregistre un prix ;
+  // DELETE rend la facturation au défaut du déploiement. Écrire exige la
+  // permission 'settings:write' (super_admin) — l'analyste lit le prix en
+  // vigueur sans formulaire (l'API le réimpose côté serveur).
+  //
+  // Cet écran remplace celui du barème de commission. Nota ne prélève plus une
+  // part des honoraires : il n'y a donc plus deux moitiés à montrer, plus de
+  // palier, plus de cote. UN montant, le même pour tous — l'art. 29.1 du Code
+  // de déontologie interdit au notaire toute convention mettant en péril son
+  // indépendance et son désintéressement, et un prix qui bougerait selon la
+  // cote que Nota lui attribue en serait une.
+  //
+  // Le prix voyage en CENTS (40000 = 400 $) ; le formulaire parle en dollars et
+  // convertit à l'enregistrement. Le serveur reste l'autorité (le 422 s'affiche
+  // dans la région d'erreur en ligne), mais l'écran refuse d'expédier une
+  // évidence : validatePrixForm() rejoue la règle de prix-nota-config.js avant
+  // le premier octet réseau.
+  // ---------------------------------------------------------------------------
+  var prixBody = null;
+  var MAX_PALIERS = 10;
 
   // La porte des données personnelles : le bottin des notaires et le journal
   // d'audit. 'pii:read' n'est donné qu'à l'administrateur principal.
+  // Le MÊME test que le serveur : un compte qui porte le joker « * » peut tout,
+  // et la console doit le refléter — sans quoi elle cacherait des commandes que
+  // l'API accepterait, ce qui est la pire forme de désaccord entre les deux.
+  function can(permission) {
+    var list = (me && me.permissions) || [];
+    return list.indexOf('*') >= 0 || list.indexOf(permission) >= 0;
+  }
   function canReadPii() {
-    return !!(me && me.permissions && me.permissions.indexOf('pii:read') >= 0);
+    return can('pii:read');
   }
 
   function canWriteSettings() {
-    return !!(me && me.permissions && me.permissions.indexOf('settings:write') >= 0);
+    return can('settings:write');
   }
 
   // « 12 » or « 12,5 » (percent, comma or point) → 0.125 fraction.
@@ -1164,11 +2426,26 @@
     return s.slice(0, 10) + (s.length > 16 ? ' ' + s.slice(11, 16) : '');
   }
 
-  async function renderCommission() {
+  // Dollars saisis (« 400 », « 400,50 ») → un entier de cents, ou NaN. Le prix
+  // se stocke en cents parce qu'un montant d'argent ne se garde jamais en
+  // flottant ; l'écran, lui, parle la langue de l'opérateur.
+  function dollarsToCents(v) {
+    var s = String(v == null ? '' : v).trim().replace(/\s/g, '').replace(',', '.');
+    if (!s || !/^\d+(\.\d{1,2})?$/.test(s)) return NaN;
+    return Math.round(Number(s) * 100);
+  }
+  // 40000 cents → « 400 » / « 400,50 », pour amorcer le champ.
+  function centsToDollarsInput(cents) {
+    var n = Math.round(Number(cents) || 0);
+    var rem = n % 100;
+    return String(Math.floor(n / 100)) + (rem ? (',' + String(rem).padStart(2, '0')) : '');
+  }
+
+  async function renderPrix() {
     if (!me || !me.email) {
       var loaded = await loadMe();
       if (!loaded.ok) {
-        if (loaded.status !== 401) renderFatal('Impossible de charger votre profil.', renderCommission);
+        if (loaded.status !== 401) renderFatal('Impossible de charger votre profil.', renderPrix);
         return;
       }
     }
@@ -1178,31 +2455,31 @@
     var head = el('div', 'page-head view-enter');
     var titleWrap = el('div');
     titleWrap.appendChild(el('span', 'page-eyebrow', 'Facturation'));
-    titleWrap.appendChild(el('h1', 'page-title', 'Commission'));
+    titleWrap.appendChild(el('h1', 'page-title', 'Prix'));
     titleWrap.appendChild(el('p', 'page-sub',
-      'Barème décidé par Nota — la cote sur 100 du notaire décide le partage.'));
+      'Le prix du service de Nota — un montant fixe, le même pour tous les notaires.'));
     head.appendChild(titleWrap);
     content.appendChild(head);
 
-    commissionBody = el('div');
-    content.appendChild(commissionBody);
+    prixBody = el('div');
+    content.appendChild(prixBody);
 
-    mountAuthed('commission', content);
+    mountAuthed('prix', content);
     focusTitle();
-    await loadCommissionInto(commissionBody);
+    await loadPrixInto(prixBody);
   }
 
-  async function loadCommissionInto(container) {
+  async function loadPrixInto(container) {
     clear(container);
     var skel = el('div', 'stat-grid');
     for (var i = 0; i < 3; i++) skel.appendChild(el('div', 'skeleton skeleton-tile'));
     container.appendChild(skel);
 
-    var r = await call('GET', '/commission');
+    var r = await call('GET', '/prix');
     if (r.status === 401) return; // handled by call()
     clear(container);
     if (!r.ok || !r.json || !r.json.effectif) {
-      container.appendChild(buildErrorBanner(function () { loadCommissionInto(container); }));
+      container.appendChild(buildErrorBanner(function () { loadPrixInto(container); }));
       return;
     }
 
@@ -1210,226 +2487,82 @@
     if (!canWriteSettings()) {
       var note = el('div', 'tpl-readonly-note');
       note.appendChild(el('strong', null, 'Lecture seule'));
-      note.appendChild(document.createTextNode(' — la modification du barème est réservée à l’administrateur principal.'));
+      note.appendChild(document.createTextNode(' — la modification du prix est réservée à l’administrateur principal.'));
       view.appendChild(note);
     }
-    view.appendChild(buildBaremeView(r.json));
-    // Le simulateur est une LECTURE : l'analyste y a droit comme le
-    // propriétaire, puisqu'il ne fait que rejouer le barème en vigueur.
-    view.appendChild(buildBaremeSim(r.json.effectif));
-    if (canWriteSettings()) view.appendChild(buildBaremeForm(r.json, container));
+    view.appendChild(buildPrixView(r.json));
+    if (canWriteSettings()) view.appendChild(buildPrixForm(r.json, container));
     container.appendChild(view);
   }
 
   // --- Read view: what billing prices with right now -------------------------
-  function buildBaremeView(data) {
+  function buildPrixView(data) {
     var eff = data.effectif;
     var wrap = el('div');
 
     var grid = el('div', 'stat-grid');
-    grid.appendChild(tile('Taux de base', pctLabel(eff.taux), 'la part de Nota sans historique', false));
-    grid.appendChild(tile('Plancher', pctLabel(eff.plancher), 'jamais franchi, quelle que soit la cote', false));
-    // Le sommet du barème, énoncé : c'est le chiffre que le notaire retient.
-    grid.appendChild(tile('Au mieux, le notaire garde', pctLabel(partNotaire(tauxPourCote(100, eff))),
-      'à la cote la plus haute du barème', false));
-    grid.appendChild(tile('Paliers', num((eff.paliers || []).length), 'de cote qui abaissent la part de Nota', false));
+    grid.appendChild(tile('Prix en vigueur', moneyCents(eff.prixCents),
+      'ajouté à chaque offre, encaissé à la signature', false));
+    grid.appendChild(tile('Défaut du déploiement', moneyCents(data.defaut.prixCents),
+      'ce à quoi une réinitialisation revient', false));
     wrap.appendChild(grid);
 
     var card = el('div', 'chart-card tpl-group bareme-card');
     var head = el('div', 'chart-card-head');
     var ht = el('div');
-    ht.appendChild(el('div', 'chart-card-title', 'Barème en vigueur'));
-    // Quietly say WHICH barème rules: the stored override (with its date) or
-    // the deployment defaults.
+    ht.appendChild(el('div', 'chart-card-title', 'Prix en vigueur'));
+    // Dire sans bruit LEQUEL des deux gouverne : le prix enregistré (avec sa
+    // date) ou le défaut du déploiement.
     var src = data.override
-      ? 'Barème décidé par Nota — modifié le ' + baremeDate(data.override.updatedAt) + '.'
-      : 'Valeurs par défaut du déploiement — aucun barème enregistré.';
+      ? 'Prix décidé par Nota — modifié le ' + baremeDate(data.override.updatedAt) + '.'
+      : 'Valeur par défaut du déploiement — aucun prix enregistré.';
     ht.appendChild(el('div', 'chart-card-sub', src));
     head.appendChild(ht);
     card.appendChild(head);
 
-    var paliers = eff.paliers || [];
-    if (!paliers.length) {
-      card.appendChild(el('p', 'tpl-note', 'Aucun palier — le taux de base s’applique toujours.'));
-    } else {
-      var scroll = el('div', 'chart-scroll');
-      var table = el('table', 'ptable');
-      var thead = el('thead');
-      var hr = el('tr');
-      ['Cote atteinte', 'Part de Nota', 'Le notaire garde'].forEach(function (h, i) {
-        hr.appendChild(el('th', i >= 1 ? 'is-num' : null, h));
-      });
-      thead.appendChild(hr);
-      table.appendChild(thead);
-      var tbody = el('tbody');
-      paliers.forEach(function (p) {
-        var taux = borneTaux(p.taux, eff);
-        var tr = el('tr');
-        tr.appendChild(el('td', 'ptable-code', num(p.cote)));
-        tr.appendChild(el('td', 'is-num', pctLabel(taux)));
-        // La moitié qui se négocie porte l'accent.
-        tr.appendChild(el('td', 'is-num ptable-du', pctLabel(partNotaire(taux))));
-        tbody.appendChild(tr);
-      });
-      table.appendChild(tbody);
-      scroll.appendChild(table);
-      card.appendChild(scroll);
-      // Sous le premier palier, c'est le taux de base qui parle — dit ici pour
-      // que le tableau n'ait pas besoin d'une ligne « départ » silencieuse.
-      var foot = el('p', 'tpl-note');
-      foot.appendChild(document.createTextNode(
-        'Sous le premier palier, le taux de base s’applique — le notaire garde '));
-      foot.appendChild(el('span', null, pctLabel(partNotaire(Number(eff.taux) || 0))));
-      foot.appendChild(document.createTextNode('.'));
-      card.appendChild(foot);
-    }
+    // Ce que l'opérateur doit avoir sous les yeux avant de changer ce nombre.
+    var foot = el('p', 'tpl-note');
+    foot.appendChild(document.createTextNode(
+      'Le client autorise sa carte pour le montant offert au notaire PLUS ce prix. '
+      + 'Le notaire reçoit ses honoraires en entier ; ce prix ne dépend ni de lui, '
+      + 'ni de sa cote, ni de la valeur de l’acte.'));
+    card.appendChild(foot);
     wrap.appendChild(card);
     return wrap;
   }
 
-  // --- Simulateur : une cote, le partage qu'elle vaut ------------------------
-  // Le barème est un document ; le simulateur en est la lecture. Il rejoue
-  // exactement tauxPourCote() — la copie fidèle de la facturation — pour que
-  // « et à 78, ça donne quoi ? » se réponde ici, pas dans un tableur.
-  function buildBaremeSim(eff) {
-    var card = el('div', 'chart-card bareme-sim');
-    var head = el('div', 'chart-card-head');
-    var ht = el('div');
-    ht.appendChild(el('div', 'chart-card-title', 'Simulateur'));
-    ht.appendChild(el('div', 'chart-card-sub', 'Une cote, et le partage qu’elle vaut sous le barème en vigueur.'));
-    head.appendChild(ht);
-    card.appendChild(head);
-
-    var field = el('div', 'field bareme-sim-field');
-    field.appendChild(el('label', null, 'Cote du notaire (0 à 100)'));
-    var input = el('input', 'input bareme-sim-input');
-    input.type = 'text';
-    input.inputMode = 'numeric';
-    input.setAttribute('data-i18n-skip', '');
-    input.value = '75';
-    field.appendChild(input);
-    card.appendChild(field);
-
-    var out = el('div', 'bareme-sim-out');
-    function fig(k, cls) {
-      var f = el('div', 'bareme-sim-fig');
-      f.appendChild(el('div', 'bareme-sim-k', k));
-      var v = el('div', 'bareme-sim-v ' + cls, '—');
-      f.appendChild(v);
-      out.appendChild(f);
-      return v;
-    }
-    var vNota = fig('Nota garde', 'bareme-sim-nota');
-    var vNotaire = fig('Le notaire garde', 'bareme-sim-notaire');
-    card.appendChild(out);
-
-    var note = el('p', 'tpl-note bareme-sim-note');
-    card.appendChild(note);
-
-    function refresh() {
-      clear(note);
-      var cote = decToNum(input.value);
-      if (!isFinite(cote) || cote < 0 || cote > 100) {
-        vNota.textContent = '—';
-        vNotaire.textContent = '—';
-        note.appendChild(document.createTextNode('Entrez une cote de 0 à 100.'));
-        return;
-      }
-      var taux = tauxPourCote(cote, eff);
-      vNota.textContent = pctLabel(taux);
-      vNotaire.textContent = pctLabel(partNotaire(taux));
-      var p = palierPourCote(cote, eff);
-      if (!p) {
-        note.appendChild(document.createTextNode('Aucun palier atteint — le taux de base s’applique.'));
-      } else {
-        note.appendChild(document.createTextNode('Palier atteint : cote '));
-        note.appendChild(el('span', null, num(p.cote)));
-      }
-    }
-    input.addEventListener('input', refresh);
-    refresh();
-    return card;
-  }
-
   // --- Edit form (super_admin only) ------------------------------------------
-  function buildBaremeForm(data, container) {
+  function buildPrixForm(data, container) {
     var eff = data.effectif;
     var card = el('div', 'chart-card');
     var head = el('div', 'chart-card-head');
     var ht = el('div');
-    ht.appendChild(el('div', 'chart-card-title', 'Modifier le barème'));
-    ht.appendChild(el('div', 'chart-card-sub', 'Les valeurs sont saisies en pourcentage — « 12 » signifie 12 %.'));
+    ht.appendChild(el('div', 'chart-card-title', 'Modifier le prix'));
+    ht.appendChild(el('div', 'chart-card-sub', 'Le montant est saisi en dollars — « 400 » signifie 400,00 $.'));
     head.appendChild(ht);
     card.appendChild(head);
-
-    function fld(labelText, value) {
-      var field = el('div', 'field');
-      field.appendChild(el('label', null, labelText));
-      var input = el('input', 'input');
-      input.type = 'text';
-      input.inputMode = 'decimal';
-      input.setAttribute('data-i18n-skip', '');
-      input.value = value;
-      field.appendChild(input);
-      return { field: field, input: input };
-    }
 
     var form = el('form', 'bareme-form');
     form.noValidate = true;
 
     var top = el('div', 'tpl-fields');
-    var taux = fld('Taux de base (%)', fracToPct(eff.taux));
-    var plancher = fld('Plancher (%)', fracToPct(eff.plancher));
-    top.appendChild(taux.field);
-    top.appendChild(plancher.field);
+    var field = el('div', 'field');
+    field.appendChild(el('label', null, 'Prix de Nota ($)'));
+    var input = el('input', 'input');
+    input.type = 'text';
+    input.inputMode = 'decimal';
+    input.setAttribute('data-i18n-skip', '');
+    input.value = centsToDollarsInput(eff.prixCents);
+    field.appendChild(input);
+    top.appendChild(field);
     form.appendChild(top);
-
-    // Editable tier rows, capped at MAX_PALIERS (mirrors the API's ceiling).
-    var listWrap = el('div', 'bareme-paliers');
-    listWrap.appendChild(el('div', 'bareme-paliers-label', 'Paliers de cote'));
-    var rowsBox = el('div', 'bareme-rows');
-    listWrap.appendChild(rowsBox);
-    var addBtn = el('button', 'btn btn-sm', 'Ajouter un palier');
-    addBtn.type = 'button';
-    listWrap.appendChild(addBtn);
-    form.appendChild(listWrap);
-
-    function syncAdd() { addBtn.disabled = rowsBox.children.length >= MAX_PALIERS; }
-    function addRow(p) {
-      if (rowsBox.children.length >= MAX_PALIERS) return;
-      var row = el('div', 'bareme-palier bareme-palier-cote');
-      row.appendChild(fld('Cote atteinte', p ? String(p.cote) : '').field);
-      var taux = fld('Part de Nota (%)', p ? fracToPct(p.taux) : '');
-      row.appendChild(taux.field);
-      // L'autre moitié, en direct : c'est elle qui se négocie avec le notaire.
-      var part = el('div', 'bareme-part');
-      part.appendChild(el('div', 'bareme-part-k', 'Le notaire garde'));
-      var partV = el('div', 'bareme-part-v', '—');
-      part.appendChild(partV);
-      row.appendChild(part);
-      function syncPart() {
-        var f = pctToFrac(taux.input.value);
-        partV.textContent = isFinite(f) ? pctLabel(partNotaire(f)) : '—';
-      }
-      taux.input.addEventListener('input', syncPart);
-      syncPart();
-      var rm = el('button', 'btn btn-sm bareme-remove', 'Retirer');
-      rm.type = 'button';
-      rm.addEventListener('click', function () { rowsBox.removeChild(row); syncAdd(); });
-      row.appendChild(rm);
-      rowsBox.appendChild(row);
-      syncAdd();
-    }
-    (eff.paliers || []).forEach(function (p) { addRow(p); });
-    syncAdd();
-    addBtn.addEventListener('click', function () { addRow(null); });
 
     var error = el('div', 'tpl-error');
     error.hidden = true;
     form.appendChild(error);
 
     var actions = el('div', 'tpl-actions');
-    var save = el('button', 'btn btn-sm btn-primary', 'Enregistrer le barème');
+    var save = el('button', 'btn btn-sm btn-primary', 'Enregistrer le prix');
     save.type = 'submit';
     actions.appendChild(save);
     form.appendChild(actions);
@@ -1437,39 +2570,29 @@
 
     form.addEventListener('submit', function (e) {
       e.preventDefault();
-      var body = {
-        taux: pctToFrac(taux.input.value),
-        plancher: pctToFrac(plancher.input.value),
-        paliers: [].map.call(rowsBox.children, function (row) {
-          var ins = row.querySelectorAll('input');
-          return {
-            cote: decToNum(ins[0].value), // l'entier 1–100 est revalidé plus bas, puis par l'API
-            taux: pctToFrac(ins[1].value),
-          };
-        }),
-      };
+      var body = { prixCents: dollarsToCents(input.value) };
       // Le serveur reste l'autorité, mais une évidence ne part pas sur le fil.
-      var errs = validateBareme(body);
+      var errs = validatePrixForm(body);
       if (errs.length) { showErrorLines(error, errs); return; }
-      submitBareme('PUT', body, [save], error, container, 'Barème enregistré.');
+      submitPrix('PUT', body, [save], error, container, 'Prix enregistré.');
     });
 
-    // The reset is offered only when an override is actually stored (same
-    // idiom as the Courriels Réinitialiser), behind an in-page confirm step.
-    if (data.override) card.appendChild(buildBaremeReset(error, container));
+    // La réinitialisation n'est offerte que lorsqu'un prix est réellement
+    // enregistré (même idiome que Courriels), derrière une confirmation.
+    if (data.override) card.appendChild(buildPrixReset(error, container));
     return card;
   }
 
-  function buildBaremeReset(error, container) {
+  function buildPrixReset(error, container) {
     var wrap = el('div', 'bareme-reset');
-    var open = el('button', 'btn btn-sm', 'Revenir aux valeurs par défaut');
+    var open = el('button', 'btn btn-sm', 'Revenir à la valeur par défaut');
     open.type = 'button';
     wrap.appendChild(open);
 
     var confirmBox = el('div', 'bareme-confirm');
     confirmBox.hidden = true;
     confirmBox.appendChild(el('p', 'bareme-confirm-text',
-      'Le barème enregistré sera supprimé — les valeurs par défaut reprendront effet dès le prochain acte.'));
+      'Le prix enregistré sera supprimé — la valeur par défaut reprendra effet dès la prochaine offre.'));
     var confirmActions = el('div', 'tpl-actions');
     var yes = el('button', 'btn btn-sm btn-danger', 'Confirmer la réinitialisation');
     yes.type = 'button';
@@ -1483,88 +2606,91 @@
     open.addEventListener('click', function () { confirmBox.hidden = false; open.hidden = true; });
     no.addEventListener('click', function () { confirmBox.hidden = true; open.hidden = false; });
     yes.addEventListener('click', function () {
-      submitBareme('DELETE', null, [yes, no], error, container, 'Barème réinitialisé.');
+      submitPrix('DELETE', null, [yes, no], error, container, 'Prix réinitialisé.');
     });
     return wrap;
   }
 
-  // Les mêmes règles, les mêmes mots que commission-config.js (validateSchedule)
-  // — l'écran ne doit jamais refuser autre chose que ce que le serveur refuse,
+  // La même règle, les mêmes mots que prix-nota-config.js (validatePrix) —
+  // l'écran ne doit jamais refuser autre chose que ce que le serveur refuse,
   // ni le formuler autrement. Un 422 reste possible : c'est lui qui tranche.
-  function validateBareme(body) {
-    var errors = [];
-    var taux = body.taux;
-    if (!isFinite(taux) || !(taux > 0 && taux < 1)) {
-      errors.push({ code: 'taux_invalide', message: 'Le taux de base doit être un nombre entre 0 et 1 (ex. 0,15 pour 15 %).' });
-      taux = undefined;
+  function validatePrixForm(body) {
+    var c = body.prixCents;
+    if (!isFinite(c) || Math.floor(c) !== c || c <= 0) {
+      return [{
+        code: 'prix_invalide',
+        message: 'Le prix de Nota doit être un nombre entier de cents, supérieur à zéro (ex. 40000 pour 400,00 $).',
+      }];
     }
-    var plancher = body.plancher;
-    if (!isFinite(plancher) || plancher < 0 || (taux !== undefined && plancher > taux)) {
-      errors.push({ code: 'plancher_invalide', message: 'Le plancher doit être un nombre entre 0 et le taux de base.' });
-      plancher = undefined;
-    }
-    var paliers = body.paliers || [];
-    if (paliers.length > MAX_PALIERS) {
-      errors.push({ code: 'paliers_invalides', message: 'Les paliers doivent être une liste d’au plus ' + MAX_PALIERS + ' éléments.' });
-      return errors;
-    }
-    var clean = [];
-    paliers.forEach(function (p, i) {
-      var cote = p.cote, t = p.taux;
-      var bad =
-        !isFinite(cote) || Math.floor(cote) !== cote || cote < 1 || cote > 100 ||
-        !isFinite(t) || t < 0 || t >= 1 ||
-        (plancher !== undefined && t < plancher) ||
-        (taux !== undefined && t > taux);
-      if (bad) {
-        errors.push({ code: 'palier_invalide', message: 'Palier ' + (i + 1) + ' : il faut une cote entière de 1 à 100 et un taux entre le plancher et le taux de base.' });
-      } else {
-        clean.push({ cote: cote, taux: t });
-      }
-    });
-    if (clean.length !== paliers.length) return errors;
-    // Trié par cote, une cote ne se répète pas et le taux ne remonte jamais.
-    clean.sort(function (a, b) { return a.cote - b.cote; });
-    for (var i = 1; i < clean.length; i++) {
-      if (clean[i].cote === clean[i - 1].cote) {
-        errors.push({ code: 'paliers_invalides', message: 'Deux paliers ne peuvent pas viser la même cote (' + clean[i].cote + ').' });
-        break;
-      }
-      if (clean[i].taux > clean[i - 1].taux) {
-        errors.push({ code: 'paliers_invalides', message: 'Une cote plus haute ne peut jamais coûter plus cher au notaire.' });
-        break;
-      }
-    }
-    return errors;
+    return [];
   }
 
-  // La région d'erreur en ligne, partagée par le refus local, le 422 du barème
+  // Les codes de refus de l'API, dits en clair — et TRADUISIBLES. Le message
+  // du serveur est excellent, mais il n'existe qu'en français : le rendre seul
+  // laisserait la console anglaise parler français au pire moment. La phrase
+  // claire passe donc par le dictionnaire, et le mot du serveur reste dessous
+  // pour le détail qu'une phrase générique ne peut pas deviner (quel jeton,
+  // quelle borne). Un code sans entrée retombe sur le message du serveur.
+  var ERREUR_CLAIRE = {
+    jeton_inconnu: 'Jeton inconnu — ce modèle n’accepte que les jetons listés sous le formulaire.',
+    html_interdit: 'HTML refusé — écrivez du texte : la mise en forme vient du gabarit.',
+    partage_interdit: 'Partage d’honoraires — Nota ne prélève aucune part des honoraires du notaire, et un courriel ne peut pas l’affirmer (art. 32 du Code de déontologie).',
+    desactivation_interdite: 'Courriel transactionnel — il annonce un fait que son destinataire doit connaître : l’envoi ne peut pas être coupé (art. 68 du Code de déontologie).',
+    champ_inconnu: 'Champ inconnu — la console a envoyé un champ que le serveur ne connaît pas. Rechargez la page.',
+    champ_invalide: 'Valeur invalide.',
+    modele_inconnu: 'Modèle inconnu — la liste a peut-être changé. Rechargez la page.',
+    sujet_trop_long: 'Sujet trop long.',
+    preheader_trop_long: 'Ligne d’aperçu trop longue.',
+    corps_trop_long: 'Corps trop long.',
+    cta_trop_long: 'Libellé de bouton trop long.',
+    sujet_bilingue: 'Sujet : les deux langues vont ensemble — remplissez le français ET l’anglais, ou aucun des deux.',
+    preheader_bilingue: 'Ligne d’aperçu : les deux langues vont ensemble — remplissez le français ET l’anglais, ou aucun des deux.',
+    corps_bilingue: 'Corps : les deux langues vont ensemble — remplissez le français ET l’anglais, ou aucun des deux.',
+    cta_bilingue: 'Bouton : les deux langues vont ensemble — remplissez le français ET l’anglais, ou aucun des deux.',
+    confirmation_requise: 'Confirmation requise — l’audience dépasse le plafond. Confirmez pour envoyer quand même.',
+    audience_invalide: 'Cible invalide — choisissez une personne, un groupe ou un segment.',
+    segment_inconnu: 'Segment inconnu — la liste a peut-être changé. Rechargez la page.',
+    parametre_inconnu: 'Paramètre inconnu pour ce segment.',
+    parametre_hors_bornes: 'Paramètre hors des bornes permises.',
+    cible_sans_adresse: 'Cible incomplète — écrivez l’adresse courriel de la personne visée.',
+    cible_sans_groupe: 'Cible incomplète — choisissez le groupe visé.',
+    cible_sans_segment: 'Cible incomplète — choisissez le segment visé.',
+    gabarit_manquant: 'Aucun gabarit choisi — désignez le courriel à envoyer.',
+  };
+
+  // La région d'erreur en ligne, partagée par le refus local, le 422 du prix
   // et celui du journal d'audit : un message par ligne, jamais un JSON brut.
   function showErrorLines(error, errs) {
     error.hidden = false;
     clear(error);
     errs.forEach(function (er) {
       var line = el('div', 'tpl-error-line');
-      line.appendChild(el('strong', null, er.message || er.code || 'Erreur.'));
+      var clair = er && ERREUR_CLAIRE[er.code];
+      line.appendChild(el('strong', null, clair || er.message || er.code || 'Erreur.'));
+      if (clair && er.message) {
+        var detail = el('div', 'tpl-error-detail', er.message);
+        detail.setAttribute('data-i18n-skip', ''); // texte du serveur, pas du dictionnaire
+        line.appendChild(detail);
+      }
       error.appendChild(line);
     });
   }
 
-  async function submitBareme(method, body, buttons, error, container, okMsg) {
+  async function submitPrix(method, body, buttons, error, container, okMsg) {
     buttons.forEach(function (b) { b.disabled = true; });
-    var r = await call(method, '/commission', body === null ? undefined : body);
+    var r = await call(method, '/prix', body === null ? undefined : body);
     buttons.forEach(function (b) { b.disabled = false; });
     if (r.status === 401) return; // handled by call()
     if (!r.ok) {
       showErrorLines(error, (r.json && r.json.errors && r.json.errors.length)
         ? r.json.errors
-        : [{ message: 'Impossible d’enregistrer le barème.' }]);
+        : [{ message: 'Impossible d’enregistrer le prix.' }]);
       return;
     }
-    error.hidden = true; // un barème accepté ne laisse pas traîner l'ancien refus
+    error.hidden = true; // un prix accepté ne laisse pas traîner l'ancien refus
     clear(error);
     toast(okMsg);
-    await loadCommissionInto(container);
+    await loadPrixInto(container);
   }
 
   // ---------------------------------------------------------------------------
@@ -2005,7 +3131,7 @@
     var table = el('table', 'ptable ntable');
     var thead = el('thead');
     var hr = el('tr');
-    ['Étude', 'Statut', 'Cote', 'Le notaire garde', 'Actes', 'Note', 'Commission perçue', 'Dernière visite']
+    ['Étude', 'Statut', 'Cote', 'Actes', 'Note', 'Facturé par Nota', 'Dernière visite']
       .forEach(function (h, i) { hr.appendChild(el('th', i >= 2 ? 'is-num' : null, h)); });
     thead.appendChild(hr);
     table.appendChild(thead);
@@ -2015,13 +3141,11 @@
     scroll.appendChild(table);
     card.appendChild(scroll);
 
-    // Le barème qui explique la colonne « Le notaire garde », rappelé sous le
-    // tableau : sans lui, la colonne est un chiffre sans cause.
-    var b = data.bareme;
-    if (b && typeof b.taux === 'number') {
-      card.appendChild(el('p', 'tpl-note',
-        'Barème en vigueur : Nota garde de ' + pctLabel(b.taux) + ' à ' + pctLabel(tauxPourCote(100, b)) + ' selon la cote.'));
-    }
+    // ADR 0031 — il n'y a plus de barème à rappeler : le notaire garde 100 %
+    // de ses honoraires. La colonne « Facturé par Nota » est ce que le CLIENT
+    // a payé pour le service de la plateforme, jamais une retenue.
+    card.appendChild(el('p', 'tpl-note',
+      'Le notaire garde la totalité de ses honoraires. La colonne « Facturé par Nota » est ce que le client a payé pour le service de la plateforme.'));
     wrap.appendChild(card);
     return wrap;
   }
@@ -2051,12 +3175,6 @@
     tr.appendChild(st);
 
     tr.appendChild(el('td', 'is-num ptable-code', num(n.cote)));
-
-    // La part du notaire telle que servie ; à défaut, déduite du taux. Jamais
-    // un 0 % inventé quand la facturation n'a rien dit.
-    var part = typeof n.part === 'number' ? n.part
-      : (typeof n.tauxEffectif === 'number' ? partNotaire(n.tauxEffectif) : null);
-    tr.appendChild(el('td', 'is-num ptable-du', part === null ? '—' : pctLabel(part)));
 
     tr.appendChild(el('td', 'is-num', num(n.actes || 0)));
 
@@ -2148,8 +3266,8 @@
 
   var AUDIT_LABELS = {
     acte_regle: 'Acte réglé',
-    commission_schedule_updated: 'Barème de commission modifié',
-    commission_schedule_reset: 'Barème de commission réinitialisé',
+    prix_nota_updated: 'Prix de Nota modifié',
+    prix_nota_reset: 'Prix de Nota réinitialisé',
     cancellation_schedule_updated: 'Barème d’annulation modifié',
     cancellation_schedule_reset: 'Barème d’annulation réinitialisé',
     email_template_updated: 'Modèle de courriel modifié',
@@ -2288,14 +3406,15 @@
     row.appendChild(head);
 
     var m = e.meta || {};
-    if (e.action === 'acte_regle' && typeof m.montant === 'number'
-        && typeof m.commission === 'number' && typeof m.net === 'number') {
-      // LA divulgation : ce que le client a payé, ce que Nota a gardé, à quel
-      // taux, ce qui reste au notaire, et la cote qui l'a décidé.
+    if (e.action === 'acte_regle' && typeof m.honoraires === 'number' && typeof m.prixNota === 'number') {
+      // LA divulgation, en DEUX lignes (ADR 0031) : les honoraires qui vont au
+      // notaire en entier, et le prix du service de Nota à côté. Rien ici ne
+      // divise ni ne retranche : présenter le prix de Nota comme une part des
+      // honoraires décrirait l'opération que l'art. 32 du Code de déontologie
+      // interdit au notaire — et ce serait une pièce écrite par Nota elle-même.
       row.appendChild(el('p', 'audit-money',
-        moneyCents(m.montant * 100) + ' payés · ' + pctLabel(m.taux) + ' · ' +
-        moneyCents(m.commission * 100) + ' à Nota · ' + moneyCents(m.net * 100) + ' au notaire · ' +
-        'cote ' + num(m.cote)));
+        moneyCents(m.honoraires * 100) + ' au notaire · ' +
+        moneyCents(m.prixNota * 100) + ' à Nota'));
       var facts = el('div', 'audit-facts');
       facts.setAttribute('data-i18n-skip', ''); // identifiants et codes de service
       facts.textContent = [m.serviceId, m.dateISO, m.bidId, m.notaryId, m.chargeId, m.transferId]
@@ -2374,12 +3493,20 @@
     s.appendChild(svgEl('path', { d: 'M3 7l9 6 9-6' }));
     return s;
   }
-  function iconPercent() {
+  // Un envoi ciblé : la trajectoire d'un message qui part.
+  function iconSend() {
     var s = svgEl('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none',
       stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' });
-    s.appendChild(svgEl('line', { x1: 19, y1: 5, x2: 5, y2: 19 }));
-    s.appendChild(svgEl('circle', { cx: 6.5, cy: 6.5, r: 2.5 }));
-    s.appendChild(svgEl('circle', { cx: 17.5, cy: 17.5, r: 2.5 }));
+    s.appendChild(svgEl('path', { d: 'M21.5 2.5 11 13' }));
+    s.appendChild(svgEl('path', { d: 'M21.5 2.5 15 21l-4-8-8-4z' }));
+    return s;
+  }
+  // Une étiquette de prix : ce que Nota vend, à son propre prix (ADR 0031).
+  function iconTag() {
+    var s = svgEl('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none',
+      stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' });
+    s.appendChild(svgEl('path', { d: 'M20.6 13.4 12 22l-9-9V4a1 1 0 0 1 1-1h9l7.6 7.6a2 2 0 0 1 0 2.8z' }));
+    s.appendChild(svgEl('circle', { cx: 7.5, cy: 7.5, r: 1.5 }));
     return s;
   }
   function iconCalendarX() {

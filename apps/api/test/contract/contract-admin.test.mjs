@@ -164,7 +164,9 @@ test('PUT + DELETE /admin/notifications/templates/{key} — 200/404/422 shapes v
 
   const put = await h.call('PUT', '/admin/notifications/templates/offerPublished', {
     bearer: session,
-    body: { enabled: false },
+    // `offerPublished` est transactionnel : il ne s'éteint pas. Une
+    // reformulation, elle, reste permise — c'est ce que le contrat décrit.
+    body: { subjectFr: 'Offre {{montant}}', subjectEn: 'Offer {{montant}}' },
   });
   assert.equal(put.statusCode, 200, put.body);
   assertValid('/admin/notifications/templates/{key}', 'PUT', 200, parse(put));

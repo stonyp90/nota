@@ -33,6 +33,47 @@
 
   // === DICTIONARY — generated from the French sources. =======================
   var TEXT = {
+  // Les documents de la conversation (ADR 0032).
+  "Joindre un document": "Attach a document",
+  "Aucun document échangé.": "No documents exchanged.",
+  "Envoyé par le client": "Sent by the client",
+  "Envoyé par le notaire": "Sent by the notary",
+  "Préparation…": "Preparing…",
+  "Envoi en cours…": "Uploading…",
+  "Vérification…": "Verifying…",
+  "Document envoyé.": "Document sent.",
+  "Le téléversement a échoué. Réessayez.": "The upload failed. Try again.",
+  "Document indisponible.": "Document unavailable.",
+  "Vos clients ont payé": "Your clients paid",
+  "à Nota pour le service de la plateforme, en plus de vos honoraires. Rien n’a été retranché de ce qui vous revient.": "to Nota for the platform service, on top of your fees. Nothing was deducted from what is yours.",
+  "Sur cet acte, le client vous a payé directement à la signature : Nota n’a rien encaissé, et le prix de son service reste à percevoir.": "On this act the client paid you directly at signing: Nota collected nothing, and the price of its service is still owed.",
+  "Sur ces actes, le client vous a payé directement à la signature : Nota n’a rien encaissé, et le prix de son service reste à percevoir.": "On these acts the client paid you directly at signing: Nota collected nothing, and the price of its service is still owed.",
+  "vos honoraires, et ce que le client a payé à Nota": "your fees, and what the client paid Nota",
+  "les honoraires du notaire": "the notary’s fees",
+  "le prix du service de Nota": "Nota’s service price",
+  "Vos honoraires vous reviennent en entier, quelle que soit votre cote. Cette mesure sert au service — jamais à ce que vous gagnez.": "Your fees come to you in full, whatever your score. This measure is about service — never about what you earn.",
+  "Vos honoraires vous reviennent en entier. Le prix du service de Nota est payé par le client, en plus — il n’est jamais retranché de ce qui vous est dû.": "Your fees come to you in full. Nota’s service price is paid by the client, on top — it is never deducted from what you are owed.",
+  "À cette étape, vos honoraires vous sont virés en entier. Nota facture son service au client, séparément.": "At this step, your fees are wired to you in full. Nota charges the client for its service, separately.",
+  "Vos honoraires": "Your fees",
+  "Payé à Nota par le client": "Paid to Nota by the client",
+  "Service Nota à percevoir": "Nota service still owed",
+  "vos honoraires vous sont virés en entier": "your fees are wired to you in full",
+  "Vos honoraires s’afficheront ici dès votre premier acte complété.": "Your fees will appear here as soon as you complete your first act.",
+  "les honoraires du notaire ": "the notary’s fees ",
+  "Votre date est refusée ?": "Is your date being turned down?",
+  "Payé à la signature — vos honoraires vous reviennent en entier": "Paid at signing — your fees come to you in full",
+  "La récompense de référence est un coût de marketing de Nota, payée à même ses propres revenus — jamais ajoutée au prix du client, jamais retranchée des honoraires du notaire.": "The referral reward is a Nota marketing cost, paid out of its own revenue — never added to the client’s price, never taken from the notary’s fees.",
+  "Nous ne vendons ni ne louons vos renseignements. Nota se rémunère en facturant son propre service au client, à un prix fixe et annoncé. Aucune donnée n’est monnayée.": "We neither sell nor rent your information. Nota earns its revenue by charging the client for its own service, at a fixed, disclosed price. No data is monetized.",
+  "Deux lignes, annoncées d’avance": "Two lines, disclosed up front",
+  // LE DEVIS (ADR 0031) — deux achats distincts, jamais un partage. « Service
+  // Nota » plutôt que « frais » ou « commission » : le mot doit dire ce que le
+  // client achète, pas ce qu'on retiendrait à quelqu'un d'autre.
+  "Honoraires du notaire": "Notary’s fees",
+  "Service Nota": "Nota service",
+  "Autorisé sur votre carte": "Authorized on your card",
+  "Taxes en sus.": "Taxes extra.",
+  "Débours en sus (droits de publication, RDPRM).": "Disbursements extra (registration fees, RDPRM).",
+  "Le prix du service de Nota s’ajoute à ce montant ; il vous est confirmé avant tout paiement.": "Nota’s service price is added to this amount; it is confirmed to you before any payment.",
   // Shared intake vocabulary — used by BOTH acts of the financing family.
   "Non": "No",
   "Oui": "Yes",
@@ -503,19 +544,15 @@
   "Acte complété": "Act completed",
   "Acte signé ? Confirmez la valeur finale": "Act signed? Confirm the final value",
   "Valeur de l’acte": "Act value",
-  "Nota prélève sa commission uniquement à cette étape, sur la valeur confirmée.": "Nota charges its commission only at this step, on the confirmed value.",
   "Actes complétés": "Acts completed",
   "Vos honoraires": "Your fees",
   "Payé par les clients": "Paid by clients",
   "Frais de service Nota": "Nota service fee",
   "Valeur réalisée": "Value realized",
-  "Commission Nota": "Nota commission",
   "Net à vous": "Net to you",
   // === ADR 0028 — la cote sur 100 et le partage qu'elle décide. ===========
   "Votre cote": "Your score",
   "Votre relevé d’actes": "Your act statement",
-  "montant, taux, frais Nota, net": "amount, rate, Nota fee, net",
-  "Le barème, au complet": "The full scale",
   "Ce que vous portez, service par service": "What you carry, service by service",
   "pas encore d’avis": "no reviews yet",
   "Aucun avis": "No reviews",
@@ -534,18 +571,14 @@
   "Activité aujourd’hui": "Active today",
   "Membre depuis aujourd’hui": "Member since today",
   "Taux": "Rate",
-  "Frais Nota": "Nota fee",
   "Net": "Net",
   "Total": "Total",
   "Votre relevé s’ouvrira ici dès votre premier acte réglé.": "Your statement will open here after your first settled act.",
   "Chaque ligne porte le taux que votre cote valait au règlement de l’acte.": "Every line carries the rate your score was worth when the act settled.",
   // ADR 0029 — un règlement hors plateforme est une créance, pas une recette.
-  "Frais de service à percevoir": "Service fee still owed",
-  "Sur cet acte, le client vous a payé directement à la signature : Nota n’a rien encaissé et les frais de service restent dus.": "On this act the client paid you directly at signing: Nota collected nothing and the service fee remains owed.",
-  "Sur ces actes, le client vous a payé directement à la signature : Nota n’a rien encaissé et les frais de service restent dus.": "On these acts the client paid you directly at signing: Nota collected nothing and the service fee remains owed.",
+  
   "Impossible de charger votre relevé. Réessayez.": "Could not load your statement. Try again.",
   "Impossible de charger votre relevé (hors ligne). Réessayez.": "Could not load your statement (offline). Try again.",
-  "Vos revenus et la commission Nota s’afficheront ici dès votre premier acte complété.": "Your earnings and the Nota commission will appear here after your first completed act.",
   "Déconnecté.": "Signed out.",
   "Quitter le plein écran": "Exit full screen",
   "Plein écran": "Full screen",
@@ -553,7 +586,7 @@
     "Paiement autorisé. Votre offre est en cours de publication.": "Payment authorized. Your offer is being published.",
   "Paiement annulé. Votre offre n’a pas été publiée.": "Payment cancelled. Your offer was not published.",
   "Nota — le carnet public des actes notariés à Québec": "Nota — the public carnet of notarized acts in Québec",
-  "Notaire à Québec pour votre financement ou refinancement hypothécaire, à la date voulue. Affichez votre date et votre prix, un notaire retient rapidement votre demande. Gratuit.": "A Québec notary for your mortgage financing or refinancing, on the date you need. Post your date and your price, and a notary quickly takes on your request. Free.",
+  "Trouvez un notaire à Québec pour votre financement ou refinancement hypothécaire, à la date voulue. Affichez votre date et votre offre ; un notaire de la région choisit de retenir votre demande. Publier est gratuit. Nota n’est pas un notaire.": "Find a notary in Quebec City for your mortgage financing or refinancing, on the date you need. Post your date and your offer; a notary in the region chooses whether to take on your request. Posting is free. Nota is not a notary.",
   "Choisissez votre date, nommez votre prix pour votre financement ou refinancement hypothécaire. Un notaire de Québec retient votre demande. Gratuit pour le client.": "Choose your date, name your price for your mortgage financing or refinancing. A Québec notary takes on your request. Free for the client.",
   "Nota — carnet public des actes notariés à Québec": "Nota — public carnet of notarized acts in Québec",
   "Choisissez votre date, nommez votre prix. Un notaire de Québec retient votre demande.": "Choose your date, name your price. A Québec notary takes on your request.",
@@ -689,7 +722,6 @@
   "Aucun dossier retenu pour l’instant.": "No files taken at the moment.",
   "Vos revenus": "Your earnings",
   "Paiements": "Payments",
-  "Connectez un compte de paiement sécurisé (Stripe) pour recevoir vos versements. Le client autorise le paiement dès la publication ; le net vous est viré à la signature, commission Nota déduite. Jamais de frais fixes.": "Connect a secure payment account (Stripe) to receive your payouts. The client authorizes the payment at publication; the net is wired to you at signing, Nota's commission deducted. Never a fixed fee.",
     "Vos signatures dans votre agenda": "Your signings in your calendar",
   "Vos dossiers retenus, à jour automatiquement (webcal).": "Your taken files, automatically up to date (webcal).",
   "Ouvertes en ce moment": "Open right now",
@@ -726,7 +758,6 @@
   "Vous restez maître": "You stay in charge",
   "Vous fixez la date, le montant et votre niveau d’anonymat. Aucune obligation : vous pouvez retirer une offre tant qu’aucun notaire ne l’a retenue.": "You set the date, the amount and your level of anonymity. No obligation: you can withdraw an offer as long as no notary has taken it.",
   "Gratuit pour le client": "Free for the client",
-  "Publier une offre est gratuit. Sur un acte complété, Nota conserve au plus 15 % de votre montant pour son service et le notaire garde de 85 % à 95 % selon sa cote sur 100 — jamais un dollar de plus que ce que vous avez offert.": "Publishing an offer is free. On a completed act Nota keeps at most 15% of your amount for its service and the notary keeps 85% to 95% depending on their score out of 100 — never a dollar more than what you offered.",
   "Les conditions": "The terms",
   "Rôle de Nota.": "Nota's role.",
   "Nota fournit une plateforme de mise en relation. Nous ne rédigeons pas d’actes, ne donnons aucun conseil juridique, fiscal ou financier, et ne sommes pas partie au mandat entre vous et le notaire.": "Nota provides a matchmaking platform. We do not draft acts, give no legal, tax or financial advice, and are not a party to the mandate between you and the notary.",
@@ -754,7 +785,6 @@
   "Publiez une demande et suivez vos offres.": "Post a request and follow your offers.",
   "Plus la date est éloignée, plus de notaires ont la latitude de s’organiser pour la prendre ; une date rapprochée en laisse moins.": "The further out the date, the more notaries have room to arrange to take it; a nearer date leaves fewer.",
   "Prix et commission.": "Price and commission.",
-  "Le montant que vous offrez est le total, tout compris : rien ne s’y ajoute. Il se partage à la signature — Nota garde au plus 15 % pour trouver le notaire, monter le dossier et opérer la transaction, et le notaire garde de 85 % à 95 % pour l’acte, selon sa cote sur 100.": "The amount you offer is the all-in total: nothing is added to it. It splits at signing — Nota keeps at most 15% for finding the notary, assembling the file and running the transaction, and the notary keeps 85% to 95% for the act, depending on their score out of 100.",
   "Disponibilité.": "Availability.",
   "Le service est fourni « tel quel ». Nous visons une haute disponibilité sans garantir l’absence d’interruption. Nota peut suspendre ou refuser une offre contraire à ces conditions.": "The service is provided “as is”. We aim for high availability without guaranteeing uninterrupted service. Nota may suspend or refuse an offer that violates these terms.",
   "Responsabilité.": "Liability.",
@@ -1059,6 +1089,9 @@
   "Elle a été retirée du carnet.": "It has been removed from the carnet.",
 };
   var HTML = {
+  "Connectez un compte de paiement sécurisé (Stripe) pour recevoir vos versements. Le client autorise le paiement dès la publication ; à la signature, <strong>vos honoraires vous sont virés en entier</strong>. Nota facture son service au client, séparément — rien n’est jamais retranché de vos honoraires. Jamais de frais fixes.": "Connect a secure payment account (Stripe) to receive your payouts. The client authorizes payment as soon as the offer is posted; at signing, <strong>your fees are wired to you in full</strong>. Nota charges the client for its service, separately — nothing is ever deducted from your fees. Never any fixed fees.",
+  "Publier une offre est gratuit, et le reste. Sur un acte complété, vous payez deux choses : <strong>les honoraires du notaire</strong> — le montant que vous avez offert, qui lui revient en entier — et <strong>le prix du service de Nota</strong>, un montant fixe, le même pour tous. Les deux vous sont affichés avant que votre carte ne soit autorisée.": "Posting an offer is free, and stays free. On a completed act you pay two things: <strong>the notary’s fees</strong> — the amount you offered, which comes to them in full — and <strong>Nota’s service price</strong>, a fixed amount, the same for everyone. Both are shown to you before your card is authorized.",
+  "<strong>Le prix, en deux lignes.</strong> Le montant que vous offrez est celui des <strong>honoraires du notaire</strong> : il lui revient en entier, Nota n’en prélève rien. Le <strong>prix du service de Nota</strong> est un montant fixe, identique pour tous, qui s’ajoute au vôtre et vous est affiché avant l’autorisation de votre carte. <strong>Les taxes et les débours</strong> — droits de publication, RDPRM — <strong>ne sont pas compris</strong> dans ces montants.": "<strong>The price, in two lines.</strong> The amount you offer is the <strong>notary’s fees</strong>: it comes to them in full, Nota takes none of it. <strong>Nota’s service price</strong> is a fixed amount, the same for everyone, added to yours and shown to you before your card is authorized. <strong>Taxes and disbursements</strong> — registration fees, RDPRM — <strong>are not included</strong> in these amounts.",
   "<strong>Gratuit pour vous</strong> : Nota se rémunère auprès du notaire.": "<strong>Free for you</strong>: Nota is paid by the notary.",
   "<span class=\"nc-soon-tag\">Bientôt</span>Vérification d’identité, inscription et <strong>réalisation complète de l’acte en ligne</strong> : recevez la demande, rencontrez le client et signez à distance. Tout le parcours notaire, de bout en bout, sans quitter Nota.": "<span class=\"nc-soon-tag\">Coming soon</span>Identity verification, onboarding and <strong>completing the entire act online</strong>: receive the request, meet the client and sign remotely. The whole notary journey, end to end, without leaving Nota.",
   "Au repos, vos données sont conservées sur des serveurs canadiens (Amazon Web Services, région <strong>ca-central-1</strong>, Montréal). En transit, elles passent par un réseau de diffusion dont les points de présence sont aussi aux États-Unis et en Europe, et par des prestataires tiers : Stripe pour le paiement, rsms.me pour la police de caractères.": "At rest, your data is stored on Canadian servers (Amazon Web Services, <strong>ca-central-1</strong> region, Montréal). In transit it passes through a content delivery network whose edge locations are also in the United States and Europe, and through third-party providers: Stripe for payment, rsms.me for the typeface.",
@@ -1073,34 +1106,9 @@
     "replacement": "on $1"
   },
   {
-    "pattern": "^Vous gardez ([0-9]+(?:,[0-9]+)?) % de ce que le client paie, au lieu de ([0-9]+(?:,[0-9]+)?) % — mérité par votre cote\\.$",
+    "pattern": "^Réglé hors plateforme — (.+) de service Nota à percevoir$",
     "flags": "",
-    "replacement": "You keep $1% of what the client pays, instead of $2% — earned by your score."
-  },
-  {
-    "pattern": "^Vous gardez ([0-9]+(?:,[0-9]+)?) % de ce que le client paie\\. Frais de service Nota : ([0-9]+(?:,[0-9]+)?) %\\.$",
-    "flags": "",
-    "replacement": "You keep $1% of what the client pays. Nota service fee: $2%."
-  },
-  {
-    "pattern": "^Cote ([0-9]+) → vous gardez ([0-9]+(?:,[0-9]+)?) % — il vous manque ([0-9]+) points?\\.$",
-    "flags": "",
-    "replacement": "Score $1 → you keep $2% — $3 point(s) short."
-  },
-  {
-    "pattern": "^Au départ → vous gardez ([0-9]+(?:,[0-9]+)?) % \\(frais Nota ([0-9]+(?:,[0-9]+)?) %\\)$",
-    "flags": "",
-    "replacement": "From the start → you keep $1% (Nota fee $2%)"
-  },
-  {
-    "pattern": "^Cote ([0-9]+) → vous gardez ([0-9]+(?:,[0-9]+)?) % \\(frais Nota ([0-9]+(?:,[0-9]+)?) %\\)$",
-    "flags": "",
-    "replacement": "Score $1 → you keep $2% (Nota fee $3%)"
-  },
-  {
-    "pattern": "^Réglé hors plateforme — (.+) de frais Nota à percevoir$",
-    "flags": "",
-    "replacement": "Settled off the platform — $1 of Nota fees still owed"
+    "replacement": "Settled off the platform — $1 of Nota service still owed"
   },
   {
     "pattern": "^1 acte signé via Nota$",
@@ -1653,11 +1661,6 @@
     "replacement": "A referring professional receives a flat reward from Nota: $1 when a referred client’s request is taken on, and $2, once, when a referred notary takes on their first act. Paid by Nota from its own funds, it never changes the client’s price nor the notary’s fees. A regulated professional (notably OACIQ) remains responsible for disclosing this reward to their client when their code of ethics requires it."
   },
   {
-    "pattern": "^Acte complété\\. Commission Nota : (.+)\\.$",
-    "flags": "",
-    "replacement": "Act completed. Nota commission: $1."
-  },
-  {
     "pattern": "^Abonné : (.+)$",
     "flags": "",
     "replacement": "Subscribed: $1"
@@ -1688,9 +1691,9 @@
     "replacement": "$1 · shared at signing"
   },
   {
-    "pattern": "^Valeur (.+) · commission Nota (.+)$",
+    "pattern": "^Vos honoraires (.+) · service Nota payé par le client (.+)$",
     "flags": "",
-    "replacement": "Value $1 · Nota commission $2"
+    "replacement": "Your fees $1 · Nota service paid by the client $2"
   },
   {
     "pattern": "^Facteurs : (.+)$",

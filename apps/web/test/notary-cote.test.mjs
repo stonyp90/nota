@@ -146,7 +146,7 @@ test('« Votre cote » ships in the authed console, right after « Vos revenus �
 // ---------------------------------------------------------------------------
 // (b) The number, the money sentence, the four axes, the next rung, the scale.
 // ---------------------------------------------------------------------------
-test('the panel prints the cote, the share it earns, the four axes and the next rung', async () => {
+test('the panel prints the cote and its four axes — and never a share', async () => {
   const { doc } = await bootSignedIn();
   const box = $(doc, 'notary-cote');
 
@@ -156,10 +156,18 @@ test('the panel prints the cote, the share it earns, the four axes and the next 
   assert.match(n.textContent, /\b87\b/, 'the cote reads 87: ' + n.textContent);
   assert.match(n.textContent, /100/, 'and it is stated on 100: ' + n.textContent);
 
-  // The sentence that ties the number to money — with what it beats.
-  const lines = Array.from(box.querySelectorAll('.nc-commission')).map((x) => x.textContent);
-  assert.ok(lines.some((t) => t.includes('92 %') && t.includes('au lieu de 85 %')),
-    'the earned share reads against the base share: ' + lines);
+  // ADR 0031 — la cote ne décide plus d'un dollar, et le panneau ne doit même
+  // pas le suggérer : l'art. 29.1 du Code de déontologie interdit au notaire
+  // toute convention mettant en péril son indépendance et son désintéressement,
+  // et un revenu indexé sur une note attribuée par une entreprise privée en
+  // est une. L'AFFICHER suffit à la rendre opposable.
+  assert.equal(box.querySelectorAll('.nc-commission').length, 0,
+    'aucune phrase ne rattache la cote à l’argent');
+  assert.ok(!/%/.test(box.textContent.replace(/\d+\s?\/\s?\d+/g, '')),
+    'aucun pourcentage dans le panneau de la cote : ' + box.textContent.slice(0, 200));
+  const note = box.querySelector('.nc-cote-note');
+  assert.ok(note, 'une phrase dit ce que la cote ne fait PAS');
+  assert.match(note.textContent, /en entier/, note.textContent);
 
   // The four axes, each with points / max AND its arithmetic in figures.
   const axes = Array.from(box.querySelectorAll('.nc-cote-axe'));
@@ -191,29 +199,19 @@ test('the panel prints the cote, the share it earns, the four axes and the next 
   const d3 = axes[3].querySelector('.nc-cote-detail').textContent;
   assert.match(d3, /457/, 'days as a member'); assert.match(d3, /CNQ/, 'the fiche');
 
-  // The next rung: which cote, what it pays, how many points are missing.
-  const next = box.querySelector('.nc-cote-next');
-  assert.ok(next, 'the next rung is named');
-  assert.match(next.textContent, /90/, 'the rung to reach');
-  assert.match(next.textContent, /95 %/, 'what it would pay');
-  assert.match(next.textContent, /3 points/, 'and exactly what is missing: ' + next.textContent);
+  // Le « palier suivant » disparaît avec le barème : il n'y a plus de palier.
+  assert.equal(box.querySelector('.nc-cote-next'), null, 'plus de palier suivant');
 });
 
-test('the whole barème is published as a public scale, with the rung in force marked', async () => {
+test('ART. 29.1 — aucun barème n’est publié dans la console', async () => {
   const { doc } = await bootSignedIn();
-  const rows = Array.from($(doc, 'notary-cote').querySelectorAll('.nc-bareme-row'));
-  // The base share plus one row per rung: nothing about the scale is hidden.
-  assert.equal(rows.length, PALIERS.length + 1, 'the base share leads, then every rung');
-  assert.equal(rows[0].dataset.cote, '0', 'the first row is the starting share');
-  assert.match(rows[0].textContent, /85 %/, 'a notary with no history keeps 85 %');
-  assert.match(rows[0].textContent, /15 %/, 'and Nota keeps at most 15 %');
-  assert.deepEqual(rows.slice(1).map((r) => r.dataset.cote), ['60', '70', '80', '90']);
-  assert.match(rows[4].textContent, /vous gardez 95 %/, 'the summit keeps 95 %');
-  assert.match(rows[4].textContent, /frais Nota 5 %/, 'and leaves 5 % to Nota');
-  // Cote 87 sits on the 80 rung — the one actually in force is marked.
-  const current = rows.filter((r) => r.classList.contains('is-current'));
-  assert.equal(current.length, 1, 'exactly one rung is in force');
-  assert.equal(current[0].dataset.cote, '80', 'cote 87 sits on the 80 rung');
+  const box = $(doc, 'notary-cote');
+  // Le barème rendait opposable la convention même que l'art. 29.1 interdit :
+  // « Cote 90 → vous gardez 95 % ». Il est retiré, et rien ne doit le
+  // ramener — ni une ligne, ni un conteneur vide qu'un futur rendu remplirait.
+  assert.equal(box.querySelectorAll('.nc-bareme-row').length, 0, 'aucune ligne de barème');
+  assert.equal(box.querySelector('.nc-bareme'), null, 'aucun conteneur de barème');
+  assert.ok(!/gardez|barème|palier/i.test(box.textContent), box.textContent.slice(0, 200));
 });
 
 // ---------------------------------------------------------------------------
@@ -305,29 +303,17 @@ test('the services axis no longer suggests that breadth of catalogue earns point
 test('a brand-new notary reads a fair, actionable screen — never a wall of zeros', async () => {
   const ctx = await boot();
   const score = ctx.D.notaryScore(PROFILS.neuf);
-  stubNotaryApi(ctx.win, {
-    cote: score,
-    commission: {
-      taux: 0.15, plancher: 0.05, tauxEffectif: 0.15, part: 0.85, bonus: 0, cote: score.cote,
-      axes: score.axes,
-      paliers: PALIERS,
-      prochain: { cote: 60, manque: 60 - score.cote, tauxEffectif: 0.12, part: 0.88 },
-    },
-  });
+  stubNotaryApi(ctx.win, { cote: score });
   await ctx.Nota.notary.signIn('demo@etude.ca');
   await wait(20);
   const box = $(ctx.doc, 'notary-cote');
 
-  // The starting share is already 85 % — stated plainly, not as a punishment.
-  const head = box.querySelector('.nc-commission').textContent;
-  assert.match(head, /Vous gardez 85 %/, head);
-  assert.ok(!head.includes('au lieu de'), 'nothing is being taken away from a newcomer: ' + head);
-
-  // The next rung is reachable and counted, never a scolding.
-  const next = box.querySelector('.nc-cote-next').textContent;
-  assert.match(next, /Cote 60/, next);
-  assert.match(next, /88 %/, next);
-  assert.match(next, new RegExp(String(60 - score.cote) + ' points'), next);
+  // Un notaire qui débute ne doit rien lire qui ressemble à une punition — et
+  // depuis l'ADR 0031, il n'y a plus rien à punir : ses honoraires lui
+  // reviennent en entier, quelle que soit sa cote.
+  const note = box.querySelector('.nc-cote-note').textContent;
+  assert.match(note, /en entier/, note);
+  assert.ok(!/%/.test(note), 'aucun pourcentage n’est promis ni retiré : ' + note);
 
   // The empty axes read in words, not as bare zeros the notary must decode.
   const dispo = box.querySelector('.nc-cote-axe[data-axe="disponibilite"] .nc-cote-detail').textContent;
@@ -387,13 +373,13 @@ test('the evaluations panel lists the record service by service — acts carried
 // ---------------------------------------------------------------------------
 const ACTS = {
   actes: [
-    { bidId: 'b1', dateISO: '2026-08-20', serviceId: 'refinancement', service: 'Refinancement hypothécaire', montant: 2400, taux: 0.08, commission: 192, net: 2208, cote: 84, completedAt: '2026-08-20T14:02:00.000Z', paye: true },
-    { bidId: 'b2', dateISO: '2026-07-11', serviceId: 'financement', service: 'Financement hypothécaire', montant: 1800, taux: 0.10, commission: 180, net: 1620, cote: 71, completedAt: '2026-07-11T14:02:00.000Z', paye: true },
+    { bidId: 'b1', dateISO: '2026-08-20', serviceId: 'refinancement', service: 'Refinancement hypothécaire', montant: 2400, honoraires: 2400, prixNota: 400, net: 2400, completedAt: '2026-08-20T14:02:00.000Z', paye: true, du: 0 },
+    { bidId: 'b2', dateISO: '2026-07-11', serviceId: 'financement', service: 'Financement hypothécaire', montant: 1800, honoraires: 1800, prixNota: 400, net: 1800, completedAt: '2026-07-11T14:02:00.000Z', paye: true, du: 0 },
   ],
-  totaux: { actes: 2, montant: 4200, commission: 372, net: 3828 },
+  totaux: { actes: 2, montant: 4200, honoraires: 4200, prixNota: 800, net: 4200, du: 0 },
 };
 
-test('the relevé fetches /notary/acts on first open and prints montant, taux, frais and net per act', async () => {
+test('the relevé fetches /notary/acts on first open and prints the two lines per act', async () => {
   const ctx = await boot();
   const calls = stubNotaryApi(ctx.win, { acts: ACTS });
   await ctx.Nota.notary.signIn('demo@etude.ca');
@@ -416,17 +402,18 @@ test('the relevé fetches /notary/acts on first open and prints montant, taux, f
   assert.deepEqual(rows.map((r) => r.dataset.bid), ['b1', 'b2']);
   const cells = Array.from(rows[0].querySelectorAll('td')).map((c) => c.textContent);
   assert.ok(cells.some((c) => /Refinancement/.test(c)), 'the act is named: ' + cells);
-  assert.ok(cells.some((c) => /2 400\s?\$/.test(c)), 'what the client paid: ' + cells);
-  assert.ok(cells.some((c) => /8 %/.test(c)), 'at which rate: ' + cells);
-  assert.ok(cells.some((c) => /192\s?\$/.test(c)), 'what Nota kept: ' + cells);
-  assert.ok(cells.some((c) => /2 208\s?\$/.test(c)), 'and the net: ' + cells);
+  assert.ok(cells.some((c) => /2 400\s?\$/.test(c)), 'les honoraires du notaire, ENTIERS : ' + cells);
+  // ART. 32 / 29.1 — jamais un taux, jamais une cote sur une ligne d'argent.
+  const table = ctx.doc.querySelector('#nc-actes-list table').textContent;
+  assert.ok(!/%/.test(table), 'aucun pourcentage dans le relevé : ' + table.slice(0, 160));
+  assert.ok(!/[Tt]aux/.test(table), 'aucune colonne « Taux »');
+  assert.ok(cells.some((c) => /400\s?\$/.test(c)), 'le prix payé à Nota par le client : ' + cells);
 
   // The totals close the statement.
   const tot = ctx.doc.querySelector('#nc-actes-list .nc-acte-total');
   assert.ok(tot, 'the totals row exists');
-  assert.match(tot.textContent, /4 200\s?\$/, 'total paid by clients');
-  assert.match(tot.textContent, /372\s?\$/, 'total kept by Nota');
-  assert.match(tot.textContent, /3 828\s?\$/, 'total net');
+  assert.match(tot.textContent, /4 200\s?\$/, 'total des honoraires, intact');
+  assert.match(tot.textContent, /800\s?\$/, 'total payé à Nota par les clients');
 
   // Cached for the session: reopening never re-fetches.
   panel.open = false; await wait(5);
@@ -441,10 +428,10 @@ test('the relevé fetches /notary/acts on first open and prints montant, taux, f
 // because none exists in the product yet.
 const ACTS_DU = {
   actes: [
-    { bidId: 'b1', dateISO: '2026-08-20', serviceId: 'refinancement', service: 'Refinancement hypothécaire', montant: 2400, taux: 0.08, commission: 192, net: 2208, cote: 84, completedAt: '2026-08-20T14:02:00.000Z', paye: true, du: 0 },
-    { bidId: 'b2', dateISO: '2026-07-11', serviceId: 'financement', service: 'Financement hypothécaire', montant: 1800, taux: 0.10, commission: 180, net: 1620, cote: 71, completedAt: '2026-07-11T14:02:00.000Z', paye: false, du: 180 },
+    { bidId: 'b1', dateISO: '2026-08-20', serviceId: 'refinancement', service: 'Refinancement hypothécaire', montant: 2400, honoraires: 2400, prixNota: 400, net: 2400, completedAt: '2026-08-20T14:02:00.000Z', paye: true, du: 0 },
+    { bidId: 'b2', dateISO: '2026-07-11', serviceId: 'financement', service: 'Financement hypothécaire', montant: 1800, honoraires: 1800, prixNota: 400, net: 1800, completedAt: '2026-07-11T14:02:00.000Z', paye: false, du: 400 },
   ],
-  totaux: { actes: 2, montant: 4200, commission: 372, net: 3828, du: 180 },
+  totaux: { actes: 2, montant: 4200, honoraires: 4200, prixNota: 800, net: 4200, du: 400 },
 };
 
 test('a line settled off the platform is marked, names what is still owed, and the paid line is not', async () => {
@@ -467,7 +454,7 @@ test('a line settled off the platform is marked, names what is still owed, and t
   const t = etat.textContent;
   assert.match(t, /Réglé hors plateforme/, 'it says where the money went: ' + t);
   assert.match(t, /à percevoir/, 'and that the fee is still to be collected: ' + t);
-  assert.match(t, /180\s?\$/, 'with the amount still owed: ' + t);
+  assert.match(t, /400\s?\$/, 'with the amount still owed: ' + t);
   // No new shape: the marker is text in the console's existing quiet register,
   // not a badge — and it STACKS under the act's name (the cell is nowrap).
   assert.equal(etat.tagName, 'DIV', 'a block, so the row never stretches sideways');
@@ -485,10 +472,10 @@ test('the amount still owed is totalled beside the other totals — and only whe
 
   const foot = ctx.doc.querySelector('#nc-actes-list .nc-acte-total');
   assert.ok(foot, 'the settled totals still close the statement');
-  assert.match(foot.textContent, /372\s?\$/, 'total charged by Nota');
+  assert.match(foot.textContent, /800\s?\$/, 'total payé à Nota par les clients');
   const due = ctx.doc.querySelector('#nc-actes-list [data-total="du"]');
   assert.ok(due, 'the amount still owed is a total of its own');
-  assert.match(due.textContent, /180\s?\$/, 'the sum still owed: ' + due.textContent);
+  assert.match(due.textContent, /400\s?\$/, 'the sum still owed: ' + due.textContent);
   assert.match(due.textContent, /percevoir/, 'labelled as owed to Nota, not as revenue: ' + due.textContent);
   // It lives in the table's foot, beside the other totals — not adrift below.
   assert.ok(ctx.doc.querySelector('#nc-actes-list tfoot').contains(due), 'it sits with the totals');
@@ -513,7 +500,7 @@ test('one sentence explains the debt — and invents no way to settle it', async
   const t = notes[0].textContent;
   assert.match(t, /payé.{0,30}directement/, 'the client paid the notary directly: ' + t);
   assert.match(t, /Nota n’a rien encaissé/, 'Nota collected nothing: ' + t);
-  assert.match(t, /rest(e|ent) d(us|û)/, 'and the service fee is still owed: ' + t);
+  assert.match(t, /reste à percevoir/, 'et le prix du service de Nota reste à percevoir : ' + t);
 
   // ADR 0029 leaves recovery OPEN: nothing in the product can collect this
   // yet. The copy must not suggest an invoice, a deadline, a debit or a

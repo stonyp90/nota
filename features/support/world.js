@@ -94,6 +94,10 @@ class NotaWorld extends World {
       billingConfigured: this.billingOn === true,
       // The live-chat reply link points back at the site (ADR 0026).
       supportUrl: BASE,
+      // Le chemin PAYANT exige une origine de retour : sans elle, Stripe n'a
+      // pas où renvoyer le client, et `POST /bids` refuse franchement plutôt
+      // que de créer une offre dont le paiement ne pourra jamais aboutir.
+      siteUrl: BASE,
     });
 
     this.billingOn = false;

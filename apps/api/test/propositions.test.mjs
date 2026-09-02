@@ -21,7 +21,7 @@ function app(opts = {}) {
   const mailer = createFakeMailer();
   const notifier = createNotifier({ repo, mailer, baseUrl: BASE, operatorEmail: 'ops@nota.ca', now: () => TODAY });
   return {
-    ...createApp(repo, { now: () => TODAY, nowMs: () => NOW_MS, newId: () => 'id-' + ++n, notifier, ...opts }),
+    ...createApp(repo, { siteUrl: 'https://nota.test', now: () => TODAY, nowMs: () => NOW_MS, newId: () => 'id-' + ++n, notifier, ...opts }),
     repo,
     mailer,
   };
@@ -210,7 +210,10 @@ test('GET /notary/bids: each bid carries this notary own proposition, demande an
   assert.equal(b.proposition.status, 'en_attente');
   assert.equal(b.demande.documents[0].id, 'adresse');
   assert.equal(b.demande.fournie, true);
-  assert.equal(JSON.stringify(body).includes('4000'), false, 'another notary proposition leaked');
+  // Le montant de l'autre notaire ne doit apparaître nulle part — cherché comme
+  // NOMBRE et non comme sous-chaîne : depuis l'ADR 0031 la réponse porte le
+  // tarif de Nota (40 000 ¢), qui contient « 4000 ».
+  assert.equal(/(^|\D)4000(\D|$)/.test(JSON.stringify(body)), false, 'another notary proposition leaked');
   assert.deepEqual(body.retained, []);
 });
 
@@ -266,8 +269,15 @@ test('accept a proposition: the bid is retained by that notary at the new amount
   const body = parse(res);
   assert.equal(body.bid.status, 'retenue');
   assert.equal(body.bid.montant, 3400);
-  assert.equal(body.bid.etude, 'Étude me@notaire.ca');
+  // ART. 37 — le sérialiseur public ne nomme plus l'étude. Le client, lui,
+  // apprend qui a retenu sa demande par sa propre porte, derrière son jeton.
+  assert.equal(body.bid.etude, undefined);
   assert.equal(body.proposition.status, 'acceptee');
+  const vue = parse(await a.handle({
+    method: 'GET', path: '/client/bid', headers: { authorization: 'Bearer ' + clientToken },
+    query: { id: bid.id, dateISO: bid.dateISO },
+  }));
+  assert.equal(vue.notaire.etude, 'Étude me@notaire.ca');
 
   const stored = await a.repo.get(bid.id, bid.dateISO);
   assert.equal(stored.notaryId, notaryIdForEmail('me@notaire.ca'));
@@ -303,6 +313,11 @@ test('accept a proposition: the bid is retained by that notary at the new amount
 
 test('accept a proposition with billing on: no capture, the bid is flagged a_reautoriser', async () => {
   const fakeBilling = {
+    // ADR 0031 — la carte autorise les DEUX lignes : honoraires + prix de Nota.
+    quoteOffer: async (montant) => ({
+      honorairesCents: Math.round(montant * 100), prixNotaCents: 40000,
+      totalCents: Math.round(montant * 100) + 40000,
+    }),
     authorizeOffer: async () => ({ ok: true, url: BASE + '/checkout' }),
     payNotaryOnAccept: async () => { throw new Error('must not capture'); },
   };

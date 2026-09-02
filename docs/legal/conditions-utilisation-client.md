@@ -55,56 +55,71 @@ Une offre sous ce plancher est refusée (`apps/api/src/handler.js:681-693`).
 
 ---
 
-## 3. Le prix, et exactement comment il se partage
+## 3. Le prix : deux lignes, jamais un partage
 
-**Le montant que vous offrez est le total, tout compris.** Rien ne s'y ajoute.
-Vous ne payez jamais un dollar de plus que ce que vous avez offert.
+**Vous payez deux choses, et vous les voyez séparément avant de vous engager :**
 
-Ce montant se partage **à la signature de l'acte** :
+| Ligne | Qui l'encaisse | Ce que c'est |
+| --- | --- | --- |
+| **Les honoraires du notaire** | **Le notaire, en entier** | Le montant que vous offrez |
+| **Le prix de Nota** | Nota | Un montant fixe, le même pour tous |
 
-| Ce que le notaire a mérité (cote sur 100) | Le notaire reçoit | Nota conserve |
-| ---: | ---: | ---: |
-| Aucun historique | **85 %** | 15 % |
-| 60 | 88 % | 12 % |
-| 70 | 90 % | 10 % |
-| 80 | 92 % | 8 % |
-| 90 et plus | **95 %** | 5 % |
+**Le notaire reçoit la totalité de ce que vous lui offrez.** Nota ne prélève
+rien sur ses honoraires : elle vend son propre service, à son propre prix.
+C'est une obligation, pas un choix commercial — l'art. 32 du *Code de
+déontologie des notaires* interdit au notaire de partager ses honoraires avec
+une personne qui n'est pas membre d'un ordre professionnel, et l'art. 32.1 de la
+*Loi sur le notariat* vise l'intermédiaire qui « obtient d'un notaire qu'il
+abandonne une partie de ses honoraires et frais ».
 
-**Nota ne conserve jamais plus de 15 %.** La part du notaire ne peut que monter
-avec la qualité de son service : ses évaluations, le nombre d'actes qu'il
-complète, sa disponibilité à répondre aux demandes et sa présence.
+**Le prix de Nota ne dépend jamais du notaire** — ni de sa cote, ni de son
+historique, ni de la valeur de l'acte. Un notaire chevronné et un notaire qui
+débute vous coûtent exactement la même chose en frais de plateforme.
 
-*(Source : `apps/api/src/commission-config.js:23` — taux par défaut 15 % ;
-`:27` — plancher 5 % ; `:32-37` — les paliers. La part est calculée à chaque
-règlement, `apps/api/src/billing.js:105-158`.)*
+*(Prix par défaut : 400 $ — `apps/api/src/prix-nota-config.js:41`. Décision :
+`docs/decisions/0031-le-prix-de-nota-est-celui-de-nota.md`.)*
 
-> ✅ **Aligné** (1er septembre 2026). Les conditions affichées annoncent
-> désormais la même chose que le code : « Nota conserve au plus 15 % », « le
-> notaire 85 % à 95 % » (`apps/web/public/index.html:768, 1160, 1170`,
-> `apps/web/public/i18n.js:721, 730`). L'ancienne mention 75/25 et la phrase
-> contradictoire de la charte (« ce que vous offrez est ce que le notaire
-> reçoit ») ont été retirées ; `index.html:1214` porte maintenant
-> « Transparence des prix ». La règle est documentée par l'ADR 0028.
+> **Ce qui a changé.** Jusqu'au 1<sup>er</sup> septembre 2026, ces conditions
+> annonçaient que Nota conservait de 5 % à 15 % de votre montant, selon la cote
+> du notaire. **Ce modèle est retiré**, et le texte ci-dessus le remplace.
+> Aucun acte n'a été porté sur la plateforme sous l'ancien modèle.
 
-Nota s'engage à **divulguer intégralement** la part qu'elle conserve : le taux
-applicable, le montant en dollars et la façon dont il a été calculé.
+> **Ce que ce prix ne comprend pas, et qui reste à trancher.** Les **taxes**
+> (TPS/TVQ) et les **débours** — droits de publication au registre foncier,
+> RDPRM, radiations — n'apparaissent aujourd'hui **nulle part dans le
+> produit**. Ni le montant que vous offrez ni le prix de Nota n'en portent.
+> Tant que ce point n'est pas réglé, aucune surface ne doit affirmer que le
+> montant est « tout compris » : l'art. 71 3° du *Code de déontologie* exige
+> d'indiquer si les débours et les taxes sont ou non inclus, et l'art. 68
+> interdit la publicité incomplète.
 
 ---
 
 ## 4. Comment vous payez
 
-**Vous payez Nota.** Votre paiement va à la plateforme, qui verse ensuite au
-notaire la part qui lui revient. Vous n'avez qu'un seul interlocuteur pour le
-paiement, et un seul montant à verser.
+**Vous payez Nota.** Votre carte est débitée une fois, pour le total des deux
+lignes ; Nota vire ensuite au notaire ses honoraires, en entier.
 
 1. **À la publication**, votre carte est **autorisée**, pas débitée. Le montant
-   est réservé (`apps/api/src/stripe-port.js:85-116` — session de paiement au nom
-   de Nota, capture manuelle).
+   réservé est le **total des deux lignes** — vos honoraires offerts plus le
+   prix de Nota (`apps/api/src/handler.js`, route `POST /bids` ;
+   `apps/api/src/stripe-port.js:85-116` : session de paiement au nom de Nota,
+   capture manuelle).
 2. **Si personne ne retient votre demande**, la réservation prend fin d'elle-même,
    **sans frais**.
-3. **À la signature de l'acte**, le montant est capturé par Nota, qui vire
-   aussitôt au notaire sa part — de 85 % à 95 % selon la section 3
-   (`apps/api/src/stripe-port.js:126-146`, `handler.js:1073-1186`).
+3. **À la signature de l'acte**, Nota capture **exactement le montant du
+   règlement, jamais davantage** (`amount_to_capture`,
+   `apps/api/src/stripe-port.js`, `captureAndTransfer`), et vire au notaire ses
+   honoraires entiers. Si l'acte vaut finalement moins que ce que vous aviez
+   offert, vous êtes débité de moins : l'écart n'est jamais conservé.
+
+**Nota ne voit jamais votre numéro de carte.** Le paiement est hébergé par
+Stripe (`apps/api/src/stripe-port.js:14`).
+
+**Une fois l'acte réglé, vous voyez les deux lignes de ce que vous avez payé** —
+les honoraires du notaire et le prix de Nota, côte à côte. Les chiffres viennent
+du registre d'écriture unique, pas d'un calcul refait après coup
+(`apps/api/src/handler.js`, `GET /client/bid`, champ `acte`).
 
 **Nota ne voit jamais votre numéro de carte.** Le paiement est hébergé par
 Stripe (`apps/api/src/stripe-port.js:14`).

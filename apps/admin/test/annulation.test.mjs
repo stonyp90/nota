@@ -125,9 +125,13 @@ test('the rail carries an enabled Annulation entry that routes to the barème vi
   const entry = links.find((b) => text(b).includes('Annulation'));
   assert.ok(entry, 'rail entry « Annulation » is missing');
   assert.equal(entry.disabled, false, 'the entry must be enabled (not a « Bientôt » placeholder)');
-  const commission = links.find((b) => text(b).includes('Commission'));
+  // « Commission » a disparu du rail avec l'ADR 0031 : c'est « Prix » qui la
+  // remplace, et l'ordre se vérifie contre elle — sinon l'assertion portait sur
+  // un `undefined` et ne vérifiait plus rien.
+  const prix = links.find((b) => text(b).includes('Prix'));
   const firstDisabled = links.find((b) => b.disabled);
-  assert.ok(links.indexOf(entry) > links.indexOf(commission), 'Annulation sits after Commission');
+  assert.ok(prix, 'l’entrée « Prix » manque au rail');
+  assert.ok(links.indexOf(entry) > links.indexOf(prix), 'Annulation sits after Prix');
   assert.ok(links.indexOf(entry) < links.indexOf(firstDisabled), 'Annulation sits before the disabled placeholders');
 
   click(win, entry);

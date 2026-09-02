@@ -966,6 +966,314 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+    get:
+      operationId: notaryReadDocument
+      summary: Ouvrir une autorisation de lecture d'un document.
+      description: >-
+        L'acces est decide ICI, au serveur : une URL signee est un secret
+        porteur, jamais une frontiere d'autorisation. L'autorisation dure deux
+        minutes et force une piece jointe — un document depose par un inconnu ne
+        doit jamais s'executer dans l'origine de Nota. Chaque lecture laisse une
+        trace d'audit.
+      security:
+        - notarySession: []
+      parameters:
+        - name: id
+          in: query
+          required: true
+          schema: { type: string }
+        - name: dateISO
+          in: query
+          required: true
+          schema: { type: string, format: date }
+        - name: documentId
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Le document et son autorisation de lecture.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [document, lecture]
+                properties:
+                  document: { $ref: "#/components/schemas/ChatDocument" }
+                  lecture: { $ref: "#/components/schemas/LectureAutorisation" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          description: Aucun stockage configure sur ce deploiement.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Errors"
+  /client/bid/documents:
+    post:
+      operationId: clientOpenDocumentUpload
+      summary: Ouvrir une autorisation de depot de document dans la conversation.
+      description: >-
+        ADR 0032. Les octets ne traversent JAMAIS l'API : le navigateur televerse
+        directement vers le stockage avec l'autorisation signee rendue ici, qui
+        porte une seule cle, un seul type, une seule taille et quelques minutes.
+        La conversation n'existe qu'apres retention. Le document reste
+        `en_attente` jusqu'a ce que le serveur CONSTATE le depot
+        (`/documents/confirme`) : une piece annoncee n'est pas une piece recue.
+        Repond 503 quand aucun stockage n'est configure — jamais une URL inventee.
+      security:
+        - clientBidToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, dateISO, nom, taille, type]
+              properties:
+                id: { type: string }
+                dateISO: { type: string, format: date }
+                nom: { type: string, maxLength: 120 }
+                taille:
+                  type: integer
+                  description: Taille declaree, en octets. Bornee a 15 Mo par le domaine.
+                type:
+                  type: string
+                  description: >-
+                    Type MIME declare. Il doit s'accorder a l'extension du nom,
+                    et il est FIGE dans l'autorisation signee : une autorisation
+                    emise pour un PDF ne peut pas servir a deposer autre chose.
+      responses:
+        "200":
+          description: Le document cree et son autorisation de depot.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [document, depot]
+                properties:
+                  document: { $ref: "#/components/schemas/ChatDocument" }
+                  depot: { $ref: "#/components/schemas/DepotAutorisation" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "410":
+          $ref: "#/components/responses/Gone"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "503":
+          description: Aucun stockage configure sur ce deploiement.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Errors"
+    get:
+      operationId: clientReadDocument
+      summary: Ouvrir une autorisation de lecture d'un document.
+      description: >-
+        L'acces est decide ICI, au serveur : une URL signee est un secret
+        porteur, jamais une frontiere d'autorisation. L'autorisation dure deux
+        minutes et force une piece jointe — un document depose par un inconnu ne
+        doit jamais s'executer dans l'origine de Nota. Chaque lecture laisse une
+        trace d'audit.
+      security:
+        - clientBidToken: []
+      parameters:
+        - name: id
+          in: query
+          required: true
+          schema: { type: string }
+        - name: dateISO
+          in: query
+          required: true
+          schema: { type: string, format: date }
+        - name: documentId
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Le document et son autorisation de lecture.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [document, lecture]
+                properties:
+                  document: { $ref: "#/components/schemas/ChatDocument" }
+                  lecture: { $ref: "#/components/schemas/LectureAutorisation" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          description: Aucun stockage configure sur ce deploiement.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Errors"
+  /client/bid/documents/confirme:
+    post:
+      operationId: clientConfirmDocument
+      summary: Confirmer qu'un document est bien arrive dans le stockage.
+      description: >-
+        Le serveur CONSTATE le depot ; il ne croit pas le navigateur sur parole.
+        Sans cela, n'importe qui pourrait faire apparaitre dans le fil une piece
+        jamais televersee. Le document passe alors a `pret` et devient visible
+        pour l'autre partie.
+      security:
+        - clientBidToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, dateISO, documentId]
+              properties:
+                id: { type: string }
+                dateISO: { type: string, format: date }
+                documentId: { type: string }
+      responses:
+        "200":
+          description: Le document, desormais pret.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [document]
+                properties:
+                  document: { $ref: "#/components/schemas/ChatDocument" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "503":
+          description: Aucun stockage configure sur ce deploiement.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Errors"
+  /notary/bids/documents/depot:
+    post:
+      operationId: notaryOpenDocumentUpload
+      summary: Ouvrir une autorisation de depot de document dans la conversation.
+      description: >-
+        ADR 0032. Les octets ne traversent JAMAIS l'API : le navigateur televerse
+        directement vers le stockage avec l'autorisation signee rendue ici, qui
+        porte une seule cle, un seul type, une seule taille et quelques minutes.
+        La conversation n'existe qu'apres retention. Le document reste
+        `en_attente` jusqu'a ce que le serveur CONSTATE le depot
+        (`/documents/confirme`) : une piece annoncee n'est pas une piece recue.
+        Repond 503 quand aucun stockage n'est configure — jamais une URL inventee.
+      security:
+        - notarySession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, dateISO, nom, taille, type]
+              properties:
+                id: { type: string }
+                dateISO: { type: string, format: date }
+                nom: { type: string, maxLength: 120 }
+                taille:
+                  type: integer
+                  description: Taille declaree, en octets. Bornee a 15 Mo par le domaine.
+                type:
+                  type: string
+                  description: >-
+                    Type MIME declare. Il doit s'accorder a l'extension du nom,
+                    et il est FIGE dans l'autorisation signee : une autorisation
+                    emise pour un PDF ne peut pas servir a deposer autre chose.
+      responses:
+        "200":
+          description: Le document cree et son autorisation de depot.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [document, depot]
+                properties:
+                  document: { $ref: "#/components/schemas/ChatDocument" }
+                  depot: { $ref: "#/components/schemas/DepotAutorisation" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "410":
+          $ref: "#/components/responses/Gone"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "503":
+          description: Aucun stockage configure sur ce deploiement.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Errors"
+  /notary/bids/documents/confirme:
+    post:
+      operationId: notaryConfirmDocument
+      summary: Confirmer qu'un document est bien arrive dans le stockage.
+      description: >-
+        Le serveur CONSTATE le depot ; il ne croit pas le navigateur sur parole.
+        Sans cela, n'importe qui pourrait faire apparaitre dans le fil une piece
+        jamais televersee. Le document passe alors a `pret` et devient visible
+        pour l'autre partie.
+      security:
+        - notarySession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, dateISO, documentId]
+              properties:
+                id: { type: string }
+                dateISO: { type: string, format: date }
+                documentId: { type: string }
+      responses:
+        "200":
+          description: Le document, desormais pret.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [document]
+                properties:
+                  document: { $ref: "#/components/schemas/ChatDocument" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "503":
+          description: Aucun stockage configure sur ce deploiement.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Errors"
   /notary/bids/message:
     post:
       operationId: notarySendMessage
@@ -2020,6 +2328,18 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
+    Gone:
+      description: L'offre a ete annulee par le client.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Errors"
+    ValidationError:
+      description: Le corps est refuse par la validation du domaine.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Errors"
     NotFound:
       description: Unknown bid (`introuvable`).
       content:
@@ -2224,6 +2544,53 @@ components:
           type: integer
         urgence:
           type: boolean
+    ChatDocument:
+      type: object
+      description: >-
+        Un document de la conversation. La CLE de stockage n'apparait jamais ici
+        — Nota est depositaire, jamais destinataire (art. 35 a 37 C.deont.), et
+        une cle divulguee serait une adresse a deviner.
+      required: [id, de, nom, taille, etat, createdAt]
+      properties:
+        id: { type: string }
+        de:
+          type: string
+          enum: [client, notaire]
+        nom: { type: string }
+        taille: { type: integer }
+        etat:
+          type: string
+          enum: [en_attente, pret]
+          description: >-
+            `en_attente` tant que le serveur n'a pas CONSTATE le depot. Seuls les
+            documents `pret` sont visibles par l'autre partie.
+        createdAt: { type: string, format: date-time }
+    DepotAutorisation:
+      type: object
+      description: L'autorisation signee de televerser, portee et breve.
+      required: [url, methode, expireA]
+      properties:
+        url: { type: string, format: uri }
+        methode:
+          type: string
+          enum: [PUT]
+        entetes:
+          type: object
+          additionalProperties: { type: string }
+          description: Les en-tetes que le navigateur DOIT envoyer, notamment le content-type figé.
+        expireA: { type: string, format: date-time }
+        maxBytes: { type: integer }
+    LectureAutorisation:
+      type: object
+      description: L'autorisation signee de telecharger, en piece jointe.
+      required: [url, methode, expireA]
+      properties:
+        url: { type: string, format: uri }
+        methode:
+          type: string
+          enum: [GET]
+        disposition: { type: string }
+        expireA: { type: string, format: date-time }
     ChatMessage:
       type: object
       description: >-

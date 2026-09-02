@@ -81,7 +81,7 @@ test('le registre des notaires est fermé sans session, et fermé à l’analyst
     'un registre nominatif exige pii:read');
 });
 
-test('le registre nomme, pour chaque notaire, sa cote, son taux et ce qu’il a porté', async () => {
+test('le registre nomme, pour chaque notaire, sa cote et ce qu’il a porté', async () => {
   const h = make();
   const session = await login2(h, 'ops@nota.ca');
   await seedNotaire(h, 'n1', {
@@ -98,8 +98,13 @@ test('le registre nomme, pour chaque notaire, sa cote, son taux et ce qu’il a 
   assert.equal(body.notaires.length, 2, 'même les notaires en inscription figurent au registre');
   const n1 = body.notaires.find((n) => n.id === 'n1');
   assert.ok(n1.cote > 90, 'la cote du registre est la même que celle qui facture : ' + n1.cote);
-  assert.equal(n1.tauxEffectif, 0.05);
-  assert.equal(n1.part, 0.95);
+  // ADR 0031 — le registre ne porte plus ni taux ni part : le notaire garde
+  // 100 % de ses honoraires, et une colonne « le notaire garde X % », même
+  // dans une console interne, décrirait la convention que l'art. 29.1 du Code
+  // de déontologie lui interdit de conclure.
+  assert.equal(n1.tauxEffectif, undefined);
+  assert.equal(n1.part, undefined);
+  assert.equal(body.bareme, undefined, 'et aucun barème ne clôt le registre');
   assert.equal(n1.actes, 80);
   assert.equal(n1.note, 4.9);
   assert.equal(n1.avis, 40);

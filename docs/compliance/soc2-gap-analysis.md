@@ -2,6 +2,15 @@
 
 **Date : 1er septembre 2026. Statut : constat interne, non révisé par un auditeur.**
 
+> ⚠️ **PÉRIMÉ SUR UN POINT — corrigé le 2026-09-02.** Ce document décrit le
+> partage d'honoraires (« Nota conserve au plus 15 %, le notaire garde de 85 %
+> à 95 % selon sa cote ») comme s'il était en vigueur. **Il ne l'est plus.**
+> L'[ADR 0031](../decisions/0031-le-prix-de-nota-est-celui-de-nota.md) l'a
+> retiré : le notaire reçoit 100 % du montant offert, et Nota facture au client
+> un **prix fixe** pour son propre service. Les art. 32 et 32.1 2° condamnaient
+> la mécanique décrite ici. Tout le reste du document tient ; ne citez pas ses
+> passages sur le partage sans lire l'ADR 0031 d'abord.
+
 Ce document mesure le produit **tel qu'il est écrit**, contre les *Trust Services
 Criteria* (TSC 2017, révision 2022) : **Sécurité (CC1-CC9)**, **Disponibilité
 (A1)** et **Confidentialité (C1)**.
