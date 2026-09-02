@@ -1,0 +1,84 @@
+# Nota
+
+> Rééquilibrer l'offre et la demande des actes notariaux simples.
+
+Nota est une place de marché québécoise qui met en relation des clients et des
+notaires **en fonction de l'urgence du besoin**. Le client publie sa demande sur
+un carnet public ; les notaires inscrits consultent les demandes qui
+correspondent à leurs disponibilités et à leur territoire.
+
+**Nota n'est pas un notaire et ne fournit aucun service juridique.** L'acte est
+reçu par un notaire membre de la Chambre des notaires du Québec, seul
+responsable de son dossier et de ses honoraires.
+
+## Ce que fait Nota
+
+- Le client publie **gratuitement** sa demande : type d'acte, date souhaitée,
+  secteur (code postal) et montant offert.
+- Un notaire peut **accepter** la demande, faire une **contre-offre** ou
+  **passer son tour**. Il n'est jamais tenu d'accepter un prix.
+- Les demandes sont dirigées vers les notaires dont le territoire couvre le
+  code postal du client, selon le périmètre que chacun accepte de desservir.
+
+## Actes couverts
+
+Seuls des actes simples et bien cadrés sont exposés :
+
+- **Refinancement hypothécaire** — acte de prêt et publication de l'hypothèque.
+  Tarif de base : 2 000 $.
+- **Financement hypothécaire** — acte de prêt lors d'un achat.
+  Tarif de base : 1 800 $.
+
+## Comment le prix est formé
+
+Le montant part du tarif de base de l'acte, ajusté par des facteurs objectifs
+(montant du prêt, état de l'approbation bancaire, succession, co-emprunteur,
+type de prêteur, modalité de déplacement). Le client nomme ensuite son offre.
+
+Plus l'échéance est courte, plus l'offre monte — c'est la **célérité
+exceptionnelle** que l'art. 49 (4°) du *Code de déontologie des notaires*
+reconnaît expressément comme facteur de fixation des honoraires. L'offre est
+**plafonnée à cinq fois** le tarif de départ ; au-delà, Nota refuse la demande.
+
+## Qui encaisse quoi
+
+Le client paie **deux lignes distinctes** :
+
+1. **Les honoraires du notaire** — le montant offert, versé au notaire **en
+   entier**. Nota n'en prélève aucune part.
+2. **Le prix du service de Nota** — un montant **fixe**, identique pour tous,
+   qui ne dépend ni du notaire, ni de sa cote, ni de la valeur de l'acte.
+
+Cette séparation est une contrainte de conception, pas une politique
+commerciale : l'**art. 32** du *Code de déontologie des notaires* interdit au
+notaire de partager ses honoraires avec un non-membre, et l'**art. 32.1** de la
+*Loi sur le notariat* vise l'intermédiaire qui obtiendrait d'un notaire
+l'abandon d'une partie de ses honoraires. Nota est bâtie autour de ces
+interdictions.
+
+Aucune moyenne ni cote n'est publiée sur un notaire nommé (art. 70).
+
+## Territoire et langues
+
+- Région de la Ville de Québec et environs.
+- Interface en français et en anglais.
+- Données hébergées au Canada (région AWS ca-central-1).
+
+## English summary
+
+Nota is a Québec marketplace that rebalances supply and demand for **simple
+notarial acts** (mortgage financing and refinancing). Clients post a request
+free of charge — act type, desired date, postal area and offered amount — and
+registered notaries accept, counter-offer, or pass.
+
+The notary keeps **100 % of their fees**; Nota charges its own fixed service
+price to the client, separately. Fee-sharing is prohibited by art. 32 of the
+Québec notaries' Code of ethics and art. 32.1 of the Notaries Act, so the
+platform is designed around that prohibition. Nota is not a notary and provides
+no legal services.
+
+## Liens
+
+- Site : https://d1s1h4894dau0c.cloudfront.net/
+- Version anglaise : https://d1s1h4894dau0c.cloudfront.net/?lang=en
+- Carnet public (JSON) : https://d1s1h4894dau0c.cloudfront.net/api/bids
