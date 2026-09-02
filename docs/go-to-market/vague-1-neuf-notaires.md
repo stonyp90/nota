@@ -70,7 +70,7 @@ dans cette aventure et dont le jugement professionnel façonnera Nota avant
 son ouverture au public. [LIGNE PERSONNALISÉE]
 
 Auriez-vous vingt minutes à m'accorder cette semaine ou la suivante ?
-[Il me ferait plaisir de me déplacer à [ville]. | Une visioconférence
+[Je me ferais un plaisir de me déplacer à [ville]. | Une visioconférence
 suffit amplement.]
 
 Bien à vous,
