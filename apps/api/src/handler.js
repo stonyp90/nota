@@ -146,6 +146,17 @@ function createApp(repo, opts = {}) {
   const billingConfigured = opts.billingConfigured != null
     ? !!opts.billingConfigured
     : (!!opts.billing || !!(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET));
+  // `billingConfigured` répond à « le paiement à l'acceptation est-il actif ? »
+  // et peut être forcé à false ALORS QU'un adaptateur est injecté — le monde
+  // BDD et `partenaires.test.mjs` font exactement cela pour exercer le webhook
+  // et le branchement sans changer le flux d'offre.
+  //
+  // Ce prédicat-ci répond à l'autre question, la seule qui compte avant
+  // d'appeler `billing()` : la construction peut-elle aboutir ? Elle échoue si
+  // et seulement si aucun adaptateur n'est injecté et qu'aucune clé Stripe
+  // n'est posée — `createStripeAdapter` lève alors sur `secretKey`. Confondre
+  // les deux prédicats donne soit un 500 en production, soit un 503 en test.
+  const billingAvailable = !!opts.billing || !!process.env.STRIPE_SECRET_KEY;
   // L'origine publique du site — celle où Stripe renvoie le client après le
   // paiement. `NOTA_BASE_URL` EST la variable que l'infrastructure pose
   // (`infra/lambda.tf`) ; `NOTA_SITE_URL` n'y figure nulle part. Cette ligne
@@ -1348,6 +1359,13 @@ function createApp(repo, opts = {}) {
     // Begin FREE notary onboarding — open a Stripe Connect onboarding link.
     // No subscription; Nota takes a commission only when an act completes.
     if (route === '/notaries/connect' && method === 'POST') {
+      // Brancher ses versements exige l'intermédiaire de paiement. Quand il
+      // n'est pas configuré, le dire franchement : `billing()` le construit
+      // paresseusement et lève sans clé, ce qui rendait un 500 — un notaire y
+      // lisait une panne de Nota plutôt qu'une configuration absente.
+      if (!billingAvailable) {
+        return json(503, { errors: [{ code: 'paiement_indisponible', message: 'Le branchement des versements est momentanément indisponible. Réessayez dans quelques minutes.' }] });
+      }
       let payload;
       try {
         payload = typeof request.body === 'string' ? JSON.parse(request.body || '{}') : request.body || {};
@@ -1480,6 +1498,15 @@ function createApp(repo, opts = {}) {
     // Stripe webhook. The raw request body and the `stripe-signature` header are
     // verified by the adapter; a bad signature is a 400. Idempotent by event id.
     if (route === '/stripe/webhook' && method === 'POST') {
+      // Sans secret de webhook, AUCUNE signature n'est vérifiable : le refus
+      // est donc exactement celui d'une signature fausse — même code, même
+      // corps, si bien que sonder la route n'apprend rien sur la
+      // configuration. Appeler `billing()` ici LEVAIT (l'adaptateur Stripe est
+      // construit paresseusement et exige une clé), et un webhook qui répond
+      // 500 fait réessayer Stripe pendant des heures avant de lever l'alerte.
+      if (!billingAvailable) {
+        return json(400, { errors: [{ code: 'signature_invalide', message: 'Signature Stripe invalide.' }] });
+      }
       const signature = header(request.headers, 'stripe-signature');
       const raw = typeof request.body === 'string' ? request.body : JSON.stringify(request.body || {});
       const result = await billing().handleWebhook(raw, signature);
