@@ -216,6 +216,35 @@ data "aws_iam_policy_document" "admin_lambda" {
     }
   }
 
+  # The THIRD write door on the MAIN table: activating a notary (2026-09-02,
+  # POST /admin/notaries/{id}/activer in apps/api/src/admin.js). The operator
+  # checks the Tableau de l'Ordre and stamps `approuveLe` on the notary's own
+  # record (PK = 'NOTARY#<id>', SK = PROFILE — see apps/api/src/keys.js), which
+  # is the ONE field the public console gate reads; the same click moves the
+  # « actifs / en intégration » gauge (PK = 'STATS#GAUGE', an atomic ADD).
+  # Without this grant the activation would answer 200 in the tests and
+  # AccessDenied in production — the notary would wait forever.
+  #
+  # LeadingKeys with a wildcard (StringLike) confines PutItem to notary
+  # profiles and UpdateItem to the gauge item; the console still cannot touch a
+  # bid, a dossier, a ledger row or a challenge. GetItem on the profile is
+  # already covered by MainTableReadOnly.
+  statement {
+    sid    = "MainTableNotaryActivation"
+    effect = "Allow"
+    actions = [
+      "dynamodb:PutItem",
+      "dynamodb:UpdateItem",
+    ]
+    resources = [aws_dynamodb_table.main.arn]
+
+    condition {
+      test     = "ForAllValues:StringLike"
+      variable = "dynamodb:LeadingKeys"
+      values   = ["NOTARY#*", "STATS#GAUGE"]
+    }
+  }
+
   # SES send for admin login-challenge / notification email. Scoped to the
   # configured sender address exactly the way the public notifier is scoped
   # (notifications.tf): by the ses:FromAddress condition, not a brittle ARN.
