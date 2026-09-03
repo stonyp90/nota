@@ -3,6 +3,9 @@
 const assert = require('node:assert/strict');
 const { Given, When, Then } = require('@cucumber/cucumber');
 const { notaryIdForEmail } = require('../../apps/api/src/notary-auth.js');
+// ADR 0033 : un notaire ne retient ni ne propose sans nom, téléphone et
+// adresse d'étude — la fixture partagée avec les tests de l'API les porte.
+const { NOTARY_CONTACT } = require('../../apps/api/test-support/notary-fixture.js');
 
 // --- Helpers ----------------------------------------------------------------
 
@@ -30,7 +33,7 @@ function lastBid(world) {
 // --- Given ------------------------------------------------------------------
 
 Given('un notaire actif {string}', async function (email) {
-  await this.repo.putNotary({ id: notaryIdForEmail(email), email, status: 'active', label: 'Étude ' + email });
+  await this.repo.putNotary({ id: notaryIdForEmail(email), email, status: 'active', label: 'Étude ' + email, ...NOTARY_CONTACT });
 });
 
 // --- When: notary actions ---------------------------------------------------

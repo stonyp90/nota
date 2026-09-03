@@ -8,7 +8,7 @@ const cancellationCfg = require('./cancellation-config');
 const { decodeUnsubToken } = require('./notifications');
 const { signToken, signChallengeToken, verifyToken, notaryIdForEmail, SCOPES } = require('./notary-auth');
 const { buildNotaryFeed, buildCarnetFeed } = require('./ics');
-const { statsDeltasForOffer, statsDeltasForRetain } = require('./stats');
+const { statsDeltasForOffer, statsDeltasForRetain, statsDeltasForNotaryOnboarding, statsDeltasForFunnel } = require('./stats');
 
 /**
  * HTTP application, transport-agnostic. `createApp` takes a Repo port and
@@ -61,6 +61,9 @@ function createApp(repo, opts = {}) {
   const NOTARY_CHALLENGE_TTL_MS = opts.notaryChallengeTtlMs || 15 * 60 * 1000; // 15 min
   const NOTARY_LOGIN_RL_WINDOW_SEC = opts.notaryLoginRlWindowSec || 15 * 60; // 15 min window
   const NOTARY_LOGIN_RL_MAX = opts.notaryLoginRlMax || 5; // links / window / IP
+  // The support widget's per-IP throttle (ADR 0033 §7): 20 messages / 10 min.
+  const SUPPORT_RL_WINDOW_SEC = opts.supportRlWindowSec || 10 * 60;
+  const SUPPORT_RL_MAX = opts.supportRlMax || 20;
   // The site the magic link points back at (the notary console lives on the main
   // site, opened via a `#nauth=<token>` hash the web app consumes on load).
   const NOTARY_CONSOLE_URL = String(
@@ -165,6 +168,14 @@ function createApp(repo, opts = {}) {
   // n'avait aucun retour, et `handleCheckoutReturn()` ne s'exécutait jamais.
   const env = opts.env || process.env;
   const siteUrl = opts.siteUrl || env.NOTA_SITE_URL || env.NOTA_BASE_URL || '';
+  // --- Free notary signup + funnel beacon throttles (2026-09-02) -------------
+  // The signup door shares the sign-in request's window and ceiling (it is the
+  // same kind of door: public, unauthenticated, one mail per call). The funnel
+  // beacon is lighter and far more frequent — a page fires it on every step —
+  // so its own, looser ceiling per minute.
+  const NOTARY_SIGNUP_RL_MAX = opts.notarySignupRlMax || NOTARY_LOGIN_RL_MAX;
+  const FUNNEL_RL_WINDOW_SEC = opts.funnelRlWindowSec || 60;
+  const FUNNEL_RL_MAX = opts.funnelRlMax || 120;
   // An offer is shown on the carnet unless its card authorization is still pending
   // or was voided (pay-on-accept). Legacy bids (no paymentStatus) are always live.
   const isLive = (b) => b.paymentStatus !== 'pending' && b.paymentStatus !== 'void';
@@ -184,6 +195,10 @@ function createApp(repo, opts = {}) {
     const { createSesAdapter } = require('./notify-port');
     const { createNotifier } = require('./notifications');
     const mailer = createSesAdapter({ from: process.env.NOTA_FROM_EMAIL, region: process.env.AWS_REGION });
+    // ADR 0033 §2.7 — the client's signed, device-independent link to THEIR
+    // act, good for 30 days: the CTA of every client act mail. Minted here
+    // because the handler holds the signing secret and the public origin.
+    const CLIENT_LINK_TTL_MS = 30 * 24 * 60 * 60 * 1000;
     notifierInstance = createNotifier({
       repo,
       mailer,
@@ -193,6 +208,13 @@ function createApp(repo, opts = {}) {
       // déploiement dont l'API a sa propre adresse.
       apiBaseUrl: process.env.NOTA_API_BASE_URL,
       operatorEmail: process.env.NOTA_OPERATOR_EMAIL,
+      // Null without a public origin: the mail then falls back to the client's space.
+      clientLink: (bid) =>
+        siteUrl && bid && bid.id
+          ? siteUrl + '/#offre=' + bid.id + '&d=' + bid.dateISO + '&cle=' + signToken(bid.id, nowMs() + CLIENT_LINK_TTL_MS, SCOPES.CLIENT)
+          : null,
+      // Operator alerts open the admin console when one is configured.
+      adminUrl: process.env.NOTA_ADMIN_URL || null,
     });
     return notifierInstance;
   }
@@ -255,7 +277,12 @@ function createApp(repo, opts = {}) {
     const existing = await repo.getNotary(notaryId);
     const demoOpen = process.env.NOTA_DEMO_OPEN === 'true' && process.env.NODE_ENV !== 'production';
     const active = !!(existing && existing.status === 'active');
-    return { notaryId, existing, demoOpen, active, allowed: demoOpen || active };
+    // 2026-09-02: console access is the OPERATOR's approval (`approuveLe`,
+    // stamped from the admin console once the Tableau de l'Ordre check is
+    // done) — not Stripe's `active`, which now only says whether payouts can
+    // flow. A notary activated by Stripe before this date keeps getting in.
+    const approved = !!(existing && existing.approuveLe);
+    return { notaryId, existing, demoOpen, active, approved, allowed: demoOpen || active || approved };
   }
 
   // Upsert the notary profile so accept can stamp a stable étude label. Spreads
@@ -269,9 +296,22 @@ function createApp(repo, opts = {}) {
       demoOpen && !active
         ? { status: 'active', chargesEnabled: true, connectAccountId: 'acct_demo_' + notaryId.slice(0, 12) }
         : {};
+    // ADR 0033: retaining needs a name, a phone and an address (the client
+    // must be able to reach and find the notary). The open demo seeds them on
+    // a brand-new account — never over what a notary already typed.
+    const demoIdentity =
+      demoOpen && !active
+        ? {
+            nom: (existing && existing.nom) || 'Me Démo Nota',
+            etude: (existing && existing.etude) || 'Étude Démo',
+            telephone: (existing && existing.telephone) || '418 555 0100',
+            adresse: (existing && existing.adresse) || '1, rue de la Démo, Québec (QC) G1R 1A1',
+          }
+        : {};
     await repo.putNotary({
       ...(existing || {}),
       ...demoActivation,
+      ...demoIdentity,
       id: notaryId,
       email,
       label,
@@ -463,6 +503,55 @@ function createApp(repo, opts = {}) {
     const paliers = stored && Array.isArray(stored.paliers) ? stored.paliers : cancellationCfg.envDefaults().paliers;
     const fee = cancellationCfg.feeFor({ montant: bid.montant, joursAvant: domain.daysBetween(now(), bid.dateISO), paliers });
     return fee.fraisCents > 0 ? fee : null;
+  }
+
+  // The barème in force, as data for the notary console (ADR 0033 §2.3):
+  // resolved exactly like `annulationFeeFor` above — the admin-stored item,
+  // else the environment defaults — so what the console shows before a
+  // retain is what a cancellation would actually charge.
+  async function annulationBareme() {
+    const stored = typeof repo.getCancellationConfig === 'function' ? await repo.getCancellationConfig() : null;
+    const paliers = stored && Array.isArray(stored.paliers) ? stored.paliers : cancellationCfg.envDefaults().paliers;
+    return paliers.map((t) => ({ maxJours: t.maxJours, taux: t.taux }));
+  }
+
+  // The notary's own profile as the console reads and edits it (ADR 0033):
+  // the feed levers (fiche, rayon, urgences, secteur), the identity a retained
+  // client will receive (nom, étude, téléphone, adresse, courriel), whether
+  // that identity is complete enough to retain, and the alert preferences.
+  function notaryProfil(p) {
+    const s = (v) => { const t = String(v == null ? '' : v).trim(); return t || null; };
+    const manquants = domain.notaryContactMissing(p);
+    return {
+      lienCNQ: (p && p.lienCNQ) || null,
+      rayonKm: (p && Number(p.rayonKm)) || 0,
+      urgences: !!(p && p.urgences),
+      prefixe: (p && p.prefixe) || null,
+      nom: s(p && p.nom),
+      etude: s(p && p.etude),
+      telephone: s(p && p.telephone),
+      adresse: s(p && p.adresse),
+      courriel: s(p && p.email),
+      complet: manquants.length === 0,
+      manquants,
+      alertes: domain.notaryAlertes(p),
+    };
+  }
+
+  // The gate (ADR 0033 §2.2): a notary may RETAIN or PROPOSE only once a
+  // client could call them and find their étude. Returns the 403 to send, or
+  // null when the profile is complete. Never applied to the idempotent
+  // re-accept by the holder — a dossier already released stays released.
+  function profilIncomplet(profile) {
+    const manquants = domain.notaryContactMissing(profile);
+    if (!manquants.length) return null;
+    return json(403, {
+      errors: [{
+        code: 'profil_incomplet',
+        message: 'Complétez votre profil (nom, téléphone, adresse de l’étude) avant de retenir une demande.',
+        manquants,
+      }],
+    });
   }
 
   // Notary-facing projection of a bid: enough to decide on, never the private
@@ -752,7 +841,7 @@ function createApp(repo, opts = {}) {
       ...extra,
       status: domain.STATUS.RETENUE,
       notaryId,
-      etude: (profile && profile.label) || notaryId,
+      etude: domain.notaryEtude(profile) || notaryId,
     };
     // L'INSTANT de l'engagement. Sans lui, la piste d'audit ne peut pas dire
     // quand un notaire s'est engagé — seulement qu'il l'a fait.
@@ -786,7 +875,7 @@ function createApp(repo, opts = {}) {
     // Tell the client a notary retained their offer (fire-and-forget; never blocks
     // or fails the response), mirroring the onOfferCreated call in POST /bids.
     const rn = notifier();
-    if (rn) Promise.resolve(rn.onOfferRetained(retained)).catch(() => {});
+    if (rn) Promise.resolve(rn.onOfferRetained(retained, { notary: profile })).catch(() => {});
     return retained;
   }
 
@@ -990,20 +1079,13 @@ function createApp(repo, opts = {}) {
       const errors = [...v.errors];
 
       // OPTIONAL telephone (ADR 0010 §4, mise en relation): the number the
-      // RETAINING notary will dial, released only with the dossier. Validation
-      // is deliberately loose — people type "(418) 555-1234", "418.555.1234",
-      // "1 418 555 1234" — so we only require that stripping the formatting
-      // leaves a dialable North-American number (10 digits, or 11 with the
-      // country code). We store what the client typed, trimmed: the formatting
-      // is information for the human who will call, and domain.telHref() knows
-      // how to turn it into a dial string when a tel: link is needed.
-      const telephone = payload.telephone == null ? '' : String(payload.telephone).trim();
-      if (telephone !== '') {
-        const digits = telephone.replace(/\D/g, '');
-        if (digits.length < 10 || digits.length > 11) {
-          errors.push({ code: 'telephone_invalide', message: 'Le numéro de téléphone n’est pas valide.' });
-        }
-      }
+      // RETAINING notary will dial, released only with the dossier. The rule
+      // is the domain's (`validateTelephone`, shared with the notary profile):
+      // stripped of its formatting, a dialable North-American number must
+      // remain; what the client typed is stored trimmed, formatting kept.
+      const telV = domain.validateTelephone(payload.telephone);
+      if (!telV.ok) errors.push(telV.error);
+      const telephone = telV.value;
       if (errors.length) return json(422, { errors });
 
       // Referral attribution (ADR 0011): a partner's code rides along on the
@@ -1104,6 +1186,7 @@ function createApp(repo, opts = {}) {
       }
       await repo.put(bid);
       await recordStats(statsDeltasForOffer(bid));
+      await recordStats(statsDeltasForFunnel('publie', now())); // the funnel's « publié » step is counted HERE, never trusted from the client beacon
 
       // Fire-and-forget: confirm the offer to the client + alert the operator.
       // Never awaited and never allowed to reject the response — if mail fails
@@ -1354,6 +1437,121 @@ function createApp(repo, opts = {}) {
         if (n) Promise.resolve(n.onClientSignup(email)).catch(() => {});
       }
       return json(200, { ok: true });
+    }
+
+    // --- Free signup by professional email (2026-09-02) ----------------------
+    // The supply-side front door no longer goes through Stripe. Asking a notary
+    // for a passport and a bank account before they have even SEEN the demand
+    // was the biggest churn wall on the supply side — and with Stripe not
+    // configured in production, a wall with no door. The sequence is now:
+    // sign up here (email + optional CNQ fiche) → the operator vets the
+    // Tableau de l'Ordre and activates from the admin console (`approuveLe`,
+    // which is what notaryGate reads) → the notary signs in and works →
+    // payouts connect later, on /notaries/connect, only before a first act is
+    // marked signed. Enumeration-safe: a valid address always answers the same
+    // `{ ok: true }`, whether it is new, pending, or already active.
+    if (route === '/notaries/signup' && method === 'POST') {
+      let payload;
+      try {
+        payload = typeof request.body === 'string' ? JSON.parse(request.body || '{}') : request.body || {};
+      } catch {
+        return json(400, { errors: [{ code: 'json_invalide', message: 'Corps JSON invalide.' }] });
+      }
+      const email = String(payload.email || '').trim().toLowerCase();
+
+      // Throttle FIRST, on the trusted source IP — same window and ceiling as
+      // the sign-in request; fail OPEN on a counter error.
+      const ip = clientIp(request);
+      let count = 1;
+      try {
+        count = await repo.incrNotaryRateCounter('notary_signup', ip || email || 'unknown', NOTARY_LOGIN_RL_WINDOW_SEC, nowMs());
+      } catch {
+        count = 1;
+      }
+      if (count > NOTARY_SIGNUP_RL_MAX) return json(429, { ok: true, throttled: true });
+
+      if (!domain.isEmail(email)) {
+        return json(422, { errors: [{ code: 'courriel_invalide', message: 'Le courriel n’est pas valide.' }] });
+      }
+      // The optional fiche link is judged by the domain's own CNQ rule (ADR
+      // 0016) — the same one the profile form applies later. Only that rule's
+      // verdict matters here: the rest of the profile is not on the form.
+      const fiche = domain.validateNotaryProfile({ lienCNQ: payload.lienCNQ });
+      const ficheErrors = fiche.errors.filter((e) => e.code === 'lien_cnq_invalide');
+      if (ficheErrors.length) return json(422, { errors: ficheErrors });
+      const lienCNQ = fiche.lienCNQ || null;
+
+      // Referral (ADR 0011): normalized through the domain, an invalid code is
+      // silently dropped, and a partner signing up with their own code earns
+      // nothing — exactly the rules of /notaries/connect.
+      let parrain = domain.isReferralCode(payload.parrain) ? domain.normalizeReferralCode(payload.parrain) : null;
+      if (parrain) {
+        const owner = await repo.getPartner(parrain);
+        if (owner && owner.courriel === email) parrain = null;
+      }
+
+      const notaryId = notaryIdForEmail(email);
+      const existing = await repo.getNotary(notaryId);
+      const at = new Date(nowMs()).toISOString();
+      let created = false;
+      if (!existing) {
+        await repo.putNotary({
+          id: notaryId, email, label: email, role: 'notary',
+          status: 'en_attente', inscritLe: at, lienCNQ, parrain, createdAt: at,
+        });
+        await recordStats(statsDeltasForNotaryOnboarding());
+        // The funnel's last step is counted on the FIRST signup only.
+        await recordStats(statsDeltasForFunnel('notaire_inscrit', now()));
+        created = true;
+      } else if ((!existing.lienCNQ && lienCNQ) || (!existing.parrain && parrain)) {
+        // An existing record only gains what it lacked — never a status
+        // change (no downgrade of an active or approved notary), never a
+        // second attribution.
+        await repo.putNotary({
+          ...existing,
+          lienCNQ: existing.lienCNQ || lienCNQ,
+          parrain: existing.parrain || parrain,
+          updatedAt: at,
+        });
+      }
+
+      // Mail — fire-and-forget, and only while the file is still waiting for
+      // the operator: an already-approved (or Stripe-active) notary who hits
+      // the door again is not told to wait for a check that is done.
+      const stillPending = created || !(existing.approuveLe || existing.status === 'active');
+      const sn = notifier();
+      if (sn && stillPending && typeof sn.onNotarySignedUp === 'function') {
+        Promise.resolve(sn.onNotarySignedUp({ email, lienCNQ: (existing && existing.lienCNQ) || lienCNQ })).catch(() => {});
+      }
+      return json(200, { ok: true });
+    }
+
+    // --- The conversion funnel's beacon (2026-09-02) -------------------------
+    // The web app reports one observable step at a time (`{ event }`); only
+    // the domain's FUNNEL_EVENTS catalogue is ever counted, and anything else
+    // is dropped with the SAME 204 — a beacon never learns what the catalogue
+    // holds. The two steps that cost money (an offer published, a notary
+    // signed up) are counted server-side on their own routes, never from here.
+    // Lightly throttled per IP: a page fires this on every step.
+    if (route === '/events' && method === 'POST') {
+      const ip = clientIp(request);
+      let count = 1;
+      try {
+        count = await repo.incrNotaryRateCounter('funnel', ip || 'unknown', FUNNEL_RL_WINDOW_SEC, nowMs());
+      } catch {
+        count = 1;
+      }
+      if (count > FUNNEL_RL_MAX) return json(429, { ok: true, throttled: true });
+      let payload = null;
+      try {
+        payload = typeof request.body === 'string' ? JSON.parse(request.body || '{}') : request.body || {};
+      } catch {
+        payload = null;
+      }
+      const id = payload && typeof payload.event === 'string' ? payload.event : null;
+      if (domain.isFunnelEvent(id)) await recordStats(statsDeltasForFunnel(id, now()));
+      // A 204 carries no body — bare CORS headers, like the preflight.
+      return { statusCode: 204, headers: corsHeaders(), body: '' };
     }
 
     // Begin FREE notary onboarding — open a Stripe Connect onboarding link.
@@ -1741,6 +1939,13 @@ function createApp(repo, opts = {}) {
             // pièce annoncée n'est pas une pièce reçue.
             documents: documentsOf(b).filter((d) => d.etat === 'pret').map(publicDocument),
                 viaProposition: propositionsOf(b).some((p) => p.status === PROPOSITION.ACCEPTEE && p.notaryId === notaryId),
+                // ADR 0033: what a cancellation TODAY would hand this notary
+                // (the fee compensates them) — the same forecast the client
+                // sees on GET /client/bid; null when the cancel would be free.
+                annulation: await (async () => {
+                  const fee = await annulationFeeFor(b);
+                  return fee ? { taux: fee.taux, frais: fee.frais, joursAvant: fee.joursAvant } : null;
+                })(),
               });
             }
             continue;
@@ -1775,6 +1980,7 @@ function createApp(repo, opts = {}) {
       // aucun pourcentage à lui montrer, et lui en montrer un décrirait la
       // convention que l'art. 29.1 interdit. Ce qu'il doit voir à la place —
       // le prix que le CLIENT paie à Nota — voyage dans `tarif`.
+      const tarif = await tarifNota();
       return json(200, {
         bids: out, retained,
         rating: notaryRating(ownProfile),
@@ -1782,16 +1988,25 @@ function createApp(repo, opts = {}) {
         // le dire au notaire sans jamais le présenter comme une part de ses
         // honoraires : c'est une ligne du client, pas une retenue sur les
         // siennes.
-        tarif: await tarifNota(),
+        tarif,
         // ADR 0028: the cote sur 100 and its four axes — the console's own
         // copy, present even when billing is off (a notary always has a cote).
         cote: cote.coteFor(ownProfile, nowMs()),
-        profil: {
-          lienCNQ: (ownProfile && ownProfile.lienCNQ) || null,
-          rayonKm: (ownProfile && Number(ownProfile.rayonKm)) || 0,
-          urgences: !!(ownProfile && ownProfile.urgences),
-          prefixe: (ownProfile && ownProfile.prefixe) || null,
+        profil: notaryProfil(ownProfile),
+        // ADR 0033 — what retaining commits the notary to, as data the
+        // console lays out BEFORE they confirm: honoraires paid in full at the
+        // signing, the client's separate price to Nota, the cancellation
+        // barème (the fee compensates the notary), and the withdrawal right
+        // (free, but counted on their record — releasesCount).
+        conditions: {
+          paiement: 'signature',
+          tarifNota: tarif,
+          annulation: { paliers: await annulationBareme(), beneficiaire: 'notaire' },
+          desistement: { gratuit: true, compte: true },
         },
+        // The months `retained` covers — so the console can prune the local
+        // entries the server no longer returns (a client cancelled).
+        fenetre: months,
       });
     }
 
@@ -1898,8 +2113,13 @@ function createApp(repo, opts = {}) {
       // Spread the existing record first — the billing identity, the rating
       // aggregates and the commission accumulator must all survive this write.
       const existing = await repo.getNotary(notaryId);
-      await repo.putNotary({
-        ...(existing || { id: notaryId, createdAt: now() }),
+      // A field ABSENT from the body keeps its stored value; a field present
+      // but empty clears it. The console edits the profile from more than one
+      // form (the identity/feed form, the « à votre rythme » alert block), and
+      // a block that posts only its own fields must never wipe the others.
+      const sent = (k) => Object.prototype.hasOwnProperty.call(payload, k) && payload[k] !== undefined;
+      const fields = {
+        // ADR 0016: the official fiche.
         lienCNQ: v.lienCNQ,
         // ADR 0017: the declared travel radius and the online-urgency opt-in —
         // the two levers that widen (or narrow) the feed this notary sees.
@@ -1908,9 +2128,20 @@ function createApp(repo, opts = {}) {
         // ADR 0025: the étude's sector — what turns the feed's declarative
         // travel rules into measured distances.
         prefixe: v.prefixe,
-        updatedAt: now(),
-      });
-      return json(200, { profil: { lienCNQ: v.lienCNQ, rayonKm: v.rayonKm, urgences: v.urgences, prefixe: v.prefixe } });
+        // ADR 0033: the identity a retained client receives — and the gate
+        // on retaining at all (nom, téléphone, adresse).
+        nom: v.nom,
+        etude: v.etude,
+        telephone: v.telephone,
+        adresse: v.adresse,
+        // ADR 0033 §7: how (and whether) new demandes reach this notary.
+        alertes: v.alertes,
+      };
+      const next = { ...(existing || { id: notaryId, createdAt: now() }) };
+      for (const k of Object.keys(fields)) if (sent(k)) next[k] = fields[k];
+      next.updatedAt = now();
+      await repo.putNotary(next);
+      return json(200, { profil: notaryProfil(next) });
     }
 
     if (route === '/notary/bids/accept' && method === 'POST') {
@@ -1948,12 +2179,19 @@ function createApp(repo, opts = {}) {
         return json(409, { errors: [{ code: 'deja_retenue', message: 'Cette offre est déjà retenue.' }] });
       }
 
+      // ADR 0033: no retain without a name, a phone and an address — the
+      // client must be able to reach and find the notary who took their act.
+      // Placed after the idempotent re-accept above (a dossier already
+      // released stays released) and before any write.
+      const profil = await repo.getNotary(notaryId);
+      const incomplet = profilIncomplet(profil);
+      if (incomplet) return incomplet;
+
       // ADR 0017: a notary can only take what they can serve (radius / urgency
       // opt-in). Placed after the idempotent re-accept above — a notary who
       // already holds the act keeps their dossier even if their profile
       // narrowed since — and before the retain, so a refused accept never
       // flips the bid.
-      const profil = await repo.getNotary(notaryId);
       if (!domain.notaryCanServe((bid.pricing || {}).deplacement, profil, bid.prefixe)) {
         return json(403, { errors: [{ code: 'deplacement_non_couvert', message: 'Cette demande exige un déplacement ou une urgence en ligne que votre profil ne couvre pas.' }] });
       }
@@ -1997,10 +2235,15 @@ function createApp(repo, opts = {}) {
         return json(409, { errors: [{ code: 'deja_retenue', message: 'Cette offre est déjà retenue.' }] });
       }
 
+      // ADR 0033: a proposition is an offer to take the act — same gate as a
+      // retain: no name, phone or address, no proposition.
+      const profil = await repo.getNotary(notaryId);
+      const incomplet = profilIncomplet(profil);
+      if (incomplet) return incomplet;
+
       // ADR 0017: a notary can only take what they can serve (radius / urgency
       // opt-in) — a proposition on an unserveable demande is refused like an
       // accept would be.
-      const profil = await repo.getNotary(notaryId);
       if (!domain.notaryCanServe((bid.pricing || {}).deplacement, profil, bid.prefixe)) {
         return json(403, { errors: [{ code: 'deplacement_non_couvert', message: 'Cette demande exige un déplacement ou une urgence en ligne que votre profil ne couvre pas.' }] });
       }
@@ -2016,7 +2259,7 @@ function createApp(repo, opts = {}) {
       const proposition = {
         id: newId(),
         notaryId,
-        etude: (profil && profil.label) || notaryId,
+        etude: domain.notaryEtude(profil) || notaryId,
         montant: v.montant,
         delta: v.delta,
         message: message || null,
@@ -2059,7 +2302,7 @@ function createApp(repo, opts = {}) {
       const demande = {
         id: newId(),
         notaryId,
-        etude: (profile && profile.label) || notaryId,
+        etude: domain.notaryEtude(profile) || notaryId,
         documents: v.documents,
         message: v.message,
         createdAt: now(),
@@ -2087,8 +2330,15 @@ function createApp(repo, opts = {}) {
       let notaire = null;
       if (bid.status === domain.STATUS.RETENUE && bid.notaryId) {
         const profile = await repo.getNotary(bid.notaryId);
+        const s = (v) => { const t = String(v == null ? '' : v).trim(); return t || null; };
         notaire = {
-          etude: bid.etude || (profile && profile.label) || null,
+          // ADR 0033 — the mise en relation is complete: the client can call
+          // the notary and find the étude. The gate on retaining guarantees
+          // the three are on the profile of whoever holds the act.
+          nom: s(profile && profile.nom),
+          etude: bid.etude || domain.notaryEtude(profile) || null,
+          telephone: s(profile && profile.telephone),
+          adresse: s(profile && profile.adresse),
           courriel: (profile && profile.email) || null,
           // ADR 0030 — art. 70 du Code de déontologie : ni moyenne d'étoiles ni
           // cote ne voyagent vers le client. Ce qui reste sont des FAITS
@@ -2347,17 +2597,25 @@ function createApp(repo, opts = {}) {
       // The fee is charged BEFORE the flip: a capture that fails must leave
       // the client free (hold released below), never blocked or double-billed
       // — the cancelfee:<bidId> idempotency key guards the Stripe side too.
+      //
+      // ADR 0033 — the fee is the retaining NOTARY'S compensation: billing
+      // transfers it to them whole when they can receive, or books it as owed
+      // to them (`dedommagementCentsDue`) when they cannot. `dedommagement`
+      // on the bid says which, so the client reads where their money went.
       let annulation = null;
       const fee = wasRetained ? await annulationFeeFor(bid) : null;
       if (fee) {
         const b = billing();
         const charge = b && typeof b.chargeCancellationFee === 'function'
-          ? await b.chargeCancellationFee({ paymentIntentId: bid.paymentIntentId, bidId: bid.id, amountCents: fee.fraisCents })
+          ? await b.chargeCancellationFee({ paymentIntentId: bid.paymentIntentId, bidId: bid.id, amountCents: fee.fraisCents, notaryId: bid.notaryId || null })
           : { ok: false };
         if (charge.ok) {
-          annulation = { taux: fee.taux, frais: fee.frais, joursAvant: fee.joursAvant, chargeId: charge.chargeId || null };
+          const dedommagement = { notaire: true, verse: !!charge.verse, transferId: charge.transferId || null };
+          annulation = { taux: fee.taux, frais: fee.frais, joursAvant: fee.joursAvant, chargeId: charge.chargeId || null, dedommagement };
           // Une capture partielle est un mouvement d'argent : elle laisse une
           // trace, comme le règlement d'un acte (ADR 0023 + piste d'audit).
+          // Le virement au notaire en fait partie (ADR 0033) : `verse` dit si
+          // l'argent est parti, `transferId` le nomme.
           await appendAudit('annulation_frais', {
             bidId: bid.id,
             dateISO: bid.dateISO,
@@ -2367,6 +2625,8 @@ function createApp(repo, opts = {}) {
             frais: fee.frais,
             joursAvant: fee.joursAvant,
             chargeId: charge.chargeId || null,
+            transferId: dedommagement.transferId,
+            verse: dedommagement.verse,
           });
         }
       }
@@ -2434,6 +2694,22 @@ function createApp(repo, opts = {}) {
     if (route === '/support/messages' && method === 'POST') {
       const { payload, error } = parseBody(request);
       if (error) return error;
+      // Per-IP throttle (ADR 0033 §7), same fixed-window counter as the
+      // notary sign-in: an open, unauthenticated door must not become a mail
+      // cannon aimed at the operator. Keyed on the trusted source IP; fails
+      // OPEN on a counter error — a visitor's question beats strictness.
+      const ip = clientIp(request);
+      let count = 1;
+      try {
+        if (typeof repo.incrNotaryRateCounter === 'function') {
+          count = await repo.incrNotaryRateCounter('support_message', ip || 'unknown', SUPPORT_RL_WINDOW_SEC, nowMs());
+        }
+      } catch {
+        count = 1;
+      }
+      if (count > SUPPORT_RL_MAX) {
+        return json(429, { errors: [{ code: 'trop_de_messages', message: 'Trop de messages en peu de temps. Réessayez dans quelques minutes.' }] });
+      }
       const v = domain.validateSupportMessage(payload);
       if (!v.ok) return json(422, { errors: v.errors });
       // A token continues its thread; none starts one. A stale or tampered
@@ -2638,7 +2914,12 @@ function createApp(repo, opts = {}) {
       if (typeof repo.removeRetained === 'function') {
         await repo.removeRetained(notaryId, { id: bid.id, dateISO: bid.dateISO });
       }
+      // ADR 0033: withdrawing is free, but it is COUNTED on the notary's record
+      // — a client lost their notary, and the console tells the notary so.
+      await bumpNotary(notaryId, 'releasesCount');
 
+      // The operator is ALWAYS told (ADR 0033, notifier-side): a désistement
+      // is a signal on the notary's file whether or not money is in flight.
       const rn = notifier();
       if (rn && typeof rn.onActReleased === 'function') {
         Promise.resolve(repo.getNotary(notaryId))

@@ -165,3 +165,46 @@ test('the digest applies the same MEASURED reach as the live feed (ADR 0025)', a
   assert.ok(digests[0].html.includes(domain.money(2400)), 'the reachable demand is in');
   assert.ok(!digests[0].html.includes(domain.money(3000)), 'the out-of-reach demand stays out');
 });
+
+// --- ADR 0033 §7 — the digest follows each notary’s pace ------------------------
+
+test('pace « off » and pace « instant » receive no digest; « daily » and an absent preference do', async () => {
+  const { mailer } = await run(
+    [freshBid('d1')],
+    [
+      activeNotary('off', { alertes: { pace: 'off', urgentOnly: false } }),
+      activeNotary('instant', { alertes: { pace: 'instant', urgentOnly: false } }),
+      activeNotary('daily', { alertes: { pace: 'daily', urgentOnly: false } }),
+      activeNotary('legacy'),
+    ]
+  );
+  assert.deepEqual(digestMails(mailer).map((m) => m.to).sort(), ['daily@etude.example', 'legacy@etude.example']);
+});
+
+test('pace « weekly » digests only on Mondays, covering the whole past week', async () => {
+  const MONDAY = '2026-08-17'; // a Monday
+  const TUESDAY = '2026-08-18';
+  const seed = [
+    freshBid('sixDaysAgo', { createdAt: domain.addDays(MONDAY, -6) + 'T10:00:00.000Z' }),
+    freshBid('yesterday', { createdAt: domain.addDays(MONDAY, -1) + 'T10:00:00.000Z' }),
+    freshBid('eightDaysAgo', { createdAt: domain.addDays(MONDAY, -8) + 'T10:00:00.000Z', montant: 5000 }),
+  ];
+  const tue = await run(seed, [activeNotary('weekly', { alertes: { pace: 'weekly', urgentOnly: false } })], { today: TUESDAY });
+  assert.equal(digestMails(tue.mailer).length, 0, 'not on a Tuesday');
+  const mon = await run(seed, [activeNotary('weekly', { alertes: { pace: 'weekly', urgentOnly: false } })], { today: MONDAY });
+  const digests = digestMails(mon.mailer);
+  assert.equal(digests.length, 1, 'on Monday');
+  assert.match(digests[0].subject, /2 nouvelles demandes/, 'the week’s demands, not only yesterday’s');
+  assert.ok(!digests[0].html.includes(domain.money(5000)), 'older than a week stays out');
+});
+
+test('urgentOnly keeps a weekly/daily digest to elevated tiers', async () => {
+  const { mailer } = await run(
+    [freshBid('calm', { tier: 'standard' }), freshBid('hot', { tier: 'urgence', montant: 4000 })],
+    [activeNotary('picky', { alertes: { pace: 'daily', urgentOnly: true } })]
+  );
+  const digests = digestMails(mailer);
+  assert.equal(digests.length, 1);
+  assert.match(digests[0].subject, /1 nouvelle demande/);
+  assert.ok(digests[0].html.includes(domain.money(4000)));
+});

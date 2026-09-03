@@ -16,6 +16,7 @@
  */
 const domain = require('@nota/domain');
 const { STATS_SHARDS, statsGlobalPK, statsServicePK, statsDaySK } = require('./keys');
+const { FUNNEL_COUNTER_PREFIX } = require('./stats');
 
 // Inclusive list of YYYY-MM-DD dates from `fromISO` to `toISO`, capped so a
 // pathological range can never build an unbounded array.
@@ -64,11 +65,20 @@ function createAnalytics({ repo, now, gaugeHorizonMonths } = {}) {
     for (const items of perShard) {
       for (const it of items || []) {
         const day = String(it.sk || it.SK || '').replace(/^D#/, '') || it.day;
-        const cur = byDay.get(day) || { offers: 0, retenues: 0, actes: 0, commissionCents: 0 };
+        const cur = byDay.get(day) || { offers: 0, retenues: 0, actes: 0, commissionCents: 0, funnel: {} };
         cur.offers += num(it.offers);
         cur.retenues += num(it.retenues);
         cur.actes += num(it.actes);
         cur.commissionCents += num(it.commissionCents);
+        // The funnel steps (stats.statsDeltasForFunnel): every `funnel_<id>`
+        // key on the item, folded by id — the catalogue decides below which
+        // ids are reported, so a stale key can never invent a step.
+        for (const k of Object.keys(it)) {
+          if (k.startsWith(FUNNEL_COUNTER_PREFIX)) {
+            const id = k.slice(FUNNEL_COUNTER_PREFIX.length);
+            cur.funnel[id] = (cur.funnel[id] || 0) + num(it[k]);
+          }
+        }
         byDay.set(day, cur);
       }
     }
@@ -273,12 +283,20 @@ function createAnalytics({ repo, now, gaugeHorizonMonths } = {}) {
     let offersRetained = 0;
     let actsCompleted = 0;
     let commissionCents = 0;
+    const funnelTotals = {};
     for (const d of global.values()) {
       offersPosted += d.offers;
       offersRetained += d.retenues;
       actsCompleted += d.actes;
       commissionCents += d.commissionCents;
+      for (const [id, n] of Object.entries(d.funnel || {})) funnelTotals[id] = (funnelTotals[id] || 0) + n;
     }
+    // The conversion funnel (2026-09-02): every step of the domain catalogue,
+    // in its order, with the range's total — zero included, so the operator
+    // reads WHERE leads drop, not only where they happened.
+    const entonnoir = domain.FUNNEL_EVENTS.map((e) => ({
+      id: e.id, nom: e.nom, nomEn: e.nomEn, total: Math.max(0, num(funnelTotals[e.id])),
+    }));
 
     const offersPerDay = days.map((date) => ({ date, count: global.get(date)?.offers || 0 }));
 
@@ -302,6 +320,17 @@ function createAnalytics({ repo, now, gaugeHorizonMonths } = {}) {
       gaugeCounters = {};
     }
     const parrainages = await referralSection(inv.referred, inv.retainedBy);
+    // Notaries waiting for the operator's activation (2026-09-02) — counted
+    // LIVE from the roster (one bounded GSI Query, never a Scan), so the tile
+    // is exact the moment a signup lands or an activation clears it.
+    let pendingNotaries = 0;
+    if (typeof repo.listNotaries === 'function') {
+      try {
+        pendingNotaries = ((await repo.listNotaries()) || []).filter((n) => n && n.status === 'en_attente' && !n.approuveLe).length;
+      } catch {
+        pendingNotaries = 0;
+      }
+    }
 
     return {
       range: { from, to, days: days.length },
@@ -320,8 +349,10 @@ function createAnalytics({ repo, now, gaugeHorizonMonths } = {}) {
         retained: inv.retained,
         activeNotaries: Math.max(0, num(gaugeCounters.active)),
         onboardingNotaries: Math.max(0, num(gaugeCounters.onboarding)),
+        pendingNotaries,
       },
       series: { offersPerDay, byService },
+      entonnoir,
       // Per-code referral totals (demandes / retenues / complétés / dû) plus
       // the flat commission amount — see ADR 0011.
       parrainages,

@@ -7,6 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import { NOTARY_CONTACT } from '../test-support/notary-fixture.mjs';
 
 const require = createRequire(import.meta.url);
 const { createApp } = require('../src/handler.js');
@@ -35,9 +36,13 @@ async function seedNotary(a, over = {}) {
   await a.repo.putNotary({
     id: NOTARY, email: 'n@etude.ca', label: 'Étude N',
     status: 'active', chargesEnabled: true, connectAccountId: 'acct_n',
+    ...NOTARY_CONTACT,
     ...over,
   });
 }
+// The feed levers of a profil (ADR 0017/0025) — what this file is about; the
+// identity block (ADR 0033) rides the same object and is asserted elsewhere.
+const levers = (p) => ({ lienCNQ: p.lienCNQ, rayonKm: p.rayonKm, urgences: p.urgences, prefixe: p.prefixe });
 
 // A valid offer for the band under test. urgence_en_ligne raises the dynamic
 // floor to 2400 and notaire_50 to 2250 — 3000 clears every band.
@@ -79,7 +84,7 @@ test('POST /notary/profile stores rayonKm and urgences; /notary/bids reads them 
 
   const res = await postProfile(a, sessionToken(), { rayonKm: 50, urgences: true });
   assert.equal(res.statusCode, 200, res.body);
-  assert.deepEqual(parse(res).profil, { lienCNQ: null, rayonKm: 50, urgences: true, prefixe: null });
+  assert.deepEqual(levers(parse(res).profil), { lienCNQ: null, rayonKm: 50, urgences: true, prefixe: null });
 
   // The write is a spread on the existing record — identity survives.
   const notary = await a.repo.getNotary(NOTARY);
@@ -89,7 +94,7 @@ test('POST /notary/profile stores rayonKm and urgences; /notary/bids reads them 
   assert.equal(notary.ratingSum, 9);
 
   const view = await feed(a);
-  assert.deepEqual(view.profil, { lienCNQ: null, rayonKm: 50, urgences: true, prefixe: null });
+  assert.deepEqual(levers(view.profil), { lienCNQ: null, rayonKm: 50, urgences: true, prefixe: null });
 });
 
 test('the conservative defaults: a notary who said nothing travels nowhere, takes no urgency', async () => {
@@ -98,15 +103,22 @@ test('the conservative defaults: a notary who said nothing travels nowhere, take
 
   // No profile write at all: the console still reads honest defaults.
   const before = await feed(a);
-  assert.deepEqual(before.profil, { lienCNQ: null, rayonKm: 0, urgences: false, prefixe: null });
+  assert.deepEqual(levers(before.profil), { lienCNQ: null, rayonKm: 0, urgences: false, prefixe: null });
 
-  // An empty profile write stores the same defaults.
+  // An empty profile write changes nothing and reads the same defaults (ADR
+  // 0033: absent fields keep their value — here, none was ever declared).
   const res = await postProfile(a, sessionToken(), {});
   assert.equal(res.statusCode, 200, res.body);
-  assert.deepEqual(parse(res).profil, { lienCNQ: null, rayonKm: 0, urgences: false, prefixe: null });
+  assert.deepEqual(levers(parse(res).profil), { lienCNQ: null, rayonKm: 0, urgences: false, prefixe: null });
   const notary = await a.repo.getNotary(NOTARY);
-  assert.equal(notary.rayonKm, 0);
-  assert.equal(notary.urgences, false);
+  assert.equal(Number(notary.rayonKm) || 0, 0);
+  assert.equal(!!notary.urgences, false);
+
+  // Declaring the defaults explicitly stores them as such.
+  await postProfile(a, sessionToken(), { rayonKm: 0, urgences: false });
+  const declared = await a.repo.getNotary(NOTARY);
+  assert.equal(declared.rayonKm, 0);
+  assert.equal(declared.urgences, false);
 });
 
 test('a radius outside NOTARY_RADII is refused (rayon_invalide) and never stored', async () => {
@@ -233,9 +245,15 @@ test('POST /notary/profile stores the étude sector; garbage is refused, empty c
   assert.equal(parse(bad).errors[0].code, 'prefixe_invalide');
   assert.equal((await a.repo.getNotary(NOTARY)).prefixe, 'G1V', 'a refused sector never overwrites');
 
-  const clear = await postProfile(a, sessionToken(), { rayonKm: 25 });
+  // ADR 0033: a field ABSENT from the body keeps its value (the console edits
+  // the profile from more than one form); an explicit empty string clears.
+  const kept = await postProfile(a, sessionToken(), { rayonKm: 25 });
+  assert.equal(kept.statusCode, 200);
+  assert.equal(parse(kept).profil.prefixe, 'G1V', 'absent keeps — another form must never wipe the sector');
+  const clear = await postProfile(a, sessionToken(), { rayonKm: 25, prefixe: '' });
   assert.equal(clear.statusCode, 200);
   assert.equal(parse(clear).profil.prefixe, null, 'empty clears — back to the declarative rules');
+  assert.equal((await a.repo.getNotary(NOTARY)).prefixe, null);
 });
 
 test('feed by measured distance: a nearby notaire_50 demand reaches a 25 km notary; a far client_10 does not', async () => {

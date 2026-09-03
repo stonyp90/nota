@@ -120,17 +120,20 @@ reverse — fails a test).
 | Dossier incomplete | `dossierIncomplete` | client | daily reminder scheduler (`dossier_incomplet` — an explicit `dossierReady` flag, or derived via `leadReadiness` when the flag is absent) |
 | Date approaching (J-7/3/1) | `dateApproaching` | client | daily reminder scheduler (`j7`/`j3`/`j1`) |
 | Date is today, no uptake (J-0) | `dateMissedNoUptake` | client | daily reminder scheduler (`j0` — the date is today and no notary retained the offer) |
-| Offer retained | `offerRetained` | client | `POST /notary/bids/accept` |
+| Offer retained | `offerRetained` | client | `POST /notary/bids/accept` and a proposition accepted — the ONE retain path. Since ADR 0033 it names the notary (nom, étude, `tel:` link, adresse, courriel, fiche CNQ), says the conversation lives in the client's Nota space, that the notary may still withdraw, and quotes the cancellation barème in force (priced on this montant — the fee is the notary's compensation) |
+| Offer retained (to the notary) | `demandeRetenueNotaire` | notary | same retain path (ADR 0033) — the client block (nom, courriel, `tel:`, secteur, déplacement, prêteur), the file's readiness, and « ce qui vous engage » (signature à la date, honoraires versés en entier à la signature, le barème d'annulation versé en dédommagement, le désistement gratuit mais compté); CTA `/#notaires&acte=<bidId>` |
+| Offer retained (operator) | `operatorDemandeRetenue` | operator | same retain path — a small revenue event |
+| New matching demand (instant) | `nouvelleDemande` | notary | `POST /bids` (and the `checkout.session.completed` webhook once the hold is authorized) — every ACTIVE notary whose `alertes.pace` is `instant`, who can serve the demand (ADR 0017/0025 reach), and — when `urgentOnly` — only an elevated tier (`TIERS[].eleve`); once per (bid, notary); CTA `/#notaires&acte=<bidId>` |
 | Proposition received | `propositionRecue` | client | `POST /notary/bids/propose` |
 | Documents requested | `documentsDemandes` | client | `POST /notary/bids/documents` |
 | Chat — notary wrote | `messageDuNotaire` | client | `POST /notary/bids/message` (once per message) |
 | Chat — client replied | `messageDuClient` | notary | `POST /client/bid/message` (once per message) |
 | Proposition answered | `propositionAcceptee` / `propositionRefusee` | notary | `POST /client/propositions/accept` / `decline` |
-| Offer cancelled (ack) | `offerCancelled` | client | `POST /client/bid/cancel` |
-| Retained offer cancelled | `offerCancelledNotary` | notary | `POST /client/bid/cancel` (retained bid) |
+| Offer cancelled (ack) | `offerCancelled` | client | `POST /client/bid/cancel` — states the fee kept (`bid.annulation`: amount, taux) and that it goes to the notary as compensation, or that the cancel was free |
+| Retained offer cancelled | `offerCancelledNotary` | notary | `POST /client/bid/cancel` (retained bid) — states the amount transferred to them (`annulation.dedommagement.verse`), or owed « dès que vos versements Stripe seront branchés », or that no fee was due; never « notre équipe vous écrit » |
 | Retained offer cancelled (operator) | `operatorOfferCancelled` | operator | `POST /client/bid/cancel` (retained bid) |
 | Notary withdrew (act released) | `actReleased` | client | `POST /notary/bids/release` |
-| Notary withdrew (operator) | `operatorActReleased` | operator | `POST /notary/bids/release` (payment in flight, or a reason left) |
+| Notary withdrew (operator) | `operatorActReleased` | operator | `POST /notary/bids/release` — always (ADR 0033: a désistement is a signal on the notary's file) |
 | Act signed → rate the notary | `evaluationInvite` | client | `POST /notary/acts/complete` |
 | Evaluation received | `evaluationRecueNotaire` | notary | `POST /client/evaluation` |
 | Low rating alert (note ≤ 2) | `operatorLowRating` | operator | `POST /client/evaluation` |
@@ -140,7 +143,7 @@ reverse — fails a test).
 | Notary account active | `notaryActive` | notary | webhook `account.updated` (once) |
 | Notary account active (operator) | `operatorNotaryActive` | operator | webhook `account.updated` (once) |
 | Notary disconnected (win-back) | `notaryDisconnectedWinback` | notary | webhook `account.application.deauthorized` |
-| Matching open bids digest | `newMatchingBids` | notary | daily reminder Lambda — yesterday's live demands each active notary can serve (ADR 0017 perimeter), top 8 by montant, once per notary per day |
+| Matching open bids digest | `newMatchingBids` | notary | daily reminder Lambda — the live demands each active notary can serve (ADR 0017 perimeter), top 8 by montant, once per notary per day, at the notary's pace (ADR 0033 §7): `daily` (default) = yesterday's; `weekly` = the past week's, Mondays only; `instant` and `off` receive no digest; `urgentOnly` keeps it to elevated tiers |
 | Act paid / payout | `actPaidNotary` | notary | accept payout & `POST /notary/acts/complete` |
 | Act paid (operator) | `operatorActCompleted` | operator | same as above |
 | Notary console sign-in | `notaryMagicLink` | notary | `POST /notary/session/request` (magic-link flow) |
@@ -156,6 +159,32 @@ The legacy subscription set (`subWelcome`, `subReceipt`, `subRenewalReminder`,
 retired with the pay-on-accept/commission model — those templates no longer
 exist in the registry and the Stripe invoice/subscription events are
 deliberately ignored.
+
+## Where a CTA lands (ADR 0033 §2.7)
+
+Every act mail opens **the act**, on any device:
+
+- **Client** act mails (`offerRetained`, `messageDuNotaire`, `documentDuNotaire`,
+  `propositionRecue`, `documentsDemandes`, `dateApproaching`,
+  `dateMissedNoUptake`, `dossierIncomplete`, `offerPublished`,
+  `evaluationInvite`, `actReleased`, `offerAuthorized`,
+  `offerAuthorizationVoided`) use `ctx.clientUrl` — the signed deep link
+  `<site>/#offre=<id>&d=<dateISO>&cle=<token>` (CLIENT scope, 30 days) minted
+  by `createNotifier({ clientLink })`, wired in the handler's notifier factory
+  from `siteUrl` + `signToken`. Without one (an older caller, a test) the CTA
+  falls back to the client's space (`/#t=profil`; the two dossier nudges fall
+  back to `/#dossier`). The client has no account: the link IS the session.
+- **Notary** act mails (`messageDuClient`, `documentDuClient`,
+  `propositionAcceptee`, `demandeRetenueNotaire`, `offerCancelledNotary`,
+  `evaluationRecueNotaire`, `nouvelleDemande`) open the console on the act:
+  `/#notaires&acte=<bidId>` (`ctx.bidId`, set by `bidCtx`).
+- **Operator** alerts land on the admin console when `createNotifier({ adminUrl })`
+  is set (`NOTA_ADMIN_URL` in the handler), else on the public carnet.
+- `supportReponse` reopens the site widget (`/#messagerie`).
+
+Contact blocks (`detailRows`) carry real `tel:` / `mailto:` hrefs — the
+phone is dialable from the inbox, which is the whole point of the mise en
+relation.
 
 ## Admin-parametrizable subjects (overrides)
 

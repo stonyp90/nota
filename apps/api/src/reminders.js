@@ -45,29 +45,52 @@ async function runReminders({ repo, notifier, now } = {}) {
     }
   }
 
-  // --- Daily carnet digest (newMatchingBids) --------------------------------
-  // Yesterday's live demands, mailed once per active notary per day, filtered
-  // to each notary's déplacement perimeter (ADR 0017). "Yesterday" — the
-  // Québec business day of createdAt — gives exactly-once membership: a
-  // demand posted after this morning's run waits for tomorrow's digest rather
-  // than appearing twice. Guarded so an older repo without the sparse notary
-  // index simply skips the digest.
+  // --- Carnet digest (newMatchingBids) --------------------------------------
+  // Fresh live demands, mailed once per active notary per day, filtered to
+  // each notary's déplacement perimeter (ADR 0017) and, since ADR 0033 §7, to
+  // the PACE they asked for: « daily » (the default) gets yesterday's demands;
+  // « weekly » gets the past week's, on Mondays only; « instant » already heard
+  // of each demand as it landed and « off » hears nothing. "Yesterday" — the
+  // Québec business day of createdAt — gives exactly-once membership: a demand
+  // posted after this morning's run waits for tomorrow's digest rather than
+  // appearing twice. Guarded so an older repo without the sparse notary index
+  // simply skips the digest.
   const digest = { notaries: 0, sent: 0 };
   if (typeof repo.listActiveNotaries === 'function' && typeof notifier.onNotaryDigest === 'function') {
-    const yesterdayISO = domain.addDays(todayISO, -1);
     const tz = process.env.NOTA_TIMEZONE;
-    const fresh = open.filter(
-      (bid) => isLive(bid) && bid.createdAt && domain.businessDay(bid.createdAt, tz) === yesterdayISO
-    );
-    if (fresh.length) {
+    const live = open.filter((bid) => isLive(bid) && bid.createdAt);
+    // The demands created in the `days` civil days before today (never today's).
+    const createdSince = (days) => {
+      const from = domain.addDays(todayISO, -days);
+      return live.filter((bid) => {
+        const day = domain.businessDay(bid.createdAt, tz);
+        return day >= from && day < todayISO;
+      });
+    };
+    // Monday in the Québec civil calendar — todayISO already is that date.
+    const isMonday = new Date(todayISO + 'T00:00:00Z').getUTCDay() === 1;
+    const daily = createdSince(1);
+    const weekly = isMonday ? createdSince(7) : [];
+    // The notary's alert preference, normalized by the domain (absent → daily).
+    const alertesOf = (n) =>
+      typeof domain.notaryAlertes === 'function'
+        ? domain.notaryAlertes(n)
+        : { pace: (n.alertes && n.alertes.pace) || 'daily', urgentOnly: !!(n.alertes && n.alertes.urgentOnly) };
+    const elevated = (bid) => !!(domain.tierById(bid.tier) || {}).eleve;
+    if (daily.length || weekly.length) {
       const notaries = await repo.listActiveNotaries();
       for (const notary of notaries) {
         if (!notary || !notary.email) continue;
+        const alertes = alertesOf(notary);
+        const pool = alertes.pace === 'daily' ? daily : alertes.pace === 'weekly' ? weekly : [];
+        if (!pool.length) continue;
         // Same three-argument reach rule as the live feed (ADR 0025): with
         // both sectors known the measured distance decides — the digest must
         // never email a demand the feed would hide, nor hide one it shows.
-        const mine = fresh.filter((bid) =>
-          domain.notaryCanServe((bid.pricing || {})[domain.DEPLACEMENT_CRITERION_ID], notary, bid.prefixe)
+        const mine = pool.filter(
+          (bid) =>
+            domain.notaryCanServe((bid.pricing || {})[domain.DEPLACEMENT_CRITERION_ID], notary, bid.prefixe) &&
+            (!alertes.urgentOnly || elevated(bid))
         );
         if (!mine.length) continue;
         digest.notaries += 1;

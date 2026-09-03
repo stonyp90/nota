@@ -16,6 +16,7 @@
  * Kept out of @nota/domain: the domain package is pure product rules and knows
  * nothing about storage keys. This is an API-layer (persistence-shape) concern.
  */
+const domain = require('@nota/domain');
 const {
   STATS_SHARDS,
   statsGlobalPK,
@@ -106,12 +107,27 @@ function statsDeltasForGauge(adds) {
   return adds && Object.keys(adds).length ? [{ pk: STATS_GAUGE_PK, sk: STATS_GAUGE_SK, adds: { ...adds } }] : [];
 }
 
+// One step of the conversion funnel happened on `dayISO` (2026-09-02). The
+// catalogue of steps is the domain's (FUNNEL_EVENTS) — an id outside it is
+// dropped here, so a beacon can never mint a counter of its own. Stored as a
+// per-day GLOBAL counter named `funnel_<id>`, sharded like the offers counter;
+// the admin overview reads every `funnel_*` key back in catalogue order.
+const FUNNEL_COUNTER_PREFIX = 'funnel_';
+function statsDeltasForFunnel(id, dayISO) {
+  if (!domain.isFunnelEvent(id)) return [];
+  const day = dayOf(dayISO);
+  if (!day) return [];
+  return [{ pk: statsGlobalPK(pickShard()), sk: statsDaySK(day), adds: { [FUNNEL_COUNTER_PREFIX + id]: 1 } }];
+}
+
 module.exports = {
   dayOf,
+  FUNNEL_COUNTER_PREFIX,
   statsDeltasForOffer,
   statsDeltasForRetain,
   statsDeltasForComplete,
   statsDeltasForNotaryOnboarding,
   statsDeltasForNotaryActive,
   statsDeltasForGauge,
+  statsDeltasForFunnel,
 };

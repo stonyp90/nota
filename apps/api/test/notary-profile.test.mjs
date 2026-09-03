@@ -160,5 +160,13 @@ test('sans facturation configurée, la console reçoit quand même le tarif et s
   // Le prix ne dépend d'aucun compte Stripe : il se lit du déploiement.
   assert.equal(view.tarif.prixNotaCents, PRIX);
   assert.equal(view.commission, undefined);
-  assert.deepEqual(view.profil, { lienCNQ: null, rayonKm: 0, urgences: false, prefixe: null });
+  // ADR 0033 — the whole profil block: the feed levers, the identity a
+  // retained client receives (empty here, hence `complet: false` and the three
+  // `manquants`), the courriel, and the alert preferences at their default.
+  assert.deepEqual(view.profil, {
+    lienCNQ: null, rayonKm: 0, urgences: false, prefixe: null,
+    nom: null, etude: null, telephone: null, adresse: null, courriel: 'n@etude.ca',
+    complet: false, manquants: domain.notaryContactMissing({}),
+    alertes: { pace: 'daily', urgentOnly: false },
+  });
 });

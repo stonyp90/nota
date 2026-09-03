@@ -355,7 +355,9 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
       return queryAllNotaries();
     },
     async listActiveNotaries() {
-      return (await queryAllNotaries()).filter((n) => n.status === 'active');
+      // 2026-09-02: an operator-approved notary (`approuveLe`) is active on
+      // the marketplace whatever Stripe says of their payouts.
+      return (await queryAllNotaries()).filter((n) => n.status === 'active' || !!n.approuveLe);
     },
     async markEventProcessed(stripeEventId, at) {
       await doc.send(

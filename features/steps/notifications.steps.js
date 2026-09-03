@@ -2,6 +2,7 @@
 
 const assert = require('node:assert/strict');
 const { Given, When, Then } = require('@cucumber/cucumber');
+const { notaryIdForEmail } = require('../../apps/api/src/notary-auth.js');
 
 // --- Template identity ------------------------------------------------------
 // A human-friendly label (used in the scenarios) maps to a stable, distinctive
@@ -20,6 +21,9 @@ const TEMPLATE_SUBJECT = {
   'offre retenue': 'Un notaire a retenu votre demande',
   'offre annulée': 'Offre annulée',
   'demande annulée par le client': 'Demande annulée par le client',
+  // ADR 0033 — la mise en relation est complète
+  'demande retenue': 'Demande retenue',
+  'nouvelle demande': 'Nouvelle demande',
   "annulation d'une demande retenue": 'Annulation d’une demande retenue',
   'acte payé': 'Acte payé',
   // Live support messaging (ADR 0026)
@@ -137,6 +141,8 @@ function assertReceived(world, email, label) {
     hits.length >= 1,
     `${email} n'a pas reçu « ${label} ». Envois: ` + summary(world.mailer.sent)
   );
+  // « ce courriel » in a following step refers to the message just matched.
+  world.lastAsserted = hits[hits.length - 1];
 }
 
 Then('le client {string} reçoit le courriel {string}', function (email, label) {
@@ -183,4 +189,77 @@ Then('le notaire {string} ne reçoit aucun courriel', function (email) {
 Then('le client {string} ne reçoit aucun courriel {string}', function (email, label) {
   const hits = this.mailsTo(email).filter(isKind(label));
   assert.equal(hits.length, 0, `${email} a reçu « ${label} » à tort: ` + summary(hits));
+});
+
+// --- ADR 0033 — la mise en relation est complète -----------------------------
+
+// A notary whose profile carries what the client must be able to do once the
+// act is retained: call them and find the étude (domain.notaryContactMissing).
+Given('un notaire actif et joignable {string}', async function (email) {
+  await this.repo.putNotary({
+    id: notaryIdForEmail(email), email, status: 'active',
+    nom: 'Me Jeanne Tremblay', etude: 'Étude Tremblay', telephone: '418 555-0199',
+    adresse: '12, rue Saint-Jean, Québec (QC) G1R 1N4', prefixe: 'G1R', rayonKm: 25, urgences: false,
+  });
+});
+
+// The notary's alert preference — server data since ADR 0033 §7.
+Given('le notaire {string} veut ses demandes {string}', async function (email, pace) {
+  const profile = await this.repo.getNotary(notaryIdForEmail(email));
+  assert.ok(profile, 'notaire inconnu: ' + email);
+  await this.repo.putNotary({ ...profile, alertes: { pace, urgentOnly: false } });
+});
+
+When(
+  'un client nommé {string} au téléphone {string} publie une offre avec le courriel {string} pour {string} à {int} dans {int} jours',
+  async function (nom, telephone, courriel, serviceId, montant, jours) {
+    const dateISO = this.domain.addDays(this.today, jours);
+    await this.request({ method: 'POST', path: '/bids', body: JSON.stringify({ serviceId, dateISO, montant, courriel, nom, telephone, anonyme: true, prefixe: 'G1R', pricing: PRICING_VALIDE[serviceId] }) });
+    assert.equal(this.response.statusCode, 201, 'la publication a échoué: ' + this.response.body);
+    const j = this.responseJson;
+    this.lastBidId = j.bid.id;
+    this.lastBid = j.bid;
+    this.clientToken = j.clientToken || null;
+  }
+);
+
+// What the cancel route records on a late cancellation (ADR 0023/0033): the
+// fee kept, and that it is the notary's compensation. Driven through the
+// notifier with the stored bid, exactly as the route fires it.
+When("l'offre retenue est annulée avec des frais de {int} $ au taux de {int} % versés au notaire", async function (frais, taux) {
+  const bid = await this.repo.get(this.lastBidId);
+  assert.ok(bid && bid.notaryId, "l'offre n'est pas retenue");
+  const notary = await this.repo.getNotary(bid.notaryId);
+  const cancelled = { ...bid, status: this.domain.STATUS.ANNULEE, cancelledAt: this.today, annulation: { taux: taux / 100, frais, joursAvant: 10, dedommagement: { notaire: true, verse: true, transferId: 'tr_' + bid.id } } };
+  await this.repo.update(cancelled);
+  await this.notifier.onOfferCancelled(cancelled, { notary, wasRetained: true });
+  await this.flush();
+});
+
+// « ce courriel » = the one the previous « reçoit le courriel » step matched.
+function lastMail(world) {
+  assert.ok(world.lastAsserted, 'aucun courriel n’a été constaté par l’étape précédente');
+  return world.lastAsserted;
+}
+
+Then('ce courriel porte les coordonnées {string}, {string} et {string}', function (nom, courriel, telephone) {
+  const m = lastMail(this);
+  for (const needle of [nom, courriel, telephone]) {
+    assert.ok(m.html.includes(needle), `le courriel « ${m.subject} » ne porte pas « ${needle} »`);
+  }
+  const digits = telephone.replace(/\D/g, '');
+  assert.ok(m.html.includes('href="tel:' + digits + '"'), 'le téléphone doit être un lien tel:');
+});
+
+Then('ce courriel dit que {int} $ lui sont versés en dédommagement', function (frais) {
+  const m = lastMail(this);
+  assert.ok(m.html.includes(this.domain.money(frais)), 'montant absent: ' + m.subject);
+  assert.ok(/vous sont versés/.test(m.html), 'le notaire doit lire que la somme lui est versée');
+  assert.ok(!/régulariser/.test(m.html), 'aucune promesse de régularisation');
+});
+
+Then('ce courriel dit que {int} $ sont retenus en dédommagement du notaire', function (frais) {
+  const m = lastMail(this);
+  assert.ok(m.html.includes(this.domain.money(frais)), 'montant absent: ' + m.subject);
+  assert.ok(/dédommagement/.test(m.html), 'le client doit lire à qui va la somme');
 });

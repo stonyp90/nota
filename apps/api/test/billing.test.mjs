@@ -9,6 +9,8 @@ const { createMemoryRepo } = require('../src/repo-memory.js');
 const { createBilling, NOTARY_STATUS } = require('../src/billing.js');
 const { notaryIdForEmail, signToken, SCOPES } = require('../src/notary-auth.js');
 import { notarySignIn } from '../test-support/notary-session.mjs';
+// ADR 0033 — a notary may only retain with a reachable profile.
+import { NOTARY_CONTACT } from '../test-support/notary-fixture.mjs';
 
 const NOW = '2026-08-12T00:00:00.000Z';
 const NOW_MS = 1_760_000_000_000;
@@ -486,7 +488,7 @@ test('end-to-end (ADR 0015): post → authorize → accept retains WITHOUT payin
   //    the hold stays intact for the settlement at completion.
   const email = 'a@notaire.ca';
   const id = notaryIdForEmail(email);
-  await repo.putNotary({ id, email, status: 'active', chargesEnabled: true, connectAccountId: 'acct_x', commissionCentsCollected: 0 });
+  await repo.putNotary({ id, email, status: 'active', chargesEnabled: true, connectAccountId: 'acct_x', commissionCentsCollected: 0, ...NOTARY_CONTACT });
   const sess = await notarySignIn(app, email);
   const acc = parse(await app.handle({
     method: 'POST', path: '/notary/bids/accept',
@@ -521,20 +523,23 @@ const flush = async () => {
   await new Promise((r) => setImmediate(r));
 };
 
-async function activeSession(app, stripe, email) {
+async function activeSession(app, stripe, email, repo) {
   await app.handle({ method: 'POST', path: '/notaries/connect', body: JSON.stringify({ email }) });
   const notaryId = stripe.calls.accounts.at(-1).notaryId;
   await app.handle({
     method: 'POST', path: '/stripe/webhook', headers: { 'stripe-signature': 'good' },
     body: JSON.stringify(accountUpdated('evt_act_' + notaryId, notaryId, true)),
   });
+  // The Connect path seeds the billing identity only; the mise en relation
+  // contact block (ADR 0033) is what lets this notary retain.
+  await repo.putNotary({ ...(await repo.getNotary(notaryId)), ...NOTARY_CONTACT });
   const sess = await notarySignIn(app, email);
   return { notaryId, auth: { authorization: 'Bearer ' + sess.token } };
 }
 
 test('CAPTURE FAILURE AT COMPLETION (ADR 0015): a lapsed/declined hold settles the act as an UNPAID fee — never a dead end, never a phantom payment', async () => {
   const { repo, stripe, app } = setup();
-  const { auth, notaryId } = await activeSession(app, stripe, 'a@notaire.ca');
+  const { auth, notaryId } = await activeSession(app, stripe, 'a@notaire.ca', repo);
   await repo.put({
     id: 'y1', dateISO: '2026-08-20', serviceId: 'refinancement', montant: 2400,
     status: 'retenue', notaryId, paymentStatus: 'authorized', paymentIntentId: 'pi_y', courriel: 'client@x.ca',
@@ -607,7 +612,7 @@ test('A_REAUTORISER (ADR 0009): accepting a proposition releases the ORIGINAL ho
 
 test('a normal accept neither cancels nor captures the hold — it waits for the signing (ADR 0015)', async () => {
   const { repo, stripe, app } = setup();
-  const { auth } = await activeSession(app, stripe, 'q@notaire.ca');
+  const { auth } = await activeSession(app, stripe, 'q@notaire.ca', repo);
   await repo.put({
     id: 'z1', dateISO: '2026-08-20', serviceId: 'refinancement', montant: 2400,
     status: 'ouverte', paymentStatus: 'authorized', paymentIntentId: 'pi_z', courriel: 'c@x.ca',

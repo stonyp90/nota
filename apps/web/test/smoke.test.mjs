@@ -332,9 +332,16 @@ test('a valid offer combination enables #offer-submit', async () => {
   const selPreteur = $(doc, 'crit-preteur'); selPreteur.value = 'banque_nationale'; fire(win, selPreteur, 'change');
   const selDeplacement = $(doc, 'crit-deplacement'); selDeplacement.value = 'client_50'; fire(win, selDeplacement, 'change');
 
-  // The REQUIRED postal sector is the last gate (domain: prefixe_requis).
+  // The REQUIRED postal sector (domain: prefixe_requis).
   assert.equal(submit.disabled, true, 'still blocked without the postal sector');
   const pre = $(doc, 'o-prefix'); pre.value = 'G1R'; fire(win, pre, 'input');
+
+  // ADR 0033 — the mise en relation is complete: the name and the courriel
+  // are the last gate, so the retaining notary can name and write to the client.
+  assert.equal(submit.disabled, true, 'still blocked without the identity');
+  const nom = $(doc, 'o-name'); nom.value = 'Prénom Nom'; fire(win, nom, 'input');
+  assert.equal(submit.disabled, true, 'still blocked without the courriel');
+  const em = $(doc, 'o-courriel'); em.value = 'client@example.ca'; fire(win, em, 'input');
 
   assert.equal(submit.disabled, false);
 });
@@ -421,15 +428,16 @@ test('theme toggle flips documentElement[data-theme]', async () => {
 
 // 12b. Optional courriel field exists and never blocks a valid offer, and the
 //      offline store never keeps it on the public bid (privacy by omission).
-test('courriel field is optional and stays private in the local store', async () => {
+test('courriel is required at publish (ADR 0033) and stays private in the local store', async () => {
   const { win, doc, D, Nota } = await boot();
 
-  // The field is present in the offer form and not required.
+  // The field is present in the offer form and required: it is how the client
+  // learns a notary retained them (ADR 0033). Private all the same.
   const courriel = $(doc, 'o-courriel');
   assert.ok(courriel, 'offer form is missing #o-courriel');
-  assert.equal(courriel.required, false);
+  assert.equal(courriel.required, true);
 
-  // A valid offer WITHOUT a courriel still enables submit.
+  // A valid offer WITH the identity enables submit.
   const sel = $(doc, 'o-service');
   sel.value = 'refinancement';
   fire(win, sel, 'change');
@@ -445,6 +453,8 @@ test('courriel field is optional and stays private in the local store', async ()
   const selPreteur = $(doc, 'crit-preteur'); selPreteur.value = 'banque_nationale'; fire(win, selPreteur, 'change');
   const selDeplacement = $(doc, 'crit-deplacement'); selDeplacement.value = 'client_50'; fire(win, selDeplacement, 'change');
   const pre = $(doc, 'o-prefix'); pre.value = 'G1R'; fire(win, pre, 'input'); // REQUIRED sector
+  const nom = $(doc, 'o-name'); nom.value = 'Prénom Nom'; fire(win, nom, 'input');
+  courriel.value = 'client@example.ca'; fire(win, courriel, 'input');
   assert.equal($(doc, 'offer-submit').disabled, false);
 
   // Creating a bid with a courriel offline must not surface it on the bid.
@@ -851,6 +861,7 @@ test('submitting an offer attaches the saved dossier snapshot and courriel', asy
   const selPreteur = $(doc, 'crit-preteur'); selPreteur.value = 'banque_nationale'; fire(win, selPreteur, 'change');
   const selDeplacement = $(doc, 'crit-deplacement'); selDeplacement.value = 'client_50'; fire(win, selDeplacement, 'change');
   const pre = $(doc, 'o-prefix'); pre.value = 'G1R'; fire(win, pre, 'input'); // REQUIRED sector
+  $(doc, 'o-name').value = 'Prénom Nom'; fire(win, $(doc, 'o-name'), 'input'); // REQUIRED identity (ADR 0033)
   $(doc, 'o-courriel').value = 'client@example.ca'; fire(win, $(doc, 'o-courriel'), 'input');
   fire(win, $(doc, 'offer-form'), 'submit');
   await wait(10);

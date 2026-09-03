@@ -355,6 +355,7 @@
   "Le jour demandé est illisible.": "The requested day is unreadable.",
   "système": "system",
   "Acte réglé": "Act settled",
+  "Frais d’annulation retenus": "Cancellation fee withheld",
   "Prix de Nota modifié": "Nota’s price updated",
   "Prix de Nota réinitialisé": "Nota’s price reset",
   "Barème d’annulation modifié": "Cancellation schedule updated",

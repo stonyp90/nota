@@ -46,6 +46,9 @@ const FEATURE_TEMPLATES = [
   'actPaidNotary',
   'notaryDisconnectedWinback',
   'offerCancelledNotary',
+  // ADR 0033 — la mise en relation est complète
+  'demandeRetenueNotaire',
+  'nouvelleDemande',
   // contact form (nous joindre)
   'contactRecu',
   // admin console
@@ -61,6 +64,7 @@ const FEATURE_TEMPLATES = [
   'operatorNewPartner',
   'operatorOfferCancelled',
   'operatorContactMessage',
+  'operatorDemandeRetenue',
 ];
 
 test('every marketplace feature has its dedicated template in the registry', () => {
@@ -456,4 +460,167 @@ test('art. 68 / art. 14 — aucun courriel client ne promet une vitesse ou un ma
       );
     }
   }
+});
+
+// =============================================================================
+// ADR 0033 — la mise en relation est complète, et la conversation est le canal
+// =============================================================================
+
+const NOTAIRE = {
+  nom: 'Me Jeanne Tremblay',
+  etude: 'Étude Tremblay',
+  telephone: '418 555-0199',
+  adresse: '12, rue Saint-Jean, Québec (QC) G1R 1N4',
+  courriel: 'jeanne@etude.ca',
+  lienCNQ: 'https://www.cnq.org/trouver-un-notaire/jeanne-tremblay',
+};
+// Le barème en vigueur, DÉJÀ chiffré par cancellation-config sur ce montant :
+// le gabarit met en forme, il ne calcule rien.
+const BAREME = [
+  { maxJours: 3, taux: 0.3, frais: 450 },
+  { maxJours: 14, taux: 0.1, frais: 150 },
+];
+const CLIENT_URL = BASE + '/#offre=b1&d=2026-08-19&cle=jeton';
+const ACTE_URL = BASE + '/#notaires&acte=b1';
+// An href is HTML: `&` reads `&amp;` inside the attribute (the text alternative carries the raw URL).
+const ctaCount = (html, url) => (html.match(new RegExp('href="' + url.replace(/&/g, '&amp;').replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '"', 'g')) || []).length;
+
+test('offerRetained names the notary with a tel: link, the conversation, the withdrawal and the barème, and deep-links to the act', () => {
+  const out = emails.offerRetained({ ...BID_CTX, bidId: 'b1', notaire: NOTAIRE, bareme: BAREME, clientUrl: CLIENT_URL });
+  assert.ok(out.html.includes('Me Jeanne Tremblay'), 'the notary is named');
+  assert.ok(out.html.includes('Étude Tremblay'), 'the étude is named');
+  assert.ok(out.html.includes('href="tel:4185550199"'), 'the phone is a tel: link');
+  assert.ok(out.html.includes('12, rue Saint-Jean'), 'the address shows');
+  assert.ok(out.html.includes('href="mailto:jeanne@etude.ca"'), 'the courriel is a mailto');
+  assert.ok(out.html.includes(NOTAIRE.lienCNQ), 'the CNQ fiche link rides along');
+  assert.ok(/espace Nota/.test(out.html), 'FR: the conversation lives in the client space');
+  assert.ok(/Nota space/.test(out.html), 'EN: same');
+  assert.ok(/désister/.test(out.html), 'FR: the notary may still withdraw');
+  assert.ok(/withdraw/.test(out.html), 'EN: same');
+  // The barème, with the amounts computed upstream, in both languages.
+  assert.ok(out.html.includes('30' + NB + '%') && out.html.includes('450' + NB + '$'), 'FR: 30 % → 450 $');
+  assert.ok(out.html.includes('30%') && out.html.includes('$450'), 'EN: 30% → $450');
+  assert.ok(/gratuit/.test(out.html) && /free/.test(out.html), 'beyond the last palier is free');
+  assert.equal(ctaCount(out.html, CLIENT_URL), 2, 'both CTAs open the act deep link');
+  assert.ok(out.text.includes(CLIENT_URL));
+  assert.ok(out.text.includes('418 555-0199'), 'text alternative carries the phone');
+});
+
+test('offerRetained without a deep link falls back to the client space; without a profile it stays honest', () => {
+  const out = emails.offerRetained({ ...BID_CTX, bidId: 'b1' });
+  assert.equal(ctaCount(out.html, BASE + '/#t=profil'), 2);
+  assert.ok(!/undefined|null/.test(out.text), 'no leaked empties: ' + out.text);
+});
+
+test('demandeRetenueNotaire hands the notary the client block, the file readiness, what binds them, and the act deep link', () => {
+  const out = emails.demandeRetenueNotaire({
+    ...BID_CTX, bidId: 'b1',
+    client: { nom: 'Marie Roy', courriel: 'marie@exemple.ca', telephone: '(418) 555-0100', secteur: 'G1R', deplacement: 'notaire_25', preteur: 'desjardins' },
+    dossier: { ready: false, missing: ['Pièce d’identité'], requis: [] },
+    bareme: BAREME,
+  });
+  assert.ok(out.subject.includes(' / '), 'bilingual subject');
+  assert.match(out.subject, /Demande retenue/);
+  assert.ok(out.html.includes('Marie Roy'));
+  assert.ok(out.html.includes('href="mailto:marie@exemple.ca"'));
+  assert.ok(out.html.includes('href="tel:4185550100"'), 'client phone is dialable');
+  assert.ok(out.html.includes('G1R'), 'the postal sector');
+  assert.ok(out.html.includes(domain.deplacementById('notaire_25').nom), 'the déplacement band, from the domain');
+  assert.ok(out.html.includes('Desjardins'), 'the lender, from the domain');
+  assert.ok(/Pièce d’identité/.test(out.html), 'the missing item is listed');
+  assert.ok(/signature/.test(out.html) && /en entier/.test(out.html), 'FR: honoraires paid in full at signing');
+  assert.ok(/in full/.test(out.html), 'EN: same');
+  assert.ok(/dédommagement/.test(out.html) && /compensation/.test(out.html), 'the fee is the notary’s compensation');
+  assert.ok(out.html.includes('450' + NB + '$') && out.html.includes('$450'), 'the barème amounts on THIS montant');
+  assert.ok(/désister/.test(out.html) && /gratuit/.test(out.html), 'withdrawal is free, and counted');
+  assert.ok(!/commission/i.test(out.html), 'never a commission');
+  assert.equal(ctaCount(out.html, ACTE_URL), 2, 'both CTAs open the retained card');
+});
+
+test('demandeRetenueNotaire with a ready file and a client-travel band says so', () => {
+  const out = emails.demandeRetenueNotaire({
+    ...BID_CTX, bidId: 'b1',
+    client: { nom: null, courriel: 'x@exemple.ca', telephone: null, secteur: 'G1V', deplacement: 'client_50', preteur: 'autre', preteurNom: 'Caisse locale' },
+    dossier: { ready: true, missing: [], requis: [] },
+    bareme: [],
+  });
+  assert.ok(/Dossier prêt/.test(out.html) && /File ready/.test(out.html));
+  assert.ok(out.html.includes('Caisse locale'), 'the typed « autre prêteur » name travels');
+  assert.ok(/aucuns frais/.test(out.html), 'an empty barème reads as free');
+  assert.ok(!/undefined|null/.test(out.text), out.text);
+});
+
+test('offerCancelled tells the client what was kept, and that it goes to the notary', () => {
+  const paid = emails.offerCancelled({ ...BID_CTX, bidId: 'b1', annulation: { taux: 0.3, frais: 450, joursAvant: 2 } });
+  assert.ok(paid.html.includes('450' + NB + '$') && paid.html.includes('30' + NB + '%'), 'FR: amount + taux');
+  assert.ok(paid.html.includes('$450') && paid.html.includes('30%'), 'EN: same');
+  assert.ok(/dédommagement/.test(paid.html) && /compensation/.test(paid.html), 'the fee compensates the notary');
+  const free = emails.offerCancelled({ ...BID_CTX, bidId: 'b1', annulation: null });
+  assert.ok(/sans frais/.test(free.html) && /no fee/.test(free.html), 'null annulation reads as free');
+  assert.ok(!/450/.test(free.html));
+});
+
+test('offerCancelledNotary is honest about the money — paid, owed, or nothing — and never promises a call from the team', () => {
+  const paid = emails.offerCancelledNotary({ ...BID_CTX, bidId: 'b1', annulation: { taux: 0.3, frais: 450, dedommagement: { notaire: true, verse: true, transferId: 'tr_1' } } });
+  assert.ok(paid.html.includes('450' + NB + '$') && /vous sont versés/.test(paid.html), 'FR: the amount is transferred');
+  assert.ok(paid.html.includes('$450') && /transferred to you/.test(paid.html), 'EN: same');
+  const owed = emails.offerCancelledNotary({ ...BID_CTX, bidId: 'b1', annulation: { taux: 0.1, frais: 150, dedommagement: { notaire: true, verse: false, transferId: null } } });
+  assert.ok(owed.html.includes('150' + NB + '$') && /versements Stripe/.test(owed.html), 'FR: owed until Stripe payouts are wired');
+  assert.ok(/Stripe payouts/.test(owed.html), 'EN: same');
+  const free = emails.offerCancelledNotary({ ...BID_CTX, bidId: 'b1', annulation: null });
+  assert.ok(/aucuns frais/.test(free.html) && /no fee/.test(free.html));
+  for (const out of [paid, owed, free]) {
+    assert.ok(!/régulariser|notre équipe vous écrit|our team will contact/.test(out.html), 'no false promise');
+    assert.equal(ctaCount(out.html, ACTE_URL), 2, 'CTA opens the console at the act');
+  }
+});
+
+test('nouvelleDemande alerts the notary with the demand, its sector, band, lender and distance, and deep-links to it', () => {
+  const out = emails.nouvelleDemande({
+    ...BID_CTX, bidId: 'b1', secteur: 'G1R', deplacement: 'client_25', preteur: 'rbc', distanceKm: 6,
+  });
+  assert.ok(out.subject.includes(' / '));
+  assert.match(out.subject, /Nouvelle demande/);
+  assert.ok(out.html.includes('1' + NB + '500' + NB + '$') && out.html.includes('$1,500'));
+  assert.ok(out.html.includes('G1R'));
+  assert.ok(out.html.includes(domain.deplacementById('client_25').nom));
+  assert.ok(out.html.includes('RBC Banque Royale'));
+  assert.ok(/6 km/.test(out.html), 'the measured distance when known');
+  assert.equal(ctaCount(out.html, ACTE_URL), 2);
+  const noDist = emails.nouvelleDemande({ ...BID_CTX, bidId: 'b1', secteur: 'G1R' });
+  assert.ok(!/ km/.test(noDist.html.replace(/km\b[^<]*<\/a>/g, '')) || !/≈/.test(noDist.html), 'no distance line without a measure');
+});
+
+test('operatorDemandeRetenue is a small revenue event, and operator CTAs land on the admin console when configured', () => {
+  const out = emails.operatorDemandeRetenue({ ...BID_CTX, bidId: 'b1', etude: 'Étude Tremblay', adminUrl: 'https://admin.nota.example' });
+  assert.match(out.subject, /Demande retenue/);
+  assert.ok(out.html.includes('Étude Tremblay'));
+  assert.equal(ctaCount(out.html, 'https://admin.nota.example'), 2, 'admin console CTA');
+  const lead = emails.operatorNewLead({ ...BID_CTX, adminUrl: 'https://admin.nota.example' });
+  assert.equal(ctaCount(lead.html, 'https://admin.nota.example'), 2);
+  const fallback = emails.operatorNewLead(BID_CTX);
+  assert.equal(ctaCount(fallback.html, BASE + '/'), 2, 'no admin URL → the public carnet');
+});
+
+test('every client act email deep-links to the act when clientUrl is given; every notary act email opens the act card', () => {
+  // (offerCancelled invites a NEW date, so its CTA stays the public carnet.)
+  const clientTemplates = ['offerRetained', 'messageDuNotaire', 'documentDuNotaire', 'propositionRecue', 'documentsDemandes', 'dateApproaching', 'dateMissedNoUptake', 'dossierIncomplete', 'offerPublished', 'evaluationInvite', 'actReleased', 'offerAuthorized', 'offerAuthorizationVoided'];
+  for (const name of clientTemplates) {
+    const out = emails[name]({ ...BID_CTX, bidId: 'b1', clientUrl: CLIENT_URL, days: 3, proposition: { montant: 1600 }, demande: { documents: [] }, message: 'x', document: 'x.pdf' });
+    assert.equal(ctaCount(out.html, CLIENT_URL), 2, name + ': CTA must be the client deep link');
+  }
+  const notaryTemplates = ['messageDuClient', 'documentDuClient', 'propositionAcceptee', 'demandeRetenueNotaire', 'offerCancelledNotary', 'evaluationRecueNotaire', 'nouvelleDemande'];
+  for (const name of notaryTemplates) {
+    const out = emails[name]({ ...BID_CTX, bidId: 'b1', proposition: { montant: 1600 }, message: 'x', document: 'x.pdf', note: 4, client: {}, dossier: { ready: true, missing: [], requis: [] }, bareme: [] });
+    assert.equal(ctaCount(out.html, ACTE_URL), 2, name + ': CTA must open the act card');
+  }
+});
+
+test('TEMPLATE_META registers the ADR 0033 templates with their audience and placeholders', () => {
+  assert.equal(emails.TEMPLATE_META.demandeRetenueNotaire.audience, 'notaire');
+  assert.equal(emails.TEMPLATE_META.demandeRetenueNotaire.transactionnel, true);
+  assert.equal(emails.TEMPLATE_META.nouvelleDemande.audience, 'notaire');
+  assert.equal(emails.TEMPLATE_META.nouvelleDemande.transactionnel, false, 'an alert the notary asked for can be silenced');
+  assert.equal(emails.TEMPLATE_META.operatorDemandeRetenue.audience, 'operateur');
+  assert.ok(emails.TEMPLATE_META.offerRetained.placeholders.includes('etude'), 'the client subject may name the étude');
 });

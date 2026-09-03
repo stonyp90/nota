@@ -203,6 +203,9 @@ const TRANSACTIONNELS = [
   'adminMagicLink',
   'contactRecu',
   'dateMissedNoUptake',
+  // ADR 0033 — the retaining notary's only notice of the act (and of the
+  // client) they now hold.
+  'demandeRetenueNotaire',
   // ADR 0032 — une pièce arrivée dans un dossier en cours est un fait que son
   // destinataire doit connaître pour avancer. La taire serait une publicité
   // « incomplète » au sens de l'art. 68.
@@ -212,7 +215,11 @@ const TRANSACTIONNELS = [
   'messageDuClient',
   'messageDuNotaire',
   'notaryActive',
+  // 2026-09-02 — the operator's activation is the notary's only notice that
+  // the console is open; the signup acknowledgement is a step they took.
+  'notaryApproved',
   'notaryMagicLink',
+  'notaryPendingReview',
   'offerAuthorizationVoided',
   'offerAuthorized',
   'offerCancelled',

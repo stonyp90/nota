@@ -230,7 +230,9 @@ function createMemoryRepo(seed = []) {
     },
     // Mirrors the Dynamo sparse-GSI1 read: only ACTIVE notaries are enumerable.
     async listActiveNotaries() {
-      return [...byNotary.values()].filter((n) => n.status === 'active').map((n) => ({ ...n }));
+      // 2026-09-02: an operator-approved notary (`approuveLe`) is active on
+      // the marketplace whatever Stripe says of their payouts.
+      return [...byNotary.values()].filter((n) => n.status === 'active' || !!n.approuveLe).map((n) => ({ ...n }));
     },
     // Le registre de la console admin : TOUS les notaires, y compris ceux qui
     // n'ont pas fini leur inscription — un opérateur doit voir qui frappe à la

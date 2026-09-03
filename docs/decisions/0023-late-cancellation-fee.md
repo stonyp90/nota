@@ -88,3 +88,25 @@ consentement Stripe déjà donné.
   frais au notaire ; récupérer la récompense de parrainage d'une offre annulée
   (le registre EARN est write-once par conception, ADR 0011) ; rembourser un
   acte réglé (aujourd'hui : impossible d'annuler, point).
+
+## Amendé par l'ADR 0033 (2026-09-02)
+
+La décision 3 disait : « Les fonds restent sur la plateforme (pas de transfert
+au notaire pour l'instant — dédommager le notaire est une décision produit
+séparée). » Cette décision est prise : **les frais d'annulation dédommagent le
+notaire dont la journée était réservée, et Nota n'en garde rien** (art. 32.1 de
+la *Loi sur le notariat*, art. 32 du *Code de déontologie* — Nota ne conserve
+jamais une part de ce qui revient au notaire).
+
+- La capture partielle reste le mécanisme (clé `cancelfee:<bidId>`) ; elle est
+  suivie d'un **virement entier** vers le compte Stripe connecté du notaire
+  (`transfer_group: bid:<id>`, clé `cancelfee-transfer:<bidId>`, sans frais
+  d'application) dès que celui-ci peut recevoir (`active`, `chargesEnabled`,
+  `connectAccountId`).
+- Quand il ne le peut pas — ou qu'un virement échoue après une capture réussie —
+  la capture n'est jamais rejouée et le montant est inscrit **dû au notaire** :
+  `notary.dedommagementCentsDue`, sur le modèle de la créance de l'ADR 0029.
+- L'offre annulée porte `annulation.dedommagement = { notaire: true, verse,
+  transferId }` ; l'audit `annulation_frais` porte `transferId` et `verse`.
+- Le désistement du notaire reste gratuit, mais il est **compté à son dossier**
+  (`releasesCount`) et l'opérateur en est **toujours** prévenu.

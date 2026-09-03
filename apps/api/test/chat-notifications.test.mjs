@@ -13,6 +13,8 @@ const { createFakeMailer } = require('../src/notify-port.js');
 const { createNotifier } = require('../src/notifications.js');
 const { notaryIdForEmail } = require('../src/notary-auth.js');
 import { notarySignIn } from '../test-support/notary-session.mjs';
+import { activeNotary } from '../test-support/notary-fixture.mjs';
+import { NOTARY_CONTACT } from '../test-support/notary-fixture.mjs';
 const domain = require('@nota/domain');
 
 const TODAY = '2026-08-12';
@@ -38,7 +40,7 @@ function app(opts = {}) {
 }
 
 async function session(a, email) {
-  await a.repo.putNotary({ id: notaryIdForEmail(email), email, status: 'active', label: 'Étude Chat' });
+  await a.repo.putNotary({ id: notaryIdForEmail(email), email, status: 'active', label: 'Étude Chat', ...NOTARY_CONTACT });
   return notarySignIn(a, email);
 }
 
@@ -82,6 +84,9 @@ test('messageDuNotaire shows the study, the excerpt in a callout, and drives to 
   assert.ok(!out.html.includes('<du>'), 'raw user text must never reach the HTML');
   const ctas = (out.html.match(new RegExp('href="' + BASE + '/#t=profil"', 'g')) || []).length;
   assert.equal(ctas, 2, 'FR + EN CTA both open the client space');
+  // ADR 0033 — with a signed deep link in the context, the CTA opens THE act.
+  const deep = emails.messageDuNotaire({ serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2900, bidId: 'b1', clientUrl: BASE + '/#offre=b1&d=2026-08-20&cle=t', message: 'x', baseUrl: BASE, unsubscribeUrl: UNSUB });
+  assert.equal((deep.html.match(new RegExp('href="' + BASE + '/#offre=b1&amp;d=2026-08-20&amp;cle=t"', 'g')) || []).length, 2, 'deep link, escaped for HTML');
 });
 
 test('messageDuClient carries the amount in the subject and drives to the console', () => {
@@ -95,6 +100,9 @@ test('messageDuClient carries the amount in the subject and drives to the consol
   assert.ok(out.html.includes('Parfait, à mardi.'));
   const ctas = (out.html.match(new RegExp('href="' + BASE + '/#notaires"', 'g')) || []).length;
   assert.equal(ctas, 2, 'FR + EN CTA both open the notary console');
+  // ADR 0033 — the act id in the context turns the CTA into the act card.
+  const deep = emails.messageDuClient({ serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2900, bidId: 'b1', message: 'x', baseUrl: BASE, unsubscribeUrl: UNSUB });
+  assert.equal((deep.html.match(new RegExp('href="' + BASE + '/#notaires&amp;acte=b1"', 'g')) || []).length, 2);
 });
 
 // --- notifier use-case --------------------------------------------------------
@@ -166,7 +174,7 @@ test('a mail failure never breaks the chat routes', async () => {
   const a = app({ notifier: brokenNotifier });
   const repo = a.repo;
   await repo.put({ id: 'b1', serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2900, status: domain.STATUS.RETENUE, notaryId: notaryIdForEmail('n1@notaire.ca'), courriel: 'client@example.ca' });
-  await repo.putNotary({ id: notaryIdForEmail('n1@notaire.ca'), email: 'n1@notaire.ca', status: 'active' });
+  await repo.putNotary(activeNotary('n1@notaire.ca'));
   const { token } = await notarySignIn(a, 'n1@notaire.ca');
   const res = await notarySend(a, token, { id: 'b1', dateISO: '2026-08-20' }, 'Bonjour');
   assert.equal(res.statusCode, 200, res.body);

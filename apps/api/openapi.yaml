@@ -592,12 +592,20 @@ paths:
             this notary — including those retained through a proposition the
             client accepted (`viaProposition`), which the console never
             accepted itself — each with the `client` contact block (mise en
-            relation, ADR 0010 §4). Open bids never carry client contact.
+            relation, ADR 0010 §4), the live thread, and `annulation` — what
+            a client cancellation TODAY would hand this notary (ADR 0033).
+            Open bids never carry client contact. Alongside: `profil` (the
+            notary's own record, with `complet`/`manquants` — the gate on
+            retaining), `tarif` (what the CLIENT pays Nota, ADR 0031 — never
+            a share of the honoraires), `conditions` (what retaining commits
+            the notary to, ADR 0033) and `fenetre` (the months `retained`
+            covers, so the console can prune entries the server no longer
+            returns — cancelled acts).
           content:
             application/json:
               schema:
                 type: object
-                required: [bids, retained, rating, cote, profil, commission]
+                required: [bids, retained, rating, cote, tarif, profil, conditions, fenetre]
                 properties:
                   bids:
                     type: array
@@ -611,10 +619,18 @@ paths:
                     $ref: "#/components/schemas/NotaryRating"
                   cote:
                     $ref: "#/components/schemas/NotaryCote"
+                  tarif:
+                    $ref: "#/components/schemas/NotaryTarif"
                   profil:
                     $ref: "#/components/schemas/NotaryProfil"
-                  commission:
-                    $ref: "#/components/schemas/NotaryCommission"
+                  conditions:
+                    $ref: "#/components/schemas/NotaryConditions"
+                  fenetre:
+                    type: array
+                    description: The forward month window (`YYYY-MM`) the feed and `retained` cover.
+                    items:
+                      type: string
+                      pattern: "^[0-9]{4}-[0-9]{2}$"
         "401":
           $ref: "#/components/responses/Unauthorized"
   /notary/evaluations:
@@ -694,9 +710,13 @@ paths:
   /notary/profile:
     post:
       operationId: updateNotaryProfile
-      summary: Update the notary's profile — CNQ fiche, travel radius, urgency opt-in.
+      summary: Update the notary's profile — identity, CNQ fiche, travel radius, urgency opt-in, alerts.
       description: >-
-        The editable fields of the notary's profile. `lienCNQ` (ADR 0016) is
+        The editable fields of the notary's profile. `nom`, `etude`,
+        `telephone`, `adresse` (ADR 0033) are the identity a retained client
+        receives — all optional at save time, but nom, téléphone and adresse
+        must be on the profile before the notary may retain or propose
+        (`profil_incomplet` otherwise). `lienCNQ` (ADR 0016) is
         the link of their official fiche in the Chambre des notaires du Québec
         directory — the domain is the authority on what counts as a fiche
         (https on the `cnq.org` host or a subdomain, nothing else), and an
@@ -706,9 +726,13 @@ paths:
         acts — the two levers that widen (or narrow) the demandes the feed
         offers them. `prefixe` (ADR 0025) is the étude's postal sector (FSA):
         optional — empty clears it — but when present it turns the feed's
-        declarative travel rules into measured client↔étude distances. The
-        write spreads the existing profile record, so the billing identity
-        and the rating aggregates survive.
+        declarative travel rules into measured client↔étude distances.
+        `alertes` (ADR 0033 §7) is how new demandes reach the notary.
+        A field ABSENT from the body keeps its stored value; a field present
+        but empty clears it — the console edits the profile from more than
+        one form, and a block posting only its own fields never wipes the
+        others. The write spreads the existing profile record, so the billing
+        identity and the rating aggregates survive.
       security:
         - notarySession: []
       requestBody:
@@ -718,6 +742,25 @@ paths:
             schema:
               type: object
               properties:
+                nom:
+                  type: [string, "null"]
+                  maxLength: 120
+                  description: « Me Prénom Nom »; over 120 chars → 422 `nom_invalide`.
+                etude:
+                  type: [string, "null"]
+                  maxLength: 120
+                  description: The firm's name; over 120 chars → 422 `etude_invalide`.
+                telephone:
+                  type: [string, "null"]
+                  description: >-
+                    Any human formatting; stripped, 10–11 digits must remain
+                    (`domain.validateTelephone`), else 422 `telephone_invalide`.
+                adresse:
+                  type: [string, "null"]
+                  maxLength: 200
+                  description: One line; over 200 chars → 422 `adresse_invalide`.
+                alertes:
+                  $ref: "#/components/schemas/NotaryAlertes"
                 lienCNQ:
                   type: [string, "null"]
                   description: Official fiche URL on cnq.org, or empty to clear.
@@ -757,12 +800,16 @@ paths:
           description: >-
             The link is not a fiche on the Chambre's own site
             (`lien_cnq_invalide`), the radius is not 0, 25 or 50
-            (`rayon_invalide`), or the étude sector is not letter-digit-letter
-            (`prefixe_invalide`).
+            (`rayon_invalide`), the étude sector is not letter-digit-letter
+            (`prefixe_invalide`), an identity field is oversized
+            (`nom_invalide`, `etude_invalide`, `adresse_invalide`), the phone
+            is not dialable (`telephone_invalide`), or the alert preferences
+            are malformed (`alertes_invalides`, `alerte_rythme_invalide`).
+            A refused write never touches the stored record.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Errors"
+                $ref: "#/components/schemas/ErrorResponse"
   /notary/bids/accept:
     post:
       operationId: acceptBid
@@ -813,18 +860,31 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           description: >-
-            The bid's déplacement band is beyond this notary's declared radius,
-            or an online urgency they never opted into (ADR 0017,
-            `deplacement_non_couvert`). A notary who already retained the bid
-            keeps the idempotent re-accept regardless.
+            `profil_incomplet` (ADR 0033): the notary's profile lacks a name,
+            a phone or the étude's address — the client could not reach them;
+            `manquants` lists the fields still empty with their labels. Or
+            `deplacement_non_couvert` (ADR 0017): the bid's déplacement band
+            is beyond this notary's declared radius, or an online urgency they
+            never opted into. A notary who already retained the bid keeps the
+            idempotent re-accept regardless of either.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-              example:
-                errors:
-                  - code: deplacement_non_couvert
-                    message: Cette demande exige un déplacement ou une urgence en ligne que votre profil ne couvre pas.
+              examples:
+                profilIncomplet:
+                  value:
+                    errors:
+                      - code: profil_incomplet
+                        message: Complétez votre profil (nom, téléphone, adresse de l’étude) avant de retenir une demande.
+                        manquants:
+                          - id: telephone
+                            label: Votre téléphone
+                deplacement:
+                  value:
+                    errors:
+                      - code: deplacement_non_couvert
+                        message: Cette demande exige un déplacement ou une urgence en ligne que votre profil ne couvre pas.
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -884,17 +944,29 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           description: >-
-            The bid's déplacement band is beyond this notary's declared radius,
-            or an online urgency they never opted into (ADR 0017,
-            `deplacement_non_couvert`).
+            `profil_incomplet` (ADR 0033): a proposition is an offer to take
+            the act — same gate as a retain (name, phone, address; `manquants`
+            lists what is missing). Or `deplacement_non_couvert` (ADR 0017):
+            the bid's déplacement band is beyond this notary's declared
+            radius, or an online urgency they never opted into.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-              example:
-                errors:
-                  - code: deplacement_non_couvert
-                    message: Cette demande exige un déplacement ou une urgence en ligne que votre profil ne couvre pas.
+              examples:
+                profilIncomplet:
+                  value:
+                    errors:
+                      - code: profil_incomplet
+                        message: Complétez votre profil (nom, téléphone, adresse de l’étude) avant de retenir une demande.
+                        manquants:
+                          - id: adresse
+                            label: L’adresse de votre étude
+                deplacement:
+                  value:
+                    errors:
+                      - code: deplacement_non_couvert
+                        message: Cette demande exige un déplacement ou une urgence en ligne que votre profil ne couvre pas.
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -1583,16 +1655,26 @@ paths:
                     $ref: "#/components/schemas/Bid"
                   notaire:
                     description: >-
-                      The notary half of the mise en relation (ADR 0010 §4):
-                      once the bid is RETAINED, the retaining notary's étude
-                      and courriel. Null while the bid is open — contact flows
-                      in neither direction before retention.
+                      The notary half of the mise en relation (ADR 0010 §4,
+                      complete since ADR 0033): once the bid is RETAINED, the
+                      retaining notary's name, étude, phone, address, courriel
+                      and fiche — everything the client needs to call them and
+                      find the étude. Null while the bid is open — contact
+                      flows in neither direction before retention. Still NO
+                      rating or cote (ADR 0030).
                     oneOf:
                       - type: "null"
                       - type: object
-                        required: [etude, courriel]
+                        required: [nom, etude, telephone, adresse, courriel, lienCNQ, actes]
                         properties:
+                          nom:
+                            type: [string, "null"]
                           etude:
+                            type: [string, "null"]
+                          telephone:
+                            type: [string, "null"]
+                            description: "As the notary typed it; `domain.telHref` turns it into a tel: link."
+                          adresse:
                             type: [string, "null"]
                           courriel:
                             type: [string, "null"]
@@ -2106,7 +2188,9 @@ paths:
         live in the widget. `courriel` is optional — it only adds an offline
         copy of the reply. A stale/tampered token is 401 (never a silent new
         thread); domain validation errors are 422 (`message_requis`,
-        `message_trop_long`, `courriel_invalide`).
+        `message_trop_long`, `courriel_invalide`). Per-IP throttle (ADR 0033
+        §7): more than 20 messages in 10 minutes from one source IP → 429
+        `trop_de_messages` (fails open on a counter error).
       security:
         - {}
         - supportToken: []
@@ -2158,6 +2242,16 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Per-IP rate limit exceeded (`trop_de_messages`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                errors:
+                  - code: trop_de_messages
+                    message: Trop de messages en peu de temps. Réessayez dans quelques minutes.
   /support/thread:
     get:
       operationId: getSupportThread
@@ -2298,6 +2392,142 @@ paths:
             text/html:
               schema:
                 type: string
+  /notaries/signup:
+    post:
+      operationId: notarySignup
+      summary: Free notary signup by professional email — no Stripe at the door (2026-09-02).
+      description: >-
+        The supply-side front door. A notary signs up with their professional
+        email and, optionally, the link to their fiche in the Chambre's
+        directory (`lienCNQ`, judged by the domain's CNQ rule — ADR 0016) and a
+        partner referral code (`parrain`, same rules as POST /bids and
+        /notaries/connect: normalized, invalid or self-referral silently
+        dropped). A NEW address gets a `NOTARY#` record in status `en_attente`
+        stamped `inscritLe`; the operator then checks the Tableau de l'Ordre
+        and activates it from the admin console (`POST
+        /admin/notaries/{id}/activer` sets `approuveLe`, which is what the
+        console gate reads). An EXISTING record only gains a missing `lienCNQ`
+        / `parrain` — its status is never downgraded. ENUMERATION-SAFE: every
+        valid address answers the same `{ ok: true }`, new, pending or active.
+        Per-IP rate-limited like /notary/session/request. Works whether or not
+        Stripe is configured; payouts connect later, from inside the console
+        (/notaries/connect), only before a first act is marked signed. Mails:
+        the notary (`notaryPendingReview`) and the operator
+        (`operatorNotarySignedUp`), once per address, while the file is pending.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  maxLength: 254
+                  description: The notary's professional email — their sign-in identity.
+                  example: me.roy@etude.ca
+                lienCNQ:
+                  type: string
+                  maxLength: 300
+                  description: >-
+                    OPTIONAL. The https URL of the notary's official fiche on
+                    cnq.org (or a subdomain). Anything else is refused with 422
+                    `lien_cnq_invalide`. Empty is fine.
+                  example: https://www.cnq.org/trouver-un-notaire/roy
+                parrain:
+                  type: string
+                  writeOnly: true
+                  description: OPTIONAL, PRIVATE partner referral code (ADR 0011) — see ConnectInput.parrain.
+                  example: EVEROY
+      responses:
+        "200":
+          description: Generic acknowledgement — identical whether the address is new, pending or already active.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+              example:
+                ok: true
+        "400":
+          description: Malformed JSON body.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: The email is not valid (`courriel_invalide`) or the fiche link is not on cnq.org (`lien_cnq_invalide`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                errors:
+                  - code: lien_cnq_invalide
+                    message: Le lien doit être votre fiche officielle sur cnq.org (adresse https de la Chambre des notaires du Québec).
+        "429":
+          description: Per-IP rate limit exceeded.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+                  throttled:
+                    type: boolean
+                    const: true
+  /events:
+    post:
+      operationId: recordFunnelEvent
+      summary: The conversion funnel's beacon — one observable step at a time (2026-09-02).
+      description: >-
+        The web app reports a step of the conversion funnel (`{ event }`). Only
+        the domain's `FUNNEL_EVENTS` catalogue is counted (visite, jour_ouvert,
+        formulaire, publie, paiement_ok, paiement_annule, notaire_porte,
+        notaire_inscrit), as a per-day counter in the STATS# rollup that
+        `GET /admin/metrics/overview` reads back as `entonnoir`. Anything else —
+        an unknown id, a wrong type, a garbage body — is DROPPED with the same
+        204, so a beacon never learns what the catalogue holds. The two steps
+        that cost money (`publie`, `notaire_inscrit`) are ALSO counted
+        server-side on their own routes; the beacon is never trusted for them.
+        Lightly rate-limited per IP (120/min by default). Safe for
+        `navigator.sendBeacon` (a text/plain JSON body is accepted).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [event]
+              properties:
+                event:
+                  type: string
+                  description: A FUNNEL_EVENTS id from @nota/domain.
+                  example: jour_ouvert
+      responses:
+        "204":
+          description: Received — counted when it is a catalogue step, silently dropped otherwise.
+        "429":
+          description: Per-IP rate limit exceeded; the beacon is not counted.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+                  throttled:
+                    type: boolean
+                    const: true
 components:
   securitySchemes:
     notarySession:
@@ -2775,6 +3005,8 @@ components:
         commissionCents:
           type: [integer, "null"]
           description: Nota's commission on the settled act (null until completed).
+        annulation:
+          $ref: "#/components/schemas/CancellationForecast"
     AcceptedBid:
       type: object
       description: >-
@@ -3034,6 +3266,13 @@ components:
             - dossier_invalide
             - parametre_requis
             - telephone_invalide
+            - nom_invalide
+            - etude_invalide
+            - adresse_invalide
+            - alertes_invalides
+            - alerte_rythme_invalide
+            - profil_incomplet
+            - trop_de_messages
             - type_inconnu
             - code_invalide
             - code_deja_pris
@@ -3049,6 +3288,20 @@ components:
         message:
           type: string
           description: Human-readable message (fr-CA).
+        manquants:
+          type: array
+          description: >-
+            Only on `profil_incomplet` (ADR 0033): the contact fields the
+            notary still has to fill before retaining, with their fr-CA labels.
+          items:
+            type: object
+            required: [id, label]
+            properties:
+              id:
+                type: string
+                enum: [nom, telephone, adresse]
+              label:
+                type: string
     NotaryRating:
       type: [object, "null"]
       description: >-
@@ -3066,10 +3319,54 @@ components:
       type: object
       description: >-
         The notary's own profile, as the console edits it: the CNQ fiche link
-        (ADR 0016) plus the declared travel radius and online-urgency opt-in
-        (ADR 0017) that gate which demandes the feed offers.
-      required: [lienCNQ, rayonKm, urgences]
+        (ADR 0016), the declared travel radius and online-urgency opt-in
+        (ADR 0017) that gate which demandes the feed offers, the identity a
+        retained client receives (ADR 0033 — nom, étude, téléphone, adresse,
+        courriel), whether that identity is complete enough to retain
+        (`complet` / `manquants`: nom, téléphone and adresse are required
+        before /notary/bids/accept and /notary/bids/propose), and the alert
+        preferences (`alertes`).
+      required: [lienCNQ, rayonKm, urgences, prefixe, nom, etude, telephone, adresse, courriel, complet, manquants, alertes]
       properties:
+        nom:
+          type: [string, "null"]
+          maxLength: 120
+          description: The notary's name as a client will read it (« Me Prénom Nom »).
+        etude:
+          type: [string, "null"]
+          maxLength: 120
+          description: >-
+            The firm's name. The source of the `etude` stamped on retained
+            bids and propositions (`domain.notaryEtude`: étude, else the
+            legacy sign-in label, else `nom`, else the courriel).
+        telephone:
+          type: [string, "null"]
+          description: As typed, trimmed (`domain.validateTelephone`) — a dialable North-American number.
+        adresse:
+          type: [string, "null"]
+          maxLength: 200
+          description: The étude's address, one line.
+        courriel:
+          type: [string, "null"]
+          format: email
+          description: The notary's sign-in address — what a retained client receives.
+        complet:
+          type: boolean
+          description: True when `manquants` is empty — the notary may retain and propose.
+        manquants:
+          type: array
+          description: The required contact fields still empty, with their fr-CA labels.
+          items:
+            type: object
+            required: [id, label]
+            properties:
+              id:
+                type: string
+                enum: [nom, telephone, adresse]
+              label:
+                type: string
+        alertes:
+          $ref: "#/components/schemas/NotaryAlertes"
         lienCNQ:
           type: [string, "null"]
           description: Official fiche URL on cnq.org, null when none is attached.
@@ -3089,6 +3386,103 @@ components:
           description: >-
             The étude's postal sector (FSA, ADR 0025), null when none is
             declared — the feed then keeps the declarative travel rules.
+    NotaryTarif:
+      type: object
+      description: >-
+        Nota's own price, as the CLIENT pays it (ADR 0031) — a line of the
+        client's, never a share of the notary's honoraires. `taxesIncluses`
+        and `deboursInclus` are declared because art. 71 3° of the Code de
+        déontologie requires saying whether taxes and débours are included.
+      required: [prixNotaCents, taxesIncluses, deboursInclus]
+      properties:
+        prixNotaCents:
+          type: integer
+          minimum: 0
+        taxesIncluses:
+          type: boolean
+        deboursInclus:
+          type: boolean
+    NotaryAlertes:
+      type: object
+      description: >-
+        How new demandes reach this notary (ADR 0033 §7). `instant` mails
+        each matching demande as it is posted, `daily` is the digest (the
+        default), `weekly` the digest on Mondays, `off` nothing. `urgentOnly`
+        narrows instant alerts to prioritaire/urgence tiers.
+      required: [pace, urgentOnly]
+      properties:
+        pace:
+          type: string
+          enum: [instant, daily, weekly, off]
+          default: daily
+        urgentOnly:
+          type: boolean
+          default: false
+    NotaryConditions:
+      type: object
+      description: >-
+        What retaining commits the notary to (ADR 0033), as data the console
+        lays out BEFORE they confirm — never a share of their honoraires.
+      required: [paiement, tarifNota, annulation, desistement]
+      properties:
+        paiement:
+          type: string
+          const: signature
+          description: Honoraires are paid in full at the signing (ADR 0015).
+        tarifNota:
+          $ref: "#/components/schemas/NotaryTarif"
+        annulation:
+          type: object
+          description: >-
+            The cancellation barème in force (the admin-stored item, else the
+            environment defaults — resolved exactly like the cancel route).
+            The fee compensates the NOTARY.
+          required: [paliers, beneficiaire]
+          properties:
+            paliers:
+              type: array
+              items:
+                type: object
+                required: [maxJours, taux]
+                properties:
+                  maxJours:
+                    type: integer
+                    minimum: 0
+                  taux:
+                    type: number
+                    exclusiveMinimum: 0
+                    exclusiveMaximum: 1
+            beneficiaire:
+              type: string
+              const: notaire
+        desistement:
+          type: object
+          description: Withdrawing is free but counted on the notary's record (releasesCount).
+          required: [gratuit, compte]
+          properties:
+            gratuit:
+              type: boolean
+              const: true
+            compte:
+              type: boolean
+              const: true
+    CancellationForecast:
+      description: >-
+        What cancelling TODAY would keep (ADR 0023 / ADR 0033): the palier's
+        taux, the fee in dollars and the days left before the signing. Null
+        when the cancel would be free or no live hold exists.
+      oneOf:
+        - type: "null"
+        - type: object
+          required: [taux, frais, joursAvant]
+          properties:
+            taux:
+              type: number
+            frais:
+              type: number
+            joursAvant:
+              type: integer
+              minimum: 0
     NotaryCote:
       type: object
       description: >-

@@ -7,6 +7,7 @@ const { createApp } = require('../src/handler.js');
 const { createMemoryRepo } = require('../src/repo-memory.js');
 const { signToken, notaryIdForEmail } = require('../src/notary-auth.js');
 import { notarySignIn } from '../test-support/notary-session.mjs';
+import { NOTARY_CONTACT } from '../test-support/notary-fixture.mjs';
 
 const TODAY = '2026-08-12';
 const NOW_MS = 1_760_000_000_000; // fixed wall clock for deterministic tokens
@@ -30,7 +31,7 @@ const postBid = (a, obj) =>
 
 // Seed an ACTIVE subscription for this email so the sign-in gate passes.
 async function seedActive(a, email) {
-  await a.repo.putNotary({ id: notaryIdForEmail(email), email, status: 'active' });
+  await a.repo.putNotary({ id: notaryIdForEmail(email), email, status: 'active', ...NOTARY_CONTACT });
 }
 
 // Sign in an ACTIVE notary through the passwordless request → verify handshake.

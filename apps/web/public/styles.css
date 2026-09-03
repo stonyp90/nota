@@ -2150,6 +2150,15 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 .day-title { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
 .day-title::first-letter { text-transform: uppercase; }
 .day-sub { font-size: 13px; color: var(--ink-muted); margin-top: 2px; }
+/* The header's native date picker: the date moves without closing the dialog.
+   Pushed to the right edge, inside the padding that clears the pinned ✕. */
+.day-date-pick { margin-left: auto; display: flex; flex-direction: column; gap: 4px; flex: none; font-size: 11.5px; font-weight: 600; color: var(--ink-muted); }
+.day-date-input { font: inherit; font-size: 13px; padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); }
+.day-date-input:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+/* What happens after a real publication (success screen) and, back from
+   Checkout, the same line standing on « Mes offres ». */
+.offer-success-next { margin-top: 6px; }
+.checkout-notice { padding: 12px 16px; border: 1px solid var(--border); border-left: 3px solid var(--brand); border-radius: var(--radius-sm); font-size: 13px; line-height: 1.5; color: var(--ink); }
 
 /* --- Day booking surface (acte → offre à battre → book, all in one dialog) - */
 /* Act-scoped market context: the offer to beat FOR THE SELECTED ACT — one
@@ -2766,7 +2775,6 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
    job; Décliner tucks beside it as a small secondary. The cap keeps it a
    button, not a banner, when a card runs wide. */
 .nc-card-actions .nc-accept { flex: 1 1 auto; max-width: 340px; }
-.nc-card-actions .nc-accept-amt { white-space: nowrap; }
 
 /* Signed in as a notary, the chrome drops the client doors: the console is
    the whole app, nothing in the header competes with the agenda (ADR 0019).
@@ -2980,13 +2988,9 @@ body.is-notary-session #tab-notaires { pointer-events: none; }
 .nc-prefs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: 8px 36px; margin-top: 8px; align-items: start; }
 .nc-pref-block { min-width: 0; }
 .nc-pref-title { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-muted); margin-bottom: 4px; }
-.nc-pref-title--sub { margin-top: 14px; }
 .nc-pref-lbl { font-size: 13.5px; }
-.nc-pref-hint { font-size: 11px; color: var(--brand); font-weight: 700; margin-left: 6px; }
 .nc-pref-pace { display: inline-flex; flex-wrap: wrap; margin: 2px 0 6px; max-width: 100%; }
 .nc-pref-pace .seg-btn { font-size: 12.5px; }
-.nc-pref-phone { margin-top: 8px; }
-.nc-pref-svc { margin-top: 4px; }
 .nc-prefs-saved { color: var(--ok); font-weight: 700; margin-top: 10px; }
 .nc-pref-lenders { margin-top: 4px; }
 /* The full lender roster reads better on its own row of the prefs grid. */
@@ -3022,6 +3026,87 @@ body.is-notary-session #tab-notaires { pointer-events: none; }
 .nc-release-form { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
 .nc-release-motif { resize: vertical; min-height: 40px; }
 .nc-release-actions { display: flex; align-items: center; gap: 8px; }
+.nc-release-terms { margin: 0; }
+
+/* --- La mise en relation est complète (ADR 0033) ------------------------- */
+/* The contact gate, said over the working surface: a brand-tinted band
+   naming the missing fields, one door into the form. Square register. */
+.nc-banner {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
+  gap: var(--space-6) var(--space-9); margin: 0 0 var(--space-7);
+  padding: var(--space-6) var(--space-8);
+  border: 1px solid var(--brand); border-radius: var(--radius); background: var(--brand-tint-solid);
+}
+.nc-banner[hidden] { display: none; }
+.nc-banner-body { flex: 1 1 280px; min-width: 0; }
+.nc-banner-h { font-size: 14px; font-weight: 800; letter-spacing: -0.01em; color: var(--brand); }
+.nc-banner-p { margin: var(--space-2) 0 0; font-size: 13px; color: var(--ink-muted); }
+.nc-banner-list { margin: var(--space-2) 0 0; padding-left: 18px; font-size: 13px; color: var(--ink); }
+.nc-banner-list li { padding: 1px 0; }
+/* The identity fields (nom / étude / téléphone / adresse) sit two-up. */
+.nc-profil-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 0 var(--space-8); }
+.nc-field-err { color: var(--danger); }
+.nc-field-err[hidden] { display: none; }
+/* « Votre client » leads the retained card: the name, the two contact links
+   (the phone glyph rides the tel:), then the facts that frame the signing. */
+.nc-client { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.nc-client-nom { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+.nc-client-links { display: flex; flex-wrap: wrap; gap: var(--space-3) var(--space-8); margin-top: var(--space-2); }
+.nc-client-tel, .nc-client-mail {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 28px;
+  font-size: 13px; font-weight: 600; color: var(--brand); text-decoration: none; overflow-wrap: anywhere;
+}
+.nc-client-tel:hover, .nc-client-mail:hover { text-decoration: underline; }
+.nc-client-facts { margin-top: var(--space-3); }
+/* Unread: a filled square badge on the card head and in the heading. */
+.nc-unread {
+  display: inline-flex; align-items: center; gap: 4px; vertical-align: middle;
+  font-size: 11px; font-weight: 800; padding: 2px 8px; white-space: nowrap;
+  border-radius: var(--radius-sm); background: var(--brand); color: var(--brand-ink);
+}
+.nc-card-head .nc-unread { margin: 0 auto 0 var(--space-4); }
+/* The console's own composer (used until the shared one ships): the counter
+   under the box, the refusal under the row. */
+.nc-composer { display: flex; flex-direction: column; gap: 4px; }
+.nc-composer-main { flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.nc-composer .chat-input { resize: none; overflow-y: auto; max-height: 180px; }
+.nc-chat-count { align-self: flex-end; font-size: 11px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+.nc-chat-count[hidden], .nc-chat-err[hidden] { display: none; }
+.nc-chat-err { margin: 0; font-size: 12.5px; color: var(--danger); }
+/* A deep-linked card (« #notaires&acte=… ») flashes once, then rests. */
+.nc-card.is-flash { animation: ncFlash 1.6s ease-out both; }
+@keyframes ncFlash {
+  0% { box-shadow: 0 0 0 4px var(--focus-ring); border-color: var(--brand); }
+  100% { box-shadow: none; }
+}
+@media (prefers-reduced-motion: reduce) { .nc-card.is-flash { animation: none; border-color: var(--brand); } }
+/* The Retenir sheet: a wider dialog (it reads back a whole engagement), the
+   retained card's key/value register, left-rule sections for the terms. */
+.nc-retenir-dialog { max-width: 560px; }
+.nc-retenir-act { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2) var(--space-5); margin-bottom: var(--space-6); }
+.nc-retenir-svc { font-size: 15px; font-weight: 700; }
+.nc-retenir-date { font-size: 13px; color: var(--ink-muted); }
+.nc-retenir-date::first-letter { text-transform: uppercase; }
+.nc-retenir-kv { margin: 0 0 var(--space-6); }
+.nc-retenir-kv dd { line-height: 1.5; }
+.nc-retenir-kv .nc-deplacement, .nc-retenir-kv .nc-prefixe, .nc-retenir-kv .nc-lender, .nc-retenir-kv .nc-distance {
+  display: inline; padding: 0; border: 0; background: none; font-size: 13px; font-weight: 600; color: var(--ink); white-space: normal;
+}
+.nc-retenir-sub { color: var(--ink-muted); font-weight: 400; }
+.nc-retenir-missing { font-size: 12.5px; color: var(--danger); }
+.nc-retenir-sec { margin: 0 0 var(--space-6); padding: 2px 0 2px 10px; border-left: 2px solid var(--border-strong); }
+.nc-retenir-sec[hidden] { display: none; }
+.nc-retenir-h { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-muted); margin-bottom: 4px; }
+.nc-retenir .nc-retenir-p { margin: 0; font-size: 13px; color: var(--ink-muted); }
+.nc-retenir .nc-retenir-contact { margin-bottom: var(--space-8); }
+.nc-retenir-bareme { list-style: none; margin: 0 0 var(--space-2); padding: 0; font-size: 13px; }
+.nc-bareme-row { display: flex; flex-wrap: wrap; gap: 0 4px; padding: 2px 0; }
+.nc-bareme-days { font-weight: 700; font-variant-numeric: tabular-nums; }
+.nc-bareme-rate { font-weight: 700; color: var(--ink); }
+.nc-bareme-amt { font-weight: 800; color: var(--brand); }
+.nc-bareme-free .nc-bareme-rate { color: var(--ok); }
+.nc-retenir-dialog .dialog-actions .btn-primary { flex: 1 1 auto; }
+.nc-retenir-go-amt { white-space: nowrap; }
 .nc-pay { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); }
 .nc-pay .btn { margin-top: 4px; }
 /* Notary earnings roll-up: realised value, Nota's commission, and net. */
@@ -3850,6 +3935,25 @@ body.ig-open { overflow: hidden; }
 .ig-cta { font-size: calc(2.2 * var(--igu)); font-weight: 600; color: var(--brand); letter-spacing: 0.1em; text-transform: uppercase; margin: 0; }
 .ig-progress { position: absolute; bottom: 0; left: 0; height: calc(0.9 * var(--igu)); background: var(--brand-bright); width: 0; z-index: 5; }
 
+/* The compliance tiles (scene n4): three cards on the film unit, an icon on
+   a brand wash, the article as a kicker, one line of plain words. Square
+   corners on the film scale, tokens only. */
+.ig-conf { display: flex; gap: calc(1.8 * var(--igu)); width: calc(88 * var(--igu)); }
+.ig-conf-tile {
+  flex: 1 1 0; display: flex; flex-direction: column; align-items: flex-start; gap: calc(0.9 * var(--igu)); text-align: left;
+  background: var(--surface); border: 1px solid var(--border); border-radius: calc(1.6 * var(--igu));
+  border-top: calc(0.6 * var(--igu)) solid var(--brand-bright);
+  padding: calc(2 * var(--igu)) calc(2.2 * var(--igu)); box-shadow: var(--shadow);
+}
+.ig-conf-ic {
+  width: calc(4.2 * var(--igu)); height: calc(4.2 * var(--igu)); border-radius: calc(1 * var(--igu));
+  display: grid; place-items: center; color: var(--brand); background: var(--brand-tint);
+}
+.ig-conf-ic svg { width: calc(2.6 * var(--igu)); height: calc(2.6 * var(--igu)); }
+.ig-conf-art { font-size: calc(1.7 * var(--igu)); font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--brand); }
+.ig-conf-txt { font-size: calc(2.05 * var(--igu)); font-weight: 600; line-height: 1.35; color: var(--ink); }
+.ig-conf-order { font-size: calc(2.1 * var(--igu)); font-weight: 700; color: var(--ink-muted); }
+
 /* ---- motion ---- */
 @keyframes igIn { from { opacity: 0; visibility: hidden; transform: translateY(calc(1.6 * var(--igu))) scale(0.99); } to { opacity: 1; visibility: visible; transform: none; } }
 @keyframes igOut { from { opacity: 1; visibility: visible; } to { opacity: 0; visibility: hidden; transform: scale(0.985); } }
@@ -3871,7 +3975,7 @@ body.ig-open { overflow: hidden; }
 @keyframes igSlotGrow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 
 .run .ig-progress { animation: igBarAnim 20s linear both; }
-#ig-stage-notaire.run .ig-progress { animation-duration: 15s; }
+#ig-stage-notaire.run .ig-progress { animation-duration: 21s; }
 
 /* film clients — 20 s */
 .run .ig-c1 { animation: igIn 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) 0s both, igOut 0.4s ease 4.15s forwards; }
@@ -3918,7 +4022,7 @@ body.ig-open { overflow: hidden; }
 .run .ig-c5 .ig-note { animation: igSoft 0.5s ease 17.1s both; }
 .run .ig-c5 .ig-cta { animation: igSoft 0.45s ease 17.6s both; }
 
-/* film notaires — 15 s */
+/* film notaires — 21 s */
 .run .ig-n1 { animation: igIn 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) 0s both, igOut 0.4s ease 4.15s forwards; }
 .run .ig-n1 .ig-kicker { animation: igSoft 0.45s ease 0.1s both; }
 .run .ig-n1 .ig-h { animation: igSoft 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) 0.3s both; }
@@ -3948,16 +4052,28 @@ body.ig-open { overflow: hidden; }
 .run .ig-n3 .ig-idle { animation: igFade 0.15s ease 10.25s forwards; }
 .run .ig-n3 .ig-done { display: inline-flex; opacity: 0; animation: igSoft 0.3s ease 10.35s forwards; position: absolute; inset: 0; align-items: center; justify-content: center; }
 .run .ig-n3 .ig-pill { animation: igPop 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.35) 10.8s both; }
-.run .ig-n4 { animation: igIn 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) 12s both, igHold 0.1s linear 14.9s forwards; }
-.run .ig-n4 .ig-logo-row { animation: igPop 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.35) 12.15s both; }
-.run .ig-n4 .ig-tag { animation: igSoft 0.5s ease 12.55s both; }
-.run .ig-n4 .ig-cta { animation: igSoft 0.45s ease 12.95s both; }
+/* The compliance scene (ADR 0033 §5): three tiles, one by one, then the
+   line about the Ordre — read time, not spectacle. */
+.run .ig-n4 { animation: igIn 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) 12s both, igOut 0.4s ease 17.55s forwards; }
+.run .ig-n4 .ig-kicker { animation: igSoft 0.45s ease 12.15s both; }
+.run .ig-n4 .ig-h { animation: igSoft 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) 12.35s both; }
+.run .ig-n4 .ig-conf-tile { animation: igPop 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.3) both; }
+.run .ig-n4 .ig-conf-tile:nth-child(1) { animation-delay: 12.9s; }
+.run .ig-n4 .ig-conf-tile:nth-child(2) { animation-delay: 13.5s; }
+.run .ig-n4 .ig-conf-tile:nth-child(3) { animation-delay: 14.1s; }
+.run .ig-n4 .ig-conf-order { animation: igSoft 0.45s ease 14.9s both; }
+.run .ig-n5 { animation: igIn 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) 17.9s both, igHold 0.1s linear 20.9s forwards; }
+.run .ig-n5 .ig-logo-row { animation: igPop 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.35) 18.05s both; }
+.run .ig-n5 .ig-tag { animation: igSoft 0.5s ease 18.45s both; }
+.run .ig-n5 .ig-cta { animation: igSoft 0.45s ease 18.85s both; }
 
 @media (max-width: 640px) {
   .ig { padding: 10px; }
   .ig-inner { width: 100%; }
   .ig-door { min-width: 0; width: 100%; }
   .ig-doors { width: 100%; flex-direction: column; }
+  /* Three tiles side by side are three narrow columns on a phone: stack them. */
+  .ig-conf { flex-direction: column; width: calc(80 * var(--igu)); }
   /* Phones keep the validated « square cut » readability for free: in
      portrait --igu resolves to 1cqw (stage WIDTH), so the full-height
      stage renders exactly the composition the square cut validated,
@@ -3968,52 +4084,99 @@ body.ig-open { overflow: hidden; }
 }
 
 /* ==========================================================================
-   Live support chat (ADR 0026) — the floating question door.
-   Same square scale as every control; brand green only on the trigger and
-   the visitor's own bubbles. Fixed above everything, footer included.
+   Conformité (ADR 0033 §5 · ADR 0031) — the notary landing's compliance block.
+   The film's three articles, repeated under the sign-in gate so they are
+   readable outside the film. Folds away with the gate: signed in, the console
+   is a workspace (the [hidden] form hides its next sibling — no JS).
    ========================================================================== */
-.chat-wrap { position: fixed; right: 16px; bottom: 16px; z-index: 60; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
-.chat-fab {
-  appearance: none; border: 0; cursor: pointer;
+.nc-conformite { margin-top: var(--space-8); padding-top: var(--space-6); border-top: 1px solid var(--border); max-width: 440px; }
+#notary-auth-form[hidden] + #nc-conformite { display: none; }
+.nc-conformite-kicker { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--brand); margin-bottom: var(--space-3); }
+.nc-conformite-h { font-size: 15px; font-weight: 800; letter-spacing: -0.01em; margin: 0 0 var(--space-5); }
+.nc-conformite-tiles { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-4); }
+.nc-conformite-tile {
+  display: grid; grid-template-columns: auto 1fr; column-gap: var(--space-5); row-gap: var(--space-1); align-items: start;
+  padding: var(--space-5) var(--space-6);
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+}
+.nc-conformite-ic {
+  grid-row: 1 / span 2; width: 30px; height: 30px; border-radius: var(--radius-sm);
+  display: grid; place-items: center; color: var(--brand); background: var(--brand-tint);
+}
+.nc-conformite-ic svg { width: 18px; height: 18px; }
+.nc-conformite-art { font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--brand); }
+.nc-conformite-txt { font-size: 13px; line-height: 1.45; color: var(--ink); }
+.nc-conformite-order { margin: var(--space-5) 0 0; font-size: 12.5px; font-weight: 700; color: var(--ink-muted); }
+.nc-conformite-link { display: inline-block; margin-top: var(--space-3); font-size: 13px; font-weight: 700; color: var(--brand); }
+
+/* ==========================================================================
+   Live support chat (ADR 0026 · ADR 0033 §5) — the floating question door.
+   Its own `sup-*` namespace: the retained-act `.chat-*` rules (a flex column,
+   start-aligned) once reached in and dropped the visitor's bubbles on the
+   wrong side. Same square scale as every control; brand green only on the
+   trigger and the visitor's own bubbles. Fixed above everything, footer
+   included — and ABOVE the guide « ? » bubble, which shares the corner on
+   desktop (both at 16px sat on the same pixel).
+   ========================================================================== */
+.sup-wrap { position: fixed; right: 16px; bottom: 70px; z-index: 60; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+.sup-fab {
+  appearance: none; border: 0; cursor: pointer; position: relative;
   width: 48px; height: 48px; border-radius: var(--radius);
   background: var(--brand); color: var(--brand-ink);
   display: inline-flex; align-items: center; justify-content: center;
   box-shadow: var(--shadow-brand);
 }
-.chat-fab:hover { background: var(--brand-hover); }
-.chat-fab:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
-.chat-panel {
+.sup-fab:hover { background: var(--brand-hover); }
+.sup-fab:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+/* The unread mark — the one round thing here: an 8px dot, as the register allows. */
+.sup-fab-dot { position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 0 2px var(--brand); }
+.sup-panel {
   width: min(340px, calc(100vw - 32px));
   display: flex; flex-direction: column;
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg); overflow: hidden;
 }
-.chat-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 12px 14px 10px; border-bottom: 1px solid var(--border); }
-.chat-title { font-weight: 800; letter-spacing: -0.01em; }
-.chat-sub { margin: 2px 0 0; font-size: 12.5px; color: var(--ink-muted); }
-.chat-close { appearance: none; border: 0; background: transparent; color: var(--ink-muted); font: inherit; cursor: pointer; padding: 4px 6px; border-radius: var(--radius-sm); }
-.chat-close:hover { background: var(--surface-inset); color: var(--ink); }
-.chat-log { min-height: 120px; max-height: 300px; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
-.chat-log-op { min-height: 80px; max-height: 240px; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 10px; }
-.chat-empty { font-size: 13px; color: var(--ink-muted); }
-.chat-msg { display: flex; }
-.chat-msg[data-de='visiteur'] { justify-content: flex-end; }
-.chat-bubble {
+.sup-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 12px 14px 10px; border-bottom: 1px solid var(--border); }
+.sup-title { font-weight: 800; letter-spacing: -0.01em; }
+.sup-sub { margin: 2px 0 0; font-size: 12.5px; color: var(--ink-muted); }
+.sup-close { appearance: none; border: 0; background: transparent; color: var(--ink-muted); font: inherit; cursor: pointer; padding: 4px 6px; border-radius: var(--radius-sm); }
+.sup-close:hover { background: var(--surface-inset); color: var(--ink); }
+.sup-log { min-height: 120px; max-height: 300px; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.sup-log-op { min-height: 80px; max-height: 240px; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 10px; }
+.sup-empty { font-size: 13px; color: var(--ink-muted); }
+/* A message is a column — the bubble, then its « who · when » line — on the
+   end side for the reader's own, the start side for the other. */
+.sup-msg { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+.sup-msg.is-mine { align-items: flex-end; }
+.sup-bubble {
   max-width: 85%; padding: 7px 10px; font-size: 13.5px; line-height: 1.4;
   border-radius: var(--radius); white-space: pre-wrap; word-break: break-word;
   background: var(--surface-inset); color: var(--ink); border: 1px solid var(--border);
 }
-.chat-msg[data-de='visiteur'] .chat-bubble { background: var(--brand); color: var(--brand-ink); border-color: transparent; }
-#chat-form { padding: 10px 14px 12px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
-.chat-courriel { width: 100%; }
-.chat-input-row { display: flex; align-items: flex-end; gap: 8px; }
-.chat-input-row textarea { flex: 1; resize: none; min-height: 40px; }
-.chat-send { flex: none; }
-.chat-error { margin: 0; font-size: 12.5px; color: var(--danger); }
+.sup-msg.is-mine .sup-bubble { background: var(--brand); color: var(--brand-ink); border-color: transparent; }
+.sup-meta { display: flex; gap: 6px; font-size: 10.5px; color: var(--ink-muted); padding: 0 2px; }
+.sup-who { font-weight: 700; }
+.sup-ended { margin: 0; padding: 8px 14px; font-size: 12.5px; color: var(--ink-muted); border-top: 1px dashed var(--border); }
+.sup-form { padding: 10px 14px 12px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+.sup-row { display: flex; align-items: flex-end; gap: 8px; }
+/* Grows with the text (field-sizing where the browser has it, app.js
+   otherwise), capped so the log keeps its room. */
+.sup-text { flex: 1; resize: none; min-height: 40px; max-height: 160px; overflow-y: auto; field-sizing: content; }
+.sup-send { flex: none; }
+.sup-count { margin: 0; font-size: 11.5px; color: var(--ink-muted); text-align: right; font-variant-numeric: tabular-nums; }
+.sup-error { margin: 0; font-size: 12.5px; color: var(--danger); }
+/* The optional courriel, one line under the composer: label · field, help beneath. */
+.sup-courriel-row { display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: 8px; row-gap: 2px; }
+.sup-courriel-lbl { font-size: 12.5px; font-weight: 600; color: var(--ink-muted); white-space: nowrap; }
+.sup-opt { font-weight: 500; }
+.sup-courriel { min-width: 0; padding: 6px 8px; font-size: 13px; }
+.sup-courriel-help { grid-column: 1 / -1; margin: 0; }
+.sup-reply-courriel { margin: 0 0 8px; }
 #chat-reply-dialog textarea { width: 100%; resize: vertical; }
-@media (max-width: 640px) {
-  .chat-wrap { right: 10px; bottom: 10px; left: 10px; align-items: flex-end; }
-  .chat-panel { width: 100%; }
+@media (max-width: 767.98px) {
+  /* The guide « ? » leaves phones (ADR 0022) — the corner is free again. */
+  .sup-wrap { right: 10px; bottom: 10px; left: 10px; align-items: flex-end; }
+  .sup-panel { width: 100%; }
 }
 
 /* --- Les documents de la conversation (ADR 0032) --------------------------

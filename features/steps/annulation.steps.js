@@ -71,6 +71,19 @@ When('le client annule son offre', async function () {
   });
 });
 
+// ADR 0033 — the retaining notary withdraws, without a motif: free, counted,
+// and the operator is always told.
+When('le notaire {string} se désiste', async function (email) {
+  const token = await notarySession(this, email);
+  const bid = lastBid(this);
+  await this.request({
+    method: 'POST',
+    path: '/notary/bids/release',
+    headers: { authorization: 'Bearer ' + token },
+    body: JSON.stringify({ id: bid.id, dateISO: bid.dateISO }),
+  });
+});
+
 When("le notaire {string} marque l'acte complété à {int}", async function (email, montant) {
   const token = await notarySession(this, email);
   const bid = lastBid(this);
@@ -173,6 +186,56 @@ Then("l'offre est toujours retenue par {string}", async function (email) {
   const stored = await this.repo.get(bid.id, bid.dateISO);
   assert.equal(stored.status, this.domain.STATUS.RETENUE);
   assert.equal(stored.notaryId, notaryIdForEmail(email));
+});
+
+// --- Then: the fee compensates the notary (ADR 0033) ---------------------------
+
+Then('les frais de {int} $ sont virés en entier au notaire {string}', function (frais, email) {
+  const id = notaryIdForEmail(email);
+  const bid = lastBid(this);
+  const a = this.responseJson.bid.annulation;
+  assert.ok(a, 'aucuns frais retenus: ' + this.response.body);
+  assert.deepEqual(a.dedommagement, { notaire: true, verse: true, transferId: 'trfee_' + bid.id });
+
+  const captures = this.stripe.calls.feeCaptures;
+  assert.equal(captures.length, 1, 'exactement une capture partielle attendue');
+  assert.equal(captures[0].connectAccountId, 'acct_' + id, 'le virement doit viser le compte du notaire qui a retenu');
+  const virements = this.stripe.calls.feeTransfers;
+  assert.equal(virements.length, 1, 'exactement un virement attendu: ' + JSON.stringify(this.stripe.calls));
+  assert.equal(virements[0].amountCents, frais * 100);
+  // Nota n'en garde rien : ce qui est viré est exactement ce qui a été capturé.
+  assert.equal(virements[0].amountCents, captures[0].amountCents, 'une part des frais est restée chez Nota');
+});
+
+Then('les frais de {int} $ sont dus au notaire {string}, faute de versements Stripe branchés', async function (frais, email) {
+  const a = this.responseJson.bid.annulation;
+  assert.ok(a, 'aucuns frais retenus: ' + this.response.body);
+  assert.deepEqual(a.dedommagement, { notaire: true, verse: false, transferId: null });
+  assert.equal(this.stripe.calls.feeTransfers.length, 0, 'aucun virement attendu sans compte Stripe branché');
+  const profile = await this.repo.getNotary(notaryIdForEmail(email));
+  assert.ok(profile, 'notaire inconnu: ' + email);
+  assert.equal(profile.dedommagementCentsDue, frais * 100, 'la créance du notaire doit être inscrite à son dossier');
+});
+
+// --- Then: the withdrawal is free, counted, and never silent -------------------
+
+Then('le désistement ne coûte rien au notaire {string}', async function (email) {
+  assert.equal(this.stripe.calls.feeCaptures.length, 0);
+  assert.equal(this.stripe.calls.transfers.length, 0);
+  const profile = await this.repo.getNotary(notaryIdForEmail(email));
+  assert.ok(profile, 'notaire inconnu: ' + email);
+  assert.ok(!profile.dedommagementCentsDue && !profile.commissionCentsDue, 'aucune créance ne doit naître d’un désistement');
+});
+
+Then('le désistement est compté au dossier du notaire {string}', async function (email) {
+  const profile = await this.repo.getNotary(notaryIdForEmail(email));
+  assert.ok(profile, 'notaire inconnu: ' + email);
+  assert.equal(profile.releasesCount, 1, 'le désistement doit être compté: ' + JSON.stringify(profile));
+});
+
+Then("l'opérateur est prévenu du désistement", function () {
+  const hits = this.mailsTo(this.operatorEmail).filter((m) => /désistement/i.test(m.subject || ''));
+  assert.ok(hits.length >= 1, "l'opérateur n'a pas été prévenu. Envois: " + JSON.stringify(this.mailer.sent.map((m) => ({ to: m.to, subject: m.subject }))));
 });
 
 // --- Then: settlement and evaluation ------------------------------------------

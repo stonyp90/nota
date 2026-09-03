@@ -11,6 +11,7 @@ const { createFakeMailer } = require('../src/notify-port.js');
 const { createNotifier } = require('../src/notifications.js');
 const { notaryIdForEmail } = require('../src/notary-auth.js');
 import { notarySignIn } from '../test-support/notary-session.mjs';
+import { NOTARY_CONTACT } from '../test-support/notary-fixture.mjs';
 import { claimPartner } from '../test-support/partner-claim.mjs';
 const domain = require('@nota/domain');
 
@@ -249,7 +250,7 @@ async function seedRetainable(a, over = {}) {
 
 async function session(a, email) {
   const existing = await a.repo.getNotary(notaryIdForEmail(email));
-  await a.repo.putNotary({ ...(existing || {}), id: notaryIdForEmail(email), email, status: 'active' });
+  await a.repo.putNotary({ ...(existing || {}), id: notaryIdForEmail(email), email, status: 'active', ...NOTARY_CONTACT });
   return (await notarySignIn(a, email)).token;
 }
 

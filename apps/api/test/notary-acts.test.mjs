@@ -9,6 +9,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import { NOTARY_CONTACT } from '../test-support/notary-fixture.mjs';
 
 const require = createRequire(import.meta.url);
 const { createApp } = require('../src/handler.js');
@@ -47,6 +48,7 @@ async function notaireActif(a, id = NOTARY, over = {}) {
     id, email: 'n@etude.ca', label: 'Étude N',
     status: 'active', chargesEnabled: true, connectAccountId: 'acct_n',
     createdAt: '2026-01-01T00:00:00.000Z',
+    ...NOTARY_CONTACT,
     ...over,
   });
 }

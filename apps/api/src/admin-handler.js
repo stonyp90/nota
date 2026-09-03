@@ -68,6 +68,8 @@ function createAdminApp(repo, opts = {}) {
       config: {
         allowlist: (process.env.NOTA_ADMIN_EMAILS || '').split(',').map((s) => s.trim()).filter(Boolean),
         baseUrl: adminOrigin,
+        // The public site — where an activated notary is told to sign in.
+        siteUrl: opts.siteUrl || process.env.NOTA_BASE_URL || process.env.NOTA_SITE_URL || '',
         devEcho: process.env.NODE_ENV !== 'production',
       },
     });
@@ -238,6 +240,21 @@ function createAdminApp(repo, opts = {}) {
         return json(result.status, { errors: result.errors });
       }
       return json(200, { notaires: result.notaires, bareme: result.bareme });
+    }
+
+    // --- Activer un notaire (2026-09-02) -------------------------------------
+    // L'opérateur a vérifié le Tableau de l'Ordre : ce POST ouvre la console
+    // (`approuveLe`). 'moderation:write', journalisé, idempotent — tout est
+    // appliqué dans admin.js.
+    // contract: /admin/notaries/{id}/activer
+    const activerMatch = /^\/admin\/notaries\/([^/]+)\/activer$/.exec(route);
+    if (activerMatch && method === 'POST') {
+      const result = await admin.activateNotary(bearer(request), decodeURIComponent(activerMatch[1]), { ip: clientIp(request) });
+      if (!result.ok) {
+        if (result.status === 401) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+        return json(result.status, { errors: result.errors });
+      }
+      return json(200, { ok: true, deja: !!result.deja, notaire: result.notaire });
     }
 
     // --- Le journal d'audit, relu par jour -----------------------------------

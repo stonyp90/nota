@@ -66,6 +66,9 @@ async function boot() {
 
 const $ = (doc, id) => doc.getElementById(id);
 
+// The contact block a notary needs on their profile to retain (ADR 0033).
+const PROFIL_OK = { nom: 'Me Démo Nota', etude: 'Étude Démo', telephone: '418 555 0100', adresse: '1, rue de la Démo, Québec (QC) G1R 1A1', lienCNQ: null, rayonKm: 0, urgences: false, prefixe: null };
+
 // Route the app's API calls so the REAL sign-in + load path runs: a session for
 // any email, and the given open bids for the console list. Every call is
 // recorded on `calls` so a test can assert what was POSTed (and what was not).
@@ -98,12 +101,14 @@ function stubNotaryApi(win, bids, extra = {}) {
       const bid = bids.find((b) => b.id === body.id) || {};
       return json({ bid: { ...bid, status: 'ouverte', etude: null } });
     }
-    if (path.includes('/notary/profile')) return json({ profil: { lienCNQ: (body && body.lienCNQ) || null, rayonKm: (body && body.rayonKm) || 0, urgences: !!(body && body.urgences), prefixe: (body && body.prefixe) || null } });
+    if (path.includes('/notary/profile')) return json({ profil: { ...PROFIL_OK, lienCNQ: (body && body.lienCNQ) || null, rayonKm: (body && body.rayonKm) || 0, urgences: !!(body && body.urgences), prefixe: (body && body.prefixe) || null } });
     if (path.includes('/notary/bids')) {
       return json({
         bids, retained: extra.retained || [],
         rating: extra.rating || null,
-        profil: extra.profil || { lienCNQ: null },
+        // A COMPLETE contact profile by default (ADR 0033): without nom /
+        // téléphone / adresse the console gates Retenir and Proposer.
+        profil: extra.profil || PROFIL_OK,
         // ADR 0028: the cote travels with every feed load — always there,
         // barème or not.
         cote: extra.cote || null,
@@ -248,33 +253,39 @@ test('the service chip filter hides the other services', async () => {
 // ---------------------------------------------------------------------------
 // Card actions: confirm-before-accept, proposition, documents, agenda menu.
 // ---------------------------------------------------------------------------
+// Retenir opens the confirm SHEET (ADR 0033 — one <dialog>, the whole
+// engagement read back); only the sheet's primary posts. The sheet's content
+// is covered by notary-mise-en-relation.test.mjs.
 test('Retenir asks for a confirmation step before the accept request fires', async () => {
   const { doc, open, calls, D } = await bootSignedIn();
   const cardNow = () => doc.querySelector(`#notary-open-list .nc-card[data-id="${open[0].id}"]`);
-  // Arm and settle. Under CI load a stray late re-render can replace the card
-  // node and drop the armed state between the click and the assertions — so
-  // re-query and re-click until the confirm sticks instead of sampling once.
-  const arm = async () => {
+  const sheet = $(doc, 'nc-retenir-dialog');
+  // Open and settle. Under CI load a stray late re-render can replace the card
+  // node between the click and the assertions — re-query and re-click until
+  // the sheet is open instead of sampling once.
+  const open_ = async () => {
     for (let tries = 0; tries < 5; tries++) {
-      if (cardNow().dataset.confirm === '1') break;
+      if (sheet.open) break;
       click(cardNow().querySelector('.nc-accept'));
       await wait(20);
     }
     return cardNow();
   };
-  let card = await arm();
-  assert.equal(calls.filter((c) => c.path.includes('/notary/bids/accept')).length, 0, 'arming must not POST');
-  const confirm = card.querySelector('.nc-accept');
-  assert.ok(confirm.textContent.includes(D.money(open[0].montant)), 'the confirm button shows the amount');
-  assert.ok(card.querySelector('.nc-accept-cancel'), 'an Annuler escape is offered');
-  click(card.querySelector('.nc-accept-cancel'));
-  assert.ok(!card.querySelector('.nc-accept-cancel'), 'Annuler reverts the confirm state');
-  card = await arm();
-  click(card.querySelector('.nc-accept'));
+  await open_();
+  assert.equal(sheet.open, true, 'Retenir opens the confirm sheet');
+  assert.equal(calls.filter((c) => c.path.includes('/notary/bids/accept')).length, 0, 'opening the sheet must not POST');
+  const go = $(doc, 'nc-retenir-go');
+  assert.ok(go.textContent.includes(D.money(open[0].montant)), 'the confirm button shows the amount');
+  assert.ok($(doc, 'nc-retenir-later'), 'a « Pas maintenant » escape is offered');
+  click($(doc, 'nc-retenir-later'));
+  assert.notEqual(sheet.open, true, 'Pas maintenant closes the sheet');
+  await open_();
+  click($(doc, 'nc-retenir-go'));
   await wait(10);
   const posts = calls.filter((c) => c.path.includes('/notary/bids/accept'));
   assert.equal(posts.length, 1, 'the confirmed click POSTs once');
   assert.deepEqual(posts[0].body, { id: open[0].id, dateISO: open[0].dateISO });
+  assert.notEqual(sheet.open, true, 'the sheet closes after the accept');
 });
 
 test('Proposer un prix validates inline and POSTs a valid proposition', async () => {
@@ -395,7 +406,7 @@ test('an accept never books earnings — settlement waits for « Acte signé » 
   const target = open[0];
   const card = doc.querySelector(`#notary-open-list .nc-card[data-id="${target.id}"]`);
   click(card.querySelector('.nc-accept'));
-  click(card.querySelector('.nc-accept'));
+  click($(doc, 'nc-retenir-go'));
   await wait(10);
   const entry = Nota.notary.retainedFor('demo@etude.ca').find((e) => e.id === target.id);
   assert.ok(entry, 'the accept landed in the retained store');

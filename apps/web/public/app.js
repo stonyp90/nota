@@ -271,6 +271,7 @@
     var old = $('offer-success-demo');
     if (old && old.parentNode) old.parentNode.removeChild(old);
     var lead = $('offer-success-lead');
+    var next = $('offer-success-next');
     if (store.online) {
       if (lead) {
         clear(lead);
@@ -278,8 +279,11 @@
         lead.appendChild(okStrong);
         lead.appendChild(document.createTextNode(' Pendant l’attente, préparez vos documents.'));
       }
+      if (next) { renderSentences(next, expectationLines(offerCourriel(), true)); next.hidden = false; }
       return;
     }
+    // Nothing reached the carnet: no notary will see it, so nothing to expect.
+    if (next) { clear(next); next.hidden = true; }
     if (lead) {
       clear(lead);
       lead.appendChild(el('strong', null, 'Enregistrée sur cet appareil seulement.'));
@@ -292,6 +296,36 @@
   function showOfferSuccess() {
     renderOfferSuccessOrigin();
     var box = $('offer-success'); if (box) box.hidden = false;
+  }
+
+  // What happens after a real publication, said honestly and without a delay
+  // promise: who can see the demand, the one channel Nota will use, and that
+  // withdrawing costs nothing until a notary retains it. Each sentence is its
+  // own node so the i18n layer can match it (the courriel rides a rule).
+  function expectationLines(courriel, visibleNow) {
+    var out = [];
+    if (visibleNow) out.push('Votre demande est maintenant visible des notaires inscrits.');
+    out.push(courriel
+      ? 'Nous vous écrivons à ' + courriel + ' dès qu’un notaire la retient.'
+      : 'Nous vous écrivons dès qu’un notaire la retient.');
+    out.push('Vous pouvez la retirer sans frais jusque-là.');
+    return out;
+  }
+  function renderSentences(host, lines) {
+    clear(host);
+    lines.forEach(function (s, i) {
+      if (i) host.appendChild(document.createTextNode(' '));
+      host.appendChild(el('span', '', s));
+    });
+  }
+  // The courriel the client entered on the form (their field), else the one
+  // saved on this device — never a field of our own.
+  function offerCourriel() {
+    var f = $('o-courriel');
+    var v = f && f.value ? String(f.value).trim() : '';
+    if (D.isEmail(v)) return v;
+    var p = profileGet();
+    return D.isEmail(p.courriel || '') ? p.courriel : '';
   }
 
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
@@ -455,9 +489,72 @@
     // the offer is retained. Cached so "Mes offres" shows whom to contact.
     // `annulation` is the ADR 0023 prevision: what cancelling TODAY would
     // keep from the deposit (taux, frais, joursAvant) — null when free.
-    c[id] = { bid: status.bid || null, notaire: status.notaire || null, propositions: status.propositions || [], demandes: status.demandes || [], readiness: status.readiness || null, messages: status.messages || [], acte: status.acte || null, evaluation: status.evaluation || null, annulation: status.annulation || null, fetchedAt: Date.now() };
+    c[id] = { bid: status.bid || null, notaire: status.notaire || null, propositions: status.propositions || [], demandes: status.demandes || [], readiness: status.readiness || null, messages: status.messages || [], documents: status.documents || [], acte: status.acte || null, evaluation: status.evaluation || null, annulation: status.annulation || null, fetchedAt: Date.now() };
     lsSave(LS_OFFERSTATUS, c);
     return c[id];
+  }
+  // A deep link (ADR 0033 §2.7) can create a myOffers entry that knows only
+  // {id, dateISO, clientToken}: the first GET /client/bid fills the rest.
+  function patchMyOffer(id, patch) {
+    var a = myOffers(); var changed = false;
+    a.forEach(function (o) {
+      if (o.id !== id) return;
+      Object.keys(patch || {}).forEach(function (k) {
+        if (patch[k] != null && o[k] !== patch[k]) { o[k] = patch[k]; changed = true; }
+      });
+    });
+    if (changed) lsSave(LS_MYOFFERS, a);
+  }
+
+  // --- Unread on the client side (ADR 0033) ----------------------------------
+  // `nota.seen.v1` = { [offerId]: createdAt of the newest notary message the
+  // client has SEEN }. Unread = notary messages newer than that. Seen is set
+  // when the thread scrolls into view, when the composer takes focus, when a
+  // message is sent, and when the bell entry is followed to the band.
+  var LS_SEEN = 'nota.seen.v1';
+  function seenGet(id) { var s = lsLoad(LS_SEEN) || {}; return s[id] || ''; }
+  function seenSet(id, iso) {
+    if (!id || !iso) return;
+    var s = lsLoad(LS_SEEN) || {};
+    if (s[id] && String(s[id]) >= String(iso)) return;
+    s[id] = iso;
+    lsSave(LS_SEEN, s);
+  }
+  function unreadMessages(id, status) {
+    var st = status || offerStatusGet(id);
+    var seen = seenGet(id);
+    return ((st && st.messages) || []).filter(function (m) {
+      return m.de === 'notaire' && String(m.createdAt || '') > seen;
+    });
+  }
+  function unreadCount(id, status) { return unreadMessages(id, status).length; }
+  function unreadTotal() {
+    return myOffers().reduce(function (n, o) { return n + unreadCount(o.id); }, 0);
+  }
+  // Mark every notary message of this offer seen, then repaint the badges
+  // (the row's and the account door's) — never the whole pane.
+  function markOfferSeen(id, status) {
+    var st = status || offerStatusGet(id);
+    var newest = '';
+    ((st && st.messages) || []).forEach(function (m) {
+      if (m.de === 'notaire' && String(m.createdAt || '') > newest) newest = String(m.createdAt);
+    });
+    if (newest) seenSet(id, newest);
+    paintUnreadBadges();
+  }
+  function unreadLabel(n) { return n === 1 ? '1 nouveau message' : n + ' nouveaux messages'; }
+  function paintUnreadBadges() {
+    Array.prototype.forEach.call(document.querySelectorAll('.my-offer-unread[data-for]'), function (b) {
+      var n = unreadCount(b.dataset.for);
+      b.hidden = n === 0;
+      b.textContent = n ? unreadLabel(n) : '';
+    });
+    var door = document.querySelector('#acct-actions .acct-badge');
+    var total = unreadTotal();
+    if (door) {
+      if (total) door.textContent = total > 9 ? '9+' : String(total);
+      else door.parentNode.removeChild(door);
+    }
   }
   function clientHeaders(o, json) {
     var h = { accept: 'application/json', Authorization: 'Bearer ' + o.clientToken };
@@ -477,6 +574,12 @@
       // two is how a notary's release is detected (retained → open again).
       var prev = offerStatusGet(o.id);
       var st = offerStatusSet(o.id, j || {});
+      // An entry born from a deep link learns its act and amount here.
+      if (st.bid && (!o.serviceId || o.montant == null)) {
+        patchMyOffer(o.id, { serviceId: st.bid.serviceId, montant: st.bid.montant });
+        if (!o.serviceId) o.serviceId = st.bid.serviceId;
+        if (o.montant == null) o.montant = st.bid.montant;
+      }
       if (st.bid && st.bid.status === D.STATUS.RETENUE) markMyOfferRetained(o.id, { etude: st.bid.etude, montant: st.bid.montant });
       if (st.bid && st.bid.status === D.STATUS.ANNULEE) markMyOfferCancelled(o.id);
       // Release (ADR 0012): the last snapshot showed the offer retained and it
@@ -524,40 +627,179 @@
       // dedupes by key), pointing at Mes offres where the thread lives.
       (st.messages || []).forEach(function (m) {
         if (m.de !== 'notaire') return;
+        // `offerId` makes the entry a door: it opens Mes offres on this band.
         addNotif({
           key: 'message:' + m.id, kind: 'message',
           title: 'Votre notaire vous a écrit',
-          body: m.texte, dateISO: null,
+          body: m.texte, dateISO: null, offerId: o.id,
         });
       });
+      paintUnreadBadges();
       return st;
     } catch (e) { return null; }
   }
-  // Send one client message into the retained-act thread, then repaint from
-  // the refreshed cache (the send response is the appended message).
-  async function clientChatSend(o, input, btn) {
-    var texte = String((input && input.value) || '').trim();
-    if (!texte) { toast('Écrivez un message.'); return; }
-    if (btn) btn.disabled = true;
+  // Send one client message into the retained-act thread. Returns
+  // { ok, message } for the composer (which owns the busy state and the
+  // inline error); on success the cache grows by the appended message, the
+  // band repaints, and the thread is pulled fresh (the notary may have
+  // written meanwhile).
+  async function clientChatSend(o, texte) {
+    texte = String(texte || '').trim();
+    if (!texte) return { ok: false, message: 'Écrivez un message.' };
     var r;
     try {
       r = await fetch(API_BASE + '/client/bid/message', {
         method: 'POST', headers: clientHeaders(o, true),
         body: JSON.stringify({ id: o.id, dateISO: o.dateISO, texte: texte }),
       });
-    } catch (e) { toast('Message impossible (hors ligne).'); if (btn) btn.disabled = false; return; }
+    } catch (e) { return { ok: false, message: 'Message impossible (hors ligne).' }; }
     var j = {}; try { j = await r.json(); } catch (e) {}
-    if (btn) btn.disabled = false;
     if (!r.ok || !j.message) {
-      toast((j.errors && j.errors[0] && j.errors[0].message) || 'Message impossible.');
-      return;
+      return { ok: false, message: (j.errors && j.errors[0] && j.errors[0].message) || 'Message impossible.' };
     }
     var st = offerStatusGet(o.id) || {};
     offerStatusSet(o.id, Object.assign({}, st, { messages: (st.messages || []).concat([j.message]) }));
-    if (input) input.value = '';
-    if (state.tab === 'profil') renderProfil();
-    // Pull the thread fresh (the notary may have written meanwhile).
-    fetchOfferStatus(o).then(function () { if (state.tab === 'profil') renderProfil(); });
+    // Writing back means the client has read what came before.
+    markOfferSeen(o.id);
+    repaintOfferBand(o, { focusComposer: true });
+    fetchOfferStatus(o).then(function (fresh) { if (fresh) repaintOfferBand(o, { ifChanged: true }); });
+    return { ok: true };
+  }
+
+  // --- The client thread: polling, repainting, the deep link --------------------
+  // Repaint ONE offer's band from the cache (never the whole pane): the table
+  // row stays, the composer's draft is carried over, and — when asked — only
+  // a changed thread/status triggers the rebuild.
+  var bandSignatures = {};
+  function bandSignature(st) {
+    if (!st) return '';
+    var msgs = st.messages || [];
+    var last = msgs[msgs.length - 1];
+    return [st.bid && st.bid.status, msgs.length, last && last.id, (st.documents || []).length,
+      (st.propositions || []).length, (st.demandes || []).length, st.acte && st.acte.complete, !!st.evaluation].join('|');
+  }
+  function repaintOfferBand(o, opts) {
+    opts = opts || {};
+    if (state.tab !== 'profil') return false;
+    var fresh = myOffers().filter(function (x) { return x.id === o.id; })[0] || o;
+    var st = offerStatusGet(o.id);
+    var sig = bandSignature(st);
+    if (opts.ifChanged && bandSignatures[o.id] === sig) return false;
+    bandSignatures[o.id] = sig;
+    var s = clientOfferStatus(fresh);
+    var row = document.querySelector('#my-offers-live tr.my-offer[data-id="' + o.id + '"], #my-offers-past tr.my-offer[data-id="' + o.id + '"]');
+    if (row) {
+      row.dataset.status = s;
+      var pill = row.querySelector('.my-offer-status');
+      if (pill) { pill.textContent = offerStatusLabel(fresh, s); pill.dataset.status = s; }
+      var m = row.querySelector('.c-montant'); if (m && fresh.montant != null) m.textContent = D.money(fresh.montant);
+      var acte = row.querySelector('.c-acte'); if (acte && fresh.serviceId) acte.textContent = svcName(fresh.serviceId);
+    }
+    var cell = document.querySelector('.my-offer-detail[data-for="' + o.id + '"] .my-offer-detail-cell');
+    if (!cell) return false;
+    var oldInput = cell.querySelector('.chat-input');
+    var draft = oldInput ? oldInput.value : '';
+    var hadFocus = oldInput && document.activeElement === oldInput;
+    fillMyOfferDetail(cell, fresh, s, st);
+    var input = cell.querySelector('.chat-input');
+    if (input && draft) { input.value = draft; input.dispatchEvent(new Event('input', { bubbles: true })); }
+    if (input && (hadFocus || opts.focusComposer)) { try { input.focus({ preventScroll: true }); } catch (e) {} }
+    paintUnreadBadges();
+    return true;
+  }
+
+  // While Mes offres is on screen, the thread refreshes itself — every
+  // CLIENT_POLL_MS (window.__NOTA_CLIENT_POLL_MS__ overrides, for tests).
+  // The timer only EXISTS while the profil tab is shown in a visible, active
+  // window (setTab, focus/blur and visibilitychange keep it in sync — a
+  // background window polls nothing, and the `focus` handler above already
+  // refreshes everything the moment the client comes back); a tick is
+  // skipped while a field has focus, because a repaint under a typing hand
+  // is how drafts get eaten.
+  var CLIENT_POLL_MS = Number(window.__NOTA_CLIENT_POLL_MS__) > 0 ? Number(window.__NOTA_CLIENT_POLL_MS__) : 15000;
+  var clientPollTimer = null;
+  var clientPollBusy = false;
+  function fieldHasFocus() {
+    var a = document.activeElement;
+    return !!(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName));
+  }
+  function clientPollWanted() {
+    if (state.tab !== 'profil' || document.hidden) return false;
+    return typeof document.hasFocus !== 'function' || document.hasFocus();
+  }
+  function clientPollTick() {
+    if (!clientPollWanted() || fieldHasFocus() || clientPollBusy) return;
+    var offers = myOffers().filter(offerNeedsStatusPoll);
+    if (!offers.length) return;
+    clientPollBusy = true;
+    Promise.all(offers.map(function (o) {
+      return fetchOfferStatus(o).then(function (st) { if (st) repaintOfferBand(o, { ifChanged: true }); });
+    })).then(function () { clientPollBusy = false; }, function () { clientPollBusy = false; });
+  }
+  function clientPollStart() {
+    if (clientPollTimer) return;
+    clientPollTimer = setInterval(clientPollTick, CLIENT_POLL_MS);
+  }
+  function clientPollStop() {
+    if (clientPollTimer) { clearInterval(clientPollTimer); clientPollTimer = null; }
+  }
+  function clientPollSync() { if (clientPollWanted()) clientPollStart(); else clientPollStop(); }
+  window.addEventListener('focus', clientPollSync);
+  window.addEventListener('blur', clientPollSync);
+  document.addEventListener('visibilitychange', function () {
+    clientPollSync();
+    if (clientPollWanted()) clientPollTick();
+  });
+
+  // Bring one offer's band into view on Mes offres, flash it, and count its
+  // messages as seen — the landing of the bell entry and of the deep link.
+  function openOfferBand(id) {
+    toggleNotifPanel(false);
+    if (state.tab !== 'profil') setTab('profil', { focus: false });
+    var band = document.querySelector('.my-offer-detail[data-for="' + id + '"]');
+    if (!band) return false;
+    if (band.scrollIntoView) { try { band.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {} }
+    band.classList.remove('is-flash');
+    void band.offsetWidth;
+    band.classList.add('is-flash');
+    setTimeout(function () { band.classList.remove('is-flash'); }, 2400);
+    markOfferSeen(id);
+    return true;
+  }
+
+  // The device-independent deep link (ADR 0033 §2.7): the email says
+  // « Écrivez-lui dans votre espace Nota » and links
+  // #offre=<id>&d=<dateISO>&cle=<token>. On this device — any device — the
+  // entry is stored with its token, the pane opens on that band, the API
+  // fills what the link did not carry (act, amount), and the token leaves the
+  // URL before it can be shared or replayed from history.
+  function consumeOfferLinkHash() {
+    var params;
+    try { params = new URLSearchParams(String(location.hash || '').replace(/^#/, '')); } catch (e) { return false; }
+    var id = params.get('offre'), d = params.get('d'), cle = params.get('cle');
+    if (!id || !cle || !D.isISODate(d || '')) return false;
+    params.delete('offre'); params.delete('d'); params.delete('cle');
+    var rest = params.toString();
+    try { history.replaceState(null, '', location.pathname + location.search + (rest ? '#' + rest : '')); } catch (e) {}
+    var a = myOffers();
+    var entry = a.filter(function (o) { return o.id === id; })[0];
+    if (entry) { entry.dateISO = d; entry.clientToken = cle; }
+    else { entry = { id: id, dateISO: d, clientToken: cle }; a.push(entry); }
+    lsSave(LS_MYOFFERS, a.slice(-50));
+    // setTab writes #t=profil — which is also what keeps the intro film and
+    // the onboarding guide away from a destination link.
+    setTab('profil', { focus: false });
+    openOfferBand(id);
+    fetchOfferStatus(entry).then(function (st) {
+      if (!st) return;
+      // The bid's courriel, when the API carries it, signs this device in as
+      // the client (the bell and the account menu appear); otherwise the
+      // device stays anonymous and still shows the band.
+      var courriel = (st.bid && st.bid.courriel) || st.courriel || null;
+      if (courriel && D.isEmail(courriel) && !profileGet().courriel) { profileSet({ courriel: courriel }); renderAccountMenu(); }
+      if (state.tab === 'profil') { renderProfil(); openOfferBand(id); }
+    });
+    return true;
   }
 
   async function clientPropositionReply(o, propositionId, verb) {
@@ -616,16 +858,21 @@
       var kept = status && status.bid && status.bid.annulation;
       if (kept && Number(kept.frais) > 0) {
         return 'Vous avez annulé cette offre. Des frais de ' + D.money(kept.frais) + ' (' + pctLabel(kept.taux)
-          + ') ont été retenus sur votre caution. Si vous changez d’avis, choisissez une nouvelle date au carnet.';
+          + ') ont été retenus sur votre caution et versés au notaire en dédommagement. Si vous changez d’avis, choisissez une nouvelle date au carnet.';
       }
       return 'Vous avez annulé cette offre. Si vous changez d’avis, choisissez une nouvelle date au carnet.';
     }
     if (st === 'expired') return 'Cette date est passée. Choisissez une nouvelle date au carnet.';
-    if (st === 'approved') return 'Le notaire vous contacte pour convenir du lieu. Ajoutez la date à votre agenda.';
-    var pend = status && status.propositions.filter(function (p) { return p.status === 'en_attente'; }).length;
+    // ADR 0033 — the whole truth of a retained act: the conversation is the
+    // channel, and the notary keeps the right to withdraw (free for them,
+    // counted on their file); the offer then returns to the carnet as posted.
+    if (st === 'approved') return 'Convenez du lieu et de l’heure avec votre notaire dans la conversation ci-dessous, et ajoutez la date à votre agenda. Le notaire peut encore se désister : votre demande reviendrait alors au carnet, publiée telle quelle, et vous en seriez prévenu.';
+    var pend = status && (status.propositions || []).filter(function (p) { return p.status === 'en_attente'; }).length;
     if (pend) return 'Un notaire vous propose un autre prix : acceptez ou refusez ci-dessous.';
-    var dem = status && status.demandes.filter(function (d) { return !d.fournie; }).length;
+    var dem = status && (status.demandes || []).filter(function (d) { return !d.fournie; }).length;
     if (dem) return 'Un notaire attend des documents : complétez votre dossier ci-dessous.';
+    // An entry born from a deep link knows no act yet: the status is loading.
+    if (!o.serviceId || !D.serviceById(o.serviceId)) return 'Chargement de votre demande…';
     // PRICE BEFORE DOCUMENTS (ADR 0010 §3): the demand is already sellable —
     // the only remaining gate is the sharing consent; the documents are
     // preparation for after the mise en relation, never a barrier.
@@ -757,7 +1004,7 @@
     if (n.kind && !notifAllowed(n.kind)) return;
     var a = notifLoad();
     if (a.some(function (x) { return x.key === n.key; })) return; // idempotent
-    a.unshift({ key: n.key, title: n.title, body: n.body || '', dateISO: n.dateISO || null, read: false });
+    a.unshift({ key: n.key, title: n.title, body: n.body || '', dateISO: n.dateISO || null, offerId: n.offerId || null, read: false });
     notifSave(a.slice(0, 40));
     renderNotifs();
   }
@@ -799,9 +1046,14 @@
       x.title = 'Ignorer';
       x.addEventListener('click', function (e) { e.stopPropagation(); dismissNotif(n.key); });
       item.appendChild(x);
-      if (n.dateISO) {
+      // Two kinds of door: an offer's band on Mes offres (a message from the
+      // notary), or that day on the carnet.
+      if (n.offerId || n.dateISO) {
         item.setAttribute('role', 'button'); item.tabIndex = 0;
-        var go = function () { toggleNotifPanel(false); markAllRead(); openDay(n.dateISO); };
+        var go = function () {
+          toggleNotifPanel(false); markAllRead();
+          if (n.offerId) openOfferBand(n.offerId); else openDay(n.dateISO);
+        };
         item.addEventListener('click', go);
         item.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
       }
@@ -965,11 +1217,58 @@
     } catch (e) {}
   }
 
-  // The offer flow entry point used elsewhere (hero CTA): the carnet with a day open.
+  // Funnel beacon — one step of the conversion funnel, nothing else. The
+  // catalogue is the domain's (D.FUNNEL_EVENTS): anything outside it is dropped
+  // here before it reaches the wire. The body is the bare event id — no
+  // identifier, no session, nothing stored on the device. sendBeacon survives
+  // a page unload; the keepalive POST is the fallback. Never throws, never
+  // blocks: a dead analytics endpoint must not cost the client a single frame.
+  function track(eventId) {
+    try {
+      if (!D.isFunnelEvent(eventId)) return;
+      var url = API_BASE + '/events';
+      var body = JSON.stringify({ event: eventId });
+      if (navigator && typeof navigator.sendBeacon === 'function') {
+        if (navigator.sendBeacon(url, new Blob([body], { type: 'application/json' }))) return;
+      }
+      var p = fetch(url, { method: 'POST', keepalive: true, headers: { 'content-type': 'application/json' }, body: body });
+      if (p && typeof p.catch === 'function') p.catch(function () {});
+    } catch (e) { /* analytics never breaks the page */ }
+  }
+  // « formulaire » fires once per dialog opening, and only once the dialog has
+  // finished its own programmatic set-up (armed at the end of openDay) — a
+  // pre-fill dispatching a change event is not a client starting the form.
+  var formArmed = false, formStarted = false;
+  function noteFormStart() {
+    if (!formArmed || formStarted) return;
+    formStarted = true;
+    track('formulaire');
+  }
+  // « notaire_porte » counts once per page load, however often the door is used.
+  var notaryDoorSent = false;
+  function noteNotaryDoor() {
+    if (notaryDoorSent) return;
+    notaryDoorSent = true;
+    track('notaire_porte');
+  }
+
+  // The first date at the STANDARD tier — the advertised floor, no urgency
+  // premium. Read off the domain's ladder (the smallest notice tierForDays
+  // calls standard), never a literal day count: the day the ladder moves, the
+  // default moves with it.
+  function firstStandardDate() {
+    var n = 0;
+    while (D.tierForDays(n) !== 'standard' && n < 400) n++;
+    return D.addDays(todayISO(), n);
+  }
+
+  // The offer flow entry point used elsewhere (hero CTA): the carnet with a day
+  // open. With no day selected it opens the first standard date — opening TODAY
+  // showed a first-time visitor the ×4 same-day price as their introduction.
   function openOfferFlow() {
     toggleNotifPanel(false);
     setTab('carnet', { scroll: false });
-    openDay(state.selectedDate || state.focusDate || todayISO());
+    openDay(state.selectedDate || firstStandardDate());
   }
 
   // ---------------------------------------------------------------------------
@@ -1291,7 +1590,16 @@
       // Two DISTINCT rows: the profile (offers table + contact details) and the
       // dossier (document checklist). The dossier row is the pane's permanent
       // door — without it the only entry is the one-shot post-publish card.
-      actions.appendChild(acctAction('profil', 'Mon profil', function () { toggleNotifPanel(false); setTab('profil'); }));
+      var profilDoor = acctAction('profil', 'Mon profil', function () { toggleNotifPanel(false); setTab('profil'); });
+      // Unread notary messages (ADR 0033): the count rides the door to the
+      // offers where the threads live.
+      var unread = unreadTotal();
+      if (unread) {
+        var ub = el('span', 'acct-badge', unread > 9 ? '9+' : String(unread));
+        ub.setAttribute('aria-label', unreadLabel(unread));
+        profilDoor.appendChild(ub);
+      }
+      actions.appendChild(profilDoor);
       actions.appendChild(acctAction('dossiers', 'Mon dossier', function () { toggleNotifPanel(false); openDossier(myDossierServiceId()); }));
       actions.appendChild(acctAction('signout', 'Se déconnecter', clientSignOut));
     }
@@ -1849,7 +2157,7 @@
     syncFilterChips();
     writeHash();
     setTab('carnet', { scroll: false });
-    openDay(state.selectedDate || state.focusDate || todayISO());
+    openDay(state.selectedDate || firstStandardDate());
   }
 
   function renderPulse() {
@@ -1958,6 +2266,7 @@
 
     // --- Inline booking (relocated offer-form) — the clicked day IS the date ---
     $('o-date').value = iso; onOfferDateChange();
+    var pick = $('day-date'); if (pick) pick.value = iso;
     var sel = $('o-service'), chips = $('o-service-chips');
     // An active carnet filter wins; otherwise fall back to the domain's default
     // act, so the form opens ready to book instead of on an empty choice.
@@ -1994,10 +2303,14 @@
 
     renderActiveView();
     var dlg = $('day-dialog');
+    var wasOpen = !!dlg.open;
     if (dlg.showModal && !dlg.open) dlg.showModal();
     // The criteria were rendered while the dialog was still closed — zero
     // geometry. Re-settle the tracks now that they are visible.
     settleSegTracks($('o-criteria'));
+    // A dialog OPENING is one funnel step; a date moved inside it is not.
+    if (!wasOpen) { formStarted = false; track('jour_ouvert'); }
+    formArmed = true;
   }
 
 
@@ -3025,6 +3338,25 @@
    * est écrite depuis les drapeaux du serveur, pas depuis une opinion : le jour
    * où les taxes seront calculées, la phrase changera d'elle-même.
    */
+  // Nota's service price in dollars, from the tarif the API served — null
+  // while unknown (offline, fixtures): the copy then says a fixed price is
+  // added without ever inventing the amount (art. 68 C.déont.).
+  function prixNotaDollars() {
+    var t = store.tarif;
+    return t && typeof t.prixNotaCents === 'number' ? Math.round(t.prixNotaCents) / 100 : null;
+  }
+
+  // The hero's price line — the two-line truth of ADR 0031, at the exact
+  // moment of conversion: the notary keeps the whole offer, and Nota's own
+  // service is paid at signing. Quotes the served price; never a literal.
+  function renderHeroPrice() {
+    var line = $('hero-price-line'); if (!line) return;
+    var prix = prixNotaDollars();
+    line.textContent = prix != null
+      ? 'Le notaire reçoit 100 % de votre offre ; le service Nota, ' + D.money(prix) + ', se paie seulement à la signature.'
+      : 'Le notaire reçoit 100 % de votre offre ; le service Nota, à prix fixe, se paie seulement à la signature.';
+  }
+
   function renderDevis() {
     var box = $('offer-devis');
     if (!box) return;
@@ -3034,7 +3366,7 @@
     box.hidden = false;
 
     var tarif = store.tarif;
-    var prix = tarif ? Math.round(tarif.prixNotaCents) / 100 : null;
+    var prix = prixNotaDollars();
     $('devis-hon').textContent = D.money(honoraires);
     $('devis-nota').textContent = prix != null ? D.money(prix) : '—';
     $('devis-total').textContent = prix != null ? D.money(honoraires + prix) : '—';
@@ -3082,13 +3414,20 @@
     }
     // Raw field value: validateOffer owns the normalization (domain rule).
     var v = D.validateOffer({ serviceId: o.serviceId, dateISO: o.dateISO, montant: o.montant, courriel: courriel, prefixe: $('o-prefix') && $('o-prefix').value, pricing: o.pricing, todayISO: todayISO() });
+    // ADR 0033 — the mise en relation is complete: the retaining notary must
+    // be able to name, write to and call the client. The name and the courriel
+    // are required HERE (the API keeps `courriel` optional for older callers);
+    // the téléphone is recommended, but a malformed one is refused.
+    var nomDue = !(($('o-name') && $('o-name').value) || '').trim();
+    var courrielDue = !courriel || !D.isEmail(courriel);
+    var telV = D.validateTelephone(($('o-telephone') && $('o-telephone').value) || '');
     var s = $('offer-submit');
     // Editing after a publish resets the CTA out of its success/busy state.
     if (!s.getAttribute('aria-busy') && s.textContent.trim() !== 'Publier mon offre') {
       s.textContent = 'Publier mon offre';
       var succ = $('offer-success'); if (succ) succ.hidden = true;
     }
-    s.disabled = !v.ok;
+    s.disabled = !v.ok || nomDue || courrielDue || !telV.ok;
     // A dead button must say why. The notary's required questions are the one
     // thing a client can fix from inside the form — name them, right here,
     // each name a door that jumps back to its question.
@@ -3113,10 +3452,16 @@
       });
       var prefixeDue = (v.errors || []).some(function (e) { return e.code === 'prefixe_requis' || e.code === 'prefixe_invalide'; });
       if (prefixeDue) due.push({ label: T('Secteur postal'), focus: focusPrefixField });
+      // The identity the notary needs (ADR 0033), each with its own door.
+      if (nomDue) due.push({ label: T('Votre nom'), focus: focusIdentityField('o-name') });
+      if (courrielDue) due.push({ label: T('Votre courriel'), focus: focusIdentityField('o-courriel') });
+      if (!telV.ok) due.push({ label: T('Votre téléphone'), focus: focusIdentityField('o-telephone') });
       hint.hidden = !due.length;
       clear(hint);
       if (due.length) {
-        hint.appendChild(document.createTextNode('Répondez à : '));
+        // « Répondez à » while the notary's questions are open; once only the
+        // identity or the sector is left, the plain « Il manque ».
+        hint.appendChild(document.createTextNode(missing.length ? 'Répondez à : ' : 'Il manque : '));
         due.forEach(function (m, i) {
           if (i) hint.appendChild(document.createTextNode(' · '));
           var b = el('button', 'offer-hint-link', m.label);
@@ -3217,10 +3562,36 @@
     // role="switch" overrides the native checkbox role, so aria-checked must be
     // kept in sync by hand (WCAG 4.1.2).
     $('o-anon').setAttribute('aria-checked', anon ? 'true' : 'false');
-    $('name-row').hidden = anon;
+    // ADR 0033 — the switch governs the PUBLIC carnet only. The name row
+    // stays visible either way: it is what the retaining notary receives.
     $('anon-help').textContent = anon
-      ? 'Affichée comme « Client · secteur postal ».'
+      ? 'Affichée comme « Client · secteur postal ». Votre nom reste transmis au notaire qui vous retient.'
       : 'Votre nom sera visible publiquement sur le carnet.';
+  }
+
+  // The téléphone is recommended, never required — but a number that cannot
+  // be dialled is worse than none (the notary would call into the void). The
+  // domain owns the rule; the field shows its verdict under itself, and the
+  // submit gate (validateOfferUI) refuses an invalid one.
+  function onTelephoneInput() {
+    var inp = $('o-telephone'); var prev = $('o-telephone-preview');
+    if (inp && prev) {
+      var v = D.validateTelephone(inp.value);
+      clear(prev);
+      if (!v.ok) { prev.dataset.state = 'warn'; prev.textContent = v.error.message; }
+      else if (v.value) { prev.dataset.state = 'ok'; prev.textContent = 'Le notaire qui vous retient pourra vous appeler.'; }
+      else prev.removeAttribute('data-state');
+    }
+    validateOfferUI();
+  }
+  // The hint's doors to the identity fields: bring the field into view and
+  // hand it focus, exactly like the postal sector's door.
+  function focusIdentityField(id) {
+    return function () {
+      var inp = $(id); if (!inp) return;
+      if (inp.scrollIntoView) inp.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      try { inp.focus({ preventScroll: true }); } catch (e) { inp.focus(); }
+    };
   }
 
   async function onOfferSubmit(e) {
@@ -3232,9 +3603,11 @@
     var payload = {
       serviceId: o.serviceId, dateISO: o.dateISO, montant: o.montant,
       anonyme: o.anonyme,
-      nom: o.anonyme ? null : ($('o-name').value || '').trim(),
+      // ADR 0033 — ALWAYS sent: anonymity governs the public carnet (the API
+      // withholds the name there); the retaining notary receives it.
+      nom: ($('o-name').value || '').trim(),
       prefixe: ($('o-prefix').value || '').trim().toUpperCase().slice(0, 3),
-      // Private: used only for notifications, never shown on the carnet.
+      // Private: notifications, and the mise en relation. Never on the carnet.
       courriel: ($('o-courriel').value || '').trim(),
       // Private too (ADR 0010 §4): handed only to the notary who retains the
       // demand, for the mise en relation. Never on the public carnet.
@@ -3442,7 +3815,7 @@
       var tr = el('tr', 'my-offer');
       tr.dataset.status = r.st;
       tr.dataset.id = r.o.id;
-      tr.appendChild(el('td', 'c-acte', svcName(r.o.serviceId)));
+      tr.appendChild(el('td', 'c-acte', r.o.serviceId ? svcName(r.o.serviceId) : 'Votre demande'));
 
       // The date is a door: it opens that day on the carnet (the offer in its
       // market, and the form to post another one).
@@ -3455,12 +3828,20 @@
       dcell.appendChild(el('span', 'my-offer-rel', relativeDay(r.o.dateISO)));
       tr.appendChild(dcell);
 
-      tr.appendChild(el('td', 'c-montant', D.money(r.o.montant)));
+      // An entry born from a deep link may not know its amount yet.
+      tr.appendChild(el('td', 'c-montant', r.o.montant != null ? D.money(r.o.montant) : '—'));
 
       var scell = el('td', 'c-statut');
       var pill = el('span', 'my-offer-status', offerStatusLabel(r.o, r.st));
       pill.dataset.status = r.st;
       scell.appendChild(pill);
+      // Unread notary messages (ADR 0033), beside the status; a door to the
+      // band, cleared once the thread is seen.
+      var un = unreadCount(r.o.id);
+      var ub = el('button', 'my-offer-unread', un ? unreadLabel(un) : '');
+      ub.type = 'button'; ub.dataset.for = r.o.id; ub.hidden = un === 0;
+      ub.addEventListener('click', function () { openOfferBand(r.o.id); });
+      scell.appendChild(ub);
       tr.appendChild(scell);
       body.appendChild(tr);
 
@@ -3478,51 +3859,97 @@
   }
 
   // Paint (or repaint, once the API answered) the detail band of one offer.
+  // A map pin for the étude's address — drawn here so the shared MINI_ICONS
+  // table stays untouched by this band.
+  function pinIcon() {
+    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('width', '15'); svg.setAttribute('height', '15');
+    svg.setAttribute('fill', 'none'); svg.setAttribute('stroke', 'currentColor'); svg.setAttribute('stroke-width', '2');
+    svg.setAttribute('stroke-linecap', 'round'); svg.setAttribute('stroke-linejoin', 'round'); svg.setAttribute('aria-hidden', 'true');
+    svg.innerHTML = '<path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/>';
+    return svg;
+  }
+
+  // The « Votre notaire » card (ADR 0033): everything the client needs to
+  // reach and find the notary who retained them — name and étude, a tel:
+  // link, the étude's address as a maps search, mailto, the Chambre fiche
+  // (ADR 0016), the acts count. Facts only, never an appreciation of the
+  // notary (art. 70 — ADR 0030): no star, no average, no cote.
+  function notaireCard(noti) {
+    var card = el('div', 'my-offer-contact');
+    card.appendChild(el('div', 'my-offer-contact-h', 'Votre notaire'));
+    var name = el('div', 'my-offer-contact-name');
+    var nom = String(noti.nom || '').trim(), etude = String(noti.etude || '').trim();
+    if (nom) name.appendChild(el('strong', null, nom));
+    if (etude && etude !== nom) {
+      if (nom) name.appendChild(document.createTextNode(' · '));
+      name.appendChild(el(nom ? 'span' : 'strong', 'my-offer-contact-etude', etude));
+    }
+    if (!nom && !etude) name.appendChild(el('strong', null, 'Votre notaire'));
+    // The roll of the Chambre, and the acts they have carried on Nota.
+    if (noti.cnq || noti.lienCNQ) { name.appendChild(document.createTextNode(' ')); name.appendChild(cnqBadge(true)); }
+    var nactes = actsFact(noti.actes);
+    if (nactes) { name.appendChild(document.createTextNode(' ')); name.appendChild(nactes); }
+    card.appendChild(name);
+    var rows = el('div', 'my-offer-contact-rows');
+    var tel = D.telHref(noti.telephone);
+    if (tel) {
+      var call = el('a', 'my-offer-contact-row my-offer-contact-tel');
+      call.href = tel;
+      call.title = 'Appeler ' + String(noti.telephone).trim();
+      call.appendChild(miniIcon('telephone'));
+      call.appendChild(el('span', null, String(noti.telephone).trim()));
+      rows.appendChild(call);
+    }
+    if (noti.courriel) {
+      var mail = el('a', 'my-offer-contact-row my-offer-contact-mail');
+      mail.href = 'mailto:' + noti.courriel;
+      mail.title = 'Écrire à ' + noti.courriel;
+      mail.appendChild(miniIcon('courriel'));
+      mail.appendChild(el('span', null, noti.courriel));
+      rows.appendChild(mail);
+    }
+    if (noti.adresse) {
+      var adresse = String(noti.adresse).trim();
+      var addr = el('a', 'my-offer-contact-row my-offer-contact-addr');
+      addr.href = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(adresse);
+      addr.target = '_blank'; addr.setAttribute('rel', 'noopener');
+      addr.title = 'Ouvrir l’adresse dans Google Maps';
+      addr.appendChild(pinIcon());
+      addr.appendChild(el('span', null, adresse + ' ↗'));
+      rows.appendChild(addr);
+    }
+    // Labelled as the ACT of verifying, not as a decoration: Nota confirmed
+    // nothing — the Chambre's own page is the authority.
+    if (noti.lienCNQ) {
+      var fiche = el('a', 'my-offer-contact-row cnq-link', 'Vérifier sa fiche à la Chambre ↗');
+      fiche.href = noti.lienCNQ;
+      fiche.target = '_blank';
+      fiche.setAttribute('rel', 'noopener');
+      fiche.setAttribute('title', 'Ouvre la fiche déclarée par ce notaire dans l’annuaire de la Chambre des notaires du Québec.');
+      rows.appendChild(fiche);
+    }
+    if (rows.childNodes.length) card.appendChild(rows);
+    return card;
+  }
+
   function fillMyOfferDetail(cell, o, st, status) {
     clear(cell);
-    var next = el('div', 'my-offer-next');
-    next.appendChild(el('span', 'my-offer-next-k', 'Prochaine étape'));
-    next.appendChild(el('span', 'my-offer-next-v', offerNextStep(o, st, status)));
-    cell.appendChild(next);
-
-    // Mise en relation (ADR 0010 §4): a RETAINED offer names the notary the
-    // client can now talk to — étude + courriel (mailto), straight from
-    // GET /client/bid. Documents then flow through Nota or the notary's own
-    // channel; Nota does not insist on being the pipe.
     // Is any notary named in this band? The « says who? » line is owed exactly
     // when one is — and exactly once, however many propositions there are.
     var named = false;
     var noti = status && status.notaire;
-    if (st === 'approved' && noti && (noti.etude || noti.courriel)) {
+    var next = el('div', 'my-offer-next');
+    next.appendChild(el('span', 'my-offer-next-k', 'Prochaine étape'));
+    next.appendChild(el('span', 'my-offer-next-v', offerNextStep(o, st, status)));
+    // Mise en relation, complete (ADR 0033): a RETAINED offer leads with the
+    // notary the client can now call, write to and find — the card FIRST,
+    // then the next step, then the conversation.
+    if (st === 'approved' && noti && (noti.nom || noti.etude || noti.courriel || noti.telephone)) {
       named = true;
-      var mr = el('div', 'my-offer-contact');
-      mr.appendChild(el('strong', null, 'Retenue par ' + (noti.etude || 'votre notaire')));
-      // Facts about the notary, never an appreciation of them (art. 70): the
-      // roll of the Chambre, and the acts they have carried on Nota.
-      if (noti.cnq) { mr.appendChild(document.createTextNode(' ')); mr.appendChild(cnqBadge(true)); }
-      var nactes = actsFact(noti.actes);
-      if (nactes) { mr.appendChild(document.createTextNode(' ')); mr.appendChild(nactes); }
-      if (noti.courriel) {
-        mr.appendChild(document.createTextNode(' — '));
-        var mail = el('a', 'my-offer-contact-mail', noti.courriel);
-        mail.href = 'mailto:' + noti.courriel;
-        mr.appendChild(mail);
-      }
-      // The retained notary's official fiche (ADR 0016): the client can verify
-      // the notoriety at the Chambre itself. Only here — never pre-retention.
-      if (noti.lienCNQ) {
-        mr.appendChild(document.createTextNode(' — '));
-        // Labelled as the ACT of verifying, not as a decoration: Nota
-        // confirmed nothing — the Chambre's own page is the authority.
-        var fiche = el('a', 'cnq-link', 'Vérifier sa fiche à la Chambre ↗');
-        fiche.href = noti.lienCNQ;
-        fiche.target = '_blank';
-        fiche.setAttribute('rel', 'noopener');
-        fiche.setAttribute('title', 'Ouvre la fiche déclarée par ce notaire dans l’annuaire de la Chambre des notaires du Québec.');
-        mr.appendChild(fiche);
-      }
-      cell.appendChild(mr);
+      cell.appendChild(notaireCard(noti));
     }
+    cell.appendChild(next);
     // The act is signed and settled (ADR 0015): the client's last gesture is
     // the evaluation — five stars, an optional word. One per act; once sent,
     // the block shows what was said and thanks them.
@@ -3536,18 +3963,26 @@
       var chat = el('div', 'my-offer-chat chat'); chat.dataset.id = o.id;
       chat.appendChild(el('div', 'my-offer-chat-h', 'Messages avec votre notaire'));
       chat.appendChild(chatThread((status && status.messages) || [], 'client'));
-      var crow = el('div', 'chat-row');
-      var cin = el('textarea', 'chat-input');
-      cin.rows = 2; cin.maxLength = 500;
-      cin.placeholder = 'Écrire à votre notaire…';
-      cin.setAttribute('aria-label', 'Écrire à votre notaire');
-      var csend = el('button', 'btn btn-sm btn-primary client-chat-send', 'Envoyer'); csend.type = 'button';
-      csend.addEventListener('click', function () { clientChatSend(o, cin, csend); });
-      cin.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); clientChatSend(o, cin, csend); }
+      // The shared composer (ADR 0033); focusing it means the thread is read.
+      var composer = chatComposer({
+        placeholder: 'Écrire à votre notaire…', ariaLabel: 'Écrire à votre notaire', sendClass: 'client-chat-send',
+        onSend: function (texte) { return clientChatSend(o, texte); },
+        onFocus: function () { markOfferSeen(o.id); },
       });
-      crow.appendChild(cin); crow.appendChild(csend);
-      chat.appendChild(crow);
+      chat.appendChild(composer.el);
+      // Seen the moment the thread is actually on screen, where the browser
+      // can tell (jsdom cannot — the composer's focus and the bell entry remain).
+      if (typeof window.IntersectionObserver === 'function') {
+        try {
+          var thread = chat.querySelector('.chat-thread');
+          var io = new window.IntersectionObserver(function (entries) {
+            entries.forEach(function (en) {
+              if (en.isIntersecting && !document.hidden) { markOfferSeen(o.id); io.disconnect(); }
+            });
+          }, { threshold: 0.5 });
+          if (thread) io.observe(thread);
+        } catch (e) { /* no observer, no harm */ }
+      }
       // Les documents, sous le fil : ce que l'un envoie, l'autre le lit au même
       // endroit. Un document n'est pas un événement de second rang qu'on
       // découvrirait en rouvrant la page.
@@ -3573,13 +4008,15 @@
       }, (status && status.documents) || [], function () {
         // Relire l'état de l'offre : le document doit apparaître dans le fil, du
         // même mouvement qu'un message envoyé.
-        fetchOfferStatus(o).then(function () { if (state.tab === 'profil') renderProfil(); });
+        fetchOfferStatus(o).then(function () { repaintOfferBand(o); });
       }));
       cell.appendChild(chat);
     }
 
     var acts = el('div', 'my-offer-actions');
-    if (st !== 'expired' && st !== 'cancelled') {
+    // (An entry born from a deep link has no act to put on an agenda until
+    // the API answers.)
+    if (st !== 'expired' && st !== 'cancelled' && o.serviceId && o.montant != null) {
       var links = calendarLinks(o);
       var cal = el('a', 'btn btn-sm my-offer-agenda', 'Agenda');
       cal.href = links.gcal; cal.target = '_blank'; cal.rel = 'noopener';
@@ -3773,23 +4210,29 @@
   // The confirm dialog carries the consequence: an open offer just leaves the
   // carnet; a retained one unwinds the mise en relation and the notary is told.
   var cancelTarget = null;
-  function openCancelDialog(o, st) {
+  async function openCancelDialog(o, st) {
     cancelTarget = o;
+    // ADR 0023 / ADR 0033 — the fee prevision rides on GET /client/bid, and
+    // it moves with the calendar: the cached forecast may be a day old, so
+    // the dialog re-asks the server BEFORE it opens (a failure keeps the
+    // cache). The disclosure belongs HERE, before the client confirms.
+    var status = (await fetchOfferStatus(o)) || offerStatusGet(o.id);
+    if (cancelTarget !== o) return; // the client moved on while we asked
+    var noti = status && status.notaire;
+    var who = (noti && (noti.nom || noti.etude)) || o.etude || 'un notaire';
     $('cancel-text').textContent = st === 'approved'
-      ? 'Cette offre a été retenue par ' + (o.etude || 'un notaire') + '. L’annuler libère le rendez-vous et le notaire en sera avisé par courriel.'
+      ? 'Cette offre a été retenue par ' + who + '. L’annuler libère le rendez-vous et le notaire en sera avisé par courriel.'
       : 'Votre offre sera retirée du carnet. Plus aucun notaire ne pourra la retenir.';
-    // ADR 0023 — the fee prevision rides on GET /client/bid: cancelling a
-    // retained offer close to the date keeps part of the deposit, and the
-    // disclosure belongs HERE, before the client confirms. Null → free, the
-    // note stays hidden and the wording above is the whole story.
-    var status = offerStatusGet(o.id);
     var prev = status && status.annulation;
     var feeEl = $('cancel-fee');
     if (feeEl) {
       if (prev && Number(prev.frais) > 0) {
         feeEl.hidden = false;
+        // The fee compensates the NOTARY for the day they reserved — Nota
+        // keeps none of it (art. 32.1 L.N.). Said in the same breath as the
+        // amount, so the client knows where their money goes.
         feeEl.textContent = 'Annuler maintenant retient des frais de ' + D.money(prev.frais)
-          + ' (' + pctLabel(prev.taux) + ' du montant convenu) sur votre caution. Le reste vous est libéré immédiatement.';
+          + ' (' + pctLabel(prev.taux) + ' du montant convenu) sur votre caution. Ils sont versés au notaire en dédommagement de la journée réservée. Le reste vous est libéré immédiatement.';
       } else {
         feeEl.hidden = true;
         feeEl.textContent = '';
@@ -3833,7 +4276,7 @@
     // (taux, frais, joursAvant, chargeId), null when the cancel was free.
     var kept = res.body && res.body.bid && res.body.bid.annulation;
     var keptLine = kept && Number(kept.frais) > 0
-      ? 'Des frais de ' + D.money(kept.frais) + ' (' + pctLabel(kept.taux) + ') ont été retenus sur votre caution.'
+      ? 'Des frais de ' + D.money(kept.frais) + ' (' + pctLabel(kept.taux) + ') ont été retenus sur votre caution et versés au notaire en dédommagement.'
       : null;
     var st = offerStatusGet(o.id);
     if (st && st.bid) {
@@ -3926,20 +4369,7 @@
     var today = todayISO();
     offers.forEach(function (o) {
       if (!o.clientToken || D.daysBetween(today, o.dateISO) < 0) return;
-      fetchOfferStatus(o).then(function (st) {
-        if (!st || state.tab !== 'profil') return;
-        var cell = document.querySelector('.my-offer-detail[data-for="' + o.id + '"] .my-offer-detail-cell');
-        var fresh = myOffers().filter(function (x) { return x.id === o.id; })[0] || o;
-        var s = clientOfferStatus(fresh);
-        var row = document.querySelector('#my-offers-live tr.my-offer[data-id="' + o.id + '"]');
-        if (row) {
-          row.dataset.status = s;
-          var pill = row.querySelector('.my-offer-status');
-          if (pill) { pill.textContent = offerStatusLabel(fresh, s); pill.dataset.status = s; }
-          var m = row.querySelector('.c-montant'); if (m) m.textContent = D.money(fresh.montant);
-        }
-        if (cell) fillMyOfferDetail(cell, fresh, s, st);
-      });
+      fetchOfferStatus(o).then(function (st) { if (st) repaintOfferBand(o); });
     });
   }
 
@@ -4009,6 +4439,16 @@
     var body = $('profil-body'); if (!body) return; clear(body);
     var p = profileGet();
 
+    // Back from Checkout: the same expectation line the success screen
+    // shows, standing at the top of « Mes offres » for the session.
+    if (state.checkoutNotice) {
+      var notice = el('div', 'checkout-notice');
+      notice.id = 'checkout-notice';
+      notice.setAttribute('role', 'status');
+      renderSentences(notice, state.checkoutNotice);
+      body.appendChild(notice);
+    }
+
     // Mes offres — a full-width band at the top; its offers lay out across the
     // width so the actionable "where do my requests stand" view leads.
     var oCard = buildMyOffersCard();
@@ -4022,9 +4462,9 @@
     idCard.appendChild(profilHead(IC_COORD, 'Coordonnées', 'Réutilisées automatiquement quand vous publiez une offre.'));
     var idFields = el('div', 'profil-fields');
     [
-      { key: 'nom', label: 'Nom (offre non anonyme)', ph: 'Prénom Nom', type: 'text' },
+      { key: 'nom', label: 'Nom (transmis au notaire qui vous retient)', ph: 'Prénom Nom', type: 'text' },
       { key: 'courriel', label: 'Courriel', ph: 'vous@exemple.ca', type: 'email' },
-      { key: 'telephone', label: 'Téléphone (mise en relation)', ph: '(418) 000-0000', type: 'tel' },
+      { key: 'telephone', label: 'Téléphone (transmis au notaire qui vous retient)', ph: '(418) 000-0000', type: 'tel' },
       { key: 'prefixe', label: 'Code postal', ph: 'G1R', type: 'text' },
     ].forEach(function (f) {
       var row = el('div', 'form-row');
@@ -4677,6 +5117,10 @@
   // Feed disclosure level (ADR 0019): 'compact' folds every open card to its
   // decision row; 'detail' unfolds the whole feed. Remembered per device.
   var LS_NC_VIEW = 'nota.notary.view.v1';
+  // Unread (ADR 0033): per retained act, the createdAt of the last CLIENT
+  // message this device has seen — `{ [bidId]: iso }`. Unread = client
+  // messages newer than that. Per device, like a read receipt nobody sends.
+  var LS_NC_SEEN = 'nota.nc.seen.v1';
 
   // token   -> SESSION scope, sent in the Authorization header (never a URL).
   // feedToken -> FEED scope (read-only), the only token placed in the webcal URL.
@@ -4684,7 +5128,14 @@
   // toggle); it never changes what the API returned, only what is drawn.
   // openDetails: ids the notary unfolded by hand in the compact view — kept
   // across re-renders (refresh, filter) so a studied card never snaps shut.
-  var nc = { token: null, feedToken: null, email: null, open: [], filter: { service: 'all', readyOnly: false, day: null }, openDetails: {}, rating: null, profil: { lienCNQ: null }, tarif: null, cote: null };
+  // conditions -> what retaining commits the notary to (ADR 0033): paiement à
+  // la signature, the client's Nota price beside, the cancellation barème
+  // (compensation to the notary), the free-but-counted withdrawal. API data.
+  // fenetre -> the months the server's `retained` list covers, so the console
+  // can prune a local entry the server stopped returning (a cancelled act).
+  // deepAct -> the act a « #notaires&acte=<id> » link points at, until the
+  // card is on screen.
+  var nc = { token: null, feedToken: null, email: null, open: [], filter: { service: 'all', readyOnly: false, day: null }, openDetails: {}, rating: null, profil: { lienCNQ: null }, tarif: null, cote: null, conditions: null, fenetre: null, deepAct: null, manquantsServeur: null };
 
   // Pending declines: id -> { timer, dateISO }. A decline collapses the card
   // into an undo line first and only POSTs once the window closes (or a test
@@ -4717,6 +5168,57 @@
       if (have) ncRetainedUpdate(email, r.id, r);
       else ncRetainedAdd(email, r);
     });
+  }
+  // The server is the only one who knows an act was cancelled: it simply
+  // stops returning it. `fenetre` says which months the answer covered, so a
+  // local entry from one of those months that the answer lacks is gone for
+  // good (ADR 0033). Entries outside the window are left alone — the server
+  // said nothing about them. Returns the pruned entries (for the one toast).
+  function ncRetainedPrune(email, entries, fenetre) {
+    if (!email || !Array.isArray(entries) || !Array.isArray(fenetre) || !fenetre.length) return [];
+    var keep = {}; entries.forEach(function (r) { if (r && r.id) keep[r.id] = true; });
+    var gone = [];
+    var list = ncRetainedFor(email).filter(function (e) {
+      var month = String(e.dateISO || '').slice(0, 7);
+      if (fenetre.indexOf(month) < 0 || keep[e.id]) return true;
+      gone.push(e); return false;
+    });
+    if (gone.length) ncRetainedSave(email, list);
+    return gone;
+  }
+
+  // --- Unread (ADR 0033) -----------------------------------------------------
+  function ncSeenAll() { return lsLoad(LS_NC_SEEN) || {}; }
+  // The newest client message on an entry — null when the client never wrote.
+  function ncLastClientAt(entry) {
+    var last = null;
+    (entry && entry.messages || []).forEach(function (m) {
+      if (m && m.de === 'client' && m.createdAt && (!last || m.createdAt > last)) last = m.createdAt;
+    });
+    return last;
+  }
+  function ncUnreadCount(entry) {
+    var seen = ncSeenAll()[entry.id] || '';
+    return (entry.messages || []).filter(function (m) { return m && m.de === 'client' && m.createdAt && m.createdAt > seen; }).length;
+  }
+  // Mark the thread read up to its last client message and repaint the two
+  // badges IN PLACE — never a full re-render: this fires from a focused
+  // composer, and a re-render would take the focus (and the draft) away.
+  function ncMarkSeen(entry) {
+    var last = ncLastClientAt(entry); if (!last) return;
+    var all = ncSeenAll();
+    if (all[entry.id] === last) return;
+    all[entry.id] = last; lsSave(LS_NC_SEEN, all);
+    var card = document.querySelector('#notary-retained-list .nc-card[data-id="' + entry.id + '"]');
+    if (card) { card.querySelectorAll('.nc-unread').forEach(function (b) { b.parentNode.removeChild(b); }); delete card.dataset.unread; }
+    ncRenderRetainedHead();
+  }
+  function ncUnreadBadge(n) {
+    var b = el('span', 'nc-unread');
+    b.appendChild(el('span', 'nc-unread-n', String(n)));
+    b.appendChild(document.createTextNode(' '));
+    b.appendChild(el('span', null, n > 1 ? 'nouveaux' : 'nouveau'));
+    return b;
   }
 
   // A notary marks a retained act completed with its final value → the API
@@ -4783,8 +5285,10 @@
     ncPollStop(); // the live feed dies with the session
     nc.token = null; nc.feedToken = null; nc.email = null; nc.open = [];
     nc.rating = null; nc.profil = { lienCNQ: null, rayonKm: 0, urgences: false }; nc.tarif = null;
-    nc.cote = null;
+    nc.cote = null; nc.conditions = null; nc.fenetre = null; nc.manquantsServeur = null;
+    ncCloseRetainSheet(); // a sheet about a session that ended
     ncRenderProfil(); // the form must never keep another notary's fiche
+    ncRenderProfilBanner();
     ncRenderCote();   // another notary must never inherit this one's cote
     // The evaluations cache dies with the session: fold the panel, empty the
     // list — the next sign-in re-fetches ITS OWN history on first open.
@@ -4894,7 +5398,12 @@
   // open inline form or menu): ncLoadBids re-renders the profile form too,
   // and a poll must never clobber what a hand started.
   var NC_POLL_MS = Number(window.__NOTA_POLL_MS__) || 30000;
-  var ncPollTimer = null, ncPollBusy = false;
+  // A focused conversation composer pauses the poll too — but not forever: a
+  // live back-and-forth must not stall because the notary keeps the cursor in
+  // the box. Past this grace the feed refreshes anyway; ncRenderRetained
+  // carries the draft and the focus across the re-render.
+  var NC_POLL_FOCUSED_MS = Number(window.__NOTA_POLL_FOCUSED_MS__) || 60000;
+  var ncPollTimer = null, ncPollBusy = false, ncLastLoadAt = 0;
   function ncPollStop() { if (ncPollTimer) { clearInterval(ncPollTimer); ncPollTimer = null; } }
   function ncPollStart() {
     if (ncPollTimer) return;
@@ -4902,8 +5411,14 @@
       if (!nc.token) { ncPollStop(); return; }
       if (document.hidden || ncPollBusy) return;
       var ae = document.activeElement;
-      if (ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return;
-      if (document.querySelector('#notary-console .nc-card[data-confirm="1"], #notary-console form.nc-inline, #notary-console details[open]')) return;
+      if (ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) {
+        var inComposer = ae.classList && ae.classList.contains('chat-input') && ae.closest && ae.closest('#notary-retained-list');
+        if (!inComposer || Date.now() - ncLastLoadAt < NC_POLL_FOCUSED_MS) return;
+      }
+      // Mid-gesture surfaces: an armed confirm, an inline form, an open menu or
+      // panel, and the Retenir sheet (ADR 0033) — a re-render under an open
+      // sheet would swap the card the sheet is about.
+      if (document.querySelector('#notary-console .nc-card[data-confirm="1"], #notary-console form.nc-inline, #notary-console details[open], #nc-retenir-dialog[open]')) return;
       ncPollBusy = true;
       ncLoadBids().then(function () { ncPollBusy = false; }, function () { ncPollBusy = false; });
     }, NC_POLL_MS);
@@ -4936,17 +5451,36 @@
       return false;
     }
     var j = {}; try { j = await r.json(); } catch (e) {}
+    ncLastLoadAt = Date.now();
     nc.open = j.bids || [];
     nc.rating = j.rating || null; // the notary's own public average
     nc.profil = j.profil || { lienCNQ: null, rayonKm: 0, urgences: false };
     nc.tarif = j.tarif || null;           // ADR 0031 : le prix que le CLIENT paie à Nota
     nc.cote = j.cote || null;             // ADR 0028: always there, barème or not
+    nc.conditions = j.conditions || null; // ADR 0033: what retaining commits to
+    nc.fenetre = Array.isArray(j.fenetre) ? j.fenetre : null;
+    nc.manquantsServeur = null;           // a fresh profile supersedes an old 403
     ncRenderProfil();
+    ncRenderProfilBanner();
+    ncRenderPrefs();
     ncRenderEarnings(); // the money tiles
     ncRenderCote();     // …and, right under them, what decides the share
     ncRenderOpen();
-    if (j.retained && j.retained.length) { ncRetainedMerge(nc.email, j.retained); ncRenderRetained(); }
+    // The server's retained list: merge what it returns, then drop what it
+    // stopped returning inside its window — the client cancelled (ADR 0033).
+    var gone = ncRetainedPrune(nc.email, j.retained || [], nc.fenetre);
+    if (j.retained && j.retained.length) ncRetainedMerge(nc.email, j.retained);
+    if (gone.length || (j.retained && j.retained.length)) ncRenderRetained();
+    if (gone.length) ncToastCancelled(gone);
+    ncConsumeDeepAct();
     return true;
+  }
+  // One toast for a prune pass, however many acts it dropped.
+  function ncToastCancelled(gone) {
+    var dates = gone.map(function (e) { return String(e.dateISO || ''); }).sort();
+    var msg = T('Le client a annulé la demande du') + ' ' + dayTitle(dates[0]) + '.';
+    if (gone.length > 1) msg += ' (+' + (gone.length - 1) + ')';
+    toast(msg);
   }
 
   // One POST helper for the per-bid notary actions (propose / documents):
@@ -4980,6 +5514,9 @@
     var res = await ncPost('/notary/bids/propose', body);
     if (!res) return { ok: false, errors: [] };
     if (res.status === 409) { toast('Cette offre a déjà été retenue par un autre notaire.'); ncDropOpen(id); ncRenderOpen(); return { ok: false, errors: [] }; }
+    // The server is authoritative on the contact gate (ADR 0033): its 403
+    // lands exactly where the client-side gate does — in the profile.
+    if (res.status === 403 && ncProfilRefusal(res.json)) { ncProfilGate(res.json); return { ok: false, errors: [] }; }
     if (res.status !== 200) return { ok: false, errors: (res.json.errors || [{ message: 'Échec de l’envoi de la proposition.' }]) };
     if (b) b.proposition = res.json.proposition || { montant: v.montant, status: 'en_attente' };
     ncRenderOpen();
@@ -5039,11 +5576,23 @@
     var j = {}; try { j = await r.json(); } catch (e) {}
     if (r.status === 409) { toast('Cette offre a déjà été retenue par un autre notaire.'); ncDropOpen(id); ncRenderOpen(); return; }
     if (r.status === 404) { toast('Offre introuvable, elle a peut-être expiré.'); ncDropOpen(id); ncRenderOpen(); return; }
+    // The contact gate (ADR 0033): the server refuses until nom / téléphone /
+    // adresse are on the profile — open the form, say what is missing.
+    if (r.status === 403 && ncProfilRefusal(j)) { ncProfilGate(j); return; }
     if (r.status !== 200) { toast('Impossible de retenir cette demande.'); return; }
+    // The mise en relation is complete (ADR 0033): the API releases the
+    // client's contact block at accept — keep it, along with everything the
+    // open card knew (lender, déplacement, distance) so the retained card can
+    // lead with « Votre client » without waiting for the next feed load.
     var entry = {
       id: j.id, dateISO: dateISO, serviceId: bidMeta.serviceId, montant: bidMeta.montant,
       tier: bidMeta.tier, prefixe: bidMeta.prefixe || null,
-      courriel: j.courriel || null, dossier: j.dossier || null,
+      courriel: j.courriel || (j.client && j.client.courriel) || null, dossier: j.dossier || null,
+      client: j.client || null,
+      preteur: bidMeta.preteur || null, deplacement: bidMeta.deplacement || null,
+      distanceKm: bidMeta.distanceKm != null ? bidMeta.distanceKm : null,
+      complexity: bidMeta.complexity || null,
+      messages: [], documents: [], annulation: j.annulation || null, completed: false,
     };
     // PAID AT SIGNING (ADR 0015): accepting retains — no money moves here.
     // The settlement (capture + net transfer, or the commission fallback)
@@ -5508,54 +6057,62 @@
     else if (onbMobileMq.addListener) onbMobileMq.addListener(onbMqChange);
   }
 
-  // --- Lead-delivery preferences ---------------------------------------------
-  // How (in-app / email / SMS) and at what PACE Nota alerts this notary about new
-  // matching demands, plus which acts + urgency they care about. Stored per email
-  // (local for the demo; a deployment would sync these to the API so the server's
-  // notifier + an SMS adapter respect them).
+  // --- Alert preferences (ADR 0033 §7) ---------------------------------------
+  // At what PACE Nota mails this notary about new matching demands, and
+  // whether only the urgent ones: SERVER data, saved through POST
+  // /notary/profile (`alertes`) and rendered from profil.alertes — the
+  // notifier honours exactly what the console shows. What stays LOCAL is the
+  // lender roster: it filters THIS console's feed (ncFilteredOpen), nothing
+  // else reads it. No SMS switch anywhere: nothing sends texts.
   var LS_NC_PREFS = 'nota.notary.prefs.v1';
   var ncPrefsSavedT = null;
+  var NC_PACES = ['instant', 'daily', 'weekly', 'off'];
   function ncDefaultPrefs() {
-    var svc = {}; D.SERVICES.forEach(function (s) { svc[s.id] = true; });
     // Every catalogued lender starts ACCEPTED: refusing is the notary's explicit
     // choice ("je ne ferme pas avec ce prêteur"), never a default.
     var lend = {}; D.LENDERS.forEach(function (l) { lend[l.id] = true; });
-    return { email: true, sms: false, phone: '', pace: 'instant', urgent: false, services: svc, lenders: lend };
+    return { lenders: lend };
   }
   function ncPrefsGet(email) {
     var d = ncDefaultPrefs();
     var stored = (lsLoad(LS_NC_PREFS) || {})[email] || {};
-    return Object.assign(d, stored, {
-      services: Object.assign(d.services, stored.services || {}),
-      lenders: Object.assign(d.lenders, stored.lenders || {}),
-    });
+    return { lenders: Object.assign(d.lenders, stored.lenders || {}) };
   }
-  function ncPrefsSave(email, prefs) {
-    var all = lsLoad(LS_NC_PREFS) || {}; all[email] = prefs; lsSave(LS_NC_PREFS, all);
+  function ncPrefsSavedNote() {
     var saved = $('notary-prefs-saved');
     if (saved) { saved.hidden = false; clearTimeout(ncPrefsSavedT); ncPrefsSavedT = setTimeout(function () { saved.hidden = true; }, 2200); }
   }
+  function ncPrefsSave(email, prefs) {
+    var all = lsLoad(LS_NC_PREFS) || {}; all[email] = { lenders: prefs.lenders }; lsSave(LS_NC_PREFS, all);
+    ncPrefsSavedNote();
+  }
   function ncPrefsPatch(patch) { if (nc.email) ncPrefsSave(nc.email, Object.assign(ncPrefsGet(nc.email), patch)); }
+  // The server's view, normalized: an unknown pace reads as the daily digest.
+  function ncAlertes() {
+    var a = (nc.profil && nc.profil.alertes) || {};
+    return { pace: NC_PACES.indexOf(a.pace) >= 0 ? a.pace : 'daily', urgentOnly: a.urgentOnly === true };
+  }
+  async function ncSaveAlertes(patch) {
+    if (!nc.token) return;
+    var alertes = Object.assign(ncAlertes(), patch || {});
+    var res = await ncPost('/notary/profile', ncProfilBody({ alertes: alertes }));
+    if (!res) { ncRenderPrefs(); return; }
+    if (res.status !== 200) {
+      toast((res.json.errors && res.json.errors[0] && res.json.errors[0].message) || 'Échec de l’enregistrement des préférences.');
+      ncRenderPrefs(); return;
+    }
+    nc.profil = res.json.profil || Object.assign({}, nc.profil, { alertes: alertes });
+    ncRenderPrefs();
+    ncPrefsSavedNote();
+  }
   function ncRenderPrefs() {
     if (!nc.email) return;
-    var p = ncPrefsGet(nc.email);
-    var chk = function (id, on) { var e = $(id); if (e) e.checked = !!on; };
-    chk('pref-ch-email', p.email); chk('pref-ch-sms', p.sms); chk('pref-urgent', p.urgent);
-    if ($('pref-phone')) $('pref-phone').value = p.phone || '';
-    if ($('pref-phone-row')) $('pref-phone-row').hidden = !p.sms;
+    var a = ncAlertes();
+    var urg = $('pref-urgent'); if (urg) urg.checked = a.urgentOnly;
     document.querySelectorAll('#pref-pace .seg-btn').forEach(function (b) {
-      var on = b.dataset.pace === p.pace; b.classList.toggle('is-on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      var on = b.dataset.pace === a.pace; b.classList.toggle('is-on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
-    var svcWrap = $('pref-svc');
-    if (svcWrap && !svcWrap.children.length) {
-      D.SERVICES.forEach(function (s) {
-        var c = el('button', 'chip', s.nom.split(' ')[0]); c.type = 'button'; c.dataset.svc = s.id;
-        svcWrap.appendChild(c);
-      });
-    }
-    if (svcWrap) svcWrap.querySelectorAll('.chip').forEach(function (c) {
-      var on = p.services[c.dataset.svc] !== false; c.classList.toggle('is-on', on); c.setAttribute('aria-pressed', on ? 'true' : 'false');
-    });
+    var p = ncPrefsGet(nc.email);
     // The lender roster — the refusal axis: a notary only closes with the
     // institutions they know, so unchecking a lender HIDES its demands from
     // their feed (ncFilteredOpen). Virtual lenders are tagged so the extra
@@ -5596,7 +6153,8 @@
     if (authed) {
       // Identity (courriel + Se déconnecter) lives in the header account menu
       // only — the console itself opens straight on the agenda.
-      ncRenderPrefs(); // lead-delivery preferences for this notary
+      ncRenderPrefs(); // alert preferences for this notary
+      ncRenderProfilBanner(); // the contact gate, said over the feed (ADR 0033)
       // The webcal URL carries ONLY the read-only feed token, never the session
       // token — a leaked calendar URL must not authorize accept/dossier.
       // Full sync options for the notary's retained-signings feed (like the
@@ -5766,8 +6324,8 @@
 
     var actions = el('div', 'nc-card-actions');
     // Retenir is THE action of the pane — full-size primary; everything else
-    // stays small so the confirm reads first. The first click arms a confirm
-    // step (ncArmAccept); the second one accepts.
+    // stays small so the confirm reads first. The click opens the confirm
+    // SHEET (ncOpenRetainSheet, ADR 0033); the sheet's primary accepts.
     var acc = el('button', 'btn btn-primary nc-accept', 'Retenir'); acc.type = 'button';
     var dec = el('button', 'btn btn-sm nc-decline', 'Décliner'); dec.type = 'button';
     actions.appendChild(acc); actions.appendChild(dec);
@@ -5846,24 +6404,147 @@
     return d;
   }
 
-  // First click on Retenir: arm the confirm (button reads the amount, an
-  // Annuler appears). ESC, Annuler, or leaving the card disarms it.
-  function ncArmAccept(card, b) {
-    var acc = card.querySelector('.nc-accept'); if (!acc || card.dataset.confirm === '1') return;
-    card.dataset.confirm = '1';
-    clear(acc);
-    acc.appendChild(el('span', null, 'Confirmer'));
-    acc.appendChild(document.createTextNode(' · '));
-    acc.appendChild(el('span', 'nc-accept-amt', D.money(b.montant)));
-    var cancel = el('button', 'btn btn-sm btn-ghost nc-accept-cancel', 'Annuler'); cancel.type = 'button';
-    acc.insertAdjacentElement('afterend', cancel);
-    try { acc.focus({ preventScroll: true }); } catch (e) {}
+  // --- The contact gate (ADR 0033) -------------------------------------------
+  // A client must be able to call and find the notary who retains them, so
+  // nom / téléphone / adresse are required to retain or propose. The domain
+  // holds the rule (notaryContactMissing); the API enforces it (403
+  // profil_incomplet); the console says it over the feed and turns every
+  // Retenir / Proposer into a door to the form until it is filled.
+  function ncProfilRefusal(j) { return !!(j && j.errors && j.errors[0] && j.errors[0].code === 'profil_incomplet'); }
+  // What the profile lacks: what the server last said (it wins until the next
+  // feed load refreshes the profile), else the domain's own reading.
+  function ncProfilManquants() {
+    if (Array.isArray(nc.manquantsServeur) && nc.manquantsServeur.length) return nc.manquantsServeur;
+    return D.notaryContactMissing(nc.profil || {});
   }
-  function ncDisarmAccept(card) {
-    if (!card || card.dataset.confirm !== '1') return;
-    delete card.dataset.confirm;
-    var acc = card.querySelector('.nc-accept'); if (acc) acc.textContent = 'Retenir';
-    var cancel = card.querySelector('.nc-accept-cancel'); if (cancel) cancel.parentNode.removeChild(cancel);
+  function ncProfilIncomplet() { return ncProfilManquants().length > 0; }
+  function ncProfilGate(j) {
+    var e = j && j.errors && j.errors[0];
+    if (e && Array.isArray(e.manquants) && e.manquants.length) nc.manquantsServeur = e.manquants;
+    ncCloseRetainSheet(); // a modal would trap the focus the door needs
+    ncRenderProfilBanner();
+    ncOpenProfilDoor();
+    toast((e && e.message) || 'Complétez votre profil (nom, téléphone, adresse de l’étude) avant de retenir une demande.');
+  }
+  // Open the profile panel on the first missing field.
+  function ncOpenProfilDoor() {
+    var panel = $('notary-profil'); if (!panel) return;
+    panel.open = true;
+    var missing = ncProfilManquants();
+    var first = (missing.length && $('nc-' + missing[0].id)) || $('nc-nom');
+    if (!first) return;
+    if (first.scrollIntoView) { try { first.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {} }
+    try { first.focus({ preventScroll: true }); } catch (e) { try { first.focus(); } catch (e2) {} }
+  }
+  function ncRenderProfilBanner() {
+    var box = $('nc-profil-banner'); if (!box) return;
+    var missing = nc.token ? ncProfilManquants() : [];
+    box.hidden = !missing.length;
+    var list = $('nc-profil-manquants');
+    if (list) { clear(list); missing.forEach(function (m) { list.appendChild(el('li', null, m.label || m.id)); }); }
+  }
+
+  // --- Retenir: the confirm sheet (ADR 0033) ---------------------------------
+  // One <dialog> on the shared popup shell, filled from the card and from
+  // `conditions` (GET /notary/bids) — the whole engagement read back before
+  // the POST: fee paid in full at signing, the client's separate Nota price,
+  // déplacement / secteur / distance, lender, dossier readiness, the
+  // cancellation barème on THIS montant (compensation to the notary), the
+  // free-but-counted withdrawal, and what each party receives. Money never
+  // comes from the console's own arithmetic beyond taux × montant: a missing
+  // barème hides its section rather than guessing one.
+  var ncSheetBid = null;
+  function ncSetText(id, text) { var e = $(id); if (!e) return null; clear(e); if (text != null) e.appendChild(document.createTextNode(String(text))); return e; }
+  function ncPct(taux) { return Math.round(Number(taux) * 100) + ' %'; }
+  function ncOpenRetainSheet(b) {
+    var dlg = $('nc-retenir-dialog'); if (!dlg || !b) return;
+    ncSheetBid = b;
+    var svc = D.serviceById(b.serviceId);
+    ncSetText('nc-retenir-svc', svc ? svc.nom : b.serviceId);
+    ncSetText('nc-retenir-date', dayTitle(b.dateISO) + ' · ' + relativeDay(b.dateISO));
+    ncSetText('nc-retenir-fee', D.money(b.montant));
+    ncSetText('nc-retenir-go-amt', D.money(b.montant));
+    // The client's Nota price: `conditions.tarifNota` (ADR 0033) or the feed's
+    // `tarif` (ADR 0031) — the same object. Absent → said in words, no figure.
+    var tarif = (nc.conditions && nc.conditions.tarifNota) || nc.tarif;
+    var nota = ncSetText('nc-retenir-nota', null);
+    if (nota) {
+      if (tarif && typeof tarif.prixNotaCents === 'number') nota.appendChild(document.createTextNode(D.money(Math.round(tarif.prixNotaCents) / 100)));
+      else nota.appendChild(el('span', 'nc-retenir-sub', 'un montant fixe, le même pour tous'));
+    }
+    // Déplacement · secteur · distance — the same facts as the card, in the
+    // same words (each its own node so the dictionary can translate them).
+    var dep = ncSetText('nc-retenir-dep', null);
+    if (dep) {
+      var parts = [];
+      var dp = ncDeplacementPill(b.deplacement); if (dp) parts.push(dp);
+      if (b.prefixe) parts.push(el('span', 'nc-prefixe', b.prefixe));
+      if (b.distanceKm != null) parts.push(el('span', 'nc-distance', '≈ ' + b.distanceKm + ' km'));
+      if (!parts.length) parts.push(el('span', 'nc-retenir-sub', 'Non précisé'));
+      parts.forEach(function (p, i) { if (i) dep.appendChild(document.createTextNode(' · ')); dep.appendChild(p); });
+    }
+    var lender = ncSetText('nc-retenir-lender', null);
+    if (lender) {
+      var lp = ncLenderPill(b.preteur);
+      lender.appendChild(lp || el('span', 'nc-retenir-sub', 'Non précisé'));
+    }
+    var dossier = ncSetText('nc-retenir-dossier', null);
+    if (dossier) {
+      dossier.appendChild(ncReadyBadge(b.ready));
+      var missing = (b.missing || []).map(String).filter(Boolean);
+      if (missing.length) {
+        dossier.appendChild(document.createTextNode(' '));
+        var miss = el('span', 'nc-retenir-missing');
+        miss.appendChild(el('span', null, 'Il manque :'));
+        miss.appendChild(document.createTextNode(' '));
+        missing.forEach(function (m, i) { if (i) miss.appendChild(document.createTextNode(', ')); miss.appendChild(el('span', null, m)); });
+        dossier.appendChild(miss);
+      }
+    }
+    // The barème, computed on THIS montant. Bands come sorted by maxJours;
+    // beyond the last one the cancellation is free.
+    var sec = $('nc-retenir-annulation');
+    var ul = $('nc-retenir-bareme');
+    var paliers = nc.conditions && nc.conditions.annulation && Array.isArray(nc.conditions.annulation.paliers)
+      ? nc.conditions.annulation.paliers.filter(function (p) { return p && p.maxJours != null && p.taux != null; }) : [];
+    if (sec) sec.hidden = !paliers.length;
+    if (ul) {
+      clear(ul);
+      paliers.sort(function (x, y) { return Number(x.maxJours) - Number(y.maxJours); });
+      var from = 0;
+      var band = function (days, rate, amount, free) {
+        var li = el('li', 'nc-bareme-row' + (free ? ' nc-bareme-free' : ''));
+        li.appendChild(el('span', 'nc-bareme-days', days));
+        li.appendChild(document.createTextNode(' '));
+        li.appendChild(el('span', null, 'jours avant la signature'));
+        li.appendChild(document.createTextNode(' : '));
+        li.appendChild(el('span', 'nc-bareme-rate', rate));
+        if (amount != null) { li.appendChild(document.createTextNode(' · '));
+          li.appendChild(el('span', 'nc-bareme-amt', amount)); }
+        ul.appendChild(li);
+      };
+      paliers.forEach(function (p) {
+        var max = Number(p.maxJours);
+        band(from === max ? String(max) : from + '–' + max, ncPct(p.taux), D.money(Math.round(Number(b.montant) * Number(p.taux))), false);
+        from = max + 1;
+      });
+      if (paliers.length) band(from + '+', 'gratuit', null, true);
+    }
+    if (dlg.showModal && !dlg.open) { try { dlg.showModal(); } catch (e) { dlg.open = true; } }
+    else dlg.open = true;
+    var go = $('nc-retenir-go');
+    if (go) { go.disabled = false; try { go.focus({ preventScroll: true }); } catch (e) {} }
+  }
+  function ncCloseRetainSheet() {
+    var dlg = $('nc-retenir-dialog'); if (!dlg) return;
+    ncSheetBid = null;
+    if (dlg.open) { try { dlg.close(); } catch (e) { dlg.open = false; } }
+  }
+  async function ncConfirmRetainSheet() {
+    var b = ncSheetBid; if (!b) return;
+    var go = $('nc-retenir-go'); if (go) go.disabled = true;
+    try { await ncAccept(b.id, b.dateISO, b); }
+    finally { if (go) go.disabled = false; ncCloseRetainSheet(); }
   }
 
   // « Marquer complété » writes the WRITE-ONCE act ledger — the same two-step
@@ -6135,13 +6816,8 @@
     var svc = D.serviceById(entry.serviceId);
     var rows = el('dl', 'nc-kv');
     function kv(k, v) { rows.appendChild(el('dt', null, k)); rows.appendChild(el('dd', null, v)); }
-    // The mise en relation (ADR 0010): once retained, the API releases the
-    // client's contact block — name (even for a publicly anonymous bid),
-    // courriel, and the phone when the client left one.
-    var client = entry.client || {};
-    if (client.nom) kv('Nom', client.nom);
-    kv('Courriel', client.courriel || entry.courriel || '—');
-    if (client.telephone) kv('Téléphone', client.telephone);
+    // The client's contact block lives at the top of the card (ncClientBlock,
+    // ADR 0033) — this block is the FILE: answers, documents, consent.
     var d = entry.dossier || {};
     if (svc) {
       svc.champs.forEach(function (c) { if (d[c.id]) kv(c.label, String(d[c.id])); });
@@ -6194,31 +6870,76 @@
     wrap.appendChild(el('p', 'help', 'À cette étape, vos honoraires vous sont virés en entier. Nota facture son service au client, séparément.'));
     return wrap;
   }
+  // A small stroked glyph (currentColor) for the contact links.
+  function ncGlyph(paths, size) {
+    var NS = 'http://www.w3.org/2000/svg';
+    var svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('width', String(size || 14)); svg.setAttribute('height', String(size || 14));
+    svg.setAttribute('fill', 'none'); svg.setAttribute('stroke', 'currentColor'); svg.setAttribute('stroke-width', '2');
+    svg.setAttribute('stroke-linecap', 'round'); svg.setAttribute('stroke-linejoin', 'round'); svg.setAttribute('aria-hidden', 'true');
+    paths.forEach(function (d) { var p = document.createElementNS(NS, 'path'); p.setAttribute('d', d); svg.appendChild(p); });
+    return svg;
+  }
+  var NC_GLYPH_PHONE = ['M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.6a2 2 0 0 1-.5 2.1L8 9.7a16 16 0 0 0 6.3 6.3l1.3-1.3a2 2 0 0 1 2.1-.5c.8.3 1.7.6 2.6.7a2 2 0 0 1 1.7 2z'];
+  var NC_GLYPH_MAIL = ['M4 5h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z', 'm2 7 10 7 10-7'];
+
+  // « Votre client » (ADR 0033) — the mise en relation is complete: the
+  // client's name, a tel: link (the phone is there to be dialled), a mailto,
+  // then the facts that frame the signing — secteur, déplacement, distance,
+  // prêteur. First thing on the card: the conversation starts with knowing
+  // who is on the other side.
+  function ncClientBlock(entry) {
+    var wrap = el('div', 'nc-client');
+    wrap.appendChild(el('div', 'nc-dossier-h', 'Votre client'));
+    var client = entry.client || {};
+    var courriel = client.courriel || entry.courriel || null;
+    var tel = client.telephone || null;
+    if (client.nom) wrap.appendChild(el('div', 'nc-client-nom', client.nom));
+    var links = el('div', 'nc-client-links');
+    if (tel) {
+      var a = el('a', 'nc-client-tel'); a.href = D.telHref(tel) || ('tel:' + tel);
+      a.appendChild(ncGlyph(NC_GLYPH_PHONE, 14)); a.appendChild(el('span', null, tel));
+      links.appendChild(a);
+    }
+    if (courriel) {
+      var m = el('a', 'nc-client-mail'); m.href = 'mailto:' + courriel;
+      m.appendChild(ncGlyph(NC_GLYPH_MAIL, 14)); m.appendChild(el('span', null, courriel));
+      links.appendChild(m);
+    }
+    if (!tel && !courriel) links.appendChild(el('span', 'help', 'Coordonnées en attente de la prochaine mise à jour.'));
+    wrap.appendChild(links);
+    var facts = ncFactsRow({ preteur: entry.preteur, deplacement: entry.deplacement, prefixe: entry.prefixe, distanceKm: entry.distanceKm });
+    if (facts) { facts.classList.add('nc-client-facts'); wrap.appendChild(facts); }
+    return wrap;
+  }
+
   function ncRetainedCard(entry) {
     var svc = D.serviceById(entry.serviceId);
     var card = el('div', 'nc-card is-retained'); card.dataset.id = entry.id; card.dataset.date = entry.dateISO || '';
     var head = el('div', 'nc-card-head');
     head.appendChild(el('div', 'nc-card-title', svc ? svc.nom : entry.serviceId));
+    // Unread client messages (ADR 0033): the badge rides the head, beside
+    // the act's name — the first thing a scan reads.
+    var unread = ncUnreadCount(entry);
+    if (unread) { head.appendChild(ncUnreadBadge(unread)); card.dataset.unread = String(unread); }
     head.appendChild(el('div', 'nc-card-amount', D.money(entry.montant)));
     card.appendChild(head);
     var meta = el('div', 'nc-card-meta');
     meta.appendChild(ncTierPill(entry.tier));
     meta.appendChild(el('span', 'pill pill-retenue', 'Retenue'));
     if (entry.viaProposition) meta.appendChild(el('span', 'nc-pill nc-via-prop', 'Prix accepté sur proposition'));
+    if (entry.completed) meta.appendChild(el('span', 'nc-done-badge', 'Acte complété'));
     card.appendChild(meta);
     // Retained cards live in a flat list (no day sections), so the signing
-    // date leads their facts line.
-    var facts = ncFactsRow({
-      dateISO: entry.dateISO, showDate: true,
-      preteur: entry.preteur, deplacement: entry.deplacement, prefixe: entry.prefixe
-    });
+    // date leads; the lender / déplacement facts moved under « Votre client ».
+    var facts = ncFactsRow({ dateISO: entry.dateISO, showDate: true });
     if (facts) card.appendChild(facts);
     var status = ncStatusRow({ demande: entry.demande });
     if (status) card.appendChild(status);
-    card.appendChild(ncDossierBlock(entry));
-    // The retained-act conversation: the details that decide whether the file
-    // holds (lender instructions, dates) surface HERE, before the signing.
+    // Who the client is, then the conversation, then the file (ADR 0033).
+    card.appendChild(ncClientBlock(entry));
     card.appendChild(ncChatBlock(entry));
+    card.appendChild(ncDossierBlock(entry));
     // A retaining notary may still ask for what the dossier lacks, and block
     // the day in their own agenda.
     var more = el('div', 'nc-card-more');
@@ -6237,6 +6958,21 @@
   // --- The retained-act conversation (client ↔ notaire) ----------------------
   // Rendered from the entry's server-merged `messages`; refreshed by every
   // ncLoadBids (sign-in, tab switch, window focus, the poll, after a send).
+  // Shared by both sides (ADR 0033): the thread, its timestamps and the
+  // composer are ONE construction — client and notary read the same thing.
+  //
+  // « 3 sept. · 14:32 » — the day from dayShort, the LOCAL time of day when
+  // the stamp carries one (a date-only stamp keeps just the day).
+  function whenLabel(iso) {
+    var s = String(iso || '');
+    if (!s) return '';
+    var day = dayShort(s.slice(0, 10));
+    if (s.length <= 10) return day;
+    var d = new Date(s);
+    if (isNaN(d.getTime())) return day;
+    var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+    return day + ' · ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
   function chatThread(messages, mineRole) {
     var box = el('div', 'chat-thread');
     var list = Array.isArray(messages) ? messages : [];
@@ -6250,11 +6986,81 @@
       row.classList.toggle('is-mine', m.de === mineRole);
       var bubble = el('div', 'chat-bubble', m.texte);
       row.appendChild(bubble);
-      var when = String(m.createdAt || '').slice(0, 10);
-      if (when) row.appendChild(el('span', 'chat-when', dayShort(when)));
+      var when = whenLabel(m.createdAt);
+      if (when) row.appendChild(el('span', 'chat-when', when));
       box.appendChild(row);
     });
+    // The newest message is what the reader came for: once the thread is in
+    // the document (the caller appends it after this returns), rest at the end.
+    setTimeout(function () { try { box.scrollTop = box.scrollHeight; } catch (e) {} }, 0);
     return box;
+  }
+
+  // The write box: an auto-growing textarea, Enter sends (Shift+Enter breaks
+  // the line), a « N / max » counter from CHAT_COUNT_FROM, a busy state that
+  // says « Envoi… », and an inline error (never only a toast). `onSend(texte)`
+  // returns (a promise of) `{ ok, message }` or a boolean; a refusal shows the
+  // message and keeps the draft. Returns { el, input, button, setBusy, setError }.
+  var CHAT_COUNT_FROM = 400;
+  function chatComposer(opts) {
+    opts = opts || {};
+    var max = Number(opts.maxLength) > 0 ? Number(opts.maxLength) : (D.CHAT_MESSAGE_MAX || 500);
+    var wrap = el('div', 'chat-write');
+    var row = el('div', 'chat-row chat-composer');
+    var input = el('textarea', 'chat-input');
+    input.rows = 1; input.maxLength = max;
+    input.placeholder = opts.placeholder || 'Écrire un message…';
+    input.setAttribute('aria-label', opts.ariaLabel || opts.placeholder || 'Écrire un message');
+    var button = el('button', 'btn btn-sm btn-primary chat-send' + (opts.sendClass ? ' ' + opts.sendClass : ''), 'Envoyer');
+    button.type = 'button';
+    row.appendChild(input); row.appendChild(button);
+    wrap.appendChild(row);
+    var meta = el('div', 'chat-meta');
+    var err = el('p', 'chat-error'); err.hidden = true; err.setAttribute('role', 'alert');
+    var count = el('span', 'chat-count'); count.hidden = true; count.setAttribute('aria-live', 'polite');
+    meta.appendChild(err); meta.appendChild(count);
+    wrap.appendChild(meta);
+    var busy = false;
+    function grow() {
+      input.style.height = 'auto';
+      var h = input.scrollHeight;
+      if (h) input.style.height = Math.min(h, 160) + 'px';
+    }
+    function tally() {
+      var n = input.value.length;
+      count.hidden = n < CHAT_COUNT_FROM;
+      count.textContent = count.hidden ? '' : n + ' / ' + max;
+    }
+    function setError(msg) {
+      if (!msg) { err.hidden = true; err.textContent = ''; return; }
+      err.hidden = false; err.textContent = msg;
+    }
+    function setBusy(b) {
+      busy = !!b;
+      button.disabled = busy;
+      button.textContent = busy ? 'Envoi…' : 'Envoyer';
+      if (busy) button.setAttribute('aria-busy', 'true'); else button.removeAttribute('aria-busy');
+    }
+    async function send() {
+      if (busy) return;
+      var texte = input.value.trim();
+      if (!texte) { setError('Écrivez un message.'); try { input.focus(); } catch (e) {} return; }
+      setError(null);
+      setBusy(true);
+      var res;
+      try { res = await opts.onSend(texte, api); } catch (e) { res = { ok: false, message: 'Message impossible.' }; }
+      setBusy(false);
+      if (res === false || (res && res.ok === false)) { setError((res && res.message) || 'Message impossible.'); return; }
+      input.value = ''; grow(); tally();
+    }
+    input.addEventListener('input', function () { grow(); tally(); setError(null); });
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+    });
+    if (opts.onFocus) input.addEventListener('focus', opts.onFocus);
+    button.addEventListener('click', send);
+    var api = { el: wrap, input: input, button: button, setBusy: setBusy, setError: setError, send: send };
+    return api;
   }
 
   // --- Les documents de la conversation (ADR 0032) ---------------------------
@@ -6390,30 +7196,151 @@
     };
   }
 
+  // --- The notary-side thread and composer (ADR 0033) ------------------------
+  // The client side owns the SHARED helpers (`chatThread`, `whenLabel`,
+  // `chatComposer`); this side uses them when they exist and falls back to
+  // its own construction otherwise, so the two halves ship independently.
+  // Nothing here redefines a shared name.
+  var NC_CHAT_MAX = D.CHAT_MESSAGE_MAX || 500;
+  var NC_CHAT_COUNT_FROM = 400;
+  var ncFmtWhenDay = new Intl.DateTimeFormat(LOCALE, { day: 'numeric', month: 'short' });
+  // « 3 sept. · 14:32 » — the day in the locale, the time in the notary's own
+  // clock (a message is stamped when it was written, not on a signing day).
+  function ncWhenLabel(iso) {
+    if (typeof whenLabel === 'function') return whenLabel(iso);
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return String(iso || '').slice(0, 10);
+    var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+    return ncFmtWhenDay.format(d) + ' · ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+  function ncChatThread(entry) {
+    var thread = chatThread(entry.messages, 'notaire');
+    // Until the shared thread stamps the time itself, do it here: one row per
+    // message, in order — the same order chatThread walks.
+    if (typeof whenLabel !== 'function') {
+      var list = Array.isArray(entry.messages) ? entry.messages : [];
+      thread.querySelectorAll('.chat-msg').forEach(function (row, i) {
+        var m = list[i]; if (!m || !m.createdAt) return;
+        var w = row.querySelector('.chat-when');
+        if (w) w.textContent = ncWhenLabel(m.createdAt);
+      });
+    }
+    return thread;
+  }
+  // The composer: one-line box that grows with the text, Enter sends
+  // (Shift+Enter breaks), a « N / 500 » counter from 400, « Envoi… » while the
+  // POST is out, the refusal inline. Returns { root, input, button,
+  // setSending, setError, clear } — the surface ncChatSend drives.
+  function ncChatComposerLocal(opts) {
+    var wrap = el('div', 'nc-composer');
+    var row = el('div', 'chat-row');
+    var main = el('div', 'nc-composer-main');
+    var input = el('textarea', 'chat-input');
+    input.rows = 1; input.maxLength = NC_CHAT_MAX;
+    input.placeholder = opts.placeholder;
+    input.setAttribute('aria-label', opts.ariaLabel || opts.placeholder);
+    var count = el('span', 'nc-chat-count'); count.hidden = true; count.setAttribute('aria-live', 'polite');
+    var send = el('button', 'btn btn-sm btn-primary nc-chat-send', 'Envoyer'); send.type = 'button';
+    var err = el('p', 'nc-chat-err'); err.hidden = true; err.setAttribute('role', 'alert');
+    function grow() {
+      input.style.height = 'auto';
+      var h = input.scrollHeight;
+      if (h) input.style.height = Math.min(h, 180) + 'px';
+      var n = input.value.length;
+      count.hidden = n < NC_CHAT_COUNT_FROM;
+      count.textContent = n + ' / ' + NC_CHAT_MAX;
+    }
+    var api = {
+      root: wrap, input: input, button: send,
+      setSending: function (on) { send.disabled = !!on; send.textContent = on ? 'Envoi…' : 'Envoyer'; input.readOnly = !!on; },
+      setError: function (msg) { err.hidden = !msg; err.textContent = msg || ''; },
+      clear: function () { input.value = ''; grow(); },
+    };
+    input.addEventListener('input', function () { grow(); if (!err.hidden) api.setError(null); });
+    input.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' || e.shiftKey || e.isComposing) return;
+      e.preventDefault();
+      if (!send.disabled) send.click();
+    });
+    if (opts.onFocus) input.addEventListener('focus', opts.onFocus);
+    send.addEventListener('click', function () { if (!send.disabled) opts.onSend(input.value, api); });
+    main.appendChild(input); main.appendChild(count);
+    row.appendChild(main); row.appendChild(send);
+    wrap.appendChild(row); wrap.appendChild(err);
+    return api;
+  }
+  // The SHARED composer when the client side shipped it (`chatComposer`: it
+  // owns busy / error / clear from what `onSend(texte, api)` returns —
+  // `{ ok, message }`), tagged with the send class this console's delegation
+  // and tests know (.nc-chat-send). Otherwise the local one above.
+  function ncComposer(opts) {
+    if (typeof chatComposer !== 'function') return ncChatComposerLocal(opts);
+    var c = chatComposer({
+      placeholder: opts.placeholder, ariaLabel: opts.ariaLabel, sendClass: 'nc-chat-send',
+      onFocus: opts.onFocus,
+      // `shared`: the composer drives its own state; ncChatSend only clears
+      // the box before the repaint (so the draft carry-over never restores a
+      // message that just went out) and returns the verdict.
+      onSend: function (texte, api) {
+        return opts.onSend(texte, { shared: true, clear: function () { if (api && api.input) api.input.value = ''; } });
+      },
+    });
+    var root = c && c.nodeType === 1 ? c : (c && (c.el || c.root || c.element)) || null;
+    if (!root) return ncChatComposerLocal(opts);
+    var input = (c.input && c.input.nodeType === 1) ? c.input : root.querySelector('textarea');
+    var button = (c.button && c.button.nodeType === 1) ? c.button : root.querySelector('button');
+    if (input) input.classList.add('chat-input');
+    if (button) button.classList.add('nc-chat-send');
+    return { root: root, input: input, button: button };
+  }
+
   function ncChatBlock(entry) {
     var wrap = el('div', 'nc-chat chat'); wrap.dataset.id = entry.id;
     wrap.appendChild(el('div', 'nc-dossier-h', 'Conversation avec le client'));
-    wrap.appendChild(chatThread(entry.messages, 'notaire'));
+    var thread = ncChatThread(entry);
+    wrap.appendChild(thread);
+    // Read when the thread is actually looked at: on screen, or the composer taken.
+    ncObserveThread(thread, entry);
     wrap.appendChild(documentsBlock(ncDocCtx(entry), entry.documents, function (doc) {
       ncRetainedUpdate(nc.email, entry.id, { documents: (entry.documents || []).concat([doc]) });
       ncRenderRetained();
     }));
-    var row = el('div', 'chat-row');
-    var input = el('textarea', 'chat-input');
-    input.rows = 2; input.maxLength = 500;
-    input.placeholder = 'Écrire au client…';
-    input.setAttribute('aria-label', 'Écrire au client');
-    var send = el('button', 'btn btn-sm btn-primary nc-chat-send', 'Envoyer'); send.type = 'button';
-    row.appendChild(input); row.appendChild(send);
-    wrap.appendChild(row);
+    var composer = ncComposer({
+      placeholder: 'Écrire au client…', ariaLabel: 'Écrire au client',
+      onFocus: function () { ncMarkSeen(entry); },
+      onSend: function (texte, ui) { ncChatSend(entry, texte, ui); },
+    });
+    wrap.appendChild(composer.root);
     return wrap;
   }
+  // Scrolling a thread into view marks it read (ADR 0033) — where the
+  // platform can tell; a jsdom or an old engine simply waits for the composer.
+  function ncObserveThread(thread, entry) {
+    if (typeof IntersectionObserver !== 'function' || !ncUnreadCount(entry)) return;
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (x) {
+        if (!x.isIntersecting || x.intersectionRatio < 0.6) return;
+        io.disconnect(); ncMarkSeen(entry);
+      });
+    }, { threshold: [0.6] });
+    io.observe(thread);
+  }
 
-  async function ncChatSend(entry, texte, btn) {
-    if (!nc.token) return;
+  // `ui` is the composer surface: the local one ({ setSending, setError,
+  // clear }) is driven from here; the shared one ({ shared: true, clear })
+  // drives itself from the returned `{ ok, message }`. A bare button (the old
+  // call shape) still works — it is disabled while sending.
+  async function ncChatSend(entry, texte, ui) {
+    if (!nc.token) return { ok: false, message: 'Session expirée.' };
+    if (ui && ui.nodeType === 1) { var btn = ui; ui = { setSending: function (on) { btn.disabled = !!on; } }; }
+    ui = ui || {};
+    var shared = ui.shared === true;
+    var setSending = !shared && typeof ui.setSending === 'function' ? ui.setSending : function () {};
+    var setError = !shared && typeof ui.setError === 'function' ? ui.setError : (shared ? function () {} : function (m) { if (m) toast(m); });
+    var fail = function (message) { setSending(false); setError(message); return { ok: false, message: message }; };
     texte = String(texte || '').trim();
-    if (!texte) { toast('Écrivez un message.'); return; }
-    if (btn) btn.disabled = true;
+    if (!texte) return fail('Écrivez un message.');
+    setError(null); setSending(true);
     var r;
     try {
       r = await fetch(API_BASE + '/notary/bids/message', {
@@ -6421,19 +7348,19 @@
         headers: { 'content-type': 'application/json', authorization: 'Bearer ' + nc.token },
         body: JSON.stringify({ id: entry.id, dateISO: entry.dateISO, texte: texte }),
       });
-    } catch (e) { toast('Message impossible (hors ligne).'); if (btn) btn.disabled = false; return; }
-    if (r.status === 401) { ncExpire('Session expirée. Reconnectez-vous.'); return; }
+    } catch (e) { return fail('Message impossible (hors ligne).'); }
+    if (r.status === 401) { ncExpire('Session expirée. Reconnectez-vous.'); return { ok: false, message: 'Session expirée.' }; }
     var j = {}; try { j = await r.json(); } catch (e) {}
-    if (btn) btn.disabled = false;
-    if (r.status !== 200 || !j.message) {
-      toast((j.errors && j.errors[0] && j.errors[0].message) || 'Message impossible.');
-      return;
-    }
+    if (r.status !== 200 || !j.message) return fail((j.errors && j.errors[0] && j.errors[0].message) || 'Message impossible.');
+    setSending(false);
+    if (typeof ui.clear === 'function') ui.clear();
     var messages = (entry.messages || []).concat([j.message]);
     ncRetainedUpdate(nc.email, entry.id, { messages: messages });
+    ncMarkSeen(Object.assign({}, entry, { messages: messages })); // answering reads the thread
     ncRenderRetained();
     // Pull the thread fresh (the client may have written meanwhile).
     ncLoadBids();
+    return { ok: true, message: j.message };
   }
 
   // --- The withdrawal (désistement) ------------------------------------------
@@ -6447,6 +7374,8 @@
     wrap.appendChild(open);
     var form = el('div', 'nc-release-form'); form.hidden = true;
     form.appendChild(el('p', 'help', 'L’acte retourne au carnet tel que publié (même date, même montant) et le client est prévenu. Vous ne verrez plus cette demande.'));
+    // ADR 0033: withdrawing costs nothing, but it is counted on the file.
+    form.appendChild(el('p', 'help nc-release-terms', 'Se désister est gratuit, mais compté à votre dossier. Le client garde sa date et son offre.'));
     var motif = el('textarea', 'nc-release-motif');
     motif.rows = 2; motif.maxLength = 500;
     motif.placeholder = 'Motif (facultatif — transmis à l’équipe Nota, jamais publié)';
@@ -6491,15 +7420,83 @@
     toast('Acte remis au carnet. Le client est prévenu.');
   }
 
+  // « Dossiers retenus · N » + the unread count (ADR 0033).
+  function ncRenderRetainedHead() {
+    var head = $('notary-retained-h'); if (!head) return;
+    clear(head);
+    head.appendChild(el('span', null, 'Dossiers retenus'));
+    var items = nc.email ? ncRetainedFor(nc.email) : [];
+    if (!items.length) return;
+    head.appendChild(document.createTextNode(' · '));
+    head.appendChild(el('span', 'nc-h-n', String(items.length)));
+    var unread = items.reduce(function (s, e) { return s + ncUnreadCount(e); }, 0);
+    if (unread) { head.appendChild(document.createTextNode(' ')); head.appendChild(ncUnreadBadge(unread)); }
+  }
+
   function ncRenderRetained() {
-    var list = $('notary-retained-list'); if (!list) return; clear(list);
+    var list = $('notary-retained-list'); if (!list) return;
+    // A repaint can land mid-sentence (the poll, a document, a sent message):
+    // carry every draft — and the focus — across it, so the notary never
+    // loses a word to a refresh (ADR 0033).
+    var drafts = {};
+    list.querySelectorAll('.nc-card').forEach(function (card) {
+      var ta = card.querySelector('.chat-input'); if (!ta) return;
+      var focused = document.activeElement === ta;
+      if (ta.value || focused) drafts[card.dataset.id] = { value: ta.value, start: ta.selectionStart, end: ta.selectionEnd, focused: focused };
+    });
+    clear(list);
     var empty = $('notary-retained-empty');
     var items = nc.email ? ncRetainedFor(nc.email) : [];
     ncRenderEarnings();
+    ncRenderRetainedHead();
     if (!items.length) { if (empty) empty.hidden = false; return; }
     if (empty) empty.hidden = true;
-    items.slice().sort(function (a, b) { return a.dateISO.localeCompare(b.dateISO); })
-      .forEach(function (e) { list.appendChild(ncRetainedCard(e)); });
+    // Unread first (someone is waiting), then soonest signing first.
+    items.slice().sort(function (a, b) {
+      var ua = ncUnreadCount(a) > 0 ? 0 : 1, ub = ncUnreadCount(b) > 0 ? 0 : 1;
+      if (ua !== ub) return ua - ub;
+      return String(a.dateISO || '').localeCompare(String(b.dateISO || ''));
+    }).forEach(function (e) { list.appendChild(ncRetainedCard(e)); });
+    Object.keys(drafts).forEach(function (id) {
+      var card = list.querySelector('.nc-card[data-id="' + id + '"]'); if (!card) return;
+      var ta = card.querySelector('.chat-input'); if (!ta) return;
+      var d = drafts[id];
+      if (d.value) { ta.value = d.value; ta.dispatchEvent(new Event('input', { bubbles: true })); }
+      if (d.focused) {
+        try { ta.focus({ preventScroll: true }); } catch (e) { try { ta.focus(); } catch (e2) {} }
+        try { ta.setSelectionRange(d.start, d.end); } catch (e) {}
+      }
+    });
+    ncConsumeDeepAct();
+  }
+
+  // --- « #notaires&acte=<id> » (ADR 0033) --------------------------------------
+  // Every act email lands here. The tab opens at boot; the card is found once
+  // a feed load has painted it — in the open feed (a new-demand alert) or
+  // among the retained files — then scrolled to and flashed. The parameter is
+  // consumed from the URL on the spot, like a magic link.
+  function ncConsumeActHash() {
+    var params;
+    try { params = new URLSearchParams(String(location.hash || '').replace(/^#/, '')); } catch (e) { return false; }
+    var id = params.get('acte');
+    if (!id) return false;
+    nc.deepAct = id;
+    params.delete('acte'); params.delete('notaires');
+    if (!params.has('t')) params.set('t', 'notaires');
+    var rest = params.toString();
+    try { history.replaceState(null, '', location.pathname + location.search + (rest ? '#' + rest : '')); } catch (e) {}
+    state.tab = 'notaires';
+    return true;
+  }
+  function ncConsumeDeepAct() {
+    var id = nc.deepAct; if (!id) return;
+    var card = document.querySelector('#notary-retained-list .nc-card[data-id="' + id + '"], #notary-open-list .nc-card[data-id="' + id + '"]');
+    if (!card) return; // not painted yet — the next render tries again
+    nc.deepAct = null;
+    if (state.tab !== 'notaires') setTab('notaires', { scroll: false, focus: false });
+    if (card.scrollIntoView) { try { card.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {} }
+    retrigger(card, 'is-flash');
+    card.addEventListener('animationend', function () { card.classList.remove('is-flash'); }, { once: true });
   }
 
   // Le cumul des revenus du notaire (ADR 0031) : ses HONORAIRES, entiers.
@@ -6882,9 +7879,35 @@
   // --- Notary public profile (ADR 0016) --------------------------------------
   // One field: the official fiche at the Chambre des notaires. The domain is
   // the gatekeeper (cnq.org, https) — the API re-validates, of course.
+  // Every profile POST carries the WHOLE profile: the API replaces what it
+  // stores, so a partial body (the alertes alone) would blank the rest.
+  function ncProfilBody(over) {
+    var p = nc.profil || {};
+    var a = ncAlertes();
+    var body = {
+      nom: p.nom || '', etude: p.etude || '', telephone: p.telephone || '', adresse: p.adresse || '',
+      lienCNQ: p.lienCNQ || '', rayonKm: p.rayonKm || 0, urgences: p.urgences === true, prefixe: p.prefixe || '',
+      alertes: { pace: a.pace, urgentOnly: a.urgentOnly },
+    };
+    return Object.assign(body, over || {});
+  }
+  // Inline, as the notary types: the domain's phone rule, under the field.
+  function ncCheckTelephone() {
+    var inp = $('nc-telephone'), err = $('nc-telephone-err');
+    if (!inp || !err) return true;
+    var v = D.validateTelephone(inp.value);
+    err.hidden = v.ok; err.textContent = v.ok ? '' : v.error.message;
+    inp.setAttribute('aria-invalid', v.ok ? 'false' : 'true');
+    return v.ok;
+  }
   function ncRenderProfil() {
     var inp = $('nc-cnq'); if (!inp) return;
-    inp.value = (nc.profil && nc.profil.lienCNQ) || '';
+    var p = nc.profil || {};
+    // The identity the client receives (ADR 0033).
+    var fill = function (id, v) { var e = $(id); if (e) e.value = v == null ? '' : String(v); };
+    fill('nc-nom', p.nom); fill('nc-etude', p.etude); fill('nc-telephone', p.telephone); fill('nc-adresse', p.adresse);
+    var telErr = $('nc-telephone-err'); if (telErr) { telErr.hidden = true; telErr.textContent = ''; }
+    inp.value = p.lienCNQ || '';
     // Travel radius + online-urgency opt-in (ADR 0017). The radius options ARE
     // the domain's NOTARY_RADII — filled here, never re-declared in the HTML;
     // the nselect rebuilds its list from the native options on every open.
@@ -6916,23 +7939,34 @@
     var saved = $('nc-profil-saved');
     if (saved) saved.hidden = true;
     var pre = $('nc-prefixe');
+    var field = function (id) { var e = $(id); return e ? e.value : ''; };
     var v = D.validateNotaryProfile({
+      nom: field('nc-nom'), etude: field('nc-etude'), telephone: field('nc-telephone'), adresse: field('nc-adresse'),
       lienCNQ: inp.value,
       rayonKm: sel ? sel.value : 0,
       urgences: !!(urg && urg.checked),
       prefixe: pre ? pre.value : '',
     });
+    ncCheckTelephone();
     if (!v.ok) {
       if (errBox) { clear(errBox); errBox.hidden = false; v.errors.forEach(function (x) { errBox.appendChild(el('li', null, x.message)); }); }
       return;
     }
-    var res = await ncPost('/notary/profile', { lienCNQ: v.lienCNQ || '', rayonKm: v.rayonKm, urgences: v.urgences, prefixe: v.prefixe || '' });
+    var res = await ncPost('/notary/profile', ncProfilBody({
+      nom: v.nom || '', etude: v.etude || '', telephone: v.telephone || '', adresse: v.adresse || '',
+      lienCNQ: v.lienCNQ || '', rayonKm: v.rayonKm, urgences: v.urgences, prefixe: v.prefixe || '',
+    }));
     if (!res) return;
     if (res.status !== 200) {
       if (errBox) { clear(errBox); errBox.hidden = false; (res.json.errors || [{ message: 'Échec de l’enregistrement du profil.' }]).forEach(function (x) { errBox.appendChild(el('li', null, x.message)); }); }
       return;
     }
-    nc.profil = res.json.profil || { lienCNQ: v.lienCNQ, rayonKm: v.rayonKm, urgences: v.urgences, prefixe: v.prefixe };
+    nc.profil = res.json.profil || Object.assign({}, nc.profil, {
+      nom: v.nom, etude: v.etude, telephone: v.telephone, adresse: v.adresse,
+      lienCNQ: v.lienCNQ, rayonKm: v.rayonKm, urgences: v.urgences, prefixe: v.prefixe,
+    });
+    nc.manquantsServeur = null; // the saved profile is the truth now
+    ncRenderProfilBanner();
     if (errBox) { clear(errBox); errBox.hidden = true; }
     if (saved) saved.hidden = false;
     toast('Profil enregistré.');
@@ -7001,7 +8035,9 @@
     });
     if (tab === 'dossier') renderDossier();
     if (tab === 'profil') renderProfil();
-    if (tab === 'notaires') { renderNotaryLive(); }
+    if (tab === 'notaires') { renderNotaryLive(); noteNotaryDoor(); }
+    // The client thread refreshes itself only while Mes offres is on screen.
+    clientPollSync();
     if (opts.scroll !== false) window.scrollTo({ top: 0, behavior: 'auto' });
     // Move focus into the new pane's heading so keyboard/SR users are never dropped
     // to <body> when a menu/link navigates and its container is hidden. The
@@ -7018,7 +8054,7 @@
 
   // Every modal the page can hold; closed together when history moves.
   function closeOpenDialogs() {
-    ['day-dialog', 'auth-dialog', 'reveal-dialog', 'onboarding-dialog', 'cancel-dialog', 'contact-dialog'].forEach(function (id) {
+    ['day-dialog', 'auth-dialog', 'reveal-dialog', 'onboarding-dialog', 'cancel-dialog', 'contact-dialog', 'nc-retenir-dialog'].forEach(function (id) {
       var d = $(id);
       if (d && d.open) { try { d.close(); } catch (e) { d.open = false; } }
     });
@@ -7101,6 +8137,7 @@
     renderNotaryLive(); // the landing's open-demand teaser
     renderOnbWeekAnim(); // and the welcome dialog's live week board, if open
     renderLegend(); // the legend's multipliers are tuned on the freshly loaded month
+    renderHeroPrice(); // the hero quotes the tarif the same response carried
   }
   function refreshMonth() { renderActiveView(); }
   async function reloadAndRender() { await refreshMonthData(); refreshMonth(); }
@@ -7444,9 +8481,30 @@
     $('o-anon').addEventListener('change', onAnonToggle);
     $('o-prefix').addEventListener('input', onPrefixInput);
     $('o-courriel').addEventListener('input', validateOfferUI);
+    $('o-name').addEventListener('input', validateOfferUI);
+    $('o-telephone').addEventListener('input', onTelephoneInput);
     var refField = $('o-parrain'); if (refField) refField.addEventListener('input', onRefCodeInput);
     $('offer-form').addEventListener('submit', onOfferSubmit);
     $('o-date').setAttribute('min', todayISO());
+    // The first touch of the form — a typed value, a changed select, an
+    // answer chip — is one funnel step per dialog opening.
+    $('offer-form').addEventListener('input', noteFormStart);
+    $('offer-form').addEventListener('change', noteFormStart);
+    $('offer-form').addEventListener('click', function (e) {
+      if (e.target && e.target.closest && e.target.closest('.chip, .seg-btn')) noteFormStart();
+    });
+    // The header date picker re-opens the chosen day in place; a past or
+    // malformed date snaps back to the day on screen.
+    var dayPick = $('day-date');
+    if (dayPick) {
+      dayPick.setAttribute('min', todayISO());
+      dayPick.addEventListener('change', function () {
+        var iso = this.value;
+        if (!D.isISODate(iso) || iso < todayISO()) { this.value = state.selectedDate || ''; return; }
+        if (iso === state.selectedDate) return;
+        openDay(iso);
+      });
+    }
 
     // Day booking dialog
     $('day-close').addEventListener('click', function () { $('day-dialog').close(); });
@@ -7534,23 +8592,27 @@
     var ncActsBox = $('notary-actes');
     if (ncActsBox) ncActsBox.addEventListener('toggle', function () { if (ncActsBox.open) ncLoadActs(); });
 
-    // Lead-delivery preferences — every control saves on change (per notary).
-    if ($('pref-ch-email')) $('pref-ch-email').addEventListener('change', function () { ncPrefsPatch({ email: this.checked }); });
-    if ($('pref-ch-sms')) $('pref-ch-sms').addEventListener('change', function () { ncPrefsPatch({ sms: this.checked }); if ($('pref-phone-row')) $('pref-phone-row').hidden = !this.checked; });
-    if ($('pref-phone')) $('pref-phone').addEventListener('change', function () { ncPrefsPatch({ phone: this.value.trim() }); });
-    if ($('pref-urgent')) $('pref-urgent').addEventListener('change', function () { ncPrefsPatch({ urgent: this.checked }); });
+    // Alert preferences (ADR 0033 §7) — every control saves to the SERVER on
+    // change, through the profile; the seg repaints optimistically.
+    if ($('pref-urgent')) $('pref-urgent').addEventListener('change', function () { ncSaveAlertes({ urgentOnly: this.checked }); });
     var ncPace = $('pref-pace');
     if (ncPace) ncPace.addEventListener('click', function (e) {
       var b = e.target.closest('.seg-btn'); if (!b) return;
       ncPace.querySelectorAll('.seg-btn').forEach(function (x) { var on = x === b; x.classList.toggle('is-on', on); x.setAttribute('aria-pressed', on ? 'true' : 'false'); });
-      ncPrefsPatch({ pace: b.dataset.pace });
+      ncSaveAlertes({ pace: b.dataset.pace });
     });
-    var ncSvc = $('pref-svc');
-    if (ncSvc) ncSvc.addEventListener('click', function (e) {
-      var c = e.target.closest('.chip'); if (!c) return;
-      var on = !c.classList.contains('is-on'); c.classList.toggle('is-on', on); c.setAttribute('aria-pressed', on ? 'true' : 'false');
-      var svc = ncPrefsGet(nc.email).services; svc[c.dataset.svc] = on; ncPrefsPatch({ services: svc });
-    });
+    // The contact gate's door (ADR 0033), and the phone rule as it is typed.
+    if ($('nc-profil-door')) $('nc-profil-door').addEventListener('click', ncOpenProfilDoor);
+    if ($('nc-telephone')) $('nc-telephone').addEventListener('input', ncCheckTelephone);
+    // The Retenir sheet: its two buttons, and Escape (the native dialog
+    // handles it too; the listener covers engines that do not).
+    var ncSheet = $('nc-retenir-dialog');
+    if (ncSheet) {
+      if ($('nc-retenir-later')) $('nc-retenir-later').addEventListener('click', ncCloseRetainSheet);
+      if ($('nc-retenir-go')) $('nc-retenir-go').addEventListener('click', ncConfirmRetainSheet);
+      ncSheet.addEventListener('keydown', function (e) { if (e.key === 'Escape') { e.preventDefault(); ncCloseRetainSheet(); } });
+      ncSheet.addEventListener('close', function () { ncSheetBid = null; });
+    }
     var ncFilter = $('notary-open-filter');
     if (ncFilter) ncFilter.addEventListener('click', function (e) {
       var c = e.target.closest('.chip'); if (!c) return;
@@ -7582,27 +8644,22 @@
         var card = e.target.closest('.nc-card'); if (!card) return;
         var id = card.dataset.id;
         var b = ncFindOpen(id); if (!b) return;
+        // Retenir / Proposer go through the contact gate first (ADR 0033):
+        // an incomplete profile opens the form instead of the action.
         if (e.target.closest('.nc-accept')) {
-          if (card.dataset.confirm === '1') ncAccept(id, b.dateISO, b); else ncArmAccept(card, b);
+          if (ncProfilIncomplet()) ncProfilGate(null); else ncOpenRetainSheet(b);
         }
-        else if (e.target.closest('.nc-accept-cancel')) ncDisarmAccept(card);
         else if (e.target.closest('.nc-decline')) ncDeclineLater(id, b.dateISO);
         else if (e.target.closest('.nc-undo')) ncCancelDecline(id);
-        else if (e.target.closest('.nc-propose-btn')) ncToggleForm(card, e.target.closest('.nc-propose-btn'), 'nc-propose', function () { return ncProposeForm(b); });
+        else if (e.target.closest('.nc-propose-btn')) {
+          if (ncProfilIncomplet()) ncProfilGate(null);
+          else ncToggleForm(card, e.target.closest('.nc-propose-btn'), 'nc-propose', function () { return ncProposeForm(b); });
+        }
         else if (e.target.closest('.nc-docs-btn')) ncToggleForm(card, e.target.closest('.nc-docs-btn'), 'nc-docs', function () { return ncDocsForm(b); });
         else if (e.target.closest('.nc-toggle')) ncToggleCard(card);
         // The whole decision row is the disclosure target (ADR 0019) — any
         // click that isn't a control folds/unfolds the card.
         else if (!e.target.closest('button, a, input, textarea, select, label, form, details')) ncToggleCard(card);
-      });
-      // ESC or leaving the card disarms a pending Retenir confirm.
-      ncOpenList.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape') ncDisarmAccept(e.target.closest('.nc-card'));
-      });
-      ncOpenList.addEventListener('focusout', function (e) {
-        var card = e.target.closest('.nc-card'); if (!card) return;
-        if (e.relatedTarget && card.contains(e.relatedTarget)) return;
-        ncDisarmAccept(card);
       });
     }
 
@@ -7619,15 +8676,8 @@
           if (entry) ncToggleForm(card, docsBtn, 'nc-docs', function () { return ncDocsForm(entry); });
           return;
         }
-        // The conversation: send what the textarea holds.
-        var sendBtn = e.target.closest('.nc-chat-send');
-        if (sendBtn) {
-          var chat = e.target.closest('.nc-chat');
-          var input = chat && chat.querySelector('.chat-input');
-          var entry2 = entryOf();
-          if (entry2 && input) ncChatSend(entry2, input.value, sendBtn);
-          return;
-        }
+        // The conversation's send button is bound by its composer (ncChatBlock).
+        if (e.target.closest('.nc-chat-send')) return;
         // The withdrawal: open/close the inline confirm, then post it.
         var relOpen = e.target.closest('.nc-release-open');
         if (relOpen) {
@@ -7661,14 +8711,16 @@
           ncArmComplete(card);
         }
       });
-      // Enter (without Shift) in a chat box sends, like every messenger.
+      // Enter (without Shift) in a chat box sends, like every messenger. The
+      // composer handles it itself (and prevents the default); this is the
+      // fallback for a composer that does not — defaultPrevented tells them apart.
       ncRetList.addEventListener('keydown', function (e) {
-        if (e.key !== 'Enter' || e.shiftKey) return;
+        if (e.key !== 'Enter' || e.shiftKey || e.defaultPrevented) return;
         var input = e.target.closest('.chat-input'); if (!input) return;
         e.preventDefault();
-        var card = input.closest('.nc-card');
-        var send = card && card.querySelector('.nc-chat-send');
-        if (send) send.click();
+        var chat = input.closest('.nc-chat');
+        var send = chat && chat.querySelector('.nc-chat-send');
+        if (send && !send.disabled) send.click();
       });
     }
     // Lender roster chips (préférences): toggling one immediately re-filters
@@ -7685,10 +8737,7 @@
 
     // Hero CTAs — orient the buyer immediately
     var ctaR = $('cta-reserver');
-    if (ctaR) ctaR.addEventListener('click', function () {
-      setTab('carnet', { scroll: false });
-      openDay(state.selectedDate || state.focusDate || todayISO());
-    });
+    if (ctaR) ctaR.addEventListener('click', openOfferFlow);
     var ctaV = $('cta-voir');
     if (ctaV) ctaV.addEventListener('click', function () {
       var panel = $('carnet-panel');
@@ -8095,8 +9144,16 @@
     if (!p) return;
     // A successful return lands on « Mes offres » — the offer, its status and
     // its next step — not on the carnet with a toast that fades.
-    if (p === 'ok') { toast('Paiement autorisé. Votre offre est en cours de publication.'); state.tab = 'profil'; }
-    else if (p === 'annule') toast('Paiement annulé. Votre offre n’a pas été publiée.');
+    if (p === 'ok') {
+      track('paiement_ok');
+      toast('Paiement autorisé. Votre offre est en cours de publication.');
+      state.checkoutNotice = ['Paiement autorisé. Votre offre est en cours de publication.']
+        .concat(expectationLines(offerCourriel(), false));
+      state.tab = 'profil';
+    } else if (p === 'annule') {
+      track('paiement_annule');
+      toast('Paiement annulé. Votre offre n’a pas été publiée.');
+    }
     q.delete('paiement');
     var qs = q.toString();
     history.replaceState(null, '', location.pathname + (qs ? '?' + qs : '') + location.hash);
@@ -8131,7 +9188,7 @@
     var tab = film === 'client' ? 'carnet' : 'notaires';
     $('ig-skip').dataset.tab = tab;
     clearTimeout(igTimer);
-    igTimer = setTimeout(function () { igDismiss(tab, false); }, film === 'client' ? 20600 : 15600);
+    igTimer = setTimeout(function () { igDismiss(tab, false); }, film === 'client' ? 20600 : 21600);
   }
   function igDismiss(tab, explicit) {
     clearTimeout(igTimer);
@@ -8158,17 +9215,38 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Live support chat (ADR 0026)
+  // Live support chat (ADR 0026 · ADR 0033 §5)
   // ---------------------------------------------------------------------------
   // A floating chat button; the first message mints a thread on the API and its
   // signed token lives on this device. While the panel is open, the thread is
-  // polled so the operator's reply lands live. The operator answers through the
-  // emailed link (#reponse=<token>), which opens the reply dialog below.
-  var LS_SUPPORT = 'nota.support.v1';
+  // polled every 8 s so the operator's reply lands live; closed, a thread keeps
+  // a slow 30 s watch for a day so the FAB can light its unread dot. The
+  // operator answers through the emailed link (#reponse=<token>), which opens
+  // the reply dialog below; the visitor's own emailed copy links to
+  // #messagerie, which opens the panel itself. Every class here is `sup-*`:
+  // the retained-act `.chat-*` rules once reached in and dropped the visitor's
+  // bubbles on the wrong side.
+  var LS_SUPPORT = 'nota.support.v1';           // { threadId, token, lastAt, seenAt }
+  var LS_SUPPORT_OPEN = 'nota.support.open.v1'; // '1' while the panel was left open
   var CHAT_POLL_MS = 8000;
-  var chatPollTimer = null;
+  var CHAT_IDLE_POLL_MS = 30000;
+  var CHAT_IDLE_MAX_MS = 24 * 60 * 60 * 1000;
+  // The counter shows only near the cap — this many characters before it.
+  var CHAT_COUNT_MARGIN = 200;
+  var CHAT_FAB_LABEL = 'Messagerie — posez votre question';
+  var CHAT_EMPTY_TEXT = 'On vous répond en général en quelques minutes pendant les heures d’ouverture.';
+  var chatPollTimer = null, chatPollMs = 0;
+  var chatReplyTimer = null, chatReplyMs = 0;
+  var chatSending = false;
 
   function chatSession() { return lsLoad(LS_SUPPORT) || null; }
+  function chatSessionPatch(patch) {
+    var s = chatSession() || {};
+    Object.keys(patch).forEach(function (k) { s[k] = patch[k]; });
+    lsSave(LS_SUPPORT, s);
+    return s;
+  }
+  function chatForget() { try { localStorage.removeItem(LS_SUPPORT); } catch (e) {} }
   function chatApi(path, opts) {
     opts = opts || {};
     var headers = { 'content-type': 'application/json' };
@@ -8180,51 +9258,189 @@
     }).then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { status: r.status, json: j }; }); });
   }
 
-  function chatRenderMessages(log, messages) {
+  // --- Time ------------------------------------------------------------------
+  function chatTs(iso) { var t = Date.parse(iso || ''); return isNaN(t) ? null : t; }
+  // Is `a` newer than `b`? Unparsable stamps degrade to a lexical compare.
+  function chatNewer(a, b) {
+    if (!a) return false;
+    if (!b) return true;
+    var ta = chatTs(a), tb = chatTs(b);
+    return ta != null && tb != null ? ta > tb : String(a) > String(b);
+  }
+  var fmtChatDay = new Intl.DateTimeFormat(LOCALE, { day: 'numeric', month: 'short' });
+  // « 14:32 » today, « 3 sept. · 14:32 » otherwise — local time, both languages.
+  function chatWhen(iso) {
+    var t = chatTs(iso); if (t == null) return '';
+    var d = new Date(t), now = new Date();
+    var hm = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+    var sameDay = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+    return sameDay ? hm : fmtChatDay.format(d) + ' · ' + hm;
+  }
+
+  // --- The log: diffed, never rebuilt -----------------------------------------
+  function chatLabelFor(de, me) {
+    if (de === D.SUPPORT_FROM.NOTA) return 'Nota';
+    return me === D.SUPPORT_FROM.VISITEUR ? 'Vous' : 'Visiteur';
+  }
+  function chatMsgKey(m) { return m.id || (m.de + '|' + m.createdAt + '|' + m.texte); }
+  function chatBubble(m, me) {
+    var row = el('div', 'sup-msg' + (m.de === me ? ' is-mine' : ''));
+    row.dataset.de = m.de;
+    row.dataset.id = chatMsgKey(m);
+    row.appendChild(el('div', 'sup-bubble', m.texte));
+    var meta = el('div', 'sup-meta');
+    meta.appendChild(el('span', 'sup-who', chatLabelFor(m.de, me)));
+    var when = el('time', 'sup-when', chatWhen(m.createdAt));
+    if (m.createdAt) when.setAttribute('datetime', m.createdAt);
+    meta.appendChild(when);
+    row.appendChild(meta);
+    return row;
+  }
+  // Known ids keep their nodes (and the reader's scroll); new ones append; the
+  // view follows only when the reader was already at the bottom. `me` is the
+  // side that reads as « mine »: the visitor in the widget, Nota in the
+  // operator's reply box.
+  function chatRenderMessages(log, messages, me) {
     if (!log) return;
-    clear(log);
+    me = me || D.SUPPORT_FROM.VISITEUR;
+    var empty = log.querySelector('.sup-empty');
     if (!messages.length) {
-      log.appendChild(el('div', 'chat-empty', 'Posez votre question — l’équipe Nota vous répond en direct.'));
+      if (!empty && !log.querySelector('.sup-msg')) log.appendChild(el('div', 'sup-empty', CHAT_EMPTY_TEXT));
       return;
     }
+    if (empty) empty.parentNode.removeChild(empty);
+    var known = {};
+    var rows = log.querySelectorAll('.sup-msg');
+    for (var i = 0; i < rows.length; i++) known[rows[i].dataset.id] = true;
+    var atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 8;
+    var added = false;
     messages.forEach(function (m) {
-      var row = el('div', 'chat-msg');
-      row.dataset.de = m.de;
-      row.appendChild(el('div', 'chat-bubble', m.texte));
-      log.appendChild(row);
+      var k = chatMsgKey(m);
+      if (known[k]) return;
+      known[k] = true; added = true;
+      log.appendChild(chatBubble(m, me));
     });
-    log.scrollTop = log.scrollHeight;
+    if (added && atBottom) log.scrollTop = log.scrollHeight;
   }
 
+  // --- Unread ----------------------------------------------------------------
+  function chatUnreadCount(messages, seenAt) {
+    var n = 0;
+    messages.forEach(function (m) { if (m.de === D.SUPPORT_FROM.NOTA && chatNewer(m.createdAt, seenAt)) n++; });
+    return n;
+  }
+  function chatSetUnread(n) {
+    var fab = $('chat-fab'), dot = $('chat-fab-dot');
+    if (!fab) return;
+    if (dot) dot.hidden = !(n > 0);
+    if (n > 0) {
+      fab.dataset.unread = String(n);
+      fab.setAttribute('aria-label', 'Messagerie — ' + (n === 1 ? '1 nouvelle réponse' : n + ' nouvelles réponses'));
+    } else {
+      delete fab.dataset.unread;
+      fab.setAttribute('aria-label', CHAT_FAB_LABEL);
+    }
+  }
+  function chatLastAt(messages) {
+    var last = messages.length ? messages[messages.length - 1] : null;
+    return (last && last.createdAt) || null;
+  }
+
+  // --- Polling: one clock, three cadences --------------------------------------
+  // Live while open; a slow watch while closed with a thread that spoke in the
+  // last 24 h (so a late answer still lights the dot); off otherwise.
+  function chatSchedule() {
+    var panel = $('chat-panel');
+    var open = panel && !panel.hidden;
+    var s = chatSession();
+    var ms = 0;
+    if (s && s.token) {
+      if (open) ms = CHAT_POLL_MS;
+      else {
+        var last = chatTs(s.lastAt);
+        if (last == null || Date.now() - last < CHAT_IDLE_MAX_MS) ms = CHAT_IDLE_POLL_MS;
+      }
+    }
+    if (ms === chatPollMs && !!chatPollTimer === !!ms) return;
+    if (chatPollTimer) { clearInterval(chatPollTimer); chatPollTimer = null; }
+    chatPollMs = ms;
+    if (ms) chatPollTimer = setInterval(chatRefresh, ms);
+  }
+  // The server forgot the thread (stale token, expired, purged): say so in
+  // place — the bubbles stay, the next message starts fresh.
+  function chatEnded() {
+    chatForget();
+    chatSetUnread(0);
+    var ended = $('chat-ended'); if (ended) ended.hidden = false;
+    chatSchedule();
+  }
   async function chatRefresh() {
-    var s = chatSession(); if (!s || !s.token) return;
+    var s = chatSession();
+    if (!s || !s.token) { chatSchedule(); return; }
     var res = await chatApi('/support/thread', { token: s.token }).catch(function () { return null; });
     if (!res) return;
-    // A stale/expired token: forget it — the next message starts fresh.
-    if (res.status === 401 || res.status === 404) { try { localStorage.removeItem(LS_SUPPORT); } catch (e) {} return; }
-    if (res.status === 200) chatRenderMessages($('chat-log'), res.json.messages || []);
+    if (res.status === 401 || res.status === 404) { chatEnded(); return; }
+    if (res.status !== 200) return;
+    var messages = res.json.messages || [];
+    var panel = $('chat-panel');
+    var open = panel && !panel.hidden;
+    chatRenderMessages($('chat-log'), messages, D.SUPPORT_FROM.VISITEUR);
+    var lastAt = chatLastAt(messages);
+    var patch = {};
+    if (lastAt) patch.lastAt = lastAt;
+    if (open) { if (lastAt) patch.seenAt = lastAt; chatSetUnread(0); }
+    else chatSetUnread(chatUnreadCount(messages, s.seenAt));
+    if (Object.keys(patch).length) chatSessionPatch(patch);
+    chatSchedule();
   }
 
-  function chatToggle(open) {
+  function chatToggle(open, opts) {
+    opts = opts || {};
     var panel = $('chat-panel'), fab = $('chat-fab');
     if (!panel || !fab) return;
     var show = open != null ? open : panel.hidden;
     panel.hidden = !show;
     fab.setAttribute('aria-expanded', show ? 'true' : 'false');
-    if (chatPollTimer) { clearInterval(chatPollTimer); chatPollTimer = null; }
+    flagSet(LS_SUPPORT_OPEN, show ? '1' : '0');
     if (show) {
-      chatRenderMessages($('chat-log'), []);
+      // Opening reads everything that is there.
+      var s = chatSession();
+      if (s && s.lastAt) chatSessionPatch({ seenAt: s.lastAt });
+      chatSetUnread(0);
+      var log = $('chat-log');
+      if (log && !log.querySelector('.sup-msg')) chatRenderMessages(log, [], D.SUPPORT_FROM.VISITEUR);
       chatRefresh();
-      // Poll only while the panel is open — the reply must land live.
-      chatPollTimer = setInterval(chatRefresh, CHAT_POLL_MS);
-      var inp = $('chat-text'); if (inp) { try { inp.focus(); } catch (e) {} }
+      if (!opts.noFocus) { var inp = $('chat-text'); if (inp) { try { inp.focus(); } catch (e) {} } }
+    } else {
+      // Closing hands focus back to the door it came from.
+      try { fab.focus(); } catch (e) {}
     }
+    chatSchedule();
   }
 
-  async function onChatSubmit(e) {
-    e.preventDefault();
-    var text = $('chat-text'), send = $('chat-send'), err = $('chat-error');
-    var courrielInp = $('chat-courriel');
+  // --- Composer ------------------------------------------------------------------
+  function chatAutoGrow(ta) {
+    if (!ta) return;
+    ta.style.height = 'auto';
+    if (ta.scrollHeight) ta.style.height = ta.scrollHeight + 'px';
+  }
+  function chatCount() {
+    var ta = $('chat-text'), c = $('chat-count');
+    if (!ta || !c) return;
+    var n = ta.value.length, max = D.SUPPORT_MESSAGE_MAX;
+    var show = n >= max - CHAT_COUNT_MARGIN;
+    c.hidden = !show;
+    c.textContent = show ? n + ' / ' + max : '';
+  }
+  function chatSendingState(on) {
+    chatSending = on;
+    var send = $('chat-send'); if (!send) return;
+    send.disabled = on;
+    send.textContent = on ? 'Envoi…' : 'Envoyer';
+  }
+  async function chatSend() {
+    if (chatSending) return;
+    var text = $('chat-text'), err = $('chat-error'), courrielInp = $('chat-courriel');
     var texte = (text && text.value || '').trim();
     var courriel = (courrielInp && courrielInp.value || '').trim();
     // The domain is the gate — mirror it inline before any network call.
@@ -8234,17 +9450,17 @@
       if (err) { err.textContent = v.errors[0].message; err.hidden = false; }
       return;
     }
-    if (send) send.disabled = true;
+    chatSendingState(true);
     var s = chatSession();
     var body = { texte: v.texte };
     if (v.courriel) body.courriel = v.courriel;
     var res = await chatApi('/support/messages', { method: 'POST', token: s && s.token, body: body }).catch(function () { return null; });
     // A dead token never loses the message: forget it and mint a fresh thread.
-    if (res && res.status === 401 && s) {
-      try { localStorage.removeItem(LS_SUPPORT); } catch (e2) {}
+    if (res && (res.status === 401 || res.status === 404) && s) {
+      chatForget(); s = null;
       res = await chatApi('/support/messages', { method: 'POST', body: body }).catch(function () { return null; });
     }
-    if (send) send.disabled = false;
+    chatSendingState(false);
     if (!res || res.status !== 201) {
       if (err) {
         err.textContent = res && res.json && res.json.errors && res.json.errors[0]
@@ -8254,21 +9470,61 @@
       }
       return;
     }
-    lsSave(LS_SUPPORT, { threadId: res.json.threadId, token: res.json.token });
-    if (text) text.value = '';
+    var fresh = !(s && s.token);
+    var log = $('chat-log');
+    // A new thread starts a clean log: the bubbles above belonged to a
+    // conversation that ended.
+    if (fresh && log) clear(log);
+    var ended = $('chat-ended'); if (ended) ended.hidden = true;
+    var m = res.json.message;
+    chatSessionPatch({
+      threadId: res.json.threadId, token: res.json.token,
+      lastAt: (m && m.createdAt) || null, seenAt: (m && m.createdAt) || null,
+    });
+    if (text) { text.value = ''; chatAutoGrow(text); chatCount(); }
+    // The echo lands before the poll does.
+    if (m && log) chatRenderMessages(log, [m], D.SUPPORT_FROM.VISITEUR);
     chatRefresh();
   }
+  function onChatSubmit(e) { e.preventDefault(); chatSend(); }
 
   // --- The operator's reply box, opened by the emailed #reponse= link --------
+  function chatReplyRender(json) {
+    chatRenderMessages($('chat-reply-log'), json.messages || [], D.SUPPORT_FROM.NOTA);
+    // The visitor's courriel, only when the API returns it.
+    var line = $('chat-reply-courriel'), link = $('chat-reply-courriel-link');
+    var mail = json.courriel || null;
+    if (line) line.hidden = !mail;
+    if (link && mail) { link.textContent = mail; link.href = 'mailto:' + mail; }
+  }
+  function chatReplySchedule(on) {
+    if (chatReplyTimer) { clearInterval(chatReplyTimer); chatReplyTimer = null; }
+    chatReplyMs = on ? CHAT_POLL_MS : 0;
+    if (on) chatReplyTimer = setInterval(chatRefreshReply, CHAT_POLL_MS);
+  }
+  async function chatRefreshReply() {
+    var dlg = $('chat-reply-dialog');
+    if (!dlg || !dlg.open || !dlg.dataset.token) { chatReplySchedule(false); return; }
+    var res = await chatApi('/support/thread', { token: dlg.dataset.token }).catch(function () { return null; });
+    if (res && res.status === 200) chatReplyRender(res.json);
+  }
   async function chatOpenReply(opToken) {
     var dlg = $('chat-reply-dialog'); if (!dlg) return;
     var res = await chatApi('/support/thread', { token: opToken }).catch(function () { return null; });
     if (!res || res.status !== 200) { toast('Lien de réponse invalide ou expiré.'); return; }
-    chatRenderMessages($('chat-reply-log'), res.json.messages || []);
+    var log = $('chat-reply-log'); if (log) clear(log);
+    dlg.dataset.token = opToken;
+    chatReplyRender(res.json);
     var sent = $('chat-reply-sent'); if (sent) sent.hidden = true;
     var form = $('chat-reply-form'); if (form) form.hidden = false;
-    dlg.dataset.token = opToken;
     try { dlg.showModal(); } catch (e) { dlg.open = true; }
+    // The box polls too: the visitor may write back while the operator reads.
+    chatReplySchedule(true);
+  }
+  function chatCloseReply() {
+    var d = $('chat-reply-dialog'); if (!d) return;
+    try { d.close(); } catch (e) { d.open = false; }
+    chatReplySchedule(false);
   }
   async function onChatReplySubmit(e) {
     e.preventDefault();
@@ -8283,27 +9539,44 @@
       return;
     }
     if (text) text.value = '';
-    var r2 = await chatApi('/support/thread', { token: dlg.dataset.token }).catch(function () { return null; });
-    if (r2 && r2.status === 200) chatRenderMessages($('chat-reply-log'), r2.json.messages || []);
+    if (res.json.message) chatRenderMessages($('chat-reply-log'), [res.json.message], D.SUPPORT_FROM.NOTA);
+    await chatRefreshReply();
     var sent = $('chat-reply-sent'); if (sent) sent.hidden = false;
   }
 
   function supportBoot() {
     var fab = $('chat-fab'); if (!fab) return;
+    var text = $('chat-text'), rText = $('chat-reply-text');
+    // The hard cap is the domain's, never a literal in the markup.
+    if (text) text.setAttribute('maxlength', String(D.SUPPORT_MESSAGE_MAX));
+    if (rText) rText.setAttribute('maxlength', String(D.SUPPORT_MESSAGE_MAX));
     fab.addEventListener('click', function () { chatToggle(); });
     var close = $('chat-close'); if (close) close.addEventListener('click', function () { chatToggle(false); });
+    var panel = $('chat-panel');
+    if (panel) panel.addEventListener('keydown', function (e) { if (e.key === 'Escape') { e.preventDefault(); chatToggle(false); } });
+    if (text) {
+      // Enter sends; Shift+Enter breaks a line.
+      text.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); chatSend(); }
+      });
+      text.addEventListener('input', function () { chatAutoGrow(text); chatCount(); });
+    }
     var form = $('chat-form'); if (form) form.addEventListener('submit', onChatSubmit);
     var rForm = $('chat-reply-form'); if (rForm) rForm.addEventListener('submit', onChatReplySubmit);
-    var rClose = $('chat-reply-close');
-    if (rClose) rClose.addEventListener('click', function () { var d = $('chat-reply-dialog'); try { d.close(); } catch (e) { d.open = false; } });
-    // The operator's emailed link: consume the hash so the token never lingers
-    // in the address bar (same pattern as #nauth=/#pauth=).
-    var m = /(^|[#&])reponse=([^&]+)/.exec(location.hash || '');
-    if (m) {
-      var tok = decodeURIComponent(m[2]);
-      try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
-      chatOpenReply(tok);
-    }
+    if (rText) rText.addEventListener('input', function () { var sent = $('chat-reply-sent'); if (sent) sent.hidden = true; });
+    var rClose = $('chat-reply-close'); if (rClose) rClose.addEventListener('click', chatCloseReply);
+    var rDlg = $('chat-reply-dialog'); if (rDlg) rDlg.addEventListener('close', function () { chatReplySchedule(false); });
+    // The emailed links: consume the hash so a token never lingers in the
+    // address bar (same pattern as #nauth=/#pauth=). `#reponse=` is the
+    // operator's door, `#messagerie` the visitor's.
+    var h = location.hash || '';
+    var m = /(^|[#&])reponse=([^&]+)/.exec(h);
+    var msg = /(^|[#&])messagerie(?=$|&)/.test(h);
+    if (m || msg) { try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {} }
+    if (m) chatOpenReply(decodeURIComponent(m[2]));
+    if (msg) chatToggle(true);
+    else if (flagGet(LS_SUPPORT_OPEN) === '1') chatToggle(true, { noFocus: true });
+    else chatSchedule(); // a closed panel with a fresh thread keeps its slow watch
   }
 
   async function boot() {
@@ -8314,6 +9587,8 @@
     buildServiceChips();
     buildBookingChips();
     readHash();
+    // « #notaires&acte=<id> » (ADR 0033): the act emails' door into the console.
+    ncConsumeActHash();
     handleReferralParam();
     refPrefillOfferField();
     handleCheckoutReturn();
@@ -8349,6 +9624,9 @@
     // A partner confirmation link (#pauth=…) confirms an email-verified code:
     // consume it, open the Partenaires pane, and reveal the shareable link.
     partnerConsumeClaimHash();
+    // A client act link (#offre=…&d=…&cle=…, ADR 0033 §2.7): store the
+    // token, open Mes offres on that band, and clean the URL.
+    consumeOfferLinkHash();
 
     // In-app notifications: render what's stored, then derive fresh events
     // (date-approaching / retained) from this browser's own offers.
@@ -8361,6 +9639,10 @@
     // First arrival: the intro films own the first paint; the onboarding
     // guide yields whenever the gate is shown (it will greet a later visit).
     if (!igMaybeShow()) maybeShowOnboarding();
+
+    // The funnel's first step: this page load. Once, after boot, whatever the
+    // intro film or the guide do next.
+    track('visite');
 
     // Register the service worker (installable PWA + offline shell). Skip on
     // localhost so the dev server's live edits aren't served from cache, and on
@@ -8407,12 +9689,23 @@
       chatSend: ncChatSend,
       release: ncRelease,
       prefsGet: ncPrefsGet,
+      // ADR 0033: the contact gate, the confirm sheet, unread, prune.
+      openRetain: ncOpenRetainSheet,
+      closeRetain: ncCloseRetainSheet,
+      profilManquants: ncProfilManquants,
+      unread: ncUnreadCount,
+      markSeen: ncMarkSeen,
+      prune: ncRetainedPrune,
+      whenLabel: ncWhenLabel,
     },
     // Live support chat (ADR 0026) hooks for tests.
     support: {
       toggle: chatToggle,
       refresh: chatRefresh,
       openReply: chatOpenReply,
+      refreshReply: chatRefreshReply,
+      pollMs: function () { return chatPollMs; },
+      replyPollMs: function () { return chatReplyMs; },
     },
     // Unified account hub (client + notary) hooks for tests and integration.
     account: {
@@ -8439,6 +9732,10 @@
         try { localStorage.removeItem(LS_ONB_STATS); } catch (e) {}
       },
     },
+    // The retained-act conversation (ADR 0033): the helpers both sides share,
+    // and the client-side doors, for tests.
+    chat: { whenLabel: whenLabel, thread: chatThread, composer: chatComposer },
+    client: { openOfferBand: openOfferBand, pollTick: clientPollTick, markSeen: markOfferSeen, unread: unreadCount },
     _internals: { applyFilters: applyFilters, acceptance: acceptance, buildCalendarLinks: buildCalendarLinks },
   };
 

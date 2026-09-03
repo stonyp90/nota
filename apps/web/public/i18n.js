@@ -587,7 +587,7 @@
   "Paiement annulé. Votre offre n’a pas été publiée.": "Payment cancelled. Your offer was not published.",
   "Nota — le carnet public des actes notariés à Québec": "Nota — the public carnet of notarized acts in Québec",
   "Trouvez un notaire à Québec pour votre financement ou refinancement hypothécaire, à la date voulue. Affichez votre date et votre offre ; un notaire de la région choisit de retenir votre demande. Publier est gratuit. Nota n’est pas un notaire.": "Find a notary in Quebec City for your mortgage financing or refinancing, on the date you need. Post your date and your offer; a notary in the region chooses whether to take on your request. Posting is free. Nota is not a notary.",
-  "Choisissez votre date, nommez votre prix pour votre financement ou refinancement hypothécaire. Un notaire de Québec retient votre demande. Gratuit pour le client.": "Choose your date, name your price for your mortgage financing or refinancing. A Québec notary takes on your request. Free for the client.",
+  "Choisissez votre date, nommez votre prix pour votre financement ou refinancement hypothécaire. Un notaire de Québec retient votre demande. Publier est gratuit ; le notaire et le service Nota se paient à la signature.": "Choose your date, name your price for your mortgage financing or refinancing. A Québec notary takes on your request. Posting is free; the notary and Nota’s service are paid at signing.",
   "Nota — carnet public des actes notariés à Québec": "Nota — public carnet of notarized acts in Québec",
   "Choisissez votre date, nommez votre prix. Un notaire de Québec retient votre demande.": "Choose your date, name your price. A Québec notary takes on your request.",
   "Carte Nota : le carnet public du financement hypothécaire à Québec.": "Nota card: the public carnet of mortgage financing in Québec City.",
@@ -627,7 +627,15 @@
   "Place de marché des services notariaux · Québec": "Notarial services marketplace · Québec",
   "Un notaire, à la date qu’il vous faut.": "A notary, on the date you need.",
   "Proposez votre date et votre prix — un notaire de Québec retient votre demande.": "Propose your date and your price — a Québec notary takes on your request.",
-  "Gratuit pour vous.": "Free for you.",
+  // The hero's price line (ADR 0031): the notary keeps the whole offer, Nota's
+  // service is paid at signing. The priced variant is composed at runtime and
+  // rides a RULE (the amount passes through to the money conversion).
+  "Le notaire reçoit 100 % de votre offre ; le service Nota, à prix fixe, se paie seulement à la signature.": "The notary receives 100% of your offer; Nota’s service, at a fixed price, is paid only at signing.",
+  "Date de signature": "Signing date",
+  // After a real publication — what happens next, no delay promise.
+  "Votre demande est maintenant visible des notaires inscrits.": "Your request is now visible to registered notaries.",
+  "Nous vous écrivons dès qu’un notaire la retient.": "We email you the moment a notary takes it on.",
+  "Vous pouvez la retirer sans frais jusque-là.": "You can withdraw it free of charge until then.",
   "Réserver votre date →": "Reserve your date →",
   "Voir les dates": "See the dates",
   "Le carnet en ce moment": "The carnet right now",
@@ -757,7 +765,6 @@
   "Un carnet public où vous proposez une date et un montant. Un notaire du Québec choisit de retenir votre demande. Nota facilite la mise en relation, rien de plus.": "A public carnet where you propose a date and an amount. A Québec notary chooses to take on your request. Nota facilitates the connection, nothing more.",
   "Vous restez maître": "You stay in charge",
   "Vous fixez la date, le montant et votre niveau d’anonymat. Aucune obligation : vous pouvez retirer une offre tant qu’aucun notaire ne l’a retenue.": "You set the date, the amount and your level of anonymity. No obligation: you can withdraw an offer as long as no notary has taken it.",
-  "Gratuit pour le client": "Free for the client",
   "Les conditions": "The terms",
   "Rôle de Nota.": "Nota's role.",
   "Nota fournit une plateforme de mise en relation. Nous ne rédigeons pas d’actes, ne donnons aucun conseil juridique, fiscal ou financier, et ne sommes pas partie au mandat entre vous et le notaire.": "Nota provides a matchmaking platform. We do not draft acts, give no legal, tax or financial advice, and are not a party to the mandate between you and the notary.",
@@ -1044,7 +1051,7 @@
   "Messagerie vocale": "Voicemail",
   "« On vous rappelle… »": "“We’ll call you back…”",
   "Complet ce mois-ci": "Fully booked this month",
-  "Exemple · gratuit pour vous, publié en 2 minutes": "Example · free for you, posted in 2 minutes",
+  "Exemple · publié en 2 minutes, payé à la signature": "Example · posted in 2 minutes, paid at signing",
   "Votre prix, selon votre urgence.": "Your price, set by your urgency.",
   "Urgence": "Urgent",
   "Signature": "Signing",
@@ -1060,7 +1067,6 @@
   "Complétez tout sur la plateforme.": "Complete everything on the platform.",
   "Bonjour ! Votre dossier est reçu — tout est en ordre.": "Hello! Your file is in — everything is in order.",
   "Parfait. On signe toujours vendredi ?": "Perfect. Are we still signing on Friday?",
-  "Gratuit pour vous — Nota est payé à la fin, à la signature.": "Free for you — Nota is paid at the end, at signing.",
   "nota.quebec · Publiez votre offre en 2 minutes": "nota.quebec · Publish your offer in 2 minutes",
   "Refinancement · Financement": "Refinancing · Financing",
   "Vous êtes notaire": "You are a notary",
@@ -1087,12 +1093,80 @@
   "Passer →": "Skip →",
   "Nota": "Nota",
   "Elle a été retirée du carnet.": "It has been removed from the carnet.",
+  /* W3 — live support widget (ADR 0033 §5) + the notaire film’s compliance scene. */
+  "On vous répond en général en quelques minutes pendant les heures d’ouverture.": "We usually answer within a few minutes during opening hours.",
+  "Cette conversation est terminée — écrivez-nous à nouveau.": "This conversation has ended — write to us again.",
+  "Vous": "You",
+  "Visiteur": "Visitor",
+  "(optionnel)": "(optional)",
+  "pour recevoir la réponse par courriel si vous quittez": "to receive the answer by email if you leave",
+  "Courriel du visiteur :": "Visitor’s email:",
+  "Messagerie — 1 nouvelle réponse": "Chat — 1 new reply",
+  "Conformité": "Compliance",
+  "Nota respecte les règles de votre profession.": "Nota follows the rules of your profession.",
+  "Art. 32.1 — Loi sur le notariat": "S. 32.1 — Notaries Act",
+  "Aucune réduction promise, aucune part abandonnée : vous recevez 100 % du montant offert.": "No discount promised, no share given up: you receive 100% of the amount offered.",
+  "Art. 32 et 29.1 — Code de déontologie": "Ss. 32 and 29.1 — Code of ethics",
+  "Nota facture son propre prix au client, à côté : aucun partage d’honoraires, aucune convention sur vos honoraires.": "Nota bills the client its own price, separately: no fee sharing, no agreement over your fees.",
+  "Art. 49 — Code de déontologie": "S. 49 — Code of ethics",
+  "Le montant est ce que le client offre pour sa date, son urgence et le déplacement. Nota ne fixe pas vos honoraires : vous acceptez, proposez un autre prix ou passez.": "The amount is what the client offers for their date, urgency and travel. Nota does not set your fees: you accept, propose another price or pass.",
+  "Une décision de l’Ordre s’applique toujours en premier.": "A decision of the Chambre always comes first.",
+  "Lire nos engagements déontologiques →": "Read our ethics commitments →",
+  /* /W3 */
+  /* W1 — the notary console: the mise en relation is complete (ADR 0033). */
+  // The contact gate — banner over the feed, the profile's identity fields.
+  "Complétez votre profil pour retenir une demande": "Complete your profile to take on a request",
+  "Le client qui vous retient doit pouvoir vous joindre et trouver votre étude. Il manque :": "The client who takes you on must be able to reach you and find your office. Missing:",
+  "Compléter mon profil": "Complete my profile",
+  "identité, fiche CNQ, déplacement, urgences": "identity, CNQ listing, travel, urgencies",
+  "Le client qui vous retient reçoit votre nom, votre téléphone, l’adresse de votre étude et votre courriel — c’est ainsi qu’il vous joint. Sans ces trois premiers, vous ne pouvez ni retenir ni proposer un prix.": "The client who takes you on receives your name, your phone, your office address and your email — that is how they reach you. Without the first three, you can neither take on a request nor propose a price.",
+  "Votre nom": "Your name",
+  "Me Prénom Nom": "Me First Last",
+  "Votre étude": "Your office",
+  "Étude Nom & Associés": "Name & Associates",
+  "Votre téléphone": "Your phone",
+  "L’adresse de votre étude": "Your office address",
+  "123, rue Saint-Jean, Québec (QC) G1R 1N4": "123 Saint-Jean Street, Québec (QC) G1R 1N4",
+  "Complétez votre profil (nom, téléphone, adresse de l’étude) avant de retenir une demande.": "Complete your profile (name, phone, office address) before taking on a request.",
+  "Le numéro de téléphone n’est pas valide.": "The phone number is not valid.",
+  "Le nom ne peut dépasser 120 caractères.": "The name cannot exceed 120 characters.",
+  "Le nom de l’étude ne peut dépasser 120 caractères.": "The office name cannot exceed 120 characters.",
+  "L’adresse ne peut dépasser 200 caractères.": "The address cannot exceed 200 characters.",
+  // Alert preferences — server data, email only.
+  "fréquence des courriels, urgences, prêteurs": "email frequency, urgencies, lenders",
+  "Choisissez à quelle fréquence Nota vous prévient par courriel des nouvelles demandes qui vous conviennent. Modifiable à tout moment.": "Choose how often Nota emails you about new requests that suit you. Change it any time.",
+  "Aucun courriel": "No email",
+  "Échec de l’enregistrement des préférences.": "Saving the preferences failed.",
+  // The Retenir sheet.
+  "Retenir cette demande ?": "Take on this request?",
+  "versés en entier à la signature": "paid in full at signing",
+  "Le client paie à Nota, à côté": "The client pays Nota, separately",
+  "Déplacement": "Travel",
+  "Dossier": "File",
+  "Il manque :": "Missing:",
+  "Non précisé": "Not specified",
+  "un montant fixe, le même pour tous": "a fixed amount, the same for everyone",
+  "Si le client annule": "If the client cancels",
+  "jours avant la signature": "days before signing",
+  "gratuit": "free",
+  "Ces frais vous sont versés en dédommagement.": "These fees are paid to you as compensation.",
+  "Vous pouvez vous désister": "You may withdraw",
+  "Gratuit, mais compté à votre dossier. Le client garde sa date et son offre.": "Free, but counted on your record. The client keeps their date and their offer.",
+  "Une fois retenu, le client reçoit votre nom, téléphone, adresse et courriel ; vous recevez les siens ; vous vous parlez dans la conversation Nota.": "Once taken on, the client receives your name, phone, address and email; you receive theirs; you talk in the Nota conversation.",
+  "Pas maintenant": "Not now",
+  // The retained card: « Votre client », unread, withdrawal terms, the prune toast.
+  "Votre client": "Your client",
+  "Coordonnées en attente de la prochaine mise à jour.": "Contact details arrive with the next update.",
+  "nouveau": "new",
+  "nouveaux": "new",
+  "Se désister est gratuit, mais compté à votre dossier. Le client garde sa date et son offre.": "Withdrawing is free, but counted on your record. The client keeps their date and their offer.",
+  "Le client a annulé la demande du": "The client cancelled the request of",
+  /* /W1 */
 };
   var HTML = {
   "Connectez un compte de paiement sécurisé (Stripe) pour recevoir vos versements. Le client autorise le paiement dès la publication ; à la signature, <strong>vos honoraires vous sont virés en entier</strong>. Nota facture son service au client, séparément — rien n’est jamais retranché de vos honoraires. Jamais de frais fixes.": "Connect a secure payment account (Stripe) to receive your payouts. The client authorizes payment as soon as the offer is posted; at signing, <strong>your fees are wired to you in full</strong>. Nota charges the client for its service, separately — nothing is ever deducted from your fees. Never any fixed fees.",
   "Publier une offre est gratuit, et le reste. Sur un acte complété, vous payez deux choses : <strong>les honoraires du notaire</strong> — le montant que vous avez offert, qui lui revient en entier — et <strong>le prix du service de Nota</strong>, un montant fixe, le même pour tous. Les deux vous sont affichés avant que votre carte ne soit autorisée.": "Posting an offer is free, and stays free. On a completed act you pay two things: <strong>the notary’s fees</strong> — the amount you offered, which comes to them in full — and <strong>Nota’s service price</strong>, a fixed amount, the same for everyone. Both are shown to you before your card is authorized.",
   "<strong>Le prix, en deux lignes.</strong> Le montant que vous offrez est celui des <strong>honoraires du notaire</strong> : il lui revient en entier, Nota n’en prélève rien. Le <strong>prix du service de Nota</strong> est un montant fixe, identique pour tous, qui s’ajoute au vôtre et vous est affiché avant l’autorisation de votre carte. <strong>Les taxes et les débours</strong> — droits de publication, RDPRM — <strong>ne sont pas compris</strong> dans ces montants.": "<strong>The price, in two lines.</strong> The amount you offer is the <strong>notary’s fees</strong>: it comes to them in full, Nota takes none of it. <strong>Nota’s service price</strong> is a fixed amount, the same for everyone, added to yours and shown to you before your card is authorized. <strong>Taxes and disbursements</strong> — registration fees, RDPRM — <strong>are not included</strong> in these amounts.",
-  "<strong>Gratuit pour vous</strong> : Nota se rémunère auprès du notaire.": "<strong>Free for you</strong>: Nota is paid by the notary.",
   "<span class=\"nc-soon-tag\">Bientôt</span>Vérification d’identité, inscription et <strong>réalisation complète de l’acte en ligne</strong> : recevez la demande, rencontrez le client et signez à distance. Tout le parcours notaire, de bout en bout, sans quitter Nota.": "<span class=\"nc-soon-tag\">Coming soon</span>Identity verification, onboarding and <strong>completing the entire act online</strong>: receive the request, meet the client and sign remotely. The whole notary journey, end to end, without leaving Nota.",
   "Au repos, vos données sont conservées sur des serveurs canadiens (Amazon Web Services, région <strong>ca-central-1</strong>, Montréal). En transit, elles passent par un réseau de diffusion dont les points de présence sont aussi aux États-Unis et en Europe, et par des prestataires tiers : Stripe pour le paiement, rsms.me pour la police de caractères.": "At rest, your data is stored on Canadian servers (Amazon Web Services, <strong>ca-central-1</strong> region, Montréal). In transit it passes through a content delivery network whose edge locations are also in the United States and Europe, and through third-party providers: Stripe for payment, rsms.me for the typeface.",
   "<strong>Conservation.</strong> Une offre et son dossier sont conservés au plus <strong>12 mois</strong> après la date de signature, puis supprimés automatiquement. Le courriel de notification est effacé dès que l’offre est close ou expirée.": "<strong>Retention.</strong> An offer and its file are kept at most <strong>12 months</strong> after the signing date, then deleted automatically. The notification email is erased as soon as the offer is closed or expired.",
@@ -1100,6 +1174,16 @@
   "<span class=\"nc-soon-tag\">Bientôt</span>Les notaires pourront réaliser l’acte <strong>entièrement en ligne</strong> sur Nota, signature à distance comprise, sans déplacement. Aujourd’hui, vous convenez du lieu avec le notaire qui vous retient.": "<span class=\"nc-soon-tag\">Coming soon</span>Notaries will soon complete the act <strong>entirely online</strong> on Nota, remote signing included, no travel needed. For now, you agree on the location with the notary who takes you on."
 };
   var RULES = compileRules([
+  {
+    "pattern": "^Le notaire reçoit 100 % de votre offre ; le service Nota, (.+), se paie seulement à la signature\\.$",
+    "flags": "",
+    "replacement": "The notary receives 100% of your offer; Nota’s service, $1, is paid only at signing."
+  },
+  {
+    "pattern": "^Nous vous écrivons à (\\S+) dès qu’un notaire la retient\\.$",
+    "flags": "",
+    "replacement": "We email $1 the moment a notary takes it on."
+  },
   {
     "pattern": "^le ([A-Za-z][A-Za-z.]* [0-9]{1,2})$",
     "flags": "",
@@ -2024,7 +2108,14 @@
     "pattern": "(\\d)[\\u00a0 ]%",
     "flags": "g",
     "replacement": "$1%"
+  },
+  /* W3 */
+  {
+    "pattern": "^Messagerie — ([0-9]+) nouvelles réponses$",
+    "flags": "",
+    "replacement": "Chat — $1 new replies"
   }
+  /* /W3 */
 ]);
   // === END DICTIONARY ========================================================
 

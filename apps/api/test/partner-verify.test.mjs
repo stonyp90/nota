@@ -28,6 +28,7 @@ const { createFakeMailer } = require('../src/notify-port.js');
 const { createNotifier } = require('../src/notifications.js');
 const { notaryIdForEmail, signToken, signChallengeToken, SCOPES } = require('../src/notary-auth.js');
 import { notarySignIn } from '../test-support/notary-session.mjs';
+import { NOTARY_CONTACT } from '../test-support/notary-fixture.mjs';
 import { claimPartner } from '../test-support/partner-claim.mjs';
 const domain = require('@nota/domain');
 
@@ -167,7 +168,7 @@ test("a squatter's UNCONFIRMED claim never becomes the payee and never blocks th
   });
   const bid = parse(bidRes).bid;
   const id = notaryIdForEmail('me@notaire.ca');
-  await a.repo.putNotary({ id, email: 'me@notaire.ca', status: 'active' });
+  await a.repo.putNotary({ id, email: 'me@notaire.ca', status: 'active', ...NOTARY_CONTACT });
   const token = (await notarySignIn(a, 'me@notaire.ca')).token;
   await a.handle({ method: 'POST', path: '/notary/bids/accept', headers: bearer(token), body: JSON.stringify({ id: bid.id, dateISO: bid.dateISO }) });
   await flush();
@@ -194,7 +195,7 @@ test('an UNCONFIRMED claim is never shown as the owner in the admin ledger, even
   });
   const bid = parse(bidRes).bid;
   const id = notaryIdForEmail('me@notaire.ca');
-  await a.repo.putNotary({ id, email: 'me@notaire.ca', status: 'active' });
+  await a.repo.putNotary({ id, email: 'me@notaire.ca', status: 'active', ...NOTARY_CONTACT });
   const token = (await notarySignIn(a, 'me@notaire.ca')).token;
   await a.handle({ method: 'POST', path: '/notary/bids/accept', headers: bearer(token), body: JSON.stringify({ id: bid.id, dateISO: bid.dateISO }) });
   await flush();

@@ -14,6 +14,8 @@ const { createFakeMailer } = require('../src/notify-port.js');
 const { createNotifier } = require('../src/notifications.js');
 const { notaryIdForEmail } = require('../src/notary-auth.js');
 import { notarySignIn } from '../test-support/notary-session.mjs';
+// ADR 0033 — a notary may only retain with a reachable profile.
+import { NOTARY_CONTACT } from '../test-support/notary-fixture.mjs';
 const domain = require('@nota/domain');
 
 const TODAY = '2026-08-12';
@@ -59,7 +61,7 @@ async function seedBid(a, over = {}) {
 }
 
 async function session(a, email) {
-  await a.repo.putNotary({ id: notaryIdForEmail(email), email, status: 'active', label: 'Étude ' + email });
+  await a.repo.putNotary({ id: notaryIdForEmail(email), email, status: 'active', label: 'Étude ' + email, ...NOTARY_CONTACT });
   return (await notarySignIn(a, email)).token;
 }
 

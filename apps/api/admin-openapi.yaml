@@ -1144,6 +1144,68 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+  /admin/notaries/{id}/activer:
+    post:
+      operationId: activateAdminNotary
+      summary: Activate a notary — the operator has checked the Tableau de l'Ordre; this opens the console.
+      description: >-
+        A notary signs up with a CNQ number and waits (`en_attente`). The
+        operator verifies the number against the Chambre's public roll, then
+        activates: `approuveLe` is stamped, the status becomes `active`, an
+        `notary_activated` audit entry is appended, and the notary receives
+        the `notaryApproved` email with the console link (best effort — the
+        access is open even if the email fails). Idempotent: a second call on
+        an already-active notary answers `deja: true` and changes nothing.
+        Requires `moderation:write`.
+      security:
+        - adminSession: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The notary id.
+      responses:
+        "200":
+          description: The notary, as activated (or as already active).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, deja, notaire]
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+                  deja:
+                    type: boolean
+                    description: True when the notary was already active — nothing was changed.
+                  notaire:
+                    type: object
+                    required: [id, statut, approuveLe]
+                    properties:
+                      id:
+                        type: string
+                      email:
+                        type: [string, "null"]
+                      etude:
+                        type: [string, "null"]
+                      statut:
+                        type: [string, "null"]
+                        description: en_attente | active | restricted.
+                      approuveLe:
+                        type: [string, "null"]
+                        format: date-time
+                      inscritLe:
+                        type: [string, "null"]
+                        format: date-time
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /admin/audit:
     get:
       operationId: readAdminAudit

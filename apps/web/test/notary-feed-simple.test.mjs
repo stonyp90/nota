@@ -188,7 +188,8 @@ test('the console refreshes itself: no Rafraîchir button, a background poll re-
     const json = (body) => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
     if (path.includes('/notary/session/request')) return json({ ok: true, devToken: 'chal.tok' });
     if (path.includes('/notary/session/verify')) return json({ token: 'sess.tok', feedToken: 'feed.tok', email: 'demo@etude.ca' });
-    if (path.includes('/notary/bids')) { feedPulls++; return json({ bids: open, retained: [], rating: null, profil: { lienCNQ: null }, commission: null }); }
+    // A complete contact profile (ADR 0033), or Retenir opens the form instead.
+    if (path.includes('/notary/bids')) { feedPulls++; return json({ bids: open, retained: [], rating: null, profil: { lienCNQ: null, nom: 'Me Démo', telephone: '418 555 0100', adresse: '1, rue de la Démo, Québec' }, commission: null }); }
     return Promise.reject(new Error('offline'));
   };
   await ctx.Nota.notary.signIn('demo@etude.ca');
@@ -199,14 +200,15 @@ test('the console refreshes itself: no Rafraîchir button, a background poll re-
   await wait(150);
   assert.ok(feedPulls > before, 'the poll re-pulls the feed on its own');
 
-  // An armed Retenir confirm freezes the poll — a re-render mid-gesture would
-  // disarm the hand that was about to accept.
+  // An open Retenir sheet (ADR 0033) freezes the poll — a re-render under it
+  // would swap the card the sheet is about.
   click(ctx.doc.querySelector('#notary-open-list .nc-card .nc-accept'));
-  const card = ctx.doc.querySelector('#notary-open-list .nc-card[data-confirm="1"]');
-  assert.ok(card, 'the confirm armed');
+  const sheet = $(ctx.doc, 'nc-retenir-dialog');
+  assert.equal(sheet.open, true, 'the confirm sheet opened');
   const armedAt = feedPulls;
   await wait(150);
-  assert.equal(feedPulls, armedAt, 'no pull fires while a confirm is armed');
+  assert.equal(feedPulls, armedAt, 'no pull fires while the sheet is open');
+  click($(ctx.doc, 'nc-retenir-later'));
 });
 
 // ---------------------------------------------------------------------------

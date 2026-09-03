@@ -18,6 +18,10 @@
  */
 
 const emails = require('./emails');
+const domain = require('@nota/domain');
+// The cancellation barème (ADR 0023) — API data, resolved here exactly like
+// the cancel route does, so a retention mail quotes the barème in force.
+const cancellationCfg = require('./cancellation-config');
 
 // Unsubscribe token: `base64url(email).signature`, HMAC-SHA-256 over the
 // encoded address. The /unsubscribe route (GET and the RFC 8058 one-click POST)
@@ -74,7 +78,11 @@ function decodeUnsubToken(token) {
   }
 }
 
-function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now } = {}) {
+// `clientLink(bid)` (ADR 0033 §2.7) mints the signed, device-independent deep
+// link to the client's own act — the CTA of every client act mail; the caller
+// holds the signing secret, so it is injected. `adminUrl` (NOTA_ADMIN_URL)
+// is where operator alerts land when an admin console exists.
+function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now, clientLink, adminUrl } = {}) {
   if (!repo) throw new Error('createNotifier: repo is required');
   if (!mailer) throw new Error('createNotifier: mailer is required');
 
@@ -155,7 +163,7 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now 
     // `ctx` rides in the environment too: the override's {{jetons}} are
     // interpolated inside the template, and a couple of call sites hand the
     // template less than they declare here (onClientSignup and its {{email}}).
-    const msg = buildTemplate({ ...(ctx || {}), unsubscribeUrl: unsub, baseUrl: base, __override: override });
+    const msg = buildTemplate({ ...(ctx || {}), unsubscribeUrl: unsub, baseUrl: base, adminUrl: adminUrl || null, __override: override });
     // unsubscribeUrl rides along so the mailer can emit the RFC 8058
     // List-Unsubscribe / List-Unsubscribe-Post headers.
     await mailer.send({ to, subject: msg.subject, html: msg.html, text: msg.text, unsubscribeUrl: unsub });
@@ -198,7 +206,7 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now 
     if (emails.isOverrideDisabled(templateKey, override)) return { sent: false, reason: 'disabled' };
 
     const unsub = unsubscribeUrl(to);
-    const msg = build({ ...(ctx || {}), unsubscribeUrl: unsub, baseUrl: base, __override: override });
+    const msg = build({ ...(ctx || {}), unsubscribeUrl: unsub, baseUrl: base, adminUrl: adminUrl || null, __override: override });
     try {
       await mailer.send({ to, subject: msg.subject, html: msg.html, text: msg.text, unsubscribeUrl: unsub });
     } catch {
@@ -209,14 +217,142 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now 
     return { sent: true, to };
   }
 
+  // The client's signed deep link to THEIR act (ADR 0033 §2.7). A minting
+  // failure — no secret, no site URL — must never block a mail: the CTA then
+  // falls back to the client's space.
+  function clientUrlFor(bid) {
+    if (typeof clientLink !== 'function' || !bid || !bid.id) return null;
+    try {
+      return clientLink(bid) || null;
+    } catch {
+      return null;
+    }
+  }
+
   function bidCtx(bid, extra) {
     return {
       serviceId: bid.serviceId,
       dateISO: bid.dateISO,
       montant: bid.montant,
       tier: bid.tier,
+      // ADR 0033 — every act mail can open THE act: the notary console on its
+      // card (`bidId`), the client's own space on their offer (`clientUrl`).
+      bidId: bid.id,
+      clientUrl: clientUrlFor(bid),
       ...extra,
     };
+  }
+
+  // The retaining notary's profile — passed by the caller when it already
+  // holds it, else read once here. Never throws: a missing profile only means
+  // fewer facts in the mail.
+  async function notaryOf(bid, given) {
+    if (given) return given;
+    if (!bid || !bid.notaryId || typeof repo.getNotary !== 'function') return null;
+    try {
+      return await repo.getNotary(bid.notaryId);
+    } catch {
+      return null;
+    }
+  }
+  // The étude a client reads: the declared étude, then the legacy sign-in
+  // label, then the notary's name, then their courriel (domain.notaryEtude).
+  const etudeOf = (profile, bid) => domain.notaryEtude(profile) || (bid && bid.etude) || null;
+
+  // The notary's contact block, as the client receives it at retention
+  // (ADR 0033 §2.4): name, étude, phone, address, courriel, fiche at the
+  // Chambre. Facts only — never a rating (ADR 0030).
+  function notaireContact(profile) {
+    if (!profile) return null;
+    return {
+      nom: profile.nom || null,
+      etude: domain.notaryEtude(profile),
+      telephone: profile.telephone || null,
+      adresse: profile.adresse || null,
+      courriel: profile.email || null,
+      lienCNQ: profile.lienCNQ || null,
+    };
+  }
+
+  // The barème in force, PRICED on this act (ADR 0023 data): the admin-stored
+  // item, else the environment defaults — the same resolution as the cancel
+  // route, so what the mail promises is what a cancellation would charge.
+  // Each palier carries the fee on THIS montant; the template formats only.
+  async function baremeFor(bid) {
+    let stored = null;
+    try {
+      stored = typeof repo.getCancellationConfig === 'function' ? await repo.getCancellationConfig() : null;
+    } catch {
+      stored = null;
+    }
+    const paliers = stored && Array.isArray(stored.paliers) ? stored.paliers : cancellationCfg.envDefaults().paliers;
+    return paliers.map((p) => ({
+      maxJours: p.maxJours,
+      taux: p.taux,
+      frais: cancellationCfg.feeFor({ montant: bid.montant, joursAvant: p.maxJours, paliers }).frais,
+    }));
+  }
+
+  // The facts of a demand a notary weighs: the lender (or the name the client
+  // typed for « Autre prêteur »), the travel band, the sector.
+  function demandeFacts(bid) {
+    const lender = domain.bidLender(bid);
+    const dep = domain.bidDeplacement(bid);
+    return {
+      secteur: bid.prefixe || null,
+      deplacement: dep ? dep.id : null,
+      preteur: lender ? lender.id : null,
+      preteurNom: lender ? lender.nom : null,
+    };
+  }
+
+  // Pay-on-accept: a demand whose card hold is still pending, or lapsed, is
+  // not on the carnet — no notary could retain it, so nobody is rung for it.
+  const isLive = (bid) => bid.paymentStatus !== 'pending' && bid.paymentStatus !== 'void';
+  // The notary's alert preference (ADR 0033 §7), normalized by the domain;
+  // absent → the daily digest.
+  const alertesOf = (n) =>
+    typeof domain.notaryAlertes === 'function'
+      ? domain.notaryAlertes(n)
+      : { pace: (n && n.alertes && n.alertes.pace) || 'daily', urgentOnly: !!(n && n.alertes && n.alertes.urgentOnly) };
+
+  // --- Instant lead alerts (ADR 0033 §7) ---------------------------------------
+  // Every ACTIVE notary who asked for pace « instant », can serve the demand
+  // (ADR 0017/0025 reach rules — the same predicate as the feed and the
+  // digest) and, when they asked for urgent ones only, only an elevated tier.
+  // Idempotent per (bid, notary): the kind carries the notary id. A repo
+  // without listNotaries simply rings nobody.
+  async function notifyInstantLeads(bid) {
+    const results = [];
+    if (!bid || !bid.id || !isLive(bid) || typeof repo.listNotaries !== 'function') return results;
+    let notaries = [];
+    try {
+      notaries = (await repo.listNotaries()) || [];
+    } catch {
+      return results;
+    }
+    const tier = domain.tierById(bid.tier);
+    const facts = demandeFacts(bid);
+    for (const n of notaries) {
+      if (!n || !n.email || n.status !== 'active') continue;
+      const alertes = alertesOf(n);
+      if (alertes.pace !== 'instant') continue;
+      if (alertes.urgentOnly && !(tier && tier.eleve)) continue;
+      if (!domain.notaryCanServe((bid.pricing || {})[domain.DEPLACEMENT_CRITERION_ID], n, bid.prefixe)) continue;
+      const distanceKm = typeof domain.fsaDistanceKm === 'function' ? domain.fsaDistanceKm(bid.prefixe, n.prefixe) : null;
+      const ctx = bidCtx(bid, { ...facts, distanceKm });
+      results.push(
+        await sendOnce({
+          refId: bid.id,
+          kind: 'nouvelleDemande#' + n.id,
+          to: n.email,
+          templateKey: 'nouvelleDemande',
+          ctx,
+          buildTemplate: (env) => emails.nouvelleDemande({ ...ctx, ...env }),
+        })
+      );
+    }
+    return results;
   }
 
   // --- Offer lifecycle (client + operator) ---------------------------------
@@ -252,6 +388,10 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now 
           })
         );
       }
+      // ADR 0033 §7 — the notaries who asked to hear of every demand as it
+      // lands. A demand still waiting for its card hold rings nobody here; it
+      // rings when the hold is authorized (onAccountEvent).
+      results.push(...(await notifyInstantLeads(bid)));
     } catch (err) {
       // Never let a mail failure break the caller (the POST /bids response).
       return { ok: false, error: String((err && err.message) || err), results };
@@ -259,12 +399,21 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now 
     return { ok: true, results };
   }
 
-  async function onOfferRetained(bid) {
+  // The ONE retention moment (accept and proposition-accept alike) — the mise
+  // en relation is complete (ADR 0033): the CLIENT receives the notary's
+  // contact block and the barème; the RETAINING NOTARY receives the client's
+  // block, the file's readiness and what binds them; the operator hears of the
+  // revenue event. Each at most once per bid. `notary` may be passed by a
+  // caller that already holds the profile (retainFor does).
+  async function onOfferRetained(bid, { notary } = {}) {
     if (!bid) return { ok: true, results: [] };
     const results = [];
     try {
+      const profile = await notaryOf(bid, notary);
+      const bareme = await baremeFor(bid);
+      const etude = etudeOf(profile, bid);
       if (bid.courriel) {
-        const ctx = bidCtx(bid);
+        const ctx = bidCtx(bid, { etude, notaire: notaireContact(profile), bareme });
         results.push(
           await sendOnce({
             refId: bid.id,
@@ -273,6 +422,47 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now 
             templateKey: 'offerRetained',
             ctx,
             buildTemplate: (env) => emails.offerRetained({ ...ctx, ...env }),
+          })
+        );
+      }
+      if (profile && profile.email) {
+        const r = domain.leadReadiness(bid.serviceId, bid.dossier || {});
+        const facts = demandeFacts(bid);
+        const ctx = bidCtx(bid, {
+          email: bid.courriel || null,
+          client: {
+            nom: bid.nom || null,
+            courriel: bid.courriel || null,
+            telephone: bid.telephone || null,
+            secteur: facts.secteur,
+            deplacement: facts.deplacement,
+            preteur: facts.preteur,
+            preteurNom: facts.preteurNom,
+          },
+          dossier: { ready: r.ready, missing: r.missing, requis: r.requis },
+          bareme,
+        });
+        results.push(
+          await sendOnce({
+            refId: bid.id,
+            kind: 'demandeRetenueNotaire',
+            to: profile.email,
+            templateKey: 'demandeRetenueNotaire',
+            ctx,
+            buildTemplate: (env) => emails.demandeRetenueNotaire({ ...ctx, ...env }),
+          })
+        );
+      }
+      if (operatorEmail) {
+        const ctx = bidCtx(bid, { etude });
+        results.push(
+          await sendOnce({
+            refId: bid.id,
+            kind: 'operatorDemandeRetenue',
+            to: operatorEmail,
+            templateKey: 'operatorDemandeRetenue',
+            ctx,
+            buildTemplate: (env) => emails.operatorDemandeRetenue({ ...ctx, ...env }),
           })
         );
       }
@@ -478,8 +668,11 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now 
     if (!bid) return { ok: true, results: [] };
     const results = [];
     try {
+      // ADR 0023/0033 — what the cancellation actually kept, and for whom:
+      // `bid.annulation` (null → free) is the record the cancel route wrote.
+      const annulation = bid.annulation || null;
       if (bid.courriel) {
-        const ctx = bidCtx(bid);
+        const ctx = bidCtx(bid, { annulation });
         results.push(
           await sendOnce({
             refId: bid.id,
@@ -493,7 +686,7 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now 
       }
       if (wasRetained) {
         const to = notary && notary.email;
-        const ctx = bidCtx(bid);
+        const ctx = bidCtx(bid, { annulation });
         results.push(
           await sendOnce({
             refId: bid.id,
@@ -505,7 +698,7 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now 
           })
         );
         if (operatorEmail) {
-          const opCtx = { ...bidCtx(bid), etude: bid.etude };
+          const opCtx = { ...bidCtx(bid), etude: etudeOf(notary, bid), annulation };
           results.push(
             await sendOnce({
               refId: bid.id,
@@ -546,10 +739,12 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now 
           })
         );
       }
-      if (operatorEmail && (paidOrHeld || message)) {
+      // ADR 0033: ALWAYS — a désistement is a signal on the notary's file,
+      // whether or not money is in flight or a motif was given.
+      if (operatorEmail) {
         const ctx = {
           ...bidCtx(bid),
-          etude: etude || (notary && notary.label) || null,
+          etude: etude || etudeOf(notary, null),
           notaireEmail: (notary && notary.email) || null,
           messageNotaire: message || null,
           paidOrHeld: !!paidOrHeld,
@@ -622,7 +817,9 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now 
     const results = [];
     try {
       if (operatorEmail) {
-        const ctx = { courriel: courriel || null, texte: message.texte, replyUrl };
+        // `email` doubles the courriel so the {{email}} placeholder of a subject
+        // override resolves (the template reads `courriel`).
+        const ctx = { courriel: courriel || null, email: courriel || null, texte: message.texte, replyUrl };
         results.push(
           await sendOnce({
             refId: message.id,
@@ -646,7 +843,8 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now 
     if (!message || !message.texte || !courriel) return { ok: true, results: [] };
     const results = [];
     try {
-      const ctx = { texte: message.texte };
+      // The CTA reopens the widget on the site (`#messagerie`, consumed on boot).
+      const ctx = { texte: message.texte, chatUrl: base.replace(/\/+$/, '') + '/#messagerie' };
       results.push(
         await sendOnce({
           refId: message.id,
@@ -693,7 +891,7 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now 
   // dossierIncomplete nudge.
   async function onReminderDue(bid, kind, todayISO) {
     if (!bid || !bid.courriel) return { sent: false, reason: 'no-address', kind };
-    const days = require('@nota/domain').daysBetween(todayISO, bid.dateISO);
+    const days = domain.daysBetween(todayISO, bid.dateISO);
     const templateKey =
       kind === 'dossier_incomplet' ? 'dossierIncomplete' : kind === 'j0' ? 'dateMissedNoUptake' : 'dateApproaching';
     const ctx = bidCtx(bid, { days });
@@ -749,14 +947,12 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now 
    */
   async function onChatDocument(bid, document, { notary } = {}) {
     if (!bid || !document || !document.id || document.etat !== 'pret') return { ok: true, results: [] };
-    const domain = require('@nota/domain');
     try {
-      const profile =
-        notary || (bid.notaryId && typeof repo.getNotary === 'function' ? await repo.getNotary(bid.notaryId) : null);
+      const profile = await notaryOf(bid, notary);
       if (document.de === domain.CHAT_FROM.NOTAIRE) {
         const ctx = {
           ...bidCtx(bid),
-          etude: (profile && profile.label) || bid.etude || null,
+          etude: etudeOf(profile, bid),
           document: document.nom,
         };
         const r = await sendOnce({
@@ -789,14 +985,12 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now 
 
   async function onChatMessage(bid, message, { notary } = {}) {
     if (!bid || !message || !message.id || !message.texte) return { ok: true, results: [] };
-    const domain = require('@nota/domain');
     try {
       if (message.de === domain.CHAT_FROM.NOTAIRE) {
-        const profile =
-          notary || (bid.notaryId && typeof repo.getNotary === 'function' ? await repo.getNotary(bid.notaryId) : null);
+        const profile = await notaryOf(bid, notary);
         const ctx = {
           ...bidCtx(bid),
-          etude: (profile && profile.label) || bid.etude || null,
+          etude: etudeOf(profile, bid),
           message: message.texte,
         };
         const r = await sendOnce({
@@ -810,8 +1004,7 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now 
         return { ok: true, results: [r] };
       }
       if (message.de === domain.CHAT_FROM.CLIENT) {
-        const profile =
-          notary || (bid.notaryId && typeof repo.getNotary === 'function' ? await repo.getNotary(bid.notaryId) : null);
+        const profile = await notaryOf(bid, notary);
         const ctx = { ...bidCtx(bid), message: message.texte };
         const r = await sendOnce({
           refId: message.id,
@@ -839,13 +1032,12 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now 
     if (!bid || !evaluation || !Number.isFinite(Number(evaluation.note))) return { ok: true, results: [] };
     const results = [];
     try {
-      const notary =
-        bid.notaryId && typeof repo.getNotary === 'function' ? await repo.getNotary(bid.notaryId) : null;
+      const notary = await notaryOf(bid, null);
       const ctx = {
         ...bidCtx(bid),
         note: Number(evaluation.note),
         commentaire: evaluation.commentaire || null,
-        etude: (notary && notary.label) || bid.etude || null,
+        etude: etudeOf(notary, bid),
       };
       if (notary && notary.email) {
         results.push(
@@ -1042,6 +1234,9 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now 
               })
             );
           }
+          // ADR 0033 §7 — the hold is authorized: the demand is on the carnet
+          // now, so the instant notaries hear of it (idempotent per bid+notary).
+          if (bid) results.push(...(await notifyInstantLeads(bid)));
           break;
         // The hold lapsed or was cancelled before any notary accepted — the offer
         // silently dropped off the carnet, so tell the client how to come back.
@@ -1131,6 +1326,47 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now 
     return { ok: true, email: clean };
   }
 
+  // --- Free notary signup (2026-09-02) --------------------------------------
+  // Fired from POST /notaries/signup (fire-and-forget) while the file is still
+  // waiting for the operator. Two messages, once per address each (the SENT
+  // ledger): the notary is told the vetting sequence — no payout talk at the
+  // door — and the operator is pointed at the admin console's Notaires screen
+  // (`adminUrl`), where the activation button lives.
+  async function onNotarySignedUp({ email, lienCNQ } = {}) {
+    const to = String(email || '').trim().toLowerCase();
+    if (!to) return { ok: true, results: [] };
+    const results = [];
+    try {
+      const ctx = { email: to, lienCNQ: lienCNQ || null };
+      results.push(
+        await sendOnce({
+          refId: to,
+          kind: 'notaryPendingReview',
+          to,
+          templateKey: 'notaryPendingReview',
+          ctx,
+          buildTemplate: (env) => emails.notaryPendingReview({ ...ctx, ...env }),
+        })
+      );
+      if (operatorEmail) {
+        const opCtx = { ...ctx, notaryEmail: to, adminUrl: adminUrl || null };
+        results.push(
+          await sendOnce({
+            refId: to,
+            kind: 'operatorNotarySignedUp',
+            to: operatorEmail,
+            templateKey: 'operatorNotarySignedUp',
+            ctx: opCtx,
+            buildTemplate: (env) => emails.operatorNotarySignedUp({ ...opCtx, ...env }),
+          })
+        );
+      }
+      return { ok: true, results };
+    } catch (err) {
+      return { ok: false, error: String((err && err.message) || err), results };
+    }
+  }
+
   return {
     onOfferCreated,
     onOfferRetained,
@@ -1151,6 +1387,7 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now 
     onReminderDue,
     onNotaryDigest,
     onNotaryConnected,
+    onNotarySignedUp,
     onNotaryLoginRequested,
     onActPaid,
     onAccountEvent,

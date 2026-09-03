@@ -1,11 +1,11 @@
 /**
  * Account opt-in during the bid flow (no-emphasis account creation).
  *
- * A visitor can browse the carnet and publish an offer with zero identity —
- * that stays true. But DURING the bid, a client must be able to really create
- * their (passwordless) account, without the form pushing it: a discreet
- * checkbox next to the optional courriel, inside the collapsed
- * « Options et confidentialité » block. Checked + courriel → the same signup
+ * A visitor can browse the carnet with zero identity — that stays true. Since
+ * ADR 0033 the publish itself asks for a name and a courriel (the retaining
+ * notary must be able to name and write to the client), but the ACCOUNT is
+ * still a separate, discreet choice: a checkbox inside the collapsed
+ * « Options et confidentialité » block, following the courriel typed above. Checked + courriel → the same signup
  * path as the auth modal (POST /client/welcome + signed-in state). Unchecked →
  * nothing new: no server call, no account language.
  *
@@ -96,6 +96,8 @@ function fillValidOffer(win, doc, D) {
   const selPreteur = $(doc, 'crit-preteur'); selPreteur.value = 'banque_nationale'; fire(win, selPreteur, 'change');
   const pre = $(doc, 'o-prefix'); pre.value = 'G1R'; fire(win, pre, 'input'); // REQUIRED sector
   const selDeplacement = $(doc, 'crit-deplacement'); selDeplacement.value = 'client_50'; fire(win, selDeplacement, 'change');
+  // ADR 0033 — the name is required at publish; each test types its own courriel.
+  const nom = $(doc, 'o-name'); nom.value = 'Prénom Nom'; fire(win, nom, 'input');
 }
 
 const welcomeCalls = (calls) => calls.filter((c) => c.url.includes('/client/welcome'));
@@ -115,8 +117,12 @@ test('account opt-in is discreet: in the collapsed options, unchecked, inert wit
   assert.ok(details, 'the opt-in hides inside the <details> options block');
   assert.equal(details.hasAttribute('open'), false, 'options block stays collapsed by default');
 
-  // It sits in the same private-fields block as the courriel it depends on.
-  assert.ok(details.querySelector('#o-courriel'), 'same block as the optional courriel');
+  // The courriel it depends on is a REQUIRED identity field (ADR 0033): it
+  // lives in the visible identity block, never folded away with the options.
+  const courriel = $(doc, 'o-courriel');
+  assert.ok(courriel.closest('#identity-rows'), 'the courriel sits in the visible identity block');
+  assert.equal(courriel.closest('details'), null, 'and never inside the collapsed options');
+  assert.equal(courriel.required, true, 'required at publish (ADR 0033)');
   // The three always-visible steps never mention the account.
   const steps = Array.from(doc.querySelectorAll('#offer-form .form-step'));
   assert.ok(steps.every((s) => !s.querySelector('#o-account')), 'no account field in the visible steps');

@@ -70,13 +70,22 @@ class NotaWorld extends World {
     // pushed onto `.calls` so a step can assert exactly what moved. Inert
     // until a scenario turns billing on (see `enableBilling`).
     this.stripe = {
-      calls: { authorizations: [], transfers: [], cancels: [], feeCaptures: [], commissions: [] },
+      calls: { authorizations: [], transfers: [], cancels: [], feeCaptures: [], feeTransfers: [], commissions: [] },
     };
     const calls = this.stripe.calls;
     Object.assign(this.stripe, {
       async createOfferAuthorization(args) { calls.authorizations.push(args); return { sessionId: 'cs_' + args.bidId, url: BASE + '/checkout/' + args.bidId }; },
       async captureAndTransfer(args) { calls.transfers.push(args); return { paymentIntentId: args.paymentIntentId, chargeId: 'ch_' + args.bidId, transferId: 'tr_' + args.bidId, applicationFeeCents: args.applicationFeeCents, netCents: args.amountCents - args.applicationFeeCents }; },
-      async captureCancellationFee(args) { calls.feeCaptures.push(args); return { paymentIntentId: args.paymentIntentId, chargeId: 'chfee_' + args.bidId }; },
+      // ADR 0033 — the cancellation fee is captured, then TRANSFERRED whole to
+      // the retaining notary when a connected account is named; `feeTransfers`
+      // records that leg so a scenario can prove Nota kept nothing.
+      async captureCancellationFee(args) {
+        calls.feeCaptures.push(args);
+        const chargeId = 'chfee_' + args.bidId;
+        if (!args.connectAccountId) return { paymentIntentId: args.paymentIntentId, chargeId, transferId: null };
+        calls.feeTransfers.push({ bidId: args.bidId, amountCents: args.amountCents, connectAccountId: args.connectAccountId, chargeId });
+        return { paymentIntentId: args.paymentIntentId, chargeId, transferId: 'trfee_' + args.bidId };
+      },
       async cancelOfferAuthorization(args) { calls.cancels.push(args); return { id: args.paymentIntentId, status: 'canceled' }; },
       async chargeActCommission(args) { calls.commissions.push(args); return { id: 'pi_' + (args.bidId || 'x'), applicationFeeCents: args.applicationFeeCents }; },
       constructEvent(rawBody) { return JSON.parse(rawBody || '{}'); },

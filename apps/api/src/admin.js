@@ -28,6 +28,7 @@ const cote = require('./cote');
 const cancellationCfg = require('./cancellation-config');
 const rbac = require('./rbac');
 const segments = require('./segments');
+const { statsDeltasForNotaryActive } = require('./stats');
 
 // Les permissions ne sont plus une table figée `rôle → capacités`. Elles se
 // RÉSOLVENT à chaque requête par `rbac.resolvePermissions` : l'union du paquet
@@ -80,6 +81,9 @@ function createAdmin({
       .filter(Boolean)
   );
   const baseUrl = (config.baseUrl || '').replace(/\/+$/, '');
+  // The PUBLIC site (NOTA_BASE_URL) — where an activated notary signs in. The
+  // admin console's own origin (`baseUrl`) is never a place to send a notary.
+  const siteUrl = String(config.siteUrl || '').replace(/\/+$/, '');
   // In non-production only, return the magic link in the response so local dev
   // and tests can complete the flow without a real mailbox. NEVER in production.
   const devEcho = config.devEcho === true;
@@ -623,7 +627,7 @@ function createAdmin({
       return {
         id: n.id,
         email: n.email || null,
-        etude: n.label || null,
+        etude: domain.notaryEtude(n),
         statut: n.status || null,
         cote: score.cote,
         axes: score.axes,
@@ -644,6 +648,12 @@ function createAdmin({
         rayonKm: Number(n.rayonKm) || 0,
         urgences: n.urgences === true,
         cnq: !!n.lienCNQ,
+        // 2026-09-02 — what the operator needs to VET a signup: the fiche they
+        // gave (a link to check, not a badge), when they signed up, and when
+        // (if) their access was opened.
+        lienCNQ: n.lienCNQ || null,
+        inscritLe: n.inscritLe || null,
+        approuveLe: n.approuveLe || null,
         depuis: n.createdAt || null,
         vuLe: n.lastSeenAt || null,
       };
@@ -651,6 +661,81 @@ function createAdmin({
     // Par cote décroissante : le registre est d'abord un tableau d'honneur.
     notaires.sort((a, b) => b.cote - a.cote || String(a.etude || '').localeCompare(String(b.etude || '')));
     return { ok: true, notaires };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Activer un notaire (2026-09-02) — la porte de la console s'ouvre ICI.
+  //
+  // Le notaire s'est inscrit avec son courriel professionnel ; l'opérateur a
+  // vérifié son inscription au Tableau de l'Ordre ; ce geste pose `approuveLe`,
+  // le seul champ que la porte publique (notaryGate) lit. Stripe n'y est pour
+  // rien : ses versements se branchent plus tard, depuis la console.
+  //
+  //   • `moderation:write` — décider qui est sur la place de marché est de la
+  //     modération, pas un réglage.
+  //   • Idempotent : un second clic répond `deja: true` et ne bouge ni la
+  //     jauge, ni le journal, ni la boîte du notaire.
+  //   • `status` : `en_attente` devient `active` ; un statut posé par Stripe
+  //     (`onboarding`, `restricted`) est laissé tel quel — `approuveLe`
+  //     suffit à ouvrir la porte, et le statut reste le fait de Stripe.
+  //   • Le courriel `notaryApproved` part par la porte générique du notifieur
+  //     (`sendCampaign`) : la Lambda admin ne peut pas écrire le registre
+  //     SENT# de la table principale, et `deja` fait l'idempotence.
+  // ---------------------------------------------------------------------------
+  async function recordStats(deltas) {
+    if (!deltas || !deltas.length || typeof repo.applyStatsDeltas !== 'function') return;
+    try {
+      await repo.applyStatsDeltas(deltas);
+    } catch {
+      /* la jauge est un indicateur, jamais une condition de l'activation */
+    }
+  }
+  function notaireActivationView(n) {
+    return {
+      id: n.id,
+      email: n.email || null,
+      etude: domain.notaryEtude(n),
+      statut: n.status || null,
+      approuveLe: n.approuveLe || null,
+      inscritLe: n.inscritLe || null,
+    };
+  }
+  async function activateNotary(token, id, { ip } = {}) {
+    const p = await requireAdmin(token, { ip });
+    if (!p) return { ok: false, status: 401 };
+    if (!rbac.can(p.permissions, 'moderation:write')) {
+      return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Activation des notaires non autorisée.' }] };
+    }
+    const notaryId = String(id == null ? '' : id).trim();
+    const n = notaryId && typeof repo.getNotary === 'function' ? await repo.getNotary(notaryId) : null;
+    if (!n) return { ok: false, status: 404, errors: [{ code: 'notaire_introuvable', message: 'Notaire introuvable.' }] };
+    if (n.approuveLe) return { ok: true, deja: true, notaire: notaireActivationView(n) };
+
+    const at = clockIso();
+    const next = {
+      ...n,
+      approuveLe: at,
+      status: !n.status || n.status === 'en_attente' ? 'active' : n.status,
+      updatedAt: at,
+    };
+    await repo.putNotary(next);
+    await recordStats(statsDeltasForNotaryActive());
+    await appendAudit('notary_activated', {
+      adminId: p.adminId, email: p.email, ip,
+      meta: { notaryId, notaryEmail: n.email || null, statutAvant: n.status || null, statutApres: next.status },
+    });
+    if (next.email && notifier && typeof notifier.sendCampaign === 'function') {
+      try {
+        await notifier.sendCampaign({
+          to: next.email,
+          templateKey: 'notaryApproved',
+          ctx: { email: next.email, ...(siteUrl ? { consoleUrl: siteUrl + '/#notaires' } : {}) },
+        });
+      } catch {
+        /* best-effort : l'accès est ouvert même si le courriel échoue ; le lien magique reste demandable */
+      }
+    }
+    return { ok: true, deja: false, notaire: notaireActivationView(next) };
   }
 
 
@@ -1197,6 +1282,7 @@ function createAdmin({
     putCancellationSchedule,
     resetCancellationSchedule,
     listNotaries,
+    activateNotary,
     readAudit,
   };
 }

@@ -19,6 +19,7 @@ const { createBilling } = require('../../src/billing.js');
 const { notaryIdForEmail } = require('../../src/notary-auth.js');
 const { loadContract, specPath } = require('./openapi-contract.js');
 import { notarySignIn } from '../../test-support/notary-session.mjs';
+import { NOTARY_CONTACT } from '../../test-support/notary-fixture.mjs';
 
 const contract = loadContract(specPath('openapi.yaml'));
 
@@ -96,7 +97,7 @@ const postBid = (a, obj) =>
   });
 
 async function seedActive(a, email) {
-  await a.repo.putNotary({ id: notaryIdForEmail(email), email, status: 'active' });
+  await a.repo.putNotary({ id: notaryIdForEmail(email), email, status: 'active', ...NOTARY_CONTACT });
 }
 async function session(a, email) {
   await seedActive(a, email);
@@ -196,6 +197,59 @@ test('POST /notary/bids/accept — 200 released dossier + 409 already-retained s
   const conflictBody = parse(conflict);
   assert.equal(conflictBody.errors[0].code, 'deja_retenue');
   assertValid('/notary/bids/accept', 'POST', 409, conflictBody);
+});
+
+// --- ADR 0033 : identity, gate, conditions, throttle ----------------------------
+
+test('POST /notary/profile — 200 profil (identity + alertes) validates; the gate 403 profil_incomplet validates', async () => {
+  const a = app();
+  // A notary WITHOUT the contact block: the profile write is fine, the retain is not.
+  await a.repo.putNotary({ id: notaryIdForEmail('bare@etude.ca'), email: 'bare@etude.ca', status: 'active' });
+  const sess = await notarySignIn(a, 'bare@etude.ca');
+
+  const saved = await a.handle({ method: 'POST', path: '/notary/profile', headers: bearer(sess.token), body: JSON.stringify({ nom: 'Me Bare', alertes: { pace: 'instant', urgentOnly: true } }) });
+  assert.equal(saved.statusCode, 200, saved.body);
+  const profil = parse(saved).profil;
+  assert.equal(profil.complet, false);
+  assertValid('/notary/profile', 'POST', 200, parse(saved));
+
+  const posted = parse(await postBid(a, { serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2800, courriel: 'client@example.ca' }));
+  const ref = { id: posted.bid.id, dateISO: posted.bid.dateISO };
+  const refused = await a.handle({ method: 'POST', path: '/notary/bids/accept', headers: bearer(sess.token), body: JSON.stringify(ref) });
+  assert.equal(refused.statusCode, 403, refused.body);
+  assert.equal(parse(refused).errors[0].code, 'profil_incomplet');
+  assertValid('/notary/bids/accept', 'POST', 403, parse(refused));
+  const refusedProp = await a.handle({ method: 'POST', path: '/notary/bids/propose', headers: bearer(sess.token), body: JSON.stringify({ ...ref, montant: 3200 }) });
+  assert.equal(refusedProp.statusCode, 403, refusedProp.body);
+  assertValid('/notary/bids/propose', 'POST', 403, parse(refusedProp));
+});
+
+test('GET /notary/bids — 200 with a retained act, profil, conditions and fenetre validates', async () => {
+  const a = app();
+  const posted = parse(await postBid(a, { serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2400, courriel: 'client@example.ca' }));
+  const { token } = await session(a, 'feed@notaire.ca');
+  const ref = { id: posted.bid.id, dateISO: posted.bid.dateISO };
+  assert.equal((await a.handle({ method: 'POST', path: '/notary/bids/accept', headers: bearer(token), body: JSON.stringify(ref) })).statusCode, 200);
+  // A second open demand so `bids` is not empty either.
+  await postBid(a, { serviceId: 'refinancement', dateISO: '2026-08-21', montant: 2500, courriel: 'autre@example.ca' });
+
+  const res = await a.handle({ method: 'GET', path: '/notary/bids', headers: bearer(token), query: {} });
+  assert.equal(res.statusCode, 200, res.body);
+  const body = parse(res);
+  assert.equal(body.retained.length, 1);
+  assert.equal(body.bids.length, 1);
+  assert.equal(body.conditions.paiement, 'signature');
+  assertValid('/notary/bids', 'GET', 200, body);
+});
+
+test('POST /support/messages — 429 trop_de_messages validates once the per-IP window is spent', async () => {
+  const a = app({ supportRlMax: 2 });
+  const send = () => a.handle({ method: 'POST', path: '/support/messages', sourceIp: '203.0.113.7', body: JSON.stringify({ texte: 'Bonjour' }) });
+  assert.equal((await send()).statusCode, 201);
+  assert.equal((await send()).statusCode, 201);
+  const blocked = await send();
+  assert.equal(blocked.statusCode, 429, blocked.body);
+  assertValid('/support/messages', 'POST', 429, parse(blocked));
 });
 
 // --- The error envelope { errors: [{ code, message }] } across the API -------

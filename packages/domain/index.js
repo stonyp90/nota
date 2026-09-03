@@ -1514,9 +1514,118 @@
     annuaire: 'https://www.cnq.org/trouver-un-notaire/',
   };
   const CNQ_LINK_MAX = 300;
+  // --- Mise en relation : joindre l'autre partie (ADR 0033) ------------------
+  // A phone number, however a human types it — « (418) 555-1234 »,
+  // « 418.555.1234 », « 1 418 555 1234 ». The rule is deliberately loose: once
+  // the formatting is stripped, a dialable North-American number remains (10
+  // digits, or 11 with the country code). The trimmed original is kept: the
+  // formatting is information for the human who will dial, and telHref() turns
+  // it into a dial string when a tel: link is needed. Empty is valid and null.
+  function validateTelephone(raw) {
+    const s = String(raw == null ? '' : raw).trim();
+    if (!s) return { ok: true, value: null, error: null };
+    const digits = s.replace(/\D/g, '');
+    if (digits.length < 10 || digits.length > 11) {
+      return { ok: false, value: null, error: { code: 'telephone_invalide', message: 'Le numéro de téléphone n’est pas valide.' } };
+    }
+    return { ok: true, value: s, error: null };
+  }
+
+  // What a client must be able to do once a notary retains their act: call
+  // them, and find the étude. Until the three are on the profile, the notary
+  // can neither retain nor propose — the API enforces it, the console says it.
+  const NOTARY_NAME_MAX = 120;
+  const NOTARY_ADDRESS_MAX = 200;
+  const NOTARY_CONTACT_REQUIRED = ['nom', 'telephone', 'adresse'];
+  const NOTARY_CONTACT_LABELS = {
+    nom: 'Votre nom',
+    telephone: 'Votre téléphone',
+    adresse: 'L’adresse de votre étude',
+  };
+  function notaryContactMissing(profile) {
+    const p = profile || {};
+    return NOTARY_CONTACT_REQUIRED
+      .filter((id) => !String(p[id] == null ? '' : p[id]).trim())
+      .map((id) => ({ id, label: NOTARY_CONTACT_LABELS[id] }));
+  }
+
+  // The name of the étude a client sees — the declared étude first, then the
+  // legacy sign-in label, then the notary's own name, then their courriel.
+  function notaryEtude(profile) {
+    if (!profile) return null;
+    const pick = (v) => { const s = String(v == null ? '' : v).trim(); return s || null; };
+    return pick(profile.etude) || pick(profile.label) || pick(profile.nom) || pick(profile.email) || null;
+  }
+
+  // The notary's alert preferences (ADR 0033 §7) — « Recevez vos demandes à
+  // votre rythme » as SERVER data. `pace` is one of four words: instant (a
+  // mail per matching demande), daily (the digest — the default, the promise
+  // that already existed), weekly, off. `urgentOnly` narrows instant alerts
+  // to prioritaire/urgence tiers; strictly boolean true, never a truthy
+  // string. Absent or null reads as the default; anything else is validated
+  // loudly so a corrupted preference never silently mutes a notary.
+  const NOTARY_ALERT_PACES = ['instant', 'daily', 'weekly', 'off'];
+  const NOTARY_ALERTES_DEFAULT = Object.freeze({ pace: 'daily', urgentOnly: false });
+  function validateNotaryAlertes(raw) {
+    if (raw === undefined || raw === null) return { ok: true, value: { ...NOTARY_ALERTES_DEFAULT }, errors: [] };
+    if (typeof raw !== 'object' || Array.isArray(raw)) {
+      return { ok: false, value: null, errors: [{ code: 'alertes_invalides', message: 'Les préférences d’alertes ne sont pas valides.' }] };
+    }
+    const errors = [];
+    let pace = NOTARY_ALERTES_DEFAULT.pace;
+    if (raw.pace !== undefined && raw.pace !== null && String(raw.pace).trim() !== '') {
+      const p = String(raw.pace).trim().toLowerCase();
+      if (NOTARY_ALERT_PACES.indexOf(p) === -1) {
+        errors.push({ code: 'alerte_rythme_invalide', message: 'Le rythme des alertes doit être instant, daily, weekly ou off.' });
+      } else {
+        pace = p;
+      }
+    }
+    let urgentOnly = NOTARY_ALERTES_DEFAULT.urgentOnly;
+    if (raw.urgentOnly !== undefined && raw.urgentOnly !== null) {
+      if (typeof raw.urgentOnly !== 'boolean') {
+        errors.push({ code: 'alertes_invalides', message: 'Le filtre « urgences seulement » doit être vrai ou faux.' });
+      } else {
+        urgentOnly = raw.urgentOnly;
+      }
+    }
+    if (errors.length) return { ok: false, value: null, errors };
+    return { ok: true, value: { pace, urgentOnly }, errors: [] };
+  }
+  // What a STORED profile's alerts are — the default when the notary said
+  // nothing, and the default again when the stored value is corrupt: a
+  // reader never throws and never invents a pace.
+  function notaryAlertes(profile) {
+    const v = validateNotaryAlertes(profile && profile.alertes);
+    return v.ok ? v.value : { ...NOTARY_ALERTES_DEFAULT };
+  }
+
   function validateNotaryProfile(input) {
     input = input || {};
     const errors = [];
+
+    const alertesV = validateNotaryAlertes(input.alertes);
+    if (!alertesV.ok) errors.push(...alertesV.errors);
+    const alertes = alertesV.value;
+
+    // Identity for the mise en relation (ADR 0033): all optional at SAVE time
+    // — a notary fills their profile in any order — but retaining requires
+    // the three of notaryContactMissing(). Trimmed; null when empty.
+    const bounded = (key, max, code, label) => {
+      const s = String(input[key] == null ? '' : input[key]).trim();
+      if (s.length > max) {
+        errors.push({ code, message: `${label} ne peut dépasser ${max} caractères.` });
+        return null;
+      }
+      return s || null;
+    };
+    const nom = bounded('nom', NOTARY_NAME_MAX, 'nom_invalide', 'Le nom');
+    const etude = bounded('etude', NOTARY_NAME_MAX, 'etude_invalide', 'Le nom de l’étude');
+    const adresse = bounded('adresse', NOTARY_ADDRESS_MAX, 'adresse_invalide', 'L’adresse');
+    const telV = validateTelephone(input.telephone);
+    if (!telV.ok) errors.push(telV.error);
+    const telephone = telV.value;
+
     const raw = String(input.lienCNQ == null ? '' : input.lienCNQ).trim();
 
     // Empty is valid: the notary clears their fiche (and loses the badge).
@@ -1559,7 +1668,7 @@
     const prefixeV = validatePrefixe(input.prefixe);
     if (prefixeV.error) errors.push(prefixeV.error);
 
-    return { ok: errors.length === 0, errors, lienCNQ, rayonKm, urgences, prefixe: prefixeV.value };
+    return { ok: errors.length === 0, errors, lienCNQ, rayonKm, urgences, prefixe: prefixeV.value, nom, etude, telephone, adresse, alertes };
   }
 
   // A dial string for a tel: href — digits only, keeping a leading + and
@@ -2135,6 +2244,26 @@
     return 'Client · ' + (bid.prefixe || '—');
   }
 
+  // --- Funnel events -----------------------------------------------------------
+  // The conversion funnel is product data, so its catalogue lives here and both
+  // apps read the SAME list: the web app beacons an event, the API accepts only
+  // these names and counts them per day, the admin overview reads them back in
+  // this order. Anything else on the wire is dropped. Each entry is one
+  // observable step between « a person arrived » and « a person paid ».
+  const FUNNEL_EVENTS = Object.freeze([
+    { id: 'visite',          nom: 'Visites',                      nomEn: 'Visits' },
+    { id: 'jour_ouvert',     nom: 'Dates ouvertes',               nomEn: 'Dates opened' },
+    { id: 'formulaire',      nom: 'Formulaires commencés',        nomEn: 'Forms started' },
+    { id: 'publie',          nom: 'Offres publiées',              nomEn: 'Offers published' },
+    { id: 'paiement_ok',     nom: 'Cartes autorisées',            nomEn: 'Cards authorized' },
+    { id: 'paiement_annule', nom: 'Paiements abandonnés',         nomEn: 'Payments abandoned' },
+    { id: 'notaire_porte',   nom: 'Espace notaire ouvert',        nomEn: 'Notary space opened' },
+    { id: 'notaire_inscrit', nom: 'Notaires inscrits',            nomEn: 'Notaries signed up' },
+  ]);
+  function isFunnelEvent(id) {
+    return typeof id === 'string' && FUNNEL_EVENTS.some((e) => e.id === id);
+  }
+
   return {
     money,
     moneyEn,
@@ -2216,6 +2345,16 @@
     CNQ,
     CNQ_LINK_MAX,
     validateNotaryProfile,
+    validateTelephone,
+    NOTARY_NAME_MAX,
+    NOTARY_ADDRESS_MAX,
+    NOTARY_CONTACT_REQUIRED,
+    notaryContactMissing,
+    notaryEtude,
+    NOTARY_ALERT_PACES,
+    NOTARY_ALERTES_DEFAULT,
+    validateNotaryAlertes,
+    notaryAlertes,
     telHref,
     makeFixtures,
     seedSignature,
@@ -2228,6 +2367,8 @@
     validateDossierFile,
     cleanDossier,
     REFERRAL,
+    FUNNEL_EVENTS,
+    isFunnelEvent,
     normalizeReferralCode,
     isReferralCode,
     referralLedger,

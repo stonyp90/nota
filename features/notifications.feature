@@ -54,3 +54,32 @@ Fonctionnalité: Cycle de vie des notifications
     Quand le planificateur de rappels s'exécute
     Et le planificateur de rappels s'exécute
     Alors le client "relance@exemple.ca" reçoit exactement 1 courriel "date approche"
+
+  # ADR 0033 — la mise en relation est complète : retenir une demande met les
+  # deux parties en contact, par courriel, avec de quoi se joindre.
+  Scénario: la rétention avise le notaire avec les coordonnées du client
+    Étant donné un notaire actif et joignable "jeanne@etude.ca"
+    Quand un client nommé "Marie Roy" au téléphone "418 555-0100" publie une offre avec le courriel "marie@exemple.ca" pour "refinancement" à 2500 dans 10 jours
+    Et le notaire "jeanne@etude.ca" retient l'offre
+    Alors le notaire "jeanne@etude.ca" reçoit le courriel "demande retenue"
+    Et ce courriel porte les coordonnées "Marie Roy", "marie@exemple.ca" et "418 555-0100"
+    Et le client "marie@exemple.ca" reçoit le courriel "offre retenue"
+    Et ce courriel porte les coordonnées "Me Jeanne Tremblay", "jeanne@etude.ca" et "418 555-0199"
+
+  Scénario: une nouvelle demande avise instantanément le notaire qui l'a demandé
+    Étant donné un notaire actif et joignable "vite@etude.ca"
+    Et le notaire "vite@etude.ca" veut ses demandes "instant"
+    Et un notaire actif et joignable "digest@etude.ca"
+    Quand un client publie une offre avec le courriel "client@exemple.ca" pour "refinancement" à 2500 dans 10 jours
+    Alors le notaire "vite@etude.ca" reçoit le courriel "nouvelle demande"
+    Et le notaire "digest@etude.ca" ne reçoit aucun courriel
+
+  Scénario: l'annulation dit au notaire ce qu'il reçoit
+    Étant donné un notaire actif et joignable "jeanne@etude.ca"
+    Quand un client publie une offre avec le courriel "client@exemple.ca" pour "refinancement" à 2500 dans 10 jours
+    Et le notaire "jeanne@etude.ca" retient l'offre
+    Et l'offre retenue est annulée avec des frais de 250 $ au taux de 10 % versés au notaire
+    Alors le notaire "jeanne@etude.ca" reçoit le courriel "demande annulée par le client"
+    Et ce courriel dit que 250 $ lui sont versés en dédommagement
+    Et le client "client@exemple.ca" reçoit le courriel "offre annulée"
+    Et ce courriel dit que 250 $ sont retenus en dédommagement du notaire

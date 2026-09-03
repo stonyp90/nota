@@ -254,7 +254,8 @@ test('signed-in notary: retain is within two clicks of the landing (tab → Rete
     calls.push({ url: String(url), opts });
     const json = (body) => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
     if (String(url).includes('/notary/bids/accept')) return json({ id: 'n1', courriel: null, dossier: null });
-    if (String(url).includes('/notary/bids')) return json({ bids: [bid], retained: [] });
+    // A complete contact profile (ADR 0033), or Retenir opens the form instead.
+    if (String(url).includes('/notary/bids')) return json({ bids: [bid], retained: [], profil: { nom: 'Me Démo', telephone: '418 555 0100', adresse: '1, rue de la Démo, Québec' } });
     return Promise.reject(new Error('offline'));
   };
   await Nota.notary.loadBids();
@@ -265,8 +266,9 @@ test('signed-in notary: retain is within two clicks of the landing (tab → Rete
   const acc = doc.querySelector('.nc-card[data-id="n1"] .nc-accept');
   acc.click();
   await wait(10);
-  assert.equal(calls.filter((c) => c.url.includes('/accept')).length, 0, 'the first click only arms');
-  doc.querySelector('.nc-card[data-id="n1"] .nc-accept').click();
+  assert.equal(calls.filter((c) => c.url.includes('/accept')).length, 0, 'the first click only opens the confirm sheet');
+  assert.equal($(doc, 'nc-retenir-dialog').open, true, 'the confirm sheet is the second click');
+  $(doc, 'nc-retenir-go').click();
   await wait(30);
   assert.equal(calls.filter((c) => c.url.includes('/accept')).length, 1, 'the second click retains');
 });

@@ -46,3 +46,10 @@ file can only ghost the client or route through support.
   automatic clawback.
 - The thread is part of the bid record (same TTL, same privacy posture: the
   public projection never carries it).
+
+> **Note du 2026-09-02 (ADR 0033).** La phrase « Messages send no email » ne
+> tient plus depuis l'ADR 0018 : chaque message et chaque document déposé avise
+> l'autre partie par courriel (`messageDuNotaire` / `messageDuClient`,
+> `documentDu*`), une fois par message, et ces courriels mènent désormais à
+> l'acte lui-même. Le désistement reste gratuit pour le notaire mais est compté
+> à son dossier (`releasesCount`) et l'opérateur est toujours prévenu.

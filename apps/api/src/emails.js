@@ -139,7 +139,44 @@ function linksFor(baseUrl) {
     compte: (b || '') + '/#notaires',
     // The client's own space (their offer, propositions, document requests).
     profil: (b || '') + '/#t=profil',
+    // ADR 0033 — the notary console opened on ONE act: a retained card, or an
+    // open demand the console resolves to its card.
+    acte: (bidId) => (b || '') + '/#notaires&acte=' + encodeURIComponent(String(bidId == null ? '' : bidId)),
   };
+}
+
+// --- Where each audience's CTA lands (ADR 0033 §2.7) --------------------------
+// A client has no account: the notifier mints a signed, device-independent
+// deep link to THEIR act (`clientUrl`) — the same act on any phone or laptop.
+// Without one (an older caller, a test), the CTA falls back to their space,
+// or to the `fallback` a template names (the dossier pane, for the two mails
+// whose whole point is completing the file).
+function clientActeUrl(ctx, fallback) {
+  return ctx.clientUrl || fallback || linksFor(ctx.baseUrl).profil;
+}
+// A notary's act mail opens the console ON that act when the id is known.
+function notaryActeUrl(ctx) {
+  return ctx.bidId ? linksFor(ctx.baseUrl).acte(ctx.bidId) : linksFor(ctx.baseUrl).notaires;
+}
+// Operator alerts land on the admin console when one is configured
+// (`adminUrl`, from NOTA_ADMIN_URL), else on the public carnet as before.
+function operatorUrl(ctx) {
+  return ctx.adminUrl || linksFor(ctx.baseUrl).carnet;
+}
+// A dialable href for a phone number, as the domain spells it (null when empty).
+function telHref(raw) {
+  const href = domain.telHref(raw);
+  // `+1` is right for a dialer; the tests and the web card show the bare
+  // national digits, so strip the country code we just assumed.
+  return href ? href.replace(/^tel:\+1(\d{10})$/, 'tel:$1') : null;
+}
+// A rate as people read it: « 30 % » (fr-CA, no-break space) / « 30% » (en).
+const NBSP = '\u00a0';
+function pct(taux) {
+  return Math.round(Number(taux) * 100) + NBSP + '%';
+}
+function pctEn(taux) {
+  return Math.round(Number(taux) * 100) + '%';
 }
 
 // --- layout primitives -------------------------------------------------------
@@ -388,6 +425,50 @@ function callout(text) {
     '</td></tr></table>'
   );
 }
+// A label / value block — the contact card of the mise en relation (ADR 0033),
+// the facts of a demand. Rows without a value vanish; a row may carry an href
+// (tel:, mailto:, the fiche at the Chambre). Table-based like everything else.
+function detailRows(rows) {
+  const cells = (rows || [])
+    .filter((r) => r && r.value)
+    .map(
+      (r) =>
+        '<tr><td style="padding:5px 14px 5px 0;font-family:' +
+        FONT +
+        ';font-size:14px;line-height:1.5;color:' +
+        PALETTE.muted +
+        ';white-space:nowrap;vertical-align:top;">' +
+        esc(r.label) +
+        '</td><td style="padding:5px 0;font-family:' +
+        FONT +
+        ';font-size:14px;line-height:1.5;font-weight:600;color:' +
+        PALETTE.ink +
+        ';vertical-align:top;">' +
+        (r.href
+          ? '<a href="' + esc(r.href) + '" style="color:' + PALETTE.brand + ';text-decoration:underline;">' + esc(r.value) + '</a>'
+          : esc(r.value)) +
+        '</td></tr>'
+    )
+    .join('');
+  return cells
+    ? '<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px;border-collapse:collapse;">' + cells + '</table>'
+    : '';
+}
+function detailText(rows) {
+  return (rows || [])
+    .filter((r) => r && r.value)
+    .map((r) => r.label + ' : ' + r.value + (r.href && /^https?:/.test(r.href) ? ' — ' + r.href : ''));
+}
+// A short list of facts (a barème, what an engagement means).
+function bullets(items) {
+  const li = (items || []).filter(Boolean);
+  return li.length
+    ? '<ul style="margin:0 0 16px;padding-left:20px;font-family:' + FONT + ';font-size:15px;line-height:1.6;color:' + PALETTE.ink + ';">' +
+      li.map((t) => '<li>' + esc(t) + '</li>').join('') +
+      '</ul>'
+    : '';
+}
+
 // Every message: 'FR / EN' subject, 'FR · EN' preheader, FR-then-EN html/text.
 //
 // `ctx` is the same context the template received. It may carry `__override`,
@@ -429,6 +510,41 @@ function offerLineEn(ctx) {
   return svcNomEn(ctx.serviceId) + ' · ' + fmtDateEn(ctx.dateISO) + ' · ' + moneyEn(ctx.montant);
 }
 
+// --- The cancellation barème, as sentences (ADR 0023 / ADR 0033) --------------
+// `bareme` is a list of paliers ALREADY priced upstream on this act's montant
+// by cancellation-config: { maxJours, taux, frais }. The mail lays them out in
+// ascending order and closes with the free window; an empty barème reads as
+// free everywhere. Nothing is computed here.
+function baremeLines(bareme, lang) {
+  const en = lang === 'en';
+  const paliers = Array.isArray(bareme) ? [...bareme].sort((a, b) => a.maxJours - b.maxJours) : [];
+  if (!paliers.length) return [en ? 'no fee, whenever it happens' : 'aucuns frais, quel que soit le moment'];
+  const lines = [];
+  let prev = -1;
+  for (const p of paliers) {
+    const when = en
+      ? p.maxJours === 0 ? 'On the day of the signing' : prev < 0 ? p.maxJours + ' days or fewer before the date' : 'From ' + (prev + 1) + ' to ' + p.maxJours + ' days before'
+      : p.maxJours === 0 ? 'Le jour même de la signature' : prev < 0 ? 'À ' + p.maxJours + ' jours ou moins de la date' : 'De ' + (prev + 1) + ' à ' + p.maxJours + ' jours avant';
+    const amount = p.frais != null ? ' (' + (en ? moneyEn(p.frais) : money(p.frais)) + ')' : '';
+    lines.push(when + (en ? ': ' + pctEn(p.taux) + ' of the amount' : ' : ' + pct(p.taux) + ' du montant') + amount);
+    prev = p.maxJours;
+  }
+  lines.push(en ? 'Beyond ' + prev + ' days: free' : 'Au-delà de ' + prev + ' jours : gratuit');
+  return lines;
+}
+
+// The lender behind a demand, named for a notary: the catalogue name, or the
+// name the client typed for « Autre prêteur » when it travels (`preteurNom`).
+function lenderNom(ctx) {
+  if (ctx.preteurNom) return String(ctx.preteurNom);
+  const l = ctx.preteur ? domain.lenderById(ctx.preteur) : null;
+  return l ? l.nom : null;
+}
+function deplacementNom(id) {
+  const d = id ? domain.deplacementById(id) : null;
+  return d ? d.nom : null;
+}
+
 // =============================================================================
 // CLIENT templates
 // =============================================================================
@@ -463,7 +579,7 @@ function offerPublished(ctx) {
       textLines: [offerLineEn(ctx), 'Complete your file so a notary can take your request.'],
       ctaLabel: 'Complete my file',
     },
-    ctaUrl: linksFor(ctx.baseUrl).dossier,
+    ctaUrl: clientActeUrl(ctx, linksFor(ctx.baseUrl).dossier),
     unsubscribeUrl: ctx.unsubscribeUrl,
   }, ctx);
 }
@@ -494,7 +610,7 @@ function dossierIncomplete(ctx) {
       textLines: [offerLineEn(ctx), 'Add your documents and the sharing consent.'],
       ctaLabel: 'Finish my file',
     },
-    ctaUrl: linksFor(ctx.baseUrl).dossier,
+    ctaUrl: clientActeUrl(ctx, linksFor(ctx.baseUrl).dossier),
     unsubscribeUrl: ctx.unsubscribeUrl,
   }, ctx);
 }
@@ -585,50 +701,88 @@ function dateApproaching(ctx) {
       ].filter(Boolean),
       ctaLabel: 'Check my offer',
     },
-    ctaUrl: linksFor(ctx.baseUrl).profil,
+    ctaUrl: clientActeUrl(ctx),
     unsubscribeUrl: ctx.unsubscribeUrl,
   }, ctx);
 }
 
+// The mise en relation is complete (ADR 0033): the client learns WHO retained
+// their act — name, étude, phone (dialable), address, courriel, fiche at the
+// Chambre — and that the conversation lives in their Nota space. Then what may
+// still change (the notary can withdraw; the act returns to the carnet as
+// posted) and what cancelling would cost: the barème in force, priced upstream
+// on this montant, which goes to the notary as compensation — never to Nota.
+// Context: bid fields + `notaire` { nom, etude, telephone, adresse, courriel,
+// lienCNQ } + `bareme` [{ maxJours, taux, frais }] + `clientUrl`.
 function offerRetained(ctx) {
+  const n = ctx.notaire || {};
+  const nom = n.nom || null;
+  const etude = n.etude || ctx.etude || null;
+  const who = nom || etude || null;
+  const rows = [
+    { label: 'Notaire', value: nom },
+    { label: 'Étude', value: etude },
+    { label: 'Téléphone', value: n.telephone, href: telHref(n.telephone) },
+    { label: 'Adresse', value: n.adresse },
+    { label: 'Courriel', value: n.courriel, href: n.courriel ? 'mailto:' + n.courriel : null },
+    { label: 'Chambre des notaires', value: n.lienCNQ ? 'Vérifier sa fiche' : null, href: n.lienCNQ || null },
+  ];
+  const rowsEn = [
+    { label: 'Notary', value: nom },
+    { label: 'Practice', value: etude },
+    { label: 'Phone', value: n.telephone, href: telHref(n.telephone) },
+    { label: 'Address', value: n.adresse },
+    { label: 'Email', value: n.courriel, href: n.courriel ? 'mailto:' + n.courriel : null },
+    { label: 'Chambre des notaires', value: n.lienCNQ ? 'Check their fiche' : null, href: n.lienCNQ || null },
+  ];
+  const contact = detailRows(rows);
+  const contactEn = detailRows(rowsEn);
+  const bareme = baremeLines(ctx.bareme, 'fr');
+  const baremeEn = baremeLines(ctx.bareme, 'en');
+  const conversation = 'Écrivez-lui dans votre espace Nota : la conversation reste attachée à votre dossier, avec vos documents et votre rendez-vous. Le notaire vérifie votre identité à la signature.';
+  const conversationEn = 'Write to them in your Nota space: the conversation stays attached to your file, with your documents and your appointment. The notary verifies your identity at the signing.';
+  const desistement = 'Le notaire peut encore se désister si un détail du dossier (un prêteur inhabituel, un conflit d’intérêts) rend l’acte impossible de son côté. Votre offre revient alors au carnet telle quelle — même date, même montant — et vous en êtes averti aussitôt.';
+  const desistementEn = 'The notary may still withdraw if a detail of the file (an unusual lender, a conflict of interest) makes the act impossible on their side. Your offer then returns to the carnet as is — same date, same amount — and you are told right away.';
+  const fraisIntro = 'Si vous annulez, une part du montant est retenue sur votre carte et versée au notaire en dédommagement :';
+  const fraisIntroEn = 'If you cancel, a share of the amount is kept on your card and transferred to the notary as compensation:';
   return build({
     subjectFr: 'Un notaire a retenu votre demande',
     subjectEn: 'A notary has taken your request',
-    preheaderFr: 'Voici les prochaines étapes vers votre signature.',
-    preheaderEn: 'Here are the next steps toward your signing.',
+    preheaderFr: (who ? who + ' — ' : '') + 'voici comment le joindre, et les prochaines étapes.',
+    preheaderEn: (who ? who + ' — ' : '') + 'here is how to reach them, and the next steps.',
     fr: {
       heading: 'Bonne nouvelle — votre demande est retenue',
-      lead:
-        'Un notaire a retenu votre demande de ' +
-        svcNom(ctx.serviceId) +
-        ' pour le ' +
-        fmtDate(ctx.dateISO) +
-        '.',
+      lead: (who || 'Un notaire') + ' a retenu votre demande de ' + svcNom(ctx.serviceId) + ' pour le ' + fmtDate(ctx.dateISO) + '.',
       bodyHtml:
         callout(offerLine(ctx)) +
-        para(
-          'Le notaire vous contactera pour organiser la signature et vérifiera votre identité à ce moment. Assurez-vous que votre dossier est complet pour que tout aille vite.'
-        ),
-      textLines: [offerLine(ctx), 'Le notaire vous contactera pour la signature.'],
-      ctaLabel: 'Voir les prochaines étapes',
+        (contact ? para('Voici comment joindre votre notaire :') + contact : '') +
+        para(conversation) +
+        para(desistement) +
+        para(fraisIntro) +
+        bullets(bareme),
+      textLines: [offerLine(ctx)]
+        .concat(detailText(rows))
+        .concat([conversation, desistement, fraisIntro])
+        .concat(bareme.map((l) => '- ' + l)),
+      ctaLabel: 'Ouvrir mon dossier',
     },
     en: {
       heading: 'Good news — your request is taken',
-      lead:
-        'A notary has taken your ' +
-        svcNomEn(ctx.serviceId) +
-        ' request for ' +
-        fmtDateEn(ctx.dateISO) +
-        '.',
+      lead: (who || 'A notary') + ' has taken your ' + svcNomEn(ctx.serviceId) + ' request for ' + fmtDateEn(ctx.dateISO) + '.',
       bodyHtml:
         callout(offerLineEn(ctx)) +
-        para(
-          'The notary will contact you to arrange the signing and will verify your identity at that time. Make sure your file is complete so everything moves quickly.'
-        ),
-      textLines: [offerLineEn(ctx), 'The notary will contact you about the signing.'],
-      ctaLabel: 'See the next steps',
+        (contactEn ? para('Here is how to reach your notary:') + contactEn : '') +
+        para(conversationEn) +
+        para(desistementEn) +
+        para(fraisIntroEn) +
+        bullets(baremeEn),
+      textLines: [offerLineEn(ctx)]
+        .concat(detailText(rowsEn))
+        .concat([conversationEn, desistementEn, fraisIntroEn])
+        .concat(baremeEn.map((l) => '- ' + l)),
+      ctaLabel: 'Open my file',
     },
-    ctaUrl: linksFor(ctx.baseUrl).dossier,
+    ctaUrl: clientActeUrl(ctx),
     unsubscribeUrl: ctx.unsubscribeUrl,
   }, ctx);
 }
@@ -671,7 +825,7 @@ function dateMissedNoUptake(ctx) {
       textLines: [offerLineEn(ctx), 'Raise your offer to attract a notary in time.'],
       ctaLabel: 'Raise my offer',
     },
-    ctaUrl: linksFor(ctx.baseUrl).profil,
+    ctaUrl: clientActeUrl(ctx),
     unsubscribeUrl: ctx.unsubscribeUrl,
   }, ctx);
 }
@@ -704,7 +858,7 @@ function offerAuthorized(ctx) {
           'Votre offre et le prix du service de Nota sont simplement réservés sur votre carte — rien ne sera débité avant qu’un notaire retienne votre demande. Si personne ne la retient, la réservation prend fin d’elle-même, sans frais.'
         ),
       textLines: [offerLine(ctx), 'Rien n’est débité tant qu’un notaire n’accepte pas.'],
-      ctaLabel: 'Voir le carnet',
+      ctaLabel: 'Suivre mon offre',
     },
     en: {
       heading: 'Your offer is now visible',
@@ -720,9 +874,9 @@ function offerAuthorized(ctx) {
           'Your offer and the price of Nota’s service are simply held on your card — nothing is charged before a notary takes your request. If no one takes it, the hold ends on its own, at no cost.'
         ),
       textLines: [offerLineEn(ctx), 'Nothing is charged until a notary accepts.'],
-      ctaLabel: 'View the carnet',
+      ctaLabel: 'Track my offer',
     },
-    ctaUrl: linksFor(ctx.baseUrl).carnet,
+    ctaUrl: clientActeUrl(ctx),
     unsubscribeUrl: ctx.unsubscribeUrl,
   }, ctx);
 }
@@ -767,7 +921,7 @@ function offerAuthorizationVoided(ctx) {
       textLines: [offerLineEn(ctx), 'Nothing was charged. Repost to return to the carnet.'],
       ctaLabel: 'Repost my request',
     },
-    ctaUrl: linksFor(ctx.baseUrl).profil,
+    ctaUrl: clientActeUrl(ctx),
     unsubscribeUrl: ctx.unsubscribeUrl,
   }, ctx);
 }
@@ -1126,7 +1280,7 @@ function operatorNotaryActive(ctx) {
       textLines: ['New active notary: ' + (ctx.notaryEmail || '—')],
       ctaLabel: 'Open Nota',
     },
-    ctaUrl: linksFor(ctx.baseUrl).carnet,
+    ctaUrl: operatorUrl(ctx),
     unsubscribeUrl: ctx.unsubscribeUrl,
   }, ctx);
 }
@@ -1151,7 +1305,7 @@ function operatorNewLead(ctx) {
       textLines: [offerLineEn(ctx)],
       ctaLabel: 'View the carnet',
     },
-    ctaUrl: linksFor(ctx.baseUrl).carnet,
+    ctaUrl: operatorUrl(ctx),
     unsubscribeUrl: ctx.unsubscribeUrl,
   }, ctx);
 }
@@ -1180,7 +1334,7 @@ function operatorActCompleted(ctx) {
       textLines: [lineEn, 'Notary: ' + (ctx.notaryEmail || '—')],
       ctaLabel: 'Open Nota',
     },
-    ctaUrl: linksFor(ctx.baseUrl).carnet,
+    ctaUrl: operatorUrl(ctx),
     unsubscribeUrl: ctx.unsubscribeUrl,
   }, ctx);
 }
@@ -1233,7 +1387,7 @@ function propositionRecue(ctx) {
       textLines: [propEn, 'Your current offer: ' + lineEn].concat(p.message ? ['Message from the notary: ' + p.message] : []),
       ctaLabel: 'See the proposal',
     },
-    ctaUrl: linksFor(ctx.baseUrl).profil,
+    ctaUrl: clientActeUrl(ctx),
     unsubscribeUrl: ctx.unsubscribeUrl,
   }, ctx);
 }
@@ -1280,7 +1434,7 @@ function documentsDemandes(ctx) {
       textLines: listText.concat(d.message ? ['Message from the notary: ' + d.message] : [], [offerLineEn(ctx)]),
       ctaLabel: 'Complete my file',
     },
-    ctaUrl: linksFor(ctx.baseUrl).dossier,
+    ctaUrl: clientActeUrl(ctx, linksFor(ctx.baseUrl).dossier),
     unsubscribeUrl: ctx.unsubscribeUrl,
   }, ctx);
 }
@@ -1316,7 +1470,7 @@ function propositionAcceptee(ctx) {
       textLines: [lineEn, 'The client’s file is available in your console.'],
       ctaLabel: 'Open my console',
     },
-    ctaUrl: linksFor(ctx.baseUrl).notaires,
+    ctaUrl: notaryActeUrl(ctx),
     unsubscribeUrl: ctx.unsubscribeUrl,
   }, ctx);
 }
@@ -1404,7 +1558,7 @@ function documentDuNotaire(ctx) {
       textLines: [nom, offerLineEn(ctx)].filter(Boolean),
       ctaLabel: 'Open my file',
     },
-    ctaUrl: linksFor(ctx.baseUrl).profil,
+    ctaUrl: clientActeUrl(ctx),
     unsubscribeUrl: ctx.unsubscribeUrl,
   }, ctx);
 }
@@ -1430,7 +1584,7 @@ function documentDuClient(ctx) {
       textLines: [nom, offerLineEn(ctx)].filter(Boolean),
       ctaLabel: 'Open the console',
     },
-    ctaUrl: linksFor(ctx.baseUrl).notaires,
+    ctaUrl: notaryActeUrl(ctx),
     unsubscribeUrl: ctx.unsubscribeUrl,
   }, ctx);
 }
@@ -1465,7 +1619,7 @@ function messageDuNotaire(ctx) {
       textLines: [excerpt ? '“' + excerpt + '”' : '', offerLineEn(ctx)].filter(Boolean),
       ctaLabel: 'Reply to my notary',
     },
-    ctaUrl: linksFor(ctx.baseUrl).profil,
+    ctaUrl: clientActeUrl(ctx),
     unsubscribeUrl: ctx.unsubscribeUrl,
   }, ctx);
 }
@@ -1501,7 +1655,7 @@ function messageDuClient(ctx) {
       textLines: [excerpt ? '“' + excerpt + '”' : '', offerLineEn(ctx)].filter(Boolean),
       ctaLabel: 'Open my console',
     },
-    ctaUrl: linksFor(ctx.baseUrl).notaires,
+    ctaUrl: notaryActeUrl(ctx),
     unsubscribeUrl: ctx.unsubscribeUrl,
   }, ctx);
 }
@@ -1703,7 +1857,7 @@ function operatorNewPartner(ctx) {
       textLines: [lineEn],
       ctaLabel: 'Open Nota',
     },
-    ctaUrl: linksFor(ctx.baseUrl).carnet,
+    ctaUrl: operatorUrl(ctx),
     unsubscribeUrl: ctx.unsubscribeUrl,
   }, ctx);
 }
@@ -1713,20 +1867,32 @@ function operatorNewPartner(ctx) {
 // =============================================================================
 
 // Acknowledgement to the client — their own withdrawal, so the tone is
-// confirmation, not bad news; the CTA invites a fresh date.
+// confirmation, not bad news; the CTA invites a fresh date. What the
+// cancellation kept is stated plainly (ADR 0023 / ADR 0033): the fee, its
+// rate, and that it goes to the notary as compensation — or that it was free.
+// Context: bid fields + `annulation` { taux, frais, joursAvant } | null.
 function offerCancelled(ctx) {
+  const a = ctx.annulation || null;
+  const frais = a && Number(a.frais) > 0 ? Number(a.frais) : 0;
+  const argent = frais
+    ? 'Des frais d’annulation de ' + money(frais) + ' (' + pct(a.taux) + ' du montant) sont retenus sur votre carte et versés au notaire en dédommagement du rendez-vous libéré ; le reste de la réservation est libéré.'
+    : 'Votre annulation est sans frais : rien n’est débité, et la réservation sur votre carte est libérée.';
+  const argentEn = frais
+    ? 'A cancellation fee of ' + moneyEn(frais) + ' (' + pctEn(a.taux) + ' of the amount) is kept on your card and transferred to the notary as compensation for the freed appointment; the rest of the hold is released.'
+    : 'Your cancellation carries no fee: nothing is charged, and the hold on your card is released.';
   return build({
     subjectFr: 'Offre annulée : ' + money(ctx.montant),
     subjectEn: 'Offer cancelled: ' + moneyEn(ctx.montant),
-    preheaderFr: 'Votre offre a été retirée du carnet.',
-    preheaderEn: 'Your offer was removed from the carnet.',
+    preheaderFr: frais ? 'Votre offre est retirée ; ' + money(frais) + ' de frais sont retenus.' : 'Votre offre est retirée du carnet, sans frais.',
+    preheaderEn: frais ? 'Your offer is withdrawn; a ' + moneyEn(frais) + ' fee is kept.' : 'Your offer was removed from the carnet, no fee.',
     fr: {
       heading: 'Votre offre est annulée',
       lead: 'Votre offre — ' + svcNom(ctx.serviceId) + ' le ' + fmtDate(ctx.dateISO) + ' — a été retirée du carnet.',
       bodyHtml:
         callout(offerLine(ctx)) +
+        para(argent) +
         para('Plus aucun notaire ne peut la retenir et votre dossier n’est plus partagé. Si vous changez d’avis, publiez une nouvelle date en quelques gestes.'),
-      textLines: [offerLine(ctx), 'Plus aucun notaire ne peut la retenir.'],
+      textLines: [offerLine(ctx), argent, 'Plus aucun notaire ne peut la retenir.'],
       ctaLabel: 'Choisir une nouvelle date',
     },
     en: {
@@ -1734,8 +1900,9 @@ function offerCancelled(ctx) {
       lead: 'Your offer — ' + svcNomEn(ctx.serviceId) + ' on ' + fmtDateEn(ctx.dateISO) + ' — was removed from the carnet.',
       bodyHtml:
         callout(offerLineEn(ctx)) +
+        para(argentEn) +
         para('No notary can take it anymore and your file is no longer shared. If you change your mind, publish a new date in a few taps.'),
-      textLines: [offerLineEn(ctx), 'No notary can take it anymore.'],
+      textLines: [offerLineEn(ctx), argentEn, 'No notary can take it anymore.'],
       ctaLabel: 'Pick a new date',
     },
     ctaUrl: linksFor(ctx.baseUrl).carnet,
@@ -1744,20 +1911,39 @@ function offerCancelled(ctx) {
 }
 
 // To the notary whose retained demand was just withdrawn — a mise en relation
-// is being unwound, so this must land fast and say exactly which one.
+// is being unwound, so this must land fast and say exactly which one, and
+// exactly what they receive (ADR 0033 §money): the fee is THEIR compensation,
+// transferred whole to their connected account — or owed to them until their
+// Stripe payouts are wired. Never a vague promise that « the team will
+// write ». Context: bid fields + `annulation` { taux, frais, dedommagement:
+// { notaire, verse, transferId } } | null.
 function offerCancelledNotary(ctx) {
+  const a = ctx.annulation || null;
+  const frais = a && Number(a.frais) > 0 ? Number(a.frais) : 0;
+  const verse = !!(a && a.dedommagement && a.dedommagement.verse);
+  const argent = !frais
+    ? 'Le client a annulé dans la fenêtre gratuite du barème : aucuns frais ne vous sont dus.'
+    : verse
+      ? 'En dédommagement, ' + money(frais) + ' (' + pct(a.taux) + ' du montant) vous sont versés : le virement vers votre compte Stripe est en route.'
+      : money(frais) + ' (' + pct(a.taux) + ' du montant) vous sont dus en dédommagement. Ils vous seront versés dès que vos versements Stripe seront branchés.';
+  const argentEn = !frais
+    ? 'The client cancelled within the barème’s free window: no fee is due to you.'
+    : verse
+      ? 'As compensation, ' + moneyEn(frais) + ' (' + pctEn(a.taux) + ' of the amount) is transferred to you: the transfer to your Stripe account is on its way.'
+      : moneyEn(frais) + ' (' + pctEn(a.taux) + ' of the amount) is owed to you as compensation. It will be transferred as soon as your Stripe payouts are connected.';
   return build({
     subjectFr: 'Demande annulée par le client : ' + money(ctx.montant),
     subjectEn: 'Request cancelled by the client: ' + moneyEn(ctx.montant),
-    preheaderFr: 'La demande que vous aviez retenue vient d’être retirée.',
-    preheaderEn: 'The request you had taken was just withdrawn.',
+    preheaderFr: frais ? money(frais) + ' vous reviennent en dédommagement.' : 'La demande que vous aviez retenue vient d’être retirée.',
+    preheaderEn: frais ? moneyEn(frais) + ' comes to you as compensation.' : 'The request you had taken was just withdrawn.',
     fr: {
       heading: 'Le client a annulé sa demande',
       lead: 'La demande que vous aviez retenue — ' + svcNom(ctx.serviceId) + ' le ' + fmtDate(ctx.dateISO) + ' — vient d’être annulée par le client.',
       bodyHtml:
         callout(offerLine(ctx)) +
-        para('Le rendez-vous est libéré dans votre agenda. Si un paiement était engagé, notre équipe vous écrit sans délai pour le régulariser.'),
-      textLines: [offerLine(ctx), 'Le rendez-vous est libéré dans votre agenda.'],
+        para(argent) +
+        para('Le rendez-vous est libéré dans votre agenda, et la conversation de cet acte est close.'),
+      textLines: [offerLine(ctx), argent, 'Le rendez-vous est libéré dans votre agenda.'],
       ctaLabel: 'Ouvrir ma console',
     },
     en: {
@@ -1765,11 +1951,12 @@ function offerCancelledNotary(ctx) {
       lead: 'The request you had taken — ' + svcNomEn(ctx.serviceId) + ' on ' + fmtDateEn(ctx.dateISO) + ' — was just cancelled by the client.',
       bodyHtml:
         callout(offerLineEn(ctx)) +
-        para('The appointment is freed up in your calendar. If a payment was already in flight, our team will contact you promptly to settle it.'),
-      textLines: [offerLineEn(ctx), 'The appointment is freed up in your calendar.'],
+        para(argentEn) +
+        para('The appointment is freed up in your calendar, and this act’s conversation is closed.'),
+      textLines: [offerLineEn(ctx), argentEn, 'The appointment is freed up in your calendar.'],
       ctaLabel: 'Open my console',
     },
-    ctaUrl: linksFor(ctx.baseUrl).notaires,
+    ctaUrl: notaryActeUrl(ctx),
     unsubscribeUrl: ctx.unsubscribeUrl,
   }, ctx);
 }
@@ -1798,7 +1985,7 @@ function operatorOfferCancelled(ctx) {
       textLines: [lineEn],
       ctaLabel: 'Open Nota',
     },
-    ctaUrl: linksFor(ctx.baseUrl).carnet,
+    ctaUrl: operatorUrl(ctx),
     unsubscribeUrl: ctx.unsubscribeUrl,
   }, ctx);
 }
@@ -1830,7 +2017,7 @@ function actReleased(ctx) {
       textLines: [offerLineEn(ctx), 'Your offer is back on the carnet as published.'],
       ctaLabel: 'Track my offer',
     },
-    ctaUrl: linksFor(ctx.baseUrl).profil,
+    ctaUrl: clientActeUrl(ctx),
     unsubscribeUrl: ctx.unsubscribeUrl,
   }, ctx);
 }
@@ -1864,7 +2051,7 @@ function operatorActReleased(ctx) {
       textLines: [lineEn].concat(ctx.messageNotaire ? ['Notary’s reason: ' + ctx.messageNotaire] : []),
       ctaLabel: 'Open Nota',
     },
-    ctaUrl: linksFor(ctx.baseUrl).carnet,
+    ctaUrl: operatorUrl(ctx),
     unsubscribeUrl: ctx.unsubscribeUrl,
   }, ctx);
 }
@@ -1903,7 +2090,7 @@ function evaluationInvite(ctx) {
       textLines: [offerLineEn(ctx), 'Rate your notary: 1 to 5, with a comment if you like.'],
       ctaLabel: 'Rate my notary',
     },
-    ctaUrl: linksFor(ctx.baseUrl).profil,
+    ctaUrl: clientActeUrl(ctx),
     unsubscribeUrl: ctx.unsubscribeUrl,
   }, ctx);
 }
@@ -1956,7 +2143,7 @@ function evaluationRecueNotaire(ctx) {
       textLines: [lineEn].concat(comment ? ['Comment: “' + comment + '”'] : []),
       ctaLabel: 'Open my console',
     },
-    ctaUrl: linksFor(ctx.baseUrl).notaires,
+    ctaUrl: notaryActeUrl(ctx),
     unsubscribeUrl: ctx.unsubscribeUrl,
   }, ctx);
 }
@@ -1990,7 +2177,7 @@ function operatorLowRating(ctx) {
       textLines: [lineEn].concat(comment ? ['Comment: “' + comment + '”'] : []),
       ctaLabel: 'Open Nota',
     },
-    ctaUrl: linksFor(ctx.baseUrl).carnet,
+    ctaUrl: operatorUrl(ctx),
     unsubscribeUrl: ctx.unsubscribeUrl,
   }, ctx);
 }
@@ -2061,7 +2248,7 @@ function operatorContactMessage(ctx) {
       textLines: textLinesEn,
       ctaLabel: 'Open Nota',
     },
-    ctaUrl: linksFor(ctx.baseUrl).carnet,
+    ctaUrl: operatorUrl(ctx),
     unsubscribeUrl: ctx.unsubscribeUrl,
   }, ctx);
 }
@@ -2092,7 +2279,7 @@ function operatorSupportMessage(ctx) {
       textLines: [who, ctx.texte || ''],
       ctaLabel: 'Reply',
     },
-    ctaUrl: ctx.replyUrl || linksFor(ctx.baseUrl).carnet,
+    ctaUrl: ctx.replyUrl || operatorUrl(ctx),
     unsubscribeUrl: ctx.unsubscribeUrl,
   }, ctx);
 }
@@ -2125,6 +2312,301 @@ function supportReponse(ctx) {
   }, ctx);
 }
 
+// =============================================================================
+// ADR 0033 — la mise en relation est complète, et la conversation est le canal
+// =============================================================================
+
+// To the RETAINING notary, on the accept path (until now only the client was
+// mailed): the act, the client block they may now reach — name, courriel,
+// phone (dialable), sector, travel band, lender — whether the file is ready,
+// and « ce qui vous engage » : signing on the date, honoraires paid in full at
+// the signing (Nota bills its own price to the client, beside), the barème
+// whose fee is THEIR compensation if the client cancels late, and the right to
+// withdraw (free, but counted on their record). Context: bid fields + `client`
+// { nom, courriel, telephone, secteur, deplacement, preteur, preteurNom } +
+// `dossier` { ready, missing, requis } + `bareme` [{ maxJours, taux, frais }].
+function demandeRetenueNotaire(ctx) {
+  const c = ctx.client || {};
+  const d = ctx.dossier || {};
+  const rows = [
+    { label: 'Client', value: c.nom },
+    { label: 'Courriel', value: c.courriel, href: c.courriel ? 'mailto:' + c.courriel : null },
+    { label: 'Téléphone', value: c.telephone, href: telHref(c.telephone) },
+    { label: 'Secteur', value: c.secteur },
+    { label: 'Déplacement', value: deplacementNom(c.deplacement) },
+    { label: 'Prêteur', value: lenderNom(c) },
+  ];
+  const rowsEn = [
+    { label: 'Client', value: c.nom },
+    { label: 'Email', value: c.courriel, href: c.courriel ? 'mailto:' + c.courriel : null },
+    { label: 'Phone', value: c.telephone, href: telHref(c.telephone) },
+    { label: 'Sector', value: c.secteur },
+    { label: 'Travel', value: deplacementNom(c.deplacement) },
+    { label: 'Lender', value: lenderNom(c) },
+  ];
+  const manque = [].concat(Array.isArray(d.requis) ? d.requis : [], Array.isArray(d.missing) ? d.missing : []);
+  const dossier = d.ready
+    ? 'Dossier prêt : les pièces et le consentement de partage sont réunis.'
+    : 'Dossier incomplet — il manque : ' + (manque.length ? manque.join(', ') : 'des éléments') + '. Demandez-les au client dans la conversation.';
+  const dossierEn = d.ready
+    ? 'File ready: the documents and the sharing consent are in.'
+    : 'File incomplete — missing: ' + (manque.length ? manque.join(', ') : 'some items') + '. Ask the client for them in the conversation.';
+  const engage = [
+    'Signer le ' + fmtDate(ctx.dateISO) + ' — le rendez-vous est dans votre agenda Nota.',
+    'Vos honoraires : ' + money(ctx.montant) + ', versés en entier à la signature. Nota facture son propre prix au client, à côté.',
+    'Si le client annule, une part du montant vous est versée en dédommagement : ' + baremeLines(ctx.bareme, 'fr').join(' ; ') + '.',
+    'Vous pouvez vous désister — c’est gratuit, mais compté à votre dossier ; le client garde sa date et son offre.',
+  ];
+  const engageEn = [
+    'Sign on ' + fmtDateEn(ctx.dateISO) + ' — the appointment is in your Nota calendar.',
+    'Your fees: ' + moneyEn(ctx.montant) + ', paid in full at the signing. Nota bills the client its own price, beside.',
+    'If the client cancels, a share of the amount is transferred to you as compensation: ' + baremeLines(ctx.bareme, 'en').join('; ') + '.',
+    'You may withdraw — it is free, but counted on your record; the client keeps their date and their offer.',
+  ];
+  const contactIntro = 'Le client reçoit votre nom, votre téléphone, votre adresse et votre courriel ; voici les siens. Vous vous parlez dans la conversation de l’acte, sur Nota.';
+  const contactIntroEn = 'The client receives your name, phone, address and email; here are theirs. You talk in the act’s conversation, on Nota.';
+  return build({
+    subjectFr: 'Demande retenue : ' + money(ctx.montant) + ' · ' + svcNomCourt(ctx.serviceId),
+    subjectEn: 'Request taken: ' + moneyEn(ctx.montant) + ' · ' + svcNomCourtEn(ctx.serviceId),
+    preheaderFr: 'Voici votre client, et ce qui vous engage.',
+    preheaderEn: 'Here is your client, and what binds you.',
+    fr: {
+      heading: 'Vous avez retenu une demande',
+      lead: 'Le ' + svcNom(ctx.serviceId) + ' du ' + fmtDate(ctx.dateISO) + ' est à vous.',
+      bodyHtml:
+        callout(offerLine(ctx)) +
+        para(contactIntro) +
+        detailRows(rows) +
+        para(dossier) +
+        para('Ce qui vous engage :') +
+        bullets(engage),
+      textLines: [offerLine(ctx), contactIntro].concat(detailText(rows), [dossier, 'Ce qui vous engage :'], engage.map((l) => '- ' + l)),
+      ctaLabel: 'Ouvrir le dossier',
+    },
+    en: {
+      heading: 'You took a request',
+      lead: 'The ' + svcNomEn(ctx.serviceId) + ' of ' + fmtDateEn(ctx.dateISO) + ' is yours.',
+      bodyHtml:
+        callout(offerLineEn(ctx)) +
+        para(contactIntroEn) +
+        detailRows(rowsEn) +
+        para(dossierEn) +
+        para('What binds you:') +
+        bullets(engageEn),
+      textLines: [offerLineEn(ctx), contactIntroEn].concat(detailText(rowsEn), [dossierEn, 'What binds you:'], engageEn.map((l) => '- ' + l)),
+      ctaLabel: 'Open the file',
+    },
+    ctaUrl: notaryActeUrl(ctx),
+    unsubscribeUrl: ctx.unsubscribeUrl,
+  }, ctx);
+}
+
+// The instant lead alert (ADR 0033 §7) — to a notary who asked to hear of
+// every demand as it lands (`alertes.pace === 'instant'`) and can serve it:
+// the act, its sector, the measured distance when both sectors are known, the
+// travel band and the lender. CTA opens the console on that demand. Context:
+// bid fields + `secteur`, `deplacement`, `preteur`, `preteurNom`, `distanceKm`.
+function nouvelleDemande(ctx) {
+  const dist = Number.isFinite(Number(ctx.distanceKm)) && ctx.distanceKm != null ? '≈ ' + Math.round(Number(ctx.distanceKm)) + ' km' : null;
+  const rows = [
+    { label: 'Secteur', value: ctx.secteur },
+    { label: 'Distance', value: dist },
+    { label: 'Déplacement', value: deplacementNom(ctx.deplacement) },
+    { label: 'Prêteur', value: lenderNom(ctx) },
+    { label: 'Palier', value: tierNom(ctx.tier) || null },
+  ];
+  const rowsEn = [
+    { label: 'Sector', value: ctx.secteur },
+    { label: 'Distance', value: dist },
+    { label: 'Travel', value: deplacementNom(ctx.deplacement) },
+    { label: 'Lender', value: lenderNom(ctx) },
+    { label: 'Tier', value: tierNomEn(ctx.tier) || null },
+  ];
+  return build({
+    subjectFr: 'Nouvelle demande : ' + money(ctx.montant) + ' · ' + svcNomCourt(ctx.serviceId),
+    subjectEn: 'New request: ' + moneyEn(ctx.montant) + ' · ' + svcNomCourtEn(ctx.serviceId),
+    preheaderFr: 'Une demande que vous pouvez retenir vient d’être publiée.',
+    preheaderEn: 'A request you can take was just posted.',
+    fr: {
+      heading: 'Une nouvelle demande vous attend',
+      lead: 'Vous avez demandé à être prévenu dès qu’une demande vous correspond : la voici.',
+      bodyHtml:
+        callout(offerLine(ctx)) +
+        detailRows(rows) +
+        para('Ouvrez-la dans votre console pour la retenir telle quelle, ou proposer un autre prix. Le premier notaire qui la retient l’emporte.'),
+      textLines: [offerLine(ctx)].concat(detailText(rows), ['Retenez-la depuis votre console, ou proposez un autre prix.']),
+      ctaLabel: 'Voir la demande',
+    },
+    en: {
+      heading: 'A new request is waiting for you',
+      lead: 'You asked to be told as soon as a request matches you: here it is.',
+      bodyHtml:
+        callout(offerLineEn(ctx)) +
+        detailRows(rowsEn) +
+        para('Open it in your console to take it as is, or propose another price. The first notary to take it wins it.'),
+      textLines: [offerLineEn(ctx)].concat(detailText(rowsEn), ['Take it from your console, or propose another price.']),
+      ctaLabel: 'See the request',
+    },
+    ctaUrl: notaryActeUrl(ctx),
+    unsubscribeUrl: ctx.unsubscribeUrl,
+  }, ctx);
+}
+
+// Operator alert on a retention — a revenue event, kept small. Context: bid
+// fields + `etude`.
+function operatorDemandeRetenue(ctx) {
+  const line = offerLine(ctx) + (ctx.etude ? ' · ' + ctx.etude : '');
+  const lineEn = offerLineEn(ctx) + (ctx.etude ? ' · ' + ctx.etude : '');
+  return build({
+    subjectFr: 'Demande retenue : ' + money(ctx.montant) + ' · ' + svcNomCourt(ctx.serviceId),
+    subjectEn: 'Request taken: ' + moneyEn(ctx.montant) + ' · ' + svcNomCourtEn(ctx.serviceId),
+    preheaderFr: 'Une mise en relation vient de se faire.',
+    preheaderEn: 'A match was just made.',
+    fr: {
+      heading: 'Une demande vient d’être retenue',
+      lead: 'Un notaire vient de retenir une demande — la mise en relation est faite, les deux parties sont prévenues.',
+      bodyHtml: callout(line),
+      textLines: [line],
+      ctaLabel: 'Ouvrir Nota',
+    },
+    en: {
+      heading: 'A request was just taken',
+      lead: 'A notary just took a request — the match is made, both parties are notified.',
+      bodyHtml: callout(lineEn),
+      textLines: [lineEn],
+      ctaLabel: 'Open Nota',
+    },
+    ctaUrl: operatorUrl(ctx),
+    unsubscribeUrl: ctx.unsubscribeUrl,
+  }, ctx);
+}
+
+// =============================================================================
+// Free signup + operator vetting (2026-09-02)
+// =============================================================================
+// The notary's front door no longer goes through Stripe: they sign up with a
+// professional email, the operator checks the Tableau de l'Ordre and activates
+// from the admin console, and only THEN does the console open. Three
+// messages, and not one of them mentions a payout account — that comes later,
+// from inside the console, before a first act is marked signed.
+
+// The signup landed; the file waits for the operator's check. An
+// acknowledgement of a step the notary took (transactional).
+function notaryPendingReview(ctx) {
+  const who = ctx.email || '—';
+  return build({
+    subjectFr: 'Inscription reçue — nous vérifions votre inscription au Tableau de l’Ordre',
+    subjectEn: 'Registration received — we are checking your entry in the Order’s roll',
+    preheaderFr: 'Votre accès vous parvient par courriel sous un jour ouvrable.',
+    preheaderEn: 'Your access arrives by email within one business day.',
+    fr: {
+      heading: 'Inscription reçue',
+      lead: 'Merci. Nous vérifions votre inscription au Tableau de l’Ordre et vous ouvrons l’accès sous un jour ouvrable.',
+      bodyHtml:
+        callout('Courriel professionnel : ' + who) +
+        para(
+          'Dès que votre accès est ouvert, vous recevez un courriel avec votre lien de connexion. Vous verrez alors les demandes du carnet et retiendrez celles qui vous conviennent. L’inscription est gratuite et sans engagement.'
+        ),
+      textLines: [
+        'Courriel professionnel : ' + who,
+        'Nous vérifions votre inscription au Tableau de l’Ordre et vous ouvrons l’accès sous un jour ouvrable. Inscription gratuite, sans engagement.',
+      ],
+      ctaLabel: 'Voir le carnet',
+    },
+    en: {
+      heading: 'Registration received',
+      lead: 'Thank you. We are checking your entry in the Order’s roll and will open your access within one business day.',
+      bodyHtml:
+        callout('Professional email: ' + who) +
+        para(
+          'As soon as your access is open, you receive an email with your sign-in link. You will then see the carnet’s requests and take on those that suit you. Registration is free, with no commitment.'
+        ),
+      textLines: [
+        'Professional email: ' + who,
+        'We are checking your entry in the Order’s roll and will open your access within one business day. Free registration, no commitment.',
+      ],
+      ctaLabel: 'See the carnet',
+    },
+    ctaUrl: linksFor(ctx.baseUrl).carnet,
+    unsubscribeUrl: ctx.unsubscribeUrl,
+  }, ctx);
+}
+
+// The operator's cue to vet: who signed up, their fiche if they gave one, and
+// a CTA straight onto the admin console's Notaires screen.
+function operatorNotarySignedUp(ctx) {
+  const who = ctx.notaryEmail || ctx.email || '—';
+  const fiche = ctx.lienCNQ || null;
+  const admin = ctx.adminUrl ? String(ctx.adminUrl).replace(/\/+$/, '') + '/#/notaires' : operatorUrl(ctx);
+  return build({
+    subjectFr: 'Nouvelle inscription notaire : ' + who,
+    subjectEn: 'New notary signup: ' + who,
+    preheaderFr: 'À vérifier au Tableau de l’Ordre, puis à activer depuis la console.',
+    preheaderEn: 'Check the Order’s roll, then activate from the console.',
+    fr: {
+      heading: 'Un notaire vient de s’inscrire',
+      lead: 'Vérifiez son inscription au Tableau de l’Ordre, puis activez son accès depuis la console — il attend sous un jour ouvrable.',
+      bodyHtml:
+        callout('Courriel : ' + who) +
+        para(fiche ? 'Fiche au Tableau de l’Ordre : ' + fiche : 'Aucune fiche au Tableau de l’Ordre fournie — à retrouver dans l’annuaire de la Chambre.'),
+      textLines: ['Courriel : ' + who, fiche ? 'Fiche : ' + fiche : 'Aucune fiche fournie.'],
+      ctaLabel: 'Ouvrir la console',
+    },
+    en: {
+      heading: 'A notary just signed up',
+      lead: 'Check their entry in the Order’s roll, then activate their access from the console — they are waiting, within one business day.',
+      bodyHtml:
+        callout('Email: ' + who) +
+        para(fiche ? 'Profile in the Order’s roll: ' + fiche : 'No profile in the Order’s roll provided — look them up in the Chambre’s directory.'),
+      textLines: ['Email: ' + who, fiche ? 'Profile: ' + fiche : 'No profile provided.'],
+      ctaLabel: 'Open the console',
+    },
+    ctaUrl: admin,
+    unsubscribeUrl: ctx.unsubscribeUrl,
+  }, ctx);
+}
+
+// The operator activated the account: the console is open. The CTA is the
+// console itself; sign-in is the professional email (magic link).
+function notaryApproved(ctx) {
+  return build({
+    subjectFr: 'Votre accès Nota est ouvert',
+    subjectEn: 'Your Nota access is open',
+    preheaderFr: 'Connectez-vous avec votre courriel professionnel — les demandes vous attendent.',
+    preheaderEn: 'Sign in with your professional email — the requests are waiting.',
+    fr: {
+      heading: 'Bienvenue — votre accès est ouvert',
+      lead: 'Votre inscription au Tableau de l’Ordre est vérifiée. Votre console est ouverte.',
+      bodyHtml:
+        callout('Connectez-vous avec votre courriel professionnel' + (ctx.email ? ' : ' + ctx.email : '')) +
+        para(
+          'Sans mot de passe : un lien de connexion vous est envoyé à chaque visite. Vous voyez les demandes du carnet et retenez celles qui vous conviennent. Vos versements se branchent plus tard, depuis la console, seulement avant votre premier acte signé.'
+        ),
+      textLines: [
+        'Connectez-vous avec votre courriel professionnel' + (ctx.email ? ' : ' + ctx.email : ''),
+        'Sans mot de passe — un lien de connexion à chaque visite. Vos versements se branchent plus tard, avant votre premier acte signé.',
+      ],
+      ctaLabel: 'Ouvrir ma console',
+    },
+    en: {
+      heading: 'Welcome — your access is open',
+      lead: 'Your entry in the Order’s roll is verified. Your console is open.',
+      bodyHtml:
+        callout('Sign in with your professional email' + (ctx.email ? ': ' + ctx.email : '')) +
+        para(
+          'No password: a sign-in link is emailed to you on every visit. You see the carnet’s requests and take on those that suit you. Your payouts connect later, from the console, only before your first signed act.'
+        ),
+      textLines: [
+        'Sign in with your professional email' + (ctx.email ? ': ' + ctx.email : ''),
+        'No password — a sign-in link on every visit. Payouts connect later, before your first signed act.',
+      ],
+      ctaLabel: 'Open my console',
+    },
+    ctaUrl: ctx.consoleUrl || linksFor(ctx.baseUrl).notaires,
+    unsubscribeUrl: ctx.unsubscribeUrl,
+  }, ctx);
+}
+
 // Registry — the notifier looks templates up by name; tests iterate it to assert
 // every template carries a bilingual subject, an unsubscribe link and sender ID.
 const TEMPLATES = {
@@ -2153,6 +2635,9 @@ const TEMPLATES = {
   propositionAcceptee,
   propositionRefusee,
   offerCancelledNotary,
+  // ADR 0033 — la mise en relation est complète
+  demandeRetenueNotaire,
+  nouvelleDemande,
   // evaluation feedback loop (ADR 0015/0016)
   evaluationRecueNotaire,
   // contact form (nous joindre)
@@ -2180,9 +2665,14 @@ const TEMPLATES = {
   operatorActReleased,
   operatorContactMessage,
   operatorLowRating,
+  operatorDemandeRetenue,
   // live support messaging (ADR 0026)
   operatorSupportMessage,
   supportReponse,
+  // free signup + operator vetting (2026-09-02)
+  notaryPendingReview,
+  operatorNotarySignedUp,
+  notaryApproved,
 };
 
 // =============================================================================
@@ -2248,7 +2738,7 @@ const TEMPLATE_META = {
     audience: 'client', transactionnel: true,
     labelFr: 'Demande retenue', labelEn: 'Request taken',
     defaultSubjectFr: 'Un notaire a retenu votre demande', defaultSubjectEn: 'A notary has taken your request',
-    placeholders: ['montant', 'service', 'date'],
+    placeholders: ['montant', 'service', 'date', 'etude'],
   },
   dateMissedNoUptake: {
     audience: 'client', transactionnel: true,
@@ -2342,6 +2832,21 @@ const TEMPLATE_META = {
     audience: 'notaire', transactionnel: true,
     labelFr: 'Demande retenue annulée par le client', labelEn: 'Retained request cancelled by the client',
     defaultSubjectFr: 'Demande annulée par le client : {{montant}}', defaultSubjectEn: 'Request cancelled by the client: {{montant}}',
+    placeholders: ['montant', 'service', 'date'],
+  },
+  // --- ADR 0033 — la mise en relation est complète ---------------------------
+  demandeRetenueNotaire: {
+    audience: 'notaire', transactionnel: true,
+    labelFr: 'Demande retenue (au notaire)', labelEn: 'Request taken (to the notary)',
+    defaultSubjectFr: 'Demande retenue : {{montant}} · {{service}}', defaultSubjectEn: 'Request taken: {{montant}} · {{service}}',
+    placeholders: ['montant', 'service', 'date', 'email'],
+  },
+  nouvelleDemande: {
+    // An alert the notary asked for (alertes.pace = instant) — relationnel:
+    // it can be silenced, the daily digest and the carnet still carry the demand.
+    audience: 'notaire', transactionnel: false,
+    labelFr: 'Nouvelle demande (alerte instantanée)', labelEn: 'New request (instant alert)',
+    defaultSubjectFr: 'Nouvelle demande : {{montant}} · {{service}}', defaultSubjectEn: 'New request: {{montant}} · {{service}}',
     placeholders: ['montant', 'service', 'date'],
   },
   // --- evaluation feedback loop (ADR 0015/0016) ------------------------------
@@ -2487,6 +2992,32 @@ const TEMPLATE_META = {
     labelFr: 'Évaluation faible (alerte)', labelEn: 'Low rating (alert)',
     defaultSubjectFr: 'Évaluation faible : {{note}}/5 · {{service}}', defaultSubjectEn: 'Low rating: {{note}}/5 · {{service}}',
     placeholders: ['note', 'montant', 'service', 'date', 'etude'],
+  },
+  operatorDemandeRetenue: {
+    audience: 'operateur', transactionnel: false,
+    labelFr: 'Demande retenue (alerte)', labelEn: 'Request taken (alert)',
+    defaultSubjectFr: 'Demande retenue : {{montant}} · {{service}}', defaultSubjectEn: 'Request taken: {{montant}} · {{service}}',
+    placeholders: ['montant', 'service', 'date', 'etude'],
+  },
+  // --- free signup + operator vetting (2026-09-02) ----------------------------
+  notaryPendingReview: {
+    audience: 'notaire', transactionnel: true,
+    labelFr: 'Inscription reçue (en vérification)', labelEn: 'Registration received (under review)',
+    defaultSubjectFr: 'Inscription reçue — nous vérifions votre inscription au Tableau de l’Ordre',
+    defaultSubjectEn: 'Registration received — we are checking your entry in the Order’s roll',
+    placeholders: ['email'],
+  },
+  operatorNotarySignedUp: {
+    audience: 'operateur', transactionnel: false,
+    labelFr: 'Nouvelle inscription notaire', labelEn: 'New notary signup',
+    defaultSubjectFr: 'Nouvelle inscription notaire : {{email}}', defaultSubjectEn: 'New notary signup: {{email}}',
+    placeholders: ['email'],
+  },
+  notaryApproved: {
+    audience: 'notaire', transactionnel: true,
+    labelFr: 'Accès ouvert (compte activé)', labelEn: 'Access open (account activated)',
+    defaultSubjectFr: 'Votre accès Nota est ouvert', defaultSubjectEn: 'Your Nota access is open',
+    placeholders: ['email'],
   },
 };
 

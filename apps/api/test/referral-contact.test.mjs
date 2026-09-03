@@ -7,6 +7,7 @@ const { createApp } = require('../src/handler.js');
 const { createMemoryRepo } = require('../src/repo-memory.js');
 const { notaryIdForEmail } = require('../src/notary-auth.js');
 import { notarySignIn } from '../test-support/notary-session.mjs';
+import { NOTARY_CONTACT } from '../test-support/notary-fixture.mjs';
 const domain = require('@nota/domain');
 
 // The two privacy-critical features of the financing pivot, end to end:
@@ -55,7 +56,7 @@ const postBid = (a, over = {}) =>
   });
 
 async function session(a, email) {
-  await a.repo.putNotary({ id: notaryIdForEmail(email), email, status: 'active', label: 'Étude ' + email });
+  await a.repo.putNotary({ id: notaryIdForEmail(email), email, status: 'active', label: 'Étude ' + email, ...NOTARY_CONTACT });
   return (await notarySignIn(a, email)).token;
 }
 
@@ -198,8 +199,12 @@ test('after retention: the client sees the retaining notary étude + courriel; a
 
   const own = parse(await clientBid(a, posted.clientToken, posted.bid.id, posted.bid.dateISO));
   // ADR 0030 : le bloc notaire porte la mise en relation et des FAITS — jamais
-  // une moyenne ni une cote (art. 70 du Code de déontologie).
-  assert.deepEqual(own.notaire, { etude: 'Étude a@notaire.ca', courriel: 'a@notaire.ca', lienCNQ: null, actes: 0 });
+  // une moyenne ni une cote (art. 70 du Code de déontologie). ADR 0033 : la
+  // mise en relation est complète — nom, téléphone et adresse de l'étude.
+  assert.deepEqual(own.notaire, {
+    nom: NOTARY_CONTACT.nom, etude: 'Étude a@notaire.ca', telephone: NOTARY_CONTACT.telephone, adresse: NOTARY_CONTACT.adresse,
+    courriel: 'a@notaire.ca', lienCNQ: null, actes: 0,
+  });
   assert.equal(JSON.stringify(own).includes(notaryIdForEmail('a@notaire.ca')), false, 'the internal notaryId must never reach the client');
 
   // The losing notary's console lists nothing — no contact leak sideways.

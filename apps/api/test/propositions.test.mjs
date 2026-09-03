@@ -9,6 +9,7 @@ const { createFakeMailer } = require('../src/notify-port.js');
 const { createNotifier } = require('../src/notifications.js');
 const { signToken, verifyToken, notaryIdForEmail, SCOPES } = require('../src/notary-auth.js');
 import { notarySignIn } from '../test-support/notary-session.mjs';
+import { NOTARY_CONTACT } from '../test-support/notary-fixture.mjs';
 const domain = require('@nota/domain');
 
 const TODAY = '2026-08-12';
@@ -37,7 +38,7 @@ const PRICING = { refinancement: { valeur_pret: 250000, succession: 'non', appro
 const bearer = (token) => ({ authorization: 'Bearer ' + token });
 
 async function session(a, email) {
-  await a.repo.putNotary({ id: notaryIdForEmail(email), email, status: 'active', label: 'Étude ' + email });
+  await a.repo.putNotary({ id: notaryIdForEmail(email), email, status: 'active', label: 'Étude ' + email, ...NOTARY_CONTACT });
   return (await notarySignIn(a, email)).token;
 }
 

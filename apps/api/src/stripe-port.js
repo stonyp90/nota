@@ -173,18 +173,51 @@ function createStripeAdapter({ secretKey, webhookSecret, stripe: injected } = {}
      * ADR 0023 — keep a cancellation fee out of the client's card hold by
      * PARTIAL capture: `amount_to_capture` takes the fee onto the platform and
      * Stripe releases the remainder of the authorization immediately. No new
-     * payment, no new consent — the hold was posted for more than this. The
-     * funds stay on the platform (no transfer: compensating the notary is a
-     * separate product decision). Idempotent per bid via cancelfee:<bidId>.
+     * payment, no new consent — the hold was posted for more than this.
+     * Idempotent per bid via cancelfee:<bidId>.
+     *
+     * ADR 0033 — the fee COMPENSATES THE NOTARY whose day was reserved. When
+     * `connectAccountId` names their connected account, the captured amount
+     * is TRANSFERRED to them WHOLE — no application fee, no slice on the
+     * platform: art. 32.1 2° L.N. and art. 32 C.déont. forbid Nota any part
+     * of what is the notary's. Idempotent via cancelfee-transfer:<bidId>.
+     * Without an account the money waits on the platform and the caller
+     * records it as owed (billing.js).
+     *
+     * A transfer that fails AFTER a successful capture rethrows with
+     * `captured: true` and the `chargeId` attached: the money is on the
+     * platform, the caller must record the debt, and the capture must never
+     * be retried (the idempotency key would make a retry a no-op anyway).
      */
-    async captureCancellationFee({ paymentIntentId, amountCents, bidId }) {
+    async captureCancellationFee({ paymentIntentId, amountCents, bidId, connectAccountId }) {
       const captured = await stripe.paymentIntents.capture(
         paymentIntentId,
         { amount_to_capture: amountCents },
         bidId ? { idempotencyKey: `cancelfee:${bidId}` } : undefined
       );
       const chargeId = captured && (typeof captured.latest_charge === 'string' ? captured.latest_charge : captured.latest_charge && captured.latest_charge.id);
-      return { paymentIntentId, chargeId: chargeId || null };
+      if (!connectAccountId) return { paymentIntentId, chargeId: chargeId || null, transferId: null };
+      let transfer;
+      try {
+        transfer = await stripe.transfers.create(
+          {
+            amount: amountCents,
+            currency: 'cad',
+            destination: connectAccountId,
+            source_transaction: chargeId || undefined,
+            transfer_group: bidId ? `bid:${bidId}` : undefined,
+            metadata: { bidId: bidId || '', motif: 'annulation' },
+          },
+          bidId ? { idempotencyKey: `cancelfee-transfer:${bidId}` } : undefined
+        );
+      } catch (err) {
+        const e = err instanceof Error ? err : new Error(String(err));
+        e.captured = true;
+        e.chargeId = chargeId || null;
+        e.paymentIntentId = paymentIntentId;
+        throw e;
+      }
+      return { paymentIntentId, chargeId: chargeId || null, transferId: transfer.id };
     },
 
     /**

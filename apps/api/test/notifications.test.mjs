@@ -328,3 +328,204 @@ test('POST /bids still returns 201 when the notifier throws', async () => {
   });
   assert.equal(res.statusCode, 201);
 });
+
+// =============================================================================
+// ADR 0033 — la mise en relation est complète, et la conversation est le canal
+// =============================================================================
+
+const NB = '\u00a0'; // fr-CA no-break space in money()
+const CONTACT = { nom: 'Me Jeanne Tremblay', etude: 'Étude Tremblay', telephone: '418 555-0199', adresse: '12, rue Saint-Jean, Québec (QC) G1R 1N4', lienCNQ: 'https://www.cnq.org/fiche/jt' };
+const retainedBid = (over = {}) =>
+  bidWithEmail({
+    status: 'retenue', notaryId: 'n-1', etude: 'Étude Tremblay', nom: 'Marie Roy', telephone: '(418) 555-0100', prefixe: 'G1R',
+    pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'desjardins', deplacement: 'client_50' },
+    dossier: { __consent: true, __pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'desjardins', deplacement: 'client_50' } },
+    ...over,
+  });
+
+// An href is HTML: `&` reads `&amp;` inside the attribute.
+const href = (url) => url.replace(/&/g, '&amp;');
+
+function setup33(over = {}) {
+  const repo = createMemoryRepo();
+  const mailer = createFakeMailer();
+  const clientLink = (bid) => BASE + '/#offre=' + bid.id + '&d=' + bid.dateISO + '&cle=jeton-' + bid.id;
+  const notifier = createNotifier({ repo, mailer, baseUrl: BASE, operatorEmail: 'ops@nota.ca', now: () => TODAY, clientLink, adminUrl: 'https://admin.nota.example', ...over });
+  return { repo, mailer, notifier };
+}
+
+test('onOfferRetained mails the CLIENT the notary’s contact block and the act deep link, the NOTARY the client’s block, and the operator — once per bid', async () => {
+  const { repo, mailer, notifier } = setup33();
+  await repo.putNotary({ id: 'n-1', email: 'jeanne@etude.ca', status: 'active', ...CONTACT });
+  const bid = retainedBid();
+
+  await notifier.onOfferRetained(bid);
+  await notifier.onOfferRetained(bid); // the accept route is idempotent; so is the mail
+
+  const toClient = mailer.sent.filter((m) => m.to === 'client@example.ca');
+  assert.equal(toClient.length, 1, 'one retention mail to the client');
+  assert.match(toClient[0].subject, /retenu votre demande/);
+  assert.ok(toClient[0].html.includes('Me Jeanne Tremblay'), 'the client learns who');
+  assert.ok(toClient[0].html.includes('href="tel:4185550199"'), 'and can call');
+  assert.ok(toClient[0].html.includes('jeanne@etude.ca'));
+  assert.ok(toClient[0].html.includes(href(BASE + '/#offre=b1&d=2026-08-19&cle=jeton-b1')), 'the CTA is the signed deep link');
+  assert.ok(toClient[0].text.includes(BASE + '/#offre=b1&d=2026-08-19&cle=jeton-b1'), 'raw in the text alternative');
+
+  const toNotary = mailer.sent.filter((m) => m.to === 'jeanne@etude.ca');
+  assert.equal(toNotary.length, 1, 'one retention mail to the notary');
+  assert.match(toNotary[0].subject, /Demande retenue/);
+  assert.ok(toNotary[0].html.includes('Marie Roy'), 'the notary learns whom');
+  assert.ok(toNotary[0].html.includes('href="tel:4185550100"'), 'and can call');
+  assert.ok(toNotary[0].html.includes('client@example.ca'));
+  assert.ok(toNotary[0].html.includes('Desjardins'), 'the lender rides along');
+  assert.ok(toNotary[0].html.includes(href(BASE + '/#notaires&acte=b1')), 'the CTA opens the retained card');
+
+  const toOps = mailer.sent.filter((m) => m.to === 'ops@nota.ca');
+  assert.equal(toOps.length, 1, 'one operator alert');
+  assert.match(toOps[0].subject, /Demande retenue/);
+  assert.ok(toOps[0].html.includes('https://admin.nota.example'), 'operator CTA lands on the admin console');
+  assert.equal(mailer.sent.length, 3, 'nothing else, and nothing twice');
+});
+
+test('onOfferRetained quotes the barème in force (stored config first, env defaults otherwise) on this montant', async () => {
+  const { repo, mailer, notifier } = setup33();
+  await repo.putNotary({ id: 'n-1', email: 'jeanne@etude.ca', status: 'active', ...CONTACT });
+  await repo.putCancellationConfig({ paliers: [{ maxJours: 5, taux: 0.2 }] }, TODAY);
+  await notifier.onOfferRetained(retainedBid({ montant: 2000 }));
+  const client = mailer.sent.find((m) => m.to === 'client@example.ca');
+  const notary = mailer.sent.find((m) => m.to === 'jeanne@etude.ca');
+  for (const m of [client, notary]) {
+    assert.ok(m.html.includes('20' + NB + '%'), 'FR taux from the stored barème: ' + m.subject);
+    assert.ok(m.html.includes('400' + NB + '$'), 'FR amount = 20 % × 2 000 $');
+    assert.ok(m.html.includes('$400'), 'EN amount');
+    assert.ok(!m.html.includes('30' + NB + '%'), 'the env default never leaks once a barème is stored');
+  }
+});
+
+test('onOfferRetained accepts the profile from the caller and still works when the notary has no contact yet', async () => {
+  const { mailer, notifier } = setup33();
+  await notifier.onOfferRetained(retainedBid(), { notary: { id: 'n-1', email: 'jeanne@etude.ca', label: 'Étude Legacy' } });
+  const client = mailer.sent.find((m) => m.to === 'client@example.ca');
+  assert.ok(client.html.includes('Étude Legacy'), 'the legacy label names the étude');
+  assert.ok(!/undefined|null/.test(client.text));
+  assert.equal(mailer.sent.filter((m) => m.to === 'jeanne@etude.ca').length, 1);
+});
+
+test('onOfferCancelled carries the fee kept (bid.annulation) to the client and to the notary', async () => {
+  const { mailer, notifier } = setup33();
+  const notary = { id: 'n-1', email: 'jeanne@etude.ca' };
+  const bid = retainedBid({ status: 'annulee', annulation: { taux: 0.3, frais: 450, joursAvant: 2, dedommagement: { notaire: true, verse: true, transferId: 'tr_1' } } });
+  await notifier.onOfferCancelled(bid, { notary, wasRetained: true });
+  const client = mailer.sent.find((m) => m.to === 'client@example.ca');
+  assert.ok(client.html.includes('450' + NB + '$') && /dédommagement/.test(client.html), 'the client is told what was kept and for whom');
+  const n = mailer.sent.find((m) => m.to === 'jeanne@etude.ca');
+  assert.ok(n.html.includes('450' + NB + '$') && /vous sont versés/.test(n.html), 'the notary is told what they receive');
+  assert.ok(!/régulariser/.test(n.html));
+  assert.ok(n.html.includes(href(BASE + '/#notaires&acte=b1')));
+});
+
+test('onOfferCancelled without a fee says free on both sides', async () => {
+  const { mailer, notifier } = setup33();
+  await notifier.onOfferCancelled(retainedBid({ status: 'annulee', annulation: null }), { notary: { id: 'n-1', email: 'jeanne@etude.ca' }, wasRetained: true });
+  assert.ok(/sans frais/.test(mailer.sent.find((m) => m.to === 'client@example.ca').html));
+  assert.ok(/aucuns frais/.test(mailer.sent.find((m) => m.to === 'jeanne@etude.ca').html));
+});
+
+test('client act mails use the deep link when clientLink is wired, and fall back to the client space otherwise', async () => {
+  const { repo, mailer, notifier } = setup33();
+  await repo.putNotary({ id: 'n-1', email: 'jeanne@etude.ca', ...CONTACT });
+  const bid = retainedBid();
+  await notifier.onChatMessage(bid, { id: 'm1', de: 'notaire', texte: 'Bonjour' });
+  assert.ok(mailer.sent[0].html.includes(href(BASE + '/#offre=b1&d=2026-08-19&cle=jeton-b1')), 'messageDuNotaire deep-links');
+  await notifier.onChatMessage(bid, { id: 'm2', de: 'client', texte: 'Allo' });
+  assert.ok(mailer.sent[1].html.includes(href(BASE + '/#notaires&acte=b1')), 'messageDuClient opens the act card');
+
+  const plain = setup({ operatorEmail: null });
+  await plain.repo.putNotary({ id: 'n-1', email: 'jeanne@etude.ca', ...CONTACT });
+  await plain.notifier.onChatMessage(bid, { id: 'm1', de: 'notaire', texte: 'Bonjour' });
+  assert.ok(plain.mailer.sent[0].html.includes(BASE + '/#t=profil'), 'no clientLink → the client space');
+  assert.ok(!plain.mailer.sent[0].html.includes('cle='));
+});
+
+test('a clientLink that throws never blocks the mail — the CTA falls back', async () => {
+  const { repo, mailer, notifier } = setup33({ clientLink: () => { throw new Error('no secret'); } });
+  await repo.putNotary({ id: 'n-1', email: 'jeanne@etude.ca', ...CONTACT });
+  await notifier.onOfferRetained(retainedBid());
+  const client = mailer.sent.find((m) => m.to === 'client@example.ca');
+  assert.ok(client && client.html.includes(BASE + '/#t=profil'));
+});
+
+// --- instant lead alerts (§7) ---------------------------------------------------
+
+const alertNotary = (id, over = {}) => ({ id, email: id + '@etude.example', status: 'active', prefixe: 'G1V', rayonKm: 25, urgences: false, ...over });
+const leadMails = (mailer) => mailer.sent.filter((m) => /Nouvelle demande/.test(m.subject) && m.to !== 'ops@nota.ca');
+
+test('onOfferCreated alerts instantly every active notary on pace « instant » who can serve the demand — once per (bid, notary)', async () => {
+  const { repo, mailer, notifier } = setup33();
+  await repo.putNotary(alertNotary('instant', { alertes: { pace: 'instant', urgentOnly: false } }));
+  await repo.putNotary(alertNotary('daily', { alertes: { pace: 'daily', urgentOnly: false } }));
+  await repo.putNotary(alertNotary('default'));
+  await repo.putNotary(alertNotary('off', { alertes: { pace: 'off', urgentOnly: false } }));
+  await repo.putNotary(alertNotary('inactive', { status: 'pending', alertes: { pace: 'instant', urgentOnly: false } }));
+  await repo.putNotary(alertNotary('farAway', { rayonKm: 0, alertes: { pace: 'instant', urgentOnly: false } }));
+  const bid = bidWithEmail({ prefixe: 'G1R', pricing: { deplacement: 'notaire_25', preteur: 'rbc' } });
+
+  await notifier.onOfferCreated(bid);
+  await notifier.onOfferCreated(bid); // POST /bids retries never double-alert
+
+  const leads = leadMails(mailer);
+  assert.deepEqual(leads.map((m) => m.to), ['instant@etude.example'], 'only the instant notary within reach');
+  assert.ok(leads[0].html.includes(href(BASE + '/#notaires&acte=b1')), 'CTA opens the demand in the console');
+  assert.ok(leads[0].html.includes('RBC Banque Royale'), 'the lender is named');
+  assert.ok(leads[0].html.includes('G1R'), 'the sector is named');
+  assert.ok(/km/.test(leads[0].html), 'the measured distance when both sectors are known');
+});
+
+test('urgentOnly keeps standard/rapide demands out and lets an elevated tier through', async () => {
+  const { repo, mailer, notifier } = setup33();
+  await repo.putNotary(alertNotary('urgent', { alertes: { pace: 'instant', urgentOnly: true } }));
+  await notifier.onOfferCreated(bidWithEmail({ id: 'calm', tier: 'standard' }));
+  assert.equal(leadMails(mailer).length, 0, 'a standard demand does not ring');
+  await notifier.onOfferCreated(bidWithEmail({ id: 'hot', tier: 'urgence' }));
+  assert.equal(leadMails(mailer).length, 1);
+});
+
+test('a demand that is not live yet (card hold pending) rings nobody; it rings once the hold is authorized', async () => {
+  const { repo, mailer, notifier } = setup33();
+  await repo.putNotary(alertNotary('instant', { alertes: { pace: 'instant', urgentOnly: false } }));
+  const bid = bidWithEmail({ paymentStatus: 'pending' });
+  await notifier.onOfferCreated(bid);
+  assert.equal(leadMails(mailer).length, 0);
+  await notifier.onAccountEvent({ id: 'evt_ok', type: 'checkout.session.completed', data: { object: {} } }, null, { ...bid, paymentStatus: 'authorized' });
+  assert.equal(leadMails(mailer).length, 1, 'the authorized demand rings the instant notary');
+});
+
+test('a repo without listNotaries keeps onOfferCreated working (no instant alerts)', async () => {
+  const { repo, mailer, notifier } = setup33();
+  delete repo.listNotaries;
+  const r = await notifier.onOfferCreated(bidWithEmail());
+  assert.equal(r.ok, true);
+  assert.equal(leadMails(mailer).length, 0);
+});
+
+// --- support widget (§7) -------------------------------------------------------
+
+test('onSupportReply points the visitor back at the site messagerie; onSupportMessage exposes {{email}} to the operator subject', async () => {
+  const { repo, mailer, notifier } = setup33();
+  await notifier.onSupportReply({ message: { id: 'sm1', texte: 'Oui.' }, courriel: 'curieux@exemple.ca' });
+  assert.ok(mailer.sent[0].html.includes(BASE + '/#messagerie'), 'CTA reopens the widget');
+  repo.getEmailOverride = async (key) => (key === 'operatorSupportMessage' ? { key, actif: true, subjectFr: 'Question de {{email}}', subjectEn: 'Question from {{email}}' } : null);
+  await notifier.onSupportMessage({ message: { id: 'sm2', texte: 'Allo ?' }, courriel: 'curieux@exemple.ca', replyUrl: BASE + '/#reponse=t' });
+  assert.equal(mailer.sent[1].subject, 'Question de curieux@exemple.ca / Question from curieux@exemple.ca');
+});
+
+// --- operator is always told of a release (§2.5) ---------------------------------
+
+test('onActReleased always alerts the operator, money in flight or not', async () => {
+  const { mailer, notifier } = setup33();
+  await notifier.onActReleased(retainedBid({ status: 'ouverte', notaryId: null }), { notary: { id: 'n-1', email: 'jeanne@etude.ca', ...CONTACT }, paidOrHeld: false, message: null });
+  const ops = mailer.sent.filter((m) => m.to === 'ops@nota.ca');
+  assert.equal(ops.length, 1, 'the operator hears of every withdrawal');
+  assert.ok(ops[0].html.includes('Étude Tremblay'));
+  assert.ok(ops[0].html.includes('https://admin.nota.example'));
+});

@@ -5,7 +5,11 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { createApp } = require('../src/handler.js');
 const { createMemoryRepo } = require('../src/repo-memory.js');
+const { createFakeMailer } = require('../src/notify-port.js');
+const { createNotifier } = require('../src/notifications.js');
 import { notarySignIn } from '../test-support/notary-session.mjs';
+// ADR 0033 — a notary may only retain with a reachable profile.
+import { NOTARY_CONTACT } from '../test-support/notary-fixture.mjs';
 const { notaryIdForEmail } = require('../src/notary-auth.js');
 
 // The retained-act conversation + the notary's post-acceptance withdrawal
@@ -15,21 +19,39 @@ const { notaryIdForEmail } = require('../src/notary-auth.js');
 const TODAY = '2026-08-12';
 const NOW_MS = 1_760_000_000_000;
 
-function app(seed = []) {
+function app(seed = [], opts = {}) {
   let n = 0;
   const repo = createMemoryRepo(seed);
   return {
-    ...createApp(repo, { now: () => TODAY, nowMs: () => NOW_MS, newId: () => 'id-' + ++n }),
+    ...createApp(repo, { now: () => TODAY, nowMs: () => NOW_MS, newId: () => 'id-' + ++n, ...opts }),
     repo,
+  };
+}
+
+// The same app, with the REAL notifier over a fake mailer — for the scenarios
+// that assert who is told about a withdrawal.
+function mailedApp() {
+  let n = 0;
+  const repo = createMemoryRepo([]);
+  const mailer = createFakeMailer();
+  const notifier = createNotifier({ repo, mailer, baseUrl: 'https://nota.example', operatorEmail: 'ops@nota.ca', now: () => TODAY });
+  return {
+    ...createApp(repo, { now: () => TODAY, nowMs: () => NOW_MS, newId: () => 'id-' + ++n, notifier }),
+    repo,
+    mailer,
   };
 }
 
 const parse = (res) => JSON.parse(res.body);
 const bearer = (token) => ({ authorization: 'Bearer ' + token });
 const PRICING = { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'tangerine', deplacement: 'client_50' };
+const flush = async () => {
+  await new Promise((r) => setImmediate(r));
+  await new Promise((r) => setImmediate(r));
+};
 
 async function session(a, email) {
-  await a.repo.putNotary({ id: notaryIdForEmail(email), email, status: 'active', label: 'Étude Test' });
+  await a.repo.putNotary({ id: notaryIdForEmail(email), email, status: 'active', label: 'Étude Test', ...NOTARY_CONTACT });
   return notarySignIn(a, email);
 }
 
@@ -190,4 +212,47 @@ test('release guards: only the holder, only while retained', async () => {
   // The real holder releases; a second release finds an open bid -> 422.
   assert.equal((await release(a, token, bid)).statusCode, 200);
   assert.equal((await release(a, token, bid)).statusCode, 422);
+});
+
+// --- ADR 0033: withdrawing is free, but counted — and the operator always knows
+
+test('a release is free for the notary but COUNTED on their record (releasesCount)', async () => {
+  const a = app();
+  const id = notaryIdForEmail('n1@notaire.ca');
+  const { token } = await session(a, 'n1@notaire.ca');
+
+  const first = await postBid(a);
+  await accept(a, token, first.bid);
+  assert.equal((await release(a, token, first.bid)).statusCode, 200);
+  assert.equal((await a.repo.getNotary(id)).releasesCount, 1);
+
+  const second = await postBid(a, { dateISO: '2026-08-21' });
+  await accept(a, token, second.bid);
+  assert.equal((await release(a, token, second.bid, 'Conflit d’intérêts.')).statusCode, 200);
+  assert.equal((await a.repo.getNotary(id)).releasesCount, 2);
+
+  // A refused release (not the holder) counts nothing.
+  const third = await postBid(a, { dateISO: '2026-08-22' });
+  await accept(a, token, third.bid);
+  const { token: other } = await session(a, 'n2@notaire.ca');
+  assert.equal((await release(a, other, third.bid)).statusCode, 403);
+  assert.equal((await a.repo.getNotary(id)).releasesCount, 2);
+  assert.equal((await a.repo.getNotary(notaryIdForEmail('n2@notaire.ca'))).releasesCount, undefined);
+});
+
+test('a release ALWAYS alerts the operator — even with no payment in flight and no message', async () => {
+  const a = mailedApp();
+  const { bid } = await postBid(a);
+  const { token } = await session(a, 'n1@notaire.ca');
+  await accept(a, token, bid);
+  a.mailer.sent.length = 0;
+
+  // No hold on this bid (no billing configured), no motif given.
+  assert.equal((await release(a, token, bid)).statusCode, 200);
+  await flush();
+
+  const ops = a.mailer.sent.find((m) => m.to === 'ops@nota.ca' && /désistement/i.test(m.subject));
+  assert.ok(ops, 'operator was not told of the withdrawal: ' + JSON.stringify(a.mailer.sent.map((m) => [m.to, m.subject])));
+  const client = a.mailer.sent.find((m) => m.to === 'client@example.ca');
+  assert.ok(client, 'the client must be told their date is back on the market');
 });

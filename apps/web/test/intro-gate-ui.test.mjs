@@ -96,6 +96,76 @@ test('film: the frame is a fixed, edge-to-edge viewport layer with no card chrom
     'the film unit --igu is min(1cqw, k·cqh) — height caps the scale');
 });
 
+// ADR 0033 §5 — the notaire film tells the profession's rules before it
+// signs off: one compliance scene between the acceptance and the finale,
+// three illustrated tiles citing the articles (ADR 0031, docs/legal/
+// conformite-deontologique-notaires.md), and the same tiles repeated on the
+// landing under the sign-in gate so they are visible outside the film.
+const FLAT = (s) => s.replace(/[  ]/g, ' ').replace(/\s+/g, ' ').trim();
+const appSrc = readFileSync(fileURLToPath(new URL('../public/app.js', import.meta.url)), 'utf8');
+
+function assertThreeArticles(root, tileSel) {
+  const tiles = root.querySelectorAll(tileSel);
+  assert.equal(tiles.length, 3, 'three tiles: ' + tileSel);
+  for (const t of tiles) assert.ok(t.querySelector('svg'), 'each tile is illustrated');
+  const txt = FLAT(root.textContent);
+  assert.match(txt, /Nota respecte les règles de votre profession/);
+  assert.match(txt, /Art\. 32\.1/); assert.match(txt, /Loi sur le notariat/); assert.match(txt, /100 %/);
+  assert.match(txt, /Art\. 32 et 29\.1/); assert.match(txt, /Code de déontologie/);
+  assert.match(txt, /Art\. 49/);
+  assert.match(txt, /Une décision de l’Ordre s’applique toujours en premier/);
+  // Never the retired vocabulary: no share, no rate, no commission.
+  assert.ok(!/commission|pourcentage|\d+\s*%(?!\s*du montant)/.test(txt.replace('100 %', '')), 'no share vocabulary: ' + txt);
+}
+
+test('notaire film: a compliance scene sits between the acceptance and the finale, and the timeline grew with it', () => {
+  const scenes = [...doc.querySelectorAll('#ig-stage-notaire .ig-scene')].map((s) => s.className.replace('ig-scene ', ''));
+  assert.deepEqual(scenes, ['ig-n1', 'ig-n2', 'ig-n3', 'ig-n4', 'ig-n5'], 'five scenes, the finale last');
+  const conf = doc.querySelector('#ig-stage-notaire .ig-n4');
+  assertThreeArticles(conf, '.ig-conf-tile');
+  assert.match(FLAT(doc.querySelector('#ig-stage-notaire .ig-n5').textContent), /Remplissez votre semaine\./, 'the finale is still the finale');
+  // CSS timeline: the new scene enters after n3 leaves, the finale holds.
+  const n3out = /\.run \.ig-n3 \{[^}]*igOut [\d.]+s ease ([\d.]+)s/.exec(css);
+  const EASE = '(?:[^ ]+|cubic-bezier\\([^)]*\\))';
+  const n4in = new RegExp('\\.run \\.ig-n4 \\{ animation: igIn [\\d.]+s ' + EASE + ' ([\\d.]+)s both, igOut [\\d.]+s ease ([\\d.]+)s forwards; \\}').exec(css);
+  const n5in = new RegExp('\\.run \\.ig-n5 \\{ animation: igIn [\\d.]+s ' + EASE + ' ([\\d.]+)s both, igHold [\\d.]+s linear ([\\d.]+)s forwards; \\}').exec(css);
+  assert.ok(n3out && n4in && n5in, 'n3 out, n4 in/out and n5 in/hold are all timed');
+  assert.ok(Number(n4in[1]) > Number(n3out[1]), 'n4 enters after n3 leaves');
+  assert.ok(Number(n5in[1]) > Number(n4in[2]), 'n5 enters after n4 leaves');
+  assert.ok(Number(n4in[2]) - Number(n4in[1]) >= 4, 'the compliance scene stays long enough to be read');
+  assert.ok(/\.run \.ig-n4 \.ig-conf-tile:nth-child\(3\) \{ animation-delay/.test(css), 'the tiles arrive one by one');
+  // The bar and the JS constant follow the film's new length (bar = timer − 0.6 s).
+  const bar = /#ig-stage-notaire\.run \.ig-progress \{ animation-duration: ([\d.]+)s; \}/.exec(css);
+  const timer = /film === 'client' \? (\d+) : (\d+)\)/.exec(appSrc);
+  assert.ok(bar && timer, 'bar duration and film timer found');
+  assert.ok(Number(timer[2]) > 15600, 'the notaire film is longer than before');
+  assert.equal(Number(timer[2]), Math.round(Number(bar[1]) * 1000) + 600, 'the timer trails the bar by the same 0.6 s as the client film');
+  assert.ok(Number(timer[2]) >= Number(n5in[2]) * 1000, 'the timer fires after the finale holds');
+  // The gate stays inert under prefers-reduced-motion.
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{\s*\.ig \{ display: none; \}/);
+  // Tokens only, square register, on the new tiles.
+  for (const b of blocks('.ig-conf-tile')) {
+    assert.ok(!/(?:background|color|border)[^;}]*(?:#[0-9a-fA-F]{3}|rgb\(|hsl\()/.test(b), 'tiles paint tokens only: ' + b);
+    assert.ok(!/border-radius:\s*(?:50%|calc\(99)/.test(b), 'no pill on a tile');
+  }
+});
+
+test('notary landing: the same three articles sit right under the sign-in gate, and fold away signed-in', () => {
+  const sec = doc.querySelector('#nc-conformite');
+  assert.ok(sec, 'the Conformité section exists');
+  assert.equal(sec.tagName, 'SECTION');
+  assert.equal(sec.previousElementSibling && sec.previousElementSibling.id, 'notary-auth-form', 'right under the gate');
+  assert.equal(sec.closest('#pane-notaires') && sec.closest('#pane-notaires').id, 'pane-notaires');
+  assertThreeArticles(sec, '.nc-conformite-tile');
+  const link = sec.querySelector('a.goto-link[data-goto="conditions"]');
+  assert.ok(link, 'a door to the conditions — the site’s deontology surface');
+  assert.match(FLAT(link.textContent), /Lire nos engagements déontologiques/);
+  assert.match(css, /#notary-auth-form\[hidden\]\s*\+\s*#nc-conformite\s*\{[^}]*display:\s*none/, 'signed-in, the gate folds and the block with it');
+  for (const b of blocks('.nc-conformite-tile')) {
+    assert.ok(!/(?:background|color|border)[^;}]*(?:#[0-9a-fA-F]{3}|rgb\(|hsl\()/.test(b), 'tiles paint tokens only: ' + b);
+  }
+});
+
 test('backdrop: the gate floats on theme tokens — no hardcoded paint hides the dice', () => {
   assert.ok(blocks('.ig').some((b) => /background:\s*var\(--bg\)/.test(b)),
     'the gate backdrop is the theme token — both themes follow');

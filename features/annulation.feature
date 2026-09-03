@@ -134,6 +134,35 @@ Fonctionnalité: Annulation d'une offre et frais de dernière minute
     Alors l'annulation est gratuite
     Et aucune capture n'a eu lieu
 
+  # ADR 0033 — les frais dédommagent le NOTAIRE dont la journée était réservée.
+  # Nota n'en garde rien : art. 32.1 de la Loi sur le notariat et art. 32 du
+  # Code de déontologie interdisent toute part des honoraires à un non-membre.
+  Scénario: les frais d'annulation sont versés au notaire — Nota n'en garde rien
+    Étant donné un client publie une offre avec le courriel "client@exemple.ca" pour "refinancement" à 2800 dans 3 jours
+    Et la caution du client est autorisée
+    Et le notaire "notaire@exemple.ca" est connecté à Stripe
+    Et le notaire "notaire@exemple.ca" retient l'offre
+    Quand le client annule son offre
+    Alors l'annulation retient 30 % du montant, soit 840 $
+    Et les frais de 840 $ sont virés en entier au notaire "notaire@exemple.ca"
+
+  Scénario: sans versements Stripe branchés, les frais sont dus au notaire
+    Étant donné un client publie une offre avec le courriel "client@exemple.ca" pour "refinancement" à 2800 dans 3 jours
+    Et la caution du client est autorisée
+    Et le notaire "notaire@exemple.ca" retient l'offre
+    Quand le client annule son offre
+    Alors l'annulation retient 30 % du montant, soit 840 $
+    Et les frais de 840 $ sont dus au notaire "notaire@exemple.ca", faute de versements Stripe branchés
+
+  Scénario: un désistement est compté au dossier du notaire et l'opérateur est prévenu
+    Étant donné un client publie une offre avec le courriel "client@exemple.ca" pour "refinancement" à 2800 dans 3 jours
+    Et le notaire "notaire@exemple.ca" retient l'offre
+    Quand le notaire "notaire@exemple.ca" se désiste
+    Alors la réponse a le statut 200
+    Et le désistement ne coûte rien au notaire "notaire@exemple.ca"
+    Et le désistement est compté au dossier du notaire "notaire@exemple.ca"
+    Et l'opérateur est prévenu du désistement
+
   @decision
   Scénario: la récompense de parrainage d'une offre annulée est récupérée
     # Décision produit en attente (audit 2026-08-27) : le registre EARN est

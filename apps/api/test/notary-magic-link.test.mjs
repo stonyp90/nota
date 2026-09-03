@@ -14,6 +14,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import { NOTARY_CONTACT } from '../test-support/notary-fixture.mjs';
 
 const require = createRequire(import.meta.url);
 const { createApp } = require('../src/handler.js');
@@ -44,7 +45,7 @@ function harness(opts = {}) {
 const parse = (res) => JSON.parse(res.body);
 
 async function seedActive(repo, email) {
-  await repo.putNotary({ id: notaryIdForEmail(email), email, status: 'active' });
+  await repo.putNotary({ id: notaryIdForEmail(email), email, status: 'active', ...NOTARY_CONTACT });
 }
 
 const reqLink = (app, email, ip) =>

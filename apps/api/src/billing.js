@@ -165,12 +165,17 @@ function createBilling({
     });
 
     const at = clock();
+    // 2026-09-02: an APPROVED notary (`approuveLe`, the operator's activation)
+    // connects payouts from inside a console they already use — their status
+    // is not Stripe's to set, so it is left exactly as it is. Only a notary who
+    // starts here, with no record or a status-less one, is `onboarding`.
+    const approved = !!(existing && existing.approuveLe);
     await repo.putNotary({
       // Preserve any session-upserted profile fields (label, createdAt) while
       // stamping the billing identity on the same record.
       ...(existing || {}),
       id, email: clean,
-      status: NOTARY_STATUS.ONBOARDING,
+      status: approved ? existing.status : NOTARY_STATUS.ONBOARDING,
       connectAccountId: accountId,
       chargesEnabled: false,
       commissionCentsCollected: (existing && existing.commissionCentsCollected) || 0,
@@ -182,7 +187,10 @@ function createBilling({
       parrain: (existing && existing.parrain) || parrain || null,
       createdAt: (existing && existing.createdAt) || at, updatedAt: at,
     });
-    await recordStats(statsDeltasForNotaryOnboarding());
+    // The « en intégration » gauge counts a notary ONCE: a record that already
+    // carries a status (signed up at /notaries/signup, or approved) was
+    // counted when it was written.
+    if (!(existing && existing.status)) await recordStats(statsDeltasForNotaryOnboarding());
 
     return { ok: true, url };
   }
@@ -423,20 +431,55 @@ function createBilling({
    * ADR 0023 — collect a cancellation fee by PARTIAL capture of the live
    * authorization (the remainder is released by Stripe immediately). The
    * amount is decided by the caller (cancellation-config.js is the authority
-   * on the barème); this method only moves the money. Returns
-   * `{ ok, chargeId }`, `{ ok: false }` on any failure — the caller then
-   * releases the hold whole so the client is never left blocked.
+   * on the barème); this method only moves the money.
+   *
+   * ADR 0033 — the fee is the NOTARY'S: it compensates the day they reserved.
+   * A notary who can receive (ACTIVE, charges enabled, connected account) is
+   * transferred the whole amount in the same motion (`verse: true`). One who
+   * cannot — still onboarding, capability pulled, no account — is CREDITED:
+   * `dedommagementCentsDue` grows on their record, the way ADR 0029 books a
+   * receivable rather than pretending money moved (`verse: false`). Nota
+   * keeps nothing of it either way.
+   *
+   * A transfer that fails after a successful capture is the same case: the
+   * money sits on the platform, so it is recorded as owed and the capture is
+   * NOT retried. Only a failed CAPTURE answers `{ ok: false }` — the caller
+   * then releases the hold whole so the client is never left blocked.
+   *
+   * Returns `{ ok, chargeId, transferId, verse }`.
    */
-  async function chargeCancellationFee({ paymentIntentId, bidId, amountCents } = {}) {
+  async function chargeCancellationFee({ paymentIntentId, bidId, amountCents, notaryId } = {}) {
     if (!paymentIntentId || !(amountCents > 0) || typeof stripe.captureCancellationFee !== 'function') {
       return { ok: false };
     }
+    const cents = Math.round(Number(amountCents));
+    const notary = notaryId ? await repo.getNotary(notaryId) : null;
+    const payable = !!(notary && notary.status === NOTARY_STATUS.ACTIVE && notary.chargesEnabled && notary.connectAccountId);
+
+    let out;
     try {
-      const out = await stripe.captureCancellationFee({ paymentIntentId, amountCents, bidId });
-      return { ok: true, chargeId: (out && out.chargeId) || null };
-    } catch {
-      return { ok: false };
+      out = await stripe.captureCancellationFee({
+        paymentIntentId, amountCents: cents, bidId,
+        ...(payable ? { connectAccountId: notary.connectAccountId } : {}),
+      });
+    } catch (err) {
+      // The capture went through and only the transfer failed: the money is
+      // on the platform. Never lose it, never re-capture it.
+      if (!(err && err.captured && err.chargeId)) return { ok: false };
+      out = { chargeId: err.chargeId, transferId: null };
     }
+
+    const chargeId = (out && out.chargeId) || null;
+    const transferId = (payable && out && out.transferId) || null;
+    const verse = !!transferId;
+    if (!verse && notary) {
+      await repo.putNotary({
+        ...notary,
+        dedommagementCentsDue: (Number(notary.dedommagementCentsDue) || 0) + cents,
+        updatedAt: clock(),
+      });
+    }
+    return { ok: true, chargeId, transferId, verse };
   }
 
   async function cancelAuthorization({ paymentIntentId, bidId } = {}) {
@@ -473,14 +516,19 @@ function createBilling({
         const enabled = !!obj.charges_enabled;
         const prior = notaryId ? await repo.getNotary(notaryId) : null;
         const wasActive = !!(prior && prior.status === NOTARY_STATUS.ACTIVE);
+        // 2026-09-02: an APPROVED notary's status belongs to the operator, not
+        // to Stripe. For them this event moves `chargesEnabled` alone — the one
+        // fact that says whether payouts can flow — and the gauge never swings
+        // on a toggle (they were counted active at activation).
+        const approved = !!(prior && prior.approuveLe);
         const notary = await transition(notaryId, {
           chargesEnabled: enabled,
-          status: enabled ? NOTARY_STATUS.ACTIVE : NOTARY_STATUS.ONBOARDING,
+          ...(approved ? {} : { status: enabled ? NOTARY_STATUS.ACTIVE : NOTARY_STATUS.ONBOARDING }),
         });
         // Move the gauge only on an ACTUAL active<->onboarding transition, so a
         // charges_enabled toggle can never double-count (true->false->true) and
         // a revert-to-onboarding decrements the active bucket.
-        if (notary) {
+        if (notary && !approved) {
           if (enabled && !wasActive) await recordStats(statsDeltasForNotaryActive());
           else if (!enabled && wasActive) await recordStats(statsDeltasForGauge({ active: -1, onboarding: 1 }));
         }

@@ -3266,6 +3266,7 @@
 
   var AUDIT_LABELS = {
     acte_regle: 'Acte réglé',
+    annulation_frais: 'Frais d’annulation retenus',
     prix_nota_updated: 'Prix de Nota modifié',
     prix_nota_reset: 'Prix de Nota réinitialisé',
     cancellation_schedule_updated: 'Barème d’annulation modifié',
