@@ -109,8 +109,9 @@ les pièces ; ce document en est la synthèse.
 
 ### Où Nota est devant, où Nota est derrière
 
-Score du relevé D : **Nota 36 sur 58**, cinquième de onze, derrière Maple (44),
-Rocket Lawyer (38), Ownright et Proof (37). **Dans sa catégorie — accès en ligne
+Score du relevé D : **Nota 36 sur 58**, cinquième de onze **à égalité avec
+LegalZoom (36)**, derrière Maple (44), Rocket Lawyer (38), Ownright et Proof
+(37). **Dans sa catégorie — accès en ligne
 à un notaire du Québec pour un acte de financement — Nota est premier : 36
 contre 26 pour Notairo et pour Leya.** Le tableau dit pourquoi, et ce que ça
 coûte.
@@ -131,7 +132,7 @@ coûte.
 | | Jalons après la rétention | Statuts d'offre, pas de jalons | Deeded « pizza tracker » ; Ownright « by the hour » | Absent |
 | | Rappels sur l'acte **retenu** | `dueReminders` sort vide dès qu'une offre est retenue | Deeded, Ownright, Zocdoc rappellent jusqu'à la signature | Le client qui a un notaire n'entend plus rien |
 | | Preuve sociale | 0 avis, 0 acte, 0 compteur | Ownright 1 768 avis à 5,0 ; Deeded 695 à 4,9 | Le déficit de confiance, chiffré |
-| | Débours dans le devis | Absents — le « total » n'est pas un total | Ownright : débours = frais de tiers seulement, aucun frais d'administration | Tous les autres écrivent au moins « + débours » |
+| | **Montant** des débours | Mention « en sus » servie par `deboursInclus: false` (art. 71 3°), **aucun montant** | Ownright : débours = frais de tiers seulement, aucun frais d'administration | À égalité : personne ne chiffre — la seule ligne « derrière » où tout le lot l'est aussi |
 | | Vérification d'identité en ligne | Collectée, jamais vérifiée | Deeded et Ownright à l'intégration ; Proof (doc + KBA + biométrie) | Absent |
 | | Signature à distance guidée | Hors Nota (outils CNQ du notaire) | Deeded : visio ; Ownright : à distance par défaut | Vendu (« urgence en ligne +400 $ »), pas outillé |
 | | Notifications multicanal | Courriel seul | Zocdoc, Maple : SMS + push ; Deeded : texto | PWA installée, aucun push |

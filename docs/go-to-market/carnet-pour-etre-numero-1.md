@@ -6,8 +6,9 @@ reclassé par état d'avancement plutôt que par ratio.
 Le relevé D a scoré 29 capacités produit sur onze références. **Nota est premier
 dans sa catégorie** — accès en ligne à un notaire du Québec pour un acte de
 financement — avec 36 points sur 58, contre 26 pour Notairo et 26 pour Leya.
-Mais il est cinquième toutes références confondues : Maple 44, Rocket Lawyer 38,
-Ownright et Proof 37. Les clôtureurs ontariens le battent sur cinq lignes
+Mais il est cinquième toutes références confondues, **à égalité avec
+LegalZoom** : Maple 44, Rocket Lawyer 38, Ownright et Proof 37, puis Nota et
+LegalZoom à 36. Les clôtureurs ontariens le battent sur cinq lignes
 structurantes, et les étalons du « réserver un professionnel réglementé » le
 battent sur la plus lourde en conversion : **disponibilité réelle et
 confirmation immédiate**.
@@ -25,7 +26,7 @@ pas à ordonnancer : ils sont en cours.
 
 | Chantier | Ce qu'il change | Qui il dépasse | État |
 | --- | --- | --- | --- |
-| **Grille de prix par service** — ADR 0034 | Le prix de Nota cesse d'être un montant unique. À 400 $ fixes, Nota pèse **18,2 %** d'un financement de 1 800 $, **16,7 %** d'un refinancement de 2 000 $, et **9 %** d'un acte à 4 000 $ : le prix fixe est régressif, il frappe le plus petit dossier le plus fort. Une grille par service ramène le poids à ≈ 10–12 % sur le standard, et elle ne dépend d'aucune cote — l'art. 29.1 reste satisfait. | **Notairo**, dont le produit équivalent (« frais de prise en charge de dossier ») est à **295 $**, soit 35 % sous le 400 $ de Nota. La grille est la seule façon de fermer cet écart sans toucher aux honoraires du notaire. | **en cours (2026-09-03)** |
+| **Grille de prix par service** — ADR 0034 | Le prix de Nota cesse d'être un montant unique. À 400 $ fixes, Nota pèse **18,2 %** d'un financement de 1 800 $, **16,7 %** d'un refinancement de 2 000 $, et **9 %** d'un acte à 4 000 $ : le prix fixe est régressif, il frappe le plus petit dossier le plus fort. Une grille par service ramène le poids à ≈ 10–12 % sur le standard, et elle ne dépend d'aucune cote — l'art. 29.1 reste satisfait. | **Notairo**, dont le produit équivalent (« frais de prise en charge de dossier ») est à **295 $** : le prix fixe de Nota est **35 % plus cher** (400 $ contre 295 $). La grille est la seule façon de fermer cet écart sans toucher aux honoraires du notaire. | **en cours (2026-09-03)** |
 | **Caution Stripe qui tient jusqu'à la signature** — ADR 0035 | L'autorisation de carte expire en ~7 jours ; le palier `standard` commence à 15 jours. Aujourd'hui, **toute offre standard se vide d'elle-même du carnet**, sans un mot au client. SetupIntent (carte enregistrée) puis PaymentIntent à J-2, ou ré-autorisation à J-5. | **Notairo**, qui encaisse d'avance par Shopify Checkout et dont la page « Politique de remboursement » répond 404. La promesse « vous n'êtes débité qu'à la signature » n'est meilleure que si elle tient plus de sept jours. | **en cours (2026-09-03)** |
 | **Couche de persistance : consentement, notifications en application, registre de campagne, index client** | Quatre états que le produit affiche déjà mais ne conserve nulle part. Sans registre de consentement, la ligne Loi 25 du formulaire n'a aucune preuve derrière elle ; sans notifications persistées, la cloche du compte repart vide à chaque appareil ; sans registre de campagne ni index client, l'admin ne peut ni retrouver un client par son courriel ni savoir ce qui lui a été envoyé. | Personne directement — c'est le plancher sous les six chantiers de la section 2. La porte « Proposer une amélioration » (voir [`les-usagers-dans-le-cycle-de-developpement.md`](les-usagers-dans-le-cycle-de-developpement.md)) et les jalons de l'acte s'y posent tous les deux. | **en cours (2026-09-03)** |
 
@@ -62,39 +63,53 @@ qui ait des avis indépendants : **29 % à une étoile**, et les verbatims disen
 paiement est ce qui fabrique ces avis. Nota n'a encore aucun avis ; ce chantier
 décide de la couleur des premiers.
 
-**Ce que ça coûte à livrer.** Rien de neuf, ou presque : les ~40 gabarits
-bilingues existent, le registre d'envoi (idempotence) existe, la cadence existe.
+**Ce que ça coûte à livrer.** Rien de neuf, ou presque : les **49** gabarits
+bilingues existent (`TEMPLATES` et `TEMPLATE_META`, `apps/api/src/emails.js`),
+le registre d'envoi (idempotence) existe, la cadence existe.
 Il faut étendre `dueReminders` aux offres retenues (J-3, J-1, J0 aux **deux**
 parties) et poser cinq jalons dans la bande de l'offre et la carte du notaire —
 Retenue → Documents fournis → Rendez-vous confirmé → Signé → Réglé — chacun
 émettant un courriel qui existe déjà. C'est du domaine et un bandeau.
 
-### 2.2 Les débours dans le devis — la quatrième ligne qui manque
+### 2.2 Le **montant** des débours — le chiffre qui manque
 
 *Dépasse : Ownright (le seul qui précise que ses débours sont des frais de tiers
 et qu'il n'ajoute aucun frais d'administration), Notairo et Deeded (qui écrivent
-« + débours » sans chiffre). Taille : S.*
+« + débours » sans chiffre — comme Nota). Taille : S.*
 
-**Le fait.** Le devis de Nota a trois lignes : honoraires du notaire, service
-Nota, autorisé sur votre carte. Les débours — droits du Registre foncier,
-copies, index aux immeubles — n'apparaissent **nulle part**, ni dans le
-formulaire, ni dans le domaine, ni dans la feuille « Retenir » du notaire. Le
-client les découvre à l'étude.
+**Le fait, dans le code.** La mention existe déjà, et il faut le dire pour ne
+pas se donner un chantier plus gros qu'il n'est. `tarifNota()`
+(`apps/api/src/handler.js`) sert un drapeau `deboursInclus: false`, dont le
+commentaire cite l'art. 71 3° — quiconque annonce des honoraires doit indiquer
+si les débours sont inclus ; `apps/web/public/app.js` pousse en conséquence,
+sous le devis, la phrase « Débours en sus (droits de publication, RDPRM). »,
+traduite dans `i18n.js`. Le devis a donc trois lignes — honoraires du notaire,
+service Nota, autorisé sur votre carte — **plus une note qui dit qu'il reste
+quelque chose à payer**.
 
-**Ce que font les autres.** Notairo écrit « 949 $ + débours » sur chaque acte.
-Deeded écrit « + disbursements » et le répète dans ses conditions. Ownright va
-plus loin : « subject to HST and disbursements », les débours étant **des frais
-de tiers seulement**, « we don't charge Administration Fees ». Les trois disent
-au client qu'il reste quelque chose à payer.
+**Ce qui manque, exactement.** Un montant. Aucun chiffre de débours nulle part :
+ni dans le formulaire, ni dans le domaine, ni dans la feuille « Retenir » du
+notaire (qui ne porte même pas la note). Le client sait qu'il paiera davantage ;
+il ne sait pas combien, et « Autorisé sur votre carte » se lit quand même comme
+un total.
 
-**Pourquoi c'est la ligne à prendre.** Nota a construit le seul devis décomposé
-du marché québécois, et l'a laissé incomplet : « Autorisé sur votre carte » se
-lit comme un total, et n'en est pas un. C'est la seule ligne du benchmark où
-Nota est en retard **sur sa propre force**. Et c'est aussi la plus facile à
-gagner franchement : personne ne met un **chiffre** en face des débours. Une
-ligne « Débours estimés (Registre foncier, copies) » par service, portée par le
-domaine, affichée en quatrième ligne du devis et dans la feuille Retenir, fait
-de Nota le seul qui annonce le vrai total.
+**Ce que font les autres.** La même chose, à un cran près. La vitrine de Notairo
+écrit « à partir de 949 $ + débours » — chiffre que son propre catalogue Shopify
+dément (forfaits à 1 795 / 1 995 / 2 225 $ taxes incluses, voir
+[`concurrence.md` §2](concurrence.md)), mais la mention « + débours » est bien
+là sur chaque acte. Deeded écrit « + disbursements » et le répète dans ses
+conditions. Ownright va plus loin : « subject to HST and disbursements », les
+débours étant **des frais de tiers seulement**, « we don't charge Administration
+Fees ». Aucun des trois ne met un **chiffre** en face.
+
+**Pourquoi c'est quand même la ligne à prendre.** Ce n'est pas une ligne où Nota
+est en retard : c'est une ligne où le lot entier est à égalité, au minimum légal.
+C'est ce qui la rend facile à gagner franchement — personne ne chiffre, et Nota
+a déjà le seul devis décomposé du marché québécois pour accueillir le chiffre.
+Une ligne « Débours estimés (Registre foncier, copies) » par service, portée par
+le domaine, affichée en quatrième ligne du devis **et** dans la feuille Retenir,
+fait de Nota le seul qui annonce le vrai total. Le chantier est un calcul et une
+ligne, pas une mention à inventer.
 
 **Deux gardes-fous.** L'estimation doit se dire estimation, et elle doit rester
 **encaissée par le notaire ou par le Registre** — un débours qui transiterait
@@ -187,7 +202,7 @@ n'ont donc pas leur place ci-dessus. Ils appartiennent au
    sans caution qui tient 15 jours, aucune offre standard ne survit assez
    longtemps pour qu'un jalon ait un sens.
 2. **Les six S** (section 2), dans l'ordre : rappels et jalons sur l'acte
-   retenu, débours, faits agrégés, délai d'appariement, heures de support,
+   retenu, montant des débours, faits agrégés, délai d'appariement, support,
    garantie énoncée.
 3. **Après les premiers notaires réels** : SMS, onboarding notaire, push web,
    jours bloqués.

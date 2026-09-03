@@ -123,7 +123,7 @@ Lancement il y a 11 mois, aucune levée, pas de profil LinkedIn d'entreprise ; e
 
 **Nota est pire :**
 - **Prix** : 2 400 $ (2 000 + 400) au palier standard vs ~1 800–2 200 $ TTC débours inclus chez Notairo ; et **6 400 $** pour une signature dans la semaine, alors que Notairo affirme boucler un refinancement en « 1 à 2 semaines, parfois moins » sans surprime affichée. L'échelle ×3/×4 n'a **aucune transaction** pour la soutenir.
-- Nota n'annonce **ni taxes ni débours** : le « total » du client n'est pas un total ; Notairo écrit « + débours » partout et vend des forfaits taxes-et-débours inclus.
+- Nota n'annonce **aucun montant** de taxes ni de débours : le « total » du client n'est pas un total. *(Corrigé le 3 septembre : la **mention** existe — `tarifNota()` sert `taxesIncluses: false` / `deboursInclus: false` au titre de l'art. 71 3°, et le devis affiche « Taxes en sus. » et « Débours en sus (droits de publication, RDPRM). ». Ce qui manque est le chiffre, pas la phrase.)* Notairo écrit « + débours » partout et vend des forfaits taxes-et-débours inclus.
 - Catalogue : Nota n'a **pas d'acte de vente/achat** (le gros du volume, 1 099 $ chez Notairo) ni de conseils juridiques.
 - Couverture : « un notaire de **Québec** » vs Montréal, Laval, Rive-Sud, West Island.
 - Preuve sociale : 0 vs 3 témoignages + un lancement médiatisé ; Nota n'a ni domaine, ni SES hors bac à sable, ni Stripe en prod.
