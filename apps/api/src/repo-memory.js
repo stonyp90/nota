@@ -1,6 +1,24 @@
 'use strict';
 
-const { monthOf, STATS_GAUGE_PK, STATS_GAUGE_SK } = require('./keys');
+const {
+  monthOf,
+  STATS_GAUGE_PK,
+  STATS_GAUGE_SK,
+  consentJournalSK,
+  notifSK,
+  subjectJournalSK,
+  campaignRecipientsPK,
+  campaignRecipientSK,
+  clientBidSK,
+  bidTtl,
+  notifTtl,
+  NOTIF_PAGE_MAX,
+  SUBJECT_PAGE_MAX,
+  CAMPAIGN_PAGE_MAX,
+  encodeCursor,
+  decodeCursor,
+} = require('./keys');
+const { randomUUID } = require('node:crypto');
 const { STATUS, normalizeReferralCode } = require('@nota/domain');
 
 /**
@@ -42,6 +60,51 @@ function createMemoryRepo(seed = []) {
   const consentements = new Map(); // courriel -> { email, base, at, source }
   const campagnes = new Map(); // courriel -> { email, at, campagneId }
   const courriel = (e) => String(e == null ? '' : e).trim().toLowerCase();
+
+  // Les sept registres de persistance (voir keys.js). Chacun est une Map de
+  // partitions, dont chaque partition est elle-même une Map indexée par la CLÉ
+  // DE TRI — pas un tableau : c'est la clé qui porte l'unicité côté DynamoDB,
+  // et l'adaptateur mémoire doit refuser exactement les mêmes doublons.
+  const consentJournal = new Map(); // courriel -> Map(sk -> événement)
+  const avis = new Map(); // sujet -> Map(sk -> avis en application)
+  const sujetJournal = new Map(); // sujet -> Map(sk -> événement)
+  const campagneDestinataires = new Map(); // campagneId -> Map(sk -> destinataire)
+  const clientOffres = new Map(); // courriel -> Map(sk -> pointeur d'offre)
+  const effacements = new Map(); // courriel -> { courriel, at }
+
+  // Une partition qui n'existe pas encore se lit vide — jamais `undefined`.
+  const partition = (registre, cle) => {
+    const k = String(cle);
+    if (!registre.has(k)) registre.set(k, new Map());
+    return registre.get(k);
+  };
+  const triees = (registre, cle) =>
+    [...(registre.get(String(cle)) || new Map()).entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  // Écriture unique : la seconde écriture de la même clé est REFUSÉE, elle
+  // n'écrase rien — miroir exact de `attribute_not_exists` côté DynamoDB.
+  const ajoutUnique = (registre, cle, sk, item) => {
+    const part = partition(registre, cle);
+    if (part.has(sk)) return false;
+    part.set(sk, item);
+    return true;
+  };
+  const borne = (limit, max) => {
+    const n = Number(limit);
+    return Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), max) : max;
+  };
+  // La projection d'état courant du consentement. Une seule écriture pour deux
+  // portes : `putEmailConsent` (l'état, écrit directement) et
+  // `appendConsentEvent` (le journal, qui rafraîchit l'index de lecture).
+  function majProjectionConsentement(email, consent) {
+    const item = {
+      email: courriel(email),
+      base: (consent && consent.base) || null,
+      at: (consent && consent.at) || null,
+      source: (consent && consent.source) || null,
+    };
+    consentements.set(item.email, item);
+    return item;
+  }
 
   // Notary console: declines (per notary+bid) and retained pointers (per notary).
   const declines = new Set(); // `${notaryId}#${bidId}`
@@ -261,6 +324,13 @@ function createMemoryRepo(seed = []) {
     async putUnsubscribe(email, at) {
       unsubscribed.add(String(email).trim().toLowerCase());
       return at || true;
+    },
+    // Le réabonnement. Sans cette porte, `putUnsubscribe` était irréversible :
+    // une personne qui redemandait à recevoir les avis restait supprimée pour
+    // toujours, et la LCAP n'interdit rien de tel — elle exige le retrait, pas
+    // son irrévocabilité. Effacer une adresse absente est un no-op.
+    async deleteUnsubscribe(email) {
+      unsubscribed.delete(String(email == null ? '' : email).trim().toLowerCase());
     },
     async isUnsubscribed(email) {
       return unsubscribed.has(String(email).trim().toLowerCase());
@@ -523,14 +593,7 @@ function createMemoryRepo(seed = []) {
       return c ? { ...c } : null;
     },
     async putEmailConsent(email, consent) {
-      const item = {
-        email: courriel(email),
-        base: (consent && consent.base) || null,
-        at: (consent && consent.at) || null,
-        source: (consent && consent.source) || null,
-      };
-      consentements.set(item.email, item);
-      return { ...item };
+      return { ...majProjectionConsentement(email, consent) };
     },
 
     // Art. 56 1° — le registre qui donne sa force au plafond de fréquence. UN
@@ -557,6 +620,177 @@ function createMemoryRepo(seed = []) {
         out[clean] = c ? c.at : null;
       }
       return out;
+    },
+
+    // --- Registre de consentement (Loi 25 / LCAP) ---------------------------
+    // Le JOURNAL est la vérité, la projection d'état courant est un index de
+    // lecture. Écriture unique par (adresse, instant, id) : un rejeu ne réécrit
+    // pas un consentement déjà donné — miroir de la ConditionExpression dynamo.
+    async appendConsentEvent(evenement = {}) {
+      const adresse = courriel(evenement.courriel);
+      const at = evenement.at || null;
+      const id = evenement.id == null ? randomUUID() : String(evenement.id);
+      const item = {
+        id,
+        courriel: adresse,
+        audience: evenement.audience || null,
+        type: evenement.type || null,
+        base: evenement.base || null,
+        version: evenement.version || null,
+        source: evenement.source || null,
+        ip: evenement.ip || null,
+        lang: evenement.lang || null,
+        at,
+      };
+      if (!ajoutUnique(consentJournal, adresse, consentJournalSK(at, id), item)) return false;
+      // La projection suit le DERNIER événement : `segments.js` la lit sans
+      // jamais connaître le journal.
+      majProjectionConsentement(adresse, { base: item.base, at: item.at, source: item.source });
+      return true;
+    },
+    // Du plus ancien au plus récent : une chaîne de preuve se lit dans l'ordre.
+    async listConsentEvents(email) {
+      return triees(consentJournal, courriel(email)).map(([, e]) => ({ ...e }));
+    },
+
+    // --- Avis en application ------------------------------------------------
+    // Le sujet est déjà dérivé par l'appelant (keys.notaryNotifSubject /
+    // keys.clientNotifSubject) : le dépôt ne voit jamais un jeton porteur.
+    async appendNotification(avisNeuf = {}) {
+      const sujet = String(avisNeuf.sujet || '');
+      const at = avisNeuf.at || null;
+      const id = avisNeuf.id == null ? randomUUID() : String(avisNeuf.id);
+      const item = {
+        id,
+        sujet,
+        audience: avisNeuf.audience || null,
+        kind: avisNeuf.kind || null,
+        titre: avisNeuf.titre || null,
+        corps: avisNeuf.corps || null,
+        lien: avisNeuf.lien || null,
+        refId: avisNeuf.refId || null,
+        at,
+        luLe: avisNeuf.luLe || null,
+        ttl: avisNeuf.ttl == null ? notifTtl(at) : avisNeuf.ttl,
+      };
+      return ajoutUnique(avis, sujet, notifSK(at, id), item);
+    },
+    // Les plus récentes d'abord, bornées. `depuis` est INCLUSIF : « tout ce qui
+    // s'est passé à partir de cet instant » — la clé de tri commence par
+    // l'instant, donc la comparaison de chaînes suffit, ici comme en dynamo.
+    async listNotifications(sujet, { limit, depuis } = {}) {
+      const rows = triees(avis, sujet).filter(([sk]) => (depuis ? sk >= String(depuis) : true));
+      return rows
+        .reverse()
+        .slice(0, borne(limit, NOTIF_PAGE_MAX))
+        .map(([, a]) => ({ ...a }));
+    },
+    // `ids` : un tableau d'identifiants, ou 'toutes'. Ne touche QUE le non-lu —
+    // un avis déjà lu garde son instant de lecture, et n'est pas recompté.
+    async markNotificationsRead(sujet, ids, at) {
+      const cible = ids === 'toutes' || ids === 'all' || ids == null
+        ? null
+        : new Set((Array.isArray(ids) ? ids : [ids]).map(String));
+      let marques = 0;
+      for (const [, a] of triees(avis, sujet)) {
+        if (a.luLe) continue;
+        if (cible && !cible.has(String(a.id))) continue;
+        a.luLe = at || null;
+        marques += 1;
+      }
+      return marques;
+    },
+
+    // --- Journal par sujet --------------------------------------------------
+    async appendSubjectEvent(evenement = {}) {
+      const sujet = String(evenement.sujet || '');
+      const at = evenement.at || null;
+      const id = evenement.id == null ? randomUUID() : String(evenement.id);
+      const item = {
+        id,
+        sujet,
+        kind: evenement.kind || null,
+        templateKey: evenement.templateKey || null,
+        refId: evenement.refId || null,
+        at,
+        messageId: evenement.messageId || null,
+      };
+      return ajoutUnique(sujetJournal, sujet, subjectJournalSK(at, id), item);
+    },
+    // Les plus récents d'abord : la question posée est « qu'a-t-on envoyé à
+    // cette personne dernièrement », et une limite n'a de sens que par ce bout.
+    async listSubjectEvents(sujet, { limit } = {}) {
+      return triees(sujetJournal, sujet)
+        .reverse()
+        .slice(0, borne(limit, SUBJECT_PAGE_MAX))
+        .map(([, e]) => ({ ...e }));
+    },
+
+    // --- Registre des destinataires d'une campagne --------------------------
+    // L'HISTOIRE, pas l'état : `markCampaignSent` garde la dernière date par
+    // adresse (plafond de fréquence, art. 56 1°), celui-ci garde la ligne.
+    async appendCampaignRecipient(ligne = {}) {
+      const campagneId = String(ligne.campagneId == null ? '' : ligne.campagneId).trim();
+      campaignRecipientsPK(campagneId); // refuse l'identifiant réservé, comme la clé dynamo
+      const adresse = courriel(ligne.courriel);
+      const item = {
+        campagneId,
+        courriel: adresse,
+        templateKey: ligne.templateKey || null,
+        nature: ligne.nature || null,
+        at: ligne.at || null,
+        statut: ligne.statut || null,
+        erreur: ligne.erreur || null,
+      };
+      return ajoutUnique(campagneDestinataires, campagneId, campaignRecipientSK(adresse), item);
+    },
+    // Page bornée + curseur opaque : une campagne de masse ne rentre pas dans
+    // la mémoire d'une Lambda, et le curseur doit survivre à un aller-retour
+    // HTTP — d'où la même chaîne encodée que côté dynamo.
+    async listCampaignRecipients(campagneId, { limit, cursor } = {}) {
+      campaignRecipientsPK(campagneId); // même refus de l'identifiant réservé qu'en dynamo
+      const rows = triees(campagneDestinataires, String(campagneId));
+      const reprise = decodeCursor(cursor);
+      const debut = reprise && reprise.SK ? rows.findIndex(([sk]) => sk === reprise.SK) + 1 : 0;
+      const taille = borne(limit, CAMPAIGN_PAGE_MAX);
+      const page = rows.slice(debut, debut + taille);
+      const reste = rows.length > debut + page.length;
+      return {
+        destinataires: page.map(([, d]) => ({ ...d })),
+        cursor: reste && page.length ? encodeCursor({ SK: page[page.length - 1][0] }) : null,
+      };
+    },
+
+    // --- Index client -------------------------------------------------------
+    // Un pointeur, pas un journal : la clé porte déjà l'unicité, donc une
+    // réindexation est la même ligne réécrite. Le ttl est celui de l'offre
+    // indexée — l'appelant le passe s'il l'a, sinon il se recalcule de la date.
+    async indexClientBid({ courriel: adresse, bidId, dateISO, at, ttl } = {}) {
+      const clean = courriel(adresse);
+      const item = {
+        courriel: clean,
+        bidId: String(bidId),
+        dateISO: String(dateISO),
+        at: at || null,
+        ttl: ttl == null ? bidTtl(dateISO) : ttl,
+      };
+      partition(clientOffres, clean).set(clientBidSK(item.dateISO, item.bidId), item);
+      return { ...item };
+    },
+    // Chronologique : la date mène la clé de tri.
+    async listClientBids(email) {
+      return triees(clientOffres, courriel(email)).map(([, o]) => ({ ...o }));
+    },
+
+    // --- Marque d'effacement (Loi 25, art. 28) ------------------------------
+    async putErasure(email, at) {
+      const item = { courriel: courriel(email), at: at || null };
+      effacements.set(item.courriel, item);
+      return { ...item };
+    },
+    async getErasure(email) {
+      const e = effacements.get(courriel(email));
+      return e ? { ...e } : null;
     },
 
     // --- Admin login challenges (single-use magic links) --------------------

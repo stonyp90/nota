@@ -1,5 +1,7 @@
 'use strict';
 
+const { createHash } = require('node:crypto');
+
 /**
  * Single-table key design.
  *
@@ -349,6 +351,178 @@ function campaignLogSK(email) {
   return 'EMAIL#' + normalizedEmail(email);
 }
 
+// --- Registre de CONSENTEMENT (Loi 25, LCAP) ----------------------------------
+// La partition CONSENT#COURRIEL juste au-dessus porte l'ÉTAT COURANT : un item
+// par adresse, écrasé. Un état écrasé ne prouve rien — or l'art. 13 LCAP met la
+// preuve du consentement à la charge de l'expéditeur, et la Loi 25 (art. 8, 12)
+// exige de pouvoir dire à quoi la personne a consenti, QUAND, et sur quelle
+// version du texte. D'où un JOURNAL append-only, une partition par personne :
+//
+//   PK = CONSENT#<courriel minuscule>   SK = <at>#<id>
+//
+// L'instant mène la clé de tri, donc l'ordre lexical EST l'ordre chronologique
+// et la chaîne se relit d'un bout à l'autre par une seule Query ; `<id>` garde
+// distincts deux événements du même instant. L'écriture est conditionnelle
+// (attribute_not_exists), comme les écrivains d'audit : un rejeu ne réécrit
+// jamais un consentement déjà donné.
+//
+// Les deux partitions ne peuvent pas se confondre : celle de l'état courant est
+// le littéral MAJUSCULE `CONSENT#COURRIEL`, celles du journal sont des adresses
+// minuscules — et une adresse contient toujours un « @ ».
+function consentJournalPK(email) {
+  return 'CONSENT#' + normalizedEmail(email);
+}
+function consentJournalSK(at, id) {
+  return `${at}#${id}`;
+}
+
+// --- Avis EN APPLICATION (le carnet et la console notaire) ---------------------
+// Un avis par item, rangé sous son destinataire, l'instant en tête du tri :
+//
+//   PK = NOTIF#<sujet>   SK = <at>#<id>
+//
+// Le SUJET d'un notaire est son courriel : il a un compte, une identité stable.
+// Un client n'en a pas — il ne possède qu'un jeton porteur, remis une fois à la
+// publication de son offre. Ce jeton est un SECRET : le ranger tel quel dans une
+// clé de partition le rendrait lisible dans un export, un journal de requêtes
+// lentes ou une sauvegarde, et quiconque le lit devient ce client. Le sujet est
+// donc le HACHÉ du jeton — déterministe (le même porteur retrouve ses avis),
+// irréversible (la table ne contient rien qui permette de rejouer le jeton).
+function notifPK(sujet) {
+  return 'NOTIF#' + String(sujet);
+}
+function notifSK(at, id) {
+  return `${at}#${id}`;
+}
+function notaryNotifSubject(email) {
+  return normalizedEmail(email);
+}
+function clientNotifSubject(jeton) {
+  return 'client:' + createHash('sha256').update(String(jeton == null ? '' : jeton)).digest('hex');
+}
+
+// --- Journal PAR SUJET : ce qui est parti vers cette personne -------------------
+//
+//   PK = SUJET#<sujet>   SK = <at>#<id>
+//
+// Le registre `SENT#<refId>#<kind>` répond « ce courriel-là est-il déjà parti ? »
+// (idempotence) ; il est rangé par ÉVÉNEMENT, donc il ne peut pas répondre à la
+// question inverse — « qu'a-t-on envoyé à cette personne ? » — que la Loi 25
+// (art. 27, droit d'accès) rend un jour obligatoire. Même dessin que le journal
+// de consentement : append-only, instant en tête du tri, une Query par personne.
+function subjectJournalPK(sujet) {
+  return 'SUJET#' + String(sujet);
+}
+function subjectJournalSK(at, id) {
+  return `${at}#${id}`;
+}
+
+// --- Registre des DESTINATAIRES d'une campagne ---------------------------------
+//
+//   PK = CAMPAGNE#<campagneId>   SK = EMAIL#<courriel minuscule>
+//
+// À ne pas confondre avec `CAMPAGNE#ENVOIS` (plus haut) : celui-là est l'ÉTAT —
+// un item par adresse, écrasé, qui porte le plafond de fréquence de l'art. 56 1°
+// C.déont. Celui-ci est l'HISTOIRE : qui a reçu quoi, dans quelle campagne, avec
+// quel résultat. Une ligne par (campagne, adresse), écrite une seule fois — le
+// rejeu d'un envoi ne doit pas repeindre un « refusé » en « envoyé ».
+//
+// La partition étant nommée par l'identifiant de campagne, un identifiant qui
+// vaudrait `ENVOIS` viserait la partition du plafond de fréquence et écraserait
+// la dernière date d'envoi de chaque destinataire. La clé refuse plutôt que de
+// corrompre : c'est le seul identifiant réservé du schéma.
+const CAMPAIGN_ID_RESERVE = 'ENVOIS';
+function campaignRecipientsPK(campagneId) {
+  const id = String(campagneId == null ? '' : campagneId).trim();
+  if (id.toUpperCase() === CAMPAIGN_ID_RESERVE) {
+    throw new Error(`campaignRecipientsPK: « ${CAMPAIGN_ID_RESERVE} » est réservé au registre de fréquence`);
+  }
+  return 'CAMPAGNE#' + id;
+}
+function campaignRecipientSK(email) {
+  return 'EMAIL#' + normalizedEmail(email);
+}
+
+// --- Index CLIENT : retrouver une personne par son adresse ---------------------
+//
+//   PK = CLIENT#<courriel minuscule>   SK = BID#<dateISO>#<bidId>
+//
+// Les offres se rangent par MOIS (MONTH#YYYY-MM) : c'est ce que le carnet lit.
+// Personne, donc, ne peut répondre « quelles offres cette personne a-t-elle
+// posées ? » sans parcourir tous les mois — c'est-à-dire un Scan, que le rôle
+// IAM refuse. Ce pointeur, écrit à la publication, rend la personne trouvable
+// par une Query. C'est aussi ce qui rend une demande d'accès ou d'effacement
+// (Loi 25, art. 27 et 28) exécutable.
+//
+// Ce n'est PAS un journal : sa clé porte déjà l'unicité, une réindexation est
+// la même ligne réécrite. La date mène la clé de tri, donc la lecture est
+// chronologique sans tri côté client.
+function clientIndexPK(email) {
+  return 'CLIENT#' + normalizedEmail(email);
+}
+function clientBidSK(dateISO, bidId) {
+  return `BID#${dateISO}#${bidId}`;
+}
+const CLIENT_BID_PREFIX = 'BID#';
+
+// --- Marque d'EFFACEMENT (Loi 25, art. 28) -------------------------------------
+// Un effacement demandé est un fait à conserver : sans marque, rien ne distingue
+// « nous avons effacé cette personne » de « nous ne l'avons jamais connue », et
+// une réimportation la ferait revenir. Un item, adressé par sa clé.
+//
+//   PK = ERASURE#<courriel minuscule>   SK = ERASURE
+function erasurePK(email) {
+  return 'ERASURE#' + normalizedEmail(email);
+}
+const ERASURE_SK = 'ERASURE';
+
+// --- Rétentions et bornes de lecture, partagées par les DEUX adaptateurs --------
+// Elles vivent ici parce que `repo-memory` et `repo-dynamo` doivent s'accorder
+// au chiffre près : une borne recopiée des deux côtés finit par diverger, et la
+// divergence ne se voit qu'en production.
+//
+// Un pointeur d'index doit mourir avec ce qu'il indexe — un index qui survit à
+// l'offre pointe dans le vide, un index qui meurt avant la rend introuvable.
+// C'est la MÊME rétention que le ttl de l'offre (apps/api/src/handler.js).
+const BID_RETENTION_DAYS = 400;
+function bidTtl(dateISO) {
+  const ms = Date.parse(String(dateISO) + 'T00:00:00Z');
+  return Number.isFinite(ms) ? Math.floor(ms / 1000) + BID_RETENTION_DAYS * 86400 : null;
+}
+
+// Un avis en application est une copie de courtoisie d'un fait qui vit ailleurs
+// (l'offre, l'acte, le fil de messages) : il n'a pas à survivre à la saison où
+// il servait. Minimisation (Loi 25, art. 3.2) plutôt que conservation par défaut.
+const NOTIF_RETENTION_DAYS = 180;
+function notifTtl(atISO) {
+  const ms = Date.parse(String(atISO));
+  return Number.isFinite(ms) ? Math.floor(ms / 1000) + NOTIF_RETENTION_DAYS * 86400 : null;
+}
+
+// Plafonds de page. Une lecture non bornée finit par ramener une partition
+// entière dans la mémoire d'une Lambda ; ces trois nombres sont la borne dure.
+const NOTIF_PAGE_MAX = 50;
+const SUBJECT_PAGE_MAX = 50;
+const CAMPAIGN_PAGE_MAX = 100;
+
+// Un curseur de page voyage : il sort du dépôt, traverse une réponse HTTP et
+// revient. Il doit donc être une CHAÎNE opaque, identique en forme d'un
+// adaptateur à l'autre — pas un `LastEvaluatedKey` DynamoDB nu, qui fuiterait
+// la forme des clés et ne survivrait pas à l'adaptateur mémoire. Un curseur
+// illisible se lit `null` : une page repart du début plutôt que de lever.
+function encodeCursor(clef) {
+  return clef ? Buffer.from(JSON.stringify(clef), 'utf8').toString('base64') : null;
+}
+function decodeCursor(curseur) {
+  if (!curseur) return null;
+  try {
+    const clef = JSON.parse(Buffer.from(String(curseur), 'base64').toString('utf8'));
+    return clef && typeof clef === 'object' ? clef : null;
+  } catch {
+    return null;
+  }
+}
+
 // --- Admin table (admin.nota.ca) ---------------------------------------------
 // Identity, revocable sessions, single-use magic-link challenges, the immutable
 // audit log and rate-limit counters live in a SEPARATE `nota-admin` table, so
@@ -510,6 +684,38 @@ module.exports = {
   emailConsentSK,
   campaignLogPK,
   campaignLogSK,
+  // registre de consentement (Loi 25 / LCAP)
+  consentJournalPK,
+  consentJournalSK,
+  // avis en application
+  notifPK,
+  notifSK,
+  notaryNotifSubject,
+  clientNotifSubject,
+  // journal par sujet
+  subjectJournalPK,
+  subjectJournalSK,
+  // destinataires d'une campagne
+  CAMPAIGN_ID_RESERVE,
+  campaignRecipientsPK,
+  campaignRecipientSK,
+  // index client
+  clientIndexPK,
+  clientBidSK,
+  CLIENT_BID_PREFIX,
+  // marque d'effacement (Loi 25)
+  erasurePK,
+  ERASURE_SK,
+  // rétentions et bornes partagées par les deux adaptateurs
+  BID_RETENTION_DAYS,
+  bidTtl,
+  NOTIF_RETENTION_DAYS,
+  notifTtl,
+  NOTIF_PAGE_MAX,
+  SUBJECT_PAGE_MAX,
+  CAMPAIGN_PAGE_MAX,
+  encodeCursor,
+  decodeCursor,
   // admin table
   adminPK,
   ADMIN_SK,
