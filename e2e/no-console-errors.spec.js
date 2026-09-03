@@ -26,8 +26,15 @@ test('home and booking load with no severe console errors or failed requests', a
   // Record the carnet feed status as it arrives (registering a listener up front
   // avoids racing the fetch that gotoHome already waits on).
   let bidsStatus = null;
+  // Requests that DID get a 2xx: Chromium reports a bodiless 204 to a fetch
+  // (the funnel beacon, POST /events) as `requestfailed` / net::ERR_ABORTED
+  // right after the response has arrived — the promise resolved with 204, the
+  // server counted the step, nothing failed. Only a request that never got a
+  // response is a failed request.
+  const answered = new WeakSet();
   page.on('response', (resp) => {
     const url = resp.url();
+    if (resp.status() < 300) answered.add(resp.request());
     if (/\/bids\?month=/.test(url)) bidsStatus = resp.status();
     // A same-origin 5xx is a real server fault; 4xx here would be an app bug too.
     if (isLocal(url) && resp.status() >= 500) badResponses.push(`${resp.status()} ${url}`);
@@ -44,6 +51,7 @@ test('home and booking load with no severe console errors or failed requests', a
   page.on('pageerror', (err) => pageErrors.push(String(err && err.message || err)));
   page.on('requestfailed', (req) => {
     if (!isLocal(req.url())) return; // external font/resource failures are not ours
+    if (answered.has(req)) return; // a 2xx already landed — see `answered` above
     failedRequests.push(`${req.method()} ${req.url()} — ${req.failure() && req.failure().errorText}`);
   });
 

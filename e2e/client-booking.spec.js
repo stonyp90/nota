@@ -54,10 +54,17 @@ test('a client publishes a financing offer end to end', async ({ page }) => {
   await sheet.locator('#crit-preteur').selectOption('banque_nationale');
   await sheet.locator('#crit-deplacement').selectOption('client_50');
 
-  // The REQUIRED postal sector (domain: prefixe_requis) — the last gate.
+  // The REQUIRED postal sector (domain: prefixe_requis).
   const submit = sheet.locator('#offer-submit');
   await expect(submit).toBeDisabled();
   await sheet.locator('#o-prefix').fill('G1R');
+
+  // ADR 0033 — the mise en relation is complete: the retaining notary must be
+  // able to name and write to the client, so the name and the courriel are
+  // the last gate. Both stay private (never on the carnet).
+  await expect(submit).toBeDisabled();
+  await sheet.locator('#o-name').fill('Prénom Nom');
+  await sheet.locator('#o-courriel').fill('client@exemple.ca');
 
   // Step 3 — the offer is pre-filled to a valid amount within the act's range.
   await expect(submit).toBeEnabled();

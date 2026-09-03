@@ -105,10 +105,15 @@ async function boot({ url = '', seed = {}, routes = [], beacon = true, fetchThro
   return { win, doc: win.document, Nota: win.Nota, D: win.NotaDomain, calls, beacons, dom };
 }
 
-// The funnel ids a page sent, in order (beacon bodies decoded).
-async function sentEvents(win, beacons) {
+// The funnel ids a page sent, in order — every keepalive POST to /events.
+// (sendBeacon is deliberately NOT the transport: it always carries
+// credentials, which the API's wildcard CORS origin refuses — see track().)
+async function sentEvents(win, beacons, calls) {
   const out = [];
   for (const b of beacons) out.push(JSON.parse(await blobText(win, b.body)));
+  for (const c of calls || []) {
+    if (c.url.endsWith('/events') && c.init.method === 'POST') out.push(JSON.parse(c.init.body));
+  }
   return out;
 }
 
@@ -305,12 +310,17 @@ test('the expectation copy is translated, courriel included', () => {
 // ---------------------------------------------------------------------------
 // 5. Funnel beacons
 // ---------------------------------------------------------------------------
-test('one « visite » per page load, as a sendBeacon to /events with only the event id', async () => {
-  const { win, beacons, D, dom } = await boot();
-  const ev = await sentEvents(win, beacons);
+test('one « visite » per page load, as a credential-less keepalive POST to /events with only the event id', async () => {
+  const { win, beacons, calls, D, dom } = await boot();
+  const ev = await sentEvents(win, beacons, calls);
   assert.deepEqual(ev.map((e) => e.event), ['visite']);
   assert.deepEqual(Object.keys(ev[0]), ['event'], 'no identifier, no extra field');
-  assert.ok(beacons[0].url.endsWith('/events'), beacons[0].url);
+  const post = calls.find((c) => c.url.endsWith('/events'));
+  assert.ok(post, 'the event went by fetch');
+  assert.equal(post.init.keepalive, true, 'survives a page unload');
+  assert.equal(post.init.credentials, 'omit', 'never carries credentials (a wildcard CORS origin refuses them)');
+  assert.equal(post.init.headers['content-type'], 'text/plain', 'a simple request: no preflight to abort on unload');
+  assert.equal(beacons.length, 0, 'sendBeacon is never used — it always sends credentials');
   assert.ok(D.isFunnelEvent('visite'));
   // Nothing is remembered about the visitor for it.
   assert.ok(!Object.keys(win.localStorage).some((k) => /event|funnel|visite/i.test(k)), 'nothing stored');
@@ -318,10 +328,10 @@ test('one « visite » per page load, as a sendBeacon to /events with only the e
 });
 
 test('opening a day, touching the form, the notary door and the Checkout return each beacon once', async () => {
-  const { win, doc, beacons, Nota, D, dom } = await boot();
+  const { win, doc, beacons, calls, Nota, D, dom } = await boot();
   $(doc, 'cta-reserver').click();
   await wait(60);
-  let ev = (await sentEvents(win, beacons)).map((e) => e.event);
+  let ev = (await sentEvents(win, beacons, calls)).map((e) => e.event);
   assert.deepEqual(ev, ['visite', 'jour_ouvert']);
 
   // The first input in the form, once per opening — a second input is silent.
@@ -330,7 +340,7 @@ test('opening a day, touching the form, the notary door and the Checkout return 
   fire(win, lv, 'input');
   fire(win, lv, 'input');
   fire(win, $(doc, 'o-service'), 'change');
-  ev = (await sentEvents(win, beacons)).map((e) => e.event);
+  ev = (await sentEvents(win, beacons, calls)).map((e) => e.event);
   assert.deepEqual(ev, ['visite', 'jour_ouvert', 'formulaire']);
 
   // Reopening a day starts a new « formulaire » window.
@@ -339,13 +349,13 @@ test('opening a day, touching the form, the notary door and the Checkout return 
   await wait(40);
   // The criteria re-render on open: touch the LIVE input, not a detached node.
   fire(win, $(doc, 'crit-valeur_pret') || doc.querySelector('#offer-form input:not([type=hidden])'), 'input');
-  ev = (await sentEvents(win, beacons)).map((e) => e.event);
+  ev = (await sentEvents(win, beacons, calls)).map((e) => e.event);
   assert.deepEqual(ev, ['visite', 'jour_ouvert', 'formulaire', 'jour_ouvert', 'formulaire']);
 
   Nota.setTab('notaires');
   Nota.setTab('carnet');
   Nota.setTab('notaires');
-  ev = (await sentEvents(win, beacons)).map((e) => e.event);
+  ev = (await sentEvents(win, beacons, calls)).map((e) => e.event);
   assert.equal(ev.filter((e) => e === 'notaire_porte').length, 1, 'the notary door counts once per load');
 
   for (const e of ev) assert.ok(D.isFunnelEvent(e), 'unknown funnel id sent: ' + e);
@@ -355,16 +365,16 @@ test('opening a day, touching the form, the notary door and the Checkout return 
 
 test('the Checkout return beacons paiement_ok / paiement_annule', async () => {
   const ok = await boot({ url: '?paiement=ok' });
-  assert.ok((await sentEvents(ok.win, ok.beacons)).some((e) => e.event === 'paiement_ok'));
+  assert.ok((await sentEvents(ok.win, ok.beacons, ok.calls)).some((e) => e.event === 'paiement_ok'));
   ok.dom.window.close();
   const ko = await boot({ url: '?paiement=annule' });
-  const ev = (await sentEvents(ko.win, ko.beacons)).map((e) => e.event);
+  const ev = (await sentEvents(ko.win, ko.beacons, ko.calls)).map((e) => e.event);
   assert.ok(ev.includes('paiement_annule'));
   assert.ok(!ev.includes('paiement_ok'));
   ko.dom.window.close();
 });
 
-test('without sendBeacon the event goes by keepalive POST; a broken transport never throws', async () => {
+test('the event goes by keepalive POST even without sendBeacon; a broken transport never throws', async () => {
   const { calls, dom } = await boot({ beacon: false });
   const post = calls.find((c) => c.url.endsWith('/events'));
   assert.ok(post, 'fetch fallback used');

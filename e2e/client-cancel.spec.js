@@ -32,9 +32,10 @@ test('a client cancels their published offer end to end', async ({ page }) => {
   await sheet.locator('#crit-deplacement').selectOption('client_50');
   await sheet.locator('#o-prefix').fill('G1R'); // REQUIRED postal sector
 
-  // The account bell is signed-in only: give a courriel so the publish signs
-  // this device in as a client — the cancel journey then runs from the bell.
-  await sheet.locator('.book-options summary').click();
+  // ADR 0033 — name and courriel are required at publish (the retaining
+  // notary must reach the client). The courriel also signs this device in as
+  // a client, so the cancel journey then runs from the bell.
+  await sheet.locator('#o-name').fill('Prénom Nom');
   await sheet.locator('#o-courriel').fill('client@exemple.ca');
 
   const submit = sheet.locator('#offer-submit');

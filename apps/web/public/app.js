@@ -1220,18 +1220,22 @@
   // Funnel beacon — one step of the conversion funnel, nothing else. The
   // catalogue is the domain's (D.FUNNEL_EVENTS): anything outside it is dropped
   // here before it reaches the wire. The body is the bare event id — no
-  // identifier, no session, nothing stored on the device. sendBeacon survives
-  // a page unload; the keepalive POST is the fallback. Never throws, never
-  // blocks: a dead analytics endpoint must not cost the client a single frame.
+  // identifier, no session, nothing stored on the device. A keepalive POST
+  // survives a page unload the way sendBeacon does — and NOT sendBeacon: it
+  // always sends credentials, which a wildcard CORS origin refuses, so on any
+  // cross-origin layout (local dev, e2e) every step was silently blocked
+  // (caught by e2e/no-console-errors 2026-09-03). `credentials: 'omit'` is the
+  // truth of the call: there is no cookie to carry. The body travels as
+  // text/plain on purpose: a "simple" request needs no preflight, and a
+  // keepalive request that needs one does not outlive the page — the API
+  // parses the JSON whatever the declared type. Never throws, never blocks: a
+  // dead analytics endpoint must not cost the client a single frame.
   function track(eventId) {
     try {
       if (!D.isFunnelEvent(eventId)) return;
       var url = API_BASE + '/events';
       var body = JSON.stringify({ event: eventId });
-      if (navigator && typeof navigator.sendBeacon === 'function') {
-        if (navigator.sendBeacon(url, new Blob([body], { type: 'application/json' }))) return;
-      }
-      var p = fetch(url, { method: 'POST', keepalive: true, headers: { 'content-type': 'application/json' }, body: body });
+      var p = fetch(url, { method: 'POST', keepalive: true, credentials: 'omit', headers: { 'content-type': 'text/plain' }, body: body });
       if (p && typeof p.catch === 'function') p.catch(function () {});
     } catch (e) { /* analytics never breaks the page */ }
   }
