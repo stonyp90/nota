@@ -8,9 +8,15 @@
 # GATING (defence in depth):
 #   1. Triggers only via manual dispatch OR pushes to main that touch the admin
 #      SPA / shared api bundle (path filter below).
-#   2. The deploy job runs in the PROTECTED GitHub Environment "admin-production"
-#      (configure REQUIRED REVIEWERS on it in repo Settings -> Environments), so
-#      every admin deploy needs a human approval before it runs.
+#   2. The deploy job runs in the GitHub Environment "admin-production". That
+#      environment currently has NO required reviewers — verified 2026-09-03 via
+#      `gh api repos/stonyp90/nota/environments` (protection_rules: []) — so an
+#      admin deploy ships WITHOUT a human approval. This is the owner's explicit
+#      choice (2026-09-03): everything that lands on main goes to production.
+#      The environment still earns its keep: it is what the OIDC role's trust
+#      policy binds to (point 3). To require an approval later, add yourself as
+#      a required reviewer in repo Settings -> Environments -> admin-production;
+#      no workflow change is needed, and this comment must then be updated.
 #   3. The AWS role it assumes (ADMIN_DEPLOY_ROLE_ARN) is a dedicated
 #      least-privilege OIDC role whose trust policy only accepts the
 #      "admin-production" environment (see aws_iam_role.admin_github_deploy).
@@ -85,8 +91,9 @@ jobs:
     needs: test
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    # PROTECTED environment: requires human approval (configure required
-    # reviewers in repo Settings -> Environments -> admin-production).
+    # The environment the OIDC trust policy binds to (infra/admin.tf: the role
+    # only accepts `...:environment:admin-production`). It carries NO required
+    # reviewer today — see the GATING note at the top of this file.
     environment: admin-production
     steps:
       - uses: actions/checkout@v4
