@@ -133,7 +133,7 @@ test('le registre est trié par cote décroissante — le tableau d’honneur es
   assert.deepEqual(body.notaires.map((n) => n.id), ['fort', 'faible']);
 });
 
-test('le journal d’audit se relit par jour — et seulement avec pii:read', async () => {
+test('le journal d’audit se relit par jour — et pas avec le simple jeton d’analyste', async () => {
   const h = make();
   const analyste = await loginAnalyste(h);
   assert.equal((await h.call('GET', '/admin/audit', { bearer: analyste, query: { jour: '2026-08-12' } })).statusCode, 403);
@@ -153,6 +153,34 @@ test('le journal d’audit se relit par jour — et seulement avec pii:read', as
 
   const mauvais = await h.call('GET', '/admin/audit', { bearer: session, query: { jour: 'hier' } });
   assert.equal(mauvais.statusCode, 422);
+});
+
+test('un auditeur dédié lit le journal avec audit:read SEUL — sans détenir tout le PII', async () => {
+  // Le moindre privilège, vérifié plutôt qu'annoncé : `audit:read` et
+  // `pii:read` sont deux capacités distinctes, et la première doit s'ouvrir
+  // sans la seconde. Sans ce test, le catalogue pourrait publier une clé que
+  // personne n'exerce jamais — c'était exactement l'écart trouvé le 2026-09-03,
+  // où le commentaire de la route et l'OpenAPI annonçaient encore `pii:read`.
+  const h = make();
+  // Un analyste — donc SANS 'pii:read' — à qui l'opérateur a ouvert la seule
+  // capacité d'audit, en accord direct.
+  const email = 'analyst@nota.ca';
+  await h.repo.putAdmin({
+    id: authDefaults.adminIdForEmail(email), email, role: 'analyst',
+    permissions: ['audit:read'], disabled: false, createdAt: NOW_ISO,
+  });
+  const session = await login2(h, email);
+
+  await h.repo.appendTxAudit({ id: 'tx9', ts: '2026-08-12T19:00:00.000Z', day: '2026-08-12', action: 'document_lu', meta: { bidId: 'b1' } });
+
+  const res = await h.call('GET', '/admin/audit', { bearer: session, query: { jour: '2026-08-12' } });
+  assert.equal(res.statusCode, 200, 'audit:read suffit : ' + res.body);
+  assert.deepEqual(parse(res).entrees.map((e) => e.id), ['tx9']);
+
+  // Et la porte nominative, elle, reste fermée : la capacité accordée est
+  // bornée à ce qu'elle nomme.
+  assert.equal((await h.call('GET', '/admin/notaries', { bearer: session })).statusCode, 403,
+    'lire le journal n’ouvre pas le bottin nominatif');
 });
 
 test('le journal fusionne les deux sources — gestes d’administration ET mouvements d’argent', async () => {

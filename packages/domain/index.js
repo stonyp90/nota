@@ -893,6 +893,30 @@
     return fmt.format(at == null ? new Date() : new Date(at));
   }
 
+  // --- Conservation du journal d'audit ---------------------------------------
+  // `docs/legal/politique-conservation-des-donnees.md` §1 : « Journal d'audit
+  // administratif — 7 ans — preuve d'imputabilité ». La Loi 25 exige une
+  // conservation BORNÉE : un journal qu'on ne détruit jamais n'est pas plus
+  // conforme qu'un journal absent, et sept ans est le délai que la politique
+  // nomme. La durée est donc une règle d'affaires, définie ici une seule fois ;
+  // les deux adaptateurs de dépôt (mémoire, DynamoDB) la posent en `ttl` sur
+  // chaque entrée d'audit à l'écriture.
+  const AUDIT_RETENTION_YEARS = 7;
+
+  // L'échéance d'une entrée écrite à l'instant `atMs`, en SECONDES epoch —
+  // l'unité que le TTL DynamoDB attend. Le calcul est CALENDAIRE (sept fois
+  // « même jour, année suivante ») et non un compte de jours : 7 × 365 jours
+  // expirerait deux jours trop tôt à cause des années bissextiles, et sur une
+  // borne de preuve, arrondir vers le bas est la seule erreur qui coûte cher.
+  // Un instant illisible rend `null` — aucune expiration vaut mieux qu'une
+  // expiration fausse, qui effacerait une preuve au hasard.
+  function auditRetentionTtl(atMs) {
+    const d = new Date(atMs == null ? NaN : atMs);
+    if (!isFinite(d.getTime())) return null;
+    d.setUTCFullYear(d.getUTCFullYear() + AUDIT_RETENTION_YEARS);
+    return Math.floor(d.getTime() / 1000);
+  }
+
   // --- Offer validation ------------------------------------------------------
   // The one function the API must call before persisting anything. Returns the
   // derived tier and premium so the caller never recomputes them, and a list of
@@ -2438,6 +2462,8 @@
     addDays,
     BUSINESS_TIMEZONE,
     businessDay,
+    AUDIT_RETENTION_YEARS,
+    auditRetentionTtl,
     validateOffer,
     validateCounterOffer,
     suggestedCounterOffer,

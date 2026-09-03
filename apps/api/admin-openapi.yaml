@@ -1236,7 +1236,9 @@ paths:
         admin logins, barème changes, and every settled act (`acte_regle`, with
         the amount, the rate applied, the cote that earned it, Nota's share and
         the notary's net) — bucketed on the Québec business day. Requires
-        `pii:read` (super_admin); an analyst gets 403. Newest first.
+        `audit:read` — reading the trail and unmasking a client are two distinct
+        capabilities, and a dedicated auditor must be able to hold the first
+        without the second. Any principal without it gets 403. Newest first.
       security:
         - adminSession: []
       parameters:
@@ -1278,6 +1280,24 @@ paths:
                           type: [string, "null"]
                         ip:
                           type: [string, "null"]
+                        acteur:
+                          type: [object, "null"]
+                          description: >-
+                            Who acted. Absent on entries written before
+                            2026-09-03. `id` is the identifier the system
+                            already holds — the notary's derived id, the bid a
+                            client's dossier lives on, a partner's code — never
+                            an email address: the trail is kept for seven years
+                            and must stay minimal while remaining joinable to
+                            the registries.
+                          properties:
+                            type:
+                              type: string
+                              enum: [notaire, client, partenaire, systeme]
+                            id:
+                              type: [string, "null"]
+                            ip:
+                              type: [string, "null"]
                         meta:
                           type: [object, "null"]
         "401":

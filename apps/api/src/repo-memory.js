@@ -1,7 +1,7 @@
 'use strict';
 
 const { monthOf, STATS_GAUGE_PK, STATS_GAUGE_SK } = require('./keys');
-const { STATUS, normalizeReferralCode } = require('@nota/domain');
+const { STATUS, normalizeReferralCode, auditRetentionTtl } = require('@nota/domain');
 
 /**
  * In-memory implementation of the Repo port. Used by the test suite and by the
@@ -611,7 +611,17 @@ function createMemoryRepo(seed = []) {
       // nomme (le handler public le fait : un règlement du soir appartient à la
       // journée d'affaires en cours, pas au lendemain UTC) ; sinon, la date de
       // l'horodatage. L'instant, lui, reste toujours vrai.
-      audit.push({ ...entry, day: entry.day || String(entry.ts || '').slice(0, 10) });
+      //
+      // La borne de conservation (sept ans — politique §1) est posée ICI comme
+      // dans l'adaptateur DynamoDB : si elle ne vivait que là-bas, les tests
+      // mentiraient sur la production. Rien n'est posé quand l'appelant a déjà
+      // décidé, ni quand l'horodatage est illisible.
+      const ttl = entry.ttl != null ? entry.ttl : auditRetentionTtl(Date.parse(entry.ts || ''));
+      audit.push({
+        ...entry,
+        day: entry.day || String(entry.ts || '').slice(0, 10),
+        ...(ttl == null ? {} : { ttl }),
+      });
     },
     async queryAuditByDay(dayISO) {
       return audit.filter((e) => e.day === dayISO).map((e) => ({ ...e }));
