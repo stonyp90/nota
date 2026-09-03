@@ -431,6 +431,18 @@ function subjectJournalSK(at, id) {
 // vaudrait `ENVOIS` viserait la partition du plafond de fréquence et écraserait
 // la dernière date d'envoi de chaque destinataire. La clé refuse plutôt que de
 // corrompre : c'est le seul identifiant réservé du schéma.
+// AVANT DE BRANCHER CE REGISTRE, LIRE CECI. La partition est nommée par
+// l'identifiant de campagne, donc elle est NOUVELLE à chaque campagne — et la
+// porte d'écriture de la Lambda admin est bornée par `dynamodb:LeadingKeys`
+// (infra/admin.tf), une condition qui compare la clé de partition à une LISTE
+// DE VALEURS EXACTES. Aucune liste finie ne couvre des identifiants qu'on mint
+// à l'envoi : telle quelle, la console admin ne peut PAS écrire ici sans que
+// l'on élargisse sa permission à toute la table — c'est-à-dire sans défaire
+// l'isolement qui fait qu'elle ne peut pas toucher un item client. Deux issues,
+// et le chantier qui branchera tranchera : soit l'écriture part de la Lambda
+// PUBLIQUE (qui a déjà PutItem sur la table), soit la forme devient une
+// partition FIXE `CAMPAGNE#DESTINATAIRES` avec SK `<campagneId>#<courriel>`,
+// autorisable par LeadingKeys exactement comme AUDIENCE#GROUPES ci-dessus.
 const CAMPAIGN_ID_RESERVE = 'ENVOIS';
 function campaignRecipientsPK(campagneId) {
   const id = String(campagneId == null ? '' : campagneId).trim();
@@ -475,6 +487,14 @@ function erasurePK(email) {
   return 'ERASURE#' + normalizedEmail(email);
 }
 const ERASURE_SK = 'ERASURE';
+
+// AVANT DE BRANCHER LE RÉABONNEMENT, LIRE CECI. Le rôle IAM de la Lambda
+// PUBLIQUE accorde GetItem, PutItem, Query et UpdateItem — PAS DeleteItem
+// (infra/lambda.tf). Toute porte qui efface un item lève donc AccessDenied en
+// production, et le dépôt en compte déjà : `removeRetained`, appelé par
+// l'annulation (handler.js), n'a jamais retiré un rendez-vous annulé du flux
+// d'agenda du notaire ailleurs qu'en test. `deleteUnsubscribe` bute sur le
+// même mur : le brancher demande un `terraform apply` qui ajoute DeleteItem.
 
 // --- Rétentions et bornes de lecture, partagées par les DEUX adaptateurs --------
 // Elles vivent ici parce que `repo-memory` et `repo-dynamo` doivent s'accorder
