@@ -18,14 +18,14 @@ jobs:
   # The fast gate (L1 domain · L2 api · L3 contract · L4 dom · L5 BDD). The
   # Playwright browser layer (L6) is deliberately NOT here — it is the only slow
   # layer and runs on the push to main in deploy.yml, before the ship. Keeping
-  # it off PRs holds this gate near ~15s so it never discourages a push.
+  # it off PRs holds this gate to a couple of minutes so it never discourages a push.
   test:
     name: Tests (domain + api + contract + BDD + web + admin)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Node 20
+      - name: Set up Node 22
         uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -38,7 +38,7 @@ jobs:
         run: npm test
 
       - name: BDD suite (Cucumber)
-        run: npm install --prefix features && npm test --prefix features
+        run: npm ci --prefix features && npm test --prefix features
 
       - name: Web smoke test (jsdom)
         run: npm test --workspace @nota/web

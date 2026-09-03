@@ -25,16 +25,19 @@
 name: Deploy Admin
 
 on:
-  # Manual-only until the admin surface is actually stood up (Terraform applied
-  # with enable_admin = true + the ADMIN_* repo variables set). Re-enable the
-  # push trigger below once the admin-production environment + role/bucket exist,
-  # otherwise every apps/api push fails this workflow with no admin infra to ship to.
+  # The admin surface is stood up (Terraform applied with enable_admin = true,
+  # the four ADMIN_* repo variables set, two green dispatched deploys) — so
+  # since 2026-09-03 a push to main that touches the console, the shared api
+  # bundle or the domain ships it, exactly like the public surface. The manual
+  # dispatch stays for a re-ship without a code change.
   workflow_dispatch:
-  # push:
-  #   branches: [main]
-  #   paths:
-  #     - apps/admin/**
-  #     - apps/api/**
+  push:
+    branches: [main]
+    paths:
+      - apps/admin/**
+      - apps/api/**
+      - packages/domain/**
+      - .github/workflows/deploy-admin.yml
 
 # OIDC needs id-token: write to mint the token; contents: read to checkout.
 permissions:
@@ -51,12 +54,12 @@ env:
 
 jobs:
   test:
-    name: Tests (domain + api + BDD + web)
+    name: Tests (domain + api + contract + BDD + web + admin)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Node 20
+      - name: Set up Node 22
         uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -69,7 +72,7 @@ jobs:
         run: npm test
 
       - name: BDD suite (Cucumber)
-        run: npm install --prefix features && npm test --prefix features
+        run: npm ci --prefix features && npm test --prefix features
 
       - name: Web smoke test (jsdom)
         run: npm test --workspace @nota/web
@@ -88,7 +91,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Node 20
+      - name: Set up Node 22
         uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -121,11 +124,21 @@ jobs:
         run: |
           set -euo pipefail
           # The admin Lambda ships the SAME apps/api bundle as the public API
-          # (handler admin.handler). Vendor the workspace-linked @nota/domain in
-          # so it resolves at runtime, exactly like deploy.yml does.
-          mkdir -p apps/api/node_modules/@nota/domain
-          cp packages/domain/index.js packages/domain/package.json apps/api/node_modules/@nota/domain/
-          ( cd apps/api && zip -qr /tmp/admin-api.zip . -x '*.git*' )
+          # (handler admin.handler), vendored the same way as deploy.yml: the
+          # whole production dependency tree, through symlinks, tests excluded.
+          rm -rf apps/api/node_modules
+          npm ls --omit=dev --all --parseable --workspace @nota/api 2>/dev/null \
+            | grep '/node_modules/' | sort -u \
+            | while read -r p; do
+                rel="${p#*/node_modules/}"
+                case "$rel" in @nota/api) continue ;; esac   # the package itself
+                mkdir -p "apps/api/node_modules/$(dirname "$rel")"
+                cp -RL "$p" "apps/api/node_modules/$rel"
+              done
+          test -f apps/api/node_modules/stripe/package.json
+          test -f apps/api/node_modules/@nota/domain/index.js
+          ( cd apps/api && zip -qr /tmp/admin-api.zip . -x '*.git*' 'test/*' 'test-support/*' 'node_modules/@nota/domain/test/*' )
+          ls -la /tmp/admin-api.zip
           aws lambda update-function-code \
             --function-name "${{ vars.ADMIN_LAMBDA_NAME }}" \
             --zip-file fileb:///tmp/admin-api.zip \
@@ -145,8 +158,10 @@ jobs:
             --cache-control "public,max-age=31536000,immutable" \
             --exclude index.html \
             --exclude robots.txt
-          aws s3 cp apps/admin/dist/robots.txt "s3://${{ vars.ADMIN_WEB_BUCKET }}/robots.txt" \
-            --cache-control "public,max-age=3600"
+          if [ -f apps/admin/dist/robots.txt ]; then
+            aws s3 cp apps/admin/dist/robots.txt "s3://${{ vars.ADMIN_WEB_BUCKET }}/robots.txt" \
+              --cache-control "public,max-age=3600"
+          fi
           aws s3 cp apps/admin/dist/index.html "s3://${{ vars.ADMIN_WEB_BUCKET }}/index.html" \
             --cache-control "no-cache"
 

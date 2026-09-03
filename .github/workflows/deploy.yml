@@ -42,7 +42,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Node 20
+      - name: Set up Node 22
         uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -55,7 +55,7 @@ jobs:
         run: npm test
 
       - name: BDD suite (Cucumber)
-        run: npm install --prefix features && npm test --prefix features
+        run: npm ci --prefix features && npm test --prefix features
 
       - name: Web smoke test (jsdom)
         run: npm test --workspace @nota/web
@@ -96,17 +96,39 @@ jobs:
           path: playwright-report/
           retention-days: 7
 
+  # The infra that the code ships INTO. ci.yml validates Terraform on branches
+  # only, and since everything lands directly on main, nothing validated the
+  # infra of a shipped commit (2026-09-03 audit). fmt + validate are cheap
+  # (no backend, no credentials) and catch a broken .tf before the next apply.
+  terraform:
+    name: Terraform fmt + validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Format check
+        run: terraform -chdir=infra fmt -check
+
+      - name: Init (no backend)
+        run: terraform -chdir=infra init -backend=false
+
+      - name: Validate
+        run: terraform -chdir=infra validate
+
   deploy:
     name: Build + deploy to AWS
-    # Gate the ship on BOTH the fast suite and the browser journeys: a red in
-    # either means nothing reaches production.
-    needs: [test, e2e]
+    # Gate the ship on the fast suite, the browser journeys AND the infra
+    # validation: a red in any of the three means nothing reaches production.
+    needs: [test, e2e, terraform]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Node 20
+      - name: Set up Node 22
         uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -138,12 +160,29 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Vendor the workspace-linked @nota/domain into the api package so it
-          # resolves at runtime (the AWS SDK + stripe are provided by the Lambda
-          # runtime / omitted, so only the domain code needs vendoring).
-          mkdir -p apps/api/node_modules/@nota/domain
-          cp packages/domain/index.js packages/domain/package.json apps/api/node_modules/@nota/domain/
-          ( cd apps/api && zip -qr /tmp/api.zip . -x '*.git*' )
+          # Vendor EVERY production dependency of @nota/api into the package.
+          # `npm ci` hoists them to the ROOT node_modules, so a naive zip of
+          # apps/api ships an EMPTY node_modules. Until 2026-09-03 only
+          # @nota/domain was hand-copied: `stripe` (required lazily by
+          # stripe-port.js) never reached the Lambda, and the AWS SDK rode on
+          # whatever copy the runtime happened to bundle. The resolved
+          # production tree (dev deps excluded) is copied through symlinks
+          # (-L) so the workspace-linked domain comes along too.
+          rm -rf apps/api/node_modules
+          npm ls --omit=dev --all --parseable --workspace @nota/api 2>/dev/null \
+            | grep '/node_modules/' | sort -u \
+            | while read -r p; do
+                rel="${p#*/node_modules/}"
+                case "$rel" in @nota/api) continue ;; esac   # the package itself
+                mkdir -p "apps/api/node_modules/$(dirname "$rel")"
+                cp -RL "$p" "apps/api/node_modules/$rel"
+              done
+          test -f apps/api/node_modules/stripe/package.json
+          test -f apps/api/node_modules/@nota/domain/index.js
+          test -f apps/api/node_modules/@aws-sdk/client-dynamodb/package.json
+          # Tests and their fixtures never run in production — keep the zip lean.
+          ( cd apps/api && zip -qr /tmp/api.zip . -x '*.git*' 'test/*' 'test-support/*' 'node_modules/@nota/domain/test/*' )
+          ls -la /tmp/api.zip
           aws lambda update-function-code \
             --function-name nota-api \
             --zip-file fileb:///tmp/api.zip \
