@@ -573,7 +573,20 @@
       // The PREVIOUS snapshot, before this poll overwrites it: comparing the
       // two is how a notary's release is detected (retained → open again).
       var prev = offerStatusGet(o.id);
-      var st = offerStatusSet(o.id, j || {});
+      // A message this device just sent may not be in the server's read yet
+      // (the send is followed by a refresh at once, and a read right after a
+      // write is not guaranteed to see it). Never let a refresh erase what the
+      // client watched themselves send: server thread first, then the local
+      // client messages the server has not returned, by id.
+      var next = j || {};
+      if (prev && prev.messages && prev.messages.length) {
+        var srv = next.messages || [];
+        var seen = {};
+        srv.forEach(function (m) { if (m && m.id) seen[m.id] = true; });
+        var stray = prev.messages.filter(function (m) { return m && m.id && m.de === 'client' && !seen[m.id]; });
+        if (stray.length) next = Object.assign({}, next, { messages: srv.concat(stray) });
+      }
+      var st = offerStatusSet(o.id, next);
       // An entry born from a deep link learns its act and amount here.
       if (st.bid && (!o.serviceId || o.montant == null)) {
         patchMyOffer(o.id, { serviceId: st.bid.serviceId, montant: st.bid.montant });
@@ -643,7 +656,7 @@
   // inline error); on success the cache grows by the appended message, the
   // band repaints, and the thread is pulled fresh (the notary may have
   // written meanwhile).
-  async function clientChatSend(o, texte) {
+  async function clientChatSend(o, texte, api) {
     texte = String(texte || '').trim();
     if (!texte) return { ok: false, message: 'Écrivez un message.' };
     var r;
@@ -661,6 +674,9 @@
     offerStatusSet(o.id, Object.assign({}, st, { messages: (st.messages || []).concat([j.message]) }));
     // Writing back means the client has read what came before.
     markOfferSeen(o.id);
+    // Clear the box BEFORE the repaint: the band carries the draft over to
+    // the rebuilt composer, and a message that just went out is not a draft.
+    if (api && api.input) api.input.value = '';
     repaintOfferBand(o, { focusComposer: true });
     fetchOfferStatus(o).then(function (fresh) { if (fresh) repaintOfferBand(o, { ifChanged: true }); });
     return { ok: true };
@@ -725,12 +741,17 @@
   }
   function clientPollWanted() {
     if (state.tab !== 'profil' || document.hidden) return false;
-    return typeof document.hasFocus !== 'function' || document.hasFocus();
+    if (typeof document.hasFocus === 'function' && !document.hasFocus()) return false;
+    // No timer without something to poll: an idle interval is a battery cost
+    // on a phone and an open handle everywhere else (it kept every jsdom test
+    // that visited the profil tab alive forever, 2026-09-03).
+    return myOffers().some(offerNeedsStatusPoll);
   }
   function clientPollTick() {
-    if (!clientPollWanted() || fieldHasFocus() || clientPollBusy) return;
+    if (!clientPollWanted()) { clientPollStop(); return; }
+    if (fieldHasFocus() || clientPollBusy) return;
     var offers = myOffers().filter(offerNeedsStatusPoll);
-    if (!offers.length) return;
+    if (!offers.length) { clientPollStop(); return; }
     clientPollBusy = true;
     Promise.all(offers.map(function (o) {
       return fetchOfferStatus(o).then(function (st) { if (st) repaintOfferBand(o, { ifChanged: true }); });
@@ -3970,7 +3991,7 @@
       // The shared composer (ADR 0033); focusing it means the thread is read.
       var composer = chatComposer({
         placeholder: 'Écrire à votre notaire…', ariaLabel: 'Écrire à votre notaire', sendClass: 'client-chat-send',
-        onSend: function (texte) { return clientChatSend(o, texte); },
+        onSend: function (texte, api) { return clientChatSend(o, texte, api); },
         onFocus: function () { markOfferSeen(o.id); },
       });
       chat.appendChild(composer.el);
@@ -7312,7 +7333,10 @@
     var composer = ncComposer({
       placeholder: 'Écrire au client…', ariaLabel: 'Écrire au client',
       onFocus: function () { ncMarkSeen(entry); },
-      onSend: function (texte, ui) { ncChatSend(entry, texte, ui); },
+      // RETURN the verdict: the shared composer awaits it to hold « Envoi… »
+      // and to show a refusal inline — without it the button re-armed at once
+      // and a 422 was a toast only (notary-mise-en-relation §7, 2026-09-03).
+      onSend: function (texte, ui) { return ncChatSend(entry, texte, ui); },
     });
     wrap.appendChild(composer.root);
     return wrap;

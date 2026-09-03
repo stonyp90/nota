@@ -164,6 +164,10 @@ test('LOI DES TROIS CLICS — de l’accueil à l’offre publiable sans clic de
   $(doc, 'crit-approbation_bancaire__obtenue').click();
   const p = $(doc, 'crit-preteur'); p.value = 'banque_nationale'; fire(p, 'change');
   const pre = $(doc, 'o-prefix'); pre.value = 'G1R'; fire(pre, 'input');
+  // L'identité (ADR 0033) est une saisie, pas un clic : le notaire qui retient
+  // doit pouvoir nommer et écrire au client.
+  const nom = $(doc, 'o-name'); nom.value = 'Prénom Nom'; fire(nom, 'input');
+  const em = $(doc, 'o-courriel'); em.value = 'client@exemple.ca'; fire(em, 'input');
   await wait(20);
 
   assert.equal($(doc, 'offer-devis').hidden, false, 'le devis ne disparaît jamais');

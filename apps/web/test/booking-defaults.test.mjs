@@ -75,7 +75,7 @@ test('succession and déplacement arrive pre-answered with their zero-cost defau
   assert.ok(!/Déplacement/.test(hint.textContent), 'déplacement is pre-answered');
 });
 
-test('four inputs left: montant + approbation + prêteur + secteur postal enable the CTA', async () => {
+test('six inputs left: montant + approbation + prêteur + secteur postal + nom + courriel enable the CTA', async () => {
   const { win, doc } = await boot();
   await openRefinancement(win, doc);
   const fire = (el, type) => el.dispatchEvent(new win.Event(type, { bubbles: true }));
@@ -84,11 +84,17 @@ test('four inputs left: montant + approbation + prêteur + secteur postal enable
   $(doc, 'crit-approbation_bancaire__obtenue').click();
   const selPreteur = $(doc, 'crit-preteur'); selPreteur.value = 'banque_nationale'; fire(selPreteur, 'change');
 
-  // The REQUIRED postal sector is the last gate (domain: prefixe_requis).
+  // The REQUIRED postal sector (domain: prefixe_requis).
   assert.equal($(doc, 'offer-submit').disabled, true, 'still blocked without the postal sector');
   const pre = $(doc, 'o-prefix'); pre.value = 'G1R'; fire(pre, 'input');
 
-  assert.equal($(doc, 'offer-submit').disabled, false, 'defaults + 4 answers = publishable');
+  // ADR 0033 — the identity the retaining notary needs: name + courriel are
+  // the last gate (the téléphone is recommended, never required).
+  assert.equal($(doc, 'offer-submit').disabled, true, 'still blocked without the identity');
+  const nom = $(doc, 'o-name'); nom.value = 'Prénom Nom'; fire(nom, 'input');
+  const em = $(doc, 'o-courriel'); em.value = 'client@exemple.ca'; fire(em, 'input');
+
+  assert.equal($(doc, 'offer-submit').disabled, false, 'defaults + 6 answers = publishable');
 });
 
 test('a dossier answer wins over the default', async () => {

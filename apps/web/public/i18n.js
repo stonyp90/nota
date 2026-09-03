@@ -377,6 +377,18 @@
   "Offre généreuse, susceptible d’être retenue rapidement.": "Generous offer, likely to be taken quickly.",
   "Publier mon offre": "Post my offer",
   "Affichée comme « Client · secteur postal ».": "Displayed as “Client · postal sector”.",
+  // ADR 0033 — the mise en relation is complete: the identity block of the
+  // booking sheet, and the cancellation line of the intro.
+  "Vous fixez la date, le montant et votre niveau d’anonymat. Tant qu’aucun notaire ne l’a retenue, vous retirez votre offre gratuitement ; une fois retenue, des frais peuvent s’appliquer selon le délai — ils vous sont affichés avant de confirmer.": "You set the date, the amount and your level of anonymity. Until a notary retains it, you withdraw your offer for free; once retained, a fee may apply depending on the notice — it is shown to you before you confirm.",
+  "Annulation et désistement.": "Cancellation and withdrawal.",
+  "Convenez du lieu et de l’heure avec votre notaire dans la conversation ci-dessous, et ajoutez la date à votre agenda. Le notaire peut encore se désister : votre demande reviendrait alors au carnet, publiée telle quelle, et vous en seriez prévenu.": "Agree on the place and time with your notary in the conversation below, and add the date to your calendar. The notary may still withdraw: your request would then return to the carnet, published as is, and you would be notified.",
+  "Votre nom — transmis seulement au notaire qui retient votre demande": "Your name — shared only with the notary who retains your request",
+  "Votre courriel — pour vous prévenir dès qu’un notaire retient votre demande": "Your email — to let you know as soon as a notary retains your request",
+  "Jamais affiché sur le carnet.": "Never shown on the carnet.",
+  "(recommandé)": "(recommended)",
+  "Pour que le notaire qui vous retient puisse vous joindre. Jamais public.": "So the notary who retains you can reach you. Never public.",
+  "Offre anonyme sur le carnet": "Anonymous offer on the carnet",
+  "Affichée comme « Client · secteur postal ». Votre nom reste transmis au notaire qui vous retient.": "Displayed as “Client · postal sector”. Your name is still shared with the notary who retains you.",
   "Votre nom sera visible publiquement sur le carnet.": "Your name will be publicly visible on the carnet.",
   "Publication…": "Publishing…",
   "Redirection vers le paiement…": "Redirecting to payment…",

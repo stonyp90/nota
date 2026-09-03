@@ -23,11 +23,17 @@
  *
  * Harness mirrors client-offers.test.mjs (jsdom + fetch stub keyed by URL).
  */
-import test from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { JSDOM } from 'jsdom';
+
+// Every window this file boots is closed when the file is done: a signed-in
+// client on the profil tab runs the 15 s status poll (app.js clientPollStart),
+// and a jsdom timer left running keeps the test process alive forever.
+const openWindows = [];
+after(() => { for (const w of openWindows) { try { w.close(); } catch { /* already closed */ } } });
 
 const DOMAIN_SRC = readFileSync(fileURLToPath(new URL('../../../packages/domain/index.js', import.meta.url)), 'utf8');
 const APP_SRC = readFileSync(fileURLToPath(new URL('../public/app.js', import.meta.url)), 'utf8');
@@ -78,6 +84,7 @@ async function boot({ url = '', seed = {}, routes = [], onWindow } = {}) {
     },
   });
   const win = dom.window;
+  openWindows.push(win);
   win.eval(DOMAIN_SRC);
   win.eval(APP_SRC);
   await wait(60);

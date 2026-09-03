@@ -16,12 +16,18 @@
  *
  * Harness mirrors cancel-contact.test.mjs (jsdom + fetch stub).
  */
-import test from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { JSDOM } from 'jsdom';
+
+// Every window this file boots is closed when the file is done: a signed-in
+// client on the profil tab runs the 15 s status poll (app.js clientPollStart),
+// and a jsdom timer left running keeps the test process alive forever.
+const openWindows = [];
+after(() => { for (const w of openWindows) { try { w.close(); } catch { /* already closed */ } } });
 
 const require = createRequire(import.meta.url);
 const D = require('../../../packages/domain/index.js');
@@ -73,6 +79,7 @@ async function boot({ seed = {}, routes = [] } = {}) {
     },
   });
   const win = dom.window;
+  openWindows.push(win);
   win.eval(DOMAIN_SRC);
   win.eval(APP_SRC);
   await wait(60);
@@ -120,6 +127,7 @@ test('a retained offer inside the fee window discloses amount and rate in the co
   const btn = doc.querySelector('.btn-offer-cancel');
   assert.ok(btn, 'cancel button missing on the retained offer');
   btn.click();
+  await wait(40); // the dialog re-asks GET /client/bid before it opens (ADR 0023 / 0033)
   assert.equal($(doc, 'cancel-dialog').open, true, 'confirm dialog did not open');
 
   const fee = $(doc, 'cancel-fee');
@@ -137,6 +145,7 @@ test('a retained offer inside the fee window discloses amount and rate in the co
 test('annulation null keeps the free-cancellation wording — the fee note stays hidden', async () => {
   const { doc } = await bootRetained({ annulation: null });
   doc.querySelector('.btn-offer-cancel').click();
+  await wait(40); // the dialog re-asks GET /client/bid before it opens (ADR 0023 / 0033)
   assert.equal($(doc, 'cancel-dialog').open, true);
   const fee = $(doc, 'cancel-fee');
   assert.equal(fee.hidden, true, 'no fee → no note');
@@ -156,6 +165,7 @@ test('an open (never retained) offer shows no fee note either', async () => {
   Nota.setTab('profil');
   await wait(40);
   doc.querySelector('.btn-offer-cancel').click();
+  await wait(40);
   assert.equal($(doc, 'cancel-fee').hidden, true);
   assert.match($(doc, 'cancel-text').textContent, /retirée du carnet/);
 });
@@ -173,6 +183,7 @@ test('a cancellation that kept a fee says so — toast and « Prochaine étape �
     },
   });
   doc.querySelector('.btn-offer-cancel').click();
+  await wait(40);
   $(doc, 'cancel-confirm').click();
   await wait(40);
 
@@ -200,6 +211,7 @@ test('a free cancellation keeps the existing receipt — no fee mentioned anywhe
     },
   });
   doc.querySelector('.btn-offer-cancel').click();
+  await wait(40);
   $(doc, 'cancel-confirm').click();
   await wait(40);
   assert.equal($(doc, 'toast').textContent, 'Offre annulée. Elle a été retirée du carnet.');

@@ -570,6 +570,14 @@ a:hover { text-decoration: underline; }
 .acct-role { align-self: flex-start; margin-top: 4px; font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--brand); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1px 8px; }
 /* Role-aware action rows reuse .acct-item; the group is just a stack. */
 .acct-actions { display: flex; flex-direction: column; }
+/* Unread notary messages (ADR 0033) ride the « Mon profil » door: a filled
+   square count, brand on brand-ink. */
+.acct-badge {
+  display: inline-flex; align-items: center; justify-content: center; margin-left: auto;
+  min-width: 20px; height: 20px; padding: 0 6px; font-size: 11px; font-weight: 800;
+  border-radius: var(--radius-sm); background: var(--brand); color: var(--brand-ink);
+  font-variant-numeric: tabular-nums;
+}
 .acct-sep { height: 1px; background: var(--border); margin: 6px 4px; }
 .acct-panel .notif-head { padding: 6px 10px; border-bottom: 0; }
 .acct-panel .notif-list { max-height: min(320px, 50vh); }
@@ -1897,6 +1905,28 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 /* Mise en relation (ADR 0010 §4): whom to contact once the offer is retained. */
 .my-offer-contact { margin-top: 8px; font-size: 13px; line-height: 1.5; }
 .my-offer-contact-mail { color: var(--brand); font-weight: 600; }
+/* « Votre notaire » (ADR 0033): heading, name line, then one row per way to
+   reach them — tel:, mailto:, the étude on a map. Facts only, square register. */
+.my-offer-contact-h { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-muted); }
+.my-offer-contact-name { margin-top: var(--space-2); font-size: 14px; }
+.my-offer-contact-etude { color: var(--ink-muted); }
+.my-offer-contact-rows { display: flex; flex-wrap: wrap; gap: var(--space-3) var(--space-8); margin-top: var(--space-2); }
+.my-offer-contact-row {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 28px;
+  font-size: 13px; font-weight: 600; color: var(--brand); text-decoration: none; overflow-wrap: anywhere;
+}
+.my-offer-contact-row:hover { text-decoration: underline; }
+.my-offer-contact-tel { font-variant-numeric: tabular-nums; }
+.my-offer-contact-addr { font-weight: 500; }
+/* Unread notary messages beside the status: a door to the thread, a filled
+   square badge while there is something to read, nothing when there is not. */
+.my-offer-unread {
+  display: inline-flex; align-items: center; margin-left: var(--space-3); padding: 2px 8px;
+  border: 0; font: inherit; font-size: 11px; font-weight: 800; white-space: nowrap; cursor: pointer;
+  border-radius: var(--radius-sm); background: var(--brand); color: var(--brand-ink);
+}
+.my-offer-unread:empty { display: none; }
+.my-offer-unread:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 /* A notary's proposition / document request: the block that asks for a decision. */
 .my-offer-prop, .my-offer-demande {
   margin-top: 10px; padding: 10px 12px; border-radius: var(--radius);
@@ -2295,6 +2325,9 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 #o-service-chips .chip.is-on .chip-svc-sub { color: inherit; }
 .book-options { margin: 0; }
 .book-options .form-row:last-of-type { margin-bottom: 0; }
+/* The identity block of the booking sheet (ADR 0033): name, courriel,
+   téléphone — set apart from the notary's questions by a rule, never folded. */
+.book-identity { margin-top: var(--space-6); padding-top: var(--space-6); border-top: 1px solid var(--border); }
 
 /* Brand utility classes — replace ad-hoc inline styles, keep markup on-brand */
 .w-full { width: 100%; }
@@ -3018,6 +3051,14 @@ body.is-notary-session #tab-notaires { pointer-events: none; }
 .chat-when { font-size: 10.5px; color: var(--ink-muted); }
 .chat-row { display: flex; align-items: flex-end; gap: 8px; }
 .chat-input { flex: 1 1 auto; resize: vertical; min-height: 40px; }
+/* The shared composer (chatComposer): the write row, then a meta line — the
+   refusal on the left, the « N / 500 » counter on the right from 400 on. */
+.chat-write { display: flex; flex-direction: column; gap: 4px; }
+.chat-composer .chat-input { resize: none; overflow-y: auto; max-height: 160px; }
+.chat-meta { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-4); min-height: 0; }
+.chat-error { margin: 0; font-size: 12.5px; color: var(--danger); }
+.chat-count { margin-left: auto; font-size: 11px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+.chat-error[hidden], .chat-count[hidden] { display: none; }
 .nc-chat .nc-dossier-h, .my-offer-chat-h { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-muted); }
 
 /* --- Withdrawal (désistement) after acceptance --------------------------- */
@@ -3075,6 +3116,8 @@ body.is-notary-session #tab-notaires { pointer-events: none; }
 .nc-chat-err { margin: 0; font-size: 12.5px; color: var(--danger); }
 /* A deep-linked card (« #notaires&acte=… ») flashes once, then rests. */
 .nc-card.is-flash { animation: ncFlash 1.6s ease-out both; }
+/* The client's offer band flashes the same way when the bell or a deep link lands on it. */
+.my-offer-detail.is-flash { animation: ncFlash 1.6s ease-out both; }
 @keyframes ncFlash {
   0% { box-shadow: 0 0 0 4px var(--focus-ring); border-color: var(--brand); }
   100% { box-shadow: none; }
