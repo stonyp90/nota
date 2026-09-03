@@ -326,6 +326,12 @@
       // title/certificate review) with real value at stake, so the floor starts
       // at 2000 $ and rises with the loan value below.
       prixDepart: 2000,
+      // ADR 0034 — Nota's OWN price for this service, in cents. It is not a
+      // share of the fee above and never varies with it: the two lines are
+      // two purchases (ADR 0031). The most substantial act carries the
+      // higher line because Nota does more on it — more documents to gather,
+      // a lender to chase, a title review to chase down.
+      prixNotaCents: 24900,
       description:
         'Acte de prêt et publication de l’hypothèque lors d’un refinancement.',
       pricing: {
@@ -410,6 +416,9 @@
       // there is no old hypothec to discharge; the loan-value brackets are the
       // same ladder.
       prixDepart: 1800,
+      // ADR 0034 — the catalogue's entry line: a smaller act pays Nota less,
+      // so the take rate never rises as the act shrinks.
+      prixNotaCents: 19900,
       description:
         'Acte de prêt et publication de l’hypothèque pour un nouveau financement.',
       pricing: {
@@ -636,12 +645,19 @@
   // multipliers raised hard): the second week commands ×2, the FIRST week ×3,
   // the eve ×3.5 and the same day ×4 (band midpoints; the market tunes within
   // each band below). Standard notice stays the advertised floor.
+  //
+  // `prixNotaDateCents` is a SEPARATE object from the multipliers beside it
+  // (ADR 0034). The multipliers price the NOTARY's fee — art. 49 4° C.déont.
+  // lets a notary weigh « le degré d'urgence » in their own fees. This line is
+  // what NOTA charges for the date guarantee it sells: sourcing a notary at
+  // short notice and holding the date. Two objects, two justifications, two
+  // lines on the quote — never one number doing both jobs.
   const TIERS = [
-    { id: 'standard',    nom: 'Standard',    nomEn: 'Standard', maxJours: null, apercuMin: 1.0, apercuMax: 1.0, eleve: false },
-    { id: 'rapide',      nom: 'Rapide',      nomEn: 'Fast',     maxJours: 14,   apercuMin: 1.8, apercuMax: 2.2, eleve: false },
-    { id: 'prioritaire', nom: 'Prioritaire', nomEn: 'Priority', maxJours: 7,    apercuMin: 2.7, apercuMax: 3.3, eleve: true },
-    { id: 'urgence',     nom: 'Urgent',      nomEn: 'Urgent',   maxJours: 1,    apercuMin: 3.3, apercuMax: 3.7, eleve: true },
-    { id: 'extreme',     nom: 'Extrême',     nomEn: 'Extreme',  maxJours: 0,    apercuMin: 3.7, apercuMax: 4.3, eleve: true },
+    { id: 'standard',    nom: 'Standard',    nomEn: 'Standard', maxJours: null, apercuMin: 1.0, apercuMax: 1.0, eleve: false, prixNotaDateCents: 0 },
+    { id: 'rapide',      nom: 'Rapide',      nomEn: 'Fast',     maxJours: 14,   apercuMin: 1.8, apercuMax: 2.2, eleve: false, prixNotaDateCents: 5000 },
+    { id: 'prioritaire', nom: 'Prioritaire', nomEn: 'Priority', maxJours: 7,    apercuMin: 2.7, apercuMax: 3.3, eleve: true,  prixNotaDateCents: 10000 },
+    { id: 'urgence',     nom: 'Urgent',      nomEn: 'Urgent',   maxJours: 1,    apercuMin: 3.3, apercuMax: 3.7, eleve: true,  prixNotaDateCents: 20000 },
+    { id: 'extreme',     nom: 'Extrême',     nomEn: 'Extreme',  maxJours: 0,    apercuMin: 3.7, apercuMax: 4.3, eleve: true,  prixNotaDateCents: 30000 },
   ];
 
   // What a client is actually asked to pay at a given notice, as a multiple of
@@ -733,6 +749,90 @@
     if (d <= 7) return 'prioritaire';   // inside the first week
     if (d <= 14) return 'rapide';       // inside the second week
     return 'standard';
+  }
+
+  // --- Le prix de Nota (ADR 0034) ---------------------------------------------
+  // Nota sells its own service at its own price, beside the notary's fee and
+  // never out of it (ADR 0031). Until 2026-09-03 that price was ONE number for
+  // the whole catalogue, and one number on a catalogue of unequal acts is
+  // regressive: 400 $ weighed 18,2 % of an 1 800 $ financing and 9,4 % of a
+  // 4 000 $ act — the smaller the act, the heavier Nota.
+  //
+  // The grid fixes that WITHOUT touching art. 29.1 C.déont.: the price depends
+  // on the SERVICE and on the NOTICE — two published dimensions the client
+  // knows before offering — and on nothing that touches the notary. Not their
+  // cote, not their history, not the value of the act. The signature below is
+  // the guarantee: there is no argument through which a notary could enter.
+  //
+  //   { serviceCents, dateCents, totalCents }
+  //
+  // Two lines, because they answer to two different articles: the service line
+  // is what Nota sells (art. 32.1 2° L.N. — the notary abandons nothing), the
+  // date line is the date guarantee Nota sells on top, distinct from the
+  // notary's own right to weigh urgency in their fees (art. 49 4° C.déont.).
+
+  // A readable integer of cents, or undefined — an operator-stored grid, an
+  // environment value and a legacy record all pass through here, so an
+  // unreadable cell reads as absent rather than dropping the pricing.
+  function prixNotaCell(v, { min = 1 } = {}) {
+    if (v === undefined || v === null || v === '') return undefined;
+    const n = Number(v);
+    return Number.isInteger(n) && n >= min ? n : undefined;
+  }
+
+  /**
+   * THE grid, normalized and complete: every service, every tier, plus the
+   * `defaut` a service outside the catalogue falls back to.
+   *
+   * `source` accepts three shapes, and this is the whole of the migration:
+   *   - nothing            → the catalogue's own published grid
+   *   - `{ prixCents }`    → the ADR 0031 single price: it applies to EVERY
+   *                          service, with no date line — a stored config
+   *                          written before 2026-09-03 keeps pricing exactly
+   *                          what it priced yesterday
+   *   - `{ services, garantieDate }` → the operator's grid, cell by cell; a
+   *                          missing or unreadable cell falls back to the
+   *                          catalogue rather than to zero.
+   *
+   * The fallback for a service the catalogue cannot name is the LOWEST line:
+   * Nota may never charge more than it published for a service it cannot name
+   * (art. 68 C.déont. — no incomplete advertising).
+   */
+  function prixNotaGrille(source) {
+    const src = source && typeof source === 'object' && !Array.isArray(source) ? source : {};
+    const unique = prixNotaCell(src.prixCents);
+    const srcServices = src.services && typeof src.services === 'object' ? src.services : {};
+    const srcDates = src.garantieDate && typeof src.garantieDate === 'object' ? src.garantieDate : {};
+
+    const services = {};
+    for (const s of SERVICES) {
+      const cell = prixNotaCell(srcServices[s.id]);
+      services[s.id] = cell !== undefined ? cell : (unique !== undefined ? unique : s.prixNotaCents);
+    }
+    const garantieDate = {};
+    for (const t of TIERS) {
+      const cell = prixNotaCell(srcDates[t.id], { min: 0 });
+      // A single-price config carried no date line: it stays at zero, or the
+      // migration would silently raise what a stored price meant.
+      garantieDate[t.id] = cell !== undefined ? cell : (unique !== undefined ? 0 : t.prixNotaDateCents);
+    }
+    const lignes = Object.keys(services).map((id) => services[id]);
+    return {
+      defaut: unique !== undefined ? unique : (lignes.length ? Math.min(...lignes) : 0),
+      services,
+      garantieDate,
+    };
+  }
+
+  /**
+   * Le prix de Nota pour UN service et UN palier — the only place a Nota price
+   * is computed. The API never does this arithmetic by hand.
+   */
+  function prixNota(serviceId, tierId, grille) {
+    const g = grille && grille.services && grille.garantieDate ? grille : prixNotaGrille(grille);
+    const serviceCents = g.services[serviceId] !== undefined ? g.services[serviceId] : g.defaut;
+    const dateCents = g.garantieDate[tierId] !== undefined ? g.garantieDate[tierId] : 0;
+    return { serviceCents, dateCents, totalCents: serviceCents + dateCents };
   }
 
   // --- Premium cap -----------------------------------------------------------
@@ -2301,6 +2401,8 @@
     tierForDays,
     tierMultiplier,
     tunedTierMultipliers,
+    prixNota,
+    prixNotaGrille,
     PREMIUM_CAP,
     STATUS,
     isISODate,

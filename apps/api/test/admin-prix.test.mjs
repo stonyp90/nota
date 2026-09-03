@@ -1,4 +1,4 @@
-// Le prix de Nota est celui de Nota, et Nota le décide (ADR 0031) :
+// Le prix de Nota est celui de Nota, et Nota le décide (ADR 0031 / 0034) :
 //   • repo.getPrixNotaConfig / putPrixNotaConfig / deletePrixNotaConfig sur LES
 //     DEUX adaptateurs (comportement en mémoire ; formes de commandes dynamo
 //     contre le faux enregistreur — l'unique item CONFIG#PRIX / PRIX).
@@ -24,26 +24,35 @@ const { createMemoryRepo } = require('../src/repo-memory.js');
 const { createDynamoRepo } = require('../src/repo-dynamo.js');
 const { createBilling } = require('../src/billing.js');
 const prixConfig = require('../src/prix-nota-config.js');
+const domain = require('@nota/domain');
 const authDefaults = require('../src/admin-auth.js');
 
 const TODAY = '2026-08-27';
 const START = 1_700_000_000_000;
 const NOW_ISO = new Date(START).toISOString();
 
-// 250,00 $ — un prix rond que Nota pourrait décider demain.
+// 250,00 $ — un prix rond que Nota pourrait décider demain. C'est l'ANCIEN
+// corps, à prix unique (ADR 0031) : il reste accepté de bout en bout, et c'est
+// exactement ce que la rétro-compatibilité de l'ADR 0034 promet.
 const PRIX = { prixCents: 25000 };
+// La grille du catalogue — ce à quoi une remise à zéro revient (ADR 0034).
+const CATALOGUE = domain.prixNotaGrille();
 
 // ============================================================================
 // prix-nota-config — la seule autorité sur le défaut, l'environnement, la règle
 // ============================================================================
 
-test('envDefaults : le défaut intégré quand l’environnement se tait, NOTA_PRIX_CENTS sinon', () => {
-  assert.deepEqual(prixConfig.envDefaults({}), { prixCents: prixConfig.DEFAULT_PRIX_CENTS });
-  assert.deepEqual(prixConfig.envDefaults({ NOTA_PRIX_CENTS: '25000' }), { prixCents: 25000 });
+test('envDefaults : la grille du catalogue quand l’environnement se tait, NOTA_PRIX_CENTS sinon', () => {
+  assert.deepEqual(prixConfig.envDefaults({}), CATALOGUE);
+  // L'ancien prix unique aplatit la grille sur un seul nombre : un déploiement
+  // qui le porte encore tarife exactement ce qu'il tarifait la veille.
+  const aplati = prixConfig.envDefaults({ NOTA_PRIX_CENTS: '25000' });
+  for (const svc of domain.SERVICES) assert.equal(aplati.services[svc.id], 25000, svc.id);
+  for (const t of domain.TIERS) assert.equal(aplati.garantieDate[t.id], 0, t.id);
   // Une valeur illisible se lit comme ABSENTE : un prix périmé doit retomber
-  // sur le défaut, jamais faire tomber la tarification.
-  assert.deepEqual(prixConfig.envDefaults({ NOTA_PRIX_CENTS: '{oops' }), { prixCents: prixConfig.DEFAULT_PRIX_CENTS });
-  assert.deepEqual(prixConfig.envDefaults({ NOTA_PRIX_CENTS: '0' }), { prixCents: prixConfig.DEFAULT_PRIX_CENTS });
+  // sur le catalogue, jamais faire tomber la tarification.
+  assert.deepEqual(prixConfig.envDefaults({ NOTA_PRIX_CENTS: '{oops' }), CATALOGUE);
+  assert.deepEqual(prixConfig.envDefaults({ NOTA_PRIX_CENTS: '0' }), CATALOGUE);
 });
 
 test('validatePrix : un entier de cents strictement positif, et rien d’autre', () => {
@@ -181,12 +190,15 @@ test('GET montre le défaut et aucun prix stocké ; l’analyste lit mais n’é
   const h = make();
   const analyst = await loginAnalyst(h);
   const body = parse(await h.call('GET', '/admin/prix', { bearer: analyst }));
-  assert.equal(body.defaut.prixCents, prixConfig.DEFAULT_PRIX_CENTS);
+  assert.deepEqual(body.defaut, CATALOGUE);
   assert.equal(body.override, null);
-  assert.deepEqual(body.effectif, body.defaut, 'aucun prix stocké → le défaut gouverne');
-  // Le défaut est un MONTANT : la porte ne porte plus rien qui ressemble à un
-  // taux, un plancher ou un palier (art. 29.1).
-  assert.deepEqual(Object.keys(body.defaut), ['prixCents']);
+  assert.deepEqual(body.effectif, body.defaut, 'aucune grille stockée → le catalogue gouverne');
+  // La grille ne porte que des MONTANTS : la porte ne porte toujours rien qui
+  // ressemble à un taux ou à une cote (art. 29.1).
+  assert.deepEqual(Object.keys(body.defaut).sort(), ['defaut', 'garantieDate', 'services']);
+  for (const cents of Object.values(body.defaut.services)) {
+    assert.ok(Number.isInteger(cents) && cents > 0, 'un entier de cents, jamais un ratio');
+  }
 
   const put = await h.call('PUT', '/admin/prix', { bearer: analyst, body: PRIX });
   assert.equal(put.statusCode, 403);
@@ -208,7 +220,9 @@ test('super_admin enregistre un prix : validé, en vigueur, journalisé ; DELETE
 
   const read = parse(await h.call('GET', '/admin/prix', { bearer: session }));
   assert.equal(read.override.prixCents, 25000);
-  assert.equal(read.effectif.prixCents, 25000, 'le prix stocké EST celui en vigueur');
+  for (const svc of domain.SERVICES) {
+    assert.equal(read.effectif.services[svc.id], 25000, 'le prix stocké EST celui en vigueur');
+  }
 
   // Le changement est au journal d'audit avec son avant/après.
   const auditDay = NOW_ISO.slice(0, 10);
@@ -234,14 +248,16 @@ test('un prix enregistré depuis la console tarife l’offre suivante ; une remi
   const session = await login(h);
   const billing = createBilling({ repo: h.repo, stripe: {}, now: () => NOW_ISO });
 
-  assert.equal((await billing.quoteOffer(2000)).prixNotaCents, prixConfig.DEFAULT_PRIX_CENTS);
+  const devis = (o) => billing.quoteOffer(2000, o);
+  const offre = { serviceId: 'refinancement', tierId: 'standard' };
+  assert.equal((await devis(offre)).prixNotaCents, CATALOGUE.services.refinancement);
 
   assert.equal((await h.call('PUT', '/admin/prix', { bearer: session, body: PRIX })).statusCode, 200);
-  const apres = await billing.quoteOffer(2000);
+  const apres = await devis(offre);
   assert.equal(apres.prixNotaCents, 25000, 'le prix se relit à chaque devis — aucun déploiement');
   assert.equal(apres.honorairesCents, 200_000, 'et les honoraires du notaire ne bougent pas d’un cent');
   assert.equal(apres.totalCents, 225_000);
 
   assert.equal((await h.call('DELETE', '/admin/prix', { bearer: session })).statusCode, 200);
-  assert.equal((await billing.quoteOffer(2000)).prixNotaCents, prixConfig.DEFAULT_PRIX_CENTS);
+  assert.equal((await devis(offre)).prixNotaCents, CATALOGUE.services.refinancement);
 });

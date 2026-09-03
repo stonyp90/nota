@@ -481,20 +481,31 @@ function createAdmin({
   // exige 'settings:write' (super_admin). Chaque changement est journalisé
   // avec son avant/après.
   // ---------------------------------------------------------------------------
+  //
+  // ADR 0034 — ce n'est plus UN nombre mais une GRILLE : une ligne par service,
+  // plus la garantie de date sur sa propre ligne. Un prix unique posé sur des
+  // actes inégaux était régressif ; la grille ne dépend toujours que de deux
+  // dimensions publiées — le service et le délai — et de rien qui touche au
+  // notaire. Une grille stockée à l'ancien format `{ prixCents }` continue de
+  // tarifer exactement ce qu'elle tarifait la veille.
   function prixView(o) {
     if (!o) return null;
-    return { prixCents: o.prixCents, updatedAt: o.updatedAt || null };
+    const v = prixCfg.validatePrix(o);
+    if (!v.ok) return null;
+    return { ...v.config, updatedAt: o.updatedAt || null };
   }
 
-  // GET — le défaut du déploiement (intégré + environnement), le prix stocké
-  // quand Nota en a décidé un, et celui des deux qui est en vigueur.
+  // GET — la grille du déploiement (catalogue + environnement), celle stockée
+  // quand Nota en a décidé une, celle des deux qui est en vigueur, et le
+  // catalogue à éditer (la console n'a pas le domaine).
   async function getPrixNota(token, { ip } = {}) {
     const p = await requireAdmin(token, { ip });
     if (!p) return { ok: false, status: 401 };
     const defaut = prixCfg.envDefaults(process.env);
-    const override = prixView(typeof repo.getPrixNotaConfig === 'function' ? await repo.getPrixNotaConfig() : null);
-    const effectif = override ? { prixCents: override.prixCents } : defaut;
-    return { ok: true, defaut, override, effectif };
+    const stored = typeof repo.getPrixNotaConfig === 'function' ? await repo.getPrixNotaConfig() : null;
+    const override = prixView(stored);
+    const effectif = await prixCfg.resolveGrille(repo, process.env);
+    return { ok: true, defaut, override, effectif, catalogue: prixCfg.catalogue() };
   }
 
   // PUT — enregistrer (remplacer) le prix. super_admin seulement, validé fort.
@@ -507,7 +518,11 @@ function createAdmin({
     const v = prixCfg.validatePrix(body || {});
     if (!v.ok) return { ok: false, status: 422, errors: v.errors };
     const before = prixView(await repo.getPrixNotaConfig());
-    const stored = await repo.putPrixNotaConfig({ prixCents: v.prixCents }, clockIso());
+    // On ne stocke QUE les cellules décidées par l'opérateur : un service
+    // ajouté au catalogue demain sera tarifé par le catalogue jusqu'à ce que
+    // Nota en décide autrement, plutôt que par un zéro figé dans un vieil
+    // enregistrement.
+    const stored = await repo.putPrixNotaConfig(v.config, clockIso());
     const after = prixView(stored);
     await appendAudit('prix_nota_updated', {
       adminId: p.adminId,

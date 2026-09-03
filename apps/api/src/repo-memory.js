@@ -2,6 +2,9 @@
 
 const { monthOf, STATS_GAUGE_PK, STATS_GAUGE_SK } = require('./keys');
 const { STATUS, normalizeReferralCode } = require('@nota/domain');
+// ADR 0034 — la forme stockée d'une grille de prix, définie une seule fois pour
+// les deux adaptateurs de persistance.
+const prixNotaConfig = require('./prix-nota-config');
 
 /**
  * In-memory implementation of the Repo port. Used by the test suite and by the
@@ -311,7 +314,7 @@ function createMemoryRepo(seed = []) {
         .sort((a, b) => a.key.localeCompare(b.key));
     },
 
-    // --- Le prix de Nota, décidé par Nota (ADR 0031) -------------------------
+    // --- Le prix de Nota, décidé par Nota (ADR 0031 / 0034) ------------------
     // Même contrat que l'adaptateur dynamo : un seul enregistrement, updatedAt
     // estampillé par l'horloge de l'appelant, absent se lit null (la
     // facturation retombe alors sur les défauts du déploiement).
@@ -319,7 +322,7 @@ function createMemoryRepo(seed = []) {
       return prixCfg ? { ...prixCfg } : null;
     },
     async putPrixNotaConfig(cfg, nowISO) {
-      prixCfg = { prixCents: cfg.prixCents, updatedAt: nowISO };
+      prixCfg = { ...prixNotaConfig.storedConfig(cfg), updatedAt: nowISO };
       return { ...prixCfg };
     },
     async deletePrixNotaConfig() {

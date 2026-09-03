@@ -17,7 +17,11 @@ const { createMemoryRepo } = require('../src/repo-memory.js');
 const { createBilling } = require('../src/billing.js');
 const { notaryIdForEmail, signToken, SCOPES } = require('../src/notary-auth.js');
 const domain = require('@nota/domain');
-const { DEFAULT_PRIX_CENTS: PRIX } = require('../src/prix-nota-config.js');
+// ADR 0034 — le prix de Nota est une grille : une ligne par service, plus la
+// garantie de date. Les règlements de cette suite se font au palier standard
+// (`tier: 'standard'` sur l'offre retenue), donc sans ligne de garantie.
+const prixDe = (serviceId, tierId = 'standard') => domain.prixNota(serviceId, tierId).totalCents;
+const PRIX = prixDe('refinancement');
 
 const TODAY = '2026-08-12';
 const NOW_MS = Date.parse('2026-08-12T15:00:00.000Z');
@@ -162,7 +166,8 @@ test('le relevé additionne plusieurs actes et ne montre que les siens', async (
   assert.equal(body.totaux.montant, 3800);
   assert.equal(body.totaux.honoraires, 3800, 'la somme des honoraires, intacte');
   assert.equal(body.totaux.net, 3800, 'rien n’est retranché');
-  assert.equal(body.totaux.prixNota, 2 * (PRIX / 100), 'un prix fixe, une fois par acte');
+  assert.equal(body.totaux.prixNota, (prixDe('refinancement') + prixDe('financement')) / 100,
+    'une ligne de la grille par acte, selon SON service — jamais un pourcentage');
   assert.equal(JSON.stringify(body).includes('b3'), false, 'jamais l’acte d’un autre notaire');
 });
 

@@ -453,11 +453,19 @@ function createApp(repo, opts = {}) {
    * seront calculés, ces drapeaux basculent et toute la copie suit.
    */
   async function tarifNota() {
+    // La MÊME résolution que la tarification : le prix annoncé est celui qui
+    // sera facturé, sans quoi l'annonce devient trompeuse au sens de
+    // l'art. 68 dès qu'un opérateur change la grille.
+    const grille = await prixConfig.resolveGrille(repo, opts.env || process.env);
     return {
-      // La MÊME résolution que la tarification : le prix annoncé est celui qui
-      // sera facturé, sans quoi l'annonce devient trompeuse au sens de
-      // l'art. 68 dès qu'un opérateur change le prix.
-      prixNotaCents: await prixConfig.resolvePrix(repo, opts.env || process.env),
+      // ADR 0034 — la GRILLE voyage entière : le client doit pouvoir lire le
+      // prix de SON service à SA date, pas un nombre moyen. Le calcul reste
+      // celui du domaine (`domain.prixNota`), des deux côtés du fil.
+      grille,
+      // Le « à partir de » — la cellule la plus basse de la grille. C'est un
+      // plancher annoncé comme tel, jamais le prix d'un devis : un devis se
+      // calcule sur la grille, avec son service et son palier.
+      prixNotaMinCents: domain.prixNota(null, 'standard', grille).totalCents,
       taxesIncluses: false,
       deboursInclus: false,
     };
@@ -1204,7 +1212,9 @@ function createApp(repo, opts = {}) {
         // notaire (le montant offert, qui lui revient en entier) et le prix du
         // service de Nota. Autoriser les seuls honoraires sous-facturerait le
         // client au moment de la capture.
-        const devis = await billing().quoteOffer(bid.montant);
+        // ADR 0034 — le devis est celui de CE service à CETTE date : le prix de
+        // Nota est une grille, et l'autorisation doit porter la cellule exacte.
+        const devis = await billing().quoteOffer(bid.montant, { serviceId: bid.serviceId, tierId: bid.tier });
         let auth;
         try {
           auth = await billing().authorizeOffer({
@@ -1638,6 +1648,9 @@ function createApp(repo, opts = {}) {
           // ADR 0028: the settled act is counted on its own service, so the
           // cote can reward the breadth of the catalogue a notary serves.
           serviceId: bid.serviceId,
+          // ADR 0034: and priced on the cell the client was quoted — the
+          // service AND the notice band the offer was published under.
+          tierId: bid.tier,
         });
       }
       if (!result || !result.ok) {
@@ -1645,7 +1658,8 @@ function createApp(repo, opts = {}) {
         // ~7-day window, declined): the act still settles on the commission
         // model — the client paid the notary directly at signing.
         result = await billing().completeAct({
-          notaryId, bidId: payload.bidId, actAmount: payload.actAmount, serviceId: bid.serviceId,
+          notaryId, bidId: payload.bidId, actAmount: payload.actAmount,
+          serviceId: bid.serviceId, tierId: bid.tier,
         });
       }
       if (!result.ok) return json(422, { errors: result.errors });

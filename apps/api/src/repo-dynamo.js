@@ -73,6 +73,9 @@ const {
   notaryGSI1SK,
 } = require('./keys');
 const { STATUS, normalizeReferralCode } = require('@nota/domain');
+// ADR 0034 — la forme stockée d'une grille de prix, définie une seule fois pour
+// les deux adaptateurs de persistance.
+const prixNotaConfig = require('./prix-nota-config');
 
 /**
  * DynamoDB implementation of the Repo port.
@@ -458,13 +461,14 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
         new DeleteCommand({ TableName: tableName, Key: { PK: emailOverridePK(), SK: emailOverrideSK(key) } })
       );
     },
-    // --- Le prix de Nota, décidé par Nota (ADR 0031) -------------------------
+    // --- Le prix de Nota, décidé par Nota (ADR 0031 / 0034) ------------------
     // UN item sur la table PRINCIPALE — la facturation le lit par le repo
     // qu'elle possède déjà, à chaque tarification ; la porte d'écriture de la
     // Lambda admin, bornée par LeadingKeys (infra/admin.tf), est la seule qui
-    // le change. Un entier de cents, jamais un taux : l'art. 29.1 du Code de
+    // le change. Des entiers de cents, jamais un taux : l'art. 29.1 du Code de
     // déontologie interdit au notaire une convention où son revenu dépendrait
-    // d'une note que Nota lui attribue.
+    // d'une note que Nota lui attribue. Un item écrit avant l'ADR 0034 porte un
+    // `prixCents` unique et se relit tel quel.
     async getPrixNotaConfig() {
       const out = await doc.send(
         new GetCommand({ TableName: tableName, Key: { PK: prixConfigPK(), SK: PRIX_CONFIG_SK } })
@@ -474,7 +478,7 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
       return cfg;
     },
     async putPrixNotaConfig(cfg, nowISO) {
-      const stored = { prixCents: cfg.prixCents, updatedAt: nowISO };
+      const stored = { ...prixNotaConfig.storedConfig(cfg), updatedAt: nowISO };
       await doc.send(
         new PutCommand({
           TableName: tableName,

@@ -269,16 +269,21 @@ function createAdminApp(repo, opts = {}) {
       return json(200, { jour: result.jour, entrees: result.entrees });
     }
 
-    // --- Le prix de Nota (ADR 0031) ------------------------------------------
+    // --- Le prix de Nota (ADR 0031 / 0034) -----------------------------------
     // Remplace la porte du barème de commission : Nota vend son service à son
-    // propre prix, un montant fixe, et non plus une part des honoraires du
-    // notaire. Lecture ouverte à tout admin authentifié ; PUT/DELETE exigent
-    // 'settings:write' — appliqué dans admin.js, qui journalise chaque
-    // changement avec son avant/après.
+    // propre prix — depuis l'ADR 0034 une grille par service, plus la garantie
+    // de date — et non plus une part des honoraires du notaire. Lecture ouverte
+    // à tout admin authentifié ; PUT/DELETE exigent 'settings:write' — appliqué
+    // dans admin.js, qui journalise chaque changement avec son avant/après.
     if (route === '/admin/prix' && method === 'GET') {
       const result = await admin.getPrixNota(bearer(request), { ip: clientIp(request) });
       if (!result.ok) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
-      return json(200, { defaut: result.defaut, override: result.override, effectif: result.effectif });
+      // `catalogue` : les lignes à éditer, avec leurs noms. La console admin
+      // n'a pas le domaine — sans cet écho elle coderait le catalogue en dur.
+      return json(200, {
+        defaut: result.defaut, override: result.override,
+        effectif: result.effectif, catalogue: result.catalogue,
+      });
     }
 
     if (route === '/admin/prix' && (method === 'PUT' || method === 'DELETE')) {
