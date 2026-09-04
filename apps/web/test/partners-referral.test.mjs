@@ -36,6 +36,8 @@ after(() => { for (const w of openWindows) { try { w.close(); } catch { /* alrea
 const DOMAIN_SRC = readFileSync(fileURLToPath(new URL('../../../packages/domain/index.js', import.meta.url)), 'utf8');
 const APP_SRC = readFileSync(fileURLToPath(new URL('../public/app.js', import.meta.url)), 'utf8');
 const HTML_SRC = readFileSync(fileURLToPath(new URL('../public/index.html', import.meta.url)), 'utf8');
+// The public origin the page declares (P1-8): share links are built on it, not on location.origin.
+const SITE = (/<meta name="nota:site" content="([^"]+)"/.exec(HTML_SRC) || [null, 'https://nota.example'])[1];
 const CSS_SRC = readFileSync(fileURLToPath(new URL('../public/styles.css', import.meta.url)), 'utf8');
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -271,7 +273,7 @@ test('the claim form previews the normalized shareable link as the partner types
   code.value = 'eve-roy'; fire(win, code, 'input');
   const prev = $(doc, 'partner-code-preview');
   assert.equal(prev.dataset.state, 'ok');
-  assert.ok(prev.textContent.includes('https://nota.example/?ref=EVEROY'),
+  assert.ok(prev.textContent.includes(SITE + '/?ref=EVEROY'),
     'origin + /?ref=CODE, normalized: ' + prev.textContent);
   code.value = 'x'; fire(win, code, 'input');
   assert.equal(prev.dataset.state, 'warn', 'a short code warns instead of previewing');
@@ -339,7 +341,7 @@ test('a verified claim shows the shareable link and a copy button; editing re-ar
   // The echoed token was redeemed at /partenaires/verify.
   assert.ok(calls.find((c) => c.url.endsWith('/partenaires/verify')), 'POST /partenaires/verify');
   assert.equal($(doc, 'partner-success').hidden, false);
-  assert.equal($(doc, 'partner-link').textContent, 'https://nota.example/?ref=EVEROY');
+  assert.equal($(doc, 'partner-link').textContent, SITE + '/?ref=EVEROY');
   assert.ok($(doc, 'partner-copy'), 'a copy button beside the link');
 });
 
@@ -359,7 +361,7 @@ test("the owner re-requesting their own confirmed code still gets their link —
   await wait(20);
   assert.equal($(doc, 'partner-errors').hidden, true, 'a re-request is not an error');
   assert.equal($(doc, 'partner-success').hidden, false);
-  assert.equal($(doc, 'partner-link').textContent, 'https://nota.example/?ref=EVEROY');
+  assert.equal($(doc, 'partner-link').textContent, SITE + '/?ref=EVEROY');
 });
 
 test('a pending claim (production, no dev echo) shows the "check your email" state', async () => {
@@ -392,7 +394,7 @@ test('a #pauth= confirmation link is consumed on boot: it verifies and reveals t
   assert.ok(calls.find((c) => c.url.endsWith('/partenaires/verify')), 'the boot consumes the #pauth token');
   assert.ok(!/pauth/.test(win.location.hash), 'the token never lingers in the URL (a refresh cannot replay it)');
   assert.equal($(doc, 'partner-success').hidden, false, 'the shareable link is revealed');
-  assert.equal($(doc, 'partner-link').textContent, 'https://nota.example/?ref=EVEROY');
+  assert.equal($(doc, 'partner-link').textContent, SITE + '/?ref=EVEROY');
 });
 
 // The pending state must not dead-end: the likeliest failures are a typo'd
@@ -430,7 +432,7 @@ test('a claimed link offers the native share sheet where the platform has one', 
   share.click();
   await wait(10);
   assert.equal(shares.length, 1, 'one share-sheet call');
-  assert.equal(shares[0].url, 'https://nota.example/?ref=EVEROY');
+  assert.equal(shares[0].url, SITE + '/?ref=EVEROY');
 });
 
 test('without navigator.share the copy button stands alone', async () => {
@@ -481,7 +483,7 @@ test('a returning partner lands on their code — never a blank claim form', asy
   Nota.setTab('partenaires');
   // The share box is already open, exactly as the claim left it.
   assert.equal($(doc, 'partner-success').hidden, false, 'the share box is open on arrival');
-  assert.equal($(doc, 'partner-link').textContent, 'https://nota.example/?ref=EVEROY');
+  assert.equal($(doc, 'partner-link').textContent, SITE + '/?ref=EVEROY');
   // The panel reads as THEIR code now, not a fresh claim.
   assert.equal($(doc, 'partner-form-title').textContent, 'Votre code partenaire');
   assert.equal($(doc, 'partner-submit').textContent.trim(), 'Code réclamé ✓');
@@ -715,4 +717,124 @@ test('a dossier document can be marked transmitted through another channel, and 
   const after = JSON.parse(win.localStorage.getItem('nota.dossier.v1'))[svcId] || {};
   assert.ok(!after[firstDocId], 'undo clears the stored value');
   assert.ok(doc.querySelector('#dossier-list .doc-transmis-btn'), 'the action is offered again');
+});
+
+// ---------------------------------------------------------------------------
+// 6. Audit 2026-09-02 — P1-3, P1-6, P1-7, P1-8, P2-14, P2-15, P2-16
+// ---------------------------------------------------------------------------
+// Fill and submit the claim form as a first-time partner; returns the errors text.
+async function claimAs(ctx) {
+  ctx.Nota.setTab('partenaires');
+  ctx.doc.querySelector('#partner-type .chip').click();
+  const mail = $(ctx.doc, 'partner-courriel'); mail.value = 'eve@agence.ca'; fire(ctx.win, mail, 'input');
+  const code = $(ctx.doc, 'partner-code'); code.value = 'eve-roy'; fire(ctx.win, code, 'input');
+  fire(ctx.win, $(ctx.doc, 'partner-form'), 'submit');
+  await wait(20);
+  return $(ctx.doc, 'partner-errors').textContent;
+}
+const claimRoute = (reply) => ({ match: (u, init) => u.endsWith('/partenaires') && init.method === 'POST', reply });
+
+test('P1-3: the reward cards are plain stats — no pointer affordance, no hidden click door', async () => {
+  const { doc } = await boot();
+  assert.ok(!/\.pr-card\s*\{[^}]*cursor:\s*pointer/.test(CSS_SRC), 'a div that looks pressable but no keyboard can reach');
+  assert.ok(!/\.pr-card::after/.test(CSS_SRC), 'no generated « → » door marker');
+  assert.ok(!/\.pr-card:hover\s*\{[^}]*transform/.test(CSS_SRC), 'no hover lift');
+  assert.ok(!/\['pr-card-client', 'pr-card-notaire'\]\.forEach/.test(APP_SRC), 'no click wiring on the cards');
+  for (const id of ['pr-card-client', 'pr-card-notaire']) {
+    assert.equal($(doc, id).getAttribute('role'), null, id + ' has no role');
+    assert.equal($(doc, id).getAttribute('tabindex'), null, id + ' is not focusable');
+  }
+});
+
+test('P1-6: the pending state says the link expires (the API’s TTL when it says so)', async () => {
+  const timed = await boot({ routes: [claimRoute(() => jsonRes(200, { ok: true, ttlMinutes: 30 }))] });
+  await claimAs(timed);
+  assert.equal($(timed.doc, 'partner-pending').hidden, false);
+  assert.match($(timed.doc, 'partner-pending').textContent, /30 minutes/, 'the API’s TTL is stated');
+  const bare = await boot({ routes: [claimRoute(() => jsonRes(200, { ok: true }))] });
+  await claimAs(bare);
+  const t = $(bare.doc, 'partner-pending').textContent;
+  assert.match(t, /expire/, 'without a figure, the copy still warns the link is short-lived: ' + t);
+  assert.ok(!/\d+\s*minutes/.test(t), 'no invented number: ' + t);
+});
+
+test('P1-6: a failed boot-time verification lands on the error, not under the fold', async () => {
+  const { doc, Nota } = await boot({
+    url: '#pauth=EXPIRED',
+    routes: [{ match: (u) => u.endsWith('/partenaires/verify'), reply: () => jsonRes(400, { errors: [{ code: 'lien_invalide', message: 'Lien invalide ou expiré.' }] }) }],
+  });
+  await wait(30);
+  assert.equal(Nota.state.tab, 'partenaires');
+  const errs = $(doc, 'partner-errors');
+  assert.equal(errs.hidden, false);
+  assert.match(errs.textContent, /invalide ou expiré/);
+  assert.equal(doc.activeElement, errs, 'focus lands on the error list — a browser scrolls it into view, a screen reader reads it');
+});
+
+test('P1-7: the pane says notaries are excluded before anyone submits (art. 33)', async () => {
+  const { doc } = await boot();
+  const hero = doc.querySelector('#pane-partenaires .pr-hero');
+  const line = hero.querySelector('.pr-eligibility');
+  assert.ok(line, 'one line under the reward cards');
+  assert.ok(hero.querySelector('.pr-rewards').compareDocumentPosition(line) & 4, 'it follows the cards');
+  assert.match(line.textContent, /art\. 33/i);
+  assert.match(line.textContent, /notaire/);
+  const faq = [...doc.querySelectorAll('#pane-partenaires .pr-faq details')]
+    .find((d) => /notaire/i.test(d.querySelector('summary').textContent));
+  assert.ok(faq, 'the FAQ asks the question outright');
+  assert.match(faq.textContent, /33/);
+  assert.match(faq.textContent, /Code de déontologie/);
+});
+
+test('P1-8: the share link is built on the declared public origin, and falls back to location.origin without it', async () => {
+  const { doc, Nota } = await boot({ seed: { 'nota.partner.v1': CLAIMED } });
+  Nota.setTab('partenaires');
+  assert.notEqual(SITE, 'https://nota.example', 'the head declares a real origin');
+  assert.equal($(doc, 'partner-link').textContent, SITE + '/?ref=EVEROY');
+  const stripped = HTML_SRC.replace(/<meta name="nota:site"[^>]*>\s*/, '');
+  assert.ok(!/nota:site/.test(stripped));
+  const dom = new JSDOM(stripped, {
+    runScripts: 'outside-only', url: 'https://nota.example/', pretendToBeVisual: true,
+    beforeParse(window) {
+      window.fetch = () => Promise.reject(new Error('offline'));
+      window.scrollTo = () => {};
+      window.localStorage.setItem('nota.partner.v1', CLAIMED);
+    },
+  });
+  openWindows.push(dom.window);
+  dom.window.eval(DOMAIN_SRC); dom.window.eval(APP_SRC);
+  await wait(60);
+  dom.window.Nota.setTab('partenaires');
+  assert.equal(dom.window.document.getElementById('partner-link').textContent, 'https://nota.example/?ref=EVEROY');
+});
+
+test('P2-14: a throttled claim never promises « quelques minutes » — it reads Retry-After, or says later', async () => {
+  const plain = await boot({ routes: [claimRoute(() => jsonRes(429, { ok: true, throttled: true }))] });
+  const t1 = await claimAs(plain);
+  assert.ok(!/quelques minutes/.test(t1), 'the window is 15 minutes, not a few: ' + t1);
+  assert.match(t1, /Trop de tentatives/);
+  assert.match(t1, /plus tard/);
+  const timed = await boot({ routes: [claimRoute(() => ({
+    ...jsonRes(429, { ok: true, throttled: true }),
+    headers: { get: (h) => (String(h).toLowerCase() === 'retry-after' ? '900' : null) },
+  }))] });
+  const t2 = await claimAs(timed);
+  assert.match(t2, /15 minutes/, 'a Retry-After header is turned into minutes: ' + t2);
+});
+
+test('P2-15: the code field’s maxlength is the domain’s cap', async () => {
+  const { doc, D } = await boot();
+  // The longest run of letters the domain still accepts (REFERRAL_CODE_RE is
+  // not exported — derived through the validator so the pin cannot drift).
+  const cap = Math.max(...Array.from({ length: 64 }, (_, i) => i + 1).filter((n) => D.isReferralCode('A'.repeat(n))));
+  assert.ok(cap >= 4, 'the validator accepts codes at all');
+  assert.equal($(doc, 'partner-code').getAttribute('maxlength'), String(cap));
+});
+
+test('P2-16: the hero CTA and the form’s submit carry distinct accessible names', async () => {
+  const { doc } = await boot();
+  const hero = $(doc, 'pr-hero-cta').textContent.trim(), submit = $(doc, 'partner-submit').textContent.trim();
+  assert.ok(hero && submit);
+  assert.notEqual(hero, submit, 'two controls named alike confuse a screen-reader user');
+  assert.equal(submit, 'Réclamer mon code →', 'the action keeps the claim verb');
 });

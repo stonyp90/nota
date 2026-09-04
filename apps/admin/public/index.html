@@ -12,7 +12,7 @@
     <title>Nota · Admin</title>
     <!-- Private console: never index or follow. -->
     <meta name="robots" content="noindex,nofollow" />
-    <meta name="theme-color" content="#2c5f34" />
+    <meta name="theme-color" content="#315b43" />
     <meta name="color-scheme" content="light dark" />
 
     <!-- API base override for local dev. Empty/absent → same-origin "/api/admin"
@@ -22,6 +22,10 @@
          pointing straight at the admin API, include that namespace, e.g.
          content="http://localhost:8790/admin". -->
     <meta name="nota-admin-api" content="" />
+    <!-- The business day's time zone (domain.BUSINESS_TIMEZONE). The console does
+         not load the domain bundle, so the value travels here; admin.js falls
+         back to the same zone when the meta is absent. -->
+    <meta name="nota-timezone" content="America/Toronto" />
 
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="admin.css" />

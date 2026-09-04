@@ -564,7 +564,7 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [email, role, permissions]
+                required: [email, role, permissions, idleTtlMs, expiresAt]
                 properties:
                   email:
                     type: string
@@ -575,6 +575,17 @@ paths:
                     type: array
                     items:
                       type: string
+                  idleTtlMs:
+                    type: integer
+                    description: >-
+                      La fenetre d'inactivite de la session, en millisecondes
+                      (30 min par defaut) : sans requete pendant ce delai, la
+                      session meurt — bien avant le plafond absolu. La console
+                      vise cette echeance-la (audit 2026-09-03, P1-15).
+                  expiresAt:
+                    type: string
+                    format: date-time
+                    description: Le plafond absolu de la session (12 h), jamais repousse par un refresh.
         "401":
           $ref: "#/components/responses/Unauthorized"
   /admin/notifications/templates:
@@ -738,7 +749,11 @@ paths:
       description: >-
         Le catalogue publie EST celui que le serveur applique (`rbac.can`). Une
         cle absente d'ici n'est jamais verifiee ; une cle verifiee sans etre ici
-        serait invisible a la console. Ouvert a tout admin authentifie.
+        serait invisible a la console. Depuis le 2026-09-03 la lecture exige
+        `permissions:read` (la cle etait publiee sans etre appliquee), et
+        `services:write` a quitte le catalogue — aucune route ne l'appliquait.
+        Un groupe deja stocke qui la porte se charge encore ; elle n'est
+        simplement plus offerte.
       security:
         - adminSession: []
       responses:
@@ -762,6 +777,12 @@ paths:
                         libelleEn: { type: string }
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Sans `permissions:read`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Errors"
 
   /admin/groups:
     get:
@@ -1382,7 +1403,10 @@ paths:
       description: >-
         History (offers, retentions, completed acts) read from the sharded
         STATS# rollup counters over a date range, plus present-tense inventory
-        computed live from the carnet — no table Scan anywhere.
+        computed live from the carnet — no table Scan anywhere. Requires
+        `analytics:read` (403 otherwise). The partner `courriel` in
+        `parrainages.codes[]` only travels with `pii:read`; it is `null` for
+        everyone else (audit 2026-09-03, P0-10).
       security:
         - adminSession: []
       parameters:
@@ -1407,8 +1431,43 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [range, kpis, gauge, series, parrainages]
+                required: [range, kpis, gauge, series, parrainages, annulations, creances]
                 properties:
+                  annulations:
+                    type: object
+                    description: >-
+                      The late-cancellation money over the range (ADR 0033):
+                      since the fee is the retaining NOTARY's compensation,
+                      never Nota's revenue, it is reported as what was paid to
+                      notaries and what was booked as owed to them. Read from
+                      the transaction audit trail (`annulation_frais` rows),
+                      day by day over the range.
+                    required: [nombre, versesCents, dusCents]
+                    properties:
+                      nombre:
+                        type: integer
+                        description: Cancellations that carried a fee, in the range.
+                      versesCents:
+                        type: integer
+                        description: "Fees transferred to notaries (`verse: true`), in cents."
+                      dusCents:
+                        type: integer
+                        description: "Fees booked as owed to notaries (`verse: false`), in cents."
+                  creances:
+                    type: object
+                    description: >-
+                      The two receivable BALANCES right now, summed over the
+                      notary roster — they ignore the range. `commissionCentsDue`
+                      is what notaries still owe Nota for acts settled outside
+                      the platform (ADR 0029); `dedommagementCentsDue` is what
+                      Nota still owes notaries in cancellation compensation it
+                      could not transfer (ADR 0033).
+                    required: [commissionCentsDue, dedommagementCentsDue]
+                    properties:
+                      commissionCentsDue:
+                        type: integer
+                      dedommagementCentsDue:
+                        type: integer
                   range:
                     type: object
                     required: [from, to, days]
@@ -1530,12 +1589,19 @@ paths:
                             courriel:
                               type: string
                               nullable: true
+                              description: Only with `pii:read`; null otherwise.
                             typeNom:
                               type: string
                             typeNomEn:
                               type: string
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Sans `analytics:read`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Errors"
   /admin/segments:
     get:
       operationId: getAdminSegments

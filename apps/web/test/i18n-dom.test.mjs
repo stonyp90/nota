@@ -176,3 +176,28 @@ test('French boot stays French and offers English', async () => {
   const pulse = doc.getElementById('pulse-rows').textContent;
   assert.match(pulse, /\d\u00a0\$/, 'French boot keeps Quebec money format');
 });
+
+// P1-2 — the canonical URL and og:url follow the rendered language, so an
+// English render never canonicalises to the French page (and vice versa).
+test('P1-2: English boot rewrites canonical and og:url to the ?lang=en address; French keeps the bare one', async () => {
+  const site = /<meta name="nota:site" content="([^"]+)"/.exec(HTML_SRC)[1];
+  const en = (await boot('en')).document;
+  assert.equal(en.querySelector('link[rel="canonical"]').getAttribute('href'), site + '/?lang=en');
+  assert.equal(en.querySelector('meta[property="og:url"]').getAttribute('content'), site + '/?lang=en');
+  const fr = (await boot('fr')).document;
+  assert.equal(fr.querySelector('link[rel="canonical"]').getAttribute('href'), site + '/');
+  assert.equal(fr.querySelector('meta[property="og:url"]').getAttribute('content'), site + '/');
+  // The browser-language detection stays: an English browser with no stored
+  // choice and no ?lang renders English — and canonicalises to it.
+  const dom = new JSDOM(HTML_SRC, {
+    runScripts: 'outside-only', url: 'https://nota.example/', pretendToBeVisual: true,
+    beforeParse(window) {
+      Object.defineProperty(window.navigator, 'language', { configurable: true, value: 'en-US' });
+      window.fetch = () => Promise.reject(new Error('offline'));
+    },
+  });
+  dom.window.eval(I18N_SRC); dom.window.eval(DOMAIN_SRC); dom.window.eval(APP_SRC);
+  await wait(80);
+  assert.equal(dom.window.document.documentElement.getAttribute('lang'), 'en-CA', 'navigator.language still detects');
+  assert.equal(dom.window.document.querySelector('link[rel="canonical"]').getAttribute('href'), site + '/?lang=en');
+});

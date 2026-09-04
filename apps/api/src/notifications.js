@@ -565,7 +565,9 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
         );
       }
       if (operatorEmail) {
-        const ctx = { code: partner.code, type: partner.type, courriel: partner.courriel };
+        // `email` doubles the courriel so the {{email}} placeholder of a
+        // subject override resolves (the template reads `courriel`).
+        const ctx = { code: partner.code, type: partner.type, courriel: partner.courriel, email: partner.courriel || null };
         results.push(
           await sendOnce({
             refId: partner.code,

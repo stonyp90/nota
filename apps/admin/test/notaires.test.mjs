@@ -100,12 +100,12 @@ function sampleNotaries() {
       { id: 'n1', email: 'm.tremblay@etude.ca', etude: 'Étude Tremblay & associés', statut: 'active',
         cote: 93, axes: axes(), tauxEffectif: 0.05, part: 0.95, actes: 40,
         actesParService: { refinancement: 25, financement: 15 },
-        note: 4.7, avis: 30, commissionPercue: 4820, rayonKm: 50, urgences: true, cnq: true,
+        note: 4.7, avis: 30, commissionPercue: 4820, commissionDue: 400, rayonKm: 50, urgences: true, cnq: true,
         depuis: '2025-06-01T12:00:00.000Z', vuLe: '2026-08-31T14:02:00.000Z' },
       { id: 'n2', email: 'j.roy@notaires.ca', etude: 'Notaires Roy', statut: 'onboarding',
         cote: 12, axes: axes([{ points: 0, detail: { note: 0, avis: 0, notePonderee: 4, cible: 4.8 } }]),
         tauxEffectif: 0.15, part: 0.85, actes: 0, actesParService: {},
-        note: null, avis: 0, commissionPercue: 0, rayonKm: 0, urgences: false, cnq: false,
+        note: null, avis: 0, commissionPercue: 0, commissionDue: 0, rayonKm: 0, urgences: false, cnq: false,
         depuis: '2026-08-20T12:00:00.000Z', vuLe: null },
     ],
   };
@@ -159,7 +159,9 @@ test('ART. 29.1 — le registre nomme la cote et les actes, jamais une part gard
   // ADR 0031 — plus de colonne « Le notaire garde » : il garde tout. Publier
   // un pourcentage, fût-ce dans une console interne, décrirait la convention
   // que l'art. 29.1 du Code de déontologie interdit au notaire de conclure.
-  assert.deepEqual(heads, ['Étude', 'Statut', 'Cote', 'Actes', 'Note', 'Facturé par Nota', 'Dernière visite']);
+  // « Dû à Nota » (ADR 0029) est une CRÉANCE, jamais une part : ce qu'un
+  // notaire doit encore pour un acte réglé hors plateforme.
+  assert.deepEqual(heads, ['Étude', 'Statut', 'Cote', 'Actes', 'Note', 'Facturé par Nota', 'Dû à Nota', 'Dernière visite']);
 
   const rows = [...doc.querySelectorAll('.ntable tbody tr.nrow')];
   assert.equal(rows.length, 2, 'one row per notary, in the order the API served (cote desc)');
@@ -173,7 +175,8 @@ test('ART. 29.1 — le registre nomme la cote et les actes, jamais une part gard
   assert.match(first[4], /4,7/);
   assert.match(first[4], /30 avis/);
   assert.match(first[5], /4 820 \$/, 'ce que le CLIENT a payé à Nota, jamais une retenue');
-  assert.match(first[6], /2026-08-31/);
+  assert.match(first[6], /400 \$/, 'ce que ce notaire DOIT encore à Nota (ADR 0029) — une créance, pas une retenue');
+  assert.match(first[7], /2026-08-31/);
   assert.ok(!/%/.test(first.join(' ')), 'aucun pourcentage sur la ligne : ' + first.join(' | '));
 
   // Le nouveau venu : aucune fausse note, aucune fausse visite.
@@ -181,7 +184,7 @@ test('ART. 29.1 — le registre nomme la cote et les actes, jamais une part gard
   assert.match(second[1], /En intégration/);
   assert.match(second[4], /aucun avis/, 'note: null reads « aucun avis »');
   assert.ok(!/\b0\b/.test(second[4]), 'never a 0 out of 5');
-  assert.match(second[6], /jamais/, 'vuLe: null reads « jamais »');
+  assert.match(second[7], /jamais/, 'vuLe: null reads « jamais »');
 
   // Ce qui remplace le barème : la phrase qui dit que le notaire garde tout.
   const pied = text(doc.querySelector('.admin-content'));
@@ -300,11 +303,13 @@ test('the roster crosses into English — columns, statuses and axis labels', as
   await settle(win);
 
   const heads = [...doc.querySelectorAll('.ntable thead th')].map(text);
-  assert.deepEqual(heads, ['Firm', 'Status', 'Cote', 'Acts', 'Rating', 'Billed by Nota', 'Last visit']);
+  assert.deepEqual(heads, ['Firm', 'Status', 'Cote', 'Acts', 'Rating', 'Billed by Nota', 'Owed to Nota', 'Last visit']);
   const rows = [...doc.querySelectorAll('.ntable tbody tr.nrow')];
   assert.match(text(rows[1]), /no reviews/, 'the missing rating stays honest in English');
   assert.match(text(rows[1]), /Onboarding/);
   assert.match(text(rows[0]), /\$4,820/, 'money is reformatted, not just translated');
+  // P2-29 — a decimal in English is a point, not a comma.
+  assert.equal(text(rows[0].querySelector('.nrow-note')), '4.7');
 
   click(win, rows[0].querySelector('.nrow-toggle'));
   const detail = await waitFor(win, '.naxes-row');
@@ -374,4 +379,54 @@ test('an unknown detail key falls back to its raw name, in both languages', asyn
   // Et la convention du dépôt tient : une clé `taux…` porte son %, même
   // inconnue au dictionnaire (plus aucun axe n'en sert aujourd'hui).
   assert.deepEqual(kv, ['CNQ listing=yes', 'nouvelleMesure=7', 'tauxMachin=42.5%']);
+});
+
+// ---------------------------------------------------------------------------
+// Audit console admin (2026-09-03)
+// ---------------------------------------------------------------------------
+
+test('P0-5 — l’entête ne dit plus que la cote décide une part : elle décrit les axes et ce que Nota a facturé', async () => {
+  const { win, doc } = await boot(api(), '#/auth?token=T');
+  await waitFor(win, '.admin-rail');
+  win.location.hash = '#/notaires';
+  await waitFor(win, '.ntable');
+  const sub = text(doc.querySelector('.page-sub'));
+  assert.equal(sub, 'Tableau d’honneur — la cote sur 100, ses quatre axes, et ce que Nota a facturé au client.');
+  assert.doesNotMatch(sub, /part que chaque notaire garde/, 'l’ADR 0031 a retiré le partage');
+});
+
+test('P0-6 — ce que chaque notaire DOIT à Nota se lit en colonne, et le total en tuile', async () => {
+  const { win, doc } = await boot(api(), '#/auth?token=T');
+  await waitFor(win, '.admin-rail');
+  win.location.hash = '#/notaires';
+  await waitFor(win, '.ntable');
+  const heads = [...doc.querySelectorAll('.ntable thead th')].map(text);
+  assert.ok(heads.includes('Dû à Nota'), heads.join(' | '));
+  const col = heads.indexOf('Dû à Nota');
+  const rows = [...doc.querySelectorAll('.ntable tbody tr.nrow')];
+  assert.equal(text(rows[0].querySelectorAll('td')[col]), '400 $');
+  assert.equal(text(rows[1].querySelectorAll('td')[col]), '0 $');
+
+  const tiles = {};
+  doc.querySelectorAll('.stat-tile').forEach((t) => { tiles[text(t.querySelector('.stat-k'))] = text(t.querySelector('.stat-v')); });
+  assert.equal(tiles['Dû à Nota'], '400 $', 'la créance totale, ADR 0029');
+  assert.equal(tiles['Facturé par Nota'], '4 820 $');
+});
+
+test('P2-23 — le dépli couvre exactement les colonnes du tableau', async () => {
+  const { win, doc } = await boot(api(), '#/auth?token=T');
+  await waitFor(win, '.admin-rail');
+  win.location.hash = '#/notaires';
+  await waitFor(win, '.ntable');
+  click(win, doc.querySelector('.nrow-toggle'));
+  const detail = await waitFor(win, '.naxes-row');
+  assert.equal(detail.querySelector('td').colSpan, doc.querySelectorAll('.ntable thead th').length);
+});
+
+test('P1-19 — un tableau accessible : chaque en-tête porte sa portée', async () => {
+  const { win, doc } = await boot(api(), '#/auth?token=T');
+  await waitFor(win, '.admin-rail');
+  win.location.hash = '#/notaires';
+  await waitFor(win, '.ntable');
+  doc.querySelectorAll('.ntable thead th').forEach((th) => assert.equal(th.getAttribute('scope'), 'col'));
 });

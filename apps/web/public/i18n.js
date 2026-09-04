@@ -78,27 +78,27 @@
   "Non": "No",
   "Oui": "Yes",
   "Pièce d’identité avec photo": "Photo ID",
-  "Permis de conduire, passeport ou carte d’assurance maladie valide.": "A valid driver’s licence, passport or health insurance card.",
+  "Permis de conduire ou passeport valide (non expiré). N’utilisez pas votre carte d’assurance maladie : la loi en interdit l’usage comme pièce d’identité.": "A valid (unexpired) driver’s licence or passport. Do not use your health insurance card: the law prohibits its use as identification.",
   "Refinancement hypothécaire": "Mortgage refinancing",
   "Refinancement": "Refinancing",
   "Acte de prêt et publication de l’hypothèque lors d’un refinancement.": "Loan deed and publication of the hypothec during a refinancing.",
   "Montant du nouveau prêt": "Amount of the new loan",
   "La propriété fait-elle partie d’une succession ?": "Is the property part of an estate?",
-  "Héritiers, liquidateur : dossier nettement plus complexe.": "Heirs, a liquidator: a markedly more complex file.",
+  "Répondez oui si l’immeuble vient d’une succession qui n’est pas entièrement réglée — par exemple si le titre est encore au nom de la personne décédée.": "Answer yes if the property comes from an estate that is not fully settled — for example if the title is still in the deceased’s name.",
   "Approbation bancaire": "Bank approval",
   "Sans les instructions du prêteur, le notaire ne peut signer à la date visée.": "Without the lender’s instructions, the notary cannot sign on the target date.",
   "Obtenue": "Obtained",
   "En cours": "In progress",
-  "Pas encore": "Not yet",
+  "Pas encore demandée": "Not yet requested",
   "Co-emprunteur / indivision": "Co-borrower / undivided co-ownership",
-  "Plus de deux propriétaires inscrits.": "More than two registered owners.",
+  "Deux emprunteurs ou plus, ou une propriété détenue en indivision (parts non divisées).": "Two or more borrowers, or a property held in undivided co-ownership.",
   "Assurance habitation à jour ?": "Home insurance up to date?",
-  "Le prêteur exige une assurance habitation en vigueur.": "The lender requires home insurance in force.",
+  "Le prêteur exige une assurance habitation en vigueur. Sans elle, il ne débourse pas : prévoyez-la avant la signature.": "The lender requires home insurance in force. Without it, the lender does not disburse: arrange it before the signing.",
   "Oui, en vigueur": "Yes, in force",
   "À renouveler": "Needs renewal",
   "Aucune": "None",
   "Certificat de localisation": "Certificate of location",
-  "Un certificat périmé ou absent retarde souvent le dossier.": "An expired or missing certificate often delays the file.",
+  "La plupart des prêteurs exigent un certificat de moins de 10 ans, à jour si des travaux ont été faits depuis. Un certificat périmé ou absent retarde souvent le dossier.": "Most lenders require a certificate less than 10 years old, and up to date if work has been done since. An expired or missing certificate often delays the file.",
   "À jour": "Up to date",
   "Je ne sais pas": "I don’t know",
   "Périmé / absent": "Expired / missing",
@@ -106,19 +106,19 @@
   "Dossier en préparation": "File in preparation",
   "La propriété fait-elle partie d’une succession : Oui": "Is the property part of an estate: Yes",
   "Approbation bancaire : En cours": "Bank approval: In progress",
-  "Approbation bancaire : Pas encore": "Bank approval: Not yet",
+  "Approbation bancaire : Pas encore demandée": "Bank approval: Not yet requested",
   "Assurance habitation à jour : À renouveler": "Home insurance up to date: Needs renewal",
   "Assurance habitation à jour : Aucune": "Home insurance up to date: None",
   "Certificat de localisation : Je ne sais pas": "Certificate of location: I don’t know",
   "Certificat de localisation : Périmé / absent": "Certificate of location: Expired / missing",
-  "Le prêt finance quoi : L’achat d’une propriété": "What the loan finances: The purchase of a property",
-  "Offre de financement du prêteur": "Lender’s financing offer",
+  "Que finance ce prêt : L’achat d’une propriété": "What this loan finances: The purchase of a property",
+  "Lettre d’engagement du prêteur (offre de financement)": "Lender’s commitment letter (financing offer)",
   "Le document d’engagement de la banque, avec le taux et le montant.": "The bank’s commitment document, with the rate and the amount.",
   "Relevé hypothécaire actuel": "Current mortgage statement",
-  "Un relevé de moins de 30 jours du prêt à rembourser.": "A statement less than 30 days old for the loan being paid off.",
-  "Compte de taxes municipales": "Municipal tax bill",
-  "Le compte le plus récent de la municipalité.": "The most recent bill from the municipality.",
-  "Le plan de l’arpenteur-géomètre. C’est souvent le document qui retarde un dossier — vérifiez qu’il est à jour.": "The land surveyor’s plan. It is often the document that delays a file — check that it is up to date.",
+  "Votre plus récent relevé du prêt à rembourser.": "Your most recent statement for the loan being paid off.",
+  "Comptes de taxes municipales et scolaires": "Municipal and school tax bills",
+  "Les comptes les plus récents de votre municipalité et de votre centre de services scolaire.": "The most recent bills from your municipality and your school service centre.",
+  "Le rapport et le plan de l’arpenteur-géomètre. C’est souvent le document qui retarde un dossier — vérifiez qu’il est à jour.": "The land surveyor’s report and plan. It is often the document that delays a file — check that it is up to date.",
   "Adresse de l’immeuble": "Property address",
   "Adresse civique complète de la propriété refinancée.": "Full civic address of the property being refinanced.",
   "Prêteur": "Lender",
@@ -132,7 +132,7 @@
   "Financement": "Financing",
   "Acte de prêt et publication de l’hypothèque pour un nouveau financement.": "Loan deed and publication of the hypothec for a new financing.",
   "Montant du prêt": "Loan amount",
-  "Le prêt finance quoi ?": "What does the loan finance?",
+  "Que finance ce prêt ?": "What does this loan finance?",
   "Un achat exige de coordonner l’acte de prêt avec la vente chez le notaire instrumentant.": "A purchase requires coordinating the loan deed with the sale at the instrumenting notary.",
   "Une propriété que je possède": "A property I already own",
   "L’achat d’une propriété": "The purchase of a property",
@@ -141,7 +141,7 @@
   // Prêteur hypothécaire — the lender question (domain LENDERS catalogue).
   // Proper names identical in English still get an entry: covered() is exact.
   "Prêteur hypothécaire": "Mortgage lender",
-  "Un prêteur virtuel (sans succursale) demande plus de coordination au notaire.": "A virtual lender (no branches) means more coordination for the notary.",
+  "Un prêteur sans succursale (en ligne) demande plus de coordination au notaire.": "A lender with no branches (online) means more coordination for the notary.",
   "Banque Nationale": "National Bank",
   "Desjardins": "Desjardins",
   "RBC Banque Royale": "RBC Royal Bank",
@@ -177,10 +177,10 @@
   "Réponse requise : Prêteur hypothécaire.": "Answer required: Mortgage lender.",
   // Déplacement pour la signature — who travels (ADR 0017, domain DEPLACEMENTS).
   "Déplacement pour la signature": "Travel for the signing",
-  "L’acte se signe en personne. Plus vous êtes mobile, plus de notaires peuvent vous servir.": "The act is signed in person. The more mobile you are, the more notaries can serve you.",
-  "Je me déplace à l’étude — jusqu’à 50 km": "I can travel to the notary’s office — up to 50 km",
-  "Je me déplace à l’étude — jusqu’à 25 km": "I can travel to the notary’s office — up to 25 km",
-  "Je me déplace à l’étude — moins de 10 km": "I can travel to the notary’s office — under 10 km",
+  "L’acte se signe en personne, sauf en cas d’urgence déclarée. Plus vous acceptez de vous déplacer, plus de notaires peuvent vous servir — et moins le déplacement coûte.": "The act is signed in person, except for a declared urgency. The farther you are willing to travel, the more notaries can serve you — and the less the travel costs.",
+  "J’accepte de me déplacer à l’étude — jusqu’à 50 km": "I’m willing to travel to the notary’s office — up to 50 km",
+  "J’accepte de me déplacer à l’étude — jusqu’à 25 km": "I’m willing to travel to the notary’s office — up to 25 km",
+  "J’accepte de me déplacer à l’étude — moins de 10 km": "I’m willing to travel to the notary’s office — under 10 km",
   "Le notaire se déplace chez moi — jusqu’à 25 km": "The notary travels to me — up to 25 km",
   "Le notaire se déplace chez moi — jusqu’à 50 km": "The notary travels to me — up to 50 km",
   "Urgence — signature 100 % en ligne": "Urgency — 100 % online signing",
@@ -190,9 +190,9 @@
   "Chez moi": "At my home",
   "Urgence en ligne": "Online urgency",
   // Composed notary-card factors, one per band (finite compositions).
-  "Déplacement pour la signature : Je me déplace à l’étude — jusqu’à 50 km": "Travel for the signing: I can travel to the notary’s office — up to 50 km",
-  "Déplacement pour la signature : Je me déplace à l’étude — jusqu’à 25 km": "Travel for the signing: I can travel to the notary’s office — up to 25 km",
-  "Déplacement pour la signature : Je me déplace à l’étude — moins de 10 km": "Travel for the signing: I can travel to the notary’s office — under 10 km",
+  "Déplacement pour la signature : J’accepte de me déplacer à l’étude — jusqu’à 50 km": "Travel for the signing: I’m willing to travel to the notary’s office — up to 50 km",
+  "Déplacement pour la signature : J’accepte de me déplacer à l’étude — jusqu’à 25 km": "Travel for the signing: I’m willing to travel to the notary’s office — up to 25 km",
+  "Déplacement pour la signature : J’accepte de me déplacer à l’étude — moins de 10 km": "Travel for the signing: I’m willing to travel to the notary’s office — under 10 km",
   "Déplacement pour la signature : Le notaire se déplace chez moi — jusqu’à 25 km": "Travel for the signing: The notary travels to me — up to 25 km",
   "Déplacement pour la signature : Le notaire se déplace chez moi — jusqu’à 50 km": "Travel for the signing: The notary travels to me — up to 50 km",
   "Déplacement pour la signature : Urgence — signature 100 % en ligne": "Travel for the signing: Urgency — 100 % online signing",
@@ -255,7 +255,7 @@
   "Le courriel n’est pas valide.": "The email address is not valid.",
   "Réponse requise : Montant du nouveau prêt.": "Answer required: Amount of the new loan.",
   "Réponse requise : Montant du prêt.": "Answer required: Loan amount.",
-  "Réponse requise : Le prêt finance quoi ?": "Answer required: What does the loan finance?",
+  "Réponse requise : Que finance ce prêt ?": "Answer required: What does this loan finance?",
   "Réponse requise : La propriété fait-elle partie d’une succession ?": "Answer required: Is the property part of an estate?",
   "Réponse requise : Approbation bancaire.": "Answer required: Bank approval.",
   "Erreur serveur. Réessayez.": "Server error. Please try again.",
@@ -267,7 +267,6 @@
   "Ignorer": "Dismiss",
   "Accédez aux demandes ouvertes à Québec. Sans mot de passe.": "Access open requests in Québec. No password required.",
   "Accéder à l’espace notaire →": "Go to the notary space →",
-  "Publiez une demande et suivez vos offres. Votre courriel est transmis à Nota pour le lien de suivi et les avis. Le contenu de vos documents, lui, ne quitte jamais cet appareil.": "Post a request and follow your offers. Your email address is sent to Nota for the tracking link and notices. The contents of your documents never leave this device.",
   "Continuer →": "Continue →",
   "Entrez un courriel valide.": "Enter a valid email.",
   "Trouvez votre notaire en 3 étapes": "Find your notary in 3 steps",
@@ -799,7 +798,6 @@
   "Rien n’a été publié. Le carnet réel est injoignable : cette offre n’existe que sur cet appareil, et aucun notaire ne la verra.": "Nothing was published. The real carnet is unreachable: this offer exists only on this device, and no notary will see it.",
   "Enregistrée sur cet appareil seulement.": "Saved on this device only.",
   // Affirmations corrigées (audit 2026-09-01) : ce que le code fait vraiment.
-  "Votre courriel est transmis à Nota pour le lien de suivi et les avis. Le contenu de vos documents, lui, ne quitte jamais cet appareil.": "Your email address is sent to Nota for the tracking link and notices. The contents of your documents never leave this device.",
   "Première visite ou retour, c’est le même geste.": "First visit or return, it is the same gesture.",
   "Publiez une demande et suivez vos offres.": "Post a request and follow your offers.",
   "Plus la date est éloignée, plus de notaires ont la latitude de s’organiser pour la prendre ; une date rapprochée en laisse moins.": "The further out the date, the more notaries have room to arrange to take it; a nearer date leaves fewer.",
@@ -876,7 +874,6 @@
   "Télécharger .ics": "Download .ics",
   "Google Agenda": "Google Calendar",
   "Rendre votre offre publique ?": "Make your offer public?",
-  "Votre nom sera visible sur le carnet public, à côté du service, du montant et de la date. Par exemple : « votre nom · refinancement · dans 4 jours ». Les offres nominatives sont souvent retenues plus vite, mais c’est une information que vous rendez publique.": "Your name will be visible on the public carnet, next to the service, the amount and the date. For example: “your name · refinancing · in 4 days”. Named offers are often taken faster, but this is information you are making public.",
   "Rester anonyme": "Stay anonymous",
   "Afficher mon nom": "Show my name",
   "Bienvenue sur Nota": "Welcome to Nota",
@@ -892,7 +889,6 @@
   "Je suis notaire": "I'm a notary",
   "Bientôt": "Coming soon",
   "vous@courriel.ca": "you@email.ca",
-  "Première visite ou retour, c’est le même geste. Votre courriel est transmis à Nota pour le lien de suivi et les avis. Le contenu de vos documents, lui, ne quitte jamais cet appareil.": "First visit or return, it is the same gesture. Your email address is sent to Nota for the tracking link and notices. The contents of your documents never leave this device.",
   "Comment souhaitez-vous utiliser Nota\u00a0?": "How would you like to use Nota?",
   "Comment souhaitez-vous utiliser Nota ?": "How would you like to use Nota?",
   "Étape 1 sur 2": "Step 1 of 2",
@@ -1009,7 +1005,6 @@
 
   // --- Nous joindre (contact dialog) + cancel-offer flow ---------------------
   "Nous joindre": "Contact us",
-  "Une question, un pépin, besoin d’un coup de main ? Écrivez-nous — une personne de l’équipe vous répond à votre courriel, normalement le jour même.": "A question, a snag, need a hand? Write to us — someone from the team replies to your email, normally the same day.",
   "Nom (optionnel)": "Name (optional)",
   "Sujet": "Subject",
   "Question générale": "General question",
@@ -1020,7 +1015,6 @@
   "Message": "Message",
   "Envoyer": "Send",
   "Message envoyé.": "Message sent.",
-  "Une personne de l’équipe vous répond à votre courriel, normalement le jour même.": "Someone from the team replies to your email, normally the same day.",
   "Ou écrivez-nous directement :": "Or write to us directly:",
   "Impossible d’envoyer pour le moment. Réessayez, ou écrivez-nous par courriel.": "Unable to send right now. Try again, or write to us by email.",
   "Un courriel valide est requis pour vous répondre.": "A valid email is required so we can reply.",
@@ -1121,7 +1115,7 @@
   "Art. 32 et 29.1 — Code de déontologie": "Ss. 32 and 29.1 — Code of ethics",
   "Nota facture son propre prix au client, à côté : aucun partage d’honoraires, aucune convention sur vos honoraires.": "Nota bills the client its own price, separately: no fee sharing, no agreement over your fees.",
   "Art. 49 — Code de déontologie": "S. 49 — Code of ethics",
-  "Le montant est ce que le client offre pour sa date, son urgence et le déplacement. Nota ne fixe pas vos honoraires : vous acceptez, proposez un autre prix ou passez.": "The amount is what the client offers for their date, urgency and travel. Nota does not set your fees: you accept, propose another price or pass.",
+  "Vos honoraires restent les vôtres : vous acceptez le montant offert, proposez le vôtre, ou passez. Rien n’est retranché.": "Your fees stay yours: you accept the amount offered, propose your own, or pass. Nothing is taken off.",
   "Une décision de l’Ordre s’applique toujours en premier.": "A decision of the Chambre always comes first.",
   "Lire nos engagements déontologiques →": "Read our ethics commitments →",
   /* /W3 */
@@ -1168,12 +1162,120 @@
   "Pas maintenant": "Not now",
   // The retained card: « Votre client », unread, withdrawal terms, the prune toast.
   "Votre client": "Your client",
-  "Coordonnées en attente de la prochaine mise à jour.": "Contact details arrive with the next update.",
+  "Ni courriel ni téléphone transmis — écrivez-lui dans la conversation.": "No email or phone was provided — write to them in the conversation.",
   "nouveau": "new",
   "nouveaux": "new",
   "Se désister est gratuit, mais compté à votre dossier. Le client garde sa date et son offre.": "Withdrawing is free, but counted on your record. The client keeps their date and their offer.",
   "Le client a annulé la demande du": "The client cancelled the request of",
   /* /W1 */
+  /* F2 */
+  // Audit of the booking journey (2026-09-02): the notary's questions and the
+  // client's checklist — new questions, conditional documents, the déplacement
+  // bands as a willingness. Every string below is domain data (SERVICES,
+  // DEPLACEMENT_QUI, LENDERS); the composed « label : option » lines are the
+  // notary-card factors of the poids>0 options.
+  "Un prêteur privé donne ses instructions à la main : plus de vérifications, d’où le supplément.": "A private lender gives its instructions by hand: more checks, hence the surcharge.",
+  "Situation conjugale et résidence familiale": "Marital status and family residence",
+  "Si vous êtes marié ou uni civilement et que l’immeuble est votre résidence familiale, votre conjoint doit intervenir à l’acte, même s’il n’emprunte pas.": "If you are married or in a civil union and the property is your family residence, your spouse must intervene in the deed, even if they are not borrowing.",
+  "Ni marié ni uni civilement": "Neither married nor in a civil union",
+  "Marié ou uni civilement — autre immeuble": "Married or in a civil union — another property",
+  "Marié ou uni civilement — résidence familiale": "Married or in a civil union — family residence",
+  "Situation conjugale et résidence familiale : Marié ou uni civilement — autre immeuble": "Marital status and family residence: Married or in a civil union — another property",
+  "Situation conjugale et résidence familiale : Marié ou uni civilement — résidence familiale": "Marital status and family residence: Married or in a civil union — family residence",
+  "Assurance titres": "Title insurance",
+  "L’assurance titres remplace souvent un certificat périmé — demandez au notaire.": "Title insurance often replaces an expired certificate — ask the notary.",
+  "Certificat de localisation : Assurance titres": "Certificate of location: Title insurance",
+  "Preuve d’assurance habitation": "Proof of home insurance",
+  "L’attestation de votre assureur ; le prêteur demande d’y être inscrit comme créancier hypothécaire.": "Your insurer’s certificate; the lender asks to be named on it as mortgagee.",
+  "Promesse d’achat acceptée": "Accepted promise to purchase",
+  "La promesse d’achat signée par le vendeur et vous, avec ses annexes.": "The promise to purchase signed by the seller and you, with its annexes.",
+  "Testament et déclaration de transmission": "Will and declaration of transmission",
+  "Le testament (ou la recherche testamentaire) et la déclaration de transmission, si elle a été publiée.": "The will (or the will search) and the declaration of transmission, if it has been published.",
+  "Certificat périmé, absent ou remplacé par une assurance titres : rien à téléverser pour l’instant. Le notaire vous dira s’il en faut un nouveau et quand le commander.": "Certificate expired, missing or replaced by title insurance: nothing to upload for now. The notary will tell you whether a new one is needed and when to order it.",
+  "Jusqu’où acceptez-vous de vous déplacer ?": "How far are you willing to travel?",
+  "Jusqu’où le notaire doit-il se déplacer ?": "How far must the notary travel?",
+  /* /F2 */
+  /* F3 */
+  // Audit 2026-09-02 — booking form mechanics & dossier UI (web-owned copy).
+  "Où signez-vous\u00a0?": "Where will you sign?",
+  "(elles ajustent le prix et le temps de préparation)": "(they adjust the price and the preparation time)",
+  "Qui se déplace": "Who travels",
+  "Jusqu’où acceptez-vous de vous déplacer ?": "How far are you willing to travel?",
+  "Jusqu’où le notaire doit-il se déplacer ?": "How far must the notary travel?",
+  "Je ne peux ni me déplacer ni recevoir le notaire — signature 100 % en ligne": "I can neither travel nor host the notary — 100% online signing",
+  "Peu de notaires se déplacent jusqu’à": "Few notaries travel as far as",
+  "Votre offre ne sera visible que pour eux.": "Your offer will be visible only to them.",
+  "La signature 100 % en ligne n’est offerte que par les notaires qui l’acceptent.": "100% online signing is offered only by the notaries who accept it.",
+  "Réponse requise": "Answer required",
+  "Corriger": "Fix",
+  "Le montant que le prêteur vous avance — pas la valeur de la propriété.": "The amount the lender advances you — not the property’s value.",
+  "Vos réponses précédentes — vérifiez-les.": "Your previous answers — check them.",
+  "Sans les instructions du prêteur en main, une signature dans moins de deux semaines est rarement tenable. Choisissez une date plus éloignée, ou confirmez l’approbation avant de publier.": "Without the lender’s instructions in hand, a signing in under two weeks is rarely workable. Pick a later date, or confirm the approval before publishing.",
+  "Enregistrées dans votre profil et réutilisées pour vos prochaines offres. Le prix d’une offre déjà publiée ne change pas.": "Saved in your profile and reused for your next offers. The price of an offer already published does not change.",
+  "Les 3 premiers caractères de votre code postal.": "The first 3 characters of your postal code.",
+  "Joindre": "Attach",
+  "Autre document": "Other document",
+  /* /F3 */
+  /* F7 */
+  // Audit 2026-09-03 — notary console + « Mes offres » fixes (ADR 0033).
+  "Vos honoraires restent les vôtres : vous acceptez le montant offert, proposez le vôtre, ou passez. Rien n’est retranché.": "Your fees remain yours: you accept the amount offered, propose your own, or pass. Nothing is deducted.",
+  "Votre espace": "Your space",
+  "Mes offres": "My offers",
+  "Vos offres, la conversation avec votre notaire, votre dossier et vos coordonnées — tout ce que vous avez publié depuis Nota, au même endroit.": "Your offers, the conversation with your notary, your file and your contact details — everything you have posted through Nota, in one place.",
+  "Le client paie à Nota, en plus de vos honoraires, séparément": "The client pays Nota, on top of your fees, separately",
+  "Aucune caution vivante sur cette demande — une annulation serait sans frais.": "No live hold on this request — a cancellation would be free of charge.",
+  "Gratuit ; l’équipe Nota en est avisée. Le client garde sa date et son offre.": "Free; the Nota team is told. The client keeps their date and their offer.",
+  "Se désister est gratuit ; l’équipe Nota en est avisée. Le client garde sa date et son offre.": "Withdrawing is free; the Nota team is told. The client keeps their date and their offer.",
+  "Si le client annule aujourd’hui :": "If the client cancels today:",
+  "vous sont versés": "are paid to you",
+  "jour avant la signature": "day before signing",
+  "le jour de la signature": "on the signing day",
+  "et": "and",
+  "autre": "other",
+  "autres": "others",
+  "nouveau message": "new message",
+  "nouveaux messages": "new messages",
+  "nouveau document": "new document",
+  "nouveaux documents": "new documents",
+  "nouveautés": "new items",
+  "Ce lien a expiré — le lien du courriel le plus récent ouvre votre demande.": "This link has expired — the link in the most recent email opens your request.",
+  "Impossible de vérifier ce lien pour l’instant. Réessayez une fois en ligne.": "This link cannot be checked right now. Try again once online.",
+  "Nom non communiqué — ce notaire n’a pas encore complété sa fiche.": "Name not provided — this notary has not completed their profile yet.",
+  "Nota ne facture pas son service sur une demande annulée.": "Nota does not charge for its service on a cancelled request.",
+  "sur cet appareil": "on this device",
+  "✓ Prêteurs enregistrés sur cet appareil.": "✓ Lenders saved on this device.",
+  "Confirmer l’acte signé": "Confirm the signed act",
+  /* /F7 */
+  /* F4 — public site audit 2026-09-02: legal panes, dialogs, partners, gate. */
+  "Version 0.1 — brouillon, non révisé par un juriste · dernière mise à jour 2026-09-03": "Version 0.1 — draft, not reviewed by a lawyer · last updated 2026-09-03",
+  "Une offre et son dossier sont conservés au plus 13 mois après la date de signature (400 jours), plus 35 jours de sauvegarde continue, puis supprimés automatiquement.": "An offer and its file are kept at most 13 months after the signing date (400 days), plus 35 days of continuous backup, then deleted automatically.",
+  ". Nous traitons votre demande dans les meilleurs délais prévus par la Loi 25.": ". We handle your request within the time limits set by Law 25.",
+  "Documents échangés.": "Exchanged documents.",
+  "Quand vous envoyez un document par la messagerie au notaire qui a retenu votre demande, Nota en est le dépositaire, jamais le destinataire : le fichier est chiffré en transit et au repos, conservé au Canada (région ca-central-1) et lisible uniquement par vous et ce notaire. Aucun employé de Nota n’y a accès ; aucune analyse, aucune indexation. Il est effacé avec l’offre, et dès qu’un notaire se désiste.": "When you send a document through the chat to the notary who took on your request, Nota is its custodian, never its recipient: the file is encrypted in transit and at rest, kept in Canada (ca-central-1 region) and readable only by you and that notary. No Nota employee has access to it; no analysis, no indexing. It is erased with the offer, and as soon as a notary withdraws.",
+  "Le numéro que vous fournissez (optionnel) est privé : il n’est partagé qu’avec le notaire qui retient votre demande, puis supprimé selon le même calendrier que le reste.": "The number you provide (optional) is private: it is shared only with the notary who takes on your request, then deleted on the same schedule as the rest.",
+  "Stockage local.": "Local storage.",
+  "Vos coordonnées, vos réponses de dossier, vos préférences (langue, thème) et les liens de suivi de vos offres sont enregistrés dans le stockage local de votre navigateur, sur cet appareil seulement — aucun témoin publicitaire. Effacer les données du site dans votre navigateur les supprime. Nota compte par ailleurs, sans compte ni témoin, les grandes étapes franchies (visite, formulaire, publication) pour mesurer son parcours.": "Your contact details, your file answers, your preferences (language, theme) and the tracking links of your offers are saved in your browser’s local storage, on this device only — no advertising cookie. Clearing the site’s data in your browser removes them. Nota also counts, with no account and no cookie, the main steps taken (visit, form, publication) to measure its funnel.",
+  "Un prix de départ clair par service et deux lignes annoncées d’avance : les honoraires du notaire — ce que vous offrez est ce qu’il reçoit — et le prix fixe du service de Nota. Aucun frais caché : le barème des frais d’annulation est publié dans les": "A clear starting price per service and two lines announced up front: the notary’s fees — what you offer is what they receive — and Nota’s fixed service price. No hidden fees: the cancellation fee schedule is published in the",
+  "conditions d’utilisation": "terms of use",
+  "et le montant exact vous est affiché avant toute confirmation.": "and the exact amount is shown to you before any confirmation.",
+  "Votre nom sera visible sur le carnet public, à côté du service, du montant et de la date. Par exemple : « votre nom · refinancement · dans 4 jours ». C’est une information que vous rendez publique.": "Your name will be visible on the public carnet, next to the service, the amount and the date. For example: “your name · refinancing · in 4 days”. This is information you are making public.",
+  "Première visite ou retour, c’est le même geste. Votre courriel est transmis à Nota pour le lien de suivi et les avis. Vos documents, quand vous en envoyez, transitent chiffrés et ne sont lus que par le notaire qui vous retient — jamais par Nota.": "First visit or return, it is the same gesture. Your email address is sent to Nota for the tracking link and notices. Your documents, when you send any, travel encrypted and are read only by the notary who takes you on — never by Nota.",
+  "Publiez une demande et suivez vos offres. Votre courriel est transmis à Nota pour le lien de suivi et les avis. Vos documents, quand vous en envoyez, transitent chiffrés et ne sont lus que par le notaire qui vous retient — jamais par Nota.": "Post a request and follow your offers. Your email address is sent to Nota for the tracking link and notices. Your documents, when you send any, travel encrypted and are read only by the notary who takes you on — never by Nota.",
+  "Pas de compte ni de mot de passe : ce courriel est enregistré sur cet appareil, comme identité. Votre courriel est transmis à Nota pour le lien de suivi et les avis. Vos documents, quand vous en envoyez, transitent chiffrés et ne sont lus que par le notaire qui vous retient — jamais par Nota.": "No account, no password: this email address is saved on this device as your identity. Your email address is sent to Nota for the tracking link and notices. Your documents, when you send any, travel encrypted and are read only by the notary who takes you on — never by Nota.",
+  "Enregistrer votre courriel": "Save your email address",
+  "Enregistrer mon courriel": "Save my email address",
+  "ou vous propose un prix — vous restez libre. Vous payez ses honoraires — le montant que vous avez offert — et, séparément, le prix fixe du service de Nota ; les deux vous sont affichés avant tout paiement.": "or proposes a price — you stay free to choose. You pay their fees — the amount you offered — and, separately, Nota’s fixed service price; both are shown to you before any payment.",
+  "Une question, un pépin, besoin d’un coup de main\u00a0? Écrivez-nous — une personne de l’équipe vous répond à votre courriel.": "A question, a snag, need a hand? Write to us — someone from the team replies to your email.",
+  "Une personne de l’équipe vous répond à votre courriel.": "Someone from the team replies to your email.",
+  "Obtenir mon code →": "Get my code →",
+  "Réservé aux professionnels qui ne sont pas notaires : le Code de déontologie des notaires (art. 33) interdit à un notaire de verser ou de recevoir un tel avantage.": "Reserved for professionals who are not notaries: the notaries’ Code of ethics (s. 33) forbids a notary from paying or receiving such an advantage.",
+  "Un notaire peut-il être partenaire ?": "Can a notary be a partner?",
+  "Non. L’article 33 du Code de déontologie des notaires lui interdit, hors sa rémunération, de verser ou de recevoir tout autre avantage relatif à l’exercice de sa profession. Le programme s’adresse aux agents immobiliers, aux courtiers hypothécaires et aux autres professionnels qui ne sont pas notaires.": "No. Section 33 of the notaries’ Code of ethics forbids them, apart from their remuneration, from paying or receiving any other advantage related to the practice of their profession. The program is for real-estate agents, mortgage brokers and other professionals who are not notaries.",
+  "Le lien expire rapidement : ouvrez-le dès sa réception.": "The link expires quickly: open it as soon as it arrives.",
+  "Trop de tentatives. Réessayez plus tard.": "Too many attempts. Try again later.",
+  "Messagerie": "Chat",
+  "repère du mois": "month’s reference",
+  /* /F4 */
 };
   var HTML = {
   "Connectez un compte de paiement sécurisé (Stripe) pour recevoir vos versements. Le client autorise le paiement dès la publication ; à la signature, <strong>vos honoraires vous sont virés en entier</strong>. Nota facture son service au client, séparément — rien n’est jamais retranché de vos honoraires. Jamais de frais fixes.": "Connect a secure payment account (Stripe) to receive your payouts. The client authorizes payment as soon as the offer is posted; at signing, <strong>your fees are wired to you in full</strong>. Nota charges the client for its service, separately — nothing is ever deducted from your fees. Never any fixed fees.",
@@ -1362,24 +1464,29 @@
     "replacement": "Your offer of $1 is cancelled"
   },
   {
-    "pattern": "^Annuler maintenant retient des frais de (.+?) \\((.+?) du montant convenu\\) sur votre caution\\. Le reste vous est libéré immédiatement\\.$",
+    "pattern": "^Annuler maintenant retient des frais de (.+?) \\((.+?) du montant convenu\\) sur votre caution\\. Ils sont versés au notaire en dédommagement de la journée réservée\\. Le reste vous est libéré immédiatement\\.$",
     "flags": "",
-    "replacement": "Cancelling now keeps a fee of $1 ($2 of the agreed amount) from your deposit. The rest is released to you immediately."
+    "replacement": "Cancelling now keeps a fee of $1 ($2 of the agreed amount) from your deposit. It is paid to the notary as compensation for the day they reserved. The rest is released to you immediately."
   },
   {
-    "pattern": "^Offre annulée\\. Des frais de (.+?) \\((.+?)\\) ont été retenus sur votre caution\\.$",
+    "pattern": "^Offre annulée\\. Des frais de (.+?) \\((.+?)\\) ont été retenus sur votre caution et versés au notaire en dédommagement\\.$",
     "flags": "",
-    "replacement": "Offer cancelled. A fee of $1 ($2) was kept from your deposit."
+    "replacement": "Offer cancelled. A fee of $1 ($2) was kept from your deposit and paid to the notary as compensation."
   },
   {
-    "pattern": "^Des frais de (.+?) \\((.+?)\\) ont été retenus sur votre caution\\.$",
+    "pattern": "^Des frais de (.+?) \\((.+?)\\) ont été retenus sur votre caution et versés au notaire en dédommagement\\.$",
     "flags": "",
-    "replacement": "A fee of $1 ($2) was kept from your deposit."
+    "replacement": "A fee of $1 ($2) was kept from your deposit and paid to the notary as compensation."
   },
   {
-    "pattern": "^Vous avez annulé cette offre\\. Des frais de (.+?) \\((.+?)\\) ont été retenus sur votre caution\\. Si vous changez d’avis, choisissez une nouvelle date au carnet\\.$",
+    "pattern": "^Vous avez annulé cette offre\\. Des frais de (.+?) \\((.+?)\\) ont été retenus sur votre caution et versés au notaire en dédommagement\\. Si vous changez d’avis, choisissez une nouvelle date au carnet\\.$",
     "flags": "",
-    "replacement": "You cancelled this offer. A fee of $1 ($2) was kept from your deposit. If you change your mind, pick a new date on the carnet."
+    "replacement": "You cancelled this offer. A fee of $1 ($2) was kept from your deposit and paid to the notary as compensation. If you change your mind, pick a new date on the carnet."
+  },
+  {
+    "pattern": "^([0-9]+) nouveaux? messages?$",
+    "flags": "",
+    "replacement": "$1 new message(s)"
   },
   {
     "pattern": "^À propos de votre (.+) du (.+)\\.$",
@@ -2037,19 +2144,19 @@
     "replacement": "Private lender"
   },
   {
-    "pattern": "Je me déplace à l’étude — jusqu’à 50 km(?![A-Za-zà-ÿ])",
+    "pattern": "J’accepte de me déplacer à l’étude — jusqu’à 50 km(?![A-Za-zà-ÿ])",
     "flags": "g",
-    "replacement": "I can travel to the notary’s office — up to 50 km"
+    "replacement": "I’m willing to travel to the notary’s office — up to 50 km"
   },
   {
-    "pattern": "Je me déplace à l’étude — jusqu’à 25 km(?![A-Za-zà-ÿ])",
+    "pattern": "J’accepte de me déplacer à l’étude — jusqu’à 25 km(?![A-Za-zà-ÿ])",
     "flags": "g",
-    "replacement": "I can travel to the notary’s office — up to 25 km"
+    "replacement": "I’m willing to travel to the notary’s office — up to 25 km"
   },
   {
-    "pattern": "Je me déplace à l’étude — moins de 10 km(?![A-Za-zà-ÿ])",
+    "pattern": "J’accepte de me déplacer à l’étude — moins de 10 km(?![A-Za-zà-ÿ])",
     "flags": "g",
-    "replacement": "I can travel to the notary’s office — under 10 km"
+    "replacement": "I’m willing to travel to the notary’s office — under 10 km"
   },
   {
     "pattern": "Le notaire se déplace chez moi — jusqu’à 25 km(?![A-Za-zà-ÿ])",
@@ -2126,8 +2233,40 @@
     "pattern": "^Messagerie — ([0-9]+) nouvelles réponses$",
     "flags": "",
     "replacement": "Chat — $1 new replies"
-  }
+  },
   /* /W3 */
+  /* F4 */
+  {
+    "pattern": "^(.+?) — à partir de (.+?), repère du mois (.+?)\\. Retirer ce filtre\\.$",
+    "flags": "",
+    "replacement": "$1 — from $2, month’s reference $3. Remove this filter."
+  },
+  {
+    "pattern": "^(.+?) — à partir de (.+?), repère du mois (.+?)\\. Afficher le carnet pour cet acte\\.$",
+    "flags": "",
+    "replacement": "$1 — from $2, month’s reference $3. Show the carnet for this act."
+  },
+  {
+    "pattern": "^(.+?) — à partir de (.+?), pas assez d’offres ce mois pour un repère\\. Retirer ce filtre\\.$",
+    "flags": "",
+    "replacement": "$1 — from $2, not enough offers this month for a reference. Remove this filter."
+  },
+  {
+    "pattern": "^(.+?) — à partir de (.+?), pas assez d’offres ce mois pour un repère\\. Afficher le carnet pour cet acte\\.$",
+    "flags": "",
+    "replacement": "$1 — from $2, not enough offers this month for a reference. Show the carnet for this act."
+  },
+  {
+    "pattern": "^Le lien expire dans (\\d+) minutes\\.$",
+    "flags": "",
+    "replacement": "The link expires in $1 minutes."
+  },
+  {
+    "pattern": "^Trop de tentatives\\. Réessayez dans (\\d+) minutes\\.$",
+    "flags": "",
+    "replacement": "Too many attempts. Try again in $1 minutes."
+  }
+  /* /F4 */
 ]);
   // === END DICTIONARY ========================================================
 
@@ -2304,6 +2443,17 @@
     }
     var ogl = d.querySelector('meta[property="og:locale"]');
     if (ogl) ogl.setAttribute('content', 'en_CA');
+    // The canonical address and og:url follow the rendered language: an
+    // English render must not canonicalise to the French page. ?lang=en is
+    // the address the hreflang alternates already point at.
+    var canon = d.querySelector('link[rel="canonical"]');
+    var ogu = d.querySelector('meta[property="og:url"]');
+    var base = (canon && canon.getAttribute('href')) || (ogu && ogu.getAttribute('content')) || '';
+    if (base) {
+      var enUrl = base.replace(/[?#].*$/, '') + '?lang=en';
+      if (canon) canon.setAttribute('href', enUrl);
+      if (ogu) ogu.setAttribute('content', enUrl);
+    }
     var man = d.querySelector('link[rel="manifest"]');
     if (man) man.setAttribute('href', 'manifest.en.webmanifest');
   }

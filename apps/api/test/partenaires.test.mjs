@@ -73,8 +73,11 @@ test('claiming a code is email-verified: request pends, verify confirms with nor
   // Step 1 — the request only PENDS: nothing is stored, no welcome yet.
   const req = await register(a, { type: 'courtier_hypothecaire', courriel: 'Eve@Courtage.CA', code: 'eve-roy' });
   assert.equal(req.statusCode, 200, req.body);
-  const { devToken } = parse(req);
+  const { devToken, ttlMinutes } = parse(req);
   assert.ok(devToken, 'the dev echo carries the verification token');
+  // The pane tells the partner how long the emailed link lives — from the API,
+  // never a guessed number (audit 2026-09-02, P1-6).
+  assert.equal(ttlMinutes, 30, 'the claim answer carries the link lifetime in minutes');
   assert.equal(await a.repo.getPartner('everoy'), null, 'no partner record before verification');
 
   // Step 2 — verify writes the confirmed partner (normalized) and echoes it.

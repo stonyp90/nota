@@ -28,9 +28,28 @@
   // In-memory session (see the security note above). Nothing here is persisted.
   // ---------------------------------------------------------------------------
   var session = null;     // bearer token
-  var sessionExp = null;  // expiresAt (ISO) — drives the silent refresh timer
-  var me = null;          // { email, role, permissions }
+  var sessionExp = null;  // expiresAt (ISO) — the ABSOLUTE cap (12 h), never extended by a refresh
+  var me = null;          // { email, role, permissions, idleTtlMs, expiresAt }
   var refreshTimer = null;
+  // La session meurt à la PREMIÈRE des deux échéances : le plafond absolu, ou
+  // `idleTtlMs` sans requête (30 min côté API). La console visait le plafond
+  // seul et laissait la session s'éteindre en silence (audit 2026-09-03,
+  // P1-15). Elle suit désormais la dernière requête vue par le serveur, vise
+  // l'inactivité − 5 min pour le rafraîchissement silencieux, prévient deux
+  // minutes avant la vraie échéance, et referme d'elle-même à l'échéance.
+  var SESSION_IDLE_DEFAULT_MS = 30 * 60 * 1000;
+  var SESSION_REFRESH_LEAD_MS = 5 * 60 * 1000;
+  var SESSION_ABS_LEAD_MS = 60 * 1000;
+  var SESSION_WARN_LEAD_MS = 2 * 60 * 1000;
+  var idleTtlMs = SESSION_IDLE_DEFAULT_MS;
+  var lastActivityMs = 0; // last response the server answered with this session
+  var warnTimer = null;
+  var expireTimer = null;
+  var sessionWarning = null; // the « Rester connecté » strip, when shown
+  // Where the operator was heading before the sign-in gate (P2-31) — a hash,
+  // never a credential, kept only long enough for the magic link to land.
+  var LS_NEXT = 'nota.admin.next';
+  var NEXT_TTL_MS = 15 * 60 * 1000;
 
   // Overview view state.
   var RANGE_PRESETS = [7, 30, 90];
@@ -87,10 +106,12 @@
     return (neg ? '−' : '') + digits + frac + ' $';
   }
   // 4.7 → « 4,7 » : un nombre à virgule décimale, sans zéro inutile (deux
-  // décimales au plus, ce que servent les axes de la cote).
+  // décimales au plus, ce que servent les axes de la cote). En anglais la
+  // décimale est un point (P2-29) — le dictionnaire ne repasse pas derrière
+  // un nombre nu.
   function dec(v) {
     var n = Math.round((Number(v) || 0) * 100) / 100;
-    return String(n).replace('.', ',');
+    return String(n).replace('.', isEnglish() ? '.' : ',');
   }
   // Retention rate → "42 %" / "42,5 %". Accepts a 0..1 fraction or a 0..100
   // percent (see the API assumption in the file header / task report).
@@ -102,9 +123,27 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Dates
+  // Dates — « aujourd'hui » est le jour ouvrable québécois, jamais la tranche
+  // UTC (P0-4) : un soir d'été à Montréal, UTC est déjà demain, et l'aperçu
+  // comme le journal auraient visé le mauvais jour. Le fuseau est celui du
+  // domaine (BUSINESS_TIMEZONE) ; l'admin ne charge pas le domaine, alors il
+  // se lit dans <meta name="nota-timezone"> et retombe sur la même valeur.
   // ---------------------------------------------------------------------------
-  function todayISO() { return new Date().toISOString().slice(0, 10); }
+  var tzMeta = document.querySelector('meta[name="nota-timezone"]');
+  var BUSINESS_TZ = (tzMeta && tzMeta.content && tzMeta.content.trim()) || 'America/Toronto';
+  var fmtDay = new Intl.DateTimeFormat('en-CA', { timeZone: BUSINESS_TZ, year: 'numeric', month: '2-digit', day: '2-digit' });
+  var fmtTime = new Intl.DateTimeFormat('en-CA', { timeZone: BUSINESS_TZ, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+  function todayISO() { return fmtDay.format(new Date()); }
+  // Un instant ISO → « 2026-08-28 » / « 08:00 » à l'heure de Québec (P2-27).
+  function localDay(iso) {
+    var d = new Date(iso);
+    return isNaN(d.getTime()) ? '' : fmtDay.format(d);
+  }
+  function localTime(iso) {
+    var d = new Date(iso);
+    return isNaN(d.getTime()) ? '' : fmtTime.format(d);
+  }
+  var TZ_TITLE = 'Heure de Québec (' + BUSINESS_TZ + ')';
   function isoMinusDays(iso, n) {
     var p = iso.split('-').map(Number);
     return new Date(Date.UTC(p[0], p[1] - 1, p[2] - n)).toISOString().slice(0, 10);
@@ -137,27 +176,126 @@
   function setSession(token, expiresAt) {
     session = token || null;
     sessionExp = expiresAt || null;
-    scheduleRefresh(sessionExp);
+    lastActivityMs = Date.now();
+    scheduleSession();
   }
   function clearSession() {
     session = null; sessionExp = null; me = null;
-    if (refreshTimer) { clearTimeout(refreshTimer); refreshTimer = null; }
+    idleTtlMs = SESSION_IDLE_DEFAULT_MS;
+    clearSessionTimers();
+    hideSessionWarning();
     showUserbar(false);
   }
-  function scheduleRefresh(expiresAt) {
+  function clearSessionTimers() {
     if (refreshTimer) { clearTimeout(refreshTimer); refreshTimer = null; }
-    if (!expiresAt) return;
-    var ms = new Date(expiresAt).getTime() - Date.now() - 60000; // refresh ~1 min early
-    if (!isFinite(ms)) return;
-    refreshTimer = setTimeout(doRefresh, Math.max(5000, ms));
+    if (warnTimer) { clearTimeout(warnTimer); warnTimer = null; }
+    if (expireTimer) { clearTimeout(expireTimer); expireTimer = null; }
+  }
+  // Les deux échéances, et laquelle tombe la première.
+  function sessionDeadlines() {
+    var idle = lastActivityMs + idleTtlMs;
+    var abs = sessionExp ? new Date(sessionExp).getTime() : NaN;
+    var absolute = isFinite(abs) && abs <= idle;
+    return { idle: idle, abs: abs, at: absolute ? abs : idle, absolute: absolute };
+  }
+  // Le serveur a répondu avec cette session : sa fenêtre d'inactivité vient de
+  // glisser, la nôtre suit.
+  function touchSession() {
+    if (!session) return;
+    lastActivityMs = Date.now();
+    scheduleSession();
+  }
+  function scheduleSession() {
+    clearSessionTimers();
+    if (!session) return;
+    var d = sessionDeadlines();
+    var now = Date.now();
+    // Rafraîchir en silence : min(inactivité − 5 min, plafond − 60 s). Le
+    // rafraîchissement fait glisser l'inactivité ; il ne repousse jamais le
+    // plafond, qui est dur par conception.
+    var refreshAt = d.idle - SESSION_REFRESH_LEAD_MS;
+    if (isFinite(d.abs)) refreshAt = Math.min(refreshAt, d.abs - SESSION_ABS_LEAD_MS);
+    refreshTimer = setTimeout(doRefresh, Math.max(5000, refreshAt - now));
+    // Prévenir deux minutes avant la vraie échéance, et refermer à l'échéance.
+    warnTimer = setTimeout(showSessionWarning, Math.max(1000, d.at - SESSION_WARN_LEAD_MS - now));
+    expireTimer = setTimeout(sessionExpired, Math.max(2000, d.at - now));
   }
   async function doRefresh() {
     if (!session) return;
     var r = await call('POST', '/auth/refresh');
     if (r.status === 200 && r.json && r.json.ok && r.json.session) {
       setSession(r.json.session, r.json.expiresAt);
+      hideSessionWarning();
+      return true;
     }
     // A 401 is already handled inside call(): session cleared + routed to auth.
+    return false;
+  }
+  // L'échéance est passée côté serveur : ne pas laisser une console qui a
+  // l'air ouverte sur une session morte.
+  function sessionExpired() {
+    if (!session) return;
+    clearSession();
+    toast('Session expirée. Reconnectez-vous.');
+    history.replaceState(null, '', location.pathname);
+    renderAuthRequest({});
+  }
+  // L'avis « Rester connecté » — hors du <main>, pour survivre aux rendus de
+  // section. Quand c'est le plafond absolu qui échoit, aucun geste ne le
+  // repousse : on dit de se reconnecter.
+  function showSessionWarning() {
+    if (!session) return;
+    hideSessionWarning();
+    var d = sessionDeadlines();
+    var box = el('div', 'session-warning');
+    box.setAttribute('role', 'alert');
+    var body = el('div', 'session-warning-body');
+    body.appendChild(el('strong', null, d.absolute
+      ? 'Votre session atteint sa durée maximale dans deux minutes — reconnectez-vous pour continuer.'
+      : 'Votre session expire dans deux minutes.'));
+    box.appendChild(body);
+    var actions = el('div', 'tpl-actions');
+    if (d.absolute) {
+      var re = el('button', 'btn btn-sm btn-primary', 'Se reconnecter');
+      re.type = 'button';
+      re.addEventListener('click', function () { logout(); });
+      actions.appendChild(re);
+    } else {
+      var stay = el('button', 'btn btn-sm btn-primary', 'Rester connecté');
+      stay.type = 'button';
+      stay.addEventListener('click', function () {
+        stay.disabled = true;
+        doRefresh().then(function (ok) { if (!ok && stay) stay.disabled = false; });
+      });
+      actions.appendChild(stay);
+    }
+    box.appendChild(actions);
+    sessionWarning = box;
+    var app = $('app');
+    if (app && app.parentNode) app.parentNode.insertBefore(box, app);
+    else document.body.appendChild(box);
+    var first = box.querySelector('button');
+    if (first) first.focus();
+  }
+  function hideSessionWarning() {
+    if (sessionWarning && sessionWarning.parentNode) sessionWarning.parentNode.removeChild(sessionWarning);
+    sessionWarning = null;
+  }
+  // La route demandée avant la porte (P2-31) : gardée un quart d'heure — le
+  // temps de vie d'un lien — puis oubliée.
+  function rememberNext(hash) {
+    if (!hash || hash === '#/' || hash.indexOf('#/auth') === 0) return;
+    try { localStorage.setItem(LS_NEXT, JSON.stringify({ hash: hash, at: Date.now() })); } catch (e) {}
+  }
+  function takeNext() {
+    var out = null;
+    try {
+      var raw = localStorage.getItem(LS_NEXT);
+      localStorage.removeItem(LS_NEXT);
+      var v = raw ? JSON.parse(raw) : null;
+      if (v && typeof v.hash === 'string' && /^#\/[a-z]/.test(v.hash) && Date.now() - Number(v.at) < NEXT_TTL_MS) out = v.hash;
+    } catch (e) { out = null; }
+    return out;
   }
 
   // ---------------------------------------------------------------------------
@@ -189,6 +327,8 @@
       toast('Session expirée. Reconnectez-vous.');
       history.replaceState(null, '', location.pathname);
       renderAuthRequest({});
+    } else if (hadSession && session) {
+      touchSession(); // the server slid the idle window on this request
     }
     return { ok: res.ok, status: res.status, json: json };
   }
@@ -216,7 +356,7 @@
   function router() {
     var hash = location.hash || '';
     if (hash.indexOf('#/auth') === 0) { handleAuthRoute(hash); return; }
-    if (!session) { renderAuthRequest({}); return; }
+    if (!session) { rememberNext(hash); renderAuthRequest({}); return; }
     if (hash.indexOf('#/courriels') === 0) { renderCourriels(); return; }
     if (hash.indexOf('#/campagnes') === 0) { renderCampagnes(); return; }
     if (hash.indexOf('#/prix') === 0) { renderPrix(); return; }
@@ -251,6 +391,7 @@
 
     if (opts.error) {
       var eb = el('div', 'auth-error');
+      eb.setAttribute('role', 'alert');
       eb.appendChild(el('strong', null, opts.error));
       card.appendChild(eb);
     }
@@ -284,15 +425,24 @@
       e.preventDefault();
       var email = input.value.trim();
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-        note.hidden = false; note.className = 'auth-error';
-        clear(note); note.appendChild(el('strong', null, 'Courriel invalide.'));
+        authError(note, 'Courriel invalide.');
+        input.setAttribute('aria-invalid', 'true');
         input.focus();
         return;
       }
+      input.removeAttribute('aria-invalid');
       submitLinkRequest(email, submit, note);
     });
 
     input.focus();
+  }
+
+  // La région d'erreur de la porte : une alerte, pour qu'un lecteur d'écran
+  // l'entende sans avoir à chercher.
+  function authError(note, message) {
+    note.hidden = false; note.className = 'auth-error';
+    note.setAttribute('role', 'alert');
+    clear(note); note.appendChild(el('strong', null, message));
   }
 
   async function submitLinkRequest(email, submit, note) {
@@ -300,14 +450,17 @@
     var r = await call('POST', '/auth/request', { email: email });
     submit.disabled = false; submit.textContent = 'Recevoir le lien';
 
-    note.hidden = false; clear(note);
-    if (r.network) {
-      note.className = 'auth-error';
-      note.appendChild(el('strong', null, 'Service indisponible. Réessayez dans un instant.'));
-      return;
-    }
+    if (r.network) { authError(note, 'Service indisponible. Réessayez dans un instant.'); return; }
+    // Un refus n'est pas un envoi (P0-1). Le 429 dit « trop de demandes » ;
+    // tout autre échec dit que le lien n'est pas parti. Ni l'un ni l'autre ne
+    // révèle si l'adresse est autorisée — le serveur ne le dit pas non plus.
+    if (r.status === 429) { authError(note, 'Trop de demandes de lien. Réessayez dans quinze minutes.'); return; }
+    if (!r.ok) { authError(note, 'Le service n’a pas pu envoyer le lien. Réessayez.'); return; }
+
     // Neutral by design — never reveal whether the address is authorized.
+    note.hidden = false; clear(note);
     note.className = 'auth-note';
+    note.removeAttribute('role');
     note.appendChild(document.createTextNode('Si cette adresse est autorisée, un lien vient d’être envoyé.'));
 
     // Dev convenience: the API returns devLink only in non-production.
@@ -346,7 +499,13 @@
     verifyToken(token).then(function (ok) {
       // Strip the token from the URL either way — a used/dead token must not linger.
       history.replaceState(null, '', location.pathname);
-      if (ok) { renderOverview(); toast('Connexion réussie.'); }
+      if (ok) {
+        toast('Connexion réussie.');
+        // Back to the section the operator was heading for (P2-31), else the overview.
+        var next = takeNext();
+        if (next) location.hash = next; // hashchange → router
+        else renderOverview();
+      }
       else { renderAuthRequest({ error: 'Lien invalide ou expiré.' }); }
     });
   }
@@ -364,7 +523,17 @@
 
   async function loadMe() {
     var r = await call('GET', '/me');
-    if (r.status === 200 && r.json) { me = r.json; return { ok: true }; }
+    if (r.status === 200 && r.json) {
+      me = r.json;
+      // The real deadlines, from the server: the idle window, and the
+      // absolute cap (already known from verify, re-read here in case /me is
+      // the first thing this tab learns about the session).
+      var idle = Number(me.idleTtlMs);
+      idleTtlMs = isFinite(idle) && idle > 0 ? idle : SESSION_IDLE_DEFAULT_MS;
+      if (me.expiresAt && !sessionExp) sessionExp = me.expiresAt;
+      scheduleSession();
+      return { ok: true };
+    }
     return { ok: false, status: r.status }; // a 401 is already re-routed by call()
   }
 
@@ -374,17 +543,22 @@
     var app = $('app'); clear(app);
     var screen = el('div', 'auth-screen');
     var card = el('div', 'auth-card');
+    card.setAttribute('role', 'alert');
     card.appendChild(el('h1', 'auth-title', 'Une erreur est survenue'));
     card.appendChild(el('p', 'auth-lead', message));
+    // Les deux gestes côte à côte (P2-36), dans la barre d'actions commune.
+    var actions = el('div', 'tpl-actions');
     var retry = el('button', 'btn btn-primary', 'Réessayer');
     retry.type = 'button';
     retry.addEventListener('click', function () { retryFn(); });
-    card.appendChild(retry);
+    actions.appendChild(retry);
     var back = el('button', 'btn btn-sm', 'Se reconnecter');
     back.type = 'button';
     back.addEventListener('click', function () { clearSession(); renderAuthRequest({}); });
-    card.appendChild(back);
+    actions.appendChild(back);
+    card.appendChild(actions);
     screen.appendChild(card); app.appendChild(screen);
+    retry.focus();
   }
 
   // ---------------------------------------------------------------------------
@@ -466,14 +640,15 @@
     rail.appendChild(annul);
 
     // Notaires — le tableau d'honneur des cotes (ADR 0028) — et Audit — le
-    // journal append-only. Les deux exposent des données personnelles : la
-    // porte est 'pii:read', donc l'administrateur principal. Pour un analyste
-    // l'entrée reste VISIBLE mais fermée, comme les autres contrôles réservés :
-    // la console garde sa forme et dit pourquoi, plutôt que d'escamoter une
-    // section et de laisser croire qu'elle n'existe pas.
-    var reserved = !canReadPii();
-    rail.appendChild(railLink('Notaires', iconUsers(), 'notaires', '#/notaires', active, reserved));
-    rail.appendChild(railLink('Audit', iconShield(), 'audit', '#/audit', active, reserved));
+    // journal append-only. Deux portes DISTINCTES, celles que l'API applique :
+    // le bottin est nominatif ('pii:read'), le journal se lit avec
+    // 'audit:read' — lire le journal et lever l'anonymat d'un client sont deux
+    // capacités, et on doit pouvoir ouvrir l'une sans l'autre (P0-2). Sans la
+    // permission, l'entrée reste VISIBLE mais fermée, comme les autres
+    // contrôles réservés : la console garde sa forme et dit pourquoi, plutôt
+    // que d'escamoter une section et de laisser croire qu'elle n'existe pas.
+    rail.appendChild(railLink('Notaires', iconUsers(), 'notaires', '#/notaires', active, !canReadPii()));
+    rail.appendChild(railLink('Audit', iconShield(), 'audit', '#/audit', active, !canReadAudit()));
 
     // Phase-2 placeholder — visible but disabled, so the console reads as a
     // console without shipping a dead link.
@@ -534,7 +709,8 @@
     var titleWrap = el('div');
     titleWrap.appendChild(el('span', 'page-eyebrow', 'Tableau de bord'));
     titleWrap.appendChild(el('h1', 'page-title', 'Aperçu'));
-    titleWrap.appendChild(el('p', 'page-sub', 'Activité du marché notarial — offres, rétention et commissions.'));
+    // ADR 0031 — il n'y a plus de « commission » : Nota facture son propre prix.
+    titleWrap.appendChild(el('p', 'page-sub', 'Activité du marché notarial — offres, rétention, et ce que Nota a facturé.'));
     head.appendChild(titleWrap);
     head.appendChild(el('span', 'admin-spacer'));
     head.appendChild(buildRangeControl());
@@ -596,6 +772,9 @@
     if (r.status === 401) return; // handled by call()
 
     clear(container);
+    // Un refus n'est pas une panne : sans « analytics:read » la porte est
+    // fermée, et la console le dit plutôt que d'offrir un « Réessayer » mort.
+    if (r.status === 403) { container.appendChild(buildDenied('Lire les tableaux de bord')); return; }
     if (!r.ok || !r.json) {
       container.appendChild(buildErrorBanner(function () { loadOverviewInto(container, { afterError: true }); }));
       return;
@@ -637,7 +816,7 @@
     return t;
   }
   function buildStatTiles(d, muted) {
-    var k = d.kpis || {}, g = d.gauge || {};
+    var k = d.kpis || {}, g = d.gauge || {}, a = d.annulations || {}, c = d.creances || {};
     var grid = el('div', 'stat-grid' + (muted ? ' is-muted' : ''));
 
     var retainedSub = 'sur ' + num(k.offersPosted || 0) + ' publiées';
@@ -645,11 +824,22 @@
     grid.appendChild(tile('Taux de rétention', formatRate(k.retentionRate || 0),
       num(k.offersRetained || 0) + ' retenues ' + retainedSub, false));
     grid.appendChild(tile('Actes complétés', num(k.actsCompleted || 0), 'sur la période', false));
-    grid.appendChild(tile('Commission perçue', moneyCents(k.commissionCents || 0), 'sur la période', false));
+    // ADR 0031 — `commissionCents` est le nom hérité de ce que Nota a FACTURÉ
+    // au client pour son propre service ; « commission perçue » décrirait une
+    // part des honoraires du notaire, qui n'existe plus (P1-21).
+    grid.appendChild(tile('Facturé par Nota', moneyCents(k.commissionCents || 0), 'sur la période', false));
+    // ADR 0033 — les frais d'annulation tardive sont le DÉDOMMAGEMENT du
+    // notaire, jamais un revenu de Nota : la tuile dit à qui l'argent va (P1-22).
+    grid.appendChild(tile('Dédommagements versés aux notaires', moneyCents(a.versesCents || 0), 'sur la période', false));
 
     grid.appendChild(tile('Offres ouvertes', num(g.open || 0), 'en ce moment', true));
+    grid.appendChild(tile('Retenues en cours', num(g.retained || 0), 'en ce moment', true));
     grid.appendChild(tile('Notaires actifs', num(g.activeNotaries || 0), 'sur la plateforme', true));
     grid.appendChild(tile('Notaires en intégration', num(g.onboardingNotaries || 0), 'en intégration', true));
+    // Les deux soldes de créances, en ce moment : ce que Nota doit encore aux
+    // notaires (ADR 0033) et ce que les notaires doivent à Nota (ADR 0029).
+    grid.appendChild(tile('Dédommagements dus aux notaires', moneyCents(c.dedommagementCentsDue || 0), 'en ce moment', true));
+    grid.appendChild(tile('Dû à Nota', moneyCents(c.commissionCentsDue || 0), 'actes réglés hors plateforme', true));
     return grid;
   }
 
@@ -941,6 +1131,7 @@
   async function loadTemplatesInto(container) {
     clear(container);
     var skel = el('div', 'stat-grid');
+    skel.setAttribute('aria-busy', 'true');
     for (var i = 0; i < 4; i++) skel.appendChild(el('div', 'skeleton skeleton-tile'));
     container.appendChild(skel);
 
@@ -1439,11 +1630,15 @@
   async function loadCampagnesInto(container) {
     clear(container);
     var skel = el('div', 'stat-grid');
+    skel.setAttribute('aria-busy', 'true');
     for (var i = 0; i < 3; i++) skel.appendChild(el('div', 'skeleton skeleton-tile'));
     container.appendChild(skel);
 
     var segs = await call('GET', '/segments');
     if (segs.status === 401) return; // handled by call()
+    // Une porte fermée n'est pas une panne (P1-11) : sans « analytics:read »
+    // le catalogue est refusé, et un « Réessayer » ne l'ouvrirait jamais.
+    if (segs.status === 403) { clear(container); container.appendChild(buildDenied('Lire les tableaux de bord')); return; }
     var groupes = await call('GET', '/groups');
     var gabarits = await call('GET', '/notifications/templates');
     clear(container);
@@ -1589,8 +1784,9 @@
     campNoeuds.perime = el('p', 'tpl-note camp-perime');
     card.appendChild(campNoeuds.perime);
     if (!canPreviewCampaigns()) {
+      // Nommée comme au catalogue servi par l'API — jamais autrement (P2-30).
       card.appendChild(el('p', 'tpl-note',
-        'La prévisualisation demande la permission « Lire les statistiques ».'));
+        'La prévisualisation demande la permission « Lire les tableaux de bord ».'));
     }
 
     campNoeuds.confirm = el('div', 'bareme-confirm camp-confirm');
@@ -2057,10 +2253,14 @@
   // l'écriture, et une clé qu'elle oublierait deviendrait invisible.
   // ---------------------------------------------------------------------------
   var accesBody = null;
-  var accesEtat = { catalogue: [], groupes: [], utilisateurs: [], edition: null };
+  var accesEtat = { catalogue: [], groupes: [], utilisateurs: [], edition: null, groupesRefuses: false, utilisateursRefuses: false };
 
   function canWriteUsers() { return can('users:write'); }
   function canWriteGroups() { return can('groups:write'); }
+  // La même règle que l'API (validateGroup) : un identifiant est une clé, en
+  // minuscules, sans espace, 40 caractères au plus (P2-28).
+  var GROUP_ID_RE = /^[a-z0-9][a-z0-9_-]{0,39}$/;
+  var GROUP_NAME_MAX = 80;
 
   async function renderAcces() {
     if (!me || !me.email) {
@@ -2092,11 +2292,15 @@
   async function loadAccesInto(container) {
     clear(container);
     var skel = el('div', 'stat-grid');
+    skel.setAttribute('aria-busy', 'true');
     for (var i = 0; i < 3; i++) skel.appendChild(el('div', 'skeleton skeleton-tile'));
     container.appendChild(skel);
 
     var perms = await call('GET', '/permissions');
     if (perms.status === 401) return;
+    // Sans le catalogue il n'y a rien à lire : la section se ferme et le dit
+    // (P1-12) — un 403 n'est pas une panne à réessayer.
+    if (perms.status === 403) { clear(container); container.appendChild(buildDenied('Lire le catalogue des permissions')); return; }
     var groupes = await call('GET', '/groups');
     var users = await call('GET', '/users');
     clear(container);
@@ -2105,10 +2309,14 @@
       return;
     }
     accesEtat.catalogue = perms.json.permissions || [];
-    // Une porte fermée n'est pas une panne : un compte sans « groups:read » voit
-    // la section, vide, et la raison — la console garde sa forme.
+    // Une porte fermée n'est pas une panne : un compte sans « groups:read » ou
+    // « users:read » voit la section, et la raison — jamais un faux « Aucun
+    // groupe » (P1-12). La console garde sa forme.
+    accesEtat.groupesRefuses = groupes.status === 403;
+    accesEtat.utilisateursRefuses = users.status === 403;
     accesEtat.groupes = (groupes.ok && groupes.json && groupes.json.groupes) || [];
     accesEtat.utilisateurs = (users.ok && users.json && users.json.utilisateurs) || [];
+    accesEtat.edition = null;
 
     var view = el('div', 'view-enter');
     if (!canWriteUsers() && !canWriteGroups()) {
@@ -2123,13 +2331,43 @@
     container.appendChild(view);
   }
 
+  // Le libellé d'une permission, dans la langue de l'écran : l'API sert les
+  // deux (`libelle` / `libelleEn`), et un libellé resté en français au milieu
+  // d'une console anglaise se lit comme une fuite (P1-17).
+  function permLibelle(p) {
+    if (!p) return '';
+    return (isEnglish() && p.libelleEn) ? p.libelleEn : (p.libelle || p.cle || '');
+  }
   // Le libellé lisible d'une clé de permission. Sans entrée au catalogue on
   // affiche la clé : mieux vaut une clé brute qu'une capacité silencieuse.
   function permLabel(cle) {
     for (var i = 0; i < accesEtat.catalogue.length; i++) {
-      if (accesEtat.catalogue[i].cle === cle) return accesEtat.catalogue[i].libelle;
+      if (accesEtat.catalogue[i].cle === cle) return permLibelle(accesEtat.catalogue[i]);
     }
     return cle;
+  }
+  // Une case à cocher pour une permission du catalogue. Le libellé est du
+  // contenu d'API déjà choisi dans la bonne langue : le traducteur DOM ne
+  // repasse pas derrière.
+  function permCheckbox(p, cls, checked) {
+    var line = el('label', 'check-line');
+    line.setAttribute('data-i18n-skip', '');
+    var cb = el('input');
+    cb.type = 'checkbox'; cb.value = p.cle;
+    if (cls) cb.className = cls;
+    cb.checked = !!checked;
+    line.appendChild(cb);
+    line.appendChild(document.createTextNode(' ' + permLibelle(p)));
+    return line;
+  }
+  // Combien de personnes portent ce groupe — ce qu'une suppression touche.
+  function membresDuGroupe(id) {
+    return accesEtat.utilisateurs.filter(function (u) { return (u.groupes || []).indexOf(id) >= 0; }).length;
+  }
+  // « Réservé — cette liste demande la permission « X ». » : la porte fermée
+  // d'une liste, dans le registre de « Lecture seule ».
+  function buildReservedLine(label) {
+    return el('p', 'tpl-note acces-reserve', 'Réservé — cette liste demande la permission « ' + label + ' ».');
   }
 
   function buildGroupesCard() {
@@ -2138,84 +2376,209 @@
     card.appendChild(el('p', 'tpl-note',
       'Un groupe réunit des permissions et s’attribue à des personnes. Le supprimer retire ses permissions à tous ses membres, immédiatement.'));
 
-    if (!accesEtat.groupes.length) {
+    if (accesEtat.groupesRefuses) {
+      card.appendChild(buildReservedLine('Voir les groupes'));
+    } else if (!accesEtat.groupes.length) {
       card.appendChild(el('p', 'tpl-note', 'Aucun groupe pour le moment.'));
     }
-    accesEtat.groupes.forEach(function (g) {
-      var row = el('div', 'acces-groupe');
-      var h = el('div', 'acces-groupe-h');
-      h.appendChild(el('strong', null, g.nom));
-      h.appendChild(el('span', 'ptable-sub', ' · ' + g.id));
-      row.appendChild(h);
-      if (g.description) row.appendChild(el('p', 'ptable-sub', g.description));
-      var ul = el('ul', 'acces-perm-list');
-      (g.permissions || []).forEach(function (p) { ul.appendChild(el('li', null, permLabel(p))); });
-      if (!(g.permissions || []).length) ul.appendChild(el('li', 'ptable-sub', 'Aucune permission'));
-      row.appendChild(ul);
-      if (canWriteGroups()) {
-        var del = el('button', 'btn btn-sm acces-groupe-del', 'Supprimer');
-        del.type = 'button';
-        del.addEventListener('click', function () { supprimerGroupe(g.id); });
-        row.appendChild(del);
-      }
-      card.appendChild(row);
-    });
+    accesEtat.groupes.forEach(function (g) { card.appendChild(buildGroupeRow(g)); });
 
-    if (canWriteGroups()) card.appendChild(buildGroupeForm());
+    if (canWriteGroups() && !accesEtat.groupesRefuses) card.appendChild(buildGroupeForm(null));
     return card;
   }
 
-  function buildGroupeForm() {
+  function buildGroupeRow(g) {
+    var row = el('div', 'acces-groupe');
+    row.dataset.id = g.id;
+    var h = el('div', 'acces-groupe-h');
+    var nom = el('strong', null, g.nom);
+    nom.setAttribute('data-i18n-skip', '');
+    h.appendChild(nom);
+    h.appendChild(el('span', 'ptable-sub', ' · ' + g.id));
+    row.appendChild(h);
+    if (g.description) {
+      var desc = el('p', 'ptable-sub', g.description);
+      desc.setAttribute('data-i18n-skip', '');
+      row.appendChild(desc);
+    }
+    var ul = el('ul', 'acces-perm-list');
+    (g.permissions || []).forEach(function (p) {
+      var li = el('li', null, permLabel(p));
+      li.setAttribute('data-i18n-skip', '');
+      ul.appendChild(li);
+    });
+    if (!(g.permissions || []).length) ul.appendChild(el('li', 'ptable-sub', 'Aucune permission'));
+    row.appendChild(ul);
+
+    if (!canWriteGroups()) return row;
+
+    var err = el('div', 'tpl-error acces-erreur');
+    err.hidden = true;
+
+    var actions = el('div', 'tpl-actions');
+    // « Modifier » ouvre le groupe tel qu'il est — nom, description,
+    // permissions — plutôt que de laisser « Nouveau groupe » l'écraser en
+    // silence et effacer sa description (P0-8).
+    var edit = el('button', 'btn btn-sm acces-groupe-edit', 'Modifier');
+    edit.type = 'button';
+    edit.setAttribute('aria-expanded', 'false');
+    var editor = null;
+    edit.addEventListener('click', function () {
+      if (editor) { editor.remove(); editor = null; edit.setAttribute('aria-expanded', 'false'); return; }
+      editor = buildGroupeForm(g);
+      row.appendChild(editor);
+      edit.setAttribute('aria-expanded', 'true');
+      var first = editor.querySelector('[name="nom"]');
+      if (first) first.focus();
+    });
+    actions.appendChild(edit);
+
+    // Supprimer demande une confirmation qui NOMME ce qu'elle efface — le
+    // groupe, et combien de personnes perdent ses permissions (P0-7).
+    var del = el('button', 'btn btn-sm acces-groupe-del', 'Supprimer');
+    del.type = 'button';
+    actions.appendChild(del);
+    row.appendChild(actions);
+
+    var confirmBox = el('div', 'bareme-confirm');
+    confirmBox.hidden = true;
+    var n = membresDuGroupe(g.id);
+    var txt = el('p', 'bareme-confirm-text');
+    txt.appendChild(el('strong', null, 'Supprimer le groupe « ' + g.nom + ' » ?'));
+    txt.appendChild(document.createTextNode(' '));
+    txt.appendChild(el('span', null, n === 1
+      ? '1 membre perd ses permissions, immédiatement.'
+      : num(n) + ' membres perdent ses permissions, immédiatement.'));
+    confirmBox.appendChild(txt);
+    var cActions = el('div', 'tpl-actions');
+    var yes = el('button', 'btn btn-sm btn-danger', 'Confirmer la suppression');
+    yes.type = 'button';
+    var no = el('button', 'btn btn-sm btn-ghost', 'Annuler');
+    no.type = 'button';
+    cActions.appendChild(yes);
+    cActions.appendChild(no);
+    confirmBox.appendChild(cActions);
+    row.appendChild(confirmBox);
+    row.appendChild(err);
+
+    del.addEventListener('click', function () {
+      err.hidden = true; clear(err);
+      confirmBox.hidden = false; del.hidden = true;
+      yes.focus();
+    });
+    no.addEventListener('click', function () { confirmBox.hidden = true; del.hidden = false; del.focus(); });
+    yes.addEventListener('click', function () { supprimerGroupe(g.id, [yes, no], err, confirmBox, del); });
+    return row;
+  }
+
+  // Le formulaire d'un groupe : création (`existing` nul) ou modification.
+  // En création, un identifiant déjà pris est refusé AVANT le réseau — le PUT
+  // est un upsert côté serveur, et l'écraser effacerait une description et
+  // des permissions que personne n'a demandé de perdre.
+  function buildGroupeForm(existing) {
+    var edition = !!existing;
     var form = el('form', 'acces-groupe-form');
-    form.appendChild(el('div', 'chart-card-sub', 'Nouveau groupe'));
+    form.noValidate = true;
+    form.appendChild(el('div', 'chart-card-sub', edition ? 'Modifier le groupe' : 'Nouveau groupe'));
 
     var idRow = el('div', 'field');
-    idRow.appendChild(el('label', null, 'Identifiant'));
+    var idLab = el('label', null, 'Identifiant');
+    idLab.setAttribute('for', 'acces-groupe-id-' + (edition ? existing.id : 'nouveau'));
+    idRow.appendChild(idLab);
     var id = el('input', 'input');
     id.name = 'id'; id.type = 'text'; id.placeholder = 'soutien';
+    id.id = idLab.getAttribute('for');
+    id.setAttribute('data-i18n-skip', '');
+    if (edition) { id.value = existing.id; id.readOnly = true; }
     idRow.appendChild(id);
     form.appendChild(idRow);
 
     var nomRow = el('div', 'field');
-    nomRow.appendChild(el('label', null, 'Nom'));
+    var nomLab = el('label', null, 'Nom');
+    nomLab.setAttribute('for', 'acces-groupe-nom-' + (edition ? existing.id : 'nouveau'));
+    nomRow.appendChild(nomLab);
     var nom = el('input', 'input');
     nom.name = 'nom'; nom.type = 'text'; nom.placeholder = 'Soutien';
+    nom.id = nomLab.getAttribute('for');
+    nom.maxLength = GROUP_NAME_MAX;
+    nom.setAttribute('data-i18n-skip', '');
+    if (edition) nom.value = existing.nom || '';
     nomRow.appendChild(nom);
     form.appendChild(nomRow);
 
+    var descRow = el('div', 'field');
+    var descLab = el('label', null, 'Description');
+    descLab.setAttribute('for', 'acces-groupe-desc-' + (edition ? existing.id : 'nouveau'));
+    descRow.appendChild(descLab);
+    var desc = el('input', 'input');
+    desc.name = 'description'; desc.type = 'text'; desc.placeholder = 'À quoi sert ce groupe';
+    desc.id = descLab.getAttribute('for');
+    desc.maxLength = 240;
+    desc.setAttribute('data-i18n-skip', '');
+    if (edition) desc.value = existing.description || '';
+    descRow.appendChild(desc);
+    form.appendChild(descRow);
+
     var permsBox = el('fieldset', 'acces-perms');
     permsBox.appendChild(el('legend', null, 'Permissions'));
+    var deja = (existing && existing.permissions) || [];
     accesEtat.catalogue.forEach(function (p) {
       // Le joker ne figure JAMAIS au catalogue offert sur un groupe.
       if (p.cle === '*') return;
-      var line = el('label', 'check-line');
-      var cb = el('input');
-      cb.type = 'checkbox'; cb.value = p.cle;
-      line.appendChild(cb);
-      line.appendChild(document.createTextNode(' ' + p.libelle));
-      permsBox.appendChild(line);
+      permsBox.appendChild(permCheckbox(p, null, deja.indexOf(p.cle) >= 0));
     });
     form.appendChild(permsBox);
 
-    var err = el('ul', 'acces-erreur');
+    var err = el('div', 'tpl-error acces-erreur');
     err.hidden = true;
     form.appendChild(err);
 
-    var submit = el('button', 'btn btn-primary', 'Créer le groupe');
+    var actions = el('div', 'tpl-actions');
+    var submit = el('button', 'btn btn-primary', edition ? 'Enregistrer le groupe' : 'Créer le groupe');
     submit.type = 'submit';
-    form.appendChild(submit);
+    actions.appendChild(submit);
+    if (edition) {
+      var cancel = el('button', 'btn btn-sm btn-ghost', 'Annuler');
+      cancel.type = 'button';
+      cancel.addEventListener('click', function () {
+        var btn = form.parentNode && form.parentNode.querySelector('.acces-groupe-edit');
+        form.remove();
+        if (btn) { btn.setAttribute('aria-expanded', 'false'); btn.focus(); }
+      });
+      actions.appendChild(cancel);
+    }
+    form.appendChild(actions);
 
     form.addEventListener('submit', async function (ev) {
       if (ev.preventDefault) ev.preventDefault();
       clear(err); err.hidden = true;
+      [id, nom].forEach(function (i) { i.removeAttribute('aria-invalid'); });
       var permissions = [];
       permsBox.querySelectorAll('input[type="checkbox"]').forEach(function (cb) {
         if (cb.checked) permissions.push(cb.value);
       });
-      var r = await call('PUT', '/groups/' + encodeURIComponent(id.value.trim()), {
-        nom: nom.value.trim(),
+      var cle = id.value.trim();
+      // Ce que le serveur refusera à coup sûr se dit AVANT le voyage, avec ses
+      // mots à lui — et le champ fautif reçoit la marque et le focus.
+      var errs = [];
+      if (!GROUP_ID_RE.test(cle)) errs.push({ code: 'identifiant_invalide', champ: id });
+      else if (!edition && accesEtat.groupes.some(function (g) { return g.id === cle; })) errs.push({ code: 'groupe_existant', champ: id });
+      var n = nom.value.trim();
+      if (!n || n.length > GROUP_NAME_MAX) errs.push({ code: 'nom_invalide', champ: nom });
+      if (errs.length) {
+        showErrorLines(err, errs);
+        errs.forEach(function (e) { e.champ.setAttribute('aria-invalid', 'true'); });
+        errs[0].champ.focus();
+        return;
+      }
+      submit.disabled = true;
+      var r = await call('PUT', '/groups/' + encodeURIComponent(cle), {
+        nom: n,
+        description: desc.value.trim(),
         permissions: permissions,
       });
+      submit.disabled = false;
+      if (r.status === 401) return; // handled by call()
       if (!r.ok) { montrerErreurs(err, r); return; }
       toast('Groupe enregistré.');
       await loadAccesInto(accesBody);
@@ -2223,9 +2586,18 @@
     return form;
   }
 
-  async function supprimerGroupe(id) {
+  async function supprimerGroupe(id, buttons, err, confirmBox, del) {
+    buttons.forEach(function (b) { b.disabled = true; });
     var r = await call('DELETE', '/groups/' + encodeURIComponent(id));
-    if (!r.ok) { toast('Suppression impossible.'); return; }
+    buttons.forEach(function (b) { b.disabled = false; });
+    if (r.status === 401) return; // handled by call()
+    if (!r.ok) {
+      // Le refus se lit là où le geste a été fait — jamais dans un toast qui
+      // s'efface (P0-7).
+      confirmBox.hidden = true; del.hidden = false;
+      montrerErreurs(err, r);
+      return;
+    }
     toast('Groupe supprimé.');
     await loadAccesInto(accesBody);
   }
@@ -2236,6 +2608,7 @@
     card.appendChild(el('p', 'tpl-note',
       'Les comptes viennent de la liste blanche du déploiement — elle reste la porte extérieure. Ce qui se règle ici, c’est ce que chacun peut.'));
 
+    if (accesEtat.utilisateursRefuses) card.appendChild(buildReservedLine('Voir les utilisateurs'));
     accesEtat.utilisateurs.forEach(function (u) {
       var row = el('div', 'acces-user');
       row.dataset.email = u.email;
@@ -2253,6 +2626,7 @@
         resume.appendChild(document.createTextNode('Aucun accès'));
       } else {
         resume.appendChild(document.createTextNode(u.effectives.map(permLabel).join(' · ')));
+        resume.setAttribute('data-i18n-skip', ''); // libellés d'API, déjà dans la bonne langue
       }
       row.appendChild(resume);
 
@@ -2265,11 +2639,13 @@
       if (canWriteUsers()) {
         var edit = el('button', 'btn btn-sm acces-user-edit', 'Modifier');
         edit.type = 'button';
+        edit.setAttribute('aria-expanded', 'false');
         edit.addEventListener('click', function () {
           accesEtat.edition = u.email;
           var existant = row.querySelector('.acces-user-form');
-          if (existant) { existant.remove(); return; }
+          if (existant) { existant.remove(); edit.setAttribute('aria-expanded', 'false'); return; }
           row.appendChild(buildUserForm(u));
+          edit.setAttribute('aria-expanded', 'true');
         });
         row.appendChild(edit);
       }
@@ -2314,17 +2690,21 @@
     var pBox = el('fieldset', 'acces-user-perms');
     pBox.appendChild(el('legend', null, 'Permissions directes'));
     accesEtat.catalogue.forEach(function (p) {
-      var line = el('label', 'check-line');
-      var cb = el('input');
-      cb.type = 'checkbox'; cb.value = p.cle; cb.className = 'acces-user-perm';
-      cb.checked = (u.permissions || []).indexOf(p.cle) >= 0;
-      line.appendChild(cb);
-      line.appendChild(document.createTextNode(' ' + p.libelle));
-      pBox.appendChild(line);
+      pBox.appendChild(permCheckbox(p, 'acces-user-perm', (u.permissions || []).indexOf(p.cle) >= 0));
     });
     form.appendChild(pBox);
 
-    var err = el('ul', 'acces-erreur');
+    // `disabled` était affiché et jamais réglable (P1-14) : un compte se
+    // désactive ici, nommément — le serveur refuse le dernier accès complet.
+    var offLine = el('label', 'check-line');
+    var off = el('input');
+    off.type = 'checkbox'; off.name = 'disabled';
+    off.checked = !!u.disabled;
+    offLine.appendChild(off);
+    offLine.appendChild(document.createTextNode(' Compte désactivé — ne peut plus ouvrir de session'));
+    form.appendChild(offLine);
+
+    var err = el('div', 'tpl-error acces-erreur');
     err.hidden = true;
     form.appendChild(err);
 
@@ -2341,7 +2721,10 @@
       var groupes = [];
       gBox.querySelectorAll('.acces-user-groupe').forEach(function (cb) { if (cb.checked) groupes.push(cb.value); });
 
-      var r = await call('PUT', '/users/' + encodeURIComponent(u.email), { groupes: groupes, permissions: permissions });
+      save.disabled = true;
+      var r = await call('PUT', '/users/' + encodeURIComponent(u.email), { groupes: groupes, permissions: permissions, disabled: off.checked });
+      save.disabled = false;
+      if (r.status === 401) return; // handled by call()
       if (!r.ok) { montrerErreurs(err, r); return; }
       toast('Accès enregistrés.');
       await loadAccesInto(accesBody);
@@ -2349,14 +2732,15 @@
     return form;
   }
 
-  // Les messages du serveur, rendus près du formulaire. Un 409
-  // « dernier_administrateur » n'est pas une panne : c'est une décision du
-  // serveur qui doit se lire, sinon l'opérateur croit à un bogue.
+  // Les messages du serveur, rendus près du formulaire — par la région
+  // commune (showErrorLines), pour qu'un 409 « dernier_administrateur » se
+  // lise en clair ET en anglais : c'est une décision du serveur, pas une
+  // panne, et l'escamoter ferait croire à un bogue (P1-13).
   function montrerErreurs(box, r) {
-    clear(box);
-    var errs = (r.json && r.json.errors) || [{ message: 'Enregistrement impossible.' }];
-    errs.forEach(function (e) { box.appendChild(el('li', null, e.message)); });
-    box.hidden = false;
+    var errs = (r.json && r.json.errors && r.json.errors.length)
+      ? r.json.errors
+      : [{ message: 'Enregistrement impossible.' }];
+    showErrorLines(box, errs);
   }
 
   // ---------------------------------------------------------------------------
@@ -2382,17 +2766,21 @@
   var prixBody = null;
   var MAX_PALIERS = 10;
 
-  // La porte des données personnelles : le bottin des notaires et le journal
-  // d'audit. 'pii:read' n'est donné qu'à l'administrateur principal.
   // Le MÊME test que le serveur : un compte qui porte le joker « * » peut tout,
   // et la console doit le refléter — sans quoi elle cacherait des commandes que
   // l'API accepterait, ce qui est la pire forme de désaccord entre les deux.
+  // Chaque porte de la console est CELLE que l'API applique : le bottin des
+  // notaires est nominatif ('pii:read'), le journal d'audit se lit avec
+  // 'audit:read' — deux capacités, jamais confondues (P0-2).
   function can(permission) {
     var list = (me && me.permissions) || [];
     return list.indexOf('*') >= 0 || list.indexOf(permission) >= 0;
   }
   function canReadPii() {
     return can('pii:read');
+  }
+  function canReadAudit() {
+    return can('audit:read');
   }
 
   function canWriteSettings() {
@@ -2419,11 +2807,13 @@
     var n = Number(s);
     return isFinite(n) ? n : NaN;
   }
-  // updatedAt ISO → a quiet locale-neutral « 2026-08-27 12:00 ».
+  // updatedAt ISO → « 2026-08-27 08:00 (heure de Québec) » — l'heure de
+  // l'opérateur, nommée, plutôt qu'une tranche UTC muette (P2-27).
   function baremeDate(iso) {
     if (!iso) return '—';
-    var s = String(iso);
-    return s.slice(0, 10) + (s.length > 16 ? ' ' + s.slice(11, 16) : '');
+    var day = localDay(iso);
+    if (!day) return String(iso);
+    return day + ' ' + localTime(iso) + ' (heure de Québec)';
   }
 
   // Dollars saisis (« 400 », « 400,50 ») → un entier de cents, ou NaN. Le prix
@@ -2656,12 +3046,24 @@
     cible_sans_groupe: 'Cible incomplète — choisissez le groupe visé.',
     cible_sans_segment: 'Cible incomplète — choisissez le segment visé.',
     gabarit_manquant: 'Aucun gabarit choisi — désignez le courriel à envoyer.',
+    // Accès (RBAC) et campagnes — les refus que le serveur peut rendre (P1-13).
+    dernier_administrateur: 'Dernier administrateur — impossible de retirer le dernier accès complet : accordez-le d’abord à quelqu’un d’autre.',
+    joker_interdit: 'Joker refusé — « * » ne s’accorde pas à un groupe : accordez-le nommément à une personne.',
+    permission_inconnue: 'Permission inconnue — le catalogue a peut-être changé. Rechargez la page.',
+    groupe_introuvable: 'Groupe introuvable — il a peut-être été supprimé entre-temps. Rechargez la page.',
+    utilisateur_inconnu: 'Compte inconnu — cette adresse n’est pas dans la liste blanche du déploiement.',
+    identifiant_invalide: 'Identifiant invalide — minuscules, sans espace (lettres, chiffres, - et _), 40 caractères au plus.',
+    nom_invalide: 'Nom manquant — le nom du groupe est obligatoire, 80 caractères au plus.',
+    groupe_existant: 'Un groupe porte déjà l’identifiant demandé — modifiez-le depuis sa ligne plutôt que de l’écraser.',
+    envoi_indisponible: 'Aucun expéditeur câblé sur cette console — la campagne n’a pas été envoyée.',
+    gabarit_transactionnel: 'Gabarit transactionnel — un avis de service ne peut pas servir de campagne commerciale (art. 68 du Code de déontologie).',
   };
 
   // La région d'erreur en ligne, partagée par le refus local, le 422 du prix
   // et celui du journal d'audit : un message par ligne, jamais un JSON brut.
   function showErrorLines(error, errs) {
     error.hidden = false;
+    error.setAttribute('role', 'alert'); // annoncé sans qu'on ait à le chercher
     clear(error);
     errs.forEach(function (er) {
       var line = el('div', 'tpl-error-line');
@@ -2752,6 +3154,7 @@
   async function loadAnnulationInto(container) {
     clear(container);
     var skel = el('div', 'stat-grid');
+    skel.setAttribute('aria-busy', 'true');
     for (var i = 0; i < 3; i++) skel.appendChild(el('div', 'skeleton skeleton-tile'));
     container.appendChild(skel);
 
@@ -2782,10 +3185,14 @@
     var wrap = el('div');
 
     var grid = el('div', 'stat-grid');
-    grid.appendChild(tile('Dernière minute', pctLabel(annulationRateAt(0, paliers)), 'retenu la veille de la signature', false));
+    // Le palier « 0 jour » couvre le jour même de la signature (P2-24).
+    grid.appendChild(tile('Dernière minute', pctLabel(annulationRateAt(0, paliers)), 'retenu le jour de la signature', false));
     grid.appendChild(tile('Paliers', num(paliers.length), 'de frais selon les jours restants', false));
-    var freeFrom = paliers.length ? paliers[paliers.length - 1].maxJours + 1 : 0;
-    grid.appendChild(tile('Gratuit dès', num(freeFrom) + (freeFrom > 1 ? ' jours' : ' jour'), 'avant la signature', false));
+    // « Gratuit dès 0 jour » ne dit rien : sans palier, la tuile s'efface (P2-25).
+    if (paliers.length) {
+      var freeFrom = paliers[paliers.length - 1].maxJours + 1;
+      grid.appendChild(tile('Gratuit dès', num(freeFrom) + (freeFrom > 1 ? ' jours' : ' jour'), 'avant la signature', false));
+    }
     wrap.appendChild(grid);
 
     var card = el('div', 'chart-card tpl-group bareme-card');
@@ -2897,8 +3304,9 @@
 
     form.addEventListener('submit', function (e) {
       e.preventDefault();
+      var rows = [].slice.call(rowsBox.children);
       var body = {
-        paliers: [].map.call(rowsBox.children, function (row) {
+        paliers: rows.map(function (row) {
           var ins = row.querySelectorAll('input');
           return {
             maxJours: decToNum(ins[0].value), // the API enforces the integer ≥ 0
@@ -2906,6 +3314,16 @@
           };
         }),
       };
+      // Le serveur reste l'autorité, mais une évidence ne part pas sur le fil
+      // (P2-26) : la même règle, les mêmes mots que cancellation-config.js,
+      // et le champ fautif reçoit la marque et le focus.
+      var errs = validateAnnulationForm(body.paliers, rows);
+      if (errs.length) {
+        showErrorLines(error, errs);
+        errs.forEach(function (er) { if (er.champ) er.champ.setAttribute('aria-invalid', 'true'); });
+        if (errs[0].champ) errs[0].champ.focus();
+        return;
+      }
       submitAnnulation('PUT', body, [save], error, container, 'Barème enregistré.');
     });
 
@@ -2935,12 +3353,39 @@
     confirmBox.appendChild(confirmActions);
     wrap.appendChild(confirmBox);
 
-    open.addEventListener('click', function () { confirmBox.hidden = false; open.hidden = true; });
-    no.addEventListener('click', function () { confirmBox.hidden = true; open.hidden = false; });
+    open.addEventListener('click', function () { confirmBox.hidden = false; open.hidden = true; yes.focus(); });
+    no.addEventListener('click', function () { confirmBox.hidden = true; open.hidden = false; open.focus(); });
     yes.addEventListener('click', function () {
       submitAnnulation('DELETE', null, [yes, no], error, container, 'Barème réinitialisé.');
     });
     return wrap;
+  }
+
+  // La règle de cancellation-config.js (validateSchedule), rejouée mot pour
+  // mot : jours entiers ≥ 0, taux dans (0, 1), jours strictement croissants.
+  // `rows` sert à désigner le champ fautif. Un 422 reste possible : c'est le
+  // serveur qui tranche.
+  function validateAnnulationForm(paliers, rows) {
+    var errs = [];
+    var prev = -1;
+    paliers.forEach(function (p, i) {
+      var ins = rows[i] ? rows[i].querySelectorAll('input') : [];
+      [].forEach.call(ins, function (x) { x.removeAttribute('aria-invalid'); });
+      var badJours = !isFinite(p.maxJours) || Math.floor(p.maxJours) !== p.maxJours || p.maxJours < 0;
+      var badTaux = !isFinite(p.taux) || p.taux <= 0 || p.taux >= 1;
+      if (badJours || badTaux) {
+        errs.push({
+          code: 'palier_invalide',
+          message: 'Palier ' + (i + 1) + ' : il faut un nombre de jours entier ≥ 0 et un taux entre 0 et 1 (ex. 0,30 pour 30 %).',
+          champ: badJours ? ins[0] : ins[1],
+        });
+      } else if (p.maxJours <= prev) {
+        errs.push({ code: 'paliers_desordonnes', message: 'Palier ' + (i + 1) + ' : les jours doivent être strictement croissants.', champ: ins[0] });
+      } else {
+        prev = p.maxJours;
+      }
+    });
+    return errs;
   }
 
   async function submitAnnulation(method, body, buttons, error, container, okMsg) {
@@ -2949,18 +3394,13 @@
     buttons.forEach(function (b) { b.disabled = false; });
     if (r.status === 401) return; // handled by call()
     if (!r.ok) {
-      error.hidden = false;
-      clear(error);
-      var errs = (r.json && r.json.errors && r.json.errors.length)
+      showErrorLines(error, (r.json && r.json.errors && r.json.errors.length)
         ? r.json.errors
-        : [{ message: 'Impossible d’enregistrer le barème.' }];
-      errs.forEach(function (er) {
-        var line = el('div', 'tpl-error-line');
-        line.appendChild(el('strong', null, er.message || er.code || 'Erreur.'));
-        error.appendChild(line);
-      });
+        : [{ message: 'Impossible d’enregistrer le barème.' }]);
       return;
     }
+    error.hidden = true; // un barème accepté ne laisse pas traîner l'ancien refus
+    clear(error);
     toast(okMsg);
     await loadAnnulationInto(container);
   }
@@ -3051,10 +3491,13 @@
   }
 
   // La porte fermée, dite proprement — même registre que « Lecture seule ».
-  function buildDenied() {
+  // Avec `label`, elle NOMME la permission qui l'ouvrirait, comme au catalogue.
+  function buildDenied(label) {
     var note = el('div', 'tpl-readonly-note admin-denied');
     note.appendChild(el('strong', null, 'Accès réservé'));
-    note.appendChild(document.createTextNode(' — cette section est réservée à l’administrateur principal.'));
+    note.appendChild(document.createTextNode(label
+      ? ' — cette section demande la permission « ' + label + ' ».'
+      : ' — cette section est réservée à l’administrateur principal.'));
     return note;
   }
 
@@ -3073,8 +3516,10 @@
     var titleWrap = el('div');
     titleWrap.appendChild(el('span', 'page-eyebrow', 'Réseau'));
     titleWrap.appendChild(el('h1', 'page-title', 'Notaires'));
+    // ADR 0031 — la cote ne décide plus d'un dollar : elle classe, et Nota
+    // facture son propre prix au client (P0-5).
     titleWrap.appendChild(el('p', 'page-sub',
-      'Tableau d’honneur — la cote sur 100 décide la part que chaque notaire garde.'));
+      'Tableau d’honneur — la cote sur 100, ses quatre axes, et ce que Nota a facturé au client.'));
     head.appendChild(titleWrap);
     content.appendChild(head);
 
@@ -3092,6 +3537,7 @@
   async function loadNotairesInto(container) {
     clear(container);
     var skel = el('div', 'stat-grid');
+    skel.setAttribute('aria-busy', 'true');
     for (var i = 0; i < 3; i++) skel.appendChild(el('div', 'skeleton skeleton-tile'));
     container.appendChild(skel);
 
@@ -3127,12 +3573,25 @@
       return wrap;
     }
 
+    // Les deux totaux, avant le détail : ce que Nota a facturé, et ce qui lui
+    // est encore DÛ — les actes réglés hors plateforme (ADR 0029, P0-6). Un
+    // encaissement et une créance ne se confondent jamais.
+    var facture = 0, du = 0;
+    rows.forEach(function (n) { facture += Number(n.commissionPercue) || 0; du += Number(n.commissionDue) || 0; });
+    var grid = el('div', 'stat-grid');
+    grid.appendChild(tile('Facturé par Nota', moneyCents(facture * 100), 'encaissé, tous notaires', false));
+    grid.appendChild(tile('Dû à Nota', moneyCents(du * 100), 'actes réglés hors plateforme', true));
+    wrap.appendChild(grid);
+
     var scroll = el('div', 'chart-scroll');
     var table = el('table', 'ptable ntable');
     var thead = el('thead');
     var hr = el('tr');
-    ['Étude', 'Statut', 'Cote', 'Actes', 'Note', 'Facturé par Nota', 'Dernière visite']
-      .forEach(function (h, i) { hr.appendChild(el('th', i >= 2 ? 'is-num' : null, h)); });
+    NTABLE_HEADS.forEach(function (h, i) {
+      var th = el('th', i >= 2 ? 'is-num' : null, h);
+      th.setAttribute('scope', 'col');
+      hr.appendChild(th);
+    });
     thead.appendChild(hr);
     table.appendChild(thead);
     var tbody = el('tbody');
@@ -3189,6 +3648,7 @@
     tr.appendChild(noteCell);
 
     tr.appendChild(el('td', 'is-num', moneyCents((n.commissionPercue || 0) * 100)));
+    tr.appendChild(el('td', 'is-num', moneyCents((n.commissionDue || 0) * 100)));
 
     var vu = el('td', 'is-num');
     if (n.vuLe) {
@@ -3217,10 +3677,14 @@
     });
   }
 
+  // Les colonnes du tableau, UNE fois : l'entête et le dépli (colSpan) les
+  // lisent au même endroit, pour ne plus diverger (P2-23).
+  var NTABLE_HEADS = ['Étude', 'Statut', 'Cote', 'Actes', 'Note', 'Facturé par Nota', 'Dû à Nota', 'Dernière visite'];
+
   function buildAxesRow(n) {
     var tr = el('tr', 'naxes-row');
     var td = el('td');
-    td.colSpan = 8;
+    td.colSpan = NTABLE_HEADS.length;
     var box = el('div', 'naxes');
     (n.axes || []).forEach(function (a) {
       var axe = el('div', 'naxe');
@@ -3266,7 +3730,16 @@
 
   var AUDIT_LABELS = {
     acte_regle: 'Acte réglé',
-    annulation_frais: 'Frais d’annulation retenus',
+    acte_retenu: 'Acte retenu',
+    annulation_frais: 'Frais d’annulation — dédommagement du notaire',
+    document_depose: 'Document déposé',
+    document_lu: 'Document consulté',
+    notary_activated: 'Notaire activé',
+    acces_modifie: 'Accès modifiés',
+    groupe_modifie: 'Groupe enregistré',
+    groupe_supprime: 'Groupe supprimé',
+    campagne_envoyee: 'Campagne envoyée',
+    campagne_refusee: 'Campagne refusée',
     prix_nota_updated: 'Prix de Nota modifié',
     prix_nota_reset: 'Prix de Nota réinitialisé',
     cancellation_schedule_updated: 'Barème d’annulation modifié',
@@ -3305,13 +3778,14 @@
     auditBody = el('div');
     // Le sélecteur vit dans l'en-tête, pas dans le corps rechargé : une date
     // refusée par le serveur doit rester corrigeable.
-    if (canReadPii()) head.appendChild(buildAuditDayControl());
+    if (canReadAudit()) head.appendChild(buildAuditDayControl());
     content.appendChild(head);
     content.appendChild(auditBody);
 
     mountAuthed('audit', content);
     focusTitle();
-    if (!canReadPii()) { auditBody.appendChild(buildDenied()); return; }
+    // La porte est 'audit:read' — celle que l'API applique (P0-2).
+    if (!canReadAudit()) { auditBody.appendChild(buildDenied('Lire le journal d’audit')); return; }
     await loadAuditInto(auditBody);
   }
 
@@ -3341,6 +3815,7 @@
     var gen = ++auditGen;
     clear(container);
     var skel = el('div');
+    skel.setAttribute('aria-busy', 'true');
     for (var i = 0; i < 3; i++) skel.appendChild(el('div', 'skeleton skeleton-tile'));
     container.appendChild(skel);
 
@@ -3387,8 +3862,11 @@
   function buildAuditEntry(e) {
     var row = el('div', 'audit-entry');
     var head = el('div', 'audit-entry-head');
-    var ts = el('span', 'audit-ts', String(e.ts || '').slice(11, 16) || '—:—');
+    // L'heure de Québec, et le fuseau nommé au survol (P2-27) : un journal
+    // qu'on relit devant un auditeur ne laisse pas deviner son fuseau.
+    var ts = el('span', 'audit-ts', localTime(e.ts) || '—:—');
     ts.setAttribute('data-i18n-skip', '');
+    ts.title = TZ_TITLE;
     head.appendChild(ts);
     var action = el('span', 'audit-action', AUDIT_LABELS[e.action] || e.action || '—');
     if (!AUDIT_LABELS[e.action]) action.setAttribute('data-i18n-skip', ''); // code brut : pas à traduire
@@ -3407,20 +3885,38 @@
     row.appendChild(head);
 
     var m = e.meta || {};
+    // Les pièces d'ARGENT se lisent en une phrase, sans JSON ; les
+    // identifiants restent à côté, lisibles mais discrets.
+    function facts(list) {
+      var f = el('div', 'audit-facts');
+      f.setAttribute('data-i18n-skip', ''); // identifiants et codes de service
+      f.textContent = list.filter(function (x) { return x; }).join(' · ');
+      return f;
+    }
     if (e.action === 'acte_regle' && typeof m.honoraires === 'number' && typeof m.prixNota === 'number') {
       // LA divulgation, en DEUX lignes (ADR 0031) : les honoraires qui vont au
       // notaire en entier, et le prix du service de Nota à côté. Rien ici ne
       // divise ni ne retranche : présenter le prix de Nota comme une part des
       // honoraires décrirait l'opération que l'art. 32 du Code de déontologie
       // interdit au notaire — et ce serait une pièce écrite par Nota elle-même.
+      //
+      // ADR 0029 — réglé n'est pas encaissé : un acte réglé HORS plateforme
+      // (`paye: false`) porte une CRÉANCE, et la phrase le dit (P0-3).
+      var du = m.paye === false;
+      if (du) head.appendChild(el('span', 'audit-badge is-du', 'Non encaissé'));
       row.appendChild(el('p', 'audit-money',
         moneyCents(m.honoraires * 100) + ' au notaire · ' +
-        moneyCents(m.prixNota * 100) + ' à Nota'));
-      var facts = el('div', 'audit-facts');
-      facts.setAttribute('data-i18n-skip', ''); // identifiants et codes de service
-      facts.textContent = [m.serviceId, m.dateISO, m.bidId, m.notaryId, m.chargeId, m.transferId]
-        .filter(function (x) { return x; }).join(' · ');
-      row.appendChild(facts);
+        moneyCents(m.prixNota * 100) + (du ? ' dû à Nota — non encaissé' : ' à Nota')));
+      row.appendChild(facts([m.serviceId, m.dateISO, m.bidId, m.notaryId, m.chargeId, m.transferId]));
+    } else if (e.action === 'annulation_frais' && typeof m.frais === 'number') {
+      // ADR 0033 — les frais retenus au client sont le dédommagement du
+      // notaire : versés quand ses versements sont branchés, dus sinon.
+      row.appendChild(el('p', 'audit-money',
+        moneyCents(m.frais * 100) + ' retenus au client · ' + (m.verse ? 'versés au notaire' : 'dus au notaire')));
+      row.appendChild(facts([m.dateISO, m.bidId, m.notaryId, m.chargeId, m.transferId]));
+    } else if (e.action === 'acte_retenu' && typeof m.montant === 'number') {
+      row.appendChild(el('p', 'audit-money', moneyCents(m.montant * 100) + ' offerts au notaire'));
+      row.appendChild(facts([m.serviceId, m.dateISO, m.bidId, m.notaryId, m.etude]));
     } else if (Object.keys(m).length) {
       // Les autres gestes : la meta telle quelle, une ligne par clé. Ici le
       // JSON EST la pièce — on ne prétend pas le raconter.
@@ -3441,8 +3937,9 @@
   // --- Loading / empty / error ----------------------------------------------
   function buildSkeletons() {
     var wrap = el('div');
+    wrap.setAttribute('aria-busy', 'true'); // une attente annoncée, pas devinée
     var grid = el('div', 'stat-grid');
-    for (var i = 0; i < 7; i++) grid.appendChild(el('div', 'skeleton skeleton-tile'));
+    for (var i = 0; i < 11; i++) grid.appendChild(el('div', 'skeleton skeleton-tile'));
     wrap.appendChild(grid);
     var charts = el('div', 'chart-grid');
     charts.appendChild(el('div', 'skeleton skeleton-chart'));
@@ -3461,12 +3958,13 @@
     e.appendChild(ic);
     e.appendChild(el('div', 'empty-state-title', 'Aucune donnée pour cette période.'));
     e.appendChild(el('div', 'empty-state-text',
-      'Aucune offre, rétention ou commission n’a été enregistrée sur l’intervalle sélectionné. Essayez une période plus large.'));
+      'Aucune offre, rétention ni facturation n’a été enregistrée sur l’intervalle sélectionné. Essayez une période plus large.'));
     return e;
   }
 
   function buildErrorBanner(retry) {
     var b = el('div', 'error-banner');
+    b.setAttribute('role', 'alert');
     var body = el('div', 'error-banner-body');
     body.appendChild(el('div', 'error-banner-title', 'Impossible de charger les données.'));
     body.appendChild(el('div', 'error-banner-text', 'Le service n’a pas répondu correctement. Vérifiez votre connexion, puis réessayez.'));

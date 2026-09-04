@@ -190,7 +190,18 @@ function createAdminApp(repo, opts = {}) {
     if (route === '/admin/metrics/overview' && method === 'GET') {
       const principal = await admin.requireAdmin(bearer(request), { ip: clientIp(request) });
       if (!principal) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+      // `analytics:read` — le tableau de bord est la capacité que le paquet
+      // « analyste » a toujours décrite ; une session sans elle n'a rien à y lire.
+      if (!rbac.can(principal.permissions, 'analytics:read')) {
+        return json(403, { errors: [{ code: 'interdit', message: 'Lecture des tableaux de bord non autorisée.' }] });
+      }
       const data = await analytics.overview({ from: query.from, to: query.to });
+      // Le courriel d'un partenaire est une donnée personnelle : il ne voyage
+      // qu'avec `pii:read`. Le reste de la ligne (code, type, montants dus)
+      // est ce qu'un tableau de bord montre.
+      if (!rbac.can(principal.permissions, 'pii:read') && data && data.parrainages && Array.isArray(data.parrainages.codes)) {
+        data.parrainages = { ...data.parrainages, codes: data.parrainages.codes.map((c) => ({ ...c, courriel: null })) };
+      }
       return json(200, data);
     }
 
@@ -310,6 +321,9 @@ function createAdminApp(repo, opts = {}) {
     if (route === '/admin/permissions' && method === 'GET') {
       const p = await admin.requireAdmin(bearer(request), { ip: clientIp(request) });
       if (!p) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+      // `permissions:read` — la clé était publiée sans être appliquée nulle
+      // part (audit du 2026-09-03). Elle garde désormais ce qu'elle nomme.
+      if (!rbac.can(p.permissions, 'permissions:read')) return json(403, { errors: [{ code: 'interdit', message: 'Lecture du catalogue des permissions non autorisée.' }] });
       return json(200, admin.listPermissions());
     }
 

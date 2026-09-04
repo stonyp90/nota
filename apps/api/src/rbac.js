@@ -31,7 +31,11 @@ const PERMISSIONS = Object.freeze([
   'groups:read',
   'groups:write', // create/edit groups + their permissions
   'permissions:read', // read the permission catalog
-  'services:write', // customize the notarial services offered
+  // `services:write` (customize the catalogue of acts) was published here
+  // without any route ever checking it — a key no gate applies is a promise,
+  // not a permission, so it left the catalogue on 2026-09-03. A group stored
+  // with it still loads (resolvePermissions never filters); it is simply no
+  // longer offered. Bring it back the day a route enforces it.
   'notifications:write', // customize notification templates / channels
   'billing:write', // Stripe / commission configuration
   'audit:read', // read the audit log

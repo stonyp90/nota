@@ -49,7 +49,7 @@
   "Accès enregistrés.": "Access saved.",
   "Enregistrement impossible.": "Could not save.",
   "Désactivé": "Disabled",
-  " — attribuer des accès demande la permission « Attribuer groupes et permissions ».": " — assigning access requires the “Assign groups and permissions” permission.",
+  "— attribuer des accès demande la permission « Attribuer groupes et permissions ».": "— assigning access requires the “Assign groups and permissions” permission.",
   "Facturé par Nota": "Billed by Nota",
   "Le notaire garde la totalité de ses honoraires. La colonne « Facturé par Nota » est ce que le client a payé pour le service de la plateforme.": "The notary keeps the entirety of their fees. The « Billed by Nota » column is what the client paid for the platform service.",
   "Aller au contenu": "Skip to content",
@@ -88,7 +88,7 @@
   "Notaires": "Notaries",
   "Bientôt": "Coming soon",
   "Tableau de bord": "Dashboard",
-  "Activité du marché notarial — offres, rétention et commissions.": "Notarial marketplace activity — offers, retention and commissions.",
+  "Activité du marché notarial — offres, rétention, et ce que Nota a facturé.": "Notarial marketplace activity — offers, retention, and what Nota billed.",
   "Période": "Period",
   "Offres publiées": "Offers posted",
   "sur la période": "over the period",
@@ -111,7 +111,7 @@
   "Diagramme à barres des offres publiées et retenues par service.": "Bar chart of offers posted and taken, by service.",
   "Offres et rétention par service": "Offers and retention by service",
   "Aucune donnée pour cette période.": "No data for this period.",
-  "Aucune offre, rétention ou commission n’a été enregistrée sur l’intervalle sélectionné. Essayez une période plus large.": "No offers, retention, or commission were recorded over the selected interval. Try a wider period.",
+  "Aucune offre, rétention ni facturation n’a été enregistrée sur l’intervalle sélectionné. Essayez une période plus large.": "No offers, retention or billing were recorded over the selected interval. Try a wider period.",
   "Parrainages": "Referrals",
   "Récompenses des partenaires référents — dû à la rétention (clients) et au premier acte (notaires).": "Referring-partner rewards — owed at retention (clients) and at the first act (notaries).",
   "Partenaire": "Partner",
@@ -212,8 +212,8 @@
   "Prévisualisez d’abord : l’envoi ne s’ouvre qu’une fois le décompte affiché.": "Preview first: sending only opens once the count is shown.",
   "Le décompte ci-dessous correspond à la cible actuelle. Changez un paramètre et il faudra prévisualiser de nouveau.": "The count below matches the current target. Change one parameter and you will have to preview again.",
   "Le décompte est à jour ; l’envoi demande la permission « Envoyer une campagne ciblée ».": "The count is current; sending requires the “Send a targeted campaign” permission.",
-  "La prévisualisation demande la permission « Lire les statistiques ».": "Previewing requires the “Read analytics” permission.",
-  " — l’envoi d’une campagne demande la permission « Envoyer une campagne ciblée ». La prévisualisation, elle, reste ouverte.": " — sending a campaign requires the “Send a targeted campaign” permission. Previewing stays open.",
+  "La prévisualisation demande la permission « Lire les tableaux de bord ».": "Previewing requires the “Read the dashboards” permission.",
+  "— l’envoi d’une campagne demande la permission « Envoyer une campagne ciblée ». La prévisualisation, elle, reste ouverte.": "— sending a campaign requires the “Send a targeted campaign” permission. Previewing stays open.",
   "Confirmer l’envoi": "Confirm the send",
   "L’envoi est immédiat et ne se rappelle pas.": "Sending is immediate and cannot be recalled.",
   "Confirmer et envoyer quand même": "Confirm and send anyway",
@@ -293,7 +293,7 @@
   "Impossible d’enregistrer le barème.": "Unable to save the schedule.",
   "Barème décidé par Nota — frais d’annulation tardive selon les jours restants avant la signature.": "Schedule decided by Nota — late-cancellation fees by days left before the signing.",
   "Dernière minute": "Last minute",
-  "retenu la veille de la signature": "retained on the eve of the signing",
+  "retenu le jour de la signature": "retained on the day of the signing",
   "de frais selon les jours restants": "of fees by days remaining",
   "Gratuit dès": "Free from",
   "avant la signature": "before the signing",
@@ -311,7 +311,7 @@
   "Accès réservé": "Restricted access",
   "— cette section est réservée à l’administrateur principal.": "— this section is reserved for the primary administrator.",
   "Réseau": "Network",
-  "Tableau d’honneur — la cote sur 100 décide la part que chaque notaire garde.": "Roll of honour — the cote out of 100 decides the share each notary keeps.",
+  "Tableau d’honneur — la cote sur 100, ses quatre axes, et ce que Nota a facturé au client.": "Roll of honour — the cote out of 100, its four axes, and what Nota billed the client.",
   "Tableau d’honneur": "Roll of honour",
   "Trié par cote — la meilleure d’abord.": "Sorted by cote — the best first.",
   "Aucun notaire inscrit pour le moment.": "No notary registered yet.",
@@ -355,7 +355,7 @@
   "Le jour demandé est illisible.": "The requested day is unreadable.",
   "système": "system",
   "Acte réglé": "Act settled",
-  "Frais d’annulation retenus": "Cancellation fee withheld",
+  "Frais d’annulation — dédommagement du notaire": "Cancellation fee — the notary’s compensation",
   "Prix de Nota modifié": "Nota’s price updated",
   "Prix de Nota réinitialisé": "Nota’s price reset",
   "Barème d’annulation modifié": "Cancellation schedule updated",
@@ -367,7 +367,60 @@
   "Connexion freinée": "Sign-in throttled",
   "Connexion réussie": "Signed in",
   "Déconnexion": "Signed out",
-  "Session prolongée": "Session extended"
+  "Session prolongée": "Session extended",
+  /* F1 — audit console admin 2026-09-03 */
+  "Trop de demandes de lien. Réessayez dans quinze minutes.": "Too many link requests. Try again in fifteen minutes.",
+  "Le service n’a pas pu envoyer le lien. Réessayez.": "The service could not send the link. Try again.",
+  "Votre session expire dans deux minutes.": "Your session expires in two minutes.",
+  "Votre session atteint sa durée maximale dans deux minutes — reconnectez-vous pour continuer.": "Your session reaches its maximum length in two minutes — sign in again to continue.",
+  "Rester connecté": "Stay signed in",
+  "Facturé par Nota": "Billed by Nota",
+  "Dédommagements versés aux notaires": "Compensation paid to notaries",
+  "Dédommagements dus aux notaires": "Compensation owed to notaries",
+  "Dû à Nota": "Owed to Nota",
+  "actes réglés hors plateforme": "acts settled off-platform",
+  "encaissé, tous notaires": "collected, all notaries",
+  "Retenues en cours": "Retained right now",
+  "— cette section demande la permission « Lire les tableaux de bord ».": "— this section requires the “Read the dashboards” permission.",
+  "— cette section demande la permission « Lire le catalogue des permissions ».": "— this section requires the “Read the permission catalog” permission.",
+  "— cette section demande la permission « Lire le journal d’audit ».": "— this section requires the “Read the audit log” permission.",
+  "Réservé — cette liste demande la permission « Voir les groupes ».": "Reserved — this list requires the “See groups” permission.",
+  "Réservé — cette liste demande la permission « Voir les utilisateurs ».": "Reserved — this list requires the “See users” permission.",
+  "Modifier le groupe": "Edit the group",
+  "Description": "Description",
+  "À quoi sert ce groupe": "What this group is for",
+  "Enregistrer le groupe": "Save the group",
+  "Supprimer": "Delete",
+  "Confirmer la suppression": "Confirm the deletion",
+  "1 membre perd ses permissions, immédiatement.": "1 member loses its permissions, immediately.",
+  "Compte désactivé — ne peut plus ouvrir de session": "Account disabled — can no longer sign in",
+  "Dernier administrateur — impossible de retirer le dernier accès complet : accordez-le d’abord à quelqu’un d’autre.": "Last administrator — the last full access cannot be removed: grant it to someone else first.",
+  "Joker refusé — « * » ne s’accorde pas à un groupe : accordez-le nommément à une personne.": "Wildcard refused — “*” is not granted to a group: grant it to a named person.",
+  "Permission inconnue — le catalogue a peut-être changé. Rechargez la page.": "Unknown permission — the catalogue may have changed. Reload the page.",
+  "Groupe introuvable — il a peut-être été supprimé entre-temps. Rechargez la page.": "Group not found — it may have been deleted in the meantime. Reload the page.",
+  "Compte inconnu — cette adresse n’est pas dans la liste blanche du déploiement.": "Unknown account — this address is not on the deployment allowlist.",
+  "Identifiant invalide — minuscules, sans espace (lettres, chiffres, - et _), 40 caractères au plus.": "Invalid identifier — lowercase, no spaces (letters, digits, - and _), 40 characters at most.",
+  "Nom manquant — le nom du groupe est obligatoire, 80 caractères au plus.": "Name missing — the group name is required, 80 characters at most.",
+  "Un groupe porte déjà l’identifiant demandé — modifiez-le depuis sa ligne plutôt que de l’écraser.": "A group already carries the requested identifier — edit it from its row rather than overwriting it.",
+  "Aucun expéditeur câblé sur cette console — la campagne n’a pas été envoyée.": "No sender is wired on this console — the campaign was not sent.",
+  "Gabarit transactionnel — un avis de service ne peut pas servir de campagne commerciale (art. 68 du Code de déontologie).": "Transactional template — a service notice cannot serve as a commercial campaign (s. 68 of the Code of ethics).",
+  "Non encaissé": "Not collected",
+  "Acte retenu": "Act retained",
+  "Document déposé": "Document uploaded",
+  "Document consulté": "Document viewed",
+  "Notaire activé": "Notary activated",
+  "Accès modifiés": "Access updated",
+  "Groupe enregistré": "Group saved",
+  "Groupe supprimé": "Group deleted",
+  "Campagne refusée": "Campaign refused",
+  "Audit": "Audit",
+  "Console": "Console",
+  "Notifications": "Notifications",
+  "Barème en vigueur": "Schedule in force",
+  "Axes": "Axes",
+  "Aucun jeton pour ce modèle.": "No tokens for this template.",
+  "— la modification du barème est réservée à l’administrateur principal.": "— editing the schedule is reserved for the primary administrator."
+  /* /F1 */
 };
   var HTML = {};
   var RULES = compileRules([
@@ -590,7 +643,69 @@
     "pattern": "(\\d)[\\u00a0 ]%",
     "flags": "g",
     "replacement": "$1%"
+  },
+  /* F1 rules — audit console admin 2026-09-03 */
+  {
+    "pattern": "^(.+) au notaire · (.+) dû à Nota — non encaissé$",
+    "flags": "",
+    "replacement": "$1 to the notary · $2 owed to Nota — not collected"
+  },
+  {
+    "pattern": "^(.+) retenus au client · versés au notaire$",
+    "flags": "",
+    "replacement": "$1 withheld from the client · paid to the notary"
+  },
+  {
+    "pattern": "^(.+) retenus au client · dus au notaire$",
+    "flags": "",
+    "replacement": "$1 withheld from the client · owed to the notary"
+  },
+  {
+    "pattern": "^(.+) offerts au notaire$",
+    "flags": "",
+    "replacement": "$1 offered to the notary"
+  },
+  {
+    "pattern": "^(\\d+)\\.(\\d+) sur (\\d+)$",
+    "flags": "",
+    "replacement": "$1.$2 out of $3"
+  },
+  {
+    "pattern": "^Supprimer le groupe « (.+) » \\?$",
+    "flags": "",
+    "replacement": "Delete the group “$1”?"
+  },
+  {
+    "pattern": "^([\\d\\u00a0 ]+) membres perdent ses permissions, immédiatement\\.$",
+    "flags": "",
+    "replacement": "$1 members lose its permissions, immediately."
+  },
+  {
+    "pattern": "^Groupes : (.+)$",
+    "flags": "",
+    "replacement": "Groups: $1"
+  },
+  {
+    "pattern": "^Palier (\\d+) : il faut un nombre de jours entier ≥ 0 et un taux entre 0 et 1 \\(ex\\. 0,30 pour 30 ?%\\)\\.$",
+    "flags": "",
+    "replacement": "Tier $1: a whole number of days ≥ 0 and a rate between 0 and 1 are required (e.g. 0.30 for 30%)."
+  },
+  {
+    "pattern": "^Palier (\\d+) : les jours doivent être strictement croissants\\.$",
+    "flags": "",
+    "replacement": "Tier $1: days must be strictly ascending."
+  },
+  {
+    "pattern": "^Heure de Québec \\((.+)\\)$",
+    "flags": "",
+    "replacement": "Québec time ($1)"
+  },
+  {
+    "pattern": "\\(heure de Québec\\)",
+    "flags": "g",
+    "replacement": "(Québec time)"
   }
+  /* /F1 rules */
 ]);
   // === END DICTIONARY ========================================================
 

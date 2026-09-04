@@ -24,13 +24,19 @@ const $ = (doc, id) => doc.getElementById(id);
 const todayISO = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
 const addDays = (iso, n) => new Date(Date.parse(iso + 'T00:00:00Z') + n * 864e5).toISOString().slice(0, 10);
 
-async function boot() {
+const jsonRes = (status, body) => ({ ok: status >= 200 && status < 300, status, json: async () => body, text: async () => JSON.stringify(body) });
+
+async function boot({ routes = [] } = {}) {
   const dom = new JSDOM(HTML_SRC, {
     runScripts: 'outside-only',
     url: 'https://nota.example/',
     pretendToBeVisual: true,
     beforeParse(window) {
-      window.fetch = () => Promise.reject(new Error('offline'));
+      window.fetch = (u, init) => {
+        const r = routes.find((x) => x.match(String(u), init || {}));
+        if (!r) return Promise.reject(new Error('offline'));
+        return Promise.resolve(r.reply(String(u), init || {}));
+      };
       window.scrollTo = () => {};
       if (!window.HTMLDialogElement.prototype.showModal) {
         window.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
@@ -120,4 +126,55 @@ test('the montant field wears its $ unit', async () => {
   const wrap = inp.closest('.crit-unit-wrap');
   assert.ok(wrap, 'the bracket input is wrapped with its unit');
   assert.equal(wrap.querySelector('.crit-unit').textContent, '$');
+});
+
+// --- Audit §1.5 (2026-09-02): a default is a pre-selection, not a declaration.
+// Opening the sheet used to WRITE the two defaults into the dossier (and push
+// it to the API) before the client touched anything. Now the row merely opens
+// on the zero-cost answer; the dossier records an answer when the client
+// gives one — or when they publish, which is the moment they stand by it.
+
+const dossierLS = (win) => JSON.parse(win.localStorage.getItem('nota.dossier.v1') || '{}');
+
+test('a default is visual until touched: nothing is recorded in the dossier on open', async () => {
+  const { win, doc } = await boot();
+  await openRefinancement(win, doc);
+  const pricing = (dossierLS(win).refinancement || {}).__pricing || {};
+  assert.ok(!('succession' in pricing) && !('deplacement' in pricing), 'the dossier holds no default');
+  assert.ok(!('succession' in win.Nota.state.offer.pricing), 'the offer state holds no default either');
+  const srow = doc.querySelector('#o-criteria .crit-row[data-crit="succession"]');
+  assert.equal(srow.dataset.default, 'true', 'the row says it shows a default');
+  assert.equal($(doc, 'crit-succession__non').getAttribute('aria-pressed'), 'true', 'yet « Non » is visibly pre-selected');
+  // Touching it is the declaration.
+  $(doc, 'crit-succession__non').click();
+  await wait(10);
+  assert.equal(dossierLS(win).refinancement.__pricing.succession, 'non');
+  assert.equal(srow.dataset.default, undefined, 'no longer a default');
+});
+
+test('publishing stands by the defaults: they ride the payload and are recorded as the client’s answers', async () => {
+  let posted = null;
+  const routes = [
+    { match: (u) => u.includes('/bids?month='), reply: (u) => jsonRes(200, { month: u.slice(-7), bids: [] }) },
+    { match: (u, init) => u.endsWith('/bids') && init.method === 'POST', reply: (u, init) => {
+      posted = JSON.parse(init.body);
+      return jsonRes(201, { bid: { id: 'b1', serviceId: posted.serviceId, dateISO: posted.dateISO, montant: posted.montant, status: 'ouverte' }, clientToken: 'tok-b1' });
+    } },
+  ];
+  const { win, doc } = await boot({ routes });
+  await openRefinancement(win, doc);
+  const fire = (el, type) => el.dispatchEvent(new win.Event(type, { bubbles: true }));
+  const lv = $(doc, 'crit-valeur_pret'); lv.value = '300000'; fire(lv, 'input');
+  $(doc, 'crit-approbation_bancaire__obtenue').click();
+  const selPreteur = $(doc, 'crit-preteur'); selPreteur.value = 'banque_nationale'; fire(selPreteur, 'change');
+  const pre = $(doc, 'o-prefix'); pre.value = 'G1R'; fire(pre, 'input');
+  const nom = $(doc, 'o-name'); nom.value = 'Prénom Nom'; fire(nom, 'input');
+  const em = $(doc, 'o-courriel'); em.value = 'client@exemple.ca'; fire(em, 'input');
+  assert.equal($(doc, 'offer-submit').disabled, false);
+  fire($(doc, 'offer-form'), 'submit');
+  await wait(60);
+  assert.ok(posted, 'POST /bids');
+  assert.equal(posted.pricing.succession, 'non', 'the default rides the payload');
+  assert.equal(posted.pricing.deplacement, 'client_50');
+  assert.equal(dossierLS(win).refinancement.__pricing.succession, 'non', 'and is now the client’s recorded answer');
 });

@@ -74,11 +74,23 @@ function pick(win, input, file) {
   input.dispatchEvent(new win.Event('change', { bubbles: true }));
 }
 
-test('the picker only offers notarial exchange formats (accept from the domain rule)', async () => {
+// The accept list the domain validator actually honours (D.DOCUMENT_TYPES:
+// extension → MIME) — never the broader « image/* » DOSSIER_FILE.accept once
+// offered, which let a phone pick a format the validator then refused.
+function expectedAccept(D) {
+  const types = D.DOCUMENT_TYPES;
+  const exts = Object.keys(types).map((e) => '.' + e);
+  const mimes = [];
+  Object.keys(types).forEach((e) => types[e].forEach((m) => { if (!mimes.includes(m)) mimes.push(m); }));
+  return exts.concat(mimes).join(',');
+}
+
+test('the picker only offers what the validator lets through (accept derived from the domain’s document types)', async () => {
   const { doc, D, Nota } = await boot();
   Nota.setTab('dossier');
   const { input } = firstDocRow(doc);
-  assert.equal(input.accept, D.DOSSIER_FILE.accept);
+  assert.equal(input.accept, expectedAccept(D));
+  assert.ok(!/image\/\*/.test(input.accept), 'no wildcard broader than the validator');
 });
 
 test('picking a valid file declares its CLEANED name, shows the chip, Retirer removes it', async () => {
@@ -192,7 +204,7 @@ test('the profile pane refuses a wrong format the same way', async () => {
   chip.click();
   const input = doc.querySelector('.profil-doc-list .doc-row input[type="file"]');
   assert.ok(input, 'profile file input');
-  assert.equal(input.accept, win.NotaDomain.DOSSIER_FILE.accept);
+  assert.equal(input.accept, expectedAccept(win.NotaDomain));
   pick(win, input, { name: 'virus.exe', size: 10 });
   await wait(10);
   assert.ok(!(dossierLS(win).financement || {}).piece_identite, 'nothing saved');

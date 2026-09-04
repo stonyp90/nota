@@ -185,7 +185,7 @@ test('GET /notary/bids carries profil (complet/manquants/courriel/alertes), cond
 
   assert.equal(view.conditions.paiement, 'signature');
   assert.deepEqual(view.conditions.tarifNota, view.tarif, 'the same object as `tarif`');
-  assert.deepEqual(view.conditions.annulation, { paliers: cancellationCfg.envDefaults().paliers, beneficiaire: 'notaire' });
+  assert.deepEqual(view.conditions.annulation, { paliers: cancellationCfg.envDefaults().paliers, beneficiaire: 'notaire', applicable: false });
   assert.deepEqual(view.conditions.desistement, { gratuit: true, compte: true });
 
   assert.deepEqual(view.fenetre, ['2026-08', '2026-09', '2026-10', '2026-11']);
@@ -295,4 +295,55 @@ test('POST /support/messages: the 21st message from one IP in 10 minutes is 429 
   assert.equal(blocked.statusCode, 429, blocked.body);
   assert.deepEqual(parse(blocked), { errors: [{ code: 'trop_de_messages', message: 'Trop de messages en peu de temps. Réessayez dans quelques minutes.' }] });
   assert.equal((await send('10.0.0.2')).statusCode, 201);
+});
+
+// --- F7 (2026-09-03) : la caution vivante, l'applicabilité du barème, les pièces ---
+
+// La feuille « Retenir » promettait l'indemnité sans condition ; or seule une
+// caution autorisée peut la payer. L'API dit donc si un barème s'applique du
+// tout (facturation branchée) et, par demande ouverte, si SA caution est vivante.
+test('conditions.annulation.applicable follows billing; each open bid says whether its own hold is live', async () => {
+  const noBilling = app();
+  const t1 = await session(noBilling, activeNotary(EMAIL));
+  const b1 = await seedBid(noBilling);
+  const v1 = await feed(noBilling, t1);
+  assert.equal(v1.conditions.annulation.applicable, false, 'nothing can be captured without billing');
+  const open1 = v1.bids.find((b) => b.id === b1.id);
+  assert.ok(open1, 'the open bid is in the feed');
+  assert.equal(open1.cautionVivante, false);
+
+  const repo = createMemoryRepo([]);
+  const stripe = {
+    async createOfferAuthorization(args) { return { sessionId: 'cs_' + args.bidId, url: 'https://checkout.test/' + args.bidId }; },
+    constructEvent(raw) { return JSON.parse(raw); },
+  };
+  const billing = createBilling({ repo, stripe, now: () => TODAY });
+  const withBilling = { ...createApp(repo, { siteUrl: 'https://nota.test', now: () => TODAY, nowMs: () => NOW_MS, newId: (() => { let n = 0; return () => 'bid-' + ++n; })(), billing }), repo };
+  const t2 = await session(withBilling, activeNotary(EMAIL));
+  const b2 = await seedBid(withBilling, { dateISO: domain.addDays(TODAY, 3) });
+  await repo.authorizeBid(b2.id, b2.dateISO, { paymentIntentId: 'pi_' + b2.id, authorizedAt: TODAY });
+  const v2 = await feed(withBilling, t2);
+  assert.equal(v2.conditions.annulation.applicable, true);
+  const open2 = v2.bids.find((b) => b.id === b2.id);
+  assert.ok(open2, 'an authorized bid is live in the feed');
+  assert.equal(open2.cautionVivante, true);
+});
+
+// Le notaire qui a retenu peut encore demander des pièces : la projection
+// retenue porte ce qui manque et ce qui est demandable (calculé avec le
+// `pricing` de la demande, qui reste privé — la console ne le reçoit jamais).
+test('retained entries and open bids carry `missing` and `requestable` computed from the bid’s pricing', async () => {
+  const a = app();
+  const token = await session(a, activeNotary(EMAIL));
+  const bid = await seedBid(a);
+  const before = await feed(a, token);
+  const expected = domain.requestableItems('refinancement', PRICING).map((i) => i.id);
+  assert.deepEqual(before.bids[0].requestable, expected);
+  assert.ok(Array.isArray(before.bids[0].missing) && before.bids[0].missing.length > 0);
+  assert.equal((await accept(a, token, bid)).statusCode, 200);
+  const after = await feed(a, token);
+  const r = after.retained[0];
+  assert.ok(Array.isArray(r.missing), 'missing rides the retained entry');
+  assert.deepEqual(r.missing, domain.leadReadiness('refinancement', {}, PRICING).missing);
+  assert.deepEqual(r.requestable, expected);
 });

@@ -11,7 +11,7 @@ const TODAY = '2026-08-14';
 // (The catalogue is the financing family only — ADR 0010.)
 const BASE_ANSWERS = {
   refinancement: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale', deplacement: 'client_50' },
-  financement: { valeur_pret: 250000, contexte: 'propriete_detenue', approbation_bancaire: 'obtenue', preteur: 'banque_nationale', deplacement: 'client_50' },
+  financement: { valeur_pret: 250000, contexte: 'propriete_detenue', approbation_bancaire: 'obtenue', preteur: 'banque_nationale', succession: 'non', deplacement: 'client_50' },
 };
 
 test('with NO answers a service returns its flat base (== prixDepart)', () => {
@@ -72,7 +72,7 @@ test('missingRequired lists the unanswered mandatory params', () => {
   // Layout order: the questions that genuinely vary first, the zero-cost
   // defaults (succession, déplacement) close the block.
   assert.deepEqual(missingRequired('refinancement', {}).map((m) => m.id), ['valeur_pret', 'approbation_bancaire', 'preteur', 'succession', 'deplacement']);
-  assert.deepEqual(missingRequired('financement', {}).map((m) => m.id), ['valeur_pret', 'contexte', 'approbation_bancaire', 'preteur', 'deplacement']);
+  assert.deepEqual(missingRequired('financement', {}).map((m) => m.id), ['valeur_pret', 'contexte', 'approbation_bancaire', 'preteur', 'succession', 'deplacement']);
   // A loan value must be a real positive number — a crafted blank cannot skip it.
   assert.deepEqual(missingRequired('refinancement', { ...BASE_ANSWERS.refinancement, valeur_pret: '' }).map((m) => m.id), ['valeur_pret']);
   // Fully answered -> nothing missing.

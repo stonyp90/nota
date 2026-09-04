@@ -240,19 +240,21 @@ test('a settled act answers 409 acte_complete — the client is told it can no l
 
 test('the fee sentences translate fully to English, money and rate converted', () => {
   const pct = '30 %';
-  const disclose = 'Annuler maintenant retient des frais de ' + D.money(840) + ' (' + pct + ' du montant convenu) sur votre caution. Le reste vous est libéré immédiatement.';
+  // The ADR 0033 wording — the fee goes to the notary (i18n-rules-live.test.mjs
+  // pins these to what app.js composes).
+  const disclose = 'Annuler maintenant retient des frais de ' + D.money(840) + ' (' + pct + ' du montant convenu) sur votre caution. Ils sont versés au notaire en dédommagement de la journée réservée. Le reste vous est libéré immédiatement.';
   assert.equal(
     I18N.tEn(disclose),
-    'Cancelling now keeps a fee of $840 (30% of the agreed amount) from your deposit. The rest is released to you immediately.'
+    'Cancelling now keeps a fee of $840 (30% of the agreed amount) from your deposit. It is paid to the notary as compensation for the day they reserved. The rest is released to you immediately.'
   );
-  const toast = 'Offre annulée. Des frais de ' + D.money(840) + ' (' + pct + ') ont été retenus sur votre caution.';
-  assert.equal(I18N.tEn(toast), 'Offer cancelled. A fee of $840 (30%) was kept from your deposit.');
-  const notif = 'Des frais de ' + D.money(1250) + ' (' + pct + ') ont été retenus sur votre caution.';
-  assert.equal(I18N.tEn(notif), 'A fee of $1,250 (30%) was kept from your deposit.');
-  const receipt = 'Vous avez annulé cette offre. Des frais de ' + D.money(840) + ' (' + pct + ') ont été retenus sur votre caution. Si vous changez d’avis, choisissez une nouvelle date au carnet.';
+  const toast = 'Offre annulée. Des frais de ' + D.money(840) + ' (' + pct + ') ont été retenus sur votre caution et versés au notaire en dédommagement.';
+  assert.equal(I18N.tEn(toast), 'Offer cancelled. A fee of $840 (30%) was kept from your deposit and paid to the notary as compensation.');
+  const notif = 'Des frais de ' + D.money(1250) + ' (' + pct + ') ont été retenus sur votre caution et versés au notaire en dédommagement.';
+  assert.equal(I18N.tEn(notif), 'A fee of $1,250 (30%) was kept from your deposit and paid to the notary as compensation.');
+  const receipt = 'Vous avez annulé cette offre. Des frais de ' + D.money(840) + ' (' + pct + ') ont été retenus sur votre caution et versés au notaire en dédommagement. Si vous changez d’avis, choisissez une nouvelle date au carnet.';
   assert.equal(
     I18N.tEn(receipt),
-    'You cancelled this offer. A fee of $840 (30%) was kept from your deposit. If you change your mind, pick a new date on the carnet.'
+    'You cancelled this offer. A fee of $840 (30%) was kept from your deposit and paid to the notary as compensation. If you change your mind, pick a new date on the carnet.'
   );
   assert.equal(
     I18N.tEn('Cet acte est signé et réglé — il ne peut plus être annulé.'),

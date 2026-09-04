@@ -123,7 +123,9 @@
     { id: 'first_national', nom: 'First National', virtuel: true, add: 0, poids: 1 },
     { id: 'mcap', nom: 'MCAP', virtuel: true, add: 0, poids: 1 },
     { id: 'manuvie', nom: 'Banque Manuvie', virtuel: true, add: 0, poids: 1 },
-    { id: 'prive', nom: 'Prêteur privé', virtuel: false, add: 300, poids: 2 },
+    // The one lender that still adds explains its surcharge (`aide`): the
+    // client sees WHY the private lender costs more, right at the choice.
+    { id: 'prive', nom: 'Prêteur privé', virtuel: false, add: 300, poids: 2, aide: 'Un prêteur privé donne ses instructions à la main : plus de vérifications, d’où le supplément.' },
     { id: 'autre', nom: 'Autre prêteur', virtuel: false, add: 0, poids: 1 },
   ];
 
@@ -142,8 +144,10 @@
     return {
       id: LENDER_CRITERION_ID, type: 'choice', required: true, ui: 'select',
       label: 'Prêteur hypothécaire',
-      aide: 'Un prêteur virtuel (sans succursale) demande plus de coordination au notaire.',
-      options: LENDERS.map((l) => ({ id: l.id, label: l.nom, add: l.add, poids: l.poids })),
+      aide: 'Un prêteur sans succursale (en ligne) demande plus de coordination au notaire.',
+      options: LENDERS.map((l) => (l.aide
+        ? { id: l.id, label: l.nom, add: l.add, poids: l.poids, aide: l.aide }
+        : { id: l.id, label: l.nom, add: l.add, poids: l.poids })),
       // « Autre prêteur » opens a free-text companion: the client ADDS their
       // lender by name instead of leaving the notary guessing. Renderers show
       // the field only when this option is chosen; missingRequired() gates on
@@ -193,10 +197,13 @@
   // The list is data — adapters render it, never re-declare it.
   // `nomCourt` is the radius half of the sentence, for renderers that split
   // the band into two choices (who travels × how far) instead of one select.
+  // The client bands read as a WILLINGNESS (« j'accepte de me déplacer »):
+  // the client is not promising a drive, they are widening the pool of
+  // notaries that can serve them — the price lever the help text explains.
   const DEPLACEMENTS = [
-    { id: 'client_50', nom: 'Je me déplace à l’étude — jusqu’à 50 km', nomCourt: '≤ 50 km', qui: 'client', km: 50, add: 0, poids: 0, urgence: false },
-    { id: 'client_25', nom: 'Je me déplace à l’étude — jusqu’à 25 km', nomCourt: '≤ 25 km', qui: 'client', km: 25, add: 50, poids: 0, urgence: false },
-    { id: 'client_10', nom: 'Je me déplace à l’étude — moins de 10 km', nomCourt: '< 10 km', qui: 'client', km: 10, add: 100, poids: 1, urgence: false },
+    { id: 'client_50', nom: 'J’accepte de me déplacer à l’étude — jusqu’à 50 km', nomCourt: '≤ 50 km', qui: 'client', km: 50, add: 0, poids: 0, urgence: false },
+    { id: 'client_25', nom: 'J’accepte de me déplacer à l’étude — jusqu’à 25 km', nomCourt: '≤ 25 km', qui: 'client', km: 25, add: 50, poids: 0, urgence: false },
+    { id: 'client_10', nom: 'J’accepte de me déplacer à l’étude — moins de 10 km', nomCourt: '< 10 km', qui: 'client', km: 10, add: 100, poids: 1, urgence: false },
     { id: 'notaire_25', nom: 'Le notaire se déplace chez moi — jusqu’à 25 km', nomCourt: '≤ 25 km', qui: 'notaire', km: 25, add: 150, poids: 1, urgence: false },
     { id: 'notaire_50', nom: 'Le notaire se déplace chez moi — jusqu’à 50 km', nomCourt: '≤ 50 km', qui: 'notaire', km: 50, add: 250, poids: 2, urgence: false },
     { id: 'urgence_en_ligne', nom: 'Urgence — signature 100 % en ligne', nomCourt: 'Urgence — 100 % en ligne', qui: 'en_ligne', km: 0, add: 400, poids: 2, urgence: true },
@@ -207,9 +214,11 @@
   // so renderers need no radius row for it.
   // The labels answer « où se signe l'acte ? » in the client's own register —
   // the same words as the notary-card pill (« À l'étude · ≤ 50 km »).
+  // `question` heads the radius row of that direction — asked of the client
+  // for their own willingness, of the notary's reach when the notary travels.
   const DEPLACEMENT_QUI = [
-    { id: 'client', nom: 'À l’étude', urgence: false },
-    { id: 'notaire', nom: 'Chez moi', urgence: false },
+    { id: 'client', nom: 'À l’étude', urgence: false, question: 'Jusqu’où acceptez-vous de vous déplacer ?' },
+    { id: 'notaire', nom: 'Chez moi', urgence: false, question: 'Jusqu’où le notaire doit-il se déplacer ?' },
     { id: 'en_ligne', nom: 'Urgence en ligne', urgence: true },
   ];
 
@@ -229,7 +238,7 @@
       // Conversion default (`defaut`): the dominant answer costs nothing, so
       // renderers pre-declare it and the client only touches the exceptions.
       defaut: 'client_50',
-      aide: 'L’acte se signe en personne. Plus vous êtes mobile, plus de notaires peuvent vous servir.',
+      aide: 'L’acte se signe en personne, sauf en cas d’urgence déclarée. Plus vous acceptez de vous déplacer, plus de notaires peuvent vous servir — et moins le déplacement coûte.',
       options: DEPLACEMENTS.map((d) => ({ id: d.id, label: d.nom, add: d.add, poids: d.poids })),
     };
   }
@@ -315,6 +324,135 @@
     return true;
   }
 
+  // --- The questions both financing acts share -------------------------------
+  // One factory per question, so the two acts can never drift apart: the help
+  // text, the options and their adds/poids are declared ONCE. (The loan amount
+  // and the purchase context stay per-act — their labels differ.)
+  function approbationCriterion() {
+    return {
+      id: 'approbation_bancaire', type: 'choice', required: true, label: 'Approbation bancaire',
+      aide: 'Sans les instructions du prêteur, le notaire ne peut signer à la date visée.',
+      options: [
+        { id: 'obtenue', label: 'Obtenue', add: 0, poids: 0 },
+        { id: 'en_cours', label: 'En cours', add: 100, poids: 1 },
+        { id: 'non', label: 'Pas encore demandée', add: 200, poids: 2 },
+      ],
+    };
+  }
+  function successionCriterion() {
+    return {
+      id: 'succession', type: 'choice', required: true, label: 'La propriété fait-elle partie d’une succession ?',
+      defaut: 'non',
+      aide: 'Répondez oui si l’immeuble vient d’une succession qui n’est pas entièrement réglée — par exemple si le titre est encore au nom de la personne décédée.',
+      options: [
+        { id: 'non', label: 'Non', add: 0, poids: 0 },
+        { id: 'oui', label: 'Oui', add: 400, poids: 2 },
+      ],
+    };
+  }
+  // Art. 401-405 C.c.Q.: a married or civil-union spouse must intervene in any
+  // act on the FAMILY residence, even without borrowing. Optional (a bid that
+  // predates the question stays a valid offer) but priced and weighed: the
+  // intervention is real work the notary must see before retaining.
+  function residenceFamilialeCriterion() {
+    return {
+      id: 'residence_familiale', type: 'choice', optional: true, label: 'Situation conjugale et résidence familiale',
+      aide: 'Si vous êtes marié ou uni civilement et que l’immeuble est votre résidence familiale, votre conjoint doit intervenir à l’acte, même s’il n’emprunte pas.',
+      options: [
+        { id: 'non', label: 'Ni marié ni uni civilement', add: 0, poids: 0 },
+        { id: 'autre_immeuble', label: 'Marié ou uni civilement — autre immeuble', add: 0, poids: 1 },
+        { id: 'residence_familiale', label: 'Marié ou uni civilement — résidence familiale', add: 150, poids: 2 },
+      ],
+    };
+  }
+  function coemprunteurCriterion() {
+    return {
+      id: 'coemprunteur', type: 'flag', optional: true, label: 'Co-emprunteur / indivision',
+      aide: 'Deux emprunteurs ou plus, ou une propriété détenue en indivision (parts non divisées).',
+      add: 150, poids: 1,
+    };
+  }
+  function assuranceHabitationCriterion() {
+    return {
+      id: 'assurance_habitation', type: 'choice', optional: true, label: 'Assurance habitation à jour ?',
+      aide: 'Le prêteur exige une assurance habitation en vigueur. Sans elle, il ne débourse pas : prévoyez-la avant la signature.',
+      options: [
+        { id: 'oui', label: 'Oui, en vigueur', add: 0, poids: 0 },
+        { id: 'a_renouveler', label: 'À renouveler', add: 0, poids: 1 },
+        { id: 'non', label: 'Aucune', add: 0, poids: 2 },
+      ],
+    };
+  }
+  function certificatLocalisationCriterion() {
+    return {
+      id: 'certificat_localisation', type: 'choice', optional: true, label: 'Certificat de localisation',
+      aide: 'La plupart des prêteurs exigent un certificat de moins de 10 ans, à jour si des travaux ont été faits depuis. Un certificat périmé ou absent retarde souvent le dossier.',
+      options: [
+        { id: 'a_jour', label: 'À jour', add: 0, poids: 0 },
+        { id: 'inconnu', label: 'Je ne sais pas', add: 0, poids: 1 },
+        { id: 'perime', label: 'Périmé / absent', add: 100, poids: 1 },
+        // An option-level `aide` — renderers show it beside the chosen answer.
+        { id: 'assurance_titres', label: 'Assurance titres', add: 0, poids: 1, aide: 'L’assurance titres remplace souvent un certificat périmé — demandez au notaire.' },
+      ],
+    };
+  }
+
+  // --- The documents a notary needs, by id -----------------------------------
+  // Declared once; each act lists the ids it collects, in checklist order.
+  // A document may carry `si`, a predicate on the client's PRICING answers:
+  //   { critere, valeurs: [...] } — collected only when the answer is one of
+  //                                 `valeurs` (unanswered → not collected);
+  //   { critere, sauf: [...] }    — collected unless the answer is one of
+  //                                 `sauf` (unanswered → collected).
+  // `sinon` is the note shown IN PLACE of the upload when `si` does not hold
+  // (dossierItems returns it as a `note` item): the client is told why nothing
+  // is asked instead of facing a silent gap. Without pricing every document
+  // applies — see documentApplies().
+  const DOCUMENTS = {
+    piece_identite: {
+      nom: 'Pièce d’identité avec photo',
+      // Loi sur l'assurance maladie, art. 9.0.0.1: the RAMQ card may not be
+      // required as identification — so it is never suggested here.
+      aide: 'Permis de conduire ou passeport valide (non expiré). N’utilisez pas votre carte d’assurance maladie : la loi en interdit l’usage comme pièce d’identité.',
+    },
+    offre_preteur: {
+      nom: 'Lettre d’engagement du prêteur (offre de financement)',
+      aide: 'Le document d’engagement de la banque, avec le taux et le montant.',
+    },
+    releve_hypotheque: {
+      nom: 'Relevé hypothécaire actuel',
+      aide: 'Votre plus récent relevé du prêt à rembourser.',
+    },
+    promesse_achat: {
+      nom: 'Promesse d’achat acceptée',
+      aide: 'La promesse d’achat signée par le vendeur et vous, avec ses annexes.',
+      si: { critere: 'contexte', valeurs: ['achat'] },
+    },
+    compte_taxes: {
+      nom: 'Comptes de taxes municipales et scolaires',
+      aide: 'Les comptes les plus récents de votre municipalité et de votre centre de services scolaire.',
+    },
+    preuve_assurance: {
+      nom: 'Preuve d’assurance habitation',
+      aide: 'L’attestation de votre assureur ; le prêteur demande d’y être inscrit comme créancier hypothécaire.',
+      si: { critere: 'assurance_habitation', sauf: ['non'] },
+    },
+    certificat_localisation: {
+      nom: 'Certificat de localisation',
+      aide: 'Le rapport et le plan de l’arpenteur-géomètre. C’est souvent le document qui retarde un dossier — vérifiez qu’il est à jour.',
+      si: { critere: 'certificat_localisation', sauf: ['perime', 'assurance_titres'] },
+      sinon: 'Certificat périmé, absent ou remplacé par une assurance titres : rien à téléverser pour l’instant. Le notaire vous dira s’il en faut un nouveau et quand le commander.',
+    },
+    testament_transmission: {
+      nom: 'Testament et déclaration de transmission',
+      aide: 'Le testament (ou la recherche testamentaire) et la déclaration de transmission, si elle a été publiée.',
+      si: { critere: 'succession', valeurs: ['oui'] },
+    },
+  };
+  function documentList(ids) {
+    return ids.map((id) => ({ id, ...DOCUMENTS[id] }));
+  }
+
   const SERVICES = [
     {
       id: 'refinancement',
@@ -333,8 +471,10 @@
         criteria: [
           // Order is the layout: the three questions that genuinely vary
           // (montant, approbation, prêteur) come first; the two carrying a
-          // zero-cost default (succession, déplacement) close the block
-          // pre-answered — a typical client touches three controls, not five.
+          // zero-cost default (succession, déplacement) close the required
+          // block pre-answered — a typical client touches three controls, not
+          // five. The optional refinements follow, the family residence first
+          // (a legal intervention, not a nicety).
           {
             id: 'valeur_pret', type: 'bracket', required: true, label: 'Montant du nouveau prêt', unit: '$',
             brackets: [
@@ -344,54 +484,20 @@
               { max: null, add: 600, poids: 1 },
             ],
           },
-          {
-            id: 'approbation_bancaire', type: 'choice', required: true, label: 'Approbation bancaire',
-            aide: 'Sans les instructions du prêteur, le notaire ne peut signer à la date visée.',
-            options: [
-              { id: 'obtenue', label: 'Obtenue', add: 0, poids: 0 },
-              { id: 'en_cours', label: 'En cours', add: 100, poids: 1 },
-              { id: 'non', label: 'Pas encore', add: 200, poids: 2 },
-            ],
-          },
+          approbationCriterion(),
           lenderCriterion(),
-          {
-            id: 'succession', type: 'choice', required: true, label: 'La propriété fait-elle partie d’une succession ?',
-            defaut: 'non',
-            aide: 'Héritiers, liquidateur : dossier nettement plus complexe.',
-            options: [
-              { id: 'non', label: 'Non', add: 0, poids: 0 },
-              { id: 'oui', label: 'Oui', add: 400, poids: 2 },
-            ],
-          },
+          successionCriterion(),
           deplacementCriterion(),
-          { id: 'coemprunteur', type: 'flag', optional: true, label: 'Co-emprunteur / indivision', aide: 'Plus de deux propriétaires inscrits.', add: 150, poids: 1 },
-          {
-            id: 'assurance_habitation', type: 'choice', optional: true, label: 'Assurance habitation à jour ?',
-            aide: 'Le prêteur exige une assurance habitation en vigueur.',
-            options: [
-              { id: 'oui', label: 'Oui, en vigueur', add: 0, poids: 0 },
-              { id: 'a_renouveler', label: 'À renouveler', add: 0, poids: 1 },
-              { id: 'non', label: 'Aucune', add: 0, poids: 2 },
-            ],
-          },
-          {
-            id: 'certificat_localisation', type: 'choice', optional: true, label: 'Certificat de localisation',
-            aide: 'Un certificat périmé ou absent retarde souvent le dossier.',
-            options: [
-              { id: 'a_jour', label: 'À jour', add: 0, poids: 0 },
-              { id: 'inconnu', label: 'Je ne sais pas', add: 0, poids: 1 },
-              { id: 'perime', label: 'Périmé / absent', add: 100, poids: 1 },
-            ],
-          },
+          residenceFamilialeCriterion(),
+          coemprunteurCriterion(),
+          assuranceHabitationCriterion(),
+          certificatLocalisationCriterion(),
         ],
       },
-      documents: [
-        { id: 'piece_identite', nom: 'Pièce d’identité avec photo', aide: 'Permis de conduire, passeport ou carte d’assurance maladie valide.' },
-        { id: 'offre_preteur', nom: 'Offre de financement du prêteur', aide: 'Le document d’engagement de la banque, avec le taux et le montant.' },
-        { id: 'releve_hypotheque', nom: 'Relevé hypothécaire actuel', aide: 'Un relevé de moins de 30 jours du prêt à rembourser.' },
-        { id: 'compte_taxes', nom: 'Compte de taxes municipales', aide: 'Le compte le plus récent de la municipalité.' },
-        { id: 'certificat_localisation', nom: 'Certificat de localisation', aide: 'Le plan de l’arpenteur-géomètre. C’est souvent le document qui retarde un dossier — vérifiez qu’il est à jour.' },
-      ],
+      documents: documentList([
+        'piece_identite', 'offre_preteur', 'releve_hypotheque', 'compte_taxes',
+        'preuve_assurance', 'certificat_localisation', 'testament_transmission',
+      ]),
       champs: [
         // Le prêteur n'est plus un champ libre : c'est le critère de prix
         // `preteur` (la question obligatoire du carnet), répondu dans __pricing.
@@ -425,51 +531,30 @@
             ],
           },
           {
-            id: 'contexte', type: 'choice', required: true, label: 'Le prêt finance quoi ?',
+            id: 'contexte', type: 'choice', required: true, label: 'Que finance ce prêt ?',
             aide: 'Un achat exige de coordonner l’acte de prêt avec la vente chez le notaire instrumentant.',
             options: [
               { id: 'propriete_detenue', label: 'Une propriété que je possède', add: 0, poids: 0 },
               { id: 'achat', label: 'L’achat d’une propriété', add: 200, poids: 1 },
             ],
           },
-          {
-            id: 'approbation_bancaire', type: 'choice', required: true, label: 'Approbation bancaire',
-            aide: 'Sans les instructions du prêteur, le notaire ne peut signer à la date visée.',
-            options: [
-              { id: 'obtenue', label: 'Obtenue', add: 0, poids: 0 },
-              { id: 'en_cours', label: 'En cours', add: 100, poids: 1 },
-              { id: 'non', label: 'Pas encore', add: 200, poids: 2 },
-            ],
-          },
+          approbationCriterion(),
           lenderCriterion(),
+          // A financed property can come from an unsettled estate too (the
+          // title still in the deceased's name) — the same question, the
+          // same default, on both acts.
+          successionCriterion(),
           deplacementCriterion(),
-          { id: 'coemprunteur', type: 'flag', optional: true, label: 'Co-emprunteur / indivision', aide: 'Plus de deux propriétaires inscrits.', add: 150, poids: 1 },
-          {
-            id: 'assurance_habitation', type: 'choice', optional: true, label: 'Assurance habitation à jour ?',
-            aide: 'Le prêteur exige une assurance habitation en vigueur.',
-            options: [
-              { id: 'oui', label: 'Oui, en vigueur', add: 0, poids: 0 },
-              { id: 'a_renouveler', label: 'À renouveler', add: 0, poids: 1 },
-              { id: 'non', label: 'Aucune', add: 0, poids: 2 },
-            ],
-          },
-          {
-            id: 'certificat_localisation', type: 'choice', optional: true, label: 'Certificat de localisation',
-            aide: 'Un certificat périmé ou absent retarde souvent le dossier.',
-            options: [
-              { id: 'a_jour', label: 'À jour', add: 0, poids: 0 },
-              { id: 'inconnu', label: 'Je ne sais pas', add: 0, poids: 1 },
-              { id: 'perime', label: 'Périmé / absent', add: 100, poids: 1 },
-            ],
-          },
+          residenceFamilialeCriterion(),
+          coemprunteurCriterion(),
+          assuranceHabitationCriterion(),
+          certificatLocalisationCriterion(),
         ],
       },
-      documents: [
-        { id: 'piece_identite', nom: 'Pièce d’identité avec photo', aide: 'Permis de conduire, passeport ou carte d’assurance maladie valide.' },
-        { id: 'offre_preteur', nom: 'Offre de financement du prêteur', aide: 'Le document d’engagement de la banque, avec le taux et le montant.' },
-        { id: 'compte_taxes', nom: 'Compte de taxes municipales', aide: 'Le compte le plus récent de la municipalité.' },
-        { id: 'certificat_localisation', nom: 'Certificat de localisation', aide: 'Le plan de l’arpenteur-géomètre. C’est souvent le document qui retarde un dossier — vérifiez qu’il est à jour.' },
-      ],
+      documents: documentList([
+        'piece_identite', 'offre_preteur', 'promesse_achat', 'compte_taxes',
+        'preuve_assurance', 'certificat_localisation', 'testament_transmission',
+      ]),
       champs: [
         { id: 'adresse', label: 'Adresse de l’immeuble', aide: 'Adresse civique complète de la propriété financée.' },
         { id: 'date_echeance_taux', label: 'Échéance du taux', aide: 'La date avant laquelle le taux offert doit être signé, si connue.' },
@@ -968,11 +1053,14 @@
 
   // Everything a notary may ask a client for: the service's documents and its
   // intake fields, by id, with the label the client already saw in the dossier.
+  // With `pricing`, only the documents that apply to THIS client's answers
+  // (documentApplies) — a notary cannot ask for a promise to purchase on a
+  // refinancing; without it, every document, as before.
   const DOCUMENT_REQUEST_MESSAGE_MAX = 500;
-  function requestableItems(serviceId) {
+  function requestableItems(serviceId, pricing) {
     const svc = serviceById(serviceId);
     if (!svc) return [];
-    return svc.documents
+    return applicableDocuments(svc, pricing)
       .map((d) => ({ id: d.id, nom: d.nom, kind: 'document' }))
       .concat(svc.champs.map((c) => ({ id: c.id, nom: c.label, kind: 'champ' })));
   }
@@ -1917,6 +2005,9 @@
         approbation_bancaire: ['obtenue', 'en_cours', 'non'][Math.floor(rng() * 3)],
         preteur: lenderFor(valeur),
         deplacement: deplacementFor(valeur),
+        // Derived from the loan value like the lender and the band, so the
+        // draw stream (dates, names, prefixes, statuses) stays unchanged.
+        succession: valeur % 7 === 0 ? 'oui' : 'non',
       });
     }
     return {};
@@ -1986,12 +2077,50 @@
   // performed by the notary at signing (in person / by video, per Québec
   // rules) — Nota collects the ID document, it does not verify identity.
   // `saved` is the per-service intake map; consent is stored under `__consent`.
+  // `pricing` (optional) is the client's pricing answers: given, the checklist
+  // holds only the documents that apply to them (documentApplies); absent,
+  // every document counts — exactly what callers predating the predicate get.
+  // The dossier's own `__pricing` is NOT read implicitly: a caller opts in.
   const DOSSIER_TRANSMIS = 'transmis_autrement';
-  function leadReadiness(serviceId, saved) {
+
+  // Does a document's `si` predicate hold for these pricing answers?
+  //   - no predicate, or no pricing at all (undefined/null) → yes;
+  //   - { critere, valeurs } → the answer is one of `valeurs` (unanswered: no);
+  //   - { critere, sauf }    → the answer is none of `sauf` (unanswered: yes).
+  function documentApplies(doc, pricing) {
+    const si = doc && doc.si;
+    if (!si || pricing == null) return true;
+    const answer = (pricing || {})[si.critere];
+    if (Array.isArray(si.valeurs)) return si.valeurs.indexOf(answer) !== -1;
+    if (Array.isArray(si.sauf)) return si.sauf.indexOf(answer) === -1;
+    return true;
+  }
+  function applicableDocuments(svc, pricing) {
+    return (svc.documents || []).filter((d) => documentApplies(d, pricing));
+  }
+
+  // The client's checklist for an act: its documents, then its intake fields,
+  // each `{ kind, id, nom, aide }` with kind 'doc' | 'field' — plus, for a
+  // document whose `si` does not hold but which carries a `sinon`, a 'note'
+  // item in its place (the explanation, never an upload). `service` is an id
+  // or the service object itself.
+  function dossierItems(service, pricing) {
+    const svc = service && typeof service === 'object' ? service : serviceById(service);
+    if (!svc) return [];
+    const items = [];
+    (svc.documents || []).forEach((d) => {
+      if (documentApplies(d, pricing)) items.push({ kind: 'doc', id: d.id, nom: d.nom, aide: d.aide });
+      else if (d.sinon) items.push({ kind: 'note', id: d.id, nom: d.nom, aide: d.sinon });
+    });
+    (svc.champs || []).forEach((c) => items.push({ kind: 'field', id: c.id, nom: c.label, aide: c.aide }));
+    return items;
+  }
+
+  function leadReadiness(serviceId, saved, pricing) {
     saved = saved || {};
     const svc = serviceById(serviceId);
     if (!svc) return { total: 0, done: 0, missing: [], requis: [], consent: false, ready: false };
-    const items = svc.documents
+    const items = applicableDocuments(svc, pricing)
       .map((d) => ({ id: d.id, nom: d.nom }))
       .concat(svc.champs.map((c) => ({ id: c.id, nom: c.label })));
     const missing = items.filter((it) => !saved[it.id]).map((it) => it.nom);
@@ -2359,6 +2488,8 @@
     makeFixtures,
     seedSignature,
     bidLabel,
+    documentApplies,
+    dossierItems,
     leadReadiness,
     DOSSIER_TRANSMIS,
     DOSSIER_FILE,

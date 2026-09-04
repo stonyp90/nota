@@ -59,9 +59,13 @@ test('can() only allows an explicitly present permission (or wildcard)', () => {
 test('the permission catalog covers the manageable admin surface', () => {
   for (const k of [
     'users:read', 'users:write', 'groups:read', 'groups:write', 'permissions:read',
-    'services:write', 'notifications:write', 'billing:write', 'audit:read',
+    'moderation:write', 'notifications:write', 'billing:write', 'audit:read', 'campaigns:send',
   ]) {
     assert.ok(rbac.isKnownPermission(k), k + ' is in the catalog');
   }
   assert.equal(rbac.isKnownPermission('not:a:permission'), false);
+  // 2026-09-03 — a key no route ever checked is a promise, not a permission:
+  // `services:write` left the catalogue. Stored groups that still carry it
+  // keep loading (resolvePermissions never filters), it is just not offered.
+  assert.equal(rbac.isKnownPermission('services:write'), false);
 });

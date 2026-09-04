@@ -204,3 +204,220 @@ test('sans « users:write » l’écran est en lecture seule', async () => {
   assert.equal(doc.querySelector('.acces-user-edit'), null, 'aucun bouton de modification');
   assert.ok(doc.querySelector('.tpl-readonly-note'), 'et la console dit pourquoi');
 });
+
+// ---------------------------------------------------------------------------
+// Audit console admin (2026-09-03)
+// ---------------------------------------------------------------------------
+
+test('P0-7 — supprimer un groupe demande une confirmation qui le nomme, avec ses membres ; rien ne part avant', async () => {
+  const supprimes = [];
+  const handler = (method, url, body) => {
+    if (url.includes('/groups/') && method === 'DELETE') { supprimes.push(url); return [200, { ok: true }]; }
+    return api()(method, url, body);
+  };
+  const { win, doc } = await boot(handler, '#/auth?token=T');
+  await waitFor(win, '.admin-rail');
+  win.location.hash = '#/acces';
+  await waitFor(win, '.acces-groupe');
+  const row = doc.querySelector('.acces-groupe');
+  click(win, row.querySelector('.acces-groupe-del'));
+  await wait(10);
+  assert.equal(supprimes.length, 0, 'le premier clic n’efface rien');
+  const confirm = row.querySelector('.bareme-confirm');
+  assert.ok(confirm && !confirm.hidden, 'la confirmation s’ouvre dans la ligne');
+  assert.match(text(confirm), /Soutien/, 'elle nomme le groupe');
+  assert.match(text(confirm), /1 membre/, 'et compte ses membres (support@nota.ca)');
+  assert.equal(win.document.activeElement, confirm.querySelector('button'), 'le focus va au bouton de confirmation');
+
+  click(win, [...confirm.querySelectorAll('button')].find((b) => /Annuler/.test(text(b))));
+  assert.equal(confirm.hidden, true);
+  assert.equal(supprimes.length, 0);
+
+  click(win, row.querySelector('.acces-groupe-del'));
+  click(win, [...confirm.querySelectorAll('button')].find((b) => /Confirmer/.test(text(b))));
+  for (let i = 0; i < 4; i++) await wait(10);
+  assert.equal(supprimes.length, 1);
+  assert.match(supprimes[0], /\/groups\/soutien$/);
+});
+
+test('P0-7 — un refus du serveur à la suppression se lit dans la ligne, en clair', async () => {
+  const handler = (method, url, body) => {
+    if (url.includes('/groups/') && method === 'DELETE') return [404, { errors: [{ code: 'groupe_introuvable', message: 'Ce groupe n’existe pas.' }] }];
+    return api()(method, url, body);
+  };
+  const { win, doc } = await boot(handler, '#/auth?token=T');
+  await waitFor(win, '.admin-rail');
+  win.location.hash = '#/acces';
+  await waitFor(win, '.acces-groupe');
+  const row = doc.querySelector('.acces-groupe');
+  click(win, row.querySelector('.acces-groupe-del'));
+  click(win, [...row.querySelectorAll('.bareme-confirm button')].find((b) => /Confirmer/.test(text(b))));
+  for (let i = 0; i < 4; i++) await wait(10);
+  const err = row.querySelector('.tpl-error');
+  assert.ok(err && !err.hidden, 'l’erreur est rendue près du geste');
+  assert.match(text(err), /Groupe introuvable/, 'le code est dit en clair (ERREUR_CLAIRE)');
+  assert.match(text(err), /n’existe pas/, 'et le mot du serveur reste dessous');
+  assert.equal(err.getAttribute('role'), 'alert');
+});
+
+test('P0-8 — « Modifier » ouvre le groupe avec son nom, sa description et ses permissions, et le PUT garde la description', async () => {
+  const recus = [];
+  const { win, doc } = await boot(api({ putGroup: (b) => { recus.push(b); return [200, { ok: true, groupe: { id: 'soutien', ...b } }]; } }), '#/auth?token=T');
+  await waitFor(win, '.admin-rail');
+  win.location.hash = '#/acces';
+  await waitFor(win, '.acces-groupe');
+  const row = doc.querySelector('.acces-groupe');
+  const edit = row.querySelector('.acces-groupe-edit');
+  assert.ok(edit, 'chaque ligne offre « Modifier »');
+  click(win, edit);
+  const form = await waitFor(win, '.acces-groupe .acces-groupe-form');
+  const id = form.querySelector('[name="id"]');
+  assert.equal(id.value, 'soutien');
+  assert.equal(id.readOnly, true, 'l’identifiant ne se change pas : c’est la clé');
+  assert.equal(form.querySelector('[name="nom"]').value, 'Soutien');
+  assert.equal(form.querySelector('[name="description"]').value, 'Lecture des dossiers');
+  assert.equal(form.querySelector('input[type="checkbox"][value="audit:read"]').checked, true);
+
+  type(win, form.querySelector('[name="nom"]'), 'Soutien clientèle');
+  submit(win, form);
+  for (let i = 0; i < 4; i++) await wait(10);
+  assert.equal(recus.length, 1);
+  assert.equal(recus[0].nom, 'Soutien clientèle');
+  assert.equal(recus[0].description, 'Lecture des dossiers', 'la description n’est plus effacée par un enregistrement');
+  assert.deepEqual(recus[0].permissions, ['audit:read']);
+});
+
+test('P0-8 — en création, un identifiant déjà pris est refusé AVANT le réseau, et renvoie vers « Modifier »', async () => {
+  const recus = [];
+  const { win, doc } = await boot(api({ putGroup: (b) => { recus.push(b); return [200, { ok: true, groupe: {} }]; } }), '#/auth?token=T');
+  await waitFor(win, '.admin-rail');
+  win.location.hash = '#/acces';
+  const form = await waitFor(win, '.acces-groupes > .acces-groupe-form');
+  type(win, form.querySelector('[name="id"]'), 'soutien');
+  type(win, form.querySelector('[name="nom"]'), 'Doublon');
+  submit(win, form);
+  for (let i = 0; i < 3; i++) await wait(10);
+  assert.equal(recus.length, 0, 'rien ne part');
+  const err = form.querySelector('.tpl-error');
+  assert.ok(err && !err.hidden);
+  assert.match(text(err), /porte déjà l’identifiant/);
+  assert.equal(win.document.activeElement, form.querySelector('[name="id"]'), 'le focus va au champ fautif');
+  assert.equal(form.querySelector('[name="id"]').getAttribute('aria-invalid'), 'true');
+});
+
+test('P2-28 — un identifiant mal formé est refusé côté console, dans les mots du serveur', async () => {
+  const recus = [];
+  const { win, doc } = await boot(api({ putGroup: (b) => { recus.push(b); return [200, { ok: true, groupe: {} }]; } }), '#/auth?token=T');
+  await waitFor(win, '.admin-rail');
+  win.location.hash = '#/acces';
+  const form = await waitFor(win, '.acces-groupes > .acces-groupe-form');
+  type(win, form.querySelector('[name="id"]'), 'Mauvais Id!');
+  type(win, form.querySelector('[name="nom"]'), 'X');
+  submit(win, form);
+  for (let i = 0; i < 3; i++) await wait(10);
+  assert.equal(recus.length, 0);
+  assert.match(text(form.querySelector('.tpl-error')), /minuscules, sans espace/);
+});
+
+test('P1-12 — un 403 sur les groupes ou les utilisateurs se lit « Réservé », jamais « Aucun groupe »', async () => {
+  const handler = (method, url, body) => {
+    if (url.endsWith('/groups') && method === 'GET') return [403, { errors: [{ code: 'interdit', message: 'Lecture des groupes non autorisée.' }] }];
+    if (url.endsWith('/users') && method === 'GET') return [403, { errors: [{ code: 'interdit', message: 'Lecture des utilisateurs non autorisée.' }] }];
+    return api()(method, url, body);
+  };
+  const { win, doc } = await boot(handler, '#/auth?token=T');
+  await waitFor(win, '.admin-rail');
+  win.location.hash = '#/acces';
+  await waitFor(win, '.acces-groupes');
+  const groupes = text(doc.querySelector('.acces-groupes'));
+  assert.doesNotMatch(groupes, /Aucun groupe pour le moment/);
+  assert.match(groupes, /Réservé — .*Voir les groupes/);
+  const users = text(doc.querySelector('.acces-users'));
+  assert.match(users, /Réservé — .*Voir les utilisateurs/);
+  assert.equal(doc.querySelector('.error-banner'), null, 'une porte fermée n’est pas une panne');
+});
+
+test('P1-12 — un 403 sur le catalogue des permissions ferme la section proprement', async () => {
+  const handler = (method, url, body) => {
+    if (url.endsWith('/permissions')) return [403, { errors: [{ code: 'interdit', message: 'Lecture du catalogue des permissions non autorisée.' }] }];
+    return api()(method, url, body);
+  };
+  const { win, doc } = await boot(handler, '#/auth?token=T');
+  await waitFor(win, '.admin-rail');
+  win.location.hash = '#/acces';
+  await waitFor(win, '.admin-denied');
+  assert.match(text(doc.querySelector('.admin-denied')), /Lire le catalogue des permissions/);
+  assert.equal(doc.querySelector('.error-banner'), null);
+});
+
+test('P1-14 — le formulaire d’une personne permet de la désactiver, et l’envoie', async () => {
+  const recus = [];
+  const { win, doc } = await boot(api({ putUser: (b) => { recus.push(b); return [200, { ok: true, utilisateur: {} }]; } }), '#/auth?token=T');
+  await waitFor(win, '.admin-rail');
+  win.location.hash = '#/acces';
+  await waitFor(win, '.acces-user');
+  const ligne = [...doc.querySelectorAll('.acces-user')].find((l) => /support@nota\.ca/.test(text(l)));
+  click(win, ligne.querySelector('.acces-user-edit'));
+  const form = await waitFor(win, '.acces-user-form');
+  const off = form.querySelector('input[type="checkbox"][name="disabled"]');
+  assert.ok(off, 'la case « Compte désactivé » existe');
+  assert.equal(off.checked, false);
+  off.checked = true;
+  submit(win, form);
+  for (let i = 0; i < 4; i++) await wait(10);
+  assert.equal(recus.length, 1);
+  assert.equal(recus[0].disabled, true);
+  assert.deepEqual(recus[0].groupes, ['soutien']);
+});
+
+test('P1-13 — un 409 « dernier administrateur » se dit en clair, traduisible, avec le mot du serveur dessous', async () => {
+  const { win, doc } = await boot(api({
+    putUser: () => [409, { errors: [{ code: 'dernier_administrateur', message: 'Impossible : plus aucun compte actif ne pourrait administrer la console.' }] }],
+  }), '#/auth?token=T', );
+  await waitFor(win, '.admin-rail');
+  win.location.hash = '#/acces';
+  await waitFor(win, '.acces-user');
+  const ligne = [...doc.querySelectorAll('.acces-user')].find((l) => /ops@nota\.ca/.test(text(l)));
+  click(win, ligne.querySelector('.acces-user-edit'));
+  const form = await waitFor(win, '.acces-user-form');
+  submit(win, form);
+  for (let i = 0; i < 5; i++) await wait(10);
+  const err = form.querySelector('.acces-erreur');
+  assert.ok(err && !err.hidden);
+  assert.match(text(err.querySelector('strong')), /Dernier administrateur/, 'la phrase claire d’abord');
+  assert.match(text(err.querySelector('.tpl-error-detail')), /plus aucun compte actif/, 'le détail du serveur dessous');
+  assert.equal(err.getAttribute('role'), 'alert');
+});
+
+test('P1-17 — en anglais, les permissions se lisent par leur libellé anglais servi par l’API', async () => {
+  const calls = [];
+  const dom = new JSDOM(HTML_SRC, {
+    runScripts: 'outside-only',
+    url: 'https://admin.nota.example/#/auth?token=T',
+    pretendToBeVisual: true,
+    beforeParse(window) {
+      window.fetch = makeFetch(api(), calls);
+      window.scrollTo = () => {};
+      window.localStorage.setItem('nota.lang', 'en');
+      if (!window.matchMedia) {
+        window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} });
+      }
+    },
+  });
+  const win = dom.window;
+  OPEN.push(win);
+  win.eval(readFileSync(fileURLToPath(new URL('../public/i18n.js', import.meta.url)), 'utf8'));
+  win.eval(ADMIN_SRC);
+  for (let i = 0; i < 3; i++) await wait(5);
+  await waitFor(win, '.admin-rail');
+  win.location.hash = '#/acces';
+  await waitFor(win, '.acces-groupe');
+  for (let i = 0; i < 3; i++) await wait(5);
+  const doc = win.document;
+  assert.match(text(doc.querySelector('.acces-groupe .acces-perm-list')), /Read the audit log/);
+  assert.doesNotMatch(text(doc.querySelector('.acces-groupe .acces-perm-list')), /Lire le journal/);
+  const ligne = [...doc.querySelectorAll('.acces-user')].find((l) => /support@nota\.ca/.test(text(l)));
+  assert.match(text(ligne), /Read the audit log/, 'le résumé des accès effectifs aussi');
+  const form = doc.querySelector('.acces-groupes > .acces-groupe-form');
+  assert.match(text(form.querySelector('.acces-perms')), /Assign groups and permissions/, 'et les cases à cocher');
+});

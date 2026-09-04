@@ -157,6 +157,8 @@ test('every user-visible string in index.html has an English translation', () =>
 const USER_FACING_FIELDS = new Set([
   'nom', 'nomCourt', 'label', 'sublabel', 'aide', 'help', 'description',
   'titre', 'note', 'placeholder', 'hint', 'question', 'message', 'resume', 'short',
+  // A document's `sinon`: the note shown in place of an upload that does not apply.
+  'sinon',
 ]);
 
 function collectDomainStrings(node, out) {
@@ -172,7 +174,9 @@ function collectDomainStrings(node, out) {
 
 test('every user-facing domain string has an English translation', () => {
   const out = [];
-  collectDomainStrings(D.SERVICES, out);
+  // The catalogue, plus the déplacement directions (their radius-row questions
+  // and labels are rendered by the booking sheet, outside SERVICES).
+  collectDomainStrings([D.SERVICES, D.DEPLACEMENT_QUI], out);
   I18N.force('en');
   const missing = out
     .map((s) => I18N.normalize(s))

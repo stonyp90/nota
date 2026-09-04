@@ -333,3 +333,30 @@ test('the demonstration register is token-driven and square', () => {
     assert.ok(!/--danger/.test(rule), sel + ' must not read as an alarm: ' + rule);
   }
 });
+
+// ---------------------------------------------------------------------------
+// 5. P0-8 — the onboarding vignettes escape the dialog's mark. The guide's
+//    mark sits in .onb-live-host, inside the ROLE view, which is hidden the
+//    moment a role is picked — exactly when the week board / bid vignette
+//    start quoting the month's (possibly invented) demands.
+// ---------------------------------------------------------------------------
+test('P0-8: the onboarding vignettes (bid, week board) carry their own mark when the figures are invented', async () => {
+  const { doc, win, dom } = await boot(); // every fetch rejects → fixtures
+  win.Nota.onboarding.open();
+  await wait(10);
+  doc.querySelector('#onboarding-dialog .onb-choice[data-role="client"]').click();
+  await wait(30);
+  const bid = $(doc, 'ob-bid');
+  assert.equal(bid.hidden, false, 'the client steps play the bid vignette');
+  assert.equal(bid.dataset.demo, 'true', 'the bid vignette is a marked region');
+  assert.ok(bid.querySelector('.demo-mark'), 'and carries a visible mark');
+  $(doc, 'onb-back').click();
+  await wait(10);
+  doc.querySelector('#onboarding-dialog .onb-choice[data-role="notary"]').click();
+  await wait(30);
+  const wk = $(doc, 'ob-week');
+  assert.equal(wk.hidden, false, 'the notary steps play the week board (wide screens)');
+  assert.equal(wk.dataset.demo, 'true', 'the week board is a marked region');
+  assert.ok(wk.querySelector('.demo-mark'), 'and carries a visible mark');
+  dom.window.close();
+});

@@ -2,9 +2,10 @@
  * The signup/sign-in door (owner, 2026-08-28: « comme un site traditionnel,
  * en trois clics ») — ONE clean modal behind both header buttons:
  *   • no dead social doors, no « ou » divider — role → courriel → one CTA;
- *   • the title matches the button that opened it (Connexion / Créer votre
- *     compte) and the CTA names the exact action;
- *   • a client signs up in TWO clicks (S'inscrire → Créer mon compte);
+ *   • the title matches the button that opened it (Connexion / Enregistrer
+ *     votre courriel — a client's « account » is a courriel kept on this
+ *     device, P1-15) and the CTA names the exact action;
+ *   • a client signs up in TWO clicks (S'inscrire → Enregistrer mon courriel);
  *   • the notary path says a link is coming and requests it (3rd click is in
  *     their inbox — the magic link stays, it is the security boundary).
  * Boots the real page (index.html + i18n.js + domain.js + app.js) in jsdom.
@@ -67,8 +68,15 @@ test('both header buttons open the SAME door, titled for the button that opened 
   await wait(10);
   assert.equal($(doc, 'auth-dialog').open, true, 'S’inscrire opens the signup door');
   assert.notEqual($(doc, 'onboarding-dialog').open, true, 'never the pedagogical guide');
+  // P1-15: a client has no server account — the courriel is kept on this
+  // device and sent for the tracking link. The door says exactly that.
+  assert.equal($(doc, 'auth-title').textContent, 'Enregistrer votre courriel');
+  assert.equal($(doc, 'auth-continue').textContent, 'Enregistrer mon courriel');
+  assert.match($(doc, 'auth-fine').textContent, /sur cet appareil/, 'the fine print says where the courriel lives');
+  assert.ok(!/compte/i.test($(doc, 'auth-title').textContent), 'no « compte » for a device-local courriel');
+  // The notary DOES get an account (a magic-link session): the title keeps it.
+  doc.querySelector('#auth-role .seg-btn[data-role="notary"]').click();
   assert.equal($(doc, 'auth-title').textContent, 'Créer votre compte');
-  assert.equal($(doc, 'auth-continue').textContent, 'Créer mon compte');
   $(doc, 'auth-dialog').close();
 
   $(doc, 'header-login').click();
@@ -78,7 +86,7 @@ test('both header buttons open the SAME door, titled for the button that opened 
   assert.equal($(doc, 'auth-continue').textContent, 'Me connecter');
 });
 
-test('a client signs up in TWO clicks: S’inscrire → courriel → Créer mon compte', async () => {
+test('a client signs up in TWO clicks: S’inscrire → courriel → Enregistrer mon courriel', async () => {
   const calls = [];
   const { win, doc, Nota } = await boot({
     fetchStub: (url, opts) => {

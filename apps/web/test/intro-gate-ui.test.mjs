@@ -150,17 +150,28 @@ test('notaire film: a compliance scene sits between the acceptance and the final
   }
 });
 
-test('notary landing: the same three articles sit right under the sign-in gate, and fold away signed-in', () => {
+test('notary landing: the same three articles sit in the content column, and fold away signed-in', () => {
   const sec = doc.querySelector('#nc-conformite');
   assert.ok(sec, 'the Conformité section exists');
   assert.equal(sec.tagName, 'SECTION');
-  assert.equal(sec.previousElementSibling && sec.previousElementSibling.id, 'notary-auth-form', 'right under the gate');
+  // It is a child of the pane's .wrap, not of the gate card: inside
+  // #notary-console it made the rail ~400px taller than the demand grid beside
+  // it and opened a hole in the content column (2026-09-03).
+  assert.ok(sec.parentElement.classList.contains('wrap'), 'a grid child of the pane, not of the console');
+  assert.ok(!sec.closest('#notary-console'), 'never back inside the gate card');
   assert.equal(sec.closest('#pane-notaires') && sec.closest('#pane-notaires').id, 'pane-notaires');
   assertThreeArticles(sec, '.nc-conformite-tile');
   const link = sec.querySelector('a.goto-link[data-goto="conditions"]');
   assert.ok(link, 'a door to the conditions — the site’s deontology surface');
   assert.match(FLAT(link.textContent), /Lire nos engagements déontologiques/);
-  assert.match(css, /#notary-auth-form\[hidden\]\s*\+\s*#nc-conformite\s*\{[^}]*display:\s*none/, 'signed-in, the gate folds and the block with it');
+  assert.match(css, /:has\(#notary-auth-form\[hidden\]\)\s*#nc-conformite\s*\{[^}]*display:\s*none/, 'signed-in, the gate folds and the block with it');
+  // It takes the content column under the demands at every two-column width.
+  assert.match(css, /#nc-conformite\s*\{[^}]*grid-area:\s*conformite/, 'the band is placed by the pane grid');
+  for (const areas of css.match(/grid-template-areas:[^;]*;/g) || []) {
+    if (/\bconsole\b/.test(areas) && /\blive\b/.test(areas)) {
+      assert.match(areas, /\bconformite\b/, 'every notary-landing layout places the band: ' + areas);
+    }
+  }
   for (const b of blocks('.nc-conformite-tile')) {
     assert.ok(!/(?:background|color|border)[^;}]*(?:#[0-9a-fA-F]{3}|rgb\(|hsl\()/.test(b), 'tiles paint tokens only: ' + b);
   }

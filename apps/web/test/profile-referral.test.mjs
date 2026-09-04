@@ -23,6 +23,8 @@ import { JSDOM } from 'jsdom';
 const DOMAIN_SRC = readFileSync(fileURLToPath(new URL('../../../packages/domain/index.js', import.meta.url)), 'utf8');
 const APP_SRC = readFileSync(fileURLToPath(new URL('../public/app.js', import.meta.url)), 'utf8');
 const HTML_SRC = readFileSync(fileURLToPath(new URL('../public/index.html', import.meta.url)), 'utf8');
+// The public origin the page declares (P1-8): share links are built on it, not on location.origin.
+const SITE = (/<meta name="nota:site" content="([^"]+)"/.exec(HTML_SRC) || [null, 'https://nota.example'])[1];
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const $ = (doc, id) => doc.getElementById(id);
@@ -176,7 +178,7 @@ test('the profile shows the Parrainage card after Mes documents, with code and s
   assert.match(card.textContent, /EVEROY/);
   const link = card.querySelector('code');
   assert.ok(link, 'the share link renders as code, like the Partenaires pane');
-  assert.equal(link.textContent, 'https://nota.example/?ref=EVEROY');
+  assert.equal(link.textContent, SITE + '/?ref=EVEROY');
   // The email-driven program is stated — there is deliberately no dashboard.
   assert.match(card.textContent, /courriel/);
 });
@@ -189,7 +191,7 @@ test('the copy button writes the share link to the clipboard', async () => {
   assert.ok(copy, 'a copy button sits beside the link');
   copy.click();
   await wait(10);
-  assert.deepEqual(copied, ['https://nota.example/?ref=EVEROY']);
+  assert.deepEqual(copied, [SITE + '/?ref=EVEROY']);
 });
 
 // Same affordance as the Partenaires success box: where the platform has a
@@ -204,7 +206,7 @@ test('the card offers the native share sheet where the platform has one', async 
   share.click();
   await wait(10);
   assert.equal(shares.length, 1);
-  assert.equal(shares[0].url, 'https://nota.example/?ref=EVEROY');
+  assert.equal(shares[0].url, SITE + '/?ref=EVEROY');
 });
 
 test('the reward amounts on the card are the domain\'s, via D.money', async () => {

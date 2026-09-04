@@ -473,3 +473,187 @@ test('the three doors and the partner claim form carry English entries', () => {
   }
   I18N.force('fr');
 });
+
+// ---------------------------------------------------------------------------
+// Audit 2026-09-02 — the public site's chrome, links, PWA files and print.
+// ---------------------------------------------------------------------------
+const read = (p) => readFileSync(fileURLToPath(new URL(p, import.meta.url)), 'utf8');
+const cssBlock = (sel) => {
+  const i = CSS_SRC.indexOf(sel + ' {');
+  assert.ok(i >= 0, 'rule ' + sel);
+  return CSS_SRC.slice(i, CSS_SRC.indexOf('}', i));
+};
+const px = (block, prop) => Number((new RegExp('(?:^|[\\s;])' + prop + ':\\s*(-?\\d+)').exec(block) || [])[1]);
+
+test('P0-1: the support fab leaves phones; on desktop it stacks above the guide bubble', () => {
+  const phone = CSS_SRC.slice(CSS_SRC.indexOf('@media (max-width: 767.98px)'));
+  assert.match(phone, /\.sup-fab\s*\{[^}]*display:\s*none/,
+    'phones drop the chat fab — the calendar corner ADR 0022 cleared stays clear');
+  const guide = cssBlock('.guide-fab'), sup = cssBlock('.sup-wrap');
+  assert.ok(px(sup, 'bottom') >= px(guide, 'bottom') + px(guide, 'height'),
+    'the chat fab sits ABOVE the guide bubble on desktop, never on it');
+  assert.ok(px(sup, 'z-index') > px(guide, 'z-index'), 'and paints over it if they ever touch');
+});
+
+test('P0-1: the phone drawer carries a « Messagerie » row that opens the support panel', async () => {
+  const { doc } = await boot();
+  const row = $(doc, 'mnav-messagerie');
+  assert.ok(row && row.closest('#mobile-nav'), 'the drawer offers the chat where the fab is gone');
+  $(doc, 'nav-burger').click();
+  await wait(10);
+  row.click();
+  await wait(10);
+  assert.equal($(doc, 'chat-panel').hidden, false, 'the support panel opens');
+  assert.equal($(doc, 'mobile-nav').classList.contains('is-open'), false, 'and the drawer closes');
+});
+
+test('P1-1: every pane link carries its hash destination — never href="#"', async () => {
+  const dom = new JSDOM(HTML_SRC);
+  DOMS.push(dom);
+  for (const a of dom.window.document.querySelectorAll('a.goto-link[data-goto]')) {
+    if (a.closest('#pane-notaires')) continue; // that pane is another session's this wave
+    assert.equal(a.getAttribute('href'), '#t=' + a.dataset.goto, 'link to ' + a.dataset.goto);
+  }
+  // …and the in-page door still wins over a plain hash jump.
+  const { doc, win } = await boot();
+  doc.querySelector('.site-footer .goto-link[data-goto="charte"]').click();
+  await wait(10);
+  assert.equal(activePane(doc), 'pane-charte');
+  // writeHash carries the carnet filters too — the pane key is what matters.
+  assert.match(win.location.hash, /(^#|&)t=charte(&|$)/);
+});
+
+test('P1-16: the account bell opens a dialog; the open drawer is modal and the page behind it inert', async () => {
+  const { doc } = await boot();
+  assert.equal($(doc, 'notif-bell').getAttribute('aria-haspopup'), 'dialog', 'not a menu — the panel carries no menu roles');
+  assert.equal($(doc, 'notif-panel').getAttribute('role'), 'dialog');
+  const drawer = $(doc, 'mobile-nav');
+  assert.equal(drawer.getAttribute('role'), 'dialog');
+  assert.equal(drawer.getAttribute('aria-modal'), 'true');
+  const behind = ['.site-header', '#main', '.site-footer'];
+  $(doc, 'nav-burger').click();
+  await wait(10);
+  for (const sel of behind) assert.ok(doc.querySelector(sel).hasAttribute('inert'), sel + ' is inert behind the drawer');
+  $(doc, 'mnav-close').click();
+  await wait(10);
+  for (const sel of behind) assert.ok(!doc.querySelector(sel).hasAttribute('inert'), sel + ' is live again');
+  assert.equal(doc.activeElement, $(doc, 'nav-burger'), 'focus returns to the burger');
+});
+
+test('P1-18: a print stylesheet exists — light canvas, chrome hidden, content kept', () => {
+  const i = CSS_SRC.indexOf('@media print');
+  assert.ok(i >= 0, 'no @media print');
+  const print = CSS_SRC.slice(i);
+  // (.demo-banner stays: a printed fictional carnet must still say so.)
+  for (const sel of ['.site-header', '.site-footer nav', '.guide-fab', '.sup-wrap', '.mark-drift', '.mnav', '#intro-gate']) {
+    const esc = sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    assert.match(print, new RegExp('(?:^|[,\\s])' + esc + '\\s*(?:,|\\{)', 'm'), 'print hides ' + sel);
+  }
+  assert.match(print, /display:\s*none\s*!important/);
+  assert.match(print, /:root\[data-theme='dark'\][^{]*\{[^}]*--bg:/, 'the dark theme is overridden to light on paper');
+  assert.match(print, /color-scheme:\s*light/);
+  assert.match(print, /box-shadow:\s*none/);
+});
+
+test('P2-1: every border-radius is a token, 0 or the 50% dot — no literal pill or off-scale corner', () => {
+  const noComments = CSS_SRC.replace(/\/\*[\s\S]*?\*\//g, '');
+  const decls = [...noComments.matchAll(/border-radius:\s*([^;}]+)/g)].map((m) => m[1].trim());
+  // The intro films are a scaled composition in their own unit (--igu): a
+  // calc() radius there is the film's drawing, not UI chrome.
+  const bad = decls.filter((v) => !/^(?:var\(--radius(?:-sm|-xs|-lg)?\)|0|50%|inherit|calc\([^)]*var\(--igu\)[^)]*\)|\s)+$/.test(v));
+  assert.deepEqual(bad, [], 'literal radii outside the square register (8/6/3/12px tokens)');
+});
+
+test('P2-10: the phone header hides the empty tool strip; no dead #nav-guide references', () => {
+  const phone = CSS_SRC.slice(CSS_SRC.indexOf('@media (max-width: 719.98px)'));
+  assert.match(phone, /\.header-tools\s*\{[^}]*display:\s*none/, 'language and theme live in the drawer — the strip is empty');
+  assert.ok(!/nav-guide/.test(HTML_SRC), 'index.html still mentions #nav-guide');
+  assert.ok(!/nav-guide/.test(CSS_SRC), 'styles.css still mentions #nav-guide');
+});
+
+test('P2-18: « Comment ça marche » in the footer is a button, not a dead link', async () => {
+  const { doc } = await boot();
+  const b = $(doc, 'footer-guide');
+  assert.equal(b.tagName, 'BUTTON');
+  assert.equal(b.getAttribute('type'), 'button');
+  b.click();
+  await wait(10);
+  assert.equal($(doc, 'onboarding-dialog').open, true);
+});
+
+test('P2-19: the logomark is drawn once as a <symbol>; every inline copy is a <use>', () => {
+  const dom = new JSDOM(HTML_SRC);
+  DOMS.push(dom);
+  const doc = dom.window.document;
+  assert.equal(doc.querySelectorAll('symbol#nota-logomark').length, 1, 'one symbol');
+  const marks = doc.querySelectorAll('svg.ig-mark');
+  assert.ok(marks.length >= 3, 'the chooser and both finales');
+  for (const m of marks) {
+    assert.ok(m.querySelector('use[href="#nota-logomark"]'), 'a mark is a <use>');
+    assert.equal(m.querySelector('rect, polygon, circle'), null, 'no shapes inlined again');
+  }
+  const outside = HTML_SRC.replace(/<symbol[\s\S]*?<\/symbol>/, '');
+  assert.ok(!/fill="#[0-9a-fA-F]{3,6}"/.test(outside), 'no hardcoded fill outside the symbol');
+  // The mark's two greens are the stylesheet's brand ramp — every asset
+  // (symbol, favicon.svg, og.svg, manifests, theme-color) says the same green.
+  const ramp = (step) => /--hunter-STEP:\s*(#[0-9a-fA-F]{6})/.source.replace('STEP', step);
+  const brand = new RegExp(ramp('700')).exec(CSS_SRC)[1].toLowerCase();
+  const bright = new RegExp(ramp('500')).exec(CSS_SRC)[1].toLowerCase();
+  const symbol = /<symbol[\s\S]*?<\/symbol>/.exec(HTML_SRC)[0].toLowerCase();
+  assert.ok(symbol.includes('fill="' + brand + '"'), 'the symbol’s square is --hunter-700');
+  assert.ok(symbol.includes('fill="' + bright + '"'), 'the symbol’s dot is --hunter-500');
+  for (const f of ['../public/favicon.svg', '../public/og.svg']) {
+    const svg = read(f).toLowerCase();
+    assert.ok(svg.includes(brand) && !svg.includes('#2c5f34') && !svg.includes('#50b848'), f + ' carries the current brand green');
+  }
+  const light = [...doc.querySelectorAll('meta[name="theme-color"]')].find((m) => !m.getAttribute('media'));
+  assert.equal(light.getAttribute('content').toLowerCase(), brand, 'the light theme-color is the brand token');
+  for (const f of ['../public/manifest.webmanifest', '../public/manifest.en.webmanifest']) {
+    assert.equal(JSON.parse(read(f)).theme_color.toLowerCase(), brand, f + ' theme_color is the brand token');
+  }
+});
+
+test('P1-8: the canonical origin is declared once in the head', () => {
+  const dom = new JSDOM(HTML_SRC);
+  DOMS.push(dom);
+  const doc = dom.window.document;
+  const meta = doc.querySelector('meta[name="nota:site"]');
+  assert.ok(meta, 'a <meta name="nota:site"> names the public origin');
+  const site = meta.getAttribute('content');
+  assert.match(site, /^https:\/\/[^/]+$/, 'origin only, no trailing slash: ' + site);
+  assert.equal(doc.querySelector('link[rel="canonical"]').getAttribute('href'), site + '/', 'canonical and site agree');
+});
+
+test('P2-2 / P2-3 / P2-4: manifests — no forced orientation, a dark splash, an English start URL', () => {
+  const fr = JSON.parse(read('../public/manifest.webmanifest'));
+  const en = JSON.parse(read('../public/manifest.en.webmanifest'));
+  const darkBg = /:root\[data-theme='dark'\]\s*\{[^}]*--bg:\s*(#[0-9a-fA-F]{6})/.exec(CSS_SRC)[1].toLowerCase();
+  for (const m of [fr, en]) {
+    assert.equal(m.orientation, undefined, 'no portrait lock — the carnet is a table, tablets rotate');
+    assert.equal(m.background_color.toLowerCase(), darkBg, 'the splash is the dark canvas the page boots in');
+  }
+  assert.equal(fr.start_url, '/');
+  assert.equal(en.start_url, '/?lang=en');
+  const dom = new JSDOM(HTML_SRC);
+  DOMS.push(dom);
+  const dark = [...dom.window.document.querySelectorAll('meta[name="theme-color"]')]
+    .find((m) => /prefers-color-scheme:\s*dark/.test(m.getAttribute('media') || ''));
+  assert.ok(dark, 'a dark theme-color meta');
+  assert.equal(dark.getAttribute('content').toLowerCase(), darkBg);
+});
+
+test('P2-6: the sitemap carries lastmod and hreflang alternates', () => {
+  const xml = read('../public/sitemap.xml');
+  assert.match(xml, /<lastmod>\d{4}-\d{2}-\d{2}<\/lastmod>/);
+  assert.match(xml, /xmlns:xhtml="http:\/\/www\.w3\.org\/1999\/xhtml"/);
+  assert.match(xml, /<xhtml:link rel="alternate" hreflang="en-CA" href="[^"]*\?lang=en"\s*\/>/);
+  assert.match(xml, /hreflang="fr-CA"/);
+  assert.match(xml, /hreflang="x-default"/);
+});
+
+test('P2-7: the service worker ignores other origins and never answers a failed asset with HTML', () => {
+  const sw = read('../public/sw.js');
+  assert.match(sw, /url\.origin\s*!==\s*self\.location\.origin/, 'a same-origin guard before any caching');
+  assert.equal((sw.match(/caches\.match\('\/index\.html'\)/g) || []).length, 1,
+    'only the navigation branch falls back to the shell — an asset must not get index.html');
+});

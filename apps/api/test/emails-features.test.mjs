@@ -322,7 +322,7 @@ test('the admin sign-in email uses the branded bilingual template, not an inline
   const m = sent[0];
   assert.ok(m.subject.includes(' / '), 'bilingual subject expected');
   assert.match(m.subject, /Nota Admin/);
-  assert.ok(m.html && m.html.includes('#2c5f34'), 'HTML must carry the Nota brand');
+  assert.ok(m.html && m.html.includes(emails.PALETTE.brand), 'HTML must carry the Nota brand');
   assert.ok(m.html.includes(res.devLink), 'HTML CTA must carry the magic link');
   assert.ok(m.text.includes(res.devLink), 'text alternative must carry the magic link');
 });

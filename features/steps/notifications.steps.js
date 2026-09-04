@@ -52,7 +52,7 @@ function summary(msgs) {
 // (refinancement 2000 $, financement 1800 $).
 const PRICING_VALIDE = {
   refinancement: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale', deplacement: 'client_50' },
-  financement: { valeur_pret: 250000, contexte: 'propriete_detenue', approbation_bancaire: 'obtenue', preteur: 'banque_nationale', deplacement: 'client_50' },
+  financement: { valeur_pret: 250000, contexte: 'propriete_detenue', approbation_bancaire: 'obtenue', preteur: 'banque_nationale', succession: 'non', deplacement: 'client_50' },
 };
 
 // --- Given ------------------------------------------------------------------

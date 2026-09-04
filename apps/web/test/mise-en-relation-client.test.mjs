@@ -105,8 +105,9 @@ const NOTAIRE = {
   lienCNQ: 'https://www.cnq.org/trouver-un-notaire/fiche/42/', actes: 12, cnq: true,
 };
 const MSGS = [
-  { id: 'm1', de: 'notaire', texte: 'Bonjour — avez-vous les instructions ?', createdAt: '2026-09-03T14:32:00.000Z' },
-  { id: 'm2', de: 'notaire', texte: 'Je peux aussi passer le matin.', createdAt: '2026-09-03T15:05:00.000Z' },
+  // A past day: a stamp from today renders as the time alone (F7 P0-2).
+  { id: 'm1', de: 'notaire', texte: 'Bonjour — avez-vous les instructions ?', createdAt: '2026-08-03T14:32:00.000Z' },
+  { id: 'm2', de: 'notaire', texte: 'Je peux aussi passer le matin.', createdAt: '2026-08-03T15:05:00.000Z' },
 ];
 const retainedStatus = (over = {}) => Object.assign({
   bid: { id: 'o1', serviceId: 'financement', dateISO: DATE, montant: 2400, status: 'retenue', etude: 'Étude Roy' },
@@ -287,13 +288,14 @@ test('a notary without a phone or address still gets a card — only the missing
 
 test('whenLabel says the day AND the time; the thread stamps each bubble with it', async () => {
   const { win, doc, Nota } = await boot({ seed: RETAINED_SEED, routes: [statusRoute(retainedStatus()), monthRoute()] });
-  const iso = '2026-09-03T14:32:00';
+  // A past day (today reads as the time alone — see the F7 block below).
+  const iso = '2026-08-03T14:32:00';
   const label = Nota.chat.whenLabel(iso);
   const d = new win.Date(iso);
   const hh = String(d.getHours()).padStart(2, '0'), mm = String(d.getMinutes()).padStart(2, '0');
   assert.match(label, new RegExp('· ' + hh + ':' + mm + '$'), label);
-  assert.match(label, /sept/, 'the day part comes from dayShort: ' + label);
-  assert.equal(Nota.chat.whenLabel('2026-09-03'), Nota.chat.whenLabel('2026-09-03').replace(/ · .*$/, ''), 'a date-only stamp has no time');
+  assert.match(label, /août/, 'the day part is the local day: ' + label);
+  assert.equal(Nota.chat.whenLabel('2026-08-03'), Nota.chat.whenLabel('2026-08-03').replace(/ · .*$/, ''), 'a date-only stamp has no time');
   Nota.setTab('profil');
   await wait(40);
   const whens = doc.querySelectorAll('.my-offer-chat .chat-when');
@@ -597,4 +599,187 @@ test('the new client classes are styled with tokens and exist in the stylesheet'
   const block = CSS_SRC.slice(CSS_SRC.indexOf('/* --- Retained-act conversation'), CSS_SRC.indexOf('/* --- Withdrawal (désistement)'));
   assert.ok(!/#[0-9a-f]{3,8}\b/i.test(block), 'no literal colour in the chat block');
   assert.ok(!/border-radius:\s*(50%|999px|9999px)/.test(block), 'no pill in the chat block');
+});
+
+// ---------------------------------------------------------------------------
+// F7 — audit fixes on the client side (2026-09-03)
+// ---------------------------------------------------------------------------
+
+// P0-2 — the DAY of a stamp follows the same local clock as its time: an
+// evening message whose UTC date is already tomorrow reads as the local day;
+// a stamp from today reads as the time alone (like the support widget).
+test('whenLabel: the day follows the local clock, and today is the time alone', async () => {
+  const { win, Nota } = await boot({ seed: RETAINED_SEED, routes: [statusRoute(retainedStatus()), monthRoute()] });
+  const now = new win.Date();
+  const today = Nota.chat.whenLabel(now.toISOString());
+  assert.match(today, /^\d{2}:\d{2}$/, 'today → time only: ' + today);
+  const y = new win.Date(now.getTime() - 864e5); y.setHours(23, 30, 0, 0);
+  const label = Nota.chat.whenLabel(y.toISOString());
+  assert.match(label, /· 23:30$/, label);
+  assert.ok(new RegExp('(^|\\D)' + y.getDate() + '(\\D|$)').test(label), 'the local day number, not the UTC one: ' + label + ' (expected day ' + y.getDate() + ')');
+  const dateOnly = Nota.chat.whenLabel('2026-08-03');
+  assert.ok(!/\d{2}:\d{2}/.test(dateOnly), 'a date-only stamp carries no time: ' + dateOnly);
+  assert.ok(!APP_SRC.includes('function ncWhenLabel'), 'the unreachable notary-side fallback is gone');
+  assert.equal(Nota.notary.whenLabel, Nota.chat.whenLabel, 'one whenLabel for both sides');
+});
+
+// P1-5 — an Enter that ends an IME composition is not a send.
+test('Enter during IME composition never sends (isComposing)', async () => {
+  const { win, doc, Nota, calls } = await boot({
+    seed: RETAINED_SEED,
+    routes: [statusRoute(retainedStatus()), monthRoute(),
+      { match: (u) => u.endsWith('/client/bid/message'), reply: () => jsonRes(200, { message: { id: 'm9', de: 'client', texte: 'x', createdAt: '2026-08-03T16:00:00.000Z' } }) }],
+  });
+  Nota.setTab('profil');
+  await wait(40);
+  const input = doc.querySelector('.my-offer-chat .chat-input');
+  input.value = '日本語'; fire(win, input, 'input');
+  input.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Enter', isComposing: true, bubbles: true, cancelable: true }));
+  await wait(10);
+  assert.ok(!calls.some((c) => c.url.endsWith('/client/bid/message')), 'a composition Enter is not a send');
+});
+
+// P1-6 — the account door badge is created when unread arrives after the menu
+// was painted, and hidden (not destroyed) at zero.
+test('the account door badge appears when unread messages arrive after the menu was painted', async () => {
+  let msgs = [];
+  const { doc, Nota } = await boot({
+    seed: { ...RETAINED_SEED, 'nota.profile.v1': { courriel: 'client@exemple.ca' } },
+    routes: [statusRoute(() => retainedStatus({ messages: msgs.slice() })), monthRoute()],
+  });
+  Nota.setTab('profil');
+  await wait(40);
+  Nota.account.render();
+  const door = () => [...doc.querySelectorAll('#acct-actions .acct-action')].find((b) => /Mon profil/.test(b.textContent));
+  assert.equal(door().querySelector('.acct-badge'), null, 'nothing unread → no badge');
+  msgs = MSGS.slice();
+  await Nota.client.pollTick();
+  await wait(20);
+  const badge = door().querySelector('.acct-badge');
+  assert.ok(badge, 'the door badge is created on the spot, without a menu repaint');
+  assert.equal(badge.textContent, '2');
+  Nota.client.markSeen('o1');
+  const after = door().querySelector('.acct-badge');
+  assert.ok(!after || after.hidden, 'no visible badge at zero');
+});
+
+// P1-7 — a deep link is validated BEFORE it is persisted: an expired token
+// never becomes a phantom entry polled forever.
+test('an expired deep link (401/403) is not persisted, and the client is told which link opens the demand', async () => {
+  const { win, doc } = await boot({
+    url: '#offre=o9&d=' + DATE + '&cle=tok-old',
+    routes: [{ match: (u) => u.includes('/client/bid?'), reply: () => jsonRes(403, { errors: [{ code: 'non_autorise', message: 'Jeton invalide ou expiré.' }] }) }, monthRoute()],
+  });
+  await wait(40);
+  const mine = JSON.parse(win.localStorage.getItem('nota.myoffers.v1') || '[]');
+  assert.ok(!mine.some((o) => o.id === 'o9'), 'no phantom entry');
+  assert.match($(doc, 'toast').textContent, /lien a expiré/);
+  assert.match($(doc, 'toast').textContent, /courriel le plus récent/);
+  assert.ok(!/cle=/.test(win.location.hash), 'the token still leaves the URL');
+});
+
+test('an expired link on a KNOWN offer keeps the stored token untouched', async () => {
+  const { win } = await boot({
+    url: '#offre=o1&d=' + DATE + '&cle=tok-old',
+    seed: RETAINED_SEED,
+    routes: [{ match: (u) => u.includes('/client/bid?'), reply: () => jsonRes(401, {}) }, monthRoute()],
+  });
+  await wait(40);
+  const mine = JSON.parse(win.localStorage.getItem('nota.myoffers.v1'));
+  assert.equal(mine.find((o) => o.id === 'o1').clientToken, 'tok-o1', 'the working token is not replaced by a dead one');
+});
+
+// P1-9 / P1-10 — documents count as unread; the badge splits its number from
+// its words so each translates in place; the document row carries its time.
+test('a notary document counts as unread, badges the row with its own words, and its row carries the time', async () => {
+  const docs = [{ id: 'd1', de: 'notaire', nom: 'Projet.pdf', taille: 1000, etat: 'pret', createdAt: '2026-08-03T15:30:00.000Z' }];
+  const { doc, Nota } = await boot({ seed: RETAINED_SEED, routes: [statusRoute(retainedStatus({ messages: [], documents: docs })), monthRoute()] });
+  Nota.setTab('profil');
+  await wait(40);
+  const badge = doc.querySelector('#my-offers-live tr.my-offer[data-id="o1"] .my-offer-unread');
+  assert.ok(badge && !badge.hidden, 'the document badges the row');
+  assert.equal(badge.querySelector('.my-offer-unread-n').textContent, '1', 'the number sits in its own span');
+  assert.match(badge.textContent, /1 nouveau document/);
+  const row = doc.querySelector('.my-offer-chat .chat-doc[data-doc="d1"]');
+  assert.ok(row, 'the document row renders');
+  assert.ok(row.querySelector('.chat-when'), 'with its time');
+  assert.match(row.querySelector('.chat-when').textContent, /\d{2}:\d{2}/);
+  Nota.client.markSeen('o1');
+  assert.equal(Nota.client.unread('o1'), 0, 'seen covers documents too');
+});
+
+// P2-7 — a notary who never gave a name is said so, not dressed as « Votre notaire ».
+test('a notary without a name reads honestly — no « Votre notaire » standing in for a name', async () => {
+  const noti = { nom: null, etude: null, telephone: null, adresse: null, courriel: 'x@etude.ca', lienCNQ: null, actes: 0, cnq: false };
+  const { doc, Nota } = await boot({ seed: RETAINED_SEED, routes: [statusRoute(retainedStatus({ notaire: noti })), monthRoute()] });
+  Nota.setTab('profil');
+  await wait(40);
+  const name = doc.querySelector('.my-offer-contact-name');
+  assert.ok(name, 'the card renders (a courriel is enough to reach the notary)');
+  assert.match(name.textContent, /Nom non communiqué/);
+  assert.ok(!/Votre notaire/.test(name.textContent), name.textContent);
+});
+
+// P2-9 — the cancel button says it is busy while the forecast is re-fetched.
+test('« Annuler cette offre » shows a pending state while the forecast is re-fetched', async () => {
+  let slow = false;
+  const { doc, Nota } = await boot({
+    seed: RETAINED_SEED,
+    routes: [{ match: (u) => u.includes('/client/bid?'), reply: () => (slow ? new Promise((res) => setTimeout(() => res(jsonRes(200, retainedStatus())), 60)) : jsonRes(200, retainedStatus())) }, monthRoute()],
+  });
+  Nota.setTab('profil');
+  await wait(40);
+  slow = true;
+  const btn = doc.querySelector('.btn-offer-cancel');
+  btn.click();
+  await wait(5);
+  assert.equal(btn.disabled, true, 'disabled while the server is asked');
+  assert.equal(btn.getAttribute('aria-busy'), 'true');
+  await wait(100);
+  assert.equal($(doc, 'cancel-dialog').open, true);
+  assert.equal(btn.disabled, false, 're-armed once the dialog is up');
+});
+
+// P2-18 — the dialog says Nota charges nothing on a cancelled demand.
+test('the cancel dialog says Nota charges nothing on a cancelled demand', async () => {
+  const { doc, Nota } = await boot({ seed: RETAINED_SEED, routes: [statusRoute(retainedStatus()), monthRoute()] });
+  Nota.setTab('profil');
+  await wait(40);
+  doc.querySelector('.btn-offer-cancel').click();
+  await wait(30);
+  assert.match($(doc, 'cancel-dialog').textContent, /Nota ne facture pas son service sur une demande annulée/);
+});
+
+// P2-13 — the pane is « Mes offres »; the deep-linked band takes the focus.
+test('#pane-profil is titled « Mes offres », its lede no longer claims « sur cet appareil », and the deep-linked band takes the focus', async () => {
+  const st = retainedStatus({ bid: { id: 'o9', serviceId: 'refinancement', dateISO: DATE, montant: 2600, status: 'retenue', etude: 'Étude Roy' } });
+  const { doc } = await boot({ url: '#offre=o9&d=' + DATE + '&cle=tok-9', routes: [statusRoute(st), monthRoute()] });
+  await wait(40);
+  const pane = $(doc, 'pane-profil');
+  assert.equal(pane.querySelector('h1').textContent.trim(), 'Mes offres');
+  assert.ok(!/sur cet appareil/.test(pane.querySelector('.intro p').textContent), 'the device note leaves the lede');
+  const band = doc.querySelector('.my-offer-detail[data-for="o9"]');
+  assert.equal(doc.activeElement, band, 'the band is focused');
+});
+
+// P2-1 — one IntersectionObserver per surface, however many repaints.
+test('one IntersectionObserver for Mes offres: re-rendering never constructs another', async () => {
+  let made = 0; const observed = [];
+  const { doc, Nota } = await boot({
+    seed: RETAINED_SEED, routes: [statusRoute(retainedStatus()), monthRoute()],
+    onWindow: (w) => { w.IntersectionObserver = function () { made++; this.observe = (t) => observed.push(t); this.unobserve = () => {}; this.disconnect = () => {}; }; },
+  });
+  Nota.setTab('profil'); await wait(40);
+  Nota.setTab('carnet'); Nota.setTab('profil'); await wait(40);
+  assert.ok(doc.querySelector('.my-offer-chat .chat-thread'), 'the thread is on screen');
+  assert.equal(made, 1, 'one observer');
+  assert.ok(observed.length >= 2, 'every repaint observes its fresh thread');
+});
+
+// P2-10 — the counters are not live regions (every keystroke past 400 would
+// otherwise be announced).
+test('the composer counter carries no aria-live', async () => {
+  const { doc, Nota } = await boot({ seed: RETAINED_SEED, routes: [statusRoute(retainedStatus()), monthRoute()] });
+  Nota.setTab('profil'); await wait(40);
+  assert.equal(doc.querySelector('.my-offer-chat .chat-count').hasAttribute('aria-live'), false);
 });

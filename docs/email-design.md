@@ -19,16 +19,25 @@ anything.
    through `domain.money()` / `domain.moneyEn()`, service and tier names
    through `nom`/`nomEn` — never hardcoded, never computed in the mail layer.
 4. **Survives hostile clients.** Table-based layout, all CSS inline (clients
-   strip `<style>`), no `<img>`, no `<svg>` — the logo is pure CSS/text so the
-   brand shows even with images blocked. An MSO ghost table pins Outlook to
-   600px; everywhere else the card is fluid. `color-scheme` /
+   strip `<style>`), no `<img>`, no `<svg>`, no `url()` — the logo is pure
+   CSS/text so the brand shows even with images blocked (the « N » mark is
+   `aria-hidden`; the wordmark is the accessible name). An MSO ghost table
+   pins Outlook to 600px; everywhere else the card is fluid. `color-scheme` /
    `supported-color-schemes` metas declare the card light-only so Apple Mail
    does not auto-invert it in dark mode, and the English block carries
    `lang="en-CA"` inside the `fr-CA` document so screen readers switch
    pronunciation.
 5. **Compliant on every message.** CASL / Law 25 footer with sender name,
-   registered mailing address, a plain-language reason, and a working
+   registered mailing address, a plain-language reason, the contact and
+   privacy addresses from `domain.CONTACT`, and a working
    `Se désabonner / Unsubscribe` link — on transactional messages too.
+   CASL s. 6(6) lifts only the *consent* requirement for a message that
+   solely completes a transaction, not the form requirements of s. 6(2)
+   (identification + unsubscribe); a pure service notice is not a commercial
+   message at all. Carrying the link everywhere is therefore always
+   compliant, and one shell keeps it so. (Open product point: the notifier's
+   suppression list silences transactional notices too — CASL does not ask
+   for that; see `notifications.js` `sendOnce`.)
 6. **One-click unsubscribe at the header level.** Every send carries its
    `unsubscribeUrl` through the mailer port; the SES adapter emits
    `List-Unsubscribe: <url>` and, for http(s) URLs, `List-Unsubscribe-Post:
@@ -43,21 +52,23 @@ anything.
 ```
 ┌──────────────────────────────────────────────┐  ← neutral #f4f7f4 page
 │ ┌──────────────────────────────────────────┐ │
-│ │ ███ 3px hunter-green top rule            │ │  ← white card, max 600px,
-│ │  [N] Nota                                │ │    1px border, 14px radius
+│ │ ███ 3px hunter-green top rule            │ │  ← surface card, max 600px,
+│ │  [N] Nota                                │ │    1px border, 12px radius
 │ │      La place de marché notariale ·      │ │  ← CSS-only logo header
 │ │      The notarial marketplace            │ │
 │ ├──────────────────────────────────────────┤ │
 │ │  H1 (fr)                                 │ │
 │ │  lead (fr, muted)                        │ │
 │ │  ▎callout — offer line, tinted panel     │ │  ← brand-left-rule emphasis
-│ │  paragraph(s)                            │ │
+│ │  paragraph(s) · detail rows · bullets    │ │
 │ │        [ CTA — hunter green ]            │ │  ← ONE CTA per language
+│ │  L’équipe Nota                           │ │  ← sign-off, per language
 │ │  ──────────── divider ────────────       │ │
 │ │  H1 (en) … same structure … [ CTA ]      │ │
+│ │  The Nota team                           │ │
 │ ├──────────────────────────────────────────┤ │
 │ │  footer: Nota · mailing address ·        │ │  ← CASL / Law 25, bilingual
-│ │  reason · unsubscribe / support / privacy│ │
+│ │  reason · unsubscribe / contact / privacy│ │
 │ └──────────────────────────────────────────┘ │
 └──────────────────────────────────────────────┘
 ```
@@ -69,40 +80,80 @@ zero-width joiners so body copy never leaks into the preview.
 
 Inline styles are mandatory in email, so the web CSS custom properties can't be
 referenced directly. The `PALETTE` object in `emails.js` is the one flattened
-copy of the **light-theme** web tokens (`apps/web/public/styles.css`) — change
-a color there, never inline:
+copy of the **light-theme** web tokens (`apps/web/public/styles.css`).
+`emails-brand.test.mjs` parses that file's `:root` block and holds every key
+below to it, so a token changed on the site fails CI here until the copy
+follows — change a color there, never inline:
 
-| PALETTE key | Value | Web token |
+| PALETTE key | Web token | Role in the mail |
 | --- | --- | --- |
-| `ink` | `#0b1220` | `--ink` |
-| `muted` | `#4d5b6e` | `--ink-muted` |
-| `bg` | `#f4f7f4` | `--surface-inset` |
-| `card` | `#ffffff` | `--surface` |
-| `border` | `#dbe2ea` | `--border` |
-| `brand` | `#2c5f34` | `--brand` (hunter-700) |
-| `brandBright` | `#50b848` | `--brand-bright` (hunter-500) |
-| `brandDark` | `#244c2a` | `--brand-hover` (hunter-800) |
-| `brandInk` | `#ffffff` | `--on-accent` |
-| `tint` | `#f0f9f0` | hunter-50 |
-| `footer` | `#6b7a8a` | email-only small print |
+| `ink` | `--ink` | headings, body |
+| `muted` | `--ink-muted` | lead, tagline, footer small print, sign-off |
+| `bg` | `--bg` | the page canvas the card floats on |
+| `card` | `--surface` | the card |
+| `border` | `--border` | card edge, hairlines, digest rows |
+| `brand` | `--brand` (hunter-700) | top rule, mark, wordmark, CTA fill, links |
+| `brandDark` | `--brand-hover` (hunter-800) | the CTA's 1px edge |
+| `brandInk` | `--brand-ink` | text on the brand fill |
+| `tint` | `--hunter-50` | the callout wash |
+
+Every hex literal in a rendered message must be one of these (asserted) —
+there is no email-only colour. Radii sit on the web square scale
+(`RADIUS`): card `--radius-lg` 12px, mark and CTA `--radius` 8px, callout
+`--radius-sm` 6px — no pills, no circles (asserted).
 
 Type: Inter-first stack (`Inter, system-ui, …`), matching the web `--font-sans`.
 The card always sits on the light surface — deliberate: it stays legible in
 dark-mode clients that would otherwise invert unknown backgrounds.
 
 CTA button: hunter-green fill, white 16px/600 label, `14px 32px` padding
-(≥44px touch target), `mso-padding-alt` for Outlook, 10px radius, 1px
+(≥44px touch target), `mso-padding-alt` for Outlook, 8px radius, 1px
 `brandDark` border. Table-based ("bulletproof"), no VML.
 
-## Conversion checklist (every template)
+## Invariants — every template, enforced by `emails-brand.test.mjs`
 
-- a short, specific subject — no spammy words, no ALL CAPS;
-- a preheader that adds information, not repeats the subject;
-- exactly **one** CTA per language block, verb-first label ("Compléter mon
-  dossier"), both languages pointing at the same URL;
-- the key fact (offer line, amount, link validity) in a `callout()` so a
-  5-second scan gets it;
-- a plain-text alternative carrying the same content and CTA URL.
+The generic suites iterate `TEMPLATES` with a rich context AND a bare one, so
+registering a template is what opts it in. Each line is an assertion:
+
+- **Subject** reads `FR / EN` (exactly one ` / `), ≤ 78 characters with a
+  typical amount, never ALL CAPS, no newline. Operator alerts carry the detail
+  on the FR side and keep the EN side a short label so an address fits.
+- **Preheader** reads `FR · EN`, each side ≤ 110 characters, and never
+  repeats the FR subject.
+- **CTA**: exactly one per language, both on the same absolute URL, label
+  ≤ 40 characters opening with an imperative verb from the whitelist in the
+  test (`Ouvrir`, `Compléter`, … / `Open`, `Complete`, …), and the same
+  label + URL in the text alternative.
+- **Sign-off** « L’équipe Nota » / « The Nota team » closes each language
+  block, HTML and text.
+- **Footer**: sender name, mailing address, contact + privacy addresses from
+  `domain.CONTACT` as `mailto:` links, unsubscribe link — HTML and text.
+- **Shell**: `max-width:600px`, `role="presentation"` tables, no `<style>`,
+  no `<img>`/`<svg>`/`url(`, Inter stack, `color-scheme` metas, `lang`
+  switch, aria-hidden mark + wordmark + tagline, palette-only colours,
+  square-scale radii.
+- **No leaks**: no `{{`, `undefined`, `null`, `NaN`, `[object`, lorem/TODO,
+  and no empty « · · » offer line — with the rich context and the bare one.
+- **Text alternative** carries every `http(s)` link the HTML carries.
+- **Dates** through `fmtDate`/`fmtDateEn` — a raw ISO date never reaches the
+  copy; **amounts** through `money()`/`moneyEn()`; **acts** through
+  `nom`/`nomEn`.
+- **Escaped once**: a document name with `&` / `<` reads as typed.
+- **Client copy**: no platform jargon (`lead`, `hold`, `capture`, `payout`,
+  `webhook`, `Stripe`), and never a rating value, an average or a cote value
+  about a named notary (ADR 0030).
+- **Notary copy**: never a percentage of honoraires (art. 29.1 / 32); the only
+  `%` allowed is the cancellation barème, immediately followed by « du
+  montant » / « of the amount », in a sentence that does not name honoraires.
+- **Coverage**: `TEMPLATE_META` covers exactly `Object.keys(TEMPLATES)`, and
+  every placeholder a template declares is carried by the ctx of the
+  send-point that mails it — the test drives every notifier send-point with a
+  probing override and reads the interpolated subject back (the three auth
+  links bypass overrides and are excluded).
+
+Also, per template: the key fact (offer line, amount, link validity) in a
+`callout()` so a 5-second scan gets it, and the first sentence says what
+happened and what to do.
 
 ## Template inventory — every feature has its dedicated email
 
@@ -215,12 +266,16 @@ repo.getEmailOverride(key)
   or missing tokens render as `''`:
   `montant` (domain `money()` fr / `moneyEn()` en), `service` (`nom`/`nomEn`),
   `date` (fr-CA / en-CA long date), `code`, `n`, `note`, `etude`, `email`.
+  `montant` is always the **act's** amount — the referral reward templates do
+  not declare it on purpose, so an admin cannot publish the act amount as the
+  reward (the reward is `domain.REFERRAL`).
 - **`TEMPLATE_META`** (exported from `emails.js`) describes every registry key
-  for the console: `{ audience, labelFr, labelEn, defaultSubjectFr,
-  defaultSubjectEn, placeholders }` — the defaults show the subject with its
-  `{{token}}` placeholders, and `placeholders` lists only the tokens that
-  template's ctx actually carries. A test asserts it covers exactly
-  `Object.keys(TEMPLATES)`.
+  for the console: `{ audience, transactionnel, labelFr, labelEn,
+  defaultSubjectFr, defaultSubjectEn, placeholders }` — the defaults show the
+  subject with its `{{token}}` placeholders, and `placeholders` lists only the
+  tokens that template's ctx actually carries. Two tests hold it: coverage
+  of exactly `Object.keys(TEMPLATES)`, and a notifier-driven probe proving
+  every declared token renders non-empty from its real send-point.
 - **Non-overridable, on purpose:** the direct `mailer.send` bypasses
   (`notaryMagicLink` via `onNotaryLoginRequested`, `partnerClaimLink` via
   `onPartnerClaimRequested`) and the admin console's own `adminMagicLink`.
@@ -237,17 +292,20 @@ repo.getEmailOverride(key)
    primitives (`para`, `callout`, `button` via `ctaLabel`). No new styles.
 3. Add it to the `TEMPLATES` registry. That alone opts it into the generic
    suites (`emails-brand.test.mjs`, `notifications.test.mjs`), which enforce
-   the bilingual contract, brand color, Inter stack, no-`<style>`/`<img>`/
-   `<svg>`, preheader, CASL footer and unsubscribe link automatically.
+   every invariant listed above automatically — subject and preheader
+   lengths, the verb-first CTA pair, the sign-off, palette-only colours, the
+   no-leak render under a bare context, the audience copy rules.
 4. Wire it in `notifications.js` through `sendOnce()` — consent (suppression
    list) and idempotency (the `(refId, kind)` SENT ledger) come for free. Pass
    `templateKey` (the registry key) and `ctx` (the same context object handed
    to the template) so the admin override system can disable or reword it.
    Send-points in `handler.js` are fire-and-forget: mail must never break a
    response.
-5. Describe it in `TEMPLATE_META` (audience, labels, default subjects with
-   `{{token}}` placeholders, and the tokens its ctx carries) — the coverage
-   test fails until the entry exists.
+5. Describe it in `TEMPLATE_META` (audience, `transactionnel`, labels,
+   default subjects with `{{token}}` placeholders, and the tokens its ctx
+   carries) — the coverage test fails until the entry exists, and the
+   placeholder probe in `emails-brand.test.mjs` fails until its send-point is
+   driven there (add the call next to the others).
 
 ## Before go-live
 

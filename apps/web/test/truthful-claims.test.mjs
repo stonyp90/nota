@@ -89,24 +89,32 @@ test('the signup fine print says the courriel is transmitted, and claims only wh
     assert.ok(!DEVICE_LIE.test(txt), label + ' still claims device-only: ' + txt);
     assert.match(txt, /courriel est transmis à Nota/, label + ' must say the courriel is transmitted: ' + txt);
     assert.match(txt, /lien de suivi|avis/, label + ' must say what it is used for: ' + txt);
-    // The narrow, verifiable half: file CONTENTS never leave. Answers and
-    // document FILENAMES do travel (payload.dossier), so the copy must not
-    // promise that « vos renseignements » or « votre dossier » stay local.
-    assert.match(txt, /contenu de vos documents/, label + ' must scope the promise to file contents: ' + txt);
+    // Since ADR 0032 the documents DO leave the device (envoyerDocument PUTs
+    // the bytes to the signed upload URL). The truthful half: they travel
+    // encrypted and only the retaining notary reads them — never Nota. No
+    // surface may promise that file contents, answers or the dossier stay local.
+    assert.ok(!/ne quitte jamais cet appareil|ne quittent jamais cet appareil/.test(txt),
+      label + ' still promises the documents stay on the device — ADR 0032 uploads them: ' + txt);
+    assert.match(txt, /transitent chiffrés/, label + ' must say the documents travel encrypted: ' + txt);
+    assert.match(txt, /jamais par Nota/, label + ' must say who never reads them: ' + txt);
     assert.ok(!/vos réponses.{0,30}rest|dossier.{0,30}reste sur cet appareil/.test(txt),
       label + ' over-promises: the dossier answers and filenames DO travel with an offer: ' + txt);
   }
   dom.window.close();
 });
 
-test('the fine print is honest about a real POST: clientWelcome sends the courriel', () => {
-  // Guard the premise itself — if this call ever stops existing, the copy
-  // should be revisited rather than left stale in the other direction.
+test('the fine print is honest about two real calls: clientWelcome sends the courriel, envoyerDocument sends the bytes', () => {
+  // Guard the premises themselves — if either call ever stops existing, the
+  // copy should be revisited rather than left stale in the other direction.
   assert.match(APP_SRC, /function clientWelcome\([\s\S]{0,400}\/client\/welcome/,
     'clientWelcome must still POST the courriel — the copy is written for that fact');
-  // Nothing uploads file contents: no FormData, no data-URL read of a file.
-  assert.ok(!/FormData|readAsDataURL|readAsArrayBuffer/.test(APP_SRC),
-    'a file-upload path appeared — « le contenu de vos documents ne quitte jamais cet appareil » would become false');
+  assert.match(APP_SRC, /async function envoyerDocument\([\s\S]{0,900}body: file/,
+    'envoyerDocument must still PUT the file bytes (ADR 0032) — the copy is written for that fact');
+  // And the retired device-only promise about documents is gone from every source.
+  for (const [name, src] of Object.entries({ 'index.html': HTML_SRC, 'app.js': APP_SRC, 'i18n.js': I18N_SRC })) {
+    assert.ok(!/documents?, lui, ne quitte jamais cet appareil|never leave this device/i.test(src),
+      name + ' still promises document contents never leave the device');
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -188,4 +196,152 @@ test('the three replacements are translated', () => {
   covered('Plus la date est éloignée, plus de notaires ont la latitude de s’organiser pour la prendre ; une date rapprochée en laisse moins.');
   const en = I18N.tEn('Plus la date est éloignée, plus de notaires ont la latitude de s’organiser pour la prendre ; une date rapprochée en laisse moins.');
   assert.ok(!/\d|%/.test(en), 'the English side must not reintroduce a figure: ' + en);
+});
+
+// ---------------------------------------------------------------------------
+// 4. The public site, audited 2026-09-02 — head, structured data, legal panes,
+//    onboarding and dialogs. Each finding locks both directions: the retired
+//    wording must not come back, and the replacement must say the true thing.
+// ---------------------------------------------------------------------------
+const staticDoc = () => new JSDOM(HTML_SRC).window.document;
+const ldScripts = () => [...staticDoc().querySelectorAll('script[type="application/ld+json"]')].map((s) => s.textContent);
+
+test('P0-2: neither the social description nor the structured data says the client pays nothing', () => {
+  const og = staticDoc().querySelector('meta[property="og:description"]').getAttribute('content');
+  assert.ok(!/gratuit pour le client|gratuit pour vous/i.test(og), og);
+  assert.match(og, /gratuit/i, 'publishing IS free — say that half: ' + og);
+  assert.match(og, /signature/, 'and where the money happens: ' + og);
+  for (const s of ldScripts()) {
+    // The FAQ may ASK « Est-ce gratuit pour le client ? » — its answer must
+    // not state it. Only the question is excused.
+    const answers = s.replace(/Est-ce gratuit pour le client\s*\?/g, '');
+    assert.ok(!/free for the client|gratuit pour le client/i.test(answers), 'structured data still says free: ' + s.slice(0, 160));
+  }
+});
+
+test('P1-17 / P2-22: no price literal in the static structured data — the catalogue and the contact are emitted from the domain at boot', async () => {
+  for (const s of ldScripts()) {
+    assert.ok(!/"price"/.test(s), 'a static price survives: ' + s.slice(0, 200));
+    assert.ok(!/\b(2000|1800)\b/.test(s), 'a literal amount survives in structured data: ' + s.slice(0, 200));
+  }
+  const { doc, D, dom } = await boot();
+  const ld = $(doc, 'ld-catalogue');
+  assert.ok(ld && ld.getAttribute('type') === 'application/ld+json', 'boot emits a JSON-LD catalogue into the head');
+  assert.equal(ld.parentNode, doc.head);
+  const nodes = JSON.parse(ld.textContent)['@graph'];
+  const cat = nodes.find((n) => n['@type'] === 'OfferCatalog');
+  assert.ok(cat, 'an OfferCatalog node');
+  // (D lives in the jsdom realm — round-trip through JSON so the arrays share a prototype.)
+  assert.deepEqual(
+    cat.itemListElement.map((o) => [o['@type'], o.itemOffered.name, o.price, o.priceCurrency]),
+    JSON.parse(JSON.stringify(D.SERVICES.map((s) => ['Offer', s.nom, String(s.prixDepart), 'CAD']))),
+    'one Offer per domain service, priced from prixDepart');
+  for (const o of cat.itemListElement) assert.match(o.description, /honoraires du notaire/, 'the price is the notary’s starting fee, said so');
+  const org = nodes.find((n) => n['@type'] === 'Organization');
+  assert.equal(org.email, D.CONTACT.courriel, 'the organisation’s email is the domain’s (P2-22)');
+  assert.match(org['@id'], /#organization$/, 'merges by @id into the static Organization node');
+  dom.window.close();
+});
+
+test('P1-19 / P2-22: one og:image; the static Organization carries a postal address', () => {
+  const doc = staticDoc();
+  assert.equal(doc.querySelectorAll('meta[property="og:image"]').length, 1, 'the SVG duplicate after the PNG confused scrapers');
+  const org = ldScripts().map((s) => JSON.parse(s)).find((j) => j['@type'] === 'Organization');
+  assert.equal(org.address && org.address.addressLocality, 'Québec');
+  assert.equal(org.address.addressRegion, 'QC');
+  assert.equal(org.address.addressCountry, 'CA');
+});
+
+test('P0-5: the onboarding’s third client step names both lines, never « rien de plus »', async () => {
+  const { doc, Nota, dom } = await boot();
+  Nota.onboarding.open();
+  await wait(10);
+  doc.querySelector('#onboarding-dialog .onb-choice[data-role="client"]').click();
+  await wait(10);
+  const steps = [...doc.querySelectorAll('#onb-steps li')].map((li) => FLAT(li.textContent));
+  assert.equal(steps.length, 3);
+  const last = steps[2];
+  assert.ok(!/rien de plus/.test(last), 'the client pays TWO lines since ADR 0031: ' + last);
+  assert.match(last, /honoraires/, last);
+  assert.match(last, /prix fixe du service de Nota/, last);
+  assert.match(last, /affichés avant tout paiement/, last);
+  dom.window.close();
+});
+
+test('P0-6 / P0-7: the privacy pane states the real retention, promises no erasure the code does not do, and names custody and local storage', () => {
+  const pane = FLAT(staticDoc().getElementById('pane-confidentialite').textContent);
+  assert.ok(!/12 mois/.test(pane), 'the TTL is 400 days (≈ 13 months) plus 35 days of PITR, not 12 months');
+  assert.ok(!/30 jours/.test(pane), 'no 30-day DSAR mechanism exists in the code');
+  assert.ok(!/effacé dès que l’offre/.test(pane), 'no code erases the courriel when an offer closes');
+  assert.match(pane, /13 mois/);
+  assert.match(pane, /35 jours/);
+  assert.match(pane, /meilleurs délais prévus par la Loi 25/);
+  // ADR 0032 — custody, not readership.
+  assert.match(pane, /dépositaire/, 'Nota is the custodian of exchanged documents');
+  assert.match(pane, /Aucun employé de Nota/);
+  assert.match(pane, /aucune analyse/i);
+  assert.match(pane, /ca-central-1/);
+  // The device side: what localStorage holds.
+  assert.match(pane, /[Ss]tockage local/);
+  assert.match(pane, /navigateur/);
+});
+
+test('P0-10: the legal panes publish only addresses the domain defines, filled at boot', async () => {
+  for (const [name, src] of Object.entries({ 'index.html': HTML_SRC, 'app.js': APP_SRC })) {
+    assert.ok(!/info@nota\.ca/.test(src), name + ' publishes info@nota.ca, which exists nowhere');
+    assert.ok(!/confidentialite@nota\.ca/.test(src), name + ' hardcodes the privacy address instead of reading D.CONTACT');
+  }
+  const { doc, D, dom } = await boot();
+  for (const [id, addr] of [
+    ['tos-contact', D.CONTACT.courriel], ['charte-contact', D.CONTACT.courriel],
+    ['priv-contact', D.CONTACT.confidentialite], ['priv-responsable', D.CONTACT.confidentialite],
+  ]) {
+    const a = $(doc, id);
+    assert.ok(a, id + ' exists');
+    assert.equal(a.tagName, 'A');
+    assert.equal(a.textContent, addr, id);
+    assert.equal(a.getAttribute('href'), 'mailto:' + addr, id);
+  }
+  dom.window.close();
+});
+
+test('legal panes: each carries a version stamp — an unreviewed draft, dated', () => {
+  const doc = staticDoc();
+  for (const id of ['pane-confidentialite', 'pane-conditions', 'pane-charte']) {
+    const stamp = doc.querySelector('#' + id + ' .legal-stamp');
+    assert.ok(stamp, id + ' carries a stamp');
+    const t = FLAT(stamp.textContent);
+    assert.match(t, /^Version \d+\.\d+/, t);
+    assert.match(t, /brouillon/, t);
+    assert.match(t, /non révisé par un juriste/, t);
+    assert.match(t, /\d{4}-\d{2}-\d{2}/, 'dated: ' + t);
+  }
+});
+
+test('charte: « aucun frais caché » names the two lines and points at the cancellation barème', () => {
+  const doc = staticDoc();
+  const li = [...doc.querySelectorAll('#pane-charte .privacy-list li')].find((l) => /aucun frais caché/i.test(l.textContent));
+  assert.ok(li, 'the transparency commitment stays');
+  const t = FLAT(li.textContent);
+  assert.match(t, /barème/, t);
+  assert.match(t, /annulation/, t);
+  assert.match(t, /prix fixe du service de Nota/, t);
+  assert.ok(li.querySelector('a.goto-link[data-goto="conditions"]'), 'a door to the conditions where the barème lives');
+  // The retired one-liner cannot return.
+  assert.ok(!/aucun frais caché\. Ce que vous offrez est ce que le notaire reçoit\.$/.test(t), t);
+});
+
+test('P1-5 / P1-14: no unbacked same-day SLA, no unmeasured « retenues plus vite »', () => {
+  for (const [name, src] of Object.entries({ 'index.html': HTML_SRC, 'app.js': APP_SRC, 'i18n.js': I18N_SRC })) {
+    assert.ok(!/normalement le jour même|normally the same day/i.test(src), name + ' promises a same-day answer nobody measured');
+    assert.ok(!/nominatives sont souvent retenues plus vite|Named offers are often taken faster/.test(src), name + ' claims an unmeasured effect of revealing one’s name');
+  }
+  const doc = staticDoc();
+  assert.match(FLAT(doc.querySelector('#contact-dialog').textContent), /vous répond à votre courriel\./);
+  assert.match(FLAT(doc.querySelector('#reveal-dialog').textContent), /information que vous rendez publique/);
+});
+
+test('P2-11: the auth dialog’s comment no longer narrates a social-login plan that is not wired', () => {
+  assert.ok(!/Social OAuth is not wired yet/.test(HTML_SRC));
+  assert.ok(!/social provider or a courriel/.test(HTML_SRC));
 });

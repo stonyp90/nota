@@ -474,9 +474,23 @@ test('sans « campaigns:send » l’écran reste visible, en lecture seule, et d
 });
 
 test('sans « analytics:read » la prévisualisation elle-même est fermée, et l’écran le dit', async () => {
-  const { doc } = await ouvrir(api({ permissions: ['groups:read'] }));
+  const handler = api({ permissions: ['groups:read'] });
+  const { doc } = await ouvrir(handler);
   assert.equal(q(doc, '.camp-previsualiser').disabled, true);
   assert.match(text(q(doc, '.camp-form')), /prévisualisation/i);
+  // P2-30 — la permission est nommée comme au catalogue, jamais autrement.
+  assert.match(text(q(doc, '.camp-form')), /« Lire les tableaux de bord »/);
+});
+
+test('P1-11 — un 403 sur le catalogue des segments se lit comme une porte fermée, pas comme une panne à réessayer', async () => {
+  const handler = api({ permissions: ['groups:read'] });
+  handler.state.segmentsStatus = 403;
+  const { win, doc } = await boot(handler, '#/auth?token=T');
+  await waitFor(win, '.admin-rail');
+  win.location.hash = '#/campagnes';
+  await waitFor(win, '.admin-denied');
+  assert.equal(q(doc, '.error-banner'), null, 'aucun « Réessayer » mort');
+  assert.match(text(q(doc, '.admin-denied')), /Lire les tableaux de bord/);
 });
 
 test('une cible « personne » sans adresse est refusée AVANT l’envoi', async () => {

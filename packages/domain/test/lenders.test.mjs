@@ -77,11 +77,11 @@ test('the lender no longer moves the price; complexity still names it', () => {
 });
 
 test('a bid cannot be posted without naming the lender', () => {
-  const missing = D.missingRequired('financement', { valeur_pret: 250000, contexte: 'propriete_detenue', approbation_bancaire: 'obtenue', deplacement: 'client_50' });
+  const missing = D.missingRequired('financement', { valeur_pret: 250000, contexte: 'propriete_detenue', approbation_bancaire: 'obtenue', succession: 'non', deplacement: 'client_50' });
   assert.deepEqual(missing.map((m) => m.id), ['preteur']);
   const r = D.validateOffer({
     serviceId: 'financement', dateISO: '2026-09-20', montant: 2500, todayISO: '2026-08-26',
-    pricing: { valeur_pret: 250000, contexte: 'propriete_detenue', approbation_bancaire: 'obtenue', deplacement: 'client_50' },
+    pricing: { valeur_pret: 250000, contexte: 'propriete_detenue', approbation_bancaire: 'obtenue', succession: 'non', deplacement: 'client_50' },
   });
   assert.equal(r.ok, false);
   assert.ok(r.errors.some((e) => e.code === 'parametre_requis' && e.param === 'preteur'));

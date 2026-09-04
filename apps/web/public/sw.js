@@ -35,6 +35,10 @@ self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET') return; // never cache POST/PUT (offers, notary actions)
   const url = new URL(req.url);
+  // Same origin only: the font host (rsms.me), Stripe and the signed document
+  // URLs (ADR 0032: bytes go straight to the bucket) are never cached here
+  // and never answered by this worker — the browser fetches them itself.
+  if (url.origin !== self.location.origin) return;
 
   // API: network-first, no cache; graceful offline JSON.
   if (url.pathname.startsWith('/api')) {
@@ -64,7 +68,9 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // Hashed assets / icons: cache-first, then network (and cache it).
+  // Hashed assets / icons: cache-first, then network (and cache it). A miss
+  // offline is a plain failure — never the HTML shell in a stylesheet's or
+  // script's clothing.
   e.respondWith(
     caches.match(req).then((cached) =>
       cached ||
@@ -74,7 +80,7 @@ self.addEventListener('fetch', (e) => {
           caches.open(CACHE).then((c) => c.put(req, copy));
           return res;
         })
-        .catch(() => caches.match('/index.html'))
+        .catch(() => new Response('', { status: 503, statusText: 'Hors ligne' }))
     )
   );
 });

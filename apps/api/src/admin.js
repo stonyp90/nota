@@ -116,6 +116,18 @@ function createAdmin({
     }
   }
 
+  // Qui nommer dans le journal quand une adresse frappe à la porte. Un compte
+  // de la liste blanche se journalise par son adresse : l'opérateur doit savoir
+  // QUI est freiné. Un INCONNU, lui, n'est pas un compte — c'est la donnée
+  // personnelle d'un tiers, et le journal la gardait en clair sans limite de
+  // durée (audit du 2026-09-03, P2-34). Il ne reste qu'une empreinte : de quoi
+  // corréler des tentatives répétées, jamais de quoi reconstituer l'adresse.
+  function auditIdentity(clean) {
+    if (clean && allowlist.has(clean)) return { email: clean };
+    const empreinte = require('node:crypto').createHash('sha256').update(String(clean || '')).digest('hex').slice(0, 16);
+    return { email: null, meta: { empreinte } };
+  }
+
   /**
    * Step 1 — request a magic link. Always returns { ok: true } for a
    * well-formed request (no account enumeration); `throttled: true` when the
@@ -135,7 +147,7 @@ function createAdmin({
       count = 1; // fail open on a counter error — availability over strictness here
     }
     if (count > RL_MAX) {
-      await appendAudit('login_throttled', { email: clean, ip });
+      await appendAudit('login_throttled', { ...auditIdentity(clean), ip });
       return { ok: true, throttled: true };
     }
 
@@ -147,7 +159,7 @@ function createAdmin({
     // rate limit above — now keyed on the trusted source IP — caps an attacker to
     // RL_MAX samples per window, making a timing oracle impractical.)
     if (!domain.isEmail(clean) || !allowlist.has(clean)) {
-      await appendAudit('login_requested_unknown', { email: clean, ip });
+      await appendAudit('login_requested_unknown', { ...auditIdentity(clean), ip });
       return { ok: true };
     }
 
@@ -323,7 +335,16 @@ function createAdmin({
   async function me(token) {
     const p = await requireAdmin(token);
     if (!p) return null;
-    return { email: p.email, role: p.role, permissions: p.permissions };
+    return {
+      email: p.email,
+      role: p.role,
+      permissions: p.permissions,
+      // Les DEUX échéances de la session, pour que la console vise la vraie :
+      // elle rafraîchissait vers le plafond de 12 h alors que la session meurt
+      // après `idleTtlMs` sans requête (audit du 2026-09-03, P1-15).
+      idleTtlMs: SESSION_IDLE_TTL_MS,
+      expiresAt: new Date(p.absoluteExpiresAt).toISOString(),
+    };
   }
 
   /**
@@ -799,7 +820,6 @@ function createAdmin({
     'groups:read': ['Voir les groupes', 'See groups'],
     'groups:write': ['Créer et modifier les groupes', 'Create and edit groups'],
     'permissions:read': ['Lire le catalogue des permissions', 'Read the permission catalog'],
-    'services:write': ['Modifier le catalogue des actes', 'Edit the catalogue of acts'],
     'notifications:write': ['Modifier les courriels et notifications', 'Edit emails and notifications'],
     'billing:write': ['Configurer le paiement et le prix', 'Configure payment and price'],
     'audit:read': ['Lire le journal d’audit', 'Read the audit log'],

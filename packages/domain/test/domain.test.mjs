@@ -262,7 +262,8 @@ test('leadReadiness: documents are progress, and "transmis autrement" counts as 
   const r = D.leadReadiness('refinancement', saved);
   assert.equal(r.total, svc.documents.length + svc.champs.length);
   assert.equal(r.done, 2, 'the item sent outside Nota counts as provided');
-  assert.ok(!r.missing.includes('Offre de financement du prêteur'));
+  const offreNom = svc.documents.find((d) => d.id === 'offre_preteur').nom;
+  assert.ok(!r.missing.includes(offreNom));
   assert.ok(r.missing.includes('Certificat de localisation'));
 });
 

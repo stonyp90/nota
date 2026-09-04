@@ -168,7 +168,7 @@ test('a valid magic link verifies and renders the overview with correctly format
   assert.equal(byKey('Offres publiées'), '120');
   assert.equal(byKey('Taux de rétention'), '40 %');            // 0.4 fraction -> "40 %"
   assert.equal(byKey('Actes complétés'), '31');
-  assert.equal(byKey('Commission perçue'), '12 345,67 $');     // cents -> fr-CA money
+  assert.equal(byKey('Facturé par Nota'), '12 345,67 $');      // cents -> fr-CA money (ADR 0031 : plus de « commission »)
   assert.equal(byKey('Notaires actifs'), '9');
 
   // Two charts render, and the used token is scrubbed from the URL.

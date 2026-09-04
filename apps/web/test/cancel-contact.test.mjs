@@ -378,3 +378,47 @@ test('no fiche → no CNQ badge and no fiche link', async () => {
   assert.equal(doc.querySelector('.cnq-badge'), null);
   assert.equal(doc.querySelector('a.cnq-link'), null);
 });
+
+// --- 4. « Nous joindre » — audit 2026-09-02 (P1-4, P2-12, P2-13) -------------
+test('P1-4: the contact success state is a live status and takes focus', async () => {
+  const { doc } = await boot({
+    routes: [monthRoute(), { match: (u) => u.endsWith('/contact'), reply: () => jsonRes(202, { recu: true }) }],
+  });
+  assert.equal($(doc, 'contact-success').getAttribute('role'), 'status', 'the confirmation is announced');
+  $(doc, 'mnav-contact').click();
+  $(doc, 'ct-courriel').value = 'eve@client.ca';
+  $(doc, 'ct-message').value = 'Bonjour, une question.';
+  $(doc, 'contact-form').dispatchEvent(new doc.defaultView.Event('submit', { bubbles: true, cancelable: true }));
+  await wait(30);
+  assert.equal($(doc, 'contact-success').hidden, false);
+  assert.equal(doc.activeElement, $(doc, 'ct-done'), 'focus moves to the one remaining control, not lost with the form');
+});
+
+test('P2-12: the dialog focuses the empty required courriel first, the message once the courriel is known', async () => {
+  const anon = await boot({ routes: [monthRoute()] });
+  $(anon.doc, 'mnav-contact').click();
+  await wait(10);
+  assert.equal(anon.doc.activeElement, $(anon.doc, 'ct-courriel'), 'no courriel on file → the required field first');
+  const known = await boot({
+    routes: [monthRoute()],
+    seed: { 'nota.profile.v1': JSON.stringify({ courriel: 'eve@client.ca', nom: 'Eve Roy' }) },
+  });
+  $(known.doc, 'mnav-contact').click();
+  await wait(10);
+  assert.equal(known.doc.activeElement, $(known.doc, 'ct-message'), 'courriel pre-filled → straight to the message');
+});
+
+test('P2-13: the message cap is the domain’s, and a counter appears near it', async () => {
+  const { doc, D } = await boot({ routes: [monthRoute()] });
+  const ta = $(doc, 'ct-message'), count = $(doc, 'ct-count');
+  assert.equal(ta.getAttribute('maxlength'), String(D.CONTACT_MESSAGE_MAX), 'maxlength comes from D.CONTACT_MESSAGE_MAX');
+  assert.ok(count, 'a counter element');
+  assert.equal(count.getAttribute('aria-live'), 'polite');
+  $(doc, 'mnav-contact').click();
+  const fire = () => ta.dispatchEvent(new doc.defaultView.Event('input', { bubbles: true }));
+  ta.value = 'Bonjour'; fire();
+  assert.equal(count.hidden, true, 'quiet while far from the cap');
+  ta.value = 'x'.repeat(D.CONTACT_MESSAGE_MAX - 50); fire();
+  assert.equal(count.hidden, false, 'shown near the cap');
+  assert.equal(count.textContent, (D.CONTACT_MESSAGE_MAX - 50) + ' / ' + D.CONTACT_MESSAGE_MAX);
+});

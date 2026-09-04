@@ -237,7 +237,11 @@ test('a dossier value of DOSSIER_TRANSMIS satisfies a document request exactly l
   // The demande is fournie — Nota does not insist on being the pipe, only on
   // the checklist being visibly complete.
   assert.equal(res.demandes[0].fournie, true, 'transmis autrement must count as provided');
-  // And the readiness checklist counts it done too.
-  assert.equal(res.readiness.missing.includes('Offre de financement du prêteur'), false);
+  // And the readiness checklist counts it done too — asserted on the
+  // domain's own label for that document, never a literal (a renamed label
+  // once made this assertion vacuous: `.includes(oldLabel)` is trivially false).
+  const offrePreteur = domain.dossierItems('refinancement', PRICING).find((it) => it.id === 'offre_preteur');
+  assert.ok(offrePreteur && offrePreteur.nom, 'the domain lists offre_preteur for a refinancement');
+  assert.equal(res.readiness.missing.includes(offrePreteur.nom), false, 'transmis autrement clears « ' + offrePreteur.nom + ' » from missing');
   assert.equal(res.readiness.ready, true, 'required answers + consent -> ready (documents never gate)');
 });

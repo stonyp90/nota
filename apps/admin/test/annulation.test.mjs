@@ -172,7 +172,7 @@ test('a stored override shows its updatedAt; an EMPTY override reads as free eve
   win.location.hash = '#/annulation';
   await waitFor(win, '.bareme-card');
   const sub = [...doc.querySelectorAll('.chart-card-sub')].map(text).join(' ');
-  assert.match(sub, /Barème décidé par Nota — modifié le 2026-08-28 12:00\./);
+  assert.match(sub, /Barème décidé par Nota — modifié le 2026-08-28 08:00 \(heure de Québec\)\./);
   assert.equal(doc.querySelector('.ptable'), null, 'no tier table on an empty barème');
   assert.match(text(doc.querySelector('.tpl-note')), /Aucun palier — l’annulation est gratuite partout\./);
   const tiles = [...doc.querySelectorAll('.stat-tile')].map((t) => ({
@@ -180,7 +180,69 @@ test('a stored override shows its updatedAt; an EMPTY override reads as free eve
   }));
   const byKey = (k) => (tiles.find((t) => t.k === k) || {}).v;
   assert.equal(byKey('Dernière minute'), '0 %', 'an empty barème charges nothing even at zero days');
-  assert.equal(byKey('Gratuit dès'), '0 jour');
+  // P2-25 — « Gratuit dès 0 jour » ne veut rien dire : sans palier, la tuile s'efface.
+  assert.equal(byKey('Gratuit dès'), undefined);
+});
+
+// ---------------------------------------------------------------------------
+// Audit console admin (2026-09-03)
+// ---------------------------------------------------------------------------
+
+test('P2-24 — la tuile « Dernière minute » parle du jour de la signature, pas de la veille', async () => {
+  const { win, doc } = await boot(api(), '#/auth?token=T');
+  await waitFor(win, '.admin-rail');
+  win.location.hash = '#/annulation';
+  await waitFor(win, '.bareme-card');
+  const tile = [...doc.querySelectorAll('.stat-tile')].find((t) => text(t.querySelector('.stat-k')) === 'Dernière minute');
+  assert.equal(text(tile.querySelector('.stat-sub')), 'retenu le jour de la signature');
+});
+
+test('P2-26 — le formulaire refuse lui-même un taux hors de (0, 1) et des jours non croissants, sans réseau', async () => {
+  const writes = [];
+  const handler = api({ onWrite(method, url, body) { writes.push(body); return [200, { ok: true, override: {} }]; } });
+  const { win, doc } = await boot(handler, '#/auth?token=T');
+  await waitFor(win, '.admin-rail');
+  win.location.hash = '#/annulation';
+  const form = await waitFor(win, '.bareme-form');
+  const rows = form.querySelector('.bareme-rows');
+  const inputs = (i) => rows.children[i].querySelectorAll('input');
+
+  // 150 % n'est pas un taux.
+  inputs(0)[1].value = '150';
+  submit(win, form);
+  await settle(win);
+  assert.equal(writes.length, 0, 'rien ne part');
+  let err = form.querySelector('.tpl-error');
+  assert.equal(err.hidden, false);
+  assert.match(text(err), /Palier 1 : il faut un nombre de jours entier ≥ 0 et un taux entre 0 et 1/);
+  assert.equal(err.getAttribute('role'), 'alert');
+  assert.equal(inputs(0)[1].getAttribute('aria-invalid'), 'true', 'le champ fautif porte la marque');
+  assert.equal(win.document.activeElement, inputs(0)[1], 'et reçoit le focus');
+
+  // Des jours qui redescendent.
+  inputs(0)[1].value = '30';
+  inputs(0)[0].value = '20';
+  submit(win, form);
+  await settle(win);
+  assert.equal(writes.length, 0);
+  err = form.querySelector('.tpl-error');
+  assert.match(text(err), /Palier 2 : les jours doivent être strictement croissants/);
+
+  // Corrigé : ça part.
+  inputs(0)[0].value = '3';
+  submit(win, form);
+  await settle(win);
+  assert.equal(writes.length, 1);
+});
+
+test('P2-27 — la date de modification se lit à l’heure de Québec, et le dit', async () => {
+  const { win, doc } = await boot(api({ annulation: sampleAnnulation({ override: true }) }), '#/auth?token=T');
+  await waitFor(win, '.admin-rail');
+  win.location.hash = '#/annulation';
+  await waitFor(win, '.bareme-card');
+  // 2026-08-28T12:00Z = 08:00 à Montréal (EDT).
+  const sub = [...doc.querySelectorAll('.chart-card-sub')].map(text).join(' ');
+  assert.match(sub, /modifié le 2026-08-28 08:00 \(heure de Québec\)\./);
 });
 
 test('the edit form converts percent inputs to fractions and PUTs the full barème', async () => {

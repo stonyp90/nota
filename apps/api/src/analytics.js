@@ -320,17 +320,31 @@ function createAnalytics({ repo, now, gaugeHorizonMonths } = {}) {
       gaugeCounters = {};
     }
     const parrainages = await referralSection(inv.referred, inv.retainedBy);
-    // Notaries waiting for the operator's activation (2026-09-02) — counted
-    // LIVE from the roster (one bounded GSI Query, never a Scan), so the tile
-    // is exact the moment a signup lands or an activation clears it.
+    // The roster (one bounded GSI Query, never a Scan) feeds two things:
+    //   • notaries waiting for the operator's activation (2026-09-02) — exact
+    //     the moment a signup lands or an activation clears it;
+    //   • the two receivable BALANCES (2026-09-03, audit P1-22): what notaries
+    //     still owe Nota for acts settled outside the platform (ADR 0029,
+    //     `commissionCentsDue`) and what Nota still owes notaries in
+    //     cancellation compensation it could not transfer (ADR 0033,
+    //     `dedommagementCentsDue`). Balances, not flows — they ignore the range.
     let pendingNotaries = 0;
+    const creances = { commissionCentsDue: 0, dedommagementCentsDue: 0 };
     if (typeof repo.listNotaries === 'function') {
       try {
-        pendingNotaries = ((await repo.listNotaries()) || []).filter((n) => n && n.status === 'en_attente' && !n.approuveLe).length;
+        for (const n of (await repo.listNotaries()) || []) {
+          if (!n) continue;
+          if (n.status === 'en_attente' && !n.approuveLe) pendingNotaries += 1;
+          creances.commissionCentsDue += Math.max(0, Math.round(num(n.commissionCentsDue)));
+          creances.dedommagementCentsDue += Math.max(0, Math.round(num(n.dedommagementCentsDue)));
+        }
       } catch {
         pendingNotaries = 0;
+        creances.commissionCentsDue = 0;
+        creances.dedommagementCentsDue = 0;
       }
     }
+    const annulations = await annulationsSection(days);
 
     return {
       range: { from, to, days: days.length },
@@ -356,7 +370,47 @@ function createAnalytics({ repo, now, gaugeHorizonMonths } = {}) {
       // Per-code referral totals (demandes / retenues / complétés / dû) plus
       // the flat commission amount — see ADR 0011.
       parrainages,
+      // The cancellation money over the range — the NOTARIES' compensation
+      // (ADR 0033), never Nota's revenue — and the two receivable balances.
+      annulations,
+      creances,
     };
+  }
+
+  // The late-cancellation flow over `days` (2026-09-03, audit P1-22). Since
+  // ADR 0033 the fee is the retaining notary's compensation: transferred whole
+  // when they can receive (`verse: true`), booked as owed to them otherwise.
+  // No counter records it yet, so the honest source is the transaction audit
+  // trail the cancel route writes (`annulation_frais`, one row per fee, frais
+  // in dollars) — read day by day over the range, in small concurrent
+  // batches, and bounded by the same cap as the range itself. An older repo
+  // without the audit door reports zeros rather than breaking the overview.
+  async function annulationsSection(days) {
+    const out = { nombre: 0, versesCents: 0, dusCents: 0 };
+    const read = typeof repo.queryTxAuditByDay === 'function'
+      ? (d) => repo.queryTxAuditByDay(d)
+      : (typeof repo.queryAuditByDay === 'function' ? (d) => repo.queryAuditByDay(d) : null);
+    if (!read) return out;
+    const BATCH = 12;
+    for (let i = 0; i < days.length; i += BATCH) {
+      const rows = await Promise.all(days.slice(i, i + BATCH).map(async (d) => {
+        try {
+          return (await read(d)) || [];
+        } catch {
+          return [];
+        }
+      }));
+      for (const items of rows) {
+        for (const e of items) {
+          if (!e || e.action !== 'annulation_frais' || !e.meta) continue;
+          const cents = Math.max(0, Math.round(num(e.meta.frais) * 100));
+          out.nombre += 1;
+          if (e.meta.verse === true) out.versesCents += cents;
+          else out.dusCents += cents;
+        }
+      }
+    }
+    return out;
   }
 
   return { overview, liveInventory };

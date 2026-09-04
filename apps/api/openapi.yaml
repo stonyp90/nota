@@ -200,6 +200,9 @@ paths:
                   ok:
                     type: boolean
                     const: true
+                  ttlMinutes:
+                    type: integer
+                    description: How many minutes the emailed confirmation link stays valid (the pane shows it).
                   confirmed:
                     type: boolean
                     description: Present and true only when the same courriel already owns this confirmed code.
@@ -2931,6 +2934,21 @@ components:
           type: array
           items:
             type: string
+        requestable:
+          type: array
+          description: >-
+            The item ids a document request may name for THIS client — the
+            domain's requestable items filtered by the bid's private pricing
+            answers (which never travel themselves).
+          items:
+            type: string
+        cautionVivante:
+          type: boolean
+          description: >-
+            True when a cancellation fee could actually be captured on this
+            bid (billing configured, an authorized hold with a payment
+            intent) — exactly what the cancel route requires. False means a
+            cancellation would be free, whatever the barème says.
     ClientContact:
       type: object
       description: >-
@@ -3007,6 +3025,16 @@ components:
           description: Nota's commission on the settled act (null until completed).
         annulation:
           $ref: "#/components/schemas/CancellationForecast"
+        missing:
+          type: array
+          description: The dossier items still missing (names), as on an open bid.
+          items:
+            type: string
+        requestable:
+          type: array
+          description: The item ids a document request may name for this client.
+          items:
+            type: string
     AcceptedBid:
       type: object
       description: >-
@@ -3436,9 +3464,13 @@ components:
           description: >-
             The cancellation barème in force (the admin-stored item, else the
             environment defaults — resolved exactly like the cancel route).
-            The fee compensates the NOTARY.
-          required: [paliers, beneficiaire]
+            The fee compensates the NOTARY. `applicable` is false when no
+            billing adapter is configured — no fee can then be captured, the
+            barème is information rather than a promise.
+          required: [paliers, beneficiaire, applicable]
           properties:
+            applicable:
+              type: boolean
             paliers:
               type: array
               items:

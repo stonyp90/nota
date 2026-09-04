@@ -75,7 +75,7 @@ test('the band moves the floor; complexity names the travel', () => {
 });
 
 test('a bid cannot be posted without declaring who travels', () => {
-  const answers = { valeur_pret: 250000, contexte: 'propriete_detenue', approbation_bancaire: 'obtenue', preteur: 'desjardins' };
+  const answers = { valeur_pret: 250000, contexte: 'propriete_detenue', approbation_bancaire: 'obtenue', preteur: 'desjardins', succession: 'non' };
   const missing = D.missingRequired('financement', answers);
   assert.deepEqual(missing.map((m) => m.id), ['deplacement']);
   const r = D.validateOffer({

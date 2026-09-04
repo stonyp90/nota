@@ -77,7 +77,11 @@ const change = (win, node, value) => {
   node.value = value;
   node.dispatchEvent(new win.Event('change', { bubbles: true }));
 };
-const today = () => new Date().toISOString().slice(0, 10);
+// « Aujourd'hui » est le jour ouvrable québécois (America/Toronto), jamais la
+// tranche UTC : un soir d'été à Montréal, UTC est déjà demain.
+const TZ = 'America/Toronto';
+const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+const hhmm = (iso) => new Intl.DateTimeFormat('en-CA', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(iso));
 
 // Une journée : un acte réglé (la pièce financière) et un geste d'admin.
 function sampleDay(jour) {
@@ -100,8 +104,11 @@ function sampleDay(jour) {
 
 function api(opts = {}) {
   const role = opts.role || 'super_admin';
+  // La porte du journal est `audit:read` — celle que l'API applique (P0-2) —
+  // et non `pii:read` : lire le journal et lever l'anonymat d'un client sont
+  // deux capacités distinctes.
   const permissions = opts.permissions || (role === 'super_admin'
-    ? ['analytics:read', 'pii:read', 'moderation:write', 'settings:write', 'notifications:write']
+    ? ['analytics:read', 'pii:read', 'audit:read', 'moderation:write', 'settings:write', 'notifications:write']
     : ['analytics:read']);
   const state = { days: opts.days || null, status: opts.status || 200, error: opts.error || null };
   const handler = (method, url) => {
@@ -156,7 +163,10 @@ test('a settled act reads as a sentence, newest first, without ever showing JSON
     'a known action reads in French, never as its raw code');
   assert.match(text(entries[0]), /ops@nota\.ca/);
   assert.match(text(entries[0]), /24\.201\.10\.4/);
-  assert.match(text(entries[0].querySelector('.audit-ts')), /18:11/);
+  // L'heure est celle de Québec (P2-27), et l'entrée le dit plutôt que de
+  // laisser deviner un fuseau.
+  assert.equal(text(entries[0].querySelector('.audit-ts')), hhmm(today() + 'T18:11:03.000Z'));
+  assert.match(entries[0].querySelector('.audit-ts').getAttribute('title') || '', /America\/Toronto/);
 
   const acte = entries[1];
   assert.match(text(acte.querySelector('.audit-action')), /Acte réglé/);
@@ -246,4 +256,138 @@ test('the money line crosses into English with the money reformatted', async () 
   const money = [...doc.querySelectorAll('.audit-money')][0];
   assert.equal(text(money), '$2,800 to the notary · $400 to Nota');
   assert.match(text(doc.querySelector('.audit-action')), /Nota’s price updated/);
+});
+
+// ---------------------------------------------------------------------------
+// Audit console admin (2026-09-03)
+// ---------------------------------------------------------------------------
+
+test('P0-2 — la porte du journal est « audit:read » : un lecteur sans pii:read y entre, un pii:read sans audit:read reste dehors', async () => {
+  const lecteur = await boot(api({ permissions: ['audit:read'] }), '#/auth?token=T');
+  await waitFor(lecteur.win, '.admin-rail');
+  const entree = [...lecteur.doc.querySelectorAll('.admin-rail-link')].find((b) => text(b).includes('Audit'));
+  assert.equal(entree.disabled, false, 'audit:read suffit');
+  lecteur.win.location.hash = '#/audit';
+  await waitFor(lecteur.win, '.audit-entry');
+  assert.equal(lecteur.calls.filter((c) => c.url.includes('/audit')).length, 1);
+
+  const curieux = await boot(api({ permissions: ['pii:read'] }), '#/auth?token=T');
+  await waitFor(curieux.win, '.admin-rail');
+  const fermee = [...curieux.doc.querySelectorAll('.admin-rail-link')].find((b) => text(b).includes('Audit'));
+  assert.equal(fermee.disabled, true, 'pii:read n’ouvre pas le journal');
+  // …et le bottin, lui, reste ouvert à pii:read : les deux portes sont distinctes.
+  const bottin = [...curieux.doc.querySelectorAll('.admin-rail-link')].find((b) => text(b).includes('Notaires'));
+  assert.equal(bottin.disabled, false);
+});
+
+test('P0-3 — un acte réglé HORS plateforme se lit « dû à Nota — non encaissé », jamais comme un encaissement', async () => {
+  const jour = today();
+  const days = {};
+  days[jour] = { jour, entrees: [
+    { id: 'd1', ts: jour + 'T14:02:00.000Z', day: jour, action: 'acte_regle', adminId: null, email: null, ip: null,
+      meta: { bidId: 'b7', dateISO: '2026-08-20', notaryId: 'n1', serviceId: 'refinancement',
+              montant: 2800, honoraires: 2800, prixNota: 400, chargeId: null, transferId: null,
+              paye: false, commissionCentsDue: 40000 } },
+    { id: 'd2', ts: jour + 'T13:00:00.000Z', day: jour, action: 'acte_regle', adminId: null, email: null, ip: null,
+      meta: { bidId: 'b8', dateISO: '2026-08-21', notaryId: 'n1', serviceId: 'refinancement',
+              montant: 2000, honoraires: 2000, prixNota: 400, chargeId: 'ch_8', transferId: 'tr_8', paye: true, commissionCentsDue: 0 } },
+  ] };
+  const { win, doc } = await boot(api({ days }), '#/auth?token=T');
+  await waitFor(win, '.admin-rail');
+  win.location.hash = '#/audit';
+  await waitFor(win, '.audit-entry');
+  const [du, paye] = [...doc.querySelectorAll('.audit-entry')];
+  assert.equal(text(du.querySelector('.audit-money')), '2 800 $ au notaire · 400 $ dû à Nota — non encaissé');
+  assert.match(text(du.querySelector('.audit-badge')), /Non encaissé/, 'le badge se voit avant de lire la phrase');
+  assert.equal(text(paye.querySelector('.audit-money')), '2 000 $ au notaire · 400 $ à Nota');
+  assert.equal(paye.querySelector('.audit-badge'), null, 'un acte encaissé ne porte aucun badge');
+});
+
+test('P0-3 (EN) — la créance se dit en anglais', async () => {
+  const jour = today();
+  const days = {};
+  days[jour] = { jour, entrees: [
+    { id: 'd1', ts: jour + 'T14:02:00.000Z', day: jour, action: 'acte_regle', adminId: null, email: null, ip: null,
+      meta: { bidId: 'b7', dateISO: '2026-08-20', notaryId: 'n1', serviceId: 'refinancement',
+              montant: 2800, honoraires: 2800, prixNota: 400, paye: false, commissionCentsDue: 40000 } },
+  ] };
+  const { win, doc } = await boot(api({ days }), '#/auth?token=T', 'en');
+  await waitFor(win, '.admin-rail');
+  win.location.hash = '#/audit';
+  await waitFor(win, '.audit-entry');
+  await settle(win);
+  assert.equal(text(doc.querySelector('.audit-money')), '$2,800 to the notary · $400 owed to Nota — not collected');
+  assert.match(text(doc.querySelector('.audit-badge')), /Not collected/);
+});
+
+test('P0-4 — « aujourd’hui » est le jour ouvrable québécois : à 22 h 30 à Montréal, UTC est déjà demain', async () => {
+  // 2026-09-03T02:30Z = 2026-09-02 22:30 à Montréal (EDT).
+  const FIXED = Date.parse('2026-09-03T02:30:00.000Z');
+  const calls = [];
+  const handler = api();
+  const dom = new JSDOM(HTML_SRC, {
+    runScripts: 'outside-only',
+    url: 'https://admin.nota.example/#/auth?token=T',
+    pretendToBeVisual: true,
+    beforeParse(window) {
+      window.fetch = makeFetch((m, url) => {
+        if (url.includes('/auth/verify')) return [200, { ok: true, session: 'sess', expiresAt: new Date(FIXED + 3600000).toISOString(), role: 'super_admin' }];
+        return handler(m, url);
+      }, calls);
+      window.scrollTo = () => {};
+      if (!window.matchMedia) {
+        window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} });
+      }
+      const Real = window.Date;
+      class FakeDate extends Real {
+        constructor(...a) { super(...(a.length ? a : [FIXED])); }
+        static now() { return FIXED; }
+      }
+      window.Date = FakeDate;
+    },
+  });
+  const win = dom.window;
+  OPEN.push(win);
+  win.eval(ADMIN_SRC);
+  await settle(win);
+  await waitFor(win, '.admin-rail');
+  win.location.hash = '#/audit';
+  await waitFor(win, '.audit-day');
+  assert.equal(win.document.querySelector('.audit-day').value, '2026-09-02');
+  assert.equal(win.document.querySelector('.audit-day').max, '2026-09-02');
+  assert.match(calls.find((c) => c.url.includes('/audit')).url, /jour=2026-09-02$/);
+});
+
+test('P1-16 — chaque geste connu a un libellé, et l’argent des annulations et des rétentions se lit en phrase', async () => {
+  const jour = today();
+  const mk = (id, action, meta) => ({ id, ts: jour + 'T12:00:00.000Z', day: jour, action, adminId: null, email: 'ops@nota.ca', ip: null, meta });
+  const days = {};
+  days[jour] = { jour, entrees: [
+    mk('e1', 'annulation_frais', { bidId: 'b1', dateISO: '2026-09-10', notaryId: 'n1', montant: 2800, taux: 0.3, frais: 840, joursAvant: 3, chargeId: 'ch_1', transferId: 'tr_1', verse: true }),
+    mk('e2', 'annulation_frais', { bidId: 'b2', dateISO: '2026-09-12', notaryId: 'n2', montant: 2000, taux: 0.1, frais: 200, joursAvant: 10, chargeId: 'ch_2', transferId: null, verse: false }),
+    mk('e3', 'acte_retenu', { bidId: 'b3', dateISO: '2026-09-15', notaryId: 'n1', serviceId: 'refinancement', montant: 2800, etude: 'Étude Tremblay' }),
+    mk('e4', 'acces_modifie', { cible: 'support@nota.ca' }),
+    mk('e5', 'groupe_modifie', { groupeId: 'soutien' }),
+    mk('e6', 'groupe_supprime', { groupeId: 'soutien' }),
+    mk('e7', 'campagne_envoyee', { campagneId: 'c1', envoyes: 34 }),
+    mk('e8', 'campagne_refusee', { motif: 'envoi_indisponible' }),
+    mk('e9', 'document_depose', { bidId: 'b3', documentId: 'd1', de: 'client' }),
+    mk('e10', 'document_lu', { bidId: 'b3', documentId: 'd1', par: 'notaire' }),
+    mk('e11', 'notary_activated', { notaryId: 'n9' }),
+  ] };
+  const { win, doc } = await boot(api({ days }), '#/auth?token=T');
+  await waitFor(win, '.admin-rail');
+  win.location.hash = '#/audit';
+  await waitFor(win, '.audit-entry');
+  const entries = [...doc.querySelectorAll('.audit-entry')];
+  entries.forEach((e) => {
+    const a = e.querySelector('.audit-action');
+    assert.ok(!/_/.test(text(a)), 'un geste connu ne sort jamais comme un code brut : ' + text(a));
+    assert.equal(a.hasAttribute('data-i18n-skip'), false, 'et il se traduit');
+  });
+  assert.equal(text(entries[0].querySelector('.audit-money')), '840 $ retenus au client · versés au notaire');
+  assert.equal(text(entries[1].querySelector('.audit-money')), '200 $ retenus au client · dus au notaire');
+  assert.equal(text(entries[2].querySelector('.audit-money')), '2 800 $ offerts au notaire');
+  assert.match(text(entries[2].querySelector('.audit-facts')), /Étude Tremblay/);
+  assert.equal(entries[3].querySelector('.audit-money'), null, 'les autres gestes gardent leur meta telle quelle');
 });

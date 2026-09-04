@@ -577,7 +577,9 @@ function createApp(repo, opts = {}) {
   }
 
   function notaryBid(b) {
-    const r = domain.leadReadiness(b.serviceId, b.dossier || {});
+    // The bid's frozen pricing answers decide which documents apply to this
+    // client (domain `si` predicates) — the checklist the notary sees is theirs.
+    const r = domain.leadReadiness(b.serviceId, b.dossier || {}, b.pricing);
     return {
       id: b.id,
       serviceId: b.serviceId,
@@ -1351,7 +1353,10 @@ function createApp(repo, opts = {}) {
 
       // Dev echo (never in production): hand the link + raw token back so tests
       // and `npm run api:local` confirm a code with no mailbox.
-      const body = { ok: true };
+      // `ttlMinutes` is the link's real lifetime, so the pane can say how long
+      // the emailed link stays valid instead of guessing (audit 2026-09-02,
+      // P1-6). Safe on the generic path too: it leaks nothing about the code.
+      const body = { ok: true, ttlMinutes: Math.round(PARTNER_CLAIM_TTL_MS / 60000) };
       if (PARTNER_CLAIM_DEV_ECHO) {
         body.devLink = link;
         body.devToken = token;
@@ -1668,6 +1673,12 @@ function createApp(repo, opts = {}) {
             prixNota,
             chargeId: regle.chargeId || null,
             transferId: regle.transferId || null,
+            // ADR 0029 — réglé n'est pas encaissé. Le registre write-once
+            // porte `paye: false` et la créance quand aucun dollar n'a bougé ;
+            // la pièce d'audit le répète, pour que la console n'écrive jamais
+            // « encaissé » là où c'est « dû ».
+            paye: regle.paye !== false,
+            commissionCentsDue: regle.paye === false ? Math.round(Number(regle.commissionCentsDue) || 0) : 0,
           });
         }
       }
@@ -1931,6 +1942,11 @@ function createApp(repo, opts = {}) {
                 preteur: bidLenderInfo(b),
                 deplacement: bidDeplacementInfo(b),
                 distanceKm: distKm(b),
+                // The retaining notary may still ask for what the dossier lacks:
+                // the same checklist the open card carried (computed with the
+                // bid's private `pricing`, which never travels itself).
+                missing: domain.leadReadiness(b.serviceId, b.dossier || {}, b.pricing).missing,
+                requestable: domain.requestableItems(b.serviceId, b.pricing).map((it) => it.id),
                 // The live thread with the client — the place details surface
                 // (and the reason a notary may still withdraw, see /release).
                 messages: messagesOf(b).map(chatMessage),
@@ -1969,7 +1985,14 @@ function createApp(repo, opts = {}) {
             // ONLY this notary's own proposition/demande — never another's.
             proposition: mine ? { id: mine.id, montant: mine.montant, delta: mine.delta, status: mine.status, createdAt: mine.createdAt } : null,
             demande: ask ? { id: ask.id, documents: ask.documents, createdAt: ask.createdAt, fournie: demandeFournie(b, ask) } : null,
-            missing: domain.leadReadiness(b.serviceId, b.dossier || {}).missing,
+            missing: domain.leadReadiness(b.serviceId, b.dossier || {}, b.pricing).missing,
+            // The ids a document request may name for THIS client (the domain's
+            // `si` predicates, fed with the bid's private pricing answers).
+            requestable: domain.requestableItems(b.serviceId, b.pricing).map((it) => it.id),
+            // Is there a hold a cancellation fee could actually be captured
+            // from? Exactly the condition `annulationFeeFor` requires — so the
+            // Retenir sheet promises the barème only where it can be honoured.
+            cautionVivante: billingConfigured && b.paymentStatus === 'authorized' && !!b.paymentIntentId,
           });
         }
       }
@@ -2001,7 +2024,10 @@ function createApp(repo, opts = {}) {
         conditions: {
           paiement: 'signature',
           tarifNota: tarif,
-          annulation: { paliers: await annulationBareme(), beneficiaire: 'notaire' },
+          // `applicable`: without a billing adapter no fee can ever be
+          // captured (annulationFeeFor answers null) — the barème is then
+          // information, not a promise, and the console says so.
+          annulation: { paliers: await annulationBareme(), beneficiaire: 'notaire', applicable: billingConfigured },
           desistement: { gratuit: true, compte: true },
         },
         // The months `retained` covers — so the console can prune the local
@@ -2378,7 +2404,7 @@ function createApp(repo, opts = {}) {
           actes: (proposersById[p.notaryId] && Number(proposersById[p.notaryId].actsCompleted)) || 0,
         })),
         demandes: demandesOf(bid).map((d) => clientDemande(bid, d)),
-        readiness: domain.leadReadiness(bid.serviceId, bid.dossier || {}),
+        readiness: domain.leadReadiness(bid.serviceId, bid.dossier || {}, bid.pricing),
         // The retained-act conversation. Empty until a notary retains the bid.
         messages: messagesOf(bid).map(chatMessage),
         documents: documentsOf(bid).filter((d) => d.etat === 'pret').map(publicDocument),
@@ -2566,7 +2592,7 @@ function createApp(repo, opts = {}) {
       const updated = { ...bid, dossier };
       await repo.update(updated);
       return json(200, {
-        readiness: domain.leadReadiness(updated.serviceId, dossier),
+        readiness: domain.leadReadiness(updated.serviceId, dossier, updated.pricing),
         demandes: demandesOf(updated).map((d) => clientDemande(updated, d)),
       });
     }
@@ -2981,7 +3007,7 @@ function createApp(repo, opts = {}) {
                 montant: bid.montant,
                 preteur: bidLenderInfo(bid),
                 deplacement: bidDeplacementInfo(bid),
-                ready: domain.leadReadiness(bid.serviceId, bid.dossier || {}).ready,
+                ready: domain.leadReadiness(bid.serviceId, bid.dossier || {}, bid.pricing).ready,
                 clientNom: bid.nom || null,
                 prefixe: bid.prefixe || null,
               }

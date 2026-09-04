@@ -174,7 +174,8 @@ test('un prix stocké affiche sa date de modification dans la ligne de provenanc
   win.location.hash = '#/prix';
   await waitFor(win, '.bareme-card');
   const sub = [...doc.querySelectorAll('.chart-card-sub')].map(text).join(' ');
-  assert.match(sub, /Prix décidé par Nota — modifié le 2026-08-27 12:00\./);
+  // 2026-08-27T12:00Z se lit 08:00 à Montréal (EDT) — l'heure de l'opérateur, nommée (audit 2026-09-03, P2-27).
+  assert.match(sub, /Prix décidé par Nota — modifié le 2026-08-27 08:00 \(heure de Québec\)\./);
   assert.equal([...doc.querySelectorAll('.stat-tile')]
     .map((t) => text(t.querySelector('.stat-v')))[0], '250 $', 'le prix stocké est celui en vigueur');
 });

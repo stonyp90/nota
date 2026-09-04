@@ -15,7 +15,7 @@ Given('le service {string}', function (serviceId) {
 // a scenario explicitly overrides them.
 const DEFAULT_PRICING = {
   refinancement: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale', deplacement: 'client_50' },
-  financement: { valeur_pret: 250000, contexte: 'propriete_detenue', approbation_bancaire: 'obtenue', preteur: 'banque_nationale', deplacement: 'client_50' },
+  financement: { valeur_pret: 250000, contexte: 'propriete_detenue', approbation_bancaire: 'obtenue', preteur: 'banque_nationale', succession: 'non', deplacement: 'client_50' },
 };
 async function publish(world, body) {
   await world.request({

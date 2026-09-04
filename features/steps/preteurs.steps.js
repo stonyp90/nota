@@ -43,7 +43,7 @@ Then('aucun prêteur du catalogue ne majore le prix, sauf le prêteur privé', f
 Then('le prix de base {string} avec le prêteur {string} est {int}', function (serviceId, preteur, attendu) {
   const answers = {
     refinancement: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', deplacement: 'client_50' },
-    financement: { valeur_pret: 250000, contexte: 'propriete_detenue', approbation_bancaire: 'obtenue', deplacement: 'client_50' },
+    financement: { valeur_pret: 250000, contexte: 'propriete_detenue', approbation_bancaire: 'obtenue', succession: 'non', deplacement: 'client_50' },
   }[serviceId];
   assert.equal(this.domain.computeBasePrice(serviceId, { ...answers, preteur }), attendu);
 });

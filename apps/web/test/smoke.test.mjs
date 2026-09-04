@@ -351,10 +351,13 @@ test('dossier tab lists first service intake items and badge shows 0/N', async (
   const { doc, D, Nota } = await boot();
   Nota.setTab('dossier');
   const svc = D.SERVICES[0];
-  const expected = svc.documents.length + svc.champs.length;
+  // What the domain lists for THIS client's answers (none yet): a document
+  // conditioned on an answer waits for it (F2, 2026-09-03) — the pane reads
+  // D.dossierItems(svc, dossierPricing) exactly like leadReadiness (F3).
+  const expected = D.dossierItems(svc, {}).length;
   // The intake items, excluding the appended consent row.
   assert.equal(all(doc, '#dossier-list .dossier-item:not(.dossier-consent)').length, expected);
-  assert.equal(expected, 7); // refinancement (first act): 5 docs + 2 champs (the lender moved into the pricing questions)
+  assert.ok(expected < svc.documents.length + svc.champs.length, 'unanswered conditionals are held back'); // the lender lives in the pricing questions
   assert.equal(all(doc, '#dossier-list .dossier-consent').length, 1); // consent row present
   // The checklist is a compact card grid, not one full-width line per item.
   assert.equal(all(doc, '#dossier-list .dossier-grid > .dossier-row').length, expected);
@@ -368,7 +371,8 @@ test('profile documents: upload sets it, then it can be removed', async () => {
   assert.ok(chip, 'document service chip rendered in the profile');
   chip.click();
   const rows = all(doc, '.profil-doc-list .doc-row');
-  const expected = D.serviceById('financement').documents.length + D.serviceById('financement').champs.length;
+  // Same door as the dossier pane: the domain's checklist for this client's answers (none yet).
+  const expected = D.dossierItems('financement', {}).length;
   assert.equal(rows.length, expected);
   // A field row exists; no "validé" affordance until it has a value.
   assert.equal(all(doc, '.profil-doc-list .doc-valid').length, 0);
@@ -1529,14 +1533,17 @@ test('the hero pulse shows the month median per service and filters the carnet',
     status: status || ctx.D.STATUS.OUVERTE, anonyme: true, createdAt: iso,
   });
   // financement: 1400 / 1800 / 2600 -> median 1800, one of them retained.
-  // refinancement: a single 400 offer — LEGACY data under today's floor, so
-  // its médiane must clamp up to the floor (never reading below the "à partir
-  // de" beside it).
+  // refinancement: three 400 offers — LEGACY data under today's floor, so
+  // the repère must clamp up to the floor (never reading below the "à partir
+  // de" beside it). Three, because under three offers no repère is shown at
+  // all (P1-9): one 9 000 $ urgence must not read as the going rate.
   await reseed(ctx, [
     mk('t1', 'financement', 1400),
     mk('t2', 'financement', 1800, ctx.D.STATUS.RETENUE),
     mk('t3', 'financement', 2600),
     mk('p1', 'refinancement', 400),
+    mk('p2', 'refinancement', 400),
+    mk('p3', 'refinancement', 400),
   ]);
 
   const rows = [...ctx.doc.querySelectorAll('#pulse-rows .pulse-row')];
@@ -1552,16 +1559,17 @@ test('the hero pulse shows the month median per service and filters the carnet',
   ]);
   const floorOf = (id) => ctx.D.money(ctx.D.serviceById(id).prixDepart);
 
-  // The median (not the mean: 1933) is what a client is shown.
+  // The median (not the mean: 1933) is what a client is shown — labelled as
+  // the month's reference point, never as a statistic (P1-9).
   assert.deepEqual(figs(byId.financement), [
     ['à partir de', floorOf('financement')],
-    ['médiane', ctx.D.money(1800)],
+    ['repère du mois', ctx.D.money(1800)],
   ]);
   assert.match(byId.financement.querySelector('.pulse-meta').textContent, /3 offres · 1 retenue$/);
-  // Below-floor history never shows a médiane under the floor beside it.
+  // Below-floor history never shows a repère under the floor beside it.
   assert.deepEqual(figs(byId.refinancement), [
     ['à partir de', floorOf('refinancement')],
-    ['médiane', floorOf('refinancement')],
+    ['repère du mois', floorOf('refinancement')],
   ]);
 
   // The foot line was removed — the rows carry the whole story; nothing may
@@ -1572,7 +1580,7 @@ test('the hero pulse shows the month median per service and filters the carnet',
   // Clicking a row filters the carnet to that service, and syncs the chip group.
   byId.refinancement.click();
   await wait(30);
-  assert.equal(ctx.doc.getElementById('result-count').textContent, '1 offre au carnet');
+  assert.equal(ctx.doc.getElementById('result-count').textContent, '3 offres au carnet');
   assert.equal(ctx.doc.querySelector('#chips-service .chip[data-svc="refinancement"]').getAttribute('aria-pressed'), 'true');
   const onRow = ctx.doc.querySelector('#pulse-rows .pulse-row[data-svc="refinancement"]');
   assert.equal(onRow.getAttribute('aria-pressed'), 'true');
@@ -1583,19 +1591,25 @@ test('the hero pulse shows the month median per service and filters the carnet',
   );
 
   // Clicking the active row again returns to every act, the carnet's resting
-  // scope: 4 seeded, 1 retained, so 3 open ones are counted.
+  // scope: 6 seeded, 1 retained, so 5 open ones are counted.
   onRow.click();
   await wait(30);
-  assert.equal(ctx.doc.getElementById('result-count').textContent, '3 offres au carnet');
+  assert.equal(ctx.doc.getElementById('result-count').textContent, '5 offres au carnet');
   assert.equal(ctx.doc.querySelector('#chips-service .chip[data-svc=""]').getAttribute('aria-pressed'), 'true');
 
   // An act with no offer this month still shows its floor; the median is simply
   // absent rather than the floor masquerading as a market fact.
   await reseed(ctx, [mk('f9', 'financement', 2600)]);
   const refi = ctx.doc.querySelector('#pulse-rows .pulse-row[data-svc="refinancement"]');
-  assert.deepEqual(figs(refi), [['à partir de', floorOf('refinancement')], ['médiane', '—']]);
+  assert.deepEqual(figs(refi), [['à partir de', floorOf('refinancement')], ['repère du mois', '—']]);
   assert.ok(refi.querySelectorAll('.pulse-fig-v')[1].classList.contains('is-empty'));
   assert.match(refi.querySelector('.pulse-meta').textContent, /aucune offre/);
+  // One offer is not a market reference either (P1-9): the domain lifts a
+  // lone amount to the médiane; the render shows the dash under three.
+  const fin1 = ctx.doc.querySelector('#pulse-rows .pulse-row[data-svc="financement"]');
+  assert.deepEqual(figs(fin1), [['à partir de', floorOf('financement')], ['repère du mois', '—']]);
+  assert.ok(fin1.querySelectorAll('.pulse-fig-v')[1].classList.contains('is-empty'));
+  assert.match(fin1.getAttribute('aria-label'), /pas assez d’offres/, 'the row names why there is no repère');
 });
 
 

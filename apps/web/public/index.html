@@ -14,11 +14,19 @@
     <meta name="keywords" content="notaire Québec, refinancement hypothécaire notaire Québec, financement hypothécaire notaire Québec, acte de prêt notaire Québec, notaire refinancement hypothèque Ville de Québec, prix notaire refinancement Québec, mainlevée hypothèque notaire, mortgage refinancing notary Quebec City, mortgage financing notary Quebec City, refinance mortgage notary Quebec, real estate notary Quebec City, rendez-vous notaire rapide, notaire urgent Québec" />
     <meta name="robots" content="index, follow, max-image-preview:large" />
     <link rel="canonical" href="https://d1s1h4894dau0c.cloudfront.net/" />
+    <!-- The public origin, declared once: app.js builds every shareable link
+         (partner ?ref=, …) on it instead of location.origin, so a link copied
+         from a preview or a dev box still points at the real site. -->
+    <meta name="nota:site" content="https://d1s1h4894dau0c.cloudfront.net" />
     <!-- Language alternates: ?lang= is honoured (and persisted) by i18n.js. -->
     <link rel="alternate" hreflang="fr-CA" href="https://d1s1h4894dau0c.cloudfront.net/" />
     <link rel="alternate" hreflang="en-CA" href="https://d1s1h4894dau0c.cloudfront.net/?lang=en" />
     <link rel="alternate" hreflang="x-default" href="https://d1s1h4894dau0c.cloudfront.net/" />
-    <meta name="theme-color" content="#2c5f34" />
+    <!-- Browser chrome: the dark canvas on a dark system (the page boots dark
+         by default), the brand green otherwise. The dark value is --bg of the
+         dark theme in styles.css — keep the two in lockstep. -->
+    <meta name="theme-color" content="#0f110f" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#315b43" />
 
     <!-- Local / geo signals (Ville de Québec) -->
     <meta name="geo.region" content="CA-QC" />
@@ -32,13 +40,13 @@
     <meta property="og:title" content="Nota — le carnet public des actes notariés à Québec" />
     <meta property="og:description" content="Choisissez votre date, nommez votre prix pour votre financement ou refinancement hypothécaire. Un notaire de Québec retient votre demande. Publier est gratuit ; le notaire et le service Nota se paient à la signature." />
     <meta property="og:url" content="https://d1s1h4894dau0c.cloudfront.net/" />
-    <!-- Raster first: most social scrapers do not render SVG. SVG kept as a fallback. -->
+    <!-- Raster only: most social scrapers do not render SVG, and a second
+         og:image after the PNG made some of them pick the wrong one. -->
     <meta property="og:image" content="https://d1s1h4894dau0c.cloudfront.net/og.png" />
     <meta property="og:image:type" content="image/png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content="Nota — carnet public des actes notariés à Québec" />
-    <meta property="og:image" content="https://d1s1h4894dau0c.cloudfront.net/og.svg" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Nota — carnet public des actes notariés à Québec" />
     <meta name="twitter:description" content="Choisissez votre date, nommez votre prix. Un notaire de Québec retient votre demande." />
@@ -55,7 +63,11 @@
     <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
     <link rel="stylesheet" href="styles.css" />
 
-    <!-- Structured data: helps Google rich results and gives LLMs clean facts. -->
+    <!-- Structured data: helps Google rich results and gives LLMs clean facts.
+         NO PRICE is written here: the offer catalogue (#catalogue, one Offer
+         per act priced from D.SERVICES) and the organisation's contact
+         (D.CONTACT) are emitted at boot by app.js renderCatalogueLd(), so the
+         markup can never drift from the domain (AGENTS.md rule 1). -->
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -72,7 +84,8 @@
           "height": 630
         },
         "image": "https://d1s1h4894dau0c.cloudfront.net/og.png",
-        "areaServed": { "@type": "City", "name": "Québec" }
+        "areaServed": { "@type": "City", "name": "Québec" },
+        "address": { "@type": "PostalAddress", "addressLocality": "Québec", "addressRegion": "QC", "addressCountry": "CA" }
       }
     </script>
     <script type="application/ld+json">
@@ -106,14 +119,7 @@
         "geo": { "@type": "GeoCoordinates", "latitude": 46.8139, "longitude": -71.2080 },
         "knowsLanguage": "fr-CA",
         "priceRange": "$$",
-        "hasOfferCatalog": {
-          "@type": "OfferCatalog",
-          "name": "Mises en relation notariales",
-          "itemListElement": [
-            { "@type": "Offer", "priceCurrency": "CAD", "price": "2000", "itemOffered": { "@type": "Service", "name": "Refinancement hypothécaire" } },
-            { "@type": "Offer", "priceCurrency": "CAD", "price": "1800", "itemOffered": { "@type": "Service", "name": "Financement hypothécaire" } }
-          ]
-        }
+        "hasOfferCatalog": { "@id": "https://d1s1h4894dau0c.cloudfront.net/#catalogue" }
       }
     </script>
     <script type="application/ld+json">
@@ -125,9 +131,9 @@
           { "@type": "Question", "name": "Puis-je obtenir un rendez-vous de notaire rapidement ?", "acceptedAnswer": { "@type": "Answer", "text": "Vous affichez la date de signature souhaitée et votre offre, et les notaires de la région décident de la retenir ou non. Plus vous laissez de préavis, plus un notaire peut organiser son agenda autour de votre date. Nota ne garantit aucun délai." } },
           { "@type": "Question", "name": "Est-ce gratuit pour le client ?", "acceptedAnswer": { "@type": "Answer", "text": "Publier une demande est gratuit et le reste. Quand un notaire retient votre demande, vous payez ses honoraires — le montant que vous avez offert, qui lui revient en entier — et, séparément, le prix du service de Nota. Les deux vous sont annoncés avant tout paiement. Taxes et débours en sus." } },
           { "@type": "Question", "name": "Mon nom est-il rendu public ?", "acceptedAnswer": { "@type": "Answer", "text": "Non par défaut. Les offres sont anonymes et affichées comme « Client · secteur postal ». Vous pouvez choisir de rendre votre nom visible." } },
-          { "@type": "Question", "name": "Quels actes sont offerts sur Nota ?", "acceptedAnswer": { "@type": "Answer", "text": "Nota se concentre sur le financement immobilier : le refinancement hypothécaire (mainlevée de l’ancienne hypothèque et nouvel acte de prêt, dès 2000 $) et le financement hypothécaire (acte de prêt et publication d’une nouvelle hypothèque — achat ou premier prêt, dès 1800 $)." } },
-          { "@type": "Question", "name": "Combien coûte un notaire pour un refinancement hypothécaire à Québec ?", "acceptedAnswer": { "@type": "Answer", "text": "Sur Nota, un refinancement hypothécaire (mainlevée et nouvel acte de prêt) démarre à 2000 $ dans la Ville de Québec. Vous affichez la date de signature voulue et votre offre ; un notaire de la région retient votre demande. Plus l’échéance est proche, plus l’offre pèse." } },
-          { "@type": "Question", "name": "How much does a notary charge to refinance a mortgage in Quebec City?", "acceptedAnswer": { "@type": "Answer", "text": "On Nota, a mortgage refinancing (discharge of the old hypothec and the new loan deed) starts at CAD 2000 in Quebec City. You post the signing date you need and your price; a local Québec notary takes on your request. Posting is free; the notary’s fees and Nota’s fixed service price are paid at signing." } },
+          { "@type": "Question", "name": "Quels actes sont offerts sur Nota ?", "acceptedAnswer": { "@type": "Answer", "text": "Nota se concentre sur le financement immobilier : le refinancement hypothécaire (mainlevée de l’ancienne hypothèque et nouvel acte de prêt) et le financement hypothécaire (acte de prêt et publication d’une nouvelle hypothèque — achat ou premier prêt). Le prix de départ de chaque acte est affiché au carnet." } },
+          { "@type": "Question", "name": "Combien coûte un notaire pour un refinancement hypothécaire à Québec ?", "acceptedAnswer": { "@type": "Answer", "text": "Sur Nota, un refinancement hypothécaire (mainlevée et nouvel acte de prêt) démarre au prix de départ affiché au carnet, dans la Ville de Québec — ce montant est celui des honoraires du notaire ; le prix fixe du service de Nota s’ajoute à la signature. Vous affichez la date de signature voulue et votre offre ; un notaire de la région retient votre demande. Plus l’échéance est proche, plus l’offre pèse." } },
+          { "@type": "Question", "name": "How much does a notary charge to refinance a mortgage in Quebec City?", "acceptedAnswer": { "@type": "Answer", "text": "On Nota, a mortgage refinancing (discharge of the old hypothec and the new loan deed) starts at the starting price shown on the carnet in Quebec City — that amount is the notary’s fee; Nota’s fixed service price is added at signing. You post the signing date you need and your price; a local Québec notary takes on your request. Posting is free; the notary’s fees and Nota’s fixed service price are paid at signing." } },
           { "@type": "Question", "name": "How fast can I get a notary for a mortgage refinance in Quebec City?", "acceptedAnswer": { "@type": "Answer", "text": "You pick the signing date on the public carnet and name your offer; notaries in the region decide whether to take it on. The more notice you leave, the more easily a notary can fit your date into their schedule. Nota guarantees no timeline. No account needed to post." } }
         ]
       }
@@ -140,11 +146,10 @@
         "@type": "Service",
         "serviceType": "Refinancement hypothécaire / Mortgage refinancing (notary)",
         "name": "Refinancement hypothécaire chez le notaire à Québec — Mortgage refinancing notary, Quebec City",
-        "description": "Réservez un notaire à Québec pour votre refinancement hypothécaire à la date voulue : mainlevée de l’ancienne hypothèque et nouvel acte de prêt. Book a Québec-City notary for your mortgage refinancing on the date you need — discharge of the old hypothec and the new loan deed. À partir de / from CAD 2000. Le service Nota s’ajoute, payé à la signature / Nota’s service is added, paid at signing.",
+        "description": "Réservez un notaire à Québec pour votre refinancement hypothécaire à la date voulue : mainlevée de l’ancienne hypothèque et nouvel acte de prêt. Book a Québec-City notary for your mortgage refinancing on the date you need — discharge of the old hypothec and the new loan deed. Le service Nota s’ajoute, payé à la signature / Nota’s service is added, paid at signing.",
         "broker": { "@type": "Organization", "name": "Nota" },
         "areaServed": { "@type": "City", "name": "Québec", "alternateName": "Quebec City" },
         "audience": { "@type": "Audience", "geographicArea": { "@type": "City", "name": "Québec" } },
-        "offers": { "@type": "Offer", "priceCurrency": "CAD", "price": "2000", "availability": "https://schema.org/InStock" },
         "availableLanguage": ["fr-CA", "en-CA"]
       }
     </script>
@@ -156,11 +161,10 @@
         "@type": "Service",
         "serviceType": "Financement hypothécaire / Mortgage financing (notary)",
         "name": "Financement hypothécaire chez le notaire à Québec — Mortgage financing notary, Quebec City",
-        "description": "Réservez un notaire à Québec pour votre financement hypothécaire à la date voulue : acte de prêt et publication de la nouvelle hypothèque, pour un achat ou un premier prêt. Book a Québec-City notary for your mortgage financing on the date you need — the loan deed and the publication of the new hypothec. À partir de / from CAD 1800. Le service Nota s’ajoute, payé à la signature / Nota’s service is added, paid at signing.",
+        "description": "Réservez un notaire à Québec pour votre financement hypothécaire à la date voulue : acte de prêt et publication de la nouvelle hypothèque, pour un achat ou un premier prêt. Book a Québec-City notary for your mortgage financing on the date you need — the loan deed and the publication of the new hypothec. Le service Nota s’ajoute, payé à la signature / Nota’s service is added, paid at signing.",
         "broker": { "@type": "Organization", "name": "Nota" },
         "areaServed": { "@type": "City", "name": "Québec", "alternateName": "Quebec City" },
         "audience": { "@type": "Audience", "geographicArea": { "@type": "City", "name": "Québec" } },
-        "offers": { "@type": "Offer", "priceCurrency": "CAD", "price": "1800", "availability": "https://schema.org/InStock" },
         "availableLanguage": ["fr-CA", "en-CA"]
       }
     </script>
@@ -168,26 +172,39 @@
   <body>
     <a class="skip" href="#main">Aller au contenu</a>
 
+    <!-- The Nota logomark, drawn ONCE: every inline copy below is a
+         <use href="#nota-logomark">. The two greens are styles.css :root
+         --hunter-700 and --hunter-500 (the same as favicon.svg / og.svg /
+         manifest theme_color) — ux-nav.test.mjs keeps them in lockstep.
+         (The drifting dice in app.js keep their own string copy on purpose:
+         they are cloned twenty times into a cube, outside this document's
+         symbol table.) -->
+    <svg class="svg-defs" aria-hidden="true" focusable="false" width="0" height="0">
+      <symbol id="nota-logomark" viewBox="0 0 64 64">
+        <rect width="64" height="64" rx="12" fill="#315b43"/>
+        <g fill="#ffffff">
+          <rect x="16" y="15" width="7.5" height="34" rx="2.5"/>
+          <rect x="40.5" y="15" width="7.5" height="34" rx="2.5"/>
+          <polygon points="16,15 24,15 48,49 40,49"/>
+        </g>
+        <circle cx="48" cy="16" r="8" fill="#599a71" stroke="#315b43" stroke-width="3"/>
+      </symbol>
+    </svg>
+
     <!-- ================= INTRO GATE =================
          First arrival: the pitch film for the chosen audience plays full
          screen, then lands on the matching pane. Skippable at every moment,
          shown once per browser (nota.introSeen), bypassed for deep links and
-         under prefers-reduced-motion. Strings are single text nodes so the
-         i18n TEXT map covers them one for one. -->
-    <div class="ig" id="intro-gate" hidden>
+         under prefers-reduced-motion. A real modal: role=dialog, labelled by
+         its title, focus inside, header/main/footer inert while it is open
+         (app.js igMaybeShow / igDismiss). Strings are single text nodes so
+         the i18n TEXT map covers them one for one. -->
+    <div class="ig" id="intro-gate" role="dialog" aria-modal="true" aria-labelledby="ig-title" hidden>
       <div class="ig-inner">
 
         <div class="ig-chooser" id="ig-chooser">
-          <svg class="ig-mark" viewBox="0 0 64 64" role="img" aria-label="Nota">
-          <rect width="64" height="64" rx="12" fill="#2c5f34"/>
-          <g fill="#ffffff">
-            <rect x="16" y="15" width="7.5" height="34" rx="2.5"/>
-            <rect x="40.5" y="15" width="7.5" height="34" rx="2.5"/>
-            <polygon points="16,15 24,15 48,49 40,49"/>
-          </g>
-          <circle cx="48" cy="16" r="8" fill="#50b848" stroke="#2c5f34" stroke-width="3"/>
-        </svg>
-          <h2 class="ig-title">Un notaire, à la date qu’il vous faut.</h2>
+          <svg class="ig-mark" viewBox="0 0 64 64" role="img" aria-label="Nota"><use href="#nota-logomark"/></svg>
+          <h2 class="ig-title" id="ig-title">Un notaire, à la date qu’il vous faut.</h2>
           <div class="ig-doors">
             <button type="button" class="ig-door" id="ig-door-client">
               <span class="ig-door-t">Je cherche un notaire</span>
@@ -243,15 +260,7 @@
               </div>
             </section>
             <section class="ig-scene ig-c5" aria-hidden="true">
-              <div class="ig-logo-row"><svg class="ig-mark ig-mark-final" viewBox="0 0 64 64" role="img" aria-label="Nota">
-          <rect width="64" height="64" rx="12" fill="#2c5f34"/>
-          <g fill="#ffffff">
-            <rect x="16" y="15" width="7.5" height="34" rx="2.5"/>
-            <rect x="40.5" y="15" width="7.5" height="34" rx="2.5"/>
-            <polygon points="16,15 24,15 48,49 40,49"/>
-          </g>
-          <circle cx="48" cy="16" r="8" fill="#50b848" stroke="#2c5f34" stroke-width="3"/>
-        </svg><span class="ig-word">Nota</span></div>
+              <div class="ig-logo-row"><svg class="ig-mark ig-mark-final" viewBox="0 0 64 64" role="img" aria-label="Nota"><use href="#nota-logomark"/></svg><span class="ig-word">Nota</span></div>
               <p class="ig-tag">Un notaire, à la date qu’il vous faut.</p>
               <p class="ig-note">Le notaire reçoit 100 % de votre offre ; le service Nota, à prix fixe, se paie seulement à la signature.</p>
               <p class="ig-cta">nota.quebec · Publiez votre offre en 2 minutes</p>
@@ -310,21 +319,18 @@
                 <div class="ig-conf-tile">
                   <span class="ig-conf-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18M6 21h12M4 7h16"/><path d="m7 7-3 7h6zM17 7l-3 7h6z"/></svg></span>
                   <span class="ig-conf-art">Art. 49 — Code de déontologie</span>
-                  <span class="ig-conf-txt">Le montant est ce que le client offre pour sa date, son urgence et le déplacement. Nota ne fixe pas vos honoraires : vous acceptez, proposez un autre prix ou passez.</span>
+                  <!-- F7 (audit 2026-09-03, owner decision pending): art. 49
+                       binds the notary, not Nota — the tile states what the
+                       notary keeps and does, and voices no compliance claim
+                       on Nota's behalf. #nc-conformite mirrors this wording
+                       by its own owner. -->
+                  <span class="ig-conf-txt">Vos honoraires restent les vôtres : vous acceptez le montant offert, proposez le vôtre, ou passez. Rien n’est retranché.</span>
                 </div>
               </div>
               <span class="ig-conf-order">Une décision de l’Ordre s’applique toujours en premier.</span>
             </section>
             <section class="ig-scene ig-n5" aria-hidden="true">
-              <div class="ig-logo-row"><svg class="ig-mark ig-mark-final" viewBox="0 0 64 64" role="img" aria-label="Nota">
-          <rect width="64" height="64" rx="12" fill="#2c5f34"/>
-          <g fill="#ffffff">
-            <rect x="16" y="15" width="7.5" height="34" rx="2.5"/>
-            <rect x="40.5" y="15" width="7.5" height="34" rx="2.5"/>
-            <polygon points="16,15 24,15 48,49 40,49"/>
-          </g>
-          <circle cx="48" cy="16" r="8" fill="#50b848" stroke="#2c5f34" stroke-width="3"/>
-        </svg><span class="ig-word">Nota</span></div>
+              <div class="ig-logo-row"><svg class="ig-mark ig-mark-final" viewBox="0 0 64 64" role="img" aria-label="Nota"><use href="#nota-logomark"/></svg><span class="ig-word">Nota</span></div>
               <p class="ig-tag">Remplissez votre semaine.</p>
               <p class="ig-cta">nota.quebec · Inscription gratuite pour les notaires</p>
             </section>
@@ -339,7 +345,7 @@
 
     <header class="site-header">
       <div class="wrap">
-        <a class="brand goto-link" href="#" data-goto="carnet" aria-label="Nota, accueil — retour au menu">
+        <a class="brand goto-link" href="#t=carnet" data-goto="carnet" aria-label="Nota, accueil — retour au menu">
           <span class="brand-mark" aria-hidden="true">
             <img src="favicon.svg" width="30" height="30" alt="" />
           </span>
@@ -386,11 +392,14 @@
         </div>
         <!-- One account menu (avatar) merging profile + notifications + menu. -->
         <div class="notif-wrap acct-wrap">
-          <button class="icon-btn acct-btn" id="notif-bell" title="Compte et notifications" aria-label="Compte et notifications" aria-haspopup="true" aria-expanded="false" aria-controls="notif-panel">
+          <button class="icon-btn acct-btn" id="notif-bell" title="Compte et notifications" aria-label="Compte et notifications" aria-haspopup="dialog" aria-expanded="false" aria-controls="notif-panel">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
             <span class="notif-badge" id="notif-badge" hidden>0</span>
           </button>
-          <div class="notif-panel acct-panel" id="notif-panel" role="region" aria-label="Compte" hidden>
+          <!-- A non-modal dialog (the bell says aria-haspopup="dialog"): it takes
+               focus on open, Escape closes it and hands focus back. No menu
+               roles — the rows are plain buttons and links. -->
+          <div class="notif-panel acct-panel" id="notif-panel" role="dialog" aria-label="Compte" hidden>
             <button type="button" class="acct-item acct-head" id="acct-profil">
               <span class="acct-avatar" aria-hidden="true">
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
@@ -435,7 +444,7 @@
          the tabs, the auth pair, the theme switch and the legal links that the
          narrow header hides. Wired by wire() in app.js (nav-burger opens it). -->
     <div class="mnav-scrim" id="mnav-scrim" aria-hidden="true"></div>
-    <nav class="mnav" id="mobile-nav" aria-label="Menu principal" tabindex="-1">
+    <nav class="mnav" id="mobile-nav" role="dialog" aria-modal="true" aria-label="Menu principal" tabindex="-1">
       <div class="mnav-head">
         <span class="brand-mark" aria-hidden="true"><img src="favicon.svg" width="26" height="26" alt="" /></span>
         <span class="mnav-title">Menu</span>
@@ -474,6 +483,13 @@
         <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16v12H7l-3 3z"/></svg>
         Nous joindre
       </button>
+      <!-- The support chat's phone door: the fixed fab leaves phones (ADR 0022
+           cleared that corner for the calendar), so the drawer opens the
+           panel instead. -->
+      <button type="button" class="mnav-link" id="mnav-messagerie">
+        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        Messagerie
+      </button>
       <div class="mnav-sep"></div>
       <!-- Préférences: language and theme adjust IN PLACE with the same small
            toggles as the header. These rows are NOT .mnav-link on purpose —
@@ -511,9 +527,9 @@
         <svg class="mnav-chevron" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
       </button>
       <div class="mnav-sub mnav-legal" id="msub-legal" role="group" aria-label="Informations légales" hidden>
-        <a href="#" class="mnav-subitem goto-link" data-goto="confidentialite">Confidentialité</a>
-        <a href="#" class="mnav-subitem goto-link" data-goto="conditions">Conditions d’utilisation</a>
-        <a href="#" class="mnav-subitem goto-link" data-goto="charte">Charte des droits</a>
+        <a href="#t=confidentialite" class="mnav-subitem goto-link" data-goto="confidentialite">Confidentialité</a>
+        <a href="#t=conditions" class="mnav-subitem goto-link" data-goto="conditions">Conditions d’utilisation</a>
+        <a href="#t=charte" class="mnav-subitem goto-link" data-goto="charte">Charte des droits</a>
       </div>
     </nav>
 
@@ -542,8 +558,9 @@
                    text below is the no-amount fallback, never a literal price. -->
               <p class="hero-tagline">Proposez votre date et votre prix — un notaire de Québec retient votre demande. <strong id="hero-price-line">Le notaire reçoit 100 % de votre offre ; le service Nota, à prix fixe, se paie seulement à la signature.</strong></p>
               <!-- Two date CTAs only (owner's ask, 2026-08-25): the guide left
-                   the hero for the compact header "?" icon (#nav-guide, shown
-                   pre-signup) — the action row keeps one decision point. -->
+                   the hero for the fixed « ? » bubble (.guide-fab on desktop;
+                   phones keep the footer link and the first-visit guide) —
+                   the action row keeps one decision point. -->
               <div class="hero-cta">
                 <button class="btn btn-primary btn-lg" id="cta-reserver">Réserver votre date →</button>
                 <button class="btn btn-lg" id="cta-voir">Voir les dates</button>
@@ -781,36 +798,6 @@
               </div>
             </form>
 
-            <!-- Conformité (ADR 0033 §5 · ADR 0031): the three articles the
-                 notaire film cites, visible outside the film — right under the
-                 gate, folded away signed-in (styles.css: the [hidden] gate
-                 hides its next sibling). Wording checked against
-                 docs/legal/conformite-deontologique-notaires.md. -->
-            <section class="nc-conformite" id="nc-conformite" aria-labelledby="nc-conformite-h">
-              <div class="nc-conformite-kicker">Conformité</div>
-              <h2 class="nc-conformite-h" id="nc-conformite-h">Nota respecte les règles de votre profession.</h2>
-              <ul class="nc-conformite-tiles">
-                <li class="nc-conformite-tile">
-                  <span class="nc-conformite-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 6v6c0 5 3.5 8.5 8 9 4.5-.5 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg></span>
-                  <span class="nc-conformite-art">Art. 32.1 — Loi sur le notariat</span>
-                  <span class="nc-conformite-txt">Aucune réduction promise, aucune part abandonnée : vous recevez 100 % du montant offert.</span>
-                </li>
-                <li class="nc-conformite-tile">
-                  <span class="nc-conformite-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="8" height="14" rx="1"/><rect x="13" y="5" width="8" height="14" rx="1"/><path d="M5.5 9h3M5.5 12h3M15.5 9h3M15.5 12h3"/></svg></span>
-                  <span class="nc-conformite-art">Art. 32 et 29.1 — Code de déontologie</span>
-                  <span class="nc-conformite-txt">Nota facture son propre prix au client, à côté : aucun partage d’honoraires, aucune convention sur vos honoraires.</span>
-                </li>
-                <li class="nc-conformite-tile">
-                  <span class="nc-conformite-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18M6 21h12M4 7h16"/><path d="m7 7-3 7h6zM17 7l-3 7h6z"/></svg></span>
-                  <span class="nc-conformite-art">Art. 49 — Code de déontologie</span>
-                  <span class="nc-conformite-txt">Le montant est ce que le client offre pour sa date, son urgence et le déplacement. Nota ne fixe pas vos honoraires : vous acceptez, proposez un autre prix ou passez.</span>
-                </li>
-              </ul>
-              <p class="nc-conformite-order">Une décision de l’Ordre s’applique toujours en premier.</p>
-              <a href="#" class="goto-link nc-conformite-link" data-goto="conditions">Lire nos engagements déontologiques →</a>
-            </section>
-
-
             <!-- Authenticated view. No identity bar here: the header account
                  menu already says who is connected and carries Se déconnecter —
                  repeating it left a dead band over the agenda (owner,
@@ -1020,6 +1007,43 @@
               </div>
             </div>
           </div>
+          <!-- Conformité (ADR 0033 §5 · ADR 0031): the three articles the
+               notaire film cites, visible outside the film. It is a child of
+               the pane's .wrap, NOT of #notary-console: it takes the content
+               column under the demands (styles.css, grid-area: conformite) —
+               inside the gate card it made the rail ~400px taller than the
+               grid beside it. Folded away signed-in (styles.css keys off the
+               [hidden] gate through the wrap). Wording checked against
+               docs/legal/conformite-deontologique-notaires.md. -->
+          <section class="nc-conformite" id="nc-conformite" aria-labelledby="nc-conformite-h">
+            <div class="nc-conformite-kicker">Conformité</div>
+            <h2 class="nc-conformite-h" id="nc-conformite-h">Nota respecte les règles de votre profession.</h2>
+            <ul class="nc-conformite-tiles">
+              <li class="nc-conformite-tile">
+                <span class="nc-conformite-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 6v6c0 5 3.5 8.5 8 9 4.5-.5 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg></span>
+                <span class="nc-conformite-art">Art. 32.1 — Loi sur le notariat</span>
+                <span class="nc-conformite-txt">Aucune réduction promise, aucune part abandonnée : vous recevez 100 % du montant offert.</span>
+              </li>
+              <li class="nc-conformite-tile">
+                <span class="nc-conformite-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="8" height="14" rx="1"/><rect x="13" y="5" width="8" height="14" rx="1"/><path d="M5.5 9h3M5.5 12h3M15.5 9h3M15.5 12h3"/></svg></span>
+                <span class="nc-conformite-art">Art. 32 et 29.1 — Code de déontologie</span>
+                <span class="nc-conformite-txt">Nota facture son propre prix au client, à côté : aucun partage d’honoraires, aucune convention sur vos honoraires.</span>
+              </li>
+              <li class="nc-conformite-tile">
+                <span class="nc-conformite-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18M6 21h12M4 7h16"/><path d="m7 7-3 7h6zM17 7l-3 7h6z"/></svg></span>
+                <span class="nc-conformite-art">Art. 49 — Code de déontologie</span>
+                <!-- F7 (audit 2026-09-03, owner decision pending): art. 49 binds
+                     the notary, not Nota, and the pre-filled recommended amount
+                     makes « Nota ne fixe pas vos honoraires » thin (docs/legal/
+                     conformite-deontologique-notaires.md). The tile states what
+                     the notary keeps and does, and voices no compliance claim
+                     on Nota's behalf — the same wording as the film's scene. -->
+                  <span class="nc-conformite-txt">Vos honoraires restent les vôtres : vous acceptez le montant offert, proposez le vôtre, ou passez. Rien n’est retranché.</span>
+              </li>
+            </ul>
+            <p class="nc-conformite-order">Une décision de l’Ordre s’applique toujours en premier.</p>
+            <a href="#" class="goto-link nc-conformite-link" data-goto="conditions">Lire nos engagements déontologiques →</a>
+          </section>
           <p class="note nota-guarantee">
             <strong>Vous gardez la main.</strong> Vous fixez vos honoraires et vérifiez l’identité du client à la signature, comme l’exige la loi. Nota n’intervient jamais dans l’acte.
           </p>
@@ -1045,9 +1069,11 @@
               <p>Agents immobiliers, courtiers hypothécaires : chaque mise en relation qui aboutit est récompensée.</p>
               <!-- The hero's own door to the action: on a phone the claim form
                    sits below the steps and the FAQ — this lands the visitor in
-                   it, courriel focused (three-click rule). renderPartnerPane()
-                   relabels it « Voir mon code → » for a returning partner. -->
-              <button type="button" class="btn btn-primary btn-lg pr-hero-cta" id="pr-hero-cta">Réclamer mon code →</button>
+                   it, courriel focused (three-click rule). Named apart from the
+                   form's « Réclamer mon code → » submit, so two controls never
+                   share one accessible name. renderPartnerPane() relabels it
+                   « Voir mon code → » for a returning partner. -->
+              <button type="button" class="btn btn-primary btn-lg pr-hero-cta" id="pr-hero-cta">Obtenir mon code →</button>
             </div>
             <!-- Two tracks, one stat card each: kicker, amount + cadence tag,
                  when. The HOW lives in the steps below — never repeated per
@@ -1070,6 +1096,9 @@
                 <p class="pr-when">Versée à son premier acte retenu.</p>
               </div>
             </div>
+            <!-- Who may claim, said BEFORE the form (art. 33 C. déont.: a
+                 notary can neither pay nor receive such an advantage). -->
+            <p class="pr-eligibility">Réservé aux professionnels qui ne sont pas notaires : le Code de déontologie des notaires (art. 33) interdit à un notaire de verser ou de recevoir un tel avantage.</p>
           </header>
 
           <!-- The reorganisation (owner, 2026-08-27, evening pass): one grid
@@ -1139,6 +1168,12 @@
                     <p>Vous le pouvez — et si votre code de déontologie l’exige (OACIQ notamment), vous le devez. C’est pourquoi les montants sont fixes et publics : simples à divulguer, faciles à expliquer.</p>
                   </div>
                 </details>
+                <details class="disclosure">
+                  <summary>Un notaire peut-il être partenaire ?</summary>
+                  <div class="disclosure-body">
+                    <p>Non. L’article 33 du Code de déontologie des notaires lui interdit, hors sa rémunération, de verser ou de recevoir tout autre avantage relatif à l’exercice de sa profession. Le programme s’adresse aux agents immobiliers, aux courtiers hypothécaires et aux autres professionnels qui ne sont pas notaires.</p>
+                  </div>
+                </details>
               </div>
 
               <!-- The fine print: the guarantee stays a quiet closing line. -->
@@ -1163,7 +1198,9 @@
                 </div>
                 <div class="form-row">
                   <label class="lbl" for="partner-code">Code souhaité</label>
-                  <input type="text" id="partner-code" class="uppercase" maxlength="20" spellcheck="false" placeholder="EVEROY"
+                  <!-- maxlength = the domain's cap (REFERRAL_CODE_RE: 4–12);
+                       partners-referral.test.mjs derives it from D.isReferralCode. -->
+                  <input type="text" id="partner-code" class="uppercase" maxlength="12" spellcheck="false" placeholder="EVEROY"
                          autocomplete="off" autocapitalize="characters" aria-describedby="partner-code-help partner-code-preview" />
                   <p class="help" id="partner-code-help">Suggéré depuis votre courriel — modifiable. 4 à 12 lettres ou chiffres.</p>
                   <p class="prefix-preview" id="partner-code-preview" aria-live="polite"></p>
@@ -1174,7 +1211,10 @@
                      PENDS until the emailed link is opened, so the code cannot be
                      squatted by someone who does not control the address. -->
                 <div id="partner-pending" class="partner-success" hidden aria-live="polite">
-                  <p class="help"><strong>Vérifiez votre courriel.</strong> Nous avons envoyé un lien à usage unique pour confirmer votre code — il devient actif dès que vous l’ouvrez.</p>
+                  <!-- The link's lifetime: app.js fills #partner-pending-ttl from
+                       the API's ttlMinutes when the answer carries it; this is
+                       the no-figure fallback. -->
+                  <p class="help"><strong>Vérifiez votre courriel.</strong> Nous avons envoyé un lien à usage unique pour confirmer votre code — il devient actif dès que vous l’ouvrez. <span id="partner-pending-ttl">Le lien expire rapidement : ouvrez-le dès sa réception.</span></p>
                   <!-- The likeliest failures are a junk-folder detour and a
                        typo'd courriel — and editing a field is exactly what
                        re-arms the form, so the recovery line says so. -->
@@ -1185,7 +1225,7 @@
                 <div id="partner-success" class="partner-success" hidden aria-live="polite">
                   <p class="help"><strong>Code réclamé.</strong> Partagez ce lien — chaque demande publiée par lui vous est attribuée :</p>
                   <div class="partner-link-row">
-                    <code id="partner-link"></code>
+                    <code id="partner-link" data-i18n-skip></code>
                     <button type="button" class="btn btn-sm" id="partner-copy">Copier le lien</button>
                     <!-- Revealed by partnerClaimConfirmed() only where the
                          platform has a share sheet (navigator.share). -->
@@ -1199,12 +1239,16 @@
       </section>
 
       <!-- ================= CONFIDENTIALITÉ (Loi 25) ================= -->
-      <section class="tab-pane" id="pane-profil" role="region" aria-label="Mon profil" hidden>
+      <!-- F7 (audit 2026-09-03): the pane IS « Mes offres » — the offers, the
+           conversation with the notary, the dossier. The « sur cet appareil »
+           fact belongs to the Coordonnées card (F3), not to the lede of the
+           whole pane: a deep-linked client reads their retained act here. -->
+      <section class="tab-pane" id="pane-profil" role="region" aria-label="Mes offres" hidden>
         <div class="wrap">
           <div class="intro">
-            <span class="eyebrow">Votre profil</span>
-            <h1>Mon profil</h1>
-            <p>Vos coordonnées et préférences, enregistrées sur cet appareil et réutilisées automatiquement pour vos offres et votre dossier.</p>
+            <span class="eyebrow">Votre espace</span>
+            <h1>Mes offres</h1>
+            <p>Vos offres, la conversation avec votre notaire, votre dossier et vos coordonnées — tout ce que vous avez publié depuis Nota, au même endroit.</p>
           </div>
           <div id="profil-body" class="profil-stack"></div>
         </div>
@@ -1216,6 +1260,7 @@
             <span class="eyebrow">Vie privée · Loi 25</span>
             <h1>Vos renseignements, protégés.</h1>
             <p>Nota respecte la <em>Loi 25</em> (Loi sur la protection des renseignements personnels dans le secteur privé). Voici, en clair, ce que nous recueillons et vos droits.</p>
+            <p class="legal-stamp">Version 0.1 — brouillon, non révisé par un juriste · dernière mise à jour 2026-09-03</p>
           </div>
 
           <div class="cards">
@@ -1236,14 +1281,29 @@
           <div class="panel panel-pad panel-narrow mt-md">
             <h2 class="h-sub">Vos droits et nos engagements</h2>
             <ul class="privacy-list">
-              <li><strong>Conservation.</strong> Une offre et son dossier sont conservés au plus <strong>12 mois</strong> après la date de signature, puis supprimés automatiquement. Le courriel de notification est effacé dès que l’offre est close ou expirée.</li>
-              <li><strong>Droit de suppression.</strong> Vous pouvez demander l’accès, la rectification ou la suppression de vos renseignements en tout temps en écrivant à <a href="mailto:confidentialite@nota.ca">confidentialite@nota.ca</a>. Nous répondons dans un délai de 30 jours.</li>
+              <!-- The figures are the deployment's: a 400-day TTL on every offer
+                   record (apps/api/src/handler.js, infra/dynamodb.tf) and the
+                   S3 lifecycle of the documents (infra/documents.tf), plus the
+                   35-day point-in-time recovery window. No code erases the
+                   courriel earlier, so nothing here promises it. -->
+              <li><strong>Conservation.</strong> Une offre et son dossier sont conservés au plus 13 mois après la date de signature (400 jours), plus 35 jours de sauvegarde continue, puis supprimés automatiquement.</li>
+              <!-- Addresses are filled at boot from D.CONTACT (renderContact). -->
+              <li><strong>Droit de suppression.</strong> Vous pouvez demander l’accès, la rectification ou la suppression de vos renseignements en tout temps en écrivant à <a id="priv-contact" href="#" data-i18n-skip></a>. Nous traitons votre demande dans les meilleurs délais prévus par la Loi 25.</li>
               <li><strong>Partage du dossier.</strong> Le contenu de votre dossier n’est transmis à personne tant qu’un notaire n’a pas retenu votre demande, et seulement après votre consentement explicite. Les documents eux-mêmes sont échangés de façon sécurisée à cette étape.</li>
-              <li><strong>Téléphone.</strong> Le numéro que vous fournissez (optionnel) est privé : il n’est partagé qu’avec le notaire qui retient votre demande, puis supprimé selon le même calendrier de 12 mois que le reste.</li>
+              <!-- ADR 0032: custody, never readership. The bytes go straight
+                   from the browser to the private bucket by a signed, minutes-long
+                   authorisation; the admin console has no route to them; they
+                   are erased with the offer and on a notary's release. -->
+              <li><strong>Documents échangés.</strong> Quand vous envoyez un document par la messagerie au notaire qui a retenu votre demande, Nota en est le dépositaire, jamais le destinataire : le fichier est chiffré en transit et au repos, conservé au Canada (région ca-central-1) et lisible uniquement par vous et ce notaire. Aucun employé de Nota n’y a accès ; aucune analyse, aucune indexation. Il est effacé avec l’offre, et dès qu’un notaire se désiste.</li>
+              <li><strong>Téléphone.</strong> Le numéro que vous fournissez (optionnel) est privé : il n’est partagé qu’avec le notaire qui retient votre demande, puis supprimé selon le même calendrier que le reste.</li>
               <li><strong>Code de partenaire.</strong> Si vous arrivez par le lien d’un partenaire, son code est conservé en privé avec votre demande — jamais affiché publiquement — et sert uniquement à créditer ce partenaire.</li>
               <li><strong>Vérification d’identité.</strong> Nota ne vérifie pas votre identité. C’est le notaire qui retient votre demande qui vérifie votre identité au moment de la signature, comme l’exige la loi.</li>
               <li><strong>Aucune revente.</strong> Nous ne vendons ni ne louons vos renseignements. Nota se rémunère en facturant son propre service au client, à un prix fixe et annoncé. Aucune donnée n’est monnayée.</li>
-              <li><strong>Responsable.</strong> Une personne responsable de la protection des renseignements personnels supervise ces pratiques : <a href="mailto:confidentialite@nota.ca">confidentialite@nota.ca</a>.</li>
+              <!-- What localStorage holds (nota.profile / dossier / lang / theme /
+                   offer tokens) and the one server-side measure: the funnel
+                   events (app.js track → POST /events, no account, no cookie). -->
+              <li><strong>Stockage local.</strong> Vos coordonnées, vos réponses de dossier, vos préférences (langue, thème) et les liens de suivi de vos offres sont enregistrés dans le stockage local de votre navigateur, sur cet appareil seulement — aucun témoin publicitaire. Effacer les données du site dans votre navigateur les supprime. Nota compte par ailleurs, sans compte ni témoin, les grandes étapes franchies (visite, formulaire, publication) pour mesurer son parcours.</li>
+              <li><strong>Responsable.</strong> Une personne responsable de la protection des renseignements personnels supervise ces pratiques : <a id="priv-responsable" href="#" data-i18n-skip></a>.</li>
             </ul>
           </div>
         </div>
@@ -1256,6 +1316,7 @@
             <span class="eyebrow">Conditions d’utilisation</span>
             <h1>Les règles du service, en clair.</h1>
             <p>En utilisant Nota, vous acceptez ces conditions. Nota est une place de marché qui met en relation des clients et des notaires du Québec. Nota n’est pas un notaire et ne pose aucun acte notarié.</p>
+            <p class="legal-stamp">Version 0.1 — brouillon, non révisé par un juriste · dernière mise à jour 2026-09-03</p>
           </div>
 
           <div class="cards">
@@ -1292,10 +1353,11 @@
               <li><strong>Programme partenaires.</strong> <span id="tos-partenaires"></span></li>
               <li><strong>Disponibilité.</strong> Le service est fourni « tel quel ». Nous visons une haute disponibilité sans garantir l’absence d’interruption. Nota peut suspendre ou refuser une offre contraire à ces conditions.</li>
               <li><strong>Responsabilité.</strong> Dans la mesure permise par la loi, la responsabilité de Nota se limite à la mise en relation. La qualité, la validité et l’exécution de l’acte relèvent du notaire.</li>
-              <li><strong>Données personnelles.</strong> Le traitement de vos renseignements est décrit dans notre <a href="#" class="goto-link" data-goto="confidentialite">politique de confidentialité</a> (Loi 25).</li>
+              <li><strong>Données personnelles.</strong> Le traitement de vos renseignements est décrit dans notre <a href="#t=confidentialite" class="goto-link" data-goto="confidentialite">politique de confidentialité</a> (Loi 25).</li>
               <li><strong>Modifications.</strong> Ces conditions peuvent évoluer. La version en vigueur est celle affichée ici. Les changements importants vous seront signalés.</li>
               <li><strong>Droit applicable.</strong> Ces conditions sont régies par le droit du Québec. Tout litige relève des tribunaux du district judiciaire de Québec.</li>
-              <li><strong>Contact.</strong> Une question ? Écrivez à <a href="mailto:info@nota.ca">info@nota.ca</a>.</li>
+              <!-- Filled at boot from D.CONTACT (renderContact) — never a literal address. -->
+              <li><strong>Contact.</strong> Une question ? Écrivez à <a id="tos-contact" href="#" data-i18n-skip></a>.</li>
             </ul>
           </div>
         </div>
@@ -1308,6 +1370,7 @@
             <span class="eyebrow">Charte des droits</span>
             <h1>Vos droits sur Nota.</h1>
             <p>Nos engagements envers vous, le client. Cette charte guide chaque décision que nous prenons.</p>
+            <p class="legal-stamp">Version 0.1 — brouillon, non révisé par un juriste · dernière mise à jour 2026-09-03</p>
           </div>
 
           <div class="cards">
@@ -1329,12 +1392,16 @@
             <h2 class="h-sub">Nos engagements</h2>
             <ul class="privacy-list">
               <li><strong>Gratuité.</strong> Publier une offre et consulter le carnet est gratuit pour le client, pour toujours.</li>
-              <li><strong>Transparence des prix.</strong> Un prix de départ clair par service, aucun frais caché. Ce que vous offrez est ce que le notaire reçoit.</li>
+              <!-- « aucun frais caché » is only true because the barème is
+                   published: the cancellation fee bands live in the conditions
+                   (#tos-annulation) and the exact amount is shown before any
+                   confirmation (ADR 0023 / 0033). -->
+              <li><strong>Transparence des prix.</strong> Un prix de départ clair par service et deux lignes annoncées d’avance : les honoraires du notaire — ce que vous offrez est ce qu’il reçoit — et le prix fixe du service de Nota. Aucun frais caché : le barème des frais d’annulation est publié dans les <a href="#t=conditions" class="goto-link" data-goto="conditions">conditions d’utilisation</a> et le montant exact vous est affiché avant toute confirmation.</li>
               <li><strong>Anonymat par défaut.</strong> Votre offre s’affiche « Client · secteur postal ». Votre nom n’apparaît que si vous le choisissez.</li>
-              <li><strong>Vos données protégées.</strong> Hébergement au Canada, conformité à la Loi 25, aucune revente. Voir la <a href="#" class="goto-link" data-goto="confidentialite">confidentialité</a>.</li>
+              <li><strong>Vos données protégées.</strong> Hébergement au Canada, conformité à la Loi 25, aucune revente. Voir la <a href="#t=confidentialite" class="goto-link" data-goto="confidentialite">confidentialité</a>.</li>
               <li><strong>Traitement équitable.</strong> Le carnet est public et les mêmes règles s’appliquent à tous. Aucune offre n’est mise en avant contre paiement.</li>
               <li><strong>Liberté de partir.</strong> Vous pouvez demander la suppression de vos renseignements en tout temps.</li>
-              <li><strong>Un recours.</strong> Un problème, une question ? Une personne vous répond : <a href="mailto:info@nota.ca">info@nota.ca</a>.</li>
+              <li><strong>Un recours.</strong> Un problème, une question ? Une personne vous répond : <a id="charte-contact" href="#" data-i18n-skip></a>.</li>
             </ul>
           </div>
         </div>
@@ -1352,17 +1419,18 @@
         </div>
         <nav class="footer-col" aria-label="Explorer">
           <span class="footer-col-h">Explorer</span>
-          <a href="#" class="goto-link" data-goto="carnet">Le carnet</a>
-          <a href="#" class="goto-link" data-goto="dossier">Préparer mon dossier</a>
-          <a href="#" class="goto-link" data-goto="notaires">Espace notaire</a>
-          <a href="#" class="goto-link" data-goto="partenaires">Partenaires</a>
-          <a href="#" id="footer-guide">Comment ça marche</a>
+          <a href="#t=carnet" class="goto-link" data-goto="carnet">Le carnet</a>
+          <a href="#t=dossier" class="goto-link" data-goto="dossier">Préparer mon dossier</a>
+          <a href="#t=notaires" class="goto-link" data-goto="notaires">Espace notaire</a>
+          <a href="#t=partenaires" class="goto-link" data-goto="partenaires">Partenaires</a>
+          <!-- Opens the guide dialog: an action, so a button — not a link to nowhere. -->
+          <button type="button" class="footer-link" id="footer-guide">Comment ça marche</button>
         </nav>
         <nav class="footer-col" aria-label="Informations légales">
           <span class="footer-col-h">Légal</span>
-          <a href="#" class="goto-link" data-goto="confidentialite">Confidentialité</a>
-          <a href="#" class="goto-link" data-goto="conditions">Conditions d’utilisation</a>
-          <a href="#" class="goto-link" data-goto="charte">Charte des droits</a>
+          <a href="#t=confidentialite" class="goto-link" data-goto="confidentialite">Confidentialité</a>
+          <a href="#t=conditions" class="goto-link" data-goto="conditions">Conditions d’utilisation</a>
+          <a href="#t=charte" class="goto-link" data-goto="charte">Charte des droits</a>
         </nav>
       </div>
       <div class="wrap footer-base">
@@ -1419,7 +1487,7 @@
         </div>
         <input type="date" id="o-date" class="visually-hidden" required tabindex="-1" aria-hidden="true" />
         <div class="book-step" id="o-criteria-step" hidden>
-          <div class="book-step-lbl"><span class="step">2</span> Les questions du notaire <span class="book-opt">(elles ajustent le prix)</span>
+          <div class="book-step-lbl"><span class="step">2</span> Les questions du notaire <span class="book-opt">(elles ajustent le prix et le temps de préparation)</span>
             <!-- Live tally kept by validateOfferUI: how many required answers
                  the notary still awaits, then a quiet « ✓ complet ». -->
             <span class="crit-count" id="o-criteria-count" aria-live="polite" hidden></span></div>
@@ -1468,13 +1536,18 @@
              It lives in the open flow, not the folded options — without it the
              déplacement declared above cannot be related to any notary's
              travel radius, so the offer is not publishable. -->
-        <div class="form-row" id="prefix-row">
-          <label class="lbl" for="o-prefix">Secteur postal</label>
-          <input type="text" id="o-prefix" maxlength="3" placeholder="G1R" class="uppercase" required
-                 autocomplete="postal-code" inputmode="text" spellcheck="false"
-                 pattern="[A-Za-z][0-9][A-Za-z]" aria-describedby="prefix-help" />
-          <p class="help" id="prefix-help">Les 3 premiers caractères de votre code postal — requis pour situer le déplacement du notaire. Il indique votre secteur sans révéler votre adresse.</p>
-          <p class="prefix-preview" id="prefix-preview" aria-live="polite"></p>
+        <!-- Step 4 (audit 2.7): the sector is a numbered step of its own,
+             not an orphan between the offer and the identity. -->
+        <div class="book-step" id="o-where-step">
+          <div class="book-step-lbl"><span class="step">4</span> Où signez-vous&nbsp;?</div>
+          <div class="form-row" id="prefix-row">
+            <label class="lbl" for="o-prefix">Secteur postal</label>
+            <input type="text" id="o-prefix" maxlength="3" placeholder="G1R" class="uppercase" required
+                   autocomplete="postal-code" inputmode="text" spellcheck="false" autocapitalize="characters"
+                   pattern="[A-Za-z][0-9][A-Za-z]" aria-describedby="prefix-help" />
+            <p class="help" id="prefix-help">Les 3 premiers caractères de votre code postal — requis pour situer le déplacement du notaire. Il indique votre secteur sans révéler votre adresse.</p>
+            <p class="prefix-preview" id="prefix-preview" aria-live="polite"></p>
+          </div>
         </div>
         <!-- ADR 0033 — the mise en relation is complete: the notary who
              retains the demand receives the client's name, courriel and
@@ -1499,7 +1572,7 @@
             <p class="prefix-preview" id="o-telephone-preview" aria-live="polite"></p>
           </div>
         </div>
-        <ul class="errors" id="offer-errors" role="alert" aria-atomic="true" hidden></ul>
+        <ul class="errors" id="offer-errors" role="alert" aria-atomic="true" tabindex="-1" hidden></ul>
         <p class="offer-hint" id="offer-hint" aria-live="polite" hidden></p>
         <button type="submit" class="btn btn-primary w-full btn-lg" id="offer-submit" disabled>Publier mon offre</button>
         <!-- Law 25 small print: always visible, directly under the decision it covers. -->
@@ -1585,8 +1658,7 @@
         <h3 id="reveal-title">Rendre votre offre publique ?</h3>
         <p>
           Votre nom sera visible sur le carnet public, à côté du service, du montant et de la date. Par exemple :
-          « votre nom · refinancement · dans 4 jours ». Les offres nominatives sont souvent retenues plus vite,
-          mais c’est une information que vous rendez publique.
+          « votre nom · refinancement · dans 4 jours ». C’est une information que vous rendez publique.
         </p>
         <div class="dialog-actions">
           <button class="btn" id="reveal-cancel">Rester anonyme</button>
@@ -1595,9 +1667,10 @@
       </div>
     </dialog>
 
-    <!-- Sign-in / sign-up modal: choose a role (client or notary), then continue
-         with a social provider or a courriel. Social OAuth is not wired yet — those
-         buttons surface the option and point to the courriel path for now. -->
+    <!-- Sign-in / sign-up modal: choose a role (client or notary), then a
+         passwordless courriel. A client's « account » is a courriel kept on
+         this device (plus the welcome/tracking email); a notary gets a real
+         session by magic link. authSetRole() swaps title, CTA and fine print. -->
     <dialog id="auth-dialog" class="auth-modal" aria-labelledby="auth-title">
       <form method="dialog" class="dlg-x-form"><button class="dlg-x" value="close" aria-label="Fermer">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
@@ -1623,7 +1696,7 @@
           <button type="submit" class="btn btn-primary btn-lg auth-continue" id="auth-continue">Créer mon compte</button>
         </form>
 
-        <p class="auth-fine" id="auth-fine">Première visite ou retour, c’est le même geste. Votre courriel est transmis à Nota pour le lien de suivi et les avis. Le contenu de vos documents, lui, ne quitte jamais cet appareil.</p>
+        <p class="auth-fine" id="auth-fine">Première visite ou retour, c’est le même geste. Votre courriel est transmis à Nota pour le lien de suivi et les avis. Vos documents, quand vous en envoyez, transitent chiffrés et ne sont lus que par le notaire qui vous retient — jamais par Nota.</p>
       </div>
     </dialog>
 
@@ -1756,7 +1829,9 @@
          ncOpenRetainSheet() from the card + `conditions` (GET /notary/bids);
          nothing money-related is invented client-side — a missing barème
          hides its section rather than guessing. -->
-    <dialog id="nc-retenir-dialog" class="nc-retenir-dialog" aria-labelledby="nc-retenir-title">
+    <!-- tabindex="-1": the sheet opens with the focus on itself (a reader
+         starts at the title), never on the confirm button (F7 P2-3). -->
+    <dialog id="nc-retenir-dialog" class="nc-retenir-dialog" aria-labelledby="nc-retenir-title" tabindex="-1">
       <form method="dialog" class="dlg-x-form"><button class="dlg-x" value="close" aria-label="Fermer">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
       </button></form>
@@ -1769,7 +1844,7 @@
         <dl class="nc-kv nc-retenir-kv">
           <dt>Vos honoraires</dt>
           <dd><strong id="nc-retenir-fee"></strong> <span class="nc-retenir-sub">versés en entier à la signature</span></dd>
-          <dt>Le client paie à Nota, à côté</dt>
+          <dt>Le client paie à Nota, en plus de vos honoraires, séparément</dt>
           <dd id="nc-retenir-nota"></dd>
           <dt>Déplacement</dt>
           <dd id="nc-retenir-dep"></dd>
@@ -1781,11 +1856,15 @@
         <section class="nc-retenir-sec" id="nc-retenir-annulation">
           <div class="nc-retenir-h">Si le client annule</div>
           <ul class="nc-retenir-bareme" id="nc-retenir-bareme"></ul>
-          <p class="nc-retenir-p">Ces frais vous sont versés en dédommagement.</p>
+          <p class="nc-retenir-p" id="nc-retenir-dedommagement">Ces frais vous sont versés en dédommagement.</p>
+          <!-- F7 P1-2: the barème is a promise only over a hold the platform
+               can capture (conditions.annulation.applicable × the bid's
+               cautionVivante). Otherwise the truth, in place of amounts. -->
+          <p class="nc-retenir-p" id="nc-retenir-nocaution" hidden>Aucune caution vivante sur cette demande — une annulation serait sans frais.</p>
         </section>
         <section class="nc-retenir-sec">
           <div class="nc-retenir-h">Vous pouvez vous désister</div>
-          <p class="nc-retenir-p">Gratuit, mais compté à votre dossier. Le client garde sa date et son offre.</p>
+          <p class="nc-retenir-p">Gratuit ; l’équipe Nota en est avisée. Le client garde sa date et son offre.</p>
         </section>
         <p class="nc-retenir-p nc-retenir-contact">Une fois retenu, le client reçoit votre nom, téléphone, adresse et courriel ; vous recevez les siens ; vous vous parlez dans la conversation Nota.</p>
         <div class="dialog-actions">
@@ -1805,7 +1884,7 @@
       </button></form>
       <div class="dialog-pad">
         <h3 id="contact-title">Nous joindre</h3>
-        <p>Une question, un pépin, besoin d’un coup de main&nbsp;? Écrivez-nous — une personne de l’équipe vous répond à votre courriel, normalement le jour même.</p>
+        <p>Une question, un pépin, besoin d’un coup de main&nbsp;? Écrivez-nous — une personne de l’équipe vous répond à votre courriel.</p>
         <form id="contact-form" novalidate>
           <div class="form-row">
             <label class="lbl" for="ct-nom">Nom (optionnel)</label>
@@ -1827,15 +1906,18 @@
           </div>
           <div class="form-row">
             <label class="lbl" for="ct-message">Message</label>
-            <textarea id="ct-message" rows="5" maxlength="2000" required></textarea>
+            <!-- maxlength is set at boot from D.CONTACT_MESSAGE_MAX; the counter
+                 shows only near the cap (wireContactCounter). -->
+            <textarea id="ct-message" rows="5" required aria-describedby="ct-count"></textarea>
+            <p class="help ct-count" id="ct-count" aria-live="polite" hidden></p>
           </div>
           <p class="help" id="ct-context" hidden></p>
           <ul class="errors" id="ct-errors" role="alert" aria-atomic="true" hidden></ul>
           <button type="submit" class="btn btn-primary w-full" id="ct-submit">Envoyer</button>
           <p class="help" id="ct-quick"></p>
         </form>
-        <div id="contact-success" hidden>
-          <p><strong>Message envoyé.</strong> Une personne de l’équipe vous répond à votre courriel, normalement le jour même.</p>
+        <div id="contact-success" role="status" hidden>
+          <p><strong>Message envoyé.</strong> Une personne de l’équipe vous répond à votre courriel.</p>
           <div class="dialog-actions">
             <button type="button" class="btn btn-primary" id="ct-done">Fermer</button>
           </div>
@@ -1857,7 +1939,7 @@
           </div>
           <button type="button" class="sup-close" id="chat-close" aria-label="Fermer la messagerie">✕</button>
         </header>
-        <div class="sup-log" id="chat-log" aria-live="polite"></div>
+        <div class="sup-log" id="chat-log" aria-live="polite" data-i18n-skip></div>
         <!-- The server forgot the thread (expired token): said in place, the
              bubbles stay, the next message starts fresh. -->
         <p class="sup-ended" id="chat-ended" role="status" hidden>Cette conversation est terminée — écrivez-nous à nouveau.</p>
@@ -1897,7 +1979,7 @@
       <div class="dialog-pad">
         <h2 id="chat-reply-title">Répondre au visiteur</h2>
         <p class="help sup-reply-courriel" id="chat-reply-courriel" hidden>Courriel du visiteur : <a id="chat-reply-courriel-link" href="#"></a></p>
-        <div class="sup-log sup-log-op" id="chat-reply-log" aria-live="polite"></div>
+        <div class="sup-log sup-log-op" id="chat-reply-log" aria-live="polite" data-i18n-skip></div>
         <form id="chat-reply-form" novalidate>
           <textarea id="chat-reply-text" rows="3" placeholder="Votre réponse…" aria-label="Votre réponse"></textarea>
           <p class="sup-error" id="chat-reply-error" role="alert" hidden></p>
