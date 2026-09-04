@@ -401,6 +401,6 @@ test('a freshly registered partner with ZERO referrals is visible in the ledger 
   assert.deepEqual(row, {
     code: 'ZOEQC', demandes: 0, retenues: 0, completes: 0, notaires: 0, notairesActifs: 0, du: 0,
     type: 'agent_immobilier', courriel: 'zoe@agence.ca',
-    typeNom: 'Agent immobilier', typeNomEn: 'Real-estate agent',
+    typeNom: domain.REFERRAL.partners[0].nom, typeNomEn: domain.REFERRAL.partners[0].nomEn,
   });
 });

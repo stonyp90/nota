@@ -201,7 +201,7 @@ test('referralRewardNotary announces the flat notary reward, once-per-notary', (
 test('operatorNewPartner mirrors the operator-alert style with code, type and courriel', () => {
   const out = emails.operatorNewPartner({ code: 'EVEROY', type: 'agent_immobilier', courriel: 'eve@agence.ca', baseUrl: BASE, unsubscribeUrl: UNSUB });
   assert.ok(out.subject.includes('EVEROY'));
-  assert.ok(out.html.includes('Agent immobilier'));
+  assert.ok(out.html.includes(domain.REFERRAL.partners.find((p) => p.id === 'agent_immobilier').nom));
   assert.ok(out.html.includes('eve@agence.ca'));
 });
 

@@ -1724,6 +1724,30 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 #partner-form .btn-lg { margin-top: var(--space-6); width: 100%; }
 .partner-success { margin-top: var(--space-5); padding: var(--space-5) var(--space-6); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-inset); }
 .partner-success[hidden] { display: none; }
+/* « Vous êtes… » (2026-09-03): the claim form's first question asked in the
+   hero, so a courtier or an accountant recognises themself before anything
+   scrolls. One tinted chip per profession — the picked one takes the strong
+   tint like the step glyphs — and, under the row, that profession's own
+   « moment »: the cue that turns a reader into a referrer. Tokens only. */
+.pr-audience { margin-top: var(--space-7); }
+.pr-audience-lbl { display: block; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; color: var(--ink-muted); margin-bottom: var(--space-3); }
+.pr-audience-row { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.pr-aud {
+  appearance: none; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px;
+  border-radius: var(--radius); border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--brand-tint-solid) var(--surface-veil-mix), transparent);
+  color: var(--ink);
+  transition: background .15s, color .15s, border-color .15s;
+}
+.pr-aud:hover { border-color: var(--brand); }
+.pr-aud:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.pr-aud[aria-pressed='true'] { background: var(--brand-tint-solid-strong); border-color: var(--brand-on-tint-strong); color: var(--brand-on-tint-strong); }
+.pr-aud-ic { display: inline-flex; width: 18px; height: 18px; color: var(--brand); }
+.pr-aud-ic svg { width: 18px; height: 18px; }
+.pr-aud[aria-pressed='true'] .pr-aud-ic { color: currentColor; }
+/* The moment line keeps its height before a pick, so the CTA below never jumps. */
+.pr-moment { margin: var(--space-4) 0 0; padding-left: var(--space-4); border-left: 3px solid var(--brand); font-size: 14px; line-height: 1.5; color: var(--ink); max-width: 52ch; min-height: 2.9em; }
 /* The hero estimator (2026-09-03): one row under the CTA — the slider, then
    the sentence whose two numbers the domain fills. The yearly figure takes
    the brand ink like the reward amounts, at a smaller size; tokens only. */
