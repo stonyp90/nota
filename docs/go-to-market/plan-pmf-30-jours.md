@@ -98,6 +98,12 @@ autorisées → retenues → actes signés`, plus `notaires inscrits → activé
 | Délai publication → rétention | < 2 jours ouvrables | L'opérateur ne tient pas la règle des quatre heures. |
 | Formulaires → publiées | > 50 % | Le formulaire fait fuir : regarder quelle question du notaire arrête les gens. |
 
+Le même lundi sert au triage des demandes d'amélioration reçues des premiers
+usagers : le dispositif — conseil de dix, cadence de 30 minutes, chemin d'une
+demande jusqu'à la note de version — est décrit dans
+[`les-usagers-dans-le-cycle-de-developpement.md`](les-usagers-dans-le-cycle-de-developpement.md),
+et il se mesure au même taux de rétention.
+
 ## 7. Livré aujourd'hui (code) et ce qu'il reste
 
 **Livré, testé et déployé** (commits `9db4b79` → `8de32a9`, six couches vertes :
