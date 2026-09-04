@@ -40,6 +40,19 @@ const DOMS = [];
 after(() => { for (const d of DOMS) { try { d.window.close(); } catch {} } });
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+// Attendre une CONDITION plutôt qu'une durée. Un `wait(220)` suppose que la
+// machine réagit en 220 ms ; sur un exécuteur CI chargé elle ne le fait pas, et
+// le test échoue sans qu'aucun code n'ait changé (Deploy rouge sur 8de32a9,
+// 2026-09-03, alors que le run suivant sur un code web identique était vert).
+// La borne reste une VRAIE borne : au-delà, l'échec est réel.
+async function waitUntil(cond, { timeout = 3000, step = 10, quoi = 'la condition' } = {}) {
+  const fin = Date.now() + timeout;
+  while (Date.now() < fin) {
+    if (cond()) return true;
+    await wait(step);
+  }
+  throw new Error(`waitUntil: ${quoi} ne s'est jamais produite en ${timeout} ms`);
+}
 const todayISO = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
 const firstOfMonth = (iso) => iso.slice(0, 7) + '-01';
 const addDays = (iso, n) => new Date(Date.parse(iso + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10);
@@ -547,17 +560,31 @@ test('the alert preferences render from profil.alertes and POST through /notary/
 
 test('a focused composer pauses the poll only for a while: after the grace the feed refreshes and the draft + focus survive', async () => {
   const state = { profil: PROFIL_COMPLET(), retained: [retainedEntry()] };
-  const { doc } = await bootSignedIn(state, { pollMs: 30, focusedMs: 120 });
+  // La grâce se compte depuis le DERNIER CHARGEMENT (`ncLastLoadAt`), pas
+  // depuis la prise de focus. Avec 120 ms de grâce, un boot un peu lent la
+  // consommait AVANT que le test ne commence à mesurer : le poll repartait
+  // pendant la fenêtre censée être calme et l'assertion tombait, sans qu'aucun
+  // code n'ait changé. 600 ms laissent la place à un exécuteur chargé.
+  const { doc, Nota } = await bootSignedIn(state, { pollMs: 30, focusedMs: 600 });
   const ta = () => doc.querySelector('#notary-retained-list .nc-card[data-id="r-1"] .chat-input');
+  // Repartir d'un chargement FRAIS : la fenêtre de grâce commence ici, à un
+  // instant que le test connaît, au lieu d'un instant quelconque du boot.
+  await Nota.notary.loadBids();
   ta().focus();
   input(ta(), 'brouillon en cours');
   const at = state.feedPulls;
-  await wait(70);
+  await wait(150); // franchement à l'intérieur des 600 ms de grâce
   assert.equal(state.feedPulls, at, 'right after focusing, the poll waits');
   // Meanwhile the client writes.
   state.retained[0].messages.push({ id: 'c9', de: 'client', texte: 'Nouvelle question', createdAt: '2026-08-12T11:00:00Z' });
-  await wait(220);
+  // Au-delà de la grâce le poll REPREND — l'instant exact dépend de la machine,
+  // donc on attend l'événement, avec une borne qui reste un vrai échec.
+  await waitUntil(() => state.feedPulls > at, { timeout: 5000, quoi: 'la reprise du poll après la grâce' });
   assert.ok(state.feedPulls > at, 'past the grace the poll refreshes even with the composer focused');
+  await waitUntil(
+    () => [...doc.querySelectorAll('#notary-retained-list .chat-bubble')].some((b) => /Nouvelle question/.test(b.textContent)),
+    { timeout: 3000, quoi: 'l’arrivée du message du client' },
+  );
   assert.ok([...doc.querySelectorAll('#notary-retained-list .chat-bubble')].some((b) => /Nouvelle question/.test(b.textContent)), 'the client’s message arrived');
   assert.equal(ta().value, 'brouillon en cours', 'the draft survived the re-render');
   assert.equal(doc.activeElement, ta(), 'the focus survived the re-render');
