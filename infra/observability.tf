@@ -298,10 +298,18 @@ resource "aws_cloudwatch_metric_alarm" "billing_cost_guard" {
 # (`{"level":"error","event":"audit_write_failed",...}`) sur chaque écriture
 # perdue. Le filtre ci-dessous la compte ; l'alarme la dit.
 #
-# Le filtre est posé sur les groupes de logs des Lambdas qui écrivent le
-# journal : l'API publique (accès, connexions, règlements) et, quand la console
+# Le filtre est posé sur les groupes de logs des DEUX Lambdas qui écrivent un
+# journal — l'API publique (accès, connexions, règlements) et, quand la console
 # est activée, l'API admin. Un seul nom de métrique pour les deux, donc une
 # seule alarme : d'où qu'elle vienne, une trace perdue est une trace perdue.
+#
+# CE QUE LE FILTRE ADMIN COMPTE AUJOURD'HUI : RIEN. Seul le handler public a
+# appris à crier. `apps/api/src/admin.js:113-116` garde son `catch {}` muet, donc
+# une écriture perdue du journal ADMINISTRATIF — connexions d'administrateurs,
+# changements de barème, activations de notaires — passe encore inaperçue. Le
+# filtre est posé d'avance, pour que le jour où ce `catch` émettra la même ligne
+# rien d'autre ne soit à faire ; il ne faut pas le lire comme une couverture
+# acquise.
 #
 # Coût : un filtre de métrique est gratuit, la métrique personnalisée coûte
 # ~0,30 $/mois et l'alarme ~0,10 $ — hors franchise gratuite.
@@ -310,9 +318,27 @@ locals {
   audit_metric_namespace = "${var.project_name}/Audit"
   audit_metric_name      = "AuditWriteFailed"
 
-  # Le motif JSON que CloudWatch Logs applique à chaque ligne : il ne compte que
-  # les traces émises par le chemin d'audit, jamais les autres erreurs.
-  audit_failure_pattern = "{ $.event = \"audit_write_failed\" }"
+  # Le motif que CloudWatch Logs applique à chaque ligne. C'est un motif TEXTE,
+  # et le choix est tout sauf cosmétique.
+  #
+  # Un motif JSON (`{ $.event = "audit_write_failed" }`) n'apparie QUE si
+  # l'événement de journal est, EN ENTIER, du JSON valide. Or ces fonctions
+  # écrivent au format texte — aucune `logging_config` sur les Lambdas
+  # (lambda.tf, admin.tf) — et le runtime Node préfixe chaque console.error :
+  # `<horodatage>\t<requestId>\tERROR\t{…}`. Le JSON est bien là, mais pas au
+  # premier caractère. Le motif JSON n'aurait donc apparié aucune ligne, jamais :
+  # l'alarme serait restée à OK pour toujours, c'est-à-dire exactement
+  # l'apparence d'un puits d'audit en bonne santé. Une alarme incapable de se
+  # déclencher est pire qu'une alarme absente — elle se fait passer pour une
+  # surveillance.
+  #
+  # Un terme entre guillemets apparie une sous-chaîne exacte, quel que soit le
+  # format du journal. Il traverse aussi un futur passage en `log_format =
+  # "JSON"`, où la ligne deviendrait la valeur ré-échappée d'un champ `message` :
+  # `audit_write_failed` ne porte aucun guillemet interne, donc rien à échapper.
+  # apps/api/test/audit-promesses-infra.test.mjs vérifie les deux formats contre
+  # la ligne que le handler émet réellement.
+  audit_failure_pattern = "\"audit_write_failed\""
 }
 
 resource "aws_cloudwatch_log_metric_filter" "audit_write_failed_api" {

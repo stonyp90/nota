@@ -144,7 +144,16 @@ data "aws_iam_policy_document" "admin_lambda" {
   #     l'histoire. L'immuabilité réelle demanderait un puits séparé
   #     (CloudTrail Lake, ou un bucket S3 Object Lock) : ce Deny ferme le chemin
   #     applicatif, il ne rend pas la table inviolable.
-  #   • PutItem d'une NOUVELLE entrée reste permis : c'est l'écriture du journal.
+  #   • PutItem reste permis — c'est l'écriture du journal — et il faut le dire
+  #     jusqu'au bout : PutItem ÉCRASE par défaut. Un PutItem sur la clé d'une
+  #     entrée existante réécrirait donc la preuve, sans passer par UpdateItem.
+  #     Aucune condition IAM ne sait exiger qu'un PutItem porte une
+  #     ConditionExpression ; l'y ajouter en Deny ne rendrait pas la piste
+  #     inaltérable, il la rendrait VIDE. Contre l'écrasement, la seule garde
+  #     reste donc applicative : le `attribute_not_exists` de
+  #     apps/api/src/repo-dynamo.js, sur les deux journaux, tenu par
+  #     apps/api/test/audit-promesses-infra.test.mjs. Ce Deny ferme la
+  #     suppression et la modification ; il ne ferme pas la réécriture.
   statement {
     sid    = "AdminTableAuditAppendOnly"
     effect = "Deny"

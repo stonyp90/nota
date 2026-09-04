@@ -1298,6 +1298,16 @@ paths:
                               type: [string, "null"]
                             ip:
                               type: [string, "null"]
+                        ttl:
+                          type: integer
+                          description: >-
+                            Epoch SECONDS at which DynamoDB will reap this
+                            entry — seven calendar years after `ts` (ADR 0036).
+                            Absent on entries written before 2026-09-03, which
+                            carry no expiry and never will: nothing is applied
+                            retroactively. Surfaced deliberately, because "when
+                            does this evidence disappear" is a question a
+                            retention audit has to be able to answer.
                         meta:
                           type: [object, "null"]
         "401":

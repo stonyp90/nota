@@ -57,7 +57,7 @@ Le mécanisme TTL est bien activé sur les deux tables
 | **Gains de parrainage** (`EARN#…`) | Aucun `ttl` (`repo-dynamo.js:835-840`). |
 | **Registre des évaluations** (`EVAL#…`) | Aucun `ttl` (`repo-dynamo.js:558`). Survit à l'offre qui l'a produite. |
 | **Désabonnements** (`UNSUB#…`) | Aucun `ttl` — correct et voulu. |
-| **Journal d'audit admin** (`AUDIT#…`) | Aucun `ttl` — correct et voulu. |
+| **Journal d'audit** (`AUDIT#…`) | ~~Aucun `ttl`~~ — **corrigé le 2026-09-03 (ADR 0036)** : les deux adaptateurs posent désormais un `ttl` calendaire de **sept ans** à l'écriture, sur les deux journaux (`packages/domain` → `auditRetentionTtl`, `apps/api/src/repo-dynamo.js`, `apps/api/src/repo-memory.js`). Conforme au §1 ci-dessus : la Loi 25 exige une conservation *bornée*. Les entrées écrites AVANT cette date ne portent pas de `ttl` et n'expireront jamais — rien n'est rétroactif. |
 
 ---
 

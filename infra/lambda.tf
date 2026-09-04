@@ -65,8 +65,14 @@ data "aws_iam_policy_document" "api_dynamodb" {
   # UpdateItem — nécessaire aux compteurs STATS# — et cet accord suffisait à
   # laisser réécrire une entrée d'audit déjà posée.
   #
-  # Deny l'emporte sur Allow : PutItem d'une nouvelle entrée reste permis (c'est
-  # l'écriture du journal), toute modification ou suppression ne l'est plus.
+  # Deny l'emporte sur Allow : PutItem reste permis (c'est l'écriture du
+  # journal), toute modification ou suppression ne l'est plus. Dit sans
+  # complaisance : PutItem ÉCRASE par défaut, donc la RÉÉCRITURE d'une entrée
+  # existante reste possible à l'étage IAM, et aucune condition ne sait exiger
+  # qu'un PutItem porte une ConditionExpression. Refuser PutItem ne rendrait pas
+  # la piste inaltérable — il la rendrait vide. Contre l'écrasement, la garde est
+  # donc applicative (`attribute_not_exists`, repo-dynamo.js), et c'est
+  # apps/api/test/audit-promesses-infra.test.mjs qui l'empêche de disparaître.
   # DeleteItem et BatchWriteItem ne sont de toute façon pas accordés ici ; ils
   # sont nommés quand même, pour qu'un futur élargissement du statement
   # ci-dessus ne rouvre pas la porte sans qu'on s'en aperçoive.

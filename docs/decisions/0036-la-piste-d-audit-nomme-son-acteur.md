@@ -1,6 +1,7 @@
-# 0034 — La piste d'audit nomme son acteur, se conserve sept ans, et crie quand elle casse
+# 0036 — La piste d'audit nomme son acteur, se conserve sept ans, et crie quand elle casse
 
-Date : 2026-09-03
+Date : 2026-09-03 (renumérotée le 2026-09-04 : 0034 est réservé à la grille de
+prix par service et 0035 à la caution Stripe)
 
 Statut : accepté — **complète l'ADR 0028 §divulgation**, ne renverse rien
 
@@ -114,6 +115,25 @@ alarme dit sur le sujet SNS d'alerte existant. **Le seuil est zéro** :
 contrairement à une erreur passagère, une entrée d'audit qui n'est pas écrite ne
 se rattrape jamais — il n'y a pas de reprise, l'événement est passé.
 
+Le motif du filtre est un motif **texte**, pas un motif JSON, et c'est
+load-bearing : un motif JSON n'apparie que si l'événement de journal est *en
+entier* du JSON valide, alors que le runtime Node de Lambda préfixe chaque
+`console.error` (`<horodatage>\t<requestId>\tERROR\t{…}`). La première rédaction
+posait `{ $.event = "audit_write_failed" }` : elle n'aurait apparié **aucune**
+ligne, l'alarme serait restée à OK pour toujours — l'apparence exacte d'un puits
+d'audit en bonne santé. Une alarme incapable de se déclencher est pire qu'une
+alarme absente : elle se fait passer pour une surveillance. Le motif est
+désormais le terme cité `"audit_write_failed"`, apparié contre la ligne
+réellement émise par le handler dans
+`apps/api/test/audit-promesses-infra.test.mjs`.
+
+**Et la moitié admin ne crie pas encore.** Seul `handler.js` a appris à émettre
+la ligne ; `apps/api/src/admin.js:113-116` garde son `catch {}` muet. Le filtre
+posé sur le groupe de logs admin est donc armé d'avance et ne compte rien
+aujourd'hui : une écriture perdue du journal *administratif* — connexions
+d'administrateurs, changements de barème, activations de notaires — passe
+toujours inaperçue.
+
 ### 4. Un Deny explicite tient la promesse d'append-only
 
 Sur les deux rôles, un statement `Deny` sur `DeleteItem`, `UpdateItem` et
@@ -124,6 +144,15 @@ l'écriture du journal.
 
 **Ce que la garantie vaut exactement, et rien de plus :**
 
+- elle ferme la **suppression** et la **modification**, pas la **réécriture**.
+  `PutItem` écrase par défaut : un `PutItem` sur la clé d'une entrée existante
+  réécrit la preuve sans jamais passer par `UpdateItem`. Aucune condition IAM ne
+  sait exiger qu'un `PutItem` porte une `ConditionExpression`, et l'ajouter au
+  `Deny` ne rendrait pas la piste inaltérable — il la rendrait **vide**. Contre
+  l'écrasement, la garde reste donc applicative : le `attribute_not_exists` de
+  `apps/api/src/repo-dynamo.js`, sur les deux journaux. Un test l'y retient
+  (`apps/api/test/audit-promesses-infra.test.mjs`), et le même test interdit
+  qu'on « renforce » un jour le `Deny` en y glissant `PutItem` ;
 - elle couvre les appels qui **nomment une clé de partition** ;
 - elle ne couvre **pas** ce qui ne porte pas `dynamodb:LeadingKeys` : une
   condition `ForAnyValue` ne s'applique jamais quand la clé de contexte est
@@ -173,9 +202,12 @@ communication, c'est le violer.
   d'audit derrière `canReadPii()`. Tant que ce n'est pas fait, le moindre
   privilège est défait en pratique — un auditeur à qui on a accordé `audit:read`
   passe par l'API mais ne voit pas l'écran.
-- La politique de conservation se contredit : son §1 nomme sept ans, son §2
-  qualifie l'absence de `ttl` de « correct et voulu ». Le code suit le §1 (la
-  Loi 25 exige une borne) ; le document doit être repris pour ne dire qu'une
-  seule chose.
+- La politique de conservation se contredisait : son §1 nommait sept ans, son §2
+  qualifiait l'absence de `ttl` de « correct et voulu ». Le code suit le §1 (la
+  Loi 25 exige une borne) et le §2 a été repris pour dire la même chose.
+- **Le journal admin ne crie toujours pas.** `apps/api/src/admin.js:113-116`
+  avale encore l'échec d'écriture en silence. La ligne `audit_write_failed` et
+  le filtre CloudWatch qui l'attend existent ; il reste à les brancher là. Tant
+  que ce n'est pas fait, l'alarme ne couvre que la moitié publique de la piste.
 - `terraform apply` est requis pour que les deux `Deny`, le filtre de métrique
   et l'alarme existent réellement. Rien n'est appliqué à ce jour.
