@@ -534,6 +534,20 @@
   "Écrire au client…": "Write to the client…",
   "Écrire au client": "Write to the client",
   "Messages avec votre notaire": "Messages with your notary",
+  // ADR 0035 — la garantie de paiement, telle que le NOTAIRE la lit avant de
+  // retenir : la pastille, ce qu'elle implique, et la règle générale.
+  "Garantie de paiement": "Payment guarantee",
+  "Somme réservée": "Amount held",
+  "Carte validée": "Card validated",
+  "Carte refusée": "Card declined",
+  "Réservation expirée": "Hold expired",
+  "posée le": "placed on",
+  "la somme est bloquée sur la carte du client": "the amount is held on the client’s card",
+  "somme réservée le": "amount held on",
+  "la somme sera réservée avant la signature": "the amount will be held before the signing",
+  "le client doit enregistrer une autre carte": "the client must save another card",
+  "aucune somme n’est réservée pour cet acte": "no amount is being held for this act",
+  "Aucune garantie en place": "No guarantee in place",
   // ADR 0035 — la caution refusée, et le seul geste qui la répare.
   "Votre carte a été refusée": "Your card was declined",
   "Rien n’a été débité. Votre demande reste en place et votre notaire est prévenu. Enregistrez une autre carte avant votre signature.": "Nothing was charged. Your request stands and your notary has been told. Save another card before your signing.",
@@ -1181,7 +1195,7 @@
   /* /W1 */
 };
   var HTML = {
-  "Connectez un compte de paiement sécurisé (Stripe) pour recevoir vos versements. La carte du client est validée par sa banque dès la publication, et la somme y est réservée deux jours avant la signature ; à la signature, <strong>vos honoraires vous sont virés en entier</strong>. Nota facture son service au client, séparément — rien n’est jamais retranché de vos honoraires. Jamais de frais fixes.": "Connect a secure payment account (Stripe) to receive your payouts. The client’s card is validated by their bank as soon as the offer is posted, and the amount is held on it two days before the signing; at signing, <strong>your fees are wired to you in full</strong>. Nota charges the client for its service, separately — nothing is ever deducted from your fees. Never any fixed fees.",
+  "Connectez un compte de paiement sécurisé (Stripe) pour recevoir vos versements. À la signature, <strong>vos honoraires vous sont virés en entier</strong>. Nota facture son service au client, séparément — rien n’est jamais retranché de vos honoraires. Jamais de frais fixes.": "Connect a secure payment account (Stripe) to receive your payouts. At signing, <strong>your fees are wired to you in full</strong>. Nota charges the client for its service, separately — nothing is ever deducted from your fees. Never any fixed fees.",
   "Publier une offre est gratuit, et le reste. Sur un acte complété, vous payez deux choses : <strong>les honoraires du notaire</strong> — le montant que vous avez offert, qui lui revient en entier — et <strong>le prix du service de Nota</strong>, un montant fixe, le même pour tous. Les deux vous sont affichés avant que votre carte ne soit autorisée.": "Posting an offer is free, and stays free. On a completed act you pay two things: <strong>the notary’s fees</strong> — the amount you offered, which comes to them in full — and <strong>Nota’s service price</strong>, a fixed amount, the same for everyone. Both are shown to you before your card is authorized.",
   "<strong>Le prix, en deux lignes.</strong> Le montant que vous offrez est celui des <strong>honoraires du notaire</strong> : il lui revient en entier, Nota n’en prélève rien. Le <strong>prix du service de Nota</strong> est un montant fixe, identique pour tous, qui s’ajoute au vôtre et vous est affiché avant l’autorisation de votre carte. <strong>Les taxes et les débours</strong> — droits de publication, RDPRM — <strong>ne sont pas compris</strong> dans ces montants.": "<strong>The price, in two lines.</strong> The amount you offer is the <strong>notary’s fees</strong>: it comes to them in full, Nota takes none of it. <strong>Nota’s service price</strong> is a fixed amount, the same for everyone, added to yours and shown to you before your card is authorized. <strong>Taxes and disbursements</strong> — registration fees, RDPRM — <strong>are not included</strong> in these amounts.",
   "<span class=\"nc-soon-tag\">Bientôt</span>Vérification d’identité, inscription et <strong>réalisation complète de l’acte en ligne</strong> : recevez la demande, rencontrez le client et signez à distance. Tout le parcours notaire, de bout en bout, sans quitter Nota.": "<span class=\"nc-soon-tag\">Coming soon</span>Identity verification, onboarding and <strong>completing the entire act online</strong>: receive the request, meet the client and sign remotely. The whole notary journey, end to end, without leaving Nota.",
@@ -1366,25 +1380,71 @@
     "flags": "",
     "replacement": "Your offer of $1 is cancelled"
   },
+  // ADR 0035 — ce qu'une annulation a fait à l'argent se dit en TROIS phrases,
+  // parce qu'il y a trois situations : une somme était réservée et on y a
+  // retenu des frais ; rien n'était réservé et une charge neuve est portée à la
+  // carte enregistrée ; la carte a refusé et rien n'a été prélevé. Ces trois-là
+  // sont des FRAGMENTS : les cadres qui les portent (reçu, rôtie, avis) les
+  // encadrent et les règles suivantes les finissent.
   {
-    "pattern": "^Annuler maintenant retient des frais de (.+?) \\((.+?) du montant convenu\\) sur votre caution\\. Le reste vous est libéré immédiatement\\.$",
+    "pattern": "Des frais de (.+?) \\((.+?)\\) ont été retenus sur la somme réservée pour cet acte et versés au notaire en dédommagement\\.",
     "flags": "",
-    "replacement": "Cancelling now keeps a fee of $1 ($2 of the agreed amount) from your deposit. The rest is released to you immediately."
+    "replacement": "A fee of $1 ($2) was kept from the amount held for this act and transferred to the notary as compensation."
   },
   {
-    "pattern": "^Offre annulée\\. Des frais de (.+?) \\((.+?)\\) ont été retenus sur votre caution\\.$",
+    "pattern": "Des frais de (.+?) \\((.+?)\\) ont été portés à la carte que vous avez enregistrée et versés au notaire en dédommagement\\.",
     "flags": "",
-    "replacement": "Offer cancelled. A fee of $1 ($2) was kept from your deposit."
+    "replacement": "A fee of $1 ($2) was charged to the card you saved and transferred to the notary as compensation."
   },
   {
-    "pattern": "^Des frais de (.+?) \\((.+?)\\) ont été retenus sur votre caution\\.$",
+    "pattern": "Des frais de (.+?) \\((.+?)\\) s’appliquaient, mais votre carte les a refusés : rien n’a été débité\\.",
     "flags": "",
-    "replacement": "A fee of $1 ($2) was kept from your deposit."
+    "replacement": "A fee of $1 ($2) applied, but your card declined it: nothing was charged."
   },
   {
-    "pattern": "^Vous avez annulé cette offre\\. Des frais de (.+?) \\((.+?)\\) ont été retenus sur votre caution\\. Si vous changez d’avis, choisissez une nouvelle date au carnet\\.$",
+    "pattern": "^Offre annulée\\. ",
     "flags": "",
-    "replacement": "You cancelled this offer. A fee of $1 ($2) was kept from your deposit. If you change your mind, pick a new date on the carnet."
+    "replacement": "Offer cancelled. "
+  },
+  {
+    "pattern": "^Vous avez annulé cette offre\\. ",
+    "flags": "",
+    "replacement": "You cancelled this offer. "
+  },
+  {
+    "pattern": " Si vous changez d’avis, choisissez une nouvelle date au carnet\\.",
+    "flags": "",
+    "replacement": " If you change your mind, pick a new date on the carnet."
+  },
+  {
+    "pattern": "^Annuler maintenant retient des frais de (.+?) \\((.+?) du montant convenu\\) sur la somme réservée pour cet acte\\.",
+    "flags": "",
+    "replacement": "Cancelling now keeps a fee of $1 ($2 of the agreed amount) from the amount held for this act."
+  },
+  {
+    "pattern": "^Aucune somme n’est réservée pour cet acte\\. Annuler maintenant porte des frais de (.+?) \\((.+?) du montant convenu\\) à la carte que vous avez enregistrée\\.",
+    "flags": "",
+    "replacement": "No amount is being held for this act. Cancelling now charges a fee of $1 ($2 of the agreed amount) to the card you saved."
+  },
+  {
+    "pattern": " Ils sont versés au notaire en dédommagement de la journée réservée\\.",
+    "flags": "",
+    "replacement": " It is transferred to the notary as compensation for the reserved day."
+  },
+  {
+    "pattern": "^La carte du client est validée par sa banque dès la publication, et la somme y est réservée 1 jour avant la signature\\.$",
+    "flags": "",
+    "replacement": "The client’s card is validated by their bank as soon as the offer is posted, and the amount is held on it 1 day before the signing."
+  },
+  {
+    "pattern": "^La carte du client est validée par sa banque dès la publication, et la somme y est réservée ([0-9]+) jours avant la signature\\.$",
+    "flags": "",
+    "replacement": "The client’s card is validated by their bank as soon as the offer is posted, and the amount is held on it $1 days before the signing."
+  },
+  {
+    "pattern": " Le reste vous est libéré immédiatement\\.",
+    "flags": "",
+    "replacement": " The rest is released to you immediately."
   },
   {
     "pattern": "^À propos de votre (.+) du (.+)\\.$",

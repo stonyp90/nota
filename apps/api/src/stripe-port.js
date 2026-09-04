@@ -214,6 +214,37 @@ function createStripeAdapter({ secretKey, webhookSecret, stripe: injected } = {}
     },
 
     /**
+     * ADR 0035 — READ BACK a SetupIntent: which customer, and which CARD.
+     *
+     * `checkout.session.completed` in setup mode names the SetupIntent but not
+     * the payment method, and `setup_intent.succeeded` — which does name it —
+     * may simply not be subscribed on the webhook endpoint. Rather than let a
+     * checkbox in a third-party console decide whether the product works, the
+     * billing layer follows the id it already holds to the card itself.
+     */
+    async retrieveSetupIntent({ setupIntentId }) {
+      const si = await stripe.setupIntents.retrieve(setupIntentId);
+      return {
+        id: (si && si.id) || setupIntentId,
+        status: (si && si.status) || null,
+        customerId: (si && (typeof si.customer === 'string' ? si.customer : si.customer && si.customer.id)) || null,
+        paymentMethodId:
+          (si && (typeof si.payment_method === 'string' ? si.payment_method : si.payment_method && si.payment_method.id)) || null,
+      };
+    },
+
+    /**
+     * ADR 0035 — the LAST resort behind `retrieveSetupIntent`: the cards saved
+     * on a Stripe Customer. A customer created by Checkout for one offer holds
+     * exactly one, so the caller only trusts a single answer — it must never
+     * guess which of several cards the client meant.
+     */
+    async listCustomerPaymentMethods({ customerId }) {
+      const list = await stripe.paymentMethods.list({ customer: customerId, type: 'card', limit: 2 });
+      return ((list && list.data) || []).map((pm) => (typeof pm === 'string' ? pm : pm && pm.id)).filter(Boolean);
+    },
+
+    /**
      * ADR 0035, step 1 — PLACE the caution on a card registered earlier, OFF
      * SESSION (the client is not at their browser). A manual-capture
      * PaymentIntent confirmed on the saved payment method: exactly the hold the

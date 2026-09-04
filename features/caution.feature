@@ -100,3 +100,42 @@ Fonctionnalité: La caution tient jusqu'à la signature
     Et le planificateur de rappels s'exécute
     Quand le client demande à enregistrer une autre carte
     Alors une nouvelle session de paiement lui est ouverte
+
+  # Une offre d'AVANT cet ADR : la caution avait été posée à la publication pour
+  # une date lointaine, elle est morte depuis des semaines. Le notaire ne doit
+  # jamais lire « somme réservée » dessus — c'est un mensonge sur de l'argent —
+  # et la passe quotidienne ne doit pas l'écarter comme déjà garantie.
+  Scénario: une réservation périmée dont la carte est enregistrée est recautionnée
+    Étant donné un client publie une offre avec le courriel "client@exemple.ca" pour "refinancement" à 2000 dans 2 jours
+    Et le client donne sa carte
+    Et le notaire "notaire@exemple.ca" retient l'offre
+    Et la caution de l'offre a été posée il y a 35 jours
+    Et le notaire "notaire@exemple.ca" lit la garantie "enregistree" sur son acte
+    Quand le planificateur de rappels s'exécute
+    Alors la carte du client est bloquée pour 2400 $
+    Et le notaire "notaire@exemple.ca" lit la garantie "posee" sur son acte
+
+  # La même offre héritée, mais sans carte enregistrée : plus rien ne permet de
+  # reposer la caution. Le notaire doit LIRE cette mauvaise nouvelle, pas la
+  # deviner, et le règlement garde son repli (créance, ADR 0029).
+  Scénario: une réservation périmée sans carte se dit expirée, jamais posée
+    Étant donné un client publie une offre avec le courriel "client@exemple.ca" pour "refinancement" à 2000 dans 2 jours
+    Et le client donne sa carte
+    Et le notaire "notaire@exemple.ca" retient l'offre
+    Et la caution de l'offre a été posée il y a 35 jours, sans carte enregistrée
+    Et le notaire "notaire@exemple.ca" lit la garantie "expiree" sur son acte
+    Quand le planificateur de rappels s'exécute
+    Alors aucune caution n'est posée
+
+  # Le prélèvement hors session vise des cartes qui viennent parfois d'être
+  # refusées deux jours plus tôt : c'est le cas de bord le plus probable du
+  # mécanisme. Il ne peut pas passer sans laisser de trace.
+  Scénario: des frais d'annulation refusés ne rendent pas l'annulation gratuite en silence
+    Étant donné un client publie une offre avec le courriel "client@exemple.ca" pour "refinancement" à 2000 dans 10 jours
+    Et le client donne sa carte
+    Et le notaire "notaire@exemple.ca" retient l'offre
+    Et la banque du client refuse les frais d'annulation
+    Quand le client annule son offre
+    Alors les frais de 200 $ sont inscrits comme NON perçus
+    Et aucune créance n'est inscrite au notaire "notaire@exemple.ca"
+    Et la piste d'audit garde la trace des frais non perçus

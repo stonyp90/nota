@@ -46,3 +46,38 @@ test('cautionDue answers false on garbage rather than guessing', () => {
   assert.equal(D.cautionDue('2026-09-10', 'demain'), false);
   assert.equal(D.cautionDue('pas-une-date', '2026-09-10'), false);
 });
+
+// --- La durée de vie d'une caution posée ------------------------------------
+// L'autre moitié de la règle : poser la caution ne suffit pas, il faut savoir
+// jusqu'à quand la chose posée est encore une garantie. Sans cela, une offre
+// héritée du modèle d'avant — autorisée à la publication pour une date à J+30 —
+// se lit « la somme est réservée » sur une autorisation morte depuis des
+// semaines.
+
+test('la vie d’une caution dépasse le délai de pose — sinon elle serait morte à la signature', () => {
+  assert.equal(typeof D.CAUTION_VIE_JOURS, 'number');
+  assert.ok(
+    D.CAUTION_VIE_JOURS > D.CAUTION_LEAD_DAYS,
+    'poser la caution à J-' + D.CAUTION_LEAD_DAYS + ' n’a de sens que si elle vit plus longtemps que cela'
+  );
+});
+
+test('cautionVivante ferme la fenêtre au bout de CAUTION_VIE_JOURS', () => {
+  const today = '2026-09-10';
+  const at = (n) => D.addDays(today, n);
+  assert.equal(D.cautionVivante(today, today), true, 'posée ce matin');
+  assert.equal(D.cautionVivante(at(-D.CAUTION_VIE_JOURS), today), true, 'le dernier jour tient encore');
+  assert.equal(D.cautionVivante(at(-D.CAUTION_VIE_JOURS - 1), today), false, 'un jour de trop, et ce n’est plus une garantie');
+  assert.equal(D.cautionVivante(at(-35), today), false, 'l’offre héritée : autorisée il y a cinq semaines');
+});
+
+test('cautionVivante lit un horodatage complet comme une date', () => {
+  assert.equal(D.cautionVivante('2026-09-10T14:00:00.000Z', '2026-09-11'), true);
+  assert.equal(D.cautionVivante('2026-08-01T14:00:00.000Z', '2026-09-10'), false);
+});
+
+test('cautionVivante n’invente pas de mauvaise nouvelle quand la date de pose est inconnue', () => {
+  assert.equal(D.cautionVivante(null, '2026-09-10'), true);
+  assert.equal(D.cautionVivante('', '2026-09-10'), true);
+  assert.equal(D.cautionVivante('pas-une-date', '2026-09-10'), true);
+});

@@ -3118,16 +3118,25 @@ components:
           properties:
             etat:
               type: string
-              enum: [posee, enregistree, refusee, aucune]
+              enum: [posee, enregistree, refusee, expiree, aucune]
               description: >-
-                `posee` — the amount is held and can be captured at the signing;
+                `posee` — the amount is held, still ALIVE
+                (`domain.cautionVivante`) and capturable at the signing;
                 `enregistree` — the client's card is validated and the hold is
                 placed on `poseeLe`; `refusee` — the bank declined the hold
-                (both parties were told, retried daily); `aucune` — no card.
+                (both parties were told, retried daily); `expiree` — a hold was
+                placed but has outlived a card authorization's ~7-day life and
+                no registered card allows a new one (offers predating ADR 0035:
+                settlement falls back on the ADR 0029 receivable); `aucune` —
+                no card.
             poseeLe:
               type: [string, "null"]
               format: date
-              description: The day the caution is (or was) placed.
+              description: >-
+                A DATE, and it never lies about its tense: on `posee` /
+                `expiree` it is the day the hold WAS placed (`authorizedAt`); on
+                `enregistree` it is the day it WILL be placed — today when the
+                signing already entered the window, null when the date is past.
     AcceptedBid:
       type: object
       description: >-
@@ -3353,6 +3362,28 @@ components:
             joursAvant:
               type: integer
               description: Civil days left before the signing at cancel time.
+            mecanisme:
+              type: string
+              enum: [capture, hors_session]
+              description: >-
+                ADR 0035 — HOW the fee was taken, because the client does not
+                read the same sentence in both cases: `capture` kept it from a
+                caution already held (the rest is released); `hors_session`
+                charged it fresh on the card the client registered, since no
+                amount was being held at all.
+            percu:
+              type: boolean
+              description: >-
+                Whether the money actually moved. `false` means the card
+                DECLINED the fee: nothing was charged, nothing is owed to the
+                notary, and the cancellation is recorded rather than silently
+                free (an `annulation_frais` audit entry carries the reason).
+            refus:
+              type: [object, "null"]
+              description: Present only when `percu` is false — the decline code.
+              properties:
+                code:
+                  type: string
             chargeId:
               type: [string, "null"]
     Error:

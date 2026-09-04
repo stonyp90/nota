@@ -2198,6 +2198,25 @@
     return days >= 0 && days <= CAUTION_LEAD_DAYS;
   }
 
+  // Combien de jours une réservation de carte NON capturée tient-elle ? Une
+  // autorisation est relâchée par l'émetteur après ~7 jours. C'est l'autre
+  // moitié de la même règle d'affaires : CAUTION_LEAD_DAYS dit quand poser,
+  // CAUTION_VIE_JOURS dit jusqu'à quand la chose posée est encore une garantie.
+  const CAUTION_VIE_JOURS = 7;
+
+  // Une caution posée le `poseeISO` (date ou horodatage ISO) tient-elle encore
+  // le `todayISO` ? C'est la question qu'il faut poser AVANT d'écrire au
+  // notaire « la somme est réservée » : une autorisation périmée n'est plus une
+  // garantie, et l'afficher comme telle est un mensonge sur de l'argent.
+  //
+  // Un horodatage absent répond VRAI : les offres d'avant que Nota ne le note
+  // ne doivent pas hériter d'une mauvaise nouvelle inventée.
+  function cautionVivante(poseeISO, todayISO) {
+    const posee = String(poseeISO == null ? '' : poseeISO).slice(0, 10);
+    if (!isISODate(posee) || !isISODate(todayISO)) return true;
+    return daysBetween(posee, todayISO) <= CAUTION_VIE_JOURS;
+  }
+
   // --- Reminder schedule -----------------------------------------------------
   // The cadence at which an open lead's client is reminded that their signing
   // date is approaching, expressed as whole days BEFORE the date. Closer dates
@@ -2402,6 +2421,8 @@
     obtainChance,
     CAUTION_LEAD_DAYS,
     cautionDue,
+    CAUTION_VIE_JOURS,
+    cautionVivante,
     REMINDER_OFFSETS,
     REMINDER_KINDS,
     reminderKindForDays,

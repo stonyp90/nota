@@ -122,7 +122,14 @@ async function runReminders({ repo, notifier, billing, now } = {}) {
   //   • une carte refusée ne lève jamais : elle se compte, s'inscrit sur
   //     l'offre et prévient les deux parties une seule fois. Un lot de rappels
   //     ne tombe pas parce qu'une banque a dit non.
-  const caution = { due: 0, posee: 0, refusee: 0 };
+  //
+  // LE JOURNAL COMPTE DES CHOSES DIFFÉRENTES SÉPARÉMENT, parce qu'elles
+  // appellent des gestes opposés : `refusee` (la banque a dit non) se répare en
+  // relançant des clients ; `sansCarte` (aucun moyen de paiement connu) se
+  // répare dans la console Stripe ou pas du tout ; `expiree` compte les offres
+  // héritées dont la réservation avait dépassé sa durée de vie. Un seul
+  // compteur pour les trois ne dirait à l'opérateur ni quoi faire, ni où.
+  const caution = { due: 0, posee: 0, refusee: 0, sansCarte: 0, expiree: 0 };
   // Les DEUX gestes du port sont exigés : poser la caution, et dire quelles
   // offres l'attendent. Un port qui n'offrirait que le premier ferait tenter la
   // pose sur tout le mois — la passe est alors sautée, comme sans Stripe.
@@ -141,29 +148,55 @@ async function runReminders({ repo, notifier, billing, now } = {}) {
       // Le moyen de paiement, lui, n'est PAS vérifié ici : son absence est un
       // symptôme à rapporter (voir `carte_absente` plus bas), pas une offre à
       // écarter en silence.
-      if (!billing.attendCaution(bid)) continue;
+      // Le jour est passé : c'est lui qui décide si une offre marquée
+      // `authorized` porte encore une garantie ou une autorisation périmée —
+      // le cas ORDINAIRE d'avant l'ADR 0035, qu'il faut recautionner et non
+      // déclarer « posée ».
+      if (!billing.attendCaution(bid, todayISO)) continue;
       if (!domain.cautionDue(bid.dateISO, todayISO)) continue;
       caution.due += 1;
+      if (bid.paymentStatus === 'authorized') caution.expiree += 1;
       try {
         const r = await billing.placeCaution({ bid, todayISO });
         if (r && r.ok) {
           caution.posee += 1;
           continue;
         }
-        caution.refusee += 1;
         // Prévenir UNE fois : la fenêtre dure trois jours et le geste est
         // quotidien — répéter la mauvaise nouvelle chaque matin serait de
         // l'insistance (art. 56 1°), pas de l'information.
-        if (r && r.code === 'caution_refusee' && !bid.cautionRefus && typeof notifier.onCautionRefusee === 'function') {
-          await notifier.onCautionRefusee(bid, r.refus);
+        if (r && r.code === 'caution_refusee') {
+          caution.refusee += 1;
+          if (!bid.cautionRefus && typeof notifier.onCautionRefusee === 'function') {
+            await notifier.onCautionRefusee(bid, r.refus);
+          }
+          continue;
         }
-        // `carte_absente` sur une offre marquée « enregistrée » ne vient PAS du
-        // client : il manque le moyen de paiement, donc l'abonnement au webhook
-        // `setup_intent.succeeded` (ADR 0035, réglage de production). Cela se
-        // rapporte, sinon la caution ne se pose jamais en silence.
+        // `carte_absente` ne vient PAS du client. Sur une offre « enregistrée »
+        // il manque le moyen de paiement, donc l'abonnement au webhook
+        // `setup_intent.succeeded` (ADR 0035, réglage de production) ; sur une
+        // offre héritée, aucune carte n'a jamais été enregistrée et le
+        // règlement gardera son repli (créance, ADR 0029). Les deux se
+        // rapportent, sinon la caution ne se pose jamais en silence — mais
+        // JAMAIS dans le même compteur qu'un refus bancaire.
         if (r && r.code === 'carte_absente') {
-          errors.push({ bidId: bid.id, kind: 'caution', error: 'carte_absente — moyen de paiement inconnu (setup_intent.succeeded non reçu ?)' });
+          caution.sansCarte += 1;
+          errors.push({
+            bidId: bid.id,
+            kind: 'caution',
+            error: r.heritee
+              ? 'carte_absente — caution expirée et aucune carte enregistrée (offre antérieure à l’ADR 0035 : le règlement retombe sur la créance)'
+              : 'carte_absente — moyen de paiement inconnu (setup_intent.succeeded non reçu ?)',
+          });
+          continue;
         }
+        // La réservation existe chez Stripe mais n'a pas pu être inscrite. Elle
+        // a normalement été relâchée : c'est un incident, pas un refus.
+        errors.push({
+          bidId: bid.id,
+          kind: 'caution',
+          error: (r && r.code ? r.code : 'caution_non_posee') + (r && r.relachee === false ? ' — RÉSERVATION ORPHELINE, à relâcher à la main' : ''),
+        });
       } catch (err) {
         // Un incident d'infrastructure se rapporte, il n'arrête pas le lot.
         errors.push({ bidId: bid.id, kind: 'caution', error: String((err && err.message) || err) });

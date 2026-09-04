@@ -52,7 +52,23 @@ const NOTARY_STATUS = {
 // annulation tardive était gratuite — le trou que l'ADR 0033 avait laissé
 // ouvert « faute de caution vivante », et que la carte enregistrée referme.
 const PAYMENT_STATUS_SANS_CAUTION = ['enregistre', 'a_reautoriser'];
-const attendCaution = (bid) => !!bid && PAYMENT_STATUS_SANS_CAUTION.includes(bid.paymentStatus);
+
+// `todayISO` est facultatif, et il change la réponse sur UN cas : une offre
+// marquée `authorized` dont la réservation a dépassé sa durée de vie. C'est le
+// cas ORDINAIRE d'avant l'ADR 0035 — une autorisation posée à la publication
+// pour une date à J+30 — et il en reste en base. Une telle offre n'a plus de
+// garantie : elle attend sa caution comme les autres, et si la carte est
+// enregistrée elle sera recautionnée par le geste quotidien.
+//
+// Sans le jour, la réponse reste celle d'avant : seuls les états sans caution
+// comptent. Les appelants qui décident d'argent passent toujours le jour.
+const attendCaution = (bid, todayISO) => {
+  if (!bid) return false;
+  if (PAYMENT_STATUS_SANS_CAUTION.includes(bid.paymentStatus)) return true;
+  if (!todayISO) return false;
+  return bid.paymentStatus === 'authorized' && !!bid.paymentIntentId
+    && !domain.cautionVivante(bid.authorizedAt, todayISO);
+};
 
 // ADR 0031 — le prix de Nota, montant fixe, indépendant du notaire et de l'acte.
 // C'est la SEULE configuration que la tarification lise.
@@ -373,18 +389,39 @@ function createBilling({
    * NEVER THROWS: a declined card is an operating fact, not an exception. It
    * answers `{ ok:false, code:'caution_refusee', refus }` and records the
    * refusal on the offer.
+   *
+   * Codes de refus, chacun un geste d'opérateur DIFFÉRENT :
+   *   • `caution_refusee`  — la banque a dit non. On relance le client.
+   *   • `carte_absente`    — aucun moyen de paiement connu. Soit le webhook
+   *                          `setup_intent.succeeded` n'est pas branché, soit
+   *                          l'offre est antérieure à l'ADR 0035. On répare
+   *                          une configuration, pas un client.
+   *   • `caution_non_inscrite` — la réservation existe chez Stripe mais n'a pas
+   *                          pu être écrite ; elle a été relâchée pour que
+   *                          demain reparte propre (jamais deux blocages).
    */
   async function placeCaution({ bid, todayISO } = {}) {
     if (!bid || !bid.id) return { ok: false, code: 'offre_absente' };
+    const jour = todayISO || statsDay();
     // Already guaranteed — a second run of the day, or a hold posted at
-    // publication because the date was already close.
-    if (bid.paymentStatus === 'authorized' && bid.paymentIntentId) {
+    // publication because the date was already close. « Guaranteed » means
+    // ALIVE: a hold that has outlived Stripe's ~7-day window guarantees
+    // nothing, and answering `deja` on one would let a legacy offer sail to
+    // its signing on a dead authorization (ADR 0035, offres héritées).
+    const heritee = bid.paymentStatus === 'authorized' && !!bid.paymentIntentId
+      && !domain.cautionVivante(bid.authorizedAt, jour);
+    if (bid.paymentStatus === 'authorized' && bid.paymentIntentId && !heritee) {
       return { ok: true, deja: true, paymentIntentId: bid.paymentIntentId };
     }
-    if (!attendCaution(bid) || !bid.paymentCustomerId || !bid.paymentMethodId) {
-      return { ok: false, code: 'carte_absente' };
-    }
-    if (typeof stripe.placeOfferAuthorization !== 'function') return { ok: false, code: 'carte_absente' };
+    if (!attendCaution(bid, jour)) return { ok: false, code: 'carte_absente', heritee };
+    // Le moyen de paiement peut manquer alors que le client Stripe est connu :
+    // c'est la signature d'un point de terminaison abonné à
+    // `checkout.session.completed` seul. Plutôt que d'abandonner, on redemande
+    // à Stripe la carte de ce client — un repli, pas une case à cocher dans une
+    // console tierce (ADR 0035, risque n° 1).
+    const carte = await resoudreCarte(bid);
+    if (!carte.customerId || !carte.paymentMethodId) return { ok: false, code: 'carte_absente', heritee };
+    if (typeof stripe.placeOfferAuthorization !== 'function') return { ok: false, code: 'carte_absente', heritee };
 
     // The caution carries the SAME two lines the settlement will capture: the
     // notary's fees and Nota's own price (ADR 0031). Holding only the fees
@@ -393,8 +430,8 @@ function createBilling({
     let out;
     try {
       out = await stripe.placeOfferAuthorization({
-        customerId: bid.paymentCustomerId,
-        paymentMethodId: bid.paymentMethodId,
+        customerId: carte.customerId,
+        paymentMethodId: carte.paymentMethodId,
         amountCents: devis.totalCents,
         currency: 'cad',
         bidId: bid.id,
@@ -402,7 +439,7 @@ function createBilling({
         description: bid.serviceId ? (domain.serviceById(bid.serviceId) || {}).nom : undefined,
         // The day scopes the idempotency key: two runs today are one attempt,
         // tomorrow's retry after a decline is a new one.
-        jour: todayISO || statsDay(),
+        jour,
       });
     } catch (err) {
       const refus = {
@@ -420,10 +457,86 @@ function createBilling({
       return { ok: false, code: 'caution_refusee', refus };
     }
 
-    const updated = typeof repo.authorizeBid === 'function'
-      ? await repo.authorizeBid(bid.id, bid.dateISO, { paymentIntentId: out.paymentIntentId, authorizedAt: clock() })
-      : null;
+    // L'ÉCRITURE fait partie du geste d'argent. Si elle échoue, la réservation
+    // existe chez Stripe mais rien ne la nomme sur l'offre : demain la passe
+    // reprendrait l'offre comme non cautionnée, et la clé d'idempotence porte
+    // le JOUR — elle créerait un SECOND blocage du montant complet sur la même
+    // carte. Le code appelle cela un vol ailleurs ; on ne le laisse pas arriver
+    // ici. La réservation orpheline est donc relâchée tout de suite, et la
+    // journée de demain repart d'une carte libre.
+    let updated = null;
+    try {
+      updated = typeof repo.authorizeBid === 'function'
+        ? await repo.authorizeBid(bid.id, bid.dateISO, { paymentIntentId: out.paymentIntentId, authorizedAt: clock() })
+        : null;
+    } catch (err) {
+      let relachee = false;
+      if (typeof stripe.cancelOfferAuthorization === 'function') {
+        try {
+          await stripe.cancelOfferAuthorization({ paymentIntentId: out.paymentIntentId, bidId: bid.id });
+          relachee = true;
+        } catch { /* le blocage expirera de lui-même ; il faut surtout le DIRE */ }
+      }
+      return {
+        ok: false,
+        code: 'caution_non_inscrite',
+        relachee,
+        paymentIntentId: out.paymentIntentId,
+        message: String((err && err.message) || err).slice(0, 300),
+      };
+    }
     return { ok: true, paymentIntentId: out.paymentIntentId, bid: updated };
+  }
+
+  /**
+   * ADR 0035 — QUELLE CARTE porte la caution. Normalement les deux moitiés sont
+   * déjà sur l'offre : le client Stripe (posé par `checkout.session.completed`)
+   * et le moyen de paiement (posé par `setup_intent.succeeded`).
+   *
+   * Le second événement est le risque n° 1 de la livraison : s'il n'est pas
+   * abonné dans le point de terminaison Stripe, aucune carte n'est jamais
+   * nommée et AUCUNE caution ne peut être posée — une case à cocher dans une
+   * console tierce déciderait si le produit fonctionne. Deux replis ferment
+   * cette porte, dans l'ordre du moins ambigu au plus large :
+   *
+   *   1. le SetupIntent que la session de Checkout nomme (`setupIntentId`) :
+   *      il porte exactement la carte que CE client a validée pour CETTE offre ;
+   *   2. à défaut, les cartes du client Stripe — un client créé par Checkout
+   *      pour cette offre n'en porte qu'une.
+   *
+   * Ne lève jamais : un repli qui échoue laisse simplement la réponse d'origine.
+   */
+  async function resoudreCarte(bid) {
+    const dejaLa = { customerId: bid.paymentCustomerId || null, paymentMethodId: bid.paymentMethodId || null };
+    if (dejaLa.customerId && dejaLa.paymentMethodId) return dejaLa;
+
+    let customerId = dejaLa.customerId;
+    let paymentMethodId = dejaLa.paymentMethodId;
+    if (bid.setupIntentId && typeof stripe.retrieveSetupIntent === 'function') {
+      try {
+        const si = await stripe.retrieveSetupIntent({ setupIntentId: bid.setupIntentId });
+        customerId = customerId || (si && si.customerId) || null;
+        paymentMethodId = paymentMethodId || (si && si.paymentMethodId) || null;
+      } catch { /* un repli qui échoue n'est pas une panne */ }
+    }
+    if (!paymentMethodId && customerId && typeof stripe.listCustomerPaymentMethods === 'function') {
+      try {
+        const cartes = await stripe.listCustomerPaymentMethods({ customerId });
+        if (Array.isArray(cartes) && cartes.length === 1) paymentMethodId = cartes[0] || null;
+      } catch { /* idem */ }
+    }
+    if (!customerId || !paymentMethodId) return { customerId, paymentMethodId };
+
+    // Ce qui a été retrouvé est INSCRIT sur l'offre : le repli est un filet,
+    // pas une dépendance permanente à un aller-retour Stripe par tentative.
+    if (typeof repo.registerBidPaymentMethod === 'function') {
+      try {
+        await repo.registerBidPaymentMethod(bid.id, bid.dateISO, {
+          customerId, paymentMethodId, setupIntentId: bid.setupIntentId || null, registeredAt: clock(),
+        });
+      } catch { /* la caution peut se poser même si l'inscription rate */ }
+    }
+    return { customerId, paymentMethodId };
   }
 
   /**
@@ -554,10 +667,17 @@ function createBilling({
    * NOT retried. Only a failed CAPTURE answers `{ ok: false }` — the caller
    * then releases the hold whole so the client is never left blocked.
    *
-   * Returns `{ ok, chargeId, transferId, verse }`.
+   * UN ÉCHEC EST UN FAIT, PAS UN SILENCE. La porte hors session vise justement
+   * des cartes qui viennent parfois d'être refusées à J-2 : c'est le cas de
+   * bord le plus probable du mécanisme. Il répond donc
+   * `{ ok:false, code:'frais_refuses', mecanisme, refus }` — assez pour que la
+   * route d'annulation INSCRIVE des frais dus et non perçus plutôt que de
+   * laisser l'annulation passer gratuitement sans que personne ne le compte.
+   *
+   * Returns `{ ok, mecanisme, chargeId, transferId, verse }`.
    */
   async function chargeCancellationFee({ paymentIntentId, bidId, amountCents, notaryId, customerId, paymentMethodId } = {}) {
-    if (!(amountCents > 0)) return { ok: false };
+    if (!(amountCents > 0)) return { ok: false, code: 'montant_invalide' };
     // ADR 0035 — TWO mechanisms, one rule. A live caution is collected by
     // PARTIAL capture (nothing new is asked of the client). Without one — the
     // signing was still far enough that the caution was not placed yet — the
@@ -566,7 +686,8 @@ function createBilling({
     const parCapture = !!(paymentIntentId && typeof stripe.captureCancellationFee === 'function');
     const horsSession = !parCapture
       && !!(customerId && paymentMethodId && typeof stripe.chargeCancellationFeeOffSession === 'function');
-    if (!parCapture && !horsSession) return { ok: false };
+    if (!parCapture && !horsSession) return { ok: false, code: 'aucun_moyen' };
+    const mecanisme = parCapture ? 'capture' : 'hors_session';
     const cents = Math.round(Number(amountCents));
     const notary = notaryId ? await repo.getNotary(notaryId) : null;
     const payable = !!(notary && notary.status === NOTARY_STATUS.ACTIVE && notary.chargesEnabled && notary.connectAccountId);
@@ -585,7 +706,20 @@ function createBilling({
     } catch (err) {
       // The capture went through and only the transfer failed: the money is
       // on the platform. Never lose it, never re-capture it.
-      if (!(err && err.captured && err.chargeId)) return { ok: false };
+      if (!(err && err.captured && err.chargeId)) {
+        // Tout le reste — et un refus de carte hors session en est un — est un
+        // ÉCHEC DE PRÉLÈVEMENT. Il est nommé, daté et rendu à l'appelant.
+        return {
+          ok: false,
+          code: 'frais_refuses',
+          mecanisme,
+          refus: {
+            at: clock(),
+            code: (err && (err.code || err.decline_code)) || 'frais_refuses',
+            message: String((err && err.message) || 'Les frais n’ont pas pu être prélevés.').slice(0, 300),
+          },
+        };
+      }
       out = { chargeId: err.chargeId, transferId: null };
     }
 
@@ -599,7 +733,7 @@ function createBilling({
         updatedAt: clock(),
       });
     }
-    return { ok: true, chargeId, transferId, verse };
+    return { ok: true, mecanisme, chargeId, transferId, verse };
   }
 
   async function cancelAuthorization({ paymentIntentId, bidId } = {}) {
@@ -688,9 +822,27 @@ function createBilling({
         if (md.bidId && paymentIntentId && typeof repo.authorizeBid === 'function') {
           bid = await repo.authorizeBid(md.bidId, md.bidDate, { paymentIntentId, authorizedAt: clock() });
         } else if (md.bidId && typeof repo.registerBidPaymentMethod === 'function') {
+          // La session de setup NE PORTE PAS de `payment_method` : seulement le
+          // SetupIntent, par son id. Nota le suit donc jusqu'à la carte plutôt
+          // que d'attendre `setup_intent.succeeded` — sans quoi un point de
+          // terminaison abonné à ce seul événement écrirait un client Stripe
+          // sans moyen de paiement, et AUCUNE caution ne serait jamais posée
+          // (ADR 0035, risque n° 1). Un repli qui échoue laisse l'offre
+          // enregistrée : `placeCaution` retentera la résolution le jour venu.
+          const setupIntentId = idOf(obj.setup_intent);
+          let paymentMethodId = null;
+          let customerId = idOf(obj.customer);
+          if (setupIntentId && typeof stripe.retrieveSetupIntent === 'function') {
+            try {
+              const si = await stripe.retrieveSetupIntent({ setupIntentId });
+              paymentMethodId = (si && si.paymentMethodId) || null;
+              customerId = customerId || (si && si.customerId) || null;
+            } catch { /* le webhook doit répondre 200 : un repli n'est pas une panne */ }
+          }
           bid = await repo.registerBidPaymentMethod(md.bidId, md.bidDate, {
-            customerId: idOf(obj.customer),
-            setupIntentId: idOf(obj.setup_intent),
+            customerId,
+            paymentMethodId,
+            setupIntentId,
             registeredAt: clock(),
           });
         }

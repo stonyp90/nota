@@ -38,10 +38,23 @@ const proche = domain.addDays(TODAY, domain.CAUTION_LEAD_DAYS); // déjà dans l
  * aucun réseau. `refuse` fait échouer la pose de la caution comme le ferait une
  * carte refusée hors session.
  */
-function fakeStripe({ refuse = false, refuseTransfer = false } = {}) {
-  const calls = { setups: [], authorizations: [], holds: [], transfers: [], fees: [], offSessionFees: [], cancels: [], accounts: [], links: [] };
+function fakeStripe({ refuse = false, refuseTransfer = false, refuseFraisHorsSession = false, sansSetupIntent = false } = {}) {
+  const calls = { setups: [], authorizations: [], holds: [], transfers: [], fees: [], offSessionFees: [], cancels: [], accounts: [], links: [], setupIntents: [], cartes: [] };
   return {
     calls,
+    // Le repli de l'ADR 0035 : la session de Checkout ne nomme QUE le
+    // SetupIntent ; Nota le suit jusqu'à la carte plutôt que de dépendre d'un
+    // abonnement au webhook `setup_intent.succeeded`.
+    async retrieveSetupIntent(a) {
+      calls.setupIntents.push(a);
+      if (sansSetupIntent) throw new Error('No such setupintent');
+      const bidId = String(a.setupIntentId || '').replace(/^seti_/, '');
+      return { id: a.setupIntentId, status: 'succeeded', customerId: 'cus_' + bidId, paymentMethodId: 'pm_' + bidId };
+    },
+    async listCustomerPaymentMethods(a) {
+      calls.cartes.push(a);
+      return ['pm_' + String(a.customerId || '').replace(/^cus_/, '')];
+    },
     async createConnectAccount(a) { calls.accounts.push(a); return { accountId: 'acct_' + a.notaryId }; },
     async createOnboardingLink(a) { calls.links.push(a); return { url: 'https://connect.test/' + a.accountId }; },
     async createOfferAuthorization(a) { calls.authorizations.push(a); return { sessionId: 'cs_' + a.bidId, url: 'https://checkout.test/pay/' + a.bidId }; },
@@ -62,6 +75,11 @@ function fakeStripe({ refuse = false, refuseTransfer = false } = {}) {
     async captureCancellationFee(a) { calls.fees.push(a); return { paymentIntentId: a.paymentIntentId, chargeId: 'ch_fee_' + a.bidId, transferId: a.connectAccountId ? 'tr_fee_' + a.bidId : null }; },
     async chargeCancellationFeeOffSession(a) {
       calls.offSessionFees.push(a);
+      if (refuseFraisHorsSession) {
+        const err = new Error('Your card was declined.');
+        err.code = 'card_declined';
+        throw err;
+      }
       if (refuseTransfer) {
         const err = new Error('transfer failed');
         err.captured = true;
@@ -281,19 +299,47 @@ test('une livraison tardive de l’enregistrement ne rétrograde JAMAIS une caut
   assert.equal(after.paymentIntentId, 'pi_live');
 });
 
-test('une carte enregistrée SANS moyen de paiement se rapporte — le webhook manque, la caution ne se pose pas en silence', async () => {
+test('`setup_intent.succeeded` non abonné ne casse PLUS rien : la session nomme le SetupIntent, Nota le suit jusqu’à la carte', async () => {
   // Ce que produit un point de terminaison Stripe abonné à
-  // `checkout.session.completed` mais PAS à `setup_intent.succeeded` : le
-  // client Stripe est connu, la carte ne l'est pas.
+  // `checkout.session.completed` mais PAS à `setup_intent.succeeded` : la
+  // session ne porte pas de `payment_method`, seulement un `setup_intent`.
+  // C'était le risque n° 1 de la livraison — une case à cocher dans une console
+  // tierce décidait si une caution pouvait exister. Le repli la ferme.
   const t = setup();
   const dateISO = domain.addDays(TODAY, domain.CAUTION_LEAD_DAYS);
   await poster(t.app, dateISO);
   const [bid] = await t.repo.listByMonth(dateISO.slice(0, 7));
   await webhook(t.app, checkoutSetupCompleted('evt_partiel', bid.id, bid.dateISO));
 
+  const enregistre = await t.repo.get(bid.id, bid.dateISO);
+  assert.equal(enregistre.paymentMethodId, 'pm_' + bid.id, 'la carte est retrouvée par le SetupIntent que la session nomme');
+  assert.equal(t.stripe.calls.setupIntents.length, 1);
+
+  const res = await runReminders({ repo: t.repo, notifier: fakeNotifier(), billing: t.billing, now: () => TODAY });
+  assert.equal(res.caution.due, 1);
+  assert.equal(res.caution.posee, 1, 'la caution se pose sans le second webhook');
+  assert.equal(res.caution.sansCarte, 0);
+  assert.deepEqual(res.errors, []);
+});
+
+test('une carte VRAIMENT introuvable se rapporte — et jamais dans le compteur des refus bancaires', async () => {
+  // Le repli lui-même échoue (SetupIntent effacé, clé changée) : il ne reste
+  // aucun moyen de paiement. C'est un défaut de CONFIGURATION, pas un client à
+  // relancer — les deux gestes sont opposés, les deux compteurs le sont aussi.
+  const t = setup({ sansSetupIntent: true });
+  const dateISO = domain.addDays(TODAY, domain.CAUTION_LEAD_DAYS);
+  await poster(t.app, dateISO);
+  const [bid] = await t.repo.listByMonth(dateISO.slice(0, 7));
+  await webhook(t.app, {
+    id: 'evt_nu', type: 'checkout.session.completed',
+    data: { object: { mode: 'setup', metadata: { bidId: bid.id, bidDate: bid.dateISO } } },
+  });
+
   const res = await runReminders({ repo: t.repo, notifier: fakeNotifier(), billing: t.billing, now: () => TODAY });
   assert.equal(res.caution.due, 1);
   assert.equal(res.caution.posee, 0);
+  assert.equal(res.caution.sansCarte, 1, 'une configuration cassée se compte à part');
+  assert.equal(res.caution.refusee, 0, 'aucune banque n’a rien refusé ici');
   assert.equal(t.stripe.calls.holds.length, 0, 'rien n’est tenté sans moyen de paiement');
   assert.equal(res.errors.length, 1, 'le lot doit RAPPORTER ce cas plutôt que de l’avaler');
   assert.match(res.errors[0].error, /carte_absente/);
@@ -302,7 +348,7 @@ test('une carte enregistrée SANS moyen de paiement se rapporte — le webhook m
 test('sans port de facturation, le geste quotidien reste exactement ce qu’il était', async () => {
   const { repo } = await offreEnregistree({ jours: domain.CAUTION_LEAD_DAYS });
   const res = await runReminders({ repo, notifier: fakeNotifier(), now: () => TODAY });
-  assert.deepEqual(res.caution, { due: 0, posee: 0, refusee: 0 });
+  assert.deepEqual(res.caution, { due: 0, posee: 0, refusee: 0, sansCarte: 0, expiree: 0 });
 });
 
 // --- 3 bis. ce que le notaire voit AVANT de retenir --------------------------------
@@ -593,4 +639,239 @@ test('une caution DÉJÀ vivante ne se redouble pas — bloquer deux fois la mê
   assert.equal(res.statusCode, 409, res.body);
   assert.equal(parse(res).errors[0].code, 'caution_posee');
   assert.equal(stripe.calls.authorizations.length + stripe.calls.setups.length, avant, 'aucune session de plus');
+});
+
+// --- 9. les offres HÉRITÉES (autorisées à la publication, pour une date lointaine)
+//
+// Le cas ORDINAIRE d'avant cet ADR, et il en reste en base : une offre
+// `paymentStatus:'authorized'` avec son `paymentIntentId`, autorisée à la
+// publication pour une date à J+25. L'autorisation est morte depuis des
+// semaines. Deux choses ne doivent PAS arriver : que le notaire lise « la somme
+// est réservée », et que la passe quotidienne l'écarte comme déjà garantie.
+
+/** Fabrique une offre telle que l'ancien modèle la laissait en base. */
+async function offreHeritee({ jours, avecCarte = true, statut = 'ouverte', notaryId = null }) {
+  const t = setup();
+  const dateISO = domain.addDays(TODAY, jours);
+  const posted = parse(await poster(t.app, dateISO));
+  const [seed] = await t.repo.listByMonth(dateISO.slice(0, 7));
+  if (avecCarte) await webhook(t.app, setupSucceeded('evt_' + seed.id, seed.id, seed.dateISO));
+  const stored = await t.repo.get(seed.id, seed.dateISO);
+  await t.repo.update({
+    ...stored,
+    status: statut,
+    notaryId,
+    paymentStatus: 'authorized',
+    paymentIntentId: 'pi_vieux_' + seed.id,
+    // Cinq semaines : bien au-delà de la vie d'une autorisation Stripe.
+    authorizedAt: domain.addDays(TODAY, -35) + 'T14:00:00.000Z',
+  });
+  return { ...t, clientToken: posted.clientToken, bid: await t.repo.get(seed.id, seed.dateISO) };
+}
+
+test('une caution PÉRIMÉE n’est jamais annoncée « posée » au notaire', async () => {
+  const { app, repo, bid } = await offreHeritee({ jours: 25, avecCarte: false });
+  await repo.putNotary(activeNotary('n@x.ca', { rayonKm: 50, urgences: true }));
+  const { token } = await notarySignIn(app, 'n@x.ca');
+
+  const feed = parse(await app.handle({
+    method: 'GET', path: '/notary/bids', query: {}, headers: { authorization: 'Bearer ' + token },
+  }));
+  const mine = feed.bids.find((b) => b.id === bid.id);
+  assert.ok(mine, 'la demande est au carnet');
+  assert.equal(mine.caution.etat, 'expiree', 'une autorisation morte n’est pas une garantie');
+  assert.notEqual(mine.caution.etat, 'posee');
+});
+
+test('une offre héritée dont la carte est enregistrée est RECAUTIONNÉE par le geste quotidien', async () => {
+  const { repo, stripe, billing, bid } = await offreHeritee({ jours: domain.CAUTION_LEAD_DAYS });
+  const res = await runReminders({ repo, notifier: fakeNotifier(), billing, now: () => TODAY });
+  assert.equal(res.caution.due, 1, 'une autorisation morte remet l’offre dans la file');
+  assert.equal(res.caution.expiree, 1, 'et le journal dit POURQUOI elle y est revenue');
+  assert.equal(res.caution.posee, 1);
+  assert.equal(stripe.calls.holds.length, 1, 'une caution neuve, vivante jusqu’à la signature');
+
+  const after = await repo.get(bid.id, bid.dateISO);
+  assert.equal(after.paymentIntentId, 'pi_' + bid.id, 'la nouvelle réservation remplace la morte');
+  assert.notEqual(after.authorizedAt, bid.authorizedAt);
+});
+
+test('une offre héritée SANS carte enregistrée ne peut pas l’être — elle se rapporte, elle ne se tait pas', async () => {
+  const { repo, stripe, billing } = await offreHeritee({ jours: domain.CAUTION_LEAD_DAYS, avecCarte: false });
+  const res = await runReminders({ repo, notifier: fakeNotifier(), billing, now: () => TODAY });
+  assert.equal(res.caution.due, 1);
+  assert.equal(res.caution.posee, 0);
+  assert.equal(res.caution.sansCarte, 1);
+  assert.equal(stripe.calls.holds.length, 0);
+  assert.match(res.errors[0].error, /antérieure à l’ADR 0035/);
+});
+
+test('annuler tard une offre héritée n’est pas gratuit non plus — la carte enregistrée prend le relais', async () => {
+  const notaryId = notaryIdForEmail('n@x.ca');
+  const { app, repo, stripe, bid, clientToken } = await offreHeritee({ jours: 10, statut: 'retenue', notaryId });
+  await repo.putNotary(activeNotary('n@x.ca', { chargesEnabled: true, connectAccountId: 'acct_' + notaryId }));
+
+  const res = await app.handle({
+    method: 'POST', path: '/client/bid/cancel', query: {},
+    headers: { authorization: 'Bearer ' + clientToken },
+    body: JSON.stringify({ id: bid.id, dateISO: bid.dateISO }),
+  });
+  assert.equal(res.statusCode, 200, res.body);
+  assert.equal(stripe.calls.fees.length, 0, 'capturer une autorisation morte échouerait');
+  assert.equal(stripe.calls.offSessionFees.length, 1);
+  assert.equal(parse(res).bid.annulation.mecanisme, 'hors_session');
+});
+
+// --- 10. `poseeLe` est une DATE, pas une prévision plaquée sur un fait --------
+
+test('poseeLe nomme le jour où la caution a été posée, jamais un jour à venir', async () => {
+  const notaryId = notaryIdForEmail('n@x.ca');
+  const { app, repo, billing, bid } = await offreEnregistree({
+    jours: domain.CAUTION_LEAD_DAYS, statut: 'retenue', notaryId,
+  });
+  await repo.putNotary(activeNotary('n@x.ca', { rayonKm: 50, urgences: true }));
+  await runReminders({ repo, notifier: fakeNotifier(), billing, now: () => TODAY });
+  const { token } = await notarySignIn(app, 'n@x.ca');
+
+  const feed = parse(await app.handle({
+    method: 'GET', path: '/notary/bids', query: {}, headers: { authorization: 'Bearer ' + token },
+  }));
+  const acte = feed.retained.find((r) => r.id === bid.id);
+  assert.ok(acte, 'l’acte retenu est là');
+  assert.equal(acte.caution.etat, 'posee');
+  assert.equal(acte.caution.poseeLe, TODAY, 'elle a été posée AUJOURD’HUI, pas dans deux jours');
+  assert.ok(acte.caution.poseeLe <= TODAY, 'un fait passé ne porte pas une date future');
+});
+
+test('une offre publiée dans la fenêtre annonce sa pose pour aujourd’hui, pas pour hier', async () => {
+  // Signature demain : J-CAUTION_LEAD_DAYS est déjà passé, donc la caution est
+  // due AUJOURD'HUI. Annoncer une date révolue serait aussi faux qu'une future.
+  const { app, repo, bid } = await offreEnregistree({ jours: 1 });
+  await repo.putNotary(activeNotary('n@x.ca', { rayonKm: 50, urgences: true }));
+  const { token } = await notarySignIn(app, 'n@x.ca');
+  const feed = parse(await app.handle({
+    method: 'GET', path: '/notary/bids', query: {}, headers: { authorization: 'Bearer ' + token },
+  }));
+  const mine = feed.bids.find((b) => b.id === bid.id);
+  assert.deepEqual(mine.caution, { etat: 'enregistree', poseeLe: TODAY });
+});
+
+// --- 11. l'écriture fait partie du geste d'argent -----------------------------
+
+test('une réservation qui n’a pas pu être INSCRITE est relâchée — jamais un second blocage demain', async () => {
+  const { repo, stripe, billing, bid } = await offreEnregistree({ jours: domain.CAUTION_LEAD_DAYS });
+  // Le repo tombe entre la réservation Stripe et son inscription sur l'offre.
+  const vrai = repo.authorizeBid.bind(repo);
+  repo.authorizeBid = async () => { throw new Error('dynamo indisponible'); };
+
+  const res = await runReminders({ repo, notifier: fakeNotifier(), billing, now: () => TODAY });
+  assert.equal(res.caution.posee, 0, 'une caution qu’on ne sait pas nommer n’est pas posée');
+  assert.equal(res.caution.refusee, 0, 'ce n’est pas un refus bancaire');
+  assert.equal(stripe.calls.holds.length, 1);
+  assert.equal(stripe.calls.cancels.length, 1, 'la réservation orpheline est RELÂCHÉE');
+  assert.equal(stripe.calls.cancels[0].paymentIntentId, 'pi_' + bid.id);
+  assert.match(res.errors[0].error, /caution_non_inscrite/);
+
+  // Et demain, la carte est libre : une seule réservation, jamais deux.
+  repo.authorizeBid = vrai;
+  const demain = domain.addDays(TODAY, 1);
+  await runReminders({ repo, notifier: fakeNotifier(), billing, now: () => demain });
+  assert.equal(stripe.calls.holds.length, 2, 'la reprise du lendemain est une VRAIE tentative');
+  const after = await repo.get(bid.id, bid.dateISO);
+  assert.equal(after.paymentStatus, 'authorized');
+});
+
+// --- 12. des frais d'annulation REFUSÉS laissent une trace ---------------------
+
+test('des frais refusés hors session ne rendent PAS l’annulation gratuite en silence', async () => {
+  const notaryId = notaryIdForEmail('n@x.ca');
+  const { app, repo, stripe, bid, clientToken } = await offreEnregistree({
+    jours: 10, statut: 'retenue', notaryId, stripeOpts: { refuseFraisHorsSession: true },
+  });
+  await repo.putNotary(activeNotary('n@x.ca', { chargesEnabled: true, connectAccountId: 'acct_' + notaryId }));
+
+  const res = await app.handle({
+    method: 'POST', path: '/client/bid/cancel', query: {},
+    headers: { authorization: 'Bearer ' + clientToken },
+    body: JSON.stringify({ id: bid.id, dateISO: bid.dateISO }),
+  });
+  assert.equal(res.statusCode, 200, res.body);
+  assert.equal(stripe.calls.offSessionFees.length, 1, 'le prélèvement a bien été TENTÉ');
+
+  const annulation = parse(res).bid.annulation;
+  assert.ok(annulation, 'l’annulation n’est pas « gratuite » : elle est INSCRITE');
+  assert.equal(annulation.percu, false);
+  assert.equal(annulation.frais, 200, 'le barème s’appliquait');
+  assert.equal(annulation.chargeId, null);
+  assert.equal(annulation.dedommagement.verse, false);
+
+  // Nota n'a rien encaissé : elle n'inscrit AUCUNE dette envers le notaire.
+  assert.equal((await repo.getNotary(notaryId)).dedommagementCentsDue, undefined);
+
+  // La piste d'audit compte l'échec, avec son motif et son mécanisme.
+  const trace = (await repo.queryAuditByDay(TODAY))
+    .find((e) => e.action === 'annulation_frais' && e.meta && e.meta.bidId === bid.id);
+  assert.ok(trace, 'aucune trace d’audit — c’est précisément le trou');
+  assert.equal(trace.meta.percu, false);
+  assert.equal(trace.meta.mecanisme, 'hors_session');
+  assert.equal(trace.meta.motif, 'card_declined');
+});
+
+// --- 13. les courriels d'annulation ne promettent pas une caution absente ------
+
+async function courrielsAnnulation(bid, annulation) {
+  const repo = createMemoryRepo([]);
+  const mailer = createFakeMailer();
+  const notifier = createNotifier({ repo, mailer, baseUrl: 'https://nota.test', operatorEmail: null, now: () => NOW });
+  const notaryId = notaryIdForEmail('n@x.ca');
+  await repo.putNotary(activeNotary('n@x.ca', { chargesEnabled: true, connectAccountId: 'acct_' + notaryId }));
+  const complet = { id: 'bx', serviceId: 'refinancement', montant: 2000, courriel: 'client@exemple.ca', notaryId, status: 'retenue', annulation, ...bid };
+  await notifier.onOfferCancelled(complet, { notary: await repo.getNotary(notaryId), wasRetained: true });
+  return {
+    client: mailer.sent.find((m) => m.to === 'client@exemple.ca'),
+    notaire: mailer.sent.find((m) => m.to === 'n@x.ca'),
+  };
+}
+
+test('sans caution vivante, le courriel ne « libère » aucune réservation — il dit la charge neuve', async () => {
+  const { client } = await courrielsAnnulation(
+    { dateISO: loin, paymentStatus: 'enregistre', paymentCustomerId: 'cus_x', paymentMethodId: 'pm_x' },
+    { taux: 0.1, frais: 200, joursAvant: 10, mecanisme: 'hors_session', percu: true, chargeId: 'ch_1', dedommagement: { notaire: true, verse: true, transferId: 'tr_1' } }
+  );
+  assert.ok(client, 'le client doit être avisé');
+  assert.match(client.text, /Aucune somme n’était réservée/, client.text);
+  assert.match(client.text, /portés à la carte que vous avez enregistrée/, client.text);
+  assert.doesNotMatch(client.text, /le reste de la réservation est libéré/);
+  assert.doesNotMatch(client.text, /the rest of the hold is released/);
+});
+
+test('avec une caution vivante, la phrase d’origine tient — retenue sur la somme réservée, le reste libéré', async () => {
+  const { client } = await courrielsAnnulation(
+    { dateISO: proche, paymentStatus: 'authorized', paymentIntentId: 'pi_x', authorizedAt: NOW },
+    { taux: 0.3, frais: 600, joursAvant: 2, mecanisme: 'capture', percu: true, chargeId: 'ch_2', dedommagement: { notaire: true, verse: true, transferId: 'tr_2' } }
+  );
+  assert.match(client.text, /retenus sur la somme réservée/, client.text);
+  assert.match(client.text, /le reste vous est libéré/i, client.text);
+});
+
+test('des frais refusés se disent aux deux parties comme un refus, jamais comme un versement', async () => {
+  const { client, notaire } = await courrielsAnnulation(
+    { dateISO: loin, paymentStatus: 'enregistre', paymentCustomerId: 'cus_x', paymentMethodId: 'pm_x' },
+    { taux: 0.1, frais: 200, joursAvant: 10, mecanisme: 'hors_session', percu: false, chargeId: null, refus: { code: 'card_declined' }, dedommagement: { notaire: true, verse: false, transferId: null } }
+  );
+  assert.match(client.text, /votre carte les a refusés/, client.text);
+  assert.match(client.text, /rien n’a été débité/, client.text);
+  assert.ok(notaire, 'le notaire doit l’apprendre');
+  assert.match(notaire.text, /la carte du client a refusé le prélèvement/, notaire.text);
+  assert.doesNotMatch(notaire.text, /vous sont versés/, 'rien n’a été encaissé : rien n’est versé');
+  assert.doesNotMatch(notaire.text, /vous sont dus/, 'Nota n’a rien encaissé : elle ne doit rien');
+});
+
+test('une annulation gratuite SANS réservation ne promet pas de libérer une somme', async () => {
+  const { client } = await courrielsAnnulation(
+    { dateISO: loin, paymentStatus: 'enregistre', paymentCustomerId: 'cus_x', paymentMethodId: 'pm_x' },
+    null
+  );
+  assert.match(client.text, /aucune somme n’était réservée/i, client.text);
+  assert.doesNotMatch(client.text, /la réservation sur votre carte est libérée/);
 });

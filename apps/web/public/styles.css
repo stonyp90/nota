@@ -2929,6 +2929,21 @@ body.is-notary-session #tab-notaires { pointer-events: none; }
   background: var(--surface-inset); color: var(--ink); border: 1px solid var(--border-strong);
 }
 .nc-deplacement[data-urgence='true'] { color: var(--warn, var(--ink-muted)); border-color: currentColor; }
+/* ADR 0035 — la garantie de paiement, sur la rangée de décision du notaire.
+   Même registre que les autres signaux (même hauteur, même rayon) : ce n'est
+   pas une alarme, c'est un fait à lire avant de retenir. Seul un refus ou une
+   réservation expirée prend l'accent d'alerte — ce sont les deux seuls états
+   qui appellent un geste. */
+.nc-caution {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: var(--radius-sm); white-space: nowrap;
+  background: var(--surface-inset); color: var(--ink-muted); border: 1px solid var(--border-strong);
+}
+.nc-caution[data-caution='posee'] { color: var(--ok); border-color: var(--ok); }
+.nc-caution[data-caution='refusee'], .nc-caution[data-caution='expiree'] { color: var(--danger); border-color: var(--danger); }
+.nc-caution-line { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.nc-caution-sub { font-size: 12px; color: var(--ink-muted); }
+.nc-caution-row { margin-top: 6px; }
 .nc-prop-pill[data-status='en_attente'] { color: var(--brand); border-color: var(--brand); }
 .nc-prop-pill[data-status='acceptee'], .nc-docs-pill[data-fournie='true'], .nc-via-prop { color: var(--ok); border-color: var(--ok); }
 .nc-prop-pill[data-status='refusee'] { color: var(--danger); border-color: var(--danger); }

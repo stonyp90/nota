@@ -671,8 +671,13 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
       // ADR 0023/0033 — what the cancellation actually kept, and for whom:
       // `bid.annulation` (null → free) is the record the cancel route wrote.
       const annulation = bid.annulation || null;
+      // ADR 0035 — y avait-il une somme RÉSERVÉE sur la carte ? Le courriel du
+      // client parle d'argent : il ne peut pas promettre de « libérer » une
+      // réservation qui n'a jamais existé, ni une autorisation périmée.
+      const cautionPosee = bid.paymentStatus === 'authorized' && !!bid.paymentIntentId
+        && domain.cautionVivante(bid.authorizedAt, String(clock()).slice(0, 10));
       if (bid.courriel) {
-        const ctx = bidCtx(bid, { annulation });
+        const ctx = bidCtx(bid, { annulation, cautionPosee });
         results.push(
           await sendOnce({
             refId: bid.id,
