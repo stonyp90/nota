@@ -214,7 +214,13 @@ variable "admin_memory_size" {
 }
 
 variable "prix_nota_cents" {
-  description = "Le prix du service de Nota, en cents (ADR 0031). Vide = le défaut intégré de 400 $ ; la console admin le surcharge à l'exécution via CONFIG#PRIX."
+  description = "L'ANCIEN prix unique du service de Nota, en cents (ADR 0031). Vide = la grille du catalogue (ADR 0034) ; le poser aplatit cette grille sur un seul nombre, sans aucune garantie de date. Ne le posez que pour figer un déploiement sur son prix d'avant le 2026-09-03. La console admin surcharge les deux à l'exécution via CONFIG#PRIX."
+  type        = string
+  default     = ""
+}
+
+variable "prix_nota_grille" {
+  description = "La GRILLE du prix de Nota (ADR 0034), en JSON : {\"services\":{\"refinancement\":24900},\"garantieDate\":{\"rapide\":5000}} — en cents. Vide = la grille du catalogue. Une cellule absente reste celle du catalogue. Dès que cette variable porte une grille lisible, elle décide SEULE : prix_nota_cents est alors ignoré (les deux ne se composent jamais). La console admin la surcharge à l'exécution via CONFIG#PRIX."
   type        = string
   default     = ""
 }

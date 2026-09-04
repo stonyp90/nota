@@ -329,7 +329,7 @@ async function activeBilling() {
 test('EDGE (logic): a fractional act value leaves Nota’s price a whole number of cents', async () => {
   const { billing } = await activeBilling();
   // 999,99 $ d'honoraires : ce sont eux qui portent la fraction, jamais le
-  // prix de Nota — un montant fixe n'a pas de cent à arrondir.
+  // prix de Nota — une cellule de grille en cents entiers n'a rien à arrondir.
   const r = await billing.completeAct({ notaryId: EDGE_ID, bidId: 'b1', actAmount: 999.99 });
   assert.equal(r.honorairesCents, 99_999);
   assert.equal(r.commissionCents, PRIX);

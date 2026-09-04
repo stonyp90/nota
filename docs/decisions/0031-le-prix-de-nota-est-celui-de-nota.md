@@ -3,7 +3,16 @@
 Date : 2026-09-01
 
 Statut : accepté — **révise l'ADR 0027 et retire la mécanique de rémunération
-de l'ADR 0028**
+de l'ADR 0028** ; **précisé depuis par l'ADR 0034**
+
+> **Lu après le 2026-09-03.** Tout ce que cet ADR pose tient toujours : les deux
+> lignes, le notaire qui reçoit 100 % du montant offert, le prix qui ne dépend
+> ni du notaire ni de sa cote ni de la valeur de l'acte. Une seule chose a
+> changé : ce prix n'est plus **un** nombre. L'ADR 0034 en fait une **grille** —
+> une ligne par service, plus la garantie de date sur sa propre ligne. Là où ce
+> document dit « un montant fixe, identique pour tous », lisez « un prix publié
+> d'avance, déterminé par le service et le délai, identique pour tous les
+> notaires ».
 
 > **Ce qui survit de l'ADR 0028.** La cote sur 100 et ses quatre axes, calculés
 > par `domain.notaryScore`, restent intacts. Ils peuvent décider du classement

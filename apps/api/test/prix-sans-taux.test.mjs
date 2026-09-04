@@ -89,8 +89,12 @@ test('la décision de prix ne porte QUE des montants en cents', async () => {
   // Pas un `taux`, pas une `cote`, pas une `part` — un devis qui les porterait
   // décrirait un partage, et il n'y en a plus.
   for (const v of Object.values(devis)) {
-    assert.ok(Number.isInteger(v), 'un devis ne porte que des entiers de cents : ' + v);
-    assert.equal(v > 0 && v < 1, false, 'jamais une fraction entre 0 et 1, qui serait un taux : ' + v);
+    // Entier ET jamais négatif. Le plancher a dû descendre de 1 à 0 quand la
+    // ligne `prixNotaDateCents` est apparue (elle vaut zéro au palier
+    // standard) : le laisser tomber sous zéro par la même occasion rendrait le
+    // test aveugle à un devis à −5 000 ¢, qui virerait de l'argent au client.
+    assert.ok(Number.isInteger(v) && v >= 0, 'un devis ne porte que des entiers de cents, jamais négatifs : ' + v);
+    assert.ok(!(v > 0 && v < 1), 'jamais une fraction entre 0 et 1, qui serait un taux : ' + v);
   }
 });
 

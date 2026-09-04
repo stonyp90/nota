@@ -835,6 +835,35 @@
     return { serviceCents, dateCents, totalCents: serviceCents + dateCents };
   }
 
+  /**
+   * Le devis FIGÉ d'une offre — les deux lignes de Nota telles qu'elles ont été
+   * AUTORISÉES, relues sur l'enregistrement de l'offre plutôt que recalculées.
+   *
+   * La grille est VIVANTE : Nota la change quand elle veut, et c'est tout
+   * l'objet de la console. Mais la carte du client a été bloquée pour un total
+   * précis, une fois, avant qu'il ne s'engage. Un règlement qui relirait la
+   * grille du jour facturerait un prix que le client n'a jamais lu :
+   *
+   *   — à la hausse, Stripe refuse une capture supérieure à l'autorisation ;
+   *     l'acte reste retenu et impayé, ce qui est la panne, pas la faute ;
+   *   — à la baisse, le client aurait bloqué plus que ce qu'on lui prend —
+   *     l'écart entre le prix annoncé et le prix facturé est exactement la
+   *     publicité « incomplète » que l'art. 68 C.déont. interdit.
+   *
+   * Rend `null` — et le prix se résout alors sur la grille en vigueur — dès
+   * qu'une des deux lignes manque ou est illisible : une offre publiée avant
+   * l'ADR 0034, ou une offre qui n'a jamais engagé de carte.
+   */
+  function prixNotaFige(source) {
+    const src = source && typeof source === 'object' && !Array.isArray(source) ? source : {};
+    // Zéro est relisible des deux côtés : un devis figé se rejoue tel quel,
+    // jamais « corrigé » par les planchers de la grille vivante.
+    const serviceCents = prixNotaCell(src.prixNotaServiceCents, { min: 0 });
+    const dateCents = prixNotaCell(src.prixNotaDateCents, { min: 0 });
+    if (serviceCents === undefined || dateCents === undefined) return null;
+    return { serviceCents, dateCents, totalCents: serviceCents + dateCents };
+  }
+
   // --- Premium cap -----------------------------------------------------------
   // A client may offer up to 5x the service's starting price — a sane ceiling
   // just above the ×4 a same-day signing now commands (owner, 2026-08-28).
@@ -2403,6 +2432,7 @@
     tunedTierMultipliers,
     prixNota,
     prixNotaGrille,
+    prixNotaFige,
     PREMIUM_CAP,
     STATUS,
     isISODate,

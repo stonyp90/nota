@@ -62,7 +62,7 @@ Une offre sous ce plancher est refusée (`apps/api/src/handler.js:681-693`).
 | Ligne | Qui l'encaisse | Ce que c'est |
 | --- | --- | --- |
 | **Les honoraires du notaire** | **Le notaire, en entier** | Le montant que vous offrez |
-| **Le prix de Nota** | Nota | Un montant fixe, le même pour tous |
+| **Le prix de Nota** | Nota | Un prix publié d’avance, déterminé par le service demandé et par le délai avant la signature — jamais par le notaire, sa cote ou le montant que vous offrez |
 
 **Le notaire reçoit la totalité de ce que vous lui offrez.** Nota ne prélève
 rien sur ses honoraires : elle vend son propre service, à son propre prix.

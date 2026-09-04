@@ -270,3 +270,64 @@ test('LOI DES TROIS CLICS — de l’accueil à l’offre publiable sans clic de
   assert.equal($(doc, 'offer-submit').disabled, false,
     'la publication est atteignable au troisième clic');
 });
+
+// ---------------------------------------------------------------------------
+// LA COPIE DU MODÈLE — ce que la page AFFIRME au client doit rester vrai
+// ---------------------------------------------------------------------------
+//
+// Le défaut que ce garde-fou existe pour attraper : l'ADR 0034 a fait varier le
+// prix de Nota par SERVICE et par PALIER DE DÉLAI, et quatre surfaces ont
+// continué d'affirmer au client qu'il s'agissait d'« un montant fixe, identique
+// pour tous » — dont les conditions d'utilisation, qui sont un engagement
+// contractuel, et llms.txt, publié exprès pour que les assistants citent Nota
+// juste. Le test i18n ne scanne que la COUVERTURE des chaînes, jamais leur
+// véracité : rien en CI ne l'attrapait.
+//
+// L'art. 68 du Code de déontologie interdit la publicité « incomplète » : une
+// page qui décrit le modèle avec un axe de variation en moins l'est exactement.
+
+const LLMS_SRC = readFileSync(fileURLToPath(new URL('../public/llms.txt', import.meta.url)), 'utf8');
+const I18N_TXT = readFileSync(fileURLToPath(new URL('../public/i18n.js', import.meta.url)), 'utf8');
+
+test('ART. 68 — aucune surface ne dit plus que le prix de Nota est FIXE', () => {
+  // Deux axes de variation, tous deux vivants : le service et le délai.
+  assert.notEqual(GRILLE.services.financement, GRILLE.services.refinancement,
+    'le prix varie bien par service — sans quoi ce test ne garderait rien');
+  assert.ok(Object.values(GRILLE.garantieDate).some((c) => c > 0),
+    'et par palier de délai');
+
+  const interdits = [
+    /montant\s+fixe/i,
+    /prix\s+fixe/i,
+    /à\s+prix\s+fixe/i,
+    /identique\s+pour\s+tous\b(?!\s+les\s+notaires)/i,
+    /fixed\s+(price|amount|service\s+price)/i,
+    /flat\s+(price|service\s+price)/i,
+  ];
+  // Aucune exception : la récompense d'un partenaire EST fixe, mais elle se dit
+  // « une récompense fixe », jamais « un montant fixe » — le mot qui décrit le
+  // prix de Nota reste réservé à ce qui est vrai de lui.
+  const surfaces = [
+    ['index.html', HTML_SRC],
+    ['llms.txt', LLMS_SRC],
+  ];
+  for (const [nom, src] of surfaces) {
+    for (const re of interdits) {
+      const m = src.match(new RegExp('.{0,120}' + re.source + '.{0,120}', re.flags + 's'));
+      assert.equal(m, null, nom + ' affirme encore un prix fixe : ' + (m && m[0]));
+    }
+  }
+  // Et la traduction anglaise ne doit pas rattraper par la fenêtre ce que le
+  // français a lâché par la porte.
+  assert.ok(!/Nota’s service price<\/strong> is a fixed amount/.test(I18N_TXT),
+    'le dictionnaire anglais porte encore l’ancienne affirmation');
+});
+
+test('les surfaces qui décrivent le modèle nomment les DEUX axes', () => {
+  // Ne pas dire « fixe » ne suffit pas : l'art. 68 vise la publicité
+  // INCOMPLÈTE. Le client doit lire de quoi le prix dépend.
+  for (const [nom, src] of [['index.html', HTML_SRC], ['llms.txt', LLMS_SRC]]) {
+    assert.match(src, /publié d’avance|publié d'avance|published in advance/, nom);
+    assert.match(src, /dépend du service demandé et du délai|dépend de deux choses|service.{0,40}délai/s, nom);
+  }
+});

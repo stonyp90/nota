@@ -100,6 +100,74 @@ test('RÉTRO-COMPATIBILITÉ — validatePrix accepte encore l’ancien corps { p
   for (const s of domain.SERVICES) assert.equal(v.grille.services[s.id], 40000);
 });
 
+test('NOTA_PRIX_GRILLE et NOTA_PRIX_CENTS ne se MÉLANGENT jamais', () => {
+  // Le cas réel : un déploiement d'avant l'ADR 0034 porte encore l'ancien prix
+  // unique, et l'opérateur ajoute une grille pour corriger UN service. Si les
+  // deux se composaient, il perdrait sans le voir les cinq lignes de garantie
+  // de date (un prix unique n'en vendait aucune, donc toutes à zéro) et
+  // laisserait les autres services à 400 $.
+  const g = prixConfig.envDefaults({
+    NOTA_PRIX_CENTS: '40000',
+    NOTA_PRIX_GRILLE: JSON.stringify({ services: { financement: 15000 } }),
+  });
+  assert.equal(g.services.financement, 15000, 'la grille décide');
+  assert.equal(g.services.refinancement, 24900, 'les cellules muettes suivent le CATALOGUE, pas l’ancien prix unique');
+  assert.equal(g.garantieDate.prioritaire, domain.tierById('prioritaire').prixNotaDateCents,
+    'les garanties de date du catalogue survivent — c’est la ligne que la composition écrasait');
+  // Et la réciproque : une grille illisible laisse l'ancien prix unique tenir
+  // exactement ce qu'il tenait la veille.
+  const legacy = prixConfig.envDefaults({ NOTA_PRIX_CENTS: '40000', NOTA_PRIX_GRILLE: '{oops' });
+  for (const s of domain.SERVICES) assert.equal(legacy.services[s.id], 40000, s.id);
+  for (const t of domain.TIERS) assert.equal(legacy.garantieDate[t.id], 0, t.id);
+});
+
+test('readStored écarte la CELLULE fautive, jamais la grille entière', () => {
+  // Le catalogue a déjà rétréci une fois : testament et procuration ont été
+  // retirés au pivot financement-d'abord. Une grille stockée la veille du
+  // retrait ne doit pas emporter avec elle les décisions encore valides.
+  const { config, ignorees } = prixConfig.readStored({
+    services: { financement: 12300, refinancement: 45600, testament: 9900 },
+    garantieDate: { rapide: 7700, demain: 100 },
+  });
+  assert.deepEqual(config.services, { financement: 12300, refinancement: 45600 });
+  assert.deepEqual(config.garantieDate, { rapide: 7700 });
+  assert.deepEqual(ignorees.sort(), ['garantieDate.demain', 'services.testament'],
+    'les cellules écartées sont NOMMÉES — sans quoi personne ne saurait qu’elles le sont');
+
+  // Rien de relisible : la grille stockée compte comme absente.
+  assert.deepEqual(prixConfig.readStored({ services: { testament: 9900 } }).config, {});
+  // L'ancien corps se relit comme à l'écriture : il ne compte que seul.
+  assert.deepEqual(prixConfig.readStored({ prixCents: 40000 }).config, { prixCents: 40000 });
+  assert.deepEqual(prixConfig.readStored({ prixCents: 40000, services: { financement: 12300 } }).config,
+    { services: { financement: 12300 } });
+});
+
+test('une grille stockée survit au retrait d’un service du catalogue', async () => {
+  const repo = createMemoryRepo();
+  // Écrit par la porte admin d'hier, quand `testament` était encore au
+  // catalogue — impossible à écrire aujourd'hui, parfaitement lisible en base.
+  await repo.putPrixNotaConfig({
+    services: { financement: 12300, refinancement: 45600, testament: 9900 },
+    garantieDate: { rapide: 7700 },
+  }, NOW_ISO);
+
+  const g = await prixConfig.resolveGrille(repo, {});
+  assert.equal(g.services.financement, 12300, 'la décision de Nota tient');
+  assert.equal(g.services.refinancement, 45600, 'et celle-ci aussi');
+  assert.equal(g.garantieDate.rapide, 7700);
+  assert.equal(g.services.testament, undefined, 'un service hors catalogue n’a plus de ligne');
+
+  // Et la console le DIT au lieu de le taire : la ligne existe toujours en
+  // base, l'écran ne doit pas afficher « aucun prix enregistré ».
+  const h = adminHarness();
+  await h.repo.putPrixNotaConfig({ services: { financement: 12300, testament: 9900 } }, NOW_ISO);
+  const body = parse(await h.call('GET', '/admin/prix', { bearer: await login(h) }));
+  assert.ok(body.override, 'la grille stockée doit rester visible');
+  assert.equal(body.override.services.financement, 12300);
+  assert.deepEqual(body.override.ignorees, ['services.testament']);
+  assert.equal(body.effectif.services.financement, 12300);
+});
+
 test('resolveGrille : le stocké l’emporte, l’illisible retombe, le legacy vaut encore', async () => {
   const repo = createMemoryRepo();
   assert.deepEqual(await prixConfig.resolveGrille(repo, {}), CATALOGUE);

@@ -66,6 +66,23 @@ Fonctionnalité: Règlement de l'acte — deux lignes, et le notaire garde les s
     Et le notaire reçoit 5600 $ — la totalité du montant offert
     Et Nota ne garde que son prix : 349 $
 
+  # ART. 68 C.déont. — « aucune publicité fausse, trompeuse, INCOMPLÈTE ». Le
+  # prix de Nota est administrable, et il DOIT l'être : la grille change quand
+  # Nota le décide. Mais elle change pour la SUITE. Une offre déjà autorisée a
+  # bloqué la carte du client sur un total qu'il a lu ; le règlement rejoue ce
+  # devis-là. Relire la grille du jour se casserait dans les deux sens : à la
+  # hausse, la capture dépasserait le blocage et l'acte resterait impayé après
+  # une signature bien réelle ; à la baisse, le prix facturé ne serait plus
+  # celui qui a été annoncé.
+  Scénario: Nota change sa grille après l'autorisation — le client paie le prix qu'il a lu
+    Étant donné la carte du client est bloquée pour 3149 $
+    Quand Nota porte le prix du service "refinancement" à 399 $
+    Et le notaire "notaire@exemple.ca" marque l'acte complété à 2800
+    Alors la réponse a le statut 200
+    Et la capture porte 3149 $
+    Et le notaire reçoit 2800 $ — la totalité du montant offert
+    Et Nota ne garde que son prix : 349 $
+
   Scénario: la valeur d'acte est bornée — un montant fou meurt avant le registre write-once
     Quand le notaire "notaire@exemple.ca" marque l'acte complété à 46004600
     Alors la réponse a le statut 422

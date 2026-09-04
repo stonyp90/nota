@@ -129,13 +129,23 @@ resource "aws_lambda_function" "api" {
       STRIPE_WEBHOOK_SECRET = var.stripe_webhook_secret
 
       # ADR 0031 — il n'y a plus de commission. Nota ne prélève aucune part des
-      # honoraires du notaire : elle vend son service à son PRIX, un montant
-      # fixe (NOTA_PRIX_CENTS, surchargé par la console via CONFIG#PRIX). Les
-      # trois variables de taux qui vivaient ici ont été retirées le
-      # 2026-09-02 : plus aucun code ne les lit, et les laisser décrirait
-      # l'opération que l'art. 32 du Code de déontologie interdit au notaire.
-      # Vide = le défaut intégré (400 $), ce qui est le cas voulu aujourd'hui.
-      NOTA_PRIX_CENTS = var.prix_nota_cents
+      # honoraires du notaire : elle vend son service à son PRIX. Les trois
+      # variables de taux qui vivaient ici ont été retirées le 2026-09-02 :
+      # plus aucun code ne les lit, et les laisser décrirait l'opération que
+      # l'art. 32 du Code de déontologie interdit au notaire.
+      #
+      # ADR 0034 — ce prix est devenu une GRILLE : une ligne par service, plus
+      # la garantie de date sur sa propre ligne. NOTA_PRIX_GRILLE la porte en
+      # JSON ; NOTA_PRIX_CENTS est l'ANCIEN prix unique, gardé pour qu'un
+      # déploiement d'avant le 2026-09-03 tarife exactement ce qu'il tarifait la
+      # veille. Les deux ne se composent JAMAIS : une grille lisible décide
+      # seule. Les deux vides = la grille du catalogue, ce qui est le cas voulu
+      # aujourd'hui. La console admin surcharge le tout via CONFIG#PRIX — et
+      # cette ligne stockée l'emporte sur l'environnement, donc changer ces
+      # variables sur un déploiement qui porte déjà une grille en base ne
+      # changera rien tant que l'opérateur n'aura pas remis la sienne à zéro.
+      NOTA_PRIX_CENTS  = var.prix_nota_cents
+      NOTA_PRIX_GRILLE = var.prix_nota_grille
       # Where Stripe returns the notary after Connect onboarding (hash routes to
       # the Notaires tab; base_url falls back to the CloudFront domain).
       NOTA_ONBOARDING_RETURN_URL  = "${var.base_url}/#notaires"

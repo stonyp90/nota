@@ -273,6 +273,7 @@
   "Garantie de date Nota": "Nota date guarantee",
   "La garantie de date est ce que NOTA vend pour tenir une date rapprochée. Elle ne se confond pas avec le droit du notaire de tenir compte de l’urgence dans SES honoraires (art. 49 4° du Code de déontologie) : deux objets, deux lignes sur le devis du client.": "The date guarantee is what NOTA sells to hold a near-term date. It is not the notary’s own right to weigh urgency in THEIR fees (s. 49(4) of the Code of ethics): two things, two lines on the client’s quote.",
   "Valeur par défaut du déploiement — aucun prix enregistré.": "Deployment default — no price stored.",
+  "Lignes enregistrées mais hors catalogue, donc ignorées : ": "Lines stored but outside the catalogue, and therefore ignored: ",
   "Le client autorise sa carte pour le montant offert au notaire PLUS ce prix. Le notaire reçoit ses honoraires en entier ; ce prix ne dépend ni de lui, ni de sa cote, ni de la valeur de l’acte.": "The client authorizes their card for the amount offered to the notary PLUS this price. The notary receives their fees in full; this price depends neither on them, nor on their cote, nor on the value of the act.",
   "Modifier la grille": "Edit the grid",
   "Les montants sont saisis en dollars — « 249 » signifie 249,00 $.": "Amounts are entered in dollars — “249” means $249.00.",

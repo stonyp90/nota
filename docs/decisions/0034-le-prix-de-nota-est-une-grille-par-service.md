@@ -17,10 +17,25 @@ Statut : accepté — **précise l'ADR 0031 ; n'en retire rien**
 
 L'ADR 0031 a mis Nota du bon côté des quatre murs en remplaçant un pourcentage
 par un prix fixe. Le prix retenu — 400 $, `DEFAULT_PRIX_CENTS = 40000` — n'a
-jamais été calculé : c'était le nombre rond qui permettait d'écrire l'ADR. La
-veille du 3 septembre l'a mesuré (`docs/go-to-market/veille-2026-09-03/`,
-`c-decouverte-et-marges.md` §3 et `a-notairo-deeded-ownright.md` §4), et le
-nombre rond tient mal.
+jamais été calculé : c'était le nombre rond qui permettait d'écrire l'ADR. Une
+veille menée le 3 septembre l'a mesuré, et le nombre rond tient mal.
+
+> **Sources, et ce que le dépôt en porte.** Les notes brutes de cette veille ne
+> sont PAS dans le dépôt : ne cherchez pas de fichier, il n'y en a pas. Chaque
+> chiffre ci-dessous est donc donné avec sa source PRIMAIRE, vérifiable
+> directement, plutôt qu'avec un renvoi interne :
+>
+> - **Notairo, 295 $** — le catalogue Shopify public de notairo.com
+>   (`/products.json`), produit « Frais de prise en charge de dossier », relevé
+>   le 2026-09-03. Le dépôt en porte le portrait général dans
+>   `docs/go-to-market/concurrence.md` (§ « Notairo — le plus proche »), qui
+>   documente l'offre affichée à 949 $ + débours, pas cette ligne-ci.
+> - **Airbnb, 13,6 %** et **Upwork, 18,0 %** — les taux de prise publiés par
+>   ces plateformes (frais voyageur + hôte pour la première, barème unique de
+>   la seconde), au 2026-09-03.
+> - Le **calcul** de chaque pourcentage, lui, est reproductible sans aucune
+>   source externe : il est rejoué cellule par cellule dans
+>   `packages/domain/test/prix-nota-grille.test.mjs`.
 
 **Un prix unique posé sur un catalogue d'actes inégaux est régressif.** À 400 $ :
 
@@ -178,6 +193,38 @@ Les quatre textes sont cités mot pour mot dans
   — et la revendication « Le notaire garde 100 % de ses honoraires. » là où le
   client décide.
 - `apps/admin` : l'écran Prix édite la grille cellule par cellule.
+
+**Le devis autorisé est figé sur l'offre, et c'est lui qu'on capture.** La
+grille est vivante — la console la change quand Nota le décide, et c'est le but.
+L'autorisation, elle, ne l'est pas : la carte du client est bloquée pour **un**
+total, une fois, avant qu'il ne s'engage. Les deux lignes de Nota sont donc
+écrites sur l'enregistrement de l'offre au moment de l'autorisation
+(`prixNotaServiceCents`, `prixNotaDateCents`) et rejouées telles quelles au
+règlement (`domain.prixNotaFige`). Une grille relue au moment de la capture se
+casserait dans les deux sens : **à la hausse**, Stripe refuse une capture
+supérieure à son autorisation — l'acte reste retenu et impayé alors que la
+signature a eu lieu ; **à la baisse**, l'écart entre le prix annoncé et le prix
+facturé est exactement la publicité « incomplète » de l'art. 68. Une offre sans
+devis figé — publiée sans carte, ou d'avant cet ADR — se tarife encore sur la
+grille en vigueur.
+
+**Une cellule stockée hors catalogue est écartée seule, jamais la grille
+entière.** L'écriture est stricte (un id inconnu vaut un 422 : l'opérateur doit
+voir sa faute de frappe) ; la **lecture** est tolérante. Le catalogue a déjà
+rétréci une fois — testament et procuration retirés au pivot
+financement-d'abord — et une grille écrite la veille aurait alors emporté toutes
+les décisions encore valides, sans un mot, la console affichant « aucun prix
+enregistré » pendant que la ligne dormait en base. Les cellules écartées sont
+journalisées et nommées dans la console (`ignorees`).
+
+**Les deux variables d'environnement ne se composent jamais.** Dès que
+`NOTA_PRIX_GRILLE` porte une grille lisible, elle décide seule et
+`NOTA_PRIX_CENTS` est ignoré — même règle qu'au stockage, où `validatePrix`
+écarte déjà `prixCents` en présence de `services`/`garantieDate`. Les composer
+ferait le dégât qu'un opérateur ne verrait pas : ajouter une grille pour
+corriger **un** service forcerait toutes les garanties de date à zéro (c'est ce
+que `{ prixCents }` veut dire) et laisserait les autres services à l'ancien prix
+unique.
 
 **La rétro-compatibilité est une exigence, pas une politesse.** Une
 configuration stockée avant le 3 septembre porte `{ prixCents: 40000 }`. Elle

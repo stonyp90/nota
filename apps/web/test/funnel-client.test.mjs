@@ -3,7 +3,7 @@
  * funnel-mapping report named, each locked here.
  *
  *   1. HONEST PRICE LINE. Since ADR 0031 the client pays two lines: the
- *      notary's fees (100 % of the offer) and Nota's fixed service price.
+ *      notary's fees (100 % of the offer) and Nota's own service price.
  *      « Gratuit pour vous » was false, and it sat exactly where the form
  *      shows « Service Nota 400 $ ». The hero line now states the two-line
  *      truth and quotes the price the API serves — never a literal.
@@ -161,12 +161,16 @@ test('the hero states the two-line truth and quotes the price the API serves', a
   dom.window.close();
 });
 
-test('offline, the hero says a fixed price is added — it never invents the amount', async () => {
+test('offline, the hero says the price is PUBLISHED — never « fixe », never an invented amount', async () => {
+  // ADR 0034 : le prix n'est plus un nombre unique, il varie par service ET
+  // par palier de délai. Le chemin nominal dit « à partir de X » ; ce repli,
+  // qui ne connaît aucun chiffre, doit rester vrai sans en citer un.
   const { doc, dom } = await boot();
   const t = FLAT($(doc, 'hero-price-line').textContent);
   assert.match(t, /100 % de votre offre/, t);
   assert.ok(!/\$/.test(t), 'no amount when the tarif is unknown: ' + t);
-  assert.match(t, /prix fixe/, 'says the price is fixed: ' + t);
+  assert.match(t, /prix publié d’avance/, 'says the price is published, not fixed: ' + t);
+  assert.ok(!/fixe/.test(t), 'le prix n’est plus fixe : ' + t);
   dom.window.close();
 });
 
@@ -181,8 +185,13 @@ test('the intro film note and the film kicker say the two-line truth', () => {
 
 test('the new price copy is translated, amount included', () => {
   I18N.force('en');
-  const fixed = 'Le notaire reçoit 100 % de votre offre ; le service Nota, à prix fixe, se paie seulement à la signature.';
-  assert.ok(I18N.covered(fixed), 'no English entry for the fixed-price line');
+  const repli = 'Le notaire reçoit 100 % de votre offre ; le service Nota, à un prix publié d’avance, se paie seulement à la signature.';
+  assert.ok(I18N.covered(repli), 'no English entry for the fallback price line');
+  assert.match(I18N.tEn(repli), /published in advance/, I18N.tEn(repli));
+  // L'ancienne affirmation — « à prix fixe » — ne doit survivre nulle part :
+  // depuis l'ADR 0034 le prix varie par service ET par palier de délai.
+  assert.ok(!/à prix fixe/.test(HTML_SRC), 'index.html affirme encore un prix fixe');
+  assert.ok(!/à prix fixe/.test(I18N_SRC), 'le dictionnaire porte encore un prix fixe');
   const priced = 'Le notaire reçoit 100 % de votre offre ; le service Nota, à partir de 525 $, se paie seulement à la signature.';
   const en = I18N.tEn(priced);
   assert.ok(!/reçoit|offre|signature\b.*\./.test(en) || /receives/.test(en), 'the composed line has a rule: ' + en);

@@ -46,8 +46,11 @@ Le client paie **deux lignes distinctes** :
 
 1. **Les honoraires du notaire** — le montant offert, versé au notaire **en
    entier**. Nota n'en prélève aucune part.
-2. **Le prix du service de Nota** — un montant **fixe**, identique pour tous,
-   qui ne dépend ni du notaire, ni de sa cote, ni de la valeur de l'acte.
+2. **Le prix du service de Nota** — **publié d'avance**, et facturé tel qu'il a
+   été annoncé. Il dépend de deux dimensions que le client choisit : le
+   **service** demandé et le **délai** avant la signature. Il ne dépend ni du
+   notaire, ni de sa cote, ni du montant offert. Il est affiché au client avant
+   que sa carte ne soit autorisée, et c'est ce montant-là qui est capturé.
 
 Cette séparation est une contrainte de conception, pas une politique
 commerciale : l'**art. 32** du *Code de déontologie des notaires* interdit au
@@ -71,8 +74,10 @@ notarial acts** (mortgage financing and refinancing). Clients post a request
 free of charge — act type, desired date, postal area and offered amount — and
 registered notaries accept, counter-offer, or pass.
 
-The notary keeps **100 % of their fees**; Nota charges its own fixed service
-price to the client, separately. Fee-sharing is prohibited by art. 32 of the
+The notary keeps **100 % of their fees**; Nota charges the client for its own
+service, separately, at a price published in advance — set by the service
+requested and by the notice before signing, never by the notary, their rating,
+or the amount offered. Fee-sharing is prohibited by art. 32 of the
 Québec notaries' Code of ethics and art. 32.1 of the Notaries Act, so the
 platform is designed around that prohibition. Nota is not a notary and provides
 no legal services.

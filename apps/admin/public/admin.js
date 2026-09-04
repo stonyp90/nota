@@ -432,7 +432,7 @@
     camp.addEventListener('click', function () { go('#/campagnes'); });
     rail.appendChild(camp);
 
-    // Prix — le prix du service de Nota, un montant fixe (ADR 0031). Cette
+    // Prix — le prix du service de Nota, une grille par service (ADR 0034). Cette
     // entrée remplace « Commission » : Nota ne prélève plus une part des
     // honoraires du notaire, elle vend son service à son propre prix.
     var prix = el('button', 'admin-rail-link');
@@ -2591,6 +2591,19 @@
       ? 'Prix décidé par Nota — modifié le ' + baremeDate(data.override.updatedAt) + '.'
       : 'Valeur par défaut du déploiement — aucun prix enregistré.';
     ht.appendChild(el('div', 'chart-card-sub', src));
+    // Une cellule stockée que la tarification écarte — un service retiré du
+    // catalogue depuis, une valeur devenue illisible. Elle existe toujours en
+    // base : la taire laisserait l'opérateur croire qu'il a décidé quelque
+    // chose qui ne s'applique plus.
+    var ignorees = (data.override && data.override.ignorees) || [];
+    if (ignorees.length) {
+      var warn = el('div', 'chart-card-sub');
+      warn.appendChild(document.createTextNode('Lignes enregistrées mais hors catalogue, donc ignorées : '));
+      var ids = el('strong', null, ignorees.join(', '));
+      ids.setAttribute('data-i18n-skip', ''); // identifiants de catalogue : contenu d'API
+      warn.appendChild(ids);
+      ht.appendChild(warn);
+    }
     head.appendChild(ht);
     card.appendChild(head);
 

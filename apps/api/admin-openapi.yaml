@@ -186,6 +186,16 @@ components:
             updatedAt:
               type: [string, "null"]
               description: ISO datetime of the last change.
+            ignorees:
+              type: array
+              items: { type: string }
+              description: >-
+                Les cellules STOCKEES que la tarification ecarte — un service
+                retire du catalogue depuis, une valeur devenue illisible. La
+                lecture est tolerante la ou l'ecriture est stricte : une cellule
+                fautive est ecartee SEULE, jamais la grille entiere, et elle est
+                nommee ici (« services.testament ») pour que la console le dise
+                au lieu de le taire. Absent quand tout se relit.
     PrixNotaCatalogue:
       type: object
       description: >-

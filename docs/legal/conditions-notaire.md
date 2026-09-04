@@ -91,7 +91,7 @@ de s'engager :
 | Ligne | Qui l'encaisse | Ce qui la détermine |
 | --- | --- | --- |
 | **Honoraires** | **Le notaire, en entier** | Le montant offert par le client |
-| **Prix de Nota** | Nota | Un **montant fixe**, identique pour tous |
+| **Prix de Nota** | Nota | Un prix **publié d’avance**, déterminé par le service et par le délai avant la signature — **identique pour tous les notaires**, et sans lien avec vos honoraires |
 
 La carte du client autorise le **total** des deux lignes ; à la signature, la
 capture prélève ce total, les frais d'application Stripe **sont** le prix de

@@ -267,6 +267,29 @@ test('une configuration à l’ancien format (un seul prix) reste lisible et éd
   }, 'l’enregistrement part au NOUVEAU format, sans rien inventer');
 });
 
+test('une cellule stockée HORS CATALOGUE est dite, pas tue', async () => {
+  // Le catalogue a déjà rétréci une fois (testament et procuration retirés au
+  // pivot financement-d'abord). La ligne stockée la veille survit en base : la
+  // tarification l'écarte SEULE, et l'écran doit le dire — sinon l'opérateur
+  // croit avoir décidé quelque chose qui ne s'applique plus.
+  const services = { refinancement: 25000, financement: 21000 };
+  const prix = {
+    defaut: DEFAUT, catalogue: CATALOGUE,
+    override: { services, updatedAt: '2026-08-27T12:00:00.000Z', ignorees: ['services.testament'] },
+    effectif: grille(services, { standard: 0, rapide: 5000, prioritaire: 10000, urgence: 20000, extreme: 30000 }),
+  };
+  const { win, doc } = await boot(api({ prix }), '#/auth?token=T');
+  await waitFor(win, '.admin-rail');
+  win.location.hash = '#/prix';
+  await waitFor(win, '.bareme-card');
+  const sub = [...doc.querySelectorAll('.chart-card-sub')].map(text).join(' ');
+  assert.match(sub, /Prix décidé par Nota/, 'la grille stockée gouverne toujours');
+  assert.match(sub, /hors catalogue, donc ignorées : services\.testament/);
+  // Et les décisions valides, elles, sont bien celles en vigueur.
+  assert.deepEqual([...doc.querySelectorAll('.stat-tile')]
+    .map((t) => text(t.querySelector('.stat-v'))), ['250 $', '210 $']);
+});
+
 test('une grille stockée affiche sa date de modification dans la ligne de provenance', async () => {
   const { win, doc } = await boot(api({ prix: samplePrix({ override: true }) }), '#/auth?token=T');
   await waitFor(win, '.admin-rail');

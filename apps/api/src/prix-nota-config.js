@@ -81,15 +81,23 @@ function jsonOrUndefined(v) {
  * un déploiement qui le porte encore tarife exactement ce qu'il tarifait la
  * veille, sur tous les services, sans ligne de garantie de date.
  * `NOTA_PRIX_GRILLE` — la grille, en JSON : `{ services, garantieDate }`.
+ *
+ * LES DEUX NE SE MÉLANGENT JAMAIS. Dès qu'une grille lisible est posée, elle
+ * décide seule et l'ancien prix unique est ignoré ; les cellules qu'elle ne
+ * nomme pas retombent sur le CATALOGUE. Mélanger les deux ferait exactement le
+ * dégât qu'un opérateur ne verrait pas : ajouter `NOTA_PRIX_GRILLE` pour
+ * corriger UN service forcerait toutes les garanties de date à zéro (c'est ce
+ * que veut dire `{ prixCents }` — un déploiement d'avant l'ADR 0034 n'en
+ * vendait pas) et laisserait les autres services à l'ancien prix unique. La
+ * règle est donc la même que celle du stockage : `validatePrix` écarte déjà
+ * `prixCents` dès que `services`/`garantieDate` sont là.
  */
 function envDefaults(env = process.env) {
-  const unique = centsOrUndefined(env.NOTA_PRIX_CENTS);
-  const grille = jsonOrUndefined(env.NOTA_PRIX_GRILLE) || {};
-  return domain.prixNotaGrille({
-    prixCents: unique,
-    services: grille.services,
-    garantieDate: grille.garantieDate,
-  });
+  const grille = jsonOrUndefined(env.NOTA_PRIX_GRILLE);
+  if (grille && (grille.services !== undefined || grille.garantieDate !== undefined)) {
+    return domain.prixNotaGrille({ services: grille.services, garantieDate: grille.garantieDate });
+  }
+  return domain.prixNotaGrille({ prixCents: centsOrUndefined(env.NOTA_PRIX_CENTS) });
 }
 
 const erreur = (code, message) => ({ code, message });
@@ -172,6 +180,66 @@ function validatePrix(payload = {}) {
 }
 
 /**
+ * RELIRE une grille STOCKÉE — tolérante là où l'écriture est stricte, et
+ * bavarde là où elle écarte quelque chose.
+ *
+ * `validatePrix` refuse une grille ENTIÈRE dès qu'une de ses clés n'est pas au
+ * catalogue : c'est juste à l'écriture (l'opérateur doit voir sa faute de
+ * frappe), et destructeur à la lecture. Le catalogue a déjà rétréci une fois —
+ * testament et procuration ont été retirés au pivot financement-d'abord — et
+ * une ligne stockée la veille du retrait aurait alors emporté avec elle TOUTES
+ * les autres décisions de Nota, sans un mot, la console affichant « aucun prix
+ * enregistré » pendant que la ligne dormait en base.
+ *
+ * Une cellule illisible ou hors catalogue est donc écartée SEULE, et nommée.
+ * Rend `{ config, ignorees }` :
+ *
+ *   `config`   — les cellules relisibles, dans la forme que `prixNotaGrille`
+ *                attend ; vide si rien n'a survécu.
+ *   `ignorees` — `['services.testament', 'garantieDate.hier', …]`, les
+ *                cellules écartées, pour que le journal et la console le
+ *                disent au lieu de le taire.
+ *
+ * L'ancien corps `{ prixCents }` de l'ADR 0031 se relit comme à l'écriture :
+ * il ne compte QUE si l'enregistrement ne porte aucune clé de grille.
+ */
+function readStored(stored) {
+  const src = stored && typeof stored === 'object' && !Array.isArray(stored) ? stored : {};
+  const ignorees = [];
+
+  const relire = (source, { groupe, min, connus }) => {
+    const out = {};
+    if (source === undefined || source === null) return out;
+    if (typeof source !== 'object' || Array.isArray(source)) {
+      ignorees.push(groupe);
+      return out;
+    }
+    for (const id of Object.keys(source)) {
+      const cents = connus.includes(id) ? centsOrUndefined(source[id], min) : undefined;
+      if (cents === undefined) ignorees.push(`${groupe}.${id}`);
+      else out[id] = cents;
+    }
+    return out;
+  };
+
+  if (src.services === undefined && src.garantieDate === undefined) {
+    const prixCents = centsOrUndefined(src.prixCents);
+    if (prixCents === undefined) {
+      if (src.prixCents !== undefined) ignorees.push('prixCents');
+      return { config: {}, ignorees };
+    }
+    return { config: { prixCents }, ignorees };
+  }
+
+  const services = relire(src.services, { groupe: 'services', min: 1, connus: domain.SERVICES.map((s) => s.id) });
+  const garantieDate = relire(src.garantieDate, { groupe: 'garantieDate', min: 0, connus: domain.TIERS.map((t) => t.id) });
+  const config = {};
+  if (Object.keys(services).length) config.services = services;
+  if (Object.keys(garantieDate).length) config.garantieDate = garantieDate;
+  return { config, ignorees };
+}
+
+/**
  * LA GRILLE EN VIGUEUR — une seule résolution, pour toutes les surfaces.
  *
  * La grille stockée par l'opérateur l'emporte sur celle du déploiement. Il est
@@ -183,19 +251,39 @@ function validatePrix(payload = {}) {
  * il n'y en a donc qu'une.
  *
  * Une grille stockée illisible se lit comme absente : le défaut reprend la main
- * plutôt que de faire tomber le carnet.
+ * plutôt que de faire tomber le carnet. Une CELLULE illisible ou hors catalogue
+ * est écartée seule (`readStored`) et journalisée — jamais toute la grille.
  */
 async function resolveGrille(repo, env = process.env) {
   if (repo && typeof repo.getPrixNotaConfig === 'function') {
     try {
       const stored = await repo.getPrixNotaConfig();
       if (stored) {
-        const v = validatePrix(stored);
-        if (v.ok) return v.grille;
+        const { config, ignorees } = readStored(stored);
+        if (ignorees.length) journalIgnorees(ignorees);
+        if (Object.keys(config).length) return domain.prixNotaGrille(config);
       }
     } catch { /* une grille stockée illisible ne fait jamais tomber la tarification */ }
   }
   return envDefaults(env);
+}
+
+// Écarter une cellule stockée est une décision de Nota qu'aucun humain n'a
+// prise : elle doit au moins laisser une trace. Le journal du Lambda est le
+// bon niveau — un enregistrement d'audit par TARIFICATION en écrirait un par
+// devis. La grille se résout à CHAQUE devis et à chaque lecture du carnet :
+// on ne répète donc pas le même avertissement, sinon une seule cellule périmée
+// noierait le journal. Silencieux si la console manque (tests, navigateur).
+let dernierAvertissement = null;
+function journalIgnorees(ignorees) {
+  try {
+    const signature = ignorees.join(',');
+    if (signature === dernierAvertissement) return;
+    dernierAvertissement = signature;
+    if (typeof console !== 'undefined' && typeof console.warn === 'function') {
+      console.warn('[prix] cellules stockées ignorées (hors catalogue ou illisibles) : ' + signature);
+    }
+  } catch { /* journaliser ne doit jamais faire tomber une tarification */ }
 }
 
 /**
@@ -229,6 +317,7 @@ function storedConfig(cfg = {}) {
 module.exports = {
   envDefaults,
   validatePrix,
+  readStored,
   resolveGrille,
   catalogue,
   storedConfig,

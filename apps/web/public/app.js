@@ -3401,7 +3401,7 @@
     var prix = prixNotaMinDollars();
     line.textContent = prix != null
       ? 'Le notaire reçoit 100 % de votre offre ; le service Nota, à partir de ' + D.money(prix) + ', se paie seulement à la signature.'
-      : 'Le notaire reçoit 100 % de votre offre ; le service Nota, à prix fixe, se paie seulement à la signature.';
+      : 'Le notaire reçoit 100 % de votre offre ; le service Nota, à un prix publié d’avance, se paie seulement à la signature.';
   }
 
   function renderDevis() {
@@ -6532,7 +6532,7 @@
         nota.appendChild(document.createTextNode(
           D.money(Math.round(D.prixNota(b.serviceId, b.tier, grille).totalCents) / 100)));
       } else {
-        nota.appendChild(el('span', 'nc-retenir-sub', 'un prix publié, le même pour tous'));
+        nota.appendChild(el('span', 'nc-retenir-sub', 'un prix publié, le même pour tous les notaires'));
       }
     }
     // Déplacement · secteur · distance — the same facts as the card, in the

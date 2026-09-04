@@ -130,10 +130,11 @@ function createApp(repo, opts = {}) {
       timeZone: TIME_ZONE,
       onboardingReturnUrl: process.env.NOTA_ONBOARDING_RETURN_URL,
       onboardingRefreshUrl: process.env.NOTA_ONBOARDING_REFRESH_URL,
-      // ADR 0031 — plus aucun taux à passer. La facturation ne connaît qu'un
-      // PRIX, résolu par `prix-nota-config.resolvePrix` : le stocké par
-      // l'opérateur, sinon `NOTA_PRIX_CENTS`, sinon le défaut. Passer encore un
-      // barème que rien ne lit serait la manière la plus sûre de le voir
+      // ADR 0031 / 0034 — plus aucun taux à passer. La facturation ne connaît
+      // qu'une GRILLE, résolue par `prix-nota-config.resolveGrille` : celle
+      // stockée par l'opérateur, sinon celle du déploiement (`NOTA_PRIX_GRILLE`
+      // ou l'ancien `NOTA_PRIX_CENTS`), sinon celle du catalogue. Passer encore
+      // un barème que rien ne lit serait la manière la plus sûre de le voir
       // revenir.
     });
     return billingInstance;
@@ -860,8 +861,10 @@ function createApp(repo, opts = {}) {
     // C'est exactement la convention que l'art. 29.1 du Code de déontologie
     // interdit — « aucune convention ayant pour effet de mettre en péril
     // l'indépendance, le désintéressement, l'objectivité et l'intégrité ». Le
-    // prix de Nota est désormais un montant fixe, identique pour tous : rien
-    // ne dépend du notaire, donc rien n'a besoin d'être figé à son engagement.
+    // prix de Nota est désormais publié d'avance et identique pour tous les
+    // notaires : rien n'y dépend du notaire, donc rien n'a besoin d'être figé à
+    // SON engagement. (Le devis du CLIENT, lui, est bien figé — mais à
+    // l'autorisation de sa carte, et sur l'offre : voir POST /bids.)
     const retained = await repo.retain(updated, notaryId);
     if (!retained) return null;
     await appendAudit('acte_retenu', {
@@ -1176,6 +1179,7 @@ function createApp(repo, opts = {}) {
       // authorizes their card via hosted Checkout — the webhook then binds the
       // PaymentIntent and the offer goes live (isLive). Without billing (demo/tests)
       // the offer is live immediately, exactly as before.
+      let devisFige = null;
       if (billingConfigured) {
         // La même garde que le lien magique notaire et la réclamation
         // partenaire : sans origine publique, Stripe n'a pas où renvoyer le
@@ -1191,6 +1195,17 @@ function createApp(repo, opts = {}) {
           });
         }
         bid.paymentStatus = 'pending';
+        // ADR 0034 — le devis est FIGÉ ICI, sur l'enregistrement de l'offre,
+        // AVANT que la carte du client ne soit bloquée. La grille est vivante :
+        // Nota la change quand elle veut. L'autorisation, elle, porte un total
+        // précis, et Stripe refuse toute capture au-dessus de lui. Un règlement
+        // qui relirait la grille du jour facturerait un prix que le client n'a
+        // jamais lu — publicité « incomplète » (art. 68 C.déont.) à la baisse,
+        // capture refusée et acte impayé à la hausse. Ces deux lignes sont donc
+        // ce que la carte autorise ET ce que le règlement capturera.
+        devisFige = await billing().quoteOffer(bid.montant, { serviceId: bid.serviceId, tierId: bid.tier });
+        bid.prixNotaServiceCents = devisFige.prixNotaServiceCents;
+        bid.prixNotaDateCents = devisFige.prixNotaDateCents;
       }
       await repo.put(bid);
       await recordStats(statsDeltasForOffer(bid));
@@ -1214,7 +1229,11 @@ function createApp(repo, opts = {}) {
         // client au moment de la capture.
         // ADR 0034 — le devis est celui de CE service à CETTE date : le prix de
         // Nota est une grille, et l'autorisation doit porter la cellule exacte.
-        const devis = await billing().quoteOffer(bid.montant, { serviceId: bid.serviceId, tierId: bid.tier });
+        // C'est le devis FIGÉ plus haut, sur l'offre elle-même — pas une
+        // seconde résolution de la grille, qui pourrait déjà avoir bougé entre
+        // les deux lectures et bloquer un total que le règlement ne retrouvera
+        // plus.
+        const devis = devisFige;
         let auth;
         try {
           auth = await billing().authorizeOffer({
@@ -1637,6 +1656,17 @@ function createApp(repo, opts = {}) {
       const valued = domain.validateActValue({ actAmount: payload.actAmount, retainedMontant: bid.montant });
       if (!valued.ok) return json(422, { errors: valued.errors });
       payload.actAmount = valued.actAmount;
+      // ADR 0034 — LE DEVIS AUTORISÉ, relu sur l'offre. C'est lui qui décide le
+      // prix de Nota au règlement, jamais la grille du jour : entre la
+      // publication et la signature, Nota a pu changer sa grille, et la carte
+      // du client, elle, est bloquée depuis le premier jour sur un total que
+      // Stripe ne laissera pas dépasser. Absent (offre publiée sans carte,
+      // enregistrement d'avant l'ADR 0034) → la grille en vigueur reprend la
+      // main, exactement comme avant.
+      const devisFige = {
+        prixNotaServiceCents: bid.prixNotaServiceCents,
+        prixNotaDateCents: bid.prixNotaDateCents,
+      };
       let result = null;
       const canCapture = billingConfigured && bid.paymentIntentId && bid.paymentStatus === 'authorized';
       if (canCapture) {
@@ -1649,8 +1679,9 @@ function createApp(repo, opts = {}) {
           // cote can reward the breadth of the catalogue a notary serves.
           serviceId: bid.serviceId,
           // ADR 0034: and priced on the cell the client was quoted — the
-          // service AND the notice band the offer was published under.
-          tierId: bid.tier,
+          // service AND the notice band the offer was published under, figés
+          // sur l'offre à l'autorisation.
+          tierId: bid.tier, devisFige,
         });
       }
       if (!result || !result.ok) {
@@ -1659,7 +1690,7 @@ function createApp(repo, opts = {}) {
         // model — the client paid the notary directly at signing.
         result = await billing().completeAct({
           notaryId, bidId: payload.bidId, actAmount: payload.actAmount,
-          serviceId: bid.serviceId, tierId: bid.tier,
+          serviceId: bid.serviceId, tierId: bid.tier, devisFige,
         });
       }
       if (!result.ok) return json(422, { errors: result.errors });

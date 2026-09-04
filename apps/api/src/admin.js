@@ -468,7 +468,7 @@ function createAdmin({
   //
   // Cette porte remplace celle du barème de commission. Nota ne prélève plus
   // une part des honoraires du notaire : elle vend son service à son propre
-  // prix, un montant fixe identique pour tous. L'art. 29.1 du Code de
+  // prix, publié d'avance et le même pour tous les notaires. L'art. 29.1 du Code de
   // déontologie interdit au notaire toute convention mettant en péril son
   // indépendance et son désintéressement — un prix qui bougerait selon la cote
   // que Nota lui attribue en serait une. Il n'y a donc RIEN à paramétrer ici
@@ -488,11 +488,22 @@ function createAdmin({
   // dimensions publiées — le service et le délai — et de rien qui touche au
   // notaire. Une grille stockée à l'ancien format `{ prixCents }` continue de
   // tarifer exactement ce qu'elle tarifait la veille.
+  //
+  // La LECTURE est tolérante là où l'écriture est stricte (`readStored`) : une
+  // cellule devenue illisible — un service retiré du catalogue, par exemple —
+  // est écartée SEULE et nommée dans `ignorees`. La console doit voir les
+  // décisions qui survivent, et voir aussi celle qui ne survit pas : rendre
+  // `null` afficherait « aucun prix enregistré » alors que la ligne existe
+  // toujours en base, et le prochain enregistrement l'écraserait à l'aveugle.
   function prixView(o) {
     if (!o) return null;
-    const v = prixCfg.validatePrix(o);
-    if (!v.ok) return null;
-    return { ...v.config, updatedAt: o.updatedAt || null };
+    const { config, ignorees } = prixCfg.readStored(o);
+    if (!Object.keys(config).length) return null;
+    return {
+      ...config,
+      updatedAt: o.updatedAt || null,
+      ...(ignorees.length ? { ignorees } : {}),
+    };
   }
 
   // GET — la grille du déploiement (catalogue + environnement), celle stockée

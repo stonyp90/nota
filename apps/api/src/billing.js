@@ -90,10 +90,18 @@ function createBilling({
    *
    * L'arithmétique elle-même est celle du domaine (`domain.prixNota`) : la
    * facturation ne recalcule jamais un prix à la main.
+   *
+   * `devisFige` — les deux lignes déjà AUTORISÉES, relues sur l'offre. Quand
+   * elles sont là, elles l'emportent sur la grille du jour : la carte du client
+   * a été bloquée pour un total précis, et le devis du règlement doit être
+   * celui que le client a lu avant d'engager sa carte. Sans elles (offre
+   * publiée sans carte, enregistrement d'avant l'ADR 0034), la grille en
+   * vigueur décide, comme avant.
    */
-  async function quoteOffer(actAmount, { serviceId, tierId } = {}) {
+  async function quoteOffer(actAmount, { serviceId, tierId, devisFige } = {}) {
     const honorairesCents = Math.round(Number(actAmount) * 100);
-    const p = domain.prixNota(serviceId, tierId, await resolveGrilleNota());
+    const p = domain.prixNotaFige(devisFige)
+      || domain.prixNota(serviceId, tierId, await resolveGrilleNota());
     return {
       honorairesCents,
       prixNotaServiceCents: p.serviceCents,
@@ -219,7 +227,7 @@ function createBilling({
    *
    * Returns `{ ok, actAmount, commissionCents, paye: false, du }`.
    */
-  async function completeAct({ notaryId, bidId, actAmount, serviceId, tierId } = {}) {
+  async function completeAct({ notaryId, bidId, actAmount, serviceId, tierId, devisFige } = {}) {
     const notary = notaryId ? await repo.getNotary(notaryId) : null;
     if (!notary) {
       return { ok: false, errors: [{ code: 'notaire_introuvable', message: 'Notaire introuvable.' }] };
@@ -247,10 +255,12 @@ function createBilling({
       }
     }
 
-    // ADR 0034 — le service et le palier RETENUS décident du prix, exactement
-    // comme à l'autorisation : le devis du règlement doit être celui du devis
-    // que le client a lu avant d'engager sa carte.
-    const prix = await priceAct(amount, { serviceId, tierId });
+    // ADR 0034 — le devis du règlement EST celui que le client a lu avant
+    // d'engager sa carte : `devisFige` porte les deux lignes autorisées,
+    // relues sur l'offre. La grille est vivante, l'autorisation ne l'est pas.
+    // Sans devis figé (offre sans carte, enregistrement d'avant l'ADR 0034),
+    // le service et le palier RETENUS résolvent la grille en vigueur.
+    const prix = await priceAct(amount, { serviceId, tierId, devisFige });
     // Les frais d'application SONT le prix de Nota — jamais une part des
     // honoraires. Le total capturé porte les deux lignes, et le net viré au
     // notaire est exactement le montant qui lui a été offert (art. 32.1 2°).
@@ -345,7 +355,7 @@ function createBilling({
    * completeAct call for the same bid is a no-op — the act is only ever paid once.
    * Returns `{ ok, commissionCents, netCents, transferId, chargeId }`.
    */
-  async function payNotaryOnAccept({ notaryId, bidId, actAmount, paymentIntentId, serviceId, tierId } = {}) {
+  async function payNotaryOnAccept({ notaryId, bidId, actAmount, paymentIntentId, serviceId, tierId, devisFige } = {}) {
     const notary = notaryId ? await repo.getNotary(notaryId) : null;
     if (!notary) {
       return { ok: false, errors: [{ code: 'notaire_introuvable', message: 'Notaire introuvable.' }] };
@@ -369,10 +379,12 @@ function createBilling({
       }
     }
 
-    // ADR 0034 — le service et le palier RETENUS décident du prix, exactement
-    // comme à l'autorisation : le devis du règlement doit être celui du devis
-    // que le client a lu avant d'engager sa carte.
-    const prix = await priceAct(amount, { serviceId, tierId });
+    // ADR 0034 — le devis du règlement EST celui que le client a lu avant
+    // d'engager sa carte : `devisFige` porte les deux lignes autorisées,
+    // relues sur l'offre. La grille est vivante, l'autorisation ne l'est pas.
+    // Sans devis figé (offre sans carte, enregistrement d'avant l'ADR 0034),
+    // le service et le palier RETENUS résolvent la grille en vigueur.
+    const prix = await priceAct(amount, { serviceId, tierId, devisFige });
     // Les frais d'application SONT le prix de Nota — jamais une part des
     // honoraires. Le total capturé porte les deux lignes, et le net viré au
     // notaire est exactement le montant qui lui a été offert (art. 32.1 2°).

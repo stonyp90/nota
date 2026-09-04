@@ -7,6 +7,7 @@ const { createBilling, NOTARY_STATUS } = require('../src/billing.js');
 const { createMemoryRepo } = require('../src/repo-memory.js');
 const { notaryIdForEmail } = require('../src/notary-auth.js');
 const prix = require('../src/prix-nota-config.js');
+const { coteFor } = require('../src/cote.js');
 const domain = require('@nota/domain');
 
 // ADR 0034 — le prix de Nota est une GRILLE : une ligne par service, plus la
@@ -84,7 +85,7 @@ test('chaque cellule de la grille est un montant en cents, jamais un taux', () =
   for (const c of cellules) {
     assert.ok(Number.isInteger(c) && c >= 0, 'un entier de cents : ' + c);
     // Le mot « taux » n'a plus de sens ici : rien dans la config n'est un ratio.
-    assert.equal(c > 0 && c < 1, false, 'une fraction entre 0 et 1 serait un taux : ' + c);
+    assert.ok(!(c > 0 && c < 1), 'une fraction entre 0 et 1 serait un taux : ' + c);
   }
   for (const s of domain.SERVICES) assert.ok(g.services[s.id] > 0, s.id + ' : un prix, pas rien');
 });
@@ -124,16 +125,34 @@ test('le prix de Nota ne dépend pas de la valeur de l’acte', async () => {
 
 test('ART. 29.1 — le prix de Nota ne dépend pas du notaire', async () => {
   const repo = createMemoryRepo();
-  const b = billingOn(repo, fakeStripe());
+  const calls = { transfers: [], charges: [] };
+  const b = billingOn(repo, fakeStripe(calls));
   const faible = await notary(repo, 'faible@example.ca');
   const haute = await notary(repo, 'haute@example.ca', { cote: 'haute' });
 
-  // Le notaire n'est plus un argument : les DEUX devis portent la même cellule
-  // de la grille, et il n'existe aucune porte par laquelle sa cote entrerait.
-  const a = await b.priceAct(2000, OFFRE);
-  const z = await b.priceAct(2000, OFFRE);
+  // Les deux profils doivent VRAIMENT différer, sinon ce test se compare à
+  // lui-même. On le vérifie sur la cote elle-même — le nombre exact qui
+  // déplaçait des dollars avant l'ADR 0031 — lue par le même port que la
+  // console (`cote.coteFor`), jamais par une arithmétique refaite ici.
+  const cote = async (id) => coteFor(await repo.getNotary(id), Date.parse(NOW)).cote;
+  assert.ok((await cote(haute)) > (await cote(faible)),
+    'sans deux cotes distinctes, l’invariant ne serait pas exercé');
+
+  // Et on va jusqu'au MOUVEMENT D'ARGENT, pas jusqu'au devis : le devis ne
+  // prend plus de notaire (c'est l'assertion d'arité, plus haut), mais le
+  // règlement, lui, en connaît un. C'est là que la cote entrait autrefois.
+  const a = await b.payNotaryOnAccept({ notaryId: faible, bidId: 'B-faible', actAmount: 2000, paymentIntentId: 'pi_faible', ...OFFRE });
+  const z = await b.payNotaryOnAccept({ notaryId: haute, bidId: 'B-haute', actAmount: 2000, paymentIntentId: 'pi_haute', ...OFFRE });
+  assert.equal(a.ok, true, JSON.stringify(a.errors || {}));
+  assert.equal(z.ok, true, JSON.stringify(z.errors || {}));
+
   assert.equal(a.prixNotaCents, z.prixNotaCents,
     'une cote ne doit jamais déplacer un dollar — art. 29.1');
+  assert.equal(a.netCents, z.netCents, 'et le net du notaire ne bouge pas non plus');
+  assert.equal(calls.transfers[0].applicationFeeCents, calls.transfers[1].applicationFeeCents,
+    'ce que Nota retient chez Stripe est le même nombre pour les deux');
+  assert.equal(calls.transfers[0].amountCents, calls.transfers[1].amountCents,
+    'et le total capturé au client aussi');
 });
 
 test('ART. 32.1 2° — le notaire reçoit 100 % du montant offert', async () => {

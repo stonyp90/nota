@@ -22,7 +22,7 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const domain = require('../index.js');
-const { SERVICES, TIERS, prixNota, prixNotaGrille } = domain;
+const { SERVICES, TIERS, prixNota, prixNotaGrille, prixNotaFige } = domain;
 
 test('le catalogue porte la grille : chaque service publie son prix de Nota', () => {
   assert.ok(SERVICES.length, 'le catalogue existe');
@@ -164,4 +164,33 @@ test('le taux de prise chiffré de l’ADR 0034 se vérifie sur le catalogue', (
   // Le prix unique de 400 $ pesait davantage sur les DEUX.
   assert.ok(40000 / (180000 + 40000) > fin / (180000 + fin));
   assert.ok(40000 / (200000 + 40000) > refi / (200000 + refi));
+});
+
+// ---------------------------------------------------------------------------
+// Le devis FIGÉ — ce qu'une offre a AUTORISÉ, relu plutôt que recalculé
+// ---------------------------------------------------------------------------
+
+test('prixNotaFige relit les deux lignes autorisées, ou rien du tout', () => {
+  assert.deepEqual(prixNotaFige({ prixNotaServiceCents: 24900, prixNotaDateCents: 5000 }), {
+    serviceCents: 24900, dateCents: 5000, totalCents: 29900,
+  });
+  // Une seule ligne ne fait pas un devis : la moitié d'un total autorisé
+  // vaudrait pire que rien, puisqu'elle passerait pour un total.
+  assert.equal(prixNotaFige({ prixNotaServiceCents: 24900 }), null);
+  assert.equal(prixNotaFige({ prixNotaDateCents: 5000 }), null);
+  // Et rien de ce qui n'est pas un entier de cents ne se rejoue.
+  for (const bad of [{ prixNotaServiceCents: 0.15, prixNotaDateCents: 0 },
+    { prixNotaServiceCents: -1, prixNotaDateCents: 0 },
+    { prixNotaServiceCents: 24900, prixNotaDateCents: 'oups' },
+    null, undefined, 'nope', []]) {
+    assert.equal(prixNotaFige(bad), null, JSON.stringify(bad));
+  }
+});
+
+test('ART. 29.1 — un devis figé se relit sans notaire, comme la grille', () => {
+  // Le même garde-fou d'arité que `prixNota` : il n'existe aucun argument par
+  // lequel un notaire, ou sa cote, entrerait dans le prix — ni au devis, ni au
+  // règlement, qui est le seul endroit où l'API en connaît un.
+  assert.equal(prixNota.length, 3, 'prixNota(serviceId, tierId, grille) — et rien d’autre');
+  assert.equal(prixNotaFige.length, 1, 'prixNotaFige(offre) — et rien d’autre');
 });

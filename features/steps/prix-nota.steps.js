@@ -8,7 +8,8 @@
  * cette mécanique ; le modèle a changé, et ces steps décrivent le nouveau :
  *
  *   honoraires — le montant offert par le client, qui va au notaire EN ENTIER
- *   prix Nota  — un montant fixe, le même pour tous, payé par le client À CÔTÉ
+ *   prix Nota  — publié d'avance, décidé par le SERVICE et par le DÉLAI (une
+ *                grille depuis l'ADR 0034), payé par le client À CÔTÉ
  *   total      — ce que la carte autorise, et la borne haute de la capture
  *
  * Rien ici ne divise, ne compare ni ne retranche : un scénario qui exprimerait
@@ -46,6 +47,14 @@ function transferFor(world, bidId) {
   assert.equal(t.length, 1, 'exactement une capture attendue sur ' + id + ': ' + JSON.stringify(world.stripe.calls.transfers));
   return t[0];
 }
+
+// La console de Nota change la grille — en plein milieu d'un scénario, comme
+// en plein milieu de la vie d'une offre. C'est l'événement que le devis figé
+// existe pour absorber : la grille du lendemain ne réécrit pas ce qu'un client
+// a lu et bloqué la veille.
+When('Nota porte le prix du service {string} à {int} $', async function (serviceId, dollars) {
+  await this.repo.putPrixNotaConfig({ services: { [serviceId]: cents(dollars) } }, new Date().toISOString());
+});
 
 // --- Le devis, avant l'engagement -------------------------------------------
 

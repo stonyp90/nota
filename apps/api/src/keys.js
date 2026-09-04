@@ -272,8 +272,9 @@ function emailOverrideSK(key) {
 }
 const EMAIL_OVERRIDE_PREFIX = 'TPL#';
 
-// --- Le prix de Nota, décidé par Nota (ADR 0031) -------------------------------
-// UN item : le montant fixe, en cents, que la tarification ajoute à toute offre.
+// --- Le prix de Nota, décidé par Nota (ADR 0031 / 0034) ------------------------
+// UN item : la GRILLE, en cents — une ligne par service, plus la garantie de
+// date sur sa propre ligne — que la tarification ajoute à toute offre.
 // Ce partition remplace CONFIG#COMMISSION, qui portait un barème de taux :
 // l'art. 29.1 du Code de déontologie interdit au notaire toute convention
 // mettant en péril son désintéressement, et un prix indexé sur sa cote en était
