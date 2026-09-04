@@ -6,6 +6,7 @@ const {
   STATS_GAUGE_SK,
   consentJournalSK,
   notifSK,
+  notifSubject,
   subjectJournalSK,
   campaignRecipientsPK,
   campaignRecipientSK,
@@ -15,6 +16,8 @@ const {
   NOTIF_PAGE_MAX,
   SUBJECT_PAGE_MAX,
   CAMPAIGN_PAGE_MAX,
+  CONSENT_PAGE_MAX,
+  CLIENT_BID_PAGE_MAX,
   encodeCursor,
   decodeCursor,
 } = require('./keys');
@@ -104,6 +107,27 @@ function createMemoryRepo(seed = []) {
     };
     consentements.set(item.email, item);
     return item;
+  }
+  // La même écriture, mais GARDÉE PAR L'INSTANT : la projection doit suivre le
+  // dernier ÉVÉNEMENT, pas la dernière écriture. Un rejeu tardif, un backfill
+  // ou deux Lambdas concurrentes présentent les événements dans le désordre —
+  // sans cette garde, un octroi arrivé après coup ressuscite un consentement
+  // retiré, et `segments.js` (qui ne lit que la projection) démarche à nouveau
+  // quelqu'un qui s'est retiré. Miroir exact de la ConditionExpression
+  // `#at <= :at` côté DynamoDB.
+  function projeterConsentement(email, consent) {
+    const adresse = courriel(email);
+    const actuel = consentements.get(adresse);
+    const nouvelInstant = consent && consent.at ? String(consent.at) : null;
+    if (actuel && actuel.at && nouvelInstant && String(actuel.at) > nouvelInstant) return actuel;
+    return majProjectionConsentement(adresse, consent);
+  }
+  // Le dernier fait du journal : l'instant mène la clé de tri, donc c'est la
+  // dernière entrée. Sert à la reprise — réconcilier une projection restée en
+  // arrière demande de savoir ce que le journal, lui, porte déjà.
+  function dernierEvenementConsentement(adresse) {
+    const rangees = triees(consentJournal, adresse);
+    return rangees.length ? rangees[rangees.length - 1][1] : null;
   }
 
   // Notary console: declines (per notary+bid) and retained pointers (per notary).
@@ -642,22 +666,37 @@ function createMemoryRepo(seed = []) {
         lang: evenement.lang || null,
         at,
       };
-      if (!ajoutUnique(consentJournal, adresse, consentJournalSK(at, id), item)) return false;
+      if (!ajoutUnique(consentJournal, adresse, consentJournalSK(at, id), item)) {
+        // REJEU. Le journal refuse le doublon — c'est ce qu'on lui demande.
+        // Mais un rejeu vient presque toujours d'une tentative précédente qui
+        // s'est arrêtée EN CHEMIN : le journal écrit, la projection perdue. La
+        // reprise doit donc réconcilier, sinon elle ne répare jamais rien.
+        const dernier = dernierEvenementConsentement(adresse);
+        if (dernier) projeterConsentement(adresse, dernier);
+        return false;
+      }
       // La projection suit le DERNIER événement : `segments.js` la lit sans
       // jamais connaître le journal.
-      majProjectionConsentement(adresse, { base: item.base, at: item.at, source: item.source });
+      projeterConsentement(adresse, { base: item.base, at: item.at, source: item.source });
       return true;
     },
     // Du plus ancien au plus récent : une chaîne de preuve se lit dans l'ordre.
-    async listConsentEvents(email) {
-      return triees(consentJournal, courriel(email)).map(([, e]) => ({ ...e }));
+    // BORNÉE, comme toutes les lectures de ces registres, et la fenêtre se
+    // prend par le bout RÉCENT : si une partition débordait, ce qui tombe est
+    // le passé lointain, jamais le dernier fait — c'est lui qui décide.
+    async listConsentEvents(email, { limit } = {}) {
+      return triees(consentJournal, courriel(email))
+        .slice(-borne(limit, CONSENT_PAGE_MAX))
+        .map(([, e]) => ({ ...e }));
     },
 
     // --- Avis en application ------------------------------------------------
     // Le sujet est déjà dérivé par l'appelant (keys.notaryNotifSubject /
     // keys.clientNotifSubject) : le dépôt ne voit jamais un jeton porteur.
     async appendNotification(avisNeuf = {}) {
-      const sujet = String(avisNeuf.sujet || '');
+      // Le sujet est une CLÉ : il se normalise comme côté DynamoDB (et un
+      // sujet vide y est refusé — une boîte d'avis COMMUNE n'existe pas).
+      const sujet = notifSubject(avisNeuf.sujet);
       const at = avisNeuf.at || null;
       const id = avisNeuf.id == null ? randomUUID() : String(avisNeuf.id);
       const item = {
@@ -679,7 +718,7 @@ function createMemoryRepo(seed = []) {
     // s'est passé à partir de cet instant » — la clé de tri commence par
     // l'instant, donc la comparaison de chaînes suffit, ici comme en dynamo.
     async listNotifications(sujet, { limit, depuis } = {}) {
-      const rows = triees(avis, sujet).filter(([sk]) => (depuis ? sk >= String(depuis) : true));
+      const rows = triees(avis, notifSubject(sujet)).filter(([sk]) => (depuis ? sk >= String(depuis) : true));
       return rows
         .reverse()
         .slice(0, borne(limit, NOTIF_PAGE_MAX))
@@ -687,12 +726,15 @@ function createMemoryRepo(seed = []) {
     },
     // `ids` : un tableau d'identifiants, ou 'toutes'. Ne touche QUE le non-lu —
     // un avis déjà lu garde son instant de lecture, et n'est pas recompté.
+    // Bornée à la MÊME fenêtre que la lecture : on ne marque lu que ce qu'on
+    // pouvait voir, et aucune des deux portes ne rapatrie une partition
+    // entière dans la mémoire d'une Lambda.
     async markNotificationsRead(sujet, ids, at) {
       const cible = ids === 'toutes' || ids === 'all' || ids == null
         ? null
         : new Set((Array.isArray(ids) ? ids : [ids]).map(String));
       let marques = 0;
-      for (const [, a] of triees(avis, sujet)) {
+      for (const [, a] of triees(avis, notifSubject(sujet)).slice(-NOTIF_PAGE_MAX)) {
         if (a.luLe) continue;
         if (cible && !cible.has(String(a.id))) continue;
         a.luLe = at || null;
@@ -703,7 +745,7 @@ function createMemoryRepo(seed = []) {
 
     // --- Journal par sujet --------------------------------------------------
     async appendSubjectEvent(evenement = {}) {
-      const sujet = String(evenement.sujet || '');
+      const sujet = notifSubject(evenement.sujet);
       const at = evenement.at || null;
       const id = evenement.id == null ? randomUUID() : String(evenement.id);
       const item = {
@@ -720,7 +762,7 @@ function createMemoryRepo(seed = []) {
     // Les plus récents d'abord : la question posée est « qu'a-t-on envoyé à
     // cette personne dernièrement », et une limite n'a de sens que par ce bout.
     async listSubjectEvents(sujet, { limit } = {}) {
-      return triees(sujetJournal, sujet)
+      return triees(sujetJournal, notifSubject(sujet))
         .reverse()
         .slice(0, borne(limit, SUBJECT_PAGE_MAX))
         .map(([, e]) => ({ ...e }));
@@ -748,16 +790,30 @@ function createMemoryRepo(seed = []) {
     // la mémoire d'une Lambda, et le curseur doit survivre à un aller-retour
     // HTTP — d'où la même chaîne encodée que côté dynamo.
     async listCampaignRecipients(campagneId, { limit, cursor } = {}) {
-      campaignRecipientsPK(campagneId); // même refus de l'identifiant réservé qu'en dynamo
-      const rows = triees(campagneDestinataires, String(campagneId));
+      const pk = campaignRecipientsPK(campagneId); // même refus de l'identifiant réservé qu'en dynamo
+      // L'identifiant se trime À LA LECTURE comme à l'écriture : sinon un
+      // « camp-1 » recopié d'un formulaire lit une partition vide alors que
+      // l'autre adaptateur, lui, trouve ses destinataires.
+      const rows = triees(campagneDestinataires, String(campagneId == null ? '' : campagneId).trim());
       const reprise = decodeCursor(cursor);
-      const debut = reprise && reprise.SK ? rows.findIndex(([sk]) => sk === reprise.SK) + 1 : 0;
+      // Reprise STRICTEMENT après la clé, comme `ExclusiveStartKey` : la clé
+      // nommée peut avoir disparu (ligne purgée, curseur d'une autre page), et
+      // un `findIndex` qui ne la trouve pas rendrait -1 — donc la page
+      // repartirait du DÉBUT, et la boucle de l'appelant tournerait sans fin.
+      let debut = 0;
+      if (reprise && reprise.SK) {
+        const apres = rows.findIndex(([sk]) => sk > String(reprise.SK));
+        debut = apres === -1 ? rows.length : apres;
+      }
       const taille = borne(limit, CAMPAIGN_PAGE_MAX);
       const page = rows.slice(debut, debut + taille);
       const reste = rows.length > debut + page.length;
       return {
         destinataires: page.map(([, d]) => ({ ...d })),
-        cursor: reste && page.length ? encodeCursor({ SK: page[page.length - 1][0] }) : null,
+        // Le curseur porte la clé COMPLÈTE — la même forme que le
+        // `LastEvaluatedKey` de DynamoDB, sinon les deux adaptateurs ne
+        // rendent pas le même jeton pour la même page.
+        cursor: reste && page.length ? encodeCursor({ PK: pk, SK: page[page.length - 1][0] }) : null,
       };
     },
 
@@ -777,9 +833,13 @@ function createMemoryRepo(seed = []) {
       partition(clientOffres, clean).set(clientBidSK(item.dateISO, item.bidId), item);
       return { ...item };
     },
-    // Chronologique : la date mène la clé de tri.
-    async listClientBids(email) {
-      return triees(clientOffres, courriel(email)).map(([, o]) => ({ ...o }));
+    // Chronologique : la date mène la clé de tri. Bornée comme les autres, et
+    // la fenêtre se prend par les dates les plus proches — une personne se
+    // retrouve par ce qu'elle a de vivant, pas par ce qui a expiré.
+    async listClientBids(email, { limit } = {}) {
+      return triees(clientOffres, courriel(email))
+        .slice(-borne(limit, CLIENT_BID_PAGE_MAX))
+        .map(([, o]) => ({ ...o }));
     },
 
     // --- Marque d'effacement (Loi 25, art. 28) ------------------------------

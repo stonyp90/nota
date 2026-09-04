@@ -56,6 +56,7 @@ const {
   consentJournalSK,
   notifPK,
   notifSK,
+  notifSubject,
   subjectJournalPK,
   subjectJournalSK,
   campaignRecipientsPK,
@@ -70,6 +71,8 @@ const {
   NOTIF_PAGE_MAX,
   SUBJECT_PAGE_MAX,
   CAMPAIGN_PAGE_MAX,
+  CONSENT_PAGE_MAX,
+  CLIENT_BID_PAGE_MAX,
   encodeCursor,
   decodeCursor,
   adminPK,
@@ -162,22 +165,71 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
     return Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), max) : max;
   };
   // La projection d'état courant du consentement. Une seule écriture pour deux
-  // portes : `putEmailConsent` (l'état) et `appendConsentEvent` (le journal,
-  // qui rafraîchit l'index de lecture derrière lui).
-  async function ecrireProjectionConsentement(email, consent) {
+  // portes : `putEmailConsent` (l'état, écrit de force) et
+  // `appendConsentEvent` (le journal, qui rafraîchit l'index de lecture
+  // derrière lui — et celui-là passe par la GARDE ci-dessous).
+  //
+  // `at` est ABSENT de l'item quand l'appelant n'en donne pas : un attribut
+  // NULL ne se compare pas en DynamoDB, il bloquerait toute écriture suivante.
+  // `getEmailConsent` recompose la forme complète à la lecture.
+  async function ecrireProjectionConsentement(email, consent, { garderLOrdre = false } = {}) {
+    const at = (consent && consent.at) || null;
     const stored = {
       email: lowerEmail(email),
       base: (consent && consent.base) || null,
-      at: (consent && consent.at) || null,
+      at,
       source: (consent && consent.source) || null,
     };
-    await doc.send(
-      new PutCommand({
+    // La projection doit suivre le dernier ÉVÉNEMENT, pas la dernière
+    // ÉCRITURE. Un rejeu tardif, un backfill ou deux Lambdas concurrentes
+    // présentent les événements dans le désordre : sans cette condition, un
+    // octroi arrivé après coup ressusciterait un consentement retiré, et
+    // `segments.js` — qui ne lit que cette projection — démarcherait à nouveau
+    // quelqu'un qui s'est retiré (LCAP art. 13, Loi 25 art. 8). La condition
+    // est ATOMIQUE : elle tient aussi entre deux Lambdas, là où un
+    // lire-puis-écrire perdrait la course.
+    const garde = garderLOrdre && at
+      ? {
+          ConditionExpression: 'attribute_not_exists(PK) OR attribute_not_exists(#at) OR #at <= :at',
+          ExpressionAttributeNames: { '#at': 'at' },
+          ExpressionAttributeValues: { ':at': at },
+        }
+      : {};
+    try {
+      await doc.send(
+        new PutCommand({
+          TableName: tableName,
+          Item: {
+            PK: emailConsentPK(),
+            SK: emailConsentSK(stored.email),
+            type: 'email_consent',
+            ...stored,
+            at: at || undefined,
+          },
+          ...garde,
+        })
+      );
+    } catch (err) {
+      // La projection porte déjà un fait PLUS RÉCENT : la laisser est la
+      // bonne réponse, pas une erreur.
+      if (!(err && err.name === 'ConditionalCheckFailedException')) throw err;
+    }
+    return stored;
+  }
+  // Le dernier fait du journal : l'instant mène la clé de tri, donc une Query
+  // d'UN item à rebours suffit. Sert à la reprise — réconcilier une projection
+  // restée en arrière demande de savoir ce que le journal porte déjà.
+  async function dernierEvenementConsentement(adresse) {
+    const out = await doc.send(
+      new QueryCommand({
         TableName: tableName,
-        Item: { PK: emailConsentPK(), SK: emailConsentSK(stored.email), type: 'email_consent', ...stored },
+        KeyConditionExpression: 'PK = :pk',
+        ExpressionAttributeValues: { ':pk': consentJournalPK(adresse) },
+        ScanIndexForward: false,
+        Limit: 1,
       })
     );
-    return stored;
+    return (out.Items || [])[0] || null;
   }
 
   function toItem(bid) {
@@ -668,8 +720,17 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
         new GetCommand({ TableName: tableName, Key: { PK: emailConsentPK(), SK: emailConsentSK(email) } })
       );
       if (!out.Item) return null;
-      const { PK, SK, type, ...consent } = out.Item;
-      return consent;
+      // La forme est recomposée, jamais recopiée : l'item peut ne PAS porter
+      // d'`at` (voir `ecrireProjectionConsentement`), et l'adaptateur mémoire,
+      // lui, rend toujours les quatre champs. Un appelant ne doit pas pouvoir
+      // dire lequel des deux dépôts lui a répondu.
+      const item = out.Item;
+      return {
+        email: item.email || lowerEmail(email),
+        base: item.base == null ? null : item.base,
+        at: item.at == null ? null : item.at,
+        source: item.source == null ? null : item.source,
+      };
     },
     async putEmailConsent(email, consent) {
       return ecrireProjectionConsentement(email, consent);
@@ -761,33 +822,54 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
           })
         );
       } catch (err) {
-        if (err && err.name === 'ConditionalCheckFailedException') return false;
-        throw err;
+        if (err && err.name !== 'ConditionalCheckFailedException') throw err;
+        // REJEU. Le journal refuse le doublon — c'est ce qu'on lui demande.
+        // Mais les deux écritures ne sont PAS atomiques : un rejeu vient
+        // presque toujours d'une tentative qui s'est arrêtée en chemin, le
+        // journal écrit et la projection perdue (throttling, coupure réseau).
+        // Une reprise qui rendrait `false` sans rien réconcilier ne
+        // réparerait jamais rien — et `segments.js` continuerait de démarcher
+        // quelqu'un dont le retrait est pourtant au registre.
+        const dernier = await dernierEvenementConsentement(adresse);
+        if (dernier) {
+          await ecrireProjectionConsentement(
+            adresse,
+            { base: dernier.base, at: dernier.at, source: dernier.source },
+            { garderLOrdre: true }
+          );
+        }
+        return false;
       }
-      await ecrireProjectionConsentement(adresse, { base: item.base, at: item.at, source: item.source });
+      await ecrireProjectionConsentement(
+        adresse,
+        { base: item.base, at: item.at, source: item.source },
+        { garderLOrdre: true }
+      );
       return true;
     },
-    // Du plus ancien au plus récent, la partition entière : une chaîne de
-    // preuve se lit dans l'ordre et d'un bout à l'autre.
-    async listConsentEvents(email) {
-      const evenements = [];
-      let ExclusiveStartKey;
-      do {
-        const out = await doc.send(
-          new QueryCommand({
-            TableName: tableName,
-            KeyConditionExpression: 'PK = :pk',
-            ExpressionAttributeValues: { ':pk': consentJournalPK(email) },
-            ExclusiveStartKey,
-          })
-        );
-        (out.Items || []).forEach((i) => {
+    // Du plus ancien au plus récent : une chaîne de preuve se lit dans l'ordre.
+    // La lecture est BORNÉE — une partition entière rapatriée dans la mémoire
+    // d'une Lambda est un bogue de dessin — et la fenêtre se prend par le bout
+    // RÉCENT : si une partition débordait, ce qui tombe est le passé lointain,
+    // jamais le dernier fait, qui décide seul si l'on peut encore démarcher.
+    async listConsentEvents(email, { limit } = {}) {
+      const out = await doc.send(
+        new QueryCommand({
+          TableName: tableName,
+          KeyConditionExpression: 'PK = :pk',
+          ExpressionAttributeValues: { ':pk': consentJournalPK(email) },
+          ScanIndexForward: false,
+          Limit: borne(limit, CONSENT_PAGE_MAX),
+        })
+      );
+      return (out.Items || [])
+        .map((i) => {
+          // `type` est ici un champ MÉTIER (octroi / retrait), pas le
+          // discriminant d'item : il ne se dépouille pas.
           const { PK, SK, ...rec } = i;
-          evenements.push(rec);
-        });
-        ExclusiveStartKey = out.LastEvaluatedKey;
-      } while (ExclusiveStartKey);
-      return evenements;
+          return rec;
+        })
+        .reverse();
     },
 
     // --- Avis en application ------------------------------------------------
@@ -798,7 +880,9 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
       const id = avis.id == null ? randomUUID() : String(avis.id);
       const item = {
         id,
-        sujet: String(avis.sujet || ''),
+        // Le sujet est une CLÉ : il se range normalisé, sinon « Roy@Etude.CA »
+        // et « roy@etude.ca » sont deux boîtes d'avis pour une seule personne.
+        sujet: notifSubject(avis.sujet),
         audience: avis.audience || null,
         kind: avis.kind || null,
         titre: avis.titre || null,
@@ -849,28 +933,32 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
     // les clés de tri (l'identifiant seul ne les donne pas : l'instant les
     // mène), puis un UpdateItem par avis NON LU. Course bénigne assumée : deux
     // marquages simultanés écrivent le même instant de lecture.
+    //
+    // La recherche est bornée à la MÊME fenêtre que `listNotifications` — on ne
+    // marque lu que ce qu'on pouvait voir — et elle ne rapatrie QUE de quoi
+    // décider : la clé, l'identifiant, l'instant de lecture. Le corps d'un avis
+    // n'a rien à faire dans la mémoire d'une Lambda qui ne fait que cocher.
     async markNotificationsRead(sujet, ids, at) {
       const cible = ids === 'toutes' || ids === 'all' || ids == null
         ? null
         : new Set((Array.isArray(ids) ? ids : [ids]).map(String));
+      const out = await doc.send(
+        new QueryCommand({
+          TableName: tableName,
+          KeyConditionExpression: 'PK = :pk',
+          ExpressionAttributeValues: { ':pk': notifPK(sujet) },
+          ProjectionExpression: 'PK, SK, #id, #lu',
+          ExpressionAttributeNames: { '#id': 'id', '#lu': 'luLe' },
+          ScanIndexForward: false,
+          Limit: NOTIF_PAGE_MAX,
+        })
+      );
       const aMarquer = [];
-      let ExclusiveStartKey;
-      do {
-        const out = await doc.send(
-          new QueryCommand({
-            TableName: tableName,
-            KeyConditionExpression: 'PK = :pk',
-            ExpressionAttributeValues: { ':pk': notifPK(sujet) },
-            ExclusiveStartKey,
-          })
-        );
-        for (const i of out.Items || []) {
-          if (i.luLe) continue;
-          if (cible && !cible.has(String(i.id))) continue;
-          aMarquer.push({ PK: i.PK, SK: i.SK });
-        }
-        ExclusiveStartKey = out.LastEvaluatedKey;
-      } while (ExclusiveStartKey);
+      for (const i of out.Items || []) {
+        if (i.luLe) continue;
+        if (cible && !cible.has(String(i.id))) continue;
+        aMarquer.push({ PK: i.PK, SK: i.SK });
+      }
 
       let marques = 0;
       for (const Key of aMarquer) {
@@ -895,7 +983,7 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
 
     // --- Journal par sujet --------------------------------------------------
     async appendSubjectEvent(evenement = {}) {
-      const sujet = String(evenement.sujet || '');
+      const sujet = notifSubject(evenement.sujet);
       const at = evenement.at || null;
       const id = evenement.id == null ? randomUUID() : String(evenement.id);
       const item = {
@@ -1018,23 +1106,20 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
       );
       return item;
     },
-    // Chronologique : la date mène la clé de tri, aucun tri côté client.
-    async listClientBids(email) {
-      const offres = [];
-      let ExclusiveStartKey;
-      do {
-        const out = await doc.send(
-          new QueryCommand({
-            TableName: tableName,
-            KeyConditionExpression: 'PK = :pk AND begins_with(SK, :b)',
-            ExpressionAttributeValues: { ':pk': clientIndexPK(email), ':b': CLIENT_BID_PREFIX },
-            ExclusiveStartKey,
-          })
-        );
-        (out.Items || []).forEach((i) => offres.push(sansCles(i)));
-        ExclusiveStartKey = out.LastEvaluatedKey;
-      } while (ExclusiveStartKey);
-      return offres;
+    // Chronologique : la date mène la clé de tri, aucun tri côté client. Comme
+    // partout ici la lecture est BORNÉE, et la fenêtre se prend par les dates
+    // les plus proches — une personne se retrouve par ce qu'elle a de vivant.
+    async listClientBids(email, { limit } = {}) {
+      const out = await doc.send(
+        new QueryCommand({
+          TableName: tableName,
+          KeyConditionExpression: 'PK = :pk AND begins_with(SK, :b)',
+          ExpressionAttributeValues: { ':pk': clientIndexPK(email), ':b': CLIENT_BID_PREFIX },
+          ScanIndexForward: false,
+          Limit: borne(limit, CLIENT_BID_PAGE_MAX),
+        })
+      );
+      return (out.Items || []).map(sansCles).reverse();
     },
 
     // --- Marque d'effacement (Loi 25, art. 28) ------------------------------

@@ -22,12 +22,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
 import { createFakeTable } from './fake-table.mjs';
 
 const require = createRequire(import.meta.url);
 const keys = require('../src/keys.js');
 const { createMemoryRepo } = require('../src/repo-memory.js');
+const { createApp } = require('../src/handler.js');
 const { createDynamoRepo } = require('../src/repo-dynamo.js');
 
 const T0 = '2026-09-03T14:00:00.000Z';
@@ -89,19 +89,38 @@ test('keys : le registre des destinataires ne peut pas écraser le plafond de fr
   assert.throws(() => keys.campaignRecipientsPK('envois'), /réservé/i);
 });
 
-test('keys : le ttl de l’index client est CELUI de l’offre qu’il indexe', () => {
+test('keys : le ttl de l’index client est CELUI de l’offre qu’il indexe', async () => {
   const dateISO = '2026-10-02';
   assert.equal(
     keys.bidTtl(dateISO),
     Math.floor(Date.parse(dateISO + 'T00:00:00Z') / 1000) + keys.BID_RETENTION_DAYS * 86400
   );
+  assert.equal(keys.bidTtl('pas-une-date'), null, 'une date illisible ne produit pas un ttl NaN');
+
   // Et la rétention est bien celle que le handler applique à l’offre : si l’un
   // change sans l’autre, l’index survit à ce qu’il indexe (ou meurt avant).
-  const src = readFileSync(new URL('../src/handler.js', import.meta.url), 'utf8');
-  const ligne = src.split('\n').find((l) => l.includes("payload.dateISO + 'T00:00:00Z'") && l.includes('86400'));
-  assert.ok(ligne, 'le calcul du ttl de l’offre a bougé dans handler.js');
-  assert.equal(Number(/\+\s*(\d+)\s*\*\s*86400/.exec(ligne)[1]), keys.BID_RETENTION_DAYS);
-  assert.equal(keys.bidTtl('pas-une-date'), null, 'une date illisible ne produit pas un ttl NaN');
+  //
+  // La garde passe par la PORTE, pas par la source : elle publie une offre et
+  // compare le ttl RÉELLEMENT stocké. Une garde qui cherchait la ligne de
+  // calcul dans `handler.js` interdisait la migration qu’elle réclamait — le
+  // jour où le handler écrit `ttl: keys.bidTtl(...)`, la ligne disparaît et la
+  // garde tombe, alors que l’invariant, lui, n’a jamais été aussi vrai.
+  const repo = createMemoryRepo();
+  const api = createApp(repo, { now: () => '2026-08-12', newId: () => 'b1' });
+  const res = await api.handle({
+    method: 'POST',
+    path: '/bids',
+    body: JSON.stringify({
+      serviceId: 'refinancement', dateISO, montant: 2500, prefixe: 'G1R',
+      pricing: {
+        valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue',
+        preteur: 'banque_nationale', deplacement: 'client_50',
+      },
+    }),
+  });
+  assert.equal(res.statusCode, 201, res.body);
+  const [offre] = await repo._all();
+  assert.equal(offre.ttl, keys.bidTtl(dateISO), 'l’index doit mourir EXACTEMENT avec l’offre qu’il indexe');
 });
 
 // ============================================================================

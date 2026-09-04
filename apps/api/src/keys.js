@@ -388,17 +388,42 @@ function consentJournalSK(at, id) {
 // lentes ou une sauvegarde, et quiconque le lit devient ce client. Le sujet est
 // donc le HACHÉ du jeton — déterministe (le même porteur retrouve ses avis),
 // irréversible (la table ne contient rien qui permette de rejouer le jeton).
+//
+// Un sujet est une CLÉ, donc il se normalise comme toutes les autres clés
+// dérivées d'une adresse (`normalizedEmail`) : sans cela, « Roy@Etude.CA » et
+// « roy@etude.ca » sont deux boîtes d'avis pour la même personne, et l'avis
+// écrit par un chantier reste invisible au chantier qui le lit. Un haché de
+// jeton est déjà minuscule : la normalisation le laisse intact.
+//
+// Et un sujet VIDE est refusé. La partition `NOTIF#` seule serait une boîte
+// COMMUNE : tous les visiteurs sans sujet y liraient les avis des autres, et
+// un « tout marquer lu » cocherait ceux de tout le monde.
+function notifSubject(sujet) {
+  const clean = normalizedEmail(sujet);
+  if (!clean) throw new Error('notifSubject : un sujet vide vaudrait une boîte d’avis COMMUNE');
+  return clean;
+}
 function notifPK(sujet) {
-  return 'NOTIF#' + String(sujet);
+  return 'NOTIF#' + notifSubject(sujet);
 }
 function notifSK(at, id) {
   return `${at}#${id}`;
 }
+// Les deux dérivations refusent le vide plutôt que de le hacher : `String(null)`
+// et `String('')` donnent le MÊME haché, donc la même partition — deux clients
+// sans jeton partageraient leur boîte d'avis. C'est le réflexe de
+// `campaignRecipientsPK` : une clé refuse plutôt que de corrompre.
 function notaryNotifSubject(email) {
-  return normalizedEmail(email);
+  const clean = normalizedEmail(email);
+  if (!clean) throw new Error('notaryNotifSubject : un sujet de notaire est son adresse, et elle est requise');
+  return clean;
 }
 function clientNotifSubject(jeton) {
-  return 'client:' + createHash('sha256').update(String(jeton == null ? '' : jeton)).digest('hex');
+  const brut = String(jeton == null ? '' : jeton);
+  if (!brut.trim()) throw new Error('clientNotifSubject : sans jeton porteur, il n’y a pas de sujet à hacher');
+  // Le jeton est haché TEL QUEL — le rogner changerait la partition d'un
+  // porteur qui, lui, présente toujours la même chaîne.
+  return 'client:' + createHash('sha256').update(brut).digest('hex');
 }
 
 // --- Journal PAR SUJET : ce qui est parti vers cette personne -------------------
@@ -411,7 +436,7 @@ function clientNotifSubject(jeton) {
 // (art. 27, droit d'accès) rend un jour obligatoire. Même dessin que le journal
 // de consentement : append-only, instant en tête du tri, une Query par personne.
 function subjectJournalPK(sujet) {
-  return 'SUJET#' + String(sujet);
+  return 'SUJET#' + notifSubject(sujet);
 }
 function subjectJournalSK(at, id) {
   return `${at}#${id}`;
@@ -501,9 +526,27 @@ const ERASURE_SK = 'ERASURE';
 // au chiffre près : une borne recopiée des deux côtés finit par diverger, et la
 // divergence ne se voit qu'en production.
 //
+// Aucune de ces valeurs n'est gravée : elles se surchargent par
+// l'environnement, comme tout ce que l'exploitation doit pouvoir régler sans
+// redéployer du code. Une surcharge illisible (vide, négative, non numérique)
+// est IGNORÉE — un déploiement ne tombe pas sur une variable mal tapée.
+function entierEnv(nom, defaut) {
+  const brut = process.env[nom];
+  if (brut === undefined || brut === null || String(brut).trim() === '') return defaut;
+  const n = Number(brut);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : defaut;
+}
+
 // Un pointeur d'index doit mourir avec ce qu'il indexe — un index qui survit à
 // l'offre pointe dans le vide, un index qui meurt avant la rend introuvable.
 // C'est la MÊME rétention que le ttl de l'offre (apps/api/src/handler.js).
+//
+// CELLE-CI N'A PAS DE SURCHARGE, et c'est délibéré : `handler.js` calcule
+// encore le ttl de l'offre en clair (`+ 400 * 86400`) au lieu d'appeler
+// `bidTtl`. Une variable d'environnement désaccorderait donc l'index de ce
+// qu'il indexe sans que rien ne le dise. Elle s'ouvrira le jour où le handler
+// passera par cette maison commune — la garde de
+// `registres-persistance.test.mjs` compare déjà les deux par la porte.
 const BID_RETENTION_DAYS = 400;
 function bidTtl(dateISO) {
   const ms = Date.parse(String(dateISO) + 'T00:00:00Z');
@@ -513,17 +556,26 @@ function bidTtl(dateISO) {
 // Un avis en application est une copie de courtoisie d'un fait qui vit ailleurs
 // (l'offre, l'acte, le fil de messages) : il n'a pas à survivre à la saison où
 // il servait. Minimisation (Loi 25, art. 3.2) plutôt que conservation par défaut.
-const NOTIF_RETENTION_DAYS = 180;
+const NOTIF_RETENTION_DAYS = entierEnv('NOTA_NOTIF_RETENTION_DAYS', 180);
 function notifTtl(atISO) {
   const ms = Date.parse(String(atISO));
   return Number.isFinite(ms) ? Math.floor(ms / 1000) + NOTIF_RETENTION_DAYS * 86400 : null;
 }
 
 // Plafonds de page. Une lecture non bornée finit par ramener une partition
-// entière dans la mémoire d'une Lambda ; ces trois nombres sont la borne dure.
-const NOTIF_PAGE_MAX = 50;
-const SUBJECT_PAGE_MAX = 50;
-const CAMPAIGN_PAGE_MAX = 100;
+// entière dans la mémoire d'une Lambda ; ces cinq nombres sont la borne dure,
+// et AUCUNE lecture de ces registres ne s'en dispense.
+//
+// Deux d'entre elles bornent une lecture qui se veut exhaustive — la chaîne de
+// consentement, les offres d'une personne. La fenêtre s'y prend donc par le
+// bout RÉCENT et se rend dans l'ordre chronologique : si une partition devait
+// un jour déborder, ce qui tombe est le passé lointain, jamais le dernier fait
+// (le retrait de consentement décide seul si l'on peut encore démarcher).
+const NOTIF_PAGE_MAX = entierEnv('NOTA_NOTIF_PAGE_MAX', 50);
+const SUBJECT_PAGE_MAX = entierEnv('NOTA_SUBJECT_PAGE_MAX', 50);
+const CAMPAIGN_PAGE_MAX = entierEnv('NOTA_CAMPAIGN_PAGE_MAX', 100);
+const CONSENT_PAGE_MAX = entierEnv('NOTA_CONSENT_PAGE_MAX', 50);
+const CLIENT_BID_PAGE_MAX = entierEnv('NOTA_CLIENT_BID_PAGE_MAX', 100);
 
 // Un curseur de page voyage : il sort du dépôt, traverse une réponse HTTP et
 // revient. Il doit donc être une CHAÎNE opaque, identique en forme d'un
@@ -710,6 +762,7 @@ module.exports = {
   // avis en application
   notifPK,
   notifSK,
+  notifSubject,
   notaryNotifSubject,
   clientNotifSubject,
   // journal par sujet
@@ -734,6 +787,8 @@ module.exports = {
   NOTIF_PAGE_MAX,
   SUBJECT_PAGE_MAX,
   CAMPAIGN_PAGE_MAX,
+  CONSENT_PAGE_MAX,
+  CLIENT_BID_PAGE_MAX,
   encodeCursor,
   decodeCursor,
   // admin table

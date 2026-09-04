@@ -60,21 +60,52 @@ test('le journal de consentement s’écrit une fois, et met à jour sa projecti
   assert.equal(projection.input.Item.PK, 'CONSENT#COURRIEL');
   assert.equal(projection.input.Item.SK, 'EMAIL#roy@etude.ca');
   assert.equal(projection.input.Item.at, T0);
-  assert.equal(projection.input.ConditionExpression, undefined, 'l’état courant, lui, s’écrase');
+  // L'état courant s'écrase — mais JAMAIS avec un fait plus ancien que celui
+  // qu'il porte déjà. La condition est atomique, donc elle tient aussi entre
+  // deux Lambdas concurrentes : sans elle, un octroi rejoué en retard
+  // ressusciterait un consentement retiré, et `segments.js` (qui ne lit que
+  // cette projection) recommencerait à démarcher.
+  assert.equal(projection.input.ConditionExpression, 'attribute_not_exists(PK) OR attribute_not_exists(#at) OR #at <= :at');
+  assert.deepEqual(projection.input.ExpressionAttributeNames, { '#at': 'at' });
+  assert.equal(projection.input.ExpressionAttributeValues[':at'], T0);
 });
 
-test('le journal de consentement se relit par sa seule partition, dans l’ordre', async () => {
+test('la porte d’ÉTAT, elle, écrase sans condition — c’est une décision, pas un événement', async () => {
+  const { repo, sent } = recordingRepo();
+  await repo.putEmailConsent('Roy@Etude.CA', { base: 'expres', at: T0, source: 'inscription' });
+  const put = seule(sent, 'PutCommand');
+  assert.equal(put.input.Item.PK, 'CONSENT#COURRIEL');
+  assert.equal(put.input.ConditionExpression, undefined, 'l’état écrit à la main fait foi');
+});
+
+test('le journal de consentement se relit par sa seule partition, borné, et rendu dans l’ordre', async () => {
+  const T10 = '2026-09-03T14:10:00.000Z';
   const { repo, sent } = recordingRepo((rec) =>
     rec.name === 'QueryCommand'
-      ? { Items: [{ PK: 'CONSENT#roy@etude.ca', SK: `${T0}#e1`, type: 'consent_event', id: 'e1', courriel: 'roy@etude.ca', at: T0 }] }
+      ? {
+          Items: [
+            { PK: 'CONSENT#roy@etude.ca', SK: `${T10}#e2`, id: 'e2', type: 'retrait', courriel: 'roy@etude.ca', at: T10 },
+            { PK: 'CONSENT#roy@etude.ca', SK: `${T0}#e1`, id: 'e1', type: 'octroi', courriel: 'roy@etude.ca', at: T0 },
+          ],
+        }
       : {}
   );
   const journal = await repo.listConsentEvents('Roy@Etude.CA');
   const q = seule(sent, 'QueryCommand');
   assert.equal(q.input.TableName, 'nota-main');
   assert.equal(q.input.ExpressionAttributeValues[':pk'], 'CONSENT#roy@etude.ca');
-  assert.notEqual(q.input.ScanIndexForward, false, 'du plus ancien au plus récent : la chaîne de preuve se lit dans l’ordre');
-  assert.equal(journal.length, 1);
+  // UNE Query bornée, jamais une boucle sur toute la partition : une lecture
+  // non bornée finit par rapatrier une partition entière dans la mémoire d'une
+  // Lambda. Et la fenêtre garde le bout RÉCENT — le retrait est le fait qui
+  // décide si l'on peut encore démarcher, l'octroi de 2019 ne l'est plus.
+  assert.equal(q.input.Limit, keys.CONSENT_PAGE_MAX);
+  assert.equal(q.input.ScanIndexForward, false, 'la fenêtre se prend par le bout récent…');
+  assert.deepEqual(
+    journal.map((e) => e.id),
+    ['e1', 'e2'],
+    '…et se rend du plus ancien au plus récent : une chaîne de preuve se lit dans l’ordre'
+  );
+  assert.equal(journal[0].type, 'octroi', 'la nature de l’événement survit à la lecture');
   assert.equal(journal[0].PK, undefined, 'les clés de table ne remontent jamais');
 });
 
@@ -123,6 +154,16 @@ test('marquer lu n’écrit que sur les avis non lus, un UpdateItem chacun', asy
   ];
   const { repo, sent } = recordingRepo((rec) => (rec.name === 'QueryCommand' ? { Items: items } : {}));
   const marques = await repo.markNotificationsRead('roy@etude.ca', 'toutes', '2026-09-03T16:00:00.000Z');
+
+  // La recherche des clés est BORNÉE à la même fenêtre que la lecture — on ne
+  // marque lu que ce qu'on pouvait voir — et elle ne rapatrie QUE de quoi
+  // décider : la clé, l'identifiant, l'instant de lecture. Le corps d'un avis
+  // n'a rien à faire dans la mémoire d'une Lambda qui ne fait que cocher.
+  const recherche = seule(sent, 'QueryCommand');
+  assert.equal(recherche.input.Limit, keys.NOTIF_PAGE_MAX);
+  assert.equal(recherche.input.ScanIndexForward, false, 'la même fenêtre que listNotifications');
+  assert.equal(recherche.input.ProjectionExpression, 'PK, SK, #id, #lu');
+  assert.deepEqual(recherche.input.ExpressionAttributeNames, { '#id': 'id', '#lu': 'luLe' });
 
   assert.equal(marques, 1, 'le déjà-lu n’est pas réécrit');
   const updates = sent.filter((s) => s.name === 'UpdateCommand');
@@ -213,6 +254,25 @@ test('l’index client porte le ttl de l’offre et ne s’oppose à rien', asyn
   assert.equal(put.input.Item.type, 'client_bid');
   assert.equal(put.input.Item.ttl, keys.bidTtl('2026-10-02'));
   assert.equal(put.input.ConditionExpression, undefined, 'un index n’est pas un journal : sa clé porte déjà l’unicité');
+});
+
+test('l’index client se lit borné — la partition d’une personne n’est pas une page', async () => {
+  const { repo, sent } = recordingRepo((rec) =>
+    rec.name === 'QueryCommand'
+      ? {
+          Items: [
+            { PK: 'CLIENT#roy@etude.ca', SK: 'BID#2026-11-15#b2', type: 'client_bid', bidId: 'b2', dateISO: '2026-11-15' },
+            { PK: 'CLIENT#roy@etude.ca', SK: 'BID#2026-10-02#b1', type: 'client_bid', bidId: 'b1', dateISO: '2026-10-02' },
+          ],
+        }
+      : {}
+  );
+  const offres = await repo.listClientBids('Roy@Etude.CA');
+  const q = seule(sent, 'QueryCommand');
+  assert.equal(q.input.ExpressionAttributeValues[':pk'], 'CLIENT#roy@etude.ca');
+  assert.equal(q.input.Limit, keys.CLIENT_BID_PAGE_MAX, 'une lecture non bornée est un bogue de dessin, pas un coût');
+  assert.equal(q.input.ScanIndexForward, false, 'la fenêtre se prend par les dates les plus proches…');
+  assert.deepEqual(offres.map((o) => o.bidId), ['b1', 'b2'], '…et se rend chronologiquement, comme le carnet');
 });
 
 test('le réabonnement efface l’item de désabonnement, et la marque d’effacement a sa propre clé', async () => {
