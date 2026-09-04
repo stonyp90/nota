@@ -112,16 +112,36 @@ soit 1 649 tests, plus 137 scénarios BDD — 717 pas — et 10 parcours Playwri
 déploiements web et admin verts) :
 
 - inscription notaire par courriel + fiche CNQ (`POST /notaries/signup`), activation manuelle dans la console admin (`POST /admin/notaries/{id}/activer`, `approuveLe`), accès qui survit à tout l'onboarding Stripe ultérieur ; Stripe n'est demandé qu'avant le premier acte signé ;
-- page d'accueil honnête (« le notaire reçoit 100 % de votre offre ; le service Nota, à prix fixe, se paie seulement à la signature »), CTA qui ouvre la première date standard, choix de date dans le formulaire, écran de publication qui dit la vérité ; nom et courriel du client requis (ADR 0033) ;
+- page d'accueil honnête (« le notaire reçoit 100 % de votre offre ; le service Nota se paie seulement à la signature — devenu depuis une grille publiée par service, ADR 0034 »), CTA qui ouvre la première date standard, choix de date dans le formulaire, écran de publication qui dit la vérité ; nom et courriel du client requis (ADR 0033) ;
 - entonnoir de conversion : catalogue d'événements dans le domaine (`FUNNEL_EVENTS`), `POST /events` en `fetch` sans identifiant, compteurs par jour, bloc « entonnoir » dans la console admin ;
 - Terraform de l'identité de domaine SES (`infra/ses-domain.tf` : DKIM, MAIL FROM, DMARC, rebonds vers les alertes), inactif tant qu'aucun domaine n'est posé.
+
+**Livré ensuite, les 3 et 4 septembre** (commits `18e017e` → `5e68c59`, sept
+couches vertes sur l'arbre combiné : domaine 294 · api 1 066 · contrat 22 ·
+web 628 · admin 144 · BDD 153 scénarios · Playwright 26) :
+
+- **Partenaires, deux passes** : estimateur « clients par mois → par année » (`D.referralProjection`), message prêt à envoyer au client avec le lien du partenaire, « Copié ✓ » seulement sur copie réussie ; puis le sélecteur « Vous êtes… » (courtier immobilier · courtier hypothécaire · autre professionnel) avec, pour chaque métier, le bon moment pour référer, porté par le domaine, et la puce du formulaire synchronisée dans les deux sens. « Agent immobilier » est devenu « Courtier immobilier », le titre de l'OACIQ.
+- **ADR 0034** : le prix de Nota est une grille publiée par service (199 $ financement, 249 $ refinancement) plus la garantie de date sur sa propre ligne ; « prix fixe » est retiré de toute la copie et un garde-fou (art. 68) refuse le mot.
+- **ADR 0035** : la caution remplace l'autorisation de carte à sept jours — carte enregistrée à la publication, blocage posé deux jours avant la signature, au devis gelé. Le point 1 de la liste ci-dessous est réglé.
+- **ADR 0037** : la récompense de parrainage est acquise à la rétention et versée à la signature ; cartes, FAQ, courriel et colonne admin « payable » alignés.
+- **Geste 4, aux deux tiers** : courriel opérateur sur les deux Lambdas, abonnements SNS créés (à confirmer par le clic dans les deux courriels AWS), journaux conservés 14 jours. Manque l'adresse postale LCAP.
 
 **Ce que le code ne peut pas faire à votre place :** les sept gestes du § 3.
 Tant qu'ils ne sont pas faits, tout ce qui précède tourne à vide.
 
+| Geste | État au 4 septembre |
+| --- | --- |
+| 1 Domaine | À faire — le film dit encore `nota.quebec`, les courriels `@nota.ca`. |
+| 2 SES | À faire — Terraform prêt (`ses-domain.tf`), demande de sortie du bac à sable rédigée (annexe A). |
+| 3 Stripe live | À faire — la caution (ADR 0035) attend les clés. |
+| 4 Adresses | Aux deux tiers — opérateur et alertes posés ; confirmer les deux abonnements SNS ; adresse postale manquante. |
+| 5 Purge des données de test | À faire — annexe B ; les 16 offres fictives sont toujours au carnet. |
+| 6 Déployer | Fait en continu — web et admin partent à chaque poussée sur `main`. |
+| 7 Gamache + vague 1 | À faire — Gamache contacté selon le pipeline ; la vague attend l'adresse postale. |
+
 **À faire ensuite, par ordre d'importance :**
 
-1. **L'autorisation de carte qui expire à 7 jours** (`stripe-port.js`, `billing.js`) : passer Checkout en mode `setup` (carte enregistrée, aucun blocage) et débiter à la signature. Sans ça, toute offre à plus de sept jours disparaît du carnet sans prévenir. Effort moyen ; c'est le prochain chantier de plomberie.
+1. ~~**L'autorisation de carte qui expire à 7 jours**~~ — réglé le 4 septembre par l'ADR 0035 (caution différée, `5e68c59`).
 2. **Un seul interstitiel.** Garder le film à la première visite, retirer le guide à la deuxième : deux écrans bloquants de 15 à 20 s sur deux visites, c'est deux occasions de partir. Décision du propriétaire.
 3. **Filet « aucun notaire »** : à J-3 sans rétention, courriel au client et alerte opérateur — la règle de conciergerie, automatisée.
 4. **Pages par acte** (refinancement, financement) avec le prix de départ et les prochaines dates : c'est ce que la recherche payante et les IA citent.
