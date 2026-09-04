@@ -2038,6 +2038,92 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /client/bid/carte:
+    post:
+      operationId: registerClientCard
+      summary: Register another card on an existing offer (ADR 0035).
+      description: >-
+        Guarded by the bid's own CLIENT token. Opens a fresh hosted Stripe
+        Checkout session for THIS offer, so a client whose card was declined
+        when the caution was placed can hand over another one. Without it the
+        refusal notice and the daily retry would be theatre: retrying the same
+        declined card gives the same decline.
+
+
+        Which surface opens follows the same rule as publication
+        (`domain.cautionDue`): a signing still beyond the caution window opens
+        a `setup` session (the card is validated and saved, nothing is held);
+        a signing already inside it opens a manual-capture `payment` session,
+        so the amount is reserved immediately. `mode` says which. The amount is
+        the offer's total TODAY — an accepted counter-offer included.
+
+
+        The session is idempotent per bid and per day: two clicks the same
+        morning reopen the same session, the next day opens a genuinely new
+        one.
+      security:
+        - clientToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, dateISO]
+              properties:
+                id:
+                  type: string
+                dateISO:
+                  type: string
+                  format: date
+      responses:
+        "200":
+          description: The hosted Checkout session to send the client to.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [checkoutUrl]
+                properties:
+                  checkoutUrl:
+                    type: string
+                    format: uri
+                  mode:
+                    type: string
+                    enum: [enregistrement, paiement]
+                    description: >-
+                      `enregistrement` saves the card without holding a cent;
+                      `paiement` reserves the amount right away.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: >-
+            Nothing to repair: the act is signed and settled (`acte_regle`), or
+            the caution is already placed on the client's card
+            (`caution_posee`) — opening a second session would hold the amount
+            twice.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "410":
+          description: The offer was cancelled (`annulee`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: >-
+            `paiement_indisponible` — billing is not configured, or Stripe is
+            unreachable. Nothing was charged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /client/welcome:
     post:
       operationId: clientWelcome

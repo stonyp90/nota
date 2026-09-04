@@ -489,7 +489,9 @@
     // the offer is retained. Cached so "Mes offres" shows whom to contact.
     // `annulation` is the ADR 0023 prevision: what cancelling TODAY would
     // keep from the deposit (taux, frais, joursAvant) — null when free.
-    c[id] = { bid: status.bid || null, notaire: status.notaire || null, propositions: status.propositions || [], demandes: status.demandes || [], readiness: status.readiness || null, messages: status.messages || [], documents: status.documents || [], acte: status.acte || null, evaluation: status.evaluation || null, annulation: status.annulation || null, fetchedAt: Date.now() };
+    // `caution` is the ADR 0035 state of the payment guarantee — `refusee` is
+    // the one the client must act on, and this cache is what the band reads.
+    c[id] = { bid: status.bid || null, notaire: status.notaire || null, propositions: status.propositions || [], demandes: status.demandes || [], readiness: status.readiness || null, messages: status.messages || [], documents: status.documents || [], acte: status.acte || null, evaluation: status.evaluation || null, annulation: status.annulation || null, caution: status.caution || null, fetchedAt: Date.now() };
     lsSave(LS_OFFERSTATUS, c);
     return c[id];
   }
@@ -3958,6 +3960,38 @@
     return card;
   }
 
+  // ADR 0035 — « votre carte a été refusée ». Dit ce qui s'est passé (rien
+  // n'a été débité), ce qui arrive si rien n'est fait (la demande tombe), et
+  // offre le seul geste utile : en enregistrer une autre. POST
+  // /client/bid/carte rouvre une page Stripe — enregistrement si la signature
+  // est loin, réservation immédiate si elle est proche : le serveur tranche.
+  function carteRefuseeBloc(o) {
+    var box = el('div', 'my-offer-carte');
+    box.appendChild(el('div', 'my-offer-carte-h', 'Votre carte a été refusée'));
+    box.appendChild(el('p', 'my-offer-carte-t', 'Rien n’a été débité. Votre demande reste en place et votre notaire est prévenu. Enregistrez une autre carte avant votre signature.'));
+    var btn = el('button', 'btn btn-sm', 'Enregistrer une autre carte');
+    btn.type = 'button';
+    btn.addEventListener('click', async function () {
+      btn.disabled = true; btn.setAttribute('aria-busy', 'true');
+      var res;
+      try {
+        var r = await fetch(API_BASE + '/client/bid/carte', {
+          method: 'POST', headers: clientHeaders(o, true),
+          body: JSON.stringify({ id: o.id, dateISO: o.dateISO }),
+        });
+        var j = {}; try { j = await r.json(); } catch (e2) {}
+        res = { ok: r.ok, status: r.status, body: j };
+      } catch (e) { res = { ok: false, status: 0, body: {} }; }
+      btn.disabled = false; btn.removeAttribute('aria-busy');
+      if (res.ok && res.body && res.body.checkoutUrl) { window.location.href = res.body.checkoutUrl; return; }
+      toast(res.status === 0 ? 'Hors ligne. Réessayez une fois en ligne.' : 'Le paiement est momentanément indisponible. Réessayez dans quelques minutes.');
+    });
+    var actions = el('div', 'my-offer-actions');
+    actions.appendChild(btn);
+    box.appendChild(actions);
+    return box;
+  }
+
   function fillMyOfferDetail(cell, o, st, status) {
     clear(cell);
     // Is any notary named in this band? The « says who? » line is owed exactly
@@ -3975,6 +4009,13 @@
       cell.appendChild(notaireCard(noti));
     }
     cell.appendChild(next);
+    // ADR 0035 — la banque a refusé la carte au moment de réserver la somme.
+    // C'est la seule mauvaise nouvelle d'argent que le client puisse encore
+    // corriger lui-même, et elle a une date de péremption : sa signature. Le
+    // courriel de refus l'envoie ICI, donc le bouton doit y être.
+    if (status && status.caution && status.caution.etat === 'refusee' && o.clientToken) {
+      cell.appendChild(carteRefuseeBloc(o));
+    }
     // The act is signed and settled (ADR 0015): the client's last gesture is
     // the evaluation — five stars, an optional word. One per act; once sent,
     // the block shows what was said and thanks them.

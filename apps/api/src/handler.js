@@ -3,7 +3,7 @@
 const domain = require('@nota/domain');
 const prixConfig = require('./prix-nota-config.js');
 const cote = require('./cote');
-const { createBilling } = require('./billing');
+const { createBilling, attendCaution } = require('./billing');
 const cancellationCfg = require('./cancellation-config');
 const { decodeUnsubToken } = require('./notifications');
 const { signToken, signChallengeToken, verifyToken, notaryIdForEmail, SCOPES } = require('./notary-auth');
@@ -499,7 +499,7 @@ function createApp(repo, opts = {}) {
   // registered at publication. Without either (demo, tests, pending or voided
   // payment) the answer is null and the cancel is free.
   const cautionCapturable = (b) => b.paymentStatus === 'authorized' && !!b.paymentIntentId;
-  const carteEnregistree = (b) => b.paymentStatus === 'enregistre' && !!b.paymentCustomerId && !!b.paymentMethodId;
+  const carteEnregistree = (b) => attendCaution(b) && !!b.paymentCustomerId && !!b.paymentMethodId;
   async function annulationFeeFor(bid) {
     if (!billingConfigured || bid.status !== domain.STATUS.RETENUE) return null;
     if (!cautionCapturable(bid) && !carteEnregistree(bid)) return null;
@@ -2437,6 +2437,11 @@ function createApp(repo, opts = {}) {
             })()
           : { complete: false },
         evaluation: bid.evaluation ? { note: bid.evaluation.note, commentaire: bid.evaluation.commentaire || null } : null,
+        // ADR 0035 — l'état de la garantie, dit au CLIENT dans les mêmes mots
+        // qu'au notaire : rien n'est réservé aujourd'hui, la somme le sera le
+        // `poseeLe`, ou sa banque a refusé. C'est ce dernier état qui commande
+        // la reprise — POST /client/bid/carte.
+        caution: cautionEtat(bid),
         // ADR 0023 — what cancelling TODAY would cost, disclosed BEFORE the
         // client confirms. Null when the cancel would be free (open offer, no
         // live hold, free window) or impossible (settled act).
@@ -2446,6 +2451,61 @@ function createApp(repo, opts = {}) {
           return fee ? { taux: fee.taux, frais: fee.frais, joursAvant: fee.joursAvant } : null;
         })(),
       });
+    }
+
+    // ADR 0035 — REPRENDRE LA MAIN SUR SA CARTE. Le courriel de refus dit au
+    // client d'en enregistrer une autre et le geste quotidien réessaie jusqu'à
+    // la signature : sans cette porte, les deux seraient du théâtre, puisque
+    // réessayer demain la MÊME carte refusée donnera le même refus.
+    //
+    // La route ne décide d'aucune mécanique d'argent : elle redemande à
+    // `authorizeOffer` la surface Stripe qui convient à la date — une session
+    // d'enregistrement si la signature est lointaine, une réservation immédiate
+    // si elle est déjà dans la fenêtre. Le montant relu est celui de l'offre
+    // AUJOURD'HUI, contre-proposition acceptée comprise.
+    if (route === '/client/bid/carte' && method === 'POST') {
+      const { payload, error } = parseBody(request);
+      if (error) return error;
+      const auth = requireClient(request, payload.id);
+      if (auth.error) return auth.error;
+      const bid = await repo.get(payload.id, payload.dateISO);
+      if (!bid) return json(404, { errors: [{ code: 'introuvable', message: 'Offre introuvable.' }] });
+      if (bid.status === domain.STATUS.ANNULEE) return goneCancelled();
+      if (!billingConfigured) {
+        return json(503, { errors: [{ code: 'paiement_indisponible', message: 'Le paiement est momentanément indisponible. Réessayez dans quelques minutes — rien n’a été débité.' }] });
+      }
+      // Un acte déjà réglé n'a plus de carte à changer : la capture est faite.
+      const done = typeof repo.getActCompletion === 'function' ? await repo.getActCompletion(bid.id) : null;
+      if (done) return json(409, { errors: [{ code: 'acte_regle', message: 'Cet acte est déjà réglé.' }] });
+      // La caution est DÉJÀ posée : ouvrir une seconde session en réserverait
+      // une deuxième sur la même carte, et le client verrait le double de son
+      // acte bloqué. Il n'y a rien à réparer ici — la garantie tient.
+      if (cautionCapturable(bid)) {
+        return json(409, { errors: [{ code: 'caution_posee', message: 'Le montant est déjà réservé sur votre carte pour cette date.' }] });
+      }
+
+      const svc = domain.serviceById(bid.serviceId);
+      const devis = await billing().quoteOffer(bid.montant);
+      let out;
+      try {
+        out = await billing().authorizeOffer({
+          bidId: bid.id,
+          bidDate: bid.dateISO,
+          amountCents: devis.totalCents,
+          email: bid.courriel || undefined,
+          description: (svc && svc.nom) || 'Acte notarié',
+          successUrl: siteUrl ? siteUrl + '/?paiement=ok' : undefined,
+          cancelUrl: siteUrl ? siteUrl + '/?paiement=annule' : undefined,
+          // Le jour borne la reprise : deux clics le même matin rouvrent la
+          // MÊME session (rien ne se duplique), et le lendemain en ouvre une
+          // vraie neuve — la cadence du geste quotidien, exactement.
+          reprise: now(),
+        });
+      } catch {
+        return json(503, { errors: [{ code: 'paiement_indisponible', message: 'Le paiement est momentanément indisponible. Réessayez dans quelques minutes — rien n’a été débité.' }] });
+      }
+      if (!out.ok) return json(422, { errors: out.errors });
+      return json(200, { checkoutUrl: out.url, mode: out.mode });
     }
 
     // The client evaluates the notary — once, after the act is signed and

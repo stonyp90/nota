@@ -534,6 +534,11 @@
   "Écrire au client…": "Write to the client…",
   "Écrire au client": "Write to the client",
   "Messages avec votre notaire": "Messages with your notary",
+  // ADR 0035 — la caution refusée, et le seul geste qui la répare.
+  "Votre carte a été refusée": "Your card was declined",
+  "Rien n’a été débité. Votre demande reste en place et votre notaire est prévenu. Enregistrez une autre carte avant votre signature.": "Nothing was charged. Your request stands and your notary has been told. Save another card before your signing.",
+  "Enregistrer une autre carte": "Save another card",
+  "Le paiement est momentanément indisponible. Réessayez dans quelques minutes.": "Payment is momentarily unavailable. Try again in a few minutes.",
   "Écrire à votre notaire…": "Write to your notary…",
   "Écrire à votre notaire": "Write to your notary",
   "Écrivez un message.": "Write a message.",

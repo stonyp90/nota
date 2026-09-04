@@ -1902,6 +1902,16 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .my-offer-next-k { font-weight: 700; color: var(--ink-muted); text-transform: uppercase; font-size: 10.5px; letter-spacing: .03em; align-self: center; }
 .my-offer-next-v { color: var(--ink); }
 .my-offer-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+/* ADR 0035 — la carte a été refusée au moment de réserver la somme. Un bloc
+   qui se voit (filet rouge, fond teinté) sans crier : rien n'est perdu, mais
+   il y a un geste à poser avant la signature. */
+.my-offer-carte {
+  margin-top: var(--space-4); padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--danger); border-left-width: 3px; border-radius: var(--radius-sm);
+  background: var(--surface-inset);
+}
+.my-offer-carte-h { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--danger); }
+.my-offer-carte-t { margin: var(--space-2) 0 0; font-size: 13px; line-height: 1.5; color: var(--ink); }
 /* Mise en relation (ADR 0010 §4): whom to contact once the offer is retained. */
 .my-offer-contact { margin-top: 8px; font-size: 13px; line-height: 1.5; }
 .my-offer-contact-mail { color: var(--brand); font-weight: 600; }

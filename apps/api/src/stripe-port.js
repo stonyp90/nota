@@ -140,7 +140,7 @@ function createStripeAdapter({ secretKey, webhookSecret, stripe: injected } = {}
      * bid id rides on the session + intent metadata so the webhook can bind the
      * resulting PaymentIntent back to the bid. Idempotent per bid.
      */
-    async createOfferAuthorization({ amountCents, currency, bidId, bidDate, description, customerEmail, successUrl, cancelUrl }) {
+    async createOfferAuthorization({ amountCents, currency, bidId, bidDate, description, customerEmail, successUrl, cancelUrl, cle }) {
       const meta = { bidId: bidId || '', bidDate: bidDate || '' };
       const session = await stripe.checkout.sessions.create(
         {
@@ -168,7 +168,7 @@ function createStripeAdapter({ secretKey, webhookSecret, stripe: injected } = {}
           success_url: successUrl,
           cancel_url: cancelUrl,
         },
-        bidId ? { idempotencyKey: `auth:${bidId}` } : undefined
+        bidId ? { idempotencyKey: `auth:${bidId}${cle ? ':' + cle : ''}` } : undefined
       );
       return { sessionId: session.id, url: session.url };
     },
@@ -185,9 +185,12 @@ function createStripeAdapter({ secretKey, webhookSecret, stripe: injected } = {}
      * the amount their card will carry (art. 68 C.déont. : le prix annoncé est
      * le prix facturé). The bid id rides on both metadata blocks so the
      * `setup_intent.succeeded` webhook binds the saved card back to the bid.
-     * Idempotent per bid via setup:<bidId>.
+     * Idempotent per bid via setup:<bidId>. `cle` suffixes that key when the
+     * client comes back to register ANOTHER card (their first was declined):
+     * without it Stripe would replay the session already completed with the bad
+     * card, and the recovery would be a dead link.
      */
-    async createOfferSetup({ amountCents, currency, bidId, bidDate, description, customerEmail, successUrl, cancelUrl }) {
+    async createOfferSetup({ amountCents, currency, bidId, bidDate, description, customerEmail, successUrl, cancelUrl, cle }) {
       const meta = { bidId: bidId || '', bidDate: bidDate || '', amountCents: String(amountCents == null ? '' : amountCents) };
       const session = await stripe.checkout.sessions.create(
         {
@@ -205,7 +208,7 @@ function createStripeAdapter({ secretKey, webhookSecret, stripe: injected } = {}
           success_url: successUrl,
           cancel_url: cancelUrl,
         },
-        bidId ? { idempotencyKey: `setup:${bidId}` } : undefined
+        bidId ? { idempotencyKey: `setup:${bidId}${cle ? ':' + cle : ''}` } : undefined
       );
       return { sessionId: session.id, url: session.url };
     },

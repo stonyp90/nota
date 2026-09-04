@@ -78,3 +78,25 @@ Fonctionnalité: La caution tient jusqu'à la signature
     Alors l'annulation retient 10 % du montant, soit 200 $
     Et les frais sont prélevés hors session sur la carte enregistrée
     Et les frais de 200 $ sont virés en entier au notaire "notaire@exemple.ca"
+
+  # Le client accepte une contre-proposition : l'offre est retenue à un NOUVEAU
+  # montant et l'autorisation d'origine, qui portait l'ancien, a été relâchée.
+  # La carte enregistrée est tout ce qui reste — et elle suffit.
+  Scénario: un acte renégocié est cautionné lui aussi, sur le montant accepté
+    Étant donné un client publie une offre avec le courriel "client@exemple.ca" pour "refinancement" à 2000 dans 2 jours
+    Et le client donne sa carte
+    Et le notaire "notaire@exemple.ca" propose 3200 sur l'offre
+    Et le client accepte la proposition
+    Quand le planificateur de rappels s'exécute
+    Alors la carte du client est bloquée pour 3600 $
+
+  # Réessayer demain la MÊME carte refusée donnerait le même refus : sans porte
+  # pour en donner une autre, l'avis de refus ne servirait à rien.
+  Scénario: après un refus, le client peut donner une autre carte
+    Étant donné un client publie une offre avec le courriel "client@exemple.ca" pour "refinancement" à 2000 dans 2 jours
+    Et le client donne sa carte
+    Et le notaire "notaire@exemple.ca" retient l'offre
+    Et la banque du client refuse la carte
+    Et le planificateur de rappels s'exécute
+    Quand le client demande à enregistrer une autre carte
+    Alors une nouvelle session de paiement lui est ouverte

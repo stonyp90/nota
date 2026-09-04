@@ -40,6 +40,20 @@ const NOTARY_STATUS = {
   RESTRICTED: 'restricted',
 };
 
+// ADR 0035 — les états de paiement où la carte du client est ENREGISTRÉE et
+// prélevable hors session, mais où AUCUNE somme n'est encore réservée. C'est
+// l'ensemble des offres dont la caution reste à poser.
+//
+// `a_reautoriser` en fait partie, et ce n'est pas un détail : le client a
+// accepté une contre-proposition, donc l'autorisation d'origine — qui portait
+// l'ANCIEN montant — a été relâchée, et la carte enregistrée est tout ce qui
+// reste. Sans cette ligne, un acte renégocié n'était jamais cautionné (le
+// notaire avait bloqué sa journée pour une créance de l'ADR 0029) et son
+// annulation tardive était gratuite — le trou que l'ADR 0033 avait laissé
+// ouvert « faute de caution vivante », et que la carte enregistrée referme.
+const PAYMENT_STATUS_SANS_CAUTION = ['enregistre', 'a_reautoriser'];
+const attendCaution = (bid) => !!bid && PAYMENT_STATUS_SANS_CAUTION.includes(bid.paymentStatus);
+
 // ADR 0031 — le prix de Nota, montant fixe, indépendant du notaire et de l'acte.
 // C'est la SEULE configuration que la tarification lise.
 const prixConfig = require('./prix-nota-config');
@@ -318,7 +332,7 @@ function createBilling({
    * Stripe — a demand a notary sees always rests on a card a bank accepted.
    * Returns `{ ok, url, sessionId, mode }`.
    */
-  async function authorizeOffer({ bidId, bidDate, amountCents, email, description, successUrl, cancelUrl } = {}) {
+  async function authorizeOffer({ bidId, bidDate, amountCents, email, description, successUrl, cancelUrl, reprise } = {}) {
     const cents = Math.round(Number(amountCents));
     if (!(cents > 0)) {
       return { ok: false, errors: [{ code: 'montant_invalide', message: 'Montant de l’offre invalide.' }] };
@@ -326,6 +340,10 @@ function createBilling({
     const args = {
       amountCents: cents, currency: 'cad', bidId, bidDate, description,
       customerEmail: email || undefined, successUrl, cancelUrl,
+      // `reprise` — le client REVIENT donner une autre carte après un refus.
+      // La clé d'idempotence doit alors changer, sinon Stripe rejoue la session
+      // déjà terminée avec la carte refusée et la reprise est un lien mort.
+      ...(reprise ? { cle: String(reprise) } : {}),
     };
     if (bidDate && !domain.cautionDue(bidDate, statsDay())) {
       const setup = await stripe.createOfferSetup(args);
@@ -363,7 +381,7 @@ function createBilling({
     if (bid.paymentStatus === 'authorized' && bid.paymentIntentId) {
       return { ok: true, deja: true, paymentIntentId: bid.paymentIntentId };
     }
-    if (bid.paymentStatus !== 'enregistre' || !bid.paymentCustomerId || !bid.paymentMethodId) {
+    if (!attendCaution(bid) || !bid.paymentCustomerId || !bid.paymentMethodId) {
       return { ok: false, code: 'carte_absente' };
     }
     if (typeof stripe.placeOfferAuthorization !== 'function') return { ok: false, code: 'carte_absente' };
@@ -735,7 +753,7 @@ function createBilling({
     return { ok: true, handled, duplicate: false, type: event.type, event, notary, bid: bid || null };
   }
 
-  return { connectNotary, authorizeOffer, placeCaution, payNotaryOnAccept, completeAct, cancelAuthorization, chargeCancellationFee, handleWebhook, quoteOffer, priceAct, resolvePrixNota };
+  return { connectNotary, authorizeOffer, placeCaution, attendCaution, payNotaryOnAccept, completeAct, cancelAuthorization, chargeCancellationFee, handleWebhook, quoteOffer, priceAct, resolvePrixNota };
 }
 
-module.exports = { createBilling, NOTARY_STATUS };
+module.exports = { createBilling, NOTARY_STATUS, attendCaution };

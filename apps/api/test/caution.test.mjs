@@ -442,3 +442,155 @@ test('GET /client/bid annonce les frais AVANT la confirmation, même sans cautio
   assert.equal(res.statusCode, 200, res.body);
   assert.equal(parse(res).annulation.frais, 200, 'la divulgation fait partie du mécanisme (ADR 0023)');
 });
+
+// --- 7. l'acte renégocié (contre-proposition acceptée) ------------------------------
+//
+// Le trou que l'ADR 0035 laissait ouvert : quand le client accepte une
+// contre-proposition, l'offre est retenue à un NOUVEAU montant et marquée
+// `a_reautoriser` — l'ancienne autorisation ne peut pas régler le nouveau prix.
+// Le geste quotidien ne regardait que les offres `enregistre` : la caution
+// n'était donc JAMAIS posée sur ces actes-là, et le notaire qui avait bloqué sa
+// journée retombait sur la créance de l'ADR 0029. C'est précisément le défaut
+// que cet ADR prétend fermer, resté vivant sur ce chemin.
+
+/** Publie, enregistre la carte, fait proposer un autre montant, et l'accepte. */
+async function acteRenegocie({ jours, montant = 3200 }) {
+  const t = setup();
+  const dateISO = domain.addDays(TODAY, jours);
+  const posted = parse(await poster(t.app, dateISO));
+  const [seed] = await t.repo.listByMonth(dateISO.slice(0, 7));
+  await webhook(t.app, setupSucceeded('evt_' + seed.id, seed.id, seed.dateISO));
+
+  await t.repo.putNotary(activeNotary('n@x.ca', { rayonKm: 50, urgences: true, chargesEnabled: true, connectAccountId: 'acct_' + notaryIdForEmail('n@x.ca') }));
+  const { token } = await notarySignIn(t.app, 'n@x.ca');
+  const prop = await t.app.handle({
+    method: 'POST', path: '/notary/bids/propose', query: {}, headers: { authorization: 'Bearer ' + token },
+    body: JSON.stringify({ id: seed.id, dateISO: seed.dateISO, montant }),
+  });
+  assert.equal(prop.statusCode, 200, prop.body);
+  const propositionId = parse(prop).proposition.id;
+
+  const acc = await t.app.handle({
+    method: 'POST', path: '/client/propositions/accept', query: {},
+    headers: { authorization: 'Bearer ' + posted.clientToken },
+    body: JSON.stringify({ id: seed.id, dateISO: seed.dateISO, propositionId }),
+  });
+  assert.equal(acc.statusCode, 200, acc.body);
+  return { ...t, clientToken: posted.clientToken, bid: await t.repo.get(seed.id, seed.dateISO), montant };
+}
+
+test('un acte RENÉGOCIÉ est cautionné lui aussi — sur le montant accepté, pas l’ancien', async () => {
+  const { repo, stripe, billing, bid } = await acteRenegocie({ jours: domain.CAUTION_LEAD_DAYS });
+  assert.equal(bid.paymentStatus, 'a_reautoriser', 'l’ancienne autorisation ne règle pas le nouveau montant');
+  assert.equal(bid.montant, 3200);
+
+  const res = await runReminders({ repo, notifier: fakeNotifier(), billing, now: () => TODAY });
+  assert.equal(res.caution.posee, 1, 'le notaire a bloqué sa journée : la caution doit être posée');
+  assert.equal(stripe.calls.holds[0].amountCents, 320000 + PRIX, 'la caution porte le montant ACCEPTÉ');
+
+  const after = await repo.get(bid.id, bid.dateISO);
+  assert.equal(after.paymentStatus, 'authorized');
+});
+
+test('annuler tard un acte RENÉGOCIÉ n’est pas gratuit — les frais suivent la carte enregistrée', async () => {
+  const { app, stripe, bid, clientToken } = await acteRenegocie({ jours: 10 });
+  const res = await app.handle({
+    method: 'POST', path: '/client/bid/cancel', query: {},
+    headers: { authorization: 'Bearer ' + clientToken },
+    body: JSON.stringify({ id: bid.id, dateISO: bid.dateISO }),
+  });
+  assert.equal(res.statusCode, 200, res.body);
+  // Palier 4-14 jours : 10 % du montant accepté (3200 $), au notaire.
+  assert.equal(parse(res).bid.annulation.frais, 320);
+  assert.equal(stripe.calls.offSessionFees.length, 1, 'la carte enregistrée reste prélevable');
+  assert.equal(stripe.calls.offSessionFees[0].amountCents, 32000);
+});
+
+// --- 8. reprendre la main sur sa carte ----------------------------------------------
+//
+// Le courriel de refus dit au client d'enregistrer une autre carte, et le geste
+// quotidien réessaie jusqu'à la signature. Sans porte pour CHANGER de carte,
+// les deux sont du théâtre : réessayer demain la même carte refusée donnera le
+// même refus. C'est cette porte-là.
+
+test('le client voit l’état de sa caution — c’est la même vérité que le notaire lit', async () => {
+  const { app, repo, bid, clientToken } = await offreEnregistree({ jours: 10 });
+  const stored = await repo.get(bid.id, bid.dateISO);
+  await repo.markCautionRefusee(bid.id, bid.dateISO, { at: NOW, code: 'card_declined' });
+  void stored;
+
+  const res = await app.handle({
+    method: 'GET', path: '/client/bid', query: { id: bid.id, dateISO: bid.dateISO },
+    headers: { authorization: 'Bearer ' + clientToken },
+  });
+  assert.equal(res.statusCode, 200, res.body);
+  assert.equal(parse(res).caution.etat, 'refusee');
+});
+
+test('après un refus, le client peut enregistrer une AUTRE carte', async () => {
+  const { app, stripe, bid, clientToken } = await offreEnregistree({ jours: 10 });
+  const res = await app.handle({
+    method: 'POST', path: '/client/bid/carte', query: {},
+    headers: { authorization: 'Bearer ' + clientToken },
+    body: JSON.stringify({ id: bid.id, dateISO: bid.dateISO }),
+  });
+  assert.equal(res.statusCode, 200, res.body);
+  assert.match(parse(res).checkoutUrl, /checkout\.test/);
+  // Une date lointaine enregistre — elle ne bloque toujours rien.
+  assert.equal(stripe.calls.setups.length, 2, 'une NOUVELLE session, pas celle de la publication');
+  assert.notEqual(stripe.calls.setups[1].cle, undefined, 'la clé d’idempotence doit changer, sinon Stripe rejoue la session déjà terminée');
+});
+
+test('dans la fenêtre, changer de carte la BLOQUE tout de suite — la signature est dans deux jours', async () => {
+  const { app, stripe, bid, clientToken } = await offreEnregistree({ jours: domain.CAUTION_LEAD_DAYS });
+  const res = await app.handle({
+    method: 'POST', path: '/client/bid/carte', query: {},
+    headers: { authorization: 'Bearer ' + clientToken },
+    body: JSON.stringify({ id: bid.id, dateISO: bid.dateISO }),
+  });
+  assert.equal(res.statusCode, 200, res.body);
+  // La publication en avait déjà ouvert une (la date était DÉJÀ dans la
+  // fenêtre) : la reprise en ouvre une SECONDE, du même genre — une
+  // réservation immédiate, pas un simple enregistrement qui ne bloquerait
+  // rien à deux jours de la signature.
+  assert.equal(parse(res).mode, 'paiement');
+  assert.equal(stripe.calls.authorizations.length, 2);
+  assert.equal(stripe.calls.setups.length, 0);
+  assert.notEqual(stripe.calls.authorizations[1].cle, undefined, 'sans clé neuve, Stripe rejoue la session de la publication');
+});
+
+test('une offre annulée n’ouvre plus aucune session de paiement', async () => {
+  const { app, repo, bid, clientToken } = await offreEnregistree({ jours: 10 });
+  const stored = await repo.get(bid.id, bid.dateISO);
+  await repo.update({ ...stored, status: domain.STATUS.ANNULEE });
+  const res = await app.handle({
+    method: 'POST', path: '/client/bid/carte', query: {},
+    headers: { authorization: 'Bearer ' + clientToken },
+    body: JSON.stringify({ id: bid.id, dateISO: bid.dateISO }),
+  });
+  assert.equal(res.statusCode, 410, res.body);
+});
+
+test('la carte d’autrui ne s’enregistre pas : le jeton client est exigé', async () => {
+  const { app, bid } = await offreEnregistree({ jours: 10 });
+  const res = await app.handle({
+    method: 'POST', path: '/client/bid/carte', query: {}, headers: {},
+    body: JSON.stringify({ id: bid.id, dateISO: bid.dateISO }),
+  });
+  assert.equal(res.statusCode, 401, res.body);
+});
+
+test('une caution DÉJÀ vivante ne se redouble pas — bloquer deux fois la même carte serait un vol', async () => {
+  const { app, stripe, billing, repo, bid, clientToken } = await offreEnregistree({ jours: domain.CAUTION_LEAD_DAYS });
+  await runReminders({ repo, notifier: fakeNotifier(), billing, now: () => TODAY });
+  const avant = stripe.calls.authorizations.length + stripe.calls.setups.length;
+
+  const res = await app.handle({
+    method: 'POST', path: '/client/bid/carte', query: {},
+    headers: { authorization: 'Bearer ' + clientToken },
+    body: JSON.stringify({ id: bid.id, dateISO: bid.dateISO }),
+  });
+  assert.equal(res.statusCode, 409, res.body);
+  assert.equal(parse(res).errors[0].code, 'caution_posee');
+  assert.equal(stripe.calls.authorizations.length + stripe.calls.setups.length, avant, 'aucune session de plus');
+});

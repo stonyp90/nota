@@ -114,3 +114,30 @@ Then('les frais sont prélevés hors session sur la carte enregistrée', functio
   assert.equal(hs.length, 1, 'un prélèvement hors session attendu: ' + JSON.stringify(this.stripe.calls.offSessionFees));
   assert.equal(this.stripe.calls.feeCaptures.length, 0, "aucune capture partielle : il n'y a pas de caution à capturer");
 });
+
+// --- La reprise de carte (ADR 0035) -------------------------------------------
+
+// Le client, prévenu du refus, revient donner une autre carte. La route rouvre
+// une session Stripe — enregistrement si la signature est lointaine,
+// réservation immédiate si elle est proche : le serveur tranche, pas le client.
+When('le client demande à enregistrer une autre carte', async function () {
+  const bid = lastBid(this);
+  await this.request({
+    method: 'POST',
+    path: '/client/bid/carte',
+    headers: { authorization: 'Bearer ' + this.clientToken },
+    body: JSON.stringify({ id: bid.id, dateISO: bid.dateISO }),
+  });
+});
+
+Then('une nouvelle session de paiement lui est ouverte', function () {
+  assert.equal(this.response.statusCode, 200, this.response.body);
+  assert.ok(this.responseJson.checkoutUrl, 'une adresse de paiement est attendue');
+  // La clé d'idempotence doit être NEUVE : sans elle, Stripe rejouerait la
+  // session déjà terminée avec la carte refusée, et la reprise serait un lien
+  // mort.
+  const bid = lastBid(this);
+  const ouvertes = this.stripe.calls.setups.concat(this.stripe.calls.authorizations).filter((x) => x.bidId === bid.id);
+  assert.ok(ouvertes.length >= 2, 'une session de plus que celle de la publication: ' + ouvertes.length);
+  assert.ok(ouvertes[ouvertes.length - 1].cle, 'la dernière session doit porter une clé de reprise');
+});

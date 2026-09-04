@@ -123,14 +123,25 @@ async function runReminders({ repo, notifier, billing, now } = {}) {
   //     l'offre et prévient les deux parties une seule fois. Un lot de rappels
   //     ne tombe pas parce qu'une banque a dit non.
   const caution = { due: 0, posee: 0, refusee: 0 };
-  if (billing && typeof billing.placeCaution === 'function' && typeof repo.listByMonth === 'function') {
+  // Les DEUX gestes du port sont exigés : poser la caution, et dire quelles
+  // offres l'attendent. Un port qui n'offrirait que le premier ferait tenter la
+  // pose sur tout le mois — la passe est alors sautée, comme sans Stripe.
+  if (billing && typeof billing.placeCaution === 'function' && typeof billing.attendCaution === 'function'
+    && typeof repo.listByMonth === 'function') {
     // La fenêtre chevauche au plus deux mois (la couture de fin de mois).
     const months = [...new Set([todayISO.slice(0, 7), domain.addDays(todayISO, domain.CAUTION_LEAD_DAYS).slice(0, 7)])];
     const candidates = [];
     for (const m of months) candidates.push(...(await repo.listByMonth(m)));
     for (const bid of candidates) {
       if (!bid || bid.status === domain.STATUS.ANNULEE) continue;
-      if (bid.paymentStatus !== 'enregistre') continue; // déjà cautionnée, jamais payée, ou facturation absente
+      // Le port de facturation dit LUI-MÊME quelles offres attendent leur
+      // caution : celles dont la carte est enregistrée sans qu'aucune somme
+      // soit réservée — y compris un acte renégocié (`a_reautoriser`), dont
+      // l'autorisation d'origine portait l'ancien montant et a été relâchée.
+      // Le moyen de paiement, lui, n'est PAS vérifié ici : son absence est un
+      // symptôme à rapporter (voir `carte_absente` plus bas), pas une offre à
+      // écarter en silence.
+      if (!billing.attendCaution(bid)) continue;
       if (!domain.cautionDue(bid.dateISO, todayISO)) continue;
       caution.due += 1;
       try {

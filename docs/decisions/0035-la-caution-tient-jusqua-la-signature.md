@@ -111,6 +111,53 @@ Cela se dit aussi **dans le produit** : `GET /notary/bids` porte
 `aucune`. Une garantie qu'on ne peut pas voir n'en est pas une (ADR 0033 §4 :
 tout est exposé au notaire avant qu'il confirme).
 
+### 3 bis. L'acte renégocié entre dans la règle
+
+Quand le client accepte une contre-proposition, l'offre est retenue à un
+**nouveau** montant : l'autorisation d'origine ne peut pas le régler, elle est
+relâchée, et l'offre passe en `a_reautoriser` (ADR 0009). Jusqu'ici, ce chemin
+n'avait **aucune** garantie — l'ADR 0033 le notait comme une décision ouverte,
+« s'annule encore sans frais (aucune caution vivante) ».
+
+Ce n'est plus une fatalité : depuis cet ADR, la carte du client est
+**enregistrée**, et elle survit à la renégociation. `a_reautoriser` rejoint donc
+`enregistre` dans l'ensemble des offres qui attendent leur caution
+(`attendCaution`, une seule définition lue par la Lambda, la route d'annulation
+et la console notaire). Conséquences, toutes deux vérifiées par un scénario :
+
+- la caution d'un acte renégocié est posée à J-2 **sur le montant accepté**, et
+  le notaire est payé à la signature comme sur tout autre acte ;
+- son annulation tardive n'est plus gratuite : les frais du barème sont
+  prélevés hors session et versés au notaire.
+
+Sans cette ligne, un notaire qui avait négocié son prix — le seul qui ait
+vraiment discuté son dossier — était précisément celui qu'aucune garantie ne
+couvrait.
+
+### 3 ter. Une carte refusée peut être remplacée
+
+Le geste quotidien réessaie chaque jour jusqu'à la signature. Réessayer demain
+la **même** carte refusée donne le même refus : sans porte de sortie, l'avis de
+refus et la reprise quotidienne seraient du théâtre, et le seul recours du
+client serait de republier ou d'écrire au soutien.
+
+`POST /client/bid/carte` est cette porte. Gardée par le jeton client de l'offre,
+elle redemande à `authorizeOffer` la surface qui convient à la date — session
+d'enregistrement si la signature est lointaine, réservation immédiate si elle
+est déjà dans la fenêtre — sur le montant de l'offre **aujourd'hui**,
+contre-proposition acceptée comprise. La route ne décide d'aucune mécanique
+d'argent ; elle repose la question au domaine.
+
+Deux détails qui comptent :
+
+- **la clé d'idempotence porte le jour.** Sans clé neuve, Stripe rejouerait la
+  session déjà terminée avec la carte refusée et la reprise serait un lien mort.
+  Avec le jour : deux clics le même matin rouvrent la même session, le lendemain
+  en ouvre une vraie neuve — la cadence du geste quotidien.
+- **le client voit ce que le notaire voit.** `GET /client/bid` porte le même
+  `caution = { etat, poseeLe }`, et la bande de l'offre affiche le refus, dit
+  que rien n'a été débité, et offre le bouton. Le courriel de refus mène là.
+
 ### 4. Les frais d'annulation restent prélevés, et restent au notaire
 
 L'ADR 0023 §3 disait : « Le mécanisme d'encaissement est la capture partielle de
@@ -139,10 +186,12 @@ remplace `offerAuthorized` sur ce chemin — annoncer un « paiement autorisé �
 qui n'existe pas serait un mensonge sur de l'argent, et l'art. 68 du *Code de
 déontologie* interdit la publicité incomplète). Le devis affiche « Porté à votre
 carte » plutôt que « Autorisé sur votre carte ». Si sa banque refuse à J-2, il
-est prévenu et peut enregistrer une autre carte.
+est prévenu, il voit le refus sur son offre, et il enregistre une autre carte
+d'un bouton (§3 ter) — le courriel de refus l'y mène.
 
 **Pour le notaire.** La garantie qu'il croyait avoir existe maintenant, et il la
-voit avant de retenir. En échange, il apprend un refus deux jours avant la
+voit avant de retenir — y compris sur un acte qu'il a négocié lui-même, qui
+n'en avait aucune (§3 bis). En échange, il apprend un refus deux jours avant la
 signature plutôt que de le découvrir le jour de la capture.
 
 **Pour l'opérateur.** Le lot quotidien devient un geste d'argent : son journal
@@ -170,8 +219,11 @@ changer le sujet, jamais les éteindre (art. 68, ADR 0018).
    `off_session`) : le produit les traite, mais l'opérateur n'a pas encore de
    tableau qui les compte. À suivre avec le recouvrement des créances de
    l'ADR 0029, qui reste ouvert.
-5. **Décisions non prises, hors périmètre :** proposer au client de changer sa
-   carte depuis son espace (aujourd'hui il republie ou écrit au soutien) ;
-   avancer la fenêtre pour les actes de très forte valeur ; et le sort d'une
-   offre restée `enregistre` dont la date est passée sans que la caution ait pu
-   être posée — elle n'est plus retentée, et le règlement retombe sur la créance.
+5. **Décisions non prises, hors périmètre :** avancer la fenêtre pour les actes
+   de très forte valeur ; le sort d'une offre restée `enregistre` dont la date
+   est passée sans que la caution ait pu être posée — elle n'est plus retentée,
+   et le règlement retombe sur la créance ; et un cas de bord assumé de la
+   reprise de carte — un client dont la **deuxième** carte est refusée le même
+   jour rouvre la session déjà terminée (la clé d'idempotence porte le jour) et
+   doit attendre le lendemain. Réduire la clé à la tentative plutôt qu'au jour
+   le réglerait ; ce n'est pas fait.
