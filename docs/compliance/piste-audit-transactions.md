@@ -5,7 +5,7 @@
 > à 95 % selon sa cote ») comme s'il était en vigueur. **Il ne l'est plus.**
 > L'[ADR 0031](../decisions/0031-le-prix-de-nota-est-celui-de-nota.md) l'a
 > retiré : le notaire reçoit 100 % du montant offert, et Nota facture au client
-> un **prix fixe** pour son propre service. Les art. 32 et 32.1 2° condamnaient
+> un **prix publié d'avance** pour son propre service (une grille par service depuis l'[ADR 0034](../decisions/0034-le-prix-de-nota-est-une-grille-par-service.md)). Les art. 32 et 32.1 2° condamnaient
 > la mécanique décrite ici. Tout le reste du document tient ; ne citez pas ses
 > passages sur le partage sans lire l'ADR 0031 d'abord.
 

@@ -281,3 +281,37 @@ test('offer validation errors have English translations', () => {
   }
   assert.deepEqual([...new Set(missing)], [], 'validation messages with no English entry');
 });
+
+// ---------------------------------------------------------------------------
+// 3. Coverage, layer two — la copie COMPOSÉE dans app.js
+// ---------------------------------------------------------------------------
+//
+// La couverture ci-dessus ne lit que index.html et les chaînes exportées par le
+// domaine. Toute une classe de copie lui échappait : celle que l'écran fabrique
+// lui-même, en JavaScript. Un exemple réel, passé en revue humaine plutôt qu'en
+// CI : « un prix publié, le même pour tous », le repli du panneau Retenir de la
+// console notaire, ajouté en français sans entrée anglaise — et son
+// prédécesseur laissé au dictionnaire, une entrée morte à côté d'un trou.
+//
+// Le motif scanné est celui que l'écran emploie partout pour poser du texte :
+// `el(tag, classe, 'texte')`. Il ne couvre pas TOUTE la copie composée (une
+// concaténation lui échappe, et c'est à quoi servent les règles à motif), mais
+// il ferme la porte par laquelle la copie neuve entre le plus souvent.
+
+const APP_SRC = readFileSync(fileURLToPath(new URL('../public/app.js', import.meta.url)), 'utf8');
+
+test('every French literal app.js renders through el() has an English entry', () => {
+  I18N.force('en');
+  const litteraux = new Set();
+  const re = /\bel\(\s*'[a-z0-9]+'\s*,\s*(?:'[^']*'|null)\s*,\s*'((?:[^'\\]|\\.)+)'\s*\)/g;
+  let m;
+  while ((m = re.exec(APP_SRC))) litteraux.add(m[1].replace(/\\'/g, "'"));
+
+  // Le marqueur du français : un accent, un guillemet ou une apostrophe
+  // typographique. « Nota », « OK » ou « 250 $ » n'ont rien à traduire.
+  const francais = [...litteraux].filter((s) => /[À-ÖØ-öø-ÿ«»’]/.test(s) && s.length > 6);
+  assert.ok(francais.length > 20, 'le scan doit voir de la copie, sinon il ne garde rien : ' + francais.length);
+
+  const missing = francais.filter((s) => needsTranslation(s) && !I18N.covered(I18N.normalize(s)));
+  assert.deepEqual(missing, [], 'chaînes composées dans app.js sans entrée anglaise');
+});

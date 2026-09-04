@@ -331,7 +331,9 @@ test('charte: « aucun frais caché » names the two lines and points at the can
   const t = FLAT(li.textContent);
   assert.match(t, /barème/, t);
   assert.match(t, /annulation/, t);
-  assert.match(t, /prix fixe du service de Nota/, t);
+  // ADR 0034 — le prix de Nota n'est plus « fixe » : c'est une grille par
+  // service, publiée d'avance. La charte doit dire la nouvelle vérité.
+  assert.match(t, /prix du service de Nota, publié d’avance/, t);
   assert.ok(li.querySelector('a.goto-link[data-goto="conditions"]'), 'a door to the conditions where the barème lives');
   // The retired one-liner cannot return.
   assert.ok(!/aucun frais caché\. Ce que vous offrez est ce que le notaire reçoit\.$/.test(t), t);

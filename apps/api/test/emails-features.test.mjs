@@ -384,7 +384,7 @@ test('ADR 0031 — aucun gabarit ne parle de commission ni d’un pourcentage de
       `${name}: « commission » est réapparu dans un courriel — Nota ne prélève plus rien sur les honoraires (ADR 0031)`
     );
 
-    // Un pourcentage, quel qu'il soit : le prix de Nota est un montant fixe, pas
+    // Un pourcentage, quel qu'il soit : le prix de Nota est un montant publié, pas
     // un taux, et la cote ne décide plus d'un dollar (art. 29.1).
     const pct = v.match(/\d+(?:[.,]\d+)?\s*%/);
     assert.ok(

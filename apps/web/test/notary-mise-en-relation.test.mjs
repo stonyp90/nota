@@ -29,7 +29,11 @@ import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 import { JSDOM } from 'jsdom';
+
+const require = createRequire(import.meta.url);
+const DOMAIN_GRILLE = require('@nota/domain').prixNotaGrille();
 
 const DOMAIN_SRC = readFileSync(fileURLToPath(new URL('../../../packages/domain/index.js', import.meta.url)), 'utf8');
 const APP_SRC = readFileSync(fileURLToPath(new URL('../public/app.js', import.meta.url)), 'utf8');
@@ -106,9 +110,19 @@ const PROFIL_INCOMPLET = () => ({
   alertes: { pace: 'daily', urgentOnly: false }, complet: false,
   manquants: [{ id: 'nom', label: 'Votre nom' }, { id: 'telephone', label: 'Votre téléphone' }, { id: 'adresse', label: 'L’adresse de votre étude' }],
 });
+// ADR 0034 — le tarif servi est une GRILLE : le notaire doit voir le prix que
+// le client paie POUR CETTE demande, pas une moyenne.
+const GRILLE = () => {
+  const g = JSON.parse(JSON.stringify(DOMAIN_GRILLE));
+  return g;
+};
+const TARIF = () => ({
+  grille: GRILLE(), prixNotaMinCents: DOMAIN_GRILLE.defaut,
+  taxesIncluses: false, deboursInclus: false,
+});
 const CONDITIONS = () => ({
   paiement: 'signature',
-  tarifNota: { prixNotaCents: 40000, taxesIncluses: false, deboursInclus: false },
+  tarifNota: TARIF(),
   annulation: { paliers: [{ maxJours: 3, taux: 0.3 }, { maxJours: 14, taux: 0.1 }], beneficiaire: 'notaire' },
   desistement: { gratuit: true, compte: true },
 });
@@ -148,7 +162,7 @@ function stubApi(win, state) {
   state.bids = state.bids || [];
   state.retained = (state.retained || []).map((r) => ({ ...r, messages: (r.messages || []).slice() }));
   state.conditions = state.conditions === undefined ? CONDITIONS() : state.conditions;
-  state.tarif = state.tarif === undefined ? { prixNotaCents: 40000, taxesIncluses: false, deboursInclus: false } : state.tarif;
+  state.tarif = state.tarif === undefined ? TARIF() : state.tarif;
   win.fetch = (url, init = {}) => {
     const path = String(url);
     const body = init.body ? JSON.parse(init.body) : null;
@@ -312,7 +326,11 @@ test('the Retenir sheet is a dialog on the shared shell that reads back the comm
   assert.match(txt, /Refinancement/, 'names the act');
   assert.ok(txt.includes(D.money(bid.montant)), 'the fee reads the montant');
   assert.match(txt, /versés en entier à la signature/);
-  assert.ok(txt.includes(D.money(400)), 'the client’s Nota price shows beside');
+  // Le prix que le CLIENT paie pour CETTE demande : la cellule de la grille
+  // pour ce service et ce palier, jamais un nombre unique (ADR 0034).
+  const prixClient = D.prixNota('refinancement', 'rapide', GRILLE()).totalCents / 100;
+  assert.ok(txt.includes(D.money(prixClient)),
+    'the client’s Nota price for THIS demand shows beside: ' + txt);
   assert.match(txt, /Desjardins/, 'names the lender');
   assert.match(txt, /Relevé hypothécaire/, 'lists what the dossier still lacks');
   assert.match(txt, /≈ 4 km/, 'shows the measured distance');

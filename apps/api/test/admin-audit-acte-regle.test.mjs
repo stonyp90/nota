@@ -16,7 +16,11 @@ const { createMemoryRepo } = require('../src/repo-memory.js');
 const { createBilling } = require('../src/billing.js');
 const { notaryIdForEmail, signToken, SCOPES } = require('../src/notary-auth.js');
 const domain = require('@nota/domain');
-const { DEFAULT_PRIX_CENTS: PRIX } = require('../src/prix-nota-config.js');
+// ADR 0034 — le prix de Nota est une GRILLE par service, plus un montant
+// unique : le prix dû se calcule pour l'acte réglé (refinancement, palier
+// standard), au lieu d'une constante qui n'existe plus.
+const { resolveGrille } = require('../src/prix-nota-config.js');
+const PRIX = domain.prixNota('refinancement', 'standard', resolveGrille(null)).totalCents;
 
 const TODAY = '2026-08-12';
 const NOW_MS = Date.parse('2026-08-12T15:00:00.000Z');

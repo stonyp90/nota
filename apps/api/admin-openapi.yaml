@@ -129,27 +129,99 @@ components:
     PrixNota:
       type: object
       description: >-
-        Le prix du service de Nota (ADR 0031) : un montant FIXE, en cents,
-        ajoute a toute offre et encaisse comme frais d'application Stripe. Ni
-        pourcentage, ni fonction de la valeur de l'acte, ni fonction du
-        notaire — l'art. 29.1 du Code de deontologie interdit au notaire toute
-        convention mettant en peril son desinteressement, et un prix indexe sur
-        une note attribuee par Nota en serait une.
-      required: [prixCents]
+        La GRILLE du prix de Nota (ADR 0034, qui remplace le prix unique de
+        l'ADR 0031) : une ligne par service, plus la garantie de date sur sa
+        propre ligne, toutes en cents. Ni pourcentage, ni fonction de la valeur
+        de l'acte, ni fonction du notaire — l'art. 29.1 du Code de deontologie
+        interdit au notaire toute convention mettant en peril son
+        desinteressement, et un prix indexe sur une note attribuee par Nota en
+        serait une. Le service et le delai, eux, sont deux dimensions PUBLIEES
+        que le client connait avant d'offrir. `defaut` est la cellule sur
+        laquelle retombe un service hors catalogue — la plus basse.
+      required: [defaut, services, garantieDate]
       properties:
+        defaut:
+          type: integer
+          minimum: 0
+        services:
+          type: object
+          additionalProperties:
+            type: integer
+            minimum: 1
+          description: id du service -> prix de Nota, en cents (24900 = 249,00 $).
+        garantieDate:
+          type: object
+          additionalProperties:
+            type: integer
+            minimum: 0
+          description: id du palier de delai -> prix de la garantie de date, en cents.
+    PrixNotaEdit:
+      type: object
+      description: >-
+        Ce que la console ENVOIE : les seules cellules que Nota decide. Une
+        cellule absente reste celle du catalogue. L'ancien corps a prix unique
+        `{ prixCents }` (ADR 0031) reste accepte et s'applique a tous les
+        services, sans garantie de date.
+      properties:
+        services:
+          type: object
+          additionalProperties:
+            type: integer
+            minimum: 1
+        garantieDate:
+          type: object
+          additionalProperties:
+            type: integer
+            minimum: 0
         prixCents:
           type: integer
           minimum: 1
-          description: Le prix, en cents (40000 = 400,00 $).
+          description: Ancien contrat (ADR 0031) — un prix unique pour tout le catalogue.
     PrixNotaStored:
       allOf:
-        - $ref: "#/components/schemas/PrixNota"
+        - $ref: "#/components/schemas/PrixNotaEdit"
         - type: object
           required: [updatedAt]
           properties:
             updatedAt:
               type: [string, "null"]
               description: ISO datetime of the last change.
+            ignorees:
+              type: array
+              items: { type: string }
+              description: >-
+                Les cellules STOCKEES que la tarification ecarte — un service
+                retire du catalogue depuis, une valeur devenue illisible. La
+                lecture est tolerante la ou l'ecriture est stricte : une cellule
+                fautive est ecartee SEULE, jamais la grille entiere, et elle est
+                nommee ici (« services.testament ») pour que la console le dise
+                au lieu de le taire. Absent quand tout se relit.
+    PrixNotaCatalogue:
+      type: object
+      description: >-
+        Les lignes a editer, avec leurs noms — la console admin n'a pas le
+        domaine, et sans cet echo elle coderait le catalogue en dur.
+      required: [services, garantieDate]
+      properties:
+        services:
+          type: array
+          items:
+            type: object
+            required: [id, nom]
+            properties:
+              id: { type: string }
+              nom: { type: string }
+              nomEn: { type: string }
+        garantieDate:
+          type: array
+          items:
+            type: object
+            required: [id, nom]
+            properties:
+              id: { type: string }
+              nom: { type: string }
+              nomEn: { type: string }
+              maxJours: { type: [integer, "null"] }
     CancellationBareme:
       type: object
       description: >-
@@ -977,13 +1049,14 @@ paths:
   /admin/prix:
     get:
       operationId: getAdminPrixNota
-      summary: Le prix de Nota — defaut du deploiement, prix stocke, prix en vigueur.
+      summary: La grille de Nota — defaut du deploiement, grille stockee, grille en vigueur.
       description: >-
-        ADR 0031. `defaut` est le prix du deploiement (integre, surcharge par
-        `NOTA_PRIX_CENTS`) ; `override` est le prix que Nota a enregistre depuis
-        cette console, ou `null` ; `effectif` est celui des deux avec lequel la
-        facturation tarife en ce moment. Ouvert a TOUT admin authentifie —
-        l'analyste voit l'etat en lecture seule.
+        ADR 0034. `defaut` est la grille du deploiement (le catalogue, surcharge
+        par `NOTA_PRIX_CENTS` ou `NOTA_PRIX_GRILLE`) ; `override` est ce que
+        Nota a enregistre depuis cette console, ou `null` ; `effectif` est la
+        grille complete avec laquelle la facturation tarife en ce moment ;
+        `catalogue` porte les lignes a editer et leurs noms. Ouvert a TOUT admin
+        authentifie — l'analyste voit l'etat en lecture seule.
       security:
         - adminSession: []
       responses:
@@ -993,7 +1066,7 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [defaut, override, effectif]
+                required: [defaut, override, effectif, catalogue]
                 properties:
                   defaut:
                     $ref: "#/components/schemas/PrixNota"
@@ -1003,16 +1076,20 @@ paths:
                       - type: "null"
                   effectif:
                     $ref: "#/components/schemas/PrixNota"
+                  catalogue:
+                    $ref: "#/components/schemas/PrixNotaCatalogue"
         "401":
           $ref: "#/components/responses/Unauthorized"
     put:
       operationId: putAdminPrixNota
-      summary: Enregistrer (remplacer) le prix que Nota decide.
+      summary: Enregistrer (remplacer) la grille que Nota decide.
       description: >-
         super_admin seulement (`settings:write`) — un analyste recoit 403. La
-        regle tient en une ligne : `prixCents` doit etre un entier de cents
-        strictement positif. Effet a la prochaine tarification, sans deploiement.
-        Journalise avec son avant/apres.
+        regle tient en une ligne : chaque cellule doit etre un entier de cents,
+        strictement positif pour un service, zero accepte pour la garantie de
+        date. Un service ou un palier hors catalogue est refuse
+        (`service_inconnu` / `palier_inconnu`). Effet a la prochaine
+        tarification, sans deploiement. Journalise avec son avant/apres.
       security:
         - adminSession: []
       requestBody:
@@ -1020,10 +1097,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PrixNota"
+              $ref: "#/components/schemas/PrixNotaEdit"
       responses:
         "200":
-          description: Le prix enregistre.
+          description: La grille enregistree.
           content:
             application/json:
               schema:

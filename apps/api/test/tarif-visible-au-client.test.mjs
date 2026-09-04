@@ -21,7 +21,11 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { createApp } = require('../src/handler.js');
 const { createMemoryRepo } = require('../src/repo-memory.js');
-const { DEFAULT_PRIX_CENTS } = require('../src/prix-nota-config.js');
+const domain = require('@nota/domain');
+
+// ADR 0034 — le carnet annonce la GRILLE : le client doit pouvoir lire le prix
+// de SON service à SA date. Le « à partir de » est la cellule la plus basse.
+const CATALOGUE = domain.prixNotaGrille();
 
 const TODAY = '2026-08-12';
 const parse = (res) => JSON.parse(res.body);
@@ -34,7 +38,8 @@ const carnet = (a) => a.handle({ method: 'GET', path: '/bids', headers: {}, quer
 test('le carnet public porte le prix de Nota', async () => {
   const body = parse(await carnet(app()));
   assert.ok(body.tarif, 'le carnet annonce le tarif de la plateforme');
-  assert.equal(body.tarif.prixNotaCents, DEFAULT_PRIX_CENTS);
+  assert.deepEqual(body.tarif.grille, CATALOGUE);
+  assert.equal(body.tarif.prixNotaMinCents, CATALOGUE.defaut);
 });
 
 test('ART. 71 3° — le tarif dit si les taxes et les débours sont inclus', async () => {
@@ -48,7 +53,9 @@ test('ART. 71 3° — le tarif dit si les taxes et les débours sont inclus', as
 
 test('le prix annoncé est celui du déploiement, jamais un nombre en dur', async () => {
   const { tarif } = parse(await carnet(app({ NOTA_PRIX_CENTS: '25000' })));
-  assert.equal(tarif.prixNotaCents, 25000);
+  // L'ancien prix unique du déploiement aplatit la grille : rétro-compatible.
+  for (const s of domain.SERVICES) assert.equal(tarif.grille.services[s.id], 25000, s.id);
+  assert.equal(tarif.prixNotaMinCents, 25000);
 });
 
 test('le tarif ne dépend d’aucun notaire — il est le même sans en connaître un seul', async () => {
@@ -68,9 +75,9 @@ test('ART. 68 — le prix ANNONCÉ est celui qui sera FACTURÉ, jamais un autre'
   // prix, pas le défaut du déploiement : annoncer 400 $ et bloquer 250 $ sur
   // la carte serait précisément la publicité « incomplète » que l'art. 68
   // interdit — et la seule chose que le client verrait, c'est l'écart.
-  await a.repo.putPrixNotaConfig({ prixCents: 25000 }, '2026-08-12T00:00:00.000Z');
+  await a.repo.putPrixNotaConfig({ services: { refinancement: 25000 } }, '2026-08-12T00:00:00.000Z');
   const { tarif } = parse(await carnet(a));
-  assert.equal(tarif.prixNotaCents, 25000, 'le carnet suit le prix stocké');
+  assert.equal(tarif.grille.services.refinancement, 25000, 'le carnet suit la grille stockée');
 });
 
 test('un prix stocké illisible retombe sur le défaut plutôt que de faire tomber le carnet', async () => {
@@ -78,5 +85,5 @@ test('un prix stocké illisible retombe sur le défaut plutôt que de faire tomb
   await a.repo.putPrixNotaConfig({ prixCents: 'oups' }, '2026-08-12T00:00:00.000Z');
   const res = await carnet(a);
   assert.equal(res.statusCode, 200);
-  assert.equal(parse(res).tarif.prixNotaCents, DEFAULT_PRIX_CENTS);
+  assert.deepEqual(parse(res).tarif.grille, CATALOGUE);
 });

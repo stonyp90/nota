@@ -64,7 +64,7 @@ Sept gestes du propriétaire. Aucun n'est du code ; tous bloquent le premier usa
 
 - **L'inscription ne demande plus Stripe.** Un notaire entre son courriel professionnel et, s'il veut, le lien de sa fiche au Tableau ; il reçoit « Inscription reçue » ; l'opérateur vérifie la fiche (une à la fois, jamais d'extraction du bottin) et clique « Activer » dans la console admin ; le notaire reçoit son accès. Les versements Stripe se branchent plus tard, seulement avant le premier acte signé.
 - **Objectif chiffré :** 10 comptes activés, dont 5 qui ont ouvert le fil deux fois ; 5 entrevues de 20 minutes (grille `entrevue-notaire.md`). La question qui décide tout est H2 : « à quel prix prenez-vous un refinancement jeudi prochain ? » — une réponse en chiffres par notaire, consignée dans `pipeline-notaires.csv`.
-- **Mettre le kit au modèle réel** (`validation-notaires.md`, `courriels-notaires.md` E4, `entrevue-notaire.md`) : deux lignes, 100 % au notaire, prix fixe de Nota. Le premier notaire à qui l'on parle ne doit pas entendre un chiffre que quatre textes condamnent.
+- **Mettre le kit au modèle réel** (`validation-notaires.md`, `courriels-notaires.md` E4, `entrevue-notaire.md`) : deux lignes, 100 % au notaire, prix de Nota publié d'avance (199 $ / 249 $ par service, plus la garantie de date — ADR 0034). Le premier notaire à qui l'on parle ne doit pas entendre un chiffre que quatre textes condamnent.
 - **Réseaux démultiplicateurs**, après les neuf : AJNQ (porte principale des jeunes notaires), PME INTER, Jurisconseil ; l'APNQ pour le colloque des 23–24 octobre.
 
 ## 5. Semaines 2–4 (15 septembre – 3 octobre) — dix demandes réelles

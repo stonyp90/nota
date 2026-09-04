@@ -63,7 +63,7 @@
   "Votre date est refusée ?": "Is your date being turned down?",
   "Payé à la signature — vos honoraires vous reviennent en entier": "Paid at signing — your fees come to you in full",
   "La récompense de référence est un coût de marketing de Nota, payée à même ses propres revenus — jamais ajoutée au prix du client, jamais retranchée des honoraires du notaire.": "The referral reward is a Nota marketing cost, paid out of its own revenue — never added to the client’s price, never taken from the notary’s fees.",
-  "Nous ne vendons ni ne louons vos renseignements. Nota se rémunère en facturant son propre service au client, à un prix fixe et annoncé. Aucune donnée n’est monnayée.": "We neither sell nor rent your information. Nota earns its revenue by charging the client for its own service, at a fixed, disclosed price. No data is monetized.",
+  "Nous ne vendons ni ne louons vos renseignements. Nota se rémunère en facturant son propre service au client, à un prix publié d’avance. Aucune donnée n’est monnayée.": "We neither sell nor rent your information. Nota earns its revenue by charging the client for its own service, at a price published in advance. No data is monetized.",
   "Deux lignes, annoncées d’avance": "Two lines, disclosed up front",
   // LE DEVIS (ADR 0031) — deux achats distincts, jamais un partage. « Service
   // Nota » plutôt que « frais » ou « commission » : le mot doit dire ce que le
@@ -641,7 +641,12 @@
   // The hero's price line (ADR 0031): the notary keeps the whole offer, Nota's
   // service is paid at signing. The priced variant is composed at runtime and
   // rides a RULE (the amount passes through to the money conversion).
-  "Le notaire reçoit 100 % de votre offre ; le service Nota, à prix fixe, se paie seulement à la signature.": "The notary receives 100% of your offer; Nota’s service, at a fixed price, is paid only at signing.",
+  "Le notaire reçoit 100 % de votre offre ; le service Nota, à un prix publié d’avance, se paie seulement à la signature.": "The notary receives 100% of your offer; Nota’s service, at a price published in advance, is paid only at signing.",
+  // ADR 0034 — le devis, ligne par ligne. La garantie de date est ce que NOTA
+  // vend ; elle ne se confond pas avec le droit du notaire de tenir compte de
+  // l'urgence dans SES honoraires (art. 49 4° C.déont.).
+  "Garantie de date Nota": "Nota date guarantee",
+  "Le notaire garde 100 % de ses honoraires.": "The notary keeps 100% of their fee.",
   "Date de signature": "Signing date",
   // After a real publication — what happens next, no delay promise.
   "Votre demande est maintenant visible des notaires inscrits.": "Your request is now visible to registered notaries.",
@@ -827,6 +832,7 @@
   "Nos engagements": "Our commitments",
   "Gratuité.": "Free of charge.",
   "Publier une offre et consulter le carnet est gratuit pour le client, pour toujours.": "Publishing an offer and browsing the carnet is free for the client, forever.",
+  "Un prix de départ clair par service et deux lignes annoncées d’avance : les honoraires du notaire — ce que vous offrez est ce qu’il reçoit — et le prix du service de Nota, publié d’avance. Aucun frais caché : le barème des frais d’annulation est publié dans les": "A clear starting price per service and two lines announced in advance: the notary’s fees — what you offer is what they receive — and Nota’s service price, published in advance. No hidden fees: the cancellation fee schedule is published in the",
   "Transparence des prix.": "Price transparency.",
   "Un prix de départ clair par service, aucun frais caché. Ce que vous offrez est ce que le notaire reçoit.": "A clear starting price per service, no hidden fees. What you offer is what the notary receives.",
   "Anonymat par défaut.": "Anonymity by default.",
@@ -943,7 +949,7 @@
   "Partagez votre lien": "Share your link",
   "Le code voyage en privé — jamais affiché au carnet ni montré aux notaires.": "The code travels privately — never displayed on the carnet nor shown to notaries.",
   "Soyez récompensé quand ça aboutit": "Be rewarded when it comes through",
-  "Un montant fixe, jamais un pourcentage.": "A flat amount, never a percentage.",
+  "Une récompense fixe, jamais un pourcentage.": "A flat reward, never a percentage.",
   "Réclamez votre code": "Claim your code",
   "Votre code partenaire": "Your partner code",
   "Code souhaité": "Desired code",
@@ -1153,7 +1159,7 @@
   "Dossier": "File",
   "Il manque :": "Missing:",
   "Non précisé": "Not specified",
-  "un montant fixe, le même pour tous": "a fixed amount, the same for everyone",
+  "un prix publié, le même pour tous les notaires": "a published price, the same for every notary",
   "Si le client annule": "If the client cancels",
   "jours avant la signature": "days before signing",
   "gratuit": "free",
@@ -1273,7 +1279,7 @@
 "Combien de clients référez-vous par mois ?": "How many clients do you refer each month?",
 "clients par mois": "clients per month",
 "par année": "per year",
-"Si chaque demande est retenue par un notaire — un montant fixe par client, sans plafond.": "If every request is retained by a notary — a flat amount per client, no cap.",
+"Si chaque demande est retenue par un notaire — une récompense fixe par client, sans plafond.": "If every request is retained by a notary — a flat reward per client, no cap.",
 "Un message prêt à envoyer": "A message ready to send",
 "à votre client, tel quel :": "to your client, as is:",
 "Copier le message": "Copy the message",
@@ -1292,8 +1298,8 @@
 };
   var HTML = {
   "Connectez un compte de paiement sécurisé (Stripe) pour recevoir vos versements. Le client autorise le paiement dès la publication ; à la signature, <strong>vos honoraires vous sont virés en entier</strong>. Nota facture son service au client, séparément — rien n’est jamais retranché de vos honoraires. Jamais de frais fixes.": "Connect a secure payment account (Stripe) to receive your payouts. The client authorizes payment as soon as the offer is posted; at signing, <strong>your fees are wired to you in full</strong>. Nota charges the client for its service, separately — nothing is ever deducted from your fees. Never any fixed fees.",
-  "Publier une offre est gratuit, et le reste. Sur un acte complété, vous payez deux choses : <strong>les honoraires du notaire</strong> — le montant que vous avez offert, qui lui revient en entier — et <strong>le prix du service de Nota</strong>, un montant fixe, le même pour tous. Les deux vous sont affichés avant que votre carte ne soit autorisée.": "Posting an offer is free, and stays free. On a completed act you pay two things: <strong>the notary’s fees</strong> — the amount you offered, which comes to them in full — and <strong>Nota’s service price</strong>, a fixed amount, the same for everyone. Both are shown to you before your card is authorized.",
-  "<strong>Le prix, en deux lignes.</strong> Le montant que vous offrez est celui des <strong>honoraires du notaire</strong> : il lui revient en entier, Nota n’en prélève rien. Le <strong>prix du service de Nota</strong> est un montant fixe, identique pour tous, qui s’ajoute au vôtre et vous est affiché avant l’autorisation de votre carte. <strong>Les taxes et les débours</strong> — droits de publication, RDPRM — <strong>ne sont pas compris</strong> dans ces montants.": "<strong>The price, in two lines.</strong> The amount you offer is the <strong>notary’s fees</strong>: it comes to them in full, Nota takes none of it. <strong>Nota’s service price</strong> is a fixed amount, the same for everyone, added to yours and shown to you before your card is authorized. <strong>Taxes and disbursements</strong> — registration fees, RDPRM — <strong>are not included</strong> in these amounts.",
+  "Publier une offre est gratuit, et le reste. Sur un acte complété, vous payez deux choses : <strong>les honoraires du notaire</strong> — le montant que vous avez offert, qui lui revient en entier — et <strong>le prix du service de Nota</strong>, publié d’avance : il dépend du service demandé et du délai avant la signature, jamais du notaire ni du montant que vous offrez. Les deux vous sont affichés avant que votre carte ne soit autorisée.": "Posting an offer is free, and stays free. On a completed act you pay two things: <strong>the notary’s fees</strong> — the amount you offered, which comes to them in full — and <strong>Nota’s service price</strong>, published in advance: it depends on the service requested and on the notice before signing, never on the notary nor on the amount you offer. Both are shown to you before your card is authorized.",
+  "<strong>Le prix, en deux lignes.</strong> Le montant que vous offrez est celui des <strong>honoraires du notaire</strong> : il lui revient en entier, Nota n’en prélève rien. Le <strong>prix du service de Nota</strong> s’ajoute au vôtre. Il est publié d’avance et dépend de deux choses que vous choisissez — le service demandé et le délai avant la signature — jamais du notaire, de sa cote ni du montant que vous offrez. Il vous est affiché avant l’autorisation de votre carte, et c’est celui-là qui vous est facturé. <strong>Les taxes et les débours</strong> — droits de publication, RDPRM — <strong>ne sont pas compris</strong> dans ces montants.": "<strong>The price, in two lines.</strong> The amount you offer is the <strong>notary’s fees</strong>: it comes to them in full, Nota takes none of it. <strong>Nota’s service price</strong> is added to yours. It is published in advance and depends on two things you choose — the service requested and the notice before signing — never on the notary, their cote, or the amount you offer. It is shown to you before your card is authorized, and that is the one you are charged. <strong>Taxes and disbursements</strong> — registration fees, RDPRM — <strong>are not included</strong> in these amounts.",
   "<span class=\"nc-soon-tag\">Bientôt</span>Vérification d’identité, inscription et <strong>réalisation complète de l’acte en ligne</strong> : recevez la demande, rencontrez le client et signez à distance. Tout le parcours notaire, de bout en bout, sans quitter Nota.": "<span class=\"nc-soon-tag\">Coming soon</span>Identity verification, onboarding and <strong>completing the entire act online</strong>: receive the request, meet the client and sign remotely. The whole notary journey, end to end, without leaving Nota.",
   "Au repos, vos données sont conservées sur des serveurs canadiens (Amazon Web Services, région <strong>ca-central-1</strong>, Montréal). En transit, elles passent par un réseau de diffusion dont les points de présence sont aussi aux États-Unis et en Europe, et par des prestataires tiers : Stripe pour le paiement, rsms.me pour la police de caractères.": "At rest, your data is stored on Canadian servers (Amazon Web Services, <strong>ca-central-1</strong> region, Montréal). In transit it passes through a content delivery network whose edge locations are also in the United States and Europe, and through third-party providers: Stripe for payment, rsms.me for the typeface.",
   "<strong>Conservation.</strong> Une offre et son dossier sont conservés au plus <strong>12 mois</strong> après la date de signature, puis supprimés automatiquement. Le courriel de notification est effacé dès que l’offre est close ou expirée.": "<strong>Retention.</strong> An offer and its file are kept at most <strong>12 months</strong> after the signing date, then deleted automatically. The notification email is erased as soon as the offer is closed or expired.",
@@ -1301,6 +1307,14 @@
   "<span class=\"nc-soon-tag\">Bientôt</span>Les notaires pourront réaliser l’acte <strong>entièrement en ligne</strong> sur Nota, signature à distance comprise, sans déplacement. Aujourd’hui, vous convenez du lieu avec le notaire qui vous retient.": "<span class=\"nc-soon-tag\">Coming soon</span>Notaries will soon complete the act <strong>entirely online</strong> on Nota, remote signing included, no travel needed. For now, you agree on the location with the notary who takes you on."
 };
   var RULES = compileRules([
+  {
+    // ADR 0034 — le prix est une grille : le héros annonce un PLANCHER. La
+    // règle est plus spécifique que la suivante et doit donc passer avant,
+    // sans quoi « à partir de » resterait en français dans la phrase anglaise.
+    "pattern": "^Le notaire reçoit 100 % de votre offre ; le service Nota, à partir de (.+), se paie seulement à la signature\\.$",
+    "flags": "",
+    "replacement": "The notary receives 100% of your offer; Nota’s service, from $1, is paid only at signing."
+  },
   {
     "pattern": "^Le notaire reçoit 100 % de votre offre ; le service Nota, (.+), se paie seulement à la signature\\.$",
     "flags": "",

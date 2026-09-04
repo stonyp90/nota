@@ -132,8 +132,8 @@
           { "@type": "Question", "name": "Est-ce gratuit pour le client ?", "acceptedAnswer": { "@type": "Answer", "text": "Publier une demande est gratuit et le reste. Quand un notaire retient votre demande, vous payez ses honoraires — le montant que vous avez offert, qui lui revient en entier — et, séparément, le prix du service de Nota. Les deux vous sont annoncés avant tout paiement. Taxes et débours en sus." } },
           { "@type": "Question", "name": "Mon nom est-il rendu public ?", "acceptedAnswer": { "@type": "Answer", "text": "Non par défaut. Les offres sont anonymes et affichées comme « Client · secteur postal ». Vous pouvez choisir de rendre votre nom visible." } },
           { "@type": "Question", "name": "Quels actes sont offerts sur Nota ?", "acceptedAnswer": { "@type": "Answer", "text": "Nota se concentre sur le financement immobilier : le refinancement hypothécaire (mainlevée de l’ancienne hypothèque et nouvel acte de prêt) et le financement hypothécaire (acte de prêt et publication d’une nouvelle hypothèque — achat ou premier prêt). Le prix de départ de chaque acte est affiché au carnet." } },
-          { "@type": "Question", "name": "Combien coûte un notaire pour un refinancement hypothécaire à Québec ?", "acceptedAnswer": { "@type": "Answer", "text": "Sur Nota, un refinancement hypothécaire (mainlevée et nouvel acte de prêt) démarre au prix de départ affiché au carnet, dans la Ville de Québec — ce montant est celui des honoraires du notaire ; le prix fixe du service de Nota s’ajoute à la signature. Vous affichez la date de signature voulue et votre offre ; un notaire de la région retient votre demande. Plus l’échéance est proche, plus l’offre pèse." } },
-          { "@type": "Question", "name": "How much does a notary charge to refinance a mortgage in Quebec City?", "acceptedAnswer": { "@type": "Answer", "text": "On Nota, a mortgage refinancing (discharge of the old hypothec and the new loan deed) starts at the starting price shown on the carnet in Quebec City — that amount is the notary’s fee; Nota’s fixed service price is added at signing. You post the signing date you need and your price; a local Québec notary takes on your request. Posting is free; the notary’s fees and Nota’s fixed service price are paid at signing." } },
+          { "@type": "Question", "name": "Combien coûte un notaire pour un refinancement hypothécaire à Québec ?", "acceptedAnswer": { "@type": "Answer", "text": "Sur Nota, un refinancement hypothécaire (mainlevée et nouvel acte de prêt) démarre au prix de départ affiché au carnet, dans la Ville de Québec — ce montant est celui des honoraires du notaire ; le prix du service de Nota, publié d’avance, s’ajoute à la signature. Vous affichez la date de signature voulue et votre offre ; un notaire de la région retient votre demande. Plus l’échéance est proche, plus l’offre pèse." } },
+          { "@type": "Question", "name": "How much does a notary charge to refinance a mortgage in Quebec City?", "acceptedAnswer": { "@type": "Answer", "text": "On Nota, a mortgage refinancing (discharge of the old hypothec and the new loan deed) starts at the starting price shown on the carnet in Quebec City — that amount is the notary’s fee; Nota’s service price, published in advance, is added at signing. You post the signing date you need and your price; a local Québec notary takes on your request. Posting is free; the notary’s fees and Nota’s own service price — published in advance, set by the service and the notice — are paid at signing." } },
           { "@type": "Question", "name": "How fast can I get a notary for a mortgage refinance in Quebec City?", "acceptedAnswer": { "@type": "Answer", "text": "You pick the signing date on the public carnet and name your offer; notaries in the region decide whether to take it on. The more notice you leave, the more easily a notary can fit your date into their schedule. Nota guarantees no timeline. No account needed to post." } }
         ]
       }
@@ -262,7 +262,7 @@
             <section class="ig-scene ig-c5" aria-hidden="true">
               <div class="ig-logo-row"><svg class="ig-mark ig-mark-final" viewBox="0 0 64 64" role="img" aria-label="Nota"><use href="#nota-logomark"/></svg><span class="ig-word">Nota</span></div>
               <p class="ig-tag">Un notaire, à la date qu’il vous faut.</p>
-              <p class="ig-note">Le notaire reçoit 100 % de votre offre ; le service Nota, à prix fixe, se paie seulement à la signature.</p>
+              <p class="ig-note">Le notaire reçoit 100 % de votre offre ; le service Nota, à un prix publié d’avance, se paie seulement à la signature.</p>
               <p class="ig-cta">nota.quebec · Publiez votre offre en 2 minutes</p>
             </section>
             <div class="ig-progress" aria-hidden="true"></div>
@@ -556,7 +556,7 @@
               <!-- The price line is the two-line truth of ADR 0031, rendered by
                    renderHeroPrice() from the tarif the API serves: the static
                    text below is the no-amount fallback, never a literal price. -->
-              <p class="hero-tagline">Proposez votre date et votre prix — un notaire de Québec retient votre demande. <strong id="hero-price-line">Le notaire reçoit 100 % de votre offre ; le service Nota, à prix fixe, se paie seulement à la signature.</strong></p>
+              <p class="hero-tagline">Proposez votre date et votre prix — un notaire de Québec retient votre demande. <strong id="hero-price-line">Le notaire reçoit 100 % de votre offre ; le service Nota, à un prix publié d’avance, se paie seulement à la signature.</strong></p>
               <!-- Two date CTAs only (owner's ask, 2026-08-25): the guide left
                    the hero for the fixed « ? » bubble (.guide-fab on desktop;
                    phones keep the footer link and the first-visit guide) —
@@ -1089,7 +1089,7 @@
                     <span class="pr-estimate-year"><strong id="pr-estimate-year"></strong> par année</span>
                   </output>
                 </div>
-                <p class="pr-estimate-fine">Si chaque demande est retenue par un notaire — un montant fixe par client, sans plafond.</p>
+                <p class="pr-estimate-fine">Si chaque demande est retenue par un notaire — une récompense fixe par client, sans plafond.</p>
               </div>
             </div>
             <!-- Two tracks, one stat card each: kicker, amount + cadence tag,
@@ -1146,7 +1146,7 @@
                   <li>
                     <span class="pr-step-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8.5" r="5.5"/><path d="M15.4 12.9 17 22l-5-2.8L7 22l1.6-9.1"/></svg></span>
                     <strong>Soyez récompensé quand ça aboutit</strong>
-                    <span>Un montant fixe, jamais un pourcentage.</span>
+                    <span>Une récompense fixe, jamais un pourcentage.</span>
                   </li>
                 </ol>
               </section>
@@ -1326,7 +1326,7 @@
               <li><strong>Téléphone.</strong> Le numéro que vous fournissez (optionnel) est privé : il n’est partagé qu’avec le notaire qui retient votre demande, puis supprimé selon le même calendrier que le reste.</li>
               <li><strong>Code de partenaire.</strong> Si vous arrivez par le lien d’un partenaire, son code est conservé en privé avec votre demande — jamais affiché publiquement — et sert uniquement à créditer ce partenaire.</li>
               <li><strong>Vérification d’identité.</strong> Nota ne vérifie pas votre identité. C’est le notaire qui retient votre demande qui vérifie votre identité au moment de la signature, comme l’exige la loi.</li>
-              <li><strong>Aucune revente.</strong> Nous ne vendons ni ne louons vos renseignements. Nota se rémunère en facturant son propre service au client, à un prix fixe et annoncé. Aucune donnée n’est monnayée.</li>
+              <li><strong>Aucune revente.</strong> Nous ne vendons ni ne louons vos renseignements. Nota se rémunère en facturant son propre service au client, à un prix publié d’avance. Aucune donnée n’est monnayée.</li>
               <!-- What localStorage holds (nota.profile / dossier / lang / theme /
                    offer tokens) and the one server-side measure: the funnel
                    events (app.js track → POST /events, no account, no cookie). -->
@@ -1358,7 +1358,7 @@
             </div>
             <div class="card">
               <h3>Deux lignes, annoncées d’avance</h3>
-              <p>Publier une offre est gratuit, et le reste. Sur un acte complété, vous payez deux choses : <strong>les honoraires du notaire</strong> — le montant que vous avez offert, qui lui revient en entier — et <strong>le prix du service de Nota</strong>, un montant fixe, le même pour tous. Les deux vous sont affichés avant que votre carte ne soit autorisée.</p>
+              <p>Publier une offre est gratuit, et le reste. Sur un acte complété, vous payez deux choses : <strong>les honoraires du notaire</strong> — le montant que vous avez offert, qui lui revient en entier — et <strong>le prix du service de Nota</strong>, publié d’avance : il dépend du service demandé et du délai avant la signature, jamais du notaire ni du montant que vous offrez. Les deux vous sont affichés avant que votre carte ne soit autorisée.</p>
             </div>
           </div>
 
@@ -1368,7 +1368,7 @@
               <li><strong>Rôle de Nota.</strong> Nota fournit une plateforme de mise en relation. Nous ne rédigeons pas d’actes, ne donnons aucun conseil juridique, fiscal ou financier, et ne sommes pas partie au mandat entre vous et le notaire.</li>
               <li><strong>Indépendance du notaire.</strong> Le notaire qui retient votre demande agit en toute indépendance : il fixe ses honoraires, vérifie votre identité et rédige l’acte selon la loi. Nota n’intervient jamais dans l’acte notarié.</li>
               <li><strong>Vos engagements.</strong> Vous fournissez des renseignements exacts et n’utilisez pas le service à des fins illégales ou trompeuses. Une offre publiée est un engagement de bonne foi à procéder à la date convenue.</li>
-              <li><strong>Le prix, en deux lignes.</strong> Le montant que vous offrez est celui des <strong>honoraires du notaire</strong> : il lui revient en entier, Nota n’en prélève rien. Le <strong>prix du service de Nota</strong> est un montant fixe, identique pour tous, qui s’ajoute au vôtre et vous est affiché avant l’autorisation de votre carte. <strong>Les taxes et les débours</strong> — droits de publication, RDPRM — <strong>ne sont pas compris</strong> dans ces montants.</li>
+              <li><strong>Le prix, en deux lignes.</strong> Le montant que vous offrez est celui des <strong>honoraires du notaire</strong> : il lui revient en entier, Nota n’en prélève rien. Le <strong>prix du service de Nota</strong> s’ajoute au vôtre. Il est publié d’avance et dépend de deux choses que vous choisissez — le service demandé et le délai avant la signature — jamais du notaire, de sa cote ni du montant que vous offrez. Il vous est affiché avant l’autorisation de votre carte, et c’est celui-là qui vous est facturé. <strong>Les taxes et les débours</strong> — droits de publication, RDPRM — <strong>ne sont pas compris</strong> dans ces montants.</li>
               <!-- ADR 0033 / ADR 0023 — the cancellation barème quoted here is
                    the DEPLOYMENT DEFAULT (the admin can change it): the app
                    always shows the barème in force, on this offer's amount,
@@ -1424,7 +1424,7 @@
                    published: the cancellation fee bands live in the conditions
                    (#tos-annulation) and the exact amount is shown before any
                    confirmation (ADR 0023 / 0033). -->
-              <li><strong>Transparence des prix.</strong> Un prix de départ clair par service et deux lignes annoncées d’avance : les honoraires du notaire — ce que vous offrez est ce qu’il reçoit — et le prix fixe du service de Nota. Aucun frais caché : le barème des frais d’annulation est publié dans les <a href="#t=conditions" class="goto-link" data-goto="conditions">conditions d’utilisation</a> et le montant exact vous est affiché avant toute confirmation.</li>
+              <li><strong>Transparence des prix.</strong> Un prix de départ clair par service et deux lignes annoncées d’avance : les honoraires du notaire — ce que vous offrez est ce qu’il reçoit — et le prix du service de Nota, publié d’avance. Aucun frais caché : le barème des frais d’annulation est publié dans les <a href="#t=conditions" class="goto-link" data-goto="conditions">conditions d’utilisation</a> et le montant exact vous est affiché avant toute confirmation.</li>
               <li><strong>Anonymat par défaut.</strong> Votre offre s’affiche « Client · secteur postal ». Votre nom n’apparaît que si vous le choisissez.</li>
               <li><strong>Vos données protégées.</strong> Hébergement au Canada, conformité à la Loi 25, aucune revente. Voir la <a href="#t=confidentialite" class="goto-link" data-goto="confidentialite">confidentialité</a>.</li>
               <li><strong>Traitement équitable.</strong> Le carnet est public et les mêmes règles s’appliquent à tous. Aucune offre n’est mise en avant contre paiement.</li>
@@ -1553,10 +1553,26 @@
               <span class="devis-k" id="devis-nota-k">Service Nota</span>
               <span class="devis-v" id="devis-nota">—</span>
             </div>
+            <!-- ADR 0034 — la garantie de date, sur SA propre ligne. C'est ce
+                 que NOTA vend : trouver un notaire à courte échéance et tenir
+                 la date. L'art. 49 4° du Code de déontologie laisse au notaire
+                 le droit de tenir compte de l'urgence dans SES honoraires : ce
+                 sont deux objets, et deux lignes. Masquée à zéro — un client à
+                 échéance normale ne paie rien pour une garantie qu'il n'a pas
+                 demandée, et une ligne à 0 $ ne ferait que du bruit. -->
+            <div class="devis-l" id="devis-date-l" hidden>
+              <span class="devis-k" id="devis-date-k">Garantie de date Nota</span>
+              <span class="devis-v" id="devis-date">—</span>
+            </div>
             <div class="devis-l devis-total">
               <span class="devis-k" id="devis-total-k">Autorisé sur votre carte</span>
               <span class="devis-v" id="devis-total">—</span>
             </div>
+            <!-- La revendication du modèle, écrite là où le client décide.
+                 Art. 32.1 2° L.N. / art. 32 C.déont. : Nota n'obtient du
+                 notaire aucun abandon d'honoraires, et le dire au moment de
+                 l'engagement est le seul endroit qui compte. -->
+            <p class="devis-claim" id="devis-claim">Le notaire garde 100 % de ses honoraires.</p>
             <p class="devis-note" id="devis-note"></p>
           </div>
         </div>

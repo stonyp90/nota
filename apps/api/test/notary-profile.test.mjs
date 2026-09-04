@@ -13,8 +13,11 @@ const { createApp } = require('../src/handler.js');
 const { createMemoryRepo } = require('../src/repo-memory.js');
 const { createBilling } = require('../src/billing.js');
 const { notaryIdForEmail, signToken, SCOPES } = require('../src/notary-auth.js');
-const { DEFAULT_PRIX_CENTS: PRIX } = require('../src/prix-nota-config.js');
 const domain = require('@nota/domain');
+// ADR 0034 — la console reçoit la GRILLE et son « à partir de » : le prix que
+// le client paie dépend du service et du délai, jamais du notaire qui lit.
+const GRILLE = domain.prixNotaGrille();
+const PRIX_MIN = GRILLE.defaut;
 
 const TODAY = '2026-08-12';
 const NOW_MS = 1_760_000_000_000;
@@ -123,9 +126,11 @@ test('/notary/bids ne montre PLUS aucun partage — le tarif du client, et la co
 
   const view = parse(await a.handle({ method: 'GET', path: '/notary/bids', headers: bearer(sessionToken()), query: {} }));
   assert.equal(view.commission, undefined, 'plus aucun bloc de partage ne descend à la console');
-  assert.equal(view.tarif.prixNotaCents, PRIX, 'le prix que le client paie à Nota, en cents');
-  // Ni pourcentage, ni part, ni palier : rien à recalculer, rien à négocier.
-  assert.deepEqual(Object.keys(view.tarif).sort(), ['deboursInclus', 'prixNotaCents', 'taxesIncluses']);
+  assert.deepEqual(view.tarif.grille, GRILLE, 'la grille que le client paie à Nota, en cents');
+  assert.equal(view.tarif.prixNotaMinCents, PRIX_MIN, 'et son « à partir de »');
+  // Ni pourcentage, ni part, ni cote : rien à recalculer, rien à négocier.
+  assert.deepEqual(Object.keys(view.tarif).sort(),
+    ['deboursInclus', 'grille', 'prixNotaMinCents', 'taxesIncluses']);
 
   // La cote survit intacte — elle classe, elle ouvre des dossiers, elle ne
   // touche simplement plus à un dollar.
@@ -149,7 +154,7 @@ test('ART. 29.1 — la cote peut grimper au sommet, le tarif ne bouge pas d’un
 
   const view = parse(await a.handle({ method: 'GET', path: '/notary/bids', headers: bearer(sessionToken()), query: {} }));
   assert.ok(view.cote.cote > 90, 'la cote passe 90 : ' + view.cote.cote);
-  assert.equal(view.tarif.prixNotaCents, PRIX, 'le même prix que pour un notaire tout neuf');
+  assert.deepEqual(view.tarif.grille, GRILLE, 'la même grille que pour un notaire tout neuf');
   assert.equal(view.commission, undefined);
 });
 
@@ -158,7 +163,7 @@ test('sans facturation configurée, la console reçoit quand même le tarif et s
   await seedNotary(a);
   const view = parse(await a.handle({ method: 'GET', path: '/notary/bids', headers: bearer(sessionToken()), query: {} }));
   // Le prix ne dépend d'aucun compte Stripe : il se lit du déploiement.
-  assert.equal(view.tarif.prixNotaCents, PRIX);
+  assert.deepEqual(view.tarif.grille, GRILLE);
   assert.equal(view.commission, undefined);
   // ADR 0033 — the whole profil block: the feed levers, the identity a
   // retained client receives (empty here, hence `complet: false` and the three

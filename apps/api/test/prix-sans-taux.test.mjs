@@ -8,6 +8,7 @@ const { createBilling, NOTARY_STATUS } = require('../src/billing.js');
 const { createMemoryRepo } = require('../src/repo-memory.js');
 const { notaryIdForEmail } = require('../src/notary-auth.js');
 const prix = require('../src/prix-nota-config.js');
+const domain = require('@nota/domain');
 
 const NOW = '2026-09-02T12:00:00.000Z';
 
@@ -71,18 +72,29 @@ test('la facturation n’expose plus aucune porte de taux', async () => {
   // Ce qui reste est la porte du prix, et elle seule.
   assert.equal(typeof b.quoteOffer, 'function');
   assert.equal(typeof b.priceAct, 'function');
-  assert.equal(typeof b.resolvePrixNota, 'function');
+  assert.equal(typeof b.resolveGrilleNota, 'function');
 });
 
-test('la décision de prix ne porte QUE trois nombres, tous des cents', async () => {
+test('la décision de prix ne porte QUE des montants en cents', async () => {
   const b = billingOn(createMemoryRepo());
-  const devis = await b.priceAct(2000);
-  assert.deepEqual(Object.keys(devis).sort(), ['honorairesCents', 'prixNotaCents', 'totalCents']);
-  // Pas un `taux`, pas une `cote`, pas une `part`, pas un `plancher` — un
-  // devis qui les porterait décrirait un partage, et il n'y en a plus.
+  const devis = await b.priceAct(2000, { serviceId: 'refinancement', tierId: 'standard' });
+  // ADR 0034 — les deux lignes de Nota sont DIVULGUÉES séparément : le prix du
+  // service et la garantie de date. Une somme muette laisserait le client
+  // incapable de savoir ce qu'il paie pour quoi (art. 68 C.déont.).
+  assert.deepEqual(Object.keys(devis).sort(), [
+    'honorairesCents', 'prixNotaCents', 'prixNotaDateCents', 'prixNotaServiceCents', 'totalCents',
+  ]);
+  assert.equal(devis.prixNotaCents, devis.prixNotaServiceCents + devis.prixNotaDateCents,
+    'le prix de Nota EST la somme de ses deux lignes — rien ne se cache entre elles');
+  // Pas un `taux`, pas une `cote`, pas une `part` — un devis qui les porterait
+  // décrirait un partage, et il n'y en a plus.
   for (const v of Object.values(devis)) {
-    assert.ok(Number.isInteger(v), 'un devis ne porte que des entiers de cents : ' + v);
-    assert.ok(v >= 1, 'jamais une fraction entre 0 et 1, qui serait un taux : ' + v);
+    // Entier ET jamais négatif. Le plancher a dû descendre de 1 à 0 quand la
+    // ligne `prixNotaDateCents` est apparue (elle vaut zéro au palier
+    // standard) : le laisser tomber sous zéro par la même occasion rendrait le
+    // test aveugle à un devis à −5 000 ¢, qui virerait de l'argent au client.
+    assert.ok(Number.isInteger(v) && v >= 0, 'un devis ne porte que des entiers de cents, jamais négatifs : ' + v);
+    assert.ok(!(v > 0 && v < 1), 'jamais une fraction entre 0 et 1, qui serait un taux : ' + v);
   }
 });
 
@@ -141,7 +153,8 @@ test('les frais d’application Stripe SONT le prix, jamais une fraction du tota
   await b.payNotaryOnAccept({ notaryId: id, bidId: 'B1', actAmount: 3000, paymentIntentId: 'pi' });
 
   const t = calls.transfers[0];
-  assert.equal(t.applicationFeeCents, prix.DEFAULT_PRIX_CENTS);
+  assert.equal(t.applicationFeeCents, domain.prixNota().totalCents,
+    'un règlement sans service nommé retombe sur la ligne la plus basse du catalogue');
   assert.equal(t.amountCents - t.applicationFeeCents, 300_000,
     'le net du notaire EST le montant offert — art. 32.1 2° de la Loi sur le notariat');
 });

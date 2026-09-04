@@ -99,7 +99,10 @@
         if (r.ok) {
           this.online = true;
           var j = await r.json();
-          if (j.tarif && typeof j.tarif.prixNotaCents === 'number') this.tarif = j.tarif;
+          // ADR 0034 — le tarif porte la GRILLE : sans elle, aucun devis ne
+          // peut se calculer, et il vaut mieux ne rien afficher qu'un prix
+          // inventé (art. 68 C.déont.).
+          if (j.tarif && j.tarif.grille && j.tarif.grille.services) this.tarif = j.tarif;
           return j.bids || [];
         }
       } catch (e) { /* offline */ }
@@ -3667,23 +3670,42 @@
    * est écrite depuis les drapeaux du serveur, pas depuis une opinion : le jour
    * où les taxes seront calculées, la phrase changera d'elle-même.
    */
-  // Nota's service price in dollars, from the tarif the API served — null
-  // while unknown (offline, fixtures): the copy then says a fixed price is
-  // added without ever inventing the amount (art. 68 C.déont.).
-  function prixNotaDollars() {
+  // ADR 0034 — le prix de Nota pour UNE offre : la cellule de la grille servie
+  // par l'API, pour ce service et ce palier de délai. Null tant que la grille
+  // est inconnue (hors ligne, fixtures) : la copie dit alors qu'un prix
+  // s'ajoutera, sans jamais inventer le montant (art. 68 C.déont.). Le calcul
+  // est celui du domaine — l'écran ne fait aucune arithmétique de prix.
+  function prixNotaLignes(serviceId, dateISO) {
     var t = store.tarif;
-    return t && typeof t.prixNotaCents === 'number' ? Math.round(t.prixNotaCents) / 100 : null;
+    if (!t || !t.grille) return null;
+    var tierId = D.isISODate(dateISO)
+      ? D.tierForDays(Math.max(0, D.daysBetween(todayISO(), dateISO)))
+      : 'standard';
+    var p = D.prixNota(serviceId, tierId, t.grille);
+    return {
+      service: Math.round(p.serviceCents) / 100,
+      date: Math.round(p.dateCents) / 100,
+      total: Math.round(p.totalCents) / 100,
+    };
+  }
+
+  // Le plancher ANNONCÉ : la cellule la plus basse de la grille. C'est un « à
+  // partir de », dit comme tel — jamais le prix d'un devis.
+  function prixNotaMinDollars() {
+    var t = store.tarif;
+    return t && typeof t.prixNotaMinCents === 'number' ? Math.round(t.prixNotaMinCents) / 100 : null;
   }
 
   // The hero's price line — the two-line truth of ADR 0031, at the exact
   // moment of conversion: the notary keeps the whole offer, and Nota's own
-  // service is paid at signing. Quotes the served price; never a literal.
+  // service is paid at signing. Depuis l'ADR 0034 le prix est une grille : le
+  // héros annonce donc un plancher, et le devis donne le prix exact.
   function renderHeroPrice() {
     var line = $('hero-price-line'); if (!line) return;
-    var prix = prixNotaDollars();
+    var prix = prixNotaMinDollars();
     line.textContent = prix != null
-      ? 'Le notaire reçoit 100 % de votre offre ; le service Nota, ' + D.money(prix) + ', se paie seulement à la signature.'
-      : 'Le notaire reçoit 100 % de votre offre ; le service Nota, à prix fixe, se paie seulement à la signature.';
+      ? 'Le notaire reçoit 100 % de votre offre ; le service Nota, à partir de ' + D.money(prix) + ', se paie seulement à la signature.'
+      : 'Le notaire reçoit 100 % de votre offre ; le service Nota, à un prix publié d’avance, se paie seulement à la signature.';
   }
 
   function renderDevis() {
@@ -3695,9 +3717,17 @@
     box.hidden = false;
 
     var tarif = store.tarif;
-    var prix = prixNotaDollars();
+    var lignes = prixNotaLignes(svc.id, state.offer.dateISO);
+    var prix = lignes ? lignes.total : null;
     $('devis-hon').textContent = D.money(honoraires);
-    $('devis-nota').textContent = prix != null ? D.money(prix) : '—';
+    $('devis-nota').textContent = lignes ? D.money(lignes.service) : '—';
+    // La garantie de date n'apparaît que lorsqu'elle se paie : une ligne à 0 $
+    // ne dirait rien au client à échéance normale.
+    var dl = $('devis-date-l');
+    if (dl) {
+      dl.hidden = !lignes || !lignes.date;
+      if (lignes && lignes.date) $('devis-date').textContent = D.money(lignes.date);
+    }
     $('devis-total').textContent = prix != null ? D.money(honoraires + prix) : '—';
 
     // Chaque phrase est son PROPRE noeud de texte : la couche i18n traduit par
@@ -7077,12 +7107,20 @@
     ncSetText('nc-retenir-fee', D.money(b.montant));
     ncSetText('nc-retenir-go-amt', D.money(b.montant));
     // The client's Nota price: `conditions.tarifNota` (ADR 0033) or the feed's
-    // `tarif` (ADR 0031) — the same object. Absent → said in words, no figure.
+    // `tarif` (ADR 0031) — the same object. Depuis l'ADR 0034 c'est une GRILLE :
+    // ce qui s'affiche est la cellule de CE service à CE palier, c'est-à-dire
+    // exactement ce que le client a lu sur son devis. Absente → dit en mots,
+    // jamais un chiffre inventé.
     var tarif = (nc.conditions && nc.conditions.tarifNota) || nc.tarif;
     var nota = ncSetText('nc-retenir-nota', null);
     if (nota) {
-      if (tarif && typeof tarif.prixNotaCents === 'number') nota.appendChild(document.createTextNode(D.money(Math.round(tarif.prixNotaCents) / 100)));
-      else nota.appendChild(el('span', 'nc-retenir-sub', 'un montant fixe, le même pour tous'));
+      var grille = tarif && tarif.grille;
+      if (grille && grille.services) {
+        nota.appendChild(document.createTextNode(
+          D.money(Math.round(D.prixNota(b.serviceId, b.tier, grille).totalCents) / 100)));
+      } else {
+        nota.appendChild(el('span', 'nc-retenir-sub', 'un prix publié, le même pour tous les notaires'));
+      }
       // The tarif flags (art. 71 3°) — the same two notes the client devis
       // shows, in the same words (audit P1-1).
       if (tarif && tarif.taxesIncluses === false) { nota.appendChild(document.createTextNode(' ')); nota.appendChild(el('span', 'nc-retenir-sub', 'Taxes en sus.')); }

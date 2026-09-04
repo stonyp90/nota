@@ -271,11 +271,16 @@ a:hover { text-decoration: underline; }
 
 .chart-scroll { overflow-x: auto; overscroll-behavior-x: contain; }
 
-/* Parrainages ledger — one row per partner code, both reward tracks. */
-.ptable { width: 100%; border-collapse: collapse; font-size: 13px; }
-.ptable th, .ptable td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); }
-.ptable th { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-muted); }
-.ptable tbody tr:last-child td { border-bottom: 0; }
+/* Parrainages ledger — one row per partner code, both reward tracks.
+   La grille de prix (ADR 0034) reprend le même tableau : mêmes rythmes, mêmes
+   filets, aucun style dupliqué. */
+.ptable, .prix-grille { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ptable th, .ptable td,
+.prix-grille th, .prix-grille td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); }
+.ptable th,
+.prix-grille thead th { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-muted); }
+.ptable tbody tr:last-child td,
+.prix-grille tbody tr:last-child td { border-bottom: 0; }
 .ptable .is-num { text-align: right; font-variant-numeric: tabular-nums; }
 .ptable-code { font-weight: 700; letter-spacing: 0.03em; }
 .ptable-sub { font-size: 12px; color: var(--ink-muted); }
@@ -372,12 +377,23 @@ a:hover { text-decoration: underline; }
 .tpl-badge.is-transactionnel { background: var(--neutral-wash); }
 .input[aria-invalid='true'] { border-color: var(--danger); }
 
-/* --- Prix (ADR 0031) et Annulation (barème, ADR 0023) ----------------------
+/* --- Prix (ADR 0031, grille ADR 0034) et Annulation (barème, ADR 0023) ------
    Les vues de lecture réutilisent les tuiles de statistiques et la .ptable ;
    les formulaires réutilisent .field/.input/.tpl-fields/.tpl-error/.tpl-actions.
    Seuls la grille d'un palier d'annulation, la bande de réinitialisation et sa
    confirmation en page sont propres à ces écrans. */
 .bareme-form { display: flex; flex-direction: column; gap: 14px; }
+/* La grille de prix : l'en-tête de RANGÉE nomme la ligne du catalogue, il ne
+   titre pas une colonne — il garde donc la casse et l'encre du texte courant. */
+.prix-grille tbody th {
+  font-size: 13px; font-weight: 600; text-transform: none; letter-spacing: 0; color: var(--ink);
+}
+.prix-grille td { font-variant-numeric: tabular-nums; }
+.prix-groupe-titre {
+  margin: 14px 0 6px;
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--ink-muted);
+}
 .bareme-paliers { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
 .bareme-paliers-label {
   font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;

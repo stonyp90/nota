@@ -18,7 +18,15 @@ const TODAY = '2026-08-12';
 // ADR 0031 — le prix de Nota, un montant FIXE. Ces tests lisent le défaut du
 // module plutôt qu'un nombre écrit ici : le jour où le propriétaire change le
 // prix, la suite le suit sans être retouchée.
-const { DEFAULT_PRIX_CENTS: PRIX } = require('../src/prix-nota-config.js');
+const domain = require('@nota/domain');
+
+// ADR 0034 — le prix de Nota est une GRILLE : une ligne par service, plus la
+// garantie de date. Un règlement qui ne nomme aucun service retombe sur la
+// ligne la plus basse du catalogue (Nota ne facture jamais plus que ce qu'elle
+// a publié pour un service qu'elle ne sait pas nommer) : c'est ce que la
+// plupart des cas ci-dessous exercent, service par ailleurs hors sujet.
+const PRIX = domain.prixNota().totalCents;
+const prixDe = (serviceId, tierId) => domain.prixNota(serviceId, tierId).totalCents;
 
 /**
  * A plain fake Stripe adapter — implements the same surface as
@@ -278,7 +286,8 @@ test('POST /notary/acts/complete: session-gated, verifies bid ownership, then se
     body: JSON.stringify({ bidId: 'BID#9', dateISO: '2026-08-20', actAmount: 1500 }),
   });
   assert.equal(res.statusCode, 200);
-  assert.equal(parse(res).commissionCents, PRIX);
+  // Le service est connu du carnet : c'est SA ligne de la grille qui est due.
+  assert.equal(parse(res).commissionCents, prixDe('refinancement'));
 });
 
 test('POST /stripe/webhook returns 200 {received:true} on a good signature', async () => {
@@ -320,7 +329,7 @@ async function activeBilling() {
 test('EDGE (logic): a fractional act value leaves Nota’s price a whole number of cents', async () => {
   const { billing } = await activeBilling();
   // 999,99 $ d'honoraires : ce sont eux qui portent la fraction, jamais le
-  // prix de Nota — un montant fixe n'a pas de cent à arrondir.
+  // prix de Nota — une cellule de grille en cents entiers n'a rien à arrondir.
   const r = await billing.completeAct({ notaryId: EDGE_ID, bidId: 'b1', actAmount: 999.99 });
   assert.equal(r.honorairesCents, 99_999);
   assert.equal(r.commissionCents, PRIX);
@@ -479,9 +488,12 @@ test('end-to-end (ADR 0015): post → authorize → accept retains WITHOUT payin
   feed = parse(await app.handle({ method: 'GET', path: '/bids', query: { month: '2026-08' } }));
   assert.equal(feed.bids.length, 1);
   const montant = feed.bids[0].montant;
+  // ADR 0034 — le prix de Nota est celui de CE service à CE palier, lu sur la
+  // grille exactement comme le devis du client l'a lu.
+  const prixOffre = prixDe('refinancement', feed.bids[0].tier);
   // La carte autorise les DEUX lignes : autoriser les seuls honoraires
   // sous-facturerait le client au moment de la capture (ADR 0031).
-  assert.equal(stripe.calls.authorizations[0].amountCents, Math.round(montant * 100) + PRIX);
+  assert.equal(stripe.calls.authorizations[0].amountCents, Math.round(montant * 100) + prixOffre);
 
   // 3) A charge-ready notary signs in and accepts → the dossier is released
   //    but NO money moves (paid at signing, ADR 0015): no capture, no transfer,
@@ -508,11 +520,11 @@ test('end-to-end (ADR 0015): post → authorize → accept retains WITHOUT payin
   }));
   assert.equal(done.ok, true);
   assert.equal(done.paid, true);
-  assert.equal(done.commissionCents, PRIX);
+  assert.equal(done.commissionCents, prixOffre);
   assert.equal(done.netCents, cents, 'le notaire nette ses honoraires ENTIERS');
   assert.equal(stripe.calls.transfers.length, 1);
   assert.equal(stripe.calls.transfers[0].paymentIntentId, 'pi_x');
-  assert.equal(stripe.calls.transfers[0].amountCents, cents + PRIX, 'la capture porte les deux lignes');
+  assert.equal(stripe.calls.transfers[0].amountCents, cents + prixOffre, 'la capture porte les deux lignes');
   assert.equal(stripe.calls.charges.length, 0, 'the capture path never also charges the notary');
 });
 
@@ -555,12 +567,13 @@ test('CAPTURE FAILURE AT COMPLETION (ADR 0015): a lapsed/declined hold settles t
   const body = parse(res);
   assert.equal(body.ok, true);
   assert.equal(body.paid, undefined, 'nothing was paid through Nota on this path');
-  assert.equal(body.commissionCents, PRIX);
+  const prixY = prixDe('refinancement', (await repo.get('y1', '2026-08-20')).tier);
+  assert.equal(body.commissionCents, prixY);
   assert.equal(stripe.calls.charges.length, 0, 'no charge is attempted: there is nothing to charge');
   const ledger = await repo.getActCompletion('y1');
   assert.ok(ledger, 'the act ledger settled exactly once, via the fallback');
   assert.equal(ledger.paye, false, 'and it says so: settled, not paid');
-  assert.equal(ledger.commissionCentsDue, PRIX, 'le prix de Nota est dû par le notaire');
+  assert.equal(ledger.commissionCentsDue, prixY, 'le prix de Nota est dû par le notaire');
   assert.equal((await repo.getNotary(notaryId)).commissionCentsCollected || 0, 0);
 });
 

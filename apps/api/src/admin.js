@@ -489,7 +489,7 @@ function createAdmin({
   //
   // Cette porte remplace celle du barème de commission. Nota ne prélève plus
   // une part des honoraires du notaire : elle vend son service à son propre
-  // prix, un montant fixe identique pour tous. L'art. 29.1 du Code de
+  // prix, publié d'avance et le même pour tous les notaires. L'art. 29.1 du Code de
   // déontologie interdit au notaire toute convention mettant en péril son
   // indépendance et son désintéressement — un prix qui bougerait selon la cote
   // que Nota lui attribue en serait une. Il n'y a donc RIEN à paramétrer ici
@@ -502,20 +502,42 @@ function createAdmin({
   // exige 'settings:write' (super_admin). Chaque changement est journalisé
   // avec son avant/après.
   // ---------------------------------------------------------------------------
+  //
+  // ADR 0034 — ce n'est plus UN nombre mais une GRILLE : une ligne par service,
+  // plus la garantie de date sur sa propre ligne. Un prix unique posé sur des
+  // actes inégaux était régressif ; la grille ne dépend toujours que de deux
+  // dimensions publiées — le service et le délai — et de rien qui touche au
+  // notaire. Une grille stockée à l'ancien format `{ prixCents }` continue de
+  // tarifer exactement ce qu'elle tarifait la veille.
+  //
+  // La LECTURE est tolérante là où l'écriture est stricte (`readStored`) : une
+  // cellule devenue illisible — un service retiré du catalogue, par exemple —
+  // est écartée SEULE et nommée dans `ignorees`. La console doit voir les
+  // décisions qui survivent, et voir aussi celle qui ne survit pas : rendre
+  // `null` afficherait « aucun prix enregistré » alors que la ligne existe
+  // toujours en base, et le prochain enregistrement l'écraserait à l'aveugle.
   function prixView(o) {
     if (!o) return null;
-    return { prixCents: o.prixCents, updatedAt: o.updatedAt || null };
+    const { config, ignorees } = prixCfg.readStored(o);
+    if (!Object.keys(config).length) return null;
+    return {
+      ...config,
+      updatedAt: o.updatedAt || null,
+      ...(ignorees.length ? { ignorees } : {}),
+    };
   }
 
-  // GET — le défaut du déploiement (intégré + environnement), le prix stocké
-  // quand Nota en a décidé un, et celui des deux qui est en vigueur.
+  // GET — la grille du déploiement (catalogue + environnement), celle stockée
+  // quand Nota en a décidé une, celle des deux qui est en vigueur, et le
+  // catalogue à éditer (la console n'a pas le domaine).
   async function getPrixNota(token, { ip } = {}) {
     const p = await requireAdmin(token, { ip });
     if (!p) return { ok: false, status: 401 };
     const defaut = prixCfg.envDefaults(process.env);
-    const override = prixView(typeof repo.getPrixNotaConfig === 'function' ? await repo.getPrixNotaConfig() : null);
-    const effectif = override ? { prixCents: override.prixCents } : defaut;
-    return { ok: true, defaut, override, effectif };
+    const stored = typeof repo.getPrixNotaConfig === 'function' ? await repo.getPrixNotaConfig() : null;
+    const override = prixView(stored);
+    const effectif = await prixCfg.resolveGrille(repo, process.env);
+    return { ok: true, defaut, override, effectif, catalogue: prixCfg.catalogue() };
   }
 
   // PUT — enregistrer (remplacer) le prix. super_admin seulement, validé fort.
@@ -528,7 +550,11 @@ function createAdmin({
     const v = prixCfg.validatePrix(body || {});
     if (!v.ok) return { ok: false, status: 422, errors: v.errors };
     const before = prixView(await repo.getPrixNotaConfig());
-    const stored = await repo.putPrixNotaConfig({ prixCents: v.prixCents }, clockIso());
+    // On ne stocke QUE les cellules décidées par l'opérateur : un service
+    // ajouté au catalogue demain sera tarifé par le catalogue jusqu'à ce que
+    // Nota en décide autrement, plutôt que par un zéro figé dans un vieil
+    // enregistrement.
+    const stored = await repo.putPrixNotaConfig(v.config, clockIso());
     const after = prixView(stored);
     await appendAudit('prix_nota_updated', {
       adminId: p.adminId,

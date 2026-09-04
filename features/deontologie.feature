@@ -37,7 +37,9 @@ Fonctionnalité: Les murs déontologiques du modèle
   # le DÉCLARER, et non laisser lire un « tout compris » qui n'en est pas un.
   Scénario: le prix de Nota est annoncé avant que le client n'autorise sa carte — art. 68 et 71 3°
     Quand le carnet public du mois "2026-08" est consulté
-    Alors le carnet annonce le prix du service de Nota, 400 $
+    Alors le carnet annonce le prix du service de Nota, à partir de 199 $
+    Et le carnet tarife "financement" à 199 $ à échéance normale
+    Et le carnet tarife "refinancement" à 249 $ à échéance normale
     Et le carnet déclare que ni les taxes ni les débours ne sont inclus
 
   # ART. 29.1 C.déont. — « Le notaire ne peut conclure aucune convention ayant
@@ -80,9 +82,9 @@ Fonctionnalité: Les murs déontologiques du modèle
     Quand le notaire "notaire@exemple.ca" marque l'acte complété à 2800
     Et le notaire "notaire@exemple.ca" consulte son relevé
     Alors aucune ligne du relevé ne porte de taux ni de cote
-    Et l'entrée d'audit "acte_regle" porte 2800 $ d'honoraires et 400 $ pour Nota
+    Et l'entrée d'audit "acte_regle" porte 2800 $ d'honoraires et 349 $ pour Nota
     Quand le client consulte son offre
-    Alors le client voit son acte réglé en deux lignes : 2800 $ et 400 $, soit 3200 $
+    Alors le client voit son acte réglé en deux lignes : 2800 $ et 349 $, soit 3149 $
 
   # ART. 37 C.déont. — « Le notaire ne doit pas, à moins que la nature du cas ne
   # l'exige, révéler qu'une personne a fait appel à ses services. » Le carnet

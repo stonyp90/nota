@@ -3437,18 +3437,48 @@ components:
       type: object
       description: >-
         Nota's own price, as the CLIENT pays it (ADR 0031) — a line of the
-        client's, never a share of the notary's honoraires. `taxesIncluses`
-        and `deboursInclus` are declared because art. 71 3° of the Code de
-        déontologie requires saying whether taxes and débours are included.
-      required: [prixNotaCents, taxesIncluses, deboursInclus]
+        client's, never a share of the notary's honoraires. Since ADR 0034 it
+        is a GRID: one cell per service, plus the date guarantee Nota sells on
+        its own line. `prixNotaMinCents` is the advertised "from" — the lowest
+        cell — and never the price of a given quote, which is computed from
+        the grid with `domain.prixNota(serviceId, tierId, grille)`.
+        `taxesIncluses` and `deboursInclus` are declared because art. 71 3° of
+        the Code de déontologie requires saying whether taxes and débours are
+        included.
+      required: [grille, prixNotaMinCents, taxesIncluses, deboursInclus]
       properties:
-        prixNotaCents:
+        grille:
+          $ref: '#/components/schemas/PrixNotaGrille'
+        prixNotaMinCents:
           type: integer
           minimum: 0
         taxesIncluses:
           type: boolean
         deboursInclus:
           type: boolean
+    PrixNotaGrille:
+      type: object
+      description: >-
+        The Nota price grid (ADR 0034). `services` maps a service id to Nota's
+        price in cents; `garantieDate` maps a notice tier id to the price of
+        the date guarantee, in cents (the standard tier is 0). `defaut` is the
+        fallback for a service the catalogue cannot name — the lowest cell, so
+        Nota never charges more than it published.
+      required: [defaut, services, garantieDate]
+      properties:
+        defaut:
+          type: integer
+          minimum: 0
+        services:
+          type: object
+          additionalProperties:
+            type: integer
+            minimum: 0
+        garantieDate:
+          type: object
+          additionalProperties:
+            type: integer
+            minimum: 0
     NotaryAlertes:
       type: object
       description: >-

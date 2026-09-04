@@ -7,8 +7,9 @@
  *
  * MODÈLE (ADR 0031, 2026-09-01) : le notaire s'inscrit et consulte gratuitement.
  * Nota ne prélève AUCUNE part des honoraires — elle vend son propre service à
- * son propre prix, un montant fixe encaissé comme frais d'application Stripe
- * sur la capture. Le net viré au notaire est exactement le montant qui lui a
+ * son propre prix — depuis l'ADR 0034 une GRILLE par service, plus la garantie
+ * de date sur sa propre ligne — encaissé comme frais d'application Stripe sur
+ * la capture. Le net viré au notaire est exactement le montant qui lui a
  * été offert.
  *
  * Jusqu'à cette date, la part de Nota était un pourcentage que la cote du
@@ -17,8 +18,8 @@
  * et l'art. 29.1 la condamnait deux fois : un revenu du notaire indexé sur une
  * note attribuée par une entreprise privée est une convention qui met en péril
  * son indépendance et son désintéressement. Le prix de Nota ne dépend donc ni
- * du notaire, ni de sa cote, ni de la valeur de l'acte : prix-nota-config.js
- * est la seule autorité sur ce montant.
+ * du notaire, ni de sa cote, ni de la valeur de l'acte : le domaine porte la
+ * grille, prix-nota-config.js l'environnement et le stockage.
  */
 
 const {
@@ -40,8 +41,9 @@ const NOTARY_STATUS = {
   RESTRICTED: 'restricted',
 };
 
-// ADR 0031 — le prix de Nota, montant fixe, indépendant du notaire et de l'acte.
-// C'est la SEULE configuration que la tarification lise.
+// ADR 0031 et 0034 — le prix de Nota : une grille par service, indépendante du
+// notaire et de la valeur de l'acte. C'est la SEULE configuration que la
+// tarification lise.
 const prixConfig = require('./prix-nota-config');
 
 // Le taux historique du prélèvement. Il ne tarife plus rien depuis l'ADR 0031 ;
@@ -71,39 +73,52 @@ function createBilling({
   const statsDay = () => domain.businessDay(clock(), timeZone || process.env.NOTA_TIMEZONE);
 
   /**
-   * ADR 0031 — le devis d'une offre, AVANT tout engagement : deux lignes que
-   * le client voit séparément.
+   * ADR 0031 / 0034 — le devis d'une offre, AVANT tout engagement : les lignes
+   * que le client voit séparément.
    *
-   *   honorairesCents — le montant offert, qui va au notaire EN ENTIER
-   *   prixNotaCents   — le prix du service de Nota, fixe
-   *   totalCents      — ce que la carte du client doit autoriser
+   *   honorairesCents        — le montant offert, qui va au notaire EN ENTIER
+   *   prixNotaServiceCents   — le prix de Nota pour CE service
+   *   prixNotaDateCents      — la garantie de date, quand la date en demande une
+   *   prixNotaCents          — la somme des deux lignes de Nota
+   *   totalCents             — ce que la carte du client doit autoriser
    *
-   * Aucun des trois ne dépend du notaire : art. 29.1 du Code de déontologie
-   * interdit au notaire toute convention mettant en péril son désintéressement,
-   * et un prix qui bougerait selon sa cote en serait une.
+   * Aucun de ces nombres ne dépend du notaire : art. 29.1 du Code de
+   * déontologie interdit au notaire toute convention mettant en péril son
+   * désintéressement, et un prix qui bougerait selon sa cote en serait une. Le
+   * service et le délai, eux, sont deux dimensions PUBLIÉES que le client
+   * connaît avant d'offrir — c'est tout l'objet de l'ADR 0034.
+   *
+   * L'arithmétique elle-même est celle du domaine (`domain.prixNota`) : la
+   * facturation ne recalcule jamais un prix à la main.
+   *
+   * `devisFige` — les deux lignes déjà AUTORISÉES, relues sur l'offre. Quand
+   * elles sont là, elles l'emportent sur la grille du jour : la carte du client
+   * a été bloquée pour un total précis, et le devis du règlement doit être
+   * celui que le client a lu avant d'engager sa carte. Sans elles (offre
+   * publiée sans carte, enregistrement d'avant l'ADR 0034), la grille en
+   * vigueur décide, comme avant.
    */
-  async function quoteOffer(actAmount) {
+  async function quoteOffer(actAmount, { serviceId, tierId, devisFige } = {}) {
     const honorairesCents = Math.round(Number(actAmount) * 100);
-    const prixNotaCents = await resolvePrixNota();
-    return { honorairesCents, prixNotaCents, totalCents: honorairesCents + prixNotaCents };
+    const p = domain.prixNotaFige(devisFige)
+      || domain.prixNota(serviceId, tierId, await resolveGrilleNota());
+    return {
+      honorairesCents,
+      prixNotaServiceCents: p.serviceCents,
+      prixNotaDateCents: p.dateCents,
+      prixNotaCents: p.totalCents,
+      totalCents: honorairesCents + p.totalCents,
+    };
   }
 
-  // Le prix en vigueur : le prix stocké par l'admin, sinon celui du déploiement.
-  async function resolvePrixNota() {
-    if (typeof repo.getPrixNotaConfig === 'function') {
-      try {
-        const stored = await repo.getPrixNotaConfig();
-        const v = stored && prixConfig.validatePrix(stored);
-        if (v && v.ok) return v.prixCents;
-      } catch { /* un prix stocké illisible ne fait jamais tomber la tarification */ }
-    }
-    return prixConfig.envDefaults(process.env).prixCents;
+  // La grille en vigueur : celle stockée par l'admin, sinon celle du déploiement.
+  async function resolveGrilleNota() {
+    return prixConfig.resolveGrille(repo, process.env);
   }
 
-  // Le devis d'un acte. Le paramètre `notary` n'est PAS lu, et c'est le fond
-  // du sujet : il ne subsiste que pour les appelants historiques.
-  async function priceAct(actAmount) {
-    return quoteOffer(actAmount);
+  // Le devis d'un acte. Il ne prend PAS de notaire, et c'est le fond du sujet.
+  async function priceAct(actAmount, opts) {
+    return quoteOffer(actAmount, opts);
   }
 
   // Best-effort analytics rollups (see keys.js STATS#). A rollup failure must
@@ -212,7 +227,7 @@ function createBilling({
    *
    * Returns `{ ok, actAmount, commissionCents, paye: false, du }`.
    */
-  async function completeAct({ notaryId, bidId, actAmount, serviceId } = {}) {
+  async function completeAct({ notaryId, bidId, actAmount, serviceId, tierId, devisFige } = {}) {
     const notary = notaryId ? await repo.getNotary(notaryId) : null;
     if (!notary) {
       return { ok: false, errors: [{ code: 'notaire_introuvable', message: 'Notaire introuvable.' }] };
@@ -240,7 +255,12 @@ function createBilling({
       }
     }
 
-    const prix = await priceAct(amount);
+    // ADR 0034 — le devis du règlement EST celui que le client a lu avant
+    // d'engager sa carte : `devisFige` porte les deux lignes autorisées,
+    // relues sur l'offre. La grille est vivante, l'autorisation ne l'est pas.
+    // Sans devis figé (offre sans carte, enregistrement d'avant l'ADR 0034),
+    // le service et le palier RETENUS résolvent la grille en vigueur.
+    const prix = await priceAct(amount, { serviceId, tierId, devisFige });
     // Les frais d'application SONT le prix de Nota — jamais une part des
     // honoraires. Le total capturé porte les deux lignes, et le net viré au
     // notaire est exactement le montant qui lui a été offert (art. 32.1 2°).
@@ -264,6 +284,10 @@ function createBilling({
         // deux lignes, figées avec l'argent. Un changement de prix ultérieur ne
         // peut jamais réécrire ce qu'un acte a coûté.
         prixNotaCents: prix.prixNotaCents, honorairesCents: prix.honorairesCents,
+        // ADR 0034 — les DEUX lignes de Nota, figées avec l'argent : le prix du
+        // service et la garantie de date. Une grille modifiée demain ne peut
+        // pas réécrire ce qu'un acte a coûté.
+        prixNotaServiceCents: prix.prixNotaServiceCents, prixNotaDateCents: prix.prixNotaDateCents,
         serviceId: serviceId || null,
         // Settled, but not paid through Nota: the fee is a receivable.
         paye: false, commissionCentsDue: fee,
@@ -331,7 +355,7 @@ function createBilling({
    * completeAct call for the same bid is a no-op — the act is only ever paid once.
    * Returns `{ ok, commissionCents, netCents, transferId, chargeId }`.
    */
-  async function payNotaryOnAccept({ notaryId, bidId, actAmount, paymentIntentId, serviceId } = {}) {
+  async function payNotaryOnAccept({ notaryId, bidId, actAmount, paymentIntentId, serviceId, tierId, devisFige } = {}) {
     const notary = notaryId ? await repo.getNotary(notaryId) : null;
     if (!notary) {
       return { ok: false, errors: [{ code: 'notaire_introuvable', message: 'Notaire introuvable.' }] };
@@ -355,7 +379,12 @@ function createBilling({
       }
     }
 
-    const prix = await priceAct(amount);
+    // ADR 0034 — le devis du règlement EST celui que le client a lu avant
+    // d'engager sa carte : `devisFige` porte les deux lignes autorisées,
+    // relues sur l'offre. La grille est vivante, l'autorisation ne l'est pas.
+    // Sans devis figé (offre sans carte, enregistrement d'avant l'ADR 0034),
+    // le service et le palier RETENUS résolvent la grille en vigueur.
+    const prix = await priceAct(amount, { serviceId, tierId, devisFige });
     // Les frais d'application SONT le prix de Nota — jamais une part des
     // honoraires. Le total capturé porte les deux lignes, et le net viré au
     // notaire est exactement le montant qui lui a été offert (art. 32.1 2°).
@@ -388,6 +417,7 @@ function createBilling({
         // write-once ne se réécrit pas : le mot reste, le montant est le prix.
         bidId, notaryId, actAmount: amount, commissionCents: fee,
         prixNotaCents: prix.prixNotaCents, honorairesCents: prix.honorairesCents,
+        prixNotaServiceCents: prix.prixNotaServiceCents, prixNotaDateCents: prix.prixNotaDateCents,
         serviceId: serviceId || null,
         netCents: result.netCents, transferId: result.transferId, chargeId: result.chargeId,
         paidOnAccept: true, completedAt: clock(),
@@ -603,7 +633,7 @@ function createBilling({
     return { ok: true, handled, duplicate: false, type: event.type, event, notary, bid: bid || null };
   }
 
-  return { connectNotary, authorizeOffer, payNotaryOnAccept, completeAct, cancelAuthorization, chargeCancellationFee, handleWebhook, quoteOffer, priceAct, resolvePrixNota };
+  return { connectNotary, authorizeOffer, payNotaryOnAccept, completeAct, cancelAuthorization, chargeCancellationFee, handleWebhook, quoteOffer, priceAct, resolveGrilleNota };
 }
 
 module.exports = { createBilling, NOTARY_STATUS };

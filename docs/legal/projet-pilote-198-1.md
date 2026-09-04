@@ -132,9 +132,12 @@ partout où l'indépendance du notaire est en jeu.
 
 6. **Le montant offert par le client constitue les honoraires du notaire, en
    entier.** La plateforme n'en retient rien.
-7. La rémunération de la plateforme est un **montant fixe par transaction**,
-   **additionnel**, affiché au client avant qu'il ne s'engage, et **sans
-   aucun lien avec le montant des honoraires**.
+7. La rémunération de la plateforme est un **prix publié d'avance**,
+   **additionnel**, affiché au client avant qu'il ne s'engage. Il est
+   déterminé par deux dimensions publiées que le client choisit — le
+   **service** demandé et le **délai** avant la signature — et **sans aucun
+   lien avec le montant des honoraires**, ni avec l'identité du notaire, ni
+   avec l'évaluation que la plateforme en fait.
 8. La plateforme **garantit au notaire le paiement de ses honoraires**, y
    compris en cas de défaut du client.
 9. Aucune réduction d'honoraires n'est annoncée, promise ni suggérée à
