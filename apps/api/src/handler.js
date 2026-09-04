@@ -61,6 +61,12 @@ function createApp(repo, opts = {}) {
   const NOTARY_CHALLENGE_TTL_MS = opts.notaryChallengeTtlMs || 15 * 60 * 1000; // 15 min
   const NOTARY_LOGIN_RL_WINDOW_SEC = opts.notaryLoginRlWindowSec || 15 * 60; // 15 min window
   const NOTARY_LOGIN_RL_MAX = opts.notaryLoginRlMax || 5; // links / window / IP
+  // La REDEMPTION a son propre plafond (2026-09-04). Elle est plus généreuse
+  // que l'émission — un notaire peut légitimement rouvrir le même lien depuis
+  // un client de courriel qui préfetche, ou se tromper d'onglet — mais elle est
+  // BORNÉE, parce qu'elle écrit désormais dans le journal (voir la porte).
+  const NOTARY_VERIFY_RL_WINDOW_SEC = opts.notaryVerifyRlWindowSec || 15 * 60; // 15 min
+  const NOTARY_VERIFY_RL_MAX = opts.notaryVerifyRlMax || 20; // redemptions / window / IP
   // The support widget's per-IP throttle (ADR 0033 §7): 20 messages / 10 min.
   const SUPPORT_RL_WINDOW_SEC = opts.supportRlWindowSec || 10 * 60;
   const SUPPORT_RL_MAX = opts.supportRlMax || 20;
@@ -371,12 +377,32 @@ function createApp(repo, opts = {}) {
   // l'utilité pour un auditeur pointent ici dans le même sens : une clé
   // joignable au registre vaut mieux qu'une donnée personnelle recopiée dans un
   // journal conservé sept ans.
+  //
+  // CE QUE L'ACTEUR NE PORTE PAS : L'ADRESSE D'ORIGINE (2026-09-04). La
+  // première version de ce chantier posait `ip` sur chaque entrée. Deux règles
+  // s'y opposent, et elles pointent dans le même sens :
+  //
+  //   — La politique de conservation (§1) borne déjà les journaux d'ACCÈS à
+  //     douze mois, et ce journal-ci est conservé SEPT ANS au titre de la
+  //     preuve d'imputabilité. Une adresse IP est un renseignement personnel
+  //     au sens de la Loi 25 ; la garder sept ans dans un registre que la
+  //     permission `audit:read` ouvre SANS `pii:read` contredisait les deux
+  //     bornes à la fois.
+  //   — Elle n'était pas nécessaire. Ce qu'un auditeur doit reconstituer, c'est
+  //     QUI a agi — le type et l'identifiant interne le disent — et un rejeu se
+  //     distingue d'un balayage par l'EMPREINTE du jeton (voir plus bas), pas
+  //     par l'origine. L'origine, elle, sert à l'investigation d'incident :
+  //     c'est la finalité des journaux techniques de la Lambda, que la
+  //     politique borne à douze mois et qui la portent déjà.
+  //
+  // L'enveloppe reste donc `{ type, id }`, et `ip` reste `null` sur la porte
+  // publique — comme avant ce chantier. Le journal ADMIN, lui, continue de
+  // consigner l'adresse de l'administrateur : ce sont des employés nommés,
+  // pas des clients, et cette règle-là est antérieure et inchangée.
   const ACTEUR = { NOTAIRE: 'notaire', CLIENT: 'client', PARTENAIRE: 'partenaire', SYSTEME: 'systeme' };
-  const SYSTEME = { type: ACTEUR.SYSTEME, id: null, ip: null };
-  // `request` est facultatif : une trace écrite hors requête (tâche planifiée,
-  // reprise) dit « systeme » et n'invente aucune origine.
-  function acteur(type, id, request) {
-    return { type, id: id == null ? null : String(id), ip: (request && clientIp(request)) || null };
+  const SYSTEME = { type: ACTEUR.SYSTEME, id: null };
+  function acteur(type, id) {
+    return { type, id: id == null ? null : String(id) };
   }
 
   // Un jeton ne s'entrepose JAMAIS en clair dans le journal : une trace de
@@ -402,11 +428,11 @@ function createApp(repo, opts = {}) {
     try {
       await write.call(repo, {
         id: newId(), ts, day: now(), action,
-        // La porte publique n'a pas d'administrateur, et ne consigne aucune
-        // adresse : ces deux colonnes appartiennent au journal admin, qui les
-        // remplit. `ip` est doublée hors de l'acteur pour que l'écran d'audit
-        // existant la montre sans rien savoir de la nouvelle enveloppe.
-        adminId: null, email: null, ip: a.ip || null,
+        // La porte publique n'a ni administrateur, ni adresse courriel, ni
+        // adresse d'origine : ces trois colonnes appartiennent au journal
+        // admin, qui les remplit. Voir la note sur l'acteur plus haut — un
+        // registre conservé sept ans ne porte aucun renseignement personnel.
+        adminId: null, email: null, ip: null,
         acteur: a,
         meta: meta || null,
       });
@@ -792,10 +818,10 @@ function createApp(repo, opts = {}) {
   // par l'offre — il n'a pas de compte, son dossier EST son nom. Une seule
   // définition pour le dépôt et pour la lecture, sinon les deux traces
   // nommeraient les mêmes personnes différemment.
-  const acteurPartie = (qui, bid, notaryId, request) =>
+  const acteurPartie = (qui, bid, notaryId) =>
     (qui === domain.CHAT_FROM.NOTAIRE
-      ? acteur(ACTEUR.NOTAIRE, notaryId, request)
-      : acteur(ACTEUR.CLIENT, bid && bid.id, request));
+      ? acteur(ACTEUR.NOTAIRE, notaryId)
+      : acteur(ACTEUR.CLIENT, bid && bid.id));
 
   // Étape 1 — l'autorisation de dépôt. Le domaine décide de la recevabilité
   // AVANT qu'une seule URL soit émise : refuser après un téléversement de 15 Mo
@@ -847,7 +873,7 @@ function createApp(repo, opts = {}) {
     await appendAudit(
       'document_depose',
       { bidId: bid.id, documentId: doc.id, de: qui, taille: pret.taille },
-      acteurPartie(qui, bid, notaryId, request)
+      acteurPartie(qui, bid, notaryId)
     );
     // Prévenir l'autre partie, comme pour un message — au même endroit et par
     // le même chemin, pour qu'un document ne soit pas un événement de second
@@ -871,7 +897,7 @@ function createApp(repo, opts = {}) {
     await appendAudit(
       'document_lu',
       { bidId: bid.id, documentId: doc.id, par: qui, notaryId: notaryId || null },
-      acteurPartie(qui, bid, notaryId, request)
+      acteurPartie(qui, bid, notaryId)
     );
     return json(200, { document: publicDocument(doc), lecture });
   }
@@ -1286,7 +1312,7 @@ function createApp(repo, opts = {}) {
       await appendAudit(
         'client_jeton_emis',
         { bidId: bid.id, dateISO: bid.dateISO, expiresAt: clientTokenExp },
-        acteur(ACTEUR.CLIENT, bid.id, request)
+        acteur(ACTEUR.CLIENT, bid.id)
       );
 
       if (billingConfigured) {
@@ -1358,7 +1384,7 @@ function createApp(repo, opts = {}) {
         // journalisé, pour qu'un flot hostile ne puisse pas gonfler le journal.
         // Le code n'est pas encore lu à ce stade — la limite s'applique avant.
         if (count === PARTNER_CLAIM_RL_MAX + 1) {
-          await appendAudit('partenaire_reclamation', { code: null, type: null, throttled: true }, acteur(ACTEUR.PARTENAIRE, null, request));
+          await appendAudit('partenaire_reclamation', { code: null, type: null, throttled: true }, acteur(ACTEUR.PARTENAIRE, null));
         }
         return json(429, { ok: true, throttled: true });
       }
@@ -1386,7 +1412,7 @@ function createApp(repo, opts = {}) {
       await appendAudit(
         'partenaire_reclamation',
         { code, type, throttled: false },
-        acteur(ACTEUR.PARTENAIRE, code, request)
+        acteur(ACTEUR.PARTENAIRE, code)
       );
 
       // ADR 0030 — art. 33 du Code de déontologie des notaires : hors la
@@ -1514,7 +1540,7 @@ function createApp(repo, opts = {}) {
         await appendAudit(
           'partenaire_confirme',
           { code, type: partenaire.type, challengeId: claims.cid },
-          acteur(ACTEUR.PARTENAIRE, code, request)
+          acteur(ACTEUR.PARTENAIRE, code)
         );
         // Welcome the partner (their shareable link + the reward tracks) and
         // alert the operator. Fire-and-forget, like every send-point: mail must
@@ -1793,7 +1819,7 @@ function createApp(repo, opts = {}) {
             // « encaissé » là où c'est « dû ».
             paye: regle.paye !== false,
             commissionCentsDue: regle.paye === false ? Math.round(Number(regle.commissionCentsDue) || 0) : 0,
-          }, acteur(ACTEUR.NOTAIRE, notaryId, request));
+          }, acteur(ACTEUR.NOTAIRE, notaryId));
         }
       }
 
@@ -1908,7 +1934,7 @@ function createApp(repo, opts = {}) {
         // pouvoir de faire grossir le journal à volonté — une arme retournée.
         // Le plafond dit déjà que la suite est du même flot, depuis la même IP.
         if (count === NOTARY_LOGIN_RL_MAX + 1) {
-          await appendAudit('notaire_lien_demande', { eligible: null, throttled: true }, acteur(ACTEUR.NOTAIRE, null, request));
+          await appendAudit('notaire_lien_demande', { eligible: null, throttled: true }, acteur(ACTEUR.NOTAIRE, null));
         }
         return json(429, { ok: true, throttled: true });
       }
@@ -1932,7 +1958,7 @@ function createApp(repo, opts = {}) {
       await appendAudit(
         'notaire_lien_demande',
         { eligible: !!gate.allowed, throttled: false },
-        acteur(ACTEUR.NOTAIRE, gate.allowed ? gate.notaryId : null, request)
+        acteur(ACTEUR.NOTAIRE, gate.allowed ? gate.notaryId : null)
       );
 
       if (!gate.allowed) {
@@ -1995,17 +2021,49 @@ function createApp(repo, opts = {}) {
       // les distingue. Le jeton, lui, n'entre jamais dans le journal : son
       // empreinte suffit à voir que deux refus portent sur le même lien.
       //
-      // Cette porte n'est pas limitée en débit, donc un balayage produit autant
-      // de traces qu'il fait d'appels. C'est assumé : l'écriture d'audit coûte
-      // strictement moins que l'invocation Lambda qui la provoque, elle ne
-      // change donc pas l'économie d'un flot hostile — elle le rend visible.
+      // LE PLAFOND (2026-09-04). La première version de ce chantier assumait
+      // que cette porte reste libre : « l'écriture d'audit coûte moins que
+      // l'invocation Lambda qui la provoque ». C'est vrai du COÛT et faux du
+      // RISQUE. Un jeton forgé échoue à la vérification de signature avant tout
+      // appel de dépôt — il ne touchait donc AUCUNE écriture — et il en coûte
+      // désormais une, durable, sur la clé de partition `AUDIT#<jour>`. C'est
+      // la MÊME clé que celle qui porte `acte_regle` et `annulation_frais`, et
+      // DynamoDB plafonne une clé de partition à ~1000 WCU/s : un flot anonyme
+      // pouvait donc étouffer les traces d'argent (best-effort : perdues sans
+      // reprise) et rendre `GET /admin/audit`, qui pagine la partition entière
+      // du jour, inexploitable. Il n'y a pas de WAF devant ce compte.
+      //
+      // Le plafond est celui des deux autres portes ouvertes (lien notaire,
+      // réclamation partenaire) : compté par IP, franchi une seule fois dans le
+      // journal, et il ÉCHOUE OUVERT sur une erreur de compteur — la connexion
+      // d'un notaire ne dépend pas de la santé d'un compteur anti-abus.
+      const ipVerif = clientIp(request);
+      let nVerif = 1;
+      try {
+        nVerif = await repo.incrNotaryRateCounter('notary_verify', ipVerif || 'unknown', NOTARY_VERIFY_RL_WINDOW_SEC, nowMs());
+      } catch {
+        nVerif = 1;
+      }
+      if (nVerif > NOTARY_VERIFY_RL_MAX) {
+        // Seul le FRANCHISSEMENT est journalisé : une trace par requête bloquée
+        // rendrait le plafond inutile, puisque c'est l'écriture qu'il borne.
+        if (nVerif === NOTARY_VERIFY_RL_MAX + 1) {
+          await appendAudit(
+            'notaire_connexion_refusee',
+            { raison: 'trop_de_tentatives', empreinteJeton: null, throttled: true },
+            acteur(ACTEUR.NOTAIRE, null)
+          );
+        }
+        return json(429, { errors: [{ code: 'trop_de_tentatives', message: 'Trop de tentatives. Réessayez dans quinze minutes.' }] });
+      }
+
       const jeton = String(payload.token || '');
       const claims = verifyToken(jeton, nowMs());
       if (!claims || claims.scope !== SCOPES.CHALLENGE || !claims.cid) {
         await appendAudit(
           'notaire_connexion_refusee',
           { raison: 'jeton_invalide', empreinteJeton: empreinteJeton(jeton) },
-          acteur(ACTEUR.NOTAIRE, null, request)
+          acteur(ACTEUR.NOTAIRE, null)
         );
         return json(401, { errors: [{ code: 'lien_invalide', message: 'Lien invalide ou expiré.' }] });
       }
@@ -2016,7 +2074,7 @@ function createApp(repo, opts = {}) {
         await appendAudit(
           'notaire_connexion_refusee',
           { raison: 'lien_deja_utilise', empreinteJeton: empreinteJeton(jeton), challengeId: claims.cid },
-          acteur(ACTEUR.NOTAIRE, claims.sub, request)
+          acteur(ACTEUR.NOTAIRE, claims.sub)
         );
         return json(401, { errors: [{ code: 'lien_invalide', message: 'Lien invalide ou déjà utilisé.' }] });
       }
@@ -2027,7 +2085,7 @@ function createApp(repo, opts = {}) {
         await appendAudit(
           'notaire_connexion_refusee',
           { raison: 'compte_inactif', empreinteJeton: empreinteJeton(jeton), challengeId: claims.cid },
-          acteur(ACTEUR.NOTAIRE, challenge.notaryId, request)
+          acteur(ACTEUR.NOTAIRE, challenge.notaryId)
         );
         return json(403, {
           errors: [{ code: 'compte_requis', message: 'Un compte notaire actif est requis pour accéder à la console. L’inscription est gratuite.' }],
@@ -2038,7 +2096,7 @@ function createApp(repo, opts = {}) {
       await appendAudit(
         'notaire_connexion',
         { challengeId: claims.cid },
-        acteur(ACTEUR.NOTAIRE, gate.notaryId, request)
+        acteur(ACTEUR.NOTAIRE, gate.notaryId)
       );
       const exp = nowMs() + NOTARY_TOKEN_TTL_MS;
       return json(200, {
@@ -2391,7 +2449,7 @@ function createApp(repo, opts = {}) {
       // accepting the same open bid concurrently both read status=ouverte, but
       // only ONE write succeeds — the repo flips the bid only while it is still
       // ouverte.
-      const retained = await retainFor(bid, notaryId, {}, acteur(ACTEUR.NOTAIRE, notaryId, request));
+      const retained = await retainFor(bid, notaryId, {}, acteur(ACTEUR.NOTAIRE, notaryId));
       if (!retained) {
         // Lost the race. Re-read to answer precisely: if WE ended up the winner
         // (a double-submit by the same notary), it is idempotent; otherwise the
@@ -2719,7 +2777,7 @@ function createApp(repo, opts = {}) {
         propositions,
         ...(billingConfigured ? { paymentStatus: 'a_reautoriser' } : {}),
       };
-      const retained = await retainFor(bid, answered.notaryId, extra, acteur(ACTEUR.CLIENT, bid.id, request));
+      const retained = await retainFor(bid, answered.notaryId, extra, acteur(ACTEUR.CLIENT, bid.id));
       if (!retained) return json(409, { errors: [{ code: 'deja_retenue', message: 'Cette offre est déjà retenue.' }] });
       // Release the ORIGINAL card hold right away — it was authorized for the
       // old amount and can never settle the accepted proposition, so leaving it
@@ -2818,7 +2876,7 @@ function createApp(repo, opts = {}) {
             chargeId: charge.chargeId || null,
             transferId: dedommagement.transferId,
             verse: dedommagement.verse,
-          }, acteur(ACTEUR.CLIENT, bid.id, request));
+          }, acteur(ACTEUR.CLIENT, bid.id));
         }
       }
 

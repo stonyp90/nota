@@ -960,6 +960,8 @@
   "Rien reçu ? Vérifiez vos indésirables — ou corrigez votre courriel et soumettez à nouveau.": "Nothing received? Check your junk folder — or fix your email and submit again.",
   "Trop de tentatives. Réessayez dans quelques minutes.": "Too many attempts. Try again in a few minutes.",
   "Lien invalide ou expiré. Redemandez un lien.": "Invalid or expired link. Request a new one.",
+  /* ADR 0036 — le plafond de redemption du lien magique : quinze minutes, pas « quelques ». */
+  "Trop de tentatives. Réessayez dans quinze minutes.": "Too many attempts. Try again in fifteen minutes.",
   "Partagez ce lien — chaque demande publiée par lui vous est attribuée :": "Share this link — every request posted through it is credited to you:",
   "Copier le lien": "Copy the link",
   "Partager": "Share",

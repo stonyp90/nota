@@ -1280,6 +1280,15 @@ paths:
                           type: [string, "null"]
                         ip:
                           type: [string, "null"]
+                          description: >-
+                            The origin address, on ADMINISTRATIVE entries only —
+                            a named employee acting on the console. Always
+                            `null` on entries written by the public gate: a
+                            record kept for seven years, readable with
+                            `audit:read` alone, carries no personal information
+                            (ADR 0036). Origin belongs to incident
+                            investigation, which the Lambda access logs serve
+                            under their own twelve-month bound.
                         acteur:
                           type: [object, "null"]
                           description: >-
@@ -1287,16 +1296,14 @@ paths:
                             2026-09-03. `id` is the identifier the system
                             already holds — the notary's derived id, the bid a
                             client's dossier lives on, a partner's code — never
-                            an email address: the trail is kept for seven years
-                            and must stay minimal while remaining joinable to
-                            the registries.
+                            an email address and never an origin address: the
+                            trail is kept for seven years and must stay minimal
+                            while remaining joinable to the registries.
                           properties:
                             type:
                               type: string
                               enum: [notaire, client, partenaire, systeme]
                             id:
-                              type: [string, "null"]
-                            ip:
                               type: [string, "null"]
                         ttl:
                           type: integer

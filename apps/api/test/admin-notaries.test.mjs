@@ -171,11 +171,26 @@ test('un auditeur dédié lit le journal avec audit:read SEUL — sans détenir 
   });
   const session = await login2(h, email);
 
-  await h.repo.appendTxAudit({ id: 'tx9', ts: '2026-08-12T19:00:00.000Z', day: '2026-08-12', action: 'document_lu', meta: { bidId: 'b1' } });
+  await h.repo.appendTxAudit({
+    id: 'tx9', ts: '2026-08-12T19:00:00.000Z', day: '2026-08-12', action: 'document_lu',
+    adminId: null, email: null, ip: null, acteur: { type: 'notaire', id: 'n1' }, meta: { bidId: 'b1' },
+  });
 
   const res = await h.call('GET', '/admin/audit', { bearer: session, query: { jour: '2026-08-12' } });
   assert.equal(res.statusCode, 200, 'audit:read suffit : ' + res.body);
-  assert.deepEqual(parse(res).entrees.map((e) => e.id), ['tx9']);
+  const entrees = parse(res).entrees;
+  assert.deepEqual(entrees.map((e) => e.id), ['tx9']);
+
+  // CE QUI REND LE DÉCOUPLAGE TENABLE (ADR 0036). `readAudit` rend les entrées
+  // TELLES QUELLES — aucune liste blanche de champs. Ouvrir le journal sans
+  // `pii:read` n'est donc défendable que si le journal public ne porte aucun
+  // renseignement personnel : ni courriel, ni adresse d'origine. Une IP y
+  // suffirait à joindre un client à son dossier par son `bidId`, sans jamais
+  // franchir la porte nominative que ce test ferme trois lignes plus bas.
+  assert.equal(entrees[0].ip, null, 'aucune adresse d’origine sur une entrée publique');
+  assert.equal(entrees[0].email, null, 'aucune adresse courriel non plus');
+  assert.deepEqual(Object.keys(entrees[0].acteur).sort(), ['id', 'type'],
+    'l’acteur est { type, id } — surtout pas { type, id, ip }');
 
   // Et la porte nominative, elle, reste fermée : la capacité accordée est
   // bornée à ce qu'elle nomme.

@@ -391,3 +391,108 @@ test('P1-16 — chaque geste connu a un libellé, et l’argent des annulations 
   assert.match(text(entries[2].querySelector('.audit-facts')), /Étude Tremblay/);
   assert.equal(entries[3].querySelector('.audit-money'), null, 'les autres gestes gardent leur meta telle quelle');
 });
+
+// ---------------------------------------------------------------------------
+// La chaîne d'ACCÈS écrite par la porte publique (ADR 0036)
+// ---------------------------------------------------------------------------
+// Ces trois tests ferment le trou trouvé le 2026-09-04 : le chantier d'audit
+// avait promis que le journal « nomme son acteur », et la console ne lisait
+// toujours pas `acteur` — elle affichait « système » pour TOUTES les entrées
+// publiques, y compris `document_lu`, qui nomme enfin le notaire. Les six
+// actions neuves, elles, sortaient en code brut, avec `data-i18n-skip` : donc
+// invisibles au test i18n, qui ne marche que les littéraux passés à `el()`.
+
+// Le vocabulaire est lu dans la SOURCE de l'API, pas recopié : deux listes qui
+// doivent s'accorder finissent toujours par diverger. Ajouter un `appendAudit`
+// côté serveur fait rougir ce test tant que la console n'a pas son libellé.
+const HANDLER_SRC = readFileSync(fileURLToPath(new URL('../../api/src/handler.js', import.meta.url)), 'utf8');
+const ACTIONS_API = [...new Set(
+  [...HANDLER_SRC.matchAll(/\bappendAudit\(\s*'([a-z_]+)'/g)].map((m) => m[1])
+)].sort();
+
+test('ADR 0036 — chaque action que l’API écrit a un libellé dans la console, et son anglais', () => {
+  assert.ok(ACTIONS_API.length >= 10, 'le vocabulaire a bien été lu dans handler.js : ' + ACTIONS_API.join(', '));
+
+  // Les libellés, lus dans la source de la console — la table n'est pas exportée.
+  const bloc = /var AUDIT_LABELS = \{([\s\S]*?)\n  \};/.exec(ADMIN_SRC);
+  assert.ok(bloc, 'AUDIT_LABELS introuvable dans admin.js');
+  const libelles = new Map(
+    [...bloc[1].matchAll(/^\s{4}([a-z_]+):\s*'((?:[^'\\]|\\.)*)',/gm)]
+      .map((m) => [m[1], m[2].replace(/\\'/g, "'")])
+  );
+
+  const sansLibelle = ACTIONS_API.filter((a) => !libelles.has(a));
+  assert.deepEqual(sansLibelle, [], 'actions écrites par l’API que la console afficherait en code brut');
+
+  // Et chaque libellé se traduit : un administrateur anglophone lit un journal,
+  // pas un dictionnaire français.
+  const I18N = (() => {
+    const mod = { exports: {} };
+    new Function('module', 'exports', I18N_SRC)(mod, mod.exports);
+    return mod.exports;
+  })();
+  const sansAnglais = [...libelles.values()].filter((v) => !I18N.covered(v));
+  assert.deepEqual(sansAnglais, [], 'libellés d’audit sans entrée anglaise');
+});
+
+test('ADR 0036 — une entrée publique NOMME son acteur : « système » était la réponse à tout', async () => {
+  const jour = today();
+  const mk = (id, action, acteur, meta) =>
+    ({ id, ts: jour + 'T12:00:00.000Z', day: jour, action, adminId: null, email: null, ip: null, acteur, meta: meta || {} });
+  const days = {};
+  days[jour] = { jour, entrees: [
+    mk('p1', 'document_lu', { type: 'notaire', id: 'me-tremblay' }, { bidId: 'b1', documentId: 'd1', par: 'notaire' }),
+    mk('p2', 'client_jeton_emis', { type: 'client', id: 'b1' }, { bidId: 'b1', dateISO: '2026-09-20' }),
+    mk('p3', 'partenaire_confirme', { type: 'partenaire', id: 'EVEROY' }, { code: 'EVEROY' }),
+    // Un refus anonyme : le type se dit, l'identifiant n'existe pas.
+    mk('p4', 'notaire_connexion_refusee', { type: 'notaire', id: null }, { raison: 'jeton_invalide' }),
+  ] };
+  const { win, doc } = await boot(api({ days }), '#/auth?token=T');
+  await waitFor(win, '.admin-rail');
+  win.location.hash = '#/audit';
+  await waitFor(win, '.audit-entry');
+  const entries = [...doc.querySelectorAll('.audit-entry')];
+  assert.equal(entries.length, 4);
+
+  // C'EST la régression : avant le correctif, ces quatre lignes disaient toutes
+  // « système », parce que la console lisait `e.email` et rien d'autre.
+  entries.forEach((e) => {
+    assert.ok(!/système/.test(text(e.querySelector('.audit-who'))),
+      'une entrée qui porte un acteur ne doit plus se dire « système » : ' + text(e.querySelector('.audit-who')));
+  });
+
+  assert.match(text(entries[0].querySelector('.audit-who')), /Notaire/);
+  assert.equal(text(entries[0].querySelector('.audit-acteur-id')), 'me-tremblay');
+  assert.match(text(entries[1].querySelector('.audit-who')), /Client/);
+  assert.equal(text(entries[1].querySelector('.audit-acteur-id')), 'b1');
+  assert.match(text(entries[2].querySelector('.audit-who')), /Partenaire/);
+  assert.equal(text(entries[2].querySelector('.audit-acteur-id')), 'EVEROY');
+  // L'acteur sans identifiant nomme son type et s'arrête là — il n'invente rien.
+  assert.match(text(entries[3].querySelector('.audit-who')), /Notaire/);
+  assert.equal(entries[3].querySelector('.audit-acteur-id'), null);
+
+  // Et les six actions neuves ne sortent plus en code brut.
+  entries.forEach((e) => {
+    const a = e.querySelector('.audit-action');
+    assert.ok(!/_/.test(text(a)), 'code brut affiché : ' + text(a));
+    assert.equal(a.hasAttribute('data-i18n-skip'), false, 'et il se traduit');
+  });
+});
+
+test('ADR 0036 — un geste d’administration continue de porter son courriel et son IP', async () => {
+  // Le correctif ne devait pas régresser l'autre journal : un administrateur
+  // est une personne nommée, et son adresse d'origine reste consignée.
+  const jour = today();
+  const days = {};
+  days[jour] = { jour, entrees: [
+    { id: 'a1', ts: jour + 'T12:00:00.000Z', day: jour, action: 'acces_modifie',
+      adminId: 'ad1', email: 'ops@nota.ca', ip: '24.201.10.4', meta: { cible: 'support@nota.ca' } },
+  ] };
+  const { win, doc } = await boot(api({ days }), '#/auth?token=T');
+  await waitFor(win, '.admin-rail');
+  win.location.hash = '#/audit';
+  await waitFor(win, '.audit-entry');
+  const who = doc.querySelector('.audit-entry .audit-who');
+  assert.match(text(who), /ops@nota\.ca/);
+  assert.match(text(who), /24\.201\.10\.4/);
+});

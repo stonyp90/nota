@@ -763,8 +763,16 @@ function createAdmin({
 
   // ---------------------------------------------------------------------------
   // Le journal d'audit, relu par jour. Écrire une piste que personne ne peut
-  // relire n'est pas une piste d'audit : c'est un fichier. Nominatif et
-  // financier — 'pii:read', donc super_admin.
+  // relire n'est pas une piste d'audit : c'est un fichier.
+  //
+  // La permission est 'audit:read', et rien d'autre — surtout pas 'pii:read',
+  // que cet en-tête annonçait encore à tort le 2026-09-03 alors que trois
+  // lignes plus bas c'est bien 'audit:read' qui est appliqué. Lire le journal
+  // et lever l'anonymat d'un client sont deux capacités distinctes, et la
+  // première s'ouvre sans la seconde (apps/api/test/admin-notaries.test.mjs).
+  // Ce qui rend ce découplage tenable : le journal PUBLIC ne porte aucun
+  // renseignement personnel — ni courriel, ni adresse d'origine, seulement des
+  // identifiants internes (voir la note sur l'acteur dans handler.js).
   // ---------------------------------------------------------------------------
   async function readAudit(token, jour, { ip } = {}) {
     const p = await requireAdmin(token, { ip });

@@ -3752,6 +3752,30 @@
     login_success: 'Connexion réussie',
     logout: 'Déconnexion',
     session_refreshed: 'Session prolongée',
+    // La chaîne d'ACCÈS écrite par la porte publique (ADR 0036). Sans ces
+    // libellés, ces six actions s'affichaient en code brut — donc illisibles
+    // pour un administrateur anglophone, et invisibles au test i18n, qui ne
+    // marche que les littéraux passés à `el()`. C'est audit.test.mjs qui garde
+    // désormais la correspondance avec le vocabulaire que l'API écrit.
+    notaire_lien_demande: 'Lien notaire demandé',
+    notaire_connexion: 'Notaire connecté',
+    notaire_connexion_refusee: 'Connexion notaire refusée',
+    partenaire_reclamation: 'Code partenaire réclamé',
+    partenaire_confirme: 'Partenaire confirmé',
+    client_jeton_emis: 'Accès client émis',
+  };
+
+  // QUI a agi, quand ce n'est pas un administrateur (ADR 0036). Le journal
+  // public nomme son acteur par un type et un identifiant interne : le notaire
+  // par l'identifiant dérivé de sa boîte, le client par l'offre qui EST son
+  // dossier, le partenaire par son code. Sans cette table, `buildAuditEntry`
+  // lisait `e.email` — vide sur toute entrée publique — et affichait
+  // « système » pour TOUTES, y compris celles qui nomment enfin quelqu'un.
+  var ACTEUR_LABELS = {
+    notaire: 'Notaire',
+    client: 'Client',
+    partenaire: 'Partenaire',
+    systeme: 'système',
   };
 
   async function renderAudit() {
@@ -3872,11 +3896,28 @@
     if (!AUDIT_LABELS[e.action]) action.setAttribute('data-i18n-skip', ''); // code brut : pas à traduire
     head.appendChild(action);
     var who = el('span', 'audit-who');
-    var qui = e.email || 'système';
-    var quiEl = el('span', null, qui);
-    if (e.email) quiEl.setAttribute('data-i18n-skip', '');
-    who.appendChild(quiEl);
+    // Deux journaux, deux façons de nommer. Un geste d'ADMINISTRATION porte le
+    // courriel de son auteur — c'est un employé nommé. Une entrée PUBLIQUE
+    // porte un acteur `{ type, id }` : le type se traduit, l'identifiant non.
+    var acteur = e.acteur || null;
+    if (e.email) {
+      var quiEl = el('span', null, e.email);
+      quiEl.setAttribute('data-i18n-skip', '');
+      who.appendChild(quiEl);
+    } else if (acteur && ACTEUR_LABELS[acteur.type]) {
+      who.appendChild(el('span', null, ACTEUR_LABELS[acteur.type]));
+      if (acteur.id) {
+        var idEl = el('span', 'audit-acteur-id', acteur.id);
+        idEl.setAttribute('data-i18n-skip', '');
+        who.appendChild(idEl);
+      }
+    } else {
+      who.appendChild(el('span', null, 'système'));
+    }
     if (e.ip) {
+      // Seul le journal admin consigne une adresse : la porte publique n'en
+      // écrit aucune (ADR 0036 — un registre gardé sept ans ne porte pas de
+      // renseignement personnel). Le rendu reste, pour les gestes admin.
       var ip = el('span', 'audit-ip', e.ip);
       ip.setAttribute('data-i18n-skip', '');
       who.appendChild(ip);
