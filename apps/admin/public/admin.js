@@ -2360,24 +2360,35 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Prix — le prix du service de Nota (ADR 0031).
-  // GET /prix renvoie { defaut, override, effectif } ; PUT enregistre un prix ;
-  // DELETE rend la facturation au défaut du déploiement. Écrire exige la
-  // permission 'settings:write' (super_admin) — l'analyste lit le prix en
-  // vigueur sans formulaire (l'API le réimpose côté serveur).
+  // Prix — le prix du service de Nota (ADR 0031), devenu une GRILLE (ADR 0034).
+  // GET /prix renvoie { defaut, override, effectif, catalogue } ; PUT enregistre
+  // une grille ; DELETE rend la facturation au défaut du déploiement. Écrire
+  // exige la permission 'settings:write' (super_admin) — l'analyste lit la
+  // grille en vigueur sans formulaire (l'API le réimpose côté serveur).
   //
   // Cet écran remplace celui du barème de commission. Nota ne prélève plus une
   // part des honoraires : il n'y a donc plus deux moitiés à montrer, plus de
-  // palier, plus de cote. UN montant, le même pour tous — l'art. 29.1 du Code
-  // de déontologie interdit au notaire toute convention mettant en péril son
-  // indépendance et son désintéressement, et un prix qui bougerait selon la
+  // cote. Ce qui s'édite ici ne dépend que de DEUX dimensions publiées — le
+  // service et le délai — et de rien qui touche au notaire : l'art. 29.1 du
+  // Code de déontologie interdit au notaire toute convention mettant en péril
+  // son indépendance et son désintéressement, et un prix qui bougerait selon la
   // cote que Nota lui attribue en serait une.
   //
-  // Le prix voyage en CENTS (40000 = 400 $) ; le formulaire parle en dollars et
-  // convertit à l'enregistrement. Le serveur reste l'autorité (le 422 s'affiche
-  // dans la région d'erreur en ligne), mais l'écran refuse d'expédier une
-  // évidence : validatePrixForm() rejoue la règle de prix-nota-config.js avant
-  // le premier octet réseau.
+  // La garantie de date a SA propre ligne, et ce n'est pas un détail
+  // d'affichage : c'est ce que NOTA vend pour tenir une date. L'art. 49 4° du
+  // même Code laisse au NOTAIRE le droit de tenir compte d'une « célérité
+  // exceptionnelle » dans SES honoraires — deux objets, deux lignes, jamais un
+  // seul nombre faisant les deux travaux.
+  //
+  // Les lignes à éditer viennent du `catalogue` servi par l'API : la console
+  // n'a pas le domaine, et un service ajouté demain doit apparaître ici sans
+  // qu'on touche à ce fichier.
+  //
+  // Les prix voyagent en CENTS (24900 = 249 $) ; le formulaire parle en dollars
+  // et convertit à l'enregistrement. Le serveur reste l'autorité (le 422
+  // s'affiche dans la région d'erreur en ligne), mais l'écran refuse d'expédier
+  // une évidence : validatePrixForm() rejoue la règle de prix-nota-config.js
+  // avant le premier octet réseau.
   // ---------------------------------------------------------------------------
   var prixBody = null;
   var MAX_PALIERS = 10;
@@ -2457,7 +2468,7 @@
     titleWrap.appendChild(el('span', 'page-eyebrow', 'Facturation'));
     titleWrap.appendChild(el('h1', 'page-title', 'Prix'));
     titleWrap.appendChild(el('p', 'page-sub',
-      'Le prix du service de Nota — un montant fixe, le même pour tous les notaires.'));
+      'Le prix du service de Nota — une grille par service, la même pour tous les notaires.'));
     head.appendChild(titleWrap);
     content.appendChild(head);
 
@@ -2478,7 +2489,10 @@
     var r = await call('GET', '/prix');
     if (r.status === 401) return; // handled by call()
     clear(container);
-    if (!r.ok || !r.json || !r.json.effectif) {
+    // Le catalogue est aussi essentiel que la grille : sans lui l'écran n'a
+    // aucune ligne à éditer, et un formulaire vide expédierait une grille vide.
+    // Mieux vaut la bannière de reprise qu'un écran qui a l'air de fonctionner.
+    if (!r.ok || !r.json || !r.json.effectif || !r.json.catalogue) {
       container.appendChild(buildErrorBanner(function () { loadPrixInto(container); }));
       return;
     }
@@ -2495,16 +2509,76 @@
     container.appendChild(view);
   }
 
+  // Le nom d'une ligne du catalogue, dans la langue de l'opérateur. Les noms
+  // viennent de l'API : sans leur `nomEn`, la console anglaise étiquetterait
+  // ses champs en français.
+  function ligneNom(l) {
+    return (isEnglish() && l.nomEn) ? l.nomEn : l.nom;
+  }
+
+  // Les cellules à montrer et à éditer, dans l'ordre du catalogue servi par
+  // l'API. `min` est le plancher de chaque groupe : un service se vend, donc
+  // au-dessus de zéro ; la garantie de date accepte zéro, parce que renoncer à
+  // la facturer n'est pas donner un service — c'est ne pas en vendre un.
+  function prixLignes(data) {
+    var cat = data.catalogue || { services: [], garantieDate: [] };
+    var out = [];
+    (cat.services || []).forEach(function (s) {
+      out.push({ id: s.id, nom: ligneNom(s), groupe: 'services', min: 1 });
+    });
+    (cat.garantieDate || []).forEach(function (t) {
+      out.push({ id: t.id, nom: ligneNom(t), groupe: 'garantieDate', min: 0 });
+    });
+    return out;
+  }
+
+  function prixCellule(grille, ligne) {
+    return ((grille && grille[ligne.groupe]) || {})[ligne.id];
+  }
+
+  var PRIX_GROUPES = [
+    { cle: 'services', titre: 'Prix par service' },
+    { cle: 'garantieDate', titre: 'Garantie de date Nota' },
+  ];
+
+  // La grille entière, cellule par cellule, le défaut à côté : c'est ce à quoi
+  // une remise à zéro revient, et l'opérateur doit le voir avant de la demander.
+  function buildPrixTable(data, lignes, groupe) {
+    var table = el('table', 'prix-grille');
+    var thead = el('thead');
+    var hr = el('tr');
+    hr.appendChild(el('th', null, 'Ligne'));
+    hr.appendChild(el('th', null, 'Prix en vigueur'));
+    hr.appendChild(el('th', null, 'Défaut du déploiement'));
+    thead.appendChild(hr);
+    table.appendChild(thead);
+    var tbody = el('tbody');
+    lignes.filter(function (l) { return l.groupe === groupe; }).forEach(function (l) {
+      var tr = el('tr');
+      var th = el('th', null, l.nom);
+      th.setAttribute('data-i18n-skip', ''); // nom du catalogue : contenu d'API
+      tr.appendChild(th);
+      tr.appendChild(el('td', null, moneyCents(prixCellule(data.effectif, l))));
+      tr.appendChild(el('td', null, moneyCents(prixCellule(data.defaut, l))));
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    return table;
+  }
+
   // --- Read view: what billing prices with right now -------------------------
   function buildPrixView(data) {
-    var eff = data.effectif;
+    var lignes = prixLignes(data);
     var wrap = el('div');
 
+    // Une tuile par SERVICE : c'est la ligne que le client lira sur son devis.
     var grid = el('div', 'stat-grid');
-    grid.appendChild(tile('Prix en vigueur', moneyCents(eff.prixCents),
-      'ajouté à chaque offre, encaissé à la signature', false));
-    grid.appendChild(tile('Défaut du déploiement', moneyCents(data.defaut.prixCents),
-      'ce à quoi une réinitialisation revient', false));
+    lignes.filter(function (l) { return l.groupe === 'services'; }).forEach(function (l) {
+      var t = tile(l.nom, moneyCents(prixCellule(data.effectif, l)),
+        'ajouté à chaque offre, encaissé à la signature', false);
+      t.querySelector('.stat-k').setAttribute('data-i18n-skip', '');
+      grid.appendChild(t);
+    });
     wrap.appendChild(grid);
 
     var card = el('div', 'chart-card tpl-group bareme-card');
@@ -2520,49 +2594,76 @@
     head.appendChild(ht);
     card.appendChild(head);
 
-    // Ce que l'opérateur doit avoir sous les yeux avant de changer ce nombre.
+    PRIX_GROUPES.forEach(function (g) {
+      card.appendChild(el('div', 'prix-groupe-titre', g.titre));
+      card.appendChild(buildPrixTable(data, lignes, g.cle));
+    });
+
+    // Ce que l'opérateur doit avoir sous les yeux avant de changer ces nombres.
     var foot = el('p', 'tpl-note');
     foot.appendChild(document.createTextNode(
       'Le client autorise sa carte pour le montant offert au notaire PLUS ce prix. '
       + 'Le notaire reçoit ses honoraires en entier ; ce prix ne dépend ni de lui, '
       + 'ni de sa cote, ni de la valeur de l’acte.'));
     card.appendChild(foot);
+    // La distinction qu'un opérateur pressé effacerait sans le vouloir.
+    var foot2 = el('p', 'tpl-note');
+    foot2.appendChild(document.createTextNode(
+      'La garantie de date est ce que NOTA vend pour tenir une date rapprochée. '
+      + 'Elle ne se confond pas avec le droit du notaire de tenir compte de '
+      + 'l’urgence dans SES honoraires (art. 49 4° du Code de déontologie) : '
+      + 'deux objets, deux lignes sur le devis du client.'));
+    card.appendChild(foot2);
     wrap.appendChild(card);
     return wrap;
   }
 
   // --- Edit form (super_admin only) ------------------------------------------
   function buildPrixForm(data, container) {
-    var eff = data.effectif;
+    var lignes = prixLignes(data);
     var card = el('div', 'chart-card');
     var head = el('div', 'chart-card-head');
     var ht = el('div');
-    ht.appendChild(el('div', 'chart-card-title', 'Modifier le prix'));
-    ht.appendChild(el('div', 'chart-card-sub', 'Le montant est saisi en dollars — « 400 » signifie 400,00 $.'));
+    ht.appendChild(el('div', 'chart-card-title', 'Modifier la grille'));
+    ht.appendChild(el('div', 'chart-card-sub', 'Les montants sont saisis en dollars — « 249 » signifie 249,00 $.'));
     head.appendChild(ht);
     card.appendChild(head);
 
     var form = el('form', 'bareme-form');
     form.noValidate = true;
 
-    var top = el('div', 'tpl-fields');
-    var field = el('div', 'field');
-    field.appendChild(el('label', null, 'Prix de Nota ($)'));
-    var input = el('input', 'input');
-    input.type = 'text';
-    input.inputMode = 'decimal';
-    input.setAttribute('data-i18n-skip', '');
-    input.value = centsToDollarsInput(eff.prixCents);
-    field.appendChild(input);
-    top.appendChild(field);
-    form.appendChild(top);
+    // Une cellule par ligne du catalogue, repérée par son identifiant : le
+    // catalogue peut grandir sans que rien ici ne bouge.
+    var inputs = {};
+    PRIX_GROUPES.forEach(function (g) {
+      var duGroupe = lignes.filter(function (l) { return l.groupe === g.cle; });
+      if (!duGroupe.length) return;
+      form.appendChild(el('div', 'prix-groupe-titre', g.titre));
+      var champs = el('div', 'tpl-fields');
+      duGroupe.forEach(function (l) {
+        var field = el('div', 'field');
+        var lab = el('label', null, l.nom + ' ($)');
+        lab.setAttribute('data-i18n-skip', ''); // nom du catalogue : contenu d'API
+        field.appendChild(lab);
+        var input = el('input', 'input');
+        input.type = 'text';
+        input.inputMode = 'decimal';
+        input.setAttribute('data-i18n-skip', '');
+        input.setAttribute('data-prix-cell', l.id);
+        input.value = centsToDollarsInput(prixCellule(data.effectif, l));
+        field.appendChild(input);
+        champs.appendChild(field);
+        inputs[l.id] = input;
+      });
+      form.appendChild(champs);
+    });
 
     var error = el('div', 'tpl-error');
     error.hidden = true;
     form.appendChild(error);
 
     var actions = el('div', 'tpl-actions');
-    var save = el('button', 'btn btn-sm btn-primary', 'Enregistrer le prix');
+    var save = el('button', 'btn btn-sm btn-primary', 'Enregistrer la grille');
     save.type = 'submit';
     actions.appendChild(save);
     form.appendChild(actions);
@@ -2570,9 +2671,13 @@
 
     form.addEventListener('submit', function (e) {
       e.preventDefault();
-      var body = { prixCents: dollarsToCents(input.value) };
+      // La grille part ENTIÈRE : le PUT remplace, il ne fusionne pas. Envoyer
+      // les seules cellules touchées laisserait les autres à la merci du
+      // défaut, et l'opérateur croirait avoir gardé ce qu'il voyait.
+      var body = { services: {}, garantieDate: {} };
+      lignes.forEach(function (l) { body[l.groupe][l.id] = dollarsToCents(inputs[l.id].value); });
       // Le serveur reste l'autorité, mais une évidence ne part pas sur le fil.
-      var errs = validatePrixForm(body);
+      var errs = validatePrixForm(body, lignes);
       if (errs.length) { showErrorLines(error, errs); return; }
       submitPrix('PUT', body, [save], error, container, 'Prix enregistré.');
     });
@@ -2614,12 +2719,15 @@
   // La même règle, les mêmes mots que prix-nota-config.js (validatePrix) —
   // l'écran ne doit jamais refuser autre chose que ce que le serveur refuse,
   // ni le formuler autrement. Un 422 reste possible : c'est lui qui tranche.
-  function validatePrixForm(body) {
-    var c = body.prixCents;
-    if (!isFinite(c) || Math.floor(c) !== c || c <= 0) {
+  function validatePrixForm(body, lignes) {
+    var mauvais = (lignes || []).some(function (l) {
+      var c = (body[l.groupe] || {})[l.id];
+      return !isFinite(c) || Math.floor(c) !== c || c < l.min;
+    });
+    if (mauvais) {
       return [{
         code: 'prix_invalide',
-        message: 'Le prix de Nota doit être un nombre entier de cents, supérieur à zéro (ex. 40000 pour 400,00 $).',
+        message: 'Chaque cellule de la grille doit être un nombre entier de cents (ex. 24900 pour 249,00 $) — strictement positif pour un service, zéro accepté pour la garantie de date.',
       }];
     }
     return [];

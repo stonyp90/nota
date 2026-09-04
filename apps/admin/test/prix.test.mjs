@@ -1,17 +1,25 @@
 /**
  * Tests DOM sans navigateur pour la section « Prix » — le prix du service de
- * Nota, décidé par Nota (ADR 0031). Ce fichier remplace commission.test.mjs :
- * l'écran n'édite plus un barème de taux mais UN montant, parce que l'art. 29.1
- * du Code de déontologie interdit au notaire toute convention mettant en péril
- * son indépendance et son désintéressement — et un prix indexé sur une cote
- * attribuée par Nota en est une.
+ * Nota, décidé par Nota (ADR 0031), devenu une GRILLE par service (ADR 0034).
+ * Ce fichier remplace commission.test.mjs : l'écran n'édite plus un barème de
+ * taux, parce que l'art. 29.1 du Code de déontologie interdit au notaire toute
+ * convention mettant en péril son indépendance et son désintéressement — et un
+ * prix indexé sur une cote attribuée par Nota en est une.
+ *
+ * Ce que la grille ajoute, et que ces tests tiennent : une ligne par SERVICE,
+ * plus la garantie de date sur SA propre ligne — ce que Nota vend pour tenir
+ * une date, jamais la prime d'urgence que l'art. 49 4° réserve au notaire dans
+ * SES honoraires. Les deux dimensions éditées (service, délai) sont publiées
+ * et ne passent par aucun notaire.
  *
  * Même harnais que smoke.test.mjs / courriels.test.mjs : index.html dans jsdom,
  * admin.js évalué, fetch bouchonné en API admin, assertions sur le DOM rendu.
- * Couvre : l'entrée du rail et sa route, la vue de lecture (prix en vigueur,
- * défaut, ligne de provenance), le formulaire (dollars → cents à l'envoi), le
- * refus local d'une évidence, un 422 servi en ligne, la remise à zéro derrière
- * une confirmation en page, et la vue en lecture seule de l'analyste.
+ * Couvre : l'entrée du rail et sa route, la vue de lecture (grille en vigueur,
+ * défaut, ligne de provenance), le formulaire (dollars → cents à l'envoi, une
+ * cellule par ligne du catalogue), le refus local d'une évidence, un 422 servi
+ * en ligne, la remise à zéro derrière une confirmation en page, la vue en
+ * lecture seule de l'analyste, et la RÉTRO-COMPATIBILITÉ : une configuration
+ * stockée à l'ancien format `{ prixCents }` reste lisible et éditable.
  */
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -87,15 +95,60 @@ const type = (win, input, value) => {
   input.dispatchEvent(new win.Event('input', { bubbles: true }));
 };
 
-// La charge de GET /prix — le défaut gouverne, ou un prix stocké gouverne.
-// Le défaut expédié est celui de prix-nota-config.js : 40 000 ¢ = 400 $.
+// Le catalogue que l'API renvoie avec la grille : la console n'a pas le
+// domaine, et sans cet écho elle coderait en dur les services et les paliers —
+// une ligne ajoutée au catalogue deviendrait alors invisible à l'opérateur.
+const CATALOGUE = {
+  services: [
+    { id: 'refinancement', nom: 'Refinancement hypothécaire', nomEn: 'Mortgage refinancing' },
+    { id: 'financement', nom: 'Financement hypothécaire', nomEn: 'Mortgage financing' },
+  ],
+  garantieDate: [
+    { id: 'standard', nom: 'Standard', nomEn: 'Standard', maxJours: null },
+    { id: 'rapide', nom: 'Rapide', nomEn: 'Fast', maxJours: 14 },
+    { id: 'prioritaire', nom: 'Prioritaire', nomEn: 'Priority', maxJours: 7 },
+    { id: 'urgence', nom: 'Urgent', nomEn: 'Urgent', maxJours: 1 },
+    { id: 'extreme', nom: 'Extrême', nomEn: 'Extreme', maxJours: 0 },
+  ],
+};
+
+// Une grille complète, telle que `domain.prixNotaGrille` la normalise.
+const grille = (services, garantieDate) => ({
+  defaut: Math.min(...Object.keys(services).map((k) => services[k])),
+  services, garantieDate,
+});
+
+// La grille du déploiement (ADR 0034) : 249 $ / 199 $, garantie de date par palier.
+const DEFAUT = grille(
+  { refinancement: 24900, financement: 19900 },
+  { standard: 0, rapide: 5000, prioritaire: 10000, urgence: 20000, extreme: 30000 },
+);
+
+// La charge de GET /prix — le défaut gouverne, ou une grille stockée gouverne.
+// `legacy` rejoue une configuration écrite avant le 2026-09-03 : UN prix pour
+// tout le catalogue, sans ligne de garantie de date. Elle doit rester lisible.
 function samplePrix(opts = {}) {
-  const defaut = { prixCents: 40000 };
-  if (opts.override) {
-    const override = { prixCents: 25000, updatedAt: '2026-08-27T12:00:00.000Z' };
-    return { defaut, override, effectif: { prixCents: override.prixCents } };
+  const base = { defaut: DEFAUT, catalogue: CATALOGUE };
+  if (opts.legacy) {
+    const override = { prixCents: 40000, updatedAt: '2026-08-27T12:00:00.000Z' };
+    return {
+      ...base, override,
+      effectif: grille(
+        { refinancement: 40000, financement: 40000 },
+        { standard: 0, rapide: 0, prioritaire: 0, urgence: 0, extreme: 0 },
+      ),
+    };
   }
-  return { defaut, override: null, effectif: defaut };
+  if (opts.override) {
+    const services = { refinancement: 25000, financement: 21000 };
+    const garantieDate = { standard: 0, rapide: 6000, prioritaire: 11000, urgence: 21000, extreme: 31000 };
+    return {
+      ...base,
+      override: { services, garantieDate, updatedAt: '2026-08-27T12:00:00.000Z' },
+      effectif: grille(services, garantieDate),
+    };
+  }
+  return { ...base, override: null, effectif: DEFAUT };
 }
 
 // L'API authentifiée : super_admin par défaut, ou un analyste sans settings:write.
@@ -149,12 +202,24 @@ test('la vue de lecture énonce le prix en vigueur, le défaut, et rien qui ress
   win.location.hash = '#/prix';
   await waitFor(win, '.bareme-card');
 
+  // Une tuile par SERVICE : c'est la ligne que le client verra sur son devis.
   const tiles = [...doc.querySelectorAll('.stat-tile')].map((t) => ({
     k: text(t.querySelector('.stat-k')), v: text(t.querySelector('.stat-v')),
   }));
   const byKey = (k) => (tiles.find((t) => t.k === k) || {}).v;
-  assert.equal(byKey('Prix en vigueur'), '400 $', 'les 40 000 ¢ s’affichent comme « 400 $ »');
-  assert.equal(byKey('Défaut du déploiement'), '400 $');
+  assert.equal(byKey('Refinancement hypothécaire'), '249 $', 'les 24 900 ¢ s’affichent comme « 249 $ »');
+  assert.equal(byKey('Financement hypothécaire'), '199 $');
+
+  // ADR 0034 — la garantie de date a SA propre ligne, par délai. C'est ce que
+  // NOTA vend ; la prime d'urgence que l'art. 49 4° réserve au notaire dans SES
+  // honoraires est un autre objet, et n'apparaît pas sur cet écran.
+  const lignes = [...doc.querySelectorAll('.prix-grille tbody tr')].map((tr) =>
+    [...tr.querySelectorAll('th, td')].map(text));
+  const ligne = (nom) => lignes.find((l) => l[0] === nom);
+  assert.deepEqual(ligne('Refinancement hypothécaire'), ['Refinancement hypothécaire', '249 $', '249 $']);
+  assert.deepEqual(ligne('Standard'), ['Standard', '0 $', '0 $'], 'à échéance normale, la garantie de date ne se paie pas');
+  assert.deepEqual(ligne('Urgent'), ['Urgent', '200 $', '200 $']);
+  assert.deepEqual(ligne('Extrême'), ['Extrême', '300 $', '300 $']);
 
   // ADR 0031 — le vocabulaire du partage a disparu de l'écran, en entier.
   const all = text(doc.querySelector('.admin-content'));
@@ -164,19 +229,59 @@ test('la vue de lecture énonce le prix en vigueur, le défaut, et rien qui ress
 
   // La ligne qui dit ce que le client paie vraiment, et à qui.
   assert.match(all, /Le client autorise sa carte pour le montant offert au notaire PLUS ce prix/);
-  // Aucun prix stocké — la ligne de provenance le dit sans bruit.
+  // Aucune grille stockée — la ligne de provenance le dit sans bruit.
   assert.match(text(doc.querySelector('.chart-card-sub')), /Valeur par défaut du déploiement/);
 });
 
-test('un prix stocké affiche sa date de modification dans la ligne de provenance', async () => {
+// ADR 0034 — la rétro-compatibilité n'est pas une politesse : une grille
+// stockée avant le 2026-09-03 porte UN prix pour tout le catalogue, et elle
+// doit rester lisible ET éditable. L'écran la montre telle qu'elle tarife —
+// le même prix partout, aucune garantie de date — et non telle qu'elle est
+// écrite, sans quoi l'opérateur ne saurait pas ce qui est réellement facturé.
+test('une configuration à l’ancien format (un seul prix) reste lisible et éditable', async () => {
+  const writes = [];
+  const handler = api({
+    prix: samplePrix({ legacy: true }),
+    onWrite(method, url, body) { writes.push({ method, body }); return [200, { ok: true, override: {} }]; },
+  });
+  const { win, doc } = await boot(handler, '#/auth?token=T');
+  await waitFor(win, '.admin-rail');
+  win.location.hash = '#/prix';
+  const form = await waitFor(win, '.bareme-form');
+
+  const tiles = [...doc.querySelectorAll('.stat-tile')].map((t) => text(t.querySelector('.stat-v')));
+  assert.deepEqual(tiles, ['400 $', '400 $'], 'l’ancien prix unique s’applique à chaque service');
+  const lignes = [...doc.querySelectorAll('.prix-grille tbody tr')].map((tr) =>
+    [...tr.querySelectorAll('th, td')].map(text));
+  assert.deepEqual(lignes.find((l) => l[0] === 'Standard'), ['Standard', '0 $', '0 $']);
+  assert.deepEqual(lignes.find((l) => l[0] === 'Urgent'), ['Urgent', '0 $', '200 $'],
+    'une config d’avant l’ADR 0034 ne facture AUCUNE garantie de date — la migration ne la lui ajoute pas');
+
+  // Et elle s'édite : le formulaire réécrit la grille entière, cellule par cellule.
+  submit(win, form);
+  await settle(win);
+  assert.equal(writes.length, 1);
+  assert.deepEqual(writes[0].body, {
+    services: { refinancement: 40000, financement: 40000 },
+    garantieDate: { standard: 0, rapide: 0, prioritaire: 0, urgence: 0, extreme: 0 },
+  }, 'l’enregistrement part au NOUVEAU format, sans rien inventer');
+});
+
+test('une grille stockée affiche sa date de modification dans la ligne de provenance', async () => {
   const { win, doc } = await boot(api({ prix: samplePrix({ override: true }) }), '#/auth?token=T');
   await waitFor(win, '.admin-rail');
   win.location.hash = '#/prix';
   await waitFor(win, '.bareme-card');
   const sub = [...doc.querySelectorAll('.chart-card-sub')].map(text).join(' ');
   assert.match(sub, /Prix décidé par Nota — modifié le 2026-08-27 12:00\./);
-  assert.equal([...doc.querySelectorAll('.stat-tile')]
-    .map((t) => text(t.querySelector('.stat-v')))[0], '250 $', 'le prix stocké est celui en vigueur');
+  assert.deepEqual([...doc.querySelectorAll('.stat-tile')]
+    .map((t) => text(t.querySelector('.stat-v'))), ['250 $', '210 $'], 'la grille stockée est celle en vigueur');
+  // La colonne du défaut reste lisible à côté : c'est ce à quoi une remise à
+  // zéro revient, et l'opérateur doit le voir avant de la demander.
+  const ligne = [...doc.querySelectorAll('.prix-grille tbody tr')]
+    .map((tr) => [...tr.querySelectorAll('th, td')].map(text))
+    .find((l) => l[0] === 'Refinancement hypothécaire');
+  assert.deepEqual(ligne, ['Refinancement hypothécaire', '250 $', '249 $']);
 });
 
 test('le formulaire convertit les dollars saisis en cents et PUT le prix', async () => {
@@ -192,10 +297,17 @@ test('le formulaire convertit les dollars saisis en cents et PUT le prix', async
   win.location.hash = '#/prix';
   const form = await waitFor(win, '.bareme-form');
 
-  // Le champ est amorcé sur le prix en vigueur, en dollars.
-  const input = form.querySelector('.tpl-fields input');
-  assert.equal(input.value, '400', 'amorcé en dollars, jamais en cents');
-  type(win, input, '250,50'); // la virgule décimale du Québec voyage
+  // Une cellule par ligne du catalogue, amorcée sur la grille en vigueur, en
+  // dollars. Le champ est retrouvé par l'identifiant de sa ligne, jamais par
+  // sa position : le catalogue peut grandir.
+  const cell = (id) => form.querySelector('input[data-prix-cell="' + id + '"]');
+  assert.equal(cell('refinancement').value, '249', 'amorcé en dollars, jamais en cents');
+  assert.equal(cell('financement').value, '199');
+  assert.equal(cell('standard').value, '0');
+  assert.equal(cell('urgence').value, '200');
+
+  type(win, cell('refinancement'), '250,50'); // la virgule décimale du Québec voyage
+  type(win, cell('urgence'), '0'); // renoncer à facturer la garantie est légitime
 
   submit(win, form);
   await settle(win);
@@ -203,7 +315,10 @@ test('le formulaire convertit les dollars saisis en cents et PUT le prix', async
   assert.equal(writes.length, 1);
   assert.equal(writes[0].method, 'PUT');
   assert.match(writes[0].url, /\/prix$/);
-  assert.deepEqual(writes[0].body, { prixCents: 25050 });
+  assert.deepEqual(writes[0].body, {
+    services: { refinancement: 25050, financement: 19900 },
+    garantieDate: { standard: 0, rapide: 5000, prioritaire: 10000, urgence: 0, extreme: 30000 },
+  });
   await waitFor(win, '.stat-tile'); // la vue se recharge après l'enregistrement
   assert.match(text(doc.querySelector('#toast')), /Prix enregistré/);
   assert.ok(calls.filter((c) => c.method === 'GET' && c.url.includes('/prix')).length >= 2,
@@ -219,27 +334,37 @@ test('une évidence n’atteint jamais l’API : l’écran la refuse en ligne',
   await waitFor(win, '.admin-rail');
   win.location.hash = '#/prix';
   const form = await waitFor(win, '.bareme-form');
-  const input = form.querySelector('.tpl-fields input');
+  const cell = (id) => form.querySelector('input[data-prix-cell="' + id + '"]');
   const error = form.querySelector('.tpl-error');
 
   // Le champ parle DOLLARS : « 0,15 » y vaut 15 ¢, un prix absurde mais légal,
   // et l'écran ne refuse jamais autre chose que ce que le serveur refuse.
   for (const mauvais of ['0', '-40', 'quatre cents', '', '400,555', '15 %']) {
-    type(win, input, mauvais);
+    type(win, cell('refinancement'), mauvais);
     submit(win, form);
     await settle(win);
     assert.equal(writes.length, 0, 'rien n’est envoyé pour : ' + JSON.stringify(mauvais));
     assert.equal(error.hidden, false);
-    assert.match(text(error), /Le prix de Nota doit être un nombre entier de cents/);
+    assert.match(text(error), /Chaque cellule de la grille doit être un nombre entier de cents/);
   }
 
-  // Un prix cohérent : le PUT part et le refus s'efface.
-  type(win, input, '300');
+  // La garantie de date, elle, accepte zéro : renoncer à la facturer n'est pas
+  // donner un service, c'est ne pas en vendre un. Mais pas un négatif.
+  type(win, cell('refinancement'), '249');
+  type(win, cell('rapide'), '-1');
   submit(win, form);
   await settle(win);
-  assert.equal(writes.length, 1, 'un prix valide voyage');
-  assert.deepEqual(writes[0].body, { prixCents: 30000 });
-  assert.equal(error.hidden, true, 'le refus en ligne s’efface dès que le prix tient');
+  assert.equal(writes.length, 0, 'une garantie de date négative est refusée');
+  assert.equal(error.hidden, false);
+
+  // Une grille cohérente : le PUT part et le refus s'efface.
+  type(win, cell('rapide'), '0');
+  submit(win, form);
+  await settle(win);
+  assert.equal(writes.length, 1, 'une grille valide voyage');
+  assert.deepEqual(writes[0].body.services, { refinancement: 24900, financement: 19900 });
+  assert.equal(writes[0].body.garantieDate.rapide, 0, 'zéro est une décision, pas une absence');
+  assert.equal(error.hidden, true, 'le refus en ligne s’efface dès que la grille tient');
 });
 
 test('un 422 de l’API s’affiche en ligne sans recharger', async () => {
@@ -248,7 +373,7 @@ test('un 422 de l’API s’affiche en ligne sans recharger', async () => {
     onWrite(method, url, body) {
       writes.push({ method, body });
       return [422, { errors: [
-        { code: 'prix_invalide', message: 'Le prix de Nota doit être un nombre entier de cents, supérieur à zéro (ex. 40000 pour 400,00 $).' },
+        { code: 'prix_invalide', message: 'Chaque cellule de la grille doit être un nombre entier de cents (ex. 24900 pour 249,00 $) — strictement positif pour un service, zéro accepté pour la garantie de date.' },
       ] }];
     },
   });
@@ -263,7 +388,7 @@ test('un 422 de l’API s’affiche en ligne sans recharger', async () => {
   assert.equal(writes.length, 1, 'un prix cohérent atteint l’API — le serveur reste l’autorité');
   const err = form.querySelector('.tpl-error');
   assert.equal(err.hidden, false);
-  assert.match(text(err), /Le prix de Nota doit être un nombre entier de cents/);
+  assert.match(text(err), /Chaque cellule de la grille doit être un nombre entier de cents/);
   assert.equal(calls.filter((c) => c.method === 'GET' && c.url.includes('/prix')).length, gets,
     'aucun rechargement sur un échec de validation');
 });
@@ -334,20 +459,26 @@ test('tout le vocabulaire du prix passe en anglais — écran et refus', async (
   await settle(win);
 
   const page = text(doc.querySelector('.admin-content'));
-  assert.match(page, /Nota’s service price — a fixed amount, the same for every notary\./);
+  assert.match(page, /Nota’s service price — a grid by service, the same for every notary\./);
   assert.match(page, /Price in force/);
   assert.match(page, /Deployment default/);
-  assert.match(page, /Edit the price/);
-  assert.match(page, /Nota’s price \(\$\)/, 'l’étiquette du champ suit');
+  assert.match(page, /Edit the grid/);
+  assert.match(page, /Nota date guarantee/, 'la ligne que Nota vend porte son nom en anglais');
   assert.match(page, /The client authorizes their card for the amount offered to the notary PLUS this price/);
+
+  // Les noms du catalogue viennent de l'API et suivent la langue : sans leur
+  // `nomEn`, la console anglaise étiquetterait ses champs en français.
+  assert.match(page, /Mortgage refinancing/);
+  assert.match(page, /Mortgage financing/);
+  assert.ok(!/Refinancement hypothécaire/.test(page), 'aucun nom de service resté en français');
 
   // Un refus local parle anglais aussi — c'est NOTRE chaîne, pas celle de l'API.
   const form = doc.querySelector('.bareme-form');
-  type(win, form.querySelector('.tpl-fields input'), '0');
+  type(win, form.querySelector('input[data-prix-cell="refinancement"]'), '0');
   submit(win, form);
   await settle(win);
   assert.match(text(form.querySelector('.tpl-error')),
-    /Nota’s price must be a whole number of cents, greater than zero \(e\.g\. 40000 for \$400\.00\)\./);
+    /Every cell in the grid must be a whole number of cents \(e\.g\. 24900 for \$249\.00\) — strictly positive for a service, zero accepted for the date guarantee\./);
 });
 
 test('un GET du prix en échec montre la bannière de reprise, et la reprise rétablit', async () => {

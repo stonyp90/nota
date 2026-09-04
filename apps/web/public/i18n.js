@@ -643,6 +643,11 @@
   // service is paid at signing. The priced variant is composed at runtime and
   // rides a RULE (the amount passes through to the money conversion).
   "Le notaire reçoit 100 % de votre offre ; le service Nota, à prix fixe, se paie seulement à la signature.": "The notary receives 100% of your offer; Nota’s service, at a fixed price, is paid only at signing.",
+  // ADR 0034 — le devis, ligne par ligne. La garantie de date est ce que NOTA
+  // vend ; elle ne se confond pas avec le droit du notaire de tenir compte de
+  // l'urgence dans SES honoraires (art. 49 4° C.déont.).
+  "Garantie de date Nota": "Nota date guarantee",
+  "Le notaire garde 100 % de ses honoraires.": "The notary keeps 100% of their fee.",
   "Date de signature": "Signing date",
   // After a real publication — what happens next, no delay promise.
   "Votre demande est maintenant visible des notaires inscrits.": "Your request is now visible to registered notaries.",
@@ -1186,6 +1191,14 @@
   "<span class=\"nc-soon-tag\">Bientôt</span>Les notaires pourront réaliser l’acte <strong>entièrement en ligne</strong> sur Nota, signature à distance comprise, sans déplacement. Aujourd’hui, vous convenez du lieu avec le notaire qui vous retient.": "<span class=\"nc-soon-tag\">Coming soon</span>Notaries will soon complete the act <strong>entirely online</strong> on Nota, remote signing included, no travel needed. For now, you agree on the location with the notary who takes you on."
 };
   var RULES = compileRules([
+  {
+    // ADR 0034 — le prix est une grille : le héros annonce un PLANCHER. La
+    // règle est plus spécifique que la suivante et doit donc passer avant,
+    // sans quoi « à partir de » resterait en français dans la phrase anglaise.
+    "pattern": "^Le notaire reçoit 100 % de votre offre ; le service Nota, à partir de (.+), se paie seulement à la signature\\.$",
+    "flags": "",
+    "replacement": "The notary receives 100% of your offer; Nota’s service, from $1, is paid only at signing."
+  },
   {
     "pattern": "^Le notaire reçoit 100 % de votre offre ; le service Nota, (.+), se paie seulement à la signature\\.$",
     "flags": "",

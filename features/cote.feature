@@ -51,7 +51,7 @@ Fonctionnalité: La cote sur 100 mesure le notaire — et ne décide plus un dol
   # siennes — et la console doit pouvoir le dire sans jamais l'exprimer en part.
   Scénario: la console dit au notaire ce que le client paie à Nota, jamais ce qu'il abandonne
     Quand le notaire "notaire@exemple.ca" consulte son espace
-    Alors sa console annonce le prix que le CLIENT paie à Nota : 400 $
+    Alors sa console annonce le prix que le CLIENT paie à Nota pour "refinancement" : 249 $
 
   # ART. 29.1 pris dans le temps : la cote peut monter ou s'effondrer entre
   # l'engagement du notaire et la signature. Avant l'ADR 0031, la rétention
@@ -66,9 +66,9 @@ Fonctionnalité: La cote sur 100 mesure le notaire — et ne décide plus un dol
     Quand le notaire "notaire@exemple.ca" retient l'offre
     Et la cote du notaire "notaire@exemple.ca" s'effondre
     Et le notaire "notaire@exemple.ca" marque l'acte complété à 2000
-    Alors la capture porte 2400 $
+    Alors la capture porte 2299 $
     Et le notaire reçoit 2000 $ — la totalité du montant offert
-    Et Nota ne garde que son prix : 400 $
+    Et Nota ne garde que son prix : 299 $
 
   # ADR 0030 — art. 70 C.déont. : « Le notaire ne peut, dans sa publicité,
   # utiliser ou permettre que soit utilisé un témoignage d'appui ou de
@@ -85,13 +85,13 @@ Fonctionnalité: La cote sur 100 mesure le notaire — et ne décide plus un dol
     Étant donné un client publie une offre avec le courriel "client@exemple.ca" pour "refinancement" à 6000 dans 1 jours
     Et la caution du client est autorisée
     Alors l'offre publiée porte le palier "urgence"
-    Et la carte du client est bloquée pour 6400 $
+    Et la carte du client est bloquée pour 6449 $
     Quand le notaire "notaire@exemple.ca" retient l'offre
     Et le notaire "notaire@exemple.ca" marque l'acte complété à 6000
-    Alors la capture porte 6400 $
+    Alors la capture porte 6449 $
     Et le notaire reçoit 6000 $ — la totalité du montant offert
-    Et Nota ne garde que son prix : 400 $
-    Et l'entrée d'audit "acte_regle" porte 6000 $ d'honoraires et 400 $ pour Nota
+    Et Nota ne garde que son prix : 449 $
+    Et l'entrée d'audit "acte_regle" porte 6000 $ d'honoraires et 449 $ pour Nota
     Quand le client évalue le notaire à 5 avec le commentaire "Signé la veille, impeccable."
     Et le notaire "notaire@exemple.ca" consulte son espace
     Alors sa satisfaction pèse plus que celle d'un notaire sans avis

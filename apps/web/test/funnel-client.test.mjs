@@ -25,7 +25,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 import { JSDOM } from 'jsdom';
+
+const require = createRequire(import.meta.url);
+const domain = require('@nota/domain');
 
 const DOMAIN_SRC = readFileSync(fileURLToPath(new URL('../../../packages/domain/index.js', import.meta.url)), 'utf8');
 const APP_SRC = readFileSync(fileURLToPath(new URL('../public/app.js', import.meta.url)), 'utf8');
@@ -52,7 +56,13 @@ const jsonRes = (status, body) => ({
 });
 
 const PRIX_CENTS = 40000;
-const tarifOf = (cents) => ({ prixNotaCents: cents, taxesIncluses: false, deboursInclus: false });
+// ADR 0034 — le tarif servi est une GRILLE. `tarifOf(cents)` fabrique une
+// grille plate à ce prix : le « à partir de » du héros en est la cellule la
+// plus basse, et c'est ce que le héros doit citer.
+const tarifOf = (cents) => {
+  const grille = domain.prixNotaGrille({ prixCents: cents });
+  return { grille, prixNotaMinCents: grille.defaut, taxesIncluses: false, deboursInclus: false };
+};
 const monthRoute = (cents = PRIX_CENTS) => ({
   match: (u, i) => u.includes('/bids?month=') && (!i.method || i.method === 'GET'),
   reply: (u) => jsonRes(200, { month: u.split('month=')[1], bids: [], tarif: tarifOf(cents) }),
@@ -145,6 +155,7 @@ test('the hero states the two-line truth and quotes the price the API serves', a
   const t = FLAT(line.textContent);
   assert.match(t, /100 % de votre offre/, 'the notary gets the whole offer: ' + t);
   assert.match(t, /signature/, 'and Nota is paid at signing: ' + t);
+  assert.match(t, /à partir de/, 'the grid is quoted as a floor, never as THE price: ' + t);
   assert.ok(t.includes(FLAT(D.money(525))), 'the served price (525 $) is quoted, not a literal: ' + t);
   assert.ok(!t.includes(FLAT(D.money(400))), 'the default price is NOT baked into the page: ' + t);
   dom.window.close();
@@ -172,11 +183,12 @@ test('the new price copy is translated, amount included', () => {
   I18N.force('en');
   const fixed = 'Le notaire reçoit 100 % de votre offre ; le service Nota, à prix fixe, se paie seulement à la signature.';
   assert.ok(I18N.covered(fixed), 'no English entry for the fixed-price line');
-  const priced = 'Le notaire reçoit 100 % de votre offre ; le service Nota, 525 $, se paie seulement à la signature.';
+  const priced = 'Le notaire reçoit 100 % de votre offre ; le service Nota, à partir de 525 $, se paie seulement à la signature.';
   const en = I18N.tEn(priced);
   assert.ok(!/reçoit|offre|signature\b.*\./.test(en) || /receives/.test(en), 'the composed line has a rule: ' + en);
   assert.match(en, /100 ?% of your offer/, en);
   assert.ok(en.includes('$525'), 'the amount rides through, money-converted: ' + en);
+  assert.match(en, /from \$525/, 'the « à partir de » is translated, never left in French: ' + en);
   assert.ok(!/Free for you|Free for the client/.test(I18N_SRC), 'the English side of the retired claim is gone');
 });
 

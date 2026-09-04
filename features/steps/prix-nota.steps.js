@@ -59,9 +59,35 @@ When('le carnet public du mois {string} est consulté', async function (month) {
   this.carnet = this.responseJson;
 });
 
-Then('le carnet annonce le prix du service de Nota, {int} $', function (prix) {
-  assert.ok(this.carnet.tarif, 'le carnet ne porte aucun tarif: ' + JSON.stringify(Object.keys(this.carnet)));
-  assert.equal(this.carnet.tarif.prixNotaCents, cents(prix));
+// ADR 0034 — le prix est une GRILLE. Le carnet annonce donc un PLANCHER, dit
+// comme tel, ET porte la grille entière : un plancher servi sans sa grille
+// laisserait le client découvrir le vrai prix de SON service plus tard, et
+// « incomplète » est précisément le mot de l'art. 68.
+Then('le carnet annonce le prix du service de Nota, à partir de {int} $', function (plancher) {
+  const t = this.carnet.tarif;
+  assert.ok(t, 'le carnet ne porte aucun tarif: ' + JSON.stringify(Object.keys(this.carnet)));
+  assert.equal(t.prixNotaMinCents, cents(plancher));
+  // La grille voyage ENTIÈRE : un service ou un palier manquant, et le devis
+  // du client se calculerait sur autre chose que ce que le carnet a annoncé.
+  assert.ok(t.grille && t.grille.services && t.grille.garantieDate, 'le tarif ne porte aucune grille: ' + JSON.stringify(t));
+  for (const s of this.domain.SERVICES) {
+    assert.equal(typeof t.grille.services[s.id], 'number', 'la grille ne tarife pas « ' + s.id + ' »');
+  }
+  for (const p of this.domain.TIERS) {
+    assert.equal(typeof t.grille.garantieDate[p.id], 'number', 'la grille ne tarife pas le palier « ' + p.id + ' »');
+  }
+  // Et le plancher annoncé EST la cellule la plus basse : un « à partir de »
+  // qu'une cellule passerait par-dessous serait un prix d'appel trompeur.
+  const cellules = this.domain.SERVICES.map((s) => this.domain.prixNota(s.id, 'standard', t.grille).totalCents);
+  assert.equal(t.prixNotaMinCents, Math.min(...cellules), 'le plancher annoncé doit être la cellule la plus basse');
+});
+
+// Le prix EXACT d'un service à échéance normale — celui que la carte bloquera.
+// L'annonce et la tarification lisent la même grille, par le même calcul.
+Then('le carnet tarife {string} à {int} $ à échéance normale', function (serviceId, prix) {
+  const t = this.carnet.tarif;
+  assert.ok(t && t.grille, 'le carnet ne porte aucune grille');
+  assert.equal(this.domain.prixNota(serviceId, 'standard', t.grille).totalCents, cents(prix));
 });
 
 // ART. 71 3° du Code de déontologie — quiconque annonce des honoraires doit
@@ -206,9 +232,13 @@ Then('sa console ne porte aucun barème : ni taux, ni part, ni palier', function
   sansPartage(this.console.retained, 'les actes retenus de la console');
 });
 
-Then('sa console annonce le prix que le CLIENT paie à Nota : {int} $', function (prix) {
-  assert.ok(this.console.tarif, 'la console ne porte aucun tarif');
-  assert.equal(this.console.tarif.prixNotaCents, cents(prix));
+// ADR 0034 — la console nomme le SERVICE, parce que le prix en dépend. Ce que
+// le notaire lit reste une ligne du CLIENT : la grille ne comporte aucune
+// dimension qui le concerne, et `sansPartage` ci-dessus le vérifie.
+Then('sa console annonce le prix que le CLIENT paie à Nota pour {string} : {int} $', function (serviceId, prix) {
+  const t = this.console.tarif;
+  assert.ok(t && t.grille, 'la console ne porte aucune grille de prix');
+  assert.equal(this.domain.prixNota(serviceId, 'standard', t.grille).totalCents, cents(prix));
 });
 
 // --- La vue du client ---------------------------------------------------------

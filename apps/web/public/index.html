@@ -1457,10 +1457,26 @@
               <span class="devis-k" id="devis-nota-k">Service Nota</span>
               <span class="devis-v" id="devis-nota">—</span>
             </div>
+            <!-- ADR 0034 — la garantie de date, sur SA propre ligne. C'est ce
+                 que NOTA vend : trouver un notaire à courte échéance et tenir
+                 la date. L'art. 49 4° du Code de déontologie laisse au notaire
+                 le droit de tenir compte de l'urgence dans SES honoraires : ce
+                 sont deux objets, et deux lignes. Masquée à zéro — un client à
+                 échéance normale ne paie rien pour une garantie qu'il n'a pas
+                 demandée, et une ligne à 0 $ ne ferait que du bruit. -->
+            <div class="devis-l" id="devis-date-l" hidden>
+              <span class="devis-k" id="devis-date-k">Garantie de date Nota</span>
+              <span class="devis-v" id="devis-date">—</span>
+            </div>
             <div class="devis-l devis-total">
               <span class="devis-k" id="devis-total-k">Autorisé sur votre carte</span>
               <span class="devis-v" id="devis-total">—</span>
             </div>
+            <!-- La revendication du modèle, écrite là où le client décide.
+                 Art. 32.1 2° L.N. / art. 32 C.déont. : Nota n'obtient du
+                 notaire aucun abandon d'honoraires, et le dire au moment de
+                 l'engagement est le seul endroit qui compte. -->
+            <p class="devis-claim" id="devis-claim">Le notaire garde 100 % de ses honoraires.</p>
             <p class="devis-note" id="devis-note"></p>
           </div>
         </div>

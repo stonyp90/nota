@@ -52,4 +52,4 @@ Fonctionnalité: Plancher et plafond de l'offre
     Étant donné la facturation Stripe est configurée
     Quand un client publie une offre avec le courriel "client@exemple.ca" pour "refinancement" à 2000 dans 10 jours
     Alors la réponse a le statut 201
-    Et la carte du client est bloquée pour 2400 $
+    Et la carte du client est bloquée pour 2299 $
