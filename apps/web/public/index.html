@@ -1066,7 +1066,19 @@
             <div class="pr-hero-copy">
               <span class="eyebrow">Partenaires</span>
               <h1>Référez, et soyez récompensé.</h1>
-              <p>Agents immobiliers, courtiers hypothécaires : chaque mise en relation qui aboutit est récompensée.</p>
+              <p>Courtiers immobiliers, courtiers hypothécaires, comptables et planificateurs : vos clients ont besoin d’un notaire à un moment précis. Référez-les à ce moment-là — chaque mise en relation qui aboutit est récompensée.</p>
+              <!-- « Vous êtes… » (2026-09-03): the claim form's first question,
+                   asked here so a courtier or an accountant recognises
+                   themself before anything scrolls. One button per
+                   D.REFERRAL.partners entry (partnerAudienceInit); picking one
+                   shows that profession's « moment » — domain data, the cue
+                   that turns a reader into a referrer — and pre-selects the
+                   form's chip. The two stay in sync both ways. -->
+              <div class="pr-audience" id="pr-audience">
+                <span class="pr-audience-lbl" id="pr-audience-lbl">Vous êtes…</span>
+                <div class="pr-audience-row" role="group" aria-labelledby="pr-audience-lbl"></div>
+                <p class="pr-moment" id="pr-moment" aria-live="polite">Le bon moment pour référer dépend de votre métier — choisissez le vôtre.</p>
+              </div>
               <!-- The hero's own door to the action: on a phone the claim form
                    sits below the steps and the FAQ — this lands the visitor in
                    it, courriel focused (three-click rule). Named apart from the
@@ -1104,13 +1116,13 @@
                 <div class="pr-kicker">Référez un client</div>
                 <div class="pr-amount" id="pr-amount-client"></div>
                 <span class="pr-freq">Sans limite</span>
-                <p class="pr-when">Versée dès qu’un notaire retient la demande.</p>
+                <p class="pr-when">Acquise dès qu’un notaire retient la demande ; versée une fois l’acte signé.</p>
               </div>
               <div class="pr-card pr-card--notaire" id="pr-card-notaire">
                 <div class="pr-kicker">Référez un notaire</div>
                 <div class="pr-amount" id="pr-amount-notaire"></div>
                 <span class="pr-freq">Une fois par notaire</span>
-                <p class="pr-when">Versée à son premier acte retenu.</p>
+                <p class="pr-when">Acquise à son premier acte retenu ; versée une fois cet acte signé.</p>
               </div>
             </div>
             <!-- Who may claim, said BEFORE the form (art. 33 C. déont.: a
@@ -1171,6 +1183,7 @@
                   <summary>Quand suis-je récompensé ?</summary>
                   <div class="disclosure-body">
                     <p>Au moment visible où ça marche : la demande du client référé est retenue par un notaire, ou le notaire référé retient son premier acte. Vous êtes prévenu par courriel — rien à surveiller.</p>
+                    <p>Le versement suit la signature de l’acte — une demande annulée avant ne donne lieu à aucun versement.</p>
                   </div>
                 </details>
                 <details class="disclosure">

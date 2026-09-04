@@ -164,3 +164,20 @@ test('referralProjection: what a steady referrer earns in a year, from the flat 
   assert.ok(Number.isInteger(D.REFERRAL.projectionMax) && D.REFERRAL.projectionMax >= 5);
   assert.ok(Number.isInteger(D.REFERRAL.projectionDefault) && D.REFERRAL.projectionDefault >= 1 && D.REFERRAL.projectionDefault <= D.REFERRAL.projectionMax);
 });
+
+test('REFERRAL.partners: Québec titles, stable ids, and the moment each profession should refer', () => {
+  // The licensed title in Québec is « courtier immobilier » (OACIQ) — never
+  // « agent ». The id stays: records and the API validation key on it.
+  const ids = D.REFERRAL.partners.map((p) => p.id);
+  assert.deepEqual(ids, ['agent_immobilier', 'courtier_hypothecaire', 'autre_professionnel']);
+  assert.equal(D.REFERRAL.partners[0].nom, 'Courtier immobilier');
+  assert.equal(D.REFERRAL.partners[0].nomEn, 'Real-estate broker');
+  // Each profession carries the ONE sentence the Partenaires hero shows when
+  // it is picked: when, in their own work, the referral happens. Bilingual,
+  // short enough for a hero line.
+  for (const p of D.REFERRAL.partners) {
+    assert.ok(p.moment && p.moment.length > 40 && p.moment.length <= 190, `${p.id} moment: ${p.moment}`);
+    assert.ok(p.momentEn && p.momentEn.length > 40 && p.momentEn.length <= 190, `${p.id} momentEn`);
+    assert.ok(!/\d\s*\$/.test(p.moment), 'the moment names no amount — the cards do');
+  }
+});

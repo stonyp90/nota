@@ -2415,10 +2415,28 @@
   const REFERRAL = {
     client: 50,
     notaire: 250,
+    // The professions who meet a homeowner at the exact moment they need a
+    // notary. `nom` is the Québec title (OACIQ: courtier, never agent); the id
+    // is a stable key (records, API validation) and does not follow the
+    // label. `moment` is the one sentence the Partenaires hero shows when a
+    // visitor picks their profession: WHEN, in their own work, the referral
+    // happens — the cue that turns a reader into a referrer.
     partners: [
-      { id: 'agent_immobilier', nom: 'Agent immobilier', nomEn: 'Real-estate agent' },
-      { id: 'courtier_hypothecaire', nom: 'Courtier hypothécaire', nomEn: 'Mortgage broker' },
-      { id: 'autre_professionnel', nom: 'Autre professionnel', nomEn: 'Other professional' },
+      {
+        id: 'agent_immobilier', nom: 'Courtier immobilier', nomEn: 'Real-estate broker',
+        moment: 'Le bon moment : dès que la promesse d’achat est acceptée. Votre client doit trouver un notaire pour son financement avant la date de signature.',
+        momentEn: 'The right moment: as soon as the offer to purchase is accepted. Your client must find a notary for their financing before the signing date.',
+      },
+      {
+        id: 'courtier_hypothecaire', nom: 'Courtier hypothécaire', nomEn: 'Mortgage broker',
+        moment: 'Le bon moment : à l’approbation du prêt. La date de signature est fixée et il manque encore le notaire — c’est là que le prix d’une date compte.',
+        momentEn: 'The right moment: when the loan is approved. The signing date is set and the notary is still missing — that is when the price of a date matters.',
+      },
+      {
+        id: 'autre_professionnel', nom: 'Autre professionnel', nomEn: 'Other professional',
+        moment: 'Comptables, planificateurs financiers, avocats, évaluateurs : le bon moment, c’est dès qu’un client parle de refinancer ou d’acheter.',
+        momentEn: 'Accountants, financial planners, lawyers, appraisers: the right moment is the minute a client mentions refinancing or buying.',
+      },
     ],
     // The Partenaires hero's « clients par mois » slider: its default seat and
     // its cap are product data, so the page never invents a range.

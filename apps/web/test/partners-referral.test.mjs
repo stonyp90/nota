@@ -941,3 +941,61 @@ test('a copy that fails never claims success on the button', async () => {
   assert.equal(btn.textContent, label, 'no « Copié ✓ » without a copy');
   assert.ok(!btn.classList.contains('is-copied'));
 });
+
+// --- 2026-09-03, second pass: the hero speaks to each profession -------------
+// A courtier immobilier, a courtier hypothécaire or an accountant must see in
+// three seconds that the programme is for THEM and WHEN, in their own work,
+// a referral happens. The audience row in the hero is the form's « Vous êtes »
+// question asked early — the two stay in sync both ways.
+
+test('the hero names its audiences from the domain and shows each profession its moment', async () => {
+  const { win, doc, D, Nota } = await boot();
+  Nota.setTab('partenaires');
+  const auds = [...doc.querySelectorAll('#pr-audience .pr-aud')];
+  assert.equal(auds.map((b) => b.dataset.type).join(','), D.REFERRAL.partners.map((p) => p.id).join(','));
+  assert.equal(auds.map((b) => b.textContent.trim()).join(','), D.REFERRAL.partners.map((p) => p.nom).join(','));
+  for (const b of auds) assert.equal(b.getAttribute('aria-pressed'), 'false', 'nothing picked on arrival');
+  const moment = $(doc, 'pr-moment');
+  assert.ok(moment.textContent.trim().length > 20, 'a resting sentence, never an empty slot');
+  for (const p of D.REFERRAL.partners) assert.ok(!moment.textContent.includes(p.moment), 'no profession assumed on arrival');
+  // Picking the mortgage broker: their moment, their form chip, nothing else pressed.
+  auds[1].click();
+  assert.equal(auds[1].getAttribute('aria-pressed'), 'true');
+  assert.equal(auds[0].getAttribute('aria-pressed'), 'false');
+  assert.equal(moment.textContent, D.REFERRAL.partners[1].moment);
+  const chip = doc.querySelector('#partner-type .chip[data-type="courtier_hypothecaire"]');
+  assert.ok(chip.classList.contains('is-on'), 'the form’s « Vous êtes » chip follows the hero');
+  // The other way round: picking a form chip lights the hero audience too.
+  doc.querySelector('#partner-type .chip[data-type="agent_immobilier"]').click();
+  assert.equal(auds[0].getAttribute('aria-pressed'), 'true');
+  assert.equal(auds[1].getAttribute('aria-pressed'), 'false');
+  assert.equal(moment.textContent, D.REFERRAL.partners[0].moment);
+  // The pitch line names the professions in their Québec titles.
+  const pitch = doc.querySelector('#pane-partenaires .pr-hero-copy > p').textContent;
+  assert.match(pitch, /Courtiers immobiliers/);
+  assert.match(pitch, /courtiers hypothécaires/);
+  assert.ok(!/agent/i.test(pitch), 'never « agent » — the OACIQ title is courtier');
+  // Every label and every moment has its English twin in the web dictionary,
+  // equal to the domain’s own English.
+  // The dictionary itself (the boot harness does not load i18n.js): evaluated
+  // as a plain script, the way i18n.test.mjs does.
+  const I = (() => {
+    const src = readFileSync(fileURLToPath(new URL('../public/i18n.js', import.meta.url)), 'utf8');
+    const mod = { exports: {} };
+    new Function('module', 'exports', src)(mod, mod.exports);
+    return mod.exports;
+  })();
+  for (const p of D.REFERRAL.partners) {
+    assert.equal(I.tEn(p.nom), p.nomEn, `${p.id} nom`);
+    assert.equal(I.tEn(p.moment), p.momentEn, `${p.id} moment`);
+  }
+});
+
+test('a returning partner sees their own profession lit in the hero', async () => {
+  const REC = { code: 'EVEROY', type: 'courtier_hypothecaire', courriel: 'eve@agence.ca', createdAt: '2026-09-01T00:00:00.000Z' };
+  const { doc, D, Nota } = await boot({ seed: { 'nota.partner.v1': JSON.stringify(REC) } });
+  Nota.setTab('partenaires');
+  const on = doc.querySelector('#pr-audience .pr-aud[aria-pressed="true"]');
+  assert.ok(on && on.dataset.type === 'courtier_hypothecaire');
+  assert.equal($(doc, 'pr-moment').textContent, D.REFERRAL.partners[1].moment);
+});

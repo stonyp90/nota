@@ -9018,9 +9018,7 @@
     var pType = $('partner-type');
     if (pType) pType.addEventListener('click', function (e) {
       var b = e.target.closest('.chip'); if (!b) return;
-      partnerState.type = b.dataset.type;
-      setGroupActive(pType, b);
-      partnerValidateUI();
+      partnerSetType(b.dataset.type);
     });
     // Conversion: the courriel SUGGESTS the code (its local part, normalized),
     // so the happy path never invents one. The suggestion is remembered in
@@ -9615,7 +9613,7 @@
   // status and strip the param so a reload is clean. Publication itself is
   // confirmed server-side by the authorization webhook, so this is informational.
   // --- Partner referral capture (ADR 0011) -----------------------------------
-  // A partner (agent immobilier, courtier hypothécaire) shares ?ref=CODE.
+  // A partner (courtier immobilier, courtier hypothécaire) shares ?ref=CODE.
   // Capture it once, normalized, on this device; onOfferSubmit attaches it
   // PRIVATELY as `parrain` when the client posts their demand. The code is
   // never displayed anywhere, and the param is stripped from the URL right
@@ -9763,6 +9761,7 @@
     var amtNotaire = $('pr-amount-notaire');
     if (amtNotaire) amtNotaire.textContent = D.money(D.REFERRAL.notaire);
     partnerEstimatorInit();
+    partnerAudienceInit();
     // One chip per partner category, from the domain.
     var wrap = $('partner-type');
     if (wrap && !wrap.children.length) {
@@ -9786,6 +9785,7 @@
       partnerState.type = rec.type || partnerState.type;
       var onChip = wrap ? wrap.querySelector('.chip[data-type="' + partnerState.type + '"]') : null;
       if (onChip) setGroupActive(wrap, onChip);
+      partnerAudienceSync();
       var mailInp = $('partner-courriel');
       if (mailInp && rec.courriel) mailInp.value = rec.courriel;
       var codeInp = $('partner-code');
@@ -9802,6 +9802,47 @@
         + 'Payée par Nota à même ses propres fonds, elle ne change jamais le prix du client ni les honoraires du notaire. '
         + 'Le professionnel encadré (OACIQ notamment) demeure responsable de divulguer cette récompense à son client lorsque son code de déontologie l’exige.';
     }
+  }
+
+  // The hero's « Vous êtes… » row: the claim form's first question, asked
+  // early. One button per domain partner category, built once; picking one
+  // shows that profession's own « moment » (domain data) and lights the
+  // form's chip. partnerSetType is the single writer for both surfaces, so
+  // they can never disagree. The glyphs are the site's stroke idiom.
+  var PARTNER_AUD_ICONS = {
+    agent_immobilier: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg>',
+    courtier_hypothecaire: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 15.5l7-7"/><circle cx="9" cy="9" r="1"/><circle cx="15" cy="15" r="1"/></svg>',
+    autre_professionnel: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5h6v2"/><path d="M3 12h18"/></svg>',
+  };
+  function partnerAudienceInit() {
+    var row = document.querySelector('#pr-audience .pr-audience-row');
+    if (!row || row.children.length) return;
+    D.REFERRAL.partners.forEach(function (p) {
+      var b = el('button', 'pr-aud');
+      b.type = 'button'; b.dataset.type = p.id; b.setAttribute('aria-pressed', 'false');
+      var ic = el('span', 'pr-aud-ic'); ic.setAttribute('aria-hidden', 'true'); ic.innerHTML = PARTNER_AUD_ICONS[p.id] || '';
+      b.appendChild(ic); b.appendChild(el('span', null, p.nom));
+      b.addEventListener('click', function () { partnerSetType(p.id); });
+      row.appendChild(b);
+    });
+  }
+  function partnerAudienceSync() {
+    var row = document.querySelector('#pr-audience .pr-audience-row');
+    if (row) {
+      row.querySelectorAll('.pr-aud').forEach(function (b) {
+        b.setAttribute('aria-pressed', b.dataset.type === partnerState.type ? 'true' : 'false');
+      });
+    }
+    var p = D.REFERRAL.partners.find(function (x) { return x.id === partnerState.type; });
+    var m = $('pr-moment'); if (m && p) m.textContent = p.moment;
+  }
+  function partnerSetType(id) {
+    partnerState.type = id;
+    var wrap = $('partner-type');
+    var chip = wrap ? wrap.querySelector('.chip[data-type="' + id + '"]') : null;
+    if (wrap && chip) setGroupActive(wrap, chip);
+    partnerAudienceSync();
+    partnerValidateUI();
   }
 
   // The hero estimator: the slider's range and seat are domain data and the
