@@ -143,3 +143,24 @@ test('referralLedger: sorted by dollars owed desc, then code asc — a stable pa
   assert.deepEqual(ledger.map((e) => e.code), ['NOTA1', 'ALFA1', 'BETA1', 'MIKE1', 'ZETA1']);
   assert.deepEqual(ledger.map((e) => e.du), [250, 100, 50, 50, 0]);
 });
+
+test('referralProjection: what a steady referrer earns in a year, from the flat client reward', () => {
+  // The Partenaires hero lets a courtier or agent slide « clients par mois »
+  // and read the yearly figure. It is the client track only (the recurring
+  // one), assuming every referred demand is retained — the page says so.
+  const p = D.referralProjection(3);
+  assert.equal(p.clientsParMois, 3);
+  assert.equal(p.parMois, 3 * D.REFERRAL.client);
+  assert.equal(p.parAn, 3 * 12 * D.REFERRAL.client);
+  // Bounded and integer: garbage in, a sane number out — never NaN on screen.
+  assert.equal(D.referralProjection('4').clientsParMois, 4);
+  assert.equal(D.referralProjection(2.7).clientsParMois, 2);
+  assert.equal(D.referralProjection(-5).clientsParMois, 0);
+  assert.equal(D.referralProjection(-5).parAn, 0);
+  assert.equal(D.referralProjection(999).clientsParMois, D.REFERRAL.projectionMax);
+  assert.equal(D.referralProjection(undefined).clientsParMois, 0);
+  assert.equal(D.referralProjection(NaN).parAn, 0);
+  // The slider's range is domain data too, so the page never invents a cap.
+  assert.ok(Number.isInteger(D.REFERRAL.projectionMax) && D.REFERRAL.projectionMax >= 5);
+  assert.ok(Number.isInteger(D.REFERRAL.projectionDefault) && D.REFERRAL.projectionDefault >= 1 && D.REFERRAL.projectionDefault <= D.REFERRAL.projectionMax);
+});

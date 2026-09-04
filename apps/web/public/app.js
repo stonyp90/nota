@@ -9006,6 +9006,7 @@
     var pForm = $('partner-form'); if (pForm) pForm.addEventListener('submit', onPartnerSubmit);
     var pCopy = $('partner-copy'); if (pCopy) pCopy.addEventListener('click', partnerCopyLink);
     var pShare = $('partner-share'); if (pShare) pShare.addEventListener('click', partnerShareClick);
+    var pMsgCopy = $('partner-msg-copy'); if (pMsgCopy) pMsgCopy.addEventListener('click', partnerCopyMessage);
     // The hero's CTA travels to the claim form — it never submits anything.
     // The two reward cards take the same trip: on this pane every surface
     // that sells the program lands the visitor in the form, courriel focused
@@ -9723,6 +9724,7 @@
     if (amtClient) amtClient.textContent = D.money(D.REFERRAL.client);
     var amtNotaire = $('pr-amount-notaire');
     if (amtNotaire) amtNotaire.textContent = D.money(D.REFERRAL.notaire);
+    partnerEstimatorInit();
     // One chip per partner category, from the domain.
     var wrap = $('partner-type');
     if (wrap && !wrap.children.length) {
@@ -9763,6 +9765,34 @@
         + 'Le professionnel encadré (OACIQ notamment) demeure responsable de divulguer cette récompense à son client lorsque son code de déontologie l’exige.';
     }
   }
+
+  // The hero estimator: the slider's range and seat are domain data and the
+  // yearly figure is D.referralProjection — the page invents no number.
+  function partnerEstimatorRender() {
+    var range = $('pr-estimate-n');
+    if (!range) return;
+    var p = D.referralProjection(range.value);
+    var nv = $('pr-estimate-n-val'); if (nv) nv.textContent = String(p.clientsParMois);
+    var yr = $('pr-estimate-year'); if (yr) yr.textContent = D.money(p.parAn);
+  }
+  function partnerEstimatorInit() {
+    var range = $('pr-estimate-n');
+    if (!range) return;
+    if (!range.dataset.ready) {
+      range.min = '1'; range.max = String(D.REFERRAL.projectionMax); range.step = '1';
+      range.value = String(D.REFERRAL.projectionDefault);
+      range.addEventListener('input', partnerEstimatorRender);
+      range.dataset.ready = '1';
+    }
+    partnerEstimatorRender();
+  }
+
+  // The words a partner sends their client once the code is claimed. Client-
+  // facing: what the client gets, never the reward (disclosure is the
+  // partner's own duty). One sentence in the source language; T() carries it
+  // into English; the link is appended, never translated.
+  var PARTNER_MESSAGE = 'Bonjour ! Pour votre refinancement ou votre financement hypothécaire, vous pouvez choisir votre date de signature et voir le prix avant de vous engager, sur Nota. Le notaire reçoit 100 % de votre offre et vous ne payez qu’à la signature. Voici le lien : ';
+  function partnerMessageText(code) { return T(PARTNER_MESSAGE) + partnerShareLink(code); }
 
   // The claim form validates live: a chosen type, a valid courriel, and a
   // code the domain accepts. The preview normalizes as the partner types —
@@ -9891,6 +9921,7 @@
     var box = $('partner-success'); if (box) box.hidden = false;
     var code = saved.code || hint.code;
     var link = $('partner-link'); if (link) link.textContent = partnerShareLink(code);
+    var msg = $('partner-msg'); if (msg) msg.textContent = partnerMessageText(code);
     // Native share only where the platform has a sheet — everywhere else the
     // copy button stands alone, exactly as before.
     var share = $('partner-share'); if (share) share.hidden = typeof navigator.share !== 'function';
@@ -9942,23 +9973,47 @@
 
   // Clipboard with visible feedback either way — shared by the Partenaires
   // pane's copy button and the profile's Parrainage card.
-  function copyLinkText(text) {
+  // `onDone` runs only when the text actually reached the clipboard — a
+  // failed copy gets its toast and nothing else claims success.
+  function copyText(text, done, fail, onDone) {
     if (!text) return;
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).then(
-          function () { toast('Lien copié.'); },
-          function () { toast('Copie impossible — sélectionnez le lien.'); }
+          function () { toast(done); if (onDone) onDone(); },
+          function () { toast(fail); }
         );
         return;
       }
     } catch (e) {}
-    toast('Copie impossible — sélectionnez le lien.');
+    toast(fail);
+  }
+  function copyLinkText(text, onDone) {
+    copyText(text, 'Lien copié.', 'Copie impossible — sélectionnez le lien.', onDone);
+  }
+
+  // The button itself says it worked — « Copié ✓ » for a beat, then its own
+  // label again — so the confirmation sits where the eye already is, not only
+  // in a toast that may have faded. Guarded so a double-click cannot freeze
+  // the button on the confirmation.
+  function flashCopied(btn) {
+    if (!btn || btn.dataset.copiedTimer) return;
+    var label = btn.textContent;
+    btn.textContent = T('Copié ✓'); btn.classList.add('is-copied');
+    btn.dataset.copiedTimer = String(setTimeout(function () {
+      btn.textContent = label; btn.classList.remove('is-copied'); delete btn.dataset.copiedTimer;
+    }, 1600));
   }
 
   function partnerCopyLink() {
     var link = $('partner-link');
-    copyLinkText(link ? link.textContent : '');
+    copyLinkText(link ? link.textContent : '', function () { flashCopied($('partner-copy')); });
+  }
+
+  function partnerCopyMessage() {
+    var msg = $('partner-msg');
+    copyText(msg ? msg.textContent : '', 'Message copié.', 'Copie impossible — sélectionnez le message.',
+      function () { flashCopied($('partner-msg-copy')); });
   }
 
   // Native share where the platform has a sheet (phones): the agent hands the

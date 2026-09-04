@@ -838,3 +838,106 @@ test('P2-16: the hero CTA and the form’s submit carry distinct accessible name
   assert.notEqual(hero, submit, 'two controls named alike confuse a screen-reader user');
   assert.equal(submit, 'Réclamer mon code →', 'the action keeps the claim verb');
 });
+
+// --- 2026-09-03: the pane sells harder without getting thicker ---------------
+// An estimator in the hero (the one figure a courtier actually wants: a year
+// of referrals), and a ready-to-send message once the code is claimed (the
+// step that turns a claimed code into a real referral).
+
+test('the hero estimates a year of client referrals from the domain — slider and figure agree', async () => {
+  const { win, doc, D, Nota } = await boot();
+  Nota.setTab('partenaires');
+  const range = $(doc, 'pr-estimate-n');
+  assert.ok(range, 'a « clients par mois » slider in the hero');
+  assert.equal(Number(range.min), 1);
+  assert.equal(Number(range.max), D.REFERRAL.projectionMax, 'the cap is domain data');
+  assert.equal(Number(range.value), D.REFERRAL.projectionDefault, 'so is the default seat');
+  const p0 = D.referralProjection(D.REFERRAL.projectionDefault);
+  assert.equal($(doc, 'pr-estimate-n-val').textContent, String(p0.clientsParMois));
+  assert.equal($(doc, 'pr-estimate-year').textContent, D.money(p0.parAn));
+  range.value = '7'; fire(win, range, 'input');
+  const p7 = D.referralProjection(7);
+  assert.equal($(doc, 'pr-estimate-n-val').textContent, '7');
+  assert.equal($(doc, 'pr-estimate-year').textContent, D.money(p7.parAn));
+  // The figure is computed — never a literal in the markup.
+  const at = HTML_SRC.indexOf('id="pr-estimate"');
+  assert.ok(at > 0 && !/\d\s*\$/.test(HTML_SRC.slice(at, at + 1600)), 'no hardcoded dollar amount in the estimator markup');
+  // It lives in the hero copy column, under the CTA — the pane stays thin.
+  assert.ok($(doc, 'pr-estimate').closest('.pr-hero-copy'), 'the estimator rides the hero copy');
+});
+
+test('a confirmed claim hands the partner a ready-to-send message carrying their link', async () => {
+  const { win, doc, Nota } = await boot({
+    routes: claimRoutes(jsonRes(201, { partenaire: { code: 'EVEROY' } })),
+  });
+  Nota.setTab('partenaires');
+  doc.querySelector('#partner-type .chip').click();
+  const mail = $(doc, 'partner-courriel'); mail.value = 'eve@agence.ca'; fire(win, mail, 'input');
+  const code = $(doc, 'partner-code'); code.value = 'EVEROY'; fire(win, code, 'input');
+  fire(win, $(doc, 'partner-form'), 'submit');
+  await wait(20);
+  assert.equal($(doc, 'partner-success').hidden, false);
+  const msg = $(doc, 'partner-msg');
+  assert.ok(msg, 'a message block in the success box');
+  assert.ok(msg.textContent.includes(SITE + '/?ref=EVEROY'), 'the message carries the share link');
+  assert.ok(!/\d\s*\$/.test(msg.textContent), 'the client-facing message names no reward amount');
+  assert.ok(/100 %/.test(msg.textContent), 'it tells the client the notary keeps the whole offer');
+  assert.ok($(doc, 'partner-msg-copy'), 'a copy button for the message');
+});
+
+// The button itself confirms a copy — and ONLY a copy that happened.
+function stubClipboard(win) {
+  const copied = [];
+  Object.defineProperty(win.navigator, 'clipboard', {
+    configurable: true,
+    value: { writeText: async (t) => { copied.push(t); } },
+  });
+  return copied;
+}
+
+test('a copy that succeeds flashes « Copié ✓ » on the button, then restores its label', async () => {
+  const { win, doc, Nota } = await boot({
+    routes: claimRoutes(jsonRes(201, { partenaire: { code: 'EVEROY' } })),
+  });
+  const copied = stubClipboard(win);
+  Nota.setTab('partenaires');
+  doc.querySelector('#partner-type .chip').click();
+  const mail = $(doc, 'partner-courriel'); mail.value = 'eve@agence.ca'; fire(win, mail, 'input');
+  const code = $(doc, 'partner-code'); code.value = 'EVEROY'; fire(win, code, 'input');
+  fire(win, $(doc, 'partner-form'), 'submit');
+  await wait(20);
+  const btn = $(doc, 'partner-msg-copy');
+  const label = btn.textContent;
+  btn.click();
+  await wait(10);
+  assert.equal(copied.length, 1, 'the message went to the clipboard');
+  assert.ok(copied[0].includes(SITE + '/?ref=EVEROY'));
+  assert.equal(btn.textContent, 'Copié ✓');
+  assert.ok(btn.classList.contains('is-copied'));
+  // The link button confirms the same way.
+  $(doc, 'partner-copy').click();
+  await wait(10);
+  assert.equal($(doc, 'partner-copy').textContent, 'Copié ✓');
+  await wait(1700);
+  assert.equal(btn.textContent, label, 'the label comes back');
+  assert.ok(!btn.classList.contains('is-copied'));
+});
+
+test('a copy that fails never claims success on the button', async () => {
+  const { win, doc, Nota } = await boot({
+    routes: claimRoutes(jsonRes(201, { partenaire: { code: 'EVEROY' } })),
+  });
+  // No clipboard at all (jsdom's default): the toast says so, the button stays itself.
+  Nota.setTab('partenaires');
+  doc.querySelector('#partner-type .chip').click();
+  const mail = $(doc, 'partner-courriel'); mail.value = 'eve@agence.ca'; fire(win, mail, 'input');
+  const code = $(doc, 'partner-code'); code.value = 'EVEROY'; fire(win, code, 'input');
+  fire(win, $(doc, 'partner-form'), 'submit');
+  await wait(20);
+  const btn = $(doc, 'partner-msg-copy');
+  const label = btn.textContent;
+  btn.click();
+  await wait(10);
+  assert.equal(btn.textContent, label, 'no « Copié ✓ » without a copy');
+  assert.ok(!btn.classList.contains('is-copied'));
+});

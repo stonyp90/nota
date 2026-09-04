@@ -96,6 +96,7 @@
   "Actes complétés": "Acts completed",
   "Offres ouvertes": "Open offers",
   "en ce moment": "right now",
+  "registre des notaires indisponible": "notary roster unavailable",
   "Notaires actifs": "Active notaries",
   "sur la plateforme": "on the platform",
   "Notaires en intégration": "Notaries onboarding",

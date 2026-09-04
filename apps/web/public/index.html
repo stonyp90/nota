@@ -1074,6 +1074,23 @@
                    share one accessible name. renderPartnerPane() relabels it
                    « Voir mon code → » for a returning partner. -->
               <button type="button" class="btn btn-primary btn-lg pr-hero-cta" id="pr-hero-cta">Obtenir mon code →</button>
+              <!-- The estimator (2026-09-03): the one figure a courtier or an
+                   agent actually wants — a year of referrals. The slider's
+                   range and seat are domain data (D.REFERRAL.projection*), the
+                   figure is D.referralProjection — nothing numeric is written
+                   here. One row under the CTA, so the pane stays thin. -->
+              <div class="pr-estimate" id="pr-estimate">
+                <label class="pr-estimate-lbl" for="pr-estimate-n">Combien de clients référez-vous par mois ?</label>
+                <div class="pr-estimate-row">
+                  <input type="range" id="pr-estimate-n" aria-describedby="pr-estimate-out" />
+                  <output class="pr-estimate-out" id="pr-estimate-out" for="pr-estimate-n" aria-live="polite">
+                    <span class="pr-estimate-n"><b id="pr-estimate-n-val"></b> clients par mois</span>
+                    <span class="pr-estimate-arrow" aria-hidden="true">→</span>
+                    <span class="pr-estimate-year"><strong id="pr-estimate-year"></strong> par année</span>
+                  </output>
+                </div>
+                <p class="pr-estimate-fine">Si chaque demande est retenue par un notaire — un montant fixe par client, sans plafond.</p>
+              </div>
             </div>
             <!-- Two tracks, one stat card each: kicker, amount + cadence tag,
                  when. The HOW lives in the steps below — never repeated per
@@ -1231,6 +1248,17 @@
                          platform has a share sheet (navigator.share). -->
                     <button type="button" class="btn btn-sm" id="partner-share" hidden>Partager</button>
                   </div>
+                  <!-- The ready-to-send message (2026-09-03): a claimed code
+                       only pays when a client actually arrives — these are
+                       the words to send them. Client-facing, so it names no
+                       reward (disclosure is the partner's own duty), only what
+                       the client gets. Filled by partnerClaimConfirmed() with
+                       the partner's link. -->
+                  <div class="partner-msg">
+                    <p class="help"><strong>Un message prêt à envoyer</strong> à votre client, tel quel :</p>
+                    <p class="partner-msg-text" id="partner-msg" data-i18n-skip></p>
+                    <button type="button" class="btn btn-sm" id="partner-msg-copy">Copier le message</button>
+                  </div>
                 </div>
               </form>
             </div>
@@ -1294,7 +1322,7 @@
                    from the browser to the private bucket by a signed, minutes-long
                    authorisation; the admin console has no route to them; they
                    are erased with the offer and on a notary's release. -->
-              <li><strong>Documents échangés.</strong> Quand vous envoyez un document par la messagerie au notaire qui a retenu votre demande, Nota en est le dépositaire, jamais le destinataire : le fichier est chiffré en transit et au repos, conservé au Canada (région ca-central-1) et lisible uniquement par vous et ce notaire. Aucun employé de Nota n’y a accès ; aucune analyse, aucune indexation. Il est effacé avec l’offre, et dès qu’un notaire se désiste.</li>
+              <li><strong>Documents échangés.</strong> Quand vous envoyez un document par la messagerie au notaire qui a retenu votre demande, Nota en est le dépositaire, jamais le destinataire : le fichier est chiffré en transit et au repos, conservé au Canada (région ca-central-1) et lisible uniquement par vous et ce notaire. La console d’administration de Nota n’y donne aucun accès, chaque ouverture est journalisée ; aucune analyse, aucune indexation. Il est effacé avec l’offre, et dès qu’un notaire se désiste.</li>
               <li><strong>Téléphone.</strong> Le numéro que vous fournissez (optionnel) est privé : il n’est partagé qu’avec le notaire qui retient votre demande, puis supprimé selon le même calendrier que le reste.</li>
               <li><strong>Code de partenaire.</strong> Si vous arrivez par le lien d’un partenaire, son code est conservé en privé avec votre demande — jamais affiché publiquement — et sert uniquement à créditer ce partenaire.</li>
               <li><strong>Vérification d’identité.</strong> Nota ne vérifie pas votre identité. C’est le notaire qui retient votre demande qui vérifie votre identité au moment de la signature, comme l’exige la loi.</li>

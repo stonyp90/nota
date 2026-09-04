@@ -329,7 +329,7 @@ function createAnalytics({ repo, now, gaugeHorizonMonths } = {}) {
     //     cancellation compensation it could not transfer (ADR 0033,
     //     `dedommagementCentsDue`). Balances, not flows — they ignore the range.
     let pendingNotaries = 0;
-    const creances = { commissionCentsDue: 0, dedommagementCentsDue: 0 };
+    let creances = { commissionCentsDue: 0, dedommagementCentsDue: 0 };
     if (typeof repo.listNotaries === 'function') {
       try {
         for (const n of (await repo.listNotaries()) || []) {
@@ -339,9 +339,11 @@ function createAnalytics({ repo, now, gaugeHorizonMonths } = {}) {
           creances.dedommagementCentsDue += Math.max(0, Math.round(num(n.dedommagementCentsDue)));
         }
       } catch {
-        pendingNotaries = 0;
-        creances.commissionCentsDue = 0;
-        creances.dedommagementCentsDue = 0;
+        // A roster we could not read is NOT « nothing owed » (review of
+        // f45a2e1): the balances are unknown, and the console must say so
+        // rather than let an operator conclude everything is settled.
+        pendingNotaries = null;
+        creances = null;
       }
     }
     const annulations = await annulationsSection(days);

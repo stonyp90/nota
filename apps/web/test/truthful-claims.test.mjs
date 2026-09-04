@@ -279,7 +279,12 @@ test('P0-6 / P0-7: the privacy pane states the real retention, promises no erasu
   assert.match(pane, /meilleurs délais prévus par la Loi 25/);
   // ADR 0032 — custody, not readership.
   assert.match(pane, /dépositaire/, 'Nota is the custodian of exchanged documents');
-  assert.match(pane, /Aucun employé de Nota/);
+  // The promise is the one the CODE keeps (review of f45a2e1): no admin route
+  // reaches a document and every opening is logged — not « no employee », a
+  // claim the infrastructure does not back (default KMS key, no account deny).
+  assert.ok(!/Aucun employé de Nota/.test(pane), 'never promise more than the infrastructure enforces');
+  assert.match(pane, /console d’administration de Nota n’y donne aucun accès/);
+  assert.match(pane, /chaque ouverture est journalisée/);
   assert.match(pane, /aucune analyse/i);
   assert.match(pane, /ca-central-1/);
   // The device side: what localStorage holds.

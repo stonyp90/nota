@@ -673,14 +673,21 @@
   // Some criteria are `required: true` — without them the posted price is
   // meaningless to a notary (e.g. refinancement succession + bank approval), so a
   // bid cannot be submitted until they are answered. Returns the unanswered ones.
-  function missingRequired(serviceId, answers) {
+  // `applyDefaults` (readiness only): an absent answer to a required criterion
+  // that carries a `defaut` reads as that default. Offers published before a
+  // criterion became required — `succession` on financement, 2026-09-03 —
+  // must not flip to « dossier incomplet » on the notary's screen. Publishing
+  // stays strict (validateOffer never passes the flag): a NEW offer answers.
+  function missingRequired(serviceId, answers, opts) {
     const svc = serviceById(serviceId);
     if (!svc || !svc.pricing) return [];
     answers = answers || {};
+    const applyDefaults = !!(opts && opts.applyDefaults);
     const missing = [];
     for (const c of svc.pricing.criteria || []) {
       if (!c.required) continue;
-      const a = answers[c.id];
+      let a = answers[c.id];
+      if (applyDefaults && (a === undefined || a === null || a === '') && c.defaut !== undefined) a = c.defaut;
       let ok;
       if (c.type === 'choice') ok = (c.options || []).some((o) => o.id === a);
       else if (c.type === 'bracket') {
@@ -2120,12 +2127,23 @@
     saved = saved || {};
     const svc = serviceById(serviceId);
     if (!svc) return { total: 0, done: 0, missing: [], requis: [], consent: false, ready: false };
-    const items = applicableDocuments(svc, pricing)
+    // ONE source of answers for both gates: the pricing the caller holds (the
+    // bid's own answers), else what the dossier saved. Two sources disagreed
+    // (review of f45a2e1): `missing` read the argument, `requis` the dossier.
+    // When the caller holds the bid's own answers (`pricing`), they feed BOTH
+    // gates — the checklist and the required questions — so the two can never
+    // disagree (review of f45a2e1). Without them, today's contract holds: every
+    // document applies, and the dossier's saved answers alone drive `requis`.
+    // Defaults stand in for absent answers ONLY on a bid's own answers: an
+    // offer published before a question became required stays ready; a dossier
+    // still being filled keeps showing what is unanswered.
+    const own = pricing || null;
+    const items = applicableDocuments(svc, own)
       .map((d) => ({ id: d.id, nom: d.nom }))
       .concat(svc.champs.map((c) => ({ id: c.id, nom: c.label })));
     const missing = items.filter((it) => !saved[it.id]).map((it) => it.nom);
     const consent = !!saved.__consent;
-    const requis = missingRequired(serviceId, saved.__pricing || {}).map((m) => m.label);
+    const requis = missingRequired(serviceId, own || saved.__pricing || {}, { applyDefaults: !!own }).map((m) => m.label);
     return {
       total: items.length,
       done: items.length - missing.length,
@@ -2249,7 +2267,25 @@
       { id: 'courtier_hypothecaire', nom: 'Courtier hypothécaire', nomEn: 'Mortgage broker' },
       { id: 'autre_professionnel', nom: 'Autre professionnel', nomEn: 'Other professional' },
     ],
+    // The Partenaires hero's « clients par mois » slider: its default seat and
+    // its cap are product data, so the page never invents a range.
+    projectionDefault: 3,
+    projectionMax: 10,
   };
+
+  // What a steady referrer earns from the CLIENT track alone (the recurring
+  // one), assuming every referred demand is retained. Bounded to the slider's
+  // range and floored to an integer, so a bad input can never put NaN on
+  // screen. The notary track is a one-off per notary and is not projected.
+  function referralProjection(clientsParMois) {
+    const n = Number(clientsParMois);
+    const perMonth = Number.isFinite(n) ? Math.min(REFERRAL.projectionMax, Math.max(0, Math.floor(n))) : 0;
+    return {
+      clientsParMois: perMonth,
+      parMois: perMonth * REFERRAL.client,
+      parAn: perMonth * 12 * REFERRAL.client,
+    };
+  }
 
   // A code is 4–12 letters/digits, case-insensitive; separators are dropped so
   // "eve-roy" and "EVEROY" are the same partner. Anything else is not a code.
@@ -2498,6 +2534,7 @@
     validateDossierFile,
     cleanDossier,
     REFERRAL,
+    referralProjection,
     FUNNEL_EVENTS,
     isFunnelEvent,
     normalizeReferralCode,

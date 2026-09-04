@@ -785,13 +785,23 @@ function createAdmin({
     // table admin, les mouvements d'argent dans la table principale (la Lambda
     // publique n'a pas accès à la première). Un auditeur ne doit pas avoir à
     // savoir ça — on fusionne, on dédoublonne par id, on trie.
-    const [admins, transactions] = await Promise.all([
-      typeof repo.queryAuditByDay === 'function' ? repo.queryAuditByDay(j) : [],
-      typeof repo.queryTxAuditByDay === 'function' ? repo.queryTxAuditByDay(j) : [],
-    ]);
+    // Le journal est PARTITIONNÉ par jour UTC (AUDIT#<isoTs.slice(0,10)>) ;
+    // l'opérateur demande un jour de QUÉBEC. Un geste de 21 h à Québec vit
+    // dans la partition du lendemain UTC — on lit donc les deux partitions
+    // que ce jour civil recouvre, puis on ne garde que les entrées dont le
+    // jour ouvrable est bien celui demandé (revue de f45a2e1).
+    const lendemain = new Date(Date.parse(j + 'T00:00:00Z') + 864e5).toISOString().slice(0, 10);
+    const lire = (fn) => (typeof repo[fn] === 'function' ? Promise.all([repo[fn](j), repo[fn](lendemain)]).then((x) => x.flat()) : Promise.resolve([]));
+    const [admins, transactions] = await Promise.all([lire('queryAuditByDay'), lire('queryTxAuditByDay')]);
+    const zone = process.env.NOTA_TIMEZONE || undefined;
+    const duJour = (e) => {
+      if (!e || !e.ts) return true; // an undated entry stays visible rather than lost
+      const t = Date.parse(e.ts);
+      return Number.isFinite(t) ? domain.businessDay(t, zone) === j : true;
+    };
     const parId = new Map();
     for (const e of [...(admins || []), ...(transactions || [])]) {
-      if (e && !parId.has(e.id)) parId.set(e.id, e);
+      if (e && duJour(e) && !parId.has(e.id)) parId.set(e.id, e);
     }
     const entrees = [...parId.values()];
     // Le plus récent d'abord, comme partout ailleurs dans la console.

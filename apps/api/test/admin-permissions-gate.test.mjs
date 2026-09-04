@@ -14,6 +14,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
 
 const require = createRequire(import.meta.url);
 const { createAdminApp } = require('../src/admin-handler.js');
@@ -108,7 +109,21 @@ test('« services:write » n’est plus publié — aucune route ne l’applique
   const body = parse(await h.call('GET', '/admin/permissions', { bearer: s }));
   const cles = body.permissions.map((p) => p.cle);
   assert.equal(cles.includes('services:write'), false, 'une permission gardée nulle part est une promesse, pas une permission');
-  assert.deepEqual(cles.slice().sort(), rbac.PERMISSIONS.slice().sort(), 'publié == appliqué');
+  // « Publié == appliqué » se vérifie contre le CODE, pas contre le catalogue
+  // lui-même (la version précédente comparait rbac.PERMISSIONS à rbac.PERMISSIONS
+  // et ne pouvait jamais rougir — c'est ainsi que billing:write est resté publié
+  // sans qu'aucune route ne l'applique). Une clé publiée doit apparaître dans un
+  // garde `rbac.can(…, 'clé')` de la couche admin.
+  const source = ['admin.js', 'admin-handler.js']
+    .map((f) => readFileSync(new URL('../src/' + f, import.meta.url), 'utf8')).join('\n');
+  const appliquees = new Set([...source.matchAll(/rbac\.can\([^,]+,\s*'([a-z]+:[a-z]+)'\)/g)].map((m) => m[1]));
+  // billing:write : la route /admin/prix appartient à la session « grille de
+  // prix » (2026-09-04) ; elle doit l'appliquer — d'ici là, exception nommée.
+  const DEFERRED = ['billing:write'];
+  for (const k of cles) {
+    if (DEFERRED.includes(k)) continue;
+    assert.ok(appliquees.has(k), k + ' est publiée mais aucun garde rbac.can() ne l’applique');
+  }
   // Celles-ci SONT gardées (activation d'un notaire, journal, campagnes) : elles restent.
   for (const k of ['moderation:write', 'audit:read', 'campaigns:send', 'permissions:read']) {
     assert.ok(cles.includes(k), k + ' reste au catalogue');

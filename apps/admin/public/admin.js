@@ -213,13 +213,27 @@
     // Rafraîchir en silence : min(inactivité − 5 min, plafond − 60 s). Le
     // rafraîchissement fait glisser l'inactivité ; il ne repousse jamais le
     // plafond, qui est dur par conception.
-    var refreshAt = d.idle - SESSION_REFRESH_LEAD_MS;
-    if (isFinite(d.abs)) refreshAt = Math.min(refreshAt, d.abs - SESSION_ABS_LEAD_MS);
-    refreshTimer = setTimeout(doRefresh, Math.max(5000, refreshAt - now));
+    // Rafraîchir en silence SEULEMENT si une personne a touché la console depuis
+    // la dernière réponse du serveur : un poste laissé ouvert ne se prolonge
+    // pas tout seul (revue de f45a2e1) — il reçoit l'avertissement, puis la
+    // porte. Et jamais près du plafond : un rafraîchissement ne le repousse
+    // pas, il ne ferait que faire clignoter l'avertissement.
+    if (!d.absolute) {
+      var refreshAt = d.idle - SESSION_REFRESH_LEAD_MS;
+      refreshTimer = setTimeout(function () {
+        if (lastUserInputMs > lastActivityMs) doRefresh();
+      }, Math.max(5000, refreshAt - now));
+    }
     // Prévenir deux minutes avant la vraie échéance, et refermer à l'échéance.
     warnTimer = setTimeout(showSessionWarning, Math.max(1000, d.at - SESSION_WARN_LEAD_MS - now));
     expireTimer = setTimeout(sessionExpired, Math.max(2000, d.at - now));
   }
+  // Une vraie personne devant l'écran — pas une réponse du serveur.
+  var lastUserInputMs = 0;
+  function noteUserInput() { lastUserInputMs = Date.now(); }
+  ['pointerdown', 'keydown', 'touchstart'].forEach(function (ev) {
+    document.addEventListener(ev, noteUserInput, { passive: true, capture: true });
+  });
   async function doRefresh() {
     if (!session) return;
     var r = await call('POST', '/auth/refresh');
@@ -243,10 +257,15 @@
   // L'avis « Rester connecté » — hors du <main>, pour survivre aux rendus de
   // section. Quand c'est le plafond absolu qui échoit, aucun geste ne le
   // repousse : on dit de se reconnecter.
+  // Un avertissement par échéance : re-planifier la session (une réponse du
+  // serveur, un rafraîchissement) ne le fait ni clignoter ni reprendre le focus.
+  var sessionWarningFor = 0;
   function showSessionWarning() {
     if (!session) return;
-    hideSessionWarning();
     var d = sessionDeadlines();
+    if (sessionWarning && sessionWarningFor === d.at) return;
+    hideSessionWarning();
+    sessionWarningFor = d.at;
     var box = el('div', 'session-warning');
     box.setAttribute('role', 'alert');
     var body = el('div', 'session-warning-body');
@@ -838,6 +857,14 @@
     grid.appendChild(tile('Notaires en intégration', num(g.onboardingNotaries || 0), 'en intégration', true));
     // Les deux soldes de créances, en ce moment : ce que Nota doit encore aux
     // notaires (ADR 0033) et ce que les notaires doivent à Nota (ADR 0029).
+    // Un registre illisible n'est pas « rien de dû » : l'API répond alors
+    // `creances: null` (explicitement — une section absente d'une vieille API
+    // reste des zéros), et la tuile le dit — jamais un 0 $ rassurant.
+    if (d.creances === null) {
+      grid.appendChild(tile('Dédommagements dus aux notaires', '—', 'registre des notaires indisponible', true));
+      grid.appendChild(tile('Dû à Nota', '—', 'registre des notaires indisponible', true));
+      return grid;
+    }
     grid.appendChild(tile('Dédommagements dus aux notaires', moneyCents(c.dedommagementCentsDue || 0), 'en ce moment', true));
     grid.appendChild(tile('Dû à Nota', moneyCents(c.commissionCentsDue || 0), 'actes réglés hors plateforme', true));
     return grid;

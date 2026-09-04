@@ -1724,6 +1724,24 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 #partner-form .btn-lg { margin-top: var(--space-6); width: 100%; }
 .partner-success { margin-top: var(--space-5); padding: var(--space-5) var(--space-6); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-inset); }
 .partner-success[hidden] { display: none; }
+/* The hero estimator (2026-09-03): one row under the CTA — the slider, then
+   the sentence whose two numbers the domain fills. The yearly figure takes
+   the brand ink like the reward amounts, at a smaller size; tokens only. */
+.pr-estimate { margin-top: var(--space-9); max-width: 52ch; }
+.pr-estimate-lbl { display: block; font-size: 13px; font-weight: 700; margin-bottom: var(--space-3); }
+.pr-estimate-row { display: flex; align-items: center; gap: var(--space-5); flex-wrap: wrap; }
+.pr-estimate-row input[type='range'] { flex: 1 1 140px; min-width: 120px; margin: 0; }
+.pr-estimate-out { display: inline-flex; align-items: baseline; gap: var(--space-3); font-size: 14px; color: var(--ink-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pr-estimate-out b { color: var(--ink); font-weight: 800; }
+.pr-estimate-year strong { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; color: var(--brand); }
+.pr-estimate-arrow { color: var(--border-strong); }
+.pr-estimate-fine { margin: var(--space-3) 0 0; font-size: 12.5px; color: var(--ink-muted); line-height: 1.45; }
+/* The ready-to-send message under the claimed link: a quiet inset block the
+   partner reads once, then its own copy button. */
+.partner-msg { margin-top: var(--space-6); padding-top: var(--space-5); border-top: 1px solid var(--border); }
+.partner-msg-text { margin: var(--space-3) 0 var(--space-4); padding: var(--space-4) var(--space-5); font-size: 13px; line-height: 1.5; color: var(--ink); background: var(--surface-inset); border-radius: var(--radius-sm); white-space: pre-wrap; overflow-wrap: anywhere; }
+/* A copy button that just worked: the label reads « Copié ✓ » in the ok ink for a beat (app.js flashCopied). */
+.btn.is-copied { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, transparent); }
 .partner-link-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
 .partner-link-row code { font-family: var(--font-mono); font-size: 13px; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); overflow-wrap: anywhere; }
 
