@@ -10,30 +10,42 @@
 
 ## 0. Réserve déontologique — à lire d'abord
 
-**Le *Code de déontologie des notaires* du Québec restreint le partage
-d'honoraires avec une personne qui n'est pas notaire.**
+**Le *Code de déontologie des notaires* du Québec interdit au notaire de
+partager ses honoraires avec une personne qui n'est pas membre d'un ordre
+professionnel (art. 32).**
 
-La structure décrite ci-dessous — Nota conserve une part du montant que le client
-verse pour un acte notarié — tombe directement dans le champ de cette
-restriction. L'avertissement figure dans le code du produit depuis le premier
-jour (`apps/api/src/billing.js:13-17`) et dans le plan d'affaires, qui budgète
-**20 000 $** pour un avis écrit et un engagement structuré avec la Chambre des
-notaires du Québec (`docs/business-plan.md:133-134`, `:554`).
+**La structure décrite ci-dessous ne partage aucun honoraire.** Le notaire reçoit
+**la totalité** du montant que le client lui offre ; Nota facture au client, à
+côté, **son propre prix pour son propre service**. Ce n'est pas une nuance de
+rédaction : c'est la différence entre une convention licite et une convention que
+quatre textes condamnent ensemble.
 
-**Il y a plus lourd encore.** L'**article 32.1 de la *Loi sur le notariat***
-présume **usurper les fonctions de notaire** l'intermédiaire qui « obtient d'un
-notaire qu'il abandonne une partie de ses honoraires » — **2 500 à 125 000 $,
-doublé en récidive** — et le Bureau du syndic de la Chambre a prévenu le
-**25 janvier 2024** qu'il est « proscrit […] de laisser un intermédiaire […]
-fixer ou partager vos honoraires ». Le dossier complet, avec ses sources, est
-dans [`conformite-deontologique-notaires.md`](conformite-deontologique-notaires.md).
+Jusqu'au 1<sup>er</sup> septembre 2026, ce n'était pas le cas. Nota conservait
+alors de 5 % à 15 % du montant offert, selon la cote du notaire — la forme
+classique du partage d'honoraires. **Ce modèle est retiré**
+(`docs/decisions/0031-le-prix-de-nota-est-celui-de-nota.md`, puis
+`0034-le-prix-de-nota-est-une-grille-par-service.md`). Aucun notaire n'a été
+facturé sous l'ancien modèle : aucun acte n'avait encore été porté sur la
+plateforme.
+
+**Ce qui reste ouvert, et qu'un avis juridique doit trancher.** L'**article 32.1
+de la *Loi sur le notariat*** présume **usurper les fonctions de notaire**
+l'intermédiaire qui « obtient d'un notaire qu'il abandonne une partie de ses
+honoraires » — **2 500 à 125 000 $, doublé en récidive** — et le Bureau du syndic
+de la Chambre a prévenu le **25 janvier 2024** qu'il est « proscrit […] de
+laisser un intermédiaire […] fixer ou partager vos honoraires ». Nota n'obtient
+aucun abandon d'honoraires ; ce qui n'est pas tranché est la **qualification**
+juridique de son propre prix, perçu par acte, par un intermédiaire. Le dossier
+complet, avec ses sources, est dans
+[`conformite-deontologique-notaires.md`](conformite-deontologique-notaires.md).
 
 **Un avis juridique écrit demeure REQUIS avant la mise en service**, et son
-mandat couvre désormais quatre volets : le partage d'honoraires et l'art. 32.1,
-l'affichage des avis (art. 70), la qualification de la cote, et la présentation
-des prix (art. 71-72). Il peut conclure que la structure doit être refaite — par exemple en frais de service
-facturés au client sans lien avec les honoraires, comme le font les plateformes
-comparables (voir `docs/decisions/0027-partage-75-25-cote-client.md`, dont l'ADR 0028 a depuis révisé le barème).
+mandat couvre quatre volets : la qualification du prix de Nota au regard de
+l'art. 32.1, l'affichage des avis (art. 70), la qualification de la cote, et la
+présentation des prix (art. 71-72) — **y compris le fait que les taxes et les
+débours ne figurent aujourd'hui dans aucune ligne du produit**. L'avis peut
+conclure que la structure doit encore être refaite ; un forfait par acte facturé
+hors de l'acte est la structure de repli déjà identifiée.
 
 **Aucun notaire ne devrait signer cette entente avant l'obtention de cet avis.**
 Le notaire demeure en tout temps seul responsable du respect de son propre code
@@ -105,8 +117,27 @@ de son historique, ni de la valeur de l'acte. C'est un invariant testé
 péril son indépendance et son désintéressement, et un revenu indexé sur une note
 attribuée par une entreprise privée en serait une.
 
-*(Prix par défaut : 400 $ — `apps/api/src/prix-nota-config.js:41`. Décision :
-`docs/decisions/0031-le-prix-de-nota-est-celui-de-nota.md`.)*
+**La grille en vigueur** (`packages/domain/index.js`, modifiable par Nota depuis
+sa console sans déploiement) :
+
+| Prix de Nota | `financement` | `refinancement` |
+| --- | ---: | ---: |
+| Ligne de service | **199 $** | **249 $** |
+
+| Garantie de date, ajoutée à la ligne de Nota | `standard` | `rapide` | `prioritaire` | `urgence` | `extrême` |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| | 0 $ | **50 $** | **100 $** | **200 $** | **300 $** |
+
+Les deux lignes sont **figées sur l'offre** au moment où la carte du client est
+engagée : une grille modifiée demain ne peut jamais réécrire ce qu'un acte a
+coûté (`domain.prixNotaFige`).
+
+**Ni l'une ni l'autre ne comprend les taxes (TPS/TVQ) ni les débours** — droits
+de publication, RDPRM, radiations. Ils n'apparaissent aujourd'hui nulle part dans
+le produit.
+
+*(Décisions : `docs/decisions/0031-le-prix-de-nota-est-celui-de-nota.md` et
+`docs/decisions/0034-le-prix-de-nota-est-une-grille-par-service.md`.)*
 
 > **Ce qui a changé, et pourquoi.** Jusqu'au 1<sup>er</sup> septembre 2026, Nota
 > conservait de 5 % à 15 % du montant offert, selon la cote du notaire. Ce
@@ -152,13 +183,15 @@ client par la plateforme et ne rétrocède rien à Nota : il reçoit un virement
    de Nota** — une session de paiement au nom de la plateforme, sans compte
    connecté (`apps/api/src/stripe-port.js:85-116`). Rien n'est débité.
 2. **Quand le notaire retient la demande**, le dossier et les coordonnées du
-   client lui sont libérés (`apps/api/src/handler.js:1613`). **Aucun paiement
-   n'a lieu à cette étape** — mais le taux du notaire est **gravé** (voir
-   section 3).
+   client lui sont libérés. **Aucun paiement n'a lieu à cette étape** — mais les
+   **deux lignes du devis** sont désormais figées sur l'offre : ni le montant du
+   notaire ni le prix de Nota ne peuvent bouger entre l'engagement et la
+   signature (voir section 3).
 3. **À la signature**, le notaire déclare l'acte complété et sa valeur. Le
-   paiement du client est **capturé sur le compte de Nota**, puis **le net —
-   montant moins la part de Nota — est viré au compte Connect du notaire**
-   (`apps/api/src/stripe-port.js:126-146`).
+   paiement du client est **capturé sur le compte de Nota**, puis **les
+   honoraires — le montant offert, en entier — sont virés au compte Connect du
+   notaire**. Ce que Nota garde, c'est son propre prix, et seulement son propre
+   prix (`apps/api/src/stripe-port.js`, `captureAndTransfer`).
 
 La valeur déclarée est bornée contre l'offre retenue : une valeur aberrante est
 refusée (`apps/api/src/handler.js:1094`). **Un acte ne peut être réglé qu'une
@@ -167,20 +200,22 @@ fois** : le registre est en écriture unique (`apps/api/src/repo-dynamo.js:735-7
 **Seul le notaire qui a retenu la demande peut la compléter**
 (`handler.js:1087-1090`).
 
-### Le taux promis est un plafond
+### Il n'y a aucun taux
 
-Le taux affiché au notaire **au moment où il retient** est gravé sur l'acte
-(`tauxRetenu`, `apps/api/src/handler.js:509-524`). Au règlement, Nota applique
-**le plus avantageux des deux** pour le notaire (`billing.js:174-180`) : une cote
-qui monte entre l'engagement et la signature profite encore au notaire, **une
-cote qui baisse ne renchérit jamais un acte déjà promis**. Les deux taux sont
-conservés dans le registre, donc vérifiables.
+**Le notaire n'a pas de taux, parce qu'on ne lui retranche rien.** Il y avait
+autrefois un pourcentage gravé à la rétention (`tauxRetenu`), pour garantir
+qu'une cote en baisse ne renchérisse jamais un acte déjà promis. Ce mécanisme
+n'a plus d'objet : le notaire reçoit son montant en entier, et ce qui est figé à
+l'engagement, ce sont **les deux lignes du devis du client** — les siennes et
+celles de Nota. La console du notaire ne reçoit d'ailleurs plus aucun
+pourcentage : lui en montrer un décrirait une convention que l'art. 29.1
+interdit.
 
 > ✅ **Corrigé** (1er septembre 2026). Le chemin de repli n'invente plus
 > d'encaissement. Lorsque aucune autorisation ne peut être capturée — le client a
 > payé le notaire **directement** à la signature — l'acte est enregistré
-> `paye: false` et la part de Nota devient une **créance** explicite,
-> `commissionCentsDue`, qui ne touche jamais le compteur des sommes réellement
+> `paye: false` et le prix de Nota devient une **créance** explicite,
+> `commissionCentsDue` (nom hérité), qui ne touche jamais le compteur des sommes réellement
 > encaissées (`apps/api/src/billing.js:255-340`). Le relevé du notaire
 > (`handler.js:1507-1511`) et le registre de l'opérateur (`admin.js:616-620`)
 > distinguent partout l'encaissé du dû, et le courriel « acte payé » n'est plus
@@ -188,9 +223,12 @@ conservés dans le registre, donc vérifiables.
 
 ### La créance, et ce qui n'existe pas encore
 
-Quand un acte se règle hors plateforme, **le notaire doit à Nota la part de
-service** de cet acte. Il la voit sur son relevé (`du`), et Nota la voit dans son
-registre (`commissionDue`).
+Quand un acte se règle hors plateforme — le client a payé le notaire directement
+à la signature — **le notaire doit à Nota le prix de Nota** pour cet acte : la
+ligne que le client aurait dû payer et qui n'a pas pu être capturée. Ce n'est
+jamais une part de ses honoraires. Il la voit sur son relevé (`du`), et Nota la
+voit dans son registre (`commissionDue` — un nom hérité, un montant qui est le
+prix).
 
 > ⚠️ **Aucune modalité de recouvrement n'existe.** Il n'y a aujourd'hui ni
 > facturation, ni échéance, ni moyen de marquer une créance payée : le montant dû
@@ -224,12 +262,15 @@ registre (`commissionDue`).
 ## 6. Ce que Nota s'engage à faire
 
 - **Ne jamais intervenir dans l'acte**, ni dans la relation professionnelle.
-- **Divulguer intégralement sa part** : le taux, le montant, la cote qui l'a
-  déterminé, et le prochain palier.
+- **Publier son prix d'avance et l'afficher au devis** : la ligne de service et
+  la garantie de date, séparément des honoraires du notaire, avant tout
+  engagement du client.
+- **Ne jamais afficher au notaire un pourcentage de ses honoraires**, ni lui
+  demander d'en abandonner une part.
 - **Ne pas mettre une offre en avant contre paiement.** Le carnet est public et
   les mêmes règles s'appliquent à tous (`index.html:1192`).
-- **Ne pas monnayer les données.** Nota se rémunère uniquement par sa part sur les
-  actes complétés (`index.html:1108`).
+- **Ne pas monnayer les données.** Nota se rémunère uniquement par son propre
+  prix, facturé au client sur les actes complétés.
 - Ne libérer le dossier et les coordonnées du client **qu'au notaire qui retient**
   la demande.
 - Payer les récompenses de référence **à même ses propres fonds** : elles ne sont
@@ -273,14 +314,15 @@ Garanti par `apps/api/test/deontologie-avis.test.mjs`.)*
 
 ### Ce qui manque encore
 
-Les évaluations alimentent la cote, donc la part (section 3). Nota se réserve la
-possibilité de retirer une évaluation manifestement abusive ; **aucune procédure
-de contestation n'existe aujourd'hui dans le produit** et doit être créée.
+Les évaluations alimentent la cote — **qui ne décide plus d'aucun dollar**
+(section 3). Nota se réserve la possibilité de retirer une évaluation
+manifestement abusive ; **aucune procédure de contestation n'existe aujourd'hui
+dans le produit** et doit être créée.
 
 ### Décliner ne vous coûte rien
 
-**Refuser une demande ne fait jamais baisser votre cote**, donc n'augmente jamais
-la part que Nota prélève.
+**Refuser une demande ne fait jamais baisser votre cote.** Et depuis que la cote
+ne décide plus d'aucun montant, refuser ne peut plus rien vous coûter du tout.
 
 Votre déontologie peut vous **imposer** de refuser un mandat — conflit
 d'intérêts, compétence insuffisante, surcharge. Une plateforme qui vous ferait
@@ -335,7 +377,15 @@ tribunaux du district judiciaire de Québec.
 
 ## 10. Documents de référence
 
-- ADR 0028 — la cote sur 100 décide le partage
+- **ADR 0031 — le prix de Nota est celui de Nota** : le partage d'honoraires est
+  retiré, le notaire garde 100 % de ses honoraires
+  (`docs/decisions/0031-le-prix-de-nota-est-celui-de-nota.md`)
+- **ADR 0034 — le prix de Nota est une grille par service**
+  (`docs/decisions/0034-le-prix-de-nota-est-une-grille-par-service.md`)
+- ADR 0030 — la déontologie prime : la cote ne se publie pas
+  (`docs/decisions/0030-la-deontologie-prime-la-cote-ne-se-publie-pas.md`)
+- ADR 0028 — la cote sur 100 décidait le partage **(retiré par l'ADR 0031 ;
+  conservé comme trace de décision)**
   (`docs/decisions/0028-la-cote-sur-100-decide-le-partage.md`)
 - ADR 0029 — un règlement hors plateforme est une créance, jamais un
   encaissement (`docs/decisions/0029-un-reglement-hors-plateforme-est-une-creance.md`)

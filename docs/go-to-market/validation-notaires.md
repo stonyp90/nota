@@ -19,7 +19,7 @@ son prix.
 | --- | --- | --- | --- |
 | **H1** | Le notaire a des plages vides qu'il vendrait | < 40 % déclarent ≥ 2 plages vides/semaine | « Cette semaine, combien d'heures de signature non vendues ? » |
 | **H2** | Il vend sa disponibilité de dernière minute | < 1/3 acceptent un J-3 même à 2,2× | « Refinancement, jeudi dans 3 jours, 4 400 $. Vous prenez ? » |
-| **H3** | Le modèle de rémunération ne l'expose pas | ≥ 1/3 nomment le partage d'honoraires spontanément | « Nota prélève X. D'où doit venir le X ? » |
+| **H3** | Le modèle de rémunération ne l'expose pas | ≥ 1/3 nomment le partage d'honoraires spontanément | « Une plateforme vous amène ce dossier ; elle doit être payée. D'où doit venir cet argent ? » |
 
 **Trois hypothèses secondaires, pas moins utiles :**
 
@@ -38,61 +38,111 @@ son prix.
 
 ---
 
-## 2. Le modèle, tel qu'il est décidé (ADR 0028)
+## 2. Le modèle, tel qu'il est déployé (ADR 0031 et 0034)
 
-Le partage est facturé **côté client**, et il penche vers le notaire :
+> **Ce qui a été retiré, et pourquoi le kit le disait encore.** Jusqu'au
+> 2026-09-01, ce document décrivait le partage de l'ADR 0028 : un total qui se
+> partageait 85/15 à la signature, la part du notaire montant à 95 % avec une
+> « cote sur 100 » publiée des deux côtés. **L'ADR 0031 a retiré ce partage**,
+> l'ADR 0034 l'a remplacé par une grille de prix, et l'ADR 0030 a fermé
+> l'affichage de toute cote sur un notaire nommé. Ce n'est pas seulement
+> périmé : le partage d'honoraires avec un non-notaire tombe sous l'art. 32 du
+> *Code de déontologie* et l'art. 32.1 de la *Loi sur le notariat*, et une cote
+> visible du client sur un notaire nommé sous l'art. 70. **Aucun chiffre de
+> l'ancien barème ne doit reparaître dans un texte destiné à un notaire.**
 
-- le montant offert par le client est un **total tout compris** — rien ne s'y
-  ajoute ;
-- **Nota garde au plus 15 %** en frais de service — trouver le notaire, monter
-  et valider le dossier, opérer la transaction et le séquestre ;
-- **le notaire garde donc 85 % au départ, et jusqu'à 95 %** au mieux : 15 %,
-  c'est le point de départ d'un notaire sans historique, 5 % est le plancher ;
-- le levier est **une seule mesure, publiée des deux côtés : la cote sur 100**
-  — satisfaction des clients (40), services rendus (25), disponibilité (20),
-  présence sur Nota (15). Elle ne déplace la ligne que vers le notaire, jamais
-  l'inverse.
+### Deux lignes, deux achats
 
-| Cote atteinte | Nota garde | Le notaire garde |
-| ---: | ---: | ---: |
-| — (départ) | 15 % | **85 %** |
-| 60 | 12 % | **88 %** |
-| 70 | 10 % | **90 %** |
-| 80 | 8 % | **92 %** |
-| 90 | 5 % | **95 %** |
+- **Le notaire fixe ses honoraires et les garde en entier.** Nota ne prélève
+  rien dessus, ni pourcentage, ni part, ni frais de piste. Le montant offert
+  par le client *est* la rémunération du notaire.
+- **Nota vend son propre service au client, à son propre prix, à côté.** Ce
+  prix ne dépend ni du notaire, ni de la valeur de l'acte : c'est une grille
+  publiée, la même pour tout le monde.
+- **Le client paie à la signature.** La carte est enregistrée à la publication,
+  le blocage est posé deux jours avant la date, la capture se fait à l'acte
+  (ADR 0015, amendé par l'ADR 0035).
 
-Quelques repères, pour parler juste en entrevue : un notaire neuf au profil
-complet est déjà autour de **46** ; quatre mois d'activité, huit actes et six
-avis à 4,6 le placent vers **66** ; un établi — treize mois, vingt-cinq actes
-sur les deux services, dix-huit avis à 4,7 — atteint **86** ; un chevronné
-(80 actes, 40 avis à 4,9, urgences en ligne) frôle **99**.
+### La grille, telle que le code la porte
 
-Deux points de discipline pour tout ce qui s'écrit à un notaire.
+Source unique : `packages/domain/index.js` (`SERVICES[].prixNotaCents` et
+`TIERS[].prixNotaDateCents`). Ne jamais citer un autre document pour ces
+chiffres.
 
-**Ne jamais présenter Nota comme prenant une part des honoraires.** La
-structure est un frais payé par le client pour un service rendu au client.
-C'est la formulation exacte, et c'est aussi la seule que la concurrence
-utilise — voir [`concurrence.md`](concurrence.md).
+| Service | Prix de Nota | Honoraires de départ du notaire |
+| --- | ---: | ---: |
+| Financement hypothécaire | **199 $** | 1 800 $ |
+| Refinancement hypothécaire | **249 $** | 2 000 $ |
 
-**Ne pas défendre le 15 % : le mesurer.** C'est une hypothèse (le plan
-modélisait 10 %), et H3 est précisément là pour la trancher. Un notaire qui
-trouve le taux élevé n'est pas une objection à réfuter, c'est la donnée qu'on
-est venu chercher. Les quatre pondérations de la cote (40/25/20/15) sont, elles
-aussi, un jugement calibré sur des profils plausibles et jamais confronté à un
-notaire réel — la phase 1 doit les mesurer au même titre que le taux.
+À quoi s'ajoute la **garantie de date**, sur sa propre ligne, quand le client
+demande une date rapprochée :
+
+| Palier | Préavis | Ligne de Nota |
+| --- | --- | ---: |
+| Standard | plus de 14 jours | **0 $** |
+| Rapide | 14 jours ou moins | **50 $** |
+| Prioritaire | 7 jours ou moins | **100 $** |
+| Urgence | la veille | **200 $** |
+| Extrême | le jour même | **300 $** |
+
+Taxes et débours en sus, des deux côtés. Le prix de Nota n'est **pas** « fixe » :
+c'est une grille par service, et le mot « fixe » est faux depuis l'ADR 0034.
+La formulation juste est « **le prix de Nota, publié par service** ».
+
+### Ce que ça pèse, arithmétique en clair
+
+Un notaire demandera ce que Nota coûte au client par rapport à l'acte. Le
+calcul, au palier standard :
+
+- refinancement : 2 000 $ d'honoraires + 249 $ = **2 249 $**, dont Nota
+  249 / 2 249 = **11,1 %** ;
+- financement : 1 800 $ + 199 $ = **1 999 $**, dont Nota 199 / 1 999 = **10,0 %**.
+
+Et cette part **descend** dès que la date porte une prime, parce que les
+honoraires montent avec le palier tandis que la ligne de Nota monte de
+quelques dizaines de dollars : au palier prioritaire (7 jours ou moins,
+honoraires au multiple médian ×3), un refinancement fait 6 000 + 349 = 6 349 $,
+dont Nota **5,5 %**. Le petit acte n'est donc plus le plus taxé — c'est
+l'inverse de l'ancien prix unique de 400 $, qui pesait 16,7 % d'un
+refinancement et 18,2 % d'un financement.
+
+### La cote sur 100 : interne, et rien d'autre
+
+Elle existe toujours dans le code, elle sert la console du notaire et le
+jugement de Nota. Elle **ne décide plus d'aucun partage** — il n'y en a plus —
+et **rien de ce qu'elle contient ne s'affiche au client sur un notaire nommé**
+(ADR 0030). Côté client, il n'y a que des faits : numéro au Tableau de l'Ordre,
+nombre d'actes. En entrevue, ne jamais promettre une réputation « visible » :
+c'est exactement ce que l'art. 70 refuse.
+
+### Trois points de discipline pour tout ce qui s'écrit à un notaire
+
+**Ne jamais écrire que Nota prend une part des honoraires.** Ni « commission »,
+ni « partage », ni « pourcentage ». La structure est un prix payé par le client
+pour un service rendu au client — c'est aussi la seule que la concurrence
+utilise, voir [`concurrence.md`](concurrence.md).
+
+**Ne jamais écrire « moins cher ».** L'art. 32.1 1° du *Code de déontologie*
+proscrit la publicité comparative sur le prix. La phrase qui tient est « le
+seul endroit où une date rapprochée a un prix, affiché avant l'engagement ».
+
+**Ne pas défendre la grille : la mesurer.** 199 $ et 249 $ sont un jugement du
+propriétaire, jamais confronté à un notaire réel. H3 est là pour ça. Un notaire
+qui trouve le prix élevé n'est pas une objection à réfuter, c'est la donnée
+qu'on est venu chercher.
 
 **Ce qu'il faut savoir avant d'en parler.** Sur le fil Stripe, le client paie
 **la plateforme** : la caution est une session Checkout sur le compte de Nota,
-et à la signature Nota capture, garde sa part et vire le net au notaire. La
-part de Nota n'est donc pas un prélèvement sur un encaissement du notaire —
-c'est la structure de Notairo, Deeded et Ownright. Mais cela ne tranche pas la
-**qualification** : l'article 32.1 de la *Loi sur le notariat* (2023) présume
-usurpation des fonctions de notaire chez l'intermédiaire qui obtient d'un
-notaire l'abandon d'une partie de ses honoraires (2 500 $ à 125 000 $), et
-l'article 70 du *Code de déontologie* touche l'affichage public des évaluations.
-**L'avis juridique écrit (20 000 $ budgétés) reste requis avant la mise en
-service** — et en entrevue, on décrit l'économie et on ne promet rien sur la
-mécanique.
+et à la signature Nota capture le total, garde son prix en frais d'application
+et vire au notaire exactement le montant qui lui a été offert. Ce n'est donc
+pas un prélèvement sur un encaissement du notaire — c'est la structure de
+Notairo, Deeded et Ownright. Mais cela ne tranche pas la **qualification** :
+l'article 32.1 de la *Loi sur le notariat* (2023) présume usurpation des
+fonctions de notaire chez l'intermédiaire qui obtient d'un notaire l'abandon
+d'une partie de ses honoraires (2 500 $ à 125 000 $), et l'article 70 du *Code
+de déontologie* touche l'affichage public des évaluations. **L'avis juridique
+écrit (20 000 $ budgétés) reste requis avant la mise en service** — et en
+entrevue, on décrit l'économie et on ne promet rien sur la mécanique.
 
 ## 3. Où les trouver — canaux classés par vitesse
 
@@ -193,7 +243,8 @@ le pied de courriel coûte deux lignes et vaut la tranquillité.
 
 **Déontologie.** Ne jamais demander de signer quoi que ce soit au premier
 contact. Ne jamais offrir de rétribution pour une référence de client. Ne
-jamais écrire « commission ».
+jamais écrire « commission », « partage » ni « pourcentage » : Nota ne prend
+rien sur les honoraires, il vend son propre service au client (§2).
 
 ---
 

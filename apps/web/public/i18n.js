@@ -281,7 +281,6 @@
   "Proposez votre prix": "Propose your price",
   "plus la date est proche, plus il faut offrir.": "the closer the date, the more you need to offer.",
   "Un notaire vous retient": "A notary takes on your request",
-  "ou vous propose un prix — vous restez libre. Vous payez votre prix affiché à la signature, rien de plus.": "or proposes a price — you stay free to choose. You pay your posted price at signing, nothing more.",
   "Recevez des dossiers en 3 étapes": "Receive files in 3 steps",
   "Vous choisissez les demandes qui vous conviennent.": "You choose the requests that suit you.",
   "Voir les demandes →": "See the requests →",
@@ -290,7 +289,6 @@
   "proposez votre prix ou demandez des documents ; le dossier s’ouvre dès que vous retenez.": "propose your price or ask for documents; the file opens as soon as you take it on.",
   "Retenez — ou négociez": "Take it on — or negotiate",
   "Complétez l’acte": "Complete the act",
-  "commission seulement sur ce qui se conclut.": "commission only on what closes.",
   "Se déconnecter effacera de cet appareil vos coordonnées, vos offres publiées, votre dossier et vos notifications. Continuer ?": "Signing out will erase your contact details, published offers, file and notifications from this device. Continue?",
   "Vous êtes déconnecté.": "You are signed out.",
   "Espace notaire": "Notary space",
@@ -791,7 +789,6 @@
   "Vérification d’identité.": "Identity verification.",
   "Nota ne vérifie pas votre identité. C’est le notaire qui retient votre demande qui vérifie votre identité au moment de la signature, comme l’exige la loi.": "Nota does not verify your identity. The notary who takes on your request verifies your identity at signing, as the law requires.",
   "Aucune revente.": "No resale.",
-  "Nous ne vendons ni ne louons vos renseignements. Nota se rémunère par une commission sur les actes complétés. Aucune donnée n’est monnayée.": "We neither sell nor rent your information. Nota earns a commission on completed acts. No data is monetized.",
   "Responsable.": "Accountability.",
   "Une personne responsable de la protection des renseignements personnels supervise ces pratiques :": "A person responsible for the protection of personal information oversees these practices:",
   "Les règles du service, en clair.": "The rules of the service, in plain language.",
@@ -825,7 +822,6 @@
   "Première visite ou retour, c’est le même geste.": "First visit or return, it is the same gesture.",
   "Publiez une demande et suivez vos offres.": "Post a request and follow your offers.",
   "Plus la date est éloignée, plus de notaires ont la latitude de s’organiser pour la prendre ; une date rapprochée en laisse moins.": "The further out the date, the more notaries have room to arrange to take it; a nearer date leaves fewer.",
-  "Prix et commission.": "Price and commission.",
   "Disponibilité.": "Availability.",
   "Le service est fourni « tel quel ». Nous visons une haute disponibilité sans garantir l’absence d’interruption. Nota peut suspendre ou refuser une offre contraire à ces conditions.": "The service is provided “as is”. We aim for high availability without guaranteeing uninterrupted service. Nota may suspend or refuse an offer that violates these terms.",
   "Responsabilité.": "Liability.",
@@ -1020,7 +1016,6 @@
   "Dois-je divulguer cette récompense à mon client ?": "Must I disclose this reward to my client?",
   "Vous le pouvez — et si votre code de déontologie l’exige (OACIQ notamment), vous le devez. C’est pourquoi les montants sont fixes et publics : simples à divulguer, faciles à expliquer.": "You may — and if your code of ethics requires it (the OACIQ notably), you must. That is why the amounts are flat and public: simple to disclose, easy to explain.",
   "Le prix du client n’y touche jamais.": "The client’s price is never touched.",
-  "La récompense de référence est un coût de marketing de Nota, payée à même sa propre commission — jamais ajoutée au prix du client, jamais retranchée des honoraires du notaire.": "The referral reward is a Nota marketing cost, paid out of its own commission — never added to the client’s price, never taken from the notary’s fees.",
   "vous@agence.ca": "you@agency.ca",
   "EVEROY": "EVEROY",
 
@@ -2118,11 +2113,6 @@
     "pattern": " · valeur estimée ",
     "flags": "g",
     "replacement": " · estimated value "
-  },
-  {
-    "pattern": "La commission n’est prélevée qu’à la signature, sur la valeur confirmée\\.",
-    "flags": "g",
-    "replacement": "The commission is only charged at signing, on the confirmed value."
   },
   {
     "pattern": "^Dans ([0-9]+) jours$",

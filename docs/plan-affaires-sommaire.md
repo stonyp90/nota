@@ -2,9 +2,20 @@
 
 **Le marché du temps notarial au Québec.**
 
-Ronde : **250 000 $ CAD en préamorçage**, 12 mois · Août 2026
+Ronde : **250 000 $ CAD en préamorçage**, 12 mois · Version 1.1 — 4 septembre 2026
 Anthony Paquet — anthonypaquet1508@gmail.com
 Plan complet (anglais) : [`docs/business-plan.md`](business-plan.md)
+
+> **Ce qui a changé en 1.1.** La version 1.0 décrivait une **commission de 10 %
+> sur les honoraires du notaire** comme ce que le code faisait, et proposait de
+> la restructurer. Cette commission est **retirée du produit**, pas seulement
+> proposée au retrait : Nota facture au client **son propre prix, publié par
+> service**, et les honoraires du notaire lui reviennent en entier. Tous les
+> chiffres ont été recalculés sur la grille en vigueur dans
+> `packages/domain/index.js`. **La marge brute par acte est nettement plus basse
+> que ne le disait la version 1.0** — environ **66 %**, pas 89 à 91 % — parce que
+> Nota supporte les frais de carte sur la **totalité** de ce que le client paie,
+> honoraires du notaire compris, dont Nota ne garde rien.
 
 ---
 
@@ -23,24 +34,32 @@ l'offre est rattachée à une date, **le marché prix l'urgence** : une signatur
 requise demain se règle à un multiple d'une signature requise dans trois
 semaines.
 
-| Palier | Jours avant la date | Prime indicative |
-| --- | --- | --- |
-| `standard` | 15+ | 1,0×–1,2× |
-| `rapide` | 8–14 | 1,2×–1,5× |
-| `prioritaire` | 4–7 | 1,6×–2,2× |
-| `urgence` | 2–3 | 2,5×–4,0× |
-| `extreme` | 0–1 | 4,0×–10,0× |
+| Palier | Jours avant la date | Prime sur les honoraires du **notaire** | Garantie de date de **Nota** |
+| --- | --- | --- | ---: |
+| `standard` | 15+ | 1,0× | 0 $ |
+| `rapide` | 8–14 | 1,8×–2,2× (≈×2) | 50 $ |
+| `prioritaire` | 2–7 | 2,7×–3,3× (≈×3) | 100 $ |
+| `urgence` | 1 | 3,3×–3,7× (≈×3,5) | 200 $ |
+| `extreme` | 0 | 3,7×–4,3× (≈×4) | 300 $ |
 
-Trois services au lancement, chacun avec une collecte de documents **bornée**
-que le client assemble seul : testament et mandat de protection (650 $),
-procuration (295 $), refinancement hypothécaire (2 000 $). Plancher par service,
-plafond ferme à **10×**.
+**Deux colonnes, deux justifications.** Le multiplicateur tarife les honoraires
+du **notaire** — l'art. 49 4° du *Code de déontologie* lui permet de pondérer
+« le degré d'urgence » — et il n'est pas figé : il s'ajuste sur la médiane des
+offres réellement retenues. La colonne de droite est ce que **Nota** vend : la
+garantie de la date.
+
+Deux services au lancement, tous deux des actes de **financement**, chacun avec
+une collecte de documents **bornée** que le client assemble seul :
+refinancement hypothécaire (plancher 2 000 $) et financement hypothécaire
+(plancher 1 800 $). Testament et procuration ont été **retirés** — un testament
+n'a pas d'échéance externe, donc l'urgence y est une préférence et non un coût.
+Plancher par service, plafond ferme à **5×**.
 
 ---
 
 ## Ce qui existe déjà
 
-**Le produit est construit, testé et déployé.** Environ 21 000 lignes, en solo :
+**Le produit est construit, testé et déployé.** Environ 40 000 lignes, en solo :
 
 - un noyau de règles d'affaires **sans aucune dépendance** (prix, paliers,
   plafond, validation, tarification dynamique) ;
@@ -48,15 +67,21 @@ plafond ferme à **10×**.
   hexagonale** (ports et adaptateurs) ;
 - une application web publique **sans dépendance d'exécution** — carnet, dépôt
   d'offre, dossier, carte du Québec, console notaire ;
-- paiements Stripe (autorisation à l'offre, capture à la complétion),
-  authentification notaire et admin, courriels transactionnels et rappels
-  planifiés, flux ICS, statistiques ;
+- paiements Stripe Connect : la carte est enregistrée au dépôt de l'offre, la
+  caution posée quelques jours avant la signature pour qu'une autorisation de
+  ~7 jours atteigne l'acte, capture à la signature puis virement des honoraires ;
+  authentification notaire et admin avec permissions par rôle, courriels
+  transactionnels et rappels planifiés, flux ICS, statistiques ;
 - infrastructure Terraform **en production sur AWS `ca-central-1`**, coût au
   repos ≈ 0 $ ;
-- suite de tests unitaires, DOM et **BDD Cucumber**, CI sur chaque poussée ;
+- suites de tests unitaires, de contrat OpenAPI, DOM, **BDD Cucumber** et
+  bout-en-bout Playwright, CI sur chaque poussée, déploiement conditionné à
+  leur réussite ;
 - conformité **Loi 25** par conception : hébergement au Canada, anonymat activé
   par défaut, consentement à la collecte ;
-- sept décisions d'architecture (ADR) documentées.
+- **trente-sept** décisions d'architecture (ADR) documentées — dont la séquence
+  qui a démonté le modèle de revenus de la plateforme quand quatre articles du
+  droit notarial québécois se sont avérés l'interdire.
 
 **Cette ronde ne finance pas un développement. Elle finance la distribution et
 la liquidité.**
@@ -91,53 +116,100 @@ justification horodaté et vérifiable**. Le notaire reçoit un dossier déjà
 défendable. On transforme un jugement discrétionnaire risqué en flux de travail
 standard.
 
-### 2. Le modèle de revenus doit être restructuré avant le lancement
+### 2. Le modèle de revenus était un risque déontologique. Il a été retiré.
 
-Le code implémente aujourd'hui une **commission de 10 %** prélevée sur les
-honoraires du notaire. C'est la forme classique du **partage d'honoraires** que
-le *Code de déontologie des notaires* interdit avec un non-notaire, et cela
-exposerait chaque notaire de la plateforme à une plainte disciplinaire.
+La version 1.0 rapportait que le code prélevait une **commission de 10 %** sur
+les honoraires du notaire, et proposait de la restructurer. Une variante
+ultérieure faisait varier ce pourcentage entre 5 % et 15 % selon une note
+interne. **Les deux ont disparu du produit.** Elles ne sont rappelées ici que
+pour qu'un lecteur qui les retrouve dans l'historique ou dans un audit daté
+sache qu'elles sont retirées, et par quelle décision.
 
-**La correction préserve l'économie et change entièrement la structure
-juridique : facturer le client, pas le notaire.**
+**Ce que le code fait aujourd'hui.** Une offre porte **deux lignes**, que le
+client lit séparément avant de s'engager :
 
-| | Actuel (à risque) | Proposé (conforme) |
+| Ligne | Qui l'encaisse | Ce qui la détermine |
 | --- | --- | --- |
-| Le client paie | 650 $ | 650 $ + 65 $ de frais de service = **715 $** |
-| Le notaire reçoit | 585 $ (90 %) | **650 $ (100 %)** |
-| Nota reçoit | 65 $ *pris sur les honoraires* | 65 $ *du client, pour son propre service* |
+| **Honoraires** | **Le notaire, en entier** | Le montant offert par le client |
+| **Le prix de Nota** | Nota | Une grille publiée d'avance — le service demandé, plus la garantie de date — jamais le notaire, sa cote ou la valeur de l'acte |
 
-Nota est payé par le client pour le travail que Nota exécute réellement :
-trouver le notaire, monter et valider le dossier, opérer la transaction et le
-séquestre. **Nota ne prend aucune part d'un honoraire professionnel.** Les
-honoraires du notaire lui reviennent intégralement.
+La grille : `financement` **199 $**, `refinancement` **249 $**, plus la garantie
+de date (0 · 50 · 100 · 200 · 300 $ selon le palier). La carte du client
+autorise le **total** des deux lignes sur le compte de Nota ; à la signature,
+Nota capture ce total, garde ses deux lignes et vire les honoraires au compte
+Connect du notaire. **Nota ne retranche rien d'un honoraire professionnel, et le
+notaire n'abandonne rien.**
 
-**20 000 $ sont budgétés** pour un avis déontologique écrit et un dialogue
-structuré avec la Chambre des notaires **avant** le premier acte.
+**Quatre textes imposent cette forme.** L'art. **32.1 2°** de la *Loi sur le
+notariat* présume usurper les fonctions de notaire l'intermédiaire qui « obtient
+d'un notaire qu'il abandonne une partie de ses honoraires et frais » — 2 500 à
+125 000 $, doublé en récidive. L'art. **32** du *Code de déontologie* interdit au
+notaire de partager ses honoraires avec un non-membre d'un ordre : la même
+conclusion prise par l'autre bout. L'art. **29.1** interdit toute convention
+mettant en péril l'indépendance et le désintéressement du notaire — ce qu'un
+revenu indexé sur une note attribuée par une entreprise privée serait. L'art.
+**32.1 3°** écarte l'intermédiaire sans responsabilité envers le notaire pour ses
+honoraires : Nota autorise, capture et garantit le net, délibérément.
+
+Décisions : [ADR 0031](decisions/0031-le-prix-de-nota-est-celui-de-nota.md) a
+retiré le partage ; [ADR 0034](decisions/0034-le-prix-de-nota-est-une-grille-par-service.md)
+a transformé le prix unique en grille. **Aucun notaire n'a été facturé sous
+l'ancien modèle** : aucun acte n'avait encore été porté sur la plateforme.
+
+**Ce qui reste ouvert.** La **direction** de l'argent est réglée et vérifiable
+sur le fil Stripe : le client paie la plateforme. Ce qui reste ouvert est la
+**qualification** juridique du prix de Nota, plus trois questions plus étroites —
+l'affichage des avis (art. 70), la qualification de la cote interne, et la
+présentation des prix (art. 71-72), y compris le fait que **les taxes et les
+débours ne figurent dans aucune des deux lignes et n'existent nulle part dans le
+produit**. **20 000 $ sont budgétés** pour un avis écrit et un dialogue structuré
+avec la Chambre des notaires **avant** le premier acte.
+
+> **Discipline de langage, en permanence.** Aucune surface, aucun document et
+> aucun commentaire ne peut décrire Nota comme prenant une *commission*, une
+> *part* ou un *partage* des honoraires d'un notaire ; ne peut attacher une note,
+> une moyenne ou une *cote* à un notaire **nommé** sur une surface client
+> (art. 70) ; ne peut prétendre coûter *moins cher qu'un notaire* (art. 32.1 1°) ;
+> ni qualifier le prix de Nota de *fixe* — c'est une grille, publiée par service.
 
 ---
 
 ## Le marché
 
-| | Volume annuel estimé | Valeur d'acte |
-| --- | ---: | ---: |
-| Testaments et mandats | ~200 000 inscriptions | ~130 M$ |
-| Procurations | ~50 000 | ~15 M$ |
-| Refinancements | ~50 000 | ~100 M$ |
-| **Marché adressable (3 services)** | **~300 000 actes** | **~245 M$** |
+Avec un prix fixé par acte, le nombre qui compte est le **volume d'actes**, pas
+les dollars qui changent de mains. Les deux sont montrés ; seule la colonne de
+droite revient à Nota.
+
+| | Volume annuel estimé | Honoraires notariaux | Revenu Nota adressable |
+| --- | ---: | ---: | ---: |
+| Refinancement hypothécaire | ~50 000 | ~100 M$ | ~12,5 M$ |
+| Financement hypothécaire (hypothèque neuve) | ~60 000 | ~115 M$ | ~12 M$ |
+| **Marché adressable (2 services)** | **~110 000 actes** | **~215 M$** | **~28 M$** |
+
+La conséquence honnête du virage financement : le nombre d'actes adressables
+vaut environ le tiers de l'ancien plan à trois services (~110 000 contre
+~300 000), parce que les testaments faisaient le volume et qu'ils sont retirés.
+Ce qui les remplace est une catégorie qui arrive avec une **échéance que le
+client n'a pas choisie** — la seule demande qu'un marché tarifé au temps peut
+facturer.
 
 La profession compte environ **3 900 notaires** et facture de l'ordre de
-**1,1 à 1,2 G$** par année. Au-delà des trois services : les transactions
-immobilières résidentielles (~90 000 par année, 1 500–3 500 $ chacune) — à elles
-seules plus grandes que le marché adressable actuel. Au-delà du Québec : le
-notariat de droit civil, soit environ **90 États membres** de l'Union
-internationale du notariat, tous bâtis sur le même instrument.
+**1,1 à 1,2 G$** par année. Au-delà des deux services : l'**acte de vente** sur
+ces mêmes ~90 000 transactions résidentielles, qui arrive sur la même échéance
+et par le même canal de référence ; les testaments et mandats (~200 000 par
+année) restent une catégorie réelle où revenir une fois la liquidité acquise, sur
+une base de prix adaptée à un acte de 650 $. Au-delà du Québec : le notariat de
+droit civil, soit environ **90 États membres** de l'Union internationale du
+notariat, tous bâtis sur le même instrument.
 
 **Pourquoi maintenant :** les honoraires sont libres depuis 1991 sans aucun
 mécanisme de prix ; l'acte technologique est permanent depuis 2023 ; ~1,2 M
-d'hypothèques à taux fixe se renouvellent au Canada en 2025 ; **environ la
-moitié des adultes québécois n'ont pas de testament** (près de 70 % chez les
-18–34 ans) au moment du plus grand transfert de patrimoine de l'histoire.
+d'hypothèques à taux fixe se renouvellent au Canada en 2025, **chacune avec une
+garantie de taux qui expire à une date que le client n'a pas fixée** ; et un
+concurrent — Notairo — vend déjà au Québec, depuis la fin de 2025, des frais de
+prise en charge facturés au client (295 $), soit la même forme juridique que
+celle de Nota. La structure n'est plus à expliquer ; ce qui reste à bâtir, c'est
+de **publier le prix de la date avant que le client s'engage**.
 
 ---
 
@@ -172,6 +244,66 @@ plan.
 
 ---
 
+## Économie unitaire
+
+**Le coût des revenus n'est pas négligeable, et la version 1.0 le sous-estimait
+gravement.** Nota est la **plateforme** Stripe : la carte du client est débitée
+du **total des deux lignes** sur le compte de Nota, et les honoraires sont virés
+au notaire ensuite. Les frais de carte portent donc sur la totalité — **y compris
+les honoraires du notaire, dont Nota ne garde rien** — et Nota les supporte
+seule. Au taux publié de Stripe au Canada (**2,9 % + 0,30 $** ; ce taux n'est
+écrit nulle part dans le code, et le code ne comptabilise jamais ces frais) :
+
+```
+le client paie      2 000 $ (notaire) + 249 $ (Nota) = 2 249,00 $
+Stripe              2,9 % × 2 249 $   + 0,30 $       =    65,52 $
+Nota garde          249 $ − 65,52 $                  =   183,48 $   → marge 73,7 %
+le notaire reçoit   2 000,00 $ — en entier
+```
+
+| Service · palier | Honoraires | Prix de Nota | Total client | Stripe | **Marge brute** | % |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `financement` · standard | 1 800 $ | 199 $ | 1 999 $ | 58,27 $ | **140,73 $** | 70,7 % |
+| `financement` · prioritaire | 5 400 $ | 299 $ | 5 699 $ | 165,57 $ | **133,43 $** | 44,6 % |
+| `refinancement` · standard | 2 000 $ | 249 $ | 2 249 $ | 65,52 $ | **183,48 $** | 73,7 % |
+| `refinancement` · prioritaire | 6 000 $ | 349 $ | 6 349 $ | 184,42 $ | **164,58 $** | 47,2 % |
+| `refinancement` · extrême | 8 000 $ | 549 $ | 8 549 $ | 248,22 $ | **300,78 $** | 54,8 % |
+
+**Un constat que cette table rend inévitable : deux barreaux de l'échelle
+d'urgence coûtent de l'argent à vendre.** Passer un refinancement de `standard`
+à `prioritaire` ajoute 100 $ à la ligne de Nota et **118,90 $** aux frais Stripe :
+Nota est **18,90 $ plus pauvre** sur l'acte le plus urgent. Même chose au palier
+`rapide` (+50 $ contre +59,45 $). Seuls `urgence` et `extrême` paient le coût
+qu'ils créent. C'est de l'arithmétique, pas une opinion, et c'est le chiffre le
+plus actionnable du plan — la grille est une donnée, modifiable depuis la console
+sans déploiement.
+
+**En moyenne pondérée** (60 % refinancement / 40 % financement ; 70 % standard,
+18 % rapide, 7 % prioritaire, 3 % urgence, 2 % extrême — le mélange est une
+hypothèse, les prix n'en sont pas) :
+
+| Par acte complété | |
+| --- | ---: |
+| Honoraires (versés au notaire en entier) | 2 794 $ |
+| **Revenu de Nota** | **257 $** |
+| Frais de carte | (89) $ |
+| **Marge brute de Nota** | **168 $** |
+| **Marge brute** | **66 %** |
+
+**Point de structure.** Comme le prix de Nota ne suit pas la valeur de l'acte,
+**la marge brute par acte est presque plate** — entre 133 $ et 301 $ — pendant
+que le montant qui change de mains varie du simple au quadruple. Le revenu est
+donc fonction du **nombre d'actes**, jamais du volume transigé. Tout argument de
+croissance doit être un argument de volume.
+
+**Économie du notaire.** Coût d'acquisition ≈ 500 $ (le poste terrain de
+15 000 $ ÷ 30 notaires). Un notaire qui retient 20 actes par année produit
+**3 365 $** de marge brute annuelle — 10 094 $ sur trois ans. **VVC/CAC ≈ 20×**,
+retour sur investissement en **trois actes**. C'est l'offre, pas la demande, qui
+compose.
+
+---
+
 ## Projections
 
 | | An 1 | An 2 | An 3 |
@@ -180,15 +312,30 @@ plan.
 | Offres déposées | 434 | 4 912 | 17 742 |
 | Taux de rétention | 56 % | 57 % | 62 % |
 | **Actes complétés** | **244** | **2 800** | **11 000** |
-| **Valeur transigée** | **257 664 $** | **3 220 000 $** | **15 950 000 $** |
-| **Revenu net (10 %)** | **25 766 $** | **322 000 $** | **1 595 000 $** |
-| Résultat net | (226 959) $ | (430 060) $ | (390 850) $ |
+| Honoraires versés aux notaires | 682 000 $ | 7 822 000 $ | 30 730 000 $ |
+| Total facturé aux clients | 744 000 $ | 8 542 000 $ | 33 557 000 $ |
+| **Revenu de Nota** (257 $ × actes) | **62 700 $** | **719 600 $** | **2 827 000 $** |
+| Frais de carte | (21 700) $ | (248 500) $ | (976 400) $ |
+| **Marge brute** | **41 000 $** | **471 100 $** | **1 850 600 $** |
+| Charges d'exploitation | (250 000) $ | (720 000) $ | (1 850 000) $ |
+| **Résultat net** | **(209 000) $** | **(249 000) $** | **+600 $** |
 
-L'an 3 représente **~3,7 %** du volume d'actes adressable. Le plan n'exige pas de
-dominer le marché — seulement d'être l'endroit où le prix se découvre.
+**Seuil de rentabilité**, à 168 $ de marge brute par acte : **1 487 actes**
+(124/mois) en an 1, **4 280** (357/mois) en an 2, **10 997** (917/mois) en an 3.
+Le volume prévu de l'an 3 arrive donc à une centaine d'actes de couvrir sa
+propre base de coûts — une histoire plus propre que celle de la version 1.0, où
+l'an 3 perdait encore 390 850 $.
+
+**Capital cumulé requis jusqu'à l'an 3 : ~460 000 $**, contre ~1,05 M$ dans la
+version 1.0.
+
+L'an 3 représente **~10 %** du volume d'actes adressable des deux services — une
+part plus grande d'une catégorie plus petite que ne le disait la version 1.0,
+conséquence directe du virage financement. Le plan n'exige pas de dominer le
+marché — seulement d'être l'endroit où le prix se découvre.
 
 **Déclencheur de la série A :** sortir de l'an 2 à un rythme annualisé de
-300–500 K$, avec l'appariement provincial et la couche d'exception en
+**700 K$**, avec l'appariement provincial et la couche d'exception en
 production.
 
 ---
@@ -203,7 +350,7 @@ production.
 | Design et front-end (contrat, ~3 mois) | 25 000 $ |
 | Acquisition clients | 40 000 $ |
 | Acquisition notaires (terrain, congrès) | 15 000 $ |
-| Infrastructure, Stripe, certificats, assurances, outils | 12 000 $ |
+| Infrastructure, certificats, assurances, outils | 12 000 $ |
 | Imprévus (~7 %) | 17 000 $ |
 | **Total** | **250 000 $** |
 
@@ -222,15 +369,21 @@ Centech) dans la présente ronde est donc le pont vers l'amorçage.
 
 ## Ce qui doit être vrai
 
-Trois hypothèses portent le modèle, chacune avec son test de réfutation — **et
-les trois sont tranchées à l'intérieur de cette ronde** :
+Quatre hypothèses portent le modèle, chacune avec son test de réfutation — **et
+les quatre sont tranchées à l'intérieur de cette ronde** :
 
 1. **Le client paie une prime pour une date.** *Test :* la distribution des
    primes réalisées par palier. Visible au 6ᵉ mois.
 2. **Le notaire vend sa disponibilité de dernière minute.** *Test :* le taux de
    rétention sur les paliers `prioritaire` et `urgence`. Visible au 5ᵉ mois.
-3. **Les frais côté client sont déontologiquement sûrs.** *Test :* un avis
-   juridique écrit. 2ᵉ mois.
+3. **Le client paie le prix de Nota en plus des honoraires.** *Test :* le taux
+   d'abandon à l'écran du devis, où les deux lignes s'affichent ensemble avant
+   tout engagement de carte. Visible dès les cinquante premières offres. C'est
+   une question distincte de la première, et la version 1.0 ne la posait pas :
+   un pourcentage retranché des honoraires du notaire était invisible au client.
+4. **Le prix de Nota est déontologiquement sûr tel que structuré.** *Test :* un
+   avis juridique écrit, 2ᵉ mois. La direction de l'argent est déjà réglée et
+   vérifiable sur le fil Stripe ; la qualification ne l'est pas.
 
 C'est l'argument pour la taille de la ronde : 250 000 $ suffisent à confirmer ou
 à réfuter la thèse entière, et pas un dollar ne construit ce qui n'a pas été
@@ -242,7 +395,11 @@ validé.
 
 | Risque | Atténuation |
 | --- | --- |
-| **Partage d'honoraires (déontologie)** — critique | Restructuration en frais côté client avant le lancement. Avis écrit budgété, 2ᵉ mois. Le notaire conserve 100 % de ses honoraires. |
+| **Qualification du prix de Nota (art. 32.1 L.N.)** — critique | Le partage est **retiré** : le notaire reçoit 100 % de ses honoraires et Nota facture au client son propre prix publié (ADR 0031/0034). Ce qui reste est une qualification, pas une structure. Avis écrit budgété, 2ᵉ mois ; un forfait par acte facturé hors de l'acte est la structure de repli. |
+| **Une affirmation retirée survit dans un document** | La commission de 10 %, le partage 75/25, la coupe de 5 à 15 % décidée par la cote et le prix unique de 400 $ sont tous retirés. Ils sont faux **et** ils décrivent un arrangement que le droit québécois interdit à Nota d'avoir : chaque audit daté qui les cite porte un bandeau de retrait. |
+| **Les taxes et les débours ne sont pas au devis** | L'art. 71 3° exige d'indiquer s'ils sont inclus, l'art. 68 interdit la publicité incomplète. Chiffrés et affichés au 1ᵉʳ mois, avant toute affirmation de complétude. |
+| **Le milieu de l'échelle d'urgence est vendu sous son coût** | Mesuré : `rapide` et `prioritaire` perdent 9,45 $ et 18,90 $ face aux frais Stripe qu'ils créent. La grille est une donnée, retarifée au 6ᵉ mois sur le coût réel. |
+| **Aucune vérification au Tableau de l'Ordre** | Le seul contrôle actuel est le format d'une URL de fiche CNQ. Une vérification réelle et une radiation immédiate sont des préalables au premier acte. |
 | **L'art. 46 maintient l'exception** | La phase 2 est rentable sous la loi actuelle. Les catégories d'exception sont vastes et mal desservies. |
 | **Démarrage à froid** | L'offre est gratuite et sans friction. Une ville dense d'abord. Taux de rétention suivi chaque semaine. |
 | **Faible réachat client** | L'actif durable est l'offre (notaires récurrents), la capture organique du carnet et les canaux de référence à coût nul. |
@@ -256,12 +413,12 @@ validé.
 **250 000 $ CAD en préamorçage, 12 mois.** SAFE ou billet convertible, avec un
 ange principal.
 
-Ce que l'argent achète : une structure déontologiquement propre avec avis écrit
-au dossier ; 30 notaires et un marché biface fonctionnel à Québec ; 244 actes
-complétés et **la première courbe d'urgence du marché notarial québécois** ; la
-couche d'exception qui rend l'acte à distance routinier là où la loi le permet
-déjà ; et douze mois d'un fondateur qui a bâti la plateforme entière et qui ne
-fera plus que cela.
+Ce que l'argent achète : un avis juridique écrit au dossier qui qualifie le prix
+de Nota — la structure, elle, est déjà livrée ; 30 notaires et un marché biface
+fonctionnel à Québec ; 244 actes complétés, ~62 700 $ de revenu et **la première
+courbe d'urgence du marché notarial québécois** ; la couche d'exception qui rend
+l'acte à distance routinier là où la loi le permet déjà ; et douze mois d'un
+fondateur qui a bâti la plateforme entière et qui ne fera plus que cela.
 
 > **En une phrase :** le Québec a déréglementé les honoraires notariaux en 1991
 > et n'a jamais bâti de marché. Le marché est bâti. Cette ronde sert à savoir

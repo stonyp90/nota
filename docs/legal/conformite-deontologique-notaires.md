@@ -4,7 +4,26 @@
 > par un juriste. Ne remplace pas l'avis juridique écrit, qui **reste requis
 > avant la mise en service**. Voir [`README.md`](README.md).
 
-**Version : 0.1 (brouillon) · 1er septembre 2026**
+**Version : 0.2 (brouillon) · 1er septembre 2026, révisé le 4 septembre 2026**
+
+> ⚠️ **RÉVISION DU 4 SEPTEMBRE 2026 — le modèle économique analysé ici a changé
+> depuis la rédaction.** La version 0.1 examinait un prélèvement de **5 % à 15 %
+> du montant payé pour un acte notarié**, variable selon la cote du notaire.
+> **Ce prélèvement est retiré du produit.** Depuis
+> l'[ADR 0031](../decisions/0031-le-prix-de-nota-est-celui-de-nota.md), le
+> notaire reçoit **100 %** du montant qui lui est offert et Nota facture au
+> client **son propre prix, publié d'avance** ; depuis
+> l'[ADR 0034](../decisions/0034-le-prix-de-nota-est-une-grille-par-service.md),
+> ce prix est une grille par service (199 $ / 249 $) plus une ligne de garantie
+> de date (0 · 50 · 100 · 200 · 300 $). `commission-config.js` a été supprimé.
+>
+> **C'est exactement la « piste structurelle » que le §1.2 recommandait**, mise en
+> œuvre : un prix par acte, sans lien avec le montant de l'acte ni avec la
+> personne du notaire. Les passages ci-dessous qui décrivent le pourcentage ont
+> été corrigés là où ils affirmaient un fait ; l'analyse juridique des textes,
+> elle, tient intégralement — et la question qu'elle pose reste ouverte : ce qui
+> demeure à qualifier est **le prix de Nota lui-même**, perçu par acte, par un
+> intermédiaire.
 
 ---
 
@@ -59,7 +78,7 @@ client) et un notaire**. Les trois branches doivent être examinées séparémen
 | Branche | Exposition de Nota |
 | --- | --- |
 | **1° réduction des honoraires promise au client** | Le carnet est un marché où le client **fixe le montant qu'il offre** et où les notaires se positionnent. Le produit ne « promet » pas de rabais, mais il organise une concurrence par les prix dont l'effet attendu est la baisse. À qualifier. |
-| **2° obtenir du notaire qu'il abandonne une partie de ses honoraires** | **La branche la plus dangereuse.** Nota prélève 5 % à 15 % du montant payé pour un acte notarié (`apps/api/src/commission-config.js:23, 27, 32-37`). Que le mécanisme soit appelé « frais de service » ne tranche pas la question : le texte vise le **résultat économique**, pas la qualification contractuelle. |
+| **2° obtenir du notaire qu'il abandonne une partie de ses honoraires** | **La branche la plus dangereuse — et celle qui a fait changer le produit.** Jusqu'au 1<sup>er</sup> septembre 2026, Nota prélevait 5 % à 15 % du montant payé pour un acte notarié : c'était le résultat économique que le texte vise, quel que soit le nom donné au mécanisme. **Ce prélèvement est retiré** (ADR 0031/0034). Le notaire reçoit aujourd'hui 100 % du montant offert (`billing.js` — `honorairesCents` viré en entier) et **n'abandonne rien**. Ce qui reste à qualifier est le prix propre de Nota, facturé au client sur sa propre ligne : le texte vise le résultat économique, et un juriste doit dire si un prix par acte perçu par un intermédiaire y échappe. |
 | **3° procurer des services sans responsabilité envers le notaire pour ses honoraires** | **Partiellement atténué**, et c'est un point qui joue en faveur de Nota — voir §1.2. |
 
 ### 1.1 La mise en garde du syndic — la Chambre s'est déjà prononcée
@@ -90,7 +109,7 @@ Chacun des quatre verbes proscrits doit être confronté au produit :
 | **offrir vos services** | le carnet expose des demandes ; le notaire choisit ce qu'il retient (`handler.js:1589-1656`). Nota ne démarche pas au nom d'un notaire nommé. | plutôt favorable |
 | **dicter votre conduite** | Nota n'intervient jamais dans l'acte ; aucune instruction professionnelle n'est transmise. | favorable |
 | **dicter la portée du mandat** | le service et le dossier viennent du client, pas de Nota ; le notaire apprécie le mandat. | plutôt favorable |
-| **fixer ou partager vos honoraires** | **le montant est fixé par le client puis validé contre un plancher serveur** (`handler.js:732-744`), **et Nota en retient 5 % à 15 %**. | **exposé — les deux verbes** |
+| **fixer ou partager vos honoraires** | **le montant est fixé par le client** puis validé contre un plancher serveur, et **Nota n'en retient rien** : le virement au notaire est exactement le montant offert (retrait du prélèvement, ADR 0031). Le verbe « partager » n'a donc plus de prise. Le verbe « fixer » reste discutable : c'est le client qui pose le montant, mais dans une fourchette que Nota publie (plancher par service, plafond 5×) et sur une recommandation que Nota calcule. | **partager : fermé · fixer : à qualifier** |
 
 ### 1.2 Ce que le circuit de l'argent dit réellement — correction du 1er septembre 2026
 
@@ -131,18 +150,25 @@ Deux éléments à verser au dossier, dans les deux sens :
   paiement** — la caution est posée sur la carte du client avant tout engagement
   (`handler.js:857-871`), ce qui l'écarte de la branche 3° (« sans aucune
   responsabilité de sa part envers le notaire pour ses honoraires »).
-- **Contre Nota :** la part est **proportionnelle** au montant de l'acte, ce qui
-  la rattache économiquement aux honoraires plutôt qu'au coût du service rendu ;
-  et **elle varie selon la cote du notaire**, donc selon sa personne — un frais
-  de service pur ne devrait dépendre que du service de Nota.
+- **Contre Nota (version 0.1, corrigé depuis) :** la part était
+  **proportionnelle** au montant de l'acte, ce qui la rattachait économiquement
+  aux honoraires plutôt qu'au coût du service rendu ; et **elle variait selon la
+  cote du notaire**, donc selon sa personne — un frais de service pur ne devrait
+  dépendre que du service de Nota.
 
-> ⚠️ **Une piste structurelle que l'avis doit évaluer :** un **frais de service
-> fixe par acte**, sans lien avec le montant ni avec la personne du notaire,
-> sortirait le modèle du champ de l'art. 32.1 2° bien plus nettement que le
-> pourcentage actuel. C'est la structure retenue par toutes les plateformes
-> comparables (`docs/decisions/0027-partage-75-25-cote-client.md`). Le coût
-> produit serait la perte de la cote comme levier de rémunération — c'est-à-dire
-> l'ADR 0028 en entier.
+> ✅ **La piste structurelle a été suivie.** La version 0.1 recommandait un
+> **prix par acte, sans lien avec le montant ni avec la personne du notaire**,
+> comme sortie bien plus nette du champ de l'art. 32.1 2° que le pourcentage
+> d'alors. C'est ce qui a été livré : l'ADR 0031 a retiré le pourcentage, l'ADR
+> 0034 a posé une grille qui ne dépend que de **deux dimensions publiées** — le
+> service demandé et le délai avant la signature — et de rien qui touche au
+> notaire. Le coût produit annoncé a été payé : la cote n'est plus un levier de
+> rémunération, et l'ADR 0028 est retiré en entier.
+>
+> **Ce qui reste à faire qualifier par l'avis** : un prix perçu **par acte
+> notarié**, par un intermédiaire, échappe-t-il à une lecture strictement
+> économique de l'art. 32.1 2° ? Et le repli — facturer le service hors de
+> l'acte, à l'abonnement ou au dossier — doit-il être préparé ?
 
 ### 1.3 Le bac à sable réglementaire — la seule voie de conformité identifiée
 
@@ -199,10 +225,14 @@ L'avis **1132 du barreau de l'État de New York** tient qu'**afficher une note
 transforme un annuaire en recommandation** — et qu'une recommandation rémunérée
 est interdite.
 
-Appliqué à Nota, ce raisonnement mord plus fort qu'ailleurs : **la cote de Nota
-n'est pas une décoration, elle décide combien Nota prélève**
-(`apps/api/src/billing.js:105-147`). Affichée au client, elle est exactement une
-recommandation dont l'auteur a un intérêt financier au classement.
+Appliqué à Nota, ce raisonnement mordait plus fort qu'ailleurs, parce que la
+cote n'était pas une décoration : **elle décidait combien Nota prélevait**.
+Affichée au client, elle aurait été exactement une recommandation dont l'auteur a
+un intérêt financier au classement. **Cette aggravation est tombée avec l'ADR
+0031** — la cote ne décide plus d'aucun montant. Le raisonnement de l'avis 1132
+tient néanmoins par lui-même : afficher une note transforme un annuaire en
+recommandation, que l'auteur y gagne ou non. C'est pourquoi la cote reste
+**invisible côté client** (ADR 0030).
 
 ### 2.2 Ce que le régulateur exigerait d'une cote publiée
 
@@ -297,10 +327,11 @@ champ si l'avantage est relatif à l'exercice de la profession.
 L'art. 34 est **le seul de cette section que Nota satisfait déjà**, et
 largement :
 
-- la part de Nota est annoncée au client **avant** qu'il publie
-  (`apps/web/public/index.html:768, 1160, 1170`) ;
-- une fois l'acte réglé, **le client voit comment son montant s'est partagé**,
-  depuis le registre write-once (`handler.js:1807-1810`) ;
+- **les deux lignes du devis** — les honoraires offerts au notaire et le prix de
+  Nota — sont annoncées au client **avant** qu'il publie, séparément ;
+- une fois l'acte réglé, **le client revoit les deux lignes** telles qu'elles ont
+  été figées, depuis le registre write-once. Il n'y a pas de « partage » à
+  divulguer : il y a deux achats, montrés comme deux achats ;
 - le notaire voit son taux, sa cote et le barème complet avant de s'engager, et
   son relevé acte par acte après (`GET /notary/acts`, `handler.js:1477-1517`) ;
 - le taux est **gravé à l'engagement comme plafond** : une cote qui baisse ne
@@ -442,8 +473,9 @@ montant et une date ; c'est sa fonction.
 > réponse.** Ce qui vaut zéro, c'est le **silence** — ne pas répondre du tout.
 >
 > Vérifié en exécutant le domaine sur un profil réel : 0 déclin → cote 69,
-> 1 → 70, 2 → 70, 5 → 71, 10 → 73. **Décliner fait légèrement MONTER la cote**,
-> donc **baisser** la part que Nota prélève.
+> 1 → 70, 2 → 70, 5 → 71, 10 → 73. **Décliner fait légèrement MONTER la cote.**
+> (Et depuis l'ADR 0031, la cote ne décide plus d'aucun montant : décliner ne
+> peut plus rien coûter du tout.)
 >
 > Le test `packages/domain/test/cote.test.mjs` — « décliner est une RÉPONSE,
 > jamais une pénalité ; seul le silence coûte » — vérifie que dix déclins et dix
@@ -486,10 +518,10 @@ depuis l'ADR 0030 ; le n° 5 a été **atténué par un garde-fou, sans être fe
 
 | # | Exposition | Fondement | Ce qui existe | Reste à faire |
 | :-: | --- | --- | --- | --- |
-| **1** | **Le modèle économique lui-même.** Nota retient 5 % à 15 % d'un montant versé pour un acte notarié, en tant qu'intermédiaire. | **Art. 32.1 L.N.** (2 500–125 000 $, doublé en récidive) ; art. 32/33 C.déont. ; mise en garde du syndic du 25/01/2024 | Le circuit est celui du client qui paie la plateforme (`stripe-port.js:85-146`), Nota assume le risque de paiement, et le service rendu est réel et distinct. | **Avis juridique écrit — REQUIS.** Évaluer un **frais fixe par acte** comme structure de repli. Envisager la démarche d'art. 198.1 auprès du ministre et de la Chambre. |
-| **2** | **La cote fait varier la part selon la personne du notaire**, ce qui rattache économiquement le prélèvement aux honoraires plutôt qu'au service de Nota. | Art. 32.1 2° ; art. 32 | Barème publié, testé, communiqué au notaire avant engagement, gravé comme plafond. | Faire qualifier : un frais indexé sur la personne du prestataire peut-il être un « frais de service » ? |
+| **1** | **Le modèle économique lui-même.** Nota perçoit un prix **par acte notarié**, en tant qu'intermédiaire. Le prélèvement sur les honoraires (5 % à 15 %) est **retiré** ; ce qui reste à qualifier est le prix propre de Nota. | **Art. 32.1 L.N.** (2 500–125 000 $, doublé en récidive) ; art. 32/33 C.déont. ; mise en garde du syndic du 25/01/2024 | Le notaire reçoit **100 %** du montant offert (ADR 0031) ; le prix de Nota est **publié d'avance**, par service et par délai, et ne dépend ni du notaire ni de la valeur de l'acte (ADR 0034) ; le circuit est celui du client qui paie la plateforme ; Nota assume le risque de paiement, et le service rendu est réel et distinct. | **Avis juridique écrit — REQUIS.** Faire qualifier le prix par acte. Préparer le repli : facturer le service **hors de l'acte** (abonnement, forfait dossier). Envisager la démarche d'art. 198.1 auprès du ministre et de la Chambre. |
+| **2** | ~~La cote fait varier la part selon la personne du notaire.~~ **Fermé le 1<sup>er</sup> septembre 2026.** | Art. 32.1 2° ; art. 32 ; **art. 29.1** | Le prix de Nota ne dépend **ni du notaire, ni de sa cote, ni de la valeur de l'acte** — invariant testé (`apps/api/test/prix-nota-separe.test.mjs`). La cote subsiste comme signal de service et **ne décide plus d'aucun dollar**. | Rien. Ne jamais réintroduire une rémunération indexée sur une note attribuée par une entreprise privée : l'art. 29.1 l'interdit deux fois. |
 | **3** | **Le badge « CNQ » n'est pas vérifié** — le seul contrôle est un format d'URL (`packages/domain/index.js:1399-1402`). **L'ADR 0030 vient d'en augmenter le poids** : en retirant la note et la cote des vues client, il a fait de `cnq` et `actes` les **deux seuls signaux** sur lesquels un client choisit son notaire. Un signal rare porte plus de charge qu'un signal parmi cinq — et celui-ci n'est adossé à rien. | **Art. 68** (publicité trompeuse) ; protection du public ; crédibilité devant la Chambre | Badge `cnq` et `lienCNQ` affichés, désormais mis en avant — mais **jamais vérifiés auprès de l'Ordre**. | **Vérification réelle du statut au Tableau, et radiation immédiate.** Afficher une appartenance à l'Ordre sans la vérifier est trompeur en soi — d'autant plus quand c'est le principal signal de confiance offert. |
-| **4** | **L'art. 72 contre une interface de marché.** Le prix est structurellement au premier plan. | **Art. 72** ; art. 71 | Prix tout compris, clair, sans supplément. | Revoir la hiérarchie visuelle prix/service. Vérifier les débours et taxes. Qualifier le maintien 60 jours face à un prix dynamique. |
+| **4** | **L'art. 72 contre une interface de marché.** Le prix est structurellement au premier plan. **Et le devis est incomplet** : ni les taxes (TPS/TVQ) ni les débours n'apparaissent nulle part dans le produit. | **Art. 72** ; **art. 71 3°** (indiquer si les débours et taxes sont inclus) ; **art. 68** (publicité incomplète) | Prix clair, deux lignes séparées, publiées avant tout engagement et figées sur l'offre. Aucune surface ne dit « tout compris ». | **Chiffrer et afficher les taxes et les débours** — préalable à toute affirmation de complétude. Revoir la hiérarchie visuelle prix/service. Qualifier le maintien 60 jours face à un prix dynamique. |
 | **5** | **Les récompenses de parrainage versées à un notaire** — 50 $ par client amené, 250 $ pour un notaire amené qui complète son premier acte. **Atténuée, pas fermée** : le refus ne tient qu'au courriel, et il porte sur la réclamation, jamais sur le versement. | **Art. 33** (« tout autre avantage ») | ✅ `POST /partenaires` **refuse** une réclamation dont le courriel correspond à un notaire connu — `notaire_non_admissible`, 422, avec un message qui dit pourquoi (`handler.js:928-944`). 3 tests (`apps/api/test/deontologie-parrainage.test.mjs`), code documenté (`openapi.yaml:231`). Par ailleurs, payées par Nota, jamais retranchées des honoraires ni ajoutées au prix (`index.html:1009`). | Fermer les deux angles morts (§3.1). Faire qualifier le fait générateur, et faire dire à l'avis si le refus au moment de la réclamation suffit ou si le **versement** doit être conditionné. |
 | **6** | **Aucune décision disciplinaire n'a été trouvée** sur le partage d'honoraires avec une plateforme. | — | — | **Absence de preuve n'est pas preuve d'absence.** Recherche plein texte SOQUIJ à commander avec l'avis. |
 

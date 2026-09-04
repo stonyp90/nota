@@ -24,9 +24,46 @@ de désabonnement**. D'où le bloc-signature ci-dessous, qui n'est pas décorati
 4. **Une ligne personnalisée** propre à l'étude. Sans elle, c'est du
    démarchage — et ça se sent.
 5. **Le lien de la bêta**, une fois, à la fin.
-6. **Jamais de pourcentage** dans un premier contact. Le partage se discute de
-   vive voix, quand la question vient de l'autre.
+6. **Jamais de pourcentage, parce qu'il n'y en a pas.** Le notaire garde
+   100 % de ses honoraires ; Nota vend son service au client, à son propre
+   prix publié. Le mot « commission », le mot « partage » et tout barème en
+   pourcentage sont proscrits de tous les gabarits — voir le bloc « La grille »
+   ci-dessous.
 7. **Envoi individuel**, jamais en cc/cci. 20 par jour au maximum.
+8. **Jamais « moins cher »** (art. 32.1 1° du *Code de déontologie*), jamais un
+   délai garanti, jamais un témoignage sur un notaire nommé (art. 70).
+
+## La grille — les seuls chiffres à citer
+
+Vérifiés dans `packages/domain/index.js` (`SERVICES[].prixNotaCents`,
+`TIERS[].prixNotaDateCents`). Jamais recopiés d'un autre document.
+
+| Service | Honoraires de départ du notaire | Prix de Nota, payé par le client |
+| --- | ---: | ---: |
+| Financement hypothécaire | 1 800 $ | **199 $** |
+| Refinancement hypothécaire | 2 000 $ | **249 $** |
+
+Plus la **garantie de date**, sur sa propre ligne, quand le client veut une date
+rapprochée : standard (plus de 14 j) **0 $** · rapide (≤ 14 j) **50 $** ·
+prioritaire (≤ 7 j) **100 $** · urgence (la veille) **200 $** · extrême (le jour
+même) **300 $**. Taxes et débours en sus.
+
+Trois phrases qui disent tout, et qu'on peut mettre telles quelles dans un
+courriel :
+
+> Vos honoraires demeurent entièrement les vôtres : Nota ne prélève rien
+> dessus. Nota facture son propre service au client, séparément, à un prix
+> publié d'avance — 199 $ pour un financement, 249 $ pour un refinancement,
+> plus une ligne de garantie de date si le client demande une date rapprochée.
+> Le client n'est débité qu'à la signature.
+
+**Ce qui a été retiré le 1<sup>er</sup> septembre.** Les versions précédentes de
+E4 vendaient « 85 % pour vous, 15 % pour Nota, jusqu'à 95 % avec votre cote sur
+100 ». C'est un partage d'honoraires avec un non-notaire (art. 32 C.déont.,
+art. 32.1 *Loi sur le notariat*) doublé d'une cote visible du client sur un
+notaire nommé (art. 70). Retiré par les ADR 0031, 0034 et 0030 — et ce n'est
+plus ce que le produit fait. Si un notaire vous cite ces chiffres, c'est qu'il a
+reçu une vieille version : corrigez-le au premier mot.
 
 ## E1 — Premier contact
 
@@ -80,14 +117,14 @@ de votre étude serait-il disponible… ».
 | **Marché dense** (Montréal, Rive-Sud, couronnes) | *Dans un marché aussi dense que le vôtre, la date de signature est souvent le seul véritable facteur de différenciation.* |
 | **Offre finie** (villes moyennes) | *Dans une région comme [X], le nombre de notaires disponibles pour une date donnée est limité — c'est là que la plateforme prend tout son sens.* |
 | **RMR de Québec, Lévis** | *Nous amorçons le déploiement dans la région de Québec.* |
-| **Étude jeune ou pratique solo** | *Nota s'adresse particulièrement aux notaires qui développent leur clientèle : les évaluations des clients y bâtissent une réputation visible.* |
+| **Étude jeune ou pratique solo** | *Nota s'adresse particulièrement aux notaires qui développent leur clientèle : une date vide y trouve un client, sans coût d'acquisition.* |
 
 ## E2 — Relance, J+4
 
 *Une seule question, répondable en une ligne. Beaucoup répondront à celle-ci
 sans jamais accorder l'appel — et c'est déjà une donnée.*
 
-**Objet :** `Re: 20 minutes — question de recherche sur les honoraires notariaux`
+**Objet :** `Re: Nota — démonstration en visioconférence`
 
 ```
 Bonjour Me [Nom],
@@ -113,7 +150,7 @@ Anthony Paquet
 *Fermer proprement vaut mieux que relancer une quatrième fois : la porte reste
 ouverte pour la cohorte pilote dans six mois.*
 
-**Objet :** `Re: 20 minutes — dernière relance`
+**Objet :** `Re: Nota — démonstration en visioconférence` (dernière relance)
 
 ```
 Bonjour Me [Nom],
@@ -149,14 +186,15 @@ que ça implique concrètement :
     le montant offert ;
   · vous retenez ce qui cadre avec votre horaire — rien n'est imposé,
     rien n'est automatique ;
-  · le montant affiché est un total tout compris : 85 % sont vos
-    honoraires, les 15 % qui restent sont les frais de service que le
-    client paie à Nota pour monter le dossier et opérer la transaction ;
-  · votre part monte avec votre cote sur 100 — satisfaction des clients,
-    services rendus, disponibilité, présence — jusqu'à 95 %, et elle ne
-    redescend jamais ;
-  · aucun engagement, aucun abonnement, aucun coût par piste : Nota ne
-    touche rien tant qu'un acte ne se conclut pas.
+  · le montant offert est votre honoraire, en entier : Nota ne prend
+    rien dessus, ni pourcentage, ni frais de piste ;
+  · Nota facture son propre service au client, à côté et à un prix
+    publié d'avance : 199 $ pour un financement, 249 $ pour un
+    refinancement, plus une ligne de garantie de date (0 $ au-delà de
+    14 jours, jusqu'à 300 $ pour le jour même) ;
+  · le client n'est débité qu'à la signature ;
+  · aucun engagement, aucun abonnement, aucun coût par piste : vous ne
+    payez rien, jamais, ni avant ni après.
 
 Je vous ouvre un accès cette semaine ?
 

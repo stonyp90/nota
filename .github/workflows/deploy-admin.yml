@@ -7,17 +7,23 @@
 #
 # GATING (defence in depth):
 #   1. Triggers only via manual dispatch OR pushes to main that touch the admin
-#      SPA / shared api bundle (path filter below).
-#   2. The deploy job runs in the GitHub Environment "admin-production". That
+#      SPA / shared api bundle / the shared dependency tree (path filter below).
+#   2. The ship waits on the SAME three gates as the public deploy — tests,
+#      Playwright journeys, Terraform fmt+validate — called from ci.yml.
+#      Jusqu'au 2026-09-04 cette porte-ci n'en franchissait qu'une (`needs:
+#      test`). Les deux Lambdas embarquent pourtant le MÊME paquet apps/api :
+#      la console pouvait donc livrer du code API que le navigateur ou
+#      Terraform auraient refusé côté public.
+#   3. The deploy job runs in the GitHub Environment "admin-production". That
 #      environment currently has NO required reviewers — verified 2026-09-03 via
 #      `gh api repos/stonyp90/nota/environments` (protection_rules: []) — so an
 #      admin deploy ships WITHOUT a human approval. This is the owner's explicit
 #      choice (2026-09-03): everything that lands on main goes to production.
 #      The environment still earns its keep: it is what the OIDC role's trust
-#      policy binds to (point 3). To require an approval later, add yourself as
+#      policy binds to (point 4). To require an approval later, add yourself as
 #      a required reviewer in repo Settings -> Environments -> admin-production;
 #      no workflow change is needed, and this comment must then be updated.
-#   3. The AWS role it assumes (ADMIN_DEPLOY_ROLE_ARN) is a dedicated
+#   4. The AWS role it assumes (ADMIN_DEPLOY_ROLE_ARN) is a dedicated
 #      least-privilege OIDC role whose trust policy only accepts the
 #      "admin-production" environment (see aws_iam_role.admin_github_deploy).
 #
@@ -43,7 +49,17 @@ on:
       - apps/admin/**
       - apps/api/**
       - packages/domain/**
+      # LES DEUX LAMBDAS POUVAIENT DÉRIVER (corrigé le 2026-09-04). Un
+      # changement de dépendance qui ne touche QUE le verrou — un `npm install`
+      # qui remonte une version, un correctif de sécurité transitif — ne
+      # passait aucun de ces filtres. La Lambda publique repartait alors sur le
+      # nouvel arbre de dépendances et la Lambda admin restait sur l'ancien,
+      # alors qu'elles embarquent le même paquet apps/api.
+      - package.json
+      - package-lock.json
       - .github/workflows/deploy-admin.yml
+      # Les gardes elles-mêmes : si elles changent, on revalide et on relivre.
+      - .github/workflows/ci.yml
 
 # OIDC needs id-token: write to mint the token; contents: read to checkout.
 permissions:
@@ -59,36 +75,19 @@ env:
   AWS_REGION: ca-central-1
 
 jobs:
-  test:
-    name: Tests (domain + api + contract + BDD + web + admin)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Node 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - name: Install workspaces
-        run: npm ci
-
-      - name: Unit tests (domain + api)
-        run: npm test
-
-      - name: BDD suite (Cucumber)
-        run: npm ci --prefix features && npm test --prefix features
-
-      - name: Web smoke test (jsdom)
-        run: npm test --workspace @nota/web
-
-      - name: Admin console tests (jsdom + dev proxy)
-        run: npm test --workspace @nota/admin
+  # Exactement les mêmes gardes que la livraison publique, et la MÊME
+  # définition : ci.yml. Rien à réinventer ici, donc rien qui puisse diverger.
+  checks:
+    name: Gardes avant livraison
+    uses: ./.github/workflows/ci.yml
+    with:
+      e2e: true
+    permissions:
+      contents: read
 
   deploy:
     name: Build + deploy admin to AWS
-    needs: test
+    needs: checks
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     # The environment the OIDC trust policy binds to (infra/admin.tf: the role
@@ -142,8 +141,25 @@ jobs:
                 mkdir -p "apps/api/node_modules/$(dirname "$rel")"
                 cp -RL "$p" "apps/api/node_modules/$rel"
               done
-          test -f apps/api/node_modules/stripe/package.json
+
+          # Même garde-fou que deploy.yml, et pour la même raison : la liste des
+          # dépendances de production se lit DANS apps/api/package.json plutôt
+          # que d'être recopiée à la main. Ici elle ne couvrait que deux noms
+          # sur sept — @aws-sdk/client-s3 et @aws-sdk/s3-request-presigner, dont
+          # dépend le port de stockage des documents (ADR 0032), n'étaient
+          # vérifiés nulle part.
+          deps=$(node -p 'Object.keys(require("./apps/api/package.json").dependencies || {}).join(" ")')
+          test -n "$deps"
+          missing=""
+          for dep in $deps; do
+            [ -f "apps/api/node_modules/$dep/package.json" ] || missing="$missing $dep"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::dépendances de production absentes du paquet Lambda :$missing" >&2
+            exit 1
+          fi
           test -f apps/api/node_modules/@nota/domain/index.js
+
           ( cd apps/api && zip -qr /tmp/admin-api.zip . -x '*.git*' 'test/*' 'test-support/*' 'node_modules/@nota/domain/test/*' )
           ls -la /tmp/admin-api.zip
           aws lambda update-function-code \
@@ -155,20 +171,34 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Hashed assets are immutable for a year; index.html is the un-hashed
-          # entrypoint that must never be cached so a new deploy is picked up
-          # immediately. --delete prunes the previous build's hashed files.
-          # robots.txt is un-hashed POLICY (never index the admin) — short cache
-          # so a policy change propagates, mirroring the public deploy.
+          # Même règle de cache que la surface publique, inversée le 2026-09-04 :
+          # le défaut est COURT, et seul ce dont le nom porte l'empreinte du
+          # contenu est promu immuable. favicon.svg et robots.txt gardent leur
+          # nom d'un déploiement à l'autre — ils prenaient pourtant l'année
+          # immuable de la synchro en masse (robots.txt exclu à part).
+          #
+          # Passe 1 — tout, en cache court. --delete élague les fichiers
+          # empreintés du build précédent. index.html est exclu pour qu'il ne
+          # porte JAMAIS autre chose que no-cache ; la passe 3 le republie.
           aws s3 sync apps/admin/dist "s3://${{ vars.ADMIN_WEB_BUCKET }}" \
             --delete \
-            --cache-control "public,max-age=31536000,immutable" \
-            --exclude index.html \
-            --exclude robots.txt
-          if [ -f apps/admin/dist/robots.txt ]; then
-            aws s3 cp apps/admin/dist/robots.txt "s3://${{ vars.ADMIN_WEB_BUCKET }}/robots.txt" \
-              --cache-control "public,max-age=3600"
+            --cache-control "public,max-age=3600" \
+            --exclude index.html
+
+          # Passe 2 — les seuls fichiers dont le NOM change avec les octets
+          # (apps/admin/build.mjs les renomme admin.<10 hex>.js, tokens.<…>.css…).
+          hashed=$(find apps/admin/dist -maxdepth 1 -type f | grep -E '\.[0-9a-f]{10}\.(js|css)$' || true)
+          if [ -z "$hashed" ]; then
+            echo "::error::aucun asset empreinté dans apps/admin/dist — le build a changé de forme, la règle de cache ne tient plus" >&2
+            exit 1
           fi
+          for f in $hashed; do
+            aws s3 cp "$f" "s3://${{ vars.ADMIN_WEB_BUCKET }}/$(basename "$f")" \
+              --cache-control "public,max-age=31536000,immutable"
+          done
+
+          # Passe 3 — index.html : jamais mis en cache. C'est le seul fichier
+          # non empreinté qui DÉSIGNE les empreintes courantes.
           aws s3 cp apps/admin/dist/index.html "s3://${{ vars.ADMIN_WEB_BUCKET }}/index.html" \
             --cache-control "no-cache"
 

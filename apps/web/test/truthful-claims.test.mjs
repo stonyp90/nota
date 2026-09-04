@@ -264,7 +264,10 @@ test('P0-5: the onboarding’s third client step names both lines, never « rien
   const last = steps[2];
   assert.ok(!/rien de plus/.test(last), 'the client pays TWO lines since ADR 0031: ' + last);
   assert.match(last, /honoraires/, last);
-  assert.match(last, /prix fixe du service de Nota/, last);
+  // ADR 0034 — le prix de Nota est une GRILLE (par service, par palier de
+  // délai) : la troisième étape le nomme « publié d'avance », jamais « fixe ».
+  assert.match(last, /prix du service de Nota, publié d’avance/, last);
+  assert.ok(!/prix fixe/.test(last), 'le prix de Nota n’est pas fixe depuis l’ADR 0034 : ' + last);
   assert.match(last, /affichés avant tout paiement/, last);
   dom.window.close();
 });
@@ -394,4 +397,296 @@ test('og.png a bien été re-rendu depuis le og.svg courant', async () => {
   assert.equal(somme, OG_SVG_SHA256,
     'og.svg a changé : re-rends og.png depuis le svg (1200x630) puis remplace OG_SVG_SHA256 par ' + somme
     + '. Sans cela, l’image partagée continue d’annoncer l’ancien message.');
+});
+
+// ---------------------------------------------------------------------------
+// 5. COMMENT NOTA EST PAYÉE — les mots que le droit notarial lui interdit.
+//
+//    Audit du 2026-09-04 : la politique de confidentialité disait encore
+//    « Nota se rémunère par une commission sur les actes complétés », le
+//    dictionnaire portait quatre entrées et une règle bâties sur le même mot,
+//    et deux phrases d'app.js — la troisième étape de l'accueil, la
+//    description du catalogue JSON-LD — annonçaient « le prix FIXE du service
+//    de Nota ».
+//
+//    Ce qui est livré, et la seule chose qu'une surface puisse dire : Nota
+//    facture au CLIENT son propre service, à un prix publié par service auquel
+//    s'ajoute la garantie de date ; le notaire garde 100 % de ses honoraires,
+//    Nota n'en prélève rien (ADR 0031, ADR 0034, ADR 0035).
+//
+//    Le garde lit les CHAÎNES, jamais les commentaires : un commentaire qui
+//    explique POURQUOI un mot est proscrit doit rester lisible — i18n.js en
+//    porte un, et cette section aussi. Trois surfaces : les littéraux d'app.js,
+//    ceux d'i18n.js (clés ET valeurs — l'anglais ne doit pas rentrer par la
+//    fenêtre ce que le français a lâché par la porte) et le TEXTE rendu
+//    d'index.html. llms.txt et le « prix fixe » d'index.html sont déjà gardés
+//    par devis-deux-lignes.test.mjs ; la cote côté client, elle, est prouvée
+//    au rendu par client-cote.test.mjs — ici on ferme le vocabulaire.
+// ---------------------------------------------------------------------------
+
+// Les chaînes d'un module, commentaires exclus. Le balayage ne modélise pas
+// les littéraux d'expression régulière ; ni app.js ni i18n.js n'en contient un
+// qui porte une apostrophe ou un guillemet, et « le balayage ne décroche pas »
+// ci-dessous le vérifie à chaque exécution (une désynchronisation capturerait
+// du code au lieu d'une phrase).
+function chaines(src) {
+  const out = [];
+  let i = 0;
+  const n = src.length;
+  while (i < n) {
+    const c = src[i];
+    if (c === '/' && src[i + 1] === '/') { while (i < n && src[i] !== '\n') i++; continue; }
+    if (c === '/' && src[i + 1] === '*') { i += 2; while (i < n && !(src[i] === '*' && src[i + 1] === '/')) i++; i += 2; continue; }
+    if (c === "'" || c === '"' || c === '`') {
+      const q = c; let s = ''; let j = i + 1; let clos = false;
+      while (j < n) {
+        const d = src[j];
+        if (d === '\\') { s += src[j + 1]; j += 2; continue; }
+        if (d === q) { clos = true; j++; break; }
+        if (d === '\n' && q !== '`') break;
+        s += d; j++;
+      }
+      if (clos) { out.push(s); i = j; continue; }
+      i++; continue;
+    }
+    i++;
+  }
+  return out;
+}
+
+// Le texte qu'un lecteur (ou un robot d'indexation) reçoit d'index.html : le
+// corps, les attributs visibles, les métas et les données structurées. Les
+// commentaires HTML n'en font pas partie — textContent ne les rend pas.
+function textesHtml() {
+  const doc = staticDoc();
+  const bouts = [doc.body.textContent];
+  for (const m of doc.querySelectorAll('meta[content]')) bouts.push(m.getAttribute('content'));
+  for (const attr of ['aria-label', 'title', 'placeholder', 'alt']) {
+    for (const e of doc.querySelectorAll('[' + attr + ']')) bouts.push(e.getAttribute(attr));
+  }
+  for (const s of doc.querySelectorAll('script[type="application/ld+json"]')) bouts.push(s.textContent);
+  return bouts.filter(Boolean);
+}
+
+// La phrase qui porte l'occurrence — c'est à cette échelle qu'on reconnaît une
+// dénégation (« aucun partage d'honoraires ») d'une affirmation.
+const phraseAutour = (s, i) => {
+  const debut = Math.max(...['.', '!', '?', '\n', ';'].map((p) => s.lastIndexOf(p, i)), -1) + 1;
+  const fins = ['.', '!', '?', '\n', ';'].map((p) => s.indexOf(p, i)).filter((k) => k >= 0);
+  return s.slice(debut, fins.length ? Math.min(...fins) + 1 : s.length).trim();
+};
+
+const AXES = [
+  {
+    id: 'commission',
+    dit: 'que Nota touche une COMMISSION',
+    vrai: 'Nota facture son propre service au client, à un prix publié (ADR 0031, ADR 0034)',
+    // Art. 32 de la Loi sur le notariat et art. 32.1 du Code de déontologie des
+    // notaires (N-3, r. 2) : les honoraires d'un notaire ne se partagent pas
+    // avec un non-notaire, et l'intermédiaire ne peut pas en obtenir l'abandon
+    // d'une partie. Dire « commission », c'est décrire exactement l'arrangement
+    // interdit — même au passé, même en anglais. Le mot n'a plus d'emploi
+    // légitime dans une phrase montrée à un lecteur ; le champ `commissionCents`
+    // que l'API renvoie encore reste hors de portée (un identifiant, pas une
+    // phrase), d'où les bornes qui excluent lettres et traits d'union.
+    motifs: [/(?<![\w-])commissions?(?![\w-])/i],
+  },
+  {
+    id: 'partage',
+    dit: 'un PARTAGE des honoraires du notaire',
+    vrai: 'le notaire garde 100 % de ses honoraires ; Nota vend son service à côté (ADR 0031)',
+    // Même interdiction, l'autre formulation : les 75/25 et 85/15 retirés, le
+    // « montant à 85 % », la part en pourcentage des honoraires. Art. 32.1 du
+    // Code de déontologie ; ADR 0031 a fermé le partage, ADR 0034 a publié la
+    // grille qui l'a remplacé.
+    motifs: [
+      /\b(?:75\s*\/\s*25|25\s*\/\s*75|85\s*\/\s*15|15\s*\/\s*85)\b/,
+      /\bpartag\w*[^.!?]{0,60}\bhonoraires\b/i,
+      /\bhonoraires\b[^.!?]{0,60}\bpartag/i,
+      /\b(?:15|25|75|85|95)\s*%[^.!?]{0,40}\bhonoraires\b/i,
+      /\bhonoraires\b[^.!?]{0,40}\b(?:15|25|75|85|95)\s*%/i,
+      /\bmont\w*\s+à\s+(?:85|95)\s*%/i,
+      /\b(?:share|split)\s+of\s+(?:the\s+)?(?:notary’s\s+|notary's\s+)?fees\b/i,
+      /\bfee[-\s]?sharing\b|\brevenue\s+(?:share|split)\b/i,
+    ],
+    // NIER le partage est précisément ce que le produit doit écrire : « aucun
+    // partage d'honoraires, aucune convention sur vos honoraires » est la
+    // promesse faite au notaire, et la charte cite l'interdiction elle-même.
+    // Seule l'AFFIRMATION est proscrite, d'où l'exception au niveau de la phrase.
+    sauf: /\b(?:aucun|aucune|sans|jamais|ni|interdit\w*|interdiction|no|never|prohibit\w*)\b/i,
+  },
+  {
+    id: 'prix fixe',
+    dit: 'que le prix de Nota est FIXE',
+    vrai: 'c’est une grille : un prix par service, plus le palier de garantie de date (ADR 0034)',
+    // ADR 0034 : deux axes de variation vivants (le service demandé, le délai
+    // avant la signature). « Fixe » est donc faux, et l'art. 68 du Code de
+    // déontologie vise la publicité incomplète ou trompeuse. La formule juste :
+    // « le prix du service de Nota, publié d'avance ».
+    motifs: [
+      /prix\s+fixe/i,
+      /montant\s+fixe/i,
+      /fixed\s+(?:price|amount|service\s+price)/i,
+      /flat\s+(?:price|fee|service\s+price)/i,
+    ],
+  },
+  {
+    id: '400 $',
+    dit: 'le prix forfaitaire retiré de 400 $',
+    vrai: 'les montants viennent du domaine (D.SERVICES, garantie de date), jamais d’un littéral',
+    // ADR 0034 a retiré le prix unique de 400 $. Un montant écrit en dur dans
+    // une phrase est doublement faux : il ressuscite le forfait, et il cesse de
+    // suivre la grille que l'admin peut changer. (La borne devant « 400 »
+    // laisse passer « 2 400 $ » écrit avec une espace insécable — la forme que
+    // produit D.money — et « 400 jours », qui n'est pas un montant.)
+    motifs: [/(?<![\d  ])400\s*\$/, /\$\s?400(?![\d.,])/],
+  },
+  {
+    id: 'comparatif',
+    dit: 'que Nota coûte MOINS CHER qu’un notaire',
+    vrai: 'les honoraires sont ceux que le client offre et que le notaire accepte — rien à comparer',
+    // Art. 32.1 1° du Code de déontologie : pas de publicité comparative sur
+    // les prix de la profession. Nota ne fixe pas les honoraires du notaire ;
+    // elle ne peut donc rien affirmer sur leur niveau.
+    motifs: [/moins\s+ch[eè]re?s?\b/i, /\bcheaper\b/i, /\bless\s+expensive\b/i],
+  },
+  {
+    id: 'cote publiée',
+    dit: 'une cote, une moyenne ou un témoignage rattaché à un notaire NOMMÉ',
+    vrai: 'des faits seulement côté client : le numéro à la Chambre, le nombre d’actes (ADR 0030)',
+    // Art. 70 du Code de déontologie : le notaire ne peut utiliser NI PERMETTRE
+    // QUE SOIT UTILISÉ un témoignage d'appui ou de reconnaissance qui le
+    // concerne. La cote sur 100 (ADR 0028) reste interne, et la console du
+    // notaire lui montre ses propres évaluations — ce sont les formulations
+    // publicitaires qui sont fermées ici ; le rendu, lui, est prouvé par
+    // client-cote.test.mjs.
+    motifs: [
+      /t[ée]moignages?\b/i,
+      /\b(?:cote|note|moyenne|évaluation)\s+(?:du|de ce|de votre)\s+notaire/i,
+      /notaire[^.!?]{0,30}\b(?:noté|coté|évalué|recommandé)\b/i,
+      /\b(?:avis|évaluations?)\s+(?:vérifiés?|de clients?)\b/i,
+      /\b\d[,.]\d\s*(?:\/|sur)\s*5\b/,
+      /(?:étoiles?|stars?)[^.!?]{0,40}notaire/i,
+    ],
+  },
+];
+
+const SURFACES = () => ({
+  'app.js': chaines(APP_SRC),
+  'i18n.js': chaines(I18N_SRC),
+  'index.html': textesHtml(),
+});
+
+test('le balayage ne décroche pas : ce qu’on lit sont bien des phrases, pas du code', () => {
+  for (const [nom, textes] of Object.entries(SURFACES())) {
+    assert.ok(textes.length > 100, nom + ' : le balayage n’a presque rien trouvé (' + textes.length + ')');
+    for (const t of textes) {
+      assert.ok(!/\bfunction\s*\(|\bvar\s+\w+\s*=\s*|=>\s*\{/.test(t),
+        nom + ' : le balayage a capturé du code — une chaîne non fermée l’a désynchronisé : ' + JSON.stringify(t.slice(0, 120)));
+    }
+  }
+});
+
+test('aucune surface livrée ne dit comment Nota est payée avec les mots que la loi lui interdit', () => {
+  const fautes = [];
+  for (const [nom, textes] of Object.entries(SURFACES())) {
+    for (const axe of AXES) {
+      for (const motif of axe.motifs) {
+        for (const t of textes) {
+          const m = t.match(motif);
+          if (!m) continue;
+          const phrase = phraseAutour(t, t.indexOf(m[0]));
+          if (axe.sauf && axe.sauf.test(phrase)) continue; // une dénégation, pas une affirmation
+          fautes.push(nom + ' affirme ' + axe.dit + ' — or ' + axe.vrai + '.\n      « ' + phrase.slice(0, 220) + ' »');
+        }
+      }
+    }
+  }
+  assert.deepEqual(fautes, [], 'affirmations proscrites :\n    ' + fautes.join('\n    '));
+});
+
+test('le garde a des dents : chaque formulation retirée est bien reconnue par son axe', () => {
+  // Sans ceci, une expression affaiblie passerait inaperçue — le test resterait
+  // vert en ne gardant plus rien. Chaque phrase ci-dessous a réellement été
+  // livrée, ou décrit exactement l'arrangement retiré.
+  const retirees = [
+    ['commission', 'Nous ne vendons rien. Nota se rémunère par une commission sur les actes complétés.'],
+    ['commission', 'La commission n’est prélevée qu’à la signature, sur la valeur confirmée.'],
+    ['commission', 'Nota earns a commission on completed acts.'],
+    ['partage', 'Le partage des honoraires est de 75/25 en faveur du notaire.'],
+    ['partage', 'Vos honoraires montent à 85 % au-delà d’une cote de 90.'],
+    ['partage', 'Nota takes a 15 % share of the notary’s fees.'],
+    ['prix fixe', 'Vous payez ses honoraires et, séparément, le prix fixe du service de Nota.'],
+    ['prix fixe', 'Nota’s service price is a fixed amount.'],
+    ['400 $', 'Le service de Nota coûte 400 $, quel que soit l’acte.'],
+    ['comparatif', 'Signer par Nota revient moins cher qu’un notaire.'],
+    ['cote publiée', 'Un témoignage de cliente sur ce notaire.'],
+    ['cote publiée', 'La cote du notaire est de 4,5 sur 5.'],
+  ];
+  for (const [id, phrase] of retirees) {
+    const axe = AXES.find((a) => a.id === id);
+    assert.ok(axe, 'axe inconnu : ' + id);
+    assert.ok(axe.motifs.some((re) => re.test(phrase)),
+      'l’axe « ' + id + ' » ne reconnaît plus : ' + phrase);
+  }
+  // …et une dénégation ne doit JAMAIS être comptée comme une affirmation.
+  const denegation = 'Nota facture son propre prix au client, à côté : aucun partage d’honoraires, aucune convention sur vos honoraires.';
+  const partage = AXES.find((a) => a.id === 'partage');
+  assert.ok(partage.motifs.some((re) => re.test(denegation)), 'la phrase est bien attrapée par le motif…');
+  assert.ok(partage.sauf.test(phraseAutour(denegation, denegation.indexOf('partage'))), '…et rendue par l’exception de dénégation');
+});
+
+test('et les surfaces disent la vérité à la place — les deux directions, toujours', () => {
+  // (a) La politique de confidentialité : d'où vient l'argent de Nota.
+  const priv = FLAT(staticDoc().getElementById('pane-confidentialite').textContent);
+  assert.match(priv, /facturant son propre service au client/, priv.slice(0, 200));
+  assert.match(priv, /prix publié d’avance/, 'et que ce prix est publié : ' + priv.slice(0, 200));
+  I18N.force('en');
+  const privEn = I18N.tEn('Nous ne vendons ni ne louons vos renseignements. Nota se rémunère en facturant son propre service au client, à un prix publié d’avance. Aucune donnée n’est monnayée.');
+  assert.match(privEn, /charging the client for its own service/, privEn);
+  assert.match(privEn, /published in advance/, privEn);
+
+  // (b) La récompense de référence sort des revenus de Nota — pas d'une part
+  //     des honoraires du notaire, pas du prix du client.
+  const notes = [...staticDoc().querySelectorAll('.nota-guarantee')].map((n) => FLAT(n.textContent));
+  const partenaires = notes.find((t) => /récompense de référence/.test(t)) || '';
+  assert.match(partenaires, /à même ses propres revenus/, partenaires);
+  assert.match(partenaires, /jamais retranchée des honoraires du notaire/, partenaires);
+  assert.match(I18N.tEn('La récompense de référence est un coût de marketing de Nota, payée à même ses propres revenus — jamais ajoutée au prix du client, jamais retranchée des honoraires du notaire.'),
+    /paid out of its own revenue/);
+
+  // (c) Le catalogue JSON-LD — la seule phrase de prix qu'un robot lit — dit la
+  //     grille, pas un forfait. (Les scripts ne sont jamais traduits : le
+  //     walker d'i18n.js saute <script>, donc rien à couvrir côté anglais.)
+  const cat = APP_SRC.match(/description: '([^']*Prix de départ[^']*)'/);
+  assert.ok(cat, 'le catalogue décrit toujours son offre');
+  assert.match(cat[1], /publié d’avance/, cat[1]);
+  assert.ok(!/fixe/.test(cat[1]), cat[1]);
+});
+
+test('le dictionnaire ne garde pas en dormance une entrée que plus aucune source ne produit', () => {
+  // Une entrée orpheline est une copie prête à revenir : les six retirées le
+  // 2026-09-04 (cinq entrées TEXT + une règle) n'avaient plus de source
+  // française nulle part, et portaient toutes une affirmation retirée — le mot
+  // « commission » pour cinq d'entre elles, la ligne unique de l'ADR 0031
+  // (« rien de plus ») pour la sixième.
+  for (const orpheline of [
+    'commission seulement sur ce qui se conclut.',
+    'Prix et commission.',
+    'ou vous propose un prix — vous restez libre. Vous payez votre prix affiché à la signature, rien de plus.',
+    'Nous ne vendons ni ne louons vos renseignements. Nota se rémunère par une commission sur les actes complétés. Aucune donnée n’est monnayée.',
+    'La récompense de référence est un coût de marketing de Nota, payée à même sa propre commission — jamais ajoutée au prix du client, jamais retranchée des honoraires du notaire.',
+  ]) {
+    assert.ok(!I18N.covered(orpheline), 'le dictionnaire porte encore : ' + orpheline);
+  }
+  // Et les phrases vivantes, elles, restent traduites — retirer une entrée ne
+  // doit jamais laisser une source française sans anglais.
+  I18N.force('en');
+  for (const vivante of [
+    'Nous ne vendons ni ne louons vos renseignements. Nota se rémunère en facturant son propre service au client, à un prix publié d’avance. Aucune donnée n’est monnayée.',
+    'ou vous propose un prix — vous restez libre. Vous payez ses honoraires — le montant que vous avez offert — et, séparément, le prix du service de Nota, publié d’avance ; les deux vous sont affichés avant tout paiement.',
+    'La récompense de référence est un coût de marketing de Nota, payée à même ses propres revenus — jamais ajoutée au prix du client, jamais retranchée des honoraires du notaire.',
+  ]) {
+    assert.ok(I18N.covered(vivante), 'plus d’anglais pour : ' + vivante);
+  }
 });

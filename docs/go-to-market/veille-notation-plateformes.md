@@ -1,9 +1,35 @@
 # Veille — comment les plateformes notent leurs prestataires, et ce que Nota devrait en retenir
 
-Date : 2026-09-01
-Objet : valider (ou corriger) la **cote sur 100** décidée par le propriétaire le
-1<sup>er</sup> septembre 2026, qui fixe directement la part que Nota retient sur
-chaque acte (15 % au départ, 5 % au sommet).
+Date : 2026-09-01 — **instantané. Ne pas lire comme l'état du produit.**
+Objet, *tel qu'il était le 1<sup>er</sup> septembre* : valider (ou corriger) la
+**cote sur 100** décidée par le propriétaire ce jour-là, qui fixait alors la
+part que Nota retenait sur chaque acte (15 % au départ, 5 % au sommet).
+
+> **Ce que les jours suivants ont retiré — à lire avant tout le reste.**
+>
+> - **L'ADR 0031 (2026-09-02) a supprimé le partage.** Il n'existe plus aucune
+>   part, aucun pourcentage, aucune commission sur les honoraires du notaire :
+>   il les fixe et les garde **en entier**. Nota vend son propre service au
+>   client, à côté, à un prix publié — **199 $** financement, **249 $**
+>   refinancement (ADR 0034), plus une garantie de date de 0 à 300 $. Un partage
+>   d'honoraires avec un non-notaire tombe sous l'art. 32 du *Code de
+>   déontologie* et l'art. 32.1 de la *Loi sur le notariat* : ce n'est pas
+>   seulement périmé, c'est interdit.
+> - **L'ADR 0030 (2026-09-02) a fermé l'affichage.** Aucune cote, moyenne, note
+>   ou témoignage attaché à un **notaire nommé** n'est visible du client
+>   (art. 70). Côté client : des faits seulement — numéro au Tableau, nombre
+>   d'actes.
+> - **Ce qui survit :** la cote sur 100 comme **outil interne**, dans la console
+>   du notaire et dans le jugement de Nota. Et surtout l'enquête elle-même —
+>   comment Uber, Upwork, DoorDash, Airbnb et les autres notent leurs
+>   prestataires : ces chiffres-là sont des faits sourcés sur des tiers, ils ne
+>   dépendent d'aucune décision de Nota, et ils restent la meilleure matière
+>   disponible pour régler la cote interne.
+> - **Ce qui ne survit pas :** toute table « cote → taux » de ce document, et
+>   toute phrase qui présente la cote comme visible du client ou comme le levier
+>   d'une part. Les tables sont conservées telles quelles parce qu'elles ont
+>   servi à des décisions ; **aucune ne doit être recopiée dans un texte
+>   destiné à un notaire.**
 
 **Convention de lecture.** Chaque affirmation sur un concurrent est suivie de sa
 source. Ce qui vient d'une page officielle de la plateforme est marqué
@@ -29,17 +55,22 @@ Pas la table du courriel : le code.
 | --- | --- |
 | `packages/domain/index.js` (bloc `COTE`, ligne ~1222) | Les quatre axes, leurs maxima, toute la pondération |
 | `apps/api/src/cote.js` | L'adaptateur : quels compteurs du profil notaire alimentent quels axes |
-| `apps/api/src/commission-config.js` | La traduction cote → taux : 15 % de base, paliers 60/70/80/90, plancher 5 % |
+| ~~`apps/api/src/commission-config.js`~~ | ~~La traduction cote → taux : 15 % de base, paliers 60/70/80/90, plancher 5 %~~ — **retiré par l'ADR 0031 : il n'y a plus de taux à traduire** |
 
-Barème effectif :
+Barème effectif **au 1<sup>er</sup> septembre 2026 — retiré le lendemain par
+l'ADR 0031. Archive ; à ne recopier nulle part** :
 
-| Cote atteinte | Nota garde | Le notaire garde |
+| Cote atteinte | ~~Nota garde~~ | ~~Le notaire garde~~ |
 | ---: | ---: | ---: |
-| < 60 | 15 % | 85 % |
-| ≥ 60 | 12 % | 88 % |
-| ≥ 70 | 10 % | 90 % |
-| ≥ 80 | 8 % | 92 % |
-| ≥ 90 | 5 % | 95 % |
+| < 60 | ~~15 %~~ | ~~85 %~~ |
+| ≥ 60 | ~~12 %~~ | ~~88 %~~ |
+| ≥ 70 | ~~10 %~~ | ~~90 %~~ |
+| ≥ 80 | ~~8 %~~ | ~~92 %~~ |
+| ≥ 90 | ~~5 %~~ | ~~95 %~~ |
+
+Depuis l'ADR 0031, la colonne de droite vaut **100 % à toutes les lignes**, et
+la colonne du milieu n'existe plus : Nota est payé par le client, pas par le
+notaire.
 
 **Fait structurant, vérifié dans `cote.js` :** tous les signaux sont des
 compteurs **cumulés depuis l'inscription** — `ratingSum` / `ratingCount`,
@@ -54,17 +85,29 @@ interrupteur à deux positions : 3,5 pts ou 7 pts.
 
 ### Simulations du barème actuel (exécutées contre `domain.notaryScore`)
 
-| Profil | Cote | Nota garde |
-| --- | ---: | ---: |
-| Notaire neuf, profil vide | **35** | 15 % |
-| Notaire neuf, profil **complet** (fiche CNQ, secteur, rayon 50 km, urgences) | **51** | 15 % |
-| 1 an, 20 actes (1 seul service), 20 avis à 4,9, 30 réponses / 0 déclin | **88** | 8 % |
-| 1 an, 50 actes (2 services), 30 avis à 5,0, 40 réponses / 0 déclin | **100** | 5 % |
-| Le même que le 3<sup>e</sup>, mais 15 réponses / 5 déclins | **85** | 8 % |
+*La colonne « Nota garde » est celle du barème retiré, conservée pour la
+lecture historique. Les cotes, elles, restent exactes : elles sortent de
+`domain.notaryScore`, qui n'a pas changé.*
 
-**[estimation Nota]** Conséquence immédiate : *un notaire irréprochable mais
-neuf plafonne à 51 et paie le taux maximum*. Le premier palier (60) est
-inatteignable sans actes complétés, quelle que soit la qualité du notaire.
+| Profil | Cote | ~~Nota garde~~ (retiré) |
+| --- | ---: | ---: |
+| Notaire neuf, profil vide | **35** | ~~15 %~~ |
+| Notaire neuf, profil **complet** (fiche CNQ, secteur, rayon 50 km, urgences) | **51** | ~~15 %~~ |
+| 1 an, 20 actes (1 seul service), 20 avis à 4,9, 30 réponses / 0 déclin | **88** | ~~8 %~~ |
+| 1 an, 50 actes (2 services), 30 avis à 5,0, 40 réponses / 0 déclin | **100** | ~~5 %~~ |
+| Le même que le 3<sup>e</sup>, mais 15 réponses / 5 déclins | **85** | ~~8 %~~ |
+
+**[estimation Nota]** Conséquence immédiate, *telle qu'elle se lisait le
+1<sup>er</sup> septembre* : un notaire irréprochable mais neuf plafonnait à 51 et
+payait le taux maximum. Le premier palier (60) reste inatteignable sans actes
+complétés, quelle que soit la qualité du notaire.
+
+**Ce que ça vaut aujourd'hui.** Le défaut n'a plus de conséquence financière —
+il n'y a plus de taux — mais il en garde une **de conception** : une cote qui
+plafonne à 51 pour un notaire irréprochable ne peut pas servir d'outil interne
+de priorisation sans pénaliser structurellement les nouveaux venus, qui sont
+exactement la cohorte pilote visée. Le défaut reste donc à corriger ; l'enjeu a
+changé de nature.
 
 ---
 
@@ -453,10 +496,14 @@ discounts »). **[officiel]**
    fait exactement ce que le propriétaire a décidé, sur une amplitude comparable
    (0–15 % contre 5–15 %). Le modèle de Nota n'est donc pas une aberration.
 2. **Mais le taux est FIGÉ à l'ouverture du contrat et annoncé AVANT
-   l'engagement.** C'est le garde-fou que Nota n'a pas : aujourd'hui, le taux
-   se calcule au règlement (`billing.js` appelle `coteFor` au moment de
-   facturer), donc un notaire peut retenir un acte à 8 % et le régler à 10 %
-   parce qu'il aura décliné deux demandes entretemps.
+   l'engagement.** C'était le garde-fou que Nota n'avait pas : *au
+   1<sup>er</sup> septembre*, le taux se calculait au règlement (`billing.js`
+   appelait `coteFor` au moment de facturer), donc un notaire pouvait retenir un
+   acte à 8 % et le régler à 10 % parce qu'il aurait décliné deux demandes
+   entretemps. **Sans objet depuis l'ADR 0031 : il n'y a plus de taux.** Ce qui
+   est figé aujourd'hui, et pour la même raison de fond, c'est le **prix de
+   Nota** — le devis lu par le client avant qu'il engage sa carte est celui qui
+   se facture (`prixNotaFige`, ADR 0034).
 3. **La commission dégressive selon la relation client a été supprimée en
    2023.** Le palier 5 % était le seul avantage tarifaire récompensant la
    fidélité ; depuis, la loyauté n'ouvre plus que de la visibilité. Upwork a
@@ -1274,15 +1321,17 @@ source interne `validation-notaires.md`) verra, dans les premiers trimestres de
 Nota, **quelques dizaines de demandes par an au mieux**. Le dénominateur reste
 petit **en permanence**.
 
-Simulation exécutée contre le code actuel **[estimation Nota]** :
+Simulation exécutée contre le code du 1<sup>er</sup> septembre
+**[estimation Nota]**. *La colonne « Effet » est celle du barème retiré par
+l'ADR 0031 ; les cotes, elles, restent exactes.*
 
-| Situation | Cote | Effet |
+| Situation | Cote | ~~Effet~~ (barème retiré) |
 | --- | ---: | --- |
-| Notaire à 6 réponses, 0 déclin | 83 | 8 % |
-| Le même, **1 seul déclin** (5 réponses, 1 déclin) | **81** | 8 % |
-| Le même, 2 déclins | **79** | **10 %** — franchit le palier 80 vers le bas |
-| Notaire mûr : 18 réponses, 0 déclin | 89 | 8 % |
-| Le même, 3 déclins | 87 | 8 % |
+| Notaire à 6 réponses, 0 déclin | 83 | ~~8 %~~ |
+| Le même, **1 seul déclin** (5 réponses, 1 déclin) | **81** | ~~8 %~~ |
+| Le même, 2 déclins | **79** | ~~**10 %** — franchit le palier 80 vers le bas~~ |
+| Notaire mûr : 18 réponses, 0 déclin | 89 | ~~8 %~~ |
+| Le même, 3 déclins | 87 | ~~8 %~~ |
 
 **Un seul refus légitime coûte 2 points à faible volume**, et deux refus font
 basculer un palier — soit **2 points de pourcentage sur chaque acte futur**,
@@ -1427,10 +1476,13 @@ Nota, c'est le garde-fou qui accompagne ce taux chez Upwork :**
 et le taux est affiché **avant** que le prestataire soumette sa proposition ou
 accepte l'offre. **[officiel]** (même page)
 
-Chez Nota aujourd'hui, `billing.js` appelle `coteFor` **au moment de facturer** :
-un notaire peut retenir un acte alors que sa cote lui vaut 8 %, et le régler à
-10 % parce qu'il aura décliné deux demandes entretemps. C'est le défaut le plus
-facile à corriger et le plus difficile à défendre s'il subsiste.
+Chez Nota au 1<sup>er</sup> septembre, `billing.js` appelait `coteFor` **au
+moment de facturer** : un notaire pouvait retenir un acte alors que sa cote lui
+valait 8 %, et le régler à 10 % parce qu'il aurait décliné deux demandes
+entretemps. C'était le défaut le plus facile à corriger et le plus difficile à
+défendre. *Réglé par la disparition de l'objet : l'ADR 0031 a supprimé le taux.
+Le principe a survécu ailleurs — le prix de Nota est figé au devis que le client
+a lu, et ne se recalcule pas au règlement (`prixNotaFige`, ADR 0034).*
 
 **Correctifs :**
 
@@ -1520,12 +1572,20 @@ Quatre pièces, et il faut les quatre :
    c'est déjà fait.
 2. **Ne pas afficher de cote publique tant qu'il n'y a pas 3 évaluations et
    2 clients distincts.** C'est la règle d'Upwork, et elle est plus honnête que
-   la nôtre : Nota affiche aujourd'hui **35** à un notaire dont on ne sait
-   strictement rien, ce qui est un jugement déguisé en mesure. Un notaire sans
-   historique doit lire « pas encore évalué », pas « 35 ». **[estimation Nota]**
-3. **Une période de grâce explicite de 6 mois ou 5 actes complétés** (le
+   la nôtre : Nota affiche **35** à un notaire dont on ne sait strictement rien,
+   ce qui est un jugement déguisé en mesure. Un notaire sans historique doit
+   lire « pas encore évalué », pas « 35 ». **[estimation Nota]**
+   *Tranché depuis, et plus radicalement : l'ADR 0030 (2026-09-02) interdit
+   toute cote publique sur un notaire nommé, quel que soit le nombre d'avis
+   (art. 70). La recommandation ne vaut donc plus que pour ce que le notaire lit
+   dans sa propre console.*
+3. ~~**Une période de grâce explicite de 6 mois ou 5 actes complétés** (le
    premier atteint des deux) pendant laquelle **le notaire est facturé au
-   palier 70 (10 %)**, pas au taux de base de 15 %. Sinon Nota fait payer le
+   palier 70 (10 %)**, pas au taux de base de 15 %.~~ *Sans objet depuis
+   l'ADR 0031 : le notaire n'est facturé à aucun taux, il garde 100 % de ses
+   honoraires. Le raisonnement ci-dessous garde sa valeur pour tout usage
+   **interne** de la cote — priorisation, mise en avant — où pénaliser le
+   nouveau venu produirait le même effet.* Le texte d'origine : Sinon Nota fait payer le
    plus cher à ceux dont elle a le plus besoin pour amorcer le marché — environ
    400 notaires dans la RMR de Québec, aucun n'a d'historique le jour 1.
    **[estimation Nota]**
@@ -1541,6 +1601,16 @@ d'appui ou de reconnaissance » que le notaire « permettrait d'utiliser ». À
 inscrire dans les questions de l'avis juridique, pas à implémenter.
 
 ### 8.4 Tableau final — ce qu'on garde, ce qu'on change, pourquoi
+
+> **À lire au 4 septembre 2026.** Les lignes **11, 12 et 13** portent sur le
+> **taux** que la cote décidait (paliers 60/70/80/90, amplitude 5–15 %, moment
+> où il se fige, grâce du notaire neuf). Ce taux n'existe plus : l'ADR 0031 a
+> supprimé le partage, l'ADR 0034 a posé la grille par service. Ces trois lignes
+> sont **sans objet**. Toutes les autres — fenêtre temporelle, déclins,
+> pondérations, cible de satisfaction, éventail, volume, fiche CNQ — restent
+> entièrement valides : elles décrivent la **cote interne**, qui existe toujours
+> et sert la console du notaire. La ligne **13b** est tranchée plus fort que
+> proposé : l'ADR 0030 interdit toute cote publique sur un notaire nommé.
 
 | # | Élément | Décision | Correctif chiffré | Pourquoi |
 | --- | --- | --- | --- | --- |
@@ -1597,9 +1667,19 @@ members » — et a obtenu des approbations d'éthique dans cinq États.
 Avvo l'a violée sur (b) et (c) et a fermé son produit après huit avis d'éthique
 concordants.
 
-Nota est aujourd'hui **du mauvais côté des trois critères** : le prix de Nota
-varie avec l'honoraire du notaire (b), la cote est un classement au mérite (c),
-et l'affichage de la cote oriente le choix du client (a). Au Québec, l'art. 32.1
+Nota était, **au 1<sup>er</sup> septembre 2026, du mauvais côté des trois
+critères** : le prix de Nota variait avec l'honoraire du notaire (b), la cote
+était un classement au mérite (c), et l'affichage de la cote orientait le choix
+du client (a).
+
+> **Réglé depuis — c'est le constat de ce document qui a provoqué les trois
+> décisions.** (b) L'**ADR 0031** a coupé tout lien entre le prix de Nota et
+> l'honoraire du notaire : le notaire garde 100 %, Nota facture son propre
+> service au client (199 / 249 $, ADR 0034). (c) Le classement au mérite ne
+> décide plus rien, faute de part à décider. (a) L'**ADR 0030** a fermé
+> l'affichage : aucune cote sur un notaire nommé n'atteint le client. Le
+> paragraphe est conservé parce qu'il porte le raisonnement ; il ne décrit plus
+> le produit. Au Québec, l'art. 32.1
 de la *Loi sur le notariat* ajoute une sanction que les États-Unis n'ont pas :
 l'intermédiaire qui obtient l'abandon d'une part des honoraires est **présumé
 usurper les fonctions de notaire**.
@@ -1740,9 +1820,9 @@ il ne compte que s'il est publié.
 
 - `packages/domain/index.js`, bloc `COTE` — les quatre axes
 - `apps/api/src/cote.js` — l'adaptateur, et la confirmation que tous les compteurs sont cumulés à vie
-- `apps/api/src/commission-config.js` — 15 % de base, paliers 60/70/80/90, plancher 5 %
+- ~~`apps/api/src/commission-config.js` — 15 % de base, paliers 60/70/80/90, plancher 5 %~~ *(le barème a été retiré par l'ADR 0031 : plus aucun taux)*
 - `apps/api/src/billing.js` — la cote est calculée **au règlement**, pas à la retenue
-- `docs/decisions/0027-partage-75-25-cote-client.md` — la décision du propriétaire
+- ~~`docs/decisions/0027-partage-75-25-cote-client.md`~~ *(remplacé : ADR 0031 « Le prix de Nota est celui de Nota », ADR 0034 « une grille par service », ADR 0030 « la déontologie prime : la cote ne se publie pas »)*
 - `docs/go-to-market/validation-notaires.md` — ≈ 3 900 notaires au Québec, ≈ 400 dans la RMR de Québec
 
 ### Réserves de fiabilité — à vérifier avant toute citation externe

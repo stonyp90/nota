@@ -76,8 +76,23 @@ abandonne une partie de ses honoraires et frais ».
 historique, ni de la valeur de l'acte. Un notaire chevronné et un notaire qui
 débute vous coûtent exactement la même chose en frais de plateforme.
 
-*(Prix par défaut : 400 $ — `apps/api/src/prix-nota-config.js:41`. Décision :
-`docs/decisions/0031-le-prix-de-nota-est-celui-de-nota.md`.)*
+**La grille en vigueur.** Le prix de Nota se lit sur deux lignes que vous voyez
+avant de vous engager :
+
+| Prix de Nota | Financement hypothécaire | Refinancement hypothécaire |
+| --- | ---: | ---: |
+| Le service | **199 $** | **249 $** |
+
+| Garantie de date, ajoutée au prix ci-dessus | 15 jours et plus | 8 à 14 jours | 2 à 7 jours | Demain | Aujourd'hui |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| | 0 $ | **50 $** | **100 $** | **200 $** | **300 $** |
+
+Nota peut modifier cette grille, mais **jamais rétroactivement** : les deux
+lignes sont figées sur votre offre au moment où votre carte est engagée, et
+c'est ce total-là qui sera prélevé.
+
+*(Décisions : `docs/decisions/0031-le-prix-de-nota-est-celui-de-nota.md` et
+`docs/decisions/0034-le-prix-de-nota-est-une-grille-par-service.md`.)*
 
 > **Ce qui a changé.** Jusqu'au 1<sup>er</sup> septembre 2026, ces conditions
 > annonçaient que Nota conservait de 5 % à 15 % de votre montant, selon la cote

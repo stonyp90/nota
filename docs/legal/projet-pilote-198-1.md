@@ -103,7 +103,7 @@ la protection du public par rapport au statu quo, sur quatre points vérifiables
 | | Aujourd'hui, hors plateforme | Sous les normes proposées |
 | --- | --- | --- |
 | **Statut au Tableau** | Le client se fie à ce que l'étude affiche | Vérifié à l'Ordre, suspension immédiate à la radiation |
-| **Prix** | Rarement annoncé, jamais comparable | Annoncé, ferme, tout compris, avant l'engagement |
+| **Prix** | Rarement annoncé, jamais comparable | Annoncé et ferme avant l'engagement, en deux lignes distinctes — les honoraires du notaire et le prix de la plateforme — avec les taxes et les débours indiqués séparément |
 | **Traçabilité** | Aucune | Chaque acte horodaté, montant et parties consignés, remis mensuellement à la Chambre |
 | **Signalement** | Le client doit savoir que le syndic existe | Voie de signalement affichée à chaque étape |
 
@@ -151,8 +151,11 @@ partout où l'indépendance du notaire est en jeu.
 11. Le **statut au Tableau de l'Ordre est vérifié** auprès de la Chambre, à
     l'inscription puis périodiquement. Une radiation ou une limitation
     d'exercice **retire l'accès immédiatement**.
-12. Le prix affiché est **ferme et tout compris**, sans supplément, conforme
-    aux exigences des articles 71 et 72.
+12. Le prix affiché est **ferme**, sans supplément ajouté après l'engagement, et
+    **indique expressément si les taxes et les débours sont ou non compris**,
+    conformément aux articles 71 3° et 72. *(À la date de rédaction, ni les
+    taxes ni les débours ne figurent dans le produit : les chiffrer et les
+    afficher est un préalable au dépôt de cette demande.)*
 
 ### 4.4 Public et données
 

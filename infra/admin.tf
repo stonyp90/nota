@@ -448,8 +448,27 @@ resource "aws_lambda_permission" "admin_apigateway" {
 #
 # Distinct from the public github_deploy role (cicd.tf) for blast-radius: this
 # role can ONLY touch the admin bucket / distribution / Lambda. Its trust is
-# scoped to the PROTECTED "admin-production" GitHub Environment (required
-# reviewers on deploy-admin.yml), so an admin deploy needs human approval.
+# scoped to the "admin-production" GitHub Environment.
+#
+# CE COMMENTAIRE A MENTI JUSQU'AU 2026-09-04. Il annonçait un environnement
+# « PROTECTED », des réviseurs requis et donc une approbation humaine avant
+# chaque livraison admin. L'environnement n'a AUCUNE règle de protection —
+# vérifié le 2026-09-03 par `gh api repos/stonyp90/nota/environments`
+# (protection_rules: []). La même phrase avait déjà été corrigée dans
+# deploy-admin.yml ; elle avait survécu ici, et un lecteur du Terraform
+# pouvait en conclure qu'une porte existait alors qu'il n'y en a pas.
+#
+# CE QUE L'ENVIRONNEMENT FAIT RÉELLEMENT : il sert de sujet OIDC. Le
+# `token.actions.githubusercontent.com:sub` ci-dessous n'accepte que les
+# workflows qui s'exécutent DANS cet environnement, ce qui interdit à
+# n'importe quel autre workflow du dépôt d'assumer ce rôle. C'est un
+# cloisonnement, pas une approbation.
+#
+# POUR EXIGER UNE APPROBATION HUMAINE (choix du propriétaire, non fait) :
+# repo Settings -> Environments -> admin-production -> Required reviewers.
+# Aucun changement de code n'est nécessaire ; ce commentaire et l'en-tête de
+# .github/workflows/deploy-admin.yml devront alors être remis à jour.
+#
 # Publish its ARN as the GitHub variable ADMIN_DEPLOY_ROLE_ARN.
 # ---------------------------------------------------------------------------
 data "aws_iam_policy_document" "admin_github_deploy_assume" {
@@ -471,8 +490,10 @@ data "aws_iam_policy_document" "admin_github_deploy_assume" {
       values   = ["sts.amazonaws.com"]
     }
 
-    # Only workflows running in the PROTECTED "admin-production" environment may
-    # assume this role. Same immutable numeric-ID subject shape as cicd.tf, but
+    # Only workflows running in the "admin-production" environment may assume
+    # this role — un cloisonnement entre workflows, PAS une approbation
+    # humaine : l'environnement ne porte aucune règle de protection (voir la
+    # note ci-dessus). Same immutable numeric-ID subject shape as cicd.tf, but
     # keyed on `environment:` instead of `ref:refs/heads/main`.
     condition {
       test     = "StringLike"

@@ -258,7 +258,7 @@ footer h3{font-size:.95rem;margin:0 0 .9rem;font-family:var(--body);font-weight:
 
 <!-- ══════════════════ MASTHEAD ══════════════════ -->
 <div class="wrap mast">
-  <span class="eyebrow">Pre-seed · Québec City · August 2026</span>
+  <span class="eyebrow">Pre-seed · Québec City · September 2026</span>
   <h1 class="mark">Nota</h1>
   <p class="thesis">Pricing time in the Québec notarial market.</p>
   <p class="stand">Québec abolished mandatory notary tariffs in 1991. Thirty-five years later, no
@@ -268,16 +268,28 @@ footer h3{font-size:.95rem;margin:0 0 .9rem;font-family:var(--body);font-weight:
 
   <div class="figs">
     <div class="fig"><span class="v tnum">$250K</span><span class="k">CAD pre-seed, 12 months of runway</span></div>
-    <div class="fig hi"><span class="v tnum">~21,000</span><span class="k">lines already written, tested and deployed</span></div>
+    <div class="fig hi"><span class="v tnum">~40,000</span><span class="k">lines already written, tested and deployed</span></div>
     <div class="fig"><span class="v tnum">~3,900</span><span class="k">notaries in Québec, each with unsold calendar gaps</span></div>
-    <div class="fig"><span class="v tnum">~$245M</span><span class="k">annual act value in the three launch services</span></div>
-    <div class="fig hi"><span class="v tnum">3.7%</span><span class="k">of addressable volume needed by year three</span></div>
+    <div class="fig"><span class="v tnum">~110,000</span><span class="k">financing acts a year in the two launch services</span></div>
+    <div class="fig hi"><span class="v tnum">10%</span><span class="k">of addressable act volume needed by year three</span></div>
   </div>
 
   <div class="meta">
     <span>Anthony Paquet</span>
     <span>anthonypaquet1508@gmail.com</span>
-    <span>Version 1.0</span>
+    <span>Version 1.1 · 4 September 2026</span>
+  </div>
+
+  <div class="note brass" style="margin-top:1.6rem">
+    <span class="label">What changed in 1.1</span>
+    <p>Version 1.0 described a <strong>10% commission on the notary's fee</strong> as what the code
+    did, and proposed restructuring it. That commission has since been <strong>removed from the
+    product</strong>, not merely proposed for removal: Nota now charges the client its own published
+    price, per service, and the notary's <em>honoraires</em> reach them whole. Every economic figure
+    here has been recomputed from the shipped pricing grid. <strong>Gross margin per act is materially
+    lower than version 1.0 claimed</strong> — about <strong>66%</strong>, not 89–91% — because Nota
+    bears the card-processing fee on the whole amount the client pays, including the notary's fee,
+    which Nota never keeps.</p>
   </div>
 </div>
 
@@ -328,17 +340,21 @@ footer h3{font-size:.95rem;margin:0 0 .9rem;font-family:var(--body);font-weight:
 
   <div class="tw" style="max-width:760px">
     <table>
-      <thead><tr><th>Horizon</th><th class="n">Acts closed</th><th class="n">GMV</th><th class="n">Net revenue</th></tr></thead>
+      <thead><tr><th>Horizon</th><th class="n">Acts closed</th><th class="n">Charged to clients</th><th class="n">Nota revenue</th><th class="n">Gross profit</th></tr></thead>
       <tbody>
-        <tr><td>Y1 — Québec City, three services</td><td class="n">244</td><td class="n">$257,664</td><td class="n">$25,766</td></tr>
-        <tr><td>Y2 — All Québec, remote layer</td><td class="n">2,800</td><td class="n">$3,220,000</td><td class="n">$322,000</td></tr>
-        <tr><td>Y3 — Widening act catalogue</td><td class="n">11,000</td><td class="n">$15,950,000</td><td class="n">$1,595,000</td></tr>
+        <tr><td>Y1 — Québec City, financing catalogue</td><td class="n">244</td><td class="n">$744,000</td><td class="n">$62,700</td><td class="n">$41,000</td></tr>
+        <tr><td>Y2 — All Québec, remote layer</td><td class="n">2,800</td><td class="n">$8,542,000</td><td class="n">$719,600</td><td class="n">$471,100</td></tr>
+        <tr><td>Y3 — Widening act catalogue</td><td class="n">11,000</td><td class="n">$33,557,000</td><td class="n">$2,827,000</td><td class="n">$1,850,600</td></tr>
       </tbody>
     </table>
   </div>
 
-  <p class="col small">Year 3 represents about <strong>3.7%</strong> of addressable Québec act volume.
-  The plan does not require winning the market. It requires being the place where price is discovered.</p>
+  <p class="col small">Read the fourth column, not the third. Nota's revenue is its own published price
+  per act, not a percentage of what changes hands, so the amount flowing through the platform is a
+  scale indicator and nothing more. Year 3 is roughly <strong>10%</strong> of the two-service
+  addressable act volume — a bigger share of a smaller category than version 1.0 claimed, which is the
+  direct consequence of the financing-first catalogue. The plan does not require winning the market.
+  It requires being the place where price is discovered.</p>
 </section>
 
 <!-- ══════════════════ 02 TWO FINDINGS ══════════════════ -->
@@ -390,54 +406,95 @@ footer h3{font-size:.95rem;margin:0 0 .9rem;font-family:var(--body);font-weight:
   removing geography as a matching constraint.</p>
 
   <div class="col">
-    <h3>The implemented revenue model is a déontologie risk</h3>
-    <p>The billing layer currently implements a <strong>10% commission</strong> on a completed act,
-    collected against the notary's account. The code flags this itself: a share of a notarial act is
-    fee-sharing the Québec <em>Code de déontologie</em> restricts, and the model needs legal review
-    with the Chambre before launch.</p>
-    <p>That flag is correct. As implemented, the notary receives 90% of their own professional fee
-    and a non-<em>notaire</em> keeps 10% — the textbook shape of prohibited fee-sharing, exposing
-    every notary on the platform to a disciplinary complaint. It is the single largest structural
-    risk in the business and it must be fixed before the first live act.</p>
-    <p><strong>The fix preserves the economics and changes the legal structure entirely: charge the
-    client, not the notary.</strong></p>
+    <h3>The revenue model was a déontologie risk. It has been removed.</h3>
+    <p>Version 1.0 of this plan reported that the billing layer implemented a <strong>10%
+    commission</strong> on a completed act, collected against the notary's account, and proposed
+    restructuring it. A later variant made the percentage float between 5% and 15% according to an
+    internal score. <strong>Both are gone from the product.</strong> They are stated here only so a
+    reader who finds them in the git history or in a dated audit knows they were retired, and by
+    which decision.</p>
+    <p>As implemented, the notary received 90% of their own professional fee and a
+    non-<em>notaire</em> kept 10% — the textbook shape of prohibited fee-sharing, exposing every
+    notary on the platform to a disciplinary complaint. It was the single largest structural risk in
+    the business, and it was removed before the first live act rather than after.</p>
   </div>
 
   <div class="pair">
     <div class="pane bad">
-      <span class="tag">Commission</span>
-      <h4>Deducted from the notary's fee</h4>
+      <span class="tag">Retired</span>
+      <h4>A share deducted from the notary's fee</h4>
       <ul class="flow">
-        <li><span>Client pays</span><span class="amt">650 $</span></li>
-        <li><span>Notary receives</span><span class="amt">585 $ &middot; 90%</span></li>
-        <li><span>Nota keeps, from the honoraires</span><span class="amt">65 $</span></li>
+        <li><span>Client pays</span><span class="amt">2 000 $</span></li>
+        <li><span>Notary receives</span><span class="amt">1 700–1 900 $</span></li>
+        <li><span>Nota keeps, from the honoraires</span><span class="amt">100–300 $</span></li>
       </ul>
       <p class="verdict">Fee-sharing. Every notary on the platform is exposed.</p>
     </div>
     <div class="pane good">
-      <span class="tag">Client-side fee</span>
-      <h4>Charged on top, for Nota's own service</h4>
+      <span class="tag">Shipped</span>
+      <h4>Nota's own price, charged to the client</h4>
       <ul class="flow">
-        <li><span>Client pays</span><span class="amt">650 $ + 65 $ = 715 $</span></li>
-        <li><span>Notary receives</span><span class="amt">650 $ &middot; 100%</span></li>
-        <li><span>Nota is paid by the client</span><span class="amt">65 $</span></li>
+        <li><span>Client pays</span><span class="amt">2 000 $ + 249 $ = 2 249 $</span></li>
+        <li><span>Notary receives</span><span class="amt">2 000 $ &middot; 100%</span></li>
+        <li><span>Nota is paid by the client</span><span class="amt">249 $</span></li>
       </ul>
-      <p class="verdict">Identical unit economics. No share of any professional fee.</p>
+      <p class="verdict">No share of any professional fee. Both lines read before committing.</p>
     </div>
   </div>
 
   <div class="col">
-    <p>Nota is paid by the client for work Nota actually performs — sourcing a notary, assembling and
-    validating the dossier, running the transaction. It takes no share of any professional fee. The
-    notary's <em>honoraires</em> arrive whole.</p>
+    <p>An offer carries <strong>two lines</strong>, which the client reads separately before
+    committing anything: the <strong>honoraires</strong>, which reach the notary whole, and
+    <strong>the price of Nota</strong> — a grid published in advance, set by the service asked for
+    plus a date-guarantee line, and never by the notary, their record, or the value of the act. The
+    card is authorized for the total on Nota's own Stripe account; at signing Nota captures that
+    total, keeps its own two lines and transfers the <em>honoraires</em> out. <strong>Nota deducts
+    nothing from a professional fee, and the notary abandons nothing.</strong></p>
+
+    <h3>Why this shape and no other</h3>
+    <p>Four texts, read against the code, forbid the retired arrangement and require this one.</p>
+    <ul class="clean">
+      <li><strong>Art. 32.1 2° of the <em>Loi sur le notariat</em></strong> presumes usurpation of a
+      notary's functions by an intermediary who "obtains from a notary the abandonment of part of
+      their fees" — 2,500 to 125,000 $, doubled on repeat.</li>
+      <li><strong>Art. 32 of the <em>Code de déontologie</em></strong> forbids a notary from sharing
+      fees with someone who is not a member of a professional order. The same conclusion taken from
+      the other end: the prohibition binds the notary, the presumption binds Nota, and fixing one
+      without the other fixes nothing.</li>
+      <li><strong>Art. 29.1</strong> forbids any agreement endangering the notary's independence and
+      disinterest — which a fee indexed on a score awarded by a private company is.</li>
+      <li><strong>Art. 32.1 3°</strong> excludes the intermediary who supplies services with no
+      responsibility toward the notary for their fees. Nota authorizes, captures and guarantees the
+      notary's net, deliberately.</li>
+    </ul>
+    <p class="small">No notary was ever billed under the retired model — no act had yet been carried
+    on the platform when it was removed.</p>
+  </div>
+
+  <div class="note brass">
+    <span class="label">What is still open</span>
+    <p>The <em>direction</em> of the money is settled and verifiable on the Stripe wire: the client
+    pays the platform. What remains open is the legal <strong>qualification</strong> of Nota's own
+    price, plus three narrower questions — the display of evaluations (art. 70), the qualification of
+    the internal cote, and price presentation (art. 71–72, including the fact that <strong>taxes and
+    disbursements are in neither line and appear nowhere in the product yet</strong>).</p>
   </div>
 
   <div class="note">
     <span class="label" style="color:var(--muted)">Budgeted</span>
     <p class="small">$20,000 of this round buys a formal déontologie opinion and structured engagement
-    with the Chambre des notaires before launch. Getting an opinion on file is also a competitive
-    asset: it is the kind of work a well-funded entrant from outside Québec will not know it needs
-    to do.</p>
+    with the Chambre des notaires before the first live act. Getting an opinion on file is also a
+    competitive asset: it is the kind of work a well-funded entrant from outside Québec will not know
+    it needs to do.</p>
+  </div>
+
+  <div class="note">
+    <span class="label" style="color:var(--muted)">Wording discipline, permanently</span>
+    <p class="small">No surface, document or comment may describe Nota as taking a
+    <em>commission</em>, a <em>share</em> or a <em>split</em> of a notary's fees; may attach a rating,
+    average or <em>cote</em> to a <strong>named</strong> notary on a client surface (art. 70); may
+    claim to be <em>cheaper than a notary</em> (art. 32.1 1°); or may call Nota's price
+    <em>fixed</em> — it is a grid, published per service.</p>
   </div>
 </section>
 
@@ -457,12 +514,13 @@ footer h3{font-size:.95rem;margin:0 0 .9rem;font-family:var(--body);font-weight:
       <h4>The client</h4>
       <ul class="clean small">
         <li>Price discovery costs a sequence of phone calls during business hours.</li>
-        <li>Published ranges are wide — a will and protection mandate run 700–1,000 $ — and you learn
-        where you land only after you call.</li>
+        <li>Published ranges are wide — a mortgage or refinancing act runs roughly 1,500–3,500 $ —
+        and you learn where you land only after you call.</li>
         <li>Urgency has no price. There is no way to pay to jump a three-week queue, because there is
         no queue and no market.</li>
-        <li>So the act does not happen. Roughly half of Québec adults have no will; among 18–34
-        year-olds it is about 70%.</li>
+        <li>And the deadline is not yours. A mortgage rate hold expires on a date the lender set;
+        when the notarial calendar cannot meet it, you lose the rate — thousands of dollars over the
+        term, caused by an appointment nobody could price.</li>
       </ul>
     </div>
     <div class="card">
@@ -494,60 +552,81 @@ footer h3{font-size:.95rem;margin:0 0 .9rem;font-family:var(--body);font-weight:
   </div>
 
   <div class="ladder" style="max-width:760px">
-    <div class="rung" style="--t:#7C8EA3;--w:12%;--d:.05s">
+    <div class="rung" style="--t:#7C8EA3;--w:20%;--d:.05s">
       <span class="tier">standard</span><span class="days">15+ days</span>
-      <span class="track"><span class="bar"></span></span><span class="mult">1.0–1.2&times;</span>
+      <span class="track"><span class="bar"></span></span><span class="mult">1.0&times;</span>
     </div>
-    <div class="rung" style="--t:#6B87A8;--w:15%;--d:.13s">
+    <div class="rung" style="--t:#6B87A8;--w:44%;--d:.13s">
       <span class="tier">rapide</span><span class="days">8–14 days</span>
-      <span class="track"><span class="bar"></span></span><span class="mult">1.2–1.5&times;</span>
+      <span class="track"><span class="bar"></span></span><span class="mult">≈2&times;</span>
     </div>
-    <div class="rung" style="--t:#A8791F;--w:22%;--d:.21s">
-      <span class="tier">prioritaire</span><span class="days">4–7 days</span>
-      <span class="track"><span class="bar"></span></span><span class="mult">1.6–2.2&times;</span>
+    <div class="rung" style="--t:#A8791F;--w:66%;--d:.21s">
+      <span class="tier">prioritaire</span><span class="days">2–7 days</span>
+      <span class="track"><span class="bar"></span></span><span class="mult">≈3&times;</span>
     </div>
-    <div class="rung" style="--t:#B4711C;--w:40%;--d:.29s">
-      <span class="tier">urgence</span><span class="days">2–3 days</span>
-      <span class="track"><span class="bar"></span></span><span class="mult">2.5–4.0&times;</span>
+    <div class="rung" style="--t:#B4711C;--w:74%;--d:.29s">
+      <span class="tier">urgence</span><span class="days">1 day</span>
+      <span class="track"><span class="bar"></span></span><span class="mult">≈3.5&times;</span>
     </div>
     <div class="rung" style="--t:#8E4034;--w:100%;--d:.37s">
-      <span class="tier">extreme</span><span class="days">0–1 day</span>
-      <span class="track"><span class="bar"></span></span><span class="mult">4.0–10.0&times;</span>
+      <span class="tier">extreme</span><span class="days">same day</span>
+      <span class="track"><span class="bar"></span></span><span class="mult">≈4&times;</span>
     </div>
   </div>
-  <p class="small" style="max-width:760px">Bar length is the tier's maximum premium against the 10&times; ceiling.</p>
+  <p class="small" style="max-width:760px">Bar length is the tier's mid-band premium against the
+  5&times; ceiling. This ladder prices the <strong>notary's</strong> fee — art. 49 4° of the
+  <em>Code de déontologie</em> lets a notary weigh the degree of urgency in setting fees — and it is
+  not a constant: the domain shrinks the observed median premium of retained offers toward the
+  published band, so the ladder learns from the market. Nota's own <strong>date-guarantee</strong>
+  line is separate and published beside it: 0 $ · 50 $ · 100 $ · 200 $ · 300 $. Two numbers, two
+  justifications, two lines on the quote — never one number doing both jobs.</p>
 
   <div class="col">
     <h3>Guardrails</h3>
-    <p>Offers are floored at a market-researched <em>prix de départ</em> per service and hard-capped
-    at ten times it, so the market is a real auction rather than a race to the bottom or a panic tax.
+    <p>Offers are floored at a <em>prix de départ</em> per service and hard-capped at five times it,
+    so the market is a real auction rather than a race to the bottom or a panic tax.
     Both the browser and the server load the <em>same</em> rules module, so the price a client sees
     and the price the server enforces cannot drift. Anonymity is default-on and enforced server-side,
     not merely in the interface.</p>
 
-    <h3>Three services, chosen for a bounded intake</h3>
+    <h3>Two services, both financing, chosen for a bounded intake</h3>
     <p>Each launch service has a short document checklist a layperson can complete alone, in one
     sitting, without a professional pre-consult.</p>
   </div>
 
-  <div class="tw" style="max-width:820px">
+  <div class="tw" style="max-width:900px">
     <table>
-      <thead><tr><th>Service</th><th class="n">Prix de départ</th><th>Why it qualifies</th></tr></thead>
+      <thead><tr><th>Service</th><th class="n">Prix de départ<br><span class="small">(the notary)</span></th><th class="n">Nota's price</th><th>Why it qualifies</th></tr></thead>
       <tbody>
-        <tr><td>Testament et mandat de protection</td><td class="n">650 $</td><td>Identity, asset list, named parties. No third party involved.</td></tr>
-        <tr><td>Procuration</td><td class="n">295 $</td><td>Identity, mandatary, scope. No third party involved.</td></tr>
-        <tr><td>Refinancement hypothécaire</td><td class="n">2 000 $</td><td>Highest value and complexity of the three; priced accordingly.</td></tr>
+        <tr><td>Refinancement hypothécaire</td><td class="n">2 000 $</td><td class="n">249 $</td><td>Loan act, hypothec publication, title review. Highest value on the platform, and the one act with a lender's deadline attached.</td></tr>
+        <tr><td>Financement hypothécaire</td><td class="n">1 800 $</td><td class="n">199 $</td><td>The loan act for a <em>new</em> hypothec — a purchase or a first loan. Same ladder, no old hypothec to discharge.</td></tr>
       </tbody>
     </table>
   </div>
 
-  <p class="col small"><em>Acte de vente</em> was deliberately excluded: it requires coordinated
+  <p class="col small">The two price columns are two different purchases and never one number doing
+  both jobs: the <em>prix de départ</em> is the floor of what the <strong>notary</strong> is offered,
+  the right-hand column is what <strong>Nota</strong> charges the client for its own service. Neither
+  is a share of the other.</p>
+
+  <div class="note">
+    <span class="label" style="color:var(--muted)">Retired</span>
+    <p class="small"><strong>Testament and procuration were retired.</strong> They were the wrong first
+    market for a marketplace that sells a date: a will has no external deadline, so urgency is a
+    preference rather than a cost, and at a 650 $ or 295 $ act value Nota's own price would have
+    weighed 30% or more of the transaction. A financing act arrives with a <strong>rate hold that
+    expires</strong> — a deadline the client did not choose and cannot move.</p>
+  </div>
+
+  <p class="col small"><em>Acte de vente</em> stays excluded: it requires coordinated
   document transfer between broker, surveyor and lender before the notary can begin. That is a
   workflow product, not a web form. Discipline about what not to launch is why the marketplace can be
   self-serve on day one. Each service also carries a dynamic base price built from criteria collected
-  during intake — a couple's mirror wills add 450 $, a protective trust for a dependent heir adds
-  600 $ — so the client gets an accurate price and the notary gets a pre-qualified file with a
-  complexity weighting already computed.</p>
+  during intake — a loan above 600,000 $ adds 350 $ and above 1 M$ adds 600 $, a private lender adds
+  300 $, a declared urgency signed entirely online adds 400 $ — so the client gets an accurate price
+  and the notary gets a pre-qualified file with a complexity weighting already computed. Note which
+  side of the invoice these move: they are criteria on the <strong>notary's</strong> fee, not on
+  Nota's price, which depends only on the service and the date.</p>
 </section>
 
 <!-- ══════════════════ 05 WHAT'S BUILT ══════════════════ -->
@@ -557,7 +636,7 @@ footer h3{font-size:.95rem;margin:0 0 .9rem;font-family:var(--body);font-weight:
     <span class="snum">05</span>
     <div>
       <h2>This raise does not fund a build</h2>
-      <p class="sub">The platform is written, tested and deployed. Roughly 21,000 lines, built solo.</p>
+      <p class="sub">The platform is written, tested and deployed. Roughly 40,000 lines, built solo.</p>
     </div>
   </div>
 
@@ -569,7 +648,7 @@ footer h3{font-size:.95rem;margin:0 0 .9rem;font-family:var(--body);font-weight:
     <div class="card"><h4>Notary side</h4><p class="small">Authentication, sign-up gate, lead-delivery preferences, ICS calendar feed, earnings roll-up.</p></div>
     <div class="card"><h4>Operations</h4><p class="small">Admin console, transactional email with scheduled reminders, analytics with drift healing.</p></div>
     <div class="card"><h4>Infrastructure</h4><p class="small">Terraform: S3, CloudFront, IAM-authed Lambda, DynamoDB — live in <code>ca-central-1</code>. Idle cost near zero.</p></div>
-    <div class="card"><h4>Quality</h4><p class="small">Unit, DOM and Cucumber BDD suites. CI on every push. Seven architecture decision records.</p></div>
+    <div class="card"><h4>Quality</h4><p class="small">Unit, contract, DOM, Cucumber BDD and Playwright end-to-end suites. CI on every push, gating the deploy. Thirty-seven architecture decision records.</p></div>
   </div>
 
   <div class="note" style="margin-top:1.8rem">
@@ -596,38 +675,47 @@ footer h3{font-size:.95rem;margin:0 0 .9rem;font-family:var(--body);font-weight:
 
   <div class="tw" style="max-width:860px">
     <table>
-      <thead><tr><th>Service</th><th class="n">Annual volume</th><th class="n">Avg act value</th><th class="n">Annual act value</th></tr></thead>
+      <thead><tr><th>Service</th><th class="n">Annual volume</th><th class="n">Notarial fees</th><th class="n">Nota revenue<br><span class="small">addressable</span></th></tr></thead>
       <tbody>
-        <tr><td>Wills and protection mandates</td><td class="n">~200,000</td><td class="n">650 $</td><td class="n">~$130M</td></tr>
-        <tr><td>Refinancing (new hypothec)</td><td class="n">~50,000</td><td class="n">2 000 $</td><td class="n">~$100M</td></tr>
-        <tr><td>Procurations</td><td class="n">~50,000</td><td class="n">295 $</td><td class="n">~$15M</td></tr>
-        <tr class="total"><td>Addressable market, three services</td><td class="n">~300,000</td><td class="n">—</td><td class="n">~$245M</td></tr>
+        <tr><td>Refinancement hypothécaire</td><td class="n">~50,000</td><td class="n">~$100M</td><td class="n">~$12.5M</td></tr>
+        <tr><td>Financement hypothécaire (new hypothec)</td><td class="n">~60,000</td><td class="n">~$115M</td><td class="n">~$12M</td></tr>
+        <tr class="total"><td>Addressable market, two services</td><td class="n">~110,000</td><td class="n">~$215M</td><td class="n">~$28M</td></tr>
       </tbody>
     </table>
   </div>
 
   <div class="col">
-    <p>The profession as a whole — roughly 3,900 practising notaries — bills on the order of
-    <strong>$1.1–1.2 billion</strong> a year in professional fees. Wills volume is anchored on the
-    Chambre's <em>Registre des dispositions testamentaires</em>, which recorded 215,576 registrations
-    in 2017–18 and now holds over six million wills. Refinancing volume is inferred from the Canadian
-    renewal cycle.</p>
+    <p><strong>Read the right-hand column.</strong> With a price fixed per act, the number that
+    matters is act <em>volume</em>, not the dollars that change hands. The profession as a whole —
+    roughly 3,900 practising notaries — bills on the order of <strong>$1.1–1.2 billion</strong> a
+    year in professional fees, none of which is Nota's. Refinancing volume is inferred from the
+    Canadian renewal cycle; new-hypothec volume is anchored on the ~90,000 Québec residential
+    transactions a year, most of which carry a mortgage, plus first loans on property already owned.
+    Both are estimates derived from transaction counts, not published act counts.</p>
 
-    <h3>Beyond the three services</h3>
-    <p>Residential closings alone run about <strong>90,000 transactions a year</strong> in Québec at
-    1,500–3,500 $ each — a single category larger than the entire current addressable market. Beyond
-    Québec sits the civil-law <em>notariat</em>: the International Union of Notaries spans roughly
-    ninety member states, including France, Belgium, Switzerland and most of Latin America, all
-    running the same instrument Nota is built around. That is where a hundredfold claim actually
-    lives — not in avoiding a car trip.</p>
+    <p>The honest consequence of the financing-first pivot: the addressable act count is roughly a
+    third of the retired three-service plan (~110,000 against ~300,000), because wills were the
+    volume and they are gone. What replaced them is a category with a <strong>deadline the client did
+    not set</strong> — the only kind of demand a time-priced market can charge for. Year 3's 11,000
+    acts are about <strong>10%</strong> of that volume, and the plan says so rather than keeping the
+    old denominator.</p>
+
+    <h3>Beyond the two services</h3>
+    <p>The <em>acte de vente</em> rides those same ~90,000 residential transactions, at 1,500–3,500 $
+    each, arriving on the same lender deadline and through the same referral channel. Wills and
+    mandates remain a real ~200,000-a-year category to return to once liquidity exists, on a pricing
+    basis that suits a 650 $ act. Beyond Québec sits the civil-law <em>notariat</em>: the
+    International Union of Notaries spans roughly ninety member states, including France, Belgium,
+    Switzerland and most of Latin America, all running the same instrument Nota is built around. That
+    is where a hundredfold claim actually lives — not in avoiding a car trip.</p>
   </div>
 
   <h3 class="col">Why now</h3>
   <ol class="steps" style="max-width:820px">
     <li><div><b>Remote acts became law</b><span class="small">Bill 34 made the technological notarial act permanent in October 2023. The rails exist and are sanctioned. Nota is not betting on legislation.</span></div></li>
     <li><div><b>Thirty-five years of blind pricing</b><span class="small">Fees free since 1991 with no discovery mechanism ever built. The gap does not close on its own — someone has to build the venue.</span></div></li>
-    <li><div><b>The renewal wall</b><span class="small">Roughly 1.2 million Canadian fixed-rate mortgages renewing in 2025, driving volume straight into the highest-value service on the platform.</span></div></li>
-    <li><div><b>The wealth transfer</b><span class="small">The largest intergenerational transfer in Canadian history, against a population where half the adults have no will.</span></div></li>
+    <li><div><b>The renewal wall</b><span class="small">Roughly 1.2 million Canadian fixed-rate mortgages renewing in 2025 — and every one arrives with a rate hold that expires on a date the client did not choose. That is the demand a time-priced market exists to serve, and it is why the catalogue is financing-first.</span></div></li>
+    <li><div><b>A competitor has validated the structure</b><span class="small">Notairo has been selling its own client-side intake fee in Québec since late 2025 — the same legal shape Nota uses. The structure is no longer novel to explain; what is still unbuilt is publishing the price of the date before the client commits.</span></div></li>
     <li><div><b>Access-to-justice pressure</b><span class="small">Notary coverage is uneven across the regions — and distance from an available notary is a statutorily recognised ground for signing remotely. The exception categories map onto the under-served.</span></div></li>
   </ol>
 </section>
@@ -654,9 +742,9 @@ footer h3{font-size:.95rem;margin:0 0 .9rem;font-family:var(--body);font-weight:
     <table>
       <thead><tr><th>Months</th><th>Focus</th><th>Exit criteria</th></tr></thead>
       <tbody>
-        <tr><td class="tnum">1–2</td><td><strong>Déontologie restructure.</strong> Client-side fee, billing refactor, written opinion, Chambre engagement.</td><td>Opinion on file. No fee-sharing exposure.</td></tr>
+        <tr><td class="tnum">1–2</td><td><strong>Déontologie.</strong> The client-side price is already shipped; what remains is the written opinion, Chambre engagement, and the taxes-and-disbursements line the product does not yet carry.</td><td>Opinion on file. Taxes and débours priced and displayed.</td></tr>
         <tr><td class="tnum">1–3</td><td><strong>Supply.</strong> Thirty Québec City notaries recruited in person. Free to join, free to browse.</td><td>25+ notaries with preferences configured.</td></tr>
-        <tr><td class="tnum">3–6</td><td><strong>Demand.</strong> Carnet SEO, mortgage-broker and financial-planner referral partnerships, urgency-targeted paid search.</td><td>25+ bids/month, fill rate above 45%.</td></tr>
+        <tr><td class="tnum">3–6</td><td><strong>Demand.</strong> Carnet SEO, <strong>mortgage-broker referral partnerships first</strong> — the broker sits on the rate hold that creates the deadline — urgency-targeted paid search.</td><td>25+ bids/month, fill rate above 45%.</td></tr>
         <tr><td class="tnum">6–12</td><td><strong>Liquidity.</strong> Tighten time-to-retain, publish the urgency curve, extend to Lévis and Saguenay.</td><td>90+ bids/month, fill rate above 60%.</td></tr>
       </tbody>
     </table>
@@ -732,54 +820,184 @@ footer h3{font-size:.95rem;margin:0 0 .9rem;font-family:var(--body);font-weight:
     <span class="snum">09</span>
     <div>
       <h2>Business model and unit economics</h2>
-      <p class="sub">A client-side service fee of 10% of the act value, charged on top of the notary's
-      fee and collected only on a completed act.</p>
+      <p class="sub">Nota charges the client its own published price, per service. The notary keeps
+      100% of their <em>honoraires</em>.</p>
     </div>
   </div>
 
-  <div class="col">
-    <p>The card is authorized when the offer is posted and captured on completion, so a posted bid is
-    a real commitment and the notary is never chasing payment. Cost of revenue is payment processing
-    plus effectively nothing — the infrastructure is serverless and scale-to-zero.</p>
+  <div class="tw" style="max-width:620px">
+    <table>
+      <thead><tr><th>Nota's price</th><th class="n"><code>financement</code></th><th class="n"><code>refinancement</code></th></tr></thead>
+      <tbody>
+        <tr><td>Service line</td><td class="n">199 $</td><td class="n">249 $</td></tr>
+      </tbody>
+    </table>
   </div>
 
-  <div class="tw" style="max-width:700px">
+  <div class="tw" style="max-width:760px">
     <table>
-      <thead><tr><th></th><th class="n">Y1</th><th class="n">Y2</th><th class="n">Y3</th></tr></thead>
+      <thead><tr><th>Date guarantee, added to Nota's line</th><th class="n">standard</th><th class="n">rapide</th><th class="n">prioritaire</th><th class="n">urgence</th><th class="n">extreme</th></tr></thead>
       <tbody>
-        <tr><td>Average realised act value</td><td class="n">1 056 $</td><td class="n">1 150 $</td><td class="n">1 450 $</td></tr>
-        <tr><td>Net revenue per act</td><td class="n">106 $</td><td class="n">115 $</td><td class="n">145 $</td></tr>
-        <tr><td>Gross profit per act</td><td class="n">94 $</td><td class="n">104 $</td><td class="n">133 $</td></tr>
-        <tr><td>Blended client CAC</td><td class="n">164 $</td><td class="n">55 $</td><td class="n">40 $</td></tr>
-        <tr class="total"><td>Contribution per act</td><td class="n neg">(70) $</td><td class="n pos">49 $</td><td class="n pos">93 $</td></tr>
-        <tr><td>Gross margin</td><td class="n">89%</td><td class="n">90%</td><td class="n">91%</td></tr>
+        <tr><td>&nbsp;</td><td class="n">0 $</td><td class="n">50 $</td><td class="n">100 $</td><td class="n">200 $</td><td class="n">300 $</td></tr>
       </tbody>
     </table>
   </div>
 
   <div class="col">
-    <p>Year 1 CAC exceeds revenue per act. That is what a year-one marketplace looks like, and the
-    model says so rather than assuming it away. On the supply side a notary costs about
-    <strong>500 $</strong> to recruit and returns roughly <strong>2,071 $</strong> a year in gross
-    profit — LTV to CAC of about <strong>12&times;</strong> over a three-year tenure, payback inside
-    five acts.</p>
+    <p>So Nota's revenue on one act runs from <strong>199 $</strong> — a financing act on a calm date
+    — to <strong>549 $</strong> for a refinancing signed the same day. The grid is data, editable from
+    the operator console without a deploy, and the two lines are <strong>frozen on the offer</strong>
+    when the client's card is engaged, so a later grid change can never rewrite what an act cost. The
+    card is registered when the offer is posted and the hold placed a few days before the signing, so
+    a posted bid is a real commitment and the notary is never chasing payment.</p>
+
+    <p><strong>Taxes and disbursements — registry publication fees, RDPRM, discharges — are in
+    neither line and appear nowhere in the product yet.</strong> Until they do, no surface may
+    describe the amount as all-inclusive: art. 71 3° of the <em>Code de déontologie</em> requires
+    saying whether they are included, and art. 68 forbids incomplete advertising. Fixing this is a
+    Phase 1 exit criterion, not a nicety.</p>
+
+    <h3>The cost of revenue, computed from the shipped grid</h3>
+    <p>Version 1.0 understated this badly. Nota is the Stripe <strong>platform</strong>: the client's
+    card is charged the <strong>total</strong> of both lines on Nota's own account, and the
+    <em>honoraires</em> are transferred out afterwards. So the card-processing fee is levied on the
+    whole amount — <strong>including the notary's fee, which Nota never keeps</strong> — and Nota
+    bears all of it. At Stripe's published Canadian domestic-card rate (2.9% + 0.30 $; it is not a
+    constant in the code, and the code never books it), one refinancing act on a calm date reads:</p>
+  </div>
+
+  <div class="tw" style="max-width:620px">
+    <table>
+      <tbody>
+        <tr><td>Client pays — 2 000 $ (notary) + 249 $ (Nota)</td><td class="n">2 249,00 $</td></tr>
+        <tr><td>Stripe — 2.9% &times; 2 249 $ + 0,30 $</td><td class="n">(65,52) $</td></tr>
+        <tr class="total"><td>Nota keeps</td><td class="n">183,48 $</td></tr>
+        <tr><td>Notary receives</td><td class="n">2 000,00 $</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th>Service &middot; tier</th><th class="n">Notary's fee</th><th class="n">Nota's price</th><th class="n">Client total</th><th class="n">Stripe</th><th class="n">Gross profit</th><th class="n">Margin</th></tr></thead>
+      <tbody>
+        <tr><td><code>financement</code> &middot; standard</td><td class="n">1 800 $</td><td class="n">199 $</td><td class="n">1 999 $</td><td class="n">58,27 $</td><td class="n">140,73 $</td><td class="n">70.7%</td></tr>
+        <tr><td><code>financement</code> &middot; rapide</td><td class="n">3 600 $</td><td class="n">249 $</td><td class="n">3 849 $</td><td class="n">111,92 $</td><td class="n">137,08 $</td><td class="n">55.1%</td></tr>
+        <tr><td><code>financement</code> &middot; prioritaire</td><td class="n">5 400 $</td><td class="n">299 $</td><td class="n">5 699 $</td><td class="n">165,57 $</td><td class="n">133,43 $</td><td class="n">44.6%</td></tr>
+        <tr><td><code>financement</code> &middot; urgence</td><td class="n">6 300 $</td><td class="n">399 $</td><td class="n">6 699 $</td><td class="n">194,57 $</td><td class="n">204,43 $</td><td class="n">51.2%</td></tr>
+        <tr><td><code>financement</code> &middot; extrême</td><td class="n">7 200 $</td><td class="n">499 $</td><td class="n">7 699 $</td><td class="n">223,57 $</td><td class="n">275,43 $</td><td class="n">55.2%</td></tr>
+        <tr><td><code>refinancement</code> &middot; standard</td><td class="n">2 000 $</td><td class="n">249 $</td><td class="n">2 249 $</td><td class="n">65,52 $</td><td class="n">183,48 $</td><td class="n">73.7%</td></tr>
+        <tr><td><code>refinancement</code> &middot; rapide</td><td class="n">4 000 $</td><td class="n">299 $</td><td class="n">4 299 $</td><td class="n">124,97 $</td><td class="n">174,03 $</td><td class="n">58.2%</td></tr>
+        <tr><td><code>refinancement</code> &middot; prioritaire</td><td class="n">6 000 $</td><td class="n">349 $</td><td class="n">6 349 $</td><td class="n">184,42 $</td><td class="n">164,58 $</td><td class="n">47.2%</td></tr>
+        <tr><td><code>refinancement</code> &middot; urgence</td><td class="n">7 000 $</td><td class="n">449 $</td><td class="n">7 449 $</td><td class="n">216,32 $</td><td class="n">232,68 $</td><td class="n">51.8%</td></tr>
+        <tr><td><code>refinancement</code> &middot; extrême</td><td class="n">8 000 $</td><td class="n">549 $</td><td class="n">8 549 $</td><td class="n">248,22 $</td><td class="n">300,78 $</td><td class="n">54.8%</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note brass">
+    <span class="label">Two rungs of the date ladder cost Nota money to sell</span>
+    <p>Moving a refinancing from <code>standard</code> to <code>prioritaire</code> adds 100 $ to
+    Nota's line and <strong>118,90 $</strong> to the Stripe fee — Nota is 18,90 $ <em>worse off</em>
+    on the more urgent act. The same at <code>rapide</code> (+50 $ of revenue against +59,45 $ of
+    fee). Only <code>urgence</code> and <code>extrême</code> pay for the cost they create. This is
+    arithmetic, not opinion, and it is the single most actionable number in the plan: the middle of
+    the urgency ladder — where most urgent demand actually sits — is priced below its own cost of
+    collection. Three remedies exist, all data changes: raise the two lines, add a small percentage
+    component so Nota's line tracks the fee it generates, or move the notary's fee off the platform
+    charge entirely. An owner decision, and no code has been changed for it here.</p>
+  </div>
+
+  <div class="tw" style="max-width:700px">
+    <table>
+      <thead><tr><th>Refinancement, against <code>standard</code></th><th class="n">Date line</th><th class="n">Extra Stripe fee</th><th class="n">Net to Nota</th></tr></thead>
+      <tbody>
+        <tr><td><code>rapide</code></td><td class="n">+50 $</td><td class="n">+59,45 $</td><td class="n neg">(9,45) $</td></tr>
+        <tr><td><code>prioritaire</code></td><td class="n">+100 $</td><td class="n">+118,90 $</td><td class="n neg">(18,90) $</td></tr>
+        <tr><td><code>urgence</code></td><td class="n">+200 $</td><td class="n">+150,80 $</td><td class="n pos">+49,20 $</td></tr>
+        <tr><td><code>extrême</code></td><td class="n">+300 $</td><td class="n">+182,70 $</td><td class="n pos">+117,30 $</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="col">
+    <h3>Blended, on a modelled mix</h3>
+    <p class="small">60% <code>refinancement</code> / 40% <code>financement</code>; 70%
+    <code>standard</code>, 18% <code>rapide</code>, 7% <code>prioritaire</code>, 3%
+    <code>urgence</code>, 2% <code>extrême</code>. The mix is a modelling assumption, stated so it can
+    be argued with. The prices are not.</p>
+  </div>
+
+  <div class="tw" style="max-width:700px">
+    <table>
+      <thead><tr><th>Per completed act</th><th class="n">Y1</th><th class="n">Y2</th><th class="n">Y3</th></tr></thead>
+      <tbody>
+        <tr><td>Notary's fee (paid whole to the notary)</td><td class="n">2 794 $</td><td class="n">2 794 $</td><td class="n">2 794 $</td></tr>
+        <tr><td>Nota revenue per act</td><td class="n">257 $</td><td class="n">257 $</td><td class="n">257 $</td></tr>
+        <tr><td>Card processing</td><td class="n">(89) $</td><td class="n">(89) $</td><td class="n">(89) $</td></tr>
+        <tr><td>Gross profit per act</td><td class="n">168 $</td><td class="n">168 $</td><td class="n">168 $</td></tr>
+        <tr><td>Blended client CAC</td><td class="n">164 $</td><td class="n">55 $</td><td class="n">40 $</td></tr>
+        <tr class="total"><td>Contribution per act</td><td class="n pos">4 $</td><td class="n pos">113 $</td><td class="n pos">128 $</td></tr>
+        <tr><td>Gross margin</td><td class="n">66%</td><td class="n">66%</td><td class="n">66%</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="col">
+    <p>Version 1.0 claimed 89–91% gross margin and a (70) $ Year 1 contribution. Both were wrong in
+    the same direction: the margin was overstated because the Stripe fee was applied to Nota's own
+    line instead of the whole charge, and the contribution was understated because revenue per act
+    was pinned to a 10% cut of a 1,056 $ act — a catalogue that no longer exists.</p>
+
+    <p><strong>A structural point worth stating plainly.</strong> Because Nota's price does not scale
+    with the act, gross profit per act is nearly flat across the whole urgency ladder — between 133 $
+    and 301 $ — while the amount changing hands varies four-fold. Revenue is therefore a function of
+    <strong>act count</strong>, not of the volume transacted. Every growth argument in this plan has
+    to be an argument about volume.</p>
+
+    <h3>Break-even, from the same numbers</h3>
+  </div>
+
+  <div class="tw" style="max-width:760px">
+    <table>
+      <thead><tr><th></th><th class="n">Operating expense</th><th class="n">Break-even acts</th><th class="n">Per month</th><th class="n">Plan volume</th></tr></thead>
+      <tbody>
+        <tr><td>Y1</td><td class="n">$250,000</td><td class="n">1,487</td><td class="n">124</td><td class="n">244</td></tr>
+        <tr><td>Y2</td><td class="n">$720,000</td><td class="n">4,280</td><td class="n">357</td><td class="n">2,800</td></tr>
+        <tr><td>Y3</td><td class="n">$1,850,000</td><td class="n">10,997</td><td class="n">917</td><td class="n">11,000</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="col">
+    <p>Years 1 and 2 are deliberately below break-even — that is what the raise buys. <strong>Year 3's
+    planned volume lands within a hundred acts of covering its own cost base</strong>, which is a
+    cleaner story than version 1.0's, where Year 3 still lost $390,850.</p>
+
+    <p>On the supply side a notary costs about <strong>500 $</strong> to recruit and, at 20 acts a
+    year, returns <strong>3,365 $</strong> of annual gross profit — 10,094 $ over a three-year
+    tenure. <strong>LTV to CAC of about 20&times;</strong>, payback inside <strong>three acts</strong>.
+    Supply, not demand, is where the compounding is.</p>
 
     <h3>The repeat-purchase problem, stated plainly</h3>
-    <p>A client buys a will roughly once a decade. Client retention is not the flywheel and this plan
-    does not pretend otherwise. Three things carry the business instead.</p>
+    <p>A financing act recurs on the renewal cycle — every five years for a typical fixed-rate
+    mortgage, and sooner when rates move. That is better than the retired will-and-mandate catalogue,
+    where a client bought once a decade, but it is still not a subscription and this plan does not
+    pretend otherwise. Three things carry the business instead.</p>
   </div>
 
   <div class="grid3">
-    <div class="card"><h4>Supply is the durable asset</h4><p class="small">Notaries are recurring, not one-time. Every notary recruited compounds; the network is the moat.</p></div>
-    <div class="card"><h4>Organic demand capture</h4><p class="small">The public carnet is a continuously refreshed, hyper-local corpus of real posted prices — structurally the best possible answer to "combien coûte un testament notarié à Québec ?". No competitor can index what they do not transact.</p></div>
-    <div class="card"><h4>Zero-CAC referral</h4><p class="small">Mortgage brokers, financial planners, benefit providers and estate advisors all sit upstream of the intent moment and all need a notary to hand a client to.</p></div>
+    <div class="card"><h4>Supply is the durable asset</h4><p class="small">Notaries are recurring, not one-time. Every notary recruited compounds; the network is the moat. At payback inside three acts, supply spend is the highest-return line in the budget.</p></div>
+    <div class="card"><h4>Organic demand capture</h4><p class="small">The public carnet is a continuously refreshed, hyper-local corpus of real posted prices — structurally the best possible answer to "combien coûte un refinancement chez le notaire à Québec ?". No competitor can index what they do not transact.</p></div>
+    <div class="card"><h4>Zero-CAC referral</h4><p class="small">Mortgage brokers above all: the broker sets the rate hold that creates the deadline Nota prices, and has nowhere structured to send a client who needs a notary inside it. Agents and planners sit one step further out on the same path.</p></div>
   </div>
 
-  <p class="col small" style="margin-top:1.4rem">Refinancing, unlike wills, genuinely recurs on the
-  renewal cycle — a second reason it earns its place as the high-value service. Two expansion levers
-  sit behind the core fee: a flat dossier-preparation fee of 99–149 $, unambiguously Nota's own
-  service, which lifts revenue per act by about half on the low-value services; and notary practice
-  tooling sold as a flat subscription, which is a software fee rather than a deduction from an act.</p>
+  <p class="col small" style="margin-top:1.4rem">Expansion levers, in order of confidence: raise the
+  grid per service and per tier — the most direct lever, and the one the architecture makes free,
+  since the grid is data edited from the console; widen the catalogue, starting with the
+  <em>acte de vente</em>, which rides the same lender deadline; and sell notary practice tooling as a
+  flat subscription for <em>software</em>, never a deduction from an act, which is what makes it safe
+  under art. 32.</p>
 </section>
 
 <!-- ══════════════════ 10 COMPETITION ══════════════════ -->
@@ -797,11 +1015,11 @@ footer h3{font-size:.95rem;margin:0 0 .9rem;font-family:var(--body);font-weight:
     <table>
       <thead><tr><th>Who</th><th>What they do</th><th>Where Nota differs</th></tr></thead>
       <tbody>
-        <tr><td><strong>Notairo</strong></td><td>Montréal legal-tech; digital preparation of real-estate closings, final signature in person.</td><td>Closest analogue. Workflow software for one act type — fixed pricing, no marketplace, no time-based discovery.</td></tr>
-        <tr><td><strong>Nolos</strong></td><td>Online notarized wills, ~21 service points in Québec.</td><td>A distribution network with fixed prices — a chain, not a market. No urgency pricing, no notary-side liquidity.</td></tr>
-        <tr><td><strong>Neolegal / ScriptaLegal</strong></td><td>Online legal services and document generation with notarial add-ons.</td><td>Document-first and price-fixed. They do not sell notary availability.</td></tr>
+        <tr><td><strong>Notairo</strong></td><td>Montréal legal-tech, launched Oct 2025; digital preparation of closings and refinancings, signature in person. Sells its own <strong>295 $</strong> intake fee on a Shopify storefront, with the notary's fees paid directly to the notary at signing.</td><td>Closest analogue, and external validation of the structure: Notairo is already selling exactly this legal shape in Québec. It advertises "from 949 $" while its actual packages list at 1,795–2,225 $, and prices urgency in the fine print. Nota differs on the mechanism — the price of the date is published <em>before</em> the client commits, not added afterwards.</td></tr>
+        <tr><td><strong>Nolos</strong></td><td>Online notarized wills, ~21 service points in Québec.</td><td>A distribution network with set prices — a chain, not a market. No urgency pricing, no notary-side liquidity. Outside the current catalogue.</td></tr>
+        <tr><td><strong>Neolegal / ScriptaLegal</strong></td><td>Online legal services and document generation with notarial add-ons.</td><td>Document-first and price-set. They do not sell notary availability.</td></tr>
         <tr><td><strong>Traditional practice</strong></td><td>Phone, referral, signage.</td><td>The real competitor. Nota wins by pricing time, which the phone cannot do.</td></tr>
-        <tr><td><strong>US remote-notarization platforms</strong></td><td>High-volume remote online notarization for common-law notaries public.</td><td>Structurally cannot enter. A Québec <em>notaire</em> is a civil-law public officer, and the Code de déontologie makes their commission model illegal here.</td></tr>
+        <tr><td><strong>US remote-notarization platforms</strong></td><td>High-volume remote online notarization for common-law notaries public.</td><td>Structurally cannot enter. A Québec <em>notaire</em> is a civil-law public officer, and their commission-on-the-professional's-fee model is exactly what art. 32 forbids here.</td></tr>
       </tbody>
     </table>
   </div>
@@ -811,7 +1029,7 @@ footer h3{font-size:.95rem;margin:0 0 .9rem;font-family:var(--body);font-weight:
     <ul class="clean">
       <li><strong>The urgency price curve</strong> — requires running the marketplace to obtain.</li>
       <li><strong>The notary network</strong> — slow and in-person to build.</li>
-      <li><strong>The déontologie-safe structure</strong> plus a written opinion — an outside entrant will not know to build it.</li>
+      <li><strong>The déontologie structure</strong> plus a written opinion — Notairo's 295 $ product shows the structure is discoverable, but not the four-article reasoning behind the two-line quote.</li>
       <li><strong>The exception-layer compliance product</strong> — requires understanding art. 46 well enough to productize it.</li>
     </ul>
     <p class="small">None of these are patents. All of them are years.</p>
@@ -838,21 +1056,37 @@ footer h3{font-size:.95rem;margin:0 0 .9rem;font-family:var(--body);font-weight:
         <tr><td>Bids posted</td><td class="n">434</td><td class="n">4,912</td><td class="n">17,742</td></tr>
         <tr><td>Fill rate</td><td class="n">56%</td><td class="n">57%</td><td class="n">62%</td></tr>
         <tr><td>Acts completed</td><td class="n">244</td><td class="n">2,800</td><td class="n">11,000</td></tr>
-        <tr><td>Average realised act value</td><td class="n">1 056 $</td><td class="n">1 150 $</td><td class="n">1 450 $</td></tr>
-        <tr class="total"><td>GMV</td><td class="n">$257,664</td><td class="n">$3,220,000</td><td class="n">$15,950,000</td></tr>
-        <tr class="total"><td>Net revenue</td><td class="n">$25,766</td><td class="n">$322,000</td><td class="n">$1,595,000</td></tr>
-        <tr><td>Gross profit</td><td class="n">$23,041</td><td class="n">$289,940</td><td class="n">$1,459,150</td></tr>
+        <tr><td>Notary fees paid through the platform</td><td class="n">$682,000</td><td class="n">$7,822,000</td><td class="n">$30,730,000</td></tr>
+        <tr><td>Total charged to clients</td><td class="n">$744,000</td><td class="n">$8,542,000</td><td class="n">$33,557,000</td></tr>
+        <tr class="total"><td>Nota revenue (257 $ &times; acts)</td><td class="n">$62,700</td><td class="n">$719,600</td><td class="n">$2,827,000</td></tr>
+        <tr><td>Card processing</td><td class="n">($21,700)</td><td class="n">($248,500)</td><td class="n">($976,400)</td></tr>
+        <tr class="total"><td>Gross profit</td><td class="n">$41,000</td><td class="n">$471,100</td><td class="n">$1,850,600</td></tr>
+        <tr><td>Gross margin</td><td class="n">66%</td><td class="n">66%</td><td class="n">66%</td></tr>
         <tr><td>Operating expense</td><td class="n">($250,000)</td><td class="n">($720,000)</td><td class="n">($1,850,000)</td></tr>
-        <tr class="total"><td>Net income</td><td class="n neg">($226,959)</td><td class="n neg">($430,060)</td><td class="n neg">($390,850)</td></tr>
+        <tr class="total"><td>Net income</td><td class="n neg">($209,000)</td><td class="n neg">($249,000)</td><td class="n pos">$600</td></tr>
         <tr><td>Headcount (FTE)</td><td class="n">1 + contract</td><td class="n">4</td><td class="n">10</td></tr>
       </tbody>
     </table>
   </div>
 
-  <p class="col small">Year 3 is 3.7% of addressable act volume. Cumulative capital required through
-  Year 3 is about <strong>$1.05M</strong>. <strong>Series A trigger:</strong> exiting Year 2 at a
-  $300–500K ARR run-rate with province-wide liquidity proven and the exception layer in production,
-  raising against the full act catalogue and the first cross-border corridor.</p>
+  <p class="col small">Year 3 is about 10% of the two-service addressable act volume. Cumulative
+  capital required through Year 3 is about <strong>$460,000</strong>, down from the $1.05M of version
+  1.0 — Nota's revenue per act is now 257 $ rather than a 10% cut of a 1,056 $ act, and the act values
+  themselves are financing acts. <strong>Series A trigger:</strong> exiting Year 2 at a
+  <strong>$700K</strong> revenue run-rate with province-wide liquidity proven and the exception layer
+  in production, raising against the full act catalogue and the first cross-border corridor.</p>
+
+  <div class="note brass">
+    <span class="label">Three sensitivities to press on</span>
+    <p class="small"><strong>Volume is the only lever</strong> — Nota's price does not scale with the
+    act, so revenue is act count &times; ~257 $. Halve the count and you halve the revenue; double the
+    average act value and nothing changes except the Stripe bill. <strong>The mix moves gross profit
+    far less than it moves the amount transacted</strong> — across the whole urgency ladder, gross
+    profit per act stays between 133 $ and 301 $; a pessimistic all-<code>standard</code> mix still
+    yields 166 $. <strong>Card processing is the whole cost of revenue and it grows with the notary's
+    fee</strong> — every 1,000 $ added to a typical act adds 29 $ to Nota's cost and nothing to its
+    revenue.</p>
+  </div>
 
   <h3 class="col">Use of funds — $250,000 over twelve months</h3>
   <div class="tw" style="max-width:820px">
@@ -866,7 +1100,7 @@ footer h3{font-size:.95rem;margin:0 0 .9rem;font-family:var(--body);font-weight:
         <tr><td>Legal</td><td class="n">$20,000</td><td>Déontologie opinion, Chambre engagement, incorporation, terms, Law 25 program.</td></tr>
         <tr><td>Contingency</td><td class="n">$17,000</td><td>About 7%.</td></tr>
         <tr><td>Notary acquisition</td><td class="n">$15,000</td><td>Field sales, congrès, travel.</td></tr>
-        <tr><td>Infrastructure and tooling</td><td class="n">$12,000</td><td>Serverless keeps this small.</td></tr>
+        <tr><td>Infrastructure and tooling</td><td class="n">$12,000</td><td>Serverless keeps this small — the stack idles at about $0. Card processing is not here: it is a cost of revenue, about $21,700 in Year 1 at plan volume.</td></tr>
         <tr class="total"><td>Total</td><td class="n">$250,000</td><td>About 20,800 $/month average burn.</td></tr>
       </tbody>
     </table>
@@ -896,8 +1130,8 @@ footer h3{font-size:.95rem;margin:0 0 .9rem;font-family:var(--body);font-weight:
     <span class="snum">12</span>
     <div>
       <h2>What has to be true</h2>
-      <p class="sub">Three assumptions carry the model. Each has a named falsification test, and all
-      three resolve inside this round.</p>
+      <p class="sub">Four assumptions carry the model. Each has a named falsification test, and all
+      four resolve inside this round.</p>
     </div>
   </div>
 
@@ -916,10 +1150,18 @@ footer h3{font-size:.95rem;margin:0 0 .9rem;font-family:var(--body);font-weight:
       specifically, not blended.</p>
     </div>
     <div class="card">
+      <span class="eyebrow">Resolves at the first fifty bids</span>
+      <h4>Clients pay Nota's price on top of the notary's fee</h4>
+      <p class="small">Test: the abandonment rate at the quote screen, where both lines are shown
+      together before any card is engaged. A different question from the first, and version 1.0 never
+      asked it — a percentage taken out of the notary's fee was invisible to the client.</p>
+    </div>
+    <div class="card">
       <span class="eyebrow">Resolves month 2</span>
-      <h4>The client-side fee is déontologie-safe</h4>
+      <h4>Nota's own price is déontologically safe as structured</h4>
       <p class="small">Test: a written legal opinion from Québec counsel, with structured engagement
-      with the Chambre des notaires.</p>
+      with the Chambre des notaires. The direction of the money is already settled and verifiable on
+      the Stripe wire; the qualification is not.</p>
     </div>
   </div>
 
@@ -942,14 +1184,18 @@ footer h3{font-size:.95rem;margin:0 0 .9rem;font-family:var(--body);font-weight:
     <table>
       <thead><tr><th>Risk</th><th>Severity</th><th>Mitigation</th></tr></thead>
       <tbody>
-        <tr><td><strong>Fee-sharing under the Code de déontologie</strong></td><td><span style="color:var(--oxide);font-weight:650">Critical</span></td><td>Restructure to a client-side service fee before launch. Written opinion budgeted, month 2. The notary receives 100% of their honoraires.</td></tr>
+        <tr><td><strong>Qualification of Nota's own price under art. 32.1 L.N.</strong></td><td><span style="color:var(--oxide);font-weight:650">Critical</span></td><td>The fee <em>share</em> is gone: the notary receives 100% of their honoraires and Nota charges the client its own published price. What remains is qualification, not structure. Written opinion budgeted, month 2; a flat per-act fee billed outside the act is the fallback structure.</td></tr>
+        <tr><td><strong>A retired claim survives in a document</strong></td><td>High</td><td>The 10% commission, the 75/25 split, the 5–15% cote-driven cut and the flat 400 $ price are all retired. They are wrong <em>and</em> they describe an arrangement Québec law forbids Nota from having, so every dated audit that cites them carries a retirement banner.</td></tr>
+        <tr><td><strong>Taxes and disbursements are not in the quote</strong></td><td>High</td><td>Art. 71 3° requires saying whether they are included; art. 68 forbids incomplete advertising. Priced and displayed as a month-1 milestone before any claim of completeness.</td></tr>
         <tr><td>Art. 46 keeps remote signing exceptional</td><td>High</td><td>Phase 2 is designed to be fully valuable under the current statute. The exception categories are large and under-served. Liberalization is upside, not plan.</td></tr>
         <tr><td>Cold-start liquidity fails</td><td>High</td><td>Supply is free and frictionless. One dense city first. Fill rate monitored weekly with an explicit floor-adjustment lever.</td></tr>
         <tr><td>Low client repeat rate</td><td>Medium-high</td><td>Supply-side moat, compounding organic capture, zero-CAC referral channels, recurring refinancing.</td></tr>
-        <tr><td>Chambre opposition</td><td>Medium-high</td><td>Early, written, partnership-framed engagement. Nota never touches the act or shares a fee — it is demand generation for the profession.</td></tr>
+        <tr><td>Chambre opposition</td><td>Medium-high</td><td>Early, written, partnership-framed engagement. Nota never touches the act and takes nothing out of a notary's fees — it is demand generation for the profession.</td></tr>
+        <tr><td>The date ladder's middle is priced below its own cost</td><td>Medium</td><td>Already measured: <code>rapide</code> and <code>prioritaire</code> lose 9,45 $ and 18,90 $ against the Stripe fee they create. The grid is data, edited from the console without a deploy; re-priced against realized cost at month 6.</td></tr>
+        <tr><td>No verification against the Tableau de l'Ordre</td><td>Medium-high</td><td>The only check today is the URL format of a CNQ fiche. A real status check and an immediate-removal path are prerequisites to the first live act.</td></tr>
         <tr><td>A funded competitor copies the mechanism</td><td>Medium</td><td>The price curve requires running the market to obtain; the notary network is slow and in-person; the déontologie structure is non-obvious from outside Québec.</td></tr>
         <tr><td>Solo-founder key-person risk</td><td>Medium</td><td>Architecture decision records, BDD specs as executable specification, second engineer early in Year 2.</td></tr>
-        <tr><td>Race to the bottom on price</td><td>Low</td><td>Hard floors per service and a 10&times; cap, enforced server-side in the domain core.</td></tr>
+        <tr><td>Race to the bottom on price</td><td>Low</td><td>Hard floors per service and a 5&times; cap, enforced server-side in the domain core.</td></tr>
         <tr><td>Law 25 / privacy incident</td><td>Low-medium</td><td>Canadian data residency, anonymity default-on, consent at collection, right-to-erasure on the roadmap.</td></tr>
       </tbody>
     </table>
@@ -975,7 +1221,9 @@ footer h3{font-size:.95rem;margin:0 0 .9rem;font-family:var(--body);font-weight:
     notary and admin authentication; transactional email with scheduled reminders; an ICS feed;
     analytics with drift healing; Terraform infrastructure live in <code>ca-central-1</code>; a
     Cucumber BDD suite; CI running unit, DOM, BDD and infrastructure validation on every push; Law 25
-    compliance designed in; and seven architecture decision records explaining the reasoning.</p>
+    compliance designed in; and thirty-seven architecture decision records explaining the reasoning
+    — including the sequence that dismantled the platform's own revenue model when four articles of
+    Québec notarial law turned out to forbid it.</p>
 
     <p><strong>Why this de-risks the round.</strong> Most pre-seed capital funds the possibility that
     a team can build the thing. Here the thing is built, deployed and tested. The capital buys twelve
@@ -1020,7 +1268,9 @@ footer h3{font-size:.95rem;margin:0 0 .9rem;font-family:var(--body);font-weight:
   </div>
   <p style="margin-top:1.8rem;font-size:.78rem;color:var(--faint)">Market volumes are estimates derived
   from the sources above, offered as scale rather than precision. Financial projections are
-  model outputs, not forecasts. Nota, August 2026.</p>
+  model outputs, not forecasts. Pricing figures are computed from the shipped grid in
+  <code>packages/domain</code>; the card-processing rate is Stripe's published Canadian
+  domestic-card rate and is not a constant in the code. Nota, September 2026.</p>
 </footer>
 
 </main>

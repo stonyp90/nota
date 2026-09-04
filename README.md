@@ -6,32 +6,61 @@ it; notaries watch a public calendar (the *carnet*) and pick up the work that
 fits their schedule. Closer dates command a higher premium — the market prices
 urgency.
 
-> **How Nota makes money — the one rule that shapes everything.** Notaries
-> join and browse for **free**. The amount a client offers is an all-in total
-> that splits at signing, charged only on completed acts and never as a fixed
-> or per-lead cost. **Nota keeps at most 15 % and at least 5 %**, decided by
-> one number: the notary's **cote out of 100**. A notary with no history starts
-> at 15 % and keeps **85 %**; above a cote of 90 they leave only 5 % and keep
-> **95 %**. The share **rises with merit and never falls** — the effective rate
-> is bounded by the base rate and by the floor, so merit only ever moves the
-> line toward the notary. The whole split, the cote and its four axes are
-> visible **to the notary, before they commit** — and the rate is frozen at
-> retention, so it can never worsen between the engagement and the signing. The
-> commission concept lives only in the billing layer — never in the domain.
+> **How Nota makes money — the one rule that shapes everything.** Notaries join
+> and browse for **free**, and **Nota takes nothing out of a notary's fees.** An
+> offer carries **two lines**, which the client reads separately before
+> committing:
 >
-> Quebec's *Code de déontologie des notaires* restricts sharing professional
-> fees with a non-notaire, which is why the fee is structured as a client-side
-> charge for a service Nota renders to the client. On the Stripe wire the client
-> pays **the platform** — the hold is a Checkout session on Nota's own account —
-> and at signing Nota captures, keeps its share and transfers the net to the
-> notary. What remains open is the legal **qualification**, not the direction of
-> the money: art. 32.1 of the *Loi sur le notariat* presumes usurpation by an
-> intermediary who obtains from a notary the abandonment of part of their fees.
-> **A written legal review is required before launch**, and since ADR 0030 its
-> scope also covers displaying evaluations and the cote itself.
-> See [`docs/decisions/0028-la-cote-sur-100-decide-le-partage.md`](docs/decisions/0028-la-cote-sur-100-decide-le-partage.md)
-> (revises [`0027`](docs/decisions/0027-partage-75-25-cote-client.md), which
-> superseded [`0008`](docs/decisions/0008-free-commission-marketplace.md)).
+> - **Honoraires** — the amount the client offers. It reaches the notary
+>   **whole**. Nota deducts nothing from it, ever.
+> - **The price of Nota** — Nota's own price for Nota's own service, published
+>   per service, plus a **date-guarantee** line when the date calls for one.
+>
+> Neither line depends on the notary, their cote, or the value of the act. The
+> client's card is authorized for the **total** of the two and captured at
+> signing: Nota keeps its own two lines and transfers the honoraires to the
+> notary's Connect account. **Taxes (GST/QST) and disbursements are not
+> included** in either line and appear nowhere in the product yet.
+>
+> | Nota's price | `financement` | `refinancement` |
+> | --- | ---: | ---: |
+> | Service line | **199 $** | **249 $** |
+>
+> | Date guarantee | `standard` | `rapide` | `prioritaire` | `urgence` | `extreme` |
+> | --- | ---: | ---: | ---: | ---: | ---: |
+> | Added to Nota's line | 0 $ | **50 $** | **100 $** | **200 $** | **300 $** |
+>
+> The grid lives in `packages/domain` (`SERVICES[].prixNotaCents`,
+> `TIERS[].prixNotaDateCents`) and is resolved by `domain.prixNota()`. Nota edits
+> it from the admin console without a deploy; `NOTA_PRIX_GRILLE` carries the
+> deployment default (`apps/api/src/prix-nota-config.js`). The two lines are
+> **frozen on the offer** when the card is engaged, so a later grid change can
+> never rewrite what an act cost (`domain.prixNotaFige`).
+>
+> **Why the structure is this and not a percentage.** Quebec's *Code de
+> déontologie des notaires* (art. 32) forbids a notary from sharing fees with a
+> non-*notaire*, and art. 32.1 2° of the *Loi sur le notariat* presumes
+> usurpation by an intermediary who "obtains from a notary the abandonment of
+> part of their fees". Art. 29.1 adds a second wall: no agreement may endanger
+> the notary's independence and disinterest — which is what a notary's revenue
+> indexed on a score awarded by a private company would be. So Nota sells its own
+> service at its own price, and the notary's fees are untouched. On the Stripe
+> wire the client pays **the platform** (a Checkout session on Nota's own
+> account, `separate charges and transfers`), and at signing Nota captures the
+> total and transfers the honoraires out.
+>
+> **A written legal review is still required before launch.** What stays open is
+> the legal **qualification** of Nota's price, not the direction of the money;
+> since ADR 0030 the mandate also covers displaying evaluations and the cote.
+> See [`ADR 0031`](docs/decisions/0031-le-prix-de-nota-est-celui-de-nota.md) and
+> [`ADR 0034`](docs/decisions/0034-le-prix-de-nota-est-une-grille-par-service.md).
+>
+> **Retired, and never to be restated as current:** the revenue *share* of
+> [`ADR 0027`](docs/decisions/0027-partage-75-25-cote-client.md) (75/25) and
+> [`ADR 0028`](docs/decisions/0028-la-cote-sur-100-decide-le-partage.md)
+> (a 5–15 % cut set by the cote), and the single flat 400 $ price of ADR 0031
+> before the per-service grid of ADR 0034. No surface, document or comment may
+> describe any of them as what Nota does.
 
 ## The cote — one number out of 100
 
@@ -58,19 +87,17 @@ directory into a recommendation. A client sees facts about a named notary (the
 appreciation. The notary sees everything about themselves; so does Nota. See
 [`ADR 0030`](docs/decisions/0030-la-deontologie-prime-la-cote-ne-se-publie-pas.md).
 
-The cote earns a rate through the barème (`apps/api/src/commission-config.js`):
-**60 → 12 %, 70 → 10 %, 80 → 8 %, 90 → 5 %** — the notary keeps 88 %, 90 %, 92 %,
-95 %. The best rung reached applies. Nota edits the barème from the admin console
-without a deploy (ADR 0021); the deployment defaults come from the environment:
+**The cote decides no money.** Until 2026-09-01 it set the percentage Nota kept
+from a notary's fees; ADR 0031 retired that, and `commission-config.js` with it.
+What remains is a service signal: the notary sees their cote and its four axes in
+their own console, the operator sees the same number in the admin register, and
+**no dollar depends on it**. Art. 29.1 of the *Code de déontologie* forbids any
+agreement endangering a notary's independence and disinterest, and a notary's
+revenue indexed on a score awarded by a private company was one.
 
-| Variable | Default | Meaning |
-| --- | --- | --- |
-| `NOTA_COMMISSION_RATE` | `0.15` | Base rate — what Nota keeps from a notary with no history |
-| `NOTA_COMMISSION_RATE_FLOOR` | `0.05` | Floor — Nota never keeps less, the notary never keeps more than 95 % |
-| `NOTA_COMMISSION_TIERS` | see above | JSON array of `{ cote, taux }` rungs. A schedule in the pre-0028 shape (`note`/`avis`/`actes`/`bonus`) reads as **absent** and pricing falls back to the defaults |
-
-The domain knows nothing of the split: it produces the number, the billing layer
-turns it into percentages.
+The domain computes the number and stops there: `apps/api/src/cote.js` reads one
+notary record into `domain.notaryScore`, and nothing downstream turns it into a
+price.
 
 ## Services and pricing
 
@@ -81,9 +108,15 @@ The price is derived from a handful of answers (never from uploaded
 documents); the base amount below is the **starting price** (*prix de
 départ*), and the client may offer more, up to a hard **5× cap**.
 
-| Service | `serviceId` | Prix de départ |
-| --- | --- | --- |
-| Refinancement hypothécaire | `refinancement` | **2 000 $** |
+| Service | `serviceId` | Prix de départ (notary) | Nota's own price |
+| --- | --- | ---: | ---: |
+| Refinancement hypothécaire | `refinancement` | **2 000 $** | **249 $** |
+| Financement hypothécaire | `financement` | **1 800 $** | **199 $** |
+
+The two columns are two different purchases and never one number doing both
+jobs: the *prix de départ* is the floor of what the **notary** is offered, the
+right-hand column is what **Nota** charges the client for its own service (plus
+the date-guarantee line above). Neither is a share of the other.
 
 Referring professionals (agents immobiliers, courtiers hypothécaires) earn
 flat rewards on two tracks — **50 $** when a referred client's demand is
@@ -103,15 +136,23 @@ The **tier** is derived from how many days away the requested signing date is. I
 is the axis that makes the calendar meaningful — the closer the date, the higher
 the premium the market will bear.
 
-| Tier | Days to date | Indicative premium |
-| --- | --- | --- |
-| `standard` | 15+ | 1.0× |
-| `rapide` | 8–14 | 1.8×–2.2× (≈×2) |
-| `prioritaire` | 2–7 | 2.7×–3.3× (≈×3) |
-| `urgence` | 1 | 3.3×–3.7× (≈×3.5) |
-| `extreme` | 0 | 3.7×–4.3× (≈×4) |
+| Tier | Days to date | Premium on the **notary's** fee | Nota's **date-guarantee** line |
+| --- | --- | --- | ---: |
+| `standard` | 15+ | 1.0× | 0 $ |
+| `rapide` | 8–14 | 1.8×–2.2× (≈×2) | 50 $ |
+| `prioritaire` | 2–7 | 2.7×–3.3× (≈×3) | 100 $ |
+| `urgence` | 1 | 3.3×–3.7× (≈×3.5) | 200 $ |
+| `extreme` | 0 | 3.7×–4.3× (≈×4) | 300 $ |
 
-`tierForDays(days)` is the single source of truth for this mapping.
+**Two columns, two justifications.** The multiplier prices the *notary's* own
+fee — art. 49 4° of the *Code de déontologie* lets a notary weigh « le degré
+d'urgence » in their fees, and the market tunes the multiplier from retained
+offers (`tunedTierMultipliers`). The right-hand column is what **Nota** charges
+for the date guarantee it sells: sourcing a notary at short notice and holding
+the date. They are never one number doing both jobs.
+
+`tierForDays(days)` is the single source of truth for the mapping;
+`domain.prixNota(serviceId, tierId, grille)` for the right-hand column.
 
 ## Architecture
 
@@ -161,10 +202,10 @@ needs no CORS.
 | `GET` | `/bids?month=YYYY-MM` | `200 { month, bids }` |
 | `POST` | `/bids` | `201 { bid, clientToken }` · `422 { errors }` · `400 { errors }` |
 | `POST` | `/notary/session` | `200 { token, feedToken, expiresAt }` · `403 compte_requis` |
-| `GET` | `/notary/bids` | `200 { bids, retained, rating, cote, profil, commission }` — open demands (with this notary's own `proposition` / `demande` / `missing`), the demands they retained, and the cote with the rate it earns |
+| `GET` | `/notary/bids` | `200 { bids, retained, rating, tarif, cote, profil, conditions, fenetre }` — open demands (with this notary's own `proposition` / `demande` / `missing`), the demands they retained, the cote, and `tarif` — **what the client pays Nota**, never a rate on the notary's fees. `conditions` is what retaining commits them to: payment at signing, the cancellation barème (the fee goes to the notary), the free withdrawal, and the card hold |
 | `GET` | `/notary/evaluations` | `200 { rating, cote, services, evaluations }` — the anonymized evaluation ledger and the record service by service |
-| `GET` | `/notary/acts` | `200 { actes, totaux }` — the settled-act statement: amount, rate, Nota's share, net and what is still owed, act by act |
-| `GET` | `/admin/notaries` · `/admin/audit?jour=` | the notary register (cote, axes, rate, acts, collected and owed) and one day of the append-only log — `pii:read`, super_admin only |
+| `GET` | `/notary/acts` | `200 { actes, totaux }` — the settled-act statement, act by act: `montant`, `honoraires`, `prixNota`, `net` (which **is** the honoraires — nothing is deducted) and `du` when the act settled off-platform. **Never a rate**: a statement showing a percentage would describe a fee split the plumbing no longer performs |
+| `GET` | `/admin/notaries` · `/admin/audit?jour=` | the notary register (cote, axes, acts, what Nota collected and what is owed — **no rate and no share column**) and one day of the append-only log — `pii:read`, super_admin only |
 | `POST` | `/notary/bids/accept` · `/decline` | retain (conditional, one winner) · hide a demand |
 | `POST` | `/notary/bids/propose` | `200 { proposition }` — suggest a higher price · `422` `proposition_inferieure` / `plafond_depasse` |
 | `POST` | `/notary/bids/documents` | `200 { demande }` — ask the client for specific documents · `422` `document_inconnu` |
@@ -267,19 +308,28 @@ docker compose up
 ```
 
 This starts `dynamodb-local` (:8000), creates the `nota` and `nota-admin`
-tables, runs the API against them (:8788), serves the web app (:4173), and
-brings up the admin surface too — the admin API (:8790) and the admin console
-(:4174), mirroring production's two-table, two-Lambda split.
+tables, brings up **MinIO** (:9100, console :9101) as the S3-compatible document
+store behind the storage port (ADR 0032), runs the API against them (:8788),
+serves the web app (:4173), and brings up the admin surface too — the admin API
+(:8790) and the admin console (:4174), mirroring production's two-table,
+two-Lambda split.
 
 ## Tests
 
 ```bash
 npm test                                   # @nota/domain + @nota/api unit tests
-npm run test:web                           # @nota/web jsdom smoke test
+npm run test:contract                      # OpenAPI contract tests
+npm run test:web                           # @nota/web jsdom tests
 npm run test:admin                         # @nota/admin jsdom + dev-proxy tests
 npm install --prefix features \
   && npm test --prefix features            # Cucumber BDD suite
+npm run test:e2e                           # Playwright end-to-end (e2e/)
 ```
+
+Six layers, and CI gates the deploy on the unit/DOM/BDD/contract set plus the
+Playwright run. **A worktree must `npm install` before it can run anything** —
+without it `@nota/*` resolves to the main checkout and the suite silently tests
+the wrong tree (`features/` needs its own install too).
 
 ## Deploy
 

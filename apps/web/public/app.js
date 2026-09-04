@@ -1471,8 +1471,10 @@
         { icon: 'calendrier', t: 'Choisissez votre date', d: 'sur le calendrier public.' },
         { icon: 'prix', t: 'Proposez votre prix', d: 'plus la date est proche, plus il faut offrir.' },
         // ADR 0031: two lines at signing — the notary's fee (the offer, in
-        // full) and Nota's fixed service price — both shown before any payment.
-        { icon: 'retenu', t: 'Un notaire vous retient', d: 'ou vous propose un prix — vous restez libre. Vous payez ses honoraires — le montant que vous avez offert — et, séparément, le prix fixe du service de Nota ; les deux vous sont affichés avant tout paiement.' },
+        // full) and the price of Nota's own service, published in advance.
+        // Since ADR 0034 that price is a GRID (per service, per notice
+        // tier), so it is never described as « fixe » — only as published.
+        { icon: 'retenu', t: 'Un notaire vous retient', d: 'ou vous propose un prix — vous restez libre. Vous payez ses honoraires — le montant que vous avez offert — et, séparément, le prix du service de Nota, publié d’avance ; les deux vous sont affichés avant tout paiement.' },
       ],
     },
     notary: {
@@ -5830,7 +5832,8 @@
   }
   // Merge the server's view of this notary's retentions (incl. those won on a
   // proposition) into the local store, keyed by id. Local-only progress
-  // (completed act, commission) is kept; server fields win on overlap.
+  // (completed act, price of the Nota service the client paid) is kept;
+  // server fields win on overlap.
   function ncRetainedMerge(email, entries) {
     if (!email || !Array.isArray(entries)) return;
     var local = ncRetainedFor(email);
@@ -5909,8 +5912,10 @@
   }
 
   // A notary marks a retained act completed with its final value → the API
-  // charges Nota's commission (Stripe Connect application fee) and returns the
-  // real commission in cents (never a client-side rate). Session bearer only.
+  // settles the act and returns, in cents, the price the CLIENT paid for the
+  // Nota service (never a client-side rate, and never a cut of the fees:
+  // sharing a notary's fees with a non-notary is forbidden, art. 32.1).
+  // Session bearer only.
   async function ncCompleteAct(id, dateISO, actAmount, btn) {
     if (!nc.token) return;
     var amt = Number(actAmount);
@@ -6133,7 +6138,7 @@
     if (r.status === 401) { ncExpire('Session expirée. Reconnectez-vous.'); return false; }
     // Anything else that is not a success must NOT be read as one. Without this,
     // a 500 parsed to {} and blanked the console — no open demands, no rating,
-    // no cote, no commission — while returning true, so callers toasted success.
+    // no cote, no service price — while returning true, so callers toasted success.
     if (!r.ok) {
       nc.open = []; ncRenderOpen();
       var errEmpty = $('notary-open-empty');
@@ -6300,7 +6305,7 @@
       messages: [], documents: [], annulation: j.annulation || null, completed: false,
     };
     // PAID AT SIGNING (ADR 0015): accepting retains — no money moves here.
-    // The settlement (capture + net transfer, or the commission fallback)
+    // The settlement (capture + net transfer, or the créance fallback)
     // happens when the notary confirms the signed act (« Acte signé »), and
     // « Vos revenus » counts it at that moment.
     ncRetainedAdd(nc.email, entry);
@@ -9077,7 +9082,7 @@
       return {
         '@type': 'Offer', priceCurrency: 'CAD', price: String(svc.prixDepart),
         availability: 'https://schema.org/InStock',
-        description: 'Prix de départ des honoraires du notaire pour cet acte, dans la Ville de Québec ; le prix fixe du service de Nota s’ajoute, payé à la signature.',
+        description: 'Prix de départ des honoraires du notaire pour cet acte, dans la Ville de Québec ; le prix du service de Nota, publié d’avance, s’ajoute et se paie à la signature.',
         itemOffered: { '@type': 'Service', name: svc.nom, alternateName: svc.nomEn, areaServed: { '@type': 'City', name: 'Québec' } },
       };
     });
@@ -9603,7 +9608,7 @@
     if (ncEvalsBox) ncEvalsBox.addEventListener('toggle', function () { if (ncEvalsBox.open) ncLoadEvals(); });
 
     // « Votre relevé d’actes » — same register, same first-open fetch: the
-    // full commission disclosure costs nothing until the notary asks for it.
+    // full act-by-act disclosure costs nothing until the notary asks for it.
     var ncActsBox = $('notary-actes');
     if (ncActsBox) ncActsBox.addEventListener('toggle', function () { if (ncActsBox.open) ncLoadActs(); });
 

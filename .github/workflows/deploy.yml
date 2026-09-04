@@ -36,93 +36,24 @@ env:
   AWS_REGION: ca-central-1
 
 jobs:
-  test:
-    name: Tests (domain + api + contract + BDD + web + admin)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Node 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - name: Install workspaces
-        run: npm ci
-
-      - name: Unit tests (domain + api)
-        run: npm test
-
-      - name: BDD suite (Cucumber)
-        run: npm ci --prefix features && npm test --prefix features
-
-      - name: Web smoke test (jsdom)
-        run: npm test --workspace @nota/web
-
-      - name: Admin console tests (jsdom + dev proxy)
-        run: npm test --workspace @nota/admin
-
-  # L6 — the only slow layer, kept OFF pull requests (see ci.yml) and run here
-  # on the push to main, BEFORE the deploy job, so a broken critical journey
-  # blocks the ship. Playwright boots the demo API + web itself (webServer in
-  # playwright.config.js); CI=true makes it start fresh servers on clean ports.
-  e2e:
-    name: E2E browser journeys (Playwright)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Node 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - name: Install workspaces
-        run: npm ci
-
-      - name: Install Playwright chromium
-        run: npx playwright install --with-deps chromium
-
-      - name: Run critical journeys (client booking, notary sign-in, partner claim, home numbers)
-        run: npm run test:e2e
-
-      - name: Upload Playwright report on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report
-          path: playwright-report/
-          retention-days: 7
-
-  # The infra that the code ships INTO. ci.yml validates Terraform on branches
-  # only, and since everything lands directly on main, nothing validated the
-  # infra of a shipped commit (2026-09-03 audit). fmt + validate are cheap
-  # (no backend, no credentials) and catch a broken .tf before the next apply.
-  terraform:
-    name: Terraform fmt + validate
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v3
-
-      - name: Format check
-        run: terraform -chdir=infra fmt -check
-
-      - name: Init (no backend)
-        run: terraform -chdir=infra init -backend=false
-
-      - name: Validate
-        run: terraform -chdir=infra validate
+  # Les trois gardes (tests rapides · parcours navigateur · Terraform) vivent
+  # dans ci.yml et sont APPELÉES ici, pour que le contrôle pré-fusion, la
+  # livraison publique et la livraison admin partagent une seule définition.
+  # Elles ne demandent que la lecture du dépôt : le jeton OIDC reste au seul
+  # job qui parle à AWS.
+  checks:
+    name: Gardes avant livraison
+    uses: ./.github/workflows/ci.yml
+    with:
+      e2e: true
+    permissions:
+      contents: read
 
   deploy:
     name: Build + deploy to AWS
     # Gate the ship on the fast suite, the browser journeys AND the infra
     # validation: a red in any of the three means nothing reaches production.
-    needs: [test, e2e, terraform]
+    needs: checks
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
@@ -177,9 +108,29 @@ jobs:
                 mkdir -p "apps/api/node_modules/$(dirname "$rel")"
                 cp -RL "$p" "apps/api/node_modules/$rel"
               done
-          test -f apps/api/node_modules/stripe/package.json
+
+          # LE GARDE-FOU NE REGARDAIT QUE TROIS DÉPENDANCES SUR SEPT
+          # (corrigé le 2026-09-04). Il vérifiait stripe, @nota/domain et
+          # @aws-sdk/client-dynamodb en dur ; @aws-sdk/client-s3 et
+          # @aws-sdk/s3-request-presigner — dont dépend le port de stockage des
+          # documents (ADR 0032) — n'étaient vérifiés nulle part, et toute
+          # dépendance ajoutée plus tard échappait au contrôle par construction.
+          # La liste se lit maintenant DANS apps/api/package.json : ajouter une
+          # dépendance ajoute son garde-fou.
+          deps=$(node -p 'Object.keys(require("./apps/api/package.json").dependencies || {}).join(" ")')
+          test -n "$deps"
+          missing=""
+          for dep in $deps; do
+            [ -f "apps/api/node_modules/$dep/package.json" ] || missing="$missing $dep"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::dépendances de production absentes du paquet Lambda :$missing" >&2
+            exit 1
+          fi
+          # Le domaine est un lien d'espace de travail : on vérifie en plus que
+          # cp -RL a bien déréférencé le lien et copié le code lui-même.
           test -f apps/api/node_modules/@nota/domain/index.js
-          test -f apps/api/node_modules/@aws-sdk/client-dynamodb/package.json
+
           # Tests and their fixtures never run in production — keep the zip lean.
           ( cd apps/api && zip -qr /tmp/api.zip . -x '*.git*' 'test/*' 'test-support/*' 'node_modules/@nota/domain/test/*' )
           ls -la /tmp/api.zip
@@ -208,26 +159,46 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # JS/CSS are content-hashed by the build (app.<hash>.js …), so their
-          # names change whenever their bytes do — cache them immutably for a
-          # year. Stable icons ride along. index.html + sw.js are the un-hashed
-          # source of truth that points at the current hashes: never cache them,
-          # so a new deploy is picked up immediately. --delete prunes the prior
-          # build's hashed files. /* is still invalidated at the end.
+          # UN AN D'IMMUABLE SUR DES FICHIERS QUI CHANGENT (corrigé le
+          # 2026-09-04). La synchro posait `max-age=31536000, immutable` sur
+          # TOUT sauf index.html, sw.js, robots.txt et sitemap.xml. Or
+          # llms.txt, les deux manifestes, og.png, og.svg, favicon.svg et les
+          # icônes gardent leur nom d'un déploiement à l'autre : une og.png
+          # corrigée restait épinglée un an dans les navigateurs — ce qui a
+          # déjà mordu le projet une fois, quand og.png portait une
+          # affirmation fausse.
+          #
+          # La règle est donc inversée : le défaut est COURT, et seul ce dont
+          # le nom porte l'empreinte du contenu est promu immuable.
+          #
+          # Passe 1 — tout, en cache court. --delete élague les fichiers
+          # empreintés du build précédent. index.html et sw.js sont exclus pour
+          # qu'ils ne portent JAMAIS, même une seconde, autre chose que
+          # no-cache ; --delete ne les efface pas non plus, et la passe 3 les
+          # republie de toute façon.
           aws s3 sync apps/web/dist "s3://${{ vars.WEB_BUCKET }}" \
             --delete \
-            --cache-control "public,max-age=31536000,immutable" \
+            --cache-control "public,max-age=3600" \
             --exclude index.html \
-            --exclude sw.js \
-            --exclude robots.txt \
-            --exclude sitemap.xml
-          # SEO text files change without a hash — keep them only briefly cached.
-          for f in robots.txt sitemap.xml; do
-            if [ -f "apps/web/dist/$f" ]; then
-              aws s3 cp "apps/web/dist/$f" "s3://${{ vars.WEB_BUCKET }}/$f" \
-                --cache-control "public,max-age=3600"
-            fi
+            --exclude sw.js
+
+          # Passe 2 — les seuls fichiers dont le NOM change avec les octets
+          # (apps/web/build.mjs les renomme app.<10 hex>.js, styles.<…>.css…).
+          # Un navigateur ne peut donc jamais servir une version périmée sous
+          # un nom courant : eux seuls méritent l'année immuable.
+          hashed=$(find apps/web/dist -maxdepth 1 -type f | grep -E '\.[0-9a-f]{10}\.(js|css)$' || true)
+          if [ -z "$hashed" ]; then
+            echo "::error::aucun asset empreinté dans apps/web/dist — le build a changé de forme, la règle de cache ne tient plus" >&2
+            exit 1
+          fi
+          for f in $hashed; do
+            aws s3 cp "$f" "s3://${{ vars.WEB_BUCKET }}/$(basename "$f")" \
+              --cache-control "public,max-age=31536000,immutable"
           done
+
+          # Passe 3 — index.html et sw.js : jamais mis en cache. Ce sont les
+          # deux fichiers non empreintés qui DÉSIGNENT les empreintes courantes ;
+          # un déploiement doit être vu tout de suite.
           aws s3 cp apps/web/dist/index.html "s3://${{ vars.WEB_BUCKET }}/index.html" \
             --cache-control "no-cache"
           # sw.js is optional — only upload it if the build emitted one.

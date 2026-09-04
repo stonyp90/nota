@@ -1,17 +1,37 @@
 name: CI
 
-# Fast pre-merge checks (tests + terraform validate, NO deploy). Runs on pull
-# requests and on pushes to any branch EXCEPT main — pushes to main are covered
-# by deploy.yml, which runs the same test suite before shipping, so ignoring
-# main here avoids a redundant duplicate run.
+# LES TROIS GARDES, ÉCRITES UNE SEULE FOIS.
+#
+# Ce fichier est à la fois :
+#   • le contrôle pré-fusion (pushes sur toute branche SAUF main, et pull
+#     requests) — rapide, sans navigateur ;
+#   • la définition RÉUTILISÉE (workflow_call) par deploy.yml ET
+#     deploy-admin.yml avant chaque livraison. Les deux surfaces embarquent le
+#     MÊME paquet apps/api : elles doivent donc franchir les mêmes gardes.
+#     Jusqu'au 2026-09-04 la console admin n'en franchissait qu'une (`needs:
+#     test`) et pouvait livrer du code API que le navigateur ou Terraform
+#     auraient refusé côté public.
+#
+# main est volontairement ignoré en déclenchement direct : un push sur main est
+# déjà couvert par les workflows de livraison, qui appellent ce fichier.
 on:
   push:
     branches-ignore: [main]
   pull_request:
+  workflow_call:
+    inputs:
+      e2e:
+        description: "Exécuter la couche navigateur (L6, Playwright). Fausse sur les PR, vraie avant une livraison."
+        type: boolean
+        default: false
 
 # Cancel superseded runs on the same ref to keep the queue fast.
+# `github.workflow` porte le nom de l'APPELANT quand ce fichier est appelé :
+# la livraison publique, la livraison admin et un CI de branche n'occupent donc
+# jamais le même groupe — sans quoi l'une annulerait les gardes de l'autre sur
+# le même ref.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -46,8 +66,51 @@ jobs:
       - name: Admin console tests (jsdom + dev proxy)
         run: npm test --workspace @nota/admin
 
+  # L6 — the only slow layer, kept OFF pull requests and run before a ship, so a
+  # broken critical journey blocks it. Playwright boots the demo API + web itself
+  # (webServer in playwright.config.js); CI=true makes it start fresh servers on
+  # clean ports.
+  #
+  # La condition tient par DEUX chemins volontairement redondants : l'entrée
+  # explicite passée par les workflows de livraison, ET le ref lui-même. Si un
+  # appelant oubliait `e2e: true`, la garde tournerait quand même sur main —
+  # une garde silencieusement sautée est exactement le défaut qu'on corrige.
+  e2e:
+    name: E2E browser journeys (Playwright)
+    if: ${{ inputs.e2e || github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install workspaces
+        run: npm ci
+
+      - name: Install Playwright chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run critical journeys (client booking, notary sign-in, partner claim, home numbers)
+        run: npm run test:e2e
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+  # The infra that the code ships INTO. Since everything lands directly on main,
+  # nothing validated the infra of a shipped commit until the 2026-09-03 audit.
+  # fmt + validate are cheap (no backend, no credentials) and catch a broken .tf
+  # before the next apply.
   terraform:
-    name: Terraform validate
+    name: Terraform fmt + validate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

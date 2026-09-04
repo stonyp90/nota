@@ -9,14 +9,14 @@ chaque ligne : Anthony, sauf mention.
 | --- | --- |
 | Produit | 216 commits, six couches de tests vertes (1 164 tests), carnet public, console notaire, console admin, 41 gabarits de courriel bilingues. |
 | Usagers | **Zéro.** Un seul `NOTARY#` en production, en `@nota.ca` : un enregistrement de test. |
-| Courriels | **Zéro parti.** SES en bac à sable, expéditeur = adresse Gmail personnelle, aucun domaine vérifié. Ni lien magique notaire, ni confirmation client, ni alerte opérateur ne peut atteindre qui que ce soit. |
+| Courriels | **Aucun courriel du produit n'est parti.** L'accès production SES est **accordé** (vérifié le 2026-09-03, quota 50 000/jour) : le bac à sable n'est pas le problème. Le problème est qu'**aucune identité de domaine n'existe** — pas de DKIM, pas de SPF aligné, expéditeur = adresse Gmail personnelle. Un lien magique notaire ou une confirmation client partirait techniquement, et atterrirait dans les indésirables. |
 | Paiement | `STRIPE_SECRET_KEY` vide. Une offre se publie sans carte ; un notaire ne peut pas s'inscrire (503). |
 | Domaine | Aucun. Le site vit sur `d1s1h4894dau0c.cloudfront.net` et affiche `nota.quebec` et `@nota.ca` selon la page. |
 | Alertes | Huit alarmes CloudWatch, **zéro abonné** SNS. Logs conservés 1 jour. |
 | Données | Le carnet public montre **16 offres de test** avec des noms fictifs (« Martin Gauthier », …), créées le 27 août. |
-| GTM | 37 contacts dans le pipeline, **0 courriel envoyé, 0 entrevue**. Tout est suspendu à une adresse postale (LCAP) et à l'envoi du courriel Gamache. Le kit décrit encore le partage 85/95 retiré par l'ADR 0031. |
+| GTM | 37 contacts dans le pipeline, **0 courriel envoyé, 0 entrevue** *(état au 2 septembre ; voir le tableau du § 7 pour le 4)*. Tout est suspendu à une adresse postale (LCAP). Le kit décrit encore le partage 85/95 retiré par l'ADR 0031. |
 
-Et dans le tunnel lui-même, ce qui faisait fuir un premier visiteur :
+Et dans le tunnel lui-même, ce qui faisait fuir un premier visiteur *(constat du 2 septembre ; le « 400 $ » qui y apparaît est l'ancien prix unique, remplacé le 3 septembre par la grille par service de l'ADR 0034 — 199 $ / 249 $ plus la garantie de date)* :
 
 - la page disait « Gratuit pour vous » ; le formulaire, trois clics plus loin, affichait « Service Nota 400 $ » ;
 - « Réserver votre date » ouvrait **aujourd'hui** : 7 400 $ + 400 $ autorisés sur la carte comme première image ;
@@ -53,16 +53,24 @@ Sept gestes du propriétaire. Aucun n'est du code ; tous bloquent le premier usa
 | # | Geste | Comment |
 | --- | --- | --- |
 | 1 | **Choisir un domaine** — un seul. Le film dit `nota.quebec`, les courriels `@nota.ca`. | Acheter, créer la zone Route53, poser `domain_name` et `hosted_zone_id` dans `infra/terraform.tfvars`. `acm.tf` et le nouveau `ses-domain.tf` font le reste. |
-| 2 | **SES : domaine + sortie du bac à sable** | `from_email = "bonjour@<domaine>"` ; `terraform apply` crée l'identité, DKIM, MAIL FROM, DMARC et le rattachement des rebonds au sujet d'alertes. Puis la demande au support AWS (texte en annexe A). Délai AWS : 24 à 48 h — c'est le chemin critique, à lancer le jour 1. |
+| 2 | **SES : poser l'identité de domaine** — l'accès production est **déjà accordé** (vérifié le 2026-09-03, quota 50 000/jour). Le blocage n'a jamais été le bac à sable : c'est qu'**aucun domaine n'est vérifié**, donc aucune signature DKIM, aucun SPF aligné, et un envoi depuis une adresse Gmail personnelle qui tombe dans les indésirables. | `from_email = "bonjour@<domaine>"` ; `terraform apply` crée l'identité, DKIM, MAIL FROM, DMARC et le rattachement des rebonds au sujet d'alertes. Puis publier les enregistrements DNS et attendre la vérification (minutes à quelques heures). Aucune demande au support AWS n'est requise. Dépend du geste 1. |
 | 3 | **Stripe en mode live** | `stripe_secret_key`, `stripe_webhook_secret` ; point de terminaison `https://<domaine>/api/stripe/webhook` avec les événements `account.updated`, `account.application.deauthorized`, `checkout.session.completed`, `checkout.session.expired`, `payment_intent.canceled`. |
 | 4 | **Les trois adresses** | `operator_email` (sans elle, six alertes sont muettes), `sender_address` (adresse postale, exigée par la LCAP sur chaque courriel), `alert_email` (puis confirmer l'abonnement SNS reçu par courriel). `log_retention_days = 14`. |
 | 5 | **Purger les données de test** | Annexe B. Un notaire de la vague 1 qui verrait « Martin Gauthier » retenir une offre fantôme ne reviendrait pas. |
-| 6 | **Déployer** | `git push` (le site et l'API partent seuls) ; `gh workflow run deploy-admin.yml` pour la console admin, qui reçoit désormais les inscriptions notaires à activer. |
+| 6 | **Déployer** | `git push` (le site et l'API partent seuls) ; `gh workflow run deploy-admin.yml` pour la console admin. L'activation d'un notaire inscrit passe encore par l'API, pas par un bouton (§ 7). |
 | 7 | **Envoyer Gamache, puis la vague 1** | L'adresse postale du geste 4 débloque le kit. Neuf courriels individuels (`vague-1-neuf-notaires.md`), 20 par jour maximum, colonne `e1_envoye` remplie le jour même. |
 
 ## 4. Semaines 1–2 (8–19 septembre) — dix notaires actifs
 
-- **L'inscription ne demande plus Stripe.** Un notaire entre son courriel professionnel et, s'il veut, le lien de sa fiche au Tableau ; il reçoit « Inscription reçue » ; l'opérateur vérifie la fiche (une à la fois, jamais d'extraction du bottin) et clique « Activer » dans la console admin ; le notaire reçoit son accès. Les versements Stripe se branchent plus tard, seulement avant le premier acte signé.
+- **L'inscription sans Stripe : côté serveur seulement.** Le modèle visé est
+  celui-ci — un notaire entre son courriel professionnel et, s'il veut, le lien
+  de sa fiche au Tableau ; il reçoit « Inscription reçue » ; l'opérateur vérifie
+  la fiche (une à la fois, jamais d'extraction du bottin) et l'active dans la
+  console admin ; les versements Stripe se branchent plus tard, avant le premier
+  acte signé. **Les deux routes existent et sont testées, aucun écran ne les
+  appelle** (§ 7). Deux petits chantiers avant que la vague 1 puisse s'inscrire
+  seule : un formulaire d'inscription sur le site, et un bouton « Activer » dans
+  la console admin. D'ici là, l'opérateur inscrit et active à la main.
 - **Objectif chiffré :** 10 comptes activés, dont 5 qui ont ouvert le fil deux fois ; 5 entrevues de 20 minutes (grille `entrevue-notaire.md`). La question qui décide tout est H2 : « à quel prix prenez-vous un refinancement jeudi prochain ? » — une réponse en chiffres par notaire, consignée dans `pipeline-notaires.csv`.
 - **Mettre le kit au modèle réel** (`validation-notaires.md`, `courriels-notaires.md` E4, `entrevue-notaire.md`) : deux lignes, 100 % au notaire, prix de Nota publié d'avance (199 $ / 249 $ par service, plus la garantie de date — ADR 0034). Le premier notaire à qui l'on parle ne doit pas entendre un chiffre que quatre textes condamnent.
 - **Réseaux démultiplicateurs**, après les neuf : AJNQ (porte principale des jeunes notaires), PME INTER, Jurisconseil ; l'APNQ pour le colloque des 23–24 octobre.
@@ -106,12 +114,12 @@ et il se mesure au même taux de rétention.
 
 ## 7. Livré aujourd'hui (code) et ce qu'il reste
 
-**Livré, testé et déployé** (commits `9db4b79` → `8de32a9`, six couches vertes :
+**Livré, testé et déployé — côté serveur ; lire chaque ligne jusqu'au bout, l'une d'elles n'a pas de surface** (commits `9db4b79` → `8de32a9`, six couches vertes :
 domaine 239 · api 828, les 22 tests de contrat compris · web 483 · admin 99,
 soit 1 649 tests, plus 137 scénarios BDD — 717 pas — et 10 parcours Playwright ;
 déploiements web et admin verts) :
 
-- inscription notaire par courriel + fiche CNQ (`POST /notaries/signup`), activation manuelle dans la console admin (`POST /admin/notaries/{id}/activer`, `approuveLe`), accès qui survit à tout l'onboarding Stripe ultérieur ; Stripe n'est demandé qu'avant le premier acte signé ;
+- inscription notaire par courriel + fiche CNQ : **l'API existe, la surface n'existe pas.** Les deux routes sont écrites et couvertes par des tests (`POST /notaries/signup` dans `handler.js`, `POST /admin/notaries/{id}/activer` dans `admin-handler.js`, `apps/api/test/notary-signup.test.mjs`), et `approuveLe` fait bien survivre l'accès à tout l'onboarding Stripe ultérieur. Mais **aucune interface ne les appelle** : ni `apps/web/public/app.js`, ni `apps/admin/public/admin.js` ne contient un seul appel à ces deux routes — le parcours notaire du site passe encore par l'onboarding Stripe Connect. Vérifié le 2026-09-04. Tant que les deux écrans ne sont pas écrits, l'inscription sans Stripe se fait au `curl`, par l'opérateur, ou pas du tout ;
 - page d'accueil honnête (« le notaire reçoit 100 % de votre offre ; le service Nota se paie seulement à la signature — devenu depuis une grille publiée par service, ADR 0034 »), CTA qui ouvre la première date standard, choix de date dans le formulaire, écran de publication qui dit la vérité ; nom et courriel du client requis (ADR 0033) ;
 - entonnoir de conversion : catalogue d'événements dans le domaine (`FUNNEL_EVENTS`), `POST /events` en `fetch` sans identifiant, compteurs par jour, bloc « entonnoir » dans la console admin ;
 - Terraform de l'identité de domaine SES (`infra/ses-domain.tf` : DKIM, MAIL FROM, DMARC, rebonds vers les alertes), inactif tant qu'aucun domaine n'est posé.
@@ -132,12 +140,12 @@ Tant qu'ils ne sont pas faits, tout ce qui précède tourne à vide.
 | Geste | État au 4 septembre |
 | --- | --- |
 | 1 Domaine | À faire — le film dit encore `nota.quebec`, les courriels `@nota.ca`. |
-| 2 SES | À faire — Terraform prêt (`ses-domain.tf`), demande de sortie du bac à sable rédigée (annexe A). |
+| 2 SES | À faire — **mais pas ce qu'on croyait** : l'accès production est accordé (50 000/jour, vérifié le 2026-09-03) ; ce qui manque est l'identité de domaine. Terraform prêt (`ses-domain.tf`), en attente du geste 1. L'annexe A est sans objet. |
 | 3 Stripe live | À faire — la caution (ADR 0035) attend les clés. |
-| 4 Adresses | Aux deux tiers — opérateur et alertes posés ; confirmer les deux abonnements SNS ; adresse postale manquante. |
+| 4 Adresses | Aux deux tiers — opérateur et alertes posés ; confirmer les deux abonnements SNS ; **adresse postale manquante, et c'est elle qui retient les neuf courriels de la vague 1**. |
 | 5 Purge des données de test | À faire — annexe B ; les 16 offres fictives sont toujours au carnet. |
 | 6 Déployer | Fait en continu — web et admin partent à chaque poussée sur `main`. |
-| 7 Gamache + vague 1 | À faire — Gamache contacté selon le pipeline ; la vague attend l'adresse postale. |
+| 7 Gamache + vague 1 | **Amorcé.** Gamache : courriel envoyé le 2026-09-02 (1 ligne `contacte`). Vague 1 : les neuf brouillons Gmail sont créés le 2026-09-03 et **aucun n'est envoyé** (9 lignes `brouillon_gmail`), faute d'adresse postale. 27 contacts restent à rédiger. 0 entrevue tenue. |
 
 **À faire ensuite, par ordre d'importance :**
 
@@ -145,9 +153,17 @@ Tant qu'ils ne sont pas faits, tout ce qui précède tourne à vide.
 2. **Un seul interstitiel.** Garder le film à la première visite, retirer le guide à la deuxième : deux écrans bloquants de 15 à 20 s sur deux visites, c'est deux occasions de partir. Décision du propriétaire.
 3. **Filet « aucun notaire »** : à J-3 sans rétention, courriel au client et alerte opérateur — la règle de conciergerie, automatisée.
 4. **Pages par acte** (refinancement, financement) avec le prix de départ et les prochaines dates : c'est ce que la recherche payante et les IA citent.
-5. **Kit GTM au modèle ADR 0031** (§ 4) — une heure, avant le premier appel.
+5. ~~**Kit GTM au modèle ADR 0031**~~ — fait le 2026-09-04 : `validation-notaires.md` § 2, `courriels-notaires.md` (E4 et le bloc « La grille »), `entrevue-notaire.md` (bloc H3 et fiche de prix) et la veille portent la grille des ADR 0031/0034 ; l'ancien barème 85/95 et la cote publiée sont marqués retirés partout où ils survivaient.
+6. **Les deux écrans de l'inscription notaire** — formulaire d'inscription au site, bouton « Activer » à la console admin. Les routes existent depuis le 3 septembre et personne ne peut les atteindre (§ 7).
 
-## Annexe A — demande de sortie du bac à sable SES
+## Annexe A — demande de sortie du bac à sable SES *(sans objet)*
+
+> **Périmée.** Vérifié le 2026-09-03 : le compte a **déjà l'accès production
+> SES** en ca-central-1, avec un quota de 50 000 messages/jour. Cette demande
+> n'a plus à être déposée. Le texte reste ici parce qu'il décrit correctement
+> l'usage, les destinataires et le traitement des rebonds — c'est la matière
+> d'une éventuelle demande de hausse de quota, ou d'une question de la Chambre.
+
 
 À déposer dans la console AWS (Support → Service limit increase → SES Sending
 Limits, région ca-central-1), en anglais :

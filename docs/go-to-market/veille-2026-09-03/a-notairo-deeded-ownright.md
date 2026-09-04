@@ -6,6 +6,29 @@ recherches web. Chaque fait porte l'URL d'où il vient. Le point de comparaison
 est le produit Nota **tel qu'il est dans le dépôt aujourd'hui**
 (`packages/domain/index.js`, `apps/web/public/index.html`, ADR 0015/0023/0031/0033).
 
+> **Recalculé le 4 septembre 2026 — le prix de Nota a changé la veille de ce
+> relevé.** Tout ce qui suit est chiffré sur le prix **unique de 400 $** de
+> l'ADR 0031. L'ADR 0034 l'a remplacé par une **grille par service** : **199 $**
+> financement, **249 $** refinancement, plus une garantie de date de **0 à
+> 300 $** selon le préavis (`packages/domain/index.js`). Le relevé n'est pas
+> réécrit — c'est un instantané, et il a servi à des décisions — mais chaque
+> conclusion qui dépendait du 400 $ porte désormais son chiffre corrigé.
+>
+> **Les trois corrections qui comptent, en clair :**
+>
+> | Ce que le relevé dit | Ce qui est vrai depuis l'ADR 0034 |
+> | --- | --- |
+> | Nota est **35 % plus cher** que la prise en charge de 295 $ de Notairo | Nota est **en dessous** : 249 / 295 = −15,6 % (refinancement), 199 / 295 = −32,5 % (financement) |
+> | Refinancement standard **2 400 $** (2 000 + 400) | **2 249 $** (2 000 + 249). Financement : 1 999 $ (1 800 + 199) |
+> | **6 400 $** pour une signature dans la semaine | **6 349 $** (6 000 d'honoraires + 249 + 100 de garantie prioritaire) |
+>
+> Reste vrai sans changement : l'écart de total client avec Deeded (999 $) et
+> Ownright (1 179 $) — il vient des **honoraires du notaire** (1 800 / 2 000 $),
+> pas du prix de Nota, et il n'appartient donc pas à Nota de le baisser.
+> Reste faux dans les deux versions : « SES en bac à sable » — l'accès
+> production est accordé (vérifié le 2026-09-03) ; ce qui manque est une
+> identité de domaine.
+
 ---
 
 ## 0. Ce que Nota vend réellement (base de comparaison)
@@ -16,13 +39,13 @@ est le produit Nota **tel qu'il est dans le dépôt aujourd'hui**
 | Suppléments de dossier | prêt > 300 k$ +150 · > 600 k$ +350 · > 1 M$ +600 ; approbation « en cours » +100 / « pas encore » +200 ; succession +400 ; co-emprunteur +150 ; certificat périmé +100 ; achat (financement) +200 ; prêteur privé +300 | idem, `pricing.criteria` |
 | Déplacement | client ≤ 50 km +0 · ≤ 25 km +50 · < 10 km +100 · notaire chez le client ≤ 25 km +150 · ≤ 50 km +250 · **urgence 100 % en ligne +400** | `DEPLACEMENTS`, ADR 0017 |
 | **Échelle d'urgence** (multiplicateur du prix plancher, médiane de bande) | standard 15 j+ **×1** · rapide 8–14 j **×2** · prioritaire 2–7 j **×3** · urgence veille **×3,5** · extrême jour même **×4** ; plafond ×5 | `TIERS`, `tierMultiplier`, `PREMIUM_CAP` |
-| Prix de Nota | **400 $ fixe** par acte (`DEFAULT_PRIX_CENTS` = 40 000 ¢), identique pour tous, payé par le client à la signature ; le notaire reçoit 100 % de l'offre | ADR 0031 |
+| Prix de Nota | ~~**400 $ fixe** par acte (`DEFAULT_PRIX_CENTS` = 40 000 ¢), identique pour tous~~ → **grille par service depuis l'ADR 0034** : 199 $ financement, 249 $ refinancement, plus 0 / 50 / 100 / 200 / 300 $ de garantie de date. Payé par le client à la signature ; le notaire reçoit 100 % de l'offre | ADR 0031, **ADR 0034** ; `SERVICES[].prixNotaCents`, `TIERS[].prixNotaDateCents` |
 | Moment du paiement | carte **autorisée** à la publication (« Paiement autorisé. Votre offre est en cours de publication »), **capturée à la signature** ; l'autorisation Stripe expire ~7 j → repli créance hors plateforme | ADR 0015, ADR 0029, `i18n.js` l. 586 |
 | Annulation | gratuite tant qu'aucun notaire n'a retenu ; ensuite 30 % (0–3 j) · 10 % (4–14 j) · 0 % (15 j+), **versés au notaire** | ADR 0023, ADR 0033 |
 | Entonnoir | calendrier public → clic sur une date → un seul formulaire (`#offer-form` : service, date, curseur de montant, secteur postal, nom, courriel, téléphone, anonymat, code de parrainage) → autorisation de carte → publié. **Pas de compte requis** ; lien magique pour l'espace client | `index.html` l. 1386–1580, ADR 0024 |
-| Exemple concret | refinancement ≤ 300 k$, approbation obtenue, client se déplace : **2 000 $ + 400 $ = 2 400 $** à 15 j+ ; **6 000 $ + 400 $ = 6 400 $** signé dans la semaine ; **8 000 $ + 400 $** le jour même | calcul `notaPrice × tierMultiplier + prixNota` |
+| Exemple concret *(recalculé le 4 septembre)* | refinancement ≤ 300 k$, approbation obtenue, client se déplace : **2 000 + 249 = 2 249 $** à 15 j+ *(c'était 2 400 $)* ; **6 000 + 249 + 100 = 6 349 $** signé dans la semaine *(c'était 6 400 $)* ; **8 000 + 249 + 300 = 8 549 $** le jour même *(c'était 8 400 $ — le jour même coûte désormais un peu plus, la garantie de date étant sur sa propre ligne)* | calcul `notaPrice × tierMultiplier + prixNota(service, palier)` |
 | Débours | **non mentionnés** nulle part dans l'offre au client (frais du Registre foncier, copies, etc. restent à régler à l'étude) | absence dans `index.html` / domaine |
-| Confiance | 0 avis, 1 notaire inscrit (`@nota.ca`, test), SES en bac à sable (aucun courriel réel), Stripe vide en prod, canonical = URL CloudFront (pas de domaine) | mémoire « Config prod incomplète », `index.html` l. 18 |
+| Confiance | 0 avis, 1 notaire inscrit (`@nota.ca`, test), ~~SES en bac à sable~~ → **accès production SES accordé, mais aucune identité de domaine** (donc pas de DKIM/SPF : le courrier partirait dans les indésirables — vérifié le 2026-09-03), Stripe vide en prod, canonical = URL CloudFront (pas de domaine) | mémoire « Config prod incomplète », `index.html` l. 18 |
 | SEO / a11y | title « Nota — le carnet public des actes notariés à Québec », 6 blocs JSON-LD (ProfessionalService, OfferCatalog, FAQPage, WebSite…), hreflang fr-CA/en-CA, `llms.txt`, `robots.txt` ouvert aux LLM ; sitemap **1 URL**, **0 billet de blogue** ; 245 attributs `aria-*`, lien d'évitement, `focus-visible`, `prefers-reduced-motion`, bilingue natif FR/EN | `apps/web/public/` |
 
 ---
@@ -119,16 +142,16 @@ Lancement il y a 11 mois, aucune levée, pas de profil LinkedIn d'entreprise ; e
 - Annulation chiffrée et publique ; rien de tel chez Notairo (404).
 - Console notaire (agenda par date, flux webcal, messagerie avec documents, registre) vs un courriel à info@.
 - JSON-LD, `llms.txt`, bilinguisme natif, accessibilité mesurée.
-- **Validation externe** : le produit « frais de prise en charge 295 $ » de Notairo est la même structure que le prix fixe Nota de 400 $ — le marché québécois l'a déjà adoptée.
+- **Validation externe** : le produit « frais de prise en charge 295 $ » de Notairo est la même structure que la ligne « service Nota » — le marché québécois l'a déjà adoptée. *(Recalculé le 4 septembre : cette ligne vaut 199 / 249 $, donc **sous** les 295 $ ; au 400 $ du relevé elle était 35 % au-dessus.)*
 
 **Nota est pire :**
-- **Prix** : 2 400 $ (2 000 + 400) au palier standard vs ~1 800–2 200 $ TTC débours inclus chez Notairo ; et **6 400 $** pour une signature dans la semaine, alors que Notairo affirme boucler un refinancement en « 1 à 2 semaines, parfois moins » sans surprime affichée. L'échelle ×3/×4 n'a **aucune transaction** pour la soutenir.
+- **Prix** : ~~2 400 $ (2 000 + 400)~~ **2 249 $ (2 000 + 249)** au palier standard vs ~1 800–2 200 $ TTC débours inclus chez Notairo — et les 2 249 $ sont hors taxes et hors débours, donc les deux nombres ne couvrent pas le même périmètre ; et ~~6 400 $~~ **6 349 $** pour une signature dans la semaine, alors que Notairo affirme boucler un refinancement en « 1 à 2 semaines, parfois moins » sans surprime affichée. L'échelle ×3/×4 n'a **aucune transaction** pour la soutenir. *(Recalculé le 4 septembre ; l'écart tient aux honoraires du notaire, pas au prix de Nota, qui est passé sous celui de son comparable direct.)*
 - Nota n'annonce **aucun montant** de taxes ni de débours : le « total » du client n'est pas un total. *(Corrigé le 3 septembre : la **mention** existe — `tarifNota()` sert `taxesIncluses: false` / `deboursInclus: false` au titre de l'art. 71 3°, et le devis affiche « Taxes en sus. » et « Débours en sus (droits de publication, RDPRM). ». Ce qui manque est le chiffre, pas la phrase.)* Notairo écrit « + débours » partout et vend des forfaits taxes-et-débours inclus.
 - Catalogue : Nota n'a **pas d'acte de vente/achat** (le gros du volume, 1 099 $ chez Notairo) ni de conseils juridiques.
 - Couverture : « un notaire de **Québec** » vs Montréal, Laval, Rive-Sud, West Island.
 - Preuve sociale : 0 vs 3 témoignages + un lancement médiatisé ; Nota n'a ni domaine, ni SES hors bac à sable, ni Stripe en prod.
 - Contenu : 0 billet vs 18 + 19 pages locales.
-- Notairo encaisse **avant** (Shopify) ; Nota autorise une carte qui **expire en 7 jours** pour des dates à 15 j+ — le chantier connu.
+- Notairo encaisse **avant** (Shopify) ; Nota autorisait une carte qui **expirait en 7 jours** pour des dates à 15 j+ — *réglé le 4 septembre par l'ADR 0035 : carte enregistrée à la publication, blocage posé deux jours avant la signature.*
 
 ---
 
@@ -204,10 +227,10 @@ https://www.deeded.ca/pricing (Webflow, publié 31 juil. 2026)
 - Pas de compte, pas d'engagement à accepter avant de voir le prix ; un seul formulaire.
 - Français natif (Deeded : Weglot).
 - Annulation chiffrée et publique.
-- Transparence du flux : Nota déclare le prix fixe payé par le client ; Deeded fait payer l'avocat sans barème public — structure que l'art. 32.1 rendrait risquée au Québec.
+- Transparence du flux : Nota publie le prix payé par le client, ligne par ligne ; Deeded fait payer l'avocat sans barème public — structure que l'art. 32.1 rendrait risquée au Québec.
 
 **Nota est pire :**
-- Refinancement **2 400 $** vs **999 $ + débours** (et 6 400 $ dans la semaine).
+- Refinancement ~~2 400 $~~ **2 249 $** vs **999 $ + débours** (et **6 349 $** dans la semaine). *(Recalculé le 4 septembre ; l'écart vient des honoraires du notaire.)*
 - 0 avis vs 695 à 4,9 ; SOC 2 ; deux régulateurs ; téléphone et heures affichés ; processus de plainte écrit.
 - Pas de tableau de bord de jalons après rétention (Nota : courriels + messagerie), pas de vérification d'identité en ligne, pas de signature virtuelle standard.
 - Pas de portail courtier ; Deeded a « Deeded Pro » (soumission de dossier en 30 s, visibilité courtier/client).
@@ -285,10 +308,10 @@ https://ownright.com/pricing
 - Marché ouvert : plusieurs notaires voient et proposent ; Ownright est un cabinet à prix unique.
 - La date est un prix ; Ownright demande 30 jours et fait le rush « à la faveur ».
 - Bilingue, sans compte pour publier, prix avant identité.
-- Rien à défendre sur le partage d'honoraires : Nota vend son service ; Ownright est le cabinet (l'autre voie légitime).
+- Rien à défendre sur le partage d'honoraires : Nota vend son propre service à son propre prix ; Ownright est le cabinet (l'autre voie légitime).
 
 **Nota est pire :**
-- Refinancement **2 400 $** vs **1 179 $ + HST + débours de tiers** (Ownright explicite même les débours qu'il absorbe).
+- Refinancement ~~2 400 $~~ **2 249 $** vs **1 179 $ + HST + débours de tiers** (Ownright explicite même les débours qu'il absorbe). *(Recalculé le 4 septembre.)*
 - 0 avis vs 1 768 à 5,0 + BBB A+ + A2I ; 6,5 M$ vs 0 ; 25 employés vs propriétaire seul.
 - Aucun réseau de partenaires actif (Nota a la porte Partenaires 50 $/250 $, mais pas de portail ni de nom affiché) vs 41 partenaires nommés et un portail.
 - Pas de revue gratuite « produit d'appel », pas d'assurance titres, pas de lettre d'engagement publiée.
@@ -315,11 +338,13 @@ https://ownright.com/pricing
 5. FR/EN natif au Québec (Notairo : oui aussi ; Deeded : machine ; Ownright : non).
 
 ### Les deux chiffres à assumer
-- **Écart de prix** : Nota standard 2 400 $ vs 999–1 179 $ + débours (ON/AB) et ~1 800–2 200 $ TTC (Notairo). **Dans la semaine, Nota est à 6 400 $** — 3× le forfait TTC de Notairo, qui affirme livrer un refinancement en 1–2 semaines « parfois moins ». La thèse « on vend la date » n'a encore **aucune transaction** derrière elle ; les multiplicateurs ×3/×4 sont une opinion du 28 août, pas un prix de marché.
-- **Déficit de confiance** : 0 avis, pas de domaine, courriels en bac à sable, 1 notaire test, aucune estampille — face à des concurrents qui affichent régulateur, SOC 2, BBB et des milliers d'avis. Notairo, sans avis tiers et avec une facture client indexée, montre que ce déficit est réel pour tout nouvel entrant québécois.
+- **Écart de prix** *(recalculé le 4 septembre)* : Nota standard **2 249 $** (c'était 2 400 $) vs 999–1 179 $ + débours (ON/AB) et ~1 800–2 200 $ TTC (Notairo). **Dans la semaine, Nota est à 6 349 $** (c'était 6 400 $) — ≈ 3× le forfait TTC de Notairo, qui affirme livrer un refinancement en 1–2 semaines « parfois moins ». La thèse « on vend la date » n'a encore **aucune transaction** derrière elle ; les multiplicateurs ×3/×4 sont une opinion du 28 août, pas un prix de marché. **La grille de l'ADR 0034 ne change pas ce constat** : elle retire 151 $ au total client, quand l'écart se compte en centaines ou en milliers, et il est porté par les honoraires du notaire.
+- **Déficit de confiance** : 0 avis, pas de domaine, aucune identité de domaine pour le courriel (l'accès production SES, lui, est accordé), 1 notaire test, aucune estampille — face à des concurrents qui affichent régulateur, SOC 2, BBB et des milliers d'avis. Notairo, sans avis tiers et avec une facture client indexée, montre que ce déficit est réel pour tout nouvel entrant québécois.
 
 ### Validation externe la plus forte
-Le produit Shopify « **Frais de prise en charge de dossier — 295 $** » de Notairo, avec la phrase « les honoraires du notaire et les débours seront payables directement au notaire », est **l'ADR 0031 mise en vente** au Québec depuis décembre 2025. Le prix fixe Nota (400 $) a donc un comparable direct — et il est **35 % plus cher** que celui de Notairo.
+Le produit Shopify « **Frais de prise en charge de dossier — 295 $** » de Notairo, avec la phrase « les honoraires du notaire et les débours seront payables directement au notaire », est **l'ADR 0031 mise en vente** au Québec depuis décembre 2025. La ligne « service Nota » a donc un comparable direct.
+
+**Corrigé le 4 septembre — et le sens s'inverse.** Au prix unique de 400 $, Nota était 35 % **plus cher** que Notairo (400 / 295 = 1,36). Avec la grille de l'ADR 0034, les deux lignes passent **sous** ce comparable : 249 / 295 = **−15,6 %** au refinancement, 199 / 295 = **−32,5 %** au financement. Comparaison **interne** : elle ne s'écrit jamais à un client (art. 32.1 1° C.déont., publicité comparative sur le prix).
 
 ---
 

@@ -19,38 +19,50 @@ Leur utilité est double :
 
 ## Le préalable qui n'est pas négociable
 
-**Le partage d'honoraires avec un non-notaire est restreint par le *Code de
-déontologie des notaires* du Québec.**
+**Le partage d'honoraires avec un non-notaire est interdit par le *Code de
+déontologie des notaires* du Québec (art. 32).**
 
-Le modèle économique de Nota — retenir une part du montant que le client verse
-pour un acte notarié — tombe directement dans cette restriction. L'avertissement
-est dans le code depuis le premier jour, en tête de
-`apps/api/src/billing.js:13-17` :
+**Nota ne partage aucun honoraire.** Le notaire reçoit **la totalité** du montant
+que le client lui offre ; Nota facture au client, à côté et sur sa propre ligne,
+**son propre prix pour son propre service** — une grille publiée par service
+(199 $ / 249 $) plus une garantie de date (0 · 50 · 100 · 200 · 300 $). La carte
+du client autorise le total des deux ; à la signature, Nota capture ce total,
+garde ses deux lignes et vire les honoraires au notaire.
 
-> *a share of a notarial acte is fee-sharing the Québec Code de déontologie
-> restricts; this model is an explicit owner decision and needs a legal review
-> with the Chambre before launch.*
+Jusqu'au 1<sup>er</sup> septembre 2026, il en allait autrement : Nota conservait
+de 5 % à 15 % du montant offert, selon la cote du notaire. **Ce modèle est
+retiré**, et le fichier qui le portait (`commission-config.js`) a été supprimé du
+dépôt au profit de `prix-nota-config.js`. Décisions :
+[`0031`](../decisions/0031-le-prix-de-nota-est-celui-de-nota.md) puis
+[`0034`](../decisions/0034-le-prix-de-nota-est-une-grille-par-service.md). Aucun
+notaire n'a été facturé sous l'ancien modèle : aucun acte n'avait encore été
+porté sur la plateforme.
 
-Le plan d'affaires budgète **20 000 $** pour un avis écrit et un engagement
-structuré avec la Chambre (`docs/business-plan.md:133-134`, `:554`).
+**Ce qui reste ouvert est la qualification, pas la structure.** L'**article 32.1
+de la *Loi sur le notariat*** (en vigueur le 24 octobre 2023) présume **usurper
+les fonctions de notaire** l'intermédiaire qui « obtient d'un notaire qu'il
+abandonne une partie de ses honoraires » — **2 500 à 125 000 $, doublé en
+récidive**. Et le Bureau du syndic de la Chambre a prévenu, le **25 janvier
+2024**, qu'il est « proscrit […] de laisser un intermédiaire offrir vos services,
+dicter votre conduite ou la portée de votre mandat ou fixer ou partager vos
+honoraires », en annonçant qu'il n'hésiterait pas « à prendre les recours qui
+s'imposent ». Nota n'obtient aucun abandon d'honoraires — mais un prix perçu par
+acte, par un intermédiaire, reste à **qualifier** par un juriste.
 
-**Et ce n'est pas le texte le plus lourd du dossier.** L'**article 32.1 de la
-*Loi sur le notariat*** (en vigueur le 24 octobre 2023) présume **usurper les
-fonctions de notaire** l'intermédiaire qui « obtient d'un notaire qu'il abandonne
-une partie de ses honoraires » — **2 500 à 125 000 $, doublé en récidive**. Et le
-Bureau du syndic de la Chambre a prévenu, le **25 janvier 2024**, qu'il est
-« proscrit […] de laisser un intermédiaire offrir vos services, dicter votre
-conduite ou la portée de votre mandat ou fixer ou partager vos honoraires », en
-annonçant qu'il n'hésiterait pas « à prendre les recours qui s'imposent ».
+Le plan d'affaires budgète **20 000 $** pour cet avis et pour un engagement
+structuré avec la Chambre ([`../business-plan.md`](../business-plan.md), §2.2 et
+§12.1).
 
 **Cet avis juridique écrit demeure REQUIS avant toute mise en service**, et son
-mandat s'est **élargi à quatre volets** : le partage d'honoraires et l'art. 32.1,
-l'affichage des avis (art. 70), la qualification de la cote comme
-recommandation, et la présentation des prix (art. 71-72).
+mandat couvre **quatre volets** : la qualification du prix de Nota au regard de
+l'art. 32.1, l'affichage des avis (art. 70), la qualification de la cote comme
+recommandation, et la présentation des prix (art. 71-72) — **y compris le fait
+que les taxes et les débours ne figurent dans aucune ligne du produit**.
 
 Aucun document de ce répertoire ne le remplace, ne l'anticipe et n'en préjuge.
 Tant qu'il n'est pas obtenu, la structure de rémunération décrite ici doit être
-tenue pour **provisoire et susceptible d'être refaite**.
+tenue pour **provisoire et susceptible d'être refaite** — un forfait par acte
+facturé hors de l'acte est la structure de repli déjà identifiée.
 
 Le dossier complet — textes, sources officielles, ce que le produit fait déjà,
 et la liste ordonnée de ce qui reste exposé — est dans
@@ -118,8 +130,14 @@ brouillon ne peut les résoudre seul : ils demandent une décision du propriéta
 2. **La suppression sur demande sous 30 jours** est promise
    (`index.html:1103`) ; **aucun mécanisme correspondant n'existe dans le code**.
 3. **Les frais d'annulation** (30 % / 10 % selon le délai,
-   `apps/api/src/cancellation-config.js:25-28`) ne figurent **pas** dans les
-   conditions affichées : ils n'apparaissent qu'au moment d'annuler.
+   `apps/api/src/cancellation-config.js`) ne figurent **pas** dans les
+   conditions affichées : ils n'apparaissent qu'au moment d'annuler. Ils sont
+   **versés au notaire**, jamais gardés par Nota (ADR 0033).
+8. **Les taxes et les débours ne sont dans aucune ligne du produit.** Ni le
+   montant offert au notaire ni le prix de Nota ne les portent. L'art. 71 3°
+   exige d'indiquer s'ils sont inclus, et l'art. 68 interdit la publicité
+   incomplète : tant que ce point n'est pas réglé, aucune surface ne peut
+   présenter le total comme « tout compris ».
 4. **L'adresse postale de l'expéditeur est un texte de remplacement** dans tous
    les courriels sortants (`apps/api/src/emails.js:46`) — exigence de la LCAP.
 5. **Aucune acceptation des conditions n'est enregistrée** : aucune case, aucune
@@ -128,22 +146,22 @@ brouillon ne peut les résoudre seul : ils demandent une décision du propriéta
    `packages/domain/index.js` → **zéro résultat**.
 6. **Aucune version ni date d'entrée en vigueur** dans les conditions affichées.
 7. **La créance du règlement hors plateforme n'a aucune modalité.** Quand le
-   client paie le notaire directement, la part de Nota devient un dû
-   (`apps/api/src/billing.js:318-332`) que **rien ne permet de facturer,
-   d'encaisser ni d'éteindre**. Les conditions notaire ne peuvent pas lier
+   client paie le notaire directement, le prix de Nota — jamais une part des
+   honoraires — devient un dû que **rien ne permet de facturer, d'encaisser ni
+   d'éteindre**. Les conditions notaire ne peuvent pas lier
    quelqu'un à une dette dont ni l'exigibilité ni le mode de paiement ne sont
    définis.
 
 ### Résolu le 1er septembre 2026
 
 - ~~Le site annonçait « 75 % au notaire, 25 % à Nota » alors que le code
-  facturait 15 %.~~ **Aligné** : site, README, ADR 0028 et code disent tous
-  « Nota au plus 15 %, le notaire 85 % à 95 % selon sa cote sur 100 »
-  (`apps/web/public/index.html:768, 1160, 1170`, `i18n.js:721, 730`,
-  `apps/api/src/commission-config.js:23, 27, 32-37`).
+  facturait 15 %.~~ D'abord **aligné** sur « Nota au plus 15 % » — puis
+  **entièrement retiré** le 1<sup>er</sup> septembre : il n'y a plus de partage à
+  divulguer. Le notaire reçoit 100 % de ses honoraires et Nota facture son propre
+  prix au client (ADR 0031, puis la grille de l'ADR 0034).
 - ~~« Ce que vous offrez est ce que le notaire reçoit » contredisait la clause de
-  partage.~~ **Retiré** ; `index.html:1214` porte maintenant « Transparence des
-  prix ».
+  partage.~~ **La phrase est redevenue vraie** : c'est exactement ce que le code
+  fait depuis l'ADR 0031.
 
 ---
 

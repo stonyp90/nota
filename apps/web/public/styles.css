@@ -1518,6 +1518,28 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 @media (max-width: 900px) {
   .pr-hero { grid-template-columns: minmax(0, 1fr); align-items: start; }
 }
+/* Two columns: the pitch on the left, the two reward cards AND the art. 33
+   line stacked on the right — the note under the cards it qualifies, which is
+   what its own comment below has always said.
+
+   It has to be said explicitly. .pr-eligibility is a direct child of this
+   grid, so auto-placement dropped it into a NEW ROW in the LEFT column: the
+   note was orphaned bottom-left at a 52ch measure with ~1070px of empty page
+   beside it, and the right column held nothing under the cards. `align-items:
+   center` then floated the 217px card block inside a 457px row, for ~276px of
+   dead space under the money (owner, 2026-09-04, at 1990px). The copy spans
+   both rows because it is the tall one — the second pass grew it (audience
+   row, moment line, CTA, estimator) — and `auto 1fr` keeps row 1 hugging the
+   cards so the note lands right under them instead of drifting down with the
+   copy. Explicit placement is scoped ABOVE the stack breakpoint: a
+   `grid-column: 2` leaking into the one-column layout would invent a second
+   column out of nothing. */
+@media (min-width: 901px) {
+  .pr-hero { align-items: start; grid-template-rows: auto 1fr; }
+  .pr-hero-copy { grid-column: 1; grid-row: 1 / span 2; }
+  .pr-rewards { grid-column: 2; grid-row: 1; }
+  .pr-eligibility { grid-column: 2; grid-row: 2; }
+}
 /* Two tracks, one stat card each: kicker, big figure, when. The mechanics
    live in the timeline — never repeated per card. The notary track pays more
    and carries the highlight (the STRONGER brand tint — never a ring) — tokens
@@ -2183,7 +2205,6 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
    affichée transforme un annuaire en recommandation. Ce qui reste à côté du
    badge CNQ est un FAIT : le nombre d'actes portés sur Nota. */
 .my-offer-acts { white-space: nowrap; }
-.nc-commission { font-variant-numeric: tabular-nums; }
 #notary-profil .form-row { margin-bottom: var(--space-4); }
 #nc-profil-form .btn { margin-top: var(--space-3); }
 
@@ -3282,7 +3303,8 @@ body.is-notary-session #tab-notaires { pointer-events: none; }
 .nc-retenir-go-amt { white-space: nowrap; }
 .nc-pay { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); }
 .nc-pay .btn { margin-top: 4px; }
-/* Notary earnings roll-up: realised value, Nota's commission, and net. */
+/* Notary earnings roll-up: realised value, the price the CLIENT paid for the
+   Nota service, and what the notary keeps — never a cut of their fees. */
 .nc-earn { margin-top: 6px; }
 .nc-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
 .nc-stat { border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; background: var(--surface); }
@@ -3290,15 +3312,15 @@ body.is-notary-session #tab-notaires { pointer-events: none; }
 .nc-stat-k { font-size: 12px; font-weight: 600; color: var(--ink-muted); margin-top: 3px; }
 .nc-stat-net { border-color: var(--brand); }
 .nc-stat-net .nc-stat-v { color: var(--brand); }
-/* Kill the default <p> margins so the empty state + commission facts read as
+/* Kill the default <p> margins so the empty state + the money facts read as
    one quiet block, not three floating paragraphs. */
 .nc-earn .help { margin: 8px 0 0; }
 
 /* --- « Votre cote » (ADR 0028) -------------------------------------------
-   The measure that decides the split, published whole. The number leads at
-   display size; the axes are the arithmetic under it; the barème closes the
-   panel as a public scale. Square register throughout — no pill, no circle;
-   every colour is a token. */
+   The measure of the SERVICE, published whole — since ADR 0031 it decides no
+   dollar: the notary keeps 100 % of their fees. The number leads at display
+   size; the axes are the arithmetic under it. Square register throughout —
+   no pill, no circle; every colour is a token. */
 .nc-cote { margin-top: var(--space-3); }
 .nc-cote-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--space-3) var(--space-8); }
 .nc-cote-n {
@@ -3343,7 +3365,7 @@ body.is-notary-session #tab-notaires { pointer-events: none; }
 .nc-svc-actes { font-size: 12.5px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 .nc-svc-none { font-size: 12.5px; color: var(--ink-muted); font-style: italic; }
 
-/* The act-by-act statement: the full commission disclosure. Wide content
+/* The act-by-act statement: the full disclosure, act by act. Wide content
    scrolls inside its own box — the console never scrolls sideways. */
 .nc-actes { margin-top: var(--space-5); overflow-x: auto; }
 .nc-actes-table { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }

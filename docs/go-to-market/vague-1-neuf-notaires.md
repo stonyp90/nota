@@ -1,12 +1,16 @@
 # Vague 1 — neuf notaires après Gamache
 
-**Déclencheur :** le courriel à Me Gamache est approuvé et envoyé.
-**Source des cibles :** `pipeline-notaires.csv`, colonne `statut = brouillon_pret`,
-`e1_envoye` vide. Aucune extraction du bottin de la Chambre.
+**Déclencheur :** fait — le courriel à Me Gamache est parti le 2026-09-02.
+**État au 4 septembre :** les neuf brouillons Gmail sont créés (`statut =
+brouillon_gmail` au pipeline), **aucun n'est envoyé**. Le seul reste est
+l'adresse postale exigée par la LCAP (geste 4 du plan PMF).
+**Source des cibles :** `pipeline-notaires.csv`. Aucune extraction du bottin de
+la Chambre.
 **Règles du kit qui s'appliquent** (`courriels-notaires.md`) : envoi individuel,
-jamais en cc ; une ligne personnalisée par étude ; aucun pourcentage ;
-identification complète et mécanisme de retrait, parce que ces neuf-là sont des
-premiers contacts à froid et non une référence.
+jamais en cc ; une ligne personnalisée par étude ; **aucun pourcentage, parce
+qu'il n'y en a pas** — le notaire garde 100 % de ses honoraires et Nota vend son
+propre service au client ; identification complète et mécanisme de retrait,
+parce que ces neuf-là sont des premiers contacts à froid et non une référence.
 
 ## Les neuf
 
@@ -58,8 +62,17 @@ Je suis Anthony Paquet, entrepreneur et développeur logiciel. J'ai développé
 Nota, une plateforme qui vise à rééquilibrer l'offre et la demande des actes
 notariaux simples, soit le financement et le refinancement hypothécaires.
 
-[… paragraphes 2 à 6 identiques au courriel Gamache : fonctionnement,
-honoraires, questionnaire, prime, liens …]
+[… paragraphes 2 à 5 identiques au courriel Gamache : fonctionnement,
+honoraires entiers au notaire, questionnaire, prime de date …]
+
+Le service de Nota se facture au client, séparément, à un prix publié
+d'avance : 199 $ pour un financement hypothécaire, 249 $ pour un
+refinancement, plus une ligne de garantie de date lorsque le client
+demande une date rapprochée, de 0 $ au-delà de quatorze jours à 300 $
+pour le jour même. Taxes et débours en sus. Le client n'est débité qu'à
+la signature.
+
+[… liens : version bêta, parcours …]
 
 À terme, je souhaite démontrer à la Chambre des notaires qu'un tel dossier
 peut se mener à distance en toute sécurité. C'est le sujet sur lequel votre
@@ -83,12 +96,16 @@ anthonypaquet.com
 Pour ne plus recevoir de message de ma part, répondez « retrait ».
 ```
 
-## Avant de créer les neuf brouillons
+## Avant d'envoyer les neuf brouillons
 
-1. **Le courriel Gamache est envoyé** (déclencheur).
-2. **L'adresse postale** est fournie : sans elle, le pied de page LCAP est un
-   trou, et il vaut mieux ne pas envoyer que d'envoyer incomplet.
-3. **Les liens sont retapés à la main** dans chaque brouillon (voir la note
+1. ~~**Le courriel Gamache est envoyé**~~ — fait le 2026-09-02.
+2. ~~**Les neuf brouillons sont créés**~~ — faits le 2026-09-03.
+3. **L'adresse postale** est fournie : sans elle, le pied de page LCAP est un
+   trou, et il vaut mieux ne pas envoyer que d'envoyer incomplet. **C'est le
+   seul blocage restant.**
+4. **Le paragraphe de prix ci-dessus est dans chaque brouillon** : les neuf ont
+   été rédigés avant que la grille de l'ADR 0034 n'y soit ajoutée.
+5. **Les liens sont retapés à la main** dans chaque brouillon (voir la note
    sur la réécriture par Gmail ci-dessous).
 
 ## Note — Gmail réécrit les liens des brouillons créés par l'API

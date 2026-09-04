@@ -87,7 +87,7 @@ Le mécanisme TTL est bien activé sur les deux tables
 
 | Élément | Pourquoi c'est un problème |
 | --- | --- |
-| **Profils de notaires** (`NOTARY#…/PROFILE`) | Portent courriel, identifiant Stripe Connect, historique de commission, notations. **Aucun `ttl`** — `infra/dynamodb.tf:65-68` le dit explicitement. Un notaire qui quitte la plateforme y reste indéfiniment. |
+| **Profils de notaires** (`NOTARY#…/PROFILE`) | Portent courriel, identifiant Stripe Connect, cumul de ce que Nota a facturé au client sur leurs actes, notations. **Aucun `ttl`** — `infra/dynamodb.tf` le dit explicitement. Un notaire qui quitte la plateforme y reste indéfiniment. |
 | **Registre des actes** (`ACT#…`) | Aucun `ttl` (`apps/api/src/repo-dynamo.js:735-749`). Voulu — c'est la pièce comptable — mais **non déclaré**. |
 | **Événements Stripe traités** (`EVENT#…`) | Aucun `ttl` (`repo-dynamo.js:322-328`). Croissance sans fin, non documentée. |
 | **Gains de parrainage** (`EARN#…`) | Aucun `ttl` (`repo-dynamo.js:835-840`). |

@@ -121,7 +121,8 @@ Deux questions en plus, si elles vous concernent :
 Contexte en une phrase : je construis une place de marché où le client
 affiche la date à laquelle il veut signer et le montant qu'il offre, et où
 le notaire retient ce qui cadre avec son horaire. Le notaire garde ses
-honoraires ; les frais de service sont payés par le client.
+honoraires en entier ; le service de la plateforme est facturé au client,
+séparément et à un prix publié d'avance.
 
 Merci,
 
@@ -201,10 +202,13 @@ je souhaite en discuter avec vous avant sa mise en service plutôt qu'après.
 Ce que c'est, en trois lignes : une place de marché où un client affiche la
 date à laquelle il souhaite signer son acte et le montant qu'il offre, et où
 les notaires retiennent les demandes qui cadrent avec leur horaire. Le
-notaire conserve ses honoraires ; les frais de service sont facturés au
-client, pour le service que la plateforme lui rend — trouver le notaire,
-assembler le dossier, opérer la transaction. La plateforme ne touche jamais
-à l'acte lui-même.
+notaire conserve ses honoraires en entier ; le service de la plateforme est
+facturé au client, séparément et à un prix publié d'avance — 199 $ pour un
+financement hypothécaire, 249 $ pour un refinancement, plus une ligne de
+garantie de date lorsque le client demande une date rapprochée. C'est le
+prix de ce que la plateforme rend au client : trouver le notaire, assembler
+le dossier, opérer la transaction. La plateforme ne touche jamais à l'acte
+lui-même, et ne prélève rien sur les honoraires.
 
 Deux questions, et seulement celles-là :
 
@@ -245,3 +249,31 @@ Anthony Paquet
   le net au notaire (correction du 2026-09-01 : l'ADR 0027 affirmait l'inverse)
   — mais tant que l'avis juridique écrit n'est pas au dossier, on décrit
   l'économie et on se tait sur le circuit.
+
+---
+
+## La fiche de prix, si une des trois institutions la demande
+
+C'est la question que la Chambre posera en premier, et il faut y répondre au
+chiffre près. Source : `packages/domain/index.js`.
+
+| Service | Honoraires de départ du notaire | Prix de Nota, payé par le client |
+| --- | ---: | ---: |
+| Financement hypothécaire | 1 800 $ | **199 $** |
+| Refinancement hypothécaire | 2 000 $ | **249 $** |
+
+Garantie de date, sur sa propre ligne : 0 $ au-delà de 14 jours · 50 $ à
+14 jours ou moins · 100 $ à 7 jours ou moins · 200 $ la veille · 300 $ le jour
+même. Taxes et débours en sus. Le client est débité **à la signature**.
+
+Les deux points à tenir, sans les enjoliver :
+
+1. **Nota ne prélève rien sur les honoraires du notaire.** Ni pourcentage, ni
+   commission, ni partage. Les honoraires sont fixés par le notaire et lui
+   reviennent intégralement (art. 32 C.déont., art. 32.1 *Loi sur le notariat*).
+2. **La prime de date porte sur deux lignes distinctes, pour deux raisons
+   distinctes.** Le notaire peut tenir compte de « la célérité exceptionnelle »
+   dans ses propres honoraires (art. 49 al. 2 4°) ; la ligne de Nota, elle, est
+   le prix de la garantie de date que Nota vend — sourcer un notaire à court
+   préavis et tenir la date. Deux justifications, jamais un seul nombre qui
+   ferait les deux travaux.

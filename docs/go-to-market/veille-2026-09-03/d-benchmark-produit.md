@@ -3,7 +3,23 @@
 Date : 2026-09-03 · Périmètre : accès en ligne à un notaire du Québec pour un acte de financement / refinancement.
 Méthode : inventaire du produit **réellement livré** (code du dépôt, pas les ADR ni le marketing), puis capture directe (`curl`, WebSearch, WebFetch) de dix références — quatre concurrents directs ou adjacents au Québec/Canada, six étalons internationaux du « réserver un professionnel réglementé en ligne ». Matrice, score, puis carnet « pour être n° 1 ».
 
-Réserve importante : plusieurs ✅ de Nota sont **livrés dans le code mais pas vivants en production** (SES en bac à sable, Stripe vide, un seul notaire de test — voir mémoire « Config prod incomplète »). Le benchmark compare le produit tel que codé ; le plan PMF 30 jours reste le préalable.
+Réserve importante : plusieurs ✅ de Nota sont **livrés dans le code mais pas vivants en production** (aucune identité de domaine SES — l'accès production, lui, est accordé —, Stripe vide, un seul notaire de test — voir mémoire « Config prod incomplète »). Le benchmark compare le produit tel que codé ; le plan PMF 30 jours reste le préalable.
+
+> **Corrigé le 4 septembre 2026.** Deux lignes de cet inventaire décrivaient un
+> modèle retiré la veille :
+>
+> - le **prix de Nota** est une **grille par service** depuis l'ADR 0034 —
+>   199 $ financement, 249 $ refinancement, plus une garantie de date de 0 à
+>   300 $ — et non plus un prix unique. Le devis du client compte donc
+>   **quatre** lignes, pas trois ;
+> - le **taux gagné de 85 % → 95 %** affiché à la console notaire décrivait le
+>   partage de l'ADR 0028, **retiré par l'ADR 0031** : il n'y a plus de partage
+>   du tout, le notaire garde 100 % de ses honoraires. La cote /100 survit comme
+>   outil **interne** ; elle ne décide plus d'aucune part et ne s'affiche jamais
+>   au client sur un notaire nommé (ADR 0030).
+>
+> Le score (Nota 36/58, premier de sa catégorie) ne dépend d'aucun de ces deux
+> chiffres et reste valide.
 
 ---
 
@@ -17,7 +33,7 @@ Réserve importante : plusieurs ✅ de Nota sont **livrés dans le code mais pas
 | Carnet public | Calendrier par mois, chaque jour montre les offres (montant, service, secteur) ; filtres service / statut / montant min / tri ; « pulse » du mois ; sur téléphone le calendrier est centré (ADR 0022) | `#cal-grid`, `#filters`, `#carnet-pulse` |
 | Réserver une date | **Un seul dialogue** `#day-dialog` : date → acte (chips : Refinancement 2 000 $ · Financement 1 800 $) → « Ce que d'autres offrent ce jour-là » + « Offrir autant » → critères → montant → secteur postal → identité → publier | `openDay`, `renderOfferCriteria`, `onAmountChange` |
 | Critères de prix | Requis : montant du prêt (tranches), approbation bancaire, succession (refi) / contexte (financement), **prêteur** (17 institutions + « Autre » nommé), **déplacement** (6 bandes : à l'étude ≤ 50/25/10 km, chez moi ≤ 25/50 km, urgence 100 % en ligne +400 $). Optionnels : co-emprunteur, assurance habitation, certificat de localisation | `SERVICES[].pricing.criteria`, `LENDERS`, `DEPLACEMENTS` |
-| Prix avant engagement | Paliers d'urgence dérivés de la date (standard 15 j+ ×1 → extrême J0 ≈ ×4), curseur borné [plancher, 5×], jauge « chances », **devis en trois lignes** : Honoraires du notaire · Service Nota · Autorisé sur votre carte | `TIERS`, `PREMIUM_CAP`, `renderDevis` |
+| Prix avant engagement | Paliers d'urgence dérivés de la date (standard 15 j+ ×1 → extrême J0 ≈ ×4), curseur borné [plancher, 5×], jauge « chances », **devis décomposé** : Honoraires du notaire · Service Nota (199 / 249 $) · Garantie de date (0 à 300 $) · Autorisé sur votre carte *(corrigé le 4 septembre : trois lignes avant l'ADR 0034)* | `TIERS`, `PREMIUM_CAP`, `renderDevis`, `prixNota` |
 | Identité & vie privée | Nom + courriel requis, téléphone optionnel ; **anonyme par défaut** (« Client · G1R ») ; compte sans mot de passe optionnel ; code de référence ; ligne de consentement Loi 25 | `#o-anon`, `#o-account`, `#o-parrain`, `#consent-line` |
 | Paiement | `POST /bids` renvoie `checkoutUrl` → **Stripe Checkout hébergé, pré-autorisation à capture manuelle** ; capture partielle à la signature ; le client paie la plateforme, Nota transfère le net au notaire (Connect) | `authorizeOffer`, `captureAndTransfer` |
 | Après publication | Panneau de succès : ICS / Google Agenda / Outlook ; « Préparer mon dossier » → checklist de documents par acte avec aide, barre de progression, « Réutiliser », **fichiers jamais envoyés avant la mise en relation** | `#offer-success`, `renderDossier`, `dossierWire` |
@@ -41,7 +57,7 @@ Nombre d'écrans/décisions jusqu'à l'offre publiée : 1 dialogue, ~8 décision
 | Actions | **Retenir** (feuille qui expose montant, part Nota, déplacement, prêteur, pièces manquantes, barème d'annulation) · **Proposer un prix** · **Demander des documents** · Refuser |
 | Alertes | Rythme (instantané / quotidien), urgentes seulement, prêteurs acceptés ; digest quotidien `newMatchingBids` |
 | Dossiers retenus | Bloc client (nom, courriel, tél.), dossier, messagerie + documents, désistement, « Marquer complété » (confirmation armée) |
-| Argent | Tuiles de revenus, **cote /100 en quatre axes** et taux gagné (85 % → 95 %), relevé des actes (`/notary/acts`), registre des évaluations, Stripe Connect Express (« Connecter mon compte de paiement ») |
+| Argent | Tuiles de revenus, **cote /100 en quatre axes** *(outil interne ; elle ne décide plus d'aucun partage — ADR 0031 — et ne s'affiche jamais au client sur un notaire nommé — ADR 0030 ; le « taux gagné 85 % → 95 % » décrivait l'ADR 0028, retiré)*, relevé des actes (`/notary/acts`), registre des évaluations, Stripe Connect Express (« Connecter mon compte de paiement ») |
 | Agenda | Flux webcal hydraté (montant, déplacement, prêteur, client), ICS par acte, bilingue |
 
 ### 1.3 Transversal
@@ -182,7 +198,7 @@ Classement par impact (1–5, conversion + rétention) ÷ effort (S = 1, M = 2, 
 | 18 | 0,7 | **App native** (Zocdoc, Maple, Rocket) | Après le push web : enveloppe Capacitor de la PWA pour les magasins ; peu de gain tant que le push web n'est pas là. | L |
 
 ### Ce qu'il faut garder tel quel (Nota déjà au-dessus de tous)
-Devis en trois lignes avant engagement · date choisie par le client et paliers jusqu'à J0 · checklist de documents avec fichiers qui restent sur l'appareil · messagerie par acte avec dépôt de documents · barème d'annulation exposé aux deux parties et versé au notaire · agenda ICS/webcal des deux côtés · bilingue partout · entrée sans mot de passe · cote /100 et taux visibles au notaire avant de retenir · déontologie d'abord (aucune cote publiée).
+Devis décomposé avant engagement (honoraires · service Nota · garantie de date) · date choisie par le client et paliers jusqu'à J0 · checklist de documents avec fichiers qui restent sur l'appareil · messagerie par acte avec dépôt de documents · barème d'annulation exposé aux deux parties et versé au notaire · agenda ICS/webcal des deux côtés · bilingue partout · entrée sans mot de passe · cote /100 visible au notaire dans sa propre console · déontologie d'abord (aucune cote publiée sur un notaire nommé).
 
 ### Séquence recommandée
 - **Semaine 1 (tout en S, ~6 items)** : rangs 1, 2, 3, 6, 7, 8 — jalons + rappels sur l'acte retenu, faits agrégés, délai d'appariement mesuré, débours, heures de support, garantie énoncée. Aucun changement de modèle, tout est copie + domaine + un calcul de stats.

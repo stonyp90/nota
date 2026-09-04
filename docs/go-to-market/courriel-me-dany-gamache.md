@@ -2,7 +2,7 @@
 
 **À :** dgamache@gamachenotaires.com
 **Objet :** Nota : rééquilibrer l'offre et la demande des actes notariaux simples
-**État :** brouillon Gmail, non envoyé
+**État :** **envoyé le 2026-09-02** (Antoine Leclerc en cci). Le texte ci-dessous est celui qui est parti : c'est un enregistrement, il ne se réécrit pas.
 **Registre :** corporatif, sans tiret cadratin ni point-virgule
 **Relecture :** 2026-09-02, trois lentilles (langue, droit, produit) + sceptiques — voir « Relecture » ci-dessous
 
@@ -53,6 +53,27 @@ anthonypaquet.com
 **Non cité volontairement** (matière à rencontre, pas à courriel) : succession
 +400 $, prêteur privé +300 $, échelle de déplacement 0 à +400 $, tranches de
 valeur du prêt 0 / +150 / +350 / +600 $.
+
+## Ce que la version suivante doit porter — la grille de prix
+
+Le courriel envoyé dit juste sur la structure (« les honoraires demeurent
+entièrement les vôtres ; Nota facture son propre service, séparément, au
+client ») mais il ne **chiffre** pas le service de Nota. Depuis l'ADR 0034 ce
+prix est une grille publiée, et un notaire qui pose la question mérite le
+chiffre au premier échange. À ajouter dans toute reprise — la relance à
+Gamache comme les neuf de la vague 1 :
+
+| Service | Honoraires de départ du notaire | Prix de Nota, payé par le client |
+| --- | ---: | ---: |
+| Financement hypothécaire | 1 800 $ | **199 $** |
+| Refinancement hypothécaire | 2 000 $ | **249 $** |
+
+Plus la garantie de date, sur sa propre ligne : 0 $ au-delà de 14 jours, 50 $ à
+14 jours ou moins, 100 $ à 7 jours ou moins, 200 $ la veille, 300 $ le jour
+même. Taxes et débours en sus. Le client n'est débité qu'à la signature.
+
+Ne jamais écrire « prix fixe » : depuis l'ADR 0034 c'est une grille par
+service, et le mot est faux.
 
 **Deux nuances à connaître si Gamache creuse.** Le flux d'agenda montre tout le
 carnet, pas seulement son secteur : le filtrage par territoire se fait dans la

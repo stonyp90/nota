@@ -62,10 +62,11 @@ des facteurs relatifs à la vie privée** avant la mise en service. Elle n'a pas
 faite.
 
 **Détail qui compte pour la vérifiabilité :** dans le chemin de règlement
-principal, la part de Nota n'est **pas** transmise à Stripe comme frais
-d'application ; elle n'existe que comme différence entre une capture et un
-virement (`apps/api/src/stripe-port.js:136-156`). Les rapports Stripe ne la
-montrent donc pas. Voir `../compliance/piste-audit-transactions.md`, §4.
+principal, le prix de Nota — jamais une part des honoraires du notaire — n'est
+**pas** transmis à Stripe comme frais d'application ; il n'existe que comme
+différence entre une capture (le total des deux lignes) et un virement (les
+honoraires, en entier). Les rapports Stripe ne le montrent donc pas comme une
+ligne distincte. Voir `../compliance/piste-audit-transactions.md`, §4.
 
 ### A.3 GitHub
 

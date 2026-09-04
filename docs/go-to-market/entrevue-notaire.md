@@ -68,20 +68,26 @@ spontanément le partage d'honoraires. S'ils ne le nomment pas :*
 « Si elle prenait un pourcentage de vos honoraires — ça change quoi ? »
 → *note : la réaction brute, mot pour mot.*
 
-*Puis, et seulement une fois les deux réponses notées, le chiffre réel (ADR
-0028) :* « Le client paie un total. 85 % sont vos honoraires, les 15 % qui
-restent sont les frais de service qu'il paie à Nota. Vous en pensez quoi ? »
-→ *note : accepte / hésite / refuse, et **le taux qu'il nommerait**. Ne pas
-défendre le 15 % — on est venu le mesurer, pas le vendre.*
+*Puis, et seulement une fois les deux réponses notées, le modèle réel (ADR
+0031 et 0034) :* « Chez nous, vos honoraires restent entièrement les vôtres —
+on ne prend rien dessus. Nota facture son propre service au client, à côté :
+199 $ pour un financement, 249 $ pour un refinancement, plus une ligne de
+garantie de date de 0 à 300 $ selon le préavis. Vous en pensez quoi ? »
+→ *note : accepte / hésite / refuse, et **le prix qu'il trouverait juste**. Ne
+pas défendre les 199/249 $ — on est venu les mesurer, pas les vendre.*
 
-*Puis l'hypothèse neuve, celle que rien n'a encore mesurée :* « Et si cette
-part descendait — jusqu'à 5 %, donc 95 % pour vous — à mesure que monte une
-cote sur 100 publique, que vos clients voient autant que vous ? Est-ce que ça
-change ce que vous pensez du prélèvement ? »
-→ *note : change / ne change rien, et **pourquoi**. Écouter séparément
-l'objection à la cote elle-même — « je ne veux pas être noté publiquement » est
-une réponse distincte de « le taux est trop haut », et les confondre ferait
-lire deux fois la même donnée.*
+*Puis la question qui vaut le déplacement :* « Si le client voit ce prix-là à
+côté de vos honoraires, avant de s'engager — est-ce que ça vous met mal à
+l'aise, ou est-ce que c'est mieux que de ne pas savoir ? »
+→ *note : à l'aise / mal à l'aise, et **pourquoi**. C'est la seule chose que
+l'entrevue peut trancher que le code ne peut pas.*
+
+> **Attention — ce qu'il ne faut plus dire.** Une version antérieure de cette
+> grille scriptait « 85 % pour vous, 15 % pour Nota, jusqu'à 95 % avec votre
+> cote sur 100 ». C'est un partage d'honoraires avec un non-notaire et une cote
+> visible du client sur un notaire nommé : retiré par les ADR 0031, 0034 et
+> 0030, et interdit par les art. 32 C.déont., 32.1 *Loi sur le notariat* et 70
+> C.déont. Ne jamais le prononcer, même comme hypothèse.
 
 ### Bloc produit — H4, H5, H6
 
@@ -135,9 +141,9 @@ raison_refus_1:       # prix | client inconnu | preteur | deplacement | autre
 # H3
 source_remuneration_spontanee:
 reaction_partage_honoraires:   # citation textuelle
-reaction_85_15:                # accepte | hesite | refuse
-taux_quil_nommerait:           # %
-effet_cote_publique:           # change | ne change rien | refuse la cote
+reaction_prix_nota:            # accepte | hesite | refuse (199/249 $ + garantie de date)
+prix_quil_trouverait_juste:    # $
+prix_visible_au_client:        # a_laise | mal_a_laise
 # H4-H6
 qui_decide_agenda:
 logiciel_etude:
@@ -159,3 +165,28 @@ interesse_cohorte:    # oui | peut-etre | non
 | H4 | — | Si l'adjointe décide : la console notaire est refaite pour elle |
 | H5 | — | Si la ressaisie est rédhibitoire : une intégration passe avant le reste |
 | H6 | ≥ 5 refus/an/notaire | Confirme le dimensionnement de la phase 2 |
+
+---
+
+## La fiche de prix — à n'ouvrir que si le notaire la demande
+
+La posture reste celle du haut de page : on ne présente pas Nota. Mais dès que
+la question vient de lui, il faut répondre juste et du premier coup. Chiffres
+vérifiés dans `packages/domain/index.js`, jamais recopiés d'un autre document.
+
+| Service | Honoraires de départ du notaire | Prix de Nota, payé par le client |
+| --- | ---: | ---: |
+| Financement hypothécaire | 1 800 $ | **199 $** |
+| Refinancement hypothécaire | 2 000 $ | **249 $** |
+
+Garantie de date, sur sa propre ligne : standard (plus de 14 j) **0 $** ·
+rapide (≤ 14 j) **50 $** · prioritaire (≤ 7 j) **100 $** · urgence (la veille)
+**200 $** · extrême (le jour même) **300 $**. Taxes et débours en sus.
+
+Ce que ça pèse, s'il pose la question : au palier standard, Nota fait
+249 / 2 249 = **11,1 %** du total d'un refinancement et 199 / 1 999 = **10,0 %**
+d'un financement — et cette part **baisse** quand la date porte une prime, parce
+que les honoraires montent avec le palier et la ligne de Nota, non
+(prioritaire : 6 000 + 349 = 6 349 $, soit **5,5 %**).
+
+Trois choses à ne jamais dire : « commission », « partage », « moins cher ».

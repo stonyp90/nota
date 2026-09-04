@@ -6,6 +6,16 @@ plus Similarweb, Trustpilot et Birdeye pour les avis et le trafic. Complète
 `docs/go-to-market/concurrence.md` (relevé du 1er septembre), qui n'avait
 qu'un paragraphe par acteur.
 
+> **Recalculé le 4 septembre 2026.** Ce relevé est chiffré sur le prix **unique
+> de 400 $** de l'ADR 0031. L'ADR 0034 l'a remplacé le 3 septembre par une
+> **grille par service** : **199 $** financement, **249 $** refinancement, plus
+> une garantie de date de **0 à 300 $** selon le préavis
+> (`packages/domain/index.js`). Le texte n'est pas réécrit — c'est un instantané
+> — mais chaque « + 400 $ » qu'on y lit vaut désormais « + 249 $ » sur un
+> refinancement et « + 199 $ » sur un financement, plus la ligne de date. Aucune
+> conclusion de ce relevé ne bascule : elles portent sur les honoraires et sur
+> le SEO, pas sur la ligne de Nota.
+
 **Limites de la méthode.** Trustpilot et Reddit refusent le crawler (403) ;
 seuls Neolegal (Trustpilot, Birdeye) et Soumissions Maison (témoignages
 auto‑publiés) ont des avis lisibles. Similarweb sous‑estime les petits sites ;
@@ -23,10 +33,10 @@ Lu dans `apps/web/public/index.html`, `apps/web/public/app.js`,
 
 | Rubrique | Nota (code du 3 sept. 2026) |
 | --- | --- |
-| Offre au client | Publier est gratuit. Le client **fixe la date et le montant** ; le notaire accepte, contre‑propose ou passe. Le montant offert va au notaire **en entier** ; Nota facture séparément un **prix fixe de 400 $** (`DEFAULT_PRIX_CENTS = 40000`, modifiable par l'admin ou `NOTA_PRIX_CENTS`). Les deux lignes sont affichées avant paiement (« Honoraires du notaire » / « Service Nota » / « Autorisé sur votre carte »). |
+| Offre au client | Publier est gratuit. Le client **fixe la date et le montant** ; le notaire accepte, contre‑propose ou passe. Le montant offert va au notaire **en entier** ; Nota facture séparément son propre service — ~~un **prix fixe de 400 $**~~ → depuis l'ADR 0034, une **grille par service** : **199 $** financement, **249 $** refinancement, plus **0 à 300 $** de garantie de date, modifiable par l'admin. Les deux lignes sont affichées avant paiement (« Honoraires du notaire » / « Service Nota » / « Autorisé sur votre carte »). |
 | Ce que paie le notaire | **0 $.** Aucun abonnement, aucune piste, aucun pourcentage. |
 | Prix de départ | Refinancement **2 000 $**, financement **1 800 $** (Ville de Québec). Critères qui montent le plancher : montant du prêt (+0/150/350/600), approbation bancaire (+0/100/200), succession (+400), déplacement (+0 à +400, « urgence 100 % en ligne » = +400), co‑emprunteur (+150), certificat périmé (+100). |
-| Prime d'urgence | Multiplicateur par palier, **pré‑rempli** dans le curseur : standard ≥ 15 j ×1,0 · rapide 8–14 j ×1,8–2,2 · prioritaire 2–7 j ×2,7–3,3 · urgence la veille ×3,3–3,7 · extrême le jour même ×3,7–4,3 (plafond ×5). Concrètement, un refinancement à 10 jours est pré‑rempli à **≈ 4 000 $ + 400 $** ; à 5 jours ≈ 6 000 $ + 400 $. |
+| Prime d'urgence | Multiplicateur par palier, **pré‑rempli** dans le curseur : standard ≥ 15 j ×1,0 · rapide 8–14 j ×1,8–2,2 · prioritaire 2–7 j ×2,7–3,3 · urgence la veille ×3,3–3,7 · extrême le jour même ×3,7–4,3 (plafond ×5). Concrètement, un refinancement à 10 jours est pré‑rempli à ~~≈ 4 000 $ + 400 $~~ **≈ 4 000 $ + 299 $** (249 de service + 50 de garantie rapide) ; à 5 jours ~~6 000 $ + 400 $~~ **6 000 $ + 349 $** (249 + 100, palier prioritaire). |
 | Délai promis | Aucun. FAQ : « Nota ne garantit aucun délai. » |
 | Entonnoir | Porte d'intro (1 clic : « Entrer sur le site » ou une porte) → calendrier → clic sur une date (1) → dialogue : acte (1) → 3 questions obligatoires (montant, approbation, prêteur ; succession et déplacement pré‑répondus) → curseur pré‑rempli → secteur postal (3 caractères), nom, courriel, téléphone (recommandé) → « Publier mon offre » (1) → **page Stripe hébergée pour autoriser la carte** (quand l'API renvoie un `checkoutUrl` ; l'offre n'atteint le carnet qu'après le webhook). ≈ 5–7 clics + 4 champs + carte. **Aucun compte requis** (option sans mot de passe). |
 | Confiance | Tuiles de conformité (art. 32.1 Loi ; art. 32, 29.1, 49 C. déont.) ; « Nota n'est pas un notaire » ; profil notaire = lien CNQ + nom/tél/adresse obligatoires (ADR 0033) ; anonymat par défaut (« Client · secteur postal ») ; phrase Loi 25. **Aucun avis, aucun compteur, aucun nombre d'actes** — il n'y a encore aucun acte conclu. |
@@ -251,10 +261,10 @@ déjà. Source : [notaire‑web.ca](https://notaire-web.ca/).
 | | Soumissions Québec | Soumissions Maison | Notaire.Solutions | NotaireLocal | Neolegal | **Nota** |
 | --- | --- | --- | --- | --- | --- | --- |
 | Modèle | Piste vendue à 3 notaires | Piste vendue à 3 notaires | Piste « jusqu'à 5 » | Annuaire payé par le notaire | Cabinet d'avocats à forfait | Marché : client fixe date + prix |
-| Client paie | 0 $ | 0 $ | 0 $ | 0 $ | Forfait d'avance (199 $+) | Offre (dès 2 000 $) + **400 $ fixe**, capturés à la signature |
+| Client paie | 0 $ | 0 $ | 0 $ | 0 $ | Forfait d'avance (199 $+) | Offre (dès 1 800 $) + le prix de Nota — ~~400 $ fixe~~ **199 $ financement / 249 $ refinancement + 0 à 300 $ de garantie de date** (ADR 0034) — capturés à la signature |
 | Notaire paie | Par piste (prix caché) | Par piste (prix caché) | Inconnu | Entente signée (prix caché) | s.o. | **0 $** |
 | Refinancement nommé au client | Oui (« Financement hypothécaire ») | Oui (+ page prix mainlevée/refi) | Oui | Non | Non | Oui, seul service |
-| Prix visible avant contact | Fourchettes éditoriales | Fourchettes éditoriales | Testament seulement | Non | Oui, fixe | **Oui, exact, deux lignes** |
+| Prix visible avant contact | Fourchettes éditoriales | Fourchettes éditoriales | Testament seulement | Non | Oui, fixe | **Oui, exact, décomposé** (honoraires · service Nota · garantie de date) |
 | Urgence | Case « Date prévue », sans effet | Idem + 3 plages de rappel | Non | Non | Non | **Date ferme, prime ×1 → ×4** |
 | Délai promis | 24–48 h | 24 h | « quelques heures » | — | RDV après paiement | **Aucun** |
 | Champs / clics | ≈ 13–15 champs, 1 page | ≈ 18 champs | **5 champs** | 1 code postal | Compte + paiement | ≈ 7 clics + 4 champs + **carte** |
@@ -274,7 +284,7 @@ déjà. Source : [notaire‑web.ca](https://notaire-web.ca/).
 2. **Le prix par piste reste introuvable sur le web.** Trois acteurs le vendent (SQ, SM, NL), aucun ne l'affiche. À obtenir en entrevue, avec un notaire acheteur de pistes — c'est le nombre qui donne sa valeur au « 0 $ pour le notaire » de Nota.
 3. **Aucun des quatre apparieurs québécois n'a un seul avis indépendant.** Trustpilot 404 pour SQ et SM, rien pour NS et NL. Le seul acteur noté (Neolegal) l'est à 29 % de 1 ★. Le marché n'a pas encore de référence de confiance ; Nota n'en a pas non plus, mais c'est la première place vide à prendre — avec des faits (nombre d'actes, CNQ), pas des cotes (ADR 0030).
 4. **Le formulaire de Nota est le plus long du lot après Neolegal, et le seul qui demande une carte.** Notaire.Solutions tient en 5 champs. La carte à la publication est le prix de « payé à la signature » ; il faut que l'écran le dise aussi clairement que le devis (« Autorisé, non débité »).
-5. **Le total client de Nota est hors de l'échelle que ses concurrents publient.** SQ affiche 750 $ pour quittance/mainlevée et 1 300–1 600 $ pour une transaction ; Nota pré‑remplit 4 000–8 000 $ + 400 $ sous 14 jours. Le brief du 1er septembre disait déjà « ne jamais présenter Nota comme moins cher » ; ce relevé ajoute : sous 14 jours, l'écart n'est pas de 40–60 %, il est de ×3 à ×5 par rapport aux repères que le client lit ailleurs. Le film d'intro (1 800 → 2 200 $) est la seule échelle du site que ces repères rendent crédible — et le domaine ne la propose pas.
+5. **Le total client de Nota est hors de l'échelle que ses concurrents publient.** SQ affiche 750 $ pour quittance/mainlevée et 1 300–1 600 $ pour une transaction ; Nota pré‑remplit 4 000–8 000 $ + 299 à 549 $ sous 14 jours *(recalculé le 4 septembre ; c'était « + 400 $ »)*. **Le constat tient entièrement** : les 151 $ retirés par l'ADR 0034 ne pèsent rien contre un écart de ×3 à ×5, parce que l'écart est porté par les honoraires du notaire, pas par la ligne de Nota. Le brief du 1er septembre disait déjà « ne jamais présenter Nota comme moins cher » ; ce relevé ajoute : sous 14 jours, l'écart n'est pas de 40–60 %, il est de ×3 à ×5 par rapport aux repères que le client lit ailleurs. Le film d'intro (1 800 → 2 200 $) est la seule échelle du site que ces repères rendent crédible — et le domaine ne la propose pas.
 6. **Le SEO est le trou le plus large de Nota.** 157 et 524 articles chez SQ/SM, 127 pages de villes chez NL, contre 1 URL et 0 article chez Nota, sur une URL CloudFront. Les données structurées de Nota sont les meilleures du lot ; elles n'ont rien à structurer.
 7. **Deux acteurs visent déjà exactement le segment de Nota** : Soumissions Maison (page « refinancer une hypothèque ») et Notaire.Solutions (formulaire à trois services dont « Refinancement hypothécaire », villes = quartiers de Québec). Le second est un clone léger sans exploitant nommé ; le premier a dix ans de contenu.
 

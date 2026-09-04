@@ -8,6 +8,26 @@ enrichir. Deux volets : **(1)** les acteurs absents du relevé précédent,
 accès à une profession réglementée, et ce que cela dit de la thèse « meilleure
 marge de l'industrie ».
 
+> **Recalculé le 4 septembre 2026 — la conclusion 5 et le §2.3 changent de
+> signe.** Ce relevé situe Nota dans le banc d'essai des marges au prix
+> **unique de 400 $** de l'ADR 0031. L'ADR 0034 l'a remplacé le 3 septembre par
+> une **grille par service** : **199 $** financement, **249 $** refinancement,
+> plus **0 à 300 $** de garantie de date (`packages/domain/index.js`,
+> `SERVICES[].prixNotaCents` et `TIERS[].prixNotaDateCents`). Le relevé reste tel
+> qu'il a été écrit ; voici ce que l'arithmétique refaite donne.
+>
+> | Ce que le relevé conclut | Recalcul du 4 septembre |
+> | --- | --- |
+> | Nota pèse **16,7 %** d'un refinancement, **18,2 %** d'un financement — « niveau Upwork (18 %), au-dessus d'Airbnb (13,6 %) » | **11,1 %** (249 / 2 249) et **10,0 %** (199 / 1 999) — **sous Airbnb**, loin sous Upwork |
+> | « Le prix fixe est **régressif** — plus l'acte est petit, plus Nota pèse » | **Faux depuis l'ADR 0034** : le petit acte paie 199 $ (10,0 %) et le gros 249 $ (11,1 %). La part ne monte plus quand l'acte rétrécit |
+> | « Le taux effectif déployé est **médian**, pas minimal » | Il est désormais **dans le bas** du banc d'essai — sous Airbnb, DoorDash, Booking, Upwork, Uber, Fiverr |
+> | Marge brute réelle ≈ **82 %** après Stripe | **≈ 74 %** au refinancement standard, **≈ 71 %** au financement — et elle *tombe* aux paliers d'urgence (voir le tableau du §2.3) |
+>
+> Ce que le recalcul **ne** change **pas** : le verdict sur « meilleure marge de
+> l'industrie » (toujours pas crédible, et pour les mêmes quatre raisons), et le
+> fait qu'au Québec un *take rate* sur des honoraires est proscrit — ce qui
+> reste la raison pour laquelle Nota n'en a pas.
+
 Méthode : recherches FR/EN (termes organiques et termes « Google Ads »), curl
 des pages de prix et de conditions, rapports financiers (10-K, 6-K, communiqués),
 articles de presse. Chaque chiffre est daté et sourcé ; ce qui n'a pas pu être
@@ -56,16 +76,24 @@ articles de presse. Chaque chiffre est daté et sourcé ; ce qui n'a pas pu êtr
    Innovation Sandbox*. Deux bacs à sable canadiens (Ontario A2I, Alberta) ont
    donc chacun admis une plateforme de clôture immobilière.
 
-5. **« Meilleure marge de l'industrie » n'est pas crédible tel quel — et le
-   défaut déployé le contredit.** Le taux retenu par Nota (5–15 % selon l'ADR
-   0028, retiré par l'ADR 0031) se situait dans le *bas* du marché ; mais le
-   prix fixe déployé (`NOTA_PRIX_CENTS` = **400 $**) représente **16,7 % du
-   total client** sur un refinancement standard (2 000 $ + 400 $) et **18,2 %**
-   sur un financement (1 800 $ + 400 $) — au niveau d'Upwork (18 %), au-dessus
-   d'Airbnb (13,6 %), et sans avantage démontrable sur la génération de pistes
-   (≈ 4–8 % effectifs). La reformulation crédible et licite est ailleurs :
-   « **le notaire garde 100 % de ses honoraires** ; Nota facture au client un prix
-   fixe, publié, de X $ ». Voir §3.
+5. **« Meilleure marge de l'industrie » n'est pas crédible tel quel — mais la
+   raison a changé le lendemain.** *Au 3 septembre :* le taux retenu par Nota
+   (5–15 % selon l'ADR 0028, retiré par l'ADR 0031) se situait dans le *bas* du
+   marché ; mais le prix unique déployé (**400 $**) représentait **16,7 % du
+   total client** sur un refinancement standard (2 000 + 400) et **18,2 %** sur
+   un financement (1 800 + 400) — au niveau d'Upwork (18 %), au-dessus d'Airbnb
+   (13,6 %).
+
+   *Recalculé le 4 septembre, après l'ADR 0034 :* **11,1 %** au refinancement
+   (249 / 2 249) et **10,0 %** au financement (199 / 1 999) — **sous Airbnb**,
+   loin sous Upwork, et la part **descend** encore quand la date porte une prime
+   (5,5 % au palier prioritaire). Nota est donc revenu dans le bas du banc
+   d'essai, et sans régressivité : le petit acte paie *moins*, pas plus.
+
+   Ce qui ne change pas : la reformulation licite reste « **le notaire garde
+   100 % de ses honoraires** ; Nota facture au client son propre service, à un
+   prix publié par service ». Ne jamais écrire « prix fixe » — c'est une grille
+   depuis l'ADR 0034. Voir §3.
 
 ---
 
@@ -152,8 +180,9 @@ comparaison sert à situer l'extrême, pas à imiter.
 | Plateforme | Profession | Modèle | Take rate (ou équivalent) | Source |
 | --- | --- | --- | --- | --- |
 | **Nota — ADR 0028 (retiré 2026-09-01)** | Notaires QC | % du total client, indexé sur la cote | **15 % de départ → 10 % à 70 → 5 % au-dessus de 90** | `docs/decisions/0028` |
-| **Nota — ADR 0031 (déployé)** | Notaires QC | Prix fixe de Nota ajouté aux honoraires ; le notaire garde 100 % | **400 $ par défaut** = 16,7 % du total sur un refi 2 000 $ ; 18,2 % sur un financement 1 800 $ ; 14,3 % si l'urgence porte les honoraires à 2 400 $ | `apps/api/src/prix-nota-config.js` (`DEFAULT_PRIX_CENTS = 40000`), `infra/variables.tf` |
-| **Nota — plan d'affaires §8.2** | — | 10 % côté client | Marge brute **89–91 %** ; CAC client 164 → 40 $ ; revenu net/acte 106–145 $ | `docs/business-plan.md` |
+| ~~**Nota — ADR 0031** (prix unique, retiré le 2026-09-03)~~ | Notaires QC | Prix unique de Nota ajouté aux honoraires ; le notaire garde 100 % | ~~**400 $** = 16,7 % du total sur un refi 2 000 $ ; 18,2 % sur un financement 1 800 $~~ | `NOTA_PRIX_CENTS` (compatibilité) |
+| **Nota — ADR 0034 (déployé)** | Notaires QC | **Grille par service** ajoutée aux honoraires ; le notaire garde 100 % | **249 $ refi = 11,1 %** du total (249 / 2 249) · **199 $ financement = 10,0 %** (199 / 1 999) · **5,5 %** au palier prioritaire (349 / 6 349) — la part *baisse* quand la date porte une prime | `packages/domain/index.js` (`SERVICES[].prixNotaCents`, `TIERS[].prixNotaDateCents`), ADR 0034 |
+| ~~**Nota — plan d'affaires §8.2**~~ (modèle, jamais déployé) | — | ~~10 % côté client~~ | ~~Marge brute **89–91 %**~~ ; CAC client 164 → 40 $ ; revenu net/acte 106–145 $. *Le taux de 10 % est mort avec l'ADR 0031 ; la marge brute, recalculée le 4 septembre, est de ≈ 74 % au refinancement standard et tombe sous 50 % aux paliers d'urgence (§2.3).* | `docs/business-plan.md` |
 | Notairo | Notaires QC | Prix fixe au client | **Non divulgué** (part du notaire inconnue) | notairo.com |
 | Leya | Notaires/avocats QC | Prix fixe au client ; réseau de fournisseurs | **Non divulgué** | leya.ca |
 | Deeded (ON) | Avocats | Prix fixe au client + **frais de service facturés à l'avocat** | Non divulgué ; nature des frais énumérée (admin, technique, horaire, marketing) | deeded.ca/terms |
@@ -192,7 +221,11 @@ comparaison sert à situer l'extrême, pas à imiter.
    contestés en justice) et Avvo (mort).
 2. **Par piste ou par dossier** — Soumissions 25–50 $, Bark, Thumbtack, JuriGo,
    Zocdoc, Habitam. Le pro paie l'*accès*, pas le résultat ; ramené à l'acte
-   gagné, cela fait **4–10 %** — soit exactement la zone de l'ADR 0028.
+   gagné, cela fait **4–10 %** — la zone que visait l'ADR 0028, et, *depuis le
+   recalcul du 4 septembre*, la zone où la grille de l'ADR 0034 place aussi
+   Nota (10,0–11,1 % au standard, 5–7 % dès que la date porte une prime). La
+   différence n'est plus le niveau : c'est le **payeur** — la piste est facturée
+   au professionnel, le prix de Nota au client.
 3. **Abonnement ou prix-plateforme au client, 0 % des honoraires** — Doctolib,
    Rocket Lawyer, LegalZoom (forfait administratif), Bonjour-santé, Maple (prix
    fixe au patient), Notairo/Leya/Deeded (prix fixe au client). C'est la seule
@@ -202,20 +235,63 @@ comparaison sert à situer l'extrême, pas à imiter.
 
 - En **taux** : l'ADR 0028 (5–15 %) plaçait Nota dans le bas du marché — sous
   Upwork, au niveau d'Airbnb/DoorDash au départ, sous tout le monde au sommet.
-  L'ADR 0031 déployé à **400 $ fixes** place Nota à **14–18 % du total client**
-  sur les actes standard : niveau Upwork, au-dessus d'Airbnb, et il **remonte**
-  quand l'acte est petit. Le prix fixe est régressif ; c'est la propriété qu'il
-  faut soit assumer, soit corriger (§3).
+  L'ADR 0031 déployé à **400 $** le remontait à **14–18 % du total client** sur
+  les actes standard : niveau Upwork, au-dessus d'Airbnb, et il **remontait
+  encore** quand l'acte était petit — le prix unique était régressif.
+
+  ***Recalculé le 4 septembre, après l'ADR 0034 :*** la grille par service
+  ramène Nota à **10,0–11,1 %** au palier standard, et la régressivité
+  disparaît. Le tableau, refait ligne à ligne :
+
+  | Palier | Refinancement (2 000 $ de base) | Part de Nota | Financement (1 800 $) | Part de Nota |
+  | --- | ---: | ---: | ---: | ---: |
+  | Standard (×1) | 2 000 + 249 = **2 249 $** | **11,1 %** | 1 800 + 199 = **1 999 $** | **10,0 %** |
+  | Rapide (×2) | 4 000 + 299 = **4 299 $** | 7,0 % | 3 600 + 249 = **3 849 $** | 6,5 % |
+  | Prioritaire (×3) | 6 000 + 349 = **6 349 $** | **5,5 %** | 5 400 + 299 = **5 699 $** | **5,2 %** |
+  | Urgence (×3,5) | 7 000 + 449 = **7 449 $** | 6,0 % | 6 300 + 399 = **6 699 $** | 6,0 % |
+  | Extrême (×4) | 8 000 + 549 = **8 549 $** | 6,4 % | 7 200 + 499 = **7 699 $** | 6,5 % |
+
+  Nota est donc **sous Airbnb (13,6 %) partout**, et sous DoorDash (13,5 %) et
+  Booking (≈ 14 %) aussi. Le multiplicateur porte les honoraires du notaire ; la
+  ligne de Nota ne monte que de quelques dizaines de dollars — d'où la part qui
+  se replie à 5–7 % dès que la date compte.
+
 - En **marge brute** : 89–91 % au plan d'affaires. Mais la session Checkout est
   sur le compte de Nota et Stripe prélève ≈ 2,9 % + 0,30 $ **sur le total**
-  (2 400 $ → ≈ 70 $), soit ≈ 17,6 % des 400 $ de Nota : marge brute réelle
-  **≈ 82 %**, avant frais Connect. Comparable à Airbnb (≈ 83 %), Fiverr (≈ 82 %),
-  LegalZoom (71 %). Élevée, banale.
+  (`billing.js` : `captureAndTransfer({ amountCents: prix.totalCents,
+  applicationFeeCents: prix.prixNotaCents })`), pendant que la ligne de Nota,
+  elle, est presque plate. ***Recalculé le 4 septembre, et c'est la correction
+  qui va contre Nota :***
+
+  | Palier (refinancement) | Total client | Ligne de Nota | Frais Stripe ≈ | Part de la ligne | Marge brute |
+  | --- | ---: | ---: | ---: | ---: | ---: |
+  | Standard | 2 249 $ | 249 $ | 65,52 $ | 26,3 % | **≈ 74 %** |
+  | Rapide | 4 299 $ | 299 $ | 124,97 $ | 41,8 % | ≈ 58 % |
+  | Prioritaire | 6 349 $ | 349 $ | 184,42 $ | 52,8 % | **≈ 47 %** |
+  | Urgence | 7 449 $ | 449 $ | 216,32 $ | 48,2 % | ≈ 52 % |
+  | Extrême | 8 549 $ | 549 $ | 248,22 $ | 45,2 % | ≈ 55 % |
+
+  Au financement standard : 58,27 $ sur 199 $, soit **≈ 71 %**. Le relevé du
+  3 septembre annonçait ≈ 82 % ; c'était calculé sur 400 $. **La marge brute
+  n'est donc plus « élevée, banale » — elle passe sous celle de LegalZoom (71 %)
+  dès le palier rapide, et sous la moitié au prioritaire.** La cause est
+  structurelle et connue : Nota encaisse le total du client pour n'en garder
+  qu'une petite ligne, et Stripe facture sur le total. C'est un chantier de
+  plomberie (frais Connect, tarification négociée, ou un autre découpage du
+  paiement), pas une objection au modèle — mais il faut cesser de citer 82 %.
+
 - Face aux **comparables directs** (Notairo, Leya, Deeded) : leur partage est
   inconnu ; toute affirmation de supériorité est **invérifiable** aujourd'hui.
+  *Ajouté le 4 septembre :* la seule ligne comparable publiée reste la « prise
+  en charge de dossier — 295 $ » de Notairo, que les 199 / 249 $ de Nota
+  passent désormais **sous**. Comparaison interne uniquement (art. 32.1 1°).
 - Face à la **génération de pistes** : Nota n'est pas moins cher pour le
-  notaire (400 $ contre ≈ 75–150 $ par acte gagné) ; ce qui diffère, c'est que
-  le coût est **contingent** (0 $ tant qu'aucun acte n'est retenu) et **connu**.
+  notaire — ~~400 $~~ **199 / 249 $** contre ≈ 75–150 $ par acte gagné ; l'écart
+  est passé de ×2,7 à ×1,7. Et surtout, les deux nombres ne portent pas sur le
+  même payeur : la piste est payée **par le notaire**, converties et non
+  converties confondues ; le prix de Nota est payé **par le client**, et
+  seulement si un acte se conclut. Ce qui diffère n'est pas le montant : c'est
+  que le coût est **contingent**, **porté par le client** et **connu d'avance**.
 
 **Verdict sur « meilleure marge de l'industrie ».** Pas crédible tel quel :
 (a) la marge brute élevée est structurelle à toute place de marché,
@@ -239,8 +315,12 @@ abandonne une partie de ses honoraires », 2 500 à 125 000 $). Tout ce qui suit
 reste du bon côté.
 
 1. **Changer la phrase, pas le modèle.** La revendication licite et vérifiable
-   est : « **Le notaire garde 100 % de ses honoraires. Nota facture au client un
-   prix fixe et publié de X $.** » Aucun comparable qui rémunère un professionnel
+   est : « **Le notaire garde 100 % de ses honoraires. Nota facture au client son
+   propre service, à un prix publié.** » *(Corrigé le 4 septembre : la version du
+   3 septembre écrivait « un prix fixe et publié de X $ ». Depuis l'ADR 0034 le
+   prix est une **grille par service** — 199 / 249 $ plus la garantie de date —
+   et le mot « fixe » est devenu faux ; la copie du produit le refuse
+   désormais.)* Aucun comparable qui rémunère un professionnel
    au pourcentage (Neolegal, Avvo, UpCounsel, Practo, RON) ne peut l'écrire ;
    Notairo et Leya ne l'écrivent pas. C'est *là* la « meilleure marge » — celle
    du notaire, pas celle de Nota. L'ADR 0031 la rend vraie ; il reste à
@@ -248,12 +328,14 @@ reste du bon côté.
    prix). Ne jamais employer « commission » (le domaine ne le contient pas ;
    garder ce mot hors du marketing aussi).
 
-2. **Rendre le prix de Nota proportionné et non régressif — par service, jamais
-   par notaire.** À 400 $ fixes, Nota pèse 18 % d'un financement de 1 800 $ et
-   9 % d'un acte à 4 000 $. Une **grille fixe par service** (p. ex. 199 $
-   financement, 249 $ refinancement, palier « date rapprochée » de Nota en sus)
-   ramène le poids à ≈ 10–12 % sur le standard et ne dépend d'aucune cote
-   (art. 29.1 respecté). Le supplément d'urgence de Nota est **le prix de Nota
+2. ~~**Rendre le prix de Nota proportionné et non régressif — par service, jamais
+   par notaire.**~~ **Fait — ADR 0034, le 3 septembre 2026, le lendemain de ce
+   relevé.** À 400 $ fixes, Nota pesait 18 % d'un financement de 1 800 $ et 9 %
+   d'un acte à 4 000 $. La **grille par service** proposée ici a été adoptée
+   telle quelle — **199 $ financement, 249 $ refinancement, garantie de date de
+   Nota en sus (0 / 50 / 100 / 200 / 300 $)** — et le poids mesuré est
+   **10,0–11,1 % au standard**, exactement la fourchette prévue, sans dépendre
+   d'aucune cote (art. 29.1 respecté). Le supplément d'urgence de Nota est **le prix de Nota
    pour la garantie de date** ; il ne se confond pas avec le droit du notaire de
    tenir compte de l'urgence dans ses honoraires (art. 49 4°) — deux lignes,
    deux justifications, ce que l'ADR 0031 impose déjà.
