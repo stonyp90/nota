@@ -1220,24 +1220,32 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
         // authorizing their offer card (bound in billing.applyEvent). It must NOT
         // trigger a notary subscription welcome/receipt or a "notaire abonné"
         // operator alert — it confirms to the CLIENT that their offer is live.
+        // ADR 0035 — deux issues possibles, et le courriel doit dire LAQUELLE :
+        // « paiement autorisé » quand la somme est vraiment réservée, « carte
+        // enregistrée » quand elle ne l'est pas encore. Annoncer une
+        // autorisation qui n'existe pas serait un mensonge sur de l'argent.
         case 'checkout.session.completed':
+        case 'setup_intent.succeeded': {
+          const enregistree = !!bid && bid.paymentStatus === 'enregistre';
+          const kind = enregistree ? 'carteEnregistree' : 'offerAuthorized';
           if (bid && bid.courriel) {
             const ctx = bidCtx(bid);
             results.push(
               await sendOnce({
                 refId: bid.id,
-                kind: 'offerAuthorized',
+                kind,
                 to: bid.courriel,
-                templateKey: 'offerAuthorized',
+                templateKey: kind,
                 ctx,
-                buildTemplate: (env) => emails.offerAuthorized({ ...ctx, ...env }),
+                buildTemplate: (env) => emails[kind]({ ...ctx, ...env }),
               })
             );
           }
-          // ADR 0033 §7 — the hold is authorized: the demand is on the carnet
-          // now, so the instant notaries hear of it (idempotent per bid+notary).
+          // ADR 0033 §7 — the card cleared: the demand is on the carnet now, so
+          // the instant notaries hear of it (idempotent per bid+notary).
           if (bid) results.push(...(await notifyInstantLeads(bid)));
           break;
+        }
         // The hold lapsed or was cancelled before any notary accepted — the offer
         // silently dropped off the carnet, so tell the client how to come back.
         case 'checkout.session.expired':
@@ -1265,6 +1273,58 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
       return { ok: false, error: String((err && err.message) || err), results };
     }
     return { ok: true, results };
+  }
+
+  /**
+   * ADR 0035 — LA CAUTION N'A PAS PU ÊTRE POSÉE. Appelé par le geste quotidien
+   * (reminders.js) quand la banque refuse la carte enregistrée, deux jours
+   * avant la signature.
+   *
+   * Les DEUX parties l'apprennent, et c'est le fond de la garantie promise au
+   * notaire : il a bloqué sa journée, il doit savoir tout de suite que le
+   * paiement n'est plus garanti — assez tôt pour décider. Le client, lui, reçoit
+   * le seul avis qu'il aura : sa carte a été refusée, il lui reste deux jours.
+   *
+   * Idempotent par offre (registre SENT#) et sans exception : un envoi qui
+   * échoue ne doit pas faire tomber le lot de rappels.
+   */
+  async function onCautionRefusee(bid, refus) {
+    const results = [];
+    if (!bid) return { ok: true, results };
+    try {
+      const notary = await notaryOf(bid);
+      const ctx = bidCtx(bid, { etude: etudeOf(notary, bid) });
+      if (bid.courriel) {
+        results.push(
+          await sendOnce({
+            refId: bid.id,
+            kind: 'cautionRefusee',
+            to: bid.courriel,
+            templateKey: 'cautionRefusee',
+            ctx,
+            buildTemplate: (env) => emails.cautionRefusee({ ...ctx, ...env }),
+          })
+        );
+      }
+      // Seul le notaire qui a RETENU l'acte est concerné : une offre encore
+      // ouverte n'engage la journée de personne.
+      if (notary && notary.email && bid.notaryId) {
+        results.push(
+          await sendOnce({
+            refId: bid.id,
+            kind: 'cautionRefuseeNotaire',
+            to: notary.email,
+            templateKey: 'cautionRefuseeNotaire',
+            ctx,
+            buildTemplate: (env) => emails.cautionRefuseeNotaire({ ...ctx, ...env }),
+          })
+        );
+      }
+      void refus;
+      return { ok: true, results };
+    } catch (err) {
+      return { ok: false, error: String((err && err.message) || err), results };
+    }
   }
 
   // --- Notary console sign-in (passwordless magic link) ---------------------
@@ -1385,6 +1445,7 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
     onChatDocument,
     onEvaluationSubmitted,
     onReminderDue,
+    onCautionRefusee,
     onNotaryDigest,
     onNotaryConnected,
     onNotarySignedUp,

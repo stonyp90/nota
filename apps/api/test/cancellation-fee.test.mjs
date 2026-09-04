@@ -35,10 +35,14 @@ const PRICING = { valeur_pret: 250000, succession: 'non', approbation_bancaire: 
 // the TRANSFER fail after a successful capture — the money is on the platform
 // and must be recorded as owed, never re-captured.
 function fakeStripe({ failFeeCapture = false, failFeeTransfer = false } = {}) {
-  const calls = { authorizations: [], transfers: [], cancels: [], feeCaptures: [], feeTransfers: [] };
+  const calls = { authorizations: [], setups: [], transfers: [], cancels: [], feeCaptures: [], feeTransfers: [] };
   return {
     calls,
     async createOfferAuthorization(args) { calls.authorizations.push(args); return { sessionId: 'cs_' + args.bidId, url: 'https://checkout.stripe.test/pay/' + args.bidId }; },
+    // ADR 0035 — la publication d'une date lointaine ENREGISTRE la carte ; ces
+    // scénarios-ci posent ensuite la caution à la main (repo.authorizeBid),
+    // pour rester sur le mécanisme qu'ils décrivent : la capture partielle.
+    async createOfferSetup(args) { calls.setups.push(args); return { sessionId: 'cs_setup_' + args.bidId, url: 'https://checkout.stripe.test/setup/' + args.bidId }; },
     async captureAndTransfer(args) { calls.transfers.push(args); return { paymentIntentId: args.paymentIntentId, chargeId: 'ch_' + args.bidId, transferId: 'tr_' + args.bidId, applicationFeeCents: args.applicationFeeCents, netCents: args.amountCents - args.applicationFeeCents }; },
     async cancelOfferAuthorization(args) { calls.cancels.push(args); return { id: args.paymentIntentId, status: 'canceled' }; },
     async captureCancellationFee(args) {

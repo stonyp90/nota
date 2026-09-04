@@ -106,6 +106,11 @@ paths:
             ~400 days, `sub` = bid id) is their only key to the `/client/*`
             routes — it is returned ONCE here and never echoed again. With
             billing on, `paymentStatus` (pending) and `checkoutUrl` are added.
+            `checkoutUrl` opens a hosted Stripe page whose shape depends on the
+            signing date (ADR 0035): a PAYMENT session (manual capture) when
+            the date is already within `CAUTION_LEAD_DAYS`, otherwise a SETUP
+            session that only registers the card — the caution is then placed
+            by the daily worker, close enough that it survives to the signing.
           content:
             application/json:
               schema:
@@ -373,6 +378,10 @@ paths:
         `account.application.deauthorized` restricts them, and
         `checkout.session.completed` / `checkout.session.expired` /
         `payment_intent.canceled` bind or void a client's offer authorization.
+        Since ADR 0035 a `checkout.session.completed` carrying no PaymentIntent
+        (setup mode) and `setup_intent.succeeded` REGISTER the client's card
+        instead — the offer goes live with no money held, and the caution is
+        placed by the daily worker two days before the signing.
         Processing is idempotent by event id, so a redelivered event is a no-op.
         Not called by browsers.
       parameters:
@@ -2891,6 +2900,8 @@ components:
         complexity:
           type: object
           additionalProperties: true
+        caution:
+          $ref: "#/components/schemas/CautionState"
         proposition:
           description: This notary's latest non-superseded proposition, or null.
           oneOf:
@@ -3007,6 +3018,30 @@ components:
           description: Nota's commission on the settled act (null until completed).
         annulation:
           $ref: "#/components/schemas/CancellationForecast"
+        caution:
+          $ref: "#/components/schemas/CautionState"
+    CautionState:
+      description: >-
+        ADR 0035 — the state of the payment guarantee on a demand, told to the
+        notary BEFORE they retain and while they hold it. Null when billing is
+        off (demo, tests).
+      oneOf:
+        - type: "null"
+        - type: object
+          required: [etat, poseeLe]
+          properties:
+            etat:
+              type: string
+              enum: [posee, enregistree, refusee, aucune]
+              description: >-
+                `posee` — the amount is held and can be captured at the signing;
+                `enregistree` — the client's card is validated and the hold is
+                placed on `poseeLe`; `refusee` — the bank declined the hold
+                (both parties were told, retried daily); `aucune` — no card.
+            poseeLe:
+              type: [string, "null"]
+              format: date
+              description: The day the caution is (or was) placed.
     AcceptedBid:
       type: object
       description: >-
@@ -3423,7 +3458,7 @@ components:
       description: >-
         What retaining commits the notary to (ADR 0033), as data the console
         lays out BEFORE they confirm — never a share of their honoraires.
-      required: [paiement, tarifNota, annulation, desistement]
+      required: [paiement, tarifNota, annulation, desistement, caution]
       properties:
         paiement:
           type: string
@@ -3455,6 +3490,23 @@ components:
             beneficiaire:
               type: string
               const: notaire
+        caution:
+          type: object
+          description: >-
+            ADR 0035 — what guarantees the payment: the client's card is
+            validated by their bank before the demand is ever visible, and the
+            amount is held `jours` days before the signing, late enough for the
+            hold to survive to the act. Each demand also carries its own
+            `caution.etat`.
+          required: [jours, carteValidee]
+          properties:
+            jours:
+              type: integer
+              minimum: 0
+              description: domain.CAUTION_LEAD_DAYS — days before the signing.
+            carteValidee:
+              type: boolean
+              description: False when billing is off (demo, tests).
         desistement:
           type: object
           description: Withdrawing is free but counted on the notary's record (releasesCount).

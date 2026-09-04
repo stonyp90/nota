@@ -926,9 +926,146 @@ function offerAuthorizationVoided(ctx) {
   }, ctx);
 }
 
+// ADR 0035 — la carte est ENREGISTRÉE, pas encore débitée ni même bloquée. Dire
+// « paiement autorisé » ici serait faux : rien n'est réservé avant l'approche
+// de la date. Ce gabarit dit exactement ce qui s'est passé, et quand la somme
+// sera réservée.
+function carteEnregistree(ctx) {
+  return build({
+    subjectFr: 'Votre carte est enregistrée — votre offre est visible',
+    subjectEn: 'Your card is saved — your offer is live',
+    preheaderFr: 'Rien n’est réservé aujourd’hui : la somme le sera à l’approche de votre date.',
+    preheaderEn: 'Nothing is held today: the amount is reserved as your date approaches.',
+    fr: {
+      heading: 'Votre offre est maintenant visible',
+      lead:
+        'Votre carte est enregistrée. Votre demande — ' +
+        svcNom(ctx.serviceId) +
+        ' — le ' +
+        fmtDate(ctx.dateISO) +
+        ' est visible sur le carnet.',
+      bodyHtml:
+        callout(offerLine(ctx)) +
+        para(
+          'Aucune somme n’est réservée aujourd’hui. Quelques jours avant votre signature, votre offre et le prix du service de Nota seront réservés sur cette carte, puis débités seulement une fois l’acte signé. Si personne ne retient votre demande, il ne se passe rien et vous ne payez rien.'
+        ),
+      textLines: [offerLine(ctx), 'Aucune somme réservée aujourd’hui; la réservation se fait à l’approche de la date.'],
+      ctaLabel: 'Suivre mon offre',
+    },
+    en: {
+      heading: 'Your offer is now visible',
+      lead:
+        'Your card is saved. Your request — ' +
+        svcNomEn(ctx.serviceId) +
+        ' — on ' +
+        fmtDateEn(ctx.dateISO) +
+        ' is visible on the carnet.',
+      bodyHtml:
+        callout(offerLineEn(ctx)) +
+        para(
+          'Nothing is held today. A few days before your signing, your offer and the price of Nota’s service are reserved on this card, then charged only once the act is signed. If nobody takes your request, nothing happens and you pay nothing.'
+        ),
+      textLines: [offerLineEn(ctx), 'Nothing held today; the hold is placed as the date approaches.'],
+      ctaLabel: 'Track my offer',
+    },
+    ctaUrl: clientActeUrl(ctx),
+    unsubscribeUrl: ctx.unsubscribeUrl,
+  }, ctx);
+}
+
+// ADR 0035 — la banque a refusé la carte au moment de poser la caution. Le
+// client a encore quelques jours pour en donner une autre : ce courriel est le
+// SEUL avis qu'il en reçoit, d'où son caractère transactionnel.
+function cautionRefusee(ctx) {
+  return build({
+    subjectFr: 'Votre carte a été refusée — votre signature approche',
+    subjectEn: 'Your card was declined — your signing is coming up',
+    preheaderFr: 'Mettez une autre carte à votre dossier avant la date.',
+    preheaderEn: 'Add another card to your file before the date.',
+    fr: {
+      heading: 'Nous n’avons pas pu réserver le montant',
+      lead:
+        'À l’approche de votre signature — ' +
+        svcNom(ctx.serviceId) +
+        ' le ' +
+        fmtDate(ctx.dateISO) +
+        ' — votre banque a refusé la carte enregistrée.',
+      bodyHtml:
+        callout(offerLine(ctx)) +
+        para(
+          'Rien n’a été débité. Votre demande reste en place et votre notaire est prévenu. Ouvrez votre dossier pour enregistrer une autre carte : nous réessayons chaque jour d’ici votre signature.'
+        ),
+      textLines: [offerLine(ctx), 'Rien n’a été débité. Enregistrez une autre carte avant la signature.'],
+      ctaLabel: 'Mettre ma carte à jour',
+    },
+    en: {
+      heading: 'We could not reserve the amount',
+      lead:
+        'As your signing approaches — ' +
+        svcNomEn(ctx.serviceId) +
+        ' on ' +
+        fmtDateEn(ctx.dateISO) +
+        ' — your bank declined the card on file.',
+      bodyHtml:
+        callout(offerLineEn(ctx)) +
+        para(
+          'Nothing was charged. Your request stands and your notary has been told. Open your file to save another card: we retry every day until your signing.'
+        ),
+      textLines: [offerLineEn(ctx), 'Nothing was charged. Save another card before the signing.'],
+      ctaLabel: 'Update my card',
+    },
+    ctaUrl: clientActeUrl(ctx),
+    unsubscribeUrl: ctx.unsubscribeUrl,
+  }, ctx);
+}
+
 // =============================================================================
 // NOTARY templates
 // =============================================================================
+
+// ADR 0035 — le notaire a bloqué sa journée : il doit savoir, deux jours avant,
+// que la garantie de paiement n'a pas pu être posée. Le dire tard serait pire
+// que de ne rien promettre.
+function cautionRefuseeNotaire(ctx) {
+  const line = svcNom(ctx.serviceId) + ' · ' + fmtDate(ctx.dateISO) + ' · ' + money(ctx.montant);
+  const lineEn = svcNomEn(ctx.serviceId) + ' · ' + fmtDateEn(ctx.dateISO) + ' · ' + moneyEn(ctx.montant);
+  return build({
+    subjectFr: 'Caution non posée — ' + money(ctx.montant),
+    subjectEn: 'Hold not placed — ' + moneyEn(ctx.montant),
+    preheaderFr: 'La carte du client a été refusée; nous réessayons d’ici la signature.',
+    preheaderEn: 'The client’s card was declined; we retry until the signing.',
+    fr: {
+      heading: 'La caution de cet acte n’a pas pu être posée',
+      lead:
+        'La carte de votre client a été refusée au moment de réserver le montant de l’acte du ' +
+        fmtDate(ctx.dateISO) +
+        '.',
+      bodyHtml:
+        callout(line) +
+        para(
+          'Votre client vient d’en être avisé et peut enregistrer une autre carte; nous réessayons chaque jour d’ici la signature. L’acte vous reste confié — vous décidez, en connaissance de cause, de le porter ou de vous désister (c’est gratuit).'
+        ),
+      textLines: [line, 'Le client est avisé; nouvelle tentative chaque jour d’ici la signature.'],
+      ctaLabel: 'Ouvrir l’acte',
+    },
+    en: {
+      heading: 'The hold for this act could not be placed',
+      lead:
+        'Your client’s card was declined when we tried to reserve the amount for the act on ' +
+        fmtDateEn(ctx.dateISO) +
+        '.',
+      bodyHtml:
+        callout(lineEn) +
+        para(
+          'Your client has just been told and can save another card; we retry every day until the signing. The act stays yours — you decide, knowing this, whether to carry it or to withdraw (free of charge).'
+        ),
+      textLines: [lineEn, 'The client was told; we retry every day until the signing.'],
+      ctaLabel: 'Open the act',
+    },
+    ctaUrl: notaryActeUrl(ctx),
+    unsubscribeUrl: ctx.unsubscribeUrl,
+  }, ctx);
+}
 
 // Weekly-style digest of open, high-value bids. The bid table is rendered once
 // per language block, each side with its own service names, dates and amounts.
@@ -2623,6 +2760,9 @@ const TEMPLATES = {
   // client — pay-on-accept lifecycle
   offerAuthorized,
   offerAuthorizationVoided,
+  // ADR 0035 — la caution qui tient jusqu'à la signature
+  carteEnregistree,
+  cautionRefusee,
   // client — notary actions on an open offer
   propositionRecue,
   documentsDemandes,
@@ -2638,6 +2778,8 @@ const TEMPLATES = {
   // ADR 0033 — la mise en relation est complète
   demandeRetenueNotaire,
   nouvelleDemande,
+  // ADR 0035 — la caution qui tient jusqu'à la signature
+  cautionRefuseeNotaire,
   // evaluation feedback loop (ADR 0015/0016)
   evaluationRecueNotaire,
   // contact form (nous joindre)
@@ -2775,6 +2917,27 @@ const TEMPLATE_META = {
     audience: 'client', transactionnel: true,
     labelFr: 'Autorisation expirée', labelEn: 'Authorization lapsed',
     defaultSubjectFr: 'Votre offre n’est plus visible', defaultSubjectEn: 'Your offer is no longer visible',
+    placeholders: ['montant', 'service', 'date'],
+  },
+  // --- ADR 0035 — la caution qui tient jusqu'à la signature ------------------
+  carteEnregistree: {
+    audience: 'client', transactionnel: true,
+    labelFr: 'Carte enregistrée', labelEn: 'Card saved',
+    defaultSubjectFr: 'Votre carte est enregistrée — votre offre est visible',
+    defaultSubjectEn: 'Your card is saved — your offer is live',
+    placeholders: ['montant', 'service', 'date'],
+  },
+  cautionRefusee: {
+    audience: 'client', transactionnel: true,
+    labelFr: 'Carte refusée (caution)', labelEn: 'Card declined (hold)',
+    defaultSubjectFr: 'Votre carte a été refusée — votre signature approche',
+    defaultSubjectEn: 'Your card was declined — your signing is coming up',
+    placeholders: ['montant', 'service', 'date'],
+  },
+  cautionRefuseeNotaire: {
+    audience: 'notaire', transactionnel: true,
+    labelFr: 'Caution non posée (notaire)', labelEn: 'Hold not placed (notary)',
+    defaultSubjectFr: 'Caution non posée — {{montant}}', defaultSubjectEn: 'Hold not placed — {{montant}}',
     placeholders: ['montant', 'service', 'date'],
   },
   // --- client — notary actions on an open offer -----------------------------

@@ -259,7 +259,53 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
         paymentStatus: 'authorized',
         paymentIntentId: (patch && patch.paymentIntentId) || bid.paymentIntentId || null,
         authorizedAt: (patch && patch.authorizedAt) || bid.authorizedAt || null,
+        // ADR 0035 — a caution that IS placed erases the memory of a refusal.
+        cautionRefus: null,
       };
+      await doc.send(new PutCommand({ TableName: tableName, Item: toItem(updated) }));
+      return updated;
+    },
+
+    // --- ADR 0035: the registered card ---------------------------------------
+    // The SETUP checkout completed: the card is validated and saved on a Stripe
+    // Customer, and NOTHING is held — the caution is placed at
+    // J-CAUTION_LEAD_DAYS by the daily gesture. Same read-modify-write shape as
+    // authorizeBid (no contention on this item).
+    async registerBidPaymentMethod(bidId, dateISO, patch) {
+      if (!dateISO) return null;
+      const out = await doc.send(
+        new GetCommand({ TableName: tableName, Key: { PK: bidPK(dateISO), SK: `BID#${dateISO}#${bidId}` } })
+      );
+      const bid = fromItem(out.Item);
+      if (!bid) return null;
+      const p = patch || {};
+      // NEVER demote a more advanced state: a late delivery of the setup event
+      // must not erase a caution already placed ('authorized'), a lapsed offer
+      // ('void') or one awaiting re-authorization ('a_reautoriser').
+      const avance = !!bid.paymentStatus && bid.paymentStatus !== 'pending' && bid.paymentStatus !== 'enregistre';
+      const updated = {
+        ...bid,
+        paymentStatus: avance ? bid.paymentStatus : 'enregistre',
+        paymentCustomerId: p.customerId || bid.paymentCustomerId || null,
+        paymentMethodId: p.paymentMethodId || bid.paymentMethodId || null,
+        setupIntentId: p.setupIntentId || bid.setupIntentId || null,
+        registeredAt: p.registeredAt || bid.registeredAt || null,
+      };
+      await doc.send(new PutCommand({ TableName: tableName, Item: toItem(updated) }));
+      return updated;
+    },
+
+    // The caution could not be placed (card declined, authentication needed).
+    // Recorded ON the offer: the daily gesture reads it to know the parties
+    // were already told, and the consoles read it to say what is missing.
+    async markCautionRefusee(bidId, dateISO, refus) {
+      if (!dateISO) return null;
+      const out = await doc.send(
+        new GetCommand({ TableName: tableName, Key: { PK: bidPK(dateISO), SK: `BID#${dateISO}#${bidId}` } })
+      );
+      const bid = fromItem(out.Item);
+      if (!bid) return null;
+      const updated = { ...bid, cautionRefus: refus || null };
       await doc.send(new PutCommand({ TableName: tableName, Item: toItem(updated) }));
       return updated;
     },

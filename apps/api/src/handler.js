@@ -493,12 +493,16 @@ function createApp(repo, opts = {}) {
 
   // ADR 0023 — the fee cancelling this RETAINED bid would carry today, under
   // the barème in force (the admin-stored CONFIG#ANNULATION item, else the
-  // environment defaults — resolved at every call, like the commission). Only
-  // a live authorized hold can pay a fee: without one (demo, tests, pending or
-  // voided payment) the answer is null and the cancel is free.
+  // environment defaults — resolved at every call, like the commission). It
+  // takes a card the client already consented to: a live caution to capture
+  // from, OR — since ADR 0035, before the caution is placed — the card they
+  // registered at publication. Without either (demo, tests, pending or voided
+  // payment) the answer is null and the cancel is free.
+  const cautionCapturable = (b) => b.paymentStatus === 'authorized' && !!b.paymentIntentId;
+  const carteEnregistree = (b) => b.paymentStatus === 'enregistre' && !!b.paymentCustomerId && !!b.paymentMethodId;
   async function annulationFeeFor(bid) {
     if (!billingConfigured || bid.status !== domain.STATUS.RETENUE) return null;
-    if (bid.paymentStatus !== 'authorized' || !bid.paymentIntentId) return null;
+    if (!cautionCapturable(bid) && !carteEnregistree(bid)) return null;
     const stored = typeof repo.getCancellationConfig === 'function' ? await repo.getCancellationConfig() : null;
     const paliers = stored && Array.isArray(stored.paliers) ? stored.paliers : cancellationCfg.envDefaults().paliers;
     const fee = cancellationCfg.feeFor({ montant: bid.montant, joursAvant: domain.daysBetween(now(), bid.dateISO), paliers });
@@ -592,7 +596,25 @@ function createApp(repo, opts = {}) {
       // The case-complexity signal (easy/hard) + the factors that drive it, so a
       // notary can judge whether the posted price fits the file before retaining.
       complexity: domain.complexity(b.serviceId, b.pricing || null),
+      // ADR 0035 — l'état de la garantie de paiement, DIT au notaire avant
+      // qu'il retienne : la somme est déjà réservée, elle le sera à telle date,
+      // ou la carte a été refusée. Une garantie qu'on ne peut pas voir n'en est
+      // pas une (ADR 0033 §4 : tout est exposé avant la confirmation).
+      caution: cautionEtat(b),
     };
+  }
+
+  // L'état de la caution d'une offre, sans jamais nommer la carte ni le client
+  // Stripe : `posee` quand l'autorisation vit, `refusee` quand la banque a dit
+  // non, `enregistree` quand la carte attend le jour de la pose, `aucune`
+  // quand la facturation est absente (démo, tests). `poseeLe` est le jour où
+  // elle sera posée — le domaine le décide, pas cette couche.
+  function cautionEtat(b) {
+    if (!billingConfigured) return null;
+    if (cautionCapturable(b)) return { etat: 'posee', poseeLe: b.dateISO ? domain.addDays(b.dateISO, -domain.CAUTION_LEAD_DAYS) : null };
+    if (b.cautionRefus) return { etat: 'refusee', poseeLe: null };
+    if (carteEnregistree(b)) return { etat: 'enregistree', poseeLe: domain.addDays(b.dateISO, -domain.CAUTION_LEAD_DAYS) };
+    return { etat: 'aucune', poseeLe: null };
   }
 
   // The mise en relation (ADR 0010 §4): retention puts the two parties in
@@ -1939,6 +1961,11 @@ function createApp(repo, opts = {}) {
             // pièce annoncée n'est pas une pièce reçue.
             documents: documentsOf(b).filter((d) => d.etat === 'pret').map(publicDocument),
                 viaProposition: propositionsOf(b).some((p) => p.status === PROPOSITION.ACCEPTEE && p.notaryId === notaryId),
+                // ADR 0035 — l'état de la garantie sur un acte DÉJÀ retenu :
+                // c'est ici qu'il compte le plus, puisque la journée est
+                // bloquée. `refusee` est la seule mauvaise nouvelle que le
+                // notaire doit pouvoir lire sans attendre un courriel.
+                caution: cautionEtat(b),
                 // ADR 0033: what a cancellation TODAY would hand this notary
                 // (the fee compensates them) — the same forecast the client
                 // sees on GET /client/bid; null when the cancel would be free.
@@ -2003,6 +2030,13 @@ function createApp(repo, opts = {}) {
           tarifNota: tarif,
           annulation: { paliers: await annulationBareme(), beneficiaire: 'notaire' },
           desistement: { gratuit: true, compte: true },
+          // ADR 0035 — ce qui garantit le paiement, dit en clair : la carte du
+          // client est validée par sa banque avant que l'offre paraisse, et la
+          // somme est réservée `jours` jours avant la signature — assez tard
+          // pour que la réservation vive jusqu'à l'acte, assez tôt pour qu'un
+          // refus laisse le temps de réagir. Chaque acte porte en plus son
+          // propre `caution.etat`.
+          caution: { jours: domain.CAUTION_LEAD_DAYS, carteValidee: billingConfigured },
         },
         // The months `retained` covers — so the console can prune the local
         // entries the server no longer returns (a client cancelled).
@@ -2606,8 +2640,17 @@ function createApp(repo, opts = {}) {
       const fee = wasRetained ? await annulationFeeFor(bid) : null;
       if (fee) {
         const b = billing();
+        // ADR 0035 — les deux moyens de prélever voyagent ensemble : la caution
+        // vivante (capture partielle) si elle existe, sinon la carte
+        // enregistrée (hors session). billing.js choisit ; la route ne décide
+        // pas de mécanique d'argent.
         const charge = b && typeof b.chargeCancellationFee === 'function'
-          ? await b.chargeCancellationFee({ paymentIntentId: bid.paymentIntentId, bidId: bid.id, amountCents: fee.fraisCents, notaryId: bid.notaryId || null })
+          ? await b.chargeCancellationFee({
+            paymentIntentId: cautionCapturable(bid) ? bid.paymentIntentId : null,
+            customerId: bid.paymentCustomerId || null,
+            paymentMethodId: bid.paymentMethodId || null,
+            bidId: bid.id, amountCents: fee.fraisCents, notaryId: bid.notaryId || null,
+          })
           : { ok: false };
         if (charge.ok) {
           const dedommagement = { notaire: true, verse: !!charge.verse, transferId: charge.transferId || null };

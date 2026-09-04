@@ -141,7 +141,47 @@ function createMemoryRepo(seed = []) {
         paymentStatus: 'authorized',
         paymentIntentId: (patch && patch.paymentIntentId) || b.paymentIntentId || null,
         authorizedAt: (patch && patch.authorizedAt) || b.authorizedAt || null,
+        // ADR 0035 — a caution that IS placed erases the memory of a refusal:
+        // the fact was true yesterday and is not today.
+        cautionRefus: null,
       };
+      byId.set(bidId, updated);
+      return updated;
+    },
+
+    // --- ADR 0035: the registered card ---------------------------------------
+    // The client finished the SETUP checkout: their card is validated and saved
+    // on a Stripe Customer, but NOTHING is held — the caution itself is placed
+    // at J-CAUTION_LEAD_DAYS.
+    async registerBidPaymentMethod(bidId, dateISO, patch) {
+      void dateISO;
+      const b = byId.get(bidId);
+      if (!b) return null;
+      const p = patch || {};
+      // NEVER demote a more advanced state: a late delivery of the setup event
+      // must not erase a caution already placed ('authorized'), a lapsed offer
+      // ('void') or one awaiting re-authorization ('a_reautoriser').
+      const avance = !!b.paymentStatus && b.paymentStatus !== 'pending' && b.paymentStatus !== 'enregistre';
+      const updated = {
+        ...b,
+        paymentStatus: avance ? b.paymentStatus : 'enregistre',
+        paymentCustomerId: p.customerId || b.paymentCustomerId || null,
+        paymentMethodId: p.paymentMethodId || b.paymentMethodId || null,
+        setupIntentId: p.setupIntentId || b.setupIntentId || null,
+        registeredAt: p.registeredAt || b.registeredAt || null,
+      };
+      byId.set(bidId, updated);
+      return updated;
+    },
+
+    // The caution could not be placed (card declined, needs authentication).
+    // Recorded ON the offer so the daily gesture knows the parties were already
+    // told, and so the console can say why the guarantee is missing.
+    async markCautionRefusee(bidId, dateISO, refus) {
+      void dateISO;
+      const b = byId.get(bidId);
+      if (!b) return null;
+      const updated = { ...b, cautionRefus: refus || null };
       byId.set(bidId, updated);
       return updated;
     },

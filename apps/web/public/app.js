@@ -9174,8 +9174,8 @@
     // its next step — not on the carnet with a toast that fades.
     if (p === 'ok') {
       track('paiement_ok');
-      toast('Paiement autorisé. Votre offre est en cours de publication.');
-      state.checkoutNotice = ['Paiement autorisé. Votre offre est en cours de publication.']
+      toast('Votre carte est acceptée. Votre offre est en cours de publication.');
+      state.checkoutNotice = ['Votre carte est acceptée. Votre offre est en cours de publication.']
         .concat(expectationLines(offerCourriel(), false));
       state.tab = 'profil';
     } else if (p === 'annule') {

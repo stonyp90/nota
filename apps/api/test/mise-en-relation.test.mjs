@@ -212,6 +212,8 @@ test('each retained entry carries the cancellation forecast for TODAY (null with
   const repo = createMemoryRepo([]);
   const stripe = {
     async createOfferAuthorization(args) { return { sessionId: 'cs_' + args.bidId, url: 'https://checkout.test/' + args.bidId }; },
+    // ADR 0035 — la porte d'ENREGISTREMENT de carte (dates hors fenêtre).
+    async createOfferSetup(args) { return { sessionId: 'cs_setup_' + args.bidId, url: 'https://checkout.test/setup/' + args.bidId }; },
     constructEvent(raw) { return JSON.parse(raw); },
   };
   const billing = createBilling({ repo, stripe, now: () => TODAY });

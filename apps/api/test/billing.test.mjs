@@ -26,13 +26,17 @@ const { DEFAULT_PRIX_CENTS: PRIX } = require('../src/prix-nota-config.js');
  * raw body as the JSON event and rejects the signature literal 'bad'.
  */
 function fakeStripe() {
-  const calls = { accounts: [], links: [], charges: [], authorizations: [], transfers: [], cancels: [] };
+  const calls = { accounts: [], links: [], charges: [], authorizations: [], setups: [], holds: [], transfers: [], cancels: [] };
   return {
     calls,
     async createConnectAccount(args) { calls.accounts.push(args); return { accountId: 'acct_' + args.notaryId }; },
     async createOnboardingLink(args) { calls.links.push(args); return { url: 'https://connect.stripe.test/onboard/' + args.accountId }; },
     async chargeActCommission(args) { calls.charges.push(args); return { id: 'pi_' + (args.bidId || 'x'), applicationFeeCents: args.applicationFeeCents }; },
     async createOfferAuthorization(args) { calls.authorizations.push(args); return { sessionId: 'cs_' + (args.bidId || 'x'), url: 'https://checkout.stripe.test/pay/' + (args.bidId || 'x') }; },
+    // ADR 0035 — la carte s'ENREGISTRE quand la signature est hors de la
+    // fenêtre de caution ; la caution elle-même se pose J-2, hors session.
+    async createOfferSetup(args) { calls.setups.push(args); return { sessionId: 'cs_setup_' + (args.bidId || 'x'), url: 'https://checkout.stripe.test/setup/' + (args.bidId || 'x') }; },
+    async placeOfferAuthorization(args) { calls.holds.push(args); return { paymentIntentId: 'pi_' + (args.bidId || 'x'), status: 'requires_capture' }; },
     async captureAndTransfer(args) { calls.transfers.push(args); return { paymentIntentId: args.paymentIntentId, chargeId: 'ch_' + (args.bidId || 'x'), transferId: 'tr_' + (args.bidId || 'x'), applicationFeeCents: args.applicationFeeCents, netCents: args.amountCents - args.applicationFeeCents }; },
     async cancelOfferAuthorization(args) { calls.cancels.push(args); return { id: args.paymentIntentId, status: 'canceled' }; },
     constructEvent(rawBody, signature) {
@@ -387,17 +391,34 @@ const checkoutExpired = (id, bidId, bidDate) => ({
 // Zero-add refinancement answers: the dynamic base stays at the flat 2000 $.
 const DEFAULT_PRICING = { refinancement: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale', deplacement: 'client_50' } };
 
-test('authorizeOffer opens a hosted Checkout to authorize the client card', async () => {
+// ADR 0035 — le clock de facturation ci-dessus place « aujourd'hui » au
+// 2026-08-11 en heure du Québec ; la fenêtre de caution s'ouvre donc au
+// 2026-08-13. Ces deux dates encadrent la seule décision d'authorizeOffer.
+const DANS_FENETRE = '2026-08-13';
+const HORS_FENETRE = '2026-09-01';
+
+test('authorizeOffer autorise la carte quand la signature est DÉJÀ dans la fenêtre de caution', async () => {
   const { stripe, billing } = setup();
-  const res = await billing.authorizeOffer({ bidId: 'BID#1', bidDate: '2026-09-01', amountCents: 90000, email: 'c@x.ca' });
+  const res = await billing.authorizeOffer({ bidId: 'BID#1', bidDate: DANS_FENETRE, amountCents: 90000, email: 'c@x.ca' });
   assert.equal(res.ok, true);
-  assert.match(res.url, /^https:\/\/checkout\.stripe\.test\//);
+  assert.equal(res.mode, 'paiement');
+  assert.match(res.url, /^https:\/\/checkout\.stripe\.test\/pay\//);
   assert.equal(stripe.calls.authorizations[0].amountCents, 90000);
   assert.equal(stripe.calls.authorizations[0].bidId, 'BID#1');
 
   const bad = await billing.authorizeOffer({ bidId: 'x', amountCents: 0 });
   assert.equal(bad.ok, false);
   assert.equal(bad.errors[0].code, 'montant_invalide');
+});
+
+test('authorizeOffer ENREGISTRE la carte quand la signature est trop loin pour qu’une autorisation survive', async () => {
+  const { stripe, billing } = setup();
+  const res = await billing.authorizeOffer({ bidId: 'BID#2', bidDate: HORS_FENETRE, amountCents: 90000, email: 'c@x.ca' });
+  assert.equal(res.ok, true);
+  assert.equal(res.mode, 'enregistrement');
+  assert.match(res.url, /^https:\/\/checkout\.stripe\.test\/setup\//);
+  assert.equal(stripe.calls.authorizations.length, 0, 'une autorisation posée 20 jours d’avance serait morte à la signature');
+  assert.equal(stripe.calls.setups[0].amountCents, 90000, 'le montant voyage : le client doit lire ce que sa carte portera');
 });
 
 test('checkout.session.completed binds the PaymentIntent to the bid and makes it live', async () => {
@@ -457,13 +478,17 @@ test('payNotaryOnAccept refuses a not-ready notary and a missing authorization',
   assert.equal(noPay.errors[0].code, 'paiement_absent');
 });
 
+// La signature est DANS la fenêtre de caution (ADR 0035) : l'autorisation est
+// donc posée dès la publication et vivra jusqu'à l'acte. Le même parcours pour
+// une date lointaine — carte enregistrée, caution posée J-2 — est prouvé bout à
+// bout dans caution.test.mjs.
 test('end-to-end (ADR 0015): post → authorize → accept retains WITHOUT paying → completion captures and pays the notary', async () => {
   const { repo, stripe, app } = setup();
 
   // 1) Post an offer — PENDING, returns a Checkout URL, hidden from the carnet.
   const posted = parse(await app.handle({
     method: 'POST', path: '/bids',
-    body: JSON.stringify({ serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2800, prefixe: 'G1R', pricing: DEFAULT_PRICING.refinancement }),
+    body: JSON.stringify({ serviceId: 'refinancement', dateISO: '2026-08-13', montant: 2800, prefixe: 'G1R', pricing: DEFAULT_PRICING.refinancement }),
   }));
   assert.equal(posted.paymentStatus, 'pending');
   assert.match(posted.checkoutUrl, /^https:\/\/checkout\.stripe\.test\//);
@@ -474,7 +499,7 @@ test('end-to-end (ADR 0015): post → authorize → accept retains WITHOUT payin
   // 2) Client authorizes their card — webhook binds the PaymentIntent, offer goes live.
   await app.handle({
     method: 'POST', path: '/stripe/webhook', headers: { 'stripe-signature': 'good' },
-    body: JSON.stringify(checkoutCompleted('evt_live', 'x', '2026-08-20', 'pi_x')),
+    body: JSON.stringify(checkoutCompleted('evt_live', 'x', '2026-08-13', 'pi_x')),
   });
   feed = parse(await app.handle({ method: 'GET', path: '/bids', query: { month: '2026-08' } }));
   assert.equal(feed.bids.length, 1);
@@ -493,7 +518,7 @@ test('end-to-end (ADR 0015): post → authorize → accept retains WITHOUT payin
   const acc = parse(await app.handle({
     method: 'POST', path: '/notary/bids/accept',
     headers: { authorization: 'Bearer ' + sess.token },
-    body: JSON.stringify({ id: 'x', dateISO: '2026-08-20' }),
+    body: JSON.stringify({ id: 'x', dateISO: '2026-08-13' }),
   }));
   assert.equal(acc.paid, undefined, 'accept must not settle anything');
   assert.equal(stripe.calls.transfers.length, 0, 'no capture at accept');
@@ -504,7 +529,7 @@ test('end-to-end (ADR 0015): post → authorize → accept retains WITHOUT payin
   const done = parse(await app.handle({
     method: 'POST', path: '/notary/acts/complete',
     headers: { authorization: 'Bearer ' + sess.token },
-    body: JSON.stringify({ bidId: 'x', dateISO: '2026-08-20', actAmount: montant }),
+    body: JSON.stringify({ bidId: 'x', dateISO: '2026-08-13', actAmount: montant }),
   }));
   assert.equal(done.ok, true);
   assert.equal(done.paid, true);

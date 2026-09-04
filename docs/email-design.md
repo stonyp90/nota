@@ -115,8 +115,11 @@ reverse — fails a test).
 | Client sign-up | `clientWelcome` | client | `POST /client/welcome` |
 | Offer posted | `offerPublished` | client | `POST /bids` |
 | Offer posted (operator) | `operatorNewLead` | operator | `POST /bids` |
-| Card authorized → offer live | `offerAuthorized` | client | webhook `checkout.session.completed` |
+| Card authorized → offer live | `offerAuthorized` | client | webhook `checkout.session.completed` carrying a PaymentIntent — the signing was already inside the caution window (ADR 0035), so the amount IS held |
+| Card registered → offer live | `carteEnregistree` | client | webhook `setup_intent.succeeded` (or a setup-mode `checkout.session.completed`) — ADR 0035: the card is validated and saved, NOTHING is held yet; the copy says so rather than claiming an authorization |
 | Authorization lapsed | `offerAuthorizationVoided` | client | webhook `checkout.session.expired` / `payment_intent.canceled` |
+| Caution refused at J-2 (client) | `cautionRefusee` | client | daily reminder scheduler, caution pass (ADR 0035) — once per offer; the bank declined the saved card, nothing was charged, retried daily until the signing |
+| Caution refused at J-2 (notary) | `cautionRefuseeNotaire` | notary | same pass, only when the act is RETAINED — the notary blocked their day and must know two days ahead; the act stays theirs |
 | Dossier incomplete | `dossierIncomplete` | client | daily reminder scheduler (`dossier_incomplet` — an explicit `dossierReady` flag, or derived via `leadReadiness` when the flag is absent) |
 | Date approaching (J-7/3/1) | `dateApproaching` | client | daily reminder scheduler (`j7`/`j3`/`j1`) |
 | Date is today, no uptake (J-0) | `dateMissedNoUptake` | client | daily reminder scheduler (`j0` — the date is today and no notary retained the offer) |
@@ -168,7 +171,7 @@ Every act mail opens **the act**, on any device:
   `propositionRecue`, `documentsDemandes`, `dateApproaching`,
   `dateMissedNoUptake`, `dossierIncomplete`, `offerPublished`,
   `evaluationInvite`, `actReleased`, `offerAuthorized`,
-  `offerAuthorizationVoided`) use `ctx.clientUrl` — the signed deep link
+  `offerAuthorizationVoided`, `carteEnregistree`, `cautionRefusee`) use `ctx.clientUrl` — the signed deep link
   `<site>/#offre=<id>&d=<dateISO>&cle=<token>` (CLIENT scope, 30 days) minted
   by `createNotifier({ clientLink })`, wired in the handler's notifier factory
   from `siteUrl` + `signToken`. Without one (an older caller, a test) the CTA
@@ -176,7 +179,7 @@ Every act mail opens **the act**, on any device:
   back to `/#dossier`). The client has no account: the link IS the session.
 - **Notary** act mails (`messageDuClient`, `documentDuClient`,
   `propositionAcceptee`, `demandeRetenueNotaire`, `offerCancelledNotary`,
-  `evaluationRecueNotaire`, `nouvelleDemande`) open the console on the act:
+  `evaluationRecueNotaire`, `nouvelleDemande`, `cautionRefuseeNotaire`) open the console on the act:
   `/#notaires&acte=<bidId>` (`ctx.bidId`, set by `bidCtx`).
 - **Operator** alerts land on the admin console when `createNotifier({ adminUrl })`
   is set (`NOTA_ADMIN_URL` in the handler), else on the public carnet.

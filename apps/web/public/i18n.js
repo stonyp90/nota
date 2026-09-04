@@ -70,7 +70,7 @@
   // client achète, pas ce qu'on retiendrait à quelqu'un d'autre.
   "Honoraires du notaire": "Notary’s fees",
   "Service Nota": "Nota service",
-  "Autorisé sur votre carte": "Authorized on your card",
+  "Porté à votre carte": "Charged to your card",
   "Taxes en sus.": "Taxes extra.",
   "Débours en sus (droits de publication, RDPRM).": "Disbursements extra (registration fees, RDPRM).",
   "Le prix du service de Nota s’ajoute à ce montant ; il vous est confirmé avant tout paiement.": "Nota’s service price is added to this amount; it is confirmed to you before any payment.",
@@ -595,7 +595,7 @@
   "Quitter le plein écran": "Exit full screen",
   "Plein écran": "Full screen",
   "Redirection vers l’inscription…": "Redirecting to sign-up…",
-    "Paiement autorisé. Votre offre est en cours de publication.": "Payment authorized. Your offer is being published.",
+    "Votre carte est acceptée. Votre offre est en cours de publication.": "Your card is accepted. Your offer is being published.",
   "Paiement annulé. Votre offre n’a pas été publiée.": "Payment cancelled. Your offer was not published.",
   "Nota — le carnet public des actes notariés à Québec": "Nota — the public carnet of notarized acts in Québec",
   "Trouvez un notaire à Québec pour votre financement ou refinancement hypothécaire, à la date voulue. Affichez votre date et votre offre ; un notaire de la région choisit de retenir votre demande. Publier est gratuit. Nota n’est pas un notaire.": "Find a notary in Quebec City for your mortgage financing or refinancing, on the date you need. Post your date and your offer; a notary in the region chooses whether to take on your request. Posting is free. Nota is not a notary.",
@@ -1176,7 +1176,7 @@
   /* /W1 */
 };
   var HTML = {
-  "Connectez un compte de paiement sécurisé (Stripe) pour recevoir vos versements. Le client autorise le paiement dès la publication ; à la signature, <strong>vos honoraires vous sont virés en entier</strong>. Nota facture son service au client, séparément — rien n’est jamais retranché de vos honoraires. Jamais de frais fixes.": "Connect a secure payment account (Stripe) to receive your payouts. The client authorizes payment as soon as the offer is posted; at signing, <strong>your fees are wired to you in full</strong>. Nota charges the client for its service, separately — nothing is ever deducted from your fees. Never any fixed fees.",
+  "Connectez un compte de paiement sécurisé (Stripe) pour recevoir vos versements. La carte du client est validée par sa banque dès la publication, et la somme y est réservée deux jours avant la signature ; à la signature, <strong>vos honoraires vous sont virés en entier</strong>. Nota facture son service au client, séparément — rien n’est jamais retranché de vos honoraires. Jamais de frais fixes.": "Connect a secure payment account (Stripe) to receive your payouts. The client’s card is validated by their bank as soon as the offer is posted, and the amount is held on it two days before the signing; at signing, <strong>your fees are wired to you in full</strong>. Nota charges the client for its service, separately — nothing is ever deducted from your fees. Never any fixed fees.",
   "Publier une offre est gratuit, et le reste. Sur un acte complété, vous payez deux choses : <strong>les honoraires du notaire</strong> — le montant que vous avez offert, qui lui revient en entier — et <strong>le prix du service de Nota</strong>, un montant fixe, le même pour tous. Les deux vous sont affichés avant que votre carte ne soit autorisée.": "Posting an offer is free, and stays free. On a completed act you pay two things: <strong>the notary’s fees</strong> — the amount you offered, which comes to them in full — and <strong>Nota’s service price</strong>, a fixed amount, the same for everyone. Both are shown to you before your card is authorized.",
   "<strong>Le prix, en deux lignes.</strong> Le montant que vous offrez est celui des <strong>honoraires du notaire</strong> : il lui revient en entier, Nota n’en prélève rien. Le <strong>prix du service de Nota</strong> est un montant fixe, identique pour tous, qui s’ajoute au vôtre et vous est affiché avant l’autorisation de votre carte. <strong>Les taxes et les débours</strong> — droits de publication, RDPRM — <strong>ne sont pas compris</strong> dans ces montants.": "<strong>The price, in two lines.</strong> The amount you offer is the <strong>notary’s fees</strong>: it comes to them in full, Nota takes none of it. <strong>Nota’s service price</strong> is a fixed amount, the same for everyone, added to yours and shown to you before your card is authorized. <strong>Taxes and disbursements</strong> — registration fees, RDPRM — <strong>are not included</strong> in these amounts.",
   "<span class=\"nc-soon-tag\">Bientôt</span>Vérification d’identité, inscription et <strong>réalisation complète de l’acte en ligne</strong> : recevez la demande, rencontrez le client et signez à distance. Tout le parcours notaire, de bout en bout, sans quitter Nota.": "<span class=\"nc-soon-tag\">Coming soon</span>Identity verification, onboarding and <strong>completing the entire act online</strong>: receive the request, meet the client and sign remotely. The whole notary journey, end to end, without leaving Nota.",

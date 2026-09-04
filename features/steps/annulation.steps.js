@@ -3,6 +3,7 @@
 const assert = require('node:assert/strict');
 const { Given, When, Then } = require('@cucumber/cucumber');
 const { notaryIdForEmail } = require('../../apps/api/src/notary-auth.js');
+const domain = require('@nota/domain');
 
 // --- Session helper (same handshake as propositions.steps.js, cached) --------
 
@@ -32,11 +33,26 @@ Given('la facturation Stripe est configurée', function () {
   this.enableBilling();
 });
 
-// What the checkout.session.completed webhook does in production: bind an
-// AUTHORIZED manual-capture hold to the published offer.
+// Le chemin de production, en deux temps depuis l'ADR 0035 : le client donne
+// sa carte (webhook setup_intent.succeeded → carte ENREGISTRÉE), puis la
+// caution est posée hors session sur cette carte — ce que fait le geste
+// quotidien à J-CAUTION_LEAD_DAYS. Un scénario qui écrivait l'autorisation
+// directement dans le dépôt ne prouvait plus rien du mécanisme réel.
 Given('la caution du client est autorisée', async function () {
   const bid = lastBid(this);
-  await this.repo.authorizeBid(bid.id, bid.dateISO, { paymentIntentId: 'pi_' + bid.id, authorizedAt: this.today });
+  // Date déjà dans la fenêtre : la publication a ouvert une session de
+  // PAIEMENT, et c'est le webhook checkout.session.completed qui lie
+  // l'autorisation à l'offre. Rien à poser de plus.
+  if (domain.cautionDue(bid.dateISO, this.today)) {
+    await this.repo.authorizeBid(bid.id, bid.dateISO, { paymentIntentId: 'pi_' + bid.id, authorizedAt: this.today });
+    return;
+  }
+  await this.repo.registerBidPaymentMethod(bid.id, bid.dateISO, {
+    customerId: 'cus_' + bid.id, paymentMethodId: 'pm_' + bid.id, registeredAt: this.today,
+  });
+  const stored = await this.repo.get(bid.id, bid.dateISO);
+  const out = await this.billing.placeCaution({ bid: stored, todayISO: this.today });
+  assert.equal(out.ok, true, 'la caution devait être posée: ' + JSON.stringify(out));
 });
 
 // Settlement needs a payable notary: a Connect account with charges enabled.
@@ -197,8 +213,12 @@ Then('les frais de {int} $ sont virés en entier au notaire {string}', function 
   assert.ok(a, 'aucuns frais retenus: ' + this.response.body);
   assert.deepEqual(a.dedommagement, { notaire: true, verse: true, transferId: 'trfee_' + bid.id });
 
-  const captures = this.stripe.calls.feeCaptures;
-  assert.equal(captures.length, 1, 'exactement une capture partielle attendue');
+  // ADR 0035 — DEUX mécanismes possibles selon qu'une caution vive existe :
+  // la capture partielle, ou le prélèvement hors session sur la carte
+  // enregistrée. Lequel des deux est en jeu se dit dans sa propre phrase ; ce
+  // qui se vérifie ICI est l'invariant commun : Nota n'en garde rien.
+  const captures = [...this.stripe.calls.feeCaptures, ...this.stripe.calls.offSessionFees];
+  assert.equal(captures.length, 1, 'exactement un prélèvement de frais attendu');
   assert.equal(captures[0].connectAccountId, 'acct_' + id, 'le virement doit viser le compte du notaire qui a retenu');
   const virements = this.stripe.calls.feeTransfers;
   assert.equal(virements.length, 1, 'exactement un virement attendu: ' + JSON.stringify(this.stripe.calls));

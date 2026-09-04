@@ -46,6 +46,8 @@ function fakeStripe(calls = { transfers: [], charges: [] }) {
     },
     async chargeActCommission(a) { calls.charges.push(a); return { id: 'pi_' + a.bidId, applicationFeeCents: a.applicationFeeCents }; },
     async createOfferAuthorization(a) { return { sessionId: 'cs_' + a.bidId, url: 'https://checkout.test/' + a.bidId }; },
+    // ADR 0035 — la porte d'ENREGISTREMENT de carte (dates hors fenêtre).
+    async createOfferSetup(a) { return { sessionId: 'cs_setup_' + a.bidId, url: 'https://checkout.test/setup/' + a.bidId }; },
   };
 }
 

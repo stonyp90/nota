@@ -300,22 +300,112 @@ function createBilling({
   }
 
   /**
-   * PAY-ON-ACCEPT, step 1 — authorize the client's card when they post an offer.
-   * Opens a hosted Checkout session that AUTHORIZES (manual capture) the act
-   * amount; nothing is captured until a notary accepts. Returns `{ ok, url }`;
-   * the client is redirected there and the webhook binds the resulting
-   * PaymentIntent back to the bid (see applyEvent: checkout.session.completed).
+   * PAY-ON-ACCEPT, step 1 — take the client's card when they post an offer.
+   *
+   * ADR 0035 — WHICH Stripe surface opens depends on ONE question: can an
+   * authorization posted today still be alive at the signing? A Stripe
+   * authorization lives ~7 days; the carnet's « standard » tier starts at 15.
+   * So the answer is the domain's `cautionDue`:
+   *
+   *   • date already inside the caution window → a PAYMENT session, manual
+   *     capture, exactly as before: the hold is posted now and it will reach
+   *     the signature;
+   *   • date beyond it → a SETUP session: the card is registered, validated by
+   *     the issuer, and NOTHING is held. The caution itself is placed at
+   *     J-CAUTION_LEAD_DAYS by the daily gesture (`placeCaution`).
+   *
+   * Either way the offer stays PENDING until the client comes back through
+   * Stripe — a demand a notary sees always rests on a card a bank accepted.
+   * Returns `{ ok, url, sessionId, mode }`.
    */
   async function authorizeOffer({ bidId, bidDate, amountCents, email, description, successUrl, cancelUrl } = {}) {
     const cents = Math.round(Number(amountCents));
     if (!(cents > 0)) {
       return { ok: false, errors: [{ code: 'montant_invalide', message: 'Montant de l’offre invalide.' }] };
     }
-    const { sessionId, url } = await stripe.createOfferAuthorization({
+    const args = {
       amountCents: cents, currency: 'cad', bidId, bidDate, description,
       customerEmail: email || undefined, successUrl, cancelUrl,
-    });
-    return { ok: true, url, sessionId };
+    };
+    if (bidDate && !domain.cautionDue(bidDate, statsDay())) {
+      const setup = await stripe.createOfferSetup(args);
+      return { ok: true, url: setup.url, sessionId: setup.sessionId, mode: 'enregistrement' };
+    }
+    const { sessionId, url } = await stripe.createOfferAuthorization(args);
+    return { ok: true, url, sessionId, mode: 'paiement' };
+  }
+
+  /**
+   * ADR 0035 — POSE LA CAUTION. The daily gesture (reminders.js) calls this for
+   * every live offer entering the caution window: it creates, off session, the
+   * authorization that must survive until the signature, then binds it to the
+   * bid exactly like the publication webhook used to.
+   *
+   * CE QUI GARANTIT LE PAIEMENT DU NOTAIRE, dans ce modèle :
+   *   1. an offer is only ever visible once the client's card has been
+   *      REGISTERED — Stripe validated it with the issuer. A notary never
+   *      retains against a card nobody checked;
+   *   2. the caution is posted two days before the signing and lives ~7 days,
+   *      so it is alive when the act is signed and can be captured;
+   *   3. a card refused at J-2 warns BOTH parties two days ahead, is retried
+   *      the next day, and never blocks the act: settlement keeps its fallback
+   *      (the fee becomes a receivable, ADR 0029) and the notary keeps the
+   *      dossier.
+   *
+   * NEVER THROWS: a declined card is an operating fact, not an exception. It
+   * answers `{ ok:false, code:'caution_refusee', refus }` and records the
+   * refusal on the offer.
+   */
+  async function placeCaution({ bid, todayISO } = {}) {
+    if (!bid || !bid.id) return { ok: false, code: 'offre_absente' };
+    // Already guaranteed — a second run of the day, or a hold posted at
+    // publication because the date was already close.
+    if (bid.paymentStatus === 'authorized' && bid.paymentIntentId) {
+      return { ok: true, deja: true, paymentIntentId: bid.paymentIntentId };
+    }
+    if (bid.paymentStatus !== 'enregistre' || !bid.paymentCustomerId || !bid.paymentMethodId) {
+      return { ok: false, code: 'carte_absente' };
+    }
+    if (typeof stripe.placeOfferAuthorization !== 'function') return { ok: false, code: 'carte_absente' };
+
+    // The caution carries the SAME two lines the settlement will capture: the
+    // notary's fees and Nota's own price (ADR 0031). Holding only the fees
+    // would under-reserve the client at capture time.
+    const devis = await quoteOffer(bid.montant);
+    let out;
+    try {
+      out = await stripe.placeOfferAuthorization({
+        customerId: bid.paymentCustomerId,
+        paymentMethodId: bid.paymentMethodId,
+        amountCents: devis.totalCents,
+        currency: 'cad',
+        bidId: bid.id,
+        bidDate: bid.dateISO,
+        description: bid.serviceId ? (domain.serviceById(bid.serviceId) || {}).nom : undefined,
+        // The day scopes the idempotency key: two runs today are one attempt,
+        // tomorrow's retry after a decline is a new one.
+        jour: todayISO || statsDay(),
+      });
+    } catch (err) {
+      const refus = {
+        at: clock(),
+        code: (err && (err.code || err.decline_code)) || 'carte_refusee',
+        message: String((err && err.message) || 'La carte a été refusée.').slice(0, 300),
+      };
+      if (typeof repo.markCautionRefusee === 'function') {
+        try {
+          await repo.markCautionRefusee(bid.id, bid.dateISO, refus);
+        } catch {
+          /* an unrecordable refusal must still be REPORTED, never thrown */
+        }
+      }
+      return { ok: false, code: 'caution_refusee', refus };
+    }
+
+    const updated = typeof repo.authorizeBid === 'function'
+      ? await repo.authorizeBid(bid.id, bid.dateISO, { paymentIntentId: out.paymentIntentId, authorizedAt: clock() })
+      : null;
+    return { ok: true, paymentIntentId: out.paymentIntentId, bid: updated };
   }
 
   /**
@@ -448,20 +538,32 @@ function createBilling({
    *
    * Returns `{ ok, chargeId, transferId, verse }`.
    */
-  async function chargeCancellationFee({ paymentIntentId, bidId, amountCents, notaryId } = {}) {
-    if (!paymentIntentId || !(amountCents > 0) || typeof stripe.captureCancellationFee !== 'function') {
-      return { ok: false };
-    }
+  async function chargeCancellationFee({ paymentIntentId, bidId, amountCents, notaryId, customerId, paymentMethodId } = {}) {
+    if (!(amountCents > 0)) return { ok: false };
+    // ADR 0035 — TWO mechanisms, one rule. A live caution is collected by
+    // PARTIAL capture (nothing new is asked of the client). Without one — the
+    // signing was still far enough that the caution was not placed yet — the
+    // fee is charged OFF SESSION on the card the client registered. Losing the
+    // second door would silently make the 4-14 day band of the barème free.
+    const parCapture = !!(paymentIntentId && typeof stripe.captureCancellationFee === 'function');
+    const horsSession = !parCapture
+      && !!(customerId && paymentMethodId && typeof stripe.chargeCancellationFeeOffSession === 'function');
+    if (!parCapture && !horsSession) return { ok: false };
     const cents = Math.round(Number(amountCents));
     const notary = notaryId ? await repo.getNotary(notaryId) : null;
     const payable = !!(notary && notary.status === NOTARY_STATUS.ACTIVE && notary.chargesEnabled && notary.connectAccountId);
 
     let out;
     try {
-      out = await stripe.captureCancellationFee({
-        paymentIntentId, amountCents: cents, bidId,
-        ...(payable ? { connectAccountId: notary.connectAccountId } : {}),
-      });
+      out = parCapture
+        ? await stripe.captureCancellationFee({
+          paymentIntentId, amountCents: cents, bidId,
+          ...(payable ? { connectAccountId: notary.connectAccountId } : {}),
+        })
+        : await stripe.chargeCancellationFeeOffSession({
+          customerId, paymentMethodId, amountCents: cents, bidId,
+          ...(payable ? { connectAccountId: notary.connectAccountId } : {}),
+        });
     } catch (err) {
       // The capture went through and only the transfer failed: the money is
       // on the platform. Never lose it, never re-capture it.
@@ -503,6 +605,9 @@ function createBilling({
     await repo.putNotary(updated);
     return updated;
   }
+
+  // A Stripe field that is either an id string or the expanded object.
+  const idOf = (v) => (typeof v === 'string' ? v : (v && v.id) || null);
 
   // Map one verified event to a repo change. Unknown types are ignored (never
   // throw). Returns the affected notary so the webhook route can notify it.
@@ -550,17 +655,44 @@ function createBilling({
         return { handled: !!notary, notary };
       }
 
-      // Client finished Checkout — their card is AUTHORIZED. Bind the resulting
-      // PaymentIntent to the bid and mark it authorized so it goes live on the
-      // carnet and a notary can be paid the instant they accept.
+      // Client finished Checkout. TWO shapes since ADR 0035:
+      //   • payment mode — the signing was already inside the caution window,
+      //     so the card is AUTHORIZED: bind the PaymentIntent, the offer goes
+      //     live carrying its guarantee;
+      //   • setup mode — the card is merely REGISTERED. There is no
+      //     PaymentIntent to bind and claiming one would be a lie about money:
+      //     record the Customer, mark the offer `enregistre`, and let the daily
+      //     gesture place the caution at J-CAUTION_LEAD_DAYS.
       case 'checkout.session.completed': {
         const md = obj.metadata || {};
-        const paymentIntentId = typeof obj.payment_intent === 'string'
-          ? obj.payment_intent
-          : (obj.payment_intent && obj.payment_intent.id) || null;
+        const paymentIntentId = idOf(obj.payment_intent);
         let bid = null;
-        if (md.bidId && typeof repo.authorizeBid === 'function') {
+        if (md.bidId && paymentIntentId && typeof repo.authorizeBid === 'function') {
           bid = await repo.authorizeBid(md.bidId, md.bidDate, { paymentIntentId, authorizedAt: clock() });
+        } else if (md.bidId && typeof repo.registerBidPaymentMethod === 'function') {
+          bid = await repo.registerBidPaymentMethod(md.bidId, md.bidDate, {
+            customerId: idOf(obj.customer),
+            setupIntentId: idOf(obj.setup_intent),
+            registeredAt: clock(),
+          });
+        }
+        return { handled: !!bid, notary: null, bid };
+      }
+
+      // ADR 0035 — the saved card itself. The Checkout session says WHICH
+      // customer; this event says which PAYMENT METHOD, and off-session
+      // charging needs it by name. Both write the same record, so whichever
+      // delivery lands first (or alone) leaves the offer usable.
+      case 'setup_intent.succeeded': {
+        const md = obj.metadata || {};
+        let bid = null;
+        if (md.bidId && typeof repo.registerBidPaymentMethod === 'function') {
+          bid = await repo.registerBidPaymentMethod(md.bidId, md.bidDate, {
+            customerId: idOf(obj.customer),
+            paymentMethodId: idOf(obj.payment_method),
+            setupIntentId: obj.id || null,
+            registeredAt: clock(),
+          });
         }
         return { handled: !!bid, notary: null, bid };
       }
@@ -603,7 +735,7 @@ function createBilling({
     return { ok: true, handled, duplicate: false, type: event.type, event, notary, bid: bid || null };
   }
 
-  return { connectNotary, authorizeOffer, payNotaryOnAccept, completeAct, cancelAuthorization, chargeCancellationFee, handleWebhook, quoteOffer, priceAct, resolvePrixNota };
+  return { connectNotary, authorizeOffer, placeCaution, payNotaryOnAccept, completeAct, cancelAuthorization, chargeCancellationFee, handleWebhook, quoteOffer, priceAct, resolvePrixNota };
 }
 
 module.exports = { createBilling, NOTARY_STATUS };

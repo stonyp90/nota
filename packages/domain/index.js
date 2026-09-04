@@ -2172,6 +2172,32 @@
     return [...byCode.values()].sort((a, b) => b.du - a.du || a.code.localeCompare(b.code));
   }
 
+  // --- La caution (ADR 0035) -------------------------------------------------
+  // Le client donne sa carte à la publication, mais la SOMME n'est réservée
+  // qu'à l'approche de la date. Le motif est arithmétique : une autorisation
+  // de carte ne vit que ~7 jours, alors que le palier « standard » du carnet
+  // commence à 15 jours (TIERS: `rapide` s'arrête à 14). Une réservation posée
+  // à la publication meurt donc avant la signature sur la majorité des dates,
+  // et le notaire qui retient se retrouverait sans garantie sans que personne
+  // ne soit prévenu.
+  //
+  // CAUTION_LEAD_DAYS est ce délai, en jours pleins avant la signature : assez
+  // tard pour que la réservation vive jusqu'à l'acte, assez tôt pour qu'une
+  // carte refusée laisse deux jours au client pour la remplacer et au notaire
+  // pour le savoir. C'est une règle d'affaires — la couche de facturation ne
+  // choisit pas ce nombre, elle le lit ici.
+  const CAUTION_LEAD_DAYS = 2;
+
+  // La caution d'une signature le `dateISO` est-elle à poser le jour
+  // `todayISO` ? Vrai dans la fenêtre [signature − CAUTION_LEAD_DAYS,
+  // signature]. Une date déjà passée en sort : une offre oubliée ne doit pas
+  // être retentée indéfiniment, et le règlement garde son repli (ADR 0029).
+  function cautionDue(dateISO, todayISO) {
+    if (!isISODate(dateISO) || !isISODate(todayISO)) return false;
+    const days = daysBetween(todayISO, dateISO);
+    return days >= 0 && days <= CAUTION_LEAD_DAYS;
+  }
+
   // --- Reminder schedule -----------------------------------------------------
   // The cadence at which an open lead's client is reminded that their signing
   // date is approaching, expressed as whole days BEFORE the date. Closer dates
@@ -2374,6 +2400,8 @@
     referralLedger,
     recommendedAmount,
     obtainChance,
+    CAUTION_LEAD_DAYS,
+    cautionDue,
     REMINDER_OFFSETS,
     REMINDER_KINDS,
     reminderKindForDays,

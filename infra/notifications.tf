@@ -151,6 +151,14 @@ resource "aws_lambda_function" "reminders" {
       NOTA_FROM_EMAIL     = var.from_email
       NOTA_OPERATOR_EMAIL = var.operator_email
       NOTA_BASE_URL       = var.base_url
+
+      # ADR 0035 — la caution. Ce lot quotidien pose, hors session, l'autorisation
+      # de carte qui doit vivre jusqu'à la signature : sans clé Stripe il ne pose
+      # rien et se limite aux rappels. La clé de webhook n'y sert à rien (aucune
+      # signature à vérifier ici) ; elle n'est passée que parce que l'adaptateur
+      # l'exige à la construction.
+      STRIPE_SECRET_KEY     = var.stripe_secret_key
+      STRIPE_WEBHOOK_SECRET = var.stripe_webhook_secret
     }
   }
 

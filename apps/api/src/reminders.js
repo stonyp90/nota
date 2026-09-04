@@ -9,11 +9,17 @@
  * The cadence itself lives in @nota/domain (dueReminders / REMINDER_OFFSETS):
  * this file encodes NO schedule of its own. It only asks the domain which
  * reminders are due today for each open bid, then sends them idempotently.
+ *
+ * Since ADR 0035 the same daily pass carries a MONEY gesture: placing the
+ * caution (the client's card authorization) on every offer whose signing date
+ * has entered the window the domain defines (CAUTION_LEAD_DAYS). The billing
+ * port is optional — without it (demo, tests, no Stripe) the pass is skipped
+ * and this file behaves exactly as it did before.
  */
 
 const domain = require('@nota/domain');
 
-async function runReminders({ repo, notifier, now } = {}) {
+async function runReminders({ repo, notifier, billing, now } = {}) {
   if (!repo) throw new Error('runReminders: repo is required');
   if (!notifier) throw new Error('runReminders: notifier is required');
   // Default clock = the Québec civil day (not the UTC day of the Lambda host),
@@ -104,7 +110,57 @@ async function runReminders({ repo, notifier, now } = {}) {
     }
   }
 
-  return { todayISO, openBids: open.length, due, sent, digest, errors };
+  // --- La caution (ADR 0035) -------------------------------------------------
+  // LE geste quotidien d'argent : poser, sur les offres dont la date entre dans
+  // la fenêtre, l'autorisation de carte qui doit vivre jusqu'à la signature.
+  // Elle ne peut pas être posée à la publication — une autorisation Stripe
+  // expire en ~7 jours et le palier « standard » du carnet commence à 15.
+  //
+  // Deux exigences tiennent tout ce bloc :
+  //   • il lit `listByMonth`, PAS `listOpenBids` : celui-ci exclut les actes
+  //     RETENUS, et c'est précisément là que la caution compte le plus ;
+  //   • une carte refusée ne lève jamais : elle se compte, s'inscrit sur
+  //     l'offre et prévient les deux parties une seule fois. Un lot de rappels
+  //     ne tombe pas parce qu'une banque a dit non.
+  const caution = { due: 0, posee: 0, refusee: 0 };
+  if (billing && typeof billing.placeCaution === 'function' && typeof repo.listByMonth === 'function') {
+    // La fenêtre chevauche au plus deux mois (la couture de fin de mois).
+    const months = [...new Set([todayISO.slice(0, 7), domain.addDays(todayISO, domain.CAUTION_LEAD_DAYS).slice(0, 7)])];
+    const candidates = [];
+    for (const m of months) candidates.push(...(await repo.listByMonth(m)));
+    for (const bid of candidates) {
+      if (!bid || bid.status === domain.STATUS.ANNULEE) continue;
+      if (bid.paymentStatus !== 'enregistre') continue; // déjà cautionnée, jamais payée, ou facturation absente
+      if (!domain.cautionDue(bid.dateISO, todayISO)) continue;
+      caution.due += 1;
+      try {
+        const r = await billing.placeCaution({ bid, todayISO });
+        if (r && r.ok) {
+          caution.posee += 1;
+          continue;
+        }
+        caution.refusee += 1;
+        // Prévenir UNE fois : la fenêtre dure trois jours et le geste est
+        // quotidien — répéter la mauvaise nouvelle chaque matin serait de
+        // l'insistance (art. 56 1°), pas de l'information.
+        if (r && r.code === 'caution_refusee' && !bid.cautionRefus && typeof notifier.onCautionRefusee === 'function') {
+          await notifier.onCautionRefusee(bid, r.refus);
+        }
+        // `carte_absente` sur une offre marquée « enregistrée » ne vient PAS du
+        // client : il manque le moyen de paiement, donc l'abonnement au webhook
+        // `setup_intent.succeeded` (ADR 0035, réglage de production). Cela se
+        // rapporte, sinon la caution ne se pose jamais en silence.
+        if (r && r.code === 'carte_absente') {
+          errors.push({ bidId: bid.id, kind: 'caution', error: 'carte_absente — moyen de paiement inconnu (setup_intent.succeeded non reçu ?)' });
+        }
+      } catch (err) {
+        // Un incident d'infrastructure se rapporte, il n'arrête pas le lot.
+        errors.push({ bidId: bid.id, kind: 'caution', error: String((err && err.message) || err) });
+      }
+    }
+  }
+
+  return { todayISO, openBids: open.length, due, sent, digest, caution, errors };
 }
 
 module.exports = { runReminders };

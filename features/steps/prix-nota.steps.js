@@ -29,12 +29,27 @@ function lastBid(world) {
   return world.lastBid;
 }
 
-// Le blocage posé sur la carte pour CETTE offre. Il n'y en a qu'un par offre :
-// la publication autorise, la signature capture.
-function authorizationFor(world) {
+// Ce que la carte du client devra porter pour CETTE offre, quelle que soit la
+// porte Stripe ouverte à la publication (ADR 0035) : une AUTORISATION quand la
+// signature est déjà dans la fenêtre de caution, un ENREGISTREMENT de carte
+// quand elle est plus loin — une autorisation posée trop tôt mourrait avant
+// l'acte. Le montant, lui, est le même : c'est le total des deux lignes.
+function montantPorteALaCarte(world) {
   const bid = lastBid(world);
-  const a = world.stripe.calls.authorizations.filter((x) => x.bidId === bid.id);
-  assert.equal(a.length, 1, 'exactement un blocage attendu sur ' + bid.id + ': ' + JSON.stringify(world.stripe.calls.authorizations));
+  const c = world.stripe.calls;
+  const a = [...c.authorizations, ...c.setups].filter((x) => x.bidId === bid.id);
+  assert.equal(a.length, 1, 'exactement un montant porté attendu sur ' + bid.id + ': ' + JSON.stringify([...c.authorizations, ...c.setups]));
+  return a[0];
+}
+
+// Le blocage RÉELLEMENT posé sur la carte : l'autorisation de la publication
+// quand la date était proche, sinon la caution posée à J-2 sur la carte
+// enregistrée. Il n'y en a qu'un par offre — la signature le capture.
+function blocageFor(world) {
+  const bid = lastBid(world);
+  const c = world.stripe.calls;
+  const a = [...c.authorizations, ...c.holds].filter((x) => x.bidId === bid.id);
+  assert.equal(a.length, 1, 'exactement un blocage attendu sur ' + bid.id + ': ' + JSON.stringify([...c.authorizations, ...c.holds]));
   return a[0];
 }
 
@@ -78,8 +93,15 @@ Then('le carnet déclare que ni les taxes ni les débours ne sont inclus', funct
 
 // --- Ce que la carte bloque, ce que la capture prend --------------------------
 
+// Ce que la carte devra porter — dit dès la publication, que la somme soit
+// bloquée maintenant ou seulement à l'approche de la date (ADR 0035).
+Then('le montant porté à la carte du client est {int} $', function (total) {
+  assert.equal(montantPorteALaCarte(this).amountCents, cents(total));
+});
+
+// Ce qui est effectivement RÉSERVÉ sur la carte : la caution.
 Then('la carte du client est bloquée pour {int} $', function (total) {
-  assert.equal(authorizationFor(this).amountCents, cents(total));
+  assert.equal(blocageFor(this).amountCents, cents(total));
 });
 
 Then('la capture porte {int} $', function (total) {
@@ -106,7 +128,7 @@ Then('Nota ne garde que son prix : {int} $', function (prix) {
 // une part des honoraires du notaire (art. 32.1 2° L.N., art. 32 C.déont.).
 Then("l'écart de {int} $ entre le blocage et le règlement ne reste pas chez Nota", async function (ecart) {
   const bid = lastBid(this);
-  const a = authorizationFor(this);
+  const a = blocageFor(this);
   const t = transferFor(this);
   assert.ok(t.amountCents < a.amountCents, 'la capture doit être PARTIELLE');
   assert.equal(a.amountCents - t.amountCents, cents(ecart), 'l’écart attendu entre le blocage et la capture');

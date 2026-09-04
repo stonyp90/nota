@@ -52,7 +52,22 @@ already moved.
 - The client's hold typically lapses before a signing more than ~7 days out;
   the capture path then falls back to the commission model. A future
   saved-payment-method (off-session) charge can tighten this without changing
-  the routes.
+  the routes. **[Fait — ADR 0035, 2026-09-03 : voir l'amendement ci-dessous.]**
 - Referral rewards still *record* at retention (ADR 0011 ledger) but the
   operator pays them out manually; no automated money moves before signing.
 - The notary evaluation happens after completion (separate decision).
+
+## Amendé par l'ADR 0035 (2026-09-03)
+
+La décision 2 supposait qu'une autorisation posée à la publication serait
+encore vivante à la signature. Elle ne l'était pas : une autorisation Stripe
+expire en ~7 jours et le palier « standard » du carnet commence à 15. Sur la
+majorité des dates publiées, le repli — devenu la créance de l'ADR 0029 —
+était donc le chemin ORDINAIRE, et non l'exception que ce texte décrivait.
+
+Depuis l'ADR 0035, la publication **enregistre** la carte (SetupIntent) et la
+caution est posée hors session `domain.CAUTION_LEAD_DAYS` jours avant la
+signature, par la Lambda de rappels. Tout le reste de cet ADR tient : le
+règlement se fait toujours à la signature, par `captureAndTransfer`, sur le
+même registre write-once ACT#, avec le même repli quand rien ne peut être
+capturé.

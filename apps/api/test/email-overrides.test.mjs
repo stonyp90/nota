@@ -201,6 +201,12 @@ const TRANSACTIONNELS = [
   'actPaidNotary',
   'actReleased',
   'adminMagicLink',
+  // ADR 0035 — la carte est prise, mais rien n'est réservé : sans cet accusé le
+  // client croirait sa somme bloquée. Et un refus de carte deux jours avant la
+  // signature est le seul avis que chaque partie recevra.
+  'carteEnregistree',
+  'cautionRefusee',
+  'cautionRefuseeNotaire',
   'contactRecu',
   'dateMissedNoUptake',
   // ADR 0033 — the retaining notary's only notice of the act (and of the
