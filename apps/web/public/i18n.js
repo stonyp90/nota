@@ -70,7 +70,7 @@
   // client achète, pas ce qu'on retiendrait à quelqu'un d'autre.
   "Honoraires du notaire": "Notary’s fees",
   "Service Nota": "Nota service",
-  "Autorisé sur votre carte": "Authorized on your card",
+  "Porté à votre carte": "Charged to your card",
   "Taxes en sus.": "Taxes extra.",
   "Débours en sus (droits de publication, RDPRM).": "Disbursements extra (registration fees, RDPRM).",
   "Le prix du service de Nota s’ajoute à ce montant ; il vous est confirmé avant tout paiement.": "Nota’s service price is added to this amount; it is confirmed to you before any payment.",
@@ -533,6 +533,25 @@
   "Écrire au client…": "Write to the client…",
   "Écrire au client": "Write to the client",
   "Messages avec votre notaire": "Messages with your notary",
+  // ADR 0035 — la garantie de paiement, telle que le NOTAIRE la lit avant de
+  // retenir : la pastille, ce qu'elle implique, et la règle générale.
+  "Garantie de paiement": "Payment guarantee",
+  "Somme réservée": "Amount held",
+  "Carte validée": "Card validated",
+  "Carte refusée": "Card declined",
+  "Réservation expirée": "Hold expired",
+  "posée le": "placed on",
+  "la somme est bloquée sur la carte du client": "the amount is held on the client’s card",
+  "somme réservée le": "amount held on",
+  "la somme sera réservée avant la signature": "the amount will be held before the signing",
+  "le client doit enregistrer une autre carte": "the client must save another card",
+  "aucune somme n’est réservée pour cet acte": "no amount is being held for this act",
+  "Aucune garantie en place": "No guarantee in place",
+  // ADR 0035 — la caution refusée, et le seul geste qui la répare.
+  "Votre carte a été refusée": "Your card was declined",
+  "Rien n’a été débité. Votre demande reste en place et votre notaire est prévenu. Enregistrez une autre carte avant votre signature.": "Nothing was charged. Your request stands and your notary has been told. Save another card before your signing.",
+  "Enregistrer une autre carte": "Save another card",
+  "Le paiement est momentanément indisponible. Réessayez dans quelques minutes.": "Payment is momentarily unavailable. Try again in a few minutes.",
   "Écrire à votre notaire…": "Write to your notary…",
   "Écrire à votre notaire": "Write to your notary",
   "Écrivez un message.": "Write a message.",
@@ -594,7 +613,7 @@
   "Quitter le plein écran": "Exit full screen",
   "Plein écran": "Full screen",
   "Redirection vers l’inscription…": "Redirecting to sign-up…",
-    "Paiement autorisé. Votre offre est en cours de publication.": "Payment authorized. Your offer is being published.",
+    "Votre carte est acceptée. Votre offre est en cours de publication.": "Your card is accepted. Your offer is being published.",
   "Paiement annulé. Votre offre n’a pas été publiée.": "Payment cancelled. Your offer was not published.",
   "Nota — le carnet public des actes notariés à Québec": "Nota — the public carnet of notarized acts in Québec",
   "Trouvez un notaire à Québec pour votre financement ou refinancement hypothécaire, à la date voulue. Affichez votre date et votre offre ; un notaire de la région choisit de retenir votre demande. Publier est gratuit. Nota n’est pas un notaire.": "Find a notary in Quebec City for your mortgage financing or refinancing, on the date you need. Post your date and your offer; a notary in the region chooses whether to take on your request. Posting is free. Nota is not a notary.",
@@ -833,6 +852,8 @@
   "Gratuité.": "Free of charge.",
   "Publier une offre et consulter le carnet est gratuit pour le client, pour toujours.": "Publishing an offer and browsing the carnet is free for the client, forever.",
   "Un prix de départ clair par service et deux lignes annoncées d’avance : les honoraires du notaire — ce que vous offrez est ce qu’il reçoit — et le prix du service de Nota, publié d’avance. Aucun frais caché : le barème des frais d’annulation est publié dans les": "A clear starting price per service and two lines announced in advance: the notary’s fees — what you offer is what they receive — and Nota’s service price, published in advance. No hidden fees: the cancellation fee schedule is published in the",
+  ", publié d’avance : il dépend du service demandé et du délai avant la signature, jamais du notaire ni du montant que vous offrez. Les deux vous sont affichés avant que votre carte ne soit autorisée.": ", published in advance: it depends on the service requested and on the notice before signing, never on the notary nor on the amount you offer. Both are shown to you before your card is authorized.",
+  "s’ajoute au vôtre. Il est publié d’avance et dépend de deux choses que vous choisissez — le service demandé et le délai avant la signature — jamais du notaire, de sa cote ni du montant que vous offrez. Il vous est affiché avant l’autorisation de votre carte, et c’est celui-là qui vous est facturé.": "is added to yours. It is published in advance and depends on two things you choose — the service requested and the notice before signing — never on the notary, their cote, nor the amount you offer. It is shown to you before your card is authorized, and that is the one you are charged.",
   "Transparence des prix.": "Price transparency.",
   "Un prix de départ clair par service, aucun frais caché. Ce que vous offrez est ce que le notaire reçoit.": "A clear starting price per service, no hidden fees. What you offer is what the notary receives.",
   "Anonymat par défaut.": "Anonymity by default.",
@@ -1263,7 +1284,7 @@
   "Le numéro que vous fournissez (optionnel) est privé : il n’est partagé qu’avec le notaire qui retient votre demande, puis supprimé selon le même calendrier que le reste.": "The number you provide (optional) is private: it is shared only with the notary who takes on your request, then deleted on the same schedule as the rest.",
   "Stockage local.": "Local storage.",
   "Vos coordonnées, vos réponses de dossier, vos préférences (langue, thème) et les liens de suivi de vos offres sont enregistrés dans le stockage local de votre navigateur, sur cet appareil seulement — aucun témoin publicitaire. Effacer les données du site dans votre navigateur les supprime. Nota compte par ailleurs, sans compte ni témoin, les grandes étapes franchies (visite, formulaire, publication) pour mesurer son parcours.": "Your contact details, your file answers, your preferences (language, theme) and the tracking links of your offers are saved in your browser’s local storage, on this device only — no advertising cookie. Clearing the site’s data in your browser removes them. Nota also counts, with no account and no cookie, the main steps taken (visit, form, publication) to measure its funnel.",
-  "Un prix de départ clair par service et deux lignes annoncées d’avance : les honoraires du notaire — ce que vous offrez est ce qu’il reçoit — et le prix fixe du service de Nota. Aucun frais caché : le barème des frais d’annulation est publié dans les": "A clear starting price per service and two lines announced up front: the notary’s fees — what you offer is what they receive — and Nota’s fixed service price. No hidden fees: the cancellation fee schedule is published in the",
+  "Un prix de départ clair par service et deux lignes annoncées d’avance : les honoraires du notaire — ce que vous offrez est ce qu’il reçoit — et le prix du service de Nota, publié d’avance. Aucun frais caché : le barème des frais d’annulation est publié dans les": "A clear starting price per service and two lines announced up front: the notary’s fees — what you offer is what they receive — and Nota’s service price, published in advance. No hidden fees: the cancellation fee schedule is published in the",
   "conditions d’utilisation": "terms of use",
   "et le montant exact vous est affiché avant toute confirmation.": "and the exact amount is shown to you before any confirmation.",
   "Votre nom sera visible sur le carnet public, à côté du service, du montant et de la date. Par exemple : « votre nom · refinancement · dans 4 jours ». C’est une information que vous rendez publique.": "Your name will be visible on the public carnet, next to the service, the amount and the date. For example: “your name · refinancing · in 4 days”. This is information you are making public.",
@@ -1272,7 +1293,7 @@
   "Pas de compte ni de mot de passe : ce courriel est enregistré sur cet appareil, comme identité. Votre courriel est transmis à Nota pour le lien de suivi et les avis. Vos documents, quand vous en envoyez, transitent chiffrés et ne sont lus que par le notaire qui vous retient — jamais par Nota.": "No account, no password: this email address is saved on this device as your identity. Your email address is sent to Nota for the tracking link and notices. Your documents, when you send any, travel encrypted and are read only by the notary who takes you on — never by Nota.",
   "Enregistrer votre courriel": "Save your email address",
   "Enregistrer mon courriel": "Save my email address",
-  "ou vous propose un prix — vous restez libre. Vous payez ses honoraires — le montant que vous avez offert — et, séparément, le prix fixe du service de Nota ; les deux vous sont affichés avant tout paiement.": "or proposes a price — you stay free to choose. You pay their fees — the amount you offered — and, separately, Nota’s fixed service price; both are shown to you before any payment.",
+  "ou vous propose un prix — vous restez libre. Vous payez ses honoraires — le montant que vous avez offert — et, séparément, le prix du service de Nota, publié d’avance ; les deux vous sont affichés avant tout paiement.": "or proposes a price — you stay free to choose. You pay their fees — the amount you offered — and, separately, Nota’s service price, published in advance; both are shown to you before any payment.",
   "Une question, un pépin, besoin d’un coup de main\u00a0? Écrivez-nous — une personne de l’équipe vous répond à votre courriel.": "A question, a snag, need a hand? Write to us — someone from the team replies to your email.",
   "Une personne de l’équipe vous répond à votre courriel.": "Someone from the team replies to your email.",
   "Obtenir mon code →": "Get my code →",
@@ -1297,9 +1318,9 @@
   /* /F4 */
 };
   var HTML = {
-  "Connectez un compte de paiement sécurisé (Stripe) pour recevoir vos versements. Le client autorise le paiement dès la publication ; à la signature, <strong>vos honoraires vous sont virés en entier</strong>. Nota facture son service au client, séparément — rien n’est jamais retranché de vos honoraires. Jamais de frais fixes.": "Connect a secure payment account (Stripe) to receive your payouts. The client authorizes payment as soon as the offer is posted; at signing, <strong>your fees are wired to you in full</strong>. Nota charges the client for its service, separately — nothing is ever deducted from your fees. Never any fixed fees.",
   "Publier une offre est gratuit, et le reste. Sur un acte complété, vous payez deux choses : <strong>les honoraires du notaire</strong> — le montant que vous avez offert, qui lui revient en entier — et <strong>le prix du service de Nota</strong>, publié d’avance : il dépend du service demandé et du délai avant la signature, jamais du notaire ni du montant que vous offrez. Les deux vous sont affichés avant que votre carte ne soit autorisée.": "Posting an offer is free, and stays free. On a completed act you pay two things: <strong>the notary’s fees</strong> — the amount you offered, which comes to them in full — and <strong>Nota’s service price</strong>, published in advance: it depends on the service requested and on the notice before signing, never on the notary nor on the amount you offer. Both are shown to you before your card is authorized.",
   "<strong>Le prix, en deux lignes.</strong> Le montant que vous offrez est celui des <strong>honoraires du notaire</strong> : il lui revient en entier, Nota n’en prélève rien. Le <strong>prix du service de Nota</strong> s’ajoute au vôtre. Il est publié d’avance et dépend de deux choses que vous choisissez — le service demandé et le délai avant la signature — jamais du notaire, de sa cote ni du montant que vous offrez. Il vous est affiché avant l’autorisation de votre carte, et c’est celui-là qui vous est facturé. <strong>Les taxes et les débours</strong> — droits de publication, RDPRM — <strong>ne sont pas compris</strong> dans ces montants.": "<strong>The price, in two lines.</strong> The amount you offer is the <strong>notary’s fees</strong>: it comes to them in full, Nota takes none of it. <strong>Nota’s service price</strong> is added to yours. It is published in advance and depends on two things you choose — the service requested and the notice before signing — never on the notary, their cote, or the amount you offer. It is shown to you before your card is authorized, and that is the one you are charged. <strong>Taxes and disbursements</strong> — registration fees, RDPRM — <strong>are not included</strong> in these amounts.",
+  "Connectez un compte de paiement sécurisé (Stripe) pour recevoir vos versements. À la signature, <strong>vos honoraires vous sont virés en entier</strong>. Nota facture son service au client, séparément — rien n’est jamais retranché de vos honoraires. Jamais de frais fixes.": "Connect a secure payment account (Stripe) to receive your payouts. At signing, <strong>your fees are wired to you in full</strong>. Nota charges the client for its service, separately — nothing is ever deducted from your fees. Never any fixed fees.",
   "<span class=\"nc-soon-tag\">Bientôt</span>Vérification d’identité, inscription et <strong>réalisation complète de l’acte en ligne</strong> : recevez la demande, rencontrez le client et signez à distance. Tout le parcours notaire, de bout en bout, sans quitter Nota.": "<span class=\"nc-soon-tag\">Coming soon</span>Identity verification, onboarding and <strong>completing the entire act online</strong>: receive the request, meet the client and sign remotely. The whole notary journey, end to end, without leaving Nota.",
   "Au repos, vos données sont conservées sur des serveurs canadiens (Amazon Web Services, région <strong>ca-central-1</strong>, Montréal). En transit, elles passent par un réseau de diffusion dont les points de présence sont aussi aux États-Unis et en Europe, et par des prestataires tiers : Stripe pour le paiement, rsms.me pour la police de caractères.": "At rest, your data is stored on Canadian servers (Amazon Web Services, <strong>ca-central-1</strong> region, Montréal). In transit it passes through a content delivery network whose edge locations are also in the United States and Europe, and through third-party providers: Stripe for payment, rsms.me for the typeface.",
   "<strong>Conservation.</strong> Une offre et son dossier sont conservés au plus <strong>12 mois</strong> après la date de signature, puis supprimés automatiquement. Le courriel de notification est effacé dès que l’offre est close ou expirée.": "<strong>Retention.</strong> An offer and its file are kept at most <strong>12 months</strong> after the signing date, then deleted automatically. The notification email is erased as soon as the offer is closed or expired.",
@@ -1490,27 +1511,74 @@
     "flags": "",
     "replacement": "Your offer of $1 is cancelled"
   },
+  // ADR 0035 — ce qu'une annulation a fait à l'argent se dit en TROIS phrases,
+  // parce qu'il y a trois situations : une somme était réservée et on y a
+  // retenu des frais ; rien n'était réservé et une charge neuve est portée à la
+  // carte enregistrée ; la carte a refusé et rien n'a été prélevé. Ces trois-là
+  // sont des FRAGMENTS : les cadres qui les portent (reçu, rôtie, avis) les
+  // encadrent et les règles suivantes les finissent.
   {
-    "pattern": "^Annuler maintenant retient des frais de (.+?) \\((.+?) du montant convenu\\) sur votre caution\\. Ils sont versés au notaire en dédommagement de la journée réservée\\. Le reste vous est libéré immédiatement\\.$",
+    "pattern": "Des frais de (.+?) \\((.+?)\\) ont été retenus sur la somme réservée pour cet acte et versés au notaire en dédommagement\\.",
     "flags": "",
-    "replacement": "Cancelling now keeps a fee of $1 ($2 of the agreed amount) from your deposit. It is paid to the notary as compensation for the day they reserved. The rest is released to you immediately."
+    "replacement": "A fee of $1 ($2) was kept from the amount held for this act and transferred to the notary as compensation."
   },
   {
-    "pattern": "^Offre annulée\\. Des frais de (.+?) \\((.+?)\\) ont été retenus sur votre caution et versés au notaire en dédommagement\\.$",
+    "pattern": "Des frais de (.+?) \\((.+?)\\) ont été portés à la carte que vous avez enregistrée et versés au notaire en dédommagement\\.",
     "flags": "",
-    "replacement": "Offer cancelled. A fee of $1 ($2) was kept from your deposit and paid to the notary as compensation."
+    "replacement": "A fee of $1 ($2) was charged to the card you saved and transferred to the notary as compensation."
   },
   {
-    "pattern": "^Des frais de (.+?) \\((.+?)\\) ont été retenus sur votre caution et versés au notaire en dédommagement\\.$",
+    "pattern": "Des frais de (.+?) \\((.+?)\\) s’appliquaient, mais votre carte les a refusés : rien n’a été débité\\.",
     "flags": "",
-    "replacement": "A fee of $1 ($2) was kept from your deposit and paid to the notary as compensation."
+    "replacement": "A fee of $1 ($2) applied, but your card declined it: nothing was charged."
   },
   {
-    "pattern": "^Vous avez annulé cette offre\\. Des frais de (.+?) \\((.+?)\\) ont été retenus sur votre caution et versés au notaire en dédommagement\\. Si vous changez d’avis, choisissez une nouvelle date au carnet\\.$",
+    "pattern": "^Offre annulée\\. ",
     "flags": "",
-    "replacement": "You cancelled this offer. A fee of $1 ($2) was kept from your deposit and paid to the notary as compensation. If you change your mind, pick a new date on the carnet."
+    "replacement": "Offer cancelled. "
   },
   {
+    "pattern": "^Vous avez annulé cette offre\\. ",
+    "flags": "",
+    "replacement": "You cancelled this offer. "
+  },
+  {
+    "pattern": " Si vous changez d’avis, choisissez une nouvelle date au carnet\\.",
+    "flags": "",
+    "replacement": " If you change your mind, pick a new date on the carnet."
+  },
+  {
+    "pattern": "^Annuler maintenant retient des frais de (.+?) \\((.+?) du montant convenu\\) sur la somme réservée pour cet acte\\.",
+    "flags": "",
+    "replacement": "Cancelling now keeps a fee of $1 ($2 of the agreed amount) from the amount held for this act."
+  },
+  {
+    "pattern": "^Aucune somme n’est réservée pour cet acte\\. Annuler maintenant porte des frais de (.+?) \\((.+?) du montant convenu\\) à la carte que vous avez enregistrée\\.",
+    "flags": "",
+    "replacement": "No amount is being held for this act. Cancelling now charges a fee of $1 ($2 of the agreed amount) to the card you saved."
+  },
+  {
+    "pattern": " Ils sont versés au notaire en dédommagement de la journée réservée\\.",
+    "flags": "",
+    "replacement": " It is transferred to the notary as compensation for the reserved day."
+  },
+  {
+    "pattern": "^La carte du client est validée par sa banque dès la publication, et la somme y est réservée 1 jour avant la signature\\.$",
+    "flags": "",
+    "replacement": "The client’s card is validated by their bank as soon as the offer is posted, and the amount is held on it 1 day before the signing."
+  },
+  {
+    "pattern": "^La carte du client est validée par sa banque dès la publication, et la somme y est réservée ([0-9]+) jours avant la signature\\.$",
+    "flags": "",
+    "replacement": "The client’s card is validated by their bank as soon as the offer is posted, and the amount is held on it $1 days before the signing."
+  },
+  {
+    "pattern": " Le reste vous est libéré immédiatement\\.",
+    "flags": "",
+    "replacement": " The rest is released to you immediately."
+  },
+  {
+    "_note": "Restauré le 2026-09-04 : la fusion de l'ADR 0035 avait remplacé en bloc les motifs d'annulation et emporté celui-ci au passage, alors qu'il n'a rien à voir avec la caution. Sans lui, l'étiquette du badge de messages non lus ne se traduit plus — un lecteur d'écran anglophone entendait du français.",
     "pattern": "^([0-9]+) nouveaux? messages?$",
     "flags": "",
     "replacement": "$1 new message(s)"

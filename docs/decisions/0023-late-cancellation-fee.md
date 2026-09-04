@@ -110,3 +110,18 @@ jamais une part de ce qui revient au notaire).
   transferId }` ; l'audit `annulation_frais` porte `transferId` et `verse`.
 - Le désistement du notaire reste gratuit, mais il est **compté à son dossier**
   (`releasesCount`) et l'opérateur en est **toujours** prévenu.
+
+## Amendé par l'ADR 0035 (2026-09-03)
+
+La décision 3 disait : « Le mécanisme d'encaissement est la capture partielle de
+la caution déjà posée. » Depuis l'ADR 0035, la caution n'est plus posée à la
+publication mais deux jours avant la signature — le palier 4-14 jours de ce
+barème n'a donc plus, le plus souvent, de caution à capturer.
+
+Il y a désormais **deux** mécanismes, choisis sur un seul critère (existe-t-il
+une caution vivante ?) : la capture partielle quand elle existe, sinon un
+prélèvement hors session sur la carte que le client a enregistrée. Même clé
+d'idempotence (`cancelfee:<bidId>`) : une offre paie ses frais par l'un ou
+l'autre, jamais par les deux. Le barème, sa résolution, la divulgation avant
+confirmation et le versement entier au notaire (amendement de l'ADR 0033) sont
+inchangés.

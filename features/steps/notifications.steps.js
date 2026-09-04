@@ -26,6 +26,10 @@ const TEMPLATE_SUBJECT = {
   'nouvelle demande': 'Nouvelle demande',
   "annulation d'une demande retenue": 'Annulation d’une demande retenue',
   'acte payé': 'Acte payé',
+  // ADR 0035 — la caution qui tient jusqu'à la signature
+  'carte enregistrée': 'Carte enregistrée',
+  'carte refusée': 'Carte refusée',
+  'caution non posée': 'Caution non posée',
   // Live support messaging (ADR 0026)
   'messagerie : nouvelle question': 'Messagerie : nouvelle question',
   'messagerie : réponse de Nota': 'Nota vous a répondu',

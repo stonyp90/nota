@@ -106,6 +106,11 @@ paths:
             ~400 days, `sub` = bid id) is their only key to the `/client/*`
             routes — it is returned ONCE here and never echoed again. With
             billing on, `paymentStatus` (pending) and `checkoutUrl` are added.
+            `checkoutUrl` opens a hosted Stripe page whose shape depends on the
+            signing date (ADR 0035): a PAYMENT session (manual capture) when
+            the date is already within `CAUTION_LEAD_DAYS`, otherwise a SETUP
+            session that only registers the card — the caution is then placed
+            by the daily worker, close enough that it survives to the signing.
           content:
             application/json:
               schema:
@@ -376,6 +381,10 @@ paths:
         `account.application.deauthorized` restricts them, and
         `checkout.session.completed` / `checkout.session.expired` /
         `payment_intent.canceled` bind or void a client's offer authorization.
+        Since ADR 0035 a `checkout.session.completed` carrying no PaymentIntent
+        (setup mode) and `setup_intent.succeeded` REGISTER the client's card
+        instead — the offer goes live with no money held, and the caution is
+        placed by the daily worker two days before the signing.
         Processing is idempotent by event id, so a redelivered event is a no-op.
         Not called by browsers.
       parameters:
@@ -2051,6 +2060,92 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /client/bid/carte:
+    post:
+      operationId: registerClientCard
+      summary: Register another card on an existing offer (ADR 0035).
+      description: >-
+        Guarded by the bid's own CLIENT token. Opens a fresh hosted Stripe
+        Checkout session for THIS offer, so a client whose card was declined
+        when the caution was placed can hand over another one. Without it the
+        refusal notice and the daily retry would be theatre: retrying the same
+        declined card gives the same decline.
+
+
+        Which surface opens follows the same rule as publication
+        (`domain.cautionDue`): a signing still beyond the caution window opens
+        a `setup` session (the card is validated and saved, nothing is held);
+        a signing already inside it opens a manual-capture `payment` session,
+        so the amount is reserved immediately. `mode` says which. The amount is
+        the offer's total TODAY — an accepted counter-offer included.
+
+
+        The session is idempotent per bid and per day: two clicks the same
+        morning reopen the same session, the next day opens a genuinely new
+        one.
+      security:
+        - clientToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, dateISO]
+              properties:
+                id:
+                  type: string
+                dateISO:
+                  type: string
+                  format: date
+      responses:
+        "200":
+          description: The hosted Checkout session to send the client to.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [checkoutUrl]
+                properties:
+                  checkoutUrl:
+                    type: string
+                    format: uri
+                  mode:
+                    type: string
+                    enum: [enregistrement, paiement]
+                    description: >-
+                      `enregistrement` saves the card without holding a cent;
+                      `paiement` reserves the amount right away.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: >-
+            Nothing to repair: the act is signed and settled (`acte_regle`), or
+            the caution is already placed on the client's card
+            (`caution_posee`) — opening a second session would hold the amount
+            twice.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "410":
+          description: The offer was cancelled (`annulee`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: >-
+            `paiement_indisponible` — billing is not configured, or Stripe is
+            unreachable. Nothing was charged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /client/welcome:
     post:
       operationId: clientWelcome
@@ -2913,6 +3008,8 @@ components:
         complexity:
           type: object
           additionalProperties: true
+        caution:
+          $ref: "#/components/schemas/CautionState"
         proposition:
           description: This notary's latest non-superseded proposition, or null.
           oneOf:
@@ -3054,6 +3151,39 @@ components:
           description: The item ids a document request may name for this client.
           items:
             type: string
+        caution:
+          $ref: "#/components/schemas/CautionState"
+    CautionState:
+      description: >-
+        ADR 0035 — the state of the payment guarantee on a demand, told to the
+        notary BEFORE they retain and while they hold it. Null when billing is
+        off (demo, tests).
+      oneOf:
+        - type: "null"
+        - type: object
+          required: [etat, poseeLe]
+          properties:
+            etat:
+              type: string
+              enum: [posee, enregistree, refusee, expiree, aucune]
+              description: >-
+                `posee` — the amount is held, still ALIVE
+                (`domain.cautionVivante`) and capturable at the signing;
+                `enregistree` — the client's card is validated and the hold is
+                placed on `poseeLe`; `refusee` — the bank declined the hold
+                (both parties were told, retried daily); `expiree` — a hold was
+                placed but has outlived a card authorization's ~7-day life and
+                no registered card allows a new one (offers predating ADR 0035:
+                settlement falls back on the ADR 0029 receivable); `aucune` —
+                no card.
+            poseeLe:
+              type: [string, "null"]
+              format: date
+              description: >-
+                A DATE, and it never lies about its tense: on `posee` /
+                `expiree` it is the day the hold WAS placed (`authorizedAt`); on
+                `enregistree` it is the day it WILL be placed — today when the
+                signing already entered the window, null when the date is past.
     AcceptedBid:
       type: object
       description: >-
@@ -3279,6 +3409,28 @@ components:
             joursAvant:
               type: integer
               description: Civil days left before the signing at cancel time.
+            mecanisme:
+              type: string
+              enum: [capture, hors_session]
+              description: >-
+                ADR 0035 — HOW the fee was taken, because the client does not
+                read the same sentence in both cases: `capture` kept it from a
+                caution already held (the rest is released); `hors_session`
+                charged it fresh on the card the client registered, since no
+                amount was being held at all.
+            percu:
+              type: boolean
+              description: >-
+                Whether the money actually moved. `false` means the card
+                DECLINED the fee: nothing was charged, nothing is owed to the
+                notary, and the cancellation is recorded rather than silently
+                free (an `annulation_frais` audit entry carries the reason).
+            refus:
+              type: [object, "null"]
+              description: Present only when `percu` is false — the decline code.
+              properties:
+                code:
+                  type: string
             chargeId:
               type: [string, "null"]
     Error:
@@ -3500,7 +3652,7 @@ components:
       description: >-
         What retaining commits the notary to (ADR 0033), as data the console
         lays out BEFORE they confirm — never a share of their honoraires.
-      required: [paiement, tarifNota, annulation, desistement]
+      required: [paiement, tarifNota, annulation, desistement, caution]
       properties:
         paiement:
           type: string
@@ -3536,6 +3688,23 @@ components:
             beneficiaire:
               type: string
               const: notaire
+        caution:
+          type: object
+          description: >-
+            ADR 0035 — what guarantees the payment: the client's card is
+            validated by their bank before the demand is ever visible, and the
+            amount is held `jours` days before the signing, late enough for the
+            hold to survive to the act. Each demand also carries its own
+            `caution.etat`.
+          required: [jours, carteValidee]
+          properties:
+            jours:
+              type: integer
+              minimum: 0
+              description: domain.CAUTION_LEAD_DAYS — days before the signing.
+            carteValidee:
+              type: boolean
+              description: False when billing is off (demo, tests).
         desistement:
           type: object
           description: Withdrawing is free but counted on the notary's record (releasesCount).

@@ -168,6 +168,8 @@ porte de connexion de l'Espace notaire, hors du film.
 - Décisions ouvertes, hors périmètre : reverser la récompense de parrainage
   d'une offre annulée (registre EARN write-once, ADR 0011) ; un acte retenu via
   proposition acceptée (`a_reautoriser`) s'annule encore sans frais (aucune
-  caution vivante) ; le recouvrement des créances (ADR 0029) ; un lien magique
+  caution vivante) — **fermé par l'ADR 0035 §3 bis : la carte enregistrée
+  survit à la renégociation, donc les frais sont prélevés hors session et versés
+  au notaire** ; le recouvrement des créances (ADR 0029) ; un lien magique
   client complet (le lien par courriel couvre le besoin réel : revenir à SON
   acte depuis n'importe quel appareil).

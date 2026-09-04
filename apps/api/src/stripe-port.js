@@ -17,10 +17,15 @@ const STRIPE_LOCALE = process.env.NOTA_STRIPE_LOCALE || 'fr-CA';
  * account for free. The client's money moves in the « separate charges and
  * transfers » shape, and the DIRECTION matters more than the mechanics:
  *
- *   1. At publication, the client's card is authorized by a Checkout session on
+ *   1. At publication, the client's card is REGISTERED by a Checkout session on
  *      NOTA'S OWN account — no connected account, no `on_behalf_of`, no
- *      `transfer_data`. The client pays the platform.
- *   2. At signing, `captureAndTransfer` captures on the platform, keeps Nota's
+ *      `transfer_data`. The client pays the platform. `createOfferSetup` saves
+ *      the card without holding a cent; `createOfferAuthorization` holds it
+ *      right away when the signing is already inside the caution window.
+ *   2. At J-CAUTION_LEAD_DAYS, `placeOfferAuthorization` posts the hold off
+ *      session on that saved card — late enough that its ~7-day life reaches
+ *      the signing (ADR 0035).
+ *   3. At signing, `captureAndTransfer` captures on the platform, keeps Nota's
  *      share and TRANSFERS THE NET to the notary's connected account.
  *
  * Nota's share therefore never transits the notary's account. (Until 2026-09-01
@@ -40,6 +45,44 @@ function createStripeAdapter({ secretKey, webhookSecret, stripe: injected } = {}
   // this adapter sends to Stripe can be asserted without a network or a key.
   // Everything above this line is the contract; everything below is plumbing.
   const stripe = injected || new (require('stripe'))(secretKey);
+
+  // A PaymentIntent's charge, expanded or not — the id every transfer sources.
+  const latestChargeId = (intent) =>
+    (intent &&
+      (typeof intent.latest_charge === 'string' ? intent.latest_charge : intent.latest_charge && intent.latest_charge.id)) ||
+    null;
+
+  /**
+   * ADR 0033 — hand a cancellation fee to the notary WHOLE: no application fee,
+   * nothing kept on the platform. Shared by the two ways a fee can be collected
+   * (partial capture of a live caution, or an off-session charge on the
+   * registered card) so both obey the same rule and the same idempotency key.
+   *
+   * A failure here means the money IS on the platform: it rethrows with
+   * `captured: true` and the charge id, so the caller records the debt and
+   * never re-collects.
+   */
+  async function transferFeeWhole({ amountCents, bidId, connectAccountId, chargeId, paymentIntentId }) {
+    try {
+      return await stripe.transfers.create(
+        {
+          amount: amountCents,
+          currency: 'cad',
+          destination: connectAccountId,
+          source_transaction: chargeId || undefined,
+          transfer_group: bidId ? `bid:${bidId}` : undefined,
+          metadata: { bidId: bidId || '', motif: 'annulation' },
+        },
+        bidId ? { idempotencyKey: `cancelfee-transfer:${bidId}` } : undefined
+      );
+    } catch (err) {
+      const e = err instanceof Error ? err : new Error(String(err));
+      e.captured = true;
+      e.chargeId = chargeId || null;
+      e.paymentIntentId = paymentIntentId || null;
+      throw e;
+    }
+  }
 
   return {
     /**
@@ -97,7 +140,7 @@ function createStripeAdapter({ secretKey, webhookSecret, stripe: injected } = {}
      * bid id rides on the session + intent metadata so the webhook can bind the
      * resulting PaymentIntent back to the bid. Idempotent per bid.
      */
-    async createOfferAuthorization({ amountCents, currency, bidId, bidDate, description, customerEmail, successUrl, cancelUrl }) {
+    async createOfferAuthorization({ amountCents, currency, bidId, bidDate, description, customerEmail, successUrl, cancelUrl, cle }) {
       const meta = { bidId: bidId || '', bidDate: bidDate || '' };
       const session = await stripe.checkout.sessions.create(
         {
@@ -125,9 +168,150 @@ function createStripeAdapter({ secretKey, webhookSecret, stripe: injected } = {}
           success_url: successUrl,
           cancel_url: cancelUrl,
         },
-        bidId ? { idempotencyKey: `auth:${bidId}` } : undefined
+        bidId ? { idempotencyKey: `auth:${bidId}${cle ? ':' + cle : ''}` } : undefined
       );
       return { sessionId: session.id, url: session.url };
+    },
+
+    /**
+     * ADR 0035, step 0 — REGISTER the client's card without holding a cent.
+     * A hosted Checkout Session in `setup` mode: Stripe validates the card with
+     * the issuer, saves it on a Customer, and hands back a SetupIntent. Nothing
+     * is reserved, so nothing can rot: the reservation itself is placed later,
+     * at J-CAUTION_LEAD_DAYS, by `placeOfferAuthorization` below.
+     *
+     * `amountCents` is NOT charged here — it rides on the session metadata and
+     * the SetupIntent description so the client reads, on Stripe's own page,
+     * the amount their card will carry (art. 68 C.déont. : le prix annoncé est
+     * le prix facturé). The bid id rides on both metadata blocks so the
+     * `setup_intent.succeeded` webhook binds the saved card back to the bid.
+     * Idempotent per bid via setup:<bidId>. `cle` suffixes that key when the
+     * client comes back to register ANOTHER card (their first was declined):
+     * without it Stripe would replay the session already completed with the bad
+     * card, and the recovery would be a dead link.
+     */
+    async createOfferSetup({ amountCents, currency, bidId, bidDate, description, customerEmail, successUrl, cancelUrl, cle }) {
+      const meta = { bidId: bidId || '', bidDate: bidDate || '', amountCents: String(amountCents == null ? '' : amountCents) };
+      const session = await stripe.checkout.sessions.create(
+        {
+          mode: 'setup',
+          // Same reason as the payment session: 'auto' would drop an English
+          // page into the middle of an all-French flow.
+          locale: STRIPE_LOCALE,
+          currency: currency || 'cad',
+          setup_intent_data: {
+            description: description || 'Acte notarié — Nota',
+            metadata: meta,
+          },
+          customer_email: customerEmail || undefined,
+          metadata: meta,
+          success_url: successUrl,
+          cancel_url: cancelUrl,
+        },
+        bidId ? { idempotencyKey: `setup:${bidId}${cle ? ':' + cle : ''}` } : undefined
+      );
+      return { sessionId: session.id, url: session.url };
+    },
+
+    /**
+     * ADR 0035 — READ BACK a SetupIntent: which customer, and which CARD.
+     *
+     * `checkout.session.completed` in setup mode names the SetupIntent but not
+     * the payment method, and `setup_intent.succeeded` — which does name it —
+     * may simply not be subscribed on the webhook endpoint. Rather than let a
+     * checkbox in a third-party console decide whether the product works, the
+     * billing layer follows the id it already holds to the card itself.
+     */
+    async retrieveSetupIntent({ setupIntentId }) {
+      const si = await stripe.setupIntents.retrieve(setupIntentId);
+      return {
+        id: (si && si.id) || setupIntentId,
+        status: (si && si.status) || null,
+        customerId: (si && (typeof si.customer === 'string' ? si.customer : si.customer && si.customer.id)) || null,
+        paymentMethodId:
+          (si && (typeof si.payment_method === 'string' ? si.payment_method : si.payment_method && si.payment_method.id)) || null,
+      };
+    },
+
+    /**
+     * ADR 0035 — the LAST resort behind `retrieveSetupIntent`: the cards saved
+     * on a Stripe Customer. A customer created by Checkout for one offer holds
+     * exactly one, so the caller only trusts a single answer — it must never
+     * guess which of several cards the client meant.
+     */
+    async listCustomerPaymentMethods({ customerId }) {
+      const list = await stripe.paymentMethods.list({ customer: customerId, type: 'card', limit: 2 });
+      return ((list && list.data) || []).map((pm) => (typeof pm === 'string' ? pm : pm && pm.id)).filter(Boolean);
+    },
+
+    /**
+     * ADR 0035, step 1 — PLACE the caution on a card registered earlier, OFF
+     * SESSION (the client is not at their browser). A manual-capture
+     * PaymentIntent confirmed on the saved payment method: exactly the hold the
+     * old flow posted at publication, only created at a moment when its ~7-day
+     * life reaches the signing.
+     *
+     * `off_session: true` tells the issuer this is a merchant-initiated charge
+     * on a mandate the client already gave; a card that needs authentication or
+     * has no funds THROWS (`err.code` carries Stripe's decline code), and the
+     * caller turns that into a notice to both parties — never an exception that
+     * kills the daily run.
+     *
+     * The idempotency key carries the DAY: two runs on the same day are one
+     * attempt, while tomorrow's retry after a decline is a genuinely new one
+     * (Stripe replays a key's original response, decline included).
+     */
+    async placeOfferAuthorization({ customerId, paymentMethodId, amountCents, currency, bidId, bidDate, description, jour }) {
+      const intent = await stripe.paymentIntents.create(
+        {
+          amount: amountCents,
+          currency: currency || 'cad',
+          customer: customerId,
+          payment_method: paymentMethodId,
+          capture_method: 'manual',
+          confirm: true,
+          off_session: true,
+          description: description || 'Acte notarié — Nota',
+          metadata: { bidId: bidId || '', bidDate: bidDate || '' },
+        },
+        bidId ? { idempotencyKey: `hold:${bidId}:${jour || ''}` } : undefined
+      );
+      return { paymentIntentId: intent.id, status: intent.status };
+    },
+
+    /**
+     * ADR 0023 + 0033 + 0035 — the cancellation fee when there is NO live
+     * caution to capture from: the signing was still far enough away that the
+     * hold had not been placed yet, but the client's card is registered. The
+     * fee is charged off session on that card, then TRANSFERRED WHOLE to the
+     * notary exactly like the partial-capture path (Nota keeps nothing of it:
+     * art. 32.1 2° L.N., art. 32 C.déont.).
+     *
+     * Without this door the 4-14 day band of the barème would silently become
+     * free, which is the kind of hole an ADR is supposed to close, not open.
+     * Idempotent per bid via cancelfee:<bidId> — the SAME key as the partial
+     * capture, because a bid is charged its fee once by one mechanism or the
+     * other, never by both.
+     */
+    async chargeCancellationFeeOffSession({ customerId, paymentMethodId, amountCents, bidId, connectAccountId }) {
+      const intent = await stripe.paymentIntents.create(
+        {
+          amount: amountCents,
+          currency: 'cad',
+          customer: customerId,
+          payment_method: paymentMethodId,
+          confirm: true,
+          off_session: true,
+          description: 'Frais d’annulation — Nota',
+          transfer_group: bidId ? `bid:${bidId}` : undefined,
+          metadata: { bidId: bidId || '', motif: 'annulation' },
+        },
+        bidId ? { idempotencyKey: `cancelfee:${bidId}` } : undefined
+      );
+      const chargeId = latestChargeId(intent);
+      if (!connectAccountId) return { paymentIntentId: intent.id, chargeId, transferId: null };
+      const transfer = await transferFeeWhole({ amountCents, bidId, connectAccountId, chargeId, paymentIntentId: intent.id });
+      return { paymentIntentId: intent.id, chargeId, transferId: transfer.id };
     },
 
     /**
@@ -195,29 +379,10 @@ function createStripeAdapter({ secretKey, webhookSecret, stripe: injected } = {}
         { amount_to_capture: amountCents },
         bidId ? { idempotencyKey: `cancelfee:${bidId}` } : undefined
       );
-      const chargeId = captured && (typeof captured.latest_charge === 'string' ? captured.latest_charge : captured.latest_charge && captured.latest_charge.id);
-      if (!connectAccountId) return { paymentIntentId, chargeId: chargeId || null, transferId: null };
-      let transfer;
-      try {
-        transfer = await stripe.transfers.create(
-          {
-            amount: amountCents,
-            currency: 'cad',
-            destination: connectAccountId,
-            source_transaction: chargeId || undefined,
-            transfer_group: bidId ? `bid:${bidId}` : undefined,
-            metadata: { bidId: bidId || '', motif: 'annulation' },
-          },
-          bidId ? { idempotencyKey: `cancelfee-transfer:${bidId}` } : undefined
-        );
-      } catch (err) {
-        const e = err instanceof Error ? err : new Error(String(err));
-        e.captured = true;
-        e.chargeId = chargeId || null;
-        e.paymentIntentId = paymentIntentId;
-        throw e;
-      }
-      return { paymentIntentId, chargeId: chargeId || null, transferId: transfer.id };
+      const chargeId = latestChargeId(captured);
+      if (!connectAccountId) return { paymentIntentId, chargeId, transferId: null };
+      const transfer = await transferFeeWhole({ amountCents, bidId, connectAccountId, chargeId, paymentIntentId });
+      return { paymentIntentId, chargeId, transferId: transfer.id };
     },
 
     /**

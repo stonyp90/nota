@@ -36,16 +36,16 @@ const money = D.money(840);
 //  a French fragment the English must NOT carry]
 const LIVE = [
   ['cancel dialog — fee disclosure (openCancelDialog)',
-    'Annuler maintenant retient des frais de ' + money + ' (' + pct + ' du montant convenu) sur votre caution. Ils sont versés au notaire en dédommagement de la journée réservée. Le reste vous est libéré immédiatement.',
-    /paid to the notary/, /versés|caution/],
+    'Annuler maintenant retient des frais de ' + money + ' (' + pct + ' du montant convenu) sur la somme réservée pour cet acte. Ils sont versés au notaire en dédommagement de la journée réservée. Le reste vous est libéré immédiatement.',
+    /(paid|transferred) to the notary/, /versés|caution/],
   ['cancel toast (confirmCancelOffer)',
-    'Offre annulée. Des frais de ' + money + ' (' + pct + ') ont été retenus sur votre caution et versés au notaire en dédommagement.',
+    'Offre annulée. Des frais de ' + money + ' (' + pct + ') ont été retenus sur la somme réservée pour cet acte et versés au notaire en dédommagement.',
     /Offer cancelled\. A fee of \$840 \(30%\)/, /frais|caution/],
   ['cancel bell entry body (confirmCancelOffer)',
-    'Des frais de ' + money + ' (' + pct + ') ont été retenus sur votre caution et versés au notaire en dédommagement.',
+    'Des frais de ' + money + ' (' + pct + ') ont été retenus sur la somme réservée pour cet acte et versés au notaire en dédommagement.',
     /^A fee of \$840 \(30%\)/, /frais|caution/],
   ['« Prochaine étape » receipt (offerNextStep)',
-    'Vous avez annulé cette offre. Des frais de ' + money + ' (' + pct + ') ont été retenus sur votre caution et versés au notaire en dédommagement. Si vous changez d’avis, choisissez une nouvelle date au carnet.',
+    'Vous avez annulé cette offre. Des frais de ' + money + ' (' + pct + ') ont été retenus sur la somme réservée pour cet acte et versés au notaire en dédommagement. Si vous changez d’avis, choisissez une nouvelle date au carnet.',
     /You cancelled this offer\. A fee of \$840 \(30%\)/, /frais|caution/],
   ['unread badge aria-label (unreadLabel) — plural',
     '3 nouveaux messages', /3 new message/, /nouveaux/],
@@ -68,10 +68,12 @@ for (const [name, fr, mustEn, mustNotFr] of LIVE) {
 test('the cancellation exemplars mirror the fragments app.js composes', () => {
   for (const frag of [
     'Annuler maintenant retient des frais de ',
-    ' du montant convenu) sur votre caution. Ils sont versés au notaire en dédommagement de la journée réservée. Le reste vous est libéré immédiatement.',
-    ') ont été retenus sur votre caution et versés au notaire en dédommagement.',
-    'Vous avez annulé cette offre. Des frais de ',
-    ') ont été retenus sur votre caution et versés au notaire en dédommagement. Si vous changez d’avis, choisissez une nouvelle date au carnet.',
+    ' du montant convenu) sur la somme réservée pour cet acte.',
+    ' Ils sont versés au notaire en dédommagement de la journée réservée.',
+    ' Le reste vous est libéré immédiatement.',
+    ') ont été retenus sur la somme réservée pour cet acte et versés au notaire en dédommagement.',
+    'Vous avez annulé cette offre. ',
+    ' Si vous changez d’avis, choisissez une nouvelle date au carnet.',
     "'Offre annulée. ' + keptLine",
   ]) {
     assert.ok(APP_SRC.includes(frag), 'app.js no longer composes: ' + frag);

@@ -35,10 +35,14 @@ const PRICING = { valeur_pret: 250000, succession: 'non', approbation_bancaire: 
 // the TRANSFER fail after a successful capture — the money is on the platform
 // and must be recorded as owed, never re-captured.
 function fakeStripe({ failFeeCapture = false, failFeeTransfer = false } = {}) {
-  const calls = { authorizations: [], transfers: [], cancels: [], feeCaptures: [], feeTransfers: [] };
+  const calls = { authorizations: [], setups: [], transfers: [], cancels: [], feeCaptures: [], feeTransfers: [] };
   return {
     calls,
     async createOfferAuthorization(args) { calls.authorizations.push(args); return { sessionId: 'cs_' + args.bidId, url: 'https://checkout.stripe.test/pay/' + args.bidId }; },
+    // ADR 0035 — la publication d'une date lointaine ENREGISTRE la carte ; ces
+    // scénarios-ci posent ensuite la caution à la main (repo.authorizeBid),
+    // pour rester sur le mécanisme qu'ils décrivent : la capture partielle.
+    async createOfferSetup(args) { calls.setups.push(args); return { sessionId: 'cs_setup_' + args.bidId, url: 'https://checkout.stripe.test/setup/' + args.bidId }; },
     async captureAndTransfer(args) { calls.transfers.push(args); return { paymentIntentId: args.paymentIntentId, chargeId: 'ch_' + args.bidId, transferId: 'tr_' + args.bidId, applicationFeeCents: args.applicationFeeCents, netCents: args.amountCents - args.applicationFeeCents }; },
     async cancelOfferAuthorization(args) { calls.cancels.push(args); return { id: args.paymentIntentId, status: 'canceled' }; },
     async captureCancellationFee(args) {
@@ -124,7 +128,7 @@ test('last-minute cancel of a retained act keeps 30% by partial capture and neve
   assert.equal(res.statusCode, 200, res.body);
   const out = parse(res).bid;
   assert.equal(out.status, domain.STATUS.ANNULEE);
-  assert.deepEqual(out.annulation, { taux: 0.3, frais: 840, joursAvant: 3, chargeId: 'chfee_' + bid.id, dedommagement: DUE });
+  assert.deepEqual(out.annulation, { taux: 0.3, frais: 840, joursAvant: 3, chargeId: 'chfee_' + bid.id, mecanisme: 'capture', percu: true, dedommagement: DUE });
 
   assert.equal(t.stripe.calls.feeCaptures.length, 1);
   assert.deepEqual(t.stripe.calls.feeCaptures[0], { paymentIntentId: 'pi_' + bid.id, amountCents: 84000, bidId: bid.id });
@@ -227,7 +231,7 @@ test('the admin-stored barème overrides the defaults, and an empty barème make
   const a = await seedAuthorized(t, { jours: 5, montant: 2000 });
   await retain(t, a.bid, 'one@etude.ca');
   const out = parse(await cancel(t, a.clientToken, a.bid)).bid;
-  assert.deepEqual(out.annulation, { taux: 0.5, frais: 1000, joursAvant: 5, chargeId: 'chfee_' + a.bid.id, dedommagement: DUE });
+  assert.deepEqual(out.annulation, { taux: 0.5, frais: 1000, joursAvant: 5, chargeId: 'chfee_' + a.bid.id, mecanisme: 'capture', percu: true, dedommagement: DUE });
 
   const t2 = setup();
   await t2.repo.putCancellationConfig({ paliers: [] }, TODAY);
@@ -239,7 +243,7 @@ test('the admin-stored barème overrides the defaults, and an empty barème make
   assert.equal(t2.stripe.calls.cancels.length, 1);
 });
 
-test('if the fee capture fails the client pays nothing and the hold is released whole', async () => {
+test('if the fee capture fails the client pays nothing, the hold is released whole — et l’échec est INSCRIT', async () => {
   const t = setup({ failFeeCapture: true });
   const { bid, clientToken } = await seedAuthorized(t, { jours: 0 });
   await retain(t, bid);
@@ -247,10 +251,22 @@ test('if the fee capture fails the client pays nothing and the hold is released 
   assert.equal(res.statusCode, 200, res.body);
   const out = parse(res).bid;
   assert.equal(out.status, domain.STATUS.ANNULEE);
-  assert.equal(out.annulation, null);
+  // ADR 0035 — une annulation dont les frais ont été REFUSÉS n'est pas une
+  // annulation gratuite : elle est gratuite POUR LE CLIENT (rien n'est
+  // débité), mais le fait se compte. Sans cela, le cas de bord le plus
+  // probable du mécanisme ne laissait aucune trace nulle part.
+  assert.equal(out.annulation.percu, false, 'rien n’a été prélevé, et cela se dit');
+  assert.equal(out.annulation.frais, 840, 'le barème s’appliquait bel et bien');
+  assert.equal(out.annulation.chargeId, null, 'aucune charge : il n’y a rien à nommer');
+  assert.equal(out.annulation.dedommagement.verse, false);
   assert.deepEqual(t.stripe.calls.cancels.map((c) => c.bidId), [bid.id]);
-  // Nothing was captured, so nothing is owed to anyone.
+  // Nothing was captured, so nothing is owed to anyone: Nota n'a rien encaissé,
+  // elle n'inscrit donc AUCUNE dette envers le notaire.
   assert.equal((await t.repo.getNotary(notaryIdForEmail('me@etude.ca'))).dedommagementCentsDue, undefined);
+  // …et la piste d'audit le compte, avec son motif.
+  const audit = await auditOf(t, bid.id);
+  assert.equal(audit.meta.percu, false);
+  assert.equal(audit.meta.mecanisme, 'capture');
 });
 
 test('GET /client/bid previews the fee on a retained offer so the client sees it BEFORE confirming', async () => {
@@ -289,6 +305,7 @@ test('ADR 0033: the fee is TRANSFERRED whole to a charge-ready notary — verse,
   const out = parse(res).bid;
   assert.deepEqual(out.annulation, {
     taux: 0.3, frais: 840, joursAvant: 3, chargeId: 'chfee_' + bid.id,
+    mecanisme: 'capture', percu: true,
     dedommagement: { notaire: true, verse: true, transferId: 'trfee_' + bid.id },
   });
 
@@ -344,7 +361,7 @@ test('ADR 0033: a transfer that fails AFTER the capture never loses the money �
   const out = parse(res).bid;
   assert.equal(out.status, domain.STATUS.ANNULEE);
   // The capture happened: the fee is recorded, and it is owed.
-  assert.deepEqual(out.annulation, { taux: 0.3, frais: 840, joursAvant: 3, chargeId: 'chfee_' + bid.id, dedommagement: DUE });
+  assert.deepEqual(out.annulation, { taux: 0.3, frais: 840, joursAvant: 3, chargeId: 'chfee_' + bid.id, mecanisme: 'capture', percu: true, dedommagement: DUE });
   assert.equal((await t.repo.getNotary(id)).dedommagementCentsDue, 84000);
   assert.equal(t.stripe.calls.feeCaptures.length, 1);
   assert.equal(t.stripe.calls.feeTransfers.length, 0);
@@ -360,13 +377,13 @@ test('billing.chargeCancellationFee returns { ok, chargeId, transferId, verse } 
   const paid = notaryIdForEmail('ok@etude.ca');
   await t.repo.putNotary({ id: paid, email: 'ok@etude.ca', status: 'active', chargesEnabled: true, connectAccountId: 'acct_ok' });
   const r1 = await t.billing.chargeCancellationFee({ paymentIntentId: 'pi_1', bidId: 'b1', amountCents: 5000, notaryId: paid });
-  assert.deepEqual(r1, { ok: true, chargeId: 'chfee_b1', transferId: 'trfee_b1', verse: true });
+  assert.deepEqual(r1, { ok: true, mecanisme: 'capture', chargeId: 'chfee_b1', transferId: 'trfee_b1', verse: true });
 
   // ACTIVE but charges disabled (Stripe pulled the capability): owed.
   const off = notaryIdForEmail('off@etude.ca');
   await t.repo.putNotary({ id: off, email: 'off@etude.ca', status: 'active', chargesEnabled: false, connectAccountId: 'acct_off' });
   const r2 = await t.billing.chargeCancellationFee({ paymentIntentId: 'pi_2', bidId: 'b2', amountCents: 5000, notaryId: off });
-  assert.deepEqual(r2, { ok: true, chargeId: 'chfee_b2', transferId: null, verse: false });
+  assert.deepEqual(r2, { ok: true, mecanisme: 'capture', chargeId: 'chfee_b2', transferId: null, verse: false });
   assert.equal((await t.repo.getNotary(off)).dedommagementCentsDue, 5000);
   assert.equal(t.stripe.calls.feeCaptures[1].connectAccountId, undefined, 'no transfer is requested for a notary who cannot receive');
 
@@ -378,8 +395,8 @@ test('billing.chargeCancellationFee returns { ok, chargeId, transferId, verse } 
   assert.equal((await t.repo.getNotary(onb)).dedommagementCentsDue, 700);
 
   // Guards: nothing to capture → { ok: false }, nothing recorded.
-  assert.deepEqual(await t.billing.chargeCancellationFee({ paymentIntentId: null, bidId: 'b4', amountCents: 700, notaryId: paid }), { ok: false });
-  assert.deepEqual(await t.billing.chargeCancellationFee({ paymentIntentId: 'pi_5', bidId: 'b5', amountCents: 0, notaryId: paid }), { ok: false });
+  assert.deepEqual(await t.billing.chargeCancellationFee({ paymentIntentId: null, bidId: 'b4', amountCents: 700, notaryId: paid }), { ok: false, code: 'aucun_moyen' });
+  assert.deepEqual(await t.billing.chargeCancellationFee({ paymentIntentId: 'pi_5', bidId: 'b5', amountCents: 0, notaryId: paid }), { ok: false, code: 'montant_invalide' });
 });
 
 // --- The Stripe adapter itself: what is actually sent to Stripe --------------

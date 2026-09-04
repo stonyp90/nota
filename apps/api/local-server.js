@@ -54,6 +54,9 @@ const demoBilling = useDynamo ? null : createBilling({
     async createConnectAccount() { return { id: 'acct_demo' }; },
     async createOnboardingLink({ accountId }) { return { url: 'http://localhost:' + PORT + '/demo-onboarding/' + accountId }; },
     async createOfferAuthorization({ bidId }) { return { sessionId: 'cs_demo_' + bidId, url: 'http://localhost:' + PORT + '/demo-checkout/' + bidId }; },
+    // ADR 0035 — la carte s'enregistre à la publication, la caution se pose J-2.
+    async createOfferSetup({ bidId }) { return { sessionId: 'cs_demo_setup_' + bidId, url: 'http://localhost:' + PORT + '/demo-checkout/' + bidId }; },
+    async placeOfferAuthorization({ bidId }) { return { paymentIntentId: 'pi_demo_' + bidId, status: 'requires_capture' }; },
     async captureAndTransfer({ bidId }) { return { id: 'pi_demo_' + bidId }; },
     async chargeActCommission({ bidId }) { return { id: 'ch_demo_' + bidId }; },
     async cancelOfferAuthorization({ bidId }) { return { id: 'pi_demo_' + bidId, canceled: true }; },

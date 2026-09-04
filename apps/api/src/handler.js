@@ -3,7 +3,7 @@
 const domain = require('@nota/domain');
 const prixConfig = require('./prix-nota-config.js');
 const cote = require('./cote');
-const { createBilling } = require('./billing');
+const { createBilling, attendCaution } = require('./billing');
 const cancellationCfg = require('./cancellation-config');
 const { decodeUnsubToken } = require('./notifications');
 const { signToken, signChallengeToken, verifyToken, notaryIdForEmail, SCOPES } = require('./notary-auth');
@@ -587,12 +587,22 @@ function createApp(repo, opts = {}) {
 
   // ADR 0023 — the fee cancelling this RETAINED bid would carry today, under
   // the barème in force (the admin-stored CONFIG#ANNULATION item, else the
-  // environment defaults — resolved at every call, like the commission). Only
-  // a live authorized hold can pay a fee: without one (demo, tests, pending or
-  // voided payment) the answer is null and the cancel is free.
+  // environment defaults — resolved at every call, like the commission). It
+  // takes a card the client already consented to: a live caution to capture
+  // from, OR — since ADR 0035, before the caution is placed — the card they
+  // registered at publication. Without either (demo, tests, pending or voided
+  // payment) the answer is null and the cancel is free.
+  // Une caution CAPTURABLE est une caution VIVANTE. Une autorisation qui a
+  // dépassé sa durée de vie (domain.CAUTION_VIE_JOURS) ne garantit plus rien :
+  // la capture partielle échouerait, et la dire « posée » au notaire serait un
+  // mensonge sur de l'argent. C'est le cas des offres d'avant l'ADR 0035,
+  // autorisées à la publication pour une date lointaine.
+  const cautionCapturable = (b) => b.paymentStatus === 'authorized' && !!b.paymentIntentId
+    && domain.cautionVivante(b.authorizedAt, now());
+  const carteEnregistree = (b) => attendCaution(b, now()) && !!b.paymentCustomerId && !!b.paymentMethodId;
   async function annulationFeeFor(bid) {
     if (!billingConfigured || bid.status !== domain.STATUS.RETENUE) return null;
-    if (bid.paymentStatus !== 'authorized' || !bid.paymentIntentId) return null;
+    if (!cautionCapturable(bid) && !carteEnregistree(bid)) return null;
     const stored = typeof repo.getCancellationConfig === 'function' ? await repo.getCancellationConfig() : null;
     const paliers = stored && Array.isArray(stored.paliers) ? stored.paliers : cancellationCfg.envDefaults().paliers;
     const fee = cancellationCfg.feeFor({ montant: bid.montant, joursAvant: domain.daysBetween(now(), bid.dateISO), paliers });
@@ -688,7 +698,48 @@ function createApp(repo, opts = {}) {
       // The case-complexity signal (easy/hard) + the factors that drive it, so a
       // notary can judge whether the posted price fits the file before retaining.
       complexity: domain.complexity(b.serviceId, b.pricing || null),
+      // ADR 0035 — l'état de la garantie de paiement, DIT au notaire avant
+      // qu'il retienne : la somme est déjà réservée, elle le sera à telle date,
+      // ou la carte a été refusée. Une garantie qu'on ne peut pas voir n'en est
+      // pas une (ADR 0033 §4 : tout est exposé avant la confirmation).
+      caution: cautionEtat(b),
     };
+  }
+
+  // Le jour où la caution SERA posée, quand elle ne l'est pas encore : le
+  // domaine décide du délai, cette couche ne fait que ne pas nommer un jour
+  // déjà passé — une offre entrée dans la fenêtre est cautionnée aujourd'hui,
+  // et une date révolue ne sera plus cautionnée du tout.
+  function cautionPrevueLe(b) {
+    if (!b.dateISO) return null;
+    const today = now();
+    if (b.dateISO < today) return null;
+    const prevu = domain.addDays(b.dateISO, -domain.CAUTION_LEAD_DAYS);
+    return prevu < today ? today : prevu;
+  }
+
+  // L'état de la caution d'une offre, sans jamais nommer la carte ni le client
+  // Stripe : `posee` quand l'autorisation vit, `expiree` quand elle a dépassé
+  // sa durée de vie sans qu'aucune carte ne permette d'en reposer une,
+  // `refusee` quand la banque a dit non, `enregistree` quand la carte attend le
+  // jour de la pose, `aucune` quand la facturation est absente (démo, tests).
+  //
+  // `poseeLe` est une DATE, et elle ne ment pas sur son temps : sur une caution
+  // posée c'est le jour où elle l'a été (`authorizedAt`, le fait), sur une
+  // carte enregistrée c'est le jour où elle le sera (la prévision).
+  function cautionEtat(b) {
+    if (!billingConfigured) return null;
+    const poseLe = b.authorizedAt ? String(b.authorizedAt).slice(0, 10) : null;
+    if (cautionCapturable(b)) return { etat: 'posee', poseeLe: poseLe };
+    // Une réservation périmée que RIEN ne permet de reposer — aucune carte
+    // enregistrée — est une garantie perdue. Le notaire doit le lire, pas le
+    // deviner : c'est exactement la mauvaise nouvelle que l'ADR 0035 promet.
+    if (b.paymentStatus === 'authorized' && b.paymentIntentId && !carteEnregistree(b)) {
+      return { etat: 'expiree', poseeLe: poseLe };
+    }
+    if (b.cautionRefus) return { etat: 'refusee', poseeLe: null };
+    if (carteEnregistree(b)) return { etat: 'enregistree', poseeLe: cautionPrevueLe(b) };
+    return { etat: 'aucune', poseeLe: null };
   }
 
   // The mise en relation (ADR 0010 §4): retention puts the two parties in
@@ -2223,6 +2274,11 @@ function createApp(repo, opts = {}) {
             // pièce annoncée n'est pas une pièce reçue.
             documents: documentsOf(b).filter((d) => d.etat === 'pret').map(publicDocument),
                 viaProposition: propositionsOf(b).some((p) => p.status === PROPOSITION.ACCEPTEE && p.notaryId === notaryId),
+                // ADR 0035 — l'état de la garantie sur un acte DÉJÀ retenu :
+                // c'est ici qu'il compte le plus, puisque la journée est
+                // bloquée. `refusee` est la seule mauvaise nouvelle que le
+                // notaire doit pouvoir lire sans attendre un courriel.
+                caution: cautionEtat(b),
                 // ADR 0033: what a cancellation TODAY would hand this notary
                 // (the fee compensates them) — the same forecast the client
                 // sees on GET /client/bid; null when the cancel would be free.
@@ -2297,6 +2353,13 @@ function createApp(repo, opts = {}) {
           // information, not a promise, and the console says so.
           annulation: { paliers: await annulationBareme(), beneficiaire: 'notaire', applicable: billingConfigured },
           desistement: { gratuit: true, compte: true },
+          // ADR 0035 — ce qui garantit le paiement, dit en clair : la carte du
+          // client est validée par sa banque avant que l'offre paraisse, et la
+          // somme est réservée `jours` jours avant la signature — assez tard
+          // pour que la réservation vive jusqu'à l'acte, assez tôt pour qu'un
+          // refus laisse le temps de réagir. Chaque acte porte en plus son
+          // propre `caution.etat`.
+          caution: { jours: domain.CAUTION_LEAD_DAYS, carteValidee: billingConfigured },
         },
         // The months `retained` covers — so the console can prune the local
         // entries the server no longer returns (a client cancelled).
@@ -2697,6 +2760,11 @@ function createApp(repo, opts = {}) {
             })()
           : { complete: false },
         evaluation: bid.evaluation ? { note: bid.evaluation.note, commentaire: bid.evaluation.commentaire || null } : null,
+        // ADR 0035 — l'état de la garantie, dit au CLIENT dans les mêmes mots
+        // qu'au notaire : rien n'est réservé aujourd'hui, la somme le sera le
+        // `poseeLe`, ou sa banque a refusé. C'est ce dernier état qui commande
+        // la reprise — POST /client/bid/carte.
+        caution: cautionEtat(bid),
         // ADR 0023 — what cancelling TODAY would cost, disclosed BEFORE the
         // client confirms. Null when the cancel would be free (open offer, no
         // live hold, free window) or impossible (settled act).
@@ -2706,6 +2774,61 @@ function createApp(repo, opts = {}) {
           return fee ? { taux: fee.taux, frais: fee.frais, joursAvant: fee.joursAvant } : null;
         })(),
       });
+    }
+
+    // ADR 0035 — REPRENDRE LA MAIN SUR SA CARTE. Le courriel de refus dit au
+    // client d'en enregistrer une autre et le geste quotidien réessaie jusqu'à
+    // la signature : sans cette porte, les deux seraient du théâtre, puisque
+    // réessayer demain la MÊME carte refusée donnera le même refus.
+    //
+    // La route ne décide d'aucune mécanique d'argent : elle redemande à
+    // `authorizeOffer` la surface Stripe qui convient à la date — une session
+    // d'enregistrement si la signature est lointaine, une réservation immédiate
+    // si elle est déjà dans la fenêtre. Le montant relu est celui de l'offre
+    // AUJOURD'HUI, contre-proposition acceptée comprise.
+    if (route === '/client/bid/carte' && method === 'POST') {
+      const { payload, error } = parseBody(request);
+      if (error) return error;
+      const auth = requireClient(request, payload.id);
+      if (auth.error) return auth.error;
+      const bid = await repo.get(payload.id, payload.dateISO);
+      if (!bid) return json(404, { errors: [{ code: 'introuvable', message: 'Offre introuvable.' }] });
+      if (bid.status === domain.STATUS.ANNULEE) return goneCancelled();
+      if (!billingConfigured) {
+        return json(503, { errors: [{ code: 'paiement_indisponible', message: 'Le paiement est momentanément indisponible. Réessayez dans quelques minutes — rien n’a été débité.' }] });
+      }
+      // Un acte déjà réglé n'a plus de carte à changer : la capture est faite.
+      const done = typeof repo.getActCompletion === 'function' ? await repo.getActCompletion(bid.id) : null;
+      if (done) return json(409, { errors: [{ code: 'acte_regle', message: 'Cet acte est déjà réglé.' }] });
+      // La caution est DÉJÀ posée : ouvrir une seconde session en réserverait
+      // une deuxième sur la même carte, et le client verrait le double de son
+      // acte bloqué. Il n'y a rien à réparer ici — la garantie tient.
+      if (cautionCapturable(bid)) {
+        return json(409, { errors: [{ code: 'caution_posee', message: 'Le montant est déjà réservé sur votre carte pour cette date.' }] });
+      }
+
+      const svc = domain.serviceById(bid.serviceId);
+      const devis = await billing().quoteOffer(bid.montant);
+      let out;
+      try {
+        out = await billing().authorizeOffer({
+          bidId: bid.id,
+          bidDate: bid.dateISO,
+          amountCents: devis.totalCents,
+          email: bid.courriel || undefined,
+          description: (svc && svc.nom) || 'Acte notarié',
+          successUrl: siteUrl ? siteUrl + '/?paiement=ok' : undefined,
+          cancelUrl: siteUrl ? siteUrl + '/?paiement=annule' : undefined,
+          // Le jour borne la reprise : deux clics le même matin rouvrent la
+          // MÊME session (rien ne se duplique), et le lendemain en ouvre une
+          // vraie neuve — la cadence du geste quotidien, exactement.
+          reprise: now(),
+        });
+      } catch {
+        return json(503, { errors: [{ code: 'paiement_indisponible', message: 'Le paiement est momentanément indisponible. Réessayez dans quelques minutes — rien n’a été débité.' }] });
+      }
+      if (!out.ok) return json(422, { errors: out.errors });
+      return json(200, { checkoutUrl: out.url, mode: out.mode });
     }
 
     // The client evaluates the notary — once, after the act is signed and
@@ -2900,16 +3023,49 @@ function createApp(repo, opts = {}) {
       const fee = wasRetained ? await annulationFeeFor(bid) : null;
       if (fee) {
         const b = billing();
+        // ADR 0035 — les deux moyens de prélever voyagent ensemble : la caution
+        // vivante (capture partielle) si elle existe, sinon la carte
+        // enregistrée (hors session). billing.js choisit ; la route ne décide
+        // pas de mécanique d'argent.
         const charge = b && typeof b.chargeCancellationFee === 'function'
-          ? await b.chargeCancellationFee({ paymentIntentId: bid.paymentIntentId, bidId: bid.id, amountCents: fee.fraisCents, notaryId: bid.notaryId || null })
+          ? await b.chargeCancellationFee({
+            paymentIntentId: cautionCapturable(bid) ? bid.paymentIntentId : null,
+            customerId: bid.paymentCustomerId || null,
+            paymentMethodId: bid.paymentMethodId || null,
+            bidId: bid.id, amountCents: fee.fraisCents, notaryId: bid.notaryId || null,
+          })
           : { ok: false };
-        if (charge.ok) {
-          const dedommagement = { notaire: true, verse: !!charge.verse, transferId: charge.transferId || null };
-          annulation = { taux: fee.taux, frais: fee.frais, joursAvant: fee.joursAvant, chargeId: charge.chargeId || null, dedommagement };
+        // ADR 0035 — un prélèvement REFUSÉ n'est pas une annulation gratuite.
+        // La porte hors session vise des cartes qui viennent parfois d'être
+        // refusées deux jours plus tôt : c'est le cas de bord le plus probable
+        // du mécanisme. Il s'inscrit donc — `percu: false` — pour que le
+        // notaire l'apprenne, que le client lise la vérité, et que la piste
+        // d'audit le compte. Ce qui ne s'inscrit PAS, c'est un dédommagement
+        // au notaire : Nota n'a rien encaissé, elle ne doit rien.
+        const percu = !!charge.ok;
+        if (percu || charge.code === 'frais_refuses') {
+          const dedommagement = percu
+            ? { notaire: true, verse: !!charge.verse, transferId: charge.transferId || null }
+            : { notaire: true, verse: false, transferId: null };
+          annulation = {
+            taux: fee.taux,
+            frais: fee.frais,
+            joursAvant: fee.joursAvant,
+            chargeId: charge.chargeId || null,
+            // Quel mécanisme a porté (ou tenté) les frais : `capture` retient
+            // sur une somme DÉJÀ réservée, `hors_session` porte une charge
+            // NEUVE sur la carte enregistrée. Le client ne lit pas la même
+            // phrase dans les deux cas — il n'y a pas toujours de caution.
+            mecanisme: charge.mecanisme || (cautionCapturable(bid) ? 'capture' : 'hors_session'),
+            percu,
+            ...(percu ? {} : { refus: { code: (charge.refus && charge.refus.code) || 'frais_refuses' } }),
+            dedommagement,
+          };
           // Une capture partielle est un mouvement d'argent : elle laisse une
           // trace, comme le règlement d'un acte (ADR 0023 + piste d'audit).
           // Le virement au notaire en fait partie (ADR 0033) : `verse` dit si
-          // l'argent est parti, `transferId` le nomme.
+          // l'argent est parti, `transferId` le nomme. Un échec en laisse une
+          // aussi : `percu: false` est ce qu'un opérateur doit pouvoir compter.
           await appendAudit('annulation_frais', {
             bidId: bid.id,
             dateISO: bid.dateISO,
@@ -2918,6 +3074,9 @@ function createApp(repo, opts = {}) {
             taux: fee.taux,
             frais: fee.frais,
             joursAvant: fee.joursAvant,
+            mecanisme: annulation.mecanisme,
+            percu,
+            motif: percu ? null : ((charge.refus && charge.refus.code) || 'frais_refuses'),
             chargeId: charge.chargeId || null,
             transferId: dedommagement.transferId,
             verse: dedommagement.verse,
@@ -2935,8 +3094,10 @@ function createApp(repo, opts = {}) {
 
       // No fee captured — free window, no live hold, or a failed capture: the
       // remaining authorization is released, retained case included (a partial
-      // capture already released its remainder, so never on top of one).
-      if (!annulation && billingConfigured && bid.paymentIntentId && bid.paymentStatus !== 'void') {
+      // capture already released its remainder, so never on top of one). Un
+      // prélèvement REFUSÉ n'a rien capturé : la réservation, si elle existe,
+      // se relâche comme dans le cas gratuit.
+      if (!(annulation && annulation.percu) && billingConfigured && bid.paymentIntentId && bid.paymentStatus !== 'void') {
         const b = billing();
         if (b && typeof b.cancelAuthorization === 'function') {
           Promise.resolve(b.cancelAuthorization({ paymentIntentId: bid.paymentIntentId, bidId: bid.id })).catch(() => {});

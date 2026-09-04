@@ -55,12 +55,18 @@ const PRICING = {
 };
 
 function fakeStripe() {
-  const calls = { authorizations: [], transfers: [] };
+  const calls = { authorizations: [], setups: [], holds: [], transfers: [] };
   return {
     calls,
     async createConnectAccount(a) { return { accountId: 'acct_' + a.notaryId }; },
     async createOnboardingLink() { return { url: 'https://connect.test/' }; },
     async createOfferAuthorization(a) { calls.authorizations.push(a); return { sessionId: 'cs', url: 'https://checkout.test/' + a.bidId }; },
+    // ADR 0035 — une date lointaine ENREGISTRE la carte au lieu de réserver
+    // tout de suite ; la caution est posée à l'approche de la signature.
+    async createOfferSetup(a) { calls.setups.push(a); return { sessionId: 'cs_setup', url: 'https://checkout.test/setup/' + a.bidId }; },
+    async placeOfferAuthorization(a) { calls.holds.push(a); return { id: 'pi_' + a.bidId, amountCents: a.amountCents }; },
+    async retrieveSetupIntent() { return { payment_method: 'pm_x', customer: 'cus_x' }; },
+    async listCustomerPaymentMethods() { return [{ id: 'pm_x' }]; },
     async captureAndTransfer(a) {
       calls.transfers.push(a);
       // La vraie contrainte de Stripe : on ne capture jamais au-dessus de
@@ -136,8 +142,10 @@ test('le devis des DEUX lignes est figé sur l’offre au moment de l’autorisa
   assert.equal(bid.prixNotaDateCents, attendu.dateCents);
   // Ce qui est figé EST ce que la carte bloque : une seule résolution de la
   // grille pour les deux, jamais deux lectures qui pourraient déjà diverger.
+  const demande = stripe.calls.authorizations[0] || stripe.calls.setups[0] || stripe.calls.holds[0];
+  assert.ok(demande, 'la publication demande bien quelque chose à la carte');
   assert.equal(
-    stripe.calls.authorizations[0].amountCents,
+    demande.amountCents,
     MONTANT * 100 + bid.prixNotaServiceCents + bid.prixNotaDateCents,
   );
   // Et rien de tout cela ne fuit au carnet public.
@@ -148,7 +156,9 @@ test('le devis des DEUX lignes est figé sur l’offre au moment de l’autorisa
 test('UNE HAUSSE DE LA GRILLE APRÈS L’AUTORISATION NE MONTE PAS LA CAPTURE', async () => {
   const { repo, stripe, app } = setup();
   await offreAutorisee(app);
-  const bloque = stripe.calls.authorizations[0].amountCents;
+  const demande = stripe.calls.authorizations[0] || stripe.calls.setups[0] || stripe.calls.holds[0];
+  assert.ok(demande, 'la publication demande bien quelque chose à la carte');
+  const bloque = demande.amountCents;
   assert.equal(bloque, HONORAIRES + ATTENDU.totalCents, 'les deux lignes de Nota, en plus des honoraires');
   assert.ok(ATTENDU.dateCents > 0, 'le palier « ' + TIER + ' » vend bien une garantie de date');
 
@@ -176,8 +186,12 @@ test('UNE HAUSSE DE LA GRILLE APRÈS L’AUTORISATION NE MONTE PAS LA CAPTURE', 
   }));
   assert.equal(suivante.paymentStatus, 'pending');
   const tierSuivant = domain.tierForDays(domain.daysBetween(TODAY, '2026-08-25'));
+  // Selon la date, l'ADR 0035 réserve tout de suite ou enregistre la carte :
+  // ce qui compte ici est le MONTANT demandé, pas le mécanisme choisi.
+  const derniere = stripe.calls.setups.at(-1) || stripe.calls.authorizations.at(-1) || stripe.calls.holds.at(-1);
+  assert.ok(derniere, 'la publication suivante demande bien quelque chose à la carte');
   assert.equal(
-    stripe.calls.authorizations.at(-1).amountCents,
+    derniere.amountCents,
     HONORAIRES + 39900 + domain.prixNotaGrille().garantieDate[tierSuivant],
   );
 });

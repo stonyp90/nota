@@ -961,9 +961,149 @@ function offerAuthorizationVoided(ctx) {
   }, ctx);
 }
 
+// ADR 0035 — la carte est ENREGISTRÉE, pas encore débitée ni même bloquée. Dire
+// « paiement autorisé » ici serait faux : rien n'est réservé avant l'approche
+// de la date. Ce gabarit dit exactement ce qui s'est passé, et quand la somme
+// sera réservée.
+function carteEnregistree(ctx) {
+  return build({
+    subjectFr: 'Carte enregistrée, offre visible',
+    subjectEn: 'Card saved, offer is live',
+    preheaderFr: 'Rien n’est réservé aujourd’hui : la somme le sera à l’approche de votre date.',
+    preheaderEn: 'Nothing is held today: the amount is reserved as your date approaches.',
+    fr: {
+      heading: 'Votre offre est maintenant visible',
+      lead:
+        'Votre carte est enregistrée. Votre demande — ' +
+        svcNom(ctx.serviceId) +
+        ' — le ' +
+        fmtDate(ctx.dateISO) +
+        ' est visible sur le carnet.',
+      bodyHtml:
+        callout(offerLine(ctx)) +
+        para(
+          'Aucune somme n’est réservée aujourd’hui. Quelques jours avant votre signature, votre offre et le prix du service de Nota seront réservés sur cette carte, puis débités seulement une fois l’acte signé. Si personne ne retient votre demande, il ne se passe rien et vous ne payez rien.'
+        ),
+      textLines: [offerLine(ctx), 'Aucune somme réservée aujourd’hui; la réservation se fait à l’approche de la date.'],
+      ctaLabel: 'Suivre mon offre',
+    },
+    en: {
+      heading: 'Your offer is now visible',
+      lead:
+        'Your card is saved. Your request — ' +
+        svcNomEn(ctx.serviceId) +
+        ' — on ' +
+        fmtDateEn(ctx.dateISO) +
+        ' is visible on the carnet.',
+      bodyHtml:
+        callout(offerLineEn(ctx)) +
+        para(
+          'Nothing is held today. A few days before your signing, your offer and the price of Nota’s service are reserved on this card, then charged only once the act is signed. If nobody takes your request, nothing happens and you pay nothing.'
+        ),
+      textLines: [offerLineEn(ctx), 'Nothing is set aside today; the amount is reserved as the date approaches.'],
+      ctaLabel: 'Track my offer',
+    },
+    ctaUrl: clientActeUrl(ctx),
+    unsubscribeUrl: ctx.unsubscribeUrl,
+  }, ctx);
+}
+
+// ADR 0035 — la banque a refusé la carte au moment de poser la caution. Le
+// client a encore quelques jours pour en donner une autre : ce courriel est le
+// SEUL avis qu'il en reçoit, d'où son caractère transactionnel.
+function cautionRefusee(ctx) {
+  return build({
+    subjectFr: 'Carte refusée, signature proche',
+    subjectEn: 'Card declined, signing is near',
+    preheaderFr: 'Mettez une autre carte à votre dossier avant la date.',
+    preheaderEn: 'Add another card to your file before the date.',
+    fr: {
+      heading: 'Nous n’avons pas pu réserver le montant',
+      lead:
+        'À l’approche de votre signature — ' +
+        svcNom(ctx.serviceId) +
+        ' le ' +
+        fmtDate(ctx.dateISO) +
+        ' — votre banque a refusé la carte enregistrée.',
+      bodyHtml:
+        callout(offerLine(ctx)) +
+        para(
+          'Rien n’a été débité. Votre demande reste en place et votre notaire est prévenu. Ouvrez votre dossier pour enregistrer une autre carte : nous réessayons chaque jour d’ici votre signature.'
+        ),
+      textLines: [offerLine(ctx), 'Rien n’a été débité. Enregistrez une autre carte avant la signature.'],
+      ctaLabel: 'Vérifier ma carte',
+    },
+    en: {
+      heading: 'We could not reserve the amount',
+      lead:
+        'As your signing approaches — ' +
+        svcNomEn(ctx.serviceId) +
+        ' on ' +
+        fmtDateEn(ctx.dateISO) +
+        ' — your bank declined the card on file.',
+      bodyHtml:
+        callout(offerLineEn(ctx)) +
+        para(
+          'Nothing was charged. Your request stands and your notary has been told. Open your file to save another card: we retry every day until your signing.'
+        ),
+      textLines: [offerLineEn(ctx), 'Nothing was charged. Save another card before the signing.'],
+      ctaLabel: 'Check my card',
+    },
+    ctaUrl: clientActeUrl(ctx),
+    unsubscribeUrl: ctx.unsubscribeUrl,
+  }, ctx);
+}
+
 // =============================================================================
 // NOTARY templates
 // =============================================================================
+
+// ADR 0035 — le notaire a bloqué sa journée : il doit savoir, deux jours avant,
+// que la garantie de paiement n'a pas pu être posée. Le dire tard serait pire
+// que de ne rien promettre.
+function cautionRefuseeNotaire(ctx) {
+  // `joinLine` (via offerLine) laisse tomber les morceaux absents ; une
+  // concaténation à la main rend « · · » sur un contexte incomplet, et ce
+  // sont les séparateurs nus que le destinataire voit.
+  const line = offerLine(ctx);
+  const lineEn = offerLineEn(ctx);
+  return build({
+    subjectFr: 'Caution non posée — ' + money(ctx.montant),
+    subjectEn: 'Hold not placed — ' + moneyEn(ctx.montant),
+    preheaderFr: 'La carte du client a été refusée; nous réessayons d’ici la signature.',
+    preheaderEn: 'The client’s card was declined; we retry until the signing.',
+    fr: {
+      heading: 'La caution de cet acte n’a pas pu être posée',
+      lead:
+        'La carte de votre client a été refusée au moment de réserver le montant de l’acte du ' +
+        fmtDate(ctx.dateISO) +
+        '.',
+      bodyHtml:
+        callout(line) +
+        para(
+          'Votre client vient d’en être avisé et peut enregistrer une autre carte; nous réessayons chaque jour d’ici la signature. L’acte vous reste confié — vous décidez, en connaissance de cause, de le porter ou de vous désister (c’est gratuit).'
+        ),
+      textLines: [line, 'Le client est avisé; nouvelle tentative chaque jour d’ici la signature.'],
+      ctaLabel: 'Ouvrir l’acte',
+    },
+    en: {
+      heading: 'The hold for this act could not be placed',
+      lead:
+        'Your client’s card was declined when we tried to reserve the amount for the act on ' +
+        fmtDateEn(ctx.dateISO) +
+        '.',
+      bodyHtml:
+        callout(lineEn) +
+        para(
+          'Your client has just been told and can save another card; we retry every day until the signing. The act stays yours — you decide, knowing this, whether to carry it or to withdraw (free of charge).'
+        ),
+      textLines: [lineEn, 'The client was told; we retry every day until the signing.'],
+      ctaLabel: 'Open the act',
+    },
+    ctaUrl: notaryActeUrl(ctx),
+    unsubscribeUrl: ctx.unsubscribeUrl,
+  }, ctx);
+}
 
 // Weekly-style digest of open, high-value bids. The bid table is rendered once
 // per language block, each side with its own service names, dates and amounts.
@@ -1915,20 +2055,47 @@ function operatorNewPartner(ctx) {
 // cancellation kept is stated plainly (ADR 0023 / ADR 0033): the fee, its
 // rate, and that it goes to the notary as compensation — or that it was free.
 // Context: bid fields + `annulation` { taux, frais, joursAvant } | null.
+// ADR 0035 — CE COURRIEL PARLE D'ARGENT, donc il ne peut pas inventer une
+// réservation qui n'existe pas. Depuis que la caution n'est posée qu'à
+// J-CAUTION_LEAD_DAYS, une annulation tardive rencontre deux situations
+// différentes, et `annulation.mecanisme` dit laquelle :
+//   • `capture`      — une somme était réservée : les frais y sont retenus et
+//                      le RESTE est libéré. C'est l'ancienne phrase, exacte.
+//   • `hors_session` — rien n'était réservé : les frais sont une charge NEUVE
+//                      sur la carte enregistrée, et il n'y a pas de « reste ».
+// `percu: false` est la troisième : la carte a refusé, rien n'a été prélevé.
 function offerCancelled(ctx) {
   const a = ctx.annulation || null;
   const frais = a && Number(a.frais) > 0 ? Number(a.frais) : 0;
-  const argent = frais
-    ? 'Des frais d’annulation de ' + money(frais) + ' (' + pct(a.taux) + ' du montant) sont retenus sur votre carte et versés au notaire en dédommagement du rendez-vous libéré ; le reste de la réservation est libéré.'
-    : 'Votre annulation est sans frais : rien n’est débité, et la réservation sur votre carte est libérée.';
-  const argentEn = frais
-    ? 'A cancellation fee of ' + moneyEn(frais) + ' (' + pctEn(a.taux) + ' of the amount) is kept on your card and transferred to the notary as compensation for the freed appointment; the rest of the reservation is released.'
-    : 'Your cancellation carries no fee: nothing is charged, and the reservation on your card is released.';
+  const percu = !a || a.percu !== false;
+  const surCaution = !!(a && a.mecanisme === 'capture');
+  // Une réservation existe-t-elle encore à libérer ? Le notifieur le dit
+  // (`cautionPosee`) : cette couche ne devine pas l'état d'une carte.
+  const reserve = !!ctx.cautionPosee;
+  const argent = !frais
+    ? (reserve
+      ? 'Votre annulation est sans frais : rien n’est débité, et la réservation sur votre carte est libérée.'
+      : 'Votre annulation est sans frais : rien n’est débité, et aucune somme n’était réservée sur votre carte.')
+    : !percu
+      ? 'Des frais d’annulation de ' + money(frais) + ' (' + pct(a.taux) + ' du montant) s’appliquaient, mais votre carte les a refusés : rien n’a été débité. Votre notaire en est informé.'
+      : surCaution
+        ? 'Des frais d’annulation de ' + money(frais) + ' (' + pct(a.taux) + ' du montant) sont retenus sur la somme réservée pour cet acte et versés au notaire en dédommagement du rendez-vous libéré ; le reste vous est libéré.'
+        : 'Aucune somme n’était réservée pour cet acte. Des frais d’annulation de ' + money(frais) + ' (' + pct(a.taux) + ' du montant) sont donc portés à la carte que vous avez enregistrée, et versés au notaire en dédommagement du rendez-vous libéré.';
+  const argentEn = !frais
+    ? (reserve
+      ? 'Your cancellation carries no fee: nothing is charged, and the hold on your card is released.'
+      : 'Your cancellation carries no fee: nothing is charged, and no amount was being held on your card.')
+    : !percu
+      ? 'A cancellation fee of ' + moneyEn(frais) + ' (' + pctEn(a.taux) + ' of the amount) applied, but your card declined it: nothing was charged. Your notary has been told.'
+      : surCaution
+        ? 'A cancellation fee of ' + moneyEn(frais) + ' (' + pctEn(a.taux) + ' of the amount) is kept from the amount held for this act and transferred to the notary as compensation for the freed appointment; the rest is released to you.'
+        : 'No amount was being held for this act. A cancellation fee of ' + moneyEn(frais) + ' (' + pctEn(a.taux) + ' of the amount) is therefore charged to the card you saved, and transferred to the notary as compensation for the freed appointment.';
+  const retenu = frais && percu;
   return build({
     subjectFr: 'Offre annulée : ' + money(ctx.montant),
     subjectEn: 'Offer cancelled: ' + moneyEn(ctx.montant),
-    preheaderFr: frais ? 'Votre offre est retirée ; ' + money(frais) + ' de frais sont retenus.' : 'Votre offre est retirée du carnet, sans frais.',
-    preheaderEn: frais ? 'Your offer is withdrawn; a ' + moneyEn(frais) + ' fee is kept.' : 'Your offer was removed from the carnet, no fee.',
+    preheaderFr: retenu ? 'Votre offre est retirée ; ' + money(frais) + ' de frais sont prélevés.' : 'Votre offre est retirée du carnet, sans frais.',
+    preheaderEn: retenu ? 'Your offer is withdrawn; a ' + moneyEn(frais) + ' fee is charged.' : 'Your offer was removed from the carnet, no fee.',
     fr: {
       heading: 'Votre offre est annulée',
       lead: 'Votre offre — ' + svcNom(ctx.serviceId) + ' le ' + fmtDate(ctx.dateISO) + ' — a été retirée du carnet.',
@@ -1965,21 +2132,29 @@ function offerCancelledNotary(ctx) {
   const a = ctx.annulation || null;
   const frais = a && Number(a.frais) > 0 ? Number(a.frais) : 0;
   const verse = !!(a && a.dedommagement && a.dedommagement.verse);
+  // ADR 0035 — les frais ont pu être REFUSÉS par la carte du client. Le
+  // notaire doit lire ce fait, jamais une promesse de versement que rien
+  // n'adosse : Nota n'a rien encaissé, elle ne doit rien.
+  const percu = !!frais && (!a || a.percu !== false);
   const argent = !frais
     ? 'Le client a annulé dans la fenêtre gratuite du barème : aucuns frais ne vous sont dus.'
-    : verse
-      ? 'En dédommagement, ' + money(frais) + ' (' + pct(a.taux) + ' du montant) vous sont versés : le virement vers votre compte Stripe est en route.'
-      : money(frais) + ' (' + pct(a.taux) + ' du montant) vous sont dus en dédommagement. Ils vous seront versés dès que vos versements Stripe seront branchés.';
+    : !percu
+      ? 'Le barème prévoyait ' + money(frais) + ' (' + pct(a.taux) + ' du montant) en dédommagement, mais la carte du client a refusé le prélèvement : rien n’a été encaissé, et rien ne vous est donc versé. Nota a inscrit l’incident.'
+      : verse
+        ? 'En dédommagement, ' + money(frais) + ' (' + pct(a.taux) + ' du montant) vous sont versés : le virement vers votre compte Stripe est en route.'
+        : money(frais) + ' (' + pct(a.taux) + ' du montant) vous sont dus en dédommagement. Ils vous seront versés dès que vos versements Stripe seront branchés.';
   const argentEn = !frais
     ? 'The client cancelled within the barème’s free window: no fee is due to you.'
-    : verse
-      ? 'As compensation, ' + moneyEn(frais) + ' (' + pctEn(a.taux) + ' of the amount) is transferred to you: the transfer to your Stripe account is on its way.'
-      : moneyEn(frais) + ' (' + pctEn(a.taux) + ' of the amount) is owed to you as compensation. It will be transferred as soon as your Stripe payouts are connected.';
+    : !percu
+      ? 'The barème called for ' + moneyEn(frais) + ' (' + pctEn(a.taux) + ' of the amount) as compensation, but the client’s card declined the charge: nothing was collected, so nothing is transferred to you. Nota has recorded the incident.'
+      : verse
+        ? 'As compensation, ' + moneyEn(frais) + ' (' + pctEn(a.taux) + ' of the amount) is transferred to you: the transfer to your Stripe account is on its way.'
+        : moneyEn(frais) + ' (' + pctEn(a.taux) + ' of the amount) is owed to you as compensation. It will be transferred as soon as your Stripe payouts are connected.';
   return build({
     subjectFr: 'Demande annulée par le client : ' + money(ctx.montant),
     subjectEn: 'Client cancelled: ' + moneyEn(ctx.montant),
-    preheaderFr: frais ? money(frais) + ' vous reviennent en dédommagement.' : 'La demande que vous aviez retenue vient d’être retirée.',
-    preheaderEn: frais ? moneyEn(frais) + ' comes to you as compensation.' : 'The request you had taken was just withdrawn.',
+    preheaderFr: percu ? money(frais) + ' vous reviennent en dédommagement.' : 'La demande que vous aviez retenue vient d’être retirée.',
+    preheaderEn: percu ? moneyEn(frais) + ' comes to you as compensation.' : 'The request you had taken was just withdrawn.',
     fr: {
       heading: 'Le client a annulé sa demande',
       lead: 'La demande que vous aviez retenue — ' + svcNom(ctx.serviceId) + ' le ' + fmtDate(ctx.dateISO) + ' — vient d’être annulée par le client.',
@@ -2668,6 +2843,9 @@ const TEMPLATES = {
   // client — pay-on-accept lifecycle
   offerAuthorized,
   offerAuthorizationVoided,
+  // ADR 0035 — la caution qui tient jusqu'à la signature
+  carteEnregistree,
+  cautionRefusee,
   // client — notary actions on an open offer
   propositionRecue,
   documentsDemandes,
@@ -2683,6 +2861,8 @@ const TEMPLATES = {
   // ADR 0033 — la mise en relation est complète
   demandeRetenueNotaire,
   nouvelleDemande,
+  // ADR 0035 — la caution qui tient jusqu'à la signature
+  cautionRefuseeNotaire,
   // evaluation feedback loop (ADR 0015/0016)
   evaluationRecueNotaire,
   // contact form (nous joindre)
@@ -2820,6 +3000,27 @@ const TEMPLATE_META = {
     audience: 'client', transactionnel: true,
     labelFr: 'Autorisation expirée', labelEn: 'Authorization lapsed',
     defaultSubjectFr: 'Votre offre n’est plus visible', defaultSubjectEn: 'Your offer is no longer visible',
+    placeholders: ['montant', 'service', 'date'],
+  },
+  // --- ADR 0035 — la caution qui tient jusqu'à la signature ------------------
+  carteEnregistree: {
+    audience: 'client', transactionnel: true,
+    labelFr: 'Carte enregistrée', labelEn: 'Card saved',
+    defaultSubjectFr: 'Votre carte est enregistrée — votre offre est visible',
+    defaultSubjectEn: 'Your card is saved — your offer is live',
+    placeholders: ['montant', 'service', 'date'],
+  },
+  cautionRefusee: {
+    audience: 'client', transactionnel: true,
+    labelFr: 'Carte refusée (caution)', labelEn: 'Card declined (hold)',
+    defaultSubjectFr: 'Votre carte a été refusée — votre signature approche',
+    defaultSubjectEn: 'Your card was declined — your signing is coming up',
+    placeholders: ['montant', 'service', 'date'],
+  },
+  cautionRefuseeNotaire: {
+    audience: 'notaire', transactionnel: true,
+    labelFr: 'Caution non posée (notaire)', labelEn: 'Hold not placed (notary)',
+    defaultSubjectFr: 'Caution non posée — {{montant}}', defaultSubjectEn: 'Hold not placed — {{montant}}',
     placeholders: ['montant', 'service', 'date'],
   },
   // --- client — notary actions on an open offer -----------------------------

@@ -1,0 +1,315 @@
+# 0035 — La caution tient jusqu'à la signature
+
+Date : 2026-09-03
+
+Statut : accepté — **amende l'ADR 0015 (§2 et ses conséquences) et l'ADR 0023
+(§3, le mécanisme d'encaissement) ; ne touche ni au partage de l'ADR 0031, ni
+au bénéficiaire des frais fixé par l'ADR 0033**
+
+## Contexte — le défaut, mesuré
+
+L'ADR 0015 a fait du règlement un geste de la signature : le client autorise sa
+carte à la **publication**, et la capture attend l'acte. Cette autorisation
+était le seul mécanisme de garantie du modèle.
+
+Or une autorisation de carte Stripe expire en **~7 jours**. Le carnet, lui,
+vend surtout des dates lointaines : le palier `rapide` s'arrête à 14 jours, donc
+le palier « standard » — celui qui n'a aucune prime d'urgence, et de loin le
+plus fréquent — **commence à 15 jours**. Sur la majorité des dates publiées,
+l'autorisation mourait donc avant la signature.
+
+Ce que cela donnait concrètement :
+
+1. **L'offre se vidait de sa garantie sans que personne ne soit prévenu.** Rien,
+   ni dans le produit ni dans un courriel, ne disait au client ni au notaire que
+   la caution avait expiré.
+2. **Le règlement retombait sur le repli.** `/notary/acts/complete` constatait
+   la capture impossible et basculait sur `completeAct`, c'est-à-dire — depuis
+   l'ADR 0029 — l'inscription d'une **créance** que personne ne sait encore
+   recouvrer. Le notaire, lui, avait déjà bloqué sa journée.
+3. **Le barème d'annulation était partiellement fictif.** L'ADR 0023 prélève les
+   frais par capture partielle de la caution. Le palier 4-14 jours suppose donc
+   une caution vivante… posée le plus souvent plus de 7 jours plus tôt. Elle ne
+   l'était pas.
+
+L'ADR 0015 avait vu le trou et l'avait laissé ouvert : « A future
+saved-payment-method (off-session) charge can tighten this without changing the
+routes. » C'est cette décision-là.
+
+## Décision
+
+### 1. Deux gestes séparés : enregistrer la carte, puis poser la caution
+
+À la **publication**, Nota n'autorise plus rien : elle **enregistre** la carte.
+Une session Stripe Checkout en mode `setup` (`createOfferSetup`) fait valider la
+carte par la banque du client et la conserve sur un client Stripe. Aucune somme
+n'est réservée, donc rien ne peut pourrir.
+
+À **J-`CAUTION_LEAD_DAYS`**, la caution est posée hors session sur cette carte
+(`placeOfferAuthorization` : `capture_method: 'manual'`, `confirm: true`,
+`off_session: true`), pour le **total des deux lignes** de l'ADR 0031 — les
+honoraires du notaire et le prix du service de Nota. La capture à la signature
+ne change pas d'un iota.
+
+`CAUTION_LEAD_DAYS` **vaut 2 et vit dans `packages/domain`**, avec
+`cautionDue(dateISO, todayISO)`. Ce n'est pas un détail d'implémentation : c'est
+le nombre qui décide si la garantie d'un acte existe. Deux jours, parce qu'il
+faut être assez tard pour que l'autorisation (~7 jours) atteigne la signature,
+et assez tôt pour qu'une carte refusée laisse le temps de réagir.
+
+**Quand la date est DÉJÀ dans la fenêtre**, rien de tout cela n'est nécessaire :
+la publication ouvre la session de paiement d'origine et la caution est posée
+immédiatement — elle vivra jusqu'à l'acte. `billing.authorizeOffer` tranche
+seule entre les deux portes, en interrogeant le domaine ; la route de
+publication ne connaît pas cette mécanique.
+
+### 2. Le geste quotidien est celui de la Lambda de rappels
+
+`apps/api/src/reminders.js` porte désormais, en plus des rappels, une passe
+« caution » : pour chaque offre vivante dont la date entre dans la fenêtre, elle
+appelle `billing.placeCaution`. Trois exigences la gouvernent :
+
+- elle lit `listByMonth`, **pas** `listOpenBids` — celui-ci exclut les actes
+  RETENUS, et c'est précisément là que la caution compte le plus ;
+- **elle ne lève jamais** parce qu'une carte est refusée. Un refus se compte
+  (`caution: { due, posee, refusee }`), s'inscrit sur l'offre et se raconte ; il
+  n'interrompt pas le lot ;
+- le port de facturation lui est **optionnel** : sans clés Stripe (démo, tests,
+  E2E), la passe est sautée et la Lambda reste ce qu'elle était.
+
+La clé d'idempotence Stripe porte le jour (`hold:<bidId>:<jour>`) : deux
+exécutions le même jour sont une seule tentative, la reprise du lendemain après
+un refus en est une vraie.
+
+### 3. Ce qui garantit le paiement du notaire
+
+C'est la question que cet ADR doit trancher explicitement, parce qu'un notaire
+qui retient bloque une journée qu'il ne revendra pas. Trois faits, et rien
+d'autre :
+
+1. **Aucune offre n'est visible sans carte validée.** Une offre publiée reste
+   `pending` — invisible au carnet, invisible au fil du notaire — tant que le
+   client n'a pas terminé la session Stripe. Le SetupIntent est une vraie
+   demande d'autorisation à l'émetteur : la carte du client a été acceptée par
+   sa banque avant que le notaire ne la voie. C'est **plus** que ce que
+   garantissait l'ancien modèle au moment de la signature, où l'autorisation
+   était déjà morte.
+2. **La caution est vivante à la signature.** Posée deux jours avant, elle a
+   ~7 jours devant elle. `/notary/acts/complete` capture donc réellement, et le
+   virement des honoraires part.
+3. **Un refus se sait deux jours d'avance.** Le notaire reçoit
+   `cautionRefuseeNotaire`, le client `cautionRefusee` (une seule fois chacun,
+   registre `SENT#`), la tentative est reprise chaque jour jusqu'à la date, et
+   **l'acte reste confié au notaire** : il décide, en connaissance de cause, de
+   le porter ou de se désister (gratuit, ADR 0033). Le repli du règlement — la
+   créance de l'ADR 0029 — subsiste, mais il cesse d'être le cas ordinaire pour
+   redevenir l'exception qu'il aurait toujours dû être.
+
+Cela se dit aussi **dans le produit** : `GET /notary/bids` porte
+`conditions.caution = { jours, carteValidee }` et, par acte,
+`caution = { etat, poseeLe }` avec `etat` ∈ `posee` / `enregistree` / `refusee` /
+`aucune`. Une garantie qu'on ne peut pas voir n'en est pas une (ADR 0033 §4 :
+tout est exposé au notaire avant qu'il confirme).
+
+### 3 bis. L'acte renégocié entre dans la règle
+
+Quand le client accepte une contre-proposition, l'offre est retenue à un
+**nouveau** montant : l'autorisation d'origine ne peut pas le régler, elle est
+relâchée, et l'offre passe en `a_reautoriser` (ADR 0009). Jusqu'ici, ce chemin
+n'avait **aucune** garantie — l'ADR 0033 le notait comme une décision ouverte,
+« s'annule encore sans frais (aucune caution vivante) ».
+
+Ce n'est plus une fatalité : depuis cet ADR, la carte du client est
+**enregistrée**, et elle survit à la renégociation. `a_reautoriser` rejoint donc
+`enregistre` dans l'ensemble des offres qui attendent leur caution
+(`attendCaution`, une seule définition lue par la Lambda, la route d'annulation
+et la console notaire). Conséquences, toutes deux vérifiées par un scénario :
+
+- la caution d'un acte renégocié est posée à J-2 **sur le montant accepté**, et
+  le notaire est payé à la signature comme sur tout autre acte ;
+- son annulation tardive n'est plus gratuite : les frais du barème sont
+  prélevés hors session et versés au notaire.
+
+Sans cette ligne, un notaire qui avait négocié son prix — le seul qui ait
+vraiment discuté son dossier — était précisément celui qu'aucune garantie ne
+couvrait.
+
+### 3 ter. Une carte refusée peut être remplacée
+
+Le geste quotidien réessaie chaque jour jusqu'à la signature. Réessayer demain
+la **même** carte refusée donne le même refus : sans porte de sortie, l'avis de
+refus et la reprise quotidienne seraient du théâtre, et le seul recours du
+client serait de republier ou d'écrire au soutien.
+
+`POST /client/bid/carte` est cette porte. Gardée par le jeton client de l'offre,
+elle redemande à `authorizeOffer` la surface qui convient à la date — session
+d'enregistrement si la signature est lointaine, réservation immédiate si elle
+est déjà dans la fenêtre — sur le montant de l'offre **aujourd'hui**,
+contre-proposition acceptée comprise. La route ne décide d'aucune mécanique
+d'argent ; elle repose la question au domaine.
+
+Deux détails qui comptent :
+
+- **la clé d'idempotence porte le jour.** Sans clé neuve, Stripe rejouerait la
+  session déjà terminée avec la carte refusée et la reprise serait un lien mort.
+  Avec le jour : deux clics le même matin rouvrent la même session, le lendemain
+  en ouvre une vraie neuve — la cadence du geste quotidien.
+- **le client voit ce que le notaire voit.** `GET /client/bid` porte le même
+  `caution = { etat, poseeLe }`, et la bande de l'offre affiche le refus, dit
+  que rien n'a été débité, et offre le bouton. Le courriel de refus mène là.
+
+### 3 quater. Une réservation périmée n'est pas une garantie
+
+`CAUTION_LEAD_DAYS` décide **quand poser** ; **`CAUTION_VIE_JOURS` (7) décide
+jusqu'à quand ce qui est posé compte encore**, et il vit dans le domaine à côté
+du premier — `cautionVivante(poseeLe, aujourdhui)`. Sans ce second nombre, la
+moitié du raisonnement de cet ADR restait implicite, et deux choses fausses en
+découlaient :
+
+- une offre **héritée** — `paymentStatus:'authorized'` posée à la publication
+  pour une date à J+30, c'est-à-dire le cas ORDINAIRE d'avant cet ADR, et il en
+  reste en base — était écartée par `attendCaution` puis déclarée « déjà
+  garantie » par `placeCaution` : elle n'était **jamais** recautionnée ;
+- pire, `cautionEtat` la classait `posee`, donc le notaire lisait « la somme est
+  réservée » sur une autorisation morte depuis des semaines.
+
+Les deux sont fermées. `attendCaution(bid, jour)` remet une réservation périmée
+dans la file ; quand la carte du client est enregistrée, la caution est
+simplement **reposée** et l'acte redevient garanti. Quand elle ne l'est pas —
+l'ancien parcours ne conservait aucune carte — l'état est `expiree`, le notaire
+le lit dans sa console, et le règlement garde son repli (créance, ADR 0029). Le
+journal du lot quotidien compte ce cas à part (`expiree`).
+
+### 3 quinquies. Ce que le notaire VOIT, et non ce que l'API porte
+
+L'ADR affirmait « une garantie qu'on ne peut pas voir n'en est pas une », et
+l'API portait effectivement `caution` partout — mais **rien ne la rendait**. La
+console notaire affichait honoraires, prix Nota, déplacement, prêteur, dossier et
+barème ; jamais la garantie. Le notaire n'apprenait un refus que par courriel,
+ce que cet ADR présente lui-même comme insuffisant.
+
+Elle se lit maintenant à trois endroits, tous avant ou pendant l'engagement :
+sur la rangée de décision de la demande ouverte (une pastille, jamais repliée),
+dans la feuille « Retenir » (avec la date de pose et la règle du délai), et sur
+l'acte **retenu** en toutes lettres — c'est là qu'elle compte le plus, puisque
+la journée est bloquée.
+
+Le **délai** affiché vient de `conditions.caution.jours`, c'est-à-dire de
+`domain.CAUTION_LEAD_DAYS` : aucune page de `apps/web` ne l'écrit en dur (règle 1
+d'AGENTS.md). Changer la constante change la copie, dans les deux langues.
+
+### 4. Les frais d'annulation restent prélevés, et restent au notaire
+
+L'ADR 0023 §3 disait : « Le mécanisme d'encaissement est la capture partielle de
+la caution déjà posée. » Il y a désormais **deux** mécanismes, et le choix se
+fait sur un seul critère — existe-t-il une caution vivante ?
+
+| Situation | Mécanisme | Clé d'idempotence |
+| --- | --- | --- |
+| Caution posée (date proche) | capture partielle, le reste libéré par Stripe | `cancelfee:<bidId>` |
+| Carte enregistrée seulement | prélèvement hors session sur cette carte | `cancelfee:<bidId>` |
+
+La même clé pour les deux : une offre est facturée ses frais une fois, par l'un
+**ou** l'autre, jamais par les deux. Le reste est identique et n'a pas bougé :
+le montant est **viré entier au notaire** dès qu'il peut recevoir, inscrit
+`dedommagementCentsDue` sinon, et Nota n'en garde rien (art. 32.1 2° de la *Loi
+sur le notariat*, art. 32 du *Code de déontologie* — ADR 0033 §5).
+
+Sans cette seconde porte, le palier 4-14 jours du barème serait devenu gratuit
+en silence : le genre de trou qu'un ADR est censé fermer, pas ouvrir.
+
+**Et un prélèvement REFUSÉ s'inscrit.** La porte hors session vise justement des
+cartes qui viennent parfois d'être refusées à J-2 : c'est le cas de bord le plus
+probable de tout le mécanisme. Il laissait pourtant l'annulation passer
+gratuitement, sans frais inscrits, sans audit, sans un mot à personne.
+Désormais l'offre porte `annulation.percu = false` avec le motif du refus, un
+événement `annulation_frais` est écrit avec `percu: false`, le client lit que sa
+carte a refusé et que rien n'a été débité, et le notaire lit la même chose. Ce
+qui **ne** s'inscrit pas, c'est un `dedommagementCentsDue` : Nota n'a rien
+encaissé, elle ne doit rien. Le recouvrement de ces frais reste ouvert, avec les
+créances de l'ADR 0029.
+
+### 4 bis. Le client lit ce qui est arrivé à son argent, pas une formule
+
+Le dialogue d'annulation disait « retient des frais de X **sur votre caution**
+[…] Le reste vous est libéré immédiatement » — au moment exact du consentement,
+et le plus souvent faux : à J+10 il n'existe aucune caution, et l'annulation
+déclenche une charge NEUVE sur la carte enregistrée. Le même mensonge courait
+sur la ligne de reçu et dans le courriel `offerCancelled`.
+
+L'offre porte donc maintenant **comment** les frais ont été pris —
+`annulation.mecanisme` (`capture` / `hors_session`) et `annulation.percu` — et
+les trois surfaces disent la bonne phrase : retenue sur la somme réservée avec
+le reste libéré, charge portée à la carte enregistrée sans « reste », ou refus
+sans rien de débité. C'est le registre d'art. 68 que cet ADR invoque déjà pour
+refuser d'écrire « paiement autorisé » à la publication ; il vaut aussi pour ce
+qu'on retire.
+
+## Ce qui change
+
+**Pour le client.** Il donne sa carte comme avant, mais rien n'est réservé le
+jour de la publication : le courriel qu'il reçoit le dit (`carteEnregistree`
+remplace `offerAuthorized` sur ce chemin — annoncer un « paiement autorisé »
+qui n'existe pas serait un mensonge sur de l'argent, et l'art. 68 du *Code de
+déontologie* interdit la publicité incomplète). Le devis affiche « Porté à votre
+carte » plutôt que « Autorisé sur votre carte ». Si sa banque refuse à J-2, il
+est prévenu, il voit le refus sur son offre, et il enregistre une autre carte
+d'un bouton (§3 ter) — le courriel de refus l'y mène.
+
+**Pour le notaire.** La garantie qu'il croyait avoir existe maintenant, et il la
+**voit** avant de retenir — sur la demande ouverte, dans la feuille « Retenir »,
+et sur l'acte retenu (§3 quinquies) — y compris sur un acte qu'il a négocié
+lui-même, qui n'en avait aucune (§3 bis). En échange, il apprend un refus deux
+jours avant la signature plutôt que de le découvrir le jour de la capture. Et il
+ne lit plus jamais « la somme est réservée » sur une autorisation périmée
+(§3 quater).
+
+**Pour l'opérateur.** Le lot quotidien devient un geste d'argent : son journal
+porte `caution: { due, posee, refusee, sansCarte, expiree }`. Les trois derniers
+appellent des gestes différents — relancer un client, réparer une configuration
+Stripe, constater une offre héritée — et c'est pour cela qu'ils se comptent
+séparément. Les gabarits `carteEnregistree`, `cautionRefusee` et
+`cautionRefuseeNotaire` sont **transactionnels** : la console admin peut en
+changer le sujet, jamais les éteindre (art. 68, ADR 0018).
+
+## Ce qui reste à faire côté Stripe en production
+
+1. **Activer les paiements hors session sur le compte Stripe.** Rien de
+   spécifique à cocher côté API, mais les cartes enregistrées via Checkout
+   `setup` doivent porter un mandat utilisable hors session — c'est le
+   comportement par défaut de `mode: 'setup'`, à vérifier une fois sur le compte
+   réel avec une carte de test qui exige une authentification.
+2. **Écouter `setup_intent.succeeded` dans le point de terminaison de webhook.**
+   Recommandé, mais **plus indispensable** : la version d'origine faisait
+   dépendre l'existence même d'une caution d'une case à cocher dans une console
+   tierce, invérifiable depuis le dépôt. `checkout.session.completed` en mode
+   `setup` ne porte pas de `payment_method`, mais il porte le `setup_intent` par
+   son id — Nota le **suit** maintenant jusqu'à la carte
+   (`stripe.retrieveSetupIntent`), et, en dernier recours, lit les cartes du
+   client Stripe quand il n'en porte qu'une. `checkout.session.completed` reste
+   nécessaire (il porte le client Stripe).
+3. **Poser `STRIPE_SECRET_KEY` (et `STRIPE_WEBHOOK_SECRET`) sur la Lambda de
+   rappels.** `infra/notifications.tf` les passe désormais ; il faut un
+   `terraform apply`. Sans la clé, la Lambda tourne mais ne pose aucune caution.
+4. **Surveiller les refus hors session** (`payment_intent.payment_failed` avec
+   `off_session`) : le produit les traite, mais l'opérateur n'a pas encore de
+   tableau qui les compte. À suivre avec le recouvrement des créances de
+   l'ADR 0029, qui reste ouvert. Le journal du lot quotidien, lui, distingue
+   désormais ce qui appelle des gestes opposés : `refusee` (la banque a dit non
+   — on relance des clients), `sansCarte` (aucun moyen de paiement connu — on
+   répare une configuration) et `expiree` (une offre héritée dont la réservation
+   avait dépassé sa vie). Un seul compteur pour les trois ne disait à personne
+   quoi faire.
+5. **Décisions non prises, hors périmètre :** avancer la fenêtre pour les actes
+   de très forte valeur ; le sort d'une offre restée `enregistre` dont la date
+   est passée sans que la caution ait pu être posée — elle n'est plus retentée,
+   et le règlement retombe sur la créance ; le recouvrement des frais
+   d'annulation refusés ; et un cas de bord assumé de la reprise de carte — un
+   client dont la **deuxième** carte est refusée le même jour rouvre la session
+   déjà terminée (la clé d'idempotence porte le jour) et doit attendre le
+   lendemain. Réduire la clé à la tentative plutôt qu'au jour le réglerait ; ce
+   n'est pas fait. En revanche, le risque de **double blocage** que cette clé
+   portait est fermé autrement : si l'écriture de la réservation sur l'offre
+   échoue après un appel Stripe réussi, la réservation orpheline est
+   immédiatement **relâchée** — la reprise du lendemain repart d'une carte
+   libre, et le client ne porte jamais deux fois le montant de son acte.

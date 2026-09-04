@@ -2490,6 +2490,51 @@
     return [...byCode.values()].sort((a, b) => b.du - a.du || a.code.localeCompare(b.code));
   }
 
+  // --- La caution (ADR 0035) -------------------------------------------------
+  // Le client donne sa carte à la publication, mais la SOMME n'est réservée
+  // qu'à l'approche de la date. Le motif est arithmétique : une autorisation
+  // de carte ne vit que ~7 jours, alors que le palier « standard » du carnet
+  // commence à 15 jours (TIERS: `rapide` s'arrête à 14). Une réservation posée
+  // à la publication meurt donc avant la signature sur la majorité des dates,
+  // et le notaire qui retient se retrouverait sans garantie sans que personne
+  // ne soit prévenu.
+  //
+  // CAUTION_LEAD_DAYS est ce délai, en jours pleins avant la signature : assez
+  // tard pour que la réservation vive jusqu'à l'acte, assez tôt pour qu'une
+  // carte refusée laisse deux jours au client pour la remplacer et au notaire
+  // pour le savoir. C'est une règle d'affaires — la couche de facturation ne
+  // choisit pas ce nombre, elle le lit ici.
+  const CAUTION_LEAD_DAYS = 2;
+
+  // La caution d'une signature le `dateISO` est-elle à poser le jour
+  // `todayISO` ? Vrai dans la fenêtre [signature − CAUTION_LEAD_DAYS,
+  // signature]. Une date déjà passée en sort : une offre oubliée ne doit pas
+  // être retentée indéfiniment, et le règlement garde son repli (ADR 0029).
+  function cautionDue(dateISO, todayISO) {
+    if (!isISODate(dateISO) || !isISODate(todayISO)) return false;
+    const days = daysBetween(todayISO, dateISO);
+    return days >= 0 && days <= CAUTION_LEAD_DAYS;
+  }
+
+  // Combien de jours une réservation de carte NON capturée tient-elle ? Une
+  // autorisation est relâchée par l'émetteur après ~7 jours. C'est l'autre
+  // moitié de la même règle d'affaires : CAUTION_LEAD_DAYS dit quand poser,
+  // CAUTION_VIE_JOURS dit jusqu'à quand la chose posée est encore une garantie.
+  const CAUTION_VIE_JOURS = 7;
+
+  // Une caution posée le `poseeISO` (date ou horodatage ISO) tient-elle encore
+  // le `todayISO` ? C'est la question qu'il faut poser AVANT d'écrire au
+  // notaire « la somme est réservée » : une autorisation périmée n'est plus une
+  // garantie, et l'afficher comme telle est un mensonge sur de l'argent.
+  //
+  // Un horodatage absent répond VRAI : les offres d'avant que Nota ne le note
+  // ne doivent pas hériter d'une mauvaise nouvelle inventée.
+  function cautionVivante(poseeISO, todayISO) {
+    const posee = String(poseeISO == null ? '' : poseeISO).slice(0, 10);
+    if (!isISODate(posee) || !isISODate(todayISO)) return true;
+    return daysBetween(posee, todayISO) <= CAUTION_VIE_JOURS;
+  }
+
   // --- Reminder schedule -----------------------------------------------------
   // The cadence at which an open lead's client is reminded that their signing
   // date is approaching, expressed as whole days BEFORE the date. Closer dates
@@ -2700,6 +2745,10 @@
     referralLedger,
     recommendedAmount,
     obtainChance,
+    CAUTION_LEAD_DAYS,
+    cautionDue,
+    CAUTION_VIE_JOURS,
+    cautionVivante,
     REMINDER_OFFSETS,
     REMINDER_KINDS,
     reminderKindForDays,

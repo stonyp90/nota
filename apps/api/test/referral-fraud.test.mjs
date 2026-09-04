@@ -39,6 +39,8 @@ function fakeStripe() {
     async createConnectAccount({ notaryId }) { return { accountId: 'acct_' + notaryId }; },
     async createOnboardingLink({ accountId }) { return { url: 'https://connect.stripe.test/onboard/' + accountId }; },
     async createOfferAuthorization({ bidId }) { return { sessionId: 'cs_' + bidId, url: 'https://checkout.stripe.test/' + bidId }; },
+    // ADR 0035 — la porte d'ENREGISTREMENT de carte (dates hors fenêtre).
+    async createOfferSetup({ bidId }) { return { sessionId: 'cs_setup_' + bidId, url: 'https://checkout.stripe.test/setup/' + bidId }; },
     constructEvent(raw) { return JSON.parse(raw); },
   };
 }

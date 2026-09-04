@@ -54,7 +54,7 @@ Fonctionnalité: Tarification et paliers de temps
     Étant donné la facturation Stripe est configurée
     Quand un client publie une offre avec le courriel "calme@exemple.ca" pour "refinancement" à 2000 dans 30 jours
     Alors l'offre publiée porte le palier "standard"
-    Et la carte du client est bloquée pour 2249 $
+    Et le montant porté à la carte du client est 2249 $
     Quand un client publie une offre avec le courriel "presse@exemple.ca" pour "refinancement" à 6000 dans 1 jours
     Alors l'offre publiée porte le palier "urgence"
-    Et la carte du client est bloquée pour 6449 $
+    Et le montant porté à la carte du client est 6449 $

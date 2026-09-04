@@ -506,7 +506,9 @@
     // the offer is retained. Cached so "Mes offres" shows whom to contact.
     // `annulation` is the ADR 0023 prevision: what cancelling TODAY would
     // keep from the deposit (taux, frais, joursAvant) — null when free.
-    c[id] = { bid: status.bid || null, notaire: status.notaire || null, propositions: status.propositions || [], demandes: status.demandes || [], readiness: status.readiness || null, messages: status.messages || [], documents: status.documents || [], acte: status.acte || null, evaluation: status.evaluation || null, annulation: status.annulation || null, fetchedAt: Date.now() };
+    // `caution` is the ADR 0035 state of the payment guarantee — `refusee` is
+    // the one the client must act on, and this cache is what the band reads.
+    c[id] = { bid: status.bid || null, notaire: status.notaire || null, propositions: status.propositions || [], demandes: status.demandes || [], readiness: status.readiness || null, messages: status.messages || [], documents: status.documents || [], acte: status.acte || null, evaluation: status.evaluation || null, annulation: status.annulation || null, caution: status.caution || null, fetchedAt: Date.now() };
     lsSave(LS_OFFERSTATUS, c);
     return c[id];
   }
@@ -980,10 +982,9 @@
   function offerNextStep(o, st, status) {
     if (st === 'cancelled') {
       // ADR 0023 — a cancellation that kept a fee says so on its receipt line.
-      var kept = status && status.bid && status.bid.annulation;
-      if (kept && Number(kept.frais) > 0) {
-        return 'Vous avez annulé cette offre. Des frais de ' + D.money(kept.frais) + ' (' + pctLabel(kept.taux)
-          + ') ont été retenus sur votre caution et versés au notaire en dédommagement. Si vous changez d’avis, choisissez une nouvelle date au carnet.';
+      var phrase = keptPhrase(status && status.bid && status.bid.annulation);
+      if (phrase) {
+        return 'Vous avez annulé cette offre. ' + phrase + ' Si vous changez d’avis, choisissez une nouvelle date au carnet.';
       }
       return 'Vous avez annulé cette offre. Si vous changez d’avis, choisissez une nouvelle date au carnet.';
     }
@@ -1059,6 +1060,25 @@
   // barème d'annulation (ADR 0023) — jamais à une part d'honoraires.
   function pctLabel(rate) {
     return String(Math.round(rate * 1000) / 10).replace('.', ',') + ' %';
+  }
+
+  // ADR 0035 — CE QU'UNE ANNULATION A RÉELLEMENT FAIT À L'ARGENT. Depuis que la
+  // caution n'est posée qu'à J-CAUTION_LEAD_DAYS, « retenus sur votre caution »
+  // est faux la plupart du temps : sur une date encore lointaine il n'y a
+  // AUCUNE somme réservée, et les frais sont une charge NEUVE sur la carte
+  // enregistrée. Trois situations, trois phrases — `annulation.mecanisme` et
+  // `annulation.percu`, écrits par le serveur, disent laquelle.
+  function keptPhrase(kept) {
+    if (!kept || !(Number(kept.frais) > 0)) return null;
+    var amt = D.money(kept.frais);
+    var pc = pctLabel(kept.taux);
+    if (kept.percu === false) {
+      return 'Des frais de ' + amt + ' (' + pc + ') s’appliquaient, mais votre carte les a refusés : rien n’a été débité.';
+    }
+    if (kept.mecanisme === 'hors_session') {
+      return 'Des frais de ' + amt + ' (' + pc + ') ont été portés à la carte que vous avez enregistrée et versés au notaire en dédommagement.';
+    }
+    return 'Des frais de ' + amt + ' (' + pc + ') ont été retenus sur la somme réservée pour cet acte et versés au notaire en dédommagement.';
   }
 
   // fr-CA decimal for the cote's figures: 35.6 → « 35,6 », 40 → « 40 ».
@@ -4367,6 +4387,38 @@
     return card;
   }
 
+  // ADR 0035 — « votre carte a été refusée ». Dit ce qui s'est passé (rien
+  // n'a été débité), ce qui arrive si rien n'est fait (la demande tombe), et
+  // offre le seul geste utile : en enregistrer une autre. POST
+  // /client/bid/carte rouvre une page Stripe — enregistrement si la signature
+  // est loin, réservation immédiate si elle est proche : le serveur tranche.
+  function carteRefuseeBloc(o) {
+    var box = el('div', 'my-offer-carte');
+    box.appendChild(el('div', 'my-offer-carte-h', 'Votre carte a été refusée'));
+    box.appendChild(el('p', 'my-offer-carte-t', 'Rien n’a été débité. Votre demande reste en place et votre notaire est prévenu. Enregistrez une autre carte avant votre signature.'));
+    var btn = el('button', 'btn btn-sm', 'Enregistrer une autre carte');
+    btn.type = 'button';
+    btn.addEventListener('click', async function () {
+      btn.disabled = true; btn.setAttribute('aria-busy', 'true');
+      var res;
+      try {
+        var r = await fetch(API_BASE + '/client/bid/carte', {
+          method: 'POST', headers: clientHeaders(o, true),
+          body: JSON.stringify({ id: o.id, dateISO: o.dateISO }),
+        });
+        var j = {}; try { j = await r.json(); } catch (e2) {}
+        res = { ok: r.ok, status: r.status, body: j };
+      } catch (e) { res = { ok: false, status: 0, body: {} }; }
+      btn.disabled = false; btn.removeAttribute('aria-busy');
+      if (res.ok && res.body && res.body.checkoutUrl) { window.location.href = res.body.checkoutUrl; return; }
+      toast(res.status === 0 ? 'Hors ligne. Réessayez une fois en ligne.' : 'Le paiement est momentanément indisponible. Réessayez dans quelques minutes.');
+    });
+    var actions = el('div', 'my-offer-actions');
+    actions.appendChild(btn);
+    box.appendChild(actions);
+    return box;
+  }
+
   function fillMyOfferDetail(cell, o, st, status) {
     clear(cell);
     // Is any notary named in this band? The « says who? » line is owed exactly
@@ -4384,6 +4436,13 @@
       cell.appendChild(notaireCard(noti));
     }
     cell.appendChild(next);
+    // ADR 0035 — la banque a refusé la carte au moment de réserver la somme.
+    // C'est la seule mauvaise nouvelle d'argent que le client puisse encore
+    // corriger lui-même, et elle a une date de péremption : sa signature. Le
+    // courriel de refus l'envoie ICI, donc le bouton doit y être.
+    if (status && status.caution && status.caution.etat === 'refusee' && o.clientToken) {
+      cell.appendChild(carteRefuseeBloc(o));
+    }
     // The act is signed and settled (ADR 0015): the client's last gesture is
     // the evaluation — five stars, an optional word. One per act; once sent,
     // the block shows what was said and thanks them.
@@ -4672,8 +4731,23 @@
         // The fee compensates the NOTARY for the day they reserved — Nota
         // keeps none of it (art. 32.1 L.N.). Said in the same breath as the
         // amount, so the client knows where their money goes.
-        feeEl.textContent = 'Annuler maintenant retient des frais de ' + D.money(prev.frais)
-          + ' (' + pctLabel(prev.taux) + ' du montant convenu) sur votre caution. Ils sont versés au notaire en dédommagement de la journée réservée. Le reste vous est libéré immédiatement.';
+        //
+        // ADR 0035 — ET DANS LES BONS TERMES. La caution n'est posée qu'à
+        // J-CAUTION_LEAD_DAYS : au moment où la plupart des annulations
+        // tardives se font, il n'y a AUCUNE somme réservée, et les frais sont
+        // une charge neuve sur la carte enregistrée. Promettre ici qu'« on
+        // retient sur votre caution » et que « le reste vous est libéré »
+        // serait un mensonge sur de l'argent, au moment exact du consentement
+        // (art. 68 C.déont.). `status.caution.etat` voyage dans la même
+        // réponse : il n'y a rien à deviner.
+        var surCaution = !!(status && status.caution && status.caution.etat === 'posee');
+        var verses = ' Ils sont versés au notaire en dédommagement de la journée réservée.';
+        feeEl.textContent = surCaution
+          ? 'Annuler maintenant retient des frais de ' + D.money(prev.frais)
+            + ' (' + pctLabel(prev.taux) + ' du montant convenu) sur la somme réservée pour cet acte.' + verses
+            + ' Le reste vous est libéré immédiatement.'
+          : 'Aucune somme n’est réservée pour cet acte. Annuler maintenant porte des frais de ' + D.money(prev.frais)
+            + ' (' + pctLabel(prev.taux) + ' du montant convenu) à la carte que vous avez enregistrée.' + verses;
       } else {
         feeEl.hidden = true;
         feeEl.textContent = '';
@@ -4716,9 +4790,7 @@
     // ADR 0023 — what was ACTUALLY kept rides back on the cancelled bid
     // (taux, frais, joursAvant, chargeId), null when the cancel was free.
     var kept = res.body && res.body.bid && res.body.bid.annulation;
-    var keptLine = kept && Number(kept.frais) > 0
-      ? 'Des frais de ' + D.money(kept.frais) + ' (' + pctLabel(kept.taux) + ') ont été retenus sur votre caution et versés au notaire en dédommagement.'
-      : null;
+    var keptLine = keptPhrase(kept);
     var st = offerStatusGet(o.id);
     if (st && st.bid) {
       st.bid.status = D.STATUS.ANNULEE;
@@ -6078,6 +6150,7 @@
     nc.conditions = j.conditions || null; // ADR 0033: what retaining commits to
     nc.fenetre = Array.isArray(j.fenetre) ? j.fenetre : null;
     nc.manquantsServeur = null;           // a fresh profile supersedes an old 403
+    ncRenderCautionRegle();
     ncRenderProfil();
     ncRenderProfilBanner();
     ncRenderPrefs();
@@ -6094,6 +6167,18 @@
     ncConsumeDeepAct();
     return true;
   }
+  // Le bloc « Paiements » raconte la caution avec le nombre du DOMAINE, servi
+  // par l'API. Tant qu'il n'est pas connu, la phrase n'existe pas — mieux vaut
+  // rien qu'un nombre inventé sur de l'argent.
+  function ncRenderCautionRegle() {
+    var p = $('notary-pay-caution'); if (!p) return;
+    var jours = nc.conditions && nc.conditions.caution && Number(nc.conditions.caution.jours);
+    if (!(jours > 0)) { p.hidden = true; clear(p); return; }
+    p.hidden = false;
+    clear(p);
+    p.appendChild(document.createTextNode(T(ncCautionRegle(jours))));
+  }
+
   // One toast for a prune pass, however many acts it dropped.
   function ncToastCancelled(gone) {
     var dates = gone.map(function (e) { return String(e.dateISO || ''); }).sort();
@@ -6853,6 +6938,57 @@
     return pill;
   }
 
+  // ADR 0035 — LA GARANTIE DE PAIEMENT, dite au notaire AVANT qu'il retienne.
+  // Le notaire bloque une journée qu'il ne revendra pas : savoir si la somme
+  // est déjà réservée, si elle le sera, ou si la banque a dit non fait partie
+  // de la décision, pas du service après-vente. Une garantie qu'on ne peut pas
+  // voir n'en est pas une (ADR 0033 §4 : tout est exposé avant la confirmation).
+  //
+  // `caution` vient de GET /notary/bids — par acte (`bid.caution`) et en règle
+  // générale (`conditions.caution.jours`). Null quand la facturation est
+  // absente (démo, tests) : on n'invente alors aucune garantie.
+  var NC_CAUTION_LABEL = {
+    posee: 'Somme réservée',
+    enregistree: 'Carte validée',
+    refusee: 'Carte refusée',
+    expiree: 'Réservation expirée',
+  };
+  // LA RÈGLE, en une phrase, et son NOMBRE vient du serveur. `CAUTION_LEAD_DAYS`
+  // vit dans packages/domain et voyage sous `conditions.caution.jours` : aucune
+  // page de apps/web n'a le droit de l'écrire en dur (règle 1 d'AGENTS.md).
+  function ncCautionRegle(jours) {
+    var n = Number(jours);
+    return 'La carte du client est validée par sa banque dès la publication, et la somme y est réservée '
+      + n + (n > 1 ? ' jours' : ' jour') + ' avant la signature.';
+  }
+  function ncCautionPill(caution) {
+    if (!caution || !NC_CAUTION_LABEL[caution.etat]) return null;
+    var pill = el('span', 'nc-caution', T(NC_CAUTION_LABEL[caution.etat]));
+    pill.dataset.caution = caution.etat;
+    pill.title = T('Garantie de paiement');
+    return pill;
+  }
+  // La même vérité, en clair : la pastille suivie de ce qu'elle implique. Chaque
+  // fragment est son propre nœud, pour que le dictionnaire le traduise seul et
+  // que la date reste une date (formatée par la locale, jamais traduite).
+  function ncCautionLine(caution) {
+    var pill = ncCautionPill(caution);
+    if (!pill) return null;
+    var wrap = el('span', 'nc-caution-line');
+    wrap.appendChild(pill);
+    var suite = null;
+    if (caution.etat === 'posee') suite = caution.poseeLe ? ['posée le', dayShort(caution.poseeLe)] : ['la somme est bloquée sur la carte du client'];
+    else if (caution.etat === 'enregistree') suite = caution.poseeLe ? ['somme réservée le', dayShort(caution.poseeLe)] : ['la somme sera réservée avant la signature'];
+    else if (caution.etat === 'refusee') suite = ['le client doit enregistrer une autre carte'];
+    else if (caution.etat === 'expiree') suite = ['aucune somme n’est réservée pour cet acte'];
+    if (suite) {
+      wrap.appendChild(document.createTextNode(' · '));
+      wrap.appendChild(el('span', 'nc-caution-sub', T(suite[0])));
+      if (suite[1]) { wrap.appendChild(document.createTextNode(' ')); wrap.appendChild(el('span', 'nc-caution-sub', suite[1])); }
+    }
+    return wrap;
+  }
+
   // The quiet facts line under the signal pills: who lends, who travels for
   // the signature, the file code — context to read, not badges to compare.
   // The signals (tier / complexity / readiness) stay pills; these don't.
@@ -6906,6 +7042,10 @@
     meta.appendChild(ncTierPill(b.tier));
     if (b.complexity) meta.appendChild(ncComplexityPill(b.complexity));
     meta.appendChild(ncReadyBadge(b.ready));
+    // ADR 0035 — la garantie de paiement est un signal de décision, pas un
+    // détail : elle se lit sur la rangée qui ne se replie jamais.
+    var caut = ncCautionPill(b.caution);
+    if (caut) meta.appendChild(caut);
     card.appendChild(meta);
     var facts = ncFactsRow(b);
     if (facts) card.appendChild(facts);
@@ -7155,6 +7295,25 @@
         dossier.appendChild(miss);
       }
     }
+    // ADR 0035 — la garantie de paiement, dans la même feuille que le reste de
+    // l'engagement. Elle se lit avant le clic, jamais après : le notaire qui
+    // retient bloque une journée qu'il ne revendra pas. Sans facturation
+    // (démo), la ligne dit qu'aucune garantie n'est en place plutôt que d'en
+    // inventer une.
+    var cautionDd = ncSetText('nc-retenir-caution', null);
+    if (cautionDd) {
+      var cautionLine = ncCautionLine(b.caution);
+      if (cautionLine) cautionDd.appendChild(cautionLine);
+      else cautionDd.appendChild(el('span', 'nc-retenir-sub', 'Aucune garantie en place'));
+      // Et la règle générale : combien de jours avant la signature la somme est
+      // réservée. Le nombre vient du serveur (`conditions.caution.jours`, lu du
+      // domaine) — il n'est écrit nulle part dans cette page.
+      var jours = nc.conditions && nc.conditions.caution && Number(nc.conditions.caution.jours);
+      if (jours > 0 && (!b.caution || b.caution.etat !== 'posee')) {
+        cautionDd.appendChild(el('div', 'nc-retenir-sub', T(ncCautionRegle(jours))));
+      }
+    }
+
     // The barème, computed on THIS montant. Bands come sorted by maxJours;
     // beyond the last one the cancellation is free.
     var sec = $('nc-retenir-annulation');
@@ -7601,6 +7760,19 @@
     if (entry.viaProposition) meta.appendChild(el('span', 'nc-pill nc-via-prop', 'Prix accepté sur proposition'));
     if (entry.completed) meta.appendChild(el('span', 'nc-done-badge', 'Acte complété'));
     card.appendChild(meta);
+    // ADR 0035 — sur un acte RETENU, c'est là que la garantie compte le plus :
+    // la journée est bloquée. Un refus est la seule mauvaise nouvelle que le
+    // notaire doit pouvoir lire sans attendre un courriel, alors elle se lit en
+    // toutes lettres et non en pastille seule. Un acte déjà réglé n'a plus de
+    // caution à surveiller : la capture est faite.
+    if (!entry.completed) {
+      var cautionLine = ncCautionLine(entry.caution);
+      if (cautionLine) {
+        var cautionRow = el('div', 'nc-card-facts nc-caution-row');
+        cautionRow.appendChild(cautionLine);
+        card.appendChild(cautionRow);
+      }
+    }
     // Retained cards live in a flat list (no day sections), so the signing
     // date leads; the lender / déplacement facts moved under « Votre client ».
     var facts = ncFactsRow({ dateISO: entry.dateISO, showDate: true });
@@ -10076,8 +10248,8 @@
     // its next step — not on the carnet with a toast that fades.
     if (p === 'ok') {
       track('paiement_ok');
-      toast('Paiement autorisé. Votre offre est en cours de publication.');
-      state.checkoutNotice = ['Paiement autorisé. Votre offre est en cours de publication.']
+      toast('Votre carte est acceptée. Votre offre est en cours de publication.');
+      state.checkoutNotice = ['Votre carte est acceptée. Votre offre est en cours de publication.']
         .concat(expectationLines(offerCourriel(), false));
       // The offer the sheet memorized before leaving (audit 2.2): renderProfil
       // draws its success card from it.

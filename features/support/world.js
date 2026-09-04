@@ -70,11 +70,15 @@ class NotaWorld extends World {
     // pushed onto `.calls` so a step can assert exactly what moved. Inert
     // until a scenario turns billing on (see `enableBilling`).
     this.stripe = {
-      calls: { authorizations: [], transfers: [], cancels: [], feeCaptures: [], feeTransfers: [], commissions: [] },
+      calls: { authorizations: [], setups: [], holds: [], transfers: [], cancels: [], feeCaptures: [], feeTransfers: [], offSessionFees: [], commissions: [] },
     };
     const calls = this.stripe.calls;
     Object.assign(this.stripe, {
       async createOfferAuthorization(args) { calls.authorizations.push(args); return { sessionId: 'cs_' + args.bidId, url: BASE + '/checkout/' + args.bidId }; },
+      // ADR 0035 — la carte s'ENREGISTRE à la publication quand la date est
+      // hors de la fenêtre de caution ; la caution se pose J-2, hors session.
+      async createOfferSetup(args) { calls.setups.push(args); return { sessionId: 'cs_setup_' + args.bidId, url: BASE + '/setup/' + args.bidId }; },
+      async placeOfferAuthorization(args) { calls.holds.push(args); return { paymentIntentId: 'pi_' + args.bidId, status: 'requires_capture' }; },
       async captureAndTransfer(args) { calls.transfers.push(args); return { paymentIntentId: args.paymentIntentId, chargeId: 'ch_' + args.bidId, transferId: 'tr_' + args.bidId, applicationFeeCents: args.applicationFeeCents, netCents: args.amountCents - args.applicationFeeCents }; },
       // ADR 0033 — the cancellation fee is captured, then TRANSFERRED whole to
       // the retaining notary when a connected account is named; `feeTransfers`
@@ -85,6 +89,15 @@ class NotaWorld extends World {
         if (!args.connectAccountId) return { paymentIntentId: args.paymentIntentId, chargeId, transferId: null };
         calls.feeTransfers.push({ bidId: args.bidId, amountCents: args.amountCents, connectAccountId: args.connectAccountId, chargeId });
         return { paymentIntentId: args.paymentIntentId, chargeId, transferId: 'trfee_' + args.bidId };
+      },
+      // ADR 0035 — les mêmes frais, prélevés hors session quand aucune caution
+      // n'est encore posée. Le virement au notaire est identique : entier.
+      async chargeCancellationFeeOffSession(args) {
+        calls.offSessionFees.push(args);
+        const chargeId = 'chhs_' + args.bidId;
+        if (!args.connectAccountId) return { paymentIntentId: 'pi_fee_' + args.bidId, chargeId, transferId: null };
+        calls.feeTransfers.push({ bidId: args.bidId, amountCents: args.amountCents, connectAccountId: args.connectAccountId, chargeId });
+        return { paymentIntentId: 'pi_fee_' + args.bidId, chargeId, transferId: 'trfee_' + args.bidId };
       },
       async cancelOfferAuthorization(args) { calls.cancels.push(args); return { id: args.paymentIntentId, status: 'canceled' }; },
       async chargeActCommission(args) { calls.commissions.push(args); return { id: 'pi_' + (args.bidId || 'x'), applicationFeeCents: args.applicationFeeCents }; },
@@ -145,8 +158,17 @@ class NotaWorld extends World {
 
   // Drive the daily reminder scheduler over the current repo with the same
   // notifier + frozen clock.
+  // ADR 0035 — le lot quotidien porte aussi le geste d'argent : poser la
+  // caution des offres qui entrent dans la fenêtre. Le port de facturation ne
+  // lui est passé que lorsqu'un scénario l'a branché (`enableBilling`), comme
+  // en production sans clés Stripe.
   async runReminders() {
-    return runRemindersUseCase({ repo: this.repo, notifier: this.notifier, now: () => TODAY });
+    return runRemindersUseCase({
+      repo: this.repo,
+      notifier: this.notifier,
+      billing: this.billingOn ? this.billing : null,
+      now: () => TODAY,
+    });
   }
 
   get responseJson() {

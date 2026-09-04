@@ -982,13 +982,22 @@
 
               <div class="nc-pay">
                 <h2 class="nc-h">Paiements</h2>
-                <!-- Le récit du paiement (ADR 0015 + ADR 0031) : la carte du
-                     client est autorisée à la publication pour les DEUX lignes ;
-                     à la signature, la capture porte le montant du règlement et
-                     les honoraires du notaire lui sont virés ENTIERS. Rien
-                     n'est retranché : le prix de Nota est une ligne du client
-                     (art. 32.1 2° L.N., art. 32 C.déont.). -->
-                <p class="help">Connectez un compte de paiement sécurisé (Stripe) pour recevoir vos versements. Le client autorise le paiement dès la publication ; à la signature, <strong>vos honoraires vous sont virés en entier</strong>. Nota facture son service au client, séparément — rien n’est jamais retranché de vos honoraires. Jamais de frais fixes.</p>
+                <!-- Le récit du paiement (ADR 0015 + 0031 + 0035) : la carte
+                     du client est ENREGISTRÉE à la publication et la somme —
+                     les DEUX lignes — n'y est réservée que deux jours avant la
+                     signature, parce qu'une autorisation de carte ne vit que
+                     ~7 jours. À la signature, la capture porte le montant du
+                     règlement et les honoraires du notaire lui sont virés
+                     ENTIERS. Rien n'est retranché : le prix de Nota est une
+                     ligne du client (art. 32.1 2° L.N., art. 32 C.déont.). -->
+                <p class="help">Connectez un compte de paiement sécurisé (Stripe) pour recevoir vos versements. À la signature, <strong>vos honoraires vous sont virés en entier</strong>. Nota facture son service au client, séparément — rien n’est jamais retranché de vos honoraires. Jamais de frais fixes.</p>
+                <!-- ADR 0035 + règle 1 d'AGENTS.md : le DÉLAI de la caution est
+                     `domain.CAUTION_LEAD_DAYS`, publié par l'API sous
+                     `conditions.caution.jours`. Il est écrit ici par app.js, à
+                     partir de ce nombre — jamais en dur dans la page, sinon
+                     changer la constante ferait mentir la copie sans qu'aucun
+                     test ne rougisse. -->
+                <p class="help" id="notary-pay-caution" hidden></p>
                 <ul class="errors" id="notary-connect-errors" role="alert" aria-atomic="true" hidden></ul>
                 <button type="button" class="btn btn-sm" id="notary-connect">Connecter mon compte de paiement</button>
               </div>
@@ -1565,7 +1574,7 @@
               <span class="devis-v" id="devis-date">—</span>
             </div>
             <div class="devis-l devis-total">
-              <span class="devis-k" id="devis-total-k">Autorisé sur votre carte</span>
+              <span class="devis-k" id="devis-total-k">Porté à votre carte</span>
               <span class="devis-v" id="devis-total">—</span>
             </div>
             <!-- La revendication du modèle, écrite là où le client décide.
@@ -1896,6 +1905,11 @@
           <dd id="nc-retenir-lender"></dd>
           <dt>Dossier</dt>
           <dd id="nc-retenir-dossier"></dd>
+          <!-- ADR 0035: la garantie de paiement, lue AVANT le clic — la somme
+               est déjà réservée, elle le sera tel jour, ou la carte a été
+               refusée. Une garantie qu'on ne peut pas voir n'en est pas une. -->
+          <dt>Garantie de paiement</dt>
+          <dd id="nc-retenir-caution"></dd>
         </dl>
         <section class="nc-retenir-sec" id="nc-retenir-annulation">
           <div class="nc-retenir-h">Si le client annule</div>

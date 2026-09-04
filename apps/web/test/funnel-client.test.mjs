@@ -310,7 +310,7 @@ test('returning from Checkout with ?paiement=ok shows the same expectation line'
   const note = $(doc, 'checkout-notice');
   assert.ok(note, 'a standing notice on the pane the client lands on');
   const t = FLAT(note.textContent);
-  assert.match(t, /Paiement autorisé/, t);
+  assert.match(t, /carte est acceptée/, t);
   assert.match(t, /client@exemple\.ca/, t);
   assert.match(t, /retirer/, t);
   assert.match(t, /sans frais/, t);

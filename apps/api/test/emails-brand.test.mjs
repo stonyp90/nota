@@ -474,6 +474,15 @@ test('every placeholder TEMPLATE_META declares is carried by the ctx of the send
   await notifier.onSupportReply({ message: { id: 's2', texte: 'Oui.' }, courriel: 'client@example.ca' });
   for (const kind of ['j7', 'j0', 'dossier_incomplet']) await notifier.onReminderDue(bid, kind, TODAY);
   await notifier.onNotaryDigest(notary, [bid], TODAY);
+  // ADR 0035 — les trois points d'envoi de la caution. Sans eux, la sonde ne
+  // les traverse jamais et un gabarit peut déclarer un placeholder que son
+  // appelant ne porte pas, sans que rien ne le dise.
+  await notifier.onAccountEvent(
+    { type: 'setup_intent.succeeded' },
+    notary,
+    { ...bid, paymentStatus: 'enregistre' },
+  );
+  await notifier.onCautionRefusee({ ...bid, paymentStatus: 'enregistre' }, { motif: 'card_declined' });
   await notifier.onChatMessage(bid, { id: 'm1', de: domain.CHAT_FROM.NOTAIRE, texte: 'Bonjour' }, { notary });
   await notifier.onChatMessage(bid, { id: 'm2', de: domain.CHAT_FROM.CLIENT, texte: 'Merci' }, { notary });
   await notifier.onChatDocument(bid, { id: 'f1', de: domain.CHAT_FROM.NOTAIRE, nom: 'q.pdf', etat: 'pret' }, { notary });
