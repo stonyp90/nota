@@ -544,7 +544,11 @@ function createAdmin({
   async function putPrixNota(token, body, { ip } = {}) {
     const p = await requireAdmin(token, { ip });
     if (!p) return { ok: false, status: 401 };
-    if (!rbac.can(p.permissions, 'settings:write')) {
+    // `billing:write` (« Configurer le paiement et le prix ») gouverne le prix
+    // de Nota ; `settings:write` (super_admin) le garde aussi. Publiée sans
+    // garde jusqu'au 2026-09-04, la première était une promesse, pas une
+    // permission (revue de f45a2e1).
+    if (!rbac.can(p.permissions, 'settings:write') && !rbac.can(p.permissions, 'billing:write')) {
       return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Réservé à l’administrateur principal.' }] };
     }
     const v = prixCfg.validatePrix(body || {});
@@ -569,7 +573,7 @@ function createAdmin({
   async function resetPrixNota(token, { ip } = {}) {
     const p = await requireAdmin(token, { ip });
     if (!p) return { ok: false, status: 401 };
-    if (!rbac.can(p.permissions, 'settings:write')) {
+    if (!rbac.can(p.permissions, 'settings:write') && !rbac.can(p.permissions, 'billing:write')) {
       return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Réservé à l’administrateur principal.' }] };
     }
     const before = prixView(await repo.getPrixNotaConfig());

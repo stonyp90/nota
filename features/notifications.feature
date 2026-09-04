@@ -3,8 +3,10 @@ Fonctionnalité: Cycle de vie des notifications
   Chaque événement du marché Nota déclenche exactement les courriels attendus,
   et jamais un de trop. Un mailer factice capture chaque envoi (aucun réseau,
   aucun SDK) ; on vérifie le destinataire et le type de gabarit. Le consentement
-  (CASL / Loi 25) est respecté : une adresse désabonnée ne reçoit rien, et un
-  même envoi n'est jamais répété. L'horloge est figée au 2026-08-12.
+  (LCAP / Loi 25) est respecté : une adresse désabonnée ne reçoit plus aucun
+  envoi commercial, mais garde les avis transactionnels sur son propre acte
+  (LCAP art. 6(6) — décision du 2026-09-04), et un même envoi n'est jamais
+  répété. L'horloge est figée au 2026-08-12.
 
   Scénario: publier une offre avec courriel notifie le client et l'opérateur
     Quand un client publie une offre avec le courriel "client@exemple.ca" pour "refinancement" à 2500 dans 10 jours
@@ -37,11 +39,14 @@ Fonctionnalité: Cycle de vie des notifications
     Quand le planificateur de rappels s'exécute
     Alors le client "loin@exemple.ca" ne reçoit aucun courriel "date approche"
 
-  Scénario: une adresse désabonnée ne reçoit rien
+  # Le retrait porte sur le commercial. La confirmation de SA propre offre est
+  # transactionnelle : la taire au nom d'un désabonnement marketing ferait
+  # manquer au client sa propre signature.
+  Scénario: une adresse désabonnée reçoit encore la confirmation de sa propre offre
     Étant donné l'adresse "client@exemple.ca" s'est désabonnée
     Quand un client publie une offre avec le courriel "client@exemple.ca" pour "refinancement" à 2500 dans 10 jours
     Alors la réponse a le statut 201
-    Et le client "client@exemple.ca" ne reçoit aucun courriel
+    Et le client "client@exemple.ca" reçoit exactement 1 courriel "offer published"
 
   Scénario: une même offre republiée n'envoie jamais deux fois le même courriel
     Quand un client publie une offre avec le courriel "client@exemple.ca" pour "refinancement" à 2500 dans 10 jours

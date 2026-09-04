@@ -1821,17 +1821,22 @@ function referralRewardClient(ctx) {
     fr: {
       heading: 'Votre référence a été retenue',
       lead: 'Une demande envoyée avec votre code' + (ctx.code ? ' ' + ctx.code : '') + ' vient d’être retenue par un notaire.',
+      // Acquise à la rétention, VERSÉE à la signature (décision du 2026-09-04) :
+      // une demande retenue puis annulée ne se paie pas — sans mécanisme de
+      // reprise, seul le moment du versement ferme cette porte.
       bodyHtml:
-        callout(money(amount) + ' vous sont crédités — ' + offerLine(ctx)),
-      textLines: [money(amount) + ' crédités · ' + offerLine(ctx)],
+        callout(money(amount) + ' vous sont acquis — ' + offerLine(ctx)) +
+        para('Le montant vous est versé une fois l’acte signé. Une demande annulée avant la signature ne donne lieu à aucun versement.'),
+      textLines: [money(amount) + ' acquis · ' + offerLine(ctx), 'Versé une fois l’acte signé — une demande annulée avant la signature ne donne lieu à aucun versement.'],
       ctaLabel: 'Voir le carnet',
     },
     en: {
       heading: 'Your referral was taken',
       lead: 'A request sent with your code' + (ctx.code ? ' ' + ctx.code : '') + ' was just taken by a notary.',
       bodyHtml:
-        callout(moneyEn(amount) + ' is credited to you — ' + offerLineEn(ctx)),
-      textLines: [moneyEn(amount) + ' credited · ' + offerLineEn(ctx)],
+        callout(moneyEn(amount) + ' is earned — ' + offerLineEn(ctx)) +
+        para('The amount is paid once the act is signed. A request cancelled before signing pays nothing.'),
+      textLines: [moneyEn(amount) + ' earned · ' + offerLineEn(ctx), 'Paid once the act is signed — a request cancelled before signing pays nothing.'],
       ctaLabel: 'View the carnet',
     },
     ctaUrl: linksFor(ctx.baseUrl).carnet,

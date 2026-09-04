@@ -151,7 +151,17 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
   // stored override can silence the send or reword its copy.
   async function sendOnce({ refId, kind, to, buildTemplate, templateKey, ctx }) {
     if (!to) return { sent: false, reason: 'no-address', kind };
-    if (await repo.isUnsubscribed(to)) return { sent: false, reason: 'unsubscribed', kind };
+    // Le retrait (CASL) porte sur les envois COMMERCIAUX. Un avis
+    // transactionnel — « un notaire a retenu votre demande », « votre notaire
+    // vous a écrit », « votre offre est annulée » — est la seule trace d'un
+    // fait qui concerne l'acte de la personne ; LCAP art. 6(6) l'exempte du
+    // consentement, et le taire au nom d'un désabonnement marketing lui
+    // ferait manquer sa propre signature (décision du 2026-09-04). Le
+    // registre des gabarits (emails.js) dit lesquels sont transactionnels ;
+    // tout le reste — résumé, nouvelle demande, campagne — reste suppressible.
+    const meta = emails.TEMPLATE_META && emails.TEMPLATE_META[templateKey];
+    const transactionnel = !!(meta && meta.transactionnel === true);
+    if (!transactionnel && (await repo.isUnsubscribed(to))) return { sent: false, reason: 'unsubscribed', kind };
     if (await repo.wasNotificationSent(refId, kind)) return { sent: false, reason: 'duplicate', kind };
 
     // Art. 68 — un gabarit transactionnel ne s'éteint pas : emails.js seul sait

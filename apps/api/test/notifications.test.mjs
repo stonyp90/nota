@@ -88,15 +88,24 @@ test('onOfferCreated sends offerPublished once (idempotent on repeat)', async ()
   assert.equal(mailer.sent.length, 2, 'no third message on the repeat call');
 });
 
-test('a suppressed (unsubscribed) address gets nothing', async () => {
+test('a suppressed (unsubscribed) address still gets the TRANSACTIONAL confirmation of its own offer (LCAP 6(6), decision of 2026-09-04)', async () => {
   const { repo, mailer, notifier } = setup();
   await repo.putUnsubscribe('client@example.ca', TODAY);
 
   await notifier.onOfferCreated(bidWithEmail());
 
-  assert.equal(mailer.sent.some((m) => m.to === 'client@example.ca'), false, 'suppressed client was mailed');
-  // The operator is a different address and is unaffected.
+  // offerPublished is `transactionnel: true` in the registry: the only notice
+  // that the offer exists. A marketing opt-out must not silence it.
+  assert.equal(mailer.sent.some((m) => m.to === 'client@example.ca'), true, 'transactional notice reaches an opted-out client');
   assert.equal(mailer.sent.some((m) => m.to === 'ops@nota.ca'), true);
+});
+
+test('a suppressed notary address gets NO relational mail — the instant lead alert stays silent', async () => {
+  const { repo, mailer, notifier } = setup33();
+  await repo.putNotary({ id: 'instant', email: 'instant@etude.example', status: 'active', prefixe: 'G1V', rayonKm: 25, urgences: false, alertes: { pace: 'instant', urgentOnly: false } });
+  await repo.putUnsubscribe('instant@etude.example', TODAY);
+  await notifier.onOfferCreated(bidWithEmail({ prefixe: 'G1R', pricing: { deplacement: 'notaire_25', preteur: 'rbc' } }));
+  assert.equal(mailer.sent.some((m) => m.to === 'instant@etude.example'), false, 'nouvelleDemande is relational: the opt-out holds');
 });
 
 test('onOfferCreated with no courriel still alerts the operator, mails no client', async () => {

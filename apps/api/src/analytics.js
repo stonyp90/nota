@@ -168,7 +168,9 @@ function createAnalytics({ repo, now, gaugeHorizonMonths } = {}) {
       );
       notaires = profiles
         .filter((n) => n && domain.isReferralCode(n.parrain))
-        .map((n) => ({ parrain: n.parrain, premierActe: true }));
+        // `regle` : le notaire référé a réglé au moins un acte — ce qui rend sa
+        // récompense PAYABLE (décision du 2026-09-04), la rétention l'ayant acquise.
+        .map((n) => ({ parrain: n.parrain, premierActe: true, regle: Number(n.actsCompleted) >= 1 }));
     }
     // The durable earning events — the ledger's all-time truth. Folded into
     // per-code per-track counts; a repo without the method (or a failed read)
@@ -206,6 +208,50 @@ function createAnalytics({ repo, now, gaugeHorizonMonths } = {}) {
     }
     for (const row of byCode.values()) {
       row.du = row.retenues * domain.REFERRAL.client + row.notairesActifs * domain.REFERRAL.notaire;
+    }
+    // ACQUIS vs PAYABLE (décision du 2026-09-04). `du` reste ce que la
+    // rétention a ACQUIS au partenaire — le registre write-once ne ment pas.
+    // Mais une demande retenue puis annulée ne se paie pas, et sans mécanisme
+    // de reprise (ADR 0011 : EARN est write-once) seul le moment du versement
+    // ferme cette porte : un gain client devient PAYABLE quand l'acte de la
+    // demande est réglé (registre ACT#), un gain notaire quand le notaire
+    // référé a réglé au moins un acte. C'est ce que l'opérateur verse.
+    const payable = new Map(); // CODE -> { client, notaire }
+    await Promise.all(
+      earnings.map(async (e) => {
+        if (!e || !domain.isReferralCode(e.code)) return;
+        const code = domain.normalizeReferralCode(e.code);
+        let ok = false;
+        try {
+          if (e.track === 'client' && typeof repo.getActCompletion === 'function') {
+            ok = !!(await repo.getActCompletion(e.refId));
+          } else if (e.track === 'notaire' && typeof repo.getNotary === 'function') {
+            const n = await repo.getNotary(e.refId);
+            ok = !!(n && Number(n.actsCompleted) >= 1);
+          }
+        } catch {
+          ok = false; // un registre illisible ne rend rien payable
+        }
+        if (!ok) return;
+        const p = payable.get(code) || { client: 0, notaire: 0 };
+        p[e.track] += 1;
+        payable.set(code, p);
+      })
+    );
+    // La fenêtre vivante compte aussi (même filet de sécurité que `du` : MAX,
+    // jamais somme) : `completes` = demandes référées dont l'acte est réglé,
+    // et les notaires référés de la fenêtre qui ont réglé au moins un acte.
+    const windowNotaires = new Map(); // CODE -> notaires référés ayant réglé
+    for (const n of notaires) {
+      if (!n.regle) continue;
+      const code = domain.normalizeReferralCode(n.parrain);
+      windowNotaires.set(code, (windowNotaires.get(code) || 0) + 1);
+    }
+    for (const row of byCode.values()) {
+      const p = payable.get(row.code) || { client: 0, notaire: 0 };
+      const client = Math.max(p.client, Number(row.completes) || 0);
+      const notaire = Math.max(p.notaire, windowNotaires.get(row.code) || 0);
+      row.payable = client * domain.REFERRAL.client + notaire * domain.REFERRAL.notaire;
     }
     // Every CONFIRMED code is a row, even with zero referrals — the operator
     // must see a partner the moment they confirm, not the day they earn. A

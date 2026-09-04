@@ -76,14 +76,16 @@ test('two messages from the same address both go through (no false dedupe)', asy
   assert.equal(ops.length, 2);
 });
 
-test('an unsubscribed sender still reaches the operator; only the ack is suppressed', async () => {
+test('an unsubscribed sender still reaches the operator, and still gets the ack — a reply to their own message is transactional (LCAP 6(6))', async () => {
+  // Decision of 2026-09-04: the marketing opt-out never silences the answer
+  // to a question the person just asked (contactRecu is `transactionnel: true`).
   const a = app();
   await a.repo.putUnsubscribe('anne@example.ca', TODAY);
   const res = await send(a, { courriel: 'anne@example.ca', message: 'Aidez-moi' });
   assert.equal(res.statusCode, 202, res.body);
   await flush();
   assert.ok(a.mailer.sent.some((m) => m.to === 'ops@nota.ca'), 'operator mail suppressed');
-  assert.ok(!a.mailer.sent.some((m) => m.to === 'anne@example.ca'), 'ack should honour the unsubscribe');
+  assert.ok(a.mailer.sent.some((m) => m.to === 'anne@example.ca'), 'the acknowledgement reaches the sender despite the opt-out');
 });
 
 test('without an operator address the route still accepts and acks', async () => {

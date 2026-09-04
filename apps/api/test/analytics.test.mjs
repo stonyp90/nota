@@ -161,6 +161,9 @@ test('parrainages: a referred demand earns at RETENTION; a referred notary earns
     {
       code: 'EVEROY', demandes: 2, retenues: 1, completes: 1, notaires: 1, notairesActifs: 1,
       du: domain.REFERRAL.client + domain.REFERRAL.notaire,
+      // Décision du 2026-09-04 : payable = l'acte réglé (r1) ; N1 n'a encore
+      // réglé aucun acte (actsCompleted absent), sa prime attend.
+      payable: domain.REFERRAL.client,
       type: 'courtier_hypothecaire', courriel: 'eve@courtage.ca',
       // The fr/en labels ride along from the domain so the admin UI renders
       // them without re-hardcoding; unregistered codes omit them (BROKER1).
@@ -168,7 +171,7 @@ test('parrainages: a referred demand earns at RETENTION; a referred notary earns
     },
     {
       code: 'BROKER1', demandes: 1, retenues: 1, completes: 0, notaires: 0, notairesActifs: 0,
-      du: domain.REFERRAL.client, type: null, courriel: null,
+      du: domain.REFERRAL.client, payable: 0, type: null, courriel: null,
     },
   ]);
 });
@@ -183,7 +186,7 @@ test('parrainages: durable earnings recorded at event time survive the window (a
   assert.deepEqual(o.parrainages.codes, [
     {
       code: 'EVEROY', demandes: 0, retenues: 1, completes: 0, notaires: 1, notairesActifs: 1,
-      du: domain.REFERRAL.client + domain.REFERRAL.notaire, type: null, courriel: null,
+      du: domain.REFERRAL.client + domain.REFERRAL.notaire, payable: 0, type: null, courriel: null,
     },
   ]);
 });
@@ -201,7 +204,7 @@ test('parrainages: an earning seen BOTH live and durably counts once (max, never
   assert.deepEqual(o.parrainages.codes, [
     {
       code: 'EVEROY', demandes: 1, retenues: 1, completes: 0, notaires: 1, notairesActifs: 1,
-      du: domain.REFERRAL.client + domain.REFERRAL.notaire, type: null, courriel: null,
+      du: domain.REFERRAL.client + domain.REFERRAL.notaire, payable: 0, type: null, courriel: null,
     },
   ]);
 });
@@ -226,6 +229,6 @@ test('parrainages degrades gracefully on a repo without the act-ledger or regist
   const a = createAnalytics({ repo: stripped, now: () => TODAY });
   const o = await a.overview();
   assert.deepEqual(o.parrainages.codes, [
-    { code: 'EVEROY', demandes: 1, retenues: 1, completes: 0, notaires: 0, notairesActifs: 0, du: domain.REFERRAL.client, type: null, courriel: null },
+    { code: 'EVEROY', demandes: 1, retenues: 1, completes: 0, notaires: 0, notairesActifs: 0, du: domain.REFERRAL.client, payable: 0, type: null, courriel: null },
   ]);
 });

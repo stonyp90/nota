@@ -134,14 +134,16 @@ test('onChatMessage client→notaire resolves the notary profile and mails their
   assert.equal(toClientChatMail(a).length, 0);
 });
 
-test('a suppressed client address silences the chat mail (CASL)', async () => {
+test('a suppressed client address STILL gets the chat mail — transactional, LCAP art. 6(6) (decision of 2026-09-04)', async () => {
+  // A marketing opt-out must never hide « your notary wrote to you »: the
+  // message is the only notice of a fact about the client's own act.
   const a = app();
   await a.repo.putUnsubscribe('client@example.ca', TODAY);
   await a.repo.putNotary({ id: 'n-1', email: 'n@etude.ca' });
   const bid = { id: 'b1', serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2900, status: domain.STATUS.RETENUE, notaryId: 'n-1', courriel: 'client@example.ca' };
   const r = await a.notifier.onChatMessage(bid, { id: 'm1', de: domain.CHAT_FROM.NOTAIRE, texte: 'Bonjour!' });
-  assert.equal(r.results[0].sent, false);
-  assert.equal(toClientChatMail(a).length, 0);
+  assert.equal(r.results[0].sent, true);
+  assert.equal(toClientChatMail(a).length, 1);
 });
 
 // --- route wiring (fire-and-forget in BOTH chat routes) -----------------------

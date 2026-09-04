@@ -929,7 +929,9 @@
     var table = el('table', 'ptable');
     var thead = el('thead');
     var hr = el('tr');
-    ['Code', 'Partenaire', 'Demandes', 'Retenues', 'Complétés', 'Notaires', 'Actifs', 'Dû'].forEach(function (h, i) {
+    // « Acquis » = ce que la rétention a écrit au registre ; « Payable » = ce
+    // que l'opérateur verse, une fois l'acte réglé (décision du 2026-09-04).
+    ['Code', 'Partenaire', 'Demandes', 'Retenues', 'Complétés', 'Notaires', 'Actifs', 'Acquis', 'Payable'].forEach(function (h, i) {
       var th = el('th', i >= 2 ? 'is-num' : null, h);
       hr.appendChild(th);
     });
@@ -954,6 +956,9 @@
       tr.appendChild(el('td', 'is-num', num(r.notaires || 0)));
       tr.appendChild(el('td', 'is-num', num(r.notairesActifs || 0)));
       tr.appendChild(el('td', 'is-num ptable-du', moneyCents((r.du || 0) * 100)));
+      var payableTd = el('td', 'is-num ptable-du ptable-payable', moneyCents((r.payable || 0) * 100));
+      payableTd.title = 'acquis à la rétention, payable une fois l’acte signé';
+      tr.appendChild(payableTd);
       tbody.appendChild(tr);
     });
     table.appendChild(tbody);
@@ -2824,6 +2829,11 @@
   function canWriteSettings() {
     return can('settings:write');
   }
+  // Le prix de Nota se gouverne par « Configurer le paiement et le prix »
+  // (billing:write) ou par les réglages globaux (super_admin) — 2026-09-04.
+  function canWritePrix() {
+    return can('settings:write') || can('billing:write');
+  }
 
   // « 12 » or « 12,5 » (percent, comma or point) → 0.125 fraction.
   function pctToFrac(v) {
@@ -2915,14 +2925,14 @@
     }
 
     var view = el('div', 'view-enter');
-    if (!canWriteSettings()) {
+    if (!canWritePrix()) {
       var note = el('div', 'tpl-readonly-note');
       note.appendChild(el('strong', null, 'Lecture seule'));
       note.appendChild(document.createTextNode(' — la modification du prix est réservée à l’administrateur principal.'));
       view.appendChild(note);
     }
     view.appendChild(buildPrixView(r.json));
-    if (canWriteSettings()) view.appendChild(buildPrixForm(r.json, container));
+    if (canWritePrix()) view.appendChild(buildPrixForm(r.json, container));
     container.appendChild(view);
   }
 

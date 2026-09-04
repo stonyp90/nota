@@ -117,11 +117,7 @@ test('« services:write » n’est plus publié — aucune route ne l’applique
   const source = ['admin.js', 'admin-handler.js']
     .map((f) => readFileSync(new URL('../src/' + f, import.meta.url), 'utf8')).join('\n');
   const appliquees = new Set([...source.matchAll(/rbac\.can\([^,]+,\s*'([a-z]+:[a-z]+)'\)/g)].map((m) => m[1]));
-  // billing:write : la route /admin/prix appartient à la session « grille de
-  // prix » (2026-09-04) ; elle doit l'appliquer — d'ici là, exception nommée.
-  const DEFERRED = ['billing:write'];
   for (const k of cles) {
-    if (DEFERRED.includes(k)) continue;
     assert.ok(appliquees.has(k), k + ' est publiée mais aucun garde rbac.can() ne l’applique');
   }
   // Celles-ci SONT gardées (activation d'un notaire, journal, campagnes) : elles restent.
@@ -195,4 +191,21 @@ test('GET /admin/me porte la fenêtre d’inactivité et le plafond absolu de la
   const moi = parse(await h.call('GET', '/admin/me', { bearer: s }));
   assert.equal(moi.idleTtlMs, 7 * 60 * 1000, 'la console doit viser la vraie échéance');
   assert.equal(moi.expiresAt, new Date(START + 60 * 60 * 1000).toISOString());
+});
+
+test('« billing:write » gouverne le prix de Nota : seule, elle ouvre PUT/DELETE /admin/prix ; sans elle ni settings:write, 403', async () => {
+  const h = make();
+  const s = await login(h);
+  const facturier = await loginNu(h, 'nu@nota.ca', { permissions: ['billing:write'] });
+  const lecteur = await loginNu(h, 'analyst@nota.ca', { permissions: ['analytics:read'] });
+  const body = { prixCents: 25000 };
+  const ok = await h.call('PUT', '/admin/prix', { bearer: facturier, body });
+  assert.notEqual(ok.statusCode, 403, 'billing:write must not be refused: ' + ok.body);
+  assert.notEqual(ok.statusCode, 401, ok.body);
+  const non = await h.call('PUT', '/admin/prix', { bearer: lecteur, body });
+  assert.equal(non.statusCode, 403, non.body);
+  const reset = await h.call('DELETE', '/admin/prix', { bearer: facturier });
+  assert.notEqual(reset.statusCode, 403, reset.body);
+  // Le super_admin garde son accès (settings:write reste accepté).
+  assert.notEqual((await h.call('PUT', '/admin/prix', { bearer: s, body })).statusCode, 403);
 });

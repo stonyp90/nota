@@ -110,3 +110,12 @@ program gains it:
 Everything else — flat two-track amounts, retention trigger, private
 attribution, derived ledger, no partner dashboard (a code plus transactional
 email is the simplest viable partner program) — stands as decided above.
+
+> **Amendement du 2026-09-04 (décision produit, ADR 0037).** La récompense
+> client reste ACQUISE à la rétention (registre EARN write-once, inchangé),
+> mais elle n'est VERSÉE qu'une fois l'acte de la demande réglé (registre
+> ACT#) ; la récompense notaire, une fois que le notaire référé a réglé au
+> moins un acte. `GET /admin/metrics/overview` distingue désormais `du`
+> (acquis) et `payable`. Motif : une demande retenue puis annulée ne se paie
+> pas, et comme EARN est write-once, seul le moment du versement ferme la
+> porte « retenir, annuler, encaisser 50 $ ».
