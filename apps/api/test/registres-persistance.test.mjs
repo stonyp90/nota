@@ -239,7 +239,6 @@ for (const [nom, ouvrir] of ADAPTATEURS) {
     // Une limite absurde retombe sur le plafond partagé par les deux adaptateurs.
     const tout = await repo.listNotifications('roy@etude.ca', { limit: 10000 });
     assert.equal(tout.length, 5);
-    assert.ok(keys.NOTIF_PAGE_MAX >= 5);
   });
 
   test(`${nom} : un avis rejoué ne se dédouble pas`, async () => {
@@ -412,6 +411,82 @@ for (const [nom, ouvrir] of ADAPTATEURS) {
 }
 
 // ============================================================================
+// 5 bis. LA BORNE DE PAGE, ÉPROUVÉE EN LA DÉPASSANT
+// ============================================================================
+//
+// « Aucune lecture ne s'en dispense » est l'argument central de ces registres :
+// une partition entière rapatriée dans la mémoire d'une Lambda est un bogue de
+// dessin. Un test qui écrit CINQ lignes, en demande dix mille et en attend cinq
+// ne peut pas être rouge — il passerait avec un plafond d'un milliard. Celui-ci
+// écrit PLUS que le plafond et exige que la fenêtre coupe : il tombe le jour où
+// une borne disparaît.
+//
+// Et il vérifie par quel BOUT la fenêtre coupe, ce qui n'est pas un détail : ce
+// qui doit tomber est le passé lointain, jamais le dernier fait — c'est le
+// dernier qui décide (le retrait de consentement, l'offre encore vivante).
+const jour = (i) => new Date(Date.UTC(2026, 9, 2) + i * 86400000).toISOString().slice(0, 10);
+
+for (const [nom, ouvrir] of ADAPTATEURS) {
+  test(`${nom} : chaque lecture bornée COUPE vraiment quand la partition déborde`, async () => {
+    const repo = ouvrir();
+    const trop = (max) => max + 3;
+
+    // Le journal de consentement : la fenêtre garde le bout RÉCENT.
+    for (let i = 0; i < trop(keys.CONSENT_PAGE_MAX); i += 1) {
+      await repo.appendConsentEvent({ courriel: 'roy@etude.ca', type: 'octroi', base: 'expres', at: t(i), id: 'e' + i });
+    }
+    const chaine = await repo.listConsentEvents('roy@etude.ca');
+    assert.equal(chaine.length, keys.CONSENT_PAGE_MAX, 'la borne du journal de consentement ne tient pas');
+    assert.equal(chaine[chaine.length - 1].at, t(trop(keys.CONSENT_PAGE_MAX) - 1), 'le DERNIER fait ne tombe jamais');
+
+    // Les avis : la lecture ET le marquage partagent la même fenêtre.
+    for (let i = 0; i < trop(keys.NOTIF_PAGE_MAX); i += 1) {
+      await repo.appendNotification({ ...AVIS, id: 'n' + i, at: t(i) });
+    }
+    const vus = await repo.listNotifications('roy@etude.ca');
+    assert.equal(vus.length, keys.NOTIF_PAGE_MAX, 'la borne des avis ne tient pas');
+    assert.equal(vus[0].id, 'n' + (trop(keys.NOTIF_PAGE_MAX) - 1), 'les plus récentes d’abord');
+    assert.equal(
+      await repo.markNotificationsRead('roy@etude.ca', 'toutes', t(9999)),
+      keys.NOTIF_PAGE_MAX,
+      'on ne marque lu que ce qu’on pouvait voir'
+    );
+
+    // Le journal par sujet.
+    for (let i = 0; i < trop(keys.SUBJECT_PAGE_MAX); i += 1) {
+      await repo.appendSubjectEvent({ sujet: 'roy@etude.ca', kind: 'courriel', templateKey: 'x', at: t(i), id: 'j' + i });
+    }
+    const envois = await repo.listSubjectEvents('roy@etude.ca');
+    assert.equal(envois.length, keys.SUBJECT_PAGE_MAX, 'la borne du journal par sujet ne tient pas');
+    assert.equal(envois[0].id, 'j' + (trop(keys.SUBJECT_PAGE_MAX) - 1));
+
+    // L'index client : la fenêtre garde les dates les plus PROCHES.
+    for (let i = 0; i < trop(keys.CLIENT_BID_PAGE_MAX); i += 1) {
+      await repo.indexClientBid({ courriel: 'roy@etude.ca', bidId: 'b' + i, dateISO: jour(i), at: t(i) });
+    }
+    const offres = await repo.listClientBids('roy@etude.ca');
+    assert.equal(offres.length, keys.CLIENT_BID_PAGE_MAX, 'la borne de l’index client ne tient pas');
+    assert.equal(
+      offres[offres.length - 1].dateISO,
+      jour(trop(keys.CLIENT_BID_PAGE_MAX) - 1),
+      'une personne se retrouve par ce qu’elle a de vivant'
+    );
+
+    // Et la campagne, elle, ne coupe pas : elle PAGINE — la borne y est la
+    // taille d'une page, pas la fin de la liste.
+    for (let i = 0; i < trop(keys.CAMPAIGN_PAGE_MAX); i += 1) {
+      await repo.appendCampaignRecipient({ campagneId: 'camp-1', courriel: `d${String(i).padStart(3, '0')}@x.ca`, at: t(i) });
+    }
+    const page = await repo.listCampaignRecipients('camp-1');
+    assert.equal(page.destinataires.length, keys.CAMPAIGN_PAGE_MAX, 'la borne de la campagne ne tient pas');
+    assert.equal(typeof page.cursor, 'string', 'ce qui déborde revient par le curseur, il ne se perd pas');
+    const suite = await repo.listCampaignRecipients('camp-1', { cursor: page.cursor });
+    assert.equal(suite.destinataires.length, 3);
+    assert.equal(suite.cursor, null);
+  });
+}
+
+// ============================================================================
 // 6. Groupes d’audience — quatre portes qui existaient sans être éprouvées
 // ============================================================================
 
@@ -429,8 +504,16 @@ for (const [nom, ouvrir] of ADAPTATEURS) {
     assert.equal(ecrit.updatedAt, T0);
 
     await repo.putAudienceGroup({ id: 'ajnq', libelle: 'AJNQ', audience: 'notaire', nature: 'commercial', membres: [] }, T0);
+    // Deux identifiants dont l’ordre par OCTETS (celui d’une partition
+    // DynamoDB) contredit celui d’une locale : « _ » vaut 0x5F, « . » 0x2E.
+    await repo.putAudienceGroup({ id: 'pilote_2', libelle: 'Pilote 2', membres: [] }, T0);
+    await repo.putAudienceGroup({ id: 'pilote.b', libelle: 'Pilote B', membres: [] }, T0);
     const liste = await repo.listAudienceGroups();
-    assert.deepEqual(liste.map((g) => g.id), ['ajnq', 'pilote'], 'ordonnés par identifiant');
+    assert.deepEqual(
+      liste.map((g) => g.id),
+      ['ajnq', 'pilote', 'pilote.b', 'pilote_2'],
+      'ordonnés par identifiant, dans l’ordre de la partition — celui des octets'
+    );
     assert.deepEqual(liste[0].membres, [], 'un groupe vide reste un groupe');
 
     assert.deepEqual(await repo.getAudienceGroup('pilote'), {
@@ -440,7 +523,11 @@ for (const [nom, ouvrir] of ADAPTATEURS) {
 
     await repo.deleteAudienceGroup('pilote');
     assert.equal(await repo.getAudienceGroup('pilote'), null);
-    assert.deepEqual((await repo.listAudienceGroups()).map((g) => g.id), ['ajnq'], 'l’effacement ne touche que le sien');
+    assert.deepEqual(
+      (await repo.listAudienceGroups()).map((g) => g.id),
+      ['ajnq', 'pilote.b', 'pilote_2'],
+      'l’effacement ne touche que le sien'
+    );
   });
 }
 

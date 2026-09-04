@@ -20,6 +20,22 @@ function conditionFailed() {
   return err;
 }
 
+function validationFailed(message) {
+  const err = new Error(message);
+  err.name = 'ValidationException';
+  return err;
+}
+
+// DynamoDB « collate and compare strings using the bytes of the underlying UTF-8
+// string encoding ». Le double doit trier PAREIL : avec `localeCompare` il
+// rangeait « marie_t » avant « marie.tremblay » (là où l'octet 0x5F vient après
+// 0x2E), donc il rendait des pages dans un ordre que la production n'aurait
+// jamais rendu — et une divergence d'ordre entre les deux adaptateurs pouvait
+// passer verte ici. La règle est écrite ICI plutôt qu'importée de `keys.js`
+// exprès : le double modélise la PLATEFORME, pas notre schéma, et un oracle qui
+// emprunte sa règle au code testé ne prouve plus rien. Un test compare les deux.
+const ordreCles = (a, b) => Buffer.compare(Buffer.from(String(a), 'utf8'), Buffer.from(String(b), 'utf8'));
+
 function attrPresent(item, attr) {
   return item != null && Object.prototype.hasOwnProperty.call(item, attr) && item[attr] !== undefined;
 }
@@ -57,6 +73,17 @@ function evalCondition(expr, item, names = {}, values = {}) {
             const attr = names[m[2]] || m[2];
             const present = attrPresent(item, attr);
             return m[1] ? !present : present;
+          }
+          // `attribute_type(chemin, :type)` — comment on reconnaît un attribut
+          // NULL, la forme des lignes de consentement héritées. Seuls les types
+          // que le dépôt émet sont modélisés : le reste lève, comme le promet
+          // l'en-tête de ce fichier.
+          const ty = /^\(?\s*attribute_type\(\s*([#\w]+)\s*,\s*(:\w+)\s*\)\s*\)?$/.exec(brut);
+          if (ty) {
+            const attr = names[ty[1]] || ty[1];
+            const attendu = values[ty[2]];
+            if (attendu !== 'NULL') throw new Error('fake-table : attribute_type non modélisé — ' + attendu);
+            return attrPresent(item, attr) && item[attr] === null;
           }
           const c = /^\(?\s*([#\w]+)\s*(<=|>=|<>|<|>|=)\s*(:\w+)\s*\)?$/.exec(brut);
           if (!c) throw new Error('fake-table : condition non supportée — ' + clause);
@@ -107,29 +134,41 @@ export function createFakeTable({ name = 'nota-main' } = {}) {
         const prefixe = String(values[m[1]]);
         rows = rows.filter((it) => String(it.SK).startsWith(prefixe));
       } else if ((m = /^SK\s+BETWEEN\s+(:\w+)\s+AND\s+(:\w+)$/.exec(reste))) {
-        const [a, b] = [String(values[m[1]]), String(values[m[2]])];
-        rows = rows.filter((it) => String(it.SK) >= a && String(it.SK) <= b);
+        // Bornes comparées EN OCTETS, comme le tri : une condition de tri qui
+        // n'emploierait pas l'ordre de la table couperait ailleurs qu'elle.
+        const [a, b] = [values[m[1]], values[m[2]]];
+        rows = rows.filter((it) => ordreCles(it.SK, a) >= 0 && ordreCles(it.SK, b) <= 0);
       } else if ((m = /^SK\s*(>=|<=|>|<)\s*(:\w+)$/.exec(reste))) {
-        const borne = String(values[m[2]]);
-        const cmp = { '>=': (s) => s >= borne, '<=': (s) => s <= borne, '>': (s) => s > borne, '<': (s) => s < borne };
-        rows = rows.filter((it) => cmp[m[1]](String(it.SK)));
+        const borne = values[m[2]];
+        const cmp = { '>=': (n) => n >= 0, '<=': (n) => n <= 0, '>': (n) => n > 0, '<': (n) => n < 0 };
+        rows = rows.filter((it) => cmp[m[1]](ordreCles(it.SK, borne)));
       } else {
         throw new Error('fake-table : condition de tri non supportée — ' + reste);
       }
     }
 
-    rows.sort((a, b) => String(a.SK).localeCompare(String(b.SK)));
+    rows.sort((a, b) => ordreCles(a.SK, b.SK));
     if (input.ScanIndexForward === false) rows.reverse();
 
     // `ExclusiveStartKey` reprend STRICTEMENT après la clé nommée — DynamoDB
     // n'exige pas qu'elle existe encore. Chercher la ligne (et repartir du
     // début quand elle a disparu) ferait tourner la boucle de l'appelant sans
     // fin sur la même page.
+    //
+    // La clé de départ doit en revanche DÉSIGNER la partition interrogée : le
+    // vrai service lève une ValidationException quand elle ne correspond pas à
+    // la KeyCondition. Le double ne regardait que le SK, donc un curseur minté
+    // pour « camp-2 » et rejoué contre « camp-1 » rendait tranquillement le
+    // milieu d'une autre campagne — toute une classe de mauvais usage du
+    // curseur ne pouvait être QUE verte en test.
     if (input.ExclusiveStartKey) {
-      const { SK } = input.ExclusiveStartKey;
+      const { PK, SK } = input.ExclusiveStartKey;
+      if (String(PK) !== String(values[pkm[1]]) || SK === undefined) {
+        throw validationFailed('The provided starting key is invalid');
+      }
       const apres = input.ScanIndexForward === false
-        ? (it) => String(it.SK) < String(SK)
-        : (it) => String(it.SK) > String(SK);
+        ? (it) => ordreCles(it.SK, SK) < 0
+        : (it) => ordreCles(it.SK, SK) > 0;
       rows = rows.filter(apres);
     }
 
@@ -215,5 +254,16 @@ export function createFakeTable({ name = 'nota-main' } = {}) {
     },
   };
 
-  return { doc, sent, items, name };
+  // SEMER une ligne telle quelle, sans passer par le dépôt : c'est la seule
+  // façon d'éprouver ce que le code NEUF n'écrit plus mais que la production
+  // porte encore — par exemple un `at` de type NULL, la forme que l'ancien
+  // `putEmailConsent` laissait dans la projection de consentement. Une suite de
+  // parité dont tous les scénarios partent d'une table écrite par le nouveau
+  // code ne peut pas voir une rétro-compatibilité cassée.
+  const semer = (item) => {
+    items.set(cle(item.PK, item.SK), clone(item));
+    return item;
+  };
+
+  return { doc, sent, items, name, semer };
 }

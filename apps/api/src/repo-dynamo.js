@@ -73,6 +73,7 @@ const {
   CAMPAIGN_PAGE_MAX,
   CONSENT_PAGE_MAX,
   CLIENT_BID_PAGE_MAX,
+  exigerInstantDeLecture,
   encodeCursor,
   decodeCursor,
   adminPK,
@@ -188,11 +189,25 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
     // quelqu'un qui s'est retiré (LCAP art. 13, Loi 25 art. 8). La condition
     // est ATOMIQUE : elle tient aussi entre deux Lambdas, là où un
     // lire-puis-écrire perdrait la course.
+    //
+    // La troisième clause N'EST PAS DÉCORATIVE : elle porte la
+    // RÉTRO-COMPATIBILITÉ. Le `putEmailConsent` d'avant ce chantier écrivait
+    // `at: (consent && consent.at) || null` et posait l'item tel quel — donc des
+    // lignes de production portent un `at` de type NULL. En DynamoDB un
+    // attribut NULL EXISTE (`attribute_not_exists` est faux) et ne se compare à
+    // aucune chaîne (`#at <= :at` est faux aussi) : sans
+    // `attribute_type(#at, 'NULL')` la garde est fausse EN ENTIER, le catch
+    // ci-dessous avale la ConditionalCheckFailedException, et la projection de
+    // cette personne est FIGÉE POUR TOUJOURS — un retrait entre au journal sans
+    // jamais atteindre `segments.js`, qui continue de la démarcher. C'est
+    // exactement la garantie que cette garde prétend donner (LCAP art. 13,
+    // Loi 25 art. 8) qui tombait, en silence, sur les lignes héritées.
     const garde = garderLOrdre && at
       ? {
-          ConditionExpression: 'attribute_not_exists(PK) OR attribute_not_exists(#at) OR #at <= :at',
+          ConditionExpression:
+            'attribute_not_exists(PK) OR attribute_not_exists(#at) OR attribute_type(#at, :typeNul) OR #at <= :at',
           ExpressionAttributeNames: { '#at': 'at' },
-          ExpressionAttributeValues: { ':at': at },
+          ExpressionAttributeValues: { ':at': at, ':typeNul': 'NULL' },
         }
       : {};
     try {
@@ -939,6 +954,10 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
     // décider : la clé, l'identifiant, l'instant de lecture. Le corps d'un avis
     // n'a rien à faire dans la mémoire d'une Lambda qui ne fait que cocher.
     async markNotificationsRead(sujet, ids, at) {
+      // Même refus que l'adaptateur mémoire : `luLe = null` laisserait l'avis
+      // NON LU, donc recompté à chaque appel — le compteur ne se stabilise
+      // jamais et l'invariant « re-marquer ce qui est lu ne compte pas » ment.
+      exigerInstantDeLecture(at);
       const cible = ids === 'toutes' || ids === 'all' || ids == null
         ? null
         : new Set((Array.isArray(ids) ? ids : [ids]).map(String));
@@ -970,7 +989,7 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
               UpdateExpression: 'SET #lu = :at',
               ConditionExpression: 'attribute_exists(PK)',
               ExpressionAttributeNames: { '#lu': 'luLe' },
-              ExpressionAttributeValues: { ':at': at || null },
+              ExpressionAttributeValues: { ':at': at },
             })
           );
           marques += 1;

@@ -329,6 +329,37 @@ const CANCELLATION_CONFIG_SK = 'BAREME';
 // comme UNSUB# : ce qu'on doit savoir, c'est la DERNIÈRE fois, pas l'historique.
 const normalizedEmail = (email) => String(email == null ? '' : email).trim().toLowerCase();
 
+// L'ORDRE DES CLÉS DE TRI, ET IL N'Y EN A QU'UN.
+//
+// DynamoDB « collate and compare strings using the bytes of the underlying
+// UTF-8 string encoding » : l'ordre d'une partition est celui des OCTETS. Un
+// adaptateur qui trie autrement — `String.localeCompare`, qui range « _ » avant
+// « . » là où l'octet 0x5F vient après 0x2E — ne diverge pas seulement sur la
+// présentation : la reprise de curseur, elle, compare des octets. Les deux
+// ordres se contredisent, la page reprend au mauvais endroit, et la boucle de
+// l'appelant rend indéfiniment la même page en perdant la fin de la partition.
+// Il suffit d'une ponctuation dans une adresse — c'est-à-dire de presque toutes.
+//
+// La comparaison passe donc par les octets eux-mêmes, pas par une approximation
+// qui « marche pour l'ASCII » : c'est la règle de DynamoDB, écrite telle quelle.
+// Elle vit ici, avec les bornes de page, parce que `repo-memory`, `repo-dynamo`
+// et le double de table doivent s'accorder — un ordre recopié finit par diverger.
+function ordreCles(a, b) {
+  return Buffer.compare(Buffer.from(String(a), 'utf8'), Buffer.from(String(b), 'utf8'));
+}
+
+// Une clé de partition dérivée d'une valeur VIDE n'est pas une clé : c'est un
+// SEAU COMMUN. `NOTIF#` seul, `CONSENT#` seul, `CLIENT#` seul rangent côte à
+// côte des lignes qui n'ont rien à voir, et la lecture de ce seau rend à
+// quiconque la preuve de consentement, les offres ou les avis d'autrui. Une clé
+// refuse plutôt que de corrompre — le réflexe est déjà celui de `notifPK` et de
+// l'identifiant réservé de `campaignRecipientsPK`, il vaut pour toutes.
+function cleRequise(nom, valeur, raison) {
+  const clean = normalizedEmail(valeur);
+  if (!clean) throw new Error(`${nom} : ${raison}`);
+  return clean;
+}
+
 function audienceGroupsPK() {
   return 'AUDIENCE#GROUPES';
 }
@@ -370,7 +401,10 @@ function campaignLogSK(email) {
 // le littéral MAJUSCULE `CONSENT#COURRIEL`, celles du journal sont des adresses
 // minuscules — et une adresse contient toujours un « @ ».
 function consentJournalPK(email) {
-  return 'CONSENT#' + normalizedEmail(email);
+  // Le seau commun serait ici le PIRE des six : c'est le registre qui porte la
+  // charge de preuve (LCAP art. 13), et `CONSENT#` nu rendrait à qui le lit le
+  // consentement de tous ceux dont l'adresse manquait à l'écriture.
+  return 'CONSENT#' + cleRequise('consentJournalPK', email, 'un événement de consentement sans adresse n’a personne à prouver');
 }
 function consentJournalSK(at, id) {
   return `${at}#${id}`;
@@ -474,6 +508,12 @@ function campaignRecipientsPK(campagneId) {
   if (id.toUpperCase() === CAMPAIGN_ID_RESERVE) {
     throw new Error(`campaignRecipientsPK: « ${CAMPAIGN_ID_RESERVE} » est réservé au registre de fréquence`);
   }
+  // Le vide passait, et il était le plus dangereux des deux : `ENVOIS` fait au
+  // moins du bruit à l'écriture, tandis que deux campagnes sans identifiant
+  // (omis, puis `null`) atterrissaient SILENCIEUSEMENT dans `CAMPAGNE#`, où
+  // elles se relisaient l'une l'autre. La casse ne compte pas ici — un
+  // identifiant de campagne n'est pas une adresse — mais le vide, si.
+  if (!id) throw new Error('campaignRecipientsPK : sans identifiant, la partition « CAMPAGNE# » serait un seau COMMUN à toutes les campagnes');
   return 'CAMPAGNE#' + id;
 }
 function campaignRecipientSK(email) {
@@ -495,7 +535,7 @@ function campaignRecipientSK(email) {
 // la même ligne réécrite. La date mène la clé de tri, donc la lecture est
 // chronologique sans tri côté client.
 function clientIndexPK(email) {
-  return 'CLIENT#' + normalizedEmail(email);
+  return 'CLIENT#' + cleRequise('clientIndexPK', email, 'une offre s’indexe SOUS une personne — sans adresse, l’index n’en désigne aucune');
 }
 function clientBidSK(dateISO, bidId) {
   return `BID#${dateISO}#${bidId}`;
@@ -509,7 +549,7 @@ const CLIENT_BID_PREFIX = 'BID#';
 //
 //   PK = ERASURE#<courriel minuscule>   SK = ERASURE
 function erasurePK(email) {
-  return 'ERASURE#' + normalizedEmail(email);
+  return 'ERASURE#' + cleRequise('erasurePK', email, 'une marque d’effacement sans adresse ne dit de personne qu’elle a été effacée');
 }
 const ERASURE_SK = 'ERASURE';
 
@@ -577,6 +617,17 @@ const CAMPAIGN_PAGE_MAX = entierEnv('NOTA_CAMPAIGN_PAGE_MAX', 100);
 const CONSENT_PAGE_MAX = entierEnv('NOTA_CONSENT_PAGE_MAX', 50);
 const CLIENT_BID_PAGE_MAX = entierEnv('NOTA_CLIENT_BID_PAGE_MAX', 100);
 
+// MARQUER LU DEMANDE UN INSTANT, et les deux adaptateurs le refusent de la même
+// façon. `luLe` EST la marque de lecture : l'écrire à `null` laisse l'avis non
+// lu, donc le prochain « tout marquer lu » le recompte, et le compteur de la
+// pastille ne se stabilise jamais. L'invariant affiché — « re-marquer ce qui est
+// déjà lu ne compte pas » — serait faux dès que l'appelant oublie l'instant.
+// Une porte refuse plutôt que de corrompre, comme les clés au-dessus.
+function exigerInstantDeLecture(at) {
+  if (!at) throw new Error('markNotificationsRead : sans instant de lecture, l’avis resterait NON LU et serait recompté à chaque appel');
+  return at;
+}
+
 // Un curseur de page voyage : il sort du dépôt, traverse une réponse HTTP et
 // revient. Il doit donc être une CHAÎNE opaque, identique en forme d'un
 // adaptateur à l'autre — pas un `LastEvaluatedKey` DynamoDB nu, qui fuiterait
@@ -585,11 +636,17 @@ const CLIENT_BID_PAGE_MAX = entierEnv('NOTA_CLIENT_BID_PAGE_MAX', 100);
 function encodeCursor(clef) {
   return clef ? Buffer.from(JSON.stringify(clef), 'utf8').toString('base64') : null;
 }
+// Un curseur ILLISIBLE se lit `null` : la page repart du début plutôt que de
+// lever. Un curseur bien formé mais INCOMPLET, lui, n'est pas illisible — il est
+// invalide : DynamoDB exige une clé de départ conforme au schéma de clés, et une
+// clé sans PK ni SK lève une ValidationException. On ne le laisse donc pas
+// passer sous la forme d'un `{}` que le service refuserait plus loin.
 function decodeCursor(curseur) {
   if (!curseur) return null;
   try {
     const clef = JSON.parse(Buffer.from(String(curseur), 'base64').toString('utf8'));
-    return clef && typeof clef === 'object' ? clef : null;
+    if (!clef || typeof clef !== 'object') return null;
+    return typeof clef.PK === 'string' && typeof clef.SK === 'string' ? clef : null;
   } catch {
     return null;
   }
@@ -789,8 +846,11 @@ module.exports = {
   CAMPAIGN_PAGE_MAX,
   CONSENT_PAGE_MAX,
   CLIENT_BID_PAGE_MAX,
+  exigerInstantDeLecture,
   encodeCursor,
   decodeCursor,
+  // l'ordre des clés de tri : celui des octets, celui de DynamoDB
+  ordreCles,
   // admin table
   adminPK,
   ADMIN_SK,

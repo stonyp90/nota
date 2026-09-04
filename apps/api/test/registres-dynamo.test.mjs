@@ -65,9 +65,21 @@ test('le journal de consentement s’écrit une fois, et met à jour sa projecti
   // deux Lambdas concurrentes : sans elle, un octroi rejoué en retard
   // ressusciterait un consentement retiré, et `segments.js` (qui ne lit que
   // cette projection) recommencerait à démarcher.
-  assert.equal(projection.input.ConditionExpression, 'attribute_not_exists(PK) OR attribute_not_exists(#at) OR #at <= :at');
+  //
+  // La clause `attribute_type(#at, 'NULL')` porte la RÉTRO-COMPATIBILITÉ, et
+  // elle n'est pas négociable : les lignes écrites par l'ancien
+  // `putEmailConsent` portent un `at` de type NULL. Un attribut NULL EXISTE
+  // (donc `attribute_not_exists` est faux) et ne se compare à aucune chaîne
+  // (donc `#at <= :at` est faux) : sans cette clause la garde serait fausse EN
+  // ENTIER sur ces lignes, la projection y serait figée pour toujours, et un
+  // retrait n'atteindrait jamais `segments.js`.
+  assert.equal(
+    projection.input.ConditionExpression,
+    'attribute_not_exists(PK) OR attribute_not_exists(#at) OR attribute_type(#at, :typeNul) OR #at <= :at'
+  );
   assert.deepEqual(projection.input.ExpressionAttributeNames, { '#at': 'at' });
   assert.equal(projection.input.ExpressionAttributeValues[':at'], T0);
+  assert.equal(projection.input.ExpressionAttributeValues[':typeNul'], 'NULL');
 });
 
 test('la porte d’ÉTAT, elle, écrase sans condition — c’est une décision, pas un événement', async () => {

@@ -143,6 +143,68 @@ for (const [nom, ouvrir] of ADAPTATEURS) {
 }
 
 // ============================================================================
+// 2 bis. L'ORDRE tient aussi contre les lignes HÉRITÉES (`at: null`)
+// ============================================================================
+//
+// La suite de parité ci-dessus part toujours d'une table écrite par le code
+// NEUF : elle ne peut donc pas voir une rétro-compatibilité cassée. Or le
+// `putEmailConsent` d'avant ce chantier écrivait `at: (consent && consent.at)
+// || null` et posait l'item tel quel — des lignes de production portent un `at`
+// de type NULL. En DynamoDB un attribut NULL EXISTE (`attribute_not_exists` est
+// faux) et ne se compare à aucune chaîne (`#at <= :at` est faux) : sans la
+// clause `attribute_type(#at, 'NULL')`, la garde d'ordre est fausse EN ENTIER,
+// le catch avale la ConditionalCheckFailedException, et la projection de cette
+// personne est FIGÉE POUR TOUJOURS — un retrait entre au journal sans jamais
+// atteindre `segments.js`, qui continue de la démarcher.
+const HERITES = [
+  [
+    'mémoire',
+    async () => {
+      const repo = createMemoryRepo();
+      // La porte d'ÉTAT écrit exactement la forme héritée : `at` à null.
+      await repo.putEmailConsent('roy@etude.ca', { base: 'implicite', at: null, source: 'ancien' });
+      return repo;
+    },
+  ],
+  [
+    'dynamo',
+    async () => {
+      const table = createFakeTable();
+      // Semée telle quelle : le code neuf n'écrit plus cette forme (il omet
+      // l'attribut), donc aucun scénario ne peut l'obtenir par la porte.
+      table.semer({
+        PK: keys.emailConsentPK(),
+        SK: keys.emailConsentSK('roy@etude.ca'),
+        type: 'email_consent',
+        email: 'roy@etude.ca',
+        base: 'implicite',
+        at: null,
+        source: 'ancien',
+      });
+      return createDynamoRepo({ tableName: 'nota-main', doc: table.doc });
+    },
+  ],
+];
+
+for (const [nom, ouvrir] of HERITES) {
+  test(`${nom} : un retrait atteint la projection même sur une ligne héritée « at: null »`, async () => {
+    const repo = await ouvrir();
+    assert.equal((await repo.getEmailConsent('roy@etude.ca')).base, 'implicite', 'la ligne héritée est bien là');
+
+    assert.equal(await repo.appendConsentEvent({ ...RETRAIT, at: t(10), id: 'e2' }), true);
+    assert.deepEqual(
+      await repo.getEmailConsent('roy@etude.ca'),
+      { email: 'roy@etude.ca', base: null, at: t(10), source: 'lien-desabonnement' },
+      'sans quoi la personne reste démarchable après son retrait (LCAP art. 13, Loi 25 art. 8)'
+    );
+
+    // Et la projection n'est pas figée non plus : l'événement SUIVANT passe.
+    assert.equal(await repo.appendConsentEvent({ ...OCTROI, at: t(20), id: 'e3' }), true);
+    assert.equal((await repo.getEmailConsent('roy@etude.ca')).at, t(20));
+  });
+}
+
+// ============================================================================
 // 3. Le sujet : sans jeton, pas de boîte
 // ============================================================================
 
@@ -239,6 +301,176 @@ for (const [nom, ouvrir] of ADAPTATEURS) {
     ).toString('base64');
     const suite = await repo.listCampaignRecipients('camp-1', { limit: 2, cursor: disparue });
     assert.deepEqual(suite.destinataires.map((d) => d.courriel), ['c@x.ca'], 'la page reprend après la clé, pas au début');
+  });
+}
+
+// ============================================================================
+// 5 bis. L'ORDRE D'UNE PARTITION EST CELUI DES OCTETS
+// ============================================================================
+//
+// DynamoDB « collate and compare strings using the bytes of the underlying
+// UTF-8 string encoding ». `String.localeCompare` ne trie PAS ainsi : il range
+// « marie_t » avant « marie.tremblay », là où l'octet 0x5F vient après 0x2E. Un
+// adaptateur qui trie par locale mais reprend son curseur par octets se
+// contredit lui-même : la page reprend au mauvais endroit, l'appelant boucle
+// sur la même page et la fin de la partition n'arrive jamais.
+//
+// Les deux tests de pagination existants n'employaient que a@x.ca…e@x.ca, où
+// les deux ordres coïncident PAR HASARD. Ceux-ci prennent des adresses
+// ordinaires — un trait d'union, un point, un souligné — c'est-à-dire presque
+// toutes les adresses réelles.
+const PONCTUEES = [
+  'jean-pierre.roy@x.ca',
+  'jeanpierre@x.ca',
+  'marie.tremblay@x.ca',
+  'marie_t@x.ca',
+  'zoe@x.ca',
+];
+
+test('l’ordre des clés est celui des OCTETS, et il diffère vraiment de celui d’une locale', () => {
+  const sk = PONCTUEES.map((c) => keys.campaignRecipientSK(c));
+  const parOctets = [...sk].sort(keys.ordreCles);
+  const parLocale = [...sk].sort((a, b) => a.localeCompare(b));
+  assert.notDeepEqual(parLocale, parOctets, 'si les deux ordres coïncidaient, ce test ne prouverait rien');
+  // L'oracle : les octets UTF-8 eux-mêmes, la règle telle que DynamoDB l'écrit.
+  assert.deepEqual(
+    parOctets,
+    [...sk].sort((a, b) => Buffer.compare(Buffer.from(a, 'utf8'), Buffer.from(b, 'utf8')))
+  );
+});
+
+for (const [nom, ouvrir] of ADAPTATEURS) {
+  test(`${nom} : la pagination rend CHAQUE destinataire, une fois, et se termine`, async () => {
+    const repo = ouvrir();
+    for (const c of PONCTUEES) {
+      await repo.appendCampaignRecipient({ campagneId: 'camp-1', courriel: c, at: t(0), statut: 'envoye' });
+    }
+
+    const vus = [];
+    let cursor = null;
+    let tours = 0;
+    do {
+      const page = await repo.listCampaignRecipients('camp-1', { limit: 2, cursor });
+      vus.push(...page.destinataires.map((d) => d.courriel));
+      cursor = page.cursor;
+      tours += 1;
+      assert.ok(tours <= 5, 'la boucle ne se termine pas : la reprise vise une autre ligne que celle qui suit');
+    } while (cursor);
+
+    // Le tri ET la reprise emploient le même ordre : la liste sort triée par
+    // octets, sans doublon, et personne ne manque à l'appel.
+    assert.deepEqual(vus, [...PONCTUEES].sort((a, b) => keys.ordreCles(a, b)));
+    assert.equal(new Set(vus).size, PONCTUEES.length, 'aucune ligne rendue deux fois');
+  });
+
+  test(`${nom} : un curseur d’une AUTRE partition est refusé, jamais servi`, async () => {
+    const repo = ouvrir();
+    for (const c of ['a@x.ca', 'b@x.ca', 'c@x.ca']) {
+      await repo.appendCampaignRecipient({ campagneId: 'camp-1', courriel: c, at: t(0) });
+    }
+    for (const c of ['y@x.ca', 'z@x.ca']) {
+      await repo.appendCampaignRecipient({ campagneId: 'camp-2', courriel: c, at: t(0) });
+    }
+
+    const etranger = (await repo.listCampaignRecipients('camp-2', { limit: 1 })).cursor;
+    assert.equal(typeof etranger, 'string');
+    // Le vrai DynamoDB lève une ValidationException quand la clé de départ ne
+    // correspond pas à la KeyCondition. Rendre tranquillement le milieu d'une
+    // autre campagne serait pire qu'une erreur : le curseur est réputé opaque,
+    // donc personne n'irait vérifier d'où il vient.
+    await assert.rejects(
+      () => repo.listCampaignRecipients('camp-1', { limit: 5, cursor: etranger }),
+      (err) => err.name === 'ValidationException'
+    );
+  });
+}
+
+for (const [nom, ouvrir] of ADAPTATEURS) {
+  test(`${nom} : à instant ÉGAL, le « dernier fait » du journal est le même des deux côtés`, async () => {
+    const repo = ouvrir();
+    // Deux événements du même instant : c'est `<id>` qui les départage, et
+    // l'ordre des identifiants est celui de la partition. Ces deux-là sont
+    // choisis pour que locale et octets DÉSIGNENT DES ÉVÉNEMENTS DIFFÉRENTS
+    // (« a.retrait » < « a_octroi » en octets, l'inverse en locale) : sans un
+    // ordre commun, les deux adaptateurs élisent un dernier fait différent, et
+    // la reprise reprojette un consentement là où l'autre reprojette un retrait.
+    await repo.appendConsentEvent({ ...RETRAIT, at: t(10), id: 'a.retrait' });
+    await repo.appendConsentEvent({ ...OCTROI, at: t(10), id: 'a_octroi' });
+
+    // Le rejeu passe par la RÉCONCILIATION : elle relit le journal et
+    // reprojette son dernier fait — c'est là que l'ordre décide.
+    assert.equal(await repo.appendConsentEvent({ ...RETRAIT, at: t(10), id: 'a.retrait' }), false);
+    assert.deepEqual(await repo.getEmailConsent('roy@etude.ca'), {
+      email: 'roy@etude.ca', base: 'expres', at: t(10), source: 'inscription',
+    });
+    assert.deepEqual(
+      (await repo.listConsentEvents('roy@etude.ca')).map((e) => e.id),
+      ['a.retrait', 'a_octroi'],
+      'la chaîne de preuve se relit dans l’ordre de la partition, celui des octets'
+    );
+  });
+}
+
+// ============================================================================
+// 5 ter. Marquer lu SANS instant ne marque rien — donc c'est refusé
+// ============================================================================
+
+for (const [nom, ouvrir] of ADAPTATEURS) {
+  test(`${nom} : marquer lu sans instant de lecture est refusé, pas silencieusement perdu`, async () => {
+    const repo = ouvrir();
+    await repo.appendNotification({ sujet: 'roy@etude.ca', kind: 'x', titre: 't', corps: 'c', at: t(0), id: 'n1' });
+
+    // `luLe = null` laisserait l'avis NON LU : le prochain « tout marquer lu »
+    // le recompterait, et le compteur de la pastille ne se stabiliserait jamais.
+    for (const sans of [undefined, null, '']) {
+      await assert.rejects(() => repo.markNotificationsRead('roy@etude.ca', 'toutes', sans), /instant de lecture/i);
+    }
+    assert.equal((await repo.listNotifications('roy@etude.ca'))[0].luLe, null, 'et rien n’a bougé');
+
+    assert.equal(await repo.markNotificationsRead('roy@etude.ca', 'toutes', t(1)), 1);
+    assert.equal(await repo.markNotificationsRead('roy@etude.ca', 'toutes', t(2)), 0, 'le déjà-lu ne se recompte pas');
+  });
+}
+
+// ============================================================================
+// 5 quater. Une clé vide serait un SEAU COMMUN — les six refusent
+// ============================================================================
+
+test('keys : aucune partition ne se dérive d’une valeur vide', () => {
+  for (const vide of [undefined, null, '', '   ']) {
+    const vu = JSON.stringify(vide);
+    assert.throws(() => keys.consentJournalPK(vide), /adresse/i, `consentJournalPK(${vu})`);
+    assert.throws(() => keys.clientIndexPK(vide), /adresse/i, `clientIndexPK(${vu})`);
+    assert.throws(() => keys.erasurePK(vide), /adresse/i, `erasurePK(${vu})`);
+    assert.throws(() => keys.campaignRecipientsPK(vide), /identifiant/i, `campaignRecipientsPK(${vu})`);
+    assert.throws(() => keys.notifPK(vide), /sujet/i);
+    assert.throws(() => keys.subjectJournalPK(vide), /sujet/i);
+  }
+});
+
+for (const [nom, ouvrir] of ADAPTATEURS) {
+  test(`${nom} : deux campagnes sans identifiant ne se retrouvent pas dans le même seau`, async () => {
+    const repo = ouvrir();
+    // L'omission et le `null` : les deux façons dont un appelant perd
+    // l'identifiant. Aucune ne doit atterrir dans « CAMPAGNE# ».
+    await assert.rejects(() => repo.appendCampaignRecipient({ courriel: 'a@x.ca', at: t(0) }), /identifiant/i);
+    await assert.rejects(
+      () => repo.appendCampaignRecipient({ campagneId: null, courriel: 'b@x.ca', at: t(0) }),
+      /identifiant/i
+    );
+    await assert.rejects(() => repo.listCampaignRecipients('   '), /identifiant/i);
+  });
+
+  test(`${nom} : le journal de consentement d’une adresse absente ne rend celui de personne`, async () => {
+    const repo = ouvrir();
+    // C'est le registre qui porte la charge de preuve : un seau commun y
+    // rendrait à qui le lit le consentement d'autrui.
+    await assert.rejects(() => repo.appendConsentEvent({ courriel: '', type: 'octroi', base: 'expres', at: t(0), id: 'x1' }), /adresse/i);
+    await assert.rejects(() => repo.listConsentEvents(null), /adresse/i);
+    await assert.rejects(() => repo.indexClientBid({ courriel: '', bidId: 'b1', dateISO: '2026-10-02', at: t(0) }), /adresse/i);
+    await assert.rejects(() => repo.listClientBids('  '), /adresse/i);
+    await assert.rejects(() => repo.putErasure('', t(0)), /adresse/i);
+    await assert.rejects(() => repo.getErasure(null), /adresse/i);
   });
 }
 
