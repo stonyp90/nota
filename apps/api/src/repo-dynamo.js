@@ -52,6 +52,30 @@ const {
   emailConsentSK,
   campaignLogPK,
   campaignLogSK,
+  consentJournalPK,
+  consentJournalSK,
+  notifPK,
+  notifSK,
+  notifSubject,
+  subjectJournalPK,
+  subjectJournalSK,
+  campaignRecipientsPK,
+  campaignRecipientSK,
+  clientIndexPK,
+  clientBidSK,
+  CLIENT_BID_PREFIX,
+  erasurePK,
+  ERASURE_SK,
+  bidTtl,
+  notifTtl,
+  NOTIF_PAGE_MAX,
+  SUBJECT_PAGE_MAX,
+  CAMPAIGN_PAGE_MAX,
+  CONSENT_PAGE_MAX,
+  CLIENT_BID_PAGE_MAX,
+  exigerInstantDeLecture,
+  encodeCursor,
+  decodeCursor,
   adminPK,
   ADMIN_SK,
   groupsPK,
@@ -72,6 +96,7 @@ const {
   NOTARY_GSI1PK,
   notaryGSI1SK,
 } = require('./keys');
+const { randomUUID } = require('node:crypto');
 const { STATUS, normalizeReferralCode } = require('@nota/domain');
 
 /**
@@ -128,6 +153,99 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
   // elle se range toujours sous la même forme, sinon une même personne occupe
   // deux items et le plafond de fréquence la manque.
   const lowerEmail = (email) => String(email == null ? '' : email).trim().toLowerCase();
+
+  // Les clés de table ne remontent jamais à l'appelant — ni le discriminant.
+  const sansCles = (item) => {
+    const { PK, SK, type, ...rec } = item || {};
+    return rec;
+  };
+  // Borne de page partagée avec l'adaptateur mémoire (voir keys.js) : une
+  // lecture non bornée finit par ramener une partition entière dans la Lambda.
+  const borne = (limit, max) => {
+    const n = Number(limit);
+    return Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), max) : max;
+  };
+  // La projection d'état courant du consentement. Une seule écriture pour deux
+  // portes : `putEmailConsent` (l'état, écrit de force) et
+  // `appendConsentEvent` (le journal, qui rafraîchit l'index de lecture
+  // derrière lui — et celui-là passe par la GARDE ci-dessous).
+  //
+  // `at` est ABSENT de l'item quand l'appelant n'en donne pas : un attribut
+  // NULL ne se compare pas en DynamoDB, il bloquerait toute écriture suivante.
+  // `getEmailConsent` recompose la forme complète à la lecture.
+  async function ecrireProjectionConsentement(email, consent, { garderLOrdre = false } = {}) {
+    const at = (consent && consent.at) || null;
+    const stored = {
+      email: lowerEmail(email),
+      base: (consent && consent.base) || null,
+      at,
+      source: (consent && consent.source) || null,
+    };
+    // La projection doit suivre le dernier ÉVÉNEMENT, pas la dernière
+    // ÉCRITURE. Un rejeu tardif, un backfill ou deux Lambdas concurrentes
+    // présentent les événements dans le désordre : sans cette condition, un
+    // octroi arrivé après coup ressusciterait un consentement retiré, et
+    // `segments.js` — qui ne lit que cette projection — démarcherait à nouveau
+    // quelqu'un qui s'est retiré (LCAP art. 13, Loi 25 art. 8). La condition
+    // est ATOMIQUE : elle tient aussi entre deux Lambdas, là où un
+    // lire-puis-écrire perdrait la course.
+    //
+    // La troisième clause N'EST PAS DÉCORATIVE : elle porte la
+    // RÉTRO-COMPATIBILITÉ. Le `putEmailConsent` d'avant ce chantier écrivait
+    // `at: (consent && consent.at) || null` et posait l'item tel quel — donc des
+    // lignes de production portent un `at` de type NULL. En DynamoDB un
+    // attribut NULL EXISTE (`attribute_not_exists` est faux) et ne se compare à
+    // aucune chaîne (`#at <= :at` est faux aussi) : sans
+    // `attribute_type(#at, 'NULL')` la garde est fausse EN ENTIER, le catch
+    // ci-dessous avale la ConditionalCheckFailedException, et la projection de
+    // cette personne est FIGÉE POUR TOUJOURS — un retrait entre au journal sans
+    // jamais atteindre `segments.js`, qui continue de la démarcher. C'est
+    // exactement la garantie que cette garde prétend donner (LCAP art. 13,
+    // Loi 25 art. 8) qui tombait, en silence, sur les lignes héritées.
+    const garde = garderLOrdre && at
+      ? {
+          ConditionExpression:
+            'attribute_not_exists(PK) OR attribute_not_exists(#at) OR attribute_type(#at, :typeNul) OR #at <= :at',
+          ExpressionAttributeNames: { '#at': 'at' },
+          ExpressionAttributeValues: { ':at': at, ':typeNul': 'NULL' },
+        }
+      : {};
+    try {
+      await doc.send(
+        new PutCommand({
+          TableName: tableName,
+          Item: {
+            PK: emailConsentPK(),
+            SK: emailConsentSK(stored.email),
+            type: 'email_consent',
+            ...stored,
+            at: at || undefined,
+          },
+          ...garde,
+        })
+      );
+    } catch (err) {
+      // La projection porte déjà un fait PLUS RÉCENT : la laisser est la
+      // bonne réponse, pas une erreur.
+      if (!(err && err.name === 'ConditionalCheckFailedException')) throw err;
+    }
+    return stored;
+  }
+  // Le dernier fait du journal : l'instant mène la clé de tri, donc une Query
+  // d'UN item à rebours suffit. Sert à la reprise — réconcilier une projection
+  // restée en arrière demande de savoir ce que le journal porte déjà.
+  async function dernierEvenementConsentement(adresse) {
+    const out = await doc.send(
+      new QueryCommand({
+        TableName: tableName,
+        KeyConditionExpression: 'PK = :pk',
+        ExpressionAttributeValues: { ':pk': consentJournalPK(adresse) },
+        ScanIndexForward: false,
+        Limit: 1,
+      })
+    );
+    return (out.Items || [])[0] || null;
+  }
 
   function toItem(bid) {
     const item = { PK: bidPK(bid.dateISO), SK: bidSK(bid), type: 'bid', ...bid };
@@ -398,6 +516,14 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
         })
       );
     },
+    // Le réabonnement. Sans cette porte, `putUnsubscribe` était irréversible :
+    // une personne qui redemandait à recevoir les avis restait supprimée pour
+    // toujours, et la LCAP n'exige que le retrait, pas son irrévocabilité.
+    async deleteUnsubscribe(email) {
+      await doc.send(
+        new DeleteCommand({ TableName: tableName, Key: { PK: unsubPK(email), SK: UNSUB_SK } })
+      );
+    },
     async isUnsubscribed(email) {
       const out = await doc.send(
         new GetCommand({ TableName: tableName, Key: { PK: unsubPK(email), SK: UNSUB_SK } })
@@ -609,23 +735,20 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
         new GetCommand({ TableName: tableName, Key: { PK: emailConsentPK(), SK: emailConsentSK(email) } })
       );
       if (!out.Item) return null;
-      const { PK, SK, type, ...consent } = out.Item;
-      return consent;
+      // La forme est recomposée, jamais recopiée : l'item peut ne PAS porter
+      // d'`at` (voir `ecrireProjectionConsentement`), et l'adaptateur mémoire,
+      // lui, rend toujours les quatre champs. Un appelant ne doit pas pouvoir
+      // dire lequel des deux dépôts lui a répondu.
+      const item = out.Item;
+      return {
+        email: item.email || lowerEmail(email),
+        base: item.base == null ? null : item.base,
+        at: item.at == null ? null : item.at,
+        source: item.source == null ? null : item.source,
+      };
     },
     async putEmailConsent(email, consent) {
-      const stored = {
-        email: lowerEmail(email),
-        base: (consent && consent.base) || null,
-        at: (consent && consent.at) || null,
-        source: (consent && consent.source) || null,
-      };
-      await doc.send(
-        new PutCommand({
-          TableName: tableName,
-          Item: { PK: emailConsentPK(), SK: emailConsentSK(stored.email), type: 'email_consent', ...stored },
-        })
-      );
-      return stored;
+      return ecrireProjectionConsentement(email, consent);
     },
 
     // Art. 56 1° : le registre du plafond de fréquence. UN item par adresse,
@@ -678,6 +801,365 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
         }
       }
       return out;
+    },
+
+    // --- Registre de consentement (Loi 25 / LCAP) ---------------------------
+    // Le JOURNAL est la vérité, la projection `CONSENT#COURRIEL` est un index
+    // de lecture. Écriture unique (attribute_not_exists) : un rejeu ne réécrit
+    // jamais un consentement déjà donné, exactement comme les écrivains d'audit.
+    //
+    // NOTE : le discriminant `type: '<entité>'` est délibérément ABSENT — comme
+    // pour les items PARTNER#, le champ métier s'appelle littéralement `type`
+    // (octroi / retrait) et doit revenir intact ; le préfixe de partition
+    // discrimine déjà la forme de l'item.
+    async appendConsentEvent(evenement = {}) {
+      const adresse = lowerEmail(evenement.courriel);
+      const at = evenement.at || null;
+      const id = evenement.id == null ? randomUUID() : String(evenement.id);
+      const item = {
+        id,
+        courriel: adresse,
+        audience: evenement.audience || null,
+        type: evenement.type || null,
+        base: evenement.base || null,
+        version: evenement.version || null,
+        source: evenement.source || null,
+        ip: evenement.ip || null,
+        lang: evenement.lang || null,
+        at,
+      };
+      try {
+        await doc.send(
+          new PutCommand({
+            TableName: tableName,
+            Item: { PK: consentJournalPK(adresse), SK: consentJournalSK(at, id), ...item },
+            ConditionExpression: 'attribute_not_exists(PK)',
+          })
+        );
+      } catch (err) {
+        if (err && err.name !== 'ConditionalCheckFailedException') throw err;
+        // REJEU. Le journal refuse le doublon — c'est ce qu'on lui demande.
+        // Mais les deux écritures ne sont PAS atomiques : un rejeu vient
+        // presque toujours d'une tentative qui s'est arrêtée en chemin, le
+        // journal écrit et la projection perdue (throttling, coupure réseau).
+        // Une reprise qui rendrait `false` sans rien réconcilier ne
+        // réparerait jamais rien — et `segments.js` continuerait de démarcher
+        // quelqu'un dont le retrait est pourtant au registre.
+        const dernier = await dernierEvenementConsentement(adresse);
+        if (dernier) {
+          await ecrireProjectionConsentement(
+            adresse,
+            { base: dernier.base, at: dernier.at, source: dernier.source },
+            { garderLOrdre: true }
+          );
+        }
+        return false;
+      }
+      await ecrireProjectionConsentement(
+        adresse,
+        { base: item.base, at: item.at, source: item.source },
+        { garderLOrdre: true }
+      );
+      return true;
+    },
+    // Du plus ancien au plus récent : une chaîne de preuve se lit dans l'ordre.
+    // La lecture est BORNÉE — une partition entière rapatriée dans la mémoire
+    // d'une Lambda est un bogue de dessin — et la fenêtre se prend par le bout
+    // RÉCENT : si une partition débordait, ce qui tombe est le passé lointain,
+    // jamais le dernier fait, qui décide seul si l'on peut encore démarcher.
+    async listConsentEvents(email, { limit } = {}) {
+      const out = await doc.send(
+        new QueryCommand({
+          TableName: tableName,
+          KeyConditionExpression: 'PK = :pk',
+          ExpressionAttributeValues: { ':pk': consentJournalPK(email) },
+          ScanIndexForward: false,
+          Limit: borne(limit, CONSENT_PAGE_MAX),
+        })
+      );
+      return (out.Items || [])
+        .map((i) => {
+          // `type` est ici un champ MÉTIER (octroi / retrait), pas le
+          // discriminant d'item : il ne se dépouille pas.
+          const { PK, SK, ...rec } = i;
+          return rec;
+        })
+        .reverse();
+    },
+
+    // --- Avis en application ------------------------------------------------
+    // Le sujet arrive DÉJÀ dérivé (keys.notaryNotifSubject /
+    // keys.clientNotifSubject) : aucun jeton porteur n'entre dans une clé.
+    async appendNotification(avis = {}) {
+      const at = avis.at || null;
+      const id = avis.id == null ? randomUUID() : String(avis.id);
+      const item = {
+        id,
+        // Le sujet est une CLÉ : il se range normalisé, sinon « Roy@Etude.CA »
+        // et « roy@etude.ca » sont deux boîtes d'avis pour une seule personne.
+        sujet: notifSubject(avis.sujet),
+        audience: avis.audience || null,
+        kind: avis.kind || null,
+        titre: avis.titre || null,
+        corps: avis.corps || null,
+        lien: avis.lien || null,
+        refId: avis.refId || null,
+        at,
+        luLe: avis.luLe || null,
+        ttl: avis.ttl == null ? notifTtl(at) : avis.ttl,
+      };
+      try {
+        await doc.send(
+          new PutCommand({
+            TableName: tableName,
+            Item: { PK: notifPK(item.sujet), SK: notifSK(at, id), type: 'notification', ...item },
+            ConditionExpression: 'attribute_not_exists(PK)',
+          })
+        );
+        return true;
+      } catch (err) {
+        if (err && err.name === 'ConditionalCheckFailedException') return false;
+        throw err;
+      }
+    },
+    // UNE Query bornée, à rebours : la clé de tri commence par l'instant, donc
+    // la remonter à l'envers EST l'ordre « plus récentes d'abord », sans tri
+    // côté client. `depuis` est INCLUSIF et se compare sur la clé de tri
+    // elle-même — la même comparaison de chaînes que l'adaptateur mémoire.
+    async listNotifications(sujet, { limit, depuis } = {}) {
+      const values = { ':pk': notifPK(sujet) };
+      let condition = 'PK = :pk';
+      if (depuis) {
+        condition += ' AND SK >= :depuis';
+        values[':depuis'] = String(depuis);
+      }
+      const out = await doc.send(
+        new QueryCommand({
+          TableName: tableName,
+          KeyConditionExpression: condition,
+          ExpressionAttributeValues: values,
+          ScanIndexForward: false,
+          Limit: borne(limit, NOTIF_PAGE_MAX),
+        })
+      );
+      return (out.Items || []).map(sansCles);
+    },
+    // `ids` : un tableau d'identifiants, ou 'toutes'. Une Query pour retrouver
+    // les clés de tri (l'identifiant seul ne les donne pas : l'instant les
+    // mène), puis un UpdateItem par avis NON LU. Course bénigne assumée : deux
+    // marquages simultanés écrivent le même instant de lecture.
+    //
+    // La recherche est bornée à la MÊME fenêtre que `listNotifications` — on ne
+    // marque lu que ce qu'on pouvait voir — et elle ne rapatrie QUE de quoi
+    // décider : la clé, l'identifiant, l'instant de lecture. Le corps d'un avis
+    // n'a rien à faire dans la mémoire d'une Lambda qui ne fait que cocher.
+    async markNotificationsRead(sujet, ids, at) {
+      // Même refus que l'adaptateur mémoire : `luLe = null` laisserait l'avis
+      // NON LU, donc recompté à chaque appel — le compteur ne se stabilise
+      // jamais et l'invariant « re-marquer ce qui est lu ne compte pas » ment.
+      exigerInstantDeLecture(at);
+      const cible = ids === 'toutes' || ids === 'all' || ids == null
+        ? null
+        : new Set((Array.isArray(ids) ? ids : [ids]).map(String));
+      const out = await doc.send(
+        new QueryCommand({
+          TableName: tableName,
+          KeyConditionExpression: 'PK = :pk',
+          ExpressionAttributeValues: { ':pk': notifPK(sujet) },
+          ProjectionExpression: 'PK, SK, #id, #lu',
+          ExpressionAttributeNames: { '#id': 'id', '#lu': 'luLe' },
+          ScanIndexForward: false,
+          Limit: NOTIF_PAGE_MAX,
+        })
+      );
+      const aMarquer = [];
+      for (const i of out.Items || []) {
+        if (i.luLe) continue;
+        if (cible && !cible.has(String(i.id))) continue;
+        aMarquer.push({ PK: i.PK, SK: i.SK });
+      }
+
+      let marques = 0;
+      for (const Key of aMarquer) {
+        try {
+          await doc.send(
+            new UpdateCommand({
+              TableName: tableName,
+              Key,
+              UpdateExpression: 'SET #lu = :at',
+              ConditionExpression: 'attribute_exists(PK)',
+              ExpressionAttributeNames: { '#lu': 'luLe' },
+              ExpressionAttributeValues: { ':at': at },
+            })
+          );
+          marques += 1;
+        } catch (err) {
+          if (!(err && err.name === 'ConditionalCheckFailedException')) throw err;
+        }
+      }
+      return marques;
+    },
+
+    // --- Journal par sujet --------------------------------------------------
+    async appendSubjectEvent(evenement = {}) {
+      const sujet = notifSubject(evenement.sujet);
+      const at = evenement.at || null;
+      const id = evenement.id == null ? randomUUID() : String(evenement.id);
+      const item = {
+        id,
+        sujet,
+        kind: evenement.kind || null,
+        templateKey: evenement.templateKey || null,
+        refId: evenement.refId || null,
+        at,
+        messageId: evenement.messageId || null,
+      };
+      try {
+        await doc.send(
+          new PutCommand({
+            TableName: tableName,
+            Item: { PK: subjectJournalPK(sujet), SK: subjectJournalSK(at, id), type: 'subject_event', ...item },
+            ConditionExpression: 'attribute_not_exists(PK)',
+          })
+        );
+        return true;
+      } catch (err) {
+        if (err && err.name === 'ConditionalCheckFailedException') return false;
+        throw err;
+      }
+    },
+    async listSubjectEvents(sujet, { limit } = {}) {
+      const out = await doc.send(
+        new QueryCommand({
+          TableName: tableName,
+          KeyConditionExpression: 'PK = :pk',
+          ExpressionAttributeValues: { ':pk': subjectJournalPK(sujet) },
+          ScanIndexForward: false,
+          Limit: borne(limit, SUBJECT_PAGE_MAX),
+        })
+      );
+      return (out.Items || []).map(sansCles);
+    },
+
+    // --- Registre des destinataires d'une campagne --------------------------
+    // L'HISTOIRE : une ligne par (campagne, adresse), écrite une seule fois —
+    // un rejeu ne repeint pas un « refusé » en « envoyé ». À ne pas confondre
+    // avec `markCampaignSent`, qui est l'ÉTAT du plafond de fréquence.
+    async appendCampaignRecipient(ligne = {}) {
+      const campagneId = String(ligne.campagneId == null ? '' : ligne.campagneId).trim();
+      const adresse = lowerEmail(ligne.courriel);
+      const item = {
+        campagneId,
+        courriel: adresse,
+        templateKey: ligne.templateKey || null,
+        nature: ligne.nature || null,
+        at: ligne.at || null,
+        statut: ligne.statut || null,
+        erreur: ligne.erreur || null,
+      };
+      try {
+        await doc.send(
+          new PutCommand({
+            TableName: tableName,
+            Item: {
+              PK: campaignRecipientsPK(campagneId),
+              SK: campaignRecipientSK(adresse),
+              type: 'campaign_recipient',
+              ...item,
+            },
+            ConditionExpression: 'attribute_not_exists(PK)',
+          })
+        );
+        return true;
+      } catch (err) {
+        if (err && err.name === 'ConditionalCheckFailedException') return false;
+        throw err;
+      }
+    },
+    // Page bornée + curseur OPAQUE : une campagne de masse ne rentre pas dans
+    // la mémoire d'une Lambda, et le curseur traverse une réponse HTTP — d'où
+    // une chaîne, jamais un LastEvaluatedKey nu (voir keys.encodeCursor).
+    // L'appelant boucle jusqu'à `cursor === null` : DynamoDB peut rendre un
+    // curseur sur une page pleine mais terminale, la page suivante est alors
+    // vide — c'est un tour de boucle de plus, jamais un destinataire perdu.
+    async listCampaignRecipients(campagneId, { limit, cursor } = {}) {
+      const out = await doc.send(
+        new QueryCommand({
+          TableName: tableName,
+          KeyConditionExpression: 'PK = :pk',
+          ExpressionAttributeValues: { ':pk': campaignRecipientsPK(campagneId) },
+          Limit: borne(limit, CAMPAIGN_PAGE_MAX),
+          ExclusiveStartKey: decodeCursor(cursor) || undefined,
+        })
+      );
+      return {
+        destinataires: (out.Items || []).map(sansCles),
+        cursor: encodeCursor(out.LastEvaluatedKey),
+      };
+    },
+
+    // --- Index client -------------------------------------------------------
+    // Un pointeur, pas un journal : sa clé porte déjà l'unicité, donc aucune
+    // ConditionExpression — réindexer la même offre est la même ligne réécrite.
+    // Le ttl est celui de l'OFFRE indexée : un index qui lui survit pointe dans
+    // le vide, un index qui meurt avant la rend introuvable.
+    async indexClientBid({ courriel, bidId, dateISO, at, ttl } = {}) {
+      const adresse = lowerEmail(courriel);
+      const item = {
+        courriel: adresse,
+        bidId: String(bidId),
+        dateISO: String(dateISO),
+        at: at || null,
+        ttl: ttl == null ? bidTtl(dateISO) : ttl,
+      };
+      await doc.send(
+        new PutCommand({
+          TableName: tableName,
+          Item: {
+            PK: clientIndexPK(adresse),
+            SK: clientBidSK(item.dateISO, item.bidId),
+            type: 'client_bid',
+            ...item,
+          },
+        })
+      );
+      return item;
+    },
+    // Chronologique : la date mène la clé de tri, aucun tri côté client. Comme
+    // partout ici la lecture est BORNÉE, et la fenêtre se prend par les dates
+    // les plus proches — une personne se retrouve par ce qu'elle a de vivant.
+    async listClientBids(email, { limit } = {}) {
+      const out = await doc.send(
+        new QueryCommand({
+          TableName: tableName,
+          KeyConditionExpression: 'PK = :pk AND begins_with(SK, :b)',
+          ExpressionAttributeValues: { ':pk': clientIndexPK(email), ':b': CLIENT_BID_PREFIX },
+          ScanIndexForward: false,
+          Limit: borne(limit, CLIENT_BID_PAGE_MAX),
+        })
+      );
+      return (out.Items || []).map(sansCles).reverse();
+    },
+
+    // --- Marque d'effacement (Loi 25, art. 28) ------------------------------
+    // Sans elle, rien ne distingue « nous avons effacé cette personne » de
+    // « nous ne l'avons jamais connue ». Un item, écrasable : la marque porte
+    // le dernier effacement, le journal de consentement porte l'histoire.
+    async putErasure(email, at) {
+      const item = { courriel: lowerEmail(email), at: at || null };
+      await doc.send(
+        new PutCommand({
+          TableName: tableName,
+          Item: { PK: erasurePK(item.courriel), SK: ERASURE_SK, type: 'erasure', ...item },
+        })
+      );
+      return item;
+    },
+    async getErasure(email) {
+      const out = await doc.send(
+        new GetCommand({ TableName: tableName, Key: { PK: erasurePK(email), SK: ERASURE_SK } })
+      );
+      return out.Item ? sansCles(out.Item) : null;
     },
 
     // --- Notary console (declines + retained calendar pointers) -------------
