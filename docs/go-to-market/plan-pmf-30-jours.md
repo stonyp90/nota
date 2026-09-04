@@ -100,12 +100,18 @@ autorisées → retenues → actes signés`, plus `notaires inscrits → activé
 
 ## 7. Livré aujourd'hui (code) et ce qu'il reste
 
-**Livré, testé, prêt à pousser :**
+**Livré, testé et déployé** (commits `9db4b79` → `8de32a9`, six couches vertes :
+domaine 239 · api 828, les 22 tests de contrat compris · web 483 · admin 99,
+soit 1 649 tests, plus 137 scénarios BDD — 717 pas — et 10 parcours Playwright ;
+déploiements web et admin verts) :
 
-- inscription notaire par courriel + fiche CNQ, activation manuelle dans la console admin, accès qui survit à tout l'onboarding Stripe ultérieur ;
-- page d'accueil honnête (prix en deux lignes, calculé, jamais écrit en dur), CTA qui ouvre la première date standard, choix de date dans le formulaire, courriel visible et requis, écran de publication qui dit la vérité ;
-- entonnoir de conversion : catalogue d'événements dans le domaine, `POST /events`, compteurs par jour, bloc dans la console admin ;
-- Terraform de l'identité de domaine SES (DKIM, MAIL FROM, DMARC, rebonds vers les alertes), inactif tant qu'aucun domaine n'est posé.
+- inscription notaire par courriel + fiche CNQ (`POST /notaries/signup`), activation manuelle dans la console admin (`POST /admin/notaries/{id}/activer`, `approuveLe`), accès qui survit à tout l'onboarding Stripe ultérieur ; Stripe n'est demandé qu'avant le premier acte signé ;
+- page d'accueil honnête (« le notaire reçoit 100 % de votre offre ; le service Nota, à prix fixe, se paie seulement à la signature »), CTA qui ouvre la première date standard, choix de date dans le formulaire, écran de publication qui dit la vérité ; nom et courriel du client requis (ADR 0033) ;
+- entonnoir de conversion : catalogue d'événements dans le domaine (`FUNNEL_EVENTS`), `POST /events` en `fetch` sans identifiant, compteurs par jour, bloc « entonnoir » dans la console admin ;
+- Terraform de l'identité de domaine SES (`infra/ses-domain.tf` : DKIM, MAIL FROM, DMARC, rebonds vers les alertes), inactif tant qu'aucun domaine n'est posé.
+
+**Ce que le code ne peut pas faire à votre place :** les sept gestes du § 3.
+Tant qu'ils ne sont pas faits, tout ce qui précède tourne à vide.
 
 **À faire ensuite, par ordre d'importance :**
 
