@@ -119,6 +119,58 @@ data "aws_iam_policy_document" "admin_lambda" {
     ]
   }
 
+  # « Journal append-only » cessait d'être vrai à l'étage IAM. Les écrivains
+  # posent bien une ConditionExpression (`attribute_not_exists`) qui interdit
+  # d'ÉCRASER une entrée, et la console l'affiche comme une garantie — mais le
+  # statement ci-dessus accordait DeleteItem, UpdateItem et BatchWriteItem sur
+  # TOUTE la table admin, partitions d'audit comprises. Le rôle pouvait donc
+  # effacer la preuve qu'il venait d'écrire.
+  #
+  # Un Deny explicite l'emporte toujours sur un Allow, quel que soit l'ordre :
+  # les Allow ci-dessus restent intacts, et cette interdiction se surimpose aux
+  # seuls items dont la clé de partition ressemble à AUDIT#* (le seau par jour
+  # ouvrable, apps/api/src/keys.js).
+  #
+  # CE QUE LA GARANTIE VAUT EXACTEMENT, ET RIEN DE PLUS :
+  #   • couvre les appels item par item qui NOMMENT une clé de partition —
+  #     DeleteItem, UpdateItem, BatchWriteItem, PutItem inclus dans un lot ;
+  #   • ne couvre PAS ce qui ne porte pas `dynamodb:LeadingKeys` : une condition
+  #     ForAnyValue ne s'applique jamais quand la clé de contexte est absente.
+  #     PartiQL (ExecuteStatement), un TransactWriteItems non conditionné par la
+  #     clé, ou une opération de niveau table (DeleteTable, RestoreTable) passent
+  #     donc à côté — ce sont d'autres actions, non accordées ici ;
+  #   • ne protège que CE rôle. Un humain avec la console AWS, un administrateur
+  #     du compte ou un point de restauration PITR peuvent toujours réécrire
+  #     l'histoire. L'immuabilité réelle demanderait un puits séparé
+  #     (CloudTrail Lake, ou un bucket S3 Object Lock) : ce Deny ferme le chemin
+  #     applicatif, il ne rend pas la table inviolable.
+  #   • PutItem reste permis — c'est l'écriture du journal — et il faut le dire
+  #     jusqu'au bout : PutItem ÉCRASE par défaut. Un PutItem sur la clé d'une
+  #     entrée existante réécrirait donc la preuve, sans passer par UpdateItem.
+  #     Aucune condition IAM ne sait exiger qu'un PutItem porte une
+  #     ConditionExpression ; l'y ajouter en Deny ne rendrait pas la piste
+  #     inaltérable, il la rendrait VIDE. Contre l'écrasement, la seule garde
+  #     reste donc applicative : le `attribute_not_exists` de
+  #     apps/api/src/repo-dynamo.js, sur les deux journaux, tenu par
+  #     apps/api/test/audit-promesses-infra.test.mjs. Ce Deny ferme la
+  #     suppression et la modification ; il ne ferme pas la réécriture.
+  statement {
+    sid    = "AdminTableAuditAppendOnly"
+    effect = "Deny"
+    actions = [
+      "dynamodb:DeleteItem",
+      "dynamodb:UpdateItem",
+      "dynamodb:BatchWriteItem",
+    ]
+    resources = [aws_dynamodb_table.admin[0].arn]
+
+    condition {
+      test     = "ForAnyValue:StringLike"
+      variable = "dynamodb:LeadingKeys"
+      values   = ["AUDIT#*"]
+    }
+  }
+
   # READ-ONLY on the MAIN customer table (+ its indexes). Deliberately NO
   # dynamodb:Scan and NO write actions: the admin surface can inspect customer
   # data but can never mutate it or table-scan it (blast-radius / Law 25).

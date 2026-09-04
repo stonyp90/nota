@@ -61,6 +61,12 @@ function createApp(repo, opts = {}) {
   const NOTARY_CHALLENGE_TTL_MS = opts.notaryChallengeTtlMs || 15 * 60 * 1000; // 15 min
   const NOTARY_LOGIN_RL_WINDOW_SEC = opts.notaryLoginRlWindowSec || 15 * 60; // 15 min window
   const NOTARY_LOGIN_RL_MAX = opts.notaryLoginRlMax || 5; // links / window / IP
+  // La REDEMPTION a son propre plafond (2026-09-04). Elle est plus généreuse
+  // que l'émission — un notaire peut légitimement rouvrir le même lien depuis
+  // un client de courriel qui préfetche, ou se tromper d'onglet — mais elle est
+  // BORNÉE, parce qu'elle écrit désormais dans le journal (voir la porte).
+  const NOTARY_VERIFY_RL_WINDOW_SEC = opts.notaryVerifyRlWindowSec || 15 * 60; // 15 min
+  const NOTARY_VERIFY_RL_MAX = opts.notaryVerifyRlMax || 20; // redemptions / window / IP
   // The support widget's per-IP throttle (ADR 0033 §7): 20 messages / 10 min.
   const SUPPORT_RL_WINDOW_SEC = opts.supportRlWindowSec || 10 * 60;
   const SUPPORT_RL_MAX = opts.supportRlMax || 20;
@@ -356,15 +362,94 @@ function createApp(repo, opts = {}) {
   // registre — et strictement best-effort : une écriture d'audit qui échoue ne
   // doit jamais empêcher un notaire d'être payé. Le registre ACT# reste
   // l'autorité comptable ; ceci en est la trace lisible par un auditeur.
-  async function appendAudit(action, meta) {
+  //
+  // L'ACTEUR (2026-09-03). L'enveloppe codait en dur `adminId: null, email:
+  // null, ip: null` pour TOUS les événements : `document_lu` ne disait qu'un
+  // camp (« par: client »), jamais une personne ni une origine. Un journal
+  // d'accès aux documents qui ne peut pas nommer qui a lu la pièce ne vaut rien
+  // dans un litige sur le secret professionnel. Chaque entrée porte donc
+  // désormais `acteur: { type, id, ip }`, sur un vocabulaire fermé.
+  //
+  // L'`id` est celui que le système possède déjà, jamais une adresse courriel :
+  // le notaire est nommé par l'identifiant dérivé de sa boîte (celui que porte
+  // son profil, donc joignable à son nom), le client par l'offre qui EST son
+  // dossier, le partenaire par son code. La minimisation de la Loi 25 et
+  // l'utilité pour un auditeur pointent ici dans le même sens : une clé
+  // joignable au registre vaut mieux qu'une donnée personnelle recopiée dans un
+  // journal conservé sept ans.
+  //
+  // CE QUE L'ACTEUR NE PORTE PAS : L'ADRESSE D'ORIGINE (2026-09-04). La
+  // première version de ce chantier posait `ip` sur chaque entrée. Deux règles
+  // s'y opposent, et elles pointent dans le même sens :
+  //
+  //   — La politique de conservation (§1) borne déjà les journaux d'ACCÈS à
+  //     douze mois, et ce journal-ci est conservé SEPT ANS au titre de la
+  //     preuve d'imputabilité. Une adresse IP est un renseignement personnel
+  //     au sens de la Loi 25 ; la garder sept ans dans un registre que la
+  //     permission `audit:read` ouvre SANS `pii:read` contredisait les deux
+  //     bornes à la fois.
+  //   — Elle n'était pas nécessaire. Ce qu'un auditeur doit reconstituer, c'est
+  //     QUI a agi — le type et l'identifiant interne le disent — et un rejeu se
+  //     distingue d'un balayage par l'EMPREINTE du jeton (voir plus bas), pas
+  //     par l'origine. L'origine, elle, sert à l'investigation d'incident :
+  //     c'est la finalité des journaux techniques de la Lambda, que la
+  //     politique borne à douze mois et qui la portent déjà.
+  //
+  // L'enveloppe reste donc `{ type, id }`, et `ip` reste `null` sur la porte
+  // publique — comme avant ce chantier. Le journal ADMIN, lui, continue de
+  // consigner l'adresse de l'administrateur : ce sont des employés nommés,
+  // pas des clients, et cette règle-là est antérieure et inchangée.
+  const ACTEUR = { NOTAIRE: 'notaire', CLIENT: 'client', PARTENAIRE: 'partenaire', SYSTEME: 'systeme' };
+  const SYSTEME = { type: ACTEUR.SYSTEME, id: null };
+  function acteur(type, id) {
+    return { type, id: id == null ? null : String(id) };
+  }
+
+  // Un jeton ne s'entrepose JAMAIS en clair dans le journal : une trace de
+  // sécurité qui contient des identifiants est elle-même une faille. L'empreinte
+  // est SHA-256, tronquée à 16 caractères hexadécimaux (64 bits) et préfixée par
+  // son algorithme. Elle ne sert qu'à une chose — reconnaître que deux refus
+  // portent sur le MÊME lien, donc distinguer un rejeu d'un balayage — et 64
+  // bits suffisent largement à cela, tout en restant irréversibles.
+  function empreinteJeton(token) {
+    const t = String(token || '');
+    if (!t) return null;
+    return 'sha256:' + require('crypto').createHash('sha256').update(t).digest('hex').slice(0, 16);
+  }
+
+  async function appendAudit(action, meta, qui) {
     // `appendTxAudit` écrit dans la table PRINCIPALE : la Lambda publique n'a
     // aucun accès à la table admin, et une trace écrite là-bas ne s'écrirait
     // jamais en production (l'appel lève, le catch ci-dessous l'avale).
     const write = typeof repo.appendTxAudit === 'function' ? repo.appendTxAudit : repo.appendAudit;
     if (typeof write !== 'function') return;
+    const a = qui || SYSTEME;
+    const ts = new Date(nowMs()).toISOString();
     try {
-      await write.call(repo, { id: newId(), ts: new Date(nowMs()).toISOString(), day: now(), action, adminId: null, email: null, ip: null, meta: meta || null });
-    } catch { /* l'audit ne bloque jamais l'argent */ }
+      await write.call(repo, {
+        id: newId(), ts, day: now(), action,
+        // La porte publique n'a ni administrateur, ni adresse courriel, ni
+        // adresse d'origine : ces trois colonnes appartiennent au journal
+        // admin, qui les remplit. Voir la note sur l'acteur plus haut — un
+        // registre conservé sept ans ne porte aucun renseignement personnel.
+        adminId: null, email: null, ip: null,
+        acteur: a,
+        meta: meta || null,
+      });
+    } catch (err) {
+      // La règle tient : l'audit ne bloque jamais l'argent. Ce qui change, c'est
+      // qu'un puits d'audit cassé n'est plus indistinguable d'une journée calme
+      // — cette ligne est ce que le filtre de métrique CloudWatch compte, et
+      // l'alarme qui en dépend vit dans infra/observability.tf.
+      console.error(JSON.stringify({
+        level: 'error',
+        event: 'audit_write_failed',
+        action,
+        ts,
+        acteur: a.type,
+        message: (err && err.message) || String(err),
+      }));
+    }
   }
 
   // --- Un lien qu'on ne peut pas cliquer ne part pas (2026-09-01) ------------
@@ -729,6 +814,15 @@ function createApp(repo, opts = {}) {
     return { bid, notaryId };
   }
 
+  // Qui agit dans une conversation : le notaire par son identifiant, le client
+  // par l'offre — il n'a pas de compte, son dossier EST son nom. Une seule
+  // définition pour le dépôt et pour la lecture, sinon les deux traces
+  // nommeraient les mêmes personnes différemment.
+  const acteurPartie = (qui, bid, notaryId) =>
+    (qui === domain.CHAT_FROM.NOTAIRE
+      ? acteur(ACTEUR.NOTAIRE, notaryId)
+      : acteur(ACTEUR.CLIENT, bid && bid.id));
+
   // Étape 1 — l'autorisation de dépôt. Le domaine décide de la recevabilité
   // AVANT qu'une seule URL soit émise : refuser après un téléversement de 15 Mo
   // est la pire réponse possible.
@@ -764,7 +858,7 @@ function createApp(repo, opts = {}) {
   // faire apparaître dans le fil une pièce qui n'a jamais été téléversée.
   async function confirmerDepot(request, payload, qui) {
     if (!storage) return storageIndisponible();
-    const { bid, error } = await conversationPour(request, payload || {}, qui);
+    const { bid, notaryId, error } = await conversationPour(request, payload || {}, qui);
     if (error) return error;
     const docs = documentsOf(bid);
     const doc = docs.find((d) => d.id === payload.documentId && d.de === qui);
@@ -776,7 +870,11 @@ function createApp(repo, opts = {}) {
     }
     const pret = { ...doc, etat: 'pret', taille: tete.taille || doc.taille };
     await repo.update({ ...bid, documents: docs.map((d) => (d.id === doc.id ? pret : d)) });
-    await appendAudit('document_depose', { bidId: bid.id, documentId: doc.id, de: qui, taille: pret.taille });
+    await appendAudit(
+      'document_depose',
+      { bidId: bid.id, documentId: doc.id, de: qui, taille: pret.taille },
+      acteurPartie(qui, bid, notaryId)
+    );
     // Prévenir l'autre partie, comme pour un message — au même endroit et par
     // le même chemin, pour qu'un document ne soit pas un événement de second
     // rang qu'on découvre en rouvrant le fil.
@@ -796,9 +894,11 @@ function createApp(repo, opts = {}) {
     const doc = documentsOf(bid).find((d) => d.id === query.documentId && d.etat === 'pret');
     if (!doc) return json(404, { errors: [{ code: 'document_introuvable', message: 'Document introuvable.' }] });
     const lecture = await storage.presignDownload({ cle: doc.cle, nom: doc.nom, expiresInSeconds: 120 });
-    await appendAudit('document_lu', {
-      bidId: bid.id, documentId: doc.id, par: qui, notaryId: notaryId || null,
-    });
+    await appendAudit(
+      'document_lu',
+      { bidId: bid.id, documentId: doc.id, par: qui, notaryId: notaryId || null },
+      acteurPartie(qui, bid, notaryId)
+    );
     return json(200, { document: publicDocument(doc), lecture });
   }
 
@@ -836,7 +936,11 @@ function createApp(repo, opts = {}) {
   // additional fields folded into the same conditional write (a proposition
   // accept rewrites montant/premium/propositions atomically with the status).
   // Returns the retained bid, or null when the bid was no longer ouverte.
-  async function retainFor(bid, notaryId, extra = {}) {
+  // `qui` est l'acteur de la piste d'audit : DEUX portes mènent ici — le notaire
+  // qui accepte une demande ouverte, et le client qui accepte une proposition.
+  // La trace `acte_retenu` nomme celle qui a été franchie, pas seulement le
+  // notaire qui se retrouve engagé.
+  async function retainFor(bid, notaryId, extra = {}, qui) {
     const profile = await repo.getNotary(notaryId);
     const updated = {
       ...bid,
@@ -865,7 +969,7 @@ function createApp(repo, opts = {}) {
       serviceId: retained.serviceId || null,
       montant: retained.montant,
       etude: retained.etude || null,
-    });
+    }, qui);
     await repo.putRetained(notaryId, {
       id: retained.id,
       dateISO: retained.dateISO,
@@ -1198,7 +1302,18 @@ function createApp(repo, opts = {}) {
 
       // The client's per-bid key (no account): scope CLIENT, sub = bid id. It is
       // returned ONCE here and never echoed by any other route.
-      const clientToken = signToken(bid.id, nowMs() + CLIENT_TOKEN_TTL_MS, SCOPES.CLIENT);
+      const clientTokenExp = nowMs() + CLIENT_TOKEN_TTL_MS;
+      const clientToken = signToken(bid.id, clientTokenExp, SCOPES.CLIENT);
+      // Ce jeton ouvre le dossier — messagerie et documents compris — pendant
+      // plus d'un an, et il n'est rendu qu'ICI. Son émission est donc le premier
+      // fait de la chaîne d'accès : sans elle, une lecture ultérieure ne se
+      // rattache à rien. Le jeton lui-même n'est jamais consigné ; ce que la
+      // trace porte, c'est l'offre qu'il ouvre et jusqu'à quand.
+      await appendAudit(
+        'client_jeton_emis',
+        { bidId: bid.id, dateISO: bid.dateISO, expiresAt: clientTokenExp },
+        acteur(ACTEUR.CLIENT, bid.id)
+      );
 
       if (billingConfigured) {
         const svc = domain.serviceById(bid.serviceId);
@@ -1265,6 +1380,12 @@ function createApp(repo, opts = {}) {
         count = 1;
       }
       if (count > PARTNER_CLAIM_RL_MAX) {
+        // Même règle que la porte du notaire : seul le FRANCHISSEMENT est
+        // journalisé, pour qu'un flot hostile ne puisse pas gonfler le journal.
+        // Le code n'est pas encore lu à ce stade — la limite s'applique avant.
+        if (count === PARTNER_CLAIM_RL_MAX + 1) {
+          await appendAudit('partenaire_reclamation', { code: null, type: null, throttled: true }, acteur(ACTEUR.PARTENAIRE, null));
+        }
         return json(429, { ok: true, throttled: true });
       }
 
@@ -1282,6 +1403,17 @@ function createApp(repo, opts = {}) {
         errors.push({ code: 'code_invalide', message: 'Le code doit compter de 4 à 12 lettres ou chiffres.' });
       }
       if (errors.length) return json(422, { errors });
+
+      // La trace de la réclamation, posée dès que la demande est BIEN FORMÉE et
+      // avant tout aiguillage : un code déjà pris, un notaire inadmissible et un
+      // code libre sont trois issues d'une même tentative, et c'est la tentative
+      // qu'un audit du programme de parrainage doit pouvoir relire. Le code est
+      // le nom du partenaire ici — son courriel n'entre pas dans le journal.
+      await appendAudit(
+        'partenaire_reclamation',
+        { code, type, throttled: false },
+        acteur(ACTEUR.PARTENAIRE, code)
+      );
 
       // ADR 0030 — art. 33 du Code de déontologie des notaires : hors la
       // rémunération et les commissions auxquelles il a droit, le notaire ne
@@ -1402,6 +1534,14 @@ function createApp(repo, opts = {}) {
 
       const partenaire = { code, type: claim.type, courriel: claim.courriel, createdAt: now(), confirmedAt: now() };
       if (await repo.createPartner(partenaire)) {
+        // La seule écriture qui fait d'un code un PAYEUR DE RECORD. Sans elle,
+        // le registre des gains ne peut pas dire quand ni d'où le bénéficiaire
+        // a été désigné.
+        await appendAudit(
+          'partenaire_confirme',
+          { code, type: partenaire.type, challengeId: claims.cid },
+          acteur(ACTEUR.PARTENAIRE, code)
+        );
         // Welcome the partner (their shareable link + the reward tracks) and
         // alert the operator. Fire-and-forget, like every send-point: mail must
         // never break the confirmation response.
@@ -1679,7 +1819,7 @@ function createApp(repo, opts = {}) {
             // « encaissé » là où c'est « dû ».
             paye: regle.paye !== false,
             commissionCentsDue: regle.paye === false ? Math.round(Number(regle.commissionCentsDue) || 0) : 0,
-          });
+          }, acteur(ACTEUR.NOTAIRE, notaryId));
         }
       }
 
@@ -1789,6 +1929,13 @@ function createApp(repo, opts = {}) {
         count = 1;
       }
       if (count > NOTARY_LOGIN_RL_MAX) {
+        // Le FRANCHISSEMENT seul est journalisé, pas chaque refus qui suit : une
+        // trace posée à chaque requête bloquée donnerait à un attaquant le
+        // pouvoir de faire grossir le journal à volonté — une arme retournée.
+        // Le plafond dit déjà que la suite est du même flot, depuis la même IP.
+        if (count === NOTARY_LOGIN_RL_MAX + 1) {
+          await appendAudit('notaire_lien_demande', { eligible: null, throttled: true }, acteur(ACTEUR.NOTAIRE, null));
+        }
         return json(429, { ok: true, throttled: true });
       }
 
@@ -1801,6 +1948,19 @@ function createApp(repo, opts = {}) {
       }
 
       const gate = await notaryGate(email);
+
+      // La trace de la DEMANDE. Elle est posée pour les deux issues — un accès
+      // non autorisé commence par une demande, et une demande qu'on ne voit pas
+      // n'est pas reconstituable. Le corps de la réponse, lui, ne change pas :
+      // l'anti-énumération se joue face au demandeur, pas face à l'auditeur.
+      // L'adresse d'un inconnu n'est jamais consignée — la consigner reviendrait
+      // à bâtir un registre de non-clients.
+      await appendAudit(
+        'notaire_lien_demande',
+        { eligible: !!gate.allowed, throttled: false },
+        acteur(ACTEUR.NOTAIRE, gate.allowed ? gate.notaryId : null)
+      );
+
       if (!gate.allowed) {
         // Same shape as the happy path: the BODY never distinguishes a notary
         // from a stranger. Nothing is minted and nothing is emailed.
@@ -1855,26 +2015,89 @@ function createApp(repo, opts = {}) {
       } catch {
         return json(400, { errors: [{ code: 'json_invalide', message: 'Corps JSON invalide.' }] });
       }
-      const claims = verifyToken(String(payload.token || ''), nowMs());
+      // Chaque refus laisse une trace : c'est la moitié du journal qui manquait.
+      // Un lien forgé, un lien expiré, un lien rejoué et un compte désactivé
+      // depuis la demande sont quatre histoires différentes, et seule la RAISON
+      // les distingue. Le jeton, lui, n'entre jamais dans le journal : son
+      // empreinte suffit à voir que deux refus portent sur le même lien.
+      //
+      // LE PLAFOND (2026-09-04). La première version de ce chantier assumait
+      // que cette porte reste libre : « l'écriture d'audit coûte moins que
+      // l'invocation Lambda qui la provoque ». C'est vrai du COÛT et faux du
+      // RISQUE. Un jeton forgé échoue à la vérification de signature avant tout
+      // appel de dépôt — il ne touchait donc AUCUNE écriture — et il en coûte
+      // désormais une, durable, sur la clé de partition `AUDIT#<jour>`. C'est
+      // la MÊME clé que celle qui porte `acte_regle` et `annulation_frais`, et
+      // DynamoDB plafonne une clé de partition à ~1000 WCU/s : un flot anonyme
+      // pouvait donc étouffer les traces d'argent (best-effort : perdues sans
+      // reprise) et rendre `GET /admin/audit`, qui pagine la partition entière
+      // du jour, inexploitable. Il n'y a pas de WAF devant ce compte.
+      //
+      // Le plafond est celui des deux autres portes ouvertes (lien notaire,
+      // réclamation partenaire) : compté par IP, franchi une seule fois dans le
+      // journal, et il ÉCHOUE OUVERT sur une erreur de compteur — la connexion
+      // d'un notaire ne dépend pas de la santé d'un compteur anti-abus.
+      const ipVerif = clientIp(request);
+      let nVerif = 1;
+      try {
+        nVerif = await repo.incrNotaryRateCounter('notary_verify', ipVerif || 'unknown', NOTARY_VERIFY_RL_WINDOW_SEC, nowMs());
+      } catch {
+        nVerif = 1;
+      }
+      if (nVerif > NOTARY_VERIFY_RL_MAX) {
+        // Seul le FRANCHISSEMENT est journalisé : une trace par requête bloquée
+        // rendrait le plafond inutile, puisque c'est l'écriture qu'il borne.
+        if (nVerif === NOTARY_VERIFY_RL_MAX + 1) {
+          await appendAudit(
+            'notaire_connexion_refusee',
+            { raison: 'trop_de_tentatives', empreinteJeton: null, throttled: true },
+            acteur(ACTEUR.NOTAIRE, null)
+          );
+        }
+        return json(429, { errors: [{ code: 'trop_de_tentatives', message: 'Trop de tentatives. Réessayez dans quinze minutes.' }] });
+      }
+
+      const jeton = String(payload.token || '');
+      const claims = verifyToken(jeton, nowMs());
       if (!claims || claims.scope !== SCOPES.CHALLENGE || !claims.cid) {
+        await appendAudit(
+          'notaire_connexion_refusee',
+          { raison: 'jeton_invalide', empreinteJeton: empreinteJeton(jeton) },
+          acteur(ACTEUR.NOTAIRE, null)
+        );
         return json(401, { errors: [{ code: 'lien_invalide', message: 'Lien invalide ou expiré.' }] });
       }
 
       // Atomic single-use consume: the FIRST redemption wins, a replay gets null.
       const challenge = await repo.consumeNotaryLoginChallenge(claims.cid, nowMs());
       if (!challenge || challenge.notaryId !== claims.sub) {
+        await appendAudit(
+          'notaire_connexion_refusee',
+          { raison: 'lien_deja_utilise', empreinteJeton: empreinteJeton(jeton), challengeId: claims.cid },
+          acteur(ACTEUR.NOTAIRE, claims.sub)
+        );
         return json(401, { errors: [{ code: 'lien_invalide', message: 'Lien invalide ou déjà utilisé.' }] });
       }
 
       const email = challenge.email;
       const gate = await notaryGate(email);
       if (!gate.allowed) {
+        await appendAudit(
+          'notaire_connexion_refusee',
+          { raison: 'compte_inactif', empreinteJeton: empreinteJeton(jeton), challengeId: claims.cid },
+          acteur(ACTEUR.NOTAIRE, challenge.notaryId)
+        );
         return json(403, {
           errors: [{ code: 'compte_requis', message: 'Un compte notaire actif est requis pour accéder à la console. L’inscription est gratuite.' }],
         });
       }
 
       await upsertNotaryProfile(gate, email);
+      await appendAudit(
+        'notaire_connexion',
+        { challengeId: claims.cid },
+        acteur(ACTEUR.NOTAIRE, gate.notaryId)
+      );
       const exp = nowMs() + NOTARY_TOKEN_TTL_MS;
       return json(200, {
         // Full-console token: sent in the Authorization header, never in a URL.
@@ -2226,7 +2449,7 @@ function createApp(repo, opts = {}) {
       // accepting the same open bid concurrently both read status=ouverte, but
       // only ONE write succeeds — the repo flips the bid only while it is still
       // ouverte.
-      const retained = await retainFor(bid, notaryId);
+      const retained = await retainFor(bid, notaryId, {}, acteur(ACTEUR.NOTAIRE, notaryId));
       if (!retained) {
         // Lost the race. Re-read to answer precisely: if WE ended up the winner
         // (a double-submit by the same notary), it is idempotent; otherwise the
@@ -2554,7 +2777,7 @@ function createApp(repo, opts = {}) {
         propositions,
         ...(billingConfigured ? { paymentStatus: 'a_reautoriser' } : {}),
       };
-      const retained = await retainFor(bid, answered.notaryId, extra);
+      const retained = await retainFor(bid, answered.notaryId, extra, acteur(ACTEUR.CLIENT, bid.id));
       if (!retained) return json(409, { errors: [{ code: 'deja_retenue', message: 'Cette offre est déjà retenue.' }] });
       // Release the ORIGINAL card hold right away — it was authorized for the
       // old amount and can never settle the accepted proposition, so leaving it
@@ -2653,7 +2876,7 @@ function createApp(repo, opts = {}) {
             chargeId: charge.chargeId || null,
             transferId: dedommagement.transferId,
             verse: dedommagement.verse,
-          });
+          }, acteur(ACTEUR.CLIENT, bid.id));
         }
       }
 

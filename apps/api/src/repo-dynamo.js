@@ -97,7 +97,20 @@ const {
   notaryGSI1SK,
 } = require('./keys');
 const { randomUUID } = require('node:crypto');
-const { STATUS, normalizeReferralCode } = require('@nota/domain');
+const { STATUS, normalizeReferralCode, auditRetentionTtl } = require('@nota/domain');
+
+// La borne de conservation du journal d'audit, posée à l'écriture sur les DEUX
+// journaux (transactions dans la table principale, gestes d'administration dans
+// la table admin) : c'est le seul point que leurs deux appelants traversent.
+// La durée elle-même est une règle d'affaires et vit dans le domaine.
+// Rend `{}` — donc AUCUN attribut ttl — quand l'appelant a déjà décidé, ou
+// quand l'horodatage est illisible : mieux vaut une entrée qui survit qu'une
+// preuve qui expire à une date inventée.
+function auditTtl(entry) {
+  if (entry && entry.ttl != null) return {};
+  const ttl = auditRetentionTtl(Date.parse((entry && entry.ts) || ''));
+  return ttl == null ? {} : { ttl };
+}
 
 /**
  * DynamoDB implementation of the Repo port.
@@ -1784,7 +1797,7 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
       await doc.send(
         new PutCommand({
           TableName: tableName,
-          Item: { PK: auditPK(day), SK: auditSK(entry.ts, entry.id), type: 'audit', day, ...entry },
+          Item: { PK: auditPK(day), SK: auditSK(entry.ts, entry.id), type: 'audit', day, ...entry, ...auditTtl(entry) },
           ConditionExpression: 'attribute_not_exists(PK) OR attribute_not_exists(SK)',
         })
       ).catch((err) => {
@@ -1820,7 +1833,7 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
       await doc.send(
         new PutCommand({
           TableName: adminTable(),
-          Item: { PK: auditPK(day), SK: auditSK(entry.ts, entry.id), type: 'audit', day, ...entry },
+          Item: { PK: auditPK(day), SK: auditSK(entry.ts, entry.id), type: 'audit', day, ...entry, ...auditTtl(entry) },
           ConditionExpression: 'attribute_not_exists(PK) OR attribute_not_exists(SK)',
         })
       ).catch((err) => {

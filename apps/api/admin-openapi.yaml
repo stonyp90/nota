@@ -1236,7 +1236,9 @@ paths:
         admin logins, barème changes, and every settled act (`acte_regle`, with
         the amount, the rate applied, the cote that earned it, Nota's share and
         the notary's net) — bucketed on the Québec business day. Requires
-        `pii:read` (super_admin); an analyst gets 403. Newest first.
+        `audit:read` — reading the trail and unmasking a client are two distinct
+        capabilities, and a dedicated auditor must be able to hold the first
+        without the second. Any principal without it gets 403. Newest first.
       security:
         - adminSession: []
       parameters:
@@ -1278,6 +1280,41 @@ paths:
                           type: [string, "null"]
                         ip:
                           type: [string, "null"]
+                          description: >-
+                            The origin address, on ADMINISTRATIVE entries only —
+                            a named employee acting on the console. Always
+                            `null` on entries written by the public gate: a
+                            record kept for seven years, readable with
+                            `audit:read` alone, carries no personal information
+                            (ADR 0036). Origin belongs to incident
+                            investigation, which the Lambda access logs serve
+                            under their own twelve-month bound.
+                        acteur:
+                          type: [object, "null"]
+                          description: >-
+                            Who acted. Absent on entries written before
+                            2026-09-03. `id` is the identifier the system
+                            already holds — the notary's derived id, the bid a
+                            client's dossier lives on, a partner's code — never
+                            an email address and never an origin address: the
+                            trail is kept for seven years and must stay minimal
+                            while remaining joinable to the registries.
+                          properties:
+                            type:
+                              type: string
+                              enum: [notaire, client, partenaire, systeme]
+                            id:
+                              type: [string, "null"]
+                        ttl:
+                          type: integer
+                          description: >-
+                            Epoch SECONDS at which DynamoDB will reap this
+                            entry — seven calendar years after `ts` (ADR 0036).
+                            Absent on entries written before 2026-09-03, which
+                            carry no expiry and never will: nothing is applied
+                            retroactively. Surfaced deliberately, because "when
+                            does this evidence disappear" is a question a
+                            retention audit has to be able to answer.
                         meta:
                           type: [object, "null"]
         "401":

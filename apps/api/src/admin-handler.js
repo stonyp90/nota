@@ -270,7 +270,10 @@ function createAdminApp(repo, opts = {}) {
 
     // --- Le journal d'audit, relu par jour -----------------------------------
     // Une piste que personne ne peut relire n'est pas une piste d'audit.
-    // 'pii:read' également : les entrées portent des courriels et des montants.
+    // 'audit:read' — ET NON 'pii:read' : c'est la clé que admin.js applique
+    // réellement. Lire le journal et lever l'anonymat d'un client sont deux
+    // capacités distinctes ; un auditeur doit pouvoir obtenir la première sans
+    // la seconde. (La console, elle, garde encore l'écran derrière 'pii:read'.)
     if (route === '/admin/audit' && method === 'GET') {
       const result = await admin.readAudit(bearer(request), query.jour, { ip: clientIp(request) });
       if (!result.ok) {

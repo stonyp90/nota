@@ -286,6 +286,113 @@ resource "aws_cloudwatch_metric_alarm" "billing_cost_guard" {
 }
 
 # ---------------------------------------------------------------------------
+# Le puits d'audit : une écriture perdue doit se voir
+#
+# La règle applicative reste « l'audit ne bloque jamais l'argent » — un notaire
+# ne doit pas rester impayé parce qu'une trace n'a pas pu s'écrire. Mais le
+# `catch` qui l'applique avalait l'erreur en silence : un puits d'audit cassé
+# était indistinguable d'une journée calme, et la piste se serait vidée sans que
+# personne l'apprenne avant d'en avoir besoin.
+#
+# apps/api/src/handler.js émet désormais une ligne JSON structurée
+# (`{"level":"error","event":"audit_write_failed",...}`) sur chaque écriture
+# perdue. Le filtre ci-dessous la compte ; l'alarme la dit.
+#
+# Le filtre est posé sur les groupes de logs des DEUX Lambdas qui écrivent un
+# journal — l'API publique (accès, connexions, règlements) et, quand la console
+# est activée, l'API admin. Un seul nom de métrique pour les deux, donc une
+# seule alarme : d'où qu'elle vienne, une trace perdue est une trace perdue.
+#
+# CE QUE LE FILTRE ADMIN COMPTE AUJOURD'HUI : RIEN. Seul le handler public a
+# appris à crier. `apps/api/src/admin.js:113-116` garde son `catch {}` muet, donc
+# une écriture perdue du journal ADMINISTRATIF — connexions d'administrateurs,
+# changements de barème, activations de notaires — passe encore inaperçue. Le
+# filtre est posé d'avance, pour que le jour où ce `catch` émettra la même ligne
+# rien d'autre ne soit à faire ; il ne faut pas le lire comme une couverture
+# acquise.
+#
+# Coût : un filtre de métrique est gratuit, la métrique personnalisée coûte
+# ~0,30 $/mois et l'alarme ~0,10 $ — hors franchise gratuite.
+# ---------------------------------------------------------------------------
+locals {
+  audit_metric_namespace = "${var.project_name}/Audit"
+  audit_metric_name      = "AuditWriteFailed"
+
+  # Le motif que CloudWatch Logs applique à chaque ligne. C'est un motif TEXTE,
+  # et le choix est tout sauf cosmétique.
+  #
+  # Un motif JSON (`{ $.event = "audit_write_failed" }`) n'apparie QUE si
+  # l'événement de journal est, EN ENTIER, du JSON valide. Or ces fonctions
+  # écrivent au format texte — aucune `logging_config` sur les Lambdas
+  # (lambda.tf, admin.tf) — et le runtime Node préfixe chaque console.error :
+  # `<horodatage>\t<requestId>\tERROR\t{…}`. Le JSON est bien là, mais pas au
+  # premier caractère. Le motif JSON n'aurait donc apparié aucune ligne, jamais :
+  # l'alarme serait restée à OK pour toujours, c'est-à-dire exactement
+  # l'apparence d'un puits d'audit en bonne santé. Une alarme incapable de se
+  # déclencher est pire qu'une alarme absente — elle se fait passer pour une
+  # surveillance.
+  #
+  # Un terme entre guillemets apparie une sous-chaîne exacte, quel que soit le
+  # format du journal. Il traverse aussi un futur passage en `log_format =
+  # "JSON"`, où la ligne deviendrait la valeur ré-échappée d'un champ `message` :
+  # `audit_write_failed` ne porte aucun guillemet interne, donc rien à échapper.
+  # apps/api/test/audit-promesses-infra.test.mjs vérifie les deux formats contre
+  # la ligne que le handler émet réellement.
+  audit_failure_pattern = "\"audit_write_failed\""
+}
+
+resource "aws_cloudwatch_log_metric_filter" "audit_write_failed_api" {
+  name           = "${var.project_name}-audit-write-failed-api"
+  log_group_name = aws_cloudwatch_log_group.api.name
+  pattern        = local.audit_failure_pattern
+
+  metric_transformation {
+    name      = local.audit_metric_name
+    namespace = local.audit_metric_namespace
+    value     = "1"
+    # Sans valeur par défaut, la métrique n'existe pas tant qu'aucune écriture
+    # n'a échoué, et l'alarme resterait en INSUFFICIENT_DATA sans jamais passer
+    # en OK — on ne saurait pas qu'elle veille.
+    default_value = "0"
+  }
+}
+
+resource "aws_cloudwatch_log_metric_filter" "audit_write_failed_admin" {
+  count          = local.admin_enabled
+  name           = "${var.project_name}-audit-write-failed-admin"
+  log_group_name = aws_cloudwatch_log_group.admin[0].name
+  pattern        = local.audit_failure_pattern
+
+  metric_transformation {
+    name          = local.audit_metric_name
+    namespace     = local.audit_metric_namespace
+    value         = "1"
+    default_value = "0"
+  }
+}
+
+# UNE seule écriture perdue suffit à alerter : contrairement à une erreur
+# passagère de rendu, une entrée d'audit qui n'est pas écrite ne se rattrape
+# jamais — il n'y a pas de reprise, l'événement est passé.
+resource "aws_cloudwatch_metric_alarm" "audit_write_failed" {
+  alarm_name          = "${var.project_name}-audit-write-failed"
+  alarm_description   = "Au moins une entrée de la piste d'audit n'a pas pu être écrite dans les 5 dernières minutes. La trace est perdue : elle ne sera pas rejouée."
+  namespace           = local.audit_metric_namespace
+  metric_name         = local.audit_metric_name
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 1
+  comparison_operator = "GreaterThanThreshold"
+  threshold           = 0
+  treat_missing_data  = "notBreaching"
+
+  alarm_actions = [aws_sns_topic.alerts.arn]
+  ok_actions    = [aws_sns_topic.alerts.arn]
+
+  depends_on = [aws_cloudwatch_log_metric_filter.audit_write_failed_api]
+}
+
+# ---------------------------------------------------------------------------
 # Outputs
 # ---------------------------------------------------------------------------
 output "alerts_sns_topic_arn" {

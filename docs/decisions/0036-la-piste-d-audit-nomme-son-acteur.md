@@ -1,0 +1,265 @@
+# 0036 — La piste d'audit nomme son acteur, se conserve sept ans, et crie quand elle casse
+
+Date : 2026-09-03 (renumérotée le 2026-09-04 : 0034 est réservé à la grille de
+prix par service et 0035 à la caution Stripe)
+
+Statut : accepté — **complète l'ADR 0028 §divulgation**, ne renverse rien
+
+## Contexte
+
+Nota exploite une place de marché de services juridiques dans un secteur
+réglementé : le notaire est tenu au secret professionnel (art. 35 à 37 du *Code
+de déontologie des notaires*), et la Loi 25 impose à Nota de pouvoir constater
+un accès non autorisé à un renseignement personnel — puis d'en rendre compte.
+
+Un audit du 3 septembre 2026 a passé la piste au crible. Elle existait, elle
+était append-only à l'écriture, elle était relisible par jour — et elle ne
+répondait à aucune des questions qu'on lui poserait en litige.
+
+**Quatre constats, tous vérifiés dans le code.**
+
+1. **Aucune connexion ne laissait de trace.** `POST /notary/session/request`,
+   `/notary/session/verify` et les deux étapes de la réclamation partenaire
+   n'appelaient jamais l'audit. Le jeton porteur du client — scope `CLIENT`,
+   **400 jours** de validité, la clé qui ouvre la messagerie et les documents du
+   dossier — était émis en silence. Un accès non autorisé à un dossier était
+   donc à la fois indétectable et irreconstituable : rien ne disait qui avait
+   demandé un lien, qui l'avait redemé, ni depuis où.
+
+2. **Les événements n'avaient pas d'acteur.** L'enveloppe codait en dur
+   `adminId: null, email: null, ip: null` pour *tous* les événements —
+   `document_depose`, `document_lu`, `acte_retenu`, `acte_regle`,
+   `annulation_frais`. `document_lu` n'enregistrait qu'un camp (`par: 'client'`
+   ou `'notaire'`), jamais une personne, jamais une origine. Un journal d'accès
+   aux documents qui ne peut pas nommer qui a lu la pièce ne vaut rien dans un
+   litige sur le secret professionnel.
+
+3. **L'écriture d'audit échouait en silence.** Le `catch` vide applique une
+   règle juste — « l'audit ne bloque jamais l'argent », un notaire ne doit pas
+   rester impayé parce qu'une trace n'a pas pu s'écrire. Mais il rendait un
+   puits d'audit cassé **indistinguable d'une journée calme**.
+
+4. **« Append-only » était une promesse que l'IAM contredisait.** Les écrivains
+   posent bien une `ConditionExpression` qui interdit d'écraser une entrée, et
+   la console affiche « Journal append-only ». Le rôle Lambda admin détenait
+   pourtant `DeleteItem` et `BatchWriteItem` sur **toute** la table admin,
+   partitions d'audit comprises ; le rôle public détenait `UpdateItem` sur toute
+   la table principale, `AUDIT#*` compris. Le rôle pouvait effacer la preuve
+   qu'il venait d'écrire.
+
+À quoi s'ajoutait une **conservation non bornée** : la politique de conservation
+(§1) nomme sept ans pour le journal d'audit, et aucun `ttl` n'était posé. La
+Loi 25 exige une conservation *bornée* — un journal qu'on ne détruit jamais
+n'est pas plus conforme qu'un journal absent.
+
+## Décision
+
+### 1. Chaque entrée porte un acteur, sur un vocabulaire fermé
+
+```js
+acteur: { type: 'notaire' | 'client' | 'partenaire' | 'systeme', id }
+```
+
+L'`id` est **l'identifiant que le système possède déjà, jamais une adresse
+courriel** :
+
+| Acteur | `id` | Comment on remonte au nom |
+| --- | --- | --- |
+| notaire | l'identifiant dérivé de sa boîte (`notaryIdForEmail`) | jointure sur `NOTARY#…/PROFILE` |
+| client | l'identifiant de son offre | le dossier **est** son identité : il n'a pas de compte |
+| partenaire | son code de parrainage | jointure sur `PARTNER#…` |
+| systeme | `null` | écriture hors requête ; aucune origine inventée |
+
+La minimisation de la Loi 25 et l'utilité pour un auditeur pointent ici dans le
+même sens : une clé joignable aux registres vaut mieux qu'une donnée personnelle
+recopiée dans un journal conservé sept ans. Corollaire assumé : l'adresse d'un
+inconnu qui frappe à la porte notaire **n'est pas consignée** — la consigner
+reviendrait à bâtir un registre de non-clients.
+
+#### Ce que l'acteur ne porte pas : l'adresse d'origine
+
+La première version de cette décision posait un troisième champ, `ip`, sur
+chaque entrée. **Il a été retiré le 2026-09-04, avant tout déploiement.** Deux
+raisons, qui pointent dans le même sens :
+
+- **La conservation.** Ce journal est gardé **sept ans** (§5) et s'ouvre avec
+  `audit:read` **sans** `pii:read`. Une adresse IP est un renseignement
+  personnel au sens de la Loi 25, et la politique de conservation borne déjà les
+  journaux d'**accès** à douze mois. Poser une IP client ici contredisait donc
+  les deux à la fois : la borne de la politique, d'un facteur sept, et le
+  découplage des deux permissions, au moment précis où on le célébrait.
+- **Elle n'était pas nécessaire.** Ce qu'un auditeur doit reconstituer, c'est
+  QUI a agi — le type et l'identifiant interne le disent — et un rejeu se
+  distingue d'un balayage par l'**empreinte du jeton** (§2), pas par l'origine.
+  L'origine sert à l'investigation d'incident : c'est la finalité des journaux
+  techniques de la Lambda, qui la portent déjà, sous leur propre borne.
+
+L'enveloppe d'une entrée publique porte donc `adminId: null, email: null,
+ip: null` — comme avant ce chantier. Le journal **administratif**, lui, continue
+de consigner le courriel et l'adresse de l'administrateur : ce sont des employés
+nommés agissant sur une console interne, et cette règle est antérieure et
+inchangée.
+
+Corollaire honnête : la console d'audit ne permet plus de dire *d'où* venait un
+balayage de liens magiques. Ce fait est dans les journaux CloudWatch de la
+Lambda ; il n'est pas dans la pièce d'audit, et c'est voulu.
+
+### 2. Les connexions laissent une trace, sans jamais entreposer un jeton
+
+Sept actions nouvelles : `notaire_lien_demande`, `notaire_connexion`,
+`notaire_connexion_refusee`, `partenaire_reclamation`, `partenaire_confirme`,
+`client_jeton_emis` — et, sur les refus, une **raison** nommée
+(`jeton_invalide`, `lien_deja_utilise`, `compte_inactif`, `trop_de_tentatives`).
+
+**Aucun jeton en clair n'entre dans le journal.** Une trace de sécurité qui
+contient des identifiants est elle-même une faille. Ce qui est consigné est une
+**empreinte** : SHA-256, tronquée à 16 caractères hexadécimaux (64 bits),
+préfixée de son algorithme (`sha256:…`). Elle ne sert qu'à une chose —
+reconnaître que deux refus portent sur le *même* lien, donc distinguer un rejeu
+d'un balayage — et 64 bits y suffisent largement tout en restant irréversibles.
+
+Deux gardes de volume, parce qu'un journal qu'un attaquant peut faire grossir à
+volonté est une arme retournée :
+
+- sur **les trois** portes ouvertes, **seul le franchissement du plafond** est
+  journalisé, pas chaque requête bloquée qui suit ;
+- `/notary/session/verify` a désormais **son propre plafond** : 20 redemptions
+  par IP par quart d'heure (plus large que les 5 de l'émission, parce qu'un
+  client de courriel qui préfetche ou un onglet rouvert rejouent légitimement le
+  même lien), qui **échoue ouvert** si le compteur tombe.
+
+Ce dernier point corrige une erreur de raisonnement de la première version, qui
+laissait cette porte libre au motif que « l'écriture d'audit coûte moins que
+l'invocation Lambda qui la provoque ». C'est vrai du **coût** et faux du
+**risque**. Un jeton forgé échoue à la vérification de signature avant tout
+appel de dépôt : avant ce chantier il ne déclenchait **aucune** écriture, et il
+en coûtait désormais une, durable, anonyme et non bornée. Toutes atterrissent
+sur la **même clé de partition** `AUDIT#<jour>` — celle qui porte aussi
+`acte_regle` et `annulation_frais`. DynamoDB plafonne une clé de partition à
+~1000 WCU/s, et les traces d'argent sont *best-effort* : un flot anonyme pouvait
+donc les faire échouer sans reprise, et rendre `GET /admin/audit` — qui pagine
+la partition entière du jour — inexploitable. Il n'y a pas de WAF devant ce
+compte. Quarante requêtes hostiles produisent maintenant quatre entrées, pas
+quarante ; le test le mesure.
+
+### 3. Une écriture perdue crie, sans jamais bloquer l'argent
+
+La règle est conservée : l'échec est avalé, la réponse part. Ce qui change, c'est
+qu'il émet une ligne JSON structurée —
+`{"level":"error","event":"audit_write_failed","action":…}` — qu'un filtre de
+métrique CloudWatch compte sur les groupes de logs des deux Lambdas, et qu'une
+alarme dit sur le sujet SNS d'alerte existant. **Le seuil est zéro** :
+contrairement à une erreur passagère, une entrée d'audit qui n'est pas écrite ne
+se rattrape jamais — il n'y a pas de reprise, l'événement est passé.
+
+Le motif du filtre est un motif **texte**, pas un motif JSON, et c'est
+load-bearing : un motif JSON n'apparie que si l'événement de journal est *en
+entier* du JSON valide, alors que le runtime Node de Lambda préfixe chaque
+`console.error` (`<horodatage>\t<requestId>\tERROR\t{…}`). La première rédaction
+posait `{ $.event = "audit_write_failed" }` : elle n'aurait apparié **aucune**
+ligne, l'alarme serait restée à OK pour toujours — l'apparence exacte d'un puits
+d'audit en bonne santé. Une alarme incapable de se déclencher est pire qu'une
+alarme absente : elle se fait passer pour une surveillance. Le motif est
+désormais le terme cité `"audit_write_failed"`, apparié contre la ligne
+réellement émise par le handler dans
+`apps/api/test/audit-promesses-infra.test.mjs`.
+
+**Et la moitié admin ne crie pas encore.** Seul `handler.js` a appris à émettre
+la ligne ; `apps/api/src/admin.js:113-116` garde son `catch {}` muet. Le filtre
+posé sur le groupe de logs admin est donc armé d'avance et ne compte rien
+aujourd'hui : une écriture perdue du journal *administratif* — connexions
+d'administrateurs, changements de barème, activations de notaires — passe
+toujours inaperçue.
+
+### 4. Un Deny explicite tient la promesse d'append-only
+
+Sur les deux rôles, un statement `Deny` sur `DeleteItem`, `UpdateItem` et
+`BatchWriteItem`, conditionné par `ForAnyValue:StringLike` sur
+`dynamodb:LeadingKeys = AUDIT#*`. Deny l'emporte toujours sur Allow ; les Allow
+existants restent intacts, et `PutItem` d'une entrée neuve reste permis — c'est
+l'écriture du journal.
+
+**Ce que la garantie vaut exactement, et rien de plus :**
+
+- elle ferme la **suppression** et la **modification**, pas la **réécriture**.
+  `PutItem` écrase par défaut : un `PutItem` sur la clé d'une entrée existante
+  réécrit la preuve sans jamais passer par `UpdateItem`. Aucune condition IAM ne
+  sait exiger qu'un `PutItem` porte une `ConditionExpression`, et l'ajouter au
+  `Deny` ne rendrait pas la piste inaltérable — il la rendrait **vide**. Contre
+  l'écrasement, la garde reste donc applicative : le `attribute_not_exists` de
+  `apps/api/src/repo-dynamo.js`, sur les deux journaux. Un test l'y retient
+  (`apps/api/test/audit-promesses-infra.test.mjs`), et le même test interdit
+  qu'on « renforce » un jour le `Deny` en y glissant `PutItem` ;
+- elle couvre les appels qui **nomment une clé de partition** ;
+- elle ne couvre **pas** ce qui ne porte pas `dynamodb:LeadingKeys` : une
+  condition `ForAnyValue` ne s'applique jamais quand la clé de contexte est
+  absente. PartiQL, un `TransactWriteItems` non conditionné par la clé ou une
+  opération de niveau table passent à côté — ce sont d'autres actions, non
+  accordées ici ;
+- elle ne lie que **ces deux rôles**. Un humain avec la console AWS, un
+  administrateur du compte ou une restauration PITR peuvent toujours réécrire
+  l'histoire.
+
+L'immuabilité réelle demanderait un puits séparé (CloudTrail Lake, ou un bucket
+S3 en Object Lock). Ce Deny ferme le chemin applicatif ; il ne rend pas la table
+inviolable, et la console ne devrait pas prétendre le contraire.
+
+### 5. Sept ans, en calendrier, dans le domaine
+
+`AUDIT_RETENTION_YEARS = 7` et `auditRetentionTtl(atMs)` vivent dans
+`packages/domain` — c'est une règle d'affaires, pas un détail d'adaptateur. Le
+calcul est **calendaire** (sept fois « même jour, année suivante »), jamais un
+compte de jours : `7 × 365` expirerait deux jours trop tôt à cause des années
+bissextiles, et sur une borne de preuve, arrondir vers le bas est la seule
+erreur qui coûte cher. Un horodatage illisible rend `null` : aucune expiration
+vaut mieux qu'une expiration fausse, qui effacerait une preuve au hasard.
+
+La borne est posée dans les **adaptateurs de dépôt**, pas dans le handler : deux
+journaux existent (gestes d'administration dans la table admin, mouvements
+d'argent et accès dans la table principale) avec deux appelants, et l'adaptateur
+est le seul point que les deux traversent.
+
+La liste de suppression (`UNSUB#`) **n'expire jamais**. Oublier un refus de
+communication, c'est le violer.
+
+## Conséquences
+
+- Une entrée d'audit écrite avant le 3 septembre 2026 ne porte pas d'`acteur` et
+  n'expirera jamais. Rien n'est rétroactif : on ne fabrique pas un acteur qu'on
+  n'a pas observé.
+- **L'écran d'audit lit l'acteur.** La première version de ce chantier promettait
+  que « la piste nomme son acteur » et laissait la console afficher
+  « système » pour **toutes** les entrées publiques — elle ne lisait que
+  `e.email`, vide sur celles-ci. Corrigé le 2026-09-04 : une entrée publique
+  affiche le type de son acteur (traduit) et son identifiant interne (brut) ; un
+  geste d'administration continue d'afficher le courriel et l'adresse de son
+  auteur.
+- **Les six actions neuves ont un libellé**, en français et en anglais. Elles
+  sortaient en code brut avec `data-i18n-skip` — donc illisibles pour un
+  administrateur anglophone, et invisibles au test i18n de la console, qui ne
+  marche que les littéraux passés à `el()`. Un test lit désormais le vocabulaire
+  **dans la source de `handler.js`** et exige un libellé traduit pour chacun :
+  ajouter un `appendAudit` côté serveur fait rougir la console tant qu'elle n'a
+  pas suivi.
+- `GET /admin/audit` est gardé par **`audit:read`**, et non `pii:read` : lire le
+  journal et lever l'anonymat d'un client sont deux capacités distinctes, et un
+  auditeur dédié doit pouvoir obtenir la première sans la seconde. Le
+  commentaire de la route l'annonçait encore mal — jusque dans l'en-tête de
+  `readAudit` elle-même, trois lignes au-dessus du `rbac.can(…, 'audit:read')`
+  qui l'applique ; c'est corrigé, ainsi que l'OpenAPI, et un test le prouve côté
+  serveur. Ce découplage n'est tenable que parce que le journal public ne porte
+  aucun renseignement personnel (§1) : c'est la condition, pas un détail.
+- La politique de conservation se contredisait deux fois. D'abord son §2, qui
+  qualifiait l'absence de `ttl` de « correct et voulu » quand son §1 nommait sept
+  ans ; le code suit le §1 et le §2 a été repris. Ensuite — trouvé le 2026-09-04
+  — entre les deux lignes du §1 lui-même : « journal d'audit administratif,
+  7 ans » et « journaux techniques (Lambda, accès), 12 mois ». Le journal élargi
+  ici **est** un journal d'accès. La contradiction est levée par le code (aucune
+  IP, aucun courriel : voir §1), et le §1 porte désormais la condition en
+  toutes lettres plutôt que de la laisser deviner.
+- **Le journal admin ne crie toujours pas.** `apps/api/src/admin.js:113-116`
+  avale encore l'échec d'écriture en silence. La ligne `audit_write_failed` et
+  le filtre CloudWatch qui l'attend existent ; il reste à les brancher là. Tant
+  que ce n'est pas fait, l'alarme ne couvre que la moitié publique de la piste.
+- `terraform apply` est requis pour que les deux `Deny`, le filtre de métrique
+  et l'alarme existent réellement. Rien n'est appliqué à ce jour.

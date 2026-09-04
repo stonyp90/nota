@@ -511,6 +511,12 @@ paths:
         token, atomically consumes it (a replay or an expired link is rejected),
         re-checks the notary is still ACTIVE, then issues the stateless SESSION +
         FEED tokens. Preserves the notary profile upsert (stable étude label).
+        Per-IP rate limited (20 redemptions / 15 min, wider than the 5 links of
+        step 1 because a prefetching mail client legitimately replays the same
+        link): every redemption now writes an audit entry, and an unbounded
+        anonymous flood would land on the single `AUDIT#<day>` partition key
+        that also carries the money trail (ADR 0036). Fails OPEN if the counter
+        errors — a notary's sign-in does not depend on an abuse counter.
       requestBody:
         required: true
         content:
@@ -564,6 +570,19 @@ paths:
                 errors:
                   - code: compte_requis
                     message: Un compte notaire actif est requis pour accéder à la console. L’inscription est gratuite.
+        "429":
+          description: >-
+            Too many redemptions from this source address in the window. Only
+            the crossing itself is audited — one entry, not one per blocked
+            request, so the log cannot be inflated by the flood it records.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                errors:
+                  - code: trop_de_tentatives
+                    message: Trop de tentatives. Réessayez dans quinze minutes.
   /notary/bids:
     get:
       operationId: listNotaryBids

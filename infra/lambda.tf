@@ -58,6 +58,44 @@ data "aws_iam_policy_document" "api_dynamodb" {
 
     resources = [aws_dynamodb_table.main.arn]
   }
+
+  # Le pendant du Deny posé sur le rôle admin (infra/admin.tf) : la piste
+  # d'audit des TRANSACTIONS et des ACCÈS vit dans les partitions AUDIT#* de
+  # CETTE table, écrite par cette Lambda. Le statement ci-dessus lui accorde
+  # UpdateItem — nécessaire aux compteurs STATS# — et cet accord suffisait à
+  # laisser réécrire une entrée d'audit déjà posée.
+  #
+  # Deny l'emporte sur Allow : PutItem reste permis (c'est l'écriture du
+  # journal), toute modification ou suppression ne l'est plus. Dit sans
+  # complaisance : PutItem ÉCRASE par défaut, donc la RÉÉCRITURE d'une entrée
+  # existante reste possible à l'étage IAM, et aucune condition ne sait exiger
+  # qu'un PutItem porte une ConditionExpression. Refuser PutItem ne rendrait pas
+  # la piste inaltérable — il la rendrait vide. Contre l'écrasement, la garde est
+  # donc applicative (`attribute_not_exists`, repo-dynamo.js), et c'est
+  # apps/api/test/audit-promesses-infra.test.mjs qui l'empêche de disparaître.
+  # DeleteItem et BatchWriteItem ne sont de toute façon pas accordés ici ; ils
+  # sont nommés quand même, pour qu'un futur élargissement du statement
+  # ci-dessus ne rouvre pas la porte sans qu'on s'en aperçoive.
+  #
+  # Mêmes limites qu'en face, et elles valent d'être relues : la condition ne
+  # s'applique qu'aux appels portant `dynamodb:LeadingKeys`, et ce Deny ne lie
+  # que ce rôle — ni la console AWS, ni une restauration PITR.
+  statement {
+    sid    = "MainTableAuditAppendOnly"
+    effect = "Deny"
+    actions = [
+      "dynamodb:DeleteItem",
+      "dynamodb:UpdateItem",
+      "dynamodb:BatchWriteItem",
+    ]
+    resources = [aws_dynamodb_table.main.arn]
+
+    condition {
+      test     = "ForAnyValue:StringLike"
+      variable = "dynamodb:LeadingKeys"
+      values   = ["AUDIT#*"]
+    }
+  }
 }
 
 resource "aws_iam_role_policy" "api_dynamodb" {

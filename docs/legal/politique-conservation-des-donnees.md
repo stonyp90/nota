@@ -24,11 +24,47 @@ Ce document énonce les durées **voulues**, puis, honnêtement, les durées
 | Registre de règlement d'un acte (montant, part, références Stripe) | **7 ans** | obligations fiscales et comptables |
 | Registre des évaluations | **12 mois**, puis anonymisation définitive | alimente la cote |
 | Profil de notaire | durée de la relation, puis **24 mois** | preuve de la relation d'affaires |
-| Journal d'audit administratif | **7 ans** | preuve d'imputabilité |
+| Journal d'audit — gestes d'administration **et** chaîne d'accès aux dossiers | **7 ans**, à la condition ci-dessous | preuve d'imputabilité |
 | Journaux techniques (Lambda, accès) | **12 mois** | investigation d'incident |
 | Défis de connexion, compteurs anti-abus | **minutes à heures** | usage unique |
 | Registre des incidents de confidentialité | **5 ans** après la date de l'incident | exigence Loi 25 |
 | Désabonnements | **indéfiniment** | on ne peut pas oublier un refus sans le violer |
+
+### La condition attachée aux sept ans du journal d'audit
+
+Le 2026-09-03, le journal d'audit s'est élargi : il ne porte plus seulement les
+gestes d'administration, mais la **chaîne d'accès** — demande et redemption d'un
+lien de connexion notaire, émission du jeton porteur du client, dépôt et lecture
+d'une pièce du dossier, réclamation d'un code partenaire.
+
+Cet élargissement a d'abord été livré avec une **adresse IP sur chaque entrée**.
+C'était une contradiction avec la ligne suivante du même tableau : un journal
+d'accès est borné ici à douze mois, et celui-ci héritait de sept ans. Une adresse
+IP est un renseignement personnel au sens de la Loi 25, et la permission
+`audit:read` — qui ouvre ce journal — est délibérément distincte de `pii:read`.
+
+La contradiction a été levée le 2026-09-04 **par le code, pas par le tableau** :
+
+- **Le journal public ne consigne aucune adresse d'origine.** L'enveloppe d'une
+  entrée écrite par la porte publique porte `ip: null`, et l'acteur est réduit à
+  `{ type, id }`. L'origine sert à l'investigation d'incident : c'est la finalité
+  des journaux techniques de la Lambda, que la ligne suivante borne à douze mois
+  et qui la portent déjà.
+- **Aucune adresse courriel non plus.** L'acteur est nommé par un identifiant
+  interne : le notaire par l'identifiant dérivé de sa boîte, le client par
+  l'offre qui est son dossier, le partenaire par son code.
+- **Ces identifiants deviennent orphelins bien avant les sept ans.** L'offre et
+  son dossier sont détruits à 400 jours (§2) ; passé ce délai, le `bidId` d'une
+  entrée d'audit ne pointe plus sur rien. La conservation longue porte donc sur
+  un fait — « quelqu'un a lu cette pièce ce jour-là » — et non sur une personne
+  identifiable.
+
+Le journal **administratif** continue, lui, de porter le courriel et l'adresse de
+l'administrateur : ce sont des employés nommés agissant sur une console interne,
+et cette règle est antérieure à l'élargissement.
+
+Ce qui reste ouvert : le profil de notaire, lui, n'a toujours aucune borne (§2),
+et un `notaryId` reste donc joignable à une personne au-delà des sept ans.
 
 ---
 
@@ -57,7 +93,7 @@ Le mécanisme TTL est bien activé sur les deux tables
 | **Gains de parrainage** (`EARN#…`) | Aucun `ttl` (`repo-dynamo.js:835-840`). |
 | **Registre des évaluations** (`EVAL#…`) | Aucun `ttl` (`repo-dynamo.js:558`). Survit à l'offre qui l'a produite. |
 | **Désabonnements** (`UNSUB#…`) | Aucun `ttl` — correct et voulu. |
-| **Journal d'audit admin** (`AUDIT#…`) | Aucun `ttl` — correct et voulu. |
+| **Journal d'audit** (`AUDIT#…`) | ~~Aucun `ttl`~~ — **corrigé le 2026-09-03 (ADR 0036)** : les deux adaptateurs posent désormais un `ttl` calendaire de **sept ans** à l'écriture, sur les deux journaux (`packages/domain` → `auditRetentionTtl`, `apps/api/src/repo-dynamo.js`, `apps/api/src/repo-memory.js`). Conforme au §1 ci-dessus — y compris à la condition qui y est attachée : depuis le 2026-09-04, le journal écrit par la porte publique ne porte **ni adresse d'origine ni adresse courriel** (`ip: null`, acteur réduit à `{ type, id }`), ce qui est ce qui rend sept ans défendables sur un journal d'accès. Les entrées écrites AVANT le 2026-09-03 ne portent pas de `ttl` et n'expireront jamais — rien n'est rétroactif ; et la version qui posait une IP n'a jamais été déployée — elle est corrigée dans la même branche, avant sa mise en ligne. |
 
 ---
 

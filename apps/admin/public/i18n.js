@@ -414,6 +414,16 @@
   "Groupe enregistré": "Group saved",
   "Groupe supprimé": "Group deleted",
   "Campagne refusée": "Campaign refused",
+  /* ADR 0036 — la chaîne d'accès écrite par la porte publique, et les mots
+     qui nomment son acteur. Sans eux, six actions s'affichaient en code brut. */
+  "Lien notaire demandé": "Notary link requested",
+  "Notaire connecté": "Notary signed in",
+  "Connexion notaire refusée": "Notary sign-in refused",
+  "Code partenaire réclamé": "Partner code claimed",
+  "Partenaire confirmé": "Partner confirmed",
+  "Accès client émis": "Client access issued",
+  "Notaire": "Notary",
+  "Client": "Client",
   "Audit": "Audit",
   "Console": "Console",
   "Notifications": "Notifications",
