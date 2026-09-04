@@ -387,6 +387,37 @@ test('onOfferRetained mails the CLIENT the notary’s contact block and the act 
   assert.equal(mailer.sent.length, 3, 'nothing else, and nothing twice');
 });
 
+test('onOfferRetained ne réclame au notaire QUE les pièces que les réponses du client rendent applicables', async () => {
+  // Le catalogue porte des prédicats `si` : « Testament et déclaration de
+  // transmission » ne s'applique qu'à une succession. Ce client a répondu
+  // `succession: 'non'` — un critère REQUIS dont c'est la valeur par défaut,
+  // donc le cas est la règle, pas l'exception.
+  //
+  // La console notaire filtre déjà là-dessus (les six portes de handler.js
+  // passent `b.pricing` à leadReadiness), et la boîte « Demander des
+  // documents » n'offre que les pièces `requestable`. Un courriel qui en
+  // réclame une autre envoie le notaire dans un cul-de-sac — il ne PEUT pas
+  // demander ce qu'on lui dit d'aller chercher — au moment exact de la mise
+  // en relation.
+  //
+  // Le dossier est volontairement SANS consentement de partage : c'est ce qui
+  // le rend incomplet, donc ce qui fait rendre la liste « il manque … ».
+  const { repo, mailer, notifier } = setup33();
+  await repo.putNotary({ id: 'n-1', email: 'jeanne@etude.ca', status: 'active', ...CONTACT });
+  const pricing = { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'desjardins', deplacement: 'client_50' };
+
+  await notifier.onOfferRetained(retainedBid({ dossier: { __pricing: pricing } }));
+
+  const toNotary = mailer.sent.filter((m) => m.to === 'jeanne@etude.ca');
+  assert.equal(toNotary.length, 1);
+  const corps = toNotary[0].html + ' ' + toNotary[0].text;
+  assert.match(corps, /Dossier incomplet — il manque/, 'le dossier incomplet rend bien sa liste');
+  assert.ok(!/Testament et déclaration de transmission/.test(corps),
+    'une pièce écartée par les réponses du client ne doit jamais être réclamée');
+  // Et le courriel reste utile : les pièces réellement dues y sont toujours.
+  assert.match(corps, /Relevé hypothécaire actuel/, 'les pièces applicables restent listées');
+});
+
 test('onOfferRetained quotes the barème in force (stored config first, env defaults otherwise) on this montant', async () => {
   const { repo, mailer, notifier } = setup33();
   await repo.putNotary({ id: 'n-1', email: 'jeanne@etude.ca', status: 'active', ...CONTACT });

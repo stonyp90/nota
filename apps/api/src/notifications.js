@@ -426,7 +426,14 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
         );
       }
       if (profile && profile.email) {
-        const r = domain.leadReadiness(bid.serviceId, bid.dossier || {});
+        // Le 3e argument n'est pas décoratif : sans lui, `documentApplies`
+        // laisse passer TOUTE pièce (pricing == null ⇒ vrai) et le courriel
+        // réclame au notaire des documents que ses propres réponses ont
+        // écartés — et que la boîte « Demander des documents » de sa console,
+        // qui filtre sur `requestable`, refuse ensuite de lui laisser demander.
+        // Les six portes de handler.js passent déjà `pricing` ; celle-ci avait
+        // été oubliée (revue du 2026-09-04).
+        const r = domain.leadReadiness(bid.serviceId, bid.dossier || {}, bid.pricing);
         const facts = demandeFacts(bid);
         const ctx = bidCtx(bid, {
           email: bid.courriel || null,

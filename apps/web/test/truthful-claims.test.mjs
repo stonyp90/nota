@@ -31,6 +31,7 @@ const DOMAIN_SRC = readFileSync(fileURLToPath(new URL('../../../packages/domain/
 const APP_SRC = readFileSync(fileURLToPath(new URL('../public/app.js', import.meta.url)), 'utf8');
 const HTML_SRC = readFileSync(fileURLToPath(new URL('../public/index.html', import.meta.url)), 'utf8');
 const I18N_SRC = readFileSync(fileURLToPath(new URL('../public/i18n.js', import.meta.url)), 'utf8');
+const OG_SVG_SRC = readFileSync(fileURLToPath(new URL('../public/og.svg', import.meta.url)), 'utf8');
 
 const I18N = (() => {
   const mod = { exports: {} };
@@ -344,4 +345,46 @@ test('P1-5 / P1-14: no unbacked same-day SLA, no unmeasured « retenues plus vit
 test('P2-11: the auth dialog’s comment no longer narrates a social-login plan that is not wired', () => {
   assert.ok(!/Social OAuth is not wired yet/.test(HTML_SRC));
   assert.ok(!/social provider or a courriel/.test(HTML_SRC));
+});
+
+// 4. L'IMAGE SOCIALE. Le garde ci-dessus ne lisait que du texte, et l'image
+//    partagée n'en est pas : le 2026-09-04, og.png (rendu le 12 août) annonçait
+//    encore « Testament · Procuration · Refinancement — gratuit pour le
+//    client » — deux services retirés depuis le virage financement, et
+//    exactement la revendication que le produit a rétractée. Elle voyageait sur
+//    LinkedIn, iMessage et Slack à chaque partage, alors que la source, elle,
+//    était propre. C'est le cas type de l'art. 68 (publicité incomplète ou
+//    trompeuse).
+//
+//    Deux verrous, parce qu'aucun test ne peut lire des pixels :
+//    (a) le TEXTE de og.svg est soumis au même garde que le reste ;
+//    (b) og.png est un RENDU de og.svg, donc toute modification du svg doit
+//        s'accompagner d'un nouveau rendu. L'empreinte ci-dessous fige le svg :
+//        la changer sans re-rendre le png fait échouer ce test, et le message
+//        dit quoi faire.
+// La même formule que celle qui garde app.js / index.html / i18n.js / llms.txt
+// dans smoke.test.mjs : « publier est gratuit » reste VRAI et reste permis ;
+// c'est « gratuit pour le client » qui a été rétracté.
+const FREE_LIE = /Gratuit pour (vous|le client)|gratuit pour (vous|le client)|It is free for the client|free for the client\.|Free for (you|the client)|se rémunère auprès du notaire|paid by the notary/;
+
+const OG_SVG_SHA256 = 'eb88f37309e0c8966442b417cd9f67fc2ffa5ebad8aed6ecbf9368b9b7c1c827';
+
+test('l’image sociale ne vend pas des services retirés, ni une gratuité rétractée', () => {
+  const hit = OG_SVG_SRC.match(FREE_LIE);
+  assert.ok(!hit, 'og.svg reprend une revendication rétractée : « ' + (hit && hit[0]) + ' »');
+  for (const retire of ['Testament', 'Procuration']) {
+    assert.ok(!OG_SVG_SRC.includes(retire),
+      'og.svg annonce « ' + retire +' », un service retiré depuis le virage financement');
+  }
+  // Et il dit bien ce que Nota vend aujourd'hui.
+  assert.match(OG_SVG_SRC, /Refinancement/);
+  assert.match(OG_SVG_SRC, /Financement/);
+});
+
+test('og.png a bien été re-rendu depuis le og.svg courant', async () => {
+  const { createHash } = await import('node:crypto');
+  const somme = createHash('sha256').update(readFileSync(fileURLToPath(new URL('../public/og.svg', import.meta.url)))).digest('hex');
+  assert.equal(somme, OG_SVG_SHA256,
+    'og.svg a changé : re-rends og.png depuis le svg (1200x630) puis remplace OG_SVG_SHA256 par ' + somme
+    + '. Sans cela, l’image partagée continue d’annoncer l’ancien message.');
 });
