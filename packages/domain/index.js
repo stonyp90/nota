@@ -1493,6 +1493,77 @@
   // courriel is OPTIONAL here — the widget is the reply channel; the courriel
   // only adds an offline copy of the answer.
   const SUPPORT_FROM = { VISITEUR: 'visiteur', NOTA: 'nota' };
+  // --- The support inbox (2026-09-04) ------------------------------------------
+  // A thread has ONE status, derived from who spoke last: the operator's inbox
+  // sorts on it and the widget can never contradict it. `closLe` (set by the
+  // operator) wins until the visitor writes again — a question after a close
+  // reopens the thread by itself, nobody has to notice.
+  const SUPPORT_STATUT = Object.freeze({ A_REPONDRE: 'a_repondre', REPONDU: 'repondu', CLOS: 'clos' });
+  const SUPPORT_STATUTS = Object.freeze([
+    { id: 'a_repondre', nom: 'À répondre', nomEn: 'To answer' },
+    { id: 'repondu',    nom: 'Répondu',    nomEn: 'Answered' },
+    { id: 'clos',       nom: 'Clos',       nomEn: 'Closed' },
+  ]);
+  const SUPPORT_EXCERPT_MAX = 140;
+  function supportThreadSummary(thread) {
+    const t = thread && typeof thread === 'object' ? thread : {};
+    const msgs = Array.isArray(t.messages) ? t.messages.filter(Boolean) : [];
+    const last = msgs.length ? msgs[msgs.length - 1] : null;
+    const dernierAt = last ? (last.createdAt || null) : null;
+    let statut = SUPPORT_STATUT.A_REPONDRE;
+    if (last && last.de === SUPPORT_FROM.NOTA) statut = SUPPORT_STATUT.REPONDU;
+    if (t.closLe && (!dernierAt || String(t.closLe) >= String(dernierAt))) statut = SUPPORT_STATUT.CLOS;
+    const texte = last ? String(last.texte == null ? '' : last.texte).replace(/\s+/g, ' ').trim() : '';
+    return {
+      id: t.id == null ? null : String(t.id),
+      courriel: t.courriel || null,
+      nom: t.nom || null,
+      origine: t.origine || 'messagerie',
+      sujet: t.sujet || null,
+      createdAt: t.createdAt || null,
+      nb: msgs.length,
+      dernierAt,
+      dernierDe: last ? (last.de || null) : null,
+      dernierTexte: texte.length > SUPPORT_EXCERPT_MAX ? texte.slice(0, SUPPORT_EXCERPT_MAX) + '…' : texte,
+      statut,
+      closLe: t.closLe || null,
+    };
+  }
+  // The operator's ready answers: data, bilingual, and each one a valid
+  // message on its own. They name no amount — prices come from the grid.
+  const SUPPORT_REPONSES_TYPES = Object.freeze([
+    { id: 'bienvenue', titre: 'Bienvenue', titreEn: 'Welcome',
+      texte: 'Bonjour ! Merci de nous écrire. Dites-moi votre date de signature souhaitée et le type d’acte (refinancement ou financement), et je vous guide.',
+      texteEn: 'Hello! Thanks for writing. Tell me your preferred signing date and the type of act (refinancing or financing), and I will guide you.' },
+    { id: 'comment_ca_marche', titre: 'Comment ça marche', titreEn: 'How it works',
+      texte: 'Vous choisissez votre date de signature dans le carnet, vous voyez le prix avant de vous engager, et un notaire inscrit retient votre demande. Vous ne payez qu’à la signature.',
+      texteEn: 'You pick your signing date in the carnet, you see the price before committing, and a registered notary takes on your request. You only pay at signing.' },
+    { id: 'honoraires', titre: 'Le notaire reçoit tout', titreEn: 'The notary keeps it all',
+      texte: 'Le montant que vous offrez revient au notaire en entier. Le service de Nota est facturé séparément, au prix affiché par acte, et se paie seulement à la signature.',
+      texteEn: 'The amount you offer goes to the notary in full. Nota’s service is billed separately, at the price shown per act, and is paid only at signing.' },
+    { id: 'documents', titre: 'Documents', titreEn: 'Documents',
+      texte: 'Vous n’avez rien à transmettre pour publier votre demande. Une fois un notaire retenu, vous échangez vos documents avec lui directement dans votre espace, de façon sécurisée.',
+      texteEn: 'You do not need to send anything to publish your request. Once a notary is retained, you exchange your documents with them directly in your space, securely.' },
+    { id: 'rappel', titre: 'On vous rappelle', titreEn: 'We will call you',
+      texte: 'Avec plaisir. Laissez-moi un numéro et une plage horaire, et je vous rappelle.',
+      texteEn: 'Gladly. Leave me a phone number and a time window, and I will call you back.' },
+  ]);
+
+  // --- In-app notifications: the closed catalogue (2026-09-04) ----------------
+  // The API writes them (one per event, under the recipient's subject), the
+  // web bell reads them. A kind names its audiences so a notary never receives
+  // a client-only kind by mistake, and both labels live here.
+  const NOTIF_KINDS = Object.freeze([
+    { id: 'message',     titre: 'Nouveau message',            titreEn: 'New message',            audiences: ['client', 'notaire'] },
+    { id: 'document',    titre: 'Document reçu',              titreEn: 'Document received',       audiences: ['client', 'notaire'] },
+    { id: 'retenue',     titre: 'Votre demande est retenue',  titreEn: 'Your request is retained', audiences: ['client'] },
+    { id: 'proposition', titre: 'Un notaire vous propose un prix', titreEn: 'A notary proposes a price', audiences: ['client'] },
+    { id: 'desistement', titre: 'Votre notaire s’est désisté', titreEn: 'Your notary withdrew',   audiences: ['client'] },
+  ]);
+  function isNotifKind(id) {
+    return typeof id === 'string' && NOTIF_KINDS.some((k) => k.id === id);
+  }
+
   const SUPPORT_MESSAGE_MAX = CONTACT_MESSAGE_MAX;
   function validateSupportMessage(input) {
     input = input || {};
@@ -2718,6 +2789,13 @@
     CONTACT_MESSAGE_MAX,
     validateContactMessage,
     SUPPORT_FROM,
+    SUPPORT_STATUT,
+    SUPPORT_STATUTS,
+    SUPPORT_EXCERPT_MAX,
+    supportThreadSummary,
+    SUPPORT_REPONSES_TYPES,
+    NOTIF_KINDS,
+    isNotifKind,
     SUPPORT_MESSAGE_MAX,
     validateSupportMessage,
     EVALUATION_COMMENT_MAX,

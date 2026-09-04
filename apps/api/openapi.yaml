@@ -2286,6 +2286,15 @@ paths:
                 properties:
                   recu:
                     type: boolean
+                  threadId:
+                    type: string
+                    description: >-
+                      The support thread this message opened (2026-09-04): a
+                      « Nous joindre » message is a support thread too, so the
+                      operator answers it from the same inbox.
+                  token:
+                    type: string
+                    description: SUPPORT-scoped token the widget keeps to follow the answer live.
         "422":
           description: Validation errors from the domain.
           content:
@@ -2645,6 +2654,172 @@ paths:
                   throttled:
                     type: boolean
                     const: true
+  /client/bid/lecture:
+    post:
+      operationId: clientMarkThreadRead
+      summary: Read receipt — the client has the retained-act thread on screen.
+      description: >-
+        Stamps `luParClientAt` on the bid (2026-09-04); the notary's feed
+        reads it as `lecture.client` and shows « Vu » under their last message.
+      security:
+        - clientToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, dateISO]
+              properties:
+                id:
+                  type: string
+                dateISO:
+                  type: string
+                  format: date
+      responses:
+        "200":
+          description: The instant recorded.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [luLe]
+                properties:
+                  luLe:
+                    type: string
+                    format: date-time
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /notary/bids/lecture:
+    post:
+      operationId: notaryMarkThreadRead
+      summary: Read receipt — the retaining notary has the thread on screen.
+      description: >-
+        Stamps `luParNotaireAt` on the bid (2026-09-04); the client's view
+        reads it as `lecture.notaire`. Only the notary who holds the act may
+        stamp it (403 otherwise).
+      security:
+        - notaryToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, dateISO]
+              properties:
+                id:
+                  type: string
+                dateISO:
+                  type: string
+                  format: date
+                token:
+                  type: string
+      responses:
+        "200":
+          description: The instant recorded.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [luLe]
+                properties:
+                  luLe:
+                    type: string
+                    format: date-time
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /notifications:
+    get:
+      operationId: listNotifications
+      summary: The in-app bell — this person's notifications, newest first.
+      description: >-
+        Written by the API on each event (message, document, retenue,
+        proposition, désistement — `domain.NOTIF_KINDS`) under the recipient's
+        subject. A notary session opens their own bell; a client's per-offer
+        token opens that offer's (`id` must match the token, 403 otherwise).
+      security:
+        - notaryToken: []
+        - clientToken: []
+      parameters:
+        - in: query
+          name: id
+          schema:
+            type: string
+          description: The offer id, required with a client token.
+        - in: query
+          name: limit
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: The bell's entries and the unread count.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [avis, nonLus]
+                properties:
+                  nonLus:
+                    type: integer
+                  avis:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Notification"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /notifications/lues:
+    post:
+      operationId: markNotificationsRead
+      summary: Mark the bell's entries read — some ids, or all of them.
+      security:
+        - notaryToken: []
+        - clientToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                  description: The offer id, required with a client token.
+                ids:
+                  description: An array of notification ids, or the string `toutes`.
+                  oneOf:
+                    - type: string
+                    - type: array
+                      items:
+                        type: string
+                token:
+                  type: string
+      responses:
+        "200":
+          description: How many entries were newly marked read.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [marques]
+                properties:
+                  marques:
+                    type: integer
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
 components:
   securitySchemes:
     notarySession:
@@ -2970,6 +3145,35 @@ components:
           type: string
         createdAt:
           type: string
+    Notification:
+      type: object
+      required: [id, kind, at]
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+          description: One of `domain.NOTIF_KINDS` ids.
+        titre:
+          type: string
+          nullable: true
+        corps:
+          type: string
+          nullable: true
+        lien:
+          type: string
+          nullable: true
+          description: A site hash that lands the reader in the right place.
+        refId:
+          type: string
+          nullable: true
+        at:
+          type: string
+          format: date-time
+        luLe:
+          type: string
+          format: date-time
+          nullable: true
     NotaryBid:
       type: object
       description: Notary-facing projection of an open bid (never the dossier or courriel).

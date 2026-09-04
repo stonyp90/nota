@@ -297,6 +297,36 @@ data "aws_iam_policy_document" "admin_lambda" {
     }
   }
 
+  # The FOURTH write door on the MAIN table: answering a support thread from
+  # the console (2026-09-04, POST /admin/support/{id}/reponse and /clos in
+  # apps/api/src/admin.js). A thread is ONE item (PK = 'SUPPORT#<id>',
+  # SK = THREAD — apps/api/src/keys.js) that the public Lambda mints when a
+  # visitor writes; the operator's reply rewrites that same item with one more
+  # message. Listing threads needs nothing new: the month-sharded GSI1 overload
+  # (SUPPORT#<YYYY-MM>) is readable through MainTableReadOnly's Query on
+  # `/index/*`. Without this grant the console's reply box answers
+  # AccessDenied in production — the console says so explicitly rather than
+  # a 500, and the emailed per-thread reply link keeps working.
+  #
+  # LeadingKeys with a wildcard (StringLike) confines the write to support
+  # threads: the console still cannot touch a bid, a dossier, a ledger row, a
+  # notary profile beyond the activation door above, or a challenge.
+  statement {
+    sid    = "MainTableSupportReply"
+    effect = "Allow"
+    actions = [
+      "dynamodb:PutItem",
+      "dynamodb:UpdateItem",
+    ]
+    resources = [aws_dynamodb_table.main.arn]
+
+    condition {
+      test     = "ForAllValues:StringLike"
+      variable = "dynamodb:LeadingKeys"
+      values   = ["SUPPORT#*"]
+    }
+  }
+
   # SES send for admin login-challenge / notification email. Scoped to the
   # configured sender address exactly the way the public notifier is scoped
   # (notifications.tf): by the ses:FromAddress condition, not a brittle ARN.

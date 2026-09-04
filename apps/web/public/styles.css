@@ -2229,6 +2229,48 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 /* The « ou écrivez-nous » quick line under the contact form's submit. */
 #ct-quick { margin-top: 12px; text-align: center; }
 #ct-quick:empty { display: none; }
+/* --- « Nous joindre » (2026-09-04 redesign) ----------------------------------
+   Scoped to the contact dialog — the shared dialog shell (.dlg-x-form,
+   .dialog-actions, the 440px column) is untouched. The pass tightens every
+   small space to the token scale, seats nom + courriel on one row where the
+   column is wide enough, lets the message box grow with the text, and gives
+   the sent state a real confirmation with its two actions. Under 480px the
+   dialog becomes a full-width sheet with its own scroll, so a 320px phone
+   never hides the Envoyer button below an unreachable fold. */
+#contact-dialog .ct-pad { padding: var(--space-9) var(--space-9) var(--space-8); }
+/* The sticky ✕ sits in the top-right corner: the title line and the lede's
+   first line keep clear of it instead of running underneath. */
+#contact-dialog h3 { margin-bottom: var(--space-3); padding-right: 52px; }
+#contact-dialog .ct-lede { padding-right: 28px; }
+#contact-dialog .ct-lede { font-size: 14px; line-height: 1.45; margin: 0 0 var(--space-7); max-width: 46ch; }
+#contact-dialog .form-row { margin-bottom: var(--space-6); }
+#contact-dialog .lbl { margin-bottom: var(--space-3); }
+#contact-dialog .lbl-hint { font-weight: 500; color: var(--ink-muted); }
+#contact-dialog .ct-grid { display: grid; grid-template-columns: 1fr; gap: 0 var(--space-6); }
+#contact-dialog textarea { min-height: 84px; max-height: 40vh; resize: vertical; }
+#contact-dialog .ct-context { margin: calc(-1 * var(--space-3)) 0 var(--space-5); }
+#contact-dialog #ct-submit { margin-top: var(--space-2); }
+#contact-dialog #ct-quick { margin-top: var(--space-6); }
+/* The sent state: a check chip on the title line, one sentence, then the two
+   actions — the messagerie first when the thread token came back. */
+.ct-ok-head { display: flex; align-items: center; gap: var(--space-4); margin-bottom: var(--space-3); }
+.ct-ok-ic { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; flex: none; border-radius: var(--radius); background: var(--brand-tint-solid-strong); color: var(--brand-on-tint-strong); }
+.ct-ok-ic svg { width: 18px; height: 18px; }
+#contact-dialog .ct-ok-title { margin: 0; font-size: 16px; color: var(--ink); }
+#contact-dialog .ct-ok-body { margin: 0 0 var(--space-7); max-width: 46ch; }
+.ct-ok-actions { flex-wrap: wrap; }
+.ct-ok-actions .btn { flex: 1 1 auto; }
+/* The dialog column is comfortable from 480px up; below, every side space
+   shrinks one step and nom + courriel stack (a 300px column cannot hold two). */
+@container (min-width: 380px) { #contact-dialog .ct-grid { grid-template-columns: 1fr 1fr; } }
+#contact-dialog .dialog-pad { container-type: inline-size; }
+@media (max-width: 479.98px) {
+  #contact-dialog { width: calc(100vw - 16px); max-width: none; max-height: calc(100% - 16px); margin: 8px auto; }
+  #contact-dialog .ct-pad { padding: var(--space-7) var(--space-6) var(--space-6); }
+  #contact-dialog .ct-lede { margin-bottom: var(--space-5); padding-right: 52px; }
+  #contact-dialog .form-row { margin-bottom: var(--space-5); }
+  #contact-dialog textarea { min-height: 72px; }
+}
 
 /* --- Day detail dialog (enlarged day over a dimmed backdrop) -------------- */
 #day-dialog { max-width: 620px; width: 94vw; max-height: 90vh; overflow-y: auto; overscroll-behavior: contain; }
@@ -3200,6 +3242,10 @@ body.is-notary-session #tab-notaires { pointer-events: none; }
   border-radius: var(--radius-lg) var(--radius-lg) var(--radius-xs) var(--radius-lg);
 }
 .chat-when { font-size: 10.5px; color: var(--ink-muted); }
+/* « Vu » (2026-09-04): the other side's read receipt, one quiet word under the
+   last own message they have read — the same register as the time stamp. */
+.chat-msg .chat-seen { display: block; font-size: 11px; color: var(--ink-muted); margin-top: 2px; }
+.chat-msg.is-mine .chat-seen { text-align: right; }
 .chat-row { display: flex; align-items: flex-end; gap: 8px; }
 .chat-input { flex: 1 1 auto; resize: vertical; min-height: 40px; }
 /* The shared composer (chatComposer): the write row, then a meta line — the

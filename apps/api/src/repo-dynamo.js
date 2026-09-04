@@ -28,6 +28,8 @@ const {
   ACT_SK,
   supportPK,
   SUPPORT_SK,
+  supportGSI1PK,
+  supportGSI1SK,
   partnerPK,
   PARTNER_SK,
   PARTNER_GSI1PK,
@@ -1525,10 +1527,15 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
     // GetItem each way, no index. Last write wins: the thread is only ever
     // rewritten by appending a message to its own latest read.
     async putSupportThread(thread) {
+      // The inbox overload (keys.supportGSI1PK): month-sharded, newest last.
+      // Written on every rewrite, so a thread that wakes up in a new month
+      // moves to that month's partition by itself.
+      const at = thread.dernierAt || thread.createdAt || null;
+      const index = at ? { [GSI1_PK]: supportGSI1PK(at), [GSI1_SK]: supportGSI1SK(thread) } : {};
       await doc.send(
         new PutCommand({
           TableName: tableName,
-          Item: { PK: supportPK(thread.id), SK: SUPPORT_SK, type: 'support', ...thread },
+          Item: { PK: supportPK(thread.id), SK: SUPPORT_SK, type: 'support', ...thread, ...index },
         })
       );
       return thread;
@@ -1538,8 +1545,35 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
         new GetCommand({ TableName: tableName, Key: { PK: supportPK(id), SK: SUPPORT_SK } })
       );
       if (!out.Item) return null;
-      const { PK, SK, ...thread } = out.Item;
+      const { PK, SK, type, [GSI1_PK]: _gpk, [GSI1_SK]: _gsk, ...thread } = out.Item;
       return thread;
+    },
+    // The operator's inbox: one bounded Query per recent month on the
+    // SUPPORT#<YYYY-MM> overload, read backwards, merged newest-first.
+    async listSupportThreads({ months, limit } = {}) {
+      const max = Math.max(1, Math.min(500, Number(limit) || 100));
+      const rows = [];
+      for (const month of Array.isArray(months) ? months : []) {
+        const out = await doc.send(
+          new QueryCommand({
+            TableName: tableName,
+            IndexName: 'GSI1',
+            KeyConditionExpression: '#g = :pk',
+            ExpressionAttributeNames: { '#g': GSI1_PK },
+            ExpressionAttributeValues: { ':pk': supportGSI1PK(month + '-01') },
+            ScanIndexForward: false,
+            Limit: max,
+          })
+        );
+        (out.Items || []).forEach((i) => {
+          const { PK, SK, type, [GSI1_PK]: _gpk, [GSI1_SK]: sk, ...thread } = i;
+          rows.push({ sk: String(sk || ''), thread });
+        });
+      }
+      return rows
+        .sort((a, b) => (a.sk < b.sk ? 1 : a.sk > b.sk ? -1 : 0))
+        .slice(0, max)
+        .map((r) => r.thread);
     },
     // Every CLAIMED code — one paginated Query on the sparse PARTNER overload.
     // A pre-overload partner item is invisible here (no GSI attributes) until

@@ -508,7 +508,7 @@
     // keep from the deposit (taux, frais, joursAvant) — null when free.
     // `caution` is the ADR 0035 state of the payment guarantee — `refusee` is
     // the one the client must act on, and this cache is what the band reads.
-    c[id] = { bid: status.bid || null, notaire: status.notaire || null, propositions: status.propositions || [], demandes: status.demandes || [], readiness: status.readiness || null, messages: status.messages || [], documents: status.documents || [], acte: status.acte || null, evaluation: status.evaluation || null, annulation: status.annulation || null, caution: status.caution || null, fetchedAt: Date.now() };
+    c[id] = { bid: status.bid || null, lecture: status.lecture || null, notaire: status.notaire || null, propositions: status.propositions || [], demandes: status.demandes || [], readiness: status.readiness || null, messages: status.messages || [], documents: status.documents || [], acte: status.acte || null, evaluation: status.evaluation || null, annulation: status.annulation || null, caution: status.caution || null, fetchedAt: Date.now() };
     lsSave(LS_OFFERSTATUS, c);
     return c[id];
   }
@@ -568,8 +568,23 @@
       if (m && m.de === 'notaire' && String(m.createdAt || '') > newest) newest = String(m.createdAt);
     });
     if (newest) seenSet(id, newest);
+    // The read receipt (2026-09-04): the notary's console will show « Vu ».
+    // Best-effort, once per newest message — never blocks the badge repaint.
+    if (newest && seenServerSent[id] !== newest) {
+      var o = myOffers().find(function (x) { return x.id === id; });
+      if (o && o.clientToken && o.dateISO) {
+        seenServerSent[id] = newest;
+        try {
+          fetch(API_BASE + '/client/bid/lecture', {
+            method: 'POST', headers: clientHeaders(o, true),
+            body: JSON.stringify({ id: o.id, dateISO: o.dateISO }),
+          }).catch(function () {});
+        } catch (e) {}
+      }
+    }
     paintUnreadBadges();
   }
+  var seenServerSent = {};
   // The words after the count: messages, documents, or both (« nouveautés »).
   function unreadWords(n, docs) {
     var msgs = n - (docs || 0);
@@ -953,7 +968,7 @@
         }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
           if (!j) return;
           var st = offerStatusGet(o.id) || {};
-          offerStatusSet(o.id, { bid: st.bid, notaire: st.notaire, propositions: st.propositions, demandes: j.demandes || st.demandes, readiness: j.readiness || st.readiness });
+          offerStatusSet(o.id, { bid: st.bid, lecture: st.lecture || null, notaire: st.notaire, propositions: st.propositions, demandes: j.demandes || st.demandes, readiness: j.readiness || st.readiness });
           if (state.tab === 'profil') renderProfil();
         }).catch(function () {});
       } catch (e) { /* offline */ }
@@ -1149,7 +1164,7 @@
     if (n.kind && !notifAllowed(n.kind)) return;
     var a = notifLoad();
     if (a.some(function (x) { return x.key === n.key; })) return; // idempotent
-    a.unshift({ key: n.key, title: n.title, body: n.body || '', dateISO: n.dateISO || null, offerId: n.offerId || null, read: false });
+    a.unshift({ key: n.key, title: n.title, body: n.body || '', dateISO: n.dateISO || null, offerId: n.offerId || null, lien: n.lien || null, read: n.read === true });
     notifSave(a.slice(0, 40));
     renderNotifs();
   }
@@ -1193,11 +1208,13 @@
       item.appendChild(x);
       // Two kinds of door: an offer's band on Mes offres (a message from the
       // notary), or that day on the carnet.
-      if (n.offerId || n.dateISO) {
+      if (n.offerId || n.dateISO || n.lien) {
         item.setAttribute('role', 'button'); item.tabIndex = 0;
         var go = function () {
           toggleNotifPanel(false); markAllRead();
-          if (n.offerId) openOfferBand(n.offerId); else openDay(n.dateISO);
+          if (n.offerId) openOfferBand(n.offerId);
+          else if (n.dateISO) openDay(n.dateISO);
+          else if (n.lien) { try { location.hash = n.lien; } catch (e) {} }
         };
         item.addEventListener('click', go);
         item.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
@@ -1205,7 +1222,11 @@
       list.appendChild(item);
     });
   }
-  function markAllRead() { var a = notifLoad(); a.forEach(function (x) { x.read = true; }); notifSave(a); renderNotifs(); }
+  function markAllRead() {
+    var a = notifLoad(); var had = a.some(function (x) { return !x.read; });
+    a.forEach(function (x) { x.read = true; }); notifSave(a); renderNotifs();
+    if (had && typeof syncNotifsRead === 'function') syncNotifsRead();
+  }
   function toggleNotifPanel(force) {
     var panel = $('notif-panel'), bell = $('notif-bell'); if (!panel) return;
     var open = force != null ? force : panel.hidden;
@@ -4457,7 +4478,7 @@
     if (st === 'approved' && o.clientToken) {
       var chat = el('div', 'my-offer-chat chat'); chat.dataset.id = o.id;
       chat.appendChild(el('div', 'my-offer-chat-h', 'Messages avec votre notaire'));
-      chat.appendChild(chatThread((status && status.messages) || [], 'client'));
+      chat.appendChild(chatThread((status && status.messages) || [], 'client', status && status.lecture && status.lecture.notaire));
       // The shared composer (ADR 0033); focusing it means the thread is read.
       var composer = chatComposer({
         placeholder: 'Écrire à votre notaire…', ariaLabel: 'Écrire à votre notaire', sendClass: 'client-chat-send',
@@ -4841,10 +4862,12 @@
     }
     $('contact-form').hidden = false;
     $('contact-success').hidden = true;
+    var lede0 = document.querySelector('#contact-dialog .ct-lede'); if (lede0) lede0.hidden = false;
+    var door = $('ct-open-chat'); if (door) door.hidden = true;
     var eb = $('ct-errors'); eb.hidden = true; clear(eb);
     var dlg = $('contact-dialog');
     if (dlg && dlg.showModal) { try { dlg.showModal(); } catch (e) {} }
-    contactCount();
+    contactCount(); contactGrow();
     // The one required field first: an empty courriel is the likeliest
     // omission; with it on file, straight to the message.
     var first = $('ct-courriel').value ? $('ct-message') : $('ct-courriel');
@@ -4861,6 +4884,29 @@
     c.hidden = !show;
     c.textContent = show ? n + ' / ' + max : '';
   }
+  // After a « Nous joindre » send: one door into the messagerie, where the
+  // answer will land live (the contact route hands the thread's token back).
+  function contactSuccessDoor() {
+    var b = $('ct-open-chat'); if (!b) return;
+    b.hidden = false;
+    if (b.dataset.wired) return;
+    b.dataset.wired = '1';
+    // Close the contact dialog first: the messagerie is where the reader goes next.
+    b.addEventListener('click', function () {
+      var done = $('ct-done'); if (done) { try { done.click(); } catch (e) {} }
+      if (typeof chatToggle === 'function') chatToggle(true);
+    });
+  }
+  // The message box grows with the text (three lines at rest, 40vh at most):
+  // a form that reserves five empty lines pushes Envoyer under the fold of
+  // a small phone for nothing.
+  function contactGrow() {
+    var ta = $('ct-message'); if (!ta) return;
+    ta.style.height = 'auto';
+    var max = Math.round(window.innerHeight * 0.4);
+    ta.style.height = Math.min(Math.max(ta.scrollHeight, 0), max) + 'px';
+  }
+
   async function submitContact(e) {
     e.preventDefault();
     var input = {
@@ -4884,12 +4930,23 @@
         body: JSON.stringify(Object.assign({}, input, contactBidId ? { bidId: contactBidId } : {})),
       });
       ok = r.ok;
+      // The message is a support thread too (2026-09-04): keep its widget
+      // token so the answer lands live in the site's messagerie.
+      if (ok) {
+        var cj = {}; try { cj = await r.json(); } catch (e4) {}
+        if (cj && cj.token && typeof chatSessionPatch === 'function') {
+          chatSessionPatch({ threadId: cj.threadId, token: cj.token, lastAt: new Date().toISOString(), seenAt: new Date().toISOString() });
+          contactSuccessDoor();
+        }
+      }
     } catch (e2) { ok = false; }
     btn.disabled = false; btn.removeAttribute('aria-busy');
     if (!ok) { toast('Impossible d’envoyer pour le moment. Réessayez, ou écrivez-nous par courriel.'); return; }
     profileSet({ nom: v.nom || profileGet().nom, courriel: v.courriel });
     $('contact-form').hidden = true;
     $('contact-success').hidden = false;
+    // The sent state speaks for itself: the form's lede leaves with the form.
+    var lede = document.querySelector('#contact-dialog .ct-lede'); if (lede) lede.hidden = true;
     $('ct-message').value = '';
     contactCount();
     // The form just vanished under the keyboard user: land on the one control left.
@@ -5899,6 +5956,17 @@
     var all = ncSeenAll();
     if (all[entry.id] === last) return;
     all[entry.id] = last; lsSave(LS_NC_SEEN, all);
+    // The read receipt (2026-09-04): the client's thread will show « Vu ».
+    // Best-effort — a failed stamp is invisible to the notary and never
+    // blocks the gesture that marked the thread read.
+    if (nc.token && entry.dateISO) {
+      try {
+        fetch(API_BASE + '/notary/bids/lecture', {
+          method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + nc.token },
+          body: JSON.stringify({ id: entry.id, dateISO: entry.dateISO }),
+        }).catch(function () {});
+      } catch (e) {}
+    }
     var card = document.querySelector('#notary-retained-list .nc-card[data-id="' + entry.id + '"]');
     if (card) { card.querySelectorAll('.nc-unread').forEach(function (b) { b.parentNode.removeChild(b); }); delete card.dataset.unread; }
     ncRenderRetainedHead();
@@ -6119,6 +6187,34 @@
     }, NC_POLL_MS);
   }
 
+  // The notary's bell (2026-09-04): the API writes one entry per event under
+  // the notary's courriel (a client message, a document); the console pulls
+  // them after each feed load and folds them into the header bell, read state
+  // included. Best-effort: a failed pull leaves the bell as it was.
+  async function ncSyncNotifs() {
+    if (!nc.token) return;
+    var r;
+    try { r = await fetch(API_BASE + '/notifications', { headers: { authorization: 'Bearer ' + nc.token } }); } catch (e) { return; }
+    if (!r || !r.ok) return;
+    var j = {}; try { j = await r.json(); } catch (e) { return; }
+    (j.avis || []).slice().reverse().forEach(function (a) {
+      if (!a || !a.id) return;
+      addNotif({ key: 'srv:' + a.id, kind: a.kind, title: a.titre || '', body: a.corps || '', lien: a.lien || null, read: !!a.luLe });
+    });
+  }
+  // Tell the server what the bell just marked read — the notary's session,
+  // and every offer this device holds a token for. Fire-and-forget.
+  function syncNotifsRead() {
+    try {
+      if (nc.token) {
+        fetch(API_BASE + '/notifications/lues', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + nc.token }, body: JSON.stringify({ ids: 'toutes' }) }).catch(function () {});
+      }
+      myOffers().forEach(function (o) {
+        if (!o.clientToken) return;
+        fetch(API_BASE + '/notifications/lues', { method: 'POST', headers: clientHeaders(o, true), body: JSON.stringify({ id: o.id, ids: 'toutes' }) }).catch(function () {});
+      });
+    } catch (e) {}
+  }
   async function ncLoadBids() {
     if (!nc.token) return false;
     ncPollStart();
@@ -6147,6 +6243,7 @@
     }
     var j = {}; try { j = await r.json(); } catch (e) {}
     ncLastLoadAt = Date.now();
+    ncSyncNotifs();
     nc.open = j.bids || [];
     nc.rating = j.rating || null; // the notary's own public average
     nc.profil = j.profil || { lienCNQ: null, rayonKm: 0, urgences: false };
@@ -7857,14 +7954,22 @@
     var today = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
     return today ? hm : fmtWhenDay.format(d).replace(/\.$/, '') + ' · ' + hm;
   }
-  function chatThread(messages, mineRole) {
+  // `vuAt` (2026-09-04) is the OTHER side's read stamp: the last own message
+  // written before it carries « Vu » — one word, under the bubble, like every
+  // messenger people already use. Nothing is shown for the other side's
+  // messages: what they read of their own is not news.
+  function chatThread(messages, mineRole, vuAt) {
     var box = el('div', 'chat-thread');
     var list = Array.isArray(messages) ? messages : [];
     if (!list.length) {
       box.appendChild(el('p', 'chat-empty', 'Aucun message pour l’instant. Écrivez le premier.'));
       return box;
     }
-    list.forEach(function (m) {
+    var seenIdx = -1;
+    if (vuAt) {
+      list.forEach(function (m, i) { if (m.de === mineRole && m.createdAt && String(m.createdAt) <= String(vuAt)) seenIdx = i; });
+    }
+    list.forEach(function (m, i) {
       var row = el('div', 'chat-msg');
       row.dataset.de = m.de;
       row.classList.toggle('is-mine', m.de === mineRole);
@@ -7872,6 +7977,11 @@
       row.appendChild(bubble);
       var when = whenLabel(m.createdAt);
       if (when) row.appendChild(el('span', 'chat-when', when));
+      if (i === seenIdx) {
+        var seen = el('span', 'chat-seen', 'Vu');
+        seen.setAttribute('title', 'Lu par votre correspondant');
+        row.appendChild(seen);
+      }
       box.appendChild(row);
     });
     // The newest message is what the reader came for: once the thread is in
@@ -8154,7 +8264,7 @@
   var NC_CHAT_COUNT_FROM = 400;
   // The shared thread stamps every bubble itself (whenLabel — one clock for
   // both sides; the console's own fallback was unreachable and is gone).
-  function ncChatThread(entry) { return chatThread(entry.messages, 'notaire'); }
+  function ncChatThread(entry) { return chatThread(entry.messages, 'notaire', entry.lecture && entry.lecture.client); }
   // The composer: one-line box that grows with the text, Enter sends
   // (Shift+Enter breaks), a « N / 500 » counter from 400, « Envoi… » while the
   // POST is out, the refusal inline. Returns { root, input, button,
@@ -9548,6 +9658,7 @@
     // Nous joindre dialog.
     $('contact-form').addEventListener('submit', submitContact);
     $('ct-done').addEventListener('click', function () { $('contact-dialog').close(); });
+    $('ct-message').addEventListener('input', contactGrow);
     var ctMsg = $('ct-message');
     if (ctMsg) { ctMsg.setAttribute('maxlength', String(D.CONTACT_MESSAGE_MAX)); ctMsg.addEventListener('input', contactCount); }
     $('contact-dialog').addEventListener('click', function (e) { if (e.target === this) this.close(); });

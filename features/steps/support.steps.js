@@ -89,3 +89,27 @@ Then("aucun courriel n'est envoyé sauf à l'opérateur", function () {
   const others = this.mailer.sent.filter((m) => m.to !== this.operatorEmail);
   assert.equal(others.length, 0, 'envois inattendus: ' + JSON.stringify(others.map((m) => m.to)));
 });
+
+// --- La boîte de l'opérateur (2026-09-04) -------------------------------------
+// Le fil stocké porte son statut (domaine : supportThreadSummary) et l'index
+// mensuel le liste — la console admin lira exactement cette liste.
+Then('la boîte de soutien liste {int} fil(s) au statut {string}', async function (n, statut) {
+  const keys = require('../../apps/api/src/keys.js');
+  const months = keys.supportInboxMonths(new Date().toISOString(), 3);
+  const rows = await this.repo.listSupportThreads({ months, limit: 50 });
+  assert.equal(rows.length, n, 'fils listés: ' + JSON.stringify(rows.map((r) => r.id)));
+  rows.forEach((r) => assert.equal(r.statut, statut, 'statut du fil ' + r.id));
+});
+
+When('un client envoie {string} par le formulaire Nous joindre avec le courriel {string}', async function (message, courriel) {
+  await this.request({
+    method: 'POST',
+    path: '/contact',
+    body: JSON.stringify({ nom: 'Ève Roy', courriel, sujet: 'question', message }),
+  });
+  assert.equal(this.response.statusCode, 202, this.response.body);
+  const j = this.responseJson;
+  assert.ok(j.token && j.threadId, 'le formulaire rend le jeton du fil : ' + this.response.body);
+  this.supportToken = j.token;
+  this.supportThreadId = j.threadId;
+});

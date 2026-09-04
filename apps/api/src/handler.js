@@ -9,6 +9,7 @@ const { decodeUnsubToken } = require('./notifications');
 const { signToken, signChallengeToken, verifyToken, notaryIdForEmail, SCOPES } = require('./notary-auth');
 const { buildNotaryFeed, buildCarnetFeed } = require('./ics');
 const { statsDeltasForOffer, statsDeltasForRetain, statsDeltasForNotaryOnboarding, statsDeltasForFunnel } = require('./stats');
+const { notaryNotifSubject, clientNotifSubject } = require('./keys');
 
 /**
  * HTTP application, transport-agnostic. `createApp` takes a Repo port and
@@ -94,6 +95,73 @@ function createApp(repo, opts = {}) {
   ).replace(/\/+$/, '');
   // The wire shape of one chat message — an allow-list, like publicBid().
   const supportMessageView = (m) => ({ id: m.id, de: m.de, texte: m.texte, createdAt: m.createdAt });
+  // A thread is stored WITH its summary (status, last message, count) so the
+  // operator's inbox lists without opening a single log — the domain derives
+  // it, this layer only stamps it before every rewrite.
+  const supportSummarize = (thread) => {
+    const sm = domain.supportThreadSummary(thread);
+    return { ...thread, dernierAt: sm.dernierAt, dernierDe: sm.dernierDe, nb: sm.nb, statut: sm.statut };
+  };
+  // The retained-act chat is throttled per thread AND side: a runaway client
+  // (or a stuck notary console) must not flood the other party's inbox. Same
+  // fixed-window counter as the sign-in, failing OPEN.
+  const CHAT_RL_WINDOW_SEC = opts.chatRlWindowSec || 10 * 60;
+  const CHAT_RL_MAX = opts.chatRlMax || 60;
+  async function chatOverLimit(key) {
+    try {
+      if (typeof repo.incrNotaryRateCounter !== 'function') return false;
+      const c = await repo.incrNotaryRateCounter('chat_message', key, CHAT_RL_WINDOW_SEC, nowMs());
+      return c > CHAT_RL_MAX;
+    } catch {
+      return false;
+    }
+  }
+  const tropDeMessages = () => json(429, { errors: [{ code: 'trop_de_messages', message: 'Trop de messages en peu de temps. Réessayez dans quelques minutes.' }] });
+  // --- In-app notifications (2026-09-04) ----------------------------------------
+  // The API is the ONLY writer: one notification per event, under the
+  // recipient's subject (keys.js — a notary's courriel, a client's offer).
+  // Best-effort, like every notifier call: a failed write never fails a route.
+  const excerpt = (t) => String(t == null ? '' : t).replace(/\s+/g, ' ').trim().slice(0, 140);
+  const notifView = (a) => ({ id: a.id, kind: a.kind, titre: a.titre, corps: a.corps, lien: a.lien, refId: a.refId, at: a.at, luLe: a.luLe || null });
+  async function notifIn(sujet, avis) {
+    if (typeof repo.appendNotification !== 'function' || !domain.isNotifKind(avis.kind)) return;
+    const k = domain.NOTIF_KINDS.find((x) => x.id === avis.kind);
+    try {
+      await repo.appendNotification({ ...avis, titre: k.titre, sujet, at: new Date(nowMs()).toISOString() });
+    } catch {
+      /* best-effort */
+    }
+  }
+  async function notifyClient(bid, kind, corps) {
+    if (!bid || !bid.id) return;
+    await notifIn(clientNotifSubject(bid.id), {
+      audience: 'client', kind, corps: corps || null, refId: bid.id,
+      lien: bid.dateISO ? '#offre=' + bid.id + '&d=' + bid.dateISO : null,
+    });
+  }
+  async function notifyNotary(bid, kind, corps) {
+    if (!bid || !bid.notaryId) return;
+    const p = await repo.getNotary(bid.notaryId);
+    if (!p || !p.email) return;
+    await notifIn(notaryNotifSubject(p.email), {
+      audience: 'notaire', kind, corps: corps || null, refId: bid.id, lien: '#notaires&acte=' + bid.id,
+    });
+  }
+  // Whose bell a token opens: a notary session → their courriel; a client's
+  // per-offer token → that offer (the `id` query/body must match, as on every
+  // client route). Null when the token opens nothing.
+  async function notifSubjectFor(request, id, tokenFallback) {
+    const raw = bearer(request) || tokenFallback;
+    const nid = requireScope(raw, SCOPES.SESSION);
+    if (nid) {
+      const p = await repo.getNotary(nid);
+      return p && p.email ? { sujet: notaryNotifSubject(p.email) } : { error: json(401, { errors: [{ code: 'non_autorise', message: 'Jeton invalide ou expiré.' }] }) };
+    }
+    const cid = requireScope(raw, SCOPES.CLIENT);
+    if (!cid) return { error: json(401, { errors: [{ code: 'non_autorise', message: 'Jeton invalide ou expiré.' }] }) };
+    if (id && String(id) !== cid) return { error: json(403, { errors: [{ code: 'interdit', message: 'Ce jeton ne donne pas accès à cette offre.' }] }) };
+    return { sujet: clientNotifSubject(cid) };
+  }
 
   // --- Partner code claim: email verification (ADR 0011 fraud-hardening) -----
   // Claiming a referral code is a TWO-step, mailbox-proven handshake, mirroring
@@ -703,6 +771,8 @@ function createApp(repo, opts = {}) {
       // ou la carte a été refusée. Une garantie qu'on ne peut pas voir n'en est
       // pas une (ADR 0033 §4 : tout est exposé avant la confirmation).
       caution: cautionEtat(b),
+      // Read receipt (2026-09-04): when the client last opened the thread.
+      lecture: { client: b.luParClientAt || null },
     };
   }
 
@@ -942,6 +1012,8 @@ function createApp(repo, opts = {}) {
     if (dn && typeof dn.onChatDocument === 'function') {
       Promise.resolve(dn.onChatDocument(bid, pret)).catch(() => {});
     }
+    if (qui === domain.CHAT_FROM.CLIENT) await notifyNotary(bid, 'document', pret.nom || null);
+    else await notifyClient(bid, 'document', pret.nom || null);
     return json(200, { document: publicDocument(pret) });
   }
 
@@ -1044,6 +1116,7 @@ function createApp(repo, opts = {}) {
     // or fails the response), mirroring the onOfferCreated call in POST /bids.
     const rn = notifier();
     if (rn) Promise.resolve(rn.onOfferRetained(retained, { notary: profile })).catch(() => {});
+    await notifyClient(retained, 'retenue', retained.etude ? String(retained.etude) : null);
     return retained;
   }
 
@@ -2269,6 +2342,8 @@ function createApp(repo, opts = {}) {
                 // The live thread with the client — the place details surface
                 // (and the reason a notary may still withdraw, see /release).
                 messages: messagesOf(b).map(chatMessage),
+                // Read receipt (2026-09-04): when the client last opened the thread.
+                lecture: { client: b.luParClientAt || null },
             // Les documents de la conversation (ADR 0032) — jamais leur clé de
             // stockage, et jamais ceux dont le dépôt n'a pas été constaté : une
             // pièce annoncée n'est pas une pièce reçue.
@@ -2628,6 +2703,7 @@ function createApp(repo, opts = {}) {
       );
       propositions.push(proposition);
       await repo.update({ ...bid, propositions });
+      await notifyClient(bid, 'proposition', domain.money(proposition.montant));
 
       // ADR 0028: answering with a price is the strongest availability signal.
       await bumpNotary(notaryId, 'proposalsCount');
@@ -2738,6 +2814,8 @@ function createApp(repo, opts = {}) {
         readiness: domain.leadReadiness(bid.serviceId, bid.dossier || {}, bid.pricing),
         // The retained-act conversation. Empty until a notary retains the bid.
         messages: messagesOf(bid).map(chatMessage),
+        // Read receipt (2026-09-04): when the notary last opened the thread.
+        lecture: { notaire: bid.luParNotaireAt || null },
         documents: documentsOf(bid).filter((d) => d.etat === 'pret').map(publicDocument),
         // ADR 0028 — la transparence va dans les DEUX sens : une fois l'acte
         // signé et réglé, le client voit comment SON montant s'est partagé.
@@ -3135,7 +3213,22 @@ function createApp(repo, opts = {}) {
       };
       const kn = notifier();
       if (kn) Promise.resolve(kn.onContactMessage(msg)).catch(() => {});
-      return json(202, { recu: true });
+      // Durable (2026-09-04): a « Nous joindre » message is a support thread
+      // too — same inbox, same reply path — never only a mail. The sender gets
+      // the thread's widget token back, so the answer can land live for them.
+      let suivi = {};
+      try {
+        const contactThread = supportSummarize({
+          id: newId(), origine: 'contact', nom: v.nom || null, courriel: v.courriel, sujet: v.sujet || null,
+          bidId: msg.bidId, createdAt: msg.receivedAt,
+          messages: [{ id: msg.id, de: domain.SUPPORT_FROM.VISITEUR, texte: v.message, createdAt: new Date(nowMs()).toISOString() }],
+        });
+        await repo.putSupportThread(contactThread);
+        suivi = { threadId: contactThread.id, token: signToken(contactThread.id, nowMs() + SUPPORT_TOKEN_TTL_MS, SCOPES.SUPPORT) };
+      } catch {
+        suivi = {};
+      }
+      return json(202, { recu: true, ...suivi });
     }
 
     // --- Live support messaging (ADR 0026) ----------------------------------
@@ -3182,7 +3275,7 @@ function createApp(repo, opts = {}) {
       if (!thread) thread = { id: newId(), courriel: null, createdAt: now(), messages: [] };
       if (v.courriel) thread.courriel = v.courriel;
       thread.messages = [...(thread.messages || []), message];
-      await repo.putSupportThread(thread);
+      await repo.putSupportThread(supportSummarize(thread));
       const sn = notifier();
       if (sn && typeof sn.onSupportMessage === 'function') {
         const replyUrl = SUPPORT_URL
@@ -3223,7 +3316,7 @@ function createApp(repo, opts = {}) {
       if (!v.ok) return json(422, { errors: v.errors });
       const message = { id: newId(), de: domain.SUPPORT_FROM.NOTA, texte: v.texte, createdAt: new Date(nowMs()).toISOString() };
       thread.messages = [...(thread.messages || []), message];
-      await repo.putSupportThread(thread);
+      await repo.putSupportThread(supportSummarize(thread));
       const rn = notifier();
       if (rn && typeof rn.onSupportReply === 'function' && thread.courriel) {
         Promise.resolve(rn.onSupportReply({ message, courriel: thread.courriel })).catch(() => {});
@@ -3266,6 +3359,7 @@ function createApp(repo, opts = {}) {
       }
       const v = domain.validateChatMessage({ bid, de: domain.CHAT_FROM.NOTAIRE, texte: payload.texte });
       if (!v.ok) return json(422, { errors: v.errors });
+      if (await chatOverLimit(bid.id + ':notaire')) return tropDeMessages();
       const message = { id: newId(), de: domain.CHAT_FROM.NOTAIRE, texte: v.texte, createdAt: new Date(nowMs()).toISOString() };
       await repo.update({ ...bid, messages: [...messagesOf(bid), message] });
       // Tell the client their notary wrote (fire-and-forget, once per message).
@@ -3273,6 +3367,7 @@ function createApp(repo, opts = {}) {
       if (mn && typeof mn.onChatMessage === 'function') {
         Promise.resolve(mn.onChatMessage(bid, message)).catch(() => {});
       }
+      await notifyClient(bid, 'message', excerpt(message.texte));
       return json(200, { message: chatMessage(message) });
     }
 
@@ -3288,6 +3383,7 @@ function createApp(repo, opts = {}) {
       if (bid.status === domain.STATUS.ANNULEE) return goneCancelled();
       const v = domain.validateChatMessage({ bid, de: domain.CHAT_FROM.CLIENT, texte: payload.texte });
       if (!v.ok) return json(422, { errors: v.errors });
+      if (await chatOverLimit(bid.id + ':client')) return tropDeMessages();
       const message = { id: newId(), de: domain.CHAT_FROM.CLIENT, texte: v.texte, createdAt: new Date(nowMs()).toISOString() };
       await repo.update({ ...bid, messages: [...messagesOf(bid), message] });
       // Tell the retaining notary their client replied (fire-and-forget, once
@@ -3296,7 +3392,56 @@ function createApp(repo, opts = {}) {
       if (mc && typeof mc.onChatMessage === 'function') {
         Promise.resolve(mc.onChatMessage(bid, message)).catch(() => {});
       }
+      await notifyNotary(bid, 'message', excerpt(message.texte));
       return json(200, { message: chatMessage(message) });
+    }
+
+    // --- Read receipts (2026-09-04) -------------------------------------------
+    // Each side says « j'ai lu » when the thread is on screen; the other side
+    // reads the stamp on its next poll and shows « Vu ». A stamp, not a
+    // per-message ledger: the thread is short-lived and one instant answers
+    // « everything before this was seen ».
+    if (route === '/client/bid/lecture' && method === 'POST') {
+      const { payload, error } = parseBody(request);
+      if (error) return error;
+      const auth = requireClient(request, payload.id);
+      if (auth.error) return auth.error;
+      const bid = await repo.get(payload.id, payload.dateISO);
+      if (!bid) return json(404, { errors: [{ code: 'introuvable', message: 'Offre introuvable.' }] });
+      const luLe = new Date(nowMs()).toISOString();
+      await repo.update({ ...bid, luParClientAt: luLe });
+      return json(200, { luLe });
+    }
+    if (route === '/notary/bids/lecture' && method === 'POST') {
+      const { payload, error } = parseBody(request);
+      if (error) return error;
+      const notaryId = requireScope(bearer(request) || payload.token, SCOPES.SESSION);
+      if (!notaryId) return json(401, { errors: [{ code: 'non_autorise', message: 'Jeton invalide ou expiré.' }] });
+      const bid = await repo.get(payload.id, payload.dateISO);
+      if (!bid) return json(404, { errors: [{ code: 'introuvable', message: 'Offre introuvable.' }] });
+      if (bid.notaryId !== notaryId) return json(403, { errors: [{ code: 'interdit', message: 'Conversation réservée au notaire qui a retenu l’offre.' }] });
+      const luLe = new Date(nowMs()).toISOString();
+      await repo.update({ ...bid, luParNotaireAt: luLe });
+      return json(200, { luLe });
+    }
+
+    // --- In-app notifications: the two doors (2026-09-04) -------------------
+    // GET lists the bell's entries, newest first, with the unread count; POST
+    // marks them read (ids, or 'toutes'). A notary session opens their own
+    // bell; a client's per-offer token opens that offer's.
+    if (route === '/notifications' && method === 'GET') {
+      const who = await notifSubjectFor(request, query.id);
+      if (who.error) return who.error;
+      const avis = await repo.listNotifications(who.sujet, { limit: query.limit });
+      return json(200, { avis: avis.map(notifView), nonLus: avis.filter((x) => !x.luLe).length });
+    }
+    if (route === '/notifications/lues' && method === 'POST') {
+      const { payload, error } = parseBody(request);
+      if (error) return error;
+      const who = await notifSubjectFor(request, payload.id, payload.token);
+      if (who.error) return who.error;
+      const marques = await repo.markNotificationsRead(who.sujet, payload.ids == null ? 'toutes' : payload.ids, new Date(nowMs()).toISOString());
+      return json(200, { marques });
     }
 
     // --- Les documents de la conversation (ADR 0032) -------------------------
@@ -3381,6 +3526,7 @@ function createApp(repo, opts = {}) {
           .then((notary) => rn.onActReleased(released, { notary, etude: bid.etude, message: v.message, paidOrHeld: !!bid.paymentIntentId }))
           .catch(() => {});
       }
+      await notifyClient(released, 'desistement', bid.etude ? String(bid.etude) : null);
       return json(200, { bid: publicBid(released) });
     }
 

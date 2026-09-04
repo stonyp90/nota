@@ -39,3 +39,14 @@ Fonctionnalité: Messagerie en direct — une question tombe live chez l'opérat
     Quand un visiteur écrit "   " à la messagerie
     Alors la réponse a le statut 422
     Et la réponse contient le code d'erreur "message_requis"
+
+  Scénario: la boîte de l'opérateur liste chaque fil avec son statut
+    Quand un visiteur écrit "Faites-vous les subrogations ?" à la messagerie
+    Alors la boîte de soutien liste 1 fil au statut "a_repondre"
+    Quand l'opérateur répond "Oui, dès la semaine prochaine." par son lien
+    Alors la boîte de soutien liste 1 fil au statut "repondu"
+
+  Scénario: un message « Nous joindre » entre dans la même boîte, et son auteur peut suivre la réponse
+    Quand un client envoie "Pouvez-vous me rappeler demain ?" par le formulaire Nous joindre avec le courriel "eve@exemple.ca"
+    Alors la boîte de soutien liste 1 fil au statut "a_repondre"
+    Et le fil de la messagerie compte 1 message

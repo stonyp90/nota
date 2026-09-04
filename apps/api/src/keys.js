@@ -183,6 +183,35 @@ function supportPK(id) {
   return 'SUPPORT#' + String(id);
 }
 const SUPPORT_SK = 'THREAD';
+// --- The operator's inbox (2026-09-04): a listing overload for support threads
+// Sharded by the MONTH of the last message — the remedy the OPENBID note
+// (keys.js, « shard OPENBID_GSI1PK by month ») prescribes for a constant-PK
+// overload's single-partition write ceiling, applied BEFORE there is data:
+// anonymous visitors write here forever and nothing of the inbox deletes.
+//
+//   GSI1PK = "SUPPORT#<YYYY-MM>"   (month of `dernierAt`, the last message)
+//   GSI1SK = "<dernierAt>#<id>"    (the inbox reads each month backwards)
+//
+// The inbox fans its read across the recent months (supportInboxMonths) and
+// merges newest-first; a thread that wakes up in a new month simply moves.
+const SUPPORT_GSI1PK_PREFIX = 'SUPPORT#';
+function supportGSI1PK(dernierAt) {
+  return SUPPORT_GSI1PK_PREFIX + String(dernierAt || '').slice(0, 7);
+}
+function supportGSI1SK(thread) {
+  return `${thread.dernierAt || thread.createdAt || ''}#${thread.id}`;
+}
+// The month keys the inbox reads: this month and the `count - 1` before it.
+function supportInboxMonths(nowISO, count = 3) {
+  const [y, m] = String(nowISO || '').slice(0, 7).split('-').map(Number);
+  const out = [];
+  if (!Number.isFinite(y) || !Number.isFinite(m)) return out;
+  for (let i = 0; i < Math.max(1, Math.min(24, Number(count) || 3)); i += 1) {
+    const d = new Date(Date.UTC(y, m - 1 - i, 1));
+    out.push(d.toISOString().slice(0, 7));
+  }
+  return out;
+}
 
 // --- Partner referral registry (ADR 0011) ------------------------------------
 // A professional claiming their referral code self-serve (POST /partenaires):
@@ -778,6 +807,10 @@ module.exports = {
   ACT_SK,
   supportPK,
   SUPPORT_SK,
+  SUPPORT_GSI1PK_PREFIX,
+  supportGSI1PK,
+  supportGSI1SK,
+  supportInboxMonths,
   partnerPK,
   PARTNER_SK,
   PARTNER_GSI1PK,

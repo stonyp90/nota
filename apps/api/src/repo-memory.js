@@ -334,6 +334,18 @@ function createMemoryRepo(seed = []) {
       const t = supportThreads.get(String(id));
       return t ? { ...t } : null;
     },
+    // The operator's inbox: the threads whose last message falls in `months`
+    // (see keys.supportInboxMonths), newest first, bounded. Mirrors the
+    // month-sharded GSI1 overload of the dynamo adapter.
+    async listSupportThreads({ months, limit } = {}) {
+      const set = new Set(Array.isArray(months) ? months : []);
+      const max = Math.max(1, Math.min(500, Number(limit) || 100));
+      return [...supportThreads.values()]
+        .filter((t) => set.has(String(t.dernierAt || t.createdAt || '').slice(0, 7)))
+        .sort((a, b) => String(b.dernierAt || b.createdAt || '').localeCompare(String(a.dernierAt || a.createdAt || '')) || String(b.id).localeCompare(String(a.id)))
+        .slice(0, max)
+        .map((t) => ({ ...t }));
+    },
 
     // --- Partner referral registry (ADR 0011) -------------------------------
     // One record per NORMALIZED code; write-once, so claiming a taken code

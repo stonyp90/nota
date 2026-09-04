@@ -235,3 +235,44 @@ test.describe('responsive layout', () => {
     }
   });
 });
+
+// --- « Nous joindre » (2026-09-04 redesign) ------------------------------------
+// The contact dialog is the one popup a stranger meets first. At every size:
+// no sideways scroll with it open, the dialog stays inside the viewport, the
+// Envoyer button can be reached, and nom + courriel share a row only where
+// the dialog column can hold two fields.
+test.describe('the contact dialog at every size', () => {
+  for (const vp of VIEWPORTS) {
+    test(`${vp.name}: « Nous joindre » fits, never scrolls sideways, and its fields re-flow`, async ({ page }) => {
+      await page.setViewportSize({ width: vp.width, height: vp.height });
+      await gotoHome(page);
+      await page.evaluate(() => document.getElementById('mnav-contact').click());
+      const dlg = page.locator('#contact-dialog');
+      await expect(dlg).toBeVisible();
+      await settled(page);
+      const m = await page.evaluate(() => {
+        const d = document.getElementById('contact-dialog');
+        const r = d.getBoundingClientRect();
+        const nom = document.getElementById('ct-nom').getBoundingClientRect();
+        const mail = document.getElementById('ct-courriel').getBoundingClientRect();
+        document.getElementById('ct-submit').scrollIntoView({ block: 'nearest' });
+        const btn = document.getElementById('ct-submit').getBoundingClientRect();
+        return {
+          sideways: document.documentElement.scrollWidth > window.innerWidth,
+          left: r.left, right: r.right, top: r.top, bottom: r.bottom,
+          inner: window.innerWidth, innerH: window.innerHeight,
+          sameRow: Math.abs(nom.top - mail.top) < 2,
+          btnVisible: btn.top >= 0 && btn.bottom <= window.innerHeight && btn.width > 0,
+        };
+      });
+      expect(m.sideways, 'no sideways scroll with the dialog open').toBe(false);
+      expect(m.left, 'dialog inside the viewport (left)').toBeGreaterThanOrEqual(0);
+      expect(m.right, 'dialog inside the viewport (right)').toBeLessThanOrEqual(m.inner + 1);
+      expect(m.top, 'dialog inside the viewport (top)').toBeGreaterThanOrEqual(0);
+      expect(m.bottom, 'dialog inside the viewport (bottom)').toBeLessThanOrEqual(m.innerH + 1);
+      expect(m.btnVisible, 'Envoyer reachable').toBe(true);
+      // Under 480px the dialog is a sheet whose column cannot hold two fields.
+      expect(m.sameRow).toBe(vp.width >= 480);
+    });
+  }
+});
