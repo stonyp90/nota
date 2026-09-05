@@ -31,6 +31,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { NOTARY_CONTACT } from '../test-support/notary-fixture.mjs';
 
 const require = createRequire(import.meta.url);
@@ -412,7 +414,34 @@ const ACTEUR_ATTENDU = {
   acte_retenu: 'notaire',
   acte_regle: 'notaire',
   annulation_frais: 'client',
+  // Les angles morts fermés le 2026-09-05. L'ARGENT hors règlement nomme le
+  // CLIENT — c'est sa carte, et l'offre EST son dossier ; Stripe n'est qu'un
+  // messager et ne doit jamais apparaître comme « systeme ». La vie du NOTAIRE
+  // le nomme, lui, même quand c'est un webhook qui l'apprend à Nota.
+  caution_demandee: 'client',
+  carte_autorisee: 'client',
+  carte_enregistree: 'client',
+  caution_liberee: 'client',
+  offre_annulee: 'client',
+  notaire_compte_stripe: 'notaire',
+  notaire_inscription: 'notaire',
+  notaire_profil_modifie: 'notaire',
+  notaire_proposition: 'notaire',
+  notaire_desistement: 'notaire',
 };
+
+test('AUCUNE action du handler n’échappe au tableau : le vocabulaire se lit dans la SOURCE', () => {
+  // La garde d'au-dessus ne voit que les actions que SON scénario déclenche —
+  // elle n'aurait jamais rougi pour un point d'appel neuf ailleurs dans le
+  // fichier. Le vocabulaire se lit donc directement dans la source, comme la
+  // console le fait pour ses libellés (apps/admin/test/audit.test.mjs) : les
+  // deux tables qui doivent s'accorder ne se recopient pas, elles se dérivent.
+  const src = readFileSync(fileURLToPath(new URL('../src/handler.js', import.meta.url)), 'utf8');
+  const ecrites = [...new Set([...src.matchAll(/\bappendAudit\(\s*'([a-z_]+)'/g)].map((m) => m[1]))].sort();
+  assert.ok(ecrites.length >= 15, 'le vocabulaire a bien été lu : ' + ecrites.join(', '));
+  const nonDeclarees = ecrites.filter((a) => !Object.prototype.hasOwnProperty.call(ACTEUR_ATTENDU, a));
+  assert.deepEqual(nonDeclarees, [], 'actions écrites par l’API que personne n’a déclarées : choisissez qui elles nomment');
+});
 
 test('chaque entrée du journal public nomme L’ACTEUR ATTENDU — « systeme » est un échec, pas un repli', async () => {
   const h = harness();

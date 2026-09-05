@@ -282,13 +282,34 @@ function createAdminApp(repo, opts = {}) {
     // réellement. Lire le journal et lever l'anonymat d'un client sont deux
     // capacités distinctes ; un auditeur doit pouvoir obtenir la première sans
     // la seconde. (La console, elle, garde encore l'écran derrière 'pii:read'.)
+    // Depuis le 2026-09-05 la porte répond aussi aux deux questions d'une
+    // ENQUÊTE — « tout ce que cette personne a fait » (`acteur`) et « tout ce
+    // qui a été fait à ce compte » (`sujet`) — sur une fenêtre `du`/`au`
+    // bornée, paginée par `limite`/`curseur`. `jour` seul reste le
+    // comportement d'origine, et la permission ne bouge pas : un paramètre
+    // neuf n'est jamais un contournement.
     if (route === '/admin/audit' && method === 'GET') {
-      const result = await admin.readAudit(bearer(request), query.jour, { ip: clientIp(request) });
+      const result = await admin.readAudit(bearer(request), query.jour, {
+        ip: clientIp(request),
+        du: query.du,
+        au: query.au,
+        acteur: query.acteur,
+        sujet: query.sujet,
+        limite: query.limite,
+        curseur: query.curseur,
+      });
       if (!result.ok) {
         if (result.status === 401) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
         return json(result.status, { errors: result.errors });
       }
-      return json(200, { jour: result.jour, entrees: result.entrees });
+      return json(200, {
+        jour: result.jour,
+        du: result.du,
+        au: result.au,
+        entrees: result.entrees,
+        // Absent quand la fenêtre est épuisée : la console arrête de demander.
+        ...(result.curseur ? { curseur: result.curseur } : {}),
+      });
     }
 
     // --- Le prix de Nota (ADR 0031 / 0034) -----------------------------------
@@ -574,6 +595,75 @@ function createAdminApp(repo, opts = {}) {
         exclus: result.exclus,
         campagneId: result.campagneId,
       });
+    }
+
+    // --- RÉGION « USAGERS » : le dossier d'une personne (Loi 25) -------------
+    //
+    // Trois portes, deux permissions, et `pii:read` par-dessus. Tout est
+    // appliqué dans admin.js — une garde qu'on contourne en appelant l'API
+    // autrement n'est pas une garde — y compris le masquage : sans `pii:read`,
+    // aucune valeur nominative ne traverse la réponse.
+    //
+    // L'adresse voyage dans le CHEMIN, encodée. Elle est décodée ici et
+    // normalisée là-bas : une adresse est une clé, et une clé se normalise à un
+    // seul endroit. Un décodage impossible ne doit pas faire tomber la Lambda —
+    // il vaut un 422, comme une adresse vide.
+    function sujetDuChemin(brut) {
+      try {
+        return decodeURIComponent(brut);
+      } catch {
+        return '';
+      }
+    }
+
+    // contract: /admin/usagers/{courriel}
+    const usagerMatch = route.match(/^\/admin\/usagers\/([^/]+)$/);
+    if (usagerMatch && method === 'GET') {
+      const result = await admin.getUserFile(bearer(request), sujetDuChemin(usagerMatch[1]), { ip: clientIp(request) });
+      if (!result.ok) {
+        if (result.status === 401) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+        return json(result.status, { errors: result.errors });
+      }
+      const { ok, ...dossier } = result;
+      return json(200, dossier);
+    }
+
+    // contract: /admin/usagers/{courriel}/export
+    const exportMatch = route.match(/^\/admin\/usagers\/([^/]+)\/export$/);
+    if (exportMatch && method === 'GET') {
+      const result = await admin.exportUserFile(bearer(request), sujetDuChemin(exportMatch[1]), { ip: clientIp(request) });
+      if (!result.ok) {
+        if (result.status === 401) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+        return json(result.status, { errors: result.errors });
+      }
+      const { ok, ...enveloppe } = result;
+      return json(200, enveloppe);
+    }
+
+    // contract: /admin/usagers/{courriel}/effacement
+    //
+    // POST et non DELETE, délibérément : ce geste porte un CORPS (`confirmer`)
+    // et rend un PLAN. Sans `confirmer: true`, il ne détruit rien — c'est la
+    // prévisualisation, et c'est le seul moyen honnête de montrer à l'opérateur
+    // ce qui partira ET ce qui restera avant qu'il ne tranche.
+    const effacementMatch = route.match(/^\/admin\/usagers\/([^/]+)\/effacement$/);
+    if (effacementMatch && method === 'POST') {
+      let payload;
+      try {
+        payload = parseBody(request);
+      } catch {
+        return json(400, { errors: [{ code: 'json_invalide', message: 'Corps JSON invalide.' }] });
+      }
+      const result = await admin.eraseUserFile(bearer(request), sujetDuChemin(effacementMatch[1]), {
+        confirmer: payload && payload.confirmer === true,
+        ip: clientIp(request),
+      });
+      if (!result.ok) {
+        if (result.status === 401) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+        return json(result.status, { errors: result.errors });
+      }
+      const { ok, ...corps } = result;
+      return json(200, corps);
     }
 
     return json(404, { errors: [{ code: 'introuvable', message: 'Route inconnue.' }] });

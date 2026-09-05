@@ -161,3 +161,32 @@ test('PutItem restant permis, la ConditionExpression est la SEULE garde contre l
       'journal ' + put.input.TableName + ' : sans cette condition, un PutItem écrase la preuve');
   }
 });
+
+// --- L'effacement (Loi 25, art. 28) : la porte qu'on ouvre, celle qu'on refuse
+
+test('la marque d’effacement a SA porte d’écriture — sinon la console répond 200 et AccessDenied', () => {
+  // `putErasure` existait dans les deux adaptateurs, testé, sans appelant. Lui
+  // donner un appelant sans lui donner sa permission IAM ferait exactement ce
+  // que ce dépôt redoute : vert en test, refusé en production, et une personne
+  // à qui l'on aurait annoncé un effacement qui n'a pas eu lieu.
+  const bloc = ADMIN_TF.match(/sid\s*=\s*"MainTableErasureMarkWrite"[\s\S]*?\n\s{2}\}\n/);
+  assert.ok(bloc, 'admin.tf : aucune porte d’écriture pour ERASURE#');
+  assert.match(bloc[0], /dynamodb:PutItem/, 'la marque doit pouvoir s’écrire');
+  assert.match(bloc[0], /ERASURE#\*/, 'la porte doit être confinée aux marques d’effacement');
+  // Confinée : jamais DeleteItem. Une marque d'effacement qu'on peut supprimer
+  // ne prouve plus rien — c'est le fait même qu'elle existe pour conserver.
+  assert.doesNotMatch(bloc[0], /dynamodb:DeleteItem/, 'la marque d’effacement ne doit pas pouvoir être supprimée');
+});
+
+test('la console n’obtient JAMAIS d’écriture sur les partitions d’offres', () => {
+  // Le choix délibéré de la région « usagers » : effacer une personne demande de
+  // réécrire ses offres, mais celles-ci vivent dans des partitions `MONTH#`
+  // PARTAGÉES par toute la clientèle. Aucune condition LeadingKeys ne peut y
+  // isoler une personne : accorder `MONTH#*` donnerait à la console l'écriture
+  // sur CHAQUE offre et déferait l'isolement que `MainTableReadOnly` existe pour
+  // créer. La route le dit plutôt que de le cacher (`enAttente`).
+  const permis = [...ADMIN_TF.matchAll(/variable\s*=\s*"dynamodb:LeadingKeys"\s*\n\s*values\s*=\s*\[([^\]]*)\]/g)]
+    .flatMap((m) => m[1].split(',').map((v) => v.trim().replace(/^"|"$/g, '')))
+    .filter(Boolean);
+  assert.equal(permis.some((v) => v.startsWith('MONTH#')), false, 'la console a obtenu l’écriture sur les offres');
+});

@@ -607,29 +607,51 @@ function entierEnv(nom, defaut) {
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : defaut;
 }
 
-// Un pointeur d'index doit mourir avec ce qu'il indexe — un index qui survit à
-// l'offre pointe dans le vide, un index qui meurt avant la rend introuvable.
-// C'est la MÊME rétention que le ttl de l'offre (apps/api/src/handler.js).
+// --- LA POLITIQUE DE CONSERVATION, LUE ET NON RECOPIÉE -------------------------
 //
-// CELLE-CI N'A PAS DE SURCHARGE, et c'est délibéré : `handler.js` calcule
-// encore le ttl de l'offre en clair (`+ 400 * 86400`) au lieu d'appeler
-// `bidTtl`. Une variable d'environnement désaccorderait donc l'index de ce
-// qu'il indexe sans que rien ne le dise. Elle s'ouvrira le jour où le handler
-// passera par cette maison commune — la garde de
-// `registres-persistance.test.mjs` compare déjà les deux par la porte.
-const BID_RETENTION_DAYS = 400;
+// Les durées elles-mêmes vivent dans le DOMAINE (`domain.RETENTION_FAMILIES`) :
+// c'est une règle d'affaires, pas un détail d'adaptateur, et jusqu'au 2026-09-05
+// elle était écrite à quatre endroits — 400 jours ici, 400 jours redits en clair
+// dans `handler.js`, sept ans dans le domaine, 180 jours pour les avis. Ce qui
+// suit ne fait que la LIRE, en passant les surcharges d'exploitation.
+//
+// Les surcharges se prennent sur `process.env` À CHAQUE APPEL, jamais figées au
+// chargement du module : une constante calculée à l'import fige la valeur qu'une
+// Lambda avait au démarrage à froid, et rend tout test de réglage menteur.
+const domainePolitique = require('@nota/domain');
+const surcharges = () => process.env;
+
+// Un pointeur d'index doit mourir avec ce qu'il indexe — un index qui survit à
+// l'offre pointe dans le vide, un index qui meurt avant la rend introuvable, et
+// c'est cet index qui rend une demande d'accès (Loi 25, art. 27) exécutable.
+// UNE seule famille pour les deux : ils ne peuvent plus se désaccorder.
+//
+// La surcharge est désormais OUVERTE. Elle était fermée pour une raison précise
+// — « handler.js calcule encore le ttl de l'offre en clair, une variable
+// d'environnement désaccorderait donc l'index de ce qu'il indexe » — et cette
+// raison a disparu le jour où le handler est passé par cette maison commune
+// (`conservation-politique.test.mjs` tient les deux ensemble).
+const BID_RETENTION_DAYS = domainePolitique.retentionDays('offre', process.env);
 function bidTtl(dateISO) {
-  const ms = Date.parse(String(dateISO) + 'T00:00:00Z');
-  return Number.isFinite(ms) ? Math.floor(ms / 1000) + BID_RETENTION_DAYS * 86400 : null;
+  return domainePolitique.retentionTtl('offre', String(dateISO) + 'T00:00:00Z', surcharges());
 }
 
 // Un avis en application est une copie de courtoisie d'un fait qui vit ailleurs
 // (l'offre, l'acte, le fil de messages) : il n'a pas à survivre à la saison où
 // il servait. Minimisation (Loi 25, art. 3.2) plutôt que conservation par défaut.
-const NOTIF_RETENTION_DAYS = entierEnv('NOTA_NOTIF_RETENTION_DAYS', 180);
+const NOTIF_RETENTION_DAYS = domainePolitique.retentionDays('avis', process.env);
 function notifTtl(atISO) {
-  const ms = Date.parse(String(atISO));
-  return Number.isFinite(ms) ? Math.floor(ms / 1000) + NOTIF_RETENTION_DAYS * 86400 : null;
+  return domainePolitique.retentionTtl('avis', String(atISO), surcharges());
+}
+
+// L'échéance d'une famille quelconque de la politique, pour les adaptateurs.
+// Rendue en objet prêt à étaler dans un Item : `{}` quand la famille est
+// indéfinie ou l'ancre illisible, pour qu'AUCUN attribut ttl ne soit posé —
+// un `ttl: null` serait accepté par DynamoDB puis ignoré, un `ttl: NaN` serait
+// refusé, et un ttl inventé détruirait la pièce au hasard.
+function ttlDe(famille, ancre) {
+  const ttl = domainePolitique.retentionTtl(famille, ancre, surcharges());
+  return ttl == null ? {} : { ttl };
 }
 
 // Plafonds de page. Une lecture non bornée finit par ramener une partition
@@ -875,6 +897,7 @@ module.exports = {
   bidTtl,
   NOTIF_RETENTION_DAYS,
   notifTtl,
+  ttlDe,
   NOTIF_PAGE_MAX,
   SUBJECT_PAGE_MAX,
   CAMPAIGN_PAGE_MAX,

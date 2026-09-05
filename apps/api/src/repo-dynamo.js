@@ -70,6 +70,7 @@ const {
   ERASURE_SK,
   bidTtl,
   notifTtl,
+  ttlDe,
   NOTIF_PAGE_MAX,
   SUBJECT_PAGE_MAX,
   CAMPAIGN_PAGE_MAX,
@@ -545,7 +546,11 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
       await doc.send(
         new PutCommand({
           TableName: tableName,
-          Item: { PK: eventPK(stripeEventId), SK: EVENT_SK, type: 'event', stripeEventId, processedAt: at },
+          // Politique de conservation, famille `evenement_stripe` : cette
+          // garde d'idempotence croissait sans fin. La borne est volontairement
+          // LARGE — sous la durée de vie d'une offre, un rappel Stripe tardif
+          // serait rejoué et l'acte réglé deux fois.
+          Item: { PK: eventPK(stripeEventId), SK: EVENT_SK, type: 'event', stripeEventId, processedAt: at, ...ttlDe('evenement_stripe', at) },
         })
       );
     },
@@ -1307,6 +1312,10 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
             note: evaluation.note,
             commentaire: evaluation.commentaire || null,
             createdAt: evaluation.createdAt,
+            // Politique de conservation, famille `evaluation` : douze mois,
+            // puis l'agrégat de la cote survit seul. Ce registre survivait sans
+            // fin à l'offre qui l'avait produit.
+            ...ttlDe('evaluation', evaluation.createdAt),
           },
         })
       );
@@ -1462,7 +1471,12 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
         await doc.send(
           new PutCommand({
             TableName: tableName,
-            Item: { PK: actPK(bidId), SK: ACT_SK, type: 'act', ...record },
+            // Politique de conservation, famille `acte` : SEPT ANS CIVILS à
+            // compter du règlement — c'est la pièce comptable de l'acte. Le
+            // registre n'avait aucune borne ; il en a une, et elle est
+            // calendaire, parce que sept fois 365 jours expirerait deux jours
+            // trop tôt (2028, 2032) sur une pièce justificative.
+            Item: { PK: actPK(bidId), SK: ACT_SK, type: 'act', ...record, ...ttlDe('acte', record && (record.at || record.completedAt || record.regleLe)) },
             ConditionExpression: 'attribute_not_exists(PK)',
           })
         );
@@ -1625,6 +1639,10 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
               refId,
               montant,
               at,
+              // Politique de conservation, famille `gain_parrainage` : une
+              // récompense due ou versée est une pièce comptable, donc SEPT ANS
+              // CIVILS. Le registre croissait sans fin.
+              ...ttlDe('gain_parrainage', at),
             },
             ConditionExpression: 'attribute_not_exists(PK)',
           })

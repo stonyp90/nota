@@ -50,6 +50,18 @@ const PERMISSIONS = Object.freeze([
   // c'est une lecture nominative, à accorder comme telle.
   'audiences:read',
   'audiences:write',
+  // LE DOSSIER D'UNE PERSONNE (Loi 25, art. 27 et 28). Deux clés et non une :
+  // OUVRIR le dossier d'un client — ses offres, ses paiements, ses avis, ses
+  // consentements — et l'EFFACER ne sont pas la même décision. La seconde
+  // détruit ; elle ne doit jamais s'obtenir comme corollaire de la première,
+  // exactement comme `campaigns:send` n'est pas un corollaire de
+  // `notifications:write`.
+  //
+  // Ni l'une ni l'autre n'implique `pii:read` : un opérateur peut instruire une
+  // demande d'accès en voyant des adresses MASQUÉES (la réponse le fait), et
+  // lever l'anonymat reste une capacité distincte, comme partout ici.
+  'subjects:read',
+  'subjects:erase',
 ]);
 
 // Legacy role → permission bundle. Kept ONLY so an admin created before groups

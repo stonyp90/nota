@@ -623,6 +623,236 @@ components:
           type: string
           format: date-time
           description: Absolute session expiry (hard 12 h cap; refresh never extends it).
+    DossierUsagerSource:
+      type: object
+      required: [famille, joignable]
+      description: >-
+        Un registre que le dossier a interroge — ou qu'il ne PEUT pas encore
+        joindre par sujet. Un dossier qui tait ce qu'il n'a pas regarde ment par
+        omission : l'operateur croirait avoir tout vu.
+      properties:
+        famille:
+          type: string
+          description: Le nom de famille de la politique de conservation.
+        joignable:
+          type: boolean
+          description: >-
+            `false` quand le registre existe mais n'a aucun index par personne
+            (les fils de soutien sont indexes par MOIS, le registre des
+            destinataires par CAMPAGNE).
+        note:
+          type: [string, "null"]
+    DossierUsagerOffre:
+      type: object
+      required: [id, dateISO, serviceId, montant]
+      description: >-
+        Une offre telle que le dossier la retient. Tout ce qui NOMME quelqu'un
+        (nom, telephone, prefixe, dossier d'intake, reponses de tarification)
+        est masque ou retire sans `pii:read`.
+      properties:
+        id: { type: string }
+        dateISO: { type: string, format: date }
+        serviceId: { type: string }
+        montant: { type: number }
+        statut: { type: [string, "null"] }
+        createdAt: { type: [string, "null"] }
+        anonyme: { type: boolean }
+        nom: { type: [string, "null"] }
+        telephone: { type: [string, "null"] }
+        prefixe: { type: [string, "null"] }
+        dossier: { type: [object, "null"], additionalProperties: true }
+        pricing: { type: [object, "null"], additionalProperties: true }
+        paiement:
+          type: object
+          properties:
+            statut: { type: [string, "null"] }
+            prixNotaServiceCents: { type: [integer, "null"] }
+            prixNotaDateCents: { type: [integer, "null"] }
+        acte:
+          type: [object, "null"]
+          properties:
+            regleLe: { type: [string, "null"] }
+            montant: { type: [number, "null"] }
+            paye: { type: boolean }
+        messagesCount:
+          type: integer
+          description: >-
+            Combien de messages porte la messagerie de l'acte. Toujours lisible :
+            un operateur sans `pii:read` doit savoir qu'une conversation existe,
+            meme s'il n'a pas le droit de la lire.
+        messages:
+          type: [array, "null"]
+          description: >-
+            La conversation elle-meme. L'art. 27 donne acces aux renseignements,
+            pas a leur decompte : un simple total ne repondrait pas a la demande.
+            `null` sans `pii:read`.
+          items:
+            type: object
+            properties:
+              id: { type: [string, "null"] }
+              de: { type: [string, "null"] }
+              texte: { type: [string, "null"] }
+              createdAt: { type: [string, "null"] }
+        notaryId: { type: [string, "null"] }
+        avis:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              kind: { type: [string, "null"] }
+              titre: { type: [string, "null"] }
+              at: { type: [string, "null"] }
+              luLe: { type: [string, "null"] }
+        conservationJusqua:
+          type: [string, "null"]
+          description: La date a laquelle la politique detruit cette offre (ttl DynamoDB).
+        efface: { type: boolean }
+        effaceLe: { type: [string, "null"] }
+    DossierUsager:
+      type: object
+      required: [courriel, enClair, offres, sources]
+      description: >-
+        Ce que Nota detient sur UNE personne, assemble par une Query sur l'index
+        CLIENT# — jamais par un balayage, que le role IAM refuse.
+      properties:
+        courriel:
+          type: string
+          description: Masquee (`r•••@exemple.ca`) sans `pii:read`.
+        enClair:
+          type: boolean
+          description: Vrai quand l'appelant porte `pii:read`.
+        offres:
+          type: array
+          items:
+            $ref: "#/components/schemas/DossierUsagerOffre"
+        consentement:
+          type: [object, "null"]
+          properties:
+            base: { type: [string, "null"] }
+            at: { type: [string, "null"] }
+        journalConsentement:
+          type: array
+          items:
+            type: object
+            properties:
+              at: { type: [string, "null"] }
+              base: { type: [string, "null"] }
+              source: { type: [string, "null"] }
+        desabonne: { type: boolean }
+        journalEnvois:
+          type: array
+          items:
+            type: object
+            properties:
+              at: { type: [string, "null"] }
+              kind: { type: [string, "null"] }
+              templateKey: { type: [string, "null"] }
+        journalAudit:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              ts: { type: [string, "null"] }
+              action: { type: [string, "null"] }
+              meta: { type: [object, "null"], additionalProperties: true }
+        effacement:
+          type: [object, "null"]
+          description: >-
+            La marque d'effacement. Presente, elle distingue « nous avons efface
+            cette personne » de « nous ne l'avons jamais connue ».
+          properties:
+            at: { type: [string, "null"] }
+        sources:
+          type: array
+          items:
+            $ref: "#/components/schemas/DossierUsagerSource"
+    RetentionLine:
+      type: object
+      required: [famille, jours, indefini]
+      description: Une ligne de la politique de conservation, duree EFFECTIVE comprise.
+      properties:
+        famille: { type: string }
+        jours:
+          type: [integer, "null"]
+          description: "`null` = conservation indefinie, et le motif dit pourquoi."
+        indefini: { type: boolean }
+        surchargee:
+          type: boolean
+          description: Vrai quand l'exploitation a regle cette famille par l'environnement.
+        defaut: { type: [integer, "null"] }
+        cle: { type: string }
+        motif: { type: string }
+        base: { type: string }
+        applique:
+          type: [boolean, "null"]
+          description: >-
+            La duree est-elle REELLEMENT posee par un adaptateur ? `null` pour
+            une famille indefinie. Faux pour une duree DECIDEE mais pas encore
+            appliquee (`journal_sujet`, `destinataire_campagne`, `fil_soutien`) :
+            cette politique voyage dans l'export remis a la personne, et une
+            promesse de destruction qui n'aura pas lieu est un mensonge de plus.
+            `conservation-politique.test.mjs` relit la source des adaptateurs
+            pour faire rougir tout drapeau qui mentirait.
+        motifNonApplique: { type: [string, "null"] }
+    ErasureLine:
+      type: object
+      required: [famille]
+      properties:
+        famille: { type: string }
+        quoi: { type: string }
+        ids:
+          type: array
+          items: { type: string }
+        compte: { type: [integer, "null"] }
+        motif: { type: string }
+        base: { type: string }
+        jusqua: { type: [string, "null"] }
+        executable:
+          type: boolean
+          description: >-
+            Sur une ligne d'`efface` seulement : l'executant SAIT-IL detruire
+            cette famille ? Faux pour les registres qu'aucun adaptateur ne sait
+            vider (journal des envois, destinataires de campagne, index par
+            adresse, avis). Une ligne non executable n'est PAS effacee — elle est
+            nommee pour que personne ne croie qu'elle l'a ete.
+        identifiante:
+          type: boolean
+          description: >-
+            Le residu NOMME-t-il encore la personne ? Seul un residu identifiant
+            interdit de declarer l'effacement complet.
+        note:
+          type: [string, "null"]
+          description: Pourquoi cette famille est hors de portee.
+    ErasurePlan:
+      type: object
+      required: [courriel, efface, conserve, residus, complet]
+      description: >-
+        La frontiere de l'effacement, decidee par le DOMAINE. `efface` et
+        `conserve` sont les deux moities, `residus` la troisieme — ce que le code
+        ne sait pas encore detruire — et `complet` est faux des qu'une donnee
+        identifiante survit, qu'elle soit gardee par obligation legale ou hors de
+        portee de l'executant. Un effacement partiel doit se declarer partiel.
+      properties:
+        courriel: { type: string }
+        at: { type: [string, "null"] }
+        efface:
+          type: array
+          items:
+            $ref: "#/components/schemas/ErasureLine"
+        conserve:
+          type: array
+          items:
+            $ref: "#/components/schemas/ErasureLine"
+        residus:
+          description: >-
+            Les lignes d'`efface` non executables ET identifiantes, isolees pour
+            qu'un ecran n'ait pas a les redecouvrir en filtrant.
+          type: array
+          items:
+            $ref: "#/components/schemas/ErasureLine"
+        complet: { type: boolean }
   responses:
     Unauthorized:
       description: Missing, invalid, expired, idled-out or revoked session.
@@ -1472,28 +1702,105 @@ paths:
   /admin/audit:
     get:
       operationId: readAdminAudit
-      summary: Read one day of the append-only audit log.
+      summary: Read the append-only audit log — one day, or a filtered window.
       description: >-
         A trail nobody can read is not an audit trail. Every meaningful action —
-        admin logins, barème changes, and every settled act (`acte_regle`, with
-        the amount, the rate applied, the cote that earned it, Nota's share and
-        the notary's net) — bucketed on the Québec business day. Requires
-        `audit:read` — reading the trail and unmasking a client are two distinct
-        capabilities, and a dedicated auditor must be able to hold the first
-        without the second. Any principal without it gets 403. Newest first.
+        admin logins, barème changes, card authorizations and their release,
+        every Stripe state change, a notary's sign-up and perimeter edits, every
+        cancellation, and every settled act (`acte_regle`, with the amount, the
+        rate applied, the cote that earned it, Nota's share and the notary's
+        net) — bucketed on the Québec business day. Requires `audit:read` —
+        reading the trail and unmasking a client are two distinct capabilities,
+        and a dedicated auditor must be able to hold the first without the
+        second. Any principal without it gets 403. Newest first.
+
+
+        Since 2026-09-05 the door also answers the two questions an
+        investigation actually asks: `acteur` ("everything this person did" —
+        matched against the public trail's `acteur.id`/`acteur.type` and the
+        admin trail's `adminId`/`email`) and `sujet` ("everything done to this
+        account" — matched against the values inside `meta`, whatever key
+        carries them). Either can be combined with a `du`/`au` window of at most
+        92 days, paginated with `limite` + `curseur`. `jour` alone remains the
+        original behaviour. The parameters filter; they never widen the
+        permission.
       security:
         - adminSession: []
       parameters:
         - name: jour
           in: query
-          required: true
-          description: The business day to read, as an ISO date (YYYY-MM-DD).
+          required: false
+          description: >-
+            The business day to read, as an ISO date (YYYY-MM-DD). Required
+            unless `du`/`au` are given, which take precedence over it.
           schema:
             type: string
             pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        - name: du
+          in: query
+          required: false
+          description: >-
+            First business day of the window (inclusive). Defaults to `au` when
+            only `au` is given.
+          schema:
+            type: string
+            pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        - name: au
+          in: query
+          required: false
+          description: >-
+            Last business day of the window (inclusive). Defaults to `du` when
+            only `du` is given. The window may not exceed 92 days — the trail is
+            partitioned by day and nothing indexes actor or subject, so an
+            unbounded window would be a table scan wearing a filter's clothes.
+          schema:
+            type: string
+            pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        - name: acteur
+          in: query
+          required: false
+          description: >-
+            Keep only entries whose actor matches, case-insensitively: the
+            public trail's `acteur.id` (a notary's derived id, the bid a
+            client's dossier lives on, a partner's code) or `acteur.type`
+            (`notaire` / `client` / `partenaire` / `systeme`), or the admin
+            trail's `adminId` or `email`.
+          schema:
+            type: string
+        - name: sujet
+          in: query
+          required: false
+          description: >-
+            Keep only entries whose `meta` carries this value, whatever key
+            holds it (`bidId`, `notaryId`, `cible`, `code`, …). The actor is
+            deliberately NOT matched here: a client's dossier is both the actor
+            and the subject of its own gestures, and folding the two would make
+            this a synonym of `acteur`.
+          schema:
+            type: string
+        - name: limite
+          in: query
+          required: false
+          description: Maximum entries in one page (default 100, ceiling 500).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+        - name: curseur
+          in: query
+          required: false
+          description: >-
+            The `curseur` from a previous response, to fetch the next page. It
+            is opaque and unsigned — it carries no secret and opens nothing:
+            `audit:read` is verified on every request, cursor or not. A cursor
+            that does not belong to the requested window is a 422.
+          schema:
+            type: string
       responses:
         "200":
-          description: That day's entries — an empty list for a quiet day, never an error.
+          description: >-
+            The window's entries, newest first — an empty list for a quiet
+            window, never an error.
           content:
             application/json:
               schema:
@@ -1502,6 +1809,18 @@ paths:
                 properties:
                   jour:
                     type: string
+                    description: >-
+                      The most recent day of the window — equal to `au`, and to
+                      the requested `jour` when a single day was asked for.
+                  du:
+                    type: string
+                  au:
+                    type: string
+                  curseur:
+                    type: string
+                    description: >-
+                      Present only when more entries remain. Absent means the
+                      window is exhausted, so the console stops asking.
                   entrees:
                     type: array
                     items:
@@ -1564,7 +1883,10 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
         "422":
-          description: The `jour` parameter is not an ISO date.
+          description: >-
+            `jour_invalide` (not an ISO date), `fenetre_invalide` (start after
+            end), `fenetre_trop_large` (over 92 days), or `curseur_invalide`
+            (a cursor that does not belong to the requested window).
           content:
             application/json:
               schema:
@@ -2439,6 +2761,203 @@ paths:
           description: >-
             `envoi_indisponible` — aucun expediteur n'est cable sur cette
             console. Rien n'a ete envoye et aucun quota n'a ete consomme.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Errors"
+
+  /admin/usagers/{courriel}:
+    parameters:
+      - name: courriel
+        in: path
+        required: true
+        schema: { type: string, format: email }
+        description: >-
+          L'adresse, encodee. Elle EST la cle de l'index CLIENT# : elle se
+          normalise (minuscules, rognee) cote serveur, a un seul endroit.
+    get:
+      operationId: getAdminDossierUsager
+      summary: Ouvrir le dossier d'une personne (Loi 25, art. 27).
+      description: >-
+        Ce que Nota detient sur UNE personne : ses offres, ce qu'elle a paye, ce
+        que l'acte a regle, ses avis, ses consentements, ce qui lui a ete envoye
+        et les entrees d'audit qui nomment ses offres. Assemble par une Query
+        sur l'index CLIENT# — le pointeur ecrit a la publication — et jamais par
+        un balayage, que le role IAM refuse.
+
+        Demande `subjects:read`. Sans `pii:read` en plus, TOUT ce qui nomme
+        quelqu'un est masque : adresse reconnaissable mais non expediable, nom
+        et telephone remplaces, dossier d'intake et reponses de tarification
+        retires. Une personne inconnue rend un dossier VIDE, jamais une erreur.
+
+        JOURNALISE SOUS `dossier_usager_consulte`, avec l'empreinte du sujet et
+        le regime de lecture (`enClair`). Cette porte rend le MEME dossier que
+        l'export : ne tracer que l'export rendrait la trace facultative.
+      security:
+        - adminSession: []
+      responses:
+        "200":
+          description: Le dossier, masque ou en clair selon `pii:read`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DossierUsager"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          description: "`courriel_invalide` — une adresse est requise pour ouvrir un dossier."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Errors"
+
+  /admin/usagers/{courriel}/export:
+    parameters:
+      - name: courriel
+        in: path
+        required: true
+        schema: { type: string, format: email }
+    get:
+      operationId: exportAdminDossierUsager
+      summary: Exporter le dossier d'une personne (droit a la portabilite).
+      description: >-
+        Le meme dossier, dans une enveloppe VERSIONNEE et datee, accompagne de la
+        politique de conservation : la personne doit pouvoir lire combien de
+        temps chaque chose est gardee sans avoir a le redemander.
+
+        Demande `subjects:read`, et laisse une entree d'audit
+        (`dossier_usager_exporte`) qui dit qui a exporte, combien, et quand. Le
+        sujet y est nomme par une EMPREINTE, jamais par son adresse : le journal
+        se lit avec `audit:read`, delibarement distinct de `pii:read`, et en
+        faire un second annuaire d'adresses defierait ce decouplage.
+      security:
+        - adminSession: []
+      responses:
+        "200":
+          description: L'enveloppe d'export.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [format, genereLe, courriel, dossier, conservation]
+                properties:
+                  format:
+                    type: string
+                    const: nota.dossier-usager.v1
+                    description: Un export sans version ne se relit pas dans dix ans.
+                  genereLe: { type: string, format: date-time }
+                  genereePar: { type: [string, "null"] }
+                  courriel: { type: string }
+                  enClair: { type: boolean }
+                  dossier:
+                    $ref: "#/components/schemas/DossierUsager"
+                  conservation:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/RetentionLine"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          description: "`courriel_invalide`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Errors"
+
+  /admin/usagers/{courriel}/effacement:
+    parameters:
+      - name: courriel
+        in: path
+        required: true
+        schema: { type: string, format: email }
+    post:
+      operationId: eraseAdminDossierUsager
+      summary: Effacer le dossier d'une personne (Loi 25, art. 28).
+      description: >-
+        POST et non DELETE, delibarement : ce geste porte un corps et rend un
+        PLAN. Sans `confirmer: true` il ne detruit RIEN — pas meme la marque —
+        et sert de previsualisation, le seul moyen honnete de montrer ce qui
+        partira ET ce qui restera avant de trancher.
+
+        L'EFFACEMENT N'EST PAS INCONDITIONNEL. La frontiere est decidee par le
+        domaine : une offre dont l'acte est REGLE est conservee (piece comptable,
+        et l'acte notarie engage les obligations professionnelles propres du
+        notaire), un acte EN COURS aussi (effacer la partie a mi-mandat
+        abandonnerait le notaire), le journal d'audit et les REFUS survivent
+        toujours. `complet` est faux des qu'une donnee identifiante survit.
+
+        RIEN N'EST ANNONCE COMME EFFACE SANS L'AVOIR ETE : une offre n'entre dans
+        `effacees` qu'apres une ecriture reussie ; une ecriture refusee la met
+        dans `enAttente`, avec un `avertissement`. En production, le role IAM de
+        la console est en lecture seule sur la table des clients (infra/admin.tf)
+        — voir la note de la region « usagers » dans admin.js.
+
+        Demande `subjects:erase`, qui n'est JAMAIS un corollaire de
+        `subjects:read` : lire un dossier et le detruire ne sont pas la meme
+        decision. Journalise sous `dossier_usager_efface`.
+      security:
+        - adminSession: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                confirmer:
+                  type: boolean
+                  description: >-
+                    Absent ou faux : previsualisation, rien n'est touche. Vrai :
+                    l'effacement s'execute.
+      responses:
+        "200":
+          description: Le plan, et ce qui a reellement ete efface.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [execute, courriel, plan, effacees, enAttente]
+                properties:
+                  execute:
+                    type: boolean
+                    description: Faux pour une previsualisation.
+                  courriel: { type: string }
+                  plan:
+                    $ref: "#/components/schemas/ErasurePlan"
+                  effacees:
+                    type: array
+                    items: { type: string }
+                    description: Les offres REELLEMENT effacees, ecriture confirmee.
+                  enAttente:
+                    type: array
+                    items: { type: string }
+                    description: >-
+                      Les offres que le plan autorisait a effacer et dont
+                      l'ecriture a ete refusee. Jamais annoncees comme effacees.
+                  marque:
+                    type: [object, "null"]
+                    properties:
+                      courriel: { type: string }
+                      at: { type: [string, "null"] }
+                  avertissement:
+                    type: [string, "null"]
+                    description: Present des qu'une partie de l'effacement n'a pas pu etre ecrite.
+        "400":
+          description: Malformed JSON body.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Errors"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          description: "`courriel_invalide`."
           content:
             application/json:
               schema:

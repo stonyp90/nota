@@ -1053,6 +1053,489 @@
     return Math.floor(d.getTime() / 1000);
   }
 
+  // ===========================================================================
+  // LA POLITIQUE DE CONSERVATION — une seule table, et le code la LIT
+  // ===========================================================================
+  //
+  // `docs/legal/politique-conservation-des-donnees.md` énonce les durées ; ce
+  // tableau les APPLIQUE. Avant lui, six familles d'enregistrements n'avaient
+  // aucune borne (profils de notaires, ACT#, EVAL#, EARN#, EVENT#, UNSUB#), les
+  // offres portaient 400 jours écrits en clair dans le handler, et le journal
+  // d'audit sept ans calculés ailleurs : quatre endroits pour une seule règle.
+  //
+  // Trois principes tiennent ce tableau :
+  //
+  //   1. UNE FAMILLE ABSENTE EST UN BOGUE. Un élément qu'on écrit sans ligne
+  //      ici est un élément que personne n'a décidé de conserver — c'est
+  //      exactement ce que la politique appelait, en §5, « le seul moyen de
+  //      rendre cette politique auto-exécutoire ».
+  //   2. `null` N'EST JAMAIS UN OUBLI. Une conservation indéfinie doit porter
+  //      son `motifIndefini` ; sans lui, la ligne ne passe pas les tests.
+  //   3. RIEN NE SE RACCOURCIT EN DOUCE. Les durées ci-dessous sont celles que
+  //      le code appliquait déjà (400 jours, 180 jours, 7 ans) ou, pour les
+  //      familles qui n'en avaient aucune, une durée AJOUTÉE — jamais une durée
+  //      existante abaissée. Une rétention raccourcie DÉTRUIT des données.
+  //
+  // Chaque ligne est réglable par l'exploitation sous sa `cle`, sans redéploiement.
+  const RETENTION_FAMILIES = Object.freeze([
+    {
+      famille: 'offre',
+      jours: 400,
+      cle: 'NOTA_OFFRE_RETENTION_DAYS',
+      motif: 'Suivi du service et différends. Ancrée sur la DATE DE SIGNATURE, pas sur la publication.',
+      base: 'Loi 25, art. 23 — finalité accomplie',
+    },
+    {
+      famille: 'index_client',
+      jours: 400,
+      cle: 'NOTA_INDEX_CLIENT_RETENTION_DAYS',
+      motif: 'Le pointeur meurt AVEC l’offre qu’il indexe : plus tôt, la personne devient introuvable ; plus tard, l’index pointe dans le vide.',
+      base: 'Loi 25, art. 27 — droit d’accès exécutable',
+    },
+    {
+      famille: 'avis',
+      jours: 180,
+      cle: 'NOTA_AVIS_RETENTION_DAYS',
+      // La clé que l'exploitation connaissait AVANT que la politique n'existe.
+      // La renommer en silence ferait retomber un déploiement réglé à 30 jours
+      // sur le défaut de 180 — une rétention ALLONGÉE sans que personne ne l'ait
+      // demandé, et l'inverse exact de ce que l'opérateur avait écrit.
+      clesHeritees: ['NOTA_NOTIF_RETENTION_DAYS'],
+      motif: 'Copie de courtoisie d’un fait qui vit ailleurs (l’offre, l’acte, le fil) : il n’a pas à survivre à la saison où il servait.',
+      base: 'Loi 25, art. 3.2 — minimisation',
+    },
+    {
+      famille: 'journal_sujet',
+      jours: 730,
+      cle: 'NOTA_JOURNAL_SUJET_RETENTION_DAYS',
+      // ÉCRITE, PAS ENCORE APPLIQUÉE : aucun adaptateur ne pose ce ttl sur une
+      // ligne de journal d'envoi. La durée est donc une INTENTION, et l'écrire
+      // sans le dire ferait promettre à la personne exportant son dossier une
+      // destruction qui n'aura pas lieu.
+      applique: false,
+      motifNonApplique: 'Durée DÉCIDÉE mais pas encore posée : ces lignes n’expirent pas d’elles-mêmes, et aucune porte ne les efface sur demande.',
+      motif: 'Répond à « que nous avez-vous envoyé ? ». Deux ans couvrent le délai de plainte, sans garder une adresse à vie.',
+      base: 'Loi 25, art. 27 — droit d’accès',
+    },
+    {
+      famille: 'journal_audit',
+      jours: AUDIT_RETENTION_YEARS * 365,
+      annees: AUDIT_RETENTION_YEARS,
+      cle: 'NOTA_JOURNAL_AUDIT_RETENTION_DAYS',
+      motif: 'Preuve d’imputabilité. L’échéance est CALENDAIRE : sept ans comptés en jours expireraient deux jours trop tôt.',
+      base: 'Politique de conservation §1 — sept ans',
+    },
+    {
+      famille: 'acte',
+      jours: AUDIT_RETENTION_YEARS * 365,
+      annees: AUDIT_RETENTION_YEARS,
+      cle: 'NOTA_ACTE_RETENTION_DAYS',
+      motif: 'Pièce comptable : montant, part, références Stripe. AJOUTÉE — ce registre n’avait aucune borne.',
+      base: 'Obligations fiscales et comptables — sept ans',
+    },
+    {
+      famille: 'evaluation',
+      jours: 365,
+      cle: 'NOTA_EVALUATION_RETENTION_DAYS',
+      motif: 'Alimente la cote du notaire. AJOUTÉE — ce registre survivait sans fin à l’offre qui l’a produite.',
+      base: 'Politique de conservation §1 — douze mois',
+    },
+    {
+      famille: 'gain_parrainage',
+      jours: AUDIT_RETENTION_YEARS * 365,
+      annees: AUDIT_RETENTION_YEARS,
+      cle: 'NOTA_GAIN_PARRAINAGE_RETENTION_DAYS',
+      motif: 'Une récompense due ou versée est une pièce comptable. AJOUTÉE — le registre croissait sans fin.',
+      base: 'Obligations fiscales et comptables — sept ans',
+    },
+    {
+      famille: 'evenement_stripe',
+      jours: 400,
+      cle: 'NOTA_EVENEMENT_STRIPE_RETENTION_DAYS',
+      motif: 'Garde d’idempotence des rappels Stripe. AJOUTÉE, et volontairement LARGE : sous la durée de vie d’une offre, un rappel tardif serait rejoué.',
+      base: 'Loi 25, art. 3.2 — minimisation',
+    },
+    {
+      famille: 'profil_notaire',
+      jours: null,
+      cle: 'NOTA_PROFIL_NOTAIRE_RETENTION_DAYS',
+      motifIndefini:
+        'La politique §1 veut « 24 mois APRÈS LA FIN DE LA RELATION », et cette fin n’est enregistrée nulle part : aucune ancre, donc aucun ttl honnête. Un ttl posé à la CRÉATION détruirait le profil d’un notaire actif. La borne s’ouvrira le jour où la désactivation datera la fin de la relation.',
+      motif: 'Preuve de la relation d’affaires ; le profil porte courriel, compte Stripe Connect et cumuls.',
+      base: 'Politique de conservation §1 — écart nommé, non refermé',
+    },
+    {
+      famille: 'desabonnement',
+      jours: null,
+      cle: 'NOTA_DESABONNEMENT_RETENTION_DAYS',
+      motifIndefini: 'On ne peut pas oublier un refus sans le violer : effacer un désabonnement ferait revenir, plus tard, quelqu’un qui a dit non.',
+      motif: 'Registre des refus de sollicitation.',
+      base: 'LCAP, L.C. 2010, ch. 23, art. 11 — retrait honoré indéfiniment',
+    },
+    {
+      famille: 'consentement',
+      jours: null,
+      cle: 'NOTA_CONSENTEMENT_RETENTION_DAYS',
+      motifIndefini: 'Le fardeau de prouver le consentement pèse sur l’expéditeur : détruire la preuve, c’est perdre le droit d’écrire.',
+      motif: 'Base de consentement d’une adresse, et le journal qui l’explique.',
+      base: 'LCAP, art. 13 — fardeau de la preuve',
+    },
+    {
+      famille: 'destinataire_campagne',
+      jours: 1095,
+      cle: 'NOTA_DESTINATAIRE_CAMPAGNE_RETENTION_DAYS',
+      applique: false,
+      motifNonApplique: 'Durée DÉCIDÉE mais pas encore posée : ces lignes n’expirent pas d’elles-mêmes.',
+      motif: 'Trois ans : « qui a reçu quoi » doit survivre au délai de plainte, sans conserver une liste d’adresses à vie.',
+      base: 'LCAP — prescription de trois ans',
+    },
+    {
+      famille: 'effacement',
+      jours: null,
+      cle: 'NOTA_EFFACEMENT_RETENTION_DAYS',
+      motifIndefini: 'Sans la marque, rien ne distingue « nous avons effacé cette personne » de « nous ne l’avons jamais connue », et une réimportation la ferait revenir.',
+      motif: 'Marque d’effacement : un effacement demandé est lui-même un fait à conserver.',
+      base: 'Loi 25, art. 28 — traçabilité de la demande',
+    },
+    {
+      famille: 'fil_soutien',
+      jours: 730,
+      cle: 'NOTA_FIL_SOUTIEN_RETENTION_DAYS',
+      applique: false,
+      motifNonApplique: 'Durée DÉCIDÉE mais pas encore posée : ces conversations n’expirent pas d’elles-mêmes.',
+      motif: 'Une conversation de soutien porte le nom et l’adresse d’une personne. Deux ans couvrent le suivi d’un différend.',
+      base: 'Loi 25, art. 23 — finalité accomplie',
+    },
+  ]);
+
+  const RETENTION_BY_FAMILY = Object.freeze(
+    RETENTION_FAMILIES.reduce((acc, f) => {
+      acc[f.famille] = f;
+      return acc;
+    }, {})
+  );
+
+  // Le seul mot qui ouvre une conservation SANS borne. Il faut l'écrire : on ne
+  // l'obtient pas en se trompant de valeur, contrairement à un `0` ou un vide.
+  const RETENTION_INDEFINIE = 'indefini';
+
+  // La durée d'une famille, en jours, une fois les surcharges d'exploitation
+  // appliquées. `null` = conservation indéfinie.
+  //
+  // Une surcharge ILLISIBLE (vide, négative, nulle, non numérique) est ignorée :
+  // un déploiement ne doit pas tomber sur une variable mal tapée, et surtout une
+  // durée `NaN` poserait un ttl `NaN`, c'est-à-dire AUCUN ttl — la donnée
+  // deviendrait éternelle sans que rien ne le dise.
+  //
+  // UN SEUL SENS EST INTERDIT : borner une famille que la politique déclare
+  // indéfinie. Donner trente jours au registre des désabonnements ferait revenir
+  // un refus ; aucune variable d'environnement ne doit pouvoir faire ça.
+  function retentionDays(famille, overrides) {
+    const ligne = RETENTION_BY_FAMILY[famille];
+    if (!ligne) throw new Error(`retentionDays : famille de conservation inconnue — « ${famille} » n’a aucune ligne dans la politique`);
+    if (ligne.jours === null) return null;
+    // La clé canonique d'abord, puis les clés HÉRITÉES : un déploiement réglé
+    // sous l'ancien nom garde son réglage, et le jour où les deux sont posées
+    // c'est la canonique qui tranche.
+    let brut;
+    for (const cle of [ligne.cle, ...(ligne.clesHeritees || [])]) {
+      const v = overrides ? overrides[cle] : undefined;
+      if (v !== undefined && v !== null && String(v).trim() !== '') {
+        brut = v;
+        break;
+      }
+    }
+    if (brut === undefined || brut === null) return ligne.jours;
+    const texte = String(brut).trim();
+    if (!texte) return ligne.jours;
+    if (texte.toLowerCase() === RETENTION_INDEFINIE) return null;
+    const n = Number(texte);
+    return Number.isFinite(n) && n > 0 ? Math.floor(n) : ligne.jours;
+  }
+
+  // L'échéance d'un élément de cette famille ancré à l'instant `ancre`, en
+  // SECONDES epoch — l'unité du TTL DynamoDB. `null` quand la famille est
+  // indéfinie, et `null` aussi quand l'ancre est illisible : mieux vaut aucune
+  // expiration qu'une fausse, qui détruirait l'élément le jour même.
+  //
+  // UNE BORNE LÉGALE SE COMPTE EN ANNÉES CIVILES, PAS EN JOURS. Les familles qui
+  // portent `annees` (les sept ans de preuve : journal d'audit, acte, gain de
+  // parrainage) roulent leur échéance « même jour, N années plus tard ». Sept
+  // fois 365 jours tomberait DEUX JOURS TROP TÔT à cause de 2028 et 2032, et sur
+  // une borne de preuve, arrondir vers le bas est la seule erreur qui coûte
+  // cher. Une surcharge d'exploitation exprimée en jours reprend la main : qui
+  // écrit des jours veut des jours.
+  function retentionTtl(famille, ancre, overrides) {
+    const jours = retentionDays(famille, overrides);
+    if (jours === null) return null;
+    const ms = ancre instanceof Date ? ancre.getTime() : typeof ancre === 'number' ? ancre : Date.parse(String(ancre));
+    if (!Number.isFinite(ms)) return null;
+    const ligne = RETENTION_BY_FAMILY[famille];
+    if (ligne.annees && jours === ligne.jours) {
+      const d = new Date(ms);
+      d.setUTCFullYear(d.getUTCFullYear() + ligne.annees);
+      return Math.floor(d.getTime() / 1000);
+    }
+    return Math.floor(ms / 1000) + jours * 86400;
+  }
+
+  // La politique, telle qu'un écran ou un document doit la rendre : une ligne
+  // par famille, la durée EFFECTIVE (surcharges comprises) et sa provenance.
+  function retentionPolicy(overrides) {
+    return RETENTION_FAMILIES.map((f) => {
+      const jours = retentionDays(f.famille, overrides);
+      return {
+        famille: f.famille,
+        jours,
+        indefini: jours === null,
+        surchargee: jours !== f.jours,
+        defaut: f.jours,
+        cle: f.cle,
+        motif: jours === null ? f.motifIndefini || f.motif : f.motif,
+        base: f.base,
+        // UNE DURÉE ÉCRITE N'EST PAS UNE DURÉE APPLIQUÉE. Trois familles portent
+        // une borne que personne ne pose encore ; cette politique voyage dans
+        // l'export remis à la personne, et une promesse de destruction qui
+        // n'aura pas lieu est un mensonge de plus, pas une intention louable.
+        // `conservation-politique.test.mjs` relit les adaptateurs et fait rougir
+        // toute ligne dont ce drapeau ment.
+        applique: f.jours === null ? null : f.applique !== false,
+        motifNonApplique: f.applique === false ? f.motifNonApplique || null : null,
+      };
+    });
+  }
+
+  // ===========================================================================
+  // LA FRONTIÈRE DE L'EFFACEMENT (Loi 25, art. 28)
+  // ===========================================================================
+  //
+  // L'effacement n'est PAS inconditionnel, et un produit qui le laisse croire
+  // ment deux fois : au client, et au notaire dont il détruirait la preuve.
+  //
+  // Ce que Nota DOIT garder même sur demande :
+  //   • la trace légale et comptable d'un acte RÉGLÉ — c'est une pièce
+  //     justificative, et l'acte notarié auquel elle se rapporte engage les
+  //     obligations professionnelles propres du notaire (tenue des dossiers,
+  //     index des minutes) ;
+  //   • un acte EN COURS — effacer le client à mi-mandat abandonnerait le
+  //     notaire avec un dossier sans partie ;
+  //   • le journal d'audit — sept ans d'imputabilité, et il ne porte plus ni
+  //     adresse d'origine ni courriel (politique §1) ;
+  //   • un REFUS — désabonnement, retrait de consentement : l'oublier serait le
+  //     violer.
+  //
+  // Tout le reste s'efface — quand l'exécutant SAIT l'effacer. Le plan nomme
+  // donc TROIS choses et non deux : ce qui part, ce qui reste (pourquoi, et
+  // jusqu'à quand), et ce que le code ne sait pas encore détruire. Une console
+  // qui annoncerait « effacé » sur ce qu'elle conserve serait pire que pas
+  // d'effacement du tout ; l'annoncer sur ce qu'elle ne sait pas atteindre est
+  // le même mensonge, en plus discret.
+  function erasurePlan({ courriel, offres, desabonne, consentement, at } = {}) {
+    const adresse = String(courriel == null ? '' : courriel).trim().toLowerCase();
+    if (!adresse) throw new Error('erasurePlan : sans adresse, il n’y a pas de sujet à effacer');
+    const instant = at || null;
+    const liste = Array.isArray(offres) ? offres.filter(Boolean) : [];
+
+    const efface = [];
+    const conserve = [];
+
+    // --- Les offres, une par une -------------------------------------------
+    // Un acte est RÉGLÉ (`acteComplete`) : la pièce comptable court sept ans à
+    // compter du règlement. Il est RETENU sans être réglé : le mandat est vivant.
+    // Sinon — ouverte, expirée, annulée — rien n'oblige à la garder.
+    const regees = liste.filter((o) => o.acteComplete === true);
+    const enCours = liste.filter((o) => o.acteComplete !== true && o.status === STATUS.RETENUE);
+    const libres = liste.filter((o) => o.acteComplete !== true && o.status !== STATUS.RETENUE);
+
+    if (libres.length) {
+      efface.push({
+        famille: 'offre',
+        quoi: 'Offres sans acte réglé : dossier, pièces, courriel, téléphone, réponses de tarification.',
+        ids: libres.map((o) => o.id),
+        compte: libres.length,
+        // La SEULE famille que l'exécutant sait détruire. « Sait » et non
+        // « peut » : l'écriture peut encore lui être refusée en production, et
+        // c'est la réponse — jamais le plan — qui distingue `effacees` de
+        // `enAttente`.
+        executable: true,
+        identifiante: true,
+        note: null,
+      });
+    }
+    if (regees.length) {
+      // L'échéance la plus LOINTAINE décide : tant qu'une seule pièce court, la
+      // conservation court. Annoncer la plus proche promettrait un effacement
+      // qui n'aurait pas lieu.
+      const echeances = regees
+        .map((o) => retentionTtl('acte', o.regleLe || o.dateISO, undefined))
+        .filter((t) => t != null);
+      conserve.push({
+        famille: 'offre',
+        quoi: 'Offres dont l’acte est RÉGLÉ : la pièce justificative de l’acte et son règlement.',
+        ids: regees.map((o) => o.id),
+        compte: regees.length,
+        motif: 'Un acte réglé est une pièce comptable, et l’acte notarié qu’elle documente engage les obligations professionnelles propres du notaire.',
+        base: 'Obligations fiscales et comptables — sept ans ; Loi sur le notariat (tenue des dossiers)',
+        jusqua: echeances.length ? new Date(Math.max(...echeances) * 1000).toISOString().slice(0, 10) : null,
+      });
+    }
+    if (enCours.length) {
+      conserve.push({
+        famille: 'offre',
+        quoi: 'Actes EN COURS : retenus par un notaire, pas encore réglés.',
+        ids: enCours.map((o) => o.id),
+        compte: enCours.length,
+        motif: 'Le mandat est en cours : effacer la partie à mi-mandat abandonnerait le notaire avec un dossier sans client.',
+        base: 'Loi 25, art. 23 — la finalité n’est pas accomplie',
+        jusqua: null,
+      });
+    }
+
+    // --- Les familles nominatives qui n'ont aucune obligation de garde ------
+    //
+    // ELLES SONT ANNONCÉES AVEC LEUR EXÉCUTABILITÉ, ET C'EST TOUT LE POINT.
+    // Jusqu'au 2026-09-05 elles étaient poussées ici sans réserve, en face du
+    // titre « Ce qui sera effacé » — alors qu'AUCUNE porte de suppression
+    // n'existe pour elles dans l'un ou l'autre adaptateur. Un plan qui annonce
+    // une destruction que le code ne sait pas faire est exactement le mensonge
+    // que cette fonction existe pour empêcher : l'opérateur confirmait, la
+    // console disait « Dossier effacé », et l'adresse restait en clair dans
+    // `SUJET#<courriel>` et sur chaque ligne de destinataire de campagne.
+    //
+    // `identifiante` sépare deux résidus très différents : celui qui NOMME
+    // encore la personne (son adresse, en clair, dans une clé de partition) et
+    // celui qui n'en porte plus le nom. Seul le premier interdit de déclarer
+    // l'effacement complet.
+    for (const [famille, quoi, identifiante, note] of [
+      [
+        'avis',
+        'Avis en application (la cloche) rattachés aux offres effacées.',
+        false,
+        'Aucune porte de suppression : rien, dans les deux adaptateurs, n’efface un avis. Leur partition dérive du jeton de l’offre et non de l’adresse, et ils expirent d’eux-mêmes (politique, famille « avis »).',
+      ],
+      [
+        'journal_sujet',
+        'Journal des envois faits à cette personne.',
+        true,
+        'Aucune porte de suppression, et ces lignes sont rangées SOUS L’ADRESSE elle-même : le courriel survit en clair à l’effacement.',
+      ],
+      [
+        'destinataire_campagne',
+        'Lignes de destinataire des campagnes reçues.',
+        true,
+        'Aucune porte de suppression, et le registre est partitionné par CAMPAGNE : on ne sait même pas énumérer les lignes d’une personne. Le courriel y survit en clair.',
+      ],
+      [
+        'index_client',
+        'Pointeurs d’index qui rendent cette personne retrouvable par son adresse.',
+        true,
+        'Aucune porte de suppression. La clé de partition EST l’adresse (CLIENT#courriel) : elle survit jusqu’à l’expiration des pointeurs, qui meurent avec les offres qu’ils indexent.',
+      ],
+    ]) {
+      efface.push({ famille, quoi, ids: [], compte: null, executable: false, identifiante, note });
+    }
+
+    // --- Ce qui survit toujours --------------------------------------------
+    const audit = RETENTION_BY_FAMILY.journal_audit;
+    conserve.push({
+      famille: 'journal_audit',
+      quoi: 'Entrées du journal d’audit qui mentionnent les offres de cette personne.',
+      ids: [],
+      compte: null,
+      motif: 'Preuve d’imputabilité. Le journal ne porte ni adresse d’origine ni courriel : il nomme une offre, pas une personne.',
+      base: audit.base,
+      jusqua: null,
+    });
+    conserve.push({
+      famille: 'effacement',
+      quoi: 'La marque d’effacement elle-même, et l’entrée d’audit qui l’enregistre.',
+      ids: [],
+      compte: null,
+      motif: RETENTION_BY_FAMILY.effacement.motifIndefini,
+      base: RETENTION_BY_FAMILY.effacement.base,
+      jusqua: null,
+    });
+    if (desabonne) {
+      conserve.push({
+        famille: 'desabonnement',
+        quoi: 'Le refus de sollicitation enregistré pour cette adresse.',
+        ids: [],
+        compte: null,
+        motif: RETENTION_BY_FAMILY.desabonnement.motifIndefini,
+        base: RETENTION_BY_FAMILY.desabonnement.base,
+        jusqua: null,
+      });
+    }
+    if (consentement) {
+      conserve.push({
+        famille: 'consentement',
+        quoi: 'La base de consentement de cette adresse et le journal qui l’explique.',
+        ids: [],
+        compte: null,
+        motif: RETENTION_BY_FAMILY.consentement.motifIndefini,
+        base: RETENTION_BY_FAMILY.consentement.base,
+        jusqua: null,
+      });
+    }
+
+    // COMPLET = plus aucune donnée IDENTIFIANTE ne survit. Le journal d'audit,
+    // la marque d'effacement et les refus n'entrent pas dans ce compte : le
+    // premier ne nomme personne, les deux autres SONT l'effacement et son refus.
+    //
+    // DEUX SOURCES DE SURVIE, ET IL A LONGTEMPS MANQUÉ LA SECONDE : ce que la
+    // loi oblige à GARDER (colonne « conservé »), et ce que le code ne sait pas
+    // DÉTRUIRE. Ne compter que la première faisait déclarer « complet » un
+    // effacement après lequel l'adresse restait en clair dans trois registres.
+    // Un résidu qui ne nomme plus personne (les avis) ne compte pas ici : c'est
+    // la donnée identifiante, et elle seule, qui interdit le mot « complet ».
+    const identifiantes = conserve.filter(
+      (l) => l.famille !== 'journal_audit' && l.famille !== 'effacement' && l.famille !== 'desabonnement' && l.famille !== 'consentement'
+    );
+    const residus = efface.filter((l) => l.executable === false && l.identifiante === true);
+    return {
+      courriel: adresse,
+      at: instant,
+      efface,
+      conserve,
+      // Ce que le plan ANNONCE et que l'exécutant ne sait pas faire, isolé pour
+      // qu'un écran n'ait pas à le redécouvrir en filtrant.
+      residus,
+      complet: identifiantes.length === 0 && residus.length === 0,
+    };
+  }
+
+  // Les champs d'une offre qui NOMMENT quelqu'un. Effacer, c'est les vider —
+  // et vider CEUX-LÀ, pas l'élément entier : une offre supprimée d'un coup
+  // trouerait le carnet public, les compteurs du tableau de bord et les
+  // agrégats du notaire, et l'on ne saurait plus distinguer « effacée » de
+  // « jamais publiée ».
+  //
+  // `pricing` est de la partie : les réponses de tarification SONT le dossier
+  // (« le document confondu avec la démarche »), et la valeur d'un prêt avec la
+  // date d'une signature identifie une transaction.
+  const BID_IDENTIFYING_FIELDS = Object.freeze([
+    'nom', 'courriel', 'telephone', 'dossier', 'pricing', 'parrain', 'messages',
+  ]);
+
+  // L'offre telle qu'elle survit à un effacement. Ce qui reste ne nomme
+  // personne ; ce qui part est nommément listé ci-dessus ; et l'élément DIT
+  // qu'il a été effacé, sans quoi « effacé » et « jamais connu » se
+  // confondraient — c'est la raison d'être de la marque d'effacement.
+  //
+  // Le `ttl` est conservé tel quel. Le perdre rendrait ÉTERNEL l'élément qu'on
+  // vient d'effacer : l'inverse exact de ce qu'on demandait.
+  //
+  // Idempotent : effacer une offre déjà effacée garde le PREMIER instant. La
+  // date d'un effacement est un fait, pas un compteur qu'on repousse.
+  function redactedBid(bid, at) {
+    if (!bid) return null;
+    const nu = { ...bid };
+    for (const champ of BID_IDENTIFYING_FIELDS) nu[champ] = null;
+    nu.efface = true;
+    nu.effaceLe = bid.efface === true && bid.effaceLe ? bid.effaceLe : at || null;
+    return nu;
+  }
+
   // --- Offer validation ------------------------------------------------------
   // The one function the API must call before persisting anything. Returns the
   // derived tier and premium so the caller never recomputes them, and a list of
@@ -2766,6 +3249,15 @@
     businessDay,
     AUDIT_RETENTION_YEARS,
     auditRetentionTtl,
+    // La politique de conservation, et la frontière de l'effacement (Loi 25).
+    RETENTION_FAMILIES,
+    RETENTION_INDEFINIE,
+    retentionDays,
+    retentionTtl,
+    retentionPolicy,
+    erasurePlan,
+    BID_IDENTIFYING_FIELDS,
+    redactedBid,
     validateOffer,
     validateCounterOffer,
     suggestedCounterOffer,

@@ -303,13 +303,15 @@ resource "aws_cloudwatch_metric_alarm" "billing_cost_guard" {
 # est activée, l'API admin. Un seul nom de métrique pour les deux, donc une
 # seule alarme : d'où qu'elle vienne, une trace perdue est une trace perdue.
 #
-# CE QUE LE FILTRE ADMIN COMPTE AUJOURD'HUI : RIEN. Seul le handler public a
-# appris à crier. `apps/api/src/admin.js:113-116` garde son `catch {}` muet, donc
-# une écriture perdue du journal ADMINISTRATIF — connexions d'administrateurs,
-# changements de barème, activations de notaires — passe encore inaperçue. Le
-# filtre est posé d'avance, pour que le jour où ce `catch` émettra la même ligne
-# rien d'autre ne soit à faire ; il ne faut pas le lire comme une couverture
-# acquise.
+# LE FILTRE ADMIN COMPTE, DEPUIS LE 2026-09-05. Il a été posé d'avance sur un
+# `catch {}` muet — l'alarme couvrait donc la moitié de ce qu'elle prétendait
+# surveiller, et une écriture perdue du journal ADMINISTRATIF (connexions
+# d'administrateurs, changements de barème, activations de notaires) passait
+# inaperçue. `apps/api/src/admin.js` émet maintenant la MÊME ligne que la porte
+# publique, avec en plus l'administrateur nommé — la console est nominative.
+# Le `catch` reste un `catch` : l'argument (pourquoi une trace perdue ne doit
+# pas faire échouer le geste qu'elle décrit) est écrit au-dessus de ce bloc-là,
+# dans admin.js. apps/api/test/audit-journal-enquete.test.mjs tient la ligne.
 #
 # Coût : un filtre de métrique est gratuit, la métrique personnalisée coûte
 # ~0,30 $/mois et l'alarme ~0,10 $ — hors franchise gratuite.

@@ -287,6 +287,49 @@ data "aws_iam_policy_document" "admin_lambda" {
     }
   }
 
+  # The FOURTH write door on the MAIN table: the ERASURE MARK (Loi 25, art. 28,
+  # 2026-09-05). One fixed prefix, one item per subject:
+  #
+  #   ERASURE#<courriel>  SK = ERASURE   « cette personne a demande l'effacement »
+  #
+  # Without the mark, nothing distinguishes "we erased this person" from "we
+  # never knew them", and a re-import would bring them back. `putErasure` /
+  # `getErasure` existed in BOTH repo adapters, tested, with no caller at all;
+  # POST /admin/usagers/{courriel}/effacement is that caller, and this grant is
+  # what makes its write land in production instead of AccessDenied.
+  #
+  # StringLike because the partition carries the subject's address, so no finite
+  # list of exact values can cover it — the same reasoning as `CAMPAGNE#*` above.
+  # The prefix authorizes erasure marks and nothing else. `erasurePK` refuses an
+  # empty address, so the bare `ERASURE#` bucket cannot be reached through it.
+  #
+  # WHAT THIS GRANT DELIBERATELY DOES *NOT* OPEN, AND WHY IT MATTERS. Erasing a
+  # person also means REDACTING her offers, and those live in `MONTH#<YYYY-MM>`
+  # partitions shared by the entire clientele. No LeadingKeys condition can
+  # single out one person's rows there: granting UpdateItem on `MONTH#*` would
+  # hand the console write access to every customer offer and undo the isolation
+  # that `MainTableReadOnly` exists to create. That trade is refused here. The
+  # consequence is stated in the product rather than hidden: the erase route
+  # reports those offers under `enAttente` with a warning, and NEVER announces
+  # them as erased. Closing that half means making the PUBLIC Lambda — which
+  # already holds PutItem/UpdateItem on the main table — the executor; until it
+  # does, the honest answer is the one the route gives.
+  statement {
+    sid    = "MainTableErasureMarkWrite"
+    effect = "Allow"
+    actions = [
+      "dynamodb:GetItem",
+      "dynamodb:PutItem",
+    ]
+    resources = [aws_dynamodb_table.main.arn]
+
+    condition {
+      test     = "ForAllValues:StringLike"
+      variable = "dynamodb:LeadingKeys"
+      values   = ["ERASURE#*"]
+    }
+  }
+
   # The THIRD write door on the MAIN table: activating a notary (2026-09-02,
   # POST /admin/notaries/{id}/activer in apps/api/src/admin.js). The operator
   # checks the Tableau de l'Ordre and stamps `approuveLe` on the notary's own

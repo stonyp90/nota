@@ -384,6 +384,7 @@
     if (hash.indexOf('#/annulation') === 0) { renderAnnulation(); return; }
     if (hash.indexOf('#/notaires') === 0) { renderNotaires(); return; }
     if (hash.indexOf('#/audit') === 0) { renderAudit(); return; }
+    if (hash.indexOf('#/usagers') === 0) { renderUsagers(); return; }
     renderOverview(); // '#/' and any unknown authed route land on the overview
   }
   function focusTitle() {
@@ -679,6 +680,13 @@
     // que d'escamoter une section et de laisser croire qu'elle n'existe pas.
     rail.appendChild(railLink('Notaires', iconUsers(), 'notaires', '#/notaires', active, !canReadPii()));
     rail.appendChild(railLink('Audit', iconShield(), 'audit', '#/audit', active, !canReadAudit()));
+
+    // Usagers — le dossier d'UNE personne (Loi 25, art. 27 et 28). C'est la
+    // porte par laquelle un opérateur répond à « que détenez-vous sur moi ? ».
+    // Fermée sans « subjects:read », VISIBLE quand même : la console garde sa
+    // forme et dit ce qui manque, plutôt que d'escamoter une section et de
+    // laisser croire qu'elle n'existe pas.
+    rail.appendChild(railLink('Usagers', iconFolderUser(), 'usagers', '#/usagers', active, !canReadSubjects()));
 
     // Phase-2 placeholder — visible but disabled, so the console reads as a
     // console without shipping a dead link.
@@ -3723,6 +3731,14 @@
   function canReadAudit() {
     return can('audit:read');
   }
+  // Le dossier d'usager : DEUX clés. Ouvrir et détruire ne sont pas la même
+  // décision, et la console applique la même frontière que l'API.
+  function canReadSubjects() {
+    return can('subjects:read');
+  }
+  function canEraseSubjects() {
+    return can('subjects:erase');
+  }
 
   function canWriteSettings() {
     return can('settings:write');
@@ -4798,6 +4814,16 @@
   var auditBody = null;
   var auditJour = null;
   var auditGen = 0; // garde de séquence : un jour lent ne recouvre pas le suivant
+  // L'ENQUÊTE (2026-09-05). Le journal ne se lisait qu'un jour à la fois : ni
+  // « tout ce que cette personne a fait », ni « tout ce qui a été fait à ce
+  // compte », et rien au-delà d'une partition. Ces quatre variables portent la
+  // fenêtre et les deux filtres ; `auditCurseur` porte la page suivante, rendu
+  // par l'API tant qu'il reste quelque chose à lire.
+  var auditDu = '';      // début de fenêtre ; vide = un seul jour
+  var auditActeur = '';  // qui a agi
+  var auditSujet = '';   // sur quoi
+  var auditCurseur = null;
+  var auditListe = null; // la liste courante, pour y APPENDRE la page suivante
 
   var AUDIT_LABELS = {
     acte_regle: 'Acte réglé',
@@ -4844,6 +4870,31 @@
     partenaire_reclamation: 'Code partenaire réclamé',
     partenaire_confirme: 'Partenaire confirmé',
     client_jeton_emis: 'Accès client émis',
+    // LES ANGLES MORTS FERMÉS LE 2026-09-05. Trois familles de gestes
+    // n'écrivaient rien : l'argent AUTRE que le règlement (la caution, sa
+    // libération, la carte, l'état poussé par Stripe), la vie du notaire
+    // au-delà de son activation, et les annulations qui ne coûtent rien.
+    // Un libellé manquant s'affiche en snake_case ET échappe à la traduction —
+    // c'est exactement le bogue livré plus tôt le même jour, et audit.test.mjs
+    // le garde en lisant le vocabulaire dans la source de l'API.
+    caution_demandee: 'Caution demandée',
+    carte_autorisee: 'Carte autorisée',
+    carte_enregistree: 'Carte enregistrée',
+    caution_liberee: 'Caution libérée',
+    notaire_compte_stripe: 'Compte Stripe du notaire modifié',
+    notaire_inscription: 'Notaire inscrit',
+    notaire_profil_modifie: 'Profil du notaire modifié',
+    notaire_proposition: 'Proposition d’un notaire',
+    notaire_desistement: 'Désistement du notaire',
+    offre_annulee: 'Offre annulée',
+    // LE DOSSIER D'UNE PERSONNE (Loi 25). Ces trois-là s'écrivent dans admin.js
+    // et non dans handler.js — c'est exactement pourquoi elles ont été livrées
+    // sans libellé : la garde d'audit.test.mjs ne lisait QUE le vocabulaire de
+    // la porte publique. Elle lit désormais les deux, et une action de console
+    // sans libellé la fait rougir comme une action publique.
+    dossier_usager_consulte: 'Dossier d’usager consulté',
+    dossier_usager_exporte: 'Dossier d’usager exporté',
+    dossier_usager_efface: 'Dossier d’usager effacé',
   };
 
   // QUI a agi, quand ce n'est pas un administrateur (ADR 0036). Le journal
@@ -4896,24 +4947,54 @@
 
   function buildAuditDayControl() {
     var wrap = el('div', 'range-control');
+    wrap.appendChild(buildAuditField('audit-du', 'Depuis', 'date', 'audit-du', auditDu, function (v) { auditDu = v; }));
+    // La classe `audit-day` reste celle du SEUL sélecteur de jour : trois
+    // champs neufs la partageant, `querySelector('.audit-day')` aurait rendu
+    // « Depuis » — et la console aurait paru s'ouvrir sur une date vide.
+    wrap.appendChild(buildAuditField('audit-day', 'Jour', 'date', 'audit-day', auditJour, function (v) { auditJour = v || todayISO(); }));
+    // LES DEUX QUESTIONS D'UNE ENQUÊTE, chacune un champ. Elles se composent :
+    // « ce que ce notaire a fait à ce dossier » est la conjonction des deux.
+    wrap.appendChild(buildAuditField('audit-acteur', 'Acteur', 'search', 'audit-acteur', auditActeur, function (v) { auditActeur = v; }));
+    wrap.appendChild(buildAuditField('audit-sujet', 'Sujet', 'search', 'audit-sujet', auditSujet, function (v) { auditSujet = v; }));
+    return wrap;
+  }
+
+  // Un champ de la barre du journal. Le même moule pour les quatre : une date
+  // et une recherche ne diffèrent que par leur type et leur borne.
+  function buildAuditField(id, libelle, type, cls, valeur, poser) {
     var field = el('div', 'field audit-day-field');
-    var label = el('label', null, 'Jour');
-    label.setAttribute('for', 'audit-day');
-    var input = el('input', 'input audit-day');
-    input.type = 'date';
-    input.id = 'audit-day';
-    input.value = auditJour;
-    input.setAttribute('value', auditJour); // survit aussi à une relecture du DOM
-    input.max = todayISO(); // un journal n'a rien à dire du futur
+    var label = el('label', null, libelle);
+    label.setAttribute('for', id);
+    var input = el('input', 'input ' + cls);
+    input.type = type;
+    input.id = id;
+    input.value = valeur || '';
+    input.setAttribute('value', valeur || ''); // survit aussi à une relecture du DOM
+    if (type === 'date') input.max = todayISO(); // un journal n'a rien à dire du futur
     input.setAttribute('data-i18n-skip', '');
     input.addEventListener('change', function () {
-      auditJour = input.value || todayISO();
+      poser(input.value || '');
+      // Toute retouche repart de la PREMIÈRE page : garder le curseur ferait
+      // reprendre une nouvelle question au milieu de la réponse à l'ancienne.
+      auditCurseur = null;
       if (auditBody) loadAuditInto(auditBody);
     });
     field.appendChild(label);
     field.appendChild(input);
-    wrap.appendChild(field);
-    return wrap;
+    return field;
+  }
+
+  // L'adresse que la barre compose. `du` vide = un seul jour, et l'appel reste
+  // alors exactement celui d'avant ce chantier — la console d'hier ne change
+  // pas tant que personne ne se sert des filtres.
+  function auditQuery(curseur) {
+    var q = auditDu
+      ? ['du=' + encodeURIComponent(auditDu), 'au=' + encodeURIComponent(auditJour)]
+      : ['jour=' + encodeURIComponent(auditJour)];
+    if (auditActeur) q.push('acteur=' + encodeURIComponent(auditActeur));
+    if (auditSujet) q.push('sujet=' + encodeURIComponent(auditSujet));
+    if (curseur) q.push('curseur=' + encodeURIComponent(curseur));
+    return '/audit?' + q.join('&');
   }
 
   async function loadAuditInto(container) {
@@ -4924,13 +5005,16 @@
     for (var i = 0; i < 3; i++) skel.appendChild(el('div', 'skeleton skeleton-tile'));
     container.appendChild(skel);
 
-    var r = await call('GET', '/audit?jour=' + encodeURIComponent(auditJour));
+    auditCurseur = null;
+    auditListe = null;
+    var r = await call('GET', auditQuery(null));
     if (gen !== auditGen) return; // un autre jour a été choigi entre-temps
     if (r.status === 401) return; // handled by call()
     clear(container);
     if (r.status === 403) { container.appendChild(buildDenied()); return; }
-    // 422 : la date est illisible pour le serveur — c'est SA phrase qui
-    // s'affiche, sous le sélecteur qui permet de la corriger.
+    // 422 : la date, la fenêtre ou le curseur sont illisibles pour le serveur —
+    // c'est SA phrase qui s'affiche, sous les champs qui permettent de la
+    // corriger.
     if (r.status === 422) {
       var box = el('div', 'tpl-error');
       showErrorLines(box, (r.json && r.json.errors && r.json.errors.length)
@@ -4946,18 +5030,85 @@
 
     var view = el('div', 'view-enter');
     var entrees = r.json.entrees;
+    // Le curseur est lu AVANT de composer le vide : une première page vide qui
+    // rend un curseur ne veut pas dire « rien », elle veut dire « pas encore
+    // lu jusqu'au bout » — c'est le cas ordinaire d'une question sélective sur
+    // un trimestre, où le budget de partitions rend la main avant d'avoir
+    // trouvé quoi que ce soit. Annoncer « aucune entrée » là serait exactement
+    // l'omission muette que cet écran existe pour empêcher.
+    auditCurseur = r.json.curseur || null;
     if (!entrees.length) {
-      view.appendChild(buildAuditEmpty());
+      view.appendChild(buildAuditEmpty(!!auditCurseur));
     } else {
       var list = el('div', 'audit-list');
       entrees.forEach(function (e) { list.appendChild(buildAuditEntry(e)); });
       view.appendChild(list);
+      auditListe = list;
     }
     container.appendChild(view);
+    montrerSuite(container);
   }
 
-  function buildAuditEmpty() {
+  // « Charger la suite » — la pagination, rendue seulement quand l'API dit
+  // qu'il reste quelque chose. Une fenêtre épuisée ne rend pas de curseur, donc
+  // le bouton disparaît de lui-même : rien à deviner côté console.
+  function montrerSuite(container) {
+    var vieux = container.querySelector('.audit-suite');
+    if (vieux) vieux.remove();
+    if (!auditCurseur) return;
+    var wrap = el('div', 'audit-suite');
+    var btn = el('button', 'btn btn-sm', 'Charger la suite');
+    btn.addEventListener('click', function () {
+      btn.disabled = true;
+      chargerSuite(container, btn);
+    });
+    wrap.appendChild(btn);
+    container.appendChild(wrap);
+  }
+
+  async function chargerSuite(container, btn) {
+    var gen = auditGen;
+    var r = await call('GET', auditQuery(auditCurseur));
+    if (gen !== auditGen) return; // la question a changé pendant la requête
+    if (r.status === 401) return;
+    if (!r.ok || !r.json || !Array.isArray(r.json.entrees)) {
+      btn.disabled = false;
+      return;
+    }
+    if (r.json.entrees.length) {
+      if (!auditListe) {
+        var vide = container.querySelector('.empty-state');
+        if (vide) vide.remove();
+        auditListe = el('div', 'audit-list');
+        container.insertBefore(auditListe, container.firstChild);
+      }
+      r.json.entrees.forEach(function (e) { auditListe.appendChild(buildAuditEntry(e)); });
+    }
+    auditCurseur = r.json.curseur || null;
+    // La fenêtre vient d'être épuisée sans que rien ne soit sorti : le vide
+    // provisoire (« pas encore lu jusqu'au bout ») devient un vide DÉFINITIF.
+    // Le laisser tel quel promettrait une suite que le bouton, disparu, ne
+    // peut plus tenir.
+    if (!auditListe && !auditCurseur) {
+      var provisoire = container.querySelector('.empty-state');
+      if (provisoire) provisoire.replaceWith(buildAuditEmpty(false));
+    }
+    montrerSuite(container);
+  }
+
+  // DEUX VIDES, ET ILS NE DISENT PAS LA MÊME CHOSE. « Rien » n'est une réponse
+  // que lorsque la fenêtre a été lue jusqu'au bout. Tant que l'API rend un
+  // curseur, elle a rendu la main sur son budget de partitions sans avoir tout
+  // regardé — annoncer « aucune entrée » serait affirmer un fait que personne
+  // n'a vérifié, dans le seul écran dont le métier est de ne rien taire.
+  function buildAuditEmpty(resteAlire) {
     var e = el('div', 'empty-state');
+    if (resteAlire) {
+      e.appendChild(el('div', 'empty-state-title', 'Rien pour l’instant dans cette fenêtre.'));
+      e.appendChild(el('div', 'empty-state-text',
+        'La fenêtre n’a pas été lue jusqu’au bout : « Charger la suite » ouvre les jours suivants.'));
+      return e;
+    }
     e.appendChild(el('div', 'empty-state-title', 'Aucune entrée pour ce jour.'));
     e.appendChild(el('div', 'empty-state-text',
       'Ni geste d’administration ni acte réglé n’a été journalisé à cette date.'));
@@ -5070,6 +5221,490 @@
     return wrap;
   }
 
+  // ===========================================================================
+  // RÉGION « USAGERS » — le dossier d'une personne (Loi 25, art. 27 et 28)
+  // ===========================================================================
+  //
+  // L'écran par lequel un opérateur répond à « que détenez-vous sur moi ? ».
+  // Trois gestes, dans l'ordre où ils se posent : CHERCHER une adresse, LIRE ce
+  // qui est détenu, puis — et seulement alors — EXPORTER ou EFFACER.
+  //
+  // CE QUE CET ÉCRAN REFUSE DE FAIRE :
+  //   • promettre un effacement total. Le plan affiche DEUX colonnes — ce qui
+  //     part, ce qui reste et pourquoi — avant la moindre destruction ;
+  //   • laisser croire qu'il a tout vu. Les registres qui n'ont aucun index par
+  //     personne sont NOMMÉS, avec la raison ;
+  //   • confondre « effacé » et « jamais connu ». Une marque d'effacement se
+  //     lit en tête de dossier.
+  // LES DATES DE CE DOSSIER PORTENT LEUR ANNÉE, et ce n'est pas un détail de
+  // style. `shortDate` rend « 5 janv. » — parfait sur l'axe d'un graphique qui
+  // couvre trente jours, MENSONGER sur « conservé jusqu'au 5 janv. », qui parle
+  // de 2028 : une promesse de conservation sans année ne promet rien. Le dossier
+  // couvre des années (400 jours pour une offre, sept ans pour une pièce
+  // comptable), donc il les écrit.
+  //
+  // Il accepte aussi un horodatage complet — les journaux portent des instants,
+  // et `shortDate` leur rendrait la chaîne brute.
+  var fmtUsagerDate = new Intl.DateTimeFormat('fr-CA', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+  function usagerJour(iso) {
+    var jour = String(iso || '').slice(0, 10);
+    if (!jour) return '';
+    var d = new Date(jour + 'T00:00:00Z');
+    return isNaN(d.getTime()) ? jour : fmtUsagerDate.format(d);
+  }
+
+  var usagerSujet = '';
+  var usagerCorps = null;
+  var usagerGen = 0;
+
+  async function renderUsagers() {
+    if (!me || !me.email) {
+      var loaded = await loadMe();
+      if (!loaded.ok) {
+        if (loaded.status !== 401) renderFatal('Impossible de charger votre profil.', renderUsagers);
+        return;
+      }
+    }
+    renderUserbar();
+
+    var content = el('div', 'admin-content');
+    var head = el('div', 'page-head view-enter');
+    var titleWrap = el('div');
+    titleWrap.appendChild(el('span', 'page-eyebrow', 'Conformité'));
+    titleWrap.appendChild(el('h1', 'page-title', 'Usagers'));
+    titleWrap.appendChild(el('p', 'page-sub',
+      'Le dossier d’une personne : ce que Nota détient, ce qu’elle peut emporter, ce qui peut être effacé.'));
+    head.appendChild(titleWrap);
+    head.appendChild(el('span', 'admin-spacer'));
+    content.appendChild(head);
+
+    usagerCorps = el('div');
+    if (canReadSubjects()) content.appendChild(buildUsagerRecherche());
+    content.appendChild(usagerCorps);
+
+    mountAuthed('usagers', content);
+    focusTitle();
+    if (!canReadSubjects()) { usagerCorps.appendChild(buildDenied('Ouvrir le dossier d’une personne')); return; }
+    if (usagerSujet) await chargerDossier(usagerSujet);
+    else usagerCorps.appendChild(buildUsagerAccueil());
+  }
+
+  // La barre de recherche. L'adresse EST la clé : on la demande telle quelle, et
+  // c'est le serveur qui la normalise — une seule maison pour cette règle.
+  function buildUsagerRecherche() {
+    var form = el('form', 'usr-recherche');
+    var field = el('div', 'field');
+    var label = el('label', null, 'Adresse courriel de la personne');
+    label.setAttribute('for', 'usr-courriel');
+    var input = el('input', 'input usr-input');
+    input.type = 'email';
+    input.id = 'usr-courriel';
+    input.value = usagerSujet || '';
+    input.placeholder = 'personne@exemple.ca';
+    input.setAttribute('data-i18n-skip', '');
+    field.appendChild(label);
+    field.appendChild(input);
+    form.appendChild(field);
+
+    var go = el('button', 'btn btn-primary', 'Ouvrir le dossier');
+    go.type = 'submit';
+    form.appendChild(go);
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      usagerSujet = (input.value || '').trim();
+      if (!usagerSujet) { toast('Une adresse est requise.'); return; }
+      chargerDossier(usagerSujet);
+    });
+    return form;
+  }
+
+  function buildUsagerAccueil() {
+    var e = el('div', 'empty-state');
+    e.appendChild(el('div', 'empty-state-title', 'Cherchez une personne par son adresse.'));
+    e.appendChild(el('div', 'empty-state-text',
+      'Le dossier rassemble ses offres, ses paiements, ses avis, ses consentements et les entrées d’audit qui la concernent. Il est assemblé par l’index des offres, jamais par un balayage.'));
+    return e;
+  }
+
+  async function chargerDossier(courriel) {
+    var gen = ++usagerGen;
+    clear(usagerCorps);
+    var skel = el('div');
+    skel.setAttribute('aria-busy', 'true');
+    for (var i = 0; i < 3; i++) skel.appendChild(el('div', 'skeleton skeleton-tile'));
+    usagerCorps.appendChild(skel);
+
+    var r = await call('GET', '/usagers/' + encodeURIComponent(courriel));
+    if (gen !== usagerGen) return; // une autre adresse a été demandée entre-temps
+    if (r.status === 401) return; // traité par call()
+    clear(usagerCorps);
+    if (r.status === 403) { usagerCorps.appendChild(buildDenied('Ouvrir le dossier d’une personne')); return; }
+    if (r.status === 422) { usagerCorps.appendChild(buildUsagerErreur('Cette adresse n’est pas valide.')); return; }
+    if (!r.ok) { usagerCorps.appendChild(buildErrorBanner(function () { chargerDossier(courriel); })); return; }
+
+    peindreDossier(usagerCorps, r.json);
+  }
+
+  function buildUsagerErreur(texte) {
+    var b = el('div', 'usr-erreur');
+    b.setAttribute('role', 'alert');
+    b.appendChild(document.createTextNode(texte));
+    return b;
+  }
+
+  function peindreDossier(box, d) {
+    clear(box);
+
+    // --- La tête : qui, et sous quel régime de lecture --------------------
+    var tete = el('div', 'usr-tete view-enter');
+    var qui = el('div', 'usr-qui');
+    var adresse = el('div', 'usr-adresse');
+    adresse.setAttribute('data-i18n-skip', ''); // une adresse ne se traduit pas
+    adresse.textContent = d.courriel || '';
+    qui.appendChild(adresse);
+    if (!d.enClair) {
+      // Le masque se DIT. Un opérateur qui ignore qu'il lit des valeurs
+      // masquées croirait que Nota ne détient pas ce qu'elle détient.
+      var masque = el('span', 'usr-badge usr-badge-masque', 'Masqué');
+      masque.title = 'Les renseignements nominatifs sont masqués : cette lecture demande la permission « Voir les renseignements personnels ».';
+      qui.appendChild(masque);
+    }
+    tete.appendChild(qui);
+    tete.appendChild(el('span', 'admin-spacer'));
+    tete.appendChild(buildUsagerActions(d));
+    box.appendChild(tete);
+
+    // La marque d'effacement, en tête : « effacé » et « jamais connu » ne se
+    // confondent pas, et l'opérateur doit le voir avant de lire quoi que ce soit.
+    if (d.effacement) {
+      var marque = el('div', 'usr-marque');
+      marque.setAttribute('role', 'status');
+      marque.appendChild(el('strong', null, 'Dossier effacé'));
+      marque.appendChild(document.createTextNode(' — l’effacement a été enregistré le ' + usagerJour(d.effacement.at) + '. Ce qui reste ci-dessous est ce que la loi oblige à conserver.'));
+      box.appendChild(marque);
+    }
+
+    // --- Les faits, en un coup d'oeil -------------------------------------
+    var grille = el('div', 'stat-grid');
+    grille.appendChild(buildUsagerTuile('Offres', String(d.offres.length)));
+    var regles = d.offres.filter(function (o) { return !!o.acte; }).length;
+    grille.appendChild(buildUsagerTuile('Actes réglés', String(regles)));
+    grille.appendChild(buildUsagerTuile('Consentement', d.consentement && d.consentement.base ? d.consentement.base : 'Aucun'));
+    grille.appendChild(buildUsagerTuile('Sollicitation', d.desabonne ? 'Refusée' : 'Permise'));
+    box.appendChild(grille);
+
+    // --- Les offres --------------------------------------------------------
+    box.appendChild(el('h2', 'usr-h2', 'Offres et actes'));
+    if (!d.offres.length) {
+      box.appendChild(el('p', 'usr-vide', 'Aucune offre n’est rattachée à cette adresse.'));
+    } else {
+      var liste = el('div', 'usr-offres');
+      d.offres.forEach(function (o) { liste.appendChild(buildUsagerOffre(o)); });
+      box.appendChild(liste);
+    }
+
+    // --- Les journaux ------------------------------------------------------
+    box.appendChild(buildUsagerJournal('Consentement', d.journalConsentement, function (e) {
+      return [usagerJour(e.at), e.base || '—', e.source || ''].filter(Boolean).join(' · ');
+    }));
+    box.appendChild(buildUsagerJournal('Envois', d.journalEnvois, function (e) {
+      return [usagerJour(e.at), e.kind || '', e.templateKey || ''].filter(Boolean).join(' · ');
+    }));
+    box.appendChild(buildUsagerJournal('Audit', d.journalAudit, function (e) {
+      return [usagerJour(e.ts), e.action || ''].filter(Boolean).join(' · ');
+    }));
+
+    // --- Les sources : y compris celles qu'on ne peut pas joindre ----------
+    box.appendChild(buildUsagerSources(d.sources || []));
+  }
+
+  function buildUsagerTuile(k, v) {
+    var t = el('div', 'stat-tile');
+    t.appendChild(el('div', 'stat-k', k));
+    var val = el('div', 'stat-v');
+    val.textContent = v;
+    t.appendChild(val);
+    return t;
+  }
+
+  function buildUsagerActions(d) {
+    var bar = el('div', 'usr-actions');
+    var exporter = el('button', 'btn btn-sm', 'Exporter');
+    exporter.type = 'button';
+    exporter.title = 'Télécharger tout ce qui est détenu sur cette personne, en JSON.';
+    exporter.addEventListener('click', function () { exporterDossier(d.courriel); });
+    bar.appendChild(exporter);
+
+    var effacer = el('button', 'btn btn-sm btn-danger', 'Effacer…');
+    effacer.type = 'button';
+    if (!canEraseSubjects()) {
+      effacer.disabled = true;
+      effacer.title = 'Effacer un dossier demande la permission « Effacer le dossier d’une personne ».';
+    } else {
+      effacer.addEventListener('click', function () { previsualiserEffacement(); });
+    }
+    bar.appendChild(effacer);
+    return bar;
+  }
+
+  function buildUsagerOffre(o) {
+    var row = el('div', 'usr-offre');
+    var head = el('div', 'usr-offre-tete');
+    var titre = el('div', 'usr-offre-titre');
+    titre.setAttribute('data-i18n-skip', '');
+    titre.textContent = o.serviceId + ' · ' + usagerJour(o.dateISO);
+    head.appendChild(titre);
+    if (o.statut) head.appendChild(el('span', 'usr-badge', o.statut));
+    if (o.acte) head.appendChild(el('span', 'usr-badge usr-badge-regle', 'Acte réglé'));
+    if (o.efface) head.appendChild(el('span', 'usr-badge usr-badge-efface', 'Effacée'));
+    row.appendChild(head);
+
+    var faits = el('div', 'usr-faits');
+    ajouterFait(faits, 'Montant', moneyCents(Math.round((Number(o.montant) || 0) * 100)));
+    if (o.nom) ajouterFait(faits, 'Nom', o.nom);
+    if (o.telephone) ajouterFait(faits, 'Téléphone', o.telephone);
+    if (o.paiement && o.paiement.statut) ajouterFait(faits, 'Paiement', o.paiement.statut);
+    if (o.acte && o.acte.regleLe) ajouterFait(faits, 'Réglé le', usagerJour(o.acte.regleLe));
+    if (o.avis && o.avis.length) ajouterFait(faits, 'Avis', String(o.avis.length));
+    // L'EXISTENCE d'une conversation se dit toujours ; son CONTENU se déplie
+    // seulement quand le serveur l'a rendu (donc avec « pii:read »).
+    if (o.messagesCount) ajouterFait(faits, 'Messages', String(o.messagesCount));
+    // Ce que la politique promet POUR CETTE OFFRE — la réponse à « et vous le
+    // gardez combien de temps ? », sans avoir à la demander.
+    if (o.conservationJusqua) ajouterFait(faits, 'Conservé jusqu’au', usagerJour(o.conservationJusqua));
+    row.appendChild(faits);
+    if (o.messages && o.messages.length) row.appendChild(buildUsagerConversation(o.messages));
+    return row;
+  }
+
+  // La conversation entre le client et son notaire. L'art. 27 donne accès aux
+  // renseignements eux-mêmes : un décompte ne répond pas à la demande.
+  function buildUsagerConversation(messages) {
+    var box = el('div', 'usr-conv');
+    box.appendChild(el('div', 'usr-conv-h', 'Messages'));
+    var ul = el('ul', 'usr-liste');
+    messages.forEach(function (m) {
+      var li = el('li', 'usr-liste-item');
+      li.setAttribute('data-i18n-skip', '');
+      var qui = el('span', 'usr-conv-de');
+      qui.textContent = (m.de || '') + ' · ' + usagerJour(m.createdAt);
+      li.appendChild(qui);
+      var texte = el('div', 'usr-conv-texte');
+      texte.textContent = m.texte == null ? '' : m.texte;
+      li.appendChild(texte);
+      ul.appendChild(li);
+    });
+    box.appendChild(ul);
+    return box;
+  }
+
+  function ajouterFait(box, k, v) {
+    var line = el('div', 'usr-fait');
+    line.appendChild(el('span', 'usr-fait-k', k));
+    var val = el('span', 'usr-fait-v');
+    val.setAttribute('data-i18n-skip', '');
+    val.textContent = v == null ? '—' : String(v);
+    line.appendChild(val);
+    box.appendChild(line);
+  }
+
+  function buildUsagerJournal(titre, entrees, ligne) {
+    var box = el('section', 'usr-journal');
+    var h = el('h2', 'usr-h2', titre);
+    box.appendChild(h);
+    if (!entrees || !entrees.length) {
+      // « rien » et « pas regardé » ne se disent pas pareil.
+      box.appendChild(el('p', 'usr-vide', 'Aucune entrée.'));
+      return box;
+    }
+    var ul = el('ul', 'usr-liste');
+    entrees.forEach(function (e) {
+      var li = el('li', 'usr-liste-item');
+      li.setAttribute('data-i18n-skip', '');
+      li.textContent = ligne(e);
+      ul.appendChild(li);
+    });
+    box.appendChild(ul);
+    return box;
+  }
+
+  // Les registres interrogés, et ceux qui n'ont PAS d'index par personne. Sans
+  // cette liste, l'écran laisserait croire qu'il a tout vu.
+  function buildUsagerSources(sources) {
+    var box = el('section', 'usr-sources');
+    box.appendChild(el('h2', 'usr-h2', 'Registres interrogés'));
+    box.appendChild(el('p', 'usr-vide',
+      'Ce dossier est assemblé à partir des registres ci-dessous. Ceux marqués « sans index par personne » existent, mais ne peuvent pas encore être rattachés à une adresse.'));
+    var ul = el('ul', 'usr-liste');
+    sources.forEach(function (s) {
+      var li = el('li', 'usr-liste-item');
+      var nom = el('span', 'usr-source-nom');
+      nom.setAttribute('data-i18n-skip', '');
+      nom.textContent = s.famille;
+      li.appendChild(nom);
+      if (!s.joignable) {
+        li.appendChild(el('span', 'usr-badge usr-badge-manque', 'Sans index par personne'));
+        if (s.note) {
+          var note = el('div', 'usr-source-note');
+          note.setAttribute('data-i18n-skip', '');
+          note.textContent = s.note;
+          li.appendChild(note);
+        }
+      }
+      ul.appendChild(li);
+    });
+    box.appendChild(ul);
+    return box;
+  }
+
+  // --- L'EXPORT --------------------------------------------------------------
+  // Le fichier part du navigateur : la console ne stocke rien, et l'opérateur
+  // remet à la personne exactement ce que le serveur a rendu.
+  async function exporterDossier(courrielAffiche) {
+    var r = await call('GET', '/usagers/' + encodeURIComponent(usagerSujet) + '/export');
+    if (r.status === 401) return;
+    if (r.status === 403) { toast('Export non autorisé.'); return; }
+    if (!r.ok) { toast('Export impossible.'); return; }
+    try {
+      var blob = new Blob([JSON.stringify(r.json, null, 2)], { type: 'application/json' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'nota-dossier-' + String(courrielAffiche || usagerSujet).replace(/[^a-z0-9]+/gi, '-') + '.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast('Dossier exporté.');
+    } catch (e) {
+      toast('Export impossible.');
+    }
+  }
+
+  // --- L'EFFACEMENT ----------------------------------------------------------
+  // DEUX temps, toujours. Le premier appel ne détruit RIEN : il rend le plan.
+  // L'opérateur lit ce qui partira ET ce qui restera, puis confirme.
+  async function previsualiserEffacement() {
+    var r = await call('POST', '/usagers/' + encodeURIComponent(usagerSujet) + '/effacement', {});
+    if (r.status === 401) return;
+    if (r.status === 403) { toast('Effacement non autorisé.'); return; }
+    if (!r.ok) { toast('Impossible de préparer l’effacement.'); return; }
+    ouvrirEffacement(r.json.plan);
+  }
+
+  function ouvrirEffacement(plan) {
+    var dlg = document.createElement('dialog');
+    dlg.className = 'usr-dlg';
+    // Le moule de toutes les fenêtres de Nota : un form.dlg-x-form qui porte le
+    // ✕ collant en haut à droite.
+    var form = el('form', 'dlg-x-form usr-dlg-form');
+    form.method = 'dialog';
+
+    var fermer = el('button', 'icon-btn dlg-x', '✕');
+    fermer.type = 'button';
+    fermer.setAttribute('aria-label', 'Fermer');
+    fermer.addEventListener('click', function () { dlg.close(); });
+    form.appendChild(fermer);
+
+    form.appendChild(el('h2', 'usr-dlg-titre', 'Effacer ce dossier'));
+    form.appendChild(el('p', 'usr-dlg-lead',
+      plan.complet
+        ? 'Tout ce qui nomme cette personne sera effacé. Le journal d’audit et les refus enregistrés survivent : ils ne nomment personne, ou les oublier serait les violer.'
+        : 'Cet effacement sera PARTIEL. Une partie de ce qui est détenu doit être conservée, une autre est hors de portée du code, et la raison est donnée pour chaque ligne.'));
+
+    // CE QUE LE CODE NE SAIT PAS DÉTRUIRE SE DIT AVANT LA CONFIRMATION, pas
+    // après. Ces registres étaient rangés dans « ce qui sera effacé » alors
+    // qu'aucune porte ne les vide : l'opérateur confirmait, la console disait
+    // « Dossier effacé », et l'adresse restait en clair.
+    var horsPortee = (plan.efface || []).filter(function (l) { return l.executable === false; });
+    if (horsPortee.length) {
+      var alerte = el('div', 'usr-dlg-residu');
+      alerte.setAttribute('role', 'alert');
+      alerte.appendChild(el('strong', null, 'Hors de portée'));
+      alerte.appendChild(document.createTextNode(
+        ' — Nota détient ces registres mais ne sait pas encore les vider. Ils ne seront PAS effacés, et une demande complète exige de les traiter à la main.'));
+      form.appendChild(alerte);
+    }
+
+    var colonnes = el('div', 'usr-dlg-cols');
+    colonnes.appendChild(buildColonnePlan('Ce qui sera effacé', (plan.efface || []).filter(function (l) { return l.executable !== false; }), false));
+    colonnes.appendChild(buildColonnePlan('Ce qui sera conservé', plan.conserve, true));
+    form.appendChild(colonnes);
+    if (horsPortee.length) form.appendChild(buildColonnePlan('Ce qui ne peut pas être effacé', horsPortee, true, true));
+
+    var actions = el('div', 'tpl-actions');
+    var annuler = el('button', 'btn btn-sm', 'Annuler');
+    annuler.type = 'button';
+    annuler.addEventListener('click', function () { dlg.close(); });
+    actions.appendChild(annuler);
+
+    var confirmer = el('button', 'btn btn-sm btn-danger', 'Effacer définitivement');
+    confirmer.type = 'button';
+    confirmer.addEventListener('click', function () {
+      confirmer.disabled = true;
+      executerEffacement(dlg);
+    });
+    actions.appendChild(confirmer);
+    form.appendChild(actions);
+
+    dlg.appendChild(form);
+    document.body.appendChild(dlg);
+    dlg.addEventListener('close', function () { if (dlg.parentNode) dlg.parentNode.removeChild(dlg); });
+    if (typeof dlg.showModal === 'function') dlg.showModal();
+  }
+
+  // `avecMotif` déplie la raison (`motif` pour ce qui est conservé, `note` pour
+  // ce qui est hors de portée) ; `pleine` sort la colonne de la grille à deux
+  // colonnes pour la poser sous elles, sur toute la largeur.
+  function buildColonnePlan(titre, lignes, avecMotif, pleine) {
+    var col = el('div', 'usr-dlg-col' + (pleine ? ' usr-dlg-col-pleine' : ''));
+    col.appendChild(el('h3', 'usr-dlg-col-h', titre));
+    var ul = el('ul', 'usr-liste');
+    (lignes || []).forEach(function (l) {
+      var li = el('li', 'usr-liste-item');
+      var quoi = el('div', 'usr-plan-quoi');
+      quoi.setAttribute('data-i18n-skip', '');
+      quoi.textContent = l.quoi || l.famille;
+      li.appendChild(quoi);
+      if (l.ids && l.ids.length) {
+        var n = el('span', 'usr-badge', String(l.ids.length));
+        li.appendChild(n);
+      }
+      if (l.executable === false) {
+        li.appendChild(el('span', 'usr-badge usr-badge-manque', 'Non effaçable'));
+      }
+      var raison = avecMotif ? (l.motif || l.note) : null;
+      if (raison) {
+        var m = el('div', 'usr-plan-motif');
+        m.setAttribute('data-i18n-skip', '');
+        // La même date, écrite comme partout ailleurs sur cet écran — année comprise.
+        m.textContent = raison + (l.jusqua ? ' (jusqu’au ' + usagerJour(l.jusqua) + ')' : '');
+        li.appendChild(m);
+      }
+      ul.appendChild(li);
+    });
+    col.appendChild(ul);
+    return col;
+  }
+
+  async function executerEffacement(dlg) {
+    var r = await call('POST', '/usagers/' + encodeURIComponent(usagerSujet) + '/effacement', { confirmer: true });
+    if (dlg && typeof dlg.close === 'function') dlg.close();
+    if (r.status === 401) return;
+    if (r.status === 403) { toast('Effacement non autorisé.'); return; }
+    if (!r.ok) { toast('Effacement impossible.'); return; }
+    // NE JAMAIS ANNONCER PLUS QUE CE QUI A ÉTÉ FAIT. Le serveur distingue ce
+    // qu'il a écrit de ce qu'il n'a pas pu écrire ; la console dit la même chose.
+    // « Dossier effacé » ne se dit QUE si le plan lui-même était complet : tant
+    // qu'un registre reste hors de portée, l'effacement est partiel, quoi qu'il
+    // soit arrivé aux offres.
+    var partiel = r.json.avertissement || (r.json.plan && r.json.plan.complet === false);
+    if (partiel) toast('Effacement partiel — voir le dossier.');
+    else if (r.json.effacees && r.json.effacees.length) toast('Dossier effacé.');
+    else toast('Rien à effacer : tout est conservé pour un motif légal.');
+    await chargerDossier(usagerSujet);
+  }
+
   function buildEmptyState() {
     var e = el('div', 'empty-state');
     var ic = svgEl('svg', { width: 34, height: 34, viewBox: '0 0 24 24', fill: 'none',
@@ -5170,6 +5805,17 @@
       s.appendChild(svgEl('line', { x1: 9, y1: y, x2: 20, y2: y }));
       s.appendChild(svgEl('line', { x1: 4, y1: y, x2: 4.01, y2: y }));
     });
+    return s;
+  }
+
+  // Un DOSSIER qui porte une personne : c'est exactement ce qu'est le dossier
+  // d'usager — pas un annuaire, pas une liste, une chemise sur quelqu'un.
+  function iconFolderUser() {
+    var s = svgEl('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none',
+      stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' });
+    s.appendChild(svgEl('path', { d: 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z' }));
+    s.appendChild(svgEl('circle', { cx: 12, cy: 12, r: 2 }));
+    s.appendChild(svgEl('path', { d: 'M8.5 17a3.6 3.6 0 0 1 7 0' }));
     return s;
   }
 

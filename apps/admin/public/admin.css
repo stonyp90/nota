@@ -11,6 +11,10 @@
 /* --- Base ----------------------------------------------------------------- */
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+/* Selected text answers to the brand, not to the browser's default blue —
+   which read as a foreign UI on a dark hunter-green page and lost contrast on
+   the light one. Both halves are stated (never colour alone on a veil). */
+::selection { background: color-mix(in srgb, var(--brand) 30%, transparent); color: var(--ink); }
 html, body { max-width: 100%; overflow-x: hidden; }
 
 body {
@@ -355,10 +359,20 @@ a:hover { text-decoration: underline; }
   background: var(--surface);
 }
 .tpl-note { margin: 0; font-size: 12px; color: var(--ink-muted); }
+/* Ces deux-là balancent entre une et deux lignes à chaque réglage : elles
+   tiennent la plus haute des deux plutôt que de pousser la rangée d'actions. */
+.camp-perime, .camp-gabarit-nature { min-height: 3em; }
 .tpl-error {
+  min-height: 1.5em;
   padding: 10px 12px; font-size: 13px; color: var(--ink);
   background: var(--surface); border-left: 3px solid var(--danger); border-radius: var(--radius);
 }
+/* Une ligne TENUE (ADR 0039) : `hidden` ne veut plus dire « retire la ligne »
+   mais « ne dis rien dessus ». La boîte reste ; `visibility` la sort de la vue,
+   du parcours au clavier et de l'arbre d'accessibilité — tout ce que `hidden`
+   promettait, sans le saut sous le curseur. Le `display` est !important parce
+   que le tapis général `.hidden, [hidden]` l'est aussi. */
+.tpl-error[hidden] { display: block !important; visibility: hidden; padding-block: 0; border-left-color: transparent; }
 .tpl-error strong { color: var(--danger); font-weight: 600; }
 .tpl-error-line + .tpl-error-line { margin-top: 8px; }
 /* Le mot du serveur, sous le nôtre : le détail sans le ton de l'alarme. */
@@ -461,7 +475,12 @@ a:hover { text-decoration: underline; }
    Une entrée par geste : l'heure, l'action, qui — puis la phrase d'argent pour
    un acte réglé, ou la meta telle quelle pour le reste. */
 .audit-day-field { min-width: 170px; }
+/* La barre du journal porte quatre champs (fenêtre + acteur + sujet) : elle
+   passe à la ligne plutôt que de pousser le titre hors de l'écran. */
+.range-control { flex-wrap: wrap; }
 .audit-list { display: flex; flex-direction: column; gap: 10px; }
+/* « Charger la suite » — rendu seulement tant que l'API rend un curseur. */
+.audit-suite { display: flex; justify-content: center; margin-top: var(--admin-gap); }
 .audit-entry {
   padding: 12px 14px; background: var(--surface);
   border: 1px solid var(--border); border-radius: var(--radius);
@@ -724,3 +743,111 @@ a:hover { text-decoration: underline; }
   min-height: 150px; resize: vertical; line-height: 1.5;
   font-family: var(--font-mono); font-size: 12.5px;
 }
+
+/* --- Usagers : le dossier d'une personne (Loi 25, 2026-09-05) ---------------
+   Le même registre que le reste de la console — cadres à angles carrés, filets
+   fins, aucune couleur littérale. Deux idées de dessin lui sont propres :
+   • ce qui est MASQUÉ ou CONSERVÉ porte une étiquette, jamais une seule
+     couleur : un opérateur daltonien doit lire la même chose que les autres ;
+   • le plan d'effacement s'affiche en DEUX colonnes de largeur égale, pour
+     qu'aucune des deux moitiés ne paraisse secondaire. */
+.usr-recherche {
+  display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap;
+  margin-bottom: var(--admin-gap);
+}
+.usr-recherche .field { flex: 1 1 280px; }
+.usr-input { font-family: var(--font-mono); }
+
+.usr-tete { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.usr-qui { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.usr-adresse { font-family: var(--font-mono); font-size: 15px; font-weight: 600; color: var(--ink); }
+.usr-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* La marque d'effacement : elle se lit AVANT le dossier, parce que « effacé »
+   et « jamais connu » ne se confondent pas. */
+.usr-marque {
+  padding: 10px 12px; margin-bottom: var(--admin-gap);
+  border: 1px solid var(--border-strong); border-left-width: 3px;
+  border-radius: var(--radius-sm); background: var(--surface-inset); color: var(--ink);
+}
+
+.usr-h2 { font-size: 14px; font-weight: 600; margin: var(--admin-gap) 0 8px; color: var(--ink); }
+.usr-vide { margin: 0 0 8px; color: var(--ink-muted); font-size: 13px; }
+.usr-erreur {
+  padding: 10px 12px; border: 1px solid var(--danger); border-radius: var(--radius-sm);
+  color: var(--danger); background: var(--surface);
+}
+
+.usr-offres { display: grid; gap: 10px; }
+.usr-offre {
+  padding: 12px 14px; border: 1px solid var(--border);
+  border-radius: var(--radius); background: var(--surface-inset);
+}
+.usr-offre-tete { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.usr-offre-titre { font-weight: 600; color: var(--ink); }
+.usr-faits { display: flex; flex-wrap: wrap; gap: 4px 18px; margin-top: 8px; }
+.usr-fait { display: flex; gap: 6px; font-size: 12.5px; }
+.usr-fait-k { color: var(--ink-muted); }
+.usr-fait-v { color: var(--ink); }
+
+.usr-liste { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.usr-liste-item {
+  padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface); font-size: 12.5px; color: var(--ink);
+}
+.usr-source-nom { font-family: var(--font-mono); }
+.usr-source-note { margin-top: 4px; color: var(--ink-muted); }
+
+/* Une étiquette, jamais une pastille ronde : le registre carré de la console. */
+.usr-badge {
+  display: inline-block; padding: 1px 7px; border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xs); font-size: 11.5px; font-weight: 600;
+  color: var(--ink-muted); background: var(--surface);
+}
+.usr-badge-regle { color: var(--ok); border-color: var(--ok); }
+.usr-badge-efface, .usr-badge-manque { color: var(--warn); border-color: var(--warn); }
+.usr-badge-masque { color: var(--brand); border-color: var(--brand); background: var(--brand-wash); }
+
+/* --- La fenêtre d'effacement ------------------------------------------------
+   Le moule commun de Nota : un form.dlg-x-form qui porte le ✕ collant en haut
+   à droite, pour qu'aucune fenêtre ne puisse enfermer l'opérateur. */
+.usr-dlg {
+  border: 1px solid var(--border-strong); border-radius: var(--radius-lg);
+  background: var(--surface); color: var(--ink); padding: 0;
+  width: min(760px, 92vw); box-shadow: var(--shadow-lg);
+}
+.usr-dlg::backdrop { background: color-mix(in srgb, var(--ink) 45%, transparent); }
+.dlg-x-form { position: relative; padding: 18px 20px 20px; display: grid; gap: 12px; }
+.dlg-x {
+  position: sticky; top: 0; margin-left: auto; z-index: 1;
+  align-self: flex-start; line-height: 1;
+}
+.usr-dlg-titre { font-size: 17px; }
+.usr-dlg-lead { margin: 0; color: var(--ink-muted); font-size: 13px; }
+.usr-dlg-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.usr-dlg-col-h { font-size: 12.5px; font-weight: 600; margin: 0 0 6px; color: var(--ink); }
+.usr-plan-quoi { color: var(--ink); }
+.usr-plan-motif { margin-top: 4px; color: var(--ink-muted); }
+
+/* Ce que le code ne sait pas détruire. Une bande d'avertissement au-dessus des
+   deux colonnes, et sa liste en dessous, sur toute la largeur : un résidu qu'on
+   range dans « ce qui sera effacé » se lit comme une promesse tenue. */
+.usr-dlg-residu {
+  border: 1px solid var(--warn); border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--warn) 8%, var(--surface-inset)); color: var(--ink);
+  padding: 8px 10px; font-size: 12.5px;
+}
+.usr-dlg-col-pleine { grid-column: 1 / -1; }
+
+/* Sous 760 px la fenêtre n'a plus la place de deux colonnes : elles s'empilent
+   plutôt que de se comprimer jusqu'à l'illisible. */
+@media (max-width: 760px) {
+  .usr-dlg-cols { grid-template-columns: 1fr; }
+}
+/* La conversation d'un acte : un fil replié sous son offre, jamais une page à
+   part — c'est un fait DE cette offre, et le lire ailleurs le détacherait de ce
+   qui lui donne son sens. */
+.usr-conv { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.usr-conv-h { font-size: 12px; font-weight: 600; color: var(--ink-muted); margin-bottom: 6px; }
+.usr-conv-de { display: block; font-size: 11.5px; color: var(--ink-muted); }
+.usr-conv-texte { margin-top: 2px; color: var(--ink); }

@@ -29,6 +29,10 @@ const cancellationCfg = require('./cancellation-config');
 const rbac = require('./rbac');
 const segments = require('./segments');
 const { statsDeltasForNotaryActive } = require('./stats');
+// Le sujet sous lequel les avis d'un client sont rangés est le HACHÉ de son
+// offre (keys.js) : le dossier d'usager les retrouve offre par offre, sans
+// jamais manipuler un jeton porteur.
+const { clientNotifSubject } = require('./keys');
 
 // Les permissions ne sont plus une table figée `rôle → capacités`. Elles se
 // RÉSOLVENT à chaque requête par `rbac.resolvePermissions` : l'union du paquet
@@ -99,8 +103,8 @@ function createAdmin({
   }
 
   async function appendAudit(action, ctx = {}) {
+    const ts = clockIso();
     try {
-      const ts = clockIso();
       await repo.appendAudit({
         id: genId(),
         ts,
@@ -110,9 +114,51 @@ function createAdmin({
         ip: ctx.ip || null,
         meta: ctx.meta || null,
       });
-    } catch {
-      // Best-effort: never let an audit-write failure break the action itself.
-      // A phase-4 reconcile / alarm surfaces a persistently failing audit sink.
+    } catch (err) {
+      // --- UN PUITS D'AUDIT CASSÉ NE DOIT PLUS SE TAIRE (2026-09-05) --------
+      // Ce `catch` était VIDE, avec pour seule justification « une alarme de
+      // phase 4 fera surface ». Elle existe : infra/observability.tf pose un
+      // filtre de métrique sur les groupes de journaux des DEUX Lambdas et une
+      // alarme à la première perte. Le filtre admin ne pouvait rien compter —
+      // le commentaire de ce fichier-là le disait mot pour mot. Une alarme
+      // incapable de se déclencher est pire qu'aucune : elle rassure.
+      //
+      // La ligne est celle de la porte publique, au caractère près (le filtre
+      // cherche la sous-chaîne « audit_write_failed »), avec ce que ce
+      // journal-ci peut dire en plus : l'administrateur nommé. La console est
+      // nominative — ce sont des employés, pas des clients — et savoir DE QUI
+      // la trace perdue parlait est la moitié utile de l'alerte.
+      //
+      // FAUT-IL FAIRE ÉCHOUER LE GESTE QUAND SA TRACE SE PERD ? Non, et ce
+      // n'est pas de la commodité — trois raisons, dont deux sont des faits de
+      // ce code :
+      //
+      //   1. L'ÉCRITURE ARRIVE APRÈS LA MUTATION. Partout ici, on écrit
+      //      `putGroup` / `putConfig` / `putAdmin` PUIS la trace. Répondre en
+      //      erreur décrirait un geste qui a bel et bien eu lieu, et
+      //      l'opérateur le rejouerait : un journal cassé produirait des
+      //      doubles écritures. Le remède serait de faire de la trace et de la
+      //      mutation UNE transaction (les deux vivent sur la table ADMIN,
+      //      donc `TransactWriteItems` est possible) — c'est le vrai
+      //      correctif, et c'est un autre chantier.
+      //   2. `login_success` EST AUDITÉ. Fermer sur échec verrouillerait tous
+      //      les administrateurs dehors à la première seconde de throttling
+      //      DynamoDB — y compris ceux qui viendraient réparer le puits. Une
+      //      politique de sécurité qui se coupe elle-même l'accès à la salle
+      //      des machines n'est pas une politique, c'est une panne.
+      //   3. Ce qu'on protège ici, c'est l'IMPUTABILITÉ, pas l'intégrité d'une
+      //      transaction. Une trace perdue ne se rattrape pas ; ce qui doit
+      //      être garanti, c'est que PERSONNE ne l'ignore. Cinq minutes plus
+      //      tard l'alarme sonne, et geler la console est alors une décision
+      //      d'opérateur — prise en connaissance de cause, pas subie.
+      console.error(JSON.stringify({
+        level: 'error',
+        event: 'audit_write_failed',
+        action,
+        ts,
+        adminId: ctx.adminId || null,
+        message: (err && err.message) || String(err),
+      }));
     }
   }
 
@@ -804,7 +850,83 @@ function createAdmin({
   // renseignement personnel — ni courriel, ni adresse d'origine, seulement des
   // identifiants internes (voir la note sur l'acteur dans handler.js).
   // ---------------------------------------------------------------------------
-  async function readAudit(token, jour, { ip } = {}) {
+  // --- LE JOURNAL VU DEPUIS UNE ENQUÊTE (2026-09-05) -------------------------
+  // Il ne se lisait QU'UN JOUR À LA FOIS, sans filtre et sans pagination
+  // au-delà d'une partition. Les deux seules questions qu'un enquêteur pose —
+  // « tout ce que cette personne a fait » et « tout ce qui a été fait à ce
+  // compte » — n'avaient donc aucune réponse : il aurait fallu ouvrir un écran
+  // par jour et lire à l'œil. Un registre qu'on ne peut pas interroger est une
+  // archive, pas une piste d'audit.
+  //
+  // POURQUOI PAS UN INDEX. Le journal est partitionné par JOUR (`AUDIT#<jour>`)
+  // et rien n'indexe l'acteur ni le sujet. Un index secondaire les rendrait
+  // interrogeables sans borne — c'est le bon dessin le jour où le volume
+  // l'exige, et c'est de l'infrastructure (une migration DynamoDB, pas un
+  // correctif de code). D'ici là, la lecture reste ce qu'elle a toujours été —
+  // une Query par partition — et le filtrage se fait au retour, sur une FENÊTRE
+  // BORNÉE. Les deux bornes ci-dessous sont ce qui empêche cette porte de
+  // devenir un balayage de table déguisé.
+  const AUDIT_FENETRE_MAX_JOURS = 92; // un trimestre : au-delà, 422
+  // Combien de JOURS une seule requête ouvre au plus. Ce n'est pas le même
+  // chiffre que le nombre de Query : `entreesDuJour` lit DEUX partitions par
+  // jour (la couture du fuseau de Québec) sur DEUX journaux — donc quatre. À
+  // quatorze jours, une requête plafonne à ~56 Query, ce qui tient largement
+  // dans le temps d'une Lambda ; le curseur porte le reste de la fenêtre.
+  const AUDIT_JOURS_PAR_PAGE = 14;
+  const AUDIT_LIMITE_DEFAUT = 100;
+  const AUDIT_LIMITE_MAX = 500;
+
+  const veille = (j) => new Date(Date.parse(j + 'T00:00:00Z') - 864e5).toISOString().slice(0, 10);
+  // La clé de tri d'une entrée dans sa partition — la MÊME que celle du dépôt
+  // (`<isoTs>#<id>`, voir keys.js). C'est elle que le curseur retient.
+  const cleAudit = (e) => String(e.ts || '') + '#' + String(e.id || '');
+
+  // Le curseur dit DEUX choses : quelle partition rouvrir, et après quelle
+  // entrée y reprendre. Il est opaque pour l'appelant mais jamais signé — il ne
+  // porte aucun secret et n'ouvre aucune permission : la porte `audit:read` est
+  // vérifiée à chaque requête, curseur ou pas.
+  function encoderCurseur(c) {
+    return Buffer.from(JSON.stringify(c), 'utf8').toString('base64url');
+  }
+  function decoderCurseur(brut) {
+    try {
+      const c = JSON.parse(Buffer.from(String(brut), 'base64url').toString('utf8'));
+      if (!c || !domain.isISODate(c.j)) return null;
+      return { j: c.j, a: c.a == null ? null : String(c.a) };
+    } catch {
+      return null;
+    }
+  }
+
+  // L'ACTEUR : qui a agi. Les deux journaux ne le nomment pas pareil — le
+  // journal public par `acteur.{type,id}`, le journal admin par le courriel de
+  // l'employé — et un enquêteur ne doit pas avoir à connaître cette plomberie.
+  // Le TYPE seul est accepté aussi (« tout ce que les notaires ont fait »).
+  function correspondActeur(e, q) {
+    if (!q) return true;
+    const candidats = [e.acteur && e.acteur.id, e.acteur && e.acteur.type, e.adminId, e.email];
+    return candidats.some((v) => v != null && String(v).toLowerCase() === q);
+  }
+
+  // LE SUJET : sur quoi on a agi. Il ne porte pas le même NOM de clé selon
+  // l'action — `bidId` ici, `notaryId` là, `cible` pour un changement d'accès,
+  // `code` pour un partenaire — et un enquêteur ne connaît pas ces noms : il
+  // connaît l'identifiant. On cherche donc la VALEUR dans la meta, quelle que
+  // soit la clé qui la porte.
+  //
+  // Volontairement, l'acteur n'est PAS regardé ici : un dossier client est à la
+  // fois l'acteur et le sujet de ses propres gestes, et confondre les deux
+  // ferait de « sujet » un synonyme de « acteur » — les deux questions
+  // redeviendraient une seule.
+  function contientValeur(v, q, profondeur) {
+    if (v == null || profondeur > 4) return false;
+    if (Array.isArray(v)) return v.some((x) => contientValeur(x, q, profondeur + 1));
+    if (typeof v === 'object') return Object.values(v).some((x) => contientValeur(x, q, profondeur + 1));
+    return String(v).toLowerCase() === q;
+  }
+  const correspondSujet = (e, q) => (!q ? true : contientValeur(e.meta, q, 0));
+
+  async function readAudit(token, jour, { ip, du, au, acteur, sujet, limite, curseur } = {}) {
     const p = await requireAdmin(token, { ip });
     if (!p) return { ok: false, status: 401 };
     // `audit:read`, et non `pii:read` : le catalogue publiait les deux clés, et
@@ -815,15 +937,104 @@ function createAdmin({
     if (!rbac.can(p.permissions, 'audit:read')) {
       return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Réservé à l’administrateur principal.' }] };
     }
-    const j = String(jour || '').trim();
-    if (!domain.isISODate(j)) {
+    // UNE fenêtre, exprimée de deux façons. `jour` seul reste le comportement
+    // d'origine (et celui de la console d'hier) ; `du`/`au` ouvrent l'intervalle
+    // sans lequel « tout ce que cette personne a fait » n'a pas de réponse.
+    const iso = (v) => String(v == null ? '' : v).trim();
+    const bornes = iso(du) || iso(au);
+    const finISO = bornes ? (iso(au) || iso(du)) : iso(jour);
+    const debutISO = bornes ? (iso(du) || iso(au)) : iso(jour);
+    if (!domain.isISODate(finISO) || !domain.isISODate(debutISO)) {
       return { ok: false, status: 422, errors: [{ code: 'jour_invalide', message: 'Le jour doit être une date ISO (AAAA-MM-JJ).' }] };
     }
+    if (debutISO > finISO) {
+      return { ok: false, status: 422, errors: [{ code: 'fenetre_invalide', message: 'La date de début suit la date de fin.' }] };
+    }
+    const etendue = Math.round((Date.parse(finISO + 'T00:00:00Z') - Date.parse(debutISO + 'T00:00:00Z')) / 864e5) + 1;
+    if (etendue > AUDIT_FENETRE_MAX_JOURS) {
+      return {
+        ok: false,
+        status: 422,
+        errors: [{
+          code: 'fenetre_trop_large',
+          message: `La fenêtre ne peut dépasser ${AUDIT_FENETRE_MAX_JOURS} jours. Resserrez les dates, ou paginez.`,
+        }],
+      };
+    }
+
+    const nombre = Number(limite);
+    const parPage = Number.isFinite(nombre) && nombre > 0 ? Math.min(Math.floor(nombre), AUDIT_LIMITE_MAX) : AUDIT_LIMITE_DEFAUT;
+    const qActeur = iso(acteur).toLowerCase() || null;
+    const qSujet = iso(sujet).toLowerCase() || null;
+
+    // Les jours de la fenêtre, du PLUS RÉCENT au plus ancien : c'est l'ordre
+    // dans lequel la console lit, et celui qu'une pagination doit conserver
+    // page après page pour ne rien rejouer ni rien sauter.
+    const jours = [];
+    for (let d = finISO; d >= debutISO; d = veille(d)) jours.push(d);
+
+    let depart = 0;
+    let apres = null;
+    if (iso(curseur)) {
+      const c = decoderCurseur(curseur);
+      const i = c ? jours.indexOf(c.j) : -1;
+      if (i < 0) {
+        return { ok: false, status: 422, errors: [{ code: 'curseur_invalide', message: 'Ce curseur ne correspond pas à la fenêtre demandée.' }] };
+      }
+      depart = i;
+      apres = c.a;
+    }
+
     // DEUX journaux, un seul écran : les gestes d'administration vivent dans la
     // table admin, les mouvements d'argent dans la table principale (la Lambda
     // publique n'a pas accès à la première). Un auditeur ne doit pas avoir à
     // savoir ça — on fusionne, on dédoublonne par id, on trie.
-    return { ok: true, jour: j, entrees: await entreesDuJour(j, ['queryAuditByDay', 'queryTxAuditByDay']) };
+    const portes = ['queryAuditByDay', 'queryTxAuditByDay'];
+    const entrees = [];
+    let suivant = null;
+    let ouvertes = 0;
+    for (let i = depart; i < jours.length; i += 1) {
+      // Deux raisons de rendre la main AVANT d'ouvrir une partition de plus :
+      // la page est pleine, ou cette requête a déjà ouvert son quota de
+      // partitions. La seconde est ce qui empêche un filtre très sélectif sur
+      // un trimestre de devenir une seule requête interminable.
+      if (entrees.length >= parPage || ouvertes >= AUDIT_JOURS_PAR_PAGE) {
+        suivant = encoderCurseur({ j: jours[i], a: null });
+        break;
+      }
+      ouvertes += 1;
+      const liste = await entreesDuJour(jours[i], portes);
+      // `apres` ne vaut que pour la partition où le curseur reprend.
+      const ancre = i === depart ? apres : null;
+      // ET SI L'ANCRE A DISPARU ? Une entrée reprise par le TTL entre deux
+      // pages, et la boucle « saute jusqu'à » ne trouverait jamais son repère :
+      // elle passerait la journée ENTIÈRE en silence. Dans un journal d'audit,
+      // un doublon visible vaut infiniment mieux qu'une omission muette — on
+      // repart donc du haut du jour.
+      const ancreVue = ancre ? liste.some((e) => cleAudit(e) === ancre) : true;
+      let vu = !(ancre && ancreVue);
+      let derniere = ancreVue ? ancre : null;
+      for (const e of liste) {
+        const cle = cleAudit(e);
+        if (!vu) {
+          if (cle === ancre) vu = true;
+          continue;
+        }
+        if (entrees.length >= parPage) {
+          suivant = encoderCurseur({ j: jours[i], a: derniere });
+          break;
+        }
+        // La clé avance sur CHAQUE entrée examinée, filtrée ou non : reprendre
+        // après la dernière RETENUE ferait relire (et refiltrer) tout ce qui
+        // suivait, à chaque page.
+        derniere = cle;
+        if (!correspondActeur(e, qActeur) || !correspondSujet(e, qSujet)) continue;
+        entrees.push(e);
+      }
+      if (suivant) break;
+    }
+
+    return { ok: true, jour: finISO, du: debutISO, au: finISO, entrees, curseur: suivant };
   }
 
   // LES ENTRÉES D'AUDIT D'UN JOUR OUVRABLE DE QUÉBEC, fusionnées et
@@ -887,6 +1098,8 @@ function createAdmin({
     'campaigns:send': ['Envoyer une campagne ciblée', 'Send a targeted campaign'],
     'audiences:read': ['Voir les groupes d’audience', 'See audience groups'],
     'audiences:write': ['Modifier les groupes d’audience', 'Edit audience groups'],
+    'subjects:read': ['Ouvrir le dossier d’une personne', 'Open a person’s file'],
+    'subjects:erase': ['Effacer le dossier d’une personne', 'Erase a person’s file'],
   };
 
   function listPermissions() {
@@ -1741,6 +1954,448 @@ function createAdmin({
     return { ok: true, jour: j, campagnes };
   }
 
+  // ===========================================================================
+  // RÉGION « USAGERS » — le dossier d'une personne (Loi 25, art. 27 et 28)
+  // ===========================================================================
+  //
+  // L'audit du 2026-09-05 : aucune route, aucun écran n'ouvrait UNE personne. Un
+  // opérateur ne pouvait pas répondre à « que détenez-vous sur moi ? », qui est
+  // la première question que la Loi 25 donne à tout résident du Québec. Trois
+  // portes le font maintenant : LIRE le dossier, l'EXPORTER, l'EFFACER.
+  //
+  // LA COLONNE VERTÉBRALE EST L'INDEX, PAS UN BALAYAGE. Les offres se rangent
+  // par mois ; retrouver une personne sans index demanderait un Scan, que le
+  // rôle IAM de la console refuse — et à juste titre. Le pointeur
+  // CLIENT#<courriel> existait dans les deux adaptateurs, testé, avec ses
+  // commentaires disant qu'il rend une demande d'accès « exécutable », et sans
+  // aucun appelant : ni lecteur ICI, ni écrivain dans `handler.js`. Il est
+  // désormais écrit à la publication et lu ici, par une Query bornée.
+  //
+  // DEUX PERMISSIONS, ET `pii:read` PAR-DESSUS. `subjects:read` ouvre le
+  // dossier ; `subjects:erase` autorise à détruire — jamais un corollaire de la
+  // lecture. Sans `pii:read`, tout ce qui NOMME est masqué exactement comme au
+  // registre des destinataires de campagne : reconnaissable, jamais expédiable.
+
+  // Ce qu'un dossier retient d'une offre. Deux projections : la nominative, et
+  // celle où tout ce qui désigne une personne est retiré. Le masque n'est pas un
+  // formatage, c'est une frontière — d'où une SEULE fonction qui construit les
+  // deux, pour qu'un champ ajouté ne puisse pas fuir en oubliant le masque.
+  function offreDuDossier(bid, acte, avis, enClair) {
+    const masque = (v) => (enClair ? v ?? null : v == null ? null : '•••');
+    return {
+      id: bid.id,
+      dateISO: bid.dateISO,
+      serviceId: bid.serviceId,
+      montant: Number(bid.montant) || 0,
+      statut: bid.status || null,
+      createdAt: bid.createdAt || null,
+      anonyme: bid.anonyme !== false,
+      // Nominatif : masqué sans `pii:read`.
+      nom: masque(bid.nom),
+      telephone: masque(bid.telephone),
+      // Le secteur postal, lui, N'EST PAS masqué — et c'est délibéré : le
+      // carnet PUBLIC l'affiche sur chaque offre. Le cacher dans une console
+      // interne serait du théâtre, et pire, ferait croire à l'opérateur que
+      // Nota le garde secret alors que le site l'expose à tout le monde.
+      prefixe: bid.prefixe || null,
+      // Le dossier d'intake et les réponses de tarification SONT des
+      // renseignements personnels (« le document confondu avec la démarche ») :
+      // sans `pii:read` on ne les résume même pas, on les retire.
+      dossier: enClair ? bid.dossier || null : null,
+      pricing: enClair ? bid.pricing || null : null,
+      // L'argent : ce que le client a payé, et ce que l'acte a réglé.
+      paiement: {
+        statut: bid.paymentStatus || null,
+        prixNotaServiceCents: bid.prixNotaServiceCents == null ? null : Number(bid.prixNotaServiceCents),
+        prixNotaDateCents: bid.prixNotaDateCents == null ? null : Number(bid.prixNotaDateCents),
+      },
+      acte: acte
+        ? { regleLe: acte.at || acte.completedAt || null, montant: Number(acte.actAmount) || null, paye: acte.paye === true }
+        : null,
+      // LA MESSAGERIE DE L'ACTE RETENU vit DANS l'offre. Un COMPTE ne suffit
+      // pas : l'art. 27 donne accès aux renseignements eux-mêmes, et une
+      // conversation entre le client et son notaire en est. On rend donc le
+      // contenu — derrière `pii:read`, comme le nom et le téléphone — et le
+      // compte reste lisible sans, pour qu'un opérateur sache qu'il existe une
+      // conversation qu'il n'a pas le droit de lire.
+      messagesCount: Array.isArray(bid.messages) ? bid.messages.length : 0,
+      messages: enClair
+        ? (Array.isArray(bid.messages) ? bid.messages : []).map((m) => ({
+            id: m.id || null,
+            de: m.de || null,
+            texte: m.texte == null ? null : String(m.texte),
+            createdAt: m.createdAt || null,
+          }))
+        : null,
+      notaryId: bid.notaryId || null,
+      avis: avis.map((a) => ({ id: a.id, kind: a.kind, titre: a.titre, at: a.at, luLe: a.luLe || null })),
+      // Ce que la politique promet pour CETTE offre, en clair.
+      conservationJusqua: bid.ttl ? new Date(Number(bid.ttl) * 1000).toISOString().slice(0, 10) : null,
+      efface: bid.efface === true,
+      effaceLe: bid.effaceLe || null,
+    };
+  }
+
+  // Le sujet nommé dans le JOURNAL D'AUDIT. Jamais l'adresse en clair : le
+  // journal se lit avec `audit:read`, délibérément distinct de `pii:read`, et en
+  // faire un second annuaire d'adresses défierait ce découplage. Une empreinte
+  // suffit à corréler deux gestes sur la même personne.
+  const empreinteSujet = (email) =>
+    require('node:crypto').createHash('sha256').update(String(email || '')).digest('hex').slice(0, 16);
+
+  // Les registres que le dossier interroge, et — tout aussi important — ceux
+  // qu'il ne peut PAS encore joindre par sujet. Un dossier qui tait ce qu'il n'a
+  // pas regardé ment par omission : l'opérateur croirait avoir tout vu.
+  function sourcesDuDossier({ joursLus, joursOmis } = {}) {
+    return [
+      { famille: 'offre', joignable: true, note: null },
+      { famille: 'acte', joignable: true, note: null },
+      { famille: 'avis', joignable: true, note: null },
+      { famille: 'consentement', joignable: true, note: null },
+      { famille: 'desabonnement', joignable: true, note: null },
+      { famille: 'journal_sujet', joignable: true, note: null },
+      { famille: 'effacement', joignable: true, note: null },
+      {
+        famille: 'journal_audit',
+        // Joignable, mais PARTIELLEMENT — et une lecture partielle qui se
+        // présente comme complète est le mensonge que cette liste existe pour
+        // empêcher. La fenêtre lue est donc CHIFFRÉE, et une troncature est
+        // annoncée : un opérateur qui instruit une demande d'accès doit savoir
+        // si le journal qu'il montre est tout le journal.
+        joignable: !joursOmis,
+        note:
+          'Le journal est partitionné par JOUR, pas par personne : seules les journées touchées par ses offres sont relues (' +
+          (joursLus || 0) +
+          '), et seules les entrées qui nomment une de ces offres sont retenues.' +
+          (joursOmis ? ' ' + joursOmis + ' journée(s) plus anciennes n’ont PAS été relues : la lecture est bornée.' : ''),
+      },
+      {
+        famille: 'fil_soutien',
+        joignable: false,
+        note: 'Les conversations de soutien sont indexées par MOIS, jamais par adresse : elles ne peuvent pas encore être jointes à une personne sans parcourir chaque mois.',
+      },
+      {
+        famille: 'destinataire_campagne',
+        joignable: false,
+        note: 'Le registre des destinataires est partitionné par CAMPAGNE : il répond à « qui a reçu la campagne X », jamais à « quelles campagnes cette personne a-t-elle reçues ».',
+      },
+    ];
+  }
+
+  // Les journées d'audit qu'il vaut la peine de relire pour cette personne : la
+  // création de chaque offre, sa date de signature, et le règlement de son acte.
+  // BORNÉ — un dossier ne doit jamais devenir un balayage du journal.
+  // Chaque journée coûte QUATRE Query (deux partitions — le jour civil de Québec
+  // chevauche deux jours UTC — sur deux journaux). La borne est donc basse, et
+  // ce qui tombe est le passé le plus lointain : on garde ce qui est vivant.
+  const AUDIT_JOURS_MAX = 12;
+  function joursDAudit(offres, actes) {
+    const jours = new Set();
+    for (const o of offres) {
+      for (const d of [o.createdAt, o.dateISO]) {
+        const j = String(d || '').slice(0, 10);
+        if (domain.isISODate(j)) jours.add(j);
+      }
+    }
+    for (const a of actes) {
+      const j = String((a && (a.at || a.completedAt)) || '').slice(0, 10);
+      if (domain.isISODate(j)) jours.add(j);
+    }
+    // Rendu ENTIER : c'est l'appelant qui borne, pour qu'il puisse dire
+    // combien de journées il a laissées de côté.
+    return [...jours].sort();
+  }
+
+  // Le dossier ASSEMBLÉ. Une fonction interne : les trois portes publiques
+  // (lire, exporter, effacer) partent toutes d'ici, pour qu'aucune ne puisse
+  // voir une personne différente des deux autres.
+  async function assemblerDossier(adresse, enClair) {
+    const pointeurs = typeof repo.listClientBids === 'function' ? await repo.listClientBids(adresse) : [];
+
+    const offres = [];
+    const actes = [];
+    for (const p of pointeurs) {
+      const bid = await repo.get(p.bidId, p.dateISO);
+      if (!bid) continue;
+      offres.push(bid);
+      const acte = typeof repo.getActCompletion === 'function' ? await repo.getActCompletion(bid.id) : null;
+      actes.push(acte);
+    }
+
+    // Les avis du client sont rangés sous le HACHÉ de son offre (keys.js) : le
+    // dossier les retrouve offre par offre, sans jamais manipuler un jeton.
+    const avisParOffre = [];
+    for (const bid of offres) {
+      let avis = [];
+      if (typeof repo.listNotifications === 'function') {
+        try {
+          avis = await repo.listNotifications(clientNotifSubject(bid.id));
+        } catch {
+          avis = [];
+        }
+      }
+      avisParOffre.push(avis);
+    }
+
+    const consentement = typeof repo.getEmailConsent === 'function' ? await repo.getEmailConsent(adresse) : null;
+    const journalConsentement = typeof repo.listConsentEvents === 'function' ? await repo.listConsentEvents(adresse) : [];
+    const desabonne = typeof repo.isUnsubscribed === 'function' ? !!(await repo.isUnsubscribed(adresse)) : false;
+    let journalEnvois = [];
+    if (typeof repo.listSubjectEvents === 'function') {
+      try {
+        journalEnvois = await repo.listSubjectEvents(adresse);
+      } catch {
+        journalEnvois = [];
+      }
+    }
+    const effacement = typeof repo.getErasure === 'function' ? await repo.getErasure(adresse) : null;
+
+    // Le journal d'audit, borné aux journées que ses offres ont touchées et
+    // filtré sur les identifiants d'offre : le journal PUBLIC nomme une offre,
+    // jamais une personne, donc c'est par l'offre qu'on le rejoint.
+    const ids = new Set(offres.map((o) => o.id));
+    const journalAudit = [];
+    const tousLesJours = joursDAudit(offres, actes);
+    const joursRetenus = tousLesJours.slice(-AUDIT_JOURS_MAX);
+    for (const j of joursRetenus) {
+      for (const e of await entreesDuJour(j, ['queryAuditByDay', 'queryTxAuditByDay'])) {
+        const m = (e && e.meta) || {};
+        const cible = m.bidId || m.refId || (e && e.acteur && e.acteur.id);
+        if (cible && ids.has(cible)) journalAudit.push({ id: e.id, ts: e.ts, action: e.action, meta: m });
+      }
+    }
+
+    return {
+      courriel: enClair ? adresse : masquerCourriel(adresse),
+      enClair,
+      offres: offres.map((bid, i) => offreDuDossier(bid, actes[i], avisParOffre[i], enClair)),
+      consentement: consentement ? { base: consentement.base || null, at: consentement.at || null } : null,
+      journalConsentement: journalConsentement.map((e) => ({ at: e.at || null, base: e.base || null, source: e.source || null })),
+      desabonne,
+      journalEnvois: journalEnvois.map((e) => ({ at: e.at || null, kind: e.kind || null, templateKey: e.templateKey || null })),
+      journalAudit,
+      effacement: effacement ? { at: effacement.at || null } : null,
+      sources: sourcesDuDossier({
+        joursLus: joursRetenus.length,
+        joursOmis: tousLesJours.length - joursRetenus.length,
+      }),
+      // Les offres BRUTES ne sortent jamais d'ici : l'effacement en a besoin
+      // pour écrire, la réponse HTTP ne doit jamais les voir.
+      _brutes: offres,
+      _actes: actes,
+    };
+  }
+
+  // Une adresse est une CLÉ : elle se normalise, et le vide se refuse plutôt que
+  // d'ouvrir la partition de personne.
+  function sujetDemande(courriel) {
+    const clean = String(courriel == null ? '' : courriel).trim().toLowerCase();
+    if (!clean || clean.indexOf('@') <= 0) {
+      return { error: { ok: false, status: 422, errors: [{ code: 'courriel_invalide', message: 'Une adresse courriel est requise pour ouvrir un dossier.' }] } };
+    }
+    return { adresse: clean };
+  }
+
+  // La garde commune aux trois portes — l'identité et le sujet, PAS la
+  // permission. Chaque porte applique la sienne, en toutes lettres, chez elle :
+  // une permission passée en VARIABLE devient invisible à l'audit
+  // « publié == appliqué » (admin-permissions-gate.test.mjs), qui relit le code
+  // à la recherche de `rbac.can(…, 'clé')`. C'est exactement ainsi que
+  // `billing:write` est resté publié sans qu'aucune route ne l'applique.
+  const interditUsager = () => ({
+    ok: false,
+    status: 403,
+    errors: [{ code: 'interdit', message: 'Dossier d’usager non autorisé.' }],
+  });
+
+  // La session se résout UNE SEULE FOIS par requête. Deux résolutions, c'est
+  // deux lectures d'identité, deux lectures de session, et surtout DEUX
+  // glissements de la fenêtre d'inactivité pour un seul geste — une session
+  // inactive vivrait plus longtemps que ce que la console annonce.
+  async function porteUsager(token, ip) {
+    const p = await requireAdmin(token, { ip });
+    if (!p) return { error: { ok: false, status: 401 } };
+    return { p, enClair: rbac.can(p.permissions, 'pii:read') };
+  }
+
+  // Ce qui sort d'un dossier assemblé, une fois les champs internes retirés.
+  const dossierPublic = ({ _brutes, _actes, ...reste }) => reste;
+
+  // --- 1. LIRE ---------------------------------------------------------------
+  //
+  // LA LECTURE LAISSE UNE TRACE, AU MÊME TITRE QUE L'EXPORT. Elle n'en laissait
+  // aucune, et l'export en laissait une : or les deux portes rendent LE MÊME
+  // dossier — nom, téléphone, dossier d'intake, conversation avec le notaire.
+  // Tracer la seconde seulement rendait la trace facultative : il suffisait
+  // d'ouvrir le dossier au lieu de l'exporter pour lire la même chose sans
+  // laisser de trace. Le motif écrit pour l'export vaut mot pour mot ici : un
+  // accès qu'on ne peut pas reprocher n'est pas un accès surveillé.
+  //
+  // Le sujet est nommé par une EMPREINTE, comme partout dans cette région : le
+  // journal se lit avec `audit:read`, délibérément distinct de `pii:read`, et il
+  // ne doit pas devenir un second annuaire d'adresses.
+  async function getUserFile(token, courriel, { ip } = {}) {
+    const garde = await porteUsager(token, ip);
+    if (garde.error) return garde.error;
+    if (!rbac.can(garde.p.permissions, 'subjects:read')) return interditUsager();
+    const sujet = sujetDemande(courriel);
+    if (sujet.error) return sujet.error;
+    const dossier = await assemblerDossier(sujet.adresse, garde.enClair);
+    await appendAudit('dossier_usager_consulte', {
+      adminId: garde.p.adminId,
+      email: garde.p.email,
+      ip,
+      meta: {
+        sujet: empreinteSujet(sujet.adresse),
+        // `enClair` dit si l'opérateur a VU les valeurs nominatives ou leur
+        // masque : sans lui, deux accès très différents se lisent pareil.
+        enClair: garde.enClair,
+        offres: dossier.offres.length,
+      },
+    });
+    return { ok: true, ...dossierPublic(dossier) };
+  }
+
+  // --- 2. EXPORTER (droit à la portabilité) ----------------------------------
+  // Le même dossier, dans une enveloppe VERSIONNÉE et datée, avec la politique
+  // de conservation qui l'accompagne : la personne doit pouvoir lire combien de
+  // temps chaque chose est gardée sans avoir à le redemander.
+  //
+  // Un export laisse une trace — c'est un geste sur des renseignements
+  // personnels, et il doit pouvoir être reproché.
+  const EXPORT_FORMAT = 'nota.dossier-usager.v1';
+
+  async function exportUserFile(token, courriel, { ip } = {}) {
+    const garde = await porteUsager(token, ip);
+    if (garde.error) return garde.error;
+    if (!rbac.can(garde.p.permissions, 'subjects:read')) return interditUsager();
+    const sujet = sujetDemande(courriel);
+    if (sujet.error) return sujet.error;
+    const dossier = await assemblerDossier(sujet.adresse, garde.enClair);
+    const genereLe = clockIso();
+    await appendAudit('dossier_usager_exporte', {
+      adminId: garde.p.adminId,
+      email: garde.p.email,
+      ip,
+      meta: {
+        sujet: empreinteSujet(sujet.adresse),
+        enClair: garde.enClair,
+        offres: dossier.offres.length,
+        format: EXPORT_FORMAT,
+      },
+    });
+    return {
+      ok: true,
+      format: EXPORT_FORMAT,
+      genereLe,
+      genereePar: garde.p.email || null,
+      courriel: dossier.courriel,
+      enClair: garde.enClair,
+      dossier: dossierPublic(dossier),
+      conservation: domain.retentionPolicy(process.env),
+    };
+  }
+
+  // --- 3. EFFACER (Loi 25, art. 28) ------------------------------------------
+  //
+  // TROIS RÈGLES, ET AUCUNE N'EST NÉGOCIABLE :
+  //
+  //   1. ON PRÉVISUALISE AVANT DE DÉTRUIRE. Sans `confirmer`, la porte rend le
+  //      PLAN et ne touche à rien — pas même à la marque.
+  //   2. LA FRONTIÈRE EST AU DOMAINE. `domain.erasurePlan` décide ce qui part et
+  //      ce qui reste ; cette fonction n'invente aucune règle, elle exécute.
+  //   3. ON NE MENT JAMAIS SUR CE QU'ON A FAIT. Chaque offre effacée n'entre
+  //      dans `effacees` qu'APRÈS une écriture réussie ; une écriture refusée
+  //      la met dans `enAttente`, avec un avertissement.
+  //
+  // CE QUE CETTE PORTE NE PEUT PAS FAIRE SEULE, ET IL FAUT LE DIRE : en
+  // production le rôle IAM de la console est en LECTURE SEULE sur la table
+  // client (infra/admin.tf, `MainTableReadOnly`), avec des portes d'écriture
+  // confinées par `dynamodb:LeadingKeys` à des partitions de CONFIGURATION. La
+  // marque d'effacement demande donc une porte `ERASURE#*` (ajoutée dans
+  // infra/admin.tf, `terraform apply` en attente) ; la RÉÉCRITURE des offres,
+  // elle, vit dans des partitions `MONTH#` partagées par toute la clientèle —
+  // les ouvrir à la console défairait l'isolement qui fait qu'elle ne peut pas
+  // toucher un élément client. Tant que l'exécutant n'est pas la Lambda
+  // publique, ces écritures-là remonteront en `enAttente`, jamais en « effacé ».
+  async function eraseUserFile(token, courriel, { confirmer, ip } = {}) {
+    const garde = await porteUsager(token, ip);
+    if (garde.error) return garde.error;
+    if (!rbac.can(garde.p.permissions, 'subjects:erase')) return interditUsager();
+    const sujet = sujetDemande(courriel);
+    if (sujet.error) return sujet.error;
+    const { adresse } = sujet;
+    const p = garde.p;
+
+    const dossier = await assemblerDossier(adresse, true);
+    const at = clockIso();
+    const plan = domain.erasurePlan({
+      courriel: adresse,
+      offres: dossier._brutes.map((b, i) => ({
+        id: b.id,
+        dateISO: b.dateISO,
+        status: b.status || null,
+        acteComplete: !!dossier._actes[i],
+        regleLe: dossier._actes[i] ? dossier._actes[i].at || dossier._actes[i].completedAt || null : null,
+      })),
+      desabonne: dossier.desabonne,
+      consentement: !!dossier.consentement,
+      at,
+    });
+
+    if (confirmer !== true) {
+      return { ok: true, execute: false, courriel: adresse, plan, effacees: [], enAttente: [], avertissement: null };
+    }
+
+    // Les identifiants que le PLAN autorise à effacer — et eux seuls.
+    const autorisees = new Set(plan.efface.filter((l) => l.famille === 'offre').flatMap((l) => l.ids || []));
+    const effacees = [];
+    const enAttente = [];
+    for (const bid of dossier._brutes) {
+      if (!autorisees.has(bid.id)) continue;
+      // Déjà effacée : ce n'est ni un succès à recompter ni un échec. La date du
+      // premier effacement est un fait, pas un compteur qu'on repousse.
+      if (bid.efface === true) continue;
+      try {
+        await repo.update(domain.redactedBid(bid, at));
+        effacees.push(bid.id);
+      } catch {
+        enAttente.push(bid.id);
+      }
+    }
+
+    // La marque : sans elle, rien ne distingue « nous avons effacé cette
+    // personne » de « nous ne l'avons jamais connue ».
+    let marque = null;
+    let marqueEnAttente = false;
+    try {
+      marque = typeof repo.putErasure === 'function' ? await repo.putErasure(adresse, at) : null;
+    } catch {
+      marqueEnAttente = true;
+    }
+
+    await appendAudit('dossier_usager_efface', {
+      adminId: p.adminId,
+      email: p.email,
+      ip,
+      meta: {
+        sujet: empreinteSujet(adresse),
+        effacees,
+        enAttente,
+        marqueEnAttente,
+        complet: plan.complet,
+        conserve: plan.conserve.map((l) => ({ famille: l.famille, compte: (l.ids || []).length || l.compte || 0 })),
+      },
+    });
+
+    const avertissement =
+      enAttente.length || marqueEnAttente
+        ? 'Une partie de l’effacement n’a PAS pu être écrite : la console est en lecture seule sur la table des clients. Ce qui reste est listé dans « en attente » — rien n’est annoncé comme effacé sans l’avoir été.'
+        : null;
+
+    return { ok: true, execute: true, courriel: adresse, plan, effacees, enAttente, marque, avertissement };
+  }
+
   return {
     requestLogin,
     verifyMagic,
@@ -1775,6 +2430,10 @@ function createAdmin({
     listNotaries,
     activateNotary,
     readAudit,
+    // Région « usagers » — le dossier d'une personne (Loi 25).
+    getUserFile,
+    exportUserFile,
+    eraseUserFile,
   };
 }
 

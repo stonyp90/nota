@@ -405,9 +405,16 @@ test('P1-16 — chaque geste connu a un libellé, et l’argent des annulations 
 // Le vocabulaire est lu dans la SOURCE de l'API, pas recopié : deux listes qui
 // doivent s'accorder finissent toujours par diverger. Ajouter un `appendAudit`
 // côté serveur fait rougir ce test tant que la console n'a pas son libellé.
+//
+// LES DEUX PORTES, ET NON UNE. La garde ne lisait que `handler.js` : les actions
+// écrites par la CONSOLE elle-même (`admin.js`) passaient donc au travers, et
+// c'est exactement ainsi que `dossier_usager_exporte` et `dossier_usager_efface`
+// ont été livrés le 2026-09-05 sans libellé — donc affichés en code brut, avec
+// `data-i18n-skip`, invisibles au test i18n.
 const HANDLER_SRC = readFileSync(fileURLToPath(new URL('../../api/src/handler.js', import.meta.url)), 'utf8');
+const ADMIN_API_SRC = readFileSync(fileURLToPath(new URL('../../api/src/admin.js', import.meta.url)), 'utf8');
 const ACTIONS_API = [...new Set(
-  [...HANDLER_SRC.matchAll(/\bappendAudit\(\s*'([a-z_]+)'/g)].map((m) => m[1])
+  [...(HANDLER_SRC + '\n' + ADMIN_API_SRC).matchAll(/\bappendAudit\(\s*'([a-z_]+)'/g)].map((m) => m[1])
 )].sort();
 
 test('ADR 0036 — chaque action que l’API écrit a un libellé dans la console, et son anglais', () => {

@@ -331,3 +331,46 @@ test('the admin handler routes exactly the documented set (no undocumented route
   assert.deepEqual([...documented].filter((p) => !routed.has(p)), [], 'admin-openapi.yaml documents a path the app does not route');
   assert.deepEqual([...routed].filter((p) => !documented.has(p)), [], 'the admin handler routes a path missing from admin-openapi.yaml');
 });
+
+// --- Le dossier d'usager (Loi 25) : les trois portes contre leur schema ------
+
+test('GET /admin/usagers/{courriel}, son export et son effacement valident leurs schemas', async () => {
+  const h = make();
+  const session = await login(h);
+
+  // L'API publique ecrit, la console lit : c'est tout l'interet de l'index.
+  const { createApp } = require('../../src/handler.js');
+  const publique = createApp(h.repo, { now: () => TODAY, nowMs: () => h.clock.ms });
+  const publie = await publique.handle({
+    method: 'POST', path: '/bids', query: {}, headers: { 'x-forwarded-for': '1.2.3.4' },
+    body: JSON.stringify({
+      serviceId: 'refinancement', dateISO: '2026-12-01', montant: 2000,
+      nom: 'Éveline Roy', courriel: 'roy@exemple.ca', telephone: '418 555-0100', prefixe: 'G1R',
+      pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale', deplacement: 'client_50' },
+    }),
+  });
+  assert.equal(publie.statusCode, 201, publie.body);
+
+  const dossier = await h.call('GET', '/admin/usagers/roy%40exemple.ca', { bearer: session });
+  assert.equal(dossier.statusCode, 200, dossier.body);
+  assertValid('/admin/usagers/{courriel}', 'GET', 200, parse(dossier));
+
+  const exporte = await h.call('GET', '/admin/usagers/roy%40exemple.ca/export', { bearer: session });
+  assert.equal(exporte.statusCode, 200, exporte.body);
+  assertValid('/admin/usagers/{courriel}/export', 'GET', 200, parse(exporte));
+
+  // La PREVISUALISATION d'abord — elle ne doit rien detruire.
+  const apercu = await h.call('POST', '/admin/usagers/roy%40exemple.ca/effacement', { bearer: session, body: {} });
+  assert.equal(apercu.statusCode, 200, apercu.body);
+  assert.equal(parse(apercu).execute, false);
+  assertValid('/admin/usagers/{courriel}/effacement', 'POST', 200, parse(apercu));
+
+  const efface = await h.call('POST', '/admin/usagers/roy%40exemple.ca/effacement', { bearer: session, body: { confirmer: true } });
+  assert.equal(efface.statusCode, 200, efface.body);
+  assertValid('/admin/usagers/{courriel}/effacement', 'POST', 200, parse(efface));
+
+  // Une adresse vide est refusee, et le refus a un schema lui aussi.
+  const vide = await h.call('GET', '/admin/usagers/%20', { bearer: session });
+  assert.equal(vide.statusCode, 422, vide.body);
+  assertValid('/admin/usagers/{courriel}', 'GET', 422, parse(vide));
+});

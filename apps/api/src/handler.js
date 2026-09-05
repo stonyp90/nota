@@ -9,7 +9,9 @@ const { decodeUnsubToken, createConsentRegistry } = require('./notifications');
 const { signToken, signChallengeToken, verifyToken, notaryIdForEmail, SCOPES } = require('./notary-auth');
 const { buildNotaryFeed, buildCarnetFeed } = require('./ics');
 const { statsDeltasForOffer, statsDeltasForRetain, statsDeltasForNotaryOnboarding, statsDeltasForFunnel } = require('./stats');
-const { notaryNotifSubject, clientNotifSubject } = require('./keys');
+// `bidTtl` reads the ONE retention policy (domain.RETENTION_FAMILIES, family
+// `offre`); this file used to compute `400 * 86400` on its own.
+const { notaryNotifSubject, clientNotifSubject, bidTtl } = require('./keys');
 
 /**
  * HTTP application, transport-agnostic. `createApp` takes a Repo port and
@@ -1400,10 +1402,18 @@ function createApp(repo, opts = {}) {
         propositions: [],
         demandes: [],
         createdAt: todayISO,
-        // DynamoDB TTL (epoch seconds): auto-delete ~13 months after the signing
-        // date — Law 25 retention + zero storage cost for stale bids. Never
-        // exposed publicly (not in publicBid/notaryBid).
-        ttl: Math.floor(Date.parse(payload.dateISO + 'T00:00:00Z') / 1000) + 400 * 86400,
+        // DynamoDB TTL (epoch seconds), anchored on the SIGNING date — Law 25
+        // retention + zero storage cost for stale bids. Never exposed publicly
+        // (not in publicBid/notaryBid).
+        //
+        // The duration is NOT computed here any more. It was `400 * 86400`
+        // written in clear, a second copy of a number that also lived in
+        // keys.js — which had to keep its own environment override CLOSED
+        // precisely because this line could not follow it, so the client index
+        // would have outlived the offer it points at. One house now: the
+        // policy (`domain.RETENTION_FAMILIES`, family `offre`), read through
+        // keys.bidTtl, which the CLIENT# index pointer below reads too.
+        ttl: bidTtl(payload.dateISO),
       };
       // Pay-on-accept: with billing on, a posted offer is PENDING until the client
       // authorizes their card via hosted Checkout — the webhook then binds the
@@ -1438,6 +1448,39 @@ function createApp(repo, opts = {}) {
         bid.prixNotaDateCents = devisFige.prixNotaDateCents;
       }
       await repo.put(bid);
+
+      // --- L'INDEX PAR PERSONNE (Loi 25, art. 27 et 28) ---------------------
+      // Les offres se rangent par MOIS : personne ne pouvait donc répondre
+      // « quelles offres cette personne a-t-elle posées ? » sans parcourir tous
+      // les mois — c'est-à-dire un Scan, que le rôle IAM refuse. Le pointeur
+      // CLIENT#<courriel> existait dans les DEUX adaptateurs, testé, avec ses
+      // commentaires expliquant qu'il « rend une demande d'accès ou d'effacement
+      // exécutable »… et AUCUN appelant. Il n'était pas seulement inutilisé : il
+      // était VIDE, et le droit d'accès restait théorique.
+      //
+      // Écrit ICI, à la publication, sur la même adresse normalisée que l'offre.
+      // BEST-EFFORT, comme les statistiques et les courriels juste en dessous :
+      // un index indisponible ne doit jamais coûter une réservation au client.
+      // Une offre sans adresse ne s'indexe pas — elle n'est simplement pas
+      // retrouvable par adresse, et la clé refuserait le vide plutôt que de
+      // ranger tout le monde dans une partition commune.
+      if (bid.courriel && typeof repo.indexClientBid === 'function') {
+        try {
+          await repo.indexClientBid({
+            courriel: bid.courriel,
+            bidId: bid.id,
+            dateISO: bid.dateISO,
+            at: new Date(nowMs()).toISOString(),
+            // Le MÊME ttl que l'offre, pris à la même maison : un index qui lui
+            // survit pointe dans le vide, un index qui meurt avant la rend
+            // introuvable au pire moment.
+            ttl: bid.ttl,
+          });
+        } catch {
+          /* best-effort */
+        }
+      }
+
       await recordStats(statsDeltasForOffer(bid));
       await recordStats(statsDeltasForFunnel('publie', now())); // the funnel's « publié » step is counted HERE, never trusted from the client beacon
 
@@ -1492,6 +1535,33 @@ function createApp(repo, opts = {}) {
           return json(503, { errors: [{ code: 'paiement_indisponible', message: 'Le paiement est momentanément indisponible. Réessayez dans quelques minutes — rien n’a été débité.' }] });
         }
         if (!auth.ok) return json(422, { errors: auth.errors });
+        // --- ANGLES MORTS DE LA PISTE (2026-09-05) — 1/7 : LA CAUTION -------
+        // Le journal voyait le RÈGLEMENT (`acte_regle`) et les frais
+        // d'annulation, jamais la réservation qui les rend possibles. Or c'est
+        // ICI que des milliers de dollars sont bloqués sur la carte d'un
+        // client : « on m'a retenu 2 400 $ » n'avait aucune réponse au
+        // registre. La trace porte le TOTAL autorisé — le plafond que la
+        // capture ne pourra jamais dépasser (ADR 0034) — et les deux lignes
+        // qui le composent, parce qu'un an plus tard c'est ce chiffre-là
+        // qu'une contestation oppose, pas la grille du jour.
+        // `mode` (ADR 0035) dit laquelle des deux surfaces Stripe s'est
+        // ouverte : caution posée tout de suite, ou carte enregistrée pour une
+        // caution au J-2. Les deux gestes ne se réparent pas de la même façon.
+        await appendAudit(
+          'caution_demandee',
+          {
+            bidId: bid.id,
+            dateISO: bid.dateISO,
+            serviceId: bid.serviceId,
+            montant: bid.montant,
+            totalCents: devis.totalCents,
+            prixNotaServiceCents: devis.prixNotaServiceCents == null ? null : devis.prixNotaServiceCents,
+            prixNotaDateCents: devis.prixNotaDateCents == null ? null : devis.prixNotaDateCents,
+            mode: auth.mode || null,
+            sessionId: auth.sessionId || null,
+          },
+          acteur(ACTEUR.CLIENT, bid.id)
+        );
         return json(201, { bid: publicBid(bid), clientToken, paymentStatus: 'pending', checkoutUrl: auth.url });
       }
 
@@ -1813,6 +1883,32 @@ function createApp(repo, opts = {}) {
         });
       }
 
+      // --- ANGLES MORTS DE LA PISTE (2026-09-05) — 3/7 : L'INSCRIPTION -------
+      // L'ACTIVATION d'un notaire était journalisée (`notary_activated`, côté
+      // console) ; son INSCRIPTION, non. La chaîne d'imputabilité commençait
+      // donc au deuxième maillon : impossible de dire, un an plus tard, quand
+      // ce dossier est entré ni s'il portait sa fiche officielle.
+      // Le courriel n'entre pas dans la piste publique — l'identifiant dérivé
+      // que porte déjà le profil nomme la personne et se rejoint au registre.
+      // Le lien CNQ non plus : ce qui compte pour un auditeur, c'est QU'IL ait
+      // été fourni ; l'URL elle-même se lit sur le profil.
+      await appendAudit(
+        'notaire_inscription',
+        {
+          notaryId,
+          nouveau: created,
+          lienCNQ: !!(lienCNQ || (existing && existing.lienCNQ)),
+          parrain: parrain || null,
+          // Pas de champ `throttled` ici : le freinage rend un 429 BIEN avant
+          // cette ligne, si bien qu'un tel champ n'aurait jamais pu valoir
+          // autre chose que `false`. Une colonne constante dans un registre
+          // conservé sept ans se lit comme une information — c'en est une
+          // fausse : elle laisserait croire que les inscriptions freinées sont
+          // journalisées ici, alors qu'aucune ne l'est.
+        },
+        acteur(ACTEUR.NOTAIRE, notaryId)
+      );
+
       // Mail — fire-and-forget, and only while the file is still waiting for
       // the operator: an already-approved (or Stripe-active) notary who hits
       // the door again is not told to wait for a check that is done.
@@ -2030,6 +2126,55 @@ function createApp(repo, opts = {}) {
       const result = await billing().handleWebhook(raw, signature);
       if (!result.ok) {
         return json(400, { errors: [{ code: 'signature_invalide', message: 'Signature Stripe invalide.' }] });
+      }
+
+      // --- ANGLES MORTS DE LA PISTE (2026-09-05) — 2/7 : L'ÉTAT DE L'ARGENT --
+      // Chaque changement d'état poussé par Stripe est un mouvement d'argent
+      // (ou de garantie) que Nota subit sans l'avoir demandé, et aucun ne
+      // laissait de trace. Trois règles tiennent cette écriture :
+      //
+      //   • On journalise le FAIT, pas la livraison. Un événement REJOUÉ
+      //     (`duplicate`) et un type que `applyEvent` ignore ne changent rien :
+      //     ils n'écrivent rien. Sinon le journal compterait les caprices de
+      //     Stripe plutôt que l'histoire de l'offre.
+      //   • Une signature INVALIDE n'écrit rien non plus — le 400 est rendu
+      //     plus haut, avant d'arriver ici. C'est délibéré : cette porte est
+      //     ouverte sur l'internet, et toutes ces écritures tomberaient sur la
+      //     MÊME clé de partition que `acte_regle`. La leçon du plafond des
+      //     jetons forgés vaut ici (voir piste-audit-acces.test.mjs).
+      //   • L'acteur est la PARTIE que l'événement concerne — le client par
+      //     l'offre qui est son dossier, le notaire par son identifiant — et
+      //     jamais « systeme » : Stripe n'est qu'un messager.
+      if (result.event && !result.duplicate && result.handled) {
+        const ev = result.event;
+        const b = result.bid;
+        const commun = { type: result.type || ev.type || null, eventId: ev.id || null };
+        if (b) {
+          const sujet = { bidId: b.id, dateISO: b.dateISO || null, ...commun };
+          const qui = acteur(ACTEUR.CLIENT, b.id);
+          if (b.paymentStatus === 'void') {
+            await appendAudit('caution_liberee', { ...sujet, origine: 'webhook' }, qui);
+          } else if (b.paymentIntentId && b.paymentStatus === 'authorized') {
+            await appendAudit('carte_autorisee', { ...sujet, paymentIntentId: b.paymentIntentId }, qui);
+          } else {
+            // ADR 0035 — la carte est ENREGISTRÉE : rien n'est bloqué encore.
+            // Ce sont des références opaques chez Stripe (`cus_…`, `pm_…`),
+            // jamais un numéro de carte ; c'est tout ce qu'un auditeur peut
+            // avoir besoin de recoudre avec leur tableau de bord.
+            await appendAudit('carte_enregistree', {
+              ...sujet,
+              customerId: b.paymentCustomerId || null,
+              paymentMethodId: b.paymentMethodId || null,
+            }, qui);
+          }
+        } else if (result.notary && result.notary.id) {
+          await appendAudit('notaire_compte_stripe', {
+            notaryId: result.notary.id,
+            statut: result.notary.status || null,
+            chargesEnabled: result.notary.chargesEnabled === true,
+            ...commun,
+          }, acteur(ACTEUR.NOTAIRE, result.notary.id));
+        }
       }
 
       // Fire the matching lifecycle email (notary active / offer authorized or
@@ -2584,9 +2729,45 @@ function createApp(repo, opts = {}) {
         alertes: v.alertes,
       };
       const next = { ...(existing || { id: notaryId, createdAt: now() }) };
-      for (const k of Object.keys(fields)) if (sent(k)) next[k] = fields[k];
+      const changes = [];
+      for (const k of Object.keys(fields)) {
+        if (!sent(k)) continue;
+        // Un rechargement à l'identique n'est pas un changement : le journal
+        // compte des GESTES, pas des sauvegardes. Une comparaison structurelle
+        // (et non par référence) parce que `alertes` est un objet.
+        if (JSON.stringify(next[k] == null ? null : next[k]) !== JSON.stringify(fields[k] == null ? null : fields[k])) {
+          changes.push(k);
+        }
+        next[k] = fields[k];
+      }
       next.updatedAt = now();
       await repo.putNotary(next);
+      // --- ANGLES MORTS DE LA PISTE (2026-09-05) — 4/7 : LE PÉRIMÈTRE --------
+      // `rayonKm` et l'opt-in `urgences` (ADR 0017), avec le secteur de
+      // l'étude (ADR 0025), décident QUI voit QUELLE demande : `notaryCanServe`
+      // les lit à chaque passage du fil et à chaque acceptation. Les changer,
+      // c'est changer le marché qu'un notaire peut servir — un geste au moins
+      // aussi sensible que son activation, qui, elle, était journalisée.
+      // L'avant/après ne porte QUE ces trois-là. Le nom, le téléphone et
+      // l'adresse (ADR 0033) ont bien leur place dans la liste des champs
+      // touchés, jamais leur VALEUR : ce sont des renseignements personnels, et
+      // cette piste est conservée sept ans, lisible avec `audit:read` seule.
+      if (changes.length) {
+        const perim = (o) => ({
+          rayonKm: o && o.rayonKm != null ? o.rayonKm : null,
+          urgences: !!(o && o.urgences),
+          prefixe: (o && o.prefixe) || null,
+        });
+        await appendAudit(
+          'notaire_profil_modifie',
+          {
+            notaryId,
+            champs: changes,
+            perimetre: { avant: perim(existing), apres: perim(next) },
+          },
+          acteur(ACTEUR.NOTAIRE, notaryId)
+        );
+      }
       return json(200, { profil: notaryProfil(next) });
     }
 
@@ -2712,11 +2893,34 @@ function createApp(repo, opts = {}) {
         createdAt: now(),
         status: PROPOSITION.EN_ATTENTE,
       };
+      const remplace = propositionsOf(bid).some((p) => p.notaryId === notaryId && p.status === PROPOSITION.EN_ATTENTE);
       const propositions = propositionsOf(bid).map((p) =>
         p.notaryId === notaryId && p.status === PROPOSITION.EN_ATTENTE ? { ...p, status: PROPOSITION.REMPLACEE } : p
       );
       propositions.push(proposition);
       await repo.update({ ...bid, propositions });
+      // --- ANGLES MORTS DE LA PISTE (2026-09-05) — 5/7 : LA PROPOSITION ------
+      // Retenir un acte laissait `acte_retenu` ; PROPOSER un prix dessus ne
+      // laissait rien. C'est pourtant le geste par lequel un notaire tente de
+      // déplacer l'économie de l'acte, et le seul endroit où l'écart entre ce
+      // que le client offrait et ce que le notaire demande est un fait daté.
+      // Le montant OFFERT voyage avec : sans lui, l'écart ne se relit pas dans
+      // un an (l'offre aura pu être renégociée depuis).
+      // Le texte du message, lui, reste dans le fil : c'est une communication
+      // entre le client et son notaire, pas une pièce de registre.
+      await appendAudit(
+        'notaire_proposition',
+        {
+          bidId: bid.id,
+          dateISO: bid.dateISO,
+          notaryId,
+          montant: proposition.montant,
+          montantOffert: bid.montant,
+          delta: proposition.delta,
+          remplace,
+        },
+        acteur(ACTEUR.NOTAIRE, notaryId)
+      );
       await notifyClient(bid, 'proposition', domain.money(proposition.montant));
 
       // ADR 0028: answering with a price is the strongest availability signal.
@@ -3048,6 +3252,20 @@ function createApp(repo, opts = {}) {
         const b = billing();
         if (b && typeof b.cancelAuthorization === 'function') {
           Promise.resolve(b.cancelAuthorization({ paymentIntentId: bid.paymentIntentId, bidId: bid.id })).catch(() => {});
+          // La demande de libération se journalise ICI et non à la confirmation :
+          // l'appel est délibérément « tire et oublie », et le webhook
+          // `payment_intent.canceled` qui en découle est un no-op sur une offre
+          // retenue (les dépôts gardent `voidBidAuthorization`). Sans cette
+          // ligne, le seul relâchement de caution que Nota provoque elle-même
+          // n'aurait aucune trace nulle part.
+          await appendAudit('caution_liberee', {
+            bidId: bid.id,
+            dateISO: bid.dateISO,
+            paymentIntentId: bid.paymentIntentId,
+            origine: 'renegociation',
+            montantAvant: bid.montant,
+            montantApres: answered.montant,
+          }, acteur(ACTEUR.CLIENT, bid.id));
         }
       }
       notifyAnswer(retained);
@@ -3178,6 +3396,75 @@ function createApp(repo, opts = {}) {
 
       const cancelled = { ...bid, status: domain.STATUS.ANNULEE, cancelledAt: now(), annulation };
       await repo.update(cancelled);
+      // --- ANGLES MORTS DE LA PISTE (2026-09-05) — 7/7 : L'ANNULATION --------
+      // Le journal ne portait l'annulation QUE lorsqu'une somme avait bougé
+      // (`annulation_frais`, ADR 0023) ou avait été refusée. Deux cas
+      // parfaitement ordinaires ne laissaient donc RIEN : une annulation dans
+      // la fenêtre gratuite, et celle d'une offre jamais retenue. L'offre
+      // disparaissait du carnet sans qu'aucun registre ne dise quand, ni de
+      // quel côté le geste venait.
+      //
+      // Deux entrées, et c'est voulu : `offre_annulee` est LE FAIT (il existe
+      // toujours), `annulation_frais` est LA PIÈCE FINANCIÈRE (elle n'existe
+      // que quand de l'argent a bougé). Les confondre, c'était perdre le fait
+      // chaque fois que le barème ne retenait rien.
+      //
+      // `motif` répond à la seule question qu'un opérateur pose devant une
+      // annulation : pourquoi n'a-t-on rien prélevé ? Chaque réponse appelle un
+      // geste différent, et deux d'entre elles se confondaient dans le silence
+      // du journal — `fenetre_gratuite` est normal, `sans_moyen_paiement` est
+      // une fuite (un acte retenu tardivement annulé que Nota ne PEUT pas
+      // facturer, donc un notaire qui a bloqué sa journée pour rien).
+      //
+      // L'ORDRE DES BRANCHES COMPTE, et une seule d'entre elles ne se déduit
+      // pas de l'état de l'offre : `fee`. Le barème pouvait retenir quelque
+      // chose (`fee` non nul) et le prélèvement n'avoir même pas pu être TENTÉ
+      // — `chargeCancellationFee` rend alors `aucun_moyen` ou
+      // `montant_invalide`, deux codes que le bloc au-dessus n'inscrit pas
+      // (seul `frais_refuses` s'inscrit). Sans cette branche, ce cas retombait
+      // sur le test de moyen de paiement — qui est VRAI, puisque c'est lui qui
+      // a fait naître `fee` — et le journal disait « fenetre_gratuite » d'une
+      // annulation où des frais étaient DUS et n'ont pas été perçus. Le motif
+      // le plus alarmant se serait lu comme le plus banal, sans qu'aucune autre
+      // entrée ne vienne le contredire : `annulation_frais`, justement, n'est
+      // pas écrite dans ce cas-là.
+      const motifAnnulation = !wasRetained
+        ? 'non_retenue'
+        : annulation
+          ? (annulation.percu ? 'frais_percus' : 'frais_refuses')
+          : fee
+            ? 'frais_non_preleves'
+            : !billingConfigured
+              ? 'hors_facturation'
+              : (cautionCapturable(bid) || carteEnregistree(bid)) ? 'fenetre_gratuite' : 'sans_moyen_paiement';
+      await appendAudit(
+        'offre_annulee',
+        {
+          bidId: bid.id,
+          dateISO: bid.dateISO,
+          serviceId: bid.serviceId || null,
+          montant: bid.montant,
+          retenue: wasRetained,
+          notaryId: bid.notaryId || null,
+          joursAvant: domain.daysBetween(now(), bid.dateISO),
+          // `frais` reste ce qui A BOUGÉ — zéro quand rien n'a été prélevé.
+          // Ce que le barème RÉCLAMAIT se lit à part, et seulement quand les
+          // deux diffèrent : un montant dû jamais perçu est le seul chiffre
+          // qui rende `frais_non_preleves` actionnable (le notaire attend ce
+          // dédommagement-là), et le confondre avec `frais` ferait croire à un
+          // encaissement — la leçon de l'ADR 0029.
+          frais: annulation ? annulation.frais : 0,
+          taux: annulation ? annulation.taux : 0,
+          fraisDus: !annulation && fee ? fee.frais : null,
+          motif: motifAnnulation,
+          // Une caution encore vivante est relâchée juste en dessous : le
+          // journal doit dire si l'argent du client a été rendu, sinon
+          // « pourquoi ma carte est-elle encore bloquée » reste sans réponse.
+          cautionLiberee: !(annulation && annulation.percu) && billingConfigured
+            && !!bid.paymentIntentId && bid.paymentStatus !== 'void',
+        },
+        acteur(ACTEUR.CLIENT, bid.id)
+      );
       // The signing no longer exists: drop it from the retaining notary's
       // calendar-feed pointers too (older repos may not have the method).
       if (wasRetained && bid.notaryId && typeof repo.removeRetained === 'function') {
@@ -3193,6 +3480,12 @@ function createApp(repo, opts = {}) {
         const b = billing();
         if (b && typeof b.cancelAuthorization === 'function') {
           Promise.resolve(b.cancelAuthorization({ paymentIntentId: bid.paymentIntentId, bidId: bid.id })).catch(() => {});
+          await appendAudit('caution_liberee', {
+            bidId: bid.id,
+            dateISO: bid.dateISO,
+            paymentIntentId: bid.paymentIntentId,
+            origine: 'annulation',
+          }, acteur(ACTEUR.CLIENT, bid.id));
         }
       }
 
@@ -3531,6 +3824,29 @@ function createApp(repo, opts = {}) {
       // ADR 0033: withdrawing is free, but it is COUNTED on the notary's record
       // — a client lost their notary, and the console tells the notary so.
       await bumpNotary(notaryId, 'releasesCount');
+      // --- ANGLES MORTS DE LA PISTE (2026-09-05) — 6/7 : LE DÉSISTEMENT ------
+      // Un notaire qui rend un acte RETENU laisse un client sans notaire à
+      // quelques jours d'une signature, et peut laisser une caution vivante
+      // derrière lui. Le compteur `releasesCount` en gardait la trace sur SON
+      // dossier — un chiffre, jamais une date, jamais l'acte concerné : de quoi
+      // le juger, pas de quoi reconstituer ce qui est arrivé au client.
+      // `message: true/false` dit qu'une explication a été laissée sans la
+      // recopier : l'art. 37 fait mourir la conversation avec la relation, et
+      // ce registre-ci vit sept ans.
+      await appendAudit(
+        'notaire_desistement',
+        {
+          bidId: bid.id,
+          dateISO: bid.dateISO,
+          notaryId,
+          montant: bid.montant,
+          etude: bid.etude || null,
+          etaitRetenue: bid.status === domain.STATUS.RETENUE,
+          message: !!v.message,
+          caution: !!bid.paymentIntentId,
+        },
+        acteur(ACTEUR.NOTAIRE, notaryId)
+      );
 
       // The operator is ALWAYS told (ADR 0033, notifier-side): a désistement
       // is a signal on the notary's file whether or not money is in flight.

@@ -68,6 +68,160 @@ et un `notaryId` reste donc joignable à une personne au-delà des sept ans.
 
 ---
 
+## 1 bis. La politique EXÉCUTABLE (2026-09-05)
+
+> Le tableau du §1 énonçait des durées **voulues** ; le §2 décrivait, honnêtement,
+> des durées **réellement appliquées** qui n'y correspondaient pas. Depuis le
+> 2026-09-05, une seule table fait les deux : `RETENTION_FAMILIES` dans
+> [`packages/domain/index.js`](../../packages/domain/index.js). **Le code la lit ;
+> il ne la recopie plus.** Avant elle, une même règle vivait à quatre endroits —
+> 400 jours en clair dans `handler.js`, 400 jours redits dans `keys.js`, sept ans
+> calculés dans le domaine, 180 jours pour les avis — et six familles n'avaient
+> aucune borne du tout.
+
+Trois principes tiennent cette table, et trois tests les gardent
+(`packages/domain/test/conservation-effacement.test.mjs`,
+`apps/api/test/conservation-politique.test.mjs`) :
+
+1. **Une famille absente est un bogue.** Un élément écrit sans ligne ici est un
+   élément que personne n'a décidé de conserver. C'est exactement le test
+   automatisé que le §5 de ce document appelait « le seul moyen de rendre cette
+   politique auto-exécutoire ».
+2. **`indéfini` n'est jamais un oubli.** Une conservation sans borne doit porter
+   son motif, sans quoi la ligne ne passe pas les tests.
+3. **Rien ne se raccourcit en douce.** Les durées existantes sont reprises telles
+   quelles ; celles qui sont apparues le sont sur des familles qui n'en avaient
+   **aucune**. Une rétention raccourcie DÉTRUIT des données.
+
+| Famille | Durée | Ancre | Changement du 2026-09-05 | Réglage |
+| --- | --- | --- | --- | --- |
+| `offre` | **400 j** | date de signature | inchangée — seulement déplacée dans la politique | `NOTA_OFFRE_RETENTION_DAYS` |
+| `index_client` | **400 j** | date de signature | inchangée ; c'est la MÊME famille que l'offre, elles ne peuvent plus se désaccorder | `NOTA_INDEX_CLIENT_RETENTION_DAYS` |
+| `avis` | **180 j** | instant de l'avis | inchangée ; l'ancienne clé `NOTA_NOTIF_RETENTION_DAYS` reste honorée | `NOTA_AVIS_RETENTION_DAYS` |
+| `journal_sujet` | 730 j — **écrite, PAS encore appliquée** | instant de l'envoi | décidée le 2026-09-05 ; `appendSubjectEvent` ne pose toujours aucun `ttl` | `NOTA_JOURNAL_SUJET_RETENTION_DAYS` |
+| `journal_audit` | **7 ans civils** | instant d'écriture | inchangée (ADR 0036) ; l'échéance reste CALENDAIRE | `NOTA_JOURNAL_AUDIT_RETENTION_DAYS` |
+| `acte` | **7 ans civils** | instant du règlement | **AJOUTÉE** — `ACT#` n'avait aucun `ttl` | `NOTA_ACTE_RETENTION_DAYS` |
+| `evaluation` | **365 j** | instant de l'évaluation | **AJOUTÉE** — `EVAL#` n'avait aucun `ttl` | `NOTA_EVALUATION_RETENTION_DAYS` |
+| `gain_parrainage` | **7 ans civils** | instant du gain | **AJOUTÉE** — `EARN#` n'avait aucun `ttl` | `NOTA_GAIN_PARRAINAGE_RETENTION_DAYS` |
+| `evenement_stripe` | **400 j** | instant du traitement | **AJOUTÉE** — `EVENT#` n'avait aucun `ttl`. Volontairement LARGE : sous la durée de vie d'une offre, un rappel tardif serait rejoué et l'acte réglé deux fois | `NOTA_EVENEMENT_STRIPE_RETENTION_DAYS` |
+| `destinataire_campagne` | 1 095 j — **écrite, PAS encore appliquée** | instant de l'envoi | décidée le 2026-09-05 ; `appendCampaignRecipient` ne pose toujours aucun `ttl` | `NOTA_DESTINATAIRE_CAMPAGNE_RETENTION_DAYS` |
+| `fil_soutien` | 730 j — **écrite, PAS encore appliquée** | dernier message | décidée le 2026-09-05 ; `putSupportThread` ne pose toujours aucun `ttl` | `NOTA_FIL_SOUTIEN_RETENTION_DAYS` |
+| `profil_notaire` | **indéfini** | — | **écart NOMMÉ, non refermé** (voir ci-dessous) | `NOTA_PROFIL_NOTAIRE_RETENTION_DAYS` |
+| `desabonnement` | **indéfini** | — | inchangée, et voulue : on ne peut pas oublier un refus sans le violer | — |
+| `consentement` | **indéfini** | — | voulue : le fardeau de prouver le consentement pèse sur l'expéditeur (LCAP, art. 13) | — |
+| `effacement` | **indéfini** | — | voulue : sans la marque, « effacé » et « jamais connu » se confondent | — |
+
+### Trois durées sont ÉCRITES sans être APPLIQUÉES, et le code le dit
+
+`journal_sujet`, `destinataire_campagne` et `fil_soutien` portent une durée dans
+la politique ; aucun adaptateur ne pose leur `ttl`. Ces lignes n'expirent donc
+pas, et rien ne les efface sur demande — le journal des envois et les lignes de
+destinataire gardent l'adresse **en clair**.
+
+Ce n'est pas une note de bas de page : cette politique voyage dans l'export
+remis à la personne (`GET /admin/usagers/{courriel}/export`). Une durée annoncée
+là est une promesse faite à elle. Chaque ligne porte donc `applique: false` et sa
+raison, et `apps/api/test/conservation-politique.test.mjs` relit la source des
+adaptateurs pour faire rougir tout drapeau qui mentirait — dans un sens comme
+dans l'autre.
+
+Refermer l'écart demande une décision distincte : poser ces `ttl` **détruira**
+des lignes à échéance, ce qui est précisément le geste que le §3 ci-dessus
+interdit de faire en douce.
+
+### Ce que ces ajouts changent, et ce qu'ils ne changent pas
+
+- **Ils ne touchent QUE les écritures futures.** Le `ttl` DynamoDB est posé à
+  l'écriture. Les `ACT#`, `EVAL#`, `EARN#` et `EVENT#` **déjà en table
+  n'expireront jamais** — exactement comme les entrées d'audit antérieures au
+  2026-09-03. Rien n'est rétroactif, et rien ne le sera sans une passe de
+  rattrapage explicite, à décider séparément.
+- **Une borne ajoutée ne détruit rien aujourd'hui.** La plus courte des durées
+  neuves est de 365 jours : aucune donnée écrite maintenant ne disparaît avant
+  septembre 2027.
+- **Une durée indéfinie ne se borne PAS par variable d'environnement.** C'est le
+  seul sens interdit : donner trente jours au registre des désabonnements ferait
+  revenir, un mois plus tard, quelqu'un qui a dit non. La table refuse.
+- **Les bornes de PREUVE se comptent en années civiles.** Sept fois 365 jours
+  expirerait deux jours trop tôt (2028 et 2032 sont bissextiles) ; sur une pièce
+  comptable, arrondir vers le bas est la seule erreur qui coûte cher.
+
+### Le profil de notaire : pourquoi il reste sans borne
+
+Le §1 veut « 24 mois **après la fin de la relation** », et cette fin **n'est
+enregistrée nulle part**. Sans ancre, aucun `ttl` honnête n'est calculable : posé
+à la création, il détruirait le profil d'un notaire actif. La ligne est donc
+`indéfini`, **avec son motif**, et l'écart reste ouvert — nommé plutôt que
+maquillé. Il se refermera le jour où la désactivation d'un notaire datera la fin
+de la relation.
+
+---
+
+## 1 ter. La demande d'accès et l'effacement (Loi 25, art. 27 et 28)
+
+Le §3 listait « aucune suppression sur demande » comme « le manquement le plus
+exigible immédiatement ». Il est levé, et il faut dire exactement jusqu'où.
+
+**Ce qui existe (2026-09-05).** Trois portes dans la console
+(`/admin/usagers/{courriel}`, `…/export`, `…/effacement`), derrière deux
+permissions distinctes — `subjects:read` pour ouvrir, `subjects:erase` pour
+détruire — et le masquage habituel : sans `pii:read`, rien de nominatif ne
+traverse la réponse. Le dossier s'assemble par **l'index `CLIENT#`**, une Query
+et non un balayage.
+
+> **L'index existait, testé, et personne ne l'écrivait.** `indexClientBid` /
+> `listClientBids` vivaient dans les deux adaptateurs depuis longtemps, avec des
+> commentaires expliquant qu'ils rendent une demande d'accès « exécutable » — et
+> aucun appelant, ni en lecture ni en écriture. La partition était **vide en
+> production** : le droit d'accès était théorique. `POST /bids` l'écrit
+> désormais à la publication.
+
+**La frontière de l'effacement est une règle de domaine** (`domain.erasurePlan`),
+pas une décision d'écran. Ce qui survit à une demande :
+
+| Ce qui est conservé | Pourquoi |
+| --- | --- |
+| Les offres dont l'**acte est réglé** | Pièce comptable (sept ans), et l'acte notarié qu'elle documente engage les obligations professionnelles propres du notaire. |
+| Les actes **en cours** | La finalité n'est pas accomplie : effacer la partie à mi-mandat abandonnerait le notaire avec un dossier sans client. |
+| Le **journal d'audit** | Preuve d'imputabilité. Il ne porte ni adresse d'origine ni courriel : il nomme une offre, pas une personne. |
+| Les **refus** (désabonnement, consentement) | Les oublier serait les violer. |
+| La **marque d'effacement** | Sans elle, « nous avons effacé » et « nous ne l'avons jamais connue » ne se distinguent plus. |
+
+Le plan est montré **avant** toute destruction, avec le motif et la date de fin
+de conservation de chaque ligne ; il se déclare **partiel** dès qu'une donnée
+identifiante survit — qu'elle soit gardée par obligation légale **ou hors de
+portée du code**.
+
+**Ce que le code ne sait pas détruire est nommé, jamais annoncé effacé.** Quatre
+registres figurent au plan avec `executable: false` et leur raison :
+
+| Hors de portée | Ce qui survit |
+| --- | --- |
+| `journal_sujet` — journal des envois | L'**adresse en clair** : c'est la clé de partition (`SUJET#<courriel>`). |
+| `destinataire_campagne` | L'**adresse en clair** ; le registre est partitionné par campagne, on ne sait même pas énumérer les lignes d'une personne. |
+| `index_client` | L'**adresse en clair** (`CLIENT#<courriel>`), jusqu'à l'expiration des pointeurs. |
+| `avis` | Les avis eux-mêmes ; ils ne nomment personne (leur partition dérive du jeton de l'offre) et expirent d'eux-mêmes. |
+
+Les trois premiers étant identifiants, **aucun plan ne peut aujourd'hui se
+déclarer complet**. Jusqu'au 2026-09-05 ces familles étaient rangées dans « ce
+qui sera effacé », le plan se déclarait complet et la console disait « Dossier
+effacé » : l'adresse restait en clair dans trois registres. C'est le mensonge
+exact que cette section existe pour empêcher.
+
+**Ce qui n'est PAS encore fait, et pourquoi.** Le rôle IAM de la console est en
+**lecture seule** sur la table des clients (`infra/admin.tf`,
+`MainTableReadOnly`). La marque d'effacement a reçu sa porte étroite
+(`MainTableErasureMarkWrite`, `ERASURE#*` — **`terraform apply` en attente**),
+mais la **réécriture des offres** vit dans des partitions `MONTH#` partagées par
+toute la clientèle : aucune condition `LeadingKeys` n'y isole une personne, et
+ouvrir `MONTH#*` donnerait à la console l'écriture sur **chaque** offre. Cet
+échange est refusé. En conséquence, tant que l'exécutant n'est pas la Lambda
+publique, ces écritures-là remontent en **`enAttente`** avec un avertissement —
+**jamais** en « effacé ». La règle tenue par les tests : *ne jamais annoncer un
+effacement qui n'a pas eu lieu.*
+
+---
+
 ## 2. Ce que le code applique réellement
 
 ### Ce qui est automatiquement supprimé
@@ -87,11 +241,11 @@ Le mécanisme TTL est bien activé sur les deux tables
 
 | Élément | Pourquoi c'est un problème |
 | --- | --- |
-| **Profils de notaires** (`NOTARY#…/PROFILE`) | Portent courriel, identifiant Stripe Connect, cumul de ce que Nota a facturé au client sur leurs actes, notations. **Aucun `ttl`** — `infra/dynamodb.tf` le dit explicitement. Un notaire qui quitte la plateforme y reste indéfiniment. |
-| **Registre des actes** (`ACT#…`) | Aucun `ttl` (`apps/api/src/repo-dynamo.js:735-749`). Voulu — c'est la pièce comptable — mais **non déclaré**. |
-| **Événements Stripe traités** (`EVENT#…`) | Aucun `ttl` (`repo-dynamo.js:322-328`). Croissance sans fin, non documentée. |
-| **Gains de parrainage** (`EARN#…`) | Aucun `ttl` (`repo-dynamo.js:835-840`). |
-| **Registre des évaluations** (`EVAL#…`) | Aucun `ttl` (`repo-dynamo.js:558`). Survit à l'offre qui l'a produite. |
+| **Profils de notaires** (`NOTARY#…/PROFILE`) | Portent courriel, identifiant Stripe Connect, cumul de ce que Nota a facturé au client sur leurs actes, notations. **Aucun `ttl`.** Toujours vrai le 2026-09-05, et désormais **nommé** dans la politique exécutable avec son motif : la fin de la relation n'est enregistrée nulle part, donc aucune ancre n'existe (§1 bis). Un notaire qui quitte la plateforme y reste indéfiniment. |
+| ~~**Registre des actes** (`ACT#…`)~~ | **Corrigé le 2026-09-05** : sept ans civils à compter du règlement (§1 bis, famille `acte`). Les lignes écrites AVANT cette date n'ont pas de `ttl` et n'expireront jamais. |
+| ~~**Événements Stripe traités** (`EVENT#…`)~~ | **Corrigé le 2026-09-05** : 400 jours (§1 bis, famille `evenement_stripe`) — délibérément au-delà de la vie d'une offre, pour qu'un rappel tardif ne soit jamais rejoué. Lignes antérieures : sans `ttl`. |
+| ~~**Gains de parrainage** (`EARN#…`)~~ | **Corrigé le 2026-09-05** : sept ans civils (§1 bis, famille `gain_parrainage`) — une récompense due ou versée est une pièce comptable. Lignes antérieures : sans `ttl`. |
+| ~~**Registre des évaluations** (`EVAL#…`)~~ | **Corrigé le 2026-09-05** : douze mois (§1 bis, famille `evaluation`). Lignes antérieures : sans `ttl`. |
 | **Désabonnements** (`UNSUB#…`) | Aucun `ttl` — correct et voulu. |
 | **Journal d'audit** (`AUDIT#…`) | ~~Aucun `ttl`~~ — **corrigé le 2026-09-03 (ADR 0036)** : les deux adaptateurs posent désormais un `ttl` calendaire de **sept ans** à l'écriture, sur les deux journaux (`packages/domain` → `auditRetentionTtl`, `apps/api/src/repo-dynamo.js`, `apps/api/src/repo-memory.js`). Conforme au §1 ci-dessus — y compris à la condition qui y est attachée : depuis le 2026-09-04, le journal écrit par la porte publique ne porte **ni adresse d'origine ni adresse courriel** (`ip: null`, acteur réduit à `{ type, id }`), ce qui est ce qui rend sept ans défendables sur un journal d'accès. Les entrées écrites AVANT le 2026-09-03 ne portent pas de `ttl` et n'expireront jamais — rien n'est rétroactif ; et la version qui posait une IP n'a jamais été déployée — elle est corrigée dans la même branche, avant sa mise en ligne. |
 
@@ -112,9 +266,12 @@ Le mécanisme TTL est bien activé sur les deux tables
    courriel à la clôture ; il disparaît avec l'offre entière, au bout de 400
    jours. Cette phrase doit être retirée ou le comportement implémenté.
 
-3. **Aucune suppression sur demande.** La promesse de suppression sous 30 jours
-   (`index.html:1103`) n'a **aucun mécanisme** : ni route, ni outil, ni
-   procédure. C'est le manquement le plus exigible immédiatement.
+3. ~~**Aucune suppression sur demande.**~~ **Levé le 2026-09-05** — voir §1 ter.
+   Trois portes existent (dossier, export, effacement), la frontière de
+   l'effacement est une règle de domaine testée, et le plan est montré avant
+   toute destruction. **Reste ouvert :** la réécriture des offres n'est pas
+   exécutable depuis la console (rôle en lecture seule sur la table des
+   clients) ; elle remonte en « en attente », jamais en « effacé ».
 
 4. **Les profils de notaires n'ont aucune borne.** Il faut décider d'une durée
    après la fin de la relation et l'implémenter.
@@ -152,7 +309,13 @@ renseignements personnels (`confidentialite@nota.ca`).
 
 **Revue : annuelle**, et à chaque changement de schéma de données.
 
-> ⚠️ Aujourd'hui, aucune vérification ne contrôle qu'un nouveau type d'élément
-> écrit dans la table porte un `ttl`. Un test automatisé — « tout élément
-> contenant un renseignement personnel porte un `ttl` » — serait le seul moyen de
-> rendre cette politique auto-exécutoire.
+> ✅ **Depuis le 2026-09-05, cette vérification existe.** La politique est une
+> table lue par le code (§1 bis), et deux suites la tiennent : une famille sans
+> ligne ne passe pas, une conservation indéfinie sans motif ne passe pas, et le
+> `ttl` que chaque adaptateur pose est comparé à celui que la politique dit
+> (`packages/domain/test/conservation-effacement.test.mjs`,
+> `apps/api/test/conservation-politique.test.mjs`).
+>
+> Ce qu'elle ne couvre PAS encore : rien n'oblige un NOUVEAU type d'élément à
+> se déclarer dans la table. La garde attrape une famille connue qui perdrait sa
+> ligne, pas une famille inventée demain qui n'en aurait jamais eu.
