@@ -12,9 +12,17 @@ const { createBilling } = require('./src/billing');
 const { createMemoryRepo } = require('./src/repo-memory');
 const { createDynamoRepo } = require('./src/repo-dynamo');
 const domain = require('@nota/domain');
+const { devToday, devBids, devPartners } = require('./scripts/dev-fixtures');
+const { sourceFingerprint } = require('./scripts/source-fingerprint');
 
 const PORT = Number(process.env.PORT || 8788);
 const useDynamo = !!process.env.TABLE_NAME;
+
+// The digest of the source THIS process loaded, stamped on every response as
+// `x-nota-source`. A container that kept serving yesterday's code answers with
+// yesterday's digest, so `npm run local:check` can call it out instead of an
+// agent trusting a stale reply. See scripts/source-fingerprint.js.
+const SOURCE = sourceFingerprint();
 
 let repo;
 if (useDynamo) {
@@ -26,19 +34,11 @@ if (useDynamo) {
 } else {
   // Seed on the same Québec business day the handler's default clock uses —
   // a UTC slice here would seed "tomorrow" every evening and desync the carnet.
-  const today = domain.businessDay(null, process.env.NOTA_TIMEZONE);
-  // Same demo referral slice as admin-local-server.js: a deterministic subset
-  // of the fixtures arrives via partner links and the two demo partners are
-  // registered, so POST /partenaires' idempotent/409 paths and the referral
-  // field are exercisable against this server out of the box.
-  const fixtures = domain.makeFixtures(today).map((b, i) =>
-    i % 5 === 0 ? { ...b, parrain: i % 10 === 0 ? 'EVEROY' : 'COURTIER1' } : b,
-  );
-  repo = createMemoryRepo(fixtures);
-  // Seeded as CONFIRMED (email-verified, ADR 0011) so the demo's owned codes
-  // answer 409 to a foreign claim and appear as payees in the referral ledger.
-  repo.createPartner({ code: 'EVEROY', type: 'agent_immobilier', courriel: 'eve.roy@agence.demo', createdAt: today, confirmedAt: today });
-  repo.createPartner({ code: 'COURTIER1', type: 'courtier_hypothecaire', courriel: 'marc.courtier@hypotheque.demo', createdAt: today, confirmedAt: today });
+  // The data itself comes from scripts/dev-fixtures.js, the SAME set the docker
+  // path writes through the Dynamo adapter: one demo world, not two that drift.
+  const today = devToday();
+  repo = createMemoryRepo(devBids(today));
+  for (const p of devPartners(today)) repo.createPartner(p);
 }
 
 // In-memory demo: a Stripe stand-in so the FULL lifecycle (retain, complete,
@@ -75,13 +75,14 @@ const server = http.createServer(async (req, res) => {
     for await (const chunk of req) body += chunk;
     const sourceIp = req.socket && req.socket.remoteAddress;
     const out = await app.handle({ method: req.method, path: url.pathname, query, headers: req.headers, body, sourceIp });
-    res.writeHead(out.statusCode, out.headers);
+    res.writeHead(out.statusCode, { ...out.headers, 'x-nota-source': SOURCE.hash });
     res.end(out.body);
   } catch (err) {
     // CORS on the failure path too: without these headers the browser cannot
     // read the error and the web app misreports a server fault as "offline".
     res.writeHead(500, {
       'content-type': 'application/json',
+      'x-nota-source': SOURCE.hash,
       'access-control-allow-origin': '*',
       'access-control-allow-methods': 'GET,POST,OPTIONS',
       'access-control-allow-headers': 'content-type,authorization',
@@ -93,4 +94,5 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, () => {
   const mode = useDynamo ? `DynamoDB ${process.env.DYNAMO_ENDPOINT || '(regional)'}` : 'in-memory fixtures';
   console.log(`Nota API on http://localhost:${PORT}  [${mode}]`);
+  console.log(`  source ${SOURCE.hash} (${SOURCE.files} fichiers) — rendu dans l'en-tête x-nota-source`);
 });

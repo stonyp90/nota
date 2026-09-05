@@ -43,6 +43,13 @@ const PERMISSIONS = Object.freeze([
   // une capacité à part, jamais un corollaire de `notifications:write` : écrire
   // un gabarit et l'envoyer à mille personnes ne sont pas la même décision.
   'campaigns:send',
+  // Les GROUPES D'AUDIENCE — des listes de DESTINATAIRES, à ne jamais confondre
+  // avec les groupes RBAC ci-dessus, qui réunissent des permissions. Deux clés
+  // et non une : voir la liste des gens à qui Nota écrit et la MODIFIER ne sont
+  // pas la même décision. `audiences:read` donne accès aux adresses du groupe —
+  // c'est une lecture nominative, à accorder comme telle.
+  'audiences:read',
+  'audiences:write',
 ]);
 
 // Legacy role → permission bundle. Kept ONLY so an admin created before groups

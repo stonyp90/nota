@@ -46,7 +46,14 @@ function attrPresent(item, attr) {
 // d'ordre passerait en test et échouerait en production.
 function compare(gauche, op, droite) {
   if (typeof gauche !== typeof droite) return false;
-  if (typeof gauche !== 'string' && typeof gauche !== 'number') return false;
+  // L'ÉGALITÉ porte sur tout scalaire — un booléen compris. Le double
+  // l'interdisait, si bien que la garde `#consumed = :false` du lien magique
+  // admin échouait toujours ici : la connexion à la console ne pouvait pas
+  // aboutir côté dynamo, alors qu'elle aboutit en production. L'ORDRE, lui,
+  // reste réservé aux chaînes et aux nombres, comme le service.
+  const ordonnable = typeof gauche === 'string' || typeof gauche === 'number';
+  if (!ordonnable && typeof gauche !== 'boolean') return false;
+  if (!ordonnable && op !== '=' && op !== '<>') return false;
   switch (op) {
     case '=': return gauche === droite;
     case '<>': return gauche !== droite;
@@ -95,14 +102,36 @@ function evalCondition(expr, item, names = {}, values = {}) {
 }
 
 function applyUpdate(item, expr, names = {}, values = {}) {
-  const m = /^\s*SET\s+(.+)$/i.exec(String(expr));
-  if (!m) throw new Error('fake-table : UpdateExpression non supportée — ' + expr);
-  for (const clause of m[1].split(',')) {
-    const a = /^\s*([#\w]+)\s*=\s*(:\w+)\s*$/.exec(clause);
-    if (!a) throw new Error('fake-table : affectation non supportée — ' + clause);
-    item[names[a[1]] || a[1]] = values[a[2]];
+  const brut = String(expr);
+  const set = /^\s*SET\s+(.+)$/i.exec(brut);
+  if (set) {
+    for (const clause of set[1].split(',')) {
+      const a = /^\s*([#\w]+)\s*=\s*(:\w+)\s*$/.exec(clause);
+      if (!a) throw new Error('fake-table : affectation non supportée — ' + clause);
+      item[names[a[1]] || a[1]] = values[a[2]];
+    }
+    return item;
   }
-  return item;
+  // `ADD` — l'incrément ATOMIQUE des compteurs analytiques (applyStatsDeltas).
+  // Le dépôt l'émet depuis toujours ; le double, lui, levait, donc aucun
+  // scénario de statistiques ne pouvait tourner côté dynamo — exactement le
+  // genre de trou que ce fichier existe pour fermer. Sémantique DynamoDB : sur
+  // un attribut absent, ADD crée l'attribut à la valeur ajoutée.
+  const add = /^\s*ADD\s+(.+)$/i.exec(brut);
+  if (add) {
+    for (const clause of add[1].split(',')) {
+      const a = /^\s*([#\w]+)\s+(:\w+)\s*$/.exec(clause);
+      if (!a) throw new Error('fake-table : incrément non supporté — ' + clause);
+      const attr = names[a[1]] || a[1];
+      const n = values[a[2]];
+      if (typeof n !== 'number') throw new Error('fake-table : ADD non numérique — ' + clause);
+      const courant = attrPresent(item, attr) ? item[attr] : 0;
+      if (typeof courant !== 'number') throw new Error('fake-table : ADD sur un attribut non numérique — ' + attr);
+      item[attr] = courant + n;
+    }
+    return item;
+  }
+  throw new Error('fake-table : UpdateExpression non supportée — ' + expr);
 }
 
 export function createFakeTable({ name = 'nota-main' } = {}) {
@@ -120,34 +149,62 @@ export function createFakeTable({ name = 'nota-main' } = {}) {
     }
   }
 
+  // Les index secondaires du schéma, par leurs VRAIES clés. Un seul existe
+  // (GSI1, l'index creux qui énumère offres ouvertes, notaires et partenaires) ;
+  // le double refusait toute `IndexName`, donc aucun scénario ne pouvait
+  // éprouver une lecture d'index côté dynamo — `listNotaries`, `listPartners`
+  // et `listOpenBids` passaient toutes par là.
+  const INDEX = { GSI1: ['GSI1PK', 'GSI1SK'] };
+
   function query(input) {
+    const nomIndex = input.IndexName;
+    if (nomIndex && !INDEX[nomIndex]) throw new Error('fake-table : index inconnu — ' + nomIndex);
+    const [pkAttr, skAttr] = nomIndex ? INDEX[nomIndex] : ['PK', 'SK'];
+
     const values = input.ExpressionAttributeValues || {};
+    const noms = input.ExpressionAttributeNames || {};
+    // Un nom de clé peut arriver ALIASÉ (`#g = :n`) : le dépôt le fait dès que
+    // l'attribut frôle un mot réservé. Le double doit résoudre l'alias comme le
+    // service, sinon une lecture parfaitement valide « n'est pas supportée ».
+    const resoudre = (jeton) => noms[jeton] || jeton;
     const kc = String(input.KeyConditionExpression || '');
-    const pkm = /^\s*PK\s*=\s*(:\w+)/.exec(kc);
-    if (!pkm) throw new Error('fake-table : KeyConditionExpression non supportée — ' + kc);
-    let rows = [...items.values()].filter((it) => it.PK === values[pkm[1]]);
+    const pkm = /^\s*([#\w]+)\s*=\s*(:\w+)/.exec(kc);
+    if (!pkm || resoudre(pkm[1]) !== pkAttr) {
+      throw new Error('fake-table : KeyConditionExpression non supportée — ' + kc);
+    }
+    pkm[1] = pkm[2]; // la suite ne lit que le jeton de valeur
+    // Index CREUX : un item sans les deux attributs de clé n'y figure pas.
+    let rows = [...items.values()].filter(
+      (it) => it[pkAttr] === values[pkm[1]] && (!nomIndex || attrPresent(it, skAttr)),
+    );
 
     const reste = kc.slice(pkm[0].length).replace(/^\s*AND\s*/, '').trim();
     if (reste) {
       let m;
-      if ((m = /^begins_with\(\s*SK\s*,\s*(:\w+)\s*\)$/.exec(reste))) {
-        const prefixe = String(values[m[1]]);
-        rows = rows.filter((it) => String(it.SK).startsWith(prefixe));
-      } else if ((m = /^SK\s+BETWEEN\s+(:\w+)\s+AND\s+(:\w+)$/.exec(reste))) {
+      const mauvaiseCle = (jeton) => {
+        if (resoudre(jeton) !== skAttr) throw new Error('fake-table : condition de tri non supportée — ' + reste);
+      };
+      if ((m = /^begins_with\(\s*([#\w]+)\s*,\s*(:\w+)\s*\)$/.exec(reste))) {
+        mauvaiseCle(m[1]);
+        const prefixe = String(values[m[2]]);
+        rows = rows.filter((it) => String(it[skAttr]).startsWith(prefixe));
+      } else if ((m = /^([#\w]+)\s+BETWEEN\s+(:\w+)\s+AND\s+(:\w+)$/.exec(reste))) {
+        mauvaiseCle(m[1]);
         // Bornes comparées EN OCTETS, comme le tri : une condition de tri qui
         // n'emploierait pas l'ordre de la table couperait ailleurs qu'elle.
-        const [a, b] = [values[m[1]], values[m[2]]];
-        rows = rows.filter((it) => ordreCles(it.SK, a) >= 0 && ordreCles(it.SK, b) <= 0);
-      } else if ((m = /^SK\s*(>=|<=|>|<)\s*(:\w+)$/.exec(reste))) {
-        const borne = values[m[2]];
+        const [a, b] = [values[m[2]], values[m[3]]];
+        rows = rows.filter((it) => ordreCles(it[skAttr], a) >= 0 && ordreCles(it[skAttr], b) <= 0);
+      } else if ((m = /^([#\w]+)\s*(>=|<=|>|<)\s*(:\w+)$/.exec(reste))) {
+        mauvaiseCle(m[1]);
+        const borne = values[m[3]];
         const cmp = { '>=': (n) => n >= 0, '<=': (n) => n <= 0, '>': (n) => n > 0, '<': (n) => n < 0 };
-        rows = rows.filter((it) => cmp[m[1]](ordreCles(it.SK, borne)));
+        rows = rows.filter((it) => cmp[m[2]](ordreCles(it[skAttr], borne)));
       } else {
         throw new Error('fake-table : condition de tri non supportée — ' + reste);
       }
     }
 
-    rows.sort((a, b) => ordreCles(a.SK, b.SK));
+    rows.sort((a, b) => ordreCles(a[skAttr], b[skAttr]) || ordreCles(a.PK, b.PK));
     if (input.ScanIndexForward === false) rows.reverse();
 
     // `ExclusiveStartKey` reprend STRICTEMENT après la clé nommée — DynamoDB
@@ -162,13 +219,14 @@ export function createFakeTable({ name = 'nota-main' } = {}) {
     // milieu d'une autre campagne — toute une classe de mauvais usage du
     // curseur ne pouvait être QUE verte en test.
     if (input.ExclusiveStartKey) {
-      const { PK, SK } = input.ExclusiveStartKey;
-      if (String(PK) !== String(values[pkm[1]]) || SK === undefined) {
+      const depart = input.ExclusiveStartKey;
+      if (String(depart[pkAttr]) !== String(values[pkm[1]]) || depart[skAttr] === undefined) {
         throw validationFailed('The provided starting key is invalid');
       }
+      const borne = depart[skAttr];
       const apres = input.ScanIndexForward === false
-        ? (it) => ordreCles(it.SK, SK) < 0
-        : (it) => ordreCles(it.SK, SK) > 0;
+        ? (it) => ordreCles(it[skAttr], borne) < 0
+        : (it) => ordreCles(it[skAttr], borne) > 0;
       rows = rows.filter(apres);
     }
 
@@ -177,7 +235,11 @@ export function createFakeTable({ name = 'nota-main' } = {}) {
     if (limite && rows.length > limite) {
       const page = rows.slice(0, limite);
       const dernier = page[page.length - 1];
-      return { Items: page.map(projeter), LastEvaluatedKey: { PK: dernier.PK, SK: dernier.SK } };
+      // Sur un index, la clé de reprise porte les DEUX paires : celle de la
+      // table et celle de l'index, exactement comme le vrai service.
+      const suite = { PK: dernier.PK, SK: dernier.SK };
+      if (nomIndex) { suite[pkAttr] = dernier[pkAttr]; suite[skAttr] = dernier[skAttr]; }
+      return { Items: page.map(projeter), LastEvaluatedKey: suite };
     }
     return { Items: rows.map(projeter) };
   }
@@ -233,7 +295,6 @@ export function createFakeTable({ name = 'nota-main' } = {}) {
         return {};
       }
       if (nom === 'QueryCommand') {
-        if (input.IndexName) throw new Error('fake-table : aucun index secondaire ici');
         return query(input);
       }
       if (nom === 'UpdateCommand') {

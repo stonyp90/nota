@@ -5,7 +5,7 @@ const prixConfig = require('./prix-nota-config.js');
 const cote = require('./cote');
 const { createBilling, attendCaution } = require('./billing');
 const cancellationCfg = require('./cancellation-config');
-const { decodeUnsubToken } = require('./notifications');
+const { decodeUnsubToken, createConsentRegistry } = require('./notifications');
 const { signToken, signChallengeToken, verifyToken, notaryIdForEmail, SCOPES } = require('./notary-auth');
 const { buildNotaryFeed, buildCarnetFeed } = require('./ics');
 const { statsDeltasForOffer, statsDeltasForRetain, statsDeltasForNotaryOnboarding, statsDeltasForFunnel } = require('./stats');
@@ -2056,7 +2056,21 @@ function createApp(repo, opts = {}) {
       if (!email || !domain.isEmail(email)) {
         return htmlPage(400, 'Lien invalide', 'Ce lien de désabonnement est invalide ou incomplet.');
       }
-      await repo.putUnsubscribe(email, now());
+      // LA SUPPRESSION *ET* LA PREUVE. Cette route écrivait `putUnsubscribe`
+      // seule : plus personne ne recevait rien (la garde tenait), mais le
+      // RETRAIT n'entrait pas au registre — qui ne recevait donc que des octrois
+      // et se trompait uniformément sur quiconque s'était retiré (LCAP art. 13).
+      //
+      // Le registre s'ouvre sur le DÉPÔT SEUL, jamais via `notifier()` : celui-ci
+      // rend `null` tant que `NOTA_FROM_EMAIL` n'est pas configuré — la
+      // configuration de production d'aujourd'hui — et le retrait se perdrait
+      // précisément là où il compte le plus. L'instant est un INSTANT et non le
+      // jour ouvrable de `now()` : la clé de tri du journal est `<at>#<id>`, et
+      // un « 2026-09-04 » se rangerait avant tout octroi du même jour. Aucune
+      // adresse d'origine n'est consignée : le jeton SIGNÉ est déjà la preuve, et
+      // l'IP d'un retrait un-clic est celle du fournisseur de boîte.
+      await createConsentRegistry({ repo, now: () => new Date(nowMs()).toISOString() })
+        .enregistrerRetrait(email);
       return htmlPage(
         200,
         'Désabonnement confirmé',

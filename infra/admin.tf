@@ -233,6 +233,25 @@ data "aws_iam_policy_document" "admin_lambda" {
   #                                           address (S.C. 2010, c. 23, s. 10).
   #   CAMPAGNE#ENVOIS   SK = EMAIL#<address>  the last commercial campaign that
   #                                           address received.
+  #   CAMPAGNE#<id>     SK = EMAIL#<address>  the RECIPIENT LEDGER: one row per
+  #                                           (campaign, recipient), written
+  #                                           once. This is the partition that
+  #                                           answers "who received campaign X"
+  #                                           — a question CAMPAGNE#ENVOIS
+  #                                           cannot answer, because it keeps
+  #                                           only the LAST campaign per
+  #                                           address and is overwritten by
+  #                                           every later send.
+  #
+  # That last one is why the condition below is StringLike and not StringEquals.
+  # The ledger's partition is MINTED at send time (one per campaign), so no
+  # finite list of exact values can ever cover it; apps/api/src/keys.js flagged
+  # exactly this before the ledger was wired. The prefix `CAMPAGNE#*` is the
+  # narrow answer: it authorizes the campaign partitions and nothing else, and
+  # it subsumes CAMPAGNE#ENVOIS (kept spelled out above for the reader). The
+  # other three values carry no wildcard, so StringLike matches them exactly as
+  # StringEquals did. `campaignRecipientsPK` refuses an empty id, so the bare
+  # `CAMPAGNE#` bucket cannot be reached through this grant.
   #
   # The last one is not bookkeeping: it is what makes the frequency cap real.
   # Art. 56 1° of the Code de déontologie des notaires makes it derogatory to
@@ -262,9 +281,9 @@ data "aws_iam_policy_document" "admin_lambda" {
     resources = [aws_dynamodb_table.main.arn]
 
     condition {
-      test     = "ForAllValues:StringEquals"
+      test     = "ForAllValues:StringLike"
       variable = "dynamodb:LeadingKeys"
-      values   = ["AUDIENCE#GROUPES", "CONSENT#COURRIEL", "CAMPAGNE#ENVOIS"]
+      values   = ["AUDIENCE#GROUPES", "CONSENT#COURRIEL", "CAMPAGNE#*"]
     }
   }
 
@@ -406,6 +425,15 @@ resource "aws_lambda_function" "admin" {
 
       # Reuse the same verified SES sender the public stack uses (notifications.tf).
       NOTA_FROM_EMAIL = var.from_email
+
+      # Les bornes de campagne (apps/api/src/segments.js GARDES). admin.js les
+      # LISAIT depuis sa config et personne ne les POSAIT : la console retombait
+      # toujours sur les défauts du module, sans qu'aucun déploiement puisse les
+      # changer — un réglage qu'on ne peut pas régler est un littéral déguisé.
+      # Vides, le code reprend les défauts ; c'est le comportement d'avant.
+      NOTA_CAMPAGNE_PLAFOND        = var.campagne_plafond
+      NOTA_CAMPAGNE_FENETRE_HEURES = var.campagne_fenetre_heures
+      NOTA_AUDIENCE_MEMBRES_MAX    = var.audience_membres_max
     }
   }
 

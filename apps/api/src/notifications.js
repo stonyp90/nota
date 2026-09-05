@@ -78,11 +78,194 @@ function decodeUnsubToken(token) {
   }
 }
 
+// --- LE REGISTRE DE CONSENTEMENT (LCAP art. 13, Loi 25 art. 8 et 12) ---------
+//
+// `segments.js` LISAIT ce registre (`repo.getEmailConsent`) et annonçait donc
+// fièrement `garde.consentement = 'registre'` — alors que personne, nulle part,
+// ne l'ÉCRIVAIT. Le registre était vide en permanence : la garde retombait
+// toujours sur la déduction, et la console affichait une garantie que rien ne
+// tenait.
+//
+// L'écriture appartient ICI, et pas à la console : la LCAP met la preuve du
+// consentement à la charge de l'expéditeur (art. 13), et une preuve ne se
+// fabrique pas après coup depuis un écran d'administration — elle se prend au
+// moment où la personne fait le geste. Les gestes sont ceux-là et pas d'autres :
+// s'inscrire, publier une demande, s'inscrire comme notaire, se retirer.
+//
+// ⚠ POURQUOI CE REGISTRE VIT AU NIVEAU DU MODULE, ET NON DANS `createNotifier`.
+// Le retrait est le seul geste dont la route publique est PUBLIQUE : `GET|POST
+// /unsubscribe` répond à n'importe qui, y compris au robot d'un fournisseur de
+// boîte (RFC 8058). Or `createNotifier` EXIGE un mailer, et le routeur ne
+// construit un notifieur que si `NOTA_FROM_EMAIL` est configuré — ce qu'il
+// n'est PAS en production aujourd'hui. Un retrait branché sur le notifieur
+// n'aurait donc rien écrit, précisément là où il faut écrire. La preuve du
+// RETRAIT ne peut pas dépendre de la configuration de l'EXPÉDITEUR : le
+// registre s'ouvre avec le seul dépôt, et `createNotifier` s'en sert.
+//
+// Ce qui est consigné : la FINALITÉ et la SOURCE (`source`), l'INSTANT (`at`),
+// la base LCAP invoquée (`base`), et la VERSION du libellé auquel la personne a
+// dit oui (`version`) — sans elle, la preuve dit « quelqu'un a consenti » sans
+// pouvoir dire À QUOI. Le texte lui-même vit ci-dessous, versionné : une
+// reformulation change la version, et les consentements passés continuent de
+// désigner le texte qu'ils ont réellement reçu.
+//
+// Une base TACITE n'est pas une base inventée : elle est celle de l'art. 10(9)a)
+// et 10(10) LCAP — la relation d'affaires en cours, née d'une demande ou d'une
+// transaction. On ne consigne donc un octroi QUE sur un geste que la personne a
+// réellement posé.
+const CONSENTEMENT_TEXTES = {
+  'lcap-2026-09-04': {
+    fr: 'En laissant votre adresse à Nota, vous acceptez de recevoir les avis liés à votre dossier et, tant que notre relation d’affaires dure, nos communications sur le service. Chaque message porte un lien de retrait qui fonctionne.',
+    en: 'By leaving your address with Nota you agree to receive the notices tied to your file and, for as long as our business relationship lasts, our communications about the service. Every message carries a working unsubscribe link.',
+  },
+};
+const CONSENTEMENT_VERSION_COURANTE = 'lcap-2026-09-04';
+
+// Chaque geste, sa finalité. Surchargeable à l'appel — rien ici n'est une loi de
+// la nature, et un déploiement doit pouvoir dire autrement.
+const CONSENTEMENT_GESTES_DEFAUT = {
+  inscription_client: { type: 'octroi', audience: 'client', base: 'tacite' },
+  offre_publiee: { type: 'octroi', audience: 'client', base: 'tacite' },
+  inscription_notaire: { type: 'octroi', audience: 'notaire', base: 'tacite' },
+  // Un retrait n'a PAS de base : il en éteint une. Écrire « tacite » ici
+  // ressusciterait le consentement dans la projection que `segments.js` lit.
+  desabonnement: { type: 'retrait', audience: null, base: null },
+};
+
+// LES BASES QUI RÉTABLISSENT. Après un retrait, seul un OUI que la personne a
+// REDONNÉ rouvre la relation ; une base déduite d'une relation d'affaires ne
+// renverse pas un non explicite (voir `noterConsentement`). Surchargeable, comme
+// les gestes : c'est une liste de bases, pas une loi de la nature.
+const CONSENTEMENT_BASES_EXPRESSES = ['expres'];
+
+// L'ORDRE DES FAITS À INSTANT ÉGAL. La clé de tri du journal est `<at>#<id>` et
+// la reprise reprojette le DERNIER événement ; à `at` identique, c'est donc
+// l'identifiant qui tranche. Tant qu'il était le nom nu du geste, l'ordre des
+// octets décidait — et « inscription_client » passe APRÈS « desabonnement » :
+// rejouer un retrait avec une horloge figée reprojetait l'octroi par-dessus le
+// retrait, c'est-à-dire ressuscitait un consentement éteint. Le rang est donc
+// porté par l'identifiant, et il est celui de la SÛRETÉ : un retrait gagne
+// toujours son ex æquo. Le rang se déduit du TYPE déclaré, jamais du nom du
+// geste — un geste ajouté par un déploiement est classé correctement d'office.
+const CONSENTEMENT_RANGS = { octroi: '1', retrait: '2' };
+const rangConsentement = (type) => CONSENTEMENT_RANGS[type] || CONSENTEMENT_RANGS.octroi;
+
+/**
+ * Le registre de consentement, ouvert sur le seul dépôt.
+ *
+ * `now` rend un INSTANT ISO, jamais un jour ouvrable : la clé de tri du journal
+ * est `<at>#<id>`, et un « 2026-09-04 » se rangerait avant tout événement
+ * horodaté du même jour.
+ */
+function createConsentRegistry({ repo, now, consentement } = {}) {
+  if (!repo) throw new Error('createConsentRegistry: repo is required');
+  const clock = now || (() => new Date().toISOString());
+  const GESTES = { ...CONSENTEMENT_GESTES_DEFAUT, ...(consentement && consentement.gestes ? consentement.gestes : {}) };
+  const BASES_EXPRESSES = new Set(
+    (consentement && consentement.basesExpresses) || CONSENTEMENT_BASES_EXPRESSES
+  );
+  const consentVersion = (consentement && consentement.version) || CONSENTEMENT_VERSION_COURANTE;
+
+  // Le texte exact d'une version, pour un reçu de consentement ou une demande
+  // d'accès (Loi 25, art. 27). Publié parce qu'une version qu'on ne peut pas
+  // relire ne prouve rien.
+  function consentTexte(version) {
+    const v = version || consentVersion;
+    const t = (consentement && consentement.textes && consentement.textes[v]) || CONSENTEMENT_TEXTES[v];
+    return t ? { version: v, ...t } : null;
+  }
+
+  // UN RETRAIT COURT-IL SUR CETTE ADRESSE ? Deux traces, et la réponse est oui
+  // dès que l'une le dit : la liste de suppression (ce que `sendOnce` LIT, et ce
+  // que la route publique écrit en premier) et la projection du registre (une
+  // ligne écrite dont la base est éteinte EST un retrait). Cette fonction PEUT
+  // LEVER — c'est voulu : son appelant ferme plutôt que de deviner.
+  async function retraitEnVigueur(email) {
+    if (typeof repo.isUnsubscribed === 'function' && (await repo.isUnsubscribed(email))) return true;
+    if (typeof repo.getEmailConsent === 'function') {
+      const etat = await repo.getEmailConsent(email);
+      if (etat && etat.at && etat.base == null) return true;
+    }
+    return false;
+  }
+
+  // BEST-EFFORT, et c'est délibéré : un registre en panne ne doit jamais retenir
+  // un courriel que la personne attend. La preuve manquante est un problème de
+  // conformité qu'on répare ; un avis retenu est un problème pour la personne.
+  async function noterConsentement(geste, email, extra = {}) {
+    const to = String(email || '').trim().toLowerCase();
+    const decl = GESTES[geste];
+    if (!to || !decl || typeof repo.appendConsentEvent !== 'function') return null;
+
+    // FERMÉ PAR DÉFAUT, ET C'EST LE CŒUR DE LA RÈGLE. Une base IMPLICITE — la
+    // relation d'affaires de l'art. 10(9)a) LCAP — ne peut pas écraser un
+    // retrait : la personne a dit non, et une DÉDUCTION ne renverse pas un non.
+    // Sans cette porte, se retirer puis redemander un simple lien de connexion
+    // réécrivait « tacite » par-dessus le retrait, et `garde.consentement =
+    // 'registre'` affirmait alors le contraire de la vérité sur cette personne.
+    // Seul un OUI exprès rétablit la relation (`basesExpresses`).
+    //
+    // ⚠ DÉCISION DE DROIT, PRISE ICI DANS SA LECTURE LA PLUS PRUDENTE : qu'un
+    // client revenu rouvre ou non une base tacite est un appel du propriétaire,
+    // pas du code. On a choisi de ne pas la rouvrir — se tromper dans ce sens
+    // coûte un envoi qu'on aurait pu défendre ; se tromper dans l'autre coûte un
+    // envoi à quelqu'un qui a dit non.
+    if (decl.type === 'octroi' && !BASES_EXPRESSES.has(decl.base)) {
+      let retire = true; // faute de pouvoir vérifier, on n'écrit pas d'octroi
+      try {
+        retire = await retraitEnVigueur(to);
+      } catch {
+        // Un dépôt muet ne vaut pas un consentement : on ferme.
+      }
+      if (retire) return { geste, courriel: to, at: null, ignore: 'retrait_en_vigueur' };
+    }
+
+    const at = clock();
+    try {
+      await repo.appendConsentEvent({
+        // L'identifiant est le GESTE, précédé de son rang : deux tentatives du
+        // même geste au même instant sont le même fait (le journal refuse le
+        // doublon), et à instant égal le rang met le retrait en dernier.
+        id: rangConsentement(decl.type) + '-' + geste,
+        courriel: to,
+        audience: extra.audience || decl.audience,
+        type: decl.type,
+        base: decl.base,
+        version: consentVersion,
+        source: geste,
+        ip: extra.ip || null,
+        lang: extra.lang || null,
+        at,
+      });
+    } catch {
+      // Voir ci-dessus : la conformité se répare, un courriel manqué non.
+    }
+    return { geste, courriel: to, at };
+  }
+
+  // LE RETRAIT, EN UN SEUL GESTE — la porte que la route publique appelle.
+  //
+  // La liste de suppression est ce que `sendOnce` et `sendCampaign` LISENT :
+  // elle reste la garde opérationnelle, et elle s'écrit EN PREMIER. Le journal
+  // de consentement, lui, est la PREUVE — l'art. 13 LCAP met la charge de la
+  // preuve sur l'expéditeur, et un retrait qu'on ne peut pas dater est aussi
+  // indéfendable qu'un octroi qu'on ne peut pas produire.
+  async function enregistrerRetrait(email, extra = {}) {
+    const clean = String(email || '').trim().toLowerCase();
+    if (!clean) return { ok: false };
+    await repo.putUnsubscribe(clean, clock());
+    await noterConsentement('desabonnement', clean, extra);
+    return { ok: true, email: clean };
+  }
+
+  return { noterConsentement, consentTexte, enregistrerRetrait, retraitEnVigueur, version: consentVersion };
+}
+
 // `clientLink(bid)` (ADR 0033 §2.7) mints the signed, device-independent deep
 // link to the client's own act — the CTA of every client act mail; the caller
 // holds the signing secret, so it is injected. `adminUrl` (NOTA_ADMIN_URL)
 // is where operator alerts land when an admin console exists.
-function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now, clientLink, adminUrl } = {}) {
+function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now, clientLink, adminUrl, consentement } = {}) {
   if (!repo) throw new Error('createNotifier: repo is required');
   if (!mailer) throw new Error('createNotifier: mailer is required');
 
@@ -101,6 +284,12 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
   function unsubscribeUrl(email) {
     return apiBase + '/unsubscribe?token=' + encodeUnsubToken(email);
   }
+
+  // LE REGISTRE DE CONSENTEMENT — construit au-dessus (module), pas ici. Il ne
+  // dépend que du dépôt : le retrait doit s'écrire même quand aucun expéditeur
+  // n'est configuré, et c'est la route publique qui l'appelle alors directement.
+  const registreConsentement = createConsentRegistry({ repo, now: clock, consentement });
+  const { noterConsentement, consentTexte } = registreConsentement;
 
   // --- Admin-parametrizable templates (consumption side) ---------------------
   // The admin console may store a per-template override: { key, actif,
@@ -206,23 +395,40 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
    * et `emails.js` seul sait lesquels), et un verdict lisible plutôt qu'un
    * silence.
    */
-  async function sendCampaign({ to, templateKey, ctx }) {
+  async function sendCampaign({ to, templateKey, ctx, message }) {
     if (!to) return { sent: false, reason: 'no-address' };
-    const build = emails.TEMPLATES && emails.TEMPLATES[templateKey];
+    // DEUX formes, un seul chemin d'envoi. `message` est la copie que
+    // l'opérateur vient d'écrire pour CETTE campagne — elle ne touche pas au
+    // registre des gabarits, donc reformuler une relance ne déplace jamais un
+    // avis transactionnel (art. 68). `templateKey` reste la forme héritée : un
+    // gabarit du registre, avec sa surcharge admin (ADR 0018).
+    const compose = !!message;
+    const build = compose ? emails.campaignMessage : emails.TEMPLATES && emails.TEMPLATES[templateKey];
     if (typeof build !== 'function') return { sent: false, reason: 'unknown-template' };
     if (await repo.isUnsubscribed(to)) return { sent: false, reason: 'unsubscribed' };
 
-    const override = await getOverride(templateKey);
-    if (emails.isOverrideDisabled(templateKey, override)) return { sent: false, reason: 'disabled' };
+    // Une copie composée n'a rien à surcharger : elle EST déjà la décision de
+    // l'opérateur, et une surcharge qui l'éteindrait ne désignerait rien.
+    const override = compose ? null : await getOverride(templateKey);
+    if (!compose && emails.isOverrideDisabled(templateKey, override)) return { sent: false, reason: 'disabled' };
 
     const unsub = unsubscribeUrl(to);
-    const msg = build({ ...(ctx || {}), unsubscribeUrl: unsub, baseUrl: base, adminUrl: adminUrl || null, __override: override });
+    const msg = build({
+      ...(ctx || {}),
+      ...(message || {}),
+      unsubscribeUrl: unsub,
+      baseUrl: base,
+      adminUrl: adminUrl || null,
+      __override: override,
+    });
     try {
       await mailer.send({ to, subject: msg.subject, html: msg.html, text: msg.text, unsubscribeUrl: unsub });
-    } catch {
+    } catch (err) {
       // Un destinataire perdu ne doit pas emporter la campagne : l'appelant
-      // compte l'échec et poursuit.
-      return { sent: false, reason: 'send-failed' };
+      // compte l'échec et poursuit. Le MOTIF voyage — un expéditeur mal
+      // configuré et une boîte pleine ne se réparent pas de la même façon, et
+      // « send-failed » nu ne dit ni l'un ni l'autre.
+      return { sent: false, reason: 'send-failed', detail: String((err && err.message) || err) };
     }
     return { sent: true, to };
   }
@@ -373,6 +579,10 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
     const results = [];
     try {
       if (bid.courriel) {
+        // Publier une demande EST la demande au sens de l'art. 10(9)a) LCAP :
+        // c'est le geste qui ouvre la relation d'affaires. Consigné avant
+        // l'envoi, parce que c'est ce geste-là qui l'autorise.
+        await noterConsentement('offre_publiee', bid.courriel);
         const ctx = bidCtx(bid);
         results.push(
           await sendOnce({
@@ -893,6 +1103,10 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
   async function onClientSignup(email) {
     const to = String(email || '').trim().toLowerCase();
     if (!to) return { ok: true, results: [] };
+    // Laisser son adresse dans la fenêtre de connexion est le geste qui ouvre
+    // la relation d'affaires (LCAP art. 10(9)a)). C'est ici, et nulle part
+    // ailleurs, que la preuve se prend.
+    await noterConsentement('inscription_client', to);
     try {
       const r = await sendOnce({
         refId: to,
@@ -1402,13 +1616,13 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
     }
   }
 
-  // Record an opt-out (used by GET /unsubscribe).
-  async function unsubscribe(email) {
-    const clean = String(email || '').trim().toLowerCase();
-    if (!clean) return { ok: false };
-    await repo.putUnsubscribe(clean, clock());
-    return { ok: true, email: clean };
-  }
+  // Record an opt-out — un ALIAS de la porte du registre, et rien d'autre.
+  //
+  // La route publique `GET|POST /unsubscribe` n'appelle PAS celle-ci : elle
+  // ouvre `createConsentRegistry` directement, parce qu'un notifieur exige un
+  // mailer et que la production n'en a pas encore. Deux chemins, un seul fait —
+  // c'est le sens de cet alias, et `consentement-registre.test.mjs` le tient.
+  const unsubscribe = registreConsentement.enregistrerRetrait;
 
   // --- Free notary signup (2026-09-02) --------------------------------------
   // Fired from POST /notaries/signup (fire-and-forget) while the file is still
@@ -1419,6 +1633,9 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
   async function onNotarySignedUp({ email, lienCNQ } = {}) {
     const to = String(email || '').trim().toLowerCase();
     if (!to) return { ok: true, results: [] };
+    // Une candidature est une demande : la fenêtre de six mois de
+    // l'art. 10(9)a) LCAP part d'ici, et la preuve doit partir d'ici aussi.
+    await noterConsentement('inscription_notaire', to);
     const results = [];
     try {
       const ctx = { email: to, lienCNQ: lienCNQ || null };
@@ -1479,7 +1696,12 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
     sendCampaign,
     unsubscribe,
     unsubscribeUrl,
+    // La preuve de consentement : l'écrivain, et le texte auquel une version
+    // renvoie (Loi 25 art. 27 — un droit d'accès qu'on ne peut pas servir n'en
+    // est pas un).
+    noterConsentement,
+    consentTexte,
   };
 }
 
-module.exports = { createNotifier, encodeUnsubToken, decodeUnsubToken };
+module.exports = { createNotifier, createConsentRegistry, encodeUnsubToken, decodeUnsubToken };

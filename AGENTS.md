@@ -14,6 +14,69 @@ business rules in one place and the merge boundaries clean.
 | `infra` | Terraform: S3, CloudFront, Lambda, DynamoDB, ACM. | Application logic. |
 | `features` | Cucumber (Gherkin) BDD specs against domain + api. | Product code. |
 
+## Running it — the local loop
+
+You do not need AWS, Docker or a mailbox to see this product work. **One
+command**, from the repo root, after `npm install`:
+
+```bash
+npm run local        # carnet :4173 · API :8788 · CONSOLE ADMIN :4174 · API admin :8790
+```
+
+All four surfaces come up **seeded** (34 offers, two confirmed referral codes,
+four demo notaries, a 28-day analytics history — `apps/api/scripts/dev-fixtures.js`),
+in memory, wired to each other. Ctrl-C stops all four.
+
+**Reaching the admin console.** Sign-in is the real single-use magic link;
+outside production the API returns it *in the response*, so no mailbox is
+involved. The allowlisted dev address is `admin@nota.local` (override with
+`NOTA_ADMIN_EMAILS`):
+
+```bash
+curl -s -X POST http://localhost:4174/api/admin/auth/request \
+  -H 'content-type: application/json' -d '{"email":"admin@nota.local"}'
+# -> {"ok":true,"devLink":"http://localhost:4174/#/auth?token=..."}
+# open the devLink (or POST its token to /api/admin/auth/verify for a session)
+```
+
+**On the real persistence layer** — DynamoDB Local + an S3-compatible store, same
+ports:
+
+```bash
+docker compose up              # everything, seeded, persisted in named volumes
+docker compose run --rm seed   # re-seed whenever (idempotent)
+docker compose down -v         # start clean
+```
+
+**Before you trust anything you curled:**
+
+```bash
+npm run local:check
+```
+
+It asks three separate questions: does each of the four surfaces answer, are the
+**two APIs** serving the tree in front of you (`x-nota-source`), and is the
+carnet the public API returns **not empty**. Note the boundary: only the two
+APIs stamp the freshness header, so a stale `web`/`admin` static server is *not*
+caught here — restart those by hand if their `run-local.mjs` changed.
+
+The middle one is not paranoia. The containers hold their code in memory and
+this stack was caught serving **two-day-old code** with no error and no warning,
+so every check made against it was worthless *and looked fine*. Every node
+service therefore runs under `apps/api/scripts/dev-watch.js` (a polling content
+digest — `node --watch` uses inotify, which never fires for a host write over a
+bind mount), and both APIs stamp that digest on every response as
+`x-nota-source`. If you edit `apps/api/src` and the answer does not change,
+check the header before you debug the code:
+
+```bash
+curl -sI "http://localhost:8788/bids?month=2026-09" | grep x-nota-source
+docker compose restart api admin-api    # the fix, if it is ever stale
+```
+
+`apps/api/test/local-stack.test.mjs` holds all of this to account without
+starting a container.
+
 ## Rules
 
 1. **Business rules live only in `packages/domain`.** If a number or a tier

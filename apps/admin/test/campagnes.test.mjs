@@ -101,9 +101,14 @@ const change = (win, node, value) => {
 // Le catalogue tel que le contrat HTTP le sert : libellés à plat, paramètres
 // en TABLEAU. Le module segments.js, lui, décrit ses paramètres en objet — la
 // console lit les deux, faute de quoi elle casserait au premier des deux.
+// `limites` voyage avec le catalogue : la console pose les `maxlength` du
+// compositeur depuis le serveur, jamais depuis un littéral qui dériverait.
+const CAMP_LIMITES = { sujet: 200, preheader: 200, corps: 4000, cta: 60, jetons: ['email'] };
+
 function sampleSegments() {
   return {
     ok: true,
+    limites: CAMP_LIMITES,
     segments: [
       {
         id: 'notaires_silencieux',
@@ -127,6 +132,7 @@ function sampleSegments() {
 function sampleSegmentsFormeModule() {
   return {
     ok: true,
+    limites: CAMP_LIMITES,
     segments: [
       {
         id: 'notaires_silencieux',
@@ -141,8 +147,24 @@ function sampleSegmentsFormeModule() {
   };
 }
 
-function sampleGroupes() {
-  return { groupes: [{ id: 'pilote', nom: 'Groupe pilote', description: 'Les dix premiers notaires.', permissions: [] }] };
+// Les groupes RBAC — des paquets de PERMISSIONS. C'est CE bouchon que l'écran
+// lisait pour peupler « envoyer à un groupe » : la cible existait à l'écran et
+// n'atteignait personne. Il reste ici pour qu'un test puisse vérifier que la
+// console ne le lit PLUS.
+function sampleGroupesRbac() {
+  return { groupes: [{ id: 'soutien', nom: 'Groupe RBAC', description: 'Des permissions.', permissions: ['analytics:read'] }] };
+}
+
+// Les groupes d'AUDIENCE — des listes de DESTINATAIRES. La forme que sert
+// vraiment `GET /admin/audiences/groups`.
+function sampleAudiences() {
+  return {
+    ok: true,
+    groupes: [{
+      id: 'pilote', libelle: 'Groupe pilote', audience: 'notaire', nature: 'commercial',
+      membres: ['a@etude.ca', 'b@etude.ca'], nbMembres: 2, updatedAt: '2026-09-01T00:00:00.000Z',
+    }],
+  };
 }
 
 function sampleTemplates() {
@@ -173,21 +195,37 @@ function sampleApercu(over = {}) {
     echantillon: ['a•••@etude-roy.ca', 'b•••@notaires-qc.ca'],
     plafond: { limite: 200, depasse: false },
     nature: 'commercial',
+    garde: { frequence: 'appliquee', consentement: 'registre' },
     avertissements: [],
   }, over);
+}
+
+// Le message que le compositeur écrit — la forme par DÉFAUT de l'écran.
+function messageEcrit() {
+  return {
+    sujetFr: 'On ne vous a pas vu', sujetEn: 'We have not seen you',
+    corpsFr: 'Le carnet reçoit des demandes chaque jour.', corpsEn: 'The carnet receives requests every day.',
+    ctaFr: '', ctaEn: '', ctaUrl: '',
+  };
 }
 
 // L'API authentifiée. `permissions` décide ce que l'écran ouvre.
 function api(opts = {}) {
   const role = opts.role || 'super_admin';
   const permissions = opts.permissions || (role === 'super_admin'
-    ? ['analytics:read', 'pii:read', 'settings:write', 'notifications:write', 'campaigns:send', 'groups:read']
+    ? ['analytics:read', 'pii:read', 'settings:write', 'notifications:write', 'campaigns:send', 'groups:read', 'audiences:read', 'audiences:write']
     : ['analytics:read']);
   const state = {
     segments: opts.segments || sampleSegments(),
     apercu: opts.apercu || sampleApercu(),
     envoi: opts.envoi || null,
     segmentsStatus: opts.segmentsStatus || 200,
+    audiences: opts.audiences || sampleAudiences(),
+    audiencesStatus: opts.audiencesStatus || 200,
+    destinataires: opts.destinataires || { ok: true, campagneId: 'camp_1', destinataires: [], cursor: null },
+    // Les envois passés du jour. Le jour vient du SERVEUR — la console n'en
+    // calcule aucun (à 21 h, une tranche UTC dirait demain).
+    histoire: opts.histoire || { ok: true, jour: '2026-09-04', campagnes: [] },
   };
   const handler = (method, url, body) => {
     if (url.includes('/auth/verify')) return [200, { ok: true, session: 'sess', expiresAt: futureISO(), role }];
@@ -196,13 +234,26 @@ function api(opts = {}) {
     if (url.includes('/metrics/overview')) return [200, { kpis: {}, gauge: {}, series: { offersPerDay: [], byService: [] } }];
     if (url.includes('/notifications/templates')) return [200, sampleTemplates()];
     if (url.includes('/segments')) return [state.segmentsStatus, state.segmentsStatus === 200 ? state.segments : null];
-    if (url.includes('/groups')) return [200, sampleGroupes()];
+    // L'ORDRE COMPTE : `/audiences/groups` contient « /groups ». Le bouchon RBAC
+    // reste servi sous `/groups` nu, pour qu'un test puisse vérifier que la
+    // console ne le lit plus.
+    if (url.includes('/audiences/groups')) {
+      return [state.audiencesStatus, state.audiencesStatus === 200 ? state.audiences : null];
+    }
+    if (url.includes('/groups')) return [200, sampleGroupesRbac()];
+    if (url.includes('/recipients')) return [200, state.destinataires];
     if (url.includes('/campaigns/preview')) {
       return typeof state.apercu === 'function' ? state.apercu(body) : [200, state.apercu];
     }
+    // LE JOURNAL DES ENVOIS PASSÉS — une LECTURE, et surtout pas l'envoi. Ce
+    // bouchon répondait à `/campaigns` sans regarder la méthode : un GET y
+    // passait pour un POST et « comptait » comme une campagne partie.
+    if (url.includes('/campaigns') && method === 'GET') {
+      return [200, typeof state.histoire === 'function' ? state.histoire(url) : state.histoire];
+    }
     if (url.includes('/campaigns')) {
       if (state.envoi) return typeof state.envoi === 'function' ? state.envoi(body) : state.envoi;
-      return [200, { ok: true, envoyes: 34, exclus: sampleApercu().exclus, campagneId: 'camp_1' }];
+      return [200, { ok: true, envoyes: 34, echoues: 0, echecs: [], registre: { ecrits: 34, echecs: 0 }, exclus: sampleApercu().exclus, campagneId: 'camp_1' }];
     }
     return [404, null];
   };
@@ -213,8 +264,27 @@ function api(opts = {}) {
 // Petits raccourcis d'écran.
 const q = (doc, sel) => doc.querySelector(sel);
 const boutonCible = (doc, libelle) => [...doc.querySelectorAll('.camp-cible .seg-btn')].find((b) => text(b) === libelle);
-// Aucun gabarit n'est pré-choisi : chaque parcours désigne le sien.
-const choisirGabarit = (win, doc, key = 'notaryReengage') => change(win, q(doc, '[name="templateKey"]'), key);
+// Les deux modes se désignent par leur RANG, pas par leur libellé : l'écran
+// anglais dit « Resend a template », et un test qui cherche le français ne
+// trouverait rien — sans échouer sur ce qui compte.
+const MODE_RANG = { message: 0, gabarit: 1 };
+const boutonMode = (doc, mode) => doc.querySelectorAll('.camp-mode .seg-btn')[MODE_RANG[mode]];
+// L'écran s'ouvre sur le COMPOSITEUR : une campagne porte sa propre copie.
+// Réexpédier un gabarit du registre reste offert — il faut le demander.
+const choisirGabarit = (win, doc, key = 'notaryReengage') => {
+  const bascule = boutonMode(doc, 'gabarit');
+  if (bascule && bascule.getAttribute('aria-pressed') !== 'true') click(win, bascule);
+  change(win, q(doc, '[name="templateKey"]'), key);
+};
+// Écrire une campagne : le parcours par défaut.
+const ecrireMessage = (win, doc, over = {}) => {
+  const m = Object.assign(messageEcrit(), over);
+  Object.keys(m).forEach((nom) => {
+    const champ = q(doc, '[name="' + nom + '"]');
+    if (champ) change(win, champ, m[nom]);
+  });
+  return m;
+};
 
 async function ouvrir(handler, lang) {
   const ctx = await boot(handler || api(), '#/auth?token=T', lang);
@@ -268,8 +338,44 @@ test('les trois formes de cible : une personne, un groupe, un segment', async ()
   click(win, boutonCible(doc, 'Un groupe'));
   await settle(win);
   const select = q(doc, '[name="cibleGroupe"]');
-  assert.ok(select, 'la cible « groupe » offre la liste des groupes');
-  assert.deepEqual([...select.options].map((o) => o.textContent), ['Groupe pilote']);
+  assert.ok(select, 'la cible « groupe » offre la liste des groupes d’AUDIENCE');
+  // Le nom de la liste ET son nombre de destinataires : viser une liste sans
+  // savoir combien elle contient est exactement ce qu'on refuse à l'aperçu.
+  assert.deepEqual([...select.options].map((o) => o.textContent), ['Groupe pilote · 2']);
+});
+
+// LA COUTURE. La liste déroulante « Un groupe » était peuplée par
+// `GET /admin/groups` — les groupes RBAC, des paquets de PERMISSIONS. Viser
+// l'un d'eux ne pouvait atteindre PERSONNE : le serveur cherchait un groupe
+// d'audience sous cet identifiant et n'en trouvait aucun. Le bogue tenait
+// derrière deux suites vertes parce qu'aucune ne traversait la couture — ce
+// test la traverse, en vérifiant l'appel RÉEL que la console fait et le fait
+// qu'aucun identifiant RBAC ne peut plus atterrir dans une cible.
+test('la cible « groupe » lit les groupes d’AUDIENCE, jamais les groupes RBAC', async () => {
+  const { win, doc, calls } = await ouvrir();
+  click(win, boutonCible(doc, 'Un groupe'));
+  await settle(win);
+
+  assert.ok(calls.some((c) => c.url.includes('/audiences/groups')),
+    'la console demande bien la route des groupes d’audience');
+  assert.ok(!calls.some((c) => /\/groups$/.test(c.url.replace(/\?.*$/, '')) && !c.url.includes('/audiences/')),
+    'et ne demande plus la route RBAC, dont les identifiants n’atteignent personne');
+
+  const select = q(doc, '[name="cibleGroupe"]');
+  const valeurs = [...select.options].map((o) => o.value);
+  assert.deepEqual(valeurs, ['pilote']);
+  assert.ok(!valeurs.includes('soutien'),
+    'l’identifiant du groupe RBAC ne doit jamais pouvoir être visé par une campagne');
+});
+
+test('sans « audiences:read » la cible « groupe » reste offerte, vide, et nomme la permission qui manque', async () => {
+  const handler = api({ permissions: ['analytics:read', 'campaigns:send'] });
+  handler.state.audiencesStatus = 403;
+  const { win, doc } = await ouvrir(handler);
+  click(win, boutonCible(doc, 'Un groupe'));
+  await settle(win);
+  assert.equal(q(doc, '[name="cibleGroupe"]'), null);
+  assert.match(text(q(doc, '.camp-cible-panneau')), /Voir les groupes d’audience/);
 });
 
 test('les paramètres d’un segment sont éditables DANS les bornes servies', async () => {
@@ -294,6 +400,10 @@ test('le catalogue est lu aussi dans la forme du module (libelle {fr,en}, params
 
 test('la nature du gabarit se dit dès le choix — et « non déclarée » n’est pas « commercial »', async () => {
   const { win, doc } = await ouvrir();
+  // L'écran s'ouvre sur le compositeur : c'est la cible qui décide de la nature.
+  assert.match(text(q(doc, '.camp-gabarit-nature')), /nature est celle de la cible/);
+  click(win, boutonMode(doc, 'gabarit'));
+  await settle(win);
   assert.match(text(q(doc, '.camp-gabarit-nature')), /Aucun gabarit choisi/);
   choisirGabarit(win, doc, 'offerPublished');
   assert.match(text(q(doc, '.camp-gabarit-nature')), /transactionnel/i);
@@ -309,15 +419,15 @@ test('aucun envoi n’est possible avant d’avoir vu le décompte', async () =>
   assert.equal(envoyer.disabled, true, 'mais fermé tant qu’aucun aperçu n’a été vu');
   click(win, envoyer);
   await settle(win);
-  assert.equal(calls.filter((c) => c.url.includes('/campaigns') && !c.url.includes('preview')).length, 0,
+  assert.equal(calls.filter((c) => c.method === 'POST' && c.url.includes('/campaigns') && !c.url.includes('preview')).length, 0,
     'aucune campagne ne part sur un bouton fermé');
 });
 
 test('la prévisualisation montre ce qui est atteint ET ce qui ne l’est pas, exclusion par exclusion', async () => {
   const { win, doc, calls } = await ouvrir();
-  // Aucun gabarit n'est pré-choisi : le parcours en désigne un.
-  assert.equal(q(doc, '[name="templateKey"]').value, '', 'aucune campagne ne part sur un défaut');
   choisirGabarit(win, doc);
+  // Aucun gabarit n'est pré-choisi une fois le mode « gabarit » demandé.
+  assert.equal(q(doc, '[name="templateKey"]').value, 'notaryReengage');
   click(win, q(doc, '.camp-previsualiser'));
   await waitFor(win, '.camp-apercu');
 
@@ -470,7 +580,7 @@ test('sans « campaigns:send » l’écran reste visible, en lecture seule, et d
   assert.equal(q(doc, '.camp-envoyer').disabled, true, 'même après l’aperçu, l’envoi reste fermé');
   click(win, q(doc, '.camp-envoyer'));
   await settle(win);
-  assert.equal(calls.filter((c) => c.url.includes('/campaigns') && !c.url.includes('preview')).length, 0);
+  assert.equal(calls.filter((c) => c.method === 'POST' && c.url.includes('/campaigns') && !c.url.includes('preview')).length, 0);
 });
 
 test('sans « analytics:read » la prévisualisation elle-même est fermée, et l’écran le dit', async () => {
@@ -503,6 +613,189 @@ test('une cible « personne » sans adresse est refusée AVANT l’envoi', async
   await settle(win);
   assert.equal(calls.length, avant, 'rien ne part sans destinataire');
   assert.match(text(q(doc, '.camp-erreur')), /adresse/i);
+});
+
+// ---------------------------------------------------------------------------
+// LE COMPOSITEUR — une campagne porte SA copie (2026-09-04)
+// ---------------------------------------------------------------------------
+
+test('l’écran s’ouvre sur le compositeur : une campagne écrit son propre message', async () => {
+  const { doc } = await ouvrir();
+  assert.ok(q(doc, '[name="sujetFr"]'), 'le sujet français est un champ, pas un choix de gabarit');
+  assert.ok(q(doc, '[name="sujetEn"]'), 'et l’anglais aussi — un courriel Nota porte les deux langues');
+  assert.ok(q(doc, '[name="corpsFr"]') && q(doc, '[name="corpsEn"]'));
+  assert.equal(q(doc, '[name="templateKey"]'), null, 'le gabarit n’est offert que si on le demande');
+  // Les bornes viennent du serveur, jamais d'un littéral de la console.
+  assert.equal(q(doc, '[name="sujetFr"]').getAttribute('maxlength'), '200');
+  assert.equal(q(doc, '[name="corpsFr"]').getAttribute('maxlength'), '4000');
+  // Le jeton permis est nommé — le reste resterait vide dans la boîte du client.
+  assert.match(text(q(doc, '.camp-jetons')), /\{\{email\}\}/);
+  // Et l'écran dit que rien du registre ne bouge.
+  assert.match(text(q(doc, '.camp-message-panneau')), /ne touche à aucun gabarit/);
+});
+
+test('le message écrit voyage AVEC la campagne, jamais comme une surcharge de gabarit', async () => {
+  const envois = [];
+  const handler = api({
+    envoi: (body) => { envois.push(body); return [200, { ok: true, envoyes: 34, echoues: 0, echecs: [], registre: { ecrits: 34, echecs: 0 }, exclus: sampleApercu().exclus, campagneId: 'camp_m' }]; },
+  });
+  const { win, doc, calls } = await ouvrir(handler);
+  ecrireMessage(win, doc);
+  click(win, q(doc, '.camp-previsualiser'));
+  await waitFor(win, '.camp-apercu');
+
+  const prev = calls.find((c) => c.url.includes('/campaigns/preview'));
+  assert.equal(prev.body.templateKey, undefined, 'aucun gabarit désigné');
+  assert.equal(prev.body.message.sujetFr, 'On ne vous a pas vu');
+  assert.equal(prev.body.message.corpsEn, 'The carnet receives requests every day.');
+
+  click(win, q(doc, '.camp-envoyer'));
+  await settle(win);
+  click(win, q(doc, '.camp-confirmer'));
+  await waitFor(win, '.camp-resultat');
+  assert.equal(envois[0].message.sujetEn, 'We have not seen you');
+  // AUCUN PUT sur un gabarit : l'écran Courriels reste ce qu'il était.
+  assert.equal(calls.filter((c) => c.method === 'PUT' && c.url.includes('/notifications/templates')).length, 0);
+});
+
+test('une paire à moitié remplie est refusée AVANT le réseau', async () => {
+  const { win, doc, calls } = await ouvrir();
+  ecrireMessage(win, doc, { sujetEn: '' });
+  const avant = calls.length;
+  click(win, q(doc, '.camp-previsualiser'));
+  await settle(win);
+  assert.equal(calls.length, avant, 'rien ne part sur une copie unilingue');
+  assert.match(text(q(doc, '.camp-erreur')), /deux langues/i);
+});
+
+test('l’aperçu dit sur quoi les deux gardes se sont appuyées', async () => {
+  const { win, doc } = await ouvrir();
+  ecrireMessage(win, doc);
+  click(win, q(doc, '.camp-previsualiser'));
+  await waitFor(win, '.camp-apercu');
+  const garde = q(doc, '.camp-garde');
+  assert.ok(garde, 'la console ne peut pas affirmer une garantie sans dire d’où elle vient');
+  assert.match(text(garde), /registre/i);
+  assert.match(text(garde), /56 1°/);
+});
+
+test('une base seulement DÉDUITE se distingue d’une base lue au registre', async () => {
+  const { win, doc } = await ouvrir(api({
+    apercu: sampleApercu({ garde: { consentement: 'deduit', frequence: 'non_verifiee' } }),
+  }));
+  ecrireMessage(win, doc);
+  click(win, q(doc, '.camp-previsualiser'));
+  await waitFor(win, '.camp-apercu');
+  const lignes = [...doc.querySelectorAll('.camp-garde-list li')];
+  assert.deepEqual(lignes.map((l) => l.getAttribute('data-garde')), ['deduit', 'non_verifiee']);
+  assert.match(text(lignes[0]), /DÉDUITE/);
+  assert.match(text(lignes[1]), /NON vérifié/);
+});
+
+// ---------------------------------------------------------------------------
+// L'ÉCHEC QUI SE VOIT, ET QUI A REÇU
+// ---------------------------------------------------------------------------
+
+test('zéro destinataire joint ne s’annonce PAS comme une campagne envoyée', async () => {
+  const handler = api({
+    envoi: [502, {
+      errors: [{ code: 'envoi_echoue', message: 'Aucun des 34 destinataires n’a été joint : la campagne n’est PAS partie.' }],
+      echecs: [{ courriel: 'roy@etude.ca', raison: 'NOTA_FROM_EMAIL is not configured on the admin Lambda' }],
+      campagneId: 'camp_vide',
+    }],
+  });
+  const { win, doc } = await ouvrir(handler);
+  ecrireMessage(win, doc);
+  click(win, q(doc, '.camp-previsualiser'));
+  await waitFor(win, '.camp-apercu');
+  click(win, q(doc, '.camp-envoyer'));
+  await settle(win);
+  click(win, q(doc, '.camp-confirmer'));
+  await waitFor(win, '.camp-echecs');
+
+  assert.equal(q(doc, '.camp-resultat'), null, 'aucun panneau « Campagne envoyée »');
+  assert.match(text(q(doc, '.camp-erreur')), /Aucun destinataire joint/);
+  // Le motif RÉEL de l'échec, celui qui dit quoi réparer.
+  assert.match(text(q(doc, '.camp-echecs')), /NOTA_FROM_EMAIL/);
+  assert.match(text(q(doc, '.camp-echecs')), /roy@etude\.ca/);
+});
+
+test('un envoi partiel compte ses échecs à côté de ses succès', async () => {
+  const handler = api({
+    envoi: [200, {
+      ok: true, envoyes: 33, echoues: 1,
+      echecs: [{ courriel: 'roy@etude.ca', raison: 'send-failed' }],
+      registre: { ecrits: 34, echecs: 0 },
+      exclus: sampleApercu().exclus, campagneId: 'camp_p',
+    }],
+  });
+  const { win, doc } = await ouvrir(handler);
+  ecrireMessage(win, doc);
+  click(win, q(doc, '.camp-previsualiser'));
+  await waitFor(win, '.camp-apercu');
+  click(win, q(doc, '.camp-envoyer'));
+  await settle(win);
+  click(win, q(doc, '.camp-confirmer'));
+  await waitFor(win, '.camp-resultat');
+  const resultat = text(q(doc, '.camp-resultat'));
+  assert.match(resultat, /33/);
+  assert.match(resultat, /Échoués/);
+  assert.match(resultat, /send-failed/);
+});
+
+test('après l’envoi, l’écran montre QUI a reçu — la ligne, pas seulement le chiffre', async () => {
+  const handler = api({
+    destinataires: {
+      ok: true, campagneId: 'camp_1', cursor: null,
+      destinataires: [
+        { courriel: 'a@etude.ca', statut: 'envoye', erreur: null, nature: 'commercial', at: '2026-09-02T14:00:00.000Z' },
+        { courriel: 'b@etude.ca', statut: 'echoue', erreur: 'send-failed', nature: 'commercial', at: '2026-09-02T14:00:00.000Z' },
+      ],
+    },
+  });
+  const { win, doc, calls } = await ouvrir(handler);
+  ecrireMessage(win, doc);
+  click(win, q(doc, '.camp-previsualiser'));
+  await waitFor(win, '.camp-apercu');
+  click(win, q(doc, '.camp-envoyer'));
+  await settle(win);
+  click(win, q(doc, '.camp-confirmer'));
+  await waitFor(win, '.camp-recus');
+
+  assert.ok(calls.some((c) => c.url.includes('/campaigns/camp_1/recipients')),
+    'la console lit le registre par (campagne, destinataire)');
+  const lignes = [...doc.querySelectorAll('.camp-recus-table tbody tr')];
+  assert.equal(lignes.length, 2);
+  assert.match(text(lignes[0]), /a@etude\.ca/);
+  assert.equal(lignes[1].getAttribute('data-statut'), 'echoue');
+  assert.match(text(lignes[1]), /send-failed/);
+});
+
+test('des lignes perdues au registre se disent — « Qui a reçu » sera incomplet', async () => {
+  const handler = api({
+    envoi: [200, {
+      ok: true, envoyes: 34, echoues: 0, echecs: [],
+      registre: { ecrits: 30, echecs: 4, frequenceEchecs: 2 },
+      exclus: sampleApercu().exclus, campagneId: 'camp_1',
+    }],
+  });
+  const { win, doc } = await ouvrir(handler);
+  ecrireMessage(win, doc);
+  click(win, q(doc, '.camp-previsualiser'));
+  await waitFor(win, '.camp-apercu');
+  click(win, q(doc, '.camp-envoyer'));
+  await settle(win);
+  click(win, q(doc, '.camp-confirmer'));
+  await waitFor(win, '.camp-resultat');
+  const alertes = [...doc.querySelectorAll('.camp-registre-manque')].map(text);
+  assert.equal(alertes.length, 2, 'deux registres, deux lacunes, deux phrases');
+  assert.match(alertes[0], /4/);
+  assert.match(alertes[0], /incomplet/i);
+  // Le quota est une AUTRE garde : un envoi bien parti dont le plafond n'a pas
+  // été inscrit ne se compte pas comme un échec de livraison.
+  assert.match(alertes[1], /2/);
+  assert.match(alertes[1], /plafond de fréquence/i);
+  assert.match(text(q(doc, '.camp-resultat .stat-grid')), /Échoués/);
 });
 
 test('un catalogue de segments indisponible montre la bannière de reprise', async () => {

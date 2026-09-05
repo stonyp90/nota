@@ -29,10 +29,23 @@ const repo = createDynamoRepo({
 //
 // Construit paresseusement : un démarrage à froid qui ne sert que des
 // statistiques ne charge jamais le client SES.
+//
+// ET IL LÈVE QUAND L'EXPÉDITEUR MANQUE. Il rendait `undefined` en silence, ce
+// qui est le pire des trois verdicts possibles : `sendCampaign` lit « aucune
+// exception » comme « le courriel est parti », donc une production dont
+// NOTA_FROM_EMAIL est vide — c'est le cas aujourd'hui — annonçait « campagne
+// envoyée à 34 destinataires » sans avoir ouvert une seule socket. Le lien
+// magique de la console souffrait du même silence : l'opérateur demandait un
+// lien, recevait un 200, et attendait un courriel qui n'existait pas. Une
+// configuration absente doit faire du bruit à l'endroit où elle manque.
 let sesMailer = null;
 const mailer = {
   async send(message) {
-    if (!process.env.NOTA_FROM_EMAIL) return;
+    if (!process.env.NOTA_FROM_EMAIL) {
+      throw new Error(
+        'NOTA_FROM_EMAIL is not configured on the admin Lambda: refusing to report a send that cannot happen.'
+      );
+    }
     if (!sesMailer) {
       const { createSesAdapter } = require('./src/notify-port.js');
       sesMailer = createSesAdapter({

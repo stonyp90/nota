@@ -378,6 +378,7 @@
     if (!session) { rememberNext(hash); renderAuthRequest({}); return; }
     if (hash.indexOf('#/courriels') === 0) { renderCourriels(); return; }
     if (hash.indexOf('#/campagnes') === 0) { renderCampagnes(); return; }
+    if (hash.indexOf('#/audiences') === 0) { renderAudiences(); return; }
     if (hash.indexOf('#/prix') === 0) { renderPrix(); return; }
     if (hash.indexOf('#/acces') === 0) { renderAcces(); return; }
     if (hash.indexOf('#/annulation') === 0) { renderAnnulation(); return; }
@@ -624,6 +625,16 @@
     if (active === 'campagnes') camp.setAttribute('aria-current', 'page');
     camp.addEventListener('click', function () { go('#/campagnes'); });
     rail.appendChild(camp);
+
+    // Audiences — les listes de DESTINATAIRES qu'une campagne peut viser. Elles
+    // n'avaient aucun écran : les méthodes de dépôt existaient, testées, sans
+    // appelant, et le compositeur proposait à leur place les groupes RBAC — des
+    // paquets de permissions, qui n'atteignaient personne.
+    //
+    // L'entrée reste ACTIVE sans « audiences:read », comme celle des campagnes :
+    // l'écran s'ouvre et DIT quelle permission manque, plutôt que d'escamoter
+    // une section et de laisser croire qu'elle n'existe pas.
+    rail.appendChild(railLink('Audiences', iconList(), 'audiences', '#/audiences', active, false));
 
     // Prix — le prix du service de Nota, une grille par service (ADR 0034). Cette
     // entrée remplace « Commission » : Nota ne prélève plus une part des
@@ -1671,7 +1682,15 @@
     // Une porte fermée n'est pas une panne (P1-11) : sans « analytics:read »
     // le catalogue est refusé, et un « Réessayer » ne l'ouvrirait jamais.
     if (segs.status === 403) { clear(container); container.appendChild(buildDenied('Lire les tableaux de bord')); return; }
-    var groupes = await call('GET', '/groups');
+    // LES GROUPES D'AUDIENCE, et surtout PAS `/groups`.
+    //
+    // Cet écran lisait `/groups`, qui rend les groupes RBAC — des paquets de
+    // PERMISSIONS, sur l'autre table. La liste déroulante « Un groupe »
+    // proposait donc des groupes d'administrateurs, et viser l'un d'eux ne
+    // pouvait atteindre PERSONNE : le serveur cherchait un groupe d'audience
+    // sous cet identifiant et n'en trouvait aucun. Un envoi qui ne peut pas
+    // aboutir n'est pas une option d'écran.
+    var groupes = await call('GET', '/audiences/groups');
     var gabarits = await call('GET', '/notifications/templates');
     clear(container);
     // Sans catalogue de segments il n'y a pas d'écran : le reste ne sert à rien.
@@ -1682,15 +1701,23 @@
 
     campEtat = {
       segments: segs.json.segments.map(normaliserSegment),
-      // Une porte fermée n'est pas une panne : sans « groups:read » la cible
+      // Les bornes du compositeur viennent du serveur : la console n'en recopie
+      // aucune, et celles-ci ne dérivent pas le jour où emails.js bouge.
+      limites: (segs.json && segs.json.limites) || {},
+      // Une porte fermée n'est pas une panne : sans « audiences:read » la cible
       // « groupe » reste offerte, vide, et le dit.
       groupes: (groupes.ok && groupes.json && groupes.json.groupes) || [],
+      groupesRefuses: groupes.status === 403,
       gabarits: (gabarits.ok && gabarits.json && Array.isArray(gabarits.json.templates)) ? gabarits.json.templates : [],
       cible: 'segment',
       email: '',
       groupId: '',
       segmentId: '',
+      // Le compositeur est le mode par DÉFAUT : une campagne porte sa propre
+      // copie. Le gabarit reste offert pour réexpédier un courriel du registre.
+      mode: 'message',
       templateKey: '',
+      message: { sujetFr: '', sujetEn: '', corpsFr: '', corpsEn: '', ctaFr: '', ctaEn: '', ctaUrl: '' },
       apercu: null,       // { signature, data }
       resultat: null,
     };
@@ -1709,7 +1736,13 @@
     view.appendChild(buildCampForm(container));
     campNoeuds.sortie = el('div', 'camp-sortie');
     view.appendChild(campNoeuds.sortie);
+    // LES ENVOIS PASSÉS. Sans eux, « qui a reçu » ne survivait pas au rendu :
+    // le registre était lu une seule fois, juste après l'envoi, et
+    // l'identifiant de campagne ne vivait que dans une variable de cet écran.
+    view.appendChild(buildCampHistoire());
     container.appendChild(view);
+    // Après le montage : la liste arrive quand elle arrive, l'écran est déjà là.
+    chargerHistoire();
   }
 
   // Le cadre juridique, en tête et non en note de bas de page.
@@ -1756,39 +1789,38 @@
     e1.appendChild(campNoeuds.panneau);
     card.appendChild(e1);
 
-    // (2) Le gabarit
+    // (2) LE MESSAGE.
+    //
+    // Cette étape ne savait que DÉSIGNER un gabarit du registre — et pour
+    // écrire quoi que ce soit, il fallait aller reformuler ce gabarit sur
+    // l'écran « Courriels », ce qui le changeait pour TOUS les envois suivants,
+    // transactionnels compris. Rédiger une relance ne doit pas pouvoir déplacer
+    // un avis de service (art. 68). La campagne porte donc SA copie.
     var e2 = el('div', 'camp-etape');
-    e2.appendChild(el('div', 'chart-card-title', '2 · Le gabarit'));
-    var field = el('div', 'field');
-    field.appendChild(el('label', null, 'Courriel à envoyer'));
-    var select = el('select', 'input');
-    select.name = 'templateKey';
-    // Aucun gabarit pré-choisi : une campagne ne se déclenche pas sur un défaut.
-    var vide = el('option', null, '— Choisissez un gabarit —');
-    vide.value = '';
-    select.appendChild(vide);
-    var parAudience = {};
-    campEtat.gabarits.forEach(function (t) { (parAudience[t.audience] = parAudience[t.audience] || []).push(t); });
-    AUDIENCE_ORDER.forEach(function (aud) {
-      var liste = parAudience[aud];
-      if (!liste || !liste.length) return;
-      var grp = el('optgroup');
-      grp.label = AUDIENCE_LABELS[aud] || aud;
-      liste.forEach(function (t) {
-        var o = el('option', null, isEnglish() ? t.labelEn : t.labelFr);
-        o.value = t.key;
-        o.setAttribute('data-i18n-skip', '');
-        grp.appendChild(o);
+    e2.appendChild(el('div', 'chart-card-title', '2 · Le message'));
+    var segMode = el('div', 'seg camp-mode');
+    segMode.setAttribute('role', 'group');
+    segMode.setAttribute('aria-label', 'Forme du message');
+    [['message', 'Écrire le message'], ['gabarit', 'Réexpédier un gabarit']].forEach(function (paire) {
+      var b = el('button', 'seg-btn' + (paire[0] === campEtat.mode ? ' is-on' : ''), paire[1]);
+      b.type = 'button';
+      b.setAttribute('aria-pressed', paire[0] === campEtat.mode ? 'true' : 'false');
+      b.addEventListener('click', function () {
+        if (campEtat.mode === paire[0]) return;
+        campEtat.mode = paire[0];
+        segMode.querySelectorAll('.seg-btn').forEach(function (x) {
+          var on = x === b;
+          x.classList.toggle('is-on', on);
+          x.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+        buildCampMessagePanneau();
+        campPerimer();
       });
-      select.appendChild(grp);
+      segMode.appendChild(b);
     });
-    select.addEventListener('change', function () {
-      campEtat.templateKey = select.value;
-      campNatureGabarit();
-      campPerimer();
-    });
-    field.appendChild(select);
-    e2.appendChild(field);
+    e2.appendChild(segMode);
+    campNoeuds.message = el('div', 'camp-message-panneau');
+    e2.appendChild(campNoeuds.message);
     campNoeuds.gabaritNature = el('p', 'tpl-note camp-gabarit-nature');
     e2.appendChild(campNoeuds.gabaritNature);
     card.appendChild(e2);
@@ -1838,9 +1870,116 @@
     card.appendChild(campNoeuds.confirm);
 
     buildCampCiblePanneau();
-    campNatureGabarit();
+    buildCampMessagePanneau();
     campMajEnvoi();
     return card;
+  }
+
+  // --- Le panneau du message : le compositeur, ou un gabarit du registre ------
+  function buildCampMessagePanneau() {
+    var box = campNoeuds.message;
+    clear(box);
+    if (campEtat.mode === 'gabarit') {
+      var field = el('div', 'field');
+      field.appendChild(el('label', null, 'Courriel à réexpédier'));
+      var select = el('select', 'input');
+      select.name = 'templateKey';
+      // Aucun gabarit pré-choisi : une campagne ne se déclenche pas sur un défaut.
+      var vide = el('option', null, '— Choisissez un gabarit —');
+      vide.value = '';
+      select.appendChild(vide);
+      var parAudience = {};
+      campEtat.gabarits.forEach(function (t) { (parAudience[t.audience] = parAudience[t.audience] || []).push(t); });
+      AUDIENCE_ORDER.forEach(function (aud) {
+        var liste = parAudience[aud];
+        if (!liste || !liste.length) return;
+        var grp = el('optgroup');
+        grp.label = AUDIENCE_LABELS[aud] || aud;
+        liste.forEach(function (t) {
+          var o = el('option', null, isEnglish() ? t.labelEn : t.labelFr);
+          o.value = t.key;
+          o.setAttribute('data-i18n-skip', '');
+          grp.appendChild(o);
+        });
+        select.appendChild(grp);
+      });
+      select.value = campEtat.templateKey;
+      select.addEventListener('change', function () {
+        campEtat.templateKey = select.value;
+        campNatureGabarit();
+        campPerimer();
+      });
+      field.appendChild(select);
+      box.appendChild(field);
+      box.appendChild(el('p', 'tpl-note',
+        'Un gabarit du registre part tel qu’il est, surcharge admin comprise. Le reformuler ici est impossible — cela changerait ce courriel pour tous les envois suivants.'));
+      campNatureGabarit();
+      return;
+    }
+
+    // Le compositeur. Bilingue par paire : un courriel Nota porte toujours les
+    // deux langues, et une paire à moitié remplie est refusée côté serveur —
+    // autant le dire dans la forme de l'écran.
+    var lim = campEtat.limites || {};
+    var champ = function (nom, libelle, placeholder, max, multi) {
+      var f = el('div', 'field');
+      var id = 'camp-champ-' + nom;
+      var lab = el('label', null, libelle);
+      lab.setAttribute('for', id);
+      f.appendChild(lab);
+      var input = el(multi ? 'textarea' : 'input', 'input' + (multi ? ' camp-corps' : ''));
+      input.id = id;
+      input.name = nom;
+      if (!multi) input.type = 'text';
+      if (multi) input.rows = 6;
+      if (max) input.maxLength = max;
+      input.placeholder = placeholder;
+      input.setAttribute('data-i18n-skip', '');
+      input.value = campEtat.message[nom] || '';
+      var compteur = max ? el('span', 'tpl-count') : null;
+      var majCompteur = function () {
+        if (!compteur) return;
+        compteur.textContent = String(input.value.length) + ' / ' + String(max);
+        compteur.setAttribute('data-i18n-skip', '');
+      };
+      input.addEventListener('input', function () {
+        campEtat.message[nom] = input.value;
+        majCompteur();
+        campPerimer();
+      });
+      f.appendChild(input);
+      if (compteur) { majCompteur(); f.appendChild(compteur); }
+      return f;
+    };
+
+    var grille = el('div', 'tpl-fields camp-compositeur');
+    grille.appendChild(champ('sujetFr', 'Sujet (français)', 'On ne vous a pas vu depuis un moment', lim.sujet, false));
+    grille.appendChild(champ('sujetEn', 'Subject (English)', 'We have not seen you in a while', lim.sujet, false));
+    box.appendChild(grille);
+
+    var corps = el('div', 'camp-compositeur-corps');
+    corps.appendChild(champ('corpsFr', 'Message (français)', 'Une ligne vide sépare deux paragraphes.', lim.corps, true));
+    corps.appendChild(champ('corpsEn', 'Message (English)', 'A blank line separates two paragraphs.', lim.corps, true));
+    box.appendChild(corps);
+
+    var boutons = el('div', 'tpl-fields camp-compositeur-cta');
+    boutons.appendChild(champ('ctaFr', 'Bouton (français)', 'Ouvrir le carnet', lim.cta, false));
+    boutons.appendChild(champ('ctaEn', 'Button (English)', 'Open the carnet', lim.cta, false));
+    boutons.appendChild(champ('ctaUrl', 'Lien du bouton', 'https://nota.ca/', 0, false));
+    box.appendChild(boutons);
+
+    var jetons = (lim.jetons && lim.jetons.length) ? lim.jetons : ['email'];
+    var note = el('p', 'tpl-note camp-jetons');
+    note.appendChild(document.createTextNode('Jetons permis : '));
+    var liste = el('span', null, jetons.map(function (j) { return '{{' + j + '}}'; }).join(', '));
+    liste.setAttribute('data-i18n-skip', '');
+    note.appendChild(liste);
+    note.appendChild(document.createTextNode(
+      '. Une campagne ne part d’aucune offre : tout autre jeton resterait vide dans la boîte du destinataire.'));
+    box.appendChild(note);
+    box.appendChild(el('p', 'tpl-note',
+      'Ce message appartient à cette campagne. Il ne touche à aucun gabarit du registre — l’écran Courriels reste ce qu’il est.'));
+    campNatureGabarit();
   }
 
   // Le panneau de la cible courante — reconstruit à chaque changement de forme.
@@ -1864,16 +2003,22 @@
     }
     if (campEtat.cible === 'group') {
       var fg = el('div', 'field');
-      fg.appendChild(el('label', null, 'Groupe'));
+      fg.appendChild(el('label', null, 'Groupe d’audience'));
       if (!campEtat.groupes.length) {
-        fg.appendChild(el('p', 'tpl-note', 'Aucun groupe lisible avec vos accès.'));
+        fg.appendChild(el('p', 'tpl-note', campEtat.groupesRefuses
+          ? 'Réservé — cette liste demande la permission « Voir les groupes d’audience ».'
+          : 'Aucun groupe d’audience. Créez-en un sur l’écran Audiences.'));
         box.appendChild(fg);
         return;
       }
       var sel = el('select', 'input');
       sel.name = 'cibleGroupe';
       campEtat.groupes.forEach(function (g) {
-        var o = el('option', null, g.nom || g.id);
+        // Le NOMBRE de destinataires est dans l'étiquette : viser une liste
+        // sans savoir combien elle contient est exactement ce qu'on refuse plus
+        // loin, à l'aperçu.
+        var n = g.nbMembres != null ? g.nbMembres : (g.membres || []).length;
+        var o = el('option', null, (g.libelle || g.id) + ' · ' + num(n));
         o.value = g.id;
         o.setAttribute('data-i18n-skip', '');
         sel.appendChild(o);
@@ -1882,6 +2027,11 @@
       sel.addEventListener('change', function () { campEtat.groupId = sel.value; campPerimer(); });
       fg.appendChild(sel);
       box.appendChild(fg);
+      var courant = campGroupeCourant();
+      if (courant) {
+        box.appendChild(el('p', 'tpl-note camp-groupe-nature',
+          (CAMP_NATURE[courant.nature] ? CAMP_NATURE[courant.nature].libelle : courant.nature)));
+      }
       return;
     }
 
@@ -1961,11 +2111,23 @@
     }
     return null;
   }
+  function campGroupeCourant() {
+    for (var i = 0; i < campEtat.groupes.length; i++) {
+      if (campEtat.groupes[i].id === campEtat.groupId) return campEtat.groupes[i];
+    }
+    return null;
+  }
 
   // La nature du GABARIT choisi, dite dès le choix — avant même l'aperçu.
   function campNatureGabarit() {
     var n = campNoeuds.gabaritNature;
     clear(n);
+    if (campEtat.mode === 'message') {
+      // Une copie écrite ici ne DÉTOURNE aucun avis de service : la nature de
+      // l'envoi est celle de la cible, et l'aperçu la nomme.
+      n.textContent = 'Message écrit pour cette campagne — sa nature est celle de la cible, que l’aperçu nomme.';
+      return;
+    }
     var t = campGabaritCourant();
     if (!t) {
       n.textContent = 'Aucun gabarit choisi — une campagne ne part jamais sur un défaut.';
@@ -1998,8 +2160,26 @@
     if (campEtat.cible === 'group') return { type: 'group', groupId: campEtat.groupId };
     return { type: 'segment', segmentId: campEtat.segmentId, params: campParams() };
   }
+  // Le corps de la requête : la cible ET la copie. Une seule source de copie —
+  // le serveur refuse les deux ensemble, et l'écran ne peut pas en offrir deux.
+  function campCorps() {
+    var body = { audience: campAudience() };
+    if (campEtat.mode === 'gabarit') {
+      body.templateKey = campEtat.templateKey;
+      return body;
+    }
+    var m = campEtat.message;
+    var propre = function (v) { return String(v == null ? '' : v).trim(); };
+    body.message = {
+      sujetFr: propre(m.sujetFr), sujetEn: propre(m.sujetEn),
+      corpsFr: propre(m.corpsFr), corpsEn: propre(m.corpsEn),
+      ctaFr: propre(m.ctaFr), ctaEn: propre(m.ctaEn),
+      ctaUrl: propre(m.ctaUrl),
+    };
+    return body;
+  }
   function campSignature() {
-    try { return JSON.stringify([campAudience(), campEtat.templateKey]); }
+    try { return JSON.stringify(campCorps()); }
     catch (e) { return 'x' + Date.now(); }
   }
 
@@ -2030,7 +2210,20 @@
         });
       }
     }
-    if (!campEtat.templateKey) errs.push({ code: 'gabarit_manquant' });
+    if (campEtat.mode === 'gabarit') {
+      if (!campEtat.templateKey) errs.push({ code: 'gabarit_manquant' });
+      return errs;
+    }
+    // Le compositeur. Les évidences seulement — le serveur garde les règles qui
+    // comptent (bilingue tout-ou-rien, HTML, partage d'honoraires, jetons).
+    var m = campCorps().message;
+    var lim = campEtat.limites || {};
+    if (!m.sujetFr || !m.sujetEn) errs.push({ code: 'sujet_bilingue' });
+    if (!m.corpsFr || !m.corpsEn) errs.push({ code: 'corps_bilingue' });
+    if ((m.ctaFr && !m.ctaEn) || (!m.ctaFr && m.ctaEn)) errs.push({ code: 'cta_bilingue' });
+    if (lim.sujet && (m.sujetFr.length > lim.sujet || m.sujetEn.length > lim.sujet)) errs.push({ code: 'sujet_trop_long' });
+    if (lim.corps && (m.corpsFr.length > lim.corps || m.corpsEn.length > lim.corps)) errs.push({ code: 'corps_trop_long' });
+    if (m.ctaUrl && !/^https:\/\/\S+$/.test(m.ctaUrl)) errs.push({ code: 'lien_invalide' });
     return errs;
   }
 
@@ -2064,7 +2257,7 @@
     clear(campNoeuds.erreur);
 
     var signature = campSignature();
-    var body = { audience: campAudience(), templateKey: campEtat.templateKey };
+    var body = campCorps();
     campNoeuds.previsualiser.disabled = true;
     var r = await call('POST', '/campaigns/preview', body);
     campNoeuds.previsualiser.disabled = !canPreviewCampaigns();
@@ -2122,6 +2315,12 @@
       : 'Plafond d’audience : ' + num(pl.limite || 0) + ' destinataires. Cette audience tient dessous.';
     card.appendChild(pp);
 
+    // SUR QUOI LES DEUX GARDES SE SONT APPUYÉES. L'écran affirmait « base de
+    // consentement » sans jamais dire si elle venait d'un registre ou d'une
+    // déduction — et le registre, lui, n'était écrit nulle part. Une garantie
+    // qu'on ne peut pas contrôler n'en est pas une.
+    card.appendChild(buildCampGarde(d.garde || {}));
+
     // Ce sur quoi l'envoi repose vraiment.
     if (Array.isArray(d.avertissements) && d.avertissements.length) {
       var av = el('div', 'tpl-readonly-note camp-avertissements');
@@ -2155,6 +2354,34 @@
     }
     card.appendChild(ech);
     return card;
+  }
+
+  // Ce que chaque état de garde VEUT DIRE. Les libellés sont ceux du serveur,
+  // traduits ici une fois — pas devinés à trois endroits.
+  var CAMP_GARDE_CONSENTEMENT = {
+    registre: 'Base de consentement lue au registre — c’est la preuve que la LCAP met à la charge de l’expéditeur (art. 13).',
+    deduit: 'Base de consentement DÉDUITE de la relation d’affaires en cours (LCAP, art. 10(9)a) et 10(10)) — aucun consentement enregistré pour ces adresses.',
+    sans_objet: 'Aucune base exigée : cet envoi est transactionnel.',
+  };
+  var CAMP_GARDE_FREQUENCE = {
+    appliquee: 'Plafond de fréquence appliqué — les adresses déjà jointes dans la fenêtre sont écartées (art. 56 1°).',
+    non_verifiee: 'Plafond de fréquence NON vérifié : aucun registre de campagnes n’a répondu.',
+    sans_objet: 'Plafond de fréquence sans objet : cet envoi est transactionnel.',
+  };
+  function buildCampGarde(garde) {
+    var wrap = el('div', 'camp-garde');
+    wrap.appendChild(el('div', 'chart-card-sub', 'Ce sur quoi les gardes se sont appuyées'));
+    var ul = el('ul', 'camp-garde-list');
+    var ligne = function (etat, table) {
+      var li = el('li');
+      li.setAttribute('data-garde', etat || 'inconnu');
+      li.textContent = table[etat] || 'État de garde non déclaré par le serveur — traitez l’envoi comme non vérifié.';
+      return li;
+    };
+    ul.appendChild(ligne(garde.consentement, CAMP_GARDE_CONSENTEMENT));
+    ul.appendChild(ligne(garde.frequence, CAMP_GARDE_FREQUENCE));
+    wrap.appendChild(ul);
+    return wrap;
   }
 
   // Les cinq exclusions, TOUTES rendues — celles à zéro comprises. Une
@@ -2201,7 +2428,7 @@
 
   async function envoyerCampagne(confirme) {
     if (!campApercuValide() || !canSendCampaigns()) return;
-    var body = { audience: campAudience(), templateKey: campEtat.templateKey };
+    var body = campCorps();
     if (confirme) body.confirme = true;
 
     var boutons = [campNoeuds.envoyer, campNoeuds.previsualiser];
@@ -2227,6 +2454,16 @@
         forcer.addEventListener('click', function () { envoyerCampagne(true); });
         campNoeuds.erreur.appendChild(forcer);
       }
+      // 502 : la résolution avait des destinataires et AUCUN n'a été joint. Le
+      // motif de chacun voyage avec le refus — sans lui, l'opérateur ne sait
+      // pas s'il doit réessayer ou appeler quelqu'un.
+      if (r.status === 502) {
+        campEtat.apercu = null; // l'audience a bougé : on reprend depuis l'aperçu
+        clear(campNoeuds.sortie);
+        campNoeuds.sortie.appendChild(buildCampEchecs((r.json && r.json.echecs) || [], r.json && r.json.campagneId));
+        campMajEnvoi();
+        toast('Aucun destinataire joint.');
+      }
       return;
     }
 
@@ -2239,6 +2476,264 @@
     campEtat.apercu = null; // un envoi consomme son aperçu
     campMajEnvoi();
     toast('Campagne envoyée.');
+    // QUI a reçu : le registre par (campagne, destinataire), chargé tout de
+    // suite. « Envoyée » est un chiffre ; la liste est la preuve.
+    chargerDestinataires(r.json && r.json.campagneId);
+    // Et l'envoi rejoint tout de suite les envois passés : le chemin de retour
+    // doit être là AVANT qu'on referme l'écran, pas seulement après. SANS jour :
+    // la campagne qui vient de partir est du jour du SERVEUR, et recharger un
+    // jour passé qu'on consultait la ferait paraître évanouie.
+    chargerHistoire();
+  }
+
+  // Le panneau d'un envoi qui n'a joint personne. Le rouge est celui du refus,
+  // pas celui d'une panne réseau : la campagne a bien été résolue, c'est
+  // l'expédition qui a échoué, destinataire par destinataire.
+  function buildCampEchecs(echecs, campagneId) {
+    var card = el('section', 'chart-card camp-echecs view-enter');
+    var head = el('div', 'chart-card-head');
+    var ht = el('div');
+    ht.appendChild(el('div', 'chart-card-title', 'Rien n’est parti'));
+    var sub = el('div', 'chart-card-sub', 'Référence');
+    var ref = el('span', null, ' ' + String(campagneId || '—'));
+    ref.setAttribute('data-i18n-skip', '');
+    sub.appendChild(ref);
+    ht.appendChild(sub);
+    head.appendChild(ht);
+    card.appendChild(head);
+    card.appendChild(buildCampEchecsTable(echecs));
+    return card;
+  }
+
+  function buildCampEchecsTable(echecs) {
+    var wrap = el('div', 'chart-scroll camp-echecs-wrap');
+    var table = el('table', 'ptable camp-echecs-table');
+    var thead = el('thead');
+    var htr = el('tr');
+    htr.appendChild(el('th', null, 'Destinataire'));
+    htr.appendChild(el('th', null, 'Pourquoi'));
+    thead.appendChild(htr);
+    table.appendChild(thead);
+    var tbody = el('tbody');
+    (echecs || []).forEach(function (e) {
+      var tr = el('tr');
+      var td = el('td', null, String((e && e.courriel) || '—'));
+      td.setAttribute('data-i18n-skip', '');
+      tr.appendChild(td);
+      var raison = el('td', 'ptable-sub', String((e && e.raison) || '—'));
+      raison.setAttribute('data-i18n-skip', '');
+      tr.appendChild(raison);
+      tbody.appendChild(tr);
+    });
+    if (!(echecs || []).length) {
+      var vide = el('tr');
+      var c = el('td', 'ptable-sub', 'Aucun échec rapporté.');
+      c.colSpan = 2;
+      vide.appendChild(c);
+      tbody.appendChild(vide);
+    }
+    table.appendChild(tbody);
+    wrap.appendChild(table);
+    return wrap;
+  }
+
+  // --- Qui a reçu -------------------------------------------------------------
+  // `markCampaignSent` ne garde que la DERNIÈRE campagne par adresse : il ne
+  // pouvait pas dire qui avait reçu quoi. Le registre par (campagne,
+  // destinataire) le peut, et c'est lui qu'on lit ici.
+  //
+  // `cible` est le nœud où la liste se pose : la sortie de l'envoi qui vient de
+  // partir, OU la ligne d'une campagne passée qu'on rouvre depuis le journal.
+  // Un seul chemin de lecture pour les deux — sinon l'un des deux dériverait.
+  var campRecusGen = 0;
+  async function chargerDestinataires(campagneId, cible) {
+    var hote = cible || (campNoeuds && campNoeuds.sortie);
+    if (!campagneId || !hote) return;
+    // Un jeton par demande, posé sur le nœud d'accueil : refermer la ligne (ou
+    // en ouvrir une autre) annule celle-ci. Sans lui, une réponse lente se
+    // poserait dans un volet déjà refermé, ou en double.
+    var jeton = String((campRecusGen += 1));
+    hote.setAttribute('data-recus-gen', jeton);
+    var r = await call('GET', '/campaigns/' + encodeURIComponent(campagneId) + '/recipients');
+    if (r.status === 401) return; // handled by call()
+    if (hote.getAttribute('data-recus-gen') !== jeton) return; // l'écran a bougé
+    if (!r.ok || !r.json || !Array.isArray(r.json.destinataires)) {
+      hote.appendChild(el('p', 'tpl-note camp-recus-vide',
+        'Le registre des destinataires n’a pas répondu — l’envoi, lui, a bien eu lieu.'));
+      return;
+    }
+    hote.appendChild(buildCampRecus(r.json.destinataires));
+  }
+
+  // --- Les envois passés ------------------------------------------------------
+  //
+  // LE DÉFAUT QUE CETTE SECTION RÉPARE. Le registre des destinataires est
+  // durable côté serveur, et cet écran le lisait — UNE FOIS, sur la réponse du
+  // POST, dans la seconde qui suivait l'envoi. Recharger la console, l'ouvrir
+  // sur un autre appareil ou revenir le lendemain coupait le seul chemin vers
+  // lui : l'identifiant de campagne ne vivait que dans une variable de rendu.
+  // « Voir exactement qui l'a reçu » ne survivait donc pas à un rechargement.
+  //
+  // Le JOUR affiché est celui que le SERVEUR nomme (jour ouvrable de Québec) :
+  // la console n'en calcule aucun — à 21 h, une tranche UTC dirait demain.
+  function buildCampHistoire() {
+    var card = el('section', 'chart-card camp-histoire view-enter');
+    var head = el('div', 'chart-card-head');
+    var ht = el('div');
+    ht.appendChild(el('div', 'chart-card-title', 'Les envois passés'));
+    ht.appendChild(el('div', 'chart-card-sub',
+      'Une campagne par ligne, avec ce qu’elle a joint. Ouvrez-en une pour voir qui l’a reçue.'));
+    head.appendChild(ht);
+
+    var field = el('div', 'field camp-histoire-jour-field');
+    var label = el('label', null, 'Jour');
+    label.setAttribute('for', 'camp-histoire-jour');
+    var input = el('input', 'input camp-histoire-jour');
+    input.type = 'date';
+    input.id = 'camp-histoire-jour';
+    input.title = TZ_TITLE;
+    input.setAttribute('data-i18n-skip', '');
+    input.addEventListener('change', function () { chargerHistoire(input.value); });
+    field.appendChild(label);
+    field.appendChild(input);
+    head.appendChild(field);
+    card.appendChild(head);
+
+    campNoeuds.histoireJour = input;
+    campNoeuds.histoire = el('div', 'camp-histoire-corps');
+    card.appendChild(campNoeuds.histoire);
+    return card;
+  }
+
+  var campHistoireGen = 0;
+  async function chargerHistoire(jour) {
+    var corps = campNoeuds && campNoeuds.histoire;
+    if (!corps) return;
+    var gen = ++campHistoireGen;
+    clear(corps);
+    var skel = el('div');
+    skel.setAttribute('aria-busy', 'true');
+    skel.appendChild(el('div', 'skeleton skeleton-tile'));
+    corps.appendChild(skel);
+
+    var r = await call('GET', '/campaigns' + (jour ? '?jour=' + encodeURIComponent(jour) : ''));
+    if (gen !== campHistoireGen) return; // un autre jour a été demandé entre-temps
+    if (r.status === 401) return; // handled by call()
+    if (!campNoeuds || campNoeuds.histoire !== corps) return;
+    clear(corps);
+    // Une porte fermée n'est pas une panne : « Réessayer » ne l'ouvrirait jamais.
+    if (r.status === 403) { corps.appendChild(buildDenied('Lire les tableaux de bord')); return; }
+    if (!r.ok || !r.json || !Array.isArray(r.json.campagnes)) {
+      // Un journal muet ne se déguise PAS en journal vide : « aucune campagne »
+      // serait un mensonge tranquille, et c'est exactement le genre de silence
+      // que cet écran est censé rendre impossible.
+      corps.appendChild(el('p', 'tpl-note camp-histoire-vide',
+        'Le journal des campagnes n’a pas répondu — réessayez, ou changez de jour.'));
+      return;
+    }
+    // Le jour vient du SERVEUR, y compris quand on ne lui en a demandé aucun.
+    if (campNoeuds.histoireJour && r.json.jour) {
+      campNoeuds.histoireJour.value = r.json.jour;
+      campNoeuds.histoireJour.setAttribute('value', r.json.jour);
+    }
+    if (!r.json.campagnes.length) {
+      corps.appendChild(el('p', 'tpl-note camp-histoire-vide', 'Aucune campagne ce jour-là.'));
+      return;
+    }
+    r.json.campagnes.forEach(function (c) { corps.appendChild(buildCampHistoireLigne(c)); });
+  }
+
+  function buildCampHistoireLigne(c) {
+    var ligne = el('div', 'camp-histoire-ligne');
+    ligne.setAttribute('data-campagne', String(c.campagneId || ''));
+    ligne.setAttribute('data-statut', String(c.statut || ''));
+
+    var tete = el('div', 'camp-histoire-tete');
+    var titre = el('div', 'camp-histoire-titre');
+    // Ce qui a été envoyé : la copie écrite pour cette campagne, ou la clé du
+    // gabarit réexpédié. Sans l'un des deux, « qui a reçu » n'a pas de « quoi ».
+    var sujet = c.message && (isEnglish() && c.message.sujetEn ? c.message.sujetEn : c.message.sujetFr);
+    var nom = sujet || c.templateKey || c.campagneId;
+    var nomNoeud = el('span', null, String(nom));
+    nomNoeud.setAttribute('data-i18n-skip', ''); // texte de l'opérateur, pas du dictionnaire
+    titre.appendChild(nomNoeud);
+    tete.appendChild(titre);
+
+    var faits = el('div', 'camp-histoire-faits');
+    var heure = el('span', 'camp-histoire-heure', localTime(c.at));
+    heure.title = TZ_TITLE;
+    heure.setAttribute('data-i18n-skip', '');
+    faits.appendChild(heure);
+    faits.appendChild(el('span', 'camp-histoire-statut',
+      c.statut === 'echouee' ? 'Rien n’est parti' : 'Campagne envoyée'));
+    var comptes = el('span', 'camp-histoire-comptes',
+      num(c.envoyes || 0) + ' / ' + num(c.total || 0));
+    comptes.setAttribute('data-i18n-skip', '');
+    faits.appendChild(comptes);
+    if (c.echoues) {
+      var ech = el('span', 'camp-histoire-echoues', num(c.echoues));
+      ech.setAttribute('data-i18n-skip', '');
+      faits.appendChild(ech);
+    }
+    tete.appendChild(faits);
+
+    var voir = el('button', 'btn btn-sm btn-ghost camp-histoire-voir', 'Qui a reçu');
+    voir.type = 'button';
+    voir.setAttribute('aria-expanded', 'false');
+    var detail = el('div', 'camp-histoire-detail');
+    voir.addEventListener('click', function () {
+      var ouvert = voir.getAttribute('aria-expanded') === 'true';
+      voir.setAttribute('aria-expanded', ouvert ? 'false' : 'true');
+      clear(detail);
+      // Refermer annule la demande en vol : le jeton disparaît avec le volet.
+      detail.removeAttribute('data-recus-gen');
+      if (ouvert) return;
+      chargerDestinataires(c.campagneId, detail);
+    });
+    tete.appendChild(voir);
+    ligne.appendChild(tete);
+    ligne.appendChild(detail);
+    return ligne;
+  }
+
+  function buildCampRecus(lignes) {
+    var card = el('section', 'chart-card camp-recus view-enter');
+    var head = el('div', 'chart-card-head');
+    var ht = el('div');
+    ht.appendChild(el('div', 'chart-card-title', 'Qui a reçu'));
+    ht.appendChild(el('div', 'chart-card-sub', 'Une ligne par destinataire, telle qu’elle a été inscrite.'));
+    head.appendChild(ht);
+    card.appendChild(head);
+
+    var wrap = el('div', 'chart-scroll camp-recus-wrap');
+    var table = el('table', 'ptable camp-recus-table');
+    var thead = el('thead');
+    var htr = el('tr');
+    [['Destinataire', ''], ['Statut', ''], ['Pourquoi', '']].forEach(function (h) {
+      htr.appendChild(el('th', h[1], h[0]));
+    });
+    thead.appendChild(htr);
+    table.appendChild(thead);
+    var tbody = el('tbody');
+    (lignes || []).forEach(function (d) {
+      var tr = el('tr');
+      tr.setAttribute('data-statut', (d && d.statut) || '');
+      var courriel = el('td', null, String((d && d.courriel) || '—'));
+      courriel.setAttribute('data-i18n-skip', '');
+      tr.appendChild(courriel);
+      tr.appendChild(el('td', null, d && d.statut === 'envoye' ? 'Envoyé' : 'Échoué'));
+      var raison = el('td', 'ptable-sub', String((d && d.erreur) || '—'));
+      raison.setAttribute('data-i18n-skip', '');
+      tr.appendChild(raison);
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    wrap.appendChild(table);
+    card.appendChild(wrap);
+    if (!(lignes || []).length) {
+      card.appendChild(el('p', 'tpl-note', 'Aucune ligne au registre pour cette campagne.'));
+    }
+    return card;
   }
 
   function buildCampResultat(d) {
@@ -2256,11 +2751,414 @@
 
     var grid = el('div', 'stat-grid');
     grid.appendChild(tile('Envoyés', num(d.envoyes || 0), 'destinataires joints', false));
+    // Les échecs sont une TUILE, pas une note de bas de page : un envoi partiel
+    // qui n'annonce que ses succès est le même mensonge, en plus petit.
+    var echecs = (d.echecs && d.echecs.length) ? d.echecs : [];
+    grid.appendChild(tile('Échoués', num(d.echoues != null ? d.echoues : echecs.length), 'et pourquoi, ligne par ligne', false));
     card.appendChild(grid);
+    if (echecs.length) card.appendChild(buildCampEchecsTable(echecs));
+
+    // L'état du registre des destinataires. Une ligne perdue ne se tait pas :
+    // un registre muet qui se croit complet est pire que pas de registre.
+    var reg = d.registre || {};
+    if (Number(reg.echecs) > 0) {
+      var alerte = el('p', 'tpl-note camp-registre-manque');
+      alerte.textContent = num(reg.echecs) + ' ligne(s) n’ont pas pu être inscrites au registre des destinataires : « Qui a reçu » sera incomplet pour cette campagne.';
+      card.appendChild(alerte);
+    }
+    // Le quota est un AUTRE registre, et son silence a une autre conséquence :
+    // le courriel est bien parti, mais la prochaine campagne retrouvera ces
+    // personnes comme si de rien n'était (art. 56 1°).
+    if (Number(reg.frequenceEchecs) > 0) {
+      var quota = el('p', 'tpl-note camp-registre-manque');
+      quota.textContent = num(reg.frequenceEchecs) + ' envoi(s) partis sans que le plafond de fréquence soit inscrit : ces personnes pourront être rejointes trop tôt.';
+      card.appendChild(quota);
+    }
+
     card.appendChild(buildCampExclus(d.exclus || {}));
     card.appendChild(el('p', 'tpl-note',
       'Prévisualisez de nouveau avant tout autre envoi : le décompte précédent a été consommé.'));
     return card;
+  }
+
+  // ---------------------------------------------------------------------------
+  // AUDIENCES — les listes de destinataires qu'une campagne peut viser.
+  //
+  // Elles n'avaient PAS d'écran. Le dépôt savait les stocker (`AUDIENCE#GROUPES`,
+  // quatre méthodes dans les deux adaptateurs, testées) et personne ne les
+  // appelait ; le compositeur, lui, proposait les groupes RBAC — des paquets de
+  // PERMISSIONS d'administrateurs — sous l'étiquette « Un groupe ». Viser l'un
+  // d'eux ne pouvait atteindre personne : le serveur cherchait un groupe
+  // d'audience sous cet identifiant et n'en trouvait aucun.
+  //
+  // Deux notions, deux écrans : « Accès » réunit des permissions, « Audiences »
+  // réunit des adresses. Le mot « groupe » ne désigne plus deux choses.
+  // ---------------------------------------------------------------------------
+  var audiencesBody = null;
+  var audEtat = null;
+  // LES BORNES VIENNENT DU SERVEUR (`limites`), comme celles du compositeur.
+  // Elles étaient recopiées ici — un motif d'identifiant et un `80` jumeaux de
+  // ceux d'`admin.js`, et AUCUN plafond de membres : relever
+  // `NOTA_AUDIENCE_MEMBRES_MAX` sur un déploiement laissait l'écran l'ignorer,
+  // et le resserrer laissait saisir des centaines d'adresses avant de découvrir
+  // le refus au retour du réseau. Une borne recopiée est une borne qui dérive.
+  //
+  // Un serveur qui n'en sert pas (déploiement plus ancien) ne ferme rien : la
+  // console n'invente alors AUCUNE règle et laisse le serveur trancher — mieux
+  // vaut un aller-retour de trop qu'un refus local que rien n'appuie.
+  function audLimites() { return (audEtat && audEtat.limites) || {}; }
+  function audMotifId() {
+    var motif = audLimites().identifiantMotif;
+    if (!motif) return null;
+    try { return new RegExp(motif); } catch (e) { return null; }
+  }
+  function audBorne(nom) {
+    var n = Number(audLimites()[nom]);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+  var AUD_AUDIENCES = [
+    { cle: 'notaire', libelle: 'Notaires' },
+    { cle: 'client', libelle: 'Clients' },
+  ];
+  var AUD_NATURES = [
+    { cle: 'commercial', libelle: 'Campagne commerciale' },
+    { cle: 'transactionnel', libelle: 'Avis de service' },
+  ];
+  function canWriteAudiences() { return can('audiences:write'); }
+
+  async function renderAudiences() {
+    if (!me || !me.email) {
+      var loaded = await loadMe();
+      if (!loaded.ok) {
+        if (loaded.status !== 401) renderFatal('Impossible de charger votre profil.', renderAudiences);
+        return;
+      }
+    }
+    renderUserbar();
+
+    var content = el('div', 'admin-content');
+    var head = el('div', 'page-head view-enter');
+    var titleWrap = el('div');
+    titleWrap.appendChild(el('span', 'page-eyebrow', 'Notifications'));
+    titleWrap.appendChild(el('h1', 'page-title', 'Audiences'));
+    titleWrap.appendChild(el('p', 'page-sub',
+      'Les listes de destinataires qu’une campagne peut viser. Ce ne sont pas les groupes de l’écran Accès : ceux-là réunissent des permissions, ceux-ci des adresses.'));
+    head.appendChild(titleWrap);
+    content.appendChild(head);
+
+    audiencesBody = el('div');
+    content.appendChild(audiencesBody);
+    mountAuthed('audiences', content);
+    focusTitle();
+    await loadAudiencesInto(audiencesBody);
+  }
+
+  async function loadAudiencesInto(container) {
+    clear(container);
+    var skel = el('div', 'stat-grid');
+    skel.setAttribute('aria-busy', 'true');
+    for (var i = 0; i < 2; i++) skel.appendChild(el('div', 'skeleton skeleton-tile'));
+    container.appendChild(skel);
+
+    var r = await call('GET', '/audiences/groups');
+    if (r.status === 401) return; // handled by call()
+    clear(container);
+    // Une porte fermée n'est pas une panne : « Réessayer » ne l'ouvrirait jamais.
+    if (r.status === 403) { container.appendChild(buildDenied('Voir les groupes d’audience')); return; }
+    if (!r.ok || !r.json || !Array.isArray(r.json.groupes)) {
+      container.appendChild(buildErrorBanner(function () { loadAudiencesInto(container); }));
+      return;
+    }
+    // Les bornes voyagent avec le catalogue : le motif d'identifiant, la
+    // longueur du nom et le plafond de destinataires sont ceux que le serveur
+    // APPLIQUE, jamais des littéraux qui dériveraient au premier changement.
+    audEtat = { groupes: r.json.groupes, limites: (r.json && r.json.limites) || null };
+
+    var view = el('div', 'view-enter');
+    if (!canWriteAudiences()) {
+      var note = el('div', 'tpl-readonly-note');
+      note.appendChild(el('strong', null, 'Lecture seule'));
+      note.appendChild(document.createTextNode(
+        ' — modifier une liste de destinataires demande la permission « Modifier les groupes d’audience ».'));
+      view.appendChild(note);
+    }
+    view.appendChild(buildAudCadre());
+    view.appendChild(buildAudCard(container));
+    container.appendChild(view);
+  }
+
+  function buildAudCadre() {
+    var card = el('section', 'chart-card aud-cadre');
+    card.appendChild(el('div', 'chart-card-title', 'Ce qu’une liste engage'));
+    card.appendChild(el('p', 'camp-cadre-texte',
+      'L’audience dit quelle fiche le serveur ira lire pour chaque adresse — donc quelle base de consentement il peut établir. Se tromper, c’est écrire à un notaire en le prenant pour un client, et perdre sa base au passage.'));
+    card.appendChild(el('p', 'camp-cadre-texte',
+      'La nature dit si la LCAP exige une base de consentement. Elle est déclarée ici, sur la liste, plutôt que devinée à l’envoi : un groupe qui ne le dit pas est traité comme commercial, la règle la plus stricte.'));
+    return card;
+  }
+
+  function buildAudCard(container) {
+    var card = el('section', 'chart-card aud-groupes');
+    card.appendChild(el('div', 'chart-card-title', 'Groupes d’audience'));
+    if (!audEtat.groupes.length) {
+      card.appendChild(el('p', 'tpl-note', 'Aucune liste pour le moment.'));
+    }
+    audEtat.groupes.forEach(function (g) { card.appendChild(buildAudRow(g, container)); });
+    if (canWriteAudiences()) card.appendChild(buildAudForm(null, container));
+    return card;
+  }
+
+  function audLibelleDe(table, cle) {
+    for (var i = 0; i < table.length; i++) if (table[i].cle === cle) return table[i].libelle;
+    return cle || '—';
+  }
+
+  function buildAudRow(g, container) {
+    var row = el('div', 'aud-groupe');
+    row.dataset.id = g.id;
+    var h = el('div', 'aud-groupe-h');
+    var nom = el('strong', null, g.libelle || g.id);
+    nom.setAttribute('data-i18n-skip', '');
+    h.appendChild(nom);
+    var meta = el('span', 'ptable-sub', ' · ' + g.id);
+    meta.setAttribute('data-i18n-skip', '');
+    h.appendChild(meta);
+    row.appendChild(h);
+
+    var faits = el('p', 'ptable-sub aud-groupe-faits');
+    faits.appendChild(el('span', null, audLibelleDe(AUD_AUDIENCES, g.audience)));
+    faits.appendChild(document.createTextNode(' · '));
+    faits.appendChild(el('span', null, audLibelleDe(AUD_NATURES, g.nature)));
+    faits.appendChild(document.createTextNode(' · '));
+    var n = g.nbMembres != null ? g.nbMembres : (g.membres || []).length;
+    var compte = el('span', null, num(n));
+    compte.setAttribute('data-i18n-skip', '');
+    faits.appendChild(compte);
+    faits.appendChild(document.createTextNode(' '));
+    faits.appendChild(el('span', null, n === 1 ? 'destinataire' : 'destinataires'));
+    row.appendChild(faits);
+
+    if (!canWriteAudiences()) return row;
+
+    var err = el('div', 'tpl-error aud-erreur');
+    err.hidden = true;
+
+    var actions = el('div', 'tpl-actions');
+    var edit = el('button', 'btn btn-sm aud-groupe-edit', 'Modifier');
+    edit.type = 'button';
+    edit.setAttribute('aria-expanded', 'false');
+    var editor = null;
+    edit.addEventListener('click', function () {
+      if (editor) { editor.remove(); editor = null; edit.setAttribute('aria-expanded', 'false'); return; }
+      editor = buildAudForm(g, container);
+      row.appendChild(editor);
+      edit.setAttribute('aria-expanded', 'true');
+      var first = editor.querySelector('[name="libelle"]');
+      if (first) first.focus();
+    });
+    actions.appendChild(edit);
+
+    var del = el('button', 'btn btn-sm aud-groupe-del', 'Supprimer');
+    del.type = 'button';
+    actions.appendChild(del);
+    row.appendChild(actions);
+
+    // La confirmation NOMME ce qu'elle efface et combien d'adresses partent
+    // avec — supprimer une liste n'est pas récupérable.
+    var confirmBox = el('div', 'bareme-confirm');
+    confirmBox.hidden = true;
+    var txt = el('p', 'bareme-confirm-text');
+    txt.appendChild(el('strong', null, 'Supprimer la liste « ' + (g.libelle || g.id) + ' » ?'));
+    txt.appendChild(document.createTextNode(' '));
+    txt.appendChild(el('span', null, num(n) + ' adresse(s) disparaissent de cette liste. Les personnes, elles, ne sont pas touchées.'));
+    confirmBox.appendChild(txt);
+    var cActions = el('div', 'tpl-actions');
+    var yes = el('button', 'btn btn-sm btn-danger', 'Confirmer la suppression');
+    yes.type = 'button';
+    var no = el('button', 'btn btn-sm btn-ghost', 'Annuler');
+    no.type = 'button';
+    cActions.appendChild(yes);
+    cActions.appendChild(no);
+    confirmBox.appendChild(cActions);
+    row.appendChild(confirmBox);
+    row.appendChild(err);
+
+    del.addEventListener('click', function () {
+      err.hidden = true; clear(err);
+      confirmBox.hidden = false; del.hidden = true;
+      yes.focus();
+    });
+    no.addEventListener('click', function () { confirmBox.hidden = true; del.hidden = false; del.focus(); });
+    yes.addEventListener('click', async function () {
+      [yes, no].forEach(function (b) { b.disabled = true; });
+      var r = await call('DELETE', '/audiences/groups/' + encodeURIComponent(g.id));
+      [yes, no].forEach(function (b) { b.disabled = false; });
+      if (r.status === 401) return; // handled by call()
+      if (!r.ok) {
+        confirmBox.hidden = true; del.hidden = false;
+        showErrorLines(err, (r.json && r.json.errors && r.json.errors.length) ? r.json.errors : [{ message: 'Suppression impossible.' }]);
+        return;
+      }
+      toast('Liste supprimée.');
+      await loadAudiencesInto(container);
+    });
+    return row;
+  }
+
+  // Le formulaire d'une liste : création (`existing` nul) ou modification.
+  // Les adresses s'écrivent UNE PAR LIGNE — la forme la plus proche de ce qu'un
+  // opérateur colle depuis un tableur, et la seule qu'on puisse relire d'un
+  // coup d'œil pour vérifier à qui l'on s'apprête à écrire.
+  function buildAudForm(existing, container) {
+    var edition = !!existing;
+    var form = el('form', 'aud-groupe-form');
+    form.noValidate = true;
+    form.appendChild(el('div', 'chart-card-sub', edition ? 'Modifier la liste' : 'Nouvelle liste'));
+
+    var idRow = el('div', 'field');
+    var idLab = el('label', null, 'Identifiant');
+    idLab.setAttribute('for', 'aud-id-' + (edition ? existing.id : 'nouveau'));
+    idRow.appendChild(idLab);
+    var id = el('input', 'input');
+    id.name = 'id'; id.type = 'text'; id.placeholder = 'pilote';
+    id.id = idLab.getAttribute('for');
+    id.setAttribute('data-i18n-skip', '');
+    if (edition) { id.value = existing.id; id.readOnly = true; }
+    idRow.appendChild(id);
+    form.appendChild(idRow);
+
+    var libRow = el('div', 'field');
+    var libLab = el('label', null, 'Nom');
+    libLab.setAttribute('for', 'aud-libelle-' + (edition ? existing.id : 'nouveau'));
+    libRow.appendChild(libLab);
+    var libelle = el('input', 'input');
+    libelle.name = 'libelle'; libelle.type = 'text'; libelle.placeholder = 'Groupe pilote';
+    libelle.id = libLab.getAttribute('for');
+    var libelleMax = audBorne('libelleMax');
+    if (libelleMax) libelle.maxLength = libelleMax;
+    libelle.setAttribute('data-i18n-skip', '');
+    if (edition) libelle.value = existing.libelle || '';
+    libRow.appendChild(libelle);
+    form.appendChild(libRow);
+
+    var choix = function (nom, libelleChamp, table, courant, aide) {
+      var f = el('div', 'field');
+      var lab = el('label', null, libelleChamp);
+      lab.setAttribute('for', 'aud-' + nom + '-' + (edition ? existing.id : 'nouveau'));
+      f.appendChild(lab);
+      var sel = el('select', 'input');
+      sel.name = nom;
+      sel.id = lab.getAttribute('for');
+      table.forEach(function (o) {
+        var opt = el('option', null, o.libelle);
+        opt.value = o.cle;
+        sel.appendChild(opt);
+      });
+      sel.value = courant || table[0].cle;
+      f.appendChild(sel);
+      f.appendChild(el('p', 'tpl-note', aide));
+      return f;
+    };
+    form.appendChild(choix('audience', 'Audience', AUD_AUDIENCES, edition ? existing.audience : 'notaire',
+      'Quelle fiche le serveur lit pour chaque adresse — donc quelle base de consentement il peut établir.'));
+    form.appendChild(choix('nature', 'Nature', AUD_NATURES, edition ? existing.nature : 'commercial',
+      'Un avis de service n’exige pas de base de consentement et ne consomme pas le plafond de fréquence ; une campagne commerciale, si.'));
+
+    var memRow = el('div', 'field');
+    var memLab = el('label', null, 'Destinataires');
+    memLab.setAttribute('for', 'aud-membres-' + (edition ? existing.id : 'nouveau'));
+    memRow.appendChild(memLab);
+    var membres = el('textarea', 'input aud-membres');
+    membres.name = 'membres';
+    membres.id = memLab.getAttribute('for');
+    membres.rows = 8;
+    membres.placeholder = 'une.adresse@exemple.ca';
+    membres.setAttribute('data-i18n-skip', '');
+    if (edition) membres.value = (existing.membres || []).join('\n');
+    memRow.appendChild(membres);
+    var compte = el('span', 'tpl-count');
+    compte.setAttribute('data-i18n-skip', '');
+    var lignesDe = function () {
+      return membres.value.split(/[\s,;]+/).map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean);
+    };
+    // Le compteur porte le PLAFOND servi quand il y en a un : on sait à combien
+    // on écrit, et à partir de quand le serveur refusera — avant d'avoir collé
+    // trois cents adresses.
+    var membresMax = audBorne('membresMax');
+    var majCompte = function () {
+      var n = lignesDe().length;
+      compte.textContent = membresMax ? n + ' / ' + membresMax : String(n);
+      compte.classList.toggle('is-over', !!membresMax && n > membresMax);
+    };
+    majCompte();
+    membres.addEventListener('input', majCompte);
+    memRow.appendChild(compte);
+    memRow.appendChild(el('p', 'tpl-note', 'Une adresse par ligne. Les doublons et la casse sont normalisés à l’enregistrement.'));
+    form.appendChild(memRow);
+
+    var err = el('div', 'tpl-error aud-erreur');
+    err.hidden = true;
+    form.appendChild(err);
+
+    var actions = el('div', 'tpl-actions');
+    var submit = el('button', 'btn btn-primary', edition ? 'Enregistrer la liste' : 'Créer la liste');
+    submit.type = 'submit';
+    actions.appendChild(submit);
+    if (edition) {
+      var cancel = el('button', 'btn btn-sm btn-ghost', 'Annuler');
+      cancel.type = 'button';
+      cancel.addEventListener('click', function () {
+        var btn = form.parentNode && form.parentNode.querySelector('.aud-groupe-edit');
+        form.remove();
+        if (btn) { btn.setAttribute('aria-expanded', 'false'); btn.focus(); }
+      });
+      actions.appendChild(cancel);
+    }
+    form.appendChild(actions);
+
+    form.addEventListener('submit', async function (ev) {
+      if (ev.preventDefault) ev.preventDefault();
+      clear(err); err.hidden = true;
+      [id, libelle, membres].forEach(function (i) { i.removeAttribute('aria-invalid'); });
+
+      var cle = id.value.trim();
+      var errs = [];
+      var motifId = audMotifId();
+      if (motifId && !motifId.test(cle)) errs.push({ code: 'identifiant_invalide', champ: id });
+      // Le PUT est un upsert : créer sous un identifiant déjà pris écraserait
+      // une liste que personne n'a demandé de perdre.
+      else if (!edition && audEtat.groupes.some(function (g) { return g.id === cle; })) {
+        errs.push({ code: 'groupe_audience_existant', champ: id });
+      }
+      var lib = libelle.value.trim();
+      if (!lib || (libelleMax && lib.length > libelleMax)) errs.push({ code: 'libelle_invalide', champ: libelle });
+      var liste = lignesDe();
+      if (!liste.length) errs.push({ code: 'membres_vides', champ: membres });
+      else if (membresMax && liste.length > membresMax) errs.push({ code: 'membres_trop_nombreux', champ: membres });
+      if (errs.length) {
+        showErrorLines(err, errs);
+        errs.forEach(function (e) { e.champ.setAttribute('aria-invalid', 'true'); });
+        errs[0].champ.focus();
+        return;
+      }
+
+      submit.disabled = true;
+      var r = await call('PUT', '/audiences/groups/' + encodeURIComponent(cle), {
+        libelle: lib,
+        audience: form.querySelector('[name="audience"]').value,
+        nature: form.querySelector('[name="nature"]').value,
+        membres: liste,
+      });
+      submit.disabled = false;
+      if (r.status === 401) return; // handled by call()
+      if (!r.ok) {
+        showErrorLines(err, (r.json && r.json.errors && r.json.errors.length) ? r.json.errors : [{ message: 'Enregistrement impossible.' }]);
+        return;
+      }
+      toast('Liste enregistrée.');
+      await loadAudiencesInto(container);
+    });
+    return form;
   }
 
   // ---------------------------------------------------------------------------
@@ -3215,6 +4113,21 @@
     groupe_existant: 'Un groupe porte déjà l’identifiant demandé — modifiez-le depuis sa ligne plutôt que de l’écraser.',
     envoi_indisponible: 'Aucun expéditeur câblé sur cette console — la campagne n’a pas été envoyée.',
     gabarit_transactionnel: 'Gabarit transactionnel — un avis de service ne peut pas servir de campagne commerciale (art. 68 du Code de déontologie).',
+    // Le compositeur et les groupes d'audience (2026-09-04).
+    envoi_echoue: 'Aucun destinataire joint — la campagne n’est PAS partie. Le détail de chaque échec est ci-dessous.',
+    copie_manquante: 'Rien à envoyer — écrivez le message, ou choisissez un gabarit à réexpédier.',
+    copie_ambigue: 'Deux copies — choisissez le message écrit OU le gabarit, jamais les deux.',
+    champ_requis: 'Champ obligatoire — le sujet et le message vont dans les deux langues.',
+    lien_invalide: 'Lien invalide — le bouton demande une adresse https complète.',
+    libelle_invalide: 'Nom manquant — le nom du groupe est obligatoire, 80 caractères au plus.',
+    nature_invalide: 'Nature manquante — dites si ce groupe reçoit une campagne commerciale ou un avis de service.',
+    courriel_invalide: 'Adresse invalide — une adresse par ligne, et chacune doit ressembler à une adresse.',
+    membres_vides: 'Groupe vide — un groupe sans destinataire n’est pas une audience.',
+    membres_invalides: 'Destinataires illisibles — écrivez une adresse par ligne.',
+    membres_trop_nombreux: 'Trop de destinataires — au-delà, visez un segment plutôt qu’une liste.',
+    campagne_invalide: 'Campagne inconnue — l’identifiant ne désigne aucun envoi.',
+    registre_indisponible: 'Registre des destinataires indisponible sur ce déploiement.',
+    groupe_audience_existant: 'Un groupe d’audience porte déjà cet identifiant — modifiez-le depuis sa ligne plutôt que de l’écraser.',
   };
 
   // La région d'erreur en ligne, partagée par le refus local, le 422 du prix
@@ -3896,8 +4809,18 @@
     acces_modifie: 'Accès modifiés',
     groupe_modifie: 'Groupe enregistré',
     groupe_supprime: 'Groupe supprimé',
+    // Les groupes d'AUDIENCE — des listes de destinataires — se nomment
+    // autrement que les groupes RBAC juste au-dessus, qui réunissent des
+    // permissions. Confondre les deux dans le journal rejouerait à la lecture
+    // l'ambiguïté qui rendait la cible « groupe » inatteignable.
+    audience_groupe_modifie: 'Groupe d’audience enregistré',
+    audience_groupe_supprime: 'Groupe d’audience supprimé',
     campagne_envoyee: 'Campagne envoyée',
     campagne_refusee: 'Campagne refusée',
+    // Un envoi qui n'a joint PERSONNE (502) : il s'écrit au journal comme les
+    // autres, et il doit pouvoir s'y lire — sans étiquette, la seule trace
+    // d'une campagne perdue s'affichait en code brut.
+    campagne_echouee: 'Campagne échouée',
     prix_nota_updated: 'Prix de Nota modifié',
     prix_nota_reset: 'Prix de Nota réinitialisé',
     cancellation_schedule_updated: 'Barème d’annulation modifié',
@@ -4237,6 +5160,16 @@
     var s = svgEl('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none',
       stroke: 'currentColor', 'stroke-width': 2, 'aria-hidden': 'true' });
     s.appendChild(svgEl('circle', { cx: 12, cy: 12, r: 3.5 }));
+    return s;
+  }
+  // Une LISTE — c'est exactement ce qu'est un groupe d'audience, et rien de plus.
+  function iconList() {
+    var s = svgEl('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none',
+      stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' });
+    [7, 12, 17].forEach(function (y) {
+      s.appendChild(svgEl('line', { x1: 9, y1: y, x2: 20, y2: y }));
+      s.appendChild(svgEl('line', { x1: 4, y1: y, x2: 4.01, y2: y }));
+    });
     return s;
   }
 

@@ -187,6 +187,122 @@ test('PUT + DELETE /admin/notifications/templates/{key} — 200/404/422 shapes v
   assertValid('/admin/notifications/templates/{key}', 'DELETE', 200, parse(del));
 });
 
+// --- Groupes d'audience + registre des destinataires (2026-09-04) ------------
+// Deux notions qui portaient le MÊME nom dans la console : le groupe RBAC
+// (des permissions) et le groupe d'audience (des destinataires). Le contrat
+// les sépare, et les deux formes sont validées ici contre leur schéma.
+
+test('GET + PUT + DELETE /admin/audiences/groups — les trois formes valident leur schéma', async () => {
+  const h = make();
+  const session = await login(h);
+
+  const put = await h.call('PUT', '/admin/audiences/groups/pilote', {
+    bearer: session,
+    body: { libelle: 'Pilote', audience: 'notaire', nature: 'commercial', membres: ['roy@etude.test'] },
+  });
+  assert.equal(put.statusCode, 200, put.body);
+  assertValid('/admin/audiences/groups/{id}', 'PUT', 200, parse(put));
+
+  const liste = await h.call('GET', '/admin/audiences/groups', { bearer: session });
+  assert.equal(liste.statusCode, 200, liste.body);
+  const body = parse(liste);
+  assert.deepEqual(body.groupes.map((g) => g.id), ['pilote']);
+  assertValid('/admin/audiences/groups', 'GET', 200, body);
+
+  const mauvais = await h.call('PUT', '/admin/audiences/groups/pilote', {
+    bearer: session,
+    body: { libelle: '', audience: 'martien', nature: 'promo', membres: [] },
+  });
+  assert.equal(mauvais.statusCode, 422, mauvais.body);
+  assertValid('/admin/audiences/groups/{id}', 'PUT', 422, parse(mauvais));
+
+  const del = await h.call('DELETE', '/admin/audiences/groups/pilote', { bearer: session });
+  assert.equal(del.statusCode, 200, del.body);
+  assertValid('/admin/audiences/groups/{id}', 'DELETE', 200, parse(del));
+
+  const absent = await h.call('DELETE', '/admin/audiences/groups/pilote', { bearer: session });
+  assert.equal(absent.statusCode, 404, absent.body);
+  assertValid('/admin/audiences/groups/{id}', 'DELETE', 404, parse(absent));
+});
+
+test('POST /admin/campaigns avec un message composé + GET .../recipients — les deux schémas tiennent', async () => {
+  const envoyes = [];
+  const repo = createMemoryRepo();
+  const clock = { ms: START };
+  let n = 0;
+  const admin = createAdmin({
+    repo,
+    mailer: { send: async () => {} },
+    notifier: { async sendCampaign(m) { envoyes.push(m); return { sent: true, to: m.to }; } },
+    newId: () => `camp-${(n += 1)}`,
+    nowMs: () => clock.ms,
+    config: { allowlist: ['ops@nota.ca'], baseUrl: 'https://admin.nota.ca', devEcho: true },
+  });
+  const app = createAdminApp(repo, {
+    admin, analytics: createAnalytics({ repo, now: () => TODAY }),
+    adminBaseUrl: 'https://admin.nota.ca', now: () => TODAY, nowMs: () => clock.ms,
+  });
+  const call = (method, routePath, { body, bearer, query } = {}) =>
+    app.handle({
+      method, path: routePath, query: query || {},
+      headers: bearer ? { authorization: `Bearer ${bearer}`, 'x-forwarded-for': '1.2.3.4' } : { 'x-forwarded-for': '1.2.3.4' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  const req = parse(await call('POST', '/admin/auth/request', { body: { email: 'ops@nota.ca' } }));
+  const session = parse(await call('POST', '/admin/auth/verify', {
+    body: { token: decodeURIComponent(req.devLink.split('token=')[1]) },
+  })).session;
+
+  await repo.putNotary({
+    id: 'roy', email: 'roy@etude.test', status: 'active', chargesEnabled: true,
+    connectAccountId: 'acct_roy', createdAt: new Date(START - 86400000).toISOString(),
+  });
+
+  const message = {
+    sujetFr: 'Le carnet vous attend', sujetEn: 'The carnet is waiting',
+    corpsFr: 'Des demandes arrivent chaque jour à Québec.', corpsEn: 'Requests arrive every day in Québec.',
+  };
+  const apercu = await call('POST', '/admin/campaigns/preview', {
+    bearer: session, body: { audience: { type: 'user', email: 'roy@etude.test' }, message },
+  });
+  assert.equal(apercu.statusCode, 200, apercu.body);
+  assertValid('/admin/campaigns/preview', 'POST', 200, parse(apercu));
+
+  const envoi = await call('POST', '/admin/campaigns', {
+    bearer: session, body: { audience: { type: 'user', email: 'roy@etude.test' }, message },
+  });
+  assert.equal(envoi.statusCode, 200, envoi.body);
+  const envoiBody = parse(envoi);
+  assert.equal(envoiBody.envoyes, 1);
+  assertValid('/admin/campaigns', 'POST', 200, envoiBody);
+
+  const recus = await call('GET', `/admin/campaigns/${envoiBody.campagneId}/recipients`, { bearer: session });
+  assert.equal(recus.statusCode, 200, recus.body);
+  const recusBody = parse(recus);
+  assert.deepEqual(recusBody.destinataires.map((d) => d.statut), ['envoye']);
+  assertValid('/admin/campaigns/{campagneId}/recipients', 'GET', 200, recusBody);
+
+  // LE CHEMIN DE RETOUR. Sans cette liste, l'identifiant ci-dessus ne vivait
+  // que dans la réponse de l'envoi : un rechargement coupait l'accès au
+  // registre. Le jour par défaut est celui de QUÉBEC.
+  const liste = await call('GET', '/admin/campaigns', { bearer: session });
+  assert.equal(liste.statusCode, 200, liste.body);
+  const listeBody = parse(liste);
+  assert.deepEqual(listeBody.campagnes.map((c) => c.campagneId), [envoiBody.campagneId]);
+  assertValid('/admin/campaigns', 'GET', 200, listeBody);
+
+  const jourFaux = await call('GET', '/admin/campaigns', { bearer: session, query: { jour: 'hier' } });
+  assert.equal(jourFaux.statusCode, 422, jourFaux.body);
+  assertValid('/admin/campaigns', 'GET', 422, parse(jourFaux));
+
+  // Ni copie ni gabarit : refusé, et le refus a un schéma lui aussi.
+  const vide = await call('POST', '/admin/campaigns', {
+    bearer: session, body: { audience: { type: 'user', email: 'roy@etude.test' } },
+  });
+  assert.equal(vide.statusCode, 422, vide.body);
+  assertValid('/admin/campaigns', 'POST', 422, parse(vide));
+});
+
 // --- Drift sweep : every documented admin path is routed ---------------------
 
 test('every path in admin-openapi.yaml is routed (no "route inconnue" fall-through)', async () => {

@@ -374,6 +374,9 @@ a:hover { text-decoration: underline; }
   align-self: flex-end; font-size: 11px; color: var(--ink-muted);
   font-variant-numeric: tabular-nums;
 }
+/* Le compteur porte « n / plafond » quand le serveur en sert un : le
+   dépassement se voit à la saisie, pas au retour du réseau. */
+.tpl-count.is-over { color: var(--danger); font-weight: 600; }
 .tpl-badge.is-transactionnel { background: var(--neutral-wash); }
 .input[aria-invalid='true'] { border-color: var(--danger); }
 
@@ -639,3 +642,85 @@ a:hover { text-decoration: underline; }
 .camp-avert-list, .camp-echantillon-list { margin: 6px 0 0; padding-left: 18px; }
 .camp-avert-list li, .camp-echantillon-list li { margin-top: 3px; }
 .camp-echantillon-list { font-family: var(--font-mono); font-size: 12px; color: var(--ink-muted); }
+
+/* --- Le compositeur : une campagne porte SA copie (2026-09-04) --------------
+   Rien de neuf en apparence — .field, .input, .tpl-fields, .tpl-count portent
+   déjà tout. Ne lui appartient que le rythme des paires bilingues et la hauteur
+   du corps, qui est le seul champ de la console où l'on écrit un courriel
+   entier plutôt qu'une ligne. */
+.camp-message-panneau { display: grid; gap: 12px; }
+.camp-compositeur-corps {
+  display: grid; gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+}
+.camp-corps { min-height: 140px; resize: vertical; line-height: 1.5; }
+.camp-jetons { max-width: 90ch; }
+.camp-groupe-nature { font-weight: 600; }
+
+/* Ce sur quoi les gardes se sont appuyées : deux lignes, lisibles, avec la
+   règle de gauche du .camp-nature — c'est le même registre (ce que l'envoi
+   engage), pas une note de bas de page. */
+.camp-garde { display: grid; gap: 6px; }
+.camp-garde-list { margin: 0; padding-left: 18px; font-size: 12.5px; color: var(--ink); }
+.camp-garde-list li { margin-top: 4px; line-height: 1.55; }
+/* Une garde qui n'a pas pu s'exercer, ou une base seulement DÉDUITE : la nuance
+   se voit, sinon la console affirme une garantie qu'elle n'a pas. */
+.camp-garde-list li[data-garde='deduit'],
+.camp-garde-list li[data-garde='non_verifiee'],
+.camp-garde-list li[data-garde='inconnu'] { color: var(--ink); font-weight: 600; }
+
+/* L'échec, et QUI a reçu — deux tableaux, le registre de la .ptable. */
+.camp-echecs, .camp-recus { display: grid; gap: 14px; margin-bottom: var(--admin-gap); }
+.camp-echecs .chart-card-head, .camp-recus .chart-card-head { margin-bottom: 0; }
+.camp-echecs-table td, .camp-recus-table td { vertical-align: top; }
+.camp-recus-table tr[data-statut='echoue'] td { color: var(--ink-muted); }
+.camp-registre-manque, .camp-recus-vide {
+  border-left: 3px solid var(--warn); padding-left: 10px; color: var(--ink);
+}
+
+/* --- Les envois passés : le chemin de retour vers « qui a reçu » ------------
+   Une ligne par campagne, du même registre que .aud-groupe (un bloc encadré,
+   son détail replié dessous) parce que c'est le même geste : ouvrir une entrée
+   pour en lire le contenu. Le journal vivait auparavant dans une variable de
+   rendu — cette section EST le défaut réparé. */
+.camp-histoire { margin-bottom: var(--admin-gap); }
+.camp-histoire .chart-card-head { align-items: flex-start; gap: 14px; flex-wrap: wrap; }
+.camp-histoire-jour-field { min-width: 170px; }
+.camp-histoire-corps { display: grid; gap: 10px; }
+.camp-histoire-ligne {
+  padding: 12px 14px; border: 1px solid var(--border);
+  border-radius: var(--radius); background: var(--surface-inset);
+}
+.camp-histoire-tete { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.camp-histoire-titre { font-weight: 600; flex: 1 1 220px; }
+.camp-histoire-faits {
+  display: flex; gap: 10px; flex-wrap: wrap;
+  font-size: 12px; color: var(--ink-muted); font-variant-numeric: tabular-nums;
+}
+/* Un envoi qui n'a joint personne ne se lit pas comme un envoi réussi. */
+.camp-histoire-ligne[data-statut='echouee'] .camp-histoire-statut { color: var(--danger); font-weight: 600; }
+.camp-histoire-echoues::before { content: '· '; }
+.camp-histoire-detail:empty { display: none; }
+.camp-histoire-detail .camp-recus { margin: 12px 0 0; }
+.camp-histoire-vide { color: var(--ink-muted); }
+
+/* --- Audiences : les listes de destinataires (2026-09-04) -------------------
+   Même dessin que les groupes de l'écran Accès — un bloc par liste, un
+   formulaire replié dessous — parce que ce sont les mêmes gestes. Ce qui change
+   est le CONTENU : des adresses, pas des permissions. */
+.aud-cadre, .aud-groupes { display: grid; gap: 14px; margin-bottom: var(--admin-gap); }
+.aud-groupe {
+  padding: 12px 14px; border: 1px solid var(--border);
+  border-radius: var(--radius); background: var(--surface-inset);
+}
+.aud-groupe-h { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.aud-groupe-faits { margin: 6px 0 0; }
+.aud-groupe-form { display: grid; gap: 12px; margin-top: 14px; }
+.aud-groupe .tpl-actions, .aud-groupe .bareme-confirm { margin-top: 8px; }
+.aud-erreur { margin-top: 4px; }
+/* Une adresse par ligne, en chasse fixe : c'est une LISTE qu'on relit avant
+   d'écrire à ces gens, pas de la prose. */
+.aud-membres {
+  min-height: 150px; resize: vertical; line-height: 1.5;
+  font-family: var(--font-mono); font-size: 12.5px;
+}

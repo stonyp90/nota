@@ -270,49 +270,103 @@ npm install          # install all workspaces
 npm test             # domain + api unit tests
 ```
 
-Two dev servers, run in separate terminals:
+Then **one command** brings up all four surfaces, seeded, with no AWS and no
+Docker:
 
 ```bash
-npm run dev          # @nota/web on http://localhost:4173
-npm run api:local    # @nota/api on http://localhost:8788
+npm run local
 ```
 
-`api:local` uses an **in-memory repo seeded with domain fixtures** when
-`TABLE_NAME` is unset, so the API returns a populated carnet with no
-infrastructure at all. The web dev server single-sources the domain module at
-`/domain.js` and falls back unknown paths to `index.html` (matching CloudFront).
+| Surface | URL |
+| --- | --- |
+| Carnet public | http://localhost:4173 |
+| API publique | http://localhost:8788 |
+| **Console admin** | http://localhost:4174 |
+| API admin | http://localhost:8790 |
 
-### Admin console locally
+Everything is in memory and seeded from `apps/api/scripts/dev-fixtures.js` — 34
+offers, two confirmed referral codes, four demo notaries and a 28-day analytics
+history — so every surface renders on real data from the first request. Ctrl-C
+stops all four. Ports are overridable (`NOTA_PORT_API`, `NOTA_PORT_WEB`,
+`NOTA_PORT_ADMIN_API`, `NOTA_PORT_ADMIN`); the individual servers are still
+there (`npm run dev`, `api:local`, `dev:admin`, `admin:local`) when you want one
+of them alone.
 
-Two more servers give the full admin experience — real magic-link flow, no AWS,
-no mailbox:
+**Signing into the admin console.** Open http://localhost:4174 and request a
+link for `admin@nota.local` (or set `NOTA_ADMIN_EMAILS`). Outside production the
+API returns the magic link **in the response**, and the page shows it — so the
+real single-use, server-checked flow completes with no mailbox. From a shell:
 
 ```bash
-npm run admin:local  # admin API on http://localhost:8790 (fixtures + seeded stats)
-npm run dev:admin    # admin console on http://localhost:4174 (proxies /api/* to :8790)
+curl -s -X POST http://localhost:4174/api/admin/auth/request \
+  -H 'content-type: application/json' -d '{"email":"admin@nota.local"}'
+# -> {"ok":true,"devLink":"http://localhost:4174/#/auth?token=..."}
 ```
 
-Open http://localhost:4174, request a link for `admin@nota.local` (or set
-`NOTA_ADMIN_EMAILS`), and click the **dev link echoed on the page** — outside
-production the API returns the magic link in the response, so the whole
-sign-in completes locally. The overview renders a deterministic seeded
-dashboard (fixtures + a 28-day analytics history).
+**Is it actually working?**
+
+```bash
+npm run local:check
+```
+
+asks three separate questions: does each of the four surfaces answer, are the
+**two APIs** serving the source tree in front of you, and is the carnet the
+public API returns **not empty**. Only the APIs carry the freshness header, so a
+stale static server is not caught — see "Freshness" below.
+
+`npm run local` itself is not a verdict: its children are supervisors, and a
+supervisor outlives the server it supervises, so a service that never binds its
+port (a stale stack still holding it) leaves the banner fully green. Run
+`local:check` before trusting anything you curled.
 
 ### Full stack with Docker (no AWS)
 
-To run the whole stack — DynamoDB Local, table creation, API and web — with a
-single command and no AWS account:
+`npm run local` is in memory; `docker compose` is the same product on the real
+persistence layer — DynamoDB Local and an S3-compatible store — on the same
+ports.
 
 ```bash
-docker compose up
+docker compose up            # everything, seeded, on the ports above
+docker compose run --rm seed # re-seed at any time (idempotent)
+docker compose down -v       # throw the demo world away and start clean
 ```
 
 This starts `dynamodb-local` (:8000), creates the `nota` and `nota-admin`
-tables, brings up **MinIO** (:9100, console :9101) as the S3-compatible document
-store behind the storage port (ADR 0032), runs the API against them (:8788),
-serves the web app (:4173), and brings up the admin surface too — the admin API
-(:8790) and the admin console (:4174), mirroring production's two-table,
-two-Lambda split.
+tables, **seeds them**, brings up **MinIO** (:9100, console :9101) as the
+S3-compatible document store behind the storage port (ADR 0032), runs the API
+against them (:8788), serves the web app (:4173), and brings up the admin
+surface too — the admin API (:8790) and the admin console (:4174), mirroring
+production's two-table, two-Lambda split. Both stores write to named volumes, so
+a restart is a restart and not a wipe.
+
+Seeding is a **separate one-shot service**, and both APIs wait for it to
+succeed: `create-table.js` only ever creates tables, and the dev servers seed
+their in-memory branch only, so before this the docker stack came up green and
+completely empty. `npm run local:seed` runs the same seed from the host against
+a running stack.
+
+### Freshness — the containers must not serve yesterday's code
+
+The docker services mount the repo and hold their code in memory, so a plain
+`node` process keeps answering with whatever it required at boot. This stack was
+found doing exactly that — **two days** behind the tree, with no error and no
+warning — which quietly invalidates every local check made against it.
+
+Two things now prevent it:
+
+- every node service runs under `apps/api/scripts/dev-watch.js`, which **polls a
+  content digest** of the source and restarts on change (`node --watch` relies
+  on inotify, which never fires for a host write over a bind mount);
+- both APIs stamp that digest on every response as **`x-nota-source`**, so
+  staleness is a fact you can read:
+
+  ```bash
+  curl -sI "http://localhost:8788/bids?month=2026-09" | grep x-nota-source
+  npm run local:check    # compares it with the tree, and names the mismatch
+  ```
+
+If a process ever does go stale, `docker compose restart api admin-api` (or
+`npm run local`) fixes it — but you will be told, rather than left guessing.
 
 ## Tests
 

@@ -3,8 +3,15 @@
 /**
  * Creates the Nota tables in DynamoDB Local for development. Idempotent.
  * Run by docker-compose (the `dynamo-init` service) and available manually:
+ *   npm run local:tables
  *   TABLE_NAME=nota ADMIN_TABLE_NAME=nota-admin \
  *   DYNAMO_ENDPOINT=http://localhost:8000 node scripts/create-table.js
+ *
+ * It creates tables and NOTHING ELSE — no PutItem, by design. Filling them with
+ * the demo world is `scripts/seed.js` (`npm run local:seed`, or the compose
+ * `seed` service), which the two APIs wait for. Splitting the two was not
+ * always obvious: for a while this script was the whole docker "setup", so a
+ * cold start produced an empty carnet and an empty admin console.
  *
  * Two tables, mirroring production (infra/dynamodb.tf + infra/admin.tf):
  *   - TABLE_NAME        — the single main table (bids, notaries, stats) with

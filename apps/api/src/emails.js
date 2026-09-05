@@ -3524,6 +3524,174 @@ function validateOverride(key, payload) {
   };
 }
 
+// =============================================================================
+// LA CAMPAGNE ÉCRITE PAR L'OPÉRATEUR (le compositeur)
+// =============================================================================
+//
+// Une campagne porte SA copie. Avant, l'écran ne savait que désigner une clé du
+// registre, et reformuler ce courriel-là depuis l'écran « Courriels » changeait
+// le gabarit pour TOUS les envois suivants — y compris les transactionnels, que
+// l'art. 68 du Code de déontologie protège justement contre la réécriture
+// publicitaire. Écrire une relance ne doit pas pouvoir déplacer un avis de
+// service : la copie d'une campagne vit donc AVEC la campagne, et le registre
+// des gabarits ne bouge pas.
+//
+// Ce n'est PAS un gabarit de plus : `campaignMessage` n'entre ni dans
+// `TEMPLATES` ni dans `TEMPLATE_META`. Il n'a pas de copie par défaut à
+// surcharger, il ne doit pas s'offrir dans l'écran « Courriels », et une
+// surcharge qui l'éteindrait n'aurait aucun sens.
+//
+// Les bornes reprennent celles d'une surcharge — mêmes raisons — sauf le corps :
+// une surcharge remplace UN paragraphe d'un gabarit existant, une campagne EST
+// son propre courriel. Les lignes vides séparent les paragraphes.
+const CAMPAIGN_LIMITS = { sujet: OVERRIDE_LIMITS.sujet, preheader: OVERRIDE_LIMITS.preheader, corps: 4000, cta: OVERRIDE_LIMITS.cta };
+
+// Le vocabulaire d'une campagne : elle ne part d'aucune offre et d'aucun acte,
+// elle ne connaît que l'adresse visée. Tout autre jeton resterait vide, et un
+// courriel qui part avec un trou est pire qu'un courriel refusé.
+const CAMPAIGN_TOKENS = ['email'];
+
+// Les quatre paires du compositeur. Même forme que OVERRIDE_FIELDS — deux
+// langues, une borne, deux codes d'erreur — pour que la console pose ses
+// `maxlength` depuis le serveur au lieu de recopier des nombres qui dérivent.
+const CAMPAIGN_FIELDS = [
+  { fr: 'sujetFr', en: 'sujetEn', max: CAMPAIGN_LIMITS.sujet, requis: true, tropLong: 'sujet_trop_long', bilingue: 'sujet_bilingue' },
+  { fr: 'preheaderFr', en: 'preheaderEn', max: CAMPAIGN_LIMITS.preheader, requis: false, tropLong: 'preheader_trop_long', bilingue: 'preheader_bilingue' },
+  { fr: 'corpsFr', en: 'corpsEn', max: CAMPAIGN_LIMITS.corps, requis: true, tropLong: 'corps_trop_long', bilingue: 'corps_bilingue' },
+  { fr: 'ctaFr', en: 'ctaEn', max: CAMPAIGN_LIMITS.cta, requis: false, tropLong: 'cta_trop_long', bilingue: 'cta_bilingue' },
+];
+
+// Un corps en paragraphes. `para()` échappe, comme partout ailleurs : rien de
+// ce que l'opérateur tape n'atteint le HTML sans passer par là.
+function campaignBody(texte) {
+  const blocs = String(texte || '').split(/\n\s*\n/).map((b) => b.replace(/\s*\n\s*/g, ' ').trim()).filter(Boolean);
+  return { html: blocs.map(para).join(''), lignes: blocs };
+}
+
+/**
+ * Le courriel d'une campagne composée. `ctx` porte la copie (`sujetFr`,
+ * `corpsEn`, …) ET le contexte d'interpolation (`email`), parce que c'est ainsi
+ * que le notifieur appelle TOUS les gabarits : une seule signature, un seul
+ * chemin d'envoi, et donc un seul endroit où le retrait RFC 8058 est posé.
+ */
+function campaignMessage(ctx = {}) {
+  const jeton = (v, lang) => interpolateTokens(String(v == null ? '' : v), ctx, lang);
+  const corpsFr = campaignBody(jeton(ctx.corpsFr, 'fr'));
+  const corpsEn = campaignBody(jeton(ctx.corpsEn, 'en'));
+  // Sans préheader écrit, la première phrase du corps en tient lieu : l'aperçu
+  // de la boîte de réception n'est jamais laissé vide.
+  const preheaderFr = jeton(ctx.preheaderFr, 'fr') || corpsFr.lignes[0] || '';
+  const preheaderEn = jeton(ctx.preheaderEn, 'en') || corpsEn.lignes[0] || '';
+  const ctaFr = jeton(ctx.ctaFr, 'fr');
+  const ctaEn = jeton(ctx.ctaEn, 'en');
+  return build({
+    subjectFr: jeton(ctx.sujetFr, 'fr'),
+    subjectEn: jeton(ctx.sujetEn, 'en'),
+    preheaderFr,
+    preheaderEn,
+    fr: {
+      heading: jeton(ctx.sujetFr, 'fr'),
+      lead: corpsFr.lignes[0] || '',
+      bodyHtml: corpsFr.lignes.slice(1).map(para).join(''),
+      textLines: corpsFr.lignes.slice(1),
+      ctaLabel: ctaFr || null,
+    },
+    en: {
+      heading: jeton(ctx.sujetEn, 'en'),
+      lead: corpsEn.lignes[0] || '',
+      bodyHtml: corpsEn.lignes.slice(1).map(para).join(''),
+      textLines: corpsEn.lignes.slice(1),
+      ctaLabel: ctaEn || null,
+    },
+    // Sans lien nommé, le bouton mène au carnet — jamais nulle part.
+    ctaUrl: ctaFr || ctaEn ? (ctx.ctaUrl || linksFor(ctx.baseUrl).carnet) : null,
+    unsubscribeUrl: ctx.unsubscribeUrl,
+  }, { ...ctx, __override: null });
+}
+
+/**
+ * Le validateur PUR du compositeur — `{ ok, errors, message }`, la même forme
+ * que `validateOverride` et les mêmes règles, parce que la copie d'une campagne
+ * est publiée tout autant que celle d'un gabarit :
+ *   • tout-ou-rien bilingue (un courriel Nota porte toujours FR et EN) ;
+ *   • pas de HTML (la mise en forme vient du gabarit, et `para()` échappe) ;
+ *   • pas de partage d'honoraires (art. 32 C.déont., art. 32.1 2° Loi sur le
+ *     notariat) — la même liste que les surcharges, jamais une seconde ;
+ *   • un seul jeton connu, `{{email}}` : une campagne ne connaît rien d'autre.
+ */
+function validateCampaignMessage(payload) {
+  const errors = [];
+  const b = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {};
+
+  const connus = new Set(['ctaUrl']);
+  CAMPAIGN_FIELDS.forEach((c) => { connus.add(c.fr); connus.add(c.en); });
+  for (const nom of Object.keys(b)) {
+    if (!connus.has(nom)) errors.push({ code: 'champ_inconnu', message: `Champ inconnu : ${nom}.` });
+  }
+
+  const valeurs = {};
+  for (const champ of CAMPAIGN_FIELDS) {
+    for (const nom of [champ.fr, champ.en]) {
+      const brut = b[nom];
+      if (brut === undefined || brut === null) { valeurs[nom] = null; continue; }
+      if (typeof brut !== 'string') {
+        errors.push({ code: 'champ_invalide', message: `${nom} doit être une chaîne de caractères.` });
+        valeurs[nom] = null;
+        continue;
+      }
+      const v = brut.trim();
+      valeurs[nom] = v || null;
+      if (!v) continue;
+      if (v.length > champ.max) {
+        errors.push({ code: champ.tropLong, message: `${nom} dépasse ${champ.max} caractères.` });
+      }
+      if (/[<>]/.test(v)) {
+        errors.push({
+          code: 'html_interdit',
+          message: `${nom} : le HTML n’est pas permis — écrivez du texte, la mise en forme vient du gabarit.`,
+        });
+      }
+      if (PARTAGE_INTERDIT.find((re) => re.test(v))) {
+        errors.push({
+          code: 'partage_interdit',
+          message:
+            `${nom} : Nota ne prélève aucune part des honoraires du notaire, et un courriel ne peut pas ` +
+            'l’affirmer (art. 32 du Code de déontologie, art. 32.1 2° de la Loi sur le notariat).',
+        });
+      }
+      for (const [, jeton] of v.matchAll(/\{\{\s*([a-zA-Z_]+)\s*\}\}/g)) {
+        if (!CAMPAIGN_TOKENS.includes(jeton)) {
+          errors.push({
+            code: 'jeton_inconnu',
+            message:
+              `${nom} : le jeton {{${jeton}}} n’existe pas pour une campagne — elle ne connaît que ` +
+              `${CAMPAIGN_TOKENS.map((p) => `{{${p}}}`).join(', ')}. Il resterait vide dans la boîte du destinataire.`,
+          });
+        }
+      }
+    }
+    const fr = valeurs[champ.fr];
+    const en = valeurs[champ.en];
+    if ((fr && !en) || (!fr && en)) {
+      errors.push({
+        code: champ.bilingue,
+        message: `${champ.fr} et ${champ.en} vont ensemble : fournissez les deux langues, ou aucune.`,
+      });
+    }
+    if (champ.requis && !fr && !en) {
+      errors.push({ code: 'champ_requis', message: `${champ.fr} et ${champ.en} sont obligatoires.` });
+    }
+  }
+
+  const ctaUrl = typeof b.ctaUrl === 'string' ? b.ctaUrl.trim() : '';
+  if (ctaUrl && !/^https:\/\/[^\s]+$/.test(ctaUrl)) {
+    errors.push({ code: 'lien_invalide', message: 'ctaUrl doit être une adresse https complète.' });
+  }
+
+  if (errors.length) return { ok: false, errors, message: null };
+  return { ok: true, errors: [], message: { ...valeurs, ctaUrl: ctaUrl || null } };
+}
+
 module.exports = {
   PLACEHOLDER_ADDRESS,
   SENDER,
@@ -3531,6 +3699,10 @@ module.exports = {
   TEMPLATES,
   TEMPLATE_META,
   OVERRIDE_LIMITS,
+  CAMPAIGN_LIMITS,
+  CAMPAIGN_TOKENS,
+  campaignMessage,
+  validateCampaignMessage,
   renderSubjectOverride,
   validateOverride,
   isOverrideDisabled,

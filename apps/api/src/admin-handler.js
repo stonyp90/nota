@@ -71,6 +71,14 @@ function createAdminApp(repo, opts = {}) {
         // The public site — where an activated notary is told to sign in.
         siteUrl: opts.siteUrl || process.env.NOTA_BASE_URL || process.env.NOTA_SITE_URL || '',
         devEcho: process.env.NODE_ENV !== 'production',
+        // Les bornes de campagne étaient LUES par admin.js (`config.campagnePlafond`,
+        // `config.campagneFenetreHeures`) et n'étaient POSÉES nulle part : la
+        // console retombait donc toujours sur les défauts de segments.js, sans
+        // qu'aucun déploiement puisse les changer. Un réglage qu'on ne peut pas
+        // régler est un littéral déguisé. Terraform les injecte ici.
+        campagnePlafond: process.env.NOTA_CAMPAGNE_PLAFOND || undefined,
+        campagneFenetreHeures: process.env.NOTA_CAMPAGNE_FENETRE_HEURES || undefined,
+        audienceMembresMax: process.env.NOTA_AUDIENCE_MEMBRES_MAX || undefined,
       },
     });
   const analytics = opts.analytics || createAnalytics({ repo, now });
@@ -440,7 +448,88 @@ function createAdminApp(repo, opts = {}) {
         if (result.status === 401) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
         return json(result.status, { errors: result.errors });
       }
-      return json(200, { ok: true, segments: result.segments });
+      return json(200, { ok: true, segments: result.segments, limites: result.limites });
+    }
+
+    // --- Les GROUPES D'AUDIENCE (2026-09-04) ---------------------------------
+    // Des listes de DESTINATAIRES, et surtout PAS les groupes RBAC de
+    // /admin/groups, qui réunissent des permissions. La console peuplait sa
+    // liste « envoyer à un groupe » depuis la route RBAC : la cible existait
+    // dans l'écran et n'atteignait jamais personne. Deux notions, deux
+    // partitions, deux routes — l'ambiguïté était la porte du bogue.
+    // `audiences:read` pour voir (c'est une lecture nominative), `audiences:write`
+    // pour toucher ; les deux sont appliquées dans admin.js, qui journalise
+    // chaque écriture avec son avant/après.
+    if (route === '/admin/audiences/groups' && method === 'GET') {
+      const result = await admin.listAudienceGroups(bearer(request), { ip: clientIp(request) });
+      if (!result.ok) {
+        if (result.status === 401) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+        return json(result.status, { errors: result.errors });
+      }
+      // Les BORNES voyagent avec le catalogue : la console pose ses `maxlength`
+      // et son motif d'identifiant depuis le serveur plutôt que de recopier des
+      // règles qui dériveraient au premier changement de déploiement.
+      return json(200, { ok: true, groupes: result.groupes, limites: result.limites });
+    }
+
+    // contract: /admin/audiences/groups/{id}
+    const audienceGroupMatch = route.match(/^\/admin\/audiences\/groups\/([^/]+)$/);
+    if (audienceGroupMatch && (method === 'PUT' || method === 'DELETE')) {
+      const id = decodeURIComponent(audienceGroupMatch[1]);
+      let result;
+      if (method === 'PUT') {
+        let payload;
+        try {
+          payload = parseBody(request);
+        } catch {
+          return json(400, { errors: [{ code: 'json_invalide', message: 'Corps JSON invalide.' }] });
+        }
+        result = await admin.putAudienceGroup(bearer(request), id, payload, { ip: clientIp(request) });
+      } else {
+        result = await admin.deleteAudienceGroup(bearer(request), id, { ip: clientIp(request) });
+      }
+      if (!result.ok) {
+        if (result.status === 401) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+        return json(result.status, { errors: result.errors });
+      }
+      return json(200, method === 'PUT' ? { ok: true, groupe: result.groupe } : { ok: true });
+    }
+
+    // --- LES CAMPAGNES PASSÉES (2026-09-04) ----------------------------------
+    // Sans cette porte, « voir exactement qui l'a reçu » ne survivait pas au
+    // rendu : l'identifiant de campagne ne vivait que dans la réponse de
+    // l'envoi, et recharger la console coupait le seul chemin vers un registre
+    // pourtant durable. La liste est servie par le JOURNAL D'AUDIT, partitionné
+    // par jour — le `jour` est donc celui de QUÉBEC, et il vaut aujourd'hui par
+    // défaut. Mêmes permissions que le registre vers lequel elle mène.
+    if (route === '/admin/campaigns' && method === 'GET') {
+      const result = await admin.listCampaigns(bearer(request), { jour: query.jour, ip: clientIp(request) });
+      if (!result.ok) {
+        if (result.status === 401) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+        return json(result.status, { errors: result.errors });
+      }
+      return json(200, { ok: true, jour: result.jour, campagnes: result.campagnes });
+    }
+
+    // --- QUI a reçu la campagne X (2026-09-04) -------------------------------
+    // Le registre par (campagne, destinataire). `markCampaignSent` ne garde que
+    // la DERNIÈRE campagne par adresse — l'état du plafond de fréquence — donc
+    // il ne pouvait pas répondre à cette question-là. `analytics:read` pour la
+    // poser ; sans `pii:read` les adresses sont masquées, comme l'échantillon
+    // de l'aperçu : reconnaissable, jamais expédiable.
+    // contract: /admin/campaigns/{campagneId}/recipients
+    const recipientsMatch = route.match(/^\/admin\/campaigns\/([^/]+)\/recipients$/);
+    if (recipientsMatch && method === 'GET') {
+      const result = await admin.listCampaignRecipients(bearer(request), decodeURIComponent(recipientsMatch[1]), {
+        limit: query.limit,
+        cursor: query.cursor,
+        ip: clientIp(request),
+      });
+      if (!result.ok) {
+        if (result.status === 401) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+        return json(result.status, { errors: result.errors });
+      }
+      return json(200, { ok: true, campagneId: result.campagneId, destinataires: result.destinataires, cursor: result.cursor });
     }
 
     if ((route === '/admin/campaigns/preview' || route === '/admin/campaigns') && method === 'POST') {
@@ -456,6 +545,12 @@ function createAdminApp(repo, opts = {}) {
         : await admin.sendCampaign(bearer(request), payload, { ip: clientIp(request) });
       if (!result.ok) {
         if (result.status === 401) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+        // Un envoi qui n'a joint personne rend ses échecs AVEC son refus : sans
+        // eux, l'opérateur ne sait pas s'il doit réessayer ou appeler
+        // quelqu'un.
+        if (result.status === 502) {
+          return json(502, { errors: result.errors, echecs: result.echecs, campagneId: result.campagneId });
+        }
         return json(result.status, { errors: result.errors });
       }
       if (essai) {
@@ -466,10 +561,19 @@ function createAdminApp(repo, opts = {}) {
           echantillon: result.echantillon,
           plafond: result.plafond,
           nature: result.nature,
+          garde: result.garde,
           avertissements: result.avertissements,
         });
       }
-      return json(200, { ok: true, envoyes: result.envoyes, exclus: result.exclus, campagneId: result.campagneId });
+      return json(200, {
+        ok: true,
+        envoyes: result.envoyes,
+        echoues: result.echoues,
+        echecs: result.echecs,
+        registre: result.registre,
+        exclus: result.exclus,
+        campagneId: result.campagneId,
+      });
     }
 
     return json(404, { errors: [{ code: 'introuvable', message: 'Route inconnue.' }] });

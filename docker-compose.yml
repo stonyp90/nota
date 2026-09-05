@@ -2,19 +2,48 @@
 #
 #     docker compose up
 #
-# brings up DynamoDB Local, creates the single "nota" table, runs the API
-# against it, and serves the web app — a self-contained mirror of the
-# same-origin CloudFront layout you can iterate on independently. Every service
-# mounts the repo, so edits are picked up on the next restart.
+# brings up DynamoDB Local, creates the two tables, SEEDS them with the demo
+# world, runs both APIs against them, and serves both front ends — a
+# self-contained mirror of the same-origin CloudFront layout you can iterate on
+# independently.
+#
+# Two things this file is deliberately opinionated about, because the local
+# stack had silently lied about both:
+#
+#   1. IT IS SEEDED. `create-table.js` only ever creates tables, and the dev
+#      servers seed their in-memory branch only (`useDynamo = !!TABLE_NAME`),
+#      which docker never takes — so a cold start used to serve an empty carnet
+#      and an empty admin console. The one-shot `seed` service writes the demo
+#      world through the real DynamoDB adapter, and the APIs wait for it.
+#      Re-run it whenever: `docker compose run --rm seed`.
+#
+#   2. IT PICKS UP EDITS. Every node service runs under `dev-watch.js`, which
+#      polls a content digest of the source (`node --watch` relies on inotify
+#      and never fires for a host write over a bind mount). Each API also stamps
+#      that digest on every response as `x-nota-source`, so if a process ever
+#      does go stale, `npm run local:check` names it instead of an agent
+#      trusting a two-day-old answer.
+#
+# The data survives a restart: DynamoDB Local and MinIO both write to named
+# volumes. `docker compose down -v` is the deliberate way to start clean.
 name: nota
 
 services:
-  # DynamoDB Local — the single-table backing store, in memory, on :8000.
-  # -sharedDb makes every client see the same table regardless of credentials.
+  # DynamoDB Local — the single-table backing store on :8000. -sharedDb makes
+  # every client see the same table regardless of credentials.
+  #
+  # -dbPath, NOT -inMemory: with the old flag every table, every offer and every
+  # seeded notary vanished on `docker compose restart`, so the stack was
+  # unusable for anything spanning a restart and nothing said why. The data now
+  # lives in a named volume. `user: root` because the image's default user
+  # cannot create the file inside a fresh volume.
   dynamodb-local:
     image: amazon/dynamodb-local:latest
+    user: root
     working_dir: /home/dynamodblocal
-    command: "-jar DynamoDBLocal.jar -inMemory -sharedDb"
+    command: "-jar DynamoDBLocal.jar -sharedDb -dbPath /home/dynamodblocal/data"
+    volumes:
+      - dynamodb-data:/home/dynamodblocal/data
     ports:
       - "8000:8000"
 
@@ -25,6 +54,10 @@ services:
   minio:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
+    # Same reason as DynamoDB: a document deposited through the messagerie
+    # (ADR 0032) must still be there after a restart.
+    volumes:
+      - minio-data:/data
     environment:
       MINIO_ROOT_USER: local
       MINIO_ROOT_PASSWORD: locallocal
@@ -74,6 +107,32 @@ services:
     depends_on:
       - dynamodb-local
 
+  # One-shot: SEED the tables with the demo world (offers, referral codes,
+  # notaries, a 28-day analytics history) through the real DynamoDB adapter.
+  # Idempotent — replaying it rewrites the same items and skips the analytics
+  # counters it already wrote. Re-run it any time:
+  #
+  #     docker compose run --rm seed              # same fixtures again
+  #     docker compose run --rm seed --force      # analytics history too
+  #
+  # Without this service the whole stack comes up green and empty.
+  seed:
+    image: node:20-alpine
+    working_dir: /repo
+    volumes:
+      - ./:/repo
+    environment:
+      TABLE_NAME: nota
+      ADMIN_TABLE_NAME: nota-admin
+      DYNAMO_ENDPOINT: http://dynamodb-local:8000
+      AWS_REGION: ca-central-1
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: locallocal
+    entrypoint: ["node", "apps/api/scripts/seed.js"]
+    depends_on:
+      dynamo-init:
+        condition: service_completed_successfully
+
   # The Nota API on :8788, talking to DynamoDB Local. Dummy AWS creds satisfy the
   # SDK; nothing leaves the machine. Starts once the table exists.
   api:
@@ -101,11 +160,14 @@ services:
       # dès que NODE_ENV vaut « production » — ce n'est pas une porte dérobée,
       # c'est un mode explicitement borné.
       NOTA_DEMO_OPEN: "true"
-    command: ["node", "apps/api/local-server.js"]
+    # Under the watcher, never bare `node`: a bare process serves whatever it
+    # required at boot, and this stack was caught answering with two-day-old
+    # code while the tree had moved on. See apps/api/scripts/dev-watch.js.
+    command: ["node", "apps/api/scripts/dev-watch.js", "apps/api/local-server.js"]
     ports:
       - "8788:8788"
     depends_on:
-      dynamo-init:
+      seed:
         condition: service_completed_successfully
       minio-init:
         condition: service_completed_successfully
@@ -118,7 +180,10 @@ services:
       - ./:/repo
     environment:
       PORT: 4173
-    command: ["node", "apps/web/run-local.mjs"]
+      # public/ is re-read on every request, so only the server file itself can
+      # go stale — watching the whole app would be a pointless digest of 2 MB.
+      NOTA_WATCH_PATHS: apps/web/run-local.mjs
+    command: ["node", "apps/api/scripts/dev-watch.js", "apps/web/run-local.mjs"]
     ports:
       - "4173:4173"
     depends_on:
@@ -142,11 +207,15 @@ services:
       AWS_ACCESS_KEY_ID: local
       AWS_SECRET_ACCESS_KEY: locallocal
       NOTA_ADMIN_BASE_URL: http://localhost:4174
-    command: ["node", "apps/api/admin-local-server.js"]
+      # Hors production, la porte admin renvoie le lien magique dans la réponse
+      # (devLink) : la console s'ouvre sans boîte aux lettres. L'adresse par
+      # défaut est admin@nota.local — NOTA_ADMIN_EMAILS la remplace.
+      NOTA_ADMIN_EMAILS: admin@nota.local
+    command: ["node", "apps/api/scripts/dev-watch.js", "apps/api/admin-local-server.js"]
     ports:
       - "8790:8790"
     depends_on:
-      dynamo-init:
+      seed:
         condition: service_completed_successfully
 
   # The admin console on :4174, proxying /api/* same-origin to admin-api —
@@ -159,8 +228,15 @@ services:
     environment:
       PORT: 4174
       NOTA_ADMIN_API: http://admin-api:8790
-    command: ["node", "apps/admin/run-local.mjs"]
+      NOTA_WATCH_PATHS: apps/admin/run-local.mjs,apps/admin/dev-server.mjs
+    command: ["node", "apps/api/scripts/dev-watch.js", "apps/admin/run-local.mjs"]
     ports:
       - "4174:4174"
     depends_on:
       - admin-api
+
+volumes:
+  # Named, so a restart is a restart and not a wipe. `docker compose down -v`
+  # is the explicit way to throw the demo world away and re-seed from zero.
+  dynamodb-data:
+  minio-data:

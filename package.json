@@ -21,6 +21,10 @@
     "dev:admin": "npm run dev --workspace @nota/admin",
     "api:local": "npm run start --workspace @nota/api",
     "admin:local": "npm run start:admin --workspace @nota/api",
+    "local": "node apps/api/scripts/dev-all.js",
+    "local:tables": "node apps/api/scripts/create-table.js",
+    "local:seed": "node apps/api/scripts/seed.js",
+    "local:check": "node apps/api/scripts/check-stack.js",
     "test:e2e": "playwright test"
   },
   "engines": {

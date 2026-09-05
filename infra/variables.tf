@@ -172,6 +172,30 @@ variable "admin_emails" {
   default     = []
 }
 
+# --- Bornes de campagne (apps/api/src/segments.js GARDES) --------------------
+# apps/api/src/admin.js LISAIT `config.campagnePlafond` et
+# `config.campagneFenetreHeures` — et rien ne les POSAIT : la console retombait
+# toujours sur les défauts du module, qu'aucun déploiement ne pouvait changer.
+# Un réglage qu'on ne peut pas régler est un littéral déguisé. Vides, le code
+# reprend les défauts de segments.js : le comportement d'avant, mais réglable.
+variable "campagne_plafond" {
+  description = "Plafond de destinataires d'une campagne au-delà duquel une confirmation explicite est exigée (NOTA_CAMPAGNE_PLAFOND). Vide = le défaut de segments.js (200)."
+  type        = string
+  default     = ""
+}
+
+variable "campagne_fenetre_heures" {
+  description = "Fenêtre du plafond de fréquence, en heures — la réponse produit à l'art. 56 1° du Code de déontologie (NOTA_CAMPAGNE_FENETRE_HEURES). Vide = le défaut de segments.js (720 h)."
+  type        = string
+  default     = ""
+}
+
+variable "audience_membres_max" {
+  description = "Nombre maximal d'adresses dans un groupe d'audience (NOTA_AUDIENCE_MEMBRES_MAX). Vide = 500. Au-delà, c'est un segment qu'il faut, pas une liste écrite à la main."
+  type        = string
+  default     = ""
+}
+
 # --- Scale / capacity limits ------------------------------------------------
 # Raised from the initial sane-low defaults so the public API is not the launch
 # ceiling (it was 20 req/s + 20 concurrent). Kept as variables — never hardcoded

@@ -114,7 +114,11 @@ test('French boot stays French', async () => {
 // `el(tag, cls, 'texte')`, `createTextNode('texte')`, `toast('texte')`, or a
 // `.placeholder = 'texte'` / `.title = 'texte'`. Walk them the way index.html
 // is walked, so a new French string cannot ship without its English.
-const CODE_ALLOW = new Set([...ALLOW, 'soutien', 'Soutien', 'vous@nota.ca', 'personne@exemple.ca']);
+// Les exemples posés en `placeholder` : ils ne se traduisent pas, ils montrent
+// la FORME attendue (un identifiant en minuscules, une adresse). « Groupe
+// pilote » en est un aussi — c'est le nom qu'un opérateur pourrait taper.
+const CODE_ALLOW = new Set([...ALLOW, 'soutien', 'Soutien', 'vous@nota.ca', 'personne@exemple.ca',
+  'pilote', 'Groupe pilote', 'une.adresse@exemple.ca']);
 function adminLiterals() {
   const out = new Set();
   const src = ADMIN_SRC;

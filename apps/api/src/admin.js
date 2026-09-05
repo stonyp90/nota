@@ -823,14 +823,23 @@ function createAdmin({
     // table admin, les mouvements d'argent dans la table principale (la Lambda
     // publique n'a pas accès à la première). Un auditeur ne doit pas avoir à
     // savoir ça — on fusionne, on dédoublonne par id, on trie.
-    // Le journal est PARTITIONNÉ par jour UTC (AUDIT#<isoTs.slice(0,10)>) ;
-    // l'opérateur demande un jour de QUÉBEC. Un geste de 21 h à Québec vit
-    // dans la partition du lendemain UTC — on lit donc les deux partitions
-    // que ce jour civil recouvre, puis on ne garde que les entrées dont le
-    // jour ouvrable est bien celui demandé (revue de f45a2e1).
+    return { ok: true, jour: j, entrees: await entreesDuJour(j, ['queryAuditByDay', 'queryTxAuditByDay']) };
+  }
+
+  // LES ENTRÉES D'AUDIT D'UN JOUR OUVRABLE DE QUÉBEC, fusionnées et
+  // dédoublonnées par id, la plus récente d'abord.
+  //
+  // Le journal est PARTITIONNÉ par jour UTC (AUDIT#<isoTs.slice(0,10)>) ;
+  // l'opérateur, lui, demande un jour de QUÉBEC. Un geste de 21 h à Québec vit
+  // dans la partition du LENDEMAIN UTC — on lit donc les deux partitions que ce
+  // jour civil recouvre, puis on ne garde que les entrées dont le jour ouvrable
+  // est bien celui demandé (revue de f45a2e1). Une seule copie de cette règle :
+  // deux écrans la lisent (le journal d'audit, la liste des campagnes) et rien
+  // ne serait pire que deux notions de « aujourd'hui » dans la même console.
+  async function entreesDuJour(j, portes) {
     const lendemain = new Date(Date.parse(j + 'T00:00:00Z') + 864e5).toISOString().slice(0, 10);
     const lire = (fn) => (typeof repo[fn] === 'function' ? Promise.all([repo[fn](j), repo[fn](lendemain)]).then((x) => x.flat()) : Promise.resolve([]));
-    const [admins, transactions] = await Promise.all([lire('queryAuditByDay'), lire('queryTxAuditByDay')]);
+    const journaux = await Promise.all(portes.map(lire));
     const zone = process.env.NOTA_TIMEZONE || undefined;
     const duJour = (e) => {
       if (!e || !e.ts) return true; // an undated entry stays visible rather than lost
@@ -838,14 +847,18 @@ function createAdmin({
       return Number.isFinite(t) ? domain.businessDay(t, zone) === j : true;
     };
     const parId = new Map();
-    for (const e of [...(admins || []), ...(transactions || [])]) {
+    for (const e of journaux.flat()) {
       if (e && duJour(e) && !parId.has(e.id)) parId.set(e.id, e);
     }
     const entrees = [...parId.values()];
     // Le plus récent d'abord, comme partout ailleurs dans la console.
     entrees.sort((a, b) => String(b.ts || '').localeCompare(String(a.ts || '')));
-    return { ok: true, jour: j, entrees };
+    return entrees;
   }
+
+  // LE JOUR OUVRABLE COURANT — celui de Québec, jamais une tranche UTC d'un
+  // horodatage. À 21 h le 3 septembre, `toISOString().slice(0,10)` dirait le 4.
+  const jourCourant = () => domain.businessDay(clockMs(), process.env.NOTA_TIMEZONE || undefined);
 
   // ---------------------------------------------------------------------------
   // RBAC — le catalogue, les groupes, les accès.
@@ -872,6 +885,8 @@ function createAdmin({
     'billing:write': ['Configurer le paiement et le prix', 'Configure payment and price'],
     'audit:read': ['Lire le journal d’audit', 'Read the audit log'],
     'campaigns:send': ['Envoyer une campagne ciblée', 'Send a targeted campaign'],
+    'audiences:read': ['Voir les groupes d’audience', 'See audience groups'],
+    'audiences:write': ['Modifier les groupes d’audience', 'Edit audience groups'],
   };
 
   function listPermissions() {
@@ -940,6 +955,160 @@ function createAdmin({
     await repo.deleteGroup(id);
     await appendAudit('groupe_supprime', { email: actor || null, meta: { groupeId: String(id), avant, apres: null } });
     return { ok: true, errors: [] };
+  }
+
+  // ---------------------------------------------------------------------------
+  // LES GROUPES D'AUDIENCE — des listes de DESTINATAIRES.
+  //
+  // À ne jamais confondre avec les groupes RBAC juste au-dessus, et la confusion
+  // n'était pas théorique : la console peuplait sa liste « envoyer à un groupe »
+  // depuis `GET /admin/groups`, qui rend des paquets de PERMISSIONS. Viser « le
+  // groupe pilote » ne pouvait donc atteindre personne — la cible existait dans
+  // l'écran, jamais dans la résolution. Deux notions, deux partitions
+  // (`AUDIENCE#GROUPES` contre `GROUPS`), deux tables, et maintenant deux
+  // routes : l'ambiguïté était la porte du bogue.
+  //
+  // Deux permissions et non une : voir la liste des gens à qui Nota écrit est
+  // une lecture NOMINATIVE, et la modifier est une décision d'envoi. Un
+  // opérateur peut avoir la première sans la seconde.
+  // ---------------------------------------------------------------------------
+
+  const AUDIENCE_GROUP_ID = /^[a-z0-9][a-z0-9_-]{0,39}$/;
+  const AUDIENCE_LIBELLE_MAX = 80;
+  // Une liste écrite à la main, pas une base de données : au-delà, c'est un
+  // segment qu'il faut, et le catalogue en sert déjà. La borne est un garde-fou
+  // de saisie, surchargeable par déploiement.
+  const AUDIENCE_MEMBRES_MAX = Number(config.audienceMembresMax) > 0 ? Number(config.audienceMembresMax) : 500;
+
+  // LES BORNES, SERVIES. La console les recopiait — un `AUD_ID_RE` et un
+  // `AUD_LIBELLE_MAX` jumeaux de ceux-ci, et AUCUN plafond de membres : relever
+  // `NOTA_AUDIENCE_MEMBRES_MAX` sur un déploiement laissait l'écran l'ignorer,
+  // et l'opérateur découvrait la borne au refus du serveur. Elles voyagent donc
+  // avec le catalogue, exactement comme celles du compositeur (`listSegments`).
+  // Le motif est rendu en SOURCE d'expression régulière : la console le compile
+  // tel quel, et le jour où la règle bouge ici, elle bouge là-bas.
+  const audienceLimites = () => ({
+    identifiantMotif: AUDIENCE_GROUP_ID.source,
+    libelleMax: AUDIENCE_LIBELLE_MAX,
+    membresMax: AUDIENCE_MEMBRES_MAX,
+  });
+
+  function validateAudienceGroup(id, payload = {}) {
+    const errors = [];
+    if (!AUDIENCE_GROUP_ID.test(String(id || ''))) {
+      errors.push({
+        code: 'identifiant_invalide',
+        message: 'L’identifiant doit être en minuscules, sans espace (lettres, chiffres, - et _), 40 caractères au plus.',
+      });
+    }
+    const libelle = typeof payload.libelle === 'string' ? payload.libelle.trim() : '';
+    if (!libelle || libelle.length > AUDIENCE_LIBELLE_MAX) {
+      errors.push({
+        code: 'libelle_invalide',
+        message: `Le nom du groupe est obligatoire et fait au plus ${AUDIENCE_LIBELLE_MAX} caractères.`,
+      });
+    }
+    // L'audience décide quelle table `segments.js` interroge pour retrouver le
+    // SUJET de chaque adresse — donc quelle base de consentement il peut
+    // établir. Se tromper ici, c'est écrire à un notaire en le prenant pour un
+    // client, et perdre sa base au passage.
+    const audiencesValides = Object.values(segments.AUDIENCE);
+    if (!audiencesValides.includes(payload.audience)) {
+      errors.push({
+        code: 'audience_invalide',
+        message: `L’audience doit être l’une de : ${audiencesValides.join(', ')}.`,
+      });
+    }
+    // La nature décide si la LCAP exige une base de consentement. Elle est
+    // DÉCLARÉE sur le groupe et non devinée à l'envoi : un groupe qui ne le dit
+    // pas est traité comme commercial par la résolution, et il vaut mieux que
+    // l'opérateur l'ait écrit lui-même.
+    const naturesValides = Object.values(segments.NATURE);
+    if (!naturesValides.includes(payload.nature)) {
+      errors.push({
+        code: 'nature_invalide',
+        message: `La nature doit être l’une de : ${naturesValides.join(', ')}.`,
+      });
+    }
+
+    const bruts = Array.isArray(payload.membres) ? payload.membres : null;
+    if (!bruts) {
+      errors.push({ code: 'membres_invalides', message: 'Les destinataires doivent être une liste d’adresses.' });
+    }
+    const membres = [];
+    for (const brut of bruts || []) {
+      const email = String(brut == null ? '' : brut).trim().toLowerCase();
+      if (!domain.isEmail(email)) {
+        errors.push({ code: 'courriel_invalide', message: `« ${brut} » n’est pas une adresse courriel valide.` });
+        continue;
+      }
+      // Déduplication à l'écriture : `resolveAudience` dédoublonne aussi, mais
+      // un groupe qui MONTRE deux fois la même personne ment sur sa taille.
+      if (!membres.includes(email)) membres.push(email);
+    }
+    if (bruts && membres.length === 0 && !errors.some((e) => e.code === 'courriel_invalide')) {
+      errors.push({ code: 'membres_vides', message: 'Un groupe sans destinataire n’est pas une audience.' });
+    }
+    if (membres.length > AUDIENCE_MEMBRES_MAX) {
+      errors.push({
+        code: 'membres_trop_nombreux',
+        message: `Un groupe compte au plus ${AUDIENCE_MEMBRES_MAX} destinataires — au-delà, visez un segment.`,
+      });
+    }
+
+    if (errors.length) return { ok: false, errors };
+    return { ok: true, errors: [], groupe: { id: String(id), libelle, audience: payload.audience, nature: payload.nature, membres } };
+  }
+
+  async function listAudienceGroups(token, { ip } = {}) {
+    const p = await requireAdmin(token, { ip });
+    if (!p) return { ok: false, status: 401 };
+    if (!rbac.can(p.permissions, 'audiences:read')) {
+      return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Lecture des groupes d’audience non autorisée.' }] };
+    }
+    const groupes = typeof repo.listAudienceGroups === 'function' ? await repo.listAudienceGroups() : [];
+    return {
+      ok: true,
+      groupes: groupes.map((g) => ({ ...g, membres: g.membres || [], nbMembres: (g.membres || []).length })),
+      limites: audienceLimites(),
+    };
+  }
+
+  async function putAudienceGroup(token, id, payload, { ip } = {}) {
+    const p = await requireAdmin(token, { ip });
+    if (!p) return { ok: false, status: 401 };
+    if (!rbac.can(p.permissions, 'audiences:write')) {
+      return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Modification des groupes d’audience non autorisée.' }] };
+    }
+    const v = validateAudienceGroup(id, payload || {});
+    if (!v.ok) return { ok: false, status: 422, errors: v.errors };
+    const avant = typeof repo.getAudienceGroup === 'function' ? await repo.getAudienceGroup(id) : null;
+    const groupe = await repo.putAudienceGroup(v.groupe, clockIso());
+    // Modifier la liste des gens à qui Nota écrit est une décision : elle se
+    // journalise avec son avant/après, comme un changement de permission.
+    await appendAudit('audience_groupe_modifie', {
+      adminId: p.adminId, email: p.email, ip,
+      meta: { groupeId: String(id), avant, apres: groupe },
+    });
+    return { ok: true, groupe: { ...groupe, nbMembres: (groupe.membres || []).length } };
+  }
+
+  async function deleteAudienceGroup(token, id, { ip } = {}) {
+    const p = await requireAdmin(token, { ip });
+    if (!p) return { ok: false, status: 401 };
+    if (!rbac.can(p.permissions, 'audiences:write')) {
+      return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Modification des groupes d’audience non autorisée.' }] };
+    }
+    const avant = typeof repo.getAudienceGroup === 'function' ? await repo.getAudienceGroup(id) : null;
+    if (!avant) {
+      return { ok: false, status: 404, errors: [{ code: 'groupe_introuvable', message: 'Ce groupe d’audience n’existe pas.' }] };
+    }
+    await repo.deleteAudienceGroup(id);
+    await appendAudit('audience_groupe_supprime', {
+      adminId: p.adminId, email: p.email, ip,
+      meta: { groupeId: String(id), avant, apres: null },
+    });
+    return { ok: true };
   }
 
   // Les comptes que la console peut administrer : la liste blanche de
@@ -1102,20 +1271,58 @@ function createAdmin({
     if (!rbac.can(p.permissions, 'analytics:read')) {
       return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Lecture des segments non autorisée.' }] };
     }
-    return { ok: true, segments: segments.describeSegments().map(segmentView) };
+    // `limites` voyage avec le catalogue : la console pose les `maxlength` du
+    // compositeur depuis le serveur plutôt que de recopier des bornes qui
+    // dériveraient le jour où emails.js bouge.
+    return {
+      ok: true,
+      segments: segments.describeSegments().map(segmentView),
+      limites: { ...emails.CAMPAIGN_LIMITS, jetons: [...emails.CAMPAIGN_TOKENS] },
+    };
   }
 
   const PLAFOND_CAMPAGNE = config.campagnePlafond || segments.GARDES.plafondAudience;
   const FENETRE_CAMPAGNE = config.campagneFenetreHeures || segments.GARDES.fenetreHeures;
 
-  // Le gabarit, contrôlé AVANT toute résolution — un refus doit coûter zéro
-  // lecture, et surtout zéro envoi.
-  function verifierGabarit(templateKey) {
-    const meta = emails.TEMPLATE_META[templateKey];
-    if (!meta) {
-      return { ok: false, status: 404, errors: [{ code: 'modele_inconnu', message: `Modèle de courriel inconnu : ${templateKey}.` }] };
+  // CE QUE LA CAMPAGNE ENVOIE — deux formes, contrôlées AVANT toute résolution :
+  // un refus doit coûter zéro lecture, et surtout zéro envoi.
+  //
+  //   • `message` — la copie que l'opérateur vient d'écrire POUR cette campagne.
+  //     C'est la forme normale depuis le compositeur. Elle vit avec la campagne
+  //     et ne touche jamais au registre des gabarits : avant, « rédiger » une
+  //     relance voulait dire aller reformuler un gabarit dans l'écran
+  //     « Courriels », donc changer ce courriel-là pour TOUS les envois
+  //     suivants — y compris les transactionnels que l'art. 68 protège.
+  //   • `templateKey` — un gabarit du registre, avec sa surcharge admin
+  //     (ADR 0018). Forme héritée, gardée : réexpédier un gabarit existant reste
+  //     une demande légitime, et c'est elle qui porte la garde de l'art. 68.
+  //
+  // Les deux ensemble sont refusés : un envoi doit avoir UNE source de copie.
+  function verifierCopie(payload) {
+    const aMessage = payload.message !== undefined && payload.message !== null;
+    const aGabarit = payload.templateKey !== undefined && payload.templateKey !== null && payload.templateKey !== '';
+    if (aMessage && aGabarit) {
+      return {
+        ok: false, status: 422,
+        errors: [{ code: 'copie_ambigue', message: 'Choisissez soit un gabarit du registre, soit un message écrit — jamais les deux.' }],
+      };
     }
-    return { ok: true, meta };
+    if (aMessage) {
+      const v = emails.validateCampaignMessage(payload.message);
+      if (!v.ok) return { ok: false, status: 422, errors: v.errors };
+      return { ok: true, message: v.message, meta: null, templateKey: null };
+    }
+    if (!aGabarit) {
+      return {
+        ok: false, status: 422,
+        errors: [{ code: 'copie_manquante', message: 'Une campagne part avec un message écrit ou un gabarit du registre : elle ne part pas vide.' }],
+      };
+    }
+    const meta = emails.TEMPLATE_META[payload.templateKey];
+    if (!meta) {
+      return { ok: false, status: 404, errors: [{ code: 'modele_inconnu', message: `Modèle de courriel inconnu : ${payload.templateKey}.` }] };
+    }
+    return { ok: true, meta, templateKey: payload.templateKey, message: null };
   }
 
   // Art. 68 : un gabarit transactionnel est le seul avis d'un fait que son
@@ -1148,21 +1355,26 @@ function createAdmin({
   // cette couche peut voir : un gabarit adressé à une autre audience que celle
   // qu'on vient de résoudre, et un gabarit dont les jetons ne peuvent pas être
   // remplis par une campagne.
-  function avertissementsDe(resolution, meta, templateKey) {
+  function avertissementsDe(resolution, copie) {
     const out = resolution.avertissements.map((a) => a.message);
+
+    // Une copie écrite ici n'a ni audience déclarée ni jeton non renseignable —
+    // le validateur du compositeur refuse déjà tout jeton hors `{{email}}`.
+    const meta = copie.meta;
+    if (!meta) return out;
 
     const visees = new Set(resolution.destinataires.map((d) => d.audience));
     for (const e of resolution.echantillon) visees.add(e.audience);
     if (visees.size && meta.audience && !visees.has(meta.audience)) {
       out.push(
-        `Le gabarit « ${templateKey} » s’adresse à « ${meta.audience} », alors que l’audience résolue vise « ${[...visees].join(', ')} ».`
+        `Le gabarit « ${copie.templateKey} » s’adresse à « ${meta.audience} », alors que l’audience résolue vise « ${[...visees].join(', ')} ».`
       );
     }
 
     const orphelins = (meta.placeholders || []).filter((j) => !CTX_CAMPAGNE.includes(j));
     if (orphelins.length) {
       out.push(
-        `Le gabarit « ${templateKey} » interpole ${orphelins.map((j) => `{{${j}}}`).join(', ')}, qu’une campagne ne peut pas renseigner : ces jetons resteront vides.`
+        `Le gabarit « ${copie.templateKey} » interpole ${orphelins.map((j) => `{{${j}}}`).join(', ')}, qu’une campagne ne peut pas renseigner : ces jetons resteront vides.`
       );
     }
     return out;
@@ -1203,14 +1415,16 @@ function createAdmin({
     }
 
     const payload = body || {};
-    const gabarit = verifierGabarit(payload.templateKey);
-    if (!gabarit.ok) return gabarit;
+    const copie = verifierCopie(payload);
+    if (!copie.ok) return copie;
 
     const r = await resoudre(payload.audience, { dryRun: true });
     if (!r.ok) return { ok: false, status: 422, errors: r.errors };
 
-    const nature = verifierNature(gabarit.meta, payload.templateKey, r.nature);
-    if (!nature.ok) return nature;
+    if (copie.meta) {
+      const nature = verifierNature(copie.meta, copie.templateKey, r.nature);
+      if (!nature.ok) return nature;
+    }
 
     return {
       ok: true,
@@ -1219,7 +1433,12 @@ function createAdmin({
       echantillon: echantillonView(r),
       plafond: { limite: r.plafond.limite, depasse: r.plafond.depasse },
       nature: r.nature,
-      avertissements: avertissementsDe(r, gabarit.meta, payload.templateKey),
+      // Sur QUOI les deux gardes se sont appuyées. Sans cet écho, la console
+      // affirmait « base de consentement vérifiée » alors que la résolution
+      // avait pu redescendre sur une déduction faute de registre — une garantie
+      // qu'on ne peut pas contrôler n'en est pas une.
+      garde: { frequence: r.garde.frequence, consentement: r.garde.consentement },
+      avertissements: avertissementsDe(r, copie),
     };
   }
 
@@ -1234,8 +1453,8 @@ function createAdmin({
     }
 
     const payload = body || {};
-    const gabarit = verifierGabarit(payload.templateKey);
-    if (!gabarit.ok) return gabarit;
+    const copie = verifierCopie(payload);
+    if (!copie.ok) return copie;
 
     const r = await resoudre(payload.audience, { dryRun: false, confirme: payload.confirme === true });
     if (!r.ok) {
@@ -1248,8 +1467,10 @@ function createAdmin({
       return { ok: false, status: 422, errors: r.errors };
     }
 
-    const nature = verifierNature(gabarit.meta, payload.templateKey, r.nature);
-    if (!nature.ok) return nature;
+    if (copie.meta) {
+      const nature = verifierNature(copie.meta, copie.templateKey, r.nature);
+      if (!nature.ok) return nature;
+    }
 
     if (!notifier || typeof notifier.sendCampaign !== 'function') {
       // Aucun chemin d'envoi câblé. On le DIT, plutôt que d'en écrire un second
@@ -1259,7 +1480,7 @@ function createAdmin({
       // pas eu lieu.
       await appendAudit('campagne_refusee', {
         adminId: p.adminId, email: p.email, ip,
-        meta: { templateKey: payload.templateKey, total: r.total, motif: 'envoi_indisponible' },
+        meta: { templateKey: copie.templateKey, total: r.total, motif: 'envoi_indisponible' },
       });
       return {
         ok: false,
@@ -1270,24 +1491,71 @@ function createAdmin({
 
     const campagneId = genId();
     const echecs = [];
+    // `ecrits` / `echecs` : le registre des DESTINATAIRES (qui a reçu quoi).
+    // `frequenceEchecs` : le registre du QUOTA (art. 56 1°), qui est un autre
+    // item et une autre garde — les confondre ferait passer un envoi réussi
+    // pour un envoi manqué.
+    const registre = { ecrits: 0, echecs: 0, frequenceEchecs: 0 };
     let envoyes = 0;
+
+    // LE REGISTRE DES DESTINATAIRES — une ligne par (campagne, adresse), et
+    // pour TOUTES les natures.
+    //
+    // Il n'existait pas. `markCampaignSent` écrit UNE ligne par ADRESSE, écrasée
+    // par la campagne suivante : c'est l'ÉTAT du plafond de fréquence, et il ne
+    // peut pas répondre à « qui a reçu la campagne du 3 septembre ». Sans cette
+    // réponse, un renvoi ne peut pas se dédoublonner, une plainte ne peut pas se
+    // vérifier, et la Loi 25 (art. 27, droit d'accès) reste inexécutable.
+    //
+    // Et il s'écrit sur le TRANSACTIONNEL aussi. L'écriture était conditionnée à
+    // `nature === COMMERCIAL` — ce qui est juste pour le quota de fréquence et
+    // faux pour la trace : la distinction LCAP décide du consentement et du
+    // plafond, jamais de la tenue des livres.
+    const inscrire = async (email, statut, erreur) => {
+      if (typeof repo.appendCampaignRecipient !== 'function') return;
+      try {
+        await repo.appendCampaignRecipient({
+          campagneId,
+          courriel: email,
+          templateKey: copie.templateKey || 'campagne_composee',
+          nature: r.nature,
+          at: clockIso(),
+          statut,
+          erreur: erreur || null,
+        });
+        registre.ecrits += 1;
+      } catch {
+        // Best-effort, comme le journal d'audit : un registre en panne ne doit
+        // pas rejouer un envoi déjà parti. Mais le compte des lignes perdues
+        // REMONTE — un registre muet qui se croit complet est pire que pas de
+        // registre du tout.
+        registre.echecs += 1;
+      }
+    };
+
     for (const d of r.destinataires) {
       let out;
       try {
         out = await notifier.sendCampaign({
           to: d.email,
-          templateKey: payload.templateKey,
+          templateKey: copie.templateKey || undefined,
+          message: copie.message || undefined,
           ctx: { email: d.email, campagneId },
         });
       } catch (err) {
-        echecs.push({ email: d.email, raison: String((err && err.message) || err) });
+        const raison = String((err && err.message) || err);
+        echecs.push({ courriel: d.email, raison });
+        await inscrire(d.email, 'echoue', raison);
         continue;
       }
       if (!out || out.sent !== true) {
-        echecs.push({ email: d.email, raison: (out && out.reason) || 'refuse' });
+        const raison = (out && (out.detail || out.reason)) || 'refuse';
+        echecs.push({ courriel: d.email, raison });
+        await inscrire(d.email, 'echoue', raison);
         continue;
       }
       envoyes += 1;
+      await inscrire(d.email, 'envoye', null);
       // Art. 56 1° — SANS cette écriture, le plafond de fréquence ne vaut rien :
       // la campagne suivante retrouverait la même personne comme si de rien
       // n'était. Elle ne se pose que sur le COMMERCIAL : un avis de service
@@ -1298,30 +1566,179 @@ function createAdmin({
         try {
           await repo.markCampaignSent(d.email, clockIso(), campagneId);
         } catch {
-          echecs.push({ email: d.email, raison: 'registre_frequence_indisponible' });
+          // PAS un échec d'ENVOI : le courriel est parti. Ce qui a échoué est
+          // le quota — la prochaine campagne retrouvera cette personne comme
+          // si de rien n'était (art. 56 1°). Le mélanger aux échecs de
+          // livraison ferait compter deux fois le même destinataire, en
+          // « envoyé » et en « échoué », et masquerait la vraie lacune.
+          registre.frequenceEchecs += 1;
         }
       }
     }
 
     const cibles = Array.isArray(payload.audience) ? payload.audience : [payload.audience];
-    await appendAudit('campagne_envoyee', {
-      adminId: p.adminId,
-      email: p.email,
-      ip,
-      meta: {
-        campagneId,
-        audience: cibles,
-        templateKey: payload.templateKey,
-        nature: r.nature,
-        envoyes,
-        total: r.total,
-        exclus: exclusView(r.exclus),
-        echecs,
-        garde: r.garde,
-      },
-    });
+    // Le message composé est CONSERVÉ avec la campagne : « qui a reçu quoi »
+    // n'a pas de « quoi » si la copie n'existe plus nulle part une fois l'écran
+    // refermé. Le journal d'audit est append-only — c'est l'endroit juste.
+    const trace = {
+      campagneId,
+      audience: cibles,
+      templateKey: copie.templateKey,
+      message: copie.message,
+      nature: r.nature,
+      envoyes,
+      total: r.total,
+      exclus: exclusView(r.exclus),
+      echecs,
+      registre,
+      garde: r.garde,
+    };
 
-    return { ok: true, envoyes, exclus: exclusView(r.exclus), campagneId };
+    // ZÉRO JOINT N'EST PAS UN SUCCÈS. Le mailer de la console rendait
+    // `undefined` sans lever quand l'expéditeur n'était pas configuré, et cette
+    // couche lisait « pas d'exception » comme « parti » : une production mal
+    // câblée annonçait « campagne envoyée » en n'ayant rien envoyé. Une
+    // résolution qui a désigné des destinataires et n'en a joint AUCUN est un
+    // échec, et elle se dit comme tel — avec le motif de chacun.
+    if (envoyes === 0 && r.destinataires.length > 0) {
+      await appendAudit('campagne_echouee', { adminId: p.adminId, email: p.email, ip, meta: trace });
+      return {
+        ok: false,
+        status: 502,
+        errors: [{
+          code: 'envoi_echoue',
+          message: `Aucun des ${r.destinataires.length} destinataires n’a été joint : la campagne n’est PAS partie.`,
+        }],
+        echecs,
+        campagneId,
+      };
+    }
+
+    await appendAudit('campagne_envoyee', { adminId: p.adminId, email: p.email, ip, meta: trace });
+
+    return {
+      ok: true,
+      envoyes,
+      echoues: echecs.length,
+      echecs,
+      registre,
+      exclus: exclusView(r.exclus),
+      campagneId,
+    };
+  }
+
+  // QUI A REÇU LA CAMPAGNE X — la question à laquelle rien ne répondait.
+  //
+  // `analytics:read` pour la poser, `pii:read` pour lire les adresses en clair :
+  // un opérateur doit pouvoir vérifier qu'un envoi a bien atteint le nombre
+  // annoncé sans obtenir pour autant la liste expédiable. Sans `pii:read`,
+  // l'adresse est masquée comme dans l'échantillon de l'aperçu — reconnaissable,
+  // pas expédiable.
+  const masquerCourriel = (email) => {
+    const s = String(email || '');
+    const at = s.indexOf('@');
+    return at <= 0 ? '•••' : s.slice(0, 1) + '•••' + s.slice(at);
+  };
+
+  async function listCampaignRecipients(token, campagneId, { limit, cursor, ip } = {}) {
+    const p = await requireAdmin(token, { ip });
+    if (!p) return { ok: false, status: 401 };
+    if (!rbac.can(p.permissions, 'analytics:read')) {
+      return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Lecture des campagnes non autorisée.' }] };
+    }
+    const id = String(campagneId || '').trim();
+    if (!id) {
+      return { ok: false, status: 422, errors: [{ code: 'campagne_invalide', message: 'Identifiant de campagne manquant.' }] };
+    }
+    if (typeof repo.listCampaignRecipients !== 'function') {
+      return { ok: false, status: 503, errors: [{ code: 'registre_indisponible', message: 'Le registre des destinataires n’est pas câblé sur ce dépôt.' }] };
+    }
+    let page;
+    try {
+      page = await repo.listCampaignRecipients(id, { limit, cursor });
+    } catch (err) {
+      // Un curseur d'une autre campagne, un identifiant réservé : la clé refuse
+      // plutôt que de rendre le milieu d'une autre partition.
+      return { ok: false, status: 422, errors: [{ code: 'campagne_invalide', message: String((err && err.message) || err) }] };
+    }
+    const enClair = rbac.can(p.permissions, 'pii:read');
+    return {
+      ok: true,
+      campagneId: id,
+      destinataires: (page.destinataires || []).map((d) => ({
+        courriel: enClair ? d.courriel : masquerCourriel(d.courriel),
+        templateKey: d.templateKey || null,
+        nature: d.nature || null,
+        statut: d.statut || null,
+        erreur: d.erreur || null,
+        at: d.at || null,
+      })),
+      cursor: page.cursor || null,
+    };
+  }
+
+  // LES CAMPAGNES PASSÉES — sans quoi « qui a reçu » ne survit pas au rendu.
+  //
+  // `listCampaignRecipients` répond à « qui a reçu la campagne X » ; encore
+  // faut-il pouvoir NOMMER X après avoir refermé l'écran. L'identifiant ne
+  // vivait que dans la réponse d'un envoi : recharger la console, ou l'ouvrir
+  // ailleurs, coupait le seul chemin vers un registre pourtant durable.
+  //
+  // La source est le JOURNAL D'AUDIT, et ce n'est pas un pis-aller : chaque
+  // envoi y écrit déjà sa trace complète (audience, copie, comptes, exclusions,
+  // gardes) sous `campagne_envoyee` / `campagne_echouee`, append-only, avec son
+  // instant. Un second index de campagnes serait une deuxième vérité à tenir
+  // d'accord avec la première. Le journal est partitionné par jour : la liste
+  // l'est donc aussi, et le jour par défaut est le JOUR OUVRABLE DE QUÉBEC.
+  //
+  // Permissions : les mêmes que le registre des destinataires vers lequel elle
+  // mène — `analytics:read` pour poser la question, `pii:read` pour lire en
+  // clair les adresses que portent les échecs.
+  const CAMPAGNE_STATUTS = { campagne_envoyee: 'envoyee', campagne_echouee: 'echouee' };
+
+  async function listCampaigns(token, { jour, ip } = {}) {
+    const p = await requireAdmin(token, { ip });
+    if (!p) return { ok: false, status: 401 };
+    if (!rbac.can(p.permissions, 'analytics:read')) {
+      return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Lecture des campagnes non autorisée.' }] };
+    }
+    const demande = String(jour == null ? '' : jour).trim();
+    const j = demande || jourCourant();
+    if (!domain.isISODate(j)) {
+      return { ok: false, status: 422, errors: [{ code: 'jour_invalide', message: 'Le jour doit être une date ISO (AAAA-MM-JJ).' }] };
+    }
+    const enClair = rbac.can(p.permissions, 'pii:read');
+    const entrees = await entreesDuJour(j, ['queryAuditByDay']);
+    const campagnes = [];
+    for (const e of entrees) {
+      const statut = CAMPAGNE_STATUTS[e && e.action];
+      const meta = (e && e.meta) || null;
+      // Une trace sans identifiant n'ouvre aucun registre : `campagne_refusee`
+      // (aucun expéditeur câblé) n'a jamais eu de campagne à nommer.
+      if (!statut || !meta || !meta.campagneId) continue;
+      campagnes.push({
+        campagneId: meta.campagneId,
+        at: e.ts || null,
+        statut,
+        audience: Array.isArray(meta.audience) ? meta.audience : (meta.audience ? [meta.audience] : []),
+        templateKey: meta.templateKey || null,
+        // La COPIE, telle qu'elle est partie. « Qui a reçu quoi » n'a pas de
+        // « quoi » si le message n'existe plus nulle part.
+        message: meta.message || null,
+        nature: meta.nature || null,
+        envoyes: Number(meta.envoyes) || 0,
+        total: Number(meta.total) || 0,
+        echoues: Array.isArray(meta.echecs) ? meta.echecs.length : 0,
+        echecs: (Array.isArray(meta.echecs) ? meta.echecs : []).map((f) => ({
+          courriel: enClair ? f.courriel : masquerCourriel(f.courriel),
+          raison: f.raison || null,
+        })),
+        exclus: meta.exclus || null,
+        registre: meta.registre || null,
+        garde: meta.garde || null,
+      });
+    }
+    return { ok: true, jour: j, campagnes };
   }
 
   return {
@@ -1331,6 +1748,12 @@ function createAdmin({
     listSegments,
     previewCampaign,
     sendCampaign,
+    listCampaigns,
+    listCampaignRecipients,
+    listAudienceGroups,
+    putAudienceGroup,
+    deleteAudienceGroup,
+    campaignLimits: () => ({ ...emails.CAMPAIGN_LIMITS, jetons: [...emails.CAMPAIGN_TOKENS] }),
     me,
     refresh,
     logout,

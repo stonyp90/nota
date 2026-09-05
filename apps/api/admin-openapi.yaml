@@ -419,6 +419,171 @@ components:
         - $ref: "#/components/schemas/AudienceCible"
         - type: array
           items: { $ref: "#/components/schemas/AudienceCible" }
+    AudienceGroup:
+      type: object
+      description: >-
+        Un groupe d'AUDIENCE : une liste de DESTINATAIRES, rangee sous
+        `AUDIENCE#GROUPES` (apps/api/src/keys.js). A NE PAS confondre avec le
+        groupe RBAC de `/admin/groups`, qui reunit des PERMISSIONS et vit sur la
+        table admin. La console peuplait sa liste "envoyer a un groupe" depuis
+        la route RBAC : la cible existait dans l'ecran et n'atteignait jamais
+        personne. Deux notions, deux partitions, deux routes.
+        `audience` decide quelle table `segments.js` interroge pour retrouver le
+        SUJET de chaque adresse — donc quelle base de consentement il peut
+        etablir ; `nature` decide si la LCAP exige une base du tout.
+      required: [id, libelle, audience, nature, membres]
+      properties:
+        id: { type: string }
+        libelle: { type: string }
+        audience:
+          type: string
+          enum: [notaire, client]
+        nature:
+          type: string
+          enum: [commercial, transactionnel]
+        membres:
+          type: array
+          items: { type: string, format: email }
+        nbMembres: { type: integer }
+        updatedAt:
+          type: [string, "null"]
+    CampaignMessage:
+      type: object
+      description: >-
+        La copie que l'operateur ecrit POUR CETTE campagne. Elle vit avec la
+        campagne et ne touche jamais au registre des gabarits : avant,
+        "rediger" une relance voulait dire aller reformuler un gabarit dans
+        l'ecran Courriels — donc changer ce courriel-la pour TOUS les envois
+        suivants, y compris les transactionnels que l'art. 68 du Code de
+        deontologie protege. Bilingue TOUT-OU-RIEN par paire (un courriel Nota
+        porte toujours FR et EN), sans HTML (`para()` echappe de toute facon),
+        sans formule de partage d'honoraires (art. 32 C.deont., art. 32.1 2 de
+        la Loi sur le notariat), et un seul jeton connu : `{{email}}` — une
+        campagne ne part d'aucune offre et ne connait rien d'autre.
+      required: [sujetFr, sujetEn, corpsFr, corpsEn]
+      properties:
+        sujetFr: { type: string }
+        sujetEn: { type: string }
+        preheaderFr: { type: [string, "null"] }
+        preheaderEn: { type: [string, "null"] }
+        corpsFr:
+          type: string
+          description: Les lignes vides separent les paragraphes.
+        corpsEn: { type: string }
+        ctaFr: { type: [string, "null"] }
+        ctaEn: { type: [string, "null"] }
+        ctaUrl:
+          type: [string, "null"]
+          description: Adresse https complete. Sans elle, le bouton mene au carnet.
+    CampaignRecipient:
+      type: object
+      description: >-
+        UNE ligne par (campagne, destinataire), ecrite une seule fois — le rejeu
+        d'un envoi ne repeint pas un "echoue" en "envoye". A ne pas confondre
+        avec `CAMPAGNE#ENVOIS`, qui garde la DERNIERE campagne par adresse
+        (l'etat du plafond de frequence) et ne peut donc pas repondre a "qui a
+        recu la campagne X". Sans `pii:read`, `courriel` est masque.
+      required: [courriel, statut]
+      properties:
+        courriel: { type: string }
+        templateKey: { type: [string, "null"] }
+        nature:
+          type: [string, "null"]
+          enum: [commercial, transactionnel, null]
+        statut:
+          type: [string, "null"]
+          enum: [envoye, echoue, null]
+        erreur: { type: [string, "null"] }
+        at: { type: [string, "null"] }
+    AudienceLimites:
+      type: object
+      description: >-
+        Les bornes que le SERVEUR applique aux groupes d'audience, servies avec
+        le catalogue. La console les recopiait (`AUD_ID_RE`, `AUD_LIBELLE_MAX`)
+        et ignorait le plafond de membres : relever
+        `NOTA_AUDIENCE_MEMBRES_MAX` sur un deploiement laissait l'ecran poser
+        l'ancienne borne, et l'operateur decouvrait la vraie au refus. Le motif
+        est rendu en SOURCE d'expression reguliere : la console le compile tel
+        quel, donc il ne peut pas deriver.
+      required: [identifiantMotif, libelleMax, membresMax]
+      properties:
+        identifiantMotif:
+          type: string
+          description: Source de l'expression reguliere appliquee a l'identifiant du groupe.
+        libelleMax: { type: integer }
+        membresMax:
+          type: integer
+          description: >-
+            Au-dela, c'est un segment qu'il faut. Surchargeable par deploiement
+            (`NOTA_AUDIENCE_MEMBRES_MAX`).
+    Campaign:
+      type: object
+      description: >-
+        UNE campagne passee, telle que le JOURNAL D'AUDIT la porte
+        (`campagne_envoyee` / `campagne_echouee`). C'est la trace append-only
+        ecrite a l'envoi qui sert cette liste, et non un second index : deux
+        registres de campagnes seraient deux verites a tenir d'accord. Sans
+        `pii:read`, les adresses des echecs sont masquees.
+      required: [campagneId, statut, envoyes]
+      properties:
+        campagneId:
+          type: string
+          description: >-
+            L'identifiant qui ouvre le registre des destinataires
+            (`GET /admin/campaigns/{campagneId}/recipients`).
+        at: { type: [string, "null"] }
+        statut:
+          type: string
+          enum: [envoyee, echouee]
+          description: >-
+            `echouee` — la resolution avait des destinataires et AUCUN n'a ete
+            joint. La campagne n'est PAS partie.
+        audience:
+          type: array
+          items: { $ref: "#/components/schemas/AudienceCible" }
+        templateKey: { type: [string, "null"] }
+        message:
+          description: >-
+            La copie telle qu'elle est partie. "Qui a recu quoi" n'a pas de
+            "quoi" si le message n'existe plus nulle part.
+          oneOf:
+            - $ref: "#/components/schemas/CampaignMessage"
+            - type: "null"
+        nature:
+          type: [string, "null"]
+          enum: [commercial, transactionnel, null]
+        envoyes: { type: integer }
+        total: { type: integer }
+        echoues: { type: integer }
+        echecs:
+          type: array
+          items: { $ref: "#/components/schemas/CampaignFailure" }
+        exclus:
+          oneOf:
+            - $ref: "#/components/schemas/CampaignExclusions"
+            - type: "null"
+        registre:
+          type: [object, "null"]
+          properties:
+            ecrits: { type: integer }
+            echecs: { type: integer }
+            frequenceEchecs: { type: integer }
+        garde:
+          type: [object, "null"]
+          description: Sur quoi les deux gardes LCAP se sont appuyees au moment de l'envoi.
+          properties:
+            frequence: { type: [string, "null"] }
+            consentement: { type: [string, "null"] }
+    CampaignFailure:
+      type: object
+      required: [courriel, raison]
+      properties:
+        courriel: { type: string }
+        raison:
+          type: string
+          description: >-
+            Le motif REEL, tel que le notifieur l'a rendu — l'expediteur non
+            configure et la boite pleine ne se reparent pas de la meme facon.
     CampaignExclusions:
       type: object
       description: >-
@@ -1743,10 +1908,226 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Segment"
+                  limites:
+                    type: object
+                    description: >-
+                      Les bornes du compositeur, servies avec le catalogue : la
+                      console pose ses `maxlength` depuis le serveur plutot que
+                      de recopier des nombres qui derivent.
+                    properties:
+                      sujet: { type: integer }
+                      preheader: { type: integer }
+                      corps: { type: integer }
+                      cta: { type: integer }
+                      jetons:
+                        type: array
+                        items: { type: string }
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+  /admin/audiences/groups:
+    get:
+      operationId: listAdminAudienceGroups
+      summary: Les groupes d'AUDIENCE — des listes de destinataires.
+      description: >-
+        A ne pas confondre avec `/admin/groups`, qui rend les groupes RBAC
+        (des paquets de PERMISSIONS, sur la table admin). Demande
+        `audiences:read` : c'est une lecture NOMINATIVE — le groupe porte les
+        adresses des gens a qui Nota ecrit — et elle s'accorde comme telle.
+      security:
+        - adminSession: []
+      responses:
+        "200":
+          description: Les groupes d'audience stockes.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, groupes, limites]
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+                  groupes:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AudienceGroup"
+                  limites:
+                    $ref: "#/components/schemas/AudienceLimites"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /admin/audiences/groups/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+        description: Minuscules, sans espace (lettres, chiffres, - et _), 40 caracteres au plus.
+    put:
+      operationId: putAdminAudienceGroup
+      summary: Creer ou remplacer un groupe d'audience.
+      description: >-
+        Remplacement COMPLET de la liste — un groupe est ce que l'operateur
+        vient d'ecrire, jamais une fusion silencieuse. Les adresses sont
+        normalisees et dedupliquees a l'ecriture. Demande `audiences:write` :
+        modifier la liste des gens a qui Nota ecrit est une decision d'envoi,
+        pas un reglage, et elle est journalisee avec son avant/apres.
+      security:
+        - adminSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [libelle, audience, nature, membres]
+              properties:
+                libelle: { type: string }
+                audience:
+                  type: string
+                  enum: [notaire, client]
+                nature:
+                  type: string
+                  enum: [commercial, transactionnel]
+                membres:
+                  type: array
+                  items: { type: string, format: email }
+      responses:
+        "200":
+          description: Le groupe tel qu'il est stocke.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, groupe]
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+                  groupe:
+                    $ref: "#/components/schemas/AudienceGroup"
+        "400":
+          description: Malformed JSON body.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Errors"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          description: >-
+            `identifiant_invalide`, `libelle_invalide`, `audience_invalide`,
+            `nature_invalide`, `courriel_invalide`, `membres_vides`,
+            `membres_invalides` ou `membres_trop_nombreux`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Errors"
+    delete:
+      operationId: deleteAdminAudienceGroup
+      summary: Supprimer un groupe d'audience.
+      description: >-
+        Demande `audiences:write`, journalise avec l'etat d'avant. Un groupe
+        inconnu est un 404 — jamais un succes silencieux, qui laisserait croire
+        qu'une liste a ete retiree alors qu'elle n'existait pas sous ce nom.
+      security:
+        - adminSession: []
+      responses:
+        "200":
+          description: Le groupe est supprime.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: "`groupe_introuvable`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Errors"
+  /admin/campaigns/{campagneId}/recipients:
+    parameters:
+      - name: campagneId
+        in: path
+        required: true
+        schema: { type: string }
+      - name: limit
+        in: query
+        required: false
+        schema: { type: integer }
+      - name: cursor
+        in: query
+        required: false
+        schema: { type: string }
+        description: >-
+          Curseur OPAQUE rendu par la page precedente. L'appelant boucle jusqu'a
+          ce que `cursor` revienne nul.
+    get:
+      operationId: listAdminCampaignRecipients
+      summary: QUI a recu la campagne X.
+      description: >-
+        La question a laquelle rien ne repondait. `markCampaignSent` ne garde
+        que la DERNIERE campagne par adresse — l'etat du plafond de frequence de
+        l'art. 56 1 — donc il ne pouvait dire ni qui avait recu quoi, ni
+        dedupliquer un renvoi, ni servir une demande d'acces (Loi 25, art. 27).
+        Ce registre-ci garde une ligne par (campagne, destinataire), avec son
+        statut. Demande `analytics:read` ; sans `pii:read` les adresses sont
+        MASQUEES comme l'echantillon de l'apercu — reconnaissable, jamais
+        expediable.
+      security:
+        - adminSession: []
+      responses:
+        "200":
+          description: Une page du registre.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, campagneId, destinataires]
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+                  campagneId: { type: string }
+                  destinataires:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/CampaignRecipient"
+                  cursor:
+                    type: [string, "null"]
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          description: >-
+            `campagne_invalide` — identifiant vide, identifiant reserve
+            (`ENVOIS`, qui viserait la partition du plafond de frequence), ou
+            curseur d'une AUTRE campagne.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Errors"
+        "503":
+          description: "`registre_indisponible` — le depot ne cable pas ce registre."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Errors"
   /admin/campaigns/preview:
     post:
       operationId: previewAdminCampaign
@@ -1765,13 +2146,20 @@ paths:
           application/json:
             schema:
               type: object
-              required: [audience, templateKey]
+              required: [audience]
+              description: >-
+                EXACTEMENT UNE source de copie : `message` (ce que l'operateur
+                vient d'ecrire) ou `templateKey` (un gabarit du registre). Les
+                deux ensemble sont refuses (`copie_ambigue`), aucune des deux
+                aussi (`copie_manquante`).
               properties:
                 audience:
                   $ref: "#/components/schemas/AudienceSpec"
                 templateKey:
                   type: string
                   description: Une cle du registre `emails.TEMPLATE_META`.
+                message:
+                  $ref: "#/components/schemas/CampaignMessage"
       responses:
         "200":
           description: Ce que la campagne ferait.
@@ -1779,7 +2167,7 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [ok, total, exclus, echantillon, plafond, nature, avertissements]
+                required: [ok, total, exclus, echantillon, plafond, nature, avertissements, garde]
                 properties:
                   ok:
                     type: boolean
@@ -1806,6 +2194,22 @@ paths:
                     type: string
                     enum: [commercial, transactionnel]
                     description: La plus stricte des natures de la cible.
+                  garde:
+                    type: object
+                    description: >-
+                      Sur QUOI les deux gardes se sont appuyees. Sans cet echo,
+                      la console affirmait "base de consentement verifiee" alors
+                      que la resolution avait pu redescendre sur une deduction
+                      faute de registre : une garantie qu'on ne peut pas
+                      controler n'en est pas une.
+                    required: [frequence, consentement]
+                    properties:
+                      frequence:
+                        type: string
+                        enum: [appliquee, non_verifiee, sans_objet]
+                      consentement:
+                        type: string
+                        enum: [registre, deduit, sans_objet]
                   avertissements:
                     type: array
                     items:
@@ -1833,6 +2237,59 @@ paths:
               schema:
                 $ref: "#/components/schemas/Errors"
   /admin/campaigns:
+    get:
+      operationId: listAdminCampaigns
+      summary: Les campagnes passees d'un jour — le chemin de retour vers "qui a recu".
+      description: >-
+        Sans cette porte, "voir exactement qui l'a recu" ne survivait pas au
+        rendu : l'identifiant de campagne ne vivait que dans la reponse de
+        l'envoi, et recharger la console — ou l'ouvrir sur un autre appareil —
+        coupait le seul chemin vers un registre pourtant durable.
+        La source est le JOURNAL D'AUDIT, qui porte deja chaque envoi avec sa
+        copie, ses comptes, ses exclusions et ses gardes ; un second index de
+        campagnes serait une deuxieme verite a tenir d'accord avec la premiere.
+        Le journal est partitionne par jour, donc la liste l'est aussi : `jour`
+        est un jour OUVRABLE DE QUEBEC (`domain.businessDay`, zone
+        `NOTA_TIMEZONE`), jamais une tranche UTC — un envoi de 21 h vit dans la
+        partition du LENDEMAIN UTC et reste du bon jour civil. Sans `jour`,
+        c'est aujourd'hui. Memes permissions que le registre vers lequel elle
+        mene : `analytics:read` pour poser la question, `pii:read` pour lire en
+        clair les adresses que portent les echecs.
+      parameters:
+        - name: jour
+          in: query
+          required: false
+          schema: { type: string }
+          description: Jour ouvrable de Quebec (AAAA-MM-JJ). Par defaut, aujourd'hui.
+      security:
+        - adminSession: []
+      responses:
+        "200":
+          description: Les campagnes de ce jour, la plus recente d'abord.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, jour, campagnes]
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+                  jour: { type: string }
+                  campagnes:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Campaign"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          description: "`jour_invalide` — le jour doit etre une date ISO (AAAA-MM-JJ)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Errors"
     post:
       operationId: sendAdminCampaign
       summary: Envoyer la campagne.
@@ -1855,7 +2312,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: [audience, templateKey]
+              required: [audience]
+              description: >-
+                EXACTEMENT UNE source de copie : `message` ou `templateKey`.
               properties:
                 audience:
                   $ref: "#/components/schemas/AudienceSpec"
@@ -1864,12 +2323,18 @@ paths:
                   description: >-
                     Une cle du registre `emails.TEMPLATE_META`. Un gabarit
                     TRANSACTIONNEL est refuse pour une campagne commerciale.
+                message:
+                  $ref: "#/components/schemas/CampaignMessage"
                 confirme:
                   type: boolean
                   description: Confirmation explicite exigee quand le plafond de taille est franchi.
       responses:
         "200":
-          description: La campagne est partie.
+          description: >-
+            La campagne est partie — au moins un destinataire a ete joint. Le
+            corps rend le compte REEL, les echecs un par un, et l'etat du
+            registre des destinataires : un envoi qui s'annonce sans se compter
+            est exactement le bogue que cette route a porte.
           content:
             application/json:
               schema:
@@ -1881,11 +2346,37 @@ paths:
                     const: true
                   envoyes:
                     type: integer
+                  echoues:
+                    type: integer
+                  echecs:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/CampaignFailure"
+                  registre:
+                    type: object
+                    description: >-
+                      Les lignes ecrites au registre des destinataires, et
+                      celles perdues. Un registre muet qui se croit complet est
+                      pire que pas de registre.
+                    properties:
+                      ecrits: { type: integer }
+                      echecs: { type: integer }
+                      frequenceEchecs:
+                        type: integer
+                        description: >-
+                          Envois REUSSIS dont le quota de frequence (art. 56 1)
+                          n'a pas pu etre inscrit : le courriel est parti, mais
+                          la prochaine campagne retrouvera cette personne comme
+                          si de rien n'etait. Ce n'est PAS un echec de
+                          livraison, et cela ne compte pas dans `echoues`.
                   exclus:
                     $ref: "#/components/schemas/CampaignExclusions"
                   campagneId:
                     type: string
-                    description: L'identifiant que porte l'entree d'audit.
+                    description: >-
+                      L'identifiant que porte l'entree d'audit ET la partition
+                      du registre des destinataires
+                      (`GET /admin/campaigns/{campagneId}/recipients`).
         "400":
           description: Malformed JSON body.
           content:
@@ -1909,12 +2400,41 @@ paths:
                 $ref: "#/components/schemas/Errors"
         "422":
           description: >-
-            Cible refusee, ou gabarit transactionnel detourne en reclame
-            (`gabarit_transactionnel`).
+            Cible refusee, gabarit transactionnel detourne en reclame
+            (`gabarit_transactionnel`), copie absente (`copie_manquante`),
+            copie double (`copie_ambigue`), ou copie composee invalide
+            (`sujet_bilingue`, `corps_trop_long`, `html_interdit`,
+            `partage_interdit`, `jeton_inconnu`, `champ_requis`…).
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Errors"
+        "502":
+          description: >-
+            `envoi_echoue` — la resolution a designe des destinataires et AUCUN
+            n'a ete joint. Le mailer de la console rendait `undefined` sans
+            lever quand l'expediteur n'etait pas configure, et cette route
+            lisait "pas d'exception" comme "parti" : une production mal cablee
+            annoncait "campagne envoyee" en n'ayant rien envoye. Le refus porte
+            l'echec de CHAQUE destinataire.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [errors]
+                properties:
+                  errors:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        code: { type: string }
+                        message: { type: string }
+                  echecs:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/CampaignFailure"
+                  campagneId: { type: string }
         "503":
           description: >-
             `envoi_indisponible` — aucun expediteur n'est cable sur cette
