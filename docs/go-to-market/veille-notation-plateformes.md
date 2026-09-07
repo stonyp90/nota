@@ -10,8 +10,8 @@ part que Nota retenait sur chaque acte (15 % au départ, 5 % au sommet).
 > - **L'ADR 0031 (2026-09-02) a supprimé le partage.** Il n'existe plus aucune
 >   part, aucun pourcentage, aucune commission sur les honoraires du notaire :
 >   il les fixe et les garde **en entier**. Nota vend son propre service au
->   client, à côté, à un prix publié — **199 $** financement, **249 $**
->   refinancement (ADR 0034), plus une garantie de date de 0 à 300 $. Un partage
+>   client, à côté, à un prix publié — **229 $** financement, **279 $**
+>   refinancement (ADR 0034), plus une garantie de date de 0 à 549 $. Un partage
 >   d'honoraires avec un non-notaire tombe sous l'art. 32 du *Code de
 >   déontologie* et l'art. 32.1 de la *Loi sur le notariat* : ce n'est pas
 >   seulement périmé, c'est interdit.
@@ -1675,7 +1675,7 @@ du client (a).
 > **Réglé depuis — c'est le constat de ce document qui a provoqué les trois
 > décisions.** (b) L'**ADR 0031** a coupé tout lien entre le prix de Nota et
 > l'honoraire du notaire : le notaire garde 100 %, Nota facture son propre
-> service au client (199 / 249 $, ADR 0034). (c) Le classement au mérite ne
+> service au client (229 / 279 $, ADR 0034 puis 0042). (c) Le classement au mérite ne
 > décide plus rien, faute de part à décider. (a) L'**ADR 0030** a fermé
 > l'affichage : aucune cote sur un notaire nommé n'atteint le client. Le
 > paragraphe est conservé parce qu'il porte le raisonnement ; il ne décrit plus

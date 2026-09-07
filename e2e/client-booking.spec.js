@@ -8,6 +8,14 @@
  * questions, accept the pre-filled offer (a valid amount within the act's range)
  * and publish — then assert the confirmation state.
  *
+ * The sheet is FOUR SCREENS since ADR 0040 — 1 the act · 2 the answers · 3 the
+ * price · 4 the contact details — and only the current one is on screen: the
+ * others keep their answers but are `display: none`, so nothing on them can be
+ * typed into. This journey therefore walks the rail with « Continuer »
+ * (`#book-next`), exactly as a client does. That walk is itself part of what is
+ * under test: if « Continuer » stopped advancing, a client could no longer book,
+ * and the spec has to fail for that.
+ *
  * Every assertion here keys on STATE (a dialog open, a gate lifted, a hidden
  * card revealed, a 201 from POST /bids) or on ids and data attributes — never on
  * a frozen sentence. The copy in this journey is bilingual and is being rewritten
@@ -15,9 +23,12 @@
  * an edit that changed nothing about whether a client can book.
  */
 const { test, expect } = require('@playwright/test');
+const D = require('@nota/domain');
 const { gotoHome, parseMoney } = require('./helpers');
 
-const FIN_FLOOR = 1800;
+// The lowest fees a notary may be offered for a financement, read from the
+// domain catalogue rather than restated here.
+const FIN_FLOOR = D.serviceById('financement').prixDepart;
 
 test('a client publishes a financing offer end to end', async ({ page }) => {
   // Deliberately DO NOT suppress onboarding — passing the gate is part of the journey.
@@ -39,35 +50,39 @@ test('a client publishes a financing offer end to end', async ({ page }) => {
   const sheet = page.locator('#day-dialog');
   await expect(sheet).toBeVisible();
 
-  // Step 1 — pick the Financing act.
+  // The form says which screen it is on; « Continuer » is what moves it.
+  const form = sheet.locator('#offer-form');
+  const next = sheet.locator('#book-next');
+  // The publish button is the LAST screen's action, so it is off screen until
+  // then (bookPaint hides it). `toBeDisabled` reads the gate itself, not the
+  // layout, so it is still the right assertion while screens 1-3 are showing.
+  const submit = sheet.locator('#offer-submit');
+
+  // --- Screen 1 · the act -----------------------------------------------------
+  await expect(form).toHaveAttribute('data-at', '1');
   await sheet.locator('#o-service-chips button[data-svc="financement"]').click();
   await expect(sheet.locator('#o-service-chips button[data-svc="financement"]')).toHaveAttribute('aria-pressed', 'true');
+  await next.click();
 
-  // Step 2 — the notary's REQUIRED questions for financement: loan amount,
-  // what the loan finances, the bank-approval stage, the LENDER (the
-  // catalogue select) and the TRAVEL band for the in-person signature
-  // (ADR 0017 — the second catalogue select). Answering all five is what
-  // lifts the submit gate (D.validateOffer → parametre_requis).
+  // --- Screen 2 · the notary's questions --------------------------------------
+  // The REQUIRED questions for financement: loan amount, what the loan
+  // finances, the bank-approval stage, the LENDER (the catalogue select) and
+  // the TRAVEL band for the in-person signature (ADR 0017 — the second
+  // catalogue select). Answering all five is what lifts the submit gate
+  // (D.validateOffer → parametre_requis), and what lets « Continuer » through:
+  // ADR 0040 §4 says the rail never skips over a question the notary asked.
+  await expect(form).toHaveAttribute('data-at', '2');
   await sheet.locator('#crit-valeur_pret').fill('350000');
   await sheet.locator('#crit-contexte__propriete_detenue').click();
   await sheet.locator('#crit-approbation_bancaire__obtenue').click();
   await sheet.locator('#crit-preteur').selectOption('banque_nationale');
   await sheet.locator('#crit-deplacement').selectOption('client_50');
+  await next.click();
 
-  // The REQUIRED postal sector (domain: prefixe_requis).
-  const submit = sheet.locator('#offer-submit');
-  await expect(submit).toBeDisabled();
-  await sheet.locator('#o-prefix').fill('G1R');
-
-  // ADR 0033 — the mise en relation is complete: the retaining notary must be
-  // able to name and write to the client, so the name and the courriel are
-  // the last gate. Both stay private (never on the carnet).
-  await expect(submit).toBeDisabled();
-  await sheet.locator('#o-name').fill('Prénom Nom');
-  await sheet.locator('#o-courriel').fill('client@exemple.ca');
-
-  // Step 3 — the offer is pre-filled to a valid amount within the act's range.
-  await expect(submit).toBeEnabled();
+  // --- Screen 3 · the price ---------------------------------------------------
+  // The offer is pre-filled to a valid amount within the act's range, so this
+  // screen asks nothing and « Continuer » always passes it.
+  await expect(form).toHaveAttribute('data-at', '3');
 
   // Sanity-check the pre-filled amount really is a valid, above-floor offer.
   const amount = Number(await sheet.locator('#o-amount').inputValue());
@@ -82,9 +97,10 @@ test('a client publishes a financing offer end to end', async ({ page }) => {
   // met on the payment page is the textbook case, so the total the card will
   // authorize has to be on screen here.
   //
-  // Checked only while the block is on screen: the sheet's step layout is in
-  // flux, and this journey's subject is the booking, not the quote's placement.
-  // Read positionally, in money the parser handles in either language.
+  // Checked only while the block is on screen: the quote lives on screen 3
+  // (ADR 0040 moved the market context and the delay line there beside it), but
+  // this journey's subject is the booking, not the quote's placement. Read
+  // positionally, in money the parser handles in either language.
   const devis = sheet.locator('#offer-devis');
   if (await devis.isVisible()) {
     const honoraires = parseMoney(await sheet.locator('#devis-hon').innerText());
@@ -98,6 +114,26 @@ test('a client publishes a financing offer end to end', async ({ page }) => {
       expect(total, 'the card is authorized for the sum of the two lines').toBe(honoraires + prixNota);
     }
   }
+
+  await next.click();
+
+  // --- Screen 4 · the contact details -----------------------------------------
+  await expect(form).toHaveAttribute('data-at', '4');
+
+  // The REQUIRED postal sector (domain: prefixe_requis).
+  await expect(submit).toBeDisabled();
+  await sheet.locator('#o-prefix').fill('G1R');
+
+  // ADR 0033 — the mise en relation is complete: the retaining notary must be
+  // able to name and write to the client, so the name and the courriel are
+  // the last gate. Both stay private (never on the carnet).
+  await expect(submit).toBeDisabled();
+  await sheet.locator('#o-name').fill('Prénom Nom');
+  await sheet.locator('#o-courriel').fill('client@exemple.ca');
+
+  // Every required answer is in — across all four screens, since the guard
+  // judges the WHOLE form and not the screen showing (ADR 0040 §2).
+  await expect(submit).toBeEnabled();
 
   // --- Publish and confirm ----------------------------------------------------
   // The demand is created by POST /bids; catch the 200 so the assertion is on

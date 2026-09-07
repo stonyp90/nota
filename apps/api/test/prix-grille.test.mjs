@@ -44,8 +44,8 @@ const CATALOGUE = domain.prixNotaGrille();
 test('envDefaults rend la GRILLE du catalogue quand l’environnement se tait', () => {
   const g = prixConfig.envDefaults({});
   assert.deepEqual(g, CATALOGUE);
-  assert.equal(g.services.financement, 19900);
-  assert.equal(g.services.refinancement, 24900);
+  assert.equal(g.services.financement, 22900);
+  assert.equal(g.services.refinancement, 27900);
   assert.equal(g.garantieDate.standard, 0);
 });
 
@@ -63,7 +63,7 @@ test('NOTA_PRIX_GRILLE porte une grille complète, cellule par cellule', () => {
     NOTA_PRIX_GRILLE: JSON.stringify({ services: { financement: 15000 }, garantieDate: { extreme: 90000 } }),
   });
   assert.equal(g.services.financement, 15000);
-  assert.equal(g.services.refinancement, 24900, 'les cellules muettes restent celles du catalogue');
+  assert.equal(g.services.refinancement, 27900, 'les cellules muettes restent celles du catalogue');
   assert.equal(g.garantieDate.extreme, 90000);
   // Un JSON illisible ne fait jamais tomber la tarification.
   assert.deepEqual(prixConfig.envDefaults({ NOTA_PRIX_GRILLE: '{oops' }), CATALOGUE);
@@ -111,7 +111,7 @@ test('NOTA_PRIX_GRILLE et NOTA_PRIX_CENTS ne se MÉLANGENT jamais', () => {
     NOTA_PRIX_GRILLE: JSON.stringify({ services: { financement: 15000 } }),
   });
   assert.equal(g.services.financement, 15000, 'la grille décide');
-  assert.equal(g.services.refinancement, 24900, 'les cellules muettes suivent le CATALOGUE, pas l’ancien prix unique');
+  assert.equal(g.services.refinancement, 27900, 'les cellules muettes suivent le CATALOGUE, pas l’ancien prix unique');
   assert.equal(g.garantieDate.prioritaire, domain.tierById('prioritaire').prixNotaDateCents,
     'les garanties de date du catalogue survivent — c’est la ligne que la composition écrasait');
   // Et la réciproque : une grille illisible laisse l'ancien prix unique tenir
@@ -175,7 +175,7 @@ test('resolveGrille : le stocké l’emporte, l’illisible retombe, le legacy v
   await repo.putPrixNotaConfig({ services: { refinancement: 30000 } }, NOW_ISO);
   const g = await prixConfig.resolveGrille(repo, {});
   assert.equal(g.services.refinancement, 30000);
-  assert.equal(g.services.financement, 19900, 'les cellules muettes suivent le catalogue');
+  assert.equal(g.services.financement, 22900, 'les cellules muettes suivent le catalogue');
 
   await repo.putPrixNotaConfig({ prixCents: 40000 }, NOW_ISO);
   const legacy = await prixConfig.resolveGrille(repo, {});
@@ -204,13 +204,13 @@ const billingOn = (repo) => createBilling({ repo, stripe: fakeStripe(), now: () 
 test('le devis porte la ligne du SERVICE et celle de la GARANTIE DE DATE', async () => {
   const b = billingOn(createMemoryRepo());
   const calme = await b.quoteOffer(2000, { serviceId: 'refinancement', tierId: 'standard' });
-  assert.equal(calme.prixNotaServiceCents, 24900);
+  assert.equal(calme.prixNotaServiceCents, 27900);
   assert.equal(calme.prixNotaDateCents, 0);
-  assert.equal(calme.prixNotaCents, 24900, 'la somme des deux lignes');
-  assert.equal(calme.totalCents, 200_000 + 24900);
+  assert.equal(calme.prixNotaCents, 27900, 'la somme des deux lignes');
+  assert.equal(calme.totalCents, 200_000 + 27900);
 
   const presse = await b.quoteOffer(2000, { serviceId: 'refinancement', tierId: 'prioritaire' });
-  assert.equal(presse.prixNotaServiceCents, 24900, 'le service ne change pas parce que la date approche');
+  assert.equal(presse.prixNotaServiceCents, 27900, 'le service ne change pas parce que la date approche');
   assert.equal(presse.prixNotaDateCents, domain.tierById('prioritaire').prixNotaDateCents);
   assert.equal(presse.prixNotaCents, presse.prixNotaServiceCents + presse.prixNotaDateCents);
 });
@@ -219,8 +219,8 @@ test('deux services à la même date ne paient pas le même prix', async () => {
   const b = billingOn(createMemoryRepo());
   const fin = await b.quoteOffer(1800, { serviceId: 'financement', tierId: 'standard' });
   const refi = await b.quoteOffer(1800, { serviceId: 'refinancement', tierId: 'standard' });
-  assert.equal(fin.prixNotaCents, 19900);
-  assert.equal(refi.prixNotaCents, 24900);
+  assert.equal(fin.prixNotaCents, 22900);
+  assert.equal(refi.prixNotaCents, 27900);
   assert.ok(fin.prixNotaCents < refi.prixNotaCents,
     'le plus petit acte du catalogue porte le plus petit prix — la grille n’est pas régressive');
 });
@@ -330,7 +330,7 @@ test('PUT /admin/prix enregistre une grille, la journalise, et tarife la suite',
 
   assert.equal(
     (await billing.quoteOffer(2000, { serviceId: 'refinancement', tierId: 'standard' })).prixNotaCents,
-    24900,
+    27900,
   );
 
   const grille = { services: { refinancement: 29900, financement: 21900 }, garantieDate: { prioritaire: 15000 } };
@@ -351,7 +351,7 @@ test('PUT /admin/prix enregistre une grille, la journalise, et tarife la suite',
   assert.equal((await h.call('DELETE', '/admin/prix', { bearer: session })).statusCode, 200);
   assert.equal(
     (await billing.quoteOffer(2000, { serviceId: 'refinancement', tierId: 'prioritaire' })).prixNotaServiceCents,
-    24900,
+    27900,
   );
 });
 

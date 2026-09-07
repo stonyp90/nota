@@ -4,35 +4,86 @@
     {
       "name": "nota-web",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "port": 4173,
       "autoPort": true
     },
     {
       "name": "nota-api-demo",
       "runtimeExecutable": "env",
-      "runtimeArgs": ["NOTA_DEMO_OPEN=true", "node", "apps/api/local-server.js"],
+      "runtimeArgs": [
+        "NOTA_DEMO_OPEN=true",
+        "node",
+        "apps/api/local-server.js"
+      ],
       "port": 8788,
       "autoPort": true
     },
     {
       "name": "nota-web-demo",
       "runtimeExecutable": "env",
-      "runtimeArgs": ["NOTA_API_BASE=http://localhost:8788", "node", "apps/web/run-local.mjs"],
+      "runtimeArgs": [
+        "NOTA_API_BASE=http://localhost:8788",
+        "node",
+        "apps/web/run-local.mjs"
+      ],
       "port": 4175,
       "autoPort": true
     },
     {
       "name": "nota-admin-api",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "admin:local"],
+      "runtimeArgs": [
+        "run",
+        "admin:local"
+      ],
       "port": 8790
     },
     {
       "name": "nota-admin",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev:admin"],
+      "runtimeArgs": [
+        "run",
+        "dev:admin"
+      ],
       "port": 4174
+    },
+    {
+      "name": "nota-local",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "NOTA_PORT_ADMIN_API=8791",
+        "npm",
+        "run",
+        "local"
+      ],
+      "port": 4173
+    },
+    {
+      "name": "swan",
+      "runtimeExecutable": "cargo",
+      "runtimeArgs": [
+        "run",
+        "--quiet",
+        "--manifest-path",
+        "/Users/tony/Github/architecture/Cargo.toml",
+        "--bin",
+        "architecture-server",
+        "--",
+        "--offline",
+        "--config",
+        "/Users/tony/Github/architecture/config",
+        "--web-root",
+        "/Users/tony/Github/architecture/apps/web",
+        "--fixture",
+        "/Users/tony/Github/architecture/fixtures/program-bungalow.json",
+        "--addr",
+        "127.0.0.1:8099"
+      ],
+      "port": 8099
     }
   ]
 }

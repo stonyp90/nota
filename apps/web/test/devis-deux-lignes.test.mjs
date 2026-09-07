@@ -230,8 +230,8 @@ test('hors ligne, le devis n’invente aucun montant', async () => {
   const { doc } = await boot({ enLigne: false });
   await ouvrirRefinancement(doc);
 
-  assert.equal($(doc, 'devis-nota').textContent, '—', 'aucun prix inventé');
-  assert.equal($(doc, 'devis-total').textContent, '—');
+  assert.equal($(doc, 'devis-nota').textContent, 'à confirmer', 'aucun prix inventé');
+  assert.equal($(doc, 'devis-total').textContent, 'à confirmer');
   assert.match($(doc, 'devis-note').textContent, /s’ajoute à ce montant/,
     'mais le client sait qu’un prix s’ajoutera');
 });
@@ -240,7 +240,7 @@ test('un serveur qui n’annonce pas de tarif ne fait pas tomber le parcours', a
   const { doc } = await boot({ tarif: null });
   await ouvrirRefinancement(doc);
   assert.equal($(doc, 'offer-devis').hidden, false);
-  assert.equal($(doc, 'devis-nota').textContent, '—');
+  assert.equal($(doc, 'devis-nota').textContent, 'à confirmer');
 });
 
 test('LOI DES TROIS CLICS — de l’accueil à l’offre publiable sans clic de plus', async () => {

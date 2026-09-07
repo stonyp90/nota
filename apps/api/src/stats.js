@@ -120,9 +120,41 @@ function statsDeltasForFunnel(id, dayISO) {
   return [{ pk: statsGlobalPK(pickShard()), sk: statsDaySK(day), adds: { [FUNNEL_COUNTER_PREFIX + id]: 1 } }];
 }
 
+// L'assistant de la messagerie (ADR 0046). Sans ces compteurs, la seule chose
+// que le propriétaire voit de l'assistant est ce qu'il n'a PAS su traiter (le
+// courriel d'escalade) — c'est-à-dire précisément la moitié qui donne
+// l'impression qu'il ne sert à rien. On compte donc les deux moitiés, le motif
+// de chaque escalade (pour savoir QUOI documenter ensuite), et les jetons, qui
+// sont la facture.
+//
+// Même forme que le tunnel : un compteur global par jour, réparti sur les
+// mêmes fragments. Les jetons sont des ADD entiers comme le reste.
+const ASSISTANT_COUNTER_PREFIX = 'assistant_';
+function statsDeltasForAssistant({ escalade, motif, usage, dayISO } = {}) {
+  const day = dayOf(dayISO);
+  if (!day) return [];
+  const adds = { [ASSISTANT_COUNTER_PREFIX + (escalade ? 'escalade' : 'repondu')]: 1 };
+  // Le motif n'est compté que s'il appartient au catalogue du domaine : un
+  // modèle ne peut pas inventer un compteur.
+  if (escalade && motif && (domain.SUPPORT_ESCALADE_MOTIFS || []).some((m) => m.id === motif)) {
+    adds[ASSISTANT_COUNTER_PREFIX + 'motif_' + motif] = 1;
+  }
+  if (usage) {
+    const entree = intOf(usage.in);
+    const sortie = intOf(usage.out);
+    const cache = intOf(usage.cacheRead);
+    if (entree) adds[ASSISTANT_COUNTER_PREFIX + 'jetons_entree'] = entree;
+    if (sortie) adds[ASSISTANT_COUNTER_PREFIX + 'jetons_sortie'] = sortie;
+    if (cache) adds[ASSISTANT_COUNTER_PREFIX + 'jetons_cache'] = cache;
+  }
+  return [{ pk: statsGlobalPK(pickShard()), sk: statsDaySK(day), adds }];
+}
+
 module.exports = {
   dayOf,
   FUNNEL_COUNTER_PREFIX,
+  ASSISTANT_COUNTER_PREFIX,
+  statsDeltasForAssistant,
   statsDeltasForOffer,
   statsDeltasForRetain,
   statsDeltasForComplete,

@@ -207,6 +207,9 @@ const TRANSACTIONNELS = [
   'carteEnregistree',
   'cautionRefusee',
   'cautionRefuseeNotaire',
+  // Le lien d'accès à l'espace client : comme tout lien d'authentification,
+  // il ne se coupe JAMAIS — le supprimer enfermerait la personne dehors.
+  'clientMagicLink',
   'contactRecu',
   'dateMissedNoUptake',
   // ADR 0033 — the retaining notary's only notice of the act (and of the
@@ -218,6 +221,11 @@ const TRANSACTIONNELS = [
   'documentDuClient',
   'documentDuNotaire',
   'documentsDemandes',
+  // ADR 0041 — la décision sur l'indemnité d'une annulation tardive : ce que
+  // le client paie (ou ne paie pas), et l'accusé au notaire qui a réclamé.
+  'indemniteClose',
+  'indemniteReclamee',
+  'indemniteReclameeNotaire',
   'messageDuClient',
   'messageDuNotaire',
   'notaryActive',
@@ -233,6 +241,8 @@ const TRANSACTIONNELS = [
   'offerPublished',
   'offerRetained',
   'partnerClaimLink',
+  // Un rappel d'identité : il repart à chaque demande, jamais supprimé.
+  'partnerCodeReminder',
   'partnerWelcome',
   'propositionAcceptee',
   'propositionRecue',

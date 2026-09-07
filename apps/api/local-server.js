@@ -65,7 +65,29 @@ const demoBilling = useDynamo ? null : createBilling({
   now: () => new Date().toISOString(),
 });
 
-const app = createApp(repo, demoBilling ? { billing: demoBilling, billingConfigured: false } : {});
+// --- Courriel local --------------------------------------------------------
+// La pile locale n'avait AUCUN mailer : le notifier restait nul, donc tout ce
+// qui passe par le courriel (les liens magiques d'abord) ne pouvait pas être
+// exercé localement — seul l'écho de développement sauvait la mise. Le mailer
+// fichier écrit chaque message dans .local-mail/ et sort le lien dans la
+// console. Aucune dépendance, aucun conteneur de plus.
+const { createFileMailer } = require('./src/notify-port');
+const { createNotifier } = require('./src/notifications');
+// L'origine que le NAVIGATEUR atteint : c'est elle qui doit être dans le lien,
+// pas l'adresse interne du conteneur.
+const SITE_URL = process.env.NOTA_SITE_URL || 'http://localhost:4173';
+const localNotifier = createNotifier({
+  repo,
+  mailer: createFileMailer({ dir: process.env.NOTA_LOCAL_MAIL_DIR }),
+  baseUrl: SITE_URL,
+  operatorEmail: process.env.NOTA_OPERATOR_EMAIL || 'admin@nota.local',
+});
+
+const app = createApp(repo, {
+  ...(demoBilling ? { billing: demoBilling, billingConfigured: false } : {}),
+  notifier: localNotifier,
+  siteUrl: SITE_URL,
+});
 
 const server = http.createServer(async (req, res) => {
   try {

@@ -186,13 +186,14 @@ const visible = (node) => {
   return true;
 };
 
-test('the dossier has a door before any offer exists (footer link, anonymous visitor)', async () => {
+// 2026-09-05, owner's instruction: « Préparer mon dossier — remove this from
+// footer ». It was the ONLY door to the Dossier pane for a visitor who has not
+// yet published an offer; the pane is now reached from the published-offer
+// card alone (app.js, #dossier-next-cta). This test records that the door is
+// gone on purpose, so its removal is never mistaken for a regression.
+test('the footer no longer carries a door to the Dossier', async () => {
   const { doc } = await boot();
-  const link = doc.querySelector('.site-footer .goto-link[data-goto="dossier"]');
-  assert.ok(link, 'footer carries "Préparer mon dossier"');
-  link.click();
-  await wait(10);
-  assert.equal(activePane(doc), 'pane-dossier');
+  assert.equal(doc.querySelector('.site-footer .goto-link[data-goto="dossier"]'), null);
 });
 
 test('the notary door is named for what it is, not as a directory of notaries', async () => {

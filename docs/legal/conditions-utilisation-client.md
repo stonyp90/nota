@@ -81,11 +81,11 @@ avant de vous engager :
 
 | Prix de Nota | Financement hypothécaire | Refinancement hypothécaire |
 | --- | ---: | ---: |
-| Le service | **199 $** | **249 $** |
+| Le service | **229 $** | **279 $** |
 
 | Garantie de date, ajoutée au prix ci-dessus | 15 jours et plus | 8 à 14 jours | 2 à 7 jours | Demain | Aujourd'hui |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| | 0 $ | **50 $** | **100 $** | **200 $** | **300 $** |
+| | 0 $ | **149 $** | **299 $** | **449 $** | **549 $** |
 
 Nota peut modifier cette grille, mais **jamais rétroactivement** : les deux
 lignes sont figées sur votre offre au moment où votre carte est engagée, et
@@ -154,24 +154,28 @@ un montant différent.
 Tant que votre offre **n'a pas été retenue**, vous la retirez du carnet **sans
 frais**.
 
-Une fois votre offre **retenue par un notaire**, l'annulation entraîne des frais,
-prélevés sur la réservation déjà posée sur votre carte :
+Une fois votre offre **retenue par un notaire**, rien n'est prélevé d'office
+quand vous annulez. Vous pouvez résilier (art. 2125 du Code civil du Québec),
+et le notaire peut alors vous réclamer, **sur justification écrite et dans un
+délai de 7 jours**, ses frais réels et la valeur du travail accompli
+(art. 2129 C.c.Q.), jusqu'à un plafond qui dépend du préavis :
 
-| Vous annulez | Frais retenus |
+| Vous annulez | Plafond de l'indemnité |
 | --- | ---: |
 | à 3 jours ou moins de la date de signature | **30 %** du montant convenu |
 | entre 4 et 14 jours | **10 %** |
-| à plus de 14 jours | **aucun** |
+| à plus de 14 jours | **aucune indemnité** |
 
-Le reste de la réservation vous est libéré immédiatement.
+Sans réclamation du notaire dans le délai, rien n'est retenu et la somme
+réservée sur votre carte est libérée. Une indemnité réclamée vous est
+expliquée, avec la justification du notaire, et lui est versée en entier :
+Nota n'en garde rien. Le plafond et le délai vous sont affichés au devis, avant
+que vous ne vous engagiez, et de nouveau avant toute confirmation d'annulation.
 
-*(Source : `apps/api/src/cancellation-config.js:25-28`. Le prélèvement est une
-capture partielle, `apps/api/src/stripe-port.js:166-174`.)*
-
-> ⚠️ **À corriger.** Ce barème **n'apparaît nulle part dans les conditions
-> affichées** : le client ne le découvre qu'au moment d'annuler
-> (`apps/web/public/app.js:3534-3535`). Un frais doit être divulgué **avant**
-> l'engagement, pas au moment de le rompre.
+*(Source : `apps/api/src/cancellation-config.js` (les plafonds et le délai),
+`apps/api/src/handler.js` (`POST /notary/bids/indemnite`), ADR 0041. Aucun
+montant ni pourcentage n'est fixé d'avance : art. 13 et 11.4 de la Loi sur la
+protection du consommateur.)*
 
 **Un acte signé et réglé ne peut plus être annulé** (`handler.js:1843-1846`).
 

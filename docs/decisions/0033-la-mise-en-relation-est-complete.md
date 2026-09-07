@@ -4,7 +4,10 @@ Date : 2026-09-02
 
 Statut : accepté — **étend l'ADR 0010 §4, l'ADR 0013 et l'ADR 0026 ; amende
 l'ADR 0023 (§ argent) ; rend caduque la phrase « Messages send no email » de
-l'ADR 0013**
+l'ADR 0013** ; **§ argent amendé par l'ADR 0041 (2026-09-05)** : les frais
+d'annulation deviennent une indemnité que le notaire réclame et justifie,
+plafonnée par le barème, jamais fixée d'avance. Elle lui est toujours versée en
+entier.
 
 ## Contexte
 

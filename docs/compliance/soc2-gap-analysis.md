@@ -9,8 +9,8 @@
 > retiré : le notaire reçoit 100 % du montant offert, et Nota facture au client
 > un **prix publié d'avance** pour son propre service — une grille par service
 > depuis l'[ADR 0034](../decisions/0034-le-prix-de-nota-est-une-grille-par-service.md) :
-> **199 $** (`financement`) / **249 $** (`refinancement`), plus une ligne de
-> garantie de date (0 · 50 · 100 · 200 · 300 $). Les art. 32 et 32.1 2°
+> **229 $** (`financement`) / **279 $** (`refinancement`, ADR 0042), plus une ligne de
+> garantie de date (0 · 149 · 299 · 449 · 549 $, ADR 0038). Les art. 32 et 32.1 2°
 > condamnaient la mécanique décrite ici, et `commission-config.js` a été supprimé
 > du dépôt. Tout le reste du document tient ; ne citez pas ses passages sur le
 > partage sans lire l'ADR 0031 d'abord, et ne réintroduisez nulle part le

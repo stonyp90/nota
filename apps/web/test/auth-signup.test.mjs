@@ -1,7 +1,9 @@
 /**
  * The signup/sign-in door (owner, 2026-08-28: « comme un site traditionnel,
  * en trois clics ») — ONE clean modal behind both header buttons:
- *   • no dead social doors, no « ou » divider — role → courriel → one CTA;
+ *   • ONE primary action — role → courriel → one CTA. Depuis le 2026-09-06 les
+ *     portes sociales sont exposées comme À VENIR, sous le séparateur, et ne
+ *     peuvent pas être prises pour le geste attendu (auth-onboarding.test.mjs);
  *   • the title matches the button that opened it (Connexion / Enregistrer
  *     votre courriel — a client's « account » is a courriel kept on this
  *     device, P1-15) and the CTA names the exact action;
@@ -51,15 +53,21 @@ async function boot({ fetchStub } = {}) {
 const $ = (doc, id) => doc.getElementById(id);
 const fire = (win, node, type) => node.dispatchEvent(new win.Event(type, { bubbles: true, cancelable: true }));
 
-test('the auth modal is ONE clean door: no social buttons, no divider — role, courriel, one CTA', async () => {
+// 2026-09-06 — ce test exigeait l'ABSENCE de portes sociales (« the dead social
+// doors are gone », décision du 2026-08-28). Le propriétaire les a rouvertes,
+// annoncées comme à venir. Ce qui reste vrai, et compte davantage : le courriel
+// est la SEULE action principale, et il précède tout ce qui ne marche pas
+// encore. Le détail des portes à venir vit dans auth-onboarding.test.mjs.
+test('the auth modal keeps ONE primary action: role, courriel, one CTA — coming-soon doors below', async () => {
   const { doc } = await boot();
   const dlg = $(doc, 'auth-dialog');
-  assert.equal(dlg.querySelectorAll('.auth-soc-btn').length, 0, 'the dead social doors are gone');
-  assert.equal(dlg.querySelector('.auth-or'), null, 'no « ou » divider without an alternative');
   // Reading order: who you are, then the one field, then the one action.
   const order = [...dlg.querySelectorAll('#auth-role, #auth-email-form')].map((n) => n.id);
   assert.deepEqual(order, ['auth-role', 'auth-email-form']);
   assert.equal(dlg.querySelectorAll('#auth-email-form button[type="submit"]').length, 1, 'exactly one CTA');
+  // Une seule action PRINCIPALE : les portes à venir ne sont pas des submit et
+  // ne peuvent pas être prises pour le geste attendu.
+  assert.equal(dlg.querySelectorAll('button[type="submit"]').length, 1, 'nothing else submits');
 });
 
 test('both header buttons open the SAME door, titled for the button that opened it', async () => {
@@ -103,7 +111,12 @@ test('a client signs up in TWO clicks: S’inscrire → courriel → Enregistrer
   assert.ok(calls.some((c) => c.url.includes('/client/welcome')), 'the welcome email fires');
 });
 
-test('the notary path says what happens and requests the magic link', async () => {
+// 2026-09-05 : ce test passait par « S'inscrire » et exigeait un lien magique.
+// Il bénissait le cul-de-sac — /notary/session/request est anti-énumération et
+// n'envoie RIEN à une adresse inconnue, si bien que l'écran annonçait un
+// courriel qui n'arrivait jamais. La porte de CONNEXION est celle qui demande
+// un lien ; l'inscription a la sienne (notary-signup-door.test.mjs).
+test('the notary sign-in path says what happens and requests the magic link', async () => {
   const calls = [];
   const { win, doc } = await boot({
     fetchStub: (url, opts) => {
@@ -111,7 +124,7 @@ test('the notary path says what happens and requests the magic link', async () =
       return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ ok: true }) });
     },
   });
-  $(doc, 'header-signup').click();
+  $(doc, 'header-login').click();
   const seg = doc.querySelector('#auth-role .seg-btn[data-role="notary"]');
   seg.click();                                 // click 2
   assert.equal($(doc, 'auth-continue').textContent, 'Recevoir mon lien de connexion →', 'the CTA names the outcome');

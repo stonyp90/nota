@@ -2,7 +2,7 @@
 
 Date : 2026-09-03
 
-Statut : accepté — **précise l'ADR 0031 ; n'en retire rien**
+Statut : accepté — **précise l'ADR 0031 ; n'en retire rien** ; **garantie de date retarifée par l'ADR 0038** ; **lignes de service portées à 229 / 279 $ et prix annoncé tout compris par l'ADR 0042**
 
 > **Ce qui survit de l'ADR 0031.** Les deux lignes, et tout ce qui les tient :
 > le notaire reçoit 100 % du montant offert, Nota vend son propre service à son
@@ -94,6 +94,10 @@ palier de `TIERS`) :
 | `prioritaire` | ≤ 7 j | 100 $ |
 | `urgence` | ≤ 1 j | 200 $ |
 | `extreme` | jour même | 300 $ |
+
+> **Retarifée le 2026-09-05 par l'ADR 0038** : 0 · 149 · 299 · 449 · 549 $.
+> Deux de ces barreaux se vendaient sous les frais de carte qu'ils induisent.
+> La table ci-dessus reste la décision du 3 septembre, telle qu'elle a été prise.
 
 **Cette ligne est un objet distinct des multiplicateurs qui la côtoient, et
 c'est le point le plus important de cet ADR.** Les multiplicateurs (×1 → ×4)

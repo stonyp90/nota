@@ -37,11 +37,16 @@ const BAREME = {
 test('envDefaults: built-ins when the environment is silent; the env var is actually read', () => {
   assert.deepEqual(cancellationConfig.envDefaults({}), {
     paliers: [{ maxJours: 3, taux: 0.30 }, { maxJours: 14, taux: 0.10 }],
+    delaiJours: 7,
   });
   const env = { NOTA_CANCELLATION_TIERS: '[{"maxJours":2,"taux":0.4}]' };
   assert.deepEqual(cancellationConfig.envDefaults(env), {
     paliers: [{ maxJours: 2, taux: 0.4 }],
+    delaiJours: 7,
   });
+  // ADR 0041 — le délai de réclamation se lit lui aussi dans l'environnement.
+  assert.equal(cancellationConfig.envDefaults({ NOTA_INDEMNITE_DELAI_JOURS: '10' }).delaiJours, 10);
+  assert.equal(cancellationConfig.envDefaults({ NOTA_INDEMNITE_DELAI_JOURS: 'oups' }).delaiJours, 7);
   // Garbage in the tiers env var falls back to the defaults — never a crash.
   const broken = cancellationConfig.envDefaults({ NOTA_CANCELLATION_TIERS: '{oops' });
   assert.equal(broken.paliers.length, 2);

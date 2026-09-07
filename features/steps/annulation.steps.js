@@ -128,12 +128,65 @@ Then("l'annulation est gratuite", function () {
   assert.equal(this.responseJson.bid.annulation, null, 'des frais ont été retenus: ' + this.response.body);
 });
 
-Then("l'annulation retient {int} % du montant, soit {int} $", function (taux, frais) {
+// ADR 0041 — l'annulation n'encaisse rien : elle OUVRE un plafond que le
+// notaire peut réclamer, en justifiant, dans le délai. Zéro bouge tant qu'il
+// n'a pas décidé.
+Then("l'annulation ouvre une indemnité plafonnée à {int} % du montant, soit {int} $", function (taux, plafond) {
   assert.equal(this.response.statusCode, 200, this.response.body);
   const a = this.responseJson.bid.annulation;
-  assert.ok(a, 'aucuns frais retenus: ' + this.response.body);
+  assert.ok(a, 'aucune fenêtre d’indemnité: ' + this.response.body);
+  assert.equal(a.statut, 'en_attente');
   assert.equal(Math.round(a.taux * 100), taux);
+  assert.equal(a.plafond, plafond);
+  assert.equal(a.frais, 0, 'rien n’est prélevé à l’annulation (art. 13 LPC)');
+  assert.ok(a.echeanceISO > this.today, 'un délai de réclamation court');
+});
+
+Then("rien n'est prélevé et la caution reste en place", function () {
+  const bid = lastBid(this);
+  assert.equal(this.stripe.calls.feeCaptures.length, 0, 'aucune capture');
+  assert.equal((this.stripe.calls.offSessionFees || []).length, 0, 'aucun prélèvement hors session');
+  assert.ok(!this.stripe.calls.cancels.some((c) => c.bidId === bid.id), 'la caution attend la décision du notaire');
+});
+
+When('le notaire {string} réclame une indemnité de {int} $ avec la justification {string}', async function (email, montant, justification) {
+  const token = await notarySession(this, email);
+  const bid = lastBid(this);
+  await this.request({
+    method: 'POST',
+    path: '/notary/bids/indemnite',
+    headers: { authorization: 'Bearer ' + token },
+    body: JSON.stringify({ id: bid.id, dateISO: bid.dateISO, montant, justification }),
+  });
+});
+
+When('le notaire {string} renonce à toute indemnité', async function (email) {
+  const token = await notarySession(this, email);
+  const bid = lastBid(this);
+  await this.request({
+    method: 'POST',
+    path: '/notary/bids/indemnite',
+    headers: { authorization: 'Bearer ' + token },
+    body: JSON.stringify({ id: bid.id, dateISO: bid.dateISO, montant: 0 }),
+  });
+});
+
+Then("l'indemnité de {int} $ est perçue", function (frais) {
+  assert.equal(this.response.statusCode, 200, this.response.body);
+  const a = this.responseJson.bid.annulation;
+  assert.ok(a, 'aucune indemnité: ' + this.response.body);
+  assert.equal(a.statut, 'percue');
   assert.equal(a.frais, frais);
+  assert.ok(a.justification && a.justification.length >= this.domain.INDEMNITE_JUSTIFICATION_MIN, 'une indemnité perçue est justifiée');
+});
+
+Then("l'indemnité est close sans prélèvement", function () {
+  assert.equal(this.response.statusCode, 200, this.response.body);
+  const a = this.responseJson.bid.annulation;
+  assert.ok(a, this.response.body);
+  assert.equal(a.statut, 'renoncee');
+  assert.equal(a.frais, 0);
+  assert.equal(this.stripe.calls.feeCaptures.length, 0);
 });
 
 Then('seule cette part est capturée sur la caution, le reste étant libéré par Stripe', function () {
@@ -165,7 +218,7 @@ Then("aucune capture n'a eu lieu", function () {
   assert.equal(this.stripe.calls.transfers.length, 0);
 });
 
-Then("le client voit des frais d'annulation de {int} $ avant de confirmer", async function (frais) {
+Then("le client voit un plafond d'indemnité de {int} $ avant de confirmer", async function (plafond) {
   const bid = lastBid(this);
   await this.request({
     method: 'GET',
@@ -174,8 +227,9 @@ Then("le client voit des frais d'annulation de {int} $ avant de confirmer", asyn
     query: { id: bid.id, dateISO: bid.dateISO },
   });
   assert.equal(this.response.statusCode, 200, this.response.body);
-  assert.ok(this.responseJson.annulation, 'aucune prévision de frais: ' + this.response.body);
-  assert.equal(this.responseJson.annulation.frais, frais);
+  assert.ok(this.responseJson.annulation, 'aucune prévision de plafond: ' + this.response.body);
+  assert.equal(this.responseJson.annulation.plafond, plafond);
+  assert.ok(this.responseJson.annulation.delaiJours >= 1, 'le délai de réclamation est divulgué aussi');
 });
 
 Then("le client ne voit aucuns frais d'annulation avant de confirmer", async function () {

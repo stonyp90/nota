@@ -80,4 +80,51 @@ function createFakeMailer() {
   };
 }
 
-module.exports = { createSesAdapter, createFakeMailer };
+/**
+ * Adaptateur de DÉVELOPPEMENT : chaque courriel est écrit sur le disque, en
+ * .html et en .txt, plus un index.json lisible d'un coup d'œil. Aucune
+ * dépendance, aucun SMTP, aucun conteneur de plus — et surtout : la pile
+ * locale peut enfin exercer TOUT ce qui passe par le courriel (les liens
+ * magiques d'abord, mais aussi chaque gabarit) au lieu de s'arrêter à l'écho
+ * de développement.
+ *
+ * Même surface que l'adaptateur SES : le notifier ne les distingue pas.
+ */
+function createFileMailer({ dir, log } = {}) {
+  const fs = require('fs');
+  const path = require('path');
+  const out = dir || path.join(process.cwd(), '.local-mail');
+  const sent = [];
+  return {
+    dir: out,
+    sent,
+    async send(msg) {
+      const n = sent.length + 1;
+      sent.push(msg);
+      try {
+        fs.mkdirSync(out, { recursive: true });
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const safe = String(msg.to || 'inconnu').replace(/[^a-zA-Z0-9._@-]/g, '_');
+        const base = path.join(out, `${stamp}__${safe}`);
+        if (msg.html) fs.writeFileSync(base + '.html', msg.html);
+        if (msg.text) fs.writeFileSync(base + '.txt', msg.text);
+        fs.writeFileSync(
+          base + '.json',
+          JSON.stringify({ to: msg.to, subject: msg.subject, unsubscribeUrl: msg.unsubscribeUrl || null, at: stamp }, null, 2)
+        );
+        // Le lien est ce qu'on vient chercher neuf fois sur dix : on le sort
+        // en clair dans la console pour qu'un test local soit un copier-coller.
+        if (log !== false) {
+          const lien = (String(msg.html || '').match(/https?:\/\/[^"'\s<>]+#(?:cauth|nauth|pauth)=[^"'\s<>]+/) || [])[0];
+          // eslint-disable-next-line no-console
+          console.log(`[courriel] → ${msg.to} · ${msg.subject}` + (lien ? `\n[lien]     ${lien}` : ''));
+        }
+      } catch {
+        /* le disque n'est pas une raison de casser une requête */
+      }
+      return { id: 'file-' + n };
+    },
+  };
+}
+
+module.exports = { createSesAdapter, createFakeMailer, createFileMailer };

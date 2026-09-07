@@ -47,14 +47,14 @@ Fonctionnalité: Tarification et paliers de temps
   # l'urgence ne fait jamais, c'est faire varier le prix du SERVICE de Nota ni
   # le lier à la valeur de l'acte : ce serait une part variable prise sur un
   # acte notarié, quel que soit le nom qu'on lui donne. Ci-dessous le
-  # refinancement se tarife 249 $ dans les DEUX cas — l'acte triple, la ligne
+  # refinancement se tarife 279 $ dans les DEUX cas — l'acte triple, la ligne
   # de service ne bouge pas ; seule la garantie de date change, de 0 $ à
-  # échéance normale à 200 $ pour une signature le lendemain.
+  # échéance normale à 449 $ pour une signature le lendemain (ADR 0038).
   Scénario: l'urgence fait monter les honoraires et la garantie de date, jamais le prix du service
     Étant donné la facturation Stripe est configurée
     Quand un client publie une offre avec le courriel "calme@exemple.ca" pour "refinancement" à 2000 dans 30 jours
     Alors l'offre publiée porte le palier "standard"
-    Et le montant porté à la carte du client est 2249 $
+    Et le montant porté à la carte du client est 2279 $
     Quand un client publie une offre avec le courriel "presse@exemple.ca" pour "refinancement" à 6000 dans 1 jours
     Alors l'offre publiée porte le palier "urgence"
-    Et le montant porté à la carte du client est 6449 $
+    Et le montant porté à la carte du client est 6728 $

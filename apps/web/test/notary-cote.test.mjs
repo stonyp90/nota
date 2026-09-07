@@ -379,12 +379,19 @@ const ACTS = {
   totaux: { actes: 2, montant: 4200, honoraires: 4200, prixNota: 800, net: 4200, du: 0 },
 };
 
-test('the relevé fetches /notary/acts on first open and prints the two lines per act', async () => {
+// 2026-09-05 : le relevé n'est plus PARESSEUX, et c'est délibéré. « Vos
+// revenus » se calculait sur le cache local (`nota.notary.retained.v1`), semé
+// par la fenêtre de 4 mois VERS L'AVANT du fil : un notaire chevronné sur un
+// navigateur neuf lisait « 0 $ » jusqu'à ce qu'il déplie ce panneau. Les
+// tuiles d'argent lisent maintenant les `totaux` du relevé, donc il part avec
+// la console. Ce qui reste garanti — et compte davantage : UN seul appel (le
+// cache de session tient), le bon porteur, et les lignes rendues.
+test('the relevé fetches /notary/acts with the console and prints the two lines per act', async () => {
   const ctx = await boot();
   const calls = stubNotaryApi(ctx.win, { acts: ACTS });
   await ctx.Nota.notary.signIn('demo@etude.ca');
-  await wait(10);
-  assert.equal(calls.acts.length, 0, 'nothing is fetched while the panel stays closed');
+  await wait(20);
+  assert.equal(calls.acts.length, 1, 'le relevé part avec la console : les tuiles en dépendent');
 
   const panel = $(ctx.doc, 'notary-actes');
   assert.ok(panel, 'the relevé panel exists');
@@ -393,7 +400,7 @@ test('the relevé fetches /notary/acts on first open and prints the two lines pe
   panel.open = true;
   await wait(20);
 
-  assert.equal(calls.acts.length, 1, 'one fetch on first open');
+  assert.equal(calls.acts.length, 1, 'ouvrir le panneau ne refrappe pas : le cache de session tient');
   const headers = calls.acts[0].headers;
   assert.equal(headers.authorization || headers.Authorization, 'Bearer sess.tok', 'the SESSION bearer authenticates it');
 

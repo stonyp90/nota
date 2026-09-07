@@ -1391,6 +1391,77 @@ function notaryMagicLink(ctx) {
   }, ctx);
 }
 
+// Lien d'accès à l'espace client. Même classe que le lien notaire : il prouve
+// la BOÎTE, il est court et à usage unique. Ce qu'il ouvre est plus étroit —
+// la liste de SES offres — et la copie le dit, pour qu'un courriel intercepté
+// ne se lise jamais comme les clés du compte.
+function clientMagicLink(ctx) {
+  const ttl = ctx.ttlMinutes || 15;
+  return build({
+    subjectFr: 'Votre lien d’accès à vos demandes',
+    subjectEn: 'Your link to your requests',
+    preheaderFr: 'Lien à usage unique, valide ' + ttl + ' minutes.',
+    preheaderEn: 'Single-use link, valid for ' + ttl + ' minutes.',
+    fr: {
+      heading: 'Retrouvez vos demandes',
+      lead: 'Voici votre lien sécurisé pour retrouver vos demandes, où que vous soyez.',
+      bodyHtml: para(
+        'Ce lien est valide ' +
+          ttl +
+          ' minutes et à usage unique. Il ouvre la liste de vos demandes sur cet appareil — rien d’autre. Si vous ne l’avez pas demandé, ignorez ce courriel : personne ne peut s’en servir sans lui.'
+      ),
+      textLines: ['Lien à usage unique, valide ' + ttl + ' minutes.'],
+      ctaLabel: 'Voir mes demandes',
+    },
+    en: {
+      heading: 'Find your requests',
+      lead: 'Here is your secure link to find your requests, wherever you are.',
+      bodyHtml: para(
+        'This link is valid for ' +
+          ttl +
+          ' minutes and can be used only once. It opens the list of your requests on this device — nothing else. If you did not ask for it, ignore this email: no one can use it without it.'
+      ),
+      textLines: ['Single-use link, valid for ' + ttl + ' minutes.'],
+      ctaLabel: 'View my requests',
+    },
+    ctaUrl: ctx.link || linksFor(ctx.baseUrl).site,
+    unsubscribeUrl: ctx.unsubscribeUrl,
+  }, ctx);
+}
+
+// Rappel du code partenaire. Ce n'est PAS une réclamation : rien n'est créé,
+// on redonne ce qui existe déjà. La copie évite donc « confirmez » ou
+// « activez », qui feraient croire à une action requise.
+function partnerCodeReminder(ctx) {
+  const code = ctx.code || '';
+  return build({
+    subjectFr: 'Votre code partenaire Nota',
+    subjectEn: 'Your Nota partner code',
+    preheaderFr: 'Votre code : ' + code,
+    preheaderEn: 'Your code: ' + code,
+    fr: {
+      heading: 'Votre code partenaire',
+      lead: 'Voici votre code et le lien à partager.',
+      bodyHtml: callout(code) + para(
+        'Rien à confirmer : votre code est déjà actif. Partagez le lien ci-dessous — toute personne qui passe par lui vous est attribuée.'
+      ),
+      textLines: ['Votre code : ' + code, ctx.link || ''],
+      ctaLabel: 'Voir mon espace partenaire',
+    },
+    en: {
+      heading: 'Your partner code',
+      lead: 'Here is your code and the link to share.',
+      bodyHtml: callout(code) + para(
+        'Nothing to confirm: your code is already active. Share the link below — anyone who comes through it is credited to you.'
+      ),
+      textLines: ['Your code: ' + code, ctx.link || ''],
+      ctaLabel: 'View my partner space',
+    },
+    ctaUrl: ctx.link || linksFor(ctx.baseUrl).site,
+    unsubscribeUrl: ctx.unsubscribeUrl,
+  }, ctx);
+}
+
 // =============================================================================
 // ADMIN templates
 // =============================================================================
@@ -2072,7 +2143,17 @@ function offerCancelled(ctx) {
   // Une réservation existe-t-elle encore à libérer ? Le notifieur le dit
   // (`cautionPosee`) : cette couche ne devine pas l'état d'une carte.
   const reserve = !!ctx.cautionPosee;
-  const argent = !frais
+  // ADR 0041 — rien n'est prélevé à l'annulation : le notaire a un délai pour
+  // RÉCLAMER, en justifiant, une indemnité sous le plafond. Le client lit le
+  // plafond, l'échéance, et ce qu'il advient de la somme réservée entre-temps.
+  const attente = !!(a && a.statut === 'en_attente');
+  const argent = attente
+    ? ('Votre notaire peut réclamer, d’ici le ' + fmtDate(a.echeanceISO) + ', ses frais réels et la valeur du travail accompli, jusqu’à ' + money(a.plafond)
+      + ' (' + pct(a.taux) + ' du montant convenu), avec justification. Rien n’est retenu pour l’instant. '
+      + (reserve
+        ? 'La somme réservée sur votre carte reste en place jusqu’à sa décision, puis vous est libérée.'
+        : 'Un montant réclamé serait porté à la carte que vous avez enregistrée.'))
+    : !frais
     ? (reserve
       ? 'Votre annulation est sans frais : rien n’est débité, et la réservation sur votre carte est libérée.'
       : 'Votre annulation est sans frais : rien n’est débité, et aucune somme n’était réservée sur votre carte.')
@@ -2081,7 +2162,13 @@ function offerCancelled(ctx) {
       : surCaution
         ? 'Des frais d’annulation de ' + money(frais) + ' (' + pct(a.taux) + ' du montant) sont retenus sur la somme réservée pour cet acte et versés au notaire en dédommagement du rendez-vous libéré ; le reste vous est libéré.'
         : 'Aucune somme n’était réservée pour cet acte. Des frais d’annulation de ' + money(frais) + ' (' + pct(a.taux) + ' du montant) sont donc portés à la carte que vous avez enregistrée, et versés au notaire en dédommagement du rendez-vous libéré.';
-  const argentEn = !frais
+  const argentEn = attente
+    ? ('Your notary may claim, by ' + fmtDateEn(a.echeanceISO) + ', their real costs and the value of work done, up to ' + moneyEn(a.plafond)
+      + ' (' + pctEn(a.taux) + ' of the agreed amount), with a written reason. Nothing is kept for now. '
+      + (reserve
+        ? 'The amount held on your card stays in place until their decision, then is released to you.'
+        : 'A claimed amount would be charged to the card you registered.'))
+    : !frais
     ? (reserve
       ? 'Your cancellation carries no fee: nothing is charged, and the hold on your card is released.'
       : 'Your cancellation carries no fee: nothing is charged, and no amount was being held on your card.')
@@ -2136,14 +2223,23 @@ function offerCancelledNotary(ctx) {
   // notaire doit lire ce fait, jamais une promesse de versement que rien
   // n'adosse : Nota n'a rien encaissé, elle ne doit rien.
   const percu = !!frais && (!a || a.percu !== false);
-  const argent = !frais
+  // ADR 0041 — l'annulation n'a rien prélevé : le notaire lit ce qu'il PEUT
+  // réclamer, avec justification, et jusqu'à quand.
+  const attente = !!(a && a.statut === 'en_attente');
+  const argent = attente
+    ? 'Vous pouvez réclamer jusqu’à ' + money(a.plafond) + ' (' + pct(a.taux) + ' du montant convenu) en dédommagement, d’ici le ' + fmtDate(a.echeanceISO)
+      + ', depuis votre console : décrivez vos frais réels et le travail accompli. Sans réclamation de votre part, rien n’est prélevé au client.'
+    : !frais
     ? 'Le client a annulé dans la fenêtre gratuite du barème : aucuns frais ne vous sont dus.'
     : !percu
       ? 'Le barème prévoyait ' + money(frais) + ' (' + pct(a.taux) + ' du montant) en dédommagement, mais la carte du client a refusé le prélèvement : rien n’a été encaissé, et rien ne vous est donc versé. Nota a inscrit l’incident.'
       : verse
         ? 'En dédommagement, ' + money(frais) + ' (' + pct(a.taux) + ' du montant) vous sont versés : le virement vers votre compte Stripe est en route.'
         : money(frais) + ' (' + pct(a.taux) + ' du montant) vous sont dus en dédommagement. Ils vous seront versés dès que vos versements Stripe seront branchés.';
-  const argentEn = !frais
+  const argentEn = attente
+    ? 'You may claim up to ' + moneyEn(a.plafond) + ' (' + pctEn(a.taux) + ' of the agreed amount) as compensation, by ' + fmtDateEn(a.echeanceISO)
+      + ', from your console: describe your real costs and the work done. Without a claim from you, nothing is charged to the client.'
+    : !frais
     ? 'The client cancelled within the barème’s free window: no fee is due to you.'
     : !percu
       ? 'The barème called for ' + moneyEn(frais) + ' (' + pctEn(a.taux) + ' of the amount) as compensation, but the client’s card declined the charge: nothing was collected, so nothing is transferred to you. Nota has recorded the incident.'
@@ -2153,7 +2249,7 @@ function offerCancelledNotary(ctx) {
   return build({
     subjectFr: 'Demande annulée par le client : ' + money(ctx.montant),
     subjectEn: 'Client cancelled: ' + moneyEn(ctx.montant),
-    preheaderFr: percu ? money(frais) + ' vous reviennent en dédommagement.' : 'La demande que vous aviez retenue vient d’être retirée.',
+    preheaderFr: attente ? 'Vous pouvez réclamer jusqu’à ' + money(a.plafond) + ' d’ici le ' + fmtDate(a.echeanceISO) + '.' : percu ? money(frais) + ' vous reviennent en dédommagement.' : 'La demande que vous aviez retenue vient d’être retirée.',
     preheaderEn: percu ? moneyEn(frais) + ' comes to you as compensation.' : 'The request you had taken was just withdrawn.',
     fr: {
       heading: 'Le client a annulé sa demande',
@@ -2504,6 +2600,56 @@ function operatorSupportMessage(ctx) {
   }, ctx);
 }
 
+// L'escalade (ADR 0046) — l'assistant a rendu la main, et cette alerte est la
+// SEULE que le propriétaire reçoit encore de la messagerie. Elle porte donc
+// tout ce qu'il faut pour répondre sans rien ouvrir : la raison de l'escalade,
+// le fil entier, l'adresse du visiteur, et le lien de réponse signé.
+function operatorSupportEscalade(ctx) {
+  const who = ctx.courriel || 'Visiteur (sans courriel)';
+  const motifFr = ctx.motifNom || 'La fiche de faits ne dit rien là-dessus';
+  const motifEn = ctx.motifNomEn || 'The fact sheet does not cover it';
+  // Le fil, dans l'ordre, avec l'émetteur en clair : c'est le contexte qui
+  // manquait à l'alerte d'avant, et sans lui une réponse par courriel
+  // recommence la conversation à zéro.
+  const lignes = (ctx.fil || []).map((m) => (m.qui || '') + ' — ' + (m.texte || ''));
+  const bodyFr =
+    callout(who) +
+    detailRows([
+      { label: 'Pourquoi vous', value: motifFr },
+      { label: 'Courriel', value: ctx.courriel || null, href: ctx.courriel ? 'mailto:' + ctx.courriel : null },
+    ]) +
+    (lignes.length ? bullets(lignes) : ctx.texte ? para(ctx.texte) : '');
+  const bodyEn =
+    callout(who) +
+    detailRows([
+      { label: 'Why you', value: motifEn },
+      { label: 'Email', value: ctx.courriel || null, href: ctx.courriel ? 'mailto:' + ctx.courriel : null },
+    ]) +
+    (lignes.length ? bullets(lignes) : ctx.texte ? para(ctx.texte) : '');
+  return build({
+    subjectFr: 'Messagerie : une question pour vous',
+    subjectEn: 'Live chat: a question for you',
+    preheaderFr: 'L’assistant a passé la main — celle-ci demande une personne.',
+    preheaderEn: 'The assistant handed off — this one needs a person.',
+    fr: {
+      heading: 'Une question pour vous',
+      lead: 'L’assistant répond aux questions que la fiche de faits fonde. Celle-ci n’en fait pas partie : elle vous attend. Répondez d’un geste — le visiteur voit votre réponse en direct dans la messagerie du site.',
+      bodyHtml: bodyFr,
+      textLines: [who, 'Pourquoi vous : ' + motifFr, ...(lignes.length ? lignes : [ctx.texte || ''])],
+      ctaLabel: 'Répondre',
+    },
+    en: {
+      heading: 'A question for you',
+      lead: 'The assistant answers what the fact sheet grounds. This one it does not — it is waiting for you. Reply in one tap; the visitor sees your answer live in the site’s chat.',
+      bodyHtml: bodyEn,
+      textLines: [who, 'Why you: ' + motifEn, ...(lignes.length ? lignes : [ctx.texte || ''])],
+      ctaLabel: 'Reply',
+    },
+    ctaUrl: ctx.replyUrl || operatorUrl(ctx),
+    unsubscribeUrl: ctx.unsubscribeUrl,
+  }, ctx);
+}
+
 // The operator's reply, forwarded to a visitor who left a courriel — the
 // widget already shows it live; this is the offline copy (ADR 0026).
 function supportReponse(ctx) {
@@ -2827,6 +2973,134 @@ function notaryApproved(ctx) {
   }, ctx);
 }
 
+// --- ADR 0041 — l'indemnité de résiliation, décidée ---------------------------
+// Une annulation tardive n'a rien prélevé : le notaire avait un délai pour
+// réclamer, en justifiant, une indemnité sous le plafond. Trois lettres
+// racontent la décision — au client ce qui a bougé et pourquoi, au notaire
+// l'accusé de sa réclamation. Context: bid fields + `annulation`
+// { statut, plafond, taux, frais, justification, percu, mecanisme, dedommagement }.
+function indemniteReclamee(ctx) {
+  const a = ctx.annulation || {};
+  const frais = Number(a.frais) > 0 ? Number(a.frais) : 0;
+  const percu = a.percu !== false;
+  const surCaution = a.mecanisme === 'capture';
+  const just = a.justification ? String(a.justification) : '';
+  const argent = !percu
+    ? 'Votre notaire a réclamé une indemnité de ' + money(frais) + ' (plafond : ' + money(a.plafond) + '), mais votre carte a refusé le prélèvement : rien n’a été retenu. Votre notaire en est informé.'
+    : surCaution
+      ? 'Votre notaire a réclamé une indemnité de ' + money(frais) + ' (plafond : ' + money(a.plafond) + '). Elle est retenue sur la somme réservée pour cet acte et lui est versée en dédommagement de la journée réservée. Le reste vous est libéré.'
+      : 'Votre notaire a réclamé une indemnité de ' + money(frais) + ' (plafond : ' + money(a.plafond) + '). Elle est portée à la carte que vous avez enregistrée et lui est versée en dédommagement de la journée réservée.';
+  const argentEn = !percu
+    ? 'Your notary claimed a ' + moneyEn(frais) + ' indemnity (cap: ' + moneyEn(a.plafond) + '), but your card declined the charge: nothing was kept. Your notary has been told.'
+    : surCaution
+      ? 'Your notary claimed a ' + moneyEn(frais) + ' indemnity (cap: ' + moneyEn(a.plafond) + '). It is kept from the amount held for this act and transferred to them as compensation for the reserved day. The rest is released to you.'
+      : 'Your notary claimed a ' + moneyEn(frais) + ' indemnity (cap: ' + moneyEn(a.plafond) + '). It is charged to the card you registered and transferred to them as compensation for the reserved day.';
+  const motif = just ? 'Justification donnée par le notaire : « ' + just + ' »' : '';
+  const motifEn = just ? 'Reason given by the notary: “' + just + '”' : '';
+  const droit = 'Cette indemnité couvre les frais réels et la valeur du travail accompli (art. 2129 C.c.Q.). Si vous la contestez, écrivez-nous depuis votre espace : Nota ne garde rien de cette somme.';
+  const droitEn = 'This indemnity covers real costs and the value of work done (art. 2129 C.C.Q.). To dispute it, write to us from your space: Nota keeps none of it.';
+  return build({
+    subjectFr: 'Indemnité de votre notaire : ' + money(frais),
+    subjectEn: 'Your notary’s indemnity: ' + moneyEn(frais),
+    preheaderFr: percu ? money(frais) + ' sont retenus, avec justification.' : 'Votre carte a refusé le prélèvement.',
+    preheaderEn: percu ? moneyEn(frais) + ' is kept, with a reason.' : 'Your card declined the charge.',
+    fr: {
+      heading: percu ? 'Une indemnité est retenue' : 'Le prélèvement a été refusé',
+      lead: 'Vous aviez annulé votre offre — ' + svcNom(ctx.serviceId) + ' le ' + fmtDate(ctx.dateISO) + ' — après qu’un notaire l’avait retenue.',
+      bodyHtml: callout(offerLine(ctx)) + para(argent) + (motif ? callout(motif) : '') + para(droit),
+      textLines: [offerLine(ctx), argent, motif, droit].filter(Boolean),
+      ctaLabel: 'Voir mon offre',
+    },
+    en: {
+      heading: percu ? 'An indemnity is kept' : 'The charge was declined',
+      lead: 'You had cancelled your offer — ' + svcNomEn(ctx.serviceId) + ' on ' + fmtDateEn(ctx.dateISO) + ' — after a notary had taken it.',
+      bodyHtml: callout(offerLineEn(ctx)) + para(argentEn) + (motifEn ? callout(motifEn) : '') + para(droitEn),
+      textLines: [offerLineEn(ctx), argentEn, motifEn, droitEn].filter(Boolean),
+      ctaLabel: 'See my offer',
+    },
+    ctaUrl: clientActeUrl(ctx),
+    unsubscribeUrl: ctx.unsubscribeUrl,
+  }, ctx);
+}
+
+function indemniteClose(ctx) {
+  const a = ctx.annulation || {};
+  const renonce = a.statut === 'renoncee';
+  const argent = renonce
+    ? 'Votre notaire ne réclame aucune indemnité : rien n’est retenu.'
+    : 'Le délai de réclamation est passé sans réclamation : rien n’est retenu.';
+  const argentEn = renonce
+    ? 'Your notary is not claiming any indemnity: nothing is kept.'
+    : 'The claim period ended with no claim: nothing is kept.';
+  const reserve = a.mecanisme === 'capture'
+    ? 'La somme réservée sur votre carte pour cet acte est libérée.'
+    : 'Rien n’est porté à la carte que vous aviez enregistrée.';
+  const reserveEn = a.mecanisme === 'capture'
+    ? 'The amount held on your card for this act is released.'
+    : 'Nothing is charged to the card you had registered.';
+  return build({
+    subjectFr: 'Annulation sans indemnité : ' + money(ctx.montant),
+    subjectEn: 'No indemnity claimed: ' + moneyEn(ctx.montant),
+    preheaderFr: 'Rien n’est retenu sur votre annulation.',
+    preheaderEn: 'Nothing is kept on your cancellation.',
+    fr: {
+      heading: 'Rien n’est retenu',
+      lead: 'Vous aviez annulé votre offre — ' + svcNom(ctx.serviceId) + ' le ' + fmtDate(ctx.dateISO) + ' — après qu’un notaire l’avait retenue.',
+      bodyHtml: callout(offerLine(ctx)) + para(argent + ' ' + reserve),
+      textLines: [offerLine(ctx), argent, reserve],
+      ctaLabel: 'Choisir une nouvelle date',
+    },
+    en: {
+      heading: 'Nothing is kept',
+      lead: 'You had cancelled your offer — ' + svcNomEn(ctx.serviceId) + ' on ' + fmtDateEn(ctx.dateISO) + ' — after a notary had taken it.',
+      bodyHtml: callout(offerLineEn(ctx)) + para(argentEn + ' ' + reserveEn),
+      textLines: [offerLineEn(ctx), argentEn, reserveEn],
+      ctaLabel: 'Pick a new date',
+    },
+    ctaUrl: linksFor(ctx.baseUrl).carnet,
+    unsubscribeUrl: ctx.unsubscribeUrl,
+  }, ctx);
+}
+
+function indemniteReclameeNotaire(ctx) {
+  const a = ctx.annulation || {};
+  const frais = Number(a.frais) > 0 ? Number(a.frais) : 0;
+  const percu = a.percu !== false;
+  const verse = !!(a.dedommagement && a.dedommagement.verse);
+  const argent = !percu
+    ? 'La carte du client a refusé le prélèvement de ' + money(frais) + ' : rien n’a été perçu, et rien ne vous est dû par Nota.'
+    : verse
+      ? 'Votre indemnité de ' + money(frais) + ' est perçue et vous est versée : le virement vers votre compte Stripe est en route.'
+      : 'Votre indemnité de ' + money(frais) + ' est perçue et vous est due. Elle vous sera versée dès que vos versements Stripe seront branchés.';
+  const argentEn = !percu
+    ? 'The client’s card declined the ' + moneyEn(frais) + ' charge: nothing was collected, and nothing is owed to you by Nota.'
+    : verse
+      ? 'Your ' + moneyEn(frais) + ' indemnity is collected and transferred to you: the transfer to your Stripe account is on its way.'
+      : 'Your ' + moneyEn(frais) + ' indemnity is collected and owed to you. It will be transferred as soon as your Stripe payouts are connected.';
+  return build({
+    subjectFr: 'Indemnité réclamée : ' + money(frais),
+    subjectEn: 'Indemnity claimed: ' + moneyEn(frais),
+    preheaderFr: percu ? money(frais) + ' vous reviennent.' : 'Le prélèvement a été refusé.',
+    preheaderEn: percu ? moneyEn(frais) + ' comes to you.' : 'The charge was declined.',
+    fr: {
+      heading: 'Votre réclamation est traitée',
+      lead: 'Pour la demande annulée — ' + svcNom(ctx.serviceId) + ' le ' + fmtDate(ctx.dateISO) + ' — vous avez réclamé une indemnité justifiée.',
+      bodyHtml: callout(offerLine(ctx)) + para(argent) + (a.justification ? callout('Votre justification : « ' + a.justification + ' »') : ''),
+      textLines: [offerLine(ctx), argent],
+      ctaLabel: 'Ouvrir ma console',
+    },
+    en: {
+      heading: 'Your claim has been processed',
+      lead: 'For the cancelled request — ' + svcNomEn(ctx.serviceId) + ' on ' + fmtDateEn(ctx.dateISO) + ' — you claimed a justified indemnity.',
+      bodyHtml: callout(offerLineEn(ctx)) + para(argentEn) + (a.justification ? callout('Your reason: “' + a.justification + '”') : ''),
+      textLines: [offerLineEn(ctx), argentEn],
+      ctaLabel: 'Open my console',
+    },
+    ctaUrl: notaryActeUrl(ctx),
+    unsubscribeUrl: ctx.unsubscribeUrl,
+  }, ctx);
+}
+
 // Registry — the notifier looks templates up by name; tests iterate it to assert
 // every template carries a bilingual subject, an unsubscribe link and sender ID.
 const TEMPLATES = {
@@ -2838,6 +3112,9 @@ const TEMPLATES = {
   offerRetained,
   dateMissedNoUptake,
   offerCancelled,
+  // ADR 0041 — l'indemnité de résiliation, décidée
+  indemniteReclamee,
+  indemniteClose,
   evaluationInvite,
   actReleased,
   // client — pay-on-accept lifecycle
@@ -2858,6 +3135,7 @@ const TEMPLATES = {
   propositionAcceptee,
   propositionRefusee,
   offerCancelledNotary,
+  indemniteReclameeNotaire,
   // ADR 0033 — la mise en relation est complète
   demandeRetenueNotaire,
   nouvelleDemande,
@@ -2870,6 +3148,8 @@ const TEMPLATES = {
   // notary — marketplace lifecycle
   newMatchingBids,
   notaryMagicLink,
+  clientMagicLink,
+  partnerCodeReminder,
   notaryOnboardingStarted,
   notaryActive,
   actPaidNotary,
@@ -2893,6 +3173,7 @@ const TEMPLATES = {
   operatorDemandeRetenue,
   // live support messaging (ADR 0026)
   operatorSupportMessage,
+  operatorSupportEscalade,
   supportReponse,
   // free signup + operator vetting (2026-09-02)
   notaryPendingReview,
@@ -2975,6 +3256,19 @@ const TEMPLATE_META = {
     audience: 'client', transactionnel: true,
     labelFr: 'Offre annulée (accusé)', labelEn: 'Offer cancelled (ack)',
     defaultSubjectFr: 'Offre annulée : {{montant}}', defaultSubjectEn: 'Offer cancelled: {{montant}}',
+    placeholders: ['montant', 'service', 'date'],
+  },
+  // ADR 0041 — l'indemnité de résiliation, décidée
+  indemniteReclamee: {
+    audience: 'client', transactionnel: true,
+    labelFr: 'Indemnité réclamée par le notaire', labelEn: 'Indemnity claimed by the notary',
+    defaultSubjectFr: 'Indemnité de votre notaire : {{montant}}', defaultSubjectEn: 'Your notary’s indemnity: {{montant}}',
+    placeholders: ['montant', 'service', 'date'],
+  },
+  indemniteClose: {
+    audience: 'client', transactionnel: true,
+    labelFr: 'Annulation sans indemnité', labelEn: 'Cancellation with no indemnity',
+    defaultSubjectFr: 'Annulation sans indemnité : {{montant}}', defaultSubjectEn: 'No indemnity claimed: {{montant}}',
     placeholders: ['montant', 'service', 'date'],
   },
   evaluationInvite: {
@@ -3080,6 +3374,12 @@ const TEMPLATE_META = {
     defaultSubjectFr: 'Demande annulée par le client : {{montant}}', defaultSubjectEn: 'Client cancelled: {{montant}}',
     placeholders: ['montant', 'service', 'date'],
   },
+  indemniteReclameeNotaire: {
+    audience: 'notaire', transactionnel: true,
+    labelFr: 'Indemnité réclamée (accusé au notaire)', labelEn: 'Indemnity claimed (ack to the notary)',
+    defaultSubjectFr: 'Indemnité réclamée : {{montant}}', defaultSubjectEn: 'Indemnity claimed: {{montant}}',
+    placeholders: ['montant', 'service', 'date'],
+  },
   // --- ADR 0033 — la mise en relation est complète ---------------------------
   demandeRetenueNotaire: {
     audience: 'notaire', transactionnel: true,
@@ -3115,6 +3415,18 @@ const TEMPLATE_META = {
     labelFr: 'Digest des demandes ouvertes', labelEn: 'Open-requests digest',
     defaultSubjectFr: '{{n}} nouvelles demandes sur le carnet', defaultSubjectEn: '{{n}} new requests on the carnet',
     placeholders: ['n'],
+  },
+  partnerCodeReminder: {
+    audience: 'partenaire', transactionnel: true,
+    labelFr: 'Rappel du code partenaire', labelEn: 'Partner code reminder',
+    defaultSubjectFr: 'Votre code partenaire Nota', defaultSubjectEn: 'Your Nota partner code',
+    placeholders: [],
+  },
+  clientMagicLink: {
+    audience: 'client', transactionnel: true,
+    labelFr: 'Lien d’accès (mes demandes)', labelEn: 'Access link (my requests)',
+    defaultSubjectFr: 'Votre lien d’accès à vos demandes', defaultSubjectEn: 'Your link to your requests',
+    placeholders: [],
   },
   notaryMagicLink: {
     audience: 'notaire', transactionnel: true,
@@ -3228,6 +3540,12 @@ const TEMPLATE_META = {
     audience: 'operateur', transactionnel: false,
     labelFr: 'Messagerie : question d’un visiteur', labelEn: 'Live chat: visitor question',
     defaultSubjectFr: 'Messagerie : nouvelle question', defaultSubjectEn: 'Live chat: new question',
+    placeholders: ['email'],
+  },
+  operatorSupportEscalade: {
+    audience: 'operateur', transactionnel: false,
+    labelFr: 'Messagerie : escalade vers vous', labelEn: 'Live chat: escalated to you',
+    defaultSubjectFr: 'Messagerie : une question pour vous', defaultSubjectEn: 'Live chat: a question for you',
     placeholders: ['email'],
   },
   supportReponse: {

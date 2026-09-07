@@ -35,22 +35,37 @@ const money = D.money(840);
 // [name, French exemplar as composed by app.js, a fragment the English MUST carry,
 //  a French fragment the English must NOT carry]
 const LIVE = [
-  ['cancel dialog — fee disclosure (openCancelDialog)',
-    'Annuler maintenant retient des frais de ' + money + ' (' + pct + ' du montant convenu) sur la somme réservée pour cet acte. Ils sont versés au notaire en dédommagement de la journée réservée. Le reste vous est libéré immédiatement.',
-    /(paid|transferred) to the notary/, /versés|caution/],
+  ['cancel dialog — cap disclosure (openCancelDialog, ADR 0041)',
+    'Annuler maintenant permet au notaire de réclamer, sur justification et dans les 7 jours, ses frais réels et la valeur du travail accompli, jusqu’à ' + money + ' (' + pct + ' du montant convenu).',
+    /lets the notary claim, with a written reason and within 7 days/, /réclamer|justification/],
   ['cancel toast (confirmCancelOffer)',
-    'Offre annulée. Des frais de ' + money + ' (' + pct + ') ont été retenus sur la somme réservée pour cet acte et versés au notaire en dédommagement.',
-    /Offer cancelled\. A fee of \$840 \(30%\)/, /frais|caution/],
+    'Offre annulée. Votre notaire peut réclamer, sur justification et dans les 7 jours, une indemnité allant jusqu’à ' + money + ' (' + pct + ' du montant convenu). Rien n’est retenu pour l’instant.',
+    /Offer cancelled\. Your notary may claim, with a written reason and within 7 days, an indemnity of up to \$840 \(30%/, /frais|réclamer/],
   ['cancel bell entry body (confirmCancelOffer)',
-    'Des frais de ' + money + ' (' + pct + ') ont été retenus sur la somme réservée pour cet acte et versés au notaire en dédommagement.',
-    /^A fee of \$840 \(30%\)/, /frais|caution/],
+    'Une indemnité de ' + money + ', justifiée par le notaire, a été retenue sur la somme réservée pour cet acte et lui est versée en dédommagement.',
+    /^A \$840 indemnity, justified by the notary/, /frais|caution/],
   ['« Prochaine étape » receipt (offerNextStep)',
-    'Vous avez annulé cette offre. Des frais de ' + money + ' (' + pct + ') ont été retenus sur la somme réservée pour cet acte et versés au notaire en dédommagement. Si vous changez d’avis, choisissez une nouvelle date au carnet.',
-    /You cancelled this offer\. A fee of \$840 \(30%\)/, /frais|caution/],
+    'Vous avez annulé cette offre. Une indemnité de ' + money + ', justifiée par le notaire, a été retenue sur la somme réservée pour cet acte et lui est versée en dédommagement. Si vous changez d’avis, choisissez une nouvelle date au carnet.',
+    /You cancelled this offer\. A \$840 indemnity/, /frais|caution/],
   ['unread badge aria-label (unreadLabel) — plural',
     '3 nouveaux messages', /3 new message/, /nouveaux/],
   ['unread badge aria-label (unreadLabel) — singular',
     '1 nouveau message', /1 new message/, /nouveau/],
+  // The market-pulse rows name themselves for a screen reader in one composed
+  // sentence (pulseRow). Three shapes, because the reference has three states:
+  // a reference exists, too few offers to carry one, or no offer at all.
+  ['pulse row aria-label (pulseRow) — with a month reference',
+    'Refinancement, à partir de ' + D.money(2279) + ', repère du mois ' + D.money(4165) + '. Afficher le carnet pour cet acte.',
+    /^Refinancing, from \$2,279, month’s reference \$4,165\. Show the carnet for this act\.$/,
+    /repère|Afficher|cet acte/],
+  ['pulse row aria-label (pulseRow) — too few offers for a reference',
+    'Refinancement, à partir de ' + D.money(2279) + ', pas assez d’offres ce mois pour un repère. Afficher le carnet pour cet acte.',
+    /^Refinancing, from \$2,279, not enough offers this month for a reference\. Show the carnet for this act\.$/,
+    /assez|offres|Afficher|cet acte/],
+  ['pulse row aria-label (pulseRow) — active filter, with a reference',
+    'Refinancement, à partir de ' + D.money(2279) + ', repère du mois ' + D.money(4165) + '. Retirer ce filtre.',
+    /^Refinancing, from \$2,279, month’s reference \$4,165\. Remove this filter\.$/,
+    /repère|Retirer|filtre/],
 ];
 
 for (const [name, fr, mustEn, mustNotFr] of LIVE) {
@@ -67,14 +82,21 @@ for (const [name, fr, mustEn, mustNotFr] of LIVE) {
 // so a future rewording fails here, not in a client's browser.
 test('the cancellation exemplars mirror the fragments app.js composes', () => {
   for (const frag of [
-    'Annuler maintenant retient des frais de ',
-    ' du montant convenu) sur la somme réservée pour cet acte.',
-    ' Ils sont versés au notaire en dédommagement de la journée réservée.',
-    ' Le reste vous est libéré immédiatement.',
-    ') ont été retenus sur la somme réservée pour cet acte et versés au notaire en dédommagement.',
+    'Annuler maintenant permet au notaire de réclamer, sur justification et dans les ',
+    ' du montant convenu).',
+    'Rien n’est retenu automatiquement.',
+    'La somme réservée sur votre carte reste en place jusqu’à sa décision, puis vous est libérée.',
+    ', justifiée par le notaire, a été retenue sur la somme réservée pour cet acte et lui est versée en dédommagement.',
     'Vous avez annulé cette offre. ',
     ' Si vous changez d’avis, choisissez une nouvelle date au carnet.',
     "'Offre annulée. ' + keptLine",
+    // pulseRow's own fragments, so a rewording of the aria-label fails here.
+    "', à partir de '",
+    "', repère du mois '",
+    "', aucune offre ce mois'",
+    "', pas assez d’offres ce mois pour un repère'",
+    "'Afficher le carnet pour cet acte.'",
+    "'Retirer ce filtre.'",
   ]) {
     assert.ok(APP_SRC.includes(frag), 'app.js no longer composes: ' + frag);
   }

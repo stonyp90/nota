@@ -25,7 +25,8 @@ déontologie des notaires* du Québec (art. 32).**
 **Nota ne partage aucun honoraire.** Le notaire reçoit **la totalité** du montant
 que le client lui offre ; Nota facture au client, à côté et sur sa propre ligne,
 **son propre prix pour son propre service** — une grille publiée par service
-(199 $ / 249 $) plus une garantie de date (0 · 50 · 100 · 200 · 300 $). La carte
+(229 $ / 279 $, ADR 0042) plus une garantie de date (0 · 149 · 299 · 449 · 549 $,
+ADR 0038). La carte
 du client autorise le total des deux ; à la signature, Nota capture ce total,
 garde ses deux lignes et vire les honoraires au notaire.
 
@@ -85,6 +86,7 @@ client** (ADR 0030).
 | Fichier | Objet | État |
 | --- | --- | --- |
 | [`conformite-deontologique-notaires.md`](conformite-deontologique-notaires.md) | **Le dossier déontologique** : Code de déontologie, *Loi sur le notariat*, ce que le produit fait, ce qui reste exposé | Brouillon — **à lire en premier** |
+| [`verification-juridique-2026-09-05-prix-et-frais.md`](verification-juridique-2026-09-05-prix-et-frais.md) | **Prix annoncé, prix variable, frais** : LPC 224 c) et 13, Loi sur la concurrence 74.01 (1.1), Loi 25 art. 12.1, relus à la source. Deux correctifs : le « à partir de » tout compris, les frais d'annulation sans pourcentage fixé d'avance | Vérification du 2026-09-05, avis écrit toujours requis |
 | [`conditions-utilisation-client.md`](conditions-utilisation-client.md) | Contrat entre Nota et le client qui publie une offre | Brouillon |
 | [`conditions-notaire.md`](conditions-notaire.md) | Entente de place de marché entre Nota et le notaire | Brouillon — **dépend de l'avis déontologique** |
 | [`politique-confidentialite.md`](politique-confidentialite.md) | Loi 25 : renseignements personnels, droits, incidents | Brouillon |

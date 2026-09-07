@@ -130,7 +130,7 @@ test('/notary/bids ne montre PLUS aucun partage — le tarif du client, et la co
   assert.equal(view.tarif.prixNotaMinCents, PRIX_MIN, 'et son « à partir de »');
   // Ni pourcentage, ni part, ni cote : rien à recalculer, rien à négocier.
   assert.deepEqual(Object.keys(view.tarif).sort(),
-    ['deboursInclus', 'grille', 'prixNotaMinCents', 'taxesIncluses']);
+    ['annulation', 'deboursInclus', 'grille', 'prixNotaMinCents', 'taxesIncluses']);
 
   // La cote survit intacte — elle classe, elle ouvre des dossiers, elle ne
   // touche simplement plus à un dollar.

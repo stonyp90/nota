@@ -12,17 +12,19 @@
     "start:admin": "node admin-local-server.js"
   },
   "dependencies": {
-    "@nota/domain": "*",
+    "@anthropic-ai/sdk": "^0.124.0",
     "@aws-sdk/client-dynamodb": "^3.667.0",
-    "@aws-sdk/lib-dynamodb": "^3.667.0",
-    "@aws-sdk/client-sesv2": "^3.667.0",
-    "stripe": "^16",
     "@aws-sdk/client-s3": "^3.667.0",
-    "@aws-sdk/s3-request-presigner": "^3.667.0"
+    "@aws-sdk/client-sesv2": "^3.667.0",
+    "@aws-sdk/client-ssm": "^3.1127.0",
+    "@aws-sdk/lib-dynamodb": "^3.667.0",
+    "@aws-sdk/s3-request-presigner": "^3.667.0",
+    "@nota/domain": "*",
+    "stripe": "^16"
   },
   "devDependencies": {
-    "js-yaml": "^4.1.0",
     "ajv": "^8.17.1",
-    "ajv-formats": "^3.0.1"
+    "ajv-formats": "^3.0.1",
+    "js-yaml": "^4.1.0"
   }
 }

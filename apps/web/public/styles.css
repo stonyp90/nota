@@ -39,6 +39,13 @@
 
   /* Semantic tokens (light) */
   --brand: var(--hunter-700);
+  /* Couleurs de MARQUE des fournisseurs tiers (portes à venir). Ce sont des
+     constantes appartenant à Google, Meta et LinkedIn : elles ne suivent pas
+     le thème et ne se redéfinissent nulle part — mais elles restent des
+     jetons nommés plutôt que des littéraux dispersés dans les règles. */
+  --marque-google-chip: #ffffff; /* le « G » doit rester sur fond blanc */
+  --marque-facebook: #1877f2;
+  --marque-linkedin: #0a66c2;
   --brand-bright: var(--hunter-500);
   --brand-ink: #ffffff;
   --brand-hover: var(--hunter-800);
@@ -303,6 +310,10 @@
 * { box-sizing: border-box; }
 
 html { -webkit-text-size-adjust: 100%; }
+/* Selected text answers to the brand, not to the browser's default blue —
+   which read as a foreign UI on a dark hunter-green page and lost contrast on
+   the light one. Both halves are stated (never colour alone on a veil). */
+::selection { background: color-mix(in srgb, var(--brand) 30%, transparent); color: var(--ink); }
 
 body {
   margin: 0;
@@ -383,7 +394,6 @@ a:hover { text-decoration: underline; }
    open date, so the carnet reads as active at a glance. */
 .cal-avail { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 600; color: var(--ink); white-space: nowrap; padding: 4px 11px; border: 1px solid var(--border); border-radius: var(--radius); }
 .cal-avail::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--brand-bright); flex: none; }
-.cal-avail[hidden] { display: none; }
 .header-spacer { flex: 1; }
 
 /* flex:none — the tab strip never shrinks below its labels: a squeezed header
@@ -712,6 +722,83 @@ html.nav-open, html.nav-open body { overflow: hidden; }
 .auth-continue { width: 100%; margin-top: 4px; }
 .auth-fine { font-size: 12px; color: var(--ink-muted); line-height: 1.5; margin: 14px 0 0; text-align: center; }
 
+/* --- Bascule inscription ↔ connexion ------------------------------------- */
+/* Une phrase, pas un bouton : le geste principal reste le CTA au-dessus. */
+.auth-switch { font-size: 13px; color: var(--ink-muted); text-align: center; margin: 14px 0 0; }
+.auth-switch-btn {
+  appearance: none; border: 0; background: none; padding: 0; margin-left: 4px;
+  font: inherit; font-weight: 650; color: var(--brand); cursor: pointer;
+  text-decoration: underline; text-underline-offset: 2px;
+}
+.auth-switch-btn:hover { color: var(--brand-hover); }
+
+/* --- Séparateur ---------------------------------------------------------- */
+/* Le filet passe DERRIÈRE le mot, qui porte le fond de la carte : pas de
+   largeur codée en dur, donc il tient dans les deux langues. */
+.auth-or {
+  display: flex; align-items: center; gap: 12px;
+  margin: 18px 0 14px; color: var(--ink-muted); font-size: 12px;
+}
+.auth-or::before, .auth-or::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+/* --- Portes à venir ------------------------------------------------------ */
+.auth-social { display: flex; flex-direction: column; gap: 8px; }
+.auth-social-h {
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--ink-muted); text-align: center; margin: 0 0 2px;
+}
+.auth-soc-list { display: flex; flex-direction: column; gap: 8px; }
+/* Elles se lisent comme des boutons — c'est ce qu'elles seront — mais en
+   retrait : elles n'entrent pas en concurrence avec le seul chemin qui marche.
+   Pas de `filter: grayscale` : la marque doit rester reconnaissable, c'est tout
+   l'intérêt de les montrer d'avance. */
+.auth-soc-btn {
+  appearance: none; font: inherit; cursor: not-allowed;
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 9px 12px; border-radius: var(--radius);
+  border: 1px solid var(--border); background: var(--surface);
+  color: var(--ink-muted); text-align: left;
+  transition: border-color .12s, background .12s;
+}
+.auth-soc-btn:hover { border-color: var(--border-strong); background: var(--surface-inset); }
+.auth-soc-btn:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+/* Le « G » de Google doit apparaître sur fond blanc, quel que soit le thème
+   (exigence de marque) : la pastille le porte. Les deux autres logos sont
+   monochromes et tiennent sur n'importe quel fond. */
+.auth-soc-ic {
+  display: grid; place-items: center; flex: none;
+  width: 26px; height: 26px; border-radius: var(--radius-sm);
+}
+.auth-soc-btn[data-provider='google'] .auth-soc-ic {
+  background: var(--marque-google-chip); border: 1px solid var(--border);
+}
+.auth-soc-t { flex: 1; font-size: 13.5px; font-weight: 600; color: var(--ink); }
+/* « Bientôt » : le mot est sur le bouton, pas seulement dans une infobulle —
+   la couleur seule ne dirait rien à qui ne la distingue pas. */
+.auth-soc-soon {
+  flex: none; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em;
+  padding: 2px 7px; border-radius: var(--radius-sm);
+  color: var(--ink-muted); background: var(--surface-inset); border: 1px solid var(--border);
+}
+.auth-social-note { text-align: center; margin: 4px 0 0; }
+/* Sous 420px la pastille volait la largeur du libellé, qui passait sur deux
+   lignes pour les trois fournisseurs. Elle rétrécit — le mot reste lisible et
+   reste DANS le bouton, ce qui est ce qui compte pour un lecteur d'écran. */
+@media (max-width: 420px) {
+  .auth-soc-btn { padding: 8px 10px; gap: 8px; }
+  .auth-soc-t { font-size: 13px; }
+  .auth-soc-soon { font-size: 9px; padding: 2px 5px; letter-spacing: .03em; }
+}
+/* La réponse au clic : vide, elle ne prend aucune place ; remplie, elle se lit
+   comme une réponse et non comme une erreur. */
+.auth-soc-live:empty { display: none; }
+.auth-soc-live {
+  margin: 8px 0 0; padding: 8px 10px; font-size: 12.5px; line-height: 1.45;
+  color: var(--ink); text-align: center;
+  background: var(--brand-tint-solid); border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
 /* --- First-visit onboarding guide --------------------------------------- */
 /* Reuses the .auth-modal shell (card + backdrop); two views live in the DOM
    and are shown/hidden. Tokens only, so it tracks every theme automatically. */
@@ -733,7 +820,7 @@ html.nav-open, html.nav-open body { overflow: hidden; }
 .onb-choice-ic { display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--radius); background: var(--surface-inset); border: 1px solid var(--border); color: var(--brand); }
 .onb-choice-t { font-size: 14.5px; font-weight: 700; letter-spacing: -0.01em; }
 .onb-choice-d { font-size: 12.5px; color: var(--ink-muted); line-height: 1.45; }
-.onb-choice-live { font-size: 12px; font-weight: 650; color: var(--brand); margin-top: 2px; }
+.onb-choice-live { min-height: 1.5em; font-size: 12px; font-weight: 650; color: var(--brand); margin-top: 2px; }
 
 /* VIEW 2 — a numbered steps list with a brand-outline number chip. */
 .onb-steps-title { margin-top: 2px; }
@@ -1418,6 +1505,130 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--brand); }
 .form-row label.lbl { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; margin-bottom: 8px; }
 .help { font-size: 12px; color: var(--ink-muted); margin-top: 4px; }
 
+/* --- A held line --------------------------------------------------------
+   The other half of ADR 0039. Some messages CANNOT go behind an « i »: a
+   validation refusal, a character counter, a « ✓ enregistré », a live status
+   line. They have to be read, out loud, in place. But `hidden` means
+   `display: none`, so each one still took its line away with it — and the
+   button the user was aiming at moved under their cursor at the exact moment
+   the refusal explained why they had missed it.
+
+   Here `hidden` stops meaning « take the line away » and starts meaning « say
+   nothing on it ». An author `display` beats the UA's `[hidden]{display:none}`,
+   so the box stays; `visibility` takes the content out of sight, out of the
+   focus order and out of the accessibility tree — everything `hidden`
+   promised, minus the jump. `.hold-line` adds the reserved height for the
+   nodes that are EMPTIED when they fall silent (an error list, a counter);
+   a node that keeps its text needs `.hold` alone. */
+/* Voici la liste, en un seul endroit : `.hold` pour tout nouvel arrivant, et
+   les lignes déjà nommées qui la rejoignent sans changer de nom. Le `display`
+   est !important parce que le tapis général `.hidden, [hidden]` l'est aussi ;
+   `block` suffit partout — un enfant de flex est de toute façon « blockifié »
+   par le navigateur. `.hold-line` réserve la hauteur des nœuds qu'on VIDE
+   quand ils se taisent (un compteur, une liste d'erreurs) ; un nœud qui garde
+   son texte n'en a pas besoin. */
+.hold[hidden],
+.offer-hint[hidden], .day-beat[hidden],
+.chat-error[hidden], .chat-count[hidden], .nc-chat-count[hidden], .nc-chat-err[hidden],
+.nc-form-errors[hidden], .nc-field-err[hidden], .onb-choice-live[hidden],
+.sup-count[hidden], .sup-reply-courriel[hidden], .ct-count[hidden],
+.day-market-line[hidden], .cal-avail[hidden],
+#chat-reply-error[hidden], #chat-reply-sent[hidden] { display: block !important; visibility: hidden; }
+/* CE QUI N'EST PAS DANS CETTE LISTE, ET POURQUOI (ADR 0046). La ligne réservée
+   est faite pour un message de VALIDATION : il apparaît et disparaît sous le
+   doigt du visiteur, et sans elle le formulaire sauterait à chaque frappe. Une
+   NOTE DE SITUATION, elle, change une fois par conversation — et si elle garde
+   sa ligne, elle la garde tout le temps. « Conversation terminée » et l'avis
+   d'escalade réservaient à eux deux 108 px de vide permanent au milieu d'un
+   panneau de 380 px : c'était, littéralement, le trou qui faisait paraître la
+   messagerie cassée. Ils se replient donc, comme les questions d'amorce. */
+/* Les deux qui sont des conteneurs flex gardent leur flex : en `block` leur
+   contenu se recomposerait, et une ligne tenue changerait de hauteur — soit
+   exactement ce qu'on est venu empêcher. */
+.day-market-line[hidden], .cal-avail[hidden] { display: flex !important; }
+.hold-line { min-height: 1.5em; }
+
+/* --- Info tip (« ⓘ ») ----------------------------------------------------
+   The house pattern for a SITUATIONAL note — « this date is short notice »,
+   « few notaries travel that far », « check these older answers ». Such a
+   sentence used to print itself as an extra line under the question, so an
+   answer that turned it on GREW its card and pushed everything below it down
+   the page; answering the next question shoved it back. The sentence now
+   rides a small « i » pinned to the question's own line and opens in a panel
+   that floats OVER the page: the form's height never depends on what the
+   notes have to say.
+
+   The box is reserved whether or not the tip has something to say
+   (visibility, never display) — so the label line does not jitter either, and
+   a hidden tip is neither focusable nor read aloud.
+
+   Three ways in, because a tooltip that only answers the mouse answers nobody
+   on a phone or a keyboard: hover, keyboard focus, and a click that PINS the
+   panel open until Escape, an outside click, or another tip takes over. The
+   pinned panel takes the pointer, so its sentence can be selected and copied. */
+.itip { position: relative; display: inline-flex; flex: none; vertical-align: -3px; margin-left: 6px; }
+.itip[data-on='false'] { visibility: hidden; }
+.itip-btn {
+  appearance: none; border: 0; background: none; padding: 0; margin: 0;
+  position: relative;
+  width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center;
+  border-radius: var(--radius-xs); color: var(--ink-muted); cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+/* WCAG 2.2 « Target Size (Minimum) » asks for 24 × 24 CSS px. The glyph stays
+   at 18 so it never lifts the label's line — the target is grown OUTWARD by an
+   invisible pad, which costs the layout nothing because it is out of flow. */
+.itip-btn::after { content: ''; position: absolute; inset: -3px; }
+.itip[data-tone='warn'] .itip-btn { color: var(--warn); }
+.itip-btn:hover, .itip[data-open='true'] .itip-btn { color: var(--ink); background: var(--surface-hover); }
+.itip-btn:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+/* The panel: absolutely placed, so it costs the layout nothing. Its side and
+   its alignment are chosen by script the moment it opens (placeItip), so it
+   never opens off the edge of a dialog or a phone. */
+/* L'aide d'une question vit maintenant DANS ce panneau : elle en prend la voix
+   (le gris de .help se perdrait sur la surface du panneau) et n'y garde pas la
+   marge qu'elle avait en pleine page. */
+.itip-pop > .help { margin: 0; font-size: inherit; color: inherit; }
+.itip-pop {
+  position: absolute; z-index: 60; top: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+  width: max-content; max-width: min(280px, calc(100vw - 16px));
+  padding: 8px 10px; text-align: left;
+  font-size: 12.5px; font-weight: 500; line-height: 1.5; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg);
+  opacity: 0; visibility: hidden; pointer-events: none;
+}
+.itip[data-side='top'] > .itip-pop { top: auto; bottom: calc(100% + 6px); }
+/* Hover is offered only where a pointer can actually hover: on a touch screen
+   a tap leaves a « stuck » hover behind, and the panel would never close. There
+   the pinning tap is the way in, and it has a way out. */
+/* FERMÉE, la bulle sort de la mise en page (2026-09-06). Elle est hors flux,
+   mais une boîte absolue invisible compte quand même dans le scrollWidth de son
+   conteneur : à 375 px, quatre bulles de 280 px ancrées sur leur « i » faisaient
+   dépasser la feuille de réservation de 30 px, et #day-dialog (overflow-y:auto,
+   donc overflow-x calculé à auto) se laissait tirer de côté — rien à voir, tout
+   à faire glisser. C'est la SEULE exception au registre « visibility, jamais
+   display » du « i » : celui-ci ne tient aucune ligne, donc il n'en bouge
+   aucune. Ouverte, elle reprend sa boîte AVANT qu'itipPlace la mesure (le clic
+   pose data-open, le survol et le focus posent l'état CSS, puis l'événement). */
+.itip-pop { display: none; }
+@media (hover: hover) {
+  .itip:hover > .itip-pop { opacity: 1; visibility: visible; display: block; }
+}
+.itip-btn:focus-visible ~ .itip-pop,
+.itip[data-open='true'] > .itip-pop { opacity: 1; visibility: visible; display: block; }
+.itip[data-open='true'] > .itip-pop { pointer-events: auto; }
+@media (prefers-reduced-motion: no-preference) {
+  .itip-pop { transition: opacity .12s ease, visibility .12s; }
+  /* A note that has just turned on wakes its « i » once, so a signal that no
+     longer takes a line of its own is still noticed. */
+  @keyframes itip-wake {
+    from { box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 35%, transparent); }
+    to { box-shadow: 0 0 0 4px transparent; }
+  }
+  .itip[data-fresh='true'] .itip-btn { animation: itip-wake 1.2s ease-out; }
+}
+
 /* Inside step 3, right above the amount: WHY it is pre-filled (delay tier +
    going range). Compact and muted — context, never a competing price signal. */
 .tier-preview { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -1435,7 +1646,7 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .slider-bounds { display: flex; justify-content: space-between; margin-top: 2px; font-size: 11.5px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 /* The reason the publish button is dead, said before it is pressed. Each
    named question is a door back to its own line — underlined, same voice. */
-.offer-hint { margin: 0 0 8px; font-size: 12.5px; font-weight: 600; color: var(--warn); }
+.offer-hint { margin: 0 0 8px; min-height: 1.5em; font-size: 12.5px; font-weight: 600; color: var(--warn); }
 .offer-hint-link {
   appearance: none; border: 0; background: none; padding: 0; margin: 0;
   font: inherit; color: inherit; cursor: pointer;
@@ -1464,6 +1675,10 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .devis-v { font-variant-numeric: tabular-nums; font-weight: 600; }
 .devis-total { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border); font-size: 14px; }
 .devis-total .devis-k, .devis-total .devis-v { color: var(--ink); font-weight: 700; }
+/* La revendication du modèle n'avait AUCUNE règle : elle héritait des 16 px du
+   formulaire et parlait donc plus fort que le total juste au-dessus. Elle
+   compte (art. 32.1 2° L.N.), mais elle se lit après le chiffre, pas avant. */
+.devis-claim { margin: var(--space-5) 0 0; font-size: 12.5px; font-weight: 600; line-height: 1.5; color: var(--ink); }
 .devis-note { margin: 6px 0 0; font-size: 11.5px; line-height: 1.5; color: var(--ink-muted); }
 
 /* Discreet inline checkbox (the bid dialog's account opt-in): plain row, no
@@ -1482,10 +1697,16 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .switch input:checked + .track::before { transform: translateX(18px); }
 .switch input:focus-visible + .track { box-shadow: 0 0 0 3px var(--focus-ring); }
 
+/* Délibérément PAS une ligne tenue (ADR 0039 §5) : une liste de refus répond à
+   un envoi volontaire, pas à une frappe — le saut arrive une fois, à un moment
+   où l'œil est déjà sur le message. La réserver mettrait ~27 px de vide
+   permanent au-dessus de six boutons d'envoi, ce qui coûte plus cher que le
+   saut qu'elle éviterait. Les listes qui répondent, elles, à CHAQUE frappe
+   (.nc-form-errors, .nc-field-err) tiennent bien leur ligne. */
 .errors { list-style: none; margin: 8px 0 0; padding: 0; }
 .errors li { color: var(--danger); font-size: 13px; padding: 2px 0; }
 /* « Nous joindre »: the message counter, shown only near the cap (app.js contactCount). */
-.ct-count { margin: 4px 0 0; text-align: right; font-variant-numeric: tabular-nums; }
+.ct-count { margin: 4px 0 0; min-height: 1.5em; text-align: right; font-variant-numeric: tabular-nums; }
 
 /* --- Partenaires (ADR 0011) ---------------------------------------------- */
 /* 2026-08-27 redesign: one washed hero band carries the pitch AND the two
@@ -1512,7 +1733,7 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
    style que espace notaire ») — the headline and lede mirror .intro h1/.intro p
    exactly, so the three doors open on one consistent register. */
 .pr-hero h1 { font-size: clamp(21px, 2.4vw, 28px); font-weight: 800; line-height: 1.15; margin-top: 4px; }
-.pr-hero p { color: var(--ink-muted); max-width: 52ch; margin: 8px 0 0; font-size: 14.5px; line-height: 1.5; }
+.pr-hero p { color: var(--ink-muted); max-width: 60ch; margin: 8px 0 0; font-size: 14.5px; line-height: 1.5; }
 /* The hero's own door to the claim form — the one action the pane sells. */
 .pr-hero-cta { margin-top: var(--space-8); align-self: flex-start; }
 @media (max-width: 900px) {
@@ -1534,11 +1755,22 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
    copy. Explicit placement is scoped ABOVE the stack breakpoint: a
    `grid-column: 2` leaking into the one-column layout would invent a second
    column out of nothing. */
+/* 2026-09-05 — l'estimateur passe SOUS les deux cartes qu'il calcule. Il
+   était en bas de la colonne de gauche, laquelle courait 179 px plus bas que
+   la droite : la moitié droite du héros finissait sur du vide, et la question
+   « combien de clients par mois ? » était loin des deux montants qui lui
+   répondent. Trois rangées : les cartes, l'estimateur, la mention d'article 33
+   — la dernière absorbe ce qui reste plutôt que de le laisser sous la
+   colonne. */
 @media (min-width: 901px) {
-  .pr-hero { align-items: start; grid-template-rows: auto 1fr; }
-  .pr-hero-copy { grid-column: 1; grid-row: 1 / span 2; }
+  .pr-hero { align-items: start; grid-template-rows: auto auto 1fr; }
+  .pr-hero-copy { grid-column: 1; grid-row: 1 / span 3; }
   .pr-rewards { grid-column: 2; grid-row: 1; }
-  .pr-eligibility { grid-column: 2; grid-row: 2; }
+  .pr-estimate { grid-column: 2; grid-row: 2 / span 2; }
+  /* Devenu une case de la grille, il n'a plus à porter sa propre marge : elle
+     s'ajoutait au `gap` et ouvrait 64 px de blanc entre deux blocs qui se
+     suivent. */
+  .pr-hero > .pr-estimate { margin-top: 0; }
 }
 /* Two tracks, one stat card each: kicker, big figure, when. The mechanics
    live in the timeline — never repeated per card. The notary track pays more
@@ -1546,7 +1778,7 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
    only. */
 .pr-rewards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: var(--gap); }
 /* Who may claim (art. 33 C. déont.), one quiet line under the two cards. */
-.pr-eligibility { margin: var(--space-6) 0 0; font-size: 12.5px; line-height: 1.5; color: var(--ink-muted); }
+.pr-eligibility { margin: var(--space-5) 0 0; max-width: 60ch; font-size: 12.5px; line-height: 1.5; color: var(--ink-muted); }
 .pr-card {
   display: flex; flex-direction: column; gap: var(--space-3);
   padding: var(--space-9) var(--space-10);
@@ -1689,11 +1921,26 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
    job is to sell the program, not to whisper) — sized like the steps' own
    verb + caveat pair. A grid so the wide reflow below only swaps the column
    count; align-items so an opened answer never stretches its row neighbour. */
-.pr-faq { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); align-items: start; }
-.pr-faq-title { grid-column: 1 / -1; margin: 0 0 var(--space-2); font-size: 18px; letter-spacing: -0.01em; }
+/* UNE colonne, pleine largeur (2026-09-05). En deux colonnes, les deux
+   réponses ouvertes tombaient du même côté et l'autre colonne restait à
+   180 px : ~520 px de vide que rien ne pouvait combler, puisque la hauteur
+   dépend de ce que le lecteur ouvre. Une colonne ne laisse aucun trou —
+   ouvrir ne déplace que ce qui suit, ce qu'un dépliant est censé faire. */
+.pr-faq { display: flex; flex-direction: column; gap: var(--space-4); }
+.pr-faq-title { margin: 0 0 var(--space-2); font-size: 18px; letter-spacing: -0.01em; }
 .pr-faq .disclosure { margin: 0; background: var(--surface); }
-.pr-faq .disclosure > summary { font-size: 14px; font-weight: 700; color: var(--ink); padding: 11px 14px; }
-.pr-faq .disclosure-body p { font-size: 13px; color: var(--ink-muted); line-height: 1.5; }
+/* La question EST la ligne : le texte part toujours du même bord, le chevron
+   ferme la rangée à droite, et la rangée entière est la cible. */
+.pr-faq .disclosure { background: var(--surface); transition: border-color .15s, background .15s; }
+.pr-faq .disclosure:hover { border-color: var(--border-strong); background: var(--surface-hover); }
+.pr-faq .disclosure[open] { background: var(--surface-inset); }
+.pr-faq .disclosure > summary {
+  font-size: 14px; font-weight: 700; color: var(--ink);
+  padding: var(--space-7) var(--space-8); gap: var(--space-5);
+}
+.pr-faq .disclosure > summary::before { order: 2; margin-left: auto; color: var(--ink-muted); }
+/* Pleine largeur, mesure bornée : la réponse ne devient pas une longue ligne. */
+.pr-faq .disclosure-body p { max-width: 78ch; font-size: 13px; color: var(--ink-muted); line-height: 1.5; }
 /* An answer eases open instead of snapping (owner: « smooth for the eyes »).
    Progressive enhancement — browsers without interpolate-size /
    ::details-content keep the instant native toggle — and motion-guarded. */
@@ -1731,10 +1978,6 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
     border-left: 0; border-top: 2px dotted var(--border-strong);
   }
 }
-@container prpitch (min-width: 560px) {
-  .pr-faq { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-
 /* Inside this pane the guarantee is a quiet closing line, not another boxed
    card — the boxed .note voice stays for panes that need a warning register.
    Its measure is capped like the intro's: fine print that runs the pitch's
@@ -1769,11 +2012,11 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .pr-aud-ic svg { width: 18px; height: 18px; }
 .pr-aud[aria-pressed='true'] .pr-aud-ic { color: currentColor; }
 /* The moment line keeps its height before a pick, so the CTA below never jumps. */
-.pr-moment { margin: var(--space-4) 0 0; padding-left: var(--space-4); border-left: 3px solid var(--brand); font-size: 14px; line-height: 1.5; color: var(--ink); max-width: 52ch; min-height: 2.9em; }
+.pr-moment { margin: var(--space-4) 0 0; padding-left: var(--space-4); border-left: 3px solid var(--brand); font-size: 14px; line-height: 1.5; color: var(--ink); max-width: 60ch; min-height: 3em; }
 /* The hero estimator (2026-09-03): one row under the CTA — the slider, then
    the sentence whose two numbers the domain fills. The yearly figure takes
    the brand ink like the reward amounts, at a smaller size; tokens only. */
-.pr-estimate { margin-top: var(--space-9); max-width: 52ch; }
+.pr-estimate { margin-top: var(--space-8); max-width: 60ch; }
 .pr-estimate-lbl { display: block; font-size: 13px; font-weight: 700; margin-bottom: var(--space-3); }
 .pr-estimate-row { display: flex; align-items: center; gap: var(--space-5); flex-wrap: wrap; }
 .pr-estimate-row input[type='range'] { flex: 1 1 140px; min-width: 120px; margin: 0; }
@@ -1796,8 +2039,7 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .dossier-bar > span { display: block; width: 0; height: 100%; background: var(--brand); }
 /* The gate line (what's left before the demand is sellable) renders inside
    the consent card — right where the gate completes (ADR 0010 §3). */
-.dossier-missing { font-size: 13px; color: var(--ink-muted); margin-top: 8px; }
-.dossier-missing:empty { display: none; }
+.dossier-missing { min-height: 1.5em; font-size: 13px; color: var(--ink-muted); margin-top: 8px; }
 .dossier-missing[data-ready='true'] { color: var(--ok); font-weight: 700; }
 /* Heading over the preparation checklist — carries the 0/N count and bar of
    the list it measures (progress, never a gate, ADR 0010 §3). */
@@ -1833,21 +2075,159 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 /* Capped at 3 tracks: auto-fit on a wide screen spread 6 questions into one
    ragged row of uneven heights — 3×2 keeps the rows balanced and the help
    text wrapping instead of a dead right half. */
-.dossier-pricing .o-criteria { margin-top: 10px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-5) var(--space-8); align-items: start; }
-@media (max-width: 1100px) { .dossier-pricing .o-criteria { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 680px) { .dossier-pricing .o-criteria { grid-template-columns: minmax(0, 1fr); } }
-/* Booking dialog step-2 criteria sit on a two-column GRID (audit 2.15): the
-   reading order is the DOM order — multicol flowed question 3 under question 1
-   and broke rows across columns. Rows align to their top, and the tall
-   déplacement control (two bars + the opt-in line) spans the width. */
-#o-criteria, #o-criteria > .crit-more .o-criteria { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 18px; align-items: start; }
-@media (max-width: 560px) { #o-criteria, #o-criteria > .crit-more .o-criteria { grid-template-columns: minmax(0, 1fr); } }
+.dossier-pricing .o-criteria { margin-top: var(--space-6); display: flex; flex-direction: column; gap: var(--space-10); }
+.dossier-pricing .crit-sec-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-5) var(--space-8); }
+@media (max-width: 1100px) { .dossier-pricing .crit-sec-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 680px) { .dossier-pricing .crit-sec-grid { grid-template-columns: minmax(0, 1fr); } }
+/* Les questions du notaire en SECTIONS (2026-09-05) : trois temps déclarés par
+   le domaine — le prêt, l'immeuble, la signature. La pile des sections est
+   verticale ; c'est DANS une section que les questions s'alignent sur la grille
+   à deux colonnes (audit 2.15 : l'ordre de lecture est l'ordre du DOM, jamais
+   du multicol qui coulait la question 3 sous la question 1). Les lignes
+   s'alignent en haut, et le grand contrôle du déplacement traverse la grille. */
+#o-criteria { display: flex; flex-direction: column; gap: var(--space-6); }
+.crit-sec-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-6) var(--space-9); align-items: start; }
+@media (max-width: 560px) { .crit-sec-grid { grid-template-columns: minmax(0, 1fr); } }
 #o-criteria .crit-row { margin: 0; }
-#o-criteria > .crit-more { grid-column: 1 / -1; margin: 4px 0 0; }
-#o-criteria > .crit-more .o-criteria { padding: 10px 14px 2px; }
 .crit-row--wide { grid-column: 1 / -1; }
-/* A note that belongs to the whole block, above the questions. */
-#o-criteria > .crit-stale { grid-column: 1 / -1; margin: 0; color: var(--warn); font-weight: 600; }
+/* Une question seule sur sa ligne PREND la ligne (retour du propriétaire,
+   2026-09-05 : « avoid blank space ») : trois questions dans une grille à deux
+   colonnes laissaient une demi-carte vide à droite de la troisième, et une
+   section qui n'en pose qu'une (« L'immeuble ») laissait la moitié du cadre
+   nu. Le dernier enfant d'un rang impair traverse la grille. */
+.crit-sec-grid > .crit-row:last-child:nth-child(odd) { grid-column: 1 / -1; }
+/* Et un rang qui PORTE TROIS CHOIX prend la ligne quoi qu'il arrive : dans une
+   demi-largeur, « Approbation bancaire » s'empilait en trois lignes à côté d'un
+   champ d'une seule — deux cellules d'une même paire, l'une trois fois plus
+   haute que l'autre (retour du propriétaire, 2026-09-06). Sur la ligne entière
+   les trois choix se rangent côte à côte, et la paire au-dessus est faite de
+   deux rangs de même taille. Le tri du DOM (renderCriteriaSections) fait
+   descendre ces rangs sous les compacts, donc aucune demi-cellule ne reste
+   vide au-dessus d'eux. */
+.crit-sec-grid > .crit-row[data-span='row'] { grid-column: 1 / -1; }
+/* Et elle OCCUPE la ligne au lieu de s'y perdre : les réponses en boutons
+   s'étalent sur toute la largeur (flex: 1 1 auto), et une liste s'allonge
+   jusqu'à une largeur de lecture — un contrôle de 320 px suivi d'un demi-cadre
+   nu était le vide le plus visible de la grille. */
+@media (min-width: 561px) {
+  .crit-sec-grid > .crit-row:last-child:nth-child(odd) > .nselect { max-width: 420px; }
+}
+/* Les écrans qui portent des SECTIONS ne portent plus leur propre cadre : deux
+   boîtes emboîtées mangeaient 30 px de largeur de chaque côté et donnaient au
+   dialogue trois niveaux de bordure. Le titre de l'écran coiffe les cartes. */
+#o-criteria-step, .book-step-offer { padding: 0; border: 0; background: none; }
+/* Une section est une CARTE, pas un simple filet (retour du propriétaire,
+   2026-09-05 : « mieux découpler les sections, ajouter des petites marges »).
+   Un trait à gauche ne suffisait pas : le titre de la section suivante venait
+   coller à la dernière réponse de la précédente, et les trois temps se lisaient
+   comme une seule colonne. Cadre + coin carré + air autour, et 20 px entre les
+   cartes. Le FOND reste celui du dialogue : les contrôles à l'intérieur
+   (segments, listes, volets) portent déjà --surface-inset, et remplir la carte
+   de la même teinte les effacerait. */
+.crit-sec, .offer-sec {
+  display: flex; flex-direction: column; gap: var(--space-6);
+  padding: var(--space-7) var(--space-8) var(--space-8);
+  border: 1px solid var(--border); border-radius: var(--radius);
+}
+/* L'écran 3 emprunte le même registre (voir index.html) : trois cartes — le
+   montant, le marché, le devis — au lieu de dix blocs à la file. Ses contenus
+   se serrent un cran de plus que des questions : ce sont des lignes de lecture,
+   pas des contrôles à viser. */
+.offer-sec { gap: var(--space-5); }
+.book-step-offer { gap: var(--space-8); }
+/* Les boîtes intérieures se sont FONDUES dans leur carte : le marché et le
+   devis portaient chacun leur propre cadre + fond, ce qui faisait deux cadres
+   l'un dans l'autre dès qu'ils sont entrés en section. La carte est le cadre. */
+.offer-sec > .day-market, .offer-sec > .devis {
+  margin: 0; padding: 0; border: 0; background: none; border-radius: 0;
+}
+.offer-sec > .day-market .day-bids { margin: var(--space-4) 0 0; }
+/* L'en-tête est une bande : le titre, son compte, sa raison d'être — puis un
+   filet qui la sépare des questions. */
+/* L'en-tête est une BANDE, pas un titre suivi d'un filet (2026-09-06) : elle
+   court d'un bord à l'autre de la carte, sur sa propre teinte, et coiffe le
+   sujet comme l'en-tête d'un tableau coiffe sa colonne. Un titre posé DANS le
+   cadre, à la même distance des questions que les questions entre elles, ne
+   disait pas où un sujet commençait. Les marges négatives valent le padding de
+   .crit-sec — la bande est le haut de la carte, pas un bloc posé dedans. */
+.crit-sec-h {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-5);
+  margin: calc(-1 * var(--space-7)) calc(-1 * var(--space-8)) 0;
+  padding: var(--space-5) var(--space-8);
+  background: var(--surface-inset);
+  border-bottom: 1px solid var(--border);
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+/* Repliée, la bande EST la carte : plus de trait sous elle, rien en dessous. */
+.crit-sec[data-fold='true'] > .crit-sec-h { border-bottom-color: transparent; border-radius: var(--radius); }
+.crit-sec[data-fold='true'] > .crit-sec-grid,
+.crit-sec[data-fold='true'] > .crit-more { display: none; }
+.crit-sec[data-fold='true'] { padding-bottom: 0; gap: 0; }
+/* Le chevron du pli : muet, à droite du compte, tourné vers le bas quand la
+   section est ouverte. Il porte le nom de sa section en aria-label — le titre
+   est à deux centimètres, il n'a pas de mot à ajouter. */
+.crit-sec-fold {
+  appearance: none; border: 0; background: none; padding: 0; margin-left: var(--space-3);
+  width: 24px; height: 24px; display: inline-grid; place-items: center; flex: none;
+  color: var(--ink-muted); cursor: pointer; border-radius: var(--radius-xs);
+  transition: color .12s, background-color .12s;
+}
+.crit-sec-fold:hover { color: var(--ink); background: var(--surface-hover); }
+.crit-sec-fold .crit-sec-chev { transition: transform .15s ease; }
+.crit-sec-fold[aria-expanded='false'] .crit-sec-chev { transform: rotate(-90deg); }
+/* Le compte cesse de pousser le chevron au bout de la ligne : c'est LUI qui
+   ferme la bande. */
+.crit-sec-h:has(.crit-sec-fold) .crit-sec-n { margin-left: auto; }
+/* Le titre de section portait 14px/700 quand la question en dessous porte
+   13,5px/600 : un cheveu d'écart, donc aucune hiérarchie — l'œil ne trouvait
+   pas où un sujet commençait (retour du propriétaire, 2026-09-06 : « comprendre
+   d'un coup d'œil que ceci se rapporte à tel sujet »). Un vrai cran au-dessus. */
+.crit-sec-t { font-size: 15px; font-weight: 800; color: var(--ink); letter-spacing: -0.01em; }
+/* La pastille du sujet : même construction que celle des actes (glyphe au trait
+   dans un carré à filet), un cran plus petite — c'est un en-tête, pas une
+   cible. Elle passe à la marque quand la section est complète, si bien que
+   l'avancement se lit sur la colonne des pastilles sans lire un seul compte. */
+.crit-sec-ic {
+  width: 28px; height: 28px; flex: none; display: inline-grid; place-items: center;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface-inset); color: var(--ink-muted);
+  transition: color .15s, border-color .15s, background .15s;
+}
+.crit-sec:has(.crit-sec-n[data-state='done']) .crit-sec-ic {
+  color: var(--brand); border-color: color-mix(in srgb, var(--brand) 45%, var(--border));
+  background: color-mix(in srgb, var(--brand) 10%, transparent);
+}
+/* La raison d'être de la section prend toute la ligne suivante : elle explique,
+   elle ne se dispute pas la première ligne avec le compte. Elle s'aligne sous
+   le TITRE, pas sous la pastille : le bloc d'en-tête se lit alors comme un
+   seul objet au lieu de deux lignes qui commencent à deux endroits. */
+.crit-sec-aide { flex: 1 0 100%; margin-top: var(--space-1); font-size: 12px; color: var(--ink-muted); }
+.crit-sec-h:has(.crit-sec-ic) .crit-sec-aide { padding-left: calc(28px + var(--space-5)); }
+/* Le compte de la section — le même vocabulaire et les mêmes couleurs que le
+   compte de l'étape : ambre tant qu'on attend, marque une fois complet. */
+.crit-sec-n {
+  margin-left: auto; min-width: 18px; padding: 1px 5px; border-radius: var(--radius-xs);
+  background: color-mix(in srgb, var(--warn) 14%, transparent);
+  font-size: 11.5px; font-weight: 700; color: var(--warn); text-align: center;
+  white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+.crit-sec-n[data-state='done'] { color: var(--brand); background: color-mix(in srgb, var(--brand) 12%, transparent); }
+/* Les précisions d'une section, repliées à côté du cas qu'elles précisent. */
+.crit-sec > .crit-more { margin: var(--space-1) 0 0; }
+.crit-sec > .crit-more .crit-sec-grid { padding: var(--space-6) var(--space-7) var(--space-4); }
+/* Le volet dit combien de questions il cache. */
+.crit-more-n {
+  margin-left: 7px; min-width: 16px; padding: 1px 5px; border-radius: var(--radius-xs);
+  background: var(--surface-inset); color: var(--ink-muted);
+  font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+/* Ce qu'une réponse change à la liste des documents, sous la réponse. Ligne
+   RÉSERVÉE dès la première peinture et masquée par `visibility` (registre ADR
+   0039) : répondre, se raviser, répondre à nouveau ne déplace jamais la
+   question suivante. */
+.crit-effet { font-size: 12px; color: var(--ink-muted); }
+.crit-effet[data-on='false'] { visibility: hidden; }
+.crit-effet-k { font-weight: 600; color: var(--brand); }
 /* The card's payoff — the determined price — separated from the questions and
    said a size louder, not buried in the bottom-left corner. */
 .dossier-price { margin-top: var(--space-5); padding-top: var(--space-4); border-top: 1px dashed var(--border); font-weight: 700; color: var(--brand); font-size: 15px; font-variant-numeric: tabular-nums; }
@@ -2242,15 +2622,20 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
    first line keep clear of it instead of running underneath. */
 #contact-dialog h3 { margin-bottom: var(--space-3); padding-right: 52px; }
 #contact-dialog .ct-lede { padding-right: 28px; }
-#contact-dialog .ct-lede { font-size: 14px; line-height: 1.45; margin: 0 0 var(--space-7); max-width: 46ch; }
-#contact-dialog .form-row { margin-bottom: var(--space-6); }
-#contact-dialog .lbl { margin-bottom: var(--space-3); }
+#contact-dialog .ct-lede { font-size: 14px; line-height: 1.45; margin: 0 0 var(--space-6); max-width: 52ch; }
+#contact-dialog .form-row { margin-bottom: var(--space-5); }
+#contact-dialog .lbl { margin-bottom: var(--space-2); }
+/* Le libellé et son compteur partagent UNE ligne — le compteur garde sa
+   réserve (ADR 0039) sur une hauteur qui existait déjà. */
+#contact-dialog .lbl-row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-4); }
+#contact-dialog .lbl-row .lbl { margin-bottom: var(--space-2); }
+#contact-dialog .lbl-row .ct-count { margin: 0; }
 #contact-dialog .lbl-hint { font-weight: 500; color: var(--ink-muted); }
 #contact-dialog .ct-grid { display: grid; grid-template-columns: 1fr; gap: 0 var(--space-6); }
-#contact-dialog textarea { min-height: 84px; max-height: 40vh; resize: vertical; }
+#contact-dialog textarea { min-height: 58px; max-height: 40vh; resize: vertical; }
 #contact-dialog .ct-context { margin: calc(-1 * var(--space-3)) 0 var(--space-5); }
-#contact-dialog #ct-submit { margin-top: var(--space-2); }
-#contact-dialog #ct-quick { margin-top: var(--space-6); }
+
+#contact-dialog #ct-quick { margin-top: var(--space-5); }
 /* The sent state: a check chip on the title line, one sentence, then the two
    actions — the messagerie first when the thread token came back. */
 .ct-ok-head { display: flex; align-items: center; gap: var(--space-4); margin-bottom: var(--space-3); }
@@ -2269,11 +2654,18 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
   #contact-dialog .ct-pad { padding: var(--space-7) var(--space-6) var(--space-6); }
   #contact-dialog .ct-lede { margin-bottom: var(--space-5); padding-right: 52px; }
   #contact-dialog .form-row { margin-bottom: var(--space-5); }
-  #contact-dialog textarea { min-height: 72px; }
+  #contact-dialog textarea { min-height: 52px; }
 }
 
 /* --- Day detail dialog (enlarged day over a dimmed backdrop) -------------- */
-#day-dialog { max-width: 620px; width: 94vw; max-height: 90vh; overflow-y: auto; overscroll-behavior: contain; }
+/* La feuille suivait la fenêtre jusqu'à 620 px et s'arrêtait là, quelle que
+   soit la taille de l'écran (2026-09-06) : sur un 27 pouces, les questions
+   s'appariaient dans deux colonnes de ~270 px, si bien qu'une réponse à trois
+   boutons s'empilait en trois lignes à côté d'un simple champ. Elle grandit
+   maintenant AVEC l'écran, sans jamais devenir une dalle : 620 px reste le
+   plancher (dialogue lisible, mesure de lecture tenue), 900 px le plafond —
+   la largeur où une réponse à trois choix tient enfin sur une seule ligne. */
+#day-dialog { max-width: min(94vw, clamp(620px, 58vw, 900px)); width: 94vw; max-height: 90vh; overflow-y: auto; overscroll-behavior: contain; }
 /* Sticky like the ✕ above it: the date being booked stays readable while the
    long booking form scrolls. padding-right clears the pinned ✕. */
 .day-head { position: sticky; top: 0; z-index: 5; background: var(--surface); display: flex; align-items: flex-start; gap: 12px; padding: var(--space-8) 64px var(--space-5) var(--space-10); border-bottom: 1px solid var(--border); }
@@ -2299,14 +2691,15 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
    itself): the reference figure and the one-tap pill hold the right rail of
    the same row at every dialog width — the pill never strands on an orphan
    row with dead space beside it (owner, 2026-08-27: « align »). */
-.day-market-line { display: flex; align-items: center; gap: 4px 10px; flex-wrap: wrap; }
+.day-market-line { display: flex; align-items: center; gap: 4px 10px; flex-wrap: wrap; min-height: 1.5em; }
 /* No open offer for the act → the line is hidden outright (every date is
    bookable, so there is no bar to print); the hint below owns the message. */
-.day-market-line[hidden] { display: none; }
-.day-value-k { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-muted); flex: 1 1 12ch; min-width: 0; }
+/* 2026-09-05 : la capitale d'affichage criait (« CE QUE D'AUTRES OFFRENT CE
+   JOUR-LÀ · REFINANCEMENT » sur deux lignes) alors que la carte porte déjà son
+   titre. Le libellé redevient une légende : casse normale, poids moyen. */
+.day-value-k { font-size: 12px; font-weight: 600; color: var(--ink-muted); flex: 1 1 12ch; min-width: 0; }
 .day-value-v { font-size: 15px; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; }
-.day-value-note { font-size: 12px; color: var(--ink-muted); margin: 2px 0 0; }
-.day-value-note:empty { display: none; }
+.day-value-note { min-height: 1.5em; font-size: 12px; color: var(--ink-muted); margin: 2px 0 0; }
 /* The live line flips green the moment the slider clears the bar. */
 .day-value-note.is-ahead { color: var(--ok); font-weight: 600; }
 /* One tap over the bar — small, inline, at the end of the strip's line. */
@@ -2317,6 +2710,9 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
   transition: background .15s, color .15s;
 }
 .day-beat:hover { background: var(--brand); color: var(--surface); }
+/* Stepping back does not take its place with it: the label is written even
+   while the button is off show, so the strip's line keeps its height and its
+   wrap (ADR 0039 — une ligne tenue). */
 /* The headline lands with a small settle; the amount echoes it after a one-tap
    jump. Both sit still under prefers-reduced-motion. */
 @keyframes day-best-in { from { opacity: 0; transform: translateY(3px); } }
@@ -2326,7 +2722,7 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 /* Says what the calendar's % means, for the date being booked. Sits under the
    header — it depends on the DATE, not on the act chosen below. Top padding
    keeps it off the sticky header's border. */
-.day-chance { font-size: 12px; color: var(--ink-muted); margin: 0; padding: var(--space-4) var(--space-10) var(--space-5); line-height: 1.5; }
+.day-chance { margin: 0; font-size: 12px; line-height: 1.5; color: var(--ink-muted); }
 .day-bids { max-height: 30vh; overflow: auto; overscroll-behavior: contain; border-top: 1px solid var(--border); }
 /* Inside the market strip the list bleeds to the edges, so its border-top
    spans the strip and the rows keep their own gutters. */
@@ -2355,6 +2751,105 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 .book-step { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--pad-card); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
 /* Step 3 — the offer — is the decision, so it is the dominant card. */
 .book-step-offer { border-color: var(--border-strong); background: var(--surface-inset); }
+
+/* --- La feuille de réservation en QUATRE ÉCRANS (ADR 0040) ---------------
+   Retour du propriétaire (2026-09-05) : « l'expérience est vraiment confuse
+   — le faire en plusieurs screens ». Les cinq blocs empilés donnaient une
+   colonne à faire défiler où l'acte, les questions du notaire, le prix, le
+   secteur et l'identité se disputaient le même premier regard.
+
+   Un écran à la fois. La structure du formulaire NE CHANGE PAS : chaque bloc
+   porte le numéro de l'écran auquel il appartient (`data-screen`), le
+   formulaire porte celui où l'on est (`data-at`), et c'est le CSS seul qui
+   n'en montre qu'un — un `display: none` retire déjà du parcours au clavier
+   et de l'arbre d'accessibilité. */
+.day-book > [data-screen] { display: none !important; }
+.day-book[data-at='1'] > [data-screen='1'],
+.day-book[data-at='2'] > [data-screen='2'],
+.day-book[data-at='3'] > [data-screen='3'],
+.day-book[data-at='4'] > [data-screen='4'] { display: block !important; }
+/* BUG 2 — l'offre publiée : le rail et la barre d'action restaient à l'écran
+   à côté de la carte de confirmation. « done » ne montre aucun écran, ni rail,
+   ni barre. */
+.day-book[data-at='done'] > .book-rail,
+.day-book[data-at='done'] > .book-nav { display: none; }
+
+/* Le rail : où l'on est, ce qui reste, et la porte de retour vers une étape
+   déjà franchie. Une étape qu'on n'a pas encore atteinte n'est pas cliquable
+   — on ne saute pas par-dessus une question du notaire. */
+.book-rail { display: flex; align-items: stretch; gap: var(--space-2); list-style: none; margin: 0 0 var(--space-6); padding: 0; }
+/* Le rail numérote les étapes ; la carte n'a pas à le refaire une ligne plus
+   bas. Le libellé reste — il nomme l'écran — la pastille part. */
+.day-book[data-at] .book-step > .book-step-lbl > .step { display: none; }
+.book-rail li { flex: 1 1 auto; min-width: 0; }
+.book-rail-b {
+  appearance: none; width: 100%; height: 100%; display: flex; align-items: center; gap: 7px;
+  padding: 7px 9px; font: inherit; font-size: 12px; font-weight: 650; text-align: left;
+  color: var(--ink-muted); background: transparent; cursor: pointer;
+  border: 0; border-top: 2px solid var(--border); border-radius: 0;
+}
+.book-rail-b[disabled] { cursor: default; opacity: 0.55; }
+.book-rail-n {
+  flex: none; width: 19px; height: 19px; display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 800; border-radius: var(--radius-xs);
+  background: var(--surface-inset); color: var(--ink-muted);
+}
+.book-rail-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.book-rail li[data-state='done'] .book-rail-b { color: var(--ink); border-top-color: var(--brand); }
+.book-rail li[data-state='done'] .book-rail-n { background: var(--brand); color: var(--brand-ink); }
+.book-rail li[data-state='at'] .book-rail-b { color: var(--ink); border-top-color: var(--brand); }
+.book-rail li[data-state='at'] .book-rail-n { background: var(--brand); color: var(--brand-ink); }
+/* Traversée sans y répondre : on peut y revenir, et le rail le dit. */
+.book-rail li[data-state='open'] .book-rail-b { color: var(--ink); border-top-color: var(--warn); }
+.book-rail li[data-state='open'] .book-rail-n { background: var(--warn); color: var(--surface); }
+.book-rail-b:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+/* Une étape sautée (l'acte n'a pas de questions) se dit à voix basse. */
+.book-rail li[data-state='skip'] { display: none; }
+
+/* Une seule barre d'action, toujours au même endroit, en bas : « Retour » à
+   gauche, et à droite l'action qui fait avancer. Au dernier écran c'est
+   « Publier mon offre » qui prend cette place — jamais deux boutons primaires
+   à la fois. */
+.book-nav { display: flex; align-items: center; gap: var(--space-4); margin-top: var(--space-2); }
+.book-nav .book-back { flex: none; }
+.book-nav .book-fwd, .book-nav #offer-submit { flex: 1 1 auto; width: auto; margin: 0; }
+.book-nav > [hidden] { display: none !important; }
+/* La barre porte la SEULE décision de l'écran, et elle ne se lisait pas comme
+   telle (propriétaire, 2026-09-06) : 37 px de haut sur 578 px de large, un
+   trait vert sous le formulaire. Elle prend la hauteur d'une vraie cible —
+   44 px à la souris AUSSI, pas seulement au doigt — et une ligne de texte plus
+   grande. « Retour » monte à la même hauteur pour que la barre tienne d'un
+   bord à l'autre, mais garde son encre sourde : deux poids, une seule action. */
+.book-nav .book-fwd, .book-nav #offer-submit { min-height: 44px; font-size: 15px; }
+.book-nav .book-back { min-height: 44px; }
+/* Le registre de la marque veut un bouton primaire en COULEUR ET GRAISSE,
+   jamais en aplat (voir .btn-primary) — et il tient partout ailleurs. Ici il
+   cède, sur décision du propriétaire (2026-09-06) : la feuille de réservation
+   n'a qu'UNE action à la fois, au bas d'un écran qu'on vient de remplir, et un
+   contour vert de 44 px sur 560 se lisait comme un trait de séparation. C'est
+   la SEULE exception, et elle est nommée : les deux boutons de cette barre,
+   pas la classe .btn-primary. Désactivé, il retombe sur les jetons d'inactif —
+   redit ici parce que l'id #offer-submit l'emporte sur `.btn:disabled`. */
+.book-nav .book-fwd, .book-nav #offer-submit {
+  background: var(--brand); border-color: var(--brand); color: var(--brand-ink);
+}
+.book-nav .book-fwd:not(:disabled):hover, .book-nav #offer-submit:not(:disabled):hover {
+  background: color-mix(in srgb, var(--brand) 88%, var(--ink));
+  border-color: color-mix(in srgb, var(--brand) 88%, var(--ink));
+}
+.book-nav .book-fwd:disabled, .book-nav #offer-submit:disabled {
+  background: var(--surface-inset); border-color: var(--border); color: var(--ink-muted);
+}
+/* Le chevron dit le sens, et seulement où il est vrai : « Continuer » avance
+   d'un écran, « Publier mon offre » conclut — celle-là n'en porte pas. */
+.book-nav .book-fwd::after { content: '→'; font-size: 1.05em; line-height: 1; transition: transform .12s ease; }
+.book-nav .book-fwd:not(:disabled):hover::after { transform: translateX(2px); }
+@media (max-width: 480px) {
+  /* Sur téléphone le rail garde les numéros et laisse tomber les mots : quatre
+     libellés sur 375 px ne tiennent qu'en s'ellipsant tous. */
+  .book-rail-t { display: none; }
+  .book-rail-b { justify-content: center; padding-inline: 4px; }
+}
 /* Pricing criteria woven into the booking flow (dossier merged with the process). */
 .o-criteria { display: flex; flex-direction: column; gap: 10px; }
 .crit-row { display: flex; flex-direction: column; gap: 6px; }
@@ -2362,11 +2857,27 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 .crit-flag input { margin-top: 3px; flex: none; accent-color: var(--brand); }
 .crit-text { display: flex; flex-direction: column; gap: 1px; }
 .crit-label { font-size: 13.5px; font-weight: 600; color: var(--ink); }
-/* Every answer set in a crit row is ONE segmented track (the déplacement
-   register): options fill the track evenly, so a wrapped option widens to
-   fill its line instead of dangling as an orphan pill. */
-.crit-row .seg { display: flex; flex-wrap: wrap; }
-.crit-row .seg-btn { flex: 1 1 auto; text-align: center; }
+/* The question's own line. Everything that used to print itself UNDER a
+   question and grow the card — the awaited-answer mark, the situational
+   notes — rides here instead, on a line the label already occupies. */
+.crit-head { display: flex; align-items: baseline; flex-wrap: wrap; min-width: 0; }
+/* Les réponses d'une question sont des BOUTONS, pas un affichage segmenté
+   (retour du propriétaire, 2026-09-05 : « our button and form is hard to
+   understand — keep it really straight forward »). Sur la piste commune, une
+   option non choisie n'avait ni fond ni cadre : trois libellés posés sur une
+   barre, dont on ne devinait ni qu'ils étaient cliquables ni lequel était pris.
+   Ici chaque option porte son propre cadre, la piste s'efface, et la réponse
+   retenue est peinte à la marque. */
+.crit-row .seg { display: flex; flex-wrap: wrap; gap: var(--space-3); padding: 0; border: 0; background: none; }
+.crit-row .seg-btn {
+  flex: 1 1 auto; text-align: center;
+  padding: 7px 12px; border-color: var(--border); background: var(--surface); color: var(--ink);
+}
+.crit-row .seg-btn:hover { border-color: var(--border-strong); background: var(--surface-hover); }
+.crit-row .seg-btn.is-on {
+  background: var(--brand-tint-solid-strong); border-color: var(--brand);
+  color: var(--brand); font-weight: 700; box-shadow: none;
+}
 /* When the options cannot share one line (settleSegTracks measures), the
    track restacks as full-width rows — answer left, price right — instead of
    a ragged 2+1 wrap that reads as two controls. */
@@ -2376,7 +2887,7 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 /* A required question still awaiting its answer carries a quiet amber dot —
    the same signal the hint line and the step tally speak. Direct child only:
    a companion field's own label must not double the mark. */
-.crit-row.crit-missing > .crit-label::after {
+.crit-row.crit-missing > .crit-head > .crit-label::after {
   content: ''; display: inline-block; width: 6px; height: 6px; margin-left: 7px;
   border-radius: 50%; background: var(--warn); vertical-align: 1px;
 }
@@ -2391,19 +2902,24 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
    each under the question it answers (audit §3.2), then the online opt-in
    line (§3.3) and the static caveats (§1.1) toggled by the direction. */
 .crit-dep { display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
-.crit-dep-km[hidden], .crit-sublabel[hidden], .crit-caveat[hidden] { display: none; }
+.crit-dep-km[hidden], .crit-sublabel[hidden] { display: none; }
 .crit-sublabel { font-size: 12.5px; font-weight: 600; color: var(--ink-muted); margin-top: 4px; }
 .crit-urgence { margin-top: 4px; }
-.crit-caveat { margin: 2px 0 0; }
 /* A default the client has not touched reads as a suggestion: the pressed
    answer keeps its place but drops the accent fill until it is confirmed. */
 .crit-row[data-default='true'] .seg-btn.is-on { background: transparent; border-style: dashed; }
 /* The awaited-answer note (audit 2.5), beside the dot, once the form is started. */
-.crit-req { font-size: 12px; font-weight: 600; color: var(--warn); margin-left: 8px; }
-.crit-req[hidden] { display: none; }
-/* A situational note under a question (the short-notice approval warning). */
-.crit-note { color: var(--warn); }
-.crit-note[hidden] { display: none; }
+/* Its OWN line inside the head (the question columns are too narrow to carry
+   the label and the message side by side), reserved from the first paint and
+   emptied by visibility — so a question that is answered, then cleared, then
+   answered again never moves the sheet under the client's hand. */
+/* Elle se range CONTRE le libellé quand la colonne le permet, et ne bascule
+   sur sa propre ligne que si elle n'y tient pas — l'aide étant passée derrière
+   le « i », une ligne réservée par question obligatoire était devenue le
+   principal gaspillage de hauteur de la carte (2026-09-05). Réservée dans les
+   deux cas : visible ou non, elle occupe la même boîte. */
+.crit-req { flex: 0 1 auto; margin-left: var(--space-5); font-size: 12px; font-weight: 600; color: var(--warn); }
+.crit-req[data-on='false'] { visibility: hidden; }
 .crit-row input[type='number'] { max-width: 180px; }
 /* The bracket figure and its unit read as one control (like the offer box). */
 .crit-unit-wrap { display: inline-flex; align-items: center; gap: 6px; }
@@ -2413,13 +2929,35 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 .crit-row .nselect { max-width: 320px; }
 /* The select's free-text companion (« Autre prêteur » → its name), revealed
    only while the opening option is chosen. */
-.crit-other { display: flex; flex-direction: column; gap: 6px; margin-top: 2px; }
+/* Le compagnon d'une liste (« Autre prêteur » → son nom) occupe la place que
+   l'aide vient de libérer : une ligne pour une ligne, donc répondre à la
+   question ne déplace rien de ce qui suit. */
+/* Le compagnon d'une liste (« Autre prêteur » → son nom) se range À CÔTÉ de la
+   liste, sur la place que la grille laisse libre : l'aide étant passée derrière
+   le « i », il n'y a plus de ligne à céder — et une réponse ne doit toujours pas
+   pousser ce qui la suit (ADR 0039). */
+.crit-row:has(> .crit-other) { flex-flow: row wrap; align-items: flex-start; column-gap: var(--space-8); }
+.crit-row:has(> .crit-other) > .crit-head, .crit-row:has(> .crit-other) > .crit-effet { flex: 1 0 100%; }
+.crit-row:has(> .crit-other) > .nselect, .crit-row:has(> .crit-other) > .help { flex: 0 1 300px; }
+.crit-row:has(> .crit-other) > .crit-other { flex: 1 1 240px; }
+.crit-other { display: flex; flex-direction: column; gap: 6px; margin-top: 0; }
 .crit-other[hidden] { display: none; }
 .crit-other input[type='text'] { max-width: 320px; }
 /* Flat dollar effect of an answer, printed on the answer itself; inherits the
    chip's on-state colour so it stays readable on the accent background. */
 .crit-add { margin-left: 6px; font-size: 11px; font-weight: 600; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 .chip.is-on .crit-add, .seg-btn.is-on .crit-add { color: inherit; }
+/* bookGoTo pose le focus sur le titre de l'écran (tabindex -1) pour que le
+   clavier et le lecteur d'écran repartent du haut. Ce titre n'est PAS un
+   contrôle : on ne l'atteint jamais en tabulant, et l'anneau de focus générique
+   dessinait une boîte verte autour de « Les questions du notaire » qui se lisait
+   comme une sélection restée coincée. Le focus reste posé — seule sa bague
+   part. */
+.book-step-lbl:focus-visible, .book-step-lbl:focus { outline: none; }
+/* Même raison pour le dialogue lui-même : showModal() y pose le focus quand
+   rien n'est autofocusable, et l'anneau générique cernait TOUTE la feuille d'un
+   trait vert qu'on lisait comme une sélection coincée. */
+dialog:focus, dialog:focus-visible { outline: none; }
 /* Wrap allowed: on a phone the parenthetical drops to its own line instead of
    squeezing the title into a ragged two-column fold. */
 .book-step-lbl { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 14px; font-weight: 700; color: var(--ink); }
@@ -2427,21 +2965,99 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 /* Step 2's live tally — amber while answers are awaited, brand once complete. */
 .crit-count { margin-left: auto; font-size: 11.5px; font-weight: 600; color: var(--warn); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .crit-count[data-state='done'] { color: var(--brand); }
-#o-service-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+/* L'écran 1 ne pose qu'UNE question, alors la réponse prend la place (ADR
+   0040, 2026-09-05 : « il y a trop d'info, c'est trop petit »). Deux cartes
+   à parts égales, assez hautes pour se viser du pouce, jamais trois par
+   ligne : sous 360 px de large elles s'empilent plutôt que de rétrécir. */
+#o-service-chips { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 1fr; gap: var(--space-6); }
+@media (max-width: 380px) { #o-service-chips { grid-template-columns: 1fr; } }
 /* Booking chips are two lines — the act, then its own offre à battre for the
    date (no offer → no sub line: every act is always bookable, so only an
    amount is worth a line) — so the acts compare at a glance before one is
    chosen. */
-#o-service-chips .chip { flex: 1 1 auto; justify-content: center; flex-direction: column; align-items: center; gap: 3px; padding: 8px 14px; border-radius: var(--radius); }
-.chip-svc-main { display: inline-flex; align-items: center; gap: 6px; }
-.chip-svc-sub { font-size: 11px; font-weight: 600; color: var(--ink-muted); }
-.chip-svc-sub:empty { display: none; }
+#o-service-chips .chip {
+  position: relative;
+  justify-content: center; flex-direction: column; align-items: center; gap: var(--space-3);
+  padding: var(--space-8) var(--space-6); border-radius: var(--radius);
+}
+/* Le crochet du choix : il n'apparaît que sur la carte retenue, et il dit le
+   choix sans dépendre de la couleur (le cadre et la teinte, eux, en dépendent). */
+#o-service-chips .chip-svc-check {
+  position: absolute; top: var(--space-4); right: var(--space-5);
+  font-size: 13px; font-weight: 700; line-height: 1; color: var(--brand);
+  opacity: 0; transform: scale(.7); transition: opacity .15s ease, transform .15s ease;
+}
+#o-service-chips .chip.is-on .chip-svc-check { opacity: 1; transform: none; }
+/* La pastille du glyphe : la marque de l'acte, visée avant que le nom se lise.
+   Elle porte l'état de la carte (survol, choix) — le cadre de la carte ne
+   change alors que d'un cheveu, et le choix se voit quand même de loin. */
+#o-service-chips .chip-svc-badge {
+  width: 36px; height: 36px; flex: none; display: inline-grid; place-items: center;
+  border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-inset);
+  transition: background .15s, border-color .15s;
+}
+#o-service-chips .chip:hover .chip-svc-badge { border-color: var(--brand); }
+#o-service-chips .chip.is-on { background: var(--brand-tint-solid); }
+#o-service-chips .chip.is-on .chip-svc-badge { background: var(--surface); border-color: var(--brand); }
+#o-service-chips .chip-svc-main { font-size: 15px; }
+.chip-svc-main { display: inline-flex; align-items: center; gap: var(--space-3); font-size: 14.5px; font-weight: 700; }
+.chip-svc-sub { font-size: 12px; font-weight: 700; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+/* Réservée seulement si le jour porte un chiffre : les deux puces gardent la
+   même hauteur quand on change d'acte, sans qu'un jour sans offre paie une
+   ligne vide dans chaque carte. */
+#o-service-chips[data-sub='true'] .chip-svc-sub { min-height: 1.45em; }
 #o-service-chips .chip.is-on .chip-svc-sub { color: inherit; }
+/* Le catalogue annoncé (D.ACTES_A_VENIR) : même carte, même hauteur, même
+   place — mais un trait pointillé, une encre sourde et aucun état survolé,
+   pour que l'œil aille d'abord aux deux actes qui, eux, se réservent. */
+#o-service-chips .chip-soon {
+  cursor: default; background: transparent; color: var(--ink-muted);
+  border-style: dashed; border-color: var(--border); box-shadow: none;
+}
+/* Rien ne s'y survole ni ne s'y anime : une annonce n'est pas une cible. */
+#o-service-chips .chip-soon:hover { background: transparent; border-color: var(--border); color: var(--ink-muted); transform: none; }
+#o-service-chips .chip-soon .chip-svc-main { font-weight: 600; }
+#o-service-chips .chip-soon .chip-svc-badge { background: transparent; border-style: dashed; }
+#o-service-chips .chip-soon .svc-ic { opacity: .7; }
+/* « Bientôt » tient sur la ligne RÉSERVÉE AU PRIX, sous le nom (2026-09-06) :
+   sur la ligne du nom, la pastille poussait « Procuration » hors de l'axe de
+   son glyphe, et la rangée annoncée se lisait de travers sous une rangée
+   centrée. La carte garde la hauteur d'une carte réservable — la ligne
+   existait déjà — et la mention se lit comme une note, pas un bouton. */
+.chip-soon-tag {
+  font-size: 9.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
+  color: var(--ink-muted); border: 1px solid var(--border);
+  padding: 1px var(--space-3); border-radius: var(--radius-xs); white-space: nowrap;
+}
 .book-options { margin: 0; }
 .book-options .form-row:last-of-type { margin-bottom: 0; }
 /* The identity block of the booking sheet (ADR 0033): name, courriel,
-   téléphone — set apart from the notary's questions by a rule, never folded. */
-.book-identity { margin-top: var(--space-6); padding-top: var(--space-6); border-top: 1px solid var(--border); }
+   téléphone — set apart from the notary's questions by a rule, never folded.
+   Les trois champs s'apparient sur la MÊME grille que les questions de
+   l'écran 2 (2026-09-06) : trois champs à la file dans une feuille qui
+   s'élargit devenaient trois barres de 700 px, et rien ne disait que le nom et
+   le courriel vont ensemble. Même seuil que .crit-sec-grid, donc les deux
+   écrans se replient au même endroit. */
+.book-identity {
+  margin-top: var(--space-6); padding-top: var(--space-6); border-top: 1px solid var(--border);
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-6) var(--space-9); align-items: start;
+}
+/* Le sélecteur d'écran impose `display: block !important` à chaque bloc de la
+   feuille (.day-book > [data-screen]) : le bloc d'identité le redit au même
+   poids, sur le même sélecteur porté d'une classe, sans quoi la grille
+   ci-dessus n'est jamais appliquée. */
+.day-book[data-at='4'] > .book-identity[data-screen='4'] { display: grid !important; }
+@media (max-width: 560px) { .book-identity { grid-template-columns: minmax(0, 1fr); } }
+.book-identity .form-row { margin: 0; }
+/* Le téléphone ferme le bloc seul : il PREND la ligne, comme la dernière
+   question d'un rang impair — mais son champ garde la longueur d'un numéro.
+   Un champ se dimensionne sur ce qu'on y écrit ; une barre de 700 px pour dix
+   chiffres promet autre chose que ce qu'elle attend. */
+.book-identity .form-row:last-child:nth-child(odd) { grid-column: 1 / -1; }
+@media (min-width: 561px) {
+  .book-identity #o-telephone { max-width: 260px; }
+}
 
 /* Brand utility classes — replace ad-hoc inline styles, keep markup on-brand */
 .w-full { width: 100%; }
@@ -2495,11 +3111,18 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
      the content column opened a 586px hole (owner, 2026-09-03: « le UI UX
      semble brisé »). Nothing below now depends on how many demands the month
      holds, or on how tall the gate is. */
+  /* 2026-09-05 — l'agenda descend SOUS la grille, dans la colonne de gauche.
+     Sous la grille des demandes s'ouvrait un trou de 137 px pendant que la
+     colonne de droite continuait : le contenu s'arrêtait, la page non. La
+     colonne de gauche va maintenant jusqu'au bout de son propre contenu, et
+     ce qui reste se retrouve sous la PORTE D'ACCÈS — sous une carte qui se
+     termine par son bouton, du blanc se lit comme du calme, pas comme un
+     oubli. */
   grid-template-areas:
     "hero       hero"
     "livehead   ."
     "live       console"
-    "live       carnet"
+    "carnet     ."
     "conformite conformite"
     "guarantee  guarantee";
   column-gap: clamp(32px, 5vw, 80px);
@@ -2522,10 +3145,17 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 /* Keep a readable measure on the lede without capping the whole hero block. */
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .intro p { max-width: 78ch; }
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .nc-live        { grid-area: live; align-self: start; }
-/* The agenda band lives in the RIGHT column, under the gate card, at the
-   card's own width (owner's call, 2026-08-25: as a full-width band it was
-   air; the column also lost its three loose value blurbs the same day). */
-#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-carnet  { grid-area: carnet; align-self: start; margin-top: var(--space-10); }
+/* L'agenda ferme la colonne de gauche, sous la grille des demandes — jamais
+   une bande pleine largeur (retour du propriétaire, 2026-08-25 : à pleine
+   largeur ce n'était que de l'air). Il garde la largeur de sa colonne. */
+#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-carnet  {
+  grid-area: carnet; align-self: start;
+  /* Sa propre bande, pas la queue de la grille des demandes : le même filet
+     que « Conformité » emploie plus bas, donc la colonne se lit en trois
+     temps — les demandes, l'agenda, la conformité. */
+  margin-top: var(--space-16); padding-top: var(--space-12);
+  border-top: 1px solid var(--border);
+}
 /* The console anchors to the TOP of the "live" row — no margin at all: its
    top edge sits exactly on the first demand cards' top edge (card aligned to
    cards, the strongest line on the page), and it scrolls with the page like
@@ -2580,18 +3210,28 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
    The threshold is 1000px, not 900: the rail is a fixed 420px, so under ~1000
    the content column falls below ~460px and the demand grid drops to ONE card
    per row — a tablet in portrait got a single file of tiles running six rows
-   deep beside a short gate. One centred column is the honest layout there. */
+   deep beside a short gate. One column is the honest layout there.
+
+   2026-09-06 — cette colonne unique était plafonnée à 620 px et centrée : à
+   900 px de fenêtre, l'espace notaire se lisait comme une bande étroite avec
+   140 px de vide de chaque côté, sous un en-tête qui, lui, allait d'un bord à
+   l'autre (retour du propriétaire : « la section notaire doit prendre toute la
+   largeur »). La colonne prend maintenant toute la largeur de .wrap — les
+   demandes gagnent une tuile par rangée au passage — et c'est le FORMULAIRE de
+   la porte qui garde sa mesure lisible, centré dans sa carte. */
 @media (max-width: 1000px) {
   #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) {
-    grid-template-columns: minmax(0, 620px);
+    grid-template-columns: minmax(0, 1fr);
     grid-template-areas: "hero" "livehead" "live" "console" "conformite" "carnet" "guarantee";
-    justify-content: center;
   }
   /* The two-column rule sizes this margin to seat the console on the hero
      H1's line. Stacked, the card steps down the page on the same --space-10
      beat as every other section instead. Longhand so the other three sides
      of the shorthand survive. */
   #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) #notary-console { align-self: stretch; margin-top: var(--space-10); }
+  /* La carte va d'un bord à l'autre ; le formulaire, non — 440 px collés à
+     gauche dans une carte de 940 px se lirait comme un oubli. */
+  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) #notary-console .nc-gate { margin-inline: auto; }
 }
 
 /* The landing's centrepiece: the live open inventory, directly under the one
@@ -2700,7 +3340,7 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 }
 .nc-week-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .nc-week-kicker { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--brand); }
-.nc-week-total { position: relative; font-size: 13px; color: var(--ink-muted); }
+.nc-week-total { position: relative; display: inline-flex; align-items: baseline; gap: var(--space-3); font-size: 13px; color: var(--ink-muted); }
 .nc-week-total strong { display: inline-block; color: var(--brand); font-weight: 800; font-variant-numeric: tabular-nums; }
 /* A small pop each time money lands on the board. */
 .nc-week-total strong.is-tick { animation: nc-week-tick .35s ease; }
@@ -2709,7 +3349,7 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
    (top offset + peak translate) stays under the box's 16px top padding, so the
    float never escapes the vignette onto whatever sits above it. */
 .nc-week-delta {
-  position: absolute; right: 0; top: -3px;
+  position: absolute; right: 100%; margin-right: var(--space-4); top: -3px;
   font-size: 11px; font-weight: 800; color: var(--brand);
   white-space: nowrap; opacity: 0; pointer-events: none;
 }
@@ -2880,8 +3520,7 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 .tab-pane h1:focus, .intro h1:focus { outline: none; box-shadow: none; }
 /* Live echo of what the carnet will publish for this bid, colour-keyed to the
    state of the entry (valid Quebec sector / still typing / off-format). */
-.prefix-preview { margin: 6px 0 0; font-size: 12px; line-height: 1.5; color: var(--ink-muted); }
-.prefix-preview:empty { display: none; }
+.prefix-preview { margin: 6px 0 0; min-height: 1.5em; font-size: 12px; line-height: 1.5; color: var(--ink-muted); }
 .prefix-preview[data-state='ok'] { color: var(--brand); }
 .prefix-preview[data-state='warn'] { color: var(--status-retenue); }
 .nc-auth .form-row { margin-bottom: var(--space-7); }
@@ -3153,7 +3792,7 @@ body.is-notary-session #tab-notaires { pointer-events: none; }
 .nc-propose-delta { font-size: 13px; font-weight: 800; color: var(--ok); padding-bottom: 8px; }
 .nc-form-msg { width: 100%; resize: vertical; font: inherit; font-size: 13px; }
 .nc-form-foot { display: flex; align-items: center; gap: 8px; }
-.nc-form-errors[hidden] { display: none; }
+.nc-form-errors { min-height: 1.5em; }
 .nc-docs-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr)); gap: 6px; }
 .nc-docs-item { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
 .nc-docs-name { flex: 1; min-width: 0; }
@@ -3217,7 +3856,9 @@ body.is-notary-session #tab-notaires { pointer-events: none; }
 .nc-pref-lbl { font-size: 13.5px; }
 .nc-pref-pace { display: inline-flex; flex-wrap: wrap; margin: 2px 0 6px; max-width: 100%; }
 .nc-pref-pace .seg-btn { font-size: 12.5px; }
-.nc-prefs-saved { color: var(--ok); font-weight: 700; margin-top: 10px; }
+/* The line is held whether or not the confirmation is on it — a note that
+   appears for two seconds must not shove the preferences under it. */
+.nc-prefs-saved { min-height: 1.5em; color: var(--ok); font-weight: 700; margin-top: 10px; }
 .nc-pref-lenders { margin-top: 4px; }
 /* The full lender roster reads better on its own row of the prefs grid. */
 .nc-pref-block--wide { grid-column: 1 / -1; }
@@ -3255,7 +3896,7 @@ body.is-notary-session #tab-notaires { pointer-events: none; }
 .chat-meta { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-4); min-height: 0; }
 .chat-error { margin: 0; font-size: 12.5px; color: var(--danger); }
 .chat-count { margin-left: auto; font-size: 11px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
-.chat-error[hidden], .chat-count[hidden] { display: none; }
+.chat-error, .chat-count { min-height: 1.5em; }
 .nc-chat .nc-dossier-h, .my-offer-chat-h { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-muted); }
 
 /* --- Withdrawal (désistement) after acceptance --------------------------- */
@@ -3283,8 +3924,7 @@ body.is-notary-session #tab-notaires { pointer-events: none; }
 .nc-banner-list li { padding: 1px 0; }
 /* The identity fields (nom / étude / téléphone / adresse) sit two-up. */
 .nc-profil-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 0 var(--space-8); }
-.nc-field-err { color: var(--danger); }
-.nc-field-err[hidden] { display: none; }
+.nc-field-err { min-height: 1.5em; color: var(--danger); }
 /* « Votre client » leads the retained card: the name, the two contact links
    (the phone glyph rides the tel:), then the facts that frame the signing. */
 .nc-client { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
@@ -3309,7 +3949,7 @@ body.is-notary-session #tab-notaires { pointer-events: none; }
 .nc-composer-main { flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .nc-composer .chat-input { resize: none; overflow-y: auto; max-height: 180px; }
 .nc-chat-count { align-self: flex-end; font-size: 11px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
-.nc-chat-count[hidden], .nc-chat-err[hidden] { display: none; }
+.nc-chat-count, .nc-chat-err { min-height: 1.5em; }
 .nc-chat-err { margin: 0; font-size: 12.5px; color: var(--danger); }
 /* A deep-linked card (« #notaires&acte=… ») flashes once, then rests. */
 .nc-card.is-flash { animation: ncFlash 1.6s ease-out both; }
@@ -3496,6 +4136,9 @@ body.is-notary-session #tab-notaires { pointer-events: none; }
   .nc-kv dd { margin-bottom: 6px; }
 }
 
+/* Le tapis général. Il est !important, donc toute LIGNE TENUE (registre plus
+   haut) doit répondre !important elle aussi — c'est le seul endroit du
+   registre où c'est inévitable, et un test le vérifie. */
 .hidden, [hidden] { display: none !important; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 
@@ -3762,7 +4405,6 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
      compensates .bid-row's own left border. */
   .day-bids .bid-row { padding-left: 14px; padding-right: var(--space-8); }
   .day-bids-count { padding-left: var(--space-8); padding-right: var(--space-8); }
-  .day-chance { padding: var(--space-6) var(--space-8); }
   .day-book { padding: 14px 16px 18px; }
   /* The day dialog becomes a full-width sheet on phones, so its rows are as tight
      as the list cards — give them the same two-line treatment. */
@@ -3792,6 +4434,12 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
    desktop density untouched. Includes the smaller controls that were being missed. */
 @media (pointer: coarse) {
   .btn, .nav-tab, .chip, .seg-btn, .acct-item, .acct-legal-link, input[type='range'], .nselect-btn { min-height: 44px; }
+  /* Le sélecteur FR|EN et l'interrupteur de thème (.mini-seg-btn) manquaient à
+     l'appel (2026-09-06) : sur téléphone l'en-tête les range dans le tiroir, et
+     ils y tenaient 35 × 24 px — sous la cible tactile, pour le seul geste qui
+     change la langue de tout le site. La piste garde sa hauteur d'origine à la
+     souris ; au doigt, les deux boutons montent à 44. */
+  .mini-seg-btn { min-height: 44px; }
   .nselect-opt { min-height: 44px; display: flex; align-items: center; }
   /* Repeated at .header-auth .btn specificity: the ≤680px header rule sets a
      32px floor on the SAME selector, and on a phone (coarse + narrow) it was
@@ -4108,7 +4756,7 @@ body.ig-open { overflow: hidden; }
 .ig-check svg { width: calc(3.6 * var(--igu)); height: calc(3.6 * var(--igu)); }
 .ig-check path { stroke-dasharray: 26; stroke-dashoffset: 26; }
 .ig-check::after {
-  content: ""; position: absolute; inset: -calc(0.9 * var(--igu));
+  content: ""; position: absolute; inset: calc(-1 * (0.9 * var(--igu)));
   border: calc(0.4 * var(--igu)) solid var(--brand-bright); border-radius: 50%; opacity: 0;
 }
 .ig-t1 { font-size: calc(2.9 * var(--igu)); font-weight: 800; display: block; }
@@ -4166,7 +4814,7 @@ body.ig-open { overflow: hidden; }
   background: var(--brand); border-radius: calc(1.6 * var(--igu)); padding: calc(2.2 * var(--igu)) calc(5 * var(--igu));
   display: inline-flex; align-items: center; gap: calc(1.6 * var(--igu));
 }
-.ig-ring { position: absolute; inset: -calc(0.4 * var(--igu)); border: calc(0.45 * var(--igu)) solid var(--brand-bright); border-radius: calc(2 * var(--igu)); opacity: 0; transform: scale(0.9); }
+.ig-ring { position: absolute; inset: calc(-1 * (0.4 * var(--igu))); border: calc(0.45 * var(--igu)) solid var(--brand-bright); border-radius: calc(2 * var(--igu)); opacity: 0; transform: scale(0.9); }
 .ig-done { display: none; align-items: center; gap: calc(1.4 * var(--igu)); }
 .ig-done svg { width: calc(3 * var(--igu)); height: calc(3 * var(--igu)); }
 
@@ -4204,7 +4852,7 @@ body.ig-open { overflow: hidden; }
 @keyframes igSoft { from { opacity: 0; transform: translateY(calc(1.4 * var(--igu))); } to { opacity: 1; transform: none; } }
 @keyframes igPop { 0% { transform: scale(0.5); opacity: 0; } 65% { transform: scale(1.07); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
 @keyframes igStrike { to { transform: scaleX(1); } }
-@keyframes igShake { 0%, 100% { transform: translateX(0); } 30% { transform: translateX(-calc(0.5 * var(--igu))); } 70% { transform: translateX(calc(0.5 * var(--igu))); } }
+@keyframes igShake { 0%, 100% { transform: translateX(0); } 30% { transform: translateX(calc(-1 * (0.5 * var(--igu)))); } 70% { transform: translateX(calc(0.5 * var(--igu))); } }
 @keyframes igBarAnim { from { width: 0; } to { width: 100%; } }
 @keyframes igDraw { to { stroke-dashoffset: 0; } }
 @keyframes igRoll { from { transform: translateY(0); } to { transform: translateY(-88.889%); } }
@@ -4332,7 +4980,7 @@ body.ig-open { overflow: hidden; }
    readable outside the film. Folds away with the gate: signed in, the console
    is a workspace (the [hidden] form hides its next sibling — no JS).
    ========================================================================== */
-.nc-conformite { margin-top: var(--space-8); padding-top: var(--space-6); border-top: 1px solid var(--border); max-width: 440px; }
+.nc-conformite { margin-top: var(--space-16); padding-top: var(--space-12); border-top: 1px solid var(--border); max-width: 440px; }
 /* Signed in, the console is a workspace and the compliance band folds away
    with the gate. The band is no longer the form's next sibling (it sits in the
    pane's grid, one level up), so the fold reads the gate through the wrap. */
@@ -4379,19 +5027,31 @@ body.ig-open { overflow: hidden; }
 /* The unread mark — the one round thing here: an 8px dot, as the register allows. */
 .sup-fab-dot { position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 0 2px var(--brand); }
 .sup-panel {
-  width: min(340px, calc(100vw - 32px));
+  width: min(380px, calc(100vw - 32px));
   display: flex; flex-direction: column;
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg); overflow: hidden;
 }
-.sup-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 12px 14px 10px; border-bottom: 1px solid var(--border); }
+.sup-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); padding: var(--space-6) var(--space-6) var(--space-5) var(--space-8); border-bottom: 1px solid var(--border); }
 .sup-title { font-weight: 800; letter-spacing: -0.01em; }
-.sup-sub { margin: 2px 0 0; font-size: 12.5px; color: var(--ink-muted); }
-.sup-close { appearance: none; border: 0; background: transparent; color: var(--ink-muted); font: inherit; cursor: pointer; padding: 4px 6px; border-radius: var(--radius-sm); }
+.sup-sub { margin: 2px 0 0; font-size: 12.5px; line-height: 1.4; color: var(--ink-muted); max-width: 30ch; }
+/* La fermeture est une icône carrée du registre, pas un caractère posé dans le
+   texte : même gabarit que les autres boutons-icônes, et une cible de 28 px. */
+.sup-close {
+  appearance: none; border: 0; background: transparent; color: var(--ink-muted);
+  font: inherit; font-size: 14px; line-height: 1; cursor: pointer; flex: none;
+  width: 28px; height: 28px; display: inline-grid; place-items: center; border-radius: var(--radius-sm);
+}
 .sup-close:hover { background: var(--surface-inset); color: var(--ink); }
-.sup-log { min-height: 120px; max-height: 300px; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.sup-close:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+/* ADR 0046 — le journal ne réserve plus 96 px de vide. Un fil neuf n'a rien à
+   montrer : ce sont les questions d'amorce, juste dessous, qui occupent la
+   place, et elles, elles mènent quelque part. Le journal ne prend donc de la
+   hauteur qu'une fois qu'il porte des bulles. */
+.sup-log { max-height: 300px; overflow-y: auto; padding: var(--space-7) var(--space-8); display: flex; flex-direction: column; justify-content: flex-end; gap: var(--space-5); }
+.sup-log:empty { padding: 0; }
 .sup-log-op { min-height: 80px; max-height: 240px; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 10px; }
-.sup-empty { font-size: 13px; color: var(--ink-muted); }
+.sup-empty { font-size: 13px; line-height: 1.5; color: var(--ink-muted); }
 /* A message is a column — the bubble, then its « who · when » line — on the
    end side for the reader's own, the start side for the other. */
 .sup-msg { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
@@ -4402,24 +5062,76 @@ body.ig-open { overflow: hidden; }
   background: var(--surface-inset); color: var(--ink); border: 1px solid var(--border);
 }
 .sup-msg.is-mine .sup-bubble { background: var(--brand); color: var(--brand-ink); border-color: transparent; }
-.sup-meta { display: flex; gap: 6px; font-size: 10.5px; color: var(--ink-muted); padding: 0 2px; }
+/* L'assistant a SA bulle : le même registre que celle de Nota, avec un filet
+   de marque à gauche qui dit d'un coup d'œil que c'est la machine qui a
+   répondu — jamais un déguisement en personne. */
+.sup-msg[data-de='assistant'] .sup-bubble { border-left: 2px solid var(--brand); }
+/* « L'assistant écrit… » : trois points qui respirent, du côté de l'assistant.
+   La bulle garde la hauteur d'une ligne pour que le fil ne saute pas quand la
+   vraie réponse la remplace. */
+.sup-bubble-typing { display: inline-flex; align-items: center; gap: 4px; min-height: 20px; }
+.sup-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--ink-muted); opacity: 0.35; animation: sup-pulse 1.2s ease-in-out infinite; }
+.sup-dot:nth-child(2) { animation-delay: 0.15s; }
+.sup-dot:nth-child(3) { animation-delay: 0.3s; }
+@keyframes sup-pulse { 0%, 60%, 100% { opacity: 0.25; } 30% { opacity: 0.9; } }
+@media (prefers-reduced-motion: reduce) { .sup-dot { animation: none; opacity: 0.5; } }
+/* Les questions d'amorce — des cibles, pas de la décoration : elles occupent
+   le vide qu'ouvrait le journal et disent ce que l'assistant sait traiter. */
+.sup-suggest { display: flex; flex-wrap: wrap; gap: var(--space-3); padding: var(--space-6) var(--space-8) 0; }
+.sup-chip {
+  appearance: none; cursor: pointer; font: inherit; font-size: 12.5px; line-height: 1.3;
+  padding: var(--space-4) var(--space-5); border-radius: var(--radius-sm);
+  border: 1px solid var(--border); background: var(--surface-inset); color: var(--ink);
+}
+.sup-chip:hover { border-color: var(--border-strong); background: var(--surface); }
+.sup-chip:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+/* L'escalade se lit — même registre que « conversation terminée », en marque. */
+.sup-escalade { margin: 0; padding: 8px 14px; font-size: 12.5px; line-height: 1.45; color: var(--ink-muted); border-top: 1px dashed var(--border); }
+.sup-meta { display: flex; gap: var(--space-3); font-size: 11.5px; color: var(--ink-muted); padding: 0 2px; }
 .sup-who { font-weight: 700; }
+/* Un bloc, pas une liste de fiches : deux messages de suite du même côté se
+   serrent, et la signature « qui · quand » ne se pose qu'au PIED du bloc —
+   une conversation de six lignes cesse d'être six fois « Vous · 15:33 ». */
+.sup-log .sup-msg.is-cont { margin-top: calc(var(--space-5) * -1 + var(--space-2)); }
+.sup-msg.is-mid .sup-meta { display: none; }
 .sup-ended { margin: 0; padding: 8px 14px; font-size: 12.5px; color: var(--ink-muted); border-top: 1px dashed var(--border); }
-.sup-form { padding: 10px 14px 12px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
-.sup-row { display: flex; align-items: flex-end; gap: 8px; }
+.sup-form { padding: var(--space-6) var(--space-8) var(--space-7); border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: var(--space-4); }
+/* Le composeur est UN champ, pas deux boîtes côte à côte : la rangée porte le
+   cadre et l'anneau de focus, le champ et le bouton vivent dedans. */
+.sup-row {
+  display: flex; align-items: flex-end; gap: var(--space-3);
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-5);
+  border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface);
+}
+.sup-row:focus-within { border-color: var(--ring); box-shadow: 0 0 0 3px var(--focus-ring); }
 /* Grows with the text (field-sizing where the browser has it, app.js
    otherwise), capped so the log keeps its room. */
-.sup-text { flex: 1; resize: none; min-height: 40px; max-height: 160px; overflow-y: auto; field-sizing: content; }
-.sup-send { flex: none; }
-.sup-count { margin: 0; font-size: 11.5px; color: var(--ink-muted); text-align: right; font-variant-numeric: tabular-nums; }
-.sup-error { margin: 0; font-size: 12.5px; color: var(--danger); }
+.sup-text {
+  flex: 1; resize: none; min-height: 26px; max-height: 160px; overflow-y: auto; field-sizing: content;
+  min-width: 0; padding: var(--space-3) 0; border: 0; border-radius: 0; background: transparent;
+}
+.sup-text:focus { border: 0; outline: none; box-shadow: none; }
+.sup-send { flex: none; padding: var(--space-4) var(--space-6); font-size: 13px; }
+.sup-count { margin: 0; min-height: 1.5em; font-size: 12px; color: var(--ink-muted); text-align: right; font-variant-numeric: tabular-nums; }
+.sup-error { margin: 0; font-size: 13px; color: var(--danger); }
+/* La porte du courriel : un lien discret tant qu'il ne sert pas. Elle ne prend
+   qu'une ligne, et le champ n'apparaît qu'une fois ouverte. */
+.sup-mail-open {
+  appearance: none; border: 0; background: transparent; padding: 0; font: inherit;
+  font-size: 12px; color: var(--ink-muted); text-align: left; cursor: pointer;
+  text-decoration: underline; text-underline-offset: 2px; align-self: flex-start;
+}
+.sup-mail-open:hover { color: var(--ink); }
+.sup-mail-open:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: var(--radius-xs); }
+.sup-mail-open[aria-expanded='true'] { display: none; }
 /* The optional courriel, one line under the composer: label · field, help beneath. */
-.sup-courriel-row { display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: 8px; row-gap: 2px; }
-.sup-courriel-lbl { font-size: 12.5px; font-weight: 600; color: var(--ink-muted); white-space: nowrap; }
+.sup-courriel-row { display: flex; flex-direction: column; gap: var(--space-2); }
+.sup-courriel-lbl { font-size: 12px; font-weight: 600; color: var(--ink-muted); }
 .sup-opt { font-weight: 500; }
-.sup-courriel { min-width: 0; padding: 6px 8px; font-size: 13px; }
-.sup-courriel-help { grid-column: 1 / -1; margin: 0; }
-.sup-reply-courriel { margin: 0 0 8px; }
+.sup-courriel { width: 100%; min-width: 0; padding: var(--space-4) var(--space-5); font-size: 13px; }
+.sup-courriel-help { margin: 0; font-size: 12px; }
+.sup-reply-courriel { margin: 0 0 8px; min-height: 1.5em; }
+#chat-reply-error, #chat-reply-sent { min-height: 1.5em; }
 #chat-reply-dialog textarea { width: 100%; resize: vertical; }
 @media (max-width: 767.98px) {
   /* The guide « ? » left phones (ADR 0022) so the calendar owns its corner —
@@ -4488,3 +5200,14 @@ body.ig-open { overflow: hidden; }
   .wrap { max-width: none; padding: 0; }
   .tab-pane[hidden] { display: none !important; }
 }
+
+/* ADR 0041 — l'acte annulé par le client, en attente de la décision du notaire
+   sur l'indemnité : une carte à part, sans client ni fil, avec sa réclamation. */
+.pill-annulee { background: transparent; color: var(--ink-muted); border: 1px solid var(--border); }
+.nc-card.is-annulee { border-style: dashed; }
+.nc-indemnite { margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--border); }
+.nc-indemnite-form { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.nc-indemnite-amt { max-width: 160px; }
+.nc-indemnite-just { resize: vertical; min-height: 56px; }
+.nc-indemnite-err { color: var(--danger, var(--ink)); }
+.devis-annulation { margin: 6px 0 0; }

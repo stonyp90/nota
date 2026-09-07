@@ -16,6 +16,8 @@ const { createBilling } = require('../../apps/api/src/billing.js');
 const TODAY = '2026-08-12';
 const BASE = 'https://nota.example';
 const OPERATOR_EMAIL = 'operateur@nota.ca';
+// Le prénom que l'assistant nomme quand il passe la main (ADR 0046).
+const OPERATOR_NAME = 'Anthony';
 
 class NotaWorld extends World {
   constructor(options) {
@@ -120,10 +122,37 @@ class NotaWorld extends World {
       // pas où renvoyer le client, et `POST /bids` refuse franchement plutôt
       // que de créer une offre dont le paiement ne pourra jamais aboutir.
       siteUrl: BASE,
+      // ADR 0046 — l'assistant de la messagerie. Nul par défaut : la
+      // messagerie se comporte alors comme un déploiement sans clé, et chaque
+      // question part à l'opérateur. Un scénario le branche explicitement.
+      ...(this.assistantPort ? { assistantPort: this.assistantPort } : {}),
+      env: {
+        ...process.env,
+        NOTA_OPERATOR_EMAIL: OPERATOR_EMAIL,
+        // Le prénom que l'assistant nomme en passant la main.
+        NOTA_OPERATOR_NAME: OPERATOR_NAME,
+      },
     });
 
     this.billingOn = false;
+    this.assistantPort = null;
     this.app = buildApp();
+
+    // ADR 0046 — brancher l'assistant sur un scénario en mémoire. Aucun SDK,
+    // aucun réseau : le scénario DICTE ce que le modèle répond, et ce qu'on
+    // observe est ce que le reste du système en fait.
+    this.enableAssistant = (scenario) => {
+      if (scenario === null) {
+        // L'état d'un déploiement SANS clé : aucun port, donc aucune réponse
+        // automatique et chaque question part à l'opérateur.
+        this.assistantPort = null;
+      } else {
+        const { createFakeAssistant } = require('../../apps/api/src/assistant-port.js');
+        this.assistantPort = createFakeAssistant(scenario);
+      }
+      this.app = buildApp();
+      return this.assistantPort;
+    };
 
     // Money scenarios (ADR 0015/0023) run the REAL billing use-cases over the
     // Stripe recorder above — only the network is fake. The app is rebuilt on

@@ -26,7 +26,7 @@ Fonctionnalité: La caution tient jusqu'à la signature
     Quand un client publie une offre avec le courriel "client@exemple.ca" pour "refinancement" à 2000 dans 30 jours
     Alors la réponse a le statut 201
     Et la carte du client est enregistrée, sans qu'aucune somme soit bloquée
-    Et le montant porté à la carte du client est 2249 $
+    Et le montant porté à la carte du client est 2279 $
 
   # L'offre reste PENDING tant que le client n'a pas donné sa carte : un notaire
   # ne voit jamais une demande dont la banque n'a rien validé.
@@ -42,11 +42,11 @@ Fonctionnalité: La caution tient jusqu'à la signature
     Et le client donne sa carte
     Et le notaire "notaire@exemple.ca" retient l'offre
     Quand le planificateur de rappels s'exécute
-    Alors la carte du client est bloquée pour 2349 $
+    Alors la carte du client est bloquée pour 2578 $
     Quand le notaire "notaire@exemple.ca" marque l'acte complété à 2000
-    Alors la capture porte 2349 $
+    Alors la capture porte 2578 $
     Et le notaire reçoit 2000 $ — la totalité du montant offert
-    Et Nota ne garde que son prix : 349 $
+    Et Nota ne garde que son prix : 578 $
 
   Scénario: trop tôt, la caution n'est pas posée — elle pourrirait avant l'acte
     Étant donné un client publie une offre avec le courriel "client@exemple.ca" pour "refinancement" à 2000 dans 20 jours
@@ -67,15 +67,17 @@ Fonctionnalité: La caution tient jusqu'à la signature
     Et le notaire "notaire@exemple.ca" reçoit le courriel "caution non posée"
     Et l'offre reste confiée au notaire "notaire@exemple.ca"
 
-  # ADR 0023 + 0033 — le barème ne devient pas gratuit parce que la caution
-  # n'est pas encore posée : les frais sont prélevés hors session sur la carte
-  # enregistrée, et versés AU NOTAIRE.
-  Scénario: annuler à 10 jours prélève quand même les frais, et le notaire les reçoit
+  # ADR 0023 + 0033 + 0041 — le plafond ne tombe pas parce que la caution n'est
+  # pas encore posée : l'indemnité que le notaire réclame est prélevée hors
+  # session sur la carte enregistrée, et versée AU NOTAIRE.
+  Scénario: annuler à 10 jours ouvre un plafond, et l'indemnité réclamée se prélève sur la carte enregistrée
     Étant donné un client publie une offre avec le courriel "client@exemple.ca" pour "refinancement" à 2000 dans 10 jours
     Et le client donne sa carte
     Et le notaire "notaire@exemple.ca" retient l'offre
     Quand le client annule son offre
-    Alors l'annulation retient 10 % du montant, soit 200 $
+    Alors l'annulation ouvre une indemnité plafonnée à 10 % du montant, soit 200 $
+    Quand le notaire "notaire@exemple.ca" réclame une indemnité de 200 $ avec la justification "Journée bloquée à l'agenda, dossier ouvert et recherches au registre faites."
+    Alors l'indemnité de 200 $ est perçue
     Et les frais sont prélevés hors session sur la carte enregistrée
     Et les frais de 200 $ sont virés en entier au notaire "notaire@exemple.ca"
 
@@ -88,7 +90,7 @@ Fonctionnalité: La caution tient jusqu'à la signature
     Et le notaire "notaire@exemple.ca" propose 3200 sur l'offre
     Et le client accepte la proposition
     Quand le planificateur de rappels s'exécute
-    Alors la carte du client est bloquée pour 3549 $
+    Alors la carte du client est bloquée pour 3778 $
 
   # Réessayer demain la MÊME carte refusée donnerait le même refus : sans porte
   # pour en donner une autre, l'avis de refus ne servirait à rien.
@@ -112,7 +114,7 @@ Fonctionnalité: La caution tient jusqu'à la signature
     Et la caution de l'offre a été posée il y a 35 jours
     Et le notaire "notaire@exemple.ca" lit la garantie "enregistree" sur son acte
     Quand le planificateur de rappels s'exécute
-    Alors la carte du client est bloquée pour 2349 $
+    Alors la carte du client est bloquée pour 2578 $
     Et le notaire "notaire@exemple.ca" lit la garantie "posee" sur son acte
 
   # La même offre héritée, mais sans carte enregistrée : plus rien ne permet de
@@ -136,6 +138,7 @@ Fonctionnalité: La caution tient jusqu'à la signature
     Et le notaire "notaire@exemple.ca" retient l'offre
     Et la banque du client refuse les frais d'annulation
     Quand le client annule son offre
+    Et le notaire "notaire@exemple.ca" réclame une indemnité de 200 $ avec la justification "Journée bloquée à l'agenda, dossier ouvert et recherches au registre faites."
     Alors les frais de 200 $ sont inscrits comme NON perçus
     Et aucune créance n'est inscrite au notaire "notaire@exemple.ca"
     Et la piste d'audit garde la trace des frais non perçus

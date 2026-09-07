@@ -790,14 +790,16 @@ test('gate continue-action signs an existing notary straight into the console', 
   assert.equal($(doc, 'notary-signup-prompt').hidden, true);
 });
 
-// 13e. The signup CTA drives Stripe onboarding with the pending email; a
-//      failure surfaces in the branch's own error list and re-arms the CTA.
-test('signup CTA posts the pending email to /notaries/connect', async () => {
+// 13e. The signup CTA files the application with the pending email — the FREE
+//      door, no Stripe: /notaries/connect answers 503 whenever billing is
+//      unconfigured, which is the state of production. A failure surfaces in
+//      the branch's own error list and re-arms the CTA.
+test('signup CTA posts the pending email to /notaries/signup', async () => {
   const { win, doc } = await boot();
   let captured = null;
   win.fetch = (url, opts) => {
     const u = String(url);
-    if (u.endsWith('/notaries/connect')) {
+    if (u.endsWith('/notaries/signup')) {
       captured = JSON.parse(opts.body);
       return Promise.resolve({ status: 503, ok: false, json: async () => ({ errors: [{ message: 'Inscription indisponible pour le moment.' }] }) });
     }
@@ -808,7 +810,7 @@ test('signup CTA posts the pending email to /notaries/connect', async () => {
   $(doc, 'notary-signup-link').click();
   $(doc, 'notary-signup-btn').click();
   await wait(20);
-  assert.ok(captured, 'the CTA should call /notaries/connect');
+  assert.ok(captured, 'the CTA should call the FREE door /notaries/signup — never Stripe');
   assert.equal(captured.email, 'nouveau@etude.ca');
   assert.equal($(doc, 'notary-signup-errors').hidden, false, 'failure shows in the branch');
   assert.equal($(doc, 'notary-signup-btn').disabled, false, 'CTA re-armed after failure');
@@ -1557,7 +1559,9 @@ test('the hero pulse shows the month median per service and filters the carnet',
     f.querySelector('.pulse-fig-k').textContent,
     f.querySelector('.pulse-fig-v').textContent,
   ]);
-  const floorOf = (id) => ctx.D.money(ctx.D.serviceById(id).prixDepart);
+  // LPC art. 224 c) : le « à partir de » est le total annoncé, honoraires de départ
+  // ET service de Nota, jamais le plancher des honoraires seul.
+  const floorOf = (id) => ctx.D.money(ctx.D.prixAnnonce(id).totalCents / 100);
 
   // The median (not the mean: 1933) is what a client is shown — labelled as
   // the month's reference point, never as a statistic (P1-9).
@@ -1569,7 +1573,7 @@ test('the hero pulse shows the month median per service and filters the carnet',
   // Below-floor history never shows a repère under the floor beside it.
   assert.deepEqual(figs(byId.refinancement), [
     ['à partir de', floorOf('refinancement')],
-    ['repère du mois', floorOf('refinancement')],
+    ['repère du mois', ctx.D.money(ctx.D.serviceById('refinancement').prixDepart)],
   ]);
 
   // The foot line was removed — the rows carry the whole story; nothing may

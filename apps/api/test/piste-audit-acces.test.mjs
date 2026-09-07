@@ -409,11 +409,20 @@ const ACTEUR_ATTENDU = {
   partenaire_reclamation: 'partenaire',
   partenaire_confirme: 'partenaire',
   client_jeton_emis: 'client',
+  // L'espace client (2026-09-05) : la personne prouve sa boîte, puis relit
+  // SES offres. Les deux gestes la nomment — c'est son dossier.
+  client_lien_demande: 'client',
+  client_espace_ouvert: 'client',
+  // Le rappel du code : c'est le PARTENAIRE qui le demande.
+  partenaire_rappel: 'partenaire',
   document_depose: 'client',
   document_lu: 'notaire',
   acte_retenu: 'notaire',
   acte_regle: 'notaire',
   annulation_frais: 'client',
+  // ADR 0041 — l'indemnité se DÉCIDE : le notaire réclame ou renonce (le
+  // système ne clôt que le délai passé).
+  annulation_indemnite: 'notaire',
   // Les angles morts fermés le 2026-09-05. L'ARGENT hors règlement nomme le
   // CLIENT — c'est sa carte, et l'offre EST son dossier ; Stripe n'est qu'un
   // messager et ne doit jamais apparaître comme « systeme ». La vie du NOTAIRE

@@ -251,7 +251,9 @@ test('the profile form carries nom, étude, téléphone, adresse — prefilled, 
   assert.equal(b.etude, 'Étude Roy & Fils');
   assert.equal(b.telephone, '(418) 555-0101');
   assert.equal(b.adresse, '2, rue Saint-Jean, Québec (QC) G1R 1N4');
-  assert.equal($(doc, 'nc-profil-saved').hidden, false);
+  // The line is held; only the sentence arrives (ADR 0039), so assert the
+  // sentence — `hidden` is now always false and would prove nothing.
+  assert.match($(doc, 'nc-profil-saved').textContent, /Profil enregistré/);
 });
 
 // --- 2. The incomplete profile is said, and opens the form ------------------
@@ -569,7 +571,7 @@ test('the alert preferences render from profil.alertes and POST through /notary/
   await wait(10);
   posts = calls.filter((c) => c.path.includes('/notary/profile'));
   assert.deepEqual(posts[posts.length - 1].body.alertes, { pace: 'instant', urgentOnly: false });
-  assert.equal($(doc, 'notary-prefs-saved').hidden, false, 'the saved note confirms');
+  assert.match($(doc, 'notary-prefs-saved').textContent, /Préférences enregistrées/, 'the saved note confirms');
   // The lender roster stays (it IS wired: it filters the feed).
   assert.ok($(doc, 'pref-lenders'), 'the lender roster stays');
 });
@@ -715,12 +717,13 @@ test('prune needs two consecutive absences — a single miss keeps the act and s
 
 // P1-4 — the retained card says what a cancellation today would hand the notary.
 test('the retained card carries the cancellation forecast; null renders nothing', async () => {
-  const entry = retainedEntry({ annulation: { taux: 0.3, frais: 870, joursAvant: 2 } });
+  const entry = retainedEntry({ annulation: { taux: 0.3, plafond: 870, joursAvant: 2, delaiJours: 7 } });
   const { doc, D } = await bootSignedIn({ profil: PROFIL_COMPLET(), retained: [entry] });
   const card = doc.querySelector('#notary-retained-list .nc-card[data-id="r-1"]');
   const line = card.querySelector('.nc-forecast');
   assert.ok(line, 'the forecast line renders');
   assert.match(line.textContent, /Si le client annule aujourd’hui/);
+  assert.match(line.textContent, /pourriez réclamer, sur justification, jusqu’à/, 'ADR 0041 — a cap the notary may claim, never a sum promised: ' + line.textContent);
   assert.ok(line.textContent.includes(D.money(870)), line.textContent);
   assert.match(line.textContent, /30 %/);
   assert.match(line.textContent, /2 jours avant la signature/);
@@ -750,7 +753,9 @@ test('the lender roster is labelled « sur cet appareil » and confirms on its o
   const own = $(doc, 'notary-lenders-saved');
   assert.ok(own && !own.hidden, 'its own confirmation');
   assert.match(own.textContent, /sur cet appareil/);
-  assert.equal($(doc, 'notary-prefs-saved').hidden, true, 'the server note stays silent');
+  // Both lines are RESERVED (they never move the panel); only the sentence
+  // arrives, which is also what makes the role="status" announce.
+  assert.equal($(doc, 'notary-prefs-saved').textContent, '', 'the server note stays silent');
 });
 
 // P1-9 — a client document is unread too, and its row carries the time.

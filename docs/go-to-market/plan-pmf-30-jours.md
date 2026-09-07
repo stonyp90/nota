@@ -72,7 +72,7 @@ Sept gestes du propriétaire. Aucun n'est du code ; tous bloquent le premier usa
   seule : un formulaire d'inscription sur le site, et un bouton « Activer » dans
   la console admin. D'ici là, l'opérateur inscrit et active à la main.
 - **Objectif chiffré :** 10 comptes activés, dont 5 qui ont ouvert le fil deux fois ; 5 entrevues de 20 minutes (grille `entrevue-notaire.md`). La question qui décide tout est H2 : « à quel prix prenez-vous un refinancement jeudi prochain ? » — une réponse en chiffres par notaire, consignée dans `pipeline-notaires.csv`.
-- **Mettre le kit au modèle réel** (`validation-notaires.md`, `courriels-notaires.md` E4, `entrevue-notaire.md`) : deux lignes, 100 % au notaire, prix de Nota publié d'avance (199 $ / 249 $ par service, plus la garantie de date — ADR 0034). Le premier notaire à qui l'on parle ne doit pas entendre un chiffre que quatre textes condamnent.
+- **Mettre le kit au modèle réel** (`validation-notaires.md`, `courriels-notaires.md` E4, `entrevue-notaire.md`) : deux lignes, 100 % au notaire, prix de Nota publié d'avance (229 $ / 249 $ par service, plus la garantie de date — ADR 0034). Le premier notaire à qui l'on parle ne doit pas entendre un chiffre que quatre textes condamnent.
 - **Réseaux démultiplicateurs**, après les neuf : AJNQ (porte principale des jeunes notaires), PME INTER, Jurisconseil ; l'APNQ pour le colloque des 23–24 octobre.
 
 ## 5. Semaines 2–4 (15 septembre – 3 octobre) — dix demandes réelles
@@ -129,7 +129,7 @@ couches vertes sur l'arbre combiné : domaine 294 · api 1 066 · contrat 22 ·
 web 628 · admin 144 · BDD 153 scénarios · Playwright 26) :
 
 - **Partenaires, deux passes** : estimateur « clients par mois → par année » (`D.referralProjection`), message prêt à envoyer au client avec le lien du partenaire, « Copié ✓ » seulement sur copie réussie ; puis le sélecteur « Vous êtes… » (courtier immobilier · courtier hypothécaire · autre professionnel) avec, pour chaque métier, le bon moment pour référer, porté par le domaine, et la puce du formulaire synchronisée dans les deux sens. « Agent immobilier » est devenu « Courtier immobilier », le titre de l'OACIQ.
-- **ADR 0034** : le prix de Nota est une grille publiée par service (199 $ financement, 249 $ refinancement) plus la garantie de date sur sa propre ligne ; « prix fixe » est retiré de toute la copie et un garde-fou (art. 68) refuse le mot.
+- **ADR 0034** : le prix de Nota est une grille publiée par service (229 $ financement, 279 $ refinancement depuis l'ADR 0042) plus la garantie de date sur sa propre ligne ; « prix fixe » est retiré de toute la copie et un garde-fou (art. 68) refuse le mot.
 - **ADR 0035** : la caution remplace l'autorisation de carte à sept jours — carte enregistrée à la publication, blocage posé deux jours avant la signature, au devis gelé. Le point 1 de la liste ci-dessous est réglé.
 - **ADR 0037** : la récompense de parrainage est acquise à la rétention et versée à la signature ; cartes, FAQ, courriel et colonne admin « payable » alignés.
 - **Geste 4, aux deux tiers** : courriel opérateur sur les deux Lambdas, abonnements SNS créés (à confirmer par le clic dans les deux courriels AWS), journaux conservés 14 jours. Manque l'adresse postale LCAP.

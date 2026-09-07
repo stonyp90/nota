@@ -22,8 +22,8 @@ tout message électronique commercial (geste 4 du plan). Rien d'autre.
 ## Le modèle économique, en une ligne
 
 Le notaire fixe ses honoraires et les garde **en entier**. Nota vend son propre
-service au client, à côté, à un prix publié par service : **199 $** financement,
-**249 $** refinancement, plus une garantie de date de **0 à 300 $** selon le
+service au client, à côté, à un prix publié par service : **229 $** financement,
+**279 $** refinancement, plus une garantie de date de **0 à 549 $** selon le
 préavis. Le client paie **à la signature**. Ni commission, ni partage, ni
 pourcentage — voir [`validation-notaires.md`](validation-notaires.md) §2 pour la
 grille complète et pour ce que les ADR 0031, 0034 et 0030 ont retiré.

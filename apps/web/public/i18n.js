@@ -33,6 +33,23 @@
 
   // === DICTIONARY — generated from the French sources. =======================
   var TEXT = {
+  "Écrivez-nous\u00a0: une personne de l’équipe vous répond à votre courriel.": "Write to us: someone on the team answers at your email address.",
+  // La porte du courriel sous le composeur de la messagerie.
+  "Recevoir aussi la réponse par courriel": "Also get the answer by email",
+  // Les quatre écrans de la feuille de réservation (ADR 0040).
+  "L’acte": "The act",
+  "Vos réponses": "Your answers",
+  "Votre prix": "Your price",
+  "Vos coordonnées": "Your details",
+  "Étapes": "Steps",
+  "Retour": "Back",
+  "Continuer": "Continue",
+  // Le catalogue annoncé de l'écran 1 (D.ACTES_A_VENIR) : le nom court sur la
+  // carte grise, la description sur son infobulle.
+  "Procuration": "Power of attorney",
+  "Testament": "Will",
+  "Mandat notarié pour qu’une personne de confiance agisse en votre nom.": "A notarial mandate letting someone you trust act on your behalf.",
+  "Testament reçu devant notaire et inscrit aux registres de la Chambre.": "A will received before a notary and entered in the Chambre’s registers.",
   // Les documents de la conversation (ADR 0032).
   "Joindre un document": "Attach a document",
   "Aucun document échangé.": "No documents exchanged.",
@@ -220,6 +237,18 @@
   // Live support chat (ADR 0026).
   "Une question ?": "A question?",
   "Écrivez-nous — on vous répond en direct, ici même.": "Write to us — we answer live, right here.",
+  // ADR 0046 — la messagerie assistée. Aucune de ces lignes ne promet un délai.
+  "L’assistant de Nota répond tout de suite à ce qu’il sait. Une personne reprend le reste, par courriel.": "Nota’s assistant answers what it knows, right away. A person picks up the rest, by email.",
+  "Assistant Nota": "Nota assistant",
+  "Vous": "You",
+  "Visiteur": "Visitor",
+  "Nota": "Nota",
+  "L’assistant écrit…": "The assistant is typing…",
+  "Cette question part à une personne — laissez votre courriel pour recevoir la réponse.": "This one goes to a person — leave your email to get the answer.",
+  "Combien ça coûte ?": "How much does it cost?",
+  "Comment ça marche ?": "How does it work?",
+  "Quels documents me faut-il ?": "Which documents do I need?",
+  "Et si j’annule ?": "What if I cancel?",
   "Messagerie Nota": "Nota chat",
   "Messagerie — posez votre question": "Chat — ask your question",
   "Fermer la messagerie": "Close the chat",
@@ -289,7 +318,7 @@
   "proposez votre prix ou demandez des documents ; le dossier s’ouvre dès que vous retenez.": "propose your price or ask for documents; the file opens as soon as you take it on.",
   "Retenez — ou négociez": "Take it on — or negotiate",
   "Complétez l’acte": "Complete the act",
-  "Se déconnecter effacera de cet appareil vos coordonnées, vos offres publiées, votre dossier et vos notifications. Continuer ?": "Signing out will erase your contact details, published offers, file and notifications from this device. Continue?",
+  "Se déconnecter effacera de cet appareil vos coordonnées, vos offres publiées, votre dossier, vos échanges avec le notaire et vos notifications. Continuer ?": "Signing out will erase your contact details, published offers, file, your exchanges with the notary and your notifications from this device. Continue?",
   "Vous êtes déconnecté.": "You are signed out.",
   "Espace notaire": "Notary space",
   "Vos demandes et vos dossiers retenus": "Your requests and your taken files",
@@ -366,7 +395,26 @@
   "Cette proposition n’est plus ouverte.": "This proposition is no longer open.",
   "Filtres réinitialisés.": "Filters reset.",
   "Tous les actes": "All acts",
-  "Affiner (facultatif)": "Refine (optional)",
+  // Les sections de l'écran 2 (domaine CRITERIA_GROUPS) : leur intitulé, leur
+  // raison d'être, le volet qui replie leurs précisions, et ce qu'une réponse
+  // change à la liste des documents (composé en DEUX nœuds — le cadre ici, le
+  // nom du document dans les entrées du catalogue).
+  "Votre prêt": "Your loan",
+  "Le montant, l’état de votre approbation et le prêteur à coordonner.": "The amount, where your approval stands, and the lender to coordinate with.",
+  "L’immeuble": "The property",
+  "Les titres et les documents que le prêteur exigera avant de débourser.": "The title and the documents your lender will require before releasing the funds.",
+  "La signature": "Signing",
+  "Où l’acte se signe, et qui se déplace pour cela.": "Where the act is signed, and who travels for it.",
+  "Préciser (facultatif)": "Add details (optional)",
+  // Les trois temps de l'écran 3 (index.html) : le montant, le marché, le devis.
+  "Le montant": "The amount",
+  "Pré-rempli au niveau qui se conclut à ce délai — ajustez-le si vous voulez.": "Pre-filled at the level that closes at this notice — adjust it if you like.",
+  "Le marché ce jour-là": "The market that day",
+  "Ce que d’autres offrent pour la même date, et ce que le délai y change.": "What others are offering for the same date, and what the notice changes.",
+  "Votre devis": "Your quote",
+  "Deux achats, deux lignes : les honoraires du notaire, et le service de Nota.": "Two purchases, two lines: the notary’s fees, and Nota’s service.",
+  "Ajoute un document :": "Adds a document:",
+  "Retire un document :": "Removes a document:",
   "Choisissez d’abord une date.": "Choose a date first.",
   "Choisissez une date et un montant.": "Choose a date and an amount.",
   "Sous la fourchette du marché, peu susceptible d’être retenue.": "Below the market range, unlikely to be taken.",
@@ -657,15 +705,47 @@
   "Google, Outlook ou Apple — à jour automatiquement.": "Google, Outlook or Apple — updated automatically.",
   "Place de marché des services notariaux · Québec": "Notarial services marketplace · Québec",
   "Un notaire, à la date qu’il vous faut.": "A notary, on the date you need.",
-  "Proposez votre date et votre prix — un notaire de Québec retient votre demande.": "Propose your date and your price — a Québec notary takes on your request.",
+  "Proposez votre date et votre prix. Un notaire de Québec retient votre demande.": "Propose your date and your price. A Québec notary takes on your request.",
   // The hero's price line (ADR 0031): the notary keeps the whole offer, Nota's
   // service is paid at signing. The priced variant is composed at runtime and
   // rides a RULE (the amount passes through to the money conversion).
-  "Le notaire reçoit 100 % de votre offre ; le service Nota, à un prix publié d’avance, se paie seulement à la signature.": "The notary receives 100% of your offer; Nota’s service, at a price published in advance, is paid only at signing.",
+  "Le notaire reçoit 100 % de votre offre. Le service Nota, à un prix publié d’avance, se paie seulement à la signature.": "The notary receives 100% of your offer. Nota’s service, at a price published in advance, is paid only at signing.",
   // ADR 0034 — le devis, ligne par ligne. La garantie de date est ce que NOTA
   // vend ; elle ne se confond pas avec le droit du notaire de tenir compte de
   // l'urgence dans SES honoraires (art. 49 4° C.déont.).
   "Garantie de date Nota": "Nota date guarantee",
+  // Le devis avant que la grille ne soit connue (hors ligne, fixtures) : un mot,
+  // jamais un tiret qui se lirait comme un montant nul.
+  "à confirmer": "to be confirmed",
+  // ADR 0041 — l'indemnité de résiliation : rien n'est prélevé à l'annulation,
+  // le notaire réclame (sur justification, dans un délai, sous un plafond) ou
+  // renonce. Les phrases fixes sont ici ; les composées (montant, %, jours)
+  // ont leur règle plus bas.
+  "Rien n’est retenu automatiquement.": "Nothing is kept automatically.",
+  "Tant que votre offre est ouverte, la retirer est gratuit. Une fois qu’un notaire l’a retenue, annuler à 15 jours et plus de la date reste gratuit. Plus près de la date, rien n’est prélevé d’office : le notaire peut réclamer, sur justification et dans un délai, ses frais réels et la valeur du travail accompli (art. 2129 du Code civil du Québec), jusqu’à un plafond publié selon le préavis, soit 10 % du montant convenu de 4 à 14 jours et 30 % à 3 jours ou moins. Sans réclamation, rien n’est retenu. Une indemnité réclamée est versée au notaire en dédommagement de la journée réservée, jamais à Nota, et le plafond vous est affiché avant toute confirmation. Ces plafonds sont ceux du déploiement par défaut ; l’application affiche toujours ceux en vigueur avant que vous n’annuliez. Le notaire peut lui aussi se désister, sans frais pour lui : votre offre revient alors au carnet, publiée telle quelle, et vous en êtes prévenu.": "While your offer is open, withdrawing it is free. Once a notary has taken it, cancelling 15 days or more before the date stays free. Closer to the date, nothing is taken automatically: the notary may claim, with a written reason and within a deadline, their real costs and the value of work done (art. 2129 of the Civil Code of Québec), up to a published cap by notice, 10% of the agreed amount from 4 to 14 days and 30% at 3 days or less. Without a claim, nothing is kept. A claimed indemnity is paid to the notary as compensation for the reserved day, never to Nota, and the cap is shown to you before any confirmation. These caps are the deployment defaults; the app always shows the ones in force before you cancel. The notary may also withdraw, at no cost to them: your offer then returns to the carnet, published as is, and you are told.",
+  "La somme réservée sur votre carte reste en place jusqu’à sa décision, puis vous est libérée.": "The amount held on your card stays in place until their decision, then is released to you.",
+  "Un montant réclamé serait porté à la carte que vous avez enregistrée.": "A claimed amount would be charged to the card you registered.",
+  "Une indemnité réclamée est versée au notaire en dédommagement de la journée réservée, jamais à Nota.": "A claimed indemnity is paid to the notary as compensation for the reserved day, never to Nota.",
+  "Votre notaire n’a réclamé aucune indemnité : rien n’est retenu.": "Your notary claimed no indemnity: nothing is kept.",
+  "Aucune indemnité n’a été réclamée dans le délai : rien n’est retenu.": "No indemnity was claimed within the period: nothing is kept.",
+  "Annulation sans frais tant qu’aucun notaire n’a retenu votre demande.": "Cancellation is free until a notary takes your request.",
+  "Rien n’est retenu sans réclamation, et l’indemnité va au notaire, jamais à Nota.": "Nothing is kept without a claim, and the indemnity goes to the notary, never to Nota.",
+  "vous pourriez réclamer, sur justification, jusqu’à": "you could claim, with a written reason, up to",
+  "Annulée par le client": "Cancelled by the client",
+  "Le client a annulé après votre rétention. Vous pouvez réclamer vos frais réels et la valeur du travail accompli, sur justification, jusqu’à": "The client cancelled after you took the act. You may claim your real costs and the value of work done, with a written reason, up to",
+  "d’ici le": "by",
+  "Sans réclamation de votre part, rien n’est prélevé au client. L’indemnité vous est versée en entier.": "Without a claim from you, nothing is charged to the client. The indemnity is paid to you in full.",
+  "Montant réclamé (en dollars)": "Amount claimed (in dollars)",
+  "Montant réclamé, en dollars": "Amount claimed, in dollars",
+  "Justification : frais engagés, travail accompli (au moins 20 caractères)": "Reason: costs incurred, work done (at least 20 characters)",
+  "Justification de l’indemnité": "Reason for the indemnity",
+  "Réclamer cette indemnité": "Claim this indemnity",
+  "Renoncer à toute indemnité": "Waive any indemnity",
+  "Réclamation impossible (hors ligne).": "Could not send the claim (offline).",
+  "Réclamation impossible.": "Could not send the claim.",
+  "La carte du client a refusé le prélèvement.": "The client’s card declined the charge.",
+  "Vous avez renoncé à toute indemnité.": "You waived any indemnity.",
+  "Ce sont des plafonds : vous pourrez réclamer, sur justification et dans le délai, vos frais réels et la valeur du travail accompli. Rien n’est prélevé sans votre réclamation, et l’indemnité vous est versée en entier, en dédommagement de la journée réservée.": "These are caps: you may claim, with a written reason and within the deadline, your real costs and the value of work done. Nothing is charged without your claim, and the indemnity is paid to you in full, as compensation for the reserved day.",
   "Le notaire garde 100 % de ses honoraires.": "The notary keeps 100% of their fee.",
   "Date de signature": "Signing date",
   // After a real publication — what happens next, no delay promise.
@@ -735,14 +815,37 @@
   "Créez votre compte gratuit pour": "Create your free account for",
   ", en deux étapes et sans engagement :": ", in two steps with no commitment:",
   "← Utiliser un autre courriel": "← Use another email",
+  "Connexion en un clic": "One-click sign-in",
+  "Ces raccourcis arrivent bientôt. D’ici là, votre courriel suffit — sans mot de passe.": "These shortcuts are coming soon. Until then, your email is enough — no password.",
+  "ou": "or",
+  "À venir": "Soon",
+  "Continuer avec Google": "Continue with Google",
+  "Continuer avec Facebook": "Continue with Facebook",
+  "Continuer avec LinkedIn": "Continue with LinkedIn",
+  "Vous avez déjà publié une demande ?": "Already published a request?",
+  "Vous avez déjà un compte notaire ?": "Already have a notary account?",
+  "Première visite sur Nota ?": "First time on Nota?",
+  "Pas encore inscrit comme notaire ?": "Not registered as a notary yet?",
+  "Déjà partenaire et vous avez perdu votre code ?": "Already a partner and lost your code?",
+  "Recevoir mon code par courriel": "Email me my code",
+  "Vos honoraires sont momentanément indisponibles. Réessayez dans un instant — rien n’est perdu.": "Your fees are momentarily unavailable. Try again in a moment — nothing is lost.",
+  "Aucune demande ouverte pour l’instant. Vous n’acceptez aucun déplacement : seuls les clients qui viennent à votre étude vous sont proposés. Augmentez votre rayon dans « Votre profil public » pour en voir davantage.": "No open requests right now. You accept no travel: only clients who come to your office are shown to you. Raise your radius in “Your public profile” to see more.",
+  "Le client qui vous retient doit pouvoir vous joindre et trouver votre étude — et tant que votre profil est incomplet, les demandes qui vous conviennent ne vous sont pas proposées. Il manque :": "The client who retains you must be able to reach you and find your office — and while your profile is incomplete, the requests that suit you are not shown to you. Missing:",
+  "Vous déposez votre inscription —": "You file your application —",
+  "aucun paiement, aucune pièce à fournir": "no payment, no document to provide",
+  "ici.": "here.",
+  "Nous vérifions votre inscription au": "We check your registration with the",
+  "Tableau de l’Ordre": "Roll of the Order",
+  ", puis votre console s’ouvre. Vous recevez un courriel.": ", then your console opens. You get an email.",
+  "L’inscription est gratuite et sans engagement. Vos versements se branchent plus tard, depuis votre console, quand vous le voulez.": "Signing up is free with no commitment. Your payouts are connected later, from your console, whenever you like.",
+  "Inscription reçue": "Application received",
+  "Merci ! Votre inscription est déposée pour": "Thank you! Your application is filed for",
+  "Nous vérifions votre inscription au Tableau de l’Ordre des notaires du Québec. Dès que votre dossier est approuvé, vous recevez un courriel avec votre lien de connexion — votre console s’ouvre à ce moment-là.": "We are checking your registration with the Roll of the Ordre des notaires du Québec. As soon as your file is approved you will get an email with your sign-in link — that is when your console opens.",
+  "Rien d’autre à faire de votre côté. Si vous ne voyez rien venir, vérifiez vos indésirables ou écrivez-nous.": "Nothing else to do on your side. If nothing arrives, check your spam folder or write to us.",
   "Première visite ? Créer un compte gratuit": "First time? Create a free account",
   "Vérifiez votre boîte courriel": "Check your inbox",
   "Nous venons d’envoyer un lien de connexion sécurisé à": "We’ve just sent a secure sign-in link to",
   "Ouvrez ce lien pour accéder à votre console. Il est valide 15 minutes et à usage unique. Pensez à vérifier vos indésirables.": "Open that link to reach your console. It is valid for 15 minutes and single-use. Remember to check your spam folder.",
-  "Vous créez votre compte de paiement sécurisé via": "You create your secure payment account via",
-  ", notre partenaire (~2 min).": ", our partner (~2 min).",
-  "Votre console s’ouvre aussitôt. Vous voyez les demandes et en retenez.": "Your console opens right away. You see the requests and take them on.",
-  "Stripe vous demandera une pièce d’identité et un compte bancaire pour vos versements. Ces informations restent chez Stripe, Nota ne les voit jamais. Vous êtes ensuite ramené ici.": "Stripe will ask you for photo ID and a bank account for your payouts. That information stays with Stripe — Nota never sees it. You are then brought back here.",
   "Connecté": "Signed in",
     "Recevez vos demandes à votre rythme": "Receive your requests at your own pace",
   "Choisissez comment et à quelle fréquence Nota vous prévient des nouvelles demandes qui vous conviennent. Modifiable à tout moment.": "Choose how and how often Nota alerts you to new requests that suit you. Adjustable at any time.",
@@ -850,7 +953,7 @@
   "Nos engagements": "Our commitments",
   "Gratuité.": "Free of charge.",
   "Publier une offre et consulter le carnet est gratuit pour le client, pour toujours.": "Publishing an offer and browsing the carnet is free for the client, forever.",
-  "Un prix de départ clair par service et deux lignes annoncées d’avance : les honoraires du notaire — ce que vous offrez est ce qu’il reçoit — et le prix du service de Nota, publié d’avance. Aucun frais caché : le barème des frais d’annulation est publié dans les": "A clear starting price per service and two lines announced in advance: the notary’s fees — what you offer is what they receive — and Nota’s service price, published in advance. No hidden fees: the cancellation fee schedule is published in the",
+  "Un prix de départ clair par service et deux lignes annoncées d’avance : les honoraires du notaire — ce que vous offrez est ce qu’il reçoit — et le prix du service de Nota, publié d’avance. Aucun frais caché : les plafonds d’indemnité d’annulation sont publiés dans les": "A clear starting price per service and two lines announced in advance: the notary’s fees — what you offer is what they receive — and Nota’s service price, published in advance. No hidden fees: the cancellation indemnity caps are published in the",
   ", publié d’avance : il dépend du service demandé et du délai avant la signature, jamais du notaire ni du montant que vous offrez. Les deux vous sont affichés avant que votre carte ne soit autorisée.": ", published in advance: it depends on the service requested and on the notice before signing, never on the notary nor on the amount you offer. Both are shown to you before your card is authorized.",
   "s’ajoute au vôtre. Il est publié d’avance et dépend de deux choses que vous choisissez — le service demandé et le délai avant la signature — jamais du notaire, de sa cote ni du montant que vous offrez. Il vous est affiché avant l’autorisation de votre carte, et c’est celui-là qui vous est facturé.": "is added to yours. It is published in advance and depends on two things you choose — the service requested and the notice before signing — never on the notary, their cote, nor the amount you offer. It is shown to you before your card is authorized, and that is the one you are charged.",
   "Transparence des prix.": "Price transparency.",
@@ -911,14 +1014,12 @@
   "Recevoir mon lien de connexion →": "Get my sign-in link →",
   "Un lien sécurisé arrive par courriel — un clic et vous êtes dans l’espace notaire.": "A secure link lands in your inbox — one click and you are in the notary space.",
   "Vous êtes": "You are",
-  "Je suis client": "I'm a client",
-  "Je suis notaire": "I'm a notary",
+  "Je suis client": "I’m a client",
   "Bientôt": "Coming soon",
   "vous@courriel.ca": "you@email.ca",
   "Comment souhaitez-vous utiliser Nota\u00a0?": "How would you like to use Nota?",
   "Comment souhaitez-vous utiliser Nota ?": "How would you like to use Nota?",
   "Étape 1 sur 2": "Step 1 of 2",
-  "Je cherche un notaire": "I'm looking for a notary",
   "Publiez votre demande — date et prix\u00a0; un notaire la retient.": "Post your request — date and price; a notary takes it on.",
   "Voyez les demandes ouvertes à Québec.": "See the open requests in Québec.",
   "Changer": "Change",
@@ -1068,9 +1169,9 @@
   "Envoyer mon évaluation": "Send my evaluation",
   "Merci ! Votre évaluation est enregistrée.": "Thank you! Your evaluation is saved.",
   "Impossible d’enregistrer l’évaluation. Réessayez.": "Unable to save the evaluation. Please try again.",
-  "Merci — elle aide les prochains clients.": "Thank you — it helps the next clients.",
+  "Merci — elle est transmise à votre notaire. Elle n’est publiée nulle part.": "Thank you — it goes to your notary. It is published nowhere.",
   "Note de 1 à 5": "Rating from 1 to 5",
-  "Votre note, telle que les clients la voient.": "Your rating, as clients see it.",
+  "Votre moyenne, lisible par vous seul. Aucun client ne la voit.": "Your average, readable by you alone. No client sees it.",
   "Vos évaluations": "Your evaluations",
   "notes et commentaires des clients": "clients’ ratings and comments",
   "Vos évaluations, telles que les clients les ont laissées.": "Your evaluations, as clients left them.",
@@ -1289,7 +1390,7 @@
   "Le numéro que vous fournissez (optionnel) est privé : il n’est partagé qu’avec le notaire qui retient votre demande, puis supprimé selon le même calendrier que le reste.": "The number you provide (optional) is private: it is shared only with the notary who takes on your request, then deleted on the same schedule as the rest.",
   "Stockage local.": "Local storage.",
   "Vos coordonnées, vos réponses de dossier, vos préférences (langue, thème) et les liens de suivi de vos offres sont enregistrés dans le stockage local de votre navigateur, sur cet appareil seulement — aucun témoin publicitaire. Effacer les données du site dans votre navigateur les supprime. Nota compte par ailleurs, sans compte ni témoin, les grandes étapes franchies (visite, formulaire, publication) pour mesurer son parcours.": "Your contact details, your file answers, your preferences (language, theme) and the tracking links of your offers are saved in your browser’s local storage, on this device only — no advertising cookie. Clearing the site’s data in your browser removes them. Nota also counts, with no account and no cookie, the main steps taken (visit, form, publication) to measure its funnel.",
-  "Un prix de départ clair par service et deux lignes annoncées d’avance : les honoraires du notaire — ce que vous offrez est ce qu’il reçoit — et le prix du service de Nota, publié d’avance. Aucun frais caché : le barème des frais d’annulation est publié dans les": "A clear starting price per service and two lines announced up front: the notary’s fees — what you offer is what they receive — and Nota’s service price, published in advance. No hidden fees: the cancellation fee schedule is published in the",
+  "Un prix de départ clair par service et deux lignes annoncées d’avance : les honoraires du notaire — ce que vous offrez est ce qu’il reçoit — et le prix du service de Nota, publié d’avance. Aucun frais caché : les plafonds d’indemnité d’annulation sont publiés dans les": "A clear starting price per service and two lines announced up front: the notary’s fees — what you offer is what they receive — and Nota’s service price, published in advance. No hidden fees: the cancellation indemnity caps are published in the",
   "conditions d’utilisation": "terms of use",
   "et le montant exact vous est affiché avant toute confirmation.": "and the exact amount is shown to you before any confirmation.",
   "Votre nom sera visible sur le carnet public, à côté du service, du montant et de la date. Par exemple : « votre nom · refinancement · dans 4 jours ». C’est une information que vous rendez publique.": "Your name will be visible on the public carnet, next to the service, the amount and the date. For example: “your name · refinancing · in 4 days”. This is information you are making public.",
@@ -1334,17 +1435,108 @@
 };
   var RULES = compileRules([
   {
+    "pattern": "^La connexion avec (.+) arrive bient\u00f4t\\. D\u2019ici l\u00e0, votre courriel suffit\\.$",
+    "flags": "",
+    "replacement": "Signing in with $1 is coming soon. Until then, your email is enough."
+  },
+  // ADR 0041 — les phrases de l'indemnité COMPOSÉES avec leur cadre : le toast
+  // (« Offre annulée. … ») et le reçu (« Vous avez annulé cette offre. … Si vous
+  // changez d’avis… »). Une règle ne traduit pas ce qu'elle capture : chaque
+  // assemblage a la sienne.
+  {
+    "pattern": "^Offre annulée\\. Votre notaire peut réclamer, sur justification et dans les ([0-9]+) jours, une indemnité allant jusqu’à (.+?) \\((.+?) du montant convenu\\)\\. Rien n’est retenu pour l’instant\\.$",
+    "flags": "",
+    "replacement": "Offer cancelled. Your notary may claim, with a written reason and within $1 days, an indemnity of up to $2 ($3 of the agreed amount). Nothing is kept for now."
+  },
+  {
+    "pattern": "^Vous avez annulé cette offre\\. Votre notaire peut réclamer, sur justification et dans les ([0-9]+) jours, une indemnité allant jusqu’à (.+?) \\((.+?) du montant convenu\\)\\. Rien n’est retenu pour l’instant\\. Si vous changez d’avis, choisissez une nouvelle date au carnet\\.$",
+    "flags": "",
+    "replacement": "You cancelled this offer. Your notary may claim, with a written reason and within $1 days, an indemnity of up to $2 ($3 of the agreed amount). Nothing is kept for now. If you change your mind, pick a new date on the carnet."
+  },
+  {
+    "pattern": "^Vous avez annulé cette offre\\. Une indemnité de (.+?), justifiée par le notaire, a été retenue sur la somme réservée pour cet acte et lui est versée en dédommagement\\. Si vous changez d’avis, choisissez une nouvelle date au carnet\\.$",
+    "flags": "",
+    "replacement": "You cancelled this offer. A $1 indemnity, justified by the notary, was kept from the amount held for this act and is paid to them as compensation. If you change your mind, pick a new date on the carnet."
+  },
+  {
+    "pattern": "^Vous avez annulé cette offre\\. Une indemnité de (.+?), justifiée par le notaire, a été portée à la carte que vous avez enregistrée et lui est versée en dédommagement\\. Si vous changez d’avis, choisissez une nouvelle date au carnet\\.$",
+    "flags": "",
+    "replacement": "You cancelled this offer. A $1 indemnity, justified by the notary, was charged to the card you registered and is paid to them as compensation. If you change your mind, pick a new date on the carnet."
+  },
+  {
+    "pattern": "^Vous avez annulé cette offre\\. Votre notaire a réclamé une indemnité de (.+?), mais votre carte a refusé le prélèvement : rien n’a été débité\\. Si vous changez d’avis, choisissez une nouvelle date au carnet\\.$",
+    "flags": "",
+    "replacement": "You cancelled this offer. Your notary claimed a $1 indemnity, but your card declined the charge: nothing was charged. If you change your mind, pick a new date on the carnet."
+  },
+  {
+    "pattern": "^Vous avez annulé cette offre\\. Votre notaire n’a réclamé aucune indemnité : rien n’est retenu\\. Si vous changez d’avis, choisissez une nouvelle date au carnet\\.$",
+    "flags": "",
+    "replacement": "You cancelled this offer. Your notary claimed no indemnity: nothing is kept. If you change your mind, pick a new date on the carnet."
+  },
+  {
+    "pattern": "^Vous avez annulé cette offre\\. Aucune indemnité n’a été réclamée dans le délai : rien n’est retenu\\. Si vous changez d’avis, choisissez une nouvelle date au carnet\\.$",
+    "flags": "",
+    "replacement": "You cancelled this offer. No indemnity was claimed within the period: nothing is kept. If you change your mind, pick a new date on the carnet."
+  },
+  // ADR 0041 — les phrases composées de l'indemnité de résiliation : le délai
+  // (jours), le plafond (montant) et le taux traversent la règle.
+  {
+    "pattern": "^Votre notaire peut réclamer, sur justification et dans les ([0-9]+) jours, une indemnité allant jusqu’à (.+?) \\((.+?) du montant convenu\\)\\. Rien n’est retenu pour l’instant\\.$",
+    "flags": "",
+    "replacement": "Your notary may claim, with a written reason and within $1 days, an indemnity of up to $2 ($3 of the agreed amount). Nothing is kept for now."
+  },
+  {
+    "pattern": "^Votre notaire a réclamé une indemnité de (.+?), mais votre carte a refusé le prélèvement : rien n’a été débité\\.$",
+    "flags": "",
+    "replacement": "Your notary claimed a $1 indemnity, but your card declined the charge: nothing was charged."
+  },
+  {
+    "pattern": "^Une indemnité de (.+?), justifiée par le notaire, a été portée à la carte que vous avez enregistrée et lui est versée en dédommagement\\.$",
+    "flags": "",
+    "replacement": "A $1 indemnity, justified by the notary, was charged to the card you registered and is paid to them as compensation."
+  },
+  {
+    "pattern": "^Une indemnité de (.+?), justifiée par le notaire, a été retenue sur la somme réservée pour cet acte et lui est versée en dédommagement\\.$",
+    "flags": "",
+    "replacement": "A $1 indemnity, justified by the notary, was kept from the amount held for this act and is paid to them as compensation."
+  },
+  {
+    "pattern": "^Annuler maintenant permet au notaire de réclamer, sur justification et dans les ([0-9]+) jours, ses frais réels et la valeur du travail accompli, jusqu’à (.+?) \\((.+?) du montant convenu\\)\\.$",
+    "flags": "",
+    "replacement": "Cancelling now lets the notary claim, with a written reason and within $1 days, their real costs and the value of work done, up to $2 ($3 of the agreed amount)."
+  },
+  {
+    "pattern": "^Ensuite, sur justification et dans les ([0-9]+) jours, le notaire peut réclamer ses frais réels et la valeur du travail accompli, jusqu’à :$",
+    "flags": "",
+    "replacement": "Then, with a written reason and within $1 days, the notary may claim their real costs and the value of work done, up to:"
+  },
+  {
+    "pattern": "^(.+?) du montant à ([0-9]+) jours ou moins de la signature$",
+    "flags": "",
+    "replacement": "$1 of the amount at $2 days or less before the signing"
+  },
+  {
+    "pattern": "^(.+?) du montant de ([0-9]+) à ([0-9]+) jours$",
+    "flags": "",
+    "replacement": "$1 of the amount from $2 to $3 days"
+  },
+  {
+    "pattern": "^Indemnité réclamée : (.+?)\\.$",
+    "flags": "",
+    "replacement": "Indemnity claimed: $1."
+  },
+  {
     // ADR 0034 — le prix est une grille : le héros annonce un PLANCHER. La
     // règle est plus spécifique que la suivante et doit donc passer avant,
     // sans quoi « à partir de » resterait en français dans la phrase anglaise.
-    "pattern": "^Le notaire reçoit 100 % de votre offre ; le service Nota, à partir de (.+), se paie seulement à la signature\\.$",
+    "pattern": "^Le notaire reçoit 100 % de votre offre\\. Le service Nota, à partir de (.+), se paie seulement à la signature\\.$",
     "flags": "",
-    "replacement": "The notary receives 100% of your offer; Nota’s service, from $1, is paid only at signing."
+    "replacement": "The notary receives 100% of your offer. Nota’s service, from $1, is paid only at signing."
   },
   {
-    "pattern": "^Le notaire reçoit 100 % de votre offre ; le service Nota, (.+), se paie seulement à la signature\\.$",
+    "pattern": "^Le notaire reçoit 100 % de votre offre\\. Le service Nota, (.+), se paie seulement à la signature\\.$",
     "flags": "",
-    "replacement": "The notary receives 100% of your offer; Nota’s service, $1, is paid only at signing."
+    "replacement": "The notary receives 100% of your offer. Nota’s service, $1, is paid only at signing."
   },
   {
     "pattern": "^Nous vous écrivons à (\\S+) dès qu’un notaire la retient\\.$",
@@ -1664,24 +1856,34 @@
     "replacement": "Hide details — $1"
   },
   {
-    "pattern": "^(.+?) — à partir de (.+?), aucune offre ce mois\\. Retirer ce filtre\\.$",
+    "pattern": "^(.+?), à partir de (.+?), aucune offre ce mois\\. Retirer ce filtre\\.$",
     "flags": "",
-    "replacement": "$1 — from $2, no offers this month. Remove this filter."
+    "replacement": "$1, from $2, no offers this month. Remove this filter."
   },
   {
-    "pattern": "^(.+?) — à partir de (.+?), aucune offre ce mois\\. Afficher le carnet pour cet acte\\.$",
+    "pattern": "^(.+?), à partir de (.+?), aucune offre ce mois\\. Afficher le carnet pour cet acte\\.$",
     "flags": "",
-    "replacement": "$1 — from $2, no offers this month. Show the carnet for this act."
+    "replacement": "$1, from $2, no offers this month. Show the carnet for this act."
   },
   {
-    "pattern": "^(.+?) — à partir de (.+?), médiane des offres (.+?)\\. Retirer ce filtre\\.$",
+    "pattern": "^(.+?), à partir de (.+?), repère du mois (.+?)\\. Retirer ce filtre\\.$",
     "flags": "",
-    "replacement": "$1 — from $2, median offer $3. Remove this filter."
+    "replacement": "$1, from $2, month’s reference $3. Remove this filter."
   },
   {
-    "pattern": "^(.+?) — à partir de (.+?), médiane des offres (.+?)\\. Afficher le carnet pour cet acte\\.$",
+    "pattern": "^(.+?), à partir de (.+?), repère du mois (.+?)\\. Afficher le carnet pour cet acte\\.$",
     "flags": "",
-    "replacement": "$1 — from $2, median offer $3. Show the carnet for this act."
+    "replacement": "$1, from $2, month’s reference $3. Show the carnet for this act."
+  },
+  {
+    "pattern": "^(.+?), à partir de (.+?), pas assez d’offres ce mois pour un repère\\. Retirer ce filtre\\.$",
+    "flags": "",
+    "replacement": "$1, from $2, not enough offers this month for a reference. Remove this filter."
+  },
+  {
+    "pattern": "^(.+?), à partir de (.+?), pas assez d’offres ce mois pour un repère\\. Afficher le carnet pour cet acte\\.$",
+    "flags": "",
+    "replacement": "$1, from $2, not enough offers this month for a reference. Show the carnet for this act."
   },
   {
     "pattern": "^Réserver un (.+)$",
@@ -1833,10 +2035,14 @@
     "flags": "",
     "replacement": "Next availability · $1"
   },
+  // FALLBACK — the bare « acte, à partir de montant » label. It swallows any
+  // longer sentence built on the same frame, so every specific « …, à partir
+  // de …, … » rule MUST sit above this one. (The pulse-row aria-labels sat
+  // below it and reached English clients as « from $2,279, repère du mois ».)
   {
-    "pattern": "^(.+) — à partir de (.+)$",
+    "pattern": "^(.+), à partir de (.+)$",
     "flags": "",
-    "replacement": "$1 — from $2"
+    "replacement": "$1, from $2"
   },
   {
     "pattern": "^Signature (.+?) · le marché se conclut ici entre (.+?) et (.+?)\\.$",
@@ -2332,26 +2538,6 @@
   /* /W3 */
   /* F4 */
   {
-    "pattern": "^(.+?) — à partir de (.+?), repère du mois (.+?)\\. Retirer ce filtre\\.$",
-    "flags": "",
-    "replacement": "$1 — from $2, month’s reference $3. Remove this filter."
-  },
-  {
-    "pattern": "^(.+?) — à partir de (.+?), repère du mois (.+?)\\. Afficher le carnet pour cet acte\\.$",
-    "flags": "",
-    "replacement": "$1 — from $2, month’s reference $3. Show the carnet for this act."
-  },
-  {
-    "pattern": "^(.+?) — à partir de (.+?), pas assez d’offres ce mois pour un repère\\. Retirer ce filtre\\.$",
-    "flags": "",
-    "replacement": "$1 — from $2, not enough offers this month for a reference. Remove this filter."
-  },
-  {
-    "pattern": "^(.+?) — à partir de (.+?), pas assez d’offres ce mois pour un repère\\. Afficher le carnet pour cet acte\\.$",
-    "flags": "",
-    "replacement": "$1 — from $2, not enough offers this month for a reference. Show the carnet for this act."
-  },
-  {
     "pattern": "^Le lien expire dans (\\d+) minutes\\.$",
     "flags": "",
     "replacement": "The link expires in $1 minutes."
@@ -2385,8 +2571,25 @@
       }
     } catch (e) {}
     try { var v = localStorage.getItem(LS_LANG); if (v === 'en' || v === 'fr') return v; } catch (e) {}
+    // Aucun choix posé : c'est le NAVIGATEUR qui décide, dans SON ordre de
+    // préférence. On lit `navigator.languages` en entier (2026-09-06) et non le
+    // seul `navigator.language` : un visiteur dont la première langue n'est ni
+    // le français ni l'anglais — « es-MX, en-US, fr » — recevait le français
+    // parce que la première entrée ne commençait pas par « en », alors que sa
+    // deuxième préférence disait l'anglais. On retient la PREMIÈRE des deux
+    // langues du site qu'il nomme ; s'il n'en nomme aucune, le Québec répond
+    // en français.
     try {
-      if (typeof navigator !== 'undefined' && /^en/i.test(String(navigator.language || ''))) return 'en';
+      if (typeof navigator !== 'undefined') {
+        var pref = navigator.languages && navigator.languages.length
+          ? navigator.languages
+          : [navigator.language];
+        for (var i = 0; i < pref.length; i++) {
+          var tag = String(pref[i] || '');
+          if (/^fr\b/i.test(tag)) return 'fr';
+          if (/^en\b/i.test(tag)) return 'en';
+        }
+      }
     } catch (e) {}
     return 'fr';
   }

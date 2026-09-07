@@ -40,20 +40,20 @@ Vérifiés dans `packages/domain/index.js` (`SERVICES[].prixNotaCents`,
 
 | Service | Honoraires de départ du notaire | Prix de Nota, payé par le client |
 | --- | ---: | ---: |
-| Financement hypothécaire | 1 800 $ | **199 $** |
-| Refinancement hypothécaire | 2 000 $ | **249 $** |
+| Financement hypothécaire | 1 800 $ | **229 $** |
+| Refinancement hypothécaire | 2 000 $ | **279 $** |
 
 Plus la **garantie de date**, sur sa propre ligne, quand le client veut une date
-rapprochée : standard (plus de 14 j) **0 $** · rapide (≤ 14 j) **50 $** ·
-prioritaire (≤ 7 j) **100 $** · urgence (la veille) **200 $** · extrême (le jour
-même) **300 $**. Taxes et débours en sus.
+rapprochée : standard (plus de 14 j) **0 $** · rapide (≤ 14 j) **149 $** ·
+prioritaire (≤ 7 j) **299 $** · urgence (la veille) **449 $** · extrême (le jour
+même) **549 $**. Taxes et débours en sus.
 
 Trois phrases qui disent tout, et qu'on peut mettre telles quelles dans un
 courriel :
 
 > Vos honoraires demeurent entièrement les vôtres : Nota ne prélève rien
 > dessus. Nota facture son propre service au client, séparément, à un prix
-> publié d'avance — 199 $ pour un financement, 249 $ pour un refinancement,
+> publié d'avance — 229 $ pour un financement, 279 $ pour un refinancement,
 > plus une ligne de garantie de date si le client demande une date rapprochée.
 > Le client n'est débité qu'à la signature.
 
@@ -189,7 +189,7 @@ que ça implique concrètement :
   · le montant offert est votre honoraire, en entier : Nota ne prend
     rien dessus, ni pourcentage, ni frais de piste ;
   · Nota facture son propre service au client, à côté et à un prix
-    publié d'avance : 199 $ pour un financement, 249 $ pour un
+    publié d'avance : 229 $ pour un financement, 279 $ pour un
     refinancement, plus une ligne de garantie de date (0 $ au-delà de
     14 jours, jusqu'à 300 $ pour le jour même) ;
   · le client n'est débité qu'à la signature ;

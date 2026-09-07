@@ -1,5 +1,7 @@
 'use strict';
 
+const crypto = require('node:crypto');
+
 /**
  * Reminder scheduler use-case. Pure orchestration over two ports (Repo +
  * Notifier); no framework, no SDK, no clock of its own (injected). Driven daily
@@ -66,10 +68,21 @@ async function runReminders({ repo, notifier, billing, now } = {}) {
     const tz = process.env.NOTA_TIMEZONE;
     const live = open.filter((bid) => isLive(bid) && bid.createdAt);
     // The demands created in the `days` civil days before today (never today's).
+    // `POST /bids` écrit `createdAt` en JOURNÉE nue (`2026-09-06`), parce que
+    // l'horloge du handler est déjà `businessDay`. La relire comme un instant
+    // la placerait à minuit UTC — donc la VEILLE à Québec — et reculerait
+    // chaque demande d'un jour : publiée après le tour de 9 h, elle manquait
+    // le digest du jour puis celui du lendemain, c'est-à-dire tous. Une
+    // journée est donc prise telle quelle ; seul un instant est converti.
+    // (Même garde, mêmes termes, que segments.js:450.)
+    const jourDe = (v) => {
+      const brut = String(v == null ? '' : v);
+      return /^\d{4}-\d{2}-\d{2}$/.test(brut) ? brut : domain.businessDay(brut, tz);
+    };
     const createdSince = (days) => {
       const from = domain.addDays(todayISO, -days);
       return live.filter((bid) => {
-        const day = domain.businessDay(bid.createdAt, tz);
+        const day = jourDe(bid.createdAt);
         return day >= from && day < todayISO;
       });
     };
@@ -204,7 +217,76 @@ async function runReminders({ repo, notifier, billing, now } = {}) {
     }
   }
 
-  return { todayISO, openBids: open.length, due, sent, digest, caution, errors };
+  // --- Les indemnités échues (ADR 0041) --------------------------------------
+  // Un client a annulé un acte retenu près de la signature : le notaire avait
+  // `delaiJours` pour réclamer, en justifiant, une indemnité sous le plafond.
+  // Le délai passé sans réclamation, rien n'est prélevé : la réservation du
+  // client est libérée, l'acte quitte la console, la décision se journalise
+  // et le client est prévenu. Lu sur `listByMonth` (les actes ANNULÉS n'y sont
+  // pas filtrés), sur les mois que la date de signature d'une annulation
+  // tardive peut porter : le mois courant, le précédent, le suivant.
+  const indemnites = { echues: 0 };
+  if (typeof repo.listByMonth === 'function' && typeof repo.update === 'function') {
+    const months = [...new Set([
+      domain.addDays(todayISO, -31).slice(0, 7), todayISO.slice(0, 7), domain.addDays(todayISO, 31).slice(0, 7),
+    ])];
+    const seen = new Set();
+    for (const m of months) {
+      let bids = [];
+      try { bids = await repo.listByMonth(m); } catch (err) { errors.push({ kind: 'indemnite', error: String((err && err.message) || err) }); continue; }
+      for (const bid of bids) {
+        if (!bid || seen.has(bid.id)) continue;
+        seen.add(bid.id);
+        const a = bid.annulation;
+        if (bid.status !== domain.STATUS.ANNULEE || !a || a.statut !== 'en_attente') continue;
+        if (!a.echeanceISO || todayISO <= a.echeanceISO) continue;
+        indemnites.echues += 1;
+        try {
+          const annulation = { ...a, statut: 'expiree', frais: 0, percu: false, justification: null, dedommagement: null, decideeLe: todayISO };
+          const updated = { ...bid, annulation };
+          await repo.update(updated);
+          if (billing && typeof billing.cancelAuthorization === 'function' && bid.paymentIntentId && bid.paymentStatus !== 'void') {
+            await Promise.resolve(billing.cancelAuthorization({ paymentIntentId: bid.paymentIntentId, bidId: bid.id })).catch(() => {});
+          }
+          if (bid.notaryId && typeof repo.removeRetained === 'function') {
+            await repo.removeRetained(bid.notaryId, { id: bid.id, dateISO: bid.dateISO });
+          }
+          await journalIndemniteEchue(repo, updated, todayISO);
+          if (typeof notifier.onIndemniteDecidee === 'function') {
+            let notary = null;
+            try { notary = bid.notaryId && typeof repo.getNotary === 'function' ? await repo.getNotary(bid.notaryId) : null; } catch { /* moins de faits dans le courriel */ }
+            await notifier.onIndemniteDecidee(updated, { notary });
+          }
+        } catch (err) {
+          errors.push({ bidId: bid.id, kind: 'indemnite', error: String((err && err.message) || err) });
+        }
+      }
+    }
+  }
+
+  return { todayISO, openBids: open.length, due, sent, digest, caution, indemnites, errors };
+}
+
+// La même pièce que la route du notaire écrit à sa décision, avec le même
+// acteur « système » que le handler emploie quand personne n'a agi : un
+// registre conservé sept ans ne porte aucun renseignement personnel.
+async function journalIndemniteEchue(repo, bid, todayISO) {
+  const write = typeof repo.appendTxAudit === 'function' ? repo.appendTxAudit : repo.appendAudit;
+  if (typeof write !== 'function') return;
+  const a = bid.annulation || {};
+  try {
+    await write.call(repo, {
+      id: crypto.randomUUID(), ts: new Date().toISOString(), day: todayISO, action: 'annulation_indemnite',
+      adminId: null, email: null, ip: null,
+      acteur: { type: 'systeme', id: null },
+      meta: {
+        bidId: bid.id, dateISO: bid.dateISO, notaryId: bid.notaryId || null, montant: bid.montant,
+        taux: a.taux != null ? a.taux : null, plafond: a.plafond != null ? a.plafond : null,
+        joursAvant: a.joursAvant != null ? a.joursAvant : null, echeanceISO: a.echeanceISO || null,
+        statut: 'expiree', frais: 0,
+      },
+    });
+  } catch { /* l'audit ne bloque jamais le geste quotidien */ }
 }
 
 module.exports = { runReminders };

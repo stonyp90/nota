@@ -122,7 +122,7 @@ sa console sans déploiement) :
 
 | Prix de Nota | `financement` | `refinancement` |
 | --- | ---: | ---: |
-| Ligne de service | **199 $** | **249 $** |
+| Ligne de service | **229 $** | **279 $** |
 
 | Garantie de date, ajoutée à la ligne de Nota | `standard` | `rapide` | `prioritaire` | `urgence` | `extrême` |
 | --- | ---: | ---: | ---: | ---: | ---: |

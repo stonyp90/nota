@@ -98,6 +98,39 @@ data "aws_iam_policy_document" "api_dynamodb" {
   }
 }
 
+# L'identité du compte, pour borner les ARN ci-dessous au compte courant.
+data "aws_caller_identity" "current" {}
+
+# ADR 0046 — le droit de lire LE paramètre de l'assistant, et rien d'autre.
+# Borné à son ARN exact : pas de `ssm:*`, pas de `/nota/*`. Le déchiffrement
+# passe par la clé KMS gérée par AWS pour SSM (`alias/aws/ssm`), que ce compte
+# n'a pas à créer ni à payer.
+data "aws_iam_policy_document" "api_assistant_secret" {
+  count = var.assistant_key_param == "" ? 0 : 1
+  statement {
+    sid       = "ReadAssistantKey"
+    actions   = ["ssm:GetParameter"]
+    resources = ["arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter${var.assistant_key_param}"]
+  }
+  statement {
+    sid       = "DecryptAssistantKey"
+    actions   = ["kms:Decrypt"]
+    resources = ["arn:aws:kms:${var.region}:${data.aws_caller_identity.current.account_id}:key/*"]
+    condition {
+      test     = "StringEquals"
+      variable = "kms:ViaService"
+      values   = ["ssm.${var.region}.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role_policy" "api_assistant_secret" {
+  count  = var.assistant_key_param == "" ? 0 : 1
+  name   = "${var.project_name}-api-assistant-secret"
+  role   = aws_iam_role.api.id
+  policy = data.aws_iam_policy_document.api_assistant_secret[0].json
+}
+
 resource "aws_iam_role_policy" "api_dynamodb" {
   name   = "${var.project_name}-api-dynamodb"
   role   = aws_iam_role.api.id
@@ -137,7 +170,13 @@ resource "aws_lambda_function" "api" {
   filename         = data.archive_file.api.output_path
   source_code_hash = data.archive_file.api.output_base64sha256
 
-  timeout     = 10
+  # ADR 0046 — 30 s, contre 10 auparavant. Une question de la messagerie attend
+  # maintenant la réponse du modèle DANS la requête ; le port coupe de lui-même
+  # à NOTA_ASSISTANT_TIMEOUT_MS (12 s par défaut) et escalade proprement, et ce
+  # plafond-ci est la ceinture qui doit rester au-dessus de la sienne. Un délai
+  # est un plafond, pas un coût : la facturation reste à la milliseconde
+  # employée.
+  timeout     = 30
   memory_size = var.api_memory_size
 
   # Blast-radius cap: hard ceiling on concurrent executions so a traffic spike
@@ -199,6 +238,19 @@ resource "aws_lambda_function" "api" {
       NOTA_FROM_EMAIL     = var.from_email
       NOTA_OPERATOR_EMAIL = var.operator_email
       NOTA_BASE_URL       = var.base_url
+
+      # ADR 0046 — l'assistant de la messagerie. Une clé VIDE laisse la
+      # messagerie exactement comme avant : aucune réponse automatique, chaque
+      # question part par courriel à l'opérateur. Le nom, lui, est ce que
+      # l'assistant dit au visiteur quand il passe la main : « je la passe à
+      # <nom>, qui répond personnellement ».
+      # Le NOM du paramètre SSM, jamais la clé : la valeur d'une variable
+      # Terraform finit en clair dans l'état, qui est local ici. La raison
+      # complète est sur la variable elle-même, dans notifications.tf.
+      NOTA_ASSISTANT_KEY_PARAM  = var.assistant_key_param
+      NOTA_ASSISTANT_MODEL      = var.assistant_model
+      NOTA_ASSISTANT_TIMEOUT_MS = tostring(var.assistant_timeout_ms)
+      NOTA_OPERATOR_NAME        = var.operator_name
       # L'origine où Stripe renvoie le client après le paiement. Le handler
       # retombe désormais sur NOTA_BASE_URL, mais la poser explicitement rend
       # l'intention lisible : sans origine, `POST /bids` refuse franchement

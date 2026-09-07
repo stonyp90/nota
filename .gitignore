@@ -36,3 +36,6 @@ awsenv.sh
 *.log
 .idea/
 .vscode/
+
+# Courriels capturés par la pile locale (createFileMailer) — jamais versionnés.
+.local-mail/

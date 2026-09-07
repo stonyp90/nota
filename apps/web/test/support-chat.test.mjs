@@ -181,16 +181,26 @@ test('#messagerie in the hash opens the widget and is stripped from the address 
   assert.ok(!/messagerie/.test(win.location.hash), 'the hash is consumed');
 });
 
-test('the intro is said once: header sub kept, the empty state is a single line with the expected response time', async () => {
+test('the intro is said once — and it no longer promises a response time (ADR 0046)', async () => {
   const { doc } = await boot();
   $(doc, 'chat-fab').click();
   const panel = $(doc, 'chat-panel');
   const txt = FLAT(panel.textContent);
-  assert.equal(txt.split('Écrivez-nous — on vous répond en direct, ici même.').length - 1, 1, 'the header sub, once');
+  assert.equal(
+    txt.split('L’assistant de Nota répond tout de suite à ce qu’il sait. Une personne reprend le reste, par courriel.').length - 1,
+    1,
+    'the header sub, once'
+  );
   assert.ok(!/Posez votre question — l’équipe Nota vous répond en direct\./.test(txt), 'the duplicated intent is gone');
-  const empty = $(doc, 'chat-log').querySelectorAll('.sup-empty');
-  assert.equal(empty.length, 1, 'one empty-state line');
-  assert.match(FLAT(empty[0].textContent), /en général en quelques minutes pendant les heures d’ouverture/);
+  // LA promesse que l'audit des affirmations a marquée invérifiable : aucune
+  // surface de la messagerie n'annonce plus un délai de réponse.
+  assert.ok(!/quelques minutes/.test(txt), 'no response-time promise anywhere in the panel');
+  assert.ok(!/heures d’ouverture/.test(txt), 'no opening-hours promise either');
+  // Le vide de 96 px a été remplacé par des questions qui mènent quelque part.
+  assert.equal($(doc, 'chat-log').querySelectorAll('.sup-empty').length, 0, 'no floating empty-state line');
+  const chips = $(doc, 'chat-suggest').querySelectorAll('.sup-chip');
+  assert.equal(chips.length, D.SUPPORT_QUESTIONS_SUGGEREES.length, 'one starter per domain suggestion');
+  assert.equal($(doc, 'chat-suggest').hidden, false, 'the starters are visible on a fresh thread');
 });
 
 test('the first message mints a thread, keeps its token on the device, and renders as « Vous » with a time', async () => {
@@ -427,6 +437,7 @@ test('CSS: the visitor’s own bubbles align right through the widget’s OWN ru
   assert.ok(!/(?:background|color|border)[^;}]*(?:#[0-9a-fA-F]{3}|rgb\(|hsl\()/.test(block.replace(/\/\*[\s\S]*?\*\//g, '')),
     'the widget paints tokens only');
   // Square register: no pills, no circles on controls — the ≤ 8px unread dot
-  // is the one round mark the register allows.
-  assert.ok(!/\.sup-(?!fab-dot)[a-z-]*\s*\{[^}]*border-radius:\s*(?:50%|99|999)/.test(block), 'square register: no pills, no circles on controls');
+  // and the ≤ 8px typing dots are the only round marks the register allows.
+  assert.ok(!/\.sup-(?!fab-dot|dot)[a-z-]*\s*\{[^}]*border-radius:\s*(?:50%|99|999)/.test(block), 'square register: no pills, no circles on controls');
+  assert.match(block, /\.sup-dot\s*\{[^}]*width:\s*[1-8]px/, 'the typing dots stay inside the ≤ 8px exemption');
 });

@@ -203,8 +203,8 @@ Ce que c'est, en trois lignes : une place de marché où un client affiche la
 date à laquelle il souhaite signer son acte et le montant qu'il offre, et où
 les notaires retiennent les demandes qui cadrent avec leur horaire. Le
 notaire conserve ses honoraires en entier ; le service de la plateforme est
-facturé au client, séparément et à un prix publié d'avance — 199 $ pour un
-financement hypothécaire, 249 $ pour un refinancement, plus une ligne de
+facturé au client, séparément et à un prix publié d'avance — 229 $ pour un
+financement hypothécaire, 279 $ pour un refinancement, plus une ligne de
 garantie de date lorsque le client demande une date rapprochée. C'est le
 prix de ce que la plateforme rend au client : trouver le notaire, assembler
 le dossier, opérer la transaction. La plateforme ne touche jamais à l'acte
@@ -259,11 +259,11 @@ chiffre près. Source : `packages/domain/index.js`.
 
 | Service | Honoraires de départ du notaire | Prix de Nota, payé par le client |
 | --- | ---: | ---: |
-| Financement hypothécaire | 1 800 $ | **199 $** |
-| Refinancement hypothécaire | 2 000 $ | **249 $** |
+| Financement hypothécaire | 1 800 $ | **229 $** |
+| Refinancement hypothécaire | 2 000 $ | **279 $** |
 
-Garantie de date, sur sa propre ligne : 0 $ au-delà de 14 jours · 50 $ à
-14 jours ou moins · 100 $ à 7 jours ou moins · 200 $ la veille · 300 $ le jour
+Garantie de date, sur sa propre ligne : 0 $ au-delà de 14 jours · 149 $ à
+14 jours ou moins · 299 $ à 7 jours ou moins · 449 $ la veille · 549 $ le jour
 même. Taxes et débours en sus. Le client est débité **à la signature**.
 
 Les deux points à tenir, sans les enjoliver :

@@ -185,7 +185,7 @@ test('GET /notary/bids carries profil (complet/manquants/courriel/alertes), cond
 
   assert.equal(view.conditions.paiement, 'signature');
   assert.deepEqual(view.conditions.tarifNota, view.tarif, 'the same object as `tarif`');
-  assert.deepEqual(view.conditions.annulation, { paliers: cancellationCfg.envDefaults().paliers, beneficiaire: 'notaire', applicable: false });
+  assert.deepEqual(view.conditions.annulation, { paliers: cancellationCfg.envDefaults().paliers, delaiJours: 7, indemnite: true, beneficiaire: 'notaire', applicable: false });
   assert.deepEqual(view.conditions.desistement, { gratuit: true, compte: true });
 
   assert.deepEqual(view.fenetre, ['2026-08', '2026-09', '2026-10', '2026-11']);
@@ -224,7 +224,7 @@ test('each retained entry carries the cancellation forecast for TODAY (null with
   await repo.authorizeBid(b2.id, b2.dateISO, { paymentIntentId: 'pi_' + b2.id, authorizedAt: TODAY });
   assert.equal((await accept(withBilling, t2, b2)).statusCode, 200);
   const v2 = await feed(withBilling, t2);
-  assert.deepEqual(v2.retained[0].annulation, { taux: 0.3, frais: 840, joursAvant: 3 });
+  assert.deepEqual(v2.retained[0].annulation, { taux: 0.3, plafond: 840, joursAvant: 3, delaiJours: 7 });
 });
 
 // --- Ce que le client reçoit : le notaire, joignable ------------------------------

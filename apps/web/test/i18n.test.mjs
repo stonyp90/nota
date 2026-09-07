@@ -175,8 +175,10 @@ function collectDomainStrings(node, out) {
 test('every user-facing domain string has an English translation', () => {
   const out = [];
   // The catalogue, plus the déplacement directions (their radius-row questions
-  // and labels are rendered by the booking sheet, outside SERVICES).
-  collectDomainStrings([D.SERVICES, D.DEPLACEMENT_QUI], out);
+  // and labels are rendered by the booking sheet, outside SERVICES) and the
+  // SECTIONS of the questions (their titles and their reason for being are
+  // rendered by the sheet and the dossier, outside SERVICES too).
+  collectDomainStrings([D.SERVICES, D.DEPLACEMENT_QUI, D.CRITERIA_GROUPS], out);
   I18N.force('en');
   const missing = out
     .map((s) => I18N.normalize(s))
@@ -216,9 +218,9 @@ test('notary-card composed lines (readiness badge, factors) have English transla
   // the frame rule translates "à partir de", and the service NAME inside the
   // capture must come out English as well — a fragment rule, not a leak.
   for (const svc of D.SERVICES) {
-    const en = I18N.tEn(svc.nom + ' — à partir de ' + D.money(svc.prixDepart));
-    assert.ok(en.startsWith(svc.nomEn + ' — from'),
-      `composed act option should open with "${svc.nomEn} — from": ${en}`);
+    const en = I18N.tEn(svc.nom + ', à partir de ' + D.money(svc.prixDepart));
+    assert.ok(en.startsWith(svc.nomEn + ', from'),
+      `composed act option should open with "${svc.nomEn}, from": ${en}`);
   }
 });
 
@@ -314,4 +316,39 @@ test('every French literal app.js renders through el() has an English entry', ()
 
   const missing = francais.filter((s) => needsTranslation(s) && !I18N.covered(I18N.normalize(s)));
   assert.deepEqual(missing, [], 'chaînes composées dans app.js sans entrée anglaise');
+});
+
+// ---------------------------------------------------------------------------
+// 3. Le navigateur choisit la langue de la première visite
+// ---------------------------------------------------------------------------
+// Personne n'a encore touché au sélecteur FR|EN : c'est l'ordre de préférence
+// déclaré par le navigateur qui décide, et le Québec répond en français quand
+// il n'y trouve ni l'une ni l'autre.
+const I18N_SRC = readFileSync(fileURLToPath(new URL('../public/i18n.js', import.meta.url)), 'utf8');
+function langFor(languages, stored) {
+  const mod = { exports: {} };
+  // `navigator` et `localStorage` entrent comme PARAMÈTRES : ils masquent les
+  // globales de Node pour la durée de l'évaluation, sans y toucher.
+  const navigator = { languages, language: languages[0] };
+  const localStorage = { getItem: () => (stored === undefined ? null : stored), setItem: () => {} };
+  new Function('module', 'exports', 'navigator', 'localStorage', I18N_SRC)(mod, mod.exports, navigator, localStorage);
+  return mod.exports.lang();
+}
+
+test('la première visite suit la langue du navigateur, dans son ordre de préférence', () => {
+  assert.equal(langFor(['en-CA', 'fr-CA']), 'en', 'un navigateur anglais ouvre en anglais');
+  assert.equal(langFor(['fr-CA', 'en-CA']), 'fr', 'un navigateur français ouvre en français');
+  assert.equal(langFor(['fr']), 'fr');
+  assert.equal(langFor(['en']), 'en');
+  // La deuxième préférence compte : c'était le bogue (2026-09-06) — seul
+  // navigator.language était lu, donc « es-MX, en-US » recevait le français.
+  assert.equal(langFor(['es-MX', 'en-US', 'fr']), 'en', 'la 2e préférence est lue');
+  assert.equal(langFor(['es-MX', 'fr-CA', 'en']), 'fr', 'et c’est la PREMIÈRE des deux qui gagne');
+  // Ni l'une ni l'autre : le français, la langue du marché.
+  assert.equal(langFor(['de-DE', 'it-IT']), 'fr', 'aucune des deux → français');
+  assert.equal(langFor([]), 'fr', 'un navigateur muet → français');
+  // Un choix déjà posé l'emporte sur le navigateur : le sélecteur FR|EN
+  // survit à un rechargement, sinon il ne servirait à rien.
+  assert.equal(langFor(['en-CA'], 'fr'), 'fr', 'le choix stocké gagne');
+  assert.equal(langFor(['fr-CA'], 'en'), 'en', 'dans les deux sens');
 });

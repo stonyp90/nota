@@ -2,9 +2,9 @@
 Fonctionnalité: Règlement de l'acte — deux lignes, et le notaire garde les siennes
   Le client paie À LA SIGNATURE (ADR 0015), et depuis l'ADR 0031 il paie DEUX
   lignes distinctes : les honoraires offerts au notaire, et le prix du service
-  de Nota. Depuis l'ADR 0034 ce prix est une GRILLE — 249 $ pour un
-  refinancement, plus la garantie de date du palier (100 $ à échéance
-  prioritaire), soit 349 $ ici. Il dépend du SERVICE et du DÉLAI, deux
+  de Nota. Depuis l'ADR 0034 ce prix est une GRILLE, 279 $ pour un
+  refinancement, plus la garantie de date du palier (299 $ à échéance
+  prioritaire, ADR 0038), soit 578 $ ici. Il dépend du SERVICE et du DÉLAI, deux
   dimensions publiées, et de rien qui touche au notaire : ni sa cote, ni son
   historique, ni la valeur de l'acte. La carte du client autorise le TOTAL des
   deux ; la capture, à la signature, est PARTIELLE et porte exactement le
@@ -31,14 +31,14 @@ Fonctionnalité: Règlement de l'acte — deux lignes, et le notaire garde les s
     Et le notaire "notaire@exemple.ca" retient l'offre
 
   Scénario: la carte autorise les deux lignes — l'offre du notaire ET le prix de Nota
-    Alors la carte du client est bloquée pour 3149 $
+    Alors la carte du client est bloquée pour 3378 $
 
   Scénario: l'acte complété capture les deux lignes, et le notaire garde les siennes
     Quand le notaire "notaire@exemple.ca" marque l'acte complété à 2800
     Alors la réponse a le statut 200
-    Et la capture porte 3149 $
+    Et la capture porte 3378 $
     Et le notaire reçoit 2800 $ — la totalité du montant offert
-    Et Nota ne garde que son prix : 349 $
+    Et Nota ne garde que son prix : 578 $
     Et le notaire "notaire@exemple.ca" reçoit le courriel "acte payé"
 
   # ART. 32.1 2° L.N. — « obtient d'un notaire qu'il abandonne une partie de ses
@@ -50,10 +50,10 @@ Fonctionnalité: Règlement de l'acte — deux lignes, et le notaire garde les s
   Scénario: la capture ne prend jamais plus que le règlement — l'écart retourne au client
     Quand le notaire "notaire@exemple.ca" marque l'acte complété à 2000
     Alors la réponse a le statut 200
-    Et la carte du client est bloquée pour 3149 $
-    Et la capture porte 2349 $
+    Et la carte du client est bloquée pour 3378 $
+    Et la capture porte 2578 $
     Et le notaire reçoit 2000 $ — la totalité du montant offert
-    Et Nota ne garde que son prix : 349 $
+    Et Nota ne garde que son prix : 578 $
     Et l'écart de 800 $ entre le blocage et le règlement ne reste pas chez Nota
 
   # Le même mur, pris par l'autre bout : un acte qui vaut plus cher ne fait pas
@@ -62,9 +62,9 @@ Fonctionnalité: Règlement de l'acte — deux lignes, et le notaire garde les s
   Scénario: le prix de Nota ne bouge pas avec la valeur de l'acte
     Quand le notaire "notaire@exemple.ca" marque l'acte complété à 5600
     Alors la réponse a le statut 200
-    Et la capture porte 5949 $
+    Et la capture porte 6178 $
     Et le notaire reçoit 5600 $ — la totalité du montant offert
-    Et Nota ne garde que son prix : 349 $
+    Et Nota ne garde que son prix : 578 $
 
   # ART. 68 C.déont. — « aucune publicité fausse, trompeuse, INCOMPLÈTE ». Le
   # prix de Nota est administrable, et il DOIT l'être : la grille change quand
@@ -75,13 +75,13 @@ Fonctionnalité: Règlement de l'acte — deux lignes, et le notaire garde les s
   # une signature bien réelle ; à la baisse, le prix facturé ne serait plus
   # celui qui a été annoncé.
   Scénario: Nota change sa grille après l'autorisation — le client paie le prix qu'il a lu
-    Étant donné la carte du client est bloquée pour 3149 $
+    Étant donné la carte du client est bloquée pour 3378 $
     Quand Nota porte le prix du service "refinancement" à 399 $
     Et le notaire "notaire@exemple.ca" marque l'acte complété à 2800
     Alors la réponse a le statut 200
-    Et la capture porte 3149 $
+    Et la capture porte 3378 $
     Et le notaire reçoit 2800 $ — la totalité du montant offert
-    Et Nota ne garde que son prix : 349 $
+    Et Nota ne garde que son prix : 578 $
 
   Scénario: la valeur d'acte est bornée — un montant fou meurt avant le registre write-once
     Quand le notaire "notaire@exemple.ca" marque l'acte complété à 46004600
@@ -107,13 +107,13 @@ Fonctionnalité: Règlement de l'acte — deux lignes, et le notaire garde les s
     Quand le notaire "notaire@exemple.ca" marque l'acte complété à 2800
     Et le notaire "notaire@exemple.ca" consulte son relevé
     Alors le relevé porte 1 acte
-    Et la ligne du relevé montre 2800 $ d'honoraires et 349 $ pour Nota
+    Et la ligne du relevé montre 2800 $ d'honoraires et 578 $ pour Nota
     Et aucune ligne du relevé ne porte de taux ni de cote
 
   Scénario: le client voit ce qu'il a payé, ligne par ligne
     Quand le notaire "notaire@exemple.ca" marque l'acte complété à 2800
     Et le client consulte son offre
-    Alors le client voit son acte réglé en deux lignes : 2800 $ et 349 $, soit 3149 $
+    Alors le client voit son acte réglé en deux lignes : 2800 $ et 578 $, soit 3378 $
 
   Scénario: le client évalue son notaire une fois l'acte réglé
     Étant donné le notaire "notaire@exemple.ca" marque l'acte complété à 2800

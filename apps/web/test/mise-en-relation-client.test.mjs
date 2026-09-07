@@ -491,7 +491,7 @@ test('a poll that brings a new message repaints the thread without touching a dr
 // 6. Cancellation disclosure, next step, conditions
 // ---------------------------------------------------------------------------
 
-test('the cancel dialog re-fetches the forecast before it opens and says the fee compensates the notary', async () => {
+test('the cancel dialog re-fetches the forecast before it opens and says the indemnity compensates the notary', async () => {
   let fee = null;
   const { doc, Nota, calls, D } = await boot({
     seed: RETAINED_SEED,
@@ -500,7 +500,7 @@ test('the cancel dialog re-fetches the forecast before it opens and says the fee
   Nota.setTab('profil');
   await wait(40);
   // The cache says « free »; the server now says 10 %. The dialog must show the server.
-  fee = { taux: 0.1, frais: 240, joursAvant: 6 };
+  fee = { taux: 0.1, plafond: 240, joursAvant: 6, delaiJours: 7 };
   calls.length = 0;
   doc.querySelector('.btn-offer-cancel').click();
   await wait(30);
@@ -510,7 +510,8 @@ test('the cancel dialog re-fetches the forecast before it opens and says the fee
   assert.equal(note.hidden, false);
   assert.ok(note.textContent.includes(D.money(240)), note.textContent);
   assert.match(note.textContent, /10 %/);
-  assert.match(note.textContent, /versés au notaire/, 'says where the fee goes: ' + note.textContent);
+  assert.match(note.textContent, /jusqu’à/, 'ADR 0041 — a cap, never a fee: ' + note.textContent);
+  assert.match(note.textContent, /versée au notaire/, 'says where the indemnity goes: ' + note.textContent);
   assert.match(note.textContent, /journée réservée/, note.textContent);
   assert.match($(doc, 'cancel-text').textContent, /Me Anne Roy|Étude Roy/);
 });
@@ -537,7 +538,11 @@ test('the conditions pane states the barème, who receives the fee, and the nota
   assert.match(t, /dédommagement/);
   assert.match(t, /avant toute confirmation|avant de confirmer/);
   assert.match(t, /se désister/);
-  assert.match(t, /barème/);
+  // ADR 0041 — the clause names caps and a justified claim, never a fee fixed in advance.
+  assert.match(t, /plafond/);
+  assert.match(t, /justification/);
+  assert.match(t, /2129/);
+  assert.ok(!/sont retenus/.test(t), 'no fee is « kept » by right any more: ' + t);
 });
 
 // ---------------------------------------------------------------------------

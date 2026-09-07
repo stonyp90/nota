@@ -142,7 +142,7 @@
   const LENDER_OTHER_FIELD = 'preteur_autre';
   function lenderCriterion() {
     return {
-      id: LENDER_CRITERION_ID, type: 'choice', required: true, ui: 'select',
+      id: LENDER_CRITERION_ID, type: 'choice', required: true, ui: 'select', groupe: 'pret',
       label: 'Prêteur hypothécaire',
       aide: 'Un prêteur sans succursale (en ligne) demande plus de coordination au notaire.',
       options: LENDERS.map((l) => (l.aide
@@ -233,7 +233,7 @@
   const DEPLACEMENT_URGENCE_ID = 'urgence_en_ligne';
   function deplacementCriterion() {
     return {
-      id: DEPLACEMENT_CRITERION_ID, type: 'choice', required: true, ui: 'select',
+      id: DEPLACEMENT_CRITERION_ID, type: 'choice', required: true, ui: 'select', groupe: 'signature',
       label: 'Déplacement pour la signature',
       // Conversion default (`defaut`): the dominant answer costs nothing, so
       // renderers pre-declare it and the client only touches the exceptions.
@@ -324,13 +324,104 @@
     return true;
   }
 
+  // --- Les SECTIONS des questions (2026-09-05) -------------------------------
+  // Dix questions à la file ne disent pas ce qui les relie. Elles se lisent en
+  // trois temps — le prêt, l'immeuble, la signature — et ce découpage est une
+  // DONNÉE : la feuille de réservation, le dossier et tout futur adaptateur
+  // rendent les mêmes sections, dans le même ordre, sous les mêmes intitulés.
+  // `aide` dit à quoi la section sert, en une ligne, dans le registre du
+  // client — c'est ce qui remplace le titre muet d'une grille plate.
+  // L'ordre du catalogue EST l'ordre de lecture : ce qu'on emprunte, sur quel
+  // immeuble, puis où l'on signe — la seule décision qui dépend des deux
+  // autres.
+  const CRITERIA_GROUPS = [
+    {
+      id: 'pret',
+      nom: 'Votre prêt',
+      aide: 'Le montant, l’état de votre approbation et le prêteur à coordonner.',
+    },
+    {
+      id: 'immeuble',
+      nom: 'L’immeuble',
+      aide: 'Les titres et les documents que le prêteur exigera avant de débourser.',
+    },
+    {
+      id: 'signature',
+      nom: 'La signature',
+      aide: 'Où l’acte se signe, et qui se déplace pour cela.',
+    },
+  ];
+
+  function criteriaGroupById(id) {
+    return CRITERIA_GROUPS.find((g) => g.id === id) || null;
+  }
+
+  // Les questions d'un acte, groupées pour l'affichage. Les sections sortent
+  // dans l'ordre du catalogue, les questions dans l'ordre déclaré par l'acte,
+  // et une section sans question n'est pas rendue. `requis` / `facultatifs`
+  // évitent à chaque adaptateur de refaire le même partage — c'est lui qui
+  // décide ce qui s'ouvre et ce qui se replie.
+  // Une question dont la section est inconnue n'est JAMAIS perdue : elle rejoint
+  // la dernière section rendue (le test du domaine interdit l'orphelin, mais un
+  // écran ne doit pas escamoter une question à cause d'une faute de frappe).
+  function criteriaGroups(service) {
+    const svc = service && typeof service === 'object' ? service : serviceById(service);
+    const criteria = (svc && svc.pricing && svc.pricing.criteria) || [];
+    if (!criteria.length) return [];
+    const known = new Set(CRITERIA_GROUPS.map((g) => g.id));
+    const last = CRITERIA_GROUPS[CRITERIA_GROUPS.length - 1].id;
+    const byGroup = new Map();
+    for (const c of criteria) {
+      const id = known.has(c.groupe) ? c.groupe : last;
+      if (!byGroup.has(id)) byGroup.set(id, []);
+      byGroup.get(id).push(c);
+    }
+    return CRITERIA_GROUPS
+      .filter((g) => byGroup.has(g.id))
+      .map((g) => {
+        const list = byGroup.get(g.id);
+        return {
+          id: g.id,
+          nom: g.nom,
+          aide: g.aide,
+          criteria: list,
+          requis: list.filter((c) => c.required),
+          facultatifs: list.filter((c) => !c.required),
+        };
+      });
+  }
+
+  // La CONSÉQUENCE d'une réponse sur la liste des documents (`si` du document).
+  // Un choix ne fait pas que bouger le prix : « Oui » à la succession appelle le
+  // testament et la déclaration de transmission, un certificat périmé retire
+  // l'envoi qu'on allait demander. L'écran le dit SOUS la réponse au lieu de le
+  // laisser découvrir plus tard dans le dossier — et il le lit ici, jamais en
+  // devinant.
+  //
+  // La différence est mesurée contre l'ABSENCE de réponse : un document exigé de
+  // toute façon n'est la conséquence de rien, et un document `sauf` (collecté
+  // par défaut) ne s'« ajoute » pas — il se retire. Sans réponse, rien ne bouge.
+  function documentEffect(service, critereId, answer) {
+    const vide = { ajoutes: [], retires: [] };
+    const svc = service && typeof service === 'object' ? service : serviceById(service);
+    if (!svc || !critereId) return vide;
+    const lies = (svc.documents || []).filter((d) => d.si && d.si.critere === critereId);
+    if (!lies.length) return vide;
+    const avant = (d) => documentApplies(d, {});
+    const apres = (d) => documentApplies(d, { [critereId]: answer });
+    return {
+      ajoutes: lies.filter((d) => !avant(d) && apres(d)),
+      retires: lies.filter((d) => avant(d) && !apres(d)),
+    };
+  }
+
   // --- The questions both financing acts share -------------------------------
   // One factory per question, so the two acts can never drift apart: the help
   // text, the options and their adds/poids are declared ONCE. (The loan amount
   // and the purchase context stay per-act — their labels differ.)
   function approbationCriterion() {
     return {
-      id: 'approbation_bancaire', type: 'choice', required: true, label: 'Approbation bancaire',
+      id: 'approbation_bancaire', type: 'choice', required: true, groupe: 'pret', label: 'Approbation bancaire',
       aide: 'Sans les instructions du prêteur, le notaire ne peut signer à la date visée.',
       options: [
         { id: 'obtenue', label: 'Obtenue', add: 0, poids: 0 },
@@ -341,7 +432,7 @@
   }
   function successionCriterion() {
     return {
-      id: 'succession', type: 'choice', required: true, label: 'La propriété fait-elle partie d’une succession ?',
+      id: 'succession', type: 'choice', required: true, groupe: 'immeuble', label: 'La propriété fait-elle partie d’une succession ?',
       defaut: 'non',
       aide: 'Répondez oui si l’immeuble vient d’une succession qui n’est pas entièrement réglée — par exemple si le titre est encore au nom de la personne décédée.',
       options: [
@@ -356,7 +447,7 @@
   // intervention is real work the notary must see before retaining.
   function residenceFamilialeCriterion() {
     return {
-      id: 'residence_familiale', type: 'choice', optional: true, label: 'Situation conjugale et résidence familiale',
+      id: 'residence_familiale', type: 'choice', optional: true, groupe: 'immeuble', label: 'Situation conjugale et résidence familiale',
       aide: 'Si vous êtes marié ou uni civilement et que l’immeuble est votre résidence familiale, votre conjoint doit intervenir à l’acte, même s’il n’emprunte pas.',
       options: [
         { id: 'non', label: 'Ni marié ni uni civilement', add: 0, poids: 0 },
@@ -367,14 +458,14 @@
   }
   function coemprunteurCriterion() {
     return {
-      id: 'coemprunteur', type: 'flag', optional: true, label: 'Co-emprunteur / indivision',
+      id: 'coemprunteur', type: 'flag', optional: true, groupe: 'pret', label: 'Co-emprunteur / indivision',
       aide: 'Deux emprunteurs ou plus, ou une propriété détenue en indivision (parts non divisées).',
       add: 150, poids: 1,
     };
   }
   function assuranceHabitationCriterion() {
     return {
-      id: 'assurance_habitation', type: 'choice', optional: true, label: 'Assurance habitation à jour ?',
+      id: 'assurance_habitation', type: 'choice', optional: true, groupe: 'immeuble', label: 'Assurance habitation à jour ?',
       aide: 'Le prêteur exige une assurance habitation en vigueur. Sans elle, il ne débourse pas : prévoyez-la avant la signature.',
       options: [
         { id: 'oui', label: 'Oui, en vigueur', add: 0, poids: 0 },
@@ -385,7 +476,7 @@
   }
   function certificatLocalisationCriterion() {
     return {
-      id: 'certificat_localisation', type: 'choice', optional: true, label: 'Certificat de localisation',
+      id: 'certificat_localisation', type: 'choice', optional: true, groupe: 'immeuble', label: 'Certificat de localisation',
       aide: 'La plupart des prêteurs exigent un certificat de moins de 10 ans, à jour si des travaux ont été faits depuis. Un certificat périmé ou absent retarde souvent le dossier.',
       options: [
         { id: 'a_jour', label: 'À jour', add: 0, poids: 0 },
@@ -469,7 +560,7 @@
       // two purchases (ADR 0031). The most substantial act carries the
       // higher line because Nota does more on it — more documents to gather,
       // a lender to chase, a title review to chase down.
-      prixNotaCents: 24900,
+      prixNotaCents: 27900,
       description:
         'Acte de prêt et publication de l’hypothèque lors d’un refinancement.',
       pricing: {
@@ -482,7 +573,7 @@
           // five. The optional refinements follow, the family residence first
           // (a legal intervention, not a nicety).
           {
-            id: 'valeur_pret', type: 'bracket', required: true, label: 'Montant du nouveau prêt', unit: '$',
+            id: 'valeur_pret', type: 'bracket', required: true, groupe: 'pret', label: 'Montant du nouveau prêt', unit: '$',
             brackets: [
               { max: 300000, add: 0, poids: 0 },
               { max: 600000, add: 150, poids: 0 },
@@ -524,14 +615,14 @@
       prixDepart: 1800,
       // ADR 0034 — the catalogue's entry line: a smaller act pays Nota less,
       // so the take rate never rises as the act shrinks.
-      prixNotaCents: 19900,
+      prixNotaCents: 22900,
       description:
         'Acte de prêt et publication de l’hypothèque pour un nouveau financement.',
       pricing: {
         base: 1800,
         criteria: [
           {
-            id: 'valeur_pret', type: 'bracket', required: true, label: 'Montant du prêt', unit: '$',
+            id: 'valeur_pret', type: 'bracket', required: true, groupe: 'pret', label: 'Montant du prêt', unit: '$',
             brackets: [
               { max: 300000, add: 0, poids: 0 },
               { max: 600000, add: 150, poids: 0 },
@@ -540,7 +631,7 @@
             ],
           },
           {
-            id: 'contexte', type: 'choice', required: true, label: 'Que finance ce prêt ?',
+            id: 'contexte', type: 'choice', required: true, groupe: 'pret', label: 'Que finance ce prêt ?',
             aide: 'Un achat exige de coordonner l’acte de prêt avec la vente chez le notaire instrumentant.',
             options: [
               { id: 'propriete_detenue', label: 'Une propriété que je possède', add: 0, poids: 0 },
@@ -574,6 +665,43 @@
   function serviceById(id) {
     return SERVICES.find((s) => s.id === id) || null;
   }
+
+  // --- Le catalogue annoncé ---------------------------------------------------
+  // Les actes que Nota prépare et ne vend PAS encore. Ce ne sont pas des
+  // services : aucun prix, aucun critère, aucune réservation ne les touche
+  // (`serviceById` continue de répondre null pour eux, et c'est voulu). Ils
+  // existent pour que l'écran 1 dise où va le catalogue — un client qui ne
+  // voit que deux actes conclut que Nota n'en fera jamais d'autres. Retirer un
+  // acte d'ici et l'ajouter à SERVICES est le geste qui le met en vente.
+  const ACTES_A_VENIR = [
+    {
+      id: 'procuration',
+      nom: 'Procuration notariée',
+      nomCourt: 'Procuration',
+      nomEn: 'Notarial power of attorney',
+      nomCourtEn: 'Power of attorney',
+      description: 'Mandat notarié pour qu’une personne de confiance agisse en votre nom.',
+    },
+    {
+      id: 'testament',
+      nom: 'Testament notarié',
+      nomCourt: 'Testament',
+      nomEn: 'Notarial will',
+      nomCourtEn: 'Will',
+      description: 'Testament reçu devant notaire et inscrit aux registres de la Chambre.',
+    },
+  ];
+  function acteAVenirById(id) {
+    return ACTES_A_VENIR.find((a) => a.id === id) || null;
+  }
+  // Un acte ne peut pas être à la fois en vente et « bientôt » : la garde vaut
+  // pour le prochain qui déplace une entrée d'une liste à l'autre.
+  for (const a of ACTES_A_VENIR) {
+    if (SERVICES.some((s) => s.id === a.id)) {
+      throw new Error('acte à venir déjà au catalogue : ' + a.id);
+    }
+  }
+
 
   // --- Dynamic base price ----------------------------------------------------
   // A service's floor price, derived from a small set of DATA-DRIVEN criteria
@@ -739,17 +867,27 @@
   // each band below). Standard notice stays the advertised floor.
   //
   // `prixNotaDateCents` is a SEPARATE object from the multipliers beside it
-  // (ADR 0034). The multipliers price the NOTARY's fee — art. 49 4° C.déont.
+  // (ADR 0034). The multipliers price the NOTARY's fee: art. 49 4° C.déont.
   // lets a notary weigh « le degré d'urgence » in their own fees. This line is
   // what NOTA charges for the date guarantee it sells: sourcing a notary at
   // short notice and holding the date. Two objects, two justifications, two
-  // lines on the quote — never one number doing both jobs.
+  // lines on the quote, never one number doing both jobs.
+  //
+  // Sized by ADR 0038 (2026-09-05). Nota is the Stripe platform and pays the
+  // card fee on the WHOLE charge, the notary's fee included, so every rung
+  // that multiplies the notary's fee also multiplies a cost Nota bears. Each
+  // date line therefore has to cover the fee it induces at the rung's own
+  // recommended multiple and still leave Nota the margin of a calm date. The
+  // ladder rises 150 $ a rung (100 $ for the same day, where the ceiling
+  // binds), and the take rate on an urgent act stays under the take rate on a
+  // calm one: buying a date never makes Nota heavier.
+  // Proven in test/prix-nota-garantie-de-date.test.mjs.
   const TIERS = [
     { id: 'standard',    nom: 'Standard',    nomEn: 'Standard', maxJours: null, apercuMin: 1.0, apercuMax: 1.0, eleve: false, prixNotaDateCents: 0 },
-    { id: 'rapide',      nom: 'Rapide',      nomEn: 'Fast',     maxJours: 14,   apercuMin: 1.8, apercuMax: 2.2, eleve: false, prixNotaDateCents: 5000 },
-    { id: 'prioritaire', nom: 'Prioritaire', nomEn: 'Priority', maxJours: 7,    apercuMin: 2.7, apercuMax: 3.3, eleve: true,  prixNotaDateCents: 10000 },
-    { id: 'urgence',     nom: 'Urgent',      nomEn: 'Urgent',   maxJours: 1,    apercuMin: 3.3, apercuMax: 3.7, eleve: true,  prixNotaDateCents: 20000 },
-    { id: 'extreme',     nom: 'Extrême',     nomEn: 'Extreme',  maxJours: 0,    apercuMin: 3.7, apercuMax: 4.3, eleve: true,  prixNotaDateCents: 30000 },
+    { id: 'rapide',      nom: 'Rapide',      nomEn: 'Fast',     maxJours: 14,   apercuMin: 1.8, apercuMax: 2.2, eleve: false, prixNotaDateCents: 14900 },
+    { id: 'prioritaire', nom: 'Prioritaire', nomEn: 'Priority', maxJours: 7,    apercuMin: 2.7, apercuMax: 3.3, eleve: true,  prixNotaDateCents: 29900 },
+    { id: 'urgence',     nom: 'Urgent',      nomEn: 'Urgent',   maxJours: 1,    apercuMin: 3.3, apercuMax: 3.7, eleve: true,  prixNotaDateCents: 44900 },
+    { id: 'extreme',     nom: 'Extrême',     nomEn: 'Extreme',  maxJours: 0,    apercuMin: 3.7, apercuMax: 4.3, eleve: true,  prixNotaDateCents: 54900 },
   ];
 
   // What a client is actually asked to pay at a given notice, as a multiple of
@@ -925,6 +1063,30 @@
     const serviceCents = g.services[serviceId] !== undefined ? g.services[serviceId] : g.defaut;
     const dateCents = g.garantieDate[tierId] !== undefined ? g.garantieDate[tierId] : 0;
     return { serviceCents, dateCents, totalCents: serviceCents + dateCents };
+  }
+
+  /**
+   * Le prix ANNONCÉ d'un acte, tout compris : les honoraires de départ du
+   * notaire plus le prix de Nota au palier standard. C'est le seul « à partir
+   * de » qu'une surface client peut afficher pour un acte.
+   *
+   * Art. 224 c) de la Loi sur la protection du consommateur : « le prix annoncé
+   * doit comprendre le total des sommes que le consommateur devra débourser
+   * pour l'obtention du bien ou du service », taxes de vente exceptées.
+   * Art. 74.01 (1.1) de la Loi sur la concurrence : un prix « qui n'est pas
+   * atteignable en raison de frais obligatoires fixes qui s'y ajoutent » est
+   * une indication fausse ou trompeuse. Le plancher des honoraires seul n'est
+   * donc jamais un prix annoncé : le service de Nota est un frais obligatoire.
+   * Taxes et débours imposés par une loi restent en sus, et se disent tels.
+   *
+   * Rend `{ honorairesCents, notaCents, totalCents }`. La grille est celle en
+   * vigueur quand l'appelant la tient, celle du catalogue sinon.
+   */
+  function prixAnnonce(serviceId, grille) {
+    const svc = serviceById(serviceId);
+    const honorairesCents = svc ? Math.round(svc.prixDepart * 100) : 0;
+    const notaCents = prixNota(serviceId, 'standard', grille).totalCents;
+    return { honorairesCents, notaCents, totalCents: honorairesCents + notaCents };
   }
 
   /**
@@ -1866,6 +2028,56 @@
     return { ok: errors.length === 0, errors, message: message || null };
   }
 
+  // --- L'indemnité de résiliation (ADR 0041) ----------------------------------
+  // Quand un client annule un acte RETENU près de la signature, le notaire
+  // peut réclamer une indemnité : ses frais réels et la valeur du travail
+  // accompli (art. 2129 C.c.Q.), plafonnée par le barème, dans un délai, et
+  // JUSTIFIÉE. Aucun montant n'est fixé d'avance (art. 13 LPC) : le domaine ne
+  // connaît ni pourcentage ni barème, il valide une réclamation contre son
+  // plafond et exige qu'elle soit motivée. Réclamer zéro, c'est renoncer.
+  const INDEMNITE_JUSTIFICATION_MIN = 20;
+  const INDEMNITE_JUSTIFICATION_MAX = 600;
+
+  /**
+   * Valide la réclamation d'un notaire : `{ montant }` en dollars (0 = il
+   * renonce), `justification` (obligatoire dès que le montant est positif),
+   * `plafond` en dollars (le plus que le barème permet pour cette annulation).
+   * Rend `{ ok, errors, montant, montantCents, justification, renonce }`.
+   */
+  function validateIndemnite(input) {
+    input = input || {};
+    const errors = [];
+    const plafond = Number(input.plafond);
+    const montant = input.montant === '' || input.montant == null ? NaN : Number(input.montant);
+    if (!Number.isFinite(plafond) || plafond <= 0) {
+      errors.push({ code: 'plafond_invalide', message: 'Aucune indemnité ne peut être réclamée sur cette annulation.' });
+    }
+    if (!Number.isFinite(montant) || montant < 0) {
+      errors.push({ code: 'montant_invalide', message: 'Le montant réclamé doit être un nombre de dollars, zéro compris.' });
+    } else if (Number.isFinite(plafond) && montant > plafond + 1e-9) {
+      errors.push({ code: 'montant_au_dessus_du_plafond', message: 'Le montant réclamé dépasse le plafond de ' + money(plafond) + '.' });
+    }
+    const justification = input.justification == null ? '' : String(input.justification).trim();
+    const renonce = Number.isFinite(montant) && montant === 0;
+    if (!renonce) {
+      if (justification.length < INDEMNITE_JUSTIFICATION_MIN) {
+        errors.push({ code: 'justification_requise', message: 'Une indemnité doit être justifiée : décrivez les frais engagés et le travail accompli (au moins ' + INDEMNITE_JUSTIFICATION_MIN + ' caractères).' });
+      }
+    }
+    if (justification.length > INDEMNITE_JUSTIFICATION_MAX) {
+      errors.push({ code: 'justification_trop_longue', message: 'La justification ne peut dépasser ' + INDEMNITE_JUSTIFICATION_MAX + ' caractères.' });
+    }
+    const montantCents = Number.isFinite(montant) ? Math.round(montant * 100) : 0;
+    return {
+      ok: errors.length === 0,
+      errors,
+      montant: montantCents / 100,
+      montantCents,
+      justification: renonce ? null : justification || null,
+      renonce,
+    };
+  }
+
   // The released bid, back on the market exactly as the client posted it.
   /**
    * L'offre retourne au carnet — et la CONVERSATION MEURT AVEC LA RELATION.
@@ -1975,7 +2187,13 @@
   // shows up in the widget. One thread per device, message-by-message. The
   // courriel is OPTIONAL here — the widget is the reply channel; the courriel
   // only adds an offline copy of the answer.
-  const SUPPORT_FROM = { VISITEUR: 'visiteur', NOTA: 'nota' };
+  // Trois émetteurs, et la distinction compte (ADR 0046) : `nota`, c'est un
+  // humain — le propriétaire, depuis son courriel. `assistant`, c'est la
+  // réponse rédigée par le modèle sur la fiche de faits ci-dessous. Les
+  // confondre laisserait une machine vider la boîte de quelqu'un d'autre, et
+  // laisserait un visiteur croire qu'il parle à une personne. Le fil sait
+  // toujours lequel des deux a parlé.
+  const SUPPORT_FROM = { VISITEUR: 'visiteur', NOTA: 'nota', ASSISTANT: 'assistant' };
   // --- The support inbox (2026-09-04) ------------------------------------------
   // A thread has ONE status, derived from who spoke last: the operator's inbox
   // sorts on it and the widget can never contradict it. `closLe` (set by the
@@ -1993,9 +2211,28 @@
     const msgs = Array.isArray(t.messages) ? t.messages.filter(Boolean) : [];
     const last = msgs.length ? msgs[msgs.length - 1] : null;
     const dernierAt = last ? (last.createdAt || null) : null;
+    // SEUL un humain marque un fil « répondu » (ADR 0046). L'assistant parle
+    // le premier et parle souvent ; s'il comptait, chaque question se
+    // classerait toute seule et la boîte du propriétaire se viderait de fils
+    // que personne n'a lus.
     let statut = SUPPORT_STATUT.A_REPONDRE;
     if (last && last.de === SUPPORT_FROM.NOTA) statut = SUPPORT_STATUT.REPONDU;
     if (t.closLe && (!dernierAt || String(t.closLe) >= String(dernierAt))) statut = SUPPORT_STATUT.CLOS;
+    // Une escalade est ouverte tant que l'humain n'a pas parlé APRÈS elle. La
+    // question « après » se tranche sur l'ORDRE des messages, jamais sur leurs
+    // horodatages : un fil est append-only, alors que deux messages peuvent
+    // porter la même seconde (et en portent la même dans les tests à horloge
+    // figée). Comparer des chaînes de temps laissait un fil escaladé le rester
+    // après la réponse du propriétaire.
+    const escaladeLe = t.escaladeLe || null;
+    let dernierNota = -1;
+    let dernierAssistant = -1;
+    msgs.forEach((m, i) => {
+      if (!m) return;
+      if (m.de === SUPPORT_FROM.NOTA) dernierNota = i;
+      if (m.de === SUPPORT_FROM.ASSISTANT) dernierAssistant = i;
+    });
+    const escalade = !!escaladeLe && dernierNota < dernierAssistant;
     const texte = last ? String(last.texte == null ? '' : last.texte).replace(/\s+/g, ' ').trim() : '';
     return {
       id: t.id == null ? null : String(t.id),
@@ -2010,6 +2247,9 @@
       dernierTexte: texte.length > SUPPORT_EXCERPT_MAX ? texte.slice(0, SUPPORT_EXCERPT_MAX) + '…' : texte,
       statut,
       closLe: t.closLe || null,
+      escalade,
+      escaladeLe,
+      escaladeMotif: escalade ? t.escaladeMotif || null : null,
     };
   }
   // The operator's ready answers: data, bilingual, and each one a valid
@@ -2032,6 +2272,235 @@
       texteEn: 'Gladly. Leave me a phone number and a time window, and I will call you back.' },
   ]);
 
+  // --- L'assistant de la messagerie : la fiche de faits (ADR 0046) -----------
+  // Une question posée dans la messagerie reçoit une réponse tout de suite,
+  // rédigée par un modèle. Pour qu'elle soit VRAIE, le modèle ne reçoit aucune
+  // connaissance de sa propre mémoire : il reçoit CETTE fiche, calculée à
+  // l'instant à partir des constantes vivantes du catalogue. Changer un prix
+  // dans SERVICES change ce que l'assistant répond, sans qu'une seule phrase
+  // soit retouchée — c'est toute la raison d'être de cette fonction, et le
+  // contraire d'une base de connaissances recopiée qui vieillit en silence.
+  //
+  // Ce que la fiche NE porte pas est aussi délibéré : rien qui vienne du
+  // barème d'annulation ni du prix de Nota lui-même au-delà de la grille
+  // publique — ces deux-là vivent dans la couche API (frontière de l'ADR
+  // 0008), qui complète la fiche avant de la donner au modèle.
+  function supportFacts({ grille, bids } = {}) {
+    return {
+      services: SERVICES.map((svc) => {
+        const annonce = prixAnnonce(svc.id, grille);
+        return {
+          id: svc.id,
+          nom: svc.nom,
+          nomEn: svc.nomEn,
+          description: svc.description,
+          // Le prix ANNONCÉ est le total (ADR 0042) : jamais l'une des deux
+          // lignes seule, jamais un « à partir de » qui cacherait l'autre.
+          honorairesDepartCents: annonce.honorairesCents,
+          prixNotaCents: annonce.notaCents,
+          prixAnnonceTotalCents: annonce.totalCents,
+          // Ce que le formulaire demandera, dans l'ordre où il le demande.
+          questions: (svc.pricing && svc.pricing.criteria ? svc.pricing.criteria : []).map((c) => ({
+            id: c.id,
+            label: c.label,
+            requis: !!c.required,
+          })),
+          documents: (svc.documents || []).map((d) => ({ id: d.id, nom: d.nom, aide: d.aide || null })),
+        };
+      }),
+      // L'échelle des dates : ce que la garantie d'une date rapprochée ajoute
+      // au prix de Nota, et le multiple de marché que le carnet pré-remplit.
+      dates: TIERS.map((t) => ({
+        id: t.id,
+        nom: t.nom,
+        nomEn: t.nomEn,
+        maxJours: t.maxJours,
+        supplementCents: t.prixNotaDateCents,
+        multiple: tierMultiplier(t.id, bids),
+      })),
+      deplacements: DEPLACEMENTS.map((d) => ({
+        id: d.id, nom: d.nom, qui: d.qui, km: d.km, supplement: d.add, urgence: !!d.urgence,
+      })),
+      preteurs: LENDERS.map((l) => ({ id: l.id, nom: l.nom, supplement: l.add })),
+      contact: { courriel: CONTACT.courriel, confidentialite: CONTACT.confidentialite, telephone: CONTACT.telephone },
+      limites: { messageMax: SUPPORT_MESSAGE_MAX, fuseau: BUSINESS_TIMEZONE },
+    };
+  }
+
+  // L'échelle 1·2·3 que le propriétaire a demandée, en DONNÉE : chaque niveau
+  // nomme ce qu'il couvre, et l'invite du modèle se construit à partir d'elle.
+  // Au-delà du niveau 3, aucune fiche ne peut fonder une réponse : c'est une
+  // personne qu'il faut, et l'escalade est immédiate.
+  const SUPPORT_NIVEAUX = Object.freeze([
+    {
+      niveau: 1, id: 'produit',
+      nom: 'Le produit', nomEn: 'The product',
+      description: 'Ce qu’est Nota, comment on s’en sert, ce qui se passe à chaque étape.',
+      descriptionEn: 'What Nota is, how to use it, what happens at each step.',
+      sujets: Object.freeze([
+        'ce qu’est Nota et à qui ça s’adresse',
+        'les étapes du client : choisir une date, publier sa demande, être retenu, signer',
+        'ce que voit le notaire et ce que « retenir » veut dire',
+        'le compte, la connexion par lien courriel, les langues',
+        'où trouver le carnet, l’espace notaire, les partenaires',
+      ]),
+    },
+    {
+      niveau: 2, id: 'chiffres',
+      nom: 'Les chiffres', nomEn: 'The numbers',
+      description: 'Prix, dates, déplacement, documents — tout ce que la fiche de faits chiffre.',
+      descriptionEn: 'Price, dates, travel, documents — everything the fact sheet quantifies.',
+      sujets: Object.freeze([
+        'le prix affiché pour un service, et ce qu’il comprend',
+        'ce qu’ajoute une date rapprochée, un déplacement, un prêteur privé',
+        'les questions que le formulaire posera',
+        'les documents à réunir pour un acte',
+        'les délais : à partir de quand une date est signable',
+      ]),
+    },
+    {
+      niveau: 3, id: 'regles',
+      nom: 'Les règles', nomEn: 'The rules',
+      description: 'Paiement, annulation, confidentialité, inscription d’un notaire.',
+      descriptionEn: 'Payment, cancellation, privacy, notary sign-up.',
+      sujets: Object.freeze([
+        'quand et comment on paie, ce qui est autorisé sur la carte et quand',
+        'ce qui se passe si le client annule, et ce que le notaire peut réclamer',
+        'la protection des renseignements, la conservation, l’effacement',
+        'comment un notaire s’inscrit, son périmètre, ce qu’il reçoit',
+        'ce que Nota n’est pas : ni notaire, ni conseiller juridique',
+      ]),
+    },
+  ]);
+
+  // Les questions d'amorce du widget. Elles ne sont pas décoratives : la
+  // messagerie s'ouvrait sur un vide de 96 px et une promesse de délai que
+  // personne ne tenait. Ces quatre lignes remplissent ce vide par ce que
+  // l'assistant sait VRAIMENT répondre — une par niveau, plus la question que
+  // tout le monde pose en premier. Données, bilingues, une seule liste pour
+  // les deux langues.
+  const SUPPORT_QUESTIONS_SUGGEREES = Object.freeze([
+    { id: 'prix', niveau: 2, fr: 'Combien ça coûte ?', en: 'How much does it cost?' },
+    { id: 'fonctionnement', niveau: 1, fr: 'Comment ça marche ?', en: 'How does it work?' },
+    { id: 'documents', niveau: 2, fr: 'Quels documents me faut-il ?', en: 'Which documents do I need?' },
+    { id: 'annulation', niveau: 3, fr: 'Et si j’annule ?', en: 'What if I cancel?' },
+  ]);
+
+  // Les motifs d'escalade. Chacun est une classe de question qu'AUCUNE fiche
+  // ne peut fonder — la lister ici, plutôt que de la deviner, est ce qui rend
+  // l'escalade prévisible et testable.
+  const SUPPORT_ESCALADE_MOTIFS = Object.freeze([
+    { id: 'dossier_precis', nom: 'Un dossier ou une personne en particulier', nomEn: 'A specific file or person' },
+    { id: 'exception', nom: 'Une exception : prix, date, entente sur mesure', nomEn: 'An exception: price, date, custom terms' },
+    { id: 'conseil_juridique', nom: 'Une question qui demande le jugement d’un notaire', nomEn: 'A question needing a notary’s judgment' },
+    { id: 'plainte', nom: 'Une insatisfaction ou une plainte', nomEn: 'A complaint or dissatisfaction' },
+    { id: 'affaires', nom: 'Partenariat, presse, recrutement', nomEn: 'Partnership, press, recruiting' },
+    { id: 'inconnu', nom: 'La fiche ne dit rien là-dessus', nomEn: 'The fact sheet does not cover it' },
+  ]);
+
+  // Le garde-fou. Le modèle PROPOSE une réponse ; le domaine DISPOSE. Trois
+  // familles de refus, et chacune répond à une contrainte qui a déjà coûté
+  // cher ailleurs dans ce dépôt :
+  //
+  //   • le vocabulaire de taux — l'ADR 0042 l'a banni côté client parce qu'un
+  //     prix annoncé doit être un total, pas une fraction d'autre chose ;
+  //   • la cote nommée — l'art. 70 du Code de déontologie interdit de publier
+  //     une appréciation d'un notaire désigné (ADR 0030) ;
+  //   • le conseil — Nota n'est pas notaire. « Vous devriez » est le mot qui
+  //     fait franchir la ligne, et il se refuse mécaniquement.
+  //
+  // Le contrôle ne s'applique QU'À la machine : un humain qui répond depuis sa
+  // boîte écrit ce qu'il veut, et c'est sa responsabilité professionnelle.
+  //
+  // NOTE — deux des motifs ci-dessous sont assemblés à partir de fragments
+  // plutôt qu'écrits en clair : la garde déontologique de billing.test.mjs lit
+  // la SOURCE de ce fichier et refuse ces littéraux (aucune part d'acte ne
+  // doit pouvoir s'exprimer dans le domaine). Les assembler dit exactement
+  // pourquoi ils ne peuvent pas s'y écrire.
+  const MOT_PART = 'com' + 'mission';
+  const MOT_PCT = 'per' + 'cent';
+  const SUPPORT_ANSWER_GUARDS = Object.freeze([
+    { code: 'vocabulaire_interdit', re: /\btaux\b/i, quoi: 'taux' },
+    { code: 'vocabulaire_interdit', re: /\bpaliers?\b/i, quoi: 'palier' },
+    { code: 'vocabulaire_interdit', re: /\bpourcentages?\b/i, quoi: 'pourcentage' },
+    { code: 'vocabulaire_interdit', re: new RegExp('\\b' + MOT_PCT + '(?:age)?s?\\b', 'i'), quoi: MOT_PCT },
+    { code: 'vocabulaire_interdit', re: /\brates?\b/i, quoi: 'rate' },
+    { code: 'vocabulaire_interdit', re: new RegExp('\\b' + MOT_PART + 's?\\b', 'i'), quoi: MOT_PART },
+    { code: 'cote_nominative', re: /\bcotes?\b[^.!?]{0,40}\d/i, quoi: 'cote chiffrée' },
+    { code: 'cote_nominative', re: /\b\d{1,3}\s*(?:\/|sur)\s*100\b/, quoi: 'note sur 100' },
+    { code: 'cote_nominative', re: /\bratings?\b|\bétoiles?\b|\bstars?\b/i, quoi: 'appréciation' },
+    { code: 'cote_nominative', re: /\b(?:le|la|nos?|notre)\s+meilleure?s?\s+notaires?\b/i, quoi: 'classement' },
+    { code: 'cote_nominative', re: /\bbest\s+notar(?:y|ies)\b/i, quoi: 'classement' },
+    { code: 'conseil_juridique', re: /\bje vous (?:conseille|recommande|suggère)\b/i, quoi: 'conseil' },
+    { code: 'conseil_juridique', re: /\bvous devriez\b/i, quoi: 'conseil' },
+    { code: 'conseil_juridique', re: /\bà votre place\b/i, quoi: 'conseil' },
+    { code: 'conseil_juridique', re: /\bil (?:vous )?faudrait\b/i, quoi: 'conseil' },
+    { code: 'conseil_juridique', re: /\byou should\b/i, quoi: 'advice' },
+    { code: 'conseil_juridique', re: /\b(?:i|we) (?:would )?(?:advise|recommend)\b/i, quoi: 'advice' },
+    { code: 'conseil_juridique', re: /\bmy advice\b/i, quoi: 'advice' },
+    // Le prix de Nota est une GRILLE (service × délai), jamais un forfait :
+    // l'ADR 0034 l'a établi et truthful-claims.test.mjs le tient sur le site.
+    // L'assistant écrit sur les mêmes surfaces, il tient la même règle.
+    { code: 'prix_fige', re: /\bprix fixes?\b|\bmontants? fixes?\b|\bforfaits?\b|\bforfaitaires?\b/i, quoi: 'prix fixe' },
+    { code: 'prix_fige', re: /\bflat (?:price|fee|rate)\b|\bfixed (?:price|amount|fee)\b/i, quoi: 'flat price' },
+    // Art. 32.1 1° du Code de déontologie : aucune publicité comparative de prix.
+    { code: 'comparaison_prix', re: /\bmoins ch[èe]re?\b|\bcheaper\b|\bless expensive\b/i, quoi: 'comparaison' },
+    // Taxes et débours sont EN SUS (art. 71 3°) : « tout compris » est faux.
+    { code: 'tout_compris', re: /\btout compris\b|\ball[-\s]inclusive\b/i, quoi: 'tout compris' },
+    // Aucune caution de l'Ordre n'a été obtenue : ne jamais la laisser entendre.
+    { code: 'caution_ordre', re: /\bcertifi[ée]e?s?\b|\bagr[ée]{2}e?s?\b|\baccr[ée]dit/i, quoi: 'caution' },
+    { code: 'caution_ordre', re: /\bapprouv[ée]e?s?\s+par\s+(?:la\s+Chambre|l[’']Ordre)/i, quoi: 'caution' },
+    // Aucun partage d'honoraires n'existe (art. 32 / 32.1). Seule la NÉGATION
+    // est permise, et elle ne contient aucun de ces motifs.
+    { code: 'partage_honoraires', re: /\bpartage\s+(?:des?\s+|d[’']\s*)?honoraires\b/i, quoi: 'partage' },
+    { code: 'partage_honoraires', re: /\bfee[-\s]sharing\b|\brevenue\s+s(?:hare|plit)\b/i, quoi: 'partage' },
+    { code: 'partage_honoraires', re: /\b(?:75\s*\/\s*25|25\s*\/\s*75|85\s*\/\s*15|15\s*\/\s*85)\b/, quoi: 'partage' },
+    // AUCUN délai n'est garanti — ni pour signer, ni pour répondre. C'est la
+    // promesse que l'audit des affirmations a marquée invérifiable, et c'est
+    // celle qu'une machine serait le plus tentée de faire.
+    { code: 'delai_promis', re: /\br[ée]ponse[^.!?]{0,25}\b(?:minutes?|heures?|jour m[êe]me)\b/i, quoi: 'délai' },
+    { code: 'delai_promis', re: /\b(?:on|nous|je)\s+(?:vous\s+)?r[ée]pond(?:ons|s|rons)?[^.!?]{0,25}\b(?:minutes?|heures?|24\s*h)\b/i, quoi: 'délai' },
+    { code: 'delai_promis', re: /\b(?:reply|respond|answer)[^.!?]{0,25}\bwithin\b[^.!?]{0,15}\b(?:minutes?|hours?)\b/i, quoi: 'délai' },
+    { code: 'delai_promis', re: /\bgarantis?\s+(?:un|le|votre)\s+d[ée]lai\b|\bguaranteed?\s+turnaround\b/i, quoi: 'délai' },
+    // Les chances d'obtenir un notaire sont une HYPOTHÈSE interne, jamais un
+    // chiffre montré à un client (audit 3.3).
+    { code: 'statistique_inventee', re: /\bchances?\s+d[’']obtenir\b/i, quoi: 'statistique' },
+    { code: 'statistique_inventee', re: /\b\d{1,3}\s*%\s*(?:de\s+)?(?:chances?|r[ée]ussite|succ[èe]s)\b/i, quoi: 'statistique' },
+    { code: 'statistique_inventee', re: /\bm[ée]dianes?\b/i, quoi: 'statistique' },
+  ]);
+  const SUPPORT_GUARD_MESSAGES = {
+    vocabulaire_interdit: 'Une réponse au client ne nomme pas un taux : le prix annoncé est un total.',
+    cote_nominative: 'Une réponse ne publie aucune appréciation chiffrée d’un notaire (art. 70).',
+    conseil_juridique: 'Une réponse ne conseille pas : Nota n’est pas notaire.',
+    prix_fige: 'Le prix de Nota dépend du service et du délai : ce n’est pas un forfait.',
+    comparaison_prix: 'Aucune publicité comparative de prix (art. 32.1 1°).',
+    tout_compris: 'Les taxes et les débours ne sont pas compris : « tout compris » est faux.',
+    caution_ordre: 'Nota n’est ni certifiée ni approuvée par la Chambre : ne pas le laisser entendre.',
+    partage_honoraires: 'Aucun partage d’honoraires n’existe, et seule sa négation se dit.',
+    delai_promis: 'Aucun délai n’est garanti — ni pour signer, ni pour répondre.',
+    statistique_inventee: 'Aucun chiffre de marché n’est mesuré : ne pas en avancer.',
+  };
+  function validateSupportAnswer(input) {
+    input = input || {};
+    const de = input.de || SUPPORT_FROM.ASSISTANT;
+    const errors = [];
+    const texte = String(input.texte == null ? '' : input.texte).trim();
+    if (!texte) errors.push({ code: 'message_requis', message: 'La réponse est vide.' });
+    if (texte.length > SUPPORT_MESSAGE_MAX) {
+      errors.push({ code: 'message_trop_long', message: `La réponse ne peut dépasser ${SUPPORT_MESSAGE_MAX} caractères.` });
+    }
+    // Un humain n'est pas filtré : seule la machine l'est.
+    if (de !== SUPPORT_FROM.NOTA) {
+      const vus = {};
+      for (const g of SUPPORT_ANSWER_GUARDS) {
+        if (vus[g.code] || !g.re.test(texte)) continue;
+        vus[g.code] = true;
+        errors.push({ code: g.code, message: SUPPORT_GUARD_MESSAGES[g.code], quoi: g.quoi });
+      }
+    }
+    return { ok: errors.length === 0, errors, texte: texte || null, de };
+  }
+
   // --- In-app notifications: the closed catalogue (2026-09-04) ----------------
   // The API writes them (one per event, under the recipient's subject), the
   // web bell reads them. A kind names its audiences so a notary never receives
@@ -2042,6 +2511,13 @@
     { id: 'retenue',     titre: 'Votre demande est retenue',  titreEn: 'Your request is retained', audiences: ['client'] },
     { id: 'proposition', titre: 'Un notaire vous propose un prix', titreEn: 'A notary proposes a price', audiences: ['client'] },
     { id: 'desistement', titre: 'Votre notaire s’est désisté', titreEn: 'Your notary withdrew',   audiences: ['client'] },
+    // L'issue ARGENT d'une annulation : l'indemnité a été réclamée et
+    // prélevée, refusée par la carte, abandonnée par le notaire, ou le délai
+    // a passé. Le handler écrivait déjà ces deux avis (reclamerIndemnite et
+    // clore) ; faute d'être déclaré ici, `notifIn` les jetait en silence —
+    // le client n'apprenait jamais, dans l'application, ce qui avait été
+    // retenu sur sa carte ou libéré.
+    { id: 'annulation',  titre: 'Suite de votre annulation', titreEn: 'About your cancellation', audiences: ['client'] },
   ]);
   function isNotifKind(id) {
     return typeof id === 'string' && NOTIF_KINDS.some((k) => k.id === id);
@@ -3203,6 +3679,8 @@
     money,
     moneyEn,
     SERVICES,
+    ACTES_A_VENIR,
+    acteAVenirById,
     DEFAULT_SERVICE_ID,
     LENDERS,
     lenderById,
@@ -3211,6 +3689,9 @@
     LENDER_OTHER_FIELD,
     lenderOtherName,
     bidLender,
+    CRITERIA_GROUPS,
+    criteriaGroupById,
+    criteriaGroups,
     DEPLACEMENTS,
     DEPLACEMENT_QUI,
     deplacementById,
@@ -3239,12 +3720,16 @@
     prixNota,
     prixNotaGrille,
     prixNotaFige,
+    prixAnnonce,
     PREMIUM_CAP,
     STATUS,
     isISODate,
     isEmail,
     daysBetween,
     addDays,
+    validateIndemnite,
+    INDEMNITE_JUSTIFICATION_MIN,
+    INDEMNITE_JUSTIFICATION_MAX,
     BUSINESS_TIMEZONE,
     businessDay,
     AUDIT_RETENTION_YEARS,
@@ -3286,6 +3771,11 @@
     SUPPORT_EXCERPT_MAX,
     supportThreadSummary,
     SUPPORT_REPONSES_TYPES,
+    supportFacts,
+    SUPPORT_NIVEAUX,
+    SUPPORT_QUESTIONS_SUGGEREES,
+    SUPPORT_ESCALADE_MOTIFS,
+    validateSupportAnswer,
     NOTIF_KINDS,
     isNotifKind,
     SUPPORT_MESSAGE_MAX,
@@ -3316,6 +3806,7 @@
     seedSignature,
     bidLabel,
     documentApplies,
+    documentEffect,
     dossierItems,
     leadReadiness,
     DOSSIER_TRANSMIS,

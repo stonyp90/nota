@@ -119,6 +119,17 @@ function notaryLoginPK(cid) {
 }
 const NOTARY_LOGIN_SK = 'NOTARY_LOGIN';
 
+// Le défi du LIEN CLIENT — même forme que celui du notaire, préfixe distinct
+// pour qu'un défi client et un défi notaire ne puissent jamais se confondre.
+// Il prouve la BOÎTE, rien de plus : ce qu'on rend ensuite, ce sont les jetons
+// par offre que le client avait déjà. Aucune portée « personne » n'existe.
+//
+//   PK = CLIENT_LOGIN#<cid>   SK = CLIENT_LOGIN   (lien à usage unique ; TTL)
+function clientLoginPK(cid) {
+  return 'CLIENT_LOGIN#' + String(cid);
+}
+const CLIENT_LOGIN_SK = 'CLIENT_LOGIN';
+
 function notaryRlPK(scope, key) {
   return `NRL#${scope}#${String(key).trim().toLowerCase()}`;
 }
@@ -816,6 +827,8 @@ module.exports = {
   UNSUB_SK,
   notaryLoginPK,
   NOTARY_LOGIN_SK,
+  clientLoginPK,
+  CLIENT_LOGIN_SK,
   notaryRlPK,
   NOTARY_RL_SK,
   declinePK,

@@ -120,52 +120,58 @@ test('§3.2 + 2.16 — the radius row asks the direction’s question, bands che
   assert.deepEqual([...dep.querySelectorAll('.crit-dep-km .seg-btn')].map((b) => b.id), order('notaire'));
 });
 
-test('§1.1 — static caveats under the rows: few notaries travel far, online signing only with those who accept it', async () => {
+test('§1.1 — the two caveats ride the question’s line as tips: few notaries travel far, online signing only with those who accept it', async () => {
+  // The sentences used to print themselves UNDER the control, so choosing a
+  // direction grew the déplacement row and pushed the rest of the dialog down.
+  // They are info tips on the question’s own line now: both always in the DOM
+  // (static text, never a live count), only the chosen direction’s one on.
   const { doc, D } = await boot();
   await openRefinancement(doc);
   const dep = row(doc, 'deplacement');
-  const far = dep.querySelector('.crit-caveat[data-caveat="notaire"]');
-  const online = dep.querySelector('.crit-caveat[data-caveat="urgence"]');
+  const far = dep.querySelector('.itip.crit-caveat[data-caveat="notaire"]');
+  const online = dep.querySelector('.itip.crit-caveat[data-caveat="urgence"]');
   assert.ok(far && online, 'both caveats exist in the DOM — static text, never a live count');
-  assert.equal(far.hidden, true, 'quiet while the client travels');
-  assert.equal(online.hidden, true);
+  assert.ok(far.closest('.crit-head'), 'on the question’s own line, not a line of its own');
+  assert.equal(far.dataset.on, 'false', 'quiet while the client travels');
+  assert.equal(online.dataset.on, 'false');
 
   $(doc, 'crit-deplacement__qui_notaire').click();
   await wait(10);
-  assert.equal(far.hidden, false);
+  assert.equal(far.dataset.on, 'true');
   const maxKm = Math.max(...D.DEPLACEMENTS.filter((d) => d.qui === 'notaire').map((d) => d.km));
   assert.match(far.textContent, /Peu de notaires se déplacent/);
   assert.ok(far.textContent.includes(maxKm + ' km'), 'names the far band, from the domain');
   assert.match(far.textContent, /visible que pour eux/);
-  assert.equal(online.hidden, true);
+  assert.equal(online.dataset.on, 'false');
 
   $(doc, 'crit-deplacement__qui_en_ligne').click();
   await wait(10);
-  assert.equal(online.hidden, false);
+  assert.equal(online.dataset.on, 'true');
   assert.match(online.textContent, /n’est offerte que par les notaires qui l’acceptent/);
-  assert.equal(far.hidden, true);
+  assert.equal(far.dataset.on, 'false');
 });
 
 test('§1.9 — bank approval not in hand and a date under two weeks: the note says it is rarely tenable', async () => {
   const { doc } = await boot();
   await openRefinancement(doc, 6);
   const note = () => $(doc, 'o-approbation-note');
-  assert.ok(!note() || note().hidden, 'nothing before an answer');
+  assert.ok(!note() || note().dataset.on === 'false', 'nothing before an answer');
   $(doc, 'crit-approbation_bancaire__en_cours').click();
   await wait(10);
-  assert.ok(note() && !note().hidden, 'the note appears');
+  assert.ok(note() && note().dataset.on === 'true', 'the note appears');
   assert.match(note().textContent, /moins de deux semaines/);
   assert.ok(row(doc, 'approbation_bancaire').contains(note()), 'under the approval question');
+  assert.ok(note().closest('.crit-head'), 'on the question’s own line — the card keeps its height');
   $(doc, 'crit-approbation_bancaire__obtenue').click();
   await wait(10);
-  assert.equal(note().hidden, true, 'approval in hand: no note');
+  assert.equal(note().dataset.on, 'false', 'approval in hand: no note');
   // Same answer, comfortable notice: no note either.
   $(doc, 'crit-approbation_bancaire__non').click();
   await wait(10);
-  assert.equal(note().hidden, false);
+  assert.equal(note().dataset.on, 'true');
   doc.defaultView.Nota.selectDate(addDays(todayISO(), 21));
   await wait(40);
-  assert.equal($(doc, 'o-approbation-note').hidden, true, 'three weeks out: the note stands down');
+  assert.equal($(doc, 'o-approbation-note').dataset.on, 'false', 'three weeks out: the note stands down');
 });
 
 test('§1.11 — the step-2 sub-label names both effects of the answers', async () => {
@@ -199,7 +205,8 @@ test('2.11 — answers older than a month are flagged and the loan amount is ask
   const a = await boot({ seed: { 'nota.dossier.v1': stale } });
   await openRefinancement(a.doc);
   const note = $(a.doc, 'o-criteria-stale');
-  assert.ok(note && !note.hidden, 'the sheet warns');
+  assert.ok(note && note.dataset.on === 'true', 'the sheet warns');
+  assert.ok(note.closest('#o-criteria-step .book-step-lbl'), 'on the step’s own line, never a banner that shoves the questions down');
   assert.match(note.textContent, /Vos réponses précédentes/);
   assert.equal($(a.doc, 'crit-valeur_pret').value, '', 'the amount is asked again');
   assert.equal($(a.doc, 'crit-approbation_bancaire__obtenue').getAttribute('aria-pressed'), 'true', 'the choices stay shown for checking');
@@ -208,7 +215,7 @@ test('2.11 — answers older than a month are flagged and the loan amount is ask
   const b = await boot({ seed: { 'nota.dossier.v1': fresh } });
   await openRefinancement(b.doc);
   const note2 = $(b.doc, 'o-criteria-stale');
-  assert.ok(!note2 || note2.hidden, 'fresh answers: no warning');
+  assert.ok(!note2 || note2.dataset.on === 'false', 'fresh answers: no warning');
   assert.equal($(b.doc, 'crit-valeur_pret').value, '300000');
 });
 

@@ -4,7 +4,7 @@
  *
  *   1. ?ref=CODE capture — normalized once, stored privately, URL cleaned,
  *      never displayed; attached as `parrain` on POST /bids AND on the notary
- *      signup POST /notaries/connect.
+ *      signup POST /notaries/signup.
  *   2. The Partenaires pane — reward amounts ALWAYS from the domain
  *      (D.REFERRAL), partner-type chips from D.REFERRAL.partners, the claim
  *      form's live D.normalizeReferralCode link preview, the POST /partenaires
@@ -190,7 +190,7 @@ test('the captured code rides as `parrain` on the notary signup too', async () =
     if (u.endsWith('/notary/session')) {
       return Promise.resolve(jsonRes(403, { errors: [{ code: 'compte_requis', message: 'Abonnement requis.' }] }));
     }
-    if (u.endsWith('/notaries/connect')) {
+    if (u.endsWith('/notaries/signup')) {
       captured = JSON.parse(opts.body);
       return Promise.resolve(jsonRes(503, { errors: [{ message: 'Inscription indisponible pour le moment.' }] }));
     }
@@ -202,7 +202,7 @@ test('the captured code rides as `parrain` on the notary signup too', async () =
   assert.equal($(doc, 'nc-signup-parrain').value, 'EVEROY', 'the signup field is pre-filled from ?ref');
   $(doc, 'notary-signup-btn').click();
   await wait(20);
-  assert.ok(captured, 'the CTA should call /notaries/connect');
+  assert.ok(captured, 'the CTA should call the FREE door /notaries/signup — never Stripe');
   assert.equal(captured.parrain, 'EVEROY', 'a referred notary credits the partner');
 });
 
@@ -214,7 +214,7 @@ test('a notary can type a spoken referral code on the signup prompt', async () =
     if (u.endsWith('/notary/session')) {
       return Promise.resolve(jsonRes(403, { errors: [{ code: 'compte_requis', message: 'Abonnement requis.' }] }));
     }
-    if (u.endsWith('/notaries/connect')) {
+    if (u.endsWith('/notaries/signup')) {
       captured = JSON.parse(opts.body);
       return Promise.resolve(jsonRes(503, { errors: [{ message: 'Inscription indisponible pour le moment.' }] }));
     }
@@ -225,7 +225,7 @@ test('a notary can type a spoken referral code on the signup prompt', async () =
   $(doc, 'nc-signup-parrain').value = ' marc qc ';
   $(doc, 'notary-signup-btn').click();
   await wait(20);
-  assert.ok(captured, 'the CTA should call /notaries/connect');
+  assert.ok(captured, 'the CTA should call the FREE door /notaries/signup — never Stripe');
   assert.equal(captured.parrain, 'MARCQC', 'typed entry is normalized like a link');
 });
 
@@ -555,18 +555,15 @@ test('the FAQ fills the story column: collapsed disclosures, no literal amounts'
   for (const d of items) {
     assert.ok(d.querySelector('summary'), 'each item is a native disclosure');
   }
-  // Owner (2026-08-27, evening): the first TWO answers greet the reader
-  // open — the column reads as content, not as a wall of closed drawers —
-  // and the rest stay collapsed so the pane stays thin. Two open at once
-  // means NO shared name: the exclusive-accordion idiom would slam the
-  // first shut the moment the second opens.
-  assert.equal(items[0].open, true, 'the first answer is open on arrival');
-  assert.equal(items[1].open, true, 'so is the second');
-  for (const d of items.slice(2)) {
-    assert.equal(d.open, false, 'the rest stay collapsed — the pane stays thin');
-  }
+  // Owner (2026-09-05): « les mettre fermés par défaut ». The 2026-08-27 pass
+  // opened the first two so the column would read as content; in one
+  // full-width column that is no longer needed — the questions ARE the
+  // content, and five closed rows read as a list one can scan. With nothing
+  // open on arrival, the exclusive-accordion idiom becomes correct too: one
+  // answer at a time, so the block never grows past the height of one.
   for (const d of items) {
-    assert.ok(!d.hasAttribute('name'), 'no exclusive accordion — two answers must coexist open');
+    assert.equal(d.open, false, 'every answer is closed on arrival');
+    assert.equal(d.getAttribute('name'), 'pr-faq', 'one answer at a time');
   }
   // The two reward figures render from D.REFERRAL — never a literal in copy.
   assert.ok(!/\d\s*\$/.test(faq.textContent), 'no hardcoded dollar amount in the FAQ');
@@ -614,8 +611,14 @@ test('wide screens densify the story column: steps 3-up, FAQ 2-up', () => {
   // 3-across row and the FAQ to two columns; narrow screens keep the stack.
   assert.match(CSS_SRC, /\.pr-steps\s*\{[^}]*repeat\(3,\s*minmax\(0,\s*1fr\)\)/,
     'the three steps ride one row on wide screens');
-  assert.match(CSS_SRC, /\.pr-faq\s*\{[^}]*repeat\(2,\s*minmax\(0,\s*1fr\)\)/,
-    'the FAQ splits into two columns on wide screens');
+  // 2026-09-05, owner: « je n'aime pas les espaces qu'il laisse ». In two
+  // columns the two open answers fell on the same side and the other column
+  // stayed 180 px tall — ~520 px of emptiness nothing could fill, since the
+  // height depends on what the reader opens. One full-width column leaves no
+  // hole at all.
+  assert.match(CSS_SRC, /\.pr-faq \{ display: flex; flex-direction: column;/,
+    'the FAQ is one full-width column');
+  assert.ok(!/\.pr-faq-col/.test(CSS_SRC), 'the column boxes are gone with it');
 });
 
 test('the page reads hero → story beside the form', async () => {
@@ -775,8 +778,14 @@ test('P1-7: the pane says notaries are excluded before anyone submits (art. 33)'
   const { doc } = await boot();
   const hero = doc.querySelector('#pane-partenaires .pr-hero');
   const line = hero.querySelector('.pr-eligibility');
-  assert.ok(line, 'one line under the reward cards');
-  assert.ok(hero.querySelector('.pr-rewards').compareDocumentPosition(line) & 4, 'it follows the cards');
+  assert.ok(line, 'the caveat is in the hero');
+  // 2026-09-05 — it moved from under the reward cards to under the CTA that
+  // proposes the claim: that is where the decision is taken, and the copy
+  // column was ending 172 px short of the money column.
+  assert.ok(line.closest('.pr-hero-copy'), 'it sits in the copy column');
+  assert.ok($(doc, 'pr-hero-cta').compareDocumentPosition(line) & 4, 'directly under the CTA');
+  assert.ok(line.compareDocumentPosition(doc.querySelector('#pane-partenaires .pr-form-panel')) & 4,
+    'and still said BEFORE the claim form');
   assert.match(line.textContent, /art\. 33/i);
   assert.match(line.textContent, /notaire/);
   const faq = [...doc.querySelectorAll('#pane-partenaires .pr-faq details')]
@@ -862,8 +871,15 @@ test('the hero estimates a year of client referrals from the domain — slider a
   // The figure is computed — never a literal in the markup.
   const at = HTML_SRC.indexOf('id="pr-estimate"');
   assert.ok(at > 0 && !/\d\s*\$/.test(HTML_SRC.slice(at, at + 1600)), 'no hardcoded dollar amount in the estimator markup');
-  // It lives in the hero copy column, under the CTA — the pane stays thin.
-  assert.ok($(doc, 'pr-estimate').closest('.pr-hero-copy'), 'the estimator rides the hero copy');
+  // 2026-09-05 — it moved UNDER the two cards it computes from: the copy
+  // column ran 179 px past the money column, so the right half of the hero
+  // ended on emptiness while « combien de clients par mois ? » sat far from
+  // the two amounts that answer it.
+  const hero = doc.querySelector('#pane-partenaires .pr-hero');
+  const est = $(doc, 'pr-estimate');
+  assert.equal(est.parentNode, hero, 'the estimator is a hero track of its own');
+  assert.ok(hero.querySelector('.pr-rewards').compareDocumentPosition(est) & 4, 'it follows the two reward cards');
+  assert.equal(est.previousElementSibling, hero.querySelector('.pr-rewards'), 'directly under them — the question and its two amounts read as one');
 });
 
 test('a confirmed claim hands the partner a ready-to-send message carrying their link', async () => {

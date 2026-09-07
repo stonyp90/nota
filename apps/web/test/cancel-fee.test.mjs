@@ -1,10 +1,14 @@
 /**
- * ADR 0023 — the late-cancellation fee is DISCLOSED, not discovered.
+ * ADR 0023 / ADR 0041 — the late-cancellation CAP is DISCLOSED, not discovered.
  *
- *   1. GET /client/bid carries `annulation` (taux, frais, joursAvant) when
- *      cancelling the retained offer today would keep a fee: the confirm
- *      dialog must show the amount and the percentage BEFORE the client
- *      confirms.
+ * Since ADR 0041 nothing is taken at cancellation (art. 13 LPC forbids any
+ * amount or percentage fixed in advance): cancelling a retained offer OPENS a
+ * window in which the notary may claim, with a written reason, up to a cap.
+ *
+ *   1. GET /client/bid carries `annulation` (taux, plafond, joursAvant,
+ *      delaiJours) when cancelling the retained offer today would open such a
+ *      window: the confirm dialog must show the cap, the rate and the delay
+ *      BEFORE the client confirms, and say nothing is kept automatically.
  *   2. `annulation: null` → the fee note stays hidden and the wording is the
  *      existing free-cancellation copy.
  *   3. POST /client/bid/cancel answers with bid.annulation when a fee was
@@ -88,7 +92,9 @@ async function boot({ seed = {}, routes = [] } = {}) {
 
 const DATE = addDays(todayISO(), 2); // inside the last-minute fee window
 const OFFER = { id: 'o1', dateISO: DATE, serviceId: 'financement', montant: 2800, clientToken: 'tok-o1' };
-const FEE = { taux: 0.3, frais: 840, joursAvant: 2 };
+const FEE = { taux: 0.3, plafond: 840, joursAvant: 2, delaiJours: 7 };
+// The indemnity file once the notary decided (ADR 0041).
+const PERCUE = { ...FEE, statut: 'percue', frais: 840, justification: 'Journée bloquée, dossier ouvert.', chargeId: 'ch_1', mecanisme: 'capture', percu: true, dedommagement: { notaire: true, verse: true, transferId: 'tr_1' } };
 
 // ADR 0035 — `caution` voyage dans la MÊME réponse que la prévision de frais :
 // le dialogue sait donc s'il existe une somme réservée avant de promettre d'y
@@ -127,7 +133,7 @@ async function bootRetained({ annulation = null, caution, cancelReply } = {}) {
 
 // --- 1. The fee is shown BEFORE the client confirms --------------------------
 
-test('a retained offer inside the fee window discloses amount and rate in the confirm dialog', async () => {
+test('a retained offer inside the window discloses the CAP, the rate and the delay in the confirm dialog — and that nothing is kept automatically', async () => {
   const { doc } = await bootRetained({ annulation: FEE });
   const btn = doc.querySelector('.btn-offer-cancel');
   assert.ok(btn, 'cancel button missing on the retained offer');
@@ -137,11 +143,15 @@ test('a retained offer inside the fee window discloses amount and rate in the co
 
   const fee = $(doc, 'cancel-fee');
   assert.ok(fee, 'the fee note element is missing from the dialog');
-  assert.equal(fee.hidden, false, 'the fee note must be visible when annulation is present');
-  assert.ok(fee.textContent.includes(D.money(840)), 'the amount must use the project money format (NBSP Quebec style): ' + fee.textContent);
-  assert.match(fee.textContent, /30 %/, 'the percentage must be shown: ' + fee.textContent);
-  assert.match(fee.textContent, /somme réservée/, 'the note must say where the fee comes from');
-  assert.match(fee.textContent, /Le reste vous est libéré/, 'a partial capture releases the remainder');
+  assert.equal(fee.hidden, false, 'the note must be visible when a window would open');
+  assert.ok(fee.textContent.includes(D.money(840)), 'the cap must use the project money format: ' + fee.textContent);
+  assert.match(fee.textContent, /30 %/, 'the rate must be shown: ' + fee.textContent);
+  assert.match(fee.textContent, /jusqu’à/, 'the amount is a CAP, said as such: ' + fee.textContent);
+  assert.match(fee.textContent, /dans les 7 jours/, 'the claim delay is disclosed: ' + fee.textContent);
+  assert.match(fee.textContent, /sur justification/, 'a claim needs a reason: ' + fee.textContent);
+  assert.match(fee.textContent, /Rien n’est retenu automatiquement/, 'art. 13 LPC — nothing fixed in advance: ' + fee.textContent);
+  assert.match(fee.textContent, /somme réservée sur votre carte reste en place/, 'the hold stays until the decision: ' + fee.textContent);
+  assert.ok(!/retient des frais/.test(fee.textContent), 'no fee is « kept » at cancellation any more: ' + fee.textContent);
   // The retained wording above the note is untouched.
   assert.match($(doc, 'cancel-text').textContent, /Étude Tremblay/);
 });
@@ -178,12 +188,12 @@ test('an open (never retained) offer shows no fee note either', async () => {
 
 // --- 3. The receipt says what was kept ---------------------------------------
 
-test('a cancellation that kept a fee says so — toast and « Prochaine étape » line', async () => {
-  const kept = { ...FEE, chargeId: 'ch_1', mecanisme: 'capture', percu: true };
+test('a cancellation that opened a claim window says so — toast and « Prochaine étape » line', async () => {
+  const pending = { ...FEE, statut: 'en_attente', frais: 0, percu: false, echeanceISO: addDays(todayISO(), 7), mecanisme: 'capture' };
   const { doc, calls } = await bootRetained({
     annulation: FEE,
     cancelReply: (status) => {
-      status.bid = { ...status.bid, status: 'annulee', annulation: kept };
+      status.bid = { ...status.bid, status: 'annulee', annulation: pending };
       status.annulation = null;
       return jsonRes(200, { bid: status.bid });
     },
@@ -198,14 +208,34 @@ test('a cancellation that kept a fee says so — toast and « Prochaine étape �
 
   const toast = $(doc, 'toast');
   assert.match(toast.textContent, /Offre annulée/, toast.textContent);
-  assert.ok(toast.textContent.includes(D.money(840)), 'the kept amount rides the toast: ' + toast.textContent);
-  assert.match(toast.textContent, /30 %/, 'the kept rate rides the toast: ' + toast.textContent);
+  assert.ok(toast.textContent.includes(D.money(840)), 'the cap rides the toast: ' + toast.textContent);
+  assert.match(toast.textContent, /jusqu’à/, 'as a cap: ' + toast.textContent);
+  assert.match(toast.textContent, /Rien n’est retenu pour l’instant/, toast.textContent);
 
   const row = doc.querySelector('.my-offer[data-id="o1"]');
   assert.equal(row.dataset.status, 'cancelled');
   const next = doc.querySelector('.my-offer-detail[data-for="o1"] .my-offer-next-v');
-  assert.ok(next.textContent.includes(D.money(840)), 'the receipt line mentions what was kept: ' + next.textContent);
-  assert.match(next.textContent, /30 %/, next.textContent);
+  assert.ok(next.textContent.includes(D.money(840)), 'the receipt line names the cap: ' + next.textContent);
+  assert.match(next.textContent, /dans les 7 jours/, next.textContent);
+});
+
+test('once the notary claimed, the receipt says what was kept, and why', async () => {
+  const { doc } = await bootRetained({
+    annulation: FEE,
+    cancelReply: (status) => {
+      status.bid = { ...status.bid, status: 'annulee', annulation: PERCUE };
+      status.annulation = null;
+      return jsonRes(200, { bid: status.bid });
+    },
+  });
+  doc.querySelector('.btn-offer-cancel').click();
+  await wait(40);
+  $(doc, 'cancel-confirm').click();
+  await wait(40);
+  const next = doc.querySelector('.my-offer-detail[data-for="o1"] .my-offer-next-v');
+  assert.ok(next.textContent.includes(D.money(840)), next.textContent);
+  assert.match(next.textContent, /justifiée par le notaire/, 'a kept indemnity is a justified one: ' + next.textContent);
+  assert.match(next.textContent, /retenue sur la somme réservée/, next.textContent);
 });
 
 test('a free cancellation keeps the existing receipt — no fee mentioned anywhere', async () => {
@@ -244,29 +274,34 @@ test('a settled act answers 409 acte_complete — the client is told it can no l
 
 // --- 5. Bilingual: every composed sentence has its English side --------------
 
-test('the fee sentences translate fully to English, money and rate converted — les TROIS situations', () => {
+test('the indemnity sentences translate fully to English, money, rate and delay converted', () => {
   const pct = '30 %';
-  const verses = ' Ils sont versés au notaire en dédommagement de la journée réservée.';
-  const disclose = 'Annuler maintenant retient des frais de ' + D.money(840) + ' (' + pct + ' du montant convenu) sur la somme réservée pour cet acte.' + verses + ' Le reste vous est libéré immédiatement.';
+  const disclose = 'Annuler maintenant permet au notaire de réclamer, sur justification et dans les 7 jours, ses frais réels et la valeur du travail accompli, jusqu’à ' + D.money(840) + ' (' + pct + ' du montant convenu).';
   assert.equal(
     I18N.tEn(disclose),
-    'Cancelling now keeps a fee of $840 (30% of the agreed amount) from the amount held for this act. It is transferred to the notary as compensation for the reserved day. The rest is released to you immediately.'
+    'Cancelling now lets the notary claim, with a written reason and within 7 days, their real costs and the value of work done, up to $840 (30% of the agreed amount).'
   );
-  const discloseCarte = 'Aucune somme n’est réservée pour cet acte. Annuler maintenant porte des frais de ' + D.money(840) + ' (' + pct + ' du montant convenu) à la carte que vous avez enregistrée.' + verses;
-  assert.equal(
-    I18N.tEn(discloseCarte),
-    'No amount is being held for this act. Cancelling now charges a fee of $840 (30% of the agreed amount) to the card you saved. It is transferred to the notary as compensation for the reserved day.'
-  );
-  const toast = 'Offre annulée. Des frais de ' + D.money(840) + ' (' + pct + ') ont été retenus sur la somme réservée pour cet acte et versés au notaire en dédommagement.';
-  assert.equal(I18N.tEn(toast), 'Offer cancelled. A fee of $840 (30%) was kept from the amount held for this act and transferred to the notary as compensation.');
-  const notif = 'Des frais de ' + D.money(1250) + ' (' + pct + ') ont été portés à la carte que vous avez enregistrée et versés au notaire en dédommagement.';
-  assert.equal(I18N.tEn(notif), 'A fee of $1,250 (30%) was charged to the card you saved and transferred to the notary as compensation.');
-  const refuse = 'Des frais de ' + D.money(840) + ' (' + pct + ') s’appliquaient, mais votre carte les a refusés : rien n’a été débité.';
-  assert.equal(I18N.tEn(refuse), 'A fee of $840 (30%) applied, but your card declined it: nothing was charged.');
+  for (const [fr, en] of [
+    ['Rien n’est retenu automatiquement.', 'Nothing is kept automatically.'],
+    ['La somme réservée sur votre carte reste en place jusqu’à sa décision, puis vous est libérée.', 'The amount held on your card stays in place until their decision, then is released to you.'],
+    ['Un montant réclamé serait porté à la carte que vous avez enregistrée.', 'A claimed amount would be charged to the card you registered.'],
+    ['Une indemnité réclamée est versée au notaire en dédommagement de la journée réservée, jamais à Nota.', 'A claimed indemnity is paid to the notary as compensation for the reserved day, never to Nota.'],
+    ['Votre notaire n’a réclamé aucune indemnité : rien n’est retenu.', 'Your notary claimed no indemnity: nothing is kept.'],
+  ]) assert.equal(I18N.tEn(fr), en);
+  const pending = 'Votre notaire peut réclamer, sur justification et dans les 7 jours, une indemnité allant jusqu’à ' + D.money(840) + ' (' + pct + ' du montant convenu). Rien n’est retenu pour l’instant.';
+  assert.equal(I18N.tEn(pending), 'Your notary may claim, with a written reason and within 7 days, an indemnity of up to $840 (30% of the agreed amount). Nothing is kept for now.');
+  const toast = 'Offre annulée. ' + pending;
+  assert.match(I18N.tEn(toast), /^Offer cancelled\. Your notary may claim/);
+  const kept = 'Une indemnité de ' + D.money(840) + ', justifiée par le notaire, a été retenue sur la somme réservée pour cet acte et lui est versée en dédommagement.';
+  assert.equal(I18N.tEn(kept), 'A $840 indemnity, justified by the notary, was kept from the amount held for this act and is paid to them as compensation.');
+  const carte = 'Une indemnité de ' + D.money(1250) + ', justifiée par le notaire, a été portée à la carte que vous avez enregistrée et lui est versée en dédommagement.';
+  assert.equal(I18N.tEn(carte), 'A $1,250 indemnity, justified by the notary, was charged to the card you registered and is paid to them as compensation.');
+  const refuse = 'Votre notaire a réclamé une indemnité de ' + D.money(840) + ', mais votre carte a refusé le prélèvement : rien n’a été débité.';
+  assert.equal(I18N.tEn(refuse), 'Your notary claimed a $840 indemnity, but your card declined the charge: nothing was charged.');
   const receipt = 'Vous avez annulé cette offre. ' + refuse + ' Si vous changez d’avis, choisissez une nouvelle date au carnet.';
   assert.equal(
     I18N.tEn(receipt),
-    'You cancelled this offer. A fee of $840 (30%) applied, but your card declined it: nothing was charged. If you change your mind, pick a new date on the carnet.'
+    'You cancelled this offer. Your notary claimed a $840 indemnity, but your card declined the charge: nothing was charged. If you change your mind, pick a new date on the carnet.'
   );
   // Les phrases SANS frais ne bougent pas.
   assert.equal(
@@ -274,10 +309,6 @@ test('the fee sentences translate fully to English, money and rate converted —
     'You cancelled this offer. If you change your mind, pick a new date on the carnet.'
   );
   assert.equal(I18N.tEn('Offre annulée. Elle a été retirée du carnet.'), 'Offer cancelled. It has been removed from the carnet.');
-  assert.equal(
-    I18N.tEn('Cet acte est signé et réglé — il ne peut plus être annulé.'),
-    'This act is signed and settled — it can no longer be cancelled.'
-  );
   // French mode is the identity.
   I18N.force('fr');
   assert.equal(I18N.t(disclose), disclose);
@@ -285,20 +316,18 @@ test('the fee sentences translate fully to English, money and rate converted —
 
 // --- 6. ADR 0035: le dialogue ne promet jamais une caution qui n'existe pas ---
 
-test('sans caution posée, le dialogue dit une CHARGE sur la carte enregistrée — jamais une retenue sur une réservation', async () => {
+test('sans caution posée, le dialogue dit une CHARGE possible sur la carte enregistrée — jamais une retenue sur une réservation', async () => {
   const { doc } = await bootRetained({ annulation: FEE, caution: { etat: 'enregistree', poseeLe: DATE } });
   doc.querySelector('.btn-offer-cancel').click();
   await wait(40);
   const fee = $(doc, 'cancel-fee');
   assert.equal(fee.hidden, false);
-  assert.match(fee.textContent, /Aucune somme n’est réservée/, fee.textContent);
-  assert.match(fee.textContent, /carte que vous avez enregistrée/, fee.textContent);
-  assert.ok(!/Le reste vous est libéré/.test(fee.textContent), 'il n’y a pas de « reste » à libérer : ' + fee.textContent);
-  assert.ok(!/sur la somme réservée/.test(fee.textContent), 'rien n’était réservé : ' + fee.textContent);
+  assert.match(fee.textContent, /porté à la carte que vous avez enregistrée/, fee.textContent);
+  assert.ok(!/somme réservée sur votre carte reste en place/.test(fee.textContent), 'rien n’était réservé : ' + fee.textContent);
 });
 
 test('le reçu suit le mécanisme que le serveur a réellement employé', async () => {
-  const kept = { ...FEE, chargeId: 'ch_2', mecanisme: 'hors_session', percu: true };
+  const kept = { ...PERCUE, chargeId: 'ch_2', mecanisme: 'hors_session' };
   const { doc } = await bootRetained({
     annulation: FEE,
     caution: { etat: 'enregistree', poseeLe: DATE },
@@ -314,13 +343,13 @@ test('le reçu suit le mécanisme que le serveur a réellement employé', async 
   $(doc, 'cancel-confirm').click();
   await wait(40);
   const next = doc.querySelector('.my-offer-detail[data-for="o1"] .my-offer-next-v');
-  assert.match(next.textContent, /portés à la carte que vous avez enregistrée/, next.textContent);
+  assert.match(next.textContent, /portée à la carte que vous avez enregistrée/, next.textContent);
   assert.ok(!/somme réservée/.test(next.textContent), 'aucune caution n’existait : ' + next.textContent);
-  assert.match($(doc, 'toast').textContent, /portés à la carte/, $(doc, 'toast').textContent);
+  assert.match($(doc, 'toast').textContent, /portée à la carte/, $(doc, 'toast').textContent);
 });
 
-test('des frais REFUSÉS ne se racontent pas comme des frais retenus', async () => {
-  const kept = { ...FEE, chargeId: null, mecanisme: 'hors_session', percu: false };
+test('une réclamation REFUSÉE par la carte ne se raconte pas comme une indemnité retenue', async () => {
+  const kept = { ...PERCUE, statut: 'refusee', chargeId: null, mecanisme: 'hors_session', percu: false, dedommagement: { notaire: true, verse: false, transferId: null } };
   const { doc } = await bootRetained({
     annulation: FEE,
     caution: { etat: 'enregistree', poseeLe: DATE },
@@ -335,7 +364,7 @@ test('des frais REFUSÉS ne se racontent pas comme des frais retenus', async () 
   $(doc, 'cancel-confirm').click();
   await wait(40);
   const next = doc.querySelector('.my-offer-detail[data-for="o1"] .my-offer-next-v');
-  assert.match(next.textContent, /votre carte les a refusés/, next.textContent);
+  assert.match(next.textContent, /votre carte a refusé le prélèvement/, next.textContent);
   assert.match(next.textContent, /rien n’a été débité/, next.textContent);
-  assert.ok(!/versés au notaire/.test(next.textContent), 'rien n’a été versé : ' + next.textContent);
+  assert.ok(!/versée en dédommagement/.test(next.textContent), 'rien n’a été versé : ' + next.textContent);
 });

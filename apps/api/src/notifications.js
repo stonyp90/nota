@@ -367,6 +367,26 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
     // List-Unsubscribe / List-Unsubscribe-Post headers.
     await mailer.send({ to, subject: msg.subject, html: msg.html, text: msg.text, unsubscribeUrl: unsub });
     await repo.markNotificationSent(refId, kind, clock());
+    // « Ce que Nota vous a envoyé » — la section du dossier Loi 25 (droit
+    // d'accès). Le magasin et son lecteur existaient depuis longtemps ; il
+    // manquait CET appel, si bien que le journal était vide en production et
+    // que le dossier remis à un usager affirmait, en creux, qu'on ne lui avait
+    // jamais écrit.
+    //
+    // Ici et pas avant : on consigne ce qui est PARTI. Un envoi refusé
+    // (désabonné, dédoublonné, gabarit éteint) sort plus haut sans rien
+    // écrire, et un envoi en erreur lève avant cette ligne.
+    //
+    // Au mieux : le courriel est le service, le journal en est la trace.
+    // Perdre la trace est grave ; refuser d'écrire au client parce que la
+    // trace échoue l'est davantage.
+    if (typeof repo.appendSubjectEvent === 'function') {
+      try {
+        await repo.appendSubjectEvent({ sujet: to, kind, templateKey: templateKey || null, refId, at: clock() });
+      } catch {
+        /* la trace cède, jamais l'envoi */
+      }
+    }
     return { sent: true, kind, to };
   }
 
@@ -893,6 +913,48 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
   // client always gets a confirmation; when the bid was RETAINED, the notary
   // who held it and the operator are told too — a mise en relation (and maybe
   // money) is being unwound. Idempotent per bid and audience.
+  // ADR 0041 — l'indemnité d'une annulation tardive est DÉCIDÉE : réclamée
+  // (perçue ou refusée par la carte), abandonnée, ou échue. Le client reçoit
+  // la décision et, quand un montant a bougé, la justification qui la fonde ;
+  // le notaire reçoit un accusé quand il a réclamé.
+  async function onIndemniteDecidee(bid, { notary } = {}) {
+    if (!bid || !bid.annulation) return { ok: true, results: [] };
+    const results = [];
+    const annulation = bid.annulation;
+    const reclamee = annulation.statut === 'percue' || annulation.statut === 'refusee';
+    try {
+      if (bid.courriel) {
+        const ctx = bidCtx(bid, { annulation });
+        results.push(
+          await sendOnce({
+            refId: bid.id,
+            kind: reclamee ? 'indemniteReclamee' : 'indemniteClose',
+            to: bid.courriel,
+            templateKey: reclamee ? 'indemniteReclamee' : 'indemniteClose',
+            ctx,
+            buildTemplate: (env) => (reclamee ? emails.indemniteReclamee : emails.indemniteClose)({ ...ctx, ...env }),
+          })
+        );
+      }
+      if (reclamee && notary && notary.email) {
+        const ctx = bidCtx(bid, { annulation });
+        results.push(
+          await sendOnce({
+            refId: bid.id,
+            kind: 'indemniteReclameeNotaire',
+            to: notary.email,
+            templateKey: 'indemniteReclameeNotaire',
+            ctx,
+            buildTemplate: (env) => emails.indemniteReclameeNotaire({ ...ctx, ...env }),
+          })
+        );
+      }
+      return { ok: true, results };
+    } catch (err) {
+      return { ok: false, error: String((err && err.message) || err), results };
+    }
+  }
+
   async function onOfferCancelled(bid, { notary, wasRetained } = {}) {
     if (!bid) return { ok: true, results: [] };
     const results = [];
@@ -1046,22 +1108,45 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
   // Every visitor message lands live with the operator: one email per message
   // (idempotent by message id) whose CTA is the signed reply link. Wired
   // fire-and-forget from POST /support/messages — never throws to the caller.
-  async function onSupportMessage({ message, courriel, replyUrl } = {}) {
+  async function onSupportMessage({ message, courriel, replyUrl, escalade, motif, historique } = {}) {
     if (!message || !message.texte) return { ok: true, results: [] };
     const results = [];
     try {
       if (operatorEmail) {
-        // `email` doubles the courriel so the {{email}} placeholder of a subject
-        // override resolves (the template reads `courriel`).
-        const ctx = { courriel: courriel || null, email: courriel || null, texte: message.texte, replyUrl };
+        // ADR 0046 — deux alertes, pas une. Une ESCALADE est la seule chose
+        // que le propriétaire reçoit encore par défaut : elle porte la raison
+        // et le fil entier, pour qu'une réponse par courriel n'ait pas à
+        // recommencer la conversation. La copie simple reste pour qui veut
+        // lire par-dessus l'épaule de l'assistant (NOTA_ASSISTANT_COPY_ALL).
+        const m = escalade
+          ? (domain.SUPPORT_ESCALADE_MOTIFS || []).find((x) => x.id === motif) || null
+          : null;
+        const qui = { visiteur: 'Visiteur', nota: 'Vous', assistant: 'Assistant' };
+        const ctx = {
+          courriel: courriel || null,
+          // `email` double le courriel pour que le {{email}} d'une surcharge
+          // de sujet se résolve (le gabarit, lui, lit `courriel`).
+          email: courriel || null,
+          texte: message.texte,
+          replyUrl,
+          ...(escalade
+            ? {
+                motif: motif || null,
+                motifNom: m ? m.nom : null,
+                motifNomEn: m ? m.nomEn : null,
+                fil: (historique || []).map((x) => ({ qui: qui[x.de] || x.de, texte: x.texte })),
+              }
+            : {}),
+        };
+        const key = escalade ? 'operatorSupportEscalade' : 'operatorSupportMessage';
         results.push(
           await sendOnce({
             refId: message.id,
-            kind: 'operatorSupportMessage',
+            kind: key,
             to: operatorEmail,
-            templateKey: 'operatorSupportMessage',
+            templateKey: key,
             ctx,
-            buildTemplate: (env) => emails.operatorSupportMessage({ ...ctx, ...env }),
+            buildTemplate: (env) => emails[key]({ ...ctx, ...env }),
           })
         );
       }
@@ -1590,6 +1675,47 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
     }
   }
 
+  // --- Lien d'accès à l'espace client (2026-09-05) --------------------------
+  // Comme le lien notaire et la réclamation partenaire, il CONTOURNE sendOnce :
+  // un lien de vérification est TRANSACTIONNEL — il doit repartir à chaque
+  // demande (un lien neuf, à usage unique) et ne jamais être supprimé par un
+  // désabonnement ou un registre de dédoublonnage. Au mieux : un échec d'envoi
+  // ne change jamais la réponse de la route (qui reste générique de toute façon).
+  async function onClientLoginRequested({ courriel, link, ttlMinutes } = {}) {
+    const to = String(courriel || '').trim().toLowerCase();
+    if (!to || !link) return { ok: true, sent: false };
+    try {
+      const unsub = unsubscribeUrl(to);
+      const msg = emails.clientMagicLink({
+        link,
+        ttlMinutes,
+        baseUrl: base,
+        unsubscribeUrl: unsub,
+      });
+      await mailer.send({ to, subject: msg.subject, html: msg.html, text: msg.text, unsubscribeUrl: unsub });
+      return { ok: true, sent: true, to };
+    } catch (err) {
+      return { ok: false, sent: false, error: String((err && err.message) || err) };
+    }
+  }
+
+  // Rappel du code partenaire (2026-09-05). Transactionnel comme les autres
+  // rappels d'identité : il repart à CHAQUE demande (sinon un partenaire qui
+  // perd son code deux fois reste dehors la seconde), donc il contourne
+  // sendOnce et n'est jamais supprimé par un désabonnement.
+  async function onPartnerCodeReminder({ courriel, code, link } = {}) {
+    const to = String(courriel || '').trim().toLowerCase();
+    if (!to || !code) return { ok: true, sent: false };
+    try {
+      const unsub = unsubscribeUrl(to);
+      const msg = emails.partnerCodeReminder({ code, link, baseUrl: base, unsubscribeUrl: unsub });
+      await mailer.send({ to, subject: msg.subject, html: msg.html, text: msg.text, unsubscribeUrl: unsub });
+      return { ok: true, sent: true, to };
+    } catch (err) {
+      return { ok: false, sent: false, error: String((err && err.message) || err) };
+    }
+  }
+
   // --- Partner code claim (email verification, ADR 0011 fraud-hardening) -----
   // Fired from POST /partenaires (fire-and-forget). Emails the single-use
   // confirmation link on the shared branded template. Like the notary magic link
@@ -1677,6 +1803,7 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
     onDocumentsRequested,
     onCounterOfferAnswered,
     onOfferCancelled,
+    onIndemniteDecidee,
     onActReleased,
     onContactMessage,
     onSupportMessage,
@@ -1691,6 +1818,8 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
     onNotaryConnected,
     onNotarySignedUp,
     onNotaryLoginRequested,
+    onClientLoginRequested,
+    onPartnerCodeReminder,
     onActPaid,
     onAccountEvent,
     sendCampaign,

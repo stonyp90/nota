@@ -18,6 +18,7 @@
  *   2.14 the profile's sector field is named, explained and autocompleted.
  *   2.15 step 2 lays out on a grid (reading order = DOM order), never multicol.
  *   2.18 the sector fields capitalize as you type.
+ *   2.19 the sheet opens with focus on the retained act, not on the ✕.
  *
  * Harness mirrors booking-defaults.test.mjs.
  */
@@ -100,7 +101,10 @@ test('2.4 — a question’s help describes its control', async () => {
   assert.ok(byId(doc, ap.querySelector('[role="group"]').getAttribute('aria-describedby')).includes(help), 'the group is described by it');
 
   const pr = row(doc, 'preteur');
-  const prHelp = pr.querySelector(':scope > .help');
+  // 2026-09-05 : l'aide vit derrière le « i » de la question (un nœud référencé
+  // par aria-describedby est lu même quand il n'est pas affiché), donc on la
+  // cherche dans la ligne, plus seulement à sa racine.
+  const prHelp = pr.querySelector('.help');
   assert.ok(byId(doc, pr.querySelector('.nselect-btn').getAttribute('aria-describedby')).includes(prHelp), 'the select’s visible trigger is described by it');
 
   const lv = row(doc, 'valeur_pret');
@@ -116,12 +120,13 @@ test('2.5 — an awaited required answer is marked invalid and says « Réponse 
   const ap = row(doc, 'approbation_bancaire');
   assert.ok(ap.classList.contains('crit-missing'));
   const note0 = ap.querySelector('.crit-req');
-  assert.ok(!note0 || note0.hidden, 'no inline note on a fresh sheet');
+  assert.ok(note0 && note0.dataset.on === 'false', 'no inline note on a fresh sheet — but its line is already reserved');
   // The client starts the form.
   const lv = $(doc, 'crit-valeur_pret'); lv.value = '300000'; fire(lv, 'input');
   await wait(10);
   const note = ap.querySelector('.crit-req');
-  assert.ok(note && !note.hidden, 'the awaited question now says so inline');
+  assert.ok(note && note.dataset.on === 'true', 'the awaited question now says so inline');
+  assert.equal(note, note0, 'the same reserved line speaks — nothing was inserted, so nothing moved');
   assert.equal(note.textContent, 'Réponse requise');
   assert.equal(ap.querySelector('[role="group"]').getAttribute('aria-invalid'), 'true');
   const pr = row(doc, 'preteur');
@@ -131,12 +136,12 @@ test('2.5 — an awaited required answer is marked invalid and says « Réponse 
   assert.ok(!lvRow.classList.contains('crit-missing'));
   assert.equal(lv.getAttribute('aria-invalid'), null);
   const lvNote = lvRow.querySelector('.crit-req');
-  assert.ok(!lvNote || lvNote.hidden);
+  assert.ok(!lvNote || lvNote.dataset.on === 'false');
   // Answering clears the mark.
   $(doc, 'crit-approbation_bancaire__obtenue').click();
   await wait(10);
   assert.equal(ap.querySelector('[role="group"]').getAttribute('aria-invalid'), null);
-  assert.ok(ap.querySelector('.crit-req').hidden);
+  assert.equal(ap.querySelector('.crit-req').dataset.on, 'false');
 });
 
 test('2.6 — the server’s refusal takes focus and each named question gets a door', async () => {
@@ -225,7 +230,10 @@ test('2.14 — the profile’s sector field is « Secteur postal », explained, 
 });
 
 test('2.15 — step 2 is a grid whose reading order is the DOM order; the déplacement row spans it', async () => {
-  const rule = CSS_SRC.match(/#o-criteria, #o-criteria > \.crit-more \.o-criteria \{[^}]*\}/);
+  // 2026-09-05: the grid moved one level in — the step is now a stack of
+  // SECTIONS (booking-form-sections.test.mjs), and it is inside a section that
+  // the questions lay out two per row.
+  const rule = CSS_SRC.match(/^\.crit-sec-grid \{[^}]*\}/m);
   assert.ok(rule, 'the step-2 layout rule exists');
   assert.match(rule[0], /display:\s*grid/);
   assert.ok(!/(?<!-)columns:/.test(rule[0]), 'no multicol: a column break scrambles the question order');
@@ -238,4 +246,19 @@ test('2.15 — step 2 is a grid whose reading order is the DOM order; the dépla
 test('2.18 — the sector fields capitalize as you type', async () => {
   const { doc } = await boot();
   assert.equal($(doc, 'o-prefix').getAttribute('autocapitalize'), 'characters');
+});
+
+test('2.19 — the day sheet opens on the act, never on its ✕', async () => {
+  // showModal() hands focus to the first tabbable element, and every dialog on
+  // the site opens with the shared .dlg-x-form shell — so « Fermer » took the
+  // focus (and, in Chrome, its focus ring) in a sheet whose entire first
+  // question is « which act? ». Enter answered it by closing.
+  const { doc } = await boot();
+  const iso = addDays(todayISO(), 6);
+  doc.querySelector('.cal-cell[data-date="' + iso + '"]').click();
+  await wait(60);
+  const on = doc.querySelector('#o-service-chips .chip.is-on');
+  assert.ok(on, 'an act is already retained when the sheet opens');
+  assert.equal(doc.activeElement, on, 'focus starts on the retained act');
+  assert.notEqual(doc.activeElement, $(doc, 'day-close'), 'never the ✕');
 });

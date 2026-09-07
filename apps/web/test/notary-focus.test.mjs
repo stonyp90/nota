@@ -500,7 +500,7 @@ test('the profile form prefills the stored fiche, validates through the domain, 
   assert.equal(posts.length, before + 1, 'one POST per save');
   assert.equal(posts[posts.length - 1].body.lienCNQ, FICHE);
   assert.equal(errs.hidden, true, 'errors clear on success');
-  assert.equal($(doc, 'nc-profil-saved').hidden, false, 'the saved note confirms');
+  assert.match($(doc, 'nc-profil-saved').textContent, /Profil enregistré/, 'the saved note confirms');
 });
 
 // The étude's sector (ADR 0025): prefilled from the stored profile, validated

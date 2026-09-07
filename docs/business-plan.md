@@ -16,7 +16,7 @@
 > in this plan has been recomputed from the shipped pricing grid in
 > `packages/domain/index.js` — unit economics, revenue per act, gross margin,
 > break-even and the three-year projection. **Gross margin per act is materially
-> lower than version 1.0 claimed** (about **66 %**, not 89–91 %), because Nota
+> lower than version 1.0 claimed** (about **73 %** since the date ladder and the service lines were repriced on 2026-09-05 by ADR 0038 and ADR 0042, not 89–91 %), because Nota
 > bears the card-processing fee on the *whole* amount the client pays, including
 > the notary's fee, which Nota never keeps. §8.2 shows the arithmetic.
 
@@ -57,9 +57,9 @@ signing routine for the cases where the law already allows it.
 
 | Horizon | Acts closed | Charged to clients | Nota revenue | Gross profit |
 | --- | ---: | ---: | ---: | ---: |
-| Y1 — Québec City, financing catalogue | 244 | 744 000 $ | 62 700 $ | 41 000 $ |
-| Y2 — All Québec, remote layer | 2 800 | 8 542 000 $ | 719 600 $ | 471 100 $ |
-| Y3 — Widening act catalogue | 11 000 | 33 557 000 $ | 2 827 000 $ | 1 850 600 $ |
+| Y1 — Québec City, financing catalogue | 244 | 762 800 $ | 80 800 $ | 58 600 $ |
+| Y2 — All Québec, remote layer | 2 800 | 8 749 400 $ | 927 400 $ | 672 800 $ |
+| Y3 — Widening act catalogue | 11 000 | 34 373 200 $ | 3 643 200 $ | 2 643 100 $ |
 
 **Read the third column, not the second.** Nota's revenue is its own published
 price per act, not a percentage of what changes hands, so the amount flowing
@@ -234,10 +234,10 @@ mean something:
 | Tier | Days to date | Premium on the **notary's** fee | Nota's **date-guarantee** line |
 | --- | --- | --- | ---: |
 | `standard` | 15+ | 1.0× | 0 $ |
-| `rapide` | 8–14 | 1.8×–2.2× (≈×2) | 50 $ |
-| `prioritaire` | 2–7 | 2.7×–3.3× (≈×3) | 100 $ |
-| `urgence` | 1 | 3.3×–3.7× (≈×3.5) | 200 $ |
-| `extreme` | 0 | 3.7×–4.3× (≈×4) | 300 $ |
+| `rapide` | 8–14 | 1.8×–2.2× (≈×2) | 149 $ |
+| `prioritaire` | 2–7 | 2.7×–3.3× (≈×3) | 299 $ |
+| `urgence` | 1 | 3.3×–3.7× (≈×3.5) | 449 $ |
+| `extreme` | 0 | 3.7×–4.3× (≈×4) | 549 $ |
 
 **Two columns, and they answer to two different articles.** The multiplier
 prices the *notary's* own fee — art. 49 4° of the *Code de déontologie* lets a
@@ -554,41 +554,41 @@ Nota keeps         249 $ − 65,52 $                    =    183,48 $   → 73,7
 notary receives    2 000,00 $ — whole
 ```
 
-Per service and per tier, at the recommended offer for each tier:
+Per service and per tier, at the recommended offer for each tier, on the ladder
+repriced by ADR 0038 and the service lines of ADR 0042 (both 2026-09-05):
 
 | Service · tier | Notary's fee | Nota's price | Client total | Stripe | **Nota's gross profit** | Margin |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| `financement` · standard | 1 800 $ | 199 $ | 1 999 $ | 58,27 $ | **140,73 $** | 70,7 % |
-| `financement` · rapide | 3 600 $ | 249 $ | 3 849 $ | 111,92 $ | **137,08 $** | 55,1 % |
-| `financement` · prioritaire | 5 400 $ | 299 $ | 5 699 $ | 165,57 $ | **133,43 $** | 44,6 % |
-| `financement` · urgence | 6 300 $ | 399 $ | 6 699 $ | 194,57 $ | **204,43 $** | 51,2 % |
-| `financement` · extrême | 7 200 $ | 499 $ | 7 699 $ | 223,57 $ | **275,43 $** | 55,2 % |
-| `refinancement` · standard | 2 000 $ | 249 $ | 2 249 $ | 65,52 $ | **183,48 $** | 73,7 % |
-| `refinancement` · rapide | 4 000 $ | 299 $ | 4 299 $ | 124,97 $ | **174,03 $** | 58,2 % |
-| `refinancement` · prioritaire | 6 000 $ | 349 $ | 6 349 $ | 184,42 $ | **164,58 $** | 47,2 % |
-| `refinancement` · urgence | 7 000 $ | 449 $ | 7 449 $ | 216,32 $ | **232,68 $** | 51,8 % |
-| `refinancement` · extrême | 8 000 $ | 549 $ | 8 549 $ | 248,22 $ | **300,78 $** | 54,8 % |
+| `financement` · standard | 1 800 $ | 229 $ | 2 029 $ | 59,14 $ | **169,86 $** | 74,2 % |
+| `financement` · rapide | 3 600 $ | 378 $ | 3 978 $ | 115,66 $ | **262,34 $** | 69,4 % |
+| `financement` · prioritaire | 5 400 $ | 528 $ | 5 928 $ | 172,21 $ | **355,79 $** | 67,4 % |
+| `financement` · urgence | 6 300 $ | 678 $ | 6 978 $ | 202,66 $ | **475,34 $** | 70,1 % |
+| `financement` · extrême | 7 200 $ | 778 $ | 7 978 $ | 231,66 $ | **546,34 $** | 70,2 % |
+| `refinancement` · standard | 2 000 $ | 279 $ | 2 279 $ | 66,39 $ | **212,61 $** | 76,2 % |
+| `refinancement` · rapide | 4 000 $ | 428 $ | 4 428 $ | 128,71 $ | **299,29 $** | 69,9 % |
+| `refinancement` · prioritaire | 6 000 $ | 578 $ | 6 578 $ | 191,06 $ | **386,94 $** | 66,9 % |
+| `refinancement` · urgence | 7 000 $ | 728 $ | 7 728 $ | 224,41 $ | **503,59 $** | 69,2 % |
+| `refinancement` · extrême | 8 000 $ | 828 $ | 8 828 $ | 256,31 $ | **571,69 $** | 69,0 % |
 
-**A finding this table makes unavoidable: two rungs of the date ladder cost Nota
-money to sell.** Moving a refinancing from `standard` to `prioritaire` adds
-100 $ to Nota's line and **118,90 $** to the Stripe fee — Nota is 18,90 $ *worse
-off* on the more urgent act. The same at `rapide` (+50 $ of revenue against
-+59,45 $ of fee). Only `urgence` and `extrême` pay for the cost they create.
+**The date ladder was priced below its own cost until 2026-09-05, and the plan
+says so.** Version 1.1 measured it: moving a refinancing from `standard` to
+`prioritaire` added 100 $ to Nota's line and 118,90 $ to the Stripe fee, so Nota
+was 18,90 $ worse off on the more urgent act, and 9,45 $ worse off at `rapide`.
+ADR 0038 repriced the ladder to 0 · 149 · 299 · 449 · 549 $ under three rules:
+each rung covers the fee it induces at its recommended multiple and at the top
+of its band, gross profit rises with urgency, and the take rate on an urgent act
+stays below the take rate on a calm one. A domain test holds all three.
 
-| Refinancement, vs `standard` | Date line | Extra Stripe fee | Net to Nota |
-| --- | ---: | ---: | ---: |
-| `rapide` | +50 $ | +59,45 $ | **−9,45 $** |
-| `prioritaire` | +100 $ | +118,90 $ | **−18,90 $** |
-| `urgence` | +200 $ | +150,80 $ | +49,20 $ |
-| `extrême` | +300 $ | +182,70 $ | +117,30 $ |
+| Refinancement, vs `standard` | Date line | Extra Stripe fee | Net to Nota | Before |
+| --- | ---: | ---: | ---: | ---: |
+| `rapide` | +149 $ | +62,32 $ | **+86,68 $** | −9,45 $ |
+| `prioritaire` | +299 $ | +124,67 $ | **+174,33 $** | −18,90 $ |
+| `urgence` | +449 $ | +158,02 $ | **+290,98 $** | +49,20 $ |
+| `extrême` | +549 $ | +189,92 $ | **+359,08 $** | +117,30 $ |
 
-This is arithmetic, not opinion, and it is the single most actionable number in
-the plan: the middle of the urgency ladder — where most urgent demand actually
-sits — is priced below its own cost of collection. Three remedies exist, all
-data changes: raise the `rapide` and `prioritaire` lines, add a small
-percentage component to Nota's line so it tracks the fee it generates, or move
-the notary's fee off the platform charge entirely. **This is an owner decision
-and no code has been changed for it here.**
+The structural cost is untouched: Nota still pays the card fee on the notary's
+fee, money it never keeps. Moving the notary's fee off the platform charge is an
+owner decision, with the written legal opinion still required.
 
 **Blended, on a modelled mix** — 60 % `refinancement` / 40 % `financement`, and
 70 % `standard` · 18 % `rapide` · 7 % `prioritaire` · 3 % `urgence` · 2 %
@@ -598,18 +598,18 @@ the prices are not):
 | Per completed act | |
 | --- | ---: |
 | Notary's fee (paid whole to the notary) | 2 794 $ |
-| **Nota's revenue** | **257 $** |
-| Card processing (Stripe) | (89) $ |
-| **Nota's gross profit** | **168 $** |
-| **Gross margin** | **66 %** |
+| **Nota's revenue** | **331 $** |
+| Card processing (Stripe) | (91) $ |
+| **Nota's gross profit** | **240 $** |
+| **Gross margin** | **73 %** |
 
 | | Y1 | Y2 | Y3 |
 | --- | ---: | ---: | ---: |
-| Nota revenue per act | 257 $ | 257 $ | 257 $ |
-| Gross profit per act | 168 $ | 168 $ | 168 $ |
+| Nota revenue per act | 331 $ | 331 $ | 331 $ |
+| Gross profit per act | 240 $ | 240 $ | 240 $ |
 | Blended client CAC | 164 $ | 55 $ | 40 $ |
-| **Contribution per act** | **4 $** | **113 $** | **128 $** |
-| Gross margin | 66 % | 66 % | 66 % |
+| **Contribution per act** | **76 $** | **185 $** | **200 $** |
+| Gross margin | 73 % | 73 % | 73 % |
 
 Version 1.0 claimed 89–91 % gross margin and a (70) $ Year 1 contribution. Both
 were wrong in the same direction: the margin was overstated because the Stripe
@@ -617,28 +617,28 @@ fee was applied to Nota's own line instead of the whole charge, and the
 contribution was understated because revenue per act was pinned to a 10 % cut of
 a 1 056 $ act — a catalogue that no longer exists.
 
-**A structural point worth stating plainly.** Because Nota's price does not
-scale with the act, **gross profit per act is nearly flat** across the whole
-urgency ladder — between 133 $ and 301 $ — while the amount changing hands
-varies four-fold. Revenue is therefore a function of **act count**, not of GMV.
-Every growth argument in this plan has to be an argument about volume.
+**A structural point worth stating plainly.** Nota's price never scales with
+the act. On a calm date gross profit per act is 170 $ on a financing and 213 $
+on a refinancing, whatever the loan behind it. Buying a date lifts it, up to
+572 $ on a same-day refinancing, but the amount changing hands never does.
+Revenue is therefore a function of **act count**, not of GMV. Every growth
+argument in this plan has to be an argument about volume.
 
-**Break-even, from the same numbers.** At 168 $ of gross profit per act:
+**Break-even, from the same numbers.** At 240 $ of gross profit per act:
 
 | | Operating expense | Break-even acts | Per month | Plan volume |
 | --- | ---: | ---: | ---: | ---: |
-| Y1 | 250 000 $ | 1 487 | 124 | 244 |
-| Y2 | 720 000 $ | 4 280 | 357 | 2 800 |
-| Y3 | 1 850 000 $ | 10 997 | 917 | 11 000 |
+| Y1 | 250 000 $ | 1 041 | 87 | 244 |
+| Y2 | 720 000 $ | 2 997 | 250 | 2 800 |
+| Y3 | 1 850 000 $ | 7 700 | 642 | 11 000 |
 
 Year 1 and Year 2 are deliberately below break-even — that is what the raise
-buys. **Year 3's planned volume lands within a hundred acts of covering its own
-cost base**, which is a cleaner story than version 1.0's, where Year 3 still lost
-390 850 $.
+buys. **Year 3's planned volume clears its own cost base by about 3 300 acts**,
+which is a cleaner story than version 1.0's, where Year 3 still lost 390 850 $.
 
 **Notary economics.** Notary CAC ≈ 500 $ (the 15 000 $ field-sales line ÷ 30
-notaries). A notary retaining 20 acts a year generates **3 365 $** of annual
-gross profit — 10 094 $ over a three-year tenure. **LTV/CAC ≈ 20×**, payback
+notaries). A notary retaining 20 acts a year generates **4 806 $** of annual
+gross profit, 14 417 $ over a three-year tenure. **LTV/CAC ≈ 29×**, payback
 inside **three acts**. Supply, not demand, is where the compounding is.
 
 ### 8.3 The repeat-purchase problem, stated plainly
@@ -789,17 +789,17 @@ same plan as version 1.0; every money line below is new.
 | Fill rate | 56 % | 57 % | 62 % |
 | **Acts completed** | **244** | **2 800** | **11 000** |
 | Notary fees paid through the platform | 682 000 $ | 7 822 000 $ | 30 730 000 $ |
-| Total charged to clients | 744 000 $ | 8 542 000 $ | 33 557 000 $ |
-| **Nota revenue** (257 $ × acts) | **62 700 $** | **719 600 $** | **2 827 000 $** |
-| Card processing | (21 700) $ | (248 500) $ | (976 400) $ |
-| **Gross profit** | **41 000 $** | **471 100 $** | **1 850 600 $** |
-| Gross margin | 66 % | 66 % | 66 % |
+| Total charged to clients | 762 800 $ | 8 749 400 $ | 34 373 200 $ |
+| **Nota revenue** (331 $ × acts) | **80 800 $** | **927 400 $** | **3 643 200 $** |
+| Card processing | (22 200) $ | (254 600) $ | (1 000 100) $ |
+| **Gross profit** | **58 600 $** | **672 800 $** | **2 643 100 $** |
+| Gross margin | 73 % | 73 % | 73 % |
 | Operating expense | (250 000) $ | (720 000) $ | (1 850 000) $ |
-| **Net** | **(209 000) $** | **(249 000) $** | **+600 $** |
+| **Net** | **(191 400) $** | **(47 200) $** | **+793 100 $** |
 | Headcount (FTE) | 1 + contract | 4 | 10 |
 
-**Cumulative capital required through Y3: ~460 000 $** — down from the
-~1,05 M$ of version 1.0, because Nota's revenue per act is now 257 $ rather than
+**Cumulative capital required through Y3: ~240 000 $** — down from the
+~1,05 M$ of version 1.0, because Nota's revenue per act is now 331 $ rather than
 a 10 % cut of a 1 056 $ act, and the act values themselves are financing acts.
 Y2 assumes province-wide matching is live; Y3 assumes the catalogue has widened
 toward the *acte de vente*.
@@ -808,15 +808,16 @@ toward the *acte de vente*.
 exposes rather than hides:**
 
 - **Volume is the only lever.** Nota's price does not scale with the act, so
-  revenue is act count × ~257 $. Halve the act count and you halve the revenue;
+  revenue is act count × ~331 $. Halve the act count and you halve the revenue;
   double the average act value and nothing changes except the Stripe bill.
 - **The mix moves gross profit far less than it moves GMV.** Across the whole
-  urgency ladder gross profit per act stays between 133 $ and 301 $ (§8.2). A
-  pessimistic all-`standard` mix still yields 166 $ per act.
+  urgency ladder gross profit per act runs from 170 $ on a calm financing to
+  572 $ on a same-day refinancing (§8.2), and the act's value never moves it. A
+  pessimistic all-`standard` mix still yields 196 $ per act.
 - **Card processing is the whole cost of revenue, and it grows with the
   notary's fee.** Every 1 000 $ added to a typical act adds 29 $ to Nota's cost
-  and nothing to its revenue. This is why §8.2's re-pricing milestone sits at
-  Month 6.
+  and nothing to its revenue. This is why the date ladder is held by a domain test
+  (ADR 0038) and re-checked against realized cost at Month 6.
 
 **Series A trigger:** exiting Y2 at a **700 K$ revenue run-rate with province-wide
 liquidity proven and the exception layer in production** — raising ~3 M$ against
@@ -891,7 +892,7 @@ puts a second engineer in the codebase early.
 | **Cold-start liquidity fails** | High | Supply is free and frictionless. One dense city first. Fill rate monitored weekly with an explicit floor-adjustment lever. |
 | **Low client repeat rate** | Medium-High | Supply-side moat, compounding organic capture, zero-CAC referral channels, recurring refinancing (§8.3). |
 | **Chambre opposition** | Medium-High | Early, written, partnership-framed engagement. Nota never touches the act and takes nothing out of a notary's fees. Positioned as demand generation for the profession. |
-| **The date ladder's middle is priced below its own cost** | Medium | Arithmetic, already measured (§8.2): `rapide` and `prioritaire` lose 9,45 $ and 18,90 $ against the Stripe fee they create. The grid is data, edited from the console without a deploy; re-priced against realized cost at Month 6. |
+| **A rung of the date ladder drifts below its own cost** | Low | Measured on 2026-09-04 (`rapide` −9,45 $, `prioritaire` −18,90 $) and repriced on 2026-09-05 (ADR 0038). A domain test now holds every rung above the fee it induces. The grid stays data, edited from the console without a deploy, and is re-checked against realized cost at Month 6. |
 | **A funded competitor copies the mechanism** | Medium | The price curve requires running the market to obtain; the notary network is slow and in-person; the déontologie structure is non-obvious from outside Québec. |
 | **Solo-founder key-person risk** | Medium | ADRs, BDD specs, early Y2 engineering hire. |
 | **Race to the bottom on price** | Low | Hard floors per service ([ADR 0006](decisions/0006-service-floor-prices.md)) and a **5×** cap, enforced server-side in the domain core. |

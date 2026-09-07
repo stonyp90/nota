@@ -272,6 +272,46 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /partenaires/rappel:
+    post:
+      operationId: partnerCodeReminder
+      summary: Email a partner their existing code back.
+      description: >-
+        Recovery, not a claim: nothing is created and nothing is modified. A
+        partner's code, link and type lived only in one device's localStorage,
+        so clearing the browser lost them for good — and the only way back was
+        to re-claim the very code you had just lost. Only CONFIRMED partners
+        are reminded (a merely claimed code belongs to no one). Rate-limited
+        per source IP and enumeration-safe: the response never reveals whether
+        the address is a partner.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [courriel]
+              properties:
+                courriel:
+                  type: string
+                  format: email
+      responses:
+        "200":
+          description: Acknowledged — identical whether or not the address is a partner.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+        "422":
+          description: The address is not a valid email; nothing is sent.
+        "429":
+          description: Per-IP ceiling reached.
+        "400":
+          description: Invalid JSON body.
   /partenaires/verify:
     post:
       operationId: verifyPartnerClaim
@@ -1433,6 +1473,70 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /notary/bids/indemnite:
+    post:
+      operationId: decideIndemnite
+      summary: The retaining notary claims, or waives, the indemnity of a late cancellation (ADR 0041).
+      description: >-
+        A client cancelled a RETAINED act inside the barème's window. Nothing
+        was charged: the cancellation opened a claim window (bid.annulation,
+        `statut: en_attente`) capped at the palier's rate. Here the notary
+        either CLAIMS an amount at or under the cap, with a written
+        justification of real costs and work done (art. 2129 C.c.Q.), or WAIVES
+        by claiming 0. A claim is collected by partial capture of the live hold
+        or off session on the registered card, and transferred whole to the
+        notary (ADR 0033). Waiving, or the deadline passing, releases the hold
+        and moves nothing. Session-scoped token; only the notary who retained.
+      security:
+        - notarySession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, dateISO, montant]
+              properties:
+                id:
+                  type: string
+                dateISO:
+                  type: string
+                  format: date
+                montant:
+                  type: number
+                  minimum: 0
+                  description: Dollars claimed, at or under `annulation.plafond`; 0 waives.
+                justification:
+                  type: string
+                  description: Required when montant > 0 (20 to 600 characters).
+      responses:
+        "200":
+          description: The decision is recorded; `annulation.statut` says what happened.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [bid, annulation]
+                properties:
+                  bid:
+                    $ref: "#/components/schemas/Bid"
+                  annulation:
+                    type: object
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: No claim is pending (`indemnite_close`), or the deadline passed (`indemnite_echue`, closed without charge).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
   /notary/bids/release:
     post:
       operationId: releaseRetainedBid
@@ -1778,17 +1882,27 @@ paths:
                   annulation:
                     type: [object, "null"]
                     description: >-
-                      What cancelling TODAY would cost (ADR 0023), disclosed
-                      before the client confirms. Null when the cancel would be
-                      free (open offer, no live hold, free window) or
-                      impossible (settled act).
+                      What cancelling TODAY would OPEN (ADR 0041): the CAP the
+                      retaining notary may claim, with a written justification,
+                      within `delaiJours` civil days. Never a fee: art. 13 of
+                      the Loi sur la protection du consommateur forbids any
+                      amount or percentage fixed in advance, and art. 2129
+                      C.c.Q. limits what is owed to real costs and work done.
+                      Disclosed before the client confirms. Null when the
+                      cancel would open nothing (open offer, no payment means,
+                      free window) or is impossible (settled act).
                     properties:
                       taux:
                         type: number
-                      frais:
+                        description: The cap as a share of the retained montant (e.g. 0.3).
+                      plafond:
                         type: number
+                        description: The cap in dollars.
                       joursAvant:
                         type: integer
+                      delaiJours:
+                        type: integer
+                        description: Civil days the notary has to claim.
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -2179,6 +2293,112 @@ paths:
                     type: boolean
         "400":
           description: Invalid JSON body.
+  /client/session/request:
+    post:
+      operationId: clientSessionRequest
+      summary: Ask for the single-use link that reopens your requests.
+      description: >-
+        Step 1 of the client space. Proves the MAILBOX before anything is
+        returned: publishing indexes every offer under CLIENT#<courriel>, and
+        answering that index on a bare address would make it an enumeration and
+        account-takeover door. Rate-limited per source IP (fails open) and
+        enumeration-safe — a known client and a stranger get the identical
+        `{ok:true}`, and a challenge is filed either way so both cost the same
+        time. Outside production the response echoes devToken/devLink so the
+        handshake closes without a mailbox.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [courriel]
+              properties:
+                courriel:
+                  type: string
+                  format: email
+      responses:
+        "200":
+          description: Acknowledged — identical whether or not the address is known.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+                  devToken:
+                    type: string
+                    description: Non-production only — the challenge token.
+                  devLink:
+                    type: string
+                    description: Non-production only — the full link.
+        "422":
+          description: The address is not a valid email; nothing is filed.
+        "429":
+          description: Per-IP ceiling reached; no link is sent.
+        "400":
+          description: Invalid JSON body.
+  /client/session/verify:
+    post:
+      operationId: clientSessionVerify
+      summary: Redeem the link and get back your requests, each with its token.
+      description: >-
+        Step 2. Atomically consumes the single-use challenge, then returns the
+        caller's offers — each carrying a freshly minted per-bid CLIENT token.
+        No « person » scope is created: requireClient still demands
+        `sub === bid.id`, so every returned token opens exactly one offer. An
+        empty list is a 200, never a 404 — the caller proved their mailbox and
+        simply has nothing published; a 404 would reveal who is a client.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+      responses:
+        "200":
+          description: The caller's offers, oldest date first (possibly empty).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, courriel, offres]
+                properties:
+                  ok:
+                    type: boolean
+                  courriel:
+                    type: string
+                    format: email
+                  offres:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, dateISO, serviceId, clientToken]
+                      properties:
+                        id:
+                          type: string
+                        dateISO:
+                          type: string
+                          format: date
+                        serviceId:
+                          type: string
+                        montant:
+                          type: number
+                        status:
+                          type: string
+                        clientToken:
+                          type: string
+                          description: CLIENT scope, valid for THIS offer only.
+        "401":
+          description: Link invalid, expired, or already used.
+        "400":
+          description: Invalid JSON body.
   /client/evaluation:
     post:
       operationId: evaluateNotary
@@ -2306,17 +2526,26 @@ paths:
       operationId: sendSupportMessage
       summary: Live chat — a visitor's message (mints the thread on first send).
       description: >-
-        The site's chat widget (ADR 0026). No auth to start: the first message
-        mints the thread and returns its signed SUPPORT `token` (the widget
-        keeps it and continues the thread with it, via Authorization Bearer or
-        the `token` body field). Every visitor message emails the operator with
-        a signed reply link, so the answer is one tap from the inbox and lands
-        live in the widget. `courriel` is optional — it only adds an offline
-        copy of the reply. A stale/tampered token is 401 (never a silent new
-        thread); domain validation errors are 422 (`message_requis`,
-        `message_trop_long`, `courriel_invalide`). Per-IP throttle (ADR 0033
-        §7): more than 20 messages in 10 minutes from one source IP → 429
-        `trop_de_messages` (fails open on a counter error).
+        The site's chat widget (ADR 0026, assisted by ADR 0046). No auth to
+        start: the first message mints the thread and returns its signed
+        SUPPORT `token` (the widget keeps it and continues the thread with it,
+        via Authorization Bearer or the `token` body field).
+
+        When an assistant is configured, the answer comes back IN THIS
+        RESPONSE as `reponse` — grounded strictly in the live catalogue and
+        operating policy, and re-checked by the domain before it is stored.
+        `escalade: true` means no grounded answer was possible and a person now
+        has the question: only then is the operator emailed, with the thread
+        and a signed reply link. With no assistant configured, `reponse` is
+        absent and EVERY message emails the operator, exactly as before.
+        `courriel` is optional — it only adds an offline copy of the reply.
+
+        A stale/tampered token is 401 (never a silent new thread); domain
+        validation errors are 422 (`message_requis`, `message_trop_long`,
+        `courriel_invalide`). Per-IP throttle (ADR 0033 §7): more than 20
+        messages in 10 minutes from one source IP → 429 `trop_de_messages`
+        (fails open on a counter error) — which also bounds what the assistant
+        may cost.
       security:
         - {}
         - supportToken: []
@@ -2338,6 +2567,12 @@ paths:
                 token:
                   type: string
                   description: Thread token fallback when the Authorization header is absent.
+                locale:
+                  type: string
+                  enum: [fr, en]
+                  description: >-
+                    The visitor's language, so the assistant answers in it.
+                    Anything other than `en` reads as French.
       responses:
         "201":
           description: Message appended (thread minted on the first one).
@@ -2354,6 +2589,18 @@ paths:
                     description: Signed SUPPORT thread token — keep it to continue and poll.
                   message:
                     $ref: "#/components/schemas/SupportMessage"
+                  reponse:
+                    allOf:
+                      - $ref: "#/components/schemas/SupportMessage"
+                    description: >-
+                      The assistant's answer, already appended to the thread
+                      (ADR 0046). Absent when no assistant is configured.
+                  escalade:
+                    type: boolean
+                    description: >-
+                      True when the assistant handed the question to a person —
+                      the thread stays « à répondre » and the operator is
+                      emailed. Absent alongside `reponse`.
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
@@ -3133,14 +3380,17 @@ components:
       type: object
       description: >-
         One message of a live-chat thread (ADR 0026). `de` names the sending
-        side — the visitor, or Nota answering through the emailed reply link.
+        side — the visitor, Nota answering through the emailed reply link, or
+        the assistant (ADR 0046). `assistant` and `nota` are deliberately
+        distinct: only a human's message marks a thread answered, and only a
+        labelled assistant lets a visitor know a machine wrote.
       required: [id, de, texte, createdAt]
       properties:
         id:
           type: string
         de:
           type: string
-          enum: [visiteur, nota]
+          enum: [visiteur, nota, assistant]
         texte:
           type: string
         createdAt:
@@ -3601,15 +3851,38 @@ components:
         annulation:
           type: [object, "null"]
           description: >-
-            What a cancellation actually kept (ADR 0023) — only on a cancelled
-            bid whose late withdrawal carried a fee, null everywhere else.
+            The indemnity file of a late cancellation (ADR 0041) — only on a
+            cancelled bid whose withdrawal opened a claim window, null
+            everywhere else. `statut` tells where it stands: `en_attente`
+            (the notary may still claim, nothing moved, the hold stays),
+            `percue` (claimed and collected), `refusee` (claimed, card
+            declined), `renoncee` (the notary waived), `expiree` (the
+            deadline passed). Money moves ONLY on `percue`.
           properties:
+            statut:
+              type: string
+              enum: [en_attente, percue, refusee, renoncee, expiree]
             taux:
               type: number
-              description: Share of the retained montant kept (e.g. 0.3).
+              description: The cap as a share of the retained montant (e.g. 0.3).
+            plafond:
+              type: number
+              description: The cap in dollars — the most the notary could claim.
             frais:
               type: number
-              description: Fee kept, in dollars.
+              description: What was actually claimed and kept, in dollars (0 until a claim is collected).
+            justification:
+              type: [string, "null"]
+              description: The notary's written reason for the claim (art. 2129 C.c.Q.).
+            delaiJours:
+              type: integer
+            echeanceISO:
+              type: string
+              format: date
+              description: Last civil day the notary may claim.
+            decideeLe:
+              type: [string, "null"]
+              format: date
             joursAvant:
               type: integer
               description: Civil days left before the signing at cancel time.
@@ -3869,13 +4142,21 @@ components:
           description: >-
             The cancellation barème in force (the admin-stored item, else the
             environment defaults — resolved exactly like the cancel route).
-            The fee compensates the NOTARY. `applicable` is false when no
-            billing adapter is configured — no fee can then be captured, the
-            barème is information rather than a promise.
+            Since ADR 0041 each palier's `taux` is a CAP: the most the notary
+            may claim, with justification, within `delaiJours` of the
+            cancellation. Nothing is taken without a claim. The indemnity
+            compensates the NOTARY. `applicable` is false when no billing
+            adapter is configured — nothing can then be collected, the barème
+            is information rather than a promise.
           required: [paliers, beneficiaire, applicable]
           properties:
             applicable:
               type: boolean
+            indemnite:
+              type: boolean
+              const: true
+            delaiJours:
+              type: integer
             paliers:
               type: array
               items:

@@ -13,6 +13,8 @@ const {
   unsubPK,
   UNSUB_SK,
   notaryLoginPK,
+  clientLoginPK,
+  CLIENT_LOGIN_SK,
   NOTARY_LOGIN_SK,
   notaryRlPK,
   NOTARY_RL_SK,
@@ -348,12 +350,48 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
     // full-item PutCommand on the same composite key as put()/get(). LIMITATION:
     // last-writer-wins — two notaries proposing on the same bid at the same
     // instant could drop one proposition (no ConditionExpression here; moving
-    // propositions to their own items would fix it). Retention stays on the
-    // conditional retain() so the retained state itself can never be clobbered
-    // by a stale proposition write racing an accept.
+    // propositions to their own items would fix it).
+    //
+    // Cette limite ne s'arrête PAS aux propositions, contrairement à ce que ce
+    // commentaire affirmait : `retain()` est conditionnel à l'écriture, mais
+    // rien n'empêche un appelant qui a lu l'offre AVANT la retenue de réécrire
+    // sa photo par-dessus. Le statut retenu se perd alors sans qu'aucune
+    // condition ne se déclenche. Les accusés de lecture — de loin les
+    // écritures les plus fréquentes — sont sortis d'ici (markThreadRead) ;
+    // les appelants restants (proposition, message, dossier, annulation,
+    // désistement) tiennent parce qu'ils sont rares et brefs, pas parce
+    // qu'ils sont protégés.
     async update(bid) {
       await doc.send(new PutCommand({ TableName: tableName, Item: toItem(bid) }));
       return bid;
+    },
+    // Poser UN horodatage de lecture, sans réécrire l'item. Un accusé « Vu »
+    // part à chaque ouverture du fil, à partir d'une photo lue juste avant :
+    // le repasser par update() rejouait cette photo par-dessus l'état courant
+    // et pouvait dé-retenir un acte qu'un `retain()` venait de prendre entre
+    // le get et le put. Un SET sur le seul attribut visé ne peut pas faire ça.
+    // `attribute_exists(PK)` garde la porte fermée sur une offre disparue :
+    // une UpdateCommand créerait l'item autrement.
+    async markThreadRead(bid, side, at) {
+      if (!bid || !bid.id || !bid.dateISO) return null;
+      const champ = side === 'notaire' ? 'luParNotaireAt' : 'luParClientAt';
+      try {
+        const out = await doc.send(
+          new UpdateCommand({
+            TableName: tableName,
+            Key: { PK: bidPK(bid.dateISO), SK: `BID#${bid.dateISO}#${bid.id}` },
+            UpdateExpression: 'SET #f = :at',
+            ConditionExpression: 'attribute_exists(PK)',
+            ExpressionAttributeNames: { '#f': champ },
+            ExpressionAttributeValues: { ':at': at },
+            ReturnValues: 'ALL_NEW',
+          })
+        );
+        return fromItem(out.Attributes);
+      } catch (err) {
+        if (err && err.name === 'ConditionalCheckFailedException') return null;
+        throw err;
+      }
     },
     // Conditional retain: write the retained item ONLY while the stored bid is
     // still OUVERTE. The ConditionExpression is evaluated against the existing
@@ -699,6 +737,8 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
     async putCancellationConfig(cfg, nowISO) {
       const stored = {
         paliers: (cfg.paliers || []).map((p) => ({ maxJours: p.maxJours, taux: p.taux })),
+        // ADR 0041 — le délai de réclamation voyage avec le barème, quand il est décidé.
+        ...(Number.isInteger(cfg.delaiJours) ? { delaiJours: cfg.delaiJours } : {}),
         updatedAt: nowISO,
       };
       await doc.send(
@@ -1370,6 +1410,44 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
           new UpdateCommand({
             TableName: tableName,
             Key: { PK: notaryLoginPK(challengeId), SK: NOTARY_LOGIN_SK },
+            UpdateExpression: 'SET #consumed = :true',
+            ConditionExpression: 'attribute_exists(PK) AND #consumed = :false AND #expiresAt > :now',
+            ExpressionAttributeNames: { '#consumed': 'consumed', '#expiresAt': 'expiresAt' },
+            ExpressionAttributeValues: { ':true': true, ':false': false, ':now': Number(nowMs) || 0 },
+            ReturnValues: 'ALL_NEW',
+          })
+        );
+        const { PK, SK, type, ...rec } = out.Attributes || {};
+        return rec;
+      } catch (err) {
+        if (err && err.name === 'ConditionalCheckFailedException') return null;
+        throw err;
+      }
+    },
+    // Le défi du lien CLIENT — même contrat que celui du notaire, préfixe
+    // distinct. Il prouve la boîte ; ce qu'on rend ensuite, ce sont les jetons
+    // par offre. Le TTL DynamoDB fait le ménage peu après l'expiration.
+    async putClientLoginChallenge(challenge) {
+      await doc.send(
+        new PutCommand({
+          TableName: tableName,
+          Item: {
+            PK: clientLoginPK(challenge.challengeId),
+            SK: CLIENT_LOGIN_SK,
+            type: 'client_login',
+            ...challenge,
+          },
+        })
+      );
+    },
+    // Consommation atomique à usage unique : `consumed` est un MOT RÉSERVÉ
+    // DynamoDB — il DOIT être aliasé, sinon tout le verify lève.
+    async consumeClientLoginChallenge(challengeId, nowMs) {
+      try {
+        const out = await doc.send(
+          new UpdateCommand({
+            TableName: tableName,
+            Key: { PK: clientLoginPK(challengeId), SK: CLIENT_LOGIN_SK },
             UpdateExpression: 'SET #consumed = :true',
             ConditionExpression: 'attribute_exists(PK) AND #consumed = :false AND #expiresAt > :now',
             ExpressionAttributeNames: { '#consumed': 'consumed', '#expiresAt': 'expiresAt' },

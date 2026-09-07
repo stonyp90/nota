@@ -13,7 +13,7 @@ Plan complet (anglais) : [`docs/business-plan.md`](business-plan.md)
 > service**, et les honoraires du notaire lui reviennent en entier. Tous les
 > chiffres ont été recalculés sur la grille en vigueur dans
 > `packages/domain/index.js`. **La marge brute par acte est nettement plus basse
-> que ne le disait la version 1.0** — environ **66 %**, pas 89 à 91 % — parce que
+> que ne le disait la version 1.0** — environ **73 %** depuis la retarification de la garantie de date et des lignes de service (ADR 0038 et 0042, 2026-09-05), pas 89 à 91 % — parce que
 > Nota supporte les frais de carte sur la **totalité** de ce que le client paie,
 > honoraires du notaire compris, dont Nota ne garde rien.
 
@@ -37,10 +37,10 @@ semaines.
 | Palier | Jours avant la date | Prime sur les honoraires du **notaire** | Garantie de date de **Nota** |
 | --- | --- | --- | ---: |
 | `standard` | 15+ | 1,0× | 0 $ |
-| `rapide` | 8–14 | 1,8×–2,2× (≈×2) | 50 $ |
-| `prioritaire` | 2–7 | 2,7×–3,3× (≈×3) | 100 $ |
-| `urgence` | 1 | 3,3×–3,7× (≈×3,5) | 200 $ |
-| `extreme` | 0 | 3,7×–4,3× (≈×4) | 300 $ |
+| `rapide` | 8–14 | 1,8×–2,2× (≈×2) | 149 $ |
+| `prioritaire` | 2–7 | 2,7×–3,3× (≈×3) | 299 $ |
+| `urgence` | 1 | 3,3×–3,7× (≈×3,5) | 449 $ |
+| `extreme` | 0 | 3,7×–4,3× (≈×4) | 549 $ |
 
 **Deux colonnes, deux justifications.** Le multiplicateur tarife les honoraires
 du **notaire** — l'art. 49 4° du *Code de déontologie* lui permet de pondérer
@@ -134,7 +134,7 @@ client lit séparément avant de s'engager :
 | **Le prix de Nota** | Nota | Une grille publiée d'avance — le service demandé, plus la garantie de date — jamais le notaire, sa cote ou la valeur de l'acte |
 
 La grille : `financement` **199 $**, `refinancement` **249 $**, plus la garantie
-de date (0 · 50 · 100 · 200 · 300 $ selon le palier). La carte du client
+de date (0 · 149 · 299 · 449 · 549 $ selon le palier, ADR 0038). La carte du client
 autorise le **total** des deux lignes sur le compte de Nota ; à la signature,
 Nota capture ce total, garde ses deux lignes et vire les honoraires au compte
 Connect du notaire. **Nota ne retranche rien d'un honoraire professionnel, et le
@@ -263,19 +263,22 @@ le notaire reçoit   2 000,00 $ — en entier
 
 | Service · palier | Honoraires | Prix de Nota | Total client | Stripe | **Marge brute** | % |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| `financement` · standard | 1 800 $ | 199 $ | 1 999 $ | 58,27 $ | **140,73 $** | 70,7 % |
-| `financement` · prioritaire | 5 400 $ | 299 $ | 5 699 $ | 165,57 $ | **133,43 $** | 44,6 % |
-| `refinancement` · standard | 2 000 $ | 249 $ | 2 249 $ | 65,52 $ | **183,48 $** | 73,7 % |
-| `refinancement` · prioritaire | 6 000 $ | 349 $ | 6 349 $ | 184,42 $ | **164,58 $** | 47,2 % |
-| `refinancement` · extrême | 8 000 $ | 549 $ | 8 549 $ | 248,22 $ | **300,78 $** | 54,8 % |
+| `financement` · standard | 1 800 $ | 229 $ | 2 029 $ | 59,14 $ | **169,86 $** | 74,2 % |
+| `financement` · prioritaire | 5 400 $ | 528 $ | 5 928 $ | 172,21 $ | **355,79 $** | 67,4 % |
+| `refinancement` · standard | 2 000 $ | 279 $ | 2 279 $ | 66,39 $ | **212,61 $** | 76,2 % |
+| `refinancement` · prioritaire | 6 000 $ | 578 $ | 6 578 $ | 191,06 $ | **386,94 $** | 66,9 % |
+| `refinancement` · extrême | 8 000 $ | 828 $ | 8 828 $ | 256,31 $ | **571,69 $** | 69,0 % |
 
-**Un constat que cette table rend inévitable : deux barreaux de l'échelle
-d'urgence coûtent de l'argent à vendre.** Passer un refinancement de `standard`
-à `prioritaire` ajoute 100 $ à la ligne de Nota et **118,90 $** aux frais Stripe :
-Nota est **18,90 $ plus pauvre** sur l'acte le plus urgent. Même chose au palier
-`rapide` (+50 $ contre +59,45 $). Seuls `urgence` et `extrême` paient le coût
-qu'ils créent. C'est de l'arithmétique, pas une opinion, et c'est le chiffre le
-plus actionnable du plan — la grille est une donnée, modifiable depuis la console
+**Jusqu'au 5 septembre, deux barreaux de l'échelle d'urgence coûtaient de
+l'argent à vendre, et le plan le disait.** Passer un refinancement de `standard`
+à `prioritaire` ajoutait 100 $ à la ligne de Nota et 118,90 $ aux frais Stripe :
+Nota était 18,90 $ plus pauvre sur l'acte le plus urgent, et 9,45 $ au palier
+`rapide`. L'ADR 0038 a retarifé la garantie de date à 0 · 149 · 299 · 449 · 549 $
+sous trois règles : chaque barreau couvre les frais qu'il induit à son multiple
+recommandé et au sommet de sa bande, la marge brute monte avec l'urgence, et le
+taux de prise d'un acte pressé reste sous celui d'un acte calme. Un test du
+domaine tient les trois. Le rapide rapporte désormais 86,68 $ net et le
+prioritaire 174,33 $. La grille reste une donnée, modifiable depuis la console
 sans déploiement.
 
 **En moyenne pondérée** (60 % refinancement / 40 % financement ; 70 % standard,
@@ -285,20 +288,22 @@ hypothèse, les prix n'en sont pas) :
 | Par acte complété | |
 | --- | ---: |
 | Honoraires (versés au notaire en entier) | 2 794 $ |
-| **Revenu de Nota** | **257 $** |
-| Frais de carte | (89) $ |
-| **Marge brute de Nota** | **168 $** |
-| **Marge brute** | **66 %** |
+| **Revenu de Nota** | **331 $** |
+| Frais de carte | (91) $ |
+| **Marge brute de Nota** | **240 $** |
+| **Marge brute** | **73 %** |
 
-**Point de structure.** Comme le prix de Nota ne suit pas la valeur de l'acte,
-**la marge brute par acte est presque plate** — entre 133 $ et 301 $ — pendant
-que le montant qui change de mains varie du simple au quadruple. Le revenu est
-donc fonction du **nombre d'actes**, jamais du volume transigé. Tout argument de
+**Point de structure.** Le prix de Nota ne suit jamais la valeur de l'acte.
+Sur une date calme, la marge brute par acte est de 170 $ sur un financement et
+de 213 $ sur un refinancement, quel que soit le prêt derrière. Acheter une date
+la fait monter, jusqu'à 572 $ sur un refinancement signé le jour même, mais le
+montant qui change de mains ne la fait jamais bouger. Le revenu est donc
+fonction du **nombre d'actes**, jamais du volume transigé. Tout argument de
 croissance doit être un argument de volume.
 
 **Économie du notaire.** Coût d'acquisition ≈ 500 $ (le poste terrain de
 15 000 $ ÷ 30 notaires). Un notaire qui retient 20 actes par année produit
-**3 365 $** de marge brute annuelle — 10 094 $ sur trois ans. **VVC/CAC ≈ 20×**,
+**4 806 $** de marge brute annuelle, 14 417 $ sur trois ans. **VVC/CAC ≈ 29×**,
 retour sur investissement en **trois actes**. C'est l'offre, pas la demande, qui
 compose.
 
@@ -313,20 +318,19 @@ compose.
 | Taux de rétention | 56 % | 57 % | 62 % |
 | **Actes complétés** | **244** | **2 800** | **11 000** |
 | Honoraires versés aux notaires | 682 000 $ | 7 822 000 $ | 30 730 000 $ |
-| Total facturé aux clients | 744 000 $ | 8 542 000 $ | 33 557 000 $ |
-| **Revenu de Nota** (257 $ × actes) | **62 700 $** | **719 600 $** | **2 827 000 $** |
-| Frais de carte | (21 700) $ | (248 500) $ | (976 400) $ |
-| **Marge brute** | **41 000 $** | **471 100 $** | **1 850 600 $** |
+| Total facturé aux clients | 762 800 $ | 8 749 400 $ | 34 373 200 $ |
+| **Revenu de Nota** (331 $ × actes) | **80 800 $** | **927 400 $** | **3 643 200 $** |
+| Frais de carte | (22 200) $ | (254 600) $ | (1 000 100) $ |
+| **Marge brute** | **58 600 $** | **672 800 $** | **2 643 100 $** |
 | Charges d'exploitation | (250 000) $ | (720 000) $ | (1 850 000) $ |
-| **Résultat net** | **(209 000) $** | **(249 000) $** | **+600 $** |
+| **Résultat net** | **(191 400) $** | **(47 200) $** | **+793 100 $** |
 
-**Seuil de rentabilité**, à 168 $ de marge brute par acte : **1 487 actes**
-(124/mois) en an 1, **4 280** (357/mois) en an 2, **10 997** (917/mois) en an 3.
-Le volume prévu de l'an 3 arrive donc à une centaine d'actes de couvrir sa
-propre base de coûts — une histoire plus propre que celle de la version 1.0, où
-l'an 3 perdait encore 390 850 $.
+**Seuil de rentabilité**, à 240 $ de marge brute par acte : **1 041 actes**
+(87/mois) en an 1, **2 997** (250/mois) en an 2, **7 700** (642/mois) en an 3.
+Le volume prévu de l'an 3 couvre donc sa propre base de coûts avec environ
+3 300 actes d'avance, là où la version 1.0 perdait encore 390 850 $ en an 3.
 
-**Capital cumulé requis jusqu'à l'an 3 : ~460 000 $**, contre ~1,05 M$ dans la
+**Capital cumulé requis jusqu'à l'an 3 : ~240 000 $**, contre ~1,05 M$ dans la
 version 1.0.
 
 L'an 3 représente **~10 %** du volume d'actes adressable des deux services — une
@@ -398,7 +402,7 @@ validé.
 | **Qualification du prix de Nota (art. 32.1 L.N.)** — critique | Le partage est **retiré** : le notaire reçoit 100 % de ses honoraires et Nota facture au client son propre prix publié (ADR 0031/0034). Ce qui reste est une qualification, pas une structure. Avis écrit budgété, 2ᵉ mois ; un forfait par acte facturé hors de l'acte est la structure de repli. |
 | **Une affirmation retirée survit dans un document** | La commission de 10 %, le partage 75/25, la coupe de 5 à 15 % décidée par la cote et le prix unique de 400 $ sont tous retirés. Ils sont faux **et** ils décrivent un arrangement que le droit québécois interdit à Nota d'avoir : chaque audit daté qui les cite porte un bandeau de retrait. |
 | **Les taxes et les débours ne sont pas au devis** | L'art. 71 3° exige d'indiquer s'ils sont inclus, l'art. 68 interdit la publicité incomplète. Chiffrés et affichés au 1ᵉʳ mois, avant toute affirmation de complétude. |
-| **Le milieu de l'échelle d'urgence est vendu sous son coût** | Mesuré : `rapide` et `prioritaire` perdent 9,45 $ et 18,90 $ face aux frais Stripe qu'ils créent. La grille est une donnée, retarifée au 6ᵉ mois sur le coût réel. |
+| **Un barreau de l'échelle d'urgence glisse sous son coût** | Mesuré le 4 septembre (`rapide` −9,45 $, `prioritaire` −18,90 $) et retarifé le 5 (ADR 0038). Un test du domaine tient désormais chaque barreau au-dessus des frais qu'il induit. La grille reste une donnée, revérifiée au 6ᵉ mois sur le coût réel. |
 | **Aucune vérification au Tableau de l'Ordre** | Le seul contrôle actuel est le format d'une URL de fiche CNQ. Une vérification réelle et une radiation immédiate sont des préalables au premier acte. |
 | **L'art. 46 maintient l'exception** | La phase 2 est rentable sous la loi actuelle. Les catégories d'exception sont vastes et mal desservies. |
 | **Démarrage à froid** | L'offre est gratuite et sans friction. Une ville dense d'abord. Taux de rétention suivi chaque semaine. |

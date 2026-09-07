@@ -455,12 +455,12 @@ test('un acte retenu annulé SANS moyen de paiement se distingue d’une annulat
   assert.equal(e.meta.motif, 'sans_moyen_paiement');
 });
 
-test('une annulation AVEC frais garde ses deux traces : le fait, et l’argent', async () => {
+test('une annulation AVEC plafond garde ses deux traces : le fait à l’annulation, l’argent à la réclamation (ADR 0041)', async () => {
   // `annulation_frais` (ADR 0023) reste la pièce financière ; `offre_annulee`
-  // est le fait. Les confondre, c'était perdre le fait chaque fois que le
-  // barème ne retenait rien.
+  // est le fait. Depuis l'ADR 0041 l'argent ne bouge plus à l'annulation mais
+  // à la RÉCLAMATION du notaire : les deux pièces s'écrivent à deux moments.
   // Cinq jours avant la signature : le palier « ≤ 14 jours » du barème par
-  // défaut, 10 % — et une caution VIVANTE, donc capturable.
+  // défaut, un plafond de 10 % — et une caution VIVANTE, donc capturable.
   const proche = '2026-09-10';
   const h = harness({
     billingConfigured: true,
@@ -480,24 +480,30 @@ test('une annulation AVEC frais garde ses deux traces : le fait, et l’argent',
     body: JSON.stringify({ id: 'b1', dateISO: proche }),
   });
   assert.equal(res.statusCode, 200, res.body);
+  assert.equal((await journal(h.repo, 'annulation_frais')).length, 0, 'rien n’a bougé à l’annulation');
+  const fait = await seule(h.repo, 'offre_annulee');
+  assert.equal(fait.meta.motif, 'indemnite_en_attente');
+  assert.equal(fait.meta.frais, 0, '`frais` reste ce qui a bougé — rien');
+  assert.equal(fait.meta.plafond, 200, 'le fait porte le PLAFOND : une seule requête au journal doit suffire');
 
+  const rec = await h.app.handle({
+    method: 'POST', path: '/notary/bids/indemnite', headers: { authorization: 'Bearer ' + jetonNotaire() },
+    body: JSON.stringify({ id: 'b1', dateISO: proche, montant: 150, justification: 'Journée bloquée, dossier ouvert, recherches faites.' }),
+  });
+  assert.equal(rec.statusCode, 200, rec.body);
   const frais = await seule(h.repo, 'annulation_frais');
   assert.equal(frais.meta.percu, true);
-  const fait = await seule(h.repo, 'offre_annulee');
-  assert.equal(fait.meta.motif, 'frais_percus');
-  assert.ok(fait.meta.frais > 0, 'le fait porte le montant lui aussi : une seule requête au journal doit suffire');
+  assert.equal(frais.meta.frais, 150);
+  assert.equal(frais.acteur.type, 'notaire', 'la réclamation est le geste du notaire');
 });
 
-test('des frais DUS que Nota n’a pas pu prélever ne se lisent PAS « fenêtre gratuite »', async () => {
-  // LE CAS QUI SE DÉGUISAIT EN NORMAL (revue du 2026-09-05). Le barème réclame
-  // 10 % — l'offre a bien une carte, c'est elle qui a fait naître les frais —
-  // mais `chargeCancellationFee` rend `aucun_moyen` : un code qui n'est NI un
-  // succès NI `frais_refuses`, donc le seul cas où AUCUNE entrée
-  // `annulation_frais` n'est écrite. Le motif se calculait alors sur le moyen
-  // de paiement, qui est présent, et le journal annonçait « fenetre_gratuite ».
-  // Le motif le plus alarmant — le notaire a bloqué sa journée, des frais lui
-  // étaient dus, personne ne les a pris — se lisait comme le plus banal, et
-  // rien d'autre au registre ne venait le contredire.
+test('une réclamation que Nota n’a pas pu prélever ne se lit PAS « fenêtre gratuite »', async () => {
+  // LE CAS QUI SE DÉGUISAIT EN NORMAL (revue du 2026-09-05), déplacé par
+  // l'ADR 0041 au moment de la RÉCLAMATION : `chargeCancellationFee` rend
+  // `aucun_moyen`, un code qui n'est ni un succès ni `frais_refuses`. La pièce
+  // financière s'écrit quand même, refusée et motivée, et le fait de
+  // l'annulation portait déjà `indemnite_en_attente` — jamais « fenêtre
+  // gratuite », puisque le barème avait bien ouvert un plafond.
   const proche = '2026-09-10';
   const h = harness({
     billingConfigured: true,
@@ -517,21 +523,25 @@ test('des frais DUS que Nota n’a pas pu prélever ne se lisent PAS « fenêtre
     body: JSON.stringify({ id: 'b1', dateISO: proche }),
   });
   assert.equal(res.statusCode, 200, res.body);
-
-  assert.equal((await journal(h.repo, 'annulation_frais')).length, 0,
-    'aucune pièce financière : c’est précisément pourquoi le FAIT doit porter la vérité');
   const e = await seule(h.repo, 'offre_annulee');
-  assert.equal(e.meta.motif, 'frais_non_preleves');
+  assert.equal(e.meta.motif, 'indemnite_en_attente');
   assert.equal(e.meta.frais, 0, '`frais` reste ce qui a bougé — rien');
-  // Le montant RÉCLAMÉ par le barème, calculé depuis le barème et non recopié
+  // Le montant que le barème PERMET, calculé depuis le barème et non recopié
   // d'une sortie observée : 10 % du montant au palier « ≤ 14 jours ».
   const attendu = require('../src/cancellation-config.js').feeFor({
     montant: 2000,
     joursAvant: domain.daysBetween(TODAY, proche),
-    paliers: require('../src/cancellation-config.js').envDefaults().paliers,
+  }).plafond;
+  assert.equal(e.meta.plafond, attendu);
+
+  const rec = await h.app.handle({
+    method: 'POST', path: '/notary/bids/indemnite', headers: { authorization: 'Bearer ' + jetonNotaire() },
+    body: JSON.stringify({ id: 'b1', dateISO: proche, montant: attendu, justification: 'Journée bloquée, dossier ouvert, recherches faites.' }),
   });
-  assert.ok(attendu.frais > 0, 'le barème réclamait bien quelque chose');
-  assert.equal(e.meta.fraisDus, attendu.frais, 'ce que le notaire attend, lisible sans rejouer le barème');
+  assert.equal(rec.statusCode, 200, rec.body);
+  const frais = await seule(h.repo, 'annulation_frais');
+  assert.equal(frais.meta.percu, false, 'la pièce financière existe, refusée');
+  assert.equal(frais.meta.motif, 'aucun_moyen', 'et elle dit pourquoi');
 });
 
 // ---------------------------------------------------------------------------

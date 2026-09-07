@@ -160,6 +160,34 @@ services:
       # dès que NODE_ENV vaut « production » — ce n'est pas une porte dérobée,
       # c'est un mode explicitement borné.
       NOTA_DEMO_OPEN: "true"
+      # L'origine que le NAVIGATEUR atteint : c'est elle qui doit figurer dans
+      # les liens des courriels (#cauth=, #nauth=, #pauth=), pas l'adresse
+      # interne du conteneur. Sans elle, les liens partaient vides.
+      NOTA_SITE_URL: http://localhost:4173
+      # La pile locale n'avait aucun mailer : tout ce qui passe par le courriel
+      # était intestable ici. Les messages sont écrits dans ce dossier (monté
+      # depuis le dépôt) et le lien est imprimé dans les logs du conteneur.
+      NOTA_LOCAL_MAIL_DIR: /repo/.local-mail
+      # ADR 0045 — le fournisseur d'identité. L'émetteur est l'adresse PUBLIQUE
+      # du royaume (celle que le navigateur atteint), parce que c'est elle qui
+      # signe la claim `iss` du jeton et donc celle que la vérification exige.
+      # Sans ces variables, /auth/keycloak/* répond 503 et le reste de l'API ne
+      # change pas d'un pouce.
+      NOTA_KEYCLOAK_ISSUER: http://localhost:8081/realms/nota
+      NOTA_KEYCLOAK_CLIENT_ID: nota-web
+      # ADR 0046 — l'assistant de la messagerie. La clé se passe depuis le shell
+      # (`export ANTHROPIC_API_KEY=...` puis `docker compose up`) et n'est
+      # JAMAIS écrite ici : ce fichier est versionné. Sans clé, la messagerie
+      # locale se comporte comme un déploiement non configuré — aucune réponse
+      # automatique, la question part au « courriel » de l'opérateur, qui
+      # atterrit dans .local-mail/. C'est la même dégradation qu'en production,
+      # et c'est donc testable localement dans les deux états.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      NOTA_ASSISTANT_MODEL: ${NOTA_ASSISTANT_MODEL:-}
+      NOTA_ASSISTANT_TIMEOUT_MS: ${NOTA_ASSISTANT_TIMEOUT_MS:-12000}
+      # Le prénom que l'assistant nomme en passant la main. Vide : « Nota ».
+      NOTA_OPERATOR_NAME: ${NOTA_OPERATOR_NAME:-}
+      NOTA_OPERATOR_EMAIL: ${NOTA_OPERATOR_EMAIL:-operateur@nota.local}
     # Under the watcher, never bare `node`: a bare process serves whatever it
     # required at boot, and this stack was caught answering with two-day-old
     # code while the tree had moved on. See apps/api/scripts/dev-watch.js.
@@ -235,8 +263,44 @@ services:
     depends_on:
       - admin-api
 
+  # Keycloak — le fournisseur d'identité qui NE CAPTE QUE LE COURRIEL (ADR 0045).
+  #
+  # Le royaume importé (docker/keycloak/realm-nota.json) pose trois choses et
+  # elles portent toute la décision : `verifyEmail: false` (c'est NOTRE base qui
+  # prouve l'adresse, pas Keycloak), l'adresse comme seul identifiant, et un
+  # client public avec PKCE obligatoire.
+  #
+  # Sur 8081, pas 8080 : le port 8080 est déjà pris par Docker Desktop sur une
+  # machine de développement, et un port occupé fait échouer `up` sans dire
+  # pourquoi. Le mode `start-dev` garde une base H2 embarquée — c'est une pile
+  # locale, pas une production ; le volume nommé la fait survivre au restart,
+  # comme DynamoDB et MinIO.
+  #
+  # AUCUN autre service ne dépend de lui : l'API répond 503 sur les routes
+  # Keycloak quand l'émetteur n'est pas configuré, et tout le reste de la pile
+  # (carnet, console, messagerie) continue de fonctionner sans lui. Le lien
+  # magique de l'ADR 0026 reste la porte des cinq autres mécaniques.
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    command: ["start-dev", "--import-realm", "--http-port=8081"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      # L'émetteur que le NAVIGATEUR atteint. C'est lui qui figure dans la
+      # claim `iss` du jeton, donc c'est lui que l'API doit exiger — la même
+      # distinction interne/publique que NOTA_DOCS_PUBLIC_ENDPOINT.
+      KC_HOSTNAME: http://localhost:8081
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+    volumes:
+      - ./docker/keycloak:/opt/keycloak/data/import:ro
+      - keycloak-data:/opt/keycloak/data
+    ports:
+      - "8081:8081"
+
 volumes:
   # Named, so a restart is a restart and not a wipe. `docker compose down -v`
   # is the explicit way to throw the demo world away and re-seed from zero.
   dynamodb-data:
   minio-data:
+  keycloak-data:

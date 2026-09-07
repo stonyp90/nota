@@ -8,7 +8,7 @@ const cancellationCfg = require('./cancellation-config');
 const { decodeUnsubToken, createConsentRegistry } = require('./notifications');
 const { signToken, signChallengeToken, verifyToken, notaryIdForEmail, SCOPES } = require('./notary-auth');
 const { buildNotaryFeed, buildCarnetFeed } = require('./ics');
-const { statsDeltasForOffer, statsDeltasForRetain, statsDeltasForNotaryOnboarding, statsDeltasForFunnel } = require('./stats');
+const { statsDeltasForOffer, statsDeltasForRetain, statsDeltasForNotaryOnboarding, statsDeltasForFunnel, statsDeltasForAssistant } = require('./stats');
 // `bidTtl` reads the ONE retention policy (domain.RETENTION_FAMILIES, family
 // `offre`); this file used to compute `400 * 86400` on its own.
 const { notaryNotifSubject, clientNotifSubject, bidTtl } = require('./keys');
@@ -64,6 +64,11 @@ function createApp(repo, opts = {}) {
   const NOTARY_CHALLENGE_TTL_MS = opts.notaryChallengeTtlMs || 15 * 60 * 1000; // 15 min
   const NOTARY_LOGIN_RL_WINDOW_SEC = opts.notaryLoginRlWindowSec || 15 * 60; // 15 min window
   const NOTARY_LOGIN_RL_MAX = opts.notaryLoginRlMax || 5; // links / window / IP
+  // Le lien magique CLIENT — mêmes ordres de grandeur que celui du notaire :
+  // court (le lien vaut une session, pas un mot de passe) et freiné par IP.
+  const CLIENT_CHALLENGE_TTL_MS = opts.clientChallengeTtlMs || 15 * 60 * 1000; // 15 min
+  const CLIENT_LOGIN_RL_WINDOW_SEC = opts.clientLoginRlWindowSec || 15 * 60;
+  const CLIENT_LOGIN_RL_MAX = opts.clientLoginRlMax || 10; // liens / fenêtre / IP
   // La REDEMPTION a son propre plafond (2026-09-04). Elle est plus généreuse
   // que l'émission — un notaire peut légitimement rouvrir le même lien depuis
   // un client de courriel qui préfetche, ou se tromper d'onglet — mais elle est
@@ -84,6 +89,12 @@ function createApp(repo, opts = {}) {
   // test can assert the production (no-echo) shape.
   const NOTARY_LOGIN_DEV_ECHO =
     opts.notaryLoginDevEcho != null ? !!opts.notaryLoginDevEcho : process.env.NODE_ENV !== 'production';
+    // Même règle que l'écho notaire : présent hors production pour que les tests
+    // et la pile locale bouclent la poignée de main sans boîte aux lettres.
+    const CLIENT_LOGIN_DEV_ECHO =
+      opts.clientLoginDevEcho != null ? !!opts.clientLoginDevEcho : process.env.NODE_ENV !== 'production';
+    const CLIENT_ESPACE_URL =
+      opts.clientEspaceUrl || opts.siteUrl || process.env.NOTA_SITE_URL || process.env.NOTA_BASE_URL || '';
 
   // --- Live support messaging (ADR 0026) -------------------------------------
   // The widget's thread token lives on the visitor's device for a season; the
@@ -102,7 +113,14 @@ function createApp(repo, opts = {}) {
   // it, this layer only stamps it before every rewrite.
   const supportSummarize = (thread) => {
     const sm = domain.supportThreadSummary(thread);
-    return { ...thread, dernierAt: sm.dernierAt, dernierDe: sm.dernierDe, nb: sm.nb, statut: sm.statut };
+    // `escalade` voyage avec le résumé (ADR 0046) pour que la boîte de
+    // l'opérateur distingue d'un coup d'œil les fils que l'assistant a
+    // traités de ceux qui l'attendent, LUI.
+    return {
+      ...thread,
+      dernierAt: sm.dernierAt, dernierDe: sm.dernierDe, nb: sm.nb, statut: sm.statut,
+      escalade: sm.escalade, escaladeMotif: sm.escaladeMotif,
+    };
   };
   // The retained-act chat is throttled per thread AND side: a runaway client
   // (or a stuck notary console) must not flood the other party's inbox. Same
@@ -296,6 +314,85 @@ function createApp(repo, opts = {}) {
     return notifierInstance;
   }
 
+  // --- L'assistant de la messagerie (ADR 0046) -------------------------------
+  // Même paresse que le notifier et la facturation : l'adaptateur n'est
+  // construit qu'au premier message, et SEULEMENT si une clé est configurée.
+  // Sans clé, `createAnthropicAssistant` rend null, l'hexagone se met en mode
+  // « escalade toujours », et la messagerie se comporte exactement comme avant
+  // l'ADR 0046 — le propriétaire reçoit chaque question par courriel. Une clé
+  // absente DÉGRADE, elle ne casse jamais.
+  //
+  // L'invite système dépend de la grille de prix, qui est résolue par requête
+  // (un opérateur peut la changer sans déploiement) : l'instance est donc
+  // reconstruite à chaque message, mais l'adaptateur — le seul objet coûteux —
+  // est mis en cache.
+  //
+  // LA CLÉ NE VIENT PAS D'UNE VARIABLE TERRAFORM. Terraform écrit la valeur de
+  // chaque variable dans son état, en clair, `sensitive = true` compris — et
+  // l'état de ce dépôt est LOCAL. La clé vit donc dans SSM Parameter Store
+  // (SecureString, palier standard, gratuit) ; l'infrastructure n'en connaît
+  // que le NOM et le droit de le lire. `ANTHROPIC_API_KEY` reste accepté en
+  // premier pour le développement local et le conteneur docker, où il n'y a ni
+  // SSM ni état à protéger. Voir secrets-port.js.
+  let secretsInstance = opts.secrets || null;
+  function secrets() {
+    if (secretsInstance) return secretsInstance;
+    const { createSsmSecrets } = require('./secrets-port');
+    secretsInstance = createSsmSecrets({ region: env.AWS_REGION });
+    return secretsInstance;
+  }
+  let assistantPortInstance = opts.assistantPort || null;
+  let assistantPortResolved = !!opts.assistantPort;
+  async function assistantPort() {
+    if (assistantPortInstance) return assistantPortInstance;
+    if (assistantPortResolved) return null;
+    const direct = env.ANTHROPIC_API_KEY || env.NOTA_ASSISTANT_API_KEY;
+    const param = env.NOTA_ASSISTANT_KEY_PARAM;
+    if (!direct && !param) {
+      // Rien de configuré : inutile d'aller le redemander à chaque message.
+      assistantPortResolved = true;
+      return null;
+    }
+    // La résolution SSM est mise en cache PAR LE PORT (un aller-retour par
+    // démarrage à froid) ; on ne fige donc `assistantPortResolved` qu'une fois
+    // la réponse obtenue, pour qu'un SSM momentanément indisponible n'éteigne
+    // pas l'assistant jusqu'au prochain déploiement.
+    const key = direct || (await secrets().get(param));
+    if (!key) return null;
+    assistantPortResolved = true;
+    const { createAnthropicAssistant } = require('./assistant-port');
+    assistantPortInstance = createAnthropicAssistant({
+      apiKey: key,
+      model: env.NOTA_ASSISTANT_MODEL || undefined,
+      effort: env.NOTA_ASSISTANT_EFFORT || undefined,
+      // Le délai du port DOIT rester sous celui de la Lambda : un dépassement
+      // doit devenir une escalade propre, jamais un 502 qui perd la question.
+      timeoutMs: Number(env.NOTA_ASSISTANT_TIMEOUT_MS) || 12000,
+    });
+    return assistantPortInstance;
+  }
+  async function supportAssistant() {
+    const { createSupportAssistant } = require('./support-assistant');
+    const [grille, annulation] = await Promise.all([
+      prixConfig.resolveGrille(repo, env).catch(() => undefined),
+      annulationConfig().catch(() => null),
+    ]);
+    return createSupportAssistant({
+      port: await assistantPort(),
+      operator: {
+        // Le prénom de la personne qui reprend la main est une donnée
+        // d'exploitation, jamais un littéral : sans lui, c'est la maison qui
+        // répond.
+        nom: env.NOTA_OPERATOR_NAME || undefined,
+        courriel: env.NOTA_OPERATOR_EMAIL || null,
+      },
+      grille,
+      policy: annulation
+        ? { paliers: annulation.paliers, annulationDelaiJours: annulation.delaiJours }
+        : undefined,
+    });
+  }
+
   // Best-effort analytics rollups (see keys.js STATS#). Awaited so the counter
   // write completes within the request (a Lambda may freeze after responding),
   // but wrapped so a rollup failure — including an older repo without the method
@@ -482,6 +579,15 @@ function createApp(repo, opts = {}) {
   // son algorithme. Elle ne sert qu'à une chose — reconnaître que deux refus
   // portent sur le MÊME lien, donc distinguer un rejeu d'un balayage — et 64
   // bits suffisent largement à cela, tout en restant irréversibles.
+  // Nomme une personne dans la piste d'audit SANS y écrire son adresse. Même
+  // dérivation que `notaryIdForEmail` : stable, irréversible, rejoignable si
+  // l'opérateur part de l'adresse.
+  function clientIdForEmail(courriel) {
+    const c = String(courriel || '').trim().toLowerCase();
+    if (!c) return null;
+    return require('crypto').createHash('sha256').update('client:' + c).digest('hex').slice(0, 32);
+  }
+
   function empreinteJeton(token) {
     const t = String(token || '');
     if (!t) return null;
@@ -624,6 +730,15 @@ function createApp(repo, opts = {}) {
       prixNotaMinCents: domain.prixNota(null, 'standard', grille).totalCents,
       taxesIncluses: false,
       deboursInclus: false,
+      // ADR 0041 / art. 12 LPC — les frais possibles se disent AVANT
+      // l'engagement, sur le devis : le plafond par palier et le délai de
+      // réclamation, jamais un montant fixé d'avance.
+      annulation: await (async () => {
+        const cfg = await annulationConfig();
+        // Côté client le mot est « plafond » : le tarif ne porte ni « taux » ni « palier »
+        // (deontologie.feature), et c'est exactement ce que la ligne est.
+        return { plafonds: cfg.paliers.map((p) => ({ maxJours: p.maxJours, plafond: p.taux })), delaiJours: cfg.delaiJours };
+      })(),
     };
   }
 
@@ -687,6 +802,137 @@ function createApp(repo, opts = {}) {
     const stored = typeof repo.getCancellationConfig === 'function' ? await repo.getCancellationConfig() : null;
     const paliers = stored && Array.isArray(stored.paliers) ? stored.paliers : cancellationCfg.envDefaults().paliers;
     return paliers.map((t) => ({ maxJours: t.maxJours, taux: t.taux }));
+  }
+  // ADR 0041 — le barème ET le délai de réclamation, résolus au même endroit
+  // que la route d'annulation. Le `taux` d'un palier est un PLAFOND.
+  async function annulationConfig() {
+    const stored = typeof repo.getCancellationConfig === 'function' ? await repo.getCancellationConfig() : null;
+    return { paliers: await annulationBareme(), delaiJours: cancellationCfg.delaiFor(stored, opts.env || process.env) };
+  }
+
+  // --- L'indemnité de résiliation (ADR 0041) -----------------------------------
+  // Le client a annulé un acte RETENU près de la signature. Rien n'a été
+  // prélevé : le barème n'a ouvert qu'un PLAFOND (art. 13 LPC, art. 2129
+  // C.c.Q.). Trois sorties, et une seule bouge de l'argent :
+  //   • le notaire RÉCLAME, en justifiant, un montant sous le plafond → capture
+  //     (ou charge hors session) et virement, comme avant l'ADR 0041 ;
+  //   • le notaire RENONCE (il réclame zéro) → rien n'est pris ;
+  //   • le délai PASSE sans réclamation → rien n'est pris (geste quotidien).
+  // Dans les trois cas la réservation du client est libérée, le pointeur
+  // d'agenda tombe, la décision se journalise, et le client est prévenu.
+  async function libererCautionApresIndemnite(bid, origine) {
+    if (!(billingConfigured && bid.paymentIntentId && bid.paymentStatus !== 'void')) return;
+    const b = billing();
+    if (!(b && typeof b.cancelAuthorization === 'function')) return;
+    Promise.resolve(b.cancelAuthorization({ paymentIntentId: bid.paymentIntentId, bidId: bid.id })).catch(() => {});
+    await appendAudit('caution_liberee', {
+      bidId: bid.id,
+      dateISO: bid.dateISO,
+      paymentIntentId: bid.paymentIntentId,
+      origine: 'indemnite_' + origine,
+    }, SYSTEME);
+  }
+  async function cloreIndemnite(bid, statut, qui) {
+    const a = bid.annulation || {};
+    const annulation = { ...a, statut, frais: 0, percu: false, justification: null, dedommagement: null, decideeLe: now() };
+    const updated = { ...bid, annulation };
+    await repo.update(updated);
+    await libererCautionApresIndemnite(bid, statut);
+    if (bid.notaryId && typeof repo.removeRetained === 'function') {
+      await repo.removeRetained(bid.notaryId, { id: bid.id, dateISO: bid.dateISO });
+    }
+    await appendAudit('annulation_indemnite', {
+      bidId: bid.id,
+      dateISO: bid.dateISO,
+      notaryId: bid.notaryId || null,
+      montant: bid.montant,
+      taux: a.taux != null ? a.taux : null,
+      plafond: a.plafond != null ? a.plafond : null,
+      joursAvant: a.joursAvant != null ? a.joursAvant : null,
+      echeanceISO: a.echeanceISO || null,
+      statut,
+      frais: 0,
+    }, qui || SYSTEME);
+    const cn = notifier();
+    if (cn && typeof cn.onIndemniteDecidee === 'function') {
+      Promise.resolve(bid.notaryId ? repo.getNotary(bid.notaryId) : null)
+        .then((notary) => cn.onIndemniteDecidee(updated, { notary }))
+        .catch(() => {});
+    }
+    await notifyClient(updated, 'annulation', statut === 'renoncee'
+      ? 'Votre notaire ne réclame aucune indemnité : rien n’est retenu, et la somme réservée est libérée.'
+      : 'Aucune indemnité n’a été réclamée dans le délai : rien n’est retenu, et la somme réservée est libérée.');
+    return updated;
+  }
+  async function reclamerIndemnite(bid, v, notaryId) {
+    const a = bid.annulation || {};
+    const b = billing();
+    // Les deux moyens de prélever voyagent ensemble (ADR 0035) : la caution
+    // vivante si elle existe encore, sinon la carte enregistrée. billing.js
+    // choisit ; la route ne décide d'aucune mécanique d'argent.
+    const charge = b && typeof b.chargeCancellationFee === 'function'
+      ? await b.chargeCancellationFee({
+        paymentIntentId: cautionCapturable(bid) ? bid.paymentIntentId : null,
+        customerId: bid.paymentCustomerId || null,
+        paymentMethodId: bid.paymentMethodId || null,
+        bidId: bid.id, amountCents: v.montantCents, notaryId,
+      })
+      : { ok: false, code: 'aucun_moyen' };
+    const percu = !!charge.ok;
+    const mecanisme = charge.mecanisme || (cautionCapturable(bid) ? 'capture' : 'hors_session');
+    const dedommagement = percu
+      ? { notaire: true, verse: !!charge.verse, transferId: charge.transferId || null }
+      : { notaire: true, verse: false, transferId: null };
+    const motifRefus = percu ? null : ((charge.refus && charge.refus.code) || charge.code || 'frais_refuses');
+    const annulation = {
+      ...a,
+      statut: percu ? 'percue' : 'refusee',
+      frais: v.montant,
+      justification: v.justification,
+      chargeId: charge.chargeId || null,
+      mecanisme,
+      percu,
+      ...(percu ? {} : { refus: { code: motifRefus } }),
+      dedommagement,
+      decideeLe: now(),
+    };
+    const updated = { ...bid, annulation };
+    await repo.update(updated);
+    // Une capture partielle est un mouvement d'argent : la pièce financière
+    // (ADR 0023), avec depuis l'ADR 0041 la justification qui la fonde.
+    await appendAudit('annulation_frais', {
+      bidId: bid.id,
+      dateISO: bid.dateISO,
+      notaryId,
+      montant: bid.montant,
+      taux: a.taux != null ? a.taux : null,
+      plafond: a.plafond != null ? a.plafond : null,
+      frais: v.montant,
+      justification: v.justification,
+      joursAvant: a.joursAvant != null ? a.joursAvant : null,
+      mecanisme,
+      percu,
+      motif: motifRefus,
+      chargeId: charge.chargeId || null,
+      transferId: dedommagement.transferId,
+      verse: dedommagement.verse,
+    }, acteur(ACTEUR.NOTAIRE, notaryId));
+    // Un prélèvement refusé n'a rien capturé : la réservation, si elle existe
+    // encore, se relâche entière. Une capture partielle relâche le reste seule.
+    if (!percu) await libererCautionApresIndemnite(bid, 'refusee');
+    if (typeof repo.removeRetained === 'function') {
+      await repo.removeRetained(notaryId, { id: bid.id, dateISO: bid.dateISO });
+    }
+    const cn = notifier();
+    if (cn && typeof cn.onIndemniteDecidee === 'function') {
+      Promise.resolve(repo.getNotary(notaryId))
+        .then((notary) => cn.onIndemniteDecidee(updated, { notary }))
+        .catch(() => {});
+    }
+    await notifyClient(updated, 'annulation', percu
+      ? 'Votre notaire a réclamé une indemnité de ' + domain.money(v.montant) + ', justifiée, versée en dédommagement de la journée réservée.'
+      : 'Votre notaire a réclamé une indemnité de ' + domain.money(v.montant) + ', mais votre carte a refusé le prélèvement : rien n’a été retenu.');
+    return updated;
   }
 
   // The notary's own profile as the console reads and edits it (ADR 0033):
@@ -1725,6 +1971,75 @@ function createApp(repo, opts = {}) {
     // here does a code become a payee of record (write-once createPartner + the
     // sparse GSI1 attrs + a `confirmedAt` stamp), and only here is the welcome/
     // operator mail sent — mirroring /notary/session/verify.
+    // « J'ai perdu mon code » — la reprise du partenaire (2026-09-05).
+    // Le code, le lien et le type ne vivaient que dans `nota.partner.v1`, sur UN
+    // appareil : vider son navigateur les perdait définitivement, et la seule
+    // reprise consistait à re-réclamer le MÊME code — qu'on vient justement de
+    // perdre. Cette porte RAPPELLE, elle ne réclame pas : rien n'est créé, rien
+    // n'est modifié, et un code seulement réclamé (jamais confirmé) n'est pas
+    // rappelé — ce serait transformer une réclamation en l'air en preuve.
+    if (route === '/partenaires/rappel' && method === 'POST') {
+      let payload;
+      try {
+        payload = typeof request.body === 'string' ? JSON.parse(request.body || '{}') : request.body || {};
+      } catch {
+        return json(400, { errors: [{ code: 'json_invalide', message: 'Corps JSON invalide.' }] });
+      }
+
+      // Freiner d'abord, sur l'IP : sans plafond, la porte énumère les adresses
+      // partenaires par le temps de réponse. Échoue OUVERT.
+      const ipr = clientIp(request);
+      let nr = 1;
+      try {
+        nr = await repo.incrNotaryRateCounter('partner_rappel', ipr || 'unknown', CLIENT_LOGIN_RL_WINDOW_SEC, nowMs());
+      } catch {
+        nr = 1;
+      }
+      if (nr > CLIENT_LOGIN_RL_MAX) {
+        if (nr === CLIENT_LOGIN_RL_MAX + 1) {
+          await appendAudit('partenaire_rappel', { throttled: true }, acteur(ACTEUR.PARTENAIRE, null));
+        }
+        return json(429, { ok: true, throttled: true });
+      }
+
+      const courriel = String(payload.courriel || payload.email || '').trim().toLowerCase();
+      if (!domain.isEmail(courriel)) {
+        return json(422, { errors: [{ code: 'courriel_invalide', message: 'Le courriel n’est pas valide.' }] });
+      }
+
+      await appendAudit('partenaire_rappel', { throttled: false }, acteur(ACTEUR.PARTENAIRE, null));
+
+      // Le registre s'interroge par CODE, pas par adresse : on parcourt la liste
+      // (une Query bornée sur GSI1, jamais un Scan) et on retient les codes
+      // CONFIRMÉS de cette adresse. À l'échelle actuelle c'est le même chemin
+      // d'accès que la console d'analytique ; si le registre grossit, il faudra
+      // un index par adresse plutôt que ce parcours.
+      let miens = [];
+      try {
+        const tous = typeof repo.listPartners === 'function' ? await repo.listPartners() : [];
+        miens = (tous || []).filter((p) => p && p.confirmedAt && String(p.courriel || '').trim().toLowerCase() === courriel);
+      } catch {
+        miens = [];
+      }
+
+      // Envoi au mieux, et la réponse ne change JAMAIS : elle ne dit pas si
+      // l'adresse est partenaire.
+      const nrap = notifier();
+      if (nrap && miens.length && typeof nrap.onPartnerCodeReminder === 'function') {
+        for (const p of miens) {
+          Promise.resolve(
+            nrap.onPartnerCodeReminder({
+              courriel,
+              code: p.code,
+              type: p.type || null,
+              link: PARTNER_CLAIM_URL ? PARTNER_CLAIM_URL + '/?ref=' + encodeURIComponent(p.code) : null,
+            })
+          ).catch(() => {});
+        }
+      }
+      return json(200, { ok: true });
+    }
+
     if (route === '/partenaires/verify' && method === 'POST') {
       const { payload, error } = parseBody(request);
       if (error) return error;
@@ -1805,6 +2120,151 @@ function createApp(repo, opts = {}) {
         if (n) Promise.resolve(n.onClientSignup(email)).catch(() => {});
       }
       return json(200, { ok: true });
+    }
+
+    // --- L'ESPACE CLIENT (2026-09-05) ---------------------------------------
+    // Un client était connu de son SEUL appareil : la liste de ses offres et
+    // les jetons qui les ouvrent vivaient dans le localStorage. Vider son
+    // navigateur ou changer de téléphone effaçait son historique — alors que
+    // le serveur le tenait toujours, dans l'index `CLIENT#<courriel>` écrit à
+    // chaque publication. Son unique lecteur était la console d'opérateur.
+    //
+    // Ce qu'on N'A PAS fait : rendre les offres sur une adresse nue. L'index
+    // serait devenu une porte d'énumération (« qui est client ? ») et de
+    // reprise de compte. La preuve de la BOÎTE vient donc d'abord, par le même
+    // lien à usage unique que le notaire et le soutien (ADR 0026).
+    //
+    // Ce qu'on rend ensuite n'est pas une nouvelle portée : ce sont les jetons
+    // CLIENT par offre que le client possédait déjà (`sub === bid.id`).
+    // `requireClient` ne bouge pas, et aucune portée « personne » n'existe.
+    if (route === '/client/session/request' && method === 'POST') {
+      let payload;
+      try {
+        payload = typeof request.body === 'string' ? JSON.parse(request.body || '{}') : request.body || {};
+      } catch {
+        return json(400, { errors: [{ code: 'json_invalide', message: 'Corps JSON invalide.' }] });
+      }
+
+      // Freiner AVANT toute lecture, sur l'IP de source : un flot hostile ne
+      // doit pas pouvoir sonder des adresses, quelles qu'elles soient. Échoue
+      // OUVERT sur une panne de compteur — la disponibilité prime pour une
+      // porte de connexion.
+      const ipc = clientIp(request);
+      let nc = 1;
+      try {
+        nc = await repo.incrNotaryRateCounter('client_login', ipc || 'unknown', CLIENT_LOGIN_RL_WINDOW_SEC, nowMs());
+      } catch {
+        nc = 1;
+      }
+      if (nc > CLIENT_LOGIN_RL_MAX) {
+        // Seul le FRANCHISSEMENT est journalisé : une trace par requête bloquée
+        // donnerait à un attaquant le pouvoir de faire grossir le journal.
+        if (nc === CLIENT_LOGIN_RL_MAX + 1) {
+          await appendAudit('client_lien_demande', { trouve: null, throttled: true }, acteur(ACTEUR.CLIENT, null));
+        }
+        return json(429, { ok: true, throttled: true });
+      }
+
+      const courriel = String(payload.courriel || payload.email || '').trim().toLowerCase();
+      if (!domain.isEmail(courriel)) {
+        return json(422, { errors: [{ code: 'courriel_invalide', message: 'Le courriel n’est pas valide.' }] });
+      }
+
+      // L'identifiant DÉRIVÉ nomme la personne dans la piste sans y écrire son
+      // adresse : un journal conservé des années ne porte pas la boîte en clair.
+      const sujet = clientIdForEmail(courriel);
+      await appendAudit('client_lien_demande', { throttled: false }, acteur(ACTEUR.CLIENT, sujet));
+
+      const cid = newId();
+      const exp = nowMs() + CLIENT_CHALLENGE_TTL_MS;
+      await repo.putClientLoginChallenge({
+        challengeId: cid,
+        courriel,
+        sujet,
+        createdAt: new Date(nowMs()).toISOString(),
+        expiresAt: exp,
+        consumed: false,
+        ttl: Math.floor(exp / 1000) + 60, // DynamoDB fait le ménage après coup
+      });
+
+      // Le lien porte le défi dans le HASH, jamais dans une query string (qui
+      // se journalise) : l'app consomme `#cauth=` au chargement.
+      const token = signChallengeToken(sujet, cid, exp);
+      const link = CLIENT_ESPACE_URL ? CLIENT_ESPACE_URL + '/#cauth=' + encodeURIComponent(token) : null;
+
+      // Envoi au mieux : un échec de courriel ne change pas la réponse — le
+      // client peut redemander un lien. Anti-énumération : la réponse est la
+      // MÊME que l'adresse ait des offres ou non. On pose le défi dans les deux
+      // cas, précisément pour que les deux chemins coûtent le même temps.
+      const nsend = notifier();
+      if (nsend && link && typeof nsend.onClientLoginRequested === 'function') {
+        Promise.resolve(
+          nsend.onClientLoginRequested({ courriel, link, ttlMinutes: Math.round(CLIENT_CHALLENGE_TTL_MS / 60000) })
+        ).catch(() => {});
+      }
+
+      const out = { ok: true };
+      if (CLIENT_LOGIN_DEV_ECHO) {
+        out.devToken = token;
+        if (link) out.devLink = link;
+      }
+      return json(200, out);
+    }
+
+    if (route === '/client/session/verify' && method === 'POST') {
+      let payload;
+      try {
+        payload = typeof request.body === 'string' ? JSON.parse(request.body || '{}') : request.body || {};
+      } catch {
+        return json(400, { errors: [{ code: 'json_invalide', message: 'Corps JSON invalide.' }] });
+      }
+
+      const jeton = String(payload.token || '');
+      const claims = verifyToken(jeton, nowMs());
+      if (!claims || claims.scope !== SCOPES.CHALLENGE || !claims.cid) {
+        return json(401, { errors: [{ code: 'lien_invalide', message: 'Lien invalide ou expiré.' }] });
+      }
+
+      // Consommation atomique à usage unique : le PREMIER gagne, un rejeu obtient
+      // null. C'est ce qui rend un lien intercepté inutilisable deux fois.
+      const challenge = await repo.consumeClientLoginChallenge(claims.cid, nowMs());
+      if (!challenge || challenge.sujet !== claims.sub) {
+        return json(401, { errors: [{ code: 'lien_invalide', message: 'Lien invalide ou déjà utilisé.' }] });
+      }
+
+      const courriel = String(challenge.courriel || '').trim().toLowerCase();
+      const pointeurs = typeof repo.listClientBids === 'function' ? await repo.listClientBids(courriel) : [];
+
+      // On relit chaque offre pour rendre une ligne qui se LIT sans second
+      // appel, et on frappe un jeton CLIENT frais par offre. Une offre que le
+      // dépôt ne rend plus (expirée, purgée) disparaît simplement de la liste.
+      const offres = [];
+      for (const p of pointeurs) {
+        const bid = await repo.get(p.bidId, p.dateISO);
+        if (!bid) continue;
+        offres.push({
+          id: bid.id,
+          dateISO: bid.dateISO,
+          serviceId: bid.serviceId,
+          montant: bid.montant,
+          status: bid.status,
+          clientToken: signToken(bid.id, nowMs() + CLIENT_TOKEN_TTL_MS, SCOPES.CLIENT),
+        });
+      }
+      offres.sort((a, b) => String(a.dateISO).localeCompare(String(b.dateISO)));
+
+      // L'ouverture d'un dossier se journalise (ADR 0036) : c'est un accès à
+      // des données personnelles. Le nombre d'offres suffit à reconstituer ce
+      // qui a été rendu ; l'adresse reste hors du journal.
+      await appendAudit(
+        'client_espace_ouvert',
+        { challengeId: claims.cid, offres: offres.length },
+        acteur(ACTEUR.CLIENT, challenge.sujet)
+      );
+
+      // Une liste VIDE n'est pas une erreur : la personne a prouvé sa boîte,
+      // elle n'a simplement rien publié. Un 404 ici dirait qui est client.
+      return json(200, { ok: true, courriel, offres });
     }
 
     // --- Free signup by professional email (2026-09-02) ----------------------
@@ -2467,6 +2927,32 @@ function createApp(repo, opts = {}) {
         const bids = await repo.listByMonth(month);
         for (const b of bids) {
           if (seen.has(b.id)) continue;
+          // ADR 0041 — un acte annulé par le client dont l'indemnité est encore
+          // à décider reste sur la console du notaire : c'est là qu'il
+          // réclame ou renonce. Il en sort à la décision, ou à l'échéance.
+          // Rien du client n'y voyage : la relation est finie (art. 37).
+          if (b.status === domain.STATUS.ANNULEE && b.annulation && b.annulation.statut === 'en_attente') {
+            if (b.notaryId === notaryId) {
+              seen.add(b.id);
+              const a = b.annulation;
+              retained.push({
+                annulee: true,
+                completed: false,
+                id: b.id,
+                dateISO: b.dateISO,
+                serviceId: b.serviceId,
+                montant: b.montant,
+                tier: b.tier,
+                prefixe: b.prefixe || null,
+                cancelledAt: b.cancelledAt || null,
+                annulation: {
+                  statut: a.statut, taux: a.taux, plafond: a.plafond, joursAvant: a.joursAvant,
+                  delaiJours: a.delaiJours, echeanceISO: a.echeanceISO, mecanisme: a.mecanisme,
+                },
+              });
+            }
+            continue;
+          }
           if (b.status === domain.STATUS.RETENUE) {
             if (b.notaryId === notaryId) {
               seen.add(b.id);
@@ -2518,7 +3004,9 @@ function createApp(repo, opts = {}) {
                 // sees on GET /client/bid; null when the cancel would be free.
                 annulation: await (async () => {
                   const fee = await annulationFeeFor(b);
-                  return fee ? { taux: fee.taux, frais: fee.frais, joursAvant: fee.joursAvant } : null;
+                  if (!fee) return null;
+                  const cfg = await annulationConfig();
+                  return { taux: fee.taux, plafond: fee.plafond, joursAvant: fee.joursAvant, delaiJours: cfg.delaiJours };
                 })(),
               });
             }
@@ -2585,7 +3073,7 @@ function createApp(repo, opts = {}) {
           // `applicable`: without a billing adapter no fee can ever be
           // captured (annulationFeeFor answers null) — the barème is then
           // information, not a promise, and the console says so.
-          annulation: { paliers: await annulationBareme(), beneficiaire: 'notaire', applicable: billingConfigured },
+          annulation: { ...(await annulationConfig()), indemnite: true, beneficiaire: 'notaire', applicable: billingConfigured },
           desistement: { gratuit: true, compte: true },
           // ADR 0035 — ce qui garantit le paiement, dit en clair : la carte du
           // client est validée par sa banque avant que l'offre paraisse, et la
@@ -3030,6 +3518,12 @@ function createApp(repo, opts = {}) {
         })),
         demandes: demandesOf(bid).map((d) => clientDemande(bid, d)),
         readiness: domain.leadReadiness(bid.serviceId, bid.dossier || {}, bid.pricing),
+        // Le dossier LUI-MÊME, pas seulement le compte qu'on en tire. Sans lui
+        // la reprise était à moitié faite : un client sur un appareil neuf
+        // retrouvait sa demande et une liste de documents vide, alors que ses
+        // réponses étaient là. Toujours un objet — jamais `undefined`, qui se
+        // lirait comme « aucune réponse » et effacerait le cache local.
+        dossier: bid.dossier || {},
         // The retained-act conversation. Empty until a notary retains the bid.
         messages: messagesOf(bid).map(chatMessage),
         // Read receipt (2026-09-04): when the notary last opened the thread.
@@ -3064,10 +3558,14 @@ function createApp(repo, opts = {}) {
         // ADR 0023 — what cancelling TODAY would cost, disclosed BEFORE the
         // client confirms. Null when the cancel would be free (open offer, no
         // live hold, free window) or impossible (settled act).
+        // ADR 0041 — ce que cancelling TODAY would OPEN: the cap the notary
+        // may claim, with justification, within `delaiJours`. Never a fee.
         annulation: await (async () => {
           if (completion) return null;
           const fee = await annulationFeeFor(bid);
-          return fee ? { taux: fee.taux, frais: fee.frais, joursAvant: fee.joursAvant } : null;
+          if (!fee) return null;
+          const cfg = await annulationConfig();
+          return { taux: fee.taux, plafond: fee.plafond, joursAvant: fee.joursAvant, delaiJours: cfg.delaiJours };
         })(),
       });
     }
@@ -3330,68 +3828,32 @@ function createApp(repo, opts = {}) {
       // to them (`dedommagementCentsDue`) when they cannot. `dedommagement`
       // on the bid says which, so the client reads where their money went.
       let annulation = null;
+      // ADR 0041 — plus aucun frais n'est PRÉLEVÉ à l'annulation. Le barème
+      // n'ouvre qu'un PLAFOND : l'art. 13 LPC interdit une pénalité au montant
+      // ou au pourcentage fixé d'avance, et l'art. 2129 C.c.Q. ne doit au
+      // notaire que ses frais réels et la valeur du travail accompli. Le
+      // notaire dispose d'un délai pour RÉCLAMER, en justifiant ; la somme
+      // réservée reste en place jusque-là. Sans réclamation, rien n'est pris.
+      // `annulationFeeFor` répond null quand aucun plafond ne s'ouvre : offre
+      // encore ouverte, fenêtre gratuite, aucun moyen de paiement, pas de
+      // facturation.
       const fee = wasRetained ? await annulationFeeFor(bid) : null;
       if (fee) {
-        const b = billing();
-        // ADR 0035 — les deux moyens de prélever voyagent ensemble : la caution
-        // vivante (capture partielle) si elle existe, sinon la carte
-        // enregistrée (hors session). billing.js choisit ; la route ne décide
-        // pas de mécanique d'argent.
-        const charge = b && typeof b.chargeCancellationFee === 'function'
-          ? await b.chargeCancellationFee({
-            paymentIntentId: cautionCapturable(bid) ? bid.paymentIntentId : null,
-            customerId: bid.paymentCustomerId || null,
-            paymentMethodId: bid.paymentMethodId || null,
-            bidId: bid.id, amountCents: fee.fraisCents, notaryId: bid.notaryId || null,
-          })
-          : { ok: false };
-        // ADR 0035 — un prélèvement REFUSÉ n'est pas une annulation gratuite.
-        // La porte hors session vise des cartes qui viennent parfois d'être
-        // refusées deux jours plus tôt : c'est le cas de bord le plus probable
-        // du mécanisme. Il s'inscrit donc — `percu: false` — pour que le
-        // notaire l'apprenne, que le client lise la vérité, et que la piste
-        // d'audit le compte. Ce qui ne s'inscrit PAS, c'est un dédommagement
-        // au notaire : Nota n'a rien encaissé, elle ne doit rien.
-        const percu = !!charge.ok;
-        if (percu || charge.code === 'frais_refuses') {
-          const dedommagement = percu
-            ? { notaire: true, verse: !!charge.verse, transferId: charge.transferId || null }
-            : { notaire: true, verse: false, transferId: null };
-          annulation = {
-            taux: fee.taux,
-            frais: fee.frais,
-            joursAvant: fee.joursAvant,
-            chargeId: charge.chargeId || null,
-            // Quel mécanisme a porté (ou tenté) les frais : `capture` retient
-            // sur une somme DÉJÀ réservée, `hors_session` porte une charge
-            // NEUVE sur la carte enregistrée. Le client ne lit pas la même
-            // phrase dans les deux cas — il n'y a pas toujours de caution.
-            mecanisme: charge.mecanisme || (cautionCapturable(bid) ? 'capture' : 'hors_session'),
-            percu,
-            ...(percu ? {} : { refus: { code: (charge.refus && charge.refus.code) || 'frais_refuses' } }),
-            dedommagement,
-          };
-          // Une capture partielle est un mouvement d'argent : elle laisse une
-          // trace, comme le règlement d'un acte (ADR 0023 + piste d'audit).
-          // Le virement au notaire en fait partie (ADR 0033) : `verse` dit si
-          // l'argent est parti, `transferId` le nomme. Un échec en laisse une
-          // aussi : `percu: false` est ce qu'un opérateur doit pouvoir compter.
-          await appendAudit('annulation_frais', {
-            bidId: bid.id,
-            dateISO: bid.dateISO,
-            notaryId: bid.notaryId || null,
-            montant: bid.montant,
-            taux: fee.taux,
-            frais: fee.frais,
-            joursAvant: fee.joursAvant,
-            mecanisme: annulation.mecanisme,
-            percu,
-            motif: percu ? null : ((charge.refus && charge.refus.code) || 'frais_refuses'),
-            chargeId: charge.chargeId || null,
-            transferId: dedommagement.transferId,
-            verse: dedommagement.verse,
-          }, acteur(ACTEUR.CLIENT, bid.id));
-        }
+        const cfg = await annulationConfig();
+        annulation = {
+          statut: 'en_attente',
+          taux: fee.taux,
+          plafond: fee.plafond,
+          joursAvant: fee.joursAvant,
+          delaiJours: cfg.delaiJours,
+          echeanceISO: domain.addDays(now(), cfg.delaiJours),
+          // Quel mécanisme porterait une réclamation : la caution vivante
+          // (capture partielle) ou la carte enregistrée (hors session).
+          mecanisme: cautionCapturable(bid) ? 'capture' : 'hors_session',
+          frais: 0,
+          percu: false,
+          dedommagement: null,
+        };
       }
 
       const cancelled = { ...bid, status: domain.STATUS.ANNULEE, cancelledAt: now(), annulation };
@@ -3428,10 +3890,13 @@ function createApp(repo, opts = {}) {
       // le plus alarmant se serait lu comme le plus banal, sans qu'aucune autre
       // entrée ne vienne le contredire : `annulation_frais`, justement, n'est
       // pas écrite dans ce cas-là.
+      // ADR 0041 — `indemnite_en_attente` remplace `frais_percus` /
+      // `frais_refuses` : à l'annulation, rien ne bouge encore. La pièce
+      // financière (`annulation_frais`) s'écrit à la RÉCLAMATION du notaire.
       const motifAnnulation = !wasRetained
         ? 'non_retenue'
         : annulation
-          ? (annulation.percu ? 'frais_percus' : 'frais_refuses')
+          ? 'indemnite_en_attente'
           : fee
             ? 'frais_non_preleves'
             : !billingConfigured
@@ -3453,21 +3918,28 @@ function createApp(repo, opts = {}) {
           // qui rende `frais_non_preleves` actionnable (le notaire attend ce
           // dédommagement-là), et le confondre avec `frais` ferait croire à un
           // encaissement — la leçon de l'ADR 0029.
-          frais: annulation ? annulation.frais : 0,
+          frais: 0,
           taux: annulation ? annulation.taux : 0,
-          fraisDus: !annulation && fee ? fee.frais : null,
+          // Ce que le barème PERMET de réclamer, jamais ce qui a bougé.
+          plafond: annulation ? annulation.plafond : null,
+          echeanceISO: annulation ? annulation.echeanceISO : null,
+          fraisDus: null,
           motif: motifAnnulation,
           // Une caution encore vivante est relâchée juste en dessous : le
           // journal doit dire si l'argent du client a été rendu, sinon
           // « pourquoi ma carte est-elle encore bloquée » reste sans réponse.
-          cautionLiberee: !(annulation && annulation.percu) && billingConfigured
+          // Une indemnité en attente GARDE la réservation en place jusqu'à la
+          // décision du notaire ou l'échéance.
+          cautionLiberee: !annulation && billingConfigured
             && !!bid.paymentIntentId && bid.paymentStatus !== 'void',
         },
         acteur(ACTEUR.CLIENT, bid.id)
       );
       // The signing no longer exists: drop it from the retaining notary's
       // calendar-feed pointers too (older repos may not have the method).
-      if (wasRetained && bid.notaryId && typeof repo.removeRetained === 'function') {
+      // ADR 0041 — tant que l'indemnité est à décider, l'acte reste sur la
+      // console du notaire : c'est là qu'il réclame ou renonce.
+      if (wasRetained && bid.notaryId && !annulation && typeof repo.removeRetained === 'function') {
         await repo.removeRetained(bid.notaryId, { id: bid.id, dateISO: bid.dateISO });
       }
 
@@ -3476,7 +3948,7 @@ function createApp(repo, opts = {}) {
       // capture already released its remainder, so never on top of one). Un
       // prélèvement REFUSÉ n'a rien capturé : la réservation, si elle existe,
       // se relâche comme dans le cas gratuit.
-      if (!(annulation && annulation.percu) && billingConfigured && bid.paymentIntentId && bid.paymentStatus !== 'void') {
+      if (!annulation && billingConfigured && bid.paymentIntentId && bid.paymentStatus !== 'void') {
         const b = billing();
         if (b && typeof b.cancelAuthorization === 'function') {
           Promise.resolve(b.cancelAuthorization({ paymentIntentId: bid.paymentIntentId, bidId: bid.id })).catch(() => {});
@@ -3581,19 +4053,100 @@ function createApp(repo, opts = {}) {
       const message = { id: newId(), de: domain.SUPPORT_FROM.VISITEUR, texte: v.texte, createdAt: new Date(nowMs()).toISOString() };
       if (!thread) thread = { id: newId(), courriel: null, createdAt: now(), messages: [] };
       if (v.courriel) thread.courriel = v.courriel;
-      thread.messages = [...(thread.messages || []), message];
+      const historique = [...(thread.messages || [])];
+      thread.messages = [...historique, message];
+
+      // --- L'assistant répond d'abord (ADR 0046) ---------------------------
+      // Ce que le propriétaire a demandé : que les questions qu'on sait
+      // répondre le soient tout de suite, et que le reste lui arrive par
+      // courriel. L'assistant est donc SYNCHRONE — le visiteur lit la réponse
+      // dans la même requête — et il ne peut pas jeter : tout ce qui n'est pas
+      // une réponse propre revient en escalade (support-assistant.js).
+      const assistant = await supportAssistant();
+      const reponse = await assistant.answer({
+        question: v.texte,
+        historique,
+        locale: String(payload.locale || '').slice(0, 2).toLowerCase() === 'en' ? 'en' : 'fr',
+      });
+      // Sans assistant configuré, `texte` est nul et le fil reste muet : la
+      // messagerie se comporte exactement comme avant l'ADR 0046.
+      const reply = reponse.texte
+        ? {
+            id: newId(),
+            de: reponse.de,
+            texte: reponse.texte,
+            createdAt: new Date(nowMs() + 1).toISOString(),
+            ...(reponse.niveau ? { niveau: reponse.niveau } : {}),
+          }
+        : null;
+      if (reply) thread.messages = [...thread.messages, reply];
+      if (reponse.escalade && assistant.enabled) {
+        // L'escalade est portée par le FIL, pas par le message : c'est elle
+        // qui garde le fil dans « à répondre » tant qu'un humain n'a pas
+        // parlé, quoi que l'assistant ait écrit entre-temps.
+        thread.escaladeLe = reply ? reply.createdAt : message.createdAt;
+        thread.escaladeMotif = reponse.motif;
+      } else if (reply) {
+        // Une réponse propre CLÔT l'escalade précédente : le fil ne doit pas
+        // rester marqué « attend une personne » après une question suivante
+        // que l'assistant a su traiter.
+        thread.escaladeLe = null;
+        thread.escaladeMotif = null;
+      }
       await repo.putSupportThread(supportSummarize(thread));
+
+      // Ce que l'assistant vient de faire, compté (ADR 0046). Sans cela, la
+      // seule chose visible de lui serait ce qu'il n'a PAS su traiter — et les
+      // jetons sont la facture. Best-effort, comme tout le reste de
+      // l'analytique : jamais sur le chemin d'une réponse.
+      if (reply) {
+        await recordStats(
+          statsDeltasForAssistant({
+            escalade: reponse.escalade,
+            motif: reponse.motif,
+            usage: reponse.usage,
+            dayISO: now(),
+          })
+        );
+      }
+
+      // Le courriel ne part QUE sur escalade — c'est tout l'intérêt de
+      // l'ADR 0046 : la boîte de l'opérateur cesse de recevoir les questions
+      // dont la fiche de faits a la réponse. `NOTA_ASSISTANT_COPY_ALL` rend
+      // l'ancien comportement (une copie de chaque question) à qui veut lire
+      // par-dessus l'épaule de l'assistant.
       const sn = notifier();
-      if (sn && typeof sn.onSupportMessage === 'function') {
+      const copieTout = String(env.NOTA_ASSISTANT_COPY_ALL || '') === '1';
+      // Sans assistant, `reponse.escalade` est vrai mais rien n'a ESCALADÉ :
+      // aucune machine n'a examiné la question. L'alerte doit alors rester
+      // celle d'avant l'ADR 0046 — « nouvelle question », pas « une question
+      // pour vous », qui promettrait un tri qui n'a pas eu lieu.
+      const escalade = reponse.escalade && assistant.enabled;
+      if (sn && typeof sn.onSupportMessage === 'function' && (escalade || !assistant.enabled || copieTout)) {
         const replyUrl = SUPPORT_URL
           ? SUPPORT_URL + '/#reponse=' + encodeURIComponent(signToken(thread.id, nowMs() + SUPPORT_OP_TTL_MS, SCOPES.SUPPORT_OP))
           : null;
-        Promise.resolve(sn.onSupportMessage({ message, courriel: thread.courriel, replyUrl })).catch(() => {});
+        Promise.resolve(
+          sn.onSupportMessage({
+            message,
+            courriel: thread.courriel,
+            replyUrl,
+            escalade,
+            motif: escalade ? reponse.motif : null,
+            // Le fil entier part avec l'alerte : le propriétaire doit pouvoir
+            // répondre depuis son courriel sans ouvrir quoi que ce soit.
+            historique: thread.messages.map(supportMessageView),
+          })
+        ).catch(() => {});
       }
+
       return json(201, {
         threadId: thread.id,
         token: signToken(thread.id, nowMs() + SUPPORT_TOKEN_TTL_MS, SCOPES.SUPPORT),
         message: supportMessageView(message),
+        // La réponse voyage dans la MÊME réponse HTTP : le widget l'affiche
+        // sans attendre son prochain sondage.
+        ...(reply ? { reponse: supportMessageView(reply), escalade: reponse.escalade } : {}),
       });
     }
 
@@ -3716,7 +4269,7 @@ function createApp(repo, opts = {}) {
       const bid = await repo.get(payload.id, payload.dateISO);
       if (!bid) return json(404, { errors: [{ code: 'introuvable', message: 'Offre introuvable.' }] });
       const luLe = new Date(nowMs()).toISOString();
-      await repo.update({ ...bid, luParClientAt: luLe });
+      await repo.markThreadRead(bid, 'client', luLe);
       return json(200, { luLe });
     }
     if (route === '/notary/bids/lecture' && method === 'POST') {
@@ -3728,7 +4281,7 @@ function createApp(repo, opts = {}) {
       if (!bid) return json(404, { errors: [{ code: 'introuvable', message: 'Offre introuvable.' }] });
       if (bid.notaryId !== notaryId) return json(403, { errors: [{ code: 'interdit', message: 'Conversation réservée au notaire qui a retenu l’offre.' }] });
       const luLe = new Date(nowMs()).toISOString();
-      await repo.update({ ...bid, luParNotaireAt: luLe });
+      await repo.markThreadRead(bid, 'notaire', luLe);
       return json(200, { luLe });
     }
 
@@ -3788,6 +4341,35 @@ function createApp(repo, opts = {}) {
     // posted it (domain.releasedBid); the withdrawing notary stops seeing it
     // (decline marker), their calendar pointer is dropped, and the client (and
     // the operator, when money may be in flight) are notified.
+    // ADR 0041 — le notaire décide de l'indemnité d'une annulation tardive :
+    // il RÉCLAME un montant sous le plafond, justifié, ou il RENONCE (zéro).
+    // Passé le délai, la porte répond 409 et clôt sans prélèvement.
+    if (route === '/notary/bids/indemnite' && method === 'POST') {
+      const { payload, error } = parseBody(request);
+      if (error) return error;
+      const notaryId = requireScope(bearer(request) || payload.token, SCOPES.SESSION);
+      if (!notaryId) return json(401, { errors: [{ code: 'non_autorise', message: 'Jeton invalide ou expiré.' }] });
+      const bid = await repo.get(payload.id, payload.dateISO);
+      if (!bid) return json(404, { errors: [{ code: 'introuvable', message: 'Offre introuvable.' }] });
+      const a = bid.annulation;
+      if (bid.status !== domain.STATUS.ANNULEE || !a || a.statut !== 'en_attente') {
+        return json(409, { errors: [{ code: 'indemnite_close', message: 'Aucune indemnité n’est en attente sur cette demande.' }], bid: publicBid(bid) });
+      }
+      if (bid.notaryId !== notaryId) {
+        return json(403, { errors: [{ code: 'interdit', message: 'Seul le notaire qui avait retenu la demande peut réclamer une indemnité.' }] });
+      }
+      if (a.echeanceISO && now() > a.echeanceISO) {
+        const expiree = await cloreIndemnite(bid, 'expiree', SYSTEME);
+        return json(409, { errors: [{ code: 'indemnite_echue', message: 'Le délai de réclamation est passé : rien n’est prélevé.' }], bid: publicBid(expiree) });
+      }
+      const v = domain.validateIndemnite({ montant: payload.montant, justification: payload.justification, plafond: a.plafond });
+      if (!v.ok) return json(422, { errors: v.errors });
+      const updated = v.renonce
+        ? await cloreIndemnite(bid, 'renoncee', acteur(ACTEUR.NOTAIRE, notaryId))
+        : await reclamerIndemnite(bid, v, notaryId);
+      return json(200, { bid: publicBid(updated), annulation: updated.annulation });
+    }
+
     if (route === '/notary/bids/release' && method === 'POST') {
       const { payload, error } = parseBody(request);
       if (error) return error;

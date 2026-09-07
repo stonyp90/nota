@@ -35,10 +35,53 @@ variable "operator_email" {
   default     = ""
 }
 
+variable "operator_name" {
+  description = "Le prénom de la personne qui reprend les questions escaladées (ADR 0046). L'assistant le nomme au visiteur ; vide, c'est « Nota » qui répond."
+  type        = string
+  default     = ""
+}
+
 variable "base_url" {
   description = "Public site origin used to build CTA + unsubscribe links in emails (e.g. https://nota.ca)."
   type        = string
   default     = ""
+}
+
+# --- L'assistant de la messagerie (ADR 0046) ---------------------------------
+# Une clé VIDE laisse la messagerie exactement comme avant : chaque question
+# part par courriel à l'opérateur, aucune réponse automatique. C'est une
+# dégradation propre, pas une panne — et c'est l'état par défaut.
+# LA CLÉ N'EST PAS UNE VARIABLE TERRAFORM, ET NE DOIT JAMAIS LE REDEVENIR.
+# Terraform écrit la valeur de chaque variable dans son état, EN CLAIR —
+# `sensitive = true` ne masque que la sortie de la console. L'état de ce dépôt
+# est local (infra/terraform.tfstate, plus son .backup). Une clé d'API en
+# variable est donc une clé déposée en clair sur le disque du propriétaire.
+#
+# Terraform ne connaît ici que le NOM d'un paramètre SSM et le droit de le
+# lire. La valeur s'y pose une seule fois, hors de ce dépôt :
+#
+#   aws ssm put-parameter --name /nota/assistant/anthropic-api-key \
+#     --type SecureString --value 'sk-ant-...' --region ca-central-1
+#
+# Palier standard : gratuit (Secrets Manager coûterait 0,40 $/mois/secret).
+# `apps/api/test/assistant-secret.test.mjs` lit CE fichier et refuse le retour
+# d'une variable qui porterait la valeur.
+variable "assistant_key_param" {
+  description = "Nom du paramètre SSM SecureString qui porte la clé API de l'assistant (ADR 0046). Sa VALEUR n'est jamais connue de Terraform. Vide = aucune réponse automatique, chaque question part à l'opérateur."
+  type        = string
+  default     = "/nota/assistant/anthropic-api-key"
+}
+
+variable "assistant_model" {
+  description = "Le modèle qui rédige les réponses de la messagerie. Vide = le défaut du port (assistant-port.js)."
+  type        = string
+  default     = ""
+}
+
+variable "assistant_timeout_ms" {
+  description = "Délai maximal d'un appel au modèle, en millisecondes. DOIT rester sous le délai de la Lambda : un dépassement doit devenir une escalade propre, jamais un 502."
+  type        = number
+  default     = 12000
 }
 
 # --- SES email identity ------------------------------------------------------
@@ -151,6 +194,14 @@ resource "aws_lambda_function" "reminders" {
       NOTA_FROM_EMAIL     = var.from_email
       NOTA_OPERATOR_EMAIL = var.operator_email
       NOTA_BASE_URL       = var.base_url
+
+      # ADR 0033 §2.7 — le lien signé qui ouvre L'ACTE du client est le bouton de
+      # tous ces courriels. Ce lot le frappe lui-même, donc il lui faut l'origine
+      # publique et LE MÊME secret que la Lambda API : un lien signé avec un autre
+      # secret ne se vérifierait pas au retour. (apps/api/test/rappels-lien-client
+      # tient les deux ensemble.)
+      NOTA_SITE_URL      = var.base_url
+      NOTA_NOTARY_SECRET = random_password.notary_secret.result
 
       # ADR 0035 — la caution. Ce lot quotidien pose, hors session, l'autorisation
       # de carte qui doit vivre jusqu'à la signature : sans clé Stripe il ne pose

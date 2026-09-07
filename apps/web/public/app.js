@@ -313,6 +313,9 @@
   function showOfferSuccess() {
     renderOfferSuccessOrigin();
     var box = $('offer-success'); if (box) box.hidden = false;
+    // L'offre est publiée : plus aucun écran, ni rail, ni barre d'action — la
+    // confirmation est seule (ADR 0040). openDay() repose data-at à 1.
+    var bf = bookForm(); if (bf) bf.dataset.at = 'done';
   }
 
   // What happens after a real publication, said honestly and without a delay
@@ -366,9 +369,16 @@
     // house silhouette, carrying a dollar mark instead of the door, so the
     // two acts read as family at a glance yet never as the same thing.
     financement: '<path d="M3 10.5 12 4l9 6.5"/><path d="M5 10v10h14V10"/><path d="M14 12.5h-2.8a1.2 1.2 0 0 0 0 2.4h1.6a1.2 1.2 0 0 1 0 2.4H10M12 11.3v1.2M12 17.3v1.2"/>',
+    // Les deux actes annoncés (D.ACTES_A_VENIR) : ils ne sont pas de la
+    // famille du financement, alors ils quittent la maison — une feuille
+    // signée pour la procuration, une feuille scellée pour le testament.
+    procuration: '<path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4"/><path d="M10 16.2c.9-1.3 1.8-1.3 2.7 0s1.8 1.3 2.7 0"/>',
+    testament: '<path d="M6 3h8l4 4v8H6z"/><path d="M14 3v4h4"/><circle cx="12" cy="18" r="2.6"/><path d="m10.3 20.2-.5 2.6 2.2-1.1 2.2 1.1-.5-2.6"/>',
   };
-  function svcIcon(id, size) {
-    if (!SVC_ICONS[id]) return null;
+  // Un glyphe au trait, construit UNE fois : même viewBox, même graisse, même
+  // invisibilité pour les lecteurs d'écran. `cls` dit à quel registre il
+  // appartient (l'acte, la section de questions…).
+  function strokeGlyph(paths, size, cls) {
     var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     var px = String(size || 14);
     svg.setAttribute('viewBox', '0 0 24 24');
@@ -377,9 +387,41 @@
     svg.setAttribute('stroke-width', '1.9');
     svg.setAttribute('stroke-linecap', 'round'); svg.setAttribute('stroke-linejoin', 'round');
     svg.setAttribute('aria-hidden', 'true');
-    svg.setAttribute('class', 'svc-ic');
-    svg.innerHTML = SVC_ICONS[id];
+    svg.setAttribute('class', cls);
+    svg.innerHTML = paths;
     return svg;
+  }
+  function svcIcon(id, size) {
+    if (!SVC_ICONS[id]) return null;
+    return strokeGlyph(SVC_ICONS[id], size, 'svc-ic');
+  }
+
+  // Un glyphe par SECTION de questions, clé pour clé sur les groupes du domaine
+  // (D.CRITERIA_GROUPS). Le sujet se reconnaît AVANT que son titre se lise —
+  // « ceci parle du prêt », « ceci parle de l'immeuble », « ceci parle de la
+  // signature » — ce qui est tout ce qu'on demande à un en-tête de groupe.
+  // Une section sans glyphe rend son titre seul : jamais un trou.
+  var CRIT_GROUP_ICONS = {
+    // Le prêt : un billet. Pas la maison de l'acte — ce qu'on emprunte, pas
+    // ce sur quoi on l'emprunte.
+    pret: '<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.6"/><path d="M6 12h.01M18 12h.01"/>',
+    // L'immeuble : la maison POSÉE SUR SON SOL — le trait au sol la distingue
+    // du glyphe de l'acte, qui vit deux cartes plus haut sur le même écran.
+    immeuble: '<path d="M3 21h18"/><path d="M5 21V9l7-5 7 5v12"/><path d="M10 21v-6h4v6"/>',
+    // La signature : la plume sur la ligne.
+    signature: '<path d="M3 20h18"/><path d="M15.6 4.4a2.1 2.1 0 0 1 3 3L9 17l-4 1 1-4z"/>',
+    // L'écran 3 tient ses sections en dur dans index.html (elles ne sortent
+    // d'aucun catalogue) : elles nomment leur glyphe par `data-sec-ic` et sont
+    // décorées au démarrage. Même registre, même bande, même lecture.
+    montant: '<path d="M12 2v20"/><path d="M17 6.5H9.8a3 3 0 0 0 0 6h4.4a3 3 0 0 1 0 6H6"/>',
+    marche: '<path d="M3 21h18"/><path d="M6 21v-6M11 21V9M16 21v-9M21 21V5"/>',
+    devis: '<path d="M7 3h10v18l-3-2-2 2-2-2-3 2z"/><path d="M10 8h4M10 12h4"/>',
+  };
+  function critGroupIcon(id, size) {
+    if (!CRIT_GROUP_ICONS[id]) return null;
+    var box = el('span', 'crit-sec-ic');
+    box.appendChild(strokeGlyph(CRIT_GROUP_ICONS[id], size || 15, 'crit-sec-glyph'));
+    return box;
   }
 
   var MINI_ICONS = {
@@ -417,6 +459,186 @@
     return b;
   }
 
+  // ---------------------------------------------------------------------------
+  // Info tip — the house pattern for a SITUATIONAL note.
+  //
+  // « Sans les instructions du prêteur… », « Peu de notaires se déplacent
+  // jusqu'à 50 km », « Vos réponses précédentes — vérifiez-les » : sentences
+  // that appear because of an answer and leave with the next one. Printed as a
+  // line under their question they GREW the card that held them and pushed
+  // every card below it down the page, then let it snap back — the form moved
+  // under the client's hand while they were reading it.
+  //
+  // The sentence now rides a small « i » pinned to the question's own line and
+  // opens in a panel that floats OVER the page. The form's height stops
+  // depending on what its notes have to say. The tip keeps its box whether or
+  // not it has something to say (CSS: visibility, never display), so even the
+  // label line does not jitter — and a visibility:hidden control is neither
+  // focusable nor announced, so a tip with nothing to say is silent too.
+  //
+  // Three ways in, because a tooltip that only answers the mouse answers
+  // nobody on a phone or a keyboard: hover, keyboard focus, and a click that
+  // PINS the panel open until Escape, an outside click, or another tip.
+  // ---------------------------------------------------------------------------
+  var ITIP_SEQ = 0;
+  var itipOpen = null;   // the one PINNED panel — two never stand open at once
+  var itipBound = false;
+
+  function itipBindGlobals() {
+    if (itipBound || typeof document === 'undefined') return;
+    itipBound = true;
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape' || !itipOpen) return;
+      var btn = itipOpen.querySelector('.itip-btn');
+      itipClose();
+      if (btn && btn.focus) btn.focus();
+    });
+    // Capture: a click anywhere else dismisses the pinned panel before that
+    // click does its own work.
+    document.addEventListener('pointerdown', function (e) {
+      if (itipOpen && !itipOpen.contains(e.target)) itipClose();
+    }, true);
+  }
+
+  // While a panel is PINNED it has to follow its « i » — a dialog that scrolls
+  // under it would leave it stranded mid-page. The listeners exist only for as
+  // long as a panel is pinned: an idle form listens to nothing.
+  function itipTrack() { if (itipOpen) itipPlace(itipOpen); }
+
+  function itipClose() {
+    if (!itipOpen) return;
+    var btn = itipOpen.querySelector('.itip-btn');
+    itipOpen.dataset.open = 'false';
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+    itipOpen = null;
+    window.removeEventListener('resize', itipTrack);
+    document.removeEventListener('scroll', itipTrack, true);
+  }
+
+  // Pick the side and the alignment that keep the panel on screen — measured
+  // ONLY when a panel is about to be seen (hover, focus, click), never on
+  // render and never on scroll, so an idle form measures nothing.
+  function itipPlace(tip) {
+    var pop = tip.querySelector('.itip-pop');
+    if (!pop || !pop.getBoundingClientRect) return;
+    var vw = window.innerWidth || 0;
+    var vh = window.innerHeight || 0;
+    if (!vw || !vh) return;
+    var probe = pop.getBoundingClientRect();
+    if (!probe.height) return; // no layout to judge (jsdom, display:none ancestor)
+    tip.removeAttribute('data-side');
+    var anchor = tip.getBoundingClientRect();
+    if (anchor.bottom + probe.height + 10 > vh && anchor.top - probe.height - 10 > 0) tip.dataset.side = 'top';
+    // Horizontal: SLIDE the panel along its line until it fits, rather than
+    // snapping it to one edge of the tip — on a phone the panel is wider than
+    // the room left of the « i », and either edge would still hang off screen.
+    pop.style.transform = 'none';
+    pop.style.right = 'auto';
+    pop.style.left = '0px';
+    var r = pop.getBoundingClientRect();
+    var want = anchor.left + anchor.width / 2 - r.width / 2;
+    var limit = vw - 8 - r.width;
+    var left = limit < 8 ? 8 : Math.max(8, Math.min(want, limit));
+    pop.style.left = (left - anchor.left) + 'px';
+  }
+
+  // Le glyphe dit le TON avant qu'on lise le panneau : « i » pour un
+  // renseignement, « ! » pour une situation qui demande attention. Deux « i »
+  // identiques côte à côte — l'aide de la question et sa note de situation —
+  // ne se distinguaient que par la couleur (2026-09-05).
+  function itipGlyph(tone) {
+    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('width', '15'); svg.setAttribute('height', '15');
+    svg.setAttribute('fill', 'none'); svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '2');
+    svg.setAttribute('stroke-linecap', 'round'); svg.setAttribute('stroke-linejoin', 'round');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.innerHTML = tone === 'warn'
+      ? '<circle cx="12" cy="12" r="9"/><path d="M12 7.6v5"/><path d="M12 16v.6"/>'
+      : '<circle cx="12" cy="12" r="9"/><path d="M12 11.2v5"/><path d="M12 7.6v.6"/>';
+    return svg;
+  }
+
+  // opts: { id, tone: 'warn' | 'info', cls }. The returned node carries
+  // setNote(content) — a string, a node, or an array of nodes (the caveats are
+  // composed of separate text nodes so i18n can match each sentence whole).
+  // setNote('') stands the tip down: the box stays, the signal leaves.
+  function infoTip(opts) {
+    opts = opts || {};
+    var tip = el('span', 'itip' + (opts.cls ? ' ' + opts.cls : ''));
+    tip.dataset.on = 'false';
+    tip.dataset.tone = opts.tone === 'warn' ? 'warn' : 'info';
+    if (opts.id) tip.id = opts.id;
+    var popId = (opts.id || 'itip-' + (++ITIP_SEQ)) + '__pop';
+    var btn = el('button', 'itip-btn');
+    btn.type = 'button';
+    // The icon is never the label: « Information » names the control, and the
+    // panel it points at is what a screen reader reads out after it.
+    btn.setAttribute('aria-label', 'Information');
+    btn.setAttribute('aria-expanded', 'false');
+    btn.setAttribute('aria-controls', popId);
+    btn.setAttribute('aria-describedby', popId);
+    btn.appendChild(itipGlyph(tip.dataset.tone));
+    var pop = el('span', 'itip-pop');
+    pop.id = popId;
+    pop.setAttribute('role', 'tooltip');
+    tip.appendChild(btn);
+    tip.appendChild(pop);
+
+    btn.addEventListener('click', function () {
+      var wasOpen = tip.dataset.open === 'true';
+      itipClose();
+      if (wasOpen) return;
+      tip.dataset.open = 'true';
+      btn.setAttribute('aria-expanded', 'true');
+      itipOpen = tip;
+      itipPlace(tip);
+      window.addEventListener('resize', itipTrack);
+      document.addEventListener('scroll', itipTrack, true);
+    });
+    // Placed the moment it is about to be seen — never on render, never on an
+    // idle scroll. `pointerenter` covers the mouse and the pen; `focusin` the
+    // keyboard, whose focus ring opens the panel through CSS alone.
+    tip.addEventListener('pointerenter', function () { itipPlace(tip); });
+    tip.addEventListener('focusin', function () { itipPlace(tip); });
+    itipBindGlobals();
+
+    tip.setNote = function (content) {
+      clear(pop);
+      var has = false;
+      if (typeof content === 'string') {
+        if (content) { pop.textContent = content; has = true; }
+      } else if (content) {
+        [].concat(content).forEach(function (n) { if (n) { pop.appendChild(n); has = true; } });
+      }
+      var was = tip.dataset.on === 'true';
+      tip.dataset.on = has ? 'true' : 'false';
+      if (!has) {
+        if (itipOpen === tip) itipClose();
+        tip.removeAttribute('data-fresh');
+        return tip;
+      }
+      // A note that has just arrived wakes its « i » once — a signal that no
+      // longer takes a line of its own still has to be noticed.
+      if (!was) {
+        tip.removeAttribute('data-fresh');
+        void tip.offsetWidth;
+        tip.dataset.fresh = 'true';
+      }
+      return tip;
+    };
+    return tip;
+  }
+
+  // The question's own line: its label, then whatever used to print itself
+  // underneath — the awaited-answer mark, the situational tips.
+  function critHead(labelEl) {
+    var head = el('div', 'crit-head');
+    head.appendChild(labelEl);
+    return head;
+  }
+
 
   // ---------------------------------------------------------------------------
   // Toast
@@ -437,7 +659,10 @@
   var LS_MYOFFERS = 'nota.myoffers.v1';
   function notifLoad() { return lsLoad(LS_NOTIF) || []; }
   function notifSave(a) { lsSave(LS_NOTIF, a); }
-  function myOffers() { return lsLoad(LS_MYOFFERS) || []; }
+  // Toujours un TABLEAU : une valeur corrompue ou d'une ancienne forme faisait
+  // lever `.forEach` en plein rendu du calendrier, donc écran blanc au boot.
+  // Une clé illisible doit coûter l'historique local, jamais l'application.
+  function myOffers() { var a = lsLoad(LS_MYOFFERS); return Array.isArray(a) ? a : []; }
   // `clientToken` is the bearer the API hands back on publish: it is what lets
   // THIS browser read the private side of its own offer (propositions,
   // document requests) and answer them. Never shown, never sent elsewhere.
@@ -693,6 +918,13 @@
         if (stray.length) next = Object.assign({}, next, { messages: srv.concat(stray) });
       }
       var st = offerStatusSet(o.id, next);
+      // Le DOSSIER que le serveur détient, replié dans l'appareil. Sans ça, la
+      // reprise n'était faite qu'à moitié : un client sur un téléphone neuf
+      // retrouvait sa demande et une liste de documents vide, alors que ses
+      // réponses étaient là. On FUSIONNE, on ne remplace pas — le serveur ne
+      // connaît que ce qui lui a été poussé, et l'appareil peut être en avance ;
+      // un objet vide ne vaut donc jamais « efface tout ».
+      hydrateDossier(next.dossier, (st.bid && st.bid.serviceId) || o.serviceId);
       // An entry born from a deep link learns its act and amount here.
       if (st.bid && (!o.serviceId || o.montant == null)) {
         patchMyOffer(o.id, { serviceId: st.bid.serviceId, montant: st.bid.montant });
@@ -1083,17 +1315,28 @@
   // AUCUNE somme réservée, et les frais sont une charge NEUVE sur la carte
   // enregistrée. Trois situations, trois phrases — `annulation.mecanisme` et
   // `annulation.percu`, écrits par le serveur, disent laquelle.
+  // ADR 0041 — l'indemnité d'une annulation tardive, telle que le client la
+  // lit : rien n'est prélevé à l'annulation ; le notaire peut RÉCLAMER, sur
+  // justification et dans un délai, jusqu'à un plafond. Chaque statut a sa
+  // phrase, et une phrase composée a sa règle de traduction.
   function keptPhrase(kept) {
-    if (!kept || !(Number(kept.frais) > 0)) return null;
+    if (!kept) return null;
+    var st = kept.statut;
+    if (st === 'en_attente') {
+      return 'Votre notaire peut réclamer, sur justification et dans les ' + (Number(kept.delaiJours) || 7) + ' jours, une indemnité allant jusqu’à '
+        + D.money(kept.plafond) + ' (' + pctLabel(kept.taux) + ' du montant convenu). Rien n’est retenu pour l’instant.';
+    }
+    if (st === 'renoncee') return 'Votre notaire n’a réclamé aucune indemnité : rien n’est retenu.';
+    if (st === 'expiree') return 'Aucune indemnité n’a été réclamée dans le délai : rien n’est retenu.';
+    if (!(Number(kept.frais) > 0)) return null;
     var amt = D.money(kept.frais);
-    var pc = pctLabel(kept.taux);
     if (kept.percu === false) {
-      return 'Des frais de ' + amt + ' (' + pc + ') s’appliquaient, mais votre carte les a refusés : rien n’a été débité.';
+      return 'Votre notaire a réclamé une indemnité de ' + amt + ', mais votre carte a refusé le prélèvement : rien n’a été débité.';
     }
     if (kept.mecanisme === 'hors_session') {
-      return 'Des frais de ' + amt + ' (' + pc + ') ont été portés à la carte que vous avez enregistrée et versés au notaire en dédommagement.';
+      return 'Une indemnité de ' + amt + ', justifiée par le notaire, a été portée à la carte que vous avez enregistrée et lui est versée en dédommagement.';
     }
-    return 'Des frais de ' + amt + ' (' + pc + ') ont été retenus sur la somme réservée pour cet acte et versés au notaire en dédommagement.';
+    return 'Une indemnité de ' + amt + ', justifiée par le notaire, a été retenue sur la somme réservée pour cet acte et lui est versée en dédommagement.';
   }
 
   // fr-CA decimal for the cote's figures: 35.6 → « 35,6 », 40 → « 40 ».
@@ -1157,7 +1400,25 @@
     lsSave(LS_PROFILE, next);
     return next;
   }
-  function notifAllowed(kind) { return profileGet().notifs[kind] !== false; }
+  // Le serveur nomme ses genres (domain.NOTIF_KINDS) ; la carte
+  // « Notifications » nomme ses interrupteurs. Les deux vocabulaires sont
+  // volontairement distincts — l'un décrit un événement, l'autre une
+  // préférence — mais ils doivent se rejoindre, sans quoi `notifAllowed`
+  // interroge une clé absente, la lit comme « pas false », et un interrupteur
+  // fermé ne ferme rien.
+  var SERVER_NOTIF_PREF = {
+    message: 'message',
+    document: 'documents',
+    retenue: 'retained',
+    proposition: 'proposition',
+    desistement: 'released',
+    annulation: 'cancelled',
+  };
+  function notifPrefKey(kind) {
+    if (!kind) return null;
+    return SERVER_NOTIF_PREF[kind] || kind;
+  }
+  function notifAllowed(kind) { return profileGet().notifs[notifPrefKey(kind)] !== false; }
 
   function addNotif(n) {
     // Respect the profile's notification preferences (a kind'd notif can be off).
@@ -1298,6 +1559,80 @@
   // --- Sign-in / sign-up modal (one door for client AND notary) --------------
   // A role toggle + social options (OAuth not wired yet) + a passwordless courriel
   // path. Client → device-local identity; notary → the existing /notary/session.
+  // --- Portes à venir (Google / Facebook / LinkedIn) -------------------------
+  // Décision du propriétaire (2026-09-06) : les exposer, sans câbler OAuth.
+  // Les marques gardent leurs couleurs officielles — c'est ce qui les rend
+  // reconnaissables — mais on ne reproduit PAS le bouton officiel « Sign in
+  // with Google » : sa forme exacte annonce une intégration qui fonctionne.
+  // Le « G » reste multicolore sur fond blanc, comme Google l'exige.
+  var AUTH_PROVIDERS = {
+    google: {
+      nom: 'Google',
+      svg: '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">'
+        + '<path fill="#4285F4" d="M23.5 12.3c0-.9-.1-1.5-.2-2.2H12v4h6.6c-.1 1.1-.9 2.8-2.5 3.9l3.9 3c2.3-2.1 3.5-5.2 3.5-8.7z"/>'
+        + '<path fill="#34A853" d="M12 24c3.2 0 5.9-1.1 7.9-2.9l-3.8-2.9c-1 .7-2.4 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5l-3.9 3C3.4 21.3 7.4 24 12 24z"/>'
+        + '<path fill="#FBBC05" d="M5.3 14.4c-.2-.7-.4-1.5-.4-2.4s.1-1.6.4-2.4l-4-3C.5 8.3 0 10.1 0 12s.5 3.7 1.3 5.4l4-3z"/>'
+        + '<path fill="#EA4335" d="M12 4.7c2.2 0 3.6.9 4.5 1.7l3.4-3.3C17.9 1.2 15.2 0 12 0 7.4 0 3.4 2.7 1.3 6.6l4 3c.9-2.8 3.6-4.9 6.7-4.9z"/>'
+        + '</svg>',
+    },
+    facebook: {
+      nom: 'Facebook',
+      svg: '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">'
+        + '<path fill="#1877F2" d="M24 12.07C24 5.4 18.63 0 12 0S0 5.4 0 12.07C0 18.1 4.39 23.09 10.13 24v-8.44H7.08v-3.49h3.05V9.41c0-3.02 1.79-4.69 4.53-4.69 1.31 0 2.68.24 2.68.24v2.96h-1.51c-1.49 0-1.96.93-1.96 1.89v2.26h3.33l-.53 3.49h-2.8V24C19.61 23.09 24 18.1 24 12.07z"/>'
+        + '</svg>',
+    },
+    linkedin: {
+      nom: 'LinkedIn',
+      svg: '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">'
+        + '<path fill="#0A66C2" d="M20.45 20.45h-3.56v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.13 1.45-2.13 2.94v5.67H9.35V9h3.42v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28zM5.34 7.43a2.06 2.06 0 1 1 0-4.13 2.06 2.06 0 0 1 0 4.13zM7.12 20.45H3.55V9h3.57v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.22.79 24 1.77 24h20.45c.98 0 1.78-.78 1.78-1.73V1.73C24 .77 23.2 0 22.22 0z"/>'
+        + '</svg>',
+    },
+  };
+  // L'ordre suit le métier : un notaire voit d'abord le réseau de sa profession,
+  // un client d'abord la porte grand public.
+  var AUTH_PROVIDER_ORDER = {
+    client: ['google', 'facebook', 'linkedin'],
+    notary: ['linkedin', 'google', 'facebook'],
+  };
+
+  function authRenderProviders() {
+    var list = $('auth-soc-list'); if (!list) return;
+    clear(list);
+    var live = $('auth-soc-live'); if (live) live.textContent = ''; // pas de message d'un autre fournisseur
+    (AUTH_PROVIDER_ORDER[authRole] || AUTH_PROVIDER_ORDER.client).forEach(function (id) {
+      var p = AUTH_PROVIDERS[id]; if (!p) return;
+      var b = el('button', 'auth-soc-btn'); b.type = 'button';
+      b.dataset.provider = id;
+      // `aria-disabled` et NON `disabled` : un bouton retiré du parcours clavier
+      // ne peut pas être découvert par qui navigue au clavier ou au lecteur
+      // d'écran. Le clic est neutralisé plus bas, pas par le navigateur.
+      b.setAttribute('aria-disabled', 'true');
+      b.setAttribute('aria-describedby', 'auth-social-note');
+      var ic = el('span', 'auth-soc-ic'); ic.innerHTML = p.svg;
+      b.appendChild(ic);
+      b.appendChild(el('span', 'auth-soc-t', 'Continuer avec ' + p.nom));
+      b.appendChild(el('span', 'auth-soc-soon', 'À venir'));
+      b.addEventListener('click', function () {
+        // Répondre, toujours : un bouton qui avale le geste se lit comme cassé.
+        // La réponse va dans la MODALE, pas dans un toast : une <dialog> ouverte
+        // par showModal() occupe la couche supérieure du navigateur, et un toast
+        // ajouté au <body> peindrait dessous — invisible, précisément là où on
+        // vient de cliquer.
+        var live = $('auth-soc-live');
+        if (live) {
+          live.textContent = T('La connexion avec ' + p.nom + ' arrive bientôt. D’ici là, votre courriel suffit.');
+          // …et la faire VOIR. La modale a `max-height: 92vh; overflow: auto` :
+          // sur un écran court, la ligne naît sous la pliure et le clic paraît
+          // n'avoir rien fait — le défaut même qu'on voulait éviter.
+          // `block: 'nearest'` ne défile que si c'est nécessaire.
+          if (live.scrollIntoView) { try { live.scrollIntoView({ block: 'nearest' }); } catch (e) {} }
+        }
+        var em = $('auth-email'); if (em) { try { em.focus({ preventScroll: true }); } catch (e) { try { em.focus(); } catch (e2) {} } }
+      });
+      list.appendChild(b);
+    });
+  }
+
   var authRole = 'client';
   function authSetRole(role) {
     authRole = role === 'notary' ? 'notary' : 'client';
@@ -1305,6 +1640,8 @@
       var on = b.dataset.role === authRole;
       b.classList.toggle('is-on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
+    authRenderProviders();   // l'ordre des portes suit le métier
+    authRenderSwitch();      // …et la bascule nomme la destination
     var fine = $('auth-fine'), cont = $('auth-continue');
     var title = $('auth-title');
     // The title matches the button that opened the door (traditional site
@@ -1334,6 +1671,21 @@
     }
   }
   var authMode = 'signup';
+  // La bascule nomme la DESTINATION, jamais l'état qu'on regarde déjà : « vous
+  // avez déjà publié ? Se connecter » depuis l'inscription, et l'inverse. Sans
+  // elle il fallait fermer la modale et viser l'autre bouton de l'en-tête.
+  function authRenderSwitch() {
+    var q = $('auth-switch-q'), b = $('auth-switch-btn');
+    if (!q || !b) return;
+    if (authMode === 'signin') {
+      q.textContent = authRole === 'notary' ? 'Pas encore inscrit comme notaire ?' : 'Première visite sur Nota ?';
+      b.textContent = authRole === 'notary' ? 'Créer mon compte' : 'S’inscrire';
+    } else {
+      q.textContent = authRole === 'notary' ? 'Vous avez déjà un compte notaire ?' : 'Vous avez déjà publié une demande ?';
+      b.textContent = 'Se connecter';
+    }
+  }
+
   function openAuthModal(role, mode) {
     authMode = mode === 'signin' ? 'signin' : 'signup';
     authSetRole(role || roleGet() || 'client'); // honour what they told the guide
@@ -1352,6 +1704,15 @@
   // Kept as the anonymous "sign in" entry point (name referenced elsewhere).
   function openClientSignIn() { openAuthModal('client', 'signin'); }
 
+  // Basculer sans rien perdre : ni l'adresse déjà tapée, ni le rôle choisi.
+  // Rouvrir la modale les écraserait tous les deux.
+  function authToggleMode() {
+    authMode = authMode === 'signin' ? 'signup' : 'signin';
+    var errs = $('auth-errors'); if (errs) errs.hidden = true;
+    authSetRole(authRole);   // repeint titre, CTA, mentions, portes et bascule
+    var em = $('auth-email'); if (em) { try { em.focus(); } catch (e) {} }
+  }
+
   function authSubmitEmail(e) {
     if (e && e.preventDefault) e.preventDefault();
     var em = $('auth-email'), errs = $('auth-errors');
@@ -1366,7 +1727,24 @@
       if (dlg && dlg.close) { try { dlg.close(); } catch (e) {} }
       setTab('notaires', { focus: false });
       var ncEmail = $('nc-email'); if (ncEmail) ncEmail.value = val;
-      ncSignIn(val); // passwordless request → verify (magic link); signup one click away
+      // The mode decides, because the API cannot. /notary/session/request is
+      // enumeration-safe: for an address that is NOT yet a notary it answers
+      // 200 and sends nothing. Routing a sign-UP through it therefore ended on
+      // « Nous venons d'envoyer un lien » for a mail that would never arrive.
+      // Signing up opens the free-signup step instead; signing in still asks
+      // for the magic link (which is the security boundary, unchanged).
+      if (authMode === 'signup') ncShowSignup(val);
+      else ncSignIn(val);
+      return;
+    }
+    // « Se connecter » veut dire « j'ai déjà des demandes, rends-les-moi » —
+    // et ça, seul le serveur peut le faire. Il demande donc le lien à usage
+    // unique (même geste que le notaire) plutôt que d'écrire une adresse dans
+    // le localStorage et de se déclarer connecté sans preuve de boîte.
+    // « S'inscrire » reste le geste léger : l'adresse vit sur l'appareil.
+    if (authMode === 'signin') {
+      clientLinkRequest(val);
+      if (dlg && dlg.close) { try { dlg.close(); } catch (e) {} }
       return;
     }
     profileSet({ courriel: val });               // client identity is device-local
@@ -1389,6 +1767,96 @@
         body: JSON.stringify({ courriel: courriel }),
       }).catch(function () {});
     } catch (e) {}
+  }
+
+  // --- L'espace client : retrouver SES demandes ------------------------------
+  // Étape 1. La réponse est volontairement la MÊME pour une adresse connue et
+  // pour une inconnue (anti-énumération), donc l'écran ne peut rien affirmer
+  // d'autre que « si cette adresse a des demandes, le lien part ». Dire
+  // « courriel envoyé » serait déjà en dire trop.
+  async function clientLinkRequest(courriel) {
+    var r;
+    try {
+      r = await fetch(API_BASE + '/client/session/request', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ courriel: courriel }),
+      });
+    } catch (e) {
+      toast('Hors ligne. Réessayez une fois en ligne.');
+      return { ok: false };
+    }
+    var j = {}; try { j = await r.json(); } catch (e) {}
+    if (r.status === 422) { toast('Entrez un courriel valide.'); return { ok: false }; }
+    // La fenêtre est celle de l'API (Retry-After), jamais un « quelques
+    // minutes » inventé : elle dure un quart d'heure.
+    if (r.status === 429) { toast(throttledMessage(r)); return { ok: false }; }
+    if (!r.ok) { toast('Impossible d’envoyer le lien pour l’instant.'); return { ok: false }; }
+    // Chemin de développement / pile locale : l'écho boucle la poignée de main
+    // sans boîte aux lettres, exactement comme pour le notaire.
+    if (j.devToken) return clientLinkVerify(j.devToken);
+    toast('Si des demandes existent pour ' + courriel + ', un lien vient d’être envoyé. Il est valide 15 minutes.');
+    return { ok: true, pending: true };
+  }
+
+  // Étape 2. Le serveur rend les offres ET un jeton frais par offre. On FUSIONNE
+  // plutôt qu'on écrase : le jeton du serveur gagne (il est neuf), mais tout ce
+  // que l'appareil savait en plus — « retenue », l'étude, un montant renégocié —
+  // survit. Un remplacement pur ferait régresser un appareil déjà à jour.
+  async function clientLinkVerify(token) {
+    var r;
+    try {
+      r = await fetch(API_BASE + '/client/session/verify', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ token: token }),
+      });
+    } catch (e) {
+      toast('Hors ligne. Réessayez une fois en ligne.');
+      return { ok: false };
+    }
+    var j = {}; try { j = await r.json(); } catch (e) {}
+    if (!r.ok) {
+      // Un lien mort ne DÉTRUIT rien : l'appareil garde ce qu'il avait.
+      toast(r.status === 401
+        ? 'Ce lien a expiré ou a déjà servi. Demandez-en un nouveau.'
+        : 'Impossible de vérifier ce lien pour l’instant.');
+      return { ok: false, status: r.status };
+    }
+    var offres = Array.isArray(j.offres) ? j.offres : [];
+    var known = {};
+    myOffers().forEach(function (o) { if (o && o.id) known[o.id] = o; });
+    offres.forEach(function (o) {
+      if (!o || !o.id) return;
+      known[o.id] = Object.assign({}, known[o.id] || {}, o);
+    });
+    var merged = Object.keys(known).map(function (k) { return known[k]; });
+    merged.sort(function (a, b) { return String(a.dateISO).localeCompare(String(b.dateISO)); });
+    lsSave(LS_MYOFFERS, merged.slice(-50));
+
+    // L'adresse vient d'être PROUVÉE : elle devient l'identité de l'appareil.
+    if (j.courriel) profileSet({ courriel: j.courriel });
+    renderAccountMenu();
+    computeNotifications();
+    setTab('profil', { focus: false });
+    if (state.tab === 'profil') renderProfil();
+    toast(offres.length
+      ? 'Vos demandes sont de retour sur cet appareil.'
+      : 'Aucune demande n’est rattachée à cette adresse pour l’instant.');
+    return { ok: true, offres: offres.length };
+  }
+
+  // `#cauth=<jeton>` — le lien du courriel. Le jeton est retiré de l'URL AVANT
+  // le réseau : une barre d'adresse se copie, se partage et entre dans
+  // l'historique. Même hygiène que `#nauth=` et `#offre=…&cle=`.
+  function clientConsumeEspaceHash() {
+    var params;
+    try { params = new URLSearchParams(String(location.hash || '').replace(/^#/, '')); } catch (e) { return false; }
+    var token = params.get('cauth');
+    if (!token) return false;
+    params.delete('cauth');
+    var rest = params.toString();
+    try { history.replaceState(null, '', location.pathname + location.search + (rest ? '#' + rest : '')); } catch (e) {}
+    clientLinkVerify(token);
+    return true;
   }
 
   // Funnel beacon — one step of the conversion funnel, nothing else. The
@@ -1711,13 +2179,23 @@
   // every surface that reads the profile/offers is re-rendered.
   function clientSignOut() {
     var ok = true;
-    try { ok = window.confirm(T('Se déconnecter effacera de cet appareil vos coordonnées, vos offres publiées, votre dossier et vos notifications. Continuer ?')); } catch (e) { ok = true; }
+    try { ok = window.confirm(T('Se déconnecter effacera de cet appareil vos coordonnées, vos offres publiées, votre dossier, vos échanges avec le notaire et vos notifications. Continuer ?')); } catch (e) { ok = true; }
     if (!ok) return;
+    // TOUT ce que la session client a posé sur cet appareil — pas seulement les
+    // quatre clés d'origine. Le cache de statut (`LS_OFFERSTATUS`) porte le nom
+    // et le courriel du notaire retenu, le CORPS des messages, l'état de la
+    // caution et les chiffres d'annulation ; `LS_DOCITEMS` nomme les documents.
+    // Sur un poste partagé, les laisser derrière faisait mentir le mot
+    // « déconnexion ».
+    //
+    // Ne SONT PAS touchées : la session notaire (elle a sa propre déconnexion)
+    // et `nota.partner.v1` (une identité distincte, avec sa reprise par
+    // courriel) — les effacer surprendrait quelqu'un qui n'a rien demandé.
     try {
-      localStorage.removeItem(LS_PROFILE);
-      localStorage.removeItem(LS_MYOFFERS);
-      localStorage.removeItem(LS_DOSSIER);
-      localStorage.removeItem(LS_NOTIF);
+      [
+        LS_PROFILE, LS_MYOFFERS, LS_DOSSIER, LS_NOTIF,
+        LS_OFFERSTATUS, LS_SEEN, LS_DOCITEMS, LS_CHECKOUT, LS_SUPPORT, LS_ROLE,
+      ].forEach(function (k) { if (k) localStorage.removeItem(k); });
     } catch (e) {}
     toggleNotifPanel(false);
     renderAccountMenu();
@@ -1809,8 +2287,42 @@
   }
   // Derive notifications from this browser's offers: local date-approaching, and
   // "retained" by matching each offer id against its month's public bids.
+  // Le journal d'avis que l'API tient POUR LE CLIENT. `notifIn` l'écrit à
+  // chaque événement d'audience « client » ; `GET /notifications?id=…` le sert
+  // contre le jeton de l'offre. Rien ne le lisait : la cloche se dérivait
+  // localement, donc un cache vidé effaçait l'historique et un document déposé
+  // par le notaire ne sonnait rien. Meilleur effort, comme la dérive locale :
+  // un échec laisse la cloche telle quelle.
+  async function clientSyncNotifs() {
+    var offers = myOffers().filter(function (o) { return o && o.id && o.clientToken; });
+    for (var i = 0; i < offers.length; i++) {
+      var o = offers[i];
+      var r;
+      try {
+        r = await fetch(API_BASE + '/notifications?id=' + encodeURIComponent(o.id), { headers: clientHeaders(o) });
+      } catch (e) { continue; }
+      if (!r || !r.ok) continue;
+      var j = {}; try { j = await r.json(); } catch (e) { continue; }
+      // Le serveur rend le plus récent d'abord ; addNotif empile, donc on
+      // remonte la liste pour retrouver l'ordre à l'écran. Idempotent par clé.
+      (j.avis || []).slice().reverse().forEach(function (a) {
+        if (!a || !a.id) return;
+        addNotif({
+          key: 'srv:' + a.id,
+          kind: a.kind,
+          title: a.titre || '',
+          body: a.corps || '',
+          offerId: a.refId || o.id,
+          lien: a.lien || null,
+          read: !!a.luLe,
+        });
+      });
+    }
+  }
+
   async function computeNotifications() {
     var offers = myOffers(); if (!offers.length) { renderNotifs(); return; }
+    await clientSyncNotifs();
     offers.forEach(function (o) {
       var days = D.daysBetween(todayISO(), o.dateISO);
       if (days >= 0 && (days === 7 || days === 3 || days === 1 || days === 0)) {
@@ -2293,7 +2805,7 @@
     // reader announces the figures and what clicking it does, not "788 $ 10 offres".
     var hasRepere = s.median != null && s.total >= PULSE_REPERE_MIN;
     row.setAttribute('aria-label',
-      short + ' — à partir de ' + D.money(s.prixDepart)
+      short + ', à partir de ' + D.money(prixAnnonceDollars(s.id))
       + (s.total === 0 ? ', aucune offre ce mois' : hasRepere ? ', repère du mois ' + D.money(s.median) : ', pas assez d’offres ce mois pour un repère') + '. '
       + (active ? 'Retirer ce filtre.' : 'Afficher le carnet pour cet acte.'));
 
@@ -2317,7 +2829,7 @@
 
     var dep = el('span', 'pulse-fig');
     dep.appendChild(el('span', 'pulse-fig-k', 'à partir de'));
-    dep.appendChild(el('span', 'pulse-fig-v', D.money(s.prixDepart)));
+    dep.appendChild(el('span', 'pulse-fig-v', D.money(prixAnnonceDollars(s.id))));
     figs.appendChild(dep);
 
     var med = el('span', 'pulse-fig');
@@ -2440,6 +2952,20 @@
     if (c) c.focus();
   }
 
+  // Le premier geste de la boîte du jour — pas sa sortie de secours.
+  // showModal() donne le focus au premier élément atteignable, et toute boîte
+  // du site commence par la coquille .dlg-x-form : c'était donc le ✕, auquel
+  // Chrome peint son anneau. « Fermer » devenait l'élément le plus fort d'une
+  // boîte dont toute la question est « quel acte ? », et Entrée y répondait en
+  // fermant. Le focus va à l'acte déjà retenu ; l'anneau ne se peint que si la
+  // date a été ouverte au clavier, ce qui est exactement quand il sert.
+  function focusBookingStart() {
+    var wrap = $('o-service-chips');
+    if (!wrap) return;
+    var t = wrap.querySelector('.chip.is-on') || wrap.querySelector('.chip:not(.chip-soon)');
+    if (t) { try { t.focus(); } catch (e) {} }
+  }
+
   // Enlarged day view: click/Enter a cell to see every offer for that day over
   // a dimmed backdrop. Cells stay minimal; all detail lives here.
   async function openDay(iso) {
@@ -2510,7 +3036,11 @@
     // geometry. Re-settle the tracks now that they are visible.
     settleSegTracks($('o-criteria'));
     // A dialog OPENING is one funnel step; a date moved inside it is not.
-    if (!wasOpen) { formStarted = false; track('jour_ouvert'); }
+    if (!wasOpen) {
+      formStarted = false; bookSeen = 1; bookGoTo(1, { silent: true }); track('jour_ouvert');
+      focusBookingStart();
+    }
+    else bookPaint(); // l'acte a pu changer : l'écran 2 apparaît ou s'efface
     formArmed = true;
   }
 
@@ -2557,6 +3087,11 @@
       // fact worth printing on the choice.
       subEl.textContent = best != null ? D.money(best) : '';
     });
+    // La ligne du chiffre n'est RÉSERVÉE que si le jour en porte un. Elle
+    // existe pour qu'une puce ne change pas de hauteur quand on passe d'un
+    // acte à l'autre (ADR 0039) — pas pour poser une bande vide dans les deux
+    // cartes d'un jour sans offre.
+    if (chipWrap) chipWrap.dataset.sub = chipWrap.querySelector('.chip-svc-sub:not(:empty)') ? 'true' : 'false';
 
     // Headline row: the one offer to beat for this act.
     if (matching.length) list.appendChild(bidRow(matching[0]));
@@ -2658,8 +3193,10 @@
       ? 'Votre offre est au niveau de ce que d’autres offrent ce jour-là.'
       : (t == null ? 'Cette référence dépasse votre plage pour cet acte.' : '');
     hint.classList.toggle('is-ahead', level);
+    // The label is written whether or not the button is on show, so its box
+    // holds its place when it steps back (ADR 0039 — une ligne tenue).
+    if (t != null) btn.textContent = 'Offrir autant · ' + D.money(t);
     btn.hidden = level || t == null;
-    if (!btn.hidden) btn.textContent = 'Offrir autant · ' + D.money(t);
   }
 
   // ---------------------------------------------------------------------------
@@ -2758,6 +3295,9 @@
 
   function setGroupActive(group, btn) {
     group.querySelectorAll('.chip, .seg-btn').forEach(function (x) {
+      // Un bouton désactivé (un acte annoncé) n'est pas un choix du groupe : il
+      // ne prend ni « is-on » ni aria-pressed.
+      if (x.getAttribute('aria-disabled') === 'true') return;
       var on = x === btn;
       x.classList.toggle('is-on', on);
       x.setAttribute('aria-pressed', on ? 'true' : 'false');
@@ -2832,7 +3372,7 @@
       if (!sel) return;
       D.SERVICES.forEach(function (s) {
         var o = document.createElement('option');
-        o.value = s.id; o.textContent = s.nom + ' — à partir de ' + D.money(s.prixDepart);
+        o.value = s.id; o.textContent = s.nom + ', à partir de ' + D.money(prixAnnonceDollars(s.id));
         sel.appendChild(o);
       });
     });
@@ -2859,18 +3399,58 @@
   }
   // Service chips inside the booking dialog (one per act; no "Tous"). Only sets
   // the hidden #o-service value — that select keeps its 3 tested options.
+  // La pastille du glyphe, la même pour un acte en vente et pour un acte
+  // annoncé : c'est elle qui donne aux quatre cartes leur gabarit commun.
+  function bookingChipBadge(id) {
+    var badge = el('span', 'chip-svc-badge');
+    var ic = svcIcon(id, 20); if (ic) badge.appendChild(ic);
+    return badge;
+  }
   function buildBookingChips() {
     var wrap = $('o-service-chips'); if (!wrap) return; clear(wrap);
     D.SERVICES.forEach(function (s) {
       var b = el('button', 'chip chip-svc');
       b.type = 'button'; b.dataset.svc = s.id; b.setAttribute('aria-pressed', 'false');
-      var main = el('span', 'chip-svc-main');
-      var ic = svcIcon(s.id); if (ic) main.appendChild(ic);
-      main.appendChild(document.createTextNode(s.nomCourt));
-      b.appendChild(main);
+      // Le glyphe monte dans une pastille : à l'écran 1 la carte est la
+      // réponse à la seule question posée, alors elle se vise de loin — une
+      // marque, un nom, et le chiffre du jour dessous.
+      b.appendChild(bookingChipBadge(s.id));
+      b.appendChild(el('span', 'chip-svc-main', s.nomCourt));
+      // La marque du choix, au coin de la carte : la teinte et le cadre disent
+      // déjà l'acte retenu, le crochet le dit sans dépendre de la couleur.
+      var check = el('span', 'chip-svc-check', '✓'); check.setAttribute('aria-hidden', 'true');
+      b.appendChild(check);
       // Each act's own offre à battre for the date being booked — filled by
       // renderDayBids, so the trade-off between acts shows at the choice itself.
       b.appendChild(el('span', 'chip-svc-sub'));
+      wrap.appendChild(b);
+    });
+    // Le catalogue annoncé, à la même place et dans le même registre, mais en
+    // gris et sans porte : le client voit où va Nota sans jamais croire qu'il
+    // peut réserver l'acte aujourd'hui. `aria-disabled` plutôt que `disabled` —
+    // la carte reste atteignable au clavier et lisible par un lecteur d'écran,
+    // et le clic est refusé une seule fois, dans le gestionnaire du groupe.
+    (D.ACTES_A_VENIR || []).forEach(function (a) {
+      // Ce n'est pas un bouton : rien ne s'y clique, alors rien ne s'y focus et
+      // rien ne s'y survole. La carte garde la taille et la place des autres —
+      // même ligne, même hauteur — et dit « Bientôt » à côté du nom.
+      var b = el('div', 'chip chip-svc chip-soon');
+      b.dataset.soon = a.id;
+      b.setAttribute('aria-disabled', 'true');
+      b.title = a.description;
+      b.appendChild(bookingChipBadge(a.id));
+      var main = el('span', 'chip-svc-main');
+      main.appendChild(document.createTextNode(a.nomCourt));
+      b.appendChild(main);
+      // La même ligne réservée que les actes réservables, pour que les quatre
+      // cartes gardent exactement la même hauteur quand le jour porte un prix.
+      // C'est elle qui porte « Bientôt » : sur la ligne du nom, la pastille
+      // poussait « Procuration » hors de l'axe de son propre glyphe — deux
+      // cartes centrées et deux de travers sur la même grille. Ici le nom
+      // reste centré, et `grid-auto-rows: 1fr` garde les hauteurs égales.
+      var sub = el('span', 'chip-svc-sub');
+      sub.appendChild(el('span', 'chip-soon-tag', 'Bientôt'));
+      b.appendChild(sub);
       wrap.appendChild(b);
     });
   }
@@ -3177,14 +3757,25 @@
   // Accessibility (audit 2.3 / 2.4): every answer group is named by its own
   // label (aria-labelledby) and every help line describes its control
   // (aria-describedby) — ids namespaced by `idPrefix` like the controls.
-  function buildCriterionRow(c, current, onChange, idPrefix, other) {
+  function buildCriterionRow(c, current, onChange, idPrefix, other, svc) {
     var row = el('div', 'crit-row');
     // The row knows its criterion, so the missing-answer pass and the hint's
     // jump links can find it without re-deriving ids from the controls.
     row.dataset.crit = c.id;
+    // Une réponse à TROIS choix ou plus ne tient pas dans une demi-largeur : à
+    // côté d'un champ d'une seule ligne elle s'y empile en trois, et la paire
+    // se lit de travers (retour du propriétaire, 2026-09-06). Le rang le
+    // déclare, la grille lui donne la ligne entière, et les choix s'y rangent
+    // enfin côte à côte. Le seuil se lit sur la DONNÉE — jamais sur une liste
+    // d'ids tenue à la main.
+    if (c.type === 'choice' && c.ui !== 'select' && (c.options || []).length >= 3) row.dataset.span = 'row';
     var helpId = idPrefix + c.id + '__help';
     var helpEl = c.aide ? el('span', 'help', c.aide) : null;
     if (helpEl) helpEl.id = helpId;
+    // L'aide rejoint le panneau d'un « i » à la toute fin (voir plus bas) ; ce
+    // porteur laisse les branches — l'échange de la liste, notamment — parler
+    // au « i » sans connaître l'ordre de construction.
+    var tipRef = {};
     var describe = function (node) { if (helpEl && node) node.setAttribute('aria-describedby', helpId); };
     if (c.type === 'flag') {
       var lab = el('label', 'crit-flag');
@@ -3209,7 +3800,8 @@
       // truth (the o-service pattern): every write — chip, checkbox, test,
       // dossier sync — sets sel.value and dispatches `change`.
       var depLbl = el('span', 'crit-label', c.label); depLbl.id = idPrefix + c.id + '__lbl';
-      row.appendChild(depLbl);
+      var depHead = critHead(depLbl);
+      row.appendChild(depHead);
       var dsel = document.createElement('select');
       dsel.id = idPrefix + c.id; dsel.className = 'visually-hidden';
       dsel.tabIndex = -1; dsel.setAttribute('aria-hidden', 'true');
@@ -3288,20 +3880,25 @@
       // Static caveats (audit §1.1): the two choices few notaries serve say so
       // where they are chosen — text, never a live count. Each shows with its
       // direction; the far radius is read off the domain's bands.
-      var caveats = el('div', 'crit-caveats');
       var farKm = Math.max.apply(null, [0].concat(D.DEPLACEMENTS
         .filter(function (d) { return d.qui === NOTAIRE_QUI_ID; })
         .map(function (d) { return Number(d.km) || 0; })));
-      var farNote = el('p', 'help crit-caveat'); farNote.dataset.caveat = 'notaire'; farNote.hidden = true;
-      farNote.appendChild(el('span', null, 'Peu de notaires se déplacent jusqu’à'));
-      farNote.appendChild(document.createTextNode(' ' + farKm + ' km. '));
-      farNote.appendChild(el('span', null, 'Votre offre ne sera visible que pour eux.'));
-      var onlineNote = el('p', 'help crit-caveat'); onlineNote.dataset.caveat = 'urgence'; onlineNote.hidden = true;
-      onlineNote.appendChild(el('span', null, 'La signature 100 % en ligne n’est offerte que par les notaires qui l’acceptent.'));
-      onlineNote.appendChild(document.createTextNode(' '));
-      onlineNote.appendChild(el('span', null, 'Votre offre ne sera visible que pour eux.'));
-      caveats.appendChild(farNote); caveats.appendChild(onlineNote);
-      row.appendChild(caveats);
+      var farNote = infoTip({ tone: 'warn', cls: 'crit-caveat' });
+      farNote.dataset.caveat = 'notaire';
+      var farText = function () {
+        return [el('span', null, 'Peu de notaires se déplacent jusqu’à'),
+          document.createTextNode(' ' + farKm + ' km. '),
+          el('span', null, 'Votre offre ne sera visible que pour eux.')];
+      };
+      var onlineNote = infoTip({ tone: 'warn', cls: 'crit-caveat' });
+      onlineNote.dataset.caveat = 'urgence';
+      var onlineText = function () {
+        return [el('span', null, 'La signature 100 % en ligne n’est offerte que par les notaires qui l’acceptent.'),
+          document.createTextNode(' '),
+          el('span', null, 'Votre offre ne sera visible que pour eux.')];
+      };
+      depHead.appendChild(farNote);
+      depHead.appendChild(onlineNote);
 
       var paintDep = function () {
         var cur = D.deplacementById(dsel.value);
@@ -3315,8 +3912,8 @@
         clear(kmRow);
         kmRow.hidden = !quiId;
         kmLbl.hidden = !quiId;
-        farNote.hidden = quiId !== NOTAIRE_QUI_ID;
-        onlineNote.hidden = !(q && q.urgence);
+        farNote.setNote(quiId === NOTAIRE_QUI_ID ? farText() : '');
+        onlineNote.setNote(q && q.urgence ? onlineText() : '');
         if (!quiId) return;
         var qq = quiOf(quiId);
         kmLbl.textContent = (qq && qq.question) || KM_QUESTION[quiId] || c.label;
@@ -3345,7 +3942,8 @@
       // cannot carry the .crit-add badge.
       var selLbl = el('label', 'crit-label', c.label);
       selLbl.setAttribute('for', idPrefix + c.id);
-      row.appendChild(selLbl);
+      var selHead = critHead(selLbl);
+      row.appendChild(selHead);
       var sel = document.createElement('select');
       sel.id = idPrefix + c.id; sel.className = 'crit-select';
       var ph = document.createElement('option');
@@ -3366,36 +3964,55 @@
       enhanceSelect(sel);
       if (helpEl) row.appendChild(helpEl);
       if ((c.options || []).some(function (o) { return o.aide; })) {
-        var selOptHelp = el('span', 'help crit-opt-help'); selOptHelp.id = idPrefix + c.id + '__opt_help';
+        // What the CHOSEN option implies — a sentence that comes and goes with
+        // the answer, so it rides the question's line, not the card's height.
+        var selOptHelp = infoTip({ id: idPrefix + c.id + '__opt_help' });
         var paintSelHelp = function () {
           var o = (c.options || []).filter(function (x) { return x.id === sel.value; })[0];
-          selOptHelp.textContent = o && o.aide ? o.aide : '';
-          selOptHelp.hidden = !selOptHelp.textContent;
+          selOptHelp.setNote(o && o.aide ? o.aide : '');
         };
         paintSelHelp();
         sel.addEventListener('change', paintSelHelp);
-        row.appendChild(selOptHelp);
+        selHead.appendChild(selOptHelp);
       }
       // The free-text companion (« Autre prêteur » → « Nom du prêteur ») —
       // the client ADDS their lender by name when it is not in the catalogue.
       if (c.autre) {
         var obox = el('div', 'crit-other');
-        var olbl = el('label', 'crit-label', c.autre.label);
+        // Le libellé du compagnon n'a plus sa ligne à lui : il nomme le champ
+        // pour un lecteur d'écran, et le champ le dit en clair par son
+        // placeholder. Sans ça, choisir « Autre prêteur » dans la liste
+        // faisait grandir le bloc de 101 px — un composant qui bouge parce
+        // qu'on y a répondu (retour du propriétaire, 2026-09-05).
+        var olbl = el('label', 'crit-label visually-hidden', c.autre.label);
         olbl.setAttribute('for', idPrefix + c.autre.champ);
         obox.appendChild(olbl);
         var oinp = document.createElement('input');
         oinp.type = 'text'; oinp.id = idPrefix + c.autre.champ; oinp.maxLength = 80;
+        oinp.placeholder = c.autre.label;
         if (other && other.value != null) oinp.value = other.value;
         oinp.addEventListener('input', function () {
           if (other) other.onChange(oinp.value === '' ? undefined : oinp.value);
         });
         obox.appendChild(oinp);
         if (c.autre.aide) {
-          var oh = el('span', 'help', c.autre.aide); oh.id = idPrefix + c.autre.champ + '__help';
+          // Lue, jamais imprimée : le placeholder dit déjà quoi écrire, et une
+          // ligne de plus ici rendrait l'échange inégal — répondre à la
+          // question déplacerait ce qui suit. `visually-hidden` reste dans
+          // l'arbre d'accessibilité (contrairement à visibility:hidden), donc
+          // le champ garde sa description.
+          var oh = el('span', 'help visually-hidden', c.autre.aide); oh.id = idPrefix + c.autre.champ + '__help';
           oinp.setAttribute('aria-describedby', oh.id);
           obox.appendChild(oh);
         }
-        var syncOther = function () { obox.hidden = sel.value !== c.autre.option; };
+        var syncOther = function () {
+          var on = sel.value === c.autre.option;
+          obox.hidden = !on;
+          // L'échange, pas l'empilement : l'aide cède sa place au champ — et son
+          // « i » se retire avec elle, sinon il ouvrirait un panneau vide.
+          if (helpEl) helpEl.hidden = on;
+          if (tipRef.tip) tipRef.tip.dataset.on = on ? 'false' : 'true';
+        };
         syncOther();
         sel.addEventListener('change', syncOther);
         row.appendChild(obox);
@@ -3404,7 +4021,8 @@
       // Answers ride the SAME segmented-track register as the déplacement
       // bars — one selection language for the whole question block.
       var chLbl = el('span', 'crit-label', c.label); chLbl.id = idPrefix + c.id + '__lbl';
-      row.appendChild(chLbl);
+      var chHead = critHead(chLbl);
+      row.appendChild(chHead);
       var grp = el('div', 'seg crit-choices');
       grp.setAttribute('role', 'group'); grp.setAttribute('aria-labelledby', chLbl.id);
       describe(grp);
@@ -3428,11 +4046,10 @@
       if (helpEl) row.appendChild(helpEl);
       // An option that explains itself (domain option `aide`): its help
       // reads under the track while it is the chosen answer.
-      var optHelp = el('span', 'help crit-opt-help'); optHelp.id = idPrefix + c.id + '__opt_help'; optHelp.hidden = true;
+      var optHelp = infoTip({ id: idPrefix + c.id + '__opt_help' });
       var paintOptHelp = function (id) {
         var o = (c.options || []).filter(function (x) { return x.id === id; })[0];
-        optHelp.textContent = o && o.aide ? o.aide : '';
-        optHelp.hidden = !optHelp.textContent;
+        optHelp.setNote(o && o.aide ? o.aide : '');
       };
       if ((c.options || []).some(function (o) { return o.aide; })) {
         paintOptHelp(current);
@@ -3440,12 +4057,12 @@
           var b = e.target && e.target.closest ? e.target.closest('.seg-btn') : null;
           if (b) paintOptHelp(b.id.slice((idPrefix + c.id + '__').length));
         });
-        row.appendChild(optHelp);
+        chHead.appendChild(optHelp);
       }
     } else if (c.type === 'bracket') {
       var lbl = el('label', 'crit-label', c.label);
       lbl.setAttribute('for', idPrefix + c.id);
-      row.appendChild(lbl);
+      row.appendChild(critHead(lbl));
       var inp = document.createElement('input');
       // min 1: the domain wants a strictly positive amount; the placeholder is
       // a figure a number input accepts (audit 2.9).
@@ -3468,7 +4085,74 @@
       }
       if (helpEl) row.appendChild(helpEl);
     }
+    // L'AIDE PASSE DERRIÈRE UN « i » (2026-09-05, retour du propriétaire :
+    // « keep it really straight forward — (i) for more information with info on
+    // mouse hover etc, keep the same pattern »). Trois à cinq lignes de prose
+    // sous chaque question doublaient la hauteur de la carte et noyaient les
+    // réponses ; deux questions côte à côte ne tenaient plus dans un écran.
+    // Le texte ne disparaît pas — il rejoint le panneau du MÊME composant que
+    // les notes de situation (infoTip, ADR 0039) : survol, focus clavier ou
+    // clic. Le contrôle continue de le nommer en `aria-describedby` : un nœud
+    // RÉFÉRENCÉ est lu par un lecteur d'écran même quand il n'est pas affiché,
+    // donc la description ne se perd pas en route.
+    var tipHost = row.querySelector(':scope > .crit-head')
+      || row.querySelector(':scope > .crit-flag > .crit-text');
+    if (helpEl && tipHost) {
+      var tip = infoTip({ id: idPrefix + c.id + '__tip' });
+      tip.setNote(helpEl);
+      // Contre le libellé, JAMAIS après la ligne réservée du message d'attente :
+      // celle-ci occupe toute la largeur, et un « i » posé derrière elle tombait
+      // sur une ligne à lui, entre la question et sa réponse.
+      var req = tipHost.querySelector(':scope > .crit-req');
+      if (req) tipHost.insertBefore(tip, req); else tipHost.appendChild(tip);
+      tipRef.tip = tip;
+      // Dans une case à cocher, le « i » vit DANS le <label> : sans ce garde,
+      // ouvrir l'aide cocherait la case.
+      if (tipHost.classList.contains('crit-text')) {
+        tip.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); });
+      }
+    }
+    // La CONSÉQUENCE de la réponse, sous la réponse (2026-09-05). Une question
+    // ne fait pas que bouger le prix : elle décide de ce que le notaire
+    // demandera. La ligne est réservée dès la première peinture et masquée par
+    // `visibility` (registre ADR 0039) — répondre, se raviser, répondre à
+    // nouveau ne déplace jamais la question suivante.
+    var effet = critEffet(svc, c);
+    if (effet) { row.appendChild(effet.node); effet.paint(current); row.critEffet = effet; }
     return row;
+  }
+
+  // La ligne « Ajoute / Retire un document : … » d'une question, ou null quand
+  // AUCUNE réponse possible ne change la liste (la plupart des questions).
+  // Ce que la réponse change vient du domaine (documentEffect) ; l'écran ne lit
+  // jamais les prédicats des documents lui-même.
+  function critEffet(svc, c) {
+    if (!svc || !c) return null;
+    var answers = c.type === 'choice' ? (c.options || []).map(function (o) { return o.id; })
+      : c.type === 'flag' ? [true] : [];
+    var moves = function (a) {
+      var e = D.documentEffect(svc, c.id, a);
+      return e.ajoutes.length || e.retires.length ? e : null;
+    };
+    if (!answers.some(moves)) return null;
+    var node = el('span', 'crit-effet');
+    node.dataset.on = 'false';
+    return {
+      node: node,
+      paint: function (value) {
+        var e = value == null ? null : moves(value);
+        clear(node);
+        node.dataset.on = e ? 'true' : 'false';
+        if (!e) return;
+        // Deux nœuds, jamais une phrase : le cadre est une entrée du
+        // dictionnaire et chaque nom de document en est une autre (ils viennent
+        // du domaine) — un changement de langue en vol les traduit tous les
+        // deux, ce qu'une phrase composée ne permettrait pas.
+        var docs = e.ajoutes.length ? e.ajoutes : e.retires;
+        node.appendChild(el('span', 'crit-effet-k', e.ajoutes.length ? 'Ajoute un document :' : 'Retire un document :'));
+        node.appendChild(document.createTextNode(' ' + docs.map(function (d) { return T(d.nom); }).join(' · ')));
+      },
+    };
   }
 
   function renderOfferCriteria(serviceId) {
@@ -3479,40 +4163,199 @@
     var svc = D.serviceById(serviceId);
     var criteria = (svc && svc.pricing && svc.pricing.criteria) || [];
     if (step) step.hidden = criteria.length === 0;
-    // Answers older than a month (audit 2.11): shown for checking, said once
-    // above the block — the amounts were already cleared by onOfferServiceChange.
-    if (state.offer.stale && criteria.length) {
-      var staleNote = el('p', 'help crit-stale', 'Vos réponses précédentes — vérifiez-les.');
-      staleNote.id = 'o-criteria-stale';
-      box.appendChild(staleNote);
+    // Answers older than a month (audit 2.11): shown for checking, said on the
+    // step's OWN line — the amounts were already cleared by
+    // onOfferServiceChange. A tip rather than a banner above the grid: a
+    // warning that arrives on a re-render must not push the questions down the
+    // dialog while the client is reading them.
+    var staleNote = $('o-criteria-stale');
+    if (!staleNote && step) {
+      staleNote = infoTip({ id: 'o-criteria-stale', tone: 'warn' });
+      var stepLbl = step.querySelector('.book-step-lbl');
+      var stepCount = $('o-criteria-count');
+      if (stepLbl && stepCount && stepCount.parentNode === stepLbl) stepLbl.insertBefore(staleNote, stepCount);
+      else if (stepLbl) stepLbl.appendChild(staleNote);
     }
+    if (staleNote) staleNote.setNote(state.offer.stale && criteria.length ? 'Vos réponses précédentes — vérifiez-les.' : '');
     var mkRow = function (c) {
       // A default (domain `defaut`) shows pre-selected while the state holds
       // no answer — visual only until touched (audit §1.5).
       var answered = state.offer.pricing[c.id] != null;
       var current = answered ? state.offer.pricing[c.id] : c.defaut;
-      var row = buildCriterionRow(c, current, function (val) { setCriterion(c.id, val); }, 'crit-',
-        c.autre ? { value: state.offer.pricing[c.autre.champ], onChange: function (val) { setCriterion(c.autre.champ, val); } } : null);
+      var row = buildCriterionRow(c, current, function (val) {
+        setCriterion(c.id, val);
+        if (row.critEffet) row.critEffet.paint(val);
+      }, 'crit-',
+        c.autre ? { value: state.offer.pricing[c.autre.champ], onChange: function (val) { setCriterion(c.autre.champ, val); } } : null,
+        svc);
       if (!answered && c.defaut != null) row.dataset.default = 'true';
       // The two-row déplacement control takes the grid's full width (2.15).
       if (c.id === D.DEPLACEMENT_CRITERION_ID) row.classList.add('crit-row--wide');
       return row;
     };
-    // Mandatory questions shown directly; optional "hardeners" behind an expander
-    // so the happy path stays ~3 clicks.
-    criteria.filter(function (c) { return c.required; }).forEach(function (c) { box.appendChild(mkRow(c)); });
-    var optional = criteria.filter(function (c) { return !c.required; });
-    if (optional.length) {
-      var det = document.createElement('details'); det.className = 'disclosure crit-more';
-      var sum = document.createElement('summary'); sum.textContent = 'Affiner (facultatif)'; det.appendChild(sum);
-      var inner = el('div', 'o-criteria');
-      optional.forEach(function (c) { inner.appendChild(mkRow(c)); });
-      det.appendChild(inner);
-      box.appendChild(det);
-      // The folded rows only get real geometry once the expander opens.
-      det.addEventListener('toggle', function () { settleSegTracks(det); });
-    }
+    renderCriteriaSections(box, svc, mkRow, { tally: true });
     settleSegTracks(box);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Les questions du notaire, EN SECTIONS (2026-09-05).
+  //
+  // Retour du propriétaire : « on peut grouper en sections et rendre ça le plus
+  // intuitif possible pour chaque cas ». Dix questions à la file sur une grille
+  // plate ne disaient pas ce qui les reliait — le montant du prêt, la
+  // succession et le déplacement se suivaient sans transition — et les quatre
+  // précisions facultatives tombaient toutes dans un seul tiroir anonyme au bas
+  // de l'écran, loin de la question qu'elles précisent.
+  //
+  // Trois temps, déclarés par le DOMAINE (D.criteriaGroups) : le prêt,
+  // l'immeuble, la signature. Chaque section dit à quoi elle sert, où elle en
+  // est, et REPLIE SES PROPRES précisions — « Préciser (facultatif) » vit
+  // désormais à côté du cas qu'il précise. Le chemin court ne s'allonge pas :
+  // ce qui était replié le reste.
+  //
+  // Un rang qui prend la ligne entière : une réponse à trois choix ou plus, et
+  // la bande du déplacement, qui en porte déjà deux.
+  function wideRow(r) { return r.dataset.span === 'row' || r.classList.contains('crit-row--wide'); }
+
+  // Le bouton qui replie une section sur son titre. Il n'a pas de mot à lui :
+  // le titre juste à côté le nomme (aria-label), et `aria-expanded` dit l'état
+  // — un chevron seul, dans la bande, à droite du compte.
+  function sectionFoldBtn(bodyId, nom) {
+    var b = el('button', 'crit-sec-fold');
+    b.type = 'button';
+    b.setAttribute('aria-expanded', 'true');
+    b.setAttribute('aria-controls', bodyId);
+    b.setAttribute('aria-label', nom);
+    b.appendChild(strokeGlyph('<path d="m6 9 6 6 6-6"/>', 14, 'crit-sec-chev'));
+    b.addEventListener('click', function () {
+      var sec = b.closest ? b.closest('.crit-sec') : null;
+      if (!sec) return;
+      sec.dataset.held = 'true';   // un pli posé à la main se respecte
+      setSectionFold(sec, sec.dataset.fold !== 'true');
+    });
+    return b;
+  }
+
+  function setSectionFold(sec, folded) {
+    var was = sec.dataset.fold === 'true';
+    sec.dataset.fold = folded ? 'true' : 'false';
+    var b = sec.querySelector('.crit-sec-fold');
+    if (b) b.setAttribute('aria-expanded', folded ? 'false' : 'true');
+    // Une piste segmentée n'a de géométrie qu'une fois visible : au dépli, on
+    // la remesure, comme le volet « Préciser » le fait déjà.
+    if (was && !folded) settleSegTracks(sec);
+  }
+
+  // Les sections de l'écran 3 vivent en dur dans index.html (elles ne sortent
+  // d'aucun catalogue) : elles NOMMENT leur glyphe, on le leur pose une fois.
+  // Même carte, même bande, même lecture que les questions de l'écran 2.
+  function paintStaticSectionIcons() {
+    Array.prototype.forEach.call(document.querySelectorAll('.crit-sec-h[data-sec-ic]'), function (h) {
+      if (h.querySelector('.crit-sec-ic')) return;
+      var ic = critGroupIcon(h.dataset.secIc);
+      if (ic) h.insertBefore(ic, h.firstChild);
+    });
+  }
+
+  // La même fonction sert la feuille de réservation et le carnet du dossier, si
+  // bien que les deux surfaces ne peuvent pas diverger.
+  // ---------------------------------------------------------------------------
+  function renderCriteriaSections(box, svc, mkRow, opts) {
+    opts = opts || {};
+    D.criteriaGroups(svc).forEach(function (g) {
+      var sec = el('section', 'crit-sec');
+      sec.dataset.groupe = g.id;
+      // Nommée pour un lecteur d'écran par le titre qu'on lit à l'œil.
+      sec.setAttribute('role', 'group');
+      var head = el('div', 'crit-sec-h');
+      // Le sujet AVANT son titre : dix questions à la file se lisaient toutes
+      // dans la même graisse, et « ceci parle du prêt » demandait de lire pour
+      // le savoir. Le glyphe le dit d'un coup d'œil ; il vient du même registre
+      // que la pastille des actes, deux cartes plus haut.
+      var mark = critGroupIcon(g.id);
+      if (mark) head.appendChild(mark);
+      var title = el('span', 'crit-sec-t', g.nom);
+      title.id = (opts.idPrefix || 'crit-') + 'sec-' + g.id + '__t';
+      sec.setAttribute('aria-labelledby', title.id);
+      head.appendChild(title);
+      // Le compte de la section — rempli par validateOfferUI, dans le
+      // vocabulaire de l'étape (« ✓ complet » / « n réponses attendues »).
+      if (opts.tally) {
+        var n = el('span', 'crit-sec-n');
+        n.setAttribute('aria-live', 'polite');
+        head.appendChild(n);
+      }
+      var grid = el('div', 'crit-sec-grid');
+      grid.id = (opts.idPrefix || 'crit-') + 'sec-' + g.id + '__body';
+      // Une section complète se replie sur son titre — seulement là où la
+      // feuille se REMPLIT dans l'ordre (opts.tally). Le dossier, lui, se
+      // consulte : il montre tout. Le chevron ferme la PREMIÈRE ligne de la
+      // bande, donc il se pose avant la raison d'être, qui prend la suivante.
+      if (opts.tally) head.appendChild(sectionFoldBtn(grid.id, g.nom));
+      head.appendChild(el('span', 'crit-sec-aide', g.aide));
+      // Les rangs qui PRENNENT la ligne (trois choix, la bande du déplacement)
+      // descendent sous les rangs compacts de leur section : intercalé, un rang
+      // pleine largeur laissait un demi-cadre vide à côté du rang compact qui le
+      // précédait. C'est le DOM qu'on réordonne, jamais un `order` CSS —
+      // l'ordre de lecture reste l'ordre du DOM, à l'œil comme au clavier
+      // (audit 2.15).
+      var rows = g.requis.map(function (c) { return mkRow(c); });
+      rows.forEach(function (r) { if (!wideRow(r)) grid.appendChild(r); });
+      rows.forEach(function (r) { if (wideRow(r)) grid.appendChild(r); });
+      sec.appendChild(head);
+      sec.appendChild(grid);
+      // Les précisions de CETTE section, repliées avec leur compte : le volet
+      // dit ce qu'il cache au lieu de promettre un vague « Affiner ».
+      if (g.facultatifs.length) {
+        var det = document.createElement('details'); det.className = 'disclosure crit-more';
+        var sum = document.createElement('summary');
+        sum.appendChild(document.createTextNode('Préciser (facultatif)'));
+        sum.appendChild(el('span', 'crit-more-n', String(g.facultatifs.length)));
+        det.appendChild(sum);
+        var inner = el('div', 'crit-sec-grid');
+        g.facultatifs.forEach(function (c) { inner.appendChild(mkRow(c)); });
+        det.appendChild(inner);
+        sec.appendChild(det);
+        // The folded rows only get real geometry once the expander opens.
+        det.addEventListener('toggle', function () { settleSegTracks(det); });
+      }
+      box.appendChild(sec);
+    });
+  }
+
+  // Le compte de chaque section : les mêmes mots que le compte de l'étape,
+  // comptés là où les questions vivent. Appelé par validateOfferUI après que
+  // les lignes en attente ont été marquées.
+  function paintSectionTallies() {
+    Array.prototype.forEach.call(document.querySelectorAll('#o-criteria > .crit-sec'), function (sec) {
+      var n = sec.querySelector('.crit-sec-n');
+      if (!n) return;
+      var due = sec.querySelectorAll('.crit-row.crit-missing').length;
+      n.dataset.state = due ? 'due' : 'done';
+      // COMPACT à l'œil, ENTIER à l'oreille : l'étape dit déjà la phrase
+      // (« 3 réponses attendues ») et la répéter sur chaque section ferait lire
+      // deux fois le même compte au même endroit. La section n'en montre que le
+      // chiffre — et le porte en entier dans son aria-label, que la passe i18n
+      // traduit comme n'importe quel attribut.
+      n.textContent = due === 0 ? '✓' : String(due);
+      n.setAttribute('aria-label', due === 0 ? '✓ complet' : due === 1 ? '1 réponse attendue' : due + ' réponses attendues');
+      // Une section RÉGLÉE SOUS LES YEUX DU CLIENT se replie sur son titre : à
+      // l'écran il ne reste que le sujet en cours, et les trois temps se
+      // comptent d'un regard au lieu de se dérouler sur deux écrans.
+      //
+      // Deux garde-fous, chacun payé par un essai raté (2026-09-06) :
+      //  · une question ENCORE ATTENDUE ne se cache jamais — la section se
+      //    rouvre d'elle-même dès qu'un compte repart, et le pli posé à la
+      //    main repart avec lui ;
+      //  · une section déjà complète À L'ARRIVÉE reste OUVERTE. Un dossier
+      //    déjà rempli repliait les trois sections d'un coup et l'écran 2
+      //    s'ouvrait sur trois bandes et zéro question — tout replier, ce
+      //    n'est plus ranger, c'est cacher. On ne replie qu'un passage de
+      //    « attendue » à « réglée », donc seulement ce que le client vient
+      //    lui-même de finir.
+      if (due) { sec.dataset.held = 'false'; sec.dataset.wasDue = 'true'; setSectionFold(sec, false); }
+      else if (sec.dataset.wasDue === 'true' && sec.dataset.held !== 'true') setSectionFold(sec, true);
+    });
   }
 
   function setCriterion(id, value) {
@@ -3734,6 +4577,17 @@
 
   // Le plancher ANNONCÉ : la cellule la plus basse de la grille. C'est un « à
   // partir de », dit comme tel — jamais le prix d'un devis.
+  // LPC art. 224 c) et Loi sur la concurrence art. 74.01 (1.1) : un prix
+  // annoncé comprend le total que le client paiera, taxes en sus. Le « à
+  // partir de » d'un acte est donc les honoraires de départ PLUS le prix de
+  // Nota au palier standard, jamais le plancher des honoraires seul. Lu sur la
+  // grille servie par l'API quand elle est là, sur le catalogue sinon.
+  function prixAnnonceDollars(serviceId) {
+    var t = store.tarif;
+    var p = D.prixAnnonce(serviceId, t && t.grille ? t.grille : null);
+    return Math.round(p.totalCents) / 100;
+  }
+
   function prixNotaMinDollars() {
     var t = store.tarif;
     return t && typeof t.prixNotaMinCents === 'number' ? Math.round(t.prixNotaMinCents) / 100 : null;
@@ -3747,8 +4601,8 @@
     var line = $('hero-price-line'); if (!line) return;
     var prix = prixNotaMinDollars();
     line.textContent = prix != null
-      ? 'Le notaire reçoit 100 % de votre offre ; le service Nota, à partir de ' + D.money(prix) + ', se paie seulement à la signature.'
-      : 'Le notaire reçoit 100 % de votre offre ; le service Nota, à un prix publié d’avance, se paie seulement à la signature.';
+      ? 'Le notaire reçoit 100 % de votre offre. Le service Nota, à partir de ' + D.money(prix) + ', se paie seulement à la signature.'
+      : 'Le notaire reçoit 100 % de votre offre. Le service Nota, à un prix publié d’avance, se paie seulement à la signature.';
   }
 
   function renderDevis() {
@@ -3763,7 +4617,7 @@
     var lignes = prixNotaLignes(svc.id, state.offer.dateISO);
     var prix = lignes ? lignes.total : null;
     $('devis-hon').textContent = D.money(honoraires);
-    $('devis-nota').textContent = lignes ? D.money(lignes.service) : '—';
+    $('devis-nota').textContent = lignes ? D.money(lignes.service) : 'à confirmer';
     // La garantie de date n'apparaît que lorsqu'elle se paie : une ligne à 0 $
     // ne dirait rien au client à échéance normale.
     var dl = $('devis-date-l');
@@ -3771,7 +4625,7 @@
       dl.hidden = !lignes || !lignes.date;
       if (lignes && lignes.date) $('devis-date').textContent = D.money(lignes.date);
     }
-    $('devis-total').textContent = prix != null ? D.money(honoraires + prix) : '—';
+    $('devis-total').textContent = prix != null ? D.money(honoraires + prix) : 'à confirmer';
 
     // Chaque phrase est son PROPRE noeud de texte : la couche i18n traduit par
     // correspondance exacte, et une phrase concaténée avec ses voisines ne se
@@ -3790,6 +4644,42 @@
       if (i) box2.appendChild(document.createTextNode(' '));
       box2.appendChild(el('span', '', phrase));
     });
+    // ADR 0041 / art. 12 LPC — ce qu'une annulation peut coûter se dit ICI,
+    // avant l'engagement, et non au moment d'annuler : les plafonds par
+    // palier et le délai de réclamation. Jamais un montant fixé d'avance.
+    devisAnnulationNote(box2, tarif && tarif.annulation);
+  }
+
+  // Les plafonds d'indemnité d'annulation, phrase par phrase (chacune a sa
+  // règle de traduction) : « 30 % à 3 jours ou moins de la signature »,
+  // « 10 % de 4 à 14 jours ».
+  function devisAnnulationNote(box, ann) {
+    var liste = ann && (Array.isArray(ann.plafonds) ? ann.plafonds : ann.paliers);
+    var paliers = Array.isArray(liste)
+      ? liste.map(function (p) { return p && { maxJours: p.maxJours, plafond: p.plafond != null ? p.plafond : p.taux }; })
+        .filter(function (p) { return p && p.maxJours != null && p.plafond != null; })
+        .sort(function (x, y) { return Number(x.maxJours) - Number(y.maxJours); })
+      : [];
+    if (!paliers.length) return;
+    var p = el('p', 'devis-annulation');
+    p.appendChild(el('span', '', 'Annulation sans frais tant qu’aucun notaire n’a retenu votre demande.'));
+    p.appendChild(document.createTextNode(' '));
+    p.appendChild(el('span', '', 'Ensuite, sur justification et dans les ' + (Number(ann.delaiJours) || 7)
+      + ' jours, le notaire peut réclamer ses frais réels et la valeur du travail accompli, jusqu’à :'));
+    var from = 0;
+    paliers.forEach(function (pal, i) {
+      var max = Number(pal.maxJours);
+      p.appendChild(document.createTextNode(' '));
+      p.appendChild(el('span', '', from === 0
+        ? pctLabel(pal.plafond) + ' du montant à ' + max + ' jours ou moins de la signature'
+        : pctLabel(pal.plafond) + ' du montant de ' + from + ' à ' + max + ' jours'));
+      p.appendChild(document.createTextNode(i < paliers.length - 1 ? ',' : '.'));
+      from = max + 1;
+    });
+    p.appendChild(document.createTextNode(' '));
+    p.appendChild(el('span', '', 'Rien n’est retenu sans réclamation, et l’indemnité va au notaire, jamais à Nota.'));
+    box.appendChild(document.createTextNode(' '));
+    box.appendChild(p);
   }
 
   function acceptance(mult, tierId) {
@@ -3872,6 +4762,8 @@
           hint.appendChild(b);
         });
       }
+      // Le rail dit la même chose que le garde, en plus court.
+      bookPaint();
       // The same list, marked WHERE the questions live: a quiet dot on each
       // awaited answer, and a live tally on the step header — so step 2 says
       // on its own how far the offer is from publishable.
@@ -3881,6 +4773,8 @@
         markRowMissing(row, !!awaited[row.dataset.crit]);
       });
       renderApprobationNote();
+      // Le même état, dit deux fois : sur l'étape, et sur chaque section.
+      paintSectionTallies();
       var count = $('o-criteria-count');
       if (count) {
         var n = missing.length;
@@ -3892,12 +4786,123 @@
     return v;
   }
 
+
+  // ---------------------------------------------------------------------------
+  // La feuille de réservation, en QUATRE ÉCRANS (ADR 0040).
+  //
+  // Retour du propriétaire (2026-09-05) : « l'expérience est vraiment confuse
+  // — le faire en plusieurs screens ». Les cinq blocs empilés donnaient une
+  // colonne à faire défiler où l'acte, les questions du notaire, le prix, le
+  // secteur et l'identité se disputaient le même premier regard.
+  //
+  // Un écran à la fois : 1 l'acte · 2 les réponses · 3 le prix · 4 les
+  // coordonnées. La STRUCTURE DU FORMULAIRE NE CHANGE PAS — chaque bloc porte
+  // le numéro de son écran (`data-screen`), le formulaire porte celui où l'on
+  // est (`data-at`), et c'est le CSS seul qui n'en montre qu'un. Rien n'est
+  // détaché du DOM : ce qui a été répondu à l'écran 2 reste répondu, la porte
+  // « Répondez à : … » ramène à la bonne question, et le garde de publication
+  // continue de juger le formulaire ENTIER, pas l'écran courant.
+  // ---------------------------------------------------------------------------
+  var BOOK_LAST = 4;
+  var bookAt = 1;      // l'écran affiché
+  var bookSeen = 1;    // le plus loin qu'on ait atteint — le rail n'ouvre pas au-delà
+
+  function bookForm() { return $('offer-form'); }
+  // L'écran 2 n'existe que si l'acte pose des questions ; sinon on l'enjambe
+  // dans les deux sens plutôt que de montrer une carte vide.
+  function bookSkips(n) {
+    if (n !== 2) return false;
+    var step = $('o-criteria-step');
+    return !step || step.hidden;
+  }
+  function bookNextUsable(n, dir) {
+    while (n >= 1 && n <= BOOK_LAST && bookSkips(n)) n += dir;
+    return Math.min(BOOK_LAST, Math.max(1, n));
+  }
+
+  function bookGoTo(n, opts) {
+    var form = bookForm(); if (!form) return;
+    n = bookNextUsable(Math.min(BOOK_LAST, Math.max(1, n || 1)), n > bookAt ? 1 : -1);
+    bookAt = n;
+    if (n > bookSeen) bookSeen = n;
+    form.dataset.at = String(n);
+    bookPaint();
+    if (opts && opts.silent) return;
+    // Le regard repart en haut de l'écran, et le clavier avec lui : sans ça on
+    // arrive au milieu d'une carte qu'on n'a pas encore lue.
+    var body = form.parentNode;
+    if (body && body.scrollTo) { try { body.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { body.scrollTop = 0; } }
+    var head = form.querySelector('[data-screen="' + n + '"] .book-step-lbl');
+    if (head && head.focus) { head.tabIndex = -1; try { head.focus({ preventScroll: true }); } catch (e) { head.focus(); } }
+  }
+
+  // Le rail et la barre d'action disent la même vérité que le garde : ce qui
+  // est fait, où l'on est, et ce qui fait avancer.
+  function bookPaint() {
+    var rail = $('book-rail');
+    if (rail) {
+      Array.prototype.forEach.call(rail.querySelectorAll('.book-rail-b'), function (b) {
+        var n = Number(b.dataset.goto);
+        var li = b.parentNode;
+        // « Fait » veut dire fait, pas visité : une étape traversée sans y
+        // répondre garde une marque d'attente, sinon le rail dirait vert sur
+        // un formulaire qu'on ne peut pas publier.
+        li.dataset.state = bookSkips(n) ? 'skip'
+          : n === bookAt ? 'at'
+          : n > bookSeen ? 'todo'
+          : bookScreenDue(n) ? 'open' : 'done';
+        // On ne saute pas par-dessus une étape qu'on n'a pas encore atteinte.
+        b.disabled = n > bookSeen;
+        if (n === bookAt) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current');
+      });
+    }
+    var back = $('book-back'), next = $('book-next'), sub = $('offer-submit');
+    if (back) back.hidden = bookAt === 1;
+    if (next) next.hidden = bookAt === BOOK_LAST;
+    if (sub) sub.hidden = bookAt !== BOOK_LAST;
+  }
+
+  // Ce qui manque À CET ÉCRAN, et rien d'autre. « Continuer » ne bloque pas en
+  // silence : il marque ce qui est attendu et pose le curseur dessus.
+  function bookScreenDue(n) {
+    if (n === 1) return !state.offer.serviceId;
+    if (n === 2) return !!document.querySelector('#o-criteria .crit-row.crit-missing');
+    if (n === 4) { var s = $('offer-submit'); return !!(s && s.disabled); }
+    return false; // le prix est toujours pré-rempli
+  }
+  function bookForward() {
+    if (!bookScreenDue(bookAt)) { bookGoTo(bookAt + 1); return; }
+    // L'écran 2 marque ses questions attendues (le même geste que la première
+    // frappe du client) puis emmène à la première.
+    state.offer.touched = true;
+    validateOfferUI();
+    var row = document.querySelector('#o-criteria .crit-row.crit-missing');
+    if (row && row.dataset.crit) focusCriterionRow(row.dataset.crit);
+    else if (bookAt === 1) {
+      var chip = document.querySelector('#o-service-chips .chip');
+      if (chip && chip.focus) chip.focus();
+    }
+  }
+
+  // Une porte (« Répondez à : … », un refus du serveur) doit d'abord ouvrir
+  // l'écran où la question habite, sinon elle vise un champ que le CSS cache.
+  function bookShow(node) {
+    if (!node || !node.closest) return;
+    var owner = node.closest('[data-screen]');
+    var n = owner ? Number(owner.dataset.screen) : 0;
+    if (n && n !== bookAt) {
+      if (n > bookSeen) bookSeen = n;
+      bookGoTo(n, { silent: true });
+    }
+  }
+
   // Jump from the hint's door to the question itself: unfold its expander if
   // it hides there, bring the row into view, hand focus to its first control,
   // and flash the row once so the eye lands on the right line.
   function focusCriterionRow(critId) {
     var row = document.querySelector('#o-criteria .crit-row[data-crit="' + critId + '"]');
     if (!row) return;
+    bookShow(row);
     var det = row.closest('details');
     if (det) det.open = true;
     if (row.scrollIntoView) row.scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -3925,14 +4930,24 @@
     row.classList.toggle('crit-missing', on);
     var ctl = row.querySelector('.nselect-btn, [role="group"], input:not(.visually-hidden):not([type="checkbox"])');
     if (ctl) { if (on) ctl.setAttribute('aria-invalid', 'true'); else ctl.removeAttribute('aria-invalid'); }
-    var note = row.querySelector(':scope > .crit-req');
+    var head = row.querySelector(':scope > .crit-head');
+    var note = row.querySelector('.crit-req');
     if (!note) {
+      // The slot is opened by the FIRST pass that finds the question awaited —
+      // which runs while the sheet is being painted — and is never taken back.
+      // The message can then arrive and leave without moving a pixel: only its
+      // visibility changes, so the question keeps the same height whether it
+      // is awaited, answered, or answered then cleared again.
       if (!on) return;
       note = el('span', 'crit-req', 'Réponse requise');
-      var lbl = row.querySelector(':scope > .crit-label');
-      if (lbl && lbl.nextSibling) row.insertBefore(note, lbl.nextSibling); else row.appendChild(note);
+      // En FIN de ligne de libellé : les « i » de la question gardent leur place
+      // contre le mot qu'ils expliquent, et le message se range après eux.
+      if (head) head.appendChild(note);
+      else row.appendChild(note);
     }
-    note.hidden = !(on && state.offer.touched);
+    // visibility, not `hidden`: a reserved line that is neither read aloud nor
+    // reachable, and a row whose height never depends on the answer.
+    note.dataset.on = on && state.offer.touched ? 'true' : 'false';
   }
   // Audit §1.9: bank approval not in hand and a date under two weeks — say,
   // under the question, that it is rarely tenable. Keyed on the domain's
@@ -3944,18 +4959,22 @@
     var row = document.querySelector('#o-criteria .crit-row[data-crit="' + APPROBATION_CRITERION_ID + '"]');
     if (!row) return;
     var note = $('o-approbation-note');
-    if (!note) { note = el('p', 'help crit-note'); note.id = 'o-approbation-note'; note.hidden = true; row.appendChild(note); }
+    if (!note) {
+      note = infoTip({ id: 'o-approbation-note', tone: 'warn' });
+      var head = row.querySelector(':scope > .crit-head') || row;
+      head.appendChild(note);
+    }
     var ans = effectivePricing()[APPROBATION_CRITERION_ID];
     var days = D.isISODate(state.offer.dateISO) ? D.daysBetween(todayISO(), state.offer.dateISO) : null;
     var show = ans != null && ans !== APPROBATION_IN_HAND && days != null && days < SHORT_NOTICE_DAYS;
-    if (show) note.textContent = 'Sans les instructions du prêteur en main, une signature dans moins de deux semaines est rarement tenable. Choisissez une date plus éloignée, ou confirmez l’approbation avant de publier.';
-    note.hidden = !show;
+    note.setNote(show ? 'Sans les instructions du prêteur en main, une signature dans moins de deux semaines est rarement tenable. Choisissez une date plus éloignée, ou confirmez l’approbation avant de publier.' : '');
   }
 
   // The hint's door to the REQUIRED postal sector: bring the field into view,
   // hand it focus, and let its own preview line explain the format.
   function focusPrefixField() {
     var inp = $('o-prefix'); if (!inp) return;
+    bookShow(inp);
     if (inp.scrollIntoView) inp.scrollIntoView({ block: 'center', behavior: 'smooth' });
     try { inp.focus({ preventScroll: true }); } catch (e) { inp.focus(); }
   }
@@ -4036,6 +5055,7 @@
   function focusIdentityField(id) {
     return function () {
       var inp = $(id); if (!inp) return;
+      bookShow(inp);
       if (inp.scrollIntoView) inp.scrollIntoView({ block: 'center', behavior: 'smooth' });
       try { inp.focus({ preventScroll: true }); } catch (e) { inp.focus(); }
     };
@@ -4630,7 +5650,7 @@
     if (status.evaluation) {
       var done = el('div', 'my-offer-eval-done');
       done.appendChild(el('strong', null, 'Votre évaluation : ' + '★'.repeat(status.evaluation.note) + '☆'.repeat(5 - status.evaluation.note)));
-      done.appendChild(el('span', 'help', ' Merci — elle aide les prochains clients.'));
+      done.appendChild(el('span', 'help', ' Merci — elle est transmise à votre notaire. Elle n’est publiée nulle part.'));
       box.appendChild(done);
       return box;
     }
@@ -4749,8 +5769,27 @@
     var prev = status && status.annulation;
     var feeEl = $('cancel-fee');
     if (feeEl) {
-      if (prev && Number(prev.frais) > 0) {
+      if (prev && Number(prev.plafond) > 0) {
         feeEl.hidden = false;
+        // ADR 0041 — RIEN n'est prélevé à l'annulation. Le client lit ce que
+        // le notaire POURRA réclamer (frais réels et travail accompli,
+        // art. 2129 C.c.Q.), jusqu'à quel plafond, dans quel délai, et ce qu'il
+        // advient de la somme réservée entre-temps. Chaque phrase est son
+        // propre nœud : la couche i18n traduit par phrase.
+        var surCautionNow = !!(status && status.caution && status.caution.etat === 'posee');
+        clear(feeEl);
+        feeEl.appendChild(el('span', '', 'Annuler maintenant permet au notaire de réclamer, sur justification et dans les '
+          + (Number(prev.delaiJours) || 7) + ' jours, ses frais réels et la valeur du travail accompli, jusqu’à '
+          + D.money(prev.plafond) + ' (' + pctLabel(prev.taux) + ' du montant convenu).'));
+        feeEl.appendChild(document.createTextNode(' '));
+        feeEl.appendChild(el('span', '', 'Rien n’est retenu automatiquement.'));
+        feeEl.appendChild(document.createTextNode(' '));
+        feeEl.appendChild(el('span', '', surCautionNow
+          ? 'La somme réservée sur votre carte reste en place jusqu’à sa décision, puis vous est libérée.'
+          : 'Un montant réclamé serait porté à la carte que vous avez enregistrée.'));
+        feeEl.appendChild(document.createTextNode(' '));
+        feeEl.appendChild(el('span', '', 'Une indemnité réclamée est versée au notaire en dédommagement de la journée réservée, jamais à Nota.'));
+      } else if (false) {
         // The fee compensates the NOTARY for the day they reserved — Nota
         // keeps none of it (art. 32.1 L.N.). Said in the same breath as the
         // amount, so the client knows where their money goes.
@@ -4764,13 +5803,6 @@
         // (art. 68 C.déont.). `status.caution.etat` voyage dans la même
         // réponse : il n'y a rien à deviner.
         var surCaution = !!(status && status.caution && status.caution.etat === 'posee');
-        var verses = ' Ils sont versés au notaire en dédommagement de la journée réservée.';
-        feeEl.textContent = surCaution
-          ? 'Annuler maintenant retient des frais de ' + D.money(prev.frais)
-            + ' (' + pctLabel(prev.taux) + ' du montant convenu) sur la somme réservée pour cet acte.' + verses
-            + ' Le reste vous est libéré immédiatement.'
-          : 'Aucune somme n’est réservée pour cet acte. Annuler maintenant porte des frais de ' + D.money(prev.frais)
-            + ' (' + pctLabel(prev.taux) + ' du montant convenu) à la carte que vous avez enregistrée.' + verses;
       } else {
         feeEl.hidden = true;
         feeEl.textContent = '';
@@ -5284,6 +6316,25 @@
   var LS_DOSSIER = 'nota.dossier.v1';
   function dossierState() { return lsLoad(LS_DOSSIER) || {}; }
   function dossierFor(sid) { var d = dossierState(); return d[sid] || {}; }
+  // Replie les réponses du serveur dans le dossier local, sans jamais écraser
+  // ce que l'appareil sait de plus. Les clés réservées (__pricing, __validated,
+  // __pricingAt) sont de l'état d'appareil : le serveur ne les porte pas et ne
+  // doit pas y toucher.
+  function hydrateDossier(serveur, sid) {
+    if (!sid || !serveur || typeof serveur !== 'object') return;
+    var keys = Object.keys(serveur);
+    if (!keys.length) return; // vide n'est pas une instruction d'effacement
+    var d = dossierState();
+    var pour = d[sid] || (d[sid] = {});
+    var change = false;
+    keys.forEach(function (k) {
+      if (k.indexOf('__') === 0) return;      // état d'appareil, jamais du serveur
+      if (pour[k] === serveur[k]) return;
+      if (pour[k]) return;                    // l'appareil a déjà une réponse : elle gagne
+      pour[k] = serveur[k]; change = true;
+    });
+    if (change) lsSave(LS_DOSSIER, d);
+  }
   function dossierSet(sid, key, val) {
     var d = dossierState(); d[sid] = d[sid] || {};
     if (val) d[sid][key] = val; else delete d[sid][key];
@@ -5418,15 +6469,19 @@
       pbody.appendChild(el('div', 'help', 'Enregistrées dans votre profil et réutilisées pour vos prochaines offres. Le prix d’une offre déjà publiée ne change pas.'));
       var pbox = el('div', 'o-criteria');
       var pans = dossierPricing(svc.id);
-      pcrit.forEach(function (c) {
-        pbox.appendChild(buildCriterionRow(c, pans[c.id], function (val) {
+      // Les mêmes sections que la feuille — une seule fonction les rend, donc
+      // les deux surfaces ne peuvent pas poser les questions dans deux ordres.
+      renderCriteriaSections(pbox, svc, function (c) {
+        var prow = buildCriterionRow(c, pans[c.id], function (val) {
           dossierSetPricing(svc.id, c.id, val);
           updateDossierPrice(svc);
+          if (prow.critEffet) prow.critEffet.paint(val);
         }, 'dcrit-', c.autre ? { value: pans[c.autre.champ], onChange: function (val) {
           dossierSetPricing(svc.id, c.autre.champ, val);
           updateDossierPrice(svc);
-        } } : null));
-      });
+        } } : null, svc);
+        return prow;
+      }, { idPrefix: 'dcrit-' });
       pbody.appendChild(pbox);
       var priceEl = el('div', 'dossier-price'); priceEl.id = 'dossier-price';
       pbody.appendChild(priceEl);
@@ -5771,6 +6826,39 @@
     return false;
   }
 
+  // Free notary signup — the door that does NOT depend on Stripe.
+  // /notaries/connect (below) starts a payout account and answers 503 whenever
+  // billing is unconfigured, which is the state of production; it was the only
+  // caller here, so a new notary could not register at all. /notaries/signup
+  // files the application (`status: 'en_attente'`), mails the notary a « we are
+  // checking » notice and mails the operator the admin link. Console access is
+  // the OPERATOR's approval (`approuveLe`), never Stripe's — so nothing about
+  // payouts belongs on this path.
+  async function ncFreeSignup(email, onError) {
+    email = (email || '').trim();
+    if (!email) { onError && onError('Un courriel est requis.'); return false; }
+    // Referral attribution (ADR 0011), same rule as everywhere: the typed field
+    // wins, the captured ?ref link is the fallback, an invalid code is dropped
+    // rather than blocking the signup.
+    var body = { email: email };
+    var refField = $('nc-signup-parrain');
+    var typedRef = refField ? refField.value.trim() : '';
+    var parrain = refField
+      ? (D.isReferralCode(typedRef) ? D.normalizeReferralCode(typedRef) : null)
+      : referralCode();
+    if (parrain) body.parrain = parrain;
+    try {
+      var r = await fetch(API_BASE + '/notaries/signup', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      var j = {}; try { j = await r.json(); } catch (e) {}
+      if (r.ok) { ncShowPendingStep(email); return true; }
+      onError && onError((j.errors && j.errors[0] && j.errors[0].message) || 'Inscription indisponible pour le moment.');
+    } catch (err) { onError && onError('Hors ligne. Réessayez une fois en ligne.'); }
+    return false;
+  }
+
   async function ncConnectPayout() {
     if (!nc.email) { toast('Connectez-vous d’abord à votre console.'); return; }
     var box = $('notary-connect-errors');
@@ -5791,6 +6879,19 @@
     var email = $('notary-gate-step-email'); if (email) email.hidden = which !== 'email';
     var sent = $('notary-gate-step-sent'); if (sent) sent.hidden = which !== 'sent';
     var signup = $('notary-signup-prompt'); if (signup) signup.hidden = which !== 'signup';
+    var pending = $('notary-gate-step-pending'); if (pending) pending.hidden = which !== 'pending';
+  }
+
+  // "Your application is filed" — the honest end of the free signup. It does
+  // NOT open the console: /notaries/signup files the notary as `en_attente`,
+  // and only the operator's approval (`approuveLe`) opens the door. Promising
+  // an immediate console here would be the old lie moved one screen along.
+  function ncShowPendingStep(email) {
+    ncSetErrors([]);
+    var who = $('notary-pending-email'); if (who) who.textContent = email;
+    ncShowGateStep('pending');
+    var box = $('notary-gate-step-pending');
+    if (box) { try { box.focus({ preventScroll: true }); } catch (e) { try { box.focus(); } catch (e2) {} } }
   }
 
   // "Check your inbox" — shown after a link request in production (no dev echo).
@@ -6092,6 +7193,15 @@
       ncSetErrors((j.errors || [{ message: 'Entrez un courriel valide.' }]).map(function (x) { return x.message; }));
       return { ok: false };
     }
+    // 429 — le plafond anti-abus, PAS un refus. La porte est volontairement
+    // muette sur l'existence du compte (`{ ok: true, throttled: true }`, sans
+    // tableau d'erreurs), donc le repli générique disait « Connexion refusée. »
+    // à un notaire qui a simplement redemandé son lien trop souvent : « vous
+    // n'avez pas le droit d'entrer » au lieu de « attendez un quart d'heure ».
+    if (r.status === 429) {
+      ncSetErrors([throttledMessage(r)]);
+      return { ok: false };
+    }
     if (r.status !== 200) {
       ncSetErrors((j.errors || [{ message: 'Connexion refusée.' }]).map(function (x) { return x.message; }));
       return { ok: false };
@@ -6252,11 +7362,17 @@
     nc.conditions = j.conditions || null; // ADR 0033: what retaining commits to
     nc.fenetre = Array.isArray(j.fenetre) ? j.fenetre : null;
     nc.manquantsServeur = null;           // a fresh profile supersedes an old 403
+    nc.profilCharge = true;               // le profil vient du SERVEUR, plus du défaut vide
     ncRenderCautionRegle();
     ncRenderProfil();
     ncRenderProfilBanner();
     ncRenderPrefs();
     ncRenderEarnings(); // the money tiles
+    // …et le relevé qui les rend JUSTES. Il était chargé au dépli du panneau
+    // seulement, si bien que les tuiles affichaient le cache local (fenêtre de
+    // 4 mois vers l'avant) jusqu'au premier clic — « 0 $ » sur un navigateur
+    // neuf. Au mieux : un échec laisse simplement les tuiles au cache.
+    ncLoadActs();
     ncRenderCote();     // …and, right under them, what decides the share
     ncRenderOpen();
     // The server's retained list: merge what it returns, then drop what it
@@ -6886,19 +8002,26 @@
     var stored = (lsLoad(LS_NC_PREFS) || {})[email] || {};
     return { lenders: Object.assign(d.lenders, stored.lenders || {}) };
   }
-  function ncPrefsSavedNote() {
-    var saved = $('notary-prefs-saved');
-    if (saved) { saved.hidden = false; clearTimeout(ncPrefsSavedT); ncPrefsSavedT = setTimeout(function () { saved.hidden = true; }, 2200); }
+  var NC_PREFS_SAVED = '✓ Préférences enregistrées.';
+  var NC_PROFIL_SAVED = '✓ Profil enregistré.';
+  var NC_LENDERS_SAVED = '✓ Prêteurs enregistrés sur cet appareil.';
+  // A confirmation that comes and goes must not move the panel it confirms.
+  // The line is RESERVED (CSS min-height) and only its sentence arrives and
+  // leaves — which is also exactly what makes a role="status" announce.
+  function ncSavedNote(id, text, timer) {
+    var saved = $(id);
+    if (!saved) return timer;
+    saved.textContent = text;
+    clearTimeout(timer);
+    return setTimeout(function () { saved.textContent = ''; }, 2200);
   }
+  function ncPrefsSavedNote() { ncPrefsSavedT = ncSavedNote('notary-prefs-saved', NC_PREFS_SAVED, ncPrefsSavedT); }
   function ncPrefsSave(email, prefs) {
     var all = lsLoad(LS_NC_PREFS) || {}; all[email] = { lenders: prefs.lenders }; lsSave(LS_NC_PREFS, all);
     ncLendersSavedNote(); // device-only: its own confirmation, never « Préférences enregistrées »
   }
   var ncLendersSavedT = null;
-  function ncLendersSavedNote() {
-    var saved = $('notary-lenders-saved');
-    if (saved) { saved.hidden = false; clearTimeout(ncLendersSavedT); ncLendersSavedT = setTimeout(function () { saved.hidden = true; }, 2200); }
-  }
+  function ncLendersSavedNote() { ncLendersSavedT = ncSavedNote('notary-lenders-saved', NC_LENDERS_SAVED, ncLendersSavedT); }
   function ncPrefsPatch(patch) { if (nc.email) ncPrefsSave(nc.email, Object.assign(ncPrefsGet(nc.email), patch)); }
   // The server's view, normalized: an unknown pace reads as the daily digest.
   function ncAlertes() {
@@ -6954,8 +8077,9 @@
         title.appendChild(el('span', 'nc-pref-scope', 'sur cet appareil'));
       }
       if (!$('notary-lenders-saved')) {
-        var note = el('p', 'help nc-prefs-saved', '✓ Prêteurs enregistrés sur cet appareil.');
-        note.id = 'notary-lenders-saved'; note.setAttribute('role', 'status'); note.hidden = true;
+        var note = el('p', 'help nc-prefs-saved');
+        note.id = 'notary-lenders-saved';
+        note.setAttribute('role', 'status'); note.setAttribute('aria-live', 'polite');
         lendBlock.appendChild(note);
       }
     }
@@ -7326,6 +8450,18 @@
     box.hidden = !missing.length;
     var list = $('nc-profil-manquants');
     if (list) { clear(list); missing.forEach(function (m) { list.appendChild(el('li', null, m.label || m.id)); }); }
+    // PREMIÈRE CONNEXION. Le film d'accueil est inatteignable une fois connecté
+    // (`maybeShowOnboarding` sort dès que le rôle n'est plus « anon »), et le
+    // panneau de profil est replié, en 8e position. Un notaire neuf arrivait
+    // donc devant un fil quasi vide — `rayonKm` vaut 0 par défaut, donc
+    // `notaryCanServe` ne lui montre que les clients qui se déplacent — sans
+    // rien pour relier l'un à l'autre. On ouvre le panneau UNE fois par
+    // session : c'est le geste qui débloque tout le reste.
+    if (missing.length && nc.profilCharge && !nc.profilOuvertAuto) {
+      nc.profilOuvertAuto = true;
+      var panel = $('notary-profil');
+      if (panel) panel.open = true;
+    }
   }
 
   // --- Retenir: the confirm sheet (ADR 0033) ---------------------------------
@@ -7697,7 +8833,23 @@
         head.lastChild.appendChild(el('span', null, 'en jeu'));
       }
     }
-    if (!all.length) { if (empty) { empty.textContent = 'Aucune demande ouverte pour l’instant.'; empty.hidden = false; } return; }
+    if (!all.length) {
+      if (empty) {
+        // Un fil vide a DEUX causes très différentes, et les confondre coûte un
+        // notaire : ou bien le marché est calme, ou bien c'est SON périmètre
+        // qui le rend aveugle. `rayonKm` vaut 0 par défaut (« je ne me déplace
+        // pas »), donc `notaryCanServe` ne montre alors que les clients qui
+        // viennent à l'étude. Sans cette phrase, un profil neuf se lit comme
+        // « Nota n'a pas de clients ».
+        var p = nc.profil || {};
+        var rayon = Number(p.rayonKm) || 0;
+        empty.textContent = rayon === 0
+          ? 'Aucune demande ouverte pour l’instant. Vous n’acceptez aucun déplacement : seuls les clients qui viennent à votre étude vous sont proposés. Augmentez votre rayon dans « Votre profil public » pour en voir davantage.'
+          : 'Aucune demande ouverte pour l’instant.';
+        empty.hidden = false;
+      }
+      return;
+    }
     var days = D.agendaByDate(ncFilteredOpen());
     if (!days.length) { if (empty) { empty.textContent = 'Aucune demande ne correspond à ce filtre.'; empty.hidden = false; } return; }
     if (empty) empty.hidden = true;
@@ -7845,7 +8997,104 @@
     return wrap;
   }
 
+  // ADR 0041 — l'acte que le client a annulé après la rétention, tant que
+  // l'indemnité est à décider : le notaire réclame (montant sous le plafond,
+  // justification) ou renonce. Rien du client n'y figure : la relation est
+  // finie (art. 37). La carte disparaît à la décision, ou à l'échéance.
+  function ncIndemniteCard(entry) {
+    var svc = D.serviceById(entry.serviceId);
+    var a = entry.annulation || {};
+    var plafond = Number(a.plafond) || 0;
+    var card = el('div', 'nc-card is-retained is-annulee'); card.dataset.id = entry.id; card.dataset.date = entry.dateISO || '';
+    var head = el('div', 'nc-card-head');
+    head.appendChild(el('div', 'nc-card-title', svc ? svc.nom : entry.serviceId));
+    head.appendChild(el('div', 'nc-card-amount', D.money(entry.montant)));
+    card.appendChild(head);
+    var meta = el('div', 'nc-card-meta');
+    meta.appendChild(ncTierPill(entry.tier));
+    meta.appendChild(el('span', 'pill pill-annulee', 'Annulée par le client'));
+    card.appendChild(meta);
+    var facts = ncFactsRow({ dateISO: entry.dateISO, showDate: true });
+    if (facts) card.appendChild(facts);
+
+    var box = el('div', 'nc-indemnite');
+    var p = el('p', 'help');
+    p.appendChild(el('span', null, 'Le client a annulé après votre rétention. Vous pouvez réclamer vos frais réels et la valeur du travail accompli, sur justification, jusqu’à'));
+    p.appendChild(document.createTextNode(' '));
+    p.appendChild(el('strong', 'nc-forecast-amt', D.money(plafond)));
+    p.appendChild(document.createTextNode(' (' + ncPct(a.taux) + ')'));
+    if (a.echeanceISO) {
+      p.appendChild(document.createTextNode(' · '));
+      p.appendChild(el('span', null, 'd’ici le'));
+      p.appendChild(document.createTextNode(' '));
+      p.appendChild(el('span', null, dayShort(a.echeanceISO)));
+    }
+    p.appendChild(document.createTextNode('.'));
+    box.appendChild(p);
+    box.appendChild(el('p', 'help', 'Sans réclamation de votre part, rien n’est prélevé au client. L’indemnité vous est versée en entier.'));
+
+    var form = el('div', 'nc-indemnite-form');
+    var amtField = el('div', 'field');
+    amtField.appendChild(el('label', null, 'Montant réclamé (en dollars)'));
+    var amt = el('input', 'input nc-indemnite-amt');
+    amt.type = 'number'; amt.min = '0'; amt.max = String(plafond); amt.step = '1'; amt.value = String(plafond);
+    amt.setAttribute('aria-label', 'Montant réclamé, en dollars');
+    amt.setAttribute('data-i18n-skip', '');
+    amtField.appendChild(amt);
+    form.appendChild(amtField);
+    var just = el('textarea', 'nc-indemnite-just');
+    just.rows = 3; just.maxLength = D.INDEMNITE_JUSTIFICATION_MAX || 600;
+    just.placeholder = 'Justification : frais engagés, travail accompli (au moins 20 caractères)';
+    just.setAttribute('aria-label', 'Justification de l’indemnité');
+    form.appendChild(just);
+    var err = el('p', 'help nc-indemnite-err'); err.hidden = true;
+    form.appendChild(err);
+    var actions = el('div', 'nc-release-actions');
+    var go = el('button', 'btn btn-sm btn-primary nc-indemnite-go', 'Réclamer cette indemnité'); go.type = 'button';
+    var waive = el('button', 'btn btn-sm nc-indemnite-waive', 'Renoncer à toute indemnité'); waive.type = 'button';
+    actions.appendChild(go); actions.appendChild(waive);
+    form.appendChild(actions);
+    go.addEventListener('click', function () { ncIndemniteSend(entry, Number(amt.value), just.value, err, [go, waive]); });
+    waive.addEventListener('click', function () { ncIndemniteSend(entry, 0, '', err, [go, waive]); });
+    box.appendChild(form);
+    card.appendChild(box);
+    return card;
+  }
+  async function ncIndemniteSend(entry, montant, justification, err, btns) {
+    btns.forEach(function (b) { b.disabled = true; });
+    err.hidden = true; err.textContent = '';
+    var r, j = {};
+    try {
+      r = await fetch(API_BASE + '/notary/bids/indemnite', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer ' + nc.token },
+        body: JSON.stringify({ id: entry.id, dateISO: entry.dateISO, montant: montant, justification: justification }),
+      });
+      try { j = await r.json(); } catch (e) {}
+    } catch (e) {
+      btns.forEach(function (b) { b.disabled = false; });
+      toast('Réclamation impossible (hors ligne).');
+      return;
+    }
+    if (!r.ok) {
+      btns.forEach(function (b) { b.disabled = false; });
+      var msg = (j.errors && j.errors[0] && j.errors[0].message) || 'Réclamation impossible.';
+      err.hidden = false; err.textContent = msg;
+      if (r.status === 409) { ncRetainedSave(nc.email, ncRetainedFor(nc.email).filter(function (e) { return e.id !== entry.id; })); ncRenderRetained(); }
+      return;
+    }
+    var a = j.annulation || {};
+    toast(a.statut === 'percue' ? 'Indemnité réclamée : ' + D.money(a.frais) + '.'
+      : a.statut === 'refusee' ? 'La carte du client a refusé le prélèvement.'
+        : 'Vous avez renoncé à toute indemnité.');
+    // Decided: the server no longer returns the act; drop it locally too.
+    ncRetainedSave(nc.email, ncRetainedFor(nc.email).filter(function (e) { return e.id !== entry.id; }));
+    ncRenderRetained();
+    ncLoadBids();
+  }
+
   function ncRetainedCard(entry) {
+    if (entry && entry.annulee) return ncIndemniteCard(entry);
     var svc = D.serviceById(entry.serviceId);
     var card = el('div', 'nc-card is-retained'); card.dataset.id = entry.id; card.dataset.date = entry.dateISO || '';
     var head = el('div', 'nc-card-head');
@@ -7908,13 +9157,15 @@
   // nothing. Each fragment is its own node so the dictionary translates it.
   function ncForecastLine(entry) {
     var a = entry && entry.annulation;
-    if (!a || !(Number(a.frais) > 0)) return null;
+    if (!a || !(Number(a.plafond) > 0)) return null;
+    // ADR 0041 — un PLAFOND, réclamable sur justification : jamais une somme
+    // promise. Le notaire lit ce qu'il pourrait réclamer, pas ce qu'il reçoit.
     var p = el('p', 'help nc-forecast');
     p.appendChild(el('span', null, 'Si le client annule aujourd’hui :'));
     p.appendChild(document.createTextNode(' '));
-    p.appendChild(el('strong', 'nc-forecast-amt', D.money(a.frais)));
+    p.appendChild(el('span', null, 'vous pourriez réclamer, sur justification, jusqu’à'));
     p.appendChild(document.createTextNode(' '));
-    p.appendChild(el('span', null, 'vous sont versés'));
+    p.appendChild(el('strong', 'nc-forecast-amt', D.money(a.plafond)));
     p.appendChild(document.createTextNode(' ('));
     p.appendChild(el('span', null, ncPct(a.taux)));
     if (a.joursAvant != null) {
@@ -8595,7 +9846,7 @@
     if (own) {
       var rrow = el('div', 'nc-own-rating');
       rrow.appendChild(own);
-      rrow.appendChild(el('span', 'help', ' Votre note, telle que les clients la voient.'));
+      rrow.appendChild(el('span', 'help', ' Votre moyenne, lisible par vous seul. Aucun client ne la voit.'));
       box.appendChild(rrow);
     }
     function tile(k, v, cls) {
@@ -8603,6 +9854,27 @@
       t.appendChild(el('div', 'nc-stat-v', v));
       t.appendChild(el('div', 'nc-stat-k', k));
       return t;
+    }
+    // Le RELEVÉ fait foi quand il a répondu : il vient du registre ACT# et
+    // couvre tout l'historique, alors que `e` se calcule sur le cache local,
+    // semé par la fenêtre de 4 mois VERS L'AVANT du fil. Sur un navigateur
+    // neuf, ce cache est vide et affichait « 0 $ » à un notaire chevronné.
+    var t = nc.actsTotals;
+    if (t) {
+      e = {
+        done: Number(t.actes) || 0,
+        honoraires: Number(t.honoraires) || 0,
+        prixNota: Number(t.prixNota) || 0,
+        // « À compléter » reste une notion du FIL (des actes à venir), pas du
+        // relevé (qui ne contient que du réglé) : le cache local garde ce rôle.
+        pending: e.pending, pendingVal: e.pendingVal,
+      };
+    } else if (nc.actsError && !e.done) {
+      // Une panne n'est pas « vous n'avez rien gagné ». Sans relevé ET sans
+      // cache, on le dit — inventer un zéro serait le bogue qu'on corrige.
+      box.appendChild(el('p', 'help', 'Vos honoraires sont momentanément indisponibles. Réessayez dans un instant — rien n’est perdu.'));
+      if (e.pending) box.appendChild(el('p', 'help', e.pending + ' dossier' + (e.pending > 1 ? 's' : '') + ' à compléter · valeur estimée ' + D.money(e.pendingVal) + '.'));
+      return;
     }
     // The tile grid only exists once there is money to show: a wall of zero
     // tiles under the open demands would compete with the working surface —
@@ -8922,6 +10194,7 @@
       // Offline is an error, never « you have settled nothing ».
       clear(box);
       box.appendChild(el('p', 'help', 'Impossible de charger votre relevé (hors ligne). Réessayez.'));
+      nc.actsError = true; ncRenderEarnings();
       return;
     }
     if (r.status === 401) { ncExpire('Session expirée. Reconnectez-vous.'); return; }
@@ -8929,6 +10202,9 @@
       // The door is not there: retire the panel rather than show an empty
       // promise of disclosure. The next session tries again from scratch.
       ncActsFor = nc.email;
+      // Porte absente (déploiement plus ancien) : ce n'est pas une panne — les
+      // tuiles retombent sur le cache local, qui vaut mieux que rien.
+      nc.actsTotals = null; nc.actsError = false;
       clear(box);
       if (panel) { panel.open = false; panel.hidden = true; }
       return;
@@ -8937,9 +10213,18 @@
     if (r.status !== 200) {
       clear(box);
       box.appendChild(el('p', 'help', 'Impossible de charger votre relevé. Réessayez.'));
+      nc.actsError = true; ncRenderEarnings();
       return;
     }
     ncActsFor = nc.email;
+    // Les totaux du RELEVÉ font foi : ils viennent du registre ACT#, écrit une
+    // fois pour toutes, et couvrent tout l'historique. Le cache local, lui,
+    // n'est semé que par la fenêtre de 4 mois VERS L'AVANT du fil — d'où un
+    // « 0 $ » sur un navigateur neuf. On garde donc la réponse et on repeint
+    // « Vos revenus » avec elle.
+    nc.actsTotals = (j && j.totaux) || null;
+    nc.actsError = false;
+    ncRenderEarnings();
     ncRenderActs(j);
   }
 
@@ -9018,7 +10303,7 @@
     var urg = $('nc-urgences');
     var errBox = $('nc-profil-errors');
     var saved = $('nc-profil-saved');
-    if (saved) saved.hidden = true;
+    if (saved) saved.textContent = '';
     var pre = $('nc-prefixe');
     var field = function (id) { var e = $(id); return e ? e.value : ''; };
     var v = D.validateNotaryProfile({
@@ -9050,7 +10335,7 @@
     ncRenderProfil({ force: true }); // the echo is the baseline the next soft repaint compares to
     ncRenderProfilBanner();
     if (errBox) { clear(errBox); errBox.hidden = true; }
-    if (saved) saved.hidden = false;
+    if (saved) saved.textContent = NC_PROFIL_SAVED;
     toast('Profil enregistré.');
   }
 
@@ -9190,9 +10475,11 @@
     var site = SITE_ORIGIN;
     var offers = D.SERVICES.map(function (svc) {
       return {
-        '@type': 'Offer', priceCurrency: 'CAD', price: String(svc.prixDepart),
+        '@type': 'Offer', priceCurrency: 'CAD', price: String(prixAnnonceDollars(svc.id)),
         availability: 'https://schema.org/InStock',
-        description: 'Prix de départ des honoraires du notaire pour cet acte, dans la Ville de Québec ; le prix du service de Nota, publié d’avance, s’ajoute et se paie à la signature.',
+        // LPC art. 224 c) : le prix annoncé est le total, honoraires de départ
+        // du notaire et service de Nota compris. Taxes et débours en sus.
+        description: 'Prix de départ pour cet acte dans la Ville de Québec, honoraires de départ du notaire et prix du service de Nota, publié d’avance, compris. Taxes et débours en sus. Le notaire reçoit 100 % de votre offre.',
         itemOffered: { '@type': 'Service', name: svc.nom, alternateName: svc.nomEn, areaServed: { '@type': 'City', name: 'Québec' } },
       };
     });
@@ -9270,6 +10557,8 @@
   // Wiring
   // ---------------------------------------------------------------------------
   function wire() {
+    // Les sections écrites en dur reçoivent leur glyphe une fois pour toutes.
+    paintStaticSectionIcons();
     // Tabs
     document.querySelectorAll('.nav-tab').forEach(function (b) {
       b.addEventListener('click', function () { setTab(this.dataset.tab); });
@@ -9455,14 +10744,12 @@
       b.addEventListener('click', function () { authSetRole(b.dataset.role); });
     });
     var authForm = $('auth-email-form'); if (authForm) authForm.addEventListener('submit', authSubmitEmail);
-    // Social doors: OAuth is not wired yet, so a click surfaces the coming-soon
-    // line INSIDE the modal (a toast would paint under the <dialog> top layer)
-    // and hands focus to the courriel field, the one live door. T() at compose
-    // time: the sentence is assembled at runtime, per provider.
     // ONE door for both header buttons (owner, 2026-08-28: « comme un site
     // traditionnel, en trois clics ») — same modal, honest title per button.
     // The pedagogical guide stays on the header « ? » and the footer link.
     var hLogin = $('header-login'); if (hLogin) hLogin.addEventListener('click', function () { openAuthModal(null, 'signin'); });
+    var authSwitch = $('auth-switch-btn');
+    if (authSwitch) authSwitch.addEventListener('click', authToggleMode);
     var hSignup = $('header-signup'); if (hSignup) hSignup.addEventListener('click', function () { openAuthModal(null, 'signup'); });
     renderAccountMenu(); // set the initial logged-out (auth buttons) / signed-in (avatar) state
     // Click the backdrop (outside the body) to dismiss.
@@ -9582,6 +10869,8 @@
     // Service chips drive the hidden #o-service select (keeps its tested options).
     $('o-service-chips').addEventListener('click', function (e) {
       var b = e.target.closest('.chip'); if (!b) return;
+      // Un acte annoncé n'est pas une réponse : il ne prend pas la sélection.
+      if (b.getAttribute('aria-disabled') === 'true') return;
       setGroupActive(this, b);
       $('o-service').value = b.dataset.svc;
       onOfferServiceChange();
@@ -9629,6 +10918,15 @@
     }
 
     // Day booking dialog
+    // Les quatre écrans : la barre d'action et le rail (ADR 0040).
+    var bnext = $('book-next'); if (bnext) bnext.addEventListener('click', bookForward);
+    var bback = $('book-back'); if (bback) bback.addEventListener('click', function () { bookGoTo(bookAt - 1); });
+    var brail = $('book-rail');
+    if (brail) brail.addEventListener('click', function (e) {
+      var b = e.target && e.target.closest ? e.target.closest('.book-rail-b') : null;
+      if (b && !b.disabled) bookGoTo(Number(b.dataset.goto));
+    });
+    bookPaint();
     $('day-close').addEventListener('click', function () { $('day-dialog').close(); });
     $('day-dialog').addEventListener('click', function (e) { if (e.target === this) this.close(); });
     $('day-dialog').addEventListener('close', function () {
@@ -9684,13 +10982,14 @@
     // Notary console
     var ncForm = $('notary-auth-form');
     if (ncForm) ncForm.addEventListener('submit', function (e) { e.preventDefault(); ncSignIn($('nc-email').value); });
-    // Same door: a new notary's signup CTA starts the free Stripe onboarding.
+    // A new notary's signup CTA files their application — no Stripe on this
+    // path (see ncFreeSignup). Payouts are connected later, from the console.
     var ncSignup = $('notary-signup-btn');
     if (ncSignup) ncSignup.addEventListener('click', function () {
       var email = nc.pendingSignupEmail || ($('nc-email') && $('nc-email').value.trim());
-      try { if (email) lsSave(LS_NC_EMAIL, email); } catch (e) {} // remember for the return from Stripe
-      ncSignup.disabled = true; ncSignup.textContent = 'Redirection vers l’inscription…';
-      ncStartOnboard(email, function (msg) {
+      try { if (email) lsSave(LS_NC_EMAIL, email); } catch (e) {} // so the gate reopens on their address
+      ncSignup.disabled = true; ncSignup.textContent = 'Envoi de votre inscription…';
+      ncFreeSignup(email, function (msg) {
         ncSignup.disabled = false; ncSignup.textContent = 'Créer mon compte gratuit →';
         var box = $('notary-signup-errors');
         if (box) { clear(box); box.hidden = false; box.appendChild(el('li', null, msg)); }
@@ -9699,8 +10998,36 @@
     // The branch's exit: back to the email step, address kept.
     var ncBack = $('notary-signup-back');
     if (ncBack) ncBack.addEventListener('click', ncShowEmailStep);
+    var ncPendingBack = $('notary-pending-back');
+    if (ncPendingBack) ncPendingBack.addEventListener('click', ncShowEmailStep);
     // "First time? Create a free account": the signup branch is user-initiated
     // now that the request is enumeration-safe (the server never routes here).
+    // « J'ai perdu mon code » : le rappel repart par courriel. La réponse de l'API
+    // est volontairement la même pour une adresse partenaire et pour une autre,
+    // donc l'écran ne peut rien affirmer de plus que « si vous êtes partenaire ».
+    var partnerRappel = $('partner-rappel');
+    if (partnerRappel) partnerRappel.addEventListener('click', async function () {
+      var mail = $('partner-courriel');
+      var val = mail ? mail.value.trim() : '';
+      if (!val || !D.isEmail(val)) {
+        toast('Entrez votre courriel ci-dessus, puis redemandez votre code.');
+        if (mail) { try { mail.focus(); } catch (e) {} }
+        return;
+      }
+      partnerRappel.disabled = true;
+      try {
+        var r = await fetch(API_BASE + '/partenaires/rappel', {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ courriel: val }),
+        });
+        if (r.status === 429) toast(throttledMessage(r));
+        else if (!r.ok) toast('Impossible d’envoyer le rappel pour l’instant.');
+        else toast('Si ce courriel a un code partenaire, il vient de partir vers ' + val + '.');
+      } catch (e) {
+        toast('Hors ligne. Réessayez une fois en ligne.');
+      }
+      partnerRappel.disabled = false;
+    });
     var ncSignupLink = $('notary-signup-link');
     if (ncSignupLink) ncSignupLink.addEventListener('click', function () {
       ncShowSignup(($('nc-email') && $('nc-email').value.trim()) || '');
@@ -10536,7 +11863,13 @@
   // The counter shows only near the cap — this many characters before it.
   var CHAT_COUNT_MARGIN = 200;
   var CHAT_FAB_LABEL = 'Messagerie — posez votre question';
-  var CHAT_EMPTY_TEXT = 'On vous répond en général en quelques minutes pendant les heures d’ouverture.';
+  // ADR 0046 — l'ancienne ligne (« on vous répond en général en quelques
+  // minutes ») promettait un délai que RIEN dans le code ne tient : c'est
+  // l'affirmation que l'audit a marquée invérifiable, et elle a disparu. Le
+  // vide qu'elle occupait est maintenant rempli par les questions d'amorce,
+  // qui disent ce que l'assistant sait vraiment répondre.
+  var CHAT_TYPING_TEXT = 'L’assistant écrit…';
+  var CHAT_ESCALADE_TEXT = 'Cette question part à une personne — laissez votre courriel pour recevoir la réponse.';
   var chatPollTimer = null, chatPollMs = 0;
   var chatReplyTimer = null, chatReplyMs = 0;
   var chatSending = false;
@@ -10580,7 +11913,11 @@
   }
 
   // --- The log: diffed, never rebuilt -----------------------------------------
+  // Qui a parlé. L'assistant porte SON nom : la voix est celle de la maison,
+  // mais un visiteur ne doit jamais croire qu'une personne lui a écrit — et
+  // quand une personne écrit vraiment, la différence doit se voir.
   function chatLabelFor(de, me) {
+    if (de === D.SUPPORT_FROM.ASSISTANT) return 'Assistant Nota';
     if (de === D.SUPPORT_FROM.NOTA) return 'Nota';
     return me === D.SUPPORT_FROM.VISITEUR ? 'Vous' : 'Visiteur';
   }
@@ -10607,10 +11944,16 @@
     me = me || D.SUPPORT_FROM.VISITEUR;
     var empty = log.querySelector('.sup-empty');
     if (!messages.length) {
-      if (!empty && !log.querySelector('.sup-msg')) log.appendChild(el('div', 'sup-empty', CHAT_EMPTY_TEXT));
+      // Un fil vide n'affiche plus de phrase : ce sont les questions d'amorce
+      // qui occupent la place, et elles, elles mènent quelque part. Le journal
+      // doit être vide LUI AUSSI : un sondage qui revient sans message (une
+      // réponse partielle, un fil purgé) ne doit pas faire réapparaître les
+      // amorces au-dessus d'une conversation déjà commencée.
+      if (log.id === 'chat-log' && !log.querySelector('.sup-msg')) chatSuggestShow(true);
       return;
     }
     if (empty) empty.parentNode.removeChild(empty);
+    if (log.id === 'chat-log') chatSuggestShow(false);
     var known = {};
     var rows = log.querySelectorAll('.sup-msg');
     for (var i = 0; i < rows.length; i++) known[rows[i].dataset.id] = true;
@@ -10622,7 +11965,79 @@
       known[k] = true; added = true;
       log.appendChild(chatBubble(m, me));
     });
+    if (added) chatGroupBubbles(log);
     if (added && atBottom) log.scrollTop = log.scrollHeight;
+  }
+  // Deux messages de suite du même côté forment un bloc : le nom ne se répète
+  // pas, seule l'heure du dernier reste. Un fil de six lignes cesse d'être six
+  // fois « Vous · 15:33 » et redevient une conversation.
+  function chatGroupBubbles(log) {
+    var rows = log.querySelectorAll('.sup-msg');
+    for (var i = 0; i < rows.length; i++) {
+      var prev = i > 0 ? rows[i - 1] : null;
+      var next = i + 1 < rows.length ? rows[i + 1] : null;
+      rows[i].classList.toggle('is-cont', !!prev && prev.dataset.de === rows[i].dataset.de);
+      rows[i].classList.toggle('is-mid', !!next && next.dataset.de === rows[i].dataset.de);
+    }
+  }
+
+  // --- Les questions d'amorce, et le temps d'attente (ADR 0046) --------------
+  // Le panneau s'ouvrait sur un vide et une promesse de délai. Il s'ouvre
+  // maintenant sur quatre questions que l'assistant sait traiter — bâties
+  // depuis le domaine, jamais écrites dans le markup — et il montre
+  // explicitement qu'il réfléchit pendant qu'il réfléchit.
+  function chatSuggestBuild() {
+    var box = $('chat-suggest');
+    if (!box || box.childNodes.length) return;
+    var lang = /^en/.test(LOCALE) ? 'en' : 'fr';
+    (D.SUPPORT_QUESTIONS_SUGGEREES || []).forEach(function (q) {
+      var b = el('button', 'sup-chip', q[lang] || q.fr);
+      b.type = 'button';
+      b.dataset.q = q.id;
+      b.addEventListener('click', function () {
+        var ta = $('chat-text');
+        if (ta) { ta.value = q[lang] || q.fr; chatAutoGrow(ta); chatCount(); }
+        chatSend();
+      });
+      box.appendChild(b);
+    });
+  }
+  function chatSuggestShow(on) {
+    var box = $('chat-suggest');
+    if (!box) return;
+    if (on) chatSuggestBuild();
+    // Une fois la conversation commencée, les amorces ne reviennent jamais.
+    box.hidden = !on || !box.childNodes.length;
+  }
+  // « L'assistant écrit… » — une vraie ligne dans le fil, du côté de
+  // l'assistant, retirée dès que la réponse arrive. Sans elle, l'envoi
+  // paraissait tomber dans le vide pendant les secondes du modèle.
+  function chatTyping(on) {
+    var log = $('chat-log');
+    if (!log) return;
+    var row = log.querySelector('.sup-typing');
+    if (!on) { if (row) row.parentNode.removeChild(row); return; }
+    if (row) return;
+    row = el('div', 'sup-msg sup-typing');
+    row.dataset.de = D.SUPPORT_FROM.ASSISTANT;
+    var b = el('div', 'sup-bubble sup-bubble-typing');
+    b.setAttribute('aria-label', CHAT_TYPING_TEXT);
+    for (var i = 0; i < 3; i++) b.appendChild(el('span', 'sup-dot'));
+    row.appendChild(b);
+    log.appendChild(row);
+    log.scrollTop = log.scrollHeight;
+  }
+  // L'escalade, dite en clair : le visiteur doit savoir qu'une PERSONNE a
+  // désormais la question, et pourquoi son courriel compte à cet instant.
+  function chatEscalade(on) {
+    var note = $('chat-escalade');
+    if (note) note.hidden = !on;
+    // C'est LE moment où quitter la page coûte la réponse : la porte du
+    // courriel s'ouvre d'elle-même si elle est encore fermée et vide.
+    if (on) {
+      var inp = $('chat-courriel');
+      if (!inp || !inp.value) { chatMailNudged = true; chatMailOpen(true, { noFocus: true }); }
+    }
   }
 
   // --- Unread ----------------------------------------------------------------
@@ -10734,6 +12149,19 @@
     c.hidden = !show;
     c.textContent = show ? n + ' / ' + max : '';
   }
+  // La porte du courriel : fermée tant qu'elle ne sert pas, ouverte d'un clic —
+  // ou d'elle-même, une seule fois, juste après le premier message.
+  var chatMailNudged = false;
+  function chatMailOpen(open, opts) {
+    var row = $('chat-courriel-row'), btn = $('chat-courriel-open');
+    if (!row || !btn) return;
+    var show = open != null ? open : row.hidden;
+    row.hidden = !show;
+    btn.setAttribute('aria-expanded', show ? 'true' : 'false');
+    if (show && !(opts && opts.noFocus)) {
+      var inp = $('chat-courriel'); if (inp) { try { inp.focus(); } catch (e) {} }
+    }
+  }
   function chatSendingState(on) {
     chatSending = on;
     var send = $('chat-send'); if (!send) return;
@@ -10756,6 +12184,21 @@
     var s = chatSession();
     var body = { texte: v.texte };
     if (v.courriel) body.courriel = v.courriel;
+    // La langue voyage avec la question : l'assistant répond dans celle du
+    // visiteur, et le serveur ne peut pas la deviner autrement.
+    body.locale = /^en/.test(LOCALE) ? 'en' : 'fr';
+    // L'écho local d'abord, PUIS le témoin d'écriture : l'assistant prend
+    // quelques secondes, et un envoi qui semble tomber dans le vide est la
+    // raison pour laquelle cette messagerie paraissait cassée.
+    var logNow = $('chat-log');
+    if (logNow && !(s && s.token)) clear(logNow);
+    chatSuggestShow(false);
+    chatEscalade(false);
+    if (logNow) {
+      chatRenderMessages(logNow, [{ id: 'local-' + Date.now(), de: D.SUPPORT_FROM.VISITEUR, texte: v.texte, createdAt: new Date().toISOString() }], D.SUPPORT_FROM.VISITEUR);
+    }
+    if (text) { text.value = ''; chatAutoGrow(text); chatCount(); }
+    chatTyping(true);
     var res = await chatApi('/support/messages', { method: 'POST', token: s && s.token, body: body }).catch(function () { return null; });
     // A dead token never loses the message: forget it and mint a fresh thread.
     if (res && (res.status === 401 || res.status === 404) && s) {
@@ -10763,6 +12206,7 @@
       res = await chatApi('/support/messages', { method: 'POST', body: body }).catch(function () { return null; });
     }
     chatSendingState(false);
+    chatTyping(false);
     if (!res || res.status !== 201) {
       if (err) {
         err.textContent = res && res.json && res.json.errors && res.json.errors[0]
@@ -10772,20 +12216,35 @@
       }
       return;
     }
-    var fresh = !(s && s.token);
     var log = $('chat-log');
-    // A new thread starts a clean log: the bubbles above belonged to a
-    // conversation that ended.
-    if (fresh && log) clear(log);
     var ended = $('chat-ended'); if (ended) ended.hidden = true;
     var m = res.json.message;
+    // La réponse de l'assistant voyage dans la MÊME réponse HTTP (ADR 0046) :
+    // elle s'affiche sans attendre le prochain sondage, et c'est ce qui fait
+    // la différence entre une messagerie vivante et une boîte à lettres.
+    var r = res.json.reponse || null;
+    var dernier = (r && r.createdAt) || (m && m.createdAt) || null;
     chatSessionPatch({
       threadId: res.json.threadId, token: res.json.token,
-      lastAt: (m && m.createdAt) || null, seenAt: (m && m.createdAt) || null,
+      lastAt: dernier, seenAt: dernier,
     });
-    if (text) { text.value = ''; chatAutoGrow(text); chatCount(); }
-    // The echo lands before the poll does.
-    if (m && log) chatRenderMessages(log, [m], D.SUPPORT_FROM.VISITEUR);
+    // L'écho local portait un id provisoire : le message serveur le remplace
+    // proprement plutôt que de doubler la bulle.
+    if (log) {
+      var provisoire = log.querySelector('.sup-msg[data-id^="local-"]');
+      if (provisoire) provisoire.parentNode.removeChild(provisoire);
+      var arrivee = [];
+      if (m) arrivee.push(m);
+      if (r) arrivee.push(r);
+      if (arrivee.length) chatRenderMessages(log, arrivee, D.SUPPORT_FROM.VISITEUR);
+    }
+    // Le message est parti : c'est maintenant que quitter la page coûterait la
+    // réponse. La porte s'ouvre une seule fois, et jamais si le courriel est
+    // déjà donné — elle ne reprend pas le focus, la conversation le garde.
+    if (!chatMailNudged && !v.courriel) { chatMailNudged = true; chatMailOpen(true, { noFocus: true }); }
+    // Une escalade se dit : une personne a la question, et le courriel devient
+    // le canal qui compte.
+    chatEscalade(!!res.json.escalade);
     chatRefresh();
   }
   function onChatSubmit(e) { e.preventDefault(); chatSend(); }
@@ -10864,6 +12323,8 @@
       text.addEventListener('input', function () { chatAutoGrow(text); chatCount(); });
     }
     var form = $('chat-form'); if (form) form.addEventListener('submit', onChatSubmit);
+    var mailBtn = $('chat-courriel-open');
+    if (mailBtn) mailBtn.addEventListener('click', function () { chatMailOpen(); });
     var rForm = $('chat-reply-form'); if (rForm) rForm.addEventListener('submit', onChatReplySubmit);
     if (rText) rText.addEventListener('input', function () { var sent = $('chat-reply-sent'); if (sent) sent.hidden = true; });
     var rClose = $('chat-reply-close'); if (rClose) rClose.addEventListener('click', chatCloseReply);
@@ -10932,6 +12393,9 @@
     // A partner confirmation link (#pauth=…) confirms an email-verified code:
     // consume it, open the Partenaires pane, and reveal the shareable link.
     partnerConsumeClaimHash();
+    // A client access link (#cauth=…): the mailbox is proven, so the device
+    // gets its own requests back — with a fresh token for each.
+    clientConsumeEspaceHash();
 
     // In-app notifications: render what's stored, then derive fresh events
     // (date-approaching / retained) from this browser's own offers.
@@ -10965,10 +12429,15 @@
   // script scope are lexical globals invisible on window — this is the one way in.
   window.Nota = {
     state: state,
+    // Quel interrupteur de la carte « Notifications » gouverne un genre du
+    // serveur. Une seule table, lue par le code et par les tests.
+    notifPrefKey: notifPrefKey,
     store: store,
     domain: D,
     setTab: setTab,
     selectDate: selectDate,
+    // La porte d'une question : « Répondez à : … » l'emprunte, les tests aussi.
+    focusCriterionRow: focusCriterionRow,
     reload: reloadAndRender,
     refreshMonthData: refreshMonthData,
     // The success screen, revealed through the helper that declares an offline

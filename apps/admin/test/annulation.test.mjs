@@ -194,7 +194,7 @@ test('P2-24 — la tuile « Dernière minute » parle du jour de la signature, p
   win.location.hash = '#/annulation';
   await waitFor(win, '.bareme-card');
   const tile = [...doc.querySelectorAll('.stat-tile')].find((t) => text(t.querySelector('.stat-k')) === 'Dernière minute');
-  assert.equal(text(tile.querySelector('.stat-sub')), 'retenu le jour de la signature');
+  assert.equal(text(tile.querySelector('.stat-sub')), 'plafond le jour de la signature');
 });
 
 test('P2-26 — le formulaire refuse lui-même un taux hors de (0, 1) et des jours non croissants, sans réseau', async () => {

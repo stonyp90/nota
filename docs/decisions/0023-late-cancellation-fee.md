@@ -1,7 +1,7 @@
 # 0023 — L'annulation tardive d'un acte retenu coûte des frais, retenus sur la caution
 
 Date : 2026-08-28
-Statut : accepté
+Statut : accepté. **Amendé par l'ADR 0041 (2026-09-05)** : le barème ne fixe plus un frais mais un PLAFOND. Rien n'est prélevé à l'annulation ; le notaire réclame, en justifiant et dans un délai, ou renonce (art. 13 LPC, art. 2129 C.c.Q.). Le mécanisme de capture partielle et le versement au notaire (ADR 0033) survivent tels quels.
 
 ## Contexte
 

@@ -448,7 +448,24 @@ a:hover { text-decoration: underline; }
 }
 .nstatut.is-active { color: var(--ok); border-color: var(--ok); background: var(--brand-wash); }
 .nstatut.is-onboarding { color: var(--warn); border-color: var(--warn); }
+.nstatut.is-en_attente { color: var(--warn); border-color: var(--warn); }
 .nstatut.is-restricted { color: var(--danger); border-color: var(--danger); }
+
+/* La file d'approbation — au-dessus du tableau d'honneur : un dossier déposé
+   par la porte gratuite attend un geste, le classement n'attend rien. Le
+   liseré la distingue d'une carte de lecture sans en faire une alarme. */
+.napprove { border-left: 3px solid var(--warn); margin-bottom: 18px; }
+.napprove-row {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px;
+  padding: 10px 0; border-top: 1px solid var(--border);
+}
+.napprove-row:first-of-type { border-top: 0; }
+.napprove-who { min-width: 0; flex: 1 1 260px; }
+.napprove-mail { font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }
+.napprove-fiche { color: var(--brand); }
+.napprove-nofiche { color: var(--warn); }
+/* Le refus prend la largeur pour se lire d'un coup, sous sa propre ligne. */
+.napprove-err { flex: 1 0 100%; font-size: 12px; color: var(--danger); }
 
 /* Le dépli : les quatre axes côte à côte, chacun avec ses chiffres nus — de
    quoi refaire une cote contestée à la main, devant le notaire. */

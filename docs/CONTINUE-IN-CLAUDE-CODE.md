@@ -32,9 +32,9 @@ calendar (the *carnet*). It is a live, working system:
 client sees separately: the **honoraires**, which reach the notary whole, and
 **the price of Nota**, published per service —
 
-- service line: `financement` **199 $**, `refinancement` **249 $**;
-- date-guarantee line: `standard` 0 $, `rapide` 50 $, `prioritaire` 100 $,
-  `urgence` 200 $, `extreme` 300 $.
+- service line: `financement` **229 $**, `refinancement` **279 $** (ADR 0042);
+- date-guarantee line: `standard` 0 $, `rapide` 149 $, `prioritaire` 299 $,
+  `urgence` 449 $, `extreme` 549 $ (ADR 0038).
 
 Neither depends on the notary, their cote or the value of the act. The card is
 authorized for the total and captured at signing on Nota's own account

@@ -465,7 +465,17 @@ test('la capture partielle reste le mécanisme quand une caution EST vivante', a
   assert.equal(stripe.calls.offSessionFees.length, 0);
 });
 
-test('la route d’annulation prélève et verse même sur une offre seulement ENREGISTRÉE', async () => {
+// ADR 0041 — la réclamation du notaire, sur la fenêtre que l'annulation a ouverte.
+const JUSTIFICATION = 'Journée bloquée à l’agenda, dossier ouvert et recherches au registre faites.';
+async function reclamer(app, email, bid, montant, justification = JUSTIFICATION) {
+  const { token } = await notarySignIn(app, email);
+  return app.handle({
+    method: 'POST', path: '/notary/bids/indemnite', query: {}, headers: { authorization: 'Bearer ' + token },
+    body: JSON.stringify({ id: bid.id, dateISO: bid.dateISO, montant, justification }),
+  });
+}
+
+test('la route d’annulation n’encaisse plus rien ; la RÉCLAMATION du notaire prélève hors session et lui verse tout', async () => {
   const notaryId = notaryIdForEmail('n@x.ca');
   const { repo, stripe, app, bid, clientToken } = await offreEnregistree({ jours: 10, statut: 'retenue', notaryId });
   await repo.putNotary(activeNotary('n@x.ca', { chargesEnabled: true, connectAccountId: 'acct_' + notaryId }));
@@ -476,12 +486,20 @@ test('la route d’annulation prélève et verse même sur une offre seulement E
     body: JSON.stringify({ id: bid.id, dateISO: bid.dateISO }),
   });
   assert.equal(res.statusCode, 200, res.body);
-  // Palier 4-14 jours : 10 % des honoraires, prélevés hors session puisque
-  // aucune caution n'est encore posée, et versés AU NOTAIRE (ADR 0033).
+  // ADR 0041 — palier 4-14 jours : un PLAFOND de 10 %, rien de prélevé.
+  assert.equal(stripe.calls.offSessionFees.length, 0, 'rien ne bouge à l’annulation');
+  const ouverte = parse(res).bid.annulation;
+  assert.equal(ouverte.statut, 'en_attente');
+  assert.equal(ouverte.plafond, 200);
+  assert.equal(ouverte.mecanisme, 'hors_session', 'aucune caution posée : une réclamation irait sur la carte enregistrée');
+
+  const rec = await reclamer(app, 'n@x.ca', bid, 200);
+  assert.equal(rec.statusCode, 200, rec.body);
   assert.equal(stripe.calls.offSessionFees.length, 1);
   assert.equal(stripe.calls.offSessionFees[0].amountCents, 20000);
   assert.equal(stripe.calls.offSessionFees[0].connectAccountId, 'acct_' + notaryId);
-  const annulation = parse(res).bid.annulation;
+  const annulation = parse(rec).bid.annulation;
+  assert.equal(annulation.statut, 'percue');
   assert.equal(annulation.frais, 200);
   assert.equal(annulation.dedommagement.verse, true);
 });
@@ -494,7 +512,7 @@ test('GET /client/bid annonce les frais AVANT la confirmation, même sans cautio
     headers: { authorization: 'Bearer ' + clientToken },
   });
   assert.equal(res.statusCode, 200, res.body);
-  assert.equal(parse(res).annulation.frais, 200, 'la divulgation fait partie du mécanisme (ADR 0023)');
+  assert.equal(parse(res).annulation.plafond, 200, 'la divulgation du PLAFOND fait partie du mécanisme (ADR 0023, ADR 0041)');
 });
 
 // --- 7. l'acte renégocié (contre-proposition acceptée) ------------------------------
@@ -546,7 +564,7 @@ test('un acte RENÉGOCIÉ est cautionné lui aussi — sur le montant accepté, 
   assert.equal(after.paymentStatus, 'authorized');
 });
 
-test('annuler tard un acte RENÉGOCIÉ n’est pas gratuit — les frais suivent la carte enregistrée', async () => {
+test('annuler tard un acte RENÉGOCIÉ ouvre un plafond sur le montant accepté — la réclamation suit la carte enregistrée', async () => {
   const { app, stripe, bid, clientToken } = await acteRenegocie({ jours: 10 });
   const res = await app.handle({
     method: 'POST', path: '/client/bid/cancel', query: {},
@@ -554,8 +572,11 @@ test('annuler tard un acte RENÉGOCIÉ n’est pas gratuit — les frais suivent
     body: JSON.stringify({ id: bid.id, dateISO: bid.dateISO }),
   });
   assert.equal(res.statusCode, 200, res.body);
-  // Palier 4-14 jours : 10 % du montant accepté (3200 $), au notaire.
-  assert.equal(parse(res).bid.annulation.frais, 320);
+  // Palier 4-14 jours : 10 % du montant accepté (3200 $), en plafond.
+  assert.equal(parse(res).bid.annulation.plafond, 320);
+  assert.equal(stripe.calls.offSessionFees.length, 0);
+  const rec = await reclamer(app, 'n@x.ca', bid, 320);
+  assert.equal(rec.statusCode, 200, rec.body);
   assert.equal(stripe.calls.offSessionFees.length, 1, 'la carte enregistrée reste prélevable');
   assert.equal(stripe.calls.offSessionFees[0].amountCents, 32000);
 });
@@ -714,7 +735,7 @@ test('une offre héritée SANS carte enregistrée ne peut pas l’être — elle
   assert.match(res.errors[0].error, /antérieure à l’ADR 0035/);
 });
 
-test('annuler tard une offre héritée n’est pas gratuit non plus — la carte enregistrée prend le relais', async () => {
+test('annuler tard une offre héritée ouvre un plafond aussi — la réclamation prend la carte enregistrée', async () => {
   const notaryId = notaryIdForEmail('n@x.ca');
   const { app, repo, stripe, bid, clientToken } = await offreHeritee({ jours: 10, statut: 'retenue', notaryId });
   await repo.putNotary(activeNotary('n@x.ca', { chargesEnabled: true, connectAccountId: 'acct_' + notaryId }));
@@ -725,9 +746,12 @@ test('annuler tard une offre héritée n’est pas gratuit non plus — la carte
     body: JSON.stringify({ id: bid.id, dateISO: bid.dateISO }),
   });
   assert.equal(res.statusCode, 200, res.body);
+  assert.equal(parse(res).bid.annulation.mecanisme, 'hors_session');
+  const rec = await reclamer(app, 'n@x.ca', bid, 200);
+  assert.equal(rec.statusCode, 200, rec.body);
   assert.equal(stripe.calls.fees.length, 0, 'capturer une autorisation morte échouerait');
   assert.equal(stripe.calls.offSessionFees.length, 1);
-  assert.equal(parse(res).bid.annulation.mecanisme, 'hors_session');
+  assert.equal(parse(rec).bid.annulation.mecanisme, 'hors_session');
 });
 
 // --- 10. `poseeLe` est une DATE, pas une prévision plaquée sur un fait --------
@@ -791,7 +815,7 @@ test('une réservation qui n’a pas pu être INSCRITE est relâchée — jamais
 
 // --- 12. des frais d'annulation REFUSÉS laissent une trace ---------------------
 
-test('des frais refusés hors session ne rendent PAS l’annulation gratuite en silence', async () => {
+test('une réclamation refusée hors session ne se lit PAS comme une annulation gratuite', async () => {
   const notaryId = notaryIdForEmail('n@x.ca');
   const { app, repo, stripe, bid, clientToken } = await offreEnregistree({
     jours: 10, statut: 'retenue', notaryId, stripeOpts: { refuseFraisHorsSession: true },
@@ -804,12 +828,14 @@ test('des frais refusés hors session ne rendent PAS l’annulation gratuite en 
     body: JSON.stringify({ id: bid.id, dateISO: bid.dateISO }),
   });
   assert.equal(res.statusCode, 200, res.body);
+  const rec = await reclamer(app, 'n@x.ca', bid, 200);
+  assert.equal(rec.statusCode, 200, rec.body);
   assert.equal(stripe.calls.offSessionFees.length, 1, 'le prélèvement a bien été TENTÉ');
 
-  const annulation = parse(res).bid.annulation;
-  assert.ok(annulation, 'l’annulation n’est pas « gratuite » : elle est INSCRITE');
+  const annulation = parse(rec).bid.annulation;
+  assert.equal(annulation.statut, 'refusee', 'la réclamation n’est pas « gratuite » : elle est INSCRITE');
   assert.equal(annulation.percu, false);
-  assert.equal(annulation.frais, 200, 'le barème s’appliquait');
+  assert.equal(annulation.frais, 200, 'le montant réclamé');
   assert.equal(annulation.chargeId, null);
   assert.equal(annulation.dedommagement.verse, false);
 

@@ -66,9 +66,9 @@ notariaux simples, soit le financement et le refinancement hypothécaires.
 honoraires entiers au notaire, questionnaire, prime de date …]
 
 Le service de Nota se facture au client, séparément, à un prix publié
-d'avance : 199 $ pour un financement hypothécaire, 249 $ pour un
+d'avance : 229 $ pour un financement hypothécaire, 279 $ pour un
 refinancement, plus une ligne de garantie de date lorsque le client
-demande une date rapprochée, de 0 $ au-delà de quatorze jours à 300 $
+demande une date rapprochée, de 0 $ au-delà de quatorze jours à 549 $
 pour le jour même. Taxes et débours en sus. Le client n'est débité qu'à
 la signature.
 

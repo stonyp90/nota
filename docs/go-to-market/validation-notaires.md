@@ -71,8 +71,8 @@ chiffres.
 
 | Service | Prix de Nota | Honoraires de départ du notaire |
 | --- | ---: | ---: |
-| Financement hypothécaire | **199 $** | 1 800 $ |
-| Refinancement hypothécaire | **249 $** | 2 000 $ |
+| Financement hypothécaire | **229 $** | 1 800 $ |
+| Refinancement hypothécaire | **279 $** | 2 000 $ |
 
 À quoi s'ajoute la **garantie de date**, sur sa propre ligne, quand le client
 demande une date rapprochée :
@@ -80,10 +80,10 @@ demande une date rapprochée :
 | Palier | Préavis | Ligne de Nota |
 | --- | --- | ---: |
 | Standard | plus de 14 jours | **0 $** |
-| Rapide | 14 jours ou moins | **50 $** |
-| Prioritaire | 7 jours ou moins | **100 $** |
-| Urgence | la veille | **200 $** |
-| Extrême | le jour même | **300 $** |
+| Rapide | 14 jours ou moins | **149 $** |
+| Prioritaire | 7 jours ou moins | **299 $** |
+| Urgence | la veille | **449 $** |
+| Extrême | le jour même | **549 $** |
 
 Taxes et débours en sus, des deux côtés. Le prix de Nota n'est **pas** « fixe » :
 c'est une grille par service, et le mot « fixe » est faux depuis l'ADR 0034.
@@ -94,8 +94,8 @@ La formulation juste est « **le prix de Nota, publié par service** ».
 Un notaire demandera ce que Nota coûte au client par rapport à l'acte. Le
 calcul, au palier standard :
 
-- refinancement : 2 000 $ d'honoraires + 249 $ = **2 249 $**, dont Nota
-  249 / 2 249 = **11,1 %** ;
+- refinancement : 2 000 $ d'honoraires + 279 $ = **2 279 $**, dont Nota
+  279 / 2 279 = **12,2 %** ;
 - financement : 1 800 $ + 199 $ = **1 999 $**, dont Nota 199 / 1 999 = **10,0 %**.
 
 Et cette part **descend** dès que la date porte une prime, parce que les
@@ -126,7 +126,7 @@ utilise, voir [`concurrence.md`](concurrence.md).
 proscrit la publicité comparative sur le prix. La phrase qui tient est « le
 seul endroit où une date rapprochée a un prix, affiché avant l'engagement ».
 
-**Ne pas défendre la grille : la mesurer.** 199 $ et 249 $ sont un jugement du
+**Ne pas défendre la grille : la mesurer.** 229 $ et 279 $ sont un jugement du
 propriétaire, jamais confronté à un notaire réel. H3 est là pour ça. Un notaire
 qui trouve le prix élevé n'est pas une objection à réfuter, c'est la donnée
 qu'on est venu chercher.

@@ -185,14 +185,14 @@ test('the intro film note and the film kicker say the two-line truth', () => {
 
 test('the new price copy is translated, amount included', () => {
   I18N.force('en');
-  const repli = 'Le notaire reçoit 100 % de votre offre ; le service Nota, à un prix publié d’avance, se paie seulement à la signature.';
+  const repli = 'Le notaire reçoit 100 % de votre offre. Le service Nota, à un prix publié d’avance, se paie seulement à la signature.';
   assert.ok(I18N.covered(repli), 'no English entry for the fallback price line');
   assert.match(I18N.tEn(repli), /published in advance/, I18N.tEn(repli));
   // L'ancienne affirmation — « à prix fixe » — ne doit survivre nulle part :
   // depuis l'ADR 0034 le prix varie par service ET par palier de délai.
   assert.ok(!/à prix fixe/.test(HTML_SRC), 'index.html affirme encore un prix fixe');
   assert.ok(!/à prix fixe/.test(I18N_SRC), 'le dictionnaire porte encore un prix fixe');
-  const priced = 'Le notaire reçoit 100 % de votre offre ; le service Nota, à partir de 525 $, se paie seulement à la signature.';
+  const priced = 'Le notaire reçoit 100 % de votre offre. Le service Nota, à partir de 525 $, se paie seulement à la signature.';
   const en = I18N.tEn(priced);
   assert.ok(!/reçoit|offre|signature\b.*\./.test(en) || /receives/.test(en), 'the composed line has a rule: ' + en);
   assert.match(en, /100 ?% of your offer/, en);

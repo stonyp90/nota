@@ -1,10 +1,19 @@
 'use strict';
 
 /**
- * Le barème des frais d'annulation — un document d'exploitation (ADR 0023).
+ * Le barème d'annulation — un document d'exploitation (ADR 0023, ADR 0041).
  *
- * Annuler une offre RETENUE près de la date de signature retient une part du
- * montant convenu, capturée sur la caution déjà posée (ADR 0015). Ce module
+ * DEPUIS L'ADR 0041 (2026-09-05), LE TAUX D'UN PALIER EST UN PLAFOND, PAS UN
+ * FRAIS. L'art. 13 de la Loi sur la protection du consommateur interdit toute
+ * clause qui impose au consommateur des frais ou une pénalité « dont le
+ * montant ou le pourcentage est fixé à l'avance dans le contrat », et
+ * l'art. 11.4 interdit d'écarter les art. 2125 et 2129 du Code civil : un
+ * client peut résilier, et il doit alors les frais réels et la valeur du
+ * travail accompli, jamais un pourcentage convenu d'avance. Annuler une offre
+ * RETENUE près de la signature n'encaisse donc plus rien : cela ouvre au
+ * notaire le droit de RÉCLAMER, avec justification et dans un délai, une
+ * indemnité plafonnée au taux du palier. Sans réclamation, rien n'est prélevé.
+ * Le plafond, lui, se capture sur la caution déjà posée (ADR 0015). Ce module
  * est la SEULE autorité sur la forme du barème : défauts intégrés, override
  * d'environnement, validation du write door admin, et l'arithmétique des
  * frais elle-même. Il est partagé par la route d'annulation (handler.js) et
@@ -28,6 +37,20 @@ const DEFAULT_TIERS = [
 ];
 
 const TIERS_MAX = 10;
+
+// ADR 0041 — le délai, en jours civils, dont le notaire dispose pour réclamer
+// son indemnité après l'annulation. Passé ce délai, rien n'est prélevé et la
+// réservation du client est libérée. Une donnée d'exploitation comme le
+// barème : `NOTA_INDEMNITE_DELAI_JOURS` en environnement, `delaiJours` sur
+// l'item stocké.
+const DEFAULT_DELAI_JOURS = 7;
+const DELAI_MIN = 1;
+const DELAI_MAX = 30;
+
+function delaiOrUndefined(v) {
+  const n = num(v);
+  return n !== undefined && Number.isInteger(n) && n >= DELAI_MIN && n <= DELAI_MAX ? n : undefined;
+}
 
 // A finite number, or undefined — env vars and stored items both go through
 // this so "0.3" and 0.3 read the same and garbage reads as absent.
@@ -66,7 +89,18 @@ function normalizeTiers(arr) {
 // exists — and what the admin console shows as « the default ».
 function envDefaults(env = process.env) {
   const paliers = parseTiers(env.NOTA_CANCELLATION_TIERS);
-  return { paliers: paliers !== undefined ? paliers : DEFAULT_TIERS.map((t) => ({ ...t })) };
+  const delai = delaiOrUndefined(env.NOTA_INDEMNITE_DELAI_JOURS);
+  return {
+    paliers: paliers !== undefined ? paliers : DEFAULT_TIERS.map((t) => ({ ...t })),
+    delaiJours: delai !== undefined ? delai : DEFAULT_DELAI_JOURS,
+  };
+}
+
+// Le délai de réclamation en vigueur : l'item stocké s'il en porte un lisible,
+// le déploiement sinon. Résolu comme le barème, au même endroit.
+function delaiFor(stored, env = process.env) {
+  const d = stored ? delaiOrUndefined(stored.delaiJours) : undefined;
+  return d !== undefined ? d : envDefaults(env).delaiJours;
 }
 
 /**
@@ -100,16 +134,27 @@ function validateSchedule(payload = {}) {
       }
     });
   }
+  // ADR 0041 — le délai de réclamation voyage avec le barème, optionnel.
+  let delaiJours;
+  if (payload.delaiJours !== undefined && payload.delaiJours !== null && payload.delaiJours !== '') {
+    delaiJours = delaiOrUndefined(payload.delaiJours);
+    if (delaiJours === undefined) {
+      errors.push({ code: 'delai_invalide', message: `Le délai de réclamation doit être un nombre entier de jours entre ${DELAI_MIN} et ${DELAI_MAX}.` });
+    }
+  }
   if (errors.length) return { ok: false, errors };
-  return { ok: true, errors: [], paliers };
+  return { ok: true, errors: [], paliers, ...(delaiJours !== undefined ? { delaiJours } : {}) };
 }
 
 /**
- * The fee a cancellation carries, pure: the retained montant (dollars), the
+ * The CAP a cancellation opens, pure: the retained montant (dollars), the
  * number of days left before the signing, and the barème in force. Days are
  * clamped to 0 — a signing date already past but never settled counts as
- * last-minute, not as free. Beyond the last palier the fee is zero. Returns
- * `{ taux, frais, fraisCents, joursAvant }`, frais rounded to the cent.
+ * last-minute, not as free. Beyond the last palier the cap is zero. Returns
+ * `{ taux, frais, fraisCents, plafond, plafondCents, joursAvant }`, rounded
+ * to the cent. `frais` and `plafond` are the same number: since ADR 0041 it
+ * is the MOST a notary may claim, never what is taken. The older name stays
+ * so every caller that reads it keeps reading the cap.
  */
 function feeFor({ montant, joursAvant, paliers } = {}) {
   const m = num(montant);
@@ -120,12 +165,14 @@ function feeFor({ montant, joursAvant, paliers } = {}) {
     if (jours <= t.maxJours) { taux = t.taux; break; }
   }
   const fraisCents = m !== undefined && m > 0 && taux > 0 ? Math.round(m * 100 * taux) : 0;
-  return { taux, frais: fraisCents / 100, fraisCents, joursAvant: jours };
+  return { taux, frais: fraisCents / 100, fraisCents, plafond: fraisCents / 100, plafondCents: fraisCents, joursAvant: jours };
 }
 
 module.exports = {
   DEFAULT_TIERS,
+  DEFAULT_DELAI_JOURS,
   TIERS_MAX,
+  delaiFor,
   parseTiers,
   envDefaults,
   validateSchedule,

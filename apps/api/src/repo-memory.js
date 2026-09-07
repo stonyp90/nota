@@ -174,6 +174,7 @@ function createMemoryRepo(seed = []) {
   // login rate-limit counter, kept apart from the admin equivalents above so an
   // admin and a notary challenge can never be confused.
   const notaryChallenges = new Map(); // challengeId -> record
+const clientChallenges = new Map(); // challengeId -> record (lien magique client)
   const notaryRateCounters = new Map(); // `${scope}#${key}#${windowStart}` -> count
 
   // Partner code claim (email verification): single-use claim challenges and a
@@ -214,10 +215,27 @@ function createMemoryRepo(seed = []) {
     // Same full-item semantics as put(); kept as its own method so the
     // handler's intent reads clearly. LIMITATION: last-writer-wins — two
     // notaries proposing on the same bid at the same instant could drop one
-    // proposition. Retention itself stays on the conditional retain().
+    // proposition. `retain()` est conditionnel, mais cela ne protège que
+    // l'écriture : un appelant qui a lu l'offre avant la retenue peut encore
+    // réécrire sa photo par-dessus (voir repo-dynamo.update).
     async update(bid) {
       byId.set(bid.id, bid);
       return bid;
+    },
+    // Poser UN horodatage de lecture, sans réécrire l'item. Un accusé « Vu »
+    // part à chaque ouverture du fil, à partir d'une photo lue juste avant :
+    // le repasser par update() rejouait cette photo par-dessus l'état courant
+    // et pouvait dé-retenir un acte qu'un notaire venait de prendre. On lit
+    // donc l'état COURANT et on n'y touche qu'au champ demandé. Miroir de
+    // l'UpdateCommand de repo-dynamo.
+    async markThreadRead(bid, side, at) {
+      const id = bid && bid.id;
+      const current = id ? byId.get(id) : null;
+      if (!current) return null;
+      const champ = side === 'notaire' ? 'luParNotaireAt' : 'luParClientAt';
+      const next = { ...current, [champ]: at };
+      byId.set(id, next);
+      return next;
     },
     // Conditional retain: flip a bid to RETENUE for `notaryId` ONLY while it is
     // still OUVERTE, mirroring the DynamoDB ConditionExpression. Returns the
@@ -506,6 +524,8 @@ function createMemoryRepo(seed = []) {
     async putCancellationConfig(cfg, nowISO) {
       cancellationCfg = {
         paliers: (cfg.paliers || []).map((p) => ({ ...p })),
+        // ADR 0041 — le délai de réclamation voyage avec le barème, quand il est décidé.
+        ...(Number.isInteger(cfg.delaiJours) ? { delaiJours: cfg.delaiJours } : {}),
         updatedAt: nowISO,
       };
       return { ...cancellationCfg, paliers: cancellationCfg.paliers.map((p) => ({ ...p })) };
@@ -569,6 +589,18 @@ function createMemoryRepo(seed = []) {
       if (typeof nowMs === 'number' && nowMs >= Number(c.expiresAt)) return null;
       c.consumed = true;
       notaryChallenges.set(challengeId, c);
+      return { ...c };
+    },
+    // Le défi du lien CLIENT — même contrat d'usage unique, magasin séparé.
+    async putClientLoginChallenge(challenge) {
+      clientChallenges.set(challenge.challengeId, { ...challenge });
+    },
+    async consumeClientLoginChallenge(challengeId, nowMs) {
+      const c = clientChallenges.get(challengeId);
+      if (!c || c.consumed) return null;
+      if (typeof nowMs === 'number' && nowMs >= Number(c.expiresAt)) return null;
+      c.consumed = true;
+      clientChallenges.set(challengeId, c);
       return { ...c };
     },
     // Fixed-window counter, same shape as incrRateCounter but on its own map so a

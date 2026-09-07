@@ -31,9 +31,9 @@ test('le catalogue porte la grille : chaque service publie son prix de Nota', ()
     assert.ok(Number.isInteger(s.prixNotaCents) && s.prixNotaCents > 0,
       s.id + ' : un entier de cents strictement positif');
   }
-  // La décision du propriétaire du 2026-09-03, chiffrée.
-  assert.equal(domain.serviceById('financement').prixNotaCents, 19900);
-  assert.equal(domain.serviceById('refinancement').prixNotaCents, 24900);
+  // La décision du propriétaire du 2026-09-03 (199 / 249 $), portée à 229 / 279 $ le 2026-09-05 (ADR 0042).
+  assert.equal(domain.serviceById('financement').prixNotaCents, 22900);
+  assert.equal(domain.serviceById('refinancement').prixNotaCents, 27900);
 });
 
 test('chaque palier publie le prix de la garantie de date — le standard est gratuit', () => {
@@ -53,10 +53,10 @@ test('chaque palier publie le prix de la garantie de date — le standard est gr
 
 test('prixNota() rend DEUX lignes et leur somme, pour un service et un palier', () => {
   const p = prixNota('refinancement', 'standard');
-  assert.deepEqual(p, { serviceCents: 24900, dateCents: 0, totalCents: 24900 });
+  assert.deepEqual(p, { serviceCents: 27900, dateCents: 0, totalCents: 27900 });
 
   const urgent = prixNota('refinancement', 'prioritaire');
-  assert.equal(urgent.serviceCents, 24900);
+  assert.equal(urgent.serviceCents, 27900);
   assert.equal(urgent.dateCents, domain.tierById('prioritaire').prixNotaDateCents);
   assert.equal(urgent.totalCents, urgent.serviceCents + urgent.dateCents,
     'le total est la somme des deux lignes — rien ne se perd, rien ne s’ajoute');
@@ -100,8 +100,8 @@ test('un service ou un palier inconnu retombe sur la ligne la plus BASSE du cata
 
 test('prixNotaGrille() sans source rend la grille du catalogue', () => {
   const g = prixNotaGrille();
-  assert.equal(g.services.financement, 19900);
-  assert.equal(g.services.refinancement, 24900);
+  assert.equal(g.services.financement, 22900);
+  assert.equal(g.services.refinancement, 27900);
   assert.equal(g.garantieDate.standard, 0);
   assert.equal(g.defaut, Math.min(...SERVICES.map((s) => s.prixNotaCents)));
   // Une grille normalisée est complète : chaque service, chaque palier.
@@ -128,7 +128,7 @@ test('RÉTRO-COMPATIBILITÉ — une configuration à prix unique continue de val
 test('une grille partielle complète ses trous avec le catalogue', () => {
   const g = prixNotaGrille({ services: { financement: 15000 }, garantieDate: { extreme: 90000 } });
   assert.equal(g.services.financement, 15000, 'la ligne décidée par l’opérateur');
-  assert.equal(g.services.refinancement, 24900, 'les autres restent celles du catalogue');
+  assert.equal(g.services.refinancement, 27900, 'les autres restent celles du catalogue');
   assert.equal(g.garantieDate.extreme, 90000);
   assert.equal(g.garantieDate.standard, 0);
 });
@@ -136,28 +136,28 @@ test('une grille partielle complète ses trous avec le catalogue', () => {
 test('une grille illisible ne fait pas tomber la tarification — elle se lit comme absente', () => {
   for (const source of [null, undefined, 0, 'oups', [], { services: 'non' }, { prixCents: -1 }, { prixCents: 0.5 }]) {
     const g = prixNotaGrille(source);
-    assert.equal(g.services.financement, 19900, String(source) + ' : le catalogue reprend la main');
+    assert.equal(g.services.financement, 22900, String(source) + ' : le catalogue reprend la main');
   }
   // Une seule ligne illisible ne condamne pas les autres.
   const g = prixNotaGrille({ services: { financement: 'oups', refinancement: 30000 } });
-  assert.equal(g.services.financement, 19900);
+  assert.equal(g.services.financement, 22900);
   assert.equal(g.services.refinancement, 30000);
 });
 
 test('la grille rendue est une COPIE — personne ne peut muter le catalogue', () => {
   const g = prixNotaGrille();
   g.services.financement = 1;
-  assert.equal(domain.serviceById('financement').prixNotaCents, 19900);
-  assert.equal(prixNotaGrille().services.financement, 19900);
+  assert.equal(domain.serviceById('financement').prixNotaCents, 22900);
+  assert.equal(prixNotaGrille().services.financement, 22900);
 });
 
 test('le taux de prise chiffré de l’ADR 0034 se vérifie sur le catalogue', () => {
-  // financement standard : 1 800 $ d'honoraires + 199 $ = 9,95 %
+  // financement standard : 1 800 $ d'honoraires + 229 $ = 11,29 %
   const fin = prixNota('financement', 'standard').totalCents;
-  assert.equal(Math.round((fin / (180000 + fin)) * 10000) / 100, 9.95);
-  // refinancement standard : 2 000 $ + 249 $ = 11,07 %
+  assert.equal(Math.round((fin / (180000 + fin)) * 10000) / 100, 11.29);
+  // refinancement standard : 2 000 $ + 279 $ = 12,24 %
   const refi = prixNota('refinancement', 'standard').totalCents;
-  assert.equal(Math.round((refi / (200000 + refi)) * 10000) / 100, 11.07);
+  assert.equal(Math.round((refi / (200000 + refi)) * 10000) / 100, 12.24);
   // Les deux sous les 13,6 % d'Airbnb, et sous les 16,7 % du prix unique.
   assert.ok(fin / (180000 + fin) < 0.136);
   assert.ok(refi / (200000 + refi) < 0.136);
@@ -171,17 +171,17 @@ test('le taux de prise chiffré de l’ADR 0034 se vérifie sur le catalogue', (
 // ---------------------------------------------------------------------------
 
 test('prixNotaFige relit les deux lignes autorisées, ou rien du tout', () => {
-  assert.deepEqual(prixNotaFige({ prixNotaServiceCents: 24900, prixNotaDateCents: 5000 }), {
-    serviceCents: 24900, dateCents: 5000, totalCents: 29900,
+  assert.deepEqual(prixNotaFige({ prixNotaServiceCents: 27900, prixNotaDateCents: 5000 }), {
+    serviceCents: 27900, dateCents: 5000, totalCents: 32900,
   });
   // Une seule ligne ne fait pas un devis : la moitié d'un total autorisé
   // vaudrait pire que rien, puisqu'elle passerait pour un total.
-  assert.equal(prixNotaFige({ prixNotaServiceCents: 24900 }), null);
+  assert.equal(prixNotaFige({ prixNotaServiceCents: 27900 }), null);
   assert.equal(prixNotaFige({ prixNotaDateCents: 5000 }), null);
   // Et rien de ce qui n'est pas un entier de cents ne se rejoue.
   for (const bad of [{ prixNotaServiceCents: 0.15, prixNotaDateCents: 0 },
     { prixNotaServiceCents: -1, prixNotaDateCents: 0 },
-    { prixNotaServiceCents: 24900, prixNotaDateCents: 'oups' },
+    { prixNotaServiceCents: 27900, prixNotaDateCents: 'oups' },
     null, undefined, 'nope', []]) {
     assert.equal(prixNotaFige(bad), null, JSON.stringify(bad));
   }

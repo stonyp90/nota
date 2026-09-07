@@ -287,7 +287,7 @@ footer h3{font-size:.95rem;margin:0 0 .9rem;font-family:var(--body);font-weight:
     product</strong>, not merely proposed for removal: Nota now charges the client its own published
     price, per service, and the notary's <em>honoraires</em> reach them whole. Every economic figure
     here has been recomputed from the shipped pricing grid. <strong>Gross margin per act is materially
-    lower than version 1.0 claimed</strong> — about <strong>66%</strong>, not 89–91% — because Nota
+    lower than version 1.0 claimed</strong> — about <strong>73%</strong> since the date ladder and the service lines were repriced on 2026-09-05, not 89–91% — because Nota
     bears the card-processing fee on the whole amount the client pays, including the notary's fee,
     which Nota never keeps.</p>
   </div>
@@ -578,7 +578,7 @@ footer h3{font-size:.95rem;margin:0 0 .9rem;font-family:var(--body);font-weight:
   <em>Code de déontologie</em> lets a notary weigh the degree of urgency in setting fees — and it is
   not a constant: the domain shrinks the observed median premium of retained offers toward the
   published band, so the ladder learns from the market. Nota's own <strong>date-guarantee</strong>
-  line is separate and published beside it: 0 $ · 50 $ · 100 $ · 200 $ · 300 $. Two numbers, two
+  line is separate and published beside it: 0 $ · 149 $ · 299 $ · 449 $ · 549 $ (ADR 0038). Two numbers, two
   justifications, two lines on the quote — never one number doing both jobs.</p>
 
   <div class="col">
@@ -838,7 +838,7 @@ footer h3{font-size:.95rem;margin:0 0 .9rem;font-family:var(--body);font-weight:
     <table>
       <thead><tr><th>Date guarantee, added to Nota's line</th><th class="n">standard</th><th class="n">rapide</th><th class="n">prioritaire</th><th class="n">urgence</th><th class="n">extreme</th></tr></thead>
       <tbody>
-        <tr><td>&nbsp;</td><td class="n">0 $</td><td class="n">50 $</td><td class="n">100 $</td><td class="n">200 $</td><td class="n">300 $</td></tr>
+        <tr><td>&nbsp;</td><td class="n">0 $</td><td class="n">149 $</td><td class="n">299 $</td><td class="n">449 $</td><td class="n">549 $</td></tr>
       </tbody>
     </table>
   </div>
@@ -869,9 +869,9 @@ footer h3{font-size:.95rem;margin:0 0 .9rem;font-family:var(--body);font-weight:
   <div class="tw" style="max-width:620px">
     <table>
       <tbody>
-        <tr><td>Client pays — 2 000 $ (notary) + 249 $ (Nota)</td><td class="n">2 249,00 $</td></tr>
-        <tr><td>Stripe — 2.9% &times; 2 249 $ + 0,30 $</td><td class="n">(65,52) $</td></tr>
-        <tr class="total"><td>Nota keeps</td><td class="n">183,48 $</td></tr>
+        <tr><td>Client pays — 2 000 $ (notary) + 279 $ (Nota)</td><td class="n">2 279,00 $</td></tr>
+        <tr><td>Stripe — 2.9% &times; 2 279 $ + 0,30 $</td><td class="n">(66,39) $</td></tr>
+        <tr class="total"><td>Nota keeps</td><td class="n">212,61 $</td></tr>
         <tr><td>Notary receives</td><td class="n">2 000,00 $</td></tr>
       </tbody>
     </table>
@@ -881,41 +881,41 @@ footer h3{font-size:.95rem;margin:0 0 .9rem;font-family:var(--body);font-weight:
     <table>
       <thead><tr><th>Service &middot; tier</th><th class="n">Notary's fee</th><th class="n">Nota's price</th><th class="n">Client total</th><th class="n">Stripe</th><th class="n">Gross profit</th><th class="n">Margin</th></tr></thead>
       <tbody>
-        <tr><td><code>financement</code> &middot; standard</td><td class="n">1 800 $</td><td class="n">199 $</td><td class="n">1 999 $</td><td class="n">58,27 $</td><td class="n">140,73 $</td><td class="n">70.7%</td></tr>
-        <tr><td><code>financement</code> &middot; rapide</td><td class="n">3 600 $</td><td class="n">249 $</td><td class="n">3 849 $</td><td class="n">111,92 $</td><td class="n">137,08 $</td><td class="n">55.1%</td></tr>
-        <tr><td><code>financement</code> &middot; prioritaire</td><td class="n">5 400 $</td><td class="n">299 $</td><td class="n">5 699 $</td><td class="n">165,57 $</td><td class="n">133,43 $</td><td class="n">44.6%</td></tr>
-        <tr><td><code>financement</code> &middot; urgence</td><td class="n">6 300 $</td><td class="n">399 $</td><td class="n">6 699 $</td><td class="n">194,57 $</td><td class="n">204,43 $</td><td class="n">51.2%</td></tr>
-        <tr><td><code>financement</code> &middot; extrême</td><td class="n">7 200 $</td><td class="n">499 $</td><td class="n">7 699 $</td><td class="n">223,57 $</td><td class="n">275,43 $</td><td class="n">55.2%</td></tr>
-        <tr><td><code>refinancement</code> &middot; standard</td><td class="n">2 000 $</td><td class="n">249 $</td><td class="n">2 249 $</td><td class="n">65,52 $</td><td class="n">183,48 $</td><td class="n">73.7%</td></tr>
-        <tr><td><code>refinancement</code> &middot; rapide</td><td class="n">4 000 $</td><td class="n">299 $</td><td class="n">4 299 $</td><td class="n">124,97 $</td><td class="n">174,03 $</td><td class="n">58.2%</td></tr>
-        <tr><td><code>refinancement</code> &middot; prioritaire</td><td class="n">6 000 $</td><td class="n">349 $</td><td class="n">6 349 $</td><td class="n">184,42 $</td><td class="n">164,58 $</td><td class="n">47.2%</td></tr>
-        <tr><td><code>refinancement</code> &middot; urgence</td><td class="n">7 000 $</td><td class="n">449 $</td><td class="n">7 449 $</td><td class="n">216,32 $</td><td class="n">232,68 $</td><td class="n">51.8%</td></tr>
-        <tr><td><code>refinancement</code> &middot; extrême</td><td class="n">8 000 $</td><td class="n">549 $</td><td class="n">8 549 $</td><td class="n">248,22 $</td><td class="n">300,78 $</td><td class="n">54.8%</td></tr>
+        <tr><td><code>financement</code> &middot; standard</td><td class="n">1 800 $</td><td class="n">229 $</td><td class="n">2 029 $</td><td class="n">59,14 $</td><td class="n">169,86 $</td><td class="n">74.2%</td></tr>
+        <tr><td><code>financement</code> &middot; rapide</td><td class="n">3 600 $</td><td class="n">378 $</td><td class="n">3 978 $</td><td class="n">115,66 $</td><td class="n">262,34 $</td><td class="n">69.4%</td></tr>
+        <tr><td><code>financement</code> &middot; prioritaire</td><td class="n">5 400 $</td><td class="n">528 $</td><td class="n">5 928 $</td><td class="n">172,21 $</td><td class="n">355,79 $</td><td class="n">67.4%</td></tr>
+        <tr><td><code>financement</code> &middot; urgence</td><td class="n">6 300 $</td><td class="n">678 $</td><td class="n">6 978 $</td><td class="n">202,66 $</td><td class="n">475,34 $</td><td class="n">70.1%</td></tr>
+        <tr><td><code>financement</code> &middot; extrême</td><td class="n">7 200 $</td><td class="n">778 $</td><td class="n">7 978 $</td><td class="n">231,66 $</td><td class="n">546,34 $</td><td class="n">70.2%</td></tr>
+        <tr><td><code>refinancement</code> &middot; standard</td><td class="n">2 000 $</td><td class="n">279 $</td><td class="n">2 279 $</td><td class="n">66,39 $</td><td class="n">212,61 $</td><td class="n">76.2%</td></tr>
+        <tr><td><code>refinancement</code> &middot; rapide</td><td class="n">4 000 $</td><td class="n">428 $</td><td class="n">4 428 $</td><td class="n">128,71 $</td><td class="n">299,29 $</td><td class="n">69.9%</td></tr>
+        <tr><td><code>refinancement</code> &middot; prioritaire</td><td class="n">6 000 $</td><td class="n">578 $</td><td class="n">6 578 $</td><td class="n">191,06 $</td><td class="n">386,94 $</td><td class="n">66.9%</td></tr>
+        <tr><td><code>refinancement</code> &middot; urgence</td><td class="n">7 000 $</td><td class="n">728 $</td><td class="n">7 728 $</td><td class="n">224,41 $</td><td class="n">503,59 $</td><td class="n">69.2%</td></tr>
+        <tr><td><code>refinancement</code> &middot; extrême</td><td class="n">8 000 $</td><td class="n">828 $</td><td class="n">8 828 $</td><td class="n">256,31 $</td><td class="n">571,69 $</td><td class="n">69.0%</td></tr>
       </tbody>
     </table>
   </div>
 
   <div class="note brass">
-    <span class="label">Two rungs of the date ladder cost Nota money to sell</span>
-    <p>Moving a refinancing from <code>standard</code> to <code>prioritaire</code> adds 100 $ to
-    Nota's line and <strong>118,90 $</strong> to the Stripe fee — Nota is 18,90 $ <em>worse off</em>
-    on the more urgent act. The same at <code>rapide</code> (+50 $ of revenue against +59,45 $ of
-    fee). Only <code>urgence</code> and <code>extrême</code> pay for the cost they create. This is
-    arithmetic, not opinion, and it is the single most actionable number in the plan: the middle of
-    the urgency ladder — where most urgent demand actually sits — is priced below its own cost of
-    collection. Three remedies exist, all data changes: raise the two lines, add a small percentage
-    component so Nota's line tracks the fee it generates, or move the notary's fee off the platform
-    charge entirely. An owner decision, and no code has been changed for it here.</p>
+    <span class="label">The date ladder was priced below its own cost until 2026-09-05</span>
+    <p>Version 1.1 measured it: moving a refinancing from <code>standard</code> to
+    <code>prioritaire</code> added 100 $ to Nota's line and 118,90 $ to the Stripe fee, so Nota was
+    18,90 $ worse off on the more urgent act, and 9,45 $ worse off at <code>rapide</code>. ADR 0038
+    repriced the ladder to 0 · 149 · 299 · 449 · 549 $ under three rules: each rung covers the fee it
+    induces at its recommended multiple and at the top of its band, gross profit rises with urgency,
+    and the take rate on an urgent act stays below the take rate on a calm one. A domain test holds
+    all three. The structural cost is untouched: Nota still pays the card fee on the notary's fee,
+    money it never keeps. Moving that fee off the platform charge is an owner decision, with the
+    written legal opinion still required.</p>
   </div>
 
   <div class="tw" style="max-width:700px">
     <table>
-      <thead><tr><th>Refinancement, against <code>standard</code></th><th class="n">Date line</th><th class="n">Extra Stripe fee</th><th class="n">Net to Nota</th></tr></thead>
+      <thead><tr><th>Refinancement, against <code>standard</code></th><th class="n">Date line</th><th class="n">Extra Stripe fee</th><th class="n">Net to Nota</th><th class="n">Before</th></tr></thead>
       <tbody>
-        <tr><td><code>rapide</code></td><td class="n">+50 $</td><td class="n">+59,45 $</td><td class="n neg">(9,45) $</td></tr>
-        <tr><td><code>prioritaire</code></td><td class="n">+100 $</td><td class="n">+118,90 $</td><td class="n neg">(18,90) $</td></tr>
-        <tr><td><code>urgence</code></td><td class="n">+200 $</td><td class="n">+150,80 $</td><td class="n pos">+49,20 $</td></tr>
-        <tr><td><code>extrême</code></td><td class="n">+300 $</td><td class="n">+182,70 $</td><td class="n pos">+117,30 $</td></tr>
+        <tr><td><code>rapide</code></td><td class="n">+149 $</td><td class="n">+62,32 $</td><td class="n pos">+86,68 $</td><td class="n neg">(9,45) $</td></tr>
+        <tr><td><code>prioritaire</code></td><td class="n">+299 $</td><td class="n">+124,67 $</td><td class="n pos">+174,33 $</td><td class="n neg">(18,90) $</td></tr>
+        <tr><td><code>urgence</code></td><td class="n">+449 $</td><td class="n">+158,02 $</td><td class="n pos">+290,98 $</td><td class="n pos">+49,20 $</td></tr>
+        <tr><td><code>extrême</code></td><td class="n">+549 $</td><td class="n">+189,92 $</td><td class="n pos">+359,08 $</td><td class="n pos">+117,30 $</td></tr>
       </tbody>
     </table>
   </div>
@@ -933,12 +933,12 @@ footer h3{font-size:.95rem;margin:0 0 .9rem;font-family:var(--body);font-weight:
       <thead><tr><th>Per completed act</th><th class="n">Y1</th><th class="n">Y2</th><th class="n">Y3</th></tr></thead>
       <tbody>
         <tr><td>Notary's fee (paid whole to the notary)</td><td class="n">2 794 $</td><td class="n">2 794 $</td><td class="n">2 794 $</td></tr>
-        <tr><td>Nota revenue per act</td><td class="n">257 $</td><td class="n">257 $</td><td class="n">257 $</td></tr>
-        <tr><td>Card processing</td><td class="n">(89) $</td><td class="n">(89) $</td><td class="n">(89) $</td></tr>
-        <tr><td>Gross profit per act</td><td class="n">168 $</td><td class="n">168 $</td><td class="n">168 $</td></tr>
+        <tr><td>Nota revenue per act</td><td class="n">331 $</td><td class="n">331 $</td><td class="n">331 $</td></tr>
+        <tr><td>Card processing</td><td class="n">(91) $</td><td class="n">(91) $</td><td class="n">(91) $</td></tr>
+        <tr><td>Gross profit per act</td><td class="n">240 $</td><td class="n">240 $</td><td class="n">240 $</td></tr>
         <tr><td>Blended client CAC</td><td class="n">164 $</td><td class="n">55 $</td><td class="n">40 $</td></tr>
-        <tr class="total"><td>Contribution per act</td><td class="n pos">4 $</td><td class="n pos">113 $</td><td class="n pos">128 $</td></tr>
-        <tr><td>Gross margin</td><td class="n">66%</td><td class="n">66%</td><td class="n">66%</td></tr>
+        <tr class="total"><td>Contribution per act</td><td class="n pos">76 $</td><td class="n pos">185 $</td><td class="n pos">200 $</td></tr>
+        <tr><td>Gross margin</td><td class="n">73%</td><td class="n">73%</td><td class="n">73%</td></tr>
       </tbody>
     </table>
   </div>
@@ -949,11 +949,12 @@ footer h3{font-size:.95rem;margin:0 0 .9rem;font-family:var(--body);font-weight:
     line instead of the whole charge, and the contribution was understated because revenue per act
     was pinned to a 10% cut of a 1,056 $ act — a catalogue that no longer exists.</p>
 
-    <p><strong>A structural point worth stating plainly.</strong> Because Nota's price does not scale
-    with the act, gross profit per act is nearly flat across the whole urgency ladder — between 133 $
-    and 301 $ — while the amount changing hands varies four-fold. Revenue is therefore a function of
-    <strong>act count</strong>, not of the volume transacted. Every growth argument in this plan has
-    to be an argument about volume.</p>
+    <p><strong>A structural point worth stating plainly.</strong> Nota's price never scales with the
+    act. On a calm date gross profit per act is 170 $ on a financing and 213 $ on a refinancing,
+    whatever the loan behind it. Buying a date lifts it, up to 572 $ on a same-day refinancing, but
+    the amount changing hands never does. Revenue is therefore a function of <strong>act
+    count</strong>, not of the volume transacted. Every growth argument in this plan has to be an
+    argument about volume.</p>
 
     <h3>Break-even, from the same numbers</h3>
   </div>
@@ -962,21 +963,21 @@ footer h3{font-size:.95rem;margin:0 0 .9rem;font-family:var(--body);font-weight:
     <table>
       <thead><tr><th></th><th class="n">Operating expense</th><th class="n">Break-even acts</th><th class="n">Per month</th><th class="n">Plan volume</th></tr></thead>
       <tbody>
-        <tr><td>Y1</td><td class="n">$250,000</td><td class="n">1,487</td><td class="n">124</td><td class="n">244</td></tr>
-        <tr><td>Y2</td><td class="n">$720,000</td><td class="n">4,280</td><td class="n">357</td><td class="n">2,800</td></tr>
-        <tr><td>Y3</td><td class="n">$1,850,000</td><td class="n">10,997</td><td class="n">917</td><td class="n">11,000</td></tr>
+        <tr><td>Y1</td><td class="n">$250,000</td><td class="n">1,041</td><td class="n">87</td><td class="n">244</td></tr>
+        <tr><td>Y2</td><td class="n">$720,000</td><td class="n">2,997</td><td class="n">250</td><td class="n">2,800</td></tr>
+        <tr><td>Y3</td><td class="n">$1,850,000</td><td class="n">7,700</td><td class="n">642</td><td class="n">11,000</td></tr>
       </tbody>
     </table>
   </div>
 
   <div class="col">
     <p>Years 1 and 2 are deliberately below break-even — that is what the raise buys. <strong>Year 3's
-    planned volume lands within a hundred acts of covering its own cost base</strong>, which is a
-    cleaner story than version 1.0's, where Year 3 still lost $390,850.</p>
+    planned volume clears its own cost base by about 3,300 acts</strong>, which is a cleaner story
+    than version 1.0's, where Year 3 still lost $390,850.</p>
 
     <p>On the supply side a notary costs about <strong>500 $</strong> to recruit and, at 20 acts a
-    year, returns <strong>3,365 $</strong> of annual gross profit — 10,094 $ over a three-year
-    tenure. <strong>LTV to CAC of about 20&times;</strong>, payback inside <strong>three acts</strong>.
+    year, returns <strong>4,806 $</strong> of annual gross profit, 14,417 $ over a three-year
+    tenure. <strong>LTV to CAC of about 29&times;</strong>, payback inside <strong>three acts</strong>.
     Supply, not demand, is where the compounding is.</p>
 
     <h3>The repeat-purchase problem, stated plainly</h3>
@@ -1057,21 +1058,21 @@ footer h3{font-size:.95rem;margin:0 0 .9rem;font-family:var(--body);font-weight:
         <tr><td>Fill rate</td><td class="n">56%</td><td class="n">57%</td><td class="n">62%</td></tr>
         <tr><td>Acts completed</td><td class="n">244</td><td class="n">2,800</td><td class="n">11,000</td></tr>
         <tr><td>Notary fees paid through the platform</td><td class="n">$682,000</td><td class="n">$7,822,000</td><td class="n">$30,730,000</td></tr>
-        <tr><td>Total charged to clients</td><td class="n">$744,000</td><td class="n">$8,542,000</td><td class="n">$33,557,000</td></tr>
-        <tr class="total"><td>Nota revenue (257 $ &times; acts)</td><td class="n">$62,700</td><td class="n">$719,600</td><td class="n">$2,827,000</td></tr>
-        <tr><td>Card processing</td><td class="n">($21,700)</td><td class="n">($248,500)</td><td class="n">($976,400)</td></tr>
-        <tr class="total"><td>Gross profit</td><td class="n">$41,000</td><td class="n">$471,100</td><td class="n">$1,850,600</td></tr>
-        <tr><td>Gross margin</td><td class="n">66%</td><td class="n">66%</td><td class="n">66%</td></tr>
+        <tr><td>Total charged to clients</td><td class="n">$762,800</td><td class="n">$8,749,400</td><td class="n">$34,373,200</td></tr>
+        <tr class="total"><td>Nota revenue (331 $ &times; acts)</td><td class="n">$80,800</td><td class="n">$927,400</td><td class="n">$3,643,200</td></tr>
+        <tr><td>Card processing</td><td class="n">($22,200)</td><td class="n">($254,600)</td><td class="n">($1,000,100)</td></tr>
+        <tr class="total"><td>Gross profit</td><td class="n">$58,600</td><td class="n">$672,800</td><td class="n">$2,643,100</td></tr>
+        <tr><td>Gross margin</td><td class="n">73%</td><td class="n">73%</td><td class="n">73%</td></tr>
         <tr><td>Operating expense</td><td class="n">($250,000)</td><td class="n">($720,000)</td><td class="n">($1,850,000)</td></tr>
-        <tr class="total"><td>Net income</td><td class="n neg">($209,000)</td><td class="n neg">($249,000)</td><td class="n pos">$600</td></tr>
+        <tr class="total"><td>Net income</td><td class="n neg">($191,400)</td><td class="n neg">($47,200)</td><td class="n pos">$793,100</td></tr>
         <tr><td>Headcount (FTE)</td><td class="n">1 + contract</td><td class="n">4</td><td class="n">10</td></tr>
       </tbody>
     </table>
   </div>
 
   <p class="col small">Year 3 is about 10% of the two-service addressable act volume. Cumulative
-  capital required through Year 3 is about <strong>$460,000</strong>, down from the $1.05M of version
-  1.0 — Nota's revenue per act is now 257 $ rather than a 10% cut of a 1,056 $ act, and the act values
+  capital required through Year 3 is about <strong>$240,000</strong>, down from the $1.05M of version
+  1.0 — Nota's revenue per act is now 331 $ rather than a 10% cut of a 1,056 $ act, and the act values
   themselves are financing acts. <strong>Series A trigger:</strong> exiting Year 2 at a
   <strong>$700K</strong> revenue run-rate with province-wide liquidity proven and the exception layer
   in production, raising against the full act catalogue and the first cross-border corridor.</p>
@@ -1079,11 +1080,11 @@ footer h3{font-size:.95rem;margin:0 0 .9rem;font-family:var(--body);font-weight:
   <div class="note brass">
     <span class="label">Three sensitivities to press on</span>
     <p class="small"><strong>Volume is the only lever</strong> — Nota's price does not scale with the
-    act, so revenue is act count &times; ~257 $. Halve the count and you halve the revenue; double the
+    act, so revenue is act count &times; ~331 $. Halve the count and you halve the revenue; double the
     average act value and nothing changes except the Stripe bill. <strong>The mix moves gross profit
     far less than it moves the amount transacted</strong> — across the whole urgency ladder, gross
-    profit per act stays between 133 $ and 301 $; a pessimistic all-<code>standard</code> mix still
-    yields 166 $. <strong>Card processing is the whole cost of revenue and it grows with the notary's
+    profit per act runs from 170 $ on a calm financing to 572 $ on a same-day refinancing, and the
+    act's value never moves it; a pessimistic all-<code>standard</code> mix still yields 196 $. <strong>Card processing is the whole cost of revenue and it grows with the notary's
     fee</strong> — every 1,000 $ added to a typical act adds 29 $ to Nota's cost and nothing to its
     revenue.</p>
   </div>
@@ -1191,7 +1192,7 @@ footer h3{font-size:.95rem;margin:0 0 .9rem;font-family:var(--body);font-weight:
         <tr><td>Cold-start liquidity fails</td><td>High</td><td>Supply is free and frictionless. One dense city first. Fill rate monitored weekly with an explicit floor-adjustment lever.</td></tr>
         <tr><td>Low client repeat rate</td><td>Medium-high</td><td>Supply-side moat, compounding organic capture, zero-CAC referral channels, recurring refinancing.</td></tr>
         <tr><td>Chambre opposition</td><td>Medium-high</td><td>Early, written, partnership-framed engagement. Nota never touches the act and takes nothing out of a notary's fees — it is demand generation for the profession.</td></tr>
-        <tr><td>The date ladder's middle is priced below its own cost</td><td>Medium</td><td>Already measured: <code>rapide</code> and <code>prioritaire</code> lose 9,45 $ and 18,90 $ against the Stripe fee they create. The grid is data, edited from the console without a deploy; re-priced against realized cost at month 6.</td></tr>
+        <tr><td>A rung of the date ladder drifts below its own cost</td><td>Low</td><td>Measured on 2026-09-04 (<code>rapide</code> −9,45 $, <code>prioritaire</code> −18,90 $) and repriced on 2026-09-05 (ADR 0038). A domain test now holds every rung above the fee it induces. The grid stays data, edited from the console without a deploy, and is re-checked against realized cost at month 6.</td></tr>
         <tr><td>No verification against the Tableau de l'Ordre</td><td>Medium-high</td><td>The only check today is the URL format of a CNQ fiche. A real status check and an immediate-removal path are prerequisites to the first live act.</td></tr>
         <tr><td>A funded competitor copies the mechanism</td><td>Medium</td><td>The price curve requires running the market to obtain; the notary network is slow and in-person; the déontologie structure is non-obvious from outside Québec.</td></tr>
         <tr><td>Solo-founder key-person risk</td><td>Medium</td><td>Architecture decision records, BDD specs as executable specification, second engineer early in Year 2.</td></tr>

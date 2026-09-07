@@ -25,11 +25,34 @@ test('a client cancels their published offer end to end', async ({ page }) => {
   const sheet = page.locator('#day-dialog');
   await expect(sheet).toBeVisible();
 
+  // The sheet is four screens since ADR 0040 — 1 the act · 2 the answers ·
+  // 3 the price · 4 the contact details — and only the current one is on
+  // screen; the rest keep their answers behind a `display: none`. So this
+  // journey walks the rail with « Continuer », the way a client does. Screen 1
+  // is already answered: the pulse's « Réserver » preselected the financement
+  // act on the way in.
+  const form = sheet.locator('#offer-form');
+  const next = sheet.locator('#book-next');
+  await expect(form).toHaveAttribute('data-at', '1');
+  await expect(sheet.locator('#o-service-chips button[data-svc="financement"]')).toHaveAttribute('aria-pressed', 'true');
+  await next.click();
+
+  // Screen 2 — the notary's required questions for a financement.
+  await expect(form).toHaveAttribute('data-at', '2');
   await sheet.locator('#crit-valeur_pret').fill('350000');
   await sheet.locator('#crit-contexte__propriete_detenue').click();
   await sheet.locator('#crit-approbation_bancaire__obtenue').click();
   await sheet.locator('#crit-preteur').selectOption('banque_nationale');
   await sheet.locator('#crit-deplacement').selectOption('client_50');
+  await next.click();
+
+  // Screen 3 — the price, pre-filled: nothing to answer, so it is only passed
+  // through. The quote itself is client-booking.spec's subject, not this one's.
+  await expect(form).toHaveAttribute('data-at', '3');
+  await next.click();
+
+  // Screen 4 — the contact details.
+  await expect(form).toHaveAttribute('data-at', '4');
   await sheet.locator('#o-prefix').fill('G1R'); // REQUIRED postal sector
 
   // ADR 0033 — name and courriel are required at publish (the retaining

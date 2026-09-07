@@ -1,0 +1,65 @@
+{
+  "realm": "nota",
+  "enabled": true,
+  "displayName": "Nota",
+  "sslRequired": "none",
+
+  "registrationAllowed": true,
+  "registrationEmailAsUsername": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "editUsernameAllowed": false,
+  "resetPasswordAllowed": true,
+  "rememberMe": false,
+
+  "verifyEmail": false,
+
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+
+  "clients": [
+    {
+      "clientId": "nota-web",
+      "name": "Nota — site public et console",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "protocol": "openid-connect",
+      "rootUrl": "http://localhost:4173",
+      "baseUrl": "/",
+      "redirectUris": [
+        "http://localhost:4173/*",
+        "http://localhost:4174/*",
+        "http://localhost:8788/*"
+      ],
+      "webOrigins": [
+        "http://localhost:4173",
+        "http://localhost:4174",
+        "http://localhost:8788"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:4173/*"
+      }
+    }
+  ],
+
+  "users": [
+    {
+      "username": "demo@nota.test",
+      "email": "demo@nota.test",
+      "enabled": true,
+      "emailVerified": false,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "demo",
+          "temporary": false
+        }
+      ]
+    }
+  ]
+}

@@ -14,8 +14,8 @@
 > notaire reçoit **100 %** du montant qui lui est offert et Nota facture au
 > client **son propre prix, publié d'avance** ; depuis
 > l'[ADR 0034](../decisions/0034-le-prix-de-nota-est-une-grille-par-service.md),
-> ce prix est une grille par service (199 $ / 249 $) plus une ligne de garantie
-> de date (0 · 50 · 100 · 200 · 300 $). `commission-config.js` a été supprimé.
+> ce prix est une grille par service (229 $ / 279 $ depuis l'ADR 0042) plus une
+> ligne de garantie de date (0 · 149 · 299 · 449 · 549 $ depuis l'ADR 0038). `commission-config.js` a été supprimé.
 >
 > **C'est exactement la « piste structurelle » que le §1.2 recommandait**, mise en
 > œuvre : un prix par acte, sans lien avec le montant de l'acte ni avec la

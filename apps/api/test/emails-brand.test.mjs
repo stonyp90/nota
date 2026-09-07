@@ -468,9 +468,25 @@ test('every placeholder TEMPLATE_META declares is carried by the ctx of the send
   await notifier.onCounterOfferAnswered(bid, { id: 'p2', status: 'acceptee', montant: 1600, notaryId: 'n-1' });
   await notifier.onCounterOfferAnswered(bid, { id: 'p3', status: 'refusee', montant: 1600, notaryId: 'n-1' });
   await notifier.onOfferCancelled(bid, { notary, wasRetained: true });
+  // ADR 0041 — les trois lettres de l'indemnité décidée.
+  await notifier.onIndemniteDecidee({ ...bid, status: 'annulee', annulation: { statut: 'percue', plafond: 450, taux: 0.3, frais: 300, justification: 'Journée bloquée, dossier ouvert.', percu: true, mecanisme: 'capture', dedommagement: { notaire: true, verse: true, transferId: 'tr_x' } } }, { notary });
+  await notifier.onIndemniteDecidee({ ...bid, status: 'annulee', annulation: { statut: 'renoncee', plafond: 450, taux: 0.3, frais: 0, mecanisme: 'capture' } }, { notary });
   await notifier.onActReleased(bid, { notary, etude: 'Étude Tremblay', message: 'Conflit', paidOrHeld: true });
   await notifier.onContactMessage({ id: 'c1', nom: 'Marie', courriel: 'client@example.ca', sujet: 'Question', message: 'Bonjour' });
   await notifier.onSupportMessage({ message: { id: 's1', texte: 'Allo ?' }, courriel: 'client@example.ca', replyUrl: BASE + '/#reponse=t' });
+  // ADR 0046 — l'escalade est un SECOND point d'envoi de la messagerie, avec
+  // son propre gabarit : elle doit être sondée comme les autres.
+  await notifier.onSupportMessage({
+    message: { id: 's1b', texte: 'Où en est mon dossier ?' },
+    courriel: 'client@example.ca',
+    replyUrl: BASE + '/#reponse=jeton',
+    escalade: true,
+    motif: 'dossier_precis',
+    historique: [
+      { de: 'visiteur', texte: 'Où en est mon dossier ?' },
+      { de: 'assistant', texte: 'Je passe la question.' },
+    ],
+  });
   await notifier.onSupportReply({ message: { id: 's2', texte: 'Oui.' }, courriel: 'client@example.ca' });
   for (const kind of ['j7', 'j0', 'dossier_incomplet']) await notifier.onReminderDue(bid, kind, TODAY);
   await notifier.onNotaryDigest(notary, [bid], TODAY);

@@ -65,11 +65,11 @@ Gamache comme les neuf de la vague 1 :
 
 | Service | Honoraires de départ du notaire | Prix de Nota, payé par le client |
 | --- | ---: | ---: |
-| Financement hypothécaire | 1 800 $ | **199 $** |
-| Refinancement hypothécaire | 2 000 $ | **249 $** |
+| Financement hypothécaire | 1 800 $ | **229 $** |
+| Refinancement hypothécaire | 2 000 $ | **279 $** |
 
-Plus la garantie de date, sur sa propre ligne : 0 $ au-delà de 14 jours, 50 $ à
-14 jours ou moins, 100 $ à 7 jours ou moins, 200 $ la veille, 300 $ le jour
+Plus la garantie de date, sur sa propre ligne : 0 $ au-delà de 14 jours, 149 $ à
+14 jours ou moins, 299 $ à 7 jours ou moins, 449 $ la veille, 549 $ le jour
 même. Taxes et débours en sus. Le client n'est débité qu'à la signature.
 
 Ne jamais écrire « prix fixe » : depuis l'ADR 0034 c'est une grille par

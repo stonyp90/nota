@@ -4226,7 +4226,7 @@
     titleWrap.appendChild(el('span', 'page-eyebrow', 'Facturation'));
     titleWrap.appendChild(el('h1', 'page-title', 'Annulation'));
     titleWrap.appendChild(el('p', 'page-sub',
-      'Barème décidé par Nota — frais d’annulation tardive selon les jours restants avant la signature.'));
+      'Barème décidé par Nota. Chaque palier est un PLAFOND : ce que le notaire peut réclamer, sur justification et dans le délai, quand le client annule un acte retenu près de la signature. Rien n’est prélevé sans réclamation.'));
     head.appendChild(titleWrap);
     content.appendChild(head);
 
@@ -4273,8 +4273,10 @@
 
     var grid = el('div', 'stat-grid');
     // Le palier « 0 jour » couvre le jour même de la signature (P2-24).
-    grid.appendChild(tile('Dernière minute', pctLabel(annulationRateAt(0, paliers)), 'retenu le jour de la signature', false));
-    grid.appendChild(tile('Paliers', num(paliers.length), 'de frais selon les jours restants', false));
+    grid.appendChild(tile('Dernière minute', pctLabel(annulationRateAt(0, paliers)), 'plafond le jour de la signature', false));
+    grid.appendChild(tile('Paliers', num(paliers.length), 'de plafonds selon les jours restants', false));
+    // ADR 0041 — le délai dont le notaire dispose pour réclamer.
+    if (eff.delaiJours != null) grid.appendChild(tile('Délai de réclamation', num(eff.delaiJours) + (eff.delaiJours > 1 ? ' jours' : ' jour'), 'après l’annulation, pour réclamer', false));
     // « Gratuit dès 0 jour » ne dit rien : sans palier, la tuile s'efface (P2-25).
     if (paliers.length) {
       var freeFrom = paliers[paliers.length - 1].maxJours + 1;
@@ -4302,7 +4304,7 @@
       var table = el('table', 'ptable');
       var thead = el('thead');
       var hr = el('tr');
-      ['Jours avant la signature', 'Taux retenu'].forEach(function (h, i) {
+      ['Jours avant la signature', 'Plafond de l’indemnité'].forEach(function (h, i) {
         hr.appendChild(el('th', i >= 1 ? 'is-num' : null, h));
       });
       thead.appendChild(hr);
@@ -4319,7 +4321,7 @@
       table.appendChild(tbody);
       scroll.appendChild(table);
       card.appendChild(scroll);
-      card.appendChild(el('p', 'tpl-note', 'Au-delà du dernier palier, l’annulation est gratuite.'));
+      card.appendChild(el('p', 'tpl-note', 'Au-delà du dernier palier, l’annulation est gratuite. Sous un palier, le notaire réclame ses frais réels et la valeur du travail accompli, jusqu’au plafond, ou renonce ; passé le délai, rien n’est prélevé (art. 13 LPC, art. 2129 C.c.Q.).'));
     }
     wrap.appendChild(card);
     return wrap;
@@ -4332,7 +4334,7 @@
     var head = el('div', 'chart-card-head');
     var ht = el('div');
     ht.appendChild(el('div', 'chart-card-title', 'Modifier le barème'));
-    ht.appendChild(el('div', 'chart-card-sub', 'Les taux sont saisis en pourcentage — « 30 » signifie 30 %. Un barème sans palier rend l’annulation gratuite partout.'));
+    ht.appendChild(el('div', 'chart-card-sub', 'Les plafonds sont saisis en pourcentage — « 30 » signifie au plus 30 % du montant convenu. Un barème sans palier rend l’annulation gratuite partout.'));
     head.appendChild(ht);
     card.appendChild(head);
 
@@ -4366,7 +4368,7 @@
       if (rowsBox.children.length >= MAX_PALIERS) return;
       var row = el('div', 'bareme-palier');
       row.appendChild(fld('Jours restants (max)', p ? String(p.maxJours) : '').field);
-      row.appendChild(fld('Taux retenu (%)', p ? fracToPct(p.taux) : '').field);
+      row.appendChild(fld('Plafond de l’indemnité (%)', p ? fracToPct(p.taux) : '').field);
       var rm = el('button', 'btn btn-sm bareme-remove', 'Retirer');
       rm.type = 'button';
       rm.addEventListener('click', function () { rowsBox.removeChild(row); syncAdd(); });
@@ -4377,6 +4379,11 @@
     (eff.paliers || []).forEach(function (p) { addRow(p); });
     syncAdd();
     addBtn.addEventListener('click', function () { addRow(null); });
+
+    // ADR 0041 — le délai de réclamation, en jours civils après l'annulation.
+    var delaiFld = fld('Délai de réclamation du notaire (jours)', eff.delaiJours != null ? String(eff.delaiJours) : '');
+    delaiFld.input.inputMode = 'numeric';
+    form.appendChild(delaiFld.field);
 
     var error = el('div', 'tpl-error');
     error.hidden = true;
@@ -4401,6 +4408,7 @@
           };
         }),
       };
+      if (String(delaiFld.input.value).trim() !== '') body.delaiJours = decToNum(delaiFld.input.value);
       // Le serveur reste l'autorité, mais une évidence ne part pas sur le fil
       // (P2-26) : la même règle, les mêmes mots que cancellation-config.js,
       // et le champ fautif reçoit la marque et le focus.
@@ -4509,10 +4517,15 @@
   var notairesBody = null;
 
   var STATUT_LABELS = {
+    // `en_attente` est le statut que POSE /notaries/signup : un dossier déposé
+    // par la porte gratuite, qui attend la vérification au Tableau de l'Ordre.
+    // Sans cette entrée l'écran affichait la valeur brute de la base.
+    en_attente: 'En attente',
     onboarding: 'En intégration',
     active: 'Actif',
     restricted: 'Restreint',
   };
+  function canModerate() { return can('moderation:write'); }
   // Les libellés des chiffres derrière chaque axe — TOUS traduits (un libellé
   // resté en français au milieu d'une colonne anglaise se lit comme une fuite).
   // Une clé inconnue retombe sur son nom brut : le domaine peut ajouter une
@@ -4639,8 +4652,103 @@
       return;
     }
     var view = el('div', 'view-enter');
+    // La file d'attente AVANT le classement : approuver un dossier déposé est
+    // le geste du jour, le tableau d'honneur est la vue d'ensemble.
+    var file = buildApprovalQueue(r.json, function () { loadNotairesInto(container); });
+    if (file) view.appendChild(file);
     view.appendChild(buildNotairesView(r.json));
     container.appendChild(view);
+  }
+
+  // --- File d'approbation ----------------------------------------------------
+  // `POST /notaries/signup` dépose un dossier en `en_attente` ; c'est
+  // `approuveLe` — écrit par POST /admin/notaries/{id}/activer — qui ouvre la
+  // console, jamais Stripe. La route faisait déjà tout (journal + courriel
+  // `notaryApproved`) et n'avait aucun appelant : la file restait invisible.
+  // Rien à traiter ⇒ pas de section : une file vide n'est pas une information.
+  function buildApprovalQueue(data, onDone) {
+    var pending = (data.notaires || []).filter(function (n) {
+      return !n.approuveLe && (n.statut === 'en_attente' || n.statut === 'onboarding');
+    });
+    if (!pending.length) return null;
+    // Une file se vide par le haut : le plus ancien dépôt d'abord.
+    pending.sort(function (a, b) { return String(a.inscritLe || '').localeCompare(String(b.inscritLe || '')); });
+
+    var card = el('div', 'chart-card napprove');
+    var head = el('div', 'chart-card-head');
+    var ht = el('div');
+    ht.appendChild(el('div', 'chart-card-title', 'En attente d’approbation'));
+    ht.appendChild(el('div', 'chart-card-sub',
+      pending.length === 1
+        ? 'Un dossier attend la vérification au Tableau de l’Ordre.'
+        : pending.length + ' dossiers attendent la vérification au Tableau de l’Ordre.'));
+    head.appendChild(ht);
+    card.appendChild(head);
+
+    pending.forEach(function (n) { card.appendChild(buildApprovalRow(n, onDone)); });
+
+    card.appendChild(el('p', 'tpl-note', canModerate()
+      ? 'Activer ouvre la console du notaire et lui envoie son lien de connexion. Vérifiez sa fiche au Tableau de l’Ordre avant d’approuver.'
+      : 'Vous n’avez pas l’autorisation d’activer un notaire (moderation:write). Ces dossiers attendent un opérateur qui la détient.'));
+    return card;
+  }
+
+  function buildApprovalRow(n, onDone) {
+    var row = el('div', 'napprove-row');
+
+    var who = el('div', 'napprove-who');
+    var mail = el('div', 'napprove-mail', n.email || n.etude || '—');
+    mail.setAttribute('data-i18n-skip', ''); // adresse : contenu d'API
+    who.appendChild(mail);
+
+    var facts = el('div', 'ptable-sub');
+    if (n.inscritLe) {
+      // Pas de `data-i18n-skip` ici : la règle « Déposé le (.+) » capture la
+      // date et traduit le préfixe. Sauter l'élément entier laissait un
+      // fragment français au milieu de la console anglaise.
+      facts.appendChild(el('span', null, 'Déposé le ' + String(n.inscritLe).slice(0, 10)));
+      facts.appendChild(el('span', null, ' · '));
+    }
+    // La fiche officielle EST le geste de vérification : un lien quand elle
+    // est fournie, une mention explicite quand elle manque — jamais un vide
+    // qu'on prendrait pour « rien à signaler ».
+    if (n.lienCNQ) {
+      var a = el('a', 'napprove-fiche', 'Vérifier la fiche au Tableau de l’Ordre');
+      a.href = n.lienCNQ; a.target = '_blank'; a.rel = 'noopener noreferrer';
+      facts.appendChild(a);
+    } else {
+      facts.appendChild(el('span', 'napprove-nofiche', 'Aucune fiche fournie — à vérifier à la main'));
+    }
+    who.appendChild(facts);
+    row.appendChild(who);
+
+    var errs = el('div', 'napprove-err');
+    errs.setAttribute('role', 'alert');
+    errs.hidden = true;
+
+    if (canModerate()) {
+      var btn = el('button', 'btn btn-sm btn-primary napprove-go', 'Activer');
+      btn.type = 'button';
+      btn.addEventListener('click', async function () {
+        if (!window.confirm('Activer ' + (n.email || 'ce notaire') + ' ? Sa console s’ouvre et il reçoit son lien de connexion.')) return;
+        btn.disabled = true; btn.textContent = 'Activation…';
+        errs.hidden = true; clear(errs);
+        var r = await call('POST', '/notaries/' + encodeURIComponent(n.id) + '/activer');
+        if (r.status === 401) return; // call() gère la session
+        if (!r.ok) {
+          // Le dossier RESTE dans la file : un refus n'est pas une activation.
+          btn.disabled = false; btn.textContent = 'Activer';
+          var msg = (r.json && r.json.errors && r.json.errors[0] && r.json.errors[0].message) || 'Activation impossible.';
+          errs.hidden = false; errs.appendChild(el('span', null, msg));
+          return;
+        }
+        toast((r.json && r.json.deja) ? 'Ce notaire était déjà approuvé.' : 'Notaire activé — son lien de connexion part par courriel.');
+        onDone(); // relire la liste : la file se vide de ce qui n'attend plus
+      });
+      row.appendChild(btn);
+    }
+    row.appendChild(errs);
+    return row;
   }
 
   function buildNotairesView(data) {
@@ -4829,6 +4937,7 @@
     acte_regle: 'Acte réglé',
     acte_retenu: 'Acte retenu',
     annulation_frais: 'Frais d’annulation — dédommagement du notaire',
+    annulation_indemnite: 'Indemnité d’annulation — décision du notaire',
     document_depose: 'Document déposé',
     document_lu: 'Document consulté',
     notary_activated: 'Notaire activé',
@@ -4870,6 +4979,12 @@
     partenaire_reclamation: 'Code partenaire réclamé',
     partenaire_confirme: 'Partenaire confirmé',
     client_jeton_emis: 'Accès client émis',
+    // L'ESPACE CLIENT (2026-09-05) : un client prouve sa boîte, puis relit
+    // SES offres depuis n'importe quel appareil. L'ouverture d'un dossier est
+    // un accès à des données personnelles — elle se nomme dans la piste.
+    client_lien_demande: 'Lien client demandé',
+    client_espace_ouvert: 'Espace client ouvert',
+    partenaire_rappel: 'Code partenaire rappelé',
     // LES ANGLES MORTS FERMÉS LE 2026-09-05. Trois familles de gestes
     // n'écrivaient rien : l'argent AUTRE que le règlement (la caution, sa
     // libération, la carte, l'état poussé par Stripe), la vie du notaire

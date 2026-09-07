@@ -648,6 +648,8 @@ function createAdmin({
     if (!o) return null;
     return {
       paliers: (o.paliers || []).map((p) => ({ maxJours: p.maxJours, taux: p.taux })),
+      // ADR 0041 — le délai de réclamation, quand Nota l'a décidé.
+      ...(Number.isInteger(o.delaiJours) ? { delaiJours: o.delaiJours } : {}),
       updatedAt: o.updatedAt || null,
     };
   }
@@ -659,7 +661,12 @@ function createAdmin({
     if (!p) return { ok: false, status: 401 };
     const defaut = cancellationCfg.envDefaults(process.env);
     const override = annulationView(typeof repo.getCancellationConfig === 'function' ? await repo.getCancellationConfig() : null);
-    const effectif = override ? { paliers: override.paliers } : defaut;
+    // ADR 0041 — chaque `taux` est un PLAFOND ; `delaiJours` est le délai de
+    // réclamation, résolu comme la route d'annulation : l'item stocké s'il en
+    // porte un, le déploiement sinon.
+    const effectif = override
+      ? { paliers: override.paliers, delaiJours: cancellationCfg.delaiFor(override, process.env) }
+      : defaut;
     return { ok: true, defaut, override, effectif };
   }
 
@@ -673,7 +680,7 @@ function createAdmin({
     const v = cancellationCfg.validateSchedule(body || {});
     if (!v.ok) return { ok: false, status: 422, errors: v.errors };
     const before = annulationView(await repo.getCancellationConfig());
-    const stored = await repo.putCancellationConfig({ paliers: v.paliers }, clockIso());
+    const stored = await repo.putCancellationConfig({ paliers: v.paliers, ...(v.delaiJours !== undefined ? { delaiJours: v.delaiJours } : {}) }, clockIso());
     const after = annulationView(stored);
     await appendAudit('cancellation_schedule_updated', {
       adminId: p.adminId,

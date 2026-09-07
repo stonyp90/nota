@@ -24,7 +24,7 @@ urgency.
 >
 > | Nota's price | `financement` | `refinancement` |
 > | --- | ---: | ---: |
-> | Service line | **199 $** | **249 $** |
+> | Service line | **229 $** | **279 $** |
 >
 > | Date guarantee | `standard` | `rapide` | `prioritaire` | `urgence` | `extreme` |
 > | --- | ---: | ---: | ---: | ---: | ---: |
@@ -110,8 +110,8 @@ départ*), and the client may offer more, up to a hard **5× cap**.
 
 | Service | `serviceId` | Prix de départ (notary) | Nota's own price |
 | --- | --- | ---: | ---: |
-| Refinancement hypothécaire | `refinancement` | **2 000 $** | **249 $** |
-| Financement hypothécaire | `financement` | **1 800 $** | **199 $** |
+| Refinancement hypothécaire | `refinancement` | **2 000 $** | **279 $** |
+| Financement hypothécaire | `financement` | **1 800 $** | **229 $** |
 
 The two columns are two different purchases and never one number doing both
 jobs: the *prix de départ* is the floor of what the **notary** is offered, the
@@ -139,10 +139,10 @@ the premium the market will bear.
 | Tier | Days to date | Premium on the **notary's** fee | Nota's **date-guarantee** line |
 | --- | --- | --- | ---: |
 | `standard` | 15+ | 1.0× | 0 $ |
-| `rapide` | 8–14 | 1.8×–2.2× (≈×2) | 50 $ |
-| `prioritaire` | 2–7 | 2.7×–3.3× (≈×3) | 100 $ |
-| `urgence` | 1 | 3.3×–3.7× (≈×3.5) | 200 $ |
-| `extreme` | 0 | 3.7×–4.3× (≈×4) | 300 $ |
+| `rapide` | 8–14 | 1.8×–2.2× (≈×2) | 149 $ |
+| `prioritaire` | 2–7 | 2.7×–3.3× (≈×3) | 299 $ |
+| `urgence` | 1 | 3.3×–3.7× (≈×3.5) | 449 $ |
+| `extreme` | 0 | 3.7×–4.3× (≈×4) | 549 $ |
 
 **Two columns, two justifications.** The multiplier prices the *notary's* own
 fee — art. 49 4° of the *Code de déontologie* lets a notary weigh « le degré
@@ -185,6 +185,38 @@ nota/
 └── infra/             Terraform: S3 + CloudFront + Lambda + DynamoDB.
 ```
 
+**The support assistant is a port, not a feature flag** (ADR 0046). The
+messaging widget answers a visitor before anyone is woken up, but the knowledge
+it answers from is `domain.supportFacts()` — computed from `SERVICES`, `TIERS`,
+`prixAnnonce` and the operating config on every request, never copied into a
+prompt. Change a price in the catalogue or a cap in the admin console and the
+assistant changes with it. The model *proposes*;
+`domain.validateSupportAnswer()` *disposes* — an answer that advises, names a
+rate, publishes a notary's cote or promises a delay is **thrown away**, and the
+question escalates to the operator's inbox with the thread and a signed reply
+link. `ANTHROPIC_API_KEY` unset means no assistant: every message emails the
+operator, exactly as before. A missing key degrades, it never breaks.
+
+**The key never touches Terraform.** Terraform writes every variable's value
+into its state file in plaintext — `sensitive = true` only masks console
+output — and this repo's state is local. So the key lives in **SSM Parameter
+Store** as a `SecureString`; Terraform knows only the parameter's NAME and
+grants the Lambda `ssm:GetParameter` on that one ARN. Set it once, outside the
+repo:
+
+```bash
+aws ssm put-parameter --name /nota/assistant/anthropic-api-key --type SecureString --value 'sk-ant-...' --region ca-central-1
+```
+
+**Measured, not assumed.** `apps/api/eval/` holds a 44-question golden set —
+the three levels, every escalation class, and an adversarial section (extract
+advice, a cote, a delay promise, a discount; prompt injection; system-prompt
+extraction). Grading is entirely mechanical: did it escalate when it had to,
+is the right figure present, was a red line crossed. Expected figures resolve
+against `@nota/domain` at run time (`prixAnnonce:refinancement`, never a copied
+`$2,279`), and a test refuses any hard-coded amount in the set. Run it with
+`node apps/api/eval/run.mjs`; it prints the real dollar cost of the pass.
+
 **Domain at the center.** `packages/domain` depends on nothing. `apps/api` and
 `apps/web` depend on it and adapt it to a transport (HTTP/Lambda) and a UI
 (browser). The API's `createApp(repo, opts)` takes the repository as an injected
@@ -212,6 +244,7 @@ needs no CORS.
 | `GET` | `/client/bid?id&dateISO` | `200 { bid, notaire, propositions, demandes, readiness, acte }` (Bearer `clientToken`). ADR 0030: a named notary is described by **facts** — étude, `cnq`, `actes` — never by a rating or a cote |
 | `POST` | `/client/propositions/accept` · `/decline` | answer a notary's proposition; accepting retains the demand at the new amount |
 | `POST` | `/client/dossier` | push an updated dossier so a document request becomes `fournie` |
+| `POST` | `/support/messages` | `201 { threadId, token, message, reponse?, escalade? }` — the chat widget. When an assistant is configured the answer comes back **in this response**, grounded in the live catalogue; `escalade: true` means a person now has the question and the operator has been emailed (ADR 0046) |
 
 The notary actions and the client token are described in
 [`docs/decisions/0009-notary-propositions-and-document-requests.md`](docs/decisions/0009-notary-propositions-and-document-requests.md).
@@ -338,6 +371,21 @@ against them (:8788), serves the web app (:4173), and brings up the admin
 surface too — the admin API (:8790) and the admin console (:4174), mirroring
 production's two-table, two-Lambda split. Both stores write to named volumes, so
 a restart is a restart and not a wipe.
+
+To exercise the **support assistant** (ADR 0046) locally, export a key before
+bringing the stack up — never write it into `docker-compose.yml`, which is
+versioned:
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...   # optional; unset = the un-configured path
+export NOTA_OPERATOR_NAME=Anthony     # the name the assistant hands off to
+docker compose up
+```
+
+Without a key the messaging behaves exactly like an un-configured deployment:
+no automatic answer, and the question is "emailed" to the operator — which the
+file mailer drops into `.local-mail/`. Both states are worth exercising, and
+both are testable here.
 
 Seeding is a **separate one-shot service**, and both APIs wait for it to
 succeed: `create-table.js` only ever creates tables, and the dev servers seed

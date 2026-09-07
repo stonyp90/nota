@@ -71,10 +71,10 @@ spontanément le partage d'honoraires. S'ils ne le nomment pas :*
 *Puis, et seulement une fois les deux réponses notées, le modèle réel (ADR
 0031 et 0034) :* « Chez nous, vos honoraires restent entièrement les vôtres —
 on ne prend rien dessus. Nota facture son propre service au client, à côté :
-199 $ pour un financement, 249 $ pour un refinancement, plus une ligne de
-garantie de date de 0 à 300 $ selon le préavis. Vous en pensez quoi ? »
+229 $ pour un financement, 279 $ pour un refinancement, plus une ligne de
+garantie de date de 0 à 549 $ selon le préavis. Vous en pensez quoi ? »
 → *note : accepte / hésite / refuse, et **le prix qu'il trouverait juste**. Ne
-pas défendre les 199/249 $ — on est venu les mesurer, pas les vendre.*
+pas défendre les 229/279 $ — on est venu les mesurer, pas les vendre.*
 
 *Puis la question qui vaut le déplacement :* « Si le client voit ce prix-là à
 côté de vos honoraires, avant de s'engager — est-ce que ça vous met mal à
@@ -141,7 +141,7 @@ raison_refus_1:       # prix | client inconnu | preteur | deplacement | autre
 # H3
 source_remuneration_spontanee:
 reaction_partage_honoraires:   # citation textuelle
-reaction_prix_nota:            # accepte | hesite | refuse (199/249 $ + garantie de date)
+reaction_prix_nota:            # accepte | hesite | refuse (229/279 $ + garantie de date)
 prix_quil_trouverait_juste:    # $
 prix_visible_au_client:        # a_laise | mal_a_laise
 # H4-H6
@@ -176,12 +176,12 @@ vérifiés dans `packages/domain/index.js`, jamais recopiés d'un autre document
 
 | Service | Honoraires de départ du notaire | Prix de Nota, payé par le client |
 | --- | ---: | ---: |
-| Financement hypothécaire | 1 800 $ | **199 $** |
-| Refinancement hypothécaire | 2 000 $ | **249 $** |
+| Financement hypothécaire | 1 800 $ | **229 $** |
+| Refinancement hypothécaire | 2 000 $ | **279 $** |
 
 Garantie de date, sur sa propre ligne : standard (plus de 14 j) **0 $** ·
-rapide (≤ 14 j) **50 $** · prioritaire (≤ 7 j) **100 $** · urgence (la veille)
-**200 $** · extrême (le jour même) **300 $**. Taxes et débours en sus.
+rapide (≤ 14 j) **149 $** · prioritaire (≤ 7 j) **299 $** · urgence (la veille)
+**449 $** · extrême (le jour même) **549 $**. Taxes et débours en sus.
 
 Ce que ça pèse, s'il pose la question : au palier standard, Nota fait
 249 / 2 249 = **11,1 %** du total d'un refinancement et 199 / 1 999 = **10,0 %**

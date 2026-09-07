@@ -235,9 +235,9 @@ test('P1-17 / P2-22: no price literal in the static structured data — the cata
   // (D lives in the jsdom realm — round-trip through JSON so the arrays share a prototype.)
   assert.deepEqual(
     cat.itemListElement.map((o) => [o['@type'], o.itemOffered.name, o.price, o.priceCurrency]),
-    JSON.parse(JSON.stringify(D.SERVICES.map((s) => ['Offer', s.nom, String(s.prixDepart), 'CAD']))),
-    'one Offer per domain service, priced from prixDepart');
-  for (const o of cat.itemListElement) assert.match(o.description, /honoraires du notaire/, 'the price is the notary’s starting fee, said so');
+    JSON.parse(JSON.stringify(D.SERVICES.map((s) => ['Offer', s.nom, String(D.prixAnnonce(s.id).totalCents / 100), 'CAD']))),
+    'one Offer per domain service, priced ALL-IN (LPC art. 224 c) : honoraires de départ + service de Nota)');
+  for (const o of cat.itemListElement) assert.match(o.description, /honoraires de départ du notaire et prix du service de Nota/, 'the price says what it includes');
   const org = nodes.find((n) => n['@type'] === 'Organization');
   assert.equal(org.email, D.CONTACT.courriel, 'the organisation’s email is the domain’s (P2-22)');
   assert.match(org['@id'], /#organization$/, 'merges by @id into the static Organization node');
@@ -327,12 +327,12 @@ test('legal panes: each carries a version stamp — an unreviewed draft, dated',
   }
 });
 
-test('charte: « aucun frais caché » names the two lines and points at the cancellation barème', () => {
+test('charte: « aucun frais caché » names the two lines and points at the cancellation caps', () => {
   const doc = staticDoc();
   const li = [...doc.querySelectorAll('#pane-charte .privacy-list li')].find((l) => /aucun frais caché/i.test(l.textContent));
   assert.ok(li, 'the transparency commitment stays');
   const t = FLAT(li.textContent);
-  assert.match(t, /barème/, t);
+  assert.match(t, /plafonds d’indemnité/, t);
   assert.match(t, /annulation/, t);
   // ADR 0034 — le prix de Nota n'est plus « fixe » : c'est une grille par
   // service, publiée d'avance. La charte doit dire la nouvelle vérité.
@@ -688,5 +688,60 @@ test('le dictionnaire ne garde pas en dormance une entrée que plus aucune sourc
     'La récompense de référence est un coût de marketing de Nota, payée à même ses propres revenus — jamais ajoutée au prix du client, jamais retranchée des honoraires du notaire.',
   ]) {
     assert.ok(I18N.covered(vivante), 'plus d’anglais pour : ' + vivante);
+  }
+});
+
+// LPC art. 224 c) and Competition Act s. 74.01 (1.1): an advertised price must
+// be the total the client pays (taxes aside). Nota's service line is a fixed
+// mandatory fee, so the notary's floor alone is never an announced price. The
+// only "à partir de" a client surface may compose is the domain's prixAnnonce.
+test('LPC 224 c) — no « à partir de » is composed from the notary floor alone', () => {
+  const APP = readFileSync(fileURLToPath(new URL('../public/app.js', import.meta.url)), 'utf8');
+  const partiel = [...APP.matchAll(/à partir de\s*['’]\s*\+\s*D\.money\(([^)]*)\)/g)].map((m) => m[1]);
+  const fautifs = partiel.filter((expr) => /prixDepart/.test(expr));
+  assert.deepEqual(fautifs, [], 'un « à partir de » cite le plancher des honoraires seul : ' + fautifs.join(' | '));
+  assert.ok(partiel.length >= 2, 'the announced-price surfaces still compose « à partir de » (pulse, act picker): ' + partiel.join(' | '));
+  for (const expr of partiel) {
+    if (/prix\b/.test(expr)) continue; // the hero: Nota's own line, said as such
+    assert.match(expr, /prixAnnonceDollars/, 'an announced act price must be the all-in prixAnnonce: ' + expr);
+  }
+});
+
+// ADR 0030 / art. 70 du Code de déontologie — une évaluation concernant un
+// notaire nommé n'est JAMAIS publiée : ni auprès du client qui la dépose, ni
+// auprès des suivants. Les courriels le disent déjà correctement
+// (emails.js, evaluationInvite / evaluationRecueNotaire) ; l'interface, elle,
+// promettait le contraire des deux côtés à la fois — au client « elle aide les
+// prochains clients », au notaire « votre note, telle que les clients la
+// voient ». Les deux phrases décrivaient une publication que la plateforme
+// n'effectue pas, et que le Code lui interdit d'effectuer.
+test('no surface tells the client their evaluation is shown to other clients', () => {
+  for (const [label, src] of [['app.js', APP_SRC], ['index.html', HTML_SRC], ['i18n.js', I18N_SRC]]) {
+    assert.ok(!/aide les prochains clients|helps the next clients/i.test(src),
+      label + ' still promises the evaluation reaches the next clients');
+    assert.ok(!/aide les prochains clients à choisir|help the next clients choose/i.test(src),
+      label + ' still promises the evaluation guides other clients');
+  }
+});
+
+test('no surface tells the notary their rating is shown to clients', () => {
+  for (const [label, src] of [['app.js', APP_SRC], ['index.html', HTML_SRC], ['i18n.js', I18N_SRC]]) {
+    assert.ok(!/telle que les clients la voient|as clients see it/i.test(src),
+      label + ' still tells the notary their rating is published to clients');
+  }
+});
+
+test('the two replacements say where the evaluation really goes, and are translated', () => {
+  I18N.force('en');
+  for (const fr of [
+    ' Merci — elle est transmise à votre notaire. Elle n’est publiée nulle part.',
+    ' Votre moyenne, lisible par vous seul. Aucun client ne la voit.',
+  ]) {
+    assert.ok(APP_SRC.includes(fr), 'app.js no longer composes: ' + fr);
+    assert.ok(I18N.covered(fr), 'no English entry for: ' + fr);
+    const en = I18N.tEn(fr);
+    assert.notEqual(en, fr, 'identity — the sentence reaches an English reader in French: ' + fr);
+    assert.ok(!/[àâçèéêëîïôùû]|\bMerci\b|\bvotre\b|\bnulle\b|\baucun\b/i.test(en),
+      'French left in the English: ' + en);
   }
 });

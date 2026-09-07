@@ -118,10 +118,10 @@ const grille = (services, garantieDate) => ({
   services, garantieDate,
 });
 
-// La grille du déploiement (ADR 0034) : 249 $ / 199 $, garantie de date par palier.
+// La grille du déploiement (ADR 0034) : 279 $ / 229 $, garantie de date par palier.
 const DEFAUT = grille(
-  { refinancement: 24900, financement: 19900 },
-  { standard: 0, rapide: 5000, prioritaire: 10000, urgence: 20000, extreme: 30000 },
+  { refinancement: 27900, financement: 22900 },
+  { standard: 0, rapide: 14900, prioritaire: 29900, urgence: 44900, extreme: 54900 },
 );
 
 // La charge de GET /prix — le défaut gouverne, ou une grille stockée gouverne.
@@ -207,8 +207,8 @@ test('la vue de lecture énonce le prix en vigueur, le défaut, et rien qui ress
     k: text(t.querySelector('.stat-k')), v: text(t.querySelector('.stat-v')),
   }));
   const byKey = (k) => (tiles.find((t) => t.k === k) || {}).v;
-  assert.equal(byKey('Refinancement hypothécaire'), '249 $', 'les 24 900 ¢ s’affichent comme « 249 $ »');
-  assert.equal(byKey('Financement hypothécaire'), '199 $');
+  assert.equal(byKey('Refinancement hypothécaire'), '279 $', 'les 27 900 ¢ s’affichent comme « 279 $ »');
+  assert.equal(byKey('Financement hypothécaire'), '229 $');
 
   // ADR 0034 — la garantie de date a SA propre ligne, par délai. C'est ce que
   // NOTA vend ; la prime d'urgence que l'art. 49 4° réserve au notaire dans SES
@@ -216,10 +216,10 @@ test('la vue de lecture énonce le prix en vigueur, le défaut, et rien qui ress
   const lignes = [...doc.querySelectorAll('.prix-grille tbody tr')].map((tr) =>
     [...tr.querySelectorAll('th, td')].map(text));
   const ligne = (nom) => lignes.find((l) => l[0] === nom);
-  assert.deepEqual(ligne('Refinancement hypothécaire'), ['Refinancement hypothécaire', '249 $', '249 $']);
+  assert.deepEqual(ligne('Refinancement hypothécaire'), ['Refinancement hypothécaire', '279 $', '279 $']);
   assert.deepEqual(ligne('Standard'), ['Standard', '0 $', '0 $'], 'à échéance normale, la garantie de date ne se paie pas');
-  assert.deepEqual(ligne('Urgent'), ['Urgent', '200 $', '200 $']);
-  assert.deepEqual(ligne('Extrême'), ['Extrême', '300 $', '300 $']);
+  assert.deepEqual(ligne('Urgent'), ['Urgent', '449 $', '449 $']);
+  assert.deepEqual(ligne('Extrême'), ['Extrême', '549 $', '549 $']);
 
   // ADR 0031 — le vocabulaire du partage a disparu de l'écran, en entier.
   const all = text(doc.querySelector('.admin-content'));
@@ -254,7 +254,7 @@ test('une configuration à l’ancien format (un seul prix) reste lisible et éd
   const lignes = [...doc.querySelectorAll('.prix-grille tbody tr')].map((tr) =>
     [...tr.querySelectorAll('th, td')].map(text));
   assert.deepEqual(lignes.find((l) => l[0] === 'Standard'), ['Standard', '0 $', '0 $']);
-  assert.deepEqual(lignes.find((l) => l[0] === 'Urgent'), ['Urgent', '0 $', '200 $'],
+  assert.deepEqual(lignes.find((l) => l[0] === 'Urgent'), ['Urgent', '0 $', '449 $'],
     'une config d’avant l’ADR 0034 ne facture AUCUNE garantie de date — la migration ne la lui ajoute pas');
 
   // Et elle s'édite : le formulaire réécrit la grille entière, cellule par cellule.
@@ -276,7 +276,7 @@ test('une cellule stockée HORS CATALOGUE est dite, pas tue', async () => {
   const prix = {
     defaut: DEFAUT, catalogue: CATALOGUE,
     override: { services, updatedAt: '2026-08-27T12:00:00.000Z', ignorees: ['services.testament'] },
-    effectif: grille(services, { standard: 0, rapide: 5000, prioritaire: 10000, urgence: 20000, extreme: 30000 }),
+    effectif: grille(services, { standard: 0, rapide: 14900, prioritaire: 29900, urgence: 44900, extreme: 54900 }),
   };
   const { win, doc } = await boot(api({ prix }), '#/auth?token=T');
   await waitFor(win, '.admin-rail');
@@ -305,7 +305,7 @@ test('une grille stockée affiche sa date de modification dans la ligne de prove
   const ligne = [...doc.querySelectorAll('.prix-grille tbody tr')]
     .map((tr) => [...tr.querySelectorAll('th, td')].map(text))
     .find((l) => l[0] === 'Refinancement hypothécaire');
-  assert.deepEqual(ligne, ['Refinancement hypothécaire', '250 $', '249 $']);
+  assert.deepEqual(ligne, ['Refinancement hypothécaire', '250 $', '279 $']);
 });
 
 test('le formulaire convertit les dollars saisis en cents et PUT le prix', async () => {
@@ -325,10 +325,10 @@ test('le formulaire convertit les dollars saisis en cents et PUT le prix', async
   // dollars. Le champ est retrouvé par l'identifiant de sa ligne, jamais par
   // sa position : le catalogue peut grandir.
   const cell = (id) => form.querySelector('input[data-prix-cell="' + id + '"]');
-  assert.equal(cell('refinancement').value, '249', 'amorcé en dollars, jamais en cents');
-  assert.equal(cell('financement').value, '199');
+  assert.equal(cell('refinancement').value, '279', 'amorcé en dollars, jamais en cents');
+  assert.equal(cell('financement').value, '229');
   assert.equal(cell('standard').value, '0');
-  assert.equal(cell('urgence').value, '200');
+  assert.equal(cell('urgence').value, '449');
 
   type(win, cell('refinancement'), '250,50'); // la virgule décimale du Québec voyage
   type(win, cell('urgence'), '0'); // renoncer à facturer la garantie est légitime
@@ -340,8 +340,8 @@ test('le formulaire convertit les dollars saisis en cents et PUT le prix', async
   assert.equal(writes[0].method, 'PUT');
   assert.match(writes[0].url, /\/prix$/);
   assert.deepEqual(writes[0].body, {
-    services: { refinancement: 25050, financement: 19900 },
-    garantieDate: { standard: 0, rapide: 5000, prioritaire: 10000, urgence: 0, extreme: 30000 },
+    services: { refinancement: 25050, financement: 22900 },
+    garantieDate: { standard: 0, rapide: 14900, prioritaire: 29900, urgence: 0, extreme: 54900 },
   });
   await waitFor(win, '.stat-tile'); // la vue se recharge après l'enregistrement
   assert.match(text(doc.querySelector('#toast')), /Prix enregistré/);
@@ -374,7 +374,7 @@ test('une évidence n’atteint jamais l’API : l’écran la refuse en ligne',
 
   // La garantie de date, elle, accepte zéro : renoncer à la facturer n'est pas
   // donner un service, c'est ne pas en vendre un. Mais pas un négatif.
-  type(win, cell('refinancement'), '249');
+  type(win, cell('refinancement'), '279');
   type(win, cell('rapide'), '-1');
   submit(win, form);
   await settle(win);
@@ -386,7 +386,7 @@ test('une évidence n’atteint jamais l’API : l’écran la refuse en ligne',
   submit(win, form);
   await settle(win);
   assert.equal(writes.length, 1, 'une grille valide voyage');
-  assert.deepEqual(writes[0].body.services, { refinancement: 24900, financement: 19900 });
+  assert.deepEqual(writes[0].body.services, { refinancement: 27900, financement: 22900 });
   assert.equal(writes[0].body.garantieDate.rapide, 0, 'zéro est une décision, pas une absence');
   assert.equal(error.hidden, true, 'le refus en ligne s’efface dès que la grille tient');
 });
