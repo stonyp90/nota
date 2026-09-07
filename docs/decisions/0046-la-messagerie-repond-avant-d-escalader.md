@@ -196,12 +196,24 @@ vol n'est pas annulée, elle est *suspendue*. Elle ne reprend qu'au réveil
 suivant du conteneur : la requête d'après, dans quelques minutes, quelques
 heures, ou jamais sur un site à faible trafic.
 
-Ce qui a été mesuré : un message de soutien posté sur la production n'a laissé
-**aucune ligne `SENT#`** dans la table et n'a rien fait bouger chez SES ; la
-ligne est apparue à la seconde où trois requêtes de santé ont réveillé le
-conteneur. Un balayage de la table n'a trouvé **aucune ligne `SENT#`** :
-depuis la mise en service, aucun avis n'était jamais parti à l'heure — ni une
-offre publiée, ni une demande retenue, ni une annulation.
+Ce qui a été mesuré, précisément. Un message de soutien posté à 02:38:59Z n'a
+laissé **aucune ligne `SENT#`** et n'a rien fait bouger chez SES. Trois
+requêtes `/api/health` à 02:40:36Z ont réveillé le conteneur, et la ligne est
+apparue avec `sentAt = 02:40:36.657Z` : **97 secondes de suspension**. Sur un
+site à faible trafic, ç'aurait pu être des heures — ou jamais. Après
+correctif, le même essai écrit sa ligne dans la MÊME seconde que la requête,
+sans réveil.
+
+Ce qu'il ne faut PAS en conclure. Avant ces essais la table ne portait aucune
+ligne `SENT#`, mais elle ne compte que ~101 éléments au total : cette
+production est quasi vide, et l'absence de traces dit autant le peu de trafic
+que le défaut. Ce qui est établi, c'est la suspension elle-même — pas un
+décompte d'avis perdus.
+
+Le défaut ne touchait que les appels du **handler HTTP** (offre publiée,
+demande retenue, annulation, soutien, formulaire de contact). Les rappels
+quotidiens n'ont jamais été concernés : `apps/api/src/reminders.js` attend
+déjà chacun de ses envois.
 
 Le correctif tient en un endroit. Le notifier est enveloppé dans un proxy qui
 dépose la promesse de chaque appel dans une liste ; `handle` la vide avant de
