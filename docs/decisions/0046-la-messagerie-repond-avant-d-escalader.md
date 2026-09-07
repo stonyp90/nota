@@ -183,6 +183,41 @@ choses différentes :
   est imprimé, parce qu'une évaluation qu'on n'ose pas relancer n'en est pas
   une.
 
+### 10. Les avis partent avant que la réponse ne parte
+
+Découvert en VÉRIFIANT cet ADR sur la production, le 2026-09-06, et sans
+rapport avec l'assistant : le défaut existait depuis la mise en service.
+
+Chaque avis était envoyé « au vol » — `Promise.resolve(n.onX(...)).catch()`,
+jamais attendu — pour qu'une panne de SES ne bloque jamais une réponse HTTP.
+L'intention est juste. La conséquence sur Lambda ne l'était pas : **Lambda gèle
+l'environnement dès que le handler rend sa réponse**, et une promesse encore en
+vol n'est pas annulée, elle est *suspendue*. Elle ne reprend qu'au réveil
+suivant du conteneur : la requête d'après, dans quelques minutes, quelques
+heures, ou jamais sur un site à faible trafic.
+
+Ce qui a été mesuré : un message de soutien posté sur la production n'a laissé
+**aucune ligne `SENT#`** dans la table et n'a rien fait bouger chez SES ; la
+ligne est apparue à la seconde où trois requêtes de santé ont réveillé le
+conteneur. Un balayage de la table n'a trouvé **aucune ligne `SENT#`** :
+depuis la mise en service, aucun avis n'était jamais parti à l'heure — ni une
+offre publiée, ni une demande retenue, ni une annulation.
+
+Le correctif tient en un endroit. Le notifier est enveloppé dans un proxy qui
+dépose la promesse de chaque appel dans une liste ; `handle` la vide avant de
+rendre la réponse. **Aucun site d'appel ne change** : ils continuent de ne pas
+attendre, et c'est la couche transport qui garantit le départ. L'attente est
+bornée (`NOTA_SEND_FLUSH_MS`, 5 s) pour qu'un envoi en éventail ne retienne pas
+une réponse ; au-delà, on rend la main et le reliquat repart au réveil suivant
+— donc jamais pire qu'avant, et presque toujours mieux. Une panne d'envoi
+continue de ne jamais remonter au visiteur.
+
+`apps/api/test/avis-partent-avant-le-gel.test.mjs` tient les cinq propriétés :
+l'avis est parti quand la réponse revient, un envoi qui échoue ne casse pas la
+réponse, un envoi qui traîne ne la retient pas, la garantie vaut pour la
+requête EN COURS et non la suivante, et une route sans avis ne paie aucune
+attente.
+
 ## Conséquences
 
 - **L'appel au modèle est SYNCHRONE** : le visiteur lit la réponse dans la même

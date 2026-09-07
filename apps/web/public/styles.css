@@ -3018,6 +3018,27 @@ dialog:focus, dialog:focus-visible { outline: none; }
 #o-service-chips .chip-soon:hover { background: transparent; border-color: var(--border); color: var(--ink-muted); transform: none; }
 #o-service-chips .chip-soon .chip-svc-main { font-weight: 600; }
 #o-service-chips .chip-soon .chip-svc-badge { background: transparent; border-style: dashed; }
+/* Sur une feuille LARGE, les cartes d'acte se couchent : le glyphe à gauche, le
+   nom à sa droite, le prix (ou « Bientôt ») au bout de la ligne. Debout, elles
+   encaissaient toute la largeur gagnée en VIDE — près de 400 px de carte pour
+   un mot, et deux actes seulement annoncés qui pesaient autant que les deux
+   qui se réservent (capture du propriétaire, 2026-09-06).
+   C'est la largeur de la FEUILLE qui décide, pas celle de l'écran : la feuille
+   est un dialogue centré, sa largeur ne suit pas la fenêtre au même rythme.
+   Là où le pouce vise — téléphone, feuille étroite — rien ne change : les
+   cartes restent debout et hautes. */
+.day-book { container-type: inline-size; container-name: book; }
+@container book (min-width: 600px) {
+  #o-service-chips .chip {
+    flex-direction: row; justify-content: flex-start; align-items: center;
+    gap: var(--space-6); padding: var(--space-6) var(--space-7); text-align: left;
+  }
+  /* Le montant du jour ferme la ligne, aligné d'une carte à l'autre. */
+  #o-service-chips .chip-svc-sub { margin-left: auto; padding-right: var(--space-6); }
+  /* Le crochet du choix reprend sa place au coin, dégagé du montant. */
+  #o-service-chips .chip-svc-check { top: 50%; transform: translateY(-50%) scale(.7); }
+  #o-service-chips .chip.is-on .chip-svc-check { transform: translateY(-50%); }
+}
 #o-service-chips .chip-soon .svc-ic { opacity: .7; }
 /* « Bientôt » tient sur la ligne RÉSERVÉE AU PRIX, sous le nom (2026-09-06) :
    sur la ligne du nom, la pastille poussait « Procuration » hors de l'axe de

@@ -131,8 +131,9 @@ jobs:
           # cp -RL a bien déréférencé le lien et copié le code lui-même.
           test -f apps/api/node_modules/@nota/domain/index.js
 
-          # Tests and their fixtures never run in production — keep the zip lean.
-          ( cd apps/api && zip -qr /tmp/api.zip . -x '*.git*' 'test/*' 'test-support/*' 'node_modules/@nota/domain/test/*' )
+          # Tests, their fixtures and le jeu d'or de l'évaluation (ADR 0046) ne
+          # tournent jamais en production — le paquet reste maigre.
+          ( cd apps/api && zip -qr /tmp/api.zip . -x '*.git*' 'test/*' 'test-support/*' 'eval/*' 'node_modules/@nota/domain/test/*' )
           ls -la /tmp/api.zip
           aws lambda update-function-code \
             --function-name nota-api \

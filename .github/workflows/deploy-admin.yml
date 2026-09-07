@@ -160,7 +160,7 @@ jobs:
           fi
           test -f apps/api/node_modules/@nota/domain/index.js
 
-          ( cd apps/api && zip -qr /tmp/admin-api.zip . -x '*.git*' 'test/*' 'test-support/*' 'node_modules/@nota/domain/test/*' )
+          ( cd apps/api && zip -qr /tmp/admin-api.zip . -x '*.git*' 'test/*' 'test-support/*' 'eval/*' 'node_modules/@nota/domain/test/*' )
           ls -la /tmp/admin-api.zip
           aws lambda update-function-code \
             --function-name "${{ vars.ADMIN_LAMBDA_NAME }}" \

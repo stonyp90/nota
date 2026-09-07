@@ -21,6 +21,7 @@ import { JSDOM } from 'jsdom';
 const DOMAIN_SRC = readFileSync(fileURLToPath(new URL('../../../packages/domain/index.js', import.meta.url)), 'utf8');
 const APP_SRC = readFileSync(fileURLToPath(new URL('../public/app.js', import.meta.url)), 'utf8');
 const HTML_SRC = readFileSync(fileURLToPath(new URL('../public/index.html', import.meta.url)), 'utf8');
+const CSS_SRC = readFileSync(fileURLToPath(new URL('../public/styles.css', import.meta.url)), 'utf8');
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const todayISO = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
@@ -115,4 +116,18 @@ test('cliquer un acte annoncé ne change rien : la sélection reste sur l’acte
     !doc.querySelector('#o-service-chips .chip-soon').hasAttribute('aria-pressed'),
     'un acte annoncé ne devient jamais un bouton pressé',
   );
+});
+
+test('la carte d’acte se couche sur une feuille large, et reste debout sous le pouce', () => {
+  // La feuille de réservation s'élargit avec l'écran ; debout, les quatre
+  // cartes encaissaient cette largeur en vide (≈ 400 px de carte pour un mot).
+  // C'est la largeur de la FEUILLE qui décide — un @container, pas un @media :
+  // le dialogue est centré, sa largeur ne suit pas la fenêtre au même rythme.
+  assert.match(CSS_SRC, /\.day-book \{[^}]*container-type:\s*inline-size/, 'la feuille est un conteneur de requête');
+  assert.match(CSS_SRC, /@container book \(min-width: 600px\) \{/, 'le seuil est celui de la feuille');
+  const block = CSS_SRC.slice(CSS_SRC.indexOf('@container book (min-width: 600px)'));
+  assert.match(block, /#o-service-chips \.chip \{[^}]*flex-direction:\s*row/, 'couchée : le glyphe, le nom, puis le montant');
+  // Et le pouce garde ses grandes cibles : AUCUNE règle ne redresse la carte
+  // sous le seuil — c'est la règle de base (colonne) qui tient là.
+  assert.match(CSS_SRC, /#o-service-chips \.chip \{[^}]*flex-direction:\s*column/, 'debout par défaut');
 });

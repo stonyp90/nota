@@ -280,7 +280,59 @@ function createApp(repo, opts = {}) {
   // like billing — and ONLY when NOTA_FROM_EMAIL is configured, so existing
   // tests (which never set it) run with notifications simply disabled. All sends
   // are best-effort: a mail failure must never affect an HTTP response.
-  let notifierInstance = opts.notifier || null;
+  // --- LES COURRIELS DOIVENT PARTIR AVANT QUE LA LAMBDA NE GÈLE -------------
+  // Chaque avis est envoyé « au vol » : `Promise.resolve(n.onX(...)).catch()`,
+  // jamais attendu, pour qu'une panne de SES ne bloque jamais une réponse
+  // HTTP. L'intention est juste ; la conséquence sur Lambda ne l'était pas.
+  //
+  // Lambda GÈLE l'environnement dès que le handler rend sa réponse. Une
+  // promesse encore en vol n'est pas annulée : elle est SUSPENDUE, et ne
+  // reprend qu'au prochain réveil du conteneur — la requête suivante, dans
+  // quelques minutes, quelques heures, ou jamais sur un site à faible trafic.
+  // Vérifié en production le 2026-09-06 : après un message de soutien, la
+  // table ne portait AUCUNE ligne SENT ; elle est apparue à la seconde où
+  // trois requêtes de santé ont réveillé le conteneur. Le registre entier
+  // (`SENT#`) était vide : aucun avis n'était jamais parti à l'heure.
+  //
+  // Le correctif tient en un endroit : le notifier est enveloppé, chaque appel
+  // dépose sa promesse ici, et `handle` les vide avant de rendre la réponse.
+  // Les sites d'appel ne changent pas d'une ligne — ils continuent de ne pas
+  // attendre, et c'est la couche transport qui garantit le départ.
+  //
+  // L'attente est BORNÉE : un envoi en éventail (une alerte à tous les
+  // notaires) ne doit pas retenir une réponse indéfiniment. Au-delà du délai,
+  // on rend la main ; le reliquat repartira au prochain réveil, exactement
+  // comme aujourd'hui — donc jamais pire, et presque toujours mieux.
+  const pendingSends = [];
+  const SEND_FLUSH_MS = Number(env.NOTA_SEND_FLUSH_MS) || 5000;
+  function trackSends(n) {
+    if (!n || typeof n !== 'object') return n;
+    const cache = new Map();
+    return new Proxy(n, {
+      get(target, key) {
+        const value = target[key];
+        if (typeof value !== 'function') return value;
+        if (!cache.has(key)) {
+          cache.set(key, (...args) => {
+            const p = Promise.resolve(value.apply(target, args)).catch(() => {});
+            pendingSends.push(p);
+            return p;
+          });
+        }
+        return cache.get(key);
+      },
+    });
+  }
+  async function flushSends() {
+    if (!pendingSends.length) return;
+    const inflight = pendingSends.splice(0);
+    let timer;
+    const bound = new Promise((resolve) => { timer = setTimeout(resolve, SEND_FLUSH_MS); });
+    await Promise.race([Promise.allSettled(inflight), bound]);
+    clearTimeout(timer);
+  }
+
+  let notifierInstance = opts.notifier ? trackSends(opts.notifier) : null;
   let notifierResolved = false;
   function notifier() {
     if (notifierInstance) return notifierInstance;
@@ -311,6 +363,7 @@ function createApp(repo, opts = {}) {
       // Operator alerts open the admin console when one is configured.
       adminUrl: process.env.NOTA_ADMIN_URL || null,
     });
+    notifierInstance = trackSends(notifierInstance);
     return notifierInstance;
   }
 
@@ -4526,7 +4579,17 @@ function createApp(repo, opts = {}) {
     return json(404, { errors: [{ code: 'introuvable', message: 'Route inconnue.' }] });
   }
 
-  return { handle, publicBid };
+  // La seule porte de sortie : toute réponse passe ici, donc tout avis en vol
+  // est vidé ici. C'est ce qui rend le « au vol » des sites d'appel honnête.
+  async function handleAndFlush(request) {
+    try {
+      return await handle(request);
+    } finally {
+      await flushSends();
+    }
+  }
+
+  return { handle: handleAndFlush, publicBid };
 }
 
 module.exports = { createApp };

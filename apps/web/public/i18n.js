@@ -236,7 +236,6 @@
   "Distance approximative de votre étude": "Approximate distance from your office",
   // Live support chat (ADR 0026).
   "Une question ?": "A question?",
-  "Écrivez-nous — on vous répond en direct, ici même.": "Write to us — we answer live, right here.",
   // ADR 0046 — la messagerie assistée. Aucune de ces lignes ne promet un délai.
   "L’assistant de Nota répond tout de suite à ce qu’il sait. Une personne reprend le reste, par courriel.": "Nota’s assistant answers what it knows, right away. A person picks up the rest, by email.",
   "Assistant Nota": "Nota assistant",
