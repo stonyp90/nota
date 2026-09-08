@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="fr-CA" data-theme="dark">
   <head>
+    <meta name="nota:analytics" content="__NOTA_GA4_ID__" />
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <!-- Dark is the default; honour an explicit saved choice. Applied before first
@@ -1423,6 +1424,7 @@
               <!-- What localStorage holds (nota.profile / dossier / lang / theme /
                    offer tokens) and the one server-side measure: the funnel
                    events (app.js track → POST /events, no account, no cookie). -->
+              <li><strong>Mesure facultative.</strong> Avec votre accord, Google Analytics mesure les visites et les clics. Aucun nom, courriel, contenu de formulaire ou lien de dossier ne lui est envoyé. Google peut traiter ces données à l’extérieur du Canada. Les témoins de mesure et la provenance conservée sur cet appareil expirent après 30 jours sans nouvelle visite. Vous pouvez retirer votre accord dans « Préférences de mesure ». La provenance d’une demande reste enregistrée avec celle-ci, même sans Google Analytics.</li>
               <li><strong>Stockage local.</strong> Vos coordonnées, vos réponses de dossier, vos préférences (langue, thème) et les liens de suivi de vos offres sont enregistrés dans le stockage local de votre navigateur, sur cet appareil seulement — aucun témoin publicitaire. Effacer les données du site dans votre navigateur les supprime. Nota compte par ailleurs, sans compte ni témoin, les grandes étapes franchies (visite, formulaire, publication) pour mesurer son parcours.</li>
               <li><strong>Responsable.</strong> Une personne responsable de la protection des renseignements personnels supervise ces pratiques : <a id="priv-responsable" href="#" data-i18n-skip></a>.</li>
             </ul>
@@ -1551,6 +1553,7 @@
         <nav class="footer-col" aria-label="Informations légales">
           <span class="footer-col-h">Légal</span>
           <a href="#t=confidentialite" class="goto-link" data-goto="confidentialite">Confidentialité</a>
+          <button type="button" id="analytics-preferences">Préférences de mesure</button>
           <a href="#t=conditions" class="goto-link" data-goto="conditions">Conditions d’utilisation</a>
           <a href="#t=charte" class="goto-link" data-goto="charte">Charte des droits</a>
         </nav>
@@ -2258,8 +2261,15 @@
     <!-- @nota/domain, copied in by the build/dev step; exposes window.NotaDomain -->
     <!-- i18n first: app.js reads NotaI18N.locale() for its date formatters, and
      the English DOM pass must land before app.js renders. -->
+<aside id="analytics-consent" class="analytics-consent" aria-label="Mesure d’audience" hidden>
+      <p>Acceptez-vous la mesure d’audience? Google Analytics nous aide à comprendre les visites et les clics pour améliorer Nota. Aucun contenu de formulaire n’y est envoyé. Le suivi est facultatif; votre demande sera traitée même si vous refusez.</p>
+      <button type="button" id="analytics-refuse">Refuser</button>
+      <button type="button" id="analytics-accept">Accepter</button>
+      <a href="#t=confidentialite">Confidentialité</a>
+    </aside>
     <script src="i18n.js"></script>
     <script src="domain.js"></script>
+    <script src="acquisition.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

@@ -275,7 +275,10 @@ test('P0-5: the onboarding’s third client step names both lines, never « rien
 test('P0-6 / P0-7: the privacy pane states the real retention, promises no erasure the code does not do, and names custody and local storage', () => {
   const pane = FLAT(staticDoc().getElementById('pane-confidentialite').textContent);
   assert.ok(!/12 mois/.test(pane), 'the TTL is 400 days (≈ 13 months) plus 35 days of PITR, not 12 months');
-  assert.ok(!/30 jours/.test(pane), 'no 30-day DSAR mechanism exists in the code');
+  // Analytics attribution has a real 30-day TTL; it is not a DSAR promise.
+  const analyticsClause = [...staticDoc().getElementById('pane-confidentialite').querySelectorAll('li')].find(li => li.querySelector('strong')?.textContent === 'Mesure facultative.');
+  const withoutAnalytics = analyticsClause ? pane.replace(FLAT(analyticsClause.textContent), '') : pane;
+  assert.ok(!/30 jours/.test(withoutAnalytics), 'no 30-day DSAR mechanism exists in the code');
   assert.ok(!/effacé dès que l’offre/.test(pane), 'no code erases the courriel when an offer closes');
   assert.match(pane, /13 mois/);
   assert.match(pane, /35 jours/);

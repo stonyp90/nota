@@ -2115,8 +2115,35 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [range, kpis, gauge, series, parrainages, annulations, creances]
+                required: [range, kpis, gauge, series, parrainages, annulations, creances, acquisition]
                 properties:
+                  followUp:
+                    type: object
+                    description: Open leads in the forward calendar month window (not an all-time CRM). Includes pending payment before public visibility, excludes voids. No client identity.
+                    properties:
+                      pendingPayment: { type: integer }
+                      open: { type: integer }
+                      oldestCreatedAt: { type: [string, 'null'] }
+                      months:
+                        type: array
+                        items: { type: string }
+                  acquisition:
+                    type: array
+                    description: Event-day counts by last non-direct source; not unique visitors or a cohort conversion rate. Legacy or unavailable attribution uses unknown. Campaign values and client identity are not exposed.
+                    items:
+                      type: object
+                      required: [source, visite, formulaire, publie, retenue]
+                      properties:
+                        source:
+                          type: string
+                        visite:
+                          type: integer
+                        formulaire:
+                          type: integer
+                        publie:
+                          type: integer
+                        retenue:
+                          type: integer
                   annulations:
                     type: object
                     description: >-

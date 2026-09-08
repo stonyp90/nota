@@ -1,4 +1,5 @@
 'use strict';
+const { acquisition } = require('./acquisition');
 
 const domain = require('@nota/domain');
 const prixConfig = require('./prix-nota-config.js');
@@ -1700,6 +1701,8 @@ function createApp(repo, opts = {}) {
 
       const anonyme = payload.anonyme !== false; // default anonymous
       const bid = {
+        acquisition: acquisition(payload.acquisition),
+        notificationRecoveryVersion: 1,
         id: newId(),
         serviceId: payload.serviceId,
         dateISO: payload.dateISO,
@@ -1834,12 +1837,11 @@ function createApp(repo, opts = {}) {
       await recordStats(statsDeltasForOffer(bid));
       await recordStats(statsDeltasForFunnel('publie', now())); // the funnel's « publié » step is counted HERE, never trusted from the client beacon
 
-      // Fire-and-forget: confirm the offer to the client + alert the operator.
-      // Never awaited and never allowed to reject the response — if mail fails
-      // the offer is still created and returned.
+      // Await delivery before Lambda can freeze. A failed notification never
+      // rejects a persisted lead; the scheduled pass retries idempotently.
       await rememberLanguage(bid.courriel, request);
       const n = notifier();
-      if (n) Promise.resolve(n.onOfferCreated(bid)).catch(() => {});
+      if (n) { try { await n.onOfferCreated(bid); } catch { /* scheduled recovery */ } }
 
       // The client's per-bid key (no account): scope CLIENT, sub = bid id. It is
       // returned ONCE here and never echoed by any other route.
@@ -2513,7 +2515,7 @@ function createApp(repo, opts = {}) {
         payload = null;
       }
       const id = payload && typeof payload.event === 'string' ? payload.event : null;
-      if (domain.isFunnelEvent(id)) await recordStats(statsDeltasForFunnel(id, now()));
+      if (domain.isFunnelEvent(id) && id !== 'publie' && id !== 'notaire_inscrit') await recordStats(statsDeltasForFunnel(id, now(), payload.acquisition));
       // A 204 carries no body — bare CORS headers, like the preflight.
       return { statusCode: 204, headers: corsHeaders(), body: '' };
     }

@@ -816,7 +816,37 @@
     // branch whenever the program has activity.
     var parr = buildParrainages(data.parrainages);
     if (parr) view.appendChild(parr);
+    if (data.followUp) {
+      var follow = el('section');
+      follow.appendChild(el('h2', null, 'Demandes à suivre'));
+      follow.appendChild(el('p', null, 'Demandes prévues dans les mois affichés au carnet. Les mois passés ne sont pas inclus.'));
+      follow.appendChild(tile('En attente de paiement', String(data.followUp.pendingPayment || 0), 'Demande enregistrée, pas encore visible au carnet.'));
+      follow.appendChild(tile('En attente d’un notaire', String(data.followUp.open || 0), 'Demande ouverte à suivre.'));
+      view.appendChild(follow);
+    }
+    if (data.acquisition) view.appendChild(buildAcquisition(data.acquisition));
     container.appendChild(view);
+  }
+
+  function buildAcquisition(rows) {
+    var section = el('section', 'parrainages');
+    section.appendChild(el('h2', null, 'Provenance des demandes'));
+    section.appendChild(el('p', null, 'Événements dans la période sélectionnée. Les visites ne sont pas des visiteurs uniques; les demandes retenues peuvent provenir d’une période antérieure.'));
+    rows = rows.filter(function (row) { return row.visite || row.formulaire || row.publie || row.retenue; });
+    if (!rows.length) { section.appendChild(el('p', null, 'Les sources apparaîtront après les premières visites mesurées.')); return section; }
+    var table = el('table', 'ptable'), head = el('thead'), hr = el('tr');
+    ['Source', 'Visites', 'Formulaires commencés', 'Demandes enregistrées', 'Demandes retenues'].forEach(function (label) { var th = el('th', null, label); th.scope = 'col'; hr.appendChild(th); });
+    head.appendChild(hr); table.appendChild(head);
+    var body = el('tbody');
+    rows.forEach(function (row) {
+      var tr = el('tr');
+      tr.appendChild(el('td', null, row.source === 'unknown' ? 'Non attribuée' : row.source));
+      ['visite', 'formulaire', 'publie', 'retenue'].forEach(function (key) { tr.appendChild(el('td', 'is-num', String(row[key] || 0))); });
+      body.appendChild(tr);
+    });
+    table.appendChild(body);
+    var scroll = el('div', 'ptable-scroll'); scroll.appendChild(table); section.appendChild(scroll);
+    return section;
   }
 
   function isEmptyOverview(d) {
