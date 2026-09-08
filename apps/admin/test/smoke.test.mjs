@@ -106,7 +106,7 @@ function sampleOverview(over) {
   }, over || {});
 }
 
-// The happy-path API: magic link verifies, /me returns a super admin, metrics OK.
+// The happy-path API: either login method verifies, /me returns a super admin, metrics OK.
 function authedApi(overview) {
   const data = overview || sampleOverview();
   return (method, url) => {
@@ -126,7 +126,27 @@ test('unauthenticated boot renders the magic-link request gate', async () => {
   assert.equal(text(doc.querySelector('.auth-title')), 'Console Nota');
   assert.ok(doc.querySelector('input#auth-email'), 'email input is missing');
   const submit = doc.querySelector('.auth-form button[type="submit"]');
-  assert.equal(text(submit), 'Recevoir le lien');
+  assert.equal(text(submit), 'Se connecter');
+  assert.ok(doc.querySelector('input#auth-password'), 'password input is missing');
+});
+
+test('the normal login form posts email and password and renders the overview', async () => {
+  const handler = (method, url, body) => {
+    if (url.includes('/auth/login')) {
+      assert.equal(body.email, 'ops@nota.ca');
+      assert.equal(body.password, 'secret-password');
+      return [200, { ok: true, session: 'password-session', expiresAt: futureISO(), role: 'super_admin' }];
+    }
+    if (url.endsWith('/me')) return [200, { email: 'ops@nota.ca', role: 'super_admin', permissions: [] }];
+    if (url.includes('/metrics/overview')) return [200, sampleOverview()];
+    return [404, null];
+  };
+  const { win, doc } = await boot(handler, '');
+  doc.querySelector('#auth-email').value = 'ops@nota.ca';
+  doc.querySelector('#auth-password').value = 'secret-password';
+  doc.querySelector('.auth-form').dispatchEvent(new win.Event('submit', { bubbles: true, cancelable: true }));
+  await waitFor(win, '.page-title');
+  assert.equal(text(doc.querySelector('.page-title')), 'Aperçu');
 });
 
 test('an invalid email is rejected client-side (no request sent)', async () => {
@@ -234,4 +254,39 @@ test('logout tears down the session and returns to the gate', async () => {
   await waitFor(win, '.auth-title');
   assert.equal(text(doc.querySelector('.auth-title')), 'Console Nota');
   assert.ok(doc.querySelector('#admin-userbar').hidden, 'userbar should be hidden after logout');
+});
+
+test('section search handles accents, clears with Escape, and navigates with Enter', async () => {
+  const { win, doc } = await boot(authedApi(), '#/auth?token=T');
+  await waitFor(win, '.admin-rail');
+  const input = doc.querySelector('#admin-section-search');
+  input.value = 'apercu';
+  input.dispatchEvent(new win.Event('input', { bubbles: true }));
+  assert.deepEqual([...doc.querySelectorAll('.admin-rail-link')].filter(n => !n.hidden).map(n => n.textContent), ['Aperçu']);
+  input.value = 'unfindable';
+  input.dispatchEvent(new win.Event('input', { bubbles: true }));
+  assert.equal(doc.querySelector('.admin-rail [role="status"]').hidden, false);
+  input.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  assert.equal([...doc.querySelectorAll('.admin-rail-link')].filter(n => !n.hidden).length, 11);
+  input.value = 'prix';
+  input.dispatchEvent(new win.Event('input', { bubbles: true }));
+  input.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  await settle(win);
+  assert.equal(win.location.hash, '#/prix');
+  assert.equal(text(doc.querySelector('.page-title')), 'Prix');
+});
+
+test('payments renders explicit credential status and working settings shortcuts', async () => {
+  const api = authedApi();
+  const { win, doc } = await boot((m, url, body) => url.endsWith('/payments')
+    ? [200, { secretConfigured: true, webhookConfigured: false, mode: 'test', currency: 'cad', locale: 'fr-CA' }]
+    : api(m, url, body), '#/auth?token=T');
+  await waitFor(win, '.admin-rail');
+  win.location.hash = '#/paiements';
+  await waitFor(win, '.settings-list');
+  assert.deepEqual([...doc.querySelectorAll('.settings-list dd')].map(n => n.textContent), ['Configuré', 'Manquant']);
+  const shortcut = [...doc.querySelectorAll('.admin-content .tpl-actions button')].find(n => n.textContent === 'Annulation');
+  shortcut.click();
+  await settle(win);
+  assert.equal(win.location.hash, '#/annulation');
 });

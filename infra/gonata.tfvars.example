@@ -1,0 +1,21 @@
+# Copy to an ignored .tfvars file and fill the operational values before apply.
+region                 = "ca-central-1"
+project_name           = "nota"
+domain_name            = "gonota.ca"
+create_hosted_zone     = true
+enable_www             = true
+base_url               = "https://gonota.ca"
+enable_admin           = true
+admin_domain_name      = "admin.gonota.ca"
+from_email             = "bonjour@gonota.ca"
+reply_to_email         = "info@gonota.ca"
+create_runtime_secrets = true
+use_secrets_manager    = true
+assistant_key_param    = ""
+# REQUIRED: use real, monitored inboxes and the registered business address.
+# admin_emails    = ["owner@example.com"]
+# operator_email  = "owner@example.com"
+# alert_email     = "owner@example.com"
+# sender_address = "Registered business mailing address"
+# Incoming mail: copy MX/TXT records supplied by your mailbox provider before
+# delegating nameservers. SES outbound verification does not create inboxes.

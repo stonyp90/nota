@@ -58,6 +58,7 @@ test('a first question mints a thread, returns its token, and emails the operato
   await flush();
   const ops = a.mailer.sent.filter((m) => m.to === 'ops@nota.ca');
   assert.equal(ops.length, 1, 'one live email per question');
+  assert.equal(ops[0].replyTo, null, 'without a visitor email there is no reply target');
   assert.match(ops[0].subject, /Messagerie/);
   assert.ok(ops[0].html.includes('refinancement se signe-t-il'), 'the question rides the email');
   replyTokenFrom(ops[0]);
@@ -88,6 +89,7 @@ test('a visitor courriel gets the reply copied to their inbox', async () => {
   const a = app();
   parse(await ask(a, { texte: 'Pouvez-vous me rappeler ?', courriel: 'Curieux@Exemple.CA' }));
   await flush();
+  assert.equal(a.mailer.sent[0].replyTo, 'curieux@exemple.ca', 'Reply sends the operator straight to the visitor');
   const opToken = replyTokenFrom(a.mailer.sent[0]);
   await reply(a, opToken, { texte: 'Bien sûr — laissez-nous votre numéro.' });
   await flush();
@@ -106,6 +108,23 @@ test('the thread token continues its thread; message-by-message, in order', asyn
   assert.deepEqual(t.messages.map((m) => m.texte), ['Première question.', 'Une précision.']);
   await flush();
   assert.equal(a.mailer.sent.filter((m) => m.to === 'ops@nota.ca').length, 2, 'every message lands live');
+});
+
+test('an unresolved assistant handoff stays assigned until a human replies', async () => {
+  const assistantPort = {
+    async answer() {
+      return { repond: false, niveau: null, motif: 'inconnu', texte: 'Je transmets cette question à Nota.' };
+    },
+  };
+  const a = app({ assistantPort });
+  const first = parse(await ask(a, { texte: 'Pouvez-vous vérifier mon cas ?', courriel: 'client@example.ca' }));
+  await flush();
+  const opToken = replyTokenFrom(a.mailer.sent[0]);
+  const second = parse(await ask(a, { texte: 'Je précise ma question.' }, first.token));
+  assert.equal(second.escalade, true, 'a later automated turn does not clear the handoff');
+  await reply(a, opToken, { texte: 'Je vous réponds personnellement.' });
+  const stored = await a.repo.getSupportThread(first.threadId);
+  assert.equal(stored.escalade, false, 'the human reply closes the handoff');
 });
 
 test('scopes are watertight: a visitor token cannot reply as Nota, garbage cannot read', async () => {

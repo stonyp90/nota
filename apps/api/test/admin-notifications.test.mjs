@@ -54,6 +54,8 @@ test('memory repo: putEmailOverride stores the normalized record and getEmailOve
     corpsEn: null,
     ctaFr: null,
     ctaEn: null,
+    signatureFr: null,
+    signatureEn: null,
     updatedAt: NOW_ISO,
   });
   assert.deepEqual(await repo.getEmailOverride('offerPublished'), stored);

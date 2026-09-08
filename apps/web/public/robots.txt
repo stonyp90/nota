@@ -15,4 +15,4 @@ Allow: /
 User-agent: Google-Extended
 Allow: /
 
-Sitemap: https://d1s1h4894dau0c.cloudfront.net/sitemap.xml
+Sitemap: https://gonota.ca/sitemap.xml

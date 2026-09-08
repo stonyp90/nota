@@ -4,7 +4,8 @@
  * Admin authentication + authorization use-case for admin.nota.ca.
  *
  * Security model (deliberately stronger than the notary console):
- *   - PASSWORDLESS magic link. requestLogin never reveals whether an address is
+ *   - Password login is the normal path. A passwordless magic link remains
+ *     available as a recovery/compatibility path and never reveals whether an address is
  *     an admin (no account enumeration); it only ever emails a single-use link
  *     to an ALLOWLISTED address and otherwise does nothing, returning the same
  *     generic result either way.
@@ -91,12 +92,65 @@ function createAdmin({
   // In non-production only, return the magic link in the response so local dev
   // and tests can complete the flow without a real mailbox. NEVER in production.
   const devEcho = config.devEcho === true;
+  const configuredPassword = config.password || null;
+  const configuredPasswordHash = config.passwordHash || null;
 
   const CHALLENGE_TTL_MS = config.challengeTtlMs || 15 * 60 * 1000; // 15 min
   const SESSION_IDLE_TTL_MS = config.sessionIdleTtlMs || 30 * 60 * 1000; // 30 min inactivity
   const SESSION_ABS_TTL_MS = config.sessionAbsoluteTtlMs || 12 * 60 * 60 * 1000; // 12 h hard cap
   const RL_WINDOW_SEC = config.rlWindowSec || 15 * 60; // 15 min window
   const RL_MAX = config.rlMax || 5; // max login requests / window / IP
+
+  function passwordMatches(password) {
+    const supplied = String(password == null ? '' : password);
+    if (!supplied) return false;
+    if (configuredPasswordHash) {
+      const expected = String(configuredPasswordHash).trim().toLowerCase();
+      const actual = require('node:crypto').createHash('sha256').update(supplied).digest('hex');
+      const a = Buffer.from(actual);
+      const b = Buffer.from(expected);
+      return a.length === b.length && require('node:crypto').timingSafeEqual(a, b);
+    }
+    if (!configuredPassword) return false;
+    const a = Buffer.from(supplied);
+    const b = Buffer.from(String(configuredPassword));
+    return a.length === b.length && require('node:crypto').timingSafeEqual(a, b);
+  }
+
+  async function establishSession({ adminId, email, role, ip }) {
+    const existing = await repo.getAdmin(adminId);
+    if (existing && existing.disabled) return { ok: false, disabled: true };
+    const effectiveRole = existing ? existing.role : role;
+    await repo.putAdmin({
+      ...(existing || {}), id: adminId, email, role: effectiveRole,
+      disabled: !!(existing && existing.disabled), createdAt: (existing && existing.createdAt) || clockIso(),
+      lastLoginAt: clockIso(),
+    });
+    const sessionId = genId();
+    const created = clockMs();
+    const absExp = created + SESSION_ABS_TTL_MS;
+    await repo.putAdminSession({ sessionId, adminId, email, role: effectiveRole, createdAt: clockIso(), lastSeenAt: created, absoluteExpiresAt: absExp, revokedAt: null, ttl: epochSeconds(absExp) + 60 });
+    const session = signToken({ sub: adminId, sid: sessionId, role: effectiveRole, scope: SCOPES.SESSION, exp: absExp });
+    await appendAudit('login_success', { adminId, email, ip });
+    return { ok: true, session, role: effectiveRole, expiresAt: new Date(absExp).toISOString() };
+  }
+
+  async function login({ email, password, ip } = {}) {
+    const clean = String(email == null ? '' : email).trim().toLowerCase();
+    let count = 1;
+    try { count = await repo.incrRateCounter('login', ip || clean || 'unknown', RL_WINDOW_SEC, clockMs()); } catch { count = 1; }
+    if (count > RL_MAX) {
+      await appendAudit('login_throttled', { ...auditIdentity(clean), ip });
+      return { ok: false, throttled: true };
+    }
+    const valid = domain.isEmail(clean) && allowlist.has(clean) && passwordMatches(password);
+    if (!valid) {
+      await appendAudit('login_failed', { ...auditIdentity(clean), ip });
+      return { ok: false };
+    }
+    const result = await establishSession({ adminId: adminIdForEmail(clean), email: clean, role: ROLES.SUPER_ADMIN, ip });
+    return result.ok ? result : { ok: false };
+  }
 
   function epochSeconds(ms) {
     return Math.floor(ms / 1000);
@@ -241,6 +295,7 @@ function createAdmin({
           '?subject=' +
           encodeURIComponent('Désabonnement / Unsubscribe');
         const msg = emails.adminMagicLink({
+          __override: repo.getEmailOverride ? await repo.getEmailOverride('adminMagicLink') : null,
           link,
           ttlMinutes: Math.round(CHALLENGE_TTL_MS / 60000),
           baseUrl,
@@ -288,34 +343,7 @@ function createAdmin({
     // à la franchir doit pouvoir ouvrir la console. Un compte déjà connu garde
     // le sien, fût-il null — c'est alors les groupes et les grants qui parlent.
     const role = existing ? existing.role : (challenge.role || ROLES.SUPER_ADMIN);
-    await repo.putAdmin({
-      ...(existing || {}),
-      id: adminId,
-      email: challenge.email,
-      role,
-      disabled: !!(existing && existing.disabled),
-      createdAt: (existing && existing.createdAt) || clockIso(),
-      lastLoginAt: clockIso(),
-    });
-
-    const sessionId = genId();
-    const created = clockMs();
-    const absExp = created + SESSION_ABS_TTL_MS;
-    await repo.putAdminSession({
-      sessionId,
-      adminId,
-      email: challenge.email,
-      role,
-      createdAt: clockIso(),
-      lastSeenAt: created,
-      absoluteExpiresAt: absExp,
-      revokedAt: null,
-      ttl: epochSeconds(absExp) + 60,
-    });
-
-    const session = signToken({ sub: adminId, sid: sessionId, role, scope: SCOPES.SESSION, exp: absExp });
-    await appendAudit('login_success', { adminId, email: challenge.email, ip });
-    return { ok: true, session, role, expiresAt: new Date(absExp).toISOString() };
+    return establishSession({ adminId, email: challenge.email, role, ip });
   }
 
   /**
@@ -449,6 +477,8 @@ function createAdmin({
       corpsEn: o.corpsEn || null,
       ctaFr: o.ctaFr || null,
       ctaEn: o.ctaEn || null,
+      signatureFr: o.signatureFr || null,
+      signatureEn: o.signatureEn || null,
       updatedAt: o.updatedAt || null,
     };
   }
@@ -2405,6 +2435,7 @@ function createAdmin({
 
   return {
     requestLogin,
+    login,
     verifyMagic,
     requireAdmin,
     listSegments,

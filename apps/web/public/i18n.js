@@ -33,6 +33,51 @@
 
   // === DICTIONARY — generated from the French sources. =======================
   var TEXT = {
+    "Entrez votre secteur postal pour voir les notaires à proximité.": "Enter your postal sector to see nearby notaries.",
+    "Notaire dans votre zone": "Notary in your area",
+    "Notaires dans votre zone": "Notaries in your area",
+    "Selon le déplacement choisi": "Based on your travel selection",
+    "Au moins ce nombre de notaires confirmés.": "At least this many confirmed geographic matches.",
+
+    "Vos offres, au même endroit": "Your offers, in one place",
+    "Choisissez une date au carnet pour publier votre première demande. Vous retrouverez ici son statut et les réponses des notaires.": "Choose a calendar date to post your first request. Its status and notary responses appear here.",
+    "Vos coordonnées, une seule fois": "Your details, just once",
+    "Ces renseignements préremplissent vos prochaines offres. Vérifiez votre courriel et votre téléphone pour faciliter la mise en relation.": "These details prefill future offers. Check your email and phone number so you can be contacted.",
+    "Gardez le fil": "Stay up to date",
+    "Choisissez vos notifications. Les préférences de courriel se règlent séparément avec le bouton de cette section.": "Choose your notifications. Email preferences are managed separately using the button in this section.",
+    "Les documents, après la demande": "Documents come after your request",
+    "Préparez seulement les pièces utiles à votre acte actif. Les documents ne bloquent pas la publication de votre offre.": "Prepare only the documents needed for your active service. Documents do not block posting your offer.",
+    "Échangez avec votre notaire": "Talk to your notary",
+    "Dès qu’un notaire retient votre demande, ouvrez votre offre pour retrouver ses coordonnées, vos messages et le suivi du dossier.": "Once a notary accepts your request, open your offer to find their contact details, your messages and file updates.",
+    "Commencez par votre profil": "Start with your profile",
+    "Complétez vos coordonnées et votre secteur de pratique. Les clients pourront vous joindre quand vous prendrez leur dossier.": "Complete your contact details and practice area so clients can reach you when you take on their file.",
+    "Votre agenda, connecté": "Your calendar, connected",
+    "Ajoutez vos signatures à votre agenda avec les liens proposés. Le carnet des demandes possède aussi son abonnement distinct.": "Add your signing appointments to your calendar using the links provided. The requests calendar also has its own separate subscription.",
+    "Choisissez vos demandes": "Choose your requests",
+    "Filtrez les demandes ouvertes. Consultez le service, la date, le lieu et le prix avant de retenir une offre ou de proposer un autre montant.": "Filter open requests. Review the service, date, location and price before accepting an offer or proposing another amount.",
+    "Accompagnez votre client": "Support your client",
+    "Vos dossiers retenus regroupent les échanges avec le client et les pièces à demander. Gardez la conversation et le suivi dans ce dossier.": "Accepted files bring together client conversations and document requests. Keep messages and follow-up in that file.",
+    "Préparez vos paiements": "Set up payments",
+    "Connectez votre compte de paiement et vérifiez son état. Consultez les montants affichés dans chaque dossier avant de confirmer une action.": "Connect your payment account and check its status. Review the amounts shown in each file before confirming an action.",
+    "Revoir la visite guidée": "Replay the guided tour",
+    "Passer la visite": "Skip tour",
+    "Suivant": "Next",
+    "Terminer la visite": "Finish tour",
+    "Visite de votre espace": "Your account tour",
+
+    "Fermer les préférences": "Close preferences",
+  "Enregistrer": "Save",
+  "Préférences de courriel": "Email preferences",
+  "Choisissez les courriels à recevoir. Les liens de connexion restent disponibles.": "Choose which emails to receive. Sign-in links remain available.",
+  "Préférences de courriel enregistrées.": "Email preferences saved.",
+  "Impossible d’enregistrer les préférences. Réessayez.": "Unable to save preferences. Try again.",
+  "Impossible de charger les préférences. Ouvrez le lien dans un courriel récent.": "Unable to load preferences. Open the link in a recent email.",
+  "Vérification de la couverture…": "Checking coverage…",
+    "Aucun notaire inscrit ne couvre actuellement ce secteur avec le déplacement choisi. Élargissez votre rayon ou changez le lieu de signature pour augmenter vos possibilités.": "No registered notary currently covers this area with your travel preference. Widen your radius or change the signing location to increase your options.",
+    "Des notaires inscrits couvrent ce secteur. Leur disponibilité à la date choisie reste à confirmer.": "Registered notaries cover this area. Availability on your chosen date still needs to be confirmed.",
+    "La couverture de ce secteur ne peut pas être confirmée pour le moment. Vous pouvez continuer, sans garantie de trouver un notaire.": "Coverage for this area cannot currently be confirmed. You can continue, with no guarantee of finding a notary.",
+    "Modifier mon déplacement": "Change my travel preferences",
+
   "Écrivez-nous\u00a0: une personne de l’équipe vous répond à votre courriel.": "Write to us: someone on the team answers at your email address.",
   // La porte du courriel sous le composeur de la messagerie.
   "Recevoir aussi la réponse par courriel": "Also get the answer by email",
@@ -429,6 +474,13 @@
   "Votre nom — transmis seulement au notaire qui retient votre demande": "Your name — shared only with the notary who retains your request",
   "Votre courriel — pour vous prévenir dès qu’un notaire retient votre demande": "Your email — to let you know as soon as a notary retains your request",
   "Jamais affiché sur le carnet.": "Never shown on the carnet.",
+  // 2026-09-07 : la promesse a quitté le LIBELLÉ pour la ligne d'aide — un
+  // libellé se reconnaît d'un coup d'œil, une phrase se lit.
+  "Votre nom": "Your name",
+  "Votre courriel": "Your email",
+  "Transmis seulement au notaire qui retient votre demande.": "Shared only with the notary who retains your request.",
+  "Pour vous prévenir dès qu’un notaire retient votre demande. Jamais affiché sur le carnet.": "So we can tell you as soon as a notary retains your request. Never shown on the carnet.",
+  "Les 3 premiers caractères de votre code postal — votre secteur, jamais votre adresse. Le notaire y lit s’il peut s’y déplacer.": "The first 3 characters of your postal code — your sector, never your address. It tells the notary whether they can travel there.",
   "(recommandé)": "(recommended)",
   "Pour que le notaire qui vous retient puisse vous joindre. Jamais public.": "So the notary who retains you can reach you. Never public.",
   "Offre anonyme sur le carnet": "Anonymous offer on the carnet",
@@ -451,7 +503,7 @@
   "Courriel": "Email",
   "vous@exemple.ca": "you@example.ca",
   "Code postal": "Postal code",
-  "Ces réglages contrôlent la cloche dans l’application ; les courriels sont gérés par le lien de désabonnement de chaque courriel.": "These settings control the in-app bell; emails are managed through the unsubscribe link in each email.",
+  "Ces réglages contrôlent la cloche dans l’application. Utilisez « Préférences de courriel » pour choisir les courriels à recevoir.": "These settings control the in-app bell. Use Email preferences to choose which emails to receive.",
   "Confirmation de publication d’une offre": "Confirmation when an offer is published",
   "Rappels à l’approche de la date": "Reminders as the date approaches",
   "Avis quand un notaire retient votre offre": "Notice when a notary takes on your offer",
@@ -465,6 +517,8 @@
   "Le notaire s’est désisté — votre demande est de retour au carnet": "The notary has withdrawn — your request is back on the carnet",
   "Mes documents": "My documents",
   "Téléversez ce que le notaire demandera. Ajoutez, retirez ou marquez « validé ». Tout reste sur votre appareil jusqu’à ce qu’un notaire retienne votre demande.": "Upload what the notary will ask for. Add, remove or mark « validated ». Everything stays on your device until a notary takes on your request.",
+  "Seules les pièces nécessaires pour l’acte actif sont affichées. Les réponses de votre dossier déterminent la liste ; rien ne bloque votre demande.": "Only the documents needed for the active act are shown. Your file answers determine the list; nothing blocks your request.",
+  "Seules les pièces nécessaires selon vos réponses apparaissent ici. Rien ne bloque votre demande ; chaque pièce peut être téléversée ou marquée déjà transmise au notaire.": "Only the documents needed for your answers appear here. Nothing blocks your request; each document can be uploaded or marked as already sent to the notary.",
   "Acte pour lequel préparer les documents": "Act to prepare documents for",
   "Aucun document requis pour cet acte.": "No documents required for this act.",
   "Validé": "Validated",
@@ -1154,6 +1208,8 @@
   "Un courriel valide est requis pour vous répondre.": "A valid email is required so we can reply.",
   "Écrivez-nous quelques mots.": "Write us a few words.",
   "Besoin d’aide ?": "Need help?",
+  "Obtenir de l’aide": "Get help",
+  "Obtenir de l’aide sur cette demande": "Get help with this request",
   "Annuler cette offre ?": "Cancel this offer?",
   "Annuler cette offre": "Cancel this offer",
   "Votre offre sera retirée du carnet. Plus aucun notaire ne pourra la retenir.": "Your offer will be removed from the carnet. No notary will be able to take it anymore.",
@@ -2565,7 +2621,7 @@
     // shareable (and is what the hreflang alternates point at).
     try {
       if (typeof location !== 'undefined') {
-        var q = /[?&]lang=(en|fr)\b/.exec(location.search || '');
+        var q = /[?&]lang=(en|fr)(?=&|$)/.exec(location.search || '');
         if (q) { try { localStorage.setItem(LS_LANG, q[1]); } catch (e) {} return q[1]; }
       }
     } catch (e) {}
@@ -2599,15 +2655,14 @@
   function force(l) { current = l === 'en' ? 'en' : 'fr'; }
   function setLang(l) {
     l = l === 'en' ? 'en' : 'fr';
-    try { localStorage.setItem(LS_LANG, l); } catch (e) {}
-    // A ?lang= in the URL would win over the stored choice on reload — rewrite
-    // it so the toggle works for visitors arriving through a language link.
-    if (typeof location !== 'undefined' && /[?&]lang=(en|fr)\b/.test(location.search || '')) {
-      location.replace(
-        location.pathname +
-        location.search.replace(/([?&])lang=(en|fr)\b/, '$1lang=' + l) +
-        location.hash
-      );
+    var saved = false;
+    try { localStorage.setItem(LS_LANG, l); saved = true; } catch (e) {}
+    if (typeof window !== 'undefined' && window.NotaSaveLanguage) window.NotaSaveLanguage(l);
+    // Preserve the choice even when storage is blocked, and replace URL overrides.
+    if (typeof location !== 'undefined' && (!saved || /[?&]lang=/.test(location.search || ''))) {
+      var query = new URLSearchParams(location.search || '');
+      query.set('lang', l);
+      location.replace(location.pathname + '?' + query.toString() + location.hash);
       return;
     }
     // Reload rather than re-render: app.js builds its Intl formatters from

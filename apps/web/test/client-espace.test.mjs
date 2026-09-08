@@ -305,3 +305,55 @@ test('un dossier vide venu du serveur n’EFFACE pas ce que l’appareil savait'
   const pour = (stored(win, 'nota.dossier.v1') || {}).refinancement || {};
   assert.equal(pour.compte_taxes, 'taxes-local.pdf', 'le travail local survit');
 });
+
+test('le profil n’affiche que les pièces correspondant aux réponses de l’acte actif', async () => {
+  const seed = {
+    'nota.myoffers.v1': [{ id: 'fin-1', dateISO: '2026-12-01', serviceId: 'financement', clientToken: 'TOK-FIN' }],
+    'nota.dossier.v1': {
+      financement: {
+        __pricing: {
+          contexte: 'propriete_detenue',
+          assurance_habitation: 'oui',
+          certificat_localisation: 'a_jour',
+          succession: 'non',
+        },
+      },
+    },
+  };
+  const { doc, Nota } = await boot({ seed, fetchStub: () => ok({ ok: true }) });
+  Nota.setTab('profil');
+  await wait(40);
+
+  const card = doc.querySelector('.profil-docs');
+  assert.ok(card, 'la carte des documents est visible');
+  assert.equal(card.querySelector('.chip[data-svc="financement"]').getAttribute('aria-pressed'), 'true', 'l’acte actif est sélectionné');
+  const names = [...card.querySelectorAll('.doc-row-name')].map((n) => n.textContent);
+  assert.ok(!names.some((n) => /promesse/i.test(n)), 'la promesse d’achat absente du contexte n’est jamais demandée');
+  assert.ok(names.length > 0, 'les pièces et informations réellement applicables restent visibles');
+});
+
+test('email preference link opens controls and persists the chosen email types', async () => {
+  let saved;
+  const { win, doc } = await boot({
+    hash: '#email-preferences=SIGNED',
+    fetchStub(url, opts) {
+      if (!url.includes('/notification-preferences')) return null;
+      assert.equal(opts.headers.authorization, 'Bearer SIGNED');
+      if (opts.method === 'POST') saved = JSON.parse(opts.body).preferences;
+      return ok({ catalog: [
+        { key: 'offerPublished', labelFr: 'Offre publiée', labelEn: 'Offer posted', required: false },
+        { key: 'clientMagicLink', labelFr: 'Lien de connexion', labelEn: 'Sign-in link', required: true },
+      ], preferences: {} });
+    },
+  });
+  const dialog = doc.getElementById('email-preferences-dialog');
+  assert.ok(dialog.open);
+  assert.equal(win.location.hash, '', 'the signed identity is removed from the URL');
+  const inputs = dialog.querySelectorAll('input[type=checkbox]');
+  assert.equal(inputs[1].disabled, true);
+  inputs[0].checked = false;
+  fire(win, dialog.querySelector('form'), 'submit');
+  await wait(30);
+  assert.deepEqual(saved, { offerPublished: false, clientMagicLink: true });
+  assert.match(dialog.textContent, /Préférences de courriel enregistrées/);
+});

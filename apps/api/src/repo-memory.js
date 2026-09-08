@@ -55,6 +55,8 @@ function createMemoryRepo(seed = []) {
   const supportThreads = new Map(); // threadId -> live support thread (ADR 0026)
 
   // Notification ledgers: sent (idempotency) and unsubscribe (suppression).
+  const notificationPreferences = new Map();
+  const emailLanguages = new Map();
   const notified = new Map(); // `${refId}#${kind}` -> timestamp
   const unsubscribed = new Set(); // lowercased emails
 
@@ -238,14 +240,16 @@ const clientChallenges = new Map(); // challengeId -> record (lien magique clien
       return next;
     },
     // Conditional retain: flip a bid to RETENUE for `notaryId` ONLY while it is
-    // still OUVERTE, mirroring the DynamoDB ConditionExpression. Returns the
+    // still OUVERTE, atomically storing the calendar pointer like DynamoDB. Returns the
     // stored bid on success, or null if another notary already retained it
     // (the TOCTOU loser). `bid` is the fully-formed retained item.
     async retain(bid, notaryId) {
-      void notaryId;
       const current = byId.get(bid.id);
-      if (!current || current.status === STATUS.RETENUE) return null;
+      if (!current || current.status !== STATUS.OUVERTE) return null;
       byId.set(bid.id, bid);
+      retained.set(`${notaryId}#${bid.id}`, {
+        id: bid.id, dateISO: bid.dateISO, serviceId: bid.serviceId, montant: bid.montant,
+      });
       return bid;
     },
     // Every open bid across all months — the reminder scheduler asks the
@@ -459,6 +463,20 @@ const clientChallenges = new Map(); // challengeId -> record (lien magique clien
     // are stored as null (the consumption side treats a half-configured pair as
     // not configured), `enabled` is a real boolean, and updatedAt is stamped by
     // the caller-supplied clock — never Date.now().
+    async getEmailLanguage(email) {
+      return emailLanguages.get(String(email).trim().toLowerCase()) || null;
+    },
+    async putEmailLanguage(email, language, onlyIfAbsent = false) {
+      if (!['en', 'fr'].includes(language)) throw new Error('Invalid email language');
+      const key = String(email).trim().toLowerCase();
+      if (!onlyIfAbsent || !emailLanguages.has(key)) emailLanguages.set(key, language);
+    },
+    async getNotificationPreferences(email) {
+      return { ...(notificationPreferences.get(String(email).trim().toLowerCase()) || {}) };
+    },
+    async putNotificationPreferences(email, preferences) {
+      notificationPreferences.set(String(email).trim().toLowerCase(), { ...preferences });
+    },
     async getEmailOverride(key) {
       const o = emailOverrides.get(String(key));
       return o ? { ...o } : null;
@@ -485,6 +503,8 @@ const clientChallenges = new Map(); // challengeId -> record (lien magique clien
         corpsEn: txt(override.corpsEn),
         ctaFr: txt(override.ctaFr),
         ctaEn: txt(override.ctaEn),
+        signatureFr: txt(override.signatureFr),
+        signatureEn: txt(override.signatureEn),
         updatedAt: nowISO,
       };
       emailOverrides.set(stored.key, stored);

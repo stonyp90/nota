@@ -1364,7 +1364,7 @@ function createApp(repo, opts = {}) {
 
   // The ONE retention path, shared by /notary/bids/accept and a client accepting
   // a proposition. Conditional retain (closes the TOCTOU race: the repo flips
-  // the bid only while it is still ouverte), then the retained-calendar pointer,
+  // the bid only while it is still ouverte, with its calendar pointer atomically),
   // the analytics rollup and the client's "offer retained" email. `extra` are
   // additional fields folded into the same conditional write (a proposition
   // accept rewrites montant/premium/propositions atomically with the status).
@@ -1405,12 +1405,6 @@ function createApp(repo, opts = {}) {
       montant: retained.montant,
       etude: retained.etude || null,
     }, qui);
-    await repo.putRetained(notaryId, {
-      id: retained.id,
-      dateISO: retained.dateISO,
-      serviceId: retained.serviceId,
-      montant: retained.montant,
-    });
     await recordStats(statsDeltasForRetain(retained, now()));
     await recordReferralEarnings(retained, notaryId, profile);
     // Tell the client a notary retained their offer (fire-and-forget; never blocks
@@ -1549,6 +1543,13 @@ function createApp(repo, opts = {}) {
     };
   }
 
+  async function rememberLanguage(email, request, verified = false) {
+    const language = require('./language').requestLanguage(request);
+    if (language && domain.isEmail(email) && repo.putEmailLanguage) {
+      try { await repo.putEmailLanguage(email, language, !verified); } catch { /* preference storage must not block intake or sign-in */ }
+    }
+  }
+
   async function handle(request) {
     const method = (request.method || 'GET').toUpperCase();
     // CloudFront routes /api/* to this Lambda so the site is single-origin.
@@ -1574,6 +1575,29 @@ function createApp(repo, opts = {}) {
 
     if (route === '/health' && method === 'GET') {
       return json(200, { ok: true, today: now() });
+    }
+
+    // Aggregate geographic coverage only; never disclose notary identities.
+    if (route === '/coverage' && method === 'GET') {
+      const prefix = domain.normalizePostalPrefix(query.prefixe);
+      const band = domain.deplacementById(query.deplacement);
+      if (!domain.isQuebecPostalPrefix(prefix) || !band) {
+        return json(422, { errors: [{ code: 'couverture_invalide', message: 'Secteur postal ou déplacement invalide.' }] });
+      }
+      try {
+        const notaries = await repo.listActiveNotaries();
+        let unknown = false;
+        const matched = notaries.filter((n) => {
+          if (!band.urgence && domain.fsaDistanceKm(prefix, n.prefixe) == null) {
+            unknown = true;
+            return false;
+          }
+          return domain.notaryCanServe(band.id, n, prefix);
+        });
+        return json(200, { status: matched.length ? 'covered' : unknown ? 'unknown' : 'none', count: unknown && !matched.length ? null : matched.length, incomplete: unknown });
+      } catch {
+        return json(503, { status: 'unknown' });
+      }
     }
 
     if (route === '/bids' && method === 'GET') {
@@ -1786,6 +1810,7 @@ function createApp(repo, opts = {}) {
       // Fire-and-forget: confirm the offer to the client + alert the operator.
       // Never awaited and never allowed to reject the response — if mail fails
       // the offer is still created and returned.
+      await rememberLanguage(bid.courriel, request);
       const n = notifier();
       if (n) Promise.resolve(n.onOfferCreated(bid)).catch(() => {});
 
@@ -1820,6 +1845,7 @@ function createApp(repo, opts = {}) {
         let auth;
         try {
           auth = await billing().authorizeOffer({
+            language: require('./language').requestLanguage(request),
             bidId: bid.id,
             bidDate: bid.dateISO,
             amountCents: devis.totalCents,
@@ -2001,7 +2027,7 @@ function createApp(repo, opts = {}) {
       const pn = notifier();
       if (pn && typeof pn.onPartnerClaimRequested === 'function') {
         Promise.resolve(
-          pn.onPartnerClaimRequested({ email: courriel, link, code, ttlMinutes: Math.round(PARTNER_CLAIM_TTL_MS / 60000) })
+          pn.onPartnerClaimRequested({ emailLanguage: require('./language').requestLanguage(request), email: courriel, link, code, ttlMinutes: Math.round(PARTNER_CLAIM_TTL_MS / 60000) })
         ).catch(() => {});
       }
 
@@ -2081,7 +2107,7 @@ function createApp(repo, opts = {}) {
       if (nrap && miens.length && typeof nrap.onPartnerCodeReminder === 'function') {
         for (const p of miens) {
           Promise.resolve(
-            nrap.onPartnerCodeReminder({
+            nrap.onPartnerCodeReminder({ emailLanguage: require('./language').requestLanguage(request),
               courriel,
               code: p.code,
               type: p.type || null,
@@ -2123,6 +2149,7 @@ function createApp(repo, opts = {}) {
         });
       }
 
+      await rememberLanguage(claim.courriel, request, true);
       const partenaire = { code, type: claim.type, courriel: claim.courriel, createdAt: now(), confirmedAt: now() };
       if (await repo.createPartner(partenaire)) {
         // La seule écriture qui fait d'un code un PAYEUR DE RECORD. Sans elle,
@@ -2170,6 +2197,7 @@ function createApp(repo, opts = {}) {
       const email = String(payload.courriel || payload.email || '').trim().toLowerCase();
       if (email && domain.isEmail(email)) {
         const n = notifier();
+        await rememberLanguage(email, request);
         if (n) Promise.resolve(n.onClientSignup(email)).catch(() => {});
       }
       return json(200, { ok: true });
@@ -2252,7 +2280,7 @@ function createApp(repo, opts = {}) {
       const nsend = notifier();
       if (nsend && link && typeof nsend.onClientLoginRequested === 'function') {
         Promise.resolve(
-          nsend.onClientLoginRequested({ courriel, link, ttlMinutes: Math.round(CLIENT_CHALLENGE_TTL_MS / 60000) })
+          nsend.onClientLoginRequested({ emailLanguage: require('./language').requestLanguage(request), courriel, link, ttlMinutes: Math.round(CLIENT_CHALLENGE_TTL_MS / 60000) })
         ).catch(() => {});
       }
 
@@ -2286,6 +2314,7 @@ function createApp(repo, opts = {}) {
       }
 
       const courriel = String(challenge.courriel || '').trim().toLowerCase();
+      await rememberLanguage(courriel, request, true);
       const pointeurs = typeof repo.listClientBids === 'function' ? await repo.listClientBids(courriel) : [];
 
       // On relit chaque offre pour rendre une ligne qui se LIT sans second
@@ -2425,6 +2454,7 @@ function createApp(repo, opts = {}) {
       // Mail — fire-and-forget, and only while the file is still waiting for
       // the operator: an already-approved (or Stripe-active) notary who hits
       // the door again is not told to wait for a check that is done.
+      await rememberLanguage(email, request);
       const stillPending = created || !(existing.approuveLe || existing.status === 'active');
       const sn = notifier();
       if (sn && stillPending && typeof sn.onNotarySignedUp === 'function') {
@@ -2477,6 +2507,11 @@ function createApp(repo, opts = {}) {
       } catch {
         return json(400, { errors: [{ code: 'json_invalide', message: 'Corps JSON invalide.' }] });
       }
+      const connectEmail = String(payload && payload.email || '').trim().toLowerCase();
+      if (!domain.isEmail(connectEmail)) return json(422, { errors: [{ code: 'courriel_invalide', message: 'Un courriel valide est requis.' }] });
+      const connectIdentity = requireScope(bearer(request), SCOPES.SESSION);
+      if (!connectIdentity) return json(401, { errors: [{ code: 'non_autorise', message: 'Jeton invalide ou expiré.' }] });
+      if (connectIdentity !== notaryIdForEmail(connectEmail)) return json(403, { errors: [{ code: 'interdit', message: 'Accès interdit.' }] });
       // Same referral rules as POST /bids (ADR 0011): normalize through the
       // domain, keep only a real code, and NEVER fail a signup over a broken
       // referral link — an invalid code is silently dropped. A referred notary
@@ -2493,7 +2528,9 @@ function createApp(repo, opts = {}) {
         const email = String(payload.email || '').trim().toLowerCase();
         if (owner && email && owner.courriel === email) notaryParrain = null;
       }
-      const result = await billing().connectNotary({ email: payload.email, parrain: notaryParrain });
+      let result;
+      try { result = await billing().connectNotary({ email: payload.email, parrain: notaryParrain }); }
+      catch { return json(503, { errors: [{ code: 'paiement_indisponible', message: 'Le branchement des versements est momentanément indisponible. Réessayez dans quelques minutes.' }] }); }
       if (!result.ok) return json(422, { errors: result.errors });
       // Back the hosted onboarding link up into the notary's inbox so a closed
       // tab is recoverable. Fire-and-forget — never blocks or fails the response.
@@ -2706,6 +2743,29 @@ function createApp(repo, opts = {}) {
     // checks it before every future send. Opening it in a browser shows a page.
     // POST is the RFC 8058 one-click target (List-Unsubscribe-Post): mailbox
     // providers POST here with no user interaction, so it must opt out too.
+    if (route === '/notification-preferences' && (method === 'GET' || method === 'POST')) {
+      const token = bearer(request);
+      let email = decodeUnsubToken(token || '').trim().toLowerCase();
+      if (!domain.isEmail(email)) {
+        const notaryId = requireScope(token, SCOPES.SESSION);
+        if (notaryId) email = (await repo.getNotary(notaryId))?.email || '';
+        else if (query.id && domain.isISODate(query.dateISO) && !requireClient(request, query.id).error) email = (await repo.get(query.id, query.dateISO))?.courriel || '';
+      }
+      if (!domain.isEmail(email)) return json(401, { errors: [{ code: 'non_autorise', message: 'Lien invalide ou expiré.' }] });
+      const preferences = require('./notification-preferences');
+      if (method === 'POST') {
+        let payload;
+        try { payload = typeof request.body === 'string' ? JSON.parse(request.body || '{}') : request.body || {}; } catch { return json(400, { error: 'json_invalide' }); }
+        if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return json(422, { error: 'preferences_invalides' });
+        if ((payload.preferences === undefined && payload.emailLanguage === undefined) ||
+            (payload.preferences !== undefined && !preferences.validate(payload.preferences)) ||
+            (payload.emailLanguage !== undefined && !['fr', 'en'].includes(payload.emailLanguage))) return json(422, { error: 'preferences_invalides' });
+        if (payload.preferences !== undefined) await repo.putNotificationPreferences(email, payload.preferences);
+        if (payload.emailLanguage !== undefined) await repo.putEmailLanguage(email, payload.emailLanguage);
+      }
+      return json(200, { catalog: preferences.catalog(), preferences: await repo.getNotificationPreferences(email), emailLanguage: await repo.getEmailLanguage(email) });
+    }
+
     if (route === '/unsubscribe' && (method === 'GET' || method === 'POST')) {
       // Normalize the decoded address (trim + lowercase) so the suppression
       // record always matches what the notifier checks — isUnsubscribed lookups
@@ -2830,7 +2890,7 @@ function createApp(repo, opts = {}) {
       const n = notifier();
       if (n && typeof n.onNotaryLoginRequested === 'function') {
         Promise.resolve(
-          n.onNotaryLoginRequested({ email, link, ttlMinutes: Math.round(NOTARY_CHALLENGE_TTL_MS / 60000) })
+          n.onNotaryLoginRequested({ emailLanguage: require('./language').requestLanguage(request), email, link, ttlMinutes: Math.round(NOTARY_CHALLENGE_TTL_MS / 60000) })
         ).catch(() => {});
       }
 
@@ -2934,6 +2994,7 @@ function createApp(repo, opts = {}) {
       }
 
       await upsertNotaryProfile(gate, email);
+      await rememberLanguage(email, request, true);
       await appendAudit(
         'notaire_connexion',
         { challengeId: claims.cid },
@@ -3659,6 +3720,7 @@ function createApp(repo, opts = {}) {
       let out;
       try {
         out = await billing().authorizeOffer({
+          language: require('./language').requestLanguage(request),
           bidId: bid.id,
           bidDate: bid.dateISO,
           amountCents: devis.totalCents,
@@ -4043,6 +4105,7 @@ function createApp(repo, opts = {}) {
         bidId: payload.bidId ? String(payload.bidId).slice(0, 80) : null,
         receivedAt: now(),
       };
+      await rememberLanguage(msg.courriel, request);
       const kn = notifier();
       if (kn) Promise.resolve(kn.onContactMessage(msg)).catch(() => {});
       // Durable (2026-09-04): a « Nous joindre » message is a support thread
@@ -4106,6 +4169,7 @@ function createApp(repo, opts = {}) {
       const message = { id: newId(), de: domain.SUPPORT_FROM.VISITEUR, texte: v.texte, createdAt: new Date(nowMs()).toISOString() };
       if (!thread) thread = { id: newId(), courriel: null, createdAt: now(), messages: [] };
       if (v.courriel) thread.courriel = v.courriel;
+      await rememberLanguage(thread.courriel, request);
       const historique = [...(thread.messages || [])];
       thread.messages = [...historique, message];
 
@@ -4139,7 +4203,7 @@ function createApp(repo, opts = {}) {
         // parlé, quoi que l'assistant ait écrit entre-temps.
         thread.escaladeLe = reply ? reply.createdAt : message.createdAt;
         thread.escaladeMotif = reponse.motif;
-      } else if (reply) {
+      } else if (reply && !thread.escaladeLe) {
         // Une réponse propre CLÔT l'escalade précédente : le fil ne doit pas
         // rester marqué « attend une personne » après une question suivante
         // que l'assistant a su traiter.
@@ -4229,6 +4293,11 @@ function createApp(repo, opts = {}) {
       if (!v.ok) return json(422, { errors: v.errors });
       const message = { id: newId(), de: domain.SUPPORT_FROM.NOTA, texte: v.texte, createdAt: new Date(nowMs()).toISOString() };
       thread.messages = [...(thread.messages || []), message];
+      // A real operator response resolves the handoff. Automated assistant
+      // messages must never do this on their own; the visitor may ask a second
+      // question while the original one is still waiting for a person.
+      thread.escaladeLe = null;
+      thread.escaladeMotif = null;
       await repo.putSupportThread(supportSummarize(thread));
       const rn = notifier();
       if (rn && typeof rn.onSupportReply === 'function' && thread.courriel) {
@@ -4525,34 +4594,35 @@ function createApp(repo, opts = {}) {
     if (route === '/notary/feed.ics' && method === 'GET') {
       const notaryId = requireScope(query.token, SCOPES.FEED);
       if (!notaryId) return json(401, { errors: [{ code: 'non_autorise', message: 'Jeton invalide ou expiré.' }] });
-      const events = await repo.listRetainedByNotary(notaryId);
-      // Hydrate each pointer into the decision details the retaining notary is
-      // already entitled to (montant, prêteur, déplacement, readiness, client
-      // NAME — the mise en relation, never the courriel or dossier content).
-      // A pointer whose bid record is gone still renders from its own fields.
+      // Pointers locate signings; they never grant access. A cancelled,
+      // released or reassigned bid must disappear even if pointer cleanup failed.
+      // Read failures return 503, not a successful empty calendar which a
+      // subscriber could interpret as deletion of all of their appointments.
       const rows = [];
-      for (const e of events) {
-        let bid = null;
-        try {
-          bid = await repo.get(e.id, e.dateISO);
-        } catch {
-          /* enrichment only: the pointer alone still makes a valid event */
+      const seen = new Set();
+      try {
+        const events = await repo.listRetainedByNotary(notaryId);
+        for (const e of events) {
+          const bid = await repo.get(e.id, e.dateISO, { consistentRead: true });
+          if (!bid || bid.status !== domain.STATUS.RETENUE || bid.notaryId !== notaryId ||
+              bid.dateISO !== e.dateISO || seen.has(bid.id)) continue;
+          seen.add(bid.id);
+          rows.push({
+            id: bid.id,
+            dateISO: bid.dateISO,
+            serviceId: bid.serviceId,
+            montant: bid.montant,
+            preteur: bidLenderInfo(bid),
+            deplacement: bidDeplacementInfo(bid),
+            ready: domain.leadReadiness(bid.serviceId, bid.dossier || {}, bid.pricing).ready,
+            clientNom: bid.nom || null,
+            prefixe: bid.prefixe || null,
+          });
         }
-        rows.push(
-          bid
-            ? {
-                id: e.id,
-                dateISO: e.dateISO,
-                serviceId: bid.serviceId,
-                montant: bid.montant,
-                preteur: bidLenderInfo(bid),
-                deplacement: bidDeplacementInfo(bid),
-                ready: domain.leadReadiness(bid.serviceId, bid.dossier || {}, bid.pricing).ready,
-                clientNom: bid.nom || null,
-                prefixe: bid.prefixe || null,
-              }
-            : e
-        );
+      } catch {
+        const response = json(503, { errors: [{ code: 'calendrier_indisponible', message: 'Calendrier temporairement indisponible.' }] });
+        response.headers['retry-after'] = '60';
+        return response;
       }
       // The cross-origin download honours the HEADER filename (the anchor's
       // download attribute is ignored cross-origin), so name it here.

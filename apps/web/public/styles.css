@@ -1984,9 +1984,12 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
    full width is one more « longue ligne ». */
 .pr-pitch .note { margin-top: var(--gap); border-left: 0; background: transparent; padding: 0; max-width: 92ch; }
 
-/* The claim form's payoff: the shareable link, ready to copy. The CTA spans
-   the panel — in the form column it IS the point of the page. */
-#partner-form .btn-lg { margin-top: var(--space-6); width: 100%; }
+/* The claim form's payoff: the shareable link, ready to copy. */
+/* Le bouton ne TRAVERSE plus la colonne (2026-09-07, même retour que la
+   feuille de réservation) : une action large de 480 px pour deux mots se lit
+   comme une bande, pas comme une cible. Il se dimensionne sur son libellé et
+   s'aligne sur le bord gauche des champs qu'il conclut. */
+#partner-form .btn-lg { margin-top: var(--space-6); width: auto; min-width: 200px; }
 .partner-success { margin-top: var(--space-5); padding: var(--space-5) var(--space-6); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-inset); }
 .partner-success[hidden] { display: none; }
 /* « Vous êtes… » (2026-09-03): the claim form's first question asked in the
@@ -2105,12 +2108,30 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
    descendre ces rangs sous les compacts, donc aucune demi-cellule ne reste
    vide au-dessus d'eux. */
 .crit-sec-grid > .crit-row[data-span='row'] { grid-column: 1 / -1; }
+/* Et le rang compact resté SEUL DEVANT une bande prend la ligne à son tour
+   (retour du propriétaire, 2026-09-07 : « enlever tous les espaces blancs ») :
+   « Prêteur hypothécaire » gardait un demi-cadre nu à sa droite parce que la
+   question suivante traversait déjà la grille — la règle du dernier rang impair
+   ne voyait que la FIN de la section. Le filet CSS tient même là où rien n'est
+   mesurable (dialogue fermé, impression) ; la passe mesurée, elle, évite le cas
+   en faisant d'abord tenir les réponses sur une ligne. */
+.crit-sec-grid > .crit-row:nth-child(odd):has(+ .crit-row[data-span='row']),
+.crit-sec-grid > .crit-row:nth-child(odd):has(+ .crit-row--wide) { grid-column: 1 / -1; }
+/* Et la dernière rangée de rangs compacts se remplit, quel que soit le nombre
+   de colonnes : packCriteriaGrids compte les pistes réelles et dit ici combien
+   il en reste à couvrir (le carnet du dossier en dessine trois, la feuille
+   deux). Deux valeurs suffisent : aucune grille du produit ne va plus loin. */
+.crit-sec-grid > .crit-row[data-fill='2'] { grid-column: span 2; }
+.crit-sec-grid > .crit-row[data-fill='3'] { grid-column: span 3; }
 /* Et elle OCCUPE la ligne au lieu de s'y perdre : les réponses en boutons
    s'étalent sur toute la largeur (flex: 1 1 auto), et une liste s'allonge
    jusqu'à une largeur de lecture — un contrôle de 320 px suivi d'un demi-cadre
    nu était le vide le plus visible de la grille. */
 @media (min-width: 561px) {
-  .crit-sec-grid > .crit-row:last-child:nth-child(odd) > .nselect { max-width: 420px; }
+  .crit-sec-grid > .crit-row:last-child:nth-child(odd) > .nselect,
+  .crit-sec-grid > .crit-row:nth-child(odd):has(+ .crit-row[data-span='row']) > .nselect,
+  .crit-sec-grid > .crit-row:nth-child(odd):has(+ .crit-row--wide) > .nselect,
+  .crit-sec-grid > .crit-row[data-fill] > .nselect { max-width: 420px; }
 }
 /* Les écrans qui portent des SECTIONS ne portent plus leur propre cadre : deux
    boîtes emboîtées mangeaient 30 px de largeur de chaque côté et donnaient au
@@ -2201,8 +2222,18 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
    elle ne se dispute pas la première ligne avec le compte. Elle s'aligne sous
    le TITRE, pas sous la pastille : le bloc d'en-tête se lit alors comme un
    seul objet au lieu de deux lignes qui commencent à deux endroits. */
-.crit-sec-aide { flex: 1 0 100%; margin-top: var(--space-1); font-size: 12px; color: var(--ink-muted); }
-.crit-sec-h:has(.crit-sec-ic) .crit-sec-aide { padding-left: calc(28px + var(--space-5)); }
+/* Elle RIDE la ligne du titre (2026-09-07) : une ligne entière par section
+   pour se présenter, c'était trois lignes dépensées avant la première question
+   — et l'écran s'ouvrait sur des bandes plutôt que sur des réponses à donner.
+   Elle ne bascule sous le titre que si la largeur lui manque (flex-basis), et
+   le compte reste collé au bord droit par sa marge automatique. */
+.crit-sec-aide { flex: 1 1 240px; min-width: 0; margin: 0; font-size: 12px; color: var(--ink-muted); }
+/* Sur un téléphone elle ne tient jamais à côté du titre : elle repasse SOUS la
+   bande — mais après le compte et le chevron, sinon c'est le chevron qui tombe
+   sur une troisième ligne et la bande coûte plus cher qu'avant. */
+@media (max-width: 560px) {
+  .crit-sec-aide { order: 1; flex: 1 0 100%; margin-top: var(--space-1); }
+}
 /* Le compte de la section — le même vocabulaire et les mêmes couleurs que le
    compte de l'étape : ambre tant qu'on attend, marque une fois complet. */
 .crit-sec-n {
@@ -2604,8 +2635,24 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 .btn-danger { color: var(--danger); border-color: var(--danger); }
 .btn-danger:hover { background: var(--danger); border-color: var(--danger); color: var(--surface); }
 .btn-offer-cancel { color: var(--danger); }
-/* Per-offer help door sits at the end of the action row, styled as a link. */
-.my-offer-help { margin-left: auto; align-self: center; }
+/* Per-offer help door: a visible secondary action with a compact help mark.
+   It stays at the end of the row on wide cards and becomes full-width on a
+   narrow card, so it never reads like an unrelated browser-default button. */
+.my-offer-help {
+  margin-left: auto; align-self: center; display: inline-flex; align-items: center;
+  gap: 7px; min-height: 34px; padding-inline: 12px; border-color: var(--brand);
+  color: var(--brand); font-weight: 700; white-space: nowrap;
+}
+.my-offer-help:hover { background: var(--brand); color: var(--brand-ink); }
+.my-offer-help-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 19px; height: 19px; border: 1.5px solid currentColor; border-radius: 50%;
+  font-size: 13px; line-height: 1; font-weight: 800;
+}
+.my-offer-help:focus-visible { outline-offset: 3px; }
+@media (max-width: 560px) {
+  .my-offer-help { margin-left: 0; width: 100%; justify-content: center; }
+}
 /* The « ou écrivez-nous » quick line under the contact form's submit. */
 #ct-quick { margin-top: 12px; text-align: center; }
 #ct-quick:empty { display: none; }
@@ -2636,6 +2683,10 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 #contact-dialog .ct-context { margin: calc(-1 * var(--space-3)) 0 var(--space-5); }
 
 #contact-dialog #ct-quick { margin-top: var(--space-5); }
+/* « Envoyer » suit le même registre que les autres formulaires (2026-09-07) :
+   largeur de son libellé, jamais toute la feuille — et rangé à droite, là où
+   .dialog-actions pose déjà les actions de tous les autres dialogues. */
+#contact-dialog #ct-submit { display: flex; width: fit-content; min-width: 200px; margin-left: auto; }
 /* The sent state: a check chip on the title line, one sentence, then the two
    actions — the messagerie first when the thread token came back. */
 .ct-ok-head { display: flex; align-items: center; gap: var(--space-4); margin-bottom: var(--space-3); }
@@ -2660,12 +2711,12 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 /* --- Day detail dialog (enlarged day over a dimmed backdrop) -------------- */
 /* La feuille suivait la fenêtre jusqu'à 620 px et s'arrêtait là, quelle que
    soit la taille de l'écran (2026-09-06) : sur un 27 pouces, les questions
-   s'appariaient dans deux colonnes de ~270 px, si bien qu'une réponse à trois
-   boutons s'empilait en trois lignes à côté d'un simple champ. Elle grandit
-   maintenant AVEC l'écran, sans jamais devenir une dalle : 620 px reste le
-   plancher (dialogue lisible, mesure de lecture tenue), 900 px le plafond —
-   la largeur où une réponse à trois choix tient enfin sur une seule ligne. */
-#day-dialog { max-width: min(94vw, clamp(620px, 58vw, 900px)); width: 94vw; max-height: 90vh; overflow-y: auto; overscroll-behavior: contain; }
+   s'appariaient dans deux colonnes trop étroites, si bien qu'une réponse à
+   trois boutons s'empilait en trois lignes à côté d'un simple champ. Elle
+   grandit maintenant AVEC l'écran : 760 px reste le plancher de lecture et
+   1 180 px le plafond, assez large pour que les choix et les champs forment
+   des rangées nettes sans transformer la feuille en pleine largeur. */
+#day-dialog { max-width: min(94vw, clamp(760px, 78vw, 1180px)); width: 94vw; max-height: 90vh; overflow-y: auto; overscroll-behavior: contain; }
 /* Sticky like the ✕ above it: the date being booked stays readable while the
    long booking form scrolls. padding-right clears the pinned ✕. */
 .day-head { position: sticky; top: 0; z-index: 5; background: var(--surface); display: flex; align-items: flex-start; gap: 12px; padding: var(--space-8) 64px var(--space-5) var(--space-10); border-bottom: 1px solid var(--border); }
@@ -2812,7 +2863,12 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
    à la fois. */
 .book-nav { display: flex; align-items: center; gap: var(--space-4); margin-top: var(--space-2); }
 .book-nav .book-back { flex: none; }
-.book-nav .book-fwd, .book-nav #offer-submit { flex: 1 1 auto; width: auto; margin: 0; }
+/* L'action va AU BOUT DE LA BARRE, elle ne la remplit pas (retour du
+   propriétaire, 2026-09-07 : « button are too big, do not fill them ») :
+   étirée sur toute la largeur restante, « Continuer » faisait un bandeau de
+   600 px pour un mot, et le regard n'avait plus de point à viser. Elle garde
+   une largeur de vraie cible et se range à droite, « Retour » à gauche. */
+.book-nav .book-fwd, .book-nav #offer-submit { flex: 0 0 auto; width: auto; min-width: 200px; margin: 0 0 0 auto; }
 .book-nav > [hidden] { display: none !important; }
 /* La barre porte la SEULE décision de l'écran, et elle ne se lisait pas comme
    telle (propriétaire, 2026-09-06) : 37 px de haut sur 578 px de large, un
@@ -2822,20 +2878,18 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
    bord à l'autre, mais garde son encre sourde : deux poids, une seule action. */
 .book-nav .book-fwd, .book-nav #offer-submit { min-height: 44px; font-size: 15px; }
 .book-nav .book-back { min-height: 44px; }
-/* Le registre de la marque veut un bouton primaire en COULEUR ET GRAISSE,
-   jamais en aplat (voir .btn-primary) — et il tient partout ailleurs. Ici il
-   cède, sur décision du propriétaire (2026-09-06) : la feuille de réservation
-   n'a qu'UNE action à la fois, au bas d'un écran qu'on vient de remplir, et un
-   contour vert de 44 px sur 560 se lisait comme un trait de séparation. C'est
-   la SEULE exception, et elle est nommée : les deux boutons de cette barre,
-   pas la classe .btn-primary. Désactivé, il retombe sur les jetons d'inactif —
-   redit ici parce que l'id #offer-submit l'emporte sur `.btn:disabled`. */
+/* Et elle rentre dans le rang : l'exception de l'aplat vert est LEVÉE
+   (2026-09-07). Elle avait été posée le 2026-09-06 parce qu'un contour de
+   44 px sur 560 se lisait comme un trait de séparation — c'était la LARGEUR le
+   problème, pas le contour. Rendue à sa taille, l'action se lit comme partout
+   ailleurs dans l'application : couleur de marque et graisse, jamais un aplat.
+   Redit ici parce que l'id #offer-submit l'emporte sur la classe .btn-primary ;
+   désactivé, il retombe sur les jetons d'inactif pour la même raison. */
 .book-nav .book-fwd, .book-nav #offer-submit {
-  background: var(--brand); border-color: var(--brand); color: var(--brand-ink);
+  background: transparent; border-color: var(--brand); color: var(--brand); font-weight: 700;
 }
 .book-nav .book-fwd:not(:disabled):hover, .book-nav #offer-submit:not(:disabled):hover {
-  background: color-mix(in srgb, var(--brand) 88%, var(--ink));
-  border-color: color-mix(in srgb, var(--brand) 88%, var(--ink));
+  background: var(--brand-tint-solid); border-color: var(--brand);
 }
 .book-nav .book-fwd:disabled, .book-nav #offer-submit:disabled {
   background: var(--surface-inset); border-color: var(--border); color: var(--ink-muted);
@@ -2869,15 +2923,78 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
    Ici chaque option porte son propre cadre, la piste s'efface, et la réponse
    retenue est peinte à la marque. */
 .crit-row .seg { display: flex; flex-wrap: wrap; gap: var(--space-3); padding: 0; border: 0; background: none; }
+/* Une réponse se dimensionne sur CE QU'ELLE DIT (retour du propriétaire,
+   2026-09-07 : « button are too big »). Étirées sur la ligne entière
+   (flex: 1 1 auto), « Non » et « Oui » devenaient deux pavés de 400 px pour
+   trois lettres : la cible était énorme et le mot perdu au milieu, si bien que
+   deux réponses opposées se lisaient comme deux bandeaux. Elles gardent un
+   plancher — une cible reste une cible, même pour « Oui » — et s'arrêtent là
+   où leur libellé s'arrête. La piste, elle, reste alignée à gauche : c'est une
+   suite de choix, pas une barre à remplir. */
 .crit-row .seg-btn {
-  flex: 1 1 auto; text-align: center;
-  padding: 7px 12px; border-color: var(--border); background: var(--surface); color: var(--ink);
+  flex: 0 1 auto; min-width: 92px; max-width: 100%; text-align: center;
+  padding: 6px 14px; border-color: var(--border); background: var(--surface); color: var(--ink);
 }
 .crit-row .seg-btn:hover { border-color: var(--border-strong); background: var(--surface-hover); }
-.crit-row .seg-btn.is-on {
-  background: var(--brand-tint-solid-strong); border-color: var(--brand);
-  color: var(--brand); font-weight: 700; box-shadow: none;
+/* Sauf quand le rang PREND LA LIGNE ENTIÈRE (retour du propriétaire,
+   2026-09-07 : « this is looking empty ») : trois réponses serrées contre le
+   bord gauche d'une ligne de 900 px laissaient les deux tiers de la carte nus.
+   Là, elles se répartissent sur la ligne — mais BORNÉES : au-delà d'environ un
+   tiers de la ligne, un bouton redevient le pavé qu'on vient de retirer. Un
+   rang qui PARTAGE sa ligne, lui, garde ses réponses à la taille du libellé :
+   c'est la place disponible qui décide, jamais la question. */
+.crit-row[data-large] .seg-btn { flex: 1 1 auto; max-width: 320px; }
+/* À partir d'une grande feuille, une rangée explicitement large utilise
+   l'espace disponible : deux choix opposés se lisent comme deux colonnes
+   équilibrées, sans laisser un quart de carte vide après les libellés. Les
+   rangées compactes gardent leur largeur naturelle. */
+@media (min-width: 1100px) {
+  .crit-row[data-large] .seg-btn { flex: 1 1 0; max-width: none; }
+  /* On a wide sheet, a segmented answer is a question-wide decision. Keeping
+     it in the two-column track leaves a conspicuous empty half-card whenever
+     its neighbour has one more option. The controls share the full row and
+     stay bounded to a comfortable reading width. */
+  .crit-sec-grid > .crit-row:has(.seg) { grid-column: 1 / -1; }
+  .crit-sec-grid > .crit-row:has(.seg) .seg-btn { flex: 1 1 0; max-width: 420px; min-height: 44px; font-size: 14px; }
+  /* The financing group asks for the amount, then the context, then the
+     lender in DOM order. Pin the two short fields to the first track so the
+     wide context row cannot strand the lender below an empty half-card. */
+  .crit-sec[data-groupe='pret'] .crit-row[data-crit='valeur_pret'] { grid-column: 1; grid-row: 1; }
+  .crit-sec[data-groupe='pret'] .crit-row[data-crit='preteur'] { grid-column: 2; grid-row: 1; }
+  .crit-sec[data-groupe='pret'] .crit-row[data-crit='contexte'] { grid-column: 1 / -1; grid-row: 2; }
+  .crit-sec[data-groupe='pret'] .crit-row[data-crit='approbation_bancaire'] { grid-column: 1 / -1; grid-row: 3; }
+  .crit-sec-t { font-size: 16px; }
+  .crit-sec-aide { font-size: 13px; }
+  .crit-label { font-size: 14px; }
 }
+/* La réponse retenue se RECONNAÎT, elle ne se REMPLIT pas (même retour : « do
+   not fill them »). L'aplat de marque faisait de chaque réponse choisie une
+   tuile verte pleine — six questions répondues et la carte n'était plus qu'une
+   grille de blocs, où le prix « +400 $ » se lisait moins bien que le fond
+   derrière lui. Ici : le cadre passe à la marque et double d'épaisseur (un
+   `inset` plutôt qu'une bordure de 2 px, qui déplacerait le texte), l'encre
+   suit, et une coche dit lequel est pris. Le registre du bouton primaire de
+   l'application — couleur et graisse, jamais un aplat — vaut donc aussi pour
+   les réponses.
+
+   La coche a sa place RÉSERVÉE sur chaque option (registre ADR 0039) : elle
+   n'apparaît pas, elle se dévoile — répondre, se raviser, répondre ailleurs ne
+   fait jamais respirer la piste sous la main du client. */
+.crit-row .seg-btn::before, .crit-row .seg-btn::after {
+  content: '✓'; font-size: 11px; font-weight: 800; color: var(--brand); visibility: hidden;
+}
+.crit-row .seg-btn::before { margin-right: 6px; }
+/* Le jumeau muet de la coche, à droite : la coche est posée AVANT le libellé,
+   donc à elle seule elle décentrerait le mot de sept pixels sur une piste
+   centrée. Il ne se montre jamais — il ne fait que rendre la boîte symétrique,
+   à l'arrêt comme choisie. */
+.crit-row .seg-btn::after { margin-left: 6px; }
+.crit-row .seg-btn.is-on {
+  background: var(--surface); border-color: var(--brand);
+  box-shadow: inset 0 0 0 1px var(--brand);
+  color: var(--brand); font-weight: 700;
+}
+.crit-row .seg-btn.is-on::before { visibility: visible; }
 /* When the options cannot share one line (settleSegTracks measures), the
    track restacks as full-width rows — answer left, price right — instead of
    a ragged 2+1 wrap that reads as two controls. */
@@ -2907,7 +3024,11 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 .crit-urgence { margin-top: 4px; }
 /* A default the client has not touched reads as a suggestion: the pressed
    answer keeps its place but drops the accent fill until it is confirmed. */
-.crit-row[data-default='true'] .seg-btn.is-on { background: transparent; border-style: dashed; }
+/* Un défaut que le client n'a pas touché reste une SUGGESTION : cadre en
+   pointillé, pas de trait doublé, et pas de coche — la coche dit « vous avez
+   répondu », ce qui serait faux tant qu'on n'y a pas touché. */
+.crit-row[data-default='true'] .seg-btn.is-on { background: transparent; border-style: dashed; box-shadow: none; }
+.crit-row[data-default='true'] .seg-btn.is-on::before { visibility: hidden; }
 /* The awaited-answer note (audit 2.5), beside the dot, once the form is started. */
 /* Its OWN line inside the head (the question columns are too narrow to carry
    the label and the message side by side), reserved from the first paint and
@@ -3059,9 +3180,14 @@ dialog:focus, dialog:focus-visible { outline: none; }
    s'élargit devenaient trois barres de 700 px, et rien ne disait que le nom et
    le courriel vont ensemble. Même seuil que .crit-sec-grid, donc les deux
    écrans se replient au même endroit. */
+/* TROIS colonnes tant que la feuille les porte (2026-09-07) : à deux, le
+   téléphone fermait le bloc seul et traînait une demi-carte nue à sa droite —
+   le dernier vide de l'écran 4. Les trois champs sont courts et se lisent d'une
+   seule ligne ; `auto-fit` les replie à deux puis à un, sans palier écrit à la
+   main. */
 .book-identity {
   margin-top: var(--space-6); padding-top: var(--space-6); border-top: 1px solid var(--border);
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: var(--space-6) var(--space-9); align-items: start;
 }
 /* Le sélecteur d'écran impose `display: block !important` à chaque bloc de la
@@ -3071,14 +3197,27 @@ dialog:focus, dialog:focus-visible { outline: none; }
 .day-book[data-at='4'] > .book-identity[data-screen='4'] { display: grid !important; }
 @media (max-width: 560px) { .book-identity { grid-template-columns: minmax(0, 1fr); } }
 .book-identity .form-row { margin: 0; }
-/* Le téléphone ferme le bloc seul : il PREND la ligne, comme la dernière
-   question d'un rang impair — mais son champ garde la longueur d'un numéro.
-   Un champ se dimensionne sur ce qu'on y écrit ; une barre de 700 px pour dix
+/* Un champ se dimensionne sur ce qu'on y écrit : une barre de 700 px pour dix
    chiffres promet autre chose que ce qu'elle attend. */
-.book-identity .form-row:last-child:nth-child(odd) { grid-column: 1 / -1; }
 @media (min-width: 561px) {
   .book-identity #o-telephone { max-width: 260px; }
 }
+/* Les trois lignes d'aide de l'écran 4 sont des PROMESSES (à qui va ce champ,
+   ce qui reste privé) : elles se lisent, donc elles restent — mais serrées
+   sous leur champ, jamais espacées comme un paragraphe. */
+.book-identity .help { margin: var(--space-3) 0 0; }
+/* « Où signez-vous ? » : trois caractères dans un champ court suivis d'un
+   demi-écran nu, et l'explication qui prenait deux lignes pleines sous lui. Le
+   champ et son explication se rangent CÔTE À CÔTE — la carte tient sur deux
+   lignes au lieu de quatre. */
+#prefix-row {
+  display: grid; grid-template-columns: auto minmax(0, 1fr);
+  align-items: center; gap: var(--space-3) var(--space-8);
+}
+#prefix-row > .lbl, #prefix-row > .prefix-preview { grid-column: 1 / -1; }
+#prefix-row > #o-prefix { width: 96px; }
+#prefix-row > .help { margin: 0; }
+@media (max-width: 560px) { #prefix-row { grid-template-columns: minmax(0, 1fr); } }
 
 /* Brand utility classes — replace ad-hoc inline styles, keep markup on-brand */
 .w-full { width: 100%; }
@@ -5232,3 +5371,150 @@ body.ig-open { overflow: hidden; }
 .nc-indemnite-just { resize: vertical; min-height: 56px; }
 .nc-indemnite-err { color: var(--danger, var(--ink)); }
 .devis-annulation { margin: 6px 0 0; }
+
+.coverage-note { grid-column: 1 / -1; padding: 1rem; border: 1px solid currentColor; border-radius: var(--radius); max-width: 100%; }
+.coverage-note .help { margin: 0 0 .75rem; }
+
+/* Email preferences use the same surface and controls as the profile. */
+#email-preferences-dialog {
+  width: min(640px, calc(100vw - 32px));
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--ink);
+}
+#email-preferences-dialog::backdrop { background: rgb(0 0 0 / 55%); }
+#email-preferences-dialog .check-row { display: flex; align-items: center; gap: 12px; min-height: 44px; }
+#email-preferences-dialog input { width: 18px; height: 18px; accent-color: var(--brand); }
+#email-preferences-dialog button { margin-block: 12px; }
+
+/* Final booking step: keep the contact form readable on wide screens. */
+.day-book[data-at='4'] {
+  width: 100%; max-width: 1120px; margin-inline: auto; box-sizing: border-box;
+  gap: 20px;
+}
+.day-book[data-at='4'] #o-where-step { padding: 20px; }
+.day-book[data-at='4'] #prefix-row { margin-bottom: 0; }
+.day-book[data-at='4'] #prefix-row > .coverage-note { grid-column: 1 / -1; }
+.day-book[data-at='4'] .book-identity {
+  margin-top: 0; padding-top: 20px;
+  grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px;
+}
+.day-book[data-at='4'] .book-identity .form-row { min-width: 0; }
+.day-book[data-at='4'] #identity-rows input { width: 100%; max-width: none; box-sizing: border-box; }
+.day-book[data-at='4'] .book-identity .help { font-size: 13px; line-height: 1.5; }
+.day-book[data-at='4'] .offer-hint { margin: 0; }
+.day-book[data-at='4'] .consent-line { margin: 0; font-size: 12px; line-height: 1.5; }
+.day-book[data-at='4'] .book-nav { margin-top: 4px; }
+@media (max-width: 760px) {
+  .day-book[data-at='4'] .book-identity { grid-template-columns: minmax(0, 1fr); }
+  .day-book[data-at='4'] #o-where-step { padding: 16px; }
+}
+/* Inactive validation messages must not reserve a flex row or its gap. */
+.day-book[data-at] > [data-screen][hidden] { display: none !important; }
+
+/* One tour surface for both account roles; native dialog contains keyboard focus. */
+.account-tour {
+  position: fixed; inset: auto 20px 20px auto; margin: 0;
+  width: min(460px, calc(100vw - 32px)); max-height: min(50dvh, 420px);
+  box-sizing: border-box; overflow: auto; padding: 24px;
+  color: var(--ink); background: var(--surface); border: 1px solid var(--brand);
+  border-radius: var(--radius); box-shadow: 0 12px 48px #0003;
+}
+.account-tour[open] { animation: account-tour-in .2s ease-out; }
+.account-tour::backdrop { background: rgb(0 0 0 / .16); }
+.account-tour h2 { margin: 10px 0; font-size: 21px; line-height: 1.25; }
+.account-tour p { margin: 0 0 20px; line-height: 1.6; }
+.account-tour-progress { color: var(--brand); font-size: 12px; font-weight: 700; }
+.account-tour-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.account-tour-actions .btn { min-height: 44px; }
+.account-tour-actions .btn:first-child { margin-right: auto; }
+.account-tour-target { outline: 3px solid var(--brand); outline-offset: 5px; scroll-margin-top: 110px; }
+.account-tour-replay { justify-self: start; margin-bottom: 16px; }
+@keyframes account-tour-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+@media (max-width: 560px) { .account-tour { inset: auto 16px 16px; padding: 18px; } }
+@media (prefers-reduced-motion: reduce) { .account-tour[open] { animation: none; } }
+.account-tour::backdrop { backdrop-filter: none; -webkit-backdrop-filter: none; }
+.account-tour h2 { animation: account-tour-in .2s ease-out; }
+@media (prefers-reduced-motion: reduce) { .account-tour h2 { animation: none; } }
+
+/* Shared help affordance: visible hit area, readable copy, both themes. */
+.itip { vertical-align: middle; margin-left: 8px; }
+.itip-btn {
+  width: 32px; height: 32px; min-height: 32px; padding: 0;
+  border: 1px solid var(--border-strong); border-radius: 50%;
+  background: var(--surface-inset); color: var(--brand);
+}
+.itip-btn svg { width: 18px; height: 18px; }
+.itip-btn::after { inset: 0; }
+.itip-btn:hover, .itip[data-open='true'] .itip-btn {
+  color: var(--brand); border-color: currentColor; background: var(--surface-hover);
+}
+.itip[data-tone='warn'] .itip-btn { color: var(--warn); }
+.itip-pop {
+  box-sizing: border-box; width: 360px; max-width: calc(100vw - 32px);
+  padding: 16px 18px; font-size: 14px; line-height: 1.6; font-weight: 400;
+  border-radius: var(--radius); overflow-y: auto; overflow-wrap: anywhere;
+  pointer-events: auto;
+}
+.itip[data-dismissed='true'] > .itip-pop { display: none; }
+@media (pointer: coarse) {
+  .itip-btn { width: 44px; height: 44px; min-height: 44px; }
+}
+
+/* Profile fields share an input baseline; supporting text sits below it. */
+.profil-fields { align-items: start; gap: 20px; }
+.profil-fields .form-row { min-width: 0; }
+.profil-fields .help { margin: 6px 0 0; font-size: 13px; line-height: 1.5; }
+@media (max-width: 860px) {
+  /* An offer summary and its detail row form one card, never adjacent cards. */
+  .my-offers tbody { grid-template-columns: minmax(0, 1fr); }
+  .my-offers .c-acte, .my-offers .c-date, .my-offers .c-montant, .my-offers .c-statut {
+    width: auto; min-width: 0;
+  }
+  .my-offers .c-statut { justify-self: stretch; }
+  .my-offers .my-offer-status { display: inline-block; max-width: 100%; box-sizing: border-box; }
+}
+
+/* Booking questionnaire: bounded working sheet and compact question tiles. */
+#day-dialog:has(.day-book[data-at='2']) { width: min(96vw, 1040px); max-width: 1040px; }
+.day-book[data-at='2'] { padding: 20px; gap: 16px; }
+.day-book[data-at='2'] .book-rail { margin-bottom: 4px; }
+#o-criteria .crit-sec { padding: 16px; gap: 16px; background: var(--surface); }
+#o-criteria .crit-sec-h {
+  margin: -16px -16px 0; padding: 14px 16px;
+  gap: 8px 12px;
+}
+#o-criteria .crit-sec-grid { gap: 12px; }
+#o-criteria .crit-sec-grid > .crit-row {
+  padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface-inset); min-width: 0;
+}
+#o-criteria .crit-head { margin-bottom: 8px; }
+#o-criteria .crit-unit-wrap { display: flex; width: 100%; }
+#o-criteria .crit-unit-wrap input[type='number'] { width: 100%; max-width: none; min-width: 0; }
+#o-criteria .crit-row .nselect { width: 100%; max-width: none; }
+#o-criteria .crit-row .seg-btn { flex: 1 1 0; max-width: none; min-height: 44px; }
+#o-criteria .crit-row .seg.seg-stack .seg-btn { flex: auto; }
+#o-criteria .crit-more { margin-top: 0; }
+#o-criteria .crit-sec[data-fold='true'] { padding-bottom: 0; gap: 0; }
+@media (max-width: 600px) {
+  #day-dialog:has(.day-book[data-at='2']) { width: 100%; max-width: 100%; }
+  .day-book[data-at='2'] { padding: 14px; }
+  #o-criteria .crit-sec-grid { grid-template-columns: minmax(0, 1fr); }
+  #o-criteria .crit-sec-grid > .crit-row { grid-column: 1 / -1; grid-row: auto; }
+}
+#o-criteria .crit-row .nselect { min-width: 100%; align-self: stretch; box-sizing: border-box; }
+
+/* Postal lookup: a compact input followed by a clear geographic result. */
+#o-where-step .coverage-note { background: var(--surface-inset); border-color: var(--border); padding: 16px; }
+#o-where-step .coverage-note[data-state='none'] { border-left: 3px solid var(--warn); }
+#o-where-step .coverage-note[data-state='covered'] { border-left: 3px solid var(--brand); }
+.coverage-summary { display: flex; align-items: center; gap: 16px; margin-bottom: 12px; }
+.coverage-count { font-size: 36px; line-height: 1; color: var(--brand); font-variant-numeric: tabular-nums; }
+.coverage-caption { display: grid; gap: 4px; min-width: 0; }
+.coverage-caption > span { font-size: 13px; color: var(--ink-muted); }
+#o-where-step #prefix-row { gap: 10px 16px; }

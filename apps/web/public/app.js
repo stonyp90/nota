@@ -21,6 +21,36 @@
       ? 'http://localhost:8788'
       : '/api');
 
+  function fetch(url, options) {
+    options = options || {};
+    if (typeof url === 'string' && (url === API_BASE || url.indexOf(API_BASE + '/') === 0)) {
+      options = Object.assign({}, options, { headers: Object.assign({}, options.headers || {}, {
+        'Accept-Language': window.NotaI18N ? window.NotaI18N.lang() : 'fr'
+      }) });
+    }
+    return window.fetch(url, options);
+  }
+
+  var emailPreferenceIdentity = null;
+  window.NotaSaveLanguage = async function (language) {
+    var targets = [];
+    var notaryToken = flagGet('nota.notary.token');
+    if (notaryToken) targets.push({ token: notaryToken, query: '' });
+    myOffers().forEach(function (offer) {
+      if (offer.clientToken && offer.id && offer.dateISO) targets.push({ token: offer.clientToken,
+        query: '?id=' + encodeURIComponent(offer.id) + '&dateISO=' + encodeURIComponent(offer.dateISO) });
+    });
+    var preferenceToken = emailPreferenceIdentity || new URLSearchParams(location.hash.slice(1)).get('email-preferences');
+    if (preferenceToken) targets.push({ token: preferenceToken, query: '' });
+    await Promise.all(targets.map(function (target) {
+      return fetch(API_BASE + '/notification-preferences' + target.query, {
+        method: 'POST', keepalive: true,
+        headers: { authorization: 'Bearer ' + target.token, 'content-type': 'application/json' },
+        body: JSON.stringify({ emailLanguage: language })
+      }).catch(function () {});
+    }));
+  };
+
   // Absolute API base: a relative '/api' resolved against the current origin.
   function apiBaseAbs() { return API_BASE.indexOf('http') === 0 ? API_BASE : location.origin + API_BASE; }
   // The public origin every shareable link is built on (partner ?ref=, the
@@ -510,6 +540,7 @@
     var btn = itipOpen.querySelector('.itip-btn');
     itipOpen.dataset.open = 'false';
     if (btn) btn.setAttribute('aria-expanded', 'false');
+    itipOpen.dataset.dismissed = 'true';
     itipOpen = null;
     window.removeEventListener('resize', itipTrack);
     document.removeEventListener('scroll', itipTrack, true);
@@ -524,11 +555,19 @@
     var vw = window.innerWidth || 0;
     var vh = window.innerHeight || 0;
     if (!vw || !vh) return;
+    var host = tip.closest('dialog');
+    var bounds = host ? host.getBoundingClientRect() : { left: 0, right: vw, top: 0, bottom: vh };
+    var edgeLeft = Math.max(16, bounds.left + 16);
+    var edgeRight = Math.min(vw - 16, bounds.right - 16);
+    pop.style.maxWidth = Math.max(0, edgeRight - edgeLeft) + 'px';
     var probe = pop.getBoundingClientRect();
     if (!probe.height) return; // no layout to judge (jsdom, display:none ancestor)
     tip.removeAttribute('data-side');
     var anchor = tip.getBoundingClientRect();
-    if (anchor.bottom + probe.height + 10 > vh && anchor.top - probe.height - 10 > 0) tip.dataset.side = 'top';
+    var above = anchor.top - Math.max(0, bounds.top) - 12;
+    var below = Math.min(vh, bounds.bottom) - anchor.bottom - 12;
+    if (above >= probe.height || above > below) tip.dataset.side = 'top';
+    pop.style.maxHeight = Math.max(80, tip.dataset.side === 'top' ? above : below) + 'px';
     // Horizontal: SLIDE the panel along its line until it fits, rather than
     // snapping it to one edge of the tip — on a phone the panel is wider than
     // the room left of the « i », and either edge would still hang off screen.
@@ -537,8 +576,8 @@
     pop.style.left = '0px';
     var r = pop.getBoundingClientRect();
     var want = anchor.left + anchor.width / 2 - r.width / 2;
-    var limit = vw - 8 - r.width;
-    var left = limit < 8 ? 8 : Math.max(8, Math.min(want, limit));
+    var limit = edgeRight - r.width;
+    var left = Math.max(edgeLeft, Math.min(want, limit));
     pop.style.left = (left - anchor.left) + 'px';
   }
 
@@ -590,6 +629,7 @@
       var wasOpen = tip.dataset.open === 'true';
       itipClose();
       if (wasOpen) return;
+      tip.removeAttribute('data-dismissed');
       tip.dataset.open = 'true';
       btn.setAttribute('aria-expanded', 'true');
       itipOpen = tip;
@@ -600,7 +640,8 @@
     // Placed the moment it is about to be seen — never on render, never on an
     // idle scroll. `pointerenter` covers the mouse and the pen; `focusin` the
     // keyboard, whose focus ring opens the panel through CSS alone.
-    tip.addEventListener('pointerenter', function () { itipPlace(tip); });
+    tip.addEventListener('pointerenter', function () { tip.removeAttribute('data-dismissed'); itipPlace(tip); });
+    tip.addEventListener('pointerleave', function () { tip.removeAttribute('data-dismissed'); });
     tip.addEventListener('focusin', function () { itipPlace(tip); });
     itipBindGlobals();
 
@@ -1362,6 +1403,54 @@
     return el('span', 'help my-offer-acts', n + (n === 1 ? ' acte signé via Nota' : ' actes signés via Nota'));
   }
 
+  // Email links open this preference centre without granting dossier access.
+  async function openEmailPreferences(accessToken, bidId, dateISO) {
+    var token = typeof accessToken === 'string' ? accessToken : new URLSearchParams(location.hash.slice(1)).get('email-preferences');
+    if (!token || $('email-preferences-dialog')) return;
+    emailPreferenceIdentity = token;
+    var dialog = el('dialog'); dialog.id = 'email-preferences-dialog';
+    dialog.addEventListener('close', function () { dialog.remove(); });
+    dialog.appendChild(el('h2', null, T('Préférences de courriel')));
+    var close = el('button', 'btn', T('Fermer les préférences'));
+    close.type = 'button'; close.addEventListener('click', function () { dialog.close(); dialog.remove(); });
+    dialog.appendChild(close);
+    var content = el('div'); dialog.appendChild(content);
+    document.body.appendChild(dialog); dialog.showModal();
+    var headers = { authorization: 'Bearer ' + token, 'content-type': 'application/json' };
+    var endpoint = API_BASE + '/notification-preferences' + (bidId ? '?id=' + encodeURIComponent(bidId) + '&dateISO=' + encodeURIComponent(dateISO) : '');
+    if (new URLSearchParams(location.hash.slice(1)).has('email-preferences')) history.replaceState(null, '', location.pathname + location.search);
+    try {
+      var response = await fetch(endpoint, { headers: headers });
+      if (!response.ok) throw new Error();
+      var data = await response.json();
+      content.appendChild(el('p', 'help', T('Choisissez les courriels à recevoir. Les liens de connexion restent disponibles.')));
+      var form = el('form'); content.appendChild(form);
+      var inputs = {};
+      data.catalog.forEach(function (item) {
+        var row = el('label', 'check-row');
+        var input = el('input'); input.type = 'checkbox';
+        input.checked = item.required || data.preferences[item.key] !== false;
+        input.disabled = item.required; inputs[item.key] = input;
+        row.appendChild(input);
+        row.appendChild(document.createTextNode(' ' + ((window.NotaI18N && window.NotaI18N.lang() === 'en') ? item.labelEn : item.labelFr)));
+        var line = el('div'); line.appendChild(row); form.appendChild(line);
+      });
+      var save = el('button', 'btn btn-primary', T('Enregistrer')); save.type = 'submit'; form.appendChild(save);
+      var status = el('p'); status.setAttribute('role', 'status'); form.appendChild(status);
+      form.addEventListener('submit', async function (event) {
+        event.preventDefault(); save.disabled = true;
+        var preferences = {}; Object.keys(inputs).forEach(function (key) { preferences[key] = inputs[key].checked; });
+        try {
+          var saved = await fetch(endpoint, { method: 'POST', headers: headers, body: JSON.stringify({ preferences: preferences, emailLanguage: window.NotaI18N ? window.NotaI18N.lang() : 'fr' }) });
+          if (!saved.ok) throw new Error();
+          status.textContent = T('Préférences de courriel enregistrées.');
+        } catch (error) { status.textContent = T('Impossible d’enregistrer les préférences. Réessayez.'); }
+        save.disabled = false;
+      });
+    } catch (error) { content.textContent = T('Impossible de charger les préférences. Ouvrez le lien dans un courriel récent.'); }
+  }
+  window.addEventListener('hashchange', openEmailPreferences);
+
   // --- Client profile --------------------------------------------------------
   // Created with sensible defaults on first read (all notifications on). Held on
   // this device; reused across the offer flow and the dossier.
@@ -1754,6 +1843,7 @@
     computeNotifications();
     toast('Bienvenue ! Vous êtes connecté comme ' + val + '.');
     setTab('profil', { focus: false });
+    accountTour('client');
   }
 
   // The one client-signup call, shared by the auth modal and the bid opt-in.
@@ -1838,6 +1928,7 @@
     computeNotifications();
     setTab('profil', { focus: false });
     if (state.tab === 'profil') renderProfil();
+    accountTour('client');
     toast(offres.length
       ? 'Vos demandes sont de retour sur cet appareil.'
       : 'Aucune demande n’est rattachée à cette adresse pour l’instant.');
@@ -1928,6 +2019,70 @@
   }
 
   // ---------------------------------------------------------------------------
+
+  // Role-specific account tour. Shared renderer; no business actions are performed.
+  var ACCOUNT_TOURS = {"client": [{"target": "#profil-offers", "title": "Vos offres, au même endroit", "description": "Choisissez une date au carnet pour publier votre première demande. Vous retrouverez ici son statut et les réponses des notaires."}, {"target": "#profil-contact", "title": "Vos coordonnées, une seule fois", "description": "Ces renseignements préremplissent vos prochaines offres. Vérifiez votre courriel et votre téléphone pour faciliter la mise en relation."}, {"target": "#profil-notifications", "title": "Gardez le fil", "description": "Choisissez vos notifications. Les préférences de courriel se règlent séparément avec le bouton de cette section."}, {"target": ".profil-docs", "title": "Les documents, après la demande", "description": "Préparez seulement les pièces utiles à votre acte actif. Les documents ne bloquent pas la publication de votre offre."}, {"target": "#profil-offers", "title": "Échangez avec votre notaire", "description": "Dès qu’un notaire retient votre demande, ouvrez votre offre pour retrouver ses coordonnées, vos messages et le suivi du dossier."}], "notary": [{"target": "#notary-profil", "title": "Commencez par votre profil", "description": "Complétez vos coordonnées et votre secteur de pratique. Les clients pourront vous joindre quand vous prendrez leur dossier."}, {"target": ".nc-cal", "title": "Votre agenda, connecté", "description": "Ajoutez vos signatures à votre agenda avec les liens proposés. Le carnet des demandes possède aussi son abonnement distinct."}, {"target": "#notary-open-h", "title": "Choisissez vos demandes", "description": "Filtrez les demandes ouvertes. Consultez le service, la date, le lieu et le prix avant de retenir une offre ou de proposer un autre montant."}, {"target": "#notary-retained-h", "title": "Accompagnez votre client", "description": "Vos dossiers retenus regroupent les échanges avec le client et les pièces à demander. Gardez la conversation et le suivi dans ce dossier."}, {"target": "#notary-connect", "title": "Préparez vos paiements", "description": "Connectez votre compte de paiement et vérifiez son état. Consultez les montants affichés dans chaque dossier avant de confirmer une action."}]};
+  function accountTour(role, replay) {
+    var identity = role === 'notary' ? nc.email : profileGet().courriel;
+    if (!identity || !ACCOUNT_TOURS[role]) return;
+    var key = 'nota.account-tour.v1.' + role + '.' + encodeURIComponent(identity.toLowerCase());
+    if (!replay && flagGet(key)) return;
+    if (document.querySelector('dialog[open]')) return;
+    var destination = role === 'notary' ? 'notaires' : 'profil';
+    if (state.tab !== destination) setTab(destination, { focus: false });
+    var steps = ACCOUNT_TOURS[role], index = 0, marked = null, opened = null;
+    var previous = document.activeElement;
+    var dlg = el('dialog', 'account-tour');
+    dlg.setAttribute('aria-labelledby', 'account-tour-title');
+    dlg.setAttribute('aria-describedby', 'account-tour-description');
+    function unmark() {
+      if (marked) marked.classList.remove('account-tour-target');
+      if (opened) opened.open = false;
+      marked = null; opened = null;
+    }
+    function finish() {
+      flagSet(key, 'done'); unmark();
+      if (dlg.open && dlg.close) dlg.close();
+      dlg.remove();
+      if (previous && previous.isConnected) previous.focus();
+    }
+    function draw() {
+      unmark(); clear(dlg);
+      var step = steps[index];
+      marked = document.querySelector(step.target);
+      if (marked) {
+        if (marked.tagName === 'DETAILS' && !marked.open) { marked.open = true; opened = marked; }
+        marked.classList.add('account-tour-target');
+        if (marked.scrollIntoView) marked.scrollIntoView({ block: 'start', behavior: 'instant' });
+      }
+      var progress = el('div', 'account-tour-progress', T('Visite de votre espace') + ' · ' + (index + 1) + ' / ' + steps.length);
+      dlg.appendChild(progress);
+      var title = el('h2', null, T(step.title)); title.id = 'account-tour-title'; title.tabIndex = -1; dlg.appendChild(title);
+      var desc = el('p', null, T(step.description)); desc.id = 'account-tour-description'; dlg.appendChild(desc);
+      var actions = el('div', 'account-tour-actions');
+      function button(label, handler, primary) {
+        var b = el('button', 'btn' + (primary ? ' btn-primary' : ' btn-ghost'), T(label)); b.type = 'button'; b.addEventListener('click', handler); actions.appendChild(b);
+      }
+      button('Passer la visite', finish);
+      if (index) button('Retour', function () { index--; draw(); });
+      button(index === steps.length - 1 ? 'Terminer la visite' : 'Suivant', function () {
+        if (index === steps.length - 1) finish(); else { index++; draw(); }
+      }, true);
+      dlg.appendChild(actions);
+      if (dlg.open) title.focus();
+    }
+    dlg.addEventListener('cancel', function (e) { e.preventDefault(); finish(); });
+    document.body.appendChild(dlg); draw();
+    if (dlg.showModal) { dlg.showModal(); dlg.querySelector('h2').focus(); }
+    else dlg.remove();
+  }
+  function accountTourReplay(role, host) {
+    if (!host || host.querySelector('.account-tour-replay')) return;
+    var b = el('button', 'btn btn-sm account-tour-replay', T('Revoir la visite guidée'));
+    b.type = 'button'; b.addEventListener('click', function () { accountTour(role, true); });
+    host.prepend(b);
+  }
+
   // First-visit onboarding guide
   // ---------------------------------------------------------------------------
   // A tiny two-view <dialog>: pick a role, read a 3-step explanation, then land
@@ -3712,6 +3867,10 @@
   // stays 0), so tests keep seeing the flat track.
   function settleSegTracks(scope) {
     var run = function () {
+      // D'abord la place de chaque rang, ensuite la forme de sa piste : une
+      // barre mesurée en demi-largeur puis élargie répondrait à la mauvaise
+      // question.
+      packCriteriaGrids(scope);
       var segs = (scope || document).querySelectorAll('.crit-row .seg');
       Array.prototype.forEach.call(segs, function (seg) {
         if (seg.classList.contains('crit-dep-qui')) return;
@@ -3733,6 +3892,106 @@
     // the dialog finishing its open.
     run();
     if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run);
+  }
+
+  // ---------------------------------------------------------------------------
+  // La grille se TASSE (2026-09-07).
+  //
+  // Retour du propriétaire : « enlever tous les espaces blancs […] le user doit
+  // comprendre rapidement ». Deux trous se creusaient sur la même carte :
+  //
+  //  · une réponse à DEUX choix aux libellés longs (« Une propriété que je
+  //    possède » / « L'achat d'une propriété ») s'empile en demi-largeur — la
+  //    question d'à côté, haute d'une ligne, laissait alors un demi-cadre nu
+  //    sous elle. Le seuil de trois options ne la voyait pas ;
+  //  · un rang pleine largeur intercalé laissait la demi-cellule qui le
+  //    précédait vide (c'est la grille qui saute à la ligne, pas le rang).
+  //
+  // Une seule mesure règle les deux : un rang dont les réponses NE TIENNENT PAS
+  // sur une ligne prend la ligne entière — où elles tiennent —, puis les rangs
+  // larges redescendent sous les compacts. Mesuré, jamais compté : la même
+  // barre tient sur une ligne en français et déborde en anglais, et la
+  // demi-largeur du dialogue n'est pas celle du carnet du dossier.
+  function packCriteriaGrids(scope) {
+    var grids = (scope || document).querySelectorAll('.crit-sec-grid');
+    Array.prototype.forEach.call(grids, function (grid) {
+      var rows = Array.prototype.filter.call(grid.children, function (n) {
+        return n.classList && n.classList.contains('crit-row');
+      });
+      // On REPART DE ZÉRO à chaque passe (2026-09-07). `data-span` se posait et
+      // ne se retirait jamais : une piste mesurée trop large une fois — le
+      // dialogue encore étroit à l'ouverture, des réponses plus larges qu'elles
+      // ne le sont aujourd'hui — condamnait la question à la ligne entière pour
+      // le reste de la session. Deux questions courtes tenaient alors une ligne
+      // chacune, et la carte s'étalait sur des rangs à moitié vides (retour du
+      // propriétaire : « this is looking empty »). Retirer la marque avant de
+      // mesurer coûte une passe de mise en page — celle que les rects forcent
+      // déjà — et rend la décision RÉVERSIBLE.
+      // Le retrait ne peut PAS se demander à `wideRow` : c'est `data-span`
+      // lui-même qui la rend vraie — la marque se serait gardée toute seule.
+      // Seule la bande du déplacement (`crit-row--wide`) prend la ligne par
+      // nature ; tout le reste se remesure.
+      rows.forEach(function (r) { if (!r.classList.contains('crit-row--wide')) delete r.dataset.span; });
+      rows.forEach(function (r) {
+        if (wideRow(r)) return;
+        var seg = r.querySelector('.seg');
+        if (!seg || seg.classList.contains('crit-dep-qui')) return;
+        var btns = seg.querySelectorAll('.seg-btn');
+        if (btns.length < 2 || seg.hidden) return;
+        // On mesure la piste À PLAT : restaquée, elle tient toujours sur une
+        // colonne et ne dit plus rien de la place qui lui manque.
+        var stacked = seg.classList.contains('seg-stack');
+        if (stacked) seg.classList.remove('seg-stack');
+        var first = btns[0].getBoundingClientRect();
+        var last = btns[btns.length - 1].getBoundingClientRect();
+        // Taille nulle = pas de mise en page (dialogue fermé, volet replié,
+        // jsdom) : on ne décide rien sur une mesure qui n'existe pas.
+        if (first.height && last.height && last.top > first.top + 1) r.dataset.span = 'row';
+        else if (stacked) seg.classList.add('seg-stack');
+      });
+      // On ne déplace un rang QUE s'il est mal placé : `appendChild` retire le
+      // nœud avant de le remettre, et le navigateur perd le focus qu'il portait
+      // — un volet qu'on déplie ne doit pas éjecter le clavier du contrôle
+      // qu'on vient d'atteindre.
+      var vuLarge = false, aTasser = false;
+      rows.forEach(function (r) {
+        if (wideRow(r)) vuLarge = true;
+        else if (vuLarge) aTasser = true;
+      });
+      if (aTasser) rows.forEach(function (r) { if (wideRow(r)) grid.appendChild(r); });
+      // Puis la DERNIÈRE rangée de rangs compacts se remplit. À deux colonnes
+      // c'est la règle CSS du rang impair ; à trois (le carnet du dossier),
+      // deux questions laissaient la troisième colonne nue et aucune règle
+      // écrite à la main ne l'aurait vu. On compte les pistes RÉELLES, on
+      // étire le dernier compact sur ce qui reste.
+      var compacts = rows.filter(function (r) { return !wideRow(r); });
+      compacts.forEach(function (r) { delete r.dataset.fill; });
+      var pistes = gridTracks(grid);
+      if (pistes > 1 && compacts.length) {
+        var reste = compacts.length % pistes;
+        if (reste) compacts[compacts.length - 1].dataset.fill = String(pistes - reste + 1);
+      }
+      // Et un rang qui OCCUPE la ligne entière le DIT (2026-09-07) : ses
+      // réponses s'y répartissent au lieu de se serrer contre le bord gauche,
+      // pendant que celles d'un rang qui partage sa ligne restent à la taille
+      // de leur libellé. Une seule marque, lue par la feuille de style — les
+      // trois façons de prendre la ligne (une bande, une piste qui déborde, le
+      // dernier compact qui comble sa rangée) se ressemblent enfin à l'œil.
+      rows.forEach(function (r) {
+        if (wideRow(r) || r.dataset.fill) r.dataset.large = 'true';
+        else delete r.dataset.large;
+      });
+    });
+  }
+
+  // Le nombre de colonnes qu'une grille dessine VRAIMENT — jamais la
+  // déclaration (« repeat(2, minmax(0, 1fr)) » n'est pas un compte), et rien du
+  // tout là où il n'y a pas de mise en page.
+  function gridTracks(grid) {
+    var css = '';
+    try { css = window.getComputedStyle(grid).gridTemplateColumns || ''; } catch (e) { return 0; }
+    var pistes = css.split(' ').filter(function (t) { return /^[\d.]+px$/.test(t); });
+    return pistes.length;
   }
 
   // Web-owned copy of the déplacement control (the domain owns the bands and
@@ -4278,6 +4537,11 @@
       title.id = (opts.idPrefix || 'crit-') + 'sec-' + g.id + '__t';
       sec.setAttribute('aria-labelledby', title.id);
       head.appendChild(title);
+      // La raison d'être RIDE la ligne du titre (2026-09-07) : trois sections
+      // dépensaient trois lignes entières à se présenter, et l'écran s'ouvrait
+      // sur des bandes plutôt que sur des questions. Elle ne bascule sous le
+      // titre que si la largeur lui manque.
+      head.appendChild(el('span', 'crit-sec-aide', g.aide));
       // Le compte de la section — rempli par validateOfferUI, dans le
       // vocabulaire de l'étape (« ✓ complet » / « n réponses attendues »).
       if (opts.tally) {
@@ -4292,7 +4556,6 @@
       // consulte : il montre tout. Le chevron ferme la PREMIÈRE ligne de la
       // bande, donc il se pose avant la raison d'être, qui prend la suivante.
       if (opts.tally) head.appendChild(sectionFoldBtn(grid.id, g.nom));
-      head.appendChild(el('span', 'crit-sec-aide', g.aide));
       // Les rangs qui PRENNENT la ligne (trois choix, la bande du déplacement)
       // descendent sous les rangs compacts de leur section : intercalé, un rang
       // pleine largeur laissait un demi-cadre vide à côté du rang compact qui le
@@ -4695,6 +4958,7 @@
   }
 
   function validateOfferUI() {
+    scheduleCoverage();
     var o = state.offer;
     var courriel = ($('o-courriel') && $('o-courriel').value || '').trim();
     // The account opt-in follows its courriel: inert without a valid one, and a
@@ -4827,6 +5091,9 @@
     if (n > bookSeen) bookSeen = n;
     form.dataset.at = String(n);
     bookPaint();
+    // L'écran qui s'ouvre est le premier à AVOIR une géométrie : caché, il ne
+    // mesurait rien, et la grille se tassait sur des rectangles nuls (2026-09-07).
+    if (n === 2) settleSegTracks($('o-criteria'));
     if (opts && opts.silent) return;
     // Le regard repart en haut de l'écran, et le clavier avec lui : sans ça on
     // arrive au milieu d'une carte qu'on n'a pas encore lue.
@@ -4984,6 +5251,74 @@
   // sector. The field normalizes as you type (domain-owned format) and
   // previews the exact public string; while incomplete, the submit gate and
   // its hint carry the requirement, so the preview stays calm.
+  var coverageTimer = null;
+  var coverageKey = '';
+  var coverageGeneration = 0;
+  function scheduleCoverage() {
+    var input = $('o-prefix');
+    var host = $('o-coverage');
+    if (!input || !host) return;
+    var prefix = D.normalizePostalPrefix(input.value);
+    var band = effectivePricing().deplacement;
+    var key = prefix + ':' + band;
+    if (key === coverageKey) return;
+    coverageKey = key;
+    var generation = ++coverageGeneration;
+    clearTimeout(coverageTimer);
+    clear(host);
+    host.hidden = false;
+    host.dataset.state = 'idle';
+    if (!D.isQuebecPostalPrefix(prefix) || !D.deplacementById(band)) {
+      host.textContent = T('Entrez votre secteur postal pour voir les notaires à proximité.');
+      return;
+    }
+    host.hidden = false;
+    host.textContent = 'Vérification de la couverture…';
+    coverageTimer = setTimeout(async function () {
+      var status = 'unknown', count = null, incomplete = false;
+      try {
+        var response = await fetch(API_BASE + '/coverage?prefixe=' + encodeURIComponent(prefix) + '&deplacement=' + encodeURIComponent(band));
+        if (response.ok) {
+          var coverage = await response.json();
+          status = coverage.status;
+          if (Number.isInteger(coverage.count) && coverage.count >= 0) count = coverage.count;
+          incomplete = coverage.incomplete === true;
+        }
+      } catch (e) { /* Unknown coverage must never become a false zero. */ }
+      if (generation !== coverageGeneration) return;
+      clear(host);
+      host.dataset.state = status;
+      if (status !== 'unknown' && count !== null) {
+        var summary = el('div', 'coverage-summary');
+        summary.appendChild(el('strong', 'coverage-count', String(count)));
+        var caption = el('div', 'coverage-caption');
+        caption.appendChild(el('strong', null, T(count === 1 ? 'Notaire dans votre zone' : 'Notaires dans votre zone')));
+        caption.appendChild(el('span', null, prefix + ' · ' + T('Selon le déplacement choisi')));
+        if (incomplete) caption.appendChild(el('span', null, T('Au moins ce nombre de notaires confirmés.')));
+        summary.appendChild(caption); host.appendChild(summary);
+      }
+      var messages = {
+        none: 'Aucun notaire inscrit ne couvre actuellement ce secteur avec le déplacement choisi. Élargissez votre rayon ou changez le lieu de signature pour augmenter vos possibilités.',
+        covered: 'Des notaires inscrits couvrent ce secteur. Leur disponibilité à la date choisie reste à confirmer.',
+        unknown: 'La couverture de ce secteur ne peut pas être confirmée pour le moment. Vous pouvez continuer, sans garantie de trouver un notaire.'
+      };
+      host.appendChild(el('p', 'help', messages[status] || messages.unknown));
+      if (status === 'none' || status === 'covered') {
+        var adjust = el('button', 'btn btn-sm', 'Modifier mon déplacement');
+        adjust.type = 'button';
+        adjust.addEventListener('click', function () {
+          var row = document.querySelector('#o-criteria [data-crit="deplacement"]');
+          if (!row) return;
+          bookShow(row);
+          var detail = row.closest('details'); if (detail) detail.open = true;
+          row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          var control = row.querySelector('button, input, select'); if (control) control.focus();
+        });
+        host.appendChild(adjust);
+      }
+    }, 300);
+  }
+
   function onPrefixInput() {
     var inp = $('o-prefix'); if (!inp) return;
     var norm = D.normalizePostalPrefix(inp.value);
@@ -5578,8 +5913,13 @@
       });
       acts.appendChild(cnl);
     }
-    // The human door, prefilled with this offer's context.
-    var aide = el('button', 'link-btn my-offer-help', 'Besoin d’aide ?'); aide.type = 'button';
+    // The human door, prefilled with this offer's context. It is a real action
+    // in the row: the icon gives it a clear affordance, while the label says
+    // what happens instead of looking like a detached text link.
+    var aide = el('button', 'btn btn-sm my-offer-help', null); aide.type = 'button';
+    aide.setAttribute('aria-label', 'Obtenir de l’aide sur cette demande');
+    aide.appendChild(el('span', 'my-offer-help-icon', '?'));
+    aide.appendChild(el('span', null, 'Obtenir de l’aide'));
     aide.addEventListener('click', function () { toggleNotifPanel(false); openContactDialog({ offer: o }); });
     acts.appendChild(aide);
     if (acts.childNodes.length) cell.appendChild(acts);
@@ -6076,19 +6416,19 @@
     // Mes offres — a full-width band at the top; its offers lay out across the
     // width so the actionable "where do my requests stand" view leads.
     var oCard = buildMyOffersCard();
-    if (oCard) body.appendChild(oCard);
+    if (oCard) { oCard.id = 'profil-offers'; body.appendChild(oCard); }
     // Then ask the API what notaries sent back, and repaint each band as it lands.
     refreshMyOffersStatus(myOffers());
 
     // Coordinates card — reused when publishing an offer. A full-width band;
     // the fields sit in a grid that fills the width (no empty right half).
-    var idCard = el('div', 'profil-card');
+    var idCard = el('div', 'profil-card'); idCard.id = 'profil-contact';
     idCard.appendChild(profilHead(IC_COORD, 'Coordonnées', 'Réutilisées automatiquement quand vous publiez une offre.'));
     var idFields = el('div', 'profil-fields');
     [
-      { key: 'nom', label: 'Nom (transmis au notaire qui vous retient)', ph: 'Prénom Nom', type: 'text', autocomplete: 'name' },
+      { key: 'nom', label: 'Votre nom', help: 'Transmis seulement au notaire qui retient votre demande.', ph: 'Prénom Nom', type: 'text', autocomplete: 'name' },
       { key: 'courriel', label: 'Courriel', ph: 'vous@exemple.ca', type: 'email', autocomplete: 'email' },
-      { key: 'telephone', label: 'Téléphone (transmis au notaire qui vous retient)', ph: '(418) 000-0000', type: 'tel', autocomplete: 'tel' },
+      { key: 'telephone', label: 'Votre téléphone', help: 'Pour que le notaire qui vous retient puisse vous joindre. Jamais public.', ph: '(418) 000-0000', type: 'tel', autocomplete: 'tel' },
       // The sector (audit 2.14): named for what it is — the same three
       // characters the booking sheet asks for — explained, capitalized as typed.
       { key: 'prefixe', label: 'Secteur postal', ph: 'G1R', type: 'text', autocomplete: 'postal-code', help: 'Les 3 premiers caractères de votre code postal.' },
@@ -6115,10 +6455,10 @@
 
     // Notifications card — on by default, per-kind toggles gate addNotif().
     // The toggles sit in a grid so they fill the width instead of stacking thin.
-    var nCard = el('div', 'profil-card');
+    var nCard = el('div', 'profil-card'); nCard.id = 'profil-notifications';
     // Honest copy: these switches govern ONLY the in-app bell — the emails the
     // API sends are transactional, managed by each email's unsubscribe link.
-    nCard.appendChild(profilHead(IC_NOTIF, 'Notifications', 'Ces réglages contrôlent la cloche dans l’application ; les courriels sont gérés par le lien de désabonnement de chaque courriel.'));
+    nCard.appendChild(profilHead(IC_NOTIF, 'Notifications', 'Ces réglages contrôlent la cloche dans l’application. Utilisez « Préférences de courriel » pour choisir les courriels à recevoir.'));
     var nGrid = el('div', 'profil-switches');
     PROFILE_NOTIF_KINDS.forEach(function (t) {
       var row = el('div', 'switch-row');
@@ -6138,19 +6478,30 @@
       row.appendChild(lab); row.appendChild(txt); nGrid.appendChild(row);
     });
     nCard.appendChild(nGrid);
+    var emailChoice = el('button', 'btn', T('Préférences de courriel'));
+    emailChoice.type = 'button';
+    emailChoice.addEventListener('click', function () {
+      var offer = myOffers().find(function (item) { return item.clientToken; });
+      if (offer) openEmailPreferences(offer.clientToken, offer.id, offer.dateISO);
+      else toast(T('Impossible de charger les préférences. Ouvrez le lien dans un courriel récent.'));
+    });
+    nCard.appendChild(emailChoice);
     body.appendChild(nCard);
 
     // Documents card — the full document list per service, with upload / remove /
     // mark-validated. "One profile" = coordinates + notifications + documents.
     var dCard = el('div', 'profil-card profil-docs');
-    dCard.appendChild(profilHead(IC_DOCS, 'Mes documents', 'Téléversez ce que le notaire demandera. Ajoutez, retirez ou marquez « validé ». Tout reste sur votre appareil jusqu’à ce qu’un notaire retienne votre demande.'));
+    dCard.appendChild(profilHead(IC_DOCS, 'Mes documents', 'Seules les pièces nécessaires pour l’acte actif sont affichées. Les réponses de votre dossier déterminent la liste ; rien ne bloque votre demande.'));
     // Service picker as outline chips (not a native dropdown) — matches the
     // calendar, one click to switch, on-aesthetic.
     var dchips = el('div', 'chip-group profil-doc-chips');
     dchips.setAttribute('role', 'group'); dchips.setAttribute('aria-label', 'Acte pour lequel préparer les documents');
-    // Back from Checkout (audit 2.2) the card opens on the act just paid
-    // for; otherwise on the catalogue's first act.
-    var docsPre = state.checkoutBid && D.serviceById(state.checkoutBid.serviceId) ? state.checkoutBid.serviceId : D.SERVICES[0].id;
+    // Open on the client's active act: the nearest upcoming offer wins, then
+    // the act just returned from checkout. This keeps the checklist tied to
+    // the answers and price of the dossier the client is actually preparing.
+    var docsPre = myDossierServiceId()
+      || (state.checkoutBid && D.serviceById(state.checkoutBid.serviceId) ? state.checkoutBid.serviceId : null)
+      || D.SERVICES[0].id;
     D.SERVICES.forEach(function (s) {
       var on = s.id === docsPre;
       var c = el('button', 'chip' + (on ? ' is-on' : ''), s.nom.split(' ')[0]);
@@ -6171,6 +6522,7 @@
 
     // Parrainage — the referral program's place in the profile, closing the page.
     body.appendChild(buildReferralCard());
+    accountTourReplay('client', body);
   }
 
   // Render the per-service document checklist into `container`: each item can be
@@ -6536,7 +6888,7 @@
     var pfill = el('span'); pfill.id = 'dossier-fill';
     pbar.appendChild(pfill);
     prep.appendChild(pbar);
-    prep.appendChild(el('div', 'help', 'Rien ici ne bloque votre demande. Chaque pièce peut être téléversée, ou marquée déjà transmise au notaire par un autre canal.'));
+    prep.appendChild(el('div', 'help', 'Seules les pièces nécessaires selon vos réponses apparaissent ici. Rien ne bloque votre demande ; chaque pièce peut être téléversée ou marquée déjà transmise au notaire.'));
     list.appendChild(prep);
 
     // The checklist packs into a card grid — several small pieces per row,
@@ -6816,7 +7168,7 @@
     if (parrain) body.parrain = parrain;
     try {
       var r = await fetch(API_BASE + '/notaries/connect', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
+        method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + nc.token },
         body: JSON.stringify(body),
       });
       var j = {}; try { j = await r.json(); } catch (e) {}
@@ -7240,7 +7592,11 @@
     ncRenderAuthState();
     renderAccountMenu(); // the account menu now reflects the notary session
     var loaded = await ncLoadBids();
-    if (loaded) toast('Console ouverte pour ' + email + '.');
+    if (loaded) {
+      toast('Console ouverte pour ' + email + '.');
+      accountTourReplay('notary', $('notary-authed'));
+      accountTour('notary');
+    }
     return { ok: true };
   }
 
@@ -7367,6 +7723,7 @@
     ncRenderProfil();
     ncRenderProfilBanner();
     ncRenderPrefs();
+    accountTourReplay('notary', $('notary-authed'));
     ncRenderEarnings(); // the money tiles
     // …et le relevé qui les rend JUSTES. Il était chargé au dépli du panneau
     // seulement, si bien que les tuiles affichaient le cache local (fenêtre de
@@ -8043,6 +8400,13 @@
   }
   function ncRenderPrefs() {
     if (!nc.email) return;
+    var pace = $('pref-pace');
+    if (pace && !$('notary-email-preferences')) {
+      var emailChoice = el('button', 'btn', T('Préférences de courriel'));
+      emailChoice.id = 'notary-email-preferences'; emailChoice.type = 'button';
+      emailChoice.addEventListener('click', function () { openEmailPreferences(nc.token); });
+      pace.parentElement.appendChild(emailChoice);
+    }
     var a = ncAlertes();
     var urg = $('pref-urgent'); if (urg) urg.checked = a.urgentOnly;
     document.querySelectorAll('#pref-pace .seg-btn').forEach(function (b) {
@@ -10670,6 +11034,15 @@
       } else if (mnav.contains(document.activeElement)) { try { navBurger.focus(); } catch (e) {} }
     }
     if (mnav && mnavScrim && navBurger) {
+      // CSS hides the drawer at desktop widths; release its modal lock too.
+      // Otherwise rotating a tablet leaves an invisible drawer blocking the site.
+      window.addEventListener('resize', function () {
+        if (window.innerWidth >= 720 && mnav.classList.contains('is-open')) {
+          setMobileNav(false);
+          var activeTab = $('tab-' + state.tab);
+          if (activeTab) activeTab.focus({ preventScroll: true });
+        }
+      });
       navBurger.addEventListener('click', function () { setMobileNav(!mnav.classList.contains('is-open')); });
       $('mnav-close').addEventListener('click', function () { setMobileNav(false); });
       mnavScrim.addEventListener('click', function () { setMobileNav(false); });
@@ -12332,6 +12705,7 @@
     // The emailed links: consume the hash so a token never lingers in the
     // address bar (same pattern as #nauth=/#pauth=). `#reponse=` is the
     // operator's door, `#messagerie` the visitor's.
+    openEmailPreferences();
     var h = location.hash || '';
     var m = /(^|[#&])reponse=([^&]+)/.exec(h);
     var msg = /(^|[#&])messagerie(?=$|&)/.test(h);
@@ -12438,6 +12812,9 @@
     selectDate: selectDate,
     // La porte d'une question : « Répondez à : … » l'emprunte, les tests aussi.
     focusCriterionRow: focusCriterionRow,
+    // Le tassement de la grille + la forme des pistes, en une passe mesurée :
+    // le navigateur l'appelle après chaque peinture, les tests la provoquent.
+    settleCriteriaLayout: settleSegTracks,
     reload: reloadAndRender,
     refreshMonthData: refreshMonthData,
     // The success screen, revealed through the helper that declares an offline
@@ -12516,6 +12893,8 @@
     client: { openOfferBand: openOfferBand, pollTick: clientPollTick, markSeen: markOfferSeen, unread: unreadCount },
     _internals: { applyFilters: applyFilters, acceptance: acceptance, buildCalendarLinks: buildCalendarLinks },
   };
+
+  if (window.NotaI18N) window.NotaSaveLanguage(window.NotaI18N.lang());
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();

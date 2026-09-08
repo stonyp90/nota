@@ -128,7 +128,7 @@ data "aws_iam_policy_document" "github_deploy" {
     effect = "Allow"
     actions = [
       "lambda:UpdateFunctionCode",
-      "lambda:GetFunction",
+      "lambda:GetFunction", "lambda:GetFunctionConfiguration",
     ]
     resources = [
       aws_lambda_function.api.arn,

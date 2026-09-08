@@ -261,3 +261,62 @@ test('les portes à venir n’existent PAS en double dans la page', async () => 
   $(doc, 'header-login').click();
   assert.equal(doc.querySelectorAll('.auth-soc-btn').length, 3, 'toujours trois après une réouverture');
 });
+
+test('account tour follows client sections, supports Back, Skip, and replay', async () => {
+  const { win, doc } = await boot();
+  doc.querySelectorAll('dialog[open]').forEach(d => d.close());
+  $(doc, 'header-signup').click();
+  $(doc, 'auth-email').value = 'tour@example.test';
+  $(doc, 'auth-email-form').dispatchEvent(new win.Event('submit', { bubbles: true, cancelable: true }));
+  const tour = () => doc.querySelector('.account-tour');
+  const click = label => [...tour().querySelectorAll('button')].find(b => b.textContent === label).click();
+  assert.ok(tour()?.open);
+  assert.match(tour().textContent, /1 \/ 5/);
+  assert.ok($(doc, 'profil-offers').classList.contains('account-tour-target'));
+  click('Suivant');
+  assert.ok($(doc, 'profil-contact').classList.contains('account-tour-target'));
+  click('Retour');
+  assert.match(tour().textContent, /1 \/ 5/);
+  click('Passer la visite');
+  assert.equal(tour(), null);
+  assert.equal(doc.querySelector('.account-tour-target'), null);
+  doc.querySelector('.account-tour-replay').click();
+  for (let i = 0; i < 4; i++) click('Suivant');
+  assert.match(tour().textContent, /5 \/ 5/);
+  click('Terminer la visite');
+  assert.equal(tour(), null);
+  assert.equal(win.localStorage.getItem('nota.account-tour.v1.client.tour%40example.test'), 'done');
+  win.close();
+});
+
+test('account tour Escape dismisses and clears the highlighted section', async () => {
+  const { win, doc } = await boot();
+  doc.querySelectorAll('dialog[open]').forEach(d => d.close());
+  $(doc, 'header-signup').click();
+  $(doc, 'auth-email').value = 'escape@example.test';
+  $(doc, 'auth-email-form').dispatchEvent(new win.Event('submit', { bubbles: true, cancelable: true }));
+  doc.querySelector('.account-tour').dispatchEvent(new win.Event('cancel', { cancelable: true }));
+  assert.equal(doc.querySelector('.account-tour'), null);
+  assert.equal(doc.querySelector('.account-tour-target'), null);
+  win.close();
+});
+
+test('notary tour covers setup, calendar, requests, files and payments only once', async () => {
+  const { win, doc, Nota } = await boot({ fetchStub: (url) => url.includes('/notary/session/verify')
+    ? { ok: true, status: 200, json: async () => ({ token: 'test-session', email: 'tour@notary.test' }) }
+    : undefined });
+  doc.querySelectorAll('dialog[open]').forEach(d => d.close());
+  await Nota.notary.verifyMagic('test-challenge', 'tour@notary.test');
+  assert.ok(doc.querySelector('.account-tour')?.open);
+  const targets = ['#notary-profil', '.nc-cal', '#notary-open-h', '#notary-retained-h', '#notary-connect'];
+  for (let i = 0; i < targets.length; i++) {
+    assert.ok(doc.querySelector(targets[i]).classList.contains('account-tour-target'));
+    const buttons = [...doc.querySelector('.account-tour').querySelectorAll('button')];
+    buttons.find(b => b.textContent === (i === 4 ? 'Terminer la visite' : 'Suivant')).click();
+  }
+  assert.equal(doc.querySelector('.account-tour'), null);
+  await Nota.notary.verifyMagic('another-challenge', 'tour@notary.test');
+  assert.equal(doc.querySelector('.account-tour'), null);
+  assert.ok(doc.querySelector('#notary-authed .account-tour-replay'));
+  win.close();
+});

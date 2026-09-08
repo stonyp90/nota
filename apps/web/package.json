@@ -8,7 +8,7 @@
   "scripts": {
     "build": "node build.mjs",
     "dev": "node run-local.mjs",
-    "test": "node --test"
+    "test": "node --test --test-concurrency=2"
   },
   "devDependencies": {
     "jsdom": "^24.1.0"

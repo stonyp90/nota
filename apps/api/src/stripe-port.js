@@ -1,9 +1,11 @@
 'use strict';
 
-// fr-CA is the product language, so every Stripe-hosted surface (Checkout,
-// Express onboarding, the payout dashboard) is pinned to it. Overridable for a
-// future market rather than baked in.
-const STRIPE_LOCALE = process.env.NOTA_STRIPE_LOCALE || 'fr-CA';
+// Explicit menu choice wins; otherwise Stripe follows the browser.
+function checkoutLocale(language) {
+  if (/^en(?:-|$)/i.test(language || '')) return 'en';
+  if (/^fr(?:-|$)/i.test(language || '')) return 'fr-CA';
+  return 'auto';
+}
 
 /**
  * Stripe adapter — a Port implementation that mirrors the shape of
@@ -44,7 +46,7 @@ function createStripeAdapter({ secretKey, webhookSecret, stripe: injected } = {}
   // `stripe` may be injected instead — the port's own seam, so the ARGUMENTS
   // this adapter sends to Stripe can be asserted without a network or a key.
   // Everything above this line is the contract; everything below is plumbing.
-  const stripe = injected || new (require('stripe'))(secretKey);
+  const stripe = injected || new (require('stripe'))(secretKey, { timeout: 5000, maxNetworkRetries: 1 });
 
   // A PaymentIntent's charge, expanded or not — the id every transfer sources.
   const latestChargeId = (intent) =>
@@ -95,20 +97,17 @@ function createStripeAdapter({ secretKey, webhookSecret, stripe: injected } = {}
         type: 'express',
         email,
         country: 'CA',
-        // Without this, Stripe-hosted onboarding and the payout dashboard render
-        // in English for a product that is fr-CA everywhere else.
-        preferred_locales: [STRIPE_LOCALE, 'fr'],
         default_currency: 'cad',
         capabilities: { transfers: { requested: true }, card_payments: { requested: true } },
         business_type: 'individual',
         metadata: { notaryId },
-      });
+      }, notaryId ? { idempotencyKey: `connect-account:${notaryId}` } : undefined);
       return { accountId: account.id };
     },
 
     /**
-     * Open a hosted onboarding link for a connected account. An idempotency key
-     * derived from the notary id makes a retried request reuse the same link.
+     * Open a fresh single-use link. A permanent idempotency key would replay
+     * a consumed or expired link and strand a returning notary.
      */
     async createOnboardingLink({ accountId, notaryId, returnUrl, refreshUrl }) {
       const link = await stripe.accountLinks.create(
@@ -118,7 +117,7 @@ function createStripeAdapter({ secretKey, webhookSecret, stripe: injected } = {}
           return_url: returnUrl,
           refresh_url: refreshUrl,
         },
-        notaryId ? { idempotencyKey: `onboard:${notaryId}` } : undefined
+        { idempotencyKey: 'onboard:' + require('node:crypto').randomUUID() }
       );
       return { url: link.url };
     },
@@ -140,14 +139,13 @@ function createStripeAdapter({ secretKey, webhookSecret, stripe: injected } = {}
      * bid id rides on the session + intent metadata so the webhook can bind the
      * resulting PaymentIntent back to the bid. Idempotent per bid.
      */
-    async createOfferAuthorization({ amountCents, currency, bidId, bidDate, description, customerEmail, successUrl, cancelUrl, cle }) {
+    async createOfferAuthorization({ amountCents, currency, bidId, bidDate, description, customerEmail, successUrl, cancelUrl, cle, language }) {
       const meta = { bidId: bidId || '', bidDate: bidDate || '' };
       const session = await stripe.checkout.sessions.create(
         {
           mode: 'payment',
-          // Stripe defaults to 'auto' (the BROWSER's language), which drops an
-          // English payment page into the middle of an all-French flow.
-          locale: STRIPE_LOCALE,
+          locale: checkoutLocale(language),
+          payment_method_types: ['card'],
           payment_intent_data: {
             capture_method: 'manual',
             description: description || 'Acte notarié — Nota',
@@ -190,14 +188,15 @@ function createStripeAdapter({ secretKey, webhookSecret, stripe: injected } = {}
      * without it Stripe would replay the session already completed with the bad
      * card, and the recovery would be a dead link.
      */
-    async createOfferSetup({ amountCents, currency, bidId, bidDate, description, customerEmail, successUrl, cancelUrl, cle }) {
+    async createOfferSetup({ amountCents, currency, bidId, bidDate, description, customerEmail, successUrl, cancelUrl, cle, language }) {
       const meta = { bidId: bidId || '', bidDate: bidDate || '', amountCents: String(amountCents == null ? '' : amountCents) };
       const session = await stripe.checkout.sessions.create(
         {
           mode: 'setup',
-          // Same reason as the payment session: 'auto' would drop an English
-          // page into the middle of an all-French flow.
-          locale: STRIPE_LOCALE,
+          locale: checkoutLocale(language),
+          payment_method_types: ['card'],
+          // Later off-session holds need a Customer, not a guest SetupIntent.
+          customer_creation: 'always',
           currency: currency || 'cad',
           setup_intent_data: {
             description: description || 'Acte notarié — Nota',

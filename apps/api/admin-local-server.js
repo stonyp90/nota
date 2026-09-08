@@ -1,5 +1,7 @@
 'use strict';
 
+process.env.NOTA_EMAIL_LANGUAGE ||= 'fr';
+
 /**
  * Local dev server for the ADMIN API (the admin.nota.ca Lambda, runnable with
  * no AWS). Plain node:http, same shape as local-server.js. Two modes:
@@ -10,10 +12,10 @@
  *   - TABLE_NAME set    → DynamoDB (Local or regional) with ADMIN_TABLE_NAME as
  *     the separate admin table, mirroring production's two-table split.
  *
- * Auth is the REAL magic-link flow: NODE_ENV !== 'production' makes the admin
- * use-case echo the link back in the response (devLink), so the flow completes
- * with no mailbox. The allowlist comes from NOTA_ADMIN_EMAILS and falls back to
- * a dev-only address; the link points at the admin SPA dev server
+ * Auth uses a normal email/password login in the console. The legacy magic-link
+ * route remains available for recovery and existing bookmarked links. The
+ * allowlist comes from NOTA_ADMIN_EMAILS and falls back to a dev-only address;
+ * the local password can be overridden with NOTA_ADMIN_PASSWORD.
  * (NOTA_ADMIN_BASE_URL, default http://localhost:4174).
  */
 const http = require('node:http');
@@ -27,6 +29,7 @@ const { sourceFingerprint } = require('./scripts/source-fingerprint');
 
 const PORT = Number(process.env.PORT || 8790);
 const DEV_ADMIN_EMAIL = 'admin@nota.local';
+const DEV_ADMIN_PASSWORD = 'nota-local-admin';
 
 // Same freshness stamp as local-server.js: the digest of the source THIS
 // process loaded, on every response as `x-nota-source`. See
@@ -88,6 +91,7 @@ function createLocalAdminApp({ today } = {}) {
     config: {
       allowlist: emails,
       baseUrl,
+      password: process.env.NOTA_ADMIN_PASSWORD || DEV_ADMIN_PASSWORD,
       devEcho: process.env.NODE_ENV !== 'production',
     },
   });
@@ -130,11 +134,11 @@ function startServer() {
     const store = mode === 'dynamo' ? `DynamoDB ${process.env.DYNAMO_ENDPOINT || '(regional)'}` : 'in-memory fixtures + seeded stats';
     console.log(`Nota ADMIN API on http://localhost:${PORT}  [${store}]`);
     console.log(`  source ${SOURCE.hash} (${SOURCE.files} fichiers) — rendu dans l'en-tête x-nota-source`);
-    console.log(`Dev sign-in: request a link for ${email} — the response echoes the magic link (devLink).`);
+    console.log(`Dev sign-in: ${email} / ${process.env.NOTA_ADMIN_PASSWORD || DEV_ADMIN_PASSWORD}`);
   });
   return server;
 }
 
 if (require.main === module) startServer();
 
-module.exports = { createLocalAdminApp, seedDevStats, seedDevNotaries, DEV_ADMIN_EMAIL };
+module.exports = { createLocalAdminApp, seedDevStats, seedDevNotaries, DEV_ADMIN_EMAIL, DEV_ADMIN_PASSWORD };

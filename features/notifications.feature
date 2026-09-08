@@ -88,3 +88,10 @@ Fonctionnalité: Cycle de vie des notifications
     Et ce courriel dit que 250 $ lui sont versés en dédommagement
     Et le client "client@exemple.ca" reçoit le courriel "offre annulée"
     Et ce courriel dit que 250 $ sont retenus en dédommagement du notaire
+
+  Scénario: le client choisit de ne plus recevoir un type de courriel
+    Étant donné que "client@exemple.ca" désactive le courriel "offerPublished"
+    Quand un client publie une offre avec le courriel "client@exemple.ca" pour "refinancement" à 2500 dans 10 jours
+    Alors la réponse a le statut 201
+    Et aucun courriel client n'est tenté
+    Et l'opérateur reçoit le courriel "nouveau lead"

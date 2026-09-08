@@ -172,13 +172,14 @@ test('a broken override store never blocks mail', async () => {
   assert.equal(mailer.sent.length, 1);
 });
 
-test('the notary magic link is NOT overridable — auth-critical mail ignores a disable', async () => {
+test('the notary magic link accepts copy overrides but ignores a disable', async () => {
   const { mailer, notifier, overrides } = setup();
   overrides.set('notaryMagicLink', { key: 'notaryMagicLink', enabled: false, subjectFr: 'Piégé', subjectEn: 'Trap', updatedAt: TODAY });
   const r = await notifier.onNotaryLoginRequested({ email: 'n@etude.ca', link: BASE + '/#nauth=t', ttlMinutes: 15 });
   assert.equal(r.sent, true, 'the sign-in link must always go out');
   assert.equal(mailer.sent.length, 1);
-  assert.match(mailer.sent[0].subject, /Espace notaire/, 'the built-in subject stands');
+  assert.equal(mailer.sent[0].subject, 'Piégé / Trap');
+  assert.ok(mailer.sent[0].html.includes(BASE + '/#nauth=t'), 'the real sign-in link remains intact');
 });
 
 // =============================================================================

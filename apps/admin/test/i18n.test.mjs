@@ -68,7 +68,7 @@ test('every user-visible string in index.html has an English entry', () => {
 // English boot of the real console (auth gate)
 // ---------------------------------------------------------------------------
 
-const FR_LEAD = 'Accès réservé. Recevez un lien de connexion à usage unique par courriel.';
+const FR_LEAD = 'Accès réservé. Connectez-vous avec votre courriel et votre mot de passe.';
 
 async function boot(lang) {
   const dom = new JSDOM(HTML_SRC, {

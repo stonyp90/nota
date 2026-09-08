@@ -160,6 +160,8 @@ test('carnetPulse: the demo fixtures produce a populated, coherent pulse', () =>
 
 test('CONTACT: the support email is defined once, here, and is a valid address', () => {
   assert.ok(D.CONTACT, 'the domain exposes the contact points');
+  assert.equal(D.CONTACT.courriel, 'info@gonota.ca');
+  assert.equal(D.CONTACT.confidentialite, 'info@gonota.ca');
   assert.ok(D.isEmail(D.CONTACT.courriel), 'support email is valid');
 });
 

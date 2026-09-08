@@ -167,6 +167,11 @@ jobs:
             --zip-file fileb:///tmp/admin-api.zip \
             --publish
 
+      - name: Wait for admin API update
+        env:
+          ADMIN_FUNCTION: ${{ vars.ADMIN_LAMBDA_NAME }}
+        run: aws lambda wait function-updated-v2 --function-name "$ADMIN_FUNCTION"
+
       - name: Sync admin assets to S3
         shell: bash
         run: |
@@ -209,3 +214,14 @@ jobs:
           aws cloudfront create-invalidation \
             --distribution-id "${{ vars.ADMIN_CF_DISTRIBUTION_ID }}" \
             --paths "/*"
+
+      - name: Smoke-test admin routing
+        env:
+          ADMIN_URL: ${{ vars.ADMIN_URL }}
+        run: |
+          set -euo pipefail
+          test -n "$ADMIN_URL"
+          curl --fail --silent --show-error --retry 5 --retry-all-errors "$ADMIN_URL/" -o /tmp/admin.html
+          grep -qi noindex /tmp/admin.html
+          status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' "$ADMIN_URL/api/admin/me")
+          test "$status" = 401

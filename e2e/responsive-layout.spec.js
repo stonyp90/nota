@@ -236,6 +236,69 @@ test.describe('responsive layout', () => {
   });
 });
 
+// The partners pane has a denser story than the other public doors: a reward
+// hero, audience chips, an estimator, a timeline and a claim form. Keep its
+// own geometry contract explicit at every supported width so a translation or
+// a new partner type cannot create a blank rail or a clipped action.
+test.describe('partners pane at every supported resolution', () => {
+  for (const vp of VIEWPORTS) {
+    test(`${vp.name}: reward hero, story and claim form keep one readable flow`, async ({ page }) => {
+      await page.setViewportSize({ width: vp.width, height: vp.height });
+      await gotoHome(page, { suppressOnboarding: true });
+      await openPane(page, 'partenaires', '#pane-partenaires');
+
+      const geometry = await page.evaluate(() => {
+        const rect = (sel) => {
+          const el = document.querySelector(sel);
+          if (!el) return null;
+          const r = el.getBoundingClientRect();
+          return { top: r.top + scrollY, bottom: r.bottom + scrollY, left: r.left, right: r.right, width: r.width, height: r.height };
+        };
+        const hero = rect('.pr-hero');
+        const copy = rect('.pr-hero-copy');
+        const rewards = rect('.pr-rewards');
+        const grid = rect('.pr-grid');
+        const pitch = rect('.pr-pitch');
+        const form = rect('.pr-form-panel');
+        const cards = [...document.querySelectorAll('.pr-card')].map((el) => {
+          const r = el.getBoundingClientRect();
+          return { top: r.top + scrollY, bottom: r.bottom + scrollY, left: r.left, right: r.right, width: r.width };
+        });
+        const chips = [...document.querySelectorAll('.pr-aud')].map((el) => {
+          const r = el.getBoundingClientRect();
+          return { right: r.right, width: r.width, height: r.height };
+        });
+        const columns = getComputedStyle(document.querySelector('.pr-grid')).gridTemplateColumns
+          .split(' ').filter(Boolean).length;
+        return {
+          viewport: { width: innerWidth, scrollWidth: document.documentElement.scrollWidth },
+          hero, copy, rewards, grid, pitch, form, cards, chips, columns,
+          cta: rect('#pr-hero-cta'), submit: rect('#partner-submit'),
+        };
+      });
+
+      expect(geometry.viewport.scrollWidth, 'partners never scrolls sideways').toBeLessThanOrEqual(geometry.viewport.width + 1);
+      expect(geometry.cards.length).toBe(2);
+      expect(geometry.cards.every((c) => c.width > 0 && c.right <= geometry.hero.right + 1), 'reward cards stay inside the hero').toBe(true);
+      expect(geometry.chips.every((c) => c.width > 0 && c.right <= geometry.hero.right + 1), 'audience chips stay inside the hero').toBe(true);
+      expect(geometry.cta.width, 'the hero action remains a real touch target').toBeGreaterThanOrEqual(120);
+      expect(geometry.submit.width, 'the claim action remains visible').toBeGreaterThanOrEqual(160);
+      expect(geometry.grid.top - geometry.hero.bottom, 'no empty band opens between hero and story').toBeLessThanOrEqual(32);
+
+      if (vp.width < 901) {
+        expect(geometry.columns, 'narrow layouts use one story/form column').toBe(1);
+        expect(geometry.form.left).toBeCloseTo(geometry.pitch.left, 0);
+        expect(geometry.form.width).toBeCloseTo(geometry.pitch.width, 0);
+        expect(geometry.rewards.top).toBeGreaterThanOrEqual(geometry.copy.bottom - 1);
+      } else {
+        expect(geometry.columns, 'wide layouts keep the claim form beside the story').toBe(2);
+        expect(geometry.form.left).toBeGreaterThan(geometry.pitch.right - 1);
+        expect(geometry.copy.right).toBeLessThanOrEqual(geometry.rewards.left + 1);
+      }
+    });
+  }
+});
+
 // --- « Nous joindre » (2026-09-04 redesign) ------------------------------------
 // The contact dialog is the one popup a stranger meets first. At every size:
 // no sideways scroll with it open, the dialog stays inside the viewport, the

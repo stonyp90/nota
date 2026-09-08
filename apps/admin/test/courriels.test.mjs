@@ -204,7 +204,7 @@ test('un enregistrement qui éteindrait un gabarit transactionnel ne se lit jama
 const champ = (editor, nom) => editor.querySelector('[name="' + nom + '"]');
 const slotErreur = (editor, cle) => editor.querySelector('.tpl-error[data-erreur="' + cle + '"]');
 
-test('the editor opens with the template vocabulary as chips and PUTs the four bilingual pairs on save', async () => {
+test('the editor opens with the template vocabulary as chips and PUTs the five bilingual pairs on save', async () => {
   const writes = [];
   const handler = api({
     onWrite(method, url, body) {
@@ -227,7 +227,7 @@ test('the editor opens with the template vocabulary as chips and PUTs the four b
 
   // Les quatre paires sont là, dans l'ordre, et le corps est une zone de texte.
   assert.deepEqual([...editor.querySelectorAll('.tpl-pair')].map((p) => p.getAttribute('data-paire')),
-    ['sujet', 'preheader', 'corps', 'cta']);
+    ['sujet', 'preheader', 'corps', 'cta', 'signature']);
   assert.equal(champ(editor, 'corpsFr').tagName, 'TEXTAREA', 'le corps se saisit sur plusieurs lignes');
 
   const [frInput, enInput] = editor.querySelectorAll('input.input');
@@ -251,6 +251,7 @@ test('the editor opens with the template vocabulary as chips and PUTs the four b
     preheaderFr: '', preheaderEn: '',
     corpsFr: 'Votre offre est publiée.', corpsEn: 'Your offer is live.',
     ctaFr: '', ctaEn: '',
+    signatureFr: '', signatureEn: '',
   });
   await waitFor(win, '.tpl-row'); // the list reloads after a save
   assert.match(text(doc.querySelector('#toast')), /Modèle enregistré/);

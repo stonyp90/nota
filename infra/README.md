@@ -1,6 +1,9 @@
 # Nota — Infrastructure (Terraform)
 
-Terraform stack for the **Nota** monorepo: a private S3-backed SPA and a Node 20
+For the GoNata.ca migration, see [the deployment runbook](../docs/gonata-deployment.md)
+and `gonata.tfvars.example`.
+
+Terraform stack for the **Nota** monorepo: a private S3-backed SPA and a Node 22
 Lambda API, both served **same-origin** through a single CloudFront distribution
 (so the browser needs no CORS), backed by a single DynamoDB table.
 
@@ -13,7 +16,7 @@ Lambda API, both served **same-origin** through a single CloudFront distribution
                        │  /api/*   ──► Lambda URL     │
                        └──────────────┬──────────────┘
                                       │
-                              Lambda (nodejs20.x)
+                              Lambda (nodejs22.x)
                                       │
                               DynamoDB (PK/SK)
 ```
@@ -125,7 +128,9 @@ DynamoDB TTL all keep idle cost near zero. Two cost levers worth knowing:
   send. If volume ever approaches a single GSI partition's write ceiling, shard
   `OPENBID` by month and fan the daily read across the shards (noted in `keys.js`).
 
-## Future additions (not built yet)
+## Email and documents
 
-- **SES** for transactional email (continue-prompt #5).
-- **Presigned-URL S3 upload bucket(s)** for user uploads (#2).
+SES domain verification, email feedback via SNS, scheduled reminders, encrypted
+S3 document uploads, and Secrets Manager runtime loading are defined in this
+stack. Email inbox hosting and the SES sandbox release still require the
+operator's provider/account setup; see the GoNata.ca runbook above.

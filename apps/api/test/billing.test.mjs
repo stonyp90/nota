@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
+const connectHeaders = require('./helpers/connect-session.cjs');
 const { createApp } = require('../src/handler.js');
 const { createMemoryRepo } = require('../src/repo-memory.js');
 const { createBilling, NOTARY_STATUS } = require('../src/billing.js');
@@ -156,7 +157,7 @@ test('GATING CONSISTENCY: free Connect onboarding then activation opens the sign
   const email = 'nouveau@notaire.ca';
 
   // 1) Sign-up via the public route.
-  const connect = await app.handle({ method: 'POST', path: '/notaries/connect', body: JSON.stringify({ email }) });
+  const connect = await app.handle({ method: 'POST', path: '/notaries/connect', headers: connectHeaders(email), body: JSON.stringify({ email }) });
   assert.equal(connect.statusCode, 200);
 
   // 2) Before activation the console gate stays closed: the request is
@@ -250,14 +251,14 @@ test('an unknown event type is ignored, not fatal', async () => {
 
 test('POST /notaries/connect returns 200 {url}', async () => {
   const { app } = setup();
-  const res = await app.handle({ method: 'POST', path: '/notaries/connect', body: JSON.stringify({ email: 'notaire@example.ca' }) });
+  const res = await app.handle({ method: 'POST', path: '/notaries/connect', headers: connectHeaders('notaire@example.ca'), body: JSON.stringify({ email: 'notaire@example.ca' }) });
   assert.equal(res.statusCode, 200);
   assert.match(parse(res).url, /^https:\/\/connect\.stripe\.test\//);
 });
 
 test('POST /notaries/connect returns 422 {errors} on an invalid email', async () => {
   const { app } = setup();
-  const res = await app.handle({ method: 'POST', path: '/notaries/connect', body: JSON.stringify({ email: 'nope' }) });
+  const res = await app.handle({ method: 'POST', path: '/notaries/connect', headers: connectHeaders('nope'), body: JSON.stringify({ email: 'nope' }) });
   assert.equal(res.statusCode, 422);
   assert.equal(parse(res).errors[0].code, 'courriel_invalide');
 });
@@ -561,7 +562,7 @@ const flush = async () => {
 };
 
 async function activeSession(app, stripe, email, repo) {
-  await app.handle({ method: 'POST', path: '/notaries/connect', body: JSON.stringify({ email }) });
+  await app.handle({ method: 'POST', path: '/notaries/connect', headers: connectHeaders(email), body: JSON.stringify({ email }) });
   const notaryId = stripe.calls.accounts.at(-1).notaryId;
   await app.handle({
     method: 'POST', path: '/stripe/webhook', headers: { 'stripe-signature': 'good' },

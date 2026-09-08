@@ -144,6 +144,7 @@ function make() {
     admin,
     analytics: createAnalytics({ repo, now: () => TODAY }),
     adminBaseUrl: 'https://admin.nota.ca',
+    stripeStatus: { secretConfigured: true, webhookConfigured: false, mode: 'test', locale: 'fr-CA', currency: 'cad' },
     now: () => TODAY,
     nowMs: () => clock.ms,
   });
@@ -178,6 +179,22 @@ async function loginAnalyst(h) {
   });
   return login(h, email);
 }
+
+test('GET /admin/payments expose une readiness Stripe sans jamais exposer les secrets', async () => {
+  const h = make();
+  const token = await login(h);
+  const res = await h.call('GET', '/admin/payments', { bearer: token });
+  assert.equal(res.statusCode, 200);
+  const body = parse(res);
+  assert.deepEqual(body, {
+    provider: 'stripe', mode: 'test', locale: 'fr-CA', currency: 'cad',
+    secretConfigured: true, webhookConfigured: false,
+    checkoutEnabled: false, connectEnabled: true,
+    customizable: { prices: true, cancellation: true, emailTemplates: true },
+  });
+  assert.equal('secretKey' in body, false);
+  assert.equal('webhookSecret' in body, false);
+});
 
 test('toutes les routes du prix sont 401 sans session', async () => {
   const h = make();

@@ -289,6 +289,12 @@ components:
           type: [string, "null"]
         corpsEn:
           type: [string, "null"]
+        signatureFr:
+          type: [string, "null"]
+          maxLength: 240
+        signatureEn:
+          type: [string, "null"]
+          maxLength: 240
         ctaFr:
           type: [string, "null"]
         ctaEn:
@@ -897,6 +903,45 @@ components:
               - code: modele_inconnu
                 message: "Modèle de courriel inconnu : nope."
 paths:
+  /admin/auth/login:
+    post:
+      operationId: loginAdminWithPassword
+      summary: Sign in with an email and password.
+      description: >-
+        Authenticates an allowlisted administrator and creates the same
+        server-backed session used by the recovery link flow. Invalid
+        credentials are deliberately indistinguishable.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, format: password, minLength: 8 }
+      responses:
+        "200":
+          description: Session established.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SessionGrant" }
+        "400":
+          description: Malformed JSON body.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Errors" }
+        "401":
+          description: Invalid credentials.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Errors" }
+        "429":
+          description: Per-IP rate limit hit.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Errors" }
   /admin/auth/request:
     post:
       operationId: requestAdminLogin
@@ -1136,6 +1181,8 @@ paths:
                 preheaderEn: { type: string, maxLength: 200 }
                 corpsFr: { type: string, maxLength: 1200 }
                 corpsEn: { type: string, maxLength: 1200 }
+                signatureFr: { type: string, maxLength: 240 }
+                signatureEn: { type: string, maxLength: 240 }
                 ctaFr: { type: string, maxLength: 60 }
                 ctaEn: { type: string, maxLength: 60 }
       responses:
@@ -1440,6 +1487,42 @@ paths:
                 $ref: "#/components/schemas/Errors"
         "422":
           $ref: "#/components/responses/ValidationError"
+
+  /admin/payments:
+    get:
+      operationId: getAdminPaymentsStatus
+      summary: Etat de configuration Stripe sans exposer de secret.
+      description: >-
+        Retourne les indicateurs de readiness du déploiement. Les clés Stripe
+        restent dans les secrets d'infrastructure et ne sont jamais renvoyées.
+      security:
+        - adminSession: []
+      responses:
+        "200":
+          description: Etat Stripe et réglages administrables.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [provider, mode, locale, currency, secretConfigured, webhookConfigured, checkoutEnabled, connectEnabled, customizable]
+                properties:
+                  provider: { type: string, example: stripe }
+                  mode: { type: string, enum: [live, test, unconfigured] }
+                  locale: { type: string, example: fr-CA }
+                  currency: { type: string, example: cad }
+                  secretConfigured: { type: boolean }
+                  webhookConfigured: { type: boolean }
+                  checkoutEnabled: { type: boolean }
+                  connectEnabled: { type: boolean }
+                  customizable:
+                    type: object
+                    required: [prices, cancellation, emailTemplates]
+                    properties:
+                      prices: { type: boolean }
+                      cancellation: { type: boolean }
+                      emailTemplates: { type: boolean }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 
   /admin/prix:
     get:

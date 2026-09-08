@@ -19,7 +19,134 @@ servers:
     description: Same-origin path fronted by CloudFront (production).
   - url: http://localhost:8788
     description: Local dev server (apps/api/local-server.js).
+# Public intake and sign-in requests accept the standard Accept-Language header.
+# Supported languages: fr and en, honoring quality weights; unsupported -> fr.
+# New recipients retain this language for notifications. Anonymous requests never
+# overwrite a saved preference; verified sign-in and preference updates can.
 paths:
+  /notary/feed.ics:
+    get:
+      summary: Subscribe to the authenticated notary's retained signings
+      description: >-
+        Read-only ICS export, not bidirectional Google/Outlook synchronization.
+        Every event is checked against the current bid ownership and retained
+        status using a strongly consistent read. Stale, missing, cancelled and
+        reassigned records are omitted. A storage outage returns 503 rather
+        than a successful empty calendar. External client refresh intervals apply.
+      parameters:
+        - in: query
+          name: token
+          required: true
+          description: FEED-scoped token from session verification; SESSION tokens are rejected.
+          schema: { type: string }
+      responses:
+        '200':
+          description: Read-only bilingual iCalendar subscription; no email addresses or document contents.
+          content:
+            text/calendar:
+              schema: { type: string }
+        '401':
+          description: Invalid, expired or incorrectly scoped token.
+        '503':
+          description: Calendar temporarily unavailable; retry without clearing locally cached events.
+          headers:
+            Retry-After:
+              schema: { type: string }
+              description: Suggested retry delay in seconds.
+  /carnet/feed.ics:
+    get:
+      summary: Subscribe to the public carnet
+      description: >-
+        Read-only bilingual ICS export of live, non-cancelled offers in the
+        forward calendar window. Contains only the public projection and does
+        not accept changes made in external calendar applications.
+      responses:
+        '200':
+          description: Public iCalendar subscription.
+          content:
+            text/calendar:
+              schema: { type: string }
+  /notification-preferences:
+    parameters:
+      - in: query
+        name: id
+        schema: { type: string }
+        description: Bid ID when authenticating with a client token
+      - in: query
+        name: dateISO
+        schema: { type: string, format: date }
+        description: Bid date when authenticating with a client token
+    get:
+      summary: Read email preferences and the notification catalog
+      description: Accepts a signed email preference token, an authenticated notary session, or a client token with its matching id and dateISO. Grants no dossier access.
+      security:
+        - notificationPreferenceToken: []
+      responses:
+        '200':
+          description: Notification catalog and boolean preferences keyed by template name
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  catalog:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        key: { type: string }
+                        labelFr: { type: string }
+                        labelEn: { type: string }
+                        required: { type: boolean }
+                  emailLanguage: { type: string, enum: [fr, en], nullable: true }
+                  preferences:
+                    type: object
+                    additionalProperties: { type: boolean }
+        '401': { description: Invalid signed identity }
+    post:
+      summary: Update the recipient's email language or per-template preferences
+      description: Omitted fields are preserved. Language updates require a verified identity. Does not reverse a global marketing unsubscribe. Login messages cannot be disabled.
+      security:
+        - notificationPreferenceToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              anyOf:
+                - required: [preferences]
+                - required: [emailLanguage]
+              properties:
+                emailLanguage: { type: string, enum: [fr, en] }
+                preferences:
+                  type: object
+                  additionalProperties: { type: boolean }
+      responses:
+        '200': { description: Updated catalog and preferences, same shape as GET }
+        '400': { description: Invalid JSON }
+        '401': { description: Invalid signed identity }
+        '422': { description: Unknown template, non-boolean value, or disabled login message }
+  /coverage:
+    get:
+      summary: Aggregate geographic coverage by active notaries; not date availability.
+      parameters:
+        - { in: query, name: prefixe, required: true, schema: { type: string } }
+        - { in: query, name: deplacement, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Coverage without identifying any notary; unknown when coordinates are missing.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, count, incomplete]
+                properties:
+                  status: { type: string, enum: [covered, none, unknown] }
+                  count: { type: [integer, "null"], minimum: 0, description: Confirmed geographic matches; null when no count can be confirmed. }
+                  incomplete: { type: boolean, description: Some active notaries have unknown coordinates; a positive count is a lower bound. }
+        "422": { description: Invalid sector or travel band. }
+        "503": { description: Coverage temporarily unavailable. }
   /health:
     get:
       operationId: getHealth
@@ -44,6 +171,8 @@ paths:
                 ok: true
                 today: "2026-08-12"
   /bids:
+    parameters:
+      - $ref: '#/components/parameters/AcceptLanguage'
     get:
       operationId: listBids
       summary: List the public bids for a month.
@@ -151,6 +280,8 @@ paths:
                   - code: sous_prix_depart
                     message: L’offre doit être d’au moins 2 000 $.
   /partenaires:
+    parameters:
+      - $ref: '#/components/parameters/AcceptLanguage'
     post:
       operationId: requestPartnerClaim
       summary: Request an email-verified claim on a partner referral code (step 1 of 2, ADR 0011).
@@ -273,6 +404,8 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
 
   /partenaires/rappel:
+    parameters:
+      - $ref: '#/components/parameters/AcceptLanguage'
     post:
       operationId: partnerCodeReminder
       summary: Email a partner their existing code back.
@@ -313,6 +446,8 @@ paths:
         "400":
           description: Invalid JSON body.
   /partenaires/verify:
+    parameters:
+      - $ref: '#/components/parameters/AcceptLanguage'
     post:
       operationId: verifyPartnerClaim
       summary: Confirm an email-verified partner code claim (step 2 of 2, ADR 0011).
@@ -372,13 +507,12 @@ paths:
       operationId: startConnectOnboarding
       summary: Start a notary's FREE Stripe Connect onboarding.
       description: >-
-        Opens a Stripe Connect onboarding link and returns the hosted URL the
-        notary redirects to. Joining is free — there is no subscription; Nota
-        collects a service fee (a configurable share of the acte's value — at
-        most 15 %, falling to 5 % as the notary's cote earns it; ADR 0028) only
-        when a retained act completes, as an application fee on a destination
-        charge. Card data never touches this server. The account becomes ACTIVE
-        via the `account.updated` webhook once charges are enabled.
+        Opens a fresh Stripe Connect onboarding link for the authenticated
+        notary's own email. Joining is free. Card data stays with Stripe.
+        Repeated requests reuse the connected account but issue a new single-use
+        onboarding URL. Account readiness is updated by verified Stripe webhooks.
+      security:
+        - notarySession: []
       requestBody:
         required: true
         content:
@@ -386,6 +520,9 @@ paths:
             schema:
               $ref: "#/components/schemas/ConnectInput"
       responses:
+        "401": { description: A valid notary session is required. }
+        "403": { description: The email does not belong to the signed-in notary. }
+        "503": { description: Payment onboarding is unavailable. }
         "200":
           description: Onboarding link created; redirect the notary to `url`.
           content:
@@ -467,6 +604,8 @@ paths:
                   - code: signature_invalide
                     message: Signature Stripe invalide.
   /notary/session/request:
+    parameters:
+      - $ref: '#/components/parameters/AcceptLanguage'
     post:
       operationId: requestNotarySignInLink
       summary: Request a passwordless sign-in link for the notary console (step 1 of 2).
@@ -552,6 +691,8 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
 
   /notary/session/verify:
+    parameters:
+      - $ref: '#/components/parameters/AcceptLanguage'
     post:
       operationId: verifyNotarySignInLink
       summary: Redeem a magic link for a notary session (step 2 of 2).
@@ -2261,6 +2402,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
   /client/welcome:
+    parameters:
+      - $ref: '#/components/parameters/AcceptLanguage'
     post:
       operationId: clientWelcome
       summary: Passwordless client signup — send the welcome email.
@@ -2294,6 +2437,8 @@ paths:
         "400":
           description: Invalid JSON body.
   /client/session/request:
+    parameters:
+      - $ref: '#/components/parameters/AcceptLanguage'
     post:
       operationId: clientSessionRequest
       summary: Ask for the single-use link that reopens your requests.
@@ -2341,6 +2486,8 @@ paths:
         "400":
           description: Invalid JSON body.
   /client/session/verify:
+    parameters:
+      - $ref: '#/components/parameters/AcceptLanguage'
     post:
       operationId: clientSessionVerify
       summary: Redeem the link and get back your requests, each with its token.
@@ -2464,6 +2611,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
   /contact:
+    parameters:
+      - $ref: '#/components/parameters/AcceptLanguage'
     post:
       operationId: sendContactMessage
       summary: Send a message to the Nota team (nous joindre form).
@@ -2522,6 +2671,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
   /support/messages:
+    parameters:
+      - $ref: '#/components/parameters/AcceptLanguage'
     post:
       operationId: sendSupportMessage
       summary: Live chat — a visitor's message (mints the thread on first send).
@@ -2766,6 +2917,8 @@ paths:
               schema:
                 type: string
   /notaries/signup:
+    parameters:
+      - $ref: '#/components/parameters/AcceptLanguage'
     post:
       operationId: notarySignup
       summary: Free notary signup by professional email — no Stripe at the door (2026-09-02).
@@ -3068,7 +3221,24 @@ paths:
           $ref: "#/components/responses/Forbidden"
 
 components:
+  parameters:
+    AcceptLanguage:
+      in: header
+      name: Accept-Language
+      required: false
+      schema: { type: string }
+      example: en-CA,en;q=0.9,fr;q=0.8
+      description: >-
+        Browser or chosen interface language. Supports fr and en, honors quality
+        weights, and falls back to fr for unsupported languages. Intake initializes
+        the recipient's notification language without replacing an existing choice.
+        Sign-in messages use the requested language immediately; verification may
+        update the saved choice. An absent header preserves existing behavior.
   securitySchemes:
+    notificationPreferenceToken:
+      type: http
+      scheme: bearer
+      description: Signed recipient identity from an email preference link
     notarySession:
       type: http
       scheme: bearer

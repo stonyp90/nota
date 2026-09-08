@@ -140,6 +140,7 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
   // so this repo performs no table Scans at all.
   const {
     PutCommand,
+    TransactWriteCommand,
     GetCommand,
     QueryCommand,
     UpdateCommand,
@@ -335,10 +336,10 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
       } while (ExclusiveStartKey);
       return bids;
     },
-    async get(id, dateISO) {
+    async get(id, dateISO, { consistentRead = false } = {}) {
       if (!dateISO) throw new Error('dynamo get requires dateISO for the key');
       const out = await doc.send(
-        new GetCommand({ TableName: tableName, Key: { PK: bidPK(dateISO), SK: `BID#${dateISO}#${id}` } })
+        new GetCommand({ TableName: tableName, Key: { PK: bidPK(dateISO), SK: `BID#${dateISO}#${id}` }, ...(consistentRead ? { ConsistentRead: true } : {}) })
       );
       return fromItem(out.Item);
     },
@@ -393,27 +394,36 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
         throw err;
       }
     },
-    // Conditional retain: write the retained item ONLY while the stored bid is
-    // still OUVERTE. The ConditionExpression is evaluated against the existing
-    // item, so two concurrent accepts cannot both win — the second trips
-    // ConditionalCheckFailedException and we surface that as `null` (the handler
-    // maps it to 409 deja_retenue). Mirror of repo-memory's retain(). `bid` is
-    // the fully-formed retained item.
+    // Commit the booking and its calendar pointer together. A failed pointer
+    // write cannot leave a successfully retained signing absent from the feed.
     async retain(bid, notaryId) {
-      void notaryId;
       try {
-        await doc.send(
-          new PutCommand({
-            TableName: tableName,
-            Item: toItem(bid),
-            ConditionExpression: '#s = :ouverte',
-            ExpressionAttributeNames: { '#s': 'status' },
-            ExpressionAttributeValues: { ':ouverte': STATUS.OUVERTE },
-          })
-        );
+        await doc.send(new TransactWriteCommand({
+          TransactItems: [
+            { Put: {
+              TableName: tableName,
+              Item: toItem(bid),
+              ConditionExpression: '#s = :ouverte',
+              ExpressionAttributeNames: { '#s': 'status' },
+              ExpressionAttributeValues: { ':ouverte': STATUS.OUVERTE },
+            } },
+            { Put: {
+              TableName: tableName,
+              Item: {
+                PK: notaryPK(notaryId), SK: retainedSK(bid.dateISO, bid.id),
+                type: 'retained', notaryId, id: bid.id, dateISO: bid.dateISO,
+                serviceId: bid.serviceId, montant: bid.montant,
+              },
+            } },
+          ],
+        }));
         return bid;
       } catch (err) {
-        if (err && err.name === 'ConditionalCheckFailedException') return null;
+        // Only a failed booking precondition is a lost acceptance race.
+        // Throttles, transaction conflicts and storage failures must propagate.
+        if (err && err.name === 'TransactionCanceledException' &&
+            err.CancellationReasons?.[0]?.Code === 'ConditionalCheckFailed' &&
+            err.CancellationReasons.slice(1).every(reason => reason.Code === 'None')) return null;
         throw err;
       }
     },
@@ -644,6 +654,27 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
     // scoped LeadingKeys grant (infra/admin.tf) is the only write door. Empty
     // subjects are stored as null so the consumption side's both-or-neither
     // contract reads unambiguously off the item itself.
+    async getEmailLanguage(email) {
+      const PK = 'MAILPREF#' + require('node:crypto').createHash('sha256').update(String(email).trim().toLowerCase()).digest('hex');
+      const out = await doc.send(new GetCommand({ TableName: tableName, Key: { PK, SK: 'PREFERENCES' }, ConsistentRead: true }));
+      return out.Item?.emailLanguage || null;
+    },
+    async putEmailLanguage(email, language, onlyIfAbsent = false) {
+      if (!['en', 'fr'].includes(language)) throw new Error('Invalid email language');
+      const PK = 'MAILPREF#' + require('node:crypto').createHash('sha256').update(String(email).trim().toLowerCase()).digest('hex');
+      await doc.send(new UpdateCommand({ TableName: tableName, Key: { PK, SK: 'PREFERENCES' },
+        UpdateExpression: 'SET emailLanguage = ' + (onlyIfAbsent ? 'if_not_exists(emailLanguage, :lang)' : ':lang'),
+        ExpressionAttributeValues: { ':lang': language } }));
+    },
+    async getNotificationPreferences(email) {
+      const PK = 'MAILPREF#' + require('node:crypto').createHash('sha256').update(String(email).trim().toLowerCase()).digest('hex');
+      const out = await doc.send(new GetCommand({ TableName: tableName, Key: { PK, SK: 'PREFERENCES' }, ConsistentRead: true }));
+      return out.Item?.preferences || {};
+    },
+    async putNotificationPreferences(email, preferences) {
+      const PK = 'MAILPREF#' + require('node:crypto').createHash('sha256').update(String(email).trim().toLowerCase()).digest('hex');
+      await doc.send(new UpdateCommand({ TableName: tableName, Key: { PK, SK: 'PREFERENCES' }, UpdateExpression: 'SET preferences = :preferences, #type = :type', ExpressionAttributeNames: { '#type': 'type' }, ExpressionAttributeValues: { ':preferences': preferences, ':type': 'notification_preferences' } }));
+    },
     async getEmailOverride(key) {
       const out = await doc.send(
         new GetCommand({ TableName: tableName, Key: { PK: emailOverridePK(), SK: emailOverrideSK(key) } })
@@ -676,6 +707,8 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
         corpsEn: txt(override.corpsEn),
         ctaFr: txt(override.ctaFr),
         ctaEn: txt(override.ctaEn),
+        signatureFr: txt(override.signatureFr),
+        signatureEn: txt(override.signatureEn),
         updatedAt: nowISO,
       };
       await doc.send(

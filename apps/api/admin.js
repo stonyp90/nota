@@ -1,5 +1,7 @@
 'use strict';
 
+process.env.NOTA_EMAIL_LANGUAGE ||= 'fr';
+
 /**
  * Admin Lambda entry point (admin.nota.ca). Adapts the API Gateway HTTP API
  * payload-format-2.0 event to the transport-agnostic request shape and wires
@@ -57,9 +59,16 @@ const mailer = {
   },
 };
 
-const app = createAdminApp(repo, { mailer });
+const { loadRuntimeSecrets } = require('./src/runtime-secrets');
+let app;
+let secretVersion;
 
 exports.handler = async (event) => {
+  const version = await loadRuntimeSecrets();
+  if (!app || version !== secretVersion) {
+    app = createAdminApp(repo, { mailer });
+    secretVersion = version;
+  }
   const method = event?.requestContext?.http?.method || 'GET';
   const path = event?.rawPath || '/';
   const query = event?.queryStringParameters || {};

@@ -14,8 +14,9 @@ resource "aws_acm_certificate" "cert" {
   count    = var.domain_name == "" ? 0 : 1
   provider = aws.us_east_1
 
-  domain_name       = var.domain_name
-  validation_method = "DNS"
+  domain_name               = var.domain_name
+  validation_method         = "DNS"
+  subject_alternative_names = var.enable_www ? ["www.${var.domain_name}"] : []
 
   lifecycle {
     create_before_destroy = true
@@ -32,7 +33,7 @@ resource "aws_route53_record" "cert_validation" {
     }
   }
 
-  zone_id         = var.hosted_zone_id
+  zone_id         = local.dns_zone_id
   name            = each.value.name
   type            = each.value.type
   records         = [each.value.record]
@@ -52,7 +53,7 @@ resource "aws_acm_certificate_validation" "cert" {
 # Alias records pointing the custom domain at the CloudFront distribution.
 resource "aws_route53_record" "alias_a" {
   count   = var.domain_name == "" ? 0 : 1
-  zone_id = var.hosted_zone_id
+  zone_id = local.dns_zone_id
   name    = var.domain_name
   type    = "A"
 
@@ -65,7 +66,7 @@ resource "aws_route53_record" "alias_a" {
 
 resource "aws_route53_record" "alias_aaaa" {
   count   = var.domain_name == "" ? 0 : 1
-  zone_id = var.hosted_zone_id
+  zone_id = local.dns_zone_id
   name    = var.domain_name
   type    = "AAAA"
 

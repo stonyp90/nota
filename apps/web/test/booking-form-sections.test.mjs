@@ -329,17 +329,64 @@ test('§8 — le contrôle reste décrit par son aide, même cachée dans le pan
   assert.ok(help.closest('.itip-pop'), 'le nœud décrit est bien celui du panneau');
 });
 
-test('§8 — une réponse est un bouton qu’on reconnaît : cadre, survol, et la réponse retenue peinte à la marque', () => {
+test('§8 — une réponse est un bouton qu’on reconnaît : cadre, survol, et la réponse retenue cerclée de marque', () => {
   const rule = CSS_SRC.match(/\.crit-row \.seg-btn \{[^}]*\}/);
   assert.ok(rule, 'les options d’une question ont leur propre règle');
   assert.match(rule[0], /border-color:\s*var\(--border\)/, 'chaque option porte un cadre');
   assert.match(rule[0], /background:\s*var\(--surface\)/, 'et une surface — plus des libellés posés sur une barre');
   const on = CSS_SRC.match(/\.crit-row \.seg-btn\.is-on \{[^}]*\}/);
   assert.ok(on, 'la réponse retenue a la sienne');
-  assert.match(on[0], /background:\s*var\(--brand-tint-solid-strong\)/, 'peinte à la marque, jamais un gris de plus');
-  assert.match(on[0], /border-color:\s*var\(--brand\)/);
+  assert.match(on[0], /border-color:\s*var\(--brand\)/, 'le cadre passe à la marque');
+  assert.match(on[0], /box-shadow:\s*inset 0 0 0 1px var\(--brand\)/,
+    'et double d’épaisseur par un inset — une bordure de 2 px déplacerait le libellé');
+  assert.match(on[0], /color:\s*var\(--brand\)/, 'l’encre suit');
   // Le registre des jetons tient : aucune couleur en dur.
   assert.ok(!/#[0-9a-f]{3,8}/i.test(rule[0] + on[0]), 'que des jetons');
+});
+
+// --- §10 · « button are too big, do not fill them » (propriétaire, 2026-09-07)
+//
+// Deux décisions, dans les deux sens du même registre : une réponse se
+// dimensionne sur ce qu'elle dit, et rien ne se remplit d'un aplat de marque —
+// ni les réponses, ni l'action qui conclut l'écran.
+
+test('§10 — une réponse se dimensionne sur son libellé, elle n’étire pas la ligne', () => {
+  const rule = CSS_SRC.match(/\.crit-row \.seg-btn \{[^}]*\}/)[0];
+  assert.ok(!/flex:\s*1 1 auto/.test(rule),
+    '« Non » ne doit plus faire 400 px de large pour trois lettres');
+  assert.match(rule, /flex:\s*0 1 auto/, 'elle ne grandit pas, elle peut seulement rétrécir');
+  assert.match(rule, /min-width:\s*\d+px/, 'mais elle garde un plancher : une cible reste une cible');
+});
+
+test('§10 — AUCUN aplat de marque : ni la réponse retenue, ni le bouton qui conclut', () => {
+  const on = CSS_SRC.match(/\.crit-row \.seg-btn\.is-on \{[^}]*\}/)[0];
+  assert.ok(!/background:\s*var\(--brand(-tint[a-z-]*)?\)/.test(on),
+    'la réponse retenue se cercle, elle ne se remplit pas');
+  const nav = CSS_SRC.match(/\.book-nav \.book-fwd, \.book-nav #offer-submit \{\s*\n\s*background:[^}]*\}/);
+  assert.ok(nav, 'la barre d’action a sa règle de couleur');
+  assert.match(nav[0], /background:\s*transparent/,
+    '« Continuer » / « Publier mon offre » rentrent dans le registre .btn-primary : couleur et graisse, jamais un aplat');
+  assert.match(nav[0], /color:\s*var\(--brand\)/);
+});
+
+test('§10 — et l’action ne traverse plus la barre : elle se range à droite', () => {
+  const geo = CSS_SRC.match(/\.book-nav \.book-fwd, \.book-nav #offer-submit \{ flex:[^}]*\}/);
+  assert.ok(geo, 'la géométrie de la barre est nommée');
+  assert.ok(!/flex:\s*1 1 auto/.test(geo[0]), 'plus de bandeau de 600 px pour un mot');
+  assert.match(geo[0], /margin:\s*0 0 0 auto/, 'l’action va au bout de la barre, « Retour » garde la gauche');
+});
+
+test('§10 — la coche de la réponse retenue a sa place réservée (ADR 0039)', () => {
+  const before = CSS_SRC.match(/\.crit-row \.seg-btn::before, \.crit-row \.seg-btn::after \{[^}]*\}/);
+  assert.ok(before, 'chaque option porte la boîte de la coche — et son jumeau muet');
+  assert.match(before[0], /visibility:\s*hidden/,
+    'réservée dès la première peinture : répondre ailleurs ne fait pas respirer la piste');
+  assert.match(CSS_SRC, /\.crit-row \.seg-btn::after \{ margin-left: 6px; \}/,
+    'et le jumeau garde le libellé centré : la coche seule le pousserait à droite');
+  assert.match(CSS_SRC, /\.crit-row \.seg-btn\.is-on::before \{ visibility: visible; \}/);
+  // Un défaut non touché n'a rien coché : la coche dirait « vous avez répondu ».
+  assert.match(CSS_SRC,
+    /\.crit-row\[data-default='true'\] \.seg-btn\.is-on::before \{ visibility: hidden; \}/);
 });
 
 test('§8 — deux « i » côte à côte ne se ressemblent pas : « i » renseigne, « ! » alerte', async () => {
@@ -350,4 +397,100 @@ test('§8 — deux « i » côte à côte ne se ressemblent pas : « i » rensei
   const warn = doc.querySelector('#o-criteria .itip[data-tone="warn"]');
   assert.ok(info && warn, 'la question porte son aide et sa note de situation');
   assert.notEqual(glyph(info), glyph(warn), 'deux glyphes, pas deux couleurs du même');
+});
+
+// --- §9 · la grille se tasse : plus de demi-cadre nu -------------------------
+//
+// Retour du propriétaire (2026-09-07) : « enlever tous les espaces blancs […]
+// le user doit comprendre rapidement ». Trois trous se voyaient sur la même
+// carte : une réponse à deux choix qui s'empile en demi-largeur creusait un
+// demi-cadre sous la question d'à côté ; un rang compact resté seul devant une
+// bande pleine largeur gardait le sien à droite ; et chaque bande de section
+// dépensait une ligne entière pour sa raison d'être.
+
+test('§9 — aucun rang compact ne suit un rang pleine largeur : les bandes descendent', async () => {
+  const { doc } = await boot();
+  await open(doc, 'financement');
+  for (const grid of doc.querySelectorAll('#o-criteria .crit-sec-grid')) {
+    const rows = [...grid.querySelectorAll(':scope > .crit-row')];
+    const wide = (r) => r.dataset.span === 'row' || r.classList.contains('crit-row--wide');
+    const premierLarge = rows.findIndex(wide);
+    if (premierLarge < 0) continue;
+    assert.ok(rows.slice(premierLarge).every(wide),
+      'une bande intercalée laisse une demi-cellule nue au-dessus d’elle : ' +
+      rows.map((r) => r.dataset.crit + (wide(r) ? '(large)' : '')).join(' · '));
+  }
+});
+
+test('§9 — un rang compact seul devant une bande prend la ligne', () => {
+  assert.match(CSS_SRC,
+    /\.crit-sec-grid > \.crit-row:nth-child\(odd\):has\(\+ \.crit-row\[data-span='row'\]\)/,
+    'sinon « Prêteur hypothécaire » garde un demi-cadre nu à sa droite');
+});
+
+test('§9 — une réponse qui ne tient pas sur une ligne prend la ligne entière (mesurée, pas comptée)', async () => {
+  const { win, doc } = await boot();
+  await open(doc, 'financement');
+  const r = row(doc, 'contexte');
+  assert.ok(r, 'le financement demande ce que le prêt finance');
+  // jsdom n'a pas de mise en page : on mesure à sa place, comme le navigateur
+  // le ferait quand les deux réponses ne tiennent pas côte à côte.
+  const btns = [...r.querySelectorAll('.seg .seg-btn')];
+  assert.equal(btns.length, 2, 'deux réponses — sous le seuil de trois, donc invisible à un simple compte');
+  let top = 0;
+  for (const b of btns) { const y = top; top += 30; b.getBoundingClientRect = () => ({ height: 24, top: y }); }
+  win.Nota.settleCriteriaLayout(doc.getElementById('o-criteria'));
+  assert.equal(r.dataset.span, 'row', 'la piste débordait : le rang prend la ligne');
+  const suivants = [...r.parentNode.querySelectorAll(':scope > .crit-row')];
+  assert.ok(suivants.indexOf(r) > suivants.indexOf(row(doc, 'preteur')),
+    'et descend sous les rangs compacts, qui se retrouvent appariés');
+  assert.ok(suivants.slice(suivants.indexOf(r)).every((x) => x.dataset.span === 'row' || x.classList.contains('crit-row--wide')),
+    'plus un seul rang compact derrière elle');
+});
+
+test('§9 — la raison d’être d’une section rejoint la ligne de son titre', async () => {
+  const { doc } = await boot();
+  await open(doc);
+  const head = section(doc, 'pret').querySelector('.crit-sec-h');
+  const kids = [...head.children].map((n) => n.className.split(' ')[0]);
+  assert.deepEqual(kids.slice(0, 3), ['crit-sec-ic', 'crit-sec-t', 'crit-sec-aide'],
+    'le sujet, son titre, sa raison d’être — puis le compte et le pli');
+  const rule = CSS_SRC.match(/\.crit-sec-aide \{[^}]*\}/);
+  assert.ok(rule, 'la raison d’être a sa règle');
+  assert.ok(!/flex:\s*1 0 100%/.test(rule[0]),
+    'elle ne réclame plus une ligne à elle : trois sections, trois lignes dépensées pour rien');
+});
+
+test('§9 — l’écran 4 ne garde plus de demi-carte nue : trois champs sur une ligne, l’explication contre son champ', () => {
+  const ident = CSS_SRC.match(/\.book-identity \{[^}]*\}/);
+  assert.ok(ident, 'le bloc d’identité a sa règle');
+  assert.match(ident[0], /grid-template-columns:\s*repeat\(auto-fit, minmax\(220px, 1fr\)\)/,
+    'à deux colonnes, le téléphone fermait le bloc seul et traînait une demi-carte vide');
+  assert.ok(!/\.book-identity \.form-row:last-child:nth-child\(odd\)/.test(CSS_SRC),
+    'et la règle qui lui faisait prendre la ligne entière n’a plus lieu d’être');
+  const prefix = CSS_SRC.match(/#prefix-row \{[^}]*\}/);
+  assert.ok(prefix, 'le secteur postal a la sienne');
+  assert.match(prefix[0], /display:\s*grid/, 'le champ et son explication se rangent côte à côte');
+});
+
+test('§9 — les champs de l’écran 4 portent un LIBELLÉ, pas une phrase', async () => {
+  const { doc } = await boot();
+  for (const id of ['o-name', 'o-courriel']) {
+    const lbl = doc.querySelector('label[for="' + id + '"]');
+    assert.ok(lbl.textContent.trim().length <= 20, id + ' : « ' + lbl.textContent.trim() + ' » se lit d’un coup d’œil');
+    // La promesse n'a pas disparu : elle décrit le champ, sur sa ligne d'aide.
+    const inp = $(doc, id);
+    const help = doc.getElementById(inp.getAttribute('aria-describedby'));
+    assert.ok(help && help.textContent.trim(), id + ' garde sa promesse sous le champ');
+  }
+});
+
+test('§9 — la feuille s’élargit sur grand écran sans laisser les choix larges en îlots', () => {
+  const dialog = CSS_SRC.match(/#day-dialog \{[^}]*\}/)?.[0] || '';
+  assert.match(dialog, /clamp\(760px, 78vw, 1180px\)/,
+    'la feuille utilise la largeur disponible sur un grand bureau');
+  assert.match(CSS_SRC, /@media \(min-width: 1100px\) \{\s*\.crit-row\[data-large\] \.seg-btn \{ flex: 1 1 0; max-width: none; \}/,
+    'les rangées de choix larges se répartissent sans colonne vide');
+  assert.match(CSS_SRC, /\.crit-sec-grid > \.crit-row:has\(\.seg\) \{ grid-column: 1 \/ -1; \}/,
+    'les réponses segmentées ne restent pas coincées dans une demi-colonne');
 });

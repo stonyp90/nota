@@ -22,7 +22,7 @@
  * Gmail and Yahoo expect from bulk senders. The POST /unsubscribe route
  * records the opt-out with no user interaction.
  */
-function createSesAdapter({ from, region, configurationSet } = {}) {
+function createSesAdapter({ from, region, configurationSet = process.env.NOTA_SES_CONFIGURATION_SET, replyTo: defaultReplyTo = process.env.NOTA_REPLY_TO_EMAIL } = {}) {
   if (!from) throw new Error('createSesAdapter: from is required');
 
   // Lazy import keeps the SES SDK out of the dependency graph for tests.
@@ -30,7 +30,7 @@ function createSesAdapter({ from, region, configurationSet } = {}) {
   const client = new SESv2Client({ ...(region ? { region } : {}) });
 
   return {
-    async send({ to, subject, html, text, unsubscribeUrl }) {
+    async send({ to, subject, html, text, unsubscribeUrl, replyTo }) {
       if (!to) throw new Error('send: a recipient (to) is required');
       const body = {};
       if (html) body.Html = { Data: html, Charset: 'UTF-8' };
@@ -49,6 +49,7 @@ function createSesAdapter({ from, region, configurationSet } = {}) {
         new SendEmailCommand({
           FromEmailAddress: from,
           Destination: { ToAddresses: [to] },
+          ...((replyTo || defaultReplyTo) ? { ReplyToAddresses: [replyTo || defaultReplyTo] } : {}),
           ...(configurationSet ? { ConfigurationSetName: configurationSet } : {}),
           Content: {
             Simple: {
@@ -110,7 +111,7 @@ function createFileMailer({ dir, log } = {}) {
         if (msg.text) fs.writeFileSync(base + '.txt', msg.text);
         fs.writeFileSync(
           base + '.json',
-          JSON.stringify({ to: msg.to, subject: msg.subject, unsubscribeUrl: msg.unsubscribeUrl || null, at: stamp }, null, 2)
+          JSON.stringify({ to: msg.to, subject: msg.subject, replyTo: msg.replyTo || null, unsubscribeUrl: msg.unsubscribeUrl || null, at: stamp }, null, 2)
         );
         // Le lien est ce qu'on vient chercher neuf fois sur dix : on le sort
         // en clair dans la console pour qu'un test local soit un copier-coller.

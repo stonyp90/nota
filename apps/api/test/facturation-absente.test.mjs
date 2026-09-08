@@ -24,6 +24,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
+const connectHeaders = require('./helpers/connect-session.cjs');
 const { createApp } = require('../src/handler.js');
 const { createMemoryRepo } = require('../src/repo-memory.js');
 
@@ -42,9 +43,7 @@ function appSansStripe() {
 test('sans Stripe, brancher ses versements répond 503 — jamais 500', async () => {
   const res = await appSansStripe().handle({
     method: 'POST',
-    path: '/notaries/connect',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ email: 'notaire@exemple.ca' }),
+    path: '/notaries/connect', headers: connectHeaders('notaire@exemple.ca'), body: JSON.stringify({ email: 'notaire@exemple.ca' }),
   });
 
   assert.equal(res.statusCode, 503, 'un 500 dit « Nota est cassé » ; le vrai fait est « le paiement n’est pas branché »');
@@ -104,9 +103,7 @@ test('un adaptateur injecté suffit, même quand le paiement à l’acceptation 
   });
 
   const connect = await app.handle({
-    method: 'POST', path: '/notaries/connect',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ email: 'notaire@exemple.ca' }),
+    method: 'POST', path: '/notaries/connect', headers: connectHeaders('notaire@exemple.ca'), body: JSON.stringify({ email: 'notaire@exemple.ca' }),
   });
   assert.equal(connect.statusCode, 200, 'l’adaptateur est là : la route doit passer');
   assert.equal(parse(connect).url, 'https://connect.stripe.test/x');

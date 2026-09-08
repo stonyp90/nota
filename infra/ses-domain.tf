@@ -32,7 +32,7 @@ variable "mail_from_subdomain" {
 }
 
 locals {
-  ses_domain_enabled = var.domain_name != "" && var.hosted_zone_id != null
+  ses_domain_enabled = var.domain_name != "" && (var.create_hosted_zone || var.hosted_zone_id != null)
   ses_mail_from      = "${var.mail_from_subdomain}.${var.domain_name}"
 }
 
@@ -49,7 +49,7 @@ resource "aws_sesv2_email_identity" "domain" {
 # Easy DKIM : trois CNAME, un par jeton publié par SES.
 resource "aws_route53_record" "ses_dkim" {
   count   = local.ses_domain_enabled ? 3 : 0
-  zone_id = var.hosted_zone_id
+  zone_id = local.dns_zone_id
   name    = "${aws_sesv2_email_identity.domain[0].dkim_signing_attributes[0].tokens[count.index]}._domainkey.${var.domain_name}"
   type    = "CNAME"
   ttl     = 600
@@ -68,7 +68,7 @@ resource "aws_sesv2_email_identity_mail_from_attributes" "domain" {
 
 resource "aws_route53_record" "ses_mail_from_mx" {
   count   = local.ses_domain_enabled ? 1 : 0
-  zone_id = var.hosted_zone_id
+  zone_id = local.dns_zone_id
   name    = local.ses_mail_from
   type    = "MX"
   ttl     = 600
@@ -77,7 +77,7 @@ resource "aws_route53_record" "ses_mail_from_mx" {
 
 resource "aws_route53_record" "ses_mail_from_spf" {
   count   = local.ses_domain_enabled ? 1 : 0
-  zone_id = var.hosted_zone_id
+  zone_id = local.dns_zone_id
   name    = local.ses_mail_from
   type    = "TXT"
   ttl     = 600
@@ -89,7 +89,7 @@ resource "aws_route53_record" "ses_mail_from_spf" {
 # courriel de notaire perdu ; passer à `p=reject` une fois les rapports propres.
 resource "aws_route53_record" "ses_dmarc" {
   count   = local.ses_domain_enabled ? 1 : 0
-  zone_id = var.hosted_zone_id
+  zone_id = local.dns_zone_id
   name    = "_dmarc.${var.domain_name}"
   type    = "TXT"
   ttl     = 600
@@ -112,6 +112,10 @@ resource "aws_sesv2_configuration_set" "main" {
     tls_policy = "REQUIRE"
   }
 
+  suppression_options {
+    suppressed_reasons = ["BOUNCE", "COMPLAINT"]
+  }
+
   reputation_options {
     reputation_metrics_enabled = true
   }
@@ -121,13 +125,14 @@ resource "aws_sesv2_configuration_set_event_destination" "alerts" {
   count                  = local.ses_domain_enabled ? 1 : 0
   configuration_set_name = aws_sesv2_configuration_set.main[0].configuration_set_name
   event_destination_name = "rebonds-et-plaintes"
+  depends_on             = [aws_sns_topic_policy.email_feedback]
 
   event_destination {
     enabled              = true
     matching_event_types = ["BOUNCE", "COMPLAINT", "REJECT"]
 
     sns_destination {
-      topic_arn = aws_sns_topic.alerts.arn
+      topic_arn = aws_sns_topic.email_feedback[0].arn
     }
   }
 }
@@ -135,4 +140,30 @@ resource "aws_sesv2_configuration_set_event_destination" "alerts" {
 output "ses_domain_identity" {
   description = "Domaine vérifié pour l'envoi (vide tant qu'aucun domaine n'est configuré)."
   value       = local.ses_domain_enabled ? aws_sesv2_email_identity.domain[0].email_identity : ""
+}
+
+# Dedicated feedback topic avoids modifying the operational alarm topic policy.
+resource "aws_sns_topic" "email_feedback" {
+  count = local.ses_domain_enabled ? 1 : 0
+  name  = "${var.project_name}-email-feedback"
+}
+
+resource "aws_sns_topic_policy" "email_feedback" {
+  count = local.ses_domain_enabled ? 1 : 0
+  arn   = aws_sns_topic.email_feedback[0].arn
+  policy = jsonencode({ Version = "2012-10-17", Statement = [{
+    Sid    = "SesFeedback", Effect = "Allow", Principal = { Service = "ses.amazonaws.com" },
+    Action = "SNS:Publish", Resource = aws_sns_topic.email_feedback[0].arn,
+    Condition = {
+      StringEquals = { "AWS:SourceAccount" = data.aws_caller_identity.current.account_id },
+      ArnEquals    = { "AWS:SourceArn" = aws_sesv2_configuration_set.main[0].arn }
+    }
+  }] })
+}
+
+resource "aws_sns_topic_subscription" "email_feedback" {
+  count     = local.ses_domain_enabled && var.alert_email != "" ? 1 : 0
+  topic_arn = aws_sns_topic.email_feedback[0].arn
+  protocol  = "email"
+  endpoint  = var.alert_email
 }

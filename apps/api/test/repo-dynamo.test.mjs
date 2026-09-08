@@ -64,7 +64,11 @@ test('retain writes with an "ouverte" ConditionExpression and returns the bid on
 
   const out = await repo.retain(bid, 'N1');
   assert.equal(out, bid);
-  const input = sent[0].input;
+  const input = sent[0].input.TransactItems[0].Put;
+  assert.equal(sent[0].constructor.name, 'TransactWriteCommand');
+  assert.equal(sent[0].input.TransactItems.length, 2);
+  assert.equal(sent[0].input.TransactItems[1].Put.Item.id, bid.id);
+  assert.equal(sent[0].input.TransactItems[1].Put.Item.notaryId, 'N1');
   assert.equal(input.ConditionExpression, '#s = :ouverte');
   assert.equal(input.ExpressionAttributeNames['#s'], 'status');
   assert.equal(input.ExpressionAttributeValues[':ouverte'], 'ouverte');
@@ -74,7 +78,8 @@ test('retain returns null when the conditional check fails (lost TOCTOU race)', 
   const doc = {
     async send() {
       const e = new Error('conditional check failed');
-      e.name = 'ConditionalCheckFailedException';
+      e.name = 'TransactionCanceledException';
+      e.CancellationReasons = [{ Code: 'ConditionalCheckFailed' }, { Code: 'None' }];
       throw e;
     },
   };
@@ -115,7 +120,7 @@ test('a RETAINED bid carries NO GSI1 attributes, so it drops out of the index', 
 
   await repo.retain({ id: 'a', dateISO: '2026-08-20', serviceId: 'refinancement', montant: 800, status: 'retenue' }, 'N1');
 
-  const item = sent[0].input.Item;
+  const item = sent[0].input.TransactItems[0].Put.Item;
   assert.equal('GSI1PK' in item, false, 'retained bids are not indexed');
   assert.equal('GSI1SK' in item, false);
 });
@@ -382,3 +387,23 @@ test('incrPartnerRateCounter ADDs on a TTL window under the PRL# prefix and retu
   assert.equal(input.Key.PK, 'PRL#partner_claim#1.2.3.4');
   assert.ok(String(input.UpdateExpression).includes('ADD'));
 });
+
+test('calendar authorization can request a strongly consistent bid read', async () => {
+  const sent = [];
+  const repo = createDynamoRepo({ tableName: 't', doc: { async send(command) { sent.push(command); return {}; } } });
+  await repo.get('bid', '2026-09-08', { consistentRead: true });
+  assert.equal(sent[0].input.ConsistentRead, true);
+  assert.deepEqual(sent[0].input.Key, { PK: 'MONTH#2026-09', SK: 'BID#2026-09-08#bid' });
+});
+
+for (const reasons of [
+  [{ Code: 'None' }, { Code: 'ProvisionedThroughputExceeded' }],
+  [{ Code: 'TransactionConflict' }, { Code: 'None' }],
+  undefined,
+]) {
+  test('retention never reports a storage/transaction outage as a lost booking race: ' + JSON.stringify(reasons), async () => {
+    const error = Object.assign(new Error('retryable storage failure'), { name: 'TransactionCanceledException', CancellationReasons: reasons });
+    const repo = createDynamoRepo({ tableName: 't', doc: { async send() { throw error; } } });
+    await assert.rejects(() => repo.retain({ id: 'bid', dateISO: '2026-09-08', status: 'retenue' }, 'N1'), error);
+  });
+}

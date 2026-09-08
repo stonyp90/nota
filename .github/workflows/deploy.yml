@@ -18,6 +18,7 @@
 name: Deploy
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
 
@@ -156,6 +157,11 @@ jobs:
             --zip-file fileb:///tmp/api.zip \
             --publish
 
+      - name: Wait for API and reminder updates
+        run: |
+          aws lambda wait function-updated-v2 --function-name nota-api
+          aws lambda wait function-updated-v2 --function-name nota-reminders
+
       - name: Sync web assets to S3
         shell: bash
         run: |
@@ -215,3 +221,13 @@ jobs:
           aws cloudfront create-invalidation \
             --distribution-id "${{ vars.CF_DISTRIBUTION_ID }}" \
             --paths "/*"
+
+      - name: Smoke-test production routing
+        env:
+          PUBLIC_URL: ${{ vars.PUBLIC_URL }}
+        run: |
+          set -euo pipefail
+          test -n "$PUBLIC_URL"
+          curl --fail --silent --show-error --retry 5 --retry-all-errors "$PUBLIC_URL/api/health" | jq -e '.ok == true'
+          curl --fail --silent --show-error --retry 5 --retry-all-errors "$PUBLIC_URL/" -o /tmp/public.html
+          grep -q 'nota:site' /tmp/public.html

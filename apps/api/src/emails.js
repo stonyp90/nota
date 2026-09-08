@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Email templates — bilingual (fr-CA first, en-CA second), conversion-optimized,
+ * Email templates — French/English with a configurable delivery language,
  * presentation only.
  *
  * This is an adapter (the "view" of the notification vertical): it turns
@@ -10,13 +10,11 @@
  * rules and does NO I/O. The notifier (notifications.js) decides who gets what
  * and when; this file decides only how it reads.
  *
- * Bilingual contract — recipients' language preference is not tracked, so EVERY
- * message carries both languages, French first:
- *   - subject: 'FR / EN' (each side kept short);
- *   - preheader: 'FR · EN';
- *   - HTML: the full French block (heading, lead, body, CTA button), a subtle
- *     divider, then the full English block with its own CTA to the same URL;
- *   - plain text: the French lines, a '----' separator, then the English lines;
+ * Delivery language — application entry points default to French; an explicit
+ * English or bilingual setting is supported. Subject, preheader, HTML, plain
+ * text, buttons and footer all follow that setting. Bilingual authoring keeps
+ * the French block first and the English block second. Recipient preferences
+ * are not yet persisted.
  *   - amounts via domain.money() (fr) and domain.moneyEn() (en); dates via the
  *     fr-CA and en-CA formatters; service/tier names via nom/nomCourt (fr) and
  *     nomEn/nomCourtEn (en) — never hardcoded here.
@@ -37,7 +35,7 @@
  *   - a plain-text alternative carrying every link the HTML carries;
  *   - a CASL / Law-25 footer: bilingual sender identification (Nota + mailing
  *     address), the contact and privacy addresses from domain.CONTACT, and a
- *     working 'Se désabonner / Unsubscribe' link, on EVERY message;
+ *     working languageCopy(lang, 'Se désabonner', 'Unsubscribe') link, on EVERY message;
  *   - no jargon in client copy (lead, hold, capture, payout, Stripe), never a
  *     rating value about a named notary in client copy (ADR 0030), never a
  *     percentage of honoraires in notary copy (art. 29.1 / 32 — the only « % »
@@ -239,7 +237,18 @@ function button(label, url) {
 // (aria-hidden): the wordmark IS the accessible name, so a screen reader says
 // « Nota », not « N Nota ». border-radius degrades gracefully to a square. Sits
 // at the top of the card, above a hairline rule.
-function logoHeader() {
+// Application entry points configure French by default. Explicit bilingual
+// rendering remains available for template authoring and translation checks.
+function emailLanguage(ctx = {}) {
+  const value = ctx.emailLanguage || process.env.NOTA_EMAIL_LANGUAGE || 'bilingual';
+  if (value === 'bilingual') return value;
+  return /^en(?:-|$)/i.test(value) ? 'en' : 'fr';
+}
+function languageCopy(lang, fr, en, separator = ' / ') {
+  return lang === 'fr' ? fr : lang === 'en' ? en : fr + separator + en;
+}
+
+function logoHeader(lang) {
   return (
     '<tr><td style="padding:26px 30px 22px;border-bottom:1px solid ' +
     PALETTE.border +
@@ -262,7 +271,7 @@ function logoHeader() {
     FONT +
     ';font-size:12px;line-height:1.5;font-weight:500;letter-spacing:0.02em;color:' +
     PALETTE.muted +
-    ';">La place de marché notariale · The notarial marketplace</div>' +
+    ';">' + languageCopy(lang, 'La place de marché notariale', 'The notarial marketplace', ' · ') + '</div>' +
     '</td></tr></table>' +
     '</td></tr>'
   );
@@ -271,7 +280,14 @@ function logoHeader() {
 // registered mailing address, a plain-language bilingual reason for the
 // message, and a working bilingual unsubscribe link alongside support +
 // privacy contacts.
-function footer(unsubscribeUrl) {
+function preferencesUrl(unsubscribeUrl, baseUrl) {
+  try {
+    const u = new URL(unsubscribeUrl);
+    if (!/^https?:$/.test(u.protocol)) return "";
+    return String(baseUrl || u.origin).replace(/\/+$/, '') + '/#email-preferences=' + encodeURIComponent(u.searchParams.get('token') || '');
+  } catch { return ''; }
+}
+function footer(unsubscribeUrl, baseUrl, lang) {
   const link = (href, label) =>
     '<a href="' + esc(href) + '" style="color:' + PALETTE.muted + ';text-decoration:underline;">' + label + '</a>';
   return (
@@ -289,27 +305,28 @@ function footer(unsubscribeUrl) {
     '<p style="margin:0 0 10px;">' +
     esc(SENDER.address) +
     '</p>' +
-    '<p style="margin:0 0 4px;">Vous recevez ce courriel de Nota au sujet de votre activité sur la place de marché notariale du Québec.</p>' +
-    '<p style="margin:0 0 10px;">You are receiving this email from Nota about your activity on Québec’s notarial marketplace.</p>' +
+    (lang !== 'en' ? '<p style="margin:0 0 4px;">Vous recevez ce courriel de Nota au sujet de votre activité sur la place de marché notariale du Québec.</p>' : '') +
+    (lang !== 'fr' ? '<p style="margin:0 0 10px;">You are receiving this email from Nota about your activity on Québec’s notarial marketplace.</p>' : '') +
     '<p style="margin:0;">' +
-    link(unsubscribeUrl, 'Se désabonner / Unsubscribe') +
+    link(unsubscribeUrl, languageCopy(lang, 'Se désabonner', 'Unsubscribe')) +
     ' &nbsp;·&nbsp; ' +
-    link('mailto:' + SENDER.supportEmail, 'Nous écrire / Contact us') +
+    (preferencesUrl(unsubscribeUrl, baseUrl) ? link(preferencesUrl(unsubscribeUrl, baseUrl), languageCopy(lang, 'Préférences de courriel', 'Email preferences')) + '<br />' : '') +
+    link('mailto:' + SENDER.supportEmail, languageCopy(lang, 'Nous écrire', 'Contact us')) +
     ' &nbsp;·&nbsp; ' +
-    link('mailto:' + SENDER.privacyEmail, 'Confidentialité (Loi 25) / Privacy (Law 25)') +
+    link('mailto:' + SENDER.privacyEmail, languageCopy(lang, 'Confidentialité (Loi 25)', 'Privacy (Law 25)')) +
     '</p></div></td></tr>'
   );
 }
 // The sign-off that closes every language block — one voice on every message.
 const SIGNOFF = { fr: 'L’équipe Nota', en: 'The Nota team' };
-function signoffHtml(lang) {
+function signoffHtml(lang, signature) {
   return (
     '<p style="margin:22px 0 0;font-family:' +
     FONT +
     ';font-size:14px;line-height:1.6;color:' +
     PALETTE.muted +
     ';">' +
-    esc(SIGNOFF[lang] || SIGNOFF.fr) +
+    esc(signature || SIGNOFF[lang] || SIGNOFF.fr) +
     '</p>'
   );
 }
@@ -324,7 +341,7 @@ function divider() {
 }
 // One language block: heading, optional lead, body, its own CTA button, the
 // sign-off in that language.
-function sectionHtml({ heading, lead, bodyHtml, ctaLabel }, ctaUrl, lang) {
+function sectionHtml({ heading, lead, bodyHtml, ctaLabel, signature }, ctaUrl, lang) {
   return (
     '<h1 style="margin:0 0 12px;font-family:' +
     FONT +
@@ -344,7 +361,7 @@ function sectionHtml({ heading, lead, bodyHtml, ctaLabel }, ctaUrl, lang) {
       : '') +
     (bodyHtml || '') +
     (ctaLabel && ctaUrl ? button(ctaLabel, ctaUrl) : '') +
-    signoffHtml(lang)
+    signoffHtml(lang, signature)
   );
 }
 // One shared, robust shell for every template. A full-bleed neutral background
@@ -353,15 +370,15 @@ function sectionHtml({ heading, lead, bodyHtml, ctaLabel }, ctaUrl, lang) {
 // and safe in dark-mode clients. The MSO ghost table pins the width to 600px in
 // Outlook, where max-width is ignored; everywhere else the card is fluid up to
 // 600px, one column, mobile-friendly.
-function layout({ preheader, fr, en, ctaUrl, unsubscribeUrl }) {
+function layout({ preheader, fr, en, ctaUrl, unsubscribeUrl, baseUrl, lang }) {
   return (
-    '<!doctype html><html lang="fr-CA"><head><meta charset="utf-8" />' +
+    '<!doctype html><html lang="' + (lang === 'en' ? 'en-CA' : 'fr-CA') + '"><head><meta charset="utf-8" />' +
     '<meta name="viewport" content="width=device-width, initial-scale=1" />' +
     // The card is deliberately light-only (stable, legible everywhere); these
     // metas tell Apple Mail and friends not to auto-invert it in dark mode.
     '<meta name="color-scheme" content="light" />' +
     '<meta name="supported-color-schemes" content="light" />' +
-    '<title>' + esc(fr.heading || 'Nota') + ' — Nota</title></head><body style="margin:0;padding:0;">' +
+    '<title>' + esc((lang === 'en' ? en.heading : fr.heading) || 'Nota') + ' — Nota</title></head><body style="margin:0;padding:0;">' +
     preheaderHtml(preheader || '') +
     '<div style="background-color:' +
     PALETTE.bg +
@@ -382,44 +399,40 @@ function layout({ preheader, fr, en, ctaUrl, unsubscribeUrl }) {
     ';border-top:3px solid ' +
     PALETTE.brand +
     ';border-radius:' + RADIUS.card + ';border-collapse:separate;overflow:hidden;">' +
-    logoHeader() +
+    logoHeader(lang) +
     '<tr><td style="padding:26px 30px 30px;">' +
-    sectionHtml(fr, ctaUrl, 'fr') +
-    divider() +
-    // The document is fr-CA; the English block declares its own language so
-    // screen readers switch pronunciation.
-    '<div lang="en-CA">' +
-    sectionHtml(en, ctaUrl, 'en') +
-    '</div>' +
+    (lang !== 'en' ? sectionHtml(fr, ctaUrl, 'fr') : '') +
+    (lang === 'bilingual' ? divider() : '') +
+    (lang !== 'fr' ? '<div lang="en-CA">' + sectionHtml(en, ctaUrl, 'en') + '</div>' : '') +
     '</td></tr>' +
-    footer(unsubscribeUrl) +
+    footer(unsubscribeUrl, baseUrl, lang) +
     '</table>' +
     '<!--[if mso]></td></tr></table><![endif]-->' +
     '</td></tr></table></div>' +
     '</body></html>'
   );
 }
-function sectionText({ heading, lead, textLines, ctaLabel }, ctaUrl, lang) {
+function sectionText({ heading, lead, textLines, ctaLabel, signature }, ctaUrl, lang) {
   const parts = [heading, ''];
   if (lead) parts.push(lead, '');
   const body = (textLines || []).filter((l) => l != null && String(l).trim() !== '');
   body.forEach((l) => parts.push(l));
   if (body.length) parts.push('');
   if (ctaLabel && ctaUrl) parts.push(ctaLabel + ' : ' + ctaUrl, '');
-  parts.push(SIGNOFF[lang] || SIGNOFF.fr, '');
+  parts.push(signature || SIGNOFF[lang] || SIGNOFF.fr, '');
   return parts;
 }
-function textLayout({ fr, en, ctaUrl, unsubscribeUrl }) {
+function textLayout({ fr, en, ctaUrl, unsubscribeUrl, baseUrl, lang }) {
   const parts = [
-    ...sectionText(fr, ctaUrl, 'fr'),
-    TEXT_SEPARATOR,
-    '',
-    ...sectionText(en, ctaUrl, 'en'),
+    ...(lang !== 'en' ? sectionText(fr, ctaUrl, 'fr') : []),
+    ...(lang === 'bilingual' ? [TEXT_SEPARATOR, ''] : []),
+    ...(lang !== 'fr' ? sectionText(en, ctaUrl, 'en') : []),
   ];
   parts.push('—', SENDER.name, SENDER.address, '');
-  parts.push('Se désabonner / Unsubscribe : ' + unsubscribeUrl);
-  parts.push('Nous écrire / Contact us : ' + SENDER.supportEmail);
-  parts.push('Confidentialité (Loi 25) / Privacy (Law 25) : ' + SENDER.privacyEmail);
+  parts.push(languageCopy(lang, 'Se désabonner', 'Unsubscribe') + ' : ' + unsubscribeUrl);
+  if (preferencesUrl(unsubscribeUrl, baseUrl)) parts.push(languageCopy(lang, 'Préférences de courriel', 'Email preferences') + ' : ' + preferencesUrl(unsubscribeUrl, baseUrl));
+  parts.push(languageCopy(lang, 'Nous écrire', 'Contact us') + ' : ' + SENDER.supportEmail);
+  parts.push(languageCopy(lang, 'Confidentialité (Loi 25)', 'Privacy (Law 25)') + ' : ' + SENDER.privacyEmail);
   return parts.join('\n');
 }
 function para(text) {
@@ -498,7 +511,7 @@ function bullets(items) {
     : '';
 }
 
-// Every message: 'FR / EN' subject, 'FR · EN' preheader, FR-then-EN html/text.
+// Every message uses the selected language across subject, preheader, HTML and text.
 //
 // `ctx` is the same context the template received. It may carry `__override`,
 // the admin record read by the notifier — this is the ONE place a stored
@@ -509,14 +522,17 @@ function bullets(items) {
 // and stay out of reach.
 function build(spec, ctx) {
   const { fr, en, ctaUrl, unsubscribeUrl } = spec;
+  const lang = emailLanguage(ctx);
   const o = overrideCopy(ctx && ctx.__override, ctx || {});
-  const preheader = (o.preheaderFr || spec.preheaderFr) + ' · ' + (o.preheaderEn || spec.preheaderEn);
+  const preheader = languageCopy(lang, o.preheaderFr || spec.preheaderFr, o.preheaderEn || spec.preheaderEn, ' · ');
   const frBlock = applyCopy(fr, o.corpsFr, o.ctaFr);
   const enBlock = applyCopy(en, o.corpsEn, o.ctaEn);
+  const signedFr = { ...frBlock, signature: o.signatureFr };
+  const signedEn = { ...enBlock, signature: o.signatureEn };
   return {
-    subject: o.subject || spec.subjectFr + ' / ' + spec.subjectEn,
-    html: layout({ preheader, fr: frBlock, en: enBlock, ctaUrl, unsubscribeUrl }),
-    text: textLayout({ fr: frBlock, en: enBlock, ctaUrl, unsubscribeUrl }),
+    subject: languageCopy(lang, o.subjectFr || spec.subjectFr, o.subjectEn || spec.subjectEn),
+    html: layout({ preheader, fr: signedFr, en: signedEn, ctaUrl, unsubscribeUrl, baseUrl: ctx && ctx.baseUrl, lang }),
+    text: textLayout({ fr: signedFr, en: signedEn, ctaUrl, unsubscribeUrl, baseUrl: ctx && ctx.baseUrl, lang }),
   };
 }
 // One language block with the overridden copy folded in. The body is a single
@@ -3637,7 +3653,7 @@ function renderSubjectOverride(override, ctx) {
 //     carte devenir une infolettre ;
 //   cta 60 — un bouton doit tenir sur une ligne à 320 px (~30 caractères) ;
 //     au-delà il se casse en pavé illisible. Les libellés du registre font ≤ 25.
-const OVERRIDE_LIMITS = { sujet: 200, preheader: 200, corps: 1200, cta: 60 };
+const OVERRIDE_LIMITS = { signature: 240, sujet: 200, preheader: 200, corps: 1200, cta: 60 };
 
 // La déclaration de chaque paire : les deux champs, la borne, et les codes
 // d'erreur que la console admin affiche.
@@ -3646,6 +3662,7 @@ const OVERRIDE_FIELDS = [
   { fr: 'preheaderFr', en: 'preheaderEn', max: OVERRIDE_LIMITS.preheader, tropLong: 'preheader_trop_long', bilingue: 'preheader_bilingue' },
   { fr: 'corpsFr', en: 'corpsEn', max: OVERRIDE_LIMITS.corps, tropLong: 'corps_trop_long', bilingue: 'corps_bilingue' },
   { fr: 'ctaFr', en: 'ctaEn', max: OVERRIDE_LIMITS.cta, tropLong: 'cta_trop_long', bilingue: 'cta_bilingue' },
+  { fr: 'signatureFr', en: 'signatureEn', max: OVERRIDE_LIMITS.signature, tropLong: 'signature_trop_long', bilingue: 'signature_bilingue' },
 ];
 // Reçus sans être de la copie : la clé et l'horodatage appartiennent au dépôt,
 // `enabled` est l'ancien nom de `actif`.
@@ -3680,7 +3697,11 @@ function overrideCopy(override, ctx) {
     return [interpolateTokens(fr, ctx, 'fr'), interpolateTokens(en, ctx, 'en')];
   };
   const sujet = rendu(OVERRIDE_FIELDS[0]);
-  if (sujet) out.subject = sujet[0] + ' / ' + sujet[1];
+  if (sujet) {
+    out.subjectFr = sujet[0];
+    out.subjectEn = sujet[1];
+    out.subject = languageCopy(emailLanguage(ctx), sujet[0], sujet[1]);
+  }
   for (const champ of OVERRIDE_FIELDS.slice(1)) {
     const paire = rendu(champ);
     if (paire) {

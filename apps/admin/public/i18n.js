@@ -24,6 +24,11 @@
 
   // === DICTIONARY — generated from the French sources. =======================
   var TEXT = {
+    "Chargement des données": "Loading data",
+    "Trouver une section": "Find a section",
+    "Rechercher une section": "Search sections",
+    "Aucune section trouvée. Effacez la recherche pour tout afficher.": "No sections found. Clear your search to show all sections.",
+
   // Usagers — le dossier d'une personne (Loi 25, art. 27 et 28).
   "Usagers": "Users",
   "Le dossier d’une personne : ce que Nota détient, ce qu’elle peut emporter, ce qui peut être effacé.": "One person's file: what Nota holds, what they can take with them, what can be erased.",
@@ -119,9 +124,17 @@
   "Lecture seule": "Read-only",
   "Accès complet": "Full access",
   "Console Nota": "Nota Console",
-  "Accès réservé. Recevez un lien de connexion à usage unique par courriel.": "Restricted access. Receive a one-time sign-in link by email.",
+  "Accès réservé. Connectez-vous avec votre courriel et votre mot de passe.": "Restricted access. Sign in with your email and password.",
   "Courriel": "Email",
   "vous@nota.ca": "you@nota.ca",
+  "Mot de passe": "Password",
+  "Votre mot de passe": "Your password",
+  "Se connecter": "Sign in",
+  "Connexion…": "Signing in…",
+  "Courriel ou mot de passe invalide.": "Invalid email or password.",
+  "Trop de tentatives. Réessayez plus tard.": "Too many attempts. Try again later.",
+  "Votre session reste uniquement dans cet onglet. Si vous avez oublié votre mot de passe, laissez ce champ vide pour recevoir un lien de récupération.": "Your session stays only in this tab. If you forgot your password, leave this field empty to receive a recovery link.",
+  "En local : admin@nota.local · nota-local-admin": "Local: admin@nota.local · nota-local-admin",
   "Recevoir le lien": "Send me the link",
   "Envoi…": "Sending…",
   "Le lien expire après un court délai et ne peut servir qu’une fois. Aucune session n’est conservée après la fermeture de l’onglet.": "The link expires after a short time and can be used only once. No session is kept after the tab is closed.",
@@ -132,6 +145,7 @@
   "Vérification du lien…": "Verifying the link…",
   "Un instant pendant que nous validons votre accès.": "One moment while we confirm your access.",
   "Connexion réussie.": "Signed in.",
+  "Échec de connexion": "Sign-in failed",
   "Lien invalide ou expiré.": "Invalid or expired link.",
   "Impossible de charger votre profil.": "Unable to load your profile.",
   "Une erreur est survenue": "Something went wrong",
@@ -213,6 +227,10 @@
   "Ligne d’aperçu (EN)": "Preview line (EN)",
   "Corps (FR)": "Body (FR)",
   "Corps (EN)": "Body (EN)",
+  "Signature (FR)": "Signature (FR)",
+  "Signature (EN)": "Signature (EN)",
+  "Signature trop longue.": "Signature is too long.",
+  "Signature : remplissez les deux langues, ou aucune.": "Signature: fill in both languages, or neither.",
   "Bouton (FR)": "Button (FR)",
   "Bouton (EN)": "Button (EN)",
   "Un champ laissé vide garde le texte du gabarit. Les deux langues d’une même ligne vont ensemble : remplissez le français ET l’anglais, ou aucun des deux.": "A field left empty keeps the template’s own text. Both languages of a line go together: fill in French AND English, or neither.",
@@ -633,7 +651,30 @@
   "Barème en vigueur": "Schedule in force",
   "Axes": "Axes",
   "Aucun jeton pour ce modèle.": "No tokens for this template.",
-  "— la modification du barème est réservée à l’administrateur principal.": "— editing the schedule is reserved for the primary administrator."
+  "— la modification du barème est réservée à l’administrateur principal.": "— editing the schedule is reserved for the primary administrator.",
+  "Paiements": "Payments",
+  "Configuration": "Configuration",
+  "Stripe, Connect et les réglages que la console peut modifier.": "Stripe, Connect, and the settings the console can change.",
+  "Checkout": "Checkout",
+  "Actif": "Active",
+  "Inactif": "Inactive",
+  "clé + webhook configurés": "key + webhook configured",
+  "clé et webhook requis": "key and webhook required",
+  "Stripe Connect": "Stripe Connect",
+  "onboarding et virements des notaires": "notary onboarding and payouts",
+  "Mode": "Mode",
+  "Production": "Production",
+  "Test": "Test",
+  "Non configuré": "Not configured",
+  "État de la connexion Stripe": "Stripe connection status",
+  "Les clés restent dans les secrets de déploiement. Elles ne sont jamais affichées ici.": "Keys stay in deployment secrets. They are never displayed here.",
+  "Clé secrète": "Secret key",
+  "Secret webhook": "Webhook secret",
+  "Configuré": "Configured",
+  "Manquant": "Missing",
+  "Le paiement à la publication est activé. Les événements Stripe doivent continuer d’atteindre /api/stripe/webhook.": "Payment at publication is enabled. Stripe events must continue reaching /api/stripe/webhook.",
+  "Le paiement à la publication reste désactivé tant que la clé secrète et le secret webhook ne sont pas fournis au déploiement.": "Payment at publication stays disabled until the secret key and webhook secret are supplied at deployment.",
+  "Réglages personnalisables : Prix, Annulation et Courriels dans le rail.": "Customizable settings: Prices, Cancellation, and Emails in the rail."
   /* /F1 */
 };
   var HTML = {};
@@ -987,17 +1028,16 @@
   function setLang(l) {
     l = l === 'en' ? 'en' : 'fr';
     try { localStorage.setItem(LS_LANG, l); } catch (e) {}
-    // A ?lang= in the URL would win over the stored choice on reload — rewrite
-    // it so the toggle works for visitors arriving through a language link.
-    if (typeof location !== 'undefined' && /[?&]lang=(en|fr)\b/.test(location.search || '')) {
-      location.replace(
-        location.pathname +
-        location.search.replace(/([?&])lang=(en|fr)\b/, '$1lang=' + l) +
-        location.hash
-      );
-      return;
+    current = l;
+    if (typeof history !== 'undefined' && typeof location !== 'undefined') {
+      history.replaceState(null, '', location.pathname + location.search.replace(/([?&])lang=(en|fr)\b/, '$1lang=' + l) + location.hash);
     }
-    if (typeof location !== 'undefined') location.reload();
+    // The admin session intentionally lives only in memory. Reloading here
+    // would silently sign an operator out every time they switch language.
+    // Let the host console re-render its current route instead.
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      window.dispatchEvent(new Event('nota:languagechange'));
+    } else if (typeof location !== 'undefined') location.reload();
   }
 
   // --- String translation ----------------------------------------------------
@@ -1099,8 +1139,9 @@
 
   // --- Dynamic renders -------------------------------------------------------
   function observe() {
+    if (mo) mo.disconnect();
     mo = new MutationObserver(function (records) {
-      if (applying) return;
+      if (applying || current !== 'en') return;
       for (var i = 0; i < records.length; i++) {
         var r = records[i];
         if (r.type === 'characterData') translateTextNode(r.target);
@@ -1135,7 +1176,7 @@
           'aria-label',
           target === 'en' ? 'Switch to English' : 'Passer au français'
         );
-        el.addEventListener('click', function () { setLang(target); });
+        el.addEventListener('click', function () { setLang(current === 'en' ? 'fr' : 'en'); });
       })(els[i]);
     }
   }
@@ -1161,5 +1202,13 @@
     normalize: normalize,
     boot: boot,
     dictionaries: function () { return { text: TEXT, html: HTML }; },
+    refresh: function () {
+      if (typeof document === 'undefined') return;
+      document.documentElement.setAttribute('lang', locale());
+      if (current === 'en' && document.body) {
+        translateElement(document.body);
+        observe();
+      }
+    },
   };
 });

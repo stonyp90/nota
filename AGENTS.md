@@ -105,8 +105,11 @@ starting a container.
      and persists it). When you add or change user-facing French copy,
      add/update its English entry — `apps/web/test/i18n.test.mjs` and
      `apps/admin/test/i18n.test.mjs` fail CI on any uncovered string.
-   - Emails (`apps/api/src/emails.js`) and ICS feeds (`apps/api/src/ics.js`)
-     are bilingual in one message: French first, English below. Service/tier
+   - Emails use each recipient’s saved language, initialized from the browser’s
+     `Accept-Language` header and updated through verified sign-in or the menu.
+     `NOTA_EMAIL_LANGUAGE` is the fallback for legacy recipients (French in
+     local and production entry points); English and explicit bilingual
+     rendering remain available. ICS feeds (`apps/api/src/ics.js`) remain bilingual. Service/tier
      English names come from the domain's `nomEn`/`nomCourtEn` fields, money
      from `money()` / `moneyEn()` — never inline.
    Technical docs and code identifiers are English.

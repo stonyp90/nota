@@ -433,7 +433,7 @@ resource "aws_lambda_function" "admin" {
   function_name = "${var.project_name}-admin-api"
   role          = aws_iam_role.admin[0].arn
 
-  runtime = "nodejs20.x"
+  runtime = "nodejs22.x"
   handler = "admin.handler"
 
   filename         = data.archive_file.api.output_path
@@ -454,17 +454,35 @@ resource "aws_lambda_function" "admin" {
       NODE_ENV = "production"
 
       # In-stack admin signing secret (never empty in production).
-      NOTA_ADMIN_SECRET = random_password.admin_secret[0].result
+      NOTA_ADMIN_SECRET = var.use_secrets_manager ? "" : random_password.admin_secret[0].result
 
       # Admin's own isolated table (full CRUD) + the main table (READ-ONLY use).
-      ADMIN_TABLE_NAME = aws_dynamodb_table.admin[0].name
-      TABLE_NAME       = aws_dynamodb_table.main.name
+      ADMIN_TABLE_NAME           = aws_dynamodb_table.admin[0].name
+      NOTA_SES_CONFIGURATION_SET = local.ses_domain_enabled ? aws_sesv2_configuration_set.main[0].configuration_set_name : ""
+      NOTA_EMAIL_LANGUAGE        = var.email_language
+      NOTA_REPLY_TO_EMAIL        = var.reply_to_email
+      NOTA_SENDER_ADDRESS        = var.sender_address
+      NOTA_BASE_URL              = var.base_url
+      NOTA_SITE_URL              = var.base_url
+      NOTA_RUNTIME_SECRET_ARN    = var.use_secrets_manager ? aws_secretsmanager_secret.admin[0].arn : ""
+      NOTA_REQUIRED_SECRETS      = "NOTA_ADMIN_SECRET,NOTA_NOTARY_SECRET"
+      TABLE_NAME                 = aws_dynamodb_table.main.name
 
       # Allowlisted admin login addresses + public base URL for links.
-      NOTA_ADMIN_EMAILS = join(",", var.admin_emails)
+      NOTA_ADMIN_EMAILS        = join(",", var.admin_emails)
+      NOTA_ADMIN_PASSWORD_HASH = var.use_secrets_manager ? "" : var.admin_password_hash
       # Custom domain when set; otherwise fall back to the CloudFront default
       # domain so the emailed magic-link is always an absolute, working URL.
       NOTA_ADMIN_BASE_URL = var.admin_domain_name != "" ? "https://${var.admin_domain_name}" : "https://${aws_cloudfront_distribution.admin[0].domain_name}"
+
+      # Safe Stripe readiness flags for the admin console. The secret values
+      # remain on the public/reminder Lambdas only; the console receives
+      # booleans so operators can see whether payments are live without ever
+      # placing credentials in the admin table or browser.
+      NOTA_STRIPE_SECRET_CONFIGURED  = (var.use_secrets_manager ? var.stripe_mode != "unconfigured" : var.stripe_secret_key != "") ? "true" : "false"
+      NOTA_STRIPE_WEBHOOK_CONFIGURED = (var.use_secrets_manager ? var.stripe_mode != "unconfigured" : var.stripe_webhook_secret != "") ? "true" : "false"
+      NOTA_STRIPE_MODE               = var.use_secrets_manager ? var.stripe_mode : startswith(var.stripe_secret_key, "sk_live_") ? "live" : (startswith(var.stripe_secret_key, "sk_test_") ? "test" : "unconfigured")
+      NOTA_STRIPE_LOCALE             = "fr-CA"
 
       # Reuse the same verified SES sender the public stack uses (notifications.tf).
       NOTA_FROM_EMAIL = var.from_email
@@ -489,6 +507,14 @@ resource "aws_lambda_function" "admin" {
   # Terraform possède l'infrastructure ; la CI possède le code.
   lifecycle {
     ignore_changes = [filename, source_code_hash]
+    precondition {
+      condition     = !var.use_secrets_manager || length(var.admin_emails) > 0
+      error_message = "Production admin rollout requires at least one allowlisted admin email."
+    }
+    precondition {
+      condition     = var.use_secrets_manager || can(regex("^[0-9a-fA-F]{64}$", var.admin_password_hash))
+      error_message = "Admin requires a password hash or the populated Secrets Manager bundle."
+    }
   }
 }
 
@@ -642,7 +668,7 @@ data "aws_iam_policy_document" "admin_github_deploy" {
   statement {
     sid       = "AdminLambdaUpdateCode"
     effect    = "Allow"
-    actions   = ["lambda:UpdateFunctionCode", "lambda:GetFunction"]
+    actions   = ["lambda:UpdateFunctionCode", "lambda:GetFunction", "lambda:GetFunctionConfiguration"]
     resources = [aws_lambda_function.admin[0].arn]
   }
 }

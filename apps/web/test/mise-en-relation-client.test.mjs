@@ -144,8 +144,11 @@ test('the name is always visible in the open flow — anonymity governs the publ
   assert.equal(name.closest('details'), null, 'the name is not folded in the options');
   assert.equal($(doc, 'name-row').hidden, false, 'visible while the offer is anonymous (default)');
   assert.equal($(doc, 'o-anon').checked, true, 'precondition: anonymous by default');
-  const label = doc.querySelector('label[for="o-name"]');
-  assert.match(label.textContent, /transmis seulement au notaire qui retient votre demande/);
+  // La promesse reste À CÔTÉ du champ — elle a quitté le libellé pour la ligne
+  // d'aide (2026-09-07), qui la dit en entier et décrit le champ.
+  assert.equal(doc.querySelector('label[for="o-name"]').textContent.trim(), 'Votre nom');
+  assert.match($(doc, 'name-row').textContent, /ransmis seulement au notaire qui retient votre demande/);
+  assert.equal(name.getAttribute('aria-describedby'), 'o-name-help');
   assert.equal(name.required, true);
   // The switch says what it governs: the PUBLIC display, nothing else.
   assert.match($(doc, 'anon-help').textContent, /Votre nom reste transmis au notaire/);
@@ -155,7 +158,8 @@ test('the name is always visible in the open flow — anonymity governs the publ
   assert.ok(wrap.querySelector('#o-courriel'), 'courriel in the same block');
   assert.ok(wrap.querySelector('#o-telephone'), 'téléphone in the same block');
   assert.equal($(doc, 'o-courriel').required, true, 'the courriel is required');
-  assert.match(doc.querySelector('label[for="o-courriel"]').textContent, /prévenir dès qu’un notaire retient/);
+  assert.equal(doc.querySelector('label[for="o-courriel"]').textContent.trim(), 'Votre courriel');
+  assert.match($(doc, 'o-courriel-help').textContent, /prévenir dès qu’un notaire retient/);
   assert.equal($(doc, 'o-telephone').required, false, 'the téléphone is recommended, not required');
   // The account opt-in stays discreet, in the folded options.
   assert.ok($(doc, 'o-account').closest('details'), 'the opt-in keeps its fold');
@@ -220,7 +224,8 @@ test('the coordinates card prefills the three identity fields of the next bookin
   });
   Nota.setTab('profil');
   assert.equal($(doc, 'p-nom').value, 'Marie Roy');
-  assert.match(doc.querySelector('label[for="p-nom"]').textContent, /notaire/, 'the label says whom the name reaches');
+  assert.match($(doc, 'p-nom-help').textContent, /notaire/, 'the associated help says whom the name reaches');
+  assert.equal($(doc, 'p-nom').getAttribute('aria-describedby'), 'p-nom-help');
   Nota.setTab('carnet');
   doc.querySelector('.cal-cell[data-date="' + addDays(todayISO(), 6) + '"]').click();
   await wait(40);
@@ -447,7 +452,9 @@ test('the thread polls while the profil tab is shown, pauses on a focused field,
   await wait(80);
   assert.equal(calls.filter((c) => c.url.includes('/client/bid?')).length, before, 'no polling off the profil tab');
   Nota.setTab('profil');
-  await wait(120);
+  // Wait for the observable behavior; fixed 120ms windows flake under full-suite load.
+  const deadline = Date.now() + 3000;
+  while (calls.filter((c) => c.url.includes('/client/bid?')).length < before + 3 && Date.now() < deadline) await wait(25);
   const during = calls.filter((c) => c.url.includes('/client/bid?')).length;
   assert.ok(during >= before + 3, 'polls every tick on the profil tab: ' + (during - before));
   // A focused composer pauses the poll — a repaint must never eat a draft.

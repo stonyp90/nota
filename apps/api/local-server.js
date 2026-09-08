@@ -1,5 +1,7 @@
 'use strict';
 
+process.env.NOTA_EMAIL_LANGUAGE ||= 'fr';
+
 /**
  * Local dev server (plain node:http, no framework). Uses DynamoDB Local when
  * TABLE_NAME is set (docker-compose), otherwise falls back to an in-memory repo

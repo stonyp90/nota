@@ -198,7 +198,7 @@ test('a valid message POSTs /contact and shows the success state', async () => {
   assert.equal($(doc, 'contact-form').hidden, true);
 });
 
-test('« Besoin d’aide ? » on an offer prefills the subject and ties the bid id', async () => {
+test('the per-offer help action is clear, prefills the subject and ties the bid id', async () => {
   const { doc, Nota, calls } = await boot({
     seed: { 'nota.myoffers.v1': JSON.stringify([OFFER]) },
     routes: [
@@ -210,6 +210,9 @@ test('« Besoin d’aide ? » on an offer prefills the subject and ties the bid 
   await wait(40);
   const help = doc.querySelector('.my-offer-help');
   assert.ok(help, 'per-offer help door missing');
+  assert.equal(help.querySelector(':scope > span:not(.my-offer-help-icon)').textContent, 'Obtenir de l’aide', 'the action says what it does');
+  assert.equal(help.querySelector('.my-offer-help-icon').textContent, '?', 'the action has a visible help mark');
+  assert.equal(help.getAttribute('aria-label'), 'Obtenir de l’aide sur cette demande');
   help.click();
   assert.equal($(doc, 'contact-dialog').open, true);
   assert.equal($(doc, 'ct-sujet').value, 'Aide avec une offre');

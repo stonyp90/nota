@@ -28,7 +28,7 @@
 # Lambda (60s) at 48000ms under the default 0.8 ratio.
 # ---------------------------------------------------------------------------
 locals {
-  monitored_lambdas = {
+  monitored_lambdas = merge({
     api = {
       function_name = aws_lambda_function.api.function_name
       timeout_ms    = aws_lambda_function.api.timeout * 1000
@@ -37,7 +37,12 @@ locals {
       function_name = aws_lambda_function.reminders.function_name
       timeout_ms    = aws_lambda_function.reminders.timeout * 1000
     }
-  }
+    }, var.enable_admin ? {
+    admin = {
+      function_name = aws_lambda_function.admin[0].function_name
+      timeout_ms    = aws_lambda_function.admin[0].timeout * 1000
+    }
+  } : {})
 
   # Create the email subscriptions only when an address is configured.
   alert_subscription_count = var.alert_email == "" ? 0 : 1

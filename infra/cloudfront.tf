@@ -75,7 +75,7 @@ resource "aws_cloudfront_response_headers_policy" "security" {
     # stylesheet + font from https://rsms.me, external app.js/domain.js on 'self',
     # inline JSON-LD + inline styles, and fetches /api on 'self'.
     content_security_policy {
-      content_security_policy = "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://rsms.me; font-src 'self' https://rsms.me data:; script-src 'self' 'unsafe-inline'; connect-src 'self'"
+      content_security_policy = "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://rsms.me; font-src 'self' https://rsms.me data:; script-src 'self' 'unsafe-inline'; connect-src 'self' https://${aws_s3_bucket.documents.bucket}.s3.${var.region}.amazonaws.com"
       override                = true
     }
   }
@@ -112,6 +112,15 @@ resource "aws_cloudfront_function" "spa_router" {
     function handler(event) {
       var request = event.request;
       var uri = request.uri;
+      if (${jsonencode(var.enable_www)} && request.headers.host.value === ${jsonencode("www.${var.domain_name}")}) {
+        var query = [];
+        for (var key in request.querystring) {
+          var entry = request.querystring[key];
+          var values = entry.multiValue || [entry];
+          for (var i = 0; i < values.length; i++) query.push(key + '=' + values[i].value);
+        }
+        return { statusCode: 308, headers: { location: { value: ${jsonencode("https://${var.domain_name}")} + uri + (query.length ? '?' + query.join('&') : '') } } };
+      }
 
       // Never rewrite API paths (defense in depth; /api/* uses its own behavior).
       if (uri.startsWith('/api')) {
@@ -210,7 +219,7 @@ resource "aws_cloudfront_distribution" "web" {
   # responses pass through unchanged. default_root_object stays index.html.
 
   # Custom domain aliases, only when a domain is configured.
-  aliases = local.has_custom_domain ? [var.domain_name] : []
+  aliases = local.has_custom_domain ? concat([var.domain_name], var.enable_www ? ["www.${var.domain_name}"] : []) : []
 
   # Use the ACM cert (us-east-1) when a domain is set; otherwise fall back to
   # the default *.cloudfront.net certificate.

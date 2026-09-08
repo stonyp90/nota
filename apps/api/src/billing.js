@@ -374,14 +374,14 @@ function createBilling({
    * Stripe — a demand a notary sees always rests on a card a bank accepted.
    * Returns `{ ok, url, sessionId, mode }`.
    */
-  async function authorizeOffer({ bidId, bidDate, amountCents, email, description, successUrl, cancelUrl, reprise } = {}) {
+  async function authorizeOffer({ bidId, bidDate, amountCents, email, description, successUrl, cancelUrl, reprise, language } = {}) {
     const cents = Math.round(Number(amountCents));
     if (!(cents > 0)) {
       return { ok: false, errors: [{ code: 'montant_invalide', message: 'Montant de l’offre invalide.' }] };
     }
     const args = {
       amountCents: cents, currency: 'cad', bidId, bidDate, description,
-      customerEmail: email || undefined, successUrl, cancelUrl,
+      customerEmail: email || undefined, successUrl, cancelUrl, language,
       // `reprise` — le client REVIENT donner une autre carte après un refus.
       // La clé d'idempotence doit alors changer, sinon Stripe rejoue la session
       // déjà terminée avec la carte refusée et la reprise est un lien mort.

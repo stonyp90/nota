@@ -541,6 +541,25 @@ test('P1-16: the account bell opens a dialog; the open drawer is modal and the p
   assert.equal(doc.activeElement, $(doc, 'nav-burger'), 'focus returns to the burger');
 });
 
+test('widening an open mobile menu releases the page and restores desktop focus', async () => {
+  const { win, doc } = await boot();
+  win.innerWidth = 390;
+  $(doc, 'nav-burger').click();
+  assert.ok($(doc, 'main').hasAttribute('inert'));
+  win.innerWidth = 719;
+  win.dispatchEvent(new win.Event('resize'));
+  assert.equal($(doc, 'nav-burger').getAttribute('aria-expanded'), 'true');
+  win.innerWidth = 720;
+  win.dispatchEvent(new win.Event('resize'));
+  assert.equal($(doc, 'nav-burger').getAttribute('aria-expanded'), 'false');
+  assert.ok(!doc.documentElement.classList.contains('nav-open'));
+  assert.ok(!$(doc, 'mobile-nav').classList.contains('is-open'));
+  for (const selector of ['.site-header', '#main', '.site-footer']) {
+    assert.ok(!doc.querySelector(selector).hasAttribute('inert'), selector + ' becomes interactive');
+  }
+  assert.equal(doc.activeElement, $(doc, 'tab-carnet'));
+});
+
 test('P1-18: a print stylesheet exists — light canvas, chrome hidden, content kept', () => {
   const i = CSS_SRC.indexOf('@media print');
   assert.ok(i >= 0, 'no @media print');

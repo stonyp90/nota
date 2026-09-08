@@ -6,7 +6,7 @@
    Security note: the session bearer lives ONLY in the module-scoped `session`
    variable below. It is NEVER written to localStorage/sessionStorage/cookies, so
    an XSS payload has nothing persistent to exfiltrate, and it is intentionally
-   lost on reload (the operator re-authenticates via a fresh magic link).
+   lost on reload (the operator signs in again through the login form).
    ========================================================================== */
 (function () {
   'use strict';
@@ -376,15 +376,8 @@
     var hash = location.hash || '';
     if (hash.indexOf('#/auth') === 0) { handleAuthRoute(hash); return; }
     if (!session) { rememberNext(hash); renderAuthRequest({}); return; }
-    if (hash.indexOf('#/courriels') === 0) { renderCourriels(); return; }
-    if (hash.indexOf('#/campagnes') === 0) { renderCampagnes(); return; }
-    if (hash.indexOf('#/audiences') === 0) { renderAudiences(); return; }
-    if (hash.indexOf('#/prix') === 0) { renderPrix(); return; }
-    if (hash.indexOf('#/acces') === 0) { renderAcces(); return; }
-    if (hash.indexOf('#/annulation') === 0) { renderAnnulation(); return; }
-    if (hash.indexOf('#/notaires') === 0) { renderNotaires(); return; }
-    if (hash.indexOf('#/audit') === 0) { renderAudit(); return; }
-    if (hash.indexOf('#/usagers') === 0) { renderUsagers(); return; }
+    var section = ADMIN_SECTIONS.find(function (entry) { return hash.split('?')[0] === sectionHash(entry); });
+    if (section) { section.render(); return; }
     renderOverview(); // '#/' and any unknown authed route land on the overview
   }
   function focusTitle() {
@@ -393,7 +386,8 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Auth — step (a): request a magic link
+  // Auth — normal email/password login. Leaving the password blank keeps the
+  // passwordless link as a recovery path for existing operators.
   // ---------------------------------------------------------------------------
   function renderAuthRequest(opts) {
     opts = opts || {};
@@ -408,7 +402,7 @@
     logo.appendChild(img); card.appendChild(logo);
 
     card.appendChild(el('h1', 'auth-title', 'Console Nota'));
-    card.appendChild(el('p', 'auth-lead', 'Accès réservé. Recevez un lien de connexion à usage unique par courriel.'));
+    card.appendChild(el('p', 'auth-lead', 'Accès réservé. Connectez-vous avec votre courriel et votre mot de passe.'));
 
     if (opts.error) {
       var eb = el('div', 'auth-error');
@@ -426,18 +420,29 @@
     input.placeholder = 'vous@nota.ca'; input.required = true;
     field.appendChild(label); field.appendChild(input);
 
-    var submit = el('button', 'btn btn-primary btn-lg btn-block', 'Recevoir le lien');
+    var passwordField = el('div', 'field');
+    var passwordLabel = el('label', null, 'Mot de passe'); passwordLabel.setAttribute('for', 'auth-password');
+    var password = el('input', 'input');
+    password.type = 'password'; password.id = 'auth-password'; password.autocomplete = 'current-password';
+    password.placeholder = 'Votre mot de passe';
+    passwordField.appendChild(passwordLabel); passwordField.appendChild(password);
+
+    var submit = el('button', 'btn btn-primary btn-lg btn-block', 'Se connecter');
     submit.type = 'submit';
 
     var note = el('div'); note.hidden = true; // neutral confirmation / dev link region
 
     form.appendChild(field);
+    form.appendChild(passwordField);
     form.appendChild(submit);
     form.appendChild(note);
     card.appendChild(form);
 
     card.appendChild(el('p', 'auth-fineprint',
-      'Le lien expire après un court délai et ne peut servir qu’une fois. Aucune session n’est conservée après la fermeture de l’onglet.'));
+      'Votre session reste uniquement dans cet onglet. Si vous avez oublié votre mot de passe, laissez ce champ vide pour recevoir un lien de récupération.'));
+    if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+      card.appendChild(el('p', 'auth-devhint', 'En local : admin@nota.local · nota-local-admin'));
+    }
 
     screen.appendChild(card);
     app.appendChild(screen);
@@ -452,10 +457,31 @@
         return;
       }
       input.removeAttribute('aria-invalid');
-      submitLinkRequest(email, submit, note);
+      if (password.value) submitPasswordLogin(email, password.value, submit, note);
+      else submitLinkRequest(email, submit, note);
     });
 
     input.focus();
+  }
+
+  async function submitPasswordLogin(email, password, submit, note) {
+    submit.disabled = true; submit.textContent = 'Connexion…';
+    var r = await call('POST', '/auth/login', { email: email, password: password });
+    submit.disabled = false; submit.textContent = 'Se connecter';
+    if (r.network) { authError(note, 'Service indisponible. Réessayez dans un instant.'); return; }
+    if (r.status === 429) { authError(note, 'Trop de tentatives. Réessayez plus tard.'); return; }
+    if (!(r.status === 200 && r.json && r.json.ok && r.json.session)) {
+      authError(note, 'Courriel ou mot de passe invalide.');
+      var passwordInput = $('auth-password');
+      if (passwordInput) { passwordInput.value = ''; passwordInput.focus(); }
+      return;
+    }
+    setSession(r.json.session, r.json.expiresAt);
+    me = { role: r.json.role || 'super_admin', email: email };
+    var next = takeNext();
+    if (next) location.hash = next;
+    else { await loadMe(); renderOverview(); }
+    toast('Connexion réussie.');
   }
 
   // La région d'erreur de la porte : une alerte, pour qu'un lecteur d'écran
@@ -593,109 +619,72 @@
     toast('Déconnecté.');
   }
 
+  // Section registry: navigation and routes share one source of truth.
+  var ADMIN_SECTIONS = [
+    { key: 'overview', label: 'Aperçu', icon: iconGrid, render: renderOverview },
+    { key: 'courriels', label: 'Courriels', icon: iconMail, render: renderCourriels },
+    { key: 'campagnes', label: 'Campagnes', icon: iconSend, render: renderCampagnes },
+    { key: 'audiences', label: 'Audiences', icon: iconList, render: renderAudiences },
+    { key: 'prix', label: 'Prix', icon: iconTag, render: renderPrix },
+    { key: 'paiements', label: 'Paiements', icon: iconShield, render: renderPaiements },
+    { key: 'acces', label: 'Accès', icon: iconUsers, render: renderAcces },
+    { key: 'annulation', label: 'Annulation', icon: iconCalendarX, render: renderAnnulation },
+    { key: 'notaires', label: 'Notaires', icon: iconUsers, render: renderNotaires, allowed: canReadPii },
+    { key: 'audit', label: 'Audit', icon: iconShield, render: renderAudit, allowed: canReadAudit },
+    { key: 'usagers', label: 'Usagers', icon: iconFolderUser, render: renderUsagers, allowed: canReadSubjects }
+  ];
+  function sectionHash(section) { return section.key === 'overview' ? '#/' : '#/' + section.key; }
+  function buildLoadingGrid(count) {
+    var grid = el('div', 'stat-grid');
+    grid.setAttribute('aria-busy', 'true');
+    grid.setAttribute('aria-label', 'Chargement des données');
+    for (var i = 0; i < count; i++) grid.appendChild(el('div', 'skeleton skeleton-tile'));
+    return grid;
+  }
+  function buildPageHeader(eyebrow, title, description) {
+    var head = el('div', 'page-head view-enter');
+    var text = el('div', 'page-heading');
+    text.appendChild(el('span', 'page-eyebrow', eyebrow));
+    text.appendChild(el('h1', 'page-title', title));
+    text.appendChild(el('p', 'page-sub', description));
+    head.appendChild(text);
+    return head;
+  }
   function buildRail(active) {
     var rail = el('nav', 'admin-rail');
     rail.setAttribute('aria-label', 'Sections de la console');
     rail.appendChild(el('span', 'admin-rail-label', 'Console'));
-
-    var overview = el('button', 'admin-rail-link');
-    overview.type = 'button';
-    overview.appendChild(iconGrid());
-    overview.appendChild(document.createTextNode('Aperçu'));
-    if (active === 'overview') overview.setAttribute('aria-current', 'page');
-    overview.addEventListener('click', function () { go('#/'); });
-    rail.appendChild(overview);
-
-    // Courriels — the admin-editable email templates (ADR 0018).
-    var mails = el('button', 'admin-rail-link');
-    mails.type = 'button';
-    mails.appendChild(iconMail());
-    mails.appendChild(document.createTextNode('Courriels'));
-    if (active === 'courriels') mails.setAttribute('aria-current', 'page');
-    mails.addEventListener('click', function () { go('#/courriels'); });
-    rail.appendChild(mails);
-
-    // Campagnes — les envois ciblés (une personne, un groupe, un segment).
-    // L'entrée reste ACTIVE sans « campaigns:send » : l'écran s'ouvre en
-    // lecture seule et dit pourquoi l'envoi est fermé, comme partout ailleurs
-    // dans la console.
-    var camp = el('button', 'admin-rail-link');
-    camp.type = 'button';
-    camp.appendChild(iconSend());
-    camp.appendChild(document.createTextNode('Campagnes'));
-    if (active === 'campagnes') camp.setAttribute('aria-current', 'page');
-    camp.addEventListener('click', function () { go('#/campagnes'); });
-    rail.appendChild(camp);
-
-    // Audiences — les listes de DESTINATAIRES qu'une campagne peut viser. Elles
-    // n'avaient aucun écran : les méthodes de dépôt existaient, testées, sans
-    // appelant, et le compositeur proposait à leur place les groupes RBAC — des
-    // paquets de permissions, qui n'atteignaient personne.
-    //
-    // L'entrée reste ACTIVE sans « audiences:read », comme celle des campagnes :
-    // l'écran s'ouvre et DIT quelle permission manque, plutôt que d'escamoter
-    // une section et de laisser croire qu'elle n'existe pas.
-    rail.appendChild(railLink('Audiences', iconList(), 'audiences', '#/audiences', active, false));
-
-    // Prix — le prix du service de Nota, une grille par service (ADR 0034). Cette
-    // entrée remplace « Commission » : Nota ne prélève plus une part des
-    // honoraires du notaire, elle vend son service à son propre prix.
-    var prix = el('button', 'admin-rail-link');
-    prix.type = 'button';
-    prix.appendChild(iconTag());
-    prix.appendChild(document.createTextNode('Prix'));
-    if (active === 'prix') prix.setAttribute('aria-current', 'page');
-    prix.addEventListener('click', function () { go('#/prix'); });
-    rail.appendChild(prix);
-
-    // Accès — utilisateurs, groupes, permissions. Trois concepts découplés :
-    // une permission est une capacité, un groupe en réunit, une personne reçoit
-    // des groupes ET des permissions directes. Le rôle survit comme raccourci
-    // de compatibilité, jamais comme la seule granularité offerte : on doit
-    // pouvoir ouvrir une capacité sans promouvoir personne.
-    var acces = el('button', 'admin-rail-link');
-    acces.type = 'button';
-    acces.appendChild(iconUsers());
-    acces.appendChild(document.createTextNode('Accès'));
-    if (active === 'acces') acces.setAttribute('aria-current', 'page');
-    acces.addEventListener('click', function () { go('#/acces'); });
-    rail.appendChild(acces);
-
-    // Annulation — the late-cancellation fee barème Nota decides (ADR 0023 §2).
-    var annul = el('button', 'admin-rail-link');
-    annul.type = 'button';
-    annul.appendChild(iconCalendarX());
-    annul.appendChild(document.createTextNode('Annulation'));
-    if (active === 'annulation') annul.setAttribute('aria-current', 'page');
-    annul.addEventListener('click', function () { go('#/annulation'); });
-    rail.appendChild(annul);
-
-    // Notaires — le tableau d'honneur des cotes (ADR 0028) — et Audit — le
-    // journal append-only. Deux portes DISTINCTES, celles que l'API applique :
-    // le bottin est nominatif ('pii:read'), le journal se lit avec
-    // 'audit:read' — lire le journal et lever l'anonymat d'un client sont deux
-    // capacités, et on doit pouvoir ouvrir l'une sans l'autre (P0-2). Sans la
-    // permission, l'entrée reste VISIBLE mais fermée, comme les autres
-    // contrôles réservés : la console garde sa forme et dit pourquoi, plutôt
-    // que d'escamoter une section et de laisser croire qu'elle n'existe pas.
-    rail.appendChild(railLink('Notaires', iconUsers(), 'notaires', '#/notaires', active, !canReadPii()));
-    rail.appendChild(railLink('Audit', iconShield(), 'audit', '#/audit', active, !canReadAudit()));
-
-    // Usagers — le dossier d'UNE personne (Loi 25, art. 27 et 28). C'est la
-    // porte par laquelle un opérateur répond à « que détenez-vous sur moi ? ».
-    // Fermée sans « subjects:read », VISIBLE quand même : la console garde sa
-    // forme et dit ce qui manque, plutôt que d'escamoter une section et de
-    // laisser croire qu'elle n'existe pas.
-    rail.appendChild(railLink('Usagers', iconFolderUser(), 'usagers', '#/usagers', active, !canReadSubjects()));
-
-    // Phase-2 placeholder — visible but disabled, so the console reads as a
-    // console without shipping a dead link.
-    var soon = el('button', 'admin-rail-link', null);
-    soon.type = 'button'; soon.disabled = true;
-    soon.appendChild(iconDot());
-    soon.appendChild(document.createTextNode('Offres'));
-    soon.appendChild(el('span', 'admin-rail-soon', 'Bientôt'));
-    rail.appendChild(soon);
+    var searchLabel = el('label', 'admin-section-label', 'Trouver une section');
+    searchLabel.htmlFor = 'admin-section-search';
+    var search = el('input', 'input admin-section-search');
+    search.id = 'admin-section-search'; search.type = 'search';
+    search.placeholder = 'Rechercher une section';
+    rail.appendChild(searchLabel); rail.appendChild(search);
+    var links = [];
+    ADMIN_SECTIONS.forEach(function (section) {
+      var link = railLink(section.label, section.icon(), section.key, sectionHash(section), active,
+        section.allowed ? !section.allowed() : false);
+      links.push(link); rail.appendChild(link);
+    });
+    var empty = el('p', 'help', 'Aucune section trouvée. Effacez la recherche pour tout afficher.');
+    empty.hidden = true; empty.setAttribute('role', 'status'); rail.appendChild(empty);
+    search.addEventListener('input', function () {
+      var query = search.value.trim().toLocaleLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      var visible = 0;
+      links.forEach(function (link) {
+        var label = link.textContent.toLocaleLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        link.hidden = label.indexOf(query) === -1;
+        if (!link.hidden) visible++;
+      });
+      empty.hidden = visible > 0;
+    });
+    search.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') { search.value = ''; search.dispatchEvent(new Event('input')); }
+      if (event.key === 'Enter') {
+        var matches = links.filter(function (link) { return !link.hidden && !link.disabled; });
+        if (matches.length === 1) matches[0].click();
+      }
+    });
     return rail;
   }
 
@@ -743,13 +732,7 @@
 
     var content = el('div', 'admin-content');
 
-    var head = el('div', 'page-head view-enter');
-    var titleWrap = el('div');
-    titleWrap.appendChild(el('span', 'page-eyebrow', 'Tableau de bord'));
-    titleWrap.appendChild(el('h1', 'page-title', 'Aperçu'));
-    // ADR 0031 — il n'y a plus de « commission » : Nota facture son propre prix.
-    titleWrap.appendChild(el('p', 'page-sub', 'Activité du marché notarial — offres, rétention, et ce que Nota a facturé.'));
-    head.appendChild(titleWrap);
+    var head = buildPageHeader('Tableau de bord', 'Aperçu', 'Activité du marché notarial — offres, rétention, et ce que Nota a facturé.');
     head.appendChild(el('span', 'admin-spacer'));
     head.appendChild(buildRangeControl());
     content.appendChild(head);
@@ -1138,6 +1121,7 @@
     { code: 'preheader', fr: 'preheaderFr', en: 'preheaderEn', libFr: 'Ligne d’aperçu (FR)', libEn: 'Ligne d’aperçu (EN)', multi: false },
     { code: 'corps', fr: 'corpsFr', en: 'corpsEn', libFr: 'Corps (FR)', libEn: 'Corps (EN)', multi: true },
     { code: 'cta', fr: 'ctaFr', en: 'ctaEn', libFr: 'Bouton (FR)', libEn: 'Bouton (EN)', multi: false },
+    { code: 'signature', fr: 'signatureFr', en: 'signatureEn', libFr: 'Signature (FR)', libEn: 'Signature (EN)', multi: true },
   ];
   // subjectFr → 'sujet' : par quel champ un refus nominatif entre.
   var TPL_CHAMP_PAIRE = {};
@@ -1162,13 +1146,7 @@
     renderUserbar();
 
     var content = el('div', 'admin-content');
-    var head = el('div', 'page-head view-enter');
-    var titleWrap = el('div');
-    titleWrap.appendChild(el('span', 'page-eyebrow', 'Notifications'));
-    titleWrap.appendChild(el('h1', 'page-title', 'Courriels'));
-    titleWrap.appendChild(el('p', 'page-sub',
-      'Sujet, ligne d’aperçu, corps et bouton de chaque modèle, dans les deux langues. Un courriel transactionnel ne peut pas être éteint.'));
-    head.appendChild(titleWrap);
+    var head = buildPageHeader('Notifications', 'Courriels', 'Sujet, ligne d’aperçu, corps et bouton de chaque modèle, dans les deux langues. Un courriel transactionnel ne peut pas être éteint.');
     content.appendChild(head);
 
     courrielsBody = el('div');
@@ -1181,9 +1159,7 @@
 
   async function loadTemplatesInto(container) {
     clear(container);
-    var skel = el('div', 'stat-grid');
-    skel.setAttribute('aria-busy', 'true');
-    for (var i = 0; i < 4; i++) skel.appendChild(el('div', 'skeleton skeleton-tile'));
+    var skel = buildLoadingGrid(4);
     container.appendChild(skel);
 
     var r = await call('GET', '/notifications/templates');
@@ -1662,13 +1638,7 @@
     renderUserbar();
 
     var content = el('div', 'admin-content');
-    var head = el('div', 'page-head view-enter');
-    var titleWrap = el('div');
-    titleWrap.appendChild(el('span', 'page-eyebrow', 'Notifications'));
-    titleWrap.appendChild(el('h1', 'page-title', 'Campagnes'));
-    titleWrap.appendChild(el('p', 'page-sub',
-      'À qui Nota écrit, et pourquoi celui-là. Prévisualisez toujours avant d’envoyer : le décompte et les exclusions sont ce qui rend l’envoi défendable.'));
-    head.appendChild(titleWrap);
+    var head = buildPageHeader('Notifications', 'Campagnes', 'À qui Nota écrit, et pourquoi celui-là. Prévisualisez toujours avant d’envoyer : le décompte et les exclusions sont ce qui rend l’envoi défendable.');
     content.appendChild(head);
 
     campagnesBody = el('div');
@@ -1680,9 +1650,7 @@
 
   async function loadCampagnesInto(container) {
     clear(container);
-    var skel = el('div', 'stat-grid');
-    skel.setAttribute('aria-busy', 'true');
-    for (var i = 0; i < 3; i++) skel.appendChild(el('div', 'skeleton skeleton-tile'));
+    var skel = buildLoadingGrid(3);
     container.appendChild(skel);
 
     var segs = await call('GET', '/segments');
@@ -2845,13 +2813,7 @@
     renderUserbar();
 
     var content = el('div', 'admin-content');
-    var head = el('div', 'page-head view-enter');
-    var titleWrap = el('div');
-    titleWrap.appendChild(el('span', 'page-eyebrow', 'Notifications'));
-    titleWrap.appendChild(el('h1', 'page-title', 'Audiences'));
-    titleWrap.appendChild(el('p', 'page-sub',
-      'Les listes de destinataires qu’une campagne peut viser. Ce ne sont pas les groupes de l’écran Accès : ceux-là réunissent des permissions, ceux-ci des adresses.'));
-    head.appendChild(titleWrap);
+    var head = buildPageHeader('Notifications', 'Audiences', 'Les listes de destinataires qu’une campagne peut viser. Ce ne sont pas les groupes de l’écran Accès : ceux-là réunissent des permissions, ceux-ci des adresses.');
     content.appendChild(head);
 
     audiencesBody = el('div');
@@ -2863,9 +2825,7 @@
 
   async function loadAudiencesInto(container) {
     clear(container);
-    var skel = el('div', 'stat-grid');
-    skel.setAttribute('aria-busy', 'true');
-    for (var i = 0; i < 2; i++) skel.appendChild(el('div', 'skeleton skeleton-tile'));
+    var skel = buildLoadingGrid(2);
     container.appendChild(skel);
 
     var r = await call('GET', '/audiences/groups');
@@ -3211,13 +3171,7 @@
     renderUserbar();
 
     var content = el('div', 'admin-content');
-    var head = el('div', 'page-head view-enter');
-    var titleWrap = el('div');
-    titleWrap.appendChild(el('span', 'page-eyebrow', 'Console'));
-    titleWrap.appendChild(el('h1', 'page-title', 'Accès'));
-    titleWrap.appendChild(el('p', 'page-sub',
-      'Qui peut quoi. Une permission est une capacité, un groupe en réunit, une personne reçoit des groupes et des permissions directes.'));
-    head.appendChild(titleWrap);
+    var head = buildPageHeader('Console', 'Accès', 'Qui peut quoi. Une permission est une capacité, un groupe en réunit, une personne reçoit des groupes et des permissions directes.');
     content.appendChild(head);
 
     accesBody = el('div');
@@ -3229,9 +3183,7 @@
 
   async function loadAccesInto(container) {
     clear(container);
-    var skel = el('div', 'stat-grid');
-    skel.setAttribute('aria-busy', 'true');
-    for (var i = 0; i < 3; i++) skel.appendChild(el('div', 'skeleton skeleton-tile'));
+    var skel = buildLoadingGrid(3);
     container.appendChild(skel);
 
     var perms = await call('GET', '/permissions');
@@ -3793,6 +3745,53 @@
     return String(Math.floor(n / 100)) + (rem ? (',' + String(rem).padStart(2, '0')) : '');
   }
 
+  async function renderPaiements() {
+    if (!me || !me.email) {
+      var loaded = await loadMe();
+      if (!loaded.ok) {
+        if (loaded.status !== 401) renderFatal('Impossible de charger votre profil.', renderPaiements);
+        return;
+      }
+    }
+    renderUserbar();
+    var content = el('div', 'admin-content');
+    var head = buildPageHeader('Configuration', 'Paiements', 'Stripe, Connect et les réglages que la console peut modifier.'); content.appendChild(head);
+    mountAuthed('paiements', content);
+    focusTitle();
+    var body = el('div'); content.appendChild(body);
+    var r = await call('GET', '/payments');
+    if (!r.ok || !r.json) { body.appendChild(buildErrorBanner(function () { renderPaiements(); })); return; }
+    var d = r.json;
+    var grid = el('div', 'stat-grid');
+    grid.appendChild(tile('Checkout', d.checkoutEnabled ? 'Actif' : 'Inactif', d.checkoutEnabled ? 'clé + webhook configurés' : 'clé et webhook requis', false));
+    grid.appendChild(tile('Stripe Connect', d.connectEnabled ? 'Actif' : 'Inactif', 'onboarding et virements des notaires', false));
+    grid.appendChild(tile('Mode', d.mode === 'live' ? 'Production' : (d.mode === 'test' ? 'Test' : 'Non configuré'), d.locale + ' · ' + String(d.currency || 'cad').toUpperCase(), false));
+    body.appendChild(grid);
+
+    var card = el('div', 'chart-card');
+    var ch = el('div', 'chart-card-head');
+    ch.appendChild(el('div', 'chart-card-title', 'État de la connexion Stripe'));
+    ch.appendChild(el('div', 'chart-card-sub', 'Les clés restent dans les secrets de déploiement. Elles ne sont jamais affichées ici.'));
+    card.appendChild(ch);
+    var list = el('dl', 'settings-list');
+    [['Clé secrète', d.secretConfigured], ['Secret webhook', d.webhookConfigured]].forEach(function (row) {
+      var dt = el('dt', null, row[0]); var dd = el('dd', null, row[1] ? 'Configuré' : 'Manquant');
+      dd.className = row[1] ? 'status-ok' : 'status-warn'; list.appendChild(dt); list.appendChild(dd);
+    });
+    card.appendChild(list);
+    var note = el('p', 'tpl-note', d.checkoutEnabled
+      ? 'Le paiement à la publication est activé. Les événements Stripe doivent continuer d’atteindre /api/stripe/webhook.'
+      : 'Le paiement à la publication reste désactivé tant que la clé secrète et le secret webhook ne sont pas fournis au déploiement.');
+    card.appendChild(note);
+    var custom = el('p', 'tpl-note', 'Réglages personnalisables : Prix, Annulation et Courriels dans le rail.');
+    card.appendChild(custom);
+    var shortcuts = el('div', 'tpl-actions');
+    ADMIN_SECTIONS.filter(function (section) { return ['prix', 'annulation', 'courriels'].indexOf(section.key) !== -1; }).forEach(function (section) {
+      shortcuts.appendChild(railLink(section.label, section.icon(), section.key, sectionHash(section), '', false));
+    });
+    card.appendChild(shortcuts); body.appendChild(card);
+  }
+
   async function renderPrix() {
     if (!me || !me.email) {
       var loaded = await loadMe();
@@ -3804,13 +3803,7 @@
     renderUserbar();
 
     var content = el('div', 'admin-content');
-    var head = el('div', 'page-head view-enter');
-    var titleWrap = el('div');
-    titleWrap.appendChild(el('span', 'page-eyebrow', 'Facturation'));
-    titleWrap.appendChild(el('h1', 'page-title', 'Prix'));
-    titleWrap.appendChild(el('p', 'page-sub',
-      'Le prix du service de Nota — une grille par service, la même pour tous les notaires.'));
-    head.appendChild(titleWrap);
+    var head = buildPageHeader('Facturation', 'Prix', 'Le prix du service de Nota — une grille par service, la même pour tous les notaires.');
     content.appendChild(head);
 
     prixBody = el('div');
@@ -3823,8 +3816,7 @@
 
   async function loadPrixInto(container) {
     clear(container);
-    var skel = el('div', 'stat-grid');
-    for (var i = 0; i < 3; i++) skel.appendChild(el('div', 'skeleton skeleton-tile'));
+    var skel = buildLoadingGrid(3);
     container.appendChild(skel);
 
     var r = await call('GET', '/prix');
@@ -4000,6 +3992,8 @@
         lab.setAttribute('data-i18n-skip', ''); // nom du catalogue : contenu d'API
         field.appendChild(lab);
         var input = el('input', 'input');
+        input.id = 'prix-cell-' + l.groupe + '-' + l.id;
+        lab.htmlFor = input.id;
         input.type = 'text';
         input.inputMode = 'decimal';
         input.setAttribute('data-i18n-skip', '');
@@ -4104,6 +4098,8 @@
     sujet_trop_long: 'Sujet trop long.',
     preheader_trop_long: 'Ligne d’aperçu trop longue.',
     corps_trop_long: 'Corps trop long.',
+    signature_trop_long: 'Signature trop longue.',
+    signature_bilingue: 'Signature : remplissez les deux langues, ou aucune.',
     cta_trop_long: 'Libellé de bouton trop long.',
     sujet_bilingue: 'Sujet : les deux langues vont ensemble — remplissez le français ET l’anglais, ou aucun des deux.',
     preheader_bilingue: 'Ligne d’aperçu : les deux langues vont ensemble — remplissez le français ET l’anglais, ou aucun des deux.',
@@ -4221,13 +4217,7 @@
     renderUserbar();
 
     var content = el('div', 'admin-content');
-    var head = el('div', 'page-head view-enter');
-    var titleWrap = el('div');
-    titleWrap.appendChild(el('span', 'page-eyebrow', 'Facturation'));
-    titleWrap.appendChild(el('h1', 'page-title', 'Annulation'));
-    titleWrap.appendChild(el('p', 'page-sub',
-      'Barème décidé par Nota. Chaque palier est un PLAFOND : ce que le notaire peut réclamer, sur justification et dans le délai, quand le client annule un acte retenu près de la signature. Rien n’est prélevé sans réclamation.'));
-    head.appendChild(titleWrap);
+    var head = buildPageHeader('Facturation', 'Annulation', 'Barème décidé par Nota. Chaque palier est un PLAFOND : ce que le notaire peut réclamer, sur justification et dans le délai, quand le client annule un acte retenu près de la signature. Rien n’est prélevé sans réclamation.');
     content.appendChild(head);
 
     annulationBody = el('div');
@@ -4240,9 +4230,7 @@
 
   async function loadAnnulationInto(container) {
     clear(container);
-    var skel = el('div', 'stat-grid');
-    skel.setAttribute('aria-busy', 'true');
-    for (var i = 0; i < 3; i++) skel.appendChild(el('div', 'skeleton skeleton-tile'));
+    var skel = buildLoadingGrid(3);
     container.appendChild(skel);
 
     var r = await call('GET', '/annulation');
@@ -4338,10 +4326,14 @@
     head.appendChild(ht);
     card.appendChild(head);
 
+    var fieldSequence = 0;
     function fld(labelText, value) {
       var field = el('div', 'field');
-      field.appendChild(el('label', null, labelText));
+      var label = el('label', null, labelText);
+      field.appendChild(label);
       var input = el('input', 'input');
+      input.id = 'annulation-field-' + (++fieldSequence);
+      label.htmlFor = input.id;
       input.type = 'text';
       input.inputMode = 'decimal';
       input.setAttribute('data-i18n-skip', '');
@@ -4612,15 +4604,7 @@
     renderUserbar();
 
     var content = el('div', 'admin-content');
-    var head = el('div', 'page-head view-enter');
-    var titleWrap = el('div');
-    titleWrap.appendChild(el('span', 'page-eyebrow', 'Réseau'));
-    titleWrap.appendChild(el('h1', 'page-title', 'Notaires'));
-    // ADR 0031 — la cote ne décide plus d'un dollar : elle classe, et Nota
-    // facture son propre prix au client (P0-5).
-    titleWrap.appendChild(el('p', 'page-sub',
-      'Tableau d’honneur — la cote sur 100, ses quatre axes, et ce que Nota a facturé au client.'));
-    head.appendChild(titleWrap);
+    var head = buildPageHeader('Réseau', 'Notaires', 'Tableau d’honneur — la cote sur 100, ses quatre axes, et ce que Nota a facturé au client.');
     content.appendChild(head);
 
     notairesBody = el('div');
@@ -4636,9 +4620,7 @@
 
   async function loadNotairesInto(container) {
     clear(container);
-    var skel = el('div', 'stat-grid');
-    skel.setAttribute('aria-busy', 'true');
-    for (var i = 0; i < 3; i++) skel.appendChild(el('div', 'skeleton skeleton-tile'));
+    var skel = buildLoadingGrid(3);
     container.appendChild(skel);
 
     var r = await call('GET', '/notaries');
@@ -4965,6 +4947,7 @@
     login_requested: 'Lien de connexion demandé',
     login_requested_unknown: 'Lien demandé par une adresse inconnue',
     login_throttled: 'Connexion freinée',
+    login_failed: 'Échec de connexion',
     login_success: 'Connexion réussie',
     logout: 'Déconnexion',
     session_refreshed: 'Session prolongée',
@@ -5037,13 +5020,7 @@
     if (!auditJour) auditJour = todayISO();
 
     var content = el('div', 'admin-content');
-    var head = el('div', 'page-head view-enter');
-    var titleWrap = el('div');
-    titleWrap.appendChild(el('span', 'page-eyebrow', 'Conformité'));
-    titleWrap.appendChild(el('h1', 'page-title', 'Audit'));
-    titleWrap.appendChild(el('p', 'page-sub',
-      'Journal append-only — chaque geste d’administration et chaque acte réglé, jour par jour.'));
-    head.appendChild(titleWrap);
+    var head = buildPageHeader('Conformité', 'Audit', 'Journal append-only — chaque geste d’administration et chaque acte réglé, jour par jour.');
     head.appendChild(el('span', 'admin-spacer'));
 
     auditBody = el('div');
@@ -5383,13 +5360,7 @@
     renderUserbar();
 
     var content = el('div', 'admin-content');
-    var head = el('div', 'page-head view-enter');
-    var titleWrap = el('div');
-    titleWrap.appendChild(el('span', 'page-eyebrow', 'Conformité'));
-    titleWrap.appendChild(el('h1', 'page-title', 'Usagers'));
-    titleWrap.appendChild(el('p', 'page-sub',
-      'Le dossier d’une personne : ce que Nota détient, ce qu’elle peut emporter, ce qui peut être effacé.'));
-    head.appendChild(titleWrap);
+    var head = buildPageHeader('Conformité', 'Usagers', 'Le dossier d’une personne : ce que Nota détient, ce qu’elle peut emporter, ce qui peut être effacé.');
     head.appendChild(el('span', 'admin-spacer'));
     content.appendChild(head);
 
@@ -5942,6 +5913,31 @@
     else location.hash = hash;
   }
 
+  function refreshLanguageView() {
+    var english = isEnglish();
+    document.documentElement.lang = english ? 'en-CA' : 'fr-CA';
+    var skip = document.querySelector('.skip');
+    if (skip) skip.textContent = english ? 'Skip to content' : 'Aller au contenu';
+    var brand = document.querySelector('.admin-brand');
+    if (brand) brand.setAttribute('aria-label', english ? 'Nota Admin, home' : 'Nota Admin, accueil');
+    var logoutButton = $('admin-logout');
+    if (logoutButton) logoutButton.textContent = english ? 'Sign out' : 'Se déconnecter';
+    var themeButton = $('admin-theme-toggle');
+    if (themeButton) {
+      themeButton.title = english ? 'Light / dark theme' : 'Thème clair / sombre';
+      themeButton.setAttribute('aria-label', english ? 'Change theme' : 'Changer de thème');
+    }
+    var langButton = $('admin-lang-toggle');
+    if (langButton) {
+      var target = english ? 'fr' : 'en';
+      langButton.textContent = target === 'en' ? 'EN' : 'FR';
+      langButton.setAttribute('aria-label', target === 'en' ? 'Switch to English' : 'Passer au français');
+      langButton.setAttribute('lang', target === 'en' ? 'en-CA' : 'fr-CA');
+    }
+    if (window.NotaI18N && window.NotaI18N.refresh) window.NotaI18N.refresh();
+    router();
+  }
+
   function boot() {
     var toggle = $('admin-theme-toggle');
     if (toggle) toggle.addEventListener('click', toggleTheme);
@@ -5949,6 +5945,7 @@
     if (out) out.addEventListener('click', logout);
 
     window.addEventListener('hashchange', router);
+    window.addEventListener('nota:languagechange', refreshLanguageView);
     router();
   }
 

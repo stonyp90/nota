@@ -34,6 +34,7 @@ npx playwright show-report                         # open the last HTML report (
 | `client-booking.spec.js` | The headline journey — pass the onboarding gate as a client, book the **Financing** act, answer the notary's required questions, publish a valid offer, land on the confirmation. |
 | `notary-signin.spec.js` | Passwordless notary sign-in, both ways: the gate form (dev-echoed token redeemed in place) and booting the emailed magic link (`#nauth=<token>`). Asserts the console renders the open agenda. |
 | `partner-claim.spec.js` | A referral partner claims a code and gets the shareable `?ref=CODE` link. |
+| `language-preferences.spec.js` | Browser language defaults, desktop/mobile menu choice, API language propagation, blocked storage, invalid URL overrides, and authenticated email preference updates. |
 | `no-console-errors.spec.js` | Home + booking load with no severe console errors, no uncaught page errors, and no failed / 5xx same-origin requests. |
 
 ## How the servers are wired

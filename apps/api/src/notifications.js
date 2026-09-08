@@ -338,6 +338,14 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
   // `templateKey` names the emails.js registry entry behind `buildTemplate` and
   // `ctx` is the context that template reads; both ride into the build so a
   // stored override can silence the send or reword its copy.
+  async function recipientLanguage(to, explicit) {
+    if (explicit === 'en' || explicit === 'fr') return explicit;
+    try {
+      const saved = repo.getEmailLanguage ? await repo.getEmailLanguage(to) : null;
+      return saved === 'en' || saved === 'fr' ? saved : undefined;
+    } catch { return undefined; }
+  }
+
   async function sendOnce({ refId, kind, to, buildTemplate, templateKey, ctx }) {
     if (!to) return { sent: false, reason: 'no-address', kind };
     // Le retrait (CASL) porte sur les envois COMMERCIAUX. Un avis
@@ -351,6 +359,10 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
     const meta = emails.TEMPLATE_META && emails.TEMPLATE_META[templateKey];
     const transactionnel = !!(meta && meta.transactionnel === true);
     if (!transactionnel && (await repo.isUnsubscribed(to))) return { sent: false, reason: 'unsubscribed', kind };
+    if (repo.getNotificationPreferences && !/MagicLink$/.test(templateKey)) {
+      const preferences = await repo.getNotificationPreferences(to);
+      if (preferences[templateKey] === false) return { sent: false, reason: 'preference', kind };
+    }
     if (await repo.wasNotificationSent(refId, kind)) return { sent: false, reason: 'duplicate', kind };
 
     // Art. 68 — un gabarit transactionnel ne s'éteint pas : emails.js seul sait
@@ -362,10 +374,10 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
     // `ctx` rides in the environment too: the override's {{jetons}} are
     // interpolated inside the template, and a couple of call sites hand the
     // template less than they declare here (onClientSignup and its {{email}}).
-    const msg = buildTemplate({ ...(ctx || {}), unsubscribeUrl: unsub, baseUrl: base, adminUrl: adminUrl || null, __override: override });
+    const msg = buildTemplate({ ...(ctx || {}), emailLanguage: await recipientLanguage(to), unsubscribeUrl: unsub, baseUrl: base, adminUrl: adminUrl || null, __override: override });
     // unsubscribeUrl rides along so the mailer can emit the RFC 8058
     // List-Unsubscribe / List-Unsubscribe-Post headers.
-    await mailer.send({ to, subject: msg.subject, html: msg.html, text: msg.text, unsubscribeUrl: unsub });
+    await mailer.send({ to, subject: msg.subject, html: msg.html, text: msg.text, unsubscribeUrl: unsub, replyTo: ctx && ctx.replyTo });
     await repo.markNotificationSent(refId, kind, clock());
     // « Ce que Nota vous a envoyé » — la section du dossier Loi 25 (droit
     // d'accès). Le magasin et son lecteur existaient depuis longtemps ; il
@@ -429,6 +441,7 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
 
     // Une copie composée n'a rien à surcharger : elle EST déjà la décision de
     // l'opérateur, et une surcharge qui l'éteindrait ne désignerait rien.
+    if (!compose && repo.getNotificationPreferences && (await repo.getNotificationPreferences(to))[templateKey] === false) return { sent: false, reason: 'preference' };
     const override = compose ? null : await getOverride(templateKey);
     if (!compose && emails.isOverrideDisabled(templateKey, override)) return { sent: false, reason: 'disabled' };
 
@@ -436,6 +449,7 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
     const msg = build({
       ...(ctx || {}),
       ...(message || {}),
+      emailLanguage: await recipientLanguage(to),
       unsubscribeUrl: unsub,
       baseUrl: base,
       adminUrl: adminUrl || null,
@@ -1127,6 +1141,7 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
           // `email` double le courriel pour que le {{email}} d'une surcharge
           // de sujet se résolve (le gabarit, lui, lit `courriel`).
           email: courriel || null,
+          replyTo: courriel || null,
           texte: message.texte,
           replyUrl,
           ...(escalade
@@ -1657,12 +1672,14 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
   // resend on each request (a fresh single-use link every time) and must never
   // be suppressed by an unsubscribe or a dedupe ledger. Best-effort: a mail
   // failure must never break the request response (which stays generic anyway).
-  async function onNotaryLoginRequested({ email, link, ttlMinutes } = {}) {
+  async function onNotaryLoginRequested({ email, link, ttlMinutes, emailLanguage } = {}) {
     const to = String(email || '').trim().toLowerCase();
     if (!to || !link) return { ok: true, sent: false };
     try {
       const unsub = unsubscribeUrl(to);
       const msg = emails.notaryMagicLink({
+        emailLanguage: await recipientLanguage(to, emailLanguage),
+        __override: await getOverride('notaryMagicLink'),
         link,
         ttlMinutes,
         baseUrl: base,
@@ -1681,12 +1698,14 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
   // demande (un lien neuf, à usage unique) et ne jamais être supprimé par un
   // désabonnement ou un registre de dédoublonnage. Au mieux : un échec d'envoi
   // ne change jamais la réponse de la route (qui reste générique de toute façon).
-  async function onClientLoginRequested({ courriel, link, ttlMinutes } = {}) {
+  async function onClientLoginRequested({ courriel, link, ttlMinutes, emailLanguage } = {}) {
     const to = String(courriel || '').trim().toLowerCase();
     if (!to || !link) return { ok: true, sent: false };
     try {
       const unsub = unsubscribeUrl(to);
       const msg = emails.clientMagicLink({
+        emailLanguage: await recipientLanguage(to, emailLanguage),
+        __override: await getOverride('clientMagicLink'),
         link,
         ttlMinutes,
         baseUrl: base,
@@ -1703,12 +1722,12 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
   // rappels d'identité : il repart à CHAQUE demande (sinon un partenaire qui
   // perd son code deux fois reste dehors la seconde), donc il contourne
   // sendOnce et n'est jamais supprimé par un désabonnement.
-  async function onPartnerCodeReminder({ courriel, code, link } = {}) {
+  async function onPartnerCodeReminder({ courriel, code, link, emailLanguage } = {}) {
     const to = String(courriel || '').trim().toLowerCase();
     if (!to || !code) return { ok: true, sent: false };
     try {
       const unsub = unsubscribeUrl(to);
-      const msg = emails.partnerCodeReminder({ code, link, baseUrl: base, unsubscribeUrl: unsub });
+      const msg = emails.partnerCodeReminder({ emailLanguage: await recipientLanguage(to, emailLanguage), __override: await getOverride('partnerCodeReminder'), code, link, baseUrl: base, unsubscribeUrl: unsub });
       await mailer.send({ to, subject: msg.subject, html: msg.html, text: msg.text, unsubscribeUrl: unsub });
       return { ok: true, sent: true, to };
     } catch (err) {
@@ -1723,12 +1742,14 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
   // on each request (a fresh single-use link every time) and must never be
   // suppressed by an unsubscribe or a dedupe ledger. Best-effort: a mail failure
   // must never break the request response (which stays generic anyway).
-  async function onPartnerClaimRequested({ email, link, code, ttlMinutes } = {}) {
+  async function onPartnerClaimRequested({ email, link, code, ttlMinutes, emailLanguage } = {}) {
     const to = String(email || '').trim().toLowerCase();
     if (!to || !link) return { ok: true, sent: false };
     try {
       const unsub = unsubscribeUrl(to);
       const msg = emails.partnerClaimLink({
+        emailLanguage: await recipientLanguage(to, emailLanguage),
+        __override: await getOverride('partnerClaimLink'),
         link,
         code,
         ttlMinutes,

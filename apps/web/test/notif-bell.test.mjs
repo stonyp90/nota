@@ -108,7 +108,7 @@ function notifCard(doc) {
   );
 }
 
-const HONEST_COPY = 'Ces réglages contrôlent la cloche dans l’application ; les courriels sont gérés par le lien de désabonnement de chaque courriel.';
+const HONEST_COPY = 'Ces réglages contrôlent la cloche dans l’application. Utilisez « Préférences de courriel » pour choisir les courriels à recevoir.';
 
 // ---------------------------------------------------------------------------
 // 1. Complete + honest preferences
@@ -162,7 +162,7 @@ test('the new copy and labels read in English too', () => {
     assert.notEqual(I18N.tEn(s), s, `translation is not the identity: ${s}`);
   }
   assert.equal(I18N.tEn(HONEST_COPY),
-    'These settings control the in-app bell; emails are managed through the unsubscribe link in each email.');
+    'These settings control the in-app bell. Use Email preferences to choose which emails to receive.');
   I18N.force('fr');
 });
 

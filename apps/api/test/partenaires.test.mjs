@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
+const connectHeaders = require('./helpers/connect-session.cjs');
 const { createApp } = require('../src/handler.js');
 const { createAnalytics } = require('../src/analytics.js');
 const { createMemoryRepo } = require('../src/repo-memory.js');
@@ -143,8 +144,7 @@ test('a foreign claim on a CONFIRMED code is 409; the owner re-requesting is ide
 test('POST /notaries/connect stores a valid parrain on the notary record, normalized and private', async () => {
   const a = app();
   const res = await a.handle({
-    method: 'POST', path: '/notaries/connect',
-    body: JSON.stringify({ email: 'new@notaire.ca', parrain: 'eve-roy' }),
+    method: 'POST', path: '/notaries/connect', headers: connectHeaders('new@notaire.ca'), body: JSON.stringify({ email: 'new@notaire.ca', parrain: 'eve-roy' }),
   });
   assert.equal(res.statusCode, 200, res.body);
   assert.equal(res.body.includes('parrain'), false, 'the connect response never echoes the code');
@@ -156,8 +156,7 @@ test('POST /notaries/connect stores a valid parrain on the notary record, normal
 test('POST /notaries/connect silently drops an invalid parrain — signup never fails over a broken link', async () => {
   const a = app();
   const res = await a.handle({
-    method: 'POST', path: '/notaries/connect',
-    body: JSON.stringify({ email: 'new@notaire.ca', parrain: '???' }),
+    method: 'POST', path: '/notaries/connect', headers: connectHeaders('new@notaire.ca'), body: JSON.stringify({ email: 'new@notaire.ca', parrain: '???' }),
   });
   assert.equal(res.statusCode, 200, res.body);
   assert.equal((await a.repo.getNotary(notaryIdForEmail('new@notaire.ca'))).parrain, null);
@@ -230,8 +229,7 @@ test('POST /notaries/connect drops a self-referral: a partner cannot refer thems
   const a = app();
   await claimPartner(a, { type: 'agent_immobilier', courriel: 'marc@agence.ca', code: 'MARCQC' });
   const res = await a.handle({
-    method: 'POST', path: '/notaries/connect',
-    body: JSON.stringify({ email: 'Marc@Agence.CA', parrain: 'MARCQC' }),
+    method: 'POST', path: '/notaries/connect', headers: connectHeaders('Marc@Agence.CA'), body: JSON.stringify({ email: 'Marc@Agence.CA', parrain: 'MARCQC' }),
   });
   assert.equal(res.statusCode, 200, 'the signup itself always succeeds: ' + res.body);
   assert.equal((await a.repo.getNotary(notaryIdForEmail('Marc@Agence.CA'))).parrain, null);

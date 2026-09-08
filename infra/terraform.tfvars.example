@@ -20,6 +20,7 @@ project_name = "nota"
 # enable_admin        = true
 # admin_domain_name   = "admin.nota.ca"
 # admin_emails        = ["you@nota.ca"]           # allowlisted admin logins
+# admin_password_hash = "..."                     # printf %s 'password' | shasum -a 256
 #
 # The admin Lambda reuses the public SES sender (from_email). Verify it in SES
 # and exit the SES sandbox before enabling admin login email.

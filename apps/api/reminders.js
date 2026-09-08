@@ -1,5 +1,7 @@
 'use strict';
 
+process.env.NOTA_EMAIL_LANGUAGE ||= 'fr';
+
 /**
  * Lambda entry point for the daily reminder scheduler. Triggered by the
  * EventBridge Scheduler (see infra/notifications.tf), NOT by HTTP. It wires the
@@ -27,6 +29,7 @@ const { createStripeAdapter } = require('./src/stripe-port');
 const { runReminders } = require('./src/reminders');
 
 exports.handler = async () => {
+  await require('./src/runtime-secrets').loadRuntimeSecrets();
   const repo = createDynamoRepo({
     tableName: process.env.TABLE_NAME,
     region: process.env.AWS_REGION,

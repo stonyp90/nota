@@ -25,7 +25,6 @@
 variable "from_email" {
   description = "Verified SES sender address (e.g. bonjour@nota.ca). Empty string disables email and creates no SES resources. Verify a domain and exit the SES sandbox before production."
   type        = string
-  sensitive   = true
   default     = ""
 }
 
@@ -176,7 +175,7 @@ resource "aws_lambda_function" "reminders" {
   function_name = "${var.project_name}-reminders"
   role          = aws_iam_role.reminders.arn
 
-  runtime = "nodejs20.x"
+  runtime = "nodejs22.x"
   handler = "reminders.handler"
 
   filename         = data.archive_file.api.output_path
@@ -190,10 +189,18 @@ resource "aws_lambda_function" "reminders" {
 
   environment {
     variables = {
-      TABLE_NAME          = aws_dynamodb_table.main.name
-      NOTA_FROM_EMAIL     = var.from_email
-      NOTA_OPERATOR_EMAIL = var.operator_email
-      NOTA_BASE_URL       = var.base_url
+      NOTA_SES_CONFIGURATION_SET = local.ses_domain_enabled ? aws_sesv2_configuration_set.main[0].configuration_set_name : ""
+      NOTA_EMAIL_LANGUAGE        = var.email_language
+      NOTA_REPLY_TO_EMAIL        = var.reply_to_email
+      NOTA_SENDER_ADDRESS        = var.sender_address
+      NOTA_ADMIN_URL             = var.admin_domain_name != "" ? "https://${var.admin_domain_name}" : ""
+      NODE_ENV                   = "production"
+      NOTA_RUNTIME_SECRET_ARN    = var.use_secrets_manager ? aws_secretsmanager_secret.public[0].arn : ""
+      NOTA_REQUIRED_SECRETS      = var.stripe_mode == "unconfigured" ? "NOTA_NOTARY_SECRET" : "NOTA_NOTARY_SECRET,STRIPE_SECRET_KEY,STRIPE_WEBHOOK_SECRET"
+      TABLE_NAME                 = aws_dynamodb_table.main.name
+      NOTA_FROM_EMAIL            = var.from_email
+      NOTA_OPERATOR_EMAIL        = var.operator_email
+      NOTA_BASE_URL              = var.base_url
 
       # ADR 0033 §2.7 — le lien signé qui ouvre L'ACTE du client est le bouton de
       # tous ces courriels. Ce lot le frappe lui-même, donc il lui faut l'origine
@@ -201,15 +208,15 @@ resource "aws_lambda_function" "reminders" {
       # secret ne se vérifierait pas au retour. (apps/api/test/rappels-lien-client
       # tient les deux ensemble.)
       NOTA_SITE_URL      = var.base_url
-      NOTA_NOTARY_SECRET = random_password.notary_secret.result
+      NOTA_NOTARY_SECRET = var.use_secrets_manager ? "" : random_password.notary_secret.result
 
       # ADR 0035 — la caution. Ce lot quotidien pose, hors session, l'autorisation
       # de carte qui doit vivre jusqu'à la signature : sans clé Stripe il ne pose
       # rien et se limite aux rappels. La clé de webhook n'y sert à rien (aucune
       # signature à vérifier ici) ; elle n'est passée que parce que l'adaptateur
       # l'exige à la construction.
-      STRIPE_SECRET_KEY     = var.stripe_secret_key
-      STRIPE_WEBHOOK_SECRET = var.stripe_webhook_secret
+      STRIPE_SECRET_KEY     = var.use_secrets_manager ? "" : var.stripe_secret_key
+      STRIPE_WEBHOOK_SECRET = var.use_secrets_manager ? "" : var.stripe_webhook_secret
     }
   }
 

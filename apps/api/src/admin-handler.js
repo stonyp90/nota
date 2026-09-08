@@ -71,6 +71,8 @@ function createAdminApp(repo, opts = {}) {
         // The public site — where an activated notary is told to sign in.
         siteUrl: opts.siteUrl || process.env.NOTA_BASE_URL || process.env.NOTA_SITE_URL || '',
         devEcho: process.env.NODE_ENV !== 'production',
+        password: process.env.NOTA_ADMIN_PASSWORD || undefined,
+        passwordHash: process.env.NOTA_ADMIN_PASSWORD_HASH || undefined,
         // Les bornes de campagne étaient LUES par admin.js (`config.campagnePlafond`,
         // `config.campagneFenetreHeures`) et n'étaient POSÉES nulle part : la
         // console retombait donc toujours sur les défauts de segments.js, sans
@@ -165,6 +167,17 @@ function createAdminApp(repo, opts = {}) {
       return json(200, body);
     }
 
+    if (route === '/admin/auth/login' && method === 'POST') {
+      let payload;
+      try { payload = parseBody(request); } catch {
+        return json(400, { errors: [{ code: 'json_invalide', message: 'Corps JSON invalide.' }] });
+      }
+      const result = await admin.login({ email: payload.email, password: payload.password, ip: clientIp(request) });
+      if (result.throttled) return json(429, { errors: [{ code: 'trop_de_tentatives', message: 'Trop de tentatives. Réessayez plus tard.' }] });
+      if (!result.ok) return json(401, { errors: [{ code: 'identifiants_invalides', message: 'Courriel ou mot de passe invalide.' }] });
+      return json(200, { ok: true, session: result.session, role: result.role, expiresAt: result.expiresAt });
+    }
+
     if (route === '/admin/auth/verify' && method === 'POST') {
       let payload;
       try {
@@ -193,6 +206,35 @@ function createAdminApp(repo, opts = {}) {
       const info = await admin.me(bearer(request));
       if (!info) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
       return json(200, info);
+    }
+
+    // Stripe credentials stay in deployment secrets, never in the admin
+    // database or browser. The console still needs an authoritative, safe
+    // readiness view so an operator can tell whether checkout, Connect and
+    // webhook delivery are actually enabled before publishing an offer.
+    if (route === '/admin/payments' && method === 'GET') {
+      const principal = await admin.requireAdmin(bearer(request), { ip: clientIp(request) });
+      if (!principal) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+      const configured = opts.stripeStatus || {
+        secretConfigured: process.env.NOTA_STRIPE_SECRET_CONFIGURED === 'true',
+        webhookConfigured: process.env.NOTA_STRIPE_WEBHOOK_CONFIGURED === 'true',
+        mode: process.env.NOTA_STRIPE_MODE || 'unconfigured',
+        locale: process.env.NOTA_STRIPE_LOCALE || 'fr-CA',
+        currency: 'cad',
+      };
+      const secretConfigured = !!configured.secretConfigured;
+      const webhookConfigured = !!configured.webhookConfigured;
+      return json(200, {
+        provider: 'stripe',
+        mode: configured.mode || 'unconfigured',
+        locale: configured.locale || 'fr-CA',
+        currency: configured.currency || 'cad',
+        secretConfigured,
+        webhookConfigured,
+        checkoutEnabled: secretConfigured && webhookConfigured,
+        connectEnabled: secretConfigured,
+        customizable: { prices: true, cancellation: true, emailTemplates: true },
+      });
     }
 
     if (route === '/admin/metrics/overview' && method === 'GET') {

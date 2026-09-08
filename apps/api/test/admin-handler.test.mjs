@@ -60,6 +60,17 @@ test('POST /admin/auth/request returns only ok + a devLink — never a session o
   assert.equal(body.token, undefined); // a bare email can NEVER yield a credential
 });
 
+test('POST /admin/auth/login accepts normal credentials and rejects bad credentials', async () => {
+  const h = make({ password: 'CorrectHorseBatteryStaple!' });
+  const ok = await h.call('POST', '/admin/auth/login', { body: { email: 'ops@nota.ca', password: 'CorrectHorseBatteryStaple!' } });
+  assert.equal(ok.statusCode, 200);
+  assert.equal(parse(ok).ok, true);
+  assert.ok(parse(ok).session);
+  const bad = await h.call('POST', '/admin/auth/login', { body: { email: 'ops@nota.ca', password: 'wrong' } });
+  assert.equal(bad.statusCode, 401);
+  assert.equal(parse(bad).errors[0].code, 'identifiants_invalides');
+});
+
 test('a non-allowlisted email gets the same 200 with no devLink (no enumeration)', async () => {
   const h = make();
   const body = parse(await h.call('POST', '/admin/auth/request', { body: { email: 'stranger@example.com' } }));

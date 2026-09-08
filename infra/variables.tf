@@ -172,6 +172,18 @@ variable "admin_emails" {
   default     = []
 }
 
+variable "admin_password_hash" {
+  description = "SHA-256 hex digest of the password used by the normal admin login. Generate with: printf %s 'your-password' | shasum -a 256. Required when enable_admin is true."
+  type        = string
+  sensitive   = true
+  default     = ""
+
+  validation {
+    condition     = var.admin_password_hash == "" || can(regex("^[0-9a-fA-F]{64}$", var.admin_password_hash))
+    error_message = "admin_password_hash must be a 64-character SHA-256 hex digest when enable_admin is true."
+  }
+}
+
 # --- Bornes de campagne (apps/api/src/segments.js GARDES) --------------------
 # apps/api/src/admin.js LISAIT `config.campagnePlafond` et
 # `config.campagneFenetreHeures` — et rien ne les POSAIT : la console retombait
@@ -247,4 +259,20 @@ variable "prix_nota_grille" {
   description = "La GRILLE du prix de Nota (ADR 0034), en JSON : {\"services\":{\"refinancement\":24900},\"garantieDate\":{\"rapide\":5000}} — en cents. Vide = la grille du catalogue. Une cellule absente reste celle du catalogue. Dès que cette variable porte une grille lisible, elle décide SEULE : prix_nota_cents est alors ignoré (les deux ne se composent jamais). La console admin la surcharge à l'exécution via CONFIG#PRIX."
   type        = string
   default     = ""
+}
+
+variable "reply_to_email" {
+  description = "Monitored inbox for replies to branded email. SES sends email; it does not create a mailbox."
+  type        = string
+  default     = ""
+}
+
+variable "email_language" {
+  description = "Default outgoing email language across API, admin, and reminders."
+  type        = string
+  default     = "fr"
+  validation {
+    condition     = contains(["fr", "en", "bilingual"], var.email_language)
+    error_message = "email_language must be fr, en, or bilingual."
+  }
 }

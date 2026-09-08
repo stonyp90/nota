@@ -334,3 +334,50 @@ test('POST /bids stores a dossier privately and it NEVER leaks in GET /bids', as
   assert.deepEqual(stored.dossier, SAMPLE_DOSSIER);
   assert.equal(stored.courriel, 'client@example.ca');
 });
+
+test('a calendar index outage returns retryable 503 without replacing the subscribed calendar', async () => {
+  const a = app();
+  const { feedToken } = await session(a, 'a@notaire.ca');
+  a.repo.listRetainedByNotary = async () => { throw new Error('private database diagnostic'); };
+  const result = await a.handle({ method: 'GET', path: '/notary/feed.ics', query: { token: feedToken } });
+  assert.equal(result.statusCode, 503);
+  assert.equal(result.headers['retry-after'], '60');
+  assert.equal(result.headers['cache-control'], 'no-store');
+  assert.doesNotMatch(result.body, /private database|BEGIN:VCALENDAR/);
+});
+
+test('private calendar ownership is checked using strongly consistent bid reads', async () => {
+  const a = app();
+  const bid = await seedBid(a);
+  const { token, feedToken } = await session(a, 'a@notaire.ca');
+  await accept(a, token, bid.id, bid.dateISO);
+  const get = a.repo.get.bind(a.repo);
+  let reads = 0;
+  a.repo.get = async (id, dateISO, options) => {
+    assert.deepEqual(options, { consistentRead: true });
+    reads++;
+    return get(id, dateISO);
+  };
+  const result = await a.handle({ method: 'GET', path: '/notary/feed.ics', query: { token: feedToken } });
+  assert.equal(result.statusCode, 200);
+  assert.equal(reads, 1);
+});
+
+test('memory retention cannot resurrect a bid cancelled after the accept path read it', async () => {
+  const original = { id: 'cancel-race', dateISO: '2026-08-20', status: 'ouverte' };
+  const repo = createMemoryRepo([original]);
+  await repo.update({ ...original, status: 'annulee' });
+  assert.equal(await repo.retain({ ...original, status: 'retenue', notaryId: 'N1' }, 'N1'), null);
+  assert.equal((await repo.get(original.id, original.dateISO)).status, 'annulee');
+});
+
+test('acceptance commits its calendar pointer without a separate fallible pointer write', async () => {
+  const a = app();
+  const bid = await seedBid(a);
+  const { token, feedToken } = await session(a, 'a@notaire.ca');
+  a.repo.putRetained = async () => { throw new Error('legacy secondary write must not be used'); };
+  assert.equal((await accept(a, token, bid.id, bid.dateISO)).statusCode, 200);
+  const response = await a.handle({ method: 'GET', path: '/notary/feed.ics', query: { token: feedToken } });
+  assert.equal(response.statusCode, 200);
+  assert.ok(response.body.includes('UID:' + bid.id + '@nota'));
+});

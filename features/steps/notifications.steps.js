@@ -267,3 +267,7 @@ Then('ce courriel dit que {int} $ sont retenus en dédommagement du notaire', fu
   assert.ok(m.html.includes(this.domain.money(frais)), 'montant absent: ' + m.subject);
   assert.ok(/dédommagement/.test(m.html), 'le client doit lire à qui va la somme');
 });
+
+Given('{string} désactive le courriel {string}', async function (email, key) {
+  await this.repo.putNotificationPreferences(email, { [key]: false });
+});

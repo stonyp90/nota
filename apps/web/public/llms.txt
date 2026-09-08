@@ -84,6 +84,6 @@ no legal services.
 
 ## Liens
 
-- Site : https://d1s1h4894dau0c.cloudfront.net/
-- Version anglaise : https://d1s1h4894dau0c.cloudfront.net/?lang=en
-- Carnet public (JSON) : https://d1s1h4894dau0c.cloudfront.net/api/bids
+- Site : https://gonota.ca/
+- Version anglaise : https://gonota.ca/?lang=en
+- Carnet public (JSON) : https://gonota.ca/api/bids

@@ -49,6 +49,24 @@ test('requestLogin never enumerates: a non-allowlisted address gets the same ok,
   assert.ok(audit.some((a) => a.action === 'login_requested_unknown'));
 });
 
+test('password login creates the same server-backed session as the recovery link', async () => {
+  const h = make({ password: 'CorrectHorseBatteryStaple!' });
+  const res = await h.admin.login({ email: 'OPS@nota.ca', password: 'CorrectHorseBatteryStaple!', ip: '2.2.2.2' });
+  assert.equal(res.ok, true);
+  assert.equal(res.role, ROLES.SUPER_ADMIN);
+  const who = await h.admin.me(res.session);
+  assert.equal(who.email, 'ops@nota.ca');
+  assert.deepEqual(who.permissions, [rbac.WILDCARD]);
+});
+
+test('password login rejects wrong, unknown, and disabled credentials without creating a session', async () => {
+  const h = make({ password: 'CorrectHorseBatteryStaple!' });
+  assert.equal((await h.admin.login({ email: 'ops@nota.ca', password: 'wrong', ip: '3.3.3.3' })).ok, false);
+  assert.equal((await h.admin.login({ email: 'stranger@example.com', password: 'CorrectHorseBatteryStaple!', ip: '3.3.3.3' })).ok, false);
+  await h.repo.putAdmin({ id: require('../src/admin-auth.js').adminIdForEmail('ops@nota.ca'), email: 'ops@nota.ca', role: ROLES.SUPER_ADMIN, disabled: true });
+  assert.equal((await h.admin.login({ email: 'ops@nota.ca', password: 'CorrectHorseBatteryStaple!', ip: '4.4.4.4' })).ok, false);
+});
+
 test('requestLogin for an allowlisted admin emails a single-use link and returns a devLink in dev', async () => {
   const h = make();
   const res = await h.admin.requestLogin({ email: 'OPS@nota.ca', ip: '1.2.3.4' });

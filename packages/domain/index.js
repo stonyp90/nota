@@ -2141,8 +2141,8 @@
   // twice. `telephone` stays null until a real line exists — the UI renders the
   // call button only when it is set, because a wrong number is worse than none.
   const CONTACT = {
-    courriel: 'bonjour@nota.ca',
-    confidentialite: 'confidentialite@nota.ca',
+    courriel: 'info@gonota.ca',
+    confidentialite: 'info@gonota.ca',
     telephone: null,
   };
 

@@ -317,17 +317,14 @@ test('every path documented in openapi.yaml is routed by the app (no "route inco
 // --- Drift flag : routed-but-undocumented routes -----------------------------
 
 // Parsed straight from the handler source so a NEW route added there without a
-// matching openapi.yaml entry trips this test. These four are known and
-// intentionally OUT of the public JSON contract for now (the two *.ics feeds
-// answer text/calendar, not JSON; decline/dossier are secondary notary
-// routes; acts/complete graduated to the spec when settlement gained its
-// domain bound). If you route a new path, either document it in openapi.yaml
+// matching openapi.yaml entry trips this test. These two secondary notary
+// routes remain outside the specification. The calendar feeds now document
+// their text/calendar responses and temporary-failure behavior.
+// If you route a new path, either document it in openapi.yaml
 // or add it here with a reason.
 const KNOWN_UNDOCUMENTED = new Set([
   '/notary/bids/decline',
   '/notary/dossier',
-  '/notary/feed.ics',
-  '/carnet/feed.ics',
 ]);
 
 function routedPathsFromHandler() {

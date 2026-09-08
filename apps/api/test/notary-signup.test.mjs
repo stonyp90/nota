@@ -20,6 +20,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
+const connectHeaders = require('./helpers/connect-session.cjs');
 const { createApp } = require('../src/handler.js');
 const { createMemoryRepo } = require('../src/repo-memory.js');
 const { createNotifier } = require('../src/notifications.js');
@@ -244,7 +245,7 @@ test('an approved notary keeps console access through the whole Stripe onboardin
   const gaugeBefore = { ...(await repo.getGauge()) };
 
   // 1. Connect payouts from the console: the record keeps its approved status.
-  const connect = await app.handle({ method: 'POST', path: '/notaries/connect', body: JSON.stringify({ email }) });
+  const connect = await app.handle({ method: 'POST', path: '/notaries/connect', headers: connectHeaders(email), body: JSON.stringify({ email }) });
   assert.equal(connect.statusCode, 200, connect.body);
   let n = await repo.getNotary(id);
   assert.equal(n.status, 'active', 'connecting payouts never demotes an approved notary to onboarding');

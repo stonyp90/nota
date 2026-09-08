@@ -77,6 +77,8 @@ async function boot() {
     url: 'https://nota.example/',
     pretendToBeVisual: true,
     beforeParse(window) {
+      // These tests isolate profile completion; the account tour has its own suite.
+      window.localStorage.setItem('nota.account-tour.v1.notary.demo%40etude.ca', 'done');
       window.fetch = () => Promise.reject(new Error('offline'));
       window.scrollTo = () => {};
       if (!window.HTMLDialogElement.prototype.showModal) {
