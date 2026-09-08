@@ -59,6 +59,15 @@ data "aws_iam_policy_document" "api_dynamodb" {
     resources = [aws_dynamodb_table.main.arn]
   }
 
+  # Postal coverage reads active notaries through GSI1. Table Query permission
+  # alone does not authorize reading an index; keep this grant read-only.
+  statement {
+    sid       = "NotaryCoverageIndex"
+    effect    = "Allow"
+    actions   = ["dynamodb:Query"]
+    resources = ["${aws_dynamodb_table.main.arn}/index/GSI1"]
+  }
+
   # Le pendant du Deny posé sur le rôle admin (infra/admin.tf) : la piste
   # d'audit des TRANSACTIONS et des ACCÈS vit dans les partitions AUDIT#* de
   # CETTE table, écrite par cette Lambda. Le statement ci-dessus lui accorde
