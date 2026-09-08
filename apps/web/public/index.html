@@ -456,7 +456,13 @@
       </div>
     </header>
     <div class="wrap referral-status" id="referral-status" role="status" hidden>
-      <span class="pill" id="referral-status-label"></span>
+      <div class="referral-status-card">
+        <span class="referral-status-check" aria-hidden="true">✓</span>
+        <div class="referral-status-copy"><strong id="referral-status-label"></strong>
+          <span>Ce code accompagne votre demande. Il ne change pas votre prix.</span>
+        </div>
+        <button type="button" class="btn btn-sm btn-ghost" id="referral-remove">Retirer le code</button>
+      </div>
     </div>
 
     <!-- Mobile navigation drawer (phones only): the hamburger's panel. Carries

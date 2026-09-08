@@ -11002,6 +11002,14 @@
       var inp = $('partner-courriel');
       if (inp) { try { inp.focus({ preventScroll: true }); } catch (e) { inp.focus(); } }
     };
+    var removeReferral = $('referral-remove');
+    if (removeReferral) removeReferral.addEventListener('click', function () {
+      flagClear(LS_REF);
+      ['o-parrain', 'nc-signup-parrain'].forEach(function (id) { var field = $(id); if (field) field.value = ''; });
+      onRefCodeInput();
+      renderReferralStatus();
+      var homeTab = $('tab-carnet'); if (homeTab) homeTab.focus();
+    });
     var pHero = $('pr-hero-cta');
     if (pHero) pHero.addEventListener('click', goPartnerClaim);
 

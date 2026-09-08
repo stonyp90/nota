@@ -1236,6 +1236,8 @@
   "Voir mon code →": "See my code →",
   "Réclamation…": "Claiming…",
   "Lien envoyé ✓": "Link sent ✓",
+  "Ce code accompagne votre demande. Il ne change pas votre prix.": "This code accompanies your request. It does not change your price.",
+  "Retirer le code": "Remove code",
   "Code réclamé ✓": "Code claimed ✓",
   "Code réclamé.": "Code claimed.",
   // Email verification of a partner code claim (ADR 0011 fraud-hardening).
