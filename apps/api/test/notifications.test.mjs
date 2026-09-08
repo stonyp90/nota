@@ -569,3 +569,27 @@ test('onActReleased always alerts the operator, money in flight or not', async (
   assert.ok(ops[0].html.includes('Étude Tremblay'));
   assert.ok(ops[0].html.includes('https://admin.nota.example'));
 });
+
+for (const failingRecipient of ['client@example.ca', 'jeanne@etude.ca']) {
+  test(`retention: delivery failure to ${failingRecipient} does not block the other party; retry skips delivered mail`, async () => {
+    const { repo, mailer, notifier } = setup33();
+    await repo.putNotary({ id: 'n-1', email: 'jeanne@etude.ca', status: 'active', ...CONTACT });
+    const send = mailer.send.bind(mailer);
+    let fail = true;
+    mailer.send = async message => {
+      if (fail && message.to === failingRecipient) throw new Error('simulated delivery outage');
+      return send(message);
+    };
+    const first = await notifier.onOfferRetained(retainedBid());
+    assert.equal(first.ok, false);
+    const other = failingRecipient === 'client@example.ca' ? 'jeanne@etude.ca' : 'client@example.ca';
+    assert.equal(mailer.sent.filter(m => m.to === other).length, 1);
+    assert.equal(mailer.sent.filter(m => m.to === 'ops@nota.ca').length, 1);
+    fail = false;
+    const retried = await notifier.onOfferRetained(retainedBid());
+    assert.equal(retried.ok, true);
+    for (const recipient of ['client@example.ca', 'jeanne@etude.ca', 'ops@nota.ca']) {
+      assert.equal(mailer.sent.filter(m => m.to === recipient).length, 1);
+    }
+  });
+}

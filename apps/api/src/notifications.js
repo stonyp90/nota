@@ -662,6 +662,12 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
   async function onOfferRetained(bid, { notary } = {}) {
     if (!bid) return { ok: true, results: [] };
     const results = [];
+    // Each introduction is independent: a recipient outage must not prevent
+    // the other participant from receiving their contact details and link.
+    async function sendIntroduction(args) {
+      try { return await sendOnce(args); }
+      catch { return { sent: false, reason: 'delivery-failed', kind: args.kind }; }
+    }
     try {
       const profile = await notaryOf(bid, notary);
       const bareme = await baremeFor(bid);
@@ -669,7 +675,7 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
       if (bid.courriel) {
         const ctx = bidCtx(bid, { etude, notaire: notaireContact(profile), bareme });
         results.push(
-          await sendOnce({
+          await sendIntroduction({
             refId: bid.id,
             kind: 'offerRetained',
             to: bid.courriel,
@@ -704,7 +710,7 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
           bareme,
         });
         results.push(
-          await sendOnce({
+          await sendIntroduction({
             refId: bid.id,
             kind: 'demandeRetenueNotaire',
             to: profile.email,
@@ -717,7 +723,7 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
       if (operatorEmail) {
         const ctx = bidCtx(bid, { etude });
         results.push(
-          await sendOnce({
+          await sendIntroduction({
             refId: bid.id,
             kind: 'operatorDemandeRetenue',
             to: operatorEmail,
@@ -732,7 +738,7 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
       // notary track, so BOTH are checked here, on the one retain path every
       // flow funnels through (accept and proposition-accept alike).
       results.push(...(await onReferralRetained(bid)));
-      return { ok: true, results };
+      return { ok: !results.some(result => result.reason === 'delivery-failed'), results };
     } catch (err) {
       return { ok: false, error: String((err && err.message) || err), results };
     }
