@@ -132,3 +132,25 @@ test('P2-20: the drifting dice are not built under prefers-reduced-motion', asyn
   assert.ok($(live.doc, 'site-bg'), 'the backdrop still greets everyone else');
   assert.equal($(live.doc, 'site-bg').querySelectorAll(':scope > i').length, 20);
 });
+
+test('pause freezes the film deadline; resume uses only the remaining time', async () => {
+  const { win, doc } = await boot();
+  const originalTimeout = win.setTimeout;
+  const scheduled = [];
+  win.setTimeout = (callback, delay) => { scheduled.push({ callback, delay }); return 999; };
+  let now = 1000;
+  win.Date.now = () => now;
+  $(doc, 'ig-door-client').click();
+  assert.equal(scheduled.at(-1).delay, 20600);
+  now += 4500;
+  $(doc, 'ig-pause').click();
+  assert.equal($(doc, 'ig-pause').getAttribute('aria-pressed'), 'true');
+  assert.ok($(doc, 'ig-stage-client').classList.contains('is-paused'));
+  now += 60000;
+  $(doc, 'ig-pause').click();
+  assert.equal(scheduled.at(-1).delay, 16100, 'time spent paused never consumes reading time');
+  assert.equal($(doc, 'ig-pause').getAttribute('aria-pressed'), 'false');
+  win.setTimeout = originalTimeout;
+  scheduled.at(-1).callback();
+  assert.equal(win.localStorage.getItem('nota.introPlays'), '1');
+});

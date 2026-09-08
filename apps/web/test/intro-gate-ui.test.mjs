@@ -59,8 +59,8 @@ test('skip: « Passer → » sits BELOW the film in normal flow — never absolu
   // puts it under the film, not on it.
   const frame = doc.querySelector('#ig-frame');
   const kids = [...frame.children].map((k) => k.id || k.className);
-  assert.deepEqual(kids, ['ig-stage-client', 'ig-stage-notaire', 'ig-skip'],
-    'frame order: the two stages, then the skip');
+  assert.deepEqual(kids, ['ig-stage-client', 'ig-stage-notaire', 'ig-controls'],
+    'frame order: the two stages, then the controls');
   // CSS: in-flow block pushed right by an auto margin — and NO rule may ever
   // absolutize it back over the picture.
   assert.ok(blocks('.ig-skip').some((b) => /display:\s*block/.test(b) && /margin-left:\s*auto/.test(b)),
@@ -87,20 +87,13 @@ test('film: the frame is a fixed, edge-to-edge viewport layer with no card chrom
   // gutters beside the film on wide monitors.
   assert.ok(!stage.some((b) => /max-width/.test(b)),
     'the stage has no max-width — the film paints edge to edge');
-  // And the composition survives it: the stage measures BOTH axes and the
-  // scenes size in --igu, a unit capped by width AND height, so the type
-  // never outgrows a short-and-wide screen.
+  // The stage supplies both axes for responsive spacing; text has a fixed minimum.
   assert.ok(stage.some((b) => /container-type:\s*size/.test(b)),
     'the stage is a size container (cqw AND cqh available)');
-  assert.ok(stage.some((b) => /--igu:\s*min\(\s*1cqw\s*,\s*[\d.]+cqh\s*\)/.test(b)),
-    'the film unit --igu is min(1cqw, k·cqh) — height caps the scale');
+  assert.match(css, /font-size: clamp\(32px, 5.4cqw, 72px\)/, 'headings retain a readable minimum');
 });
 
-// ADR 0033 §5 — the notaire film tells the profession's rules before it
-// signs off: one compliance scene between the acceptance and the finale,
-// three illustrated tiles citing the articles (ADR 0031, docs/legal/
-// conformite-deontologique-notaires.md), and the same tiles repeated on the
-// landing under the sign-in gate so they are visible outside the film.
+// The detailed professional commitments remain readable on the notary landing.
 const FLAT = (s) => s.replace(/[  ]/g, ' ').replace(/\s+/g, ' ').trim();
 const appSrc = readFileSync(fileURLToPath(new URL('../public/app.js', import.meta.url)), 'utf8');
 
@@ -118,36 +111,22 @@ function assertThreeArticles(root, tileSel) {
   assert.ok(!/commission|pourcentage|\d+\s*%(?!\s*du montant)/.test(txt.replace('100 %', '')), 'no share vocabulary: ' + txt);
 }
 
-test('notaire film: a compliance scene sits between the acceptance and the finale, and the timeline grew with it', () => {
-  const scenes = [...doc.querySelectorAll('#ig-stage-notaire .ig-scene')].map((s) => s.className.replace('ig-scene ', ''));
-  assert.deepEqual(scenes, ['ig-n1', 'ig-n2', 'ig-n3', 'ig-n4', 'ig-n5'], 'five scenes, the finale last');
-  const conf = doc.querySelector('#ig-stage-notaire .ig-n4');
-  assertThreeArticles(conf, '.ig-conf-tile');
-  assert.match(FLAT(doc.querySelector('#ig-stage-notaire .ig-n5').textContent), /Remplissez votre semaine\./, 'the finale is still the finale');
-  // CSS timeline: the new scene enters after n3 leaves, the finale holds.
-  const n3out = /\.run \.ig-n3 \{[^}]*igOut [\d.]+s ease ([\d.]+)s/.exec(css);
-  const EASE = '(?:[^ ]+|cubic-bezier\\([^)]*\\))';
-  const n4in = new RegExp('\\.run \\.ig-n4 \\{ animation: igIn [\\d.]+s ' + EASE + ' ([\\d.]+)s both, igOut [\\d.]+s ease ([\\d.]+)s forwards; \\}').exec(css);
-  const n5in = new RegExp('\\.run \\.ig-n5 \\{ animation: igIn [\\d.]+s ' + EASE + ' ([\\d.]+)s both, igHold [\\d.]+s linear ([\\d.]+)s forwards; \\}').exec(css);
-  assert.ok(n3out && n4in && n5in, 'n3 out, n4 in/out and n5 in/hold are all timed');
-  assert.ok(Number(n4in[1]) > Number(n3out[1]), 'n4 enters after n3 leaves');
-  assert.ok(Number(n5in[1]) > Number(n4in[2]), 'n5 enters after n4 leaves');
-  assert.ok(Number(n4in[2]) - Number(n4in[1]) >= 4, 'the compliance scene stays long enough to be read');
-  assert.ok(/\.run \.ig-n4 \.ig-conf-tile:nth-child\(3\) \{ animation-delay/.test(css), 'the tiles arrive one by one');
-  // The bar and the JS constant follow the film's new length (bar = timer − 0.6 s).
-  const bar = /#ig-stage-notaire\.run \.ig-progress \{ animation-duration: ([\d.]+)s; \}/.exec(css);
-  const timer = /film === 'client' \? (\d+) : (\d+)\)/.exec(appSrc);
-  assert.ok(bar && timer, 'bar duration and film timer found');
-  assert.ok(Number(timer[2]) > 15600, 'the notaire film is longer than before');
-  assert.equal(Number(timer[2]), Math.round(Number(bar[1]) * 1000) + 600, 'the timer trails the bar by the same 0.6 s as the client film');
-  assert.ok(Number(timer[2]) >= Number(n5in[2]) * 1000, 'the timer fires after the finale holds');
-  // The gate stays inert under prefers-reduced-motion.
-  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{\s*\.ig \{ display: none; \}/);
-  // Tokens only, square register, on the new tiles.
-  for (const b of blocks('.ig-conf-tile')) {
-    assert.ok(!/(?:background|color|border)[^;}]*(?:#[0-9a-fA-F]{3}|rgb\(|hsl\()/.test(b), 'tiles paint tokens only: ' + b);
-    assert.ok(!/border-radius:\s*(?:50%|calc\(99)/.test(b), 'no pill on a tile');
+test('both films explain the product immediately, with five concise scenes and one shared timeline', () => {
+  for (const film of ['client', 'notaire']) {
+    const scenes = [...doc.querySelectorAll('#ig-stage-' + film + ' .ig-scene')];
+    assert.equal(scenes.length, 5);
+    assert.match(scenes[0].textContent, /Nota/);
+    for (const scene of scenes) {
+      assert.ok(scene.querySelector('.ig-h'));
+      assert.ok(scene.querySelector('.ig-sub'));
+      assert.ok(scene.querySelectorAll('.ig-step').length <= 3);
+      assert.ok(!scene.hasAttribute('aria-hidden'), 'visible scene text stays accessible');
+    }
   }
+  assert.match(css, /igBarAnim 20s/);
+  assert.match(appSrc, /igRemaining = 20600/);
+  assert.ok(doc.querySelector('#ig-pause'));
+  assert.equal(doc.querySelectorAll('#intro-gate [data-lang-seg]').length, 2);
 });
 
 test('notary landing: the same three articles sit in the content column, and fold away signed-in', () => {

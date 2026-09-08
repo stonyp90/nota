@@ -4772,10 +4772,10 @@ body.ig-open { overflow: hidden; }
 .ig-door:hover { border-color: var(--brand); transform: translateY(-2px); box-shadow: var(--shadow); }
 .ig-door:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
 .ig-door-t { font-size: 17px; font-weight: 800; }
-.ig-door-s { font-size: 13px; font-weight: 500; color: var(--ink-muted); }
+.ig-door-s { font-size: 16px; font-weight: 500; color: var(--ink-muted); }
 .ig-enter {
   font: inherit; cursor: pointer; background: none; border: none;
-  color: var(--ink-muted); font-size: 13.5px; font-weight: 600; padding: 6px 10px;
+  color: var(--ink-muted); font-size: 16px; font-weight: 600; padding: 10px; min-height: 44px;
 }
 .ig-enter:hover { color: var(--ink); }
 .ig-enter:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; border-radius: var(--radius); }
@@ -4794,341 +4794,168 @@ body.ig-open { overflow: hidden; }
 .ig-stage {
   container-type: size;
   flex: 1; min-height: 0; width: 100%;
-  /* The film unit. The compositions size in --igu, 1cqw until the screen
-     turns short-and-wide — past 16:9 the HEIGHT takes over (1.778cqh) so
-     the stage can span every pixel of an ultra-wide monitor while the type
-     never outgrows the screen. Phones (portrait) keep the validated square
-     cut for free: there 1cqw is always the smaller term. */
-  --igu: min(1cqw, 1.778cqh);
-  background: var(--surface);
-  position: relative; overflow: hidden;
+  background: var(--surface); position: relative; overflow: hidden;
 }
-.ig-stage::before {
-  content: ""; position: absolute; top: 0; left: 0; right: 0;
-  height: calc(1.6 * var(--igu)); background: var(--brand); z-index: 5;
-}
-/* The ambient tints stay in cqw on purpose: they are scenery, not type —
-   scaling with the REAL width keeps the glow filling every corner of an
-   ultra-wide screen instead of pooling in a 16:9 middle. */
 .ig-stage::after {
   content: ""; position: absolute; inset: 0; pointer-events: none;
-  background:
-    radial-gradient(60cqw 45cqw at 82% 12%, var(--brand-tint), transparent 65%),
-    radial-gradient(52cqw 40cqw at 6% 94%, var(--brand-tint), transparent 62%);
+  background: radial-gradient(ellipse at 85% 10%, var(--brand-tint), transparent 65%);
 }
-/* Below the stage, in flow, pushed right — display:block + margin-left:auto,
-   NEVER position:absolute: the skip must never cover the film (owner rule,
-   pinned by intro-gate-ui.test.mjs). The auto margin also opts the button
-   out of the column's stretch, so it stays content-sized. */
-.ig-skip {
-  display: block; margin-left: auto; margin-right: 14px; margin-block: 10px 12px;
-  font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
-  color: var(--ink-muted); background: var(--surface);
-  border: 1px solid var(--border); border-radius: var(--radius); padding: 7px 16px;
+/* Lightweight brand scenery: two dollar signs and two existing Nota marks.
+   Decoration stays behind the reading layer and never receives pointer input. */
+.ig-atmosphere { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.ig-dollar { position: absolute; width: clamp(110px, 16cqw, 240px); height: auto; stroke: var(--brand); stroke-width: 3; stroke-linecap: round; opacity: .2; }
+.ig-dollar-a { top: 3%; left: 1%; --ig-turn: -14deg; }
+.ig-dollar-b { bottom: 3%; right: 1%; --ig-turn: 12deg; }
+.ig-brand-mark { position: absolute; width: clamp(32px, 5cqw, 64px); height: auto; opacity: .28; }
+.ig-brand-mark-a { top: 10%; right: 8%; --ig-turn: 10deg; }
+.ig-brand-mark-b { bottom: 10%; left: 8%; --ig-turn: -10deg; }
+.run .ig-atmosphere > svg { animation: igBrandDrift 8s ease-in-out infinite; }
+.run .ig-dollar-b, .run .ig-brand-mark-a { animation-delay: -4s; }
+@keyframes igBrandDrift {
+  0%, 100% { transform: translateY(0) rotate(var(--ig-turn)); }
+  50% { transform: translateY(-32px) rotate(6deg); }
 }
-.ig-skip:hover { color: var(--ink); border-color: var(--border-strong); }
-.ig-skip:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
-
 .ig-scene {
   position: absolute; inset: 0; z-index: 1;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  text-align: center; gap: calc(3 * var(--igu)); padding: calc(6 * var(--igu));
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; justify-content: safe center; overflow-y: auto;
+  text-align: center; gap: clamp(18px, 3cqh, 32px);
+  padding: max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) 24px max(24px, env(safe-area-inset-left));
   opacity: 0; visibility: hidden;
 }
+.ig-scene .ig-mark { width: 48px; height: 48px; flex: none; }
 .ig-kicker {
-  font-size: calc(2 * var(--igu)); font-weight: 700; letter-spacing: 0.16em;
-  text-transform: uppercase; color: var(--brand);
+  font-size: clamp(16px, 1.6cqw, 20px); font-weight: 700;
+  letter-spacing: .06em; text-transform: uppercase; color: var(--brand);
 }
-.ig-kicker::before {
-  content: ""; display: inline-block; width: calc(0.9 * var(--igu)); height: calc(0.9 * var(--igu));
-  border-radius: 50%; background: var(--brand-bright);
-  margin-right: calc(1.1 * var(--igu)); vertical-align: calc(0.15 * var(--igu));
+.ig-h {
+  font-size: clamp(32px, 5.4cqw, 72px); font-weight: 800;
+  letter-spacing: -.03em; line-height: 1.08; margin: 0;
+  text-wrap: balance; max-width: 18ch;
 }
-.ig-h { font-size: calc(6.3 * var(--igu)); font-weight: 800; letter-spacing: -0.03em; line-height: 1.08; margin: 0; text-wrap: balance; max-width: calc(84 * var(--igu)); }
-.ig-sub { font-size: calc(2.7 * var(--igu)); font-weight: 500; color: var(--ink-muted); margin: 0; }
-
-.ig-calls { display: flex; gap: calc(1.6 * var(--igu)); flex-wrap: wrap; justify-content: center; max-width: calc(90 * var(--igu)); }
-.ig-call {
-  display: flex; align-items: center; gap: calc(1.1 * var(--igu));
-  font-size: calc(1.9 * var(--igu)); font-weight: 700; color: var(--ink-muted);
+.ig-sub {
+  font-size: clamp(18px, 2.2cqw, 28px); font-weight: 500;
+  line-height: 1.45; color: var(--ink-muted); margin: 0; max-width: 48ch;
+  text-wrap: pretty;
+}
+.ig-steps {
+  display: flex; justify-content: center; gap: 16px;
+  width: 100%; max-width: 1000px; margin-top: 8px;
+}
+.ig-step {
+  flex: 1; min-width: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 14px;
+  padding: clamp(16px, 2.5cqw, 32px);
+  font-size: clamp(18px, 2cqw, 26px); font-weight: 700; line-height: 1.3;
   background: var(--surface); border: 1px solid var(--border);
-  border-radius: calc(1.6 * var(--igu)); padding: calc(1.1 * var(--igu)) calc(1.7 * var(--igu));
-  box-shadow: var(--shadow); position: relative; white-space: nowrap;
+  border-radius: var(--radius-lg); box-shadow: var(--shadow);
 }
-.ig-call .ig-ic {
-  width: calc(3 * var(--igu)); height: calc(3 * var(--igu)); border-radius: 50%;
-  display: grid; place-items: center; flex: none;
-  color: var(--ink-muted); background: var(--surface-inset);
+.ig-step-num {
+  display: grid; place-items: center; flex: none; width: 44px; height: 44px;
+  font-size: 18px; color: var(--brand); background: var(--brand-tint);
+  border-radius: var(--radius);
 }
-.ig-call .ig-ic svg { width: calc(1.7 * var(--igu)); height: calc(1.7 * var(--igu)); }
-.ig-call::after {
-  content: ""; position: absolute; left: 7%; right: 7%; top: 50%;
-  height: calc(0.45 * var(--igu)); background: var(--danger-solid); border-radius: calc(1 * var(--igu));
+.ig-progress {
+  position: absolute; bottom: 0; left: 0; height: 4px;
+  background: var(--brand-bright); width: 100%; z-index: 5;
   transform: scaleX(0); transform-origin: left center;
 }
-
-.ig-useg { display: flex; gap: calc(1 * var(--igu)); }
-.ig-useg span {
-  font-size: calc(1.9 * var(--igu)); font-weight: 700;
-  color: var(--ink-muted); background: var(--surface-inset);
-  border: 1px solid var(--border); border-radius: calc(99 * var(--igu)); padding: calc(0.9 * var(--igu)) calc(2 * var(--igu));
+.ig-controls {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 12px max(16px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  background: var(--surface); border-top: 1px solid var(--border);
 }
-.ig-useg span:nth-child(1) { --ig-tier: var(--tier-standard); }
-.ig-useg span:nth-child(2) { --ig-tier: var(--tier-prioritaire); }
-.ig-useg span:nth-child(3) { --ig-tier: var(--tier-urgence); }
-
-.ig-demand {
-  display: flex; align-items: center; gap: calc(3.2 * var(--igu));
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: calc(2 * var(--igu)); padding: calc(2.6 * var(--igu)) calc(4 * var(--igu));
-  box-shadow: var(--shadow);
+.ig-skip {
+  display: block; margin-left: auto;
+  font: inherit; font-size: 16px; font-weight: 700; cursor: pointer;
+  color: var(--brand-ink); background: var(--brand);
+  border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 16px; min-height: 44px;
 }
-.ig-cell { display: flex; flex-direction: column; gap: calc(0.6 * var(--igu)); text-align: left; }
-.ig-lbl { font-size: calc(1.6 * var(--igu)); font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-muted); white-space: nowrap; }
-.ig-val { font-size: calc(3.4 * var(--igu)); font-weight: 800; letter-spacing: -0.02em; white-space: nowrap; }
-.ig-sep { width: 1px; align-self: stretch; background: var(--border); }
-.ig-bid {
-  color: var(--brand); font-variant-numeric: tabular-nums;
-  min-width: calc(13 * var(--igu)); height: calc(4.2 * var(--igu)); overflow: hidden;
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 10%, #000 90%, transparent 100%);
-  mask-image: linear-gradient(to bottom, transparent 0, #000 10%, #000 90%, transparent 100%);
+.ig-pause {
+  font: inherit; font-size: 16px; font-weight: 700; cursor: pointer;
+  color: var(--ink); background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; min-height: 44px;
 }
-.ig-roll { display: block; }
-.ig-roll span { display: block; height: calc(4.2 * var(--igu)); line-height: calc(4.2 * var(--igu)); }
-.ig-up { display: inline-flex; align-items: center; gap: calc(0.8 * var(--igu)); font-size: calc(1.8 * var(--igu)); font-weight: 800; color: var(--brand); }
-.ig-up svg { width: calc(2 * var(--igu)); height: calc(2 * var(--igu)); }
-
-.ig-burst { position: absolute; left: 50%; top: 45%; width: 0; height: 0; pointer-events: none; z-index: 0; }
-.ig-burst i { position: absolute; width: calc(1.5 * var(--igu)); height: calc(1 * var(--igu)); border-radius: calc(0.35 * var(--igu)); opacity: 0; background: var(--hunter-500); }
-.ig-burst i:nth-child(4n+2) { background: var(--hunter-300); }
-.ig-burst i:nth-child(4n+3) { background: var(--hunter-700); }
-.ig-burst i:nth-child(4n) { background: var(--hunter-200); }
-.ig-notif {
-  display: flex; align-items: center; gap: calc(2.4 * var(--igu)); text-align: left;
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: calc(2 * var(--igu)); padding: calc(2.4 * var(--igu)) calc(3.6 * var(--igu)); box-shadow: var(--shadow);
-}
-.ig-check {
-  width: calc(6.5 * var(--igu)); height: calc(6.5 * var(--igu)); border-radius: 50%;
-  background: var(--brand-bright); color: var(--on-accent);
-  display: grid; place-items: center; flex: none; position: relative;
-}
-.ig-check svg { width: calc(3.6 * var(--igu)); height: calc(3.6 * var(--igu)); }
-.ig-check path { stroke-dasharray: 26; stroke-dashoffset: 26; }
-.ig-check::after {
-  content: ""; position: absolute; inset: calc(-1 * (0.9 * var(--igu)));
-  border: calc(0.4 * var(--igu)) solid var(--brand-bright); border-radius: 50%; opacity: 0;
-}
-.ig-t1 { font-size: calc(2.9 * var(--igu)); font-weight: 800; display: block; }
-.ig-t2 { font-size: calc(2.15 * var(--igu)); font-weight: 500; color: var(--ink-muted); margin-top: calc(0.5 * var(--igu)); display: block; }
-.ig-pill {
-  font-size: calc(2.3 * var(--igu)); font-weight: 700; color: var(--brand);
-  background: var(--brand-tint); border-radius: calc(99 * var(--igu)); padding: calc(1.2 * var(--igu)) calc(2.8 * var(--igu));
-}
-
-.ig-chat { width: calc(58 * var(--igu)); display: flex; flex-direction: column; gap: calc(1.4 * var(--igu)); }
-.ig-msg {
-  max-width: 78%; padding: calc(1.5 * var(--igu)) calc(2.4 * var(--igu)); border-radius: calc(2 * var(--igu));
-  font-size: calc(2.3 * var(--igu)); font-weight: 600; text-align: left; box-shadow: var(--shadow);
-}
-.ig-them { align-self: flex-start; background: var(--surface); color: var(--ink); border: 1px solid var(--border); border-bottom-left-radius: calc(0.6 * var(--igu)); }
-.ig-me { align-self: flex-end; background: var(--brand); color: var(--brand-ink); border-bottom-right-radius: calc(0.6 * var(--igu)); }
-
-.ig-week { display: flex; gap: calc(1.6 * var(--igu)); }
-.ig-day {
-  width: calc(12 * var(--igu)); border-radius: calc(1.6 * var(--igu));
-  border: 1px solid var(--border); background: var(--surface);
-  padding: calc(1.4 * var(--igu)) 0 calc(1.8 * var(--igu));
-  display: flex; flex-direction: column; align-items: center; gap: calc(1 * var(--igu));
-}
-.ig-dn { font-size: calc(1.7 * var(--igu)); font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-muted); }
-.ig-slot { width: calc(8 * var(--igu)); height: calc(1.7 * var(--igu)); border-radius: calc(0.8 * var(--igu)); background: var(--surface-inset); }
-.ig-busy-a { background: color-mix(in srgb, var(--svc-refinancement) 38%, transparent); }
-.ig-busy-b { background: var(--brand-tint); background: color-mix(in srgb, var(--brand-bright) 35%, transparent); }
-.ig-busy-c { background: color-mix(in srgb, var(--svc-financement) 32%, transparent); }
-.ig-empty { border-style: dashed; border-color: var(--border-strong); }
-.ig-empty .ig-slot { background: transparent; border: 1px dashed var(--border-strong); }
-.ig-empty .ig-dn { color: var(--tier-prioritaire); }
-
-.ig-feed { display: flex; flex-direction: column; gap: calc(1.6 * var(--igu)); width: calc(62 * var(--igu)); }
-.ig-frow {
-  display: flex; align-items: center; gap: calc(2.4 * var(--igu)); text-align: left;
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: calc(2 * var(--igu)); padding: calc(1.9 * var(--igu)) calc(3 * var(--igu)); box-shadow: var(--shadow);
-  border-left: calc(0.7 * var(--igu)) solid var(--ig-rc, var(--brand-bright));
-}
-.ig-refi { --ig-rc: var(--svc-refinancement); }
-.ig-fin { --ig-rc: var(--svc-financement); }
-.ig-svc {
-  font-size: calc(1.7 * var(--igu)); font-weight: 700; letter-spacing: 0.06em; white-space: nowrap;
-  color: var(--ig-rc); background: color-mix(in srgb, var(--ig-rc) 12%, var(--surface));
-  border-radius: calc(0.9 * var(--igu)); padding: calc(0.7 * var(--igu)) calc(1.4 * var(--igu));
-}
-.ig-when { font-size: calc(2.5 * var(--igu)); font-weight: 700; flex: 1; }
-.ig-amt { font-size: calc(3 * var(--igu)); font-weight: 800; color: var(--brand); font-variant-numeric: tabular-nums; }
-.ig-more { font-size: calc(2.1 * var(--igu)); font-weight: 700; color: var(--ink-muted); }
-
-.ig-accept {
-  position: relative;
-  font-size: calc(3 * var(--igu)); font-weight: 800; color: var(--brand-ink);
-  background: var(--brand); border-radius: calc(1.6 * var(--igu)); padding: calc(2.2 * var(--igu)) calc(5 * var(--igu));
-  display: inline-flex; align-items: center; gap: calc(1.6 * var(--igu));
-}
-.ig-ring { position: absolute; inset: calc(-1 * (0.4 * var(--igu))); border: calc(0.45 * var(--igu)) solid var(--brand-bright); border-radius: calc(2 * var(--igu)); opacity: 0; transform: scale(0.9); }
-.ig-done { display: none; align-items: center; gap: calc(1.4 * var(--igu)); }
-.ig-done svg { width: calc(3 * var(--igu)); height: calc(3 * var(--igu)); }
-
-.ig-logo-row { display: flex; align-items: center; gap: calc(2.6 * var(--igu)); }
-.ig-mark-final { width: calc(10 * var(--igu)); height: calc(10 * var(--igu)); }
-.ig-word { font-size: calc(7 * var(--igu)); font-weight: 800; letter-spacing: -0.03em; }
-.ig-tag { font-size: calc(3.6 * var(--igu)); font-weight: 700; letter-spacing: -0.02em; margin: 0; }
-.ig-note { font-size: calc(2.6 * var(--igu)); font-weight: 700; margin: 0; }
-.ig-cta { font-size: calc(2.2 * var(--igu)); font-weight: 600; color: var(--brand); letter-spacing: 0.1em; text-transform: uppercase; margin: 0; }
-.ig-progress { position: absolute; bottom: 0; left: 0; height: calc(0.9 * var(--igu)); background: var(--brand-bright); width: 0; z-index: 5; }
-
-/* The compliance tiles (scene n4): three cards on the film unit, an icon on
-   a brand wash, the article as a kicker, one line of plain words. Square
-   corners on the film scale, tokens only. */
-.ig-conf { display: flex; gap: calc(1.8 * var(--igu)); width: calc(88 * var(--igu)); }
-.ig-conf-tile {
-  flex: 1 1 0; display: flex; flex-direction: column; align-items: flex-start; gap: calc(0.9 * var(--igu)); text-align: left;
-  background: var(--surface); border: 1px solid var(--border); border-radius: calc(1.6 * var(--igu));
-  border-top: calc(0.6 * var(--igu)) solid var(--brand-bright);
-  padding: calc(2 * var(--igu)) calc(2.2 * var(--igu)); box-shadow: var(--shadow);
-}
-.ig-conf-ic {
-  width: calc(4.2 * var(--igu)); height: calc(4.2 * var(--igu)); border-radius: calc(1 * var(--igu));
-  display: grid; place-items: center; color: var(--brand); background: var(--brand-tint);
-}
-.ig-conf-ic svg { width: calc(2.6 * var(--igu)); height: calc(2.6 * var(--igu)); }
-.ig-conf-art { font-size: calc(1.7 * var(--igu)); font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--brand); }
-.ig-conf-txt { font-size: calc(2.05 * var(--igu)); font-weight: 600; line-height: 1.35; color: var(--ink); }
-.ig-conf-order { font-size: calc(2.1 * var(--igu)); font-weight: 700; color: var(--ink-muted); }
-
-/* ---- motion ---- */
-@keyframes igIn { from { opacity: 0; visibility: hidden; transform: translateY(calc(1.6 * var(--igu))) scale(0.99); } to { opacity: 1; visibility: visible; transform: none; } }
-@keyframes igOut { from { opacity: 1; visibility: visible; } to { opacity: 0; visibility: hidden; transform: scale(0.985); } }
-@keyframes igHold { from { opacity: 1; visibility: visible; } to { opacity: 1; visibility: visible; } }
-@keyframes igSoft { from { opacity: 0; transform: translateY(calc(1.4 * var(--igu))); } to { opacity: 1; transform: none; } }
-@keyframes igPop { 0% { transform: scale(0.5); opacity: 0; } 65% { transform: scale(1.07); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
-@keyframes igStrike { to { transform: scaleX(1); } }
-@keyframes igShake { 0%, 100% { transform: translateX(0); } 30% { transform: translateX(calc(-1 * (0.5 * var(--igu)))); } 70% { transform: translateX(calc(0.5 * var(--igu))); } }
-@keyframes igBarAnim { from { width: 0; } to { width: 100%; } }
-@keyframes igDraw { to { stroke-dashoffset: 0; } }
-@keyframes igRoll { from { transform: translateY(0); } to { transform: translateY(-88.889%); } }
-@keyframes igGlow { 0%, 100% { text-shadow: none; } 50% { text-shadow: 0 0 calc(1.6 * var(--igu)) color-mix(in srgb, var(--brand-bright) 45%, transparent); } }
-@keyframes igTierFlash { 0%, 100% { background: var(--surface-inset); color: var(--ink-muted); border-color: var(--border); } 15%, 85% { background: var(--ig-tier); color: var(--on-accent); border-color: var(--ig-tier); } }
-@keyframes igTierStay { to { background: var(--ig-tier); color: var(--on-accent); border-color: var(--ig-tier); } }
-@keyframes igRipple { 0% { opacity: 0.9; transform: scale(0.92); } 100% { opacity: 0; transform: scale(1.25); } }
-@keyframes igPress { 0%, 100% { transform: scale(1); } 50% { transform: scale(0.95); } }
-@keyframes igFade { to { opacity: 0; } }
-@keyframes igFly { 0% { opacity: 1; transform: translate(-50%, -50%) scale(0.3) rotate(0deg); } 100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1) rotate(var(--rot)); } }
-@keyframes igSlotGrow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
-
+.ig [data-set-lang] { min-width: 44px; min-height: 44px; font-size: 16px; }
+.ig-skip:focus-visible, .ig-pause:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+.ig-stage.is-paused, .ig-stage.is-paused * { animation-play-state: paused !important; }
+@keyframes igIn { from { opacity: 0; visibility: hidden; transform: translateY(12px); } to { opacity: 1; visibility: visible; transform: none; } }
+@keyframes igOut { from { opacity: 1; visibility: visible; } to { opacity: 0; visibility: hidden; } }
+@keyframes igBarAnim { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 .run .ig-progress { animation: igBarAnim 20s linear both; }
-#ig-stage-notaire.run .ig-progress { animation-duration: 21s; }
-
-/* film clients — 20 s */
-.run .ig-c1 { animation: igIn 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) 0s both, igOut 0.4s ease 4.15s forwards; }
-.run .ig-c1 .ig-kicker { animation: igSoft 0.45s ease 0.1s both; }
-.run .ig-c1 .ig-h { animation: igSoft 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) 0.3s both; }
-.run .ig-c1 .ig-call { animation: igPop 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.3) both; }
-.run .ig-c1 .ig-call:nth-child(1) { animation-delay: 1.2s; }
-.run .ig-c1 .ig-call:nth-child(2) { animation-delay: 1.9s; }
-.run .ig-c1 .ig-call:nth-child(3) { animation-delay: 2.6s; }
-.run .ig-c1 .ig-call:nth-child(1)::after { animation: igStrike 0.25s ease-out 1.7s both; }
-.run .ig-c1 .ig-call:nth-child(2)::after { animation: igStrike 0.25s ease-out 2.4s both; }
-.run .ig-c1 .ig-call:nth-child(3)::after { animation: igStrike 0.25s ease-out 3.1s both; }
-.run .ig-c1 .ig-calls { animation: igShake 0.35s ease 3.1s; }
-.run .ig-c2 { animation: igIn 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) 4.5s both, igOut 0.4s ease 8.65s forwards; }
-.run .ig-c2 .ig-kicker { animation: igSoft 0.45s ease 4.65s both; }
-.run .ig-c2 .ig-h { animation: igSoft 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) 4.85s both; }
-.run .ig-c2 .ig-useg { animation: igPop 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.3) 5.6s both; }
-.run .ig-c2 .ig-useg span:nth-child(1) { animation: igTierFlash 0.7s ease 6.05s both; }
-.run .ig-c2 .ig-useg span:nth-child(2) { animation: igTierFlash 0.7s ease 6.7s both; }
-.run .ig-c2 .ig-useg span:nth-child(3) { animation: igTierStay 0.45s ease 7.35s forwards; }
-.run .ig-c2 .ig-demand { animation: igPop 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.35) 5.85s both; }
-.run .ig-c2 .ig-roll { animation: igRoll 1.7s cubic-bezier(0.25, 0.8, 0.25, 1) 6.15s both; }
-.run .ig-c2 .ig-bid { animation: igGlow 0.9s ease 7.3s 2; }
-.run .ig-c2 .ig-up { animation: igSoft 0.4s ease 6.45s both; }
-.run .ig-c2 .ig-sub { animation: igSoft 0.5s ease 7.7s both; }
-.run .ig-c3 { animation: igIn 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) 9s both, igOut 0.4s ease 12.15s forwards; }
-.run .ig-c3 .ig-h { animation: igSoft 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) 9.2s both; }
-.run .ig-c3 .ig-notif { animation: igPop 0.55s cubic-bezier(0.2, 0.9, 0.3, 1.35) 9.8s both; }
-.run .ig-c3 .ig-check path { animation: igDraw 0.35s ease-out 10.4s forwards; }
-.run .ig-c3 .ig-check::after { animation: igRipple 0.6s ease-out 10.75s both; }
-.run .ig-c3 .ig-burst i { animation: igFly 0.85s cubic-bezier(0.15, 0.55, 0.35, 1) 10.55s both; }
-.run .ig-c3 .ig-burst i:nth-child(2n) { animation-delay: 10.63s; }
-.run .ig-c3 .ig-burst i:nth-child(3n) { animation-delay: 10.71s; }
-.run .ig-c3 .ig-pill { animation: igPop 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.35) 11s both; }
-.run .ig-c4 { animation: igIn 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) 12.5s both, igOut 0.4s ease 15.65s forwards; }
-.run .ig-c4 .ig-kicker { animation: igSoft 0.45s ease 12.65s both; }
-.run .ig-c4 .ig-h { animation: igSoft 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) 12.85s both; }
-.run .ig-c4 .ig-msg { animation: igPop 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.3) both; }
-.run .ig-c4 .ig-msg:nth-child(1) { animation-delay: 13.5s; }
-.run .ig-c4 .ig-msg:nth-child(2) { animation-delay: 14.3s; }
-.run .ig-c5 { animation: igIn 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) 16s both, igHold 0.1s linear 19.9s forwards; }
-.run .ig-c5 .ig-logo-row { animation: igPop 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.35) 16.15s both; }
-.run .ig-c5 .ig-tag { animation: igSoft 0.5s ease 16.6s both; }
-.run .ig-c5 .ig-note { animation: igSoft 0.5s ease 17.1s both; }
-.run .ig-c5 .ig-cta { animation: igSoft 0.45s ease 17.6s both; }
-
-/* film notaires — 21 s */
-.run .ig-n1 { animation: igIn 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) 0s both, igOut 0.4s ease 4.15s forwards; }
-.run .ig-n1 .ig-kicker { animation: igSoft 0.45s ease 0.1s both; }
-.run .ig-n1 .ig-h { animation: igSoft 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) 0.3s both; }
-.run .ig-n1 .ig-day { animation: igSoft 0.45s ease both; }
-.run .ig-n1 .ig-day:nth-child(1) { animation-delay: 0.95s; }
-.run .ig-n1 .ig-day:nth-child(2) { animation-delay: 1.1s; }
-.run .ig-n1 .ig-day:nth-child(3) { animation-delay: 1.25s; }
-.run .ig-n1 .ig-day:nth-child(4) { animation-delay: 1.4s; }
-.run .ig-n1 .ig-day:nth-child(5) { animation-delay: 1.55s; }
-.run .ig-n1 .ig-empty { animation: igSoft 0.45s ease both, igShake 0.4s ease 2.3s; }
-.run .ig-n1 .ig-busy-a, .run .ig-n1 .ig-busy-b, .run .ig-n1 .ig-busy-c { transform-origin: left center; animation: igSlotGrow 0.45s ease-out both; }
-.run .ig-n1 .ig-busy-a { animation-delay: 1.7s; }
-.run .ig-n1 .ig-busy-b { animation-delay: 1.85s; }
-.run .ig-n1 .ig-busy-c { animation-delay: 2s; }
-.run .ig-n2 { animation: igIn 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) 4.5s both, igOut 0.4s ease 8.45s forwards; }
-.run .ig-n2 .ig-kicker { animation: igSoft 0.45s ease 4.65s both; }
-.run .ig-n2 .ig-h { animation: igSoft 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) 4.85s both; }
-.run .ig-n2 .ig-frow { animation: igPop 0.55s cubic-bezier(0.2, 0.9, 0.3, 1.3) both; }
-.run .ig-n2 .ig-frow:nth-child(1) { animation-delay: 5.7s; }
-.run .ig-n2 .ig-frow:nth-child(2) { animation-delay: 6.2s; }
-.run .ig-n2 .ig-amt { animation: igGlow 0.9s ease 6.8s 2; }
-.run .ig-n2 .ig-more { animation: igSoft 0.45s ease 7.3s both; }
-.run .ig-n3 { animation: igIn 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) 8.8s both, igOut 0.4s ease 11.65s forwards; }
-.run .ig-n3 .ig-h { animation: igSoft 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) 9s both; }
-.run .ig-n3 .ig-accept { animation: igPop 0.55s cubic-bezier(0.2, 0.9, 0.3, 1.35) 9.6s both, igPress 0.3s ease 10.2s; }
-.run .ig-n3 .ig-ring { animation: igRipple 0.55s ease-out 10.25s both; }
-.run .ig-n3 .ig-idle { animation: igFade 0.15s ease 10.25s forwards; }
-.run .ig-n3 .ig-done { display: inline-flex; opacity: 0; animation: igSoft 0.3s ease 10.35s forwards; position: absolute; inset: 0; align-items: center; justify-content: center; }
-.run .ig-n3 .ig-pill { animation: igPop 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.35) 10.8s both; }
-/* The compliance scene (ADR 0033 §5): three tiles, one by one, then the
-   line about the Ordre — read time, not spectacle. */
-.run .ig-n4 { animation: igIn 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) 12s both, igOut 0.4s ease 17.55s forwards; }
-.run .ig-n4 .ig-kicker { animation: igSoft 0.45s ease 12.15s both; }
-.run .ig-n4 .ig-h { animation: igSoft 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) 12.35s both; }
-.run .ig-n4 .ig-conf-tile { animation: igPop 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.3) both; }
-.run .ig-n4 .ig-conf-tile:nth-child(1) { animation-delay: 12.9s; }
-.run .ig-n4 .ig-conf-tile:nth-child(2) { animation-delay: 13.5s; }
-.run .ig-n4 .ig-conf-tile:nth-child(3) { animation-delay: 14.1s; }
-.run .ig-n4 .ig-conf-order { animation: igSoft 0.45s ease 14.9s both; }
-.run .ig-n5 { animation: igIn 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) 17.9s both, igHold 0.1s linear 20.9s forwards; }
-.run .ig-n5 .ig-logo-row { animation: igPop 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.35) 18.05s both; }
-.run .ig-n5 .ig-tag { animation: igSoft 0.5s ease 18.45s both; }
-.run .ig-n5 .ig-cta { animation: igSoft 0.45s ease 18.85s both; }
-
+.run .ig-scene { animation: igIn .3s ease var(--ig-at) both, igOut .2s ease calc(var(--ig-at) + 3.8s) forwards; }
+.run .ig-c5, .run .ig-n5 { animation: igIn .3s ease var(--ig-at) both; }
+/* Each scene carries its start time; entrances finish within its first second. */
+.ig-c1, .ig-n1 { --ig-at: 0s; }
+.ig-c2, .ig-n2 { --ig-at: 4s; }
+.ig-c3, .ig-n3 { --ig-at: 8s; }
+.ig-c4, .ig-n4 { --ig-at: 12s; }
+.ig-c5, .ig-n5 { --ig-at: 16s; }
+.ig-h { position: relative; }
+.ig-h::after {
+  content: ""; position: absolute; bottom: -10px; left: 35%; width: 30%; height: 3px;
+  background: var(--brand-bright); border-radius: var(--radius);
+}
+.ig-step { border-top: 2px solid var(--brand); }
+.run .ig-h::after { animation: igAccentIn .55s ease calc(var(--ig-at) + .12s) both; }
+.run .ig-scene .ig-sub { animation: igDetailIn .4s ease calc(var(--ig-at) + .1s) both; }
+.run .ig-step { animation: igDetailIn .45s cubic-bezier(.2,.7,.2,1) calc(var(--ig-at) + .18s) both, igCardCue 1.5s ease calc(var(--ig-at) + .8s) forwards; }
+.run .ig-step:nth-child(2) { animation-delay: calc(var(--ig-at) + .28s), calc(var(--ig-at) + 1.15s); }
+.run .ig-step:nth-child(3) { animation-delay: calc(var(--ig-at) + .38s), calc(var(--ig-at) + 1.5s); }
+.run .ig-scene .ig-mark { animation: igLogoIn .7s cubic-bezier(.2,.7,.2,1) var(--ig-at) both; }
+@keyframes igDetailIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes igAccentIn { from { transform: scaleX(0); opacity: 0; } to { transform: scaleX(1); opacity: 1; } }
+@keyframes igLogoIn { from { opacity: 0; transform: rotate(-12deg) scale(.75); } to { opacity: 1; transform: none; } }
+.ig-stage.is-paused *::before, .ig-stage.is-paused *::after { animation-play-state: paused !important; }
+/* Story motion: the icon explains the scene while a travelling highlight
+   leads the eye through the cards. Text itself settles after its entrance. */
+.ig-kicker { display: inline-flex; align-items: center; justify-content: center; gap: 12px; }
+.ig-story-icon { width: 34px; height: 34px; flex: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ig-story-icon path { stroke-dasharray: 1; stroke-dashoffset: 1; }
+.run .ig-story-icon path { animation: igSketch .8s ease calc(var(--ig-at) + .1s) forwards; }
+.run .ig-story-icon { animation: igIconNod 1.6s ease-in-out calc(var(--ig-at) + .7s) 2; }
+.ig-step { position: relative; overflow: hidden; }
+.ig-step::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(105deg, transparent 35%, var(--brand-tint) 50%, transparent 65%);
+  transform: translateX(-110%); opacity: 0;
+}
+.run .ig-step::after { animation: igCardSweep 1.15s ease calc(var(--ig-at) + .65s) both; }
+.run .ig-step:nth-child(2)::after { animation-delay: calc(var(--ig-at) + 1s); }
+.run .ig-step:nth-child(3)::after { animation-delay: calc(var(--ig-at) + 1.35s); }
+.run .ig-step-num { animation: igNumberBeat 1.5s ease calc(var(--ig-at) + .6s) 2; }
+.run .ig-step:nth-child(2) .ig-step-num { animation-delay: calc(var(--ig-at) + .85s); }
+.run .ig-step:nth-child(3) .ig-step-num { animation-delay: calc(var(--ig-at) + 1.1s); }
+.run .ig-scene .ig-mark { animation: igLogoIn .7s cubic-bezier(.2,.7,.2,1) var(--ig-at) both, igLogoCelebrate 1.4s ease calc(var(--ig-at) + .8s) 2; }
+@keyframes igSketch { to { stroke-dashoffset: 0; } }
+@keyframes igIconNod { 0%, 100% { transform: translateY(0) rotate(0); } 40% { transform: translateY(-4px) rotate(-6deg); } 65% { transform: translateY(-2px) rotate(4deg); } }
+@keyframes igCardCue { 0%, 100% { transform: none; border-color: var(--border); border-top-color: var(--brand); } 35%, 65% { transform: translateY(-5px) scale(1.01); border-color: var(--brand-bright); } }
+@keyframes igCardSweep { 0% { transform: translateX(-110%); opacity: 0; } 20%, 75% { opacity: 1; } 100% { transform: translateX(110%); opacity: 0; } }
+@keyframes igNumberBeat { 0%, 100% { transform: scale(1); } 40% { transform: scale(1.14) rotate(-4deg); } 65% { transform: scale(1.06); } }
+@keyframes igLogoCelebrate { 0%, 100% { transform: scale(1) rotate(0); } 35% { transform: scale(1.12) rotate(8deg); } 70% { transform: scale(1.04) rotate(-4deg); } }
 @media (max-width: 640px) {
-  .ig { padding: 10px; }
+  .ig { padding: 16px; }
   .ig-inner { width: 100%; }
   .ig-door { min-width: 0; width: 100%; }
   .ig-doors { width: 100%; flex-direction: column; }
-  /* Three tiles side by side are three narrow columns on a phone: stack them. */
-  .ig-conf { flex-direction: column; width: calc(80 * var(--igu)); }
-  /* Phones keep the validated « square cut » readability for free: in
-     portrait --igu resolves to 1cqw (stage WIDTH), so the full-height
-     stage renders exactly the composition the square cut validated,
-     centred — with more vertical room, never less. */
+  .ig-steps { flex-direction: column; gap: 10px; margin-top: 0; }
+  .ig-step { flex-direction: row; justify-content: flex-start; text-align: left; padding: 12px 16px; gap: 14px; }
+  .ig-controls { gap: 6px; padding-inline: 12px; }
+  .ig-pause { padding-inline: 8px; }
+  .ig-skip { white-space: nowrap; padding-inline: 12px; }
+}
+@media (max-width: 640px) and (max-height: 700px) {
+  .ig-scene { gap: 12px; padding: 16px; }
+  .ig-steps { gap: 8px; }
+  .ig-step { padding: 8px 12px; gap: 12px; }
+  .ig-step-num { width: 36px; height: 36px; }
+}
+@media (max-height: 500px) and (min-width: 641px) {
+  .ig-scene { gap: 12px; padding-block: 16px; }
+  .ig-h { font-size: 32px; max-width: 30ch; }
+  .ig-sub { font-size: 18px; max-width: 60ch; }
+  .ig-step { flex-direction: row; padding: 12px; font-size: 18px; gap: 10px; }
+  .ig-kicker { font-size: 16px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .ig { display: none; }

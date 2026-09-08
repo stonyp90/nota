@@ -203,6 +203,10 @@
       <div class="ig-inner">
 
         <div class="ig-chooser" id="ig-chooser">
+          <div class="mini-seg" role="group" aria-label="Langue" data-lang-seg data-i18n-skip>
+            <button type="button" class="mini-seg-btn" data-set-lang="fr">FR</button>
+            <button type="button" class="mini-seg-btn" data-set-lang="en">EN</button>
+          </div>
           <svg class="ig-mark" viewBox="0 0 64 64" role="img" aria-label="Nota"><use href="#nota-logomark"/></svg>
           <h2 class="ig-title" id="ig-title">Un notaire, à la date qu’il vous faut.</h2>
           <div class="ig-doors">
@@ -221,123 +225,133 @@
         <div class="ig-frame" id="ig-frame" hidden>
 
           <div class="ig-stage" id="ig-stage-client">
-            <section class="ig-scene ig-c1" aria-hidden="true">
-              <span class="ig-kicker">Refinancement · Financement</span>
-              <p class="ig-h">Votre date est refusée&nbsp;?</p>
-              <div class="ig-calls">
-                <span class="ig-call"><span class="ig-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.7A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 2 .7 2.9a2 2 0 0 1-.5 2.1L8.1 10a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c1 .3 1.9.5 2.9.7a2 2 0 0 1 1.7 2z"/></svg></span>Messagerie vocale</span>
-                <span class="ig-call"><span class="ig-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></span>«&nbsp;On vous rappelle…&nbsp;»</span>
-                <span class="ig-call"><span class="ig-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18M10 14.5l4 4M14 14.5l-4 4"/></svg></span>Complet ce mois-ci</span>
+            <div class="ig-atmosphere" aria-hidden="true">
+              <svg class="ig-dollar ig-dollar-a" viewBox="0 0 64 64" fill="none" focusable="false"><path d="M32 8v48M44 19c-3-5-9-7-15-6-8 1-13 5-13 11 0 13 32 5 32 18 0 7-7 11-16 11-7 0-13-3-16-8"/></svg>
+              <svg class="ig-dollar ig-dollar-b" viewBox="0 0 64 64" fill="none" focusable="false"><path d="M32 8v48M44 19c-3-5-9-7-15-6-8 1-13 5-13 11 0 13 32 5 32 18 0 7-7 11-16 11-7 0-13-3-16-8"/></svg>
+              <svg class="ig-brand-mark ig-brand-mark-a" viewBox="0 0 64 64" focusable="false"><use href="#nota-logomark"/></svg>
+              <svg class="ig-brand-mark ig-brand-mark-b" viewBox="0 0 64 64" focusable="false"><use href="#nota-logomark"/></svg>
+            </div>
+            <section class="ig-scene ig-c1">
+              <span class="ig-kicker"><svg class="ig-story-icon" viewBox="0 0 32 32" fill="none" aria-hidden="true" focusable="false"><path pathLength="1" d="M10 5h16v22H6V9h4"/><path pathLength="1" d="M10 3v6M22 3v6M6 12h20"/><path pathLength="1" d="m11 20 3 3 7-7"/></svg>Trouver un notaire</span>
+              <p class="ig-h">Trouvez un notaire avec Nota.</p>
+              <p class="ig-sub">Proposez votre date et votre prix.</p>
+              <div class="ig-steps">
+                <div class="ig-step"><span class="ig-step-num" aria-hidden="true">01</span><span>Choisissez une date</span></div>
+                <div class="ig-step"><span class="ig-step-num" aria-hidden="true">02</span><span>Publiez votre offre</span></div>
+                <div class="ig-step"><span class="ig-step-num" aria-hidden="true">03</span><span>Un notaire peut accepter</span></div>
               </div>
             </section>
-            <section class="ig-scene ig-c2" aria-hidden="true">
-              <span class="ig-kicker">Exemple · publié en 2 minutes, payé à la signature</span>
-              <p class="ig-h">Votre prix, selon votre urgence.</p>
-              <div class="ig-useg"><span>Standard</span><span>Prioritaire</span><span>Urgence</span></div>
-              <div class="ig-demand">
-                <div class="ig-cell"><span class="ig-lbl">Signature</span><span class="ig-val">ven. 12 sept.</span></div>
-                <div class="ig-sep"></div>
-                <div class="ig-cell"><span class="ig-lbl">Votre offre</span><span class="ig-val ig-bid"><span class="ig-roll"><span>1&nbsp;800&nbsp;$</span><span>1&nbsp;850&nbsp;$</span><span>1&nbsp;900&nbsp;$</span><span>1&nbsp;950&nbsp;$</span><span>2&nbsp;000&nbsp;$</span><span>2&nbsp;050&nbsp;$</span><span>2&nbsp;100&nbsp;$</span><span>2&nbsp;150&nbsp;$</span><span>2&nbsp;200&nbsp;$</span></span></span></div>
-                <span class="ig-up"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20V5M5 12l7-7 7 7"/></svg>enchère</span>
-              </div>
-              <p class="ig-sub">Plus c’est urgent, plus votre offre pèse — et passe devant.</p>
-            </section>
-            <section class="ig-scene ig-c3" aria-hidden="true">
-              <p class="ig-h">Un notaire accepte votre offre.</p>
-              <span class="ig-burst" aria-hidden="true"><i style="--dx:calc(-18 * var(--igu));--dy:calc(-10 * var(--igu));--rot:-50deg"></i><i style="--dx:calc(-9 * var(--igu));--dy:calc(-14 * var(--igu));--rot:35deg"></i><i style="--dx:calc(0 * var(--igu));--dy:calc(-16 * var(--igu));--rot:-25deg"></i><i style="--dx:calc(9 * var(--igu));--dy:calc(-14 * var(--igu));--rot:45deg"></i><i style="--dx:calc(18 * var(--igu));--dy:calc(-9 * var(--igu));--rot:-35deg"></i><i style="--dx:calc(-14 * var(--igu));--dy:calc(5 * var(--igu));--rot:30deg"></i><i style="--dx:calc(14 * var(--igu));--dy:calc(5 * var(--igu));--rot:-40deg"></i><i style="--dx:calc(0 * var(--igu));--dy:calc(8 * var(--igu));--rot:20deg"></i></span>
-              <div class="ig-notif">
-                <span class="ig-check" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 12.5 9.5 18 20 6.5" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-                <span class="ig-notif-x"><span class="ig-t1">Offre acceptée — 2&nbsp;200&nbsp;$</span><span class="ig-t2">Mise en relation immédiate sur la plateforme.</span></span>
-              </div>
-              <span class="ig-pill">Il peut accepter ou refuser — vous décidez.</span>
-            </section>
-            <section class="ig-scene ig-c4" aria-hidden="true">
-              <span class="ig-kicker">Messages · Documents · Suivi</span>
-              <p class="ig-h">Complétez tout sur la plateforme.</p>
-              <div class="ig-chat">
-                <span class="ig-msg ig-them">Bonjour&nbsp;! Votre dossier est reçu — tout est en ordre.</span>
-                <span class="ig-msg ig-me">Parfait. On signe toujours vendredi&nbsp;?</span>
+
+            <section class="ig-scene ig-c2">
+              <span class="ig-kicker"><svg class="ig-story-icon" viewBox="0 0 32 32" fill="none" aria-hidden="true" focusable="false"><path pathLength="1" d="M6 7h20v21H6zM10 3v8M22 3v8M6 14h20"/><path pathLength="1" d="M11 19h3M19 19h3M11 24h3"/></svg>Votre demande</span>
+              <p class="ig-h">Dites-nous ce qu’il vous faut.</p>
+              <p class="ig-sub">Choisissez le service, la date et votre prix.</p>
+              <div class="ig-steps">
+                <div class="ig-step"><span>Le service</span></div>
+                <div class="ig-step"><span>Votre date</span></div>
+                <div class="ig-step"><span>Votre prix</span></div>
               </div>
             </section>
-            <section class="ig-scene ig-c5" aria-hidden="true">
-              <div class="ig-logo-row"><svg class="ig-mark ig-mark-final" viewBox="0 0 64 64" role="img" aria-label="Nota"><use href="#nota-logomark"/></svg><span class="ig-word">Nota</span></div>
-              <p class="ig-tag">Un notaire, à la date qu’il vous faut.</p>
-              <p class="ig-note">Le notaire reçoit 100 % de votre offre. Le service Nota, à un prix publié d’avance, se paie seulement à la signature.</p>
-              <p class="ig-cta">nota.quebec · Publiez votre offre en 2 minutes</p>
+
+            <section class="ig-scene ig-c3">
+              <span class="ig-kicker"><svg class="ig-story-icon" viewBox="0 0 32 32" fill="none" aria-hidden="true" focusable="false"><path pathLength="1" d="M27 14a11 11 0 1 1-7-9"/><path pathLength="1" d="m10 15 5 5L28 6"/></svg>La réponse</span>
+              <p class="ig-h">Un notaire accepte votre demande.</p>
+              <p class="ig-sub">Vous recevez une confirmation et ses coordonnées.</p>
+              <div class="ig-steps">
+                <div class="ig-step"><span>Votre date confirmée</span></div>
+                <div class="ig-step"><span>Un contact direct</span></div>
+              </div>
             </section>
+
+            <section class="ig-scene ig-c4">
+              <span class="ig-kicker"><svg class="ig-story-icon" viewBox="0 0 32 32" fill="none" aria-hidden="true" focusable="false"><path pathLength="1" d="M3 5h20v14H11l-6 5v-5H3z"/><path pathLength="1" d="M13 22h7l7 5V13"/><path pathLength="1" d="M8 10h10M8 14h6"/></svg>Votre dossier</span>
+              <p class="ig-h">Échangez au même endroit.</p>
+              <p class="ig-sub">Préparez la signature avec votre notaire.</p>
+              <div class="ig-steps">
+                <div class="ig-step"><span>Messages</span></div>
+                <div class="ig-step"><span>Documents</span></div>
+                <div class="ig-step"><span>Suivi</span></div>
+              </div>
+            </section>
+
+            <section class="ig-scene ig-c5">
+              <svg class="ig-mark" viewBox="0 0 64 64" role="img" aria-label="Nota"><use href="#nota-logomark"/></svg>
+              <span class="ig-kicker">À vous de jouer</span>
+              <p class="ig-h">Publiez votre demande.</p>
+              <p class="ig-sub">Vérifiez le prix total avant de publier.</p>
+              <p class="ig-sub ig-note">Le service Nota se paie seulement à la signature.</p>
+            </section>
+
             <div class="ig-progress" aria-hidden="true"></div>
           </div>
 
           <div class="ig-stage" id="ig-stage-notaire" hidden>
-            <section class="ig-scene ig-n1" aria-hidden="true">
-              <span class="ig-kicker">Vous êtes notaire</span>
-              <p class="ig-h">Des trous dans votre semaine&nbsp;?</p>
-              <div class="ig-week">
-                <div class="ig-day"><span class="ig-dn">Lun</span><span class="ig-slot ig-busy-a"></span><span class="ig-slot ig-busy-b"></span></div>
-                <div class="ig-day ig-empty"><span class="ig-dn">Mar</span><span class="ig-slot"></span><span class="ig-slot"></span></div>
-                <div class="ig-day"><span class="ig-dn">Mer</span><span class="ig-slot ig-busy-c"></span><span class="ig-slot"></span></div>
-                <div class="ig-day ig-empty"><span class="ig-dn">Jeu</span><span class="ig-slot"></span><span class="ig-slot"></span></div>
-                <div class="ig-day ig-empty"><span class="ig-dn">Ven</span><span class="ig-slot"></span><span class="ig-slot"></span></div>
+            <div class="ig-atmosphere" aria-hidden="true">
+              <svg class="ig-dollar ig-dollar-a" viewBox="0 0 64 64" fill="none" focusable="false"><path d="M32 8v48M44 19c-3-5-9-7-15-6-8 1-13 5-13 11 0 13 32 5 32 18 0 7-7 11-16 11-7 0-13-3-16-8"/></svg>
+              <svg class="ig-dollar ig-dollar-b" viewBox="0 0 64 64" fill="none" focusable="false"><path d="M32 8v48M44 19c-3-5-9-7-15-6-8 1-13 5-13 11 0 13 32 5 32 18 0 7-7 11-16 11-7 0-13-3-16-8"/></svg>
+              <svg class="ig-brand-mark ig-brand-mark-a" viewBox="0 0 64 64" focusable="false"><use href="#nota-logomark"/></svg>
+              <svg class="ig-brand-mark ig-brand-mark-b" viewBox="0 0 64 64" focusable="false"><use href="#nota-logomark"/></svg>
+            </div>
+            <section class="ig-scene ig-n1">
+              <span class="ig-kicker"><svg class="ig-story-icon" viewBox="0 0 32 32" fill="none" aria-hidden="true" focusable="false"><path pathLength="1" d="M6 7h20v21H6zM10 3v8M22 3v8M6 14h20"/><path pathLength="1" d="m11 21 3 3 7-7"/></svg>Espace notaire</span>
+              <p class="ig-h">Trouvez votre prochain dossier.</p>
+              <p class="ig-sub">Sur Nota, les clients proposent leur date et leur prix.</p>
+              <div class="ig-steps">
+                <div class="ig-step"><span class="ig-step-num" aria-hidden="true">01</span><span>Consultez les demandes</span></div>
+                <div class="ig-step"><span class="ig-step-num" aria-hidden="true">02</span><span>Choisissez un dossier</span></div>
               </div>
             </section>
-            <section class="ig-scene ig-n2" aria-hidden="true">
-              <span class="ig-kicker">Sur Nota, la demande vous attend</span>
-              <p class="ig-h">Des clients affichent date et prix.</p>
-              <div class="ig-feed">
-                <div class="ig-frow ig-refi"><span class="ig-svc">Refinancement</span><span class="ig-when">ven. 12 sept.</span><span class="ig-amt">2&nbsp;200&nbsp;$</span></div>
-                <div class="ig-frow ig-fin"><span class="ig-svc">Financement</span><span class="ig-when">mar. 16 sept.</span><span class="ig-amt">1&nbsp;950&nbsp;$</span></div>
+
+            <section class="ig-scene ig-n2">
+              <span class="ig-kicker"><svg class="ig-story-icon" viewBox="0 0 32 32" fill="none" aria-hidden="true" focusable="false"><path pathLength="1" d="M8 6h19v6H8zM8 16h19v6H8z"/><path pathLength="1" d="M3 7v17m-2-2 2 2 2-2"/></svg>Les demandes</span>
+              <p class="ig-h">Comparez les demandes.</p>
+              <p class="ig-sub">Voyez les détails avant de choisir.</p>
+              <div class="ig-steps">
+                <div class="ig-step"><span>L’acte demandé</span></div>
+                <div class="ig-step"><span>La date de signature</span></div>
+                <div class="ig-step"><span>Le montant proposé</span></div>
               </div>
-              <span class="ig-more">Exemple — d’autres demandes s’affichent la même semaine</span>
             </section>
-            <section class="ig-scene ig-n3" aria-hidden="true">
-              <p class="ig-h">Acceptez en un clic.</p>
-              <span class="ig-accept">
-                <span class="ig-ring" aria-hidden="true"></span>
-                <span class="ig-idle">Accepter — 2&nbsp;200&nbsp;$</span>
-                <span class="ig-done"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 12.5 9.5 18 20 6.5" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Demande retenue</span>
-              </span>
-              <span class="ig-pill">Payé à la signature — vos honoraires vous reviennent en entier</span>
-            </section>
-            <!-- Conformité (ADR 0033 §5 · ADR 0031): before the finale, the
-                 rules of the profession — wording checked against
-                 docs/legal/conformite-deontologique-notaires.md. Same three
-                 tiles as #nc-conformite on the landing. -->
-            <section class="ig-scene ig-n4" aria-hidden="true">
-              <span class="ig-kicker">Conformité</span>
-              <p class="ig-h">Nota respecte les règles de votre profession.</p>
-              <div class="ig-conf">
-                <div class="ig-conf-tile">
-                  <span class="ig-conf-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 6v6c0 5 3.5 8.5 8 9 4.5-.5 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg></span>
-                  <span class="ig-conf-art">Art. 32.1 — Loi sur le notariat</span>
-                  <span class="ig-conf-txt">Aucune réduction promise, aucune part abandonnée : vous recevez 100 % du montant offert.</span>
-                </div>
-                <div class="ig-conf-tile">
-                  <span class="ig-conf-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="8" height="14" rx="1"/><rect x="13" y="5" width="8" height="14" rx="1"/><path d="M5.5 9h3M5.5 12h3M15.5 9h3M15.5 12h3"/></svg></span>
-                  <span class="ig-conf-art">Art. 32 et 29.1 — Code de déontologie</span>
-                  <span class="ig-conf-txt">Nota facture son propre prix au client, à côté : aucun partage d’honoraires, aucune convention sur vos honoraires.</span>
-                </div>
-                <div class="ig-conf-tile">
-                  <span class="ig-conf-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18M6 21h12M4 7h16"/><path d="m7 7-3 7h6zM17 7l-3 7h6z"/></svg></span>
-                  <span class="ig-conf-art">Art. 49 — Code de déontologie</span>
-                  <!-- F7 (audit 2026-09-03, owner decision pending): art. 49
-                       binds the notary, not Nota — the tile states what the
-                       notary keeps and does, and voices no compliance claim
-                       on Nota's behalf. #nc-conformite mirrors this wording
-                       by its own owner. -->
-                  <span class="ig-conf-txt">Vos honoraires restent les vôtres : vous acceptez le montant offert, proposez le vôtre, ou passez. Rien n’est retranché.</span>
-                </div>
+
+            <section class="ig-scene ig-n3">
+              <span class="ig-kicker"><svg class="ig-story-icon" viewBox="0 0 32 32" fill="none" aria-hidden="true" focusable="false"><path pathLength="1" d="M16 28V16M16 16 6 6M16 16 26 6"/><path pathLength="1" d="M5 13V5h8M19 5h8v8"/></svg>Votre pratique</span>
+              <p class="ig-h">Vous gardez le choix.</p>
+              <p class="ig-sub">Le montant proposé ne vous convient pas ? Faites une autre proposition.</p>
+              <div class="ig-steps">
+                <div class="ig-step"><span>Accepter</span></div>
+                <div class="ig-step"><span>Proposer</span></div>
+                <div class="ig-step"><span>Passer</span></div>
               </div>
-              <span class="ig-conf-order">Une décision de l’Ordre s’applique toujours en premier.</span>
             </section>
-            <section class="ig-scene ig-n5" aria-hidden="true">
-              <div class="ig-logo-row"><svg class="ig-mark ig-mark-final" viewBox="0 0 64 64" role="img" aria-label="Nota"><use href="#nota-logomark"/></svg><span class="ig-word">Nota</span></div>
-              <p class="ig-tag">Remplissez votre semaine.</p>
-              <p class="ig-cta">nota.quebec · Inscription gratuite pour les notaires</p>
+
+            <section class="ig-scene ig-n4">
+              <span class="ig-kicker"><svg class="ig-story-icon" viewBox="0 0 32 32" fill="none" aria-hidden="true" focusable="false"><path pathLength="1" d="M27 14a11 11 0 1 1-7-9"/><path pathLength="1" d="m10 15 5 5L28 6"/></svg>Votre choix</span>
+              <p class="ig-h">Acceptez une demande.</p>
+              <p class="ig-sub">Le client reçoit votre confirmation et vos coordonnées.</p>
+              <div class="ig-steps">
+                <div class="ig-step"><span>Une date convenue</span></div>
+                <div class="ig-step"><span>Un contact direct</span></div>
+              </div>
             </section>
+
+            <section class="ig-scene ig-n5">
+              <svg class="ig-mark" viewBox="0 0 64 64" role="img" aria-label="Nota"><use href="#nota-logomark"/></svg>
+              <span class="ig-kicker">À vous de jouer</span>
+              <p class="ig-h">Remplissez votre semaine.</p>
+              <p class="ig-sub">Inscrivez-vous gratuitement pour consulter les demandes.</p>
+            </section>
+
             <div class="ig-progress" aria-hidden="true"></div>
           </div>
 
-          <button type="button" class="ig-skip" id="ig-skip">Passer →</button>
+          <div class="ig-controls">
+            <button type="button" class="ig-pause" id="ig-pause" aria-pressed="false">Pause</button>
+            <div class="mini-seg" role="group" aria-label="Langue" data-lang-seg data-i18n-skip>
+              <button type="button" class="mini-seg-btn" data-set-lang="fr">FR</button>
+              <button type="button" class="mini-seg-btn" data-set-lang="en">EN</button>
+            </div>
+            <button type="button" class="ig-skip" id="ig-skip">Passer →</button>
+          </div>
         </div>
 
       </div>

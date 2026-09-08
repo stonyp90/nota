@@ -12136,6 +12136,8 @@
   var LS_INTRO_PLAYS = 'nota.introPlays';
   var IG_MAX_PLAYS = 2;
   var igTimer = null;
+  var igRemaining = 0, igStartedAt = 0;
+  var igActiveStage = null;
   function reducedMotion() {
     try { return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { return false; }
   }
@@ -12166,15 +12168,32 @@
     $('ig-frame').hidden = false;
     other.hidden = true;
     stage.hidden = false;
-    stage.classList.remove('run');
+    igActiveStage = stage;
+    stage.classList.remove('run', 'is-paused');
+    $('ig-pause').textContent = 'Pause';
+    $('ig-pause').setAttribute('aria-pressed', 'false');
     void stage.offsetWidth; /* restart the CSS timeline */
     stage.classList.add('run');
     var tab = film === 'client' ? 'carnet' : 'notaires';
     $('ig-skip').dataset.tab = tab;
     clearTimeout(igTimer);
-    igTimer = setTimeout(function () { igDismiss(tab, false); }, film === 'client' ? 20600 : 21600);
-    // Focus follows the film: « Passer → » is the one control on screen.
+    igRemaining = 20600;
+    igResumeTimer();
+    // Focus follows the film to its direct route into the product.
     try { $('ig-skip').focus(); } catch (e) {}
+  }
+  function igResumeTimer() {
+    igStartedAt = Date.now();
+    igTimer = setTimeout(function () { igDismiss($('ig-skip').dataset.tab, false); }, igRemaining);
+  }
+  function igTogglePause() {
+    if (!igActiveStage) return;
+    var paused = igActiveStage.classList.toggle('is-paused');
+    clearTimeout(igTimer);
+    if (paused) igRemaining = Math.max(0, igRemaining - (Date.now() - igStartedAt));
+    else igResumeTimer();
+    $('ig-pause').textContent = paused ? 'Reprendre' : 'Pause';
+    $('ig-pause').setAttribute('aria-pressed', String(paused));
   }
   function igDismiss(tab, explicit) {
     clearTimeout(igTimer);
@@ -12204,6 +12223,10 @@
     if (!gate || !igShouldShow()) return false;
     $('ig-door-client').addEventListener('click', function () { igPlay('client'); });
     $('ig-door-notaire').addEventListener('click', function () { igPlay('notaire'); });
+    $('ig-pause').addEventListener('click', igTogglePause);
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden && !gate.hidden && igActiveStage && !igActiveStage.classList.contains('is-paused')) igTogglePause();
+    });
     $('ig-enter').addEventListener('click', function () { igDismiss(null, true); });
     $('ig-skip').addEventListener('click', function () { igDismiss($('ig-skip').dataset.tab || null, true); });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !gate.hidden) igDismiss(null, true); });

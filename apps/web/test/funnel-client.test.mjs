@@ -174,13 +174,12 @@ test('offline, the hero says the price is PUBLISHED — never « fixe », never 
   dom.window.close();
 });
 
-test('the intro film note and the film kicker say the two-line truth', () => {
-  const note = HTML_SRC.match(/<p class="ig-note">([^<]*)<\/p>/);
-  assert.ok(note, 'the client film keeps its closing note');
-  assert.match(FLAT(note[1]), /100 % de votre offre/, note[1]);
-  assert.match(FLAT(note[1]), /signature/, note[1]);
-  const kicker = HTML_SRC.match(/<span class="ig-kicker">Exemple([^<]*)<\/span>/);
-  assert.ok(kicker && !/gratuit/i.test(kicker[1]), 'the example kicker no longer says « gratuit pour vous »: ' + (kicker && kicker[1]));
+test('the concise client film discloses payment timing and asks visitors to review the total', () => {
+  const film = new JSDOM(HTML_SRC).window.document.querySelector('#ig-stage-client');
+  assert.match(film.querySelector('.ig-note').textContent, /se paie seulement à la signature/);
+  assert.match(film.textContent, /Vérifiez le prix total avant de publier/);
+  assert.ok(!/gratuit|100 %|[0-9] ?\$/.test(film.textContent), 'no free-client claim or hardcoded price');
+  film.ownerDocument.defaultView.close();
 });
 
 test('the new price copy is translated, amount included', () => {
