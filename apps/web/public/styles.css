@@ -5479,35 +5479,46 @@ body.ig-open { overflow: hidden; }
   .my-offers .my-offer-status { display: inline-block; max-width: 100%; box-sizing: border-box; }
 }
 
-/* Booking questionnaire: bounded working sheet and compact question tiles. */
+/* Shared questionnaire cards, including the dossier and optional details. */
 #day-dialog:has(.day-book[data-at='2']) { width: min(96vw, 1040px); max-width: 1040px; }
 .day-book[data-at='2'] { padding: 20px; gap: 16px; }
 .day-book[data-at='2'] .book-rail { margin-bottom: 4px; }
-#o-criteria .crit-sec { padding: 16px; gap: 16px; background: var(--surface); }
-#o-criteria .crit-sec-h {
+.o-criteria .crit-sec { padding: 16px; gap: 16px; background: var(--surface); }
+.o-criteria .crit-sec-h {
   margin: -16px -16px 0; padding: 14px 16px;
   gap: 8px 12px;
 }
-#o-criteria .crit-sec-grid { gap: 12px; }
-#o-criteria .crit-sec-grid > .crit-row {
+.o-criteria .crit-sec-grid { gap: 12px; }
+.o-criteria .crit-sec-grid > .crit-row {
   padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);
   background: var(--surface-inset); min-width: 0;
 }
-#o-criteria .crit-head { margin-bottom: 8px; }
-#o-criteria .crit-unit-wrap { display: flex; width: 100%; }
-#o-criteria .crit-unit-wrap input[type='number'] { width: 100%; max-width: none; min-width: 0; }
-#o-criteria .crit-row .nselect { width: 100%; max-width: none; }
-#o-criteria .crit-row .seg-btn { flex: 1 1 0; max-width: none; min-height: 44px; }
-#o-criteria .crit-row .seg.seg-stack .seg-btn { flex: auto; }
-#o-criteria .crit-more { margin-top: 0; }
-#o-criteria .crit-sec[data-fold='true'] { padding-bottom: 0; gap: 0; }
+.o-criteria .crit-head { margin-bottom: 8px; }
+.o-criteria .crit-unit-wrap { display: flex; width: 100%; }
+.o-criteria .crit-unit-wrap input[type='number'] { width: 100%; max-width: none; min-width: 0; }
+.o-criteria .crit-row .nselect { width: 100%; max-width: none; }
+.o-criteria .crit-sec-grid > .crit-row .seg-btn { flex: 1 1 0; max-width: none; min-height: 44px; }
+.o-criteria .crit-row .seg.seg-stack .seg-btn { flex: auto; }
+.o-criteria .crit-more { margin-top: 0; }
+.o-criteria .crit-sec[data-fold='true'] { padding-bottom: 0; gap: 0; }
 @media (max-width: 600px) {
   #day-dialog:has(.day-book[data-at='2']) { width: 100%; max-width: 100%; }
   .day-book[data-at='2'] { padding: 14px; }
-  #o-criteria .crit-sec-grid { grid-template-columns: minmax(0, 1fr); }
-  #o-criteria .crit-sec-grid > .crit-row { grid-column: 1 / -1; grid-row: auto; }
+  .o-criteria .crit-sec-grid { grid-template-columns: minmax(0, 1fr); }
+  .o-criteria .crit-sec-grid > .crit-row { grid-column: 1 / -1; grid-row: auto; }
 }
-#o-criteria .crit-row .nselect { min-width: 100%; align-self: stretch; box-sizing: border-box; }
+.o-criteria .crit-row .nselect { min-width: 100%; align-self: stretch; box-sizing: border-box; }
+
+/* Additional text belongs below its choice, with the same usable width. */
+.o-criteria .crit-row:has(> .crit-other) { flex-direction: column; flex-wrap: nowrap; gap: 8px; }
+.o-criteria .crit-row:has(> .crit-other) > :is(.crit-head, .crit-effet, .nselect, .help, .crit-other) {
+  flex: none; width: 100%; min-width: 0; box-sizing: border-box;
+}
+.o-criteria .crit-other input[type='text'] { width: 100%; max-width: none; box-sizing: border-box; }
+.o-criteria .crit-sec > .crit-more .crit-sec-grid { padding: 12px; }
+.o-criteria .crit-more > summary { padding: 12px; min-height: 44px; box-sizing: border-box; }
+.o-criteria .crit-more[open] > summary { border-bottom: 1px solid var(--border); margin-bottom: 0; }
+.o-criteria .crit-sec-grid > .crit-row { margin: 0; }
 
 /* Postal lookup: a compact input followed by a clear geographic result. */
 #o-where-step .coverage-note { background: var(--surface-inset); border-color: var(--border); padding: 16px; }
