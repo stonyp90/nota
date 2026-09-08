@@ -244,3 +244,12 @@ Public and admin builds pass.
 Browser: French desktop, English at 390 px without horizontal overflow, language
 switch, campaign preservation and direct carnet access verified. These results
 do not replace production payment/email validation or search console evidence.
+
+## Owner direction — September 8 follow-up
+
+The owner authorized production deployment and selected a zero-paid-media launch.
+Paid scenarios above are inactive. Search Console access is available; the
+`https://gonota.ca/` property was added and its supplied HTML verification tag
+is included in the deployment. Ownership verification and submission must be
+recorded only after Google confirms them. Local AWS credentials are expired;
+use the existing GitHub OIDC delivery pipeline.
