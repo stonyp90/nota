@@ -17,6 +17,7 @@
  * nothing about storage keys. This is an API-layer (persistence-shape) concern.
  */
 const domain = require('@nota/domain');
+const { counter } = require('./acquisition');
 const {
   STATS_SHARDS,
   statsGlobalPK,
@@ -52,7 +53,7 @@ function statsDeltasForOffer(bid) {
   const day = dayOf(bid.createdAt) || dayOf(bid.dateISO);
   if (!day) return [];
   const shard = pickShard();
-  const deltas = [{ pk: statsGlobalPK(shard), sk: statsDaySK(day), adds: { offers: 1 } }];
+  const deltas = [{ pk: statsGlobalPK(shard), sk: statsDaySK(day), adds: { offers: 1, ...counter(bid.acquisition, 'publie') } }];
   if (bid.serviceId) deltas.push({ pk: statsServicePK(bid.serviceId, shard), sk: statsDaySK(day), adds: { offers: 1 } });
   return deltas;
 }
@@ -65,7 +66,7 @@ function statsDeltasForRetain(bid, retainedAtISO) {
   const day = dayOf(retainedAtISO) || dayOf(bid.createdAt) || dayOf(bid.dateISO);
   if (!day) return [];
   const shard = pickShard();
-  const deltas = [{ pk: statsGlobalPK(shard), sk: statsDaySK(day), adds: { retenues: 1 } }];
+  const deltas = [{ pk: statsGlobalPK(shard), sk: statsDaySK(day), adds: { retenues: 1, ...counter(bid.acquisition, 'retenue') } }];
   if (bid.serviceId) deltas.push({ pk: statsServicePK(bid.serviceId, shard), sk: statsDaySK(day), adds: { retenues: 1 } });
   return deltas;
 }
@@ -113,11 +114,11 @@ function statsDeltasForGauge(adds) {
 // per-day GLOBAL counter named `funnel_<id>`, sharded like the offers counter;
 // the admin overview reads every `funnel_*` key back in catalogue order.
 const FUNNEL_COUNTER_PREFIX = 'funnel_';
-function statsDeltasForFunnel(id, dayISO) {
+function statsDeltasForFunnel(id, dayISO, acquisition) {
   if (!domain.isFunnelEvent(id)) return [];
   const day = dayOf(dayISO);
   if (!day) return [];
-  return [{ pk: statsGlobalPK(pickShard()), sk: statsDaySK(day), adds: { [FUNNEL_COUNTER_PREFIX + id]: 1 } }];
+  return [{ pk: statsGlobalPK(pickShard()), sk: statsDaySK(day), adds: { [FUNNEL_COUNTER_PREFIX + id]: 1, ...(acquisition ? counter(acquisition, id) : {}) } }];
 }
 
 // L'assistant de la messagerie (ADR 0046). Sans ces compteurs, la seule chose

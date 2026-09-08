@@ -144,3 +144,22 @@ test('the scheduler is idempotent: a second run the same day sends nothing new',
   assert.equal(second.sent, 0, 'but nothing is sent twice');
   assert.equal(mailer.sent.length, 2);
 });
+
+test('new lead confirmations recover on the daily pass, including pending payment, without resending successes or replaying legacy leads', async () => {
+  const bid = bidAt('recover', 5, {notificationRecoveryVersion:1, paymentStatus:'pending'});
+  const legacy = bidAt('legacy',5,{paymentStatus:'pending'});
+  const voided = bidAt('voided',5,{paymentStatus:'void',notificationRecoveryVersion:1});
+  const repo = createMemoryRepo([bid,legacy,voided]);
+  let fail = true; const deliveries = [];
+  const notifier = createNotifier({repo,mailer:{send:async message=>{if(fail && message.to === bid.courriel) throw new Error('SES temporarily down');deliveries.push(message);}},baseUrl:'https://nota.example',operatorEmail:'ops@example.ca',now:()=>TODAY});
+  const first = await notifier.onOfferCreated(bid);
+  assert.equal(first.ok,false);
+  assert.equal(deliveries.filter(m=>m.to==='ops@example.ca').length,1,'operator still receives lead when client mail fails');
+  fail=false;
+  await runReminders({repo,notifier,now:()=>TODAY});
+  await runReminders({repo,notifier,now:()=>TODAY});
+  assert.equal(deliveries.filter(m=>m.to===bid.courriel).length,1);
+  assert.equal(deliveries.filter(m=>m.to==='ops@example.ca').length,1);
+  assert.equal(deliveries.filter(m=>m.to===legacy.courriel).length,0);
+  assert.equal(deliveries.filter(m=>m.to===voided.courriel).length,0);
+});

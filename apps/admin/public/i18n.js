@@ -24,6 +24,23 @@
 
   // === DICTIONARY — generated from the French sources. =======================
   var TEXT = {
+    'Les sources apparaîtront après les premières visites mesurées.': 'Sources will appear after the first measured visits.',
+    'Demandes à suivre': 'Requests to follow up',
+    'Demandes prévues dans les mois affichés au carnet. Les mois passés ne sont pas inclus.': 'Requests scheduled in the months displayed in the calendar. Past months are not included.',
+    'En attente de paiement': 'Awaiting payment',
+    'Demande enregistrée, pas encore visible au carnet.': 'Request saved, not yet visible in the calendar.',
+    'En attente d’un notaire': 'Awaiting a notary',
+    'Demande ouverte à suivre.': 'Open request to follow up.',
+
+    'Provenance des demandes': 'Request acquisition',
+    'Événements dans la période sélectionnée. Les visites ne sont pas des visiteurs uniques; les demandes retenues peuvent provenir d’une période antérieure.': 'Events in the selected period. Visits are not unique visitors; accepted requests may originate in an earlier period.',
+    'Source': 'Source',
+    'Visites': 'Visits',
+    'Formulaires commencés': 'Forms started',
+    'Demandes enregistrées': 'Requests saved',
+    'Demandes retenues': 'Requests accepted',
+    'Non attribuée': 'Unattributed',
+
     "Chargement des données": "Loading data",
     "Trouver une section": "Find a section",
     "Rechercher une section": "Search sections",

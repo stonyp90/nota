@@ -59,7 +59,7 @@ function fire(win, elmt, type) {
 async function boot(opts = {}) {
   const dom = new JSDOM(HTML_SRC, {
     runScripts: 'outside-only',
-    url: 'https://nota.example/',
+    url: opts.url || 'https://nota.example/',
     pretendToBeVisual: true,
     beforeParse(window) {
       // Force the deterministic offline/localStorage path on boot.
@@ -432,8 +432,8 @@ test('theme toggle flips documentElement[data-theme]', async () => {
 
 // 12b. Optional courriel field exists and never blocks a valid offer, and the
 //      offline store never keeps it on the public bid (privacy by omission).
-test('courriel is required at publish (ADR 0033) and stays private in the local store', async () => {
-  const { win, doc, D, Nota } = await boot();
+test('courriel is required at publish (ADR 0033) and stays private in the local demo store', async () => {
+  const { win, doc, D, Nota } = await boot({ url: 'http://localhost:4173/' });
 
   // The field is present in the offer form and required: it is how the client
   // learns a notary retained them (ADR 0033). Private all the same.
@@ -2656,4 +2656,15 @@ test('the hero carries one product description, shown at every width', async () 
   const css = readFileSync(fileURLToPath(new URL('../public/styles.css', import.meta.url)), 'utf8');
   assert.ok(!/\.hero-tagline\s*\{[^}]*display:\s*none/.test(css),
     'the tagline is never display:none — it is the hero copy at every width');
+});
+
+
+test('a public offline submit never reports local demo success or loses the filled form', async () => {
+  const { win, doc, D, Nota } = await boot({ url: 'https://gonota.ca/' });
+  doc.getElementById('o-courriel').value = 'client@example.ca';
+  const res = await Nota.store.createBid({ serviceId: 'refinancement', dateISO: D.addDays(todayISO(), 5), montant: 2000, prefixe: 'G1R', pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale', deplacement: 'client_50' } });
+  assert.equal(res.ok, false);
+  assert.equal(res.errors[0].code, 'erreur');
+  assert.equal(doc.getElementById('o-courriel').value, 'client@example.ca');
+  win.close();
 });

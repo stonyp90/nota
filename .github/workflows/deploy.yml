@@ -70,6 +70,8 @@ jobs:
         run: npm ci
 
       - name: Build web (SPA)
+        env:
+          NOTA_GA4_ID: ${{ vars.NOTA_GA4_ID }}
         run: npm run build --workspace @nota/web
 
       - name: Verify build output

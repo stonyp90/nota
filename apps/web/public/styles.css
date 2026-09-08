@@ -5382,3 +5382,9 @@ body.ig-open { overflow: hidden; }
   .pr-grid > .partner-share-panel { grid-template-columns: minmax(0, 1fr); }
   .partner-share-panel .partner-msg { padding: 20px 0 0; border-left: 0; border-top: 1px solid var(--border); }
 }
+
+/* Equal-weight, nonblocking analytics choice. */
+.analytics-consent { position: fixed; inset: auto 16px 16px; z-index: 10000; max-width: 680px; margin: auto; padding: 18px; background: #fff; color: #182422; border: 1px solid #aab7b0; border-radius: var(--radius-lg); box-shadow: 0 4px 24px #0002; }
+.analytics-consent[hidden] { display: none; }
+.analytics-consent p { margin: 0 0 12px; font-size: 14px; line-height: 1.5; }
+.analytics-consent button, #analytics-preferences { font: inherit; cursor: pointer; padding: 8px 12px; border: 1px solid #64756b; border-radius: var(--radius-sm); background: #fff; color: #182422; margin-right: 8px; }

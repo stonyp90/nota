@@ -19,7 +19,7 @@ test('an offer bumps the global + per-service "offers" counter (sharded), keyed 
   // Both counters for one fact land on the SAME shard (so a summed read is exact).
   assert.equal(deltas[0].pk.split('#').pop(), deltas[1].pk.split('#').pop());
   assert.equal(deltas[0].sk, 'D#2026-08-14');
-  assert.deepEqual(deltas[0].adds, { offers: 1 });
+  assert.deepEqual(deltas[0].adds, { offers: 1, acq_unknown_publie: 1 });
   assert.deepEqual(deltas[1].adds, { offers: 1 });
 });
 
@@ -40,7 +40,7 @@ test('a retain is keyed by the retention day, not the offer day', () => {
     '2026-08-15'
   );
   assert.equal(deltas[0].sk, 'D#2026-08-15');
-  assert.deepEqual(deltas[0].adds, { retenues: 1 });
+  assert.deepEqual(deltas[0].adds, { retenues: 1, acq_unknown_retenue: 1 });
 });
 
 test('a completed act adds one acte and the commission cents, globally and per service (sharded)', () => {

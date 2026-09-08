@@ -15,6 +15,7 @@
  * Pure projection math over the repo read ports; the clock is injected.
  */
 const domain = require('@nota/domain');
+const { SOURCES, STAGES } = require('./acquisition');
 const { STATS_SHARDS, statsGlobalPK, statsServicePK, statsDaySK } = require('./keys');
 const { FUNNEL_COUNTER_PREFIX } = require('./stats');
 
@@ -65,7 +66,7 @@ function createAnalytics({ repo, now, gaugeHorizonMonths } = {}) {
     for (const items of perShard) {
       for (const it of items || []) {
         const day = String(it.sk || it.SK || '').replace(/^D#/, '') || it.day;
-        const cur = byDay.get(day) || { offers: 0, retenues: 0, actes: 0, commissionCents: 0, funnel: {} };
+        const cur = byDay.get(day) || { offers: 0, retenues: 0, actes: 0, commissionCents: 0, funnel: {}, acquisition: {} };
         cur.offers += num(it.offers);
         cur.retenues += num(it.retenues);
         cur.actes += num(it.actes);
@@ -73,6 +74,10 @@ function createAnalytics({ repo, now, gaugeHorizonMonths } = {}) {
         // The funnel steps (stats.statsDeltasForFunnel): every `funnel_<id>`
         // key on the item, folded by id — the catalogue decides below which
         // ids are reported, so a stale key can never invent a step.
+        for (const source of SOURCES) for (const stage of STAGES) {
+          const key = 'acq_' + source + '_' + stage;
+          cur.acquisition[key] = (cur.acquisition[key] || 0) + num(it[key]);
+        }
         for (const k of Object.keys(it)) {
           if (k.startsWith(FUNNEL_COUNTER_PREFIX)) {
             const id = k.slice(FUNNEL_COUNTER_PREFIX.length);
@@ -100,6 +105,7 @@ function createAnalytics({ repo, now, gaugeHorizonMonths } = {}) {
     let retained = 0;
     const seen = new Set();
     const referred = [];
+    const followUp = { pendingPayment: 0, open: 0, oldestCreatedAt: null, months };
     const retainedBy = new Set();
     for (const month of months) {
       const bids = await repo.listByMonth(month);
@@ -107,6 +113,11 @@ function createAnalytics({ repo, now, gaugeHorizonMonths } = {}) {
         if (seen.has(b.id)) continue;
         seen.add(b.id);
         // Match the public carnet: pending/void (unauthorized-card) offers are not live.
+        if (b.status === domain.STATUS.OUVERTE && b.paymentStatus !== 'void') {
+          if (b.paymentStatus === 'pending') followUp.pendingPayment += 1;
+          else followUp.open += 1;
+          if (b.createdAt && (!followUp.oldestCreatedAt || b.createdAt < followUp.oldestCreatedAt)) followUp.oldestCreatedAt = b.createdAt;
+        }
         if (b.paymentStatus === 'pending' || b.paymentStatus === 'void') continue;
         if (b.status === domain.STATUS.RETENUE) {
           retained += 1;
@@ -117,7 +128,7 @@ function createAnalytics({ repo, now, gaugeHorizonMonths } = {}) {
         if (domain.isReferralCode(b.parrain)) referred.push(b);
       }
     }
-    return { open, retained, referred, retainedBy };
+    return { open, retained, referred, retainedBy, followUp };
   }
 
   // The partner referral ledger (ADR 0011). The amounts DUE come from the
@@ -330,7 +341,9 @@ function createAnalytics({ repo, now, gaugeHorizonMonths } = {}) {
     let actsCompleted = 0;
     let commissionCents = 0;
     const funnelTotals = {};
+    const acquisitionTotals = {};
     for (const d of global.values()) {
+      for (const [key, n] of Object.entries(d.acquisition || {})) acquisitionTotals[key] = (acquisitionTotals[key] || 0) + n;
       offersPosted += d.offers;
       offersRetained += d.retenues;
       actsCompleted += d.actes;
@@ -414,7 +427,9 @@ function createAnalytics({ repo, now, gaugeHorizonMonths } = {}) {
         pendingNotaries,
       },
       series: { offersPerDay, byService },
+      followUp: inv.followUp,
       entonnoir,
+      acquisition: SOURCES.map(source => ({ source, ...Object.fromEntries(STAGES.map(stage => [stage, acquisitionTotals['acq_' + source + '_' + stage] || 0])) })),
       // Per-code referral totals (demandes / retenues / complétés / dû) plus
       // the flat commission amount — see ADR 0011.
       parrainages,
