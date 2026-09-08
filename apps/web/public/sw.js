@@ -52,6 +52,9 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
+  // Acquisition documents must never overwrite the cached application shell.
+  if (url.pathname.endsWith('.html') && url.pathname !== '/index.html') return;
+
   // HTML shell: network-first so new asset hashes are picked up online; the
   // cached shell is the offline fallback. Same-origin navigations only.
   const isHtml = req.mode === 'navigate' || url.pathname === '/' || url.pathname === '/index.html';

@@ -1,3 +1,4 @@
+import { pages, pagePath, renderPage } from './seo-pages.mjs';
 /**
  * Local dev server for the web app. Plain node:http, zero dependencies.
  * Serves public/ directly, synthesizes /domain.js from @nota/domain (so the
@@ -40,6 +41,16 @@ const server = createServer((req, res) => {
   const start = Date.now();
   let path = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
   if (path === '/') path = '/index.html';
+
+  for (const page of pages) {
+    for (const lang of ['fr', 'en']) {
+      if (path === pagePath(page, lang)) {
+        res.writeHead(200, { 'content-type': TYPES['.html'] });
+        res.end(renderPage(page, lang));
+        return log(req, 200, start);
+      }
+    }
+  }
 
   // Single-source the domain module.
   if (path === '/domain.js') {

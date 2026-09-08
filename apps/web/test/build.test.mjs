@@ -48,3 +48,55 @@ test('service worker is build-stamped and precaches the hashed shell', () => {
   assert.match(sw, /'\/app\.[0-9a-f]{10}\.js'/, 'sw.js precache list is not hashed');
   assert.doesNotMatch(sw, /'\/app\.js'/, 'sw.js still precaches the un-hashed app.js');
 });
+
+// Search visitors and non-JavaScript crawlers must receive complete localized pages.
+const { JSDOM } = await import('jsdom');
+const { pages, pagePath } = await import('../seo-pages.mjs');
+const sitemap = new JSDOM(readFileSync(dist('sitemap.xml'), 'utf8'), { contentType: 'text/xml' }).window.document;
+for (const page of pages) {
+  for (const lang of ['fr', 'en']) {
+    test(`static search document: ${pagePath(page, lang)}`, () => {
+      const source = readFileSync(dist(pagePath(page, lang).slice(1)), 'utf8');
+      const doc = new JSDOM(source).window.document;
+      const url = 'https://gonota.ca' + pagePath(page, lang);
+      assert.equal(doc.documentElement.lang, `${lang}-CA`);
+      assert.equal(doc.querySelector('link[rel="canonical"]').href, url);
+      assert.equal(doc.querySelectorAll('h1').length, 1);
+      assert.ok(doc.querySelector('main').textContent.length > 1000);
+      assert.ok([...sitemap.querySelectorAll('loc')].some(el => el.textContent === url));
+      assert.equal(doc.querySelector('a.btn').getAttribute('href'), `/?lang=${lang}#t=carnet`);
+      for (const el of doc.querySelectorAll('script[src],link[rel="stylesheet"]')) {
+        const path = el.getAttribute('src') || el.getAttribute('href');
+        assert.ok(files.includes(path.slice(1)), `missing built asset ${path}`);
+      }
+      for (const el of doc.querySelectorAll('script[type="application/ld+json"]')) assert.equal(JSON.parse(el.textContent).url, url);
+      if (lang === 'en') {
+        assert.match(doc.querySelector('h1').textContent, /Notary for mortgage/);
+        assert.doesNotMatch(doc.querySelector('main').textContent, /Votre|notaire|hypothécaire|demande|Québec/);
+      }
+    });
+  }
+}
+
+test('campaign and referral labels survive the CTA without forwarding personal query values', () => {
+  const dom = new JSDOM('<a data-acquisition-link href="/?lang=en#t=carnet">Continue</a>', {
+    url: 'https://gonota.ca/test.html?utm_source=linkedin&ref=COURTIER&email=private%40example.com&utm_content=%3Cscript%3E', runScripts: 'outside-only',
+  });
+  dom.window.eval(readFileSync(new URL('../public/landing.js', import.meta.url), 'utf8'));
+  const target = new URL(dom.window.document.querySelector('a').href);
+  assert.equal(target.searchParams.get('lang'), 'en');
+  assert.equal(target.searchParams.get('utm_source'), 'linkedin');
+  assert.equal(target.searchParams.get('ref'), 'COURTIER');
+  assert.equal(target.searchParams.has('email'), false);
+  assert.equal(target.searchParams.has('utm_content'), false);
+  assert.equal(target.hash, '#t=carnet');
+});
+
+test('visiting a search document cannot replace the offline application shell', async () => {
+  let listener;
+  let intercepted = false;
+  const self = { addEventListener: (name, fn) => { if (name === 'fetch') listener = fn; }, location: { origin: 'https://gonota.ca' } };
+  new Function('self', sw)(self);
+  listener({ request: { method: 'GET', url: 'https://gonota.ca/notaire-financement-quebec.html', mode: 'navigate' }, respondWith: () => { intercepted = true; } });
+  assert.equal(intercepted, false);
+});

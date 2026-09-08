@@ -9,6 +9,7 @@ import { readFileSync, writeFileSync, mkdirSync, readdirSync, rmSync, statSync, 
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
+import { pages, pagePath, renderPage } from './seo-pages.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const publicDir = join(here, 'public');
@@ -36,6 +37,9 @@ function copyTree(src, dst) {
 }
 
 copyTree(publicDir, distDir);
+for (const page of pages) {
+  for (const lang of ['fr', 'en']) writeFileSync(join(distDir, pagePath(page, lang)), renderPage(page, lang));
+}
 writeFileSync(join(distDir, 'domain.js'), readFileSync(domainSrc));
 
 // --- Content-hash the cacheable assets ------------------------------------
@@ -46,7 +50,7 @@ writeFileSync(join(distDir, 'domain.js'), readFileSync(domainSrc));
 // files be cached immutably forever. index.html (and sw.js) stay unhashed and
 // no-cache; they are the single source that points at the current hashes.
 const hash = (buf) => createHash('sha256').update(buf).digest('hex').slice(0, 10);
-const HASHED = ['app.js', 'styles.css', 'domain.js', 'i18n.js'];
+const HASHED = ['app.js', 'styles.css', 'domain.js', 'i18n.js', 'landing.js'];
 const manifest = {}; // original name -> hashed name
 for (const name of HASHED) {
   const p = join(distDir, name);
@@ -56,13 +60,13 @@ for (const name of HASHED) {
   manifest[name] = hashed;
 }
 
-// Rewrite index.html to point at the hashed filenames (src="app.js" etc.).
-const indexPath = join(distDir, 'index.html');
-let indexHtml = readFileSync(indexPath, 'utf8');
-for (const [orig, hashed] of Object.entries(manifest)) {
-  indexHtml = indexHtml.split(orig).join(hashed);
+// All HTML documents share the content-hashed asset references.
+for (const name of readdirSync(distDir).filter(name => name.endsWith('.html'))) {
+  const path = join(distDir, name);
+  let html = readFileSync(path, 'utf8');
+  for (const [orig, hashed] of Object.entries(manifest)) html = html.split(orig).join(hashed);
+  writeFileSync(path, html);
 }
-writeFileSync(indexPath, indexHtml);
 
 // Stamp the service worker: a per-build cache name (so activate purges old
 // shells) and the hashed filenames in its precache list.

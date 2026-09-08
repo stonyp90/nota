@@ -33,6 +33,32 @@
 
   // === DICTIONARY — generated from the French sources. =======================
   var TEXT = {
+    // Search landing pages: rendered in both languages at build time.
+    "Notaire pour un refinancement hypothécaire à Québec": "Notary for mortgage refinancing in Quebec City",
+    "Notaire pour un financement hypothécaire à Québec": "Notary for mortgage financing in Quebec City",
+    "Vous refinancez votre propriété? Proposez votre date de signature et votre offre sur Nota. Un notaire décide de prendre votre demande.": "Refinancing your property? Propose your signing date and offer on Nota. A notary decides whether to take your request.",
+    "Vous préparez un financement hypothécaire? Affichez votre date souhaitée et votre offre pour trouver un notaire dans la région de Québec.": "Preparing mortgage financing? Post your preferred date and offer to find a notary in the Quebec City area.",
+    "Voir les dates et proposer mon offre": "View dates and make my offer",
+    "Publier une demande est gratuit. La date reste à confirmer avec le notaire.": "Posting a request is free. Your date must still be confirmed with the notary.",
+    "Comment trouver votre notaire": "How to find your notary",
+    "Choisissez le service et votre date souhaitée dans le carnet.": "Choose the service and your preferred date on the public board.",
+    "Consultez le prix présenté et proposez votre offre.": "Review the displayed price and make your offer.",
+    "Un notaire peut accepter, faire une contre-offre ou passer. Vous préparez ensuite le dossier ensemble.": "A notary can accept, counter-offer or pass. You then prepare the file together.",
+    "Quel budget prévoir?": "What should you budget?",
+    "Consultez le devis dans le carnet : il distingue les honoraires du notaire du prix du service Nota. Vérifiez aussi les taxes, les débours et les conditions de paiement avant de poursuivre.": "Check the quote on the public board: it separates the notary’s fees from Nota’s service price. Also review taxes, disbursements and payment terms before proceeding.",
+    "Préparer un refinancement": "Preparing to refinance",
+    "Indiquez où en est votre approbation bancaire et la date visée. Le notaire précisera les pièces nécessaires à votre dossier et vérifiera les démarches liées à votre hypothèque actuelle.": "Indicate the status of your lender’s approval and your target date. The notary will specify the documents needed for your file and check the steps related to your existing mortgage.",
+    "Préparer un financement": "Preparing mortgage financing",
+    "Indiquez le montant du prêt, le prêteur et la date souhaitée. Si le financement accompagne un achat, confirmez avec le notaire quels actes et débours sont inclus dans son mandat.": "Indicate the loan amount, lender and preferred date. If financing accompanies a purchase, confirm with the notary which deeds and disbursements are included in the engagement.",
+    "Faut-il avoir tous les documents avant de commencer?": "Do you need every document before starting?",
+    "Vous pouvez commencer par votre demande. Le notaire vous indiquera ensuite les documents à fournir selon votre situation; ne publiez aucun document personnel dans le carnet public.": "You can start with your request. The notary will then tell you which documents to provide for your situation; do not post personal documents on the public board.",
+    "La date est-elle garantie?": "Is the date guaranteed?",
+    "Non. Une demande publiée ne constitue pas une réservation confirmée. La prise en charge dépend des disponibilités du notaire et de la préparation du dossier.": "No. A posted request is not a confirmed booking. Acceptance depends on the notary’s availability and the readiness of your file.",
+    "À qui s’adresse Nota?": "Who is Nota for?",
+    "Nota met en relation des clients et des notaires dans la région de Québec pour le financement et le refinancement hypothécaires. Nota n’est pas un notaire et ne fournit pas de conseils juridiques.": "Nota connects clients and notaries in the Quebec City area for mortgage financing and refinancing. Nota is not a notary and does not provide legal advice.",
+    "Explorer les services": "Explore services",
+    "Consulter le carnet": "View the public board",
+
     // Responsive introduction films.
     "Les demandes": "Requests",
     "Trouvez un notaire avec Nota.": "Find a notary with Nota.",

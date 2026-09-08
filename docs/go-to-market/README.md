@@ -28,6 +28,11 @@ préavis. Le client paie **à la signature**. Ni commission, ni partage, ni
 pourcentage — voir [`validation-notaires.md`](validation-notaires.md) §2 pour la
 grille complète et pour ce que les ADR 0031, 0034 et 0030 ont retiré.
 
+## Lancement cette semaine
+
+- [Plan exécutable du 8 au 13 septembre](launch-week-2026-09-08.md) : référencement, diffusion, budget proposé, messages FR/EN et conversion.
+- [Tableau de suivi quotidien](launch-scorecard.csv) : valeurs laissées vides tant que non mesurées.
+
 ## Le plan
 
 | Document | Ce qu'il contient |
