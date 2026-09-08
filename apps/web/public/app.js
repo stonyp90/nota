@@ -147,7 +147,7 @@
       });
       if (!v.ok) return { ok: false, errors: v.errors };
 
-      if (this.online) {
+      if (this.online || !/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)) {
         var r = null;
         try {
           r = await fetch(API_BASE + '/bids', {
@@ -159,10 +159,11 @@
           // into the local-demo path (which would falsely report success).
           var j = {};
           try { j = await r.json(); } catch (e) { /* empty or non-JSON body */ }
-          if (r.status === 201) return { ok: true, bid: j.bid, clientToken: j.clientToken || null, checkoutUrl: j.checkoutUrl || null, paymentStatus: j.paymentStatus || null };
+          if (r.status === 201 && j.bid && j.bid.id) { this.online = true; return { ok: true, bid: j.bid, clientToken: j.clientToken || null, checkoutUrl: j.checkoutUrl || null, paymentStatus: j.paymentStatus || null }; }
           return { ok: false, errors: (j && j.errors) || [{ code: 'erreur', message: 'Erreur serveur. Réessayez.' }] };
         }
       }
+      if (!/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)) return { ok: false, errors: [{ code: 'erreur', message: 'Connexion interrompue. Votre demande n’est pas confirmée. Vos réponses restent dans ce formulaire; réessayez.' }] };
       var anonyme = payload.anonyme !== false;
       var bid = {
         id: 'loc-' + Date.now() + '-' + Math.floor(Math.random() * 1e5),
@@ -1967,7 +1968,8 @@
     try {
       if (!D.isFunnelEvent(eventId)) return;
       var url = API_BASE + '/events';
-      var body = JSON.stringify({ event: eventId });
+      var body = JSON.stringify({ event: eventId, acquisition: window.NotaAcquisition ? window.NotaAcquisition.snapshot() : undefined });
+      if (window.NotaAcquisition) window.NotaAcquisition.event(eventId === 'formulaire' ? 'form_start' : eventId);
       var p = fetch(url, { method: 'POST', keepalive: true, credentials: 'omit', headers: { 'content-type': 'text/plain' }, body: body });
       if (p && typeof p.catch === 'function') p.catch(function () {});
     } catch (e) { /* analytics never breaks the page */ }
@@ -5438,9 +5440,11 @@
     // defaults still shown (audit §1.5).
     var pricing = effectivePricing();
     if (Object.keys(pricing).length) payload.pricing = pricing;
+    if (window.NotaAcquisition) { payload.acquisition = window.NotaAcquisition.snapshot(); window.NotaAcquisition.event('form_submit_attempt'); }
     var res = await store.createBid(payload);
     var errBox = $('offer-errors');
     if (!res.ok) {
+      if (window.NotaAcquisition) window.NotaAcquisition.event('form_submit_error');
       clear(errBox); errBox.hidden = false;
       var svcErr = D.serviceById(o.serviceId);
       res.errors.forEach(function (er) {
@@ -5463,6 +5467,7 @@
       try { errBox.focus({ preventScroll: true }); } catch (e) { try { errBox.focus(); } catch (e2) {} }
       return;
     }
+    if (res.clientToken && window.NotaAcquisition) window.NotaAcquisition.event('generate_lead');
     errBox.hidden = true;
     // Publishing stands by the defaults shown (audit §1.5): they become the
     // client's recorded answers now — not on dialog open.
@@ -5477,6 +5482,7 @@
     // passwordless signup as the auth modal, riding along with the publish.
     var wantsAccount = !!($('o-account') && $('o-account').checked) && D.isEmail(payload.courriel);
     if (res.checkoutUrl) {
+      if (window.NotaAcquisition) window.NotaAcquisition.event('begin_checkout');
       submit.removeAttribute('aria-busy'); submit.textContent = 'Redirection vers le paiement…';
       // The sheet leaves before its success card can render (audit 2.2):
       // remember the offer on this device so the return can draw it.

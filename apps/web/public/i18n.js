@@ -33,6 +33,17 @@
 
   // === DICTIONARY — generated from the French sources. =======================
   var TEXT = {
+    'Mesure facultative.': 'Optional measurement.',
+    'Avec votre accord, Google Analytics mesure les visites et les clics. Aucun nom, courriel, contenu de formulaire ou lien de dossier ne lui est envoyé. Google peut traiter ces données à l’extérieur du Canada. Les témoins de mesure et la provenance conservée sur cet appareil expirent après 30 jours sans nouvelle visite. Vous pouvez retirer votre accord dans « Préférences de mesure ». La provenance d’une demande reste enregistrée avec celle-ci, même sans Google Analytics.': 'With your permission, Google Analytics measures visits and clicks. No name, email, form content or case link is sent to it. Google may process this data outside Canada. Measurement cookies and acquisition data saved on this device expire after 30 days without another visit. You can withdraw permission under “Measurement preferences”. The source of a request remains saved with it, even without Google Analytics.',
+
+    'Mesure d’audience': 'Audience measurement',
+    'Acceptez-vous la mesure d’audience? Google Analytics nous aide à comprendre les visites et les clics pour améliorer Nota. Aucun contenu de formulaire n’y est envoyé. Le suivi est facultatif; votre demande sera traitée même si vous refusez.': 'Allow audience measurement? Google Analytics helps us understand visits and clicks to improve Nota. No form content is sent to it. Tracking is optional; your request will be processed even if you decline.',
+    'Refuser': 'Decline',
+    'Accepter': 'Accept',
+    'Préférences de mesure': 'Measurement preferences',
+
+    'Connexion interrompue. Votre demande n’est pas confirmée. Vos réponses restent dans ce formulaire; réessayez.': 'Connection interrupted. Your request is not confirmed. Your answers remain in this form; please try again.',
+
     // Search landing pages: rendered in both languages at build time.
     "Notaire pour un refinancement hypothécaire à Québec": "Notary for mortgage refinancing in Quebec City",
     "Notaire pour un financement hypothécaire à Québec": "Notary for mortgage financing in Quebec City",

@@ -39,6 +39,16 @@ async function runReminders({ repo, notifier, billing, now } = {}) {
   const isLive = (bid) => bid.paymentStatus !== 'pending' && bid.paymentStatus !== 'void';
 
   for (const bid of open) {
+    // Only new leads opt in to recovery; do not replay legacy confirmations.
+    // sendOnce owns delivery deduplication, including each recipient separately.
+    if (bid.paymentStatus !== 'void' && bid.notificationRecoveryVersion === 1 && typeof notifier.onOfferCreated === 'function') {
+      try {
+        const result = await notifier.onOfferCreated(bid);
+        if (result && result.ok === false) errors.push({ bidId: bid.id, kind: 'offerCreated', error: result.error || 'notification_failed' });
+      } catch (err) {
+        errors.push({ bidId: bid.id, kind: 'offerCreated', error: String(err.message || err) });
+      }
+    }
     if (!isLive(bid)) continue;
     const kinds = domain.dueReminders(bid, todayISO);
     for (const kind of kinds) {

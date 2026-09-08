@@ -28,6 +28,7 @@ export function renderPage(page, lang = 'fr') {
   const section = (heading, body) => `<section><h2>${t(heading)}</h2><p>${t(body)}</p></section>`;
   return `<!doctype html>
 <html lang="${lang}-CA" data-theme="light"><head>
+<meta name="nota:analytics" content="__NOTA_GA4_ID__">
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${t(page.title)} | Nota</title>
 <meta name="description" content="${t(page.description)}">
@@ -43,9 +44,10 @@ export function renderPage(page, lang = 'fr') {
 <link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/styles.css">
 <style>.search-page{max-width:760px;margin:auto;padding:24px 20px 60px}.search-page header{display:flex;justify-content:space-between;gap:20px;margin-bottom:48px}.search-page h1{font-size:clamp(2rem,6vw,3.4rem);line-height:1.12}.search-page p,.search-page li{font-size:1.05rem;line-height:1.7}.search-page section{margin:36px 0}.search-page .btn{white-space:normal;text-align:center;margin:12px 0}.search-page footer{border-top:1px solid #ccc;padding-top:24px}.search-page nav{display:flex;gap:16px;flex-wrap:wrap}.search-page a:focus-visible{outline:3px solid #315b43;outline-offset:4px}</style>
 <script type="application/ld+json">${JSON.stringify({ '@context': 'https://schema.org', '@type': 'WebPage', '@id': url, url, name: lang === 'en' ? I18N.tEn(page.title) : page.title, description: lang === 'en' ? I18N.tEn(page.description) : page.description, inLanguage: lang + '-CA', isPartOf: { '@id': origin + '/#website' } }).replaceAll('<', '\\u003c')}</script>
+<script src="/acquisition.js" defer></script>
 <script src="/landing.js" defer></script>
 </head><body><div class="search-page">
-<header><a href="${cta}">Nota · Québec</a><a href="${pagePath(page, lang === 'en' ? 'fr' : 'en')}" lang="${lang === 'en' ? 'fr' : 'en'}" data-acquisition-link>${lang === 'en' ? 'Français' : 'English'}</a></header>
+<header><a href="${cta}" data-acquisition-link>Nota · Québec</a><a href="${pagePath(page, lang === 'en' ? 'fr' : 'en')}" lang="${lang === 'en' ? 'fr' : 'en'}" data-acquisition-link>${lang === 'en' ? 'Français' : 'English'}</a></header>
 <main><h1>${t(page.title)}</h1><p>${t(page.description)}</p>
 <a class="btn btn-primary btn-lg" href="${cta}" data-acquisition-link>${t('Voir les dates et proposer mon offre')}</a>
 <p>${t('Publier une demande est gratuit. La date reste à confirmer avec le notaire.')}</p>
@@ -57,5 +59,10 @@ ${section('La date est-elle garantie?', 'Non. Une demande publiée ne constitue 
 ${section('À qui s’adresse Nota?', 'Nota met en relation des clients et des notaires dans la région de Québec pour le financement et le refinancement hypothécaires. Nota n’est pas un notaire et ne fournit pas de conseils juridiques.')}
 <a class="btn btn-primary" href="${cta}" data-acquisition-link>${t('Voir les dates et proposer mon offre')}</a></main>
 <footer><h2>${t('Explorer les services')}</h2><nav>${pages.map(p => `<a href="${pagePath(p, lang)}" data-acquisition-link>${t(p.title)}</a>`).join('')}<a href="${cta}" data-acquisition-link>${t('Consulter le carnet')}</a></nav></footer>
-</div></body></html>`;
+</div><aside id="analytics-consent" class="analytics-consent" aria-label="${t('Mesure d’audience')}" hidden>
+      <p>${t('Acceptez-vous la mesure d’audience? Google Analytics nous aide à comprendre les visites et les clics pour améliorer Nota. Aucun contenu de formulaire n’y est envoyé. Le suivi est facultatif; votre demande sera traitée même si vous refusez.')}</p>
+      <button type="button" id="analytics-refuse">${t('Refuser')}</button>
+      <button type="button" id="analytics-accept">${t('Accepter')}</button>
+      <a href="/#t=confidentialite" data-acquisition-link>${t('Confidentialité')}</a>
+    </aside><button type="button" id="analytics-preferences">${t('Préférences de mesure')}</button></body></html>`;
 }

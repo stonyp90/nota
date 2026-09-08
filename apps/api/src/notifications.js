@@ -607,10 +607,16 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
 
   // --- Offer lifecycle (client + operator) ---------------------------------
 
-  // Fired from POST /bids (fire-and-forget). Confirms the offer to the client
+  // Awaited by POST /bids and retried by the scheduler. Confirms the offer to the client
   // (the offerPublished nudge → dossier) and alerts the operator of a new lead.
   async function onOfferCreated(bid) {
     const results = [];
+    const recoverable = bid.notificationRecoveryVersion === 1;
+    if (recoverable && await repo.wasNotificationSent(bid.id, 'offerCreatedComplete')) return { ok: true, results };
+    async function deliver(args) {
+      try { return await sendOnce(args); }
+      catch (err) { return { sent: false, reason: 'delivery-failed', kind: args.kind }; }
+    }
     try {
       if (bid.courriel) {
         // Publier une demande EST la demande au sens de l'art. 10(9)a) LCAP :
@@ -619,7 +625,7 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
         await noterConsentement('offre_publiee', bid.courriel);
         const ctx = bidCtx(bid);
         results.push(
-          await sendOnce({
+          await deliver({
             refId: bid.id,
             kind: 'offerPublished',
             to: bid.courriel,
@@ -632,7 +638,7 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
       if (operatorEmail) {
         const ctx = bidCtx(bid);
         results.push(
-          await sendOnce({
+          await deliver({
             refId: bid.id,
             kind: 'operatorNewLead',
             to: operatorEmail,
@@ -650,7 +656,9 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
       // Never let a mail failure break the caller (the POST /bids response).
       return { ok: false, error: String((err && err.message) || err), results };
     }
-    return { ok: true, results };
+    const ok = !results.some(result => result.reason === 'delivery-failed');
+    if (ok && recoverable) await repo.markNotificationSent(bid.id, 'offerCreatedComplete', clock());
+    return { ok, results };
   }
 
   // The ONE retention moment (accept and proposition-accept alike) — the mise

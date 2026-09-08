@@ -11,6 +11,9 @@ import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { pages, pagePath, renderPage } from './seo-pages.mjs';
 
+const analyticsId = process.env.NOTA_GA4_ID || '';
+if (analyticsId && !/^G-[A-Z0-9]+$/.test(analyticsId)) throw new Error('Invalid NOTA_GA4_ID');
+
 const here = dirname(fileURLToPath(import.meta.url));
 const publicDir = join(here, 'public');
 const distDir = join(here, 'dist');
@@ -50,7 +53,7 @@ writeFileSync(join(distDir, 'domain.js'), readFileSync(domainSrc));
 // files be cached immutably forever. index.html (and sw.js) stay unhashed and
 // no-cache; they are the single source that points at the current hashes.
 const hash = (buf) => createHash('sha256').update(buf).digest('hex').slice(0, 10);
-const HASHED = ['app.js', 'styles.css', 'domain.js', 'i18n.js', 'landing.js'];
+const HASHED = ['app.js', 'styles.css', 'domain.js', 'i18n.js', 'landing.js', 'acquisition.js'];
 const manifest = {}; // original name -> hashed name
 for (const name of HASHED) {
   const p = join(distDir, name);
@@ -63,7 +66,7 @@ for (const name of HASHED) {
 // All HTML documents share the content-hashed asset references.
 for (const name of readdirSync(distDir).filter(name => name.endsWith('.html'))) {
   const path = join(distDir, name);
-  let html = readFileSync(path, 'utf8');
+  let html = readFileSync(path, 'utf8').replace('__NOTA_GA4_ID__', analyticsId);
   for (const [orig, hashed] of Object.entries(manifest)) html = html.split(orig).join(hashed);
   writeFileSync(path, html);
 }

@@ -3102,8 +3102,8 @@ paths:
         `GET /admin/metrics/overview` reads back as `entonnoir`. Anything else —
         an unknown id, a wrong type, a garbage body — is DROPPED with the same
         204, so a beacon never learns what the catalogue holds. The two steps
-        that cost money (`publie`, `notaire_inscrit`) are ALSO counted
-        server-side on their own routes; the beacon is never trusted for them.
+        that cost money (`publie`, `notaire_inscrit`) are counted ONLY
+        server-side on their own routes; client beacons for them are dropped.
         Lightly rate-limited per IP (120/min by default). Safe for
         `navigator.sendBeacon` (a text/plain JSON body is accepted).
       requestBody:
@@ -3118,6 +3118,8 @@ paths:
                   type: string
                   description: A FUNNEL_EVENTS id from @nota/domain.
                   example: jour_ouvert
+                acquisition:
+                  $ref: '#/components/schemas/Acquisition'
       responses:
         "204":
           description: Received — counted when it is a catalogue step, silently dropped otherwise.
@@ -3986,10 +3988,39 @@ components:
             reward once, when they retain their first act. Surfaces only,
             aggregated, in the admin referral ledger.
           example: EVEROY
+    AcquisitionTouch:
+      type: object
+      additionalProperties: false
+      properties:
+        source:
+          type: string
+          enum: [unknown, direct, google, bing, duckduckgo, yahoo, linkedin, facebook, instagram, youtube, tiktok, reddit, newsletter, partner, referral, other]
+        medium:
+          type: string
+          pattern: '^[a-z][a-z0-9_-]{0,63}$'
+        campaign:
+          type: string
+          pattern: '^[a-z][a-z0-9_-]{0,63}$'
+        content:
+          type: string
+          pattern: '^[a-z][a-z0-9_-]{0,63}$'
+    Acquisition:
+      type: object
+      description: Private first and last non-direct campaign attribution. Invalid fields are dropped; never returned on the public carnet. Do not put personal data in campaign names.
+      properties:
+        version:
+          type: integer
+          const: 1
+        first:
+          $ref: '#/components/schemas/AcquisitionTouch'
+        last:
+          $ref: '#/components/schemas/AcquisitionTouch'
     OfferInput:
       type: object
       required: [serviceId, dateISO, montant, prefixe]
       properties:
+        acquisition:
+          $ref: '#/components/schemas/Acquisition'
         serviceId:
           $ref: "#/components/schemas/ServiceId"
         dateISO:
