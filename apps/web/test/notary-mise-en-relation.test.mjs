@@ -545,6 +545,26 @@ test('#notaires&acte=<id> lands on the notary tab, scrolls to the card and flash
   assert.match(CSS_SRC, /\.nc-card\.is-flash/, 'the flash has a stylesheet rule');
 });
 
+test('a calendar request link survives sign-in and retains only after confirmation', async () => {
+  const bid = openBid({ id: 'calendar-request' });
+  const ctx = await boot({ url: 'https://nota.example/#notaires&acte=calendar-request' });
+  assert.equal(ctx.Nota.state.tab, 'notaires');
+  assert.equal(ctx.Nota.notary.state.token, null);
+  const calls = stubApi(ctx.win, { profil: PROFIL_COMPLET(), bids: [bid] });
+  await ctx.Nota.notary.signIn('demo@etude.ca');
+  const card = ctx.doc.querySelector('#notary-open-list .nc-card[data-id="calendar-request"]');
+  assert.ok(card && card.classList.contains('is-flash'), 'the linked request is highlighted after sign-in');
+  const accepts = () => calls.filter(c => c.path.includes('/notary/bids/accept'));
+  assert.equal(accepts().length, 0, 'opening the calendar link never accepts');
+  click(card.querySelector('.nc-accept'));
+  assert.equal($(ctx.doc, 'nc-retenir-dialog').open, true);
+  assert.equal(accepts().length, 0, 'reviewing the terms never accepts');
+  click($(ctx.doc, 'nc-retenir-go'));
+  await waitUntil(() => ctx.Nota.notary.retainedFor('demo@etude.ca').some(b => b.id === bid.id));
+  assert.equal(accepts().length, 1);
+  assert.equal(accepts()[0].body.id, bid.id);
+});
+
 // --- 9. Alert preferences are server data; no SMS promise --------------------
 
 test('the alert preferences render from profil.alertes and POST through /notary/profile; the SMS toggle and phone row are gone', async () => {

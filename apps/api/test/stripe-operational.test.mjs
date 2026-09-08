@@ -67,3 +67,82 @@ test('a Stripe onboarding outage returns a retryable response without leaking pr
   assert.equal(JSON.parse(response.body).errors[0].code, 'paiement_indisponible');
   assert.doesNotMatch(response.body, /provider-debug-sensitive/);
 });
+
+test('a failed transfer preserves the successful capture and retries with identical Stripe keys', async () => {
+  const captures = []; const transfers = [];
+  let unavailable = true;
+  const adapter = createStripeAdapter({ secretKey: 'sk_test_fixture', webhookSecret: 'whsec_fixture', stripe: {
+    paymentIntents: { async capture(id, params, options) {
+      captures.push({ id, params, options });
+      return { latest_charge: 'ch_captured' };
+    } },
+    transfers: { async create(params, options) {
+      transfers.push({ params, options });
+      if (unavailable) throw new Error('transfer unavailable');
+      return { id: 'tr_recovered' };
+    } },
+  } });
+  const args = { bidId: 'b_transfer_retry', paymentIntentId: 'pi_paid', connectAccountId: 'acct_notary', amountCents: 240000, applicationFeeCents: 40000 };
+  await assert.rejects(adapter.captureAndTransfer(args), err => {
+    assert.equal(err.captured, true);
+    assert.equal(err.chargeId, 'ch_captured');
+    assert.equal(err.paymentIntentId, 'pi_paid');
+    return true;
+  });
+  unavailable = false;
+  const result = await adapter.captureAndTransfer(args);
+  assert.equal(result.transferId, 'tr_recovered');
+  assert.deepEqual(captures[1], captures[0]);
+  assert.deepEqual(transfers[1], transfers[0]);
+  assert.equal(transfers[1].params.source_transaction, 'ch_captured');
+  assert.equal(transfers[1].params.amount, 200000);
+});
+
+for (const amountReceived of [240000, 230000]) {
+  test(`capture retry reads Stripe's settled amount (${amountReceived}) before transfer or fallback`, async () => {
+    const transfers = [];
+    const adapter = createStripeAdapter({ secretKey: 'sk_test_fixture', webhookSecret: 'whsec_fixture', stripe: {
+      paymentIntents: {
+        async capture() { throw new Error('already captured'); },
+        async retrieve() { return { status: 'succeeded', amount_received: amountReceived, latest_charge: 'ch_original' }; },
+      },
+      transfers: { async create(params) { transfers.push(params); return { id: 'tr_resumed' }; } },
+    } });
+    const attempt = adapter.captureAndTransfer({ paymentIntentId: 'pi_old', connectAccountId: 'acct_notary', amountCents: 240000, applicationFeeCents: 40000, bidId: 'old' });
+    if (amountReceived === 240000) {
+      assert.equal((await attempt).transferId, 'tr_resumed');
+      assert.equal(transfers[0].source_transaction, 'ch_original');
+    } else {
+      await assert.rejects(attempt, err => err.captured === true);
+      assert.equal(transfers.length, 0, 'no transfer at an amount other than the settled one');
+    }
+  });
+}
+
+test('an unreadable capture result remains uncertain, never an unpaid settlement', async () => {
+  const adapter = createStripeAdapter({ secretKey: 'sk_test_fixture', webhookSecret: 'whsec_fixture', stripe: {
+    paymentIntents: {
+      async capture() { throw new Error('network timeout'); },
+      async retrieve() { throw new Error('still unavailable'); },
+    },
+    transfers: { async create() { assert.fail('no transfer before verifying the charge'); } },
+  } });
+  await assert.rejects(adapter.captureAndTransfer({ paymentIntentId: 'pi_unknown', amountCents: 240000, applicationFeeCents: 40000, bidId: 'unknown' }), err => err.settlementUncertain === true);
+});
+
+
+for (const responseLost of [false, true]) {
+  test(`a processing capture remains pending (response lost: ${responseLost})`, async () => {
+    const adapter = createStripeAdapter({ secretKey: 'sk_test_fixture', webhookSecret: 'whsec_fixture', stripe: {
+      paymentIntents: {
+        async capture() {
+          if (responseLost) throw new Error('network timeout');
+          return { status: 'processing', latest_charge: 'ch_pending' };
+        },
+        async retrieve() { return { status: 'processing', latest_charge: 'ch_pending' }; },
+      },
+      transfers: { async create() { assert.fail('processing is not a confirmed capture'); } },
+    } });
+    await assert.rejects(adapter.captureAndTransfer({ paymentIntentId: 'pi_pending', amountCents: 240000, applicationFeeCents: 40000, bidId: 'pending' }), err => err.settlementUncertain === true);
+  });
+}

@@ -614,6 +614,9 @@
   "Créer mon compte gratuit →": "Create my free account →",
   "Montant de l’acte invalide.": "Invalid act amount.",
   "Envoi…": "Sending…",
+  "Le résultat du paiement ne peut pas être vérifié. Réessayez avec le même montant.": "The payment outcome could not be verified. Try again with the same amount.",
+  "Acte complété. Aucun paiement n’a été effectué par Nota.": "Act completed. No payment was made through Nota.",
+  "Le paiement du client est reçu, mais le virement au notaire doit être repris. Réessayez avec le même montant.": "The client's payment was received, but the transfer to the notary needs to be retried. Try again with the same amount.",
   "Marquer complété": "Mark completed",
   "Action impossible (hors ligne).": "Action unavailable (offline).",
   "Session expirée. Reconnectez-vous.": "Session expired. Sign in again.",
@@ -986,6 +989,12 @@
   "Vos revenus": "Your earnings",
   "Paiements": "Payments",
     "Vos signatures dans votre agenda": "Your signings in your calendar",
+  "S’abonner avec un lien": "Subscribe with a link",
+  "Lien d’abonnement": "Subscription link",
+  "Télécharger .ics": "Download .ics",
+  "Dans Outlook professionnel, ajoutez un calendrier à partir du Web et collez ce lien. Dans Apple, choisissez un abonnement à un calendrier.": "In work Outlook, add a calendar from the web and paste this link. In Apple, choose a calendar subscription.",
+  "L’abonnement se met à jour au rythme de votre application. Un fichier .ics téléchargé est une copie ponctuelle. Ouvrez le lien dans un événement pour consulter la demande et la retenir dans Nota.": "The subscription updates on your calendar app’s schedule. A downloaded .ics file is a one-time copy. Open the link in an event to view and retain the request in Nota.",
+  "Vos signatures se mettent à jour au rythme de votre application. Un fichier .ics téléchargé est une copie ponctuelle. Ouvrez le lien dans un événement pour retrouver le dossier dans Nota.": "Your signings update on your calendar app’s schedule. A downloaded .ics file is a one-time copy. Open the link in an event to return to the file in Nota.",
   "Vos dossiers retenus, à jour automatiquement (webcal).": "Your taken files, automatically up to date (webcal).",
   "Ouvertes en ce moment": "Open right now",
   "Vous gardez la main.": "You stay in control.",
@@ -1909,9 +1918,9 @@
     "replacement": "The message cannot exceed $1 characters."
   },
   {
-    "pattern": "^Code appliqué : ([A-Z0-9]{4,12})$",
+    "pattern": "^Code enregistré : ([A-Z0-9]{4,12})$",
     "flags": "",
-    "replacement": "Code applied: $1"
+    "replacement": "Code saved: $1"
   },
   {
     "pattern": "^(\\d+) demandes? publiées? ce mois-ci · (\\d+) retenues?$",

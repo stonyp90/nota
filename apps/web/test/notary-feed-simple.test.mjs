@@ -246,3 +246,42 @@ test('the notary agenda sync row carries the same branded buttons as the carnet 
     assert.ok(a.querySelector('svg.brand-ic'), id + ' carries its brand icon');
   }
 });
+
+// Provider links and the manual subscription must resolve to exactly the same
+// live feed. A saved file is explicitly labelled as a download, not a sync.
+test('Outlook, Apple and manual subscriptions share the public and private feeds', async () => {
+  const { doc, win, Nota } = await bootSignedIn();
+  const copied = [];
+  Object.defineProperty(win.navigator, 'clipboard', { value: { writeText: async text => { copied.push(text); } }, configurable: true });
+  for (const prefix of ['sub', 'notary']) {
+    const input = $(doc, prefix + '-subscription-url');
+    const outlook = new URL($(doc, prefix + '-outlook').href);
+    assert.equal(outlook.searchParams.get('url'), input.value);
+    assert.equal($(doc, prefix + '-apple').href, input.value.replace(/^https?:/, 'webcal:'));
+    assert.equal(input.readOnly, true);
+    assert.doesNotMatch(input.value, /sess\.tok/);
+    if (prefix === 'notary') assert.equal(new URL(input.value).searchParams.get('token'), 'feed.tok');
+    else assert.equal(new URL(input.value).search, '');
+    click($(doc, prefix + '-subscription-copy'));
+    await wait(5);
+    assert.equal(copied.at(-1), input.value);
+    assert.match($(doc, prefix === 'sub' ? 'sub-ics' : 'notary-webcal').textContent, /Télécharger/);
+  }
+  Nota.notary.signOut();
+  assert.equal($(doc, 'notary-subscription-url').value, '');
+  assert.equal($(doc, 'notary-subscription-copy').disabled, true);
+  for (const suffix of ['outlook', 'apple', 'google', 'webcal']) {
+    assert.equal($(doc, 'notary-' + suffix).hasAttribute('href'), false, 'no previous private feed remains after sign-out');
+  }
+  assert.ok($(doc, 'sub-subscription-url').value, 'public subscription remains available');
+});
+
+test('manual subscription remains selectable when clipboard access is denied', async () => {
+  const { doc, win } = await boot();
+  Object.defineProperty(win.navigator, 'clipboard', { value: { writeText: async () => { throw new Error('denied'); } }, configurable: true });
+  click($(doc, 'sub-subscription-copy'));
+  await wait(5);
+  assert.equal(doc.activeElement, $(doc, 'sub-subscription-url'));
+  assert.match(doc.body.textContent, /Copie impossible/);
+  assert.equal($(doc, 'sub-subscription-copy').textContent, 'Copier le lien');
+});

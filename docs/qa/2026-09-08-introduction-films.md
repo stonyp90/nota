@@ -43,3 +43,13 @@ The final motion pass adds animated calendar, acceptance and message icons; card
 The release was assembled from `7d5e037` in an isolated checkout, containing only this introduction work and its tests. Unrelated local calendar, billing and referral edits were excluded. On this exact release candidate: domain/API tests passed (API: 1,512); Web: 776; admin: 221; BDD: 186 scenarios; focused introduction/translation/accessibility: 36; production build and JavaScript syntax checks passed. The built HTML/CSS/JS were previewed separately from the development tree, including six viewport measurements for client English and notary French, with no overflow.
 
 Deployment uses the existing GitHub Actions production workflow, including its browser-journey and Terraform gates, rather than a direct asset upload. Final workflow outcome and production asset verification are recorded after the run.
+
+### Deployment outcome — 2026-09-08
+
+Commit `3da82c30bd7a5864c32e89e59ae62a67cb1ed05d` was pushed to main and deployed successfully through [production run 34219784756](https://github.com/stonyp90/nota/actions/runs/34219784756). All application, browser-journey, Terraform and AWS delivery jobs succeeded.
+
+HTTPS checks against `https://gonota.ca/` matched the release build byte-for-byte for index.html, all four fingerprinted assets and sw.js. HTML and sw.js return `no-cache`; fingerprinted assets return immutable caching. `/api/health` returned HTTP 200 and `ok: true`.
+
+Published assets: `app.7892bd5f44.js`, `styles.559e56d272.css`, `domain.049e376519.js`, `i18n.0e2ad6af2f.js`. Browser verification on the public domain confirmed the French client film, playback pause and English notary film; the latter completed and opened the notary pane. The public preview was returned to French.
+
+Local main was synchronized to the deployed commit while verifying that existing working-file bytes were preserved. This deployment outcome paragraph is a local QA record added after deployment; the production feature itself is in the commit above.

@@ -53,7 +53,7 @@ module.exports = defineConfig({
       // A test-only wrapper around the same demo stack, with the notary/partner
       // rate limits raised so the shared-IP suite never trips the 429 throttle.
       command: `node e2e/servers/api-server.js`,
-      env: { NOTA_DEMO_OPEN: 'true', PORT: String(API_PORT), NODE_ENV: 'test' },
+      env: { NOTA_DEMO_OPEN: 'true', NOTA_SITE_URL: WEB_BASE, PORT: String(API_PORT), NODE_ENV: 'test' },
       url: `${API_BASE}/health`,
       reuseExistingServer: !process.env.CI,
       timeout: 30_000,

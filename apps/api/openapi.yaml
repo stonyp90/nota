@@ -24,6 +24,71 @@ servers:
 # New recipients retain this language for notifications. Anonymous requests never
 # overwrite a saved preference; verified sign-in and preference updates can.
 paths:
+  /notary/calendar/outlook:
+    get:
+      summary: Read the authenticated notary's Outlook connection status
+      security:
+        - notarySession: []
+      responses:
+        '200':
+          description: Configuration and connection state; never credentials
+        '401':
+          description: Missing or invalid notary session
+        '503':
+          description: Calendar storage unavailable
+    delete:
+      summary: Disconnect Outlook and invalidate pending authorization
+      security:
+        - notarySession: []
+      responses:
+        '200':
+          description: Stored credentials removed
+        '401':
+          description: Missing or invalid notary session
+        '409':
+          description: Concurrent connection change; retry
+        '503':
+          description: Calendar service unavailable or unconfigured
+  /notary/calendar/outlook/connect:
+    post:
+      summary: Begin browser-bound Outlook authorization with PKCE
+      security:
+        - notarySession: []
+      responses:
+        '200':
+          description: Microsoft authorization URL and secure HttpOnly binding cookie
+        '401':
+          description: Missing or invalid notary session
+        '409':
+          description: Concurrent connection change; retry
+        '503':
+          description: Calendar service unavailable or unconfigured
+  /calendar/outlook/callback:
+    get:
+      summary: Consume single-use Outlook authorization state and store encrypted credentials
+      parameters:
+        - in: query
+          name: state
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: code
+          schema:
+            type: string
+        - in: query
+          name: error
+          schema:
+            type: string
+      responses:
+        '303':
+          description: Connection saved; redirect to the notary console
+        '400':
+          description: Invalid, expired, replayed or browser-mismatched state, or denied consent
+        '409':
+          description: Connection changed during authorization
+        '503':
+          description: Missing configuration, permission or unavailable provider
   /notary/feed.ics:
     get:
       summary: Subscribe to the authenticated notary's retained signings
@@ -33,6 +98,8 @@ paths:
         status using a strongly consistent read. Stale, missing, cancelled and
         reassigned records are omitted. A storage outage returns 503 rather
         than a successful empty calendar. External client refresh intervals apply.
+        When the public site URL is configured, URL and DESCRIPTION link directly
+        to the corresponding file in Nota; notary authentication is required.
       parameters:
         - in: query
           name: token
@@ -60,6 +127,9 @@ paths:
         Read-only bilingual ICS export of live, non-cancelled offers in the
         forward calendar window. Contains only the public projection and does
         not accept changes made in external calendar applications.
+        When the public site URL is configured, URL and bilingual DESCRIPTION
+        link directly to each request in the notary console. Retaining requires
+        notary authentication and explicit confirmation in Nota.
       responses:
         '200':
           description: Public iCalendar subscription.
@@ -1892,6 +1962,16 @@ paths:
             Domain errors: `montant_invalide`, `montant_hors_bornes` (value far
             outside the retained offer), or a billing refusal
             (`compte_incomplet`, `paiement_echoue`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: >-
+            The client payment was captured but the transfer failed
+            (`virement_en_attente`), or its outcome could not be verified
+            (`paiement_a_verifier`). Retry with the same act value; the act
+            remains unsettled and Stripe idempotency prevents another debit.
           content:
             application/json:
               schema:

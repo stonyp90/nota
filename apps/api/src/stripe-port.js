@@ -331,24 +331,63 @@ function createStripeAdapter({ secretKey, webhookSecret, stripe: injected } = {}
       // abandonne une partie de ses honoraires ») and art. 32 C.déont. Stripe
       // releases the remainder of the authorization on its own.
       // What Nota keeps is its price, and only ever its price.
-      const captured = await stripe.paymentIntents.capture(
-        paymentIntentId,
-        { amount_to_capture: amountCents },
-        bidId ? { idempotencyKey: `capture:${bidId}` } : undefined
-      );
+      let captured;
+      try {
+        captured = await stripe.paymentIntents.capture(
+          paymentIntentId,
+          { amount_to_capture: amountCents },
+          bidId ? { idempotencyKey: `capture:${bidId}` } : undefined
+        );
+      } catch (err) {
+        // A later retry may outlive Stripe's idempotency cache, or the capture
+        // response may have been lost. Read back the money before calling it
+        // unpaid. A different amount requires reconciliation, never a transfer
+        // calculated from the new input.
+        let current;
+        try { current = await stripe.paymentIntents.retrieve(paymentIntentId); } catch {
+          // An unreadable result is not proof that no money moved.
+          err.settlementUncertain = true;
+          throw err;
+        }
+        if (current && current.status === 'succeeded') {
+          if (current.amount_received !== amountCents) {
+            err.captured = true;
+            throw err;
+          }
+          captured = current;
+        } else {
+          if (!current || current.status === 'processing') err.settlementUncertain = true;
+          throw err;
+        }
+      }
+      // A capture can still be processing. Do not transfer or declare an
+      // unpaid completion until Stripe supplies a definitive result.
+      if (captured && captured.status === 'processing') {
+        throw Object.assign(new Error('Capture still processing'), { settlementUncertain: true });
+      }
       const chargeId = captured && (typeof captured.latest_charge === 'string' ? captured.latest_charge : captured.latest_charge && captured.latest_charge.id);
       const netCents = amountCents - applicationFeeCents;
-      const transfer = await stripe.transfers.create(
-        {
-          amount: netCents,
-          currency: currency || 'cad',
-          destination: connectAccountId,
-          source_transaction: chargeId || undefined,
-          transfer_group: bidId ? `bid:${bidId}` : undefined,
-          metadata: { bidId: bidId || '' },
-        },
-        bidId ? { idempotencyKey: `transfer:${bidId}` } : undefined
-      );
+      let transfer;
+      try {
+        transfer = await stripe.transfers.create(
+          {
+            amount: netCents,
+            currency: currency || 'cad',
+            destination: connectAccountId,
+            source_transaction: chargeId || undefined,
+            transfer_group: bidId ? `bid:${bidId}` : undefined,
+            metadata: { bidId: bidId || '' },
+          },
+          bidId ? { idempotencyKey: `transfer:${bidId}` } : undefined
+        );
+      } catch (err) {
+        // The client HAS paid. Preserve this boundary so the caller never
+        // closes the act as unpaid when only the notary transfer needs retry.
+        err.captured = true;
+        err.chargeId = chargeId || null;
+        err.paymentIntentId = paymentIntentId;
+        throw err;
+      }
       return { paymentIntentId, chargeId: chargeId || null, transferId: transfer.id, applicationFeeCents, netCents };
     },
 

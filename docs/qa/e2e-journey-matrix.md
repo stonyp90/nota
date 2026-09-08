@@ -11,8 +11,9 @@ Stripe adapter fakes and never contact Stripe.
 | Server revalidation: bad amount/date/tier/anonymity/private fields | `apps/api/test/handler.test.mjs` | covered |
 | Notary passwordless sign-in and magic-link replay protection | `e2e/notary-signin.spec.js`, `apps/api/test/notary-auth.test.mjs` | covered |
 | Open-demand feed and agenda calendar | `e2e/notary-signin.spec.js`, `apps/web/test/notary-cote.test.mjs` | covered |
-| Notary retains a demand and receives the client contact handoff | `apps/api/test/propositions.test.mjs`, `features/preteurs.feature` | covered in API/BDD; no dedicated browser retention assertion |
-| Client/notary retained-act chat, read receipts, scope isolation | `apps/web/test/messaging-receipts.test.mjs`, `apps/api/test/support.test.mjs`, `features/preteurs.feature` | covered |
+| Notary retains a demand and receives the client contact handoff | `e2e/calendar-retention.spec.js`, `apps/api/test/propositions.test.mjs`, `features/preteurs.feature` | browser + API/BDD |
+| Calendar entry → notary counter-offer → client acceptance at changed price | `e2e/calendar-retention.spec.js`, `apps/api/test/propositions.test.mjs` | browser + API/BDD |
+| Client/notary retained-act chat, read receipts, scope isolation | `e2e/calendar-retention.spec.js`, `apps/web/test/messaging-receipts.test.mjs`, `apps/api/test/support.test.mjs`, `features/preteurs.feature` | browser conversation + API/BDD isolation |
 | Assistant answers known questions and escalates unknown questions | `features/messagerie_assistee.feature`, `apps/api/test/support-assistant.test.mjs` | covered |
 | Client cancellation before retention | `e2e/client-cancel.spec.js`, `features/annulation.feature` | covered |
 | Client cancellation after retention, free window | `apps/web/test/cancel-contact.test.mjs`, `features/annulation.feature` | covered |
@@ -54,7 +55,8 @@ npm run test:e2e
 ```
 
 The suite currently executes the customer booking, customer cancellation,
-notary sign-in, responsive, partner and console-error journeys. The retention,
-live conversation, and payment/cancellation branches have deterministic API/BDD
-coverage. They do not yet have dedicated full browser journeys; this is a
-coverage boundary, not a requirement for additional approval.
+notary sign-in, responsive, partner and console-error journeys. The calendar-retention journey also publishes through the browser, follows the
+ICS link in a separate notary browser, confirms retention, checks the client
+and private/public calendars, and checks removal after cancellation. This
+uses the real local handler over memory storage, dev authentication and fake
+billing. External provider ingestion and live payments remain unverified.

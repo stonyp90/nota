@@ -30,6 +30,7 @@ const { notaryNotifSubject, clientNotifSubject, bidTtl } = require('./keys');
 const MAX_BODY_BYTES = 64 * 1024;
 
 function createApp(repo, opts = {}) {
+  const outlook = opts.outlook || require('./outlook').createOutlook({ repo });
   // "Today" is the Québec civil day (domain.BUSINESS_TIMEZONE), not the UTC
   // day: on Lambda (UTC) a plain toISOString() rolls to tomorrow every evening
   // after ~20:00 in Québec and wrongly 422s a same-day booking as date_passee.
@@ -1566,6 +1567,32 @@ function createApp(repo, opts = {}) {
       return json(413, { errors: [{ code: 'corps_trop_grand', message: 'Le corps de la requête est trop volumineux.' }] });
     }
 
+    if (route.startsWith('/notary/calendar/outlook') || route === '/calendar/outlook/callback') {
+      const cookie = 'nota_outlook_binding';
+      const cookieFlags = '; Path=/api/calendar/outlook/callback; HttpOnly; Secure; SameSite=Lax';
+      try {
+        if (route === '/calendar/outlook/callback' && method === 'GET') {
+          const binding = String(request.headers?.cookie || '').split(';').map(s => s.trim()).find(s => s.startsWith(cookie + '='))?.slice(cookie.length + 1);
+          await outlook.finish(query, binding);
+          return { statusCode: 303, headers: { location: '/#t=notaires', 'cache-control': 'no-store', 'referrer-policy': 'no-referrer', 'set-cookie': cookie + '=; Max-Age=0' + cookieFlags }, body: '' };
+        }
+        const owner = requireScope(bearer(request), SCOPES.SESSION);
+        if (!owner) return json(401, { errors: [{ code: 'non_autorise' }] });
+        if (route === '/notary/calendar/outlook' && method === 'GET') return json(200, await outlook.status(owner));
+        if (route === '/notary/calendar/outlook/connect' && method === 'POST') {
+          const { url, binding } = await outlook.start(owner);
+          const response = json(200, { url });
+          response.headers['set-cookie'] = cookie + '=' + binding + '; Max-Age=600' + cookieFlags;
+          return response;
+        }
+        if (route === '/notary/calendar/outlook' && method === 'DELETE') return json(200, await outlook.disconnect(owner));
+        return json(404, { errors: [{ code: 'introuvable' }] });
+      } catch (error) {
+        const code = /^calendar_(unconfigured|conflict|invalid_state|provider_error|missing_scope|consent_denied)$/.test(error.code || '') ? error.code : 'calendar_unavailable';
+        return json(code === 'calendar_invalid_state' || code === 'calendar_consent_denied' ? 400 : code === 'calendar_conflict' ? 409 : 503, { errors: [{ code }] });
+      }
+    }
+
     // The public API never serves the admin surface — that lives on its own
     // Lambda (admin-handler.js) behind admin.nota.ca. Refuse /admin/* here so
     // this internet-facing function can never be coaxed into admin behaviour.
@@ -2599,6 +2626,10 @@ function createApp(repo, opts = {}) {
           tierId: bid.tier, devisFige,
         });
       }
+      // A captured payment must never enter the unpaid completion fallback.
+      // Leave the ledger open: the same Stripe capture/transfer keys let the
+      // notary retry the original settlement after the transfer outage.
+      if (result && !result.ok && (result.captured || result.retryable)) return json(503, { errors: result.errors });
       if (!result || !result.ok) {
         // No capturable hold, or the capture failed (lapsed past Stripe's
         // ~7-day window, declined): the act still settles on the commission

@@ -607,7 +607,7 @@ test('P2-19: the logomark is drawn once as a <symbol>; every inline copy is a <u
   const doc = dom.window.document;
   assert.equal(doc.querySelectorAll('symbol#nota-logomark').length, 1, 'one symbol');
   const marks = doc.querySelectorAll('svg.ig-mark');
-  assert.ok(marks.length >= 3, 'the chooser and both finales');
+  assert.ok(marks.length >= 1, 'the introduction renders the shared mark');
   for (const m of marks) {
     assert.ok(m.querySelector('use[href="#nota-logomark"]'), 'a mark is a <use>');
     assert.equal(m.querySelector('rect, polygon, circle'), null, 'no shapes inlined again');

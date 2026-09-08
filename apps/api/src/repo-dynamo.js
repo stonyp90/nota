@@ -316,6 +316,23 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
   }
 
   return {
+    async getCalendar(owner) {
+      const out = await doc.send(new GetCommand({ TableName: tableName, Key: { PK: `CALENDAR#${owner}`, SK: 'OUTLOOK' }, ConsistentRead: true }));
+      if (!out.Item) return null;
+      const { PK, SK, ...value } = out.Item;
+      return value;
+    },
+    async compareAndSetCalendar(owner, revision, value) {
+      try {
+        await doc.send(new PutCommand({ TableName: tableName, Item: { ...value, PK: `CALENDAR#${owner}`, SK: 'OUTLOOK' },
+          ConditionExpression: revision ? '#revision = :revision' : 'attribute_not_exists(PK)',
+          ...(revision ? { ExpressionAttributeNames: { '#revision': 'revision' }, ExpressionAttributeValues: { ':revision': revision } } : {}) }));
+        return true;
+      } catch (error) {
+        if (error.name === 'ConditionalCheckFailedException') return false;
+        throw error;
+      }
+    },
     async listByMonth(month) {
       // A month partition can exceed DynamoDB's 1MB page, so follow
       // LastEvaluatedKey to exhaustion — same contract as listOpenBids and the

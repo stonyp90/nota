@@ -41,6 +41,7 @@ const prixNotaConfig = require('./prix-nota-config');
  * repo-dynamo.js — the handler cannot tell them apart.
  */
 function createMemoryRepo(seed = []) {
+  const calendarConnections = new Map();
   const byId = new Map();
   for (const b of seed) byId.set(b.id, b);
 
@@ -198,6 +199,12 @@ const clientChallenges = new Map(); // challengeId -> record (lien magique clien
   const rateCounters = new Map(); // `${scope}#${key}#${windowStart}` -> count
 
   return {
+    async getCalendar(owner) { return structuredClone(calendarConnections.get(owner) || null); },
+    async compareAndSetCalendar(owner, revision, value) {
+      if ((calendarConnections.get(owner)?.revision || null) !== revision) return false;
+      calendarConnections.set(owner, structuredClone(value));
+      return true;
+    },
     async listByMonth(month) {
       return [...byId.values()]
         .filter((b) => monthOf(b.dateISO) === month)

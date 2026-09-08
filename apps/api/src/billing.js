@@ -640,6 +640,12 @@ function createBilling({
         bidId, notaryId,
       });
     } catch (err) {
+      if (err && err.settlementUncertain) {
+        return { ok: false, retryable: true, errors: [{ code: 'paiement_a_verifier', message: 'Le résultat du paiement ne peut pas être vérifié. Réessayez avec le même montant.' }] };
+      }
+      if (err && err.captured) {
+        return { ok: false, captured: true, errors: [{ code: 'virement_en_attente', message: 'Le paiement du client est reçu, mais le virement au notaire doit être repris. Réessayez avec le même montant.' }] };
+      }
       return { ok: false, errors: [{ code: 'paiement_echoue', message: 'Le paiement du client n’a pas pu être capturé. L’acte vous reste confié; Nota fera le suivi du paiement.' }] };
     }
 

@@ -6,6 +6,7 @@
 const KEYS = new Set([
   'NOTA_NOTARY_SECRET', 'NOTA_ADMIN_SECRET', 'NOTA_ADMIN_PASSWORD_HASH',
   'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'ANTHROPIC_API_KEY',
+  'NOTA_OUTLOOK_CLIENT_SECRET', 'NOTA_CALENDAR_ENCRYPTION_KEY',
 ]);
 
 function createRuntimeSecrets({ env = process.env, read, now = Date.now, ttlMs = 300000 } = {}) {

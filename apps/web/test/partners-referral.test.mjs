@@ -3,7 +3,7 @@
  * (ADR 0010 §4), pinned end to end on the web side:
  *
  *   1. ?ref=CODE capture — normalized once, stored privately, URL cleaned,
- *      never displayed; attached as `parrain` on POST /bids AND on the notary
+ *      visible to the referring visitor; attached as `parrain` on POST /bids AND on the notary
  *      signup POST /notaries/signup.
  *   2. The Partenaires pane — reward amounts ALWAYS from the domain
  *      (D.REFERRAL), partner-type chips from D.REFERRAL.partners, the claim
@@ -90,15 +90,17 @@ function fire(win, elmt, type) {
 // 1. ?ref=CODE capture
 // ---------------------------------------------------------------------------
 
-test('?ref=CODE is captured normalized, the URL is cleaned, nothing is displayed', async () => {
+test('?ref=CODE is captured normalized, the URL is cleaned and a private indicator appears', async () => {
   // A code that no static copy uses as an example, so the display check is
   // meaningful ("EVEROY" is the claim form's own illustration text).
   const { win, doc, D } = await boot({ url: '?ref=zz-top-9' });
   assert.ok(D.isReferralCode('zz-top-9'), 'the fixture code is a valid domain code');
   assert.equal(win.localStorage.getItem('nota.ref.v1'), 'ZZTOP9', 'stored normalized');
   assert.equal(win.location.search, '', 'the param never lingers in the address bar');
-  // Private means private: the code appears nowhere in the rendered page.
-  assert.ok(!doc.body.textContent.includes('ZZTOP9'), 'the code is never displayed');
+  assert.equal($(doc, 'referral-status').hidden, false);
+  assert.equal($(doc, 'referral-status-label').textContent, 'Code enregistré : ZZTOP9');
+  assert.equal($(doc, 'o-parrain').value, 'ZZTOP9');
+  assert.equal($(doc, 'o-parrain-preview').dataset.state, 'ok');
 });
 
 test('an invalid ?ref is ignored but still cleaned from the URL', async () => {
@@ -634,7 +636,9 @@ test('the page reads hero → story beside the form', async () => {
   assert.deepEqual(bands.map((e) => e.classList[0]), ['pr-hero', 'pr-grid'],
     'two regions in reading order');
   const grid = bands[1];
-  assert.ok(grid.firstElementChild.classList.contains('pr-pitch'),
+  assert.equal(grid.firstElementChild.id, 'partner-success', 'confirmed sharing precedes the signup');
+  assert.equal(grid.firstElementChild.hidden, true, 'no empty success row before confirmation');
+  assert.ok([...grid.children].filter((child) => !child.hidden)[0].classList.contains('pr-pitch'),
     'the story leads the grid in DOM order');
   assert.ok(grid.querySelector('.pr-pitch .pr-steps'), 'the timeline opens the story column');
   assert.ok(grid.lastElementChild.classList.contains('pr-form-panel'),
@@ -1014,4 +1018,44 @@ test('a returning partner sees their own profession lit in the hero', async () =
   const on = doc.querySelector('#pr-audience .pr-aud[aria-pressed="true"]');
   assert.ok(on && on.dataset.type === 'courtier_hypothecaire');
   assert.equal($(doc, 'pr-moment').textContent, D.REFERRAL.partners[1].moment);
+});
+
+
+test('the referral field is visible at conversion without opening privacy options', async () => {
+  const { doc } = await boot();
+  const field = $(doc, 'o-parrain');
+  assert.equal(field.closest('details'), null);
+  assert.equal(field.closest('[data-screen]').dataset.screen, '4');
+  assert.equal($(doc, 'referral-status').hidden, true, 'no indicator without a code');
+});
+
+test('a typed referral persists before submission and survives navigation and a new visit', async () => {
+  const { doc, win, Nota } = await boot();
+  const field = $(doc, 'o-parrain');
+  field.value = ' eve roy '; fire(win, field, 'input');
+  assert.equal(win.localStorage.getItem('nota.ref.v1'), 'EVEROY');
+  assert.equal($(doc, 'nc-signup-parrain').value, ' eve roy ');
+  Nota.setTab('partenaires');
+  assert.equal($(doc, 'referral-status').hidden, false);
+  const next = await boot({ seed: { 'nota.ref.v1': win.localStorage.getItem('nota.ref.v1') } });
+  assert.equal($(next.doc, 'o-parrain').value, 'EVEROY');
+  assert.equal($(next.doc, 'referral-status-label').textContent, 'Code enregistré : EVEROY');
+});
+
+test('removing or replacing a code clears stale attribution from both conversion forms', async () => {
+  const { doc, win } = await boot({ url: '?ref=EVEROY' });
+  const signup = $(doc, 'nc-signup-parrain');
+  signup.value = ' marc qc '; fire(win, signup, 'input');
+  assert.equal($(doc, 'o-parrain').value, ' marc qc ');
+  assert.equal(win.localStorage.getItem('nota.ref.v1'), 'MARCQC');
+  assert.equal($(doc, 'referral-status-label').textContent, 'Code enregistré : MARCQC');
+  const field = $(doc, 'o-parrain');
+  field.value = 'x!'; fire(win, field, 'input');
+  assert.equal(win.localStorage.getItem('nota.ref.v1'), null);
+  assert.equal($(doc, 'referral-status').hidden, true);
+  assert.equal($(doc, 'o-parrain-preview').dataset.state, 'warn');
+  field.value = ''; fire(win, field, 'input');
+  assert.equal(signup.value, '');
+  assert.equal($(doc, 'o-parrain-preview').textContent, '');
+  assert.equal(win.localStorage.getItem('nota.ref.v1'), null);
 });

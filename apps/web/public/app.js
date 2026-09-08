@@ -7461,7 +7461,9 @@
     // ledger's original figure, never the retried one.
     ncRetainedUpdate(nc.email, id, { completed: true, actAmount: j.actAmount != null ? j.actAmount : amt, commissionCents: j.commissionCents || 0 });
     ncRenderRetained();
-    toast('Acte complété. Vos honoraires : ' + D.money(j.honorairesCents != null ? j.honorairesCents / 100 : (j.actAmount != null ? j.actAmount : amt)) + ', virés en entier.');
+    toast(j.paid === true
+      ? 'Acte complété. Vos honoraires : ' + D.money(j.honorairesCents != null ? j.honorairesCents / 100 : (j.actAmount != null ? j.actAmount : amt)) + ', virés en entier.'
+      : 'Acte complété. Aucun paiement n’a été effectué par Nota.');
   }
 
   // Build the webcal:// subscription URL from the API base. A relative '/api'
@@ -7476,13 +7478,31 @@
   // in sync) into a Google / Outlook / Apple calendar; .ics covers the rest.
   function wireCarnetSubscribe() {
     var http = apiBaseAbs() + '/carnet/feed.ics';
-    var webcal = toWebcal(http);
-    var name = T('Nota — carnet Québec');
-    function set(id, href) { var a = $(id); if (a) a.href = href; }
-    set('sub-ics', http);
-    set('sub-apple', webcal);
-    set('sub-google', 'https://calendar.google.com/calendar/render?cid=' + encodeURIComponent(webcal));
-    set('sub-outlook', 'https://outlook.live.com/calendar/0/addfromweb?url=' + encodeURIComponent(http) + '&name=' + encodeURIComponent(name));
+    setCalendarSubscription('sub', http, T('Nota — carnet Québec'));
+  }
+
+  // The same subscription URL powers every provider and the manual fallback.
+  // Clear all private links when the session/feed token is no longer available.
+  function setCalendarSubscription(prefix, http, name) {
+    var links = {};
+    links[prefix === 'sub' ? 'sub-ics' : 'notary-webcal'] = http;
+    links[prefix + '-apple'] = http ? toWebcal(http) : '';
+    links[prefix + '-google'] = http ? 'https://calendar.google.com/calendar/render?cid=' + encodeURIComponent(toWebcal(http)) : '';
+    links[prefix + '-outlook'] = http ? 'https://outlook.live.com/calendar/0/addfromweb?url=' + encodeURIComponent(http) + '&name=' + encodeURIComponent(name) : '';
+    Object.keys(links).forEach(function (id) {
+      var a = $(id); if (!a) return;
+      if (links[id]) a.href = links[id]; else a.removeAttribute('href');
+    });
+    var input = $(prefix + '-subscription-url'), copy = $(prefix + '-subscription-copy');
+    if (input) { input.value = http || ''; input.disabled = !http; }
+    if (copy) {
+      copy.disabled = !http;
+      copy.onclick = function () {
+        if (!input || !input.value) return;
+        input.focus(); input.select();
+        copyLinkText(input.value, function () { flashCopied(copy); });
+      };
+    }
   }
 
   function ncSetErrors(msgs) {
@@ -8457,6 +8477,9 @@
   }
 
   function ncRenderAuthState() {
+    setCalendarSubscription('notary', nc.token && nc.feedToken
+      ? apiBaseAbs() + '/notary/feed.ics?token=' + encodeURIComponent(nc.feedToken) : '', T('Nota — signatures retenues'));
+
     var authed = !!nc.token;
     // A signed-in notary's app IS the console: the body class lets the chrome
     // drop the client doors (Carnet, Partenaires) so nothing competes with
@@ -8472,21 +8495,6 @@
       // only — the console itself opens straight on the agenda.
       ncRenderPrefs(); // alert preferences for this notary
       ncRenderProfilBanner(); // the contact gate, said over the feed (ADR 0033)
-      // The webcal URL carries ONLY the read-only feed token, never the session
-      // token — a leaked calendar URL must not authorize accept/dossier.
-      // Full sync options for the notary's retained-signings feed (like the
-      // public carnet card): Google / Outlook / Apple / iCal, all from the
-      // read-only FEED token.
-      if (nc.feedToken) {
-        var http = apiBaseAbs() + '/notary/feed.ics?token=' + encodeURIComponent(nc.feedToken);
-        var webcal = toWebcal(http);
-        var name = T('Nota — signatures retenues');
-        var set = function (id, href) { var a = $(id); if (a) a.href = href; };
-        set('notary-webcal', http);
-        set('notary-apple', webcal);
-        set('notary-google', 'https://calendar.google.com/calendar/render?cid=' + encodeURIComponent(webcal));
-        set('notary-outlook', 'https://outlook.live.com/calendar/0/addfromweb?url=' + encodeURIComponent(http) + '&name=' + encodeURIComponent(name));
-      }
       ncRenderRetained();
     }
   }
@@ -11267,7 +11275,9 @@
     $('o-courriel').addEventListener('input', validateOfferUI);
     $('o-name').addEventListener('input', validateOfferUI);
     $('o-telephone').addEventListener('input', onTelephoneInput);
-    var refField = $('o-parrain'); if (refField) refField.addEventListener('input', onRefCodeInput);
+    ['o-parrain', 'nc-signup-parrain'].forEach(function (id) {
+      var refField = $(id); if (refField) refField.addEventListener('input', onRefCodeInput);
+    });
     $('offer-form').addEventListener('submit', onOfferSubmit);
     $('o-date').setAttribute('min', todayISO());
     // The first touch of the form — a typed value, a changed select, an
@@ -11604,7 +11614,7 @@
   // A partner (courtier immobilier, courtier hypothécaire) shares ?ref=CODE.
   // Capture it once, normalized, on this device; onOfferSubmit attaches it
   // PRIVATELY as `parrain` when the client posts their demand. The code is
-  // never displayed anywhere, and the param is stripped from the URL right
+  // shown only to this visitor, and the param is stripped from the URL right
   // after capture (same replaceState pattern as ?paiement below) so later
   // navigation and shares never carry it.
   var LS_REF = 'nota.ref.v1';
@@ -11632,17 +11642,34 @@
     var inp = $('o-parrain');
     var code = referralCode();
     if (inp && code && !inp.value) inp.value = code;
+    onRefCodeInput();
   }
   // Soft validation only: a recognizable code confirms normalized, anything
   // else warns without ever disabling the CTA — a bad referral code must
   // never cost a booking.
-  function onRefCodeInput() {
-    var inp = $('o-parrain'), prev = $('o-parrain-preview');
-    if (!inp || !prev) return;
+  function renderReferralStatus() {
+    var box = $('referral-status'), label = $('referral-status-label');
+    var code = referralCode();
+    if (box) box.hidden = !code;
+    if (label) label.textContent = code ? 'Code enregistré : ' + code : '';
+  }
+  function onRefCodeInput(event) {
+    var inp = event && event.currentTarget ? event.currentTarget : $('o-parrain');
+    var prev = $('o-parrain-preview');
+    if (!inp) return;
     var raw = inp.value.trim();
+    var code = D.isReferralCode(raw) ? D.normalizeReferralCode(raw) : null;
+    // Persist immediately, before conversion, and keep both conversion forms
+    // consistent. Clearing/replacing a code must not resurrect an older value.
+    if (code) flagSet(LS_REF, code); else flagClear(LS_REF);
+    ['o-parrain', 'nc-signup-parrain'].forEach(function (id) {
+      var field = $(id); if (field && field !== inp) field.value = inp.value;
+    });
+    renderReferralStatus();
+    if (!prev) return;
     clear(prev);
     if (!raw) { prev.removeAttribute('data-state'); return; }
-    if (D.isReferralCode(raw)) { prev.dataset.state = 'ok'; prev.textContent = 'Code appliqué : ' + D.normalizeReferralCode(raw); }
+    if (code) { prev.dataset.state = 'ok'; prev.textContent = 'Code enregistré : ' + code; }
     else { prev.dataset.state = 'warn'; prev.textContent = 'Code non reconnu — vérifiez-le avec la personne qui vous a référé. Votre offre part quand même.'; }
   }
 
@@ -11973,6 +12000,8 @@
       return { ok: false };
     }
     partnerClaimConfirmed(j.partenaire || {}, hint || {});
+    var confirmedPanel = $('partner-success');
+    if (confirmedPanel) confirmedPanel.focus();
     return { ok: true };
   }
 

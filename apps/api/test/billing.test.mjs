@@ -797,3 +797,32 @@ test('une reprise garde le montant du registre même si le prix a changé entre 
   assert.equal(again.alreadyCompleted, true);
   assert.equal(again.commissionCents, PRIX);
 });
+
+for (const failure of ['captured', 'settlementUncertain']) {
+test(`${failure} never closes as unpaid; retry settles once`, async () => {
+  const { repo, stripe, app } = setup();
+  const { auth, notaryId } = await activeSession(app, stripe, 'transfer@notaire.ca', repo);
+  await repo.put({
+    id: 'transfer_retry', dateISO: '2026-08-20', serviceId: 'refinancement', montant: 2400,
+    status: 'retenue', notaryId, paymentStatus: 'authorized', paymentIntentId: 'pi_paid', courriel: 'client@x.ca',
+  });
+  const capture = stripe.captureAndTransfer;
+  stripe.captureAndTransfer = async () => { throw Object.assign(new Error('sensitive-provider-detail'), { [failure]: true, chargeId: 'ch_paid' }); };
+  const request = { method: 'POST', path: '/notary/acts/complete', headers: auth,
+    body: JSON.stringify({ bidId: 'transfer_retry', dateISO: '2026-08-20', actAmount: 2400 }) };
+  const failed = await app.handle(request);
+  assert.equal(failed.statusCode, 503);
+  assert.equal(parse(failed).errors[0].code, failure === 'captured' ? 'virement_en_attente' : 'paiement_a_verifier');
+  assert.doesNotMatch(failed.body, /sensitive-provider-detail/);
+  assert.equal(await repo.getActCompletion('transfer_retry'), null, 'no irreversible unpaid fallback');
+  assert.equal((await repo.getNotary(notaryId)).commissionCentsCollected || 0, 0);
+  stripe.captureAndTransfer = capture;
+  const retry = await app.handle(request);
+  assert.equal(retry.statusCode, 200, retry.body);
+  assert.ok((await repo.getActCompletion('transfer_retry')).transferId);
+  const duplicate = await app.handle(request);
+  assert.equal(duplicate.statusCode, 200);
+  assert.equal(stripe.calls.transfers.length, 1, 'a settled act never pays twice');
+});
+
+}

@@ -91,7 +91,7 @@ function urlLine(base, suffixe) {
 }
 
 function buildNotaryFeed(events = [], stamp, baseUrl) {
-  const lien = urlLine(origine(baseUrl), '#notaires');
+  const base = origine(baseUrl);
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
@@ -119,6 +119,8 @@ function buildNotaryFeed(events = [], stamp, baseUrl) {
     }
     if (e.clientNom) desc.push('Client : ' + e.clientNom);
     if (e.prefixe) desc.push('Réf. : ' + e.prefixe);
+    const lien = urlLine(base, '#notaires&acte=' + encodeURIComponent(e.id));
+    if (lien.length) desc.push('Ouvrir ce dossier dans Nota / Open this file in Nota: ' + lien[0].slice(4));
     lines.push(
       'BEGIN:VEVENT',
       'UID:' + e.id + '@nota',
@@ -142,7 +144,7 @@ function buildNotaryFeed(events = [], stamp, baseUrl) {
 // — id, dateISO, serviceId, montant — so this can never leak courriel/dossier.
 // French SUMMARY, English DESCRIPTION, same event either way.
 function buildCarnetFeed(bids = [], stamp, baseUrl) {
-  const lien = urlLine(origine(baseUrl), '');
+  const base = origine(baseUrl);
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
@@ -155,6 +157,9 @@ function buildCarnetFeed(bids = [], stamp, baseUrl) {
     const svc = domain.serviceById(b.serviceId);
     const name = svc ? svc.nom : b.serviceId;
     const nameEn = svc ? svc.nomEn : b.serviceId;
+    const lien = urlLine(base, '#notaires&acte=' + encodeURIComponent(b.id));
+    const desc = [nameEn + ' — ' + domain.moneyEn(b.montant)];
+    if (lien.length) desc.push('Ouvrir dans Nota pour retenir cette demande / Open in Nota to retain this request: ' + lien[0].slice(4));
     lines.push(
       'BEGIN:VEVENT',
       'UID:' + b.id + '@nota',
@@ -162,7 +167,7 @@ function buildCarnetFeed(bids = [], stamp, baseUrl) {
       'DTSTART;VALUE=DATE:' + compact(b.dateISO),
       'DTEND;VALUE=DATE:' + compact(domain.addDays(b.dateISO, 1)),
       'SUMMARY:' + escText(name + ' — ' + domain.money(b.montant)),
-      'DESCRIPTION:' + escText(nameEn + ' — ' + domain.moneyEn(b.montant)),
+      'DESCRIPTION:' + escText(desc.join('\n')),
       ...lien,
       'END:VEVENT'
     );

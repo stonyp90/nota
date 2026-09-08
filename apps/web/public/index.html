@@ -453,6 +453,9 @@
         </button>
       </div>
     </header>
+    <div class="wrap referral-status" id="referral-status" role="status" hidden>
+      <span class="pill" id="referral-status-label"></span>
+    </div>
 
     <!-- Mobile navigation drawer (phones only): the hamburger's panel. Carries
          the tabs, the auth pair, the theme switch and the legal links that the
@@ -741,8 +744,18 @@
                   <a class="btn btn-sm sub-btn" id="sub-google" target="_blank" rel="noopener"><svg class="brand-ic" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="var(--logo-google-blue)" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.8z"/><path fill="var(--logo-google-green)" d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1A12 12 0 0 0 12 24z"/><path fill="var(--logo-google-yellow)" d="M5.3 14.3a7.2 7.2 0 0 1 0-4.6V6.6H1.3a12 12 0 0 0 0 10.8l4-3.1z"/><path fill="var(--logo-google-red)" d="M12 4.8c1.8 0 3.3.6 4.6 1.8l3.4-3.4A12 12 0 0 0 12 0 12 12 0 0 0 1.3 6.6l4 3.1C6.2 6.9 8.9 4.8 12 4.8z"/></svg>Google</a>
                   <a class="btn btn-sm sub-btn" id="sub-outlook" target="_blank" rel="noopener"><svg class="brand-ic" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="var(--logo-outlook-blue)" d="M2 6.2 9 4.9v14.2L2 17.8z"/><path fill="var(--logo-on-brand)" d="M5.5 9.2c-1 0-1.7.9-1.7 2.3s.7 2.3 1.7 2.3 1.7-.9 1.7-2.3-.7-2.3-1.7-2.3zm0 1c.4 0 .7.5.7 1.3s-.3 1.3-.7 1.3-.7-.5-.7-1.3.3-1.3.7-1.3z"/><rect x="9.5" y="5.5" width="12.5" height="13" rx="1.5" fill="var(--logo-outlook-blue)"/><path fill="var(--logo-on-brand)" d="M15.7 8.6a3 3 0 1 0 0 6 3 3 0 0 0 0-6zm0 1.6a1.4 1.4 0 1 1 0 2.8 1.4 1.4 0 0 1 0-2.8z"/></svg>Outlook</a>
                   <a class="btn btn-sm sub-btn" id="sub-apple"><svg class="brand-ic" viewBox="0 0 384 512" width="13" height="13" aria-hidden="true" fill="currentColor"><path d="M318.7 268c-.3-36 16.4-63 50-83-18.8-27-47-42-84-45-35-3-73 20-87 20s-52-19-79-19c-56 1-114 43-114 130 0 26 5 53 15 81 13 37 60 128 109 126 26-1 44-19 78-19s50 18 78 18c50-1 92-83 105-120-67-32-64-93-64-95zM256 84c17-20 15-49 14-59-14 1-40 9-56 29-14 17-19 43-16 58 16 1 41-8 58-28z"/></svg>Apple</a>
-                  <a class="btn btn-sm sub-btn" id="sub-ics" download="nota-carnet.ics"><svg class="brand-ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>iCal</a>
+                  <a class="btn btn-sm sub-btn" id="sub-ics" download="nota-carnet.ics"><svg class="brand-ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Télécharger .ics</a>
                 </div>
+                <details class="help">
+                  <summary>S’abonner avec un lien</summary>
+                  <p>Dans Outlook professionnel, ajoutez un calendrier à partir du Web et collez ce lien. Dans Apple, choisissez un abonnement à un calendrier.</p>
+                  <div class="calendar-subscription-field">
+                  <label for="sub-subscription-url">Lien d’abonnement</label>
+                  <input id="sub-subscription-url" type="text" readonly spellcheck="false" />
+                  <button id="sub-subscription-copy" class="btn btn-sm" type="button">Copier le lien</button>
+                  </div>
+                </details>
+                <p class="help">L’abonnement se met à jour au rythme de votre application. Un fichier .ics téléchargé est une copie ponctuelle. Ouvrez le lien dans un événement pour consulter la demande et la retenir dans Nota.</p>
               </div>
           </aside>
 
@@ -1042,9 +1055,18 @@
                   <a class="btn btn-sm sub-btn" id="notary-google" target="_blank" rel="noopener"><svg class="brand-ic" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="var(--logo-google-blue)" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.8z"/><path fill="var(--logo-google-green)" d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1A12 12 0 0 0 12 24z"/><path fill="var(--logo-google-yellow)" d="M5.3 14.3a7.2 7.2 0 0 1 0-4.6V6.6H1.3a12 12 0 0 0 0 10.8l4-3.1z"/><path fill="var(--logo-google-red)" d="M12 4.8c1.8 0 3.3.6 4.6 1.8l3.4-3.4A12 12 0 0 0 12 0 12 12 0 0 0 1.3 6.6l4 3.1C6.2 6.9 8.9 4.8 12 4.8z"/></svg>Google</a>
                   <a class="btn btn-sm sub-btn" id="notary-outlook" target="_blank" rel="noopener"><svg class="brand-ic" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="var(--logo-outlook-blue)" d="M2 6.2 9 4.9v14.2L2 17.8z"/><path fill="var(--logo-on-brand)" d="M5.5 9.2c-1 0-1.7.9-1.7 2.3s.7 2.3 1.7 2.3 1.7-.9 1.7-2.3-.7-2.3-1.7-2.3zm0 1c.4 0 .7.5.7 1.3s-.3 1.3-.7 1.3-.7-.5-.7-1.3.3-1.3.7-1.3z"/><rect x="9.5" y="5.5" width="12.5" height="13" rx="1.5" fill="var(--logo-outlook-blue)"/><path fill="var(--logo-on-brand)" d="M15.7 8.6a3 3 0 1 0 0 6 3 3 0 0 0 0-6zm0 1.6a1.4 1.4 0 1 1 0 2.8 1.4 1.4 0 0 1 0-2.8z"/></svg>Outlook</a>
                   <a class="btn btn-sm sub-btn" id="notary-apple"><svg class="brand-ic" viewBox="0 0 384 512" width="13" height="13" aria-hidden="true" fill="currentColor"><path d="M318.7 268c-.3-36 16.4-63 50-83-18.8-27-47-42-84-45-35-3-73 20-87 20s-52-19-79-19c-56 1-114 43-114 130 0 26 5 53 15 81 13 37 60 128 109 126 26-1 44-19 78-19s50 18 78 18c50-1 92-83 105-120-67-32-64-93-64-95zM256 84c17-20 15-49 14-59-14 1-40 9-56 29-14 17-19 43-16 58 16 1 41-8 58-28z"/></svg>Apple</a>
-                  <a class="btn btn-sm sub-btn" id="notary-webcal" download="nota-signatures.ics"><svg class="brand-ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>iCal</a>
+                  <a class="btn btn-sm sub-btn" id="notary-webcal" download="nota-signatures.ics"><svg class="brand-ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Télécharger .ics</a>
                 </div>
-                <p class="help">Vos dossiers retenus, à jour automatiquement (webcal).</p>
+                <details class="help">
+                  <summary>S’abonner avec un lien</summary>
+                  <p>Dans Outlook professionnel, ajoutez un calendrier à partir du Web et collez ce lien. Dans Apple, choisissez un abonnement à un calendrier.</p>
+                  <div class="calendar-subscription-field">
+                  <label for="notary-subscription-url">Lien d’abonnement</label>
+                  <input id="notary-subscription-url" type="text" readonly spellcheck="false" />
+                  <button id="notary-subscription-copy" class="btn btn-sm" type="button">Copier le lien</button>
+                  </div>
+                </details>
+                <p class="help">Vos signatures se mettent à jour au rythme de votre application. Un fichier .ics téléchargé est une copie ponctuelle. Ouvrez le lien dans un événement pour retrouver le dossier dans Nota.</p>
               </div>
             </div>
           </div>
@@ -1182,6 +1204,32 @@
                sticky, no CSS order swaps: phones read exactly as this markup
                is written — story first, the hero CTA jumping to the form. -->
           <div class="pr-grid">
+                <!-- aria-live: the link is revealed asynchronously (verify
+                     round-trip, or the #pauth boot with no user gesture). -->
+                <div id="partner-success" class="partner-success partner-share-panel" hidden aria-live="polite" tabindex="-1">
+                  <div class="partner-share-link">
+                  <p class="help"><strong>Code réclamé.</strong> Partagez ce lien — chaque demande publiée par lui vous est attribuée :</p>
+                  <div class="partner-link-row">
+                    <code id="partner-link" data-i18n-skip></code>
+                    <button type="button" class="btn btn-sm" id="partner-copy">Copier le lien</button>
+                    <!-- Revealed by partnerClaimConfirmed() only where the
+                         platform has a share sheet (navigator.share). -->
+                    <button type="button" class="btn btn-sm" id="partner-share" hidden>Partager</button>
+                  </div>
+                  <!-- The ready-to-send message (2026-09-03): a claimed code
+                       only pays when a client actually arrives — these are
+                       the words to send them. Client-facing, so it names no
+                       reward (disclosure is the partner's own duty), only what
+                       the client gets. Filled by partnerClaimConfirmed() with
+                       the partner's link. -->
+                  </div>
+                  <div class="partner-msg">
+                    <p class="help"><strong>Un message prêt à envoyer</strong> à votre client, tel quel :</p>
+                    <p class="partner-msg-text" id="partner-msg" data-i18n-skip></p>
+                    <button type="button" class="btn btn-sm" id="partner-msg-copy">Copier le message</button>
+                  </div>
+                </div>
+
             <div class="pr-pitch">
               <section class="pr-steps-band">
                 <h2 class="h-sub pr-how-title">Comment ça marche</h2>
@@ -1302,29 +1350,6 @@
                        typo'd courriel — and editing a field is exactly what
                        re-arms the form, so the recovery line says so. -->
                   <p class="help">Rien reçu ? Vérifiez vos indésirables — ou corrigez votre courriel et soumettez à nouveau.</p>
-                </div>
-                <!-- aria-live: the link is revealed asynchronously (verify
-                     round-trip, or the #pauth boot with no user gesture). -->
-                <div id="partner-success" class="partner-success" hidden aria-live="polite">
-                  <p class="help"><strong>Code réclamé.</strong> Partagez ce lien — chaque demande publiée par lui vous est attribuée :</p>
-                  <div class="partner-link-row">
-                    <code id="partner-link" data-i18n-skip></code>
-                    <button type="button" class="btn btn-sm" id="partner-copy">Copier le lien</button>
-                    <!-- Revealed by partnerClaimConfirmed() only where the
-                         platform has a share sheet (navigator.share). -->
-                    <button type="button" class="btn btn-sm" id="partner-share" hidden>Partager</button>
-                  </div>
-                  <!-- The ready-to-send message (2026-09-03): a claimed code
-                       only pays when a client actually arrives — these are
-                       the words to send them. Client-facing, so it names no
-                       reward (disclosure is the partner's own duty), only what
-                       the client gets. Filled by partnerClaimConfirmed() with
-                       the partner's link. -->
-                  <div class="partner-msg">
-                    <p class="help"><strong>Un message prêt à envoyer</strong> à votre client, tel quel :</p>
-                    <p class="partner-msg-text" id="partner-msg" data-i18n-skip></p>
-                    <button type="button" class="btn btn-sm" id="partner-msg-copy">Copier le message</button>
-                  </div>
                 </div>
               </form>
             </div>
@@ -1724,6 +1749,17 @@
         </div>
         <ul class="errors" id="offer-errors" role="alert" aria-atomic="true" tabindex="-1" data-screen="4" hidden></ul>
         <p class="offer-hint" id="offer-hint" aria-live="polite" data-screen="4" hidden></p>
+        <!-- Referral code (ADR 0011): the one entry point for a spoken
+             referral — pre-filled when the client arrived by a partner's
+             ?ref link, typed by hand otherwise. Soft validation only: a
+             bad code never blocks a booking. Private, never public. -->
+        <div class="form-row book-referral" data-screen="4">
+          <label class="lbl" for="o-parrain">Code de référence (optionnel)</label>
+          <input type="text" id="o-parrain" class="uppercase" maxlength="20" spellcheck="false"
+                 autocomplete="off" autocapitalize="characters" aria-describedby="o-parrain-help" />
+          <p class="help" id="o-parrain-help">Un professionnel vous a référé ? Entrez son code. Privé, et sans effet sur votre prix.</p>
+          <p class="prefix-preview" id="o-parrain-preview" aria-live="polite"></p>
+        </div>
         <div class="book-nav">
           <button type="button" class="btn btn-sm book-back" id="book-back">Retour</button>
           <button type="button" class="btn btn-primary btn-lg book-fwd" id="book-next">Continuer</button>
@@ -1753,17 +1789,6 @@
                 <span>Créer mon compte avec ce courriel</span>
               </label>
               <p class="help">Facultatif, sans mot de passe. Pour retrouver vos offres et suivre les réponses.</p>
-            </div>
-            <!-- Referral code (ADR 0011): the one entry point for a spoken
-                 referral — pre-filled when the client arrived by a partner's
-                 ?ref link, typed by hand otherwise. Soft validation only: a
-                 bad code never blocks a booking. Private, never public. -->
-            <div class="form-row">
-              <label class="lbl" for="o-parrain">Code de référence (optionnel)</label>
-              <input type="text" id="o-parrain" class="uppercase" maxlength="20" spellcheck="false"
-                     autocomplete="off" autocapitalize="characters" aria-describedby="o-parrain-help" />
-              <p class="help" id="o-parrain-help">Un professionnel vous a référé ? Entrez son code. Privé, et sans effet sur votre prix.</p>
-              <p class="prefix-preview" id="o-parrain-preview" aria-live="polite"></p>
             </div>
             <p id="offer-dossier-note" class="help">Les réponses de votre <strong>Dossier</strong> accompagnent l’offre. Les documents ne sont partagés qu’après qu’un notaire a retenu votre demande.</p>
           </div>

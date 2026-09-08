@@ -1,5 +1,43 @@
 # Calendar readiness — 2026-09-08
 
+## Outlook connection implementation update
+
+The owner registered `Nota Calendar` in Microsoft tenant
+`7a915511-d3f5-454c-a915-bff2f9d3aa05`, client ID
+`93d6c709-8e5d-4814-9d7e-1a4cd320fed6`. The registration supports
+Microsoft 365 and personal Microsoft accounts. Requested delegated permissions
+are `Calendars.ReadWrite`, `offline_access`, and `openid`. No tenant-wide consent
+or application permission was granted. The registered web redirect is
+`https://gonota.ca/api/calendar/outlook/callback`.
+
+The working tree now includes a disabled-by-default notary OAuth connection
+port and HTTP endpoints. It uses PKCE S256, encrypted expiring state, an HttpOnly
+Secure SameSite=Lax browser-binding cookie, single-use conditional state
+consumption, owner-bound AES-256-GCM refresh-token encryption, and conditional
+writes preventing callback/disconnect races. Dynamo reads are strongly
+consistent. Provider errors and tokens are never returned to the browser.
+Disconnect removes stored credentials and invalidates pending authorization.
+
+Enable only once the application and production secret storage are ready:
+- `NOTA_OUTLOOK_CLIENT_ID`: the public client ID above.
+- `NOTA_OUTLOOK_REDIRECT_URI`: the exact callback above.
+- `NOTA_OUTLOOK_CLIENT_SECRET`: server secret, stored in the runtime secret bundle.
+- `NOTA_CALENDAR_ENCRYPTION_KEY`: random 32-byte key represented by 64 hex
+  characters, stored in the runtime secret bundle. Preserve this key while any
+  connection is stored; rotation requires migration or reconnection.
+
+No client secret has been created. AWS SSO profile `aws-prod` still lacks a
+session. The connection endpoints are not deployed, and there is deliberately
+no customer-facing sync button yet. This is a connection foundation, not a
+calendar synchronization release: refresh/reconciliation workers, automatic
+moves and actor-correct cancellations, stable booking identities, user-visible
+connection controls, Google OAuth clients, and provider acceptance tests remain.
+The original audit below describes those remaining requirements.
+
+Validation: 10 focused Outlook tests plus 25 existing contract tests passed.
+These use provider stubs, not live Microsoft calendars. No real calendar event
+was created, modified or deleted.
+
 ## Outcome
 
 **Production bidirectional Google Calendar / Outlook synchronization is not operational or verified.** The repository currently implements ICS subscriptions and one-time calendar links. There are no provider OAuth connections, refresh-token storage, inbound change processing, or calendar reconciliation workers. Exported events cannot write changes back to Nota.

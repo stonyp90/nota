@@ -54,6 +54,7 @@ const demoBilling = createBilling({
 });
 
 const app = createApp(repo, {
+  siteUrl: process.env.NOTA_SITE_URL,
   billing: demoBilling,
   billingConfigured: false,
   // Same LOCAL-date clock as the fixtures above and the web client's

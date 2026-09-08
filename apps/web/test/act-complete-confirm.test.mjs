@@ -65,7 +65,7 @@ const RETAINED = {
   completed: false, actAmount: null, commissionCents: null,
 };
 
-function stubNotaryApi(win, { retained, completions }) {
+function stubNotaryApi(win, { retained, completions, completionResponse, completionStatus = 200 }) {
   win.fetch = (url, init = {}) => {
     const path = String(url);
     const json = (body, status = 200) => Promise.resolve({ ok: status < 400, status, json: () => Promise.resolve(body) });
@@ -73,7 +73,7 @@ function stubNotaryApi(win, { retained, completions }) {
     if (path.includes('/notary/session/verify')) return json({ token: 'sess.tok', feedToken: 'feed.tok', email: 'demo@etude.ca' });
     if (path.includes('/notary/acts/complete')) {
       completions.push(JSON.parse(init.body));
-      return json({ ok: true, actAmount: 4600, commissionCents: 46000 });
+      return json(completionResponse || { ok: true, actAmount: 4600, commissionCents: 46000 }, completionStatus);
     }
     if (path.includes('/notary/bids')) return json({ bids: [], retained, rating: null, profil: { lienCNQ: null }, commission: null });
     return Promise.reject(new Error('offline'));
@@ -92,7 +92,7 @@ async function bootRetained(entry = RETAINED) {
 }
 
 test('the settlement is two-step: arm reads the value back, Annuler disarms, confirm posts once', async () => {
-  const { card, completions } = await bootRetained();
+  const { card, completions, doc } = await bootRetained();
   const btn = card.querySelector('.nc-complete-btn');
   assert.ok(btn, 'a pending act offers the settlement button');
 
@@ -117,6 +117,8 @@ test('the settlement is two-step: arm reads the value back, Annuler disarms, con
   assert.equal(completions[0].actAmount, 4600);
   const done = card.ownerDocument.querySelector(`#notary-retained-list .nc-card[data-id="${RETAINED.id}"] .nc-done-badge`);
   assert.ok(done, 'the card renders « Acte complété »');
+  assert.match(doc.querySelector('#toast').textContent, /Aucun paiement/);
+  assert.doesNotMatch(doc.querySelector('#toast').textContent, /virés/);
 });
 
 test('a value far outside the retained offer never arms — the domain bound speaks first', async () => {
@@ -148,4 +150,28 @@ test('a server-completed act renders settled in a fresh session — the button i
   assert.equal(card.querySelector('.nc-complete-btn'), null, 'no settlement button on a settled act');
   assert.ok(card.querySelector('.nc-done-badge'), '« Acte complété » renders from the server state');
   assert.match(card.querySelector('.nc-done-fee').textContent, /4[  ]600[  ]\$/, 'the settled value renders');
+});
+
+for (const code of ['virement_en_attente', 'paiement_a_verifier']) {
+  test(`${code}: the notary sees the payment issue and can retry without a completed badge`, async () => {
+    const { win, doc, card, completions } = await bootRetained();
+    const message = 'Le paiement doit être vérifié.';
+    stubNotaryApi(win, { retained: [RETAINED], completions, completionStatus: 503,
+      completionResponse: { errors: [{ code, message }] } });
+    const btn = card.querySelector('.nc-complete-btn');
+    click(btn); click(btn); await wait(10);
+    assert.equal(completions.length, 1);
+    assert.equal(btn.disabled, false);
+    assert.equal(doc.querySelector('.nc-done-badge'), null);
+    assert.equal(doc.querySelector('#toast').textContent, message);
+  });
+}
+
+test('a confirmed Stripe payment may announce that the fees were transferred', async () => {
+  const { win, doc, card, completions } = await bootRetained();
+  stubNotaryApi(win, { retained: [RETAINED], completions,
+    completionResponse: { ok: true, paid: true, actAmount: 4600, commissionCents: 46000 } });
+  const btn = card.querySelector('.nc-complete-btn');
+  click(btn); click(btn); await wait(10);
+  assert.match(doc.querySelector('#toast').textContent, /virés en entier/);
 });
