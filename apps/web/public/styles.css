@@ -5397,3 +5397,88 @@ body.ig-open { overflow: hidden; }
 .analytics-consent[hidden] { display: none; }
 .analytics-consent p { margin: 0 0 12px; font-size: 14px; line-height: 1.5; }
 .analytics-consent button, #analytics-preferences:not(.footer-link) { font: inherit; cursor: pointer; padding: 8px 12px; border: 1px solid #64756b; border-radius: var(--radius-sm); background: #fff; color: #182422; margin-right: 8px; }
+
+/* ==========================================================================
+   LA SALLE DE SIGNATURE — ADR 0047
+
+   Plein écran, et volontairement sombre : une cérémonie n'est pas une page du
+   site. Ce qui doit rester lisible à distance d'un écran — la chaîne
+   d'authentification, l'état des quatre portes, le texte de conduite — l'est
+   avant tout le reste. Le bandeau bêta est au-dessus de tout et ne se cache
+   jamais.
+   ========================================================================== */
+.salle { position: fixed; inset: 0; z-index: 11000; display: flex; flex-direction: column; background: var(--hunter-950); color: #f6f9f7; }
+.salle[hidden] { display: none; }
+/* Le fond de la page ne défile plus derrière la salle. */
+body.salle-ouverte { overflow: hidden; }
+
+/* Le bandeau. Aucune règle ne le masque, aucun rendu ne le touche. */
+.salle-beta { margin: 0; padding: 10px 16px; text-align: center; font-size: 13px; line-height: 1.45; background: var(--warn); color: #1b1300; }
+.salle-beta strong { font-weight: 700; }
+
+.salle-scene { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 380px; min-height: 0; }
+
+.salle-videos { position: relative; min-height: 0; background: #000; }
+.salle-video { display: block; width: 100%; height: 100%; object-fit: cover; background: #000; }
+.salle-video-distant { width: 100%; height: 100%; }
+/* La vignette locale : assez grande pour se vérifier, assez petite pour ne pas
+   voler l'attention de la personne d'en face. */
+.salle-video-local { position: absolute; right: 16px; bottom: 16px; width: 22%; min-width: 140px; max-width: 260px; height: auto; aspect-ratio: 4 / 3; border: 1px solid var(--border-strong); border-radius: var(--radius); box-shadow: var(--shadow-lg); }
+
+.salle-rail { display: flex; flex-direction: column; gap: 14px; padding: 18px; overflow-y: auto; background: var(--hunter-900); border-left: 1px solid var(--hunter-800); }
+.salle-bloc { padding: 14px; background: rgb(255 255 255 / 0.04); border: 1px solid var(--hunter-800); border-radius: var(--radius); }
+.salle-etape-nom { margin: 0 0 8px; font-size: 18px; line-height: 1.3; }
+.salle-etape-conduite { margin: 0 0 8px; font-size: 15px; line-height: 1.5; }
+.salle-etape-constat { margin: 0; font-size: 13px; line-height: 1.45; color: var(--hunter-300); }
+
+/* La chaîne d'authentification. C'est la ligne qu'on lit à voix haute : elle a
+   droit à la plus grosse typographie de l'écran, en chasse fixe pour que S et 5
+   ne se confondent pas. */
+.salle-bloc-sas { text-align: center; }
+.salle-sas-titre { margin: 0 0 6px; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--hunter-300); }
+.salle-sas { margin: 0; font-family: ui-monospace, "SFMono-Regular", "Menlo", "Consolas", monospace; font-size: 34px; font-weight: 700; letter-spacing: 0.12em; }
+.salle-sas.is-confirme { color: var(--hunter-400); }
+.salle-sas-aide { margin: 6px 0 0; font-size: 12px; line-height: 1.4; color: var(--hunter-300); }
+
+.salle-portes-titre { margin: 0 0 8px; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--hunter-300); }
+.salle-portes { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.salle-porte { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 4px 8px; font-size: 14px; line-height: 1.4; }
+.salle-porte-marque { color: var(--warn); font-weight: 700; }
+.salle-porte.is-ouverte .salle-porte-marque { color: var(--hunter-400); }
+.salle-porte-nom { font-weight: 600; }
+/* Une porte fermée DIT pourquoi. Le motif s'aligne sous le nom, pas sous la
+   marque : c'est une phrase, pas une puce. */
+.salle-porte-motif { grid-column: 2; margin: 0; font-size: 13px; line-height: 1.4; color: var(--hunter-200); }
+
+.salle-statut { display: flex; flex-direction: column; gap: 8px; }
+.salle-statut-ligne { margin: 0; font-size: 13px; line-height: 1.45; color: var(--hunter-200); }
+.salle-statut-ligne.is-alerte { padding: 10px; background: rgb(180 35 24 / 0.18); border: 1px solid var(--danger); border-radius: var(--radius-sm); color: #ffe4e1; }
+.salle-statut-ligne.is-enregistre { color: var(--warn); font-weight: 600; }
+.salle-empreinte { display: block; overflow-wrap: anywhere; font-family: ui-monospace, "SFMono-Regular", "Menlo", "Consolas", monospace; font-size: 11px; line-height: 1.5; color: var(--hunter-300); }
+
+.salle-refus { display: flex; flex-direction: column; gap: 6px; padding: 10px; background: rgb(180 35 24 / 0.18); border: 1px solid var(--danger); border-radius: var(--radius-sm); }
+.salle-refus[hidden] { display: none; }
+.salle-refus-ligne { margin: 0; font-size: 13px; line-height: 1.45; color: #ffe4e1; }
+
+.salle-actions { display: flex; flex-direction: column; gap: 8px; }
+.salle-btn { font: inherit; font-size: 14px; font-weight: 600; padding: 11px 14px; cursor: pointer; text-align: left; color: #f6f9f7; background: rgb(255 255 255 / 0.06); border: 1px solid var(--hunter-700); border-radius: var(--radius-sm); }
+.salle-btn:hover:not(:disabled) { background: rgb(255 255 255 / 0.12); }
+.salle-btn.is-primaire { background: var(--hunter-600); border-color: var(--hunter-500); }
+.salle-btn.is-primaire:hover:not(:disabled) { background: var(--hunter-500); }
+.salle-btn.is-discret { background: transparent; font-weight: 500; }
+.salle-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.salle-quitter { margin-top: auto; }
+
+/* Sur un téléphone la vidéo passe au-dessus et le rail dessous : le notaire
+   conduit rarement depuis un téléphone, le client souvent. */
+@media (max-width: 860px) {
+  .salle-scene { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(180px, 40vh) minmax(0, 1fr); }
+  .salle-rail { border-left: 0; border-top: 1px solid var(--hunter-800); }
+  .salle-sas { font-size: 28px; }
+}
+
+/* L'annonce, dans le carnet et dans l'espace notaire. */
+/* Coins carrés comme tout le reste : la marque a tranché contre l'arrondi, et
+   une pastille en pilule ferait une exception que rien ne justifie ici. */
+.salle-annonce-pastille { display: inline-block; margin: 0 0 8px; padding: 3px 10px; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--brand-ink); background: var(--brand); border-radius: var(--radius-xs); }
+.salle-annonce-actions { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 8px; }

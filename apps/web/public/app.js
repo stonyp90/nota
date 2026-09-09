@@ -10934,9 +10934,80 @@
   // ---------------------------------------------------------------------------
   // Wiring
   // ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // LA SALLE DE SIGNATURE — les deux portes d'entrée (ADR 0047)
+  //
+  // La salle vit dans son propre module (public/salle.js) : WebRTC, la
+  // signalisation et le rendu de la cérémonie n'ont rien à faire ici. app.js ne
+  // garde que ce qu'il est seul à savoir — QUEL acte, et avec QUEL jeton.
+  //
+  // Une séance s'ouvre sur un acte RETENU, jamais sur une offre ouverte : sans
+  // notaire engagé il n'y a pas de cérémonie à conduire, et le domaine refuse
+  // de toute façon. Quand il n'y en a pas, le bouton EXPLIQUE au lieu d'ouvrir
+  // une salle vide.
+  // ---------------------------------------------------------------------------
+  function salleDispo() { return !!(window.NotaSalle && typeof window.NotaSalle.ouvrir === 'function'); }
+
+  function salleNote(id, texte) {
+    var n = $(id);
+    if (!n) return;
+    n.textContent = T(texte);
+    n.hidden = !texte;
+  }
+
+  // L'acte retenu du client, celui dont la signature approche en premier.
+  function salleActeClient() {
+    var today = todayISO();
+    return myOffers()
+      .filter(function (o) {
+        return o && o.id && o.dateISO && o.clientToken && o.retained && !o.cancelled
+          && D.daysBetween(today, o.dateISO) >= 0;
+      })
+      .sort(function (a, b) { return a.dateISO.localeCompare(b.dateISO); })[0] || null;
+  }
+
+  function salleActeNotaire() {
+    var today = todayISO();
+    return ncRetainedFor(nc.email)
+      .filter(function (e) { return e && e.id && e.dateISO && D.daysBetween(today, e.dateISO) >= 0; })
+      .sort(function (a, b) { return String(a.dateISO).localeCompare(String(b.dateISO)); })[0] || null;
+  }
+
+  function salleOuvrirClient() {
+    if (!salleDispo()) return salleNote('salle-annonce-note', 'La salle de signature n’est pas disponible dans ce navigateur.');
+    var acte = salleActeClient();
+    if (!acte) {
+      return salleNote('salle-annonce-note',
+        'La salle s’ouvre sur un acte qu’un notaire a retenu. Publiez votre demande et attendez qu’un notaire la prenne — vous recevrez alors l’invitation à la séance.');
+    }
+    salleNote('salle-annonce-note', '');
+    window.NotaSalle.ouvrir({ id: acte.id, dateISO: acte.dateISO, partie: 'client', token: acte.clientToken });
+  }
+
+  function salleOuvrirNotaire() {
+    if (!salleDispo()) return salleNote('salle-notaire-note', 'La salle de signature n’est pas disponible dans ce navigateur.');
+    if (!nc.token) return salleNote('salle-notaire-note', 'Connectez-vous à votre espace notaire pour ouvrir une séance.');
+    var acte = salleActeNotaire();
+    if (!acte) {
+      return salleNote('salle-notaire-note',
+        'La salle s’ouvre sur un acte que vous avez retenu. Retenez une demande du carnet, puis revenez ici.');
+    }
+    salleNote('salle-notaire-note', '');
+    window.NotaSalle.ouvrir({ id: acte.id, dateISO: acte.dateISO, partie: 'notaire', token: nc.token });
+  }
+
+  function wireSalle() {
+    var client = $('salle-annonce-ouvrir');
+    if (client) client.addEventListener('click', salleOuvrirClient);
+    var notaire = $('salle-notaire-ouvrir');
+    if (notaire) notaire.addEventListener('click', salleOuvrirNotaire);
+    if (salleDispo() && typeof window.NotaSalle.boot === 'function') window.NotaSalle.boot();
+  }
+
   function wire() {
     // Les sections écrites en dur reçoivent leur glyphe une fois pour toutes.
     paintStaticSectionIcons();
+    wireSalle();
     // Tabs
     document.querySelectorAll('.nav-tab').forEach(function (b) {
       b.addEventListener('click', function () { setTab(this.dataset.tab); });
@@ -12869,6 +12940,15 @@
   // script scope are lexical globals invisible on window — this is the one way in.
   window.Nota = {
     state: state,
+    // La salle de signature vit dans son propre module et n'a pas de raison de
+    // redécouvrir où est l'API : elle lit celle-ci (ADR 0047).
+    API_BASE: API_BASE,
+    salle: {
+      ouvrirClient: salleOuvrirClient,
+      ouvrirNotaire: salleOuvrirNotaire,
+      acteClient: salleActeClient,
+      acteNotaire: salleActeNotaire,
+    },
     // Quel interrupteur de la carte « Notifications » gouverne un genre du
     // serveur. Une seule table, lue par le code et par les tests.
     notifPrefKey: notifPrefKey,

@@ -276,3 +276,39 @@ variable "email_language" {
     error_message = "email_language must be fr, en, or bilingual."
   }
 }
+
+# --- La salle de signature (ADR 0047) ----------------------------------------
+# Trois variables, et une seule décision derrière elles : Nota ne provisionne
+# pas de relais aujourd'hui. Les défauts font donc marcher la salle sur la
+# majorité des réseaux domestiques (STUN seul) et échouer proprement, avec une
+# cause nommée, sur les autres. Poser `turn_urls` + `turn_secret` suffit à la
+# faire marcher partout — le code mint alors des identifiants horodatés.
+
+variable "stun_urls" {
+  description = "Serveurs STUN offerts à la salle de signature. Ils ne relaient aucun média : ils disent seulement à un navigateur quelle est son adresse publique. Ces URL entrent AUSSI dans connect-src de la CSP — Chrome y applique la politique, et un serveur absent de la liste est une connexion qui échoue sans message."
+  type        = list(string)
+  default     = ["stun:stun.l.google.com:19302"]
+}
+
+variable "turn_urls" {
+  description = "Relais TURN pour les réseaux à NAT symétrique, où aucune connexion directe n'est possible. Vide = pas de relais : la salle échoue alors sur ces réseaux-là, proprement et en le disant. Le relais VOIT passer le média chiffré mais ne peut pas le déchiffrer (DTLS-SRTP est de bout en bout)."
+  type        = list(string)
+  default     = []
+}
+
+variable "turn_secret" {
+  description = "Le secret partagé qui signe les identifiants TURN horodatés (forme REST de coturn : l'utilisateur EST l'expiration, le mot de passe son HMAC). JAMAIS un mot de passe statique — celui-là vivrait dans le JavaScript de la page. Vide = aucun identifiant n'est émis, même si turn_urls est posé."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "signature_fournisseur" {
+  description = "Le fournisseur de signature admis par la Chambre des notaires (ADR 0047 §6). « demonstration » est le seul adaptateur écrit : il ne produit aucune minute et le dit dans chaque écran. Nommer un fournisseur non implémenté fait ÉCHOUER la salle plutôt que retomber en silence sur une signature sans valeur juridique."
+  type        = string
+  default     = "demonstration"
+  validation {
+    condition     = contains(["demonstration", "consigno"], var.signature_fournisseur)
+    error_message = "signature_fournisseur must be demonstration or consigno."
+  }
+}

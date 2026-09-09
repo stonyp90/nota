@@ -280,6 +280,29 @@ resource "aws_lambda_function" "api" {
       # sans seau n'est pas cassé, il est simplement plus étroit.
       NOTA_DOCS_BUCKET     = aws_s3_bucket.documents.bucket
       NOTA_DOCS_KMS_KEY_ID = aws_kms_key.documents.arn
+
+      # ADR 0047 — la salle de signature. Les relais que la Lambda distribue au
+      # navigateur sont EXACTEMENT ceux que la CSP autorise : les deux lisent
+      # var.stun_urls et var.turn_urls (voir local.csp_ice_sources dans
+      # cloudfront.tf). Nommer un relais ici sans l'y nommer donnerait une
+      # connexion qui échoue en silence, sans erreur de console et sans indice.
+      #
+      # NOTA_TURN_SECRET est le secret PARTAGÉ avec coturn (`static-auth-secret`) :
+      # il ne quitte jamais la Lambda. Ce qui part vers la page est un
+      # identifiant horodaté d'une heure, et son HMAC — un vol ne donne donc
+      # qu'une heure de relais, jamais le droit d'en fabriquer d'autres.
+      # Vide des deux côtés = pas de relais du tout : STUN seul, ce qui suffit à
+      # la majorité des réseaux et échoue franchement derrière un NAT symétrique.
+      NOTA_STUN_URLS   = join(",", var.stun_urls)
+      NOTA_TURN_URL    = join(",", var.turn_urls)
+      NOTA_TURN_SECRET = var.turn_secret
+
+      # Qui appose la signature juridique. « demonstration » est le SEUL réglage
+      # admissible tant qu'aucun fournisseur admis par la Chambre n'est branché :
+      # il produit un procès-verbal scellé et AUCUNE minute, et la page le dit.
+      # Le port refuse tout autre nom en levant — une faute de configuration se
+      # voit au démarrage plutôt que de rendre une signature sans valeur.
+      NOTA_SIGNATURE_FOURNISSEUR = var.signature_fournisseur
     }
   }
 

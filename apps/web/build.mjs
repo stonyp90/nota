@@ -53,7 +53,7 @@ writeFileSync(join(distDir, 'domain.js'), readFileSync(domainSrc));
 // files be cached immutably forever. index.html (and sw.js) stay unhashed and
 // no-cache; they are the single source that points at the current hashes.
 const hash = (buf) => createHash('sha256').update(buf).digest('hex').slice(0, 10);
-const HASHED = ['app.js', 'styles.css', 'domain.js', 'i18n.js', 'landing.js', 'acquisition.js'];
+const HASHED = ['app.js', 'styles.css', 'domain.js', 'i18n.js', 'landing.js', 'acquisition.js', 'salle.js'];
 const manifest = {}; // original name -> hashed name
 for (const name of HASHED) {
   const p = join(distDir, name);
