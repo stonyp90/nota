@@ -8174,10 +8174,13 @@
   // real open demands, soonest first, each card a button into the sign-in gate.
   // Capped — the full list is the payoff of signing in; overflow collapses into
   // one "+N autres" card. Hidden signed-in (the console's open list takes over).
-  // Keep twelve slots even for an empty or sparse month so the landing keeps
-  // its shape. Empty slots are inert, clearly labelled, and never fake offers.
-  // At zero, one large empty-state panel covers the same twelve-slot footprint.
+  // Keep a compact six-slot footprint for an empty or sparse month so the
+  // landing stays balanced beside the sign-in rail. Once the inventory really
+  // grows, the grid adds rows up to the twelve-card cap. Empty slots are inert,
+  // clearly labelled, and never fake offers. At zero, one large empty-state
+  // panel covers the compact footprint.
   var NC_LIVE_MAX = 12;
+  var NC_LIVE_MIN_SLOTS = 6;
   function ncFocusGate() {
     // Land on whichever gate step is showing: the signup CTA mid-branch,
     // otherwise the email field.
@@ -8231,18 +8234,19 @@
       more.addEventListener('click', ncFocusGate);
       grid.appendChild(more);
     }
-    for (var i = grid.children.length; i < NC_LIVE_MAX; i++) {
-      var slot = el('div', 'nc-live-slot', 'Pas d’offre');
+    var slotCount = Math.min(NC_LIVE_MAX, Math.max(NC_LIVE_MIN_SLOTS, grid.children.length));
+    for (var i = grid.children.length; i < slotCount; i++) {
+      var slot = el('div', 'nc-live-slot', T('Pas d’offre'));
       // These visual spaces carry no inventory or action. Avoid announcing
-      // the same empty label eleven times to a screen reader.
+      // the same empty label to a screen reader.
       slot.setAttribute('aria-hidden', 'true');
       grid.appendChild(slot);
     }
     if (!open.length) {
       var empty = el('div', 'nc-live-empty');
       empty.setAttribute('role', 'status');
-      empty.appendChild(el('strong', null, 'Pas d’offres'));
-      empty.appendChild(el('span', null, 'Les offres disponibles s’afficheront ici.'));
+      empty.appendChild(el('strong', null, T('Pas d’offres')));
+      empty.appendChild(el('span', null, T('Les offres disponibles s’afficheront ici.')));
       grid.appendChild(empty);
     }
     box.hidden = false;

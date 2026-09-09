@@ -237,12 +237,13 @@ test.describe('responsive layout', () => {
   });
 });
 
-// Inventory count must not move the gate, agenda or compliance band. Exercise
-// actual successful API responses, including empty, rather than offline demos.
+// Inventory count must keep the landing aligned without reserving a tall wall
+// of empty cells. Exercise actual successful API responses, including empty,
+// rather than offline demos.
 test.describe('notary inventory keeps its footprint', () => {
   for (const vp of VIEWPORTS) {
     for (const lang of ['fr', 'en']) {
-      test(`${vp.name}, ${lang}: zero, one and partial inventory match a full grid`, async ({ page }) => {
+      test(`${vp.name}, ${lang}: zero, one and partial inventory keep the grid aligned`, async ({ page }) => {
         await page.setViewportSize({ width: vp.width, height: vp.height });
         await page.addInitScript(() => {
           localStorage.setItem('nota.introSeen', '1');
@@ -261,32 +262,32 @@ test.describe('notary inventory keeps its footprint', () => {
           })) : [];
           await route.fulfill({ json: { bids: bids.filter((b) => b.dateISO.startsWith(month)) }, headers: { 'access-control-allow-origin': '*' } });
         });
-        let full;
         for (count of [12, 0, 1, 5, 13]) {
           if (count === 12) await page.goto(`/?lang=${lang}#t=notaires`);
           else await page.reload();
           await expect(page.locator('#notary-live')).toBeVisible();
           await expect(page.locator('#notary-live-grid .nc-live-card')).toHaveCount(Math.min(count, 12));
-          await expect(page.locator('#notary-live-grid .nc-live-slot')).toHaveCount(Math.max(0, 12 - count));
+          await expect(page.locator('#notary-live-grid .nc-live-slot')).toHaveCount(Math.max(0, 6 - Math.min(count, 12)));
           await settled(page);
           const geometry = {};
           for (const id of ['notary-live-grid', 'notary-console', 'notary-carnet', 'nc-conformite']) {
             geometry[id] = await boxOf(page, '#' + id);
           }
-          if (count === 12) full = geometry;
-          else {
-            for (const [id, rect] of Object.entries(geometry)) {
-              for (const key of ['top', 'left', 'width', 'height']) {
-                expect(Math.abs(rect[key] - full[id][key]), `${count} offers: ${id}.${key} stays stable`).toBeLessThan(2);
-              }
-            }
+          const stacked = vp.width <= 1200;
+          if (stacked) {
+            expect(geometry['notary-console'].top, `${count} offers: gate follows inventory`).toBeGreaterThanOrEqual(geometry['notary-live-grid'].bottom - 1);
+          } else {
+            expect(Math.abs(geometry['notary-console'].top - geometry['notary-live-grid'].top), `${count} offers: gate aligns with inventory`).toBeLessThan(4);
+            expect(geometry['notary-console'].left, `${count} offers: gate stays in the right rail`).toBeGreaterThan(geometry['notary-live-grid'].right - 1);
           }
+          expect(geometry['notary-carnet'].top, `${count} offers: agenda follows the inventory`).toBeGreaterThanOrEqual(Math.max(geometry['notary-live-grid'].bottom, geometry['notary-console'].bottom) - 1);
+          expect(geometry['nc-conformite'].top, `${count} offers: compliance follows the columns`).toBeGreaterThanOrEqual(Math.max(geometry['notary-carnet'].bottom, geometry['notary-console'].bottom) - 1);
           if (count === 0) {
             const empty = page.locator('.nc-live-empty');
             await expect(empty.locator('strong')).toHaveText(lang === 'fr' ? 'Pas d’offres' : 'No offers');
             const rect = await boxOf(page, '.nc-live-empty');
-            expect(rect.height).toBe(full['notary-live-grid'].height);
-            expect(rect.width).toBe(full['notary-live-grid'].width);
+            expect(rect.height).toBe(geometry['notary-live-grid'].height);
+            expect(rect.width).toBe(geometry['notary-live-grid'].width);
           } else {
             await expect(page.locator('.nc-live-empty')).toHaveCount(0);
             if (count < 12) {

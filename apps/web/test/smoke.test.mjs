@@ -669,7 +669,9 @@ test('notaires landing preserves empty slots across live inventory refreshes', a
     const grid = $(doc, 'notary-live-grid');
     assert.equal($(doc, 'notary-live').hidden, false, `visible with ${count} offers`);
     assert.equal(grid.querySelectorAll('.nc-live-card').length, Math.min(count, 12));
-    assert.equal(grid.querySelectorAll('.nc-live-slot').length, Math.max(0, 12 - count));
+    // Sparse inventory uses a compact six-slot footprint. Once six real cards
+    // exist, the grid grows only for actual demand instead of a hidden reserve.
+    assert.equal(grid.querySelectorAll('.nc-live-slot').length, Math.max(0, 6 - Math.min(count, 12)));
     assert.equal(grid.querySelectorAll('.nc-live-more').length, count > 12 ? 1 : 0);
     for (const slot of grid.querySelectorAll('.nc-live-slot')) {
       assert.equal(slot.textContent, 'Pas d’offre');
