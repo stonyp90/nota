@@ -37,6 +37,8 @@
     'Champs d’intake': 'Intake fields',
     'Contrôles notariaux': 'Notarial controls',
     'Champs IA': 'AI fields',
+    'Aucun événement enregistré pour cette période.': 'No events recorded for this period.',
+    'Aucun utilisateur configuré pour le moment.': 'No users configured yet.',
     'Actes à venir': 'Coming acts',
     'Personnalisation disponible': 'Available customization',
     'Chaque ligne renvoie vers la section qui la gouverne et rappelle la permission appliquée côté serveur.': 'Each row links to the section that governs it and shows the permission enforced by the server.',
