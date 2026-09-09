@@ -100,7 +100,12 @@ jobs:
           # signed metadata, making Playwright's --with-deps fail before any
           # browser is installed. The runner is disposable; remove only this
           # optional source and let Playwright use the stable Ubuntu mirrors.
-          sudo rm -f /etc/apt/sources.list.d/google-chrome.list
+          for source in /etc/apt/sources.list.d/*; do
+            if [ -f "$source" ] && grep -q 'dl.google.com/linux/chrome' "$source"; then
+              echo "Disabling transient Google Chrome APT source: $source"
+              sudo rm -f "$source"
+            fi
+          done
           for attempt in 1 2 3; do
             if npx playwright install --with-deps chromium firefox webkit; then
               exit 0
