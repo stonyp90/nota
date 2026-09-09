@@ -80,13 +80,20 @@
   function appel(chemin, options) {
     var o = options || {};
     var url = base() + chemin;
-    if (o.query) {
-      var qs = Object.keys(o.query)
-        .filter(function (k) { return o.query[k] !== undefined && o.query[k] !== null; })
-        .map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(o.query[k]); })
-        .join('&');
-      if (qs) url += (url.indexOf('?') >= 0 ? '&' : '?') + qs;
-    }
+    // L'ADRESSE DE LA SÉANCE VOYAGE TOUJOURS. Une séance s'adresse par son
+    // offre et sa date : sans les deux, l'API répond 400 et n'entre même pas
+    // dans la salle. Elles partaient dans le corps des POST et nulle part
+    // ailleurs, si bien que CHAQUE sondage échouait — en silence, puisqu'une
+    // requête sans réponse utilisable est traitée ici comme un pair muet. Le
+    // lien ne montait jamais, et rien ne le disait.
+    var query = {};
+    if (o.query) for (var k in o.query) if (Object.prototype.hasOwnProperty.call(o.query, k)) query[k] = o.query[k];
+    if (!o.body) { query.id = S.id; query.dateISO = S.dateISO; }
+    var qs = Object.keys(query)
+      .filter(function (c) { return query[c] !== undefined && query[c] !== null; })
+      .map(function (c) { return encodeURIComponent(c) + '=' + encodeURIComponent(query[c]); })
+      .join('&');
+    if (qs) url += (url.indexOf('?') >= 0 ? '&' : '?') + qs;
     var entetes = { accept: 'application/json', authorization: 'Bearer ' + S.jeton };
     if (o.body) entetes['content-type'] = 'application/json';
     return deps.fetch(url, {

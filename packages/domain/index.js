@@ -4159,6 +4159,7 @@
   // l'acte contient (exigence E2).
   const PV_FAITS = Object.freeze([
     'salle_ouverte', 'porte_ouverte', 'porte_fermee', 'etape_franchie', 'etape_reprise',
+    'identite_attestee',
     'consentement_donne', 'consentement_retire', 'lien_confirme', 'lien_coupe', 'lien_repris',
     'enregistrement_demarre', 'enregistrement_arrete', 'signature_liberee', 'salle_suspendue',
     'salle_reprise', 'salle_scellee', 'mention_demonstration',
@@ -4230,7 +4231,13 @@
   function scellerProcesVerbal(salle, opts) {
     const s = salle && typeof salle === 'object' ? salle : {};
     const o = opts || {};
-    const brutes = Array.isArray(s.pv) ? s.pv.slice() : [];
+    // Le scellé GARANTIT la mention en tête ; il ne la double pas. La séance
+    // l'inscrit déjà à l'ouverture, en deuxième position, et un procès-verbal
+    // qui dirait deux fois la même chose se lirait comme une erreur là où
+    // c'est une précaution. On la retire donc d'où elle est pour la remettre
+    // là où elle doit être : impossible à manquer, et une seule fois.
+    const brutes = (Array.isArray(s.pv) ? s.pv : [])
+      .filter((e) => !(s.demonstration === true && e && e.fait === 'mention_demonstration'));
     if (s.demonstration === true) {
       brutes.unshift({
         fait: 'mention_demonstration', par: 'systeme',

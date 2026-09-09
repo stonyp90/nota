@@ -333,6 +333,22 @@ test('E2 · le procès-verbal refuse tout champ hors de sa liste blanche', () =>
   assert.equal(D.validateEntreePv({ ...entree('etape_franchie', T0), a: null }).ok, false);
 });
 
+test('B5 · l’attestation d’identité entre au procès-verbal sans la pièce ni son numéro', () => {
+  // Ce qu'elle a le droit de dire : QUI a été vérifié, et par quelle MÉTHODE.
+  const bonne = D.validateEntreePv(entree('identite_attestee', T0, { partie: 'client', methode: 'demonstration' }));
+  assert.equal(bonne.ok, true);
+  assert.deepEqual(bonne.entree.detail, { partie: 'client', methode: 'demonstration' });
+
+  // Ce qu'elle ne dira jamais : le numéro du permis, la date de naissance, le
+  // nom sur la pièce. Le procès-verbal prouve qu'une vérification a eu lieu ; il
+  // n'est pas une copie du dossier d'identité.
+  for (const fuite of [{ numero: 'S1234-567890-01' }, { piece: 'permis de conduire' }, { naissance: '1981-04-02' }]) {
+    const r = D.validateEntreePv(entree('identite_attestee', T0, { partie: 'client', methode: 'demonstration', ...fuite }));
+    assert.equal(r.ok, false, JSON.stringify(fuite));
+    assert.ok(r.errors.some((e) => e.code === 'champ_interdit'));
+  }
+});
+
 test('E1 · la chaîne d’empreintes se rompt si on retire, insère, réordonne ou retouche', () => {
   const brut = [
     entree('salle_ouverte', T0, {}, 'systeme'),

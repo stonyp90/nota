@@ -343,6 +343,10 @@ function createSalleService({ repo, now = () => new Date().toISOString().slice(0
       return muter(bidId, (s) => {
         const avant = domain.salleReadiness(s, { nowMs: nowMs() }).portes;
         s.identites = { ...s.identites, [partie]: v.attestation };
+        // L'attestation est un FAIT de la séance, et le procès-verbal le disait
+        // seulement en creux, par la porte qui s'ouvrait. Il nomme désormais la
+        // partie vérifiée et la MÉTHODE — jamais la pièce, jamais son numéro.
+        noter(s, 'identite_attestee', 'notaire', { partie, methode: v.attestation.methode });
         noterPortes(s, avant);
         return {};
       });

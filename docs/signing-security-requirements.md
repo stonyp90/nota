@@ -13,11 +13,11 @@ date et la raison. La colonne « Tenue par » est la seule preuve qui compte.
 | № | Exigence | Tenue par |
 | --- | --- | --- |
 | A1 | Le média circule **pair à pair**. Aucun serveur de Nota ne reçoit, ne relaie ni ne déchiffre l'image ou le son. | `e2e/salle-signature.spec.js` — la connexion établie est vérifiée `connected` avec des candidats `host`/`srflx`, et aucune requête média ne part vers l'API. |
-| A2 | La signalisation ne transporte **jamais** de média, seulement SDP et candidats ICE, et elle est inutilisable sans les clés DTLS des pairs. | `apps/api/test/salle-signalisation.test.mjs` — tout corps de signalisation hors du gabarit accepté est refusé en 422. |
+| A2 | La signalisation ne transporte **jamais** de média, seulement SDP et candidats ICE, et elle est inutilisable sans les clés DTLS des pairs. | `apps/api/test/salle-signature.test.mjs` — tout corps de signalisation hors du gabarit accepté est refusé en 422. |
 | A3 | Les deux pairs dérivent la **même chaîne d'authentification courte** des deux empreintes DTLS, et deux empreintes différentes donnent deux chaînes différentes. | `packages/domain/test/salle-signature.test.mjs` — `chaineAuthentification` est symétrique, déterministe, et change au moindre bit. |
 | A4 | La porte `lien` reste fermée tant que le notaire n'a pas confirmé la concordance des chaînes. | `packages/domain/test/salle-signature.test.mjs` |
 | A5 | Un participant qui n'est pas attendu dans la salle est refusé, même avec un jeton valide pour une autre offre. | `apps/api/test/salle-signature.test.mjs` |
-| A6 | Les identifiants TURN sont **à durée limitée** (HMAC horodaté), jamais un mot de passe statique, et ne sont émis qu'à un participant déjà admis. | `apps/api/test/salle-ice.test.mjs` |
+| A6 | Les identifiants TURN sont **à durée limitée** (HMAC horodaté), jamais un mot de passe statique, et ne sont émis qu'à un participant déjà admis. | `apps/api/test/salle-signature.test.mjs` |
 
 ## B — Les personnes
 
@@ -27,6 +27,7 @@ date et la raison. La colonne « Tenue par » est la seule preuve qui compte.
 | B2 | L'identité légale est établie **hors du canal vidéo**, et l'attestation porte sa méthode, son heure et son vérificateur. | `packages/domain/test/salle-signature.test.mjs` — une attestation sans méthode ou sans horodatage n'ouvre pas la porte. |
 | B3 | Le notaire est le **seul** à faire avancer la cérémonie. Une tentative du client est refusée en 403. | `apps/api/test/salle-signature.test.mjs` |
 | B4 | Les étapes sont **ordonnées**. Aucun saut ; le retour en arrière est permis et consigné. | `packages/domain/test/salle-signature.test.mjs` |
+| B5 | L'attestation d'identité entre au procès-verbal en nommant la partie et la **méthode** — jamais la pièce, jamais son numéro. | `features/salle_signature.feature` + `packages/domain/test/salle-signature.test.mjs` |
 
 ## C — La continuité
 
@@ -36,6 +37,7 @@ date et la raison. La colonne « Tenue par » est la seule preuve qui compte.
 | C2 | La reprise après suspension repart de **l'étape en cours**, jamais plus loin. | `packages/domain/test/salle-signature.test.mjs` + `features/salle_signature.feature` |
 | C3 | Une piste coupée (caméra fermée, micro muet) referme la porte `presence` sans attendre la fin de l'appel. | `apps/web/test/salle-signature.test.mjs` |
 | C4 | La suspension et la reprise sont **consignées** l'une et l'autre dans le procès-verbal. | `packages/domain/test/salle-signature.test.mjs` |
+| C5 | Le lien qui revient ne redémarre **pas** la séance : la reprise est un geste du notaire, refusé tant que la présence n'est pas rétablie. | `features/salle_signature.feature` |
 
 ## D — L'enregistrement
 
@@ -44,7 +46,7 @@ date et la raison. La colonne « Tenue par » est la seule preuve qui compte.
 | D1 | Le mode par défaut est `strict` : **aucun enregistrement**. | `packages/domain/test/salle-signature.test.mjs` |
 | D2 | L'enregistrement exige le consentement **explicite et horodaté des deux parties**, recueilli dans la salle. | `packages/domain/test/salle-signature.test.mjs` |
 | D3 | Le retrait du consentement arrête l'enregistrement à l'instant, et l'arrêt est consigné. | `packages/domain/test/salle-signature.test.mjs` |
-| D4 | Les octets enregistrés sont chiffrés **dans le navigateur** avant tout envoi ; Nota ne détient pas la clé. | `apps/web/test/salle-enregistrement.test.mjs` |
+| D4 | Les octets enregistrés sont chiffrés **dans le navigateur** avant tout envoi ; Nota ne détient pas la clé. | `apps/web/test/salle-signature.test.mjs` |
 | D5 | Une salle en mode `aucun` **ne peut pas atteindre** l'étape `signature`. | `packages/domain/test/salle-signature.test.mjs` |
 
 ## E — La preuve
@@ -71,6 +73,16 @@ date et la raison. La colonne « Tenue par » est la seule preuve qui compte.
 | G1 | La `Permissions-Policy` de production autorise `camera` et `microphone` **sur l'origine de Nota seulement**. | `e2e/document-csp.spec.js` |
 | G2 | La CSP autorise `media-src blob:` et le relais TURN configuré, et **rien de plus** que ce qui existait avant. | `e2e/document-csp.spec.js` |
 | G3 | Le bandeau bêta est présent dans la salle et ne peut pas être masqué. | `apps/web/test/salle-signature.test.mjs` |
+
+---
+
+## La même chose, en langue d'affaires
+
+`features/salle_signature.feature` rejoue A3, A4, B1 à B5, C1 à C5, D5, E1 à E4,
+F2 et F3 en Gherkin, à travers les **vraies routes** et avec une horloge que le
+scénario avance lui-même. Ce fichier n'ajoute aucune règle : il dit les mêmes
+règles dans une langue qu'un lecteur de la Chambre peut vérifier sans lire de
+JavaScript, et il tombe si le code cesse de les tenir.
 
 ---
 

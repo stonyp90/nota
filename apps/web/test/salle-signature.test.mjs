@@ -493,3 +493,31 @@ test('une caméra refusée explique pourquoi la séance ne peut pas commencer', 
   assert.match(refusBox.textContent, /caméra ou au micro/);
   assert.match(refusBox.textContent, /doit vous voir et vous entendre/);
 });
+
+// ---------------------------------------------------------------------------
+// L'adresse de la séance
+// ---------------------------------------------------------------------------
+
+test('toute requête de la salle porte son adresse — l’offre ET sa date', async () => {
+  // Une séance s'adresse par son offre et sa date : l'API répond 400 sans les
+  // deux, et n'entre même pas dans la salle. Elles ne partaient que dans le
+  // CORPS, donc les POST les avaient et les LECTURES non : chaque sondage
+  // échouait, en silence — une requête sans réponse utilisable est traitée ici
+  // comme un pair muet — et le lien ne montait jamais. Rien dans jsdom ne le
+  // montrait, parce que la doublure de `fetch` répondait sans regarder l'URL.
+  const h = await boot({ partie: 'notaire' });
+  const appels = h.appels.filter((a) => a.url.includes('/salle'));
+  assert.ok(appels.length >= 3, 'ouvrir doit rejoindre, déclarer ses pistes et sonder');
+
+  for (const a of appels) {
+    const url = new URL(a.url, 'https://nota.example');
+    const corps = a.init.body ? JSON.parse(a.init.body) : null;
+    const adresse = corps
+      ? { id: corps.id, dateISO: corps.dateISO }
+      : { id: url.searchParams.get('id'), dateISO: url.searchParams.get('dateISO') };
+    assert.deepEqual(adresse, { id: BID, dateISO: DATE }, 'sans adresse : ' + a.url);
+  }
+
+  // Et il y a bien une LECTURE parmi elles : c'est la famille qui les oubliait.
+  assert.ok(appels.some((a) => !a.init.body), 'le sondage est une lecture, pas un envoi');
+});
