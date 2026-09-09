@@ -197,7 +197,7 @@
     <!-- ================= INTRO GATE =================
          First arrival: the pitch film for the chosen audience plays full
          screen, then lands on the matching pane. Skippable at every moment,
-         shown once per browser (nota.introSeen), bypassed for deep links and
+         remembered after an explicit exit or two full viewings (nota.introSeen), bypassed for deep links and
          under prefers-reduced-motion. A real modal: role=dialog, labelled by
          its title, focus inside, header/main/footer inert while it is open
          (app.js igMaybeShow / igDismiss). Strings are single text nodes so
@@ -207,143 +207,92 @@
 
         <div class="ig-chooser" id="ig-chooser">
           <div class="mini-seg" role="group" aria-label="Langue" data-lang-seg data-i18n-skip>
-            <button type="button" class="mini-seg-btn" data-set-lang="fr">FR</button>
-            <button type="button" class="mini-seg-btn" data-set-lang="en">EN</button>
-          </div>
-          <svg class="ig-mark" viewBox="0 0 64 64" role="img" aria-label="Nota"><use href="#nota-logomark"/></svg>
-          <h2 class="ig-title" id="ig-title">Un notaire, à la date qu’il vous faut.</h2>
+              <button type="button" class="mini-seg-btn" data-set-lang="fr">FR</button>
+              <button type="button" class="mini-seg-btn" data-set-lang="en">EN</button>
+            </div>
+          <div class="ig-wordmark ig-signature"><svg class="ig-mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><use href="#nota-logomark"/></svg><span>Nota</span></div>
+          <h2 class="ig-title" id="ig-title">Votre projet. Votre notaire.</h2>
+          <p class="ig-lede">Nota met en relation clients et notaires.</p>
           <div class="ig-doors">
             <button type="button" class="ig-door" id="ig-door-client">
               <span class="ig-door-t">Je cherche un notaire</span>
-              <span class="ig-door-s">Voir comment ça marche</span>
+              <span class="ig-door-s">Faire avancer mon projet</span>
+              <span class="ig-door-arrow" aria-hidden="true">→</span>
             </button>
             <button type="button" class="ig-door" id="ig-door-notaire">
               <span class="ig-door-t">Je suis notaire</span>
-              <span class="ig-door-s">Remplir ma semaine</span>
+              <span class="ig-door-s">Trouver mon prochain dossier</span>
+              <span class="ig-door-arrow" aria-hidden="true">→</span>
             </button>
           </div>
           <button type="button" class="ig-enter" id="ig-enter">Entrer sur le site →</button>
         </div>
 
         <div class="ig-frame" id="ig-frame" hidden>
-
           <div class="ig-stage" id="ig-stage-client">
-            <div class="ig-atmosphere" aria-hidden="true">
-              <svg class="ig-dollar ig-dollar-a" viewBox="0 0 64 64" fill="none" focusable="false"><path d="M32 8v48M44 19c-3-5-9-7-15-6-8 1-13 5-13 11 0 13 32 5 32 18 0 7-7 11-16 11-7 0-13-3-16-8"/></svg>
-              <svg class="ig-dollar ig-dollar-b" viewBox="0 0 64 64" fill="none" focusable="false"><path d="M32 8v48M44 19c-3-5-9-7-15-6-8 1-13 5-13 11 0 13 32 5 32 18 0 7-7 11-16 11-7 0-13-3-16-8"/></svg>
-              <svg class="ig-brand-mark ig-brand-mark-a" viewBox="0 0 64 64" focusable="false"><use href="#nota-logomark"/></svg>
-              <svg class="ig-brand-mark ig-brand-mark-b" viewBox="0 0 64 64" focusable="false"><use href="#nota-logomark"/></svg>
+            <div class="ig-masthead">
+              <div class="ig-wordmark"><svg class="ig-mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><use href="#nota-logomark"/></svg><span>Nota</span></div>
+              <span class="ig-audience">Pour votre projet</span>
             </div>
+            <div class="ig-atmosphere" aria-hidden="true"><span>Nota</span></div>
             <section class="ig-scene ig-c1">
-              <span class="ig-kicker"><svg class="ig-story-icon" viewBox="0 0 32 32" fill="none" aria-hidden="true" focusable="false"><path pathLength="1" d="M10 5h16v22H6V9h4"/><path pathLength="1" d="M10 3v6M22 3v6M6 12h20"/><path pathLength="1" d="m11 20 3 3 7-7"/></svg>Trouver un notaire</span>
-              <p class="ig-h">Trouvez un notaire avec Nota.</p>
-              <p class="ig-sub">Proposez votre date et votre prix.</p>
-              <div class="ig-steps">
-                <div class="ig-step"><span class="ig-step-num" aria-hidden="true">01</span><span>Choisissez une date</span></div>
-                <div class="ig-step"><span class="ig-step-num" aria-hidden="true">02</span><span>Publiez votre offre</span></div>
-                <div class="ig-step"><span class="ig-step-num" aria-hidden="true">03</span><span>Un notaire peut accepter</span></div>
-              </div>
+              <div class="ig-wordmark ig-signature"><svg class="ig-mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><use href="#nota-logomark"/></svg><span>Nota</span></div>
+              <p class="ig-h">Trouvez votre notaire avec Nota.</p>
+              <p class="ig-sub">Pour faire avancer votre projet.</p>
             </section>
 
             <section class="ig-scene ig-c2">
-              <span class="ig-kicker"><svg class="ig-story-icon" viewBox="0 0 32 32" fill="none" aria-hidden="true" focusable="false"><path pathLength="1" d="M6 7h20v21H6zM10 3v8M22 3v8M6 14h20"/><path pathLength="1" d="M11 19h3M19 19h3M11 24h3"/></svg>Votre demande</span>
-              <p class="ig-h">Dites-nous ce qu’il vous faut.</p>
-              <p class="ig-sub">Choisissez le service, la date et votre prix.</p>
-              <div class="ig-steps">
-                <div class="ig-step"><span>Le service</span></div>
-                <div class="ig-step"><span>Votre date</span></div>
-                <div class="ig-step"><span>Votre prix</span></div>
-              </div>
+              <div class="ig-story-symbol"><svg class="ig-story-icon" viewBox="0 0 32 32" fill="none" aria-hidden="true" focusable="false"><path pathLength="1" d="M6 7h20v21H6zM10 3v8M22 3v8M6 14h20"/><path pathLength="1" d="m11 21 3 3 7-7"/></svg></div>
+              <p class="ig-h">Votre date. Votre prix.</p>
+              <p class="ig-sub">Publiez votre demande sur Nota.</p>
             </section>
 
             <section class="ig-scene ig-c3">
-              <span class="ig-kicker"><svg class="ig-story-icon" viewBox="0 0 32 32" fill="none" aria-hidden="true" focusable="false"><path pathLength="1" d="M27 14a11 11 0 1 1-7-9"/><path pathLength="1" d="m10 15 5 5L28 6"/></svg>La réponse</span>
-              <p class="ig-h">Un notaire accepte votre demande.</p>
-              <p class="ig-sub">Vous recevez une confirmation et ses coordonnées.</p>
-              <div class="ig-steps">
-                <div class="ig-step"><span>Votre date confirmée</span></div>
-                <div class="ig-step"><span>Un contact direct</span></div>
-              </div>
+              <div class="ig-story-symbol"><svg class="ig-story-icon" viewBox="0 0 32 32" fill="none" aria-hidden="true" focusable="false"><path pathLength="1" d="M27 14a11 11 0 1 1-7-9"/><path pathLength="1" d="m10 15 5 5L28 6"/></svg></div>
+              <p class="ig-h">Votre notaire, en contact direct.</p>
+              <p class="ig-sub">Dès qu’un notaire accepte, préparez la signature ensemble.</p>
             </section>
 
             <section class="ig-scene ig-c4">
-              <span class="ig-kicker"><svg class="ig-story-icon" viewBox="0 0 32 32" fill="none" aria-hidden="true" focusable="false"><path pathLength="1" d="M3 5h20v14H11l-6 5v-5H3z"/><path pathLength="1" d="M13 22h7l7 5V13"/><path pathLength="1" d="M8 10h10M8 14h6"/></svg>Votre dossier</span>
-              <p class="ig-h">Échangez au même endroit.</p>
-              <p class="ig-sub">Préparez la signature avec votre notaire.</p>
-              <div class="ig-steps">
-                <div class="ig-step"><span>Messages</span></div>
-                <div class="ig-step"><span>Documents</span></div>
-                <div class="ig-step"><span>Suivi</span></div>
-              </div>
-            </section>
-
-            <section class="ig-scene ig-c5">
-              <svg class="ig-mark" viewBox="0 0 64 64" role="img" aria-label="Nota"><use href="#nota-logomark"/></svg>
-              <span class="ig-kicker">À vous de jouer</span>
-              <p class="ig-h">Publiez votre demande.</p>
+              <div class="ig-wordmark ig-signature"><svg class="ig-mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><use href="#nota-logomark"/></svg><span>Nota</span></div>
+              <p class="ig-h">Votre projet commence ici.</p>
               <p class="ig-sub">Vérifiez le prix total avant de publier.</p>
-              <p class="ig-sub ig-note">Le service Nota se paie seulement à la signature.</p>
+              <button type="button" class="ig-cta" data-ig-goto="carnet">Choisir ma date →</button>
+              <p class="ig-note">Le service Nota se paie seulement à la signature.</p>
             </section>
-
             <div class="ig-progress" aria-hidden="true"></div>
           </div>
 
           <div class="ig-stage" id="ig-stage-notaire" hidden>
-            <div class="ig-atmosphere" aria-hidden="true">
-              <svg class="ig-dollar ig-dollar-a" viewBox="0 0 64 64" fill="none" focusable="false"><path d="M32 8v48M44 19c-3-5-9-7-15-6-8 1-13 5-13 11 0 13 32 5 32 18 0 7-7 11-16 11-7 0-13-3-16-8"/></svg>
-              <svg class="ig-dollar ig-dollar-b" viewBox="0 0 64 64" fill="none" focusable="false"><path d="M32 8v48M44 19c-3-5-9-7-15-6-8 1-13 5-13 11 0 13 32 5 32 18 0 7-7 11-16 11-7 0-13-3-16-8"/></svg>
-              <svg class="ig-brand-mark ig-brand-mark-a" viewBox="0 0 64 64" focusable="false"><use href="#nota-logomark"/></svg>
-              <svg class="ig-brand-mark ig-brand-mark-b" viewBox="0 0 64 64" focusable="false"><use href="#nota-logomark"/></svg>
+            <div class="ig-masthead">
+              <div class="ig-wordmark"><svg class="ig-mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><use href="#nota-logomark"/></svg><span>Nota</span></div>
+              <span class="ig-audience">Pour votre pratique</span>
             </div>
+            <div class="ig-atmosphere" aria-hidden="true"><span>Nota</span></div>
             <section class="ig-scene ig-n1">
-              <span class="ig-kicker"><svg class="ig-story-icon" viewBox="0 0 32 32" fill="none" aria-hidden="true" focusable="false"><path pathLength="1" d="M6 7h20v21H6zM10 3v8M22 3v8M6 14h20"/><path pathLength="1" d="m11 21 3 3 7-7"/></svg>Espace notaire</span>
+              <div class="ig-wordmark ig-signature"><svg class="ig-mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><use href="#nota-logomark"/></svg><span>Nota</span></div>
               <p class="ig-h">Trouvez votre prochain dossier.</p>
-              <p class="ig-sub">Sur Nota, les clients proposent leur date et leur prix.</p>
-              <div class="ig-steps">
-                <div class="ig-step"><span class="ig-step-num" aria-hidden="true">01</span><span>Consultez les demandes</span></div>
-                <div class="ig-step"><span class="ig-step-num" aria-hidden="true">02</span><span>Choisissez un dossier</span></div>
-              </div>
+              <p class="ig-sub">Avec Nota, choisissez les demandes qui vous conviennent.</p>
             </section>
 
             <section class="ig-scene ig-n2">
-              <span class="ig-kicker"><svg class="ig-story-icon" viewBox="0 0 32 32" fill="none" aria-hidden="true" focusable="false"><path pathLength="1" d="M8 6h19v6H8zM8 16h19v6H8z"/><path pathLength="1" d="M3 7v17m-2-2 2 2 2-2"/></svg>Les demandes</span>
-              <p class="ig-h">Comparez les demandes.</p>
-              <p class="ig-sub">Voyez les détails avant de choisir.</p>
-              <div class="ig-steps">
-                <div class="ig-step"><span>L’acte demandé</span></div>
-                <div class="ig-step"><span>La date de signature</span></div>
-                <div class="ig-step"><span>Le montant proposé</span></div>
-              </div>
+              <div class="ig-story-symbol"><svg class="ig-story-icon" viewBox="0 0 32 32" fill="none" aria-hidden="true" focusable="false"><path pathLength="1" d="M6 7h20v21H6zM10 3v8M22 3v8M6 14h20"/><path pathLength="1" d="m11 21 3 3 7-7"/></svg></div>
+              <p class="ig-h">Votre agenda. Votre choix.</p>
+              <p class="ig-sub">Consultez le service, la date et le prix proposé.</p>
             </section>
 
             <section class="ig-scene ig-n3">
-              <span class="ig-kicker"><svg class="ig-story-icon" viewBox="0 0 32 32" fill="none" aria-hidden="true" focusable="false"><path pathLength="1" d="M16 28V16M16 16 6 6M16 16 26 6"/><path pathLength="1" d="M5 13V5h8M19 5h8v8"/></svg>Votre pratique</span>
-              <p class="ig-h">Vous gardez le choix.</p>
-              <p class="ig-sub">Le montant proposé ne vous convient pas ? Faites une autre proposition.</p>
-              <div class="ig-steps">
-                <div class="ig-step"><span>Accepter</span></div>
-                <div class="ig-step"><span>Proposer</span></div>
-                <div class="ig-step"><span>Passer</span></div>
-              </div>
+              <div class="ig-story-symbol"><svg class="ig-story-icon" viewBox="0 0 32 32" fill="none" aria-hidden="true" focusable="false"><path pathLength="1" d="M27 14a11 11 0 1 1-7-9"/><path pathLength="1" d="m10 15 5 5L28 6"/></svg></div>
+              <p class="ig-h">Un nouveau client. Un contact direct.</p>
+              <p class="ig-sub">Acceptez une demande ou proposez votre prix.</p>
             </section>
 
             <section class="ig-scene ig-n4">
-              <span class="ig-kicker"><svg class="ig-story-icon" viewBox="0 0 32 32" fill="none" aria-hidden="true" focusable="false"><path pathLength="1" d="M27 14a11 11 0 1 1-7-9"/><path pathLength="1" d="m10 15 5 5L28 6"/></svg>Votre choix</span>
-              <p class="ig-h">Acceptez une demande.</p>
-              <p class="ig-sub">Le client reçoit votre confirmation et vos coordonnées.</p>
-              <div class="ig-steps">
-                <div class="ig-step"><span>Une date convenue</span></div>
-                <div class="ig-step"><span>Un contact direct</span></div>
-              </div>
+              <div class="ig-wordmark ig-signature"><svg class="ig-mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><use href="#nota-logomark"/></svg><span>Nota</span></div>
+              <p class="ig-h">Faites place à votre prochain client.</p>
+              <p class="ig-sub">Inscrivez-vous gratuitement sur Nota.</p>
+              <button type="button" class="ig-cta" data-ig-goto="notaires">Voir les demandes →</button>
             </section>
-
-            <section class="ig-scene ig-n5">
-              <svg class="ig-mark" viewBox="0 0 64 64" role="img" aria-label="Nota"><use href="#nota-logomark"/></svg>
-              <span class="ig-kicker">À vous de jouer</span>
-              <p class="ig-h">Remplissez votre semaine.</p>
-              <p class="ig-sub">Inscrivez-vous gratuitement pour consulter les demandes.</p>
-            </section>
-
             <div class="ig-progress" aria-hidden="true"></div>
           </div>
 
@@ -356,7 +305,6 @@
             <button type="button" class="ig-skip" id="ig-skip">Passer →</button>
           </div>
         </div>
-
       </div>
     </div>
 
@@ -1465,6 +1413,7 @@
                    events (app.js track → POST /events, no account, no cookie). -->
               <li><strong>Mesure facultative.</strong> Avec votre accord, Google Analytics mesure les visites et les clics. Aucun nom, courriel, contenu de formulaire ou lien de dossier ne lui est envoyé. Google peut traiter ces données à l’extérieur du Canada. Les témoins de mesure et la provenance conservée sur cet appareil expirent après 30 jours sans nouvelle visite. Vous pouvez retirer votre accord dans « Préférences de mesure ». La provenance d’une demande reste enregistrée avec celle-ci, même sans Google Analytics.</li>
               <li><strong>Stockage local.</strong> Vos coordonnées, vos réponses de dossier, vos préférences (langue, thème) et les liens de suivi de vos offres sont enregistrés dans le stockage local de votre navigateur, sur cet appareil seulement — aucun témoin publicitaire. Effacer les données du site dans votre navigateur les supprime. Nota compte par ailleurs, sans compte ni témoin, les grandes étapes franchies (visite, formulaire, publication) pour mesurer son parcours.</li>
+              <li><strong>Statistiques d’utilisation.</strong> Pour améliorer le site, nous regroupons les événements par famille de navigateur et d’appareil, système, format d’écran, langue et source d’arrivée. Nous comptons aussi les chargements et les erreurs d’interface. Ces statistiques ne contiennent pas d’identifiant de visiteur, d’URL complète, de contenu de formulaire ni de message d’erreur.</li>
               <li><strong>Responsable.</strong> Une personne responsable de la protection des renseignements personnels supervise ces pratiques : <a id="priv-responsable" href="#" data-i18n-skip></a>.</li>
             </ul>
           </div>
@@ -1584,6 +1533,7 @@
           <a href="#t=carnet" class="goto-link" data-goto="carnet">Le carnet</a>
           <a href="#t=notaires" class="goto-link" data-goto="notaires">Espace notaire</a>
           <a href="#t=partenaires" class="goto-link" data-goto="partenaires">Partenaires</a>
+          <a href="/signature.html">Salle de signature · Bêta</a>
           <a href="/notaire-refinancement-quebec.html">Notaire pour un refinancement hypothécaire à Québec</a>
           <a href="/notaire-financement-quebec.html">Notaire pour un financement hypothécaire à Québec</a>
           <!-- Opens the guide dialog: an action, so a button — not a link to nowhere. -->
@@ -1647,6 +1597,7 @@
           <select id="o-service" class="visually-hidden" required tabindex="-1" aria-hidden="true"></select>
           <p class="help" id="o-service-help"></p>
         </div>
+        <p id="o-expiration" class="hint" data-screen="3" hidden></p>
         <input type="date" id="o-date" class="visually-hidden" required tabindex="-1" aria-hidden="true" />
         <div class="book-step" id="o-criteria-step" data-screen="2" hidden>
           <div class="book-step-lbl"><span class="step">2</span> Les questions du notaire <span class="book-opt">(elles ajustent le prix et le temps de préparation)</span>
@@ -2226,17 +2177,23 @@
                  ne sont reprises nulle part, pas même ici : une phrase
                  retirée qui survit dans un commentaire ou dans une clé de
                  traduction morte finit par revenir à l'écran. -->
-            <p class="sup-sub">L’assistant de Nota répond tout de suite à ce qu’il sait. Une personne reprend le reste, par courriel.</p>
+            <p class="sup-sub">Explorez les sujets d’aide ou posez votre question. Une personne peut reprendre la conversation.</p>
           </div>
           <button type="button" class="sup-close" id="chat-close" aria-label="Fermer la messagerie">✕</button>
         </header>
-        <div class="sup-log" id="chat-log" aria-live="polite" data-i18n-skip></div>
+        <div class="sup-log" id="chat-log" role="log" aria-label="Conversation" aria-relevant="additions" aria-live="polite" data-i18n-skip></div>
         <!-- Les questions d'amorce (ADR 0046). Elles occupent la place que
              tenait un vide de 96 px, et elles disent au visiteur ce que
              l'assistant sait vraiment répondre au lieu de le lui faire
              deviner. Bâties depuis le domaine (SUPPORT_QUESTIONS_SUGGEREES),
              jamais écrites ici ; elles disparaissent au premier message. -->
         <div class="sup-suggest" id="chat-suggest" data-i18n-skip hidden></div>
+        <details class="sup-topics" id="chat-topics">
+          <summary>Explorer les sujets d’aide</summary>
+          <input id="chat-topic-search" class="sup-topic-search" type="search" aria-label="Chercher un sujet d’aide" placeholder="Chercher un sujet…" autocomplete="off">
+          <p id="chat-topic-empty" class="sup-topic-empty" role="status" hidden>Aucun sujet trouvé. Écrivez votre question dans le message.</p>
+          <div class="sup-topic-list" id="chat-topic-list" data-i18n-skip></div>
+        </details>
         <!-- The server forgot the thread (expired token): said in place, the
              bubbles stay, the next message starts fresh. -->
         <p class="sup-ended" id="chat-ended" role="status" hidden>Cette conversation est terminée — écrivez-nous à nouveau.</p>
@@ -2244,11 +2201,12 @@
              qu'une PERSONNE a désormais sa question, et pourquoi son courriel
              compte à cet instant précis. -->
         <p class="sup-escalade" id="chat-escalade" role="status" hidden>Cette question part à une personne — laissez votre courriel pour recevoir la réponse.</p>
+        <p class="sup-privacy" id="chat-privacy">Aide générale seulement, sans accès à votre dossier. Ne partagez pas de numéro de carte, de mot de passe ni de document personnel ici.</p>
         <form id="chat-form" class="sup-form" novalidate>
           <div class="sup-row">
             <!-- maxlength is set at boot from the domain's cap. Enter sends,
                  Shift+Enter breaks a line; the field grows with the text. -->
-            <textarea id="chat-text" class="sup-text" rows="1" placeholder="Écrivez votre question…" aria-label="Votre message" aria-describedby="chat-count"></textarea>
+            <textarea id="chat-text" class="sup-text" rows="1" placeholder="Écrivez votre question…" aria-label="Votre message" aria-describedby="chat-count chat-privacy"></textarea>
             <button type="submit" class="btn btn-primary sup-send" id="chat-send">Envoyer</button>
           </div>
           <p class="sup-count" id="chat-count" aria-live="polite" hidden></p>
@@ -2262,6 +2220,8 @@
           <div class="sup-courriel-row" id="chat-courriel-row" hidden>
             <label class="sup-courriel-lbl" for="chat-courriel">Courriel <span class="sup-opt">(optionnel)</span></label>
             <input type="email" id="chat-courriel" class="sup-courriel" autocomplete="email" inputmode="email" aria-describedby="chat-courriel-help" />
+            <button type="button" class="sup-recover" id="chat-courriel-save" hidden>Enregistrer le courriel</button>
+            <p class="help sup-courriel-help" id="chat-courriel-status" role="status" hidden></p>
             <p class="help sup-courriel-help" id="chat-courriel-help">pour recevoir la réponse par courriel si vous quittez</p>
           </div>
         </form>
@@ -2361,6 +2321,8 @@
     <script src="domain.js"></script>
     <script src="acquisition.js"></script>
     <script src="salle.js"></script>
+
+    <script src="analytics.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

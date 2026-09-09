@@ -109,8 +109,8 @@ test('certificat de localisation: an « Assurance titres » option, free, weighe
     assert.equal(o.add, 0);
     assert.equal(o.poids, 1);
     assert.equal(o.aide, 'L’assurance titres remplace souvent un certificat périmé — demandez au notaire.');
-    assert.match(c.aide, /certificat de moins de 10 ans/, 'the help names the lenders’ 10-year rule');
-    assert.match(c.aide, /travaux/, '…and the works-since caveat');
+    assert.match(c.aide, /varient selon le prêteur/, 'requirements are lender-specific');
+    assert.match(c.aide, /changements à l’immeuble/, 'property changes matter');
   }
 });
 

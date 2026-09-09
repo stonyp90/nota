@@ -8,7 +8,7 @@
  * notamment que la clé d'enregistrement ne part JAMAIS sur le réseau.
  *
  * Ce que ce fichier défend, dans l'ordre des exigences
- * (docs/signing-security-requirements.md) : C3, D4, F3, G3.
+ * (docs/salle-signature-exigences-tenues.md) : C3, D4, F3, G3.
  */
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';

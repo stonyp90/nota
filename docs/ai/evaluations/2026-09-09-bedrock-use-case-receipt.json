@@ -1,0 +1,11 @@
+{
+  "recordedAt": "2026-09-09T05:10:27.642Z",
+  "operation": "PutUseCaseForModelAccess",
+  "submissionSucceeded": true,
+  "readBackMatches": true,
+  "readBackBase64Layers": 2,
+  "inputEncoding": "fileb-raw-json",
+  "region": "ca-central-1",
+  "formPath": "../bedrock-use-case-2026-09-09.json",
+  "formSha256": "c3fb329839a9849eb29c1a2976b84880340f7aa01b59dc930e900ac60de1086e"
+}

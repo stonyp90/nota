@@ -60,7 +60,7 @@ test('le seed remplit le carnet PUBLIC que sert la route /bids', async () => {
   const repo = dynamoRepo();
   const resume = await seedInto(repo, { today: TODAY });
 
-  const app = createApp(repo);
+  const app = createApp(repo, { now: () => TODAY });
   const mois = TODAY.slice(0, 7);
   const res = await app.handle({ method: 'GET', path: '/bids', query: { month: mois }, headers: {}, body: '' });
   assert.equal(res.statusCode, 200);

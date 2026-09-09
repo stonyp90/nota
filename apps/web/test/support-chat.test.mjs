@@ -71,7 +71,7 @@ function supportStub() {
     if (path.includes('/support/thread')) {
       const t = threads.get(token);
       if (!t) return json({ errors: [{ code: 'non_autorise' }] }, 401);
-      const view = { messages: t.messages };
+      const view = { threadId: t.id, messages: t.messages };
       if (t.courriel) view.courriel = t.courriel;
       return json(view);
     }
@@ -187,7 +187,7 @@ test('the intro is said once — and it no longer promises a response time (ADR 
   const panel = $(doc, 'chat-panel');
   const txt = FLAT(panel.textContent);
   assert.equal(
-    txt.split('L’assistant de Nota répond tout de suite à ce qu’il sait. Une personne reprend le reste, par courriel.').length - 1,
+    txt.split('Explorez les sujets d’aide ou posez votre question. Une personne peut reprendre la conversation.').length - 1,
     1,
     'the header sub, once'
   );
@@ -199,7 +199,8 @@ test('the intro is said once — and it no longer promises a response time (ADR 
   // Le vide de 96 px a été remplacé par des questions qui mènent quelque part.
   assert.equal($(doc, 'chat-log').querySelectorAll('.sup-empty').length, 0, 'no floating empty-state line');
   const chips = $(doc, 'chat-suggest').querySelectorAll('.sup-chip');
-  assert.equal(chips.length, D.SUPPORT_QUESTIONS_SUGGEREES.length, 'one starter per domain suggestion');
+  assert.equal(chips.length, 4, 'four quick starters');
+  assert.equal($(doc, 'chat-topic-list').querySelectorAll('[data-topic]').length, D.SUPPORT_TOPICS.length, 'all topics stay available in the help browser');
   assert.equal($(doc, 'chat-suggest').hidden, false, 'the starters are visible on a fresh thread');
 });
 
@@ -310,7 +311,7 @@ test('the courriel row sits UNDER the composer — optional, one line, with its 
   const mail = $(doc, 'chat-courriel');
   assert.equal(mail.required, false, 'optional');
   assert.equal(mail.getAttribute('type'), 'email');
-  const help = doc.querySelector('.sup-courriel-row .help');
+  const help = $(doc, 'chat-courriel-help');
   assert.match(FLAT(help.textContent), /pour recevoir la réponse par courriel si vous quittez/);
   assert.ok((mail.getAttribute('aria-describedby') || '').split(/\s+/).includes(help.id), 'the help describes the field');
 });
@@ -440,4 +441,517 @@ test('CSS: the visitor’s own bubbles align right through the widget’s OWN ru
   // and the ≤ 8px typing dots are the only round marks the register allows.
   assert.ok(!/\.sup-(?!fab-dot|dot)[a-z-]*\s*\{[^}]*border-radius:\s*(?:50%|99|999)/.test(block), 'square register: no pills, no circles on controls');
   assert.match(block, /\.sup-dot\s*\{[^}]*width:\s*[1-8]px/, 'the typing dots stay inside the ≤ 8px exemption');
+});
+
+// Reliability regressions: exercise the actual composer and network boundary.
+const response = (json, status = 200) => ({ status, json: async () => json });
+function gate() { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; }
+
+test('a failed send restores its draft and removes only its optimistic echo', async () => {
+  const { doc, win, stub } = await boot();
+  win.fetch = (url, init) => String(url).includes('/support/messages') ? Promise.reject(new Error('offline')) : stub.handler(url, init);
+  await ask(doc, 'Question à conserver');
+  assert.equal($(doc, 'chat-text').value, 'Question à conserver');
+  assert.equal($(doc, 'chat-log').querySelectorAll('[data-id^="local-"]').length, 0);
+  assert.match($(doc, 'chat-error').textContent, /Envoi non confirmé/);
+  assert.equal($(doc, 'chat-send').disabled, false);
+  assert.equal($(doc, 'chat-log').querySelector('.sup-typing'), null);
+  win.fetch = stub.handler;
+  submit($(doc, 'chat-form')); await wait(30);
+  assert.equal($(doc, 'chat-log').querySelectorAll('.sup-msg').length, 1);
+  assert.equal($(doc, 'chat-text').value, '');
+});
+
+test('failure preserves a newer draft and offers explicit recovery without sending', async () => {
+  const { doc, win, stub } = await boot();
+  const pending = gate();
+  win.fetch = (url, init) => String(url).includes('/support/messages') ? pending.promise : stub.handler(url, init);
+  await ask(doc, 'Première question');
+  $(doc, 'chat-text').value = 'Nouveau brouillon';
+  pending.resolve(response({}, 503)); await wait(20);
+  assert.equal($(doc, 'chat-text').value, 'Nouveau brouillon');
+  const failed = $(doc, 'chat-log').querySelector('[data-delivery="unconfirmed"]');
+  assert.match(failed.textContent, /Première question/);
+  failed.querySelector('button').click();
+  assert.equal($(doc, 'chat-text').value, 'Nouveau brouillon');
+  $(doc, 'chat-text').value = '';
+  failed.querySelector('button').click();
+  assert.equal($(doc, 'chat-text').value, 'Première question');
+  assert.equal($(doc, 'chat-log').querySelector('[data-delivery="unconfirmed"]'), null);
+});
+
+test('a later successful send does not delete an earlier unconfirmed message', async () => {
+  const { doc, win, stub } = await boot();
+  await ask(doc, 'Créer le fil');
+  const pending = gate();
+  win.fetch = (url, init) => String(url).includes('/support/messages') ? pending.promise : stub.handler(url, init);
+  await ask(doc, 'Message incertain');
+  $(doc, 'chat-text').value = 'Question suivante';
+  pending.resolve(response({}, 500)); await wait(20);
+  win.fetch = stub.handler;
+  submit($(doc, 'chat-form')); await wait(30);
+  assert.equal($(doc, 'chat-log').querySelectorAll('[data-delivery="unconfirmed"]').length, 1);
+  const echoes = $(doc, 'chat-log').querySelectorAll('[data-id^="local-"]');
+  assert.equal(echoes.length, 1);
+  assert.match(echoes[0].textContent, /Message incertain/);
+  assert.match($(doc, 'chat-log').textContent, /Question suivante/);
+});
+
+test('malformed success bodies cannot discard a draft or replace its session', async () => {
+  const { doc, win, stub } = await boot();
+  await ask(doc, 'Fil existant');
+  const session = win.localStorage.getItem('nota.support.v1');
+  win.fetch = async () => response({ message: null }, 201);
+  await ask(doc, 'À conserver');
+  assert.equal($(doc, 'chat-text').value, 'À conserver');
+  assert.equal(win.localStorage.getItem('nota.support.v1'), session);
+});
+
+test('only one poll is in flight and a late expired-token poll cannot forget a renewed session', async () => {
+  const { doc, win, Nota, stub } = await boot();
+  await ask(doc, 'Fil existant');
+  const pending = gate(); let reads = 0;
+  win.fetch = (url, init) => {
+    if (String(url).includes('/support/thread')) { reads++; return pending.promise; }
+    return stub.handler(url, init);
+  };
+  const first = Nota.support.refresh();
+  const second = Nota.support.refresh();
+  await wait(5); assert.equal(reads, 1);
+  const current = JSON.parse(win.localStorage.getItem('nota.support.v1'));
+  win.localStorage.setItem('nota.support.v1', JSON.stringify({ ...current, token: 'renewed-token' }));
+  pending.resolve(response({}, 401)); await Promise.all([first, second]);
+  assert.equal(JSON.parse(win.localStorage.getItem('nota.support.v1')).token, 'renewed-token');
+  assert.equal($(doc, 'chat-ended').hidden, true);
+});
+
+test('a slow poll started before a send cannot regress seenAt or erase the conversation', async () => {
+  const { doc, win, Nota, stub } = await boot();
+  await ask(doc, 'Fil existant');
+  const pending = gate();
+  win.fetch = (url, init) => String(url).includes('/support/thread') ? pending.promise : stub.handler(url, init);
+  const read = Nota.support.refresh();
+  await ask(doc, 'Nouvelle question');
+  const session = JSON.parse(win.localStorage.getItem('nota.support.v1'));
+  pending.resolve(response({}, 401)); await read;
+  assert.deepEqual(JSON.parse(win.localStorage.getItem('nota.support.v1')), session);
+  assert.match($(doc, 'chat-log').textContent, /Nouvelle question/);
+});
+
+test('polling suspends in hidden or offline tabs and resumes when available', async () => {
+  const { doc, win, Nota } = await boot();
+  await ask(doc, 'Fil existant');
+  Object.defineProperty(doc, 'hidden', { configurable: true, value: true });
+  doc.dispatchEvent(new win.Event('visibilitychange'));
+  assert.equal(Nota.support.pollMs(), 0);
+  Object.defineProperty(doc, 'hidden', { configurable: true, value: false });
+  doc.dispatchEvent(new win.Event('visibilitychange')); await wait(10);
+  assert.equal(Nota.support.pollMs(), 8000);
+  Object.defineProperty(win.navigator, 'onLine', { configurable: true, value: false });
+  win.dispatchEvent(new win.Event('offline'));
+  assert.equal(Nota.support.pollMs(), 0);
+  Object.defineProperty(win.navigator, 'onLine', { configurable: true, value: true });
+  win.dispatchEvent(new win.Event('online')); await wait(10);
+  assert.equal(Nota.support.pollMs(), 8000);
+});
+
+test('poll failures back off and success restores the normal cadence', async () => {
+  const { doc, win, Nota, stub } = await boot();
+  await ask(doc, 'Fil existant');
+  win.fetch = async () => response({}, 503);
+  await Nota.support.refresh(); assert.equal(Nota.support.pollMs(), 16000);
+  await Nota.support.refresh(); assert.equal(Nota.support.pollMs(), 32000);
+  win.fetch = stub.handler;
+  await Nota.support.refresh(); assert.equal(Nota.support.pollMs(), 8000);
+});
+
+test('topic search ignores accents, filters locally, and has a recoverable empty state', async () => {
+  const { doc, stub } = await boot();
+  $(doc, 'chat-fab').click();
+  const search = $(doc, 'chat-topic-search'), list = $(doc, 'chat-topic-list');
+  search.value = 'preteur'; input(search);
+  const visible = [...list.children].filter(n => !n.hidden);
+  assert.equal(visible.length, 1); assert.equal(visible[0].dataset.topic, 'preteur');
+  search.value = 'zzzzzz'; input(search);
+  assert.equal($(doc, 'chat-topic-empty').hidden, false);
+  search.value = ''; input(search);
+  assert.equal([...list.children].filter(n => !n.hidden).length, D.SUPPORT_TOPICS.length);
+  assert.equal($(doc, 'chat-topic-empty').hidden, true);
+  assert.equal(stub.calls.filter(c => c.path.includes('/support/messages')).length, 0);
+});
+
+test('handoff state survives refresh and hides assistant typing on later messages', async () => {
+  const { doc, win, Nota, stub } = await boot();
+  await ask(doc, 'Fil existant');
+  win.fetch = (url, init) => String(url).includes('/support/thread')
+    ? Promise.resolve(response({ messages: [], escalade: true, humain: false })) : stub.handler(url, init);
+  await Nota.support.refresh();
+  assert.equal($(doc, 'chat-escalade').hidden, false);
+  const release = stub.hold();
+  await ask(doc, 'Précision pour la personne');
+  assert.equal($(doc, 'chat-log').querySelector('.sup-typing'), null);
+  assert.equal($(doc, 'chat-escalade').hidden, false);
+  release(); await wait(20);
+});
+
+test('IME composition does not send and repeated submit sends only once', async () => {
+  const { doc, stub } = await boot();
+  $(doc, 'chat-fab').click();
+  $(doc, 'chat-text').value = 'Question';
+  key($(doc, 'chat-text'), 'Enter', { isComposing: true }); await wait(5);
+  assert.equal(stub.calls.filter(c => c.path.includes('/support/messages')).length, 0);
+  const release = stub.hold();
+  submit($(doc, 'chat-form')); submit($(doc, 'chat-form')); await wait(5);
+  assert.equal(stub.calls.filter(c => c.path.includes('/support/messages')).length, 1);
+  release(); await wait(20);
+});
+
+test('operator double-submit is guarded and a newer reply draft survives', async () => {
+  const stub = supportStub();
+  stub.threads.set('op-token', { id: 'th-op', messages: [] });
+  const { doc, win } = await boot({ hash: '#reponse=op-token', stub });
+  const pending = gate(); let posts = 0;
+  win.fetch = (url, init) => {
+    if (String(url).includes('/support/reply')) { posts++; return pending.promise; }
+    return stub.handler(url, init);
+  };
+  $(doc, 'chat-reply-text').value = 'Réponse';
+  submit($(doc, 'chat-reply-form')); submit($(doc, 'chat-reply-form')); await wait(5);
+  $(doc, 'chat-reply-text').value = 'Précision suivante';
+  pending.resolve(response({ message: { id: 'op-answer', de: 'nota', texte: 'Réponse' } })); await wait(20);
+  assert.equal(posts, 1);
+  assert.equal($(doc, 'chat-reply-text').value, 'Précision suivante');
+});
+
+test('emailed operator retries keep the same message ID while newer replies remain independent', async () => {
+  const stub = supportStub(); stub.threads.set('op-token', { id: 'th-op', messages: [] });
+  const { doc, win } = await boot({ hash: '#reponse=op-token', stub });
+  const pending = gate(), attempts = [];
+  win.fetch = (url, init) => {
+    if (String(url).includes('/support/reply')) { attempts.push(JSON.parse(init.body)); return pending.promise; }
+    return stub.handler(url, init);
+  };
+  $(doc, 'chat-reply-text').value = 'Réponse incertaine'; submit($(doc, 'chat-reply-form')); await wait(5);
+  $(doc, 'chat-reply-text').value = 'Précision suivante'; input($(doc, 'chat-reply-text'));
+  pending.resolve(response({}, 503)); await wait(15);
+  assert.equal($(doc, 'chat-reply-text').value, 'Précision suivante');
+  assert.match($(doc, 'chat-reply-recovery').textContent, /Réponse incertaine/);
+  win.fetch = (url, init) => {
+    if (String(url).includes('/support/reply')) attempts.push(JSON.parse(init.body));
+    return stub.handler(url, init);
+  };
+  submit($(doc, 'chat-reply-form')); await wait(20);
+  assert.notEqual(attempts[1].messageId, attempts[0].messageId);
+  $(doc, 'chat-reply-recovery').querySelector('button').click();
+  assert.equal($(doc, 'chat-reply-text').value, 'Réponse incertaine');
+  submit($(doc, 'chat-reply-form')); await wait(20);
+  assert.deepEqual(attempts[2], attempts[0]);
+  assert.equal($(doc, 'chat-reply-recovery').hidden, true);
+});
+
+test('an emailed operator reply completing after a thread change cannot alter the new conversation', async () => {
+  const stub = supportStub();
+  stub.threads.set('op-one', { id: 'th-one', messages: [] });
+  stub.threads.set('op-two', { id: 'th-two', messages: [] });
+  const { doc, win, Nota } = await boot({ hash: '#reponse=op-one', stub });
+  const pending = gate();
+  win.fetch = (url, init) => String(url).includes('/support/reply') ? pending.promise : stub.handler(url, init);
+  $(doc, 'chat-reply-text').value = 'Réponse du premier fil'; submit($(doc, 'chat-reply-form')); await wait(5);
+  await Nota.support.openReply('op-two');
+  $(doc, 'chat-reply-text').value = 'Brouillon du second fil'; input($(doc, 'chat-reply-text'));
+  pending.resolve(response({ message: { id: 'old-reply', de: 'nota', texte: 'Réponse du premier fil' } })); await wait(15);
+  assert.equal($(doc, 'chat-reply-text').value, 'Brouillon du second fil');
+  assert.equal($(doc, 'chat-reply-log').textContent.includes('Réponse du premier fil'), false);
+  assert.equal($(doc, 'chat-reply-sent').hidden, true);
+});
+
+test('a hung request times out, aborts and restores the composer without retrying the POST', async () => {
+  const { doc, win, stub } = await boot();
+  const realTimeout = win.setTimeout.bind(win);
+  win.setTimeout = (fn, ms, ...args) => realTimeout(fn, ms === 45000 ? 15 : ms, ...args);
+  let posts = 0, signal;
+  win.fetch = (url, init) => {
+    if (String(url).includes('/support/messages')) { posts++; signal = init.signal; return new Promise(() => {}); }
+    return stub.handler(url, init);
+  };
+  await ask(doc, 'Question pendant la panne'); await wait(20);
+  assert.equal(posts, 1);
+  assert.equal(signal.aborted, true);
+  assert.equal($(doc, 'chat-send').disabled, false);
+  assert.equal($(doc, 'chat-text').value, 'Question pendant la panne');
+});
+
+test('a response arriving after the panel closes counts as unread', async () => {
+  const { doc, win, stub } = await boot();
+  const pending = gate();
+  win.fetch = (url, init) => String(url).includes('/support/messages') ? pending.promise : stub.handler(url, init);
+  await ask(doc, 'Question');
+  $(doc, 'chat-close').click();
+  const createdAt = new Date().toISOString();
+  pending.resolve(response({ threadId: 'th-async', token: 'tok-async', message: { id: 'q1', de: 'visiteur', texte: 'Question', createdAt }, reponse: { id: 'a1', de: 'assistant', texte: 'Réponse', createdAt } }, 201));
+  // Keep the created thread valid when the immediate follow-up poll runs.
+  stub.threads.set('tok-async', { id: 'th-async', messages: [{ id: 'a1', de: 'assistant', texte: 'Réponse', createdAt }] });
+  await wait(20);
+  assert.equal($(doc, 'chat-fab-dot').hidden, false);
+  $(doc, 'chat-fab').click(); await wait(10);
+  assert.equal($(doc, 'chat-fab-dot').hidden, true);
+});
+
+test('closing the mobile chat returns focus to the visible menu button', async () => {
+  const { doc, win } = await boot();
+  win.matchMedia = () => ({ matches: true });
+  $(doc, 'chat-fab').click();
+  $(doc, 'chat-close').click();
+  assert.equal(doc.activeElement, $(doc, 'nav-burger'));
+});
+
+test('an uncertain first message reuses its exact body and private recovery key until confirmed', async () => {
+  const { doc, win, stub } = await boot();
+  const attempts = [];
+  win.fetch = (url, init) => {
+    if (String(url).includes('/support/messages')) {
+      attempts.push(JSON.parse(init.body));
+      if (attempts.length === 1) return Promise.reject(new Error('response lost'));
+    }
+    return stub.handler(url, init);
+  };
+  $(doc, 'chat-courriel').value = 'original@example.com';
+  await ask(doc, 'Première question à retrouver');
+  assert.match(attempts[0].requestKey, /^[A-Za-z0-9_-]{43}$/);
+  assert.match(attempts[0].messageId, /^[A-Za-z0-9_.:@-]+$/);
+  $(doc, 'chat-courriel').value = 'modified@example.com'; input($(doc, 'chat-courriel'));
+  submit($(doc, 'chat-form')); await wait(30);
+  assert.deepEqual(attempts[1], attempts[0], 'a replay carries exactly the body the server originally received');
+  assert.equal($(doc, 'chat-courriel-status').hidden, true, 'a later email edit must not be announced as saved');
+  assert.equal(win.localStorage.getItem('nota.support.v1').includes(attempts[0].requestKey), false);
+  await ask(doc, 'Message suivant');
+  assert.equal(attempts[2].requestKey, undefined, 'the confirmed token replaces the first-request secret');
+  assert.notEqual(attempts[2].messageId, attempts[0].messageId);
+});
+
+test('existing-thread retries and recovery buttons reuse their message ID', async () => {
+  const { doc, win, stub } = await boot();
+  await ask(doc, 'Fil existant');
+  const pending = gate(), attempts = [];
+  win.fetch = (url, init) => {
+    if (String(url).includes('/support/messages')) { attempts.push(JSON.parse(init.body)); return pending.promise; }
+    return stub.handler(url, init);
+  };
+  await ask(doc, 'Réponse de réseau incertaine');
+  $(doc, 'chat-text').value = 'Nouveau brouillon';
+  pending.resolve(response({}, 503)); await wait(20);
+  const recovery = $(doc, 'chat-log').querySelector('[data-delivery="unconfirmed"] button');
+  $(doc, 'chat-text').value = ''; recovery.click();
+  win.fetch = (url, init) => {
+    if (String(url).includes('/support/messages')) attempts.push(JSON.parse(init.body));
+    return stub.handler(url, init);
+  };
+  submit($(doc, 'chat-form')); await wait(30);
+  assert.deepEqual(attempts[1], attempts[0]);
+  assert.equal(attempts[0].requestKey, undefined);
+  assert.equal($(doc, 'chat-log').querySelector('[data-delivery="unconfirmed"]'), null);
+});
+
+test('different first messages never reuse the same first-request recovery secret', async () => {
+  const { doc, win, stub } = await boot(); const attempts = [];
+  win.fetch = (url, init) => {
+    if (String(url).includes('/support/messages')) { attempts.push(JSON.parse(init.body)); return Promise.reject(new Error('offline')); }
+    return stub.handler(url, init);
+  };
+  await ask(doc, 'Première tentative');
+  await ask(doc, 'Question différente');
+  assert.notEqual(attempts[0].requestKey, attempts[1].requestKey);
+  assert.notEqual(attempts[0].messageId, attempts[1].messageId);
+});
+
+test('a visitor email link restores the same conversation in a fresh browser', async () => {
+  const stub = supportStub();
+  stub.threads.set('visitor-email-token', { id: 'emailed-thread', courriel: 'client@example.com', messages: [
+    { id: 'email-answer', de: 'nota', texte: 'Réponse déjà reçue par courriel', createdAt: stub.stamp() },
+  ] });
+  const { doc, win } = await boot({ hash: '#messagerie=visitor-email-token', stub });
+  assert.equal(win.location.hash, '', 'the bearer must immediately leave the address bar');
+  const stored = JSON.parse(win.localStorage.getItem('nota.support.v1'));
+  assert.equal(stored.threadId, 'emailed-thread');
+  assert.equal(stored.token, 'visitor-email-token');
+  assert.equal($(doc, 'chat-panel').hidden, false);
+  assert.match($(doc, 'chat-log').textContent, /Réponse déjà reçue par courriel/);
+  assert.equal($(doc, 'chat-courriel').value, 'client@example.com');
+  assert.equal(stub.calls.filter(c => c.path.includes('/support/thread')).length, 1, 'the verified transcript avoids an immediate duplicate read');
+  assert.equal(stub.calls.filter(c => c.path.includes('/support/messages')).length, 0);
+});
+
+test('a visitor email link restores its conversation through a same-document hash change', async () => {
+  const { doc, win, stub } = await boot();
+  stub.threads.set('same-document-visitor', { id: 'same-document-thread', messages: [
+    { id: 'same-document-answer', de: 'nota', texte: 'Réponse sur la page déjà ouverte', createdAt: stub.stamp() },
+  ] });
+  win.location.hash = '#messagerie=same-document-visitor'; await wait(30);
+  assert.equal(win.location.hash, '');
+  assert.equal($(doc, 'chat-panel').hidden, false);
+  assert.match($(doc, 'chat-log').textContent, /Réponse sur la page déjà ouverte/);
+  assert.equal(JSON.parse(win.localStorage.getItem('nota.support.v1')).threadId, 'same-document-thread');
+  // Even a later hashchange callback sees the stripped URL and cannot replay.
+  win.dispatchEvent(new win.HashChangeEvent('hashchange')); await wait(10);
+  assert.equal(stub.calls.filter(c => c.path.includes('/support/thread')).length, 1);
+  assert.equal(stub.calls.filter(c => c.path.includes('/support/messages')).length, 0);
+});
+
+test('an operator email link also opens through a same-document hash change', async () => {
+  const { doc, win, stub } = await boot();
+  stub.threads.set('same-document-operator', { id: 'operator-thread', messages: [
+    { id: 'same-document-question', de: 'visiteur', texte: 'Question à traiter dans cet onglet', createdAt: stub.stamp() },
+  ] });
+  win.location.hash = '#reponse=same-document-operator'; await wait(30);
+  assert.equal(win.location.hash, '');
+  assert.equal($(doc, 'chat-reply-dialog').open, true);
+  assert.match($(doc, 'chat-reply-log').textContent, /Question à traiter dans cet onglet/);
+  assert.equal($(doc, 'chat-reply-dialog').dataset.token, 'same-document-operator');
+  win.dispatchEvent(new win.HashChangeEvent('hashchange')); await wait(10);
+  assert.equal(stub.calls.filter(c => c.path.includes('/support/thread')).length, 1);
+  assert.equal(stub.calls.filter(c => c.path.includes('/support/reply')).length, 0);
+});
+
+test('an expired visitor email link preserves the current session and never creates a replacement thread', async () => {
+  const session = JSON.stringify({ threadId: 'existing', token: 'existing-token', lastAt: '2026-09-09T10:00:00Z', seenAt: '2026-09-09T09:00:00Z' });
+  const { doc, win, stub } = await boot({ hash: '#messagerie=expired-token', seed: { 'nota.support.v1': session } });
+  assert.equal(win.location.hash, '');
+  assert.equal(win.localStorage.getItem('nota.support.v1'), session);
+  assert.match($(doc, 'toast').textContent, /Lien de conversation invalide ou expiré/);
+  assert.equal(stub.calls.filter(c => c.path.includes('/support/messages')).length, 0);
+});
+
+test('a malformed visitor-link response cannot adopt its token or erase a draft', async () => {
+  const stub = supportStub(), pending = gate();
+  const original = stub.handler;
+  stub.handler = (url, init) => String(url).includes('/support/thread') ? pending.promise : original(url, init);
+  const { doc, win } = await boot({ hash: '#messagerie=invalid-shape', stub });
+  assert.equal(win.location.hash, '', 'strip the secret before the network finishes');
+  $(doc, 'chat-text').value = 'Brouillon pendant la vérification';
+  pending.resolve(response({ messages: [] })); await wait(15);
+  assert.equal(win.localStorage.getItem('nota.support.v1'), null);
+  assert.equal($(doc, 'chat-text').value, 'Brouillon pendant la vérification');
+  assert.match($(doc, 'toast').textContent, /Impossible d’ouvrir/);
+});
+
+test('a poll that finishes after the tab hides leaves its reply unread', async () => {
+  const { doc, win, Nota, stub } = await boot();
+  await ask(doc, 'Fil existant');
+  const session = JSON.parse(win.localStorage.getItem('nota.support.v1'));
+  const pending = gate();
+  win.fetch = (url, init) => String(url).includes('/support/thread') ? pending.promise : stub.handler(url, init);
+  const read = Nota.support.refresh();
+  await wait(5);
+  Object.defineProperty(doc, 'hidden', { configurable: true, value: true });
+  doc.dispatchEvent(new win.Event('visibilitychange'));
+  const reply = { id: 'hidden-poll-reply', de: 'nota', texte: 'Réponse arrivée ailleurs', createdAt: stub.stamp() };
+  pending.resolve(response({ messages: [reply] }));
+  await read;
+  const updated = JSON.parse(win.localStorage.getItem('nota.support.v1'));
+  assert.equal(updated.seenAt, session.seenAt, 'an unseen reply must not advance the read cursor');
+  assert.equal(updated.lastAt, reply.createdAt);
+  assert.equal($(doc, 'chat-fab-dot').hidden, false);
+  assert.equal(Nota.support.pollMs(), 0);
+});
+
+test('an expired-token retry failure preserves the original question alongside a newer draft', async () => {
+  const { doc, win, stub } = await boot();
+  await ask(doc, 'Ancien fil');
+  const pending = gate(); let posts = 0;
+  win.fetch = (url, init) => {
+    if (String(url).includes('/support/messages')) {
+      posts++;
+      return posts === 1 ? Promise.resolve(response({}, 401)) : pending.promise;
+    }
+    return stub.handler(url, init);
+  };
+  await ask(doc, 'Question à conserver après expiration');
+  assert.equal(posts, 2, 'the rejected token should retry once without its token');
+  $(doc, 'chat-text').value = 'Nouveau brouillon';
+  pending.resolve(response({}, 503)); await wait(20);
+  assert.equal($(doc, 'chat-text').value, 'Nouveau brouillon');
+  const failed = $(doc, 'chat-log').querySelector('[data-delivery="unconfirmed"]');
+  assert.ok(failed, 'the uncertain retry needs a recoverable bubble');
+  assert.match(failed.textContent, /Question à conserver après expiration/);
+  $(doc, 'chat-text').value = '';
+  failed.querySelector('button').click();
+  assert.equal($(doc, 'chat-text').value, 'Question à conserver après expiration');
+  assert.equal(posts, 2, 'restoring the question must not send it');
+});
+
+test('a poll started before saving an email cannot restore the previous address', async () => {
+  const { doc, win, Nota, stub } = await boot();
+  await ask(doc, 'Fil existant');
+  const pending = gate(); let patches = 0;
+  win.fetch = (url, init = {}) => {
+    if (String(url).includes('/support/thread')) {
+      if (init.method === 'PATCH') {
+        patches++;
+        assert.equal(JSON.parse(init.body).courriel, 'nouveau@example.com');
+        return Promise.resolve(response({ ok: true }));
+      }
+      return pending.promise;
+    }
+    return stub.handler(url, init);
+  };
+  const read = Nota.support.refresh(); await wait(5);
+  $(doc, 'chat-courriel').value = 'nouveau@example.com'; input($(doc, 'chat-courriel'));
+  $(doc, 'chat-courriel-save').click(); await wait(10);
+  assert.equal(patches, 1);
+  pending.resolve(response({ messages: [], courriel: 'ancien@example.com' }));
+  await read;
+  assert.equal($(doc, 'chat-courriel').value, 'nouveau@example.com');
+  assert.match($(doc, 'chat-courriel-status').textContent, /Courriel enregistré/);
+});
+
+test('email can be saved after sending without another message or losing the composer draft', async () => {
+  const { doc, win, stub } = await boot();
+  assert.equal($(doc, 'chat-courriel-save').hidden, true);
+  await ask(doc, 'Une question');
+  assert.equal($(doc, 'chat-courriel-save').hidden, false);
+  const before = stub.calls.filter(c => c.path.includes('/support/messages')).length;
+  let patch;
+  win.fetch = (url, init) => {
+    if (String(url).includes('/support/thread') && init.method === 'PATCH') {
+      patch = { token: init.headers.authorization, body: JSON.parse(init.body) };
+      return Promise.resolve(response({ courriel: patch.body.courriel }));
+    }
+    return stub.handler(url, init);
+  };
+  $(doc, 'chat-courriel').value = ' CUSTOMER@EXAMPLE.TEST ';
+  $(doc, 'chat-text').value = 'Mon prochain message';
+  $(doc, 'chat-courriel-save').click(); await wait(10);
+  assert.equal(patch.body.courriel, 'customer@example.test');
+  assert.match(patch.token, /^Bearer tok-/);
+  assert.equal($(doc, 'chat-text').value, 'Mon prochain message');
+  assert.equal(stub.calls.filter(c => c.path.includes('/support/messages')).length, before);
+  assert.match($(doc, 'chat-courriel-status').textContent, /Courriel enregistré/);
+});
+
+test('invalid emails never reach PATCH and save failure remains visible and retryable', async () => {
+  const { doc, win } = await boot();
+  await ask(doc, 'Une question');
+  let calls = 0;
+  win.fetch = async () => { calls++; return response({}, 503); };
+  $(doc, 'chat-courriel').value = 'invalide';
+  $(doc, 'chat-courriel-save').click(); await wait(5);
+  assert.equal(calls, 0);
+  assert.match($(doc, 'chat-courriel-status').textContent, /n’est pas valide/);
+  $(doc, 'chat-courriel').value = 'customer@example.test';
+  $(doc, 'chat-courriel-save').click(); await wait(10);
+  assert.equal(calls, 1);
+  assert.match($(doc, 'chat-courriel-status').textContent, /non enregistré/);
+  assert.equal($(doc, 'chat-courriel-save').disabled, false);
+  assert.equal($(doc, 'chat-courriel').value, 'customer@example.test');
+});
+
+test('poll restores the saved email without overwriting an email being edited', async () => {
+  const { doc, win, Nota } = await boot();
+  await ask(doc, 'Une question');
+  win.fetch = async () => response({ messages: [], courriel: 'saved@example.test', escalade: false, humain: false });
+  await Nota.support.refresh();
+  assert.equal($(doc, 'chat-courriel').value, 'saved@example.test');
+  $(doc, 'chat-courriel').value = 'new@example.test'; input($(doc, 'chat-courriel'));
+  await Nota.support.refresh();
+  assert.equal($(doc, 'chat-courriel').value, 'new@example.test');
 });

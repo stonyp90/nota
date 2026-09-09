@@ -23,6 +23,15 @@ test('home and booking load with no severe console errors or failed requests', a
   const pageErrors = [];
   const failedRequests = [];
   const badResponses = [];
+  const pendingLocal = new Set();
+  let lastLocalActivity = Date.now();
+  const settleLocal = request => {
+    if (pendingLocal.delete(request)) lastLocalActivity = Date.now();
+  };
+  page.on('request', request => {
+    if (isLocal(request.url())) { pendingLocal.add(request); lastLocalActivity = Date.now(); }
+  });
+  page.on('requestfinished', settleLocal);
   // Record the carnet feed status as it arrives (registering a listener up front
   // avoids racing the fetch that gotoHome already waits on).
   let bidsStatus = null;
@@ -35,6 +44,7 @@ test('home and booking load with no severe console errors or failed requests', a
   page.on('response', (resp) => {
     const url = resp.url();
     if (resp.status() < 300) answered.add(resp.request());
+    if (resp.status() === 204) settleLocal(resp.request());
     if (/\/bids\?month=/.test(url)) bidsStatus = resp.status();
     // A same-origin 5xx is a real server fault; 4xx here would be an app bug too.
     if (isLocal(url) && resp.status() >= 500) badResponses.push(`${resp.status()} ${url}`);
@@ -50,6 +60,7 @@ test('home and booking load with no severe console errors or failed requests', a
   });
   page.on('pageerror', (err) => pageErrors.push(String(err && err.message || err)));
   page.on('requestfailed', (req) => {
+    settleLocal(req);
     if (!isLocal(req.url())) return; // external font/resource failures are not ours
     if (answered.has(req)) return; // a 2xx already landed — see `answered` above
     failedRequests.push(`${req.method()} ${req.url()} — ${req.failure() && req.failure().errorText}`);
@@ -70,8 +81,10 @@ test('home and booking load with no severe console errors or failed requests', a
   await page.locator('.pulse-item', { has: page.locator('[data-svc="financement"]') })
     .locator('.mini-reserver').click();
   await expect(page.locator('#day-dialog')).toBeVisible();
-  // Let any lazy render / late fetch settle before the final assertion.
-  await page.waitForLoadState('networkidle');
+  // Match this test's origin boundary: external fonts can remain in flight
+  // without being an application failure. Still wait for local lazy requests.
+  await expect.poll(() => pendingLocal.size === 0 && Date.now() - lastLocalActivity >= 500,
+    { timeout: 15000, message: 'Nota requests settle before checking errors' }).toBe(true);
 
   expect(pageErrors, `uncaught page errors:\n${pageErrors.join('\n')}`).toEqual([]);
   expect(consoleErrors, `console errors:\n${consoleErrors.join('\n')}`).toEqual([]);

@@ -94,10 +94,10 @@ test('le panneau s’ouvre sur les questions du DOMAINE, pas sur un vide', async
   $(doc, 'chat-fab').click();
   await wait(20);
   const chips = [...$(doc, 'chat-suggest').querySelectorAll('.sup-chip')];
-  assert.equal(chips.length, D.SUPPORT_QUESTIONS_SUGGEREES.length);
+  assert.equal(chips.length, 4);
   // Bâties depuis la donnée : changer la liste du domaine change l'écran.
-  assert.deepEqual(chips.map((c) => FLAT(c.textContent)), D.SUPPORT_QUESTIONS_SUGGEREES.map((q) => q.fr));
-  assert.deepEqual(chips.map((c) => c.dataset.q), D.SUPPORT_QUESTIONS_SUGGEREES.map((q) => q.id));
+  assert.deepEqual(chips.map((c) => FLAT(c.textContent)), D.SUPPORT_QUESTIONS_SUGGEREES.slice(0, 4).map((q) => q.fr));
+  assert.deepEqual(chips.map((c) => c.dataset.q), D.SUPPORT_QUESTIONS_SUGGEREES.slice(0, 4).map((q) => q.id));
 });
 
 test('cliquer une question l’envoie telle quelle', async () => {
@@ -138,7 +138,7 @@ test('la ligne d’entête dit ce que la messagerie FAIT, et le dit une fois', a
   const { doc } = await boot(assistedStub());
   $(doc, 'chat-fab').click();
   const txt = FLAT($(doc, 'chat-panel').textContent);
-  const ligne = 'L’assistant de Nota répond tout de suite à ce qu’il sait. Une personne reprend le reste, par courriel.';
+  const ligne = 'Explorez les sujets d’aide ou posez votre question. Une personne peut reprendre la conversation.';
   assert.equal(txt.split(ligne).length - 1, 1);
 });
 
@@ -231,4 +231,34 @@ test('CSS : l’assistant a sa marque, et les points d’écriture restent des p
   assert.match(CSS_SRC, /\.sup-dot\s*\{[^}]*width:\s*[1-8]px/);
   // Le mouvement se coupe pour qui le demande.
   assert.match(CSS_SRC, /prefers-reduced-motion[^}]*\}[\s\S]{0,120}\.sup-dot\s*\{[^}]*animation:\s*none|\.sup-dot\s*\{\s*animation:\s*none/);
+});
+
+test('expanded questions are behind a native disclosure and the composer explains privacy', async () => {
+  const { doc } = await boot(assistedStub());
+  $(doc, 'chat-fab').click();
+  const box = $(doc, 'chat-suggest');
+  assert.equal(box.querySelectorAll(':scope > .sup-chip').length, 4);
+  const more = $(doc, 'chat-topics');
+  assert.equal(more.open, false);
+  assert.ok(more.querySelectorAll('.sup-chip').length > 10);
+  assert.ok($(doc, 'chat-text').getAttribute('aria-describedby').includes('chat-privacy'));
+  assert.match($(doc, 'chat-privacy').textContent, /mot de passe/);
+});
+
+test('help topics remain available after a reply and prepare a question without sending', async () => {
+  const { doc, stub } = await boot(assistedStub());
+  await ask(doc, 'Bonjour');
+  const posts = () => stub.calls.filter(c => c.path.includes('/support/messages')).length;
+  const before = posts();
+  const topics = $(doc, 'chat-topic-list').querySelectorAll('[data-topic]');
+  assert.equal(topics.length, D.SUPPORT_TOPICS.length);
+  $(doc, 'chat-topics').open = true;
+  topics[0].click();
+  assert.equal($(doc, 'chat-text').value, D.SUPPORT_TOPICS[0].fr);
+  assert.equal(posts(), before);
+  assert.equal(doc.activeElement, $(doc, 'chat-text'));
+  $(doc, 'chat-text').value = 'Ma question en cours';
+  topics[1].click();
+  assert.equal($(doc, 'chat-text').value, 'Ma question en cours');
+  assert.ok($(doc, 'chat-text').getAttribute('aria-describedby').includes('chat-privacy'));
 });

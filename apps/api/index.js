@@ -27,7 +27,9 @@ exports.handler = async (event) => {
   const method = event?.requestContext?.http?.method || 'GET';
   const path = event?.rawPath || '/';
   const query = event?.queryStringParameters || {};
-  const headers = event?.headers || {};
+  const headers = { ...(event?.headers || {}) };
+  // Function URLs move incoming cookies out of headers in payload format 2.0.
+  if (Array.isArray(event?.cookies) && event.cookies.length) headers.cookie = event.cookies.join('; ');
   // The platform-supplied source IP (unspoofable) — used to rate-limit notary
   // sign-in requests. NOT read from a client-controlled header.
   const sourceIp = event?.requestContext?.http?.sourceIp;
@@ -35,5 +37,9 @@ exports.handler = async (event) => {
   if (event?.isBase64Encoded && body) body = Buffer.from(body, 'base64').toString('utf8');
 
   const res = await app.handle({ method, path, query, headers, body, sourceIp });
-  return { statusCode: res.statusCode, headers: res.headers, body: res.body };
+  const responseHeaders = { ...res.headers };
+  const setCookie = responseHeaders['set-cookie'];
+  delete responseHeaders['set-cookie'];
+  return { statusCode: res.statusCode, headers: responseHeaders, body: res.body,
+    ...(setCookie ? { cookies: Array.isArray(setCookie) ? setCookie : [setCookie] } : {}) };
 };

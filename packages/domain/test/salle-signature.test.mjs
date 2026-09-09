@@ -6,7 +6,7 @@
  * calculée depuis le domaine, et l'empreinte SHA-256 est confrontée à
  * `node:crypto`, qui n'a aucune raison d'être d'accord par accident.
  *
- * La table des exigences est dans docs/signing-security-requirements.md ; les
+ * La table des exigences est dans docs/salle-signature-exigences-tenues.md ; les
  * numéros cités (A3, C1, E1…) y renvoient.
  */
 import { test } from 'node:test';

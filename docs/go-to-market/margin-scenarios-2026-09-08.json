@@ -1,0 +1,375 @@
+{
+  "date": "2026-09-08",
+  "assumptions": {
+    "domesticRate": 0.029,
+    "cardFixed": 0.3,
+    "connectRate": 0.0025,
+    "activeAccountMonthly": 2,
+    "actsPerActiveAccount": 10,
+    "actsPerPayout": 1,
+    "payoutFixed": 0.25,
+    "supportPerAct": 30,
+    "cacPerAct": 164,
+    "serviceMix": {
+      "financement": 0.4,
+      "refinancement": 0.6
+    },
+    "tierMix": {
+      "standard": 0.7,
+      "rapide": 0.18,
+      "prioritaire": 0.07,
+      "urgence": 0.03,
+      "extreme": 0.02
+    }
+  },
+  "catalogue": [
+    {
+      "service": "refinancement",
+      "combinations": 176256,
+      "uniqueBases": 46,
+      "min": 2000,
+      "max": 4300
+    },
+    {
+      "service": "financement",
+      "combinations": 352512,
+      "uniqueBases": 50,
+      "min": 1800,
+      "max": 4300
+    }
+  ],
+  "rows": [
+    {
+      "service": "refinancement",
+      "tier": "standard",
+      "honoraires": 2000,
+      "nota": 279,
+      "total": 2279,
+      "processing": 66.391,
+      "connect": 5.45,
+      "margin": 207.159,
+      "maxHonoraires": 21500,
+      "worstMargin": -407.091,
+      "breakEvenHonoraires": 8576.47619048,
+      "byCardProfile": {
+        "domestic": 207.159,
+        "international": 188.927,
+        "internationalWithFx": 143.347
+      }
+    },
+    {
+      "service": "refinancement",
+      "tier": "rapide",
+      "honoraires": 4000,
+      "nota": 428,
+      "total": 4428,
+      "processing": 128.712,
+      "connect": 10.45,
+      "margin": 288.838,
+      "maxHonoraires": 21500,
+      "worstMargin": -262.412,
+      "breakEvenHonoraires": 13169.46031746,
+      "byCardProfile": {
+        "domestic": 288.838,
+        "international": 253.414,
+        "internationalWithFx": 164.854
+      }
+    },
+    {
+      "service": "refinancement",
+      "tier": "prioritaire",
+      "honoraires": 6000,
+      "nota": 578,
+      "total": 6578,
+      "processing": 191.062,
+      "connect": 15.45,
+      "margin": 371.488,
+      "maxHonoraires": 21500,
+      "worstMargin": -116.762,
+      "breakEvenHonoraires": 17793.26984127,
+      "byCardProfile": {
+        "domestic": 371.488,
+        "international": 318.864,
+        "internationalWithFx": 187.304
+      }
+    },
+    {
+      "service": "refinancement",
+      "tier": "urgence",
+      "honoraires": 7000,
+      "nota": 728,
+      "total": 7728,
+      "processing": 224.412,
+      "connect": 17.95,
+      "margin": 485.638,
+      "maxHonoraires": 21500,
+      "worstMargin": 28.888,
+      "breakEvenHonoraires": 22417.07936508,
+      "byCardProfile": {
+        "domestic": 485.638,
+        "international": 423.814,
+        "internationalWithFx": 269.254
+      }
+    },
+    {
+      "service": "refinancement",
+      "tier": "extreme",
+      "honoraires": 8000,
+      "nota": 828,
+      "total": 8828,
+      "processing": 256.312,
+      "connect": 20.45,
+      "margin": 551.238,
+      "maxHonoraires": 21500,
+      "worstMargin": 125.988,
+      "breakEvenHonoraires": 25499.61904762,
+      "byCardProfile": {
+        "domestic": 551.238,
+        "international": 480.614,
+        "internationalWithFx": 304.054
+      }
+    },
+    {
+      "service": "financement",
+      "tier": "standard",
+      "honoraires": 1800,
+      "nota": 229,
+      "total": 2029,
+      "processing": 59.141,
+      "connect": 4.95,
+      "margin": 164.909,
+      "maxHonoraires": 21500,
+      "worstMargin": -455.641,
+      "breakEvenHonoraires": 7035.20634921,
+      "byCardProfile": {
+        "domestic": 164.909,
+        "international": 148.677,
+        "internationalWithFx": 108.097
+      }
+    },
+    {
+      "service": "financement",
+      "tier": "rapide",
+      "honoraires": 3600,
+      "nota": 378,
+      "total": 3978,
+      "processing": 115.662,
+      "connect": 9.45,
+      "margin": 252.888,
+      "maxHonoraires": 21500,
+      "worstMargin": -310.962,
+      "breakEvenHonoraires": 11628.19047619,
+      "byCardProfile": {
+        "domestic": 252.888,
+        "international": 221.064,
+        "internationalWithFx": 141.504
+      }
+    },
+    {
+      "service": "financement",
+      "tier": "prioritaire",
+      "honoraires": 5400,
+      "nota": 528,
+      "total": 5928,
+      "processing": 172.212,
+      "connect": 13.95,
+      "margin": 341.838,
+      "maxHonoraires": 21500,
+      "worstMargin": -165.312,
+      "breakEvenHonoraires": 16252,
+      "byCardProfile": {
+        "domestic": 341.838,
+        "international": 294.414,
+        "internationalWithFx": 175.854
+      }
+    },
+    {
+      "service": "financement",
+      "tier": "urgence",
+      "honoraires": 6300,
+      "nota": 678,
+      "total": 6978,
+      "processing": 202.662,
+      "connect": 16.2,
+      "margin": 459.138,
+      "maxHonoraires": 21500,
+      "worstMargin": -19.662,
+      "breakEvenHonoraires": 20875.80952381,
+      "byCardProfile": {
+        "domestic": 459.138,
+        "international": 403.314,
+        "internationalWithFx": 263.754
+      }
+    },
+    {
+      "service": "financement",
+      "tier": "extreme",
+      "honoraires": 7200,
+      "nota": 778,
+      "total": 7978,
+      "processing": 231.662,
+      "connect": 18.45,
+      "margin": 527.888,
+      "maxHonoraires": 21500,
+      "worstMargin": 77.438,
+      "breakEvenHonoraires": 23958.34920635,
+      "byCardProfile": {
+        "domestic": 527.888,
+        "international": 464.064,
+        "internationalWithFx": 304.504
+      }
+    }
+  ],
+  "baseline": {
+    "honoraires": 2793.6,
+    "nota": 331.2,
+    "total": 3124.8,
+    "processing": 90.9192,
+    "connect": 7.434,
+    "margin": 232.8468
+  },
+  "candidates": [
+    {
+      "name": "current",
+      "honoraires": 2793.6,
+      "nota": 331.2,
+      "total": 3124.8,
+      "processing": 90.9192,
+      "connect": 7.434,
+      "margin": 232.8468,
+      "gain": 0,
+      "maxRelativeConversionLoss": 0
+    },
+    {
+      "name": "249/289",
+      "honoraires": 2793.6,
+      "nota": 345.2,
+      "total": 3138.8,
+      "processing": 91.3252,
+      "connect": 7.434,
+      "margin": 246.4408,
+      "gain": 13.594,
+      "maxRelativeConversionLoss": 0.06280701
+    },
+    {
+      "name": "279/289",
+      "honoraires": 2793.6,
+      "nota": 357.2,
+      "total": 3150.8,
+      "processing": 91.6732,
+      "connect": 7.434,
+      "margin": 258.0928,
+      "gain": 25.246,
+      "maxRelativeConversionLoss": 0.11068302
+    },
+    {
+      "name": "289/289",
+      "honoraires": 2793.6,
+      "nota": 361.2,
+      "total": 3154.8,
+      "processing": 91.7892,
+      "connect": 7.434,
+      "margin": 261.9768,
+      "gain": 29.13,
+      "maxRelativeConversionLoss": 0.1255729
+    }
+  ],
+  "sensitivities": {
+    "cardProfiles": {
+      "domestic": {
+        "honoraires": 2793.6,
+        "nota": 331.2,
+        "total": 3124.8,
+        "processing": 90.9192,
+        "connect": 7.434,
+        "margin": 232.8468
+      },
+      "international": {
+        "honoraires": 2793.6,
+        "nota": 331.2,
+        "total": 3124.8,
+        "processing": 115.9176,
+        "connect": 7.434,
+        "margin": 207.8484
+      },
+      "internationalWithFx": {
+        "honoraires": 2793.6,
+        "nota": 331.2,
+        "total": 3124.8,
+        "processing": 178.4136,
+        "connect": 7.434,
+        "margin": 145.3524
+      }
+    },
+    "padBeforeVerificationAndRisk": {
+      "honoraires": 2793.6,
+      "nota": 331.2,
+      "total": 3124.8,
+      "processing": 5,
+      "connect": 7.434,
+      "margin": 318.766
+    },
+    "connectVolume": [
+      {
+        "actsPerNotaryMonth": 1,
+        "honoraires": 2793.6,
+        "nota": 331.2,
+        "total": 3124.8,
+        "processing": 90.9192,
+        "connect": 9.234,
+        "margin": 231.0468
+      },
+      {
+        "actsPerNotaryMonth": 5,
+        "honoraires": 2793.6,
+        "nota": 331.2,
+        "total": 3124.8,
+        "processing": 90.9192,
+        "connect": 7.634,
+        "margin": 232.6468
+      },
+      {
+        "actsPerNotaryMonth": 10,
+        "honoraires": 2793.6,
+        "nota": 331.2,
+        "total": 3124.8,
+        "processing": 90.9192,
+        "connect": 7.434,
+        "margin": 232.8468
+      },
+      {
+        "actsPerNotaryMonth": 20,
+        "honoraires": 2793.6,
+        "nota": 331.2,
+        "total": 3124.8,
+        "processing": 90.9192,
+        "connect": 7.334,
+        "margin": 232.9468
+      }
+    ],
+    "payoutBatch10": {
+      "honoraires": 2793.6,
+      "nota": 331.2,
+      "total": 3124.8,
+      "processing": 90.9192,
+      "connect": 7.209,
+      "margin": 233.0718
+    },
+    "contributionAfterIllustrativeSupportAndCac": 38.8468,
+    "expectedUnrecoveredPrincipalLoss": [
+      {
+        "rate": 0.001,
+        "costPerAct": 2.7936
+      },
+      {
+        "rate": 0.005,
+        "costPerAct": 13.968
+      },
+      {
+        "rate": 0.01,
+        "costPerAct": 27.936
+      }
+    ],
+    "extraTaxProcessingPer100Collected": 2.9
+  }
+}

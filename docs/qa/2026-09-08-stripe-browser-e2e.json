@@ -1,0 +1,121 @@
+{
+  "mode": "test",
+  "checkedAt": "2026-09-08T12:44:51.756Z",
+  "account": "acct_1UDOL2ADyUpA54Ph",
+  "connectedAccount": {
+    "chargesEnabled": true,
+    "payoutsEnabled": false,
+    "capabilities": {
+      "card_payments": "active",
+      "transfers": "active"
+    },
+    "requirements": {
+      "alternatives": [
+        {
+          "alternative_fields_due": [
+            "individual.verification.additional_document",
+            "individual.verification.document"
+          ],
+          "original_fields_due": [
+            "individual.verification.proof_of_liveness"
+          ]
+        }
+      ],
+      "current_deadline": null,
+      "currently_due": [
+        "individual.verification.proof_of_liveness"
+      ],
+      "disabled_reason": "requirements.past_due",
+      "errors": [
+        {
+          "code": "verification_failed_keyed_identity",
+          "reason": "The address on the account could not be verified. Correct any errors in the address field, or upload a document that includes your name and address.",
+          "requirement": "individual.verification.additional_document"
+        },
+        {
+          "code": "verification_failed_keyed_identity",
+          "reason": "The person's keyed-in identity information could not be verified. Correct any errors or upload a document that matches the identity fields (e.g., name and date of birth) entered.",
+          "requirement": "individual.verification.document"
+        }
+      ],
+      "eventually_due": [
+        "individual.verification.proof_of_liveness"
+      ],
+      "past_due": [
+        "individual.verification.proof_of_liveness"
+      ],
+      "pending_verification": []
+    }
+  },
+  "checkout": {
+    "id": "cs_test_a1uLcdgshryaYleN62NqFbfihiBhln7jaEHcjDxYzvVdJ4tN4zWsT0dUg6",
+    "status": "complete",
+    "amountCents": 697800
+  },
+  "authorization": {
+    "id": "pi_3UDONjAZUksBrhVb1LP3FcEJ",
+    "status": "requires_capture",
+    "amountCapturable": 697800
+  },
+  "bidId": "dffcc320-88d2-422f-a8a3-750613836777",
+  "completed": {
+    "ok": true,
+    "actAmount": 6300,
+    "commissionCents": 67800,
+    "paid": true,
+    "netCents": 630000
+  },
+  "capture": {
+    "id": "pi_3UDONjAZUksBrhVb1LP3FcEJ",
+    "status": "succeeded",
+    "amountReceived": 697800,
+    "chargeId": "ch_3UDONjAZUksBrhVb1RW0eKtO"
+  },
+  "transfer": {
+    "id": "tr_3UDONjAZUksBrhVb1cXrBveT",
+    "amount": 630000,
+    "destination": "acct_1UDOL2ADyUpA54Ph"
+  },
+  "retry": {
+    "ok": true,
+    "actAmount": 6300,
+    "commissionCents": 67800,
+    "paid": true,
+    "netCents": 630000
+  },
+  "noDuplicateTransfer": true,
+  "notaGrossFeeCents": 67800,
+  "stripeBalanceTransaction": {
+    "amount": 697800,
+    "fee": 20266,
+    "net": 677534,
+    "currency": "cad"
+  },
+  "passed": true,
+  "cleanup": {
+    "transferReversalId": "trr_1UDOP2AZUksBrhVbr7brdxwR",
+    "refund": {
+      "id": "re_3UDONjAZUksBrhVb14dx97bT",
+      "amount": 697800,
+      "status": "succeeded"
+    },
+    "canceledAuthorizations": [
+      "pi_3UDOJYAZUksBrhVb013Fn9jG"
+    ],
+    "testAccountDeleted": true,
+    "verified": true
+  },
+  "scope": {
+    "application": "local in-memory Nota with real Stripe test adapter",
+    "sourceDigest": "142a77052233",
+    "clientCheckoutViaBrowser": true,
+    "connectOnboardingViaBrowser": true,
+    "notaryAcceptanceAndCompletionViaHttpApi": true,
+    "signedWebhookDeliveryVerified": true,
+    "bankPayoutVerified": false,
+    "taxCollectionImplemented": false,
+    "livePaymentVerified": false,
+    "checkoutDisplayedBrand": "Usrly",
+    "passedMeaning": "Sandbox authorization, capture, transfer, retry idempotency and cleanup only"
+  }
+}

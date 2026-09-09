@@ -9,7 +9,8 @@
  * one of them wrong gives a console that renders and silently talks to nothing,
  * which is the worst possible failure for an agent iterating alone.
  *
- * So the four processes, their ports and their wiring are declared here, once.
+ * The four surfaces and their wiring are declared here, once. Both API listeners
+ * share one process/repository in memory mode.
  * Every one runs under `dev-watch.js`, so an edit anywhere under the API source
  * restarts what serves it. Output is prefixed per service; Ctrl-C stops all
  * four.
@@ -25,12 +26,22 @@
  *
  * Ports are overridable (NOTA_PORT_API, NOTA_PORT_WEB, NOTA_PORT_ADMIN_API,
  * NOTA_PORT_ADMIN). This path is IN-MEMORY: TABLE_NAME is deliberately dropped
- * from the children's environment so each server seeds itself from
+ * from the children's environment so the shared repository is seeded from
  * `dev-fixtures.js`. For the DynamoDB-backed stack, use `docker compose up`.
  */
 const { spawn } = require('node:child_process');
 const path = require('node:path');
 const { REPO_ROOT } = require('./source-fingerprint');
+const { configureLocalStripe } = require('./local-stripe-config');
+
+if (process.argv.includes('--stripe')) {
+  // Optional private file; shell variables take precedence in Node's loader.
+  const { existsSync } = require('node:fs');
+  const file = path.join(REPO_ROOT, '.env.stripe.local');
+  if (existsSync(file)) process.loadEnvFile(file);
+  process.env.NOTA_LOCAL_STRIPE = 'test';
+}
+configureLocalStripe();
 
 const PORTS = {
   api: Number(process.env.NOTA_PORT_API || 8788),
@@ -45,14 +56,9 @@ const SERVICES = [
   {
     name: 'api',
     entry: path.join('apps', 'api', 'local-server.js'),
-    env: { PORT: String(PORTS.api) },
-  },
-  {
-    name: 'admin-api',
-    entry: path.join('apps', 'api', 'admin-local-server.js'),
     env: {
-      PORT: String(PORTS.adminApi),
-      // The magic link must land on the admin CONSOLE, not on the API.
+      PORT: String(PORTS.api),
+      NOTA_SHARED_ADMIN_PORT: String(PORTS.adminApi),
       NOTA_ADMIN_BASE_URL: `http://localhost:${PORTS.admin}`,
     },
   },

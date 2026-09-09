@@ -19,6 +19,7 @@ const apiRoot = path.join(__dirname, '..', '..', 'apps', 'api');
 const { createApp } = require(path.join(apiRoot, 'src', 'handler'));
 const { createBilling } = require(path.join(apiRoot, 'src', 'billing'));
 const { createMemoryRepo } = require(path.join(apiRoot, 'src', 'repo-memory'));
+const { createLocalAdminApp } = require(path.join(apiRoot, 'admin-local-server'));
 const domain = require('@nota/domain');
 
 const PORT = Number(process.env.PORT || 8811);
@@ -65,6 +66,9 @@ const app = createApp(repo, {
   notaryLoginRlMax: RL_MAX,
   partnerClaimRlMax: RL_MAX,
 });
+// Exercise the real local shared-store composition: admin replies must become
+// visible in the public widget without a test-only messaging implementation.
+const localAdmin = createLocalAdminApp({ repo });
 
 const server = http.createServer(async (req, res) => {
   try {
@@ -73,7 +77,9 @@ const server = http.createServer(async (req, res) => {
     let body = '';
     for await (const chunk of req) body += chunk;
     const sourceIp = req.socket && req.socket.remoteAddress;
-    const out = await app.handle({ method: req.method, path: url.pathname, query, headers: req.headers, body, sourceIp });
+    await localAdmin.ready;
+    const handler = /^\/(?:api\/)?admin\//.test(url.pathname) ? localAdmin.app : app;
+    const out = await handler.handle({ method: req.method, path: url.pathname, query, headers: req.headers, body, sourceIp });
     res.writeHead(out.statusCode, out.headers);
     res.end(out.body);
   } catch (err) {

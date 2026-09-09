@@ -30,7 +30,7 @@ const {
   decodeCursor,
 } = require('./keys');
 const { randomUUID } = require('node:crypto');
-const { STATUS, normalizeReferralCode, auditRetentionTtl } = require('@nota/domain');
+const { STATUS, normalizeReferralCode, auditRetentionTtl, isOfferExpired } = require('@nota/domain');
 // ADR 0034 — la forme stockée d'une grille de prix, définie une seule fois pour
 // les deux adaptateurs de persistance.
 const prixNotaConfig = require('./prix-nota-config');
@@ -54,6 +54,7 @@ function createMemoryRepo(seed = []) {
   const partners = new Map(); // CODE -> registered referral partner (ADR 0011)
   const referralEarnings = new Map(); // `${CODE}#${TRACK}#${refId}` -> durable earning event
   const supportThreads = new Map(); // threadId -> live support thread (ADR 0026)
+  const signingSessions = new Map(); // dedicated, bounded rehearsal records; never public bid data
   const salles = new Map(); // bidId -> séance de signature (ADR 0047)
 
   // Notification ledgers: sent (idempotency) and unsubscribe (suppression).
@@ -199,7 +200,33 @@ const clientChallenges = new Map(); // challengeId -> record (lien magique clien
   const audit = []; // { id, ts, action, adminId, email, ip, meta }
   const rateCounters = new Map(); // `${scope}#${key}#${windowStart}` -> count
 
+  const oauthTickets = new Map();
+  const oauthIdentities = new Map();
   return {
+    async getSigningSession(bidId) {
+      const value = signingSessions.get(bidId);
+      return value ? structuredClone(value) : null;
+    },
+    async compareAndSetSigningSession(bidId, expectedRevision, value) {
+      const current = signingSessions.get(bidId);
+      const bid = byId.get(bidId);
+      if ((current ? current.revision : 0) !== expectedRevision || !bid || bid.dateISO !== value.dateISO ||
+          bid.status !== STATUS.RETENUE || bid.notaryId !== value.notaryId) return false;
+      signingSessions.set(bidId, structuredClone(value));
+      return true;
+    },
+    async putOAuthTicket(id, value) { oauthTickets.set(id, structuredClone(value)); },
+    async consumeOAuthTicket(id, purpose, binding, nowMs) {
+      const value = oauthTickets.get(id);
+      if (!value || value.consumed || value.expiresAt <= nowMs || value.purpose !== purpose || value.binding !== binding) return null;
+      value.consumed = true;
+      return structuredClone(value);
+    },
+    async getOAuthIdentity(subject) { return structuredClone(oauthIdentities.get(subject) || null); },
+    async putOAuthIdentity(subject, value) {
+      if (oauthIdentities.has(subject)) return false;
+      oauthIdentities.set(subject, structuredClone(value)); return true;
+    },
     async getCalendar(owner) { return structuredClone(calendarConnections.get(owner) || null); },
     async compareAndSetCalendar(owner, revision, value) {
       if ((calendarConnections.get(owner)?.revision || null) !== revision) return false;
@@ -220,6 +247,23 @@ const clientChallenges = new Map(); // challengeId -> record (lien magique clien
     async put(bid) {
       byId.set(bid.id, bid);
       return bid;
+    },
+    async saveFinancingPreparation(bid, owner, analysis, expectedId = null, expectedReviewAt = null) {
+      const current = byId.get(bid.id);
+      if (!current || current.dateISO !== bid.dateISO || current.status !== STATUS.RETENUE || current.notaryId !== owner ||
+        (current.financingAnalysis?.id || null) !== expectedId ||
+        (current.financingAnalysis?.review?.reviewedAt || null) !== expectedReviewAt) return null;
+      const next = { ...current, financingAnalysis: structuredClone(analysis) };
+      byId.set(bid.id, next);
+      return next.financingAnalysis;
+    },
+    async reviewFinancingPreparation(bid, owner, analysisId, review) {
+      const current = byId.get(bid.id);
+      if (!current || current.dateISO !== bid.dateISO || current.status !== STATUS.RETENUE || current.notaryId !== owner ||
+        current.financingAnalysis?.id !== analysisId || current.financingAnalysis.review) return null;
+      const analysis = { ...current.financingAnalysis, review: structuredClone(review) };
+      byId.set(bid.id, { ...current, financingAnalysis: analysis });
+      return analysis;
     },
     // General overwrite of a mutated bid (propositions, demandes, dossier).
     // Same full-item semantics as put(); kept as its own method so the
@@ -251,9 +295,9 @@ const clientChallenges = new Map(); // challengeId -> record (lien magique clien
     // still OUVERTE, atomically storing the calendar pointer like DynamoDB. Returns the
     // stored bid on success, or null if another notary already retained it
     // (the TOCTOU loser). `bid` is the fully-formed retained item.
-    async retain(bid, notaryId) {
+    async retain(bid, notaryId, todayISO) {
       const current = byId.get(bid.id);
-      if (!current || current.status !== STATUS.OUVERTE) return null;
+      if (!current || current.status !== STATUS.OUVERTE || (todayISO && isOfferExpired(current, todayISO))) return null;
       byId.set(bid.id, bid);
       retained.set(`${notaryId}#${bid.id}`, {
         id: bid.id, dateISO: bid.dateISO, serviceId: bid.serviceId, montant: bid.montant,
@@ -356,9 +400,13 @@ const clientChallenges = new Map(); // challengeId -> record (lien magique clien
     // --- Live support threads (ADR 0026) ------------------------------------
     // One record per chat thread, addressed by the id its signed token
     // carries — mirrors the SUPPORT#<id> GetItem in the dynamo adapter.
-    async putSupportThread(thread) {
-      supportThreads.set(String(thread.id), { ...thread });
-      return thread;
+    async putSupportThread(thread, { expectedRevision } = {}) {
+      const current = supportThreads.get(String(thread.id));
+      const revision = Number(current && current.supportRevision) || 0;
+      if (expectedRevision !== undefined && expectedRevision !== revision) return false;
+      const saved = { ...thread, supportRevision: revision + 1 };
+      supportThreads.set(String(thread.id), saved);
+      return { ...saved };
     },
     async getSupportThread(id) {
       const t = supportThreads.get(String(id));

@@ -16,6 +16,7 @@ const TODAY = '2026-08-12';
 // api.test.mjs.
 
 const storedBid = (over = {}) => ({
+  expiresOn: TODAY,
   id: 'b1',
   serviceId: 'refinancement',
   dateISO: '2026-08-20',

@@ -20,6 +20,7 @@ function setup({ operatorEmail = 'ops@nota.ca' } = {}) {
 }
 
 const bidWithEmail = (over = {}) => ({
+  expiresOn: TODAY,
   id: 'b1',
   serviceId: 'refinancement',
   dateISO: '2026-08-19',

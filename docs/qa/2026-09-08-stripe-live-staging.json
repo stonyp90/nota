@@ -1,0 +1,47 @@
+{
+  "checkedAt": "2026-09-08T12:31:51.029173+00:00",
+  "stripeAccount": "acct_19hMgWAZUksBrhVb",
+  "chargesEnabled": true,
+  "payoutsEnabled": true,
+  "accountRequirements": {
+    "currently_due": null,
+    "past_due": null,
+    "disabled_reason": null
+  },
+  "destinations": [
+    {
+      "id": "we_1UDOBnAZUksBrhVbQ4s0rhd8",
+      "url": "https://gonota.ca/api/stripe/webhook",
+      "api_version": "2024-06-20",
+      "status": "disabled",
+      "enabled_events": [
+        "checkout.session.completed",
+        "checkout.session.expired",
+        "setup_intent.succeeded",
+        "payment_intent.canceled"
+      ],
+      "livemode": true,
+      "description": "Nota production platform \u2014 pending activation"
+    },
+    {
+      "id": "we_1UDOBnAZUksBrhVbs6pPnAOb",
+      "url": "https://gonota.ca/api/stripe/webhook",
+      "api_version": "2024-06-20",
+      "status": "disabled",
+      "enabled_events": [
+        "account.updated",
+        "account.application.deauthorized"
+      ],
+      "livemode": true,
+      "description": "Nota production connect \u2014 pending activation"
+    }
+  ],
+  "activeCredentialsChanged": false,
+  "webhookDeliveryVerified": false,
+  "productionPaymentsActivated": false,
+  "pendingVersionId": "bbdee999-047e-448b-96c0-b08e6e0add94",
+  "unchangedActiveVersionId": "0e97cb99-1e5b-4389-9592-3f75063aa8ba",
+  "unrelatedDestinationsUnchanged": true,
+  "unrelatedDestinationCount": 2,
+  "secretsReadbackVerified": true
+}

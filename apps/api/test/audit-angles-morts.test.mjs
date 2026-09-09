@@ -111,7 +111,7 @@ async function offreOuverte(h, over = {}) {
     id: 'b1', serviceId: 'refinancement', dateISO: DATE_SIGNATURE, montant: 2000, tier: 'standard',
     premium: 1, anonyme: true, nom: 'Client', prefixe: 'G1R', courriel: 'client@exemple.ca',
     pricing: PRICING, basePrice: 2000, status: domain.STATUS.OUVERTE, notaryId: null,
-    propositions: [], demandes: [], createdAt: TODAY, ...over,
+    propositions: [], demandes: [], createdAt: TODAY, expiresOn: TODAY, ...over,
   };
   await h.repo.put(bid);
   return bid;

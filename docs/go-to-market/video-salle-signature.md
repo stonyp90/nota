@@ -190,4 +190,4 @@ pas.
 La vidéo n'est pas la fin, c'est une invitation. Elle finit sur une demande
 précise — voir la salle en direct, trente minutes, avec le notaire qui répond —
 et la présentation, elle, est scriptée dans
-[`../secure-signing-plan.md`](../secure-signing-plan.md).
+[`../demonstration-salle-signature.md`](../demonstration-salle-signature.md).

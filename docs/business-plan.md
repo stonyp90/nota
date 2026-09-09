@@ -617,12 +617,17 @@ fee was applied to Nota's own line instead of the whole charge, and the
 contribution was understated because revenue per act was pinned to a 10 % cut of
 a 1 056 $ act — a catalogue that no longer exists.
 
-**A structural point worth stating plainly.** Nota's price never scales with
-the act. On a calm date gross profit per act is 170 $ on a financing and 213 $
-on a refinancing, whatever the loan behind it. Buying a date lifts it, up to
-572 $ on a same-day refinancing, but the amount changing hands never does.
-Revenue is therefore a function of **act count**, not of GMV. Every growth
-argument in this plan has to be an argument about volume.
+**A structural point worth stating plainly.** Nota's own price is fixed by
+service and date, but payment contribution decreases as the collected
+honoraires increase: Nota pays processing on the entire charge. The figures
+above use starting bases and omit allocated Connect costs, refunds and losses;
+they are not a guarantee for every allowed offer. The
+[2026-09-08 margin audit](go-to-market/margin-audit-2026-09-08.md) estimates
+232.85 CAD payment contribution under this mix after published Connect costs,
+before acquisition and service costs, and identifies allowed loss-making
+offers. Revenue depends on act count and service/date mix; profitability also
+depends on honoraires, collection costs and losses. The break-even calculation
+below remains the historical simplified scenario, not an updated forecast.
 
 **Break-even, from the same numbers.** At 240 $ of gross profit per act:
 

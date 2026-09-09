@@ -318,6 +318,51 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
   }
 
   return {
+    async getSigningSession(bidId) {
+      const out = await doc.send(new GetCommand({ TableName: tableName,
+        Key: { PK: `SIGNING_BETA#${bidId}`, SK: 'SESSION' }, ConsistentRead: true }));
+      if (!out.Item) return null;
+      const { PK, SK, ...value } = out.Item;
+      return value;
+    },
+    async compareAndSetSigningSession(bidId, expectedRevision, value) {
+      try {
+        await doc.send(new TransactWriteCommand({ TransactItems: [
+          { ConditionCheck: { TableName: tableName, Key: { PK: bidPK(value.dateISO), SK: bidSK({ id: bidId, dateISO: value.dateISO }) },
+            ConditionExpression: '#status = :retained AND notaryId = :owner', ExpressionAttributeNames: { '#status': 'status' },
+            ExpressionAttributeValues: { ':retained': require('@nota/domain').STATUS.RETENUE, ':owner': value.notaryId } } },
+          { Put: { TableName: tableName, Item: { ...value, PK: `SIGNING_BETA#${bidId}`, SK: 'SESSION' },
+            ConditionExpression: expectedRevision === 0 ? 'attribute_not_exists(PK)' : '#revision = :revision',
+            ...(expectedRevision === 0 ? {} : { ExpressionAttributeNames: { '#revision': 'revision' }, ExpressionAttributeValues: { ':revision': expectedRevision } }) } },
+        ] }));
+        return true;
+      } catch (error) {
+        if (error.name === 'ConditionalCheckFailedException' || (error.name === 'TransactionCanceledException' &&
+            error.CancellationReasons?.some(reason => reason.Code === 'ConditionalCheckFailed'))) return false;
+        throw error;
+      }
+    },
+    async putOAuthTicket(id, value) {
+      await doc.send(new PutCommand({ TableName: tableName, Item: { ...value, PK: `OAUTH#${id}`, SK: 'TICKET' }, ConditionExpression: 'attribute_not_exists(PK)' }));
+    },
+    async consumeOAuthTicket(id, purpose, binding, nowMs) {
+      try {
+        const out = await doc.send(new UpdateCommand({ TableName: tableName, Key: { PK: `OAUTH#${id}`, SK: 'TICKET' },
+          UpdateExpression: 'SET #used = :yes', ConditionExpression: '#used = :no AND expiresAt > :now AND purpose = :purpose AND binding = :binding',
+          ExpressionAttributeNames: { '#used': 'consumed' }, ExpressionAttributeValues: { ':yes': true, ':no': false, ':now': nowMs, ':purpose': purpose, ':binding': binding }, ReturnValues: 'ALL_OLD' }));
+        return out.Attributes || null;
+      } catch (error) { if (error.name === 'ConditionalCheckFailedException') return null; throw error; }
+    },
+    async getOAuthIdentity(subject) {
+      const out = await doc.send(new GetCommand({ TableName: tableName, Key: { PK: `OAUTH_IDENTITY#${subject}`, SK: 'IDENTITY' }, ConsistentRead: true }));
+      return out.Item || null;
+    },
+    async putOAuthIdentity(subject, value) {
+      try {
+        await doc.send(new PutCommand({ TableName: tableName, Item: { ...value, PK: `OAUTH_IDENTITY#${subject}`, SK: 'IDENTITY' }, ConditionExpression: 'attribute_not_exists(PK)' }));
+        return true;
+      } catch (error) { if (error.name === 'ConditionalCheckFailedException') return false; throw error; }
+    },
     async getCalendar(owner) {
       const out = await doc.send(new GetCommand({ TableName: tableName, Key: { PK: `CALENDAR#${owner}`, SK: 'OUTLOOK' }, ConsistentRead: true }));
       if (!out.Item) return null;
@@ -365,6 +410,34 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
     async put(bid) {
       await doc.send(new PutCommand({ TableName: tableName, Item: toItem(bid) }));
       return bid;
+    },
+    async saveFinancingPreparation(bid, owner, analysis, expectedId = null, expectedReviewAt = null) {
+      try {
+        await doc.send(new UpdateCommand({ TableName: tableName, Key: { PK: bidPK(bid.dateISO), SK: bidSK(bid) },
+          UpdateExpression: 'SET financingAnalysis = :analysis',
+          ConditionExpression: '#status = :retained AND notaryId = :owner AND ' +
+            (expectedId ? 'financingAnalysis.id = :expected AND ' +
+              (expectedReviewAt ? 'financingAnalysis.review.reviewedAt = :expectedReview' : 'attribute_not_exists(financingAnalysis.review)')
+              : 'attribute_not_exists(financingAnalysis)'),
+          ExpressionAttributeNames: { '#status': 'status' },
+          ExpressionAttributeValues: { ':analysis': analysis, ':retained': STATUS.RETENUE, ':owner': owner,
+            ...(expectedId ? { ':expected': expectedId } : {}),
+            ...(expectedId && expectedReviewAt ? { ':expectedReview': expectedReviewAt } : {}) },
+        }));
+        return analysis;
+      } catch (e) { if (e.name === 'ConditionalCheckFailedException') return null; throw e; }
+    },
+    async reviewFinancingPreparation(bid, owner, analysisId, review) {
+      try {
+        const result = await doc.send(new UpdateCommand({ TableName: tableName, Key: { PK: bidPK(bid.dateISO), SK: bidSK(bid) },
+          UpdateExpression: 'SET financingAnalysis.review = :review',
+          ConditionExpression: '#status = :retained AND notaryId = :owner AND financingAnalysis.id = :analysisId AND attribute_not_exists(financingAnalysis.review)',
+          ExpressionAttributeNames: { '#status': 'status' },
+          ExpressionAttributeValues: { ':review': review, ':retained': STATUS.RETENUE, ':owner': owner, ':analysisId': analysisId },
+          ReturnValues: 'ALL_NEW',
+        }));
+        return result.Attributes.financingAnalysis;
+      } catch (e) { if (e.name === 'ConditionalCheckFailedException') return null; throw e; }
     },
     // General overwrite of a mutated bid (propositions, demandes, dossier): a
     // full-item PutCommand on the same composite key as put()/get(). LIMITATION:
@@ -415,16 +488,16 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
     },
     // Commit the booking and its calendar pointer together. A failed pointer
     // write cannot leave a successfully retained signing absent from the feed.
-    async retain(bid, notaryId) {
+    async retain(bid, notaryId, todayISO) {
       try {
         await doc.send(new TransactWriteCommand({
           TransactItems: [
             { Put: {
               TableName: tableName,
               Item: toItem(bid),
-              ConditionExpression: '#s = :ouverte',
-              ExpressionAttributeNames: { '#s': 'status' },
-              ExpressionAttributeValues: { ':ouverte': STATUS.OUVERTE },
+              ConditionExpression: '#s = :ouverte' + (todayISO ? ' AND #expiry = :expiry AND #expiry >= :today AND #date >= :today' : ''),
+              ExpressionAttributeNames: { '#s': 'status', ...(todayISO ? { '#expiry': 'expiresOn', '#date': 'dateISO' } : {}) },
+              ExpressionAttributeValues: { ':ouverte': STATUS.OUVERTE, ...(todayISO ? { ':expiry': bid.expiresOn, ':today': todayISO } : {}) },
             } },
             { Put: {
               TableName: tableName,
@@ -1668,25 +1741,35 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
     },
     // --- Live support threads (ADR 0026) ------------------------------------
     // One item per thread, addressed by the id its signed token carries — a
-    // GetItem each way, no index. Last write wins: the thread is only ever
-    // rewritten by appending a message to its own latest read.
-    async putSupportThread(thread) {
+    // A revision condition protects each read/append/write from concurrent
+    // visitor and operator requests. Legacy items without a revision start at 0.
+    async putSupportThread(thread, { expectedRevision } = {}) {
       // The inbox overload (keys.supportGSI1PK): month-sharded, newest last.
       // Written on every rewrite, so a thread that wakes up in a new month
       // moves to that month's partition by itself.
       const at = thread.dernierAt || thread.createdAt || null;
       const index = at ? { [GSI1_PK]: supportGSI1PK(at), [GSI1_SK]: supportGSI1SK(thread) } : {};
-      await doc.send(
-        new PutCommand({
+      const saved = { ...thread, supportRevision: (expectedRevision ?? (Number(thread.supportRevision) || 0)) + 1 };
+      const condition = expectedRevision === undefined ? {} : {
+        ConditionExpression: expectedRevision === 0 ? 'attribute_not_exists(#revision)' : '#revision = :revision',
+        ExpressionAttributeNames: { '#revision': 'supportRevision' },
+        ...(expectedRevision === 0 ? {} : { ExpressionAttributeValues: { ':revision': expectedRevision } }),
+      };
+      try {
+        await doc.send(new PutCommand({
           TableName: tableName,
-          Item: { PK: supportPK(thread.id), SK: SUPPORT_SK, type: 'support', ...thread, ...index },
-        })
-      );
-      return thread;
+          Item: { PK: supportPK(thread.id), SK: SUPPORT_SK, type: 'support', ...saved, ...index },
+          ...condition,
+        }));
+      } catch (err) {
+        if (err && err.name === 'ConditionalCheckFailedException') return false;
+        throw err;
+      }
+      return saved;
     },
     async getSupportThread(id) {
       const out = await doc.send(
-        new GetCommand({ TableName: tableName, Key: { PK: supportPK(id), SK: SUPPORT_SK } })
+        new GetCommand({ TableName: tableName, Key: { PK: supportPK(id), SK: SUPPORT_SK }, ConsistentRead: true })
       );
       if (!out.Item) return null;
       const { PK, SK, type, [GSI1_PK]: _gpk, [GSI1_SK]: _gsk, ...thread } = out.Item;

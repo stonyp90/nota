@@ -8,10 +8,9 @@
  * acting as the public API even if it were ever mis-routed.
  *
  * It shares the repo port with the public handler but is wired in its OWN Lambda
- * (apps/api/admin.js) whose IAM role is read-only on the customer table (plus
- * one item-scoped write door: the CONFIG#EMAIL partition holding the email
- * template overrides, ADR 0018 §6) and read/write on the separate nota-admin
- * table — the admin surface can never mutate customer data.
+ * (apps/api/admin.js) whose IAM role reads the customer table with narrowly
+ * scoped configuration, notary activation and support-conversation writes.
+ * Identity, sessions and audit live in the separate nota-admin table.
  */
 const domain = require('@nota/domain');
 const rbac = require('./rbac');
@@ -45,6 +44,7 @@ function createAdminApp(repo, opts = {}) {
         repo,
         mailer: opts.mailer,
         baseUrl: process.env.NOTA_BASE_URL || '',
+        adminUrl: adminOrigin,
         apiBaseUrl: process.env.NOTA_API_BASE_URL || undefined,
         now: () => new Date(nowMs()).toISOString(),
       });
@@ -206,6 +206,37 @@ function createAdminApp(repo, opts = {}) {
       const info = await admin.me(bearer(request));
       if (!info) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
       return json(200, info);
+    }
+
+    // The admin console reads and replies to the very same support records as
+    // the public widget and inbound email. RBAC and audit live in admin.js.
+    // contract: /admin/support
+    // contract: /admin/support/{id}
+    // contract: /admin/support/{id}/reponse
+    // contract: /admin/support/{id}/clos
+    const supportRoute = /^\/admin\/support(?:\/([^/]+)(?:\/(reponse|clos))?)?$/.exec(route);
+    if (supportRoute && ((method === 'GET' && !supportRoute[2]) || (method === 'POST' && supportRoute[2]))) {
+      let result;
+      const options = { ip: clientIp(request) };
+      let supportId;
+      try { supportId = supportRoute[1] ? decodeURIComponent(supportRoute[1]) : null; } catch {
+        return json(400, { errors: [{ code: 'identifiant_invalide', message: 'Identifiant de conversation invalide.' }] });
+      }
+      if (method === 'POST' && supportRoute[2] === 'clos') {
+        result = await admin.closeSupport(bearer(request), supportId, options);
+      } else if (method === 'POST') {
+        let payload;
+        try { payload = parseBody(request); } catch { return json(400, { errors: [{ code: 'json_invalide', message: 'Corps JSON invalide.' }] }); }
+        result = await admin.replySupport(bearer(request), supportId, payload || {}, options);
+      } else if (supportRoute[1]) {
+        result = await admin.getSupport(bearer(request), supportId, options);
+      } else {
+        result = await admin.listSupport(bearer(request), { ...options, statut: query.statut, limit: query.limit });
+      }
+      if (!result.ok) {
+        return json(result.status || 401, { errors: result.errors || [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+      }
+      return json(200, result);
     }
 
     // Stripe credentials stay in deployment secrets, never in the admin

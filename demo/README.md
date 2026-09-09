@@ -29,7 +29,7 @@ tirera.
 Ce n'est **pas** une suite de tests : ce fichier ne défend aucune exigence et il
 ne tourne jamais en CI. Les exigences sont tenues par `e2e/salle-signature.spec.js`,
 `features/salle_signature.feature` et les trois suites unitaires — voir
-[`docs/signing-security-requirements.md`](../docs/signing-security-requirements.md).
+[`docs/salle-signature-exigences-tenues.md`](../docs/salle-signature-exigences-tenues.md).
 
 Le scénario, la narration, les chapitres et le texte de publication :
 [`docs/go-to-market/video-salle-signature.md`](../docs/go-to-market/video-salle-signature.md).

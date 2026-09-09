@@ -56,13 +56,15 @@ function seedDevNotaries(repo, todayISO) {
  * Returns { app, repo, email, mode } — `app.handle(request)` is the same
  * transport-agnostic handler the HTTP loop below serves.
  */
-function createLocalAdminApp({ today } = {}) {
+function createLocalAdminApp({ today, repo: sharedRepo, mailer, notifier } = {}) {
   // Québec business day, matching the admin handler's default clock.
   const todayISO = devToday(today);
   const useDynamo = !!process.env.TABLE_NAME;
 
-  let repo;
-  if (useDynamo) {
+  let repo = sharedRepo;
+  if (repo) {
+    if (!useDynamo) seedDevNotaries(repo, todayISO);
+  } else if (useDynamo) {
     repo = createDynamoRepo({
       tableName: process.env.TABLE_NAME,
       adminTableName: process.env.ADMIN_TABLE_NAME || `${process.env.TABLE_NAME}-admin`,
@@ -88,6 +90,8 @@ function createLocalAdminApp({ today } = {}) {
   // conditional on NODE_ENV exactly like production wiring.
   const admin = createAdmin({
     repo,
+    mailer,
+    notifier,
     config: {
       allowlist: emails,
       baseUrl,
@@ -95,7 +99,7 @@ function createLocalAdminApp({ today } = {}) {
       devEcho: process.env.NODE_ENV !== 'production',
     },
   });
-  const app = createAdminApp(repo, { admin, adminBaseUrl: baseUrl });
+  const app = createAdminApp(repo, { admin, adminBaseUrl: baseUrl, mailer, notifier });
 
   const ready = useDynamo
     ? Promise.resolve()
@@ -104,8 +108,8 @@ function createLocalAdminApp({ today } = {}) {
   return { app, repo, email: emails[0], mode: useDynamo ? 'dynamo' : 'memory', ready };
 }
 
-function startServer() {
-  const { app, email, mode, ready } = createLocalAdminApp();
+function startServer({ port = PORT, ...options } = {}) {
+  const { app, email, mode, ready } = createLocalAdminApp(options);
 
   const server = http.createServer(async (req, res) => {
     try {
@@ -130,9 +134,9 @@ function startServer() {
     }
   });
 
-  server.listen(PORT, () => {
+  server.listen(port, () => {
     const store = mode === 'dynamo' ? `DynamoDB ${process.env.DYNAMO_ENDPOINT || '(regional)'}` : 'in-memory fixtures + seeded stats';
-    console.log(`Nota ADMIN API on http://localhost:${PORT}  [${store}]`);
+    console.log(`Nota ADMIN API on http://localhost:${port}  [${store}]`);
     console.log(`  source ${SOURCE.hash} (${SOURCE.files} fichiers) — rendu dans l'en-tête x-nota-source`);
     console.log(`Dev sign-in: ${email} / ${process.env.NOTA_ADMIN_PASSWORD || DEV_ADMIN_PASSWORD}`);
   });
@@ -141,4 +145,4 @@ function startServer() {
 
 if (require.main === module) startServer();
 
-module.exports = { createLocalAdminApp, seedDevStats, seedDevNotaries, DEV_ADMIN_EMAIL, DEV_ADMIN_PASSWORD };
+module.exports = { startServer, createLocalAdminApp, seedDevStats, seedDevNotaries, DEV_ADMIN_EMAIL, DEV_ADMIN_PASSWORD };

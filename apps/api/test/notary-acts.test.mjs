@@ -233,7 +233,7 @@ test('la rétention horodate l’engagement et laisse une trace', async () => {
   await notaireActif(a);
   // Une offre ouverte, retenue par la vraie porte (pas un raccourci de repo).
   await a.repo.put({
-    id: 'b9', dateISO: '2026-08-25', serviceId: 'refinancement', montant: 2200,
+    expiresOn: TODAY, id: 'b9', dateISO: '2026-08-25', serviceId: 'refinancement', montant: 2200,
     tier: 'standard', status: domain.STATUS.OUVERTE, anonyme: true, createdAt: '2026-08-12',
     pricing: { deplacement: 'client_50' },
   });

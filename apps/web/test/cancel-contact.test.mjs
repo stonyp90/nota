@@ -72,10 +72,10 @@ async function boot({ url = '', seed = {}, routes = [] } = {}) {
 }
 
 const DATE = addDays(todayISO(), 6);
-const OFFER = { id: 'o1', dateISO: DATE, serviceId: 'financement', montant: 1000, clientToken: 'tok-o1' };
+const OFFER = { expiresOn: DATE, id: 'o1', dateISO: DATE, serviceId: 'financement', montant: 1000, clientToken: 'tok-o1' };
 
 const openStatus = () => ({
-  bid: { id: 'o1', serviceId: 'financement', dateISO: DATE, montant: 1000, status: 'ouverte', etude: null },
+  bid: { expiresOn: DATE, id: 'o1', serviceId: 'financement', dateISO: DATE, montant: 1000, status: 'ouverte', etude: null },
   propositions: [], demandes: [],
   readiness: { total: 6, done: 2, missing: [], consent: false, ready: false },
 });

@@ -31,6 +31,19 @@ const I18N = (() => {
 
 const htmlPath = fileURLToPath(new URL('../public/index.html', import.meta.url));
 
+test('financing preparation checks and headings have English translations', () => {
+  I18N.force('en');
+  const copy = [
+    'Préparation du financement', 'Renseignements à compléter',
+    'Vérifications du notaire et du prêteur',
+    'Renseignements déclarés seulement. Les documents et les conditions de signature restent à vérifier.',
+    'Chaque élément est déclaré; la vérification du dossier reste à faire.',
+    ...D.financingPreparation('refinancement', {}).checks.map(check => check.texte),
+  ];
+  for (const phrase of copy) assert.notEqual(I18N.t(phrase), phrase);
+  I18N.force('fr');
+});
+
 // ---------------------------------------------------------------------------
 // 1. Engine behaviour
 // ---------------------------------------------------------------------------

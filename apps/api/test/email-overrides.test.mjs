@@ -235,6 +235,7 @@ const TRANSACTIONNELS = [
   'notaryApproved',
   'notaryMagicLink',
   'notaryPendingReview',
+  'oauthAccountLink',
   'offerAuthorizationVoided',
   'offerAuthorized',
   'offerCancelled',

@@ -394,6 +394,68 @@ test('the Checkout return beacons paiement_ok / paiement_annule', async () => {
   ko.dom.window.close();
 });
 
+test('booking screen reach is deduplicated until reopening; blocked progress is observable without field values', async () => {
+  const { win, doc, calls, beacons, dom } = await boot();
+  $(doc, 'cta-reserver').click();
+  await wait(60);
+  $(doc, 'book-next').click();
+  assert.equal($(doc, 'offer-form').dataset.at, '2');
+  $(doc, 'book-next').click(); // required act questions are unanswered
+  $(doc, 'book-back').click();
+  $(doc, 'book-next').click();
+  let events = await sentEvents(win, beacons, calls);
+  assert.equal(events.filter(e => e.event === 'criteres_vus').length, 1);
+  assert.equal(events.filter(e => e.event === 'formulaire_bloque').length, 1);
+  assert.ok(!events.some(e => e.event === 'prix_vu'), 'a blocked next click is not a viewed price');
+  $(doc, 'day-dialog').close();
+  $(doc, 'cta-reserver').click();
+  await wait(40);
+  $(doc, 'book-next').click();
+  events = await sentEvents(win, beacons, calls);
+  assert.equal(events.filter(e => e.event === 'criteres_vus').length, 2);
+  assert.ok(events.every(e => Object.keys(e).join() === 'event'));
+  dom.window.close();
+});
+
+test('a rejected publication counts an attempt and failure, never a published offer', async () => {
+  const { win, doc, calls, beacons, dom } = await boot({ routes: [
+    monthRoute(),
+    { match: (u, i) => u.endsWith('/bids') && i.method === 'POST',
+      reply: () => jsonRes(503, { errors: [{ code: 'indisponible', message: 'Réessayez.' }] }) },
+  ] });
+  $(doc, 'cta-reserver').click();
+  await wait(40);
+  for (const [id, value, type] of [
+    ['o-service', 'refinancement', 'change'],
+    ['o-amount', '2000', 'input'],
+    ['crit-valeur_pret', '300000', 'input'],
+    ['crit-preteur', 'banque_nationale', 'change'],
+    ['crit-deplacement', 'client_50', 'change'],
+    ['o-prefix', 'G1R', 'input'],
+    ['o-name', 'Client Exemple', 'input'],
+    ['o-courriel', 'client@example.ca', 'input'],
+  ]) {
+    $(doc, id).value = value; fire(win, $(doc, id), type);
+  }
+  $(doc, 'crit-succession__non').click();
+  $(doc, 'crit-approbation_bancaire__obtenue').click();
+  $(doc, 'book-next').click();
+  $(doc, 'book-next').click();
+  $(doc, 'book-next').click();
+  assert.equal($(doc, 'offer-form').dataset.at, '4');
+  assert.equal($(doc, 'offer-submit').disabled, false);
+  fire(win, $(doc, 'offer-form'), 'submit');
+  await wait(40);
+  assert.equal(calls.filter(c => c.url.endsWith('/bids') && c.init.method === 'POST').length, 1);
+  const events = (await sentEvents(win, beacons, calls)).map(e => e.event);
+  assert.equal(events.filter(e => e === 'prix_vu').length, 1);
+  assert.equal(events.filter(e => e === 'coordonnees_vues').length, 1);
+  assert.equal(events.filter(e => e === 'publication_tentee').length, 1);
+  assert.equal(events.filter(e => e === 'publication_echouee').length, 1);
+  assert.ok(!events.includes('publie'));
+  dom.window.close();
+});
+
 test('the event goes by keepalive POST even without sendBeacon; a broken transport never throws', async () => {
   const { calls, dom } = await boot({ beacon: false });
   const post = calls.find((c) => c.url.endsWith('/events'));

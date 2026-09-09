@@ -38,7 +38,7 @@ function checkoutLocale(language) {
  * open question is the legal QUALIFICATION of Nota's share, not the direction
  * the money travels.
  */
-function createStripeAdapter({ secretKey, webhookSecret, stripe: injected } = {}) {
+function createStripeAdapter({ secretKey, webhookSecret, connectWebhookSecret, stripe: injected } = {}) {
   if (!secretKey) throw new Error('createStripeAdapter: secretKey is required');
   if (!webhookSecret) throw new Error('createStripeAdapter: webhookSecret is required');
 
@@ -87,6 +87,12 @@ function createStripeAdapter({ secretKey, webhookSecret, stripe: injected } = {}
   }
 
   return {
+    // Live Connect destinations can also receive test events. A valid
+    // signature alone must never let a sandbox event change live records.
+    acceptsEvent(event) {
+      return typeof event?.livemode === 'boolean'
+        && event.livemode === /^(?:sk|rk)_live_/.test(secretKey);
+    },
     /**
      * Create the notary's connected (Express) account. `notaryId` is stamped on
      * the account metadata so later `account.updated` webhooks trace back to the
@@ -444,7 +450,14 @@ function createStripeAdapter({ secretKey, webhookSecret, stripe: injected } = {}
      * into a 400.
      */
     constructEvent(rawBody, signatureHeader) {
-      return stripe.webhooks.constructEvent(rawBody, signatureHeader, webhookSecret);
+      // Platform payments and v1 connected accounts have separate Stripe
+      // destinations, each with its own signing secret, even at the same URL.
+      try {
+        return stripe.webhooks.constructEvent(rawBody, signatureHeader, webhookSecret);
+      } catch (error) {
+        if (!connectWebhookSecret) throw error;
+        return stripe.webhooks.constructEvent(rawBody, signatureHeader, connectWebhookSecret);
+      }
     },
   };
 }

@@ -267,7 +267,7 @@ test('section search handles accents, clears with Escape, and navigates with Ent
   input.dispatchEvent(new win.Event('input', { bubbles: true }));
   assert.equal(doc.querySelector('.admin-rail [role="status"]').hidden, false);
   input.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-  assert.equal([...doc.querySelectorAll('.admin-rail-link')].filter(n => !n.hidden).length, 11);
+  assert.equal([...doc.querySelectorAll('.admin-rail-link')].filter(n => !n.hidden).length, 12);
   input.value = 'prix';
   input.dispatchEvent(new win.Event('input', { bubbles: true }));
   input.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));

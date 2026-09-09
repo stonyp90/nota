@@ -250,9 +250,10 @@ resource "aws_lambda_function" "api" {
       # Email notifications (see notifications.tf). When NOTA_FROM_EMAIL is empty
       # the handler leaves notifications DISABLED, so the stack is fully
       # functional without SES configured. Set var.from_email to enable.
-      NOTA_FROM_EMAIL     = var.from_email
-      NOTA_OPERATOR_EMAIL = var.operator_email
-      NOTA_BASE_URL       = var.base_url
+      NOTA_FROM_EMAIL           = var.from_email
+      NOTA_OPERATOR_EMAIL       = var.operator_email
+      NOTA_BASE_URL             = var.base_url
+      NOTA_SUPPORT_EMAIL_DOMAIN = var.enable_support_email && var.support_email_activate ? local.support_email_domain : ""
 
       # ADR 0046 — l'assistant de la messagerie. Une clé VIDE laisse la
       # messagerie exactement comme avant : aucune réponse automatique, chaque
@@ -270,7 +271,13 @@ resource "aws_lambda_function" "api" {
       # retombe désormais sur NOTA_BASE_URL, mais la poser explicitement rend
       # l'intention lisible : sans origine, `POST /bids` refuse franchement
       # plutôt que de créer une offre dont le paiement ne peut pas aboutir.
-      NOTA_SITE_URL = var.base_url
+      NOTA_SITE_URL                  = var.base_url
+      NOTA_OUTLOOK_CLIENT_ID         = var.outlook_client_id
+      NOTA_OUTLOOK_REDIRECT_URI      = var.outlook_redirect_uri
+      NOTA_OAUTH_ORIGIN              = var.oauth_origin
+      NOTA_OAUTH_GOOGLE_CLIENT_ID    = lookup(var.oauth_client_ids, "google", "")
+      NOTA_OAUTH_MICROSOFT_CLIENT_ID = lookup(var.oauth_client_ids, "microsoft", "")
+      NOTA_OAUTH_LINKEDIN_CLIENT_ID  = lookup(var.oauth_client_ids, "linkedin", "")
       # LCAP: full identification of the sender. Empty leaves the recognizable
       # placeholder in emails.js, which a test refuses in production — a
       # commercial message must carry a REAL mailing address.
@@ -278,8 +285,15 @@ resource "aws_lambda_function" "api" {
       # ADR 0032 — le seau des documents de la messagerie. VIDE = les portes de
       # document répondent 503 et la messagerie reste texte : un déploiement
       # sans seau n'est pas cassé, il est simplement plus étroit.
-      NOTA_DOCS_BUCKET     = aws_s3_bucket.documents.bucket
-      NOTA_DOCS_KMS_KEY_ID = aws_kms_key.documents.arn
+      NOTA_DOCS_BUCKET                       = aws_s3_bucket.documents.bucket
+      NOTA_DOCS_KMS_KEY_ID                   = aws_kms_key.documents.arn
+      NOTA_SIGNING_BETA_ENABLED              = tostring(var.signing_beta_enabled)
+      NOTA_SIGNING_TURN_SECRET_SSM_PARAMETER = var.signing_turn_enabled ? var.signing_turn_secret_parameter : ""
+      NOTA_SIGNING_TURN_URLS = var.signing_turn_enabled ? jsonencode([
+        "turn:${var.signing_turn_hostname}:3478?transport=udp",
+        "turn:${var.signing_turn_hostname}:3478?transport=tcp",
+        "turns:${var.signing_turn_hostname}:443?transport=tcp"
+      ]) : ""
 
       # ADR 0047 — la salle de signature. Les relais que la Lambda distribue au
       # navigateur sont EXACTEMENT ceux que la CSP autorise : les deux lisent
