@@ -414,12 +414,13 @@ test('each band trims the header; the drawer covers what the phone hides', () =>
   // one tap from anywhere without living in any menu (owner, 2026-08-27).
   assert.match(CSS_SRC, /\.guide-fab\s*\{[^}]*position:\s*fixed/,
     'the guide bubble is pinned to the viewport');
-  // Tablet compact band (720–899.98) slims chrome so the full set still fits.
-  assert.match(CSS_SRC, /@media \(min-width: 720px\) and \(max-width: 899\.98px\)/);
+  // Desktop compact band (900–1099.98) slims chrome so the full set still fits;
+  // the 768px tablet uses the drawer because coarse-pointer controls are 44px.
+  assert.match(CSS_SRC, /@media \(min-width: 900px\) and \(max-width: 1099\.98px\)/);
   // Phone: tabs, auth, theme AND the inline language toggle hand off to the
   // drawer (#mnav-theme / #mnav-lang, pinned above) — only the "?" guide keeps
   // its one-tap header spot while signed out.
-  const phone = CSS_SRC.slice(CSS_SRC.indexOf('@media (max-width: 719.98px)'));
+  const phone = CSS_SRC.slice(CSS_SRC.indexOf('@media (max-width: 899.98px)'));
   assert.notEqual(phone.length, CSS_SRC.length, 'phone header band exists');
   assert.match(phone, /#lang-toggle\s*\{[^}]*display:\s*none/,
     'the inline language toggle yields to the drawer row on phones');
@@ -546,10 +547,10 @@ test('widening an open mobile menu releases the page and restores desktop focus'
   win.innerWidth = 390;
   $(doc, 'nav-burger').click();
   assert.ok($(doc, 'main').hasAttribute('inert'));
-  win.innerWidth = 719;
+  win.innerWidth = 899;
   win.dispatchEvent(new win.Event('resize'));
   assert.equal($(doc, 'nav-burger').getAttribute('aria-expanded'), 'true');
-  win.innerWidth = 720;
+  win.innerWidth = 900;
   win.dispatchEvent(new win.Event('resize'));
   assert.equal($(doc, 'nav-burger').getAttribute('aria-expanded'), 'false');
   assert.ok(!doc.documentElement.classList.contains('nav-open'));
@@ -585,7 +586,7 @@ test('P2-1: every border-radius is a token, 0 or the 50% dot — no literal pill
 });
 
 test('P2-10: the phone header hides the empty tool strip; no dead #nav-guide references', () => {
-  const phone = CSS_SRC.slice(CSS_SRC.indexOf('@media (max-width: 719.98px)'));
+  const phone = CSS_SRC.slice(CSS_SRC.indexOf('@media (max-width: 899.98px)'));
   assert.match(phone, /\.header-tools\s*\{[^}]*display:\s*none/, 'language and theme live in the drawer — the strip is empty');
   assert.ok(!/nav-guide/.test(HTML_SRC), 'index.html still mentions #nav-guide');
   assert.ok(!/nav-guide/.test(CSS_SRC), 'styles.css still mentions #nav-guide');

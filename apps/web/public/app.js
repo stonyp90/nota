@@ -11844,7 +11844,7 @@
       // CSS hides the drawer at desktop widths; release its modal lock too.
       // Otherwise rotating a tablet leaves an invisible drawer blocking the site.
       window.addEventListener('resize', function () {
-        if (window.innerWidth >= 720 && mnav.classList.contains('is-open')) {
+        if (window.innerWidth >= 900 && mnav.classList.contains('is-open')) {
           setMobileNav(false);
           var activeTab = $('tab-' + state.tab);
           if (activeTab) activeTab.focus({ preventScroll: true });
@@ -13462,7 +13462,7 @@
       // Closing hands focus back to the door it came from.
       var target = chatOpener && chatOpener !== document.body && !panel.contains(chatOpener) &&
         !chatOpener.closest('[hidden]') ? chatOpener : fab;
-      if (typeof matchMedia === 'function' && matchMedia('(max-width: 767px)').matches) target = $('nav-burger') || target;
+      if (typeof matchMedia === 'function' && matchMedia('(max-width: 899px)').matches) target = $('nav-burger') || target;
       try { target.focus(); } catch (e) {}
     }
     chatSchedule();
