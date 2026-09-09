@@ -87,6 +87,11 @@ resource "aws_lambda_function" "customer_improvement" {
   timeout     = 60
   memory_size = 256
 
+  # This worker processes one complete-day aggregate at a time. A single
+  # concurrent execution keeps scheduler retries from duplicating work and
+  # caps spend during an incident.
+  reserved_concurrent_executions = 1
+
   depends_on = [aws_cloudwatch_log_group.customer_improvement]
 
   environment {
@@ -150,5 +155,10 @@ resource "aws_scheduler_schedule" "customer_improvement" {
   target {
     arn      = aws_lambda_function.customer_improvement.arn
     role_arn = aws_iam_role.customer_improvement_scheduler.arn
+
+    retry_policy {
+      maximum_event_age_in_seconds = 3600
+      maximum_retry_attempts       = 2
+    }
   }
 }
