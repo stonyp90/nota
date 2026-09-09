@@ -212,12 +212,14 @@ test.describe('responsive layout', () => {
     let rail = await boxOf(page, '#notary-console');
     expect(rail.top, 'stacked: the gate follows the demands').toBeGreaterThan(live.bottom - 1);
 
-    // A desktop: two columns — the gate opens level with the first row of tiles.
+    // A desktop: two columns — the gate opens level with the hero, so expanding
+    // the beta disclosure cannot create a blank right rail.
     await page.setViewportSize({ width: 1440, height: 900 });
     await settled(page);
+    const hero = await boxOf(page, '#pane-notaires .intro--hero');
     live = await boxOf(page, '#notary-live');
     rail = await boxOf(page, '#notary-console');
-    expect(Math.abs(rail.top - live.top), 'side by side: the gate seats on the tiles’ own top line').toBeLessThan(4);
+    expect(Math.abs(rail.top - hero.top), 'side by side: the gate seats on the hero top line').toBeLessThan(4);
     expect(rail.left, 'the gate is the right-hand rail').toBeGreaterThan(live.right - 1);
 
     // Read the grid's own used track list, not the tiles' measured tops: a
@@ -234,6 +236,23 @@ test.describe('responsive layout', () => {
     if (tiles > 1) {
       expect(columns, 'a two-column landing never files the tiles one under the other').toBeGreaterThan(1);
     }
+  });
+
+  test('opening the beta disclosure keeps the access card beside the hero', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await gotoHome(page, { suppressOnboarding: true });
+    await settled(page);
+    await openPane(page, 'notaires', '#pane-notaires');
+
+    await page.locator('#notary-ai-beta-toggle').click();
+    await expect(page.locator('#notary-ai-beta-details')).toBeVisible();
+    await settled(page);
+
+    const hero = await boxOf(page, '#pane-notaires .intro--hero');
+    const rail = await boxOf(page, '#notary-console');
+    const live = await boxOf(page, '#notary-live');
+    expect(Math.abs(rail.top - hero.top), 'expanded beta: the gate stays beside the hero').toBeLessThan(4);
+    expect(rail.top, 'expanded beta: the gate remains above the inventory').toBeLessThan(live.top - 100);
   });
 });
 
@@ -269,7 +288,7 @@ test.describe('notary inventory keeps its footprint', () => {
           await expect(page.locator('#notary-live-grid .nc-live-card')).toHaveCount(Math.min(count, 12));
           await expect(page.locator('#notary-live-grid .nc-live-slot')).toHaveCount(Math.max(0, 6 - Math.min(count, 12)));
           await settled(page);
-          const geometry = {};
+          const geometry = { hero: await boxOf(page, '#pane-notaires .intro--hero') };
           for (const id of ['notary-live-grid', 'notary-console', 'notary-carnet', 'nc-conformite']) {
             geometry[id] = await boxOf(page, '#' + id);
           }
@@ -277,7 +296,7 @@ test.describe('notary inventory keeps its footprint', () => {
           if (stacked) {
             expect(geometry['notary-console'].top, `${count} offers: gate follows inventory`).toBeGreaterThanOrEqual(geometry['notary-live-grid'].bottom - 1);
           } else {
-            expect(Math.abs(geometry['notary-console'].top - geometry['notary-live-grid'].top), `${count} offers: gate aligns with inventory`).toBeLessThan(4);
+            expect(Math.abs(geometry['notary-console'].top - geometry.hero.top), `${count} offers: gate aligns with the hero`).toBeLessThan(2);
             expect(geometry['notary-console'].left, `${count} offers: gate stays in the right rail`).toBeGreaterThan(geometry['notary-live-grid'].right - 1);
           }
           expect(geometry['notary-carnet'].top, `${count} offers: agenda follows the inventory`).toBeGreaterThanOrEqual(Math.max(geometry['notary-live-grid'].bottom, geometry['notary-console'].bottom) - 1);

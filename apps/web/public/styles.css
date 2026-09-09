@@ -3408,13 +3408,12 @@ dialog:focus, dialog:focus-visible { outline: none; }
   grid-template-columns: minmax(0, 1fr) minmax(0, 420px);
   /* The inventory keeps twelve slots at every offer count. Compliance remains
      a full-width band below both columns, outside the sign-in card. */
-  /* 2026-09-09 — l'agenda ferme la rangée SOUS les deux colonnes. Une carte
-     limitée à gauche laissait un vide accidentel sous la porte d'accès dès
-     que l'inventaire était court; le rail horizontal ci-dessous utilise cette
-     largeur pour rendre la page continue. */
+  /* The hero and the access card share the first line. The gate remains beside
+     the inventory rows below it, so opening the beta disclosure never leaves a
+     blank right rail while the left story grows. */
   grid-template-areas:
-    "hero       hero"
-    "livehead   ."
+    "hero       console"
+    "livehead   console"
     "live       console"
     "carnet     carnet"
     "conformite conformite"
@@ -3429,9 +3428,7 @@ dialog:focus, dialog:focus-visible { outline: none; }
 /* Keep a readable measure on the lede without capping the whole hero block. */
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .intro p { max-width: 78ch; }
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .nc-live        { grid-area: live; align-self: start; }
-/* L'agenda ferme la colonne de gauche, sous la grille des demandes — jamais
-   une bande pleine largeur (retour du propriétaire, 2026-08-25 : à pleine
-   largeur ce n'était que de l'air). Il garde la largeur de sa colonne. */
+/* The agenda closes the inventory row beneath both columns. */
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-carnet  {
   grid-area: carnet; align-self: start;
   /* A full-width support rail closes the inventory row beneath both columns.
