@@ -3544,22 +3544,17 @@ dialog:focus, dialog:focus-visible { outline: none; }
 /* Narrow screens: one column, in selling order — a line of pitch, the open
    demands, then the sign-in the cards funnel into; the rest follows.
 
-   The threshold is 1000px, not 900: the rail is a fixed 420px, so under ~1000
-   the content column falls below ~460px and the demand grid drops to ONE card
-   per row — a tablet in portrait got a single file of tiles running six rows
-   deep beside a short gate. One column is the honest layout there.
+   The threshold is 1200px: below that the fixed rail would leave a narrow
+   demand column, especially on a zoomed desktop or a tablet in landscape.
+   Stacking the two surfaces lets the inventory use the full measure and keeps
+   the sign-in gate aligned beneath it instead of beside a tall sparse grid.
 
-   2026-09-06 — cette colonne unique était plafonnée à 620 px et centrée : à
-   900 px de fenêtre, l'espace notaire se lisait comme une bande étroite avec
-   140 px de vide de chaque côté, sous un en-tête qui, lui, allait d'un bord à
-   l'autre (retour du propriétaire : « la section notaire doit prendre toute la
-   largeur »). La colonne prend maintenant toute la largeur de .wrap — les
-   demandes gagnent une tuile par rangée au passage — et c'est le FORMULAIRE de
-   la porte qui garde sa mesure lisible, centré dans sa carte. */
-@media (max-width: 1000px) {
+   The column takes the full width of .wrap; only the FORM remains readable and
+   centred inside its card. */
+@media (max-width: 1200px) {
   #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "hero" "livehead" "live" "console" "conformite" "carnet" "guarantee";
+    grid-template-areas: "hero" "livehead" "live" "console" "carnet" "conformite" "guarantee";
   }
   /* The two-column rule sizes this margin to seat the console on the hero
      H1's line. Stacked, the card steps down the page on the same --space-10
@@ -3580,10 +3575,10 @@ dialog:focus, dialog:focus-visible { outline: none; }
 /* Signed-in the wrap is a flex column and the inventory is the console's own
    list — the landing header row has nothing to head. */
 #pane-notaires > .wrap:has(#notary-authed:not([hidden])) .nc-landing-head { display: none; }
-/* Real cards and inert empty slots share the same row size. The twelve slots
-   preserve the columns and footprint at zero, one or many offers; the minimum
-   accommodates the narrow tile's four-line layout in both languages. */
-.nc-live-grid { position: relative; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(215px, 100%), 1fr)); grid-auto-rows: minmax(144px, 1fr); gap: var(--space-5); }
+/* Real cards and inert empty slots share the same row size. Sparse inventory
+   uses six slots: that is two rows on a wide column and three rows on a narrow
+   two-column column. Additional rows appear only when real offers need them. */
+.nc-live-grid { position: relative; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(215px, 100%), 1fr)); grid-auto-rows: minmax(128px, 1fr); gap: var(--space-5); }
 .nc-live-slot, .nc-live-empty {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   min-width: 0; padding: var(--pad-card); text-align: center;
