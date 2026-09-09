@@ -77,19 +77,35 @@ resource "aws_cloudfront_response_headers_policy" "security" {
     # external app.js/domain.js on 'self', inline JSON-LD + inline styles, and
     # fetches /api on 'self'.
     content_security_policy {
-      content_security_policy = "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://rsms.me https://fonts.googleapis.com; font-src 'self' https://rsms.me https://fonts.gstatic.com data:; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com; connect-src 'self' https://www.google-analytics.com https://region1.google-analytics.com https://analytics.google.com https://${aws_s3_bucket.documents.bucket}.s3.${var.region}.amazonaws.com"
+      content_security_policy = "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data:; media-src 'self' blob:; style-src 'self' 'unsafe-inline' https://rsms.me https://fonts.googleapis.com; font-src 'self' https://rsms.me https://fonts.gstatic.com data:; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com; connect-src 'self' https://www.google-analytics.com https://region1.google-analytics.com https://analytics.google.com https://${aws_s3_bucket.documents.bucket}.s3.${var.region}.amazonaws.com${local.csp_ice_sources}"
       override                = true
     }
   }
 
-  # Permissions-Policy: disable powerful features the app does not use.
+  # Permissions-Policy: every powerful feature stays off EXCEPT the camera and
+  # the microphone, and those only on Nota's own origin.
+  #
+  # They were `camera=(), microphone=()` — off everywhere — which is the right
+  # default for a marketplace and fatal for a signing room: a notary cannot
+  # receive an act remotely without seeing and hearing the person, and the
+  # browser blocks getUserMedia with no visible error on the page. `(self)`
+  # keeps them off for every embedded frame; nothing on Nota is embedded.
   custom_headers_config {
     items {
       header   = "Permissions-Policy"
-      value    = "camera=(), microphone=(), geolocation=()"
+      value    = "camera=(self), microphone=(self), geolocation=(), display-capture=()"
       override = true
     }
   }
+}
+
+# The ICE servers, folded into connect-src. Empty by default: no relay is
+# provisioned yet (ADR 0047, « ce que cette ADR ne décide pas »), and an empty
+# list must leave the policy EXACTLY as it was rather than trailing a space that
+# would read as a source expression.
+locals {
+  ice_urls        = compact(concat(var.stun_urls, var.turn_urls))
+  csp_ice_sources = length(local.ice_urls) > 0 ? " ${join(" ", local.ice_urls)}" : ""
 }
 
 # ---------------------------------------------------------------------------

@@ -510,8 +510,8 @@ test('profile persists coordinates and prefills the offer form', async () => {
 // 12d. The single account menu (avatar) merges profile + notifications + menu.
 test('account menu opens and navigates to the profile', async () => {
   const { win, doc } = await boot();
-  // Three flat doors (ADR 0010 §2): Carnet · Espace notaire · Partenaires.
-  assert.equal(doc.querySelectorAll('.nav-tabs .nav-tab').length, 3);
+  // Marketplace navigation plus the Beta entry.
+  assert.equal(doc.querySelectorAll('.nav-tabs .nav-tab').length, 4);
 
   // A signed-in client (has a courriel): the identity head routes to their profile.
   win.localStorage.setItem('nota.profile.v1', JSON.stringify({ courriel: 'marie@example.ca' }));
@@ -2411,11 +2411,13 @@ test('header tabs: roving tabindex and arrow-key activation', async () => {
 
   key(win, tabs[1], 'ArrowRight'); // third door
   assert.equal(Nota.state.tab, 'partenaires');
-  key(win, tabs[2], 'ArrowRight'); // wraps around
+  key(win, tabs[2], 'ArrowRight'); // Beta is the fourth door
+  assert.equal(Nota.state.tab, 'beta');
+  key(win, tabs[3], 'ArrowRight'); // wraps around
   assert.equal(Nota.state.tab, 'carnet');
   key(win, tabs[0], 'End');
-  assert.equal(Nota.state.tab, 'partenaires');
-  key(win, tabs[2], 'Home');
+  assert.equal(Nota.state.tab, 'beta');
+  key(win, tabs[3], 'Home');
   assert.equal(Nota.state.tab, 'carnet');
 
   // A pane with no header tab (profil) must not strand the tablist at -1/-1.

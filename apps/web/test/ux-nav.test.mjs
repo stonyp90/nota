@@ -278,11 +278,11 @@ test('signed-in notary: retain is within two clicks of the landing (tab → Rete
 // 6. Three flat doors — no submenu layer anywhere (ADR 0010 §2)
 // ---------------------------------------------------------------------------
 
-test('desktop nav: exactly three flat doors, and no submenu machinery survives', async () => {
+test('desktop nav: marketplace and Beta flat doors, and no submenu machinery survives', async () => {
   const { doc } = await boot();
   const tabs = Array.from(doc.querySelectorAll('.nav-tabs .nav-tab'));
-  assert.deepEqual(tabs.map((t) => t.dataset.tab), ['carnet', 'notaires', 'partenaires'],
-    'Carnet · Espace notaire · Partenaires — in that order, nothing else');
+  assert.deepEqual(tabs.map((t) => t.dataset.tab), ['carnet', 'notaires', 'partenaires', 'beta'],
+    'Carnet · Espace notaire · Partenaires · Bêta');
   // The retired chevron/submenu layer must not linger in any form.
   assert.equal(doc.querySelector('.nav-more'), null, 'no chevron toggles');
   assert.equal(doc.querySelector('[id^="submenu-"]'), null, 'no desktop submenus');
@@ -313,14 +313,14 @@ test('the dossier is not a header door: reached from flows, never from the menu'
   assert.equal(doc.querySelector('#mobile-nav [data-tab="dossier"]'), null);
 });
 
-test('phone drawer: the trio plus auth, theme, language and the legal fold', async () => {
+test('phone drawer: marketplace and Beta plus auth, theme, language and the legal fold', async () => {
   const { doc } = await boot();
   $(doc, 'nav-burger').click();
   await wait(10);
   const drawer = $(doc, 'mobile-nav');
   const doors = Array.from(drawer.querySelectorAll('.mnav-link[data-tab]'));
-  assert.deepEqual(doors.map((d) => d.dataset.tab), ['carnet', 'notaires', 'partenaires'],
-    'the drawer mirrors the three flat doors');
+  assert.deepEqual(doors.map((d) => d.dataset.tab), ['carnet', 'notaires', 'partenaires', 'beta'],
+    'the drawer mirrors the desktop doors');
   assert.ok($(doc, 'mnav-auth'), 'the auth group exists (shown while anonymous)');
   // Language and theme are PREFERENCE rows — label left, small toggle right —
   // grouped apart from the navigation rows.
@@ -677,4 +677,22 @@ test('P2-7: the service worker ignores other origins and never answers a failed 
   assert.match(sw, /url\.origin\s*!==\s*self\.location\.origin/, 'a same-origin guard before any caching');
   assert.equal((sw.match(/caches\.match\('\/index\.html'\)/g) || []).length, 1,
     'only the navigation branch falls back to the shell — an asset must not get index.html');
+});
+
+
+test('Beta opens from the footer, participates in history and exposes the public preview', async () => {
+  const { win, doc } = await boot();
+  doc.querySelector('.site-footer [data-goto="beta"]').click();
+  assert.equal(activePane(doc), 'pane-beta');
+  assert.equal(win.location.hash.includes('t=beta'), true);
+  assert.equal(doc.activeElement, doc.querySelector('#pane-beta h1'));
+  assert.equal($(doc, 'tab-beta').getAttribute('aria-selected'), 'true');
+  assert.equal($(doc, 'beta-preview').getAttribute('href'), '/signature.html');
+  assert.equal(doc.querySelector('.beta-demo').open, false, 'advanced demonstration is secondary');
+  assert.match(doc.querySelector('.beta-boundary').textContent, /ne signe aucun acte notarié/);
+  doc.querySelector('#pane-beta [data-goto="notaires"]').click();
+  assert.equal(activePane(doc), 'pane-notaires');
+  win.history.back();
+  await wait(30);
+  assert.equal(activePane(doc), 'pane-beta');
 });

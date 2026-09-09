@@ -191,7 +191,15 @@ test('every user-facing domain string has an English translation', () => {
   // and labels are rendered by the booking sheet, outside SERVICES) and the
   // SECTIONS of the questions (their titles and their reason for being are
   // rendered by the sheet and the dossier, outside SERVICES too).
+  // Le catalogue, les directions de déplacement, les SECTIONS des questions —
+  // et, depuis l'ADR 0047, tout ce que la salle de signature affiche depuis le
+  // domaine : le nom des quatre portes, le nom des huit étapes AVEC le texte de
+  // conduite que le notaire a à dire, les modes de séance et les méthodes de
+  // vérification d'identité. Sans cette ligne, une cérémonie conduite en
+  // anglais retomberait en français à la première phrase qui compte.
   collectDomainStrings([D.SERVICES, D.DEPLACEMENT_QUI, D.CRITERIA_GROUPS], out);
+  collectDomainStrings([D.SALLE_PORTE_LABELS, D.SALLE_MODES, D.IDENTITE_METHODES], out);
+  D.CEREMONIE_ETAPES.forEach((e) => out.push(e.nom, e.conduite, e.constat));
   I18N.force('en');
   const missing = out
     .map((s) => I18N.normalize(s))

@@ -24,6 +24,10 @@ class NotaWorld extends World {
     super(options);
     this.domain = domain;
     this.today = TODAY;
+    // L'horloge en MILLISECONDES, gelée comme la date et AVANÇABLE à la main.
+    // La continuité d'une séance de signature se mesure en secondes (ADR 0047),
+    // et une suite qui dort vraiment dix secondes ne se relit pas.
+    this.nowMs = Date.parse(TODAY + 'T14:00:00.000Z');
     this.baseUrl = BASE;
     this.operatorEmail = OPERATOR_EMAIL;
 
@@ -108,6 +112,9 @@ class NotaWorld extends World {
 
     const buildApp = () => createApp(this.repo, {
       now: () => TODAY,
+      // Lue à CHAQUE appel, pour qu'un scénario qui avance l'horloge soit vu
+      // par l'application déjà construite.
+      nowMs: () => this.nowMs,
       newId: () => 'bid-' + ++seq,
       notifier: this.notifier,
       billing: this.billing,
@@ -131,6 +138,10 @@ class NotaWorld extends World {
         NOTA_OPERATOR_EMAIL: OPERATOR_EMAIL,
         // Le prénom que l'assistant nomme en passant la main.
         NOTA_OPERATOR_NAME: OPERATOR_NAME,
+        // ADR 0047 — le seul fournisseur de signature admissible tant qu'aucun
+        // flux reconnu par la Chambre n'est branché : il scelle un procès-verbal
+        // et ne délivre AUCUNE minute, et il le dit.
+        NOTA_SIGNATURE_FOURNISSEUR: 'demonstration',
       },
     });
 

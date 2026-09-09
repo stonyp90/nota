@@ -55,6 +55,7 @@ function createMemoryRepo(seed = []) {
   const referralEarnings = new Map(); // `${CODE}#${TRACK}#${refId}` -> durable earning event
   const supportThreads = new Map(); // threadId -> live support thread (ADR 0026)
   const signingSessions = new Map(); // dedicated, bounded rehearsal records; never public bid data
+  const salles = new Map(); // bidId -> séance de signature (ADR 0047)
 
   // Notification ledgers: sent (idempotency) and unsubscribe (suppression).
   const notificationPreferences = new Map();
@@ -432,6 +433,27 @@ const clientChallenges = new Map(); // challengeId -> record (lien magique clien
     async getSupportThread(id) {
       const t = supportThreads.get(String(id));
       return t ? { ...t } : null;
+    },
+    // --- Salle de signature (ADR 0047) --------------------------------------
+    // Same shape as the dynamo adapter, `rev` guard included: the handler
+    // read-modify-writes a séance while two peers push ICE candidates at it,
+    // and a silently lost candidate is a connection that never comes up.
+    async getSalle(bidId) {
+      const s = salles.get(String(bidId));
+      return s ? JSON.parse(JSON.stringify(s)) : null;
+    },
+    async putSalle(salle, { ifRev } = {}) {
+      const id = String(salle.bidId);
+      const courante = salles.get(id);
+      if (ifRev !== undefined && (courante ? courante.rev : 0) !== ifRev) {
+        const err = new Error('salle_conflit');
+        err.name = 'ConditionalCheckFailedException';
+        throw err;
+      }
+      const rev = (courante ? courante.rev || 0 : 0) + 1;
+      const stocke = JSON.parse(JSON.stringify({ ...salle, bidId: id, rev }));
+      salles.set(id, stocke);
+      return JSON.parse(JSON.stringify(stocke));
     },
     // The operator's inbox: the threads whose last message falls in `months`
     // (see keys.supportInboxMonths), newest first, bounded. Mirrors the

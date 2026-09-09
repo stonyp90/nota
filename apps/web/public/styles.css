@@ -5414,3 +5414,150 @@ body.ig-open { overflow: hidden; }
 .sup-recover { font: inherit; font-size: 12px; padding: 6px 8px; color: var(--ink); background: var(--surface); border: 1px solid var(--border); cursor: pointer; }
 .sup-recover:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 #chat-reply-recovery .help { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* ==========================================================================
+   LA SALLE DE SIGNATURE — ADR 0047
+
+   Plein écran, et volontairement sombre : une cérémonie n'est pas une page du
+   site. Ce qui doit rester lisible à distance d'un écran — la chaîne
+   d'authentification, l'état des quatre portes, le texte de conduite — l'est
+   avant tout le reste. Le bandeau bêta est au-dessus de tout et ne se cache
+   jamais.
+   ========================================================================== */
+.salle { position: fixed; inset: 0; z-index: 11000; display: flex; flex-direction: column; background: var(--hunter-950); color: #f6f9f7; }
+.salle[hidden] { display: none; }
+/* Le fond de la page ne défile plus derrière la salle. */
+body.salle-ouverte { overflow: hidden; }
+
+/* Le bandeau. Aucune règle ne le masque, aucun rendu ne le touche. */
+.salle-beta { margin: 0; padding: 10px 16px; text-align: center; font-size: 13px; line-height: 1.45; background: var(--warn); color: #1b1300; }
+.salle-beta strong { font-weight: 700; }
+
+.salle-scene { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 380px; min-height: 0; }
+
+.salle-videos { position: relative; min-height: 0; background: #000; }
+.salle-video { display: block; width: 100%; height: 100%; object-fit: cover; background: #000; }
+.salle-video-distant { width: 100%; height: 100%; }
+/* La vignette locale : assez grande pour se vérifier, assez petite pour ne pas
+   voler l'attention de la personne d'en face. */
+.salle-video-local { position: absolute; right: 16px; bottom: 16px; width: 22%; min-width: 140px; max-width: 260px; height: auto; aspect-ratio: 4 / 3; border: 1px solid var(--border-strong); border-radius: var(--radius); box-shadow: var(--shadow-lg); }
+
+.salle-rail { display: flex; flex-direction: column; gap: 14px; padding: 18px; overflow-y: auto; background: var(--hunter-900); border-left: 1px solid var(--hunter-800); }
+.salle-bloc { padding: 14px; background: rgb(255 255 255 / 0.04); border: 1px solid var(--hunter-800); border-radius: var(--radius); }
+.salle-etape-nom { margin: 0 0 8px; font-size: 18px; line-height: 1.3; }
+.salle-etape-conduite { margin: 0 0 8px; font-size: 15px; line-height: 1.5; }
+.salle-etape-constat { margin: 0; font-size: 13px; line-height: 1.45; color: var(--hunter-300); }
+
+/* La chaîne d'authentification. C'est la ligne qu'on lit à voix haute : elle a
+   droit à la plus grosse typographie de l'écran, en chasse fixe pour que S et 5
+   ne se confondent pas. */
+.salle-bloc-sas { text-align: center; }
+.salle-sas-titre { margin: 0 0 6px; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--hunter-300); }
+.salle-sas { margin: 0; font-family: ui-monospace, "SFMono-Regular", "Menlo", "Consolas", monospace; font-size: 34px; font-weight: 700; letter-spacing: 0.12em; }
+.salle-sas.is-confirme { color: var(--hunter-400); }
+.salle-sas-aide { margin: 6px 0 0; font-size: 12px; line-height: 1.4; color: var(--hunter-300); }
+
+.salle-portes-titre { margin: 0 0 8px; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--hunter-300); }
+.salle-portes { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.salle-porte { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 4px 8px; font-size: 14px; line-height: 1.4; }
+.salle-porte-marque { color: var(--warn); font-weight: 700; }
+.salle-porte.is-ouverte .salle-porte-marque { color: var(--hunter-400); }
+.salle-porte-nom { font-weight: 600; }
+/* Une porte fermée DIT pourquoi. Le motif s'aligne sous le nom, pas sous la
+   marque : c'est une phrase, pas une puce. */
+.salle-porte-motif { grid-column: 2; margin: 0; font-size: 13px; line-height: 1.4; color: var(--hunter-200); }
+
+.salle-statut { display: flex; flex-direction: column; gap: 8px; }
+.salle-statut-ligne { margin: 0; font-size: 13px; line-height: 1.45; color: var(--hunter-200); }
+.salle-statut-ligne.is-alerte { padding: 10px; background: rgb(180 35 24 / 0.18); border: 1px solid var(--danger); border-radius: var(--radius-sm); color: #ffe4e1; }
+.salle-statut-ligne.is-enregistre { color: var(--warn); font-weight: 600; }
+.salle-empreinte { display: block; overflow-wrap: anywhere; font-family: ui-monospace, "SFMono-Regular", "Menlo", "Consolas", monospace; font-size: 11px; line-height: 1.5; color: var(--hunter-300); }
+
+.salle-refus { display: flex; flex-direction: column; gap: 6px; padding: 10px; background: rgb(180 35 24 / 0.18); border: 1px solid var(--danger); border-radius: var(--radius-sm); }
+.salle-refus[hidden] { display: none; }
+.salle-refus-ligne { margin: 0; font-size: 13px; line-height: 1.45; color: #ffe4e1; }
+
+.salle-actions { display: flex; flex-direction: column; gap: 8px; }
+.salle-btn { font: inherit; font-size: 14px; font-weight: 600; padding: 11px 14px; cursor: pointer; text-align: left; color: #f6f9f7; background: rgb(255 255 255 / 0.06); border: 1px solid var(--hunter-700); border-radius: var(--radius-sm); }
+.salle-btn:hover:not(:disabled) { background: rgb(255 255 255 / 0.12); }
+.salle-btn.is-primaire { background: var(--hunter-600); border-color: var(--hunter-500); }
+.salle-btn.is-primaire:hover:not(:disabled) { background: var(--hunter-500); }
+.salle-btn.is-discret { background: transparent; font-weight: 500; }
+.salle-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.salle-quitter { margin-top: auto; }
+
+/* Sur un téléphone la vidéo passe au-dessus et le rail dessous : le notaire
+   conduit rarement depuis un téléphone, le client souvent. */
+@media (max-width: 860px) {
+  .salle-scene { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(180px, 40vh) minmax(0, 1fr); }
+  .salle-rail { border-left: 0; border-top: 1px solid var(--hunter-800); }
+  .salle-sas { font-size: 28px; }
+}
+
+/* L'annonce, dans le carnet et dans l'espace notaire. */
+/* Coins carrés comme tout le reste : la marque a tranché contre l'arrondi, et
+   une pastille en pilule ferait une exception que rien ne justifie ici. */
+.salle-annonce-pastille { display: inline-block; margin: 0 0 8px; padding: 3px 10px; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--brand-ink); background: var(--brand); border-radius: var(--radius-xs); }
+.salle-annonce-actions { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Beta: an explicit home for experiments, separate from booking. */
+.beta-page { max-width: 1120px; padding-top: 52px; padding-bottom: 72px; }
+.beta-hero { display: grid; grid-template-columns: 1.1fr 1fr; gap: 56px; align-items: center; }
+.beta-eyebrow { display: flex; align-items: center; gap: 9px; margin: 0 0 18px; font-size: 12px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-muted); }
+.beta-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.beta-intro h1 { max-width: 560px; margin: 0 0 22px; font-size: clamp(32px, 4.2vw, 52px); line-height: 1.08; letter-spacing: -.04em; }
+.beta-lead { max-width: 500px; color: var(--ink-muted); font-size: 18px; line-height: 1.7; }
+.beta-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 26px; }
+.beta-actions .btn { min-height: 44px; white-space: normal; text-align: center; }
+.beta-caption { margin: 18px 0 0; max-width: 440px; color: var(--ink-muted); font-size: 13px; line-height: 1.6; }
+.beta-preview { border: 1px solid var(--border-strong); border-radius: var(--radius-lg); padding: 22px; background: var(--surface); box-shadow: 0 18px 45px rgb(var(--nota-blue-700-rgb) / .08); }
+.beta-preview-top { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; font-weight: 700; }
+.beta-preview-tag { font-size: 11px; color: var(--ink-muted); background: var(--surface-inset); padding: 6px 9px; border-radius: var(--radius-xs); }
+.beta-preview-scene { display: grid; grid-template-columns: .9fr 1fr; gap: 16px; margin: 22px 0; min-height: 220px; }
+.beta-preview-person { display: flex; align-items: center; justify-content: center; background: var(--nota-blue-900); border-radius: var(--radius); }
+.beta-preview-person svg { width: 80%; stroke: var(--nota-blue-300); stroke-width: 1.5; }
+.beta-preview-paper { min-width: 0; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 22px 16px; transform: rotate(3deg); background: var(--surface); }
+.beta-paper-brand { display: block; color: var(--ink-muted); font-size: 13px; font-weight: 700; margin-bottom: 25px; }
+.beta-preview-paper i { display: block; height: 4px; background: var(--border); margin: 11px 0; }
+.beta-preview-paper i:nth-of-type(2) { width: 80%; }
+.beta-preview-paper i:nth-of-type(4) { width: 60%; }
+.beta-preview-paper svg { width: 100%; margin-top: 16px; stroke: var(--brand); stroke-width: 1.7; }
+.beta-preview-steps { list-style: none; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; padding: 16px 0 0; margin: 0; border-top: 1px solid var(--border); font-size: 11px; color: var(--ink-muted); }
+.beta-boundary { display: grid; grid-template-columns: 210px 1fr; gap: 24px; align-items: start; margin-top: 40px; padding: 22px 26px; border-left: 3px solid var(--brand); background: var(--surface-inset); border-radius: 0 var(--radius) var(--radius) 0; font-size: 14px; line-height: 1.7; }
+.beta-boundary p { margin: 0; color: var(--ink-muted); }
+.beta-experience { margin-top: 64px; }
+.beta-section-heading h2, .beta-access-grid h2 { margin: 0 0 22px; font-size: 27px; line-height: 1.25; letter-spacing: -.025em; }
+.beta-features { list-style: none; display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; margin: 28px 0 0; padding: 0; }
+.beta-features li { border-top: 1px solid var(--border-strong); padding-top: 22px; }
+.beta-step { font-size: 13px; font-weight: 700; color: var(--ink-muted); }
+.beta-features h3 { font-size: 19px; margin: 16px 0 10px; }
+.beta-features p, .beta-access-grid p, .beta-demo p { font-size: 14px; color: var(--ink-muted); line-height: 1.7; }
+.beta-access-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 44px; }
+.beta-access, .beta-upcoming { min-width: 0; border: 1px solid var(--border); background: var(--surface); padding: 30px; border-radius: var(--radius); }
+.beta-upcoming { background: transparent; }
+.beta-access-grid .beta-eyebrow { color: var(--ink-muted); font-size: 12px; }
+.beta-access-grid .btn { margin-top: 8px; min-height: 44px; white-space: normal; text-align: center; }
+.beta-upcoming ul { padding-left: 20px; color: var(--ink-muted); font-size: 14px; line-height: 1.7; }
+.beta-upcoming li + li { margin-top: 12px; }
+.beta-demo { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); margin-top: 32px; padding: 20px 0; }
+.beta-demo summary { cursor: pointer; padding: 4px 0; min-height: 32px; font-size: 15px; font-weight: 650; }
+.beta-demo summary:focus-visible { outline: 2px solid var(--ring); outline-offset: 5px; }
+.beta-demo p { max-width: 850px; }
+@media (max-width: 980px) {
+  .beta-hero { gap: 28px; }
+  .beta-preview { padding: 17px; }
+  .beta-preview-scene { min-height: 190px; gap: 10px; }
+}
+@media (max-width: 720px) {
+  .beta-page { padding-top: 30px; padding-bottom: 44px; }
+  .beta-hero { grid-template-columns: 1fr; gap: 30px; }
+  .beta-preview { max-width: 480px; width: 100%; box-sizing: border-box; }
+  .beta-preview-scene { min-height: 200px; }
+  .beta-boundary { grid-template-columns: 1fr; gap: 8px; margin-top: 28px; padding: 20px; }
+  .beta-experience { margin-top: 40px; }
+  .beta-features, .beta-access-grid { grid-template-columns: 1fr; gap: 22px; }
+  .beta-features h3 { margin-top: 10px; }
+  .beta-access, .beta-upcoming { padding: 24px; }
+  .beta-access-grid { margin-top: 28px; }
+  .beta-lead { font-size: 16px; }
+}

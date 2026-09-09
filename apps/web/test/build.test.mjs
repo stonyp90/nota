@@ -49,31 +49,24 @@ test('service worker is build-stamped and precaches the hashed shell', () => {
   assert.doesNotMatch(sw, /'\/app\.js'/, 'sw.js still precaches the un-hashed app.js');
 });
 
-// Search visitors and non-JavaScript crawlers must receive complete localized pages.
+// Retired URLs overwrite the old static pages without keeping them indexed.
 const { JSDOM } = await import('jsdom');
 const { pages, pagePath } = await import('../seo-pages.mjs');
-const sitemap = new JSDOM(readFileSync(dist('sitemap.xml'), 'utf8'), { contentType: 'text/xml' }).window.document;
+const sitemap = readFileSync(dist('sitemap.xml'), 'utf8');
 for (const page of pages) {
   for (const lang of ['fr', 'en']) {
-    test(`static search document: ${pagePath(page, lang)}`, () => {
+    test(`retired search document: ${pagePath(page, lang)}`, () => {
       const source = readFileSync(dist(pagePath(page, lang).slice(1)), 'utf8');
       const doc = new JSDOM(source).window.document;
-      const url = 'https://gonota.ca' + pagePath(page, lang);
+      const target = `/?lang=${lang}#t=carnet`;
       assert.equal(doc.documentElement.lang, `${lang}-CA`);
-      assert.equal(doc.querySelector('link[rel="canonical"]').href, url);
-      assert.equal(doc.querySelectorAll('h1').length, 1);
-      assert.ok(doc.querySelector('main').textContent.length > 1000);
-      assert.ok([...sitemap.querySelectorAll('loc')].some(el => el.textContent === url));
-      assert.equal(doc.querySelector('a.btn').getAttribute('href'), `/?lang=${lang}#t=carnet`);
-      for (const el of doc.querySelectorAll('script[src],link[rel="stylesheet"]')) {
-        const path = el.getAttribute('src') || el.getAttribute('href');
-        assert.ok(files.includes(path.slice(1)), `missing built asset ${path}`);
-      }
-      for (const el of doc.querySelectorAll('script[type="application/ld+json"]')) assert.equal(JSON.parse(el.textContent).url, url);
-      if (lang === 'en') {
-        assert.match(doc.querySelector('h1').textContent, /Notary for mortgage/);
-        assert.doesNotMatch(doc.querySelector('main').textContent, /Votre|notaire|hypothécaire|demande|Québec/);
-      }
+      assert.equal(doc.querySelector('meta[name="robots"]').content, 'noindex,follow');
+      assert.equal(doc.querySelector('meta[http-equiv="refresh"]').content, `0;url=${target}`);
+      assert.equal(doc.querySelector('a').getAttribute('href'), target, 'manual fallback without JavaScript');
+      assert.equal(doc.querySelector('link[rel="canonical"]').href, 'https://gonota.ca/' + (lang === 'en' ? '?lang=en' : ''));
+      assert.equal(doc.querySelectorAll('script').length, 0, 'retired pages need no scripts or tracking');
+      assert.ok(!sitemap.includes(pagePath(page, lang)), 'retired URL is absent from sitemap');
+      assert.ok(!html.includes(pagePath(page, lang)), 'retired URL is absent from navigation');
     });
   }
 }
