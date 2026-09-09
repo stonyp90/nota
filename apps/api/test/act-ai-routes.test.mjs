@@ -25,6 +25,8 @@ const extraction = { fields: [
 
 function setup() {
   const repo = createMemoryRepo([{ ...bid }]);
+  repo.markActCompleted(bid.id, { bidId: bid.id, notaryId: 'owner', paye: true, netCents: 1,
+    transferId: 'test-paid', completedAt: '2026-09-09T14:00:00.000Z' });
   const calls = [];
   const app = createApp(repo, {
     now: () => '2026-09-09',

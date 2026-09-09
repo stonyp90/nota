@@ -49,18 +49,17 @@ for (const language of ['fr', 'en']) {
   });
 }
 
-test('search-page source survives navigation to the marketplace', async ({ page }) => {
-  const events = [];
-  page.on('request', request => {
-    if (request.url().endsWith('/events') && request.method() === 'POST') events.push(request.postDataJSON());
+for (const [path, lang] of [
+  ['/notaire-financement-quebec.html', 'fr'],
+  ['/notaire-refinancement-quebec.html', 'fr'],
+  ['/mortgage-financing-notary-quebec-city.html', 'en'],
+  ['/mortgage-refinancing-notary-quebec-city.html', 'en'],
+]) {
+  test(`retired page returns to the localized carnet: ${path}`, async ({ page }) => {
+    await page.goto(path);
+    await expect(page).toHaveURL(new RegExp('/\\?lang=' + lang + '#t=carnet'));
+    await expect(page.locator('html')).toHaveAttribute('lang', lang + '-CA');
+    await expect(page.locator('#pane-carnet')).toBeVisible();
+    await expect(page.locator('.site-footer a[href*="notaire-financement-quebec"]')).toHaveCount(0);
   });
-  await page.goto('/notaire-financement-quebec.html', { referer: 'https://www.google.ca/search?q=private-query' });
-  const link = page.locator('a.btn[data-acquisition-link]').first();
-  await expect(link).toHaveAttribute('href', /nota_source=google/);
-  await link.click();
-  await expect.poll(() => events.some(event => event.event === 'visite' && event.context.source === 'google')).toBe(true);
-  expect(events.some(event => event.event === 'page_service_vue')).toBe(true);
-  expect(events.some(event => event.event === 'page_service_vers_carnet')).toBe(true);
-  expect(events.some(event => event.event === 'visite' && event.context.entry === 'financement')).toBe(true);
-  expect(JSON.stringify(events)).not.toContain('private-query');
-});
+}

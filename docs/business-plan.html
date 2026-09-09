@@ -2,27 +2,27 @@
 
 <style>
 /* ─────────────────────────────────────────────────────────────
-   Palette: registry ink on cool paper, brass seal accent.
-   Neutrals carry a blue bias so they read as chosen, not default.
+   Palette: Nota deep blue-teal mark, cyan signal, and midnight ink.
+   The business plan uses the same identity as the product surfaces.
    ───────────────────────────────────────────────────────────── */
 :root{
-  --paper:#F4F6F8;
-  --surface:#FFFFFF;
-  --surface-2:#EDF1F5;
-  --ink:#111823;
-  --ink-2:#33404F;
-  --muted:#5D6C7E;
-  --faint:#8896A6;
-  --rule:#DCE3EA;
-  --rule-strong:#C3CEDA;
-  --brass:#8F6714;
-  --brass-bright:#A8791F;
-  --brass-wash:#F6EEDC;
-  --verdigris:#2F6B57;
-  --verdigris-wash:#E6F0EB;
-  --oxide:#8E4034;
-  --oxide-wash:#F8EAE7;
-  --shadow:0 1px 2px rgba(17,24,35,.05),0 8px 24px -12px rgba(17,24,35,.14);
+  --paper:#F2F1EC;
+  --surface:#FCFBF8;
+  --surface-2:#E6ECE9;
+  --ink:#101B26;
+  --ink-2:#2F4656;
+  --muted:#5B6B78;
+  --faint:#7C8D8E;
+  --rule:#CBD8D5;
+  --rule-strong:#9EB6B2;
+  --brass:#274A62;
+  --brass-bright:#407598;
+  --brass-wash:#EBF1F5;
+  --verdigris:#386888;
+  --verdigris-wash:#E9F1F5;
+  --oxide:#B87569;
+  --oxide-wash:#F6E6E2;
+  --shadow:0 1px 2px rgba(22,42,50,.05),0 8px 24px -12px rgba(22,42,50,.14);
 
   --display:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua","Sitka Text",Georgia,serif;
   --body:"Avenir Next",Avenir,"Segoe UI",system-ui,-apple-system,"Helvetica Neue",sans-serif;
@@ -33,42 +33,42 @@
 }
 @media (prefers-color-scheme:dark){
   :root:not([data-theme="light"]){
-    --paper:#0D131B;
-    --surface:#141C26;
-    --surface-2:#1B2531;
-    --ink:#E6EBF2;
-    --ink-2:#C4CEDA;
-    --muted:#93A1B2;
-    --faint:#71808F;
-    --rule:#25313F;
-    --rule-strong:#33424F;
-    --brass:#D9A441;
-    --brass-bright:#E3B45C;
-    --brass-wash:#2A2113;
-    --verdigris:#63B394;
-    --verdigris-wash:#132620;
-    --oxide:#D08376;
-    --oxide-wash:#2A1613;
+    --paper:#0D1C23;
+    --surface:#162E38;
+    --surface-2:#20404A;
+    --ink:#F3F6F9;
+    --ink-2:#D8E3EA;
+    --muted:#B7C7D1;
+    --faint:#8FA5A5;
+    --rule:#496972;
+    --rule-strong:#6F898D;
+    --brass:#8FB8D0;
+    --brass-bright:#70A7C4;
+    --brass-wash:#1C3547;
+    --verdigris:#78A9C1;
+    --verdigris-wash:#183343;
+    --oxide:#D19A8E;
+    --oxide-wash:#3A2D2A;
     --shadow:0 1px 2px rgba(0,0,0,.30),0 10px 28px -14px rgba(0,0,0,.55);
   }
 }
 :root[data-theme="dark"]{
-  --paper:#0D131B;
-  --surface:#141C26;
-  --surface-2:#1B2531;
-  --ink:#E6EBF2;
-  --ink-2:#C4CEDA;
-  --muted:#93A1B2;
-  --faint:#71808F;
-  --rule:#25313F;
-  --rule-strong:#33424F;
-  --brass:#D9A441;
-  --brass-bright:#E3B45C;
-  --brass-wash:#2A2113;
-  --verdigris:#63B394;
-  --verdigris-wash:#132620;
-  --oxide:#D08376;
-  --oxide-wash:#2A1613;
+  --paper:#0D1C23;
+  --surface:#162E38;
+  --surface-2:#20404A;
+  --ink:#F3F6F9;
+  --ink-2:#D8E3EA;
+  --muted:#B7C7D1;
+  --faint:#8FA5A5;
+  --rule:#496972;
+  --rule-strong:#6F898D;
+  --brass:#8FB8D0;
+  --brass-bright:#70A7C4;
+  --brass-wash:#1C3547;
+  --verdigris:#78A9C1;
+  --verdigris-wash:#183343;
+  --oxide:#D19A8E;
+  --oxide-wash:#3A2D2A;
   --shadow:0 1px 2px rgba(0,0,0,.30),0 10px 28px -14px rgba(0,0,0,.55);
 }
 
@@ -125,6 +125,12 @@ code{font-family:var(--mono);font-size:.87em;background:var(--surface-2);padding
   font-family:var(--display);font-size:clamp(3.4rem,9vw,5.6rem);line-height:.94;
   letter-spacing:-.03em;font-weight:600;margin:0 0 .5rem;
 }
+.mast .mark{display:flex;align-items:center;gap:0}
+.mast .mark-logo{width:1em;height:1em;flex:0 0 auto;margin-right:-.04em}
+.mast .mark-word{font-family:var(--body);font-weight:800;letter-spacing:-.08em}
+.mast .mark-region{display:inline-block;align-self:center;margin-left:.28em;padding:.42em .7em .36em;
+  border-radius:999px;background:var(--brass-wash);color:var(--brass);font-family:var(--body);
+  font-size:.22em;line-height:1;letter-spacing:.12em;font-weight:750}
 .mast .thesis{
   font-family:var(--display);font-style:italic;font-size:clamp(1.3rem,3.2vw,1.8rem);
   line-height:1.3;color:var(--brass);margin:0 0 1.4rem;max-width:22ch;
@@ -259,7 +265,7 @@ footer h3{font-size:.95rem;margin:0 0 .9rem;font-family:var(--body);font-weight:
 <!-- ══════════════════ MASTHEAD ══════════════════ -->
 <div class="wrap mast">
   <span class="eyebrow">Pre-seed · Québec City · September 2026</span>
-  <h1 class="mark">Nota</h1>
+  <h1 class="mark" aria-label="Nota Québec"><svg class="mark-logo" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="12" fill="#264961"/><g fill="#FFFFFF"><rect x="16" y="15" width="7.5" height="34" rx="2.5"/><rect x="40.5" y="15" width="7.5" height="34" rx="2.5"/><polygon points="16,15 24,15 48,49 40,49"/></g><circle cx="48" cy="16" r="8" fill="#407598" stroke="#101B26" stroke-width="3"/></svg><span class="mark-word">ota</span><span class="mark-region">QUÉBEC</span></h1>
   <p class="thesis">A market for urgent notarial acts - and a protocol for hidden capacity.</p>
   <p class="stand">Québec abolished mandatory notary tariffs in 1991. Thirty-five years later, no
   price discovery mechanism has ever existed. Nota is that mechanism: a client posts the date they

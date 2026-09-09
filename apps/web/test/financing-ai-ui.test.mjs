@@ -39,7 +39,8 @@ async function boot(t, { analysis = null, lang = 'fr', route, count = 1 } = {}) 
   const retained = Array.from({ length: count }, (_, i) => ({
     id: 'file?&' + i, dateISO: todayISO(), serviceId: 'refinancement',
     montant: 2000, tier: 'standard', prefixe: 'G1R', courriel: 'client@example.ca',
-    dossier: {}, viaProposition: true,
+    dossier: {}, viaProposition: true, paid: true,
+    notaryTemplate: { serviceId: 'refinancement', connectors: [{ label: 'Canal autorisé du prêteur', candidate: 'Canal de test' }] },
   }));
   const dom = new JSDOM(HTML, {
     runScripts: 'outside-only', pretendToBeVisual: true, url: 'https://nota.example/?lang=' + lang,

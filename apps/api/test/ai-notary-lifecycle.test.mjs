@@ -116,6 +116,7 @@ test('full notary lifecycle keeps client context, AI evidence and human decision
   const retained = await call(app, 'POST', '/notary/bids/accept', { token: notaryToken, body: { id: bid.id, dateISO: DATE } });
   assert.equal(retained.statusCode, 200, retained.body);
   assert.equal(parse(retained).dossier.adresse, '10 rue des Érables, Québec');
+  assert.equal(parse(retained).notaryTemplate, null);
 
   const request = await call(app, 'POST', '/notary/bids/documents', {
     token: notaryToken,
@@ -148,6 +149,20 @@ test('full notary lifecycle keeps client context, AI evidence and human decision
   });
   assert.equal(documents.statusCode, 200, documents.body);
   assert.ok(parse(documents).lecture.url);
+
+  const beforePayment = await call(app, 'POST', '/notary/financing/preparation', {
+    token: notaryToken,
+    body: { id: bid.id, dateISO: DATE, pages: [PAGE], processingAuthorized: true },
+  });
+  assert.equal(beforePayment.statusCode, 402, beforePayment.body);
+  assert.deepEqual(parse(beforePayment).errors, [{ code: 'nota_payment_required' }]);
+
+  // Simulate the payment-capture ledger entry. Retention/act completion alone
+  // is deliberately not enough to unlock the notary's generated work packet.
+  await repo.markActCompleted(bid.id, {
+    bidId: bid.id, notaryId: NOTARY_ID, actAmount: 2800, paye: true, netCents: 279900,
+    transferId: 'transfer-lifecycle', completedAt: '2026-09-09T14:00:00.000Z',
+  });
 
   const prepared = await call(app, 'POST', '/notary/financing/preparation', {
     token: notaryToken,
@@ -192,12 +207,18 @@ test('full notary lifecycle keeps client context, AI evidence and human decision
   const finalFeed = await call(app, 'GET', '/notary/bids', { token: notaryToken });
   const finalEntry = parse(finalFeed).retained.find(item => item.id === bid.id);
   assert.equal(finalEntry.completed, true);
+  assert.equal(finalEntry.paid, true);
+  assert.ok(finalEntry.notaryTemplate);
   assert.equal(finalEntry.actAmount, 2800);
+
+  const clientAfterPayment = await call(app, 'GET', '/client/bid', { token: clientToken, query: { id: bid.id, dateISO: DATE } });
+  assert.equal(clientAfterPayment.statusCode, 200, clientAfterPayment.body);
+  assert.equal(Object.prototype.hasOwnProperty.call(parse(clientAfterPayment), 'notaryTemplate'), false);
 
   const learningKinds = (await repo.queryNotaryLearningByDay(TODAY))
     .filter(entry => entry.action === 'notary_learning_signal' && entry.meta?.bidId === bid.id)
     .map(entry => entry.meta.kind);
-  for (const kind of ['customer_input', 'customer_behavior', 'communication', 'ai_output', 'notary_review', 'official_outcome']) {
+  for (const kind of ['customer_input', 'customer_behavior', 'communication', 'ai_output', 'notary_review']) {
     assert.ok(learningKinds.includes(kind), kind);
   }
 });

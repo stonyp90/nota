@@ -438,13 +438,33 @@
 
     var passwordField = el('div', 'field');
     var passwordLabel = el('label', null, 'Mot de passe'); passwordLabel.setAttribute('for', 'auth-password');
+    var passwordControl = el('div', 'password-control');
     var password = el('input', 'input');
     password.type = 'password'; password.id = 'auth-password'; password.autocomplete = 'current-password';
-    password.placeholder = 'Votre mot de passe';
-    passwordField.appendChild(passwordLabel); passwordField.appendChild(password);
+    password.placeholder = 'Votre mot de passe'; password.setAttribute('aria-describedby', 'auth-password-help');
+    passwordControl.appendChild(password);
+    var reveal = el('button', 'password-toggle', 'Afficher');
+    reveal.type = 'button'; reveal.setAttribute('aria-controls', 'auth-password');
+    reveal.setAttribute('aria-label', 'Afficher le mot de passe');
+    passwordControl.appendChild(reveal);
+    passwordField.appendChild(passwordLabel); passwordField.appendChild(passwordControl);
+    passwordField.appendChild(el('p', 'field-help auth-password-help', 'Mot de passe facultatif. Laissez vide pour recevoir un lien sécurisé.'));
 
     var submit = el('button', 'btn btn-primary btn-lg btn-block', 'Se connecter');
     submit.type = 'submit';
+
+    function syncAuthAction() {
+      submit.textContent = password.value ? 'Se connecter' : 'Recevoir le lien';
+    }
+    password.addEventListener('input', syncAuthAction);
+    reveal.addEventListener('click', function () {
+      var visible = password.type === 'text';
+      password.type = visible ? 'password' : 'text';
+      reveal.textContent = visible ? 'Afficher' : 'Masquer';
+      reveal.setAttribute('aria-label', visible ? 'Afficher le mot de passe' : 'Masquer le mot de passe');
+      password.focus();
+    });
+    syncAuthAction();
 
     var note = el('div'); note.hidden = true; // neutral confirmation / dev link region
 
@@ -454,8 +474,7 @@
     form.appendChild(note);
     card.appendChild(form);
 
-    card.appendChild(el('p', 'auth-fineprint',
-      'Votre session reste uniquement dans cet onglet. Si vous avez oublié votre mot de passe, laissez ce champ vide pour recevoir un lien de récupération.'));
+    card.appendChild(el('p', 'auth-fineprint', 'Votre session reste uniquement dans cet onglet.'));
     if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
       card.appendChild(el('p', 'auth-devhint', 'En local : admin@nota.local · nota-local-admin'));
     }
@@ -489,7 +508,7 @@
     if (!(r.status === 200 && r.json && r.json.ok && r.json.session)) {
       authError(note, 'Courriel ou mot de passe invalide.');
       var passwordInput = $('auth-password');
-      if (passwordInput) { passwordInput.value = ''; passwordInput.focus(); }
+      if (passwordInput) { passwordInput.value = ''; passwordInput.dispatchEvent(new Event('input')); passwordInput.focus(); }
       return;
     }
     setSession(r.json.session, r.json.expiresAt);
@@ -6557,9 +6576,21 @@
     var langButton = $('admin-lang-toggle');
     if (langButton) {
       var target = english ? 'fr' : 'en';
-      langButton.textContent = target === 'en' ? 'EN' : 'FR';
-      langButton.setAttribute('aria-label', target === 'en' ? 'Switch to English' : 'Passer au français');
-      langButton.setAttribute('lang', target === 'en' ? 'en-CA' : 'fr-CA');
+      var langChoices = langButton.querySelectorAll('[data-set-lang]');
+      if (langChoices.length) {
+        langButton.setAttribute('aria-label', english ? 'Language' : 'Langue');
+        for (var li = 0; li < langChoices.length; li++) {
+          var choice = langChoices[li];
+          var choiceLang = choice.getAttribute('data-set-lang') === 'en' ? 'en' : 'fr';
+          choice.setAttribute('aria-pressed', choiceLang === (english ? 'en' : 'fr') ? 'true' : 'false');
+          choice.setAttribute('aria-label', choiceLang === 'en' ? 'English' : 'Français');
+          choice.setAttribute('lang', choiceLang === 'en' ? 'en-CA' : 'fr-CA');
+        }
+      } else {
+        langButton.textContent = target === 'en' ? 'EN' : 'FR';
+        langButton.setAttribute('aria-label', target === 'en' ? 'Switch to English' : 'Passer au français');
+        langButton.setAttribute('lang', target === 'en' ? 'en-CA' : 'fr-CA');
+      }
     }
     if (window.NotaI18N && window.NotaI18N.refresh) window.NotaI18N.refresh();
     router();

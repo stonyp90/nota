@@ -38,7 +38,8 @@
     "local:check": "node apps/api/scripts/check-stack.js",
     "test:e2e": "playwright test",
     "test:chat": "node --test packages/domain/test/support-assistant.test.mjs apps/api/test/assistant-port.test.mjs apps/api/test/assistant-secret.test.mjs apps/api/test/support*.test.mjs apps/api/test/admin-support.test.mjs apps/admin/test/support.test.mjs apps/web/test/support-chat.test.mjs apps/web/test/support-assistant-ui.test.mjs",
-    "benchmark:chat": "node apps/api/scripts/benchmark-support-matcher.js"
+    "benchmark:chat": "node apps/api/scripts/benchmark-support-matcher.js",
+    "demo:salle": "playwright test --config=demo/playwright.demo.config.js"
   },
   "engines": {
     "node": ">=20"

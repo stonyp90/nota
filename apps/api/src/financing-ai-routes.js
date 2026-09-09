@@ -12,7 +12,8 @@ const MAX_IN_FLIGHT = 32;
 // The current analysis lives on the private bid, with its retention/erasure
 // policy. Raw page text is never persisted here or added to the support prompt.
 function createFinancingAIRoutes({ repo, env, authenticate, json, parseBody, getSecret,
-  port, nowMs = Date.now, newId = randomUUID, audit = async () => {}, learning = null }) {
+  port, nowMs = Date.now, newId = randomUUID, audit = async () => {}, learning = null,
+  canAccessWorkPacket = async () => true }) {
   const error = (status, code) => json(status, { errors: [{ code }] });
   const workPacket = bid => D.financingWorkPacket(bid, { todayISO: D.businessDay(nowMs(), D.BUSINESS_TIMEZONE) });
   const setting = value => typeof value === 'string' ? value.trim() : '';
@@ -76,6 +77,7 @@ function createFinancingAIRoutes({ repo, env, authenticate, json, parseBody, get
     if (!bid) return error(404, 'introuvable');
     if (bid.notaryId !== owner) return error(403, 'interdit');
     if (bid.status !== D.STATUS.RETENUE || bid.efface) return error(409, 'dossier_indisponible');
+    if (!(await canAccessWorkPacket(bid))) return error(402, 'nota_payment_required');
     if (method === 'GET') return json(200, { analysis: bid.financingAnalysis || null, workPacket: workPacket(bid) });
 
     if (route.endsWith('/review')) {

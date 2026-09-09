@@ -212,6 +212,27 @@ function supportGSI1PK(dernierAt) {
 function supportGSI1SK(thread) {
   return `${thread.dernierAt || thread.createdAt || ''}#${thread.id}`;
 }
+
+// --- Salle de signature (ADR 0047) --------------------------------------------
+// One item per séance, addressed by the bid it belongs to: an act has at most
+// one signing room, so the bid id IS the room id and no minting or index is
+// needed. Same shape as the support thread above — GetItem in, PutItem out.
+//
+//   PK = SALLE#<bidId>   SK = SALLE
+//
+// The item carries the ceremony state, the sealed procès-verbal and a BOUNDED
+// ring of WebRTC signalling messages. `rev` makes each write conditional: two
+// peers exchange ICE candidates concurrently, and a lost-update would drop a
+// candidate and hang the connection with no error anywhere.
+function sallePK(bidId) {
+  return 'SALLE#' + String(bidId);
+}
+const SALLE_SK = 'SALLE';
+// A séance lasts an hour, not a week. Signalling messages are useless the
+// moment the peer connection is up, so the ring is short and time-bounded;
+// the item itself carries the audit-retention TTL like the rest of the trail.
+const SALLE_SIGNAUX_MAX = 200;
+const SALLE_SIGNAL_VIE_MS = 5 * 60 * 1000;
 // The month keys the inbox reads: this month and the `count - 1` before it.
 function supportInboxMonths(nowISO, count = 3) {
   const [y, m] = String(nowISO || '').slice(0, 7).split('-').map(Number);
@@ -862,6 +883,11 @@ module.exports = {
   SUPPORT_GSI1PK_PREFIX,
   supportGSI1PK,
   supportGSI1SK,
+  // salle de signature (ADR 0047)
+  sallePK,
+  SALLE_SK,
+  SALLE_SIGNAUX_MAX,
+  SALLE_SIGNAL_VIE_MS,
   supportInboxMonths,
   partnerPK,
   PARTNER_SK,

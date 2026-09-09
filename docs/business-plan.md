@@ -1,5 +1,7 @@
 # Nota — Business Plan
 
+![Nota logo](../apps/web/public/favicon.svg)
+
 **A market for urgent notarial acts - and a protocol for hidden capacity.**
 
 - Version: 1.5

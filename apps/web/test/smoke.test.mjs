@@ -19,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { JSDOM } from 'jsdom';
 
 const DOMAIN_SRC = readFileSync(fileURLToPath(new URL('../../../packages/domain/index.js', import.meta.url)), 'utf8');
+const I18N_SRC = readFileSync(fileURLToPath(new URL('../public/i18n.js', import.meta.url)), 'utf8');
 const APP_SRC = readFileSync(fileURLToPath(new URL('../public/app.js', import.meta.url)), 'utf8');
 const HTML_SRC = readFileSync(fileURLToPath(new URL('../public/index.html', import.meta.url)), 'utf8');
 
@@ -78,12 +79,20 @@ async function boot(opts = {}) {
   // The intro gate owns a truly fresh first paint; every test that is not
   // about the gate itself boots past it (opts.intro = true keeps it live).
   if (!opts.intro) win.localStorage.setItem('nota.introSeen', '1');
+  // Keep the harness's default deterministic and French like the product's
+  // canonical source; the explicit ?lang=en case below still exercises the
+  // real browser-language override.
+  if (!/[?&]lang=(en|fr)(?:&|$)/.test(new URL(win.location.href).search)) {
+    win.localStorage.setItem('nota.lang', 'fr');
+  }
 
-  // 1) domain -> window.NotaDomain
+  // 1) i18n -> domain -> app, matching the browser's script order.
+  win.eval(I18N_SRC);
+  // 2) domain -> window.NotaDomain
   win.eval(DOMAIN_SRC);
   const D = win.NotaDomain;
 
-  // 2) deterministic, unexpired seed published today
+  // 3) deterministic, unexpired seed published today
   const today = todayISO();
   const anchor = firstOfMonth(today);
   const month = monthKey(anchor);
@@ -510,8 +519,8 @@ test('profile persists coordinates and prefills the offer form', async () => {
 // 12d. The single account menu (avatar) merges profile + notifications + menu.
 test('account menu opens and navigates to the profile', async () => {
   const { win, doc } = await boot();
-  // Three flat doors (ADR 0010 §2): Carnet · Espace notaire · Partenaires.
-  assert.equal(doc.querySelectorAll('.nav-tabs .nav-tab').length, 3);
+  // Marketplace navigation plus the Beta entry.
+  assert.equal(doc.querySelectorAll('.nav-tabs .nav-tab').length, 4);
 
   // A signed-in client (has a courriel): the identity head routes to their profile.
   win.localStorage.setItem('nota.profile.v1', JSON.stringify({ courriel: 'marie@example.ca' }));
@@ -658,6 +667,44 @@ test('notaires landing: each selling point is made once', async () => {
   // Owner's call (2026-08-25): no value grid — the inventory is the pitch,
   // the fee facts live in the sign-up branch and the guarantee line.
   assert.equal(all(doc, '#pane-notaires .nc-why-item').length, 0, 'the value grid is retired');
+});
+
+test('notary landing presents the assisted preparation as a truthful free beta', async () => {
+  const { doc } = await boot();
+  doc.querySelector('.nav-tab[data-tab="notaires"]').click();
+  const note = doc.getElementById('notary-ai-beta-note');
+  assert.ok(note, 'the notary landing names the beta');
+  assert.match(note.textContent, /bêta gratuite/);
+  assert.match(note.textContent, /système spécialisé/);
+  assert.match(note.textContent, /algorithmes propriétaires/);
+  assert.match(note.textContent, /pourra évoluer vers un abonnement/);
+  assert.match(note.textContent, /aucun prix ni échéance n’est fixé/);
+  assert.match(note.textContent, /ne servent pas à entraîner les modèles/);
+});
+
+test('notary beta teaser opens from the information button, not the copy', async () => {
+  const { doc } = await boot();
+  doc.querySelector('.nav-tab[data-tab="notaires"]').click();
+  const note = doc.getElementById('notary-ai-beta-note');
+  const toggle = doc.getElementById('notary-ai-beta-toggle');
+  const details = doc.getElementById('notary-ai-beta-details');
+  assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+  note.querySelector('.beta-teaser-copy').click();
+  assert.equal(toggle.getAttribute('aria-expanded'), 'false', 'copy stays informational');
+  toggle.click();
+  assert.equal(toggle.getAttribute('aria-expanded'), 'true');
+  assert.equal(details.getAttribute('aria-hidden'), 'false');
+});
+
+test('notary beta notice translates in English and stays off the customer surface', async () => {
+  const { doc } = await boot({ url: 'https://nota.example/?lang=en' });
+  const note = doc.getElementById('notary-ai-beta-note');
+  assert.match(note.textContent, /free beta/);
+  assert.match(note.textContent, /proprietary algorithms/);
+  assert.match(note.textContent, /may evolve into a subscription/);
+  assert.match(note.textContent, /not used to train the models/);
+  assert.equal(doc.querySelector('#pane-carnet #notary-ai-beta-note'), null,
+    'the beta notice belongs only to the notary landing');
 });
 
 // 13b-ter. The prospecting band works signed OUT — the carnet feed is public by
@@ -1359,10 +1406,10 @@ test('DAY: an empty day says it once — the lead time up top, the invitation in
   // The one "be the first" sentence lives in #day-hint, at the decision point.
   assert.match($(ctx.doc, 'day-hint').textContent,
     /Aucune offre en .+ pour cette date\. Soyez le premier/);
-  // Zero offers for the act AND zero for the day: a totals strip would carry
-  // no information at all, so it is not rendered.
-  assert.equal(ctx.doc.querySelector('#day-bids .day-bids-count'), null,
-    'no totals strip on a day with nothing to count');
+  // Zero offers for the act AND zero for the day: the totals strip keeps the
+  // explicit zero so the result is distinguishable from a missing component.
+  assert.match(ctx.doc.querySelector('#day-bids .day-bids-count').textContent, /0 offre/,
+    'zero offer count remains visible on an empty day');
   // The whole dialog states the empty day exactly once.
   const dlgTxt = $(ctx.doc, 'day-dialog').textContent;
   assert.equal((dlgTxt.match(/Aucune offre/g) || []).length, 1,
@@ -2182,9 +2229,12 @@ test('no data: the calendar still renders a full month and claims nothing', asyn
       'day ' + d + ' of the month has a cell even with zero offers');
   }
   assert.equal(cells.length % 7, 0, 'the grid still renders whole weeks, got ' + cells.length);
-  // Nothing may claim an offer, a price, or a "N offres" count.
+  // Nothing may claim an offer or a price; the explicit zero result is allowed
+  // and makes the empty calendar state visible.
   assert.equal(all(ctx.doc, '#cal-grid .svc-bid').length, 0, 'no service rows on an empty month');
   assert.equal(all(ctx.doc, '#cal-grid .cal-avg').length, 0, 'no cleared-day figure on an empty month');
+  assert.equal(ctx.doc.getElementById('cal-empty').hidden, false, 'the full calendar exposes its zero result');
+  assert.match(ctx.doc.getElementById('cal-empty').textContent, /0 offre/, 'the zero result is stated numerically');
   // The legend is what decodes the colours, so it must survive the empty state.
   assert.ok(all(ctx.doc, '.legend .legend-item').length > 0, 'legend still renders with no data');
   // French pluralisation: "0 offre", never "0 offres".
@@ -2411,11 +2461,13 @@ test('header tabs: roving tabindex and arrow-key activation', async () => {
 
   key(win, tabs[1], 'ArrowRight'); // third door
   assert.equal(Nota.state.tab, 'partenaires');
-  key(win, tabs[2], 'ArrowRight'); // wraps around
+  key(win, tabs[2], 'ArrowRight'); // Beta is the fourth door
+  assert.equal(Nota.state.tab, 'beta');
+  key(win, tabs[3], 'ArrowRight'); // wraps around
   assert.equal(Nota.state.tab, 'carnet');
   key(win, tabs[0], 'End');
-  assert.equal(Nota.state.tab, 'partenaires');
-  key(win, tabs[2], 'Home');
+  assert.equal(Nota.state.tab, 'beta');
+  key(win, tabs[3], 'Home');
   assert.equal(Nota.state.tab, 'carnet');
 
   // A pane with no header tab (profil) must not strand the tablist at -1/-1.
@@ -2610,6 +2662,26 @@ test('calendar CSS: the urgency price badge flows, it is never absolutely positi
   for (const r of rules) {
     assert.ok(!/position:\s*absolute/.test(r), 'no absolute positioning on .cal-urgency: ' + r);
   }
+});
+
+test('calendar CSS: compact widths give the next-availability cue the full metadata track', () => {
+  const css = readFileSync(fileURLToPath(new URL('../public/styles.css', import.meta.url)), 'utf8');
+  const compact = css.slice(css.indexOf('@media (max-width: 480px)'));
+  assert.ok(compact.length < css.length, 'the compact toolbar breakpoint exists');
+  assert.match(compact, /\.cal-toolbar-meta\s*\{[^}]*grid-template-columns:\s*auto\s+minmax\(0,\s*1fr\)/,
+    'availability keeps the flexible middle track');
+  assert.match(compact, /\.cal-toolbar-meta \.result-count\s*\{[^}]*display:\s*none/,
+    'the secondary total yields before the availability label is ellipsized');
+});
+
+test('questionnaire CSS: priced choices stack on narrow sheets so labels and modifiers fit', () => {
+  const css = readFileSync(fileURLToPath(new URL('../public/styles.css', import.meta.url)), 'utf8');
+  assert.match(css, /\.o-criteria \.crit-row:has\(\.seg-btn \.crit-add\) \.seg\s*\{[^}]*flex-direction:\s*column/,
+    'priced choices use one full-width track on phones');
+  assert.match(css, /\.o-criteria \.crit-row:has\(\.seg-btn \.crit-add\) \.seg-btn\s*\{[^}]*width:\s*100%[^}]*min-width:\s*0/,
+    'priced buttons can shrink to the available width without overflowing');
+  assert.match(css, /\.o-criteria \.crit-row:has\(\.seg-btn \.crit-add\) \.crit-add\s*\{[^}]*margin-left:\s*auto/,
+    'price modifiers stay aligned inside their button');
 });
 
 test('menu CSS: panel viewport cap and coarse-pointer touch floors hold', () => {

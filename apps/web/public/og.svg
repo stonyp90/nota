@@ -1,19 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-label="Nota">
-  <!-- Brand values = styles.css :root (nota-blue-700 / nota-blue-500 / ink / ink-muted). -->
+  <!-- Canonical Nota mark: deep teal tile, white N, cyan signal. -->
   <rect width="1200" height="630" fill="#ffffff" />
-  <rect width="1200" height="12" fill="#174a63" />
+  <rect width="1200" height="12" fill="#101B26" />
   <g transform="translate(96 150)">
-    <rect width="96" height="96" rx="22" fill="#174a63" />
+    <rect width="96" height="96" rx="22" fill="#264961" />
     <g fill="#ffffff" transform="translate(24 24) scale(0.75)">
       <rect x="16" y="15" width="7.5" height="34" rx="2.5" />
       <rect x="40.5" y="15" width="7.5" height="34" rx="2.5" />
       <polygon points="16,15 24,15 48,49 40,49" />
     </g>
-    <circle cx="72" cy="24" r="12" fill="#2a769b" stroke="#174a63" stroke-width="4.5" />
-  <text x="120" y="66" font-family="Inter, sans-serif" font-size="64" font-weight="800" fill="#0d1b27">Nota</text>
-    <text x="122" y="104" font-family="Inter, sans-serif" font-size="26" font-weight="600" fill="#174a63" letter-spacing="1">CARNET PUBLIC · QUÉBEC</text>
+    <circle cx="72" cy="24" r="12" fill="#407598" stroke="#101B26" stroke-width="4.5" />
+    <text x="120" y="66" font-family="Inter, sans-serif" font-size="64" font-weight="800" fill="#101B26">Nota</text>
+    <rect x="122" y="77" width="154" height="38" rx="19" fill="#EBF1F5" />
+    <text x="199" y="103" text-anchor="middle" font-family="Inter, sans-serif" font-size="20" font-weight="800" fill="#274A62" letter-spacing="1.5">QUÉBEC</text>
   </g>
-  <text x="96" y="380" font-family="Inter, sans-serif" font-size="72" font-weight="800" fill="#0d1b27" letter-spacing="-2">Un notaire, à la date qu’il</text>
-  <text x="96" y="462" font-family="Inter, sans-serif" font-size="72" font-weight="800" fill="#0d1b27" letter-spacing="-2">vous faut.</text>
-  <text x="96" y="536" font-family="Inter, sans-serif" font-size="30" font-weight="500" fill="#526574">Refinancement · Financement hypothécaire — publier est gratuit</text>
+  <text x="96" y="380" font-family="Inter, sans-serif" font-size="72" font-weight="800" fill="#101B26" letter-spacing="-2">Un notaire, à la date qu’il</text>
+  <text x="96" y="462" font-family="Inter, sans-serif" font-size="72" font-weight="800" fill="#101B26" letter-spacing="-2">vous faut.</text>
+  <text x="96" y="536" font-family="Inter, sans-serif" font-size="30" font-weight="500" fill="#5b6d73">Refinancement · Financement hypothécaire — publier est gratuit</text>
 </svg>

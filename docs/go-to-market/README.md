@@ -31,6 +31,7 @@ grille complète et pour ce que les ADR 0031, 0034 et 0030 ont retiré.
 ## Lancement cette semaine
 
 - [Plan exécutable du 8 au 13 septembre](launch-week-2026-09-08.md) : référencement, diffusion, budget proposé, messages FR/EN et conversion.
+- [La vidéo de la salle de signature](video-salle-signature.md) : le plan de tournage, de montage et de publication de la démonstration **bêta** — ce qu'elle montre, les quatre affirmations qu'elle ne fait jamais, et la liste de refus avant publication.
 - [Tableau de suivi quotidien](launch-scorecard.csv) : valeurs laissées vides tant que non mesurées.
 
 ## Le plan

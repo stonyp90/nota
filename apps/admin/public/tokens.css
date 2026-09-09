@@ -3,15 +3,36 @@
    The three theme blocks below (:root light palette, the prefers-color-scheme
    dark block, and the [data-theme='dark'] toggle block) are COPIED VERBATIM from
    apps/web/public/styles.css so the admin brand tracks the marketing site exactly
-   — same Nota blue ramp, same --ink / --bg / --surface / --border names. Keep
-   them in lockstep with apps/web when either side changes a color.
+   — same Nota blue-teal identity, same --ink / --bg / --surface /
+   --border names. Keep them in lockstep with apps/web when either side changes
+   a color.
 
    Admin-only tokens (layout geometry) live in a separate bare :root block at the
    bottom, leaving the copied palette untouched.
    ========================================================================== */
 
 :root {
-  /* Nota blue ramp, kept in lockstep with apps/web/public/styles.css. */
+  /* Nota identity, kept in lockstep with apps/web/public/styles.css. */
+  --nota-midnight: #101b26;
+  --nota-midnight-hover: #1b3446;
+  --nota-midnight-rgb: 16 27 38;
+  --nota-teal: #386888;
+  --nota-teal-bright: #78a9bf;
+  --nota-teal-50: #ebf1f5;
+  --nota-teal-rgb: 56 104 136;
+  --nota-logo-bg: #264961;
+  --nota-logo-signal: #407598;
+  --nota-badge-bg: #ebf1f5;
+  --nota-badge-ink: #274a62;
+  --nota-saffron: #ad9567;
+  --nota-saffron-ink: #6e5930;
+  --nota-saffron-bright: #cbb98d;
+  --nota-saffron-50: #f5f0e7;
+  --nota-saffron-rgb: 173 149 103;
+  --nota-coral: #b87569;
+  --nota-coral-bright: #d19a8e;
+
+  /* Nota blue ramp remains available for non-brand data accents. */
   --nota-blue-50: #f1f7fb;
   --nota-blue-100: #e1eef5;
   --nota-blue-200: #c3ddeb;
@@ -22,7 +43,7 @@
   --nota-blue-700: #174a63;
   --nota-blue-800: #113a51;
   --nota-blue-900: #0b2939;
-  --nota-blue-950: #061c2a;
+  --nota-blue-950: #162a32;
   /* Channel-only copies for the alpha tokens further down (washes, focus glow,
      shadow): rgb() cannot take a hex var, so no ramp value is retyped as a
      literal downstream. */
@@ -31,25 +52,25 @@
   --nota-blue-700-rgb: 23 74 99;
 
   /* Semantic tokens (light) */
-  --brand: var(--nota-blue-700);
-  --brand-bright: var(--nota-blue-500);
+  --brand: var(--nota-teal);
+  --brand-bright: var(--nota-teal);
   --brand-ink: #ffffff;
-  --brand-hover: var(--nota-blue-800);
+  --brand-hover: #274a62;
   --on-accent: #ffffff; /* text/knob on saturated accents (tier pills, toggle) — white in every theme */
 
-  --bg: #f2f5f7;
-  --surface: #fbfcfd;
-  --surface-inset: #eaf1f5;
-  --surface-hover: #e2ebf0;
-  --ink: #0d1b27;
-  --ink-muted: #526574;
-  --border: #d9e3e9;
-  --border-strong: #b6c8d4;
-  --ring: var(--nota-blue-600);
+  --bg: #f2f1ec;
+  --surface: #fcfbf8;
+  --surface-inset: #e6ece9;
+  --surface-hover: #dce6e3;
+  --ink: #101b26;
+  --ink-muted: #5b6c72;
+  --border: #cbd8d5;
+  --border-strong: #9eb6b2;
+  --ring: var(--nota-teal);
 
   --danger: #b42318;
-  --warn: #b54708;
-  --ok: var(--nota-blue-600);
+  --warn: #8b6b2e;
+  --ok: var(--nota-teal);
 
   /* Tier accent ramp — cool (calm) to warm (urgent).
      All five are dark enough for white .pill text to meet WCAG AA (>=4.5:1). */
@@ -74,7 +95,7 @@
 
   --shadow-sm: 0 1px 2px rgb(17 22 20 / 0.05);
   --shadow: 0 6px 20px -8px rgb(17 22 20 / 0.12);
-  --shadow-lg: 0 24px 50px -16px rgb(var(--nota-blue-700-rgb) / 0.24);
+  --shadow-lg: 0 24px 50px -16px rgb(var(--nota-midnight-rgb) / 0.24);
 
   --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
@@ -93,24 +114,24 @@
    light UI. Excludes an explicit light opt-out via :not([data-theme='light']). */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --brand: var(--nota-blue-500);
-    --brand-bright: var(--nota-blue-400);
-    --brand-ink: #061c2a;
-    --brand-hover: var(--nota-blue-400);
+    --brand: var(--nota-teal-bright);
+    --brand-bright: var(--nota-teal-bright);
+    --brand-ink: var(--nota-midnight);
+    --brand-hover: #a5c9dc;
 
-    --bg: #0f110f;
-    --surface: #0f2030;
-    --surface-inset: #132b3f;
-    --surface-hover: #19384d;
-    --ink: #f4f8fa;
-    --ink-muted: #afc2cf;
-    --border: #294353;
-    --border-strong: #3f5f70;
-    --ring: var(--nota-blue-400);
+    --bg: #101b26;
+    --surface: #162e38;
+    --surface-inset: #20404a;
+    --surface-hover: #2b4d57;
+    --ink: #eff3f1;
+    --ink-muted: #b2c0c0;
+    --border: #496972;
+    --border-strong: #6f898d;
+    --ring: var(--nota-teal-bright);
 
-    --danger: #f97066;
-    --warn: #f79009;
-    --ok: var(--nota-blue-500);
+    --danger: var(--nota-coral-bright);
+    --warn: var(--nota-saffron-bright);
+    --ok: var(--nota-teal-bright);
 
     --tier-standard: #64748b;
     --tier-rapide: #356c87;
@@ -126,24 +147,24 @@
    Defines the SAME complete token set as the @media block above; keep the two in
    lockstep so no token (e.g. --warn, --shadow-lg) drifts back to its light value. */
 :root[data-theme='dark'] {
-  --brand: var(--nota-blue-500);
-  --brand-bright: var(--nota-blue-400);
-  --brand-ink: #061c2a;
-  --brand-hover: var(--nota-blue-400);
+  --brand: var(--nota-teal-bright);
+  --brand-bright: var(--nota-teal-bright);
+  --brand-ink: var(--nota-midnight);
+  --brand-hover: #a5c9dc;
 
-  --bg: #0f110f;
-  --surface: #0f2030;
-  --surface-inset: #132b3f;
-  --surface-hover: #19384d;
-  --ink: #f4f8fa;
-  --ink-muted: #afc2cf;
-  --border: #294353;
-  --border-strong: #3f5f70;
-  --ring: var(--nota-blue-400);
+  --bg: #101b26;
+  --surface: #162e38;
+  --surface-inset: #20404a;
+  --surface-hover: #2b4d57;
+  --ink: #eff3f1;
+  --ink-muted: #b2c0c0;
+  --border: #496972;
+  --border-strong: #6f898d;
+  --ring: var(--nota-teal-bright);
 
-  --danger: #f97066;
-  --warn: #f79009;
-  --ok: var(--nota-blue-500);
+  --danger: var(--nota-coral-bright);
+  --warn: var(--nota-saffron-bright);
+  --ok: var(--nota-teal-bright);
 
   --tier-standard: #64748b;
   --tier-rapide: #356c87;
@@ -167,11 +188,11 @@
 
   /* Translucent washes for hover/active states. Buttons stay outline/transparent
      — no button ever gets a solid fill — so these low-alpha tints are the only
-     background a button shows on interaction. Green channel is hunter-500
-     (80 184 72), faint enough to read the same in light and dark. --neutral-wash
+     background a button shows on interaction. Brass is the brand accent,
+     faint enough to read the same in light and dark. --neutral-wash
      is a theme-neutral ink veil for non-brand controls. */
-  --brand-wash: rgb(var(--nota-blue-500-rgb) / 0.10);
-  --brand-wash-strong: rgb(var(--nota-blue-500-rgb) / 0.18);
+  --brand-wash: rgb(var(--nota-teal-rgb) / 0.10);
+  --brand-wash-strong: rgb(var(--nota-teal-rgb) / 0.18);
   --neutral-wash: rgb(120 130 120 / 0.10);
-  --focus-ring: rgb(var(--nota-blue-500-rgb) / 0.15); /* input/control focus glow (3px) — theme-neutral, same as the washes */
+  --focus-ring: rgb(var(--nota-teal-rgb) / 0.15); /* input/control focus glow (3px) — theme-neutral, same as the washes */
 }

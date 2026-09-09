@@ -13,6 +13,10 @@ const field = { fieldId: 'lender_name', value: 'Banque Exemple', evidence: [{ do
 const base = { id: 'file-a', dateISO: '2026-09-18', serviceId: 'refinancement', status: D.STATUS.RETENUE, notaryId: 'notary-a', montant: 2000 };
 function setup({ records = [base], env: overrides = {}, extract, repo: suppliedRepo } = {}) {
   const repo = suppliedRepo || createMemoryRepo(records.map(b => structuredClone(b)));
+  for (const record of records) {
+    repo.markActCompleted(record.id, { bidId: record.id, notaryId: record.notaryId, paye: true, netCents: 1,
+      transferId: 'test-paid-' + record.id, completedAt: '2026-09-09T14:00:00.000Z' });
+  }
   const calls = [], counters = [];
   const increment = repo.incrNotaryRateCounter.bind(repo);
   repo.incrNotaryRateCounter = async (...args) => { counters.push(args); return increment(...args); };
@@ -153,6 +157,10 @@ test('failed generation does not poison duplicate state, and disabled/unauthoriz
 test('daily admission limit is shared across notaries and workers; cached reads remain free of reservations', async () => {
   const records = [base, { ...base, id: 'file-b', notaryId: 'notary-b' }, { ...base, id: 'file-c', notaryId: 'notary-c' }];
   const repo = createMemoryRepo(records);
+  for (const record of records) {
+    await repo.markActCompleted(record.id, { bidId: record.id, notaryId: record.notaryId, paye: true, netCents: 1,
+      transferId: 'test-paid-' + record.id, completedAt: '2026-09-09T14:00:00.000Z' });
+  }
   const a = setup({ repo, env: { NOTA_FINANCING_AI_MAX_CALLS_PER_DAY: '2' } });
   const b = setup({ repo, env: { NOTA_FINANCING_AI_MAX_CALLS_PER_DAY: '2' } });
   assert.equal((await a.request()).status, 200);

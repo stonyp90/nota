@@ -186,15 +186,16 @@ paths:
       summary: Read the current private financing analysis, review and customer-context work packet.
       description: >-
         The work packet is rebuilt from the server's current private dossier and
-        pricing answers. It is available when AI is disabled and never calls a
-        provider. Its drafts are unsent; source labels do not imply legal approval.
+        pricing answers. It is available only after the Nota payment ledger is
+        positive; retention or an unpaid completion is not sufficient. It never
+        calls a provider on read. Its drafts are unsent; source labels do not imply legal approval.
       security: [{ notarySession: [] }]
       parameters:
         - { name: id, in: query, required: true, schema: { type: string } }
         - { name: dateISO, in: query, required: true, schema: { type: string, format: date } }
       responses:
         '200':
-          description: Restricted to the retaining notary; no legal approval is implied.
+          description: Restricted to the retaining notary after Nota payment; no legal approval is implied.
           content:
             application/json:
               schema:
@@ -206,6 +207,8 @@ paths:
                       - { $ref: '#/components/schemas/FinancingAIAnalysis' }
                       - { type: 'null' }
                   workPacket: { $ref: '#/components/schemas/FinancingWorkPacketResult' }
+        '402':
+          $ref: '#/components/responses/NotaPaymentRequired'
         default: { $ref: '#/components/responses/FinancingAIError' }
     post:
       summary: Extract page-evidenced proposals from notary-supplied text.
@@ -223,7 +226,7 @@ paths:
         not a distributed exactly-once guarantee. Changed inputs replace the current
         analysis using an optimistic analysis-ID check. Each response rebuilds the
         work packet from the current authorized server file.
-        401 unauthorized; 403 wrong owner; 404 missing; 409 ownership/version/state
+        401 unauthorized; 402 Nota payment required; 403 wrong owner; 404 missing; 409 ownership/version/state
         conflict; 413 body limit; 422 input/authorization; 429 rate limit;
         502 unsupported provider output; 503 disabled/provider/counter failure.
       security: [{ notarySession: [] }]
@@ -264,6 +267,8 @@ paths:
                     description: This request reused a saved analysis or joined an identical generation in this worker. Its analysis may contain an existing review.
                   analysis: { $ref: '#/components/schemas/FinancingAIAnalysis' }
                   workPacket: { $ref: '#/components/schemas/FinancingWorkPacketResult' }
+        '402':
+          $ref: '#/components/responses/NotaPaymentRequired'
         default: { $ref: '#/components/responses/FinancingAIError' }
   /notary/financing/review:
     post:
@@ -271,8 +276,10 @@ paths:
       description: >-
         Requires a current analysis ID and exactly one decision per proposed field.
         Corrections and rejections require a reason. The server stamps reviewer and
-        time; the review is immutable for that analysis. Review never authorizes
-        training, legal execution or funds. 401 unauthorized; 403 wrong owner;
+        time; the review is immutable for that analysis. The paid Nota ledger is
+        required before any generated work packet is read or changed. Review never
+        authorizes training, legal execution or funds. 401 unauthorized; 402 Nota
+        payment required; 403 wrong owner;
         404 missing; 409 changed/reviewed analysis or unavailable file; 422 invalid review.
       security: [{ notarySession: [] }]
       requestBody:
@@ -310,18 +317,20 @@ paths:
                   ok: { const: true }
                   review: { $ref: '#/components/schemas/FinancingAIReview' }
                   workPacket: { $ref: '#/components/schemas/FinancingWorkPacketResult' }
+        '402':
+          $ref: '#/components/responses/NotaPaymentRequired'
         default: { $ref: '#/components/responses/FinancingAIError' }
   /notary/acts/preparation:
     get:
       summary: Read the private testament or procuration work packet and AI analysis.
-      description: The packet is rebuilt from the server-side dossier and never calls an AI provider on read.
+      description: The packet is rebuilt from the server-side dossier only after the Nota payment ledger is positive, and never calls an AI provider on read.
       security: [{ notarySession: [] }]
       parameters:
         - { name: id, in: query, required: true, schema: { type: string } }
         - { name: dateISO, in: query, required: true, schema: { type: string, format: date } }
       responses:
         '200':
-          description: Restricted to the retaining notary.
+          description: Restricted to the retaining notary after Nota payment.
           content:
             application/json:
               schema:
@@ -330,10 +339,12 @@ paths:
                 properties:
                   analysis: { anyOf: [{ $ref: '#/components/schemas/ActAIAnalysis' }, { type: 'null' }] }
                   workPacket: { $ref: '#/components/schemas/ActWorkPacketResult' }
+        '402':
+          $ref: '#/components/responses/NotaPaymentRequired'
         default: { $ref: '#/components/responses/FinancingAIError' }
     post:
       summary: Extract evidence-backed testament or procuration intake proposals.
-      description: Requires explicit processing authorization. Proposals are private, bounded and require notary review; no legal conclusion or signing decision is produced.
+      description: Requires Nota payment and explicit processing authorization. Proposals are private, bounded and require notary review; no legal conclusion or signing decision is produced.
       security: [{ notarySession: [] }]
       requestBody:
         required: true
@@ -370,6 +381,8 @@ paths:
                   reused: { type: boolean }
                   analysis: { $ref: '#/components/schemas/ActAIAnalysis' }
                   workPacket: { $ref: '#/components/schemas/ActWorkPacketResult' }
+        '402':
+          $ref: '#/components/responses/NotaPaymentRequired'
         default: { $ref: '#/components/responses/FinancingAIError' }
   /notary/acts/review:
     post:
@@ -411,6 +424,8 @@ paths:
                   ok: { const: true }
                   review: { $ref: '#/components/schemas/FinancingAIReview' }
                   workPacket: { $ref: '#/components/schemas/ActWorkPacketResult' }
+        '402':
+          $ref: '#/components/responses/NotaPaymentRequired'
         default: { $ref: '#/components/responses/FinancingAIError' }
   /auth/oauth/providers:
     get:
@@ -2454,7 +2469,8 @@ paths:
       description: >-
         The notary who retained the bid confirms the act signed and its final
         value. With a live client authorization Nota captures it and transfers
-        the net; otherwise the commission model applies as fallback. The act
+        the net; otherwise the commission model records an unpaid receivable as
+        fallback. The act
         ledger is write-once: a duplicate submit answers with the ORIGINAL
         settled figures and never charges twice. The domain bounds the value
         against the retained offer (`validateActValue`, `ACT_VALUE_BOUNDS`) —
@@ -2495,9 +2511,14 @@ paths:
                     type: integer
                   paid:
                     type: boolean
-                    description: Present when the client's authorization was captured.
+                    description: True only when the Nota payment ledger records an actual payment or transfer.
                   netCents:
                     type: integer
+                  notaryTemplate:
+                    oneOf:
+                      - type: 'null'
+                      - $ref: '#/components/schemas/NotaryOfferTemplate'
+                    description: Released to the retaining notary only when `paid` is true.
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -4025,6 +4046,444 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
 
+  # ==========================================================================
+  # La salle de signature (ADR 0047)
+  #
+  # Both sides use the SAME routes, told apart by their token: a notary SESSION
+  # token (the notary who retained the act) or the per-bid CLIENT token. Every
+  # request addresses the séance by the bid `id` and its `dateISO`.
+  #
+  # NO media crosses this API. The peer connection is direct; what travels here
+  # is WebRTC signalling (SDP, ICE candidates), the state of the four gates, and
+  # the procès-verbal. Signalling is polled rather than pushed: there is no
+  # WebSocket in this deployment, and a handful of messages during setup does
+  # not need one.
+  # ==========================================================================
+  /salle/rejoindre:
+    post:
+      operationId: salleRejoindre
+      summary: Join the signing room for a retained act (creates it on first arrival).
+      description: >-
+        Marks the calling party authenticated, records its DTLS fingerprint (the
+        short authentication string is derived from both), and returns the ICE
+        servers. The room is created on the first arrival, and only on an act a
+        notary has retained. When no Chambre-admitted signature provider is
+        configured, the room is forced to `demonstration`.
+      security:
+        - notarySession: []
+        - clientToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, dateISO]
+              properties:
+                id: { type: string }
+                dateISO: { type: string, format: date }
+                empreinte:
+                  type: string
+                  description: This peer's DTLS fingerprint, from its local SDP.
+                mode:
+                  type: string
+                  enum: [strict, temoin, aucun]
+                  description: Recording mode. Defaults to `strict` — no recording.
+                demonstration: { type: boolean }
+      responses:
+        "503":
+          description: Signing provider or configured TURN relay secret is unavailable. No direct-connection fallback is used when the relay is configured.
+        "200":
+          description: The room, and the ICE servers to connect with.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [salle, ice]
+                properties:
+                  salle: { $ref: "#/components/schemas/Salle" }
+                  ice:
+                    type: array
+                    items: { $ref: "#/components/schemas/IceServer" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /salle:
+    get:
+      operationId: salleEtat
+      summary: Poll the room state and this peer's pending signalling messages.
+      description: >-
+        Also the heartbeat: a peer that stops polling is a peer that is no longer
+        there, and the silence is what closes the `presence` gate. Pass the
+        `curseur` from the previous answer as `depuis` to receive only new
+        signalling messages.
+      security:
+        - notarySession: []
+        - clientToken: []
+      parameters:
+        - in: query
+          name: id
+          required: true
+          schema: { type: string }
+        - in: query
+          name: dateISO
+          required: true
+          schema: { type: string, format: date }
+        - in: query
+          name: depuis
+          required: false
+          schema: { type: integer }
+      responses:
+        "200":
+          description: The room, the messages waiting for this peer, and the new cursor.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [salle, signaux, curseur]
+                properties:
+                  salle: { $ref: "#/components/schemas/Salle" }
+                  signaux:
+                    type: array
+                    items: { $ref: "#/components/schemas/SalleSignal" }
+                  curseur: { type: integer }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /salle/ice:
+    get:
+      operationId: salleIce
+      summary: Fresh ICE servers, with time-limited TURN credentials.
+      description: >-
+        TURN credentials are the coturn time-limited form — the username IS the
+        expiry, the password its HMAC — so a stolen credential dies on its own.
+        Never a static password.
+      security:
+        - notarySession: []
+        - clientToken: []
+      parameters:
+        - in: query
+          name: id
+          required: true
+          schema: { type: string }
+        - in: query
+          name: dateISO
+          required: true
+          schema: { type: string, format: date }
+      responses:
+        "503":
+          description: Signing provider or configured TURN relay secret is unavailable. No direct-connection fallback is used when the relay is configured.
+        "200":
+          description: The ICE servers.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ice]
+                properties:
+                  ice:
+                    type: array
+                    items: { $ref: "#/components/schemas/IceServer" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /salle/signal:
+    post:
+      operationId: salleSignal
+      summary: Leave one WebRTC signalling message for the other peer.
+      description: >-
+        Accepts an SDP offer, an SDP answer, an ICE candidate or an end marker,
+        and nothing else. Anything outside that shape, or beyond the size a
+        signalling message can legitimately reach, is refused — the room is not
+        a tunnel.
+      security:
+        - notarySession: []
+        - clientToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, dateISO, type, charge]
+              properties:
+                id: { type: string }
+                dateISO: { type: string, format: date }
+                type:
+                  type: string
+                  enum: [offre, reponse, candidat, fin]
+                charge:
+                  description: The SDP or candidate, as sent by the browser.
+      responses:
+        "200":
+          description: The sequence number of the queued message.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [n]
+                properties:
+                  n: { type: integer }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /salle/pistes:
+    post:
+      operationId: sallePistes
+      summary: Report whether this peer's camera and microphone are live.
+      description: >-
+        A dead track closes the `presence` gate immediately, without waiting for
+        the call to drop: the notary must SEE and HEAR, and a muted microphone
+        is not hearing.
+      security:
+        - notarySession: []
+        - clientToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, dateISO, video, audio]
+              properties:
+                id: { type: string }
+                dateISO: { type: string, format: date }
+                video: { type: boolean }
+                audio: { type: boolean }
+      responses:
+        "200":
+          description: The room after the report.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [salle]
+                properties:
+                  salle: { $ref: "#/components/schemas/Salle" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /salle/lien:
+    post:
+      operationId: salleConfirmerLien
+      summary: The notary confirms both short authentication strings match.
+      description: >-
+        Notary only. The confirmation records WHICH string was confirmed, so a
+        later renegotiation that changes the fingerprints reopens the gate
+        instead of inheriting a confirmation that no longer applies.
+      security:
+        - notarySession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, dateISO, sas]
+              properties:
+                id: { type: string }
+                dateISO: { type: string, format: date }
+                sas:
+                  type: string
+                  description: The string read aloud, as shown on both screens.
+      responses:
+        "200":
+          description: The room with the `lien` gate open.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [salle]
+                properties:
+                  salle: { $ref: "#/components/schemas/Salle" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /salle/identite:
+    post:
+      operationId: salleAttesterIdentite
+      summary: The notary records an identity attestation for one party.
+      description: >-
+        Notary only. The attestation carries its METHOD, its INSTANT and its
+        verifier; a bare "identity verified" boolean is refused, because it does
+        not answer the question a court asks seven years later.
+      security:
+        - notarySession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, dateISO, partie, attestation]
+              properties:
+                id: { type: string }
+                dateISO: { type: string, format: date }
+                partie: { type: string, enum: [notaire, client] }
+                attestation:
+                  type: object
+                  required: [methode, verifieeLe, verifieePar]
+                  properties:
+                    methode:
+                      type: string
+                      enum: [piece_officielle, fournisseur, connaissance_personnelle, demonstration]
+                    verifieeLe: { type: string, format: date-time }
+                    verifieePar: { type: string }
+                    reference: { type: [string, "null"] }
+      responses:
+        "200":
+          description: The room after the attestation.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [salle]
+                properties:
+                  salle: { $ref: "#/components/schemas/Salle" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /salle/consentement:
+    post:
+      operationId: salleConsentir
+      summary: Give or withdraw this party's consent.
+      description: >-
+        Both giving and withdrawing are facts, and both are written to the
+        procès-verbal. A withdrawal stops any recording at once and makes the
+        signature step impossible.
+      security:
+        - notarySession: []
+        - clientToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, dateISO]
+              properties:
+                id: { type: string }
+                dateISO: { type: string, format: date }
+                enregistrement:
+                  type: boolean
+                  description: Whether this consent covers the recording (mode `temoin`).
+                retire:
+                  type: boolean
+                  description: Withdraw the consent given earlier.
+      responses:
+        "200":
+          description: The room after the consent.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [salle]
+                properties:
+                  salle: { $ref: "#/components/schemas/Salle" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /salle/etape:
+    post:
+      operationId: salleAvancer
+      summary: The notary moves the ceremony (or resumes a suspended one).
+      description: >-
+        Notary only. Steps are ordered: none is skipped, going back is allowed
+        and recorded as a fact. Reaching `signature` requires all four gates
+        open, both consents standing, and — with the demonstration adapter — a
+        room marked `demonstration`. `reprendre` resumes a suspended séance at
+        the step it was on, never further.
+      security:
+        - notarySession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, dateISO]
+              properties:
+                id: { type: string }
+                dateISO: { type: string, format: date }
+                versEtape:
+                  type: string
+                  enum: [accueil, identite, lien, consentement, lecture, questions, signature, cloture]
+                reprendre: { type: boolean }
+      responses:
+        "200":
+          description: The room at its new step.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [salle]
+                properties:
+                  salle: { $ref: "#/components/schemas/Salle" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          description: The séance is not in a state where this applies.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /salle/sceau:
+    post:
+      operationId: salleSceller
+      summary: Seal the procès-verbal and publish its fingerprint.
+      description: >-
+        Notary only, and only after the signature step. The hash chain closes,
+        and the SAME fingerprint is written to the immutable audit trail — two
+        independent copies of one truth, neither party able to make them agree
+        on a lie afterwards.
+      security:
+        - notarySession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, dateISO]
+              properties:
+                id: { type: string }
+                dateISO: { type: string, format: date }
+      responses:
+        "200":
+          description: The sealed procès-verbal.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [salle, scelle]
+                properties:
+                  salle: { $ref: "#/components/schemas/Salle" }
+                  scelle: { $ref: "#/components/schemas/ProcesVerbal" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          description: Already sealed, or sealed before the signature.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
 components:
   parameters:
     AcceptLanguage:
@@ -4086,6 +4545,12 @@ components:
                   properties:
                     code: { type: string }
                     message: { type: string }
+    NotaPaymentRequired:
+      description: The offer is retained, but the Nota payment ledger has not recorded payment yet.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
     Unauthorized:
       description: Missing, invalid, expired or wrong-scope token (`non_autorise`).
       content:
@@ -5082,6 +5547,42 @@ components:
             bid (billing configured, an authorized hold with a payment
             intent) — exactly what the cancel route requires. False means a
             cancellation would be free, whatever the barème says.
+    NotaryOfferTemplate:
+      type: object
+      description: >-
+        A server-frozen, service-specific preparation blueprint stored on the
+        offer at booking. It contains connector candidates only, never live
+        credentials or customer dossier values, and is released solely to the
+        retaining notary after the Nota payment ledger is positive.
+      required: [version, serviceId, generatedAt, access, pricing, intake, documents, aiFields, humanControls, caseCoverage, connectors]
+      properties:
+        version: { type: string }
+        serviceId: { $ref: '#/components/schemas/ServiceId' }
+        generatedAt: { type: [string, 'null'], format: date-time }
+        access:
+          type: object
+          required: [audience, after, customerVisible]
+          properties:
+            audience: { const: retaining_notary }
+            after: { const: nota_paid }
+            customerVisible: { const: false }
+        pricing: { type: array, items: { type: object } }
+        intake: { type: array, items: { type: object } }
+        documents: { type: array, items: { type: object } }
+        aiFields: { type: array, items: { type: object } }
+        humanControls: { type: array, items: { type: object } }
+        caseCoverage: { type: array, items: { type: object } }
+        connectors:
+          type: array
+          items:
+            type: object
+            required: [type, label, candidate, status, automation]
+            properties:
+              type: { type: string }
+              label: { type: string }
+              candidate: { type: string }
+              status: { const: candidate }
+              automation: { const: prepare_only }
     ClientContact:
       type: object
       description: >-
@@ -5150,6 +5651,14 @@ components:
             True once the write-once act ledger holds this act's settlement —
             the console renders « Acte complété » in ANY session and never
             re-offers the settlement button.
+        paid:
+          type: boolean
+          description: True only when the Nota payment ledger records an actual payment or transfer.
+        notaryTemplate:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/NotaryOfferTemplate'
+          description: Released only when `paid` is true; null before payment.
         actAmount:
           type: [integer, "null"]
           description: The value the act settled at (null until completed).
@@ -5220,6 +5729,11 @@ components:
           additionalProperties: true
         client:
           $ref: "#/components/schemas/ClientContact"
+        notaryTemplate:
+          oneOf:
+            - type: "null"
+            - $ref: "#/components/schemas/NotaryOfferTemplate"
+          description: Always null at retention; the paid template is returned later in the notary feed.
         paid:
           type: boolean
           description: Present with billing on — true when the pay-on-accept capture succeeded.
@@ -5242,11 +5756,8 @@ components:
       enum: [ouverte, retenue, annulee]
     ServiceId:
       type: string
-      description: >-
-        The catalogue is the financing family — `refinancement` and
-        `financement` (ADR 0010: testament and procuration were retired;
-        historical bids for retired acts are filtered out rather than served).
-      enum: [refinancement, financement]
+      description: The catalogue services supported by Nota's notary workflow.
+      enum: [refinancement, financement, testament, procuration]
     PartnerRegistration:
       type: object
       required: [partenaire]
@@ -5975,3 +6486,151 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Error"
+    # --- La salle de signature (ADR 0047) ---------------------------------
+    IceServer:
+      type: object
+      required: [urls]
+      description: >-
+        One ICE server. TURN entries carry the coturn time-limited credential
+        (username = expiry, credential = its HMAC); STUN entries carry neither.
+      properties:
+        urls:
+          type: array
+          items: { type: string }
+        username: { type: string }
+        credential: { type: string }
+    SalleSignal:
+      type: object
+      required: [n, type, de, charge]
+      description: One WebRTC signalling message waiting for the polling peer.
+      properties:
+        n: { type: integer }
+        type: { type: string, enum: [offre, reponse, candidat, fin] }
+        de: { type: string, enum: [notaire, client] }
+        charge: { type: string }
+    Porte:
+      type: object
+      required: [ouverte]
+      description: >-
+        One of the four gates. When shut it says WHY, in the words shown to the
+        person watching it shut.
+      properties:
+        ouverte: { type: boolean }
+        raison: { type: [string, "null"] }
+        message: { type: [string, "null"] }
+    ProcesVerbalEntree:
+      type: object
+      required: [n, fait, par, a, detail, empreinte]
+      description: >-
+        One chained fact. `empreinte(n) = SHA-256(empreinte(n-1) ‖ entrée(n))`,
+        so removing, inserting, reordering or retouching any entry changes every
+        fingerprint after it. `detail` is a closed vocabulary: the procès-verbal
+        never carries the content of the act nor what was said.
+      properties:
+        n: { type: integer }
+        fait: { type: string }
+        par: { type: string, enum: [notaire, client, systeme] }
+        a: { type: string, format: date-time }
+        detail: { type: object }
+        empreinte: { type: string }
+    ProcesVerbal:
+      type: object
+      required: [entrees, empreinte, demonstration]
+      properties:
+        salleId: { type: [string, "null"] }
+        bidId: { type: [string, "null"] }
+        mode: { type: string, enum: [strict, temoin, aucun] }
+        demonstration:
+          type: boolean
+          description: >-
+            A demonstration séance carries its mention as the FIRST chained
+            entry, so it cannot be passed off as anything else without breaking
+            the fingerprint.
+        entrees:
+          type: array
+          items: { $ref: "#/components/schemas/ProcesVerbalEntree" }
+        empreinte: { type: string }
+        scelleLe: { type: [string, "null"], format: date-time }
+    Salle:
+      type: object
+      required: [id, bidId, mode, statut, etape, portes, toutesOuvertes]
+      description: The signing room as either party is allowed to see it.
+      properties:
+        id: { type: string }
+        bidId: { type: string }
+        dateISO: { type: string, format: date }
+        mode: { type: string, enum: [strict, temoin, aucun] }
+        demonstration: { type: boolean }
+        statut: { type: string, enum: [prevue, ouverte, suspendue, scellee, annulee] }
+        etape:
+          type: string
+          enum: [accueil, identite, lien, consentement, lecture, questions, signature, cloture]
+        etapes:
+          type: array
+          description: The ceremony, with the notary's spoken guidance for each step.
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              ordre: { type: integer }
+              nom: { type: string }
+              conduite: { type: string }
+              constat: { type: string }
+        portes:
+          type: object
+          properties:
+            compte: { $ref: "#/components/schemas/Porte" }
+            identite: { $ref: "#/components/schemas/Porte" }
+            lien: { $ref: "#/components/schemas/Porte" }
+            presence: { $ref: "#/components/schemas/Porte" }
+        fermees:
+          type: array
+          items: { type: string }
+        toutesOuvertes: { type: boolean }
+        sas:
+          type: [string, "null"]
+          description: The short authentication string both screens must show.
+        lien:
+          type: object
+          properties:
+            empreinteNotaire: { type: [string, "null"] }
+            empreinteClient: { type: [string, "null"] }
+            confirmeLe: { type: [string, "null"], format: date-time }
+        identites: { type: object }
+        consentements: { type: object }
+        consentement:
+          type: object
+          properties:
+            requis: { type: boolean }
+            complet: { type: boolean }
+            manquants: { type: array, items: { type: string } }
+            retires: { type: array, items: { type: string } }
+        enregistre:
+          type: boolean
+          description: Whether a recording is running right now.
+        parties: { type: object }
+        presence:
+          type: object
+          properties:
+            coupeeA: { type: [integer, "null"] }
+            repriseA: { type: [integer, "null"] }
+        signature:
+          type: [object, "null"]
+          description: >-
+            What the signature port returned. `minute` is null with the
+            demonstration adapter, and `avis` is the notice the interface MUST
+            display.
+          properties:
+            fournisseur: { type: string }
+            reference: { type: string }
+            minute: { type: [string, "null"] }
+            signeeLe: { type: string, format: date-time }
+            avis: { type: [string, "null"] }
+        scelle:
+          oneOf:
+            - $ref: "#/components/schemas/ProcesVerbal"
+            - type: "null"
+        pv:
+          type: array
+          items: { type: object }
+        rev: { type: integer }

@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <!-- Dark is the default; honour an explicit saved choice. Applied before first
          paint to avoid a flash. -->
-    <script>try{var t=JSON.parse(localStorage.getItem('nota.theme')||'null');document.documentElement.setAttribute('data-theme',t==='light'?'light':'dark');}catch(e){document.documentElement.setAttribute('data-theme','dark');}</script>
+    <script>try{var t=JSON.parse(localStorage.getItem('nota.theme')||'null');var p=JSON.parse(localStorage.getItem('nota.palette')||'null');var ps=['ardoise','marine','sapin','prune','bourgogne','terre','indigo','mousse','graphite'];document.documentElement.setAttribute('data-theme',t==='light'?'light':'dark');document.documentElement.setAttribute('data-palette',ps.indexOf(p)>-1?p:'ardoise');}catch(e){document.documentElement.setAttribute('data-theme','dark');document.documentElement.setAttribute('data-palette','ardoise');}</script>
     <title>Nota — le carnet public des actes notariés à Québec</title>
     <meta
       name="description"
@@ -25,11 +25,9 @@
     <link rel="alternate" hreflang="fr-CA" href="https://gonota.ca/" />
     <link rel="alternate" hreflang="en-CA" href="https://gonota.ca/?lang=en" />
     <link rel="alternate" hreflang="x-default" href="https://gonota.ca/" />
-    <!-- Browser chrome: the dark canvas on a dark system (the page boots dark
-         by default), the Nota cobalt otherwise. The dark value is --bg of the
-         dark theme in styles.css — keep the two in lockstep. -->
-    <meta name="theme-color" content="#0f110f" media="(prefers-color-scheme: dark)" />
-    <meta name="theme-color" content="#174a63" />
+    <!-- Browser chrome follows the new Nota dark ink identity. -->
+    <meta name="theme-color" content="#101B26" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#101B26" />
 
     <!-- Local / geo signals (Ville de Québec) -->
     <meta name="geo.region" content="CA-QC" />
@@ -181,20 +179,20 @@
     <a class="skip" href="#main">Aller au contenu</a>
 
     <!-- The Nota logomark, drawn ONCE: every inline copy below is a
-         <use href="#nota-logomark">. The two Nota blues are styles.css :root
-         --nota-blue-700 and --nota-blue-500 (the same as favicon.svg / og.svg /
-         manifest theme_color) — ux-nav.test.mjs keeps them in lockstep.
+         <use href="#nota-logomark">. The deep teal square and cyan signal dot
+         are the shared identity colors (the same as favicon.svg / og.svg /
+         manifest metadata) — ux-nav.test.mjs keeps them in lockstep.
          (The drifting cubes in app.js are quiet branded facets, kept outside
          this document's symbol table so the mark itself appears only once.) -->
     <svg class="svg-defs" aria-hidden="true" focusable="false" width="0" height="0">
       <symbol id="nota-logomark" viewBox="0 0 64 64">
-        <rect width="64" height="64" rx="12" fill="#174a63"/>
+        <rect width="64" height="64" rx="12" fill="var(--nota-logo-bg)"/>
         <g fill="#ffffff">
           <rect x="16" y="15" width="7.5" height="34" rx="2.5"/>
           <rect x="40.5" y="15" width="7.5" height="34" rx="2.5"/>
           <polygon points="16,15 24,15 48,49 40,49"/>
         </g>
-        <circle cx="48" cy="16" r="8" fill="#2a769b" stroke="#174a63" stroke-width="3"/>
+        <circle cx="48" cy="16" r="8" fill="var(--nota-logo-signal)" stroke="var(--nota-midnight)" stroke-width="3"/>
       </symbol>
     </svg>
 
@@ -229,7 +227,7 @@
               <span class="ig-door-arrow" aria-hidden="true">→</span>
             </button>
           </div>
-          <button type="button" class="ig-enter" id="ig-enter">Entrer sur le site →</button>
+          <button type="button" class="ig-enter" id="ig-enter">Explorer le carnet →</button>
         </div>
 
         <div class="ig-frame" id="ig-frame" hidden>
@@ -316,7 +314,7 @@
       <div class="wrap">
         <a class="brand goto-link" href="#t=carnet" data-goto="carnet" aria-label="Nota, accueil — retour au menu">
           <span class="brand-mark" aria-hidden="true">
-            <img src="favicon.svg" width="30" height="30" alt="" />
+            <svg viewBox="0 0 64 64" width="30" height="30" focusable="false"><use href="#nota-logomark" /></svg>
           </span>
           <span class="brand-word">Nota</span>
           <span class="brand-sub">Québec</span>
@@ -330,8 +328,7 @@
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/><path d="M5 12h10"/></svg>
           </button>
         </div>
-        <!-- Three flat doors (ADR 0010 §2): Carnet · Espace notaire ·
-             Partenaires. No chevron submenus — every inner destination is
+        <!-- Marketplace doors plus the owner-requested Beta section. No chevron submenus — every inner destination is
              reached from inside its pane, never from a nested menu. The
              dossier is deliberately NOT a door: with one act it is a step of
              booking and of the post-retention exchange, not a destination. -->
@@ -339,6 +336,7 @@
           <button class="nav-tab" role="tab" id="tab-carnet" aria-controls="pane-carnet" data-tab="carnet" aria-selected="true"><svg class="nav-tab-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>Carnet</button>
           <button class="nav-tab" role="tab" id="tab-notaires" aria-controls="pane-notaires" data-tab="notaires" aria-selected="false"><svg class="nav-tab-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M2 13h20"/></svg>Espace notaire</button>
           <button class="nav-tab" role="tab" id="tab-partenaires" aria-controls="pane-partenaires" data-tab="partenaires" aria-selected="false"><svg class="nav-tab-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="7" r="4"/><path d="M2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2M16 3.5a4 4 0 0 1 0 7.5M18 15a4 4 0 0 1 4 4v2"/></svg>Partenaires</button>
+          <button class="nav-tab" role="tab" id="tab-beta" aria-controls="pane-beta" data-tab="beta" aria-selected="false"><svg class="nav-tab-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 20h18M15.6 4.4a2.1 2.1 0 0 1 3 3L9 17l-4 1 1-4z"/></svg>Bêta</button>
         </nav>
         <!-- Utility controls on ONE shared 28px strip (owner's ask,
              2026-08-26: « ensemble et même grosseur »): FR | EN segment ·
@@ -353,6 +351,20 @@
             <button type="button" class="mini-seg-btn" data-set-lang="fr" lang="fr-CA">FR</button>
             <button type="button" class="mini-seg-btn" data-set-lang="en" lang="en-CA">EN</button>
           </div>
+          <label class="palette-picker" for="palette-select">
+            <span class="visually-hidden">Palette de couleurs</span>
+            <select class="palette-select" id="palette-select" data-palette-select aria-label="Palette de couleurs" title="Palette de couleurs">
+              <option value="ardoise">Ardoise</option>
+              <option value="marine">Marine</option>
+              <option value="sapin">Sapin</option>
+              <option value="prune">Prune</option>
+              <option value="bourgogne">Bourgogne</option>
+              <option value="terre">Terre cuite</option>
+              <option value="indigo">Indigo</option>
+              <option value="mousse">Mousse</option>
+              <option value="graphite">Graphite</option>
+            </select>
+          </label>
           <!-- Theme: a small sun/moon switch, checked = dark. The knob tracks
                html[data-theme] in CSS (right from first paint); app.js mirrors
                the state onto aria-checked here and on the drawer twin. -->
@@ -437,7 +449,7 @@
     <div class="mnav-scrim" id="mnav-scrim" aria-hidden="true"></div>
     <nav class="mnav" id="mobile-nav" role="dialog" aria-modal="true" aria-label="Menu principal" tabindex="-1">
       <div class="mnav-head">
-        <span class="brand-mark" aria-hidden="true"><img src="favicon.svg" width="26" height="26" alt="" /></span>
+        <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 64 64" width="26" height="26" focusable="false"><use href="#nota-logomark" /></svg></span>
         <span class="mnav-title">Menu</span>
         <span class="header-spacer"></span>
         <button type="button" class="icon-btn" id="mnav-close" aria-label="Fermer le menu">
@@ -454,7 +466,7 @@
           Avancer
         </button>
       </div>
-      <!-- The same three flat doors as the header (ADR 0010 §2) — no
+      <!-- The same flat doors as the header — no
            accordions: the drawer carries the sections, then auth, contact,
            the language/theme preference toggles and the legal fold. Every row
            starts the same way: one 17px icon, one label — so the column of
@@ -472,6 +484,7 @@
           <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           Partenaires
         </button>
+        <button type="button" class="mnav-link" data-tab="beta"><svg class="nav-tab-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 20h18M15.6 4.4a2.1 2.1 0 0 1 3 3L9 17l-4 1 1-4z"/></svg>Bêta</button>
       </div>
       <div class="mnav-sep"></div>
       <!-- Mirrors #header-auth: shown only while anonymous (renderAccountMenu). -->
@@ -517,6 +530,23 @@
             <svg class="tswitch-moon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
           </button>
         </div>
+        <div class="mnav-pref">
+          <span class="mnav-row-l">
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18"/></svg>
+            Palette de couleurs
+          </span>
+          <select class="palette-select" id="mnav-palette" data-palette-select aria-label="Palette de couleurs">
+            <option value="ardoise">Ardoise</option>
+            <option value="marine">Marine</option>
+            <option value="sapin">Sapin</option>
+            <option value="prune">Prune</option>
+            <option value="bourgogne">Bourgogne</option>
+            <option value="terre">Terre cuite</option>
+            <option value="indigo">Indigo</option>
+            <option value="mousse">Mousse</option>
+            <option value="graphite">Graphite</option>
+          </select>
+        </div>
       </div>
       <div class="mnav-sep"></div>
       <!-- Legal fold: three links behind one thin row. -->
@@ -552,12 +582,12 @@
             <div class="intro-main">
               <span class="eyebrow">Place de marché des services notariaux · Québec</span>
               <h1>Un notaire, à la date qu’il vous faut.</h1>
-              <!-- ONE pitch line at every width. The three steps live in the
+              <!-- ONE pitch block at every width. The three steps live in the
                    standing #how-it-works section below — never repeated here. -->
               <!-- The price line is the two-line truth of ADR 0031, rendered by
                    renderHeroPrice() from the tarif the API serves: the static
                    text below is the no-amount fallback, never a literal price. -->
-              <p class="hero-tagline">Proposez votre date et votre prix. Un notaire de Québec retient votre demande. <strong id="hero-price-line">Le notaire reçoit 100 % de votre offre. Le service Nota, à un prix publié d’avance, se paie seulement à la signature.</strong></p>
+              <p class="hero-tagline">Proposez votre date et votre prix. Un notaire de Québec retient votre demande. <strong id="hero-price-line">Le notaire reçoit 100 % de votre offre. Le service Nota, à un prix publié d’avance, se paie seulement à la signature.</strong> <span class="hero-support">Gardez le fil au même endroit, de votre première offre jusqu’à la signature.</span></p>
               <!-- Two date CTAs only (owner's ask, 2026-08-25): the guide left
                    the hero for the fixed « ? » bubble (.guide-fab on desktop;
                    phones keep the footer link and the first-visit guide) —
@@ -581,24 +611,25 @@
         </div>
 
         <div class="wrap layout">
-          <!-- Calendar + agenda -->
+            <!-- Calendar + agenda -->
           <div class="panel" id="carnet-panel">
             <div class="cal-toolbar">
-              <div class="cal-nav">
-                <button class="btn btn-sm" id="cal-prev" aria-label="Mois précédent">‹</button>
-                <button class="btn btn-sm" id="cal-today">Aujourd’hui</button>
-                <button class="btn btn-sm" id="cal-next" aria-label="Mois suivant">›</button>
+              <div class="cal-toolbar-top">
+                <span class="cal-title" id="cal-title" aria-live="polite"></span>
+                <button class="btn btn-sm" id="filters-toggle" aria-expanded="false" aria-controls="filters" title="Filtrer les offres">
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18M6 12h12M10 19h4"/></svg>
+                  Filtres<span class="filter-count" id="filters-count" hidden></span>
+                </button>
               </div>
-              <span class="cal-title" id="cal-title" aria-live="polite"></span>
-
-
-              <span class="header-spacer"></span>
-              <span class="cal-avail" id="cal-avail" aria-live="polite" hidden></span>
-              <span class="result-count" id="result-count" aria-live="polite"></span>
-              <button class="btn btn-sm" id="filters-toggle" aria-expanded="false" aria-controls="filters" title="Filtrer les offres">
-                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18M6 12h12M10 19h4"/></svg>
-                Filtres<span class="filter-count" id="filters-count" hidden></span>
-              </button>
+              <div class="cal-toolbar-meta">
+                <div class="cal-nav">
+                  <button class="btn btn-sm" id="cal-prev" aria-label="Mois précédent">‹</button>
+                  <button class="btn btn-sm" id="cal-today">Aujourd’hui</button>
+                  <button class="btn btn-sm" id="cal-next" aria-label="Mois suivant">›</button>
+                </div>
+                <span class="cal-avail" id="cal-avail" aria-live="polite" hidden></span>
+                <span class="result-count" id="result-count" aria-live="polite"></span>
+              </div>
             </div>
 
             <!-- Filters stay hidden until the customer opens them, so the carnet reads clean by default. -->
@@ -635,6 +666,7 @@
             </div>
 
           </div>
+
 
         </div>
 
@@ -685,6 +717,22 @@
                    real argument; anything longer is in the way of it. The fee
                    facts are the value grid's job, said once there. -->
               <p class="nc-lede">Des clients de Québec ont fixé leur date et leur prix — retenez ce qui vous convient.</p>
+              <aside class="notary-ai-beta-note beta-teaser" id="notary-ai-beta-note" role="note">
+                <div class="beta-teaser-trigger">
+                  <span class="beta-teaser-copy">
+                    <span class="sub-card-kicker">Outil Nota · bêta gratuite</span>
+                    <span class="sub-card-title">Préparation assistée pour les notaires</span>
+                  </span>
+                  <span class="beta-teaser-hint">Bientôt</span>
+                  <button class="beta-teaser-info" id="notary-ai-beta-toggle" type="button" aria-expanded="false" aria-controls="notary-ai-beta-details" aria-label="En savoir plus sur la bêta" title="En savoir plus sur la bêta">i</button>
+                </div>
+                <div class="beta-teaser-details" id="notary-ai-beta-details" aria-hidden="true">
+                  <p class="sub-card-sub">La préparation assistée est gratuite pendant la bêta. Nota améliore actuellement un système spécialisé — modèle, instructions et algorithmes propriétaires — à partir de données contrôlées et de révisions professionnelles.</p>
+                  <p class="help">La bêta pourra évoluer vers un abonnement pour notaires; aucun prix ni échéance n’est fixé. Les documents transmis pour votre dossier ne servent pas à entraîner les modèles.</p>
+                  <p class="beta-teaser-ask">Souhaitez-vous recevoir une invitation à la bêta ?</p>
+                  <button class="btn btn-sm btn-primary" id="notary-ai-beta-subscribe" type="button">Oui, m’inscrire à la bêta →</button>
+                </div>
+              </aside>
             </div>
           </div>
 
@@ -897,6 +945,13 @@
                 </summary>
                 <div class="nc-actes" id="nc-actes-list"></div>
               </details>
+
+              <section class="panel salle-annonce" id="salle-annonce-notaire" aria-labelledby="salle-annonce-notaire-h">
+                <p class="salle-annonce-pastille">Bêta · essais disponibles</p>
+                <h2 class="nc-h" id="salle-annonce-notaire-h">La salle de signature</h2>
+                <p>Préparez votre prochain rendez-vous à distance : aperçu caméra, répétition à deux et démonstration du parcours notarial.</p>
+                <a class="btn btn-sm goto-link" href="#t=beta" data-goto="beta">Découvrir la signature en bêta</a>
+              </section>
 
               <!-- The notary's own track record (ADR 0021): every client
                    evaluation — note, comment, act, date — anonymized by the
@@ -1512,6 +1567,66 @@
           </div>
         </div>
       </section>
+      <section class="tab-pane" id="pane-beta" role="tabpanel" aria-labelledby="tab-beta" hidden>
+        <div class="wrap beta-page">
+          <div class="beta-hero" id="salle-annonce">
+            <div class="beta-intro">
+              <p class="beta-eyebrow"><span class="beta-dot" aria-hidden="true"></span>Bêta · essais disponibles</p>
+              <h1>La signature électronique, avec votre notaire.</h1>
+              <p class="beta-lead">Un rendez-vous à distance qui garde l’essentiel : se voir, comprendre le document et avancer ensemble.</p>
+              <div class="beta-actions">
+                <a class="btn btn-primary btn-lg" href="/signature.html" id="beta-preview">Découvrir la salle</a>
+                <a class="btn btn-ghost goto-link" href="#t=profil" data-goto="profil">Retrouver mon dossier</a>
+              </div>
+              <p class="beta-caption">L’aperçu est accessible sans compte. La caméra et le micro s’activent seulement à votre demande.</p>
+            </div>
+            <div class="beta-preview" aria-label="Aperçu du parcours de signature">
+              <div class="beta-preview-top"><span>Nota</span><span class="beta-preview-tag">Document d’essai</span></div>
+              <div class="beta-preview-scene" aria-hidden="true">
+                <div class="beta-preview-person"><svg viewBox="0 0 80 80" fill="none"><circle cx="40" cy="29" r="13"/><path d="M15 70v-8c0-17 50-17 50 0v8"/></svg></div>
+                <div class="beta-preview-paper"><span class="beta-paper-brand">Nota</span><i></i><i></i><i></i><i></i><svg viewBox="0 0 100 35" fill="none"><path d="M5 28C28 4 43 0 28 23S35 28 43 18s-1 16 16 6 7 6 35-3"/></svg></div>
+              </div>
+              <ol class="beta-preview-steps"><li>Préparation</li><li>Lecture ensemble</li><li>Signature de test</li></ol>
+            </div>
+          </div>
+          <aside class="beta-boundary" aria-label="Portée de la bêta">
+            <strong>Un essai, aucun acte réel.</strong>
+            <p>La bêta utilise un document fictif. Elle ne signe aucun acte notarié et ne déclenche aucun paiement. La signature officielle reste à venir, après validation et intégration du fournisseur autorisé.</p>
+          </aside>
+          <section class="beta-experience" aria-labelledby="beta-experience-title">
+            <div class="beta-section-heading"><p class="beta-eyebrow">À essayer aujourd’hui</p><h2 id="beta-experience-title">Du premier échange au reçu d’essai.</h2></div>
+            <ol class="beta-features">
+              <li><span class="beta-step" aria-hidden="true">01</span><h3>Installez-vous</h3><p>Vérifiez votre caméra et votre micro dans un aperçu privé avant de rejoindre votre notaire.</p></li>
+              <li><span class="beta-step" aria-hidden="true">02</span><h3>Avancez à deux</h3><p>Votre notaire vous accueille en vidéo et guide la lecture. Vous pouvez poser vos questions et faire pause.</p></li>
+              <li><span class="beta-step" aria-hidden="true">03</span><h3>Essayez de signer</h3><p>Signez le document fictif dans l’ordre prévu, puis téléchargez le reçu de la répétition.</p></li>
+            </ol>
+          </section>
+          <div class="beta-access-grid">
+            <section class="beta-access" aria-labelledby="beta-access-title">
+              <p class="beta-eyebrow">Répétition à deux</p><h2 id="beta-access-title">Votre dossier ouvre la salle.</h2>
+              <p>Lorsqu’une demande est retenue, le lien « Salle de signature · Bêta » apparaît dans le dossier du client et dans l’espace du notaire. Le notaire ouvre la séance, puis accueille le client.</p>
+              <p class="help">Chaque personne se reconnecte avec son propre courriel avant d’entrer. Préparez seulement des données fictives pour les essais.</p>
+              <a class="btn goto-link" href="#t=notaires" data-goto="notaires">Accéder à mon espace notaire</a>
+            </section>
+            <section class="beta-upcoming" aria-labelledby="beta-upcoming-title">
+              <p class="beta-eyebrow">À venir</p><h2 id="beta-upcoming-title">Vers la signature officielle.</h2>
+              <ul><li>Vérification d’identité adaptée au parcours notarial.</li><li>Signature officielle et clôture avec le fournisseur autorisé.</li><li>Conservation de l’acte et remise de la copie selon le parcours validé.</li></ul>
+              <p class="help">Ces fonctions ne sont pas offertes dans la bêta.</p>
+            </section>
+          </div>
+          <details class="beta-demo">
+            <summary>Démonstration du parcours notarial</summary>
+            <p>Explorez aussi les étapes de la cérémonie : accueil, vérifications, consentement et journal de séance. Cette démonstration distincte nécessite une demande retenue et deux comptes. Elle ne produit aucune signature juridique.</p>
+            <p class="help">Les vérifications d’identité y sont simulées. N’utilisez aucun renseignement d’identité réel. Un enregistrement local ne peut démarrer qu’après le consentement des deux participants.</p>
+            <div class="beta-actions">
+              <button type="button" class="btn" id="salle-annonce-ouvrir">Essayer le parcours client</button>
+              <button type="button" class="btn" id="salle-notaire-ouvrir">Essayer le parcours notaire</button>
+            </div>
+            <p class="help" id="salle-annonce-note" role="status" hidden></p>
+            <p class="help" id="salle-notaire-note" role="status" hidden></p>
+          </details>
+        </div>
+      </section>
     </main>
 
     <footer class="site-footer">
@@ -1528,9 +1643,7 @@
           <a href="#t=carnet" class="goto-link" data-goto="carnet">Le carnet</a>
           <a href="#t=notaires" class="goto-link" data-goto="notaires">Espace notaire</a>
           <a href="#t=partenaires" class="goto-link" data-goto="partenaires">Partenaires</a>
-          <a href="/signature.html">Salle de signature · Bêta</a>
-          <a href="/notaire-refinancement-quebec.html">Notaire pour un refinancement hypothécaire à Québec</a>
-          <a href="/notaire-financement-quebec.html">Notaire pour un financement hypothécaire à Québec</a>
+          <a href="#t=beta" class="goto-link" data-goto="beta">Signature électronique · Bêta</a>
           <!-- Opens the guide dialog: an action, so a button — not a link to nowhere. -->
           <button type="button" class="footer-link" id="footer-guide">Comment ça marche</button>
         </nav>
@@ -2262,9 +2375,61 @@
       <button type="button" id="analytics-accept">Accepter</button>
       <a href="#t=confidentialite">Confidentialité</a>
     </aside>
+    <!-- ================= LA SALLE DE SIGNATURE (ADR 0047) =================
+         Plein écran, hors du flux des panneaux : une cérémonie n'est pas un
+         onglet. Ouverte par NotaSalle.ouvrir(), fermée par le bouton ci-dessous.
+
+         Le bandeau bêta est écrit ICI, dans le HTML, et aucun rendu ne le
+         touche : il ne peut donc pas être retiré par du JavaScript (exigence
+         G3). Il dit ce qui est vrai — aucun acte notarié n'est reçu dans cette
+         salle tant que le flux admis par la Chambre n'y est pas branché. -->
+    <section class="salle" id="salle-plein" aria-label="Salle de signature" hidden>
+      <p class="salle-beta" id="salle-beta" role="note">
+        <strong>Bêta — démonstration.</strong>
+        Aucun acte notarié n’est reçu dans cette salle. La signature juridique passe par le flux admis par la Chambre des notaires du Québec.
+      </p>
+
+      <div class="salle-scene">
+        <div class="salle-videos">
+          <video class="salle-video salle-video-distant" id="salle-video-distant" autoplay playsinline aria-label="L’autre partie"></video>
+          <video class="salle-video salle-video-local" id="salle-video-local" autoplay playsinline muted aria-label="Votre caméra"></video>
+        </div>
+
+        <aside class="salle-rail" aria-label="Conduite de la séance">
+          <div class="salle-bloc">
+            <h2 class="salle-etape-nom" id="salle-etape-nom">Accueil</h2>
+            <p class="salle-etape-conduite" id="salle-etape-conduite"></p>
+            <p class="salle-etape-constat" id="salle-etape-constat"></p>
+          </div>
+
+          <!-- La chaîne d'authentification : ce que les deux parties se lisent
+               à voix haute. Les deux écrans doivent afficher exactement la même
+               chose ; deux chaînes différentes veulent dire que quelqu'un s'est
+               interposé. -->
+          <div class="salle-bloc salle-bloc-sas">
+            <p class="salle-sas-titre">Lisez cette chaîne à voix haute</p>
+            <p class="salle-sas" id="salle-sas" aria-live="polite">————</p>
+            <p class="salle-sas-aide">Si les deux écrans n’affichent pas la même chaîne, arrêtez la séance.</p>
+          </div>
+
+          <div class="salle-bloc">
+            <p class="salle-portes-titre">Ce qui doit être établi</p>
+            <ul class="salle-portes" id="salle-portes"></ul>
+          </div>
+
+          <div class="salle-statut" id="salle-statut" aria-live="polite"></div>
+          <div class="salle-refus" id="salle-refus" role="alert" hidden></div>
+          <div class="salle-actions" id="salle-actions"></div>
+
+          <button type="button" class="salle-btn is-discret salle-quitter" id="salle-fermer">Quitter la séance</button>
+        </aside>
+      </div>
+    </section>
+
     <script src="i18n.js"></script>
     <script src="domain.js"></script>
     <script src="acquisition.js"></script>
+    <script src="salle.js"></script>
 
     <script src="analytics.js"></script>
     <script src="app.js"></script>

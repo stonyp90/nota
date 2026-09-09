@@ -211,7 +211,11 @@ test('l’enregistrement d’une carte est journalisé — sans jamais nommer la
   // référence opaque chez Stripe, et c'est tout ce qu'un auditeur peut avoir
   // besoin de recoudre.
   assert.equal(e.meta.paymentMethodId, 'pm_1');
-  assert.ok(!/\b\d{12,}\b/.test(JSON.stringify(e)), 'aucune suite de chiffres qui ressemblerait à une carte');
+  // A random UUID can legitimately end in twelve decimal digits. Check the
+  // recorded content rather than mistaking the generated audit ID for a PAN.
+  const { id: auditId, ...content } = e;
+  assert.match(auditId, /^[0-9a-f-]{36}$/i);
+  assert.ok(!/\b\d{12,}\b/.test(JSON.stringify(content)), 'aucune suite de chiffres qui ressemblerait à une carte');
 });
 
 test('la LIBÉRATION d’une caution est journalisée, et dit d’où elle vient', async () => {

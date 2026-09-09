@@ -24,6 +24,7 @@
 
   // === DICTIONARY — generated from the French sources. =======================
   var TEXT = {
+    'Langue': 'Language',
     'Fonctionnalités': 'Features',
     'Services': 'Services',
     'La carte complète des capacités Nota, de la demande publique aux intégrations et aux contrôles administratifs.': 'The complete map of Nota capabilities, from public requests to integrations and administrative controls.',
@@ -37,8 +38,18 @@
     'Champs d’intake': 'Intake fields',
     'Contrôles notariaux': 'Notarial controls',
     'Champs IA': 'AI fields',
+    'Aucun élément configuré.': 'None configured.',
+    'Aucune fonctionnalité configurée.': 'No features configured.',
+    'Aucune personnalisation disponible.': 'No customization available.',
+    'Le catalogue ne contient aucun service à afficher.': 'The catalogue has no services to display.',
+    'Aucun groupe de fonctionnalités n’est configuré.': 'No feature groups are configured.',
+    'Aucun modèle de courriel n’est disponible.': 'No email templates are available.',
     'Aucun événement enregistré pour cette période.': 'No events recorded for this period.',
+    'Aucune offre quotidienne à tracer pour cette période.': 'No daily offers to chart for this period.',
+    'Aucune offre par service à tracer pour cette période.': 'No service offers to chart for this period.',
+    'Aucun code partenaire n’a encore produit d’activité.': 'No partner code has generated activity yet.',
     'Aucun utilisateur configuré pour le moment.': 'No users configured yet.',
+    'Aucun dossier n’attend une approbation.': 'No applications are waiting for approval.',
     'Actes à venir': 'Coming acts',
     'Personnalisation disponible': 'Available customization',
     'Chaque ligne renvoie vers la section qui la gouverne et rappelle la permission appliquée côté serveur.': 'Each row links to the section that governs it and shows the permission enforced by the server.',
@@ -228,11 +239,16 @@
   "vous@nota.ca": "you@nota.ca",
   "Mot de passe": "Password",
   "Votre mot de passe": "Your password",
+  "Mot de passe facultatif. Laissez vide pour recevoir un lien sécurisé.": "Password optional. Leave it blank to receive a secure link.",
+  "Afficher": "Show",
+  "Masquer": "Hide",
+  "Afficher le mot de passe": "Show password",
+  "Masquer le mot de passe": "Hide password",
   "Se connecter": "Sign in",
   "Connexion…": "Signing in…",
   "Courriel ou mot de passe invalide.": "Invalid email or password.",
   "Trop de tentatives. Réessayez plus tard.": "Too many attempts. Try again later.",
-  "Votre session reste uniquement dans cet onglet. Si vous avez oublié votre mot de passe, laissez ce champ vide pour recevoir un lien de récupération.": "Your session stays only in this tab. If you forgot your password, leave this field empty to receive a recovery link.",
+  "Votre session reste uniquement dans cet onglet.": "Your session stays only in this tab.",
   "En local : admin@nota.local · nota-local-admin": "Local: admin@nota.local · nota-local-admin",
   "Recevoir le lien": "Send me the link",
   "Envoi…": "Sending…",
@@ -1301,6 +1317,16 @@
         );
         el.addEventListener('click', function () { setLang(current === 'en' ? 'fr' : 'en'); });
       })(els[i]);
+    }
+    var segments = document.querySelectorAll('[data-lang-seg] [data-set-lang]');
+    for (var j = 0; j < segments.length; j++) {
+      (function (btn) {
+        var l = btn.getAttribute('data-set-lang') === 'en' ? 'en' : 'fr';
+        btn.setAttribute('aria-pressed', l === current ? 'true' : 'false');
+        btn.setAttribute('aria-label', l === 'en' ? 'English' : 'Français');
+        btn.setAttribute('lang', l === 'en' ? 'en-CA' : 'fr-CA');
+        btn.addEventListener('click', function () { if (l !== current) setLang(l); });
+      })(segments[j]);
     }
   }
 

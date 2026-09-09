@@ -2,6 +2,28 @@
 
 Date: 2026-09-09. This describes the implemented rehearsal, not authorization to execute notarial acts. Deployment verification is recorded in `docs/qa/signing-beta/`.
 
+## Public entry and integration
+
+The bilingual **Bêta** section at `/#t=beta` is available from desktop navigation,
+the mobile menu, the footer and the notary workspace. Its primary action opens
+`/signature.html`, where a visitor can preview their camera without an account.
+Retained dossier links continue to open the authenticated two-person rehearsal.
+The presentation separates working trials from the future authorized workflow.
+
+PR #5's notarial ceremony demonstration is also integrated. It is an explicitly
+secondary, collapsed option in the Beta section, with client and notary entry
+points for retained dossiers. It uses the separate `/salle/*` API and records a
+ceremony journal; it does not execute a legal signature. Identity attestations in
+that demonstration must use fictional information. Its optional local recording
+requires both participants' consent. Its ICE configuration is separate from the
+`/signing-beta/*` relay configuration described below. The primary rehearsal does
+not record media.
+
+The two former mortgage acquisition pages and their English counterparts now
+contain only localized `noindex` redirects to the carnet. They are absent from
+navigation, `sitemap.xml` and `llms.txt`. Keeping the small redirect files in the
+build overwrites old deployed objects and gives existing links a working destination.
+
 ## What the beta does
 
 The Nota client and notary spaces expose **Salle de signature · Bêta** on retained, uncompleted dossiers. The public `/signature.html` introduction offers a private camera preview. The room uses the existing individual sign-in flow and requires mailbox verification within the preceding hour. Opening an invitation does not grant access: the API checks dossier ownership, the assigned active notary and the token role on every operation.
