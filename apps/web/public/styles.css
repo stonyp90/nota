@@ -4705,8 +4705,8 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
 }
 
 /* Never let the page scroll sideways */
-html { max-width: 100%; overflow-x: hidden; }
-body { max-width: 100%; }
+html { max-width: 100%; overflow-x: hidden; overflow-x: clip; }
+body { max-width: 100%; overflow-x: hidden; overflow-x: clip; }
 /* Smooth scrolling centralized in CSS (so the reduced-motion reset above wins),
    and every anchored/focus/programmatic scroll stops BELOW the sticky header. */
 html { scroll-behavior: smooth; scroll-padding-top: var(--sticky-top); }
