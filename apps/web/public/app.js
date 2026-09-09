@@ -11980,11 +11980,13 @@
     var betaToggle = $('notary-ai-beta-toggle');
     var betaDetails = $('notary-ai-beta-details');
     if (betaNote && betaToggle && betaDetails) {
+      betaDetails.hidden = true;
       betaToggle.addEventListener('click', function () {
         var open = !betaNote.classList.contains('is-open');
         betaNote.classList.toggle('is-open', open);
         betaToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
         betaDetails.setAttribute('aria-hidden', open ? 'false' : 'true');
+        betaDetails.hidden = !open;
       });
     }
     var betaSubscribe = $('notary-ai-beta-subscribe');
@@ -11993,6 +11995,7 @@
         betaNote.classList.add('is-open');
         betaToggle.setAttribute('aria-expanded', 'true');
         betaDetails.setAttribute('aria-hidden', 'false');
+        betaDetails.hidden = false;
       }
       var gate = $('notary-auth-form');
       var email = $('nc-email');

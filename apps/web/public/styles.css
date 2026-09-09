@@ -3479,7 +3479,7 @@ dialog:focus, dialog:focus-visible { outline: none; }
    keeps its two columns). */
 #pane-notaires .intro--hero { display: block; }
 #pane-notaires .notary-ai-beta-note {
-  position: relative; width: min(100%, 520px); margin-top: var(--space-5);
+  position: relative; width: min(100%, 680px); margin-top: var(--space-5);
   max-width: none; padding: 0; background: transparent; box-shadow: none;
   -webkit-backdrop-filter: none; backdrop-filter: none;
 }
@@ -3520,14 +3520,16 @@ dialog:focus, dialog:focus-visible { outline: none; }
   transition: opacity .15s ease, visibility .15s ease, transform .15s ease,
     max-height .2s ease, margin-top .2s ease, padding .2s ease, border-color .2s ease;
 }
+.beta-teaser-details[hidden] { display: none; }
 .beta-teaser.is-open .beta-teaser-details {
-  max-height: min(70vh, 430px); margin-top: 8px; padding: var(--pad-card);
+  display: block; max-height: min(70vh, 430px); margin-top: 8px; padding: var(--pad-card-lg);
   border-color: var(--border); opacity: 1; visibility: visible; pointer-events: auto; transform: none;
 }
-.beta-teaser-details .sub-card-sub { margin-top: 0; }
-.beta-teaser-details .help { margin: var(--space-4) 0 0; }
+.beta-teaser-points { display: grid; gap: var(--space-4); margin: 0; padding: 0 0 0 18px; color: var(--ink-muted); font-size: 13px; line-height: 1.55; }
+.beta-teaser-points li { padding-left: 2px; }
+.beta-teaser-points li::marker { color: var(--brand); }
 .beta-teaser-ask { margin: var(--space-5) 0 var(--space-3); color: var(--ink); font-size: 12.5px; font-weight: 700; }
-.beta-teaser-details .btn { width: auto; }
+.beta-teaser-details .btn { width: min(100%, 330px); min-height: 44px; }
 /* SIGNED-IN: the pane is a workspace, not a pitch. The hero keeps only its
    heading (panes focus their h1 on navigation), the lede goes, and the
    prospecting band slides behind the console (flex order — the wrap is a flex
@@ -3587,6 +3589,8 @@ dialog:focus, dialog:focus-visible { outline: none; }
 }
 .nc-live-slot { font-size: 12px; }
 .nc-live-grid--empty .nc-live-slot { visibility: hidden; }
+.nc-live-grid--empty { min-height: 168px; grid-auto-rows: auto; }
+.nc-live-grid--empty .nc-live-slot { display: none; }
 .nc-live-empty { position: absolute; inset: 0; gap: var(--space-4); }
 .nc-live-empty strong { color: var(--ink); font-size: 24px; letter-spacing: -0.02em; }
 .nc-live-empty span { max-width: 28ch; font-size: 14px; }
@@ -3646,13 +3650,12 @@ dialog:focus, dialog:focus-visible { outline: none; }
   border-style: dashed; border-color: var(--border-strong); background: transparent; color: var(--brand);
 }
 
-/* Phones: a compact grid — eight single-column tiles pushed the sign-in a full
-   screen down, so the tiles run two up and the funnel's gate stays in reach.
-   auto-fit, not a hard two: at 320px two tiles cannot hold an amount and a
-   tier side by side at all, so the grid falls to one full-width tile instead.
-   AFTER the base rules — same specificity, so order is what decides. */
+/* Phones: a compact two-column grid — eight single-column tiles pushed the
+   sign-in a full screen down, so two-up keeps the funnel's gate in reach.
+   The smallest phones fall back to one full-width tile below. AFTER the base
+   rules — same specificity, so order is what decides. */
 @media (max-width: 640px) {
-  .nc-live-grid { grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr)); gap: var(--space-4); }
+  .nc-live-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
   .nc-live-card { padding: var(--space-5) var(--space-6); row-gap: 4px; }
   .nc-live-amt { font-size: 17px; }
   .nc-live-meta { font-size: 11px; }
@@ -4837,13 +4840,42 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   .icon-btn { width: 44px; height: 44px; }
   /* Keep the beta row visually quiet while giving its only disclosure control
      a reliable thumb target on phones and tablets. */
-  .beta-teaser-info { width: 32px; height: 32px; }
+  .beta-teaser-info { width: 44px; height: 44px; }
 }
 @media (max-width: 420px) {
   .nav-tabs { gap: 0; }
   .nav-tab { padding: 6px 7px; font-size: 12px; }
   .brand-word { font-size: 17px; }
   /* .cal-cell and .cal-daynum are sized by @container cal, not from here. */
+}
+
+@media (max-width: 640px) {
+  /* The beta is part of the notary pitch, so let it use the whole mobile
+     measure. The previous 520px cap left a visually stranded half-column and
+     made the expanded explanation feel like a tooltip instead of a clear
+     product note. */
+  #pane-notaires .notary-ai-beta-note { width: 100%; }
+  .beta-teaser-trigger { min-height: 52px; padding: 7px 12px; }
+  .beta-teaser-details { max-height: none; }
+  .beta-teaser.is-open .beta-teaser-details { max-height: none; padding: var(--space-8); }
+  .beta-teaser-points { font-size: 14px; line-height: 1.5; }
+  .beta-teaser-details .btn { width: 100%; }
+  /* Keep the empty inventory from pushing the sign-in door below the first
+     screen when there is no live demand to show. Real offer cards keep their
+     existing multi-column layout. */
+  .nc-live-grid--empty { min-height: 148px; }
+}
+
+@media (min-width: 641px) and (max-width: 860px) {
+  /* Match the tablet/mobile reading pattern from the reference: two roomy
+     offers per row are easier to compare than three narrow tiles at 802px. */
+  .nc-live-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 380px) {
+  /* On the smallest phones, offer cards need the full measure for the amount,
+     tier and date; this avoids a cramped two-up scan pattern. */
+  .nc-live-grid:not(.nc-live-grid--empty) { grid-template-columns: 1fr; }
 }
 
 /* Never let the page scroll sideways */

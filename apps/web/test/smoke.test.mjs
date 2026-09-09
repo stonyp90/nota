@@ -722,11 +722,13 @@ test('notary beta teaser opens from the information button, not the copy', async
   const toggle = doc.getElementById('notary-ai-beta-toggle');
   const details = doc.getElementById('notary-ai-beta-details');
   assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+  assert.equal(details.hidden, true, 'collapsed beta details stay out of the accessibility tree');
   note.querySelector('.beta-teaser-copy').click();
   assert.equal(toggle.getAttribute('aria-expanded'), 'false', 'copy stays informational');
   toggle.click();
   assert.equal(toggle.getAttribute('aria-expanded'), 'true');
   assert.equal(details.getAttribute('aria-hidden'), 'false');
+  assert.equal(details.hidden, false, 'expanded beta details are available to assistive technology');
 });
 
 test('notary beta notice translates in English and stays off the customer surface', async () => {
