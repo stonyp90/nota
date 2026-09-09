@@ -624,8 +624,7 @@ test('notaires landing teases open demands and funnels each card to sign-in', as
     .sort((a, b) => (a.dateISO < b.dateISO ? -1 : a.dateISO > b.dateISO ? 1 : 0));
   const cards = all(doc, '#notary-live-grid .nc-live-card:not(.nc-live-more)');
   assert.ok(cards.length > 0, 'teaser should render demand cards');
-  // On overflow the "+N autres" card takes the LAST slot of the 8-tile block
-  // (7 demands + 1 lead-in card) — never an orphan row of its own.
+  // On overflow the "+N autres" card takes the last of the twelve slots.
   const shown = open.length > 12 ? 11 : open.length; // 12-tile block (2026-08-26)
   assert.equal(cards.length, shown);
 
@@ -653,6 +652,38 @@ test('notaires landing teases open demands and funnels each card to sign-in', as
   // A card is a button that lands focus on the sign-in email field.
   cards[0].click();
   assert.equal(doc.activeElement, $(doc, 'nc-email'), 'clicking a card should focus the sign-in field');
+});
+
+test('notaires landing preserves empty slots across live inventory refreshes', async () => {
+  const { doc, win, D, Nota, seed } = await boot();
+  Nota.setTab('notaires');
+  const offer = seed.find((b) => b.status !== D.STATUS.RETENUE);
+  for (const count of [12, 1, 0, 5, 13, 0, 1]) {
+    const bids = Array.from({ length: count }, (_, i) => ({ ...offer, id: 'slot-' + i }));
+    // A successful, empty API response must remain empty, never demo inventory.
+    win.fetch = async (url) => ({ ok: true, json: async () => ({
+      bids: bids.filter((b) => b.dateISO.startsWith(new URL(url, 'https://nota.example').searchParams.get('month'))),
+    }) });
+    await Nota.reload();
+    assert.equal(Nota.state.demo, false, 'inventory came from the API response');
+    const grid = $(doc, 'notary-live-grid');
+    assert.equal($(doc, 'notary-live').hidden, false, `visible with ${count} offers`);
+    assert.equal(grid.querySelectorAll('.nc-live-card').length, Math.min(count, 12));
+    assert.equal(grid.querySelectorAll('.nc-live-slot').length, Math.max(0, 12 - count));
+    assert.equal(grid.querySelectorAll('.nc-live-more').length, count > 12 ? 1 : 0);
+    for (const slot of grid.querySelectorAll('.nc-live-slot')) {
+      assert.equal(slot.textContent, 'Pas d’offre');
+      assert.equal(slot.getAttribute('aria-hidden'), 'true');
+      assert.equal(slot.tabIndex, -1, 'empty slots are not actions');
+      assert.equal(slot.querySelector('button, a, .nc-live-amt, .nc-live-meta'), null);
+    }
+    assert.equal(grid.classList.contains('nc-live-grid--empty'), count === 0);
+    assert.equal(grid.querySelectorAll('.nc-live-empty').length, count === 0 ? 1 : 0);
+    if (count === 0) {
+      assert.equal(grid.querySelector('[role="status"] strong').textContent, 'Pas d’offres');
+      assert.equal(grid.querySelectorAll('button').length, 0, 'no fake offers at zero');
+    }
+  }
 });
 
 // 13b-bis. The landing sells each fact once: the lede stops at the pitch (the

@@ -8173,13 +8173,10 @@
   // Public teaser of the live inventory on the signed-out landing: the month's
   // real open demands, soonest first, each card a button into the sign-in gate.
   // Capped — the full list is the payoff of signing in; overflow collapses into
-  // one "+N autres" card. Hidden signed-in (the console's open list takes over)
-  // and when the month has nothing open (no data → no empty section).
-  // The teaser is a 12-tile block (owner's call, 2026-08-26: at 8 the left
-  // column stopped a row short of the gate+agenda column and left a hole):
-  // with overflow, 11 demands + the "+N autres" card in the LAST slot — the
-  // lead-in sits bottom right of a full grid, never on an orphan row. A month
-  // with 12 or fewer open demands shows them all.
+  // one "+N autres" card. Hidden signed-in (the console's open list takes over).
+  // Keep twelve slots even for an empty or sparse month so the landing keeps
+  // its shape. Empty slots are inert, clearly labelled, and never fake offers.
+  // At zero, one large empty-state panel covers the same twelve-slot footprint.
   var NC_LIVE_MAX = 12;
   function ncFocusGate() {
     // Land on whichever gate step is showing: the signup CTA mid-branch,
@@ -8220,8 +8217,9 @@
       .filter(function (b) { return b.status !== D.STATUS.RETENUE; })
       .slice()
       .sort(function (a, b) { return a.dateISO < b.dateISO ? -1 : a.dateISO > b.dateISO ? 1 : 0; });
-    if (!open.length || !gate || gate.hidden) { box.hidden = true; return; }
+    if (!gate || gate.hidden) { box.hidden = true; return; }
     var grid = $('notary-live-grid'); clear(grid);
+    grid.classList.toggle('nc-live-grid--empty', !open.length);
     var shown = open.length > NC_LIVE_MAX ? NC_LIVE_MAX - 1 : open.length;
     open.slice(0, shown).forEach(function (b) { grid.appendChild(ncLiveCard(b)); });
     var extra = open.length - shown;
@@ -8232,6 +8230,20 @@
       more.appendChild(el('span', 'nc-live-meta', 'Inscrivez-vous pour tout voir'));
       more.addEventListener('click', ncFocusGate);
       grid.appendChild(more);
+    }
+    for (var i = grid.children.length; i < NC_LIVE_MAX; i++) {
+      var slot = el('div', 'nc-live-slot', 'Pas d’offre');
+      // These visual spaces carry no inventory or action. Avoid announcing
+      // the same empty label eleven times to a screen reader.
+      slot.setAttribute('aria-hidden', 'true');
+      grid.appendChild(slot);
+    }
+    if (!open.length) {
+      var empty = el('div', 'nc-live-empty');
+      empty.setAttribute('role', 'status');
+      empty.appendChild(el('strong', null, 'Pas d’offres'));
+      empty.appendChild(el('span', null, 'Les offres disponibles s’afficheront ici.'));
+      grid.appendChild(empty);
     }
     box.hidden = false;
   }
