@@ -170,6 +170,7 @@ test('signed-out pane: the live open inventory precedes the sign-in console', as
 // Signed IN: open demands are the first working block of the console.
 test('signed-in console: open demands come before every supporting block', async () => {
   const { doc } = await bootSignedIn();
+  assert.equal($(doc, 'notary-live').hidden, true, 'the public grid is hidden after sign-in');
   const openList = $(doc, 'notary-open-list');
   const FOLLOWING = doc.defaultView.Node.DOCUMENT_POSITION_FOLLOWING;
   for (const id of ['notary-retained-list', 'notary-earnings', 'notary-prefs', 'notary-connect']) {

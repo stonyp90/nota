@@ -3309,19 +3309,8 @@ dialog:focus, dialog:focus-visible { outline: none; }
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 420px);
-  /* Six rows: a two-column band (demands | gate + agenda), then two FULL-WIDTH
-     lines — the compliance band, then the guarantee. Each column is sized by
-     its own content and simply ends; whichever is shorter runs out against a
-     band that spans the page, so a ragged bottom never reads as a hole.
-
-     History, so this is not re-broken: the layout used to chase an exact
-     bottom-to-bottom match between the two columns (five rows, the guarantee
-     tucked into the left one) and the teaser was padded to twelve tiles to
-     reach it. That balance held for exactly one content height — ADR 0033's
-     compliance block landed INSIDE the gate card, the rail grew ~400px, and
-     the content column opened a 586px hole (owner, 2026-09-03: « le UI UX
-     semble brisé »). Nothing below now depends on how many demands the month
-     holds, or on how tall the gate is. */
+  /* The inventory keeps twelve slots at every offer count. Compliance remains
+     a full-width band below both columns, outside the sign-in card. */
   /* 2026-09-05 — l'agenda descend SOUS la grille, dans la colonne de gauche.
      Sous la grille des demandes s'ouvrait un trou de 137 px pendant que la
      colonne de droite continuait : le contenu s'arrêtait, la page non. La
@@ -3341,16 +3330,6 @@ dialog:focus, dialog:focus-visible { outline: none; }
   align-items: start;
 }
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .nc-landing-head { grid-area: livehead; margin-top: var(--space-2); }
-/* A month with nothing open (renderNotaryLive hides the inventory): no header
-   for an inventory that is not there, and no half-empty two-column spread —
-   the pane folds into one centred column: gate, then agenda. */
-#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])):has(#notary-live[hidden]) {
-  grid-template-columns: minmax(0, 520px);
-  grid-template-areas: "hero" "console" "conformite" "carnet" "guarantee";
-  justify-content: center;
-}
-#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])):has(#notary-live[hidden]) .nc-landing-head { display: none; }
-#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])):has(#notary-live[hidden]) #notary-console { margin-top: var(--space-6); }
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .intro--hero   { grid-area: hero; margin: 0; }
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .intro-main     { max-width: none; }
 /* Keep a readable measure on the lede without capping the whole hero block. */
@@ -3454,11 +3433,21 @@ dialog:focus, dialog:focus-visible { outline: none; }
 /* Signed-in the wrap is a flex column and the inventory is the console's own
    list — the landing header row has nothing to head. */
 #pane-notaires > .wrap:has(#notary-authed:not([hidden])) .nc-landing-head { display: none; }
-/* auto-rows 1fr: every row — including the lone "+N autres" overflow card on
-   narrow grids — shares the same height, so no card breaks the row format.
-   auto-FIT (not fill): a sparse month collapses the empty tracks, so three
-   tiles widen into a full, deliberate row instead of huddling beside a void. */
-.nc-live-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(215px, 100%), 1fr)); grid-auto-rows: 1fr; gap: var(--space-5); }
+/* Real cards and inert empty slots share the same row size. The twelve slots
+   preserve the columns and footprint at zero, one or many offers; the minimum
+   accommodates the narrow tile's four-line layout in both languages. */
+.nc-live-grid { position: relative; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(215px, 100%), 1fr)); grid-auto-rows: minmax(144px, 1fr); gap: var(--space-5); }
+.nc-live-slot, .nc-live-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-width: 0; padding: var(--pad-card); text-align: center;
+  border: 1px dashed var(--border-strong); border-radius: var(--radius-lg);
+  background: var(--surface-inset); color: var(--ink-muted);
+}
+.nc-live-slot { font-size: 12px; }
+.nc-live-grid--empty .nc-live-slot { visibility: hidden; }
+.nc-live-empty { position: absolute; inset: 0; gap: var(--space-4); }
+.nc-live-empty strong { color: var(--ink); font-size: 24px; letter-spacing: -0.02em; }
+.nc-live-empty span { max-width: 28ch; font-size: 14px; }
 /* The act's name never shares a line with the tier pill. It used to: at four
    up on a desktop the name had ~84px and read « Refinance… », at two up on a
    phone ~60px and read « Refin… » — refinancement and financement became the
