@@ -25,7 +25,8 @@
     "local:tables": "node apps/api/scripts/create-table.js",
     "local:seed": "node apps/api/scripts/seed.js",
     "local:check": "node apps/api/scripts/check-stack.js",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "demo:salle": "playwright test --config=demo/playwright.demo.config.js"
   },
   "engines": {
     "node": ">=20"

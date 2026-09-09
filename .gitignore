@@ -10,6 +10,9 @@ infra/build/
 
 # Playwright E2E artifacts
 test-results/
+# La vidéo de démonstration est PRODUITE par `npm run demo:salle`, jamais
+# versionnée : c'est un artefact, et il pèse des dizaines de mégaoctets.
+demo/sortie/
 playwright-report/
 /blob-report/
 .playwright/
