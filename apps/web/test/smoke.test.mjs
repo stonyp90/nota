@@ -2541,7 +2541,7 @@ test('a future adjacent-month day moves the calendar to its own month', async ()
 // controls must sit on the 44px coarse-pointer floor — including the auth
 // button, whose ≤680px rule outranks the plain .btn floor on specificity.
 // Header labels never wrap to two lines: the tabs and auth buttons are nowrap,
-// and a compact band (720–899.98px) slims paddings so the full EN/FR control
+// and a compact band (900–1099.98px) slims paddings so the full EN/FR control
 // set still fits on the single 62px row between the drawer threshold and a
 // roomy desktop.
 // Every act's categorical colour must exist in EVERY theme block — the app
@@ -2561,7 +2561,7 @@ test('header CSS: one-line labels at every width (nowrap + compact band)', () =>
   const css = readFileSync(fileURLToPath(new URL('../public/styles.css', import.meta.url)), 'utf8');
   assert.match(css, /\.nav-tab\s*\{[^}]*white-space:\s*nowrap/, 'tab labels never wrap');
   assert.match(css, /\.header-auth \.btn\s*\{\s*white-space:\s*nowrap/, 'auth labels never wrap');
-  assert.match(css, /@media \(min-width: 720px\) and \(max-width: 899\.98px\)/, 'the compact band exists');
+  assert.match(css, /@media \(min-width: 900px\) and \(max-width: 1099\.98px\)/, 'the compact band exists');
 });
 
 // A pulse amount is a PRICE: it may never shrink, clip or ellipsize. The hero

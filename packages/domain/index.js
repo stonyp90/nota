@@ -3638,6 +3638,10 @@
   const FIXTURE_PREFIXES = ['G1R', 'G1K', 'G2B', 'G1V', 'G1S', 'G3J'];
   const FIXTURE_NAMES = ['Marie-Ève Tremblay', 'Luc Gagné', 'Sophie Bergeron', 'Jean Roy', 'Chantal Côté', 'Marc Fortin'];
   const FIXTURE_ETUDES = ['Étude Laval', 'Notaires du Vieux-Québec', 'Cabinet Sainte-Foy'];
+  // Demo amounts are read on the public calendar before a customer has chosen
+  // an act. Keep the seeded story comfortably below five figures so the sample
+  // carnet remains legible; real offers still use the normal 5× validation cap.
+  const FIXTURE_DISPLAY_CAP = 9995;
 
   function makeFixtures(todayISO) {
     const rng = makeRng(FIXTURE_SEED);
@@ -3654,7 +3658,7 @@
       // the new pricing model, and their montant sits at/above the dynamic base.
       const pricing = fixturePricing(svc, rng);
       const base = computeBasePrice(svc.id, pricing);
-      const montant = Math.min(base * PREMIUM_CAP, Math.max(base, Math.round((base * mult) / 5) * 5));
+      const montant = Math.min(FIXTURE_DISPLAY_CAP, base * PREMIUM_CAP, Math.max(base, Math.round((base * mult) / 5) * 5));
       const anonyme = rng() > 0.35;
       const retenue = rng() > 0.8;
       bids.push({
@@ -5485,5 +5489,6 @@
     reminderKindForDays,
     dueReminders,
     FIXTURE_SEED,
+    FIXTURE_DISPLAY_CAP,
   };
 });

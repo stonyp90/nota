@@ -220,6 +220,13 @@ test('makeFixtures: every fixture is a valid offer', () => {
   }
 });
 
+test('makeFixtures: demo amounts stay under the public five-figure display guard', () => {
+  const fx = D.makeFixtures(TODAY);
+  const highest = Math.max(...fx.map((b) => b.montant));
+  assert.ok(D.FIXTURE_DISPLAY_CAP < 10000);
+  assert.ok(highest <= D.FIXTURE_DISPLAY_CAP, `${highest} exceeds ${D.FIXTURE_DISPLAY_CAP}`);
+});
+
 test('leadReadiness: price before documents — required answers + consent make it sellable (ADR 0010)', () => {
   // None of the documents changes the price; the price is a pure function of
   // the pricing answers. So the gate is: required answers (under __pricing)

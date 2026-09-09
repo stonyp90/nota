@@ -463,12 +463,12 @@ a:hover { text-decoration: underline; }
   height: 2px; border-radius: var(--radius-xs); background: var(--brand-bright);
   transform-origin: center; animation: navIndicatorIn .24s cubic-bezier(.2,.8,.2,1) both;
 }
-/* Header compact band: between the drawer threshold (720) and a roomy desktop
-   (900) the full control set — brand, two tabs, language, theme, both auth
+/* Header compact band: between the drawer threshold (900) and a roomy desktop
+   (1100) the full control set — brand, two tabs, language, theme, both auth
    buttons, avatar — only fits by slimming chrome: tighter gaps and paddings,
    and the QUÉBEC pill steps aside. Labels never wrap (nowrap above); this band
    is what guarantees they also never overflow. */
-@media (min-width: 720px) and (max-width: 899.98px) {
+@media (min-width: 900px) and (max-width: 1099.98px) {
   .site-header .wrap { gap: 8px; }
   .brand-sub { display: none; }
   .nav-tab { padding: 6px 8px; }
@@ -665,9 +665,9 @@ a:hover { text-decoration: underline; }
 .acct-panel { max-height: min(calc(100dvh - var(--header-h) - 16px), 660px); }
 
 /* --- Mobile navigation drawer (hamburger) -------------------------------- */
-/* Phones only: the burger and its right-side drawer replace the inline tabs,
-   the login button and the theme toggle below 720px (the same threshold where
-   the hero stacks). Desktop and tablet never see either. */
+/* Phones and portrait tablets: the burger and its right-side drawer replace the
+   inline tabs, login button and theme toggle below 900px. The wider touch
+   band keeps the sticky header inside the viewport at tablet widths. */
 .nav-burger { display: none; }
 .mnav-scrim {
   position: fixed; inset: 0; z-index: 65; background: var(--backdrop);
@@ -4563,13 +4563,13 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
      bubble, one tap from anywhere. */
   .guide-fab { display: none; }
 }
-/* The DRAWER threshold stays at 720: above it the header carries the full
-   control set (compact band 720–899.98); below it everything hands off to the
-   hamburger — the phone header is brand → avatar → burger. Theme and language
+/* The DRAWER threshold is 900: above it the header carries the full control
+   set (compact band 900–1099.98); below it everything hands off to the
+   hamburger — the narrow header is brand → avatar → burger. Theme and language
    keep their drawer rows (#mnav-theme / #mnav-lang), so hiding them here
    loses nothing; the guide « ? » is the fixed bubble on desktop and the
    footer link / first-visit guide on phones (see ux-nav.test.mjs). */
-@media (max-width: 719.98px) {
+@media (max-width: 899.98px) {
   .nav-burger { display: grid; }
   .nav-tabs, .nav-history, .header-auth, #theme-toggle { display: none; }
   #lang-toggle { display: none; }
@@ -4577,7 +4577,7 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   .header-tools { display: none; }
 }
 /* Above the drawer threshold the drawer can never appear, open class or not. */
-@media (min-width: 720px) {
+@media (min-width: 900px) {
   .mnav, .mnav-scrim { display: none; }
 }
 
@@ -4654,10 +4654,10 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   /* Explainer stacks the badge over the text on narrow screens. */
   .hero-cta { gap: 8px; }
   .hero-cta .btn-lg { flex: 1 1 auto; }
-  /* (Auth buttons left the phone header entirely — they live in the
-     hamburger drawer below 720px.) */
+  /* (Auth buttons left the narrow header entirely — they live in the
+     hamburger drawer below 900px.) */
 }
-/* (The theme toggle leaves the header with the tabs at 719.98px — it lives in
+/* (The theme toggle leaves the header with the tabs at 899.98px — it lives in
    the hamburger drawer on phones, so it stays reachable at every width.) */
 /* Smallest phones (320-360): the header wordmark yields to the logo mark, which
    stays the home affordance. Scoped to the header — the footer reuses
@@ -4705,8 +4705,8 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
 }
 
 /* Never let the page scroll sideways */
-html { max-width: 100%; overflow-x: hidden; }
-body { max-width: 100%; }
+html { max-width: 100%; overflow-x: hidden; overflow-x: clip; }
+body { max-width: 100%; overflow-x: hidden; overflow-x: clip; }
 /* Smooth scrolling centralized in CSS (so the reduced-motion reset above wins),
    and every anchored/focus/programmatic scroll stops BELOW the sticky header. */
 html { scroll-behavior: smooth; scroll-padding-top: var(--sticky-top); }

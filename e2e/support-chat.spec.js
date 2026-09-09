@@ -58,7 +58,7 @@ for (const lang of ['fr', 'en']) {
       page.on('pageerror', e => errors.push(e.message));
       await gotoHome(page, { suppressOnboarding: true });
       await page.goto('/?lang=' + lang);
-      if (viewport.width < 768) {
+      if (viewport.width < 900) {
         await page.locator('#nav-burger').click();
         await page.locator('#mnav-messagerie').click();
       } else await page.locator('#chat-fab').click();
@@ -95,7 +95,7 @@ for (const lang of ['fr', 'en']) {
       expect(size.y + size.height).toBeLessThanOrEqual(viewport.height + 1);
       await input.press('Escape');
       await expect(panel).toBeHidden();
-      await expect(page.locator(viewport.width < 768 ? '#nav-burger' : '#chat-fab')).toBeFocused();
+      await expect(page.locator(viewport.width < 900 ? '#nav-burger' : '#chat-fab')).toBeFocused();
       expect(errors).toEqual([]);
     });
   }
