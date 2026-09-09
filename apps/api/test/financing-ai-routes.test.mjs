@@ -20,6 +20,8 @@ const fields = [{ fieldId: 'lender_name', value: 'Banque Exemple', evidence: [{ 
 function setup({ scenario, env = {}, repo: injectedRepo } = {}) {
   const calls = [];
   const repo = injectedRepo || createMemoryRepo([{ ...bid }]);
+  repo.markActCompleted(bid.id, { bidId: bid.id, notaryId: 'owner', paye: true, netCents: 1,
+    transferId: 'test-paid', completedAt: '2026-09-09T14:00:00.000Z' });
   const port = { async extract(v) { calls.push(v); return scenario ? scenario(v, repo) : { extraction: { fields } }; } };
   const app = createApp(repo, { now: () => '2026-09-09', nowMs: () => now,
     env: { NOTA_FINANCING_AI_ENABLED: 'true', ...env }, financingAIPort: port });

@@ -3482,6 +3482,16 @@
   // refinancing must not drag the typical testament price upward. Retained
   // offers stay in the median — they are precisely the amounts that cleared —
   // but availability and the best open amount count open offers only.
+  // A month reference is a market signal, not a default price. Three offers is
+  // the minimum sample size we publish; below that, callers must keep the
+  // reference absent rather than turning one or two observations into a claim
+  // about the market.
+  const CARNET_REPERE_MIN_OFFERS = 3;
+  function carnetRepereDisponible(servicePulse) {
+    return !!servicePulse && servicePulse.total >= CARNET_REPERE_MIN_OFFERS &&
+      servicePulse.median !== null && servicePulse.median !== undefined &&
+      Number.isFinite(Number(servicePulse.median));
+  }
   function carnetPulse(bids, todayISO) {
     const list = (Array.isArray(bids) ? bids : []).filter(
       (b) => b && b.status !== STATUS.ANNULEE && isISODate(b.dateISO) && serviceById(b.serviceId),
@@ -4509,6 +4519,9 @@
   // connectors. Keep this data in the domain so web and API cannot drift.
   const NOTARY_CONTROL_PLAN_VERSION = '2026-09-09.2';
   const NOTARY_PARAMETER_COVERAGE_VERSION = '2026-09-09.4';
+  // The offer owns this immutable blueprint. It is a preparation contract,
+  // not a live integration or a permission to contact a third party.
+  const NOTARY_OFFER_TEMPLATE_VERSION = '2026-09-09.1';
   const NOTARY_AI_INTAKE_MAP = Object.freeze({
     adresse: 'property_address',
     preteur: 'lender_name',
@@ -4677,6 +4690,31 @@
         type: control.integrationType, label: control.integrationLabel, candidate: control.integrationCandidate,
       }])).values()],
       caseCoverage: notaryCaseCoverage(serviceId),
+    };
+  }
+
+  function notaryOfferTemplate(bid, { generatedAt } = {}) {
+    if (!bid || bid.efface || !['financement', 'refinancement', 'testament', 'procuration'].includes(bid.serviceId)) return null;
+    const coverage = notaryParameterCoverage(bid.serviceId, bid.pricing || {});
+    if (!coverage) return null;
+    return {
+      version: NOTARY_OFFER_TEMPLATE_VERSION,
+      serviceId: bid.serviceId,
+      generatedAt: generatedAt || bid.createdAt || null,
+      access: { audience: 'retaining_notary', after: 'nota_paid', customerVisible: false },
+      pricing: coverage.pricing,
+      intake: coverage.intake,
+      documents: coverage.documents,
+      aiFields: coverage.ai.fields,
+      humanControls: coverage.humanControls,
+      caseCoverage: coverage.caseCoverage,
+      connectors: coverage.integrations.map(integration => ({
+        type: integration.type,
+        label: integration.label,
+        candidate: integration.candidate,
+        status: 'candidate',
+        automation: 'prepare_only',
+      })),
     };
   }
 
@@ -5373,6 +5411,8 @@
     agendaByDate,
     rankOf,
     carnetPulse,
+    CARNET_REPERE_MIN_OFFERS,
+    carnetRepereDisponible,
     weekAgenda,
     CONTACT,
     CONTACT_MESSAGE_MAX,
@@ -5416,6 +5456,8 @@
     notaryControlPlan,
     NOTARY_PARAMETER_COVERAGE_VERSION,
     notaryParameterCoverage,
+    NOTARY_OFFER_TEMPLATE_VERSION,
+    notaryOfferTemplate,
     NOTARY_CASE_COVERAGE_VERSION,
     notaryCaseCoverage,
     notaryWorkflowSummary,

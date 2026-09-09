@@ -50,9 +50,9 @@ anything.
 ## Anatomy
 
 ```
-┌──────────────────────────────────────────────┐  ← neutral #f4f7f4 page
+┌──────────────────────────────────────────────┐  ← neutral page canvas
 │ ┌──────────────────────────────────────────┐ │
-│ │ ███ 3px hunter-green top rule            │ │  ← surface card, max 600px,
+│ │ ███ 3px Nota midnight top rule           │ │  ← surface card, max 600px,
 │ │  [N] Nota                                │ │    1px border, 12px radius
 │ │      La place de marché notariale ·      │ │  ← CSS-only logo header
 │ │      The notarial marketplace            │ │
@@ -61,7 +61,7 @@ anything.
 │ │  lead (fr, muted)                        │ │
 │ │  ▎callout — offer line, tinted panel     │ │  ← brand-left-rule emphasis
 │ │  paragraph(s) · detail rows · bullets    │ │
-│ │        [ CTA — hunter green ]            │ │  ← ONE CTA per language
+│ │        [ CTA — Nota midnight ]           │ │  ← ONE CTA per language
 │ │  L’équipe Nota                           │ │  ← sign-off, per language
 │ │  ──────────── divider ────────────       │ │
 │ │  H1 (en) … same structure … [ CTA ]      │ │
@@ -92,10 +92,11 @@ follows — change a color there, never inline:
 | `bg` | `--bg` | the page canvas the card floats on |
 | `card` | `--surface` | the card |
 | `border` | `--border` | card edge, hairlines, digest rows |
-| `brand` | `--brand` (hunter-700) | top rule, mark, wordmark, CTA fill, links |
-| `brandDark` | `--brand-hover` (hunter-800) | the CTA's 1px edge |
+| `brand` | `--brand` (Nota blue-teal) | top rule, mark, wordmark, CTA fill, links |
+| `brandBright` | Nota cyan-blue signal (`#407598`) | mark signal dot |
+| `brandDark` | `--brand-hover` | the CTA's 1px edge |
 | `brandInk` | `--brand-ink` | text on the brand fill |
-| `tint` | `--hunter-50` | the callout wash |
+| `tint` | `--nota-saffron-50` | the callout wash |
 
 Every hex literal in a rendered message must be one of these (asserted) —
 there is no email-only colour. Radii sit on the web square scale
@@ -106,7 +107,7 @@ Type: Inter-first stack (`Inter, system-ui, …`), matching the web `--font-sans
 The card always sits on the light surface — deliberate: it stays legible in
 dark-mode clients that would otherwise invert unknown backgrounds.
 
-CTA button: hunter-green fill, white 16px/600 label, `14px 32px` padding
+CTA button: Nota midnight fill, white 16px/600 label, `14px 32px` padding
 (≥44px touch target), `mso-padding-alt` for Outlook, 8px radius, 1px
 `brandDark` border. Table-based ("bulletproof"), no VML.
 

@@ -372,8 +372,8 @@ test('language and theme share the header cluster; the guide floats on its own',
   assert.ok(tools, 'one .header-tools cluster instead of a scatter of icons');
   assert.deepEqual(
     Array.from(tools.children).map((b) => b.id),
-    ['lang-toggle', 'theme-toggle'],
-    'language · theme — in that order, nothing else'
+    ['lang-toggle', '', 'theme-toggle'],
+    'language · palette · theme — in that order'
   );
   // The "?" guide is ALWAYS reachable but NEVER part of that menu (owner's
   // ask, 2026-08-27): it lives in its own standalone bubble outside the
@@ -615,23 +615,39 @@ test('P2-19: the logomark is drawn once as a <symbol>; every inline copy is a <u
   }
   const outside = HTML_SRC.replace(/<symbol[\s\S]*?<\/symbol>/, '');
   assert.ok(!/fill="#[0-9a-fA-F]{3,6}"/.test(outside), 'no hardcoded fill outside the symbol');
-  // The mark's two brand colors are the stylesheet's Nota ramp — every asset
+  // The mark's colors are the shared Nota identity — every asset
   // (symbol, favicon.svg, og.svg, manifests, theme-color) stays in lockstep.
-  const ramp = (step) => /--nota-blue-STEP:\s*(#[0-9a-fA-F]{6})/.source.replace('STEP', step);
-  const brand = new RegExp(ramp('700')).exec(CSS_SRC)[1].toLowerCase();
-  const bright = new RegExp(ramp('500')).exec(CSS_SRC)[1].toLowerCase();
+  const logoBg = '#264961';
+  const signal = '#407598';
+  const canvas = '#101b26';
   const symbol = /<symbol[\s\S]*?<\/symbol>/.exec(HTML_SRC)[0].toLowerCase();
-  assert.ok(symbol.includes('fill="' + brand + '"'), 'the symbol’s square is --nota-blue-700');
-  assert.ok(symbol.includes('fill="' + bright + '"'), 'the symbol’s dot is --nota-blue-500');
+  assert.ok(symbol.includes('fill="var(--nota-logo-bg)"'), 'the symbol’s square is palette-bound');
+  assert.ok(symbol.includes('fill="var(--nota-logo-signal)"'), 'the symbol’s dot is palette-bound');
   for (const f of ['../public/favicon.svg', '../public/og.svg']) {
     const svg = read(f).toLowerCase();
-    assert.ok(svg.includes(brand) && !svg.includes('#2c5f34') && !svg.includes('#50b848'), f + ' carries the current brand green');
+    assert.ok(svg.includes(logoBg) && svg.includes(signal) && !svg.includes('#2c5f34') && !svg.includes('#50b848'), f + ' carries the current Nota mark');
   }
   const light = [...doc.querySelectorAll('meta[name="theme-color"]')].find((m) => !m.getAttribute('media'));
-  assert.equal(light.getAttribute('content').toLowerCase(), brand, 'the light theme-color is the brand token');
+  assert.equal(light.getAttribute('content').toLowerCase(), canvas, 'the light theme-color is the Nota canvas');
   for (const f of ['../public/manifest.webmanifest', '../public/manifest.en.webmanifest']) {
-    assert.equal(JSON.parse(read(f)).theme_color.toLowerCase(), brand, f + ' theme_color is the brand token');
+    assert.equal(JSON.parse(read(f)).theme_color.toLowerCase(), canvas, f + ' theme_color is the Nota canvas');
   }
+});
+
+test('P2-20: the nine palette flavours are exposed in both menus and bind to CSS tokens', () => {
+  const ids = ['ardoise', 'marine', 'sapin', 'prune', 'bourgogne', 'terre', 'indigo', 'mousse', 'graphite'];
+  const selects = [...new JSDOM(HTML_SRC).window.document.querySelectorAll('[data-palette-select]')];
+  assert.equal(selects.length, 2, 'desktop and mobile menus share the palette selector');
+  for (const select of selects) assert.deepEqual([...select.options].map((o) => o.value), ids);
+  for (const id of ids.slice(1)) {
+    const block = new RegExp("data-palette='" + id + "'\\]\\s*\\{([^}]*)\\}").exec(CSS_SRC);
+    assert.ok(block, id + ' has a palette token block');
+    for (const key of ['--nota-teal', '--nota-teal-bright']) {
+      assert.match(block[1], new RegExp(key + ':\\s*#[0-9a-f]{6}'), id + ' binds ' + key);
+    }
+  }
+  assert.match(CSS_SRC, /--nota-logo-bg:\s*#264961/i, 'the canonical mark square is fixed');
+  assert.match(CSS_SRC, /--nota-logo-signal:\s*#407598/i, 'the canonical mark signal is fixed');
 });
 
 test('P1-8: the canonical origin is declared once in the head', () => {

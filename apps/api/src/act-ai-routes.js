@@ -12,7 +12,8 @@ const DEFAULT_DAILY_CALL_LIMIT = 100;
 const MAX_IN_FLIGHT = 32;
 
 function createActAIRoutes({ repo, env, authenticate, json, parseBody, getSecret,
-  port, nowMs = Date.now, newId = randomUUID, audit = async () => {}, learning = null }) {
+  port, nowMs = Date.now, newId = randomUUID, audit = async () => {}, learning = null,
+  canAccessWorkPacket = async () => true }) {
   const setting = value => typeof value === 'string' ? value.trim() : '';
   const error = (status, code) => json(status, { errors: [{ code }] });
   const packet = bid => D.actWorkPacket(bid, { todayISO: D.businessDay(nowMs(), D.BUSINESS_TIMEZONE) });
@@ -76,6 +77,7 @@ function createActAIRoutes({ repo, env, authenticate, json, parseBody, getSecret
     if (bid.notaryId !== owner) return error(403, 'interdit');
     if (!['testament', 'procuration'].includes(bid.serviceId)) return error(422, 'service_inconnu');
     if (bid.status !== D.STATUS.RETENUE || bid.efface) return error(409, 'dossier_indisponible');
+    if (!(await canAccessWorkPacket(bid))) return error(402, 'nota_payment_required');
     if (method === 'GET') return json(200, { analysis: analysisOf(bid), workPacket: packet(bid) });
 
     if (route.endsWith('/review')) {

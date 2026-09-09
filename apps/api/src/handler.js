@@ -745,6 +745,22 @@ function createApp(repo, opts = {}) {
     return claims.sub;
   }
 
+  // A retained/completed act is not automatically a paid Nota settlement:
+  // the fallback ledger can record a receivable with `paye: false`. Generated
+  // templates and AI work packets are released only after an actual payment
+  // or transfer is present in that write-once ledger.
+  function notaPaymentRecorded(completion) {
+    return !!completion && completion.paye !== false &&
+      (completion.netCents != null || !!completion.transferId || completion.paidOnAccept === true);
+  }
+  async function notaPaidForBid(bid) {
+    if (!bid || typeof repo.getActCompletion !== 'function') return false;
+    return notaPaymentRecorded(await repo.getActCompletion(bid.id));
+  }
+  function storedNotaryTemplate(bid, notaPaid) {
+    return notaPaid && bid && bid.notaryTemplate ? bid.notaryTemplate : null;
+  }
+
   // Public projection: strip anything private and enforce anonymity server-side.
   // A bid marked anonyme never leaks its name, whatever the client sent. The
   // dossier (documents/fields) is never part of the public shape — and neither
@@ -1603,11 +1619,11 @@ function createApp(repo, opts = {}) {
       '<title>' +
       title +
       ' — Nota</title></head>' +
-      '<body style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#eef2f5;margin:0;padding:48px 16px;">' +
-      '<div style="max-width:520px;margin:0 auto;background:#fff;border:1px solid #dce4ea;border-radius:12px;padding:28px 24px;">' +
-      '<h1 style="margin:0 0 12px;font-size:20px;color:#16232f;">' +
+      '<body style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#f2f1ec;margin:0;padding:48px 16px;">' +
+      '<div style="max-width:520px;margin:0 auto;background:#fcfbf8;border:1px solid #cbd8d5;border-top:3px solid #386888;border-radius:12px;padding:28px 24px;">' +
+      '<h1 style="margin:0 0 12px;font-size:20px;color:#101b26;">' +
       title +
-      '</h1><p style="margin:0;font-size:15px;line-height:1.6;color:#5b6b7b;">' +
+      '</h1><p style="margin:0;font-size:15px;line-height:1.6;color:#5b6c72;">' +
       message +
       '</p></div></body></html>';
     return {
@@ -1633,6 +1649,7 @@ function createApp(repo, opts = {}) {
     authenticate: request => requireScope(bearer(request), SCOPES.SESSION),
     getSecret: name => secrets().get(name),
     audit: (action, meta, owner) => appendAudit(action, meta, acteur(ACTEUR.NOTAIRE, owner)),
+    canAccessWorkPacket: opts.canAccessWorkPacket || notaPaidForBid,
     learning: notaryLearning,
   });
   const actAIRoutes = require('./act-ai-routes').createActAIRoutes({
@@ -1640,6 +1657,7 @@ function createApp(repo, opts = {}) {
     authenticate: request => requireScope(bearer(request), SCOPES.SESSION),
     getSecret: name => secrets().get(name),
     audit: (action, meta, owner) => appendAudit(action, meta, acteur(ACTEUR.NOTAIRE, owner)),
+    canAccessWorkPacket: opts.canAccessWorkPacket || notaPaidForBid,
     learning: notaryLearning,
   });
   const oauth = opts.oauth || require('./oauth').createOAuth({ repo, env, now: nowMs });
@@ -1895,6 +1913,12 @@ function createApp(repo, opts = {}) {
         // keys.bidTtl, which the CLIENT# index pointer below reads too.
         ttl: bidTtl(payload.dateISO),
       };
+      // Freeze the service blueprint on the offer at booking time. The stored
+      // object contains only preparation metadata and connector candidates; its
+      // projections remain null until the payment ledger is positive.
+      bid.notaryTemplate = domain.notaryOfferTemplate(bid, {
+        generatedAt: new Date(nowMs()).toISOString(),
+      });
       // Pay-on-accept: with billing on, a posted offer is PENDING until the client
       // authorizes their card via hosted Checkout — the webhook then binds the
       // PaymentIntent and the offer goes live (isLive). Without billing (demo/tests)
@@ -2816,13 +2840,20 @@ function createApp(repo, opts = {}) {
           })
         ).catch(() => {});
       }
+      const settledLedger = typeof repo.getActCompletion === 'function'
+        ? await repo.getActCompletion(payload.bidId) : null;
+      const notaPaid = notaPaymentRecorded(settledLedger);
       return json(200, {
         ok: true,
         // The SETTLED value — on a duplicate submit, the ledger's original
         // figure, never the retried one — so the console renders the truth.
         actAmount: result.actAmount != null ? result.actAmount : valued.actAmount,
         commissionCents: result.commissionCents,
-        ...(result.netCents != null ? { paid: true, netCents: result.netCents } : {}),
+        ...(notaPaid ? {
+          paid: true,
+          netCents: settledLedger.netCents != null ? settledLedger.netCents : result.netCents,
+          notaryTemplate: storedNotaryTemplate(bid, true),
+        } : {}),
       });
     }
 
@@ -3242,8 +3273,11 @@ function createApp(repo, opts = {}) {
               // re-offer the settlement button (nor forget the revenue).
               const completion = typeof repo.getActCompletion === 'function'
                 ? await repo.getActCompletion(b.id) : null;
+              const notaPaid = notaPaymentRecorded(completion);
               retained.push({
                 completed: !!completion,
+                paid: notaPaid,
+                notaryTemplate: storedNotaryTemplate(b, notaPaid),
                 actAmount: completion ? completion.actAmount : null,
                 commissionCents: completion ? completion.commissionCents : null,
                 id: b.id,
@@ -3565,7 +3599,8 @@ function createApp(repo, opts = {}) {
       // What an accept hands the winning notary: the released dossier plus the
       // mise en relation contact block (ADR 0010 §4). `courriel` stays at the
       // top level for existing callers; `client` is the full contact shape.
-      const released = (b) => ({ id: b.id, courriel: b.courriel || null, dossier: b.dossier || null, client: clientContact(b) });
+      const released = (b) => ({ id: b.id, courriel: b.courriel || null, dossier: b.dossier || null,
+        client: clientContact(b), notaryTemplate: null });
 
       // Idempotent + access-controlled: re-accept by the SAME notary returns
       // the dossier again; another notary -> 409.
@@ -4814,6 +4849,7 @@ function createApp(repo, opts = {}) {
       if (bid.notaryId !== notaryId) {
         return json(403, { errors: [{ code: 'interdit', message: 'Dossier réservé au notaire qui a retenu l’offre.' }] });
       }
+      const notaPaid = await notaPaidForBid(bid);
       return json(200, {
         id: bid.id,
         courriel: bid.courriel || null,
@@ -4822,6 +4858,7 @@ function createApp(repo, opts = {}) {
         preteur: bidLenderInfo(bid),
         messages: messagesOf(bid).map(chatMessage),
         documents: documentsOf(bid).filter((d) => d.etat === 'pret').map(publicDocument),
+        notaryTemplate: storedNotaryTemplate(bid, notaPaid),
       });
     }
 

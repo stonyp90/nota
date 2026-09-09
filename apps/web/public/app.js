@@ -3103,14 +3103,14 @@
   // service filter of the carnet below.
   // French keeps the singular at 0 as well as 1 ("0 demande"), unlike English.
   function plural(n, word) { return n + ' ' + word + (n < 2 ? '' : 's'); }
+  function countText(n, fr, en) {
+    var english = window.NotaI18N && window.NotaI18N.lang && window.NotaI18N.lang() === 'en';
+    return english ? n + ' ' + en + (n === 1 ? '' : 's') : plural(n, fr);
+  }
 
-  // Under this many offers in the month no reference is shown: the median
-  // of one or two amounts is a coincidence, not a market. The domain lifts
-  // any amount into `median`; the render decides what a client may read as a
-  // « repère du mois » — and never calls it a médiane, a statistic's name
-  // that two or three amounts cannot carry.
-  var PULSE_REPERE_MIN = 3;
-
+  // The domain owns the minimum sample size for a public month reference.
+  // The median is still returned for arithmetic/diagnostic consumers, but the
+  // public label stays empty until the domain says the sample is meaningful.
   function pulseRow(s, active, busiest) {
     var short = s.nom.split(' ')[0];
     var row = el('button', 'pulse-row' + (active ? ' is-on' : ''));
@@ -3119,7 +3119,7 @@
     row.setAttribute('aria-pressed', active ? 'true' : 'false');
     // The row is several fragments; name the WHOLE control once so a screen
     // reader announces the figures and what clicking it does, not "788 $ 10 offres".
-    var hasRepere = s.median != null && s.total >= PULSE_REPERE_MIN;
+    var hasRepere = D.carnetRepereDisponible(s);
     row.setAttribute('aria-label',
       short + ', à partir de ' + D.money(prixAnnonceDollars(s.id))
       + (s.total === 0 ? ', aucune offre ce mois' : hasRepere ? ', repère du mois ' + D.money(s.median) : ', pas assez d’offres ce mois pour un repère') + '. '
@@ -3244,6 +3244,12 @@
   // the grid itself.
   function renderActiveView() {
     var visible = applyFilters(state.monthBids);
+    var empty = $('cal-empty');
+    if (empty) {
+      var calendarVisible = visible.filter(function (b) { return b.dateISO >= todayISO(); }).length;
+      empty.textContent = calendarVisible ? '' : countText(0, 'offre visible', 'visible offer') + ' — ' + T('Aucune offre ne correspond aux filtres sélectionnés.');
+      empty.hidden = calendarVisible > 0;
+    }
     updateFilterSummary(visible.length, visible);
     // The pulse reads the WHOLE month (not `visible`): it is the market
     // reference the filters are applied against, so filtering must not
@@ -3424,17 +3430,12 @@
     // Headline row: the one offer to beat for this act.
     if (matching.length) list.appendChild(bidRow(matching[0]));
 
-    // Totals: what the client is actually up against on this date. Only real
-    // numbers — "Aucune offre en X" is #day-hint's sentence, never repeated
-    // here — and the all-acts segment only appears when it says something the
-    // act segment does not. Nothing to count = no count line at all.
+    // Totals: what the client is actually up against on this date. Keep zero
+    // visible too: a filtered act is still a real result, not a missing
+    // component. The all-acts segment appears when it adds context.
     var counts = [];
-    if (svc && matching.length) {
-      counts.push(matching.length + ' offre' + (matching.length > 1 ? 's' : '') + ' en ' + T(svc.nom).toLowerCase());
-    }
-    if ((!svc || dayAll.length !== matching.length) && dayAll.length > 0) {
-      counts.push(dayAll.length + ' offre' + (dayAll.length > 1 ? 's' : '') + ' ce jour, tous actes confondus');
-    }
+    if (svc) counts.push(countText(matching.length, 'offre', 'offer') + ' en ' + T(svc.nom).toLowerCase());
+    if (!svc || dayAll.length !== matching.length) counts.push(countText(dayAll.length, 'offre', 'offer') + ' ce jour, tous actes confondus');
     var countEl = counts.length ? el('div', 'day-bids-count', counts.join(' · ')) : null;
     if (countEl) list.appendChild(countEl);
 
@@ -3442,13 +3443,17 @@
     // totals line itself (owner, 2026-08-27: « compacter les sections »): the
     // count and its toggle share one row instead of stacking a full-width
     // button under the list.
+    var totalOthers = Math.max(0, dayAll.length - (matching.length ? 1 : 0));
     var others = dayAll.filter(function (b) { return b !== matching[0]; }).slice(0, DAY_CAP);
     if (others.length) {
       var rest = el('div', 'day-bids-rest'); rest.hidden = true;
       others.forEach(function (b) { rest.appendChild(bidRow(b)); });
-      var label = others.length > 1
-        ? 'Voir les ' + others.length + ' autres offres'
-        : 'Voir l’autre offre';
+      var english = window.NotaI18N && window.NotaI18N.lang && window.NotaI18N.lang() === 'en';
+      var label = totalOthers > others.length
+        ? (english ? 'View ' + others.length + ' of ' + totalOthers + ' other offers' : 'Voir ' + others.length + ' des ' + totalOthers + ' autres offres')
+        : others.length > 1
+          ? (english ? 'View the ' + others.length + ' other offers' : 'Voir les ' + others.length + ' autres offres')
+          : (english ? 'View the other offer' : 'Voir l’autre offre');
       var toggle = el('button', 'day-bids-toggle', label); toggle.type = 'button';
       toggle.setAttribute('aria-expanded', 'false');
       toggle.addEventListener('click', function () {
@@ -7692,7 +7697,9 @@
     }
     // The server echoes the SETTLED value — on a duplicate submit that is the
     // ledger's original figure, never the retried one.
-    ncRetainedUpdate(nc.email, id, { completed: true, actAmount: j.actAmount != null ? j.actAmount : amt, commissionCents: j.commissionCents || 0 });
+    ncRetainedUpdate(nc.email, id, { completed: true, paid: j.paid === true,
+      notaryTemplate: j.notaryTemplate || null,
+      actAmount: j.actAmount != null ? j.actAmount : amt, commissionCents: j.commissionCents || 0 });
     ncRenderRetained();
     toast(j.paid === true
       ? 'Acte complété. Vos honoraires : ' + D.money(j.honorairesCents != null ? j.honorairesCents / 100 : (j.actAmount != null ? j.actAmount : amt)) + ', virés en entier.'
@@ -8132,6 +8139,7 @@
       distanceKm: bidMeta.distanceKm != null ? bidMeta.distanceKm : null,
       complexity: bidMeta.complexity || null,
       messages: [], documents: [], annulation: j.annulation || null, completed: false,
+      paid: false, notaryTemplate: j.notaryTemplate || null,
     };
     // PAID AT SIGNING (ADR 0015): accepting retains — no money moves here.
     // The settlement (capture + net transfer, or the créance fallback)
@@ -8727,6 +8735,11 @@
     var form = $('notary-auth-form'); var view = $('notary-authed');
     if (form) form.hidden = authed;
     if (view) view.hidden = !authed;
+    // The beta notice is a signed-out acquisition message. Keep it out of the
+    // authenticated workspace explicitly so it cannot become part of the
+    // notary console through a CSS/layout regression.
+    var beta = $('notary-ai-beta-note');
+    if (beta) beta.hidden = authed;
     if (!authed) ncShowGateStep('email'); // never resurface a stale signup branch
     renderNotaryLive(); // the teaser follows the gate: shown signed-out, gone signed-in
     if (authed) {
@@ -9446,15 +9459,17 @@
     if (head) {
       clear(head);
       head.appendChild(el('span', null, 'Demandes ouvertes'));
-      if (all.length) {
+      {
         var inPlay = all.reduce(function (s, b) { return s + (Math.round(Number(b.montant)) || 0); }, 0);
         head.appendChild(document.createTextNode(' · '));
         head.appendChild(el('span', 'nc-h-n', String(all.length)));
-        head.appendChild(document.createTextNode(' · '));
-        head.appendChild(el('span', 'nc-h-sum'));
-        head.lastChild.appendChild(el('span', 'nc-h-amt', D.money(inPlay)));
-        head.lastChild.appendChild(document.createTextNode(' '));
-        head.lastChild.appendChild(el('span', null, 'en jeu'));
+        if (all.length) {
+          head.appendChild(document.createTextNode(' · '));
+          head.appendChild(el('span', 'nc-h-sum'));
+          head.lastChild.appendChild(el('span', 'nc-h-amt', D.money(inPlay)));
+          head.lastChild.appendChild(document.createTextNode(' '));
+          head.lastChild.appendChild(el('span', null, 'en jeu'));
+        }
       }
     }
     if (!all.length) {
@@ -9569,6 +9584,7 @@
       item.appendChild(meta);
       list.appendChild(item);
     });
+    if (!(workflow.nextActions || []).length) list.appendChild(el('li', 'nc-zero-count', countText(0, 'action suivante', 'next action')));
     wrap.appendChild(list);
     return wrap;
   }
@@ -10039,9 +10055,14 @@
     kv('Consentement de partage', d.__consent ? 'Oui' : 'Non');
     wrap.appendChild(rows);
     var isFinancing = ['financement', 'refinancement'].includes(entry.serviceId);
-    var preparation = isFinancing
+    var paidTemplate = entry.paid === true && entry.notaryTemplate && entry.notaryTemplate.serviceId === entry.serviceId
+      ? entry.notaryTemplate : null;
+    var preparation = paidTemplate && (isFinancing
       ? D.financingPreparation(entry.serviceId, d, entry.pricing)
-      : D.actPreparation(entry.serviceId, d, entry.pricing);
+      : D.actPreparation(entry.serviceId, d, entry.pricing));
+    if (!paidTemplate) {
+      wrap.appendChild(el('p', 'help', 'Le dossier de préparation et les connecteurs de Nota restent masqués jusqu’au paiement du service.'));
+    }
     if (preparation) {
       var brief = el('details', 'nc-preparation');
       brief.appendChild(el('summary', null, isFinancing ? 'Préparation du financement' : 'Préparation de l’acte'));
@@ -10071,6 +10092,18 @@
           controls.appendChild(item);
         });
         brief.appendChild(controls);
+      }
+      if (Array.isArray(paidTemplate.connectors) && paidTemplate.connectors.length) {
+        brief.appendChild(el('div', 'nc-dossier-h', 'Connecteurs du dossier'));
+        brief.appendChild(el('p', 'help', 'Ce modèle a été généré à la réservation et débloqué après le paiement du service.'));
+        var connectors = el('ul');
+        paidTemplate.connectors.forEach(function (connector) {
+          var item = el('li');
+          item.appendChild(el('strong', null, T(connector.label)));
+          item.appendChild(el('p', 'help', T(connector.candidate) + ' · ' + T('Préparation automatique seulement')));
+          connectors.appendChild(item);
+        });
+        brief.appendChild(connectors);
       }
       brief.appendChild(ncFinancingAIBlock(entry));
       wrap.appendChild(brief);
@@ -10529,6 +10562,7 @@
   function documentsBlock(ctx, documents, onAjout) {
     var box = el('div', 'chat-docs');
     var docs = documents || [];
+    box.appendChild(el('div', 'chat-doc-count', countText(docs.length, 'document échangé', 'shared document')));
     var items = ctx.serviceId ? checklistDocs(ctx.serviceId, ctx.pricing) : [];
     var assoc = items.length ? docItemsFor(ctx.id) : {};
     var byItem = {};
@@ -10876,7 +10910,6 @@
     clear(head);
     head.appendChild(el('span', null, 'Dossiers retenus'));
     var items = nc.email ? ncRetainedFor(nc.email) : [];
-    if (!items.length) return;
     head.appendChild(document.createTextNode(' · '));
     head.appendChild(el('span', 'nc-h-n', String(items.length)));
     var unread = items.reduce(function (s, e) { return s + ncUnreadCount(e); }, 0);
@@ -11045,6 +11078,7 @@
     if (e.pending) {
       box.appendChild(el('p', 'help', e.pending + ' dossier' + (e.pending > 1 ? 's' : '') + ' à compléter · valeur estimée ' + D.money(e.pendingVal) + '. Vos honoraires vous sont virés à la signature, en entier.'));
     } else if (!e.done) {
+      box.appendChild(el('p', 'nc-zero-count', countText(0, 'acte complété', 'completed act')));
       box.appendChild(el('p', 'help', 'Vos honoraires s’afficheront ici dès votre premier acte complété.'));
     }
   }
@@ -11111,8 +11145,12 @@
 
   function ncRenderCote() {
     var box = $('notary-cote'); if (!box) return; clear(box);
+    if (!nc.email) return; // signed out is not an empty score result
     var score = nc.cote;
-    if (!score || !score.axes || !score.axes.length) return; // signed out, or nothing to publish yet
+    if (!score || !score.axes || !score.axes.length) {
+      box.appendChild(el('p', 'help', T('Aucune cote n’est encore disponible. Elle s’affichera après les premières données de votre activité.')));
+      return; // signed out, or nothing to publish yet
+    }
 
     // Le nombre, en grand, sur 100 — et RIEN qui le rattache à l'argent.
     var head = el('div', 'nc-cote-head');
@@ -11176,9 +11214,15 @@
   // clients said about them. A service without a single review says so in
   // words; the domain never invents an average, and neither does this.
   function ncRenderServices(box, services) {
-    if (!services || !services.length) return;
+    services = Array.isArray(services) ? services : [];
     var wrap = el('div', 'nc-svc');
     wrap.appendChild(el('div', 'nc-svc-h', 'Ce que vous portez, service par service'));
+    wrap.appendChild(el('div', 'nc-svc-count', countText(services.length, 'service', 'service')));
+    if (!services.length) {
+      wrap.appendChild(el('p', 'help', T('Aucun service n’est encore associé à votre historique.')));
+      box.appendChild(wrap);
+      return;
+    }
     services.forEach(function (s) {
       var row = el('div', 'nc-svc-row');
       row.dataset.service = s.serviceId;
@@ -11196,6 +11240,7 @@
   function ncRenderEvals(rating, evaluations, services) {
     var box = $('nc-evals-list'); if (!box) return; clear(box);
     if (!evaluations || !evaluations.length) {
+      box.appendChild(el('div', 'nc-zero-count', countText(0, 'évaluation', 'evaluation')));
       box.appendChild(el('p', 'help', 'Vos évaluations s’afficheront ici après vos premiers actes signés.'));
       ncRenderServices(box, services);
       return;
@@ -11257,6 +11302,7 @@
     var box = $('nc-actes-list'); if (!box) return; clear(box);
     var actes = (payload && payload.actes) || [];
     if (!actes.length) {
+      box.appendChild(el('div', 'nc-zero-count', countText(0, 'acte réglé', 'settled act')));
       box.appendChild(el('p', 'help', 'Votre relevé s’ouvrira ici dès votre premier acte réglé.'));
       return;
     }
@@ -11657,6 +11703,32 @@
   // ---------------------------------------------------------------------------
   // Theme
   // ---------------------------------------------------------------------------
+  var PALETTE_IDS = ['ardoise', 'marine', 'sapin', 'prune', 'bourgogne', 'terre', 'indigo', 'mousse', 'graphite'];
+  function paletteId() {
+    var id = document.documentElement.getAttribute('data-palette');
+    return PALETTE_IDS.indexOf(id) > -1 ? id : 'ardoise';
+  }
+  function syncPaletteChrome() {
+    var id = paletteId();
+    document.querySelectorAll('[data-palette-select]').forEach(function (select) { select.value = id; });
+    /* The browser tab mark is generated from the same live CSS tokens as the
+       inline logo. The fallback favicon.svg remains available before boot. */
+    try {
+      var css = getComputedStyle(document.documentElement);
+      var bg = css.getPropertyValue('--nota-logo-bg').trim();
+      var signal = css.getPropertyValue('--nota-logo-signal').trim();
+      var ink = css.getPropertyValue('--nota-midnight').trim();
+      var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="6" fill="' + bg + '"/><g fill="#ffffff"><rect x="16" y="15" width="7.5" height="34" rx="2.5"/><rect x="40.5" y="15" width="7.5" height="34" rx="2.5"/><polygon points="16,15 24,15 48,49 40,49"/></g><circle cx="48" cy="16" r="8" fill="' + signal + '" stroke="' + ink + '" stroke-width="3"/></svg>';
+      var href = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+      document.querySelectorAll('link[rel="icon"]').forEach(function (link) { link.href = href; });
+    } catch (e) {}
+  }
+  function setPalette(id) {
+    if (PALETTE_IDS.indexOf(id) < 0) id = 'ardoise';
+    document.documentElement.setAttribute('data-palette', id);
+    lsSave('nota.palette', id);
+    syncPaletteChrome();
+  }
   function setTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
     lsSave('nota.theme', theme);
@@ -11807,6 +11879,44 @@
     $('theme-toggle').addEventListener('click', function () {
       var cur = document.documentElement.getAttribute('data-theme');
       setTheme(cur === 'dark' ? 'light' : 'dark');
+    });
+    document.querySelectorAll('[data-palette-select]').forEach(function (select) {
+      select.addEventListener('change', function () { setPalette(this.value); });
+    });
+    syncPaletteChrome();
+
+    // The beta announcement is intentionally a tooltip-sized disclosure. Only
+    // its information button expands it, for pointer, touch, and keyboard users,
+    // without adding a new row to the resting landing layout. The CTA leads to
+    // the existing professional-email gate;
+    // there is no separate beta list or unverified subscription record here.
+    var betaNote = $('notary-ai-beta-note');
+    var betaToggle = $('notary-ai-beta-toggle');
+    var betaDetails = $('notary-ai-beta-details');
+    if (betaNote && betaToggle && betaDetails) {
+      betaToggle.addEventListener('click', function () {
+        var open = !betaNote.classList.contains('is-open');
+        betaNote.classList.toggle('is-open', open);
+        betaToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        betaDetails.setAttribute('aria-hidden', open ? 'false' : 'true');
+      });
+    }
+    var betaSubscribe = $('notary-ai-beta-subscribe');
+    if (betaSubscribe) betaSubscribe.addEventListener('click', function () {
+      if (betaNote && betaToggle && betaDetails) {
+        betaNote.classList.add('is-open');
+        betaToggle.setAttribute('aria-expanded', 'true');
+        betaDetails.setAttribute('aria-hidden', 'false');
+      }
+      var gate = $('notary-auth-form');
+      var email = $('nc-email');
+      if (gate && gate.scrollIntoView) {
+        try { gate.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {}
+      }
+      if (email) {
+        ncShowEmailStep();
+        try { email.focus({ preventScroll: true }); } catch (e) { email.focus(); }
+      }
     });
     // First paint: the switches were authored checked (dark); a saved light
     // theme was applied to <html> before boot, so align aria-checked with it.
@@ -12512,25 +12622,20 @@
 
   // ===== Ambient mark drift — the Nota logo, twenty times, adrift. =====
   // Born on the intro gate (2026-08-27), then promoted the same day to ONE
-  // fixed site-wide layer behind all content (the hero's own clipped copy
-  // « cut rough » at the band's edges). The builder deals each copy its own
-  // place, size, drift and tempo, and a negative delay starts every one
+  // fixed site-wide layer behind all content. The builder deals each copy its
+  // own place, size, drift and tempo, and a negative delay starts every one
   // mid-flight so the scene is alive from the first frame. Decorative only:
-  // aria-hidden, pointer-blind. The mark is the #nota-logomark symbol's
-  // drawing, kept as a string because each die clones it six times — same
-  // two greens (styles.css --hunter-700 / --hunter-500).
+  // aria-hidden, pointer-blind. These are branded cube facets, not duplicate
+  // logos: the single Nota mark remains the clear identity anchor.
   var DRIFT_MARK_SVG =
     '<svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">' +
-    '<rect width="64" height="64" rx="12" fill="#315b43"/>' +
-    '<g fill="#ffffff">' +
-    '<rect x="16" y="15" width="7.5" height="34" rx="2.5"/>' +
-    '<rect x="40.5" y="15" width="7.5" height="34" rx="2.5"/>' +
-    '<polygon points="16,15 24,15 48,49 40,49"/>' +
-    '</g>' +
-    '<circle cx="48" cy="16" r="8" fill="#599a71" stroke="#315b43" stroke-width="3"/>' +
+    '<rect width="64" height="64" rx="12" fill="var(--nota-logo-bg)"/>' +
+    '<path d="M14 16 50 48" stroke="var(--nota-teal-bright)" stroke-width="5" stroke-linecap="round" opacity=".72"/>' +
+    '<path d="M14 48 50 16" stroke="var(--nota-teal-bright)" stroke-width="4" stroke-linecap="round" opacity=".72"/>' +
+    '<circle cx="48" cy="16" r="6" fill="var(--nota-logo-signal)" opacity=".9"/>' +
     '</svg>';
-  // A full die (owner: « they must look as a full dice ») — six logo faces
-  // around one body; CSS folds them into a cube and tumbles the whole thing.
+  // A full die — six quiet branded facets around one body; CSS folds them
+  // into a cube and tumbles the whole thing.
   var DRIFT_DIE_HTML = (function () {
     var faces = '';
     for (var f = 0; f < 6; f++) faces += DRIFT_MARK_SVG;
@@ -13909,6 +14014,7 @@
 
     // Restore theme preference
     var savedTheme = lsLoad('nota.theme'); if (savedTheme) setTheme(savedTheme);
+    var savedPalette = lsLoad('nota.palette'); setPalette(savedPalette || paletteId());
 
     // Initialize offer form
     onOfferServiceChange();

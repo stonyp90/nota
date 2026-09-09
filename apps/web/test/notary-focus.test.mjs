@@ -30,7 +30,7 @@ const HTML_SRC = readFileSync(fileURLToPath(new URL('../public/index.html', impo
 // process open — close every window once the suite ends so it can exit.
 const DOMS = [];
 test('retained financing shows missing preparation and outstanding professional checks', async () => {
-  const retained = { id: 'prep-1', dateISO: todayISO(), serviceId: 'refinancement', montant: 2000, tier: 'standard', prefixe: 'G1R', courriel: 'c@x.ca', dossier: { adresse: 'Adresse déclarée' }, viaProposition: true };
+  const retained = { id: 'prep-1', dateISO: todayISO(), serviceId: 'refinancement', montant: 2000, tier: 'standard', prefixe: 'G1R', courriel: 'c@x.ca', dossier: { adresse: 'Adresse déclarée' }, viaProposition: true, paid: true, notaryTemplate: { serviceId: 'refinancement', connectors: [] } };
   const { doc } = await bootSignedIn(null, { retained: [retained] });
   const brief = doc.querySelector('#notary-retained-list .nc-preparation');
   assert.ok(brief);
@@ -38,6 +38,14 @@ test('retained financing shows missing preparation and outstanding professional 
   assert.match(brief.textContent, /instructions au notaire sont distinctes/);
   assert.match(brief.textContent, /restent à vérifier/);
   assert.doesNotMatch(brief.textContent, /Adresse déclarée/);
+});
+
+test('the beta notice is removed from the authenticated notary workspace', async () => {
+  const { doc } = await bootSignedIn(null);
+  const note = doc.getElementById('notary-ai-beta-note');
+  assert.ok(note, 'the landing notice remains in the document for navigation');
+  assert.equal(note.hidden, true,
+    'the signed-in surface is a workspace, not a marketing notice');
 });
 after(() => { for (const d of DOMS) { try { d.window.close(); } catch {} } });
 
@@ -112,6 +120,7 @@ function stubNotaryApi(win, bids, extra = {}) {
       return json({ bid: { ...bid, status: 'ouverte', etude: null } });
     }
     if (path.includes('/notary/profile')) return json({ profil: { ...PROFIL_OK, lienCNQ: (body && body.lienCNQ) || null, rayonKm: (body && body.rayonKm) || 0, urgences: !!(body && body.urgences), prefixe: (body && body.prefixe) || null } });
+    if (path.includes('/notary/acts')) return json(extra.acts || { actes: [], totaux: {} });
     if (path.includes('/notary/bids')) {
       return json({
         bids, retained: extra.retained || [],
@@ -209,6 +218,17 @@ test('earnings with nothing completed render no tile grid, only the help line', 
   assert.ok(earnings, 'earnings block missing');
   assert.equal(earnings.querySelectorAll('.nc-stat').length, 0, 'zero-state earnings must not render stat tiles');
   assert.ok(earnings.querySelector('.help'), 'the zero state keeps its one-line explanation');
+});
+
+test('notary collection boundaries show 0 and 1 explicitly', async () => {
+  const zero = await bootSignedIn(() => [], { retained: [], acts: { actes: [], totaux: {} } });
+  assert.match($(zero.doc, 'notary-open-h').textContent, /· 0$/);
+  assert.match($(zero.doc, 'notary-retained-h').textContent, /· 0$/);
+  assert.match($(zero.doc, 'notary-earnings').textContent, /0 acte complété/);
+
+  const one = await bootSignedIn((seedOpen) => seedOpen.slice(0, 1), { retained: [] });
+  assert.equal(one.doc.querySelectorAll('#notary-open-list .nc-card').length, 1);
+  assert.match($(one.doc, 'notary-open-h').textContent, /· 1 ·/);
 });
 
 // ---------------------------------------------------------------------------

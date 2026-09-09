@@ -186,15 +186,16 @@ paths:
       summary: Read the current private financing analysis, review and customer-context work packet.
       description: >-
         The work packet is rebuilt from the server's current private dossier and
-        pricing answers. It is available when AI is disabled and never calls a
-        provider. Its drafts are unsent; source labels do not imply legal approval.
+        pricing answers. It is available only after the Nota payment ledger is
+        positive; retention or an unpaid completion is not sufficient. It never
+        calls a provider on read. Its drafts are unsent; source labels do not imply legal approval.
       security: [{ notarySession: [] }]
       parameters:
         - { name: id, in: query, required: true, schema: { type: string } }
         - { name: dateISO, in: query, required: true, schema: { type: string, format: date } }
       responses:
         '200':
-          description: Restricted to the retaining notary; no legal approval is implied.
+          description: Restricted to the retaining notary after Nota payment; no legal approval is implied.
           content:
             application/json:
               schema:
@@ -206,6 +207,8 @@ paths:
                       - { $ref: '#/components/schemas/FinancingAIAnalysis' }
                       - { type: 'null' }
                   workPacket: { $ref: '#/components/schemas/FinancingWorkPacketResult' }
+        '402':
+          $ref: '#/components/responses/NotaPaymentRequired'
         default: { $ref: '#/components/responses/FinancingAIError' }
     post:
       summary: Extract page-evidenced proposals from notary-supplied text.
@@ -223,7 +226,7 @@ paths:
         not a distributed exactly-once guarantee. Changed inputs replace the current
         analysis using an optimistic analysis-ID check. Each response rebuilds the
         work packet from the current authorized server file.
-        401 unauthorized; 403 wrong owner; 404 missing; 409 ownership/version/state
+        401 unauthorized; 402 Nota payment required; 403 wrong owner; 404 missing; 409 ownership/version/state
         conflict; 413 body limit; 422 input/authorization; 429 rate limit;
         502 unsupported provider output; 503 disabled/provider/counter failure.
       security: [{ notarySession: [] }]
@@ -264,6 +267,8 @@ paths:
                     description: This request reused a saved analysis or joined an identical generation in this worker. Its analysis may contain an existing review.
                   analysis: { $ref: '#/components/schemas/FinancingAIAnalysis' }
                   workPacket: { $ref: '#/components/schemas/FinancingWorkPacketResult' }
+        '402':
+          $ref: '#/components/responses/NotaPaymentRequired'
         default: { $ref: '#/components/responses/FinancingAIError' }
   /notary/financing/review:
     post:
@@ -271,8 +276,10 @@ paths:
       description: >-
         Requires a current analysis ID and exactly one decision per proposed field.
         Corrections and rejections require a reason. The server stamps reviewer and
-        time; the review is immutable for that analysis. Review never authorizes
-        training, legal execution or funds. 401 unauthorized; 403 wrong owner;
+        time; the review is immutable for that analysis. The paid Nota ledger is
+        required before any generated work packet is read or changed. Review never
+        authorizes training, legal execution or funds. 401 unauthorized; 402 Nota
+        payment required; 403 wrong owner;
         404 missing; 409 changed/reviewed analysis or unavailable file; 422 invalid review.
       security: [{ notarySession: [] }]
       requestBody:
@@ -310,18 +317,20 @@ paths:
                   ok: { const: true }
                   review: { $ref: '#/components/schemas/FinancingAIReview' }
                   workPacket: { $ref: '#/components/schemas/FinancingWorkPacketResult' }
+        '402':
+          $ref: '#/components/responses/NotaPaymentRequired'
         default: { $ref: '#/components/responses/FinancingAIError' }
   /notary/acts/preparation:
     get:
       summary: Read the private testament or procuration work packet and AI analysis.
-      description: The packet is rebuilt from the server-side dossier and never calls an AI provider on read.
+      description: The packet is rebuilt from the server-side dossier only after the Nota payment ledger is positive, and never calls an AI provider on read.
       security: [{ notarySession: [] }]
       parameters:
         - { name: id, in: query, required: true, schema: { type: string } }
         - { name: dateISO, in: query, required: true, schema: { type: string, format: date } }
       responses:
         '200':
-          description: Restricted to the retaining notary.
+          description: Restricted to the retaining notary after Nota payment.
           content:
             application/json:
               schema:
@@ -330,10 +339,12 @@ paths:
                 properties:
                   analysis: { anyOf: [{ $ref: '#/components/schemas/ActAIAnalysis' }, { type: 'null' }] }
                   workPacket: { $ref: '#/components/schemas/ActWorkPacketResult' }
+        '402':
+          $ref: '#/components/responses/NotaPaymentRequired'
         default: { $ref: '#/components/responses/FinancingAIError' }
     post:
       summary: Extract evidence-backed testament or procuration intake proposals.
-      description: Requires explicit processing authorization. Proposals are private, bounded and require notary review; no legal conclusion or signing decision is produced.
+      description: Requires Nota payment and explicit processing authorization. Proposals are private, bounded and require notary review; no legal conclusion or signing decision is produced.
       security: [{ notarySession: [] }]
       requestBody:
         required: true
@@ -370,6 +381,8 @@ paths:
                   reused: { type: boolean }
                   analysis: { $ref: '#/components/schemas/ActAIAnalysis' }
                   workPacket: { $ref: '#/components/schemas/ActWorkPacketResult' }
+        '402':
+          $ref: '#/components/responses/NotaPaymentRequired'
         default: { $ref: '#/components/responses/FinancingAIError' }
   /notary/acts/review:
     post:
@@ -411,6 +424,8 @@ paths:
                   ok: { const: true }
                   review: { $ref: '#/components/schemas/FinancingAIReview' }
                   workPacket: { $ref: '#/components/schemas/ActWorkPacketResult' }
+        '402':
+          $ref: '#/components/responses/NotaPaymentRequired'
         default: { $ref: '#/components/responses/FinancingAIError' }
   /auth/oauth/providers:
     get:
@@ -2454,7 +2469,8 @@ paths:
       description: >-
         The notary who retained the bid confirms the act signed and its final
         value. With a live client authorization Nota captures it and transfers
-        the net; otherwise the commission model applies as fallback. The act
+        the net; otherwise the commission model records an unpaid receivable as
+        fallback. The act
         ledger is write-once: a duplicate submit answers with the ORIGINAL
         settled figures and never charges twice. The domain bounds the value
         against the retained offer (`validateActValue`, `ACT_VALUE_BOUNDS`) —
@@ -2495,9 +2511,14 @@ paths:
                     type: integer
                   paid:
                     type: boolean
-                    description: Present when the client's authorization was captured.
+                    description: True only when the Nota payment ledger records an actual payment or transfer.
                   netCents:
                     type: integer
+                  notaryTemplate:
+                    oneOf:
+                      - type: 'null'
+                      - $ref: '#/components/schemas/NotaryOfferTemplate'
+                    description: Released to the retaining notary only when `paid` is true.
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -4086,6 +4107,12 @@ components:
                   properties:
                     code: { type: string }
                     message: { type: string }
+    NotaPaymentRequired:
+      description: The offer is retained, but the Nota payment ledger has not recorded payment yet.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
     Unauthorized:
       description: Missing, invalid, expired or wrong-scope token (`non_autorise`).
       content:
@@ -5082,6 +5109,42 @@ components:
             bid (billing configured, an authorized hold with a payment
             intent) — exactly what the cancel route requires. False means a
             cancellation would be free, whatever the barème says.
+    NotaryOfferTemplate:
+      type: object
+      description: >-
+        A server-frozen, service-specific preparation blueprint stored on the
+        offer at booking. It contains connector candidates only, never live
+        credentials or customer dossier values, and is released solely to the
+        retaining notary after the Nota payment ledger is positive.
+      required: [version, serviceId, generatedAt, access, pricing, intake, documents, aiFields, humanControls, caseCoverage, connectors]
+      properties:
+        version: { type: string }
+        serviceId: { $ref: '#/components/schemas/ServiceId' }
+        generatedAt: { type: [string, 'null'], format: date-time }
+        access:
+          type: object
+          required: [audience, after, customerVisible]
+          properties:
+            audience: { const: retaining_notary }
+            after: { const: nota_paid }
+            customerVisible: { const: false }
+        pricing: { type: array, items: { type: object } }
+        intake: { type: array, items: { type: object } }
+        documents: { type: array, items: { type: object } }
+        aiFields: { type: array, items: { type: object } }
+        humanControls: { type: array, items: { type: object } }
+        caseCoverage: { type: array, items: { type: object } }
+        connectors:
+          type: array
+          items:
+            type: object
+            required: [type, label, candidate, status, automation]
+            properties:
+              type: { type: string }
+              label: { type: string }
+              candidate: { type: string }
+              status: { const: candidate }
+              automation: { const: prepare_only }
     ClientContact:
       type: object
       description: >-
@@ -5150,6 +5213,14 @@ components:
             True once the write-once act ledger holds this act's settlement —
             the console renders « Acte complété » in ANY session and never
             re-offers the settlement button.
+        paid:
+          type: boolean
+          description: True only when the Nota payment ledger records an actual payment or transfer.
+        notaryTemplate:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/NotaryOfferTemplate'
+          description: Released only when `paid` is true; null before payment.
         actAmount:
           type: [integer, "null"]
           description: The value the act settled at (null until completed).
@@ -5220,6 +5291,11 @@ components:
           additionalProperties: true
         client:
           $ref: "#/components/schemas/ClientContact"
+        notaryTemplate:
+          oneOf:
+            - type: "null"
+            - $ref: "#/components/schemas/NotaryOfferTemplate"
+          description: Always null at retention; the paid template is returned later in the notary feed.
         paid:
           type: boolean
           description: Present with billing on — true when the pay-on-accept capture succeeded.
@@ -5242,11 +5318,8 @@ components:
       enum: [ouverte, retenue, annulee]
     ServiceId:
       type: string
-      description: >-
-        The catalogue is the financing family — `refinancement` and
-        `financement` (ADR 0010: testament and procuration were retired;
-        historical bids for retired acts are filtered out rather than served).
-      enum: [refinancement, financement]
+      description: The catalogue services supported by Nota's notary workflow.
+      enum: [refinancement, financement, testament, procuration]
     PartnerRegistration:
       type: object
       required: [partenaire]

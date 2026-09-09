@@ -12,7 +12,7 @@
     <title>Nota · Admin</title>
     <!-- Private console: never index or follow. -->
     <meta name="robots" content="noindex,nofollow" />
-    <meta name="theme-color" content="#315b43" />
+    <meta name="theme-color" content="#101B26" />
     <meta name="color-scheme" content="light dark" />
 
     <!-- API base override for local dev. Empty/absent → same-origin "/api/admin"
@@ -52,9 +52,12 @@
         <button type="button" class="btn btn-sm btn-ghost" id="admin-logout">Se déconnecter</button>
       </div>
 
-      <!-- Language toggle: shows the OTHER language. Wired and labelled by
-           i18n.js; data-i18n-skip keeps the translator's walker away. -->
-      <button type="button" class="icon-btn lang-btn" id="admin-lang-toggle" data-lang-toggle="short" data-i18n-skip></button>
+      <!-- Language control: both choices stay visible so the current language
+           is legible without guessing. Wired and labelled by i18n.js. -->
+      <div class="mini-seg lang-btn" id="admin-lang-toggle" role="group" aria-label="Langue" data-lang-seg data-i18n-skip>
+        <button type="button" class="mini-seg-btn" data-set-lang="fr" lang="fr-CA">FR</button>
+        <button type="button" class="mini-seg-btn" data-set-lang="en" lang="en-CA">EN</button>
+      </div>
       <button type="button" class="icon-btn" id="admin-theme-toggle" title="Thème clair / sombre" aria-label="Changer de thème">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
       </button>

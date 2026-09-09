@@ -103,15 +103,17 @@ const BRAND = WEB['--brand'];
 test('the email palette mirrors the web light-theme tokens, key by key', () => {
   const P = emails.PALETTE;
   assert.match(BRAND, /^#[0-9a-f]{6}$/, 'the web brand token must resolve to a hex colour');
-  assert.equal(P.brand, WEB['--brand'], 'brand = --brand (nota-blue-700)');
-  assert.equal(P.brandDark, WEB['--brand-hover'], 'brandDark = --brand-hover (nota-blue-800)');
+  assert.equal(P.brand, WEB['--brand'], 'brand = --brand (Nota midnight)');
+  assert.equal(P.brandDark, WEB['--brand-hover'], 'brandDark = --brand-hover');
   assert.equal(P.brandInk, WEB['--brand-ink'], 'brandInk = --brand-ink');
   assert.equal(P.ink, WEB['--ink'], 'ink = --ink');
   assert.equal(P.muted, WEB['--ink-muted'], 'muted = --ink-muted');
   assert.equal(P.card, WEB['--surface'], 'card = --surface');
   assert.equal(P.bg, WEB['--bg'], 'bg = --bg (the page canvas the card floats on)');
   assert.equal(P.border, WEB['--border'], 'border = --border');
-  assert.equal(P.tint, WEB['--nota-blue-50'], 'tint = nota-blue-50 (the callout wash)');
+  assert.equal(P.tint, WEB['--nota-saffron-50'], 'tint = nota-saffron-50 (the callout wash)');
+  assert.equal(P.brand, '#386888', 'email primary brand is Nota blue-teal');
+  assert.equal(P.brandBright, '#407598', 'email signal accent is Nota cyan-blue');
   // The web radius scale (owner: « tout garder le même style carré »).
   for (const k of ['--radius', '--radius-sm', '--radius-xs', '--radius-lg']) assert.match(WEB[k], /^\d+px$/, k);
 });
@@ -222,7 +224,7 @@ test('every template shares the branded, email-safe layout wrapper', () => {
     // Inter-first font stack (brand type).
     assert.ok(html.includes('Inter'), `${name}: missing the Inter font stack`);
 
-    // The "N" logo mark square is rendered in institutional cobalt — no image of any
+    // The "N" logo mark square is rendered in Nota midnight — no image of any
     // kind, external or inline, and no background-image either.
     assert.ok(!/<img/i.test(html), `${name}: relies on an external <img>`);
     assert.ok(!/<svg/i.test(html), `${name}: relies on an inline <svg>`);
@@ -264,11 +266,11 @@ test('every radius sits on the web square scale — no pills, no circles', () =>
   }
 });
 
-test('the logo header: a cobalt mark hidden from screen readers, the Nota wordmark, the bilingual tagline', () => {
+test('the logo header: a slate mark with an antique-gold signal, the merged Nota wordmark, the bilingual tagline', () => {
   for (const name of names) {
     const { html } = emails.TEMPLATES[name](CTX);
-    assert.ok(/aria-hidden="true"[^>]*>N<\/td>/.test(html), `${name}: the N mark must be aria-hidden (the wordmark carries the name)`);
-    assert.ok(/>Nota<\/div>/.test(html), `${name}: the wordmark`);
+    assert.ok(/aria-hidden="true"[^>]*>N<span[\s\S]*?<\/span><\/td>/.test(html), `${name}: the Nota mark must be aria-hidden (the wordmark carries the name)`);
+    assert.ok(/>ota<\/div>/.test(html), `${name}: the merged wordmark`);
     assert.ok(html.includes('La place de marché notariale · The notarial marketplace'), `${name}: the tagline`);
   }
 });

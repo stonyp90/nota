@@ -1,13 +1,34 @@
 /* ==========================================================================
    Nota — design tokens and styles.
-   Brand system: institutional cobalt, midnight ink, and restrained brass.
+   Brand system: deep blue-teal, cyan signal and dark ink, with service/data
+   colours kept separate for product meaning.
    Deviation from Tablix on purpose: squared corners (Tablix uses rounded-xl).
    All colors are tokens — no literal color values below the :root blocks.
    ========================================================================== */
 
 :root {
-  /* Nota blue ramp: institutional cobalt for trust and rigor, with a
-     restrained light blue for digital interactions. */
+  /* Nota identity: reference-sampled canonical values. The mark is fixed
+     across palette alternatives; only the surrounding UI accent may vary. */
+  --nota-midnight: #101b26;
+  --nota-midnight-hover: #1b3446;
+  --nota-midnight-rgb: 16 27 38;
+  --nota-teal: #386888;
+  --nota-teal-bright: #78a9bf;
+  --nota-teal-50: #ebf1f5;
+  --nota-teal-rgb: 56 104 136;
+  --nota-saffron: #ad9567;
+  --nota-saffron-ink: #6e5930;
+  --nota-saffron-bright: #cbb98d;
+  --nota-saffron-50: #f5f0e7;
+  --nota-saffron-rgb: 173 149 103;
+  --nota-coral: #b87569;
+  --nota-coral-bright: #d19a8e;
+  --nota-logo-bg: #264961;
+  --nota-logo-signal: #407598;
+  --nota-badge-bg: #ebf1f5;
+  --nota-badge-ink: #274a62;
+
+  /* Nota blue ramp: retained for service/data accents, not brand controls. */
   --nota-blue-50: #f1f7fb;
   --nota-blue-100: #e1eef5;
   --nota-blue-200: #c3ddeb;
@@ -18,7 +39,7 @@
   --nota-blue-700: #174a63;
   --nota-blue-800: #113a51;
   --nota-blue-900: #0b2939;
-  --nota-blue-950: #061c2a;
+  --nota-blue-950: #162a32;
   /* Channel-only copies of the three steps that alpha tokens below need
      (shadows, focus glow, background wash). rgb() cannot take a hex var, so
      these exist so no ramp value is ever retyped as a literal downstream. */
@@ -27,7 +48,7 @@
   --nota-blue-700-rgb: 23 74 99;
 
   /* Semantic tokens (light) */
-  --brand: var(--nota-blue-700);
+  --brand: var(--nota-teal);
   /* Couleurs de MARQUE des fournisseurs tiers (portes à venir). Ce sont des
      constantes appartenant à Google, Meta et LinkedIn : elles ne suivent pas
      le thème et ne se redéfinissent nulle part — mais elles restent des
@@ -35,24 +56,24 @@
   --marque-google-chip: #ffffff; /* le « G » doit rester sur fond blanc */
   --marque-facebook: #1877f2;
   --marque-linkedin: #0a66c2;
-  --brand-bright: var(--nota-blue-500);
+  --brand-bright: var(--nota-teal);
   --brand-ink: #ffffff;
-  --brand-hover: var(--nota-blue-800);
+  --brand-hover: #274a62;
   --on-accent: #ffffff; /* text/knob on saturated accents (tier pills, toggle) — white in every theme */
 
-  --bg: #f2f5f7;
-  --surface: #fbfcfd;
-  --surface-inset: #eaf1f5;
-  --surface-hover: #e2ebf0;
-  --ink: #0d1b27;
-  --ink-muted: #526574;
-  --border: #d9e3e9;
-  --border-strong: #b6c8d4;
-  --ring: var(--nota-blue-600);
+  --bg: #f2f1ec;
+  --surface: #fcfbf8;
+  --surface-inset: #e6ece9;
+  --surface-hover: #dce6e3;
+  --ink: #101b26;
+  --ink-muted: #5b6c72;
+  --border: #cbd8d5;
+  --border-strong: #9eb6b2;
+  --ring: var(--nota-teal);
 
   --danger: #b42318;
-  --warn: #b54708;
-  --ok: var(--nota-blue-600);
+  --warn: #8b6b2e;
+  --ok: var(--nota-teal);
   --danger-solid: #b42318; /* solid deep red for badge fills — dark --danger is a light salmon that fails white-text contrast */
   /* The tint pair (owner, 2026-08-27: « components carry no opacity — the
      background does »): --brand-tint keeps its alpha and is RESERVED for the
@@ -62,7 +83,7 @@
      components (chips, badges, step discs, hover fills) paint with, so
      nothing ever bleeds through a component. Auto-follows each theme:
      the mix resolves against that theme's --brand-bright / --surface. */
-  --brand-tint: rgb(var(--nota-blue-500-rgb) / 0.05); /* faint brand wash — background layers only */
+  --brand-tint: rgb(var(--nota-teal-rgb) / 0.08); /* faint brand wash — background layers only */
   --brand-tint-mix: 6%;
   --brand-tint-solid: color-mix(in srgb, var(--brand-bright) var(--brand-tint-mix), var(--surface));
   /* The HIGHLIGHT tint: one step richer than the component wash, for the one
@@ -95,11 +116,11 @@
 
   /* Tier accent ramp — cool (calm) to warm (urgent).
      All five are dark enough for white .pill text to meet WCAG AA (>=4.5:1). */
-  --tier-standard: #64748b;
-  --tier-rapide: #356c87;
-  --tier-prioritaire: #906800;
-  --tier-urgence: #c2410c;
-  --tier-extreme: #b42318;
+  --tier-standard: #77848a;
+  --tier-rapide: #537480;
+  --tier-prioritaire: #987a49;
+  --tier-urgence: #a45f4c;
+  --tier-extreme: #9a514b;
   /* Outline text/border tint per tier — light = base, dark = brighter for AA
      (the dark values live in BOTH dark blocks below; keep all three in sync).
      Rapide is the CALM baseline and covers most of a month's cells, so its ink
@@ -108,16 +129,16 @@
   --tier-rapide-ink: var(--ink-muted); --tier-prioritaire-ink: var(--tier-prioritaire);
   --tier-urgence-ink: var(--tier-urgence); --tier-extreme-ink: var(--tier-extreme);
 
-  /* Per-service categorical hues — deliberately distinct from the green brand
+  /* Per-service categorical hues — deliberately distinct from the blue-teal brand
      and the green→red tier ramp; used only as calendar data-viz fills (the
      per-service mix bar + its legend). TWO acts of the financing family
      (ADR 0010): each act owns its token here, and every theme block below
      redefines BOTH — a service colour must never fall back to a light value
      in the dark themes. */
-  --svc-refinancement: #1677a5; /* cobalt blue → AA (>=4.5:1) for the small per-service count text */
-  --svc-financement: #4f46e5; /* indigo → AA on light surfaces; clearly apart from the teal sibling */
-  --svc-testament: #b45309;
-  --svc-procuration: #7c3aed;
+  --svc-refinancement: #4d7a82; /* muted slate/sage data colours — separate from brand controls */
+  --svc-financement: #657e9e;
+  --svc-testament: #987b49;
+  --svc-procuration: #746b8d;
 
   /* Offer status: waiting for a notary vs. retained by one. var() aliases, so
      they track the theme automatically — do not duplicate into the dark blocks. */
@@ -137,10 +158,10 @@
   color-scheme: light;
   --shadow-sm: 0 1px 2px rgb(17 22 20 / 0.05);
   --shadow: 0 6px 20px -8px rgb(17 22 20 / 0.12);
-  --shadow-lg: 0 24px 50px -16px rgb(var(--nota-blue-700-rgb) / 0.24);
-  --shadow-brand: 0 6px 16px -6px rgb(var(--nota-blue-700-rgb) / 0.5); /* brand-primary hover lift */
+  --shadow-lg: 0 24px 50px -16px rgb(var(--nota-midnight-rgb) / 0.24);
+  --shadow-brand: 0 6px 16px -6px rgb(var(--nota-midnight-rgb) / 0.5); /* brand-primary hover lift */
   --logo-shadow: 0 1px 2px rgb(17 22 20 / 0.15);       /* header brand mark */
-  --focus-ring: rgb(var(--nota-blue-500-rgb) / 0.3);      /* brand focus glow (3px) */
+  --focus-ring: rgb(var(--nota-teal-rgb) / 0.35);       /* brand focus glow (3px) */
   --backdrop: rgb(13 18 15 / 0.55);                    /* dialog scrim */
 
   --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -202,51 +223,49 @@
    light UI. Excludes an explicit light opt-out via :not([data-theme='light']). */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --brand: var(--nota-blue-500);
-    --brand-bright: var(--nota-blue-400);
-    --brand-ink: #061c2a;
-    --brand-hover: var(--nota-blue-400);
+    --brand: var(--nota-teal-bright);
+    --brand-bright: var(--nota-teal-bright);
+    --brand-ink: var(--nota-midnight);
+    --brand-hover: #a5c9dc;
 
-    /* Lifted off true black (owner, 2026-08-27 evening: « the black on the
-       dark theme is too intense ») — the whole dark ramp steps up one notch
-       and stays NEUTRAL graphite (owner, 2026-08-28: « trop vert » — the
-       green cast is gone; brand green lives on controls, not the canvas). */
-    --bg: #0f110f;
-    --surface: #0f2030;
-    --surface-inset: #132b3f;
-    --surface-hover: #19384d;
-    --ink: #f4f8fa;
-    --ink-muted: #afc2cf;
-    --border: #294353;
-    --border-strong: #3f5f70;
-    --ring: var(--nota-blue-400);
+    /* Lifted off true black: the canvas stays dark ink while the
+       blue-teal identity is carried by controls and signals. */
+    --bg: #101b26;
+    --surface: #162e38;
+    --surface-inset: #20404a;
+    --surface-hover: #2b4d57;
+    --ink: #eff3f1;
+    --ink-muted: #b2c0c0;
+    --border: #496972;
+    --border-strong: #6f898d;
+    --ring: var(--nota-teal-bright);
 
-    --danger: #f97066;
-    --warn: #f79009;
-    --ok: var(--nota-blue-500);
+    --danger: var(--nota-coral-bright);
+    --warn: var(--nota-saffron-bright);
+    --ok: var(--nota-teal-bright);
     --danger-solid: #b42318;
-    --brand-tint: rgb(var(--nota-blue-400-rgb) / 0.06); /* softened three times (owner, 2026-08-28 « trop vert », 2026-09-01 « trop intense ») */
+    --brand-tint: rgb(var(--nota-teal-rgb) / 0.08);
     --brand-tint-mix: 8%;
     --brand-tint-mix-strong: 20%; /* deep pour: on near-black a component-level mix greys out — but 26 % pushed --brand ink on the highlight card below AA, so the card now carries --brand-on-tint-strong instead */
     --brand-on-tint-strong: var(--brand-bright);
 
-    --tier-standard: #64748b;
-    --tier-rapide: #356c87;
-    --tier-prioritaire: #906800;
-    --tier-urgence: #c2410c;
-    --tier-extreme: #b42318;
+    --tier-standard: #68777d;
+    --tier-rapide: #617f88;
+    --tier-prioritaire: #a0895c;
+    --tier-urgence: #b67b68;
+    --tier-extreme: #ae6b63;
     --tier-rapide-ink: var(--ink-muted); /* NEUTRAL — the green cast was too much (owner, 2026-08-28) */ --tier-prioritaire-ink: #e0b44a; --tier-urgence-ink: #f0894c; --tier-extreme-ink: #f97066;
-    --svc-refinancement: #6dc3b9;
-    --svc-financement: #818cf8;
-    --svc-testament: #f0a45d;
-    --svc-procuration: #c4a7ff;
+    --svc-refinancement: #91b3b6;
+    --svc-financement: #9eacc5;
+    --svc-testament: #c6aa7b;
+    --svc-procuration: #b1a5c1;
 
     /* Dark shadows are cast in black, not light ink, so they read on #0a0a0a. */
     --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.5);
     --shadow: 0 8px 24px -10px rgb(0 0 0 / 0.6);
     --shadow-lg: 0 20px 40px -12px rgb(0 0 0 / 0.6);
-    --shadow-brand: 0 6px 16px -6px rgb(var(--nota-blue-400-rgb) / 0.4);
-    --focus-ring: rgb(var(--nota-blue-400-rgb) / 0.45);
+    --shadow-brand: 0 6px 16px -6px rgb(var(--nota-teal-rgb) / 0.25);
+    --focus-ring: rgb(var(--nota-teal-rgb) / 0.32);
     color-scheme: dark;
   }
 }
@@ -255,59 +274,100 @@
    Defines the SAME complete token set as the @media block above; keep the two in
    lockstep so no token (e.g. --warn, --shadow-lg) drifts back to its light value. */
 :root[data-theme='dark'] {
-  --brand: var(--nota-blue-500);
-  --brand-bright: var(--nota-blue-400);
-  --brand-ink: #061c2a;
-  --brand-hover: var(--nota-blue-400);
+  --brand: var(--nota-teal-bright);
+  --brand-bright: var(--nota-teal-bright);
+  --brand-ink: var(--nota-midnight);
+  --brand-hover: #a5c9dc;
 
-  /* Lifted off true black (owner, 2026-08-27 evening: « the black on the
-     dark theme is too intense ») — the whole dark ramp steps up one notch
-     and stays NEUTRAL graphite (owner, 2026-08-28: « trop vert » — the
-     green cast is gone; brand green lives on controls, not the canvas). */
-  --bg: #0f110f;
-  --surface: #0f2030;
-  --surface-inset: #132b3f;
-  --surface-hover: #19384d;
-  --ink: #f4f8fa;
-  --ink-muted: #afc2cf;
-  --border: #294353;
-  --border-strong: #3f5f70;
-  --ring: var(--nota-blue-400);
+  /* Lifted off true black: the canvas stays dark ink while the
+     blue-teal identity is carried by controls and signals. */
+  --bg: #101b26;
+  --surface: #162e38;
+  --surface-inset: #20404a;
+  --surface-hover: #2b4d57;
+  --ink: #eff3f1;
+  --ink-muted: #b2c0c0;
+  --border: #496972;
+  --border-strong: #6f898d;
+  --ring: var(--nota-teal-bright);
 
-  --danger: #f97066;
-  --warn: #f79009;
-  --ok: var(--nota-blue-500);
+  --danger: var(--nota-coral-bright);
+  --warn: var(--nota-saffron-bright);
+  --ok: var(--nota-teal-bright);
   --danger-solid: #b42318;
-  --brand-tint: rgb(var(--nota-blue-400-rgb) / 0.06); /* softened three times (owner, 2026-08-28 « trop vert », 2026-09-01 « trop intense ») */
+  --brand-tint: rgb(var(--nota-teal-rgb) / 0.08);
   --brand-tint-mix: 8%;
   --brand-tint-mix-strong: 20%; /* deep pour: on near-black a component-level mix greys out — but 26 % pushed --brand ink on the highlight card below AA, so the card now carries --brand-on-tint-strong instead */
   --brand-on-tint-strong: var(--brand-bright);
 
-  --tier-standard: #64748b;
-  --tier-rapide: #356c87;
-  --tier-prioritaire: #906800;
-  --tier-urgence: #c2410c;
-  --tier-extreme: #b42318;
+  --tier-standard: #68777d;
+  --tier-rapide: #617f88;
+  --tier-prioritaire: #a0895c;
+  --tier-urgence: #b67b68;
+  --tier-extreme: #ae6b63;
   --tier-rapide-ink: var(--ink-muted); /* NEUTRAL — the green cast was too much (owner, 2026-08-28) */ --tier-prioritaire-ink: #e0b44a; --tier-urgence-ink: #f0894c; --tier-extreme-ink: #f97066;
-  --svc-refinancement: #6dc3b9;
-  --svc-financement: #818cf8;
-  --svc-testament: #f0a45d;
-  --svc-procuration: #c4a7ff;
+  --svc-refinancement: #91b3b6;
+  --svc-financement: #9eacc5;
+  --svc-testament: #c6aa7b;
+  --svc-procuration: #b1a5c1;
 
   /* Dark shadows are cast in black, not light ink, so they read on #0a0a0a. */
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.5);
   --shadow: 0 8px 24px -10px rgb(0 0 0 / 0.6);
   --shadow-lg: 0 20px 40px -12px rgb(0 0 0 / 0.6);
-  --shadow-brand: 0 6px 16px -6px rgb(var(--nota-blue-400-rgb) / 0.4);
-  --focus-ring: rgb(var(--nota-blue-400-rgb) / 0.45);
+  --shadow-brand: 0 6px 16px -6px rgb(var(--nota-teal-rgb) / 0.25);
+  --focus-ring: rgb(var(--nota-teal-rgb) / 0.32);
   color-scheme: dark;
+}
+
+/* Palette flavours. Each flavour changes the surrounding UI signal and
+   supporting data accent; the canonical mark stays fixed and recognizable. */
+[data-palette='marine'] {
+  --nota-teal: #3d6075; --nota-teal-bright: #8eacbd; --nota-teal-rgb: 61 96 117;
+  --nota-saffron: #b49b6c; --nota-saffron-bright: #c8ad77; --nota-saffron-rgb: 180 155 108;
+}
+[data-palette='sapin'] {
+  --nota-teal: #3f665b; --nota-teal-bright: #91b3a8; --nota-teal-rgb: 63 102 91;
+  --nota-saffron: #b29a67; --nota-saffron-bright: #c5aa6f; --nota-saffron-rgb: 178 154 103;
+}
+[data-palette='prune'] {
+  --nota-teal: #66566e; --nota-teal-bright: #ad9bb1; --nota-teal-rgb: 102 86 110;
+  --nota-saffron: #b79a73; --nota-saffron-bright: #c8ab76; --nota-saffron-rgb: 183 154 115;
+}
+[data-palette='bourgogne'] {
+  --nota-teal: #714e56; --nota-teal-bright: #bd999d; --nota-teal-rgb: 113 78 86;
+  --nota-saffron: #b89a6d; --nota-saffron-bright: #c9ac73; --nota-saffron-rgb: 184 154 109;
+}
+[data-palette='terre'] {
+  --nota-teal: #8a5f50; --nota-teal-bright: #c69783; --nota-teal-rgb: 138 95 80;
+  --nota-saffron: #b59b6b; --nota-saffron-bright: #c9a76b; --nota-saffron-rgb: 181 155 107;
+}
+[data-palette='indigo'] {
+  --nota-teal: #555e83; --nota-teal-bright: #9ea8c5; --nota-teal-rgb: 85 94 131;
+  --nota-saffron: #b59b6e; --nota-saffron-bright: #c8aa70; --nota-saffron-rgb: 181 155 110;
+}
+[data-palette='mousse'] {
+  --nota-teal: #66715b; --nota-teal-bright: #acb49a; --nota-teal-rgb: 102 113 91;
+  --nota-saffron: #b19b6b; --nota-saffron-bright: #c4a870; --nota-saffron-rgb: 177 155 107;
+}
+[data-palette='graphite'] {
+  --nota-teal: #596466; --nota-teal-bright: #a8b4b3; --nota-teal-rgb: 89 100 102;
+  --nota-saffron: #ac986f; --nota-saffron-bright: #c4aa75; --nota-saffron-rgb: 172 152 111;
+}
+:root[data-palette] {
+  --brand-hover: color-mix(in srgb, var(--nota-teal) 78%, var(--nota-midnight));
+  --ring: var(--nota-teal);
+}
+:root[data-theme='dark'][data-palette] {
+  --brand-hover: color-mix(in srgb, var(--nota-teal-bright) 72%, var(--nota-midnight));
+  --ring: var(--nota-teal-bright);
 }
 
 * { box-sizing: border-box; }
 
 html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
 /* Selected text answers to the brand, not to the browser's default blue —
-   which read as a foreign UI on a dark hunter-green page and lost contrast on
+   which reads as a foreign UI on a dark midnight page and loses contrast on
    the light one. Both halves are stated (never colour alone on a veil). */
 ::selection { background: color-mix(in srgb, var(--brand) 30%, transparent); color: var(--ink); }
 
@@ -374,16 +434,18 @@ a:hover { text-decoration: underline; }
   height: var(--header-h);
 }
 .brand {
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: center; gap: 0;
   font-weight: 800; font-size: 18px; letter-spacing: -0.03em; color: var(--ink);
 }
 .brand:hover { text-decoration: none; }
-.brand-mark { width: 26px; height: 26px; display: grid; place-items: center; }
-.brand-mark img { display: block; width: 26px; height: 26px; filter: drop-shadow(var(--logo-shadow)); }
-.brand-word { font-family: var(--font-display); font-weight: 800; }
+.brand-mark { width: 30px; height: 30px; display: grid; place-items: center; transform-origin: 50% 80%; }
+.brand-mark img, .brand-mark svg { display: block; width: 30px; height: 30px; filter: drop-shadow(var(--logo-shadow)); }
+.brand-word { font-family: var(--font-display); font-weight: 800; font-size: 18px; letter-spacing: -0.06em; }
 .brand-sub {
-  color: var(--brand); font-weight: 700; font-size: 10px; text-transform: uppercase;
-  letter-spacing: .08em; padding: 2px 6px; background: var(--surface-inset); border-radius: var(--radius-sm);
+  color: var(--nota-badge-ink); font-weight: 800; font-size: 10px; text-transform: uppercase;
+  letter-spacing: .1em; padding: 4px 8px; background: var(--nota-badge-bg);
+  border: 1px solid color-mix(in srgb, var(--nota-badge-ink) 10%, transparent);
+  border-radius: var(--radius-sm);
 }
 .result-count { font-size: 12px; font-weight: 600; color: var(--ink-muted); white-space: nowrap; }
 /* Next-availability cue in the calendar toolbar — a live green dot + soonest
@@ -406,21 +468,6 @@ a:hover { text-decoration: underline; }
 .book-referral { margin: 12px 0; }
 
 .header-spacer { flex: 1; }
-
-/* A small, familiar history rail keeps the app's pane navigation discoverable.
-   It drives the real browser history, so the browser buttons and these controls
-   always tell the same story. The quiet inset track makes the pair read as one
-   control without competing with the three primary destinations. */
-.nav-history {
-  display: inline-flex; align-items: center; gap: 2px; flex: none;
-  padding: 2px; border: 1px solid var(--border); border-radius: var(--radius);
-  background: var(--surface-inset);
-}
-.nav-history-btn { width: 28px; height: 28px; color: var(--ink-muted); }
-.nav-history-btn:not(:disabled):hover { color: var(--brand); background: var(--surface); }
-.nav-history-btn:disabled { opacity: .45; cursor: default; }
-.nav-history-btn:disabled:hover { background: transparent; }
-.nav-history-btn:active:not(:disabled) { transform: scale(.92); }
 
 /* flex:none — the tab strip never shrinks below its labels: a squeezed header
    must slim its paddings (compact band below), never wrap a label to two lines.
@@ -513,20 +560,66 @@ a:hover { text-decoration: underline; }
    preference rows; 28px tall everywhere, matching the "?" and the switch. */
 .mini-seg {
   display: inline-flex; align-items: center; gap: 2px; flex: none;
-  height: 28px; padding: 2px; border-radius: var(--radius); background: var(--surface-inset);
+  height: 28px; padding: 2px; border: 1px solid var(--border-strong);
+  border-radius: var(--radius); background: var(--surface-inset);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--on-accent) 12%, transparent);
 }
 .mini-seg-btn {
   appearance: none; display: inline-flex; align-items: center; justify-content: center;
-  height: 24px; padding: 0 9px; border: 1px solid transparent; background: transparent;
-  color: var(--ink-muted); font: inherit; font-size: 11.5px; font-weight: 700;
-  letter-spacing: 0.04em; line-height: 1; border-radius: var(--radius-sm);
-  cursor: pointer; transition: background .12s, color .12s;
+  min-width: 32px; min-height: 24px; padding: 4px 9px;
+  border: 1px solid transparent; background: transparent;
+  color: var(--ink-muted); font: inherit; font-size: 11.5px; font-weight: 800;
+  letter-spacing: 0.07em; line-height: 1; border-radius: var(--radius-sm);
+  cursor: pointer; transition: background-color .15s, color .15s, border-color .15s, box-shadow .15s;
 }
-.mini-seg-btn:hover { color: var(--ink); }
+.mini-seg-btn:hover { color: var(--ink); background: var(--surface-hover); }
 .mini-seg-btn[aria-pressed='true'] {
-  background: var(--surface); color: var(--brand);
-  border-color: var(--border); box-shadow: var(--shadow-sm);
+  background: var(--brand); color: var(--brand-ink);
+  border-color: var(--brand); box-shadow: var(--shadow-sm);
 }
+.mini-seg-btn:focus-visible {
+  outline: 3px solid var(--ring); outline-offset: 2px; position: relative; z-index: 1;
+}
+
+/* The palette selector stays a native accessible dropdown, but the desktop
+   header only shows its current colour as a quiet swatch. The full labels and
+   hit area remain in the mobile preference drawer. */
+.palette-picker { display: inline-flex; align-items: center; flex: none; width: 24px; height: 28px; }
+.palette-select {
+  appearance: none; width: 20px; min-width: 20px; height: 20px; padding: 0;
+  border: 1px solid var(--border); border-radius: 50%;
+  background: var(--brand); color: transparent; font: inherit; font-size: 0;
+  cursor: pointer; box-shadow: inset 0 0 0 3px var(--surface-inset);
+  transition: border-color .15s, box-shadow .15s, transform .15s;
+}
+.palette-select:hover { border-color: var(--brand); transform: scale(1.05); }
+.palette-select:focus-visible { outline: 3px solid var(--ring); outline-offset: 3px; }
+.palette-select option { color: var(--ink); font-size: 13px; }
+.mnav-pref .palette-select {
+  appearance: auto; width: auto; min-width: 142px; height: 38px; padding: 6px 26px 6px 9px;
+  border: 1px solid var(--border-strong); border-radius: var(--radius);
+  background: var(--surface-inset); color: var(--ink); box-shadow: none; font-size: 13px;
+}
+/* enhanceSelect replaces the native desktop select with a branded button.
+   Quiet that visible proxy too: the header shows only the active colour, while
+   opening it still reveals every named palette in the custom listbox. */
+.palette-picker .nselect { width: 24px; height: 28px; }
+.palette-picker .nselect-btn {
+  width: 20px; min-width: 20px; height: 20px; padding: 0; border: 1px solid var(--border);
+  border-radius: 50%; background: var(--brand); color: transparent;
+  --nselect-surface: var(--surface); --nselect-ink: var(--ink);
+  box-shadow: inset 0 0 0 3px var(--surface-inset);
+}
+.palette-picker .nselect-btn:hover { border-color: var(--brand); transform: scale(1.05); }
+.palette-picker .nselect-btn::after { display: none; }
+.palette-picker .nselect-list { left: auto; right: 0; width: 170px; --nselect-list-surface: var(--surface); --nselect-list-shadow: var(--shadow-lg); }
+.mnav-pref .nselect { width: auto; height: auto; }
+.mnav-pref .nselect-btn {
+  width: 100%; min-width: 142px; height: 38px; padding: 6px 10px;
+  border: 1px solid var(--border-strong); border-radius: var(--radius);
+  background: var(--surface-inset); color: var(--ink); box-shadow: none; transform: none;
+}
+.mnav-pref .nselect-btn::after { display: block; }
 
 /* Theme switch: a small sun/moon track whose knob covers the CURRENT side
    (checked = dark). The knob and icon tint follow html[data-theme] so the
@@ -930,10 +1023,11 @@ html.nav-open, html.nav-open body { overflow: hidden; }
 .btn:disabled { cursor: not-allowed; background: var(--surface-inset); border-color: var(--border); color: var(--ink-muted); box-shadow: none; }
 .btn svg { flex: none; }
 
-/* Hero call-to-action — the buyer's first, obvious action */
-/* margin-top:auto pins the buttons to the BOTTOM of the copy column, so the
-   two hero columns end on the same line instead of one trailing off. */
-.hero-cta { display: flex; align-items: center; gap: var(--space-5); flex-wrap: wrap; margin-top: auto; padding-top: var(--space-9); }
+/* Hero call-to-action — the buyer's first, obvious action. Keep it in the
+   copy's natural rhythm: the market pulse is intentionally taller than the
+   copy, so pinning this row with margin-top:auto creates a large, contentless
+   hole between the promise and the first action. */
+.hero-cta { display: flex; align-items: center; gap: var(--space-5); flex-wrap: wrap; margin-top: var(--space-12); padding-top: 0; }
 /* A slim, equal pair: ONE set height rather than padding-derived boxes, so the
    filled and the outlined button can never drift apart by a border or a wrap.
    Wide screens only — under 681px the pair keeps its full touch height. */
@@ -1073,7 +1167,8 @@ html.nav-open, html.nav-open body { overflow: hidden; }
 .intro h1 { font-size: clamp(21px, 2.4vw, 28px); font-weight: 800; line-height: 1.15; margin-top: 4px; }
 /* 68ch, not 60: the hero copy owns half the page, and the shorter measure left
    a visible blank gutter down its right edge. */
-.intro p { color: var(--ink-muted); max-width: 68ch; margin: 8px 0 0; font-size: 14.5px; line-height: 1.5; }
+.intro p { color: var(--ink-muted); max-width: min(100%, 92ch); margin: 8px 0 0; font-size: 14.5px; line-height: 1.5; }
+.hero-support { display: block; margin-top: 8px; color: var(--ink-muted); }
 /* Block, not inline-block: as an inline box it sat on the line-box strut, so on
    wide viewports (where it fits on ONE line) it dropped ~4px below the aside's
    kicker opposite it and the two hero columns started off-line. */
@@ -1200,6 +1295,7 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--brand); }
 
 /* --- Calendar ------------------------------------------------------------ */
 .cal-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; row-gap: 8px; padding: 10px 14px; }
+.cal-toolbar-top, .cal-toolbar-meta { display: contents; }
 /* 44px targets 4px apart still mis-tap: 8px is the floor between neighbours. */
 .cal-nav { display: inline-flex; gap: var(--space-4); }
 .cal-title { font-weight: 700; font-size: 15px; white-space: nowrap; }
@@ -1298,7 +1394,7 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--brand); }
 .cal-cell.is-today .cal-daynum {
   align-self: flex-start; display: inline-flex; align-items: center; justify-content: center;
   min-width: 20px; height: 20px; padding: 0 5px; border-radius: var(--radius-sm);
-  background: var(--brand); color: var(--on-accent); font-weight: 800;
+  background: var(--brand); color: var(--brand-ink); font-weight: 800;
   /* The phone grid prints the weekday as ::before with a trailing space —
      flex layout drops that space from the flow, fusing « JEU27 ». The pill
      carries its own gap (inert on desktop, where no ::before exists). */
@@ -3402,6 +3498,56 @@ dialog:focus, dialog:focus-visible { outline: none; }
 /* Hero collapses to a single column on THIS pane only (the client carnet hero
    keeps its two columns). */
 #pane-notaires .intro--hero { display: block; }
+#pane-notaires .notary-ai-beta-note {
+  position: relative; width: min(100%, 520px); margin-top: var(--space-5);
+  max-width: none; padding: 0; background: transparent; box-shadow: none;
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+#pane-notaires > .wrap:has(#notary-authed:not([hidden])) .notary-ai-beta-note { display: none; }
+
+/* Beta announcement: one quiet line in the hero, with the useful explanation
+   in a compact disclosure opened by its small information button. The opened
+   copy stays in the document flow at every width, so it never covers the live
+   inventory or makes a section feel missing behind a tooltip. */
+.beta-teaser-trigger {
+  appearance: none; display: flex; align-items: center; gap: var(--space-4);
+  width: 100%; min-height: 38px; padding: 7px 10px; border: 1px solid var(--border);
+  border-radius: var(--radius); background: color-mix(in srgb, var(--surface-inset) 58%, transparent);
+  color: var(--ink); font: inherit; text-align: left;
+  transition: background-color .15s, border-color .15s, box-shadow .15s;
+}
+.beta-teaser-trigger:hover, .beta-teaser.is-open .beta-teaser-trigger {
+  background: var(--surface-inset); border-color: var(--border-strong);
+}
+.beta-teaser:hover, .beta-teaser:focus-within, .beta-teaser.is-open { z-index: 30; }
+.beta-teaser-copy { display: grid; gap: 1px; min-width: 0; }
+.beta-teaser-trigger .sub-card-kicker { margin: 0; font-size: 9.5px; }
+.beta-teaser-trigger .sub-card-title { font-size: 12.5px; line-height: 1.2; }
+.beta-teaser-hint { margin-left: auto; color: var(--ink-muted); font-size: 11px; white-space: nowrap; }
+.beta-teaser-info {
+  appearance: none; display: grid; place-items: center; flex: none; width: 18px; height: 18px;
+  border: 1px solid var(--border-strong); border-radius: 50%; color: var(--brand);
+  background: transparent; font: inherit; font-size: 11px; font-weight: 800; line-height: 1;
+  cursor: pointer; transition: background-color .15s, border-color .15s, transform .15s;
+}
+.beta-teaser-info:hover { background: var(--surface-hover); border-color: var(--brand); transform: scale(1.05); }
+.beta-teaser-info:focus-visible { outline: 3px solid var(--ring); outline-offset: 3px; }
+.beta-teaser-details {
+  position: relative; width: 100%; max-height: 0; overflow: hidden;
+  margin-top: 0; padding: 0; border: 1px solid transparent; border-radius: var(--radius-lg);
+  background: var(--surface); box-shadow: var(--shadow-lg);
+  opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(-4px);
+  transition: opacity .15s ease, visibility .15s ease, transform .15s ease,
+    max-height .2s ease, margin-top .2s ease, padding .2s ease, border-color .2s ease;
+}
+.beta-teaser.is-open .beta-teaser-details {
+  max-height: min(70vh, 430px); margin-top: 8px; padding: var(--pad-card);
+  border-color: var(--border); opacity: 1; visibility: visible; pointer-events: auto; transform: none;
+}
+.beta-teaser-details .sub-card-sub { margin-top: 0; }
+.beta-teaser-details .help { margin: var(--space-4) 0 0; }
+.beta-teaser-ask { margin: var(--space-5) 0 var(--space-3); color: var(--ink); font-size: 12.5px; font-weight: 700; }
+.beta-teaser-details .btn { width: auto; }
 /* SIGNED-IN: the pane is a workspace, not a pitch. The hero keeps only its
    heading (panes focus their h1 on navigation), the lede goes, and the
    prospecting band slides behind the console (flex order — the wrap is a flex
@@ -4437,8 +4583,15 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
 .dossier-item { transition: background-color .14s ease; }
 .dossier-item:hover { background: var(--surface-inset); }
 .legend-item { transition: color .14s ease; }
-.brand-mark img { transition: transform .2s cubic-bezier(.2, .8, .2, 1); }
-.brand:hover .brand-mark img { transform: rotate(-6deg) scale(1.06); }
+@keyframes nota-mark-in {
+  from { opacity: 0; transform: translateY(3px) rotate(-5deg) scale(.9); }
+  to { opacity: 1; transform: none; }
+}
+.brand-mark img, .brand-mark svg { transition: filter .2s ease; }
+@media (prefers-reduced-motion: no-preference) {
+  .site-header .brand-mark { animation: nota-mark-in .55s cubic-bezier(.2, .8, .2, 1) both; }
+  .brand:hover .brand-mark { transform: translateY(-1px) rotate(-3deg) scale(1.03); transition: transform .22s cubic-bezier(.2, .8, .2, 1); }
+}
 
 /* Subscribe card — borderless floating panel (white surface, soft shadow):
    the "Le carnet dans votre agenda" band on the Notaires page. */
@@ -4524,7 +4677,16 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
      the per-row book arrow goes: the hero CTA right above already books.
      Same DOM as the desktop rows — a card still filters the carnet below,
      and the active act keeps .is-on, named here by its brand edge. */
-  .pulse-rows { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+  /* Four cards in a 2×2 block made the phone hero feel like a dashboard and
+     pushed the actual carnet too far down. A compact horizontal rail keeps the
+     same live market snapshot, with one clear card at a time. */
+  .pulse-rows {
+    grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-flow: row; grid-auto-columns: auto;
+    gap: var(--space-3); overflow-x: visible; overscroll-behavior-inline: contain;
+    padding-bottom: 4px; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+  }
+  .pulse-rows::-webkit-scrollbar { display: none; }
   /* The item wrapper dissolves so each ROW is the grid child; its book arrow
      is display:none, so nothing else surfaces from the wrapper. */
   .pulse-item { display: contents; }
@@ -4532,6 +4694,7 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   /* Same selector strength as the desktop bleed rule (.pulse-item .pulse-row),
      later in the file — the -34px arrow overhang must not survive in a card. */
   .pulse-item .pulse-row { padding: 10px 12px; margin: 0; }
+  .pulse-item .pulse-row { scroll-snap-align: start; }
   .pulse-row {
     display: flex; flex-direction: column; align-items: stretch; gap: 7px;
     border: 1px solid var(--border);
@@ -4562,7 +4725,7 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
    footer link / first-visit guide on phones (see ux-nav.test.mjs). */
 @media (max-width: 899.98px) {
   .nav-burger { display: grid; }
-  .nav-tabs, .nav-history, .header-auth, #theme-toggle { display: none; }
+  .nav-tabs, .header-auth, #theme-toggle { display: none; }
   #lang-toggle { display: none; }
   /* Both controls moved to the drawer: an empty strip is not a control. */
   .header-tools { display: none; }
@@ -4687,6 +4850,9 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   .mini-btn { width: 44px; height: 44px; }
   .cal-nav .btn { min-width: 44px; }
   .icon-btn { width: 44px; height: 44px; }
+  /* Keep the beta row visually quiet while giving its only disclosure control
+     a reliable thumb target on phones and tablets. */
+  .beta-teaser-info { width: 32px; height: 32px; }
 }
 @media (max-width: 420px) {
   .nav-tabs { gap: 0; }
@@ -4715,19 +4881,20 @@ html { scroll-behavior: smooth; scroll-padding-top: var(--sticky-top); }
    defaults above at equal specificity.
    ========================================================================== */
 @media (max-width: 680px) {
-  /* THE TOOLBAR WAS A TOWER. Every control wrapped to its own line — nav row,
-     title row, dispo pill row, count row, Filtres row — ~230px of chrome
-     before the first date. Three tight rows instead: [nav … Filtres],
-     [title], [dispo … count]. */
-  .cal-toolbar { padding: var(--space-5) var(--space-7) var(--space-3); row-gap: var(--space-3); }
-  /* The spacer goes back to being a spacer (the 680px rule above turns it
-     into a row break; here the break comes from the title's own 100% basis). */
-  .cal-toolbar .header-spacer { flex: 1 1 auto; height: auto; order: 2; }
-  .cal-nav { order: 1; }
-  #filters-toggle { order: 3; }
-  .cal-title { order: 4; flex: 1 0 100%; font-size: 14px; }
-  .cal-avail { order: 5; padding-block: 2px; }
-  .result-count { order: 6; margin-left: auto; }
+  /* The toolbar keeps one row for identity (month + filters) and one for
+     utility (navigation + live metadata). The grouped rows stop the phone
+     version from becoming a tower of controls before the first date. */
+  .cal-toolbar { display: flex; flex-direction: column; align-items: stretch; padding: var(--space-5) var(--space-7) var(--space-3); gap: var(--space-3); }
+  .cal-toolbar-top { display: flex; align-items: center; justify-content: space-between; gap: var(--space-5); min-width: 0; }
+  .cal-toolbar-meta { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--space-4); min-width: 0; }
+  .cal-toolbar .header-spacer { display: none; }
+  .cal-title { order: initial; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 14px; }
+  .cal-nav { order: initial; min-width: 0; }
+  #filters-toggle { order: initial; flex: none; }
+  .cal-avail { order: initial; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; padding-block: 2px; }
+  .result-count { order: initial; margin-left: 0; font-size: 11px; }
+  #cal-today { min-width: 44px; padding-inline: 8px; font-size: 0; }
+  #cal-today::after { content: 'Auj.'; font-size: 12px; }
 
   /* THE FILTER BAR SPRAWLED OVER SIX RAGGED ROWS. Two single-line rows now:
      the act chips, then statut + montant + tri together — each row scrolls
@@ -4747,6 +4914,15 @@ html { scroll-behavior: smooth; scroll-padding-top: var(--sticky-top); }
   .filterbar-row .chip-group { flex-wrap: nowrap; margin-inline: 0; padding-inline: 0; }
   /* A flexible spacer is meaningless inside a scroll row. */
   .filterbar-row .header-spacer { display: none; }
+}
+
+@media (max-width: 480px) {
+  /* At the compact tablet/phone edge the total competes with the live date
+     cue and truncates it ("Prochaine dispo · v..."). The total is repeated
+     elsewhere in the carnet, so give the availability cue the full middle
+     track before the browser starts ellipsizing it. */
+  .cal-toolbar-meta { grid-template-columns: auto minmax(0, 1fr); }
+  .cal-toolbar-meta .result-count { display: none; }
 }
 
 /* ==========================================================================
@@ -4821,13 +4997,22 @@ body.ig-open { overflow: hidden; }
   from { transform: rotate3d(var(--ax), var(--ay), var(--az), 0); }
   to { transform: rotate3d(var(--ax), var(--ay), var(--az), var(--spin)); }
 }
+/* The ambient marks are atmosphere, never the subject. Keep the spatial
+   drift on phones, but remove the six-face 3D tumble that is needlessly costly
+   on small screens and can compete with the calendar motion. */
+@media (max-width: 680px) {
+  .mark-drift .cube { animation: none; transform: none; }
+  .mark-drift i { opacity: calc(var(--o, .06) * .65); }
+}
 @media (prefers-reduced-motion: reduce) { .mark-drift i, .mark-drift .cube { animation: none; } }
 /* The in-flow column hosts only the CHOOSER (the film frame is its own
    fixed, full-viewport layer) — a plain centred measure is enough. */
 .ig-inner { flex: none; position: relative; z-index: 1; width: min(1040px, 96vw); display: flex; flex-direction: column; align-items: center; }
 
 /* The name and the existing mark are a single, readable brand signature. */
-.ig-wordmark { display: flex; align-items: center; gap: .23em; color: var(--brand); font-family: var(--font-display); font-size: 32px; font-weight: 800; letter-spacing: -.02em; line-height: 1; }
+.ig-wordmark { display: flex; align-items: center; gap: 0; color: var(--brand); font-family: var(--font-display); font-size: 32px; font-weight: 800; letter-spacing: -.02em; line-height: 1; }
+.ig-wordmark > span { font-size: 0; }
+.ig-wordmark > span::after { content: 'ota'; font-size: 32px; }
 .ig-wordmark svg { width: 1em; height: 1em; flex: none; }
 .ig-signature { font-size: clamp(64px, 9vw, 112px); }
 .ig-chooser { display: flex; flex-direction: column; align-items: center; gap: 22px; text-align: center; max-width: 760px; width: 100%; }
@@ -4870,9 +5055,21 @@ body.ig-open { overflow: hidden; }
   padding: max(24px, env(safe-area-inset-top)) max(32px, env(safe-area-inset-right)) 20px max(32px, env(safe-area-inset-left));
 }
 .ig-audience { color: var(--ink-muted); font-size: 16px; font-weight: 600; line-height: 1.4; text-align: right; }
-/* A still wordmark, never another moving subject competing with the message. */
+/* One persistent wordmark carries the identity through the film. The scene
+   copy should carry the message, not introduce a second logo. */
 .ig-atmosphere { position: absolute; inset: 0; overflow: hidden; pointer-events: none; display: flex; align-items: flex-end; justify-content: center; }
-.ig-atmosphere > span { font-family: var(--font-display); font-size: 48cqw; font-weight: 800; letter-spacing: -.03em; line-height: .7; color: var(--brand); opacity: .045; transform: translateY(.12em); }
+.ig-atmosphere > span { display: none; }
+.ig-atmosphere::before {
+  content: '';
+  width: min(52vw, 640px); aspect-ratio: 1;
+  border: 1px solid color-mix(in srgb, var(--brand) 18%, transparent);
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(circle at 74% 24%, var(--brand-bright) 0 9px, transparent 10px),
+    color-mix(in srgb, var(--brand) 5%, transparent);
+  opacity: .55;
+  transform: rotate(-14deg) translateY(18%);
+}
 .ig-scene {
   position: absolute; inset: 88px 0 0; z-index: 1;
   display: flex; flex-direction: column; align-items: center;
@@ -4882,6 +5079,9 @@ body.ig-open { overflow: hidden; }
   opacity: 0; visibility: hidden;
 }
 .ig-scene .ig-signature { font-size: clamp(64px, 9cqw, 112px); margin-bottom: 8px; }
+/* The masthead is the single visible logo. Keep the scene bookends in the DOM
+   for the film's accessible structure, but remove their duplicate paint. */
+.ig-scene .ig-signature { display: none; }
 .ig-h {
   font-size: clamp(32px, 5.4cqw, 72px); font-weight: 800;
   letter-spacing: -.035em; line-height: 1.08; margin: 0;
@@ -4932,6 +5132,7 @@ body.ig-open { overflow: hidden; }
   .ig-door { width: 100%; padding: 20px 40px 20px 20px; }
   .ig-masthead { padding: max(20px, env(safe-area-inset-top)) 20px 16px; }
   .ig-wordmark { font-size: 28px; }
+  .ig-wordmark > span::after { font-size: 28px; }
   .ig-signature { font-size: 72px; }
   .ig-audience { font-size: 14px; max-width: 15ch; }
   .ig-scene { inset-block-start: 72px; padding: 20px 24px 40px; }
@@ -4976,6 +5177,38 @@ body.ig-open { overflow: hidden; }
 }
 @media (prefers-reduced-motion: reduce) { .ig { display: none; } }
 
+/* Arrival chooser: the first screen is a decision point, not a poster. Keep
+   the language control in the corner, give each route a clear affordance, and
+   make the neutral fallback read like a real third option. */
+.ig-chooser { position: relative; gap: clamp(14px, 2.5vh, 22px); max-width: 700px; padding-top: 54px; }
+.ig-chooser > .mini-seg { position: absolute; top: 0; right: 0; margin: 0; }
+.ig-chooser .ig-signature { font-size: clamp(58px, 8vw, 96px); }
+.ig-title { font-size: clamp(30px, 4.6vw, 44px); }
+.ig-lede { margin: -2px 0 6px; }
+.ig-doors { gap: 12px; }
+.ig-door { min-height: 116px; padding: 20px 62px 20px 24px; border-color: color-mix(in srgb, var(--border) 82%, var(--brand)); background: color-mix(in srgb, var(--surface) 92%, var(--brand)); }
+.ig-door::before { content: ""; position: absolute; inset: 12px auto 12px 0; width: 4px; border-radius: 0 var(--radius-xs) var(--radius-xs) 0; background: var(--brand); opacity: .9; }
+.ig-door:last-child::before { background: var(--brand-bright); }
+.ig-door:hover { border-color: var(--brand); background: color-mix(in srgb, var(--surface) 84%, var(--brand)); }
+.ig-door-t { font-size: 19px; }
+.ig-door-s { font-size: 15px; }
+.ig-door-arrow { display: grid; place-items: center; width: 40px; height: 40px; right: 18px; border: 1px solid var(--border-strong); border-radius: 50%; background: var(--surface-inset); font-size: 22px; transition: transform .15s, background-color .15s, color .15s; }
+.ig-door:hover .ig-door-arrow, .ig-door:focus-visible .ig-door-arrow { transform: translate(3px, -50%); background: var(--brand); color: var(--brand-ink); }
+.ig-enter { border: 1px solid var(--border); border-radius: var(--radius-lg); background: color-mix(in srgb, var(--surface) 88%, var(--brand)); color: var(--ink); padding: 10px 18px; transition: border-color .15s, background-color .15s, transform .15s; }
+.ig-enter:hover { border-color: var(--brand); background: var(--surface-hover); transform: translateY(-1px); }
+@media (max-width: 640px) {
+  .ig { padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
+  .ig-chooser { gap: 14px; padding-top: 50px; }
+  .ig-chooser .ig-signature { font-size: clamp(54px, 16vw, 72px); }
+  .ig-title { font-size: clamp(28px, 7.5vw, 36px); }
+  .ig-lede { font-size: 17px; }
+  .ig-doors { gap: 10px; }
+  .ig-door { min-height: 100px; padding: 16px 58px 16px 22px; }
+  .ig-door-t { font-size: 18px; }
+  .ig-door-s { font-size: 14px; }
+  .ig-enter { font-size: 15px; }
+}
+
 /* ==========================================================================
    Conformité (ADR 0033 §5 · ADR 0031) — the notary landing's compliance block.
    Detailed articles stay under the sign-in gate, outside the short film.
@@ -5008,7 +5241,7 @@ body.ig-open { overflow: hidden; }
    Live support chat (ADR 0026 · ADR 0033 §5) — the floating question door.
    Its own `sup-*` namespace: the retained-act `.chat-*` rules (a flex column,
    start-aligned) once reached in and dropped the visitor's bubbles on the
-   wrong side. Same square scale as every control; brand green only on the
+   wrong side. Same square scale as every control; brand brass only on the
    trigger and the visitor's own bubbles. Fixed above everything, footer
    included — and STACKED above the guide « ? » bubble on desktop: bottom
    70px clears the bubble's 16px + 42px (ux-nav.test.mjs pins the sum).
@@ -5191,9 +5424,9 @@ body.ig-open { overflow: hidden; }
 @media print {
   :root, :root[data-theme='dark'], :root:not([data-theme='light']) {
     color-scheme: light;
-    --brand: var(--nota-blue-700); --brand-bright: var(--nota-blue-500); --brand-ink: #ffffff; --brand-hover: var(--nota-blue-800);
-    --bg: #ffffff; --surface: #ffffff; --surface-inset: #eaf1f5; --surface-hover: #e2ebf0;
-    --ink: #0d1b27; --ink-muted: #526574; --border: #d9e3e9; --border-strong: #b6c8d4; --ring: var(--nota-blue-600);
+    --brand: var(--nota-teal); --brand-bright: var(--nota-teal); --brand-ink: #ffffff; --brand-hover: #365b62;
+    --bg: #f2f1ec; --surface: #fcfbf8; --surface-inset: #e6ece9; --surface-hover: #dce6e3;
+    --ink: #19282e; --ink-muted: #5b6c72; --border: #cbd8d5; --border-strong: #9eb6b2; --ring: var(--nota-teal);
     --shadow-sm: none; --shadow: none; --shadow-lg: none; --shadow-brand: none;
   }
   .site-header, .site-footer nav, .guide-fab, .sup-wrap, .mark-drift, .mnav, .mnav-scrim,
@@ -5349,6 +5582,20 @@ body.ig-open { overflow: hidden; }
   .day-book[data-at='2'] { padding: 14px; }
   .o-criteria .crit-sec-grid { grid-template-columns: minmax(0, 1fr); }
   .o-criteria .crit-sec-grid > .crit-row { grid-column: 1 / -1; grid-row: auto; }
+
+  /* Priced answers carry a second piece of information inside the button.
+     Give each answer the full row on a phone so the label and amount never
+     compete for a three-column cell or run into the edge of the control. */
+  .o-criteria .crit-row:has(.seg-btn .crit-add) .seg {
+    flex-direction: column; align-items: stretch;
+  }
+  .o-criteria .crit-row:has(.seg-btn .crit-add) .seg-btn {
+    flex: 1 1 auto; width: 100%; min-width: 0; max-width: none;
+    justify-content: flex-start; text-align: left;
+  }
+  .o-criteria .crit-row:has(.seg-btn .crit-add) .crit-add {
+    margin-left: auto; padding-left: 12px;
+  }
 }
 .o-criteria .crit-row .nselect { min-width: 100%; align-self: stretch; box-sizing: border-box; }
 

@@ -126,8 +126,21 @@ test('unauthenticated boot renders the magic-link request gate', async () => {
   assert.equal(text(doc.querySelector('.auth-title')), 'Console Nota');
   assert.ok(doc.querySelector('input#auth-email'), 'email input is missing');
   const submit = doc.querySelector('.auth-form button[type="submit"]');
-  assert.equal(text(submit), 'Se connecter');
+  assert.equal(text(submit), 'Recevoir le lien');
   assert.ok(doc.querySelector('input#auth-password'), 'password input is missing');
+  assert.ok(doc.querySelector('.auth-password-help'), 'password recovery behavior should be explained beside the field');
+  const toggle = doc.querySelector('.password-toggle');
+  assert.ok(toggle, 'password visibility control is missing');
+  const password = doc.querySelector('#auth-password');
+  assert.equal(password.type, 'password');
+  toggle.click();
+  assert.equal(password.type, 'text');
+  assert.equal(toggle.textContent, 'Masquer');
+  assert.equal(toggle.getAttribute('aria-label'), 'Masquer le mot de passe');
+  toggle.click();
+  assert.equal(password.type, 'password');
+  assert.equal(toggle.textContent, 'Afficher');
+  assert.equal(toggle.getAttribute('aria-label'), 'Afficher le mot de passe');
 });
 
 test('the normal login form posts email and password and renders the overview', async () => {
@@ -143,7 +156,10 @@ test('the normal login form posts email and password and renders the overview', 
   };
   const { win, doc } = await boot(handler, '');
   doc.querySelector('#auth-email').value = 'ops@nota.ca';
-  doc.querySelector('#auth-password').value = 'secret-password';
+  const password = doc.querySelector('#auth-password');
+  password.value = 'secret-password';
+  password.dispatchEvent(new win.Event('input', { bubbles: true }));
+  assert.equal(text(doc.querySelector('.auth-form button[type="submit"]')), 'Se connecter');
   doc.querySelector('.auth-form').dispatchEvent(new win.Event('submit', { bubbles: true, cancelable: true }));
   await waitFor(win, '.page-title');
   assert.equal(text(doc.querySelector('.page-title')), 'Aperçu');
@@ -324,4 +340,51 @@ test('services and features expose the domain catalogue and the operator invento
   await waitFor(win, '.feature-group');
   assert.match(text(doc.querySelector('.feature-group')), /Stripe Checkout/);
   assert.match(text(doc.querySelector('.feature-group + .chart-card')), /Prix par service/);
+});
+
+test('catalogue and feature collections show explicit 0, 1 and nested zero states', async () => {
+  const service = {
+    id: 'testament', nom: 'Testament', nomEn: 'Will', actif: true,
+    description: '', prixAnnonce: { totalCents: 10000 },
+    pricing: { criteria: [] }, documents: [], champs: [], planNotaire: [],
+    ai: { active: true, fields: [] }, connaissance: { sources: [] },
+  };
+  const base = authedApi();
+  const handler = (method, url, body) => {
+    if (url.includes('/catalogue')) return [200, { services: [service] }];
+    if (url.includes('/features')) return [200, {
+      groupes: [{ id: 'empty', nom: 'Groupe vide', nomEn: 'Empty group', fonctionnalites: [] }],
+      personnalisations: [],
+    }];
+    return base(method, url, body);
+  };
+  const { win, doc } = await boot(handler, '#/auth?token=T');
+  await waitFor(win, '.admin-rail');
+  win.location.hash = '#/services';
+  await waitFor(win, '.service-card');
+  assert.match(text(doc.querySelector('.service-card').parentElement.querySelector('.collection-count')), /^1 service$/);
+  assert.deepEqual([...doc.querySelectorAll('.service-detail summary')].map((n) => n.textContent), [
+    'Questions et paramètres (0)', 'Documents (0)', 'Renseignements à recueillir (0)',
+    'Plan de contrôle notarial (0)', 'Préparation IA avec preuve (0)', 'Sources de connaissance (0)',
+  ]);
+  assert.equal(doc.querySelectorAll('.service-detail .collection-empty-inline').length, 6);
+
+  win.location.hash = '#/fonctionnalites';
+  await waitFor(win, '.feature-group');
+  assert.match(text(doc.querySelector('.feature-group > .collection-count')), /^0 fonctionnalité$/);
+  assert.match(text(doc.querySelector('.feature-group .collection-empty-inline')), /Aucune fonctionnalité/);
+  assert.match(text(doc.querySelector('.feature-group + .chart-card > .collection-count')), /^0 personnalisation$/);
+});
+
+test('an explicitly empty catalogue is still rendered as a 0-state', async () => {
+  const base = authedApi();
+  const handler = (method, url, body) => url.includes('/catalogue')
+    ? [200, { services: [] }]
+    : base(method, url, body);
+  const { win, doc } = await boot(handler, '#/auth?token=T');
+  await waitFor(win, '.admin-rail');
+  win.location.hash = '#/services';
+  await waitFor(win, '.collection-empty');
+  assert.match(text(doc.querySelector('.collection-count')), /^0 service$/);
+  assert.match(text(doc.querySelector('.collection-empty')), /0 service/);
 });

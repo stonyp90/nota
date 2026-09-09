@@ -20,6 +20,7 @@ const bidFixture = () => ({
     [D.serviceById('refinancement').documents[0].id]: 'engagement.pdf',
     [D.serviceById('refinancement').documents[1].id]: D.DOSSIER_TRANSMIS },
   pricing: { valeur_pret: 100000, preteur: 'banque_nationale', approbation_bancaire: 'en_cours', succession: 'non' },
+  paid: true, notaryTemplate: { serviceId: 'refinancement', connectors: [] },
 });
 const makePacket = bid => D.financingWorkPacket(bid, { todayISO: '2026-09-09' });
 const analysisFixture = () => ({

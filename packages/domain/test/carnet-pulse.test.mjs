@@ -7,6 +7,13 @@ const D = require('../index.js');
 
 const TODAY = '2026-08-12';
 
+test('carnetPulse exposes the domain default sample size for a month reference', () => {
+  assert.equal(D.CARNET_REPERE_MIN_OFFERS, 3);
+  assert.equal(D.carnetRepereDisponible({ total: 2, median: 2500 }), false);
+  assert.equal(D.carnetRepereDisponible({ total: 3, median: null }), false);
+  assert.equal(D.carnetRepereDisponible({ total: 3, median: 2500 }), true);
+});
+
 function bid(over) {
   return {
     id: 'b' + Math.random().toString(36).slice(2),
