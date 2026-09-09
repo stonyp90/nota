@@ -96,7 +96,7 @@ function createSupportAssistant({ port, operator, grille, policy, bids } = {}) {
         actes_annonces_pas_en_vente: (domain.ACTES_A_VENIR || []).map((a) => a.nom),
         territoire: 'Ville de Québec et les environs',
         hors_catalogue:
-          'tout autre acte (vente, testament, procuration, mandat) n’est PAS vendu sur Nota aujourd’hui : le dire simplement',
+          'tout autre acte qui ne figure pas dans la fiche des services en vente (notamment une vente ou un mandat de protection) n’est PAS vendu sur Nota : le dire simplement',
       },
       prix: {
         forme: 'une grille : un prix par service, plus la garantie de date selon le délai avant la signature',
@@ -169,7 +169,7 @@ function createSupportAssistant({ port, operator, grille, policy, bids } = {}) {
     prompt = [
       'Tu réponds aux questions posées dans la messagerie du site de Nota, une place de marché',
       'québécoise où un client publie la date à laquelle il a besoin de signer un acte notarié',
-      '(financement ou refinancement hypothécaire) et où un notaire inscrit retient sa demande.',
+      '(financement, refinancement, testament ou procuration) et où un notaire inscrit retient sa demande.',
       '',
       'TA VOIX. Celle de la maison : directe, concrète, sans jargon ni formule creuse. Français du',
       'Québec quand on t’écrit en français, anglais quand on t’écrit en anglais — la langue du',

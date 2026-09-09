@@ -91,7 +91,7 @@ test('un service ou un palier inconnu retombe sur la ligne la plus BASSE du cata
   // Nota ne peut pas facturer plus que ce qu'elle a publié pour un service
   // qu'elle ne sait pas nommer (art. 68 C.déont. — publicité incomplète).
   const plancher = Math.min(...SERVICES.map((s) => s.prixNotaCents));
-  assert.equal(prixNota('testament', 'standard').serviceCents, plancher);
+  assert.equal(prixNota('service_inconnu', 'standard').serviceCents, plancher);
   assert.equal(prixNota('refinancement', 'inconnu').dateCents, 0);
   assert.equal(prixNota(null, null).totalCents, plancher);
 });

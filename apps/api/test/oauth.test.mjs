@@ -46,6 +46,7 @@ for (const provider of Object.keys(issuers)) test(`${provider}: real signed OIDC
   assert.equal(new URL(flow.url).searchParams.get('scope'), 'openid profile email');
   assert.equal(new URL(flow.url).searchParams.has('code_challenge'), provider !== 'linkedin');
   const pending = await f.service.requestLink(result.linkTicket, flow.binding, 'verified@example.test');
+  assert.equal(pending.role, 'client');
   const token = new URL(pending.link).hash.split('=')[1];
   await assert.rejects(f.service.verifyLink(token, 'z'.repeat(43)), { code: 'oauth_invalid_state' });
   const linked = await f.service.verifyLink(token, flow.binding);
@@ -96,6 +97,7 @@ test('HTTP completion reuses client session verification and does not grant the 
   // Exercise delivery with the same notifier adapter as production.
   const send = await f.app.handle(request('link/request', { ticket: result.linkTicket, email: 'owner@example.test' }, flow.binding));
   assert.equal(send.statusCode, 200); assert.equal(f.mails.length, 1);
+  assert.equal(f.mails[0].role, 'client');
   assert.ok(!send.body.includes('oauthverify'));
   const token = new URL(f.mails[0].link).hash.split('=')[1];
   const verified = await f.app.handle(request('link/verify', { ticket: token }, flow.binding));
@@ -108,6 +110,7 @@ test('HTTP completion reuses client session verification and does not grant the 
 test('notary OAuth preserves approval gate and establishes an existing approved session', async () => {
   const f = fixture(), { flow, result } = await authenticate(f, 'google', 'notary');
   const pending = await f.service.requestLink(result.linkTicket, flow.binding, 'notary@example.test');
+  assert.equal(pending.role, 'notary');
   const first = await f.app.handle(request('link/verify', { ticket: new URL(pending.link).hash.split('=')[1] }, flow.binding));
   assert.equal(first.statusCode, 403); assert.ok(!first.body.includes('feedToken'));
   await f.repo.putNotary({ id: notaryIdForEmail('notary@example.test'), email: 'notary@example.test', status: 'active' });

@@ -72,19 +72,20 @@ test('offersPerDay is zero-filled across the range and carries the counts on the
   assert.equal(byDate['2026-08-11'], 0);
 });
 
-test('byService iterates the financing catalogue with per-service offers and retenues', async () => {
+test('byService iterates the full catalogue with per-service offers and retenues', async () => {
   const repo = await seed();
   const a = createAnalytics({ repo, now: () => TODAY });
   const o = await a.overview();
   const byId = Object.fromEntries(o.series.byService.map((s) => [s.serviceId, s]));
-  // ADR 0010: the catalogue is the financing family — both acts, no retired act row.
-  assert.deepEqual(Object.keys(byId), ['refinancement', 'financement']);
+  assert.deepEqual(Object.keys(byId), ['refinancement', 'financement', 'testament', 'procuration']);
   assert.equal(byId.refinancement.offers, 5);
   assert.equal(byId.refinancement.retained, 1);
   assert.ok(byId.refinancement.nom); // human label present for the UI
   assert.equal(byId.financement.offers, 0); // second act present even with no offers yet
   assert.equal(byId.financement.retained, 0);
   assert.ok(byId.financement.nom);
+  assert.equal(byId.testament.offers, 0);
+  assert.equal(byId.procuration.offers, 0);
 });
 
 test('the live gauge counts present open/retained from the month window; notary tiles from the running counter', async () => {

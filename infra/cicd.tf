@@ -121,8 +121,8 @@ data "aws_iam_policy_document" "github_deploy" {
     resources = [aws_cloudfront_distribution.web.arn]
   }
 
-  # Lambda: push new code for the API and the reminders worker. Scoped to those
-  # two function ARNs only — no wildcard, no permission to change config/IAM.
+  # Lambda: push new code for the API, reminders and customer-improvement workers. Scoped to those
+  # three function ARNs only — no wildcard, no permission to change config/IAM.
   statement {
     sid    = "LambdaUpdateCode"
     effect = "Allow"
@@ -133,6 +133,7 @@ data "aws_iam_policy_document" "github_deploy" {
     resources = [
       aws_lambda_function.api.arn,
       aws_lambda_function.reminders.arn,
+      aws_lambda_function.customer_improvement.arn,
     ]
   }
 }

@@ -393,6 +393,25 @@ function createAnalytics({ repo, now, gaugeHorizonMonths } = {}) {
       gaugeCounters = {};
     }
     const parrainages = await referralSection(inv.referred, inv.retainedBy);
+    let customerImprovement = null;
+    if (typeof repo.getExperienceConfig === 'function') {
+      try {
+        const config = domain.customerExperienceConfig(await repo.getExperienceConfig());
+        const last = config.history.length ? config.history[config.history.length - 1] : null;
+        customerImprovement = {
+          version: domain.CUSTOMER_IMPROVEMENT_POLICY_VERSION,
+          mode: config.mode,
+          revision: config.revision,
+          changedAt: config.changedAt,
+          lastDecision: last,
+          cadence: domain.CUSTOMER_IMPROVEMENT_POLICY.cadence,
+          automaticActions: [...domain.CUSTOMER_IMPROVEMENT_POLICY.automaticActions],
+          protectedDecisions: [...domain.CUSTOMER_IMPROVEMENT_POLICY.protectedDecisions],
+        };
+      } catch {
+        customerImprovement = null;
+      }
+    }
     // The roster (one bounded GSI Query, never a Scan) feeds two things:
     //   • notaries waiting for the operator's activation (2026-09-02) — exact
     //     the moment a signup lands or an activation clears it;
@@ -445,6 +464,7 @@ function createAnalytics({ repo, now, gaugeHorizonMonths } = {}) {
       entonnoir,
       acquisition: SOURCES.map(source => ({ source, ...Object.fromEntries(STAGES.map(stage => [stage, acquisitionTotals['acq_' + source + '_' + stage] || 0])) })),
       segments,
+      customerImprovement,
       // Per-code referral totals (demandes / retenues / complétés / dû) plus
       // the flat commission amount — see ADR 0011.
       parrainages,

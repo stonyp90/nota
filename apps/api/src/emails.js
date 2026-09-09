@@ -1417,11 +1417,18 @@ function oauthAccountLink(ctx) {
   const ttl = ctx.ttlMinutes || 10;
   const fr = 'Cette confirmation permettra à votre compte ' + provider + ' d’ouvrir votre espace Nota lors de vos prochaines connexions. Ouvrez ce lien dans le navigateur où vous avez commencé. Si vous n’avez pas demandé cette association, ignorez ce courriel.';
   const en = 'This confirmation will let your ' + providerEn + ' account open your Nota space on future sign-ins. Open this link in the browser where you started. If you did not request this link, ignore this email.';
+  const role = ctx.role === 'notary' ? 'notary' : 'client';
+  const conversionFr = role === 'notary'
+    ? 'Après la confirmation, vous pourrez retrouver votre espace notaire et découvrir les demandes qui correspondent à votre pratique. Une question avant de commencer? Écrivez-nous à ' + SENDER.supportEmail + ': notre équipe vous répondra.'
+    : 'Après la confirmation, vous pourrez retrouver vos demandes, suivre les réponses de notaires et compléter votre dossier au même endroit. Une question ou besoin d’aide? Écrivez-nous à ' + SENDER.supportEmail + ': notre équipe vous répondra.';
+  const conversionEn = role === 'notary'
+    ? 'After confirming, you can return to your notary space and discover requests that match your practice. Questions before you start? Email us at ' + SENDER.supportEmail + ' and our team will help.'
+    : 'After confirming, you can find your requests, follow notary replies and complete your file in one place. Questions or need help? Email us at ' + SENDER.supportEmail + ' and our team will help.';
   return build({
     subjectFr: 'Confirmez votre connexion à Nota', subjectEn: 'Confirm your Nota sign-in',
     preheaderFr: 'Associez votre compte en toute sécurité.', preheaderEn: 'Link your account securely.',
-    fr: { heading: 'Liez votre compte à Nota', lead: fr, bodyHtml: para('Ce lien est valide ' + ttl + ' minutes et à usage unique.'), textLines: ['Lien à usage unique, valide ' + ttl + ' minutes.'], ctaLabel: 'Confirmer l’association' },
-    en: { heading: 'Link your account to Nota', lead: en, bodyHtml: para('This single-use link is valid for ' + ttl + ' minutes.'), textLines: ['Single-use link, valid for ' + ttl + ' minutes.'], ctaLabel: 'Confirm account link' },
+    fr: { heading: 'Liez votre compte à Nota', lead: fr, bodyHtml: para('Ce lien est valide ' + ttl + ' minutes et à usage unique.') + para(conversionFr), textLines: ['Lien à usage unique, valide ' + ttl + ' minutes.', conversionFr], ctaLabel: 'Confirmer l’association' },
+    en: { heading: 'Link your account to Nota', lead: en, bodyHtml: para('This single-use link is valid for ' + ttl + ' minutes.') + para(conversionEn), textLines: ['Single-use link, valid for ' + ttl + ' minutes.', conversionEn], ctaLabel: 'Confirm account link' },
     ctaUrl: ctx.link || linksFor(ctx.baseUrl).site, unsubscribeUrl: ctx.unsubscribeUrl,
   }, ctx);
 }

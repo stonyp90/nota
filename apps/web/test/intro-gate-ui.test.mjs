@@ -139,8 +139,8 @@ test('both films explain the outcome in four scenes, keep Nota visible and offer
     assert.equal(next.dataset.igGoto, film === 'client' ? 'carnet' : 'notaires');
     assert.ok(next.textContent.trim(), 'the next step has a readable label');
   }
-  assert.match(css, /igBarAnim 20s/);
-  assert.match(appSrc, /igRemaining = 20600/);
+  assert.match(css, /igBarAnim 14s/);
+  assert.match(appSrc, /igRemaining = 14400/);
   assert.ok(doc.querySelector('#ig-pause'));
   assert.equal(doc.querySelectorAll('#intro-gate [data-lang-seg]').length, 2);
 });

@@ -49,6 +49,8 @@ const {
   PRIX_CONFIG_SK,
   cancellationConfigPK,
   CANCELLATION_CONFIG_SK,
+  experienceConfigPK,
+  EXPERIENCE_CONFIG_SK,
   audienceGroupsPK,
   audienceGroupSK,
   AUDIENCE_GROUP_PREFIX,
@@ -92,6 +94,8 @@ const {
   ADMIN_SESSION_SK,
   auditPK,
   auditSK,
+  learningSignalPK,
+  learningSignalSK,
   adminRlPK,
   ADMIN_RL_SK,
   GSI1_PK,
@@ -435,6 +439,33 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
           ReturnValues: 'ALL_NEW',
         }));
         return result.Attributes.financingAnalysis;
+      } catch (e) { if (e.name === 'ConditionalCheckFailedException') return null; throw e; }
+    },
+    async saveActPreparation(bid, owner, analysis, expectedId = null, expectedReviewAt = null) {
+      try {
+        await doc.send(new UpdateCommand({ TableName: tableName, Key: { PK: bidPK(bid.dateISO), SK: bidSK(bid) },
+          UpdateExpression: 'SET actAnalysis = :analysis',
+          ConditionExpression: '#status = :retained AND notaryId = :owner AND ' +
+            (expectedId ? 'actAnalysis.id = :expected AND ' +
+              (expectedReviewAt ? 'actAnalysis.review.reviewedAt = :expectedReview' : 'attribute_not_exists(actAnalysis.review)')
+              : 'attribute_not_exists(actAnalysis)'),
+          ExpressionAttributeNames: { '#status': 'status' },
+          ExpressionAttributeValues: { ':analysis': analysis, ':retained': STATUS.RETENUE, ':owner': owner,
+            ...(expectedId ? { ':expected': expectedId } : {}), ...(expectedId && expectedReviewAt ? { ':expectedReview': expectedReviewAt } : {}) },
+        }));
+        return analysis;
+      } catch (e) { if (e.name === 'ConditionalCheckFailedException') return null; throw e; }
+    },
+    async reviewActPreparation(bid, owner, analysisId, review) {
+      try {
+        const result = await doc.send(new UpdateCommand({ TableName: tableName, Key: { PK: bidPK(bid.dateISO), SK: bidSK(bid) },
+          UpdateExpression: 'SET actAnalysis.review = :review',
+          ConditionExpression: '#status = :retained AND notaryId = :owner AND actAnalysis.id = :analysisId AND attribute_not_exists(actAnalysis.review)',
+          ExpressionAttributeNames: { '#status': 'status' },
+          ExpressionAttributeValues: { ':review': review, ':retained': STATUS.RETENUE, ':owner': owner, ':analysisId': analysisId },
+          ReturnValues: 'ALL_NEW',
+        }));
+        return result.Attributes.actAnalysis;
       } catch (e) { if (e.name === 'ConditionalCheckFailedException') return null; throw e; }
     },
     // General overwrite of a mutated bid (propositions, demandes, dossier): a
@@ -876,6 +907,40 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
       await doc.send(
         new DeleteCommand({ TableName: tableName, Key: { PK: cancellationConfigPK(), SK: CANCELLATION_CONFIG_SK } })
       );
+    },
+
+    // --- Autonomous customer-experience policy ------------------------------
+    // One small item, replaced as a whole by the daily worker. The public API
+    // only projects its mode; the worker keeps the bounded baseline/history for
+    // rollback and auditability.
+    async getExperienceConfig() {
+      const out = await doc.send(
+        new GetCommand({ TableName: tableName, Key: { PK: experienceConfigPK(), SK: EXPERIENCE_CONFIG_SK }, ConsistentRead: true })
+      );
+      if (!out.Item) return null;
+      const { PK, SK, type, ...cfg } = out.Item;
+      return cfg;
+    },
+    async putExperienceConfig(cfg, nowISO, { expectedRevision } = {}) {
+      const stored = { ...(cfg || {}), updatedAt: nowISO };
+      const command = new PutCommand({
+        TableName: tableName,
+        Item: { PK: experienceConfigPK(), SK: EXPERIENCE_CONFIG_SK, type: 'experience_config', ...stored },
+        ...(expectedRevision == null ? {} : {
+          ConditionExpression: Number(expectedRevision) === 0
+            ? 'attribute_not_exists(#revision) OR #revision = :expectedRevision'
+            : '#revision = :expectedRevision',
+          ExpressionAttributeNames: { '#revision': 'revision' },
+          ExpressionAttributeValues: { ':expectedRevision': Number(expectedRevision) },
+        }),
+      });
+      try {
+        await doc.send(command);
+        return stored;
+      } catch (error) {
+        if (error && error.name === 'ConditionalCheckFailedException') return false;
+        throw error;
+      }
     },
 
     // Every stored override — one Query over the single CONFIG#EMAIL partition
@@ -2134,6 +2199,44 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
           items.push(entry);
         });
         ExclusiveStartKey = out.LastEvaluatedKey;
+      } while (ExclusiveStartKey);
+      return items;
+    },
+    // Minimized learning signals use a separate day partition. This keeps the
+    // autonomous worker from reading transaction audit rows containing message
+    // or document metadata, and makes its IAM Query scope narrow and reviewable.
+    async appendLearningSignal(entry) {
+      const day = entry.day || String(entry.ts || '').slice(0, 10);
+      await doc.send(
+        new PutCommand({
+          TableName: tableName,
+          Item: { PK: learningSignalPK(day), SK: learningSignalSK(entry.ts, entry.id), type: 'notary_learning_signal', day, ...entry, ...auditTtl(entry) },
+          ConditionExpression: 'attribute_not_exists(PK) OR attribute_not_exists(SK)',
+        })
+      ).catch((err) => {
+        if (!(err && err.name === 'ConditionalCheckFailedException')) throw err;
+      });
+    },
+    async queryNotaryLearningByDay(dayISO, limit) {
+      const items = [];
+      const max = limit == null ? 20000 : Math.max(0, Math.min(Math.floor(Number(limit) || 0), 20000));
+      if (!max) return items;
+      let ExclusiveStartKey;
+      do {
+        const out = await doc.send(
+          new QueryCommand({
+            TableName: tableName,
+            KeyConditionExpression: 'PK = :pk',
+            ExpressionAttributeValues: { ':pk': learningSignalPK(dayISO) },
+            Limit: max - items.length,
+            ExclusiveStartKey,
+          })
+        );
+        (out.Items || []).forEach((i) => {
+          const { PK, SK, type, ...entry } = i;
+          items.push(entry);
+        });
+        ExclusiveStartKey = items.length < max ? out.LastEvaluatedKey : undefined;
       } while (ExclusiveStartKey);
       return items;
     },

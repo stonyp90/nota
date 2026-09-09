@@ -80,3 +80,14 @@ test('composed campaigns follow the same selected language', () => {
   assert.match(out.text, /Bonjour à vous/);
   assert.doesNotMatch(out.html + out.text, /Hello there|View the calendar|The Nota team/);
 });
+
+test('OAuth account-link email adds role-specific next steps and the support contact', () => {
+  const client = emails.oauthAccountLink({ ...CTX, provider: 'google', role: 'client' });
+  assert.match(client.text, /retrouver vos demandes/);
+  assert.match(client.text, /info@gonota\.ca/);
+
+  const notary = emails.oauthAccountLink({ ...CTX, provider: 'microsoft', role: 'notary', emailLanguage: 'en' });
+  assert.match(notary.text, /return to your notary space/);
+  assert.match(notary.text, /info@gonota\.ca/);
+  assert.doesNotMatch(notary.text, /retrouver vos demandes/);
+});

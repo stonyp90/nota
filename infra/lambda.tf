@@ -70,9 +70,10 @@ data "aws_iam_policy_document" "api_dynamodb" {
 
   # Le pendant du Deny posé sur le rôle admin (infra/admin.tf) : la piste
   # d'audit des TRANSACTIONS et des ACCÈS vit dans les partitions AUDIT#* de
-  # CETTE table, écrite par cette Lambda. Le statement ci-dessus lui accorde
-  # UpdateItem — nécessaire aux compteurs STATS# — et cet accord suffisait à
-  # laisser réécrire une entrée d'audit déjà posée.
+  # CETTE table, tandis que les signaux d'apprentissage minimisés vivent dans
+  # LEARNING#*. Les deux sont écrits par cette Lambda. Le statement ci-dessus
+  # lui accorde UpdateItem — nécessaire aux compteurs STATS# — et cet accord
+  # suffisait à laisser réécrire une entrée déjà posée.
   #
   # Deny l'emporte sur Allow : PutItem reste permis (c'est l'écriture du
   # journal), toute modification ou suppression ne l'est plus. Dit sans
@@ -102,7 +103,7 @@ data "aws_iam_policy_document" "api_dynamodb" {
     condition {
       test     = "ForAnyValue:StringLike"
       variable = "dynamodb:LeadingKeys"
-      values   = ["AUDIT#*"]
+      values   = ["AUDIT#*", "LEARNING#*"]
     }
   }
 }

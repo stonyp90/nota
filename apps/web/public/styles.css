@@ -130,6 +130,8 @@
      in the dark themes. */
   --svc-refinancement: #0f766e; /* darker teal → AA (>=4.5:1) for the small per-service count text */
   --svc-financement: #4f46e5; /* indigo → AA on light surfaces; clearly apart from the teal sibling */
+  --svc-testament: #b45309;
+  --svc-procuration: #7c3aed;
 
   /* Offer status: waiting for a notary vs. retained by one. var() aliases, so
      they track the theme automatically — do not duplicate into the dark blocks. */
@@ -157,6 +159,10 @@
 
   --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
+  /* The wordmark only (brand-word / ig-wordmark) — a geometric face that
+     pairs with the logomark's blocky, rounded-terminal N instead of reading
+     as plain bold body copy. Everything else stays Inter. */
+  --font-display: 'Sora', var(--font-sans);
 
   --maxw: 1600px; /* maximized width — fills wide screens, side padding via .wrap */
   --gap: 20px;
@@ -246,6 +252,8 @@
     --tier-rapide-ink: var(--ink-muted); /* NEUTRAL — the green cast was too much (owner, 2026-08-28) */ --tier-prioritaire-ink: #e0b44a; --tier-urgence-ink: #f0894c; --tier-extreme-ink: #f97066;
     --svc-refinancement: #6dc3b9;
     --svc-financement: #818cf8;
+    --svc-testament: #f0a45d;
+    --svc-procuration: #c4a7ff;
 
     /* Dark shadows are cast in black, not light ink, so they read on #0a0a0a. */
     --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.5);
@@ -297,6 +305,8 @@
   --tier-rapide-ink: var(--ink-muted); /* NEUTRAL — the green cast was too much (owner, 2026-08-28) */ --tier-prioritaire-ink: #e0b44a; --tier-urgence-ink: #f0894c; --tier-extreme-ink: #f97066;
   --svc-refinancement: #6dc3b9;
   --svc-financement: #818cf8;
+  --svc-testament: #f0a45d;
+  --svc-procuration: #c4a7ff;
 
   /* Dark shadows are cast in black, not light ink, so they read on #0a0a0a. */
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.5);
@@ -309,7 +319,7 @@
 
 * { box-sizing: border-box; }
 
-html { -webkit-text-size-adjust: 100%; }
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
 /* Selected text answers to the brand, not to the browser's default blue —
    which read as a foreign UI on a dark hunter-green page and lost contrast on
    the light one. Both halves are stated (never colour alone on a veil). */
@@ -384,7 +394,7 @@ a:hover { text-decoration: underline; }
 .brand:hover { text-decoration: none; }
 .brand-mark { width: 26px; height: 26px; display: grid; place-items: center; }
 .brand-mark img { display: block; width: 26px; height: 26px; filter: drop-shadow(var(--logo-shadow)); }
-.brand-word { font-weight: 800; }
+.brand-word { font-family: var(--font-display); font-weight: 800; }
 .brand-sub {
   color: var(--brand); font-weight: 700; font-size: 10px; text-transform: uppercase;
   letter-spacing: .08em; padding: 2px 6px; background: var(--surface-inset); border-radius: var(--radius-sm);
@@ -411,6 +421,21 @@ a:hover { text-decoration: underline; }
 
 .header-spacer { flex: 1; }
 
+/* A small, familiar history rail keeps the app's pane navigation discoverable.
+   It drives the real browser history, so the browser buttons and these controls
+   always tell the same story. The quiet inset track makes the pair read as one
+   control without competing with the three primary destinations. */
+.nav-history {
+  display: inline-flex; align-items: center; gap: 2px; flex: none;
+  padding: 2px; border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface-inset);
+}
+.nav-history-btn { width: 28px; height: 28px; color: var(--ink-muted); }
+.nav-history-btn:not(:disabled):hover { color: var(--brand); background: var(--surface); }
+.nav-history-btn:disabled { opacity: .45; cursor: default; }
+.nav-history-btn:disabled:hover { background: transparent; }
+.nav-history-btn:active:not(:disabled) { transform: scale(.92); }
+
 /* flex:none — the tab strip never shrinks below its labels: a squeezed header
    must slim its paddings (compact band below), never wrap a label to two lines.
    Three flat doors (ADR 0010 §2) — no submenu layer, so no wrappers either. */
@@ -423,12 +448,20 @@ a:hover { text-decoration: underline; }
   white-space: nowrap;
   /* Same quiet colour ease as the language segment (.12s): the header's
      controls change state at one shared tempo. */
-  transition: background-color .12s, color .12s, border-color .12s;
+  position: relative;
+  transition: background-color .18s ease, color .18s ease, border-color .18s ease, transform .18s ease;
 }
+.nav-tab-icon { flex: none; color: currentColor; transition: transform .18s ease; }
 .nav-tab:hover { background: var(--surface-inset); color: var(--ink); }
+.nav-tab:hover .nav-tab-icon { transform: translateY(-1px); }
 .nav-tab[aria-selected='true'] {
   background: var(--surface-inset); color: var(--brand);
   border-color: var(--border);
+}
+.nav-tab[aria-selected='true']::after {
+  content: ''; position: absolute; left: 10px; right: 10px; bottom: -5px;
+  height: 2px; border-radius: var(--radius-xs); background: var(--brand-bright);
+  transform-origin: center; animation: navIndicatorIn .24s cubic-bezier(.2,.8,.2,1) both;
 }
 /* Header compact band: between the drawer threshold (720) and a roomy desktop
    (900) the full control set — brand, two tabs, language, theme, both auth
@@ -584,6 +617,10 @@ a:hover { text-decoration: underline; }
 .acct-btn:hover { border-color: var(--brand); }
 .acct-btn[aria-expanded='true'] { border-color: var(--brand); color: var(--brand); }
 .acct-panel { padding: 6px; }
+.acct-panel-head { display: flex; align-items: flex-start; gap: 2px; }
+.acct-panel-head .acct-head { flex: 1; min-width: 0; }
+.acct-close { flex: none; color: var(--ink-muted); }
+.acct-close:hover { color: var(--ink); }
 .acct-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; appearance: none; background: transparent; border: 0; border-radius: var(--radius); padding: 9px 10px; font: inherit; color: var(--ink); cursor: pointer; }
 .acct-item:hover { background: var(--surface-inset); }
 .acct-item:focus-visible { background: var(--surface-inset); outline: 2px solid var(--ring); outline-offset: -2px; }
@@ -656,6 +693,9 @@ html.nav-open, html.nav-open body { overflow: hidden; }
    button must not. Background so links slide under it, not through it. */
 .mnav-head { position: sticky; top: 0; z-index: 2; background: var(--surface); display: flex; align-items: center; gap: 10px; padding: var(--space-2) var(--space-2) var(--space-4); }
 .mnav-title { font-weight: 800; font-size: 15px; letter-spacing: -0.01em; }
+.mnav-history { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 0 var(--space-2); }
+.mnav-history .mnav-link { justify-content: center; padding: var(--space-4) var(--space-3); font-size: 13px; }
+.mnav-history .mnav-link:disabled { opacity: .42; cursor: default; }
 .mnav-group { display: flex; flex-direction: column; }
 .mnav-link {
   display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
@@ -872,11 +912,11 @@ html.nav-open, html.nav-open body { overflow: hidden; }
 }
 .btn:not(:disabled):hover { background: var(--surface-inset); }
 .btn:not(:disabled):active { transform: translateY(1px); }
-/* Primary action reads as primary through brand colour + weight, never a fill. */
-.btn-primary { background: transparent; color: var(--brand); border-color: var(--brand); font-weight: 600; transition: background .12s, border-color .12s, transform .12s ease, box-shadow .12s ease; }
+/* Primary action is a clear filled signal; secondary actions stay quiet. */
+.btn-primary { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); font-weight: 700; transition: background .18s, border-color .18s, transform .18s ease, box-shadow .18s ease; }
 /* The primary action lifts on hover — the same shadow-brand cue the hero CTA
    already uses, so "this is the one" reads consistently across the app. */
-.btn-primary:not(:disabled):hover { background: var(--surface-inset); border-color: var(--brand); transform: translateY(-1px); box-shadow: var(--shadow-brand); }
+.btn-primary:not(:disabled):hover { background: var(--brand-hover); border-color: var(--brand-hover); transform: translateY(-1px); box-shadow: var(--shadow-brand); }
 .btn-primary:not(:disabled):active { transform: translateY(0); box-shadow: none; }
 .btn-ghost { border-color: transparent; background: transparent; color: var(--ink-muted); }
 .btn-ghost:hover { background: var(--surface-inset); color: var(--ink); }
@@ -1007,6 +1047,8 @@ html.nav-open, html.nav-open body { overflow: hidden; }
 .chip-svc .svc-ic { color: var(--svc-fallback, currentColor); }
 .chip-svc[data-svc='refinancement'] .svc-ic { color: var(--svc-refinancement); }
 .chip-svc[data-svc='financement'] .svc-ic { color: var(--svc-financement); }
+.chip-svc[data-svc='testament'] .svc-ic { color: var(--svc-testament); }
+.chip-svc[data-svc='procuration'] .svc-ic { color: var(--svc-procuration); }
 .chip-svc.is-on .svc-ic { color: currentColor; }
 .legend-item .svc-ic, .legend-status-item .svc-ic { margin-right: 1px; }
 /* Two figures per act, because they answer two questions: the floor the server
@@ -3981,6 +4023,12 @@ body.is-notary-session #tab-notaires { pointer-events: none; }
 
 .nc-dossier { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
 .nc-dossier-h { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--brand); margin-bottom: 8px; }
+.nc-workflow { margin: 12px 0 16px; padding: 12px 14px; background: var(--surface-inset); border: 1px solid var(--border); border-radius: var(--radius); }
+.nc-workflow .nc-dossier-h { margin-bottom: 6px; }
+.nc-workflow-ai { margin: 8px 0; font-size: 13px; color: var(--ink); }
+.nc-workflow-actions { display: grid; gap: 7px; margin: 8px 0 0; padding-left: 22px; }
+.nc-workflow-action { padding-left: 3px; color: var(--ink); }
+.nc-workflow-action-meta { display: block; margin-top: 2px; font-size: 12px; color: var(--ink-muted); }
 .nc-kv { display: grid; grid-template-columns: minmax(120px, 38%) 1fr; gap: 4px 12px; margin: 0; }
 .nc-kv dt { font-size: 12px; font-weight: 600; color: var(--ink-muted); }
 .nc-kv dd { font-size: 13px; color: var(--ink); margin: 0; overflow-wrap: anywhere; }
@@ -4324,12 +4372,17 @@ body.is-notary-session #tab-notaires { pointer-events: none; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 
 .tab-pane { display: none; }
-.tab-pane.is-active { display: block; animation: paneIn .22s ease both; }
+.tab-pane.is-active { display: block; animation: paneInForward .28s cubic-bezier(.2,.8,.2,1) both; }
+.tab-pane.is-active > .wrap, .tab-pane.is-active > .layout { will-change: transform, opacity; }
+html[data-nav-direction='back'] .tab-pane.is-active { animation-name: paneInBack; }
 
 /* ==========================================================================
    Motion — subtle micro-interactions. All disabled under reduced-motion.
    ========================================================================== */
 @keyframes paneIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes paneInForward { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: none; } }
+@keyframes paneInBack { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: none; } }
+@keyframes navIndicatorIn { from { opacity: 0; transform: scaleX(.45); } to { opacity: 1; transform: scaleX(1); } }
 @keyframes dialogIn { from { opacity: 0; transform: translateY(10px) scale(.97); } to { opacity: 1; transform: none; } }
 @keyframes backdropIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes rowIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
@@ -4384,6 +4437,7 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
 @media (prefers-reduced-motion: reduce) {
   .tab-pane.is-active, .intro > *, .intro--hero .intro-main > *, .intro--hero .pulse,
   .pulse-rows > *, .nc-live-grid > *, .pr-rewards .pr-card, .pr-amount, .cards .card { animation: none; }
+  html { scroll-behavior: auto; }
 }
 
 /* More hover micro-interactions across client surfaces */
@@ -4517,7 +4571,7 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
    footer link / first-visit guide on phones (see ux-nav.test.mjs). */
 @media (max-width: 719.98px) {
   .nav-burger { display: grid; }
-  .nav-tabs, .header-auth, #theme-toggle { display: none; }
+  .nav-tabs, .nav-history, .header-auth, #theme-toggle { display: none; }
   #lang-toggle { display: none; }
   /* Both controls moved to the drawer: an empty strip is not a control. */
   .header-tools { display: none; }
@@ -4782,11 +4836,14 @@ body.ig-open { overflow: hidden; }
 .ig-inner { flex: none; position: relative; z-index: 1; width: min(1040px, 96vw); display: flex; flex-direction: column; align-items: center; }
 
 /* The name and the existing mark are a single, readable brand signature. */
-.ig-wordmark { display: flex; align-items: center; gap: .23em; color: var(--brand); font-size: 32px; font-weight: 800; letter-spacing: -.055em; line-height: 1; }
+.ig-wordmark { display: flex; align-items: center; gap: .23em; color: var(--brand); font-family: var(--font-display); font-size: 32px; font-weight: 800; letter-spacing: -.02em; line-height: 1; }
 .ig-wordmark svg { width: 1em; height: 1em; flex: none; }
 .ig-signature { font-size: clamp(64px, 9vw, 112px); }
 .ig-chooser { display: flex; flex-direction: column; align-items: center; gap: 22px; text-align: center; max-width: 760px; width: 100%; }
-.ig-chooser > .mini-seg { margin-bottom: 12px; }
+/* .ig [data-set-lang] below gives these buttons a 44px touch target, so the
+   track has to grow to match — at the base 28px/2px it clipped the active
+   button's own highlight by 8px top and bottom. */
+.ig-chooser > .mini-seg { height: 52px; padding: 4px; gap: 4px; margin-bottom: 12px; border: 1px solid var(--border); }
 .ig-title { font-size: clamp(28px, 4vw, 44px); font-weight: 800; letter-spacing: -.03em; line-height: 1.12; margin: 8px 0 0; text-wrap: balance; }
 .ig-lede { color: var(--ink-muted); font-size: clamp(18px, 2vw, 22px); line-height: 1.4; margin: -8px 0 10px; text-wrap: balance; }
 .ig-doors { display: flex; gap: 16px; justify-content: center; width: 100%; }
@@ -4824,7 +4881,7 @@ body.ig-open { overflow: hidden; }
 .ig-audience { color: var(--ink-muted); font-size: 16px; font-weight: 600; line-height: 1.4; text-align: right; }
 /* A still wordmark, never another moving subject competing with the message. */
 .ig-atmosphere { position: absolute; inset: 0; overflow: hidden; pointer-events: none; display: flex; align-items: flex-end; justify-content: center; }
-.ig-atmosphere > span { font-size: 48cqw; font-weight: 800; letter-spacing: -.065em; line-height: .7; color: var(--brand); opacity: .045; transform: translateY(.12em); }
+.ig-atmosphere > span { font-family: var(--font-display); font-size: 48cqw; font-weight: 800; letter-spacing: -.03em; line-height: .7; color: var(--brand); opacity: .045; transform: translateY(.12em); }
 .ig-scene {
   position: absolute; inset: 88px 0 0; z-index: 1;
   display: flex; flex-direction: column; align-items: center;
@@ -4864,14 +4921,15 @@ body.ig-open { overflow: hidden; }
 @keyframes igIn { from { opacity: 0; visibility: hidden; transform: translateY(12px); } to { opacity: 1; visibility: visible; transform: none; } }
 @keyframes igOut { from { opacity: 1; visibility: visible; } to { opacity: 0; visibility: hidden; } }
 @keyframes igBarAnim { from { transform: scaleX(0); } to { transform: scaleX(1); } }
-.run .ig-progress { animation: igBarAnim 20s linear both; }
-/* Four distinct beats. Text settles in 0.35 seconds, leaving time to read. */
-.run .ig-scene { animation: igIn .35s ease var(--ig-at) both, igOut .2s ease calc(var(--ig-at) + 4.8s) forwards; }
-.run .ig-c4, .run .ig-n4 { animation: igIn .35s ease var(--ig-at) both; }
+.run .ig-progress { animation: igBarAnim 14s linear both; }
+/* Four distinct beats, 3.5s apiece (was 5s — felt sluggish). Text settles in
+   0.3 seconds, leaving time to read. */
+.run .ig-scene { animation: igIn .3s ease var(--ig-at) both, igOut .2s ease calc(var(--ig-at) + 3.3s) forwards; }
+.run .ig-c4, .run .ig-n4 { animation: igIn .3s ease var(--ig-at) both; }
 .ig-c1, .ig-n1 { --ig-at: 0s; }
-.ig-c2, .ig-n2 { --ig-at: 5s; }
-.ig-c3, .ig-n3 { --ig-at: 10s; }
-.ig-c4, .ig-n4 { --ig-at: 15s; }
+.ig-c2, .ig-n2 { --ig-at: 3.5s; }
+.ig-c3, .ig-n3 { --ig-at: 7s; }
+.ig-c4, .ig-n4 { --ig-at: 10.5s; }
 .run .ig-story-icon path { stroke-dasharray: 1; animation: igSketch .7s ease var(--ig-at) both; }
 @keyframes igSketch { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
 @media (max-width: 640px) {
@@ -5341,11 +5399,13 @@ body.ig-open { overflow: hidden; }
   .partner-share-panel .partner-msg { padding: 20px 0 0; border-left: 0; border-top: 1px solid var(--border); }
 }
 
-/* Equal-weight, nonblocking analytics choice. */
-.analytics-consent { position: fixed; inset: auto 16px 16px; z-index: 10000; max-width: 680px; margin: auto; padding: 18px; background: #fff; color: #182422; border: 1px solid #aab7b0; border-radius: var(--radius-lg); box-shadow: 0 4px 24px #0002; }
+/* Equal-weight, nonblocking analytics choice. Token-driven so it follows
+   both themes instead of forcing a white card onto a dark canvas. */
+.analytics-consent { position: fixed; inset: auto 16px 16px; z-index: 10000; max-width: 680px; margin: auto; padding: 18px; background: var(--surface); color: var(--ink); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); }
 .analytics-consent[hidden] { display: none; }
 .analytics-consent p { margin: 0 0 12px; font-size: 14px; line-height: 1.5; }
-.analytics-consent button, #analytics-preferences:not(.footer-link) { font: inherit; cursor: pointer; padding: 8px 12px; border: 1px solid #64756b; border-radius: var(--radius-sm); background: #fff; color: #182422; margin-right: 8px; }
+.analytics-consent button, #analytics-preferences:not(.footer-link) { font: inherit; cursor: pointer; padding: 8px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); margin-right: 8px; }
+.analytics-consent button:hover, #analytics-preferences:not(.footer-link):hover { background: var(--surface-hover); }
 
 /* Help discovery remains available without crowding the conversation. */
 .sup-topics { padding: 6px 14px; font-size: 12.5px; flex-shrink: 0; }

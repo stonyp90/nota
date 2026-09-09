@@ -37,7 +37,7 @@ Fonctionnalité: Les murs déontologiques du modèle
   # le DÉCLARER, et non laisser lire un « tout compris » qui n'en est pas un.
   Scénario: le prix de Nota est annoncé avant que le client n'autorise sa carte — art. 68 et 71 3°
     Quand le carnet public du mois "2026-08" est consulté
-    Alors le carnet annonce le prix du service de Nota, à partir de 229 $
+    Alors le carnet annonce le prix du service de Nota, à partir de 209 $
     Et le carnet tarife "financement" à 229 $ à échéance normale
     Et le carnet tarife "refinancement" à 279 $ à échéance normale
     Et le carnet déclare que ni les taxes ni les débours ne sont inclus

@@ -1,14 +1,11 @@
 /**
- * Le catalogue annoncé — procuration et testament, à l'écran 1 de la feuille
- * de réservation, en gris et marqués « Bientôt ».
+ * Le catalogue des actes vendus à l'écran 1 de la feuille de réservation.
  *
  * Ce que ces cartes doivent tenir :
- *   1. elles ne sont PAS des services — rien ne les price, rien ne les réserve
- *      (serviceById continue de répondre null, cf. domain.test.mjs) ;
- *   2. elles se voient à la place des actes, pour que le client sache où va le
- *      catalogue plutôt que de conclure que Nota n'en fera jamais d'autres ;
- *   3. un clic dessus ne prend jamais la sélection : l'acte choisi reste celui
- *      qui se réserve, et le formulaire ne part pas avec un service vide.
+ *   1. testament and procuration are bookable services, not duplicate
+ *      coming-soon cards;
+ *   2. every service exposes its own intake and price criteria;
+ *   3. selecting either new service updates the same booking form.
  *
  * Boot harness identique à booking-defaults.test.mjs.
  */
@@ -58,64 +55,37 @@ async function openBooking(doc) {
   return iso;
 }
 
-test('le domaine tient deux listes : ce qui se vend, et ce qui est annoncé', async () => {
+test('le catalogue ne duplique pas les services vendus dans les actes à venir', async () => {
   const { D } = await boot();
-  // Le domaine vit dans le realm jsdom : on compare des chaînes, pas des tableaux.
-  assert.equal(D.ACTES_A_VENIR.map((a) => a.id).join(','), 'procuration,testament');
-  // Annoncé n'est pas vendu : aucun des deux n'entre au catalogue.
-  D.ACTES_A_VENIR.forEach((a) => {
-    assert.equal(D.serviceById(a.id), null, a.id + ' ne se réserve pas');
-    assert.ok(!D.SERVICES.some((s) => s.id === a.id), a.id + ' n’est pas un service');
-    assert.ok(a.nomCourt && a.nomEn && a.description, a.id + ' se nomme et se décrit');
-  });
-  assert.equal(D.acteAVenirById('testament').nomCourt, 'Testament');
+  assert.equal(D.ACTES_A_VENIR.length, 0);
+  assert.ok(D.serviceById('testament'));
+  assert.ok(D.serviceById('procuration'));
+  assert.equal(D.acteAVenirById('testament'), null);
   assert.equal(D.acteAVenirById('refinancement'), null, 'un acte en vente n’est pas « à venir »');
 });
 
-test('l’écran 1 montre les deux actes annoncés, en gris et marqués « Bientôt »', async () => {
-  const { doc } = await boot();
+test('l’écran 1 montre les quatre actes réservable et aucun faux « Bientôt »', async () => {
+  const { doc, D } = await boot();
   await openBooking(doc);
   const soon = [...doc.querySelectorAll('#o-service-chips .chip-soon')];
-  assert.deepEqual(soon.map((b) => b.dataset.soon), ['procuration', 'testament']);
-  soon.forEach((b) => {
-    assert.equal(b.getAttribute('aria-disabled'), 'true', 'annoncé, pas offert');
-    assert.equal(b.dataset.svc, undefined, 'aucun service derrière la carte');
-    assert.match(FLAT(b.textContent), /Bientôt$/, 'la mention ferme la carte');
-    // Elle ferme la carte SUR LA LIGNE RÉSERVÉE, jamais sur celle du nom :
-    // dans le nom, la pastille poussait « Procuration » hors de l'axe de son
-    // glyphe et la rangée annoncée se lisait de travers sous une rangée centrée.
-    assert.ok(b.querySelector('.chip-svc-sub .chip-soon-tag'), 'la mention tient la ligne réservée');
-    assert.equal(b.querySelector('.chip-svc-main .chip-soon-tag'), null, 'le nom reste seul sur son axe');
-    assert.ok(b.title, 'la description tient dans l’infobulle');
-  });
-  // Les deux actes qui se réservent arrivent EN PREMIER : la porte ouverte
-  // passe avant l'annonce.
+  assert.equal(soon.length, 0);
   const all = [...doc.querySelectorAll('#o-service-chips .chip')];
-  assert.deepEqual(
-    all.map((b) => b.dataset.svc || b.dataset.soon),
-    ['refinancement', 'financement', 'procuration', 'testament'],
-  );
+  assert.equal(all.map((b) => b.dataset.svc || b.dataset.soon).join(','), D.SERVICES.map((s) => s.id).join(','));
 });
 
-test('cliquer un acte annoncé ne change rien : la sélection reste sur l’acte réservable', async () => {
+test('cliquer testament ou procuration sélectionne le service et conserve le flux de prix', async () => {
   const { doc } = await boot();
   await openBooking(doc);
-  doc.querySelector('#o-service-chips .chip[data-svc="financement"]').click();
+  doc.querySelector('#o-service-chips .chip[data-svc="testament"]').click();
   await wait(20);
-  const before = doc.getElementById('o-service').value;
-  assert.equal(before, 'financement');
+  assert.equal(doc.getElementById('o-service').value, 'testament');
+  assert.equal(doc.querySelector('#o-service-chips .chip.is-on').dataset.svc, 'testament');
+  assert.ok(doc.querySelector('#o-amount').value > 0, 'the selected service has a price');
 
-  doc.querySelector('#o-service-chips .chip-soon[data-soon="testament"]').click();
+  doc.querySelector('#o-service-chips .chip[data-svc="procuration"]').click();
   await wait(20);
-  assert.equal(doc.getElementById('o-service').value, 'financement', 'le service tenu ne bouge pas');
-  assert.equal(
-    doc.querySelector('#o-service-chips .chip.is-on').dataset.svc, 'financement',
-    'la carte allumée non plus',
-  );
-  assert.ok(
-    !doc.querySelector('#o-service-chips .chip-soon').hasAttribute('aria-pressed'),
-    'un acte annoncé ne devient jamais un bouton pressé',
-  );
+  assert.equal(doc.getElementById('o-service').value, 'procuration');
+  assert.equal(doc.querySelector('#o-service-chips .chip.is-on').dataset.svc, 'procuration');
 });
 
 test('la carte d’acte se couche sur une feuille large, et reste debout sous le pouce', () => {

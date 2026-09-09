@@ -174,6 +174,11 @@ function createMemoryRepo(seed = []) {
   // CONFIG#ANNULATION / BAREME item. Null until Nota stores one.
   let cancellationCfg = null;
 
+  // The daily customer-experience controller's single bounded policy record.
+  // It is intentionally separate from pricing and legal configuration: the
+  // autonomous worker can change guidance without gaining a door to either.
+  let experienceCfg = null;
+
   // Notary magic-link login: single-use challenges (main table) and a per-IP
   // login rate-limit counter, kept apart from the admin equivalents above so an
   // admin and a notary challenge can never be confused.
@@ -197,6 +202,7 @@ const clientChallenges = new Map(); // challengeId -> record (lien magique clien
   const challenges = new Map(); // challengeId -> record
   const sessions = new Map(); // sessionId -> record
   const audit = []; // { id, ts, action, adminId, email, ip, meta }
+  const learningSignals = []; // minimized notary-learning events, separate from transaction audit
   const rateCounters = new Map(); // `${scope}#${key}#${windowStart}` -> count
 
   const oauthTickets = new Map();
@@ -262,6 +268,22 @@ const clientChallenges = new Map(); // challengeId -> record (lien magique clien
         current.financingAnalysis?.id !== analysisId || current.financingAnalysis.review) return null;
       const analysis = { ...current.financingAnalysis, review: structuredClone(review) };
       byId.set(bid.id, { ...current, financingAnalysis: analysis });
+      return analysis;
+    },
+    async saveActPreparation(bid, owner, analysis, expectedId = null, expectedReviewAt = null) {
+      const current = byId.get(bid.id);
+      if (!current || current.dateISO !== bid.dateISO || current.status !== STATUS.RETENUE || current.notaryId !== owner ||
+        (current.actAnalysis?.id || null) !== expectedId || (current.actAnalysis?.review?.reviewedAt || null) !== expectedReviewAt) return null;
+      const next = { ...current, actAnalysis: structuredClone(analysis) };
+      byId.set(bid.id, next);
+      return next.actAnalysis;
+    },
+    async reviewActPreparation(bid, owner, analysisId, review) {
+      const current = byId.get(bid.id);
+      if (!current || current.dateISO !== bid.dateISO || current.status !== STATUS.RETENUE || current.notaryId !== owner ||
+        current.actAnalysis?.id !== analysisId || current.actAnalysis.review) return null;
+      const analysis = { ...current.actAnalysis, review: structuredClone(review) };
+      byId.set(bid.id, { ...current, actAnalysis: analysis });
       return analysis;
     },
     // General overwrite of a mutated bid (propositions, demandes, dossier).
@@ -607,6 +629,19 @@ const clientChallenges = new Map(); // challengeId -> record (lien magique clien
     },
     async deleteCancellationConfig() {
       cancellationCfg = null;
+    },
+
+    // --- Autonomous customer-experience policy ------------------------------
+    async getExperienceConfig() {
+      return experienceCfg ? structuredClone(experienceCfg) : null;
+    },
+    async putExperienceConfig(cfg, nowISO, { expectedRevision } = {}) {
+      if (expectedRevision != null) {
+        const currentRevision = experienceCfg ? Number(experienceCfg.revision) || 0 : 0;
+        if (currentRevision !== Number(expectedRevision)) return false;
+      }
+      experienceCfg = structuredClone({ ...(cfg || {}), updatedAt: nowISO });
+      return structuredClone(experienceCfg);
     },
 
     // --- Notary evaluation ledger (ADR 0021) ---------------------------------
@@ -1123,6 +1158,22 @@ const clientChallenges = new Map(); // challengeId -> record (lien magique clien
     },
     async queryAuditByDay(dayISO) {
       return audit.filter((e) => e.day === dayISO).map((e) => ({ ...e }));
+    },
+    // Learning signals have their own append-only stream so the autonomous
+    // worker never has to read transaction rows that may contain customer or
+    // notary message metadata. The Dynamo adapter uses LEARNING#<day> for the
+    // same boundary.
+    async appendLearningSignal(entry) {
+      const ttl = entry.ttl != null ? entry.ttl : auditRetentionTtl(Date.parse(entry.ts || ''));
+      learningSignals.push({
+        ...entry,
+        day: entry.day || String(entry.ts || '').slice(0, 10),
+        ...(ttl == null ? {} : { ttl }),
+      });
+    },
+    async queryNotaryLearningByDay(dayISO, limit) {
+      const max = limit == null ? learningSignals.length : Math.max(0, Math.floor(Number(limit) || 0));
+      return learningSignals.filter((e) => e.day === dayISO).slice(0, max).map((e) => ({ ...e }));
     },
 
     // --- Rate limiting -------------------------------------------------------

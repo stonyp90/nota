@@ -56,6 +56,8 @@
     };
     // iPadOS can declare a desktop Macintosh UA; this coarse hint resolves it.
     if (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) result.device = 'tablet';
+    var experience = window.NotaExperience;
+    if (experience && (experience.mode === 'standard' || experience.mode === 'guided')) result.journey = experience.mode;
     return result;
   }
   function send(eventId, base) {

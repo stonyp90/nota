@@ -131,6 +131,10 @@
         if (r.ok) {
           this.online = true;
           var j = await r.json();
+          if (j.experience && (j.experience.mode === 'standard' || j.experience.mode === 'guided')) {
+            state.experience = j.experience;
+            window.NotaExperience = j.experience;
+          }
           // ADR 0034 — le tarif porte la GRILLE : sans elle, aucun devis ne
           // peut se calculer, et il vaut mieux ne rien afficher qu'un prix
           // inventé (art. 68 C.déont.).
@@ -208,8 +212,17 @@
     selectedDate: null,
     focusDate: todayISO(),
     tab: 'carnet',
+    // The server may turn on a bounded guidance mode after the daily customer
+    // improvement check. The mode never changes questions or legal controls.
+    experience: D.publicCustomerExperience ? D.publicCustomerExperience(null) : { mode: 'standard' },
     offer: { serviceId: '', dateISO: '', montant: 0, anonyme: true, pricing: {}, touched: false, stale: false },
   };
+  // The in-app history rail is intentionally a thin layer over browser history.
+  // It gives customers an obvious way out without inventing a second navigation
+  // model, and the browser Back/Forward buttons remain authoritative.
+  var navHistory = [{ tab: state.tab, url: location.href }];
+  var navHistoryIndex = 0;
+  window.NotaExperience = state.experience;
 
   // Carnet view ids (segmented switcher).
   // Order matters: the FIRST entry is the fallback for an unknown view, and the
@@ -260,7 +273,7 @@
   // not in multiples.
   function tierAmount(tierId, svc) {
     svc = svc || carnetService();
-    var m = D.tierMultiplier(tierId, state.monthBids);
+    var m = D.tierMultiplier(tierId, state.monthBids, svc && svc.id);
     return Math.round((svc && svc.prixDepart || 0) * (m || 1));
   }
   function tierFromLabel(tierId, svc) { return 'dès ' + D.money(tierAmount(tierId, svc)); }
@@ -423,6 +436,18 @@
     svg.setAttribute('class', cls);
     svg.innerHTML = paths;
     return svg;
+  }
+  // Shared close affordance for generated dialogs. Static dialogs use the
+  // same markup in index.html; keeping this tiny primitive here prevents a
+  // late-created modal from becoming a visual or keyboard exception.
+  function dialogCloseButton(label) {
+    var form = el('form', 'dlg-x-form'); form.method = 'dialog';
+    var button = el('button', 'dlg-x'); button.type = 'submit'; button.value = 'close';
+    button.setAttribute('aria-label', label || T('Fermer'));
+    button.title = label || T('Fermer');
+    button.appendChild(strokeGlyph('<path d="M18 6 6 18M6 6l12 12"/>', 18, ''));
+    form.appendChild(button);
+    return form;
   }
   function svcIcon(id, size) {
     if (!SVC_ICONS[id]) return null;
@@ -948,6 +973,7 @@
       // The PREVIOUS snapshot, before this poll overwrites it: comparing the
       // two is how a notary's release is detected (retained → open again).
       var prev = offerStatusGet(o.id);
+      var wasRetained = !!(prev && prev.bid && prev.bid.status === D.STATUS.RETENUE);
       // A message this device just sent may not be in the server's read yet
       // (the send is followed by a refresh at once, and a read right after a
       // write is not guaranteed to see it). Never let a refresh erase what the
@@ -979,7 +1005,16 @@
         if (!o.serviceId) o.serviceId = st.bid.serviceId;
         if (o.montant == null) o.montant = st.bid.montant;
       }
-      if (st.bid && st.bid.status === D.STATUS.RETENUE) markMyOfferRetained(o.id, { etude: st.bid.etude, montant: st.bid.montant });
+      if (st.bid && st.bid.status === D.STATUS.RETENUE) {
+        markMyOfferRetained(o.id, { etude: st.bid.etude, montant: st.bid.montant });
+        // A live client session learns about an acceptance through this status
+        // poll. Keep the same durable bell entry used at boot and confirm it
+        // immediately when the customer is already looking at Mes offres.
+        addRetainedNotif(o, st.bid);
+        if (!wasRetained && prev && prev.bid && prev.bid.status !== D.STATUS.RETENUE) {
+          toast('Votre demande est retenue à ' + D.money(Number(st.bid.montant) || Number(o.montant) || 0));
+        }
+      }
       if (st.bid && st.bid.status === D.STATUS.ANNULEE) markMyOfferCancelled(o.id);
       // Release (ADR 0012): the last snapshot showed the offer retained and it
       // is now OPEN again (a cancellation is not a release). Announce it, undo
@@ -1139,9 +1174,15 @@
     var offers = myOffers().filter(offerNeedsStatusPoll);
     if (!offers.length) { clientPollStop(); return; }
     clientPollBusy = true;
-    Promise.all(offers.map(function (o) {
-      return fetchOfferStatus(o).then(function (st) { if (st) repaintOfferBand(o, { ifChanged: true }); });
-    })).then(function () { clientPollBusy = false; }, function () { clientPollBusy = false; });
+    // Poll the status and the server journal together. Status updates repaint
+    // the offer; the journal supplies the durable acceptance notice (and any
+    // message/document notice) even when the customer never reloads the page.
+    Promise.all([
+      Promise.all(offers.map(function (o) {
+        return fetchOfferStatus(o).then(function (st) { if (st) repaintOfferBand(o, { ifChanged: true }); });
+      })),
+      clientSyncNotifs(),
+    ]).then(function () { clientPollBusy = false; }, function () { clientPollBusy = false; });
   }
   function clientPollStart() {
     if (clientPollTimer) return;
@@ -1418,6 +1459,7 @@
     emailPreferenceIdentity = token;
     var dialog = el('dialog'); dialog.id = 'email-preferences-dialog';
     dialog.addEventListener('close', function () { dialog.remove(); });
+    dialog.appendChild(dialogCloseButton(T('Fermer')));
     dialog.appendChild(el('h2', null, T('Préférences de courriel')));
     var close = el('button', 'btn', T('Fermer les préférences'));
     close.type = 'button'; close.addEventListener('click', function () { dialog.close(); dialog.remove(); });
@@ -1521,10 +1563,33 @@
     // Respect the profile's notification preferences (a kind'd notif can be off).
     if (n.kind && !notifAllowed(n.kind)) return;
     var a = notifLoad();
-    if (a.some(function (x) { return x.key === n.key; })) return; // idempotent
+    var existing = a.find(function (x) { return x.key === n.key; });
+    if (existing) {
+      // A local fallback can arrive before the API journal. When the server
+      // later confirms the same event, merge its read state and canonical copy
+      // instead of painting a second acceptance notice (or resurrecting one
+      // that was already read).
+      var changed = false;
+      ['title', 'body', 'dateISO', 'offerId', 'lien'].forEach(function (key) {
+        if (n[key] != null && existing[key] !== n[key]) { existing[key] = n[key]; changed = true; }
+      });
+      if (n.read === true && !existing.read) { existing.read = true; changed = true; }
+      if (changed) { notifSave(a); renderNotifs(); }
+      return false;
+    }
     a.unshift({ key: n.key, title: n.title, body: n.body || '', dateISO: n.dateISO || null, offerId: n.offerId || null, lien: n.lien || null, read: n.read === true });
     notifSave(a.slice(0, 40));
     renderNotifs();
+    return true;
+  }
+  function addRetainedNotif(o, bid) {
+    if (!o || !o.id) return false;
+    return addNotif({
+      key: 'retained:' + o.id, kind: 'retained',
+      title: 'Un notaire a retenu votre demande 🎉',
+      body: dayTitle(o.dateISO) + (bid && bid.etude ? ' · ' + bid.etude : ''),
+      dateISO: o.dateISO,
+    });
   }
   // Dismissing keeps the entry (flagged) rather than deleting it: notifications
   // are derived idempotently by `key`, so a deleted one would only come back on
@@ -1691,6 +1756,7 @@
   function oauthLinkDialog(ticket) {
     var dlg = el('dialog', 'dialog'); dlg.id = 'oauth-link-dialog';
     dlg.setAttribute('aria-labelledby', 'oauth-link-title');
+    dlg.appendChild(dialogCloseButton(T('Fermer')));
     var title = el('h2', null, 'Lier votre compte'); title.id = 'oauth-link-title'; dlg.appendChild(title);
     dlg.appendChild(el('p', 'help', 'Confirmez le courriel de votre compte Nota. Ouvrez le lien reçu dans ce navigateur pour terminer la connexion.'));
     var form = el('form'), label = el('label', null, 'Courriel'), input = el('input');
@@ -2554,8 +2620,12 @@
       // remonte la liste pour retrouver l'ordre à l'écran. Idempotent par clé.
       (j.avis || []).slice().reverse().forEach(function (a) {
         if (!a || !a.id) return;
+        // Retention also has a local fallback (the public month feed and the
+        // live status poll). Use its event key so the server journal enriches
+        // that entry instead of duplicating the same acceptance in the bell.
+        var key = a.kind === 'retenue' ? 'retained:' + (a.refId || o.id) : 'srv:' + a.id;
         addNotif({
-          key: 'srv:' + a.id,
+          key: key,
           kind: a.kind,
           title: a.titre || '',
           body: a.corps || '',
@@ -2588,12 +2658,7 @@
         offers.forEach(function (o) {
           var mine = bids.filter(function (b) { return b.id === o.id; })[0];
           if (mine && mine.status === D.STATUS.RETENUE) {
-            addNotif({
-              key: 'retained:' + o.id,
-              kind: 'retained',
-              title: 'Un notaire a retenu votre demande 🎉',
-              body: dayTitle(o.dateISO) + (mine.etude ? ' · ' + mine.etude : ''), dateISO: o.dateISO,
-            });
+            addRetainedNotif(o, mine);
           }
         });
       } catch (e) { /* offline — try again next load */ }
@@ -3213,6 +3278,17 @@
     if (t) { try { t.focus(); } catch (e) {} }
   }
 
+  // The autonomous controller can add one piece of orientation copy when the
+  // aggregate funnel shows that clients are getting stuck. It leaves every
+  // question, price and notary control intact, and is safe to hide on rollback.
+  function renderExperienceGuidance() {
+    var el = $('journey-guidance');
+    if (!el) return;
+    var guided = state.experience && state.experience.mode === 'guided';
+    el.hidden = !guided;
+    if (guided) el.textContent = T('Répondez à ce que vous savez; si un point reste à confirmer, le notaire le reprendra avec vous.');
+  }
+
   // Enlarged day view: click/Enter a cell to see every offer for that day over
   // a dimmed backdrop. Cells stay minimal; all detail lives here.
   async function openDay(iso) {
@@ -3273,6 +3349,7 @@
     // back the day it is actually measured.
     var chanceEl = $('day-chance');
     if (chanceEl) chanceEl.textContent = 'Plus la date est éloignée, plus de notaires ont la latitude de s’organiser pour la prendre ; une date rapprochée en laisse moins.';
+    renderExperienceGuidance();
     validateOfferUI();
 
     renderActiveView();
@@ -3535,10 +3612,30 @@
     var s = h.toString();
     var url = s ? '#' + s : location.pathname;
     // Pane changes push (the Back button walks panes); filter tweaks replace.
-    if (opts && opts.push) history.pushState(null, '', url);
-    else history.replaceState(null, '', url);
+    if (opts && opts.push) {
+      navHistory = navHistory.slice(0, navHistoryIndex + 1);
+      navHistory.push({ tab: state.tab, url: url });
+      navHistoryIndex = navHistory.length - 1;
+      history.pushState({ nota: true, notaIndex: navHistoryIndex, pane: state.tab }, '', url);
+    } else {
+      history.replaceState(Object.assign({}, history.state || {}, {
+        nota: true, notaIndex: navHistoryIndex, pane: state.tab,
+      }), '', url);
+    }
+    syncHistoryControls();
   }
   function num(v) { var n = Number(v); return Number.isFinite(n) ? n : null; }
+
+  function syncHistoryControls() {
+    document.querySelectorAll('[data-history="back"]').forEach(function (back) {
+      back.disabled = navHistoryIndex <= 0;
+      back.setAttribute('aria-disabled', back.disabled ? 'true' : 'false');
+    });
+    document.querySelectorAll('[data-history="forward"]').forEach(function (forward) {
+      forward.disabled = navHistoryIndex >= navHistory.length - 1;
+      forward.setAttribute('aria-disabled', forward.disabled ? 'true' : 'false');
+    });
+  }
 
   function setGroupActive(group, btn) {
     group.querySelectorAll('.chip, .seg-btn').forEach(function (x) {
@@ -6204,11 +6301,7 @@
       var bid = res.body.bid || {};
       st.bid = Object.assign({}, st.bid || {}, bid, { status: D.STATUS.RETENUE });
       markMyOfferRetained(o.id, { etude: bid.etude || p.etude, montant: Number(bid.montant) || p.montant });
-      addNotif({
-        key: 'retained:' + o.id, kind: 'retained',
-        title: 'Un notaire a retenu votre demande 🎉',
-        body: dayTitle(o.dateISO) + ' · ' + D.money(Number(bid.montant) || p.montant) + (p.etude ? ' · ' + p.etude : ''), dateISO: o.dateISO,
-      });
+      addRetainedNotif(o, Object.assign({}, bid, { etude: bid.etude || p.etude }));
       toast('Votre demande est retenue à ' + D.money(Number(bid.montant) || p.montant));
     } else {
       toast('Proposition refusée. Votre offre reste ouverte à ' + D.money(o.montant) + '.');
@@ -9118,6 +9211,15 @@
     ncSheetBid = null;
     if (dlg.open) { try { dlg.close(); } catch (e) { dlg.open = false; } }
   }
+  function ncRevealRetained(id) {
+    var card = document.querySelector('#notary-retained-list .nc-card[data-id="' + id + '"]');
+    if (!card) return;
+    if (card.scrollIntoView) {
+      try { card.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {}
+    }
+    retrigger(card, 'is-flash');
+    card.addEventListener('animationend', function () { card.classList.remove('is-flash'); }, { once: true });
+  }
   async function ncConfirmRetainSheet() {
     var b = ncSheetBid; if (!b) return;
     var go = $('nc-retenir-go'); if (go) go.disabled = true;
@@ -9126,6 +9228,10 @@
     finally { if (go) go.disabled = false; ncCloseRetainSheet(); }
     // The act moved to « Dossiers retenus »: the focus follows it (audit P2-2).
     if (ok) {
+      // Keep the accessible focus on the section heading, but bring the actual
+      // dossier into view so the notary can continue without hunting below the
+      // open-demand list. The flash also confirms which card accepted.
+      ncRevealRetained(b.id);
       var head = $('notary-retained-h');
       if (head) {
         if (!head.hasAttribute('tabindex')) head.setAttribute('tabindex', '-1');
@@ -9418,6 +9524,51 @@
     return strip;
   }
 
+  function ncWorkflowBlock(packet) {
+    var workflow = packet && packet.workflow;
+    if (!workflow) return null;
+    var wrap = el('section', 'nc-workflow');
+    wrap.appendChild(el('h4', 'nc-dossier-h', T('Prochaine action')));
+    wrap.appendChild(el('p', 'help', T('Nota rassemble le contexte client et les propositions IA pour réduire la préparation. Le notaire conserve chaque contrôle critique et chaque décision professionnelle.')));
+    var aiLabels = {
+      not_started: 'Aucune analyse IA lancée.',
+      abstained: 'L’IA n’a pas produit de proposition exploitable.',
+      awaiting_review: 'Des propositions IA attendent votre révision.',
+      reviewed: 'Les propositions IA ont été révisées.',
+    };
+    var ai = el('p', 'nc-workflow-ai');
+    ai.appendChild(el('strong', null, T('État de l’IA')));
+    ai.appendChild(document.createTextNode(' : '));
+    ai.appendChild(el('span', null, T(aiLabels[workflow.ai && workflow.ai.status] || 'État de l’IA non précisé.')));
+    if (workflow.ai && workflow.ai.proposalCount > 1) {
+      ai.appendChild(document.createTextNode(' · ' + workflow.ai.proposalCount + ' ' + T('propositions')));
+    }
+    wrap.appendChild(ai);
+    var list = el('ol', 'nc-workflow-actions');
+    var labels = {
+      request_missing_items: 'Demander les renseignements et pièces manquants',
+      analyze_documents: 'Analyser les documents autorisés avec l’IA',
+      review_ai_proposals: 'Réviser les propositions de l’IA',
+      resolve_exceptions: 'Résoudre les différences et dates signalées',
+      complete_critical_controls: 'Compléter les contrôles critiques et joindre les preuves',
+      confirm_signing_conditions: 'Confirmer les conditions de signature et de clôture',
+    };
+    (workflow.nextActions || []).forEach(function (action) {
+      var item = el('li', 'nc-workflow-action');
+      var label = el('strong', null, T(labels[action.id] || 'Action à préciser'));
+      item.appendChild(label);
+      var meta = el('span', 'nc-workflow-action-meta');
+      meta.appendChild(el('span', null, T(action.owner === 'client' ? 'À faire par le client' : 'À faire par le notaire')));
+      meta.appendChild(document.createTextNode(' · '));
+      meta.appendChild(el('span', null, T(action.priority === 'now' ? 'À faire maintenant' : 'Ensuite')));
+      if (action.count > 1) meta.appendChild(document.createTextNode(' · ' + action.count + ' ' + T('éléments')));
+      item.appendChild(meta);
+      list.appendChild(item);
+    });
+    wrap.appendChild(list);
+    return wrap;
+  }
+
   // The server prepares the work packet even without an AI analysis. This UI
   // preserves the origin of each value and only copies drafts for review.
   function ncFinancingWorkPacket(packet, active) {
@@ -9426,6 +9577,7 @@
     var notice = 'Renseignements et brouillons à réviser par le notaire. Les déclarations du client et les propositions de l’IA restent à vérifier. Ce dossier de travail ne constitue pas une approbation juridique ni une autorisation de signer.';
     wrap.appendChild(el('summary', null, T(title)));
     wrap.appendChild(el('p', 'help', T(notice)));
+    var workflow = ncWorkflowBlock(packet); if (workflow) wrap.appendChild(workflow);
     var summary = [T(title), T(notice)];
     function raw(tag, value) {
       var node = el(tag, null, value == null ? '' : String(value));
@@ -9502,6 +9654,37 @@
     (packet.checks || []).forEach(function (check) {
       line(checks, check.label, T(owners[check.owner] || 'Responsable non précisé'), 'À vérifier');
     });
+    if ((packet.controls || []).length) {
+      var controls = section('Plan des contrôles et intégrations');
+      note(controls, 'Chaque contrôle reste en attente d’une décision et d’une preuve dans le dossier du notaire.');
+      packet.controls.forEach(function (control) {
+        var block = el('div', 'nc-work-packet-control');
+        line(block, control.label, T('Préparation automatique seulement'), control.critical ? 'Contrôle critique' : 'Contrôle à confirmer');
+        line(block, 'Type d’intégration', T(control.integrationLabel || control.integrationType));
+        line(block, 'Système candidat', T(control.integrationCandidate));
+        controls.appendChild(block);
+      });
+    }
+    if (packet.parameterCoverage) {
+      var coverage = section('Couverture des paramètres');
+      note(coverage, 'Nota relie les réponses du client, les pièces, les propositions IA et les décisions qui restent au notaire.');
+      var parameterCounts = packet.parameterCoverage;
+      line(coverage, 'Paramètres tarifaires', (parameterCounts.pricing || []).length);
+      line(coverage, 'Champs de collecte', (parameterCounts.intake || []).length);
+      line(coverage, 'Documents du parcours', (parameterCounts.documents || []).length);
+      line(coverage, 'Champs préparables par l’IA', (parameterCounts.ai && parameterCounts.ai.fields || []).length);
+      line(coverage, 'Contrôles humains critiques', (parameterCounts.humanControls || []).length);
+      if (parameterCounts.caseCoverage) {
+        line(coverage, 'Branches de cas connues', (parameterCounts.caseCoverage.cases || []).length);
+        note(coverage, 'Les cas inconnus sont orientés vers le notaire avant toute automatisation.');
+      }
+      if (parameterCounts.ai && (parameterCounts.ai.unmappedIntake || []).length) {
+        note(coverage, 'Certains champs de collecte sont préparés par le dossier et le notaire sans extraction automatique : ' + parameterCounts.ai.unmappedIntake.join(', ') + '.');
+      }
+      (parameterCounts.integrations || []).forEach(function (integration) {
+        line(coverage, integration.label, integration.candidate);
+      });
+    }
     // The target is an evaluation objective, not a completion percentage or
     // evidence of time saved. Only a supplied review duration is shown.
     if (packet.measurement && packet.measurement.reviewSeconds != null) {
@@ -9566,6 +9749,9 @@
   // Source text and AI proposals stay in this disclosure's memory. Only the
   // authenticated API persists analyses/reviews; opening a card never runs AI.
   function ncFinancingAIBlock(entry) {
+    var actAI = !['financement', 'refinancement'].includes(entry.serviceId);
+    var aiFields = actAI ? (D.actAIFields(entry.serviceId) || []) : D.FINANCING_AI_FIELDS;
+    var aiRoute = actAI ? '/notary/acts' : '/notary/financing';
     var wrap = el('details', 'nc-financing-ai');
     wrap.appendChild(el('summary', null, 'Dossier de travail et analyse assistée'));
     wrap.appendChild(el('div', 'nc-dossier-h', 'Analyse assistée des documents'));
@@ -9592,7 +9778,7 @@
       return node;
     }
     function fieldLabel(id) {
-      var field = D.FINANCING_AI_FIELDS.find(function (item) { return item.id === id; });
+      var field = aiFields.find(function (item) { return item.id === id; });
       return field ? el('span', null, T(field.label)) : raw('span', id);
     }
     function message(node, copy, error) {
@@ -9601,9 +9787,9 @@
     }
     function failure(node, status, fallback, body) {
       var code = body && Array.isArray(body.errors) && body.errors[0] && body.errors[0].code;
-      var copy = status === 503 && ['financing_ai_disabled', 'financing_ai_unavailable'].includes(code)
+      var copy = status === 503 && [actAI ? 'act_ai_disabled' : 'financing_ai_disabled', actAI ? 'act_ai_unavailable' : 'financing_ai_unavailable'].includes(code)
         ? 'Analyse IA indisponible : le fournisseur est désactivé ou indisponible. Aucune nouvelle analyse n’a été produite.'
-        : code === 'financing_ai_invalid_output'
+        : code === (actAI ? 'act_ai_invalid_output' : 'financing_ai_invalid_output')
           ? 'L’analyse IA reçue n’a pas pu être validée. Aucune nouvelle proposition n’a été enregistrée.'
           : code === 'autorisation_traitement_requise'
             ? 'Confirmez votre autorisation de transmettre ce document avant de relancer l’analyse IA.'
@@ -9754,7 +9940,7 @@
         });
         lock(true); message(reviewStatus, 'Enregistrement de la révision…');
         try {
-          var response = await ncPost('/notary/financing/review', {
+          var response = await ncPost(aiRoute + '/review', {
             id: entry.id, dateISO: entry.dateISO, analysisId: analysis.id, decisions: decisions, activeReviewSeconds: elapsed,
           });
           if (!active()) return;
@@ -9780,7 +9966,7 @@
       if (!active()) return;
       lock(true); message(status, 'Chargement de l’analyse enregistrée…');
       try {
-        var response = await fetch(API_BASE + '/notary/financing/preparation?id=' + encodeURIComponent(entry.id) + '&dateISO=' + encodeURIComponent(entry.dateISO), {
+        var response = await fetch(API_BASE + aiRoute + '/preparation?id=' + encodeURIComponent(entry.id) + '&dateISO=' + encodeURIComponent(entry.dateISO), {
           headers: { authorization: 'Bearer ' + nc.token },
         });
         if (!active()) return;
@@ -9804,7 +9990,7 @@
       }
       lock(true); message(status, 'Analyse IA en cours…');
       try {
-        var response = await ncPost('/notary/financing/preparation', {
+        var response = await ncPost(aiRoute + '/preparation', {
           id: entry.id, dateISO: entry.dateISO,
           pages: [{ documentId: documentId.value, page: Number(page.value), text: text.value }], processingAuthorized: true,
         });
@@ -9848,10 +10034,13 @@
     }
     kv('Consentement de partage', d.__consent ? 'Oui' : 'Non');
     wrap.appendChild(rows);
-    var preparation = D.financingPreparation(entry.serviceId, d, entry.pricing);
+    var isFinancing = ['financement', 'refinancement'].includes(entry.serviceId);
+    var preparation = isFinancing
+      ? D.financingPreparation(entry.serviceId, d, entry.pricing)
+      : D.actPreparation(entry.serviceId, d, entry.pricing);
     if (preparation) {
       var brief = el('details', 'nc-preparation');
-      brief.appendChild(el('summary', null, 'Préparation du financement'));
+      brief.appendChild(el('summary', null, isFinancing ? 'Préparation du financement' : 'Préparation de l’acte'));
       brief.appendChild(el('p', 'help', 'Renseignements déclarés seulement. Les documents et les conditions de signature restent à vérifier.'));
       brief.appendChild(el('div', 'nc-dossier-h', 'Renseignements à compléter'));
       if (!preparation.missing.length) brief.appendChild(el('p', 'help', 'Chaque élément est déclaré; la vérification du dossier reste à faire.'));
@@ -9863,10 +10052,22 @@
         missing.appendChild(li);
       });
       brief.appendChild(missing);
-      brief.appendChild(el('div', 'nc-dossier-h', 'Vérifications du notaire et du prêteur'));
+      brief.appendChild(el('div', 'nc-dossier-h', isFinancing ? 'Vérifications du notaire et du prêteur' : 'Vérifications du notaire'));
       var checks = el('ul');
-      preparation.checks.forEach(function (check) { checks.appendChild(el('li', null, check.texte)); });
+      preparation.checks.forEach(function (check) { checks.appendChild(el('li', null, check.texte || check.label)); });
       brief.appendChild(checks);
+      if ((preparation.controls || []).length) {
+        brief.appendChild(el('div', 'nc-dossier-h', 'Plan des contrôles et intégrations'));
+        brief.appendChild(el('p', 'help', 'La préparation peut être automatisée; chaque contrôle reste à décider et à documenter par le notaire.'));
+        var controls = el('ul');
+        preparation.controls.forEach(function (control) {
+          var item = el('li');
+          item.appendChild(el('strong', null, T(control.label)));
+          item.appendChild(el('p', 'help', T(control.integrationLabel || control.integrationType) + ' · ' + T(control.integrationCandidate)));
+          controls.appendChild(item);
+        });
+        brief.appendChild(controls);
+      }
       brief.appendChild(ncFinancingAIBlock(entry));
       wrap.appendChild(brief);
     }
@@ -11342,6 +11543,10 @@
   function setTab(tab, opts) {
     opts = opts || {};
     var prev = state.tab;
+    if (tab !== prev) {
+      var prevIndex = PANES.indexOf(prev), nextIndex = PANES.indexOf(tab);
+      document.documentElement.setAttribute('data-nav-direction', nextIndex >= prevIndex ? 'forward' : 'back');
+    }
     state.tab = tab;
     syncNavTabs(tab);
     PANES.forEach(function (t) {
@@ -11368,6 +11573,7 @@
     // Each pane change is a history entry (deep-linkable, Back walks panes
     // instead of leaving the site). fromHistory guards the popstate round-trip.
     if (tab !== prev && !opts.fromHistory) writeHash({ push: true });
+    else syncHistoryControls();
   }
 
   // Every modal the page can hold; closed together when history moves.
@@ -11505,6 +11711,13 @@
   function wire() {
     // Les sections écrites en dur reçoivent leur glyphe une fois pour toutes.
     paintStaticSectionIcons();
+    document.querySelectorAll('[data-history="back"]').forEach(function (button) {
+      button.addEventListener('click', function () { if (!this.disabled) history.back(); });
+    });
+    document.querySelectorAll('[data-history="forward"]').forEach(function (button) {
+      button.addEventListener('click', function () { if (!this.disabled) history.forward(); });
+    });
+    syncHistoryControls();
     // Tabs
     document.querySelectorAll('.nav-tab').forEach(function (b) {
       b.addEventListener('click', function () { setTab(this.dataset.tab); });
@@ -11672,6 +11885,10 @@
 
     // Notification bell
     $('notif-bell').addEventListener('click', function (e) { e.stopPropagation(); toggleNotifPanel(); });
+    $('acct-close').addEventListener('click', function () {
+      toggleNotifPanel(false);
+      var bell = $('notif-bell'); if (bell) { try { bell.focus(); } catch (e) {} }
+    });
     $('notif-clear').addEventListener('click', markAllRead);
     $('notif-panel').addEventListener('click', function (e) { e.stopPropagation(); });
     // Up/Down walk the panel's rows (wrapping), Home/End jump — the menu half
@@ -11774,6 +11991,18 @@
     // (setTab pushes one entry per pane change). fromHistory stops the
     // round-trip from pushing again.
     window.addEventListener('popstate', function () {
+      var navState = history.state;
+      if (navState && navState.nota && Number.isInteger(navState.notaIndex)) {
+        navHistoryIndex = Math.max(0, Math.min(navHistory.length - 1, navState.notaIndex));
+      } else {
+        // A caller may have used history.pushState directly (shared-link tests,
+        // integrations, or a browser extension). Keep the rail honest by
+        // resolving the current URL against the entries we know.
+        var currentUrl = location.href;
+        var found = navHistory.findIndex(function (entry) { return entry.url === currentUrl; });
+        if (found >= 0) navHistoryIndex = found;
+      }
+      syncHistoryControls();
       var h = new URLSearchParams(location.hash.replace(/^#/, ''));
       var t = h.get('t') || 'carnet';
       if (PANES.indexOf(t) < 0) t = 'carnet';
@@ -12303,29 +12532,37 @@
     for (var f = 0; f < 6; f++) faces += DRIFT_MARK_SVG;
     return '<span class="cube">' + faces + '</span>';
   })();
-  function driftBuild(host, id, variant) {
+  function driftBuild(host, id, variant, opts) {
     if (!host || $(id)) return;
     // Under prefers-reduced-motion the stylesheet freezes the dice; not
-    // building twenty cubes at all also spares the DOM and the paint.
+    // building the cubes at all also spares the DOM and the paint.
     if (reducedMotion()) return;
+    // opts lets one caller (the intro gate) run a denser, more visible field
+    // than the site-wide layer without touching that layer's own tuning —
+    // defaults below reproduce the original 20-die, whisper-faint site-bg.
+    opts = opts || {};
+    var cols = opts.cols || 5, rows = opts.rows || 4;
+    var oMin = opts.oMin != null ? opts.oMin : 0.04, oRange = opts.oRange != null ? opts.oRange : 0.05;
+    var sMin = opts.sMin != null ? opts.sMin : 22, sRange = opts.sRange != null ? opts.sRange : 58;
     var bg = document.createElement('div');
     bg.id = id;
     bg.className = 'mark-drift' + (variant ? ' ' + variant : '');
     bg.setAttribute('aria-hidden', 'true');
-    for (var i = 0; i < 20; i++) {
+    // A jittered grid spreads the marks evenly — no clumps, no bare corners —
+    // while the jitter keeps the lattice invisible.
+    var cellW = 100 / cols, cellH = 100 / rows;
+    for (var i = 0; i < cols * rows; i++) {
       var m = document.createElement('i');
-      // A jittered 5×4 grid spreads the twenty marks evenly — no clumps, no
-      // bare corners — while the jitter keeps the lattice invisible.
-      var col = i % 5, row = (i / 5) | 0;
-      m.style.setProperty('--x', (col * 20 + 2 + Math.random() * 16).toFixed(1) + '%');
-      m.style.setProperty('--y', (row * 25 + 2 + Math.random() * 21).toFixed(1) + '%');
+      var col = i % cols, row = (i / cols) | 0;
+      m.style.setProperty('--x', (col * cellW + 2 + Math.random() * (cellW - 4)).toFixed(1) + '%');
+      m.style.setProperty('--y', (row * cellH + 2 + Math.random() * (cellH - 4)).toFixed(1) + '%');
       // One depth draw drives the whole parallax: near marks are bigger,
       // sharper, a touch bolder and wander farther; far ones shrink, soften
       // behind a light blur and barely stir.
       var t = Math.random();
       var amp = 40 + t * 120;
-      m.style.setProperty('--s', (22 + t * 58).toFixed(0) + 'px');
-      m.style.setProperty('--o', (0.04 + t * 0.05).toFixed(3));
+      m.style.setProperty('--s', (sMin + t * sRange).toFixed(0) + 'px');
+      m.style.setProperty('--o', (oMin + t * oRange).toFixed(3));
       m.style.setProperty('--blur', ((1 - t) * 1.6).toFixed(1) + 'px');
       m.style.setProperty('--d', (14 + Math.random() * 14).toFixed(1) + 's');
       m.style.setProperty('--dl', (-Math.random() * 28).toFixed(1) + 's');
@@ -12788,7 +13025,7 @@
     var tab = film === 'client' ? 'carnet' : 'notaires';
     $('ig-skip').dataset.tab = tab;
     clearTimeout(igTimer);
-    igRemaining = 20600;
+    igRemaining = 14400; // matches the CSS film timeline: 4 beats x 3.5s + a short grace on the last one
     igResumeTimer();
     // Focus follows the film to its direct route into the product.
     try { $('ig-skip').focus(); } catch (e) {}
@@ -12844,7 +13081,11 @@
       button.addEventListener('click', function () { igDismiss(button.dataset.igGoto, true); });
     });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !gate.hidden) igDismiss(null, true); });
-    driftBuild(gate, 'ig-bg');
+    // The first-arrival moment earns a more visible field than the
+    // whisper-faint site-wide layer, without crowding it: 16 dice (fewer
+    // than the site-wide 20, spread wider), roughly twice as opaque, a
+    // touch bigger.
+    driftBuild(gate, 'ig-bg', undefined, { cols: 4, rows: 4, oMin: 0.07, oRange: 0.09, sMin: 24, sRange: 66 });
     gate.hidden = false;
     document.body.classList.add('ig-open');
     setBackdropInert(true);

@@ -268,6 +268,29 @@ function createAdminApp(repo, opts = {}) {
       });
     }
 
+    // --- Catalogue complet + inventaire des fonctionnalités -----------------
+    // These are read models assembled from the domain and the guarded admin
+    // use-case. They let an operator inspect testament, procuration, financing,
+    // refinancing, every intake/document/AI/control-plan detail, plus the
+    // wider platform surface without granting access to customer records.
+    if (route === '/admin/catalogue' && method === 'GET') {
+      const result = await admin.getCatalogue(bearer(request), { ip: clientIp(request) });
+      if (!result.ok) {
+        if (result.status === 401) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+        return json(result.status || 403, { errors: result.errors });
+      }
+      return json(200, result.catalogue);
+    }
+
+    if (route === '/admin/features' && method === 'GET') {
+      const result = await admin.getFeatures(bearer(request), { ip: clientIp(request) });
+      if (!result.ok) {
+        if (result.status === 401) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+        return json(result.status || 403, { errors: result.errors });
+      }
+      return json(200, result);
+    }
+
     if (route === '/admin/metrics/overview' && method === 'GET') {
       const principal = await admin.requireAdmin(bearer(request), { ip: clientIp(request) });
       if (!principal) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });

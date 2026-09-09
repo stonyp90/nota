@@ -48,10 +48,10 @@
 
   // --- Services --------------------------------------------------------------
   // Only acts with a bounded, client-assemblable intake are listed. Acte de
-  // vente was removed deliberately — see docs/decisions/0003-bounded-intake.md.
-  // The catalogue is the FINANCING family: testament and procuration were
-  // retired (docs/decisions/0010-financing-first-catalogue.md) — the urgency
-  // ladder prices a deadline, and financing is the act that has one.
+  // vente remains deliberately out of scope — see
+  // docs/decisions/0003-bounded-intake.md. Testament and procuration are now
+  // catalogue services too: each has its own intake, price levers and
+  // checklist, so a notary can accept from a complete, server-validated brief.
   // Each service carries its own document checklist and info fields, with
   // plain-language help text (fr-CA) used by both the Dossier UI and the
   // text-to-speech reader.
@@ -346,6 +346,21 @@
       aide: 'Les titres et les documents que le prêteur exigera avant de débourser.',
     },
     {
+      id: 'parties',
+      nom: 'Les personnes',
+      aide: 'Les personnes concernées, leur situation et celles qui doivent intervenir.',
+    },
+    {
+      id: 'acte',
+      nom: 'Votre acte',
+      aide: 'La portée et les particularités qui déterminent le travail du notaire.',
+    },
+    {
+      id: 'biens',
+      nom: 'Vos biens et instructions',
+      aide: 'Les biens, volontés et documents qui donnent sa portée au dossier.',
+    },
+    {
       id: 'signature',
       nom: 'La signature',
       aide: 'Où l’acte se signe, et qui se déplace pour cela.',
@@ -539,6 +554,65 @@
       aide: 'Le testament (ou la recherche testamentaire) et la déclaration de transmission, si elle a été publiée.',
       si: { critere: 'succession', valeurs: ['oui'] },
     },
+    etat_civil: {
+      nom: 'Document d’état civil pertinent',
+      aide: 'Certificat de mariage, d’union civile, de naissance ou autre document permettant au notaire de confirmer votre situation.',
+    },
+    acte_mariage: {
+      nom: 'Certificat de mariage ou d’union civile',
+      aide: 'La preuve de votre mariage ou de votre union civile, lorsque cette situation est déclarée.',
+      si: { critere: 'situation_familiale', valeurs: ['marie', 'union_civile'] },
+    },
+    contrat_mariage: {
+      nom: 'Contrat de mariage ou d’union civile',
+      aide: 'Votre contrat et ses modifications, si vous en avez un et qu’il peut influencer vos volontés.',
+      si: { critere: 'regime_familial', valeurs: ['contrat', 'inconnu'] },
+    },
+    testament_existant: {
+      nom: 'Testament existant ou recherche testamentaire',
+      aide: 'Votre copie, si vous en avez une. Le notaire confirmera aussi les recherches à effectuer dans les registres.',
+      si: { critere: 'testament_existant', valeurs: ['oui', 'inconnu'] },
+      sinon: 'Vous avez indiqué ne pas avoir de testament connu : le notaire vous dira quelles recherches sont requises.',
+    },
+    personnes_a_charge: {
+      nom: 'Renseignements sur les enfants ou personnes à charge',
+      aide: 'Noms, âge et situation des personnes à charge lorsque cela influence vos volontés.',
+      si: { critere: 'enfants', sauf: ['aucun'] },
+    },
+    liste_biens: {
+      nom: 'Liste indicative des biens et volontés particulières',
+      aide: 'Une liste simple de vos biens, legs ou souhaits à discuter; elle ne remplace pas les vérifications du notaire.',
+    },
+    entreprise: {
+      nom: 'Documents de société ou d’entreprise',
+      aide: 'Statuts, conventions ou renseignements pertinents si vous détenez une entreprise ou des actions.',
+      si: { critere: 'entreprise', valeurs: [true] },
+    },
+    mandat_existant: {
+      nom: 'Procuration ou mandat existant',
+      aide: 'Copie de tout mandat ou procuration déjà signé qui touche le même sujet.',
+      si: { critere: 'mandat_existant', valeurs: ['oui', 'inconnu'] },
+      sinon: 'Vous avez indiqué ne pas avoir de mandat connu : le notaire confirmera les vérifications utiles.',
+    },
+    pieces_identite_mandataires: {
+      nom: 'Pièces d’identité des mandataires',
+      aide: 'Pièces disponibles pour les personnes qui recevront les pouvoirs, lorsque le notaire les demande.',
+      si: { critere: 'nombre_mandataires', sauf: ['aucun'] },
+    },
+    documents_immeuble: {
+      nom: 'Documents de l’immeuble visé',
+      aide: 'Adresse et documents disponibles sur l’immeuble lorsque la procuration porte sur un immeuble.',
+      si: { critere: 'portee_mandat', valeurs: ['immeuble'] },
+    },
+    instructions_mandat: {
+      nom: 'Instructions ou projet de procuration',
+      aide: 'Votre projet ou vos instructions écrites, même sous forme de notes, pour que le notaire puisse les clarifier.',
+    },
+    exigences_tiers: {
+      nom: 'Exigences du tiers ou de l’institution',
+      aide: 'Formulaire, modèle ou instructions du prêteur, de l’institution ou du tiers qui demande la procuration.',
+      si: { critere: 'portee_mandat', valeurs: ['institutionnelle'] },
+    },
   };
   function documentList(ids) {
     return ids.map((id) => ({ id, ...DOCUMENTS[id] }));
@@ -548,6 +622,32 @@
     {"id": "parties_signature", "label": "Personnes qui doivent signer", "aide": "Noms des propriétaires et des emprunteurs, situation conjugale et disponibilités. Signalez une procuration ou une personne absente; le notaire confirme qui doit intervenir."},
     {"id": "contact_preteur", "label": "Personne-ressource chez le prêteur", "aide": "Nom et coordonnées professionnelles de votre conseiller. Indiquez si les instructions ont été envoyées au notaire; une approbation de prêt ne les remplace pas."},
     {"id": "changements_immeuble", "label": "Changements à l’immeuble", "aide": "Travaux, agrandissement, piscine, occupation ou autre changement depuis le certificat de localisation. Sinon, inscrivez « aucun »; si vous ne savez pas, dites-le."},
+    {"id": "type_propriete", "label": "Type d’immeuble et situation particulière", "aide": "Indiquez s’il s’agit d’une maison, d’une copropriété, d’un immeuble à revenus, d’un immeuble détenu par une société ou une fiducie, ou si vous ne savez pas. Le notaire ouvrira les vérifications applicables."},
+    {"id": "identification_immeuble", "label": "Numéro de lot ou identification de l’immeuble", "aide": "Fournissez le numéro de lot, la désignation cadastrale ou toute autre référence disponible. L’adresse seule ne remplace pas la recherche officielle du titre."},
+  ];
+
+  const TESTAMENT_INTAKE_FIELDS = [
+    { id: 'testateurs', label: 'Personnes qui font le testament', aide: 'Noms complets, coordonnées et disponibilité de chaque testateur. Chaque personne signe son propre acte.' },
+    { id: 'situation_familiale', label: 'Situation familiale', aide: 'Mariage, union civile, conjoint de fait, séparation ou famille recomposée; indiquez ce qui doit être clarifié avec le notaire.' },
+    { id: 'regime_familial', label: 'Contrat de mariage ou d’union civile', aide: 'Indiquez si un contrat existe, est modifié ou est introuvable; le notaire confirmera ce qui doit être vérifié.' },
+    { id: 'enfants_personnes_charge', label: 'Enfants et personnes à charge', aide: 'Noms, âge et situation des enfants ou personnes à charge, sans transmettre de numéro d’assurance sociale.' },
+    { id: 'beneficiaires_legataires', label: 'Bénéficiaires et légataires', aide: 'Noms, liens avec vous et nombre approximatif de bénéficiaires ou de legs; le notaire confirme la rédaction.' },
+    { id: 'liquidateur_souhaite', label: 'Liquidateur ou fiduciaire souhaité', aide: 'Personne, personnes ou professionnel que vous envisagez pour administrer la succession ou une fiducie.' },
+    { id: 'volontes_principales', label: 'Volontés principales', aide: 'Bénéficiaires, legs particuliers, liquidateur de succession et souhaits à discuter; le notaire transforme ces instructions en acte.' },
+    { id: 'actifs_importants', label: 'Actifs importants', aide: 'Immeubles, entreprises, comptes ou biens particuliers à prendre en compte. Ne saisissez aucun numéro de compte.' },
+    { id: 'contraintes_particulieres', label: 'Contraintes ou besoins particuliers', aide: 'Langue, mobilité, lecture, interprète ou autre besoin qui peut changer la préparation de la rencontre.' },
+  ];
+
+  const PROCURATION_INTAKE_FIELDS = [
+    { id: 'type_mandat', label: 'Type de mandat ou de procuration', aide: 'Indiquez s’il s’agit d’une procuration ordinaire, d’un possible mandat de protection ou d’une situation à clarifier. Le notaire décide du parcours juridique applicable.' },
+    { id: 'mandants', label: 'Personnes qui donnent la procuration', aide: 'Noms complets, coordonnées et disponibilité de chaque mandant.' },
+    { id: 'mandataires', label: 'Mandataire(s) proposé(s)', aide: 'Noms et coordonnées des personnes autorisées à agir; précisez si elles agissent ensemble ou séparément.' },
+    { id: 'relation_mandataires', label: 'Relation et mode d’action des mandataires', aide: 'Lien de confiance et indication claire : ensemble, séparément, avec remplacement ou sans remplacement.' },
+    { id: 'objet_mandat', label: 'Objet et pouvoirs souhaités', aide: 'Décrivez ce que le mandataire doit pouvoir faire et les limites souhaitées; le notaire confirme la portée juridique.' },
+    { id: 'immeuble_mandat', label: 'Immeuble ou transaction visée', aide: 'Adresse et transaction visée si la procuration concerne un immeuble ou un financement.' },
+    { id: 'institutions_transactions', label: 'Institutions et transactions concernées', aide: 'Banque, prêteur, courtier, organisme public ou autre tiers qui recevra la procuration.' },
+    { id: 'duree_mandat', label: 'Durée ou fin du mandat', aide: 'Durée souhaitée, date de fin ou événement qui met fin au mandat, si applicable.' },
+    { id: 'contact_tiers', label: 'Personne-ressource ou institution', aide: 'Nom du courtier, prêteur, institution ou autre tiers qui demande la procuration, s’il y en a un.' },
   ];
 
   const SERVICES = [
@@ -669,6 +769,157 @@
         ...FINANCING_INTAKE_FIELDS,
       ],
     },
+    {
+      id: 'testament',
+      nom: 'Testament notarié',
+      nomCourt: 'Testament',
+      nomEn: 'Notarial will',
+      nomCourtEn: 'Will',
+      // The platform/date line is deliberately fixed across services. This
+      // floor keeps the smaller act from carrying a disproportionate platform
+      // burden while still leaving room for complexity add-ons.
+      prixDepart: 1800,
+      prixNotaCents: 22900,
+      description: 'Testament reçu devant notaire, adapté à votre situation familiale et à vos volontés.',
+      pricing: {
+        base: 1800,
+        criteria: [
+          { id: 'nombre_testateurs', type: 'bracket', required: true, groupe: 'parties', label: 'Nombre de testateurs', unit: 'personnes', brackets: [
+            { max: 1, add: 0, poids: 0 }, { max: 2, add: 500, poids: 1 }, { max: null, add: 750, poids: 2 },
+          ] },
+          { id: 'situation_familiale', type: 'choice', required: true, groupe: 'parties', label: 'Situation familiale', aide: 'La situation familiale détermine les personnes à protéger et les vérifications à prévoir.', options: [
+            { id: 'celibataire', label: 'Célibataire', add: 0, poids: 0 },
+            { id: 'marie', label: 'Marié', add: 100, poids: 1 },
+            { id: 'union_civile', label: 'Uni civilement', add: 100, poids: 1 },
+            { id: 'union_fait', label: 'Conjoint de fait', add: 150, poids: 1 },
+            { id: 'separe_divorce', label: 'Séparé ou divorcé', add: 200, poids: 1 },
+            { id: 'famille_recomposee', label: 'Famille recomposée ou situation à clarifier', add: 300, poids: 2 },
+          ] },
+          { id: 'enfants', type: 'choice', required: true, groupe: 'parties', label: 'Enfants ou personnes à charge', aide: 'Indiquez la situation qui doit être prise en compte dans vos volontés.', options: [
+            { id: 'aucun', label: 'Aucun', add: 0, poids: 0 },
+            { id: 'majeurs', label: 'Enfants majeurs', add: 0, poids: 0 },
+            { id: 'mineurs', label: 'Enfants mineurs', add: 200, poids: 1 },
+            { id: 'vulnerables', label: 'Personne à charge vulnérable', add: 350, poids: 2 },
+          ] },
+          { id: 'nombre_beneficiaires', type: 'bracket', required: true, groupe: 'acte', label: 'Nombre approximatif de bénéficiaires ou légataires', unit: 'personnes', brackets: [
+            { max: 1, add: 0, poids: 0 }, { max: 4, add: 150, poids: 1 }, { max: null, add: 300, poids: 2 },
+          ] },
+          { id: 'regime_familial', type: 'choice', required: true, defaut: 'aucun', groupe: 'parties', label: 'Contrat de mariage ou d’union civile', aide: 'Un contrat, une modification ou une situation inconnue peut nécessiter une vérification distincte.', options: [
+            { id: 'aucun', label: 'Aucun contrat connu', add: 0, poids: 0 },
+            { id: 'contrat', label: 'Contrat ou modification disponible', add: 150, poids: 1 },
+            { id: 'inconnu', label: 'Je ne sais pas', add: 200, poids: 1 },
+          ] },
+          { id: 'liquidateur', type: 'choice', required: true, defaut: 'un', groupe: 'acte', label: 'Liquidateur ou fiduciaire', aide: 'Le nombre de personnes et le recours à un professionnel changent la préparation des clauses.', options: [
+            { id: 'un', label: 'Une personne', add: 0, poids: 0 },
+            { id: 'plusieurs', label: 'Plusieurs personnes', add: 150, poids: 1 },
+            { id: 'professionnel', label: 'Professionnel ou fiducie à structurer', add: 300, poids: 2 },
+          ] },
+          { id: 'testament_existant', type: 'choice', required: true, defaut: 'non', groupe: 'acte', label: 'Avez-vous un testament existant ?', aide: 'Le notaire doit savoir si un testament précédent peut devoir être révoqué ou comparé.', options: [
+            { id: 'non', label: 'Non, à ma connaissance', add: 0, poids: 0 },
+            { id: 'oui', label: 'Oui, j’en ai une copie ou un souvenir', add: 150, poids: 1 },
+            { id: 'inconnu', label: 'Je ne sais pas', add: 200, poids: 1 },
+          ] },
+          { id: 'legs_complexes', type: 'choice', required: true, defaut: 'aucun', groupe: 'acte', label: 'Volontés ou legs particuliers', aide: 'Choisissez la situation la plus proche; le notaire précisera la rédaction.', options: [
+            { id: 'aucun', label: 'Volontés simples', add: 0, poids: 0 },
+            { id: 'particuliers', label: 'Legs particuliers ou conditions', add: 250, poids: 1 },
+            { id: 'fiducie', label: 'Fiducie, protection ou clauses complexes', add: 600, poids: 2 },
+          ] },
+          { id: 'nombre_immeubles', type: 'choice', required: true, defaut: 'aucun', groupe: 'biens', label: 'Immeubles à prendre en compte', options: [
+            { id: 'aucun', label: 'Aucun', add: 0, poids: 0 },
+            { id: 'un', label: 'Un immeuble', add: 150, poids: 1 },
+            { id: 'plusieurs', label: 'Plusieurs immeubles', add: 300, poids: 2 },
+          ] },
+          { id: 'entreprise', type: 'flag', required: true, defaut: false, groupe: 'biens', label: 'Je détiens une entreprise ou des actions', aide: 'Le notaire devra coordonner les volontés avec les documents de société.', add: 350, poids: 2 },
+          { id: 'biens_hors_qc', type: 'flag', required: true, defaut: false, groupe: 'biens', label: 'Je possède des biens importants hors Québec', aide: 'Le notaire signalera les limites et la coordination nécessaires avec une autre juridiction.', add: 300, poids: 2 },
+          { id: 'protection_beneficiaires', type: 'choice', required: true, defaut: 'aucune', groupe: 'biens', label: 'Protection particulière d’un bénéficiaire', aide: 'Une protection pour un mineur, une personne vulnérable ou une fiducie demande une analyse supplémentaire.', options: [
+            { id: 'aucune', label: 'Aucune protection particulière', add: 0, poids: 0 },
+            { id: 'mineur', label: 'Bénéficiaire mineur', add: 150, poids: 1 },
+            { id: 'vulnerable', label: 'Bénéficiaire vulnérable', add: 300, poids: 2 },
+            { id: 'fiducie', label: 'Fiducie à structurer', add: 500, poids: 2 },
+          ] },
+          { id: 'langue_acte', type: 'choice', required: true, defaut: 'francais', groupe: 'acte', label: 'Langue de l’acte', options: [
+            { id: 'francais', label: 'Français', add: 0, poids: 0 }, { id: 'anglais', label: 'Anglais', add: 150, poids: 1 }, { id: 'bilingue', label: 'Bilingue', add: 300, poids: 1 },
+          ] },
+          { id: 'accessibilite', type: 'choice', required: true, defaut: 'aucune', groupe: 'signature', label: 'Accessibilité et communication', aide: 'Indiquez le soutien matériel ou de communication à prévoir; le notaire évaluera les exigences applicables.', options: [
+            { id: 'aucune', label: 'Aucun besoin particulier', add: 0, poids: 0 },
+            { id: 'lecture_vision', label: 'Lecture ou vision à accommoder', add: 150, poids: 1 },
+            { id: 'audition', label: 'Audition ou communication à accommoder', add: 150, poids: 1 },
+            { id: 'interprete', label: 'Interprète à prévoir', add: 250, poids: 2 },
+          ] },
+          { id: 'temoin_supplementaire', type: 'flag', required: true, defaut: false, groupe: 'signature', label: 'Un témoin supplémentaire pourrait être requis', aide: 'Par exemple, certaines situations de communication ou de vision peuvent exiger une formalité supplémentaire; le notaire confirme.', add: 150, poids: 1 },
+          deplacementCriterion(),
+        ],
+      },
+      documents: documentList(['piece_identite', 'etat_civil', 'acte_mariage', 'contrat_mariage', 'testament_existant', 'personnes_a_charge', 'liste_biens', 'entreprise']),
+      champs: TESTAMENT_INTAKE_FIELDS,
+    },
+    {
+      id: 'procuration',
+      nom: 'Procuration notariée',
+      nomCourt: 'Procuration',
+      nomEn: 'Notarial power of attorney',
+      nomCourtEn: 'Power of attorney',
+      prixDepart: 1500,
+      // A separate platform line keeps this smaller act commercially viable:
+      // the date guarantee is a fixed-cost product, and the higher floor
+      // preserves a healthy margin on same-day transactions.
+      prixNotaCents: 20900,
+      description: 'Mandat notarié pour qu’une personne de confiance agisse en votre nom, dans une portée définie.',
+      pricing: {
+        base: 1500,
+        criteria: [
+          { id: 'nombre_mandants', type: 'bracket', required: true, groupe: 'parties', label: 'Nombre de mandants', unit: 'personnes', brackets: [
+            { max: 1, add: 0, poids: 0 }, { max: 2, add: 350, poids: 1 }, { max: null, add: 550, poids: 2 },
+          ] },
+          { id: 'nombre_mandataires', type: 'bracket', required: true, groupe: 'parties', label: 'Nombre de mandataires', unit: 'personnes', brackets: [
+            { max: 1, add: 0, poids: 0 }, { max: 2, add: 150, poids: 1 }, { max: null, add: 300, poids: 2 },
+          ] },
+          { id: 'portee_mandat', type: 'choice', required: true, groupe: 'acte', label: 'Portée de la procuration', aide: 'La portée indique ce que le mandataire pourra faire; le notaire rédigera les pouvoirs et les limites.', options: [
+            { id: 'generale', label: 'Générale, pour plusieurs démarches', add: 250, poids: 1 },
+            { id: 'specifique', label: 'Spécifique, pour une démarche précise', add: 0, poids: 0 },
+            { id: 'immeuble', label: 'Immeuble, vente ou financement', add: 400, poids: 2 },
+            { id: 'institutionnelle', label: 'Institution ou prêteur avec exigences particulières', add: 350, poids: 2 },
+          ] },
+          { id: 'nombre_institutions', type: 'bracket', required: true, groupe: 'acte', label: 'Nombre approximatif d’institutions ou de transactions', unit: 'institutions', brackets: [
+            { max: 1, add: 0, poids: 0 }, { max: 3, add: 150, poids: 1 }, { max: null, add: 300, poids: 2 },
+          ] },
+          { id: 'mode_action', type: 'choice', required: true, defaut: 'separement', groupe: 'parties', label: 'Mode d’action des mandataires', options: [
+            { id: 'separement', label: 'Chacun peut agir séparément', add: 0, poids: 0 },
+            { id: 'ensemble', label: 'Ils doivent agir ensemble', add: 150, poids: 1 },
+            { id: 'remplacement', label: 'Avec remplacement ou suppléance', add: 250, poids: 2 },
+          ] },
+          { id: 'pouvoirs_sensibles', type: 'choice', required: true, defaut: 'administration', groupe: 'acte', label: 'Nature des pouvoirs demandés', aide: 'Les pouvoirs bancaires, immobiliers ou multiples demandent des limites et vérifications plus détaillées.', options: [
+            { id: 'administration', label: 'Administration courante', add: 0, poids: 0 },
+            { id: 'bancaire', label: 'Opérations bancaires ou financières', add: 150, poids: 1 },
+            { id: 'immeuble', label: 'Vente, achat ou hypothèque d’un immeuble', add: 250, poids: 2 },
+            { id: 'multiple', label: 'Plusieurs catégories de pouvoirs', add: 400, poids: 2 },
+          ] },
+          { id: 'mandat_existant', type: 'choice', required: true, defaut: 'non', groupe: 'acte', label: 'Existe-t-il déjà une procuration ou un mandat ?', aide: 'Une version précédente peut devoir être comparée, révoquée ou signalée.', options: [
+            { id: 'non', label: 'Non, à ma connaissance', add: 0, poids: 0 }, { id: 'oui', label: 'Oui, j’en ai une copie ou un souvenir', add: 150, poids: 1 }, { id: 'inconnu', label: 'Je ne sais pas', add: 200, poids: 1 },
+          ] },
+          { id: 'duree_mandat', type: 'choice', required: true, defaut: 'indeterminee', groupe: 'acte', label: 'Durée ou condition de fin', options: [
+            { id: 'indeterminee', label: 'Sans date de fin indiquée', add: 0, poids: 0 }, { id: 'date_fin', label: 'Avec une date ou un événement de fin', add: 100, poids: 1 }, { id: 'conditions', label: 'Avec plusieurs conditions à préciser', add: 250, poids: 2 },
+          ] },
+          { id: 'reddition_compte', type: 'flag', required: true, defaut: false, groupe: 'acte', label: 'Prévoir une reddition de compte', aide: 'Une obligation de rendre compte ou de documenter les actes du mandataire ajoute des clauses à structurer.', add: 200, poids: 1 },
+          { id: 'remplacement_mandataire', type: 'flag', required: true, defaut: false, groupe: 'acte', label: 'Prévoir un remplaçant ou un mandataire subsidiaire', aide: 'Un remplaçant doit être identifié et ses pouvoirs doivent être coordonnés.', add: 200, poids: 1 },
+          { id: 'langue_acte', type: 'choice', required: true, defaut: 'francais', groupe: 'acte', label: 'Langue de l’acte', options: [
+            { id: 'francais', label: 'Français', add: 0, poids: 0 }, { id: 'anglais', label: 'Anglais', add: 150, poids: 1 }, { id: 'bilingue', label: 'Bilingue', add: 300, poids: 1 },
+          ] },
+          { id: 'accessibilite', type: 'choice', required: true, defaut: 'aucune', groupe: 'signature', label: 'Accessibilité et communication', aide: 'Indiquez le soutien matériel ou de communication à prévoir; le notaire évaluera les exigences applicables.', options: [
+            { id: 'aucune', label: 'Aucun besoin particulier', add: 0, poids: 0 },
+            { id: 'lecture_vision', label: 'Lecture ou vision à accommoder', add: 150, poids: 1 },
+            { id: 'audition', label: 'Audition ou communication à accommoder', add: 150, poids: 1 },
+            { id: 'interprete', label: 'Interprète à prévoir', add: 250, poids: 2 },
+          ] },
+          { id: 'nombre_immeubles', type: 'choice', required: true, defaut: 'aucun', groupe: 'biens', label: 'Immeubles à prendre en compte', options: [
+            { id: 'aucun', label: 'Aucun', add: 0, poids: 0 }, { id: 'un', label: 'Un immeuble', add: 150, poids: 1 }, { id: 'plusieurs', label: 'Plusieurs immeubles', add: 300, poids: 2 },
+          ] },
+          deplacementCriterion(),
+        ],
+      },
+      documents: documentList(['piece_identite', 'pieces_identite_mandataires', 'mandat_existant', 'documents_immeuble', 'exigences_tiers', 'instructions_mandat']),
+      champs: PROCURATION_INTAKE_FIELDS,
+    },
   ];
 
   function serviceById(id) {
@@ -676,30 +927,10 @@
   }
 
   // --- Le catalogue annoncé ---------------------------------------------------
-  // Les actes que Nota prépare et ne vend PAS encore. Ce ne sont pas des
-  // services : aucun prix, aucun critère, aucune réservation ne les touche
-  // (`serviceById` continue de répondre null pour eux, et c'est voulu). Ils
-  // existent pour que l'écran 1 dise où va le catalogue — un client qui ne
-  // voit que deux actes conclut que Nota n'en fera jamais d'autres. Retirer un
-  // acte d'ici et l'ajouter à SERVICES est le geste qui le met en vente.
-  const ACTES_A_VENIR = [
-    {
-      id: 'procuration',
-      nom: 'Procuration notariée',
-      nomCourt: 'Procuration',
-      nomEn: 'Notarial power of attorney',
-      nomCourtEn: 'Power of attorney',
-      description: 'Mandat notarié pour qu’une personne de confiance agisse en votre nom.',
-    },
-    {
-      id: 'testament',
-      nom: 'Testament notarié',
-      nomCourt: 'Testament',
-      nomEn: 'Notarial will',
-      nomCourtEn: 'Will',
-      description: 'Testament reçu devant notaire et inscrit aux registres de la Chambre.',
-    },
-  ];
+  // No duplicate “coming soon” cards: a service is either in SERVICES and
+  // bookable, or in this list and explicitly unavailable. These two acts are
+  // now live; the list stays as the forward-looking extension point.
+  const ACTES_A_VENIR = [];
   function acteAVenirById(id) {
     return ACTES_A_VENIR.find((a) => a.id === id) || null;
   }
@@ -840,7 +1071,13 @@
         // A blank/null/false/"" all coerce to a finite 0 via Number(); require a
         // real positive number so a crafted payload cannot skip the question.
         ok = (typeof a === 'number' || (typeof a === 'string' && a.trim() !== '')) && Number.isFinite(Number(a)) && Number(a) > 0;
-      } else if (c.type === 'flag') ok = a === true;
+      } else if (c.type === 'flag') {
+        // A required boolean may have an explicit false default. The browser
+        // sends that default in the published pricing snapshot; accepting it
+        // here keeps a zero-cost answer explicit without forcing a fake
+        // “non/oui” choice for every boolean driver.
+        ok = a === true || (c.defaut !== undefined && a === c.defaut);
+      }
       else ok = true;
       if (!ok) missing.push({ id: c.id, label: c.label });
       // A choice with a free-text companion (« Autre prêteur » + name): picking
@@ -905,10 +1142,10 @@
   // it becomes the TUNED value learned from what actually cleared. One number,
   // one definition, so the price shown on a calendar cell can never disagree
   // with the price in the form.
-  function tierMultiplier(id, bids) {
+  function tierMultiplier(id, bids, serviceId) {
     const t = tierById(id);
     if (!t) return null;
-    if (bids != null) return tunedTierMultipliers(bids)[t.id];
+    if (bids != null) return tunedTierMultipliers(bids, serviceId)[t.id];
     return (t.apercuMin + t.apercuMax) / 2;
   }
 
@@ -944,11 +1181,14 @@
     return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
   }
 
-  function tunedTierMultipliers(bids) {
+  function tunedTierMultipliers(bids, serviceId) {
     const byTier = {};
     if (Array.isArray(bids)) {
       for (const b of bids) {
         if (!b || b.status !== STATUS.RETENUE) continue;
+        // A retained offer only teaches the same service. Legacy rows without
+        // serviceId remain usable as unscoped history during the migration.
+        if (serviceId && b.serviceId && b.serviceId !== serviceId) continue;
         const t = tierById(b.tier);
         if (!t) continue;
         // A premium outside [1, cap] cannot come from a valid offer — noise.
@@ -2280,8 +2520,8 @@
   // message on its own. They name no amount — prices come from the grid.
   const SUPPORT_REPONSES_TYPES = Object.freeze([
     { id: 'bienvenue', titre: 'Bienvenue', titreEn: 'Welcome',
-      texte: 'Bonjour ! Merci de nous écrire. Dites-moi votre date de signature souhaitée et le type d’acte (refinancement ou financement), et je vous guide.',
-      texteEn: 'Hello! Thanks for writing. Tell me your preferred signing date and the type of act (refinancing or financing), and I will guide you.' },
+      texte: 'Bonjour ! Merci de nous écrire. Dites-moi votre date de signature souhaitée et le type d’acte (financement, refinancement, testament ou procuration), et je vous guide.',
+      texteEn: 'Hello! Thanks for writing. Tell me your preferred signing date and the type of act (financing, refinancing, will or power of attorney), and I will guide you.' },
     { id: 'comment_ca_marche', titre: 'Comment ça marche', titreEn: 'How it works',
       texte: 'Vous choisissez votre date de signature dans le carnet, vous voyez le prix avant de vous engager, et un notaire inscrit retient votre demande. Vous ne payez qu’à la signature.',
       texteEn: 'You pick your signing date in the carnet, you see the price before committing, and a registered notary takes on your request. You only pay at signing.' },
@@ -2311,7 +2551,7 @@
   // 0008), qui complète la fiche avant de la donner au modèle.
   // Source-backed preparation knowledge; never a file-specific legal opinion.
   const FINANCING_KNOWLEDGE = {
-    "version": "2026-09-09.1",
+    "version": "2026-09-09.3",
     "reviewedOn": "2026-09-09",
     "scope": "Préparation générale au Québec; les instructions propres au dossier et le jugement du notaire priment.",
     "sources": [
@@ -2373,6 +2613,145 @@
       "Les renseignements du dossier ne sont pas des exemples d’entraînement. Les évaluations utilisent des cas synthétiques; les réponses du modèle ne constituent pas une vérité validée."
     ]
   };
+
+  // The extraction prompt and every private work packet carry a service-level
+  // knowledge version. This makes changes to the control plan, source list or
+  // safety wording observable and gives the evaluation runner a stable model
+  // improvement boundary. These are preparation references, never a substitute
+  // for the current lender instruction, official register result or notary's
+  // professional judgment.
+  const NOTARY_SERVICE_KNOWLEDGE = Object.freeze({
+    financement: Object.freeze({
+      version: FINANCING_KNOWLEDGE.version,
+      reviewedOn: FINANCING_KNOWLEDGE.reviewedOn,
+      scope: 'Financement hypothécaire au Québec, avec une branche d’achat lorsque le dossier le déclare.',
+      sources: [
+        { id: 'cnq-immobilier', url: 'https://www.cnq.org/vos-services-notariaux/immobilier/' },
+        { id: 'registre-foncier', url: 'https://www.quebec.ca/habitation-territoire/information-fonciere/registre-foncier/inscrire-transaction' },
+        { id: 'cnq-technologie', url: 'https://www.cnq.org/fournisseurs-de-solutions-technologiques-aux-notaires/' },
+      ],
+      facts: [
+        { id: 'purchase_branch', texte: 'Un financement lié à un achat doit être coordonné avec la promesse, la vente, les ajustements et le notaire du vendeur; une offre de prêt seule ne remplace pas ces vérifications.' },
+        { id: 'publication', texte: 'L’acte hypothécaire, la description de l’immeuble et la publication doivent être contrôlés dans le flux officiel applicable.' },
+        { id: 'funds', texte: 'Les conditions de fonds, la demande de fonds, la réception et la réconciliation restent des étapes distinctes sous contrôle du notaire.' },
+      ],
+    }),
+    refinancement: Object.freeze({
+      version: FINANCING_KNOWLEDGE.version,
+      reviewedOn: FINANCING_KNOWLEDGE.reviewedOn,
+      scope: 'Refinancement hypothécaire au Québec, incluant le suivi des dettes garanties et des radiations.',
+      sources: [
+        { id: 'fin-hypotheque', url: 'https://www.quebec.ca/habitation-territoire/achat-vente/fin-hypotheque' },
+        { id: 'cnq-mainlevee', url: 'https://www.cnq.org/la-chambre-et-votre-protection/faq/pourquoi-une-mainlevee-et-non-une-quittance-lorsque-les-sommes-dues-en-vertu-dune-marge-de-credit-sont-totalement-acquittees-et-la-marge-fermee/' },
+        { id: 'registre-foncier', url: 'https://www.quebec.ca/habitation-territoire/information-fonciere/registre-foncier/inscrire-transaction' },
+      ],
+      facts: [
+        { id: 'official_payout', texte: 'Un relevé client ne remplace pas un état officiel de remboursement; chaque prêt ou marge garanti doit être recensé et suivi avec sa date de validité.' },
+        { id: 'discharge', texte: 'La quittance et la mainlevée ne sont pas interchangeables dans tous les dossiers; le choix et la publication doivent être confirmés par le notaire.' },
+        { id: 'new_and_old_security', texte: 'La nouvelle hypothèque, les radiations et la séquence de financement doivent être suivies séparément jusqu’aux reçus officiels.' },
+      ],
+    }),
+    testament: Object.freeze({
+      version: '2026-09-09.2',
+      reviewedOn: '2026-09-09',
+      scope: 'Testament notarié au Québec; les volontés extraites restent des propositions de préparation.',
+      sources: [
+        { id: 'cnq-testament', url: 'https://www.cnq.org/vos-services-notariaux/testament-et-succession/le-testament/' },
+        { id: 'code-civil-testament', url: 'https://www.legisquebec.gouv.qc.ca/fr/document/lc/ccq-1991/20240306?langcont=fr' },
+        { id: 'cnq-registres', url: 'https://www.cnq.org/la-chambre-et-votre-protection/services-de-la-chambre/recherche-aux-registres/' },
+      ],
+      facts: [
+        { id: 'original_minute', texte: 'Le testament notarié est reçu en minute; le notaire conserve l’original et l’existence de l’acte doit être enregistrée dans le registre applicable.' },
+        { id: 'reading_witnesses', texte: 'La forme, la lecture, les témoins et les besoins de communication doivent être préparés selon la situation et confirmés pendant la réception de l’acte.' },
+        { id: 'capacity_consent', texte: 'La capacité, la compréhension, le conseil et le consentement libre restent des décisions du notaire et ne sont pas déduits d’un document.' },
+      ],
+    }),
+    procuration: Object.freeze({
+      version: '2026-09-09.2',
+      reviewedOn: '2026-09-09',
+      scope: 'Procuration notariée au Québec, avec routage obligatoire lorsque le dossier peut être un mandat de protection.',
+      sources: [
+        { id: 'cnq-procuration', url: 'https://www.cnq.org/vos-services-notariaux/protection-des-personnes/la-procuration/' },
+        { id: 'cnq-protection', url: 'https://www.cnq.org/vos-services-notariaux/protection-des-personnes/le-mandat-de-protection/' },
+        { id: 'cnq-revocation', url: 'https://www.cnq.org/la-chambre-et-votre-protection/faq/peut-on-limiter-la-duree-dune-procuration-et-peut-on-la-revoquer/' },
+      ],
+      facts: [
+        { id: 'ordinary_or_protection', texte: 'Une procuration ordinaire et un mandat de protection sont des parcours distincts; le système doit extraire les mots du client et ouvrir une clarification notariale.' },
+        { id: 'powers_duration', texte: 'Les pouvoirs, leurs limites, la durée, les conditions de fin et les personnes autorisées doivent être structurés sans inventer une autorité.' },
+        { id: 'revocation', texte: 'Un mandat ou une procuration antérieure, sa révocation et les avis aux tiers doivent être suivis séparément jusqu’à la décision du notaire.' },
+      ],
+    }),
+  });
+
+  function notaryServiceKnowledge(serviceId) {
+    return NOTARY_SERVICE_KNOWLEDGE[serviceId] || null;
+  }
+
+  // A complete, adapter-safe view of the catalogue. The admin console uses
+  // this instead of importing the raw service objects so its inventory cannot
+  // quietly drift from the public booking flow or the notary work packet.
+  // This is deliberately a read model: prices and legal/workflow rules remain
+  // governed by the domain and the API configuration ports.
+  function catalogueSnapshot({ grille } = {}) {
+    const criterion = (c) => ({
+      id: c.id,
+      type: c.type,
+      required: !!c.required,
+      ...(c.defaut !== undefined ? { defaut: c.defaut } : {}),
+      ...(c.groupe ? { groupe: c.groupe } : {}),
+      ...(c.unit ? { unit: c.unit } : {}),
+      label: c.label,
+      ...(c.aide ? { aide: c.aide } : {}),
+      ...(c.options ? { options: c.options.map((o) => ({
+        id: o.id, label: o.label,
+        ...(o.aide ? { aide: o.aide } : {}),
+        add: Number(o.add) || 0, poids: Number(o.poids) || 0,
+      })) } : {}),
+      ...(c.brackets ? { brackets: c.brackets.map((b) => ({
+        max: b.max == null ? null : b.max, add: Number(b.add) || 0, poids: Number(b.poids) || 0,
+      })) } : {}),
+      ...(c.autre ? { autre: { ...c.autre } } : {}),
+      ...(c.add !== undefined ? { add: Number(c.add) || 0 } : {}),
+      ...(c.poids !== undefined ? { poids: Number(c.poids) || 0 } : {}),
+    });
+    const service = (svc) => {
+      const annonce = prixAnnonce(svc.id, grille);
+      return {
+        id: svc.id,
+        actif: true,
+        nom: svc.nom,
+        nomCourt: svc.nomCourt,
+        nomEn: svc.nomEn,
+        nomCourtEn: svc.nomCourtEn,
+        description: svc.description,
+        prixDepart: svc.prixDepart,
+        prixNotaCents: svc.prixNotaCents,
+        prixAnnonce: annonce,
+        pricing: {
+          base: svc.pricing ? svc.pricing.base : svc.prixDepart,
+          criteria: svc.pricing ? svc.pricing.criteria.map(criterion) : [],
+        },
+        documents: (svc.documents || []).map((d) => ({ ...d })),
+        champs: (svc.champs || []).map((c) => ({ ...c })),
+        ai: {
+          active: !!actAIFields(svc.id),
+          fields: (actAIFields(svc.id) || []).map((f) => ({ ...f })),
+          limites: { ...ACT_AI_LIMITS },
+        },
+        connaissance: notaryServiceKnowledge(svc.id),
+        planNotaire: notaryControlPlan(svc.id),
+      };
+    };
+    return {
+      services: SERVICES.map(service),
+      actesAVenir: ACTES_A_VENIR.map((a) => ({ ...a })),
+      dates: TIERS.map((t) => ({ ...t })),
+      deplacements: DEPLACEMENTS.map((d) => ({ ...d })),
+      preteurs: LENDERS.map((l) => ({ ...l })),
+      typesDocuments: Object.entries(DOCUMENT_TYPES).map(([id, value]) => ({ id, ...value })),
+      versions: { catalogue: '2026-09-09', controleNotaire: NOTARY_CONTROL_PLAN_VERSION },
+    };
+  }
 
   function supportFacts({ grille, bids } = {}) {
     return {
@@ -3334,6 +3713,45 @@
         succession: valeur % 7 === 0 ? 'oui' : 'non',
       });
     }
+    if (svc.id === 'testament') {
+      const nombre = 1 + Math.floor(rng() * 2);
+      return {
+        nombre_testateurs: nombre,
+        situation_familiale: ['celibataire', 'marie', 'union_civile', 'union_fait', 'famille_recomposee'][Math.floor(rng() * 5)],
+        regime_familial: ['aucun', 'contrat', 'inconnu'][Math.floor(rng() * 3)],
+        enfants: ['aucun', 'majeurs', 'mineurs', 'vulnerables'][Math.floor(rng() * 4)],
+        nombre_beneficiaires: 1 + Math.floor(rng() * 6),
+        liquidateur: ['un', 'plusieurs', 'professionnel'][Math.floor(rng() * 3)],
+        testament_existant: rng() > 0.8 ? 'oui' : 'non',
+        legs_complexes: ['aucun', 'particuliers', 'fiducie'][Math.floor(rng() * 3)],
+        nombre_immeubles: ['aucun', 'un', 'plusieurs'][Math.floor(rng() * 3)],
+        entreprise: rng() > 0.8,
+        biens_hors_qc: rng() > 0.85,
+        protection_beneficiaires: ['aucune', 'mineur', 'vulnerable', 'fiducie'][Math.floor(rng() * 4)],
+        langue_acte: ['francais', 'anglais', 'bilingue'][Math.floor(rng() * 3)],
+        accessibilite: ['aucune', 'lecture_vision', 'audition', 'interprete'][Math.floor(rng() * 4)],
+        temoin_supplementaire: rng() > 0.9,
+        deplacement: DEPLACEMENTS[Math.floor(rng() * DEPLACEMENTS.length)].id,
+      };
+    }
+    if (svc.id === 'procuration') {
+      return {
+        nombre_mandants: 1 + Math.floor(rng() * 2),
+        nombre_mandataires: 1 + Math.floor(rng() * 3),
+        mode_action: ['separement', 'ensemble', 'remplacement'][Math.floor(rng() * 3)],
+        portee_mandat: ['generale', 'specifique', 'immeuble', 'institutionnelle'][Math.floor(rng() * 4)],
+        pouvoirs_sensibles: ['administration', 'bancaire', 'immeuble', 'multiple'][Math.floor(rng() * 4)],
+        nombre_institutions: 1 + Math.floor(rng() * 4),
+        mandat_existant: rng() > 0.85 ? 'oui' : 'non',
+        duree_mandat: ['indeterminee', 'date_fin', 'conditions'][Math.floor(rng() * 3)],
+        reddition_compte: rng() > 0.85,
+        remplacement_mandataire: rng() > 0.85,
+        langue_acte: ['francais', 'anglais', 'bilingue'][Math.floor(rng() * 3)],
+        accessibilite: ['aucune', 'lecture_vision', 'audition', 'interprete'][Math.floor(rng() * 4)],
+        nombre_immeubles: ['aucun', 'un', 'plusieurs'][Math.floor(rng() * 3)],
+        deplacement: DEPLACEMENTS[Math.floor(rng() * DEPLACEMENTS.length)].id,
+      };
+    }
     return {};
   }
 
@@ -3356,7 +3774,7 @@
     if (!svc || !isISODate(dateISO)) return null;
     const days = isISODate(todayISO) ? Math.max(0, daysBetween(todayISO, dateISO)) : 0;
     const t = tierById(tierForDays(days));
-    const mult = tierMultiplier(t.id, bids);
+    const mult = tierMultiplier(t.id, bids, serviceId);
     // Anchor the recommendation on Nota's quoted price (notaPrice — the base
     // derived from the client's pricing answers, times the single market
     // multiplier knob), so a more complex act recommends a proportionally
@@ -3445,14 +3863,396 @@
   const FINANCING_AI_FIELDS = [
     { id: 'property_address', label: 'Adresse de l’immeuble', description: 'Civic address of the property securing the proposed loan; not a lender, adviser or correspondence address.' },
     { id: 'borrower_names', label: 'Noms des emprunteurs', description: 'People expressly identified as borrowers. Ownership alone does not establish borrower status; exclude advisers and witnesses.' },
+    { id: 'signing_parties', label: 'Personnes et rôles à la signature', description: 'Owners, borrowers, guarantors, spouses, attorneys or corporate representatives expressly identified as intervening; preserve the stated role and do not infer authority.' },
+    { id: 'property_identifier', label: 'Identification cadastrale indiquée', description: 'Lot number, cadastral designation or other property identifier expressly stated; an address is not a cadastral verification.' },
+    { id: 'property_type', label: 'Type d’immeuble indiqué', description: 'Property type or special situation expressly stated, such as condominium, income property, corporation or trust ownership; do not infer the legal regime.' },
     { id: 'lender_name', label: 'Nom du prêteur', description: 'Lender for the proposed financing, not an adviser or a creditor mentioned only in an existing debt statement. Preserve conflicting proposed lenders.' },
+    { id: 'lender_contact', label: 'Personne-ressource du prêteur', description: 'Professional lender contact expressly identified in the source; do not treat a client adviser or a generic phone number as the official lender channel.' },
     { id: 'loan_amount', label: 'Montant du prêt indiqué', description: 'Proposed loan principal expressly stated as such, not purchase price, valuation, payout balance or registered hypothec/security amount. Do not calculate.' },
+    { id: 'purchase_price', label: 'Prix d’achat indiqué', description: 'Purchase price expressly stated in a purchase or sale document; never substitute it for the loan amount.' },
+    { id: 'loan_purpose', label: 'Objet du financement indiqué', description: 'Purchase, refinance, line of credit or other purpose expressly described by the source; do not classify a transaction from an amount alone.' },
+    { id: 'lender_instruction_version', label: 'Version ou date des instructions du prêteur', description: 'Version, effective date or issue date expressly printed on lender instructions; do not conclude that instructions are current.' },
+    { id: 'property_changes', label: 'Changements à l’immeuble indiqués', description: 'Works, additions, pools, occupancy or other changes expressly stated in relation to the property or a survey.' },
     { id: 'rate_expiry', label: 'Échéance du taux indiquée', description: 'Expiry of the offered rate as stated, not document creation date, loan maturity or a conclusion about validity today.' },
     { id: 'secured_debts', label: 'Dettes garanties indiquées', description: 'Each expressly stated existing loan or credit line secured by the property, including zero-balance lines. A stated absence of debt is a declaration, not registry verification. Never calculate an official payout.' },
+    { id: 'payout_valid_through', label: 'Date de validité du remboursement indiquée', description: 'Valid-through date expressly printed on an official payout statement; do not calculate a payout or decide that it remains valid.' },
   ];
   const FINANCING_AI_LIMITS = Object.freeze({ maxPages: 8, maxPageChars: 8000,
     maxTotalChars: 36000, maxFields: 24, maxValueChars: 1000, maxQuoteChars: 2000,
     maxReasonChars: 500, maxReviewSeconds: 86400, maxExtractionChars: 24000 });
+
+  // The same evidence-first assistant can reduce intake work for every
+  // catalogue act. Each service has a bounded vocabulary of facts. The model may
+  // propose values, but a notary must review every proposal before it enters a
+  // work packet.
+  const ACT_AI_FIELDS = Object.freeze({
+    financement: Object.freeze(FINANCING_AI_FIELDS),
+    refinancement: Object.freeze(FINANCING_AI_FIELDS),
+    testament: Object.freeze([
+      { id: 'testator_names', label: 'Noms des testateurs', description: 'People expressly identified as making the will.' },
+      { id: 'family_status', label: 'Situation familiale indiquée', description: 'Marital, civil union, common-law or blended-family status as expressly stated.' },
+      { id: 'family_regime', label: 'Contrat familial indiqué', description: 'A marriage or civil-union contract or an explicit statement that none is known.' },
+      { id: 'children_dependants', label: 'Enfants ou personnes à charge indiqués', description: 'Children or dependants expressly named; do not infer relationships.' },
+      { id: 'beneficiaries', label: 'Bénéficiaires ou legs indiqués', description: 'Beneficiaries, legacies or conditions expressly stated as wishes; do not turn them into legal conclusions.' },
+      { id: 'liquidator', label: 'Liquidateur ou fiduciaire indiqué', description: 'A person, group or professional expressly proposed to administer the estate or a trust.' },
+      { id: 'existing_will', label: 'Testament antérieur indiqué', description: 'An earlier will, copy or uncertainty expressly mentioned; do not infer a registry result.' },
+      { id: 'assets_properties', label: 'Immeubles et actifs indiqués', description: 'Properties, businesses, foreign assets or other important assets expressly mentioned.' },
+      { id: 'communication_needs', label: 'Besoins de communication indiqués', description: 'Accessibility, interpreter or witness-related needs expressly stated; do not assess capacity.' },
+      { id: 'testament_formalities', label: 'Formalités du testament indiquées', description: 'Witness, reading, interpreter or execution details expressly mentioned; do not conclude that a statutory formality was satisfied.' },
+      { id: 'business_assets', label: 'Entreprise ou actifs importants indiqués', description: 'Businesses, shares or important assets expressly mentioned.' },
+    ]),
+    procuration: Object.freeze([
+      { id: 'mandant_names', label: 'Noms des mandants', description: 'People expressly identified as giving the power of attorney.' },
+      { id: 'mandataire_names', label: 'Noms des mandataires', description: 'People expressly identified as receiving authority.' },
+      { id: 'mandataire_count', label: 'Nombre de mandataires indiqué', description: 'A stated count of attorneys; do not count names that are not clearly appointed.' },
+      { id: 'mandate_regime', label: 'Type de mandat indiqué', description: 'Wording that describes an ordinary power of attorney, a protection mandate or an unclear route; extract the wording but never make the legal classification.' },
+      { id: 'authority_mode', label: 'Mode d’action indiqué', description: 'Whether attorneys act jointly, separately or as substitutes, as expressly stated.' },
+      { id: 'mandate_scope', label: 'Objet ou portée indiquée', description: 'The task, transaction or scope expressly described by the source.' },
+      { id: 'sensitive_powers', label: 'Pouvoirs sensibles indiqués', description: 'Banking, property, financing or multiple powers expressly stated.' },
+      { id: 'property_or_transaction', label: 'Immeuble ou transaction indiqué', description: 'Property address or transaction expressly tied to the power of attorney.' },
+      { id: 'mandate_end', label: 'Durée ou fin indiquée', description: 'An expressly stated date, event or condition ending the mandate.' },
+      { id: 'existing_mandate', label: 'Mandat antérieur indiqué', description: 'An earlier mandate or uncertainty expressly mentioned; do not infer revocation or validity.' },
+      { id: 'third_party_requirements', label: 'Exigences du tiers indiquées', description: 'Institutional forms or requirements expressly stated by the source.' },
+      { id: 'communication_needs', label: 'Besoins de communication indiqués', description: 'Accessibility or interpreter needs expressly stated; do not assess capacity.' },
+    ]),
+  });
+  const ACT_AI_LIMITS = FINANCING_AI_LIMITS;
+
+  // Learning signals are deliberately separated from legal conclusions. The
+  // client can show that a question was answered or that a message needed a
+  // reply; only a notary's explicit review can label an extracted field. This
+  // policy is shared by the API and the future training/export job so a product
+  // metric cannot silently become a legal reward.
+  const NOTARY_LEARNING_POLICY_VERSION = '2026-09-09.1';
+  const NOTARY_LEARNING_EVENT_KINDS = Object.freeze([
+    'customer_input', 'customer_behavior', 'communication', 'ai_output',
+    'notary_review', 'official_outcome', 'client_feedback',
+  ]);
+  const NOTARY_LEARNING_POLICIES = Object.freeze({
+    customer_input: Object.freeze({
+      strength: 'weak', source: 'client', labelFields: false,
+      rewardRole: 'question_routing_and_workflow_only',
+      allowedUses: Object.freeze(['missing_question_priority', 'intake_friction']),
+    }),
+    customer_behavior: Object.freeze({
+      strength: 'weak', source: 'client', labelFields: false,
+      rewardRole: 'question_routing_and_workflow_only',
+      allowedUses: Object.freeze(['response_latency', 'document_completion', 'reopen_prediction']),
+    }),
+    communication: Object.freeze({
+      strength: 'weak', source: 'client_or_notary', labelFields: false,
+      rewardRole: 'communication_experience_only',
+      allowedUses: Object.freeze(['clarity_ranking', 'follow_up_priority', 'escalation_prediction']),
+    }),
+    ai_output: Object.freeze({
+      strength: 'unlabeled', source: 'ai', labelFields: false,
+      rewardRole: 'observation_only',
+      allowedUses: Object.freeze(['error_analysis', 'cost_latency_monitoring']),
+    }),
+    notary_review: Object.freeze({
+      strength: 'strong', source: 'notary', labelFields: true,
+      rewardRole: 'extraction_preference_only',
+      allowedUses: Object.freeze(['notary_verified_preference_dataset', 'regression_case']),
+    }),
+    official_outcome: Object.freeze({
+      strength: 'strong', source: 'official_or_notary', labelFields: false,
+      rewardRole: 'workflow_outcome_only',
+      allowedUses: Object.freeze(['integration_reconciliation', 'workflow_regression']),
+    }),
+    client_feedback: Object.freeze({
+      strength: 'weak', source: 'client', labelFields: false,
+      rewardRole: 'service_experience_only',
+      allowedUses: Object.freeze(['communication_ranking', 'friction_analysis']),
+    }),
+  });
+  const NOTARY_LEARNING_PROGRAM = Object.freeze({
+    version: NOTARY_LEARNING_POLICY_VERSION,
+    mode: 'controlled_reinforcement_signals',
+    defaultTraining: 'off',
+    customerSignals: 'weak_rank_only',
+    notaryLabels: 'required_for_field_learning',
+    criticalControls: 'never_rewarded_from_behavior_alone',
+    weightUpdates: 'offline_only_after_approval',
+    dailyLoop: Object.freeze(['collect', 'classify', 'regress', 'evaluate', 'approve', 'canary', 'rollback']),
+  });
+
+  function notaryLearningPolicyFor(kind) {
+    const policy = NOTARY_LEARNING_POLICIES[kind];
+    return policy ? { ...policy, allowedUses: [...policy.allowedUses] } : null;
+  }
+
+  function notaryLearningPolicy() {
+    return Object.fromEntries(NOTARY_LEARNING_EVENT_KINDS.map(kind => [kind, notaryLearningPolicyFor(kind)]));
+  }
+
+  // Customer behaviour belongs in the product improvement loop, but it must
+  // not become an unbounded online reward channel. This policy describes the
+  // only autonomous product changes allowed by Nota: a coarse, reversible
+  // intake guidance mode selected from aggregate evidence. Legal rules,
+  // critical controls, prices, outbound messages and model weights stay behind
+  // an offline approval boundary.
+  const CUSTOMER_IMPROVEMENT_POLICY_VERSION = '2026-09-09.1';
+  const CUSTOMER_EXPERIENCE_MODES = Object.freeze(['standard', 'guided']);
+  const CUSTOMER_IMPROVEMENT_POLICY = Object.freeze({
+    version: CUSTOMER_IMPROVEMENT_POLICY_VERSION,
+    mode: 'bounded_autonomous_product_optimization',
+    defaultExperience: 'standard',
+    signals: Object.freeze([
+      'aggregate_funnel', 'customer_input', 'customer_behavior',
+      'communication', 'client_feedback', 'official_outcome',
+    ]),
+    automaticActions: Object.freeze(['enable_guided_intake', 'rollback_guided_intake']),
+    minimumObservations: Object.freeze({ formStarts: 20, publicationAttempts: 10, feedbackCount: 5 }),
+    windows: Object.freeze({ decisionDays: 7, comparisonDays: 7 }),
+    thresholds: Object.freeze({
+      blockedRateToGuide: 0.25,
+      maxPublicationProxyDrop: 0.20,
+      maxFailureRateIncrease: 0.10,
+      responseLatencySeconds: 172800,
+      lowRating: 2,
+    }),
+    protectedDecisions: Object.freeze([
+      'legal_rules', 'notary_controls', 'official_records',
+      'prices', 'outbound_campaigns', 'model_weights',
+    ]),
+    cadence: 'daily',
+    rollback: 'automatic_on_guardrail_regression',
+  });
+
+  function experienceMetrics(input) {
+    const source = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+    const integer = (value) => {
+      const n = Number(value);
+      return Number.isFinite(n) && n >= 0 ? Math.min(Math.floor(n), 1000000000) : 0;
+    };
+    const ratio = (value) => {
+      const n = Number(value);
+      return Number.isFinite(n) && n >= 0 ? Math.min(n, 1) : 0;
+    };
+    const metric = {
+      formStarts: integer(source.formStarts),
+      publicationAttempts: integer(source.publicationAttempts),
+      publications: integer(source.publications),
+      blockedAttempts: integer(source.blockedAttempts),
+      publicationFailures: integer(source.publicationFailures),
+      customerInputEvents: integer(source.customerInputEvents),
+      customerBehaviourEvents: integer(source.customerBehaviourEvents),
+      communicationEvents: integer(source.communicationEvents),
+      aiOutputEvents: integer(source.aiOutputEvents),
+      officialOutcomeEvents: integer(source.officialOutcomeEvents),
+      feedbackCount: integer(source.feedbackCount),
+      lowFeedbackCount: integer(source.lowFeedbackCount),
+      blockedRate: ratio(source.blockedRate),
+      publicationProxy: source.publicationProxy == null ? null : ratio(source.publicationProxy),
+      publicationFailureRate: ratio(source.publicationFailureRate),
+      averageRating: source.averageRating == null ? null : Math.max(0, Math.min(5, Number(source.averageRating) || 0)),
+      responseLatencySeconds: source.responseLatencySeconds == null ? null : integer(source.responseLatencySeconds),
+      learningSignalEvents: integer(source.learningSignalEvents),
+      learningSignalsTruncated: source.learningSignalsTruncated === true,
+    };
+    return metric;
+  }
+
+  // Stored configuration is intentionally boring and bounded. The API uses
+  // this normalizer before public projection, while the daily controller uses
+  // it to keep a malformed or hand-edited record from enabling a new mode.
+  function customerExperienceConfig(input) {
+    const source = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+    const mode = CUSTOMER_EXPERIENCE_MODES.includes(source.mode) ? source.mode : CUSTOMER_IMPROVEMENT_POLICY.defaultExperience;
+    const revision = Number(source.revision);
+    const history = Array.isArray(source.history) ? source.history.slice(-30).map((entry) => ({
+      at: typeof entry?.at === 'string' ? entry.at.slice(0, 80) : null,
+      action: typeof entry?.action === 'string' ? entry.action.slice(0, 60) : 'hold',
+      from: CUSTOMER_EXPERIENCE_MODES.includes(entry?.from) ? entry.from : null,
+      to: CUSTOMER_EXPERIENCE_MODES.includes(entry?.to) ? entry.to : null,
+      reason: typeof entry?.reason === 'string' ? entry.reason.slice(0, 300) : null,
+      primaryMetric: typeof entry?.primaryMetric === 'string' ? entry.primaryMetric.slice(0, 80) : null,
+      metrics: experienceMetrics(entry?.metrics),
+    })) : [];
+    return {
+      version: CUSTOMER_IMPROVEMENT_POLICY_VERSION,
+      mode,
+      revision: Number.isFinite(revision) && revision >= 0 ? Math.min(Math.floor(revision), 1000000000) : 0,
+      updatedAt: typeof source.updatedAt === 'string' ? source.updatedAt.slice(0, 80) : null,
+      changedAt: typeof source.changedAt === 'string' ? source.changedAt.slice(0, 80) : null,
+      lastStableMode: CUSTOMER_EXPERIENCE_MODES.includes(source.lastStableMode) ? source.lastStableMode : 'standard',
+      baseline: source.baseline && typeof source.baseline === 'object' ? experienceMetrics(source.baseline) : null,
+      history,
+    };
+  }
+
+  function publicCustomerExperience(input) {
+    const config = customerExperienceConfig(input);
+    return {
+      version: config.version,
+      mode: config.mode,
+      guidanceLevel: config.mode,
+    };
+  }
+
+  // A coverage claim is only meaningful if the branches are explicit. These
+  // are workflow classes, not a promise that an AI can resolve every legal
+  // question. A known class may be prepared and reviewed; an unknown,
+  // exceptional or out-of-catalogue class is routed to the notary before any
+  // automation is allowed to advance it.
+  const NOTARY_CASE_COVERAGE_VERSION = '2026-09-09.1';
+  const NOTARY_COMMON_CASES = Object.freeze([
+    { id: 'standard_natural_person', label: 'Dossier courant de personne physique', disposition: 'prepare_and_review', critical: false, signals: ['serviceId', 'pricing', 'dossier', 'documents'], controlIds: ['scope_and_roles', 'identity_quality_capacity'] },
+    { id: 'missing_or_late_documents', label: 'Pièces manquantes, tardives ou illisibles', disposition: 'prepare_and_review', critical: true, signals: ['missing', 'document_status', 'customer_input'], controlIds: ['scope_and_roles', 'records_and_copy'] },
+    { id: 'conflicting_or_stale_evidence', label: 'Preuves contradictoires, périmées ou incomplètes', disposition: 'route_to_notary', critical: true, signals: ['conflicts', 'document_date', 'official_outcome'], controlIds: ['identity_quality_capacity', 'scope_and_roles'] },
+    { id: 'identity_role_authority', label: 'Identité, qualité, capacité ou autorité à confirmer', disposition: 'route_to_notary', critical: true, signals: ['identity', 'role', 'authority'], controlIds: ['identity_quality_capacity'] },
+    { id: 'language_accessibility', label: 'Langue, interprète, témoin ou accessibilité', disposition: 'prepare_and_review', critical: true, signals: ['langue_acte', 'accessibilite', 'communication'], controlIds: ['language_accessibility', 'read_explain_consent', 'signature_execution'] },
+    { id: 'external_system_unavailable', label: 'Prêteur, registre ou institution temporairement indisponible', disposition: 'route_to_notary', critical: true, signals: ['integration_status', 'retry_state'], controlIds: ['records_and_copy'] },
+    { id: 'privacy_processing_consent', label: 'Autorisation de traitement, confidentialité ou conservation à confirmer', disposition: 'route_to_notary', critical: true, signals: ['processing_authorized', 'retention'], controlIds: ['scope_and_roles', 'records_and_copy'] },
+    { id: 'untrusted_or_adversarial_document', label: 'Contenu documentaire non fiable ou tentative d’instruction embarquée', disposition: 'prepare_and_review', critical: true, signals: ['evidence', 'prompt_injection'], controlIds: ['scope_and_roles', 'identity_quality_capacity'] },
+    { id: 'unknown_or_out_of_catalogue', label: 'Cas inconnu ou hors catalogue', disposition: 'route_to_notary', critical: true, signals: ['unknown_parameter', 'unknown_document', 'unknown_service'], controlIds: ['scope_and_roles', 'identity_quality_capacity'] },
+  ]);
+  const NOTARY_SERVICE_CASES = Object.freeze({
+    financement: Object.freeze([
+      { id: 'purchase_coordination', label: 'Achat, promesse, ajustements et coordination avec le vendeur', disposition: 'prepare_and_review', critical: true, signals: ['contexte=achat', 'promesse_achat', 'seller_notary'], controlIds: ['purchase_coordination', 'lender_instructions'] },
+      { id: 'existing_property_new_loan', label: 'Immeuble existant et nouveau financement', disposition: 'prepare_and_review', critical: true, signals: ['contexte=refinancement_ou_autre', 'secured_debts', 'property_identifier'], controlIds: ['title_charges', 'lender_instructions'] },
+      { id: 'co_borrower_or_guarantor', label: 'Codébiteur, caution ou personne qui intervient à l’acte', disposition: 'route_to_notary', critical: true, signals: ['parties_signature', 'signing_parties'], controlIds: ['scope_and_roles', 'identity_quality_capacity'] },
+      { id: 'condominium_property', label: 'Copropriété et documents du syndicat applicables', disposition: 'prepare_and_review', critical: true, signals: ['type_propriete=copropriete', 'condo_package'], controlIds: ['property_evidence', 'title_charges'] },
+      { id: 'income_corporate_or_trust_party', label: 'Revenu particulier, société, fiducie ou succession', disposition: 'route_to_notary', critical: true, signals: ['parties_signature', 'authority', 'entity_documents'], controlIds: ['scope_and_roles', 'identity_quality_capacity'] },
+      { id: 'title_or_survey_exception', label: 'Anomalie de titre, lot, certificat ou changements à l’immeuble', disposition: 'route_to_notary', critical: true, signals: ['property_identifier', 'property_changes', 'certificat_localisation'], controlIds: ['title_charges', 'property_evidence'] },
+      { id: 'lender_condition_or_version_change', label: 'Condition, version ou échéance des instructions du prêteur à confirmer', disposition: 'route_to_notary', critical: true, signals: ['lender_instruction_version', 'rate_expiry', 'lender_contact'], controlIds: ['lender_instructions', 'funding_reconciliation'] },
+    ]),
+    refinancement: Object.freeze([
+      { id: 'multiple_secured_debts', label: 'Plusieurs prêts ou marges garantis par l’immeuble', disposition: 'prepare_and_review', critical: true, signals: ['secured_debts', 'payout_valid_through'], controlIds: ['secured_debts', 'payout_discharge'] },
+      { id: 'zero_balance_credit_line', label: 'Marge garantie à solde nul qui doit tout de même être traitée', disposition: 'prepare_and_review', critical: true, signals: ['secured_debts', 'zero_balance'], controlIds: ['secured_debts', 'payout_discharge'] },
+      { id: 'payout_expired_or_conflicting', label: 'État de remboursement expiré ou contradictoire', disposition: 'route_to_notary', critical: true, signals: ['payout_valid_through', 'conflicts'], controlIds: ['secured_debts', 'funding_reconciliation'] },
+      { id: 'quittance_or_mainlevee', label: 'Quittance, mainlevée ou radiation à obtenir et publier', disposition: 'prepare_and_review', critical: true, signals: ['secured_debts', 'registry_publication'], controlIds: ['payout_discharge', 'registry_publication'] },
+      { id: 'new_and_existing_security', label: 'Nouvelle sûreté et sûretés existantes à coordonner', disposition: 'route_to_notary', critical: true, signals: ['secured_debts', 'title_charges', 'lender_instruction_version'], controlIds: ['title_charges', 'registry_publication'] },
+      { id: 'corporation_trust_or_family_residence', label: 'Société, fiducie ou résidence familiale impliquée', disposition: 'route_to_notary', critical: true, signals: ['parties_signature', 'authority', 'property_type'], controlIds: ['scope_and_roles', 'identity_quality_capacity'] },
+      { id: 'title_or_survey_exception', label: 'Anomalie de titre, lot, certificat ou changements à l’immeuble', disposition: 'route_to_notary', critical: true, signals: ['property_identifier', 'property_changes', 'certificat_localisation'], controlIds: ['title_charges', 'property_evidence'] },
+      { id: 'lender_condition_or_version_change', label: 'Condition, version ou échéance des instructions du prêteur à confirmer', disposition: 'route_to_notary', critical: true, signals: ['lender_instruction_version', 'rate_expiry', 'lender_contact'], controlIds: ['lender_instructions', 'funding_reconciliation'] },
+    ]),
+    testament: Object.freeze([
+      { id: 'single_testator', label: 'Un testateur avec volontés simples à clarifier', disposition: 'prepare_and_review', critical: false, signals: ['testator_names', 'beneficiaries'], controlIds: ['family_dependants', 'wishes_beneficiaries'] },
+      { id: 'multiple_testators', label: 'Plusieurs testateurs ou actes coordonnés', disposition: 'route_to_notary', critical: true, signals: ['testator_names', 'parties_signature'], controlIds: ['scope_and_roles', 'identity_quality_capacity'] },
+      { id: 'blended_family_minor_or_dependant', label: 'Famille recomposée, enfant mineur ou personne à charge', disposition: 'route_to_notary', critical: true, signals: ['family_status', 'children_dependants'], controlIds: ['family_dependants', 'wishes_beneficiaries'] },
+      { id: 'vulnerable_beneficiary_or_trust', label: 'Bénéficiaire vulnérable, legs complexe ou fiducie à discuter', disposition: 'route_to_notary', critical: true, signals: ['beneficiaries', 'assets_properties', 'business_assets'], controlIds: ['wishes_beneficiaries', 'identity_quality_capacity'] },
+      { id: 'existing_will_revision', label: 'Testament antérieur, modification ou incertitude à vérifier', disposition: 'route_to_notary', critical: true, signals: ['existing_will', 'testament_register'], controlIds: ['existing_will', 'testament_register'] },
+      { id: 'foreign_or_business_assets', label: 'Biens hors Québec, entreprise ou actifs importants', disposition: 'route_to_notary', critical: true, signals: ['assets_properties', 'business_assets'], controlIds: ['wishes_beneficiaries', 'records_and_copy'] },
+      { id: 'witness_interpreter_or_accessibility', label: 'Témoin, interprète ou adaptation de communication à prévoir', disposition: 'prepare_and_review', critical: true, signals: ['communication_needs', 'testament_formalities'], controlIds: ['witnesses', 'language_accessibility', 'signature_execution'] },
+      { id: 'capacity_or_undue_influence_concern', label: 'Doute sur la capacité, la compréhension ou l’influence exercée', disposition: 'route_to_notary', critical: true, signals: ['communication_needs', 'identity_quality_capacity'], controlIds: ['identity_quality_capacity', 'read_explain_consent'] },
+    ]),
+    procuration: Object.freeze([
+      { id: 'ordinary_power_of_attorney', label: 'Procuration ordinaire pour une portée clairement délimitée', disposition: 'prepare_and_review', critical: false, signals: ['mandate_regime', 'mandate_scope'], controlIds: ['mandate_regime', 'powers_duration'] },
+      { id: 'possible_protection_mandate', label: 'Possibilité de mandat de protection ou de parcours distinct', disposition: 'route_to_notary', critical: true, signals: ['mandate_regime', 'capacity'], controlIds: ['mandate_regime', 'protection_route'] },
+      { id: 'joint_separate_or_substitute_mandataries', label: 'Mandataires conjoints, séparés ou remplaçants', disposition: 'prepare_and_review', critical: true, signals: ['mandataire_names', 'authority_mode'], controlIds: ['scope_and_roles', 'powers_duration'] },
+      { id: 'duration_or_termination_conditions', label: 'Durée, condition de fin ou révocation à préciser', disposition: 'prepare_and_review', critical: true, signals: ['mandate_end', 'existing_mandate'], controlIds: ['powers_duration', 'existing_revocation'] },
+      { id: 'existing_mandate_or_revocation', label: 'Mandat antérieur, révocation ou annotation à vérifier', disposition: 'route_to_notary', critical: true, signals: ['existing_mandate', 'mandate_end'], controlIds: ['existing_revocation', 'protection_route'] },
+      { id: 'financial_immovable_or_institution', label: 'Pouvoir bancaire, immobilier, financement ou institutionnel', disposition: 'route_to_notary', critical: true, signals: ['sensitive_powers', 'property_or_transaction', 'third_party_requirements'], controlIds: ['powers_duration', 'third_party_requirements'] },
+      { id: 'medical_or_personal_care_route', label: 'Demande qui concerne les soins personnels ou médicaux', disposition: 'route_to_notary', critical: true, signals: ['mandate_regime', 'mandate_scope'], controlIds: ['mandate_regime', 'protection_route'] },
+      { id: 'capacity_or_pressure_concern', label: 'Doute sur la capacité, la compréhension ou une pression exercée', disposition: 'route_to_notary', critical: true, signals: ['communication_needs', 'capacity'], controlIds: ['identity_quality_capacity', 'read_explain_consent'] },
+    ]),
+  });
+
+  function notaryCaseCoverage(serviceId) {
+    if (!serviceById(serviceId) || !NOTARY_SERVICE_CASES[serviceId]) return null;
+    return {
+      version: NOTARY_CASE_COVERAGE_VERSION,
+      serviceId,
+      cases: [...NOTARY_COMMON_CASES, ...NOTARY_SERVICE_CASES[serviceId]].map(item => ({
+        ...item, signals: [...item.signals], controlIds: [...item.controlIds],
+      })),
+      unknownCasePolicy: 'route_to_notary_before_automation',
+      outputPolicy: 'evidence_proposal_only',
+    };
+  }
+
+  function actAIFields(serviceId) {
+    return ACT_AI_FIELDS[serviceId] || null;
+  }
+
+  function validateActAIInput(input) {
+    const errors = [];
+    const fail = code => errors.push({ code });
+    const obj = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+    if (!actAIFields(obj.serviceId)) fail('service_inconnu');
+    const pages = [];
+    const seen = new Set();
+    let size = 0;
+    if (!Array.isArray(obj.pages) || !obj.pages.length || obj.pages.length > ACT_AI_LIMITS.maxPages) fail('pages_invalides');
+    else for (const page of obj.pages) {
+      if (!page || typeof page !== 'object' || Array.isArray(page) ||
+        typeof page.documentId !== 'string' || !/^[a-zA-Z0-9_-]{1,80}$/.test(page.documentId) ||
+        !Number.isSafeInteger(page.page) || page.page < 1 || page.page > 10000 ||
+        typeof page.text !== 'string' || !page.text.trim() || page.text.length > ACT_AI_LIMITS.maxPageChars) {
+        fail('page_invalide'); continue;
+      }
+      const id = page.documentId + ':' + page.page;
+      if (seen.has(id)) fail('page_dupliquee');
+      seen.add(id); size += page.text.length;
+      pages.push({ documentId: page.documentId, page: page.page, text: page.text });
+    }
+    if (size > ACT_AI_LIMITS.maxTotalChars) fail('pages_trop_longues');
+    return { ok: !errors.length, errors, value: errors.length ? null : { serviceId: obj.serviceId, pages } };
+  }
+
+  function validateActAIExtraction(input, extraction) {
+    const validated = validateActAIInput(input);
+    if (!validated.ok) return validated;
+    const errors = [];
+    const fail = code => errors.push({ code });
+    const fieldsForService = actAIFields(validated.value.serviceId);
+    const allowed = new Set(fieldsForService.map(f => f.id));
+    const fields = [];
+    const seen = new Set();
+    const source = new Map(validated.value.pages.map(p => [p.documentId + ':' + p.page, p.text]));
+    const exactKeys = (obj, keys) => obj && typeof obj === 'object' && !Array.isArray(obj) && Object.keys(obj).every(k => keys.includes(k));
+    try { if (JSON.stringify(extraction)?.length > ACT_AI_LIMITS.maxExtractionChars) fail('extraction_trop_longue'); }
+    catch { fail('extraction_invalide'); }
+    if (!exactKeys(extraction, ['fields']) || !Array.isArray(extraction.fields) || extraction.fields.length > ACT_AI_LIMITS.maxFields) fail('extraction_invalide');
+    else for (const field of extraction.fields) {
+      if (!exactKeys(field, ['fieldId', 'value', 'evidence']) || !allowed.has(field.fieldId) ||
+        typeof field.value !== 'string' || !field.value.trim() || field.value.length > ACT_AI_LIMITS.maxValueChars ||
+        !Array.isArray(field.evidence) || !field.evidence.length || field.evidence.length > ACT_AI_LIMITS.maxPages) {
+        fail('champ_invalide'); continue;
+      }
+      const value = field.value.trim();
+      const evidence = [];
+      for (const e of field.evidence) {
+        if (!exactKeys(e, ['documentId', 'page', 'quote']) || typeof e.documentId !== 'string' ||
+          !Number.isSafeInteger(e.page) || typeof e.quote !== 'string' || !e.quote.trim() ||
+          e.quote.length > ACT_AI_LIMITS.maxQuoteChars || !source.get(e.documentId + ':' + e.page)?.includes(e.quote) ||
+          !e.quote.includes(value)) { fail('preuve_invalide'); continue; }
+        evidence.push({ documentId: e.documentId, page: e.page, quote: e.quote });
+      }
+      const id = field.fieldId + ':' + value;
+      if (seen.has(id)) fail('champ_duplique');
+      seen.add(id); fields.push({ fieldId: field.fieldId, value, evidence });
+    }
+    const missing = fieldsForService.filter(f => !fields.some(p => p.fieldId === f.id)).map(f => f.id);
+    const repeatable = new Set(['testator_names', 'children_dependants', 'beneficiaries', 'mandant_names', 'mandataire_names', 'signing_parties', 'property_changes']);
+    const conflicts = fieldsForService.filter(f => !repeatable.has(f.id) &&
+      new Set(fields.filter(p => p.fieldId === f.id).map(p => p.value)).size > 1).map(f => f.id);
+    return { ok: !errors.length, errors, value: errors.length ? null : { fields, missing, conflicts, status: 'needs_notary_review' } };
+  }
+
+  function validateActAIReview(analysis, input) {
+    const fields = analysis?.preparation?.fields;
+    const errors = [];
+    const fail = code => errors.push({ code });
+    if (!Array.isArray(fields) || !input || input.analysisId !== analysis.id) fail('analyse_invalide');
+    const decisions = [];
+    const seen = new Set();
+    if (!Array.isArray(input?.decisions) || input.decisions.length !== fields?.length) fail('decisions_incompletes');
+    else for (const d of input.decisions) {
+      if (!d || !Number.isInteger(d.index) || d.index < 0 || d.index >= fields.length || seen.has(d.index) ||
+        !['accepted', 'corrected', 'rejected'].includes(d.decision)) { fail('decision_invalide'); continue; }
+      seen.add(d.index);
+      const reason = typeof d.reason === 'string' ? d.reason.trim() : '';
+      const value = typeof d.value === 'string' ? d.value.trim() : '';
+      if (reason.length > ACT_AI_LIMITS.maxReasonChars || (d.decision !== 'accepted' && !reason) ||
+        (d.decision === 'corrected' && (!value || value.length > ACT_AI_LIMITS.maxValueChars))) fail('correction_invalide');
+      decisions.push({ index: d.index, decision: d.decision, ...(d.decision === 'corrected' ? { value } : {}), ...(reason ? { reason } : {}) });
+    }
+    const seconds = input?.activeReviewSeconds == null ? null : input.activeReviewSeconds;
+    if (seconds !== null && (!Number.isInteger(seconds) || seconds < 0 || seconds > ACT_AI_LIMITS.maxReviewSeconds)) fail('duree_invalide');
+    return { ok: !errors.length, errors, value: errors.length ? null : { decisions, activeReviewSeconds: seconds, trainingEligible: false, signingReadiness: 'not_assessed' } };
+  }
 
   function validateFinancingAIReview(analysis, input) {
     const errors = [];
@@ -3548,7 +4348,7 @@
     const missing = FINANCING_AI_FIELDS.filter(f => !fields.some(p => p.fieldId === f.id)).map(f => f.id);
     // Multiple names/debts are legitimate. Single-value differences need review;
     // even an exact quotation does not establish semantic or legal correctness.
-    const conflicts = FINANCING_AI_FIELDS.filter(f => !['borrower_names', 'secured_debts'].includes(f.id) &&
+    const conflicts = FINANCING_AI_FIELDS.filter(f => !['borrower_names', 'secured_debts', 'signing_parties', 'property_changes'].includes(f.id) &&
       new Set(fields.filter(p => p.fieldId === f.id).map(p => p.value)).size > 1).map(f => f.id);
     return { ok: !errors.length, errors, value: errors.length ? null : {
       fields, missing, conflicts, status: 'needs_notary_review',
@@ -3561,19 +4361,23 @@
   function financingPreparation(serviceId, saved, pricing) {
     if (!['financement', 'refinancement'].includes(serviceId)) return null;
     const clean = cleanDossier(serviceId, saved);
-    const items = dossierItems(serviceId, pricing || clean.__pricing)
+    const effectivePricing = pricing || clean.__pricing;
+    const items = dossierItems(serviceId, effectivePricing)
       .filter(item => item.kind !== 'note')
       .map(item => ({ id: item.id, nom: item.nom, aide: item.aide,
         kind: item.kind,
         status: !clean[item.id] ? 'missing' : item.kind === 'field' ? 'declared'
           : clean[item.id] === DOSSIER_TRANSMIS ? 'external' : 'listed' }));
     return { knowledgeVersion: FINANCING_KNOWLEDGE.version, items,
+      controlPlanVersion: NOTARY_CONTROL_PLAN_VERSION,
       missing: items.filter(item => item.status === 'missing'),
       // Tasks describe dependencies; their completion needs separate evidence.
       checks: FINANCING_KNOWLEDGE.facts.map(fact => ({
         id: fact.id, texte: fact.texte, sourceIds: fact.sourceIds.slice(),
         status: 'notary_review_required',
-      })), signingReadiness: 'not_assessed' };
+      })),
+      controls: notaryControlPlan(serviceId, effectivePricing),
+      signingReadiness: 'not_assessed' };
   }
 
   // Reuse client context locally before asking anyone to re-enter it. This
@@ -3610,7 +4414,7 @@
     for (const item of missingRequired(bid.serviceId, pricing)) {
       if (!missing.some(m => m.id === item.id)) missing.push({ id: item.id, label: item.label, kind: 'pricing', aide: '' });
     }
-    const mapping = { adresse: 'property_address', preteur: 'lender_name', valeur_pret: 'loan_amount', date_echeance_taux: 'rate_expiry', dettes_garanties: 'secured_debts' };
+    const mapping = NOTARY_AI_INTAKE_MAP;
     const labelFor = id => FINANCING_AI_FIELDS.find(f => f.id === id)?.label;
     const draftFields = customerContext.filter(c => mapping[c.id]).map(c => ({
       fieldId: mapping[c.id], label: labelFor(mapping[c.id]), value: c.value,
@@ -3635,7 +4439,7 @@
       });
     });
     const normalized = value => String(value).normalize('NFKC').trim().replace(/\s+/g, ' ').toLocaleLowerCase('fr-CA');
-    const comparisons = draftFields.filter(f => f.source === 'customer' && ['property_address', 'lender_name', 'loan_amount', 'rate_expiry'].includes(f.fieldId)).flatMap(c => {
+    const comparisons = draftFields.filter(f => f.source === 'customer' && ['property_address', 'lender_name', 'lender_contact', 'loan_amount', 'rate_expiry'].includes(f.fieldId)).flatMap(c => {
       const values = [...new Set(draftFields.filter(f => f.source !== 'customer' && f.fieldId === c.fieldId).map(f => f.value))];
       return values.some(v => normalized(v) !== normalized(c.value)) ? [{
         fieldId: c.fieldId, label: c.label, customerValue: c.value, documentValues: values,
@@ -3657,10 +4461,18 @@
       { id: 'deed', label: 'Choisir le formulaire autorisé et vérifier le projet d’acte', owner: 'notary', sourceIds: ['rbc'] },
       { id: 'closing', label: 'Confirmer les conditions de signature, de publication et de déboursement', owner: 'notary', sourceIds: ['rbc', 'cnq'] },
     ].map(check => ({ ...check, status: 'pending' }));
+    const controls = notaryControlPlan(bid.serviceId, pricing);
+    const workflow = notaryWorkflowSummary({
+      missing, comparisons, dateFlags, analysis, review, reviewed, controls,
+    });
     return {
-      version: FINANCING_WORK_PACKET_VERSION, customerContext,
+      version: FINANCING_WORK_PACKET_VERSION, serviceId: bid.serviceId, customerContext,
       documentInventory: preparation.items.filter(i => i.kind === 'doc').map(i => ({ id: i.id, label: i.nom, status: i.status })),
       draftFields, missing, comparisons, dateFlags, checks,
+      controlPlanVersion: NOTARY_CONTROL_PLAN_VERSION,
+      parameterCoverage: notaryParameterCoverage(bid.serviceId, pricing),
+      controls,
+      workflow,
       clientRequestDraft: missing.length ? {
         opening: 'Bonjour, voici les renseignements et les pièces à compléter pour préparer votre dossier.',
         items: missing.map(({ id, label, aide }) => ({ id, label, aide })),
@@ -3677,6 +4489,317 @@
       },
       measurement: { target: FINANCING_AUTOMATION_TARGET, measuredReduction: null,
         reviewSeconds: reviewed ? review.activeReviewSeconds ?? null : null },
+    };
+  }
+
+  // A compact, service-neutral work packet for testament and procuration. It
+  // deliberately combines deterministic intake with optional AI proposals, so
+  // the notary gets a usable checklist even when the AI provider is disabled.
+  const ACT_WORK_PACKET_VERSION = '2026-09-09.1';
+
+  // A service-specific control plan turns the notary-work research into an
+  // executable contract. It describes the evidence and integration that a
+  // control needs, but never marks a control complete: every status remains
+  // pending until a separate, notary-owned workflow records the decision.
+  // Candidate names are routing hints, not credentials, approvals or live
+  // connectors. Keep this data in the domain so web and API cannot drift.
+  const NOTARY_CONTROL_PLAN_VERSION = '2026-09-09.2';
+  const NOTARY_PARAMETER_COVERAGE_VERSION = '2026-09-09.4';
+  const NOTARY_AI_INTAKE_MAP = Object.freeze({
+    adresse: 'property_address',
+    preteur: 'lender_name',
+    valeur_pret: 'loan_amount',
+    date_echeance_taux: 'rate_expiry',
+    dettes_garanties: 'secured_debts',
+    parties_signature: 'signing_parties',
+    type_propriete: 'property_type',
+    identification_immeuble: 'property_identifier',
+    changements_immeuble: 'property_changes',
+    contexte: 'loan_purpose',
+    testateurs: 'testator_names',
+    situation_familiale: 'family_status',
+    regime_familial: 'family_regime',
+    enfants_personnes_charge: 'children_dependants',
+    beneficiaires_legataires: 'beneficiaries',
+    liquidateur_souhaite: 'liquidator',
+    volontes_principales: 'beneficiaries',
+    testament_existant: 'existing_will',
+    actifs_importants: 'assets_properties',
+    entreprise: 'business_assets',
+    contraintes_particulieres: 'communication_needs',
+    type_mandat: 'mandate_regime',
+    mandants: 'mandant_names',
+    mandataires: 'mandataire_names',
+    relation_mandataires: 'authority_mode',
+    objet_mandat: 'mandate_scope',
+    immeuble_mandat: 'property_or_transaction',
+    institutions_transactions: 'third_party_requirements',
+    contact_tiers: 'third_party_requirements',
+    contact_preteur: 'lender_contact',
+    duree_mandat: 'mandate_end',
+  });
+  const NOTARY_COMMON_CONTROLS = Object.freeze([
+    { id: 'scope_and_roles', label: 'Confirmer la portée de l’acte et les rôles de chaque personne', owner: 'notary', critical: true,
+      automation: 'prepare_only', integrationType: 'case_graph', integrationCandidate: 'Nota dossier', evidenceIds: ['parties_signature'], externalEvidence: ['mandate_scope'] },
+    { id: 'identity_quality_capacity', label: 'Vérifier l’identité, la qualité, la capacité et l’autorité d’intervention', owner: 'notary', critical: true,
+      automation: 'prepare_only', integrationType: 'secure_intake', integrationCandidate: 'Pièces d’identité et revue notariale', evidenceIds: ['piece_identite'], externalEvidence: ['notary_identity_quality_capacity_decision'] },
+    { id: 'language_accessibility', label: 'Confirmer la langue, l’accessibilité et les besoins de communication', owner: 'notary', critical: true,
+      automation: 'prepare_only', integrationType: 'case_graph', integrationCandidate: 'Nota dossier', evidenceIds: ['contraintes_particulieres'], externalEvidence: ['interpreter_or_accessibility_plan'] },
+    { id: 'read_explain_consent', label: 'Lire ou faire lire l’acte, l’expliquer et recueillir un consentement libre et éclairé', owner: 'notary', critical: true,
+      automation: 'prepare_only', integrationType: 'notarial_signing', integrationCandidate: 'Environnement de signature autorisé', evidenceIds: [], externalEvidence: ['reading_and_explanation_record', 'consent_decision'] },
+    { id: 'signature_execution', label: 'Contrôler la présence, les témoins, la méthode de signature et les mentions requises', owner: 'notary', critical: true,
+      automation: 'prepare_only', integrationType: 'notarial_signing', integrationCandidate: 'ConsignO Cloud-CNQ ou procédure autorisée', evidenceIds: [], externalEvidence: ['signed_act_and_audit'] },
+    { id: 'records_and_copy', label: 'Conserver l’original, la copie, les preuves et l’historique du dossier', owner: 'notary', critical: true,
+      automation: 'prepare_only', integrationType: 'practice_system', integrationCandidate: 'Système de pratique choisi par le cabinet', evidenceIds: [], externalEvidence: ['retention_and_custody_record'] },
+  ]);
+
+  const PURCHASE_COORDINATION_CONTROL = Object.freeze({
+    id: 'purchase_coordination', label: 'Coordonner l’achat, la promesse, les ajustements et le notaire du vendeur', owner: 'notary', critical: true,
+    automation: 'prepare_only', integrationType: 'institutional_route', integrationCandidate: 'Notaire du vendeur et parties à la vente', evidenceIds: ['promesse_achat'], externalEvidence: ['seller_notary_coordination'],
+  });
+
+  const NOTARY_INTEGRATION_LABELS = Object.freeze({
+    case_graph: 'Dossier et graphe de preuve',
+    secure_intake: 'Intake sécurisée et documents',
+    lender_channel: 'Canal autorisé du prêteur',
+    official_registry: 'Registre officiel',
+    issuer_document: 'Preuve émise par l’institution',
+    institutional_route: 'Coordination avec un tiers',
+    notarial_signing: 'Signature notariale autorisée',
+    practice_system: 'Système de pratique notariale',
+    cnq_register: 'Registre de la Chambre',
+    trust_account: 'Fiducie et rapprochement',
+  });
+
+  const NOTARY_SERVICE_CONTROLS = Object.freeze({
+    financement: Object.freeze([
+      { id: 'lender_instructions', label: 'Recevoir et vérifier les instructions officielles et actuelles du prêteur', owner: 'lender', critical: true,
+        automation: 'prepare_only', integrationType: 'lender_channel', integrationCandidate: 'Assyst/Unity ou Paiements immobiliers Dye & Durham', evidenceIds: ['offre_preteur'], externalEvidence: ['current_lender_instructions', 'instruction_version'] },
+      { id: 'title_charges', label: 'Examiner le titre, les charges, le lot et le rang de la sûreté', owner: 'notary', critical: true,
+        automation: 'prepare_only', integrationType: 'official_registry', integrationCandidate: 'Registre foncier / SLRI', evidenceIds: ['certificat_localisation'], externalEvidence: ['land_registry_search', 'title_review_decision'] },
+      { id: 'property_evidence', label: 'Valider les taxes, l’assurance, le certificat et les documents de copropriété applicables', owner: 'notary', critical: true,
+        automation: 'prepare_only', integrationType: 'issuer_document', integrationCandidate: 'Municipalité, assureur, arpenteur et syndicat', evidenceIds: ['compte_taxes', 'preuve_assurance', 'certificat_localisation'], externalEvidence: ['issuer_confirmation', 'condo_package_if_applicable'] },
+      { id: 'registry_publication', label: 'Préparer et suivre la publication de l’hypothèque et obtenir les reçus officiels', owner: 'registry', critical: true,
+        automation: 'prepare_only', integrationType: 'official_registry', integrationCandidate: 'Registre foncier / SLRI', evidenceIds: [], externalEvidence: ['registration_request', 'publication_receipt'] },
+      { id: 'funding_reconciliation', label: 'Réconcilier les conditions de fonds, les paiements et le rapport de clôture', owner: 'notary', critical: true,
+        automation: 'prepare_only', integrationType: 'trust_account', integrationCandidate: 'Système fiduciaire du cabinet et canal du prêteur', evidenceIds: [], externalEvidence: ['funding_confirmation', 'trust_reconciliation', 'final_report'] },
+    ]),
+    refinancement: Object.freeze([
+      { id: 'lender_instructions', label: 'Recevoir et vérifier les instructions officielles et actuelles du prêteur', owner: 'lender', critical: true,
+        automation: 'prepare_only', integrationType: 'lender_channel', integrationCandidate: 'Assyst/Unity ou Paiements immobiliers Dye & Durham', evidenceIds: ['offre_preteur'], externalEvidence: ['current_lender_instructions', 'instruction_version'] },
+      { id: 'title_charges', label: 'Examiner le titre, les charges, le lot et le rang des sûretés', owner: 'notary', critical: true,
+        automation: 'prepare_only', integrationType: 'official_registry', integrationCandidate: 'Registre foncier / SLRI', evidenceIds: ['certificat_localisation'], externalEvidence: ['land_registry_search', 'title_review_decision'] },
+      { id: 'property_evidence', label: 'Valider les taxes, l’assurance, le certificat et les documents de copropriété applicables', owner: 'notary', critical: true,
+        automation: 'prepare_only', integrationType: 'issuer_document', integrationCandidate: 'Municipalité, assureur, arpenteur et syndicat', evidenceIds: ['compte_taxes', 'preuve_assurance', 'certificat_localisation'], externalEvidence: ['issuer_confirmation', 'condo_package_if_applicable'] },
+      { id: 'secured_debts', label: 'Obtenir un état officiel pour chaque prêt ou marge garanti par l’immeuble', owner: 'lender', critical: true,
+        automation: 'prepare_only', integrationType: 'lender_channel', integrationCandidate: 'Créancier et canal de remboursement autorisé', evidenceIds: ['releve_hypotheque', 'dettes_garanties'], externalEvidence: ['official_payout_statement', 'valid_through_date'] },
+      { id: 'payout_discharge', label: 'Choisir, obtenir et suivre la quittance ou la mainlevée et sa publication', owner: 'notary', critical: true,
+        automation: 'prepare_only', integrationType: 'lender_channel', integrationCandidate: 'Créancier, Assyst/Unity ou Paiements immobiliers Dye & Durham', evidenceIds: [], externalEvidence: ['quittance_or_mainlevee', 'discharge_publication_receipt'] },
+      { id: 'registry_publication', label: 'Préparer et suivre la publication de la nouvelle hypothèque et des radiations', owner: 'registry', critical: true,
+        automation: 'prepare_only', integrationType: 'official_registry', integrationCandidate: 'Registre foncier / SLRI', evidenceIds: [], externalEvidence: ['registration_request', 'publication_receipt'] },
+      { id: 'funding_reconciliation', label: 'Réconcilier les conditions de fonds, les remboursements et le rapport de clôture', owner: 'notary', critical: true,
+        automation: 'prepare_only', integrationType: 'trust_account', integrationCandidate: 'Système fiduciaire du cabinet et canal du prêteur', evidenceIds: [], externalEvidence: ['funding_confirmation', 'trust_reconciliation', 'final_report'] },
+    ]),
+    testament: Object.freeze([
+      { id: 'family_dependants', label: 'Confirmer la situation familiale, le conjoint, les enfants et les personnes vulnérables', owner: 'notary', critical: true,
+        automation: 'prepare_only', integrationType: 'case_graph', integrationCandidate: 'Nota dossier et pièces d’état civil', evidenceIds: ['etat_civil', 'acte_mariage', 'personnes_a_charge'], externalEvidence: ['family_status_decision'] },
+      { id: 'wishes_beneficiaries', label: 'Comprendre les volontés, bénéficiaires, legs, liquidateur et fiducie à discuter', owner: 'notary', critical: true,
+        automation: 'prepare_only', integrationType: 'case_graph', integrationCandidate: 'Nota dossier et modèle approuvé du cabinet', evidenceIds: ['volontes_principales', 'liste_biens'], externalEvidence: ['notary_advice_and_clause_decision'] },
+      { id: 'existing_will', label: 'Vérifier le testament existant et les recherches pertinentes', owner: 'notary', critical: true,
+        automation: 'prepare_only', integrationType: 'cnq_register', integrationCandidate: 'Registre des dispositions testamentaires de la CNQ', evidenceIds: ['testament_existant'], externalEvidence: ['register_search_or_notary_decision'] },
+      { id: 'witnesses', label: 'Prévoir le témoin ou les témoins et les formalités particulières de communication', owner: 'notary', critical: true,
+        automation: 'prepare_only', integrationType: 'notarial_signing', integrationCandidate: 'Environnement de signature autorisé', evidenceIds: ['contraintes_particulieres'], externalEvidence: ['witness_and_interpreter_record'] },
+      { id: 'testament_register', label: 'Conserver l’original et enregistrer l’existence du testament dans le registre applicable', owner: 'notary', critical: true,
+        automation: 'prepare_only', integrationType: 'cnq_register', integrationCandidate: 'Registre des dispositions testamentaires de la CNQ', evidenceIds: [], externalEvidence: ['cnq_register_confirmation', 'original_minute_custody'] },
+      { id: 'review_triggers', label: 'Définir les événements qui doivent déclencher une révision du testament', owner: 'notary', critical: false,
+        automation: 'prepare_only', integrationType: 'case_graph', integrationCandidate: 'Rappels Nota contrôlés par le client et le notaire', evidenceIds: [], externalEvidence: ['review_trigger_decision'] },
+    ]),
+    procuration: Object.freeze([
+      { id: 'mandate_regime', label: 'Distinguer la procuration ordinaire du mandat de protection ou d’un autre parcours', owner: 'notary', critical: true,
+        automation: 'prepare_only', integrationType: 'case_graph', integrationCandidate: 'Nota routage de service', evidenceIds: ['type_mandat', 'objet_mandat'], externalEvidence: ['mandate_regime_decision'] },
+      { id: 'powers_duration', label: 'Confirmer les pouvoirs exprès, les limites, la durée et les conditions de fin', owner: 'notary', critical: true,
+        automation: 'prepare_only', integrationType: 'case_graph', integrationCandidate: 'Nota dossier et modèle approuvé du cabinet', evidenceIds: ['objet_mandat', 'duree_mandat'], externalEvidence: ['express_powers_decision'] },
+      { id: 'existing_revocation', label: 'Vérifier les mandats existants et préparer toute révocation ou annotation nécessaire', owner: 'notary', critical: true,
+        automation: 'prepare_only', integrationType: 'practice_system', integrationCandidate: 'Dossier du cabinet et avis contrôlés', evidenceIds: ['mandat_existant'], externalEvidence: ['revocation_or_termination_notice'] },
+      { id: 'third_party_requirements', label: 'Valider les exigences du tiers, de l’institution ou de la transaction', owner: 'notary', critical: true,
+        automation: 'prepare_only', integrationType: 'institutional_route', integrationCandidate: 'Institution ou prêteur demandeur', evidenceIds: ['contact_tiers', 'immeuble_mandat'], externalEvidence: ['third_party_requirement_confirmation'] },
+      { id: 'protection_route', label: 'Prévoir le registre et la procédure distincts si le dossier concerne un mandat de protection', owner: 'notary', critical: true,
+        automation: 'prepare_only', integrationType: 'cnq_register', integrationCandidate: 'Registre des mandats de protection de la CNQ', evidenceIds: [], externalEvidence: ['protection_mandate_route_decision', 'homologation_if_applicable'] },
+    ]),
+  });
+
+  function notaryControlPlan(serviceId, pricing = {}) {
+    if (!NOTARY_SERVICE_CONTROLS[serviceId]) return null;
+    const controls = [...NOTARY_COMMON_CONTROLS, ...NOTARY_SERVICE_CONTROLS[serviceId]];
+    // An accepted purchase context adds a coordination control. Financing
+    // without an accepted purchase must not ask for a promise or seller
+    // workflow merely because the service is mortgage-backed.
+    if (serviceId === 'financement' && pricing && pricing.contexte === 'achat' &&
+      !controls.some(control => control.id === 'purchase_coordination')) {
+      controls.push(PURCHASE_COORDINATION_CONTROL);
+    }
+    return controls.filter(Boolean).map(control => ({ ...control,
+      evidenceIds: [...control.evidenceIds], externalEvidence: [...control.externalEvidence],
+      integrationLabel: NOTARY_INTEGRATION_LABELS[control.integrationType] || control.integrationType,
+      status: 'pending',
+    }));
+  }
+
+  // A machine-readable coverage view for the notary console and integration
+  // work. It is derived from the catalogue, AI vocabulary and control plan so
+  // a new customer parameter cannot silently disappear from the workflow.
+  function notaryParameterCoverage(serviceId, pricing = {}) {
+    const svc = serviceById(serviceId);
+    if (!svc) return null;
+    const fields = actAIFields(serviceId) || [];
+    const controls = notaryControlPlan(serviceId, pricing) || [];
+    const mapping = Object.entries(NOTARY_AI_INTAKE_MAP)
+      .filter(([, aiFieldId]) => fields.some(field => field.id === aiFieldId));
+    return {
+      version: NOTARY_PARAMETER_COVERAGE_VERSION,
+      serviceId,
+      pricing: (svc.pricing?.criteria || []).map(c => ({ id: c.id, label: c.label, required: !!c.required })),
+      intake: (svc.champs || []).map(c => ({ id: c.id, label: c.label })),
+      documents: (svc.documents || []).map(d => ({ id: d.id, label: d.nom, conditional: !!d.si })),
+      ai: {
+        fields: fields.map(field => ({ id: field.id, label: field.label })),
+        mappedIntake: mapping.map(([intakeId, aiFieldId]) => ({ intakeId, aiFieldId })),
+        unmappedIntake: (svc.champs || []).map(c => c.id).filter(id => !mapping.some(([intakeId]) => intakeId === id)),
+      },
+      humanControls: controls.filter(control => control.critical).map(control => ({
+        id: control.id, label: control.label, owner: control.owner,
+      })),
+      integrations: [...new Map(controls.map(control => [control.integrationType, {
+        type: control.integrationType, label: control.integrationLabel, candidate: control.integrationCandidate,
+      }])).values()],
+      caseCoverage: notaryCaseCoverage(serviceId),
+    };
+  }
+
+  // A notary should open a retained file and immediately know the next useful
+  // move. This summary is a workflow hint derived from the packet; it never
+  // marks a legal or signing condition complete. The action ids are stable so
+  // the web app can render them bilingually without duplicating business rules.
+  function notaryWorkflowSummary({ missing = [], comparisons = [], dateFlags = [], analysis = null,
+    review = null, reviewed = false, controls = [] } = {}) {
+    const fields = Array.isArray(analysis?.preparation?.fields) ? analysis.preparation.fields : [];
+    const aiStatus = !analysis ? 'not_started' : fields.length === 0 ? 'abstained' : reviewed ? 'reviewed' : 'awaiting_review';
+    const exceptionCount = comparisons.length + dateFlags.length;
+    const pendingControls = controls.filter(control => control.status !== 'complete');
+    const criticalPending = pendingControls.filter(control => control.critical).length;
+    const nextActions = [];
+    if (missing.length) nextActions.push({ id: 'request_missing_items', owner: 'client', priority: 'now', count: missing.length });
+    if (aiStatus === 'not_started') nextActions.push({ id: 'analyze_documents', owner: 'notary', priority: 'next', count: 1 });
+    if (aiStatus === 'awaiting_review') nextActions.push({ id: 'review_ai_proposals', owner: 'notary', priority: 'now', count: fields.length });
+    if (exceptionCount) nextActions.push({ id: 'resolve_exceptions', owner: 'notary', priority: 'now', count: exceptionCount });
+    if (criticalPending) nextActions.push({ id: 'complete_critical_controls', owner: 'notary', priority: nextActions.length ? 'next' : 'now', count: criticalPending });
+    if (!nextActions.length) nextActions.push({ id: 'confirm_signing_conditions', owner: 'notary', priority: 'next', count: 1 });
+    const stage = missing.length ? 'client_intake'
+      : aiStatus === 'awaiting_review' ? 'ai_review'
+        : exceptionCount ? 'exceptions' : aiStatus === 'not_started' ? 'ai_ready' : 'notary_controls';
+    return {
+      stage,
+      nextActions,
+      ai: {
+        status: aiStatus,
+        proposalCount: fields.length,
+        reviewSeconds: reviewed && review ? review.activeReviewSeconds ?? null : null,
+      },
+      controls: { pending: pendingControls.length, criticalPending },
+    };
+  }
+
+  function actPreparation(serviceId, saved, pricing) {
+    const svc = serviceById(serviceId);
+    if (!svc || !['testament', 'procuration'].includes(serviceId)) return null;
+    const clean = cleanDossier(serviceId, saved);
+    const items = dossierItems(serviceId, pricing || clean.__pricing)
+      .filter(item => item.kind !== 'note')
+      .map(item => ({ id: item.id, nom: item.nom, aide: item.aide, kind: item.kind,
+        status: !clean[item.id] ? 'missing' : item.kind === 'field' ? 'declared'
+          : clean[item.id] === DOSSIER_TRANSMIS ? 'external' : 'listed' }));
+    const checks = serviceId === 'testament'
+      ? [
+        { id: 'capacity', label: 'Vérifier l’identité, la capacité et la compréhension de chaque testateur', owner: 'notary' },
+        { id: 'family', label: 'Confirmer la situation familiale, les personnes à protéger et les bénéficiaires', owner: 'notary' },
+        { id: 'assets', label: 'Examiner les biens, entreprises et volontés particulières déclarés', owner: 'notary' },
+        { id: 'registers', label: 'Préparer l’inscription de l’acte dans les registres applicables', owner: 'notary' },
+        { id: 'closing', label: 'Expliquer l’acte et confirmer les conditions de signature', owner: 'notary' },
+      ]
+      : [
+        { id: 'capacity', label: 'Vérifier l’identité, la capacité et la compréhension de chaque mandant', owner: 'notary' },
+        { id: 'scope', label: 'Confirmer la portée, les limites, la durée et la révocation souhaitées', owner: 'notary' },
+        { id: 'third_party', label: 'Valider les exigences du tiers ou de la transaction, s’il y en a une', owner: 'notary' },
+        { id: 'closing', label: 'Expliquer la procuration et confirmer les conditions de signature', owner: 'notary' },
+      ];
+    return {
+      version: ACT_WORK_PACKET_VERSION,
+      knowledgeVersion: (notaryServiceKnowledge(serviceId) || FINANCING_KNOWLEDGE).version,
+      controlPlanVersion: NOTARY_CONTROL_PLAN_VERSION,
+      items,
+      missing: items.filter(item => item.status === 'missing'),
+      checks: checks.map(check => ({ ...check, status: 'pending', sourceIds: ['cnq'] })),
+      controls: notaryControlPlan(serviceId, pricing),
+      signingReadiness: 'not_assessed',
+    };
+  }
+
+  function actWorkPacket(bid, { todayISO } = {}) {
+    if (!bid || !['testament', 'procuration'].includes(bid.serviceId) || bid.efface) return null;
+    const svc = serviceById(bid.serviceId);
+    const d = cleanDossier(bid.serviceId, bid.dossier);
+    const pricing = cleanDossier(bid.serviceId, { __pricing: bid.pricing || d.__pricing }).__pricing || {};
+    const preparation = actPreparation(bid.serviceId, d, pricing);
+    const customerContext = svc.champs.filter(c => d[c.id]).map(c => ({ id: c.id, label: c.label, value: d[c.id], source: 'customer' }));
+    if (isISODate(bid.dateISO)) customerContext.push({ id: 'dateISO', label: 'Date de signature demandée', value: bid.dateISO, source: 'customer' });
+    for (const criterion of svc.pricing.criteria) {
+      const answer = pricing[criterion.id];
+      if (criterion.type === 'bracket') {
+        if (Number.isFinite(Number(answer)) && Number(answer) > 0) customerContext.push({ id: criterion.id, label: criterion.label, value: String(answer), source: 'customer' });
+      } else {
+        const option = (criterion.options || []).find(o => o.id === answer);
+        if (option) customerContext.push({ id: criterion.id, label: criterion.label, value: option.label, valueIsLabel: true, source: 'customer' });
+      }
+    }
+    const missing = preparation.missing.map(item => ({ id: item.id, label: item.nom, kind: item.kind, aide: item.aide || '' }));
+    for (const item of missingRequired(bid.serviceId, pricing)) if (!missing.some(m => m.id === item.id)) missing.push({ id: item.id, label: item.label, kind: 'pricing', aide: '' });
+    const fields = actAIFields(bid.serviceId);
+    const labelFor = id => fields.find(f => f.id === id)?.label;
+    const analysis = bid.actAnalysis;
+    const proposals = analysis?.preparation?.fields;
+    const review = analysis?.review;
+    const reviewed = !!(review && bid.notaryId && review.reviewerId === bid.notaryId && validateActAIReview(analysis, { ...review, analysisId: analysis.id }).ok);
+    const draftFields = customerContext.filter(c => NOTARY_AI_INTAKE_MAP[c.id] && labelFor(NOTARY_AI_INTAKE_MAP[c.id])).map(c => ({
+      fieldId: NOTARY_AI_INTAKE_MAP[c.id], label: labelFor(NOTARY_AI_INTAKE_MAP[c.id]), value: c.value,
+      ...(c.valueIsLabel ? { valueIsLabel: true } : {}), source: 'customer', evidence: [],
+    }));
+    if (Array.isArray(proposals)) proposals.forEach((field, index) => {
+      if (!labelFor(field.fieldId) || typeof field.value !== 'string') return;
+      const decision = reviewed ? review.decisions.find(r => r.index === index) : null;
+      if (decision?.decision === 'rejected') return;
+      const corrected = decision?.decision === 'corrected';
+      draftFields.push({ fieldId: field.fieldId, label: labelFor(field.fieldId), value: corrected ? decision.value : field.value,
+        source: corrected ? 'notary_corrected' : decision?.decision === 'accepted' ? 'notary_accepted' : 'ai_proposal',
+        evidence: (field.evidence || []).map(e => ({ documentId: e.documentId, page: e.page, quote: e.quote })), ...(corrected ? { originalValue: field.value } : {}) });
+    });
+    const controls = notaryControlPlan(bid.serviceId, pricing);
+    const workflow = notaryWorkflowSummary({ missing, analysis, review, reviewed, controls });
+    return {
+      version: ACT_WORK_PACKET_VERSION, serviceId: bid.serviceId, customerContext,
+      knowledgeVersion: preparation.knowledgeVersion,
+      documentInventory: preparation.items.filter(i => i.kind === 'doc').map(i => ({ id: i.id, label: i.nom, status: i.status })),
+      draftFields, missing, comparisons: [], dateFlags: [], checks: preparation.checks,
+      controlPlanVersion: NOTARY_CONTROL_PLAN_VERSION,
+      parameterCoverage: notaryParameterCoverage(bid.serviceId, pricing),
+      controls,
+      workflow,
+      clientRequestDraft: missing.length ? {
+        opening: 'Bonjour, voici les renseignements et les pièces à compléter pour préparer votre dossier.',
+        items: missing.map(({ id, label, aide }) => ({ id, label, aide })),
+        closing: 'Utilisez le canal convenu avec votre notaire pour les pièces. Le dossier reste à confirmer par le notaire.',
+      } : null,
+      measurement: { target: FINANCING_AUTOMATION_TARGET, measuredReduction: null, reviewSeconds: reviewed ? review.activeReviewSeconds ?? null : null },
+      todayISO: isISODate(todayISO) ? todayISO : null,
     };
   }
 
@@ -4108,6 +5231,10 @@
       {"id": "slow", "nom": "Plus de 4 secondes", "nomEn": "Over 4 seconds"},
       {"id": "unknown", "nom": "Non mesuré", "nomEn": "Not measured"},
     ] },
+    { id: "journey", nom: "Mode d’accompagnement", nomEn: "Guidance mode", values: [
+      {"id": "standard", "nom": "Parcours standard", "nomEn": "Standard journey"},
+      {"id": "guided", "nom": "Parcours guidé", "nomEn": "Guided journey"},
+    ] },
   ]);
   function cleanAnalyticsContext(input) {
     const out = {};
@@ -4253,16 +5380,45 @@
     supportThreadSummary,
     SUPPORT_REPONSES_TYPES,
     FINANCING_KNOWLEDGE,
+    NOTARY_SERVICE_KNOWLEDGE,
+    notaryServiceKnowledge,
     FINANCING_AI_FIELDS,
     FINANCING_AI_LIMITS,
+    ACT_AI_FIELDS,
+    ACT_AI_LIMITS,
+    actAIFields,
+    NOTARY_LEARNING_POLICY_VERSION,
+    NOTARY_LEARNING_EVENT_KINDS,
+    NOTARY_LEARNING_PROGRAM,
+    notaryLearningPolicy,
+    notaryLearningPolicyFor,
+    CUSTOMER_IMPROVEMENT_POLICY_VERSION,
+    CUSTOMER_EXPERIENCE_MODES,
+    CUSTOMER_IMPROVEMENT_POLICY,
+    experienceMetrics,
+    customerExperienceConfig,
+    publicCustomerExperience,
+    validateActAIInput,
+    validateActAIExtraction,
+    validateActAIReview,
     validateFinancingAIInput,
     validateFinancingAIExtraction,
     validateFinancingAIReview,
     financingPreparation,
     financingWorkPacket,
+    actPreparation,
+    actWorkPacket,
+    NOTARY_CONTROL_PLAN_VERSION,
+    notaryControlPlan,
+    NOTARY_PARAMETER_COVERAGE_VERSION,
+    notaryParameterCoverage,
+    NOTARY_CASE_COVERAGE_VERSION,
+    notaryCaseCoverage,
+    notaryWorkflowSummary,
     FINANCING_AUTOMATION_TARGET,
     FINANCING_WORK_PACKET_VERSION,
     supportFacts,
+    catalogueSnapshot,
     supportQuestionGuard,
     SUPPORT_NIVEAUX,
     SUPPORT_QUESTIONS_SUGGEREES,

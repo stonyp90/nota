@@ -35,6 +35,86 @@ const { statsDeltasForNotaryActive } = require('./stats');
 // jamais manipuler un jeton porteur.
 const { clientNotifSubject } = require('./keys');
 
+// The feature inventory is an operator-facing map of shipped surfaces. It is
+// intentionally descriptive: it never grants access and never replaces the
+// route-level RBAC checks below. Keeping it here makes the admin console able
+// to answer "what is Nota currently capable of?" without inventing a second
+// product catalogue in the browser.
+const ADMIN_FEATURES = Object.freeze([
+  {
+    id: 'marketplace', nom: 'Marché public', nomEn: 'Public marketplace',
+    features: [
+      ['carnet', 'Carnet de dates et demandes', 'Date calendar and requests'],
+      ['offers', 'Publication, validation et expiration des offres', 'Offer publishing, validation and expiration'],
+      ['matching', 'Mise en relation et propositions des notaires', 'Notary matching and proposals'],
+      ['client-space', 'Espace client avec suivi du dossier', 'Client space with file tracking'],
+      ['notary-space', 'Espace notaire avec agenda et cote', 'Notary space with calendar and score'],
+      ['messages-documents', 'Messagerie et documents chiffrés après la retenue', 'Encrypted messaging and documents after acceptance'],
+      ['evaluations', 'Évaluations anonymisées des notaires', 'Anonymized notary evaluations'],
+      ['referrals', 'Partenaires et codes de recommandation', 'Partners and referral codes'],
+      ['notifications', 'Notifications dans l’application et par courriel', 'In-app and email notifications'],
+      ['cancellation', 'Annulation, caution et réclamation encadrée', 'Cancellation, holds and controlled claims'],
+    ],
+  },
+  {
+    id: 'preparation', nom: 'Préparation notariale', nomEn: 'Notarial preparation',
+    features: [
+      ['intake', 'Intake par service et liste de pièces', 'Service-specific intake and document checklist'],
+      ['financing-ai', 'Préparation assistée du financement et du refinancement', 'Assisted financing and refinancing preparation'],
+      ['act-ai', 'Préparation assistée du testament et de la procuration', 'Assisted will and power-of-attorney preparation'],
+      ['control-plans', 'Plans de contrôle, preuves et étapes réservées au notaire', 'Control plans, evidence and notary-only steps'],
+      ['signing-beta', 'Parcours de signature supervisé en phase bêta', 'Supervised signing flow in beta'],
+      ['calendar', 'Abonnement carnet et connexion Outlook du notaire', 'Calendar feed and notary Outlook connection'],
+    ],
+  },
+  {
+    id: 'operations', nom: 'Opérations Nota', nomEn: 'Nota operations',
+    features: [
+      ['support', 'Soutien omnicanal avec escalade humaine', 'Omnichannel support with human escalation'],
+      ['analytics', 'Analytique, entonnoir, appareils et provenance', 'Analytics, funnel, devices and acquisition'],
+      ['privacy', 'Dossier usager, export et effacement Loi 25', 'Privacy file, export and Law 25 erasure'],
+      ['audit', 'Journal d’audit et enquête par acteur ou sujet', 'Audit log and actor/subject investigations'],
+      ['rbac', 'Accès par utilisateurs, groupes et permissions', 'Access through users, groups and permissions'],
+      ['campaigns', 'Audiences, campagnes et registre des destinataires', 'Audiences, campaigns and recipient ledger'],
+      ['email-editor', 'Gabarits bilingues et préférences de courriel', 'Bilingual templates and email preferences'],
+    ],
+  },
+  {
+    id: 'integrations', nom: 'Intégrations et paiements', nomEn: 'Integrations and payments',
+    features: [
+      ['stripe-checkout', 'Stripe Checkout et autorisation de la carte', 'Stripe Checkout and card authorization'],
+      ['stripe-connect', 'Stripe Connect pour l’intégration des notaires', 'Stripe Connect for notary onboarding'],
+      ['stripe-webhooks', 'Webhooks Stripe idempotents et rapprochement', 'Idempotent Stripe webhooks and reconciliation'],
+      ['ses', 'SES, rebonds, plaintes et retrait LCAP', 'SES, bounces, complaints and CASL opt-out'],
+      ['s3', 'Stockage documentaire S3 chiffré', 'Encrypted S3 document storage'],
+      ['oauth', 'Connexion OAuth Google, Microsoft et LinkedIn', 'Google, Microsoft and LinkedIn OAuth sign-in'],
+      ['outlook', 'Calendrier Outlook du notaire', 'Notary Outlook calendar'],
+      ['cnq', 'Registres et formalités de la Chambre : préparation et étape humaine', 'Chambre registers and formalities: preparation and human step'],
+    ],
+  },
+]);
+
+const ADMIN_CUSTOMIZATION = Object.freeze([
+  ['prix', 'Prix par service et garantie de date', 'Service and date-guarantee prices', 'editable', 'billing:write'],
+  ['annulation', 'Barème d’annulation et délai de réclamation', 'Cancellation schedule and claim window', 'editable', 'settings:write'],
+  ['courriels', 'Sujets, pré-en-têtes, copies, appels à l’action et signatures', 'Subjects, preheaders, copy, calls to action and signatures', 'editable', 'notifications:write'],
+  ['audiences', 'Groupes de destinataires et consentement', 'Recipient groups and consent', 'editable', 'audiences:write'],
+  ['campagnes', 'Prévisualisation et envoi ciblé avec garde-fous', 'Guarded targeted preview and sending', 'editable', 'campaigns:send'],
+  ['acces', 'Utilisateurs, groupes et permissions', 'Users, groups and permissions', 'editable', 'users:write'],
+  ['paiements', 'État Stripe et mode de paiement', 'Stripe readiness and payment mode', 'readiness', 'billing:write'],
+  ['notaires', 'Activation des notaires après vérification', 'Notary activation after verification', 'operational', 'moderation:write'],
+]);
+
+function featureSnapshot() {
+  return {
+    groupes: ADMIN_FEATURES.map((group) => ({
+      id: group.id, nom: group.nom, nomEn: group.nomEn,
+      fonctionnalites: group.features.map(([id, nom, nomEn]) => ({ id, nom, nomEn, statut: 'actif', statutEn: 'active' })),
+    })),
+    personnalisations: ADMIN_CUSTOMIZATION.map(([id, nom, nomEn, mode, permission]) => ({ id, nom, nomEn, mode, permission })),
+  };
+}
+
 // Les permissions ne sont plus une table figée `rôle → capacités`. Elles se
 // RÉSOLVENT à chaque requête par `rbac.resolvePermissions` : l'union du paquet
 // hérité du rôle, des permissions accordées directement à l'utilisateur, et de
@@ -1149,6 +1229,32 @@ function createAdmin({
         libelleEn: (PERMISSION_LABELS[cle] || [cle, cle])[1],
       })),
     };
+  }
+
+  // Read-only catalogue inventory. `analytics:read` is used because this is
+  // product metadata, not customer PII; a super_admin still receives it via
+  // the wildcard. The effective Nota price is resolved through the same
+  // configuration path as `/admin/prix`, so the cards cannot show stale prices.
+  async function getCatalogue(token, { ip } = {}) {
+    const p = await requireAdmin(token, { ip });
+    if (!p) return { ok: false, status: 401 };
+    if (!rbac.can(p.permissions, 'analytics:read')) {
+      return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Lecture du catalogue des services non autorisée.' }] };
+    }
+    const grille = await prixCfg.resolveGrille(repo, process.env);
+    return { ok: true, catalogue: domain.catalogueSnapshot({ grille }) };
+  }
+
+  // The feature map is deliberately separate from the service catalogue: an
+  // operator needs to see both "what we sell" and "what the platform does".
+  // It carries no secrets and no personal data.
+  async function getFeatures(token, { ip } = {}) {
+    const p = await requireAdmin(token, { ip });
+    if (!p) return { ok: false, status: 401 };
+    if (!rbac.can(p.permissions, 'analytics:read')) {
+      return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Lecture de l’inventaire des fonctionnalités non autorisée.' }] };
+    }
+    return { ok: true, ...featureSnapshot() };
   }
 
   const GROUP_ID = /^[a-z0-9][a-z0-9_-]{0,39}$/;
@@ -2536,6 +2642,8 @@ function createAdmin({
     refresh,
     logout,
     listPermissions,
+    getCatalogue,
+    getFeatures,
     listGroups,
     putGroup,
     deleteGroup,

@@ -437,6 +437,10 @@ const ACTEUR_ATTENDU = {
   notaire_profil_modifie: 'notaire',
   notaire_proposition: 'notaire',
   notaire_desistement: 'notaire',
+  // La télémétrie d’apprentissage est un seul événement enveloppe : l’acteur
+  // est le client pour ses signaux, le notaire pour sa revue et sa demande.
+  // Elle ne doit jamais être réduite à « systeme ».
+  notary_learning_signal: 'partie',
 };
 
 test('AUCUNE action du handler n’échappe au tableau : le vocabulaire se lit dans la SOURCE', () => {
@@ -477,10 +481,14 @@ test('chaque entrée du journal public nomme L’ACTEUR ATTENDU — « systeme �
       Object.prototype.hasOwnProperty.call(ACTEUR_ATTENDU, e.action),
       'action « ' + e.action + ' » non déclarée : ajoutez-la à ACTEUR_ATTENDU en choisissant qui elle nomme'
     );
-    assert.equal(
-      e.acteur.type, ACTEUR_ATTENDU[e.action],
-      '« ' + e.action + ' » devait nommer ' + ACTEUR_ATTENDU[e.action] + ', a nommé ' + e.acteur.type
-    );
+    if (ACTEUR_ATTENDU[e.action] === 'partie') {
+      assert.ok(['client', 'notaire'].includes(e.acteur.type), 'la télémétrie doit nommer la partie qui l’a produite');
+    } else {
+      assert.equal(
+        e.acteur.type, ACTEUR_ATTENDU[e.action],
+        '« ' + e.action + ' » devait nommer ' + ACTEUR_ATTENDU[e.action] + ', a nommé ' + e.acteur.type
+      );
+    }
     assert.notEqual(e.acteur.type, 'systeme', 'une porte publique a toujours une partie devant elle : ' + e.action);
     assert.equal(e.adminId, null, 'la porte publique n’a pas d’administrateur');
     assert.equal(e.email, null, 'aucune adresse courriel dans le journal public');

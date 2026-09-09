@@ -1,12 +1,13 @@
 # Copy to an ignored .tfvars file and fill the operational values before apply.
 region                 = "ca-central-1"
+admin_emails           = ["tony@gonata.ca"]
 project_name           = "nota"
 domain_name            = "gonota.ca"
 create_hosted_zone     = true
 enable_www             = true
 base_url               = "https://gonota.ca"
 enable_admin           = true
-admin_domain_name      = "admin.gonota.ca"
+admin_domain_name      = "admin.gonata.ca"
 from_email             = "bonjour@gonota.ca"
 reply_to_email         = "info@gonota.ca"
 create_runtime_secrets = true

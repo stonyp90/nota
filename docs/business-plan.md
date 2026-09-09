@@ -1,13 +1,36 @@
 # Nota — Business Plan
 
-**Pricing time in the Québec notarial market.**
+**A market for urgent notarial acts - and a protocol for hidden capacity.**
 
-- Version: 1.1
-- Date: 2026-09-04
+- Version: 1.5
+- Date: 2026-09-09
 - Stage: product live, pre-revenue
 - Raise: **250 000 $ CAD pre-seed**, 12 months of runway
 - Contact: Anthony Paquet — anthonypaquet1508@gmail.com
 
+> **What changed in 1.5.** Added the Courtiers Immobiliers partner channel: a
+> unique referral code, a 50 $ reward when a referred customer converts into a
+> retained and settled notarial act, and a four-party outcome where the customer
+> gets the date, the notary keeps their full fee, the courtier earns a transparent
+> acquisition reward, and Nota earns its own service line.
+>
+> **What changed in 1.4.** Reframed the commercial outcome around the notary's
+> incremental gross-fee opportunity, the customer's deadline problem, and the
+> zero-obligation subscription: free to join, no full-calendar sharing, and no
+> required action unless a request fits.
+>
+> **What changed in 1.3.** Added a cited market and AI strategy research companion
+> covering Canada province by province, priority civil-law countries, adjacent
+> urgent-service markets, and the evidence required for an investor-grade AI
+> plan: baselines, act-specific evaluations, human accountability, data rights,
+> model economics, and monitoring.
+>
+> **What changed in 1.2.** This revision makes the Nota product boundary explicit:
+> Québec City first, then Quebec-wide and international notarial expansion, with
+> a reusable hidden-capacity demand market as the broader platform thesis. It
+> also makes the provider actions explicit: accept, counter-propose, request
+> information, or pass without sharing a private agenda.
+>
 > **What changed in 1.1.** Version 1.0 described a **10 % commission on the
 > notary's fee** as what the code did, and proposed restructuring it. That
 > commission has since been **removed from the product**, not merely proposed
@@ -31,10 +54,21 @@ rate hold expires next Tuesday has no way to learn what next Tuesday costs, and
 a notary with an empty Tuesday has no way to sell it.
 
 **Nota is that mechanism.** A client posts the date they need an *acte notarié*
-signed and what they will pay for it. Notaries watch a public calendar — the
-*carnet* — and pick up the work that fits their schedule. Because the offer is
+signed and what they will pay for it. Notaries watch a public calendar - the
+*carnet* - and pick up the work that fits their schedule. They do not publish
+their private agenda. For each qualified demand, a provider can accept, make a
+counter-proposal, request what is missing, or do nothing. Because the offer is
 attached to a date, **the market prices urgency**: a signature needed tomorrow
 clears at a multiple of one needed in three weeks.
+
+Nota is deliberately two businesses in sequence. First, it is the Quebec City
+market for basic, repeatable, deadline-driven notarial acts. Then it becomes a
+notary operating layer that turns a retained demand into a complete,
+act-specific work packet. The long-term asset is a reusable **hidden-capacity
+demand market**: customers bid around a deadline; service providers respond
+without exposing their full calendar. That mechanism can travel to other
+provinces, civil-law countries, and - with sector-specific safeguards - other
+industries where demand is urgent and supply is scarce.
 
 Two things make this fundable now rather than in five years:
 
@@ -352,7 +386,7 @@ as scale, not precision.
 The honest consequence of the financing-first pivot: the addressable act count
 is roughly a third of the retired three-service plan (~110 000 vs ~300 000),
 because wills were the volume and they are gone. What replaced them is a
-category with a **deadline the client did not set** — which is the only kind of
+category with a **deadline the client did not set** - which is the only kind of
 demand a time-priced market can charge for.
 
 **SOM — Year 3.** 11 000 acts ≈ **10 % of SAM volume**, and ~2,8 M$ of the ~28 M$
@@ -361,17 +395,114 @@ version 1.0 claimed, and the plan says so rather than keeping the old
 denominator.
 
 **Phase 3 horizon.** Beyond the two financing acts sits the rest of the
-catalogue — most importantly the *acte de vente* on those same ~90 000
+catalogue - most importantly the *acte de vente* on those same ~90 000
 residential transactions, which arrives on the same lender deadline and through
 the same referral channel. Testaments and mandates remain a real ~200 000-a-year
 category the platform can return to once liquidity exists, on a pricing basis
-that suits a 650 $ act. Beyond Québec sits the civil-law *notariat*: the
-International Union of Notaries spans roughly 90 member states, including
-France, Belgium, Switzerland and most of Latin America, all running the same
-instrument Nota is built around. **That is where a 100× claim actually lives** —
-not in avoiding a car trip.
+that suits a 650 $ act.
 
-### 5.2 Why now
+Beyond Québec, Nota can expand in three concentric rings:
+
+1. **Other provinces.** Reuse the hidden-capacity market for urgent legal,
+   closing, commissioning, and professional services, while adapting each
+   province's rules. “Notary” is not a portable legal category across Canada;
+   the demand protocol is.
+2. **Civil-law countries.** Localize the act catalogue, identity rules,
+   signing rails, privacy, and professional-body relationships for UINL
+   jurisdictions. The UINL currently comprises 93 member notariats, and the
+   civil-law system is present in almost 120 countries. This is a large,
+   coherent expansion surface, not a promise that one Quebec workflow can be
+   copied unchanged.
+3. **Other urgent-service industries.** After Nota proves the protocol in
+   notarial work, package it for categories such as emergency home repair,
+   field technicians, legal and translation services, inspections, logistics,
+   and other regulated or specialized services where the customer has a hard
+   deadline and providers have variable hidden capacity.
+
+**That is where a 100× claim actually lives** - not in avoiding a car trip, but
+in turning deadline-driven demand into a new, privacy-preserving market signal.
+
+### 5.2 The exportable mechanism: a hidden-capacity demand market
+
+Nota's novel concept is not “publish every provider's agenda.” It is the
+opposite: preserve provider privacy while exposing just enough demand to let a
+market clear.
+
+| Customer side | Provider side |
+| --- | --- |
+| Posts the need, deadline, constraints, location, language, and budget / bid | Receives only qualified opportunities matching chosen preferences |
+| Can compare responses without cold-calling every provider | Can accept, counter-propose, request more information, or pass |
+| Gets a clear next action and a date-bound path | Never has to reveal the full calendar or commit to every request |
+
+The flywheel is simple: urgent demand becomes structured data; structured data
+reduces provider effort; lower effort increases participation; more
+participation improves the chance of clearing the next urgent request. Nota
+should own this protocol as a separate layer from the notarial act modules, so
+each new vertical adds its own compliance, intake, and fulfillment rules without
+rebuilding the market mechanism.
+
+### 5.3 The three-sided value exchange
+
+The market is designed to make the normal act economics work harder, not to
+hide a fee inside the notary's fee. A financing act normally represents roughly
+**1 800 $+** of professional value; a refinancing act roughly **2 000 $+**.
+Against an estimated Québec financing SAM of **~110 000 acts / year** and
+**~215 M$** of annual professional-fee value, Nota can create a win-win-win:
+
+| Winner | Value created |
+| --- | --- |
+| Client | A qualified notary inside the client's real deadline, with the normal act price plus a clearly disclosed urgency premium when the date is scarce. |
+| Notary | 100 % of professional fees, plus the ability to accept a better-paid urgent request and monetize an opening without publishing the private calendar. |
+| Nota | Its own service line — 199 $ for financing, 249 $ for refinancing, plus 0–300 $ for date priority — charged only when the act completes. |
+
+This is not a zero-sum marketplace taking a cut from a professional fee. Nota's
+line pays for demand qualification, matching, document context, scheduling
+rails and — later — the act-specific operating layer. The estimated category
+can support roughly **28 M$ of annual Nota revenue** at the current grid before
+the catalogue expands; the figure is a planning estimate to validate with live
+transaction data and a written déontologie opinion.
+
+### 5.3.1 Why a notary subscribes
+
+Nota's supply-side promise is deliberately low-friction: **subscribe once,
+then do nothing until a request is worth accepting**. There is no fee to join,
+no requirement to publish a calendar, no lead quota, and no obligation to
+respond. The notary chooses delivery preferences, receives only relevant
+requests, and can accept, counter-propose, ask for information, or pass. A
+confirmed act can sync to the notary's calendar; the private calendar never
+has to be exposed.
+
+The incremental earning opportunity is easy to explain and deliberately
+conservative:
+
+| Otherwise-unused opening | Illustrative added professional fees | What Nota changes |
+| --- | ---: | --- |
+| 1 standard financing / month | **21 600 $ / year** | Finds a qualified customer for the opening; the notary keeps the full fee. |
+| 1 standard refinancing / month | **24 000 $ / year** | Same effort-light path, with a higher-value act. |
+| 2 standard openings / month | **43 200–48 000 $ / year** | Turns perishable capacity into optional income without a mandatory workflow. |
+| 1 same-day financing / month at an illustrative ~3.5× urgency multiple | **75 600 $ / year** | Lets the notary decide whether the deadline and fee justify the work. |
+
+These are gross illustrative opportunities before expenses and taxes, based on
+the current starting values and an otherwise unused slot; they are not a
+guarantee and remain subject to the act, client facts, professional judgment
+and applicable déontologie. The core promise is simpler than the upside:
+**more choice, more potential income, zero mandatory activity.**
+
+### 5.3.2 The Courtiers Immobiliers partner channel
+
+Each real-estate broker partner receives a **unique referral code** to give to
+clients who will need a notarial act. The customer arrives with the code,
+exposes the need for free, and a notary can retain the request. That conversion
+earns the broker a flat **50 $** reward from Nota's acquisition budget when the
+act settles under the program rules. The customer gets the date, the notary
+receives 100 % of professional fees, and Nota earns its own service line.
+
+The reward is public, fixed and separate from professional fees: it is not added
+to the customer's price and is never deducted from the notary. Disclosure to the
+customer and compliance with the rules applicable to brokers and notarial
+deontology must be cleared before launch.
+
+### 5.4 Why now
 
 1. **Bill 34 made the technological act permanent (Oct 2023).** The rails are
    built and sanctioned. Nota is not betting on a law passing.
@@ -397,12 +528,18 @@ not in avoiding a car trip.
 
 ## 6. Phase 1 — The price of time
 
-**Goal:** prove that a time-priced notarial marketplace clears, in one city,
-with real money.
+**Goal:** prove that a time-priced marketplace for basic, repeatable notarial
+acts clears in one city, with real money and no provider calendar exposure.
 
 **Geography:** Québec City CMA (~850 000 people, ~400 notaries). Chosen over
 Montréal deliberately — small enough that a solo founder can meet a
 material share of local supply in person, dense enough to reach liquidity.
+
+**Customer loop:** the client submits a deadline-driven request for financing or
+refinancing. A notary sees a qualified opportunity, not another calendar to
+manage, and can **retain it, propose a different amount, ask for documents, or
+pass**. Joining and browsing are free for the notary; the confirmed act can be
+added to their own calendar through ICS or a calendar feed.
 
 **Sequence.**
 
@@ -426,9 +563,11 @@ marketplace for the same year.
 
 ---
 
-## 7. Phase 2 — The act without the trip
+## 7. Phase 2 — The notary operating layer
 
-**Goal:** remove geography as a matching constraint.
+**Goal:** save the notary's preparation effort by turning the retained demand
+into an act-specific, reviewable work packet, then remove geography as a
+matching constraint where the law permits.
 
 Today a client in Québec City is matched against ~400 notaries. If the signature
 does not require the parties to be in the same room, that client is matched
@@ -439,7 +578,15 @@ partitioned by postal code.** In a marketplace, liquidity *is* the product.
 
 ### 7.1 What Nota actually builds
 
-**(a) The exception layer — the wedge.** Under art. 46 remote signing requires a
+**(a) Act-specific context and AI.** The customer's documents, answers,
+preferences, deadline, and requested outcome become a structured context for a
+model trained and evaluated for that act. The model prepares the checklist,
+missing-document requests, draft inputs, explanations, and third-party
+integration payloads. The notary validates every output. “99% effort saved” is a
+North Star to measure against baseline preparation time, not a claim to make
+before the pilot proves it.
+
+**(b) The exception layer - the wedge.** Under art. 46 remote signing requires a
 party-originated request and a party-specific justifying circumstance. Today
 that burden and its disciplinary risk sit on the individual notary, so the
 default is "come in." Nota productizes it: capture the party's request in their
@@ -449,26 +596,42 @@ the dossier. The notary receives a file that is already defensible. **This
 converts a risky judgment call into a standard workflow — and it makes Nota
 valuable to a notary independent of the marketplace.**
 
-**(b) Dossier automation.** Presigned document upload, automated identity and
+**(c) Dossier automation.** Presigned document upload, automated identity and
 completeness checks, structured hand-off into the notary's existing practice
 tooling. The dossier arrives complete or it does not arrive. This is the
 difference between selling a lead and selling a *file*, and it is what Nota's
 own price is charged for.
 
-**(c) Signing rails.** Integration with the CNQ-sanctioned videoconference
+**(d) Signing rails.** Integration with the CNQ-sanctioned videoconference
 channel and the notary's official digital signature, so the act is executed and
 the technological minute closed without leaving the workflow.
 
-**(d) Province-wide matching.** Once (a)–(c) hold, the carnet stops being a
+**(e) Province-wide matching.** Once (a)-(d) hold, the carnet stops being a
 Québec City calendar and becomes a Québec calendar.
 
-**(e) Cross-border corridor (late Phase 2 / Phase 3).** The *Loi sur le
+**(f) Cross-border corridor (late Phase 2 / Phase 3).** The *Loi sur le
 notariat* contemplates a signature received by a notary qualified in a UINL
 member state, within that state's territory. That is a legal path to serving
 **Québécois abroad** — a real, currently badly-served population — and the first
 step onto the civil-law world's rails.
 
-### 7.2 Honest framing of the regulatory position
+### 7.2 Phase 3 - Chamber-grade online acts and expansion
+
+Phase 3 is the institutional step: prove to the Chambre des notaires that Nota
+can make the online act safer, more auditable, and more accessible without
+removing the notary's judgment. The product surface includes secure live video,
+identity and capacity checks, confidentiality checks, informed consent,
+electronic signature, evidence logs, certified-copy delivery, and a complete
+audit trail. Nota should run this as a controlled pilot with the Chambre, the
+Ministry, the approved signing provider, privacy counsel, and selected notaries.
+
+The sequence after the pilot is **Quebec-wide -> other Canadian provinces ->
+UINL countries -> cross-industry protocol**. Each expansion keeps the same
+market primitive - a customer posts an urgent need and a provider can accept,
+propose, or pass without sharing their agenda - while swapping the legal act,
+professional rules, identity standard, and fulfillment integrations.
+
+### 7.3 Honest framing of the regulatory position
 
 Remote signing is **legal but exceptional** in Québec today. Phase 2 is
 deliberately built to be **fully valuable under the current statute** — the
@@ -716,7 +879,17 @@ first quarter.
 1. **Organic (compounding, ~0 $).** The carnet itself. Real posted prices, real
    dates, refreshed daily, in fr-CA, hyper-local. Plus a per-service price-guide
    corpus built from actual transaction data.
-2. **Referral partnerships (~0 $ CAC).** Mortgage brokers first and by a wide
+2. **Referral partnerships.** Mortgage brokers and **Courtiers Immobiliers** are
+   the first distribution channel: the partner receives a unique code and gives
+   it to clients who need a notarial act. When the referred demand converts — a
+   notary retains it and the act settles — the partner receives a flat **50 $**
+   reward from Nota's acquisition budget. The customer pays no referral fee, the
+   notary's professional fee is untouched, and Nota earns its own service line.
+   The code is private attribution, not a public ranking or a share of the
+   notary's fees. The reward must be disclosed to the client and cleared with
+   the relevant professional and deontology rules before launch.
+
+   Mortgage brokers first and by a wide
    margin — the broker sets the rate hold whose expiry is the deadline Nota
    prices, and currently has nowhere structured to send a client who needs a
    notary inside it. Real-estate agents and financial planners sit one step
@@ -942,6 +1115,7 @@ a market. The market is built. This funds finding out whether it clears.
 - Légis Québec — [*Loi sur le notariat*, RLRQ c. N-3](https://www.legisquebec.gouv.qc.ca/fr/document/lc/N-3)
 - Jurivision — [*L'acte notarié électronique à distance : enjeux et perspectives*](https://jurivision.ca/lacte-notarie-electronique-a-distance/)
 - Chambre des notaires du Québec — [Registre des dispositions testamentaires](https://www.cnq.org/en/the-chambre-and-your-protection/the-chambres-services/search-the-registers/)
+- International Union of Notaries — [about the UINL and its 93 member notariats](https://uinl.org/mission/about-us/)
 - Notairo — [notary fees in Québec, 2026](https://notairo.com/en/blogs/news/frais-de-notaire-au-quebec-en-2026-a-quoi-s-attendre)
 - Notairo — [launch of Québec's first digital real-estate closing platform](https://notairo.com/en/blogs/presse-et-medias/notairo-lance-la-premiere-plateforme-quebecoise-pour-preparer-les-transactions-immobilieres-en-ligne)
 - Nolos — [online notarized wills](https://nolos.ca/en)

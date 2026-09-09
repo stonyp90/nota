@@ -12,15 +12,20 @@ const MAX_IN_FLIGHT = 32;
 // The current analysis lives on the private bid, with its retention/erasure
 // policy. Raw page text is never persisted here or added to the support prompt.
 function createFinancingAIRoutes({ repo, env, authenticate, json, parseBody, getSecret,
-  port, nowMs = Date.now, newId = randomUUID, audit = async () => {} }) {
+  port, nowMs = Date.now, newId = randomUUID, audit = async () => {}, learning = null }) {
   const error = (status, code) => json(status, { errors: [{ code }] });
   const workPacket = bid => D.financingWorkPacket(bid, { todayISO: D.businessDay(nowMs(), D.BUSINESS_TIMEZONE) });
   const setting = value => typeof value === 'string' ? value.trim() : '';
   const inFlight = new Map();
   let cachedProvider;
+  async function learn(method, payload) {
+    try {
+      if (learning && typeof learning[method] === 'function') await learning[method](payload);
+    } catch { /* learning telemetry can never block a notary action */ }
+  }
   function configuration() {
     if (port) return { provider: 'injected', region: '',
-      model: port.model || setting(env.NOTA_FINANCING_AI_MODEL) || setting(env.NOTA_ASSISTANT_MODEL) || DEFAULT_MODEL };
+      model: setting(port.model) || setting(env.NOTA_FINANCING_AI_MODEL) || setting(env.NOTA_ASSISTANT_MODEL) || DEFAULT_MODEL };
     const selectedProvider = setting(env.NOTA_FINANCING_AI_PROVIDER) || 'anthropic';
     const model = setting(env.NOTA_FINANCING_AI_MODEL);
     if (selectedProvider === 'bedrock') {
@@ -87,6 +92,7 @@ function createFinancingAIRoutes({ repo, env, authenticate, json, parseBody, get
       const current = await repo.get(input.id, input.dateISO, { consistentRead: true });
       if (!current || current.notaryId !== owner || current.status !== D.STATUS.RETENUE || current.efface) return error(409, 'dossier_indisponible');
       if (current.financingAnalysis?.id !== input.analysisId) return error(409, 'analyse_modifiee');
+      await learn('notaryReview', { bid: current, analysis: current.financingAnalysis, review, owner });
       return json(200, { ok: true, review, workPacket: workPacket(current) });
     }
 
@@ -115,8 +121,10 @@ function createFinancingAIRoutes({ repo, env, authenticate, json, parseBody, get
             // Shared atomic counters bound admitted attempts across workers.
             // Failures consume their reservation; duplicate reuse consumes none.
             const count = await repo.incrNotaryRateCounter('financing_ai', owner, 3600, nowMs());
+            if (!Number.isSafeInteger(count) || count < 1) return { status: 503, code: 'financing_ai_unavailable' };
             if (count > 6) return { status: 429, code: 'trop_de_requetes' };
             const daily = await repo.incrNotaryRateCounter('financing_ai_budget', 'application', 86400, nowMs());
+            if (!Number.isSafeInteger(daily) || daily < 1) return { status: 503, code: 'financing_ai_unavailable' };
             if (daily > dailyLimit) return { status: 429, code: 'trop_de_requetes' };
             const engine = createFinancingAI({ port: await provider(config), model: config.model });
             const started = nowMs();
@@ -150,6 +158,7 @@ function createFinancingAIRoutes({ repo, env, authenticate, json, parseBody, get
       const current = await repo.get(input.id, input.dateISO, { consistentRead: true });
       if (!current || current.notaryId !== owner || current.status !== D.STATUS.RETENUE || current.efface) return error(409, 'dossier_indisponible');
       if (current.financingAnalysis?.id !== analysisId) return error(409, 'analyse_modifiee');
+      await learn('aiOutput', { bid: current, analysis: current.financingAnalysis, input: validated.value, owner, reused });
       return json(200, { ok: true, analysis: current.financingAnalysis, workPacket: workPacket(current), reused });
     } catch { return error(503, 'financing_ai_unavailable'); }
   };

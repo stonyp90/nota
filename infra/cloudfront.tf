@@ -72,10 +72,12 @@ resource "aws_cloudfront_response_headers_policy" "security" {
     }
 
     # Content-Security-Policy. Tuned to NOT break the app: it loads the Inter
-    # stylesheet + font from https://rsms.me, external app.js/domain.js on 'self',
-    # inline JSON-LD + inline styles, and fetches /api on 'self'.
+    # stylesheet + font from https://rsms.me, the Sora wordmark stylesheet from
+    # https://fonts.googleapis.com (font files from https://fonts.gstatic.com),
+    # external app.js/domain.js on 'self', inline JSON-LD + inline styles, and
+    # fetches /api on 'self'.
     content_security_policy {
-      content_security_policy = "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://rsms.me; font-src 'self' https://rsms.me data:; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com; connect-src 'self' https://www.google-analytics.com https://region1.google-analytics.com https://analytics.google.com https://${aws_s3_bucket.documents.bucket}.s3.${var.region}.amazonaws.com"
+      content_security_policy = "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://rsms.me https://fonts.googleapis.com; font-src 'self' https://rsms.me https://fonts.gstatic.com data:; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com; connect-src 'self' https://www.google-analytics.com https://region1.google-analytics.com https://analytics.google.com https://${aws_s3_bucket.documents.bucket}.s3.${var.region}.amazonaws.com"
       override                = true
     }
   }

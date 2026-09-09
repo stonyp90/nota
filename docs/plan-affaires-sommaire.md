@@ -1,10 +1,34 @@
 # Nota — Sommaire exécutif
 
-**Le marché du temps notarial au Québec.**
+**Un marché des actes notariaux urgents - puis un protocole de capacité cachée.**
 
-Ronde : **250 000 $ CAD en préamorçage**, 12 mois · Version 1.1 — 4 septembre 2026
+Ronde : **250 000 $ CAD en préamorçage**, 12 mois · Version 1.5 — 9 septembre 2026
 Anthony Paquet — anthonypaquet1508@gmail.com
 Plan complet (anglais) : [`docs/business-plan.md`](business-plan.md)
+Recherche marchés et stratégie AI : [`docs/nota-market-research-2026.md`](nota-market-research-2026.md)
+
+> **Nouveauté 1.5.** Ajout du canal partenaire des Courtiers Immobiliers : un
+> code de référence unique, une récompense de 50 $ lorsqu'un client référé
+> convertit en acte notarié retenu et réglé, et un résultat à quatre gagnants.
+> Le client obtient sa date, le notaire garde ses honoraires, le courtier reçoit
+> une récompense d'acquisition transparente et Nota reçoit sa propre ligne de
+> service.
+
+> **Nouveauté 1.4.** La proposition commerciale met l'accent sur le revenu
+> additionnel du notaire, la date critique du client et l'abonnement sans
+> obligation : inscription gratuite, aucun partage d'agenda complet et aucune
+> action requise lorsqu'une demande ne convient pas.
+
+> **Nouveauté 1.3.** La recherche jointe compare les provinces canadiennes, les
+> principaux corridors de droit civil et les marchés adjacents, puis transforme
+> la promesse AI en preuves mesurables : référence, évaluation par acte,
+> supervision humaine, droits sur les données, coût par acte et gouvernance.
+
+> **Ce qui change en 1.2.** Cette révision affirme la séquence produit :
+> Québec d'abord, puis l'expansion notariale provinciale et internationale, et
+> enfin le protocole plus large de demande urgente à capacité cachée. Un
+> fournisseur peut retenir, contre-proposer, demander des pièces ou passer sans
+> partager son agenda privé.
 
 > **Ce qui a changé en 1.1.** La version 1.0 décrivait une **commission de 10 %
 > sur les honoraires du notaire** comme ce que le code faisait, et proposait de
@@ -29,10 +53,20 @@ mardi est vide n'a nulle part où le vendre.
 
 **Nota est ce mécanisme.** Le client affiche la date à laquelle il veut signer
 son acte et le montant qu'il offre. Les notaires consultent un calendrier public
-— le *carnet* — et retiennent le travail qui cadre avec leur horaire. Comme
-l'offre est rattachée à une date, **le marché prix l'urgence** : une signature
-requise demain se règle à un multiple d'une signature requise dans trois
-semaines.
+- le *carnet* - sans publier leur agenda privé. Pour chaque demande qualifiée,
+ils peuvent la retenir, proposer un autre montant, demander ce qui manque ou ne
+rien faire. Comme l'offre est rattachée à une date, **le marché prix l'urgence**
+: une signature requise demain se règle à un multiple d'une signature requise
+dans trois semaines.
+
+Québec est le point de départ : d'abord les actes de financement de base,
+répétables et soumis à une échéance, dans la région de Québec. Ensuite, Nota
+devient une couche de travail notariale qui transforme une demande retenue en
+dossier complet et vérifiable. Enfin, le même mécanisme de **marché de demande
+à capacité cachée** peut s'étendre aux autres provinces, aux pays de droit
+civil et, avec les garde-fous propres à chaque secteur, aux services urgents
+où la demande dépasse l'offre. Le client expose son besoin; le fournisseur
+répond sans révéler tout son agenda.
 
 | Palier | Jours avant la date | Prime sur les honoraires du **notaire** | Garantie de date de **Nota** |
 | --- | --- | --- | ---: |
@@ -202,6 +236,56 @@ une base de prix adaptée à un acte de 650 $. Au-delà du Québec : le notariat
 droit civil, soit environ **90 États membres** de l'Union internationale du
 notariat, tous bâtis sur le même instrument.
 
+### Trois gagnants sur le même acte
+
+| Gagnant | Valeur créée |
+| --- | --- |
+| **Client** | Un notaire qualifié dans sa vraie fenêtre de temps, au prix normal de l'acte plus une prime d'urgence affichée clairement. |
+| **Notaire** | 100 % de ses honoraires, la possibilité d'accepter une demande urgente mieux rémunérée et de remplir une ouverture sans publier son agenda. |
+| **Nota** | Sa propre ligne de service — 199 $ pour un financement, 249 $ pour un refinancement, plus la garantie de date — capturée seulement quand l'acte est signé. |
+
+Le SAM estimé de **~110 000 actes**, soit **~215 M$ d'honoraires**, peut porter
+environ **28 M$ de revenu Nota** à la grille actuelle avant l'élargissement du
+catalogue. C'est une estimation de plan à confirmer par les données et l'avis
+déontologique : Nota ne prélève rien sur les honoraires professionnels.
+
+### Pourquoi un notaire s'abonne
+
+La promesse côté offre est volontairement simple : **s'abonner une fois, puis
+ne rien faire jusqu'à ce qu'une demande vaille la peine d'être acceptée**. Il
+n'y a aucun frais d'inscription, aucun agenda complet à publier, aucun quota de
+prospects et aucune obligation de répondre. Le notaire choisit ses préférences,
+reçoit les demandes pertinentes et peut retenir, contre-proposer, demander une
+information ou passer. Un acte confirmé peut se synchroniser à son agenda;
+l'agenda privé n'est jamais exposé.
+
+| Ouverture autrement inutilisée | Revenus professionnels bruts additionnels illustratifs |
+| --- | ---: |
+| 1 financement standard / mois | **21 600 $ / an** |
+| 1 refinancement standard / mois | **24 000 $ / an** |
+| 2 ouvertures standard / mois | **43 200–48 000 $ / an** |
+| 1 financement le jour même / mois à ~3,5× | **75 600 $ / an** |
+
+Ces montants sont des illustrations avant dépenses et taxes, fondées sur les
+prix de départ actuels et une ouverture autrement inutilisée; ils ne sont pas
+une garantie. Le principe commercial est toutefois net : **plus de choix, plus
+de revenu potentiel, zéro activité obligatoire**.
+
+### Le canal des Courtiers Immobiliers
+
+Chaque courtier immobilier partenaire reçoit un **code unique** à remettre à
+ses clients qui auront besoin d'un acte notarié. Le client arrive avec ce code,
+expose son besoin gratuitement, puis un notaire peut retenir la demande. Cette
+conversion déclenche une récompense de **50 $** pour le courtier, versée par le
+budget d'acquisition de Nota lorsque l'acte est réglé selon les règles du
+programme. Le client obtient sa date, le notaire reçoit 100 % de ses honoraires
+et Nota facture sa propre ligne de service.
+
+La récompense est publique, fixe et distincte des honoraires professionnels :
+elle n'est ni ajoutée au prix du client ni prélevée sur le notaire. Son
+divulgation au client et sa conformité aux règles applicables aux courtiers et
+à la déontologie doivent être validées avant le lancement.
+
 **Pourquoi maintenant :** les honoraires sont libres depuis 1991 sans aucun
 mécanisme de prix ; l'acte technologique est permanent depuis 2023 ; ~1,2 M
 d'hypothèques à taux fixe se renouvellent au Canada en 2025, **chacune avec une
@@ -215,28 +299,36 @@ de **publier le prix de la date avant que le client s'engage**.
 
 ## Phases
 
-**Phase 1 — Le prix du temps.** Prouver qu'un marché notarial tarifé au temps se
-règle, dans une ville, avec de l'argent réel. Québec (RMR de ~850 000 personnes,
-~400 notaires) : assez petit pour rencontrer l'offre en personne, assez dense
-pour atteindre la liquidité. **L'indicateur unique : le taux de rétention** — la
-part des offres qu'un notaire retient.
+**Phase 1 — Le prix du temps.** Prouver qu'un marché d'actes notariaux de base,
+tarifé au temps, se règle dans une ville avec de l'argent réel et sans partage
+d'agenda. Québec (RMR de ~850 000 personnes, ~400 notaires) : assez petit pour
+rencontrer l'offre en personne, assez dense pour atteindre la liquidité. Le
+notaire peut retenir, contre-proposer, demander des pièces ou passer.
+**L'indicateur unique : le taux de rétention** — la part des offres qu'un
+notaire retient.
 
 L'actif produit par la phase 1 n'est pas le revenu : c'est **la seule courbe
 existante prix réalisé × jours avant la date × type d'acte** au Québec.
 Personne ne peut la reconstituer sans opérer le même marché pendant la même
 année.
 
-**Phase 2 — L'acte sans le déplacement.** Retirer la géographie comme contrainte
-d'appariement. Un client de Québec est aujourd'hui apparié à ~400 notaires ; si
-la signature n'exige pas la même pièce, il est apparié à ~3 900 — et le notaire
-de Rimouski vend son jeudi vide à un client de Gatineau. **Le marché ne devient
-pas 10× plus grand parce que le client évite un déplacement. Il devient 10× plus
-liquide parce que l'offre et la demande cessent d'être cloisonnées par code
-postal.**
+**Phase 2 — La couche de travail notariale.** Les documents, les réponses, les
+préférences, l'échéance et le résultat demandé deviennent le contexte structuré
+d'un modèle spécialisé par acte. Le modèle prépare les listes, les demandes de
+pièces et les intégrations; le notaire valide toute sortie. L'objectif de 99 %
+d'effort économisé est une hypothèse à mesurer, pas une promesse avant preuve.
+Puis Nota retire la géographie comme contrainte d'appariement : un client de
+Québec peut accéder à ~3 900 notaires et le notaire de Rimouski peut vendre un
+jeudi vide à un client de Gatineau lorsque le droit le permet.
 
-Livrables : la couche d'exception (art. 46), l'automatisation du dossier, les
-rails de signature, l'appariement provincial, puis le corridor transfrontalier
-vers les notaires UINL pour les Québécois à l'étranger.
+**Phase 3 — La Chambre, l'acte en ligne et l'expansion.** Nota prouve à la
+Chambre des notaires que la visioconférence, la vérification d'identité et de
+capacité, le consentement, la signature électronique, les preuves et la copie
+authentique peuvent être réunis dans un parcours plus sûr et plus auditable.
+Après le pilote : Québec entier, autres provinces, pays UINL, puis protocole
+intersectoriel. Chaque nouveau territoire garde le même geste - accepter,
+proposer ou passer sans partager l'agenda - et remplace seulement ses règles,
+ses actes et ses intégrations.
 
 **La phase 2 est conçue pour être pleinement rentable sous la loi actuelle.** Un
 assouplissement de l'article 46 est un gain additionnel, pas une hypothèse du

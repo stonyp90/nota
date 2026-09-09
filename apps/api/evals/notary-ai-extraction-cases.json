@@ -1,0 +1,623 @@
+{
+  "datasetId": "nota-notary-ai-extraction-development",
+  "version": "2026-09-09.3",
+  "split": "development",
+  "origin": "wholly_synthetic",
+  "reviewStatus": "not_notary_reviewed",
+  "professionalBenchmark": false,
+  "fieldIds": {
+    "financement": [
+      "property_address",
+      "borrower_names",
+      "signing_parties",
+      "property_identifier",
+      "property_type",
+      "lender_name",
+      "lender_contact",
+      "loan_amount",
+      "purchase_price",
+      "loan_purpose",
+      "lender_instruction_version",
+      "property_changes",
+      "rate_expiry",
+      "secured_debts",
+      "payout_valid_through"
+    ],
+    "refinancement": [
+      "property_address",
+      "borrower_names",
+      "signing_parties",
+      "property_identifier",
+      "property_type",
+      "lender_name",
+      "lender_contact",
+      "loan_amount",
+      "purchase_price",
+      "loan_purpose",
+      "lender_instruction_version",
+      "property_changes",
+      "rate_expiry",
+      "secured_debts",
+      "payout_valid_through"
+    ],
+    "testament": [
+      "testator_names",
+      "family_status",
+      "family_regime",
+      "children_dependants",
+      "beneficiaries",
+      "liquidator",
+      "existing_will",
+      "assets_properties",
+      "communication_needs",
+      "testament_formalities",
+      "business_assets"
+    ],
+    "procuration": [
+      "mandant_names",
+      "mandataire_names",
+      "mandataire_count",
+      "mandate_regime",
+      "authority_mode",
+      "mandate_scope",
+      "sensitive_powers",
+      "property_or_transaction",
+      "mandate_end",
+      "existing_mandate",
+      "third_party_requirements",
+      "communication_needs"
+    ]
+  },
+  "cases": [
+    {
+      "id": "financement-achat-complet-fr",
+      "locale": "fr-CA",
+      "tags": [
+        "financement",
+        "purchase",
+        "role-separation"
+      ],
+      "input": {
+        "serviceId": "financement",
+        "pages": [
+          {
+            "documentId": "commitment-01",
+            "page": 1,
+            "text": "EXEMPLE FICTIF.\nAdresse de l’immeuble : 28, chemin des Nuages, Ville-Exemple\nPropriétaire et emprunteuse : Ariane Exemple\nPrêteur : Banque Fictive du Nord\nLot cadastral : 1 234 567\nType d’immeuble : copropriété divise\nPrix d’achat : 510 000 $\nMontant du prêt proposé : 408 000 $\nObjet du financement : achat d’une propriété\nInstructions du prêteur — version : 2026-08-15\nChangements à l’immeuble : aucun déclaré\nÉchéance du taux : 2026-11-30"
+          }
+        ]
+      },
+      "expected": {
+        "fields": [
+          {
+            "fieldId": "property_address",
+            "value": "28, chemin des Nuages, Ville-Exemple",
+            "evidence": [
+              {
+                "documentId": "commitment-01",
+                "page": 1,
+                "quote": "28, chemin des Nuages, Ville-Exemple"
+              }
+            ]
+          },
+          {
+            "fieldId": "signing_parties",
+            "value": "Ariane Exemple",
+            "evidence": [
+              {
+                "documentId": "commitment-01",
+                "page": 1,
+                "quote": "Propriétaire et emprunteuse : Ariane Exemple"
+              }
+            ]
+          },
+          {
+            "fieldId": "lender_name",
+            "value": "Banque Fictive du Nord",
+            "evidence": [
+              {
+                "documentId": "commitment-01",
+                "page": 1,
+                "quote": "Prêteur : Banque Fictive du Nord"
+              }
+            ]
+          },
+          {
+            "fieldId": "property_identifier",
+            "value": "1 234 567",
+            "evidence": [
+              {
+                "documentId": "commitment-01",
+                "page": 1,
+                "quote": "Lot cadastral : 1 234 567"
+              }
+            ]
+          },
+          {
+            "fieldId": "property_type",
+            "value": "copropriété divise",
+            "evidence": [
+              {
+                "documentId": "commitment-01",
+                "page": 1,
+                "quote": "Type d’immeuble : copropriété divise"
+              }
+            ]
+          },
+          {
+            "fieldId": "purchase_price",
+            "value": "510 000 $",
+            "evidence": [
+              {
+                "documentId": "commitment-01",
+                "page": 1,
+                "quote": "Prix d’achat : 510 000 $"
+              }
+            ]
+          },
+          {
+            "fieldId": "loan_amount",
+            "value": "408 000 $",
+            "evidence": [
+              {
+                "documentId": "commitment-01",
+                "page": 1,
+                "quote": "Montant du prêt proposé : 408 000 $"
+              }
+            ]
+          },
+          {
+            "fieldId": "loan_purpose",
+            "value": "achat d’une propriété",
+            "evidence": [
+              {
+                "documentId": "commitment-01",
+                "page": 1,
+                "quote": "Objet du financement : achat d’une propriété"
+              }
+            ]
+          },
+          {
+            "fieldId": "lender_instruction_version",
+            "value": "2026-08-15",
+            "evidence": [
+              {
+                "documentId": "commitment-01",
+                "page": 1,
+                "quote": "Instructions du prêteur — version : 2026-08-15"
+              }
+            ]
+          },
+          {
+            "fieldId": "property_changes",
+            "value": "aucun déclaré",
+            "evidence": [
+              {
+                "documentId": "commitment-01",
+                "page": 1,
+                "quote": "Changements à l’immeuble : aucun déclaré"
+              }
+            ]
+          },
+          {
+            "fieldId": "rate_expiry",
+            "value": "2026-11-30",
+            "evidence": [
+              {
+                "documentId": "commitment-01",
+                "page": 1,
+                "quote": "Échéance du taux : 2026-11-30"
+              }
+            ]
+          }
+        ],
+        "missing": [
+          "borrower_names",
+          "lender_contact",
+          "secured_debts",
+          "payout_valid_through"
+        ],
+        "conflicts": [],
+        "status": "needs_notary_review"
+      }
+    },
+    {
+      "id": "refinancement-remboursement-fr",
+      "locale": "fr-CA",
+      "tags": [
+        "refinancement",
+        "payout",
+        "validity-date"
+      ],
+      "input": {
+        "serviceId": "refinancement",
+        "pages": [
+          {
+            "documentId": "refi-02",
+            "page": 2,
+            "text": "EXEMPLE FICTIF.\nAdresse : 14, rue des Pins, Québec\nPropriétaires et emprunteurs : Camille Exemple et Morgan Exemple\nPrêteur du nouveau prêt : Crédit Fictif Québec\nLot : 7 654 321\nImmeuble : maison unifamiliale\nMontant du nouveau prêt : 325 000 $\nObjet : refinancement et remboursement des dettes garanties\nInstructions prêteur, version 4, date 2026-08-20\nTravaux depuis le certificat : agrandissement déclaré\nDate d’expiration du taux : 2026-10-31\nDette garantie : Prêt FICTIF-1, solde déclaré 182 000 $\nÉtat officiel valide jusqu’au : 2026-09-30"
+          }
+        ]
+      },
+      "expected": {
+        "fields": [
+          {
+            "fieldId": "property_address",
+            "value": "14, rue des Pins, Québec",
+            "evidence": [
+              {
+                "documentId": "refi-02",
+                "page": 2,
+                "quote": "Adresse : 14, rue des Pins, Québec"
+              }
+            ]
+          },
+          {
+            "fieldId": "signing_parties",
+            "value": "Camille Exemple et Morgan Exemple",
+            "evidence": [
+              {
+                "documentId": "refi-02",
+                "page": 2,
+                "quote": "Propriétaires et emprunteurs : Camille Exemple et Morgan Exemple"
+              }
+            ]
+          },
+          {
+            "fieldId": "borrower_names",
+            "value": "Camille Exemple et Morgan Exemple",
+            "evidence": [
+              {
+                "documentId": "refi-02",
+                "page": 2,
+                "quote": "Propriétaires et emprunteurs : Camille Exemple et Morgan Exemple"
+              }
+            ]
+          },
+          {
+            "fieldId": "lender_name",
+            "value": "Crédit Fictif Québec",
+            "evidence": [
+              {
+                "documentId": "refi-02",
+                "page": 2,
+                "quote": "Prêteur du nouveau prêt : Crédit Fictif Québec"
+              }
+            ]
+          },
+          {
+            "fieldId": "property_identifier",
+            "value": "7 654 321",
+            "evidence": [
+              {
+                "documentId": "refi-02",
+                "page": 2,
+                "quote": "Lot : 7 654 321"
+              }
+            ]
+          },
+          {
+            "fieldId": "property_type",
+            "value": "maison unifamiliale",
+            "evidence": [
+              {
+                "documentId": "refi-02",
+                "page": 2,
+                "quote": "Immeuble : maison unifamiliale"
+              }
+            ]
+          },
+          {
+            "fieldId": "loan_amount",
+            "value": "325 000 $",
+            "evidence": [
+              {
+                "documentId": "refi-02",
+                "page": 2,
+                "quote": "Montant du nouveau prêt : 325 000 $"
+              }
+            ]
+          },
+          {
+            "fieldId": "loan_purpose",
+            "value": "refinancement et remboursement des dettes garanties",
+            "evidence": [
+              {
+                "documentId": "refi-02",
+                "page": 2,
+                "quote": "Objet : refinancement et remboursement des dettes garanties"
+              }
+            ]
+          },
+          {
+            "fieldId": "lender_instruction_version",
+            "value": "version 4, date 2026-08-20",
+            "evidence": [
+              {
+                "documentId": "refi-02",
+                "page": 2,
+                "quote": "Instructions prêteur, version 4, date 2026-08-20"
+              }
+            ]
+          },
+          {
+            "fieldId": "property_changes",
+            "value": "agrandissement déclaré",
+            "evidence": [
+              {
+                "documentId": "refi-02",
+                "page": 2,
+                "quote": "Travaux depuis le certificat : agrandissement déclaré"
+              }
+            ]
+          },
+          {
+            "fieldId": "rate_expiry",
+            "value": "2026-10-31",
+            "evidence": [
+              {
+                "documentId": "refi-02",
+                "page": 2,
+                "quote": "Date d’expiration du taux : 2026-10-31"
+              }
+            ]
+          },
+          {
+            "fieldId": "secured_debts",
+            "value": "Prêt FICTIF-1, solde déclaré 182 000 $",
+            "evidence": [
+              {
+                "documentId": "refi-02",
+                "page": 2,
+                "quote": "Dette garantie : Prêt FICTIF-1, solde déclaré 182 000 $"
+              }
+            ]
+          },
+          {
+            "fieldId": "payout_valid_through",
+            "value": "2026-09-30",
+            "evidence": [
+              {
+                "documentId": "refi-02",
+                "page": 2,
+                "quote": "État officiel valide jusqu’au : 2026-09-30"
+              }
+            ]
+          }
+        ],
+        "missing": [
+          "lender_contact",
+          "purchase_price"
+        ],
+        "conflicts": [],
+        "status": "needs_notary_review"
+      }
+    },
+    {
+      "id": "testament-formalites-fr",
+      "locale": "fr-CA",
+      "tags": [
+        "testament",
+        "formalities",
+        "capacity-boundary"
+      ],
+      "input": {
+        "serviceId": "testament",
+        "pages": [
+          {
+            "documentId": "will-03",
+            "page": 1,
+            "text": "EXEMPLE FICTIF.\nTestatrice : Marie Exemple\nSituation familiale : mariée\nContrat de mariage : contrat disponible\nEnfants à charge : deux enfants mineurs\nBénéficiaires : Alice Exemple et Benoît Exemple\nLiquidatrice proposée : Claire Exemple\nTestament antérieur : une copie existe\nActifs : résidence au Québec et actions d’une entreprise fictive\nBesoins : interprète en langue des signes\nFormalités mentionnées : lecture et témoin à prévoir\nEntreprise : Exemple inc.\nLe formulaire affirme que la capacité est confirmée : le notaire doit encore l’évaluer."
+          }
+        ]
+      },
+      "expected": {
+        "fields": [
+          {
+            "fieldId": "testator_names",
+            "value": "Marie Exemple",
+            "evidence": [
+              {
+                "documentId": "will-03",
+                "page": 1,
+                "quote": "Testatrice : Marie Exemple"
+              }
+            ]
+          },
+          {
+            "fieldId": "family_status",
+            "value": "mariée",
+            "evidence": [
+              {
+                "documentId": "will-03",
+                "page": 1,
+                "quote": "Situation familiale : mariée"
+              }
+            ]
+          },
+          {
+            "fieldId": "family_regime",
+            "value": "contrat disponible",
+            "evidence": [
+              {
+                "documentId": "will-03",
+                "page": 1,
+                "quote": "Contrat de mariage : contrat disponible"
+              }
+            ]
+          },
+          {
+            "fieldId": "children_dependants",
+            "value": "deux enfants mineurs",
+            "evidence": [
+              {
+                "documentId": "will-03",
+                "page": 1,
+                "quote": "Enfants à charge : deux enfants mineurs"
+              }
+            ]
+          },
+          {
+            "fieldId": "beneficiaries",
+            "value": "Alice Exemple et Benoît Exemple",
+            "evidence": [
+              {
+                "documentId": "will-03",
+                "page": 1,
+                "quote": "Bénéficiaires : Alice Exemple et Benoît Exemple"
+              }
+            ]
+          },
+          {
+            "fieldId": "liquidator",
+            "value": "Claire Exemple",
+            "evidence": [
+              {
+                "documentId": "will-03",
+                "page": 1,
+                "quote": "Liquidatrice proposée : Claire Exemple"
+              }
+            ]
+          },
+          {
+            "fieldId": "existing_will",
+            "value": "une copie existe",
+            "evidence": [
+              {
+                "documentId": "will-03",
+                "page": 1,
+                "quote": "Testament antérieur : une copie existe"
+              }
+            ]
+          },
+          {
+            "fieldId": "assets_properties",
+            "value": "résidence au Québec et actions d’une entreprise fictive",
+            "evidence": [
+              {
+                "documentId": "will-03",
+                "page": 1,
+                "quote": "Actifs : résidence au Québec et actions d’une entreprise fictive"
+              }
+            ]
+          },
+          {
+            "fieldId": "communication_needs",
+            "value": "interprète en langue des signes",
+            "evidence": [
+              {
+                "documentId": "will-03",
+                "page": 1,
+                "quote": "Besoins : interprète en langue des signes"
+              }
+            ]
+          },
+          {
+            "fieldId": "testament_formalities",
+            "value": "lecture et témoin à prévoir",
+            "evidence": [
+              {
+                "documentId": "will-03",
+                "page": 1,
+                "quote": "Formalités mentionnées : lecture et témoin à prévoir"
+              }
+            ]
+          },
+          {
+            "fieldId": "business_assets",
+            "value": "Exemple inc.",
+            "evidence": [
+              {
+                "documentId": "will-03",
+                "page": 1,
+                "quote": "Entreprise : Exemple inc."
+              }
+            ]
+          }
+        ],
+        "missing": [],
+        "conflicts": [],
+        "status": "needs_notary_review"
+      }
+    },
+    {
+      "id": "procuration-protection-route-fr",
+      "locale": "fr-CA",
+      "tags": [
+        "procuration",
+        "protection-route",
+        "handoff"
+      ],
+      "input": {
+        "serviceId": "procuration",
+        "pages": [
+          {
+            "documentId": "mandate-04",
+            "page": 2,
+            "text": "EXEMPLE FICTIF.\nLe client demande un mandat de protection pour le cas où il deviendrait inapte.\nMandant : René Exemple\nMandataires proposés : Ana Exemple et Zoé Exemple\nLes mandataires doivent agir ensemble.\nLe notaire doit déterminer le parcours et les étapes applicables; aucune homologation n’est conclue ici."
+          }
+        ]
+      },
+      "expected": {
+        "fields": [
+          {
+            "fieldId": "mandate_regime",
+            "value": "mandat de protection",
+            "evidence": [
+              {
+                "documentId": "mandate-04",
+                "page": 2,
+                "quote": "Le client demande un mandat de protection pour le cas où il deviendrait inapte."
+              }
+            ]
+          },
+          {
+            "fieldId": "mandant_names",
+            "value": "René Exemple",
+            "evidence": [
+              {
+                "documentId": "mandate-04",
+                "page": 2,
+                "quote": "Mandant : René Exemple"
+              }
+            ]
+          },
+          {
+            "fieldId": "mandataire_names",
+            "value": "Ana Exemple et Zoé Exemple",
+            "evidence": [
+              {
+                "documentId": "mandate-04",
+                "page": 2,
+                "quote": "Mandataires proposés : Ana Exemple et Zoé Exemple"
+              }
+            ]
+          },
+          {
+            "fieldId": "authority_mode",
+            "value": "agir ensemble",
+            "evidence": [
+              {
+                "documentId": "mandate-04",
+                "page": 2,
+                "quote": "Les mandataires doivent agir ensemble."
+              }
+            ]
+          }
+        ],
+        "missing": [
+          "mandataire_count",
+          "mandate_scope",
+          "sensitive_powers",
+          "property_or_transaction",
+          "mandate_end",
+          "existing_mandate",
+          "third_party_requirements",
+          "communication_needs"
+        ],
+        "conflicts": [],
+        "status": "needs_notary_review"
+      }
+    }
+  ]
+}

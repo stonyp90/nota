@@ -911,6 +911,27 @@ a:hover { text-decoration: underline; }
 .admin-content .field { min-width: 0; }
 .admin-content input, .admin-content textarea, .admin-content select { max-width: 100%; }
 .tpl-actions { flex-wrap: wrap; gap: .5rem; }
+
+/* --- Catalogue + feature inventory ----------------------------------------- */
+.service-card, .feature-group { display: grid; gap: 14px; }
+.service-card .chart-card-head, .feature-group .chart-card-head { align-items: flex-start; }
+.service-card .chart-card-head .status-pill, .feature-group .chart-card-head .status-pill { flex: 0 0 auto; }
+.service-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
+.service-stat { display: grid; gap: 3px; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-inset); }
+.service-stat-label, .service-stat-note { color: var(--ink-muted); font-size: 11.5px; }
+.service-stat-value { color: var(--ink); font-size: 16px; }
+.service-details { display: grid; gap: 7px; }
+.service-detail { border-top: 1px solid var(--border); padding-top: 9px; }
+.service-detail summary { cursor: pointer; color: var(--ink); font-weight: 600; }
+.service-list, .feature-list { display: grid; gap: 6px; margin: 9px 0 0; padding-left: 19px; }
+.service-list li { color: var(--ink); line-height: 1.45; }
+.service-list .help { display: block; margin-top: 2px; }
+.feature-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.feature-row:last-child { border-bottom: 0; }
+.feature-row > :first-child { color: var(--ink); }
+.feature-row > :last-child { flex: 0 0 auto; }
+@media (max-width: 640px) { .feature-row { align-items: flex-start; flex-direction: column; gap: 3px; } }
+
 @media (max-width: 640px) {
   .admin-section-label, .admin-section-search { flex-basis: 100%; }
   .tpl-actions > .btn { min-height: 44px; }

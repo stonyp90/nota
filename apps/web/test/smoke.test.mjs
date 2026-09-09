@@ -278,15 +278,11 @@ test('DAY: the market line keeps its figure and one-tap pill on one aligned row'
     'the label is the flexible, wrappable column — the figure and pill never wrap away');
 });
 
-// 7. Offer form: 3 service options, anonymity on by default, service selection
+// 7. Offer form: all catalogue services, anonymity on by default, service selection
 //    enables the slider and caps it at prixDepart * PREMIUM_CAP.
 test('offer form: services populated, anon default on, slider capped at prixDepart*3', async () => {
   const { win, doc, D, Nota } = await boot();
   assert.equal($(doc, 'o-service').options.length, D.SERVICES.length);
-  // TWO acts of the financing family (ADR 0010 §1 amended): refinancement
-  // (default) + financement. Pinned so a retired act never lingers in the form.
-  assert.equal(D.SERVICES.length, 2);
-
   assert.equal($(doc, 'o-anon').checked, true);
   assert.equal(Nota.state.offer.anonyme, true);
 
@@ -1111,8 +1107,8 @@ test('URGENCY: every upcoming day prices its own notice, from the domain', async
     // multiplier — learned from the month's retained offers — not the static
     // ladder midpoint — applied to the carnet's act, and said in DOLLARS: a
     // client thinks in dollars, not in multiples.
-    const m = ctx.D.tierMultiplier(tierId, ctx.Nota.state.monthBids);
     const svc = ctx.D.serviceById(ctx.D.DEFAULT_SERVICE_ID);
+    const m = ctx.D.tierMultiplier(tierId, ctx.Nota.state.monthBids, svc.id);
     assert.equal(mark.textContent, 'dès ' + ctx.D.money(Math.round(svc.prixDepart * m)), 'the cell quotes the tuned price in dollars');
     assert.ok(!mark.textContent.includes('×'), 'no multiplier jargon on the grid');
   });
@@ -1128,8 +1124,8 @@ test('URGENCY: every upcoming day prices its own notice, from the domain', async
   const key = [...ctx.doc.querySelectorAll('#legend .legend-item')]
     .find((n) => /Prioritaire/.test(n.textContent));
   assert.ok(key, 'the legend keys each tier');
-  const legendMult = ctx.D.tierMultiplier('prioritaire', ctx.Nota.state.monthBids);
   const legendSvc = ctx.D.serviceById(ctx.D.DEFAULT_SERVICE_ID);
+  const legendMult = ctx.D.tierMultiplier('prioritaire', ctx.Nota.state.monthBids, legendSvc.id);
   const legendLabel = 'dès ' + ctx.D.money(Math.round(legendSvc.prixDepart * legendMult));
   assert.ok(key.textContent.includes(legendLabel), 'with its (tuned) price in dollars, not just a name');
 });

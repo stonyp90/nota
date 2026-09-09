@@ -175,6 +175,15 @@ test('invalid daily limits and unavailable shared budget counter fail closed bef
   assert.equal(a.calls.length, 0);
 });
 
+test('malformed shared counter results fail closed before provider use', async () => {
+  for (const malformed of [0, -1, 1.5, Number.NaN, undefined, '1']) {
+    const a = setup();
+    a.repo.incrNotaryRateCounter = async () => malformed;
+    assert.equal((await a.request()).status, 503);
+    assert.equal(a.calls.length, 0);
+  }
+});
+
 test('usage includes cache writes and distinguishes absent/invalid counters from measured zero', async () => {
   const input = { serviceId: 'refinancement', pages: [page] };
   for (const [usage, reported, cacheWrite] of [

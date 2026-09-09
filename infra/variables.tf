@@ -14,6 +14,12 @@ variable "project_name" {
   default     = "nota"
 }
 
+variable "time_zone" {
+  description = "IANA civil timezone used by scheduled workers when selecting the business day."
+  type        = string
+  default     = "America/Toronto"
+}
+
 # Custom domain is OPTIONAL. When domain_name is "" the stack serves the SPA
 # through the default *.cloudfront.net domain and no ACM/Route53 resources are
 # created. Set both variables together to attach a custom domain.
@@ -161,9 +167,15 @@ variable "enable_admin" {
 }
 
 variable "admin_domain_name" {
-  description = "Custom domain for the admin CloudFront distribution (e.g. admin.nota.ca). Empty falls back to the default *.cloudfront.net domain (no ACM/Route53 for admin). Uses var.hosted_zone_id for DNS validation + alias records."
+  description = "Custom domain for the admin CloudFront distribution (e.g. admin.nota.ca). Empty falls back to the default *.cloudfront.net domain (no ACM/Route53 for admin). Uses the public zone, or admin_hosted_zone_id when the admin hostname belongs to another zone."
   type        = string
   default     = ""
+}
+
+variable "admin_hosted_zone_id" {
+  description = "Optional Route 53 zone ID for the admin hostname when it is not under domain_name. Empty uses the public zone (or the retained gonata.ca zone for admin.gonata.ca)."
+  type        = string
+  default     = null
 }
 
 variable "admin_emails" {

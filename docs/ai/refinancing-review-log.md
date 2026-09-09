@@ -1,5 +1,31 @@
 # Refinancing improvement log
 
+## 2026-09-09 — cost and performance controls
+
+- Added deterministic exact-result reuse before provider resolution or AI
+  admission. Reuse is scoped to the retaining notary and exact validated source,
+  service, prompt/schema/knowledge version, provider, region and model; the
+  saved preparation is revalidated and the work packet is rebuilt from the
+  current server dossier.
+- Identical concurrent requests share one generation within an API worker.
+  Warm workers retain the provider client, and the existing SSM secret cache
+  avoids repeated key lookups. Cross-worker deduplication remains guarded by the
+  repository's optimistic analysis write.
+- Added a shared UTC-day provider-call cap, configurable through
+  `NOTA_FINANCING_AI_MAX_CALLS_PER_DAY` and defaulting to 100, in addition to
+  six admitted attempts per notary per hour. Unavailable or malformed counters
+  fail closed; failed attempts reserve capacity and are never reusable.
+- Persisted bounded provider, latency and usage metadata, including cache reads,
+  cache writes and whether the provider reported usage. Prompt caching and
+  automatic model downgrades remain deferred until notary-reviewed quality and
+  cost-per-accepted-file measurements support them. No measured saving or 90%
+  automation result is claimed.
+- Validation for this increment: financing/domain/API extraction checks 201/201,
+  financing UI and work-packet checks 46/46, API contract checks 25/25, both
+  production builds and `git diff --check` passed. Full domain, API, web and BDD
+  runs still include unrelated concurrent workspace failures; no deployment was
+  made.
+
 ## 2026-09-09 — AWS restored and Bedrock transport implemented
 
 - Restored AWS authentication with temporary, process-local credentials. No

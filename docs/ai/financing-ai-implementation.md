@@ -1,5 +1,8 @@
 # Evidence-grounded financing assistant
 
+The cross-service learning policy and case matrix are documented in
+[`notary-learning-strategy-2026-09-09.md`](notary-learning-strategy-2026-09-09.md).
+
 Implementation date: 2026-09-09. This is a first extraction/review workflow, not
 an autonomous notary or a validated 90% automation result.
 
@@ -71,6 +74,31 @@ The existing repo has other full-item bid writes. They retain their documented
 last-writer-wins limitation; the AI's conditional writes do not fix that broader
 repository concurrency issue. Move analyses to versioned records with coordinated
 erasure before relying on this feature as a historical professional audit system.
+
+### Cost and latency controls
+
+The preparation route checks for an exact reusable result before resolving a
+provider or reserving an AI attempt. A hit requires the same retaining notary,
+file, validated page snapshot, service, prompt/schema/knowledge version, provider,
+region and model; the saved preparation is revalidated before it is reused. The
+response still rebuilds the work packet from the current server dossier, so reuse
+does not serve a stale HTTP response. Identical concurrent requests share one
+generation inside an API worker, while the optimistic repository write remains
+the protection across workers.
+
+Provider clients are retained for the warm worker, and SSM key lookup remains
+behind the existing secret cache. Each newly admitted attempt consumes the
+existing six-per-notary-per-hour reservation and a shared UTC-day call cap
+(`NOTA_FINANCING_AI_MAX_CALLS_PER_DAY`, default 100); unavailable or malformed
+counters fail closed. Failed attempts consume their reservation and are never
+stored as reusable output. Persisted analyses retain bounded latency and provider
+usage fields, including cache reads/writes and a `reported` flag so missing usage
+is not treated as zero cost.
+
+Prompt caching and automatic model downgrades remain disabled until the same
+notary-reviewed cases establish eligibility, quality, cache hit rate, latency and
+cost per accepted file. The current controls reduce duplicate work and setup
+latency without claiming a measured percentage saving.
 
 ## Enable and verify
 
@@ -153,6 +181,15 @@ occurs. Daily development may classify authorized feedback, produce synthetic
 regressions and improve the prompt or retrieval. Training requires an authorized,
 minimized, reviewed dataset, case-level splits, a frozen qualification set and a
 supported provider training job. Never use model answers as legal ground truth.
+
+The production signal stream now records hashed metadata for customer input,
+customer behavior, retained client-notary communication, AI output, notary
+review, official workflow outcomes and client feedback. Customer signals can
+rank intake and communication improvements; they cannot label legal fields.
+`apps/api/scripts/build-notary-learning-dataset.js` builds an offline preference
+candidate only after explicit authorization, de-identification, qualification
+and rollback gates. It reports `weightUpdate: not_started` even when the dataset
+is eligible, so deployment remains a separate reviewed action.
 
 The [researched integration plan](notary-automation-research-2026-09-09.md) prioritizes:
 

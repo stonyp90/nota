@@ -39,6 +39,11 @@ resource "aws_cloudwatch_log_group" "reminders" {
   retention_in_days = var.log_retention_days
 }
 
+resource "aws_cloudwatch_log_group" "customer_improvement" {
+  name              = "/aws/lambda/${var.project_name}-customer-improvement"
+  retention_in_days = var.log_retention_days
+}
+
 # Admin API Lambda logs — gated behind the same enable_admin flag as the
 # function itself (admin.tf), so nothing is created when admin is off.
 resource "aws_cloudwatch_log_group" "admin" {
