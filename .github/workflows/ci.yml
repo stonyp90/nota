@@ -92,7 +92,19 @@ jobs:
         run: npm ci
 
       - name: Install Playwright browser engines
-        run: npx playwright install --with-deps chromium firefox webkit
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if npx playwright install --with-deps chromium firefox webkit; then
+              exit 0
+            fi
+            echo "Playwright browser install attempt ${attempt} failed; refreshing apt metadata"
+            sudo rm -rf /var/lib/apt/lists/partial /var/lib/apt/lists/*
+            sudo apt-get clean
+            sudo apt-get update -o Acquire::Retries=5
+          done
+          exit 1
 
       - name: Run critical journeys (client booking, notary sign-in, partner claim, home numbers)
         run: npm run test:e2e
