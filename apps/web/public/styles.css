@@ -3408,18 +3408,15 @@ dialog:focus, dialog:focus-visible { outline: none; }
   grid-template-columns: minmax(0, 1fr) minmax(0, 420px);
   /* The inventory keeps twelve slots at every offer count. Compliance remains
      a full-width band below both columns, outside the sign-in card. */
-  /* 2026-09-05 — l'agenda descend SOUS la grille, dans la colonne de gauche.
-     Sous la grille des demandes s'ouvrait un trou de 137 px pendant que la
-     colonne de droite continuait : le contenu s'arrêtait, la page non. La
-     colonne de gauche va maintenant jusqu'au bout de son propre contenu, et
-     ce qui reste se retrouve sous la PORTE D'ACCÈS — sous une carte qui se
-     termine par son bouton, du blanc se lit comme du calme, pas comme un
-     oubli. */
+  /* 2026-09-09 — l'agenda ferme la rangée SOUS les deux colonnes. Une carte
+     limitée à gauche laissait un vide accidentel sous la porte d'accès dès
+     que l'inventaire était court; le rail horizontal ci-dessous utilise cette
+     largeur pour rendre la page continue. */
   grid-template-areas:
     "hero       hero"
     "livehead   ."
     "live       console"
-    "carnet     ."
+    "carnet     carnet"
     "conformite conformite"
     "guarantee  guarantee";
   column-gap: clamp(32px, 5vw, 80px);
@@ -3437,11 +3434,38 @@ dialog:focus, dialog:focus-visible { outline: none; }
    largeur ce n'était que de l'air). Il garde la largeur de sa colonne. */
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-carnet  {
   grid-area: carnet; align-self: start;
-  /* Sa propre bande, pas la queue de la grille des demandes : le même filet
-     que « Conformité » emploie plus bas, donc la colonne se lit en trois
-     temps — les demandes, l'agenda, la conformité. */
+  /* A full-width support rail closes the inventory row beneath both columns.
+     Keeping it in the left column left a large, accidental-looking void under
+     the access card on sparse inventories. The card uses a compact horizontal
+     treatment below so the extra measure reads as useful space, not air. */
   margin-top: var(--space-16); padding-top: var(--space-12);
   border-top: 1px solid var(--border);
+}
+#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-carnet .sub-card {
+  display: grid;
+  grid-template-columns: minmax(280px, .8fr) minmax(0, 1.6fr);
+  grid-template-rows: auto auto auto;
+  column-gap: clamp(24px, 4vw, 64px);
+  align-items: center;
+}
+#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-carnet .sub-card-head {
+  grid-column: 1;
+  grid-row: 1 / span 3;
+  align-self: start;
+}
+#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-carnet .sub-card-actions {
+  grid-column: 2;
+  grid-row: 1;
+  margin-top: 0;
+}
+#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-carnet .sub-card > details {
+  grid-column: 2;
+  grid-row: 2;
+}
+#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-carnet .sub-card > .help:last-child {
+  grid-column: 2;
+  grid-row: 3;
+  margin: 0;
 }
 /* The console anchors to the TOP of the "live" row — no margin at all: its
    top edge sits exactly on the first demand cards' top edge (card aligned to
@@ -3566,6 +3590,15 @@ dialog:focus, dialog:focus-visible { outline: none; }
   /* La carte va d'un bord à l'autre ; le formulaire, non — 440 px collés à
      gauche dans une carte de 940 px se lirait comme un oubli. */
   #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) #notary-console .nc-gate { margin-inline: auto; }
+  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-carnet .sub-card {
+    display: block;
+  }
+  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-carnet .sub-card-actions {
+    margin-top: 12px;
+  }
+  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-carnet .sub-card > .help:last-child {
+    margin-top: 10px;
+  }
 }
 
 /* The landing's centrepiece: the live open inventory, directly under the one
