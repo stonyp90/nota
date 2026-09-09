@@ -1,6 +1,8 @@
 'use strict';
 
 process.env.NOTA_EMAIL_LANGUAGE ||= 'fr';
+const { configureLocalStripe } = require('./scripts/local-stripe-config');
+const stripeTest = configureLocalStripe();
 
 /**
  * Local dev server (plain node:http, no framework). Uses DynamoDB Local when
@@ -50,7 +52,7 @@ if (useDynamo) {
 // With TABLE_NAME (a real deployment shape) nothing is injected: billing is
 // built lazily from the real Stripe env, and completing an act without keys
 // fails loudly rather than pretending money moved.
-const demoBilling = useDynamo ? null : createBilling({
+const demoBilling = useDynamo || stripeTest ? null : createBilling({
   repo,
   stripe: {
     async createConnectAccount() { return { id: 'acct_demo' }; },
@@ -78,9 +80,11 @@ const { createNotifier } = require('./src/notifications');
 // L'origine que le NAVIGATEUR atteint : c'est elle qui doit être dans le lien,
 // pas l'adresse interne du conteneur.
 const SITE_URL = process.env.NOTA_SITE_URL || 'http://localhost:4173';
+const localMailer = createFileMailer({ dir: process.env.NOTA_LOCAL_MAIL_DIR });
 const localNotifier = createNotifier({
   repo,
-  mailer: createFileMailer({ dir: process.env.NOTA_LOCAL_MAIL_DIR }),
+  mailer: localMailer,
+  adminUrl: process.env.NOTA_ADMIN_BASE_URL || null,
   baseUrl: SITE_URL,
   operatorEmail: process.env.NOTA_OPERATOR_EMAIL || 'admin@nota.local',
 });
@@ -108,7 +112,7 @@ const server = http.createServer(async (req, res) => {
       'content-type': 'application/json',
       'x-nota-source': SOURCE.hash,
       'access-control-allow-origin': '*',
-      'access-control-allow-methods': 'GET,POST,OPTIONS',
+      'access-control-allow-methods': 'GET,POST,PATCH,OPTIONS',
       'access-control-allow-headers': 'content-type,authorization',
     });
     res.end(JSON.stringify({ errors: [{ code: 'erreur_serveur', message: String(err && err.message || err) }] }));
@@ -118,5 +122,15 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, () => {
   const mode = useDynamo ? `DynamoDB ${process.env.DYNAMO_ENDPOINT || '(regional)'}` : 'in-memory fixtures';
   console.log(`Nota API on http://localhost:${PORT}  [${mode}]`);
+  if (stripeTest) console.log('  Stripe TEST: real Checkout and signed webhooks, no live payments.');
   console.log(`  source ${SOURCE.hash} (${SOURCE.files} fichiers) — rendu dans l'en-tête x-nota-source`);
 });
+
+// `npm run local` shares one repository between the two API listeners. Separate
+// memory stores would make a new chat invisible in the admin console.
+if (!useDynamo && process.env.NOTA_SHARED_ADMIN_PORT) {
+  require('./admin-local-server').startServer({
+    port: Number(process.env.NOTA_SHARED_ADMIN_PORT), repo,
+    mailer: localMailer, notifier: localNotifier,
+  });
+}

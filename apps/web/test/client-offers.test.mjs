@@ -75,7 +75,7 @@ const activePane = (doc) => {
 };
 
 const DATE = addDays(todayISO(), 6);
-const OFFER = { id: 'o1', dateISO: DATE, serviceId: 'financement', montant: 1000, clientToken: 'tok-o1' };
+const OFFER = { expiresOn: DATE, id: 'o1', dateISO: DATE, serviceId: 'financement', montant: 1000, clientToken: 'tok-o1' };
 
 function statusRoute(body) {
   return {
@@ -85,14 +85,14 @@ function statusRoute(body) {
 }
 
 const withProposition = () => ({
-  bid: { id: 'o1', serviceId: 'financement', dateISO: DATE, montant: 1000, status: 'ouverte', etude: null },
+  bid: { expiresOn: DATE, id: 'o1', serviceId: 'financement', dateISO: DATE, montant: 1000, status: 'ouverte', etude: null },
   propositions: [{ id: 'p1', etude: 'Étude Tremblay', montant: 1200, delta: 200, message: 'Dossier complexe.', status: 'en_attente', createdAt: todayISO() }],
   demandes: [],
   readiness: { total: 6, done: 2, missing: [], consent: false, ready: false },
 });
 
 const withDemande = () => ({
-  bid: { id: 'o1', serviceId: 'financement', dateISO: DATE, montant: 1000, status: 'ouverte', etude: null },
+  bid: { expiresOn: DATE, id: 'o1', serviceId: 'financement', dateISO: DATE, montant: 1000, status: 'ouverte', etude: null },
   propositions: [],
   demandes: [{ id: 'd1', etude: 'Étude Roy', documents: [{ id: 'piece_identite', nom: 'Pièce d’identité avec photo', kind: 'doc' }, { id: 'x', nom: 'Relevé bancaire', kind: 'doc' }], message: '', createdAt: todayISO(), fournie: false }],
   readiness: { total: 6, done: 2, missing: [], consent: false, ready: false },
@@ -456,4 +456,21 @@ test('a calm date quotes ONE figure — never « entre X et X »', async () => {
   const text = $(doc, 'tp-text').textContent;
   assert.match(text, /se concluent autour de /, 'a point band collapses to one figure: ' + text);
   assert.ok(!/entre .+ et .+/.test(text), 'no degenerate « entre X et X »: ' + text);
+});
+
+test('an expired offer shows its deadline and cannot accept a pending proposition', async () => {
+  const status = withProposition();
+  status.bid.expiresOn = addDays(todayISO(), -1);
+  const { doc, Nota } = await boot({
+    seed: { 'nota.myoffers.v1': JSON.stringify([{ ...OFFER, expiresOn: status.bid.expiresOn }]) },
+    routes: [statusRoute(status)],
+  });
+  Nota.setTab('profil');
+  await wait(40);
+  const row = doc.querySelector('tr.my-offer[data-id="o1"]');
+  assert.match(row.textContent, /Offre expirée/);
+  const detail = doc.querySelector('tr.my-offer-detail[data-for="o1"]');
+  assert.match(detail.textContent, /Offre valide jusqu’au/);
+  assert.match(detail.textContent, /Cette offre a expiré/);
+  assert.equal(detail.querySelector('.btn-prop-accept'), null);
 });

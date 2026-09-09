@@ -1,0 +1,18 @@
+{
+  "recordedAt": "2026-09-09T05:11:50.802Z",
+  "operation": "synthetic-schema-warmup",
+  "professionalBenchmark": false,
+  "productionDeadlineTest": false,
+  "timeoutMs": 180000,
+  "latencyMs": 395,
+  "model": "us.anthropic.claude-sonnet-4-6",
+  "region": "ca-central-1",
+  "ok": false,
+  "code": "unavailable",
+  "diagnostic": {
+    "name": "AccessDeniedException",
+    "message": "Model access is denied due to INVALID_PAYMENT_INSTRUMENT:A valid payment instrument must be provided.. Your AWS Marketplace subscription for this model cannot be completed at this time. If you recently fixed this issue, try again after 5 minutes."
+  },
+  "provenance": null,
+  "usage": null
+}

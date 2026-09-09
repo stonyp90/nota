@@ -390,6 +390,23 @@ data "aws_iam_policy_document" "admin_lambda" {
   }
 
   # SES send for admin login-challenge / notification email. Scoped to the
+  # Shared support replies use the existing delivery ledger and the subject's
+  # sent-email history. Grant only that notification kind, not arbitrary SENT
+  # markers that could suppress unrelated business notifications.
+  statement {
+    sid       = "MainTableSupportDelivery"
+    effect    = "Allow"
+    actions   = ["dynamodb:PutItem"]
+    resources = [aws_dynamodb_table.main.arn]
+
+    condition {
+      test     = "ForAllValues:StringLike"
+      variable = "dynamodb:LeadingKeys"
+      values   = ["SENT#support:*#supportReponse", "SUJET#*"]
+    }
+  }
+
+  # SES send for admin login-challenge / notification email. Scoped to the
   # configured sender address exactly the way the public notifier is scoped
   # (notifications.tf): by the ses:FromAddress condition, not a brittle ARN.
   statement {
@@ -454,7 +471,8 @@ resource "aws_lambda_function" "admin" {
       NODE_ENV = "production"
 
       # In-stack admin signing secret (never empty in production).
-      NOTA_ADMIN_SECRET = var.use_secrets_manager ? "" : random_password.admin_secret[0].result
+      NOTA_ADMIN_SECRET  = var.use_secrets_manager ? "" : random_password.admin_secret[0].result
+      NOTA_NOTARY_SECRET = var.use_secrets_manager ? "" : random_password.notary_secret.result
 
       # Admin's own isolated table (full CRUD) + the main table (READ-ONLY use).
       ADMIN_TABLE_NAME           = aws_dynamodb_table.admin[0].name
@@ -463,6 +481,7 @@ resource "aws_lambda_function" "admin" {
       NOTA_REPLY_TO_EMAIL        = var.reply_to_email
       NOTA_SENDER_ADDRESS        = var.sender_address
       NOTA_BASE_URL              = var.base_url
+      NOTA_SUPPORT_EMAIL_DOMAIN  = var.enable_support_email && var.support_email_activate ? local.support_email_domain : ""
       NOTA_SITE_URL              = var.base_url
       NOTA_RUNTIME_SECRET_ARN    = var.use_secrets_manager ? aws_secretsmanager_secret.admin[0].arn : ""
       NOTA_REQUIRED_SECRETS      = "NOTA_ADMIN_SECRET,NOTA_NOTARY_SECRET"
@@ -485,7 +504,8 @@ resource "aws_lambda_function" "admin" {
       NOTA_STRIPE_LOCALE             = "fr-CA"
 
       # Reuse the same verified SES sender the public stack uses (notifications.tf).
-      NOTA_FROM_EMAIL = var.from_email
+      NOTA_FROM_EMAIL     = var.from_email
+      NOTA_OPERATOR_EMAIL = var.operator_email
 
       # Les bornes de campagne (apps/api/src/segments.js GARDES). admin.js les
       # LISAIT depuis sa config et personne ne les POSAIT : la console retombait

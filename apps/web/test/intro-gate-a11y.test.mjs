@@ -88,6 +88,33 @@ test('P1-10: open, the gate takes focus and inerts everything behind it; closed,
   assert.equal(win.localStorage.getItem('nota.introSeen'), '1');
 });
 
+for (const [film, tab] of [['client', 'carnet'], ['notaire', 'notaires']]) {
+  test('the ' + film + ' film CTA enters its pane and counts as an explicit dismissal', async () => {
+    const { doc, win, Nota } = await boot();
+    const gate = $(doc, 'intro-gate');
+    $(doc, 'ig-door-' + film).click();
+    assert.equal(doc.activeElement, $(doc, 'ig-skip'), 'playback keeps its accessible initial focus');
+    $(doc, 'ig-pause').click();
+    assert.equal($(doc, 'ig-pause').getAttribute('aria-pressed'), 'true');
+
+    const next = doc.querySelector('#ig-stage-' + film + ' [data-ig-goto]');
+    next.focus();
+    next.click();
+    await wait(400);
+
+    assert.equal(gate.hidden, true, 'the CTA closes even a paused film');
+    assert.equal(Nota.state.tab, tab, 'the intended product pane is selected');
+    assert.equal($(doc, 'pane-' + tab).hidden, false);
+    assert.equal(win.localStorage.getItem('nota.introSeen'), '1', 'the visitor explicitly entered the product');
+    assert.equal(win.localStorage.getItem('nota.introPlays'), null, 'a CTA click is not an automatic completion');
+    assert.ok(!doc.body.classList.contains('ig-open'), 'the page can scroll again');
+    for (const sel of BEHIND) {
+      assert.ok(!doc.querySelector(sel).hasAttribute('inert'), sel + ' is interactive again');
+    }
+    assert.equal(doc.activeElement, $(doc, 'pane-' + tab).querySelector('h1'), 'focus follows the CTA into the product');
+  });
+}
+
 test('P0-9: under prefers-reduced-motion the gate never opens — ?intro=1 included', async () => {
   const forced = await boot({ url: 'https://nota.example/?intro=1', reducedMotion: true });
   assert.equal($(forced.doc, 'intro-gate').hidden, true, 'the CSS hides .ig under RM; opening it would lock the scroll behind nothing');

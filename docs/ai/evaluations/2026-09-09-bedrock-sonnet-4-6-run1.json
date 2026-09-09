@@ -1,0 +1,241 @@
+{
+  "mode": "live-synthetic-evaluation",
+  "execution": "amazon-bedrock",
+  "model": "us.anthropic.claude-sonnet-4-6",
+  "requestedModel": "us.anthropic.claude-sonnet-4-6",
+  "generatedAt": "2026-09-09T05:05:35.454Z",
+  "dataset": {
+    "id": "nota-financing-extraction-development",
+    "version": "2026-09-09.1",
+    "split": "development",
+    "origin": "wholly_synthetic",
+    "reviewStatus": "not_notary_reviewed",
+    "professionalBenchmark": false,
+    "sha256": "f536dd7ac9196d2fa1b8a0109cc8dca5d5044d00a1c9287319ad3c1c210ca027",
+    "hashEncoding": "sha256 of exact UTF-8 dataset file bytes"
+  },
+  "datasetSha256": "f536dd7ac9196d2fa1b8a0109cc8dca5d5044d00a1c9287319ad3c1c210ca027",
+  "knowledgeVersion": "2026-09-09.1",
+  "promptSha256": "e71bf72401bd0002c4d7ad62a4a7cfcbe2aba6f6577b516cde12bba36172697a",
+  "promptSha256s": [
+    "e71bf72401bd0002c4d7ad62a4a7cfcbe2aba6f6577b516cde12bba36172697a"
+  ],
+  "trained": false,
+  "professionalBenchmark": false,
+  "pass": false,
+  "passed": 0,
+  "failed": 8,
+  "total": 8,
+  "failures": [],
+  "refusals": 8,
+  "errors": 0,
+  "expectedFields": 38,
+  "returnedFields": 0,
+  "exactFields": 0,
+  "evidencedFields": 0,
+  "falseSupportedClaims": 0,
+  "limitation": "Exact regression checks on unreviewed synthetic development data. An injected port may be a test double; no professional accuracy, notary approval or time savings are established.",
+  "results": [
+    {
+      "id": "complete-refinancement-fr",
+      "pass": false,
+      "refused": true,
+      "refusalCode": "unavailable",
+      "failures": [
+        {
+          "code": "unexpected_refusal"
+        }
+      ],
+      "metrics": {
+        "expectedFields": 6,
+        "returnedFields": 0,
+        "exactFields": 0,
+        "evidencedFields": 0,
+        "falseSupportedClaims": 0
+      },
+      "error": false,
+      "inputSha256": "96ce49e5c964ebd53c3436c91b35b865974e0dbd80cb179c8f908d73e7d43276",
+      "promptSha256": "e71bf72401bd0002c4d7ad62a4a7cfcbe2aba6f6577b516cde12bba36172697a",
+      "provenance": null,
+      "usage": null,
+      "preparation": null,
+      "latencyMs": 1469
+    },
+    {
+      "id": "financement-en-role-decoys",
+      "pass": false,
+      "refused": true,
+      "refusalCode": "unavailable",
+      "failures": [
+        {
+          "code": "unexpected_refusal"
+        }
+      ],
+      "metrics": {
+        "expectedFields": 4,
+        "returnedFields": 0,
+        "exactFields": 0,
+        "evidencedFields": 0,
+        "falseSupportedClaims": 0
+      },
+      "error": false,
+      "inputSha256": "380657b31c5ae8e8e9924000b3e91227c4bd28033220a79e76ec8530c7147d6e",
+      "promptSha256": "e71bf72401bd0002c4d7ad62a4a7cfcbe2aba6f6577b516cde12bba36172697a",
+      "provenance": null,
+      "usage": null,
+      "preparation": null,
+      "latencyMs": 419
+    },
+    {
+      "id": "no-extractable-data-fr",
+      "pass": false,
+      "refused": true,
+      "refusalCode": "unavailable",
+      "failures": [
+        {
+          "code": "unexpected_refusal"
+        }
+      ],
+      "metrics": {
+        "expectedFields": 0,
+        "returnedFields": 0,
+        "exactFields": 0,
+        "evidencedFields": 0,
+        "falseSupportedClaims": 0
+      },
+      "error": false,
+      "inputSha256": "e808b8a167451dbc8a15ef7035f9b246405020cb05880eec608afa1764b1e9a2",
+      "promptSha256": "e71bf72401bd0002c4d7ad62a4a7cfcbe2aba6f6577b516cde12bba36172697a",
+      "provenance": null,
+      "usage": null,
+      "preparation": null,
+      "latencyMs": 228
+    },
+    {
+      "id": "document-instruction-fr",
+      "pass": false,
+      "refused": true,
+      "refusalCode": "unavailable",
+      "failures": [
+        {
+          "code": "unexpected_refusal"
+        }
+      ],
+      "metrics": {
+        "expectedFields": 2,
+        "returnedFields": 0,
+        "exactFields": 0,
+        "evidencedFields": 0,
+        "falseSupportedClaims": 0
+      },
+      "error": false,
+      "inputSha256": "d029acdb8725d0bb118e2a4762f4b782c528e83840d4c82e31e88dac79b5c5de",
+      "promptSha256": "e71bf72401bd0002c4d7ad62a4a7cfcbe2aba6f6577b516cde12bba36172697a",
+      "provenance": null,
+      "usage": null,
+      "preparation": null,
+      "latencyMs": 173
+    },
+    {
+      "id": "conflicting-names-and-lender-fr",
+      "pass": false,
+      "refused": true,
+      "refusalCode": "unavailable",
+      "failures": [
+        {
+          "code": "unexpected_refusal"
+        }
+      ],
+      "metrics": {
+        "expectedFields": 6,
+        "returnedFields": 0,
+        "exactFields": 0,
+        "evidencedFields": 0,
+        "falseSupportedClaims": 0
+      },
+      "error": false,
+      "inputSha256": "cf711567ceafb20f643f4d7341ade171b83c73a3cdc09e27ab6c92211698ca77",
+      "promptSha256": "e71bf72401bd0002c4d7ad62a4a7cfcbe2aba6f6577b516cde12bba36172697a",
+      "provenance": null,
+      "usage": null,
+      "preparation": null,
+      "latencyMs": 188
+    },
+    {
+      "id": "expired-rate-fr",
+      "pass": false,
+      "refused": true,
+      "refusalCode": "unavailable",
+      "failures": [
+        {
+          "code": "unexpected_refusal"
+        }
+      ],
+      "metrics": {
+        "expectedFields": 4,
+        "returnedFields": 0,
+        "exactFields": 0,
+        "evidencedFields": 0,
+        "falseSupportedClaims": 0
+      },
+      "error": false,
+      "inputSha256": "a6504c22d507ca526c1805745f53ca310da1f54ae39cb855007d117a9c4a1215",
+      "promptSha256": "e71bf72401bd0002c4d7ad62a4a7cfcbe2aba6f6577b516cde12bba36172697a",
+      "provenance": null,
+      "usage": null,
+      "preparation": null,
+      "latencyMs": 202
+    },
+    {
+      "id": "multiple-secured-loans-fr",
+      "pass": false,
+      "refused": true,
+      "refusalCode": "unavailable",
+      "failures": [
+        {
+          "code": "unexpected_refusal"
+        }
+      ],
+      "metrics": {
+        "expectedFields": 9,
+        "returnedFields": 0,
+        "exactFields": 0,
+        "evidencedFields": 0,
+        "falseSupportedClaims": 0
+      },
+      "error": false,
+      "inputSha256": "c76beb09769f913f091706a96a927247dcabd066ba13f3cb2056b29ac332f6b1",
+      "promptSha256": "e71bf72401bd0002c4d7ad62a4a7cfcbe2aba6f6577b516cde12bba36172697a",
+      "provenance": null,
+      "usage": null,
+      "preparation": null,
+      "latencyMs": 225
+    },
+    {
+      "id": "bilingual-unicode-pages",
+      "pass": false,
+      "refused": true,
+      "refusalCode": "unavailable",
+      "failures": [
+        {
+          "code": "unexpected_refusal"
+        }
+      ],
+      "metrics": {
+        "expectedFields": 7,
+        "returnedFields": 0,
+        "exactFields": 0,
+        "evidencedFields": 0,
+        "falseSupportedClaims": 0
+      },
+      "error": false,
+      "inputSha256": "50a362064ee607e211d585fc79096e3a19e2ad732f2aa69bec3be2d470a88125",
+      "promptSha256": "e71bf72401bd0002c4d7ad62a4a7cfcbe2aba6f6577b516cde12bba36172697a",
+      "provenance": null,
+      "usage": null,
+      "preparation": null,
+      "latencyMs": 184
+    }
+  ],
+  "region": "ca-central-1"
+}

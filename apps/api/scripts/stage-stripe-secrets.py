@@ -19,11 +19,23 @@ class SafeError(Exception):
 
 
 def aws(profile, region, service, operation, payload):
-    # JSON travels over stdin, never argv, shell history, environment or a file.
+    # Keep the secret value on stdin. Passing the entire request through
+    # --cli-input-json=file:///dev/stdin fails with some AWS CLI v2 builds;
+    # --secret-string's file parameter performs the supported single read.
+    command = ['aws', '--region', region, '--no-cli-pager']
+    if profile:
+        command += ['--profile', profile]
+    command += [service, operation, '--output', 'json']
+    secret_input = None
+    for key, value in payload.items():
+        flag = '--' + re.sub(r'(?<!^)(?=[A-Z])', '-', key).lower()
+        if key == 'SecretString':
+            command += [flag, 'file:///dev/stdin']
+            secret_input = value
+        else:
+            command += [flag, json.dumps(value) if isinstance(value, (dict, list)) else str(value)]
     result = subprocess.run(
-        ['aws', '--profile', profile, '--region', region, '--no-cli-pager',
-         service, operation, '--cli-input-json', 'file:///dev/stdin', '--output', 'json'],
-        input=json.dumps(payload), text=True, capture_output=True, timeout=40,
+        command, input=secret_input, text=True, capture_output=True, timeout=40,
     )
     if result.returncode:
         raise SafeError(f'AWS {service} {operation} failed; no credentials were printed.')
@@ -79,6 +91,11 @@ def stage(args):
     if not re.fullmatch(r'whsec_[A-Za-z0-9]{16,}', signing):
         raise SafeError('Invalid webhook signing secret format; no secret version was written.')
     values.update(STRIPE_SECRET_KEY=key, STRIPE_WEBHOOK_SECRET=signing)
+    if getattr(args, 'connect_webhook', False):
+        connect_signing = read_hidden('Connected-account webhook signing secret (whsec_…): ')
+        if not re.fullmatch(r'whsec_[A-Za-z0-9]{16,}', connect_signing):
+            raise SafeError('Invalid Connect webhook signing secret format; no secret version was written.')
+        values['STRIPE_CONNECT_WEBHOOK_SECRET'] = connect_signing
     # Do not silently copy a stale signing bundle over a concurrent rotation.
     metadata = aws(args.profile, args.region, 'secretsmanager', 'describe-secret', {'SecretId': args.secret_id})
     stages = metadata.get('VersionIdsToStages', {})
@@ -98,12 +115,14 @@ def stage(args):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--profile', default='aws-prod')
+    parser.add_argument('--profile', help='Optional AWS profile; otherwise use the current AWS environment/session')
     parser.add_argument('--region', default='ca-central-1')
     parser.add_argument('--aws-account', default='436136277668')
     parser.add_argument('--secret-id', default='nota/production/public')
     parser.add_argument('--stripe-account', help='Expected acct_ ID, if already known')
     parser.add_argument('--mode', choices=['test', 'live'], default='test')
+    parser.add_argument('--connect-webhook', action='store_true',
+                        help='Also prompt for the separate connected-account endpoint signing secret')
     args = parser.parse_args()
     try:
         print(json.dumps(stage(args), indent=2))

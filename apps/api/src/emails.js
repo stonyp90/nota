@@ -1411,6 +1411,21 @@ function notaryMagicLink(ctx) {
 // la BOÎTE, il est court et à usage unique. Ce qu'il ouvre est plus étroit —
 // la liste de SES offres — et la copie le dit, pour qu'un courriel intercepté
 // ne se lise jamais comme les clés du compte.
+function oauthAccountLink(ctx) {
+  const provider = { google: 'Google', microsoft: 'Microsoft', linkedin: 'LinkedIn' }[ctx.provider] || 'votre fournisseur';
+  const providerEn = { google: 'Google', microsoft: 'Microsoft', linkedin: 'LinkedIn' }[ctx.provider] || 'your provider';
+  const ttl = ctx.ttlMinutes || 10;
+  const fr = 'Cette confirmation permettra à votre compte ' + provider + ' d’ouvrir votre espace Nota lors de vos prochaines connexions. Ouvrez ce lien dans le navigateur où vous avez commencé. Si vous n’avez pas demandé cette association, ignorez ce courriel.';
+  const en = 'This confirmation will let your ' + providerEn + ' account open your Nota space on future sign-ins. Open this link in the browser where you started. If you did not request this link, ignore this email.';
+  return build({
+    subjectFr: 'Confirmez votre connexion à Nota', subjectEn: 'Confirm your Nota sign-in',
+    preheaderFr: 'Associez votre compte en toute sécurité.', preheaderEn: 'Link your account securely.',
+    fr: { heading: 'Liez votre compte à Nota', lead: fr, bodyHtml: para('Ce lien est valide ' + ttl + ' minutes et à usage unique.'), textLines: ['Lien à usage unique, valide ' + ttl + ' minutes.'], ctaLabel: 'Confirmer l’association' },
+    en: { heading: 'Link your account to Nota', lead: en, bodyHtml: para('This single-use link is valid for ' + ttl + ' minutes.'), textLines: ['Single-use link, valid for ' + ttl + ' minutes.'], ctaLabel: 'Confirm account link' },
+    ctaUrl: ctx.link || linksFor(ctx.baseUrl).site, unsubscribeUrl: ctx.unsubscribeUrl,
+  }, ctx);
+}
+
 function clientMagicLink(ctx) {
   const ttl = ctx.ttlMinutes || 15;
   return build({
@@ -2599,19 +2614,19 @@ function operatorSupportMessage(ctx) {
     preheaderEn: 'A visitor just wrote to you on the site.',
     fr: {
       heading: 'Nouvelle question sur le site',
-      lead: 'Répondez d’un geste — le visiteur voit votre réponse en direct dans la messagerie du site.',
+      lead: ctx.emailReplyEnabled ? 'Répondez à ce courriel, au-dessus du message cité, ou ouvrez la conversation. Votre réponse rejoint le même fil.' : 'Ouvrez la conversation pour répondre au visiteur dans le même fil.',
       bodyHtml: bodyFr,
       textLines: [who, ctx.texte || ''],
-      ctaLabel: 'Répondre',
+      ctaLabel: ctx.adminReplyUrl ? 'Répondre dans la console' : 'Répondre',
     },
     en: {
       heading: 'New question on the site',
-      lead: 'Reply in one tap — the visitor sees your answer live in the site’s chat.',
+      lead: ctx.emailReplyEnabled ? 'Reply to this email above the quoted message, or open the conversation. Your reply joins the same thread.' : 'Open the conversation to reply to the visitor in the same thread.',
       bodyHtml: bodyEn,
       textLines: [who, ctx.texte || ''],
-      ctaLabel: 'Reply',
+      ctaLabel: ctx.adminReplyUrl ? 'Reply in the admin console' : 'Reply',
     },
-    ctaUrl: ctx.replyUrl || operatorUrl(ctx),
+    ctaUrl: ctx.adminReplyUrl || ctx.replyUrl || operatorUrl(ctx),
     unsubscribeUrl: ctx.unsubscribeUrl,
   }, ctx);
 }
@@ -2649,19 +2664,19 @@ function operatorSupportEscalade(ctx) {
     preheaderEn: 'The assistant handed off — this one needs a person.',
     fr: {
       heading: 'Une question pour vous',
-      lead: 'L’assistant répond aux questions que la fiche de faits fonde. Celle-ci n’en fait pas partie : elle vous attend. Répondez d’un geste — le visiteur voit votre réponse en direct dans la messagerie du site.',
+      lead: ctx.emailReplyEnabled ? 'Cette question attend votre réponse. Répondez à ce courriel, au-dessus du message cité, ou ouvrez la conversation; le même fil est conservé.' : 'Cette question attend votre réponse. Ouvrez la conversation pour prendre le relais.',
       bodyHtml: bodyFr,
       textLines: [who, 'Pourquoi vous : ' + motifFr, ...(lignes.length ? lignes : [ctx.texte || ''])],
-      ctaLabel: 'Répondre',
+      ctaLabel: ctx.adminReplyUrl ? 'Répondre dans la console' : 'Répondre',
     },
     en: {
       heading: 'A question for you',
-      lead: 'The assistant answers what the fact sheet grounds. This one it does not — it is waiting for you. Reply in one tap; the visitor sees your answer live in the site’s chat.',
+      lead: ctx.emailReplyEnabled ? 'This question is waiting for you. Reply to this email above the quoted message, or open the conversation; the same thread is preserved.' : 'This question is waiting for you. Open the conversation to take over.',
       bodyHtml: bodyEn,
       textLines: [who, 'Why you: ' + motifEn, ...(lignes.length ? lignes : [ctx.texte || ''])],
-      ctaLabel: 'Reply',
+      ctaLabel: ctx.adminReplyUrl ? 'Reply in the admin console' : 'Reply',
     },
-    ctaUrl: ctx.replyUrl || operatorUrl(ctx),
+    ctaUrl: ctx.adminReplyUrl || ctx.replyUrl || operatorUrl(ctx),
     unsubscribeUrl: ctx.unsubscribeUrl,
   }, ctx);
 }
@@ -2677,14 +2692,14 @@ function supportReponse(ctx) {
     preheaderEn: 'Your question got an answer.',
     fr: {
       heading: 'Nota vous a répondu',
-      lead: 'Voici la réponse à votre question — la conversation continue dans la messagerie du site.',
+      lead: ctx.emailReplyEnabled ? 'Voici la réponse à votre question. Répondez à ce courriel au-dessus du message cité, ou continuez dans la messagerie du site.' : 'Voici la réponse à votre question — la conversation continue dans la messagerie du site.',
       bodyHtml: bodyFr,
       textLines: [ctx.texte || ''],
       ctaLabel: 'Ouvrir la conversation',
     },
     en: {
       heading: 'Nota replied to you',
-      lead: 'Here is the answer to your question — the conversation continues in the site’s chat.',
+      lead: ctx.emailReplyEnabled ? 'Here is the answer to your question. Reply to this email above the quoted message, or continue in the site’s chat.' : 'Here is the answer to your question — the conversation continues in the site’s chat.',
       bodyHtml: bodyFr,
       textLines: [ctx.texte || ''],
       ctaLabel: 'Open the conversation',
@@ -3165,6 +3180,7 @@ const TEMPLATES = {
   newMatchingBids,
   notaryMagicLink,
   clientMagicLink,
+  oauthAccountLink,
   partnerCodeReminder,
   notaryOnboardingStarted,
   notaryActive,
@@ -3436,6 +3452,12 @@ const TEMPLATE_META = {
     audience: 'partenaire', transactionnel: true,
     labelFr: 'Rappel du code partenaire', labelEn: 'Partner code reminder',
     defaultSubjectFr: 'Votre code partenaire Nota', defaultSubjectEn: 'Your Nota partner code',
+    placeholders: [],
+  },
+  oauthAccountLink: {
+    audience: 'client', transactionnel: true,
+    labelFr: 'Association du compte de connexion', labelEn: 'Sign-in account linking',
+    defaultSubjectFr: 'Confirmez votre connexion à Nota', defaultSubjectEn: 'Confirm your Nota sign-in',
     placeholders: [],
   },
   clientMagicLink: {

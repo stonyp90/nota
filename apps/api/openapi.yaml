@@ -24,6 +24,440 @@ servers:
 # New recipients retain this language for notifications. Anonymous requests never
 # overwrite a saved preference; verified sign-in and preference updates can.
 paths:
+  /signing-beta/capabilities:
+    get:
+      summary: Read signing rehearsal capabilities; never CNQ approval or a legal signature
+      operationId: signingBetaCapabilities
+      responses:
+        '200':
+          description: Explicit rehearsal capability flags; enabled is false unless configured.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SigningBetaCapabilities'
+  /signing-beta/sessions:
+    get:
+      summary: Poll the current retained-bid rehearsal using a recently email-verified bearer token
+      operationId: signingBetaRead
+      security: [{ notarySession: [] }, { clientToken: [] }]
+      parameters:
+        - { name: bidId, in: query, required: true, schema: { type: string } }
+        - { name: dateISO, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: Current session, own role, peer-only SDP, own one-use proof challenge and admitted TURN credentials.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SigningBetaResponse' }
+        default: { $ref: '#/components/responses/SigningBetaError' }
+    post:
+      summary: Notary creates a thirty-minute test-document rehearsal for a retained bid
+      operationId: signingBetaCreate
+      security: [{ notarySession: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - { $ref: '#/components/schemas/SigningBetaCommand' }
+                - { required: [publicKeyJwk] }
+      responses:
+        '201':
+          description: Immutable test document and empty two-person room created; existing active room conflicts.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SigningBetaResponse' }
+        default: { $ref: '#/components/responses/SigningBetaError' }
+  /signing-beta/sessions/{sessionId}/commands:
+    parameters:
+      - { name: sessionId, in: path, required: true, schema: { type: string } }
+    post:
+      summary: Join, admit, review, release, pause, acknowledge or close a rehearsal
+      description: >-
+        Bearer token must have a signed mailbox verifiedAt within sixty minutes.
+        Every action requires current revision. The notary admits, reviews and releases;
+        review requires observationConfirmed=true. Both roles must report connected media
+        within twenty-five seconds before review, release or acknowledgment. Client acknowledgment
+        precedes notary acknowledgment. The signature covers exact UTF-8 challenge.message,
+        ECDSA P-256 SHA-256, encoded as base64url IEEE P1363. No official signature or billing follows.
+      operationId: signingBetaCommand
+      security: [{ notarySession: [] }, { clientToken: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - { $ref: '#/components/schemas/SigningBetaCommand' }
+                - { required: [revision, action] }
+      responses:
+        '200':
+          description: Authoritative session after a conditional update.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SigningBetaResponse' }
+        default: { $ref: '#/components/responses/SigningBetaError' }
+  /signing-beta/sessions/{sessionId}/signal:
+    parameters:
+      - { name: sessionId, in: path, required: true, schema: { type: string } }
+    post:
+      summary: Submit one signed, fully gathered SDP offer or answer after admission
+      description: >-
+        Notary sends offer; client sends answer. Requires current revision, a SHA-256 DTLS
+        fingerprint and at most 24000 SDP bytes. Signature is ECDSA P-256 SHA-256 over
+        NOTA-SIGNAL-V1, sessionId, role, type and lowercase SHA-256 hex of exact SDP,
+        joined by newline. Only latest signals are stored outside bid records; no trickle ICE.
+      operationId: signingBetaSignal
+      security: [{ notarySession: [] }, { clientToken: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - { $ref: '#/components/schemas/SigningBetaCommand' }
+                - { required: [revision, type, sdp, signature] }
+      responses:
+        '200':
+          description: Latest signal saved conditionally; peer retrieves through session polling.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SigningBetaResponse' }
+        default: { $ref: '#/components/responses/SigningBetaError' }
+  /signing-beta/sessions/{sessionId}/heartbeat:
+    parameters:
+      - { name: sessionId, in: path, required: true, schema: { type: string } }
+    post:
+      summary: Authenticated endpoint reports media connection state every eight seconds
+      description: >-
+        Body connected is browser telemetry, not independent proof of identity or observation.
+        A false report during reviewed/released stages pauses and revokes unconsumed challenges.
+        Conditional writes retry contention; revision is not required for a heartbeat.
+      operationId: signingBetaHeartbeat
+      security: [{ notarySession: [] }, { clientToken: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - { $ref: '#/components/schemas/SigningBetaCommand' }
+                - { required: [connected] }
+      responses:
+        '200':
+          description: Updated presence and session.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SigningBetaResponse' }
+        default: { $ref: '#/components/responses/SigningBetaError' }
+  /signing-beta/sessions/{sessionId}/evidence:
+    parameters:
+      - { name: sessionId, in: path, required: true, schema: { type: string } }
+    get:
+      summary: Download independently verifiable test-document acknowledgments
+      description: >-
+        Same recent bearer authentication and retained ownership as the room. Excludes
+        SDP, TURN credentials, tokens and media telemetry. Available while bounded rehearsal
+        record remains; this is neither archival custody nor a certified notarial copy.
+      operationId: signingBetaEvidence
+      security: [{ notarySession: [] }, { clientToken: [] }]
+      parameters:
+        - { name: bidId, in: query, required: true, schema: { type: string } }
+        - { name: dateISO, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: Attachment containing test text/digest, participant public keys, proof messages/signatures and events.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [format, legalSignatureAvailable, sessionId, document, acknowledgments, verification]
+                properties:
+                  format: { type: string, const: nota-rehearsal-evidence-v1 }
+                  legalSignatureAvailable: { type: boolean, const: false }
+                  sessionId: { type: string }
+                  document: { type: object }
+                  acknowledgments: { type: array, items: { type: object } }
+                  verification: { type: object }
+        default: { $ref: '#/components/responses/SigningBetaError' }
+  /notary/financing/preparation:
+    get:
+      summary: Read the current private financing analysis, review and customer-context work packet.
+      description: >-
+        The work packet is rebuilt from the server's current private dossier and
+        pricing answers. It is available when AI is disabled and never calls a
+        provider. Its drafts are unsent; source labels do not imply legal approval.
+      security: [{ notarySession: [] }]
+      parameters:
+        - { name: id, in: query, required: true, schema: { type: string } }
+        - { name: dateISO, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: Restricted to the retaining notary; no legal approval is implied.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [analysis, workPacket]
+                properties:
+                  analysis:
+                    anyOf:
+                      - { $ref: '#/components/schemas/FinancingAIAnalysis' }
+                      - { type: 'null' }
+                  workPacket: { $ref: '#/components/schemas/FinancingWorkPacketResult' }
+        default: { $ref: '#/components/responses/FinancingAIError' }
+    post:
+      summary: Extract page-evidenced proposals from notary-supplied text.
+      description: >-
+        Requires a session for the retaining notary, a retained non-erased file,
+        NOTA_FINANCING_AI_ENABLED=true, provider configuration and explicit processing
+        authorization. No OCR, deed execution, lender connection or training occurs.
+        Service comes from the server's bid. Maximum 8 pages, 8000 characters per
+        page, 36000 total characters, and the existing 64 KiB HTTP body limit.
+        Six newly admitted attempts per notary per hour and a shared UTC-day cap
+        (NOTA_FINANCING_AI_MAX_CALLS_PER_DAY, default 100); unavailable counters fail closed.
+        Matching validated source text and generation configuration reuse the same
+        retaining notary's saved analysis and review without another provider call.
+        Concurrent identical requests in one API worker share a generation; this is
+        not a distributed exactly-once guarantee. Changed inputs replace the current
+        analysis using an optimistic analysis-ID check. Each response rebuilds the
+        work packet from the current authorized server file.
+        401 unauthorized; 403 wrong owner; 404 missing; 409 ownership/version/state
+        conflict; 413 body limit; 422 input/authorization; 429 rate limit;
+        502 unsupported provider output; 503 disabled/provider/counter failure.
+      security: [{ notarySession: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, dateISO, pages, processingAuthorized]
+              properties:
+                id: { type: string }
+                dateISO: { type: string, format: date }
+                processingAuthorized: { const: true }
+                pages:
+                  type: array
+                  minItems: 1
+                  maxItems: 8
+                  items:
+                    type: object
+                    required: [documentId, page, text]
+                    properties:
+                      documentId: { type: string, pattern: '^[a-zA-Z0-9_-]{1,80}$' }
+                      page: { type: integer, minimum: 1, maximum: 10000 }
+                      text: { type: string, minLength: 1, maxLength: 8000 }
+      responses:
+        '200':
+          description: Persisted proposed fields, never a verified deed or signing decision.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, analysis, workPacket, reused]
+                properties:
+                  ok: { const: true }
+                  reused:
+                    type: boolean
+                    description: This request reused a saved analysis or joined an identical generation in this worker. Its analysis may contain an existing review.
+                  analysis: { $ref: '#/components/schemas/FinancingAIAnalysis' }
+                  workPacket: { $ref: '#/components/schemas/FinancingWorkPacketResult' }
+        default: { $ref: '#/components/responses/FinancingAIError' }
+  /notary/financing/review:
+    post:
+      summary: Record the retaining notary's explicit review of every proposed field.
+      description: >-
+        Requires a current analysis ID and exactly one decision per proposed field.
+        Corrections and rejections require a reason. The server stamps reviewer and
+        time; the review is immutable for that analysis. Review never authorizes
+        training, legal execution or funds. 401 unauthorized; 403 wrong owner;
+        404 missing; 409 changed/reviewed analysis or unavailable file; 422 invalid review.
+      security: [{ notarySession: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, dateISO, analysisId, decisions]
+              properties:
+                id: { type: string }
+                dateISO: { type: string, format: date }
+                analysisId: { type: string }
+                activeReviewSeconds: { type: [integer, 'null'], minimum: 0, maximum: 86400 }
+                decisions:
+                  type: array
+                  maxItems: 24
+                  items:
+                    type: object
+                    required: [index, decision]
+                    properties:
+                      index: { type: integer, minimum: 0 }
+                      decision: { enum: [accepted, corrected, rejected] }
+                      value: { type: string, minLength: 1, maxLength: 1000 }
+                      reason: { type: string, minLength: 1, maxLength: 500 }
+      responses:
+        '200':
+          description: Reviewed values stay in the private file under its retention policy.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, review, workPacket]
+                properties:
+                  ok: { const: true }
+                  review: { $ref: '#/components/schemas/FinancingAIReview' }
+                  workPacket: { $ref: '#/components/schemas/FinancingWorkPacketResult' }
+        default: { $ref: '#/components/responses/FinancingAIError' }
+  /auth/oauth/providers:
+    get:
+      summary: List Google, Microsoft and LinkedIn sign-in availability
+      description: Configuration flags only; no credentials. Disabled providers must not start authorization.
+      responses:
+        '200':
+          description: Provider availability; always no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [providers]
+                properties:
+                  providers:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, configured]
+                      properties:
+                        id: { type: string, enum: [google, microsoft, linkedin] }
+                        configured: { type: boolean }
+  /auth/oauth/{provider}/start:
+    post:
+      summary: Start account sign-in using a registered OIDC provider
+      description: >-
+        Requires same-origin JSON. Sets an HttpOnly, Secure (HTTPS), SameSite=Lax
+        browser-binding cookie scoped to /api/auth/oauth. Requests only openid,
+        profile and email; no calendar scope or offline access. Google and
+        Microsoft use PKCE S256; LinkedIn uses its confidential-client code flow.
+        State and nonce are single-use and expire after ten minutes.
+      parameters:
+        - &oauthProvider
+          in: path
+          name: provider
+          required: true
+          schema: { type: string, enum: [google, microsoft, linkedin] }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role: { type: string, enum: [client, notary] }
+      responses:
+        '200':
+          description: Authorization URL and browser-binding Set-Cookie; no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [url]
+                properties:
+                  url: { type: string, format: uri }
+        '400': { description: "Invalid role" }
+        '403': { description: "Cross-origin request rejected" }
+        '415': { description: "JSON required" }
+        '429': { description: "Rate limited" }
+        '503': { description: "Provider unconfigured or unavailable" }
+  /auth/oauth/{provider}/callback:
+    get:
+      summary: Consume the provider code and validate its ID token
+      description: >-
+        Requires the browser-binding cookie and single-use state. Checks RS256
+        signature, issuer, audience, authorized party, expiry, nonce and subject.
+        Microsoft tenant and signing-key issuers must match. Provider access/ID
+        tokens are neither persisted nor returned. Redirects to /#oauth= with a
+        short-lived browser-bound completion ticket, or /#oautherror= with a
+        sanitized error code. Provider error descriptions are never reflected.
+      parameters:
+        - *oauthProvider
+        - { in: query, name: code, schema: { type: string } }
+        - { in: query, name: state, schema: { type: string } }
+        - { in: query, name: error, schema: { type: string } }
+        - { in: query, name: iss, schema: { type: string } }
+      responses:
+        '303': { description: "Same-origin fragment redirect; no-store and no-referrer" }
+        '429': { description: "Rate limited" }
+  /auth/oauth/complete:
+    post:
+      summary: Complete sign-in or request first-time mailbox proof
+      description: >-
+        Same-origin JSON and matching browser cookie required. Consumes the ticket
+        once. An already linked provider subject opens its saved Nota identity,
+        ignoring mutable provider email claims. An unlinked subject receives
+        linkRequired and a single-use link-request ticket. No account lookup is
+        made using the provider email claim. Notary approval is checked again
+        before issuing any session. Client sessions return per-bid tokens only.
+      requestBody: &oauthTicketBody
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ticket]
+              properties:
+                ticket: { type: string, minLength: 43, maxLength: 43 }
+      responses: &oauthSessionResponses
+        '200':
+          description: >-
+            Either {linkRequired:true,ticket,role}, or the existing client session
+            verification response {ok,courriel,offres,role}, or the existing
+            notary session response {token,feedToken,email,expiresAt,role}.
+            Successful session responses clear the OAuth cookie. Always no-store.
+        '400': { description: "Invalid, expired, replayed or browser-mismatched ticket" }
+        '403': { description: "Origin rejected or notary account not approved" }
+        '415': { description: "JSON required" }
+        '429': { description: "Rate limited" }
+        '503': { description: "Authentication unavailable" }
+  /auth/oauth/link/request:
+    post:
+      summary: Email a one-time confirmation to link a Nota identity
+      description: >-
+        Same-origin JSON and matching browser cookie required. Consumes a
+        link-request ticket. Sends the chosen mailbox an explicit account-linking
+        confirmation with /#oauthverify=. The link must be opened in the same
+        browser within ten minutes. Verification tickets are never echoed,
+        including in development. Delivery failures return 503.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ticket, email]
+              properties:
+                ticket: { type: string, minLength: 43, maxLength: 43 }
+                email: { type: string, format: email }
+      responses:
+        '200': { description: "Confirmation accepted for email delivery; {ok:true}" }
+        '400': { description: "Invalid email or ticket" }
+        '403': { description: "Origin rejected" }
+        '415': { description: "JSON required" }
+        '429': { description: "Rate limited" }
+        '503': { description: "Email or authentication unavailable" }
+  /auth/oauth/link/verify:
+    post:
+      summary: Confirm mailbox ownership, link provider subject, and open Nota
+      description: >-
+        Consumes the emailed ticket with the same browser cookie. Atomically
+        creates an immutable provider-subject-to-email link, scoped to the OAuth
+        client ID and issuer; conflicting links are rejected. Reuses existing
+        client/notary session verification and notary approval checks. No provider
+        token or mutable email claim grants access to an existing account.
+      requestBody: *oauthTicketBody
+      responses: *oauthSessionResponses
   /notary/calendar/outlook:
     get:
       summary: Read the authenticated notary's Outlook connection status
@@ -622,7 +1056,8 @@ paths:
       operationId: stripeWebhook
       summary: Stripe webhook receiver (account + payment lifecycle).
       description: >-
-        Verifies the raw request body against the webhook signing secret using
+        Verifies the raw request body against the platform webhook signing
+        secret or the optional connected-account webhook signing secret using
         the `stripe-signature` header, then applies the event — `account.updated`
         flips the notary ACTIVE once charges are enabled,
         `account.application.deauthorized` restricts them, and
@@ -633,6 +1068,9 @@ paths:
         instead — the offer goes live with no money held, and the caution is
         placed by the daily worker two days before the signing.
         Processing is idempotent by event id, so a redelivered event is a no-op.
+        Authenticated events from the other Stripe mode are acknowledged without
+        changing records or sending notifications, including test Connect events
+        delivered to a live destination.
         Not called by browsers.
       parameters:
         - name: stripe-signature
@@ -1172,7 +1610,7 @@ paths:
         "409":
           $ref: "#/components/responses/AlreadyRetained"
         "410":
-          description: The bid was cancelled by the client (`offre_annulee`).
+          description: The bid was cancelled (`offre_annulee`) or expired / missing a valid deadline (`offre_expiree`).
           content:
             application/json:
               schema:
@@ -1253,6 +1691,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/AlreadyRetained"
+        "410":
+          description: Offer expired or has no valid expiry date (offre_expiree).
         "422":
           description: >-
             Domain errors: `offre_non_ouverte`, `montant_invalide`, `date_passee`,
@@ -1312,6 +1752,8 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/AlreadyRetained"
+        "410":
+          description: Offer expired or has no valid expiry date (offre_expiree).
         "422":
           description: >-
             Domain errors: `service_inconnu`, `documents_requis`,
@@ -1674,6 +2116,8 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "410":
+          description: Offer expired or has no valid expiry date (offre_expiree).
         "404":
           $ref: "#/components/responses/NotFound"
         "422":
@@ -1796,6 +2240,8 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "410":
+          description: Offer expired or has no valid expiry date (offre_expiree).
         "404":
           $ref: "#/components/responses/NotFound"
         "422":
@@ -2171,6 +2617,8 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "410":
+          description: Offer expired or has no valid expiry date (offre_expiree).
         "404":
           $ref: "#/components/responses/NotFound"
         "422":
@@ -2231,6 +2679,8 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "409":
           $ref: "#/components/responses/AlreadyRetained"
+        "410":
+          description: Offer expired or has no valid expiry date (offre_expiree).
         "422":
           description: The proposition is no longer pending (`proposition_close`).
           content:
@@ -2273,6 +2723,8 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "409":
           $ref: "#/components/responses/AlreadyRetained"
+        "410":
+          description: Offer expired or has no valid expiry date (offre_expiree).
         "422":
           description: The proposition is no longer pending (`proposition_close`).
           content:
@@ -2291,6 +2743,10 @@ paths:
         each value bounded — unknown keys and local UI state (`__validated`)
         are dropped. Answers with the fresh domain readiness and each
         demande's `fournie` flag.
+        Financing intake also accepts bounded text fields `parties_signature`,
+        `contact_preteur`, `changements_immeuble`; refinancing additionally
+        accepts `dettes_garanties`. These remain private dossier data.
+        Preparation progress does not certify legal or funding readiness.
       security:
         - clientToken: []
       requestBody:
@@ -2613,6 +3069,10 @@ paths:
                         dateISO:
                           type: string
                           format: date
+                        expiresOn:
+                          type: [string, "null"]
+                          format: date
+                          description: Last valid day; null on legacy offers.
                         serviceId:
                           type: string
                         montant:
@@ -2757,6 +3217,10 @@ paths:
       operationId: sendSupportMessage
       summary: Live chat — a visitor's message (mints the thread on first send).
       description: >-
+        With an assistant configured, explicit human requests, complaints and detected
+        sensitive information bypass the model and escalate. Sensitive prior messages
+        are masked in model context. Prepared discussion guides cover common topics;
+        malformed or unsafe answers escalate to human support.
         The site's chat widget (ADR 0026, assisted by ADR 0046). No auth to
         start: the first message mints the thread and returns its signed
         SUPPORT `token` (the widget keeps it and continues the thread with it,
@@ -2765,9 +3229,15 @@ paths:
         When an assistant is configured, the answer comes back IN THIS
         RESPONSE as `reponse` — grounded strictly in the live catalogue and
         operating policy, and re-checked by the domain before it is stored.
-        `escalade: true` means no grounded answer was possible and a person now
-        has the question: only then is the operator emailed, with the thread
-        and a signed reply link. With no assistant configured, `reponse` is
+        With the assistant configured, exact help-topic questions use reviewed bilingual
+        replies before any model call. Human requests, complaints and detected secrets
+        are handed off; the assistant cannot access or change a customer file.
+        `escalade: true` means a handoff is pending. Further questions go to the
+        operator with the thread and a signed reply link without another automated
+        answer. A real operator reply clears `escalade` and sets `humain: true`;
+        subsequent questions stay with the person, without invoking the assistant.
+        Both state flags are always returned, including on a thread refresh.
+        With no assistant configured, `reponse` is
         absent and EVERY message emails the operator, exactly as before.
         `courriel` is optional — it only adds an offline copy of the reply.
 
@@ -2777,6 +3247,18 @@ paths:
         messages in 10 minutes from one source IP → 429 `trop_de_messages`
         (fails open on a counter error) — which also bounds what the assistant
         may cost.
+        Appends use optimistic revisions so concurrent visitor/operator messages
+        are preserved. Conflicts retry without repeating model work; if contention
+        persists, 409 asks the visitor to retry rather than falsely accepting a message.
+        Optional messageId makes a continued-thread send idempotent. For an uncertain
+        first send, also supply a cryptographically random 32-byte base64url requestKey
+        (43 characters). This temporary possession credential selects the same thread
+        after a lost response; its raw value is neither stored nor returned. Keep it
+        private and reuse it only with the identical first request, then discard it
+        after receiving the signed SUPPORT token. Different content with the same key
+        returns 409. Concurrent matching requests return 409 message_en_cours while
+        one 30-second processing lease owns the work; completed retries return the
+        original message and associated assistant response without another model call.
       security:
         - {}
         - supportToken: []
@@ -2798,6 +3280,18 @@ paths:
                 token:
                   type: string
                   description: Thread token fallback when the Authorization header is absent.
+                messageId:
+                  type: string
+                  maxLength: 160
+                  pattern: '^[A-Za-z0-9_.:@-]+$'
+                  description: Stable ID to retain when retrying the identical message.
+                requestKey:
+                  type: string
+                  minLength: 43
+                  maxLength: 43
+                  pattern: '^[A-Za-z0-9_-]{43}$'
+                  writeOnly: true
+                  description: Temporary 256-bit random possession credential for first-send recovery; requires messageId.
                 locale:
                   type: string
                   enum: [fr, en]
@@ -2811,10 +3305,13 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [threadId, token, message]
+                required: [threadId, token, message, escalade, humain, duplicate]
                 properties:
                   threadId:
                     type: string
+                  duplicate:
+                    type: boolean
+                    description: True when returning an already accepted message.
                   token:
                     type: string
                     description: Signed SUPPORT thread token — keep it to continue and poll.
@@ -2825,13 +3322,24 @@ paths:
                       - $ref: "#/components/schemas/SupportMessage"
                     description: >-
                       The assistant's answer, already appended to the thread
-                      (ADR 0046). Absent when no assistant is configured.
+                      (ADR 0046). Absent when no assistant is configured or the
+                      conversation is waiting for or already handled by a person.
                   escalade:
                     type: boolean
                     description: >-
-                      True when the assistant handed the question to a person —
-                      the thread stays « à répondre » and the operator is
-                      emailed. Absent alongside `reponse`.
+                      True while a human handoff is pending. Only an actual
+                      operator reply clears it; automated follow-up cannot.
+                  humain:
+                    type: boolean
+                    description: >-
+                      True once a real operator has replied in this conversation.
+                      Further visitor questions stay with the operator.
+        "409":
+          description: Concurrent updates could not be merged; retry the message (`conversation_occupee`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
@@ -2857,12 +3365,74 @@ paths:
                   - code: trop_de_messages
                     message: Trop de messages en peu de temps. Réessayez dans quelques minutes.
   /support/thread:
+    patch:
+      operationId: updateSupportEmail
+      summary: Save the visitor's reply email without sending another chat message.
+      description: >-
+        Requires the visitor's SUPPORT bearer token; SUPPORT_OP tokens cannot
+        change the address. Saves the normalized email with an optimistic revision
+        and preserves concurrent messages and handoff state. Does not invoke the
+        assistant, add a chat message, or send an email notification.
+      security:
+        - supportToken: []
+      parameters:
+        - $ref: '#/components/parameters/AcceptLanguage'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [courriel]
+              properties:
+                courriel:
+                  type: string
+                  format: email
+                  maxLength: 254
+      responses:
+        "200":
+          description: Reply email saved.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [courriel, escalade, humain]
+                properties:
+                  courriel:
+                    type: string
+                    format: email
+                  escalade:
+                    type: boolean
+                  humain:
+                    type: boolean
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: The token's thread no longer exists.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Concurrent updates could not be merged; retry saving (`conversation_occupee`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Required email is absent or invalid (`courriel_invalide`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     get:
       operationId: getSupportThread
       summary: Live chat — the thread behind a SUPPORT or SUPPORT_OP token.
       description: >-
         The widget polls here while its panel is open; the operator's reply box
         reads the same thread through the emailed link's SUPPORT_OP token.
+        Handoff state comes from persisted history so reopening the widget keeps
+        the same human assignment. No operator-only metadata is exposed.
       security:
         - supportToken: []
       responses:
@@ -2872,12 +3442,26 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [messages]
+                required: [threadId, messages, escalade, humain]
                 properties:
+                  threadId:
+                    type: string
+                    description: Validated thread ID, including for signed email-link recovery on another device.
                   messages:
                     type: array
                     items:
                       $ref: "#/components/schemas/SupportMessage"
+                  escalade:
+                    type: boolean
+                    description: True while a human handoff is pending.
+                  humain:
+                    type: boolean
+                    description: True once a real operator has replied in this conversation.
+                  courriel:
+                    type: string
+                    format: email
+                    nullable: true
+                    description: The visitor's saved email, or null; returned only for a SUPPORT token.
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
@@ -2894,7 +3478,11 @@ paths:
         Requires the SUPPORT_OP scope carried by the notification email's reply
         link — a visitor's SUPPORT token is 401 here, so a visitor can never
         speak as Nota. The reply lands in the thread (the widget polls it up)
-        and is copied to the visitor's courriel when they left one.
+        and is copied to the visitor's courriel when they left one. It clears
+        the pending handoff and keeps subsequent questions with the operator.
+        A stable messageId makes retries idempotent across the shared support
+        service: the same content returns the original message; different content
+        with the same ID is rejected with 409.
       security:
         - supportToken: []
       requestBody:
@@ -2911,6 +3499,11 @@ paths:
                 token:
                   type: string
                   description: SUPPORT_OP token fallback when the Authorization header is absent.
+                messageId:
+                  type: string
+                  maxLength: 160
+                  pattern: '^[A-Za-z0-9_.:@-]+$'
+                  description: Stable ID to retain when retrying the same reply.
       responses:
         "200":
           description: Reply appended to the thread.
@@ -2918,10 +3511,19 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [message]
+                required: [message, duplicate]
                 properties:
                   message:
                     $ref: "#/components/schemas/SupportMessage"
+                  duplicate:
+                    type: boolean
+                    description: True when this message ID had already been accepted.
+        "409":
+          description: Concurrent updates could not be merged; retry the reply (`conversation_occupee`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
@@ -3028,6 +3630,8 @@ paths:
               type: object
               required: [email]
               properties:
+                analytics:
+                  $ref: "#/components/schemas/AnalyticsContext"
                 email:
                   type: string
                   format: email
@@ -3096,14 +3700,26 @@ paths:
       summary: The conversion funnel's beacon — one observable step at a time (2026-09-02).
       description: >-
         The web app reports a step of the conversion funnel (`{ event }`). Only
-        the domain's `FUNNEL_EVENTS` catalogue is counted (visite, jour_ouvert,
-        formulaire, publie, paiement_ok, paiement_annule, notaire_porte,
-        notaire_inscrit), as a per-day counter in the STATS# rollup that
+        client-allowed entries in the domain's `FUNNEL_EVENTS` catalogue are
+        counted (visite, jour_ouvert, formulaire, paiement_ok, paiement_annule,
+        notaire_porte, criteres_vus, prix_vu, coordonnees_vues,
+        formulaire_bloque, publication_tentee, publication_echouee,
+        page_service_vue, page_service_vers_carnet, erreur_script,
+        promesse_rejetee, navigation_mesuree),
+        as a per-day counter in the STATS# rollup that
         `GET /admin/metrics/overview` reads back as `entonnoir`. Anything else —
         an unknown id, a wrong type, a garbage body — is DROPPED with the same
-        204, so a beacon never learns what the catalogue holds. The two steps
-        that cost money (`publie`, `notaire_inscrit`) are ALSO counted
-        server-side on their own routes; the beacon is never trusted for them.
+        204, so a beacon never learns what the catalogue holds. Server-only
+        steps (`publie`, `notaire_inscrit`) are ignored here and counted only
+        on their authoritative routes. Payment events record browser returns,
+        not verified payments. Counts represent events, not unique visitors
+        or linked conversion cohorts. Event counters store no field values or
+        visitor identifiers.
+        Optional context is reduced to the bounded AnalyticsContext categories;
+        browser, OS and device families are inferred from User-Agent and a coarse
+        iPad hint. Raw headers, URLs, field values and error messages are not
+        persisted in these counters. Segments are independent event totals,
+        not linked visitor profiles or a compatibility guarantee.
         Lightly rate-limited per IP (120/min by default). Safe for
         `navigator.sendBeacon` (a text/plain JSON body is accepted).
       requestBody:
@@ -3118,6 +3734,8 @@ paths:
                   type: string
                   description: A FUNNEL_EVENTS id from @nota/domain.
                   example: jour_ouvert
+                context:
+                  $ref: "#/components/schemas/AnalyticsContext"
       responses:
         "204":
           description: Received — counted when it is a catalogue step, silently dropped otherwise.
@@ -3335,6 +3953,32 @@ components:
         (returned by POST /support/messages), SUPPORT_OP scope for the
         operator's emailed reply link. `sub` = thread id in both.
   responses:
+    SigningBetaError:
+      description: >-
+        400 malformed request; 401 absent/expired token or recent mailbox verification required;
+        403 retained ownership or active notary required; 404 unknown session;
+        409 stale revision, wrong stage, expired session or missing media presence;
+        422 invalid cryptographic proof; 429 rate limit; 503 disabled/unavailable.
+        Rate-limit storage failures fail closed. No tokens, keys or provider internals are returned.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    FinancingAIError:
+      description: Rejected or unavailable financing analysis; no private provider error details.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [errors]
+            properties:
+              errors:
+                type: array
+                items:
+                  type: object
+                  required: [code]
+                  properties:
+                    code: { type: string }
+                    message: { type: string }
     Unauthorized:
       description: Missing, invalid, expired or wrong-scope token (`non_autorise`).
       content:
@@ -3372,6 +4016,305 @@ components:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
   schemas:
+    SigningBetaCapabilities:
+      type: object
+      required: [enabled, mode, legalSignatureAvailable, identityProofingAvailable, recordingAvailable, turnConfigured]
+      properties:
+        enabled: { type: boolean }
+        mode: { type: string, const: rehearsal }
+        legalSignatureAvailable: { type: boolean, const: false }
+        identityProofingAvailable: { type: boolean, const: false }
+        recordingAvailable: { type: boolean, const: false }
+        authentication: { type: string, const: recent_email_verification }
+        mediaEncryption: { type: string, const: webrtc_dtls_srtp }
+        protectsAgainstMaliciousWebPublisher: { type: boolean, const: false }
+        turnConfigured: { type: boolean }
+        sessionDurationMs: { type: integer }
+        presenceFreshnessMs: { type: integer }
+    SigningBetaCommand:
+      type: object
+      required: [bidId, dateISO]
+      properties:
+        bidId: { type: string, pattern: '^[a-zA-Z0-9_-]{1,100}$' }
+        dateISO: { type: string, format: date }
+        revision: { type: integer, minimum: 1 }
+        action: { type: string, enum: [join, admit, review, release, pause, acknowledge, close] }
+        publicKeyJwk:
+          type: object
+          required: [kty, crv, x, y]
+          properties:
+            kty: { type: string, const: EC }
+            crv: { type: string, const: P-256 }
+            x: { type: string }
+            y: { type: string }
+        observationConfirmed: { type: boolean }
+        connected: { type: boolean }
+        type: { type: string, enum: [offer, answer] }
+        sdp: { type: string, maxLength: 24000 }
+        signature: { type: string, pattern: '^[a-zA-Z0-9_-]{86}$' }
+    SigningBetaResponse:
+      type: object
+      required: [role, session, capabilities, iceServers]
+      properties:
+        role: { type: string, enum: [notary, client] }
+        session:
+          type: [object, 'null']
+          properties:
+            id: { type: string }
+            revision: { type: integer }
+            status: { type: string, enum: [waiting, admitted, reviewed, released, paused, complete, closed, expired] }
+            expiresAt: { type: integer }
+            document: { type: object }
+            participants: { type: object }
+            peerSignal: { type: [object, 'null'] }
+            challenge: { type: [object, 'null'] }
+        capabilities: { $ref: '#/components/schemas/SigningBetaCapabilities' }
+        iceServers: { type: array, items: { type: object } }
+    FinancingWorkPacketResult:
+      anyOf:
+        - { type: 'null' }
+        - { $ref: '#/components/schemas/FinancingWorkPacket' }
+    FinancingWorkPacket:
+      type: object
+      required: [version, customerContext, documentInventory, draftFields, missing, comparisons, dateFlags, checks, clientRequestDraft, lenderRequestDraft, measurement]
+      properties:
+        version: { type: string }
+        customerContext:
+          type: array
+          items: { $ref: '#/components/schemas/FinancingContextItem' }
+        documentInventory:
+          type: array
+          items:
+            type: object
+            required: [id, label, status]
+            properties:
+              id: { type: string }
+              label: { type: string }
+              status: { enum: [missing, listed, external] }
+        draftFields:
+          type: array
+          items:
+            type: object
+            required: [fieldId, label, value, source, evidence]
+            properties:
+              fieldId: { type: string }
+              label: { type: string }
+              value: { type: string }
+              valueEn: { type: string }
+              valueIsLabel: { type: boolean }
+              source: { enum: [customer, ai_proposal, notary_accepted, notary_corrected] }
+              originalValue:
+                type: string
+                description: When corrected, the quotation supports this original value, not the correction.
+              evidence:
+                type: array
+                items:
+                  type: object
+                  required: [documentId, page, quote]
+                  properties:
+                    documentId: { type: string }
+                    page: { type: integer }
+                    quote: { type: string }
+        missing:
+          type: array
+          items: { $ref: '#/components/schemas/FinancingMissingItem' }
+        comparisons:
+          type: array
+          description: Values to compare, not proven mistakes; formatting alone can differ.
+          items:
+            type: object
+            required: [fieldId, label, customerValue, documentValues]
+            properties:
+              fieldId: { type: string }
+              label: { type: string }
+              customerValue: { type: string }
+              documentValues: { type: array, items: { type: string } }
+        dateFlags:
+          type: array
+          items:
+            type: object
+            required: [id, label]
+            properties:
+              id: { enum: [expiry_unclear, expiry_past, signing_after_expiry] }
+              label: { type: string }
+        checks:
+          type: array
+          items:
+            type: object
+            required: [id, label, owner, status, sourceIds]
+            properties:
+              id: { type: string }
+              label: { type: string }
+              owner: { enum: [notary, lender, registry] }
+              status: { const: pending }
+              sourceIds: { type: array, items: { type: string } }
+        clientRequestDraft:
+          anyOf:
+            - { type: 'null' }
+            - type: object
+              required: [opening, items, closing]
+              properties:
+                opening: { type: string }
+                items:
+                  type: array
+                  items: { $ref: '#/components/schemas/FinancingMissingItem' }
+                closing: { type: string }
+        lenderRequestDraft:
+          type: object
+          required: [opening, items, requirements, closing]
+          properties:
+            opening: { type: string }
+            items:
+              type: array
+              items: { $ref: '#/components/schemas/FinancingContextItem' }
+            requirements:
+              type: array
+              items:
+                type: object
+                required: [id, label]
+                properties:
+                  id: { type: string }
+                  label: { type: string }
+            closing: { type: string }
+        measurement:
+          type: object
+          required: [target, measuredReduction, reviewSeconds]
+          properties:
+            target: { const: 0.9, description: Owner target; not an observed result. }
+            measuredReduction: { type: 'null' }
+            reviewSeconds: { type: [integer, 'null'] }
+    FinancingContextItem:
+      type: object
+      required: [id, label, value, source]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        value: { type: string }
+        valueEn: { type: string }
+        valueIsLabel: { type: boolean }
+        source: { const: customer }
+    FinancingMissingItem:
+      type: object
+      required: [id, label, aide]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        aide: { type: string }
+        kind: { enum: [doc, field, pricing] }
+    FinancingAIAnalysis:
+      type: object
+      required: [id, preparation, provenance, createdAt, sourceOrigin]
+      properties:
+        id: { type: string }
+        createdAt: { type: string, format: date-time }
+        sourceOrigin: { const: notary_supplied_text }
+        preparedBy:
+          type: string
+          description: Authenticated retaining notary that generated this analysis; required for reuse. Legacy analyses may omit it.
+        requestFingerprint:
+          type: string
+          pattern: '^[a-f0-9]{64}$'
+          description: Server-computed identity of source text, prompt, schema, generation settings, provider, endpoint region and model. Contains no credentials.
+        performance:
+          type: object
+          required: [provider, region, latencyMs, usage]
+          properties:
+            provider: { enum: [anthropic, bedrock, injected] }
+            region: { type: string }
+            latencyMs: { type: number, minimum: 0 }
+            usage:
+              type: object
+              required: [in, out, cacheRead, cacheWrite, reported]
+              description: Sanitized provider counters for this generation. If reported is false, normalized counters are not a billable-usage measurement. Reuse incurs no new model call and preserves original metrics.
+              properties:
+                in: { type: integer, minimum: 0 }
+                out: { type: integer, minimum: 0 }
+                cacheRead: { type: integer, minimum: 0 }
+                cacheWrite: { type: integer, minimum: 0 }
+                reported: { type: boolean }
+        preparation:
+          type: object
+          required: [fields, missing, conflicts, status]
+          properties:
+            status: { const: needs_notary_review }
+            missing: { type: array, items: { type: string } }
+            conflicts: { type: array, items: { type: string } }
+            fields:
+              type: array
+              maxItems: 24
+              items:
+                type: object
+                required: [fieldId, value, evidence]
+                properties:
+                  fieldId: { enum: [property_address, borrower_names, lender_name, loan_amount, rate_expiry, secured_debts] }
+                  value: { type: string, minLength: 1, maxLength: 1000 }
+                  evidence:
+                    type: array
+                    minItems: 1
+                    maxItems: 8
+                    items:
+                      type: object
+                      required: [documentId, page, quote]
+                      properties:
+                        documentId: { type: string }
+                        page: { type: integer, minimum: 1 }
+                        quote: { type: string, minLength: 1, maxLength: 2000 }
+        provenance:
+          type: object
+          required: [model, knowledgeVersion, promptSha256, inputSha256]
+          properties:
+            model: { type: string }
+            knowledgeVersion: { type: string }
+            promptSha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+            inputSha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+        review: { $ref: '#/components/schemas/FinancingAIReview' }
+    FinancingAIReview:
+      type: object
+      required: [reviewerId, reviewedAt, decisions, activeReviewSeconds, trainingEligible, signingReadiness]
+      properties:
+        reviewerId: { type: string }
+        reviewedAt: { type: string, format: date-time }
+        trainingEligible: { const: false }
+        signingReadiness: { const: not_assessed }
+        activeReviewSeconds: { type: [integer, 'null'] }
+        decisions:
+          type: array
+          items:
+            type: object
+            required: [index, decision]
+            properties:
+              index: { type: integer, minimum: 0 }
+              decision: { enum: [accepted, corrected, rejected] }
+              value: { type: string }
+              reason: { type: string }
+    AnalyticsContext:
+      type: object
+      description: Optional bounded observations. Unknown keys/values are ignored. Used only for aggregate counters, never stored on a bid or notary. Browser and OS are derived server-side; device tablet is only an iPad hint.
+      properties:
+        device:
+          type: string
+          enum: ["mobile", "tablet", "desktop", "unknown"]
+        viewport:
+          type: string
+          enum: ["narrow", "medium", "wide", "unknown"]
+        language:
+          type: string
+          enum: ["fr", "en", "other", "unknown"]
+        source:
+          type: string
+          enum: ["google", "bing", "search_other", "facebook", "instagram", "linkedin", "tiktok", "ai", "email", "partner", "campaign_other", "referral_other", "internal", "direct_unknown"]
+        entry:
+          type: string
+          enum: ["home", "financement", "refinancement", "other"]
+        dialog:
+          type: string
+          enum: ["native", "fallback", "unknown"]
+        storage:
+          type: string
+          enum: ["available", "unavailable", "unknown"]
+        load:
+          type: string
+          enum: ["fast", "moderate", "slow", "unknown"]
     PropositionStatus:
       type: string
       description: >-
@@ -3686,6 +4629,10 @@ components:
         dateISO:
           type: string
           format: date
+        expiresOn:
+          type: [string, "null"]
+          format: date
+          description: Last valid civil day (inclusive, Quebec). Server sets the earlier of publication + 7 days and signing date. Legacy open bids without a valid deadline are unavailable; retained acts remain accessible.
         montant:
           type: integer
         tier:
@@ -3990,6 +4937,8 @@ components:
       type: object
       required: [serviceId, dateISO, montant, prefixe]
       properties:
+        analytics:
+          $ref: "#/components/schemas/AnalyticsContext"
         serviceId:
           $ref: "#/components/schemas/ServiceId"
         dateISO:
@@ -4066,7 +5015,7 @@ components:
           example: EVEROY
     Bid:
       type: object
-      description: Public projection of a bid. Private dossier data is never included.
+      description: Public projection of a bid. Expired or undated open offers are excluded from the marketplace and cannot be accepted (410 offre_expiree). Private dossier data is never included.
       required: [id, serviceId, dateISO, montant, tier, premium, status, anonyme]
       properties:
         id:
@@ -4076,6 +5025,10 @@ components:
         dateISO:
           type: string
           format: date
+        expiresOn:
+          type: [string, "null"]
+          format: date
+          description: Last valid civil day (inclusive, Quebec). Server sets the earlier of publication + 7 days and signing date. Legacy open bids without a valid deadline are unavailable; retained acts remain accessible.
         montant:
           type: integer
         tier:

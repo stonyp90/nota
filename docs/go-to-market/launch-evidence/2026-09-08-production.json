@@ -1,0 +1,108 @@
+{
+  "verifiedAt": "2026-09-08T11:55:22.794Z",
+  "checks": [
+    {
+      "url": "https://gonota.ca/",
+      "status": 200,
+      "contentType": "text/html",
+      "matchesBuild": true,
+      "noindex": false
+    },
+    {
+      "url": "https://gonota.ca/notaire-refinancement-quebec.html",
+      "status": 200,
+      "contentType": "text/html",
+      "matchesBuild": true,
+      "noindex": false
+    },
+    {
+      "url": "https://gonota.ca/notaire-financement-quebec.html",
+      "status": 200,
+      "contentType": "text/html",
+      "matchesBuild": true,
+      "noindex": false
+    },
+    {
+      "url": "https://gonota.ca/mortgage-refinancing-notary-quebec-city.html",
+      "status": 200,
+      "contentType": "text/html",
+      "matchesBuild": true,
+      "noindex": false
+    },
+    {
+      "url": "https://gonota.ca/mortgage-financing-notary-quebec-city.html",
+      "status": 200,
+      "contentType": "text/html",
+      "matchesBuild": true,
+      "noindex": false
+    },
+    {
+      "url": "https://gonota.ca/sitemap.xml",
+      "status": 200,
+      "contentType": "application/xml",
+      "matchesBuild": true,
+      "noindex": false
+    },
+    {
+      "url": "https://gonota.ca/robots.txt",
+      "status": 200,
+      "contentType": "text/plain",
+      "matchesBuild": true,
+      "noindex": false
+    },
+    {
+      "url": "https://gonota.ca/indexnow-key.txt",
+      "status": 200,
+      "contentType": "text/plain",
+      "matchesBuild": true,
+      "noindex": false
+    },
+    {
+      "asset": "app.60dcdf1005.js",
+      "status": 200,
+      "matchesBuild": true
+    },
+    {
+      "asset": "i18n.dd0cd5b2f5.js",
+      "status": 200,
+      "matchesBuild": true
+    },
+    {
+      "asset": "styles.d3d4d3a9bf.css",
+      "status": 200,
+      "matchesBuild": true
+    },
+    {
+      "asset": "domain.049e376519.js",
+      "status": 200,
+      "matchesBuild": true
+    },
+    {
+      "userAgent": "Googlebot",
+      "status": 200,
+      "matchesBuild": true
+    },
+    {
+      "userAgent": "bingbot",
+      "status": 200,
+      "matchesBuild": true
+    },
+    {
+      "userAgent": "OAI-SearchBot",
+      "status": 200,
+      "matchesBuild": true
+    },
+    {
+      "userAgent": "PerplexityBot",
+      "status": 200,
+      "matchesBuild": true
+    },
+    {
+      "apiStatus": 200,
+      "health": {
+        "ok": true,
+        "today": "2026-09-08"
+      }
+    }
+  ]
+}

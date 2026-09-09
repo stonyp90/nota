@@ -57,7 +57,7 @@ Fonctionnalité: La messagerie répond d'abord, et n'escalade que le reste
   # surfaces client ; une machine qui rédige est ce qui le ferait revenir.
   Scénario: une réponse qui nomme un taux ne sort jamais du serveur
     Étant donné que l'assistant sait répondre "Le taux d'annulation est de 30 % du montant."
-    Quand un visiteur écrit "Et si j'annule ?" dans la messagerie
+    Quand un visiteur écrit "Expliquez les conditions d’annulation en détail." dans la messagerie
     Alors la réponse envoyée au visiteur ne contient pas "taux"
     Et l'opérateur reçoit un courriel d'escalade
 
@@ -92,7 +92,14 @@ Fonctionnalité: La messagerie répond d'abord, et n'escalade que le reste
   # prix périmés sans que rien ne casse — sauf ceci.
   Scénario: ce que le modèle reçoit porte les prix VIVANTS du catalogue
     Étant donné que l'assistant sait répondre "Bonjour."
-    Quand un visiteur écrit "Combien ça coûte ?" dans la messagerie
+    Quand un visiteur écrit "Pouvez-vous expliquer le calcul du prix ?" dans la messagerie
     Alors l'invite du modèle porte le prix annoncé de chaque service
     Et l'invite du modèle nomme la personne qui reprend la main
     Et l'invite du modèle interdit de conseiller
+
+  Scénario: une question préparée reçoit une réponse même si le modèle est en panne
+    Étant donné que l'assistant est en panne
+    Quand un visiteur écrit "Comment ça marche ?" dans la messagerie
+    Alors le visiteur reçoit une réponse tout de suite
+    Et la réponse est signée par l'assistant, pas par une personne
+    Et l'opérateur ne reçoit aucun courriel

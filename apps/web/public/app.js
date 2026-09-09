@@ -104,6 +104,8 @@
     // A seed from an older pricing model would put medians below today's
     // floors — rebuild the demo data whenever the pricing shape changes.
     if (!a || flagGet(LS_BIDS_SIG) !== sig) { a = D.makeFixtures(todayISO()); lsSave(LS_BIDS, a); flagSet(LS_BIDS_SIG, sig); }
+    a = a.filter(function (b) { return !D.isOfferExpired(b, todayISO()); });
+    lsSave(LS_BIDS, a);
     return a;
   }
 
@@ -171,7 +173,7 @@
         nom: anonyme ? null : (payload.nom || null),
         prefixe: (payload.prefixe || '').toUpperCase().slice(0, 3) || null,
         pricing: payload.pricing || null,
-        status: D.STATUS.OUVERTE, etude: null, createdAt: todayISO(),
+        status: D.STATUS.OUVERTE, etude: null, createdAt: todayISO(), expiresOn: v.expiresOn,
       };
       var all = ensureSeed(); all.push(bid); lsSave(LS_BIDS, all);
       return { ok: true, bid: bid };
@@ -709,7 +711,7 @@
   // document requests) and answer them. Never shown, never sent elsewhere.
   function addMyOffer(bid, clientToken) {
     var a = myOffers().filter(function (o) { return o.id !== bid.id; });
-    var entry = { id: bid.id, dateISO: bid.dateISO, serviceId: bid.serviceId, montant: bid.montant };
+    var entry = { id: bid.id, expiresOn: bid.expiresOn, dateISO: bid.dateISO, serviceId: bid.serviceId, montant: bid.montant };
     if (clientToken) entry.clientToken = clientToken;
     a.push(entry);
     lsSave(LS_MYOFFERS, a.slice(-50));
@@ -966,6 +968,10 @@
       // connaît que ce qui lui a été poussé, et l'appareil peut être en avance ;
       // un objet vide ne vaut donc jamais « efface tout ».
       hydrateDossier(next.dossier, (st.bid && st.bid.serviceId) || o.serviceId);
+      if (st.bid && st.bid.expiresOn) {
+        patchMyOffer(o.id, { expiresOn: st.bid.expiresOn });
+        o.expiresOn = st.bid.expiresOn;
+      }
       // An entry born from a deep link learns its act and amount here.
       if (st.bid && (!o.serviceId || o.montant == null)) {
         patchMyOffer(o.id, { serviceId: st.bid.serviceId, montant: st.bid.montant });
@@ -1256,14 +1262,15 @@
     if (o.retained) return 'approved';
     var pub = (state.monthBids || []).filter(function (b) { return b.id === o.id; })[0];
     if (pub && pub.status === D.STATUS.RETENUE) { markMyOfferRetained(o.id, { etude: pub.etude }); return 'approved'; }
-    if (D.daysBetween(todayISO(), o.dateISO) < 0) return 'expired';
+    var cached = offerStatusGet(o.id);
+    if (D.isOfferExpired((cached && cached.bid) || pub || o, todayISO())) return 'expired';
     return 'pending';
   }
   // Plain words, never a code: what the status means for the client right now.
   function offerStatusLabel(o, st) {
     if (st === 'cancelled') return 'Annulée';
     if (st === 'approved') return o.etude ? 'Retenue par ' + o.etude : 'Retenue par un notaire';
-    if (st === 'expired') return 'Date passée';
+    if (st === 'expired') return 'Offre expirée';
     return 'Ouverte — en attente d’un notaire';
   }
   // The one line that says what happens next for this offer.
@@ -1276,7 +1283,7 @@
       }
       return 'Vous avez annulé cette offre. Si vous changez d’avis, choisissez une nouvelle date au carnet.';
     }
-    if (st === 'expired') return 'Cette date est passée. Choisissez une nouvelle date au carnet.';
+    if (st === 'expired') return 'Cette offre a expiré. Publiez une nouvelle offre.';
     // ADR 0033 — the whole truth of a retained act: the conversation is the
     // channel, and the notary keeps the right to withdraw (free for them,
     // counted on their file); the offer then returns to the carnet as posted.
@@ -1645,15 +1652,74 @@
     return b;
   }
 
-  // --- Sign-in / sign-up modal (one door for client AND notary) --------------
-  // A role toggle + social options (OAuth not wired yet) + a passwordless courriel
-  // path. Client → device-local identity; notary → the existing /notary/session.
-  // --- Portes à venir (Google / Facebook / LinkedIn) -------------------------
-  // Décision du propriétaire (2026-09-06) : les exposer, sans câbler OAuth.
-  // Les marques gardent leurs couleurs officielles — c'est ce qui les rend
-  // reconnaissables — mais on ne reproduit PAS le bouton officiel « Sign in
-  // with Google » : sa forme exacte annonce une intégration qui fonctionne.
-  // Le « G » reste multicolore sur fond blanc, comme Google l'exige.
+  // Provider availability is advertised by the server; credentials stay there.
+  // Mailbox proof is required once before a provider can open an existing account.
+  var oauthConfigured = {}, oauthLoading = null, oauthPending = null;
+  (function () {
+    var params = new URLSearchParams(String(location.hash || '').replace(/^#/, ''));
+    ['oauth', 'oauthverify', 'oautherror'].some(function (key) {
+      var value = params.get(key); if (!value) return false;
+      oauthPending = { key: key, value: value };
+      ['oauth', 'oauthverify', 'oautherror'].forEach(function (k) { params.delete(k); });
+      history.replaceState(null, '', location.pathname + location.search + (params.toString() ? '#' + params : ''));
+      return true;
+    });
+  })();
+  async function oauthPost(path, body) {
+    var r = await fetch('/api/auth/oauth/' + path, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json', 'accept-language': /^en/.test(LOCALE) ? 'en' : 'fr' }, body: JSON.stringify(body) });
+    var j = await r.json();
+    if (!r.ok) throw new Error(j.errors && j.errors[0] && j.errors[0].code || 'oauth_unavailable');
+    return j;
+  }
+  function oauthLoadProviders() {
+    if (!oauthLoading) oauthLoading = fetch('/api/auth/oauth/providers', { credentials: 'same-origin' }).then(function (r) {
+      if (!r.ok) throw new Error(); return r.json();
+    }).then(function (j) {
+      (j.providers || []).forEach(function (p) { if (p.configured === true) oauthConfigured[p.id] = true; });
+      if (Object.keys(oauthConfigured).length) authRenderProviders();
+      if (Object.keys(oauthConfigured).length && $('auth-social-note')) $('auth-social-note').textContent = 'À la première connexion, confirmez votre courriel pour lier votre compte. Microsoft accepte les comptes Outlook et Microsoft 365.';
+    }).catch(function () { oauthLoading = null; });
+    return oauthLoading;
+  }
+  async function oauthStart(id, button) {
+    if (button.disabled) return;
+    button.disabled = true;
+    try { var j = await oauthPost(id + '/start', { role: authRole }); location.assign(j.url); }
+    catch (e) { button.disabled = false; $('auth-soc-live').textContent = T('Connexion indisponible. Réessayez ou utilisez votre courriel.'); }
+  }
+  function oauthLinkDialog(ticket) {
+    var dlg = el('dialog', 'dialog'); dlg.id = 'oauth-link-dialog';
+    dlg.setAttribute('aria-labelledby', 'oauth-link-title');
+    var title = el('h2', null, 'Lier votre compte'); title.id = 'oauth-link-title'; dlg.appendChild(title);
+    dlg.appendChild(el('p', 'help', 'Confirmez le courriel de votre compte Nota. Ouvrez le lien reçu dans ce navigateur pour terminer la connexion.'));
+    var form = el('form'), label = el('label', null, 'Courriel'), input = el('input');
+    input.type = 'email'; input.required = true; input.autocomplete = 'email'; input.id = 'oauth-link-email'; label.htmlFor = input.id;
+    var status = el('p', 'help'); status.setAttribute('role', 'status');
+    var submit = el('button', 'btn btn-primary', 'Envoyer le lien de confirmation'); submit.type = 'submit';
+    var close = el('button', 'btn', 'Fermer'); close.type = 'button'; close.addEventListener('click', function () { dlg.close(); dlg.remove(); });
+    form.appendChild(label); form.appendChild(input); form.appendChild(submit); dlg.appendChild(form); dlg.appendChild(status); dlg.appendChild(close);
+    form.addEventListener('submit', async function (event) {
+      event.preventDefault(); if (!D.isEmail(input.value.trim()) || submit.disabled) return;
+      submit.disabled = true;
+      try { await oauthPost('link/request', { ticket: ticket, email: input.value.trim() }); status.textContent = T('Un lien de confirmation a été envoyé. Ouvrez-le dans ce navigateur.'); }
+      catch (e) { status.textContent = T('Connexion interrompue. Fermez cette fenêtre et recommencez la connexion.'); }
+    });
+    document.body.appendChild(dlg); dlg.showModal(); input.focus();
+  }
+  async function oauthConsumeHash() {
+    if (!oauthPending) return;
+    var pending = oauthPending; oauthPending = null;
+    try {
+      if (pending.key === 'oautherror') throw new Error(pending.value);
+      var j = await oauthPost(pending.key === 'oauthverify' ? 'link/verify' : 'complete', { ticket: pending.value });
+      if (j.linkRequired) { oauthLinkDialog(j.ticket); return; }
+      if (j.role === 'notary') { setTab('notaires', { focus: false }); await ncApplySession(j); }
+      else clientApplySession(j);
+    } catch (e) {
+      toast(e.message === 'compte_requis' ? 'Un compte notaire actif est requis pour accéder à la console. L’inscription est gratuite.' : 'Connexion interrompue. Réessayez depuis le bouton de connexion.');
+    }
+  }
+
   var AUTH_PROVIDERS = {
     google: {
       nom: 'Google',
@@ -1664,11 +1730,9 @@
         + '<path fill="#EA4335" d="M12 4.7c2.2 0 3.6.9 4.5 1.7l3.4-3.3C17.9 1.2 15.2 0 12 0 7.4 0 3.4 2.7 1.3 6.6l4 3c.9-2.8 3.6-4.9 6.7-4.9z"/>'
         + '</svg>',
     },
-    facebook: {
-      nom: 'Facebook',
-      svg: '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">'
-        + '<path fill="#1877F2" d="M24 12.07C24 5.4 18.63 0 12 0S0 5.4 0 12.07C0 18.1 4.39 23.09 10.13 24v-8.44H7.08v-3.49h3.05V9.41c0-3.02 1.79-4.69 4.53-4.69 1.31 0 2.68.24 2.68.24v2.96h-1.51c-1.49 0-1.96.93-1.96 1.89v2.26h3.33l-.53 3.49h-2.8V24C19.61 23.09 24 18.1 24 12.07z"/>'
-        + '</svg>',
+    microsoft: {
+      nom: 'Microsoft',
+      svg: '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="#f25022" d="M1 1h10v10H1z"/><path fill="#7fba00" d="M13 1h10v10H13z"/><path fill="#00a4ef" d="M1 13h10v10H1z"/><path fill="#ffb900" d="M13 13h10v10H13z"/></svg>',
     },
     linkedin: {
       nom: 'LinkedIn',
@@ -1680,8 +1744,8 @@
   // L'ordre suit le métier : un notaire voit d'abord le réseau de sa profession,
   // un client d'abord la porte grand public.
   var AUTH_PROVIDER_ORDER = {
-    client: ['google', 'facebook', 'linkedin'],
-    notary: ['linkedin', 'google', 'facebook'],
+    client: ['google', 'microsoft', 'linkedin'],
+    notary: ['linkedin', 'google', 'microsoft'],
   };
 
   function authRenderProviders() {
@@ -1695,13 +1759,14 @@
       // `aria-disabled` et NON `disabled` : un bouton retiré du parcours clavier
       // ne peut pas être découvert par qui navigue au clavier ou au lecteur
       // d'écran. Le clic est neutralisé plus bas, pas par le navigateur.
-      b.setAttribute('aria-disabled', 'true');
+      b.setAttribute('aria-disabled', oauthConfigured[id] ? 'false' : 'true');
       b.setAttribute('aria-describedby', 'auth-social-note');
       var ic = el('span', 'auth-soc-ic'); ic.innerHTML = p.svg;
       b.appendChild(ic);
       b.appendChild(el('span', 'auth-soc-t', 'Continuer avec ' + p.nom));
-      b.appendChild(el('span', 'auth-soc-soon', 'À venir'));
+      if (!oauthConfigured[id]) b.appendChild(el('span', 'auth-soc-soon', 'À venir'));
       b.addEventListener('click', function () {
+        if (oauthConfigured[id]) { oauthStart(id, b); return; }
         // Répondre, toujours : un bouton qui avale le geste se lit comme cassé.
         // La réponse va dans la MODALE, pas dans un toast : une <dialog> ouverte
         // par showModal() occupe la couche supérieure du navigateur, et un toast
@@ -1777,6 +1842,7 @@
 
   function openAuthModal(role, mode) {
     authMode = mode === 'signin' ? 'signin' : 'signup';
+    oauthLoadProviders();
     authSetRole(role || roleGet() || 'client'); // honour what they told the guide
     var errs = $('auth-errors'); if (errs) errs.hidden = true;
     var em = $('auth-email'); if (em) em.value = profileGet().courriel || '';
@@ -1911,6 +1977,22 @@
         : 'Impossible de vérifier ce lien pour l’instant.');
       return { ok: false, status: r.status };
     }
+    return clientApplySession(j);
+  }
+
+  function returnToSigningBeta() {
+    var pending = lsLoad('nota.signing.return');
+    if (!pending) return false;
+    try { localStorage.removeItem('nota.signing.return'); } catch (e) {}
+    if (!pending.path || !Number.isFinite(pending.createdAt) || Date.now() - pending.createdAt > 3600000 || pending.createdAt > Date.now()) return false;
+    var target;
+    try { target = new URL(pending.path, location.origin); } catch (e) { return false; }
+    if (target.origin !== location.origin || target.pathname !== '/signature.html' || target.hash) return false;
+    location.assign(target.pathname + target.search);
+    return true;
+  }
+
+  function clientApplySession(j) {
     var offres = Array.isArray(j.offres) ? j.offres : [];
     var known = {};
     myOffers().forEach(function (o) { if (o && o.id) known[o.id] = o; });
@@ -1932,6 +2014,7 @@
     toast(offres.length
       ? 'Vos demandes sont de retour sur cet appareil.'
       : 'Aucune demande n’est rattachée à cette adresse pour l’instant.');
+    returnToSigningBeta();
     return { ok: true, offres: offres.length };
   }
 
@@ -1953,7 +2036,9 @@
   // Funnel beacon — one step of the conversion funnel, nothing else. The
   // catalogue is the domain's (D.FUNNEL_EVENTS): anything outside it is dropped
   // here before it reaches the wire. The body is the bare event id — no
-  // identifier, no session, nothing stored on the device. A keepalive POST
+  // identifier, no session, nothing stored on the device. The shared collector
+  // adds bounded browser-experience context; the fallback below sends only
+  // the event id. A keepalive POST
   // survives a page unload the way sendBeacon does — and NOT sendBeacon: it
   // always sends credentials, which a wildcard CORS origin refuses, so on any
   // cross-origin layout (local dev, e2e) every step was silently blocked
@@ -1966,6 +2051,8 @@
   function track(eventId) {
     try {
       if (!D.isFunnelEvent(eventId)) return;
+      if (!D.isClientFunnelEvent(eventId)) return;
+      if (window.NotaAnalytics) { window.NotaAnalytics.send(eventId, API_BASE); return; }
       var url = API_BASE + '/events';
       var body = JSON.stringify({ event: eventId });
       var p = fetch(url, { method: 'POST', keepalive: true, credentials: 'omit', headers: { 'content-type': 'text/plain' }, body: body });
@@ -1976,6 +2063,9 @@
   // finished its own programmatic set-up (armed at the end of openDay) — a
   // pre-fill dispatching a change event is not a client starting the form.
   var formArmed = false, formStarted = false;
+  // Screen reach is counted once per dialog opening, including backtracking.
+  // No field values or visitor identifiers leave the browser.
+  var bookingScreensSent = {};
   function noteFormStart() {
     if (!formArmed || formStarted) return;
     formStarted = true;
@@ -2334,7 +2424,7 @@
   // every surface that reads the profile/offers is re-rendered.
   function clientSignOut() {
     var ok = true;
-    try { ok = window.confirm(T('Se déconnecter effacera de cet appareil vos coordonnées, vos offres publiées, votre dossier, vos échanges avec le notaire et vos notifications. Continuer ?')); } catch (e) { ok = true; }
+    try { ok = window.confirm(T('Se déconnecter effacera de cet appareil vos coordonnées, vos offres publiées, votre dossier, vos échanges avec le notaire et vos notifications. Continuer ?')); } catch (e) { ok = false; }
     if (!ok) return;
     // TOUT ce que la session client a posé sur cet appareil — pas seulement les
     // quatre clés d'origine. Le cache de statut (`LS_OFFERSTATUS`) porte le nom
@@ -3192,7 +3282,7 @@
     settleSegTracks($('o-criteria'));
     // A dialog OPENING is one funnel step; a date moved inside it is not.
     if (!wasOpen) {
-      formStarted = false; bookSeen = 1; bookGoTo(1, { silent: true }); track('jour_ouvert');
+      formStarted = false; bookingScreensSent = {}; bookSeen = 1; bookGoTo(1, { silent: true }); track('jour_ouvert');
       focusBookingStart();
     }
     else bookPaint(); // l'acte a pu changer : l'écran 2 apparaît ou s'efface
@@ -4960,6 +5050,14 @@
   function validateOfferUI() {
     scheduleCoverage();
     var o = state.offer;
+    var expiration = D.offerExpirationDate(todayISO(), o.dateISO);
+    if ($('o-expiration')) {
+      clear($('o-expiration'));
+      if (expiration) {
+        $('o-expiration').appendChild(el('span', null, 'Offre valide jusqu’au'));
+        $('o-expiration').appendChild(document.createTextNode(' ' + expiration));
+      }
+    }
     var courriel = ($('o-courriel') && $('o-courriel').value || '').trim();
     // The account opt-in follows its courriel: inert without a valid one, and a
     // cleared field also clears the opt-in — a bid can never sign up blindly.
@@ -5091,6 +5189,11 @@
     if (n > bookSeen) bookSeen = n;
     form.dataset.at = String(n);
     bookPaint();
+    var screenEvent = { 2: 'criteres_vus', 3: 'prix_vu', 4: 'coordonnees_vues' }[n];
+    if (screenEvent && !bookingScreensSent[screenEvent]) {
+      bookingScreensSent[screenEvent] = true;
+      track(screenEvent);
+    }
     // L'écran qui s'ouvre est le premier à AVOIR une géométrie : caché, il ne
     // mesurait rien, et la grille se tassait sur des rectangles nuls (2026-09-07).
     if (n === 2) settleSegTracks($('o-criteria'));
@@ -5139,6 +5242,7 @@
   }
   function bookForward() {
     if (!bookScreenDue(bookAt)) { bookGoTo(bookAt + 1); return; }
+    track('formulaire_bloque');
     // L'écran 2 marque ses questions attendues (le même geste que la première
     // frappe du client) puis emmène à la première.
     state.offer.touched = true;
@@ -5400,6 +5504,7 @@
     e.preventDefault();
     var submit = $('offer-submit');
     if (submit.disabled) return; // also blocks Enter-to-submit on an invalid offer
+    track('publication_tentee');
     submit.disabled = true; submit.setAttribute('aria-busy', 'true'); submit.textContent = 'Publication…';
     var o = state.offer;
     var payload = {
@@ -5438,9 +5543,11 @@
     // defaults still shown (audit §1.5).
     var pricing = effectivePricing();
     if (Object.keys(pricing).length) payload.pricing = pricing;
+    if (window.NotaAnalytics) payload.analytics = window.NotaAnalytics.context();
     var res = await store.createBid(payload);
     var errBox = $('offer-errors');
     if (!res.ok) {
+      track('publication_echouee');
       clear(errBox); errBox.hidden = false;
       var svcErr = D.serviceById(o.serviceId);
       res.errors.forEach(function (er) {
@@ -5797,6 +5904,14 @@
     return box;
   }
 
+  function signingBetaLink(offer, role) {
+    var link = el('a', 'btn btn-sm signing-beta-entry', 'Salle de signature · Bêta');
+    var params = new URLSearchParams({ bidId: offer.id, dateISO: offer.dateISO, role: role });
+    link.href = '/signature.html?' + params.toString();
+    link.setAttribute('title', 'Essai vidéo et document de démonstration. Signature notariale à venir.');
+    return link;
+  }
+
   function fillMyOfferDetail(cell, o, st, status) {
     clear(cell);
     // Is any notary named in this band? The « says who? » line is owed exactly
@@ -5814,6 +5929,19 @@
       cell.appendChild(notaireCard(noti));
     }
     cell.appendChild(next);
+    if (st === 'approved' && o.clientToken && !(status && status.acte && status.acte.complete)) {
+      var signingEntry = el('div', 'my-offer-actions');
+      signingEntry.appendChild(signingBetaLink(o, 'client'));
+      cell.appendChild(signingEntry);
+    }
+    var expiresOn = (status && status.bid && status.bid.expiresOn) || o.expiresOn;
+    if (expiresOn) {
+      var expiry = el('p', 'my-offer-expiration');
+      expiry.appendChild(el('span', null, 'Offre valide jusqu’au'));
+      expiry.appendChild(document.createTextNode(' ' + expiresOn));
+      cell.appendChild(expiry);
+    }
+
     // ADR 0035 — la banque a refusé la carte au moment de réserver la somme.
     // C'est la seule mauvaise nouvelle d'argent que le client puisse encore
     // corriger lui-même, et elle a une date de péremption : sa signature. Le
@@ -6889,6 +7017,7 @@
     pbar.appendChild(pfill);
     prep.appendChild(pbar);
     prep.appendChild(el('div', 'help', 'Seules les pièces nécessaires selon vos réponses apparaissent ici. Rien ne bloque votre demande ; chaque pièce peut être téléversée ou marquée déjà transmise au notaire.'));
+    prep.appendChild(el('div', 'help', "Un document indiqué comme transmis reste à vérifier par le notaire. Les instructions du prêteur, l’examen des titres et la disponibilité des fonds peuvent encore retarder la signature."));
     list.appendChild(prep);
 
     // The checklist packs into a card grid — several small pieces per row,
@@ -7160,6 +7289,7 @@
     // the captured link code is the fallback for paths without the field.
     // The API stores it privately on the notary; never displayed anywhere.
     var body = { email: email };
+    if (window.NotaAnalytics) body.analytics = window.NotaAnalytics.context();
     var refField = $('nc-signup-parrain');
     var typedRef = refField ? refField.value.trim() : '';
     var parrain = refField
@@ -7516,6 +7646,7 @@
   // 401 -> the token is dead: drop it and return to the sign-in gate.
   function ncExpire(msg) {
     ncPollStop(); // the live feed dies with the session
+    ncDisposeFinancingAI();
     nc.token = null; nc.feedToken = null; nc.email = null; nc.open = [];
     nc.rating = null; nc.profil = { lienCNQ: null, rayonKm: 0, urgences: false }; nc.tarif = null;
     nc.cote = null; nc.conditions = null; nc.fenetre = null; nc.manquantsServeur = null;
@@ -7605,6 +7736,10 @@
       ncSetErrors((j.errors || [{ message: 'Lien invalide ou expiré. Redemandez un lien.' }]).map(function (x) { return x.message; }));
       return { ok: false };
     }
+    return ncApplySession(j, emailHint);
+  }
+
+  async function ncApplySession(j, emailHint) {
     ncSetErrors([]);
     var email = j.email || emailHint || nc.email;
     nc.token = j.token; nc.feedToken = j.feedToken || null; nc.email = email;
@@ -7617,6 +7752,7 @@
       accountTourReplay('notary', $('notary-authed'));
       accountTour('notary');
     }
+    returnToSigningBeta();
     return { ok: true };
   }
 
@@ -9276,6 +9412,414 @@
     return strip;
   }
 
+  // The server prepares the work packet even without an AI analysis. This UI
+  // preserves the origin of each value and only copies drafts for review.
+  function ncFinancingWorkPacket(packet, active) {
+    var wrap = el('details', 'nc-financing-work-packet');
+    var title = 'Dossier de travail préparé par Nota';
+    var notice = 'Renseignements et brouillons à réviser par le notaire. Les déclarations du client et les propositions de l’IA restent à vérifier. Ce dossier de travail ne constitue pas une approbation juridique ni une autorisation de signer.';
+    wrap.appendChild(el('summary', null, T(title)));
+    wrap.appendChild(el('p', 'help', T(notice)));
+    var summary = [T(title), T(notice)];
+    function raw(tag, value) {
+      var node = el(tag, null, value == null ? '' : String(value));
+      node.setAttribute('data-i18n-skip', '');
+      return node;
+    }
+    function displayValue(item) {
+      if (window.NotaI18N && window.NotaI18N.lang() === 'en' && item.valueEn != null) return item.valueEn;
+      return item.valueIsLabel ? T(item.value) : item.value;
+    }
+    function section(label) {
+      var node = el('section');
+      node.appendChild(el('h4', 'nc-dossier-h', T(label)));
+      wrap.appendChild(node); summary.push('', T(label));
+      return node;
+    }
+    function line(parent, label, value, badge) {
+      var row = el('dl', 'nc-kv');
+      row.appendChild(el('dt', null, T(label)));
+      var content = el('dd'); content.appendChild(raw('span', value));
+      if (badge) {
+        content.appendChild(document.createTextNode(' '));
+        content.appendChild(el('span', 'pill', T(badge)));
+      }
+      row.appendChild(content); parent.appendChild(row);
+      summary.push(T(label) + ' : ' + String(value == null ? '' : value) + (badge ? ' [' + T(badge) + ']' : ''));
+    }
+    function note(parent, copy) {
+      parent.appendChild(el('p', 'help', T(copy))); summary.push(T(copy));
+    }
+    var sources = { customer: 'Déclaration du client', ai_proposal: 'Proposition de l’IA',
+      notary_accepted: 'Accepté par le notaire', notary_corrected: 'Corrigé par le notaire' };
+    var inventory = { missing: 'Document manquant', listed: 'Document déclaré', external: 'Transmis par un autre canal' };
+    var owners = { notary: 'Notaire', lender: 'Prêteur', registry: 'Registre' };
+    var context = section('Contexte fourni par le client');
+    (packet.customerContext || []).forEach(function (item) { line(context, item.label, displayValue(item), sources.customer); });
+    var documents = section('Inventaire des documents');
+    (packet.documentInventory || []).forEach(function (item) { line(documents, item.label, T(inventory[item.status] || 'État non précisé')); });
+    var fields = section('Valeurs préparées pour le dossier');
+    (packet.draftFields || []).forEach(function (field) {
+      var group = el('div', 'nc-work-packet-field');
+      line(group, field.label, displayValue(field), sources[field.source] || 'Source non précisée');
+      if (field.source === 'notary_corrected') {
+        line(group, 'Valeur d’origine dans le document', field.originalValue);
+        note(group, 'Les extraits appuient la valeur d’origine, pas la correction du notaire.');
+      }
+      (field.evidence || []).forEach(function (evidence) {
+        line(group, 'Identifiant du document', evidence.documentId);
+        line(group, 'Numéro de page', evidence.page);
+        group.appendChild(raw('blockquote', evidence.quote)); summary.push(String(evidence.quote));
+      });
+      fields.appendChild(group);
+    });
+    var missing = section('Renseignements et documents à obtenir');
+    if (!(packet.missing || []).length) note(missing, 'Aucun élément manquant signalé dans le dossier de travail.');
+    (packet.missing || []).forEach(function (item) {
+      missing.appendChild(el('p', null, T(item.label))); summary.push(T(item.label));
+      if (item.aide) note(missing, item.aide);
+    });
+    if ((packet.comparisons || []).length) {
+      var comparisons = section('Déclarations et documents à comparer');
+      note(comparisons, 'Des différences de format peuvent être signalées; comparez les sources avant de conclure.');
+      packet.comparisons.forEach(function (item) {
+        comparisons.appendChild(el('h5', null, T(item.label))); summary.push(T(item.label));
+        line(comparisons, 'Déclaration du client', item.customerValue);
+        (item.documentValues || []).forEach(function (value) { line(comparisons, 'Valeur relevée dans un document', value); });
+      });
+    }
+    if ((packet.dateFlags || []).length) {
+      var dates = section('Dates à examiner');
+      packet.dateFlags.forEach(function (flag) { note(dates, flag.label); });
+    }
+    var checks = section('Vérifications en attente');
+    (packet.checks || []).forEach(function (check) {
+      line(checks, check.label, T(owners[check.owner] || 'Responsable non précisé'), 'À vérifier');
+    });
+    // The target is an evaluation objective, not a completion percentage or
+    // evidence of time saved. Only a supplied review duration is shown.
+    if (packet.measurement && packet.measurement.reviewSeconds != null) {
+      line(checks, 'Temps de révision consigné (secondes)', packet.measurement.reviewSeconds);
+    }
+    function draftText(draft) {
+      var lines = [T('Brouillon à réviser par le notaire avant tout envoi.'), '', T(draft.opening)];
+      (draft.items || []).forEach(function (item) {
+        lines.push('- ' + T(item.label) + (item.value == null ? '' : ' : ' + String(displayValue(item))));
+        if (item.aide) lines.push('  ' + T(item.aide));
+      });
+      if ((draft.requirements || []).length) {
+        lines.push('', T('Éléments à confirmer avec le prêteur'));
+        draft.requirements.forEach(function (item) { lines.push('- ' + T(item.label)); });
+      }
+      lines.push('', T(draft.closing));
+      return lines.join('\n');
+    }
+    function copyBlock(label, buttonLabel, content) {
+      var disclosure = el('details', 'nc-work-packet-copy');
+      disclosure.appendChild(el('summary', null, T(label)));
+      var preview = el('textarea'); preview.readOnly = true; preview.rows = 8;
+      preview.setAttribute('aria-label', T(label)); preview.value = content;
+      preview.setAttribute('data-i18n-skip', '');
+      disclosure.appendChild(preview);
+      var button = el('button', 'btn btn-sm', T(buttonLabel)); button.type = 'button';
+      disclosure.appendChild(button);
+      var status = el('p', 'help'); status.setAttribute('role', 'status'); disclosure.appendChild(status);
+      button.addEventListener('click', async function () {
+        if (!active() || !wrap.isConnected || button.disabled) return;
+        button.disabled = true;
+        try {
+          if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') throw new Error('Clipboard unavailable');
+          await navigator.clipboard.writeText(preview.value);
+          if (active() && wrap.isConnected) status.textContent = T('Texte copié. Révisez-le avant de l’utiliser.');
+        } catch (error) {
+          if (active() && wrap.isConnected) {
+            disclosure.open = true;
+            preview.focus(); preview.select();
+            status.textContent = T('Copie automatique impossible. Le texte est sélectionné; copiez-le manuellement.');
+          }
+        } finally { button.disabled = false; }
+      });
+      wrap.appendChild(disclosure);
+    }
+    copyBlock('Résumé du dossier de travail', 'Copier le résumé du dossier', summary.join('\n'));
+    if (packet.clientRequestDraft) {
+      copyBlock('Brouillon pour le client', 'Copier le brouillon pour le client', draftText(packet.clientRequestDraft));
+    } else wrap.appendChild(el('p', 'help', T('Aucun élément à demander au client dans ce dossier de travail.')));
+    if (packet.lenderRequestDraft) {
+      copyBlock('Brouillon pour le prêteur', 'Copier le brouillon pour le prêteur', draftText(packet.lenderRequestDraft));
+    }
+    return wrap;
+  }
+
+  function ncDisposeFinancingAI() {
+    document.querySelectorAll('.nc-financing-ai').forEach(function (panel) {
+      panel.dispatchEvent(new Event('nota:financing-ai-dispose'));
+    });
+  }
+
+  // Source text and AI proposals stay in this disclosure's memory. Only the
+  // authenticated API persists analyses/reviews; opening a card never runs AI.
+  function ncFinancingAIBlock(entry) {
+    var wrap = el('details', 'nc-financing-ai');
+    wrap.appendChild(el('summary', null, 'Dossier de travail et analyse assistée'));
+    wrap.appendChild(el('div', 'nc-dossier-h', 'Analyse assistée des documents'));
+    wrap.appendChild(el('p', 'help', 'Collez le texte d’une page de document. La reconnaissance optique de caractères (OCR) n’est pas encore offerte. Les références de document et de page sont fournies par le notaire.'));
+    wrap.appendChild(el('p', 'help', 'L’IA produit seulement des propositions appuyées par des extraits. Le notaire doit vérifier les sources; aucune proposition ne constitue une conclusion juridique ni une autorisation de signer.'));
+    wrap.appendChild(el('p', 'help', 'Un texte inchangé peut réutiliser l’analyse et sa révision. Une nouvelle analyse remplace les précédentes. Une révision enregistrée ne peut pas être modifiée.'));
+    var sourceForm = el('form');
+    var sourceControls = el('fieldset');
+    sourceControls.appendChild(el('legend', null, 'Page à analyser'));
+    function input(parent, label, name, tag, type) {
+      var row = el('label', 'field');
+      row.appendChild(el('span', null, T(label)));
+      var control = el(tag || 'input');
+      control.name = name;
+      if (type) control.type = type;
+      row.appendChild(control); parent.appendChild(row);
+      return control;
+    }
+    // Values and evidence must remain verbatim, including when the DOM's
+    // English translator is active. Build these nodes before attaching them.
+    function raw(tag, value) {
+      var node = el(tag, null, value == null ? '' : String(value));
+      node.setAttribute('data-i18n-skip', '');
+      return node;
+    }
+    function fieldLabel(id) {
+      var field = D.FINANCING_AI_FIELDS.find(function (item) { return item.id === id; });
+      return field ? el('span', null, T(field.label)) : raw('span', id);
+    }
+    function message(node, copy, error) {
+      node.setAttribute('role', error ? 'alert' : 'status');
+      node.textContent = T(copy);
+    }
+    function failure(node, status, fallback, body) {
+      var code = body && Array.isArray(body.errors) && body.errors[0] && body.errors[0].code;
+      var copy = status === 503 && ['financing_ai_disabled', 'financing_ai_unavailable'].includes(code)
+        ? 'Analyse IA indisponible : le fournisseur est désactivé ou indisponible. Aucune nouvelle analyse n’a été produite.'
+        : code === 'financing_ai_invalid_output'
+          ? 'L’analyse IA reçue n’a pas pu être validée. Aucune nouvelle proposition n’a été enregistrée.'
+          : code === 'autorisation_traitement_requise'
+            ? 'Confirmez votre autorisation de transmettre ce document avant de relancer l’analyse IA.'
+            : fallback;
+      if (code === 'autorisation_traitement_requise') consent.checked = false;
+      message(node, copy, true);
+    }
+    var documentId = input(sourceControls, 'Identifiant du document', 'documentId', 'input', 'text');
+    documentId.value = 'manual-1'; documentId.required = true;
+    var page = input(sourceControls, 'Numéro de page', 'page', 'input', 'number');
+    page.min = '1'; page.step = '1'; page.value = '1'; page.required = true;
+    var text = input(sourceControls, 'Texte de la page', 'text', 'textarea');
+    text.rows = 6; text.required = true; text.maxLength = D.FINANCING_AI_LIMITS.maxPageChars;
+    var consentLabel = el('label', 'check-line');
+    var consent = el('input'); consent.type = 'checkbox'; consent.name = 'processingAuthorized'; consent.required = true;
+    consentLabel.appendChild(consent);
+    consentLabel.appendChild(el('span', null, 'Je confirme être autorisé à transmettre ce document au fournisseur d’IA configuré, sans utilisation pour l’entraînement des modèles.'));
+    sourceControls.appendChild(consentLabel);
+    var analyze = el('button', 'btn btn-sm btn-primary', 'Analyser cette page avec l’IA'); analyze.type = 'submit';
+    sourceControls.appendChild(analyze);
+    sourceForm.appendChild(sourceControls);
+    var packetResults = el('div', 'nc-financing-work-packet-slot'); wrap.insertBefore(packetResults, wrap.children[1]);
+    wrap.appendChild(sourceForm);
+    var status = el('p', 'help'); status.setAttribute('role', 'status'); wrap.appendChild(status);
+    var results = el('div', 'nc-financing-ai-results'); wrap.appendChild(results);
+    var loaded = false, busy = false, reviewControls = null, reviewRecorded = false, disposed = false;
+    var sessionToken = nc.token;
+    function active() { return !disposed && wrap.isConnected && nc.token === sessionToken; }
+    function lock(value) {
+      busy = value;
+      sourceControls.disabled = value || !loaded || disposed;
+      if (reviewControls) reviewControls.disabled = value || reviewRecorded || disposed;
+      wrap.setAttribute('aria-busy', String(value));
+    }
+    function renderWorkPacket(packet) {
+      var wasOpen = packetResults.firstElementChild && packetResults.firstElementChild.open;
+      packetResults.querySelectorAll('textarea').forEach(function (preview) { preview.value = ''; });
+      clear(packetResults);
+      if (packet) {
+        var panel = ncFinancingWorkPacket(packet, active); panel.open = !!wasOpen;
+        packetResults.appendChild(panel);
+      }
+    }
+    wrap.addEventListener('nota:financing-ai-dispose', function () {
+      disposed = true;
+      text.value = ''; documentId.value = ''; page.value = ''; consent.checked = false;
+      clear(results); clear(status); renderWorkPacket(null);
+      lock(false);
+    });
+    lock(false);
+    [documentId, page, text].forEach(function (control) {
+      control.addEventListener('input', function () { consent.checked = false; });
+    });
+
+    function render(analysis) {
+      clear(results); reviewControls = null; reviewRecorded = !!(analysis && analysis.review);
+      if (!analysis) {
+        results.appendChild(el('p', 'help', 'Aucune analyse enregistrée pour ce dossier. Coller du texte ne lance pas l’IA.'));
+        return;
+      }
+      results.appendChild(el('p', 'help', 'Propositions à vérifier par le notaire'));
+      var preparation = analysis.preparation;
+      function list(label, ids, empty) {
+        results.appendChild(el('div', 'nc-dossier-h', T(label)));
+        if (!ids.length) { results.appendChild(el('p', 'help', T(empty))); return; }
+        var items = el('ul');
+        ids.forEach(function (id) { var item = el('li'); item.appendChild(fieldLabel(id)); items.appendChild(item); });
+        results.appendChild(items);
+      }
+      list('Champs non trouvés dans les pages analysées', preparation.missing, 'Aucun champ signalé comme manquant.');
+      list('Contradictions à examiner', preparation.conflicts, 'Aucune contradiction signalée.');
+      var provenance = el('details'); provenance.appendChild(el('summary', null, 'Provenance de l’analyse'));
+      var metadata = el('dl', 'nc-kv');
+      function meta(label, value) { metadata.appendChild(el('dt', null, T(label))); metadata.appendChild(raw('dd', value)); }
+      meta('Identifiant de l’analyse', analysis.id);
+      meta('Date de l’analyse', analysis.createdAt);
+      meta('Modèle', analysis.provenance.model);
+      meta('Empreinte des instructions (SHA-256)', analysis.provenance.promptSha256);
+      meta('Empreinte des données (SHA-256)', analysis.provenance.inputSha256);
+      meta('Version des connaissances', analysis.provenance.knowledgeVersion);
+      provenance.appendChild(metadata); results.appendChild(provenance);
+      if (!preparation.fields.length) {
+        results.appendChild(el('p', 'help', 'Aucune proposition extraite. Vérifiez les documents et les champs manquants.'));
+        return;
+      }
+      var form = el('form', 'nc-financing-ai-review');
+      var controls = el('fieldset'); reviewControls = controls;
+      controls.appendChild(el('legend', null, 'Révision des propositions'));
+      var saved = analysis.review || {};
+      var rows = preparation.fields.map(function (field, index) {
+        var group = el('fieldset');
+        var legend = el('legend'); legend.appendChild(fieldLabel(field.fieldId)); group.appendChild(legend);
+        group.appendChild(el('p', 'help', 'Valeur proposée'));
+        group.appendChild(raw('p', field.value));
+        field.evidence.forEach(function (evidence) {
+          var reference = el('dl', 'nc-kv');
+          reference.appendChild(el('dt', null, 'Identifiant du document')); reference.appendChild(raw('dd', evidence.documentId));
+          reference.appendChild(el('dt', null, 'Numéro de page')); reference.appendChild(raw('dd', evidence.page));
+          group.appendChild(reference);
+          group.appendChild(raw('blockquote', evidence.quote));
+        });
+        var decision = input(group, 'Décision du notaire', 'decision-' + index, 'select');
+        [['', 'Choisir une décision'], ['accepted', 'Accepter la proposition'], ['corrected', 'Corriger la proposition'], ['rejected', 'Rejeter la proposition']].forEach(function (option) {
+          var item = el('option', null, T(option[1])); item.value = option[0]; decision.appendChild(item);
+        });
+        decision.required = true;
+        var value = input(group, 'Valeur corrigée', 'value-' + index, 'textarea');
+        value.rows = 2; value.maxLength = D.FINANCING_AI_LIMITS.maxValueChars;
+        var reason = input(group, 'Motif de la correction ou du rejet', 'reason-' + index, 'textarea');
+        reason.rows = 2; reason.maxLength = D.FINANCING_AI_LIMITS.maxReasonChars;
+        var previous = (saved.decisions || []).find(function (item) { return item.index === index; });
+        decision.value = previous ? previous.decision : '';
+        value.value = previous && previous.decision === 'corrected' ? previous.value : field.value;
+        reason.value = previous && previous.reason || '';
+        function sync() {
+          var corrected = decision.value === 'corrected', explained = corrected || decision.value === 'rejected';
+          value.disabled = !corrected; value.required = corrected; value.parentNode.hidden = !corrected;
+          reason.disabled = !explained; reason.required = explained; reason.parentNode.hidden = !explained;
+        }
+        decision.addEventListener('change', sync); sync();
+        controls.appendChild(group);
+        return { decision: decision, value: value, reason: reason };
+      });
+      var seconds = input(controls, 'Temps de révision active en secondes (facultatif)', 'activeReviewSeconds', 'input', 'number');
+      seconds.min = '0'; seconds.step = '1'; seconds.max = String(D.FINANCING_AI_LIMITS.maxReviewSeconds);
+      seconds.value = saved.activeReviewSeconds == null ? '' : String(saved.activeReviewSeconds);
+      var save = el('button', 'btn btn-sm btn-primary', 'Enregistrer la révision'); save.type = 'submit'; controls.appendChild(save);
+      save.hidden = reviewRecorded;
+      form.appendChild(controls);
+      var reviewStatus = el('p', 'help'); reviewStatus.setAttribute('role', 'status'); form.appendChild(reviewStatus);
+      var recorded = 'Révision enregistrée pour ce dossier. Elle ne sert pas à l’entraînement des modèles et ne constitue pas une approbation juridique.';
+      if (analysis.review) message(reviewStatus, recorded);
+      form.addEventListener('input', function () { message(reviewStatus, 'Modifications non enregistrées.'); });
+      form.addEventListener('change', function () { message(reviewStatus, 'Modifications non enregistrées.'); });
+      form.addEventListener('submit', async function (event) {
+        event.preventDefault();
+        if (!active() || busy || reviewRecorded) return;
+        var elapsed = seconds.value === '' ? null : Number(seconds.value);
+        if (!form.reportValidity() || (elapsed !== null && (!Number.isSafeInteger(elapsed) || elapsed < 0)) || rows.some(function (row) {
+          return !row.decision.value || (row.decision.value === 'corrected' && !row.value.value.trim()) ||
+            (['corrected', 'rejected'].includes(row.decision.value) && !row.reason.value.trim());
+        })) { message(reviewStatus, 'Choisissez une décision pour chaque proposition et complétez les corrections, les motifs et le temps, s’il est indiqué.', true); return; }
+        var decisions = rows.map(function (row, index) {
+          var item = { index: index, decision: row.decision.value };
+          if (item.decision === 'corrected') item.value = row.value.value;
+          if (item.decision === 'corrected' || item.decision === 'rejected') item.reason = row.reason.value;
+          return item;
+        });
+        lock(true); message(reviewStatus, 'Enregistrement de la révision…');
+        try {
+          var response = await ncPost('/notary/financing/review', {
+            id: entry.id, dateISO: entry.dateISO, analysisId: analysis.id, decisions: decisions, activeReviewSeconds: elapsed,
+          });
+          if (!active()) return;
+          if (response && response.status === 409) {
+            reviewRecorded = true; loaded = false; save.hidden = true;
+            message(reviewStatus, 'L’analyse ou sa révision a changé. Fermez ce panneau et rouvrez-le pour charger la version enregistrée.', true); return;
+          }
+          if (!response || response.status < 200 || response.status >= 300 || !response.json.ok || !response.json.review) {
+            message(reviewStatus, 'Impossible d’enregistrer la révision. Vos décisions restent à l’écran; réessayez.', true); return;
+          }
+          analysis.review = response.json.review;
+          renderWorkPacket(response.json.workPacket);
+          reviewRecorded = true; save.hidden = true;
+          message(reviewStatus, recorded);
+        } finally { lock(false); }
+      });
+      results.appendChild(form);
+    }
+
+    wrap.addEventListener('toggle', async function (event) {
+      if (event.target !== wrap || disposed || !wrap.open || loaded || busy) return;
+      if (!nc.token) { ncExpire('Session expirée. Reconnectez-vous.'); return; }
+      if (!active()) return;
+      lock(true); message(status, 'Chargement de l’analyse enregistrée…');
+      try {
+        var response = await fetch(API_BASE + '/notary/financing/preparation?id=' + encodeURIComponent(entry.id) + '&dateISO=' + encodeURIComponent(entry.dateISO), {
+          headers: { authorization: 'Bearer ' + nc.token },
+        });
+        if (!active()) return;
+        if (response.status === 401) { ncExpire('Session expirée. Reconnectez-vous.'); return; }
+        var body = await response.json();
+        if (!active()) return;
+        renderWorkPacket(body.workPacket);
+        if (!response.ok) {
+          failure(status, response.status, 'Impossible de charger l’analyse. Fermez ce panneau et rouvrez-le pour réessayer.', body); return;
+        }
+        render(body.analysis); loaded = true; message(status, '');
+      } catch (error) {
+        if (active()) message(status, 'Impossible de charger l’analyse. Fermez ce panneau et rouvrez-le pour réessayer.', true);
+      } finally { lock(false); }
+    });
+    sourceForm.addEventListener('submit', async function (event) {
+      event.preventDefault();
+      if (!active() || busy || !loaded) return;
+      if (!consent.checked || !sourceForm.reportValidity() || !documentId.value.trim() || !Number.isSafeInteger(Number(page.value)) || Number(page.value) < 1 || !text.value.trim()) {
+        message(status, 'Indiquez le document, une page valide et son texte, puis confirmez votre autorisation de transmission.', true); return;
+      }
+      lock(true); message(status, 'Analyse IA en cours…');
+      try {
+        var response = await ncPost('/notary/financing/preparation', {
+          id: entry.id, dateISO: entry.dateISO,
+          pages: [{ documentId: documentId.value, page: Number(page.value), text: text.value }], processingAuthorized: true,
+        });
+        if (!active()) return;
+        if (!response || response.status < 200 || response.status >= 300 || !response.json.ok || !response.json.analysis) {
+          if (response && Object.prototype.hasOwnProperty.call(response.json, 'workPacket')) renderWorkPacket(response.json.workPacket);
+          failure(status, response && response.status, 'Impossible d’obtenir une analyse IA. Aucune nouvelle proposition n’est disponible; réessayez.', response && response.json); return;
+        }
+        text.value = ''; consent.checked = false;
+        renderWorkPacket(response.json.workPacket);
+        render(response.json.analysis);
+        message(status, response.json.reused
+          ? 'Analyse existante réutilisée. Aucun nouvel appel d’IA pour cette demande; la révision enregistrée est conservée.'
+          : 'Analyse enregistrée. Vérifiez chaque proposition et son extrait avant de choisir une décision.');
+      } catch (error) {
+        if (active()) message(status, 'Impossible d’obtenir une analyse IA. Aucune nouvelle proposition n’est disponible; réessayez.', true);
+      } finally { lock(false); }
+    });
+    return wrap;
+  }
+
   function ncDossierBlock(entry) {
     var wrap = el('div', 'nc-dossier');
     wrap.appendChild(el('div', 'nc-dossier-h', 'Dossier du client'));
@@ -9298,6 +9842,28 @@
     }
     kv('Consentement de partage', d.__consent ? 'Oui' : 'Non');
     wrap.appendChild(rows);
+    var preparation = D.financingPreparation(entry.serviceId, d, entry.pricing);
+    if (preparation) {
+      var brief = el('details', 'nc-preparation');
+      brief.appendChild(el('summary', null, 'Préparation du financement'));
+      brief.appendChild(el('p', 'help', 'Renseignements déclarés seulement. Les documents et les conditions de signature restent à vérifier.'));
+      brief.appendChild(el('div', 'nc-dossier-h', 'Renseignements à compléter'));
+      if (!preparation.missing.length) brief.appendChild(el('p', 'help', 'Chaque élément est déclaré; la vérification du dossier reste à faire.'));
+      var missing = el('ul');
+      preparation.missing.forEach(function (item) {
+        var li = el('li');
+        li.appendChild(el('strong', null, item.nom));
+        if (item.aide) li.appendChild(el('p', 'help', item.aide));
+        missing.appendChild(li);
+      });
+      brief.appendChild(missing);
+      brief.appendChild(el('div', 'nc-dossier-h', 'Vérifications du notaire et du prêteur'));
+      var checks = el('ul');
+      preparation.checks.forEach(function (check) { checks.appendChild(el('li', null, check.texte)); });
+      brief.appendChild(checks);
+      brief.appendChild(ncFinancingAIBlock(entry));
+      wrap.appendChild(brief);
+    }
     return wrap;
   }
 
@@ -9513,6 +10079,7 @@
     docs.setAttribute('aria-expanded', 'false');
     more.appendChild(docs);
     more.appendChild(ncAgendaMenu(entry));
+    if (!entry.completed) more.appendChild(signingBetaLink(entry, 'notary'));
     card.appendChild(more);
     card.appendChild(ncCompleteBlock(entry));
     // Withdrawing stays possible until the act completes: a surfaced detail
@@ -10107,6 +10674,7 @@
 
   function ncRenderRetained() {
     var list = $('notary-retained-list'); if (!list) return;
+    ncDisposeFinancingAI();
     // A repaint can land mid-sentence (the poll, a document, a sent message):
     // carry every draft — and the focus — across it, so the notary never
     // loses a word to a refresh (ADR 0033).
@@ -12266,6 +12834,9 @@
     });
     $('ig-enter').addEventListener('click', function () { igDismiss(null, true); });
     $('ig-skip').addEventListener('click', function () { igDismiss($('ig-skip').dataset.tab || null, true); });
+    gate.querySelectorAll('[data-ig-goto]').forEach(function (button) {
+      button.addEventListener('click', function () { igDismiss(button.dataset.igGoto, true); });
+    });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !gate.hidden) igDismiss(null, true); });
     driftBuild(gate, 'ig-bg');
     gate.hidden = false;
@@ -12305,7 +12876,17 @@
   var CHAT_ESCALADE_TEXT = 'Cette question part à une personne — laissez votre courriel pour recevoir la réponse.';
   var chatPollTimer = null, chatPollMs = 0;
   var chatReplyTimer = null, chatReplyMs = 0;
-  var chatSending = false;
+  var chatSending = false, chatRefreshing = false, chatReadVersion = 0;
+  var chatPollFailures = 0, chatAttempt = 0, chatOpener = null;
+  // Unconfirmed attempts retain their exact body and stable deduplication ID.
+  // A first request also has a temporary random recovery secret, kept only in
+  // memory and erased as soon as the server confirms its conversation token.
+  var chatUnconfirmed = [], chatRetryAttempt = null;
+  var chatReplySending = false, chatReplyRefreshing = false;
+  var chatReplyAttempts = [], chatReplyDrafts = Object.create(null);
+  var chatMailSaving = false, chatMailEdited = false;
+  function chatCanPoll() { return !document.hidden && navigator.onLine !== false; }
+
 
   function chatSession() { return lsLoad(LS_SUPPORT) || null; }
   function chatSessionPatch(patch) {
@@ -12319,11 +12900,24 @@
     opts = opts || {};
     var headers = { 'content-type': 'application/json' };
     if (opts.token) headers.authorization = 'Bearer ' + opts.token;
-    return fetch(API_BASE + path, {
-      method: opts.method || 'GET',
-      headers: headers,
-      body: opts.body ? JSON.stringify(opts.body) : undefined,
-    }).then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { status: r.status, json: j }; }); });
+    var controller = typeof AbortController === 'function' ? new AbortController() : null;
+    var timer;
+    // Include JSON decoding in the deadline. Never retry an uncertain POST:
+    // the server may have accepted it even if its response was lost.
+    var deadline = new Promise(function (_, reject) {
+      timer = setTimeout(function () {
+        if (controller) controller.abort();
+        reject(new Error('support_timeout'));
+      }, opts.method === 'POST' ? 45000 : 12000);
+    });
+    var request = Promise.resolve().then(function () {
+      return fetch(API_BASE + path, {
+        method: opts.method || 'GET', headers: headers,
+        signal: controller ? controller.signal : undefined,
+        body: opts.body ? JSON.stringify(opts.body) : undefined,
+      });
+    }).then(function (r) { return r.json().then(function (j) { return { status: r.status, json: j }; }); });
+    return Promise.race([request, deadline]).finally(function () { clearTimeout(timer); });
   }
 
   // --- Time ------------------------------------------------------------------
@@ -12420,25 +13014,56 @@
   // depuis le domaine, jamais écrites dans le markup — et il montre
   // explicitement qu'il réfléchit pendant qu'il réfléchit.
   function chatSuggestBuild() {
+    var topics = $('chat-topic-list');
+    if (topics && !topics.childNodes.length) {
+      var topicLang = /^en/.test(LOCALE) ? 'en' : 'fr';
+      (D.SUPPORT_TOPICS || []).forEach(function (topic) {
+        var button = el('button', 'sup-chip', topic[topicLang]);
+        button.type = 'button';
+        button.dataset.topic = topic.id;
+        button.dataset.search = (topic[topicLang] + ' ' + topic.id).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        button.addEventListener('click', function () {
+          // Selecting a topic prepares a question; preserve an unfinished draft.
+          var input = $('chat-text');
+          if (!input || chatSending) return;
+          if (!input.value.trim()) input.value = topic[topicLang];
+          $('chat-topics').open = false;
+          chatAutoGrow(input); chatCount(); input.focus();
+        });
+        topics.appendChild(button);
+      });
+    }
     var box = $('chat-suggest');
     if (!box || box.childNodes.length) return;
     var lang = /^en/.test(LOCALE) ? 'en' : 'fr';
-    (D.SUPPORT_QUESTIONS_SUGGEREES || []).forEach(function (q) {
+    (D.SUPPORT_QUESTIONS_SUGGEREES || []).slice(0, 4).forEach(function (q) {
       var b = el('button', 'sup-chip', q[lang] || q.fr);
-      b.type = 'button';
-      b.dataset.q = q.id;
+      b.type = 'button'; b.dataset.q = q.id;
       b.addEventListener('click', function () {
         var ta = $('chat-text');
-        if (ta) { ta.value = q[lang] || q.fr; chatAutoGrow(ta); chatCount(); }
+        if (!ta || chatSending) return;
+        if (ta.value.trim()) { ta.focus(); return; }
+        ta.value = q[lang] || q.fr; chatAutoGrow(ta); chatCount();
         chatSend();
       });
       box.appendChild(b);
     });
   }
+  function chatFilterTopics() {
+    var search = $('chat-topic-search'), list = $('chat-topic-list');
+    if (!search || !list) return;
+    var query = search.value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    var words = query.split(/\s+/).filter(Boolean), visible = 0;
+    Array.prototype.forEach.call(list.children, function (button) {
+      button.hidden = !words.every(function (word) { return button.dataset.search.indexOf(word) !== -1; });
+      if (!button.hidden) visible++;
+    });
+    var empty = $('chat-topic-empty'); if (empty) empty.hidden = visible > 0;
+  }
   function chatSuggestShow(on) {
+    chatSuggestBuild();
     var box = $('chat-suggest');
     if (!box) return;
-    if (on) chatSuggestBuild();
     // Une fois la conversation commencée, les amorces ne reviennent jamais.
     box.hidden = !on || !box.childNodes.length;
   }
@@ -12476,7 +13101,7 @@
   // --- Unread ----------------------------------------------------------------
   function chatUnreadCount(messages, seenAt) {
     var n = 0;
-    messages.forEach(function (m) { if (m.de === D.SUPPORT_FROM.NOTA && chatNewer(m.createdAt, seenAt)) n++; });
+    messages.forEach(function (m) { if ((m.de === D.SUPPORT_FROM.NOTA || m.de === D.SUPPORT_FROM.ASSISTANT) && chatNewer(m.createdAt, seenAt)) n++; });
     return n;
   }
   function chatSetUnread(n) {
@@ -12504,21 +13129,24 @@
     var open = panel && !panel.hidden;
     var s = chatSession();
     var ms = 0;
-    if (s && s.token) {
+    if (s && s.token && chatCanPoll()) {
       if (open) ms = CHAT_POLL_MS;
       else {
         var last = chatTs(s.lastAt);
         if (last == null || Date.now() - last < CHAT_IDLE_MAX_MS) ms = CHAT_IDLE_POLL_MS;
       }
     }
+    if (ms && chatPollFailures) ms = Math.min(120000, ms * Math.pow(2, chatPollFailures));
     if (ms === chatPollMs && !!chatPollTimer === !!ms) return;
     if (chatPollTimer) { clearInterval(chatPollTimer); chatPollTimer = null; }
+    chatMailControls();
     chatPollMs = ms;
     if (ms) chatPollTimer = setInterval(chatRefresh, ms);
   }
   // The server forgot the thread (stale token, expired, purged): say so in
   // place — the bubbles stay, the next message starts fresh.
   function chatEnded() {
+    chatReadVersion++;
     chatForget();
     chatSetUnread(0);
     var ended = $('chat-ended'); if (ended) ended.hidden = false;
@@ -12526,22 +13154,39 @@
   }
   async function chatRefresh() {
     var s = chatSession();
-    if (!s || !s.token) { chatSchedule(); return; }
-    var res = await chatApi('/support/thread', { token: s.token }).catch(function () { return null; });
-    if (!res) return;
-    if (res.status === 401 || res.status === 404) { chatEnded(); return; }
-    if (res.status !== 200) return;
-    var messages = res.json.messages || [];
-    var panel = $('chat-panel');
-    var open = panel && !panel.hidden;
-    chatRenderMessages($('chat-log'), messages, D.SUPPORT_FROM.VISITEUR);
-    var lastAt = chatLastAt(messages);
-    var patch = {};
-    if (lastAt) patch.lastAt = lastAt;
-    if (open) { if (lastAt) patch.seenAt = lastAt; chatSetUnread(0); }
-    else chatSetUnread(chatUnreadCount(messages, s.seenAt));
-    if (Object.keys(patch).length) chatSessionPatch(patch);
-    chatSchedule();
+    if (!s || !s.token || !chatCanPoll()) { chatSchedule(); return; }
+    if (chatRefreshing || chatSending || chatMailSaving) return;
+    chatRefreshing = true;
+    var version = chatReadVersion;
+    try {
+      var res = await chatApi('/support/thread', { token: s.token }).catch(function () { return null; });
+      var current = chatSession();
+      // An old poll must never erase a renewed token or overwrite a new send.
+      if (!current || current.token !== s.token || version !== chatReadVersion) return;
+      if (res && (res.status === 401 || res.status === 404)) { chatEnded(); return; }
+      if (!res || res.status !== 200 || !res.json || !Array.isArray(res.json.messages)) {
+        chatPollFailures = Math.min(4, chatPollFailures + 1); return;
+      }
+      chatPollFailures = 0;
+      var messages = res.json.messages;
+      var panel = $('chat-panel');
+      var open = panel && !panel.hidden && !document.hidden;
+      chatRenderMessages($('chat-log'), messages, D.SUPPORT_FROM.VISITEUR);
+      if (typeof res.json.escalade === 'boolean') chatEscalade(res.json.escalade);
+      if (typeof res.json.escalade === 'boolean') chatSessionPatch({ escalade: res.json.escalade, humain: !!res.json.humain });
+      if (res.json.courriel && !chatMailEdited && $('chat-courriel')) $('chat-courriel').value = res.json.courriel;
+      var lastAt = chatLastAt(messages);
+      var patch = {};
+      if (lastAt && chatNewer(lastAt, current.lastAt)) patch.lastAt = lastAt;
+      if (open) {
+        if (lastAt && chatNewer(lastAt, current.seenAt)) patch.seenAt = lastAt;
+        chatSetUnread(0);
+      } else chatSetUnread(chatUnreadCount(messages, current.seenAt));
+      if (Object.keys(patch).length) chatSessionPatch(patch);
+    } finally {
+      chatRefreshing = false;
+      chatSchedule();
+    }
   }
 
   function chatToggle(open, opts) {
@@ -12549,6 +13194,7 @@
     var panel = $('chat-panel'), fab = $('chat-fab');
     if (!panel || !fab) return;
     var show = open != null ? open : panel.hidden;
+    if (show && panel.hidden) chatOpener = opts.opener || document.activeElement;
     panel.hidden = !show;
     fab.setAttribute('aria-expanded', show ? 'true' : 'false');
     flagSet(LS_SUPPORT_OPEN, show ? '1' : '0');
@@ -12559,11 +13205,14 @@
       chatSetUnread(0);
       var log = $('chat-log');
       if (log && !log.querySelector('.sup-msg')) chatRenderMessages(log, [], D.SUPPORT_FROM.VISITEUR);
-      chatRefresh();
+      if (!opts.noRefresh) chatRefresh();
       if (!opts.noFocus) { var inp = $('chat-text'); if (inp) { try { inp.focus(); } catch (e) {} } }
     } else {
       // Closing hands focus back to the door it came from.
-      try { fab.focus(); } catch (e) {}
+      var target = chatOpener && chatOpener !== document.body && !panel.contains(chatOpener) &&
+        !chatOpener.closest('[hidden]') ? chatOpener : fab;
+      if (typeof matchMedia === 'function' && matchMedia('(max-width: 767px)').matches) target = $('nav-burger') || target;
+      try { target.focus(); } catch (e) {}
     }
     chatSchedule();
   }
@@ -12595,14 +13244,50 @@
       var inp = $('chat-courriel'); if (inp) { try { inp.focus(); } catch (e) {} }
     }
   }
+  function chatMailControls() {
+    var save = $('chat-courriel-save'), s = chatSession();
+    if (!save) return;
+    save.hidden = !(s && s.token);
+    save.disabled = chatMailSaving || chatSending;
+  }
+  async function chatSaveEmail() {
+    if (chatMailSaving || chatSending) return;
+    var s = chatSession(), inp = $('chat-courriel'), note = $('chat-courriel-status');
+    if (!s || !s.token || !inp || !note) return;
+    var courriel = inp.value.trim().toLowerCase();
+    note.hidden = false;
+    if (!D.isEmail(courriel)) { note.textContent = 'Le courriel n’est pas valide.'; inp.focus(); return; }
+    chatMailSaving = true; chatReadVersion++; chatMailControls();
+    note.textContent = 'Enregistrement…';
+    var res = await chatApi('/support/thread', { method: 'PATCH', token: s.token, body: { courriel: courriel } }).catch(function () { return null; });
+    chatMailSaving = false; chatMailControls();
+    var current = chatSession();
+    if (!current || current.threadId !== s.threadId) return;
+    note.textContent = res && res.status === 200
+      ? 'Courriel enregistré pour cette conversation.'
+      : 'Courriel non enregistré. Réessayez avant de quitter.';
+    if (res && res.status === 200 && inp.value.trim().toLowerCase() === courriel) chatMailEdited = false;
+  }
   function chatSendingState(on) {
     chatSending = on;
+    chatMailControls();
     var send = $('chat-send'); if (!send) return;
     send.disabled = on;
     send.textContent = on ? 'Envoi…' : 'Envoyer';
   }
+  function chatFreshLog(log, pendingId) {
+    if (!log) return;
+    Array.prototype.slice.call(log.children).forEach(function (row) {
+      if (row.dataset.delivery !== 'unconfirmed' && row.dataset.id !== pendingId) row.remove();
+    });
+  }
+  function chatRandomKey(bytes) {
+    var values = new Uint8Array(bytes);
+    window.crypto.getRandomValues(values);
+    return btoa(String.fromCharCode.apply(null, values)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
   async function chatSend() {
-    if (chatSending) return;
+    if (chatSending || chatMailSaving) return;
     var text = $('chat-text'), err = $('chat-error'), courrielInp = $('chat-courriel');
     var texte = (text && text.value || '').trim();
     var courriel = (courrielInp && courrielInp.value || '').trim();
@@ -12614,42 +13299,86 @@
       return;
     }
     chatSendingState(true);
+    chatReadVersion++;
     var s = chatSession();
-    var body = { texte: v.texte };
-    if (v.courriel) body.courriel = v.courriel;
+    var attempt = chatRetryAttempt && chatRetryAttempt.body.texte === v.texte ? chatRetryAttempt : null;
+    if (!attempt) attempt = chatUnconfirmed.find(function (entry) {
+      return entry.body.texte === v.texte && entry.threadId === ((s && s.threadId) || null);
+    });
+    if (!attempt) {
+      attempt = { body: { texte: v.texte, messageId: 'visitor-' + chatRandomKey(18) }, token: (s && s.token) || null, threadId: (s && s.threadId) || null };
+      if (v.courriel) attempt.body.courriel = v.courriel;
+      if (!attempt.token) attempt.body.requestKey = chatRandomKey(32);
+      attempt.body.locale = /^en/.test(LOCALE) ? 'en' : 'fr';
+      chatUnconfirmed.push(attempt);
+    }
+    chatRetryAttempt = null;
+    var body = attempt.body;
+    if (s && attempt.threadId !== s.threadId) s = null;
     // La langue voyage avec la question : l'assistant répond dans celle du
     // visiteur, et le serveur ne peut pas la deviner autrement.
-    body.locale = /^en/.test(LOCALE) ? 'en' : 'fr';
     // L'écho local d'abord, PUIS le témoin d'écriture : l'assistant prend
     // quelques secondes, et un envoi qui semble tomber dans le vide est la
     // raison pour laquelle cette messagerie paraissait cassée.
     var logNow = $('chat-log');
-    if (logNow && !(s && s.token)) clear(logNow);
+    if (logNow && !attempt.token) chatFreshLog(logNow);
+    if (logNow && attempt.localId) {
+      var previousEcho = logNow.querySelector('[data-id="' + attempt.localId + '"]');
+      if (previousEcho) previousEcho.remove();
+    }
     chatSuggestShow(false);
-    chatEscalade(false);
+    var pendingId = 'local-' + (++chatAttempt);
+    attempt.localId = pendingId;
     if (logNow) {
-      chatRenderMessages(logNow, [{ id: 'local-' + Date.now(), de: D.SUPPORT_FROM.VISITEUR, texte: v.texte, createdAt: new Date().toISOString() }], D.SUPPORT_FROM.VISITEUR);
+      chatRenderMessages(logNow, [{ id: pendingId, de: D.SUPPORT_FROM.VISITEUR, texte: v.texte, createdAt: new Date().toISOString() }], D.SUPPORT_FROM.VISITEUR);
     }
     if (text) { text.value = ''; chatAutoGrow(text); chatCount(); }
-    chatTyping(true);
-    var res = await chatApi('/support/messages', { method: 'POST', token: s && s.token, body: body }).catch(function () { return null; });
+    if (!(s && (s.escalade || s.humain))) chatTyping(true);
+    var res = await chatApi('/support/messages', { method: 'POST', token: attempt.token, body: body }).catch(function () { return null; });
     // A dead token never loses the message: forget it and mint a fresh thread.
-    if (res && (res.status === 401 || res.status === 404) && s) {
+    if (res && (res.status === 401 || res.status === 404) && attempt.token) {
       chatForget(); s = null;
+      attempt.token = null; attempt.threadId = null;
+      if (!body.requestKey) body.requestKey = chatRandomKey(32);
+      chatFreshLog(logNow, pendingId);
       res = await chatApi('/support/messages', { method: 'POST', body: body }).catch(function () { return null; });
     }
     chatSendingState(false);
     chatTyping(false);
-    if (!res || res.status !== 201) {
+    if (!res || res.status !== 201 || !res.json || !res.json.token || !res.json.threadId || !res.json.message) {
+      var pending = logNow && logNow.querySelector('[data-id="' + pendingId + '"]');
+      if (text && !text.value.trim()) {
+        text.value = v.texte; chatAutoGrow(text); chatCount();
+        chatRetryAttempt = attempt;
+        if (pending) pending.remove();
+      } else if (pending) {
+        pending.dataset.delivery = 'unconfirmed';
+        var recover = el('button', 'sup-recover', /^en/.test(LOCALE) ? 'Restore this message' : 'Reprendre ce message');
+        recover.type = 'button';
+        pending.appendChild(el('span', 'sup-delivery', /^en/.test(LOCALE) ? 'Send not confirmed' : 'Envoi non confirmé'));
+        recover.addEventListener('click', function () {
+          if (!text || text.value.trim()) {
+            if (err) { err.textContent = 'Terminez votre brouillon avant de reprendre ce message.'; err.hidden = false; }
+            if (text) text.focus(); return;
+          }
+          text.value = v.texte; chatAutoGrow(text); chatCount(); text.focus(); pending.remove();
+          chatRetryAttempt = attempt;
+        });
+        pending.appendChild(recover);
+      }
       if (err) {
         err.textContent = res && res.json && res.json.errors && res.json.errors[0]
           ? res.json.errors[0].message
-          : 'La messagerie est momentanément indisponible. Réessayez, ou écrivez-nous par le formulaire « Nous joindre ».';
+          : 'Envoi non confirmé. Votre message est conservé. Vérifiez la conversation avant de réessayer.';
         err.hidden = false;
       }
       return;
     }
     var log = $('chat-log');
+    // The confirmed token replaces the temporary first-request capability.
+    delete attempt.body.requestKey;
+    chatUnconfirmed = chatUnconfirmed.filter(function (entry) { return entry !== attempt; });
+    if (chatRetryAttempt === attempt) chatRetryAttempt = null;
     var ended = $('chat-ended'); if (ended) ended.hidden = true;
     var m = res.json.message;
     // La réponse de l'assistant voyage dans la MÊME réponse HTTP (ADR 0046) :
@@ -12657,14 +13386,22 @@
     // la différence entre une messagerie vivante et une boîte à lettres.
     var r = res.json.reponse || null;
     var dernier = (r && r.createdAt) || (m && m.createdAt) || null;
+    var previousSession = chatSession();
+    var sameThread = previousSession && previousSession.threadId === res.json.threadId;
+    var latestAt = sameThread && chatNewer(previousSession.lastAt, dernier) ? previousSession.lastAt : dernier;
+    var seenAt = sameThread ? previousSession.seenAt : null;
+    if ($('chat-panel') && !$('chat-panel').hidden && !document.hidden && chatNewer(dernier, seenAt)) seenAt = dernier;
+
+    chatPollFailures = 0;
     chatSessionPatch({
       threadId: res.json.threadId, token: res.json.token,
-      lastAt: dernier, seenAt: dernier,
+      lastAt: latestAt, seenAt: seenAt,
+      escalade: !!res.json.escalade, humain: !!res.json.humain,
     });
     // L'écho local portait un id provisoire : le message serveur le remplace
     // proprement plutôt que de doubler la bulle.
     if (log) {
-      var provisoire = log.querySelector('.sup-msg[data-id^="local-"]');
+      var provisoire = log.querySelector('[data-id="' + pendingId + '"]');
       if (provisoire) provisoire.parentNode.removeChild(provisoire);
       var arrivee = [];
       if (m) arrivee.push(m);
@@ -12677,10 +13414,40 @@
     if (!chatMailNudged && !v.courriel) { chatMailNudged = true; chatMailOpen(true, { noFocus: true }); }
     // Une escalade se dit : une personne a la question, et le courriel devient
     // le canal qui compte.
+    chatMailControls();
+    if (body.courriel && $('chat-courriel-status') && courrielInp.value.trim().toLowerCase() === body.courriel.toLowerCase()) {
+      $('chat-courriel-status').hidden = false;
+      $('chat-courriel-status').textContent = 'Courriel enregistré pour cette conversation.';
+    }
     chatEscalade(!!res.json.escalade);
+    if ($('chat-panel').hidden || document.hidden) chatSetUnread(chatUnreadCount(r ? [r] : [], s && s.seenAt));
     chatRefresh();
   }
   function onChatSubmit(e) { e.preventDefault(); chatSend(); }
+
+  // A visitor's signed email link restores this same conversation on another
+  // device. Read proof comes before replacing any local session or transcript.
+  async function chatOpenVisitor(encodedToken) {
+    var token;
+    try { token = decodeURIComponent(encodedToken); } catch (e) { token = ''; }
+    var version = ++chatReadVersion;
+    var res = token ? await chatApi('/support/thread', { token: token }).catch(function () { return null; }) : null;
+    if (version !== chatReadVersion) return;
+    if (!res || res.status !== 200 || !res.json || typeof res.json.threadId !== 'string' || !res.json.threadId || !Array.isArray(res.json.messages)) {
+      toast(!token || (res && (res.status === 401 || res.status === 404))
+        ? 'Lien de conversation invalide ou expiré. Votre conversation actuelle est conservée.'
+        : 'Impossible d’ouvrir la conversation. Réessayez le lien reçu par courriel.');
+      chatSchedule(); return;
+    }
+    var messages = res.json.messages, lastAt = chatLastAt(messages);
+    lsSave(LS_SUPPORT, { threadId: res.json.threadId, token: token, lastAt: lastAt, seenAt: null, escalade: !!res.json.escalade, humain: !!res.json.humain });
+    var log = $('chat-log'); if (log) clear(log);
+    chatRenderMessages(log, messages, D.SUPPORT_FROM.VISITEUR);
+    if (!chatMailEdited && $('chat-courriel')) $('chat-courriel').value = res.json.courriel || '';
+    var ended = $('chat-ended'); if (ended) ended.hidden = true;
+    chatEscalade(!!res.json.escalade); chatMailControls();
+    chatToggle(true, { noRefresh: true });
+  }
 
   // --- The operator's reply box, opened by the emailed #reponse= link --------
   function chatReplyRender(json) {
@@ -12693,22 +13460,33 @@
   }
   function chatReplySchedule(on) {
     if (chatReplyTimer) { clearInterval(chatReplyTimer); chatReplyTimer = null; }
+    on = on && chatCanPoll();
     chatReplyMs = on ? CHAT_POLL_MS : 0;
     if (on) chatReplyTimer = setInterval(chatRefreshReply, CHAT_POLL_MS);
   }
   async function chatRefreshReply() {
     var dlg = $('chat-reply-dialog');
     if (!dlg || !dlg.open || !dlg.dataset.token) { chatReplySchedule(false); return; }
-    var res = await chatApi('/support/thread', { token: dlg.dataset.token }).catch(function () { return null; });
-    if (res && res.status === 200) chatReplyRender(res.json);
+    if (chatReplyRefreshing || chatReplySending || !chatCanPoll()) return;
+    chatReplyRefreshing = true;
+    var token = dlg.dataset.token;
+    try {
+      var res = await chatApi('/support/thread', { token: token }).catch(function () { return null; });
+      if (dlg.open && dlg.dataset.token === token && res && res.status === 200) chatReplyRender(res.json);
+    } finally { chatReplyRefreshing = false; }
   }
   async function chatOpenReply(opToken) {
     var dlg = $('chat-reply-dialog'); if (!dlg) return;
+    var text = $('chat-reply-text');
+    if (text && dlg.dataset.token) chatReplyDrafts[dlg.dataset.token] = text.value;
     var res = await chatApi('/support/thread', { token: opToken }).catch(function () { return null; });
     if (!res || res.status !== 200) { toast('Lien de réponse invalide ou expiré.'); return; }
     var log = $('chat-reply-log'); if (log) clear(log);
     dlg.dataset.token = opToken;
+    if (text) text.value = chatReplyDrafts[opToken] || '';
     chatReplyRender(res.json);
+    chatReplyRecovery();
+    var send = $('chat-reply-send'); if (send) send.disabled = chatReplySending;
     var sent = $('chat-reply-sent'); if (sent) sent.hidden = true;
     var form = $('chat-reply-form'); if (form) form.hidden = false;
     try { dlg.showModal(); } catch (e) { dlg.open = true; }
@@ -12720,31 +13498,108 @@
     try { d.close(); } catch (e) { d.open = false; }
     chatReplySchedule(false);
   }
+  function chatReplyRecovery() {
+    var dlg = $('chat-reply-dialog'), form = $('chat-reply-form'), text = $('chat-reply-text'), err = $('chat-reply-error');
+    if (!dlg || !form || !text) return;
+    var box = $('chat-reply-recovery');
+    if (!box) { box = el('div'); box.id = 'chat-reply-recovery'; form.insertBefore(box, err); }
+    clear(box);
+    var attempts = chatReplyAttempts.filter(function (attempt) { return attempt.token === dlg.dataset.token && attempt.failed && attempt.texte !== text.value.trim(); });
+    box.hidden = !attempts.length;
+    attempts.forEach(function (attempt) {
+      var preview = el('p', 'help', attempt.texte); preview.setAttribute('data-i18n-skip', ''); box.appendChild(preview);
+      var button = el('button', 'sup-recover', 'Reprendre ce message'); button.type = 'button';
+      button.addEventListener('click', function () {
+        if (text.value.trim()) {
+          if (err) { err.textContent = 'Terminez votre brouillon avant de reprendre ce message.'; err.hidden = false; }
+          text.focus(); return;
+        }
+        text.value = attempt.texte; chatReplyDrafts[attempt.token] = text.value; text.focus(); chatReplyRecovery();
+      }); box.appendChild(button);
+    });
+  }
   async function onChatReplySubmit(e) {
     e.preventDefault();
+    if (chatReplySending) return;
     var dlg = $('chat-reply-dialog'), text = $('chat-reply-text'), err = $('chat-reply-error');
     var texte = (text && text.value || '').trim();
     var v = D.validateSupportMessage({ texte: texte });
     if (err) err.hidden = true;
     if (!v.ok) { if (err) { err.textContent = v.errors[0].message; err.hidden = false; } return; }
-    var res = await chatApi('/support/reply', { method: 'POST', token: dlg && dlg.dataset.token, body: { texte: v.texte } }).catch(function () { return null; });
-    if (!res || res.status !== 200) {
-      if (err) { err.textContent = 'Envoi impossible — le lien est peut-être expiré.'; err.hidden = false; }
+    var token = dlg && dlg.dataset.token;
+    if (!token) return;
+    var attempt = chatReplyAttempts.find(function (entry) { return entry.token === token && entry.texte === v.texte; });
+    if (!attempt) { attempt = { token: token, texte: v.texte, messageId: 'operator-' + chatRandomKey(18), failed: false }; chatReplyAttempts.push(attempt); }
+    chatReplyDrafts[token] = text.value;
+    chatReplySending = true;
+    var send = $('chat-reply-send'); if (send) send.disabled = true;
+    var res = await chatApi('/support/reply', { method: 'POST', token: token, body: { texte: attempt.texte, messageId: attempt.messageId } }).catch(function () { return null; });
+    chatReplySending = false;
+    if (send) send.disabled = false;
+    if (!res || res.status !== 200 || !res.json || !res.json.message) {
+      attempt.failed = true;
+      if (dlg.dataset.token === token) {
+        if (err) { err.textContent = 'Envoi non confirmé. Votre message est conservé. Vérifiez la conversation avant de réessayer.'; err.hidden = false; }
+        chatReplyDrafts[token] = text.value; chatReplyRecovery();
+      }
       return;
     }
-    if (text) text.value = '';
+    chatReplyAttempts = chatReplyAttempts.filter(function (entry) { return entry !== attempt; });
+    if (dlg.dataset.token === token) chatReplyDrafts[token] = text.value;
+    if ((chatReplyDrafts[token] || '').trim() === v.texte) chatReplyDrafts[token] = '';
+    if (dlg.dataset.token !== token) return;
+    if (text) text.value = chatReplyDrafts[token];
+    chatReplyRecovery();
     if (res.json.message) chatRenderMessages($('chat-reply-log'), [res.json.message], D.SUPPORT_FROM.NOTA);
     await chatRefreshReply();
     var sent = $('chat-reply-sent'); if (sent) sent.hidden = false;
   }
 
+  function consumeSupportLink() {
+    var h = location.hash || '';
+    var operator = /(^|[#&])reponse=([^&]+)/.exec(h);
+    var visitor = /(^|[#&])messagerie=([^&]+)/.exec(h);
+    var open = /(^|[#&])messagerie(?=$|&)/.test(h);
+    if (!operator && !visitor && !open) return false;
+    // replaceState removes the credential without firing another hashchange.
+    // This also handles an email link opened in an already loaded tab.
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+    if (visitor) chatOpenVisitor(visitor[2]);
+    else if (operator) {
+      var token;
+      try { token = decodeURIComponent(operator[2]); } catch (e) { token = ''; }
+      if (token) chatOpenReply(token);
+      else toast('Lien de réponse invalide ou expiré.');
+      chatSchedule();
+    } else chatToggle(true);
+    return true;
+  }
+
   function supportBoot() {
     var fab = $('chat-fab'); if (!fab) return;
+    var emailSave = $('chat-courriel-save');
+    if (emailSave) emailSave.addEventListener('click', chatSaveEmail);
+    var emailInput = $('chat-courriel');
+    if (emailInput) emailInput.addEventListener('input', function () {
+      chatMailEdited = true;
+      var note = $('chat-courriel-status'); if (note) note.hidden = true;
+    });
+    chatMailControls();
+    var search = $('chat-topic-search');
+    if (search) search.addEventListener('input', chatFilterTopics);
+    var resume = function () {
+      chatSchedule();
+      var reply = $('chat-reply-dialog'); chatReplySchedule(!!(reply && reply.open));
+      if (chatCanPoll()) { chatPollFailures = 0; chatSchedule(); chatRefresh(); chatRefreshReply(); }
+    };
+    document.addEventListener('visibilitychange', resume);
+    window.addEventListener('online', resume);
+    window.addEventListener('offline', resume);
     var text = $('chat-text'), rText = $('chat-reply-text');
     // The hard cap is the domain's, never a literal in the markup.
     if (text) text.setAttribute('maxlength', String(D.SUPPORT_MESSAGE_MAX));
     if (rText) rText.setAttribute('maxlength', String(D.SUPPORT_MESSAGE_MAX));
-    fab.addEventListener('click', function () { chatToggle(); });
+    fab.addEventListener('click', function () { chatToggle(null, { opener: fab }); });
     var close = $('chat-close'); if (close) close.addEventListener('click', function () { chatToggle(false); });
     var panel = $('chat-panel');
     if (panel) panel.addEventListener('keydown', function (e) { if (e.key === 'Escape') { e.preventDefault(); chatToggle(false); } });
@@ -12759,20 +13614,20 @@
     var mailBtn = $('chat-courriel-open');
     if (mailBtn) mailBtn.addEventListener('click', function () { chatMailOpen(); });
     var rForm = $('chat-reply-form'); if (rForm) rForm.addEventListener('submit', onChatReplySubmit);
-    if (rText) rText.addEventListener('input', function () { var sent = $('chat-reply-sent'); if (sent) sent.hidden = true; });
+    if (rText) rText.addEventListener('input', function () {
+      var sent = $('chat-reply-sent'); if (sent) sent.hidden = true;
+      var dlg = $('chat-reply-dialog'); if (dlg && dlg.dataset.token) chatReplyDrafts[dlg.dataset.token] = rText.value;
+      chatReplyRecovery();
+    });
     var rClose = $('chat-reply-close'); if (rClose) rClose.addEventListener('click', chatCloseReply);
     var rDlg = $('chat-reply-dialog'); if (rDlg) rDlg.addEventListener('close', function () { chatReplySchedule(false); });
     // The emailed links: consume the hash so a token never lingers in the
     // address bar (same pattern as #nauth=/#pauth=). `#reponse=` is the
     // operator's door, `#messagerie` the visitor's.
     openEmailPreferences();
-    var h = location.hash || '';
-    var m = /(^|[#&])reponse=([^&]+)/.exec(h);
-    var msg = /(^|[#&])messagerie(?=$|&)/.test(h);
-    if (m || msg) { try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {} }
-    if (m) chatOpenReply(decodeURIComponent(m[2]));
-    if (msg) chatToggle(true);
-    else if (flagGet(LS_SUPPORT_OPEN) === '1') chatToggle(true, { noFocus: true });
+    window.addEventListener('hashchange', consumeSupportLink);
+    if (consumeSupportLink()) return;
+    if (flagGet(LS_SUPPORT_OPEN) === '1') chatToggle(true, { noFocus: true });
     else chatSchedule(); // a closed panel with a fresh thread keeps its slow watch
   }
 
@@ -12811,7 +13666,8 @@
     // First arrival: the intro films own the first paint — BEFORE the carnet
     // fetch, so a slow or hanging API never delays the pitch. The onboarding
     // guide yields whenever the gate is shown (it will greet a later visit).
-    var igShown = igMaybeShow();
+    var oauthReturning = !!oauthPending;
+    var igShown = !oauthReturning && igMaybeShow();
 
     // Paint immediately from cache, then repaint when the month's data lands.
     renderActiveView();
@@ -12830,6 +13686,7 @@
     // A client access link (#cauth=…): the mailbox is proven, so the device
     // gets its own requests back — with a fresh token for each.
     clientConsumeEspaceHash();
+    await oauthConsumeHash();
 
     // In-app notifications: render what's stored, then derive fresh events
     // (date-approaching / retained) from this browser's own offers.
@@ -12838,14 +13695,14 @@
 
     // scroll:false so loading on a phone never scrolls past the calendar.
     // …and no pane focus while the gate holds it.
-    setTab(state.tab, { scroll: false, focus: !igShown });
+    setTab(state.tab, { scroll: false, focus: !igShown && !oauthReturning });
     // A client act link (#offre=…&d=…&cle=…, ADR 0033 §2.7): validate the
     // token, open Mes offres on that band, clean the URL — AFTER the boot
     // paint of the stored tab, so nothing repaints over the band it opens,
     // flashes and focuses (audit P2-14). The gate never shows over a hash.
     consumeOfferLinkHash();
 
-    if (!igShown) maybeShowOnboarding();
+    if (!igShown && !oauthReturning) maybeShowOnboarding();
 
     // The funnel's first step: this page load. Once, after boot, whatever the
     // intro film or the guide do next.

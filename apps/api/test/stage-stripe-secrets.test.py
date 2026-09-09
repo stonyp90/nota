@@ -43,6 +43,27 @@ class StageTests(unittest.TestCase):
             self.assertEqual(aws.call_count, 1)
             hidden.assert_not_called()
 
+    def test_connect_secret_is_staged_and_invalid_input_never_writes(self):
+        args = self.args()
+        args.connect_webhook = True
+        def aws(profile, region, service, operation, payload):
+            return {
+                'get-caller-identity': {'Account': '123'},
+                'get-secret-value': {'SecretString': json.dumps({'NOTA_NOTARY_SECRET': 'x'*32}), 'VersionId': 'old'},
+                'describe-secret': {'VersionIdsToStages': {'old': ['AWSCURRENT']}},
+                'put-secret-value': {'ARN': 'arn:test', 'VersionId': 'new'},
+            }[operation]
+        for signing in ['whsec_' + 'c'*24, 'invalid']:
+            with patch.object(m, 'aws', side_effect=aws) as requests, patch.object(m, 'read_hidden', side_effect=['sk_test_'+'a'*24, 'whsec_'+'b'*24, signing]), patch.object(m, 'stripe_account', return_value={'id':'acct_expected'}):
+                if signing == 'invalid':
+                    with self.assertRaises(m.SafeError): m.stage(args)
+                    self.assertFalse(any(c.args[3] == 'put-secret-value' for c in requests.call_args_list))
+                else:
+                    m.stage(args)
+                    written = requests.call_args.args[4]
+                    self.assertEqual(written['VersionStages'], ['AWSPENDING'])
+                    self.assertEqual(json.loads(written['SecretString'])['STRIPE_CONNECT_WEBHOOK_SECRET'], signing)
+
     def test_cli_secret_payload_uses_stdin_only_and_errors_are_redacted(self):
         secret = 'unique-secret-value'
         with patch.object(m.subprocess, 'run', return_value=SimpleNamespace(returncode=1, stdout=secret, stderr=secret)) as run:
@@ -51,5 +72,12 @@ class StageTests(unittest.TestCase):
             self.assertNotIn(secret, ' '.join(run.call_args.args[0]))
             self.assertIn(secret, run.call_args.kwargs['input'])
             self.assertNotIn('shell', run.call_args.kwargs)
+            self.assertIn('--secret-string', run.call_args.args[0])
+            self.assertNotIn('--cli-input-json', run.call_args.args[0])
+
+    def test_environment_credentials_are_supported_without_forcing_a_profile(self):
+        with patch.object(m.subprocess, 'run', return_value=SimpleNamespace(returncode=0, stdout='{}')) as run:
+            m.aws(None, 'ca-central-1', 'sts', 'get-caller-identity', {})
+            self.assertNotIn('--profile', run.call_args.args[0])
 
 if __name__ == '__main__': unittest.main()

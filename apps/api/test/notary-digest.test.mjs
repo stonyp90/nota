@@ -18,6 +18,7 @@ const YESTERDAY = domain.addDays(TODAY, -1);
 function freshBid(id, over = {}) {
   return {
     id,
+    expiresOn: domain.addDays(TODAY, domain.OFFER_VALIDITY_DAYS),
     serviceId: 'refinancement',
     dateISO: domain.addDays(TODAY, 30),
     montant: 2400,

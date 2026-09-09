@@ -23,6 +23,7 @@ const require = createRequire(import.meta.url);
 const connectHeaders = require('./helpers/connect-session.cjs');
 const { createApp } = require('../src/handler.js');
 const { createMemoryRepo } = require('../src/repo-memory.js');
+const { createAnalytics } = require('../src/analytics.js');
 const { createNotifier } = require('../src/notifications.js');
 const { createFakeMailer } = require('../src/notify-port.js');
 const { createBilling, NOTARY_STATUS } = require('../src/billing.js');
@@ -87,7 +88,7 @@ const funnelTotal = async (repo, id) => {
 
 test('signup creates a pending notary from an email alone — no Stripe, 200 { ok }, gauge + funnel counted once', async () => {
   const { app, repo, mailer } = harness();
-  const res = await signup(app, { email: ' Me.Roy@Etude.CA ', lienCNQ: 'https://www.cnq.org/trouver-un-notaire/roy', parrain: 'eve-roy' });
+  const res = await signup(app, { email: ' Me.Roy@Etude.CA ', lienCNQ: 'https://www.cnq.org/trouver-un-notaire/roy', parrain: 'eve-roy', analytics: { source: 'linkedin', email: 'must-not-be-stored' } });
   assert.equal(res.statusCode, 200, res.body);
   assert.deepEqual(parse(res), { ok: true });
 
@@ -107,6 +108,9 @@ test('signup creates a pending notary from an email alone — no Stripe, 200 { o
   // Analytics: the onboarding gauge and the notaire_inscrit funnel step, once.
   assert.equal((await repo.getGauge()).onboarding, 1);
   assert.equal(await funnelTotal(repo, 'notaire_inscrit'), 1);
+  assert.equal(n.analytics, undefined);
+  const overview = await createAnalytics({ repo, now: () => TODAY }).overview();
+  assert.equal(overview.segments.find(d => d.id === 'source').rows.find(r => r.id === 'linkedin').events.notaire_inscrit, 1);
 
   // Mail: the notary is told the vetting sequence (no Stripe mentioned); the
   // operator is pointed at the admin console's Notaires screen.
@@ -303,6 +307,13 @@ test('POST /events counts a catalogue step per day and answers 204; anything els
   assert.equal(await funnelTotal(repo, 'visite'), 2);
   assert.equal(await funnelTotal(repo, 'jour_ouvert'), 1);
 
+  for (const event of ['publie', 'notaire_inscrit']) {
+    assert.equal((await post({ event })).statusCode, 204);
+    assert.equal(await funnelTotal(repo, event), 0, 'a beacon cannot fabricate a server conversion');
+  }
+  assert.equal((await post({ event: 'publication_echouee' })).statusCode, 204);
+  assert.equal(await funnelTotal(repo, 'publication_echouee'), 1);
+
   // Not in the catalogue, wrong type, garbage body: all dropped, all 204.
   assert.equal((await post({ event: 'drop_table' })).statusCode, 204);
   assert.equal((await post({ event: 42 })).statusCode, 204);
@@ -329,13 +340,20 @@ test('a published offer counts the « publie » step server-side — the client 
   const { app, repo } = harness();
   const res = await app.handle({
     method: 'POST', path: '/bids',
+    headers: { 'user-agent': 'Mozilla/5.0 (iPhone) Version/18.0 Mobile Safari/604.1' },
     body: JSON.stringify({
+      analytics: { source: 'google', url: 'https://private.example/secret' },
       serviceId: 'refinancement', dateISO: '2026-09-20', montant: 2400, courriel: 'client@example.ca', prefixe: 'G1R',
       pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale', deplacement: 'client_50' },
     }),
   });
   assert.equal(res.statusCode, 201, res.body);
   assert.equal(await funnelTotal(repo, 'publie'), 1);
+  const overview = await createAnalytics({ repo, now: () => TODAY }).overview();
+  assert.equal(overview.segments.find(d => d.id === 'source').rows.find(r => r.id === 'google').events.publie, 1);
+  assert.equal(overview.segments.find(d => d.id === 'os').rows.find(r => r.id === 'ios').events.publie, 1);
+  const bid = parse(res).bid;
+  assert.equal((await repo.get(bid.id, bid.dateISO)).analytics, undefined, 'arrival context is not a customer profile');
   // A refused offer counts nothing.
   await app.handle({ method: 'POST', path: '/bids', body: JSON.stringify({ serviceId: 'refinancement', dateISO: '2026-09-20', montant: 1 }) });
   assert.equal(await funnelTotal(repo, 'publie'), 1);

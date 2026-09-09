@@ -113,11 +113,15 @@ function statsDeltasForGauge(adds) {
 // per-day GLOBAL counter named `funnel_<id>`, sharded like the offers counter;
 // the admin overview reads every `funnel_*` key back in catalogue order.
 const FUNNEL_COUNTER_PREFIX = 'funnel_';
-function statsDeltasForFunnel(id, dayISO) {
+function statsDeltasForFunnel(id, dayISO, context) {
   if (!domain.isFunnelEvent(id)) return [];
   const day = dayOf(dayISO);
   if (!day) return [];
-  return [{ pk: statsGlobalPK(pickShard()), sk: statsDaySK(day), adds: { [FUNNEL_COUNTER_PREFIX + id]: 1 } }];
+  const adds = { [FUNNEL_COUNTER_PREFIX + id]: 1 };
+  for (const [dimension, value] of Object.entries(domain.cleanAnalyticsContext(context))) {
+    adds['segment__' + dimension + '__' + value + '__' + id] = 1;
+  }
+  return [{ pk: statsGlobalPK(pickShard()), sk: statsDaySK(day), adds }];
 }
 
 // L'assistant de la messagerie (ADR 0046). Sans ces compteurs, la seule chose

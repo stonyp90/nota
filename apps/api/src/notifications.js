@@ -265,12 +265,21 @@ function createConsentRegistry({ repo, now, consentement } = {}) {
 // link to the client's own act — the CTA of every client act mail; the caller
 // holds the signing secret, so it is injected. `adminUrl` (NOTA_ADMIN_URL)
 // is where operator alerts land when an admin console exists.
-function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now, clientLink, adminUrl, consentement } = {}) {
+function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now, clientLink, adminUrl, consentement, supportEmailDomain, supportEmailSecret } = {}) {
   if (!repo) throw new Error('createNotifier: repo is required');
   if (!mailer) throw new Error('createNotifier: mailer is required');
 
   const clock = now || (() => new Date().toISOString());
   const base = baseUrl || '';
+  const replyDomain = supportEmailDomain === undefined ? process.env.NOTA_SUPPORT_EMAIL_DOMAIN : supportEmailDomain;
+  const replySecret = supportEmailSecret === undefined ? process.env.NOTA_NOTARY_SECRET : supportEmailSecret;
+  function supportMailAddress(threadId, role, sender) {
+    if (!replyDomain || !replySecret || !threadId || !sender) return null;
+    const { supportReplyAddress } = require('./support-email');
+    return supportReplyAddress({ threadId, role, sender, domain: replyDomain, secret: replySecret, nowMs: Date.parse(clock()) });
+  }
+  function supportRef(threadId, messageId) { return threadId ? `support:${threadId}:${messageId}` : messageId; }
+
 
   // Le lien de retrait DOIT aboutir sur la route de l'API, pas sur l'application
   // web. Site et API partagent une origine derrière CloudFront, l'API sous
@@ -377,7 +386,7 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
     const msg = buildTemplate({ ...(ctx || {}), emailLanguage: await recipientLanguage(to), unsubscribeUrl: unsub, baseUrl: base, adminUrl: adminUrl || null, __override: override });
     // unsubscribeUrl rides along so the mailer can emit the RFC 8058
     // List-Unsubscribe / List-Unsubscribe-Post headers.
-    await mailer.send({ to, subject: msg.subject, html: msg.html, text: msg.text, unsubscribeUrl: unsub, replyTo: ctx && ctx.replyTo });
+    await mailer.send({ to, subject: msg.subject, html: msg.html, text: msg.text, unsubscribeUrl: unsub, replyTo: ctx && ctx.replyTo, ...(ctx && ctx.supportAutomation ? { supportAutomation: true } : {}) });
     await repo.markNotificationSent(refId, kind, clock());
     // « Ce que Nota vous a envoyé » — la section du dossier Loi 25 (droit
     // d'accès). Le magasin et son lecteur existaient depuis longtemps ; il
@@ -558,7 +567,11 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
 
   // Pay-on-accept: a demand whose card hold is still pending, or lapsed, is
   // not on the carnet — no notary could retain it, so nobody is rung for it.
-  const isLive = (bid) => bid.paymentStatus !== 'pending' && bid.paymentStatus !== 'void';
+  const isLive = (bid) => {
+    const at = clock();
+    const day = domain.isISODate(at) ? at : domain.businessDay(at, process.env.NOTA_TIMEZONE);
+    return !domain.isOfferExpired(bid, day) && bid.paymentStatus !== 'pending' && bid.paymentStatus !== 'void';
+  };
   // The notary's alert preference (ADR 0033 §7), normalized by the domain;
   // absent → the daily digest.
   const alertesOf = (n) =>
@@ -1128,7 +1141,7 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
   // Every visitor message lands live with the operator: one email per message
   // (idempotent by message id) whose CTA is the signed reply link. Wired
   // fire-and-forget from POST /support/messages — never throws to the caller.
-  async function onSupportMessage({ message, courriel, replyUrl, escalade, motif, historique } = {}) {
+  async function onSupportMessage({ threadId, message, courriel, replyUrl, escalade, motif, historique } = {}) {
     if (!message || !message.texte) return { ok: true, results: [] };
     const results = [];
     try {
@@ -1142,12 +1155,18 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
           ? (domain.SUPPORT_ESCALADE_MOTIFS || []).find((x) => x.id === motif) || null
           : null;
         const qui = { visiteur: 'Visiteur', nota: 'Vous', assistant: 'Assistant' };
+        const emailReplyTo = supportMailAddress(threadId, 'operator', operatorEmail);
+        const adminReplyUrl = adminUrl && threadId
+          ? String(adminUrl).replace(/\/+$/, '') + '/#/support?thread=' + encodeURIComponent(threadId) : null;
         const ctx = {
           courriel: courriel || null,
           // `email` double le courriel pour que le {{email}} d'une surcharge
           // de sujet se résolve (le gabarit, lui, lit `courriel`).
           email: courriel || null,
-          replyTo: courriel || null,
+          replyTo: emailReplyTo,
+          emailReplyEnabled: !!emailReplyTo,
+          supportAutomation: true,
+          adminReplyUrl,
           texte: message.texte,
           replyUrl,
           ...(escalade
@@ -1162,7 +1181,7 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
         const key = escalade ? 'operatorSupportEscalade' : 'operatorSupportMessage';
         results.push(
           await sendOnce({
-            refId: message.id,
+            refId: supportRef(threadId, message.id),
             kind: key,
             to: operatorEmail,
             templateKey: key,
@@ -1179,15 +1198,26 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
 
   // The operator's reply, copied to the visitor's inbox when they left a
   // courriel — the widget already shows it live. Idempotent by message id.
-  async function onSupportReply({ message, courriel } = {}) {
+  async function onSupportReply({ threadId, message, courriel } = {}) {
     if (!message || !message.texte || !courriel) return { ok: true, results: [] };
     const results = [];
     try {
-      // The CTA reopens the widget on the site (`#messagerie`, consumed on boot).
-      const ctx = { texte: message.texte, chatUrl: base.replace(/\/+$/, '') + '/#messagerie' };
+      // A scoped capability reopens this conversation even on a new device.
+      // Fragment credentials are consumed by the widget, never sent in a URL
+      // query or used as operator authentication.
+      const emailReplyTo = supportMailAddress(threadId, 'visitor', courriel);
+      let chatFragment = '#messagerie';
+      if (threadId) {
+        const { signToken, SCOPES } = require('./notary-auth');
+        const { REPLY_TTL_MS } = require('./support-email');
+        const token = signToken(threadId, Date.parse(clock()) + REPLY_TTL_MS, SCOPES.SUPPORT, replySecret || undefined);
+        chatFragment += '=' + encodeURIComponent(token);
+      }
+      const ctx = { texte: message.texte, chatUrl: base.replace(/\/+$/, '') + '/' + chatFragment,
+        replyTo: emailReplyTo, emailReplyEnabled: !!emailReplyTo, supportAutomation: true };
       results.push(
         await sendOnce({
-          refId: message.id,
+          refId: supportRef(threadId, message.id),
           kind: 'supportReponse',
           to: courriel,
           templateKey: 'supportReponse',
@@ -1704,6 +1734,17 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
   // demande (un lien neuf, à usage unique) et ne jamais être supprimé par un
   // désabonnement ou un registre de dédoublonnage. Au mieux : un échec d'envoi
   // ne change jamais la réponse de la route (qui reste générique de toute façon).
+  async function onOAuthLinkRequested({ email, provider, link, ttlMinutes, emailLanguage } = {}) {
+    const to = String(email || '').trim().toLowerCase();
+    if (!to || !link) return { ok: false, sent: false };
+    try {
+      const unsub = unsubscribeUrl(to);
+      const msg = emails.oauthAccountLink({ provider, link, ttlMinutes, emailLanguage: await recipientLanguage(to, emailLanguage), baseUrl: base, unsubscribeUrl: unsub });
+      await mailer.send({ to, subject: msg.subject, html: msg.html, text: msg.text, unsubscribeUrl: unsub });
+      return { ok: true, sent: true };
+    } catch { return { ok: false, sent: false }; }
+  }
+
   async function onClientLoginRequested({ courriel, link, ttlMinutes, emailLanguage } = {}) {
     const to = String(courriel || '').trim().toLowerCase();
     if (!to || !link) return { ok: true, sent: false };
@@ -1846,6 +1887,7 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
     onNotarySignedUp,
     onNotaryLoginRequested,
     onClientLoginRequested,
+    onOAuthLinkRequested,
     onPartnerCodeReminder,
     onActPaid,
     onAccountEvent,

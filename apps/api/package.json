@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.124.0",
+    "@aws-sdk/client-bedrock-runtime": "^3.1128.0",
     "@aws-sdk/client-dynamodb": "^3.667.0",
     "@aws-sdk/client-s3": "^3.667.0",
     "@aws-sdk/client-secrets-manager": "^3.1127.0",
@@ -21,6 +22,8 @@
     "@aws-sdk/lib-dynamodb": "^3.667.0",
     "@aws-sdk/s3-request-presigner": "^3.667.0",
     "@nota/domain": "*",
+    "jose": "^6.2.12",
+    "mailparser": "^3.9.23",
     "stripe": "^16"
   },
   "devDependencies": {

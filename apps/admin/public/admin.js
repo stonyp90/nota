@@ -180,6 +180,8 @@
     scheduleSession();
   }
   function clearSession() {
+    supportStop();
+    supportDrafts = Object.create(null);
     session = null; sessionExp = null; me = null;
     idleTtlMs = SESSION_IDLE_DEFAULT_MS;
     clearSessionTimers();
@@ -321,32 +323,45 @@
   // API call. Adds the bearer when present, parses JSON, and on a 401 for an
   // authenticated request drops the session and routes to the auth screen.
   // ---------------------------------------------------------------------------
-  async function call(method, path, body) {
+  async function call(method, path, body, opts) {
+    opts = opts || {};
     var hadSession = !!session;
+    var requestSession = session;
     var headers = { accept: 'application/json' };
     var hasBody = body !== undefined && body !== null;
     if (hasBody) headers['content-type'] = 'application/json';
     if (session) headers.authorization = 'Bearer ' + session;
 
-    var res;
+    var res, json = null, timer = null;
     try {
-      res = await fetch(API_BASE + path, {
+      var request = fetch(API_BASE + path, {
         method: method,
         headers: headers,
         body: hasBody ? JSON.stringify(body) : undefined,
+        signal: opts.controller ? opts.controller.signal : undefined,
+      }).then(async function (response) {
+        var parsed = null;
+        try { parsed = await response.json(); } catch (e) {}
+        return { response: response, json: parsed };
       });
+      if (opts.timeoutMs) request = Promise.race([request, new Promise(function (_, reject) {
+        timer = setTimeout(function () {
+          if (opts.controller) opts.controller.abort();
+          reject(new Error('request_timeout'));
+        }, opts.timeoutMs);
+      })]);
+      var result = await request;
+      res = result.response; json = result.json;
     } catch (e) {
       return { ok: false, status: 0, json: null, network: true };
-    }
-    var json = null;
-    try { json = await res.json(); } catch (e) { json = null; }
+    } finally { if (timer) clearTimeout(timer); }
 
-    if (res.status === 401 && hadSession) {
+    if (res.status === 401 && hadSession && session === requestSession) {
       clearSession();
       toast('Session expirée. Reconnectez-vous.');
       history.replaceState(null, '', location.pathname);
       renderAuthRequest({});
-    } else if (hadSession && session) {
+    } else if (hadSession && session === requestSession && !opts.background) {
       touchSession(); // the server slid the idle window on this request
     }
     return { ok: res.ok, status: res.status, json: json };
@@ -373,6 +388,7 @@
   // Router  (#/ = Aperçu, #/auth = magic-link handler)
   // ---------------------------------------------------------------------------
   function router() {
+    supportStop();
     var hash = location.hash || '';
     if (hash.indexOf('#/auth') === 0) { handleAuthRoute(hash); return; }
     if (!session) { rememberNext(hash); renderAuthRequest({}); return; }
@@ -629,6 +645,7 @@
     { key: 'paiements', label: 'Paiements', icon: iconShield, render: renderPaiements },
     { key: 'acces', label: 'Accès', icon: iconUsers, render: renderAcces },
     { key: 'annulation', label: 'Annulation', icon: iconCalendarX, render: renderAnnulation },
+    { key: 'support', label: 'Messagerie', icon: iconMail, render: renderSupport, allowed: canReadSupport },
     { key: 'notaires', label: 'Notaires', icon: iconUsers, render: renderNotaires, allowed: canReadPii },
     { key: 'audit', label: 'Audit', icon: iconShield, render: renderAudit, allowed: canReadAudit },
     { key: 'usagers', label: 'Usagers', icon: iconFolderUser, render: renderUsagers, allowed: canReadSubjects }
@@ -713,6 +730,329 @@
     shell.appendChild(content);
     app.appendChild(shell);
   }
+
+  // Existing support threads, shared with the public widget and emailed reply
+  // links. Drafts and retry IDs stay in memory and are erased on sign-out.
+  var supportView = null;
+  var supportDrafts = Object.create(null);
+  var supportRenderVersion = 0;
+  function canReadSupport() { return can('support:read') && canReadPii(); }
+  function canWriteSupport() { return can('support:write') && canReadPii(); }
+  function supportStop() {
+    supportRenderVersion++;
+    if (!supportView) return;
+    clearTimeout(supportView.timer);
+    supportView.controllers.forEach(function (controller) { controller.abort(); });
+    supportView = null;
+  }
+  function supportCurrent(view) { return supportView === view && !!session && view.root.isConnected; }
+  function supportVisible(view) { return supportCurrent(view) && !document.hidden && navigator.onLine !== false; }
+  function supportDraft(id) {
+    return supportDrafts[id] || (supportDrafts[id] = { texte: '', attempt: null, recovery: [], sending: false, uncertain: false, status: '', version: 0 });
+  }
+  function supportRequest(view, method, path, body, background) {
+    var controller = typeof AbortController === 'function' ? new AbortController() : null;
+    // A send may complete after navigation; keep its stable attempt ID. Only
+    // reads belong to the view and are aborted when that view is replaced.
+    if (controller && method === 'GET') view.controllers.push(controller);
+    return call(method, path, body, { controller: controller, timeoutMs: 15000, background: !!background }).finally(function () {
+      if (controller) view.controllers = view.controllers.filter(function (item) { return item !== controller; });
+    });
+  }
+  function supportStatus(view, id) {
+    var status = view.statuts.find(function (entry) { return entry.id === id; });
+    return status ? (isEnglish() ? status.nomEn : status.nom) : '';
+  }
+  function supportSchedule(view) {
+    clearTimeout(view.timer);
+    if (supportVisible(view)) view.timer = setTimeout(function () { supportRefresh(view, true); }, Math.min(120000, 30000 * Math.pow(2, view.failures)));
+  }
+  async function supportRefresh(view, background) {
+    if (!supportVisible(view) || view.refreshing) return;
+    view.refreshing = true;
+    try { await Promise.all([supportLoadList(view, background), supportLoadThread(view, background)]); }
+    finally { view.refreshing = false; supportSchedule(view); }
+  }
+  async function renderSupport() {
+    var version = supportRenderVersion;
+    if (!me || !me.email) {
+      var loaded = await loadMe();
+      if (version !== supportRenderVersion) return;
+      if (!loaded.ok) { if (loaded.status !== 401) renderFatal('Impossible de charger votre profil.', renderSupport); return; }
+    }
+    renderUserbar();
+    var content = el('div', 'admin-content');
+    content.appendChild(buildPageHeader('Soutien', 'Messagerie', 'Répondez aux conversations du site. Le même échange reste visible ici, dans la messagerie et par courriel.'));
+    mountAuthed('support', content); focusTitle();
+    if (!canReadSupport()) { content.appendChild(buildDenied('Lire les conversations et voir les renseignements personnels')); return; }
+    var view = {
+      root: content, timer: null, controllers: [], threads: [], statuts: [], messageMax: null,
+      selected: new URLSearchParams(location.hash.split('?')[1] || '').get('thread') || null,
+      failures: 0, refreshing: false, listBusy: false, detailBusy: false, detail: null, deliveryRetries: Object.create(null),
+    };
+    supportView = view;
+    var toolbar = el('div', 'support-toolbar');
+    var label = el('label', null, 'État des conversations'); label.htmlFor = 'support-filter';
+    view.filter = el('select', 'input'); view.filter.id = 'support-filter';
+    view.filter.appendChild(el('option', null, 'Tous les états'));
+    view.filter.firstChild.value = '';
+    var refresh = el('button', 'btn btn-sm', 'Actualiser'); refresh.type = 'button'; refresh.id = 'support-refresh';
+    refresh.addEventListener('click', function () { supportRefresh(view, false); });
+    toolbar.appendChild(label); toolbar.appendChild(view.filter); toolbar.appendChild(refresh); content.appendChild(toolbar);
+    content.appendChild(el('p', 'help', 'Conversations récentes, sur les trois derniers mois. Les réponses de l’assistant restent à vérifier par une personne.'));
+    view.notice = el('p', 'help'); view.notice.id = 'support-list-status'; view.notice.setAttribute('role', 'status'); content.appendChild(view.notice);
+    var layout = el('div', 'support-layout');
+    view.list = el('div', 'chart-card support-inbox'); view.list.setAttribute('aria-label', 'Conversations');
+    view.list.setAttribute('role', 'region');
+    view.conversation = el('section', 'chart-card support-conversation'); view.conversation.setAttribute('aria-label', 'Conversation sélectionnée');
+    view.conversation.appendChild(el('p', 'help', 'Choisissez une conversation pour lire les messages et répondre.'));
+    layout.appendChild(view.list); layout.appendChild(view.conversation); content.appendChild(layout);
+    view.filter.addEventListener('change', function () { supportRenderList(view); supportLoadList(view, false); });
+    await supportRefresh(view, false);
+  }
+  async function supportLoadList(view, background) {
+    if (!supportCurrent(view) || view.listBusy) return;
+    view.listBusy = true;
+    var filter = view.filter.value;
+    if (!view.threads.length) view.notice.textContent = 'Chargement des conversations…';
+    try {
+      var r = await supportRequest(view, 'GET', '/support?limit=100' + (filter ? '&statut=' + encodeURIComponent(filter) : ''), null, background);
+      if (!supportCurrent(view) || view.filter.value !== filter) return;
+      if (!r.ok || !r.json || !Array.isArray(r.json.threads)) {
+        view.failures = Math.min(2, view.failures + 1);
+        view.notice.textContent = r.status === 403 ? 'Accès aux conversations refusé.' : 'Impossible d’actualiser les conversations. Réessayez.';
+        return;
+      }
+      view.failures = 0; view.notice.textContent = '';
+      view.threads = r.json.threads;
+      view.statuts = Array.isArray(r.json.statuts) ? r.json.statuts : [];
+      view.messageMax = r.json.limites && r.json.limites.messageMax;
+      var selected = view.filter.value;
+      while (view.filter.options.length > 1) view.filter.remove(1);
+      view.statuts.forEach(function (status) {
+        var option = el('option', null, isEnglish() ? status.nomEn : status.nom); option.value = status.id; view.filter.appendChild(option);
+      });
+      view.filter.value = selected;
+      supportRenderList(view);
+      if (view.text && view.messageMax) view.text.maxLength = view.messageMax;
+      if (view.detail) supportRenderThread(view, view.detail);
+    } finally {
+      view.listBusy = false;
+      if (supportCurrent(view) && view.filter.value !== filter) supportLoadList(view, false);
+    }
+  }
+  function supportRenderList(view) {
+    var filtered = view.threads.filter(function (thread) { return !view.filter.value || thread.statut === view.filter.value; });
+    var wanted = {};
+    filtered.forEach(function (thread, index) {
+      wanted[thread.id] = true;
+      var button = Array.prototype.find.call(view.list.querySelectorAll('.support-thread'), function (node) { return node.dataset.thread === thread.id; });
+      if (!button) {
+        button = el('button', 'support-thread'); button.type = 'button'; button.dataset.thread = thread.id;
+        button.addEventListener('click', function () { supportSelect(view, thread.id); }); view.list.appendChild(button);
+      }
+      var signature = JSON.stringify(thread) + isEnglish();
+      if (button.dataset.signature !== signature) {
+        clear(button); button.dataset.signature = signature;
+        var who = el('strong', null, thread.nom || thread.courriel || 'Visiteur sans courriel');
+        if (thread.nom || thread.courriel) who.setAttribute('data-i18n-skip', '');
+        button.appendChild(who);
+        button.appendChild(el('span', 'support-state', supportStatus(view, thread.statut)));
+        if (thread.escalade) button.appendChild(el('span', 'support-state', 'Demande une personne'));
+        var excerpt = el('span', 'support-excerpt', thread.dernierTexte || thread.sujet || ''); excerpt.setAttribute('data-i18n-skip', ''); button.appendChild(excerpt);
+        var date = el('time', 'ptable-sub', baremeDate(thread.dernierAt || thread.createdAt)); button.appendChild(date);
+      }
+      button.setAttribute('aria-pressed', String(view.selected === thread.id));
+      if (view.list.children[index] !== button) view.list.insertBefore(button, view.list.children[index] || null);
+    });
+    Array.prototype.forEach.call(view.list.querySelectorAll('.support-thread'), function (button) { if (!wanted[button.dataset.thread]) button.remove(); });
+    var empty = view.list.querySelector('.support-inbox-empty');
+    if (!filtered.length && !empty) view.list.appendChild(el('p', 'help support-inbox-empty', 'Aucune conversation dans cet état.'));
+    if (filtered.length && empty) empty.remove();
+  }
+  function supportSelect(view, id) {
+    if (!supportCurrent(view)) return;
+    view.selected = id; view.detail = null;
+    history.replaceState(null, '', '#/support?thread=' + encodeURIComponent(id));
+    clear(view.conversation); view.conversation.appendChild(el('p', 'help', 'Chargement de la conversation…'));
+    supportRenderList(view); supportLoadThread(view, false);
+  }
+  async function supportLoadThread(view, background) {
+    if (!supportCurrent(view) || !view.selected || view.detailBusy || supportDraft(view.selected).sending || supportDraft(view.selected).closing) return;
+    var id = view.selected, version = supportDraft(view.selected).version;
+    view.detailBusy = true;
+    try {
+      var r = await supportRequest(view, 'GET', '/support/' + encodeURIComponent(id), null, background);
+      if (!supportCurrent(view) || view.selected !== id || supportDraft(id).sending || supportDraft(id).version !== version) return;
+      if (!r.ok || !r.json || !r.json.thread || !Array.isArray(r.json.thread.messages)) {
+        view.failures = Math.min(2, view.failures + 1);
+        if (!view.detail) {
+          clear(view.conversation);
+          var failure = el('p', 'help', r.status === 403 ? 'Accès aux conversations refusé.' : 'Conversation indisponible. Actualisez pour réessayer.');
+          failure.setAttribute('role', 'alert'); view.conversation.appendChild(failure);
+        }
+        return;
+      }
+      supportRenderThread(view, r.json.thread);
+    } finally {
+      view.detailBusy = false;
+      if (supportCurrent(view) && view.selected !== id) supportLoadThread(view, false);
+    }
+  }
+  function supportRenderThread(view, thread) {
+    var fresh = !view.detail || view.detail.id !== thread.id;
+    view.detail = thread;
+    var draft = supportDraft(thread.id);
+    if (fresh) {
+      clear(view.conversation);
+      view.heading = el('h2', 'chart-card-title', 'Conversation'); view.heading.tabIndex = -1; view.conversation.appendChild(view.heading);
+      view.recipient = el('p', 'help'); view.conversation.appendChild(view.recipient);
+      view.threadStatus = el('p', 'support-state'); view.threadStatus.setAttribute('role', 'status'); view.conversation.appendChild(view.threadStatus);
+      view.log = el('div', 'support-log'); view.log.id = 'support-log'; view.log.setAttribute('role', 'log'); view.log.setAttribute('aria-label', 'Messages de la conversation');
+      view.log.setAttribute('aria-live', 'polite'); view.log.setAttribute('aria-relevant', 'additions'); view.conversation.appendChild(view.log);
+      if (canWriteSupport()) {
+        var form = el('form', 'support-composer'); form.id = 'support-form';
+        var label = el('label', null, 'Votre réponse'); label.htmlFor = 'support-text'; form.appendChild(label);
+        view.text = el('textarea', 'input'); view.text.id = 'support-text'; view.text.rows = 4; view.text.value = draft.texte;
+        view.text.setAttribute('aria-describedby', 'support-send-status'); if (view.messageMax) view.text.maxLength = view.messageMax;
+        view.text.addEventListener('input', function () { draft.texte = view.text.value; }); form.appendChild(view.text);
+        view.send = el('button', 'btn btn-primary', 'Envoyer la réponse'); view.send.type = 'submit'; view.send.id = 'support-send'; form.appendChild(view.send);
+        view.close = el('button', 'btn btn-sm', 'Fermer la conversation'); view.close.type = 'button'; view.close.id = 'support-close';
+        view.close.addEventListener('click', function () { supportClose(view, thread.id); }); form.appendChild(view.close);
+        view.sentStatus = el('p', 'help'); view.sentStatus.id = 'support-send-status'; view.sentStatus.setAttribute('role', 'status'); form.appendChild(view.sentStatus);
+        view.recover = el('div', 'support-recovery'); view.recover.id = 'support-recover'; form.appendChild(view.recover);
+        form.addEventListener('submit', function (event) { event.preventDefault(); supportSend(view, thread.id); });
+        view.conversation.appendChild(form);
+      } else view.conversation.appendChild(el('p', 'help', 'Lecture seule — répondre demande la permission de répondre aux conversations.'));
+      view.heading.focus();
+    }
+    view.recipient.textContent = thread.courriel || 'Sans courriel : la réponse sera visible dans la messagerie du site.';
+    if (thread.courriel) view.recipient.setAttribute('data-i18n-skip', ''); else view.recipient.removeAttribute('data-i18n-skip');
+    view.threadStatus.textContent = supportStatus(view, thread.statut);
+    var atBottom = view.log.scrollHeight - view.log.scrollTop - view.log.clientHeight < 16;
+    var known = {};
+    Array.prototype.forEach.call(view.log.children, function (row) { known[row.dataset.message] = row; });
+    thread.messages.forEach(function (message) {
+      var row = known[message.id];
+      if (!row) {
+        row = el('article', 'support-message'); row.dataset.message = message.id; row.dataset.from = message.de;
+        row.appendChild(el('strong', null, message.de === 'nota' ? 'Nota' : message.de === 'assistant' ? 'Assistant Nota' : 'Visiteur'));
+        var body = el('p', 'support-message-text', message.texte); body.setAttribute('data-i18n-skip', ''); row.appendChild(body);
+        var when = el('time', 'ptable-sub', baremeDate(message.createdAt)); if (message.createdAt) when.dateTime = message.createdAt;
+        row.appendChild(when); view.log.appendChild(row);
+      }
+      supportMessageDelivery(view, thread.id, message, row);
+    });
+    if (atBottom) view.log.scrollTop = view.log.scrollHeight;
+    supportComposerState(view, draft);
+  }
+  function supportMessageDelivery(view, id, message, row) {
+    var box = row.querySelector('.support-email-state');
+    if (message.notificationPending !== true) { if (box) box.remove(); return; }
+    var busy = !!view.deliveryRetries[message.id];
+    if (box && box.dataset.busy === String(busy)) return;
+    if (!box) { box = el('div', 'support-email-state'); row.appendChild(box); }
+    clear(box); box.dataset.busy = String(busy);
+    var note = el('p', 'help', 'Réponse enregistrée, mais envoi du courriel non confirmé.'); note.setAttribute('role', 'status'); box.appendChild(note);
+    if (canWriteSupport()) {
+      var retry = el('button', 'btn btn-sm', busy ? 'Envoi…' : 'Réessayer le courriel'); retry.type = 'button'; retry.disabled = busy;
+      retry.addEventListener('click', function () { supportRetryEmail(view, id, message, row); }); box.appendChild(retry);
+    }
+  }
+  async function supportRetryEmail(view, id, message, row) {
+    if (!supportCurrent(view) || view.selected !== id || !canWriteSupport() || view.deliveryRetries[message.id]) return;
+    var draft = supportDraft(id);
+    draft.version++; view.deliveryRetries[message.id] = true; supportMessageDelivery(view, id, message, row);
+    var r = await supportRequest(view, 'POST', '/support/' + encodeURIComponent(id) + '/reponse', { texte: message.texte, messageId: message.id }, false);
+    draft.version++; delete view.deliveryRetries[message.id];
+    if (!supportCurrent(view) || view.selected !== id) return;
+    if (r.ok && r.json && r.json.thread && Array.isArray(r.json.thread.messages)) {
+      var confirmed = r.json.thread.messages.find(function (entry) { return entry.id === message.id; });
+      if (confirmed && !confirmed.notificationPending && draft.status === 'Réponse enregistrée, mais envoi du courriel non confirmé.') draft.status = 'Courriel envoyé.';
+      supportRenderThread(view, r.json.thread);
+    }
+    else supportMessageDelivery(view, id, message, row);
+  }
+  function supportComposerState(view, draft) {
+    if (!view.send) return;
+    view.send.disabled = draft.sending || !!draft.closing;
+    view.close.disabled = draft.sending || !!draft.closing;
+    view.close.hidden = view.detail && view.detail.statut === 'clos';
+    view.send.textContent = draft.sending ? 'Envoi…' : 'Envoyer la réponse';
+    view.sentStatus.textContent = draft.status;
+    var attempts = draft.recovery.slice();
+    if (draft.uncertain && draft.attempt) attempts.push(draft.attempt);
+    attempts = attempts.filter(function (attempt) { return attempt.texte !== draft.texte.trim(); });
+    view.recover.hidden = !attempts.length;
+    var signature = JSON.stringify(attempts);
+    if (view.recover.dataset.signature !== signature) {
+      clear(view.recover); view.recover.dataset.signature = signature;
+      attempts.forEach(function (attempt) {
+        var excerpt = el('p', 'support-message-text', attempt.texte); excerpt.setAttribute('data-i18n-skip', ''); view.recover.appendChild(excerpt);
+        var button = el('button', 'btn btn-sm', 'Reprendre la réponse non confirmée'); button.type = 'button';
+        button.addEventListener('click', function () {
+          if (view.text.value.trim()) { view.sentStatus.textContent = 'Terminez votre brouillon avant de reprendre cette réponse.'; view.text.focus(); return; }
+          view.text.value = attempt.texte; draft.texte = attempt.texte; view.text.focus();
+        }); view.recover.appendChild(button);
+      });
+    }
+  }
+  async function supportSend(view, id) {
+    if (!supportCurrent(view) || view.selected !== id || !canWriteSupport()) return;
+    var draft = supportDraft(id), texte = view.text.value.trim();
+    if (draft.sending || draft.closing) return;
+    draft.texte = view.text.value;
+    if (!texte) { draft.status = 'Écrivez une réponse avant d’envoyer.'; supportComposerState(view, draft); view.text.focus(); return; }
+    if (view.messageMax && texte.length > view.messageMax) { draft.status = 'La réponse dépasse la longueur permise.'; supportComposerState(view, draft); return; }
+    if (!draft.attempt || draft.attempt.texte !== texte) {
+      if (draft.uncertain && draft.attempt) draft.recovery.push(draft.attempt);
+      var previous = draft.recovery.find(function (attempt) { return attempt.texte === texte; });
+      draft.recovery = draft.recovery.filter(function (attempt) { return attempt !== previous; });
+      draft.attempt = previous || {
+        texte: texte, messageId: window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : 'admin-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2),
+      };
+      draft.uncertain = false;
+    }
+    var attempt = draft.attempt;
+    draft.version++; draft.sending = true; draft.status = 'Envoi…'; supportComposerState(view, draft);
+    var r = await supportRequest(view, 'POST', '/support/' + encodeURIComponent(id) + '/reponse', attempt, false);
+    draft.sending = false;
+    if (r.ok && r.json && r.json.message && r.json.thread && Array.isArray(r.json.thread.messages)) {
+      if (draft.texte.trim() === texte) draft.texte = '';
+      var pendingEmail = r.json.thread.messages.some(function (message) { return message.id === r.json.message.id && message.notificationPending === true; });
+      draft.attempt = null; draft.uncertain = false; draft.status = pendingEmail ? 'Réponse enregistrée, mais envoi du courriel non confirmé.' : 'Réponse enregistrée dans la conversation.';
+      if (supportCurrent(view) && view.selected === id) {
+        view.text.value = draft.texte; supportRenderThread(view, r.json.thread); supportLoadList(view, true);
+      }
+    } else {
+      draft.uncertain = true;
+      draft.status = r.status === 403 ? 'Envoi refusé. Votre brouillon est conservé.' : 'Envoi non confirmé. Votre réponse est conservée; réessayez pour vérifier son enregistrement.';
+    }
+    if (supportCurrent(view) && view.selected === id) supportComposerState(view, draft);
+  }
+  async function supportClose(view, id) {
+    if (!supportCurrent(view) || view.selected !== id || !canWriteSupport()) return;
+    var draft = supportDraft(id);
+    if (draft.sending || draft.closing) return;
+    if (view.text.value.trim() || draft.uncertain || draft.recovery.length) {
+      draft.status = 'Terminez votre réponse avant de fermer la conversation.'; supportComposerState(view, draft); view.text.focus(); return;
+    }
+    draft.version++; draft.closing = true; supportComposerState(view, draft);
+    var r = await supportRequest(view, 'POST', '/support/' + encodeURIComponent(id) + '/clos', null, false);
+    draft.closing = false;
+    draft.status = r.ok && r.json && r.json.thread ? 'Conversation fermée. Un nouveau message du visiteur la rouvrira.' : 'Fermeture impossible. La conversation reste disponible.';
+    if (supportCurrent(view) && view.selected === id) {
+      if (r.ok && r.json && r.json.thread) { supportRenderThread(view, r.json.thread); supportLoadList(view, true); }
+      supportComposerState(view, draft);
+    }
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (!supportView) return;
+    clearTimeout(supportView.timer);
+    if (supportVisible(supportView)) supportRefresh(supportView, true);
+  });
+  window.addEventListener('online', function () { if (supportView) supportRefresh(supportView, true); });
+  window.addEventListener('offline', function () { if (supportView) clearTimeout(supportView.timer); });
 
   // ---------------------------------------------------------------------------
   // Overview page
@@ -812,6 +1152,8 @@
       view.appendChild(buildStatTiles(data, false));
       view.appendChild(buildCharts(data));
     }
+    view.appendChild(buildFunnel(data.entonnoir));
+    view.appendChild(buildSegments(data.segments, data.entonnoir));
     // Parrainages are all-time (ledger, not range series): shown in either
     // branch whenever the program has activity.
     var parr = buildParrainages(data.parrainages);
@@ -825,10 +1167,75 @@
     var gZero = !(g.open || g.retained || g.activeNotaries || g.onboardingNotaries);
     var perDay = (s.offersPerDay || []).some(function (p) { return (p.count || 0) > 0; });
     var byService = (s.byService || []).some(function (p) { return (p.offers || 0) > 0 || (p.retained || 0) > 0; });
-    return kZero && gZero && !perDay && !byService;
+    var hasEvents = (d.entonnoir || []).some(function (event) { return event.total > 0; });
+    return kZero && gZero && !perDay && !byService && !hasEvents;
   }
 
   // --- Stat tiles ------------------------------------------------------------
+  function buildSegments(segments, events) {
+    var card = el('section', 'chart-card segment-card');
+    card.appendChild(el('h2', 'chart-card-title', 'Appareils et sources de visite'));
+    card.appendChild(el('p', 'chart-card-sub', 'Chaque groupe présente des comptages distincts. Ces données ne suivent pas des personnes et ne prouvent pas la compatibilité. Les anciennes visites ne sont pas reclassées.'));
+    if (!Array.isArray(segments) || !segments.some(function (group) { return group.rows && group.rows.length; })) {
+      card.appendChild(el('p', 'chart-card-sub', 'Aucune ventilation disponible pour cette période.'));
+      return card;
+    }
+    var ids = ['visite', 'page_service_vue', 'publication_tentee', 'publication_echouee', 'publie', 'erreur_script', 'promesse_rejetee', 'navigation_mesuree'];
+    var columns = ids.map(function (id) { return (events || []).find(function (event) { return event.id === id; }); }).filter(Boolean);
+    function label(node, item) {
+      node.textContent = isEnglish() ? (item.nomEn || item.nom) : item.nom;
+      node.setAttribute('data-i18n-skip', '');
+      return node;
+    }
+    segments.forEach(function (group) {
+      if (!group.rows || !group.rows.length) return;
+      var detail = el('details'); detail.dataset.segment = group.id;
+      detail.appendChild(label(el('summary'), group));
+      var scroll = el('div', 'chart-scroll'), table = el('table', 'ptable');
+      var header = el('tr'), head = el('thead');
+      var category = label(el('th'), group); category.scope = 'col'; header.appendChild(category);
+      columns.forEach(function (event) { var th = label(el('th'), event); th.scope = 'col'; header.appendChild(th); });
+      head.appendChild(header); table.appendChild(head);
+      var body = el('tbody');
+      group.rows.forEach(function (bucket) {
+        var row = el('tr'); row.dataset.bucket = bucket.id;
+        var name = label(el('th'), bucket); name.scope = 'row'; row.appendChild(name);
+        columns.forEach(function (event) { row.appendChild(el('td', 'is-num', num((bucket.events || {})[event.id] || 0))); });
+        body.appendChild(row);
+      });
+      table.appendChild(body); scroll.appendChild(table); detail.appendChild(scroll); card.appendChild(detail);
+    });
+    return card;
+  }
+
+  function buildFunnel(events) {
+    var card = el('section', 'chart-card funnel-card');
+    card.appendChild(el('h2', 'chart-card-title', 'Parcours des visiteurs'));
+    card.appendChild(el('p', 'chart-card-sub', 'Comptages d’événements sur la période, sans visiteurs uniques ni parcours individuels. Les retours de paiement ne confirment pas un paiement.'));
+    if (!Array.isArray(events)) {
+      card.appendChild(el('p', 'chart-card-sub', 'Données du parcours indisponibles.'));
+      return card;
+    }
+    var scroll = el('div', 'chart-scroll');
+    var table = el('table', 'ptable');
+    var head = el('thead'), header = el('tr');
+    ['Événement', 'Nombre'].forEach(function (title) {
+      var th = el('th', null, title); th.scope = 'col'; header.appendChild(th);
+    });
+    head.appendChild(header); table.appendChild(head);
+    var body = el('tbody');
+    events.forEach(function (event) {
+      var row = el('tr'); row.dataset.event = event.id;
+      var name = el('th', null, isEnglish() ? (event.nomEn || event.nom) : event.nom);
+      name.scope = 'row'; name.setAttribute('data-i18n-skip', '');
+      row.appendChild(name);
+      row.appendChild(el('td', null, num(event.total)));
+      body.appendChild(row);
+    });
+    table.appendChild(body); scroll.appendChild(table); card.appendChild(scroll);
+    return card;
+  }
+
   function tile(k, v, sub, gauge) {
     var t = el('div', 'stat-tile' + (gauge ? ' is-gauge' : ''));
     t.appendChild(el('div', 'stat-k', k));
@@ -4916,6 +5323,10 @@
   var auditListe = null; // la liste courante, pour y APPENDRE la page suivante
 
   var AUDIT_LABELS = {
+    support_inbox_read: 'Boîte de messagerie consultée',
+    support_thread_read: 'Conversation consultée',
+    support_reply_sent: 'Réponse de soutien envoyée',
+    support_thread_closed: 'Conversation fermée',
     acte_regle: 'Acte réglé',
     acte_retenu: 'Acte retenu',
     annulation_frais: 'Frais d’annulation — dédommagement du notaire',

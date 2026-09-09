@@ -7,14 +7,10 @@
  * runScripts:'outside-only', then eval the two source files from disk IN ORDER
  * (domain first) inside the window scope, reproducing the real boot.
  *
- * Determinism: the offline fallback seeds the carnet from D.makeFixtures(today),
- * whose bids land 1..27 days ahead — so on the last day of a month the current
- * month can hold zero bids. To keep this smoke suite stable on ANY calendar day,
- * we pre-seed localStorage with makeFixtures(firstOfCurrentMonth): every fixture
- * date (2nd..28th) then falls inside the anchor month. This still exercises the
- * real offline path (fetch rejects -> ensureSeed reads localStorage) while making
- * monthBids a fixed, fully computable set. All expected values are derived from
- * the same window.NotaDomain instance — nothing about the app is hardcoded here.
+ * Determinism: the offline fallback seeds offers published today, valid under
+ * the expiration policy. The rolling six-week window includes the month seam,
+ * so all 1..27-day fixture dates are visible on any calendar day. Expected
+ * values come from the same window.NotaDomain instance as the app.
  */
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -87,11 +83,11 @@ async function boot(opts = {}) {
   win.eval(DOMAIN_SRC);
   const D = win.NotaDomain;
 
-  // 2) deterministic seed anchored to the first of the current month
+  // 2) deterministic, unexpired seed published today
   const today = todayISO();
   const anchor = firstOfMonth(today);
   const month = monthKey(anchor);
-  let seed = D.makeFixtures(anchor);
+  let seed = D.makeFixtures(today);
   // A test may reshape the seed (e.g. push an offer past the month seam) while
   // still exercising the real offline boot path.
   if (opts.mutateSeed) seed = opts.mutateSeed(seed, D) || seed;
@@ -105,7 +101,7 @@ async function boot(opts = {}) {
   win.eval(APP_SRC);
   await wait(50); // boot awaits store.listMonth
 
-  const expectedMonth = seed.filter((b) => monthKey(b.dateISO) === month);
+  const expectedMonth = seed; // The rolling six-week window includes the next month.
   return { dom, win, doc: win.document, D, Nota: win.Nota, today, anchor, month, seed, expectedMonth };
 }
 
@@ -556,8 +552,8 @@ test('profile "Mes offres" is a table, soonest first, past offers folded away', 
   const { win, doc, D, Nota } = await boot();
   const at = (n) => D.addDays(todayISO(), n);
   win.localStorage.setItem('nota.myoffers.v1', JSON.stringify([
-    { id: 'far',  dateISO: at(20), serviceId: 'financement',     montant: 900 },
-    { id: 'soon', dateISO: at(2),  serviceId: 'refinancement',   montant: 700 },
+    { id: 'far', expiresOn: at(7), dateISO: at(20), serviceId: 'financement',     montant: 900 },
+    { id: 'soon', expiresOn: at(2), dateISO: at(2),  serviceId: 'refinancement',   montant: 700 },
     { id: 'old',  dateISO: at(-5), serviceId: 'refinancement', montant: 4000 },
   ]));
   Nota.setTab('profil');
@@ -586,7 +582,7 @@ test('profile "Mes offres" is a table, soonest first, past offers folded away', 
   const soon = doc.querySelector('#my-offers-live tr[data-id="soon"]');
   assert.equal(soon.querySelector('.my-offer-status').dataset.status, 'pending');
   assert.equal(soon.querySelector('.my-offer-status').textContent, 'Ouverte — en attente d’un notaire');
-  assert.equal(doc.querySelector('#my-offers-past tr[data-id="old"] .my-offer-status').textContent, 'Date passée');
+  assert.equal(doc.querySelector('#my-offers-past tr[data-id="old"] .my-offer-status').textContent, 'Offre expirée');
   assert.equal(soon.querySelector('.c-montant').textContent, D.money(700));
   assert.equal(soon.querySelector('.my-offer-rel').textContent, 'dans 2 jours');
 });
@@ -936,6 +932,7 @@ test('the calendar toolbar carries no fullscreen button', async () => {
 // bid is the same act we do it automatically — otherwise pass `scope` for the
 // one under test — so a test reads as "these offers, this act".
 async function reseed(ctx, bids, scope) {
+  bids = bids.map(b => ({ expiresOn: ctx.D.offerExpirationDate(ctx.today, b.dateISO), ...b }));
   ctx.win.localStorage.setItem('nota.bids.v1', JSON.stringify(bids));
   const acts = [...new Set((bids || []).map((b) => b.serviceId))];
   const act = scope || (acts.length === 1 ? acts[0] : null);
@@ -2656,4 +2653,17 @@ test('the hero carries one product description, shown at every width', async () 
   const css = readFileSync(fileURLToPath(new URL('../public/styles.css', import.meta.url)), 'utf8');
   assert.ok(!/\.hero-tagline\s*\{[^}]*display:\s*none/.test(css),
     'the tagline is never display:none — it is the hero copy at every width');
+});
+
+test('offline storage removes legacy and expired open offers while preserving retained acts', async () => {
+  const { win, Nota } = await boot({ mutateSeed(seed, D) {
+    const bid = seed[0];
+    return [
+      { ...bid, id: 'legacy', status: 'ouverte', expiresOn: null },
+      { ...bid, id: 'expired', status: 'ouverte', expiresOn: D.addDays(todayISO(), -1) },
+      { ...bid, id: 'kept', status: 'retenue', expiresOn: null },
+    ];
+  } });
+  assert.deepEqual(JSON.parse(win.localStorage.getItem('nota.bids.v1')).map(b => b.id), ['kept']);
+  assert.equal(Nota.state.monthBids.some(b => b.id === 'legacy' || b.id === 'expired'), false);
 });

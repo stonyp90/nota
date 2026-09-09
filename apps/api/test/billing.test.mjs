@@ -625,7 +625,7 @@ test('A_REAUTORISER (ADR 0009): accepting a proposition releases the ORIGINAL ho
   const notaryId = notaryIdForEmail('p@notaire.ca');
   await repo.putNotary({ id: notaryId, email: 'p@notaire.ca', status: 'active', label: 'Étude P' });
   await repo.put({
-    id: 'x1', dateISO: '2026-08-20', serviceId: 'refinancement', montant: 2400, basePrice: 2000,
+    expiresOn: TODAY, id: 'x1', dateISO: '2026-08-20', serviceId: 'refinancement', montant: 2400, basePrice: 2000,
     status: 'ouverte', paymentStatus: 'authorized', paymentIntentId: 'pi_old', courriel: 'client@x.ca',
     propositions: [{ id: 'p1', notaryId, etude: 'Étude P', montant: 2600, delta: 200, status: 'en_attente', createdAt: TODAY }],
   });
@@ -653,7 +653,7 @@ test('a normal accept neither cancels nor captures the hold — it waits for the
   const { repo, stripe, app } = setup();
   const { auth } = await activeSession(app, stripe, 'q@notaire.ca', repo);
   await repo.put({
-    id: 'z1', dateISO: '2026-08-20', serviceId: 'refinancement', montant: 2400,
+    expiresOn: TODAY, id: 'z1', dateISO: '2026-08-20', serviceId: 'refinancement', montant: 2400,
     status: 'ouverte', paymentStatus: 'authorized', paymentIntentId: 'pi_z', courriel: 'c@x.ca',
   });
   const res = parse(await app.handle({

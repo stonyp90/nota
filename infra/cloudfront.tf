@@ -192,6 +192,17 @@ resource "aws_cloudfront_distribution" "web" {
     }
   }
 
+  ordered_cache_behavior {
+    path_pattern               = "/signature.html"
+    target_origin_id           = local.s3_origin_id
+    viewer_protocol_policy     = "redirect-to-https"
+    allowed_methods            = ["GET", "HEAD", "OPTIONS"]
+    cached_methods             = ["GET", "HEAD"]
+    compress                   = true
+    cache_policy_id            = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.signing.id
+  }
+
   # --- /api/* behavior: route to Lambda, no caching ---------------------
   ordered_cache_behavior {
     path_pattern           = "/api/*"

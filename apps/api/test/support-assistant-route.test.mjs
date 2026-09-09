@@ -84,15 +84,14 @@ test('une question couverte reçoit sa réponse DANS la requête, et ne réveill
 
 test('la réponse est dans le fil, à sa place, et le fil reste « à répondre »', async () => {
   const a = app({ scenario: REPOND });
-  const { token } = parse(await ask(a, 'Le prix comprend quoi ?'));
+  const { token, threadId } = parse(await ask(a, 'Le prix comprend quoi ?'));
   const fil = parse(await a.handle({ method: 'GET', path: '/support/thread', headers: { authorization: 'Bearer ' + token } }));
   assert.deepEqual(fil.messages.map((m) => m.de), [domain.SUPPORT_FROM.VISITEUR, domain.SUPPORT_FROM.ASSISTANT]);
-  const stored = await a.repo.getSupportThread(fil.messages[0].id.replace(/^.*$/, '')) || null;
+  const stored = await a.repo.getSupportThread(threadId);
   // Le statut vit sur l'item stocké : une réponse de machine ne le bouge pas.
-  const items = await a.repo.listSupportThreads?.({ limit: 10 });
-  const resume = items && (items.threads || items)[0];
-  if (resume) assert.equal(resume.statut, domain.SUPPORT_STATUT.A_REPONDRE);
-  assert.equal(stored, null);
+  assert.equal(stored.statut, domain.SUPPORT_STATUT.A_REPONDRE);
+  assert.equal(fil.escalade, false);
+  assert.equal(fil.humain, false);
 });
 
 test('la langue du visiteur voyage jusqu’au modèle', async () => {
@@ -164,6 +163,65 @@ test('la réponse de l’humain ferme l’escalade', async () => {
   assert.equal(stored.escalade, false);
 });
 
+test('a pending handoff survives refresh and follow-up questions without another assistant answer', async () => {
+  const a = app({ scenario: REPOND });
+  const first = parse(await ask(a, 'Je veux parler à une personne.', { courriel: 'client@example.ca' }));
+  assert.equal(first.escalade, true);
+  assert.equal(first.humain, false);
+  assert.equal(a.port.calls.length, 0, 'an explicit human request bypasses the model');
+  const read = () => a.handle({ method: 'GET', path: '/support/thread', headers: { authorization: 'Bearer ' + first.token } }).then(parse);
+  const before = await read();
+  assert.equal(before.escalade, true, 'a refreshed widget can restore the pending handoff');
+  assert.equal(before.humain, false);
+  const initialReply = before.messages.find((message) => message.de === domain.SUPPORT_FROM.ASSISTANT);
+  assert.ok(initialReply, 'the initial handoff is acknowledged');
+
+  const next = parse(await ask(a, 'Le prix comprend quoi ?', {}, first.token));
+  assert.equal(next.escalade, true);
+  assert.equal(next.humain, false);
+  assert.equal(next.reponse, undefined, 'the assistant does not rejoin while a person is expected');
+  assert.equal(a.port.calls.length, 0, 'the follow-up costs no model request');
+  const after = await read();
+  assert.equal(after.escalade, true);
+  assert.deepEqual(after.messages.map((message) => message.de), ['visiteur', 'assistant', 'visiteur']);
+  await flush();
+  const notices = a.mailer.sent.filter((mail) => mail.to === 'ops@nota.ca');
+  assert.equal(notices.length, 2, 'the operator receives the follow-up, too');
+  assert.match(notices[1].text, /Le prix comprend quoi/);
+  assert.match(notices[1].text, /Je veux parler à une personne/);
+});
+
+test('a human keeps the conversation after replying, including questions the assistant could answer', async () => {
+  const a = app({ scenario: ESCALADE });
+  const first = parse(await ask(a, 'Où en est mon dossier ?', { courriel: 'client@example.ca' }));
+  await flush();
+  const opToken = decodeURIComponent(/#reponse=([^"'&\s]+)/.exec(a.mailer.sent[0].html)[1]);
+  await a.handle({ method: 'POST', path: '/support/reply', headers: { authorization: 'Bearer ' + opToken }, body: JSON.stringify({ texte: 'Bonjour, je prends votre question en charge.' }) });
+  const answered = parse(await a.handle({ method: 'GET', path: '/support/thread', headers: { authorization: 'Bearer ' + first.token } }));
+  assert.equal(answered.escalade, false);
+  assert.equal(answered.humain, true);
+  const previousCalls = a.port.calls.length;
+  const next = parse(await ask(a, 'Le prix comprend quoi ?', {}, first.token));
+  assert.equal(next.escalade, false);
+  assert.equal(next.humain, true);
+  assert.equal(next.reponse, undefined);
+  assert.equal(a.port.calls.length, previousCalls, 'no bot interruption after a real reply');
+  await flush();
+  assert.equal(a.mailer.sent.filter((mail) => mail.to === 'ops@nota.ca').length, 2);
+  const stored = await a.repo.getSupportThread(first.threadId);
+  assert.equal(stored.statut, domain.SUPPORT_STATUT.A_REPONDRE, 'the inbox still shows the new visitor question');
+  assert.deepEqual(stored.messages.map((message) => message.de), ['visiteur', 'assistant', 'nota', 'visiteur']);
+});
+
+test('human ownership requires an actual operator message and ignores client-supplied status', async () => {
+  const a = app({ scenario: REPOND });
+  const result = parse(await ask(a, 'Le prix comprend quoi ?', { humain: true, escalade: true }));
+  assert.equal(result.humain, false);
+  assert.equal(result.escalade, false);
+  assert.ok(result.reponse, 'a visitor cannot forge operator presence through the payload');
+  assert.equal(a.port.calls.length, 1);
+});
+
 test('une panne du modèle escalade au lieu de perdre la question', async () => {
   const a = app({ scenario: { throw: 'timeout' } });
   const res = await ask(a, 'Bonjour ?');
@@ -171,6 +229,27 @@ test('une panne du modèle escalade au lieu de perdre la question', async () => 
   assert.equal(parse(res).escalade, true);
   await flush();
   assert.equal(a.mailer.sent.length, 1, 'et le propriétaire est prévenu');
+});
+
+test('a secret-resolution outage still saves the question and notifies a person', async () => {
+  let secretReads = 0;
+  const a = app({
+    env: { NOTA_ASSISTANT_KEY_PARAM: '/nota/assistant-key', NOTA_OPERATOR_EMAIL: 'ops@nota.ca' },
+    secrets: { async get() { secretReads++; throw new Error('secret backend unavailable'); } },
+  });
+  const result = await ask(a, 'Je voudrais une précision sur ce fonctionnement.');
+  assert.equal(result.statusCode, 201);
+  const body = parse(result);
+  assert.equal(secretReads, 1);
+  assert.equal(body.escalade, true);
+  assert.equal(body.humain, false);
+  assert.ok(body.reponse);
+  assert.ok(!body.reponse.texte.includes('secret backend'), 'internal error details are not sent to the visitor');
+  const saved = await a.repo.getSupportThread(body.threadId);
+  assert.equal(saved.messages[0].texte, 'Je voudrais une précision sur ce fonctionnement.');
+  assert.equal(saved.escalade, true);
+  await flush();
+  assert.equal(a.mailer.sent.filter((mail) => mail.to === 'ops@nota.ca').length, 1);
 });
 
 test('une réponse qui franchit une ligne est jetée : elle escalade au lieu de sortir', async () => {
@@ -190,6 +269,8 @@ test('sans clé, la messagerie se comporte exactement comme avant : pas de bulle
   const a = app({ scenario: undefined, env: { NOTA_OPERATOR_EMAIL: 'ops@nota.ca' } });
   const res = parse(await ask(a, 'Bonjour ?'));
   assert.equal(res.reponse, undefined, 'aucune bulle inventée');
+  assert.equal(res.escalade, false, 'human-only mode is not an invented assistant handoff');
+  assert.equal(res.humain, false, 'a person has not replied yet');
   const stored = await a.repo.getSupportThread(res.threadId);
   assert.equal(stored.messages.length, 1);
   assert.equal(stored.escalade, false, 'rien n’a examiné la question : ce n’est pas une escalade');

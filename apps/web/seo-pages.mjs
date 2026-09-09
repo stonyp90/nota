@@ -43,9 +43,10 @@ export function renderPage(page, lang = 'fr') {
 <link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/styles.css">
 <style>.search-page{max-width:760px;margin:auto;padding:24px 20px 60px}.search-page header{display:flex;justify-content:space-between;gap:20px;margin-bottom:48px}.search-page h1{font-size:clamp(2rem,6vw,3.4rem);line-height:1.12}.search-page p,.search-page li{font-size:1.05rem;line-height:1.7}.search-page section{margin:36px 0}.search-page .btn{white-space:normal;text-align:center;margin:12px 0}.search-page footer{border-top:1px solid #ccc;padding-top:24px}.search-page nav{display:flex;gap:16px;flex-wrap:wrap}.search-page a:focus-visible{outline:3px solid #315b43;outline-offset:4px}</style>
 <script type="application/ld+json">${JSON.stringify({ '@context': 'https://schema.org', '@type': 'WebPage', '@id': url, url, name: lang === 'en' ? I18N.tEn(page.title) : page.title, description: lang === 'en' ? I18N.tEn(page.description) : page.description, inLanguage: lang + '-CA', isPartOf: { '@id': origin + '/#website' } }).replaceAll('<', '\\u003c')}</script>
+<script src="/analytics.js" defer></script>
 <script src="/landing.js" defer></script>
 </head><body><div class="search-page">
-<header><a href="${cta}">Nota · Québec</a><a href="${pagePath(page, lang === 'en' ? 'fr' : 'en')}" lang="${lang === 'en' ? 'fr' : 'en'}" data-acquisition-link>${lang === 'en' ? 'Français' : 'English'}</a></header>
+<header><a href="${cta}" data-acquisition-link>Nota · Québec</a><a href="${pagePath(page, lang === 'en' ? 'fr' : 'en')}" lang="${lang === 'en' ? 'fr' : 'en'}" data-acquisition-link>${lang === 'en' ? 'Français' : 'English'}</a></header>
 <main><h1>${t(page.title)}</h1><p>${t(page.description)}</p>
 <a class="btn btn-primary btn-lg" href="${cta}" data-acquisition-link>${t('Voir les dates et proposer mon offre')}</a>
 <p>${t('Publier une demande est gratuit. La date reste à confirmer avec le notaire.')}</p>

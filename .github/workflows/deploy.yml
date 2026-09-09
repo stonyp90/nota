@@ -162,6 +162,27 @@ jobs:
           aws lambda wait function-updated-v2 --function-name nota-api
           aws lambda wait function-updated-v2 --function-name nota-reminders
 
+      - name: Deploy optional support email worker
+        if: vars.SUPPORT_EMAIL_FUNCTION != ''
+        shell: bash
+        env:
+          SUPPORT_EMAIL_FUNCTION: ${{ vars.SUPPORT_EMAIL_FUNCTION }}
+        run: |
+          set -euo pipefail
+          # Provision the function/least-privilege IAM before setting the repo
+          # variable. A configured but missing/unauthorized function is an error.
+          aws lambda get-function --function-name "$SUPPORT_EMAIL_FUNCTION" >/dev/null
+          support_probe_dir=$(mktemp -d)
+          unzip -q /tmp/api.zip -d "$support_probe_dir"
+          # Load from the actual isolated deployment artifact, so hoisted dev
+          # dependencies cannot mask a missing MIME parser or transitive module.
+          ( cd "$support_probe_dir" && node -e "require('./node_modules/mailparser'); require('./support-email'); require('./src/support-conversations')" )
+          aws lambda update-function-code \
+            --function-name "$SUPPORT_EMAIL_FUNCTION" \
+            --zip-file fileb:///tmp/api.zip \
+            --publish
+          aws lambda wait function-updated-v2 --function-name "$SUPPORT_EMAIL_FUNCTION"
+
       - name: Sync web assets to S3
         shell: bash
         run: |
