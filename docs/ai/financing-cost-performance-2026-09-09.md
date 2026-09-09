@@ -28,12 +28,16 @@ and [verification record](/Users/tony/Github/nota/docs/ai/bedrock-verification-2
 This research used public documentation and offline source inspection only; no
 credentials, account operations or live model calls.
 
-Parallel implementation scope supplied by the parent task: exact per-file/owner
-source-and-configuration result reuse, concurrent duplicate coalescing within one
-worker, provider client reuse, and a configurable global daily provider-call cap
-defaulting to 100, alongside the existing six attempts/hour/notary. Treat these
-as integration work to verify, not savings demonstrated here. Another agent owns
-evaluator latency and token-usage coverage. This document changes no code.
+The corresponding controls are implemented in
+[`financing-ai-routes.js`](/Users/tony/Github/nota/apps/api/src/financing-ai-routes.js)
+and [`financing-ai.js`](/Users/tony/Github/nota/apps/api/src/financing-ai.js): exact
+per-file/owner source-and-configuration result reuse, concurrent duplicate
+coalescing within one worker, provider client reuse, and a configurable global
+daily provider-call cap defaulting to 100, alongside the existing six
+attempts/hour/notary. Treat these as controls to verify, not savings demonstrated
+here. The route persists bounded latency and usage metadata so later evaluation
+can compare provider attempts, cache reads/writes and reused results. This
+document records research and does not itself change application code.
 
 ## Price comparison
 

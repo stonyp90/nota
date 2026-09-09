@@ -343,6 +343,16 @@ function cancellationConfigPK() {
 }
 const CANCELLATION_CONFIG_SK = 'BAREME';
 
+// Daily autonomous customer-experience controller (bounded UX policy only).
+// One item keeps the public API read to a single GetItem and lets the worker
+// replace the policy atomically at the item level.
+//
+//   PK = CONFIG#EXPERIENCE   SK = POLICY
+function experienceConfigPK() {
+  return 'CONFIG#EXPERIENCE';
+}
+const EXPERIENCE_CONFIG_SK = 'POLICY';
+
 // --- Campagnes ciblées (segments.js) ------------------------------------------
 // Trois familles d'items, TOUTES sur la table PRINCIPALE et toutes rangées sous
 // une partition FIXE — un seul item par identifiant/adresse, adressé par sa clé
@@ -725,6 +735,7 @@ function decodeCursor(curseur) {
 //   PK = LOGIN#<challengeId> SK = LOGIN              (a single-use magic link; TTL)
 //   PK = SESSION#<sessionId> SK = SESSION            (a revocable session; TTL)
 //   PK = AUDIT#<YYYY-MM-DD>  SK = <isoTs>#<id>       (append-only action log)
+//   PK = LEARNING#<YYYY-MM-DD> SK = <isoTs>#<id>     (append-only minimized learning signals)
 //   PK = RL#<scope>#<key>    SK = RL                 (a rate-limit counter; TTL)
 // --- Groupes d'administrateurs (RBAC découplé) ------------------------------
 // Un groupe réunit des permissions et s'attribue à des utilisateurs. Il vit sur
@@ -766,6 +777,12 @@ function auditPK(dayISO) {
   return 'AUDIT#' + String(dayISO).slice(0, 10);
 }
 function auditSK(isoTs, id) {
+  return String(isoTs) + '#' + String(id);
+}
+function learningSignalPK(dayISO) {
+  return 'LEARNING#' + String(dayISO).slice(0, 10);
+}
+function learningSignalSK(isoTs, id) {
   return String(isoTs) + '#' + String(id);
 }
 
@@ -874,6 +891,8 @@ module.exports = {
   PRIX_CONFIG_SK,
   cancellationConfigPK,
   CANCELLATION_CONFIG_SK,
+  experienceConfigPK,
+  EXPERIENCE_CONFIG_SK,
   // campagnes ciblées (segments.js)
   audienceGroupsPK,
   audienceGroupSK,
@@ -933,6 +952,8 @@ module.exports = {
   ADMIN_SESSION_SK,
   auditPK,
   auditSK,
+  learningSignalPK,
+  learningSignalSK,
   adminRlPK,
   ADMIN_RL_SK,
   GSI1_PK,

@@ -7,8 +7,8 @@ const D = require('../index.js');
 
 // A retained offer carrying the realized premium — the only shape the tuner
 // reads. Everything else on a bid is noise to it.
-function settled(tier, premium, status) {
-  return { tier, premium, status: status || D.STATUS.RETENUE };
+function settled(tier, premium, status, serviceId) {
+  return { tier, premium, status: status || D.STATUS.RETENUE, ...(serviceId ? { serviceId } : {}) };
 }
 
 test('tuning: with no history the tuned ladder IS the default ladder', () => {
@@ -94,6 +94,17 @@ test('tuning: tierMultiplier(id, bids) is the tuned value — one definition for
   const bids = Array.from({ length: 10 }, () => settled('prioritaire', 1.44));
   assert.equal(D.tierMultiplier('prioritaire', bids), D.tunedTierMultipliers(bids).prioritaire);
   assert.equal(D.tierMultiplier('nope', bids), null);
+});
+
+test('tuning: service history does not move another service’s urgency ladder', () => {
+  const testament = Array.from({ length: 20 }, () => settled('prioritaire', 3.25, undefined, 'testament'));
+  const financing = Array.from({ length: 20 }, () => settled('prioritaire', 2.75, undefined, 'financement'));
+  const history = [...testament, ...financing];
+  const will = D.tunedTierMultipliers(history, 'testament');
+  const loan = D.tunedTierMultipliers(history, 'financement');
+  assert.ok(will.prioritaire > loan.prioritaire, 'the will uses will history only');
+  assert.equal(D.tierMultiplier('prioritaire', history, 'testament'), will.prioritaire);
+  assert.equal(D.tierMultiplier('prioritaire', history, 'financement'), loan.prioritaire);
 });
 
 test('tuning: recommendedAmount follows the tuned multiplier when history is supplied', () => {

@@ -10,10 +10,11 @@ import { createRequire } from 'node:module';
 const D = createRequire(import.meta.url)('../index.js');
 
 test('every service carries English names', () => {
-  // The financing family (ADR 0010) — the walker covers whatever the catalogue holds.
   const expected = {
     refinancement: ['Mortgage refinancing', 'Refinancing'],
     financement: ['Mortgage financing', 'Financing'],
+    testament: ['Notarial will', 'Will'],
+    procuration: ['Notarial power of attorney', 'Power of attorney'],
   };
   for (const s of D.SERVICES) {
     assert.ok(s.nomEn && s.nomCourtEn, `service ${s.id} is missing nomEn/nomCourtEn`);

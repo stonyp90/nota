@@ -20,8 +20,8 @@ Fonctionnalité: Validation d'offre via l'API
     Alors la réponse a le statut 422
     Et la réponse contient le code d'erreur "service_inconnu"
 
-  Scénario: un service retiré du catalogue est refusé comme inconnu
-    Quand je publie une enchère pour "testament" le "2026-08-20" à 2500
+  Scénario: un identifiant de service hors catalogue est refusé comme inconnu
+    Quand je publie une enchère pour "service-retire" le "2026-08-20" à 2500
     Alors la réponse a le statut 422
     Et la réponse contient le code d'erreur "service_inconnu"
 

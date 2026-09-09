@@ -28,6 +28,13 @@ locals {
   # certificate, exactly like the public distribution does without a domain.
   admin_has_domain     = var.enable_admin && var.admin_domain_name != ""
   admin_domain_enabled = local.admin_has_domain ? 1 : 0
+  # The requested admin.gonata.ca hostname is kept separate from the current
+  # public gonota.ca site. An explicit admin_hosted_zone_id wins; otherwise
+  # the retained gonata.ca zone is used for that hostname and the public zone
+  # remains the default for every other admin domain.
+  admin_dns_zone_id = var.admin_hosted_zone_id != null ? var.admin_hosted_zone_id : (
+    endswith(var.admin_domain_name, ".gonata.ca") ? aws_route53_zone.legacy_gonata.zone_id : local.dns_zone_id
+  )
 }
 
 # ---------------------------------------------------------------------------

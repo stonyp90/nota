@@ -40,7 +40,7 @@ const COTE = {
   cote: 87,
   axes: [
     { id: 'satisfaction', nom: 'Satisfaction des clients', nomEn: 'Client satisfaction', points: 35.6, max: 40, detail: { note: 4.7, avis: 30, notePonderee: 4.6, cible: 4.8 } },
-    { id: 'services', nom: 'Services rendus', nomEn: 'Acts delivered', points: 18.1, max: 25, detail: { actes: 40, cible: 50, servicesRendus: 2, catalogue: 2 } },
+    { id: 'services', nom: 'Services rendus', nomEn: 'Acts delivered', points: 18.1, max: 25, detail: { actes: 40, cible: 50, servicesRendus: 1, catalogue: 4 } },
     { id: 'disponibilite', nom: 'Disponibilité', nomEn: 'Availability', points: 19.2, max: 20, detail: { repondu: 14, declinees: 3, reponses: 17, cibleReponses: 20, rayonKm: 50, urgences: true } },
     { id: 'presence', nom: 'Présence sur Nota', nomEn: 'Presence on Nota', points: 14.1, max: 15, detail: { fiche: true, secteur: true, joursDepuisActivite: 1, joursMembre: 457 } },
   ],
@@ -191,7 +191,7 @@ test('the panel prints the cote and its four axes — and never a share', async 
   assert.match(d0, /4,7/, 'the observed note'); assert.match(d0, /30/, 'the number of reviews');
   assert.match(d0, /4,6/, 'the bayesian weighted note'); assert.match(d0, /4,8/, 'the target');
   const d1 = axes[1].querySelector('.nc-cote-detail').textContent;
-  assert.match(d1, /40/, 'acts carried'); assert.match(d1, /50/, 'the target'); assert.match(d1, /2/, 'catalogue coverage');
+  assert.match(d1, /40/, 'acts carried'); assert.match(d1, /50/, 'the target'); assert.match(d1, /1/, 'services rendered'); assert.match(d1, /4/, 'catalogue coverage');
   const d2 = axes[2].querySelector('.nc-cote-detail').textContent;
   assert.match(d2, /17/, 'answers given'); assert.match(d2, /20/, 'answers targeted');
   assert.match(d2, /14/, 'proposals or acceptances'); assert.match(d2, /3/, 'declines');
@@ -286,7 +286,7 @@ test('the disponibilité axis says that answering is what counts — declining i
 
 test('the services axis no longer suggests that breadth of catalogue earns points', async () => {
   const ctx = await boot();
-  // A specialist: one service of two, and a strong volume.
+  // A specialist: one service of four, and a strong volume.
   const score = ctx.D.notaryScore(PROFILS.actif);
   stubNotaryApi(ctx.win, { cote: score, commission: null });
   await ctx.Nota.notary.signIn('demo@etude.ca');
@@ -295,7 +295,7 @@ test('the services axis no longer suggests that breadth of catalogue earns point
   assert.match(txt, /40 actes portés/, 'the volume that DOES earn the points: ' + txt);
   assert.match(txt, /Cible 50 actes/, 'against its target: ' + txt);
   // The catalogue coverage stays as information, explicitly scoreless.
-  assert.match(txt, /1 service rendu sur 2/, 'what the notary actually renders: ' + txt);
+  assert.match(txt, /1 service rendu sur 4/, 'what the notary actually renders: ' + txt);
   assert.match(txt, /Se spécialiser ne coûte rien/, 'specializing is free: ' + txt);
   assert.match(txt, /n’entre pas dans la cote/, 'breadth is out of the score: ' + txt);
 });

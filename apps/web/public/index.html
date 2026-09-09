@@ -64,6 +64,11 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <link rel="preconnect" href="https://rsms.me/" crossorigin />
     <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
+    <!-- Wordmark only: a geometric display face (--font-display) that pairs
+         with the logomark, loaded separately from the Inter UI type above. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@700;800&display=swap" />
     <link rel="stylesheet" href="styles.css" />
 
     <!-- Structured data: helps Google rich results and gives LLMs clean facts.
@@ -318,15 +323,23 @@
           <span class="brand-sub">Québec</span>
         </a>
         <span class="header-spacer"></span>
+        <div class="nav-history" role="group" aria-label="Navigation">
+          <button class="icon-btn nav-history-btn" id="nav-back" data-history="back" type="button" aria-label="Retour" title="Retour" disabled>
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18 9 12l6-6"/><path d="M9 12h10"/></svg>
+          </button>
+          <button class="icon-btn nav-history-btn" id="nav-forward" data-history="forward" type="button" aria-label="Avancer" title="Avancer" disabled>
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/><path d="M5 12h10"/></svg>
+          </button>
+        </div>
         <!-- Three flat doors (ADR 0010 §2): Carnet · Espace notaire ·
              Partenaires. No chevron submenus — every inner destination is
              reached from inside its pane, never from a nested menu. The
              dossier is deliberately NOT a door: with one act it is a step of
              booking and of the post-retention exchange, not a destination. -->
         <nav class="nav-tabs" role="tablist" aria-label="Sections">
-          <button class="nav-tab" role="tab" id="tab-carnet" aria-controls="pane-carnet" data-tab="carnet" aria-selected="true">Carnet</button>
-          <button class="nav-tab" role="tab" id="tab-notaires" aria-controls="pane-notaires" data-tab="notaires" aria-selected="false">Espace notaire</button>
-          <button class="nav-tab" role="tab" id="tab-partenaires" aria-controls="pane-partenaires" data-tab="partenaires" aria-selected="false">Partenaires</button>
+          <button class="nav-tab" role="tab" id="tab-carnet" aria-controls="pane-carnet" data-tab="carnet" aria-selected="true"><svg class="nav-tab-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>Carnet</button>
+          <button class="nav-tab" role="tab" id="tab-notaires" aria-controls="pane-notaires" data-tab="notaires" aria-selected="false"><svg class="nav-tab-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M2 13h20"/></svg>Espace notaire</button>
+          <button class="nav-tab" role="tab" id="tab-partenaires" aria-controls="pane-partenaires" data-tab="partenaires" aria-selected="false"><svg class="nav-tab-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="7" r="4"/><path d="M2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2M16 3.5a4 4 0 0 1 0 7.5M18 15a4 4 0 0 1 4 4v2"/></svg>Partenaires</button>
         </nav>
         <!-- Utility controls on ONE shared 28px strip (owner's ask,
              2026-08-26: « ensemble et même grosseur »): FR | EN segment ·
@@ -365,16 +378,21 @@
                focus on open, Escape closes it and hands focus back. No menu
                roles — the rows are plain buttons and links. -->
           <div class="notif-panel acct-panel" id="notif-panel" role="dialog" aria-label="Compte" hidden>
-            <button type="button" class="acct-item acct-head" id="acct-profil">
-              <span class="acct-avatar" aria-hidden="true">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
-              </span>
-              <span class="acct-labels">
-                <span class="acct-item-title" id="acct-name">Mon profil</span>
-                <span class="acct-item-sub" id="acct-email">Coordonnées, documents, préférences</span>
-                <span class="acct-role" id="acct-role" hidden></span>
-              </span>
-            </button>
+            <div class="acct-panel-head">
+              <button type="button" class="acct-item acct-head" id="acct-profil">
+                <span class="acct-avatar" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+                </span>
+                <span class="acct-labels">
+                  <span class="acct-item-title" id="acct-name">Mon profil</span>
+                  <span class="acct-item-sub" id="acct-email">Coordonnées, documents, préférences</span>
+                  <span class="acct-role" id="acct-role" hidden></span>
+                </span>
+              </button>
+              <button type="button" class="icon-btn acct-close" id="acct-close" aria-label="Fermer" title="Fermer">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              </button>
+            </div>
             <div class="acct-sep"></div>
             <!-- Role-aware actions (sign in / sign out, routes). Filled by renderAccountMenu(). -->
             <nav class="acct-actions" id="acct-actions" aria-label="Actions du compte"></nav>
@@ -425,6 +443,16 @@
         <span class="header-spacer"></span>
         <button type="button" class="icon-btn" id="mnav-close" aria-label="Fermer le menu">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="mnav-history" role="group" aria-label="Navigation">
+        <button type="button" class="mnav-link mnav-history-btn" data-history="back" aria-label="Retour" title="Retour" disabled>
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18 9 12l6-6"/><path d="M9 12h10"/></svg>
+          Retour
+        </button>
+        <button type="button" class="mnav-link mnav-history-btn" data-history="forward" aria-label="Avancer" title="Avancer" disabled>
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/><path d="M5 12h10"/></svg>
+          Avancer
         </button>
       </div>
       <!-- The same three flat doors as the header (ADR 0010 §2) — no
@@ -1346,7 +1374,7 @@
             </div>
             <div class="card">
               <h3>Hébergé au Canada</h3>
-              <p>Au repos, vos données sont conservées sur des serveurs canadiens (Amazon Web Services, région <strong>ca-central-1</strong>, Montréal). En transit, elles passent par un réseau de diffusion dont les points de présence sont aussi aux États-Unis et en Europe, et par des prestataires tiers : Stripe pour le paiement, rsms.me pour la police de caractères.</p>
+              <p>Au repos, vos données sont conservées sur des serveurs canadiens (Amazon Web Services, région <strong>ca-central-1</strong>, Montréal). En transit, elles passent par un réseau de diffusion dont les points de présence sont aussi aux États-Unis et en Europe, et par des prestataires tiers : Stripe pour le paiement, rsms.me et Google Fonts pour les polices de caractères.</p>
             </div>
             <div class="card">
               <h3>Anonyme par défaut</h3>
@@ -1622,6 +1650,7 @@
           <!-- Pourquoi le montant est pré-rempli comme il l'est : le mécanisme
                du délai, dit une seule fois, là où il sert. -->
           <p class="day-chance" id="day-chance"></p>
+          <p class="day-chance journey-guidance" id="journey-guidance" hidden aria-live="polite"></p>
           </section>
           <section class="offer-sec" role="group" aria-labelledby="offer-sec-devis__t">
           <div class="crit-sec-h" data-sec-ic="devis">

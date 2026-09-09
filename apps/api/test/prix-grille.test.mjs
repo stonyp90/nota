@@ -122,32 +122,31 @@ test('NOTA_PRIX_GRILLE et NOTA_PRIX_CENTS ne se MÉLANGENT jamais', () => {
 });
 
 test('readStored écarte la CELLULE fautive, jamais la grille entière', () => {
-  // Le catalogue a déjà rétréci une fois : testament et procuration ont été
-  // retirés au pivot financement-d'abord. Une grille stockée la veille du
-  // retrait ne doit pas emporter avec elle les décisions encore valides.
+  // Une cellule inconnue ne doit pas emporter avec elle les décisions encore
+  // valides du catalogue.
   const { config, ignorees } = prixConfig.readStored({
-    services: { financement: 12300, refinancement: 45600, testament: 9900 },
+    services: { financement: 12300, refinancement: 45600, service_inconnu: 9900 },
     garantieDate: { rapide: 7700, demain: 100 },
   });
   assert.deepEqual(config.services, { financement: 12300, refinancement: 45600 });
   assert.deepEqual(config.garantieDate, { rapide: 7700 });
-  assert.deepEqual(ignorees.sort(), ['garantieDate.demain', 'services.testament'],
+  assert.deepEqual(ignorees.sort(), ['garantieDate.demain', 'services.service_inconnu'],
     'les cellules écartées sont NOMMÉES — sans quoi personne ne saurait qu’elles le sont');
 
   // Rien de relisible : la grille stockée compte comme absente.
-  assert.deepEqual(prixConfig.readStored({ services: { testament: 9900 } }).config, {});
+  assert.deepEqual(prixConfig.readStored({ services: { service_inconnu: 9900 } }).config, {});
   // L'ancien corps se relit comme à l'écriture : il ne compte que seul.
   assert.deepEqual(prixConfig.readStored({ prixCents: 40000 }).config, { prixCents: 40000 });
   assert.deepEqual(prixConfig.readStored({ prixCents: 40000, services: { financement: 12300 } }).config,
     { services: { financement: 12300 } });
 });
 
-test('une grille stockée survit au retrait d’un service du catalogue', async () => {
+test('une grille stockée ignore une ancienne cellule hors catalogue', async () => {
   const repo = createMemoryRepo();
-  // Écrit par la porte admin d'hier, quand `testament` était encore au
-  // catalogue — impossible à écrire aujourd'hui, parfaitement lisible en base.
+  // Écrit par la porte admin d'hier, avec une cellule devenue inconnue —
+  // impossible à écrire aujourd'hui, mais parfaitement lisible en base.
   await repo.putPrixNotaConfig({
-    services: { financement: 12300, refinancement: 45600, testament: 9900 },
+    services: { financement: 12300, refinancement: 45600, service_inconnu: 9900 },
     garantieDate: { rapide: 7700 },
   }, NOW_ISO);
 
@@ -155,16 +154,16 @@ test('une grille stockée survit au retrait d’un service du catalogue', async 
   assert.equal(g.services.financement, 12300, 'la décision de Nota tient');
   assert.equal(g.services.refinancement, 45600, 'et celle-ci aussi');
   assert.equal(g.garantieDate.rapide, 7700);
-  assert.equal(g.services.testament, undefined, 'un service hors catalogue n’a plus de ligne');
+  assert.equal(g.services.service_inconnu, undefined, 'un service hors catalogue n’a plus de ligne');
 
   // Et la console le DIT au lieu de le taire : la ligne existe toujours en
   // base, l'écran ne doit pas afficher « aucun prix enregistré ».
   const h = adminHarness();
-  await h.repo.putPrixNotaConfig({ services: { financement: 12300, testament: 9900 } }, NOW_ISO);
+  await h.repo.putPrixNotaConfig({ services: { financement: 12300, service_inconnu: 9900 } }, NOW_ISO);
   const body = parse(await h.call('GET', '/admin/prix', { bearer: await login(h) }));
   assert.ok(body.override, 'la grille stockée doit rester visible');
   assert.equal(body.override.services.financement, 12300);
-  assert.deepEqual(body.override.ignorees, ['services.testament']);
+  assert.deepEqual(body.override.ignorees, ['services.service_inconnu']);
   assert.equal(body.effectif.services.financement, 12300);
 });
 

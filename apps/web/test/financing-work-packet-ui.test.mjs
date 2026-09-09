@@ -122,6 +122,12 @@ test('lazy work packet uses customer context even with no AI analysis and surviv
   assert.match(packet.textContent, /Transmis par un autre canal/);
   assert.match(packet.textContent, /échéance du taux déclarée est passée/);
   assert.match(packet.textContent, /Vérifications en attente/);
+  assert.match(packet.textContent, /Prochaine action/);
+  assert.match(packet.textContent, /Demander les renseignements et pièces manquants/);
+  assert.match(packet.textContent, /Aucune analyse IA lancée/);
+  assert.match(packet.textContent, /Plan des contrôles et intégrations/);
+  assert.match(section(packet, 'Plan des contrôles et intégrations').textContent, /Registre foncier \/ SLRI/);
+  assert.match(section(packet, 'Plan des contrôles et intégrations').textContent, /Préparation automatique seulement/);
   assert.match(packet.textContent, /ne constitue pas une approbation juridique/);
   assert.doesNotMatch(packet.textContent, /90\s*%|0[.,]9|pourcentage|réduction mesurée/);
   assert.equal(packet.querySelector('input[type="checkbox"], progress'), null);
@@ -149,6 +155,7 @@ test('prepare and immutable review responses refresh sources, comparisons, origi
   let packet = packetPanel(ctx);
   assert.equal(packet.open, true, 'refresh preserves the packet disclosure');
   assert.match(packet.textContent, /Proposition de l’IA/);
+  assert.match(packet.textContent, /Réviser les propositions de l’IA/);
   assert.match(section(packet, 'Déclarations et documents à comparer').textContent, /différences de format/);
   const review = ctx.panel.querySelector('.nc-financing-ai-review');
   input(review.elements['decision-0'], 'accepted', 'change');
@@ -159,6 +166,7 @@ test('prepare and immutable review responses refresh sources, comparisons, origi
   packet = packetPanel(ctx);
   assert.match(packet.textContent, /Accepté par le notaire/);
   assert.match(packet.textContent, /Corrigé par le notaire/);
+  assert.match(packet.textContent, /Les propositions IA ont été révisées/);
   assert.doesNotMatch(section(packet, 'Valeurs préparées pour le dossier').textContent, /Proposition de l’IA/);
   const corrected = [...packet.querySelectorAll('.nc-work-packet-field')].find(node => node.textContent.includes('Corrigé par le notaire'));
   assert.match(corrected.textContent, /Banque corrigée/);

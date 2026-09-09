@@ -267,7 +267,7 @@ test('section search handles accents, clears with Escape, and navigates with Ent
   input.dispatchEvent(new win.Event('input', { bubbles: true }));
   assert.equal(doc.querySelector('.admin-rail [role="status"]').hidden, false);
   input.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-  assert.equal([...doc.querySelectorAll('.admin-rail-link')].filter(n => !n.hidden).length, 12);
+  assert.equal([...doc.querySelectorAll('.admin-rail-link')].filter(n => !n.hidden).length, 14);
   input.value = 'prix';
   input.dispatchEvent(new win.Event('input', { bubbles: true }));
   input.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
@@ -289,4 +289,39 @@ test('payments renders explicit credential status and working settings shortcuts
   shortcut.click();
   await settle(win);
   assert.equal(win.location.hash, '#/annulation');
+});
+
+test('services and features expose the domain catalogue and the operator inventory', async () => {
+  const service = {
+    id: 'testament', nom: 'Testament notarié', nomEn: 'Notarial will', actif: true,
+    description: 'Testament reçu devant notaire.',
+    prixAnnonce: { totalCents: 22900 },
+    pricing: { criteria: [{ id: 'beneficiaires', label: 'Bénéficiaires', required: true, options: [{ label: 'Une personne' }] }] },
+    documents: [{ id: 'piece_identite', nom: 'Pièce d’identité' }],
+    champs: [{ id: 'beneficiaires_legataires', label: 'Bénéficiaires et légataires' }],
+    planNotaire: [{ id: 'identity', label: 'Vérifier l’identité' }],
+    ai: { active: true, fields: [{ id: 'beneficiaries', label: 'Bénéficiaires' }] },
+    connaissance: { sources: [] },
+  };
+  const features = {
+    groupes: [{ id: 'integrations', nom: 'Intégrations et paiements', nomEn: 'Integrations and payments', fonctionnalites: [{ id: 'stripe-checkout', nom: 'Stripe Checkout', nomEn: 'Stripe Checkout', statut: 'actif', statutEn: 'active' }] }],
+    personnalisations: [{ id: 'prix', nom: 'Prix par service', nomEn: 'Service prices', mode: 'editable', permission: 'billing:write' }],
+  };
+  const base = authedApi();
+  const handler = (method, url, body) => {
+    if (url.includes('/catalogue')) return [200, { services: [service], actesAVenir: [], dates: [], deplacements: [], preteurs: [], typesDocuments: [], versions: {} }];
+    if (url.includes('/features')) return [200, { ok: true, ...features }];
+    return base(method, url, body);
+  };
+  const { win, doc } = await boot(handler, '#/auth?token=T');
+  await waitFor(win, '.admin-rail');
+  win.location.hash = '#/services';
+  await waitFor(win, '.service-card');
+  assert.equal(text(doc.querySelector('.service-card .chart-card-title')), 'Testament notarié');
+  assert.equal(text(doc.querySelector('.tpl-readonly-note strong')), 'Source unique');
+  assert.match(text(doc.querySelector('.service-card')), /Bénéficiaires et légataires/);
+  win.location.hash = '#/fonctionnalites';
+  await waitFor(win, '.feature-group');
+  assert.match(text(doc.querySelector('.feature-group')), /Stripe Checkout/);
+  assert.match(text(doc.querySelector('.feature-group + .chart-card')), /Prix par service/);
 });

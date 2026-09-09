@@ -311,6 +311,107 @@ paths:
                   review: { $ref: '#/components/schemas/FinancingAIReview' }
                   workPacket: { $ref: '#/components/schemas/FinancingWorkPacketResult' }
         default: { $ref: '#/components/responses/FinancingAIError' }
+  /notary/acts/preparation:
+    get:
+      summary: Read the private testament or procuration work packet and AI analysis.
+      description: The packet is rebuilt from the server-side dossier and never calls an AI provider on read.
+      security: [{ notarySession: [] }]
+      parameters:
+        - { name: id, in: query, required: true, schema: { type: string } }
+        - { name: dateISO, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: Restricted to the retaining notary.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [analysis, workPacket]
+                properties:
+                  analysis: { anyOf: [{ $ref: '#/components/schemas/ActAIAnalysis' }, { type: 'null' }] }
+                  workPacket: { $ref: '#/components/schemas/ActWorkPacketResult' }
+        default: { $ref: '#/components/responses/FinancingAIError' }
+    post:
+      summary: Extract evidence-backed testament or procuration intake proposals.
+      description: Requires explicit processing authorization. Proposals are private, bounded and require notary review; no legal conclusion or signing decision is produced.
+      security: [{ notarySession: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, dateISO, pages, processingAuthorized]
+              properties:
+                id: { type: string }
+                dateISO: { type: string, format: date }
+                processingAuthorized: { const: true }
+                pages:
+                  type: array
+                  minItems: 1
+                  maxItems: 8
+                  items:
+                    type: object
+                    required: [documentId, page, text]
+                    properties:
+                      documentId: { type: string, pattern: '^[a-zA-Z0-9_-]{1,80}$' }
+                      page: { type: integer, minimum: 1, maximum: 10000 }
+                      text: { type: string, minLength: 1, maxLength: 8000 }
+      responses:
+        '200':
+          description: Evidence-backed proposals persisted in the private act file.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, analysis, workPacket, reused]
+                properties:
+                  ok: { const: true }
+                  reused: { type: boolean }
+                  analysis: { $ref: '#/components/schemas/ActAIAnalysis' }
+                  workPacket: { $ref: '#/components/schemas/ActWorkPacketResult' }
+        default: { $ref: '#/components/responses/FinancingAIError' }
+  /notary/acts/review:
+    post:
+      summary: Record the retaining notary's review of testament or procuration proposals.
+      description: Exactly one decision is required for every proposal; corrections and rejections require a reason.
+      security: [{ notarySession: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, dateISO, analysisId, decisions]
+              properties:
+                id: { type: string }
+                dateISO: { type: string, format: date }
+                analysisId: { type: string }
+                activeReviewSeconds: { type: [integer, 'null'], minimum: 0, maximum: 86400 }
+                decisions:
+                  type: array
+                  maxItems: 24
+                  items:
+                    type: object
+                    required: [index, decision]
+                    properties:
+                      index: { type: integer, minimum: 0 }
+                      decision: { enum: [accepted, corrected, rejected] }
+                      value: { type: string, minLength: 1, maxLength: 1000 }
+                      reason: { type: string, minLength: 1, maxLength: 500 }
+      responses:
+        '200':
+          description: Immutable notary review saved in the private file.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, review, workPacket]
+                properties:
+                  ok: { const: true }
+                  review: { $ref: '#/components/schemas/FinancingAIReview' }
+                  workPacket: { $ref: '#/components/schemas/ActWorkPacketResult' }
+        default: { $ref: '#/components/responses/FinancingAIError' }
   /auth/oauth/providers:
     get:
       summary: List Google, Microsoft and LinkedIn sign-in availability
@@ -696,7 +797,7 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [month, bids]
+                required: [month, bids, experience]
                 properties:
                   month:
                     type: string
@@ -705,6 +806,8 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Bid"
+                  experience:
+                    $ref: "#/components/schemas/CustomerExperience"
         "400":
           description: Malformed `month` parameter.
           content:
@@ -4078,11 +4181,104 @@ components:
       anyOf:
         - { type: 'null' }
         - { $ref: '#/components/schemas/FinancingWorkPacket' }
-    FinancingWorkPacket:
+    ActWorkPacketResult:
+      anyOf:
+        - { type: 'null' }
+        - { $ref: '#/components/schemas/ActWorkPacket' }
+    ActWorkPacket:
       type: object
-      required: [version, customerContext, documentInventory, draftFields, missing, comparisons, dateFlags, checks, clientRequestDraft, lenderRequestDraft, measurement]
+      required: [version, serviceId, knowledgeVersion, controlPlanVersion, parameterCoverage, customerContext, documentInventory, draftFields, missing, comparisons, dateFlags, checks, controls, workflow, clientRequestDraft, measurement, todayISO]
       properties:
         version: { type: string }
+        serviceId: { enum: [testament, procuration] }
+        knowledgeVersion:
+          type: string
+          description: Version of the source-grounded service knowledge used for preparation.
+        controlPlanVersion:
+          type: string
+          description: Version of the domain-owned notary control and integration plan.
+        parameterCoverage: { $ref: '#/components/schemas/NotaryParameterCoverage' }
+        customerContext:
+          type: array
+          items: { $ref: '#/components/schemas/FinancingContextItem' }
+        documentInventory:
+          type: array
+          items:
+            type: object
+            required: [id, label, status]
+            properties:
+              id: { type: string }
+              label: { type: string }
+              status: { enum: [missing, listed, external] }
+        draftFields:
+          type: array
+          items:
+            type: object
+            required: [fieldId, label, value, source, evidence]
+            properties:
+              fieldId: { type: string }
+              label: { type: string }
+              value: { type: string }
+              originalValue: { type: string }
+              source: { enum: [customer, ai_proposal, notary_accepted, notary_corrected] }
+              evidence:
+                type: array
+                items:
+                  type: object
+                  required: [documentId, page, quote]
+                  properties:
+                    documentId: { type: string }
+                    page: { type: integer, minimum: 1 }
+                    quote: { type: string }
+        missing:
+          type: array
+          items: { $ref: '#/components/schemas/FinancingMissingItem' }
+        comparisons: { type: array, items: { type: object } }
+        dateFlags: { type: array, items: { type: object } }
+        checks:
+          type: array
+          items:
+            type: object
+            required: [id, label, owner, status, sourceIds]
+            properties:
+              id: { type: string }
+              label: { type: string }
+              owner: { const: notary }
+              status: { const: pending }
+              sourceIds: { type: array, items: { type: string } }
+        controls:
+          type: array
+          description: Service-specific notary controls. They remain pending until a separately recorded professional workflow decision.
+          items: { $ref: '#/components/schemas/NotaryControl' }
+        workflow:
+          $ref: '#/components/schemas/NotaryWorkflow'
+        clientRequestDraft:
+          anyOf:
+            - { type: 'null' }
+            - type: object
+              required: [opening, items, closing]
+              properties:
+                opening: { type: string }
+                items: { type: array, items: { $ref: '#/components/schemas/FinancingMissingItem' } }
+                closing: { type: string }
+        measurement:
+          type: object
+          required: [target, measuredReduction, reviewSeconds]
+          properties:
+            target: { const: 0.9 }
+            measuredReduction: { type: 'null' }
+            reviewSeconds: { type: [integer, 'null'] }
+        todayISO: { type: [string, 'null'], format: date }
+    FinancingWorkPacket:
+      type: object
+      required: [version, serviceId, controlPlanVersion, parameterCoverage, customerContext, documentInventory, draftFields, missing, comparisons, dateFlags, checks, controls, workflow, clientRequestDraft, measurement]
+      properties:
+        version: { type: string }
+        serviceId: { enum: [financement, refinancement, testament, procuration] }
+        controlPlanVersion:
+          type: string
+          description: Version of the domain-owned notary control and integration plan.
+        parameterCoverage: { $ref: '#/components/schemas/NotaryParameterCoverage' }
         customerContext:
           type: array
           items: { $ref: '#/components/schemas/FinancingContextItem' }
@@ -4152,6 +4348,16 @@ components:
               owner: { enum: [notary, lender, registry] }
               status: { const: pending }
               sourceIds: { type: array, items: { type: string } }
+        controls:
+          type: array
+          description: >-
+            Service-specific notary controls. These remain pending until a
+            separately recorded professional workflow decision; integration
+            candidates are routing hints and are not live connectors.
+          items:
+            $ref: '#/components/schemas/NotaryControl'
+        workflow:
+          $ref: '#/components/schemas/NotaryWorkflow'
         clientRequestDraft:
           anyOf:
             - { type: 'null' }
@@ -4187,6 +4393,153 @@ components:
             target: { const: 0.9, description: Owner target; not an observed result. }
             measuredReduction: { type: 'null' }
             reviewSeconds: { type: [integer, 'null'] }
+    NotaryControl:
+      type: object
+      required: [id, label, owner, critical, automation, integrationType, integrationLabel, integrationCandidate, evidenceIds, externalEvidence, status]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        owner: { enum: [notary, lender, registry] }
+        critical: { type: boolean }
+        automation: { const: prepare_only }
+        integrationType: { type: string }
+        integrationLabel: { type: string }
+        integrationCandidate: { type: string }
+        evidenceIds: { type: array, items: { type: string } }
+        externalEvidence: { type: array, items: { type: string } }
+        status: { const: pending }
+    NotaryParameterCoverage:
+      type: object
+      required: [version, serviceId, pricing, intake, documents, ai, humanControls, integrations, caseCoverage]
+      description: >-
+        Server-derived coverage map linking catalogue parameters, documents,
+        evidence extraction fields, integrations and controls. It describes
+        preparation coverage and never certifies a legal condition.
+      properties:
+        version: { type: string }
+        serviceId: { enum: [financement, refinancement, testament, procuration] }
+        pricing:
+          type: array
+          items:
+            type: object
+            required: [id, label, required]
+            properties:
+              id: { type: string }
+              label: { type: string }
+              required: { type: boolean }
+        intake:
+          type: array
+          items:
+            type: object
+            required: [id, label]
+            properties:
+              id: { type: string }
+              label: { type: string }
+        documents:
+          type: array
+          items:
+            type: object
+            required: [id, label, conditional]
+            properties:
+              id: { type: string }
+              label: { type: string }
+              conditional: { type: boolean }
+        ai:
+          type: object
+          required: [fields, mappedIntake, unmappedIntake]
+          properties:
+            fields:
+              type: array
+              items:
+                type: object
+                required: [id, label]
+                properties:
+                  id: { type: string }
+                  label: { type: string }
+            mappedIntake:
+              type: array
+              items:
+                type: object
+                required: [intakeId, aiFieldId]
+                properties:
+                  intakeId: { type: string }
+                  aiFieldId: { type: string }
+            unmappedIntake: { type: array, items: { type: string } }
+        humanControls:
+          type: array
+          items:
+            type: object
+            required: [id, label, owner]
+            properties:
+              id: { type: string }
+              label: { type: string }
+              owner: { enum: [notary, lender, registry] }
+        integrations:
+          type: array
+          items:
+            type: object
+            required: [type, label, candidate]
+            properties:
+              type: { type: string }
+              label: { type: string }
+              candidate: { type: string }
+        caseCoverage:
+          $ref: '#/components/schemas/NotaryCaseCoverage'
+    NotaryCaseCoverage:
+      type: object
+      required: [version, serviceId, cases, unknownCasePolicy, outputPolicy]
+      description: >-
+        Explicit service branches for preparation and review. Unknown or
+        out-of-catalogue cases are routed to the notary before automation.
+      properties:
+        version: { type: string }
+        serviceId: { enum: [financement, refinancement, testament, procuration] }
+        cases:
+          type: array
+          items:
+            type: object
+            required: [id, label, disposition, critical, signals, controlIds]
+            properties:
+              id: { type: string }
+              label: { type: string }
+              disposition: { enum: [prepare_and_review, route_to_notary] }
+              critical: { type: boolean }
+              signals: { type: array, items: { type: string } }
+              controlIds: { type: array, items: { type: string } }
+        unknownCasePolicy: { const: route_to_notary_before_automation }
+        outputPolicy: { const: evidence_proposal_only }
+    NotaryWorkflow:
+      type: object
+      description: >-
+        Deterministic next-action guidance for the retaining notary. It is a
+        workflow hint and never certifies legal readiness, signing readiness or
+        completion of a control.
+      required: [stage, nextActions, ai, controls]
+      properties:
+        stage: { enum: [client_intake, ai_ready, ai_review, exceptions, notary_controls] }
+        nextActions:
+          type: array
+          items:
+            type: object
+            required: [id, owner, priority, count]
+            properties:
+              id: { enum: [request_missing_items, analyze_documents, review_ai_proposals, resolve_exceptions, complete_critical_controls, confirm_signing_conditions] }
+              owner: { enum: [client, notary] }
+              priority: { enum: [now, next] }
+              count: { type: integer, minimum: 0 }
+        ai:
+          type: object
+          required: [status, proposalCount, reviewSeconds]
+          properties:
+            status: { enum: [not_started, abstained, awaiting_review, reviewed] }
+            proposalCount: { type: integer, minimum: 0 }
+            reviewSeconds: { type: [integer, 'null'], minimum: 0 }
+        controls:
+          type: object
+          required: [pending, criticalPending]
+          properties:
+            pending: { type: integer, minimum: 0 }
+            criticalPending: { type: integer, minimum: 0 }
     FinancingContextItem:
       type: object
       required: [id, label, value, source]
@@ -4250,7 +4603,9 @@ components:
                 type: object
                 required: [fieldId, value, evidence]
                 properties:
-                  fieldId: { enum: [property_address, borrower_names, lender_name, loan_amount, rate_expiry, secured_debts] }
+                  # The exact field set is selected by the server-side service
+                  # contract; financing and act-specific AI share this envelope.
+                  fieldId: { type: string }
                   value: { type: string, minLength: 1, maxLength: 1000 }
                   evidence:
                     type: array
@@ -4272,6 +4627,13 @@ components:
             promptSha256: { type: string, pattern: '^[a-f0-9]{64}$' }
             inputSha256: { type: string, pattern: '^[a-f0-9]{64}$' }
         review: { $ref: '#/components/schemas/FinancingAIReview' }
+    ActAIAnalysis:
+      allOf:
+        - { $ref: '#/components/schemas/FinancingAIAnalysis' }
+        - type: object
+          required: [serviceId]
+          properties:
+            serviceId: { enum: [testament, procuration] }
     FinancingAIReview:
       type: object
       required: [reviewerId, reviewedAt, decisions, activeReviewSeconds, trainingEligible, signingReadiness]
@@ -5298,6 +5660,17 @@ components:
           description: >-
             The étude's postal sector (FSA, ADR 0025), null when none is
             declared — the feed then keeps the declarative travel rules.
+    CustomerExperience:
+      type: object
+      description: >-
+        Public projection of Nota's daily customer-experience controller. The
+        mode may add bounded orientation copy to the intake; it does not alter
+        legal questions, notary controls, prices or official outcomes.
+      required: [version, mode, guidanceLevel]
+      properties:
+        version: { type: string }
+        mode: { type: string, enum: [standard, guided] }
+        guidanceLevel: { type: string, enum: [standard, guided] }
     NotaryTarif:
       type: object
       description: >-

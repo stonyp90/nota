@@ -136,6 +136,6 @@ test('agendaByDate: skips malformed bids and returns [] for nothing', () => {
   assert.deepEqual(D.agendaByDate([]), []);
   assert.deepEqual(D.agendaByDate(null), []);
   assert.deepEqual(D.agendaByDate([{ id: 'z', dateISO: 'nope', serviceId: 'refinancement', montant: 1 }]), []);
-  // A bid for a retired act (ADR 0010) is filtered, never rendered or crashed on.
-  assert.deepEqual(D.agendaByDate([{ id: 'y', dateISO: '2026-08-20', serviceId: 'testament', montant: 1300, status: D.STATUS.OUVERTE }]), []);
+  // An unknown service is filtered, never rendered or crashed on.
+  assert.deepEqual(D.agendaByDate([{ id: 'y', dateISO: '2026-08-20', serviceId: 'service_inconnu', montant: 1300, status: D.STATUS.OUVERTE }]), []);
 });

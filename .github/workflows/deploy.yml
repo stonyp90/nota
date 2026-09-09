@@ -90,7 +90,7 @@ jobs:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Package + deploy the Lambdas (api + reminders)
+      - name: Package + deploy the Lambdas (api + reminders + customer improvement)
         shell: bash
         run: |
           set -euo pipefail
@@ -134,6 +134,14 @@ jobs:
           # cp -RL a bien déréférencé le lien et copié le code lui-même.
           test -f apps/api/node_modules/@nota/domain/index.js
 
+          # Fail before changing any live function if Terraform has not yet
+          # provisioned the complete production Lambda set. This keeps a new
+          # worker rollout from leaving API and reminders on a different
+          # revision while the worker is still absent.
+          for function in nota-api nota-reminders nota-customer-improvement; do
+            aws lambda get-function --function-name "$function" >/dev/null
+          done
+
           # Tests, their fixtures and le jeu d'or de l'évaluation (ADR 0046) ne
           # tournent jamais en production — le paquet reste maigre.
           ( cd apps/api && zip -qr /tmp/api.zip . -x '*.git*' 'test/*' 'test-support/*' 'eval/*' 'node_modules/@nota/domain/test/*' )
@@ -159,10 +167,20 @@ jobs:
             --zip-file fileb:///tmp/api.zip \
             --publish
 
-      - name: Wait for API and reminder updates
+          # The customer-improvement worker is intentionally deployed from the
+          # same small, vendored API artifact. It contains only deterministic
+          # aggregate analysis and the bounded experience-policy writer; it
+          # never receives a model credential.
+          aws lambda update-function-code \
+            --function-name nota-customer-improvement \
+            --zip-file fileb:///tmp/api.zip \
+            --publish
+
+      - name: Wait for API, reminder and customer-improvement updates
         run: |
           aws lambda wait function-updated-v2 --function-name nota-api
           aws lambda wait function-updated-v2 --function-name nota-reminders
+          aws lambda wait function-updated-v2 --function-name nota-customer-improvement
 
       - name: Deploy optional support email worker
         if: vars.SUPPORT_EMAIL_FUNCTION != ''

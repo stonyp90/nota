@@ -1742,12 +1742,12 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
   // demande (un lien neuf, à usage unique) et ne jamais être supprimé par un
   // désabonnement ou un registre de dédoublonnage. Au mieux : un échec d'envoi
   // ne change jamais la réponse de la route (qui reste générique de toute façon).
-  async function onOAuthLinkRequested({ email, provider, link, ttlMinutes, emailLanguage } = {}) {
+  async function onOAuthLinkRequested({ email, provider, role, link, ttlMinutes, emailLanguage } = {}) {
     const to = String(email || '').trim().toLowerCase();
     if (!to || !link) return { ok: false, sent: false };
     try {
       const unsub = unsubscribeUrl(to);
-      const msg = emails.oauthAccountLink({ provider, link, ttlMinutes, emailLanguage: await recipientLanguage(to, emailLanguage), baseUrl: base, unsubscribeUrl: unsub });
+      const msg = emails.oauthAccountLink({ provider, role, link, ttlMinutes, emailLanguage: await recipientLanguage(to, emailLanguage), baseUrl: base, unsubscribeUrl: unsub });
       await mailer.send({ to, subject: msg.subject, html: msg.html, text: msg.text, unsubscribeUrl: unsub });
       return { ok: true, sent: true };
     } catch { return { ok: false, sent: false }; }

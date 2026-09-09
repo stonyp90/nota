@@ -1,6 +1,6 @@
 {
   "datasetId": "nota-financing-extraction-development",
-  "version": "2026-09-09.1",
+  "version": "2026-09-09.3",
   "split": "development",
   "origin": "wholly_synthetic",
   "reviewStatus": "not_notary_reviewed",
@@ -8,10 +8,19 @@
   "fieldIds": [
     "property_address",
     "borrower_names",
+    "signing_parties",
+    "property_identifier",
+    "property_type",
     "lender_name",
+    "lender_contact",
     "loan_amount",
+    "purchase_price",
+    "loan_purpose",
+    "lender_instruction_version",
+    "property_changes",
     "rate_expiry",
-    "secured_debts"
+    "secured_debts",
+    "payout_valid_through"
   ],
   "cases": [
     {
@@ -102,7 +111,17 @@
             ]
           }
         ],
-        "missing": [],
+        "missing": [
+          "signing_parties",
+          "property_identifier",
+          "property_type",
+          "lender_contact",
+          "purchase_price",
+          "loan_purpose",
+          "lender_instruction_version",
+          "property_changes",
+          "payout_valid_through"
+        ],
         "conflicts": []
       }
     },
@@ -175,8 +194,17 @@
           }
         ],
         "missing": [
+          "signing_parties",
+          "property_identifier",
+          "property_type",
+          "lender_contact",
+          "purchase_price",
+          "loan_purpose",
+          "lender_instruction_version",
+          "property_changes",
           "rate_expiry",
-          "secured_debts"
+          "secured_debts",
+          "payout_valid_through"
         ],
         "conflicts": []
       }
@@ -205,10 +233,19 @@
         "missing": [
           "property_address",
           "borrower_names",
+          "signing_parties",
+          "property_identifier",
+          "property_type",
           "lender_name",
+          "lender_contact",
           "loan_amount",
+          "purchase_price",
+          "loan_purpose",
+          "lender_instruction_version",
+          "property_changes",
           "rate_expiry",
-          "secured_debts"
+          "secured_debts",
+          "payout_valid_through"
         ],
         "conflicts": []
       }
@@ -258,10 +295,19 @@
           }
         ],
         "missing": [
+          "signing_parties",
+          "property_identifier",
+          "property_type",
           "lender_name",
+          "lender_contact",
           "loan_amount",
+          "purchase_price",
+          "loan_purpose",
+          "lender_instruction_version",
+          "property_changes",
           "rate_expiry",
-          "secured_debts"
+          "secured_debts",
+          "payout_valid_through"
         ],
         "conflicts": []
       }
@@ -371,8 +417,17 @@
           }
         ],
         "missing": [
+          "signing_parties",
+          "property_identifier",
+          "property_type",
+          "lender_contact",
+          "purchase_price",
+          "loan_purpose",
+          "lender_instruction_version",
+          "property_changes",
           "rate_expiry",
-          "secured_debts"
+          "secured_debts",
+          "payout_valid_through"
         ],
         "conflicts": [
           "lender_name"
@@ -448,7 +503,16 @@
         ],
         "missing": [
           "property_address",
-          "secured_debts"
+          "signing_parties",
+          "property_identifier",
+          "property_type",
+          "lender_contact",
+          "purchase_price",
+          "loan_purpose",
+          "lender_instruction_version",
+          "property_changes",
+          "secured_debts",
+          "payout_valid_through"
         ],
         "conflicts": []
       }
@@ -580,7 +644,17 @@
             ]
           }
         ],
-        "missing": [],
+        "missing": [
+          "signing_parties",
+          "property_identifier",
+          "property_type",
+          "lender_contact",
+          "purchase_price",
+          "loan_purpose",
+          "lender_instruction_version",
+          "property_changes",
+          "payout_valid_through"
+        ],
         "conflicts": []
       }
     },
@@ -689,7 +763,17 @@
             ]
           }
         ],
-        "missing": [],
+        "missing": [
+          "signing_parties",
+          "property_identifier",
+          "property_type",
+          "lender_contact",
+          "purchase_price",
+          "loan_purpose",
+          "lender_instruction_version",
+          "property_changes",
+          "payout_valid_through"
+        ],
         "conflicts": []
       }
     }

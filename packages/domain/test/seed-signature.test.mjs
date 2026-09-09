@@ -19,13 +19,10 @@ test('seedSignature: reflects every service id and its prixDepart', () => {
   }
 });
 
-test('seedSignature: the retired acts left the signature, so adapters rebuild their demo data (ADR 0010)', () => {
-  // The signature is a fingerprint of the pricing shape: shrinking the
-  // catalogue MUST change it, or old testament/procuration fixtures would
-  // survive in adapters that compare signatures before reseeding.
+test('seedSignature: live service ids are part of the fixture fingerprint', () => {
   const sig = D.seedSignature();
-  assert.ok(!sig.includes('testament'), 'no testament in the fingerprint');
-  assert.ok(!sig.includes('procuration'), 'no procuration in the fingerprint');
+  assert.ok(sig.includes('testament:1800'), 'testament is in the fingerprint');
+  assert.ok(sig.includes('procuration:1500'), 'procuration is in the fingerprint');
   assert.ok(sig.includes('refinancement:2000'), 'the financing acts and their floors remain');
   assert.ok(sig.includes('financement:1800'), 'the new sibling act changes the fingerprint too');
 });

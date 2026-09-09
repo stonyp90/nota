@@ -11,6 +11,7 @@ const { decodeUnsubToken, createConsentRegistry } = require('./notifications');
 const { signToken, signChallengeToken, verifyToken, notaryIdForEmail, SCOPES } = require('./notary-auth');
 const { buildNotaryFeed, buildCarnetFeed } = require('./ics');
 const { statsDeltasForOffer, statsDeltasForRetain, statsDeltasForNotaryOnboarding, statsDeltasForFunnel, statsDeltasForAssistant } = require('./stats');
+const { createNotaryLearning } = require('./notary-learning');
 // `bidTtl` reads the ONE retention policy (domain.RETENTION_FAMILIES, family
 // `offre`); this file used to compute `400 * 86400` on its own.
 const { notaryNotifSubject, clientNotifSubject, bidTtl } = require('./keys');
@@ -690,6 +691,32 @@ function createApp(repo, opts = {}) {
     }
   }
 
+  // The improvement loop receives only bounded, hashed metadata. Customer
+  // actions can improve routing and communication, while field-level learning
+  // stays gated on a separately verified notary review in an offline job.
+  const notaryLearning = createNotaryLearning({
+    nowMs, newId,
+    append: (event, eventActor) => {
+      const qui = acteur(eventActor?.type || ACTEUR.SYSTEME, eventActor?.id);
+      if (typeof repo.appendLearningSignal === 'function') {
+        return repo.appendLearningSignal({
+          id: event.id,
+          ts: event.at,
+          day: now(),
+          action: 'notary_learning_signal',
+          adminId: null,
+          email: null,
+          ip: null,
+          acteur: qui,
+          meta: event,
+        });
+      }
+      // Compatibility fallback for a repository from before the dedicated
+      // learning stream. New production repositories expose the narrow port.
+      return appendAudit('notary_learning_signal', event, qui);
+    },
+  });
+
   // --- Un lien qu'on ne peut pas cliquer ne part pas (2026-09-01) ------------
   // Les liens des courriels sont bâtis sur NOTA_BASE_URL. Vérification faite sur
   // la Lambda réelle : elle est VIDE, donc le lien magique du notaire vaut
@@ -801,6 +828,35 @@ function createApp(repo, opts = {}) {
         return { plafonds: cfg.paliers.map((p) => ({ maxJours: p.maxJours, plafond: p.taux })), delaiJours: cfg.delaiJours };
       })(),
     };
+  }
+
+  // The public experience mode is a small, low-churn configuration read. Keep
+  // it in a short in-process cache so every month requested by the calendar
+  // does not create another DynamoDB GetItem; the daily worker's next change is
+  // visible within a minute on a warm Lambda.
+  let experienceCache = { at: null, value: domain.publicCustomerExperience(null) };
+  let experienceRead = null;
+  async function customerExperience() {
+    const at = nowMs();
+    if (experienceCache.at != null && at - experienceCache.at < 60 * 1000) return experienceCache.value;
+    if (experienceRead) return experienceRead;
+    experienceRead = (async () => {
+      let stored = null;
+      try {
+        if (typeof repo.getExperienceConfig === 'function') stored = await repo.getExperienceConfig();
+      } catch {
+        // A product-optimization read must never make the public carnet fail.
+        stored = null;
+      }
+      const value = domain.publicCustomerExperience(stored);
+      experienceCache = { at, value };
+      return value;
+    })();
+    try {
+      return await experienceRead;
+    } finally {
+      experienceRead = null;
+    }
   }
 
   function publicBid(b) {
@@ -1310,12 +1366,18 @@ function createApp(repo, opts = {}) {
       return json(422, { errors: [{ code: 'depot_absent', message: 'Le fichier n’est pas arrivé — réessayez le téléversement.' }] });
     }
     const pret = { ...doc, etat: 'pret', taille: tete.taille || doc.taille };
-    await repo.update({ ...bid, documents: docs.map((d) => (d.id === doc.id ? pret : d)) });
+    const updated = { ...bid, documents: docs.map((d) => (d.id === doc.id ? pret : d)) };
+    await repo.update(updated);
     await appendAudit(
       'document_depose',
       { bidId: bid.id, documentId: doc.id, de: qui, taille: pret.taille },
       acteurPartie(qui, bid, notaryId)
     );
+    if (qui === domain.CHAT_FROM.CLIENT) {
+      await notaryLearning.customerBehavior({ bid: updated, behavior: 'document_upload', metadata: {
+        documentCount: documentsOf(updated).filter(item => item.etat === 'pret').length,
+      } });
+    }
     // Prévenir l'autre partie, comme pour un message — au même endroit et par
     // le même chemin, pour qu'un document ne soit pas un événement de second
     // rang qu'on découvre en rouvrant le fil.
@@ -1571,14 +1633,22 @@ function createApp(repo, opts = {}) {
     authenticate: request => requireScope(bearer(request), SCOPES.SESSION),
     getSecret: name => secrets().get(name),
     audit: (action, meta, owner) => appendAudit(action, meta, acteur(ACTEUR.NOTAIRE, owner)),
+    learning: notaryLearning,
+  });
+  const actAIRoutes = require('./act-ai-routes').createActAIRoutes({
+    repo, env, nowMs, newId, json, parseBody, port: opts.actAIPort,
+    authenticate: request => requireScope(bearer(request), SCOPES.SESSION),
+    getSecret: name => secrets().get(name),
+    audit: (action, meta, owner) => appendAudit(action, meta, acteur(ACTEUR.NOTAIRE, owner)),
+    learning: notaryLearning,
   });
   const oauth = opts.oauth || require('./oauth').createOAuth({ repo, env, now: nowMs });
   const oauthRoutes = require('./oauth-routes').createOAuthRoutes({
     oauth, repo, now: nowMs, clientIp,
-    notify: async ({ email, provider, language, link, ttlMinutes }) => {
+    notify: async ({ email, provider, role, language, link, ttlMinutes }) => {
       const n = notifier();
       if (!n || typeof n.onOAuthLinkRequested !== 'function') throw new Error('OAuth mail unavailable');
-      const sent = await n.onOAuthLinkRequested({ email, provider, emailLanguage: language, link, ttlMinutes });
+      const sent = await n.onOAuthLinkRequested({ email, provider, role, emailLanguage: language, link, ttlMinutes });
       if (sent?.sent === false || sent?.ok === false) throw new Error('OAuth mail unavailable');
     },
     grant: async (email, role, request) => {
@@ -1612,6 +1682,9 @@ function createApp(repo, opts = {}) {
     if (route.startsWith('/signing-beta/')) return signingRoutes(request, route, method, query);
     if (route === '/notary/financing/preparation' || route === '/notary/financing/review') {
       return financingAIRoutes(request, route, method, query);
+    }
+    if (route === '/notary/acts/preparation' || route === '/notary/acts/review') {
+      return actAIRoutes(request, route, method, query);
     }
     const oauthResponse = await oauthRoutes(request, route, method);
     if (oauthResponse) return oauthResponse;
@@ -1691,6 +1764,11 @@ function createApp(repo, opts = {}) {
         // y voyage pour qu'aucune surface n'ait à coder un prix en dur ni à
         // deviner ce que le client paiera en plus de son offre.
         tarif: await tarifNota(),
+        // Coarse, reversible customer-experience guidance selected by the
+        // daily controller. The public projection contains no metrics or
+        // customer identity, only the mode the UI may use to explain the next
+        // step more clearly.
+        experience: await customerExperience(),
       });
     }
 
@@ -2721,6 +2799,10 @@ function createApp(repo, opts = {}) {
             commissionCentsDue: regle.paye === false ? Math.round(Number(regle.commissionCentsDue) || 0) : 0,
           }, acteur(ACTEUR.NOTAIRE, notaryId));
         }
+        await notaryLearning.officialOutcome({ bid, owner: notaryId, outcome: {
+          status: 'completed', completed: true, paid: regle ? regle.paye !== false : false,
+          reconciled: !!regle,
+        } });
       }
 
       // Payout statement + operator alert, once per bid (fire-and-forget).
@@ -3885,6 +3967,7 @@ function createApp(repo, opts = {}) {
       if (ev && typeof ev.onEvaluationSubmitted === 'function') {
         Promise.resolve(ev.onEvaluationSubmitted(bid, evaluation)).catch(() => {});
       }
+      await notaryLearning.clientFeedback({ bid, evaluation });
       return json(201, { evaluation: { note: evaluation.note, commentaire: evaluation.commentaire } });
     }
 
@@ -3992,11 +4075,20 @@ function createApp(repo, opts = {}) {
       // Store the CLEANED dossier (domain.cleanDossier): only the service's
       // own items, consent and known pricing answers, each value bounded.
       // Unknown keys and local UI state (__validated) never persist.
+      const before = bid.dossier || {};
       const dossier = domain.cleanDossier(bid.serviceId, raw);
       const updated = { ...bid, dossier };
       await repo.update(updated);
+      const beforeReadiness = domain.leadReadiness(updated.serviceId, before, updated.pricing);
+      const readiness = domain.leadReadiness(updated.serviceId, dossier, updated.pricing);
+      await notaryLearning.customerInput({ bid: updated, before, after: dossier, beforeReadiness, readiness });
+      await notaryLearning.customerBehavior({ bid: updated, behavior: 'dossier_update', metadata: {
+        documentCount: Object.keys(dossier).filter(key => key !== '__pricing' && key !== '__consent' && !key.startsWith('__')).length,
+        completed: readiness.ready === true,
+        authorized: dossier.__consent === true,
+      } });
       return json(200, {
-        readiness: domain.leadReadiness(updated.serviceId, dossier, updated.pricing),
+        readiness,
         demandes: demandesOf(updated).map((d) => clientDemande(updated, d)),
       });
     }
@@ -4478,8 +4570,11 @@ function createApp(repo, opts = {}) {
       const v = domain.validateChatMessage({ bid, de: domain.CHAT_FROM.NOTAIRE, texte: payload.texte });
       if (!v.ok) return json(422, { errors: v.errors });
       if (await chatOverLimit(bid.id + ':notaire')) return tropDeMessages();
+      const priorMessages = messagesOf(bid);
       const message = { id: newId(), de: domain.CHAT_FROM.NOTAIRE, texte: v.texte, createdAt: new Date(nowMs()).toISOString() };
-      await repo.update({ ...bid, messages: [...messagesOf(bid), message] });
+      const updated = { ...bid, messages: [...priorMessages, message] };
+      await repo.update(updated);
+      await notaryLearning.communication({ bid: updated, direction: 'notary_to_client', message, createdAt: message.createdAt, priorMessages });
       // Tell the client their notary wrote (fire-and-forget, once per message).
       const mn = notifier();
       if (mn && typeof mn.onChatMessage === 'function') {
@@ -4503,8 +4598,12 @@ function createApp(repo, opts = {}) {
       const v = domain.validateChatMessage({ bid, de: domain.CHAT_FROM.CLIENT, texte: payload.texte });
       if (!v.ok) return json(422, { errors: v.errors });
       if (await chatOverLimit(bid.id + ':client')) return tropDeMessages();
+      const priorMessages = messagesOf(bid);
       const message = { id: newId(), de: domain.CHAT_FROM.CLIENT, texte: v.texte, createdAt: new Date(nowMs()).toISOString() };
-      await repo.update({ ...bid, messages: [...messagesOf(bid), message] });
+      const updated = { ...bid, messages: [...priorMessages, message] };
+      await repo.update(updated);
+      await notaryLearning.communication({ bid: updated, direction: 'client_to_notary', message, createdAt: message.createdAt, priorMessages });
+      await notaryLearning.customerBehavior({ bid: updated, behavior: 'follow_up_response', metadata: { responseLatencySeconds: null } });
       // Tell the retaining notary their client replied (fire-and-forget, once
       // per message — the notifier resolves the notary from bid.notaryId).
       const mc = notifier();
@@ -4529,6 +4628,7 @@ function createApp(repo, opts = {}) {
       if (!bid) return json(404, { errors: [{ code: 'introuvable', message: 'Offre introuvable.' }] });
       const luLe = new Date(nowMs()).toISOString();
       await repo.markThreadRead(bid, 'client', luLe);
+      await notaryLearning.customerBehavior({ bid, behavior: 'read_receipt', metadata: {} });
       return json(200, { luLe });
     }
     if (route === '/notary/bids/lecture' && method === 'POST') {

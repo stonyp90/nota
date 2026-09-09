@@ -33,6 +33,38 @@ components:
         necessary but not sufficient — the server-side session must exist, be
         un-revoked, inside its 12 h absolute window and not idle past 30 min.
   schemas:
+    CustomerImprovement:
+      type: object
+      description: >-
+        Bounded autonomous customer-experience controller status. It may tune
+        reversible guidance from aggregate signals; legal rules, critical
+        controls, prices and model weights remain outside its write boundary.
+      required: [version, mode, revision, cadence, automaticActions, protectedDecisions]
+      properties:
+        version: { type: string }
+        mode: { type: string, enum: [standard, guided] }
+        revision: { type: integer, minimum: 0 }
+        changedAt: { type: [string, 'null'] }
+        lastDecision:
+          type: [object, 'null']
+          properties:
+            at: { type: [string, 'null'] }
+            action: { type: string }
+            from: { type: [string, 'null'], enum: [standard, guided, null] }
+            to: { type: [string, 'null'], enum: [standard, guided, null] }
+            reason: { type: [string, 'null'] }
+            primaryMetric: { type: [string, 'null'] }
+            metrics:
+              type: object
+              description: Aggregate counters only; no customer identity or raw text.
+              additionalProperties: true
+        cadence: { type: string, enum: [daily] }
+        automaticActions:
+          type: array
+          items: { type: string }
+        protectedDecisions:
+          type: array
+          items: { type: string }
     SupportMessage:
       type: object
       required: [id, de, texte, createdAt]
@@ -124,6 +156,51 @@ components:
             - type: string
               format: date-time
             - type: "null"
+    AdminCatalogue:
+      type: object
+      required: [services, actesAVenir, dates, deplacements, preteurs, typesDocuments, versions]
+      description: >-
+        Vue de lecture complète du catalogue domain : services, tarification,
+        questions, pièces, préparation IA et plan de contrôle notarial.
+      properties:
+        services:
+          type: array
+          items:
+            type: object
+            required: [id, nom, nomEn, pricing, documents, champs, ai, planNotaire]
+            additionalProperties: true
+        actesAVenir:
+          type: array
+          items: { type: object, additionalProperties: true }
+        dates:
+          type: array
+          items: { type: object, additionalProperties: true }
+        deplacements:
+          type: array
+          items: { type: object, additionalProperties: true }
+        preteurs:
+          type: array
+          items: { type: object, additionalProperties: true }
+        typesDocuments:
+          type: array
+          items: { type: object, additionalProperties: true }
+        versions:
+          type: object
+          additionalProperties: true
+    AdminFeatures:
+      type: object
+      required: [ok, groupes, personnalisations]
+      properties:
+        ok: { type: boolean }
+        groupes:
+          type: array
+          items:
+            type: object
+            required: [id, nom, nomEn, fonctionnalites]
+            additionalProperties: true
+        personnalisations:
+          type: array
+          items: { type: object, additionalProperties: true }
     Errors:
       type: object
       required: [errors]
@@ -1291,6 +1368,79 @@ paths:
                     description: Le plafond absolu de la session (12 h), jamais repousse par un refresh.
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /admin/catalogue:
+    get:
+      operationId: getAdminCatalogue
+      summary: The complete service catalogue and notary-work inventory.
+      description: >-
+        Read-only product metadata for authenticated operators with
+        `analytics:read`. This is the same domain-owned catalogue used to
+        inspect testament, power of attorney, financing and refinancing
+        intake, documents, AI fields and notary control plans; it contains no
+        customer records.
+      security:
+        - adminSession: []
+      responses:
+        "200":
+          description: The current catalogue snapshot.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [services, actesAVenir, dates, deplacements, preteurs, typesDocuments, versions]
+                properties:
+                  services:
+                    type: array
+                    items: { type: object, additionalProperties: true }
+                  actesAVenir:
+                    type: array
+                    items: { type: object, additionalProperties: true }
+                  dates:
+                    type: array
+                    items: { type: object, additionalProperties: true }
+                  deplacements:
+                    type: array
+                    items: { type: object, additionalProperties: true }
+                  preteurs:
+                    type: array
+                    items: { type: object, additionalProperties: true }
+                  typesDocuments:
+                    type: array
+                    items: { type: object, additionalProperties: true }
+                  versions:
+                    type: object
+                    additionalProperties: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /admin/features:
+    get:
+      operationId: getAdminFeatures
+      summary: The active platform feature inventory.
+      description: >-
+        Read-only feature and customization metadata for authenticated
+        operators with `analytics:read`. It contains no secrets or personal
+        data and is generated from the same server-side feature registry used
+        by the admin console.
+      security:
+        - adminSession: []
+      responses:
+        "200":
+          description: The active feature inventory.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, groupes, personnalisations]
+                properties:
+                  ok: { type: boolean, const: true }
+                  groupes:
+                    type: array
+                    items: { type: object, additionalProperties: true }
+                  personnalisations:
+                    type: array
+                    items: { type: object, additionalProperties: true }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /admin/notifications/templates:
     get:
       operationId: listAdminEmailTemplates
@@ -2337,7 +2487,7 @@ paths:
                           type: integer
                   segments:
                     type: array
-                    description: Independent bounded browser, OS, device, viewport, language, arrival source, entry page, dialog, storage and load breakdowns. No joined visitor profiles; historical events are not backfilled. Raw user agents and URLs are not exposed. Rows with no attributed events are omitted.
+                    description: Independent bounded browser, OS, device, viewport, language, arrival source, entry page, dialog, storage, load and guidance-mode breakdowns. No joined visitor profiles; historical events are not backfilled. Raw user agents and URLs are not exposed. Rows with no attributed events are omitted.
                     items:
                       type: object
                       required: [id, nom, nomEn, rows]
@@ -2358,6 +2508,8 @@ paths:
                                 type: object
                                 description: Counts keyed by domain FUNNEL_EVENTS IDs, not unique people.
                                 additionalProperties: { type: integer, minimum: 0 }
+                  customerImprovement:
+                    $ref: "#/components/schemas/CustomerImprovement"
                   entonnoir:
                     type: array
                     items:

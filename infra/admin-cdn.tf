@@ -13,7 +13,7 @@ locals {
 
 # ---------------------------------------------------------------------------
 # ACM certificate (us-east-1, reusing the aws.us_east_1 alias) for the admin
-# domain, DNS-validated in the existing hosted zone (var.hosted_zone_id).
+# domain, DNS-validated in the admin hostname's Route 53 zone.
 # CloudFront only accepts us-east-1 certs — same constraint as acm.tf.
 # ---------------------------------------------------------------------------
 resource "aws_acm_certificate" "admin" {
@@ -37,7 +37,7 @@ resource "aws_route53_record" "admin_cert_validation" {
     }
   } : {}
 
-  zone_id         = local.dns_zone_id
+  zone_id         = local.admin_dns_zone_id
   name            = each.value.name
   type            = each.value.type
   records         = [each.value.record]
@@ -339,7 +339,7 @@ resource "aws_cloudfront_distribution" "admin" {
 # ---------------------------------------------------------------------------
 resource "aws_route53_record" "admin_alias_a" {
   count   = local.admin_domain_enabled
-  zone_id = local.dns_zone_id
+  zone_id = local.admin_dns_zone_id
   name    = var.admin_domain_name
   type    = "A"
 
@@ -352,7 +352,7 @@ resource "aws_route53_record" "admin_alias_a" {
 
 resource "aws_route53_record" "admin_alias_aaaa" {
   count   = local.admin_domain_enabled
-  zone_id = local.dns_zone_id
+  zone_id = local.admin_dns_zone_id
   name    = var.admin_domain_name
   type    = "AAAA"
 

@@ -8,12 +8,13 @@
 # Cost: free at idle. An SNS topic costs nothing until it delivers a message,
 # and email notifications are free. CloudWatch alarms are ~$0.10/alarm/month at
 # list price, and the first 10 standard-resolution alarms are covered by the
-# AWS Free Tier — so this whole file runs at roughly $0.00–$1.10/month.
+# AWS Free Tier — so this whole file runs at roughly $0.00–$0.40/month before
+# notification delivery once the first 10 standard alarms are covered.
 #
-# Alarm inventory (11 alarms total):
-#   Lambda Errors              x2  (api, reminders)
-#   Lambda Throttles           x2  (api, reminders)
-#   Lambda Duration p99        x2  (api, reminders — vs per-function timeout)
+# Alarm inventory (14 alarms total):
+#   Lambda Errors              x3  (api, reminders, customer-improvement)
+#   Lambda Throttles           x3  (api, reminders, customer-improvement)
+#   Lambda Duration p99        x3  (api, reminders, customer-improvement — vs per-function timeout)
 #   DynamoDB ReadThrottleEvents x1 (nota-main)
 #   DynamoDB WriteThrottleEvents x1 (nota-main)
 #   DynamoDB UserErrors        x1  (account/region-wide; see note below)
@@ -36,6 +37,10 @@ locals {
     reminders = {
       function_name = aws_lambda_function.reminders.function_name
       timeout_ms    = aws_lambda_function.reminders.timeout * 1000
+    }
+    customer_improvement = {
+      function_name = aws_lambda_function.customer_improvement.function_name
+      timeout_ms    = aws_lambda_function.customer_improvement.timeout * 1000
     }
     }, var.enable_admin ? {
     admin = {

@@ -45,27 +45,25 @@ test('moneyEn: rounds and handles junk exactly like money()', () => {
   assert.equal(D.moneyEn('nope'), '$0');
 });
 
-test('services: the catalogue is the financing family — refinancement then financement (ADR 0010)', () => {
-  // The urgency ladder prices a deadline, and financing is the family that has
-  // one. testament and procuration were retired by ADR 0010; financement (the
-  // loan act for a NEW hypothec) is exactly the financing sibling that ADR
-  // foresaw. Order matters: refinancement leads and stays the default.
-  assert.deepEqual(D.SERVICES.map((s) => s.id), ['refinancement', 'financement']);
+test('services: the catalogue includes financing, testament and procuration', () => {
+  assert.deepEqual(D.SERVICES.map((s) => s.id), ['refinancement', 'financement', 'testament', 'procuration']);
 });
 
 test('services: acte de vente is intentionally absent', () => {
   assert.equal(D.serviceById('acte_vente'), null);
 });
 
-test('services: the retired acts are gone, not aliased (ADR 0010)', () => {
-  assert.equal(D.serviceById('testament'), null);
-  assert.equal(D.serviceById('procuration'), null);
+test('services: testament and procuration are live services, while sale stays absent', () => {
+  assert.equal(D.serviceById('testament').nomCourt, 'Testament');
+  assert.equal(D.serviceById('procuration').nomCourt, 'Procuration');
 });
 
 test('services: the starting prices are the canonical values (ADR 0006)', () => {
   assert.equal(D.serviceById('refinancement').prixDepart, 2000);
   // Slightly under refinancement: no old hypothec to discharge.
   assert.equal(D.serviceById('financement').prixDepart, 1800);
+  assert.equal(D.serviceById('testament').prixDepart, 1800);
+  assert.equal(D.serviceById('procuration').prixDepart, 1500);
 });
 
 test('services: every service has documents and fields with help text', () => {
@@ -525,9 +523,13 @@ test('criteria defaults: dominant zero-cost answers are declared, and only those
   for (const svc of D.SERVICES) {
     for (const c of svc.pricing.criteria) {
       if (c.defaut == null) continue;
-      const opt = (c.options || []).find((o) => o.id === c.defaut);
-      assert.ok(opt, svc.id + ':' + c.id + ' default is a real option');
-      assert.equal(opt.add, 0, svc.id + ':' + c.id + ' default adds 0 $');
+      if (c.type === 'flag') {
+        assert.equal(c.defaut, false, svc.id + ':' + c.id + ' boolean default is false');
+      } else {
+        const opt = (c.options || []).find((o) => o.id === c.defaut);
+        assert.ok(opt, svc.id + ':' + c.id + ' default is a real option');
+        assert.equal(opt.add, 0, svc.id + ':' + c.id + ' default adds 0 $');
+      }
     }
     for (const id of ['valeur_pret', 'approbation_bancaire', 'preteur', 'contexte']) {
       const c = svc.pricing.criteria.find((x) => x.id === id);

@@ -47,7 +47,7 @@ test('LENDERS: choosing a lender is free — only the private lender surcharges'
 });
 
 test('every financing act asks the lender question, as a required select over the catalogue', () => {
-  for (const svc of D.SERVICES) {
+  for (const svc of D.SERVICES.filter((s) => ['financement', 'refinancement'].includes(s.id))) {
     const c = (svc.pricing.criteria || []).find((x) => x.id === D.LENDER_CRITERION_ID);
     assert.ok(c, `${svc.id} asks for the lender`);
     assert.equal(c.type, 'choice');
@@ -129,7 +129,7 @@ test('bidLender: the typed name of an « autre » lender travels to the notary',
 
 test('fixtures answer the lender question, so demo bids stay valid offers', () => {
   const bids = D.makeFixtures('2026-08-26');
-  for (const b of bids) {
+  for (const b of bids.filter((b) => ['financement', 'refinancement'].includes(b.serviceId))) {
     assert.ok(D.lenderById(b.pricing.preteur), `${b.id} names a catalogued lender`);
     // An « autre » fixture carries its typed name — fixtures are VALID offers.
     if (b.pricing.preteur === 'autre') {

@@ -68,6 +68,23 @@ test('la relecture d’un jour interroge la table principale par sa partition', 
   assert.equal(entrees[0].PK, undefined, 'les clés de table ne remontent jamais');
 });
 
+test('les signaux d’apprentissage sont isolés de l’audit transactionnel', async () => {
+  const { repo, sent } = recordingRepo((rec) => (rec.name === 'QueryCommand'
+    ? { Items: [{ PK: 'LEARNING#2026-08-12', SK: '2026-08-12T19:00:00.000Z#l1', type: 'notary_learning_signal', id: 'l1', ts: '2026-08-12T19:00:00.000Z', day: '2026-08-12', action: 'notary_learning_signal' }] }
+    : {}));
+  await repo.appendLearningSignal({ id: 'l1', ts: '2026-08-12T19:00:00.000Z', day: '2026-08-12', action: 'notary_learning_signal' });
+  const put = sent.find((s) => s.name === 'PutCommand');
+  assert.equal(put.input.Item.PK, 'LEARNING#2026-08-12');
+  assert.equal(put.input.Item.type, 'notary_learning_signal');
+  assert.match(String(put.input.ConditionExpression), /attribute_not_exists/);
+  const signals = await repo.queryNotaryLearningByDay('2026-08-12');
+  const query = sent.find((s) => s.name === 'QueryCommand');
+  assert.equal(query.input.ExpressionAttributeValues[':pk'], 'LEARNING#2026-08-12');
+  assert.equal(query.input.Limit, 20000, 'la lecture du worker reste bornée');
+  assert.equal(signals[0].action, 'notary_learning_signal');
+  assert.equal(signals[0].PK, undefined);
+});
+
 test('le registre des notaires voit AUSSI ceux qui n’ont pas fini leur inscription', async () => {
   // L'index GSI1 était creux — seuls les actifs y entraient — donc la console
   // ne voyait ni les notaires en inscription, ni la créance de celui qui part.

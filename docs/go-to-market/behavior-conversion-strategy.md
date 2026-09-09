@@ -1,7 +1,8 @@
 # Behavior, conversion and retention operating plan
 
-Owner: Anthony. Started September 9, 2026. Status: instrumentation improvements
-prepared locally; production baseline and deployment verification outstanding.
+Owner: Anthony. Started September 9, 2026. Status: aggregate instrumentation and
+the bounded autonomous controller are implemented on the branch; production
+baseline, deployment and schedule verification remain outstanding.
 
 ## Objective
 
@@ -37,6 +38,14 @@ authorized admin session. Do not save a session or credentials in this repositor
 The admin visitor-journey table shows counts, including zero. A missing section
 is unavailable, not zero. Its labels come from the bilingual domain catalogue.
 FR/EN interfaces, noindex admin and zero UI runtime dependencies are preserved.
+
+The client is part of the product development loop through the `journey`
+dimension and the server-side learning signals. A dossier update, confirmed
+document, read receipt, client-notary message, completed act and evaluation add
+only bounded metadata or aggregate counters to the separate learning stream.
+The system can use those signals to locate friction and improve guidance; it
+never treats a client action as a legal label or copies a document or
+conversation into the product analytics stream.
 
 These independent event totals cannot identify individual abandonment, unique
 leads, cross-device journeys, repeat customers or causal uplift. Do not subtract
@@ -134,17 +143,31 @@ submissions cannot masquerade as a conversion win.
 
 ## Recurring operating loop
 
-Weekdays at 09:00 America/Toronto, resume this task and inspect new evidence.
-Check collection failures and stalled journeys each run; on Monday, or the first
-successful run after a missed Monday, compare the complete 7-day and 28-day views.
-Record date, source, evidence, uncertainty, action, checks and rollout status.
+After deployment, EventBridge invokes the bounded controller every day at
+13:15 UTC (09:15 America/Toronto during daylight time and 08:15 during standard
+time), fifteen minutes after the reminder job.
+It reads the seven most recent complete business days and the preceding seven,
+using sharded counters and minimized learning signals. It requires at least 20
+form starts and 10 publication attempts before it can act. When the blocked
+rate, customer response delay or low feedback crosses the configured threshold,
+it can enable the public guided intake mode. If the indicative publication
+rate falls by more than 20% or publication failures rise by more than 10
+percentage points, it rolls the mode back automatically.
 
-When evidence supports a reversible improvement, implement it locally, add the
-relevant regression checks and prepare a reviewable change. Follow AGENTS.md,
-preserve unrelated work, update OpenAPI for API changes, and keep domain rules
-centralized. Run domain/API, web, admin and BDD suites plus affected builds.
-Deploy only through an authorized release workflow after reviewable validation;
-do not infer publication authorization from permission to run this recurring task.
+Each decision is written to the single `CONFIG#EXPERIENCE` policy item and to
+the append-only audit trail. The public API caches the projection for one
+minute, so the daily job adds no per-visitor model call or extra analytics
+query. A dry-run CLI is available for an operator before deployment. Once the
+worker is deployed and its alarms are verified, daily guidance tuning does not
+require a developer; model-weight changes, legal rules, notary controls,
+prices and outbound campaigns remain outside this automatic write path.
+
+The worker replaces the earlier manual weekday inspection for this narrow UX
+decision. The human review loop still owns baseline interpretation, data
+quality, legal changes, model qualification, releases and any action that
+could affect a notary’s judgment or a customer’s legal position. Follow
+AGENTS.md, preserve unrelated work, update OpenAPI for API changes, and keep
+domain rules centralized when code changes are needed.
 
 If data is missing or unchanged, do not invent conclusions or rewrite the website
 to fill the schedule. Work on a verified measurement gap when useful. Notify

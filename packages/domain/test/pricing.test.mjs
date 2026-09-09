@@ -8,10 +8,11 @@ const { computeBasePrice, validateOffer, complexity, missingRequired } = domain;
 
 const TODAY = '2026-08-14';
 // Fully-answered mandatory params that keep each act at its BASE price.
-// (The catalogue is the financing family only — ADR 0010.)
 const BASE_ANSWERS = {
   refinancement: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale', deplacement: 'client_50' },
   financement: { valeur_pret: 250000, contexte: 'propriete_detenue', approbation_bancaire: 'obtenue', preteur: 'banque_nationale', succession: 'non', deplacement: 'client_50' },
+  testament: { nombre_testateurs: 1, situation_familiale: 'celibataire', regime_familial: 'aucun', enfants: 'aucun', nombre_beneficiaires: 1, liquidateur: 'un', testament_existant: 'non', legs_complexes: 'aucun', nombre_immeubles: 'aucun', entreprise: false, biens_hors_qc: false, protection_beneficiaires: 'aucune', langue_acte: 'francais', accessibilite: 'aucune', temoin_supplementaire: false, deplacement: 'client_50' },
+  procuration: { nombre_mandants: 1, nombre_mandataires: 1, mode_action: 'separement', portee_mandat: 'specifique', pouvoirs_sensibles: 'administration', nombre_institutions: 1, mandat_existant: 'non', duree_mandat: 'indeterminee', reddition_compte: false, remplacement_mandataire: false, langue_acte: 'francais', accessibilite: 'aucune', nombre_immeubles: 'aucun', deplacement: 'client_50' },
 };
 
 test('with NO answers a service returns its flat base (== prixDepart)', () => {
@@ -21,13 +22,11 @@ test('with NO answers a service returns its flat base (== prixDepart)', () => {
   }
 });
 
-test('the floors are the financing family’s — 2 000 $ refi, 1 800 $ financement; retired acts do not price', () => {
-  // testament (1 250 $) and procuration (750 $) left with their acts; a bid on
-  // a retired act must not price — it must fail as an unknown service.
+test('the floors are explicit for all four live services', () => {
   assert.equal(computeBasePrice('refinancement', {}), 2000);
   assert.equal(computeBasePrice('financement', {}), 1800);
-  assert.equal(computeBasePrice('testament', {}), null);
-  assert.equal(computeBasePrice('procuration', {}), null);
+  assert.equal(computeBasePrice('testament', {}), 1800);
+  assert.equal(computeBasePrice('procuration', {}), 1500);
 });
 
 test('refinancement: loan-value brackets + succession + bank approval + optionals', () => {
@@ -76,7 +75,7 @@ test('missingRequired lists the unanswered mandatory params', () => {
   // A loan value must be a real positive number — a crafted blank cannot skip it.
   assert.deepEqual(missingRequired('refinancement', { ...BASE_ANSWERS.refinancement, valeur_pret: '' }).map((m) => m.id), ['valeur_pret']);
   // Fully answered -> nothing missing.
-  for (const svc of domain.SERVICES) assert.deepEqual(missingRequired(svc.id, BASE_ANSWERS[svc.id]), []);
+  for (const svc of domain.SERVICES) assert.deepEqual(missingRequired(svc.id, BASE_ANSWERS[svc.id]), [], svc.id);
 });
 
 test('validateOffer BLOCKS a bid until the mandatory params are answered', () => {

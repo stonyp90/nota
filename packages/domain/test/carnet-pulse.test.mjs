@@ -101,13 +101,12 @@ test('carnetPulse: a median never reads below the service price beside it', () =
   // floor passes through untouched (covered by the arithmetic tests above).
 });
 
-test('carnetPulse: the service row carries its own counts; a retired act never gets a row', () => {
+test('carnetPulse: the service row carries its own counts, including testament', () => {
   const p = D.carnetPulse(
     [
       bid({ montant: 2800 }),
       bid({ montant: 3000, status: D.STATUS.RETENUE }),
-      // A legacy bid for a retired act (ADR 0010) is filtered, not crashed on.
-      bid({ serviceId: 'testament', montant: 1300 }),
+      bid({ serviceId: 'testament', montant: 1900 }),
     ],
     TODAY,
   );
@@ -117,7 +116,8 @@ test('carnetPulse: the service row carries its own counts; a retired act never g
   assert.equal(r.ouvertes, 1);
   assert.equal(r.retenues, 1);
   assert.equal(r.median, 2900);
-  assert.equal(p.total, 2, 'the retired act’s bid is not counted anywhere');
+  assert.equal(p.total, 3, 'the live testament bid is counted');
+  assert.equal(p.services.find((s) => s.id === 'testament').total, 1);
 });
 
 test('carnetPulse: prochaineDispo is the soonest upcoming date still open', () => {

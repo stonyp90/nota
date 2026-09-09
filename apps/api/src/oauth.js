@@ -123,7 +123,7 @@ function createOAuth({ repo, env = process.env, fetch: send = global.fetch, now 
       if (!isEmail(email)) fail('oauth_invalid_email');
       const result = await consume(ticket, 'link-request', binding);
       const verification = await issue('link-verify', binding, { ...result, email });
-      return { email, provider: result.provider, language: result.language, link: origin + '/#oauthverify=' + encodeURIComponent(verification), ttlMinutes: TTL / 60000 };
+      return { email, provider: result.provider, role: result.role, language: result.language, link: origin + '/#oauthverify=' + encodeURIComponent(verification), ttlMinutes: TTL / 60000 };
     },
     async verifyLink(ticket, binding) {
       const result = await consume(ticket, 'link-verify', binding);

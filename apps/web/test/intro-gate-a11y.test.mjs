@@ -168,14 +168,14 @@ test('pause freezes the film deadline; resume uses only the remaining time', asy
   let now = 1000;
   win.Date.now = () => now;
   $(doc, 'ig-door-client').click();
-  assert.equal(scheduled.at(-1).delay, 20600);
+  assert.equal(scheduled.at(-1).delay, 14400);
   now += 4500;
   $(doc, 'ig-pause').click();
   assert.equal($(doc, 'ig-pause').getAttribute('aria-pressed'), 'true');
   assert.ok($(doc, 'ig-stage-client').classList.contains('is-paused'));
   now += 60000;
   $(doc, 'ig-pause').click();
-  assert.equal(scheduled.at(-1).delay, 16100, 'time spent paused never consumes reading time');
+  assert.equal(scheduled.at(-1).delay, 9900, 'time spent paused never consumes reading time');
   assert.equal($(doc, 'ig-pause').getAttribute('aria-pressed'), 'false');
   win.setTimeout = originalTimeout;
   scheduled.at(-1).callback();
