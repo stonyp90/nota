@@ -122,10 +122,17 @@
     }, true);
     start();
     if (location.pathname !== '/' && location.pathname !== '/index.html' && pages.indexOf(location.pathname) >= 0) {
-      try {
-        var api = window.__NOTA_API__ || (/^(localhost|127\.0\.0\.1)$/.test(location.hostname) ? 'http://localhost:8788' : '/api');
-        window.fetch(api + '/events', { method: 'POST', keepalive: true, credentials: 'omit', headers: { 'content-type': 'text/plain' }, body: JSON.stringify({ event: 'visite', acquisition: attribution }) }).catch(function () {});
-      } catch (_) {}
+      // Le battement de la page de recherche attend le prochain tour de boucle :
+      // analytics.js se déclare APRÈS ce fichier, et un « visite » sans contexte
+      // borné serait une mesure à moitié aveugle — la moitié manquante étant
+      // précisément la page d'entrée et la source que cette page sert à mesurer.
+      setTimeout(function () {
+        try {
+          if (window.NotaAnalytics) { window.NotaAnalytics.send('visite'); return; }
+          var api = window.__NOTA_API__ || (/^(localhost|127\.0\.0\.1)$/.test(location.hostname) ? 'http://localhost:8788' : '/api');
+          window.fetch(api + '/events', { method: 'POST', keepalive: true, credentials: 'omit', headers: { 'content-type': 'text/plain' }, body: JSON.stringify({ event: 'visite', acquisition: attribution }) }).catch(function () {});
+        } catch (_) {}
+      }, 0);
     }
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
