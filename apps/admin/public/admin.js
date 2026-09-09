@@ -646,6 +646,20 @@
     node.setAttribute('data-i18n-skip', '');
     return node;
   }
+  function collectionLabel(count, fr, en) {
+    count = Number(count) || 0;
+    var word = isEnglish() ? en : fr;
+    return count + ' ' + word + (isEnglish() ? (count === 1 ? '' : 's') : (count < 2 ? '' : 's'));
+  }
+  function collectionCount(count, fr, en) {
+    return dynamicText(el('p', 'collection-count'), collectionLabel(count, fr, en));
+  }
+  function collectionEmpty(count, fr, en, detailFr, detailEn) {
+    var box = el('div', 'collection-empty');
+    box.appendChild(collectionCount(count, fr, en));
+    if (detailFr || detailEn) dynamicText(box.appendChild(el('p', 'collection-empty-detail')), isEnglish() ? detailEn : detailFr);
+    return box;
+  }
   function servicePriceLabel(annonce) {
     if (!annonce) return '—';
     var cents = Number(annonce.totalCents != null ? annonce.totalCents : annonce.prixAnnonceTotalCents);
@@ -663,6 +677,7 @@
     details.appendChild(el('summary', null, title + ' (' + items.length + ')'));
     var list = el('ul', 'service-list');
     items.forEach(function (item) { list.appendChild(renderItem(item)); });
+    if (!items.length) list.appendChild(el('li', 'collection-empty-inline', isEnglish() ? 'None configured.' : 'Aucun élément configuré.'));
     details.appendChild(list); return details;
   }
   function renderServiceCard(service) {
@@ -684,18 +699,18 @@
     card.appendChild(stats);
     var details = el('div', 'service-details');
     var criteria = service.pricing && service.pricing.criteria || [];
-    if (criteria.length) details.appendChild(serviceList('Questions et paramètres', criteria, function (c) {
+    details.appendChild(serviceList('Questions et paramètres', criteria, function (c) {
       var li = el('li'); dynamicText(li.appendChild(el('strong')), c.label + (c.required ? ' · requis' : ''));
       if (c.options && c.options.length) dynamicText(li.appendChild(el('span', 'help')), ' — ' + c.options.map(function (o) { return o.label; }).join(', '));
       if (c.brackets && c.brackets.length) dynamicText(li.appendChild(el('span', 'help')), ' — ' + c.brackets.length + ' paliers'); return li;
     }));
-    if ((service.documents || []).length) details.appendChild(serviceList('Documents', service.documents, function (d) {
+    details.appendChild(serviceList('Documents', service.documents || [], function (d) {
       var li = el('li'); dynamicText(li.appendChild(el('strong')), d.nom || d.id); if (d.aide) dynamicText(li.appendChild(el('span', 'help')), ' — ' + d.aide); return li;
     }));
-    if ((service.champs || []).length) details.appendChild(serviceList('Renseignements à recueillir', service.champs, function (c) {
+    details.appendChild(serviceList('Renseignements à recueillir', service.champs || [], function (c) {
       var li = el('li'); dynamicText(li.appendChild(el('strong')), c.label || c.id); if (c.aide) dynamicText(li.appendChild(el('span', 'help')), ' — ' + c.aide); return li;
     }));
-    if ((service.planNotaire || []).length) details.appendChild(serviceList('Plan de contrôle notarial', service.planNotaire, function (c) {
+    details.appendChild(serviceList('Plan de contrôle notarial', service.planNotaire || [], function (c) {
       var li = el('li'); dynamicText(li.appendChild(el('strong')), c.label || c.id); dynamicText(li.appendChild(el('span', 'help')), ' · ' + (c.integrationLabel || c.integrationType || '')); return li;
     }));
     if (service.ai && service.ai.active) details.appendChild(serviceList('Préparation IA avec preuve', service.ai.fields || [], function (f) {
@@ -715,6 +730,8 @@
     var r = await call('GET', '/catalogue'); clear(body);
     if (r.status === 403) { body.appendChild(buildDenied('Lire le catalogue des services')); return; }
     if (!r.ok || !r.json || !Array.isArray(r.json.services)) { body.appendChild(buildErrorBanner(function () { renderServices(); })); return; }
+    body.appendChild(collectionCount(r.json.services.length, 'service', 'service'));
+    if (!r.json.services.length) { body.appendChild(collectionEmpty(0, 'service', 'service', 'Le catalogue ne contient aucun service à afficher.', 'The catalogue has no services to display.')); return; }
     var intro = el('div', 'tpl-readonly-note'); intro.appendChild(el('strong', null, 'Source unique')); dynamicText(intro.appendChild(el('span')), '— les règles et le catalogue viennent du domaine; les réglages opératoires se modifient dans Prix, Annulation et Courriels.'); body.appendChild(intro);
     r.json.services.forEach(function (service) { body.appendChild(renderServiceCard(service)); });
   }
@@ -726,7 +743,10 @@
     var card = el('section', 'chart-card feature-group');
     var head = el('div', 'chart-card-head'); dynamicText(head.appendChild(el('h2', 'chart-card-title')), isEnglish() ? group.nomEn : group.nom); dynamicText(head.appendChild(el('span', 'status-pill status-ok')), isEnglish() ? 'Active' : 'Actif'); card.appendChild(head);
     var list = el('ul', 'feature-list');
-    (group.fonctionnalites || []).forEach(function (f) { var li = el('li', 'feature-row'); dynamicText(li.appendChild(el('span')), isEnglish() ? f.nomEn : f.nom); dynamicText(li.appendChild(el('span', 'status-ok')), isEnglish() ? f.statutEn : f.statut); list.appendChild(li); });
+    var items = group.fonctionnalites || [];
+    card.appendChild(collectionCount(items.length, 'fonctionnalité', 'feature'));
+    items.forEach(function (f) { var li = el('li', 'feature-row'); dynamicText(li.appendChild(el('span')), isEnglish() ? f.nomEn : f.nom); dynamicText(li.appendChild(el('span', 'status-ok')), isEnglish() ? f.statutEn : f.statut); list.appendChild(li); });
+    if (!items.length) list.appendChild(el('li', 'collection-empty-inline', isEnglish() ? 'None configured.' : 'Aucune fonctionnalité configurée.'));
     card.appendChild(list); return card;
   }
   async function renderFonctionnalites() {
@@ -737,10 +757,15 @@
     var r = await call('GET', '/features'); clear(body);
     if (r.status === 403) { body.appendChild(buildDenied('Lire l’inventaire des fonctionnalités')); return; }
     if (!r.ok || !r.json || !Array.isArray(r.json.groupes)) { body.appendChild(buildErrorBanner(function () { renderFonctionnalites(); })); return; }
+    body.appendChild(collectionCount(r.json.groupes.length, 'groupe de fonctionnalités', 'feature group'));
+    if (!r.json.groupes.length) body.appendChild(collectionEmpty(0, 'groupe de fonctionnalités', 'feature group', 'Aucun groupe de fonctionnalités n’est configuré.', 'No feature groups are configured.'));
     r.json.groupes.forEach(function (group) { body.appendChild(renderFeatureGroup(group)); });
     var custom = el('section', 'chart-card'); custom.appendChild(el('h2', 'chart-card-title', 'Personnalisation disponible')); custom.appendChild(el('p', 'chart-card-sub', 'Chaque ligne renvoie vers la section qui la gouverne et rappelle la permission appliquée côté serveur.'));
     var list = el('ul', 'feature-list');
-    (r.json.personnalisations || []).forEach(function (item) { var li = el('li', 'feature-row'), link = el('a'); link.href = '#/' + item.id; dynamicText(link, isEnglish() ? item.nomEn : item.nom); li.appendChild(link); dynamicText(li.appendChild(el('span', 'help')), item.permission + ' · ' + (item.mode === 'editable' ? (isEnglish() ? 'Editable' : 'Modifiable') : (isEnglish() ? 'Readiness' : 'État'))); list.appendChild(li); });
+    var customItems = r.json.personnalisations || [];
+    custom.appendChild(collectionCount(customItems.length, 'personnalisation', 'customization'));
+    customItems.forEach(function (item) { var li = el('li', 'feature-row'), link = el('a'); link.href = '#/' + item.id; dynamicText(link, isEnglish() ? item.nomEn : item.nom); li.appendChild(link); dynamicText(li.appendChild(el('span', 'help')), item.permission + ' · ' + (item.mode === 'editable' ? (isEnglish() ? 'Editable' : 'Modifiable') : (isEnglish() ? 'Readiness' : 'État'))); list.appendChild(li); });
+    if (!customItems.length) list.appendChild(el('li', 'collection-empty-inline', isEnglish() ? 'None available.' : 'Aucune personnalisation disponible.'));
     custom.appendChild(list); body.appendChild(custom);
   }
 
@@ -1266,10 +1291,7 @@
     view.appendChild(buildFunnel(data.entonnoir));
     if (data.customerImprovement) view.appendChild(buildCustomerImprovement(data.customerImprovement));
     view.appendChild(buildSegments(data.segments, data.entonnoir));
-    // Parrainages are all-time (ledger, not range series): shown in either
-    // branch whenever the program has activity.
-    var parr = buildParrainages(data.parrainages);
-    if (parr) view.appendChild(parr);
+    if (data.parrainages != null) view.appendChild(buildParrainages(data.parrainages));
     if (data.followUp) {
       var follow = el('section');
       follow.appendChild(el('h2', null, 'Demandes à suivre'));
@@ -1286,7 +1308,8 @@
     var section = el('section', 'parrainages');
     section.appendChild(el('h2', null, 'Provenance des demandes'));
     section.appendChild(el('p', null, 'Événements dans la période sélectionnée. Les visites ne sont pas des visiteurs uniques; les demandes retenues peuvent provenir d’une période antérieure.'));
-    rows = rows.filter(function (row) { return row.visite || row.formulaire || row.publie || row.retenue; });
+    rows = Array.isArray(rows) ? rows.filter(function (row) { return row.visite || row.formulaire || row.publie || row.retenue; }) : [];
+    section.appendChild(collectionCount(rows.length, 'source', 'source'));
     if (!rows.length) { section.appendChild(el('p', null, 'Les sources apparaîtront après les premières visites mesurées.')); return section; }
     var table = el('table', 'ptable'), head = el('thead'), hr = el('tr');
     ['Source', 'Visites', 'Formulaires commencés', 'Demandes enregistrées', 'Demandes retenues'].forEach(function (label) { var th = el('th', null, label); th.scope = 'col'; hr.appendChild(th); });
@@ -1318,7 +1341,9 @@
     var card = el('section', 'chart-card segment-card');
     card.appendChild(el('h2', 'chart-card-title', 'Appareils et sources de visite'));
     card.appendChild(el('p', 'chart-card-sub', 'Chaque groupe présente des comptages distincts. Ces données ne suivent pas des personnes et ne prouvent pas la compatibilité. Les anciennes visites ne sont pas reclassées.'));
-    if (!Array.isArray(segments) || !segments.some(function (group) { return group.rows && group.rows.length; })) {
+    var segmentGroups = Array.isArray(segments) ? segments.filter(function (group) { return group.rows && group.rows.length; }) : [];
+    card.appendChild(collectionCount(segmentGroups.length, 'groupe', 'group'));
+    if (!segmentGroups.length) {
       card.appendChild(el('p', 'chart-card-sub', 'Aucune ventilation disponible pour cette période.'));
       return card;
     }
@@ -1329,7 +1354,7 @@
       node.setAttribute('data-i18n-skip', '');
       return node;
     }
-    segments.forEach(function (group) {
+    segmentGroups.forEach(function (group) {
       if (!group.rows || !group.rows.length) return;
       var detail = el('details'); detail.dataset.segment = group.id;
       detail.appendChild(label(el('summary'), group));
@@ -1358,6 +1383,8 @@
       card.appendChild(el('p', 'chart-card-sub', 'Données du parcours indisponibles.'));
       return card;
     }
+    card.appendChild(collectionCount(events.length, 'événement', 'event'));
+    if (!events.length) { card.appendChild(el('p', 'chart-card-sub', 'Aucun événement enregistré pour cette période.')); return card; }
     var scroll = el('div', 'chart-scroll');
     var table = el('table', 'ptable');
     var head = el('thead'), header = el('tr');
@@ -1454,6 +1481,8 @@
   function buildCharts(d) {
     var s = d.series || {};
     var grid = el('div', 'chart-grid');
+    var offersPerDay = Array.isArray(s.offersPerDay) ? s.offersPerDay : [];
+    var byService = Array.isArray(s.byService) ? s.byService : [];
 
     // Line chart card — offres par jour.
     var lineCard = el('div', 'chart-card');
@@ -1464,7 +1493,8 @@
     lh.appendChild(lht);
     lineCard.appendChild(lh);
     var lScroll = el('div', 'chart-scroll');
-    lScroll.appendChild(buildLineChart(s.offersPerDay || []));
+    if (offersPerDay.length) lScroll.appendChild(buildLineChart(offersPerDay));
+    else lScroll.appendChild(collectionEmpty(0, 'jour mesuré', 'measured day', 'Aucune offre quotidienne à tracer pour cette période.', 'No daily offers to chart for this period.'));
     lineCard.appendChild(lScroll);
     grid.appendChild(lineCard);
 
@@ -1477,7 +1507,8 @@
     bh.appendChild(bht);
     bh.appendChild(buildLegend());
     barCard.appendChild(bh);
-    barCard.appendChild(buildBarChart(s.byService || []));
+    if (byService.length) barCard.appendChild(buildBarChart(byService));
+    else barCard.appendChild(collectionEmpty(0, 'service', 'service', 'Aucune offre par service à tracer pour cette période.', 'No service offers to chart for this period.'));
     grid.appendChild(barCard);
 
     return grid;
@@ -1493,7 +1524,6 @@
     // amounts (domain data, echoed so this app never hardcodes them) and one
     // row per code. A bare array is tolerated for older payloads.
     var rows = section && Array.isArray(section.codes) ? section.codes : Array.isArray(section) ? section : [];
-    if (!rows.length) return null;
     var card = el('div', 'chart-card');
     var head = el('div', 'chart-card-head');
     var ht = el('div');
@@ -1502,6 +1532,7 @@
       ? 'Récompenses des partenaires référents — ' + moneyCents(section.client * 100) + ' à la rétention (client), ' + moneyCents(section.notaire * 100) + ' au premier acte (notaire).'
       : 'Récompenses des partenaires référents — dû à la rétention (clients) et au premier acte (notaires).';
     ht.appendChild(el('div', 'chart-card-sub', sub));
+    ht.appendChild(collectionCount(rows.length, 'code partenaire', 'partner code'));
     head.appendChild(ht);
     card.appendChild(head);
 
@@ -1544,6 +1575,7 @@
     table.appendChild(tbody);
     scroll.appendChild(table);
     card.appendChild(scroll);
+    if (!rows.length) card.appendChild(collectionEmpty(0, 'code partenaire', 'partner code', 'Aucun code partenaire n’a encore produit d’activité.', 'No partner code has generated activity yet.'));
     return card;
   }
 
@@ -1766,6 +1798,7 @@
       var rows = byAudience[aud];
       if (rows && rows.length) view.appendChild(buildTemplateGroup(aud, rows, container));
     });
+    if (!r.json.templates.length) view.appendChild(collectionEmpty(0, 'modèle de courriel', 'email template', 'Aucun modèle de courriel n’est disponible.', 'No email templates are available.'));
     container.appendChild(view);
   }
 
@@ -1775,6 +1808,7 @@
     var ht = el('div');
     ht.appendChild(el('div', 'chart-card-title', AUDIENCE_LABELS[audience] || audience));
     ht.appendChild(el('div', 'chart-card-sub', templates.length + ' modèles'));
+    ht.appendChild(collectionCount(templates.length, 'modèle de courriel', 'email template'));
     head.appendChild(ht);
     card.appendChild(head);
     templates.forEach(function (t) { card.appendChild(buildTemplateRow(t, container)); });
@@ -3446,6 +3480,7 @@
   function buildAudCard(container) {
     var card = el('section', 'chart-card aud-groupes');
     card.appendChild(el('div', 'chart-card-title', 'Groupes d’audience'));
+    card.appendChild(collectionCount(audEtat.groupes.length, 'groupe d’audience', 'audience group'));
     if (!audEtat.groupes.length) {
       card.appendChild(el('p', 'tpl-note', 'Aucune liste pour le moment.'));
     }
@@ -3841,6 +3876,7 @@
   function buildGroupesCard() {
     var card = el('section', 'chart-card acces-groupes');
     card.appendChild(el('div', 'chart-card-title', 'Groupes'));
+    card.appendChild(collectionCount(accesEtat.groupes.length, 'groupe', 'group'));
     card.appendChild(el('p', 'tpl-note',
       'Un groupe réunit des permissions et s’attribue à des personnes. Le supprimer retire ses permissions à tous ses membres, immédiatement.'));
 
@@ -4073,10 +4109,12 @@
   function buildUsersCard() {
     var card = el('section', 'chart-card acces-users');
     card.appendChild(el('div', 'chart-card-title', 'Utilisateurs'));
+    card.appendChild(collectionCount(accesEtat.utilisateurs.length, 'utilisateur', 'user'));
     card.appendChild(el('p', 'tpl-note',
       'Les comptes viennent de la liste blanche du déploiement — elle reste la porte extérieure. Ce qui se règle ici, c’est ce que chacun peut.'));
 
     if (accesEtat.utilisateursRefuses) card.appendChild(buildReservedLine('Voir les utilisateurs'));
+    else if (!accesEtat.utilisateurs.length) card.appendChild(el('p', 'tpl-note', 'Aucun utilisateur configuré pour le moment.'));
     accesEtat.utilisateurs.forEach(function (u) {
       var row = el('div', 'acces-user');
       row.dataset.email = u.email;
@@ -5241,6 +5279,7 @@
     var head = el('div', 'chart-card-head');
     var ht = el('div');
     ht.appendChild(el('div', 'chart-card-title', 'En attente d’approbation'));
+    ht.appendChild(collectionCount(pending.length, 'dossier', 'application'));
     ht.appendChild(el('div', 'chart-card-sub',
       pending.length === 1
         ? 'Un dossier attend la vérification au Tableau de l’Ordre.'
@@ -5321,6 +5360,7 @@
     var head = el('div', 'chart-card-head');
     var ht = el('div');
     ht.appendChild(el('div', 'chart-card-title', 'Tableau d’honneur'));
+    ht.appendChild(collectionCount(rows.length, 'notaire', 'notary'));
     ht.appendChild(el('div', 'chart-card-sub', 'Trié par cote — la meilleure d’abord.'));
     head.appendChild(ht);
     card.appendChild(head);

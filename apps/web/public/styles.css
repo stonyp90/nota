@@ -1,44 +1,33 @@
 /* ==========================================================================
    Nota — design tokens and styles.
-   Brand aligned with Tablix: hunter-green palette, Inter type, slate ink.
+   Brand system: institutional cobalt, midnight ink, and restrained brass.
    Deviation from Tablix on purpose: squared corners (Tablix uses rounded-xl).
    All colors are tokens — no literal color values below the :root blocks.
    ========================================================================== */
 
 :root {
-  /* Fir green — the brand ramp (owner, 2026-09-01: « le vert est trop
-     intense »). Rebuilt in OKLCH on ONE hue axis (150→158, a fir/sage green)
-     instead of the old ramp's yellow-green 142 with a chroma spike of 0.179
-     at step 500 — a near-gamut-edge kelly that burns on the dark canvas.
-     Chroma is now capped at 0.092 (a 48 % cut) and PEAKS on steps 400/500,
-     the two the single vivid accent (--brand-bright) resolves to; every
-     other step is quieter still, so borders, status ink and bars read as
-     ink-with-a-hue rather than paint. Lightness is monotonic, which the old
-     ramp was not (400 and 500 sat 0.005 apart and differed only in chroma).
-     Method: Radix's 12-step role split (1-2 backgrounds, 3-5 component
-     fills, 6-8 borders, 9-10 solids, 11-12 text) mapped onto this 50-950
-     scale; the cooler hue also pulls the green away from the warm alert
-     ramp under deuteranopia (dE 6.6 -> 26.4 on the worst pair). */
-  --hunter-50: #f0f8f1;
-  --hunter-100: #ddeee0;
-  --hunter-200: #bbd9c2;
-  --hunter-300: #97c0a2;
-  --hunter-400: #73b189;
-  --hunter-500: #599a71;
-  --hunter-600: #467759;
-  --hunter-700: #315b43;
-  --hunter-800: #254633;
-  --hunter-900: #183123;
-  --hunter-950: #0b1911;
+  /* Nota blue ramp: institutional cobalt for trust and rigor, with a
+     restrained light blue for digital interactions. */
+  --nota-blue-50: #f1f7fb;
+  --nota-blue-100: #e1eef5;
+  --nota-blue-200: #c3ddeb;
+  --nota-blue-300: #95c4d9;
+  --nota-blue-400: #69b7d5;
+  --nota-blue-500: #2a769b;
+  --nota-blue-600: #216680;
+  --nota-blue-700: #174a63;
+  --nota-blue-800: #113a51;
+  --nota-blue-900: #0b2939;
+  --nota-blue-950: #061c2a;
   /* Channel-only copies of the three steps that alpha tokens below need
      (shadows, focus glow, background wash). rgb() cannot take a hex var, so
      these exist so no ramp value is ever retyped as a literal downstream. */
-  --hunter-400-rgb: 115 177 137;
-  --hunter-500-rgb: 89 154 113;
-  --hunter-700-rgb: 49 91 67;
+  --nota-blue-400-rgb: 105 183 213;
+  --nota-blue-500-rgb: 42 118 155;
+  --nota-blue-700-rgb: 23 74 99;
 
   /* Semantic tokens (light) */
-  --brand: var(--hunter-700);
+  --brand: var(--nota-blue-700);
   /* Couleurs de MARQUE des fournisseurs tiers (portes à venir). Ce sont des
      constantes appartenant à Google, Meta et LinkedIn : elles ne suivent pas
      le thème et ne se redéfinissent nulle part — mais elles restent des
@@ -46,27 +35,24 @@
   --marque-google-chip: #ffffff; /* le « G » doit rester sur fond blanc */
   --marque-facebook: #1877f2;
   --marque-linkedin: #0a66c2;
-  --brand-bright: var(--hunter-500);
+  --brand-bright: var(--nota-blue-500);
   --brand-ink: #ffffff;
-  --brand-hover: var(--hunter-800);
+  --brand-hover: var(--nota-blue-800);
   --on-accent: #ffffff; /* text/knob on saturated accents (tier pills, toggle) — white in every theme */
 
-  --bg: #f0f2f1; /* neutral canvas with a whisper of the brand hue — panels float cleanly */
-  /* A whisper off pure white (owner, 2026-08-27 evening: « the white is too
-     intense ») — the faintest green cast keeps components clearly readable
-     on the washed background without the clinical glare of #fff. */
-  --surface: #fdfdfd;
-  --surface-inset: #f3f5f4;
-  --surface-hover: #e9edeb;
-  --ink: #111614; /* hunter-black: the brand hue at near-zero chroma, not a blue slate */
-  --ink-muted: #4f5e57; /* hunter-grey, AA (>=7:1) on every light surface */
-  --border: #dde2df;
-  --border-strong: #b9c2bc;
-  --ring: var(--hunter-600);
+  --bg: #f2f5f7;
+  --surface: #fbfcfd;
+  --surface-inset: #eaf1f5;
+  --surface-hover: #e2ebf0;
+  --ink: #0d1b27;
+  --ink-muted: #526574;
+  --border: #d9e3e9;
+  --border-strong: #b6c8d4;
+  --ring: var(--nota-blue-600);
 
   --danger: #b42318;
   --warn: #b54708;
-  --ok: var(--hunter-600);
+  --ok: var(--nota-blue-600);
   --danger-solid: #b42318; /* solid deep red for badge fills — dark --danger is a light salmon that fails white-text contrast */
   /* The tint pair (owner, 2026-08-27: « components carry no opacity — the
      background does »): --brand-tint keeps its alpha and is RESERVED for the
@@ -76,7 +62,7 @@
      components (chips, badges, step discs, hover fills) paint with, so
      nothing ever bleeds through a component. Auto-follows each theme:
      the mix resolves against that theme's --brand-bright / --surface. */
-  --brand-tint: rgb(var(--hunter-500-rgb) / 0.05); /* faint brand wash — background layers only */
+  --brand-tint: rgb(var(--nota-blue-500-rgb) / 0.05); /* faint brand wash — background layers only */
   --brand-tint-mix: 6%;
   --brand-tint-solid: color-mix(in srgb, var(--brand-bright) var(--brand-tint-mix), var(--surface));
   /* The HIGHLIGHT tint: one step richer than the component wash, for the one
@@ -110,7 +96,7 @@
   /* Tier accent ramp — cool (calm) to warm (urgent).
      All five are dark enough for white .pill text to meet WCAG AA (>=4.5:1). */
   --tier-standard: #64748b;
-  --tier-rapide: #3f654d;
+  --tier-rapide: #356c87;
   --tier-prioritaire: #906800;
   --tier-urgence: #c2410c;
   --tier-extreme: #b42318;
@@ -128,7 +114,7 @@
      (ADR 0010): each act owns its token here, and every theme block below
      redefines BOTH — a service colour must never fall back to a light value
      in the dark themes. */
-  --svc-refinancement: #0f766e; /* darker teal → AA (>=4.5:1) for the small per-service count text */
+  --svc-refinancement: #1677a5; /* cobalt blue → AA (>=4.5:1) for the small per-service count text */
   --svc-financement: #4f46e5; /* indigo → AA on light surfaces; clearly apart from the teal sibling */
   --svc-testament: #b45309;
   --svc-procuration: #7c3aed;
@@ -151,10 +137,10 @@
   color-scheme: light;
   --shadow-sm: 0 1px 2px rgb(17 22 20 / 0.05);
   --shadow: 0 6px 20px -8px rgb(17 22 20 / 0.12);
-  --shadow-lg: 0 24px 50px -16px rgb(var(--hunter-700-rgb) / 0.24);
-  --shadow-brand: 0 6px 16px -6px rgb(var(--hunter-700-rgb) / 0.5); /* brand-primary hover lift */
+  --shadow-lg: 0 24px 50px -16px rgb(var(--nota-blue-700-rgb) / 0.24);
+  --shadow-brand: 0 6px 16px -6px rgb(var(--nota-blue-700-rgb) / 0.5); /* brand-primary hover lift */
   --logo-shadow: 0 1px 2px rgb(17 22 20 / 0.15);       /* header brand mark */
-  --focus-ring: rgb(var(--hunter-500-rgb) / 0.3);      /* brand focus glow (3px) */
+  --focus-ring: rgb(var(--nota-blue-500-rgb) / 0.3);      /* brand focus glow (3px) */
   --backdrop: rgb(13 18 15 / 0.55);                    /* dialog scrim */
 
   --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -216,36 +202,36 @@
    light UI. Excludes an explicit light opt-out via :not([data-theme='light']). */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --brand: var(--hunter-500);
-    --brand-bright: var(--hunter-400);
-    --brand-ink: #08130a;
-    --brand-hover: var(--hunter-400);
+    --brand: var(--nota-blue-500);
+    --brand-bright: var(--nota-blue-400);
+    --brand-ink: #061c2a;
+    --brand-hover: var(--nota-blue-400);
 
     /* Lifted off true black (owner, 2026-08-27 evening: « the black on the
        dark theme is too intense ») — the whole dark ramp steps up one notch
        and stays NEUTRAL graphite (owner, 2026-08-28: « trop vert » — the
        green cast is gone; brand green lives on controls, not the canvas). */
     --bg: #0f110f;
-    --surface: #171918;
-    --surface-inset: #1d201e;
-    --surface-hover: #232624; /* one notch down (2026-09-01): at #252827 the quieter --brand ink on a hovered row measured 4.45:1, just under AA */
-    --ink: #f6f9f7;
-    --ink-muted: #a8b1ab;
-    --border: #2e332f;
-    --border-strong: #474c48;
-    --ring: var(--hunter-400);
+    --surface: #0f2030;
+    --surface-inset: #132b3f;
+    --surface-hover: #19384d;
+    --ink: #f4f8fa;
+    --ink-muted: #afc2cf;
+    --border: #294353;
+    --border-strong: #3f5f70;
+    --ring: var(--nota-blue-400);
 
     --danger: #f97066;
     --warn: #f79009;
-    --ok: var(--hunter-500);
+    --ok: var(--nota-blue-500);
     --danger-solid: #b42318;
-    --brand-tint: rgb(var(--hunter-400-rgb) / 0.06); /* softened three times (owner, 2026-08-28 « trop vert », 2026-09-01 « trop intense ») */
+    --brand-tint: rgb(var(--nota-blue-400-rgb) / 0.06); /* softened three times (owner, 2026-08-28 « trop vert », 2026-09-01 « trop intense ») */
     --brand-tint-mix: 8%;
     --brand-tint-mix-strong: 20%; /* deep pour: on near-black a component-level mix greys out — but 26 % pushed --brand ink on the highlight card below AA, so the card now carries --brand-on-tint-strong instead */
     --brand-on-tint-strong: var(--brand-bright);
 
     --tier-standard: #64748b;
-    --tier-rapide: #3f654d;
+    --tier-rapide: #356c87;
     --tier-prioritaire: #906800;
     --tier-urgence: #c2410c;
     --tier-extreme: #b42318;
@@ -259,8 +245,8 @@
     --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.5);
     --shadow: 0 8px 24px -10px rgb(0 0 0 / 0.6);
     --shadow-lg: 0 20px 40px -12px rgb(0 0 0 / 0.6);
-    --shadow-brand: 0 6px 16px -6px rgb(var(--hunter-400-rgb) / 0.4);
-    --focus-ring: rgb(var(--hunter-400-rgb) / 0.45);
+    --shadow-brand: 0 6px 16px -6px rgb(var(--nota-blue-400-rgb) / 0.4);
+    --focus-ring: rgb(var(--nota-blue-400-rgb) / 0.45);
     color-scheme: dark;
   }
 }
@@ -269,36 +255,36 @@
    Defines the SAME complete token set as the @media block above; keep the two in
    lockstep so no token (e.g. --warn, --shadow-lg) drifts back to its light value. */
 :root[data-theme='dark'] {
-  --brand: var(--hunter-500);
-  --brand-bright: var(--hunter-400);
-  --brand-ink: #08130a;
-  --brand-hover: var(--hunter-400);
+  --brand: var(--nota-blue-500);
+  --brand-bright: var(--nota-blue-400);
+  --brand-ink: #061c2a;
+  --brand-hover: var(--nota-blue-400);
 
   /* Lifted off true black (owner, 2026-08-27 evening: « the black on the
      dark theme is too intense ») — the whole dark ramp steps up one notch
      and stays NEUTRAL graphite (owner, 2026-08-28: « trop vert » — the
      green cast is gone; brand green lives on controls, not the canvas). */
   --bg: #0f110f;
-  --surface: #171918;
-  --surface-inset: #1d201e;
-  --surface-hover: #232624; /* one notch down (2026-09-01): at #252827 the quieter --brand ink on a hovered row measured 4.45:1, just under AA */
-  --ink: #f6f9f7;
-  --ink-muted: #a8b1ab;
-  --border: #2e332f;
-  --border-strong: #474c48;
-  --ring: var(--hunter-400);
+  --surface: #0f2030;
+  --surface-inset: #132b3f;
+  --surface-hover: #19384d;
+  --ink: #f4f8fa;
+  --ink-muted: #afc2cf;
+  --border: #294353;
+  --border-strong: #3f5f70;
+  --ring: var(--nota-blue-400);
 
   --danger: #f97066;
   --warn: #f79009;
-  --ok: var(--hunter-500);
+  --ok: var(--nota-blue-500);
   --danger-solid: #b42318;
-  --brand-tint: rgb(var(--hunter-400-rgb) / 0.06); /* softened three times (owner, 2026-08-28 « trop vert », 2026-09-01 « trop intense ») */
+  --brand-tint: rgb(var(--nota-blue-400-rgb) / 0.06); /* softened three times (owner, 2026-08-28 « trop vert », 2026-09-01 « trop intense ») */
   --brand-tint-mix: 8%;
   --brand-tint-mix-strong: 20%; /* deep pour: on near-black a component-level mix greys out — but 26 % pushed --brand ink on the highlight card below AA, so the card now carries --brand-on-tint-strong instead */
   --brand-on-tint-strong: var(--brand-bright);
 
   --tier-standard: #64748b;
-  --tier-rapide: #3f654d;
+  --tier-rapide: #356c87;
   --tier-prioritaire: #906800;
   --tier-urgence: #c2410c;
   --tier-extreme: #b42318;
@@ -312,8 +298,8 @@
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.5);
   --shadow: 0 8px 24px -10px rgb(0 0 0 / 0.6);
   --shadow-lg: 0 20px 40px -12px rgb(0 0 0 / 0.6);
-  --shadow-brand: 0 6px 16px -6px rgb(var(--hunter-400-rgb) / 0.4);
-  --focus-ring: rgb(var(--hunter-400-rgb) / 0.45);
+  --shadow-brand: 0 6px 16px -6px rgb(var(--nota-blue-400-rgb) / 0.4);
+  --focus-ring: rgb(var(--nota-blue-400-rgb) / 0.45);
   color-scheme: dark;
 }
 
@@ -998,6 +984,7 @@ html.nav-open, html.nav-open body { overflow: hidden; }
    column. Distributing them over the hero's height (space-between + flex:1)
    opened huge gaps whenever the copy column was tall or the hero stacked. */
 .pulse-rows { display: grid; gap: var(--space-2); margin-top: var(--space-3); align-content: start; }
+.pulse-rows .collection-empty { margin: 0; padding: 14px 12px; border: 1px dashed var(--border); border-radius: var(--radius); color: var(--ink-muted); text-align: center; background: var(--surface-inset); font-size: 12px; font-weight: 700; }
 /* The filter button takes the width; the book button sits at its right edge. */
 .pulse-item { display: flex; align-items: center; gap: 2px; }
 /* The ROW may shrink (min-width:0, else it pushed the book button past a
@@ -1229,6 +1216,7 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--brand); }
    content must respond to the GRID's width — not the viewport — to stay legible
    in a narrow column, in fullscreen, or on a phone. See the @container rules below. */
 .cal-grid { container: cal / inline-size; display: flex; flex-direction: column; gap: 5px; padding: 6px 14px 12px; }
+.cal-empty { margin: 0 14px 12px; padding: 10px 14px; text-align: center; color: var(--ink-muted); border: 1px dashed var(--border); border-radius: var(--radius); }
 .cal-row { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
 .cal-dow { text-align: center; font-size: 11px; font-weight: 700; color: var(--ink-muted); padding: 4px 0; text-transform: uppercase; letter-spacing: .04em; }
 .cal-cell {
@@ -4071,6 +4059,9 @@ body.is-notary-session #tab-notaires { pointer-events: none; }
    collapsed register. Each evaluation carries the facteurs' hairline left
    rule — the client's words, quoted in quiet type under the stars. */
 .nc-evals { margin-top: 10px; }
+.nc-zero-count, .nc-svc-count, .chat-doc-count { color: var(--ink-muted); font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.nc-zero-count { margin: 8px 0; }
+.nc-svc-count { margin: 2px 0 8px; }
 .nc-evals-own { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; margin-bottom: var(--space-4); }
 .nc-eval { margin-top: 10px; padding: 2px 0 2px 10px; border-left: 2px solid var(--border-strong); }
 .nc-eval-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
@@ -5160,6 +5151,7 @@ body.ig-open { overflow: hidden; }
    (aria-live), parce qu'une barre de progression sans phrase ne dit pas ce qui
    se passe quand elle s'arrête. */
 .chat-docs { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.chat-doc-count { margin-bottom: 8px; }
 .chat-doc-list { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 4px; }
 .chat-doc { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 13px; }
 .chat-doc-open {
@@ -5199,9 +5191,9 @@ body.ig-open { overflow: hidden; }
 @media print {
   :root, :root[data-theme='dark'], :root:not([data-theme='light']) {
     color-scheme: light;
-    --brand: var(--hunter-700); --brand-bright: var(--hunter-500); --brand-ink: #ffffff; --brand-hover: var(--hunter-800);
-    --bg: #ffffff; --surface: #ffffff; --surface-inset: #f3f5f4; --surface-hover: #e9edeb;
-    --ink: #111614; --ink-muted: #4f5e57; --border: #dde2df; --border-strong: #b9c2bc; --ring: var(--hunter-600);
+    --brand: var(--nota-blue-700); --brand-bright: var(--nota-blue-500); --brand-ink: #ffffff; --brand-hover: var(--nota-blue-800);
+    --bg: #ffffff; --surface: #ffffff; --surface-inset: #eaf1f5; --surface-hover: #e2ebf0;
+    --ink: #0d1b27; --ink-muted: #526574; --border: #d9e3e9; --border-strong: #b6c8d4; --ring: var(--nota-blue-600);
     --shadow-sm: none; --shadow: none; --shadow-lg: none; --shadow-brand: none;
   }
   .site-header, .site-footer nav, .guide-fab, .sup-wrap, .mark-drift, .mnav, .mnav-scrim,
