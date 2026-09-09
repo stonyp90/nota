@@ -30,6 +30,8 @@ const {
   ACT_SK,
   supportPK,
   SUPPORT_SK,
+  sallePK,
+  SALLE_SK,
   supportGSI1PK,
   supportGSI1SK,
   partnerPK,
@@ -1689,6 +1691,42 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
       if (!out.Item) return null;
       const { PK, SK, type, [GSI1_PK]: _gpk, [GSI1_SK]: _gsk, ...thread } = out.Item;
       return thread;
+    },
+    // --- Salle de signature (ADR 0047) --------------------------------------
+    // One item per séance, addressed by its bid: GetItem in, PutItem out, no
+    // index. The write is CONDITIONAL on `rev` and that is not decoration —
+    // during connection setup both peers push ICE candidates at the same item,
+    // and a lost update drops a candidate. A dropped candidate is not an error
+    // anyone sees: it is a peer connection that simply never comes up.
+    async getSalle(bidId) {
+      const out = await doc.send(
+        new GetCommand({ TableName: tableName, Key: { PK: sallePK(bidId), SK: SALLE_SK } })
+      );
+      if (!out.Item) return null;
+      const { PK, SK, type, ttl, ...salle } = out.Item;
+      return salle;
+    },
+    async putSalle(salle, { ifRev } = {}) {
+      const rev = (Number(ifRev) || 0) + 1;
+      const item = {
+        PK: sallePK(salle.bidId), SK: SALLE_SK, type: 'salle',
+        ...salle, bidId: String(salle.bidId), rev,
+        // The séance is part of the audit trail's story, so it ages with it.
+        ttl: auditRetentionTtl(Date.now()),
+      };
+      await doc.send(
+        new PutCommand({
+          TableName: tableName,
+          Item: item,
+          ...(ifRev === undefined
+            ? {}
+            : ifRev === 0
+              ? { ConditionExpression: 'attribute_not_exists(PK)' }
+              : { ConditionExpression: '#rev = :rev', ExpressionAttributeNames: { '#rev': 'rev' }, ExpressionAttributeValues: { ':rev': ifRev } }),
+        })
+      );
+      const { PK, SK, type, ttl, ...propre } = item;
+      return propre;
     },
     // The operator's inbox: one bounded Query per recent month on the
     // SUPPORT#<YYYY-MM> overload, read backwards, merged newest-first.

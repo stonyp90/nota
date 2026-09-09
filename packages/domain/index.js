@@ -3675,6 +3675,636 @@
     return typeof id === 'string' && FUNNEL_EVENTS.some((e) => e.id === id);
   }
 
+  // ===========================================================================
+  // SALLE DE SIGNATURE — ADR 0047
+  //
+  // La cérémonie est de Nota. La signature juridique est du fournisseur admis
+  // par la Chambre. La preuve est de Nota, et elle est remise au notaire.
+  //
+  // Tout ce qui décide vit ici : les quatre portes, les huit étapes, les trois
+  // modes d'enregistrement, et la chaîne d'empreintes du procès-verbal. Ni
+  // l'API ni l'interface ne rejouent une de ces règles — elles appellent.
+  // ===========================================================================
+
+  // --- SHA-256, écrit à la main ----------------------------------------------
+  // Le domaine n'a aucune dépendance et tourne dans Node ET dans le navigateur.
+  // `node:crypto` n'existe pas dans l'un, `crypto.subtle` est asynchrone et
+  // absent des origines non sécurisées de l'autre. La chaîne de preuve ne peut
+  // dépendre ni de l'un ni de l'autre : elle doit se calculer partout, de la
+  // même manière, tout de suite. Quatre-vingts lignes, des vecteurs d'essai
+  // connus dans les tests, et la question est close.
+  const SHA256_K = Object.freeze([
+    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+  ]);
+
+  // UTF-8 à la main plutôt que TextEncoder : une globale de moins à supposer.
+  // Un demi-substitut isolé devient U+FFFD, comme le ferait TextEncoder.
+  function utf8Bytes(value) {
+    const s = String(value == null ? '' : value);
+    const out = [];
+    for (let i = 0; i < s.length; i++) {
+      const c = s.charCodeAt(i);
+      if (c < 0x80) { out.push(c); continue; }
+      if (c < 0x800) { out.push(0xc0 | (c >> 6), 0x80 | (c & 63)); continue; }
+      if (c >= 0xd800 && c <= 0xdbff) {
+        const next = i + 1 < s.length ? s.charCodeAt(i + 1) : 0;
+        if (next >= 0xdc00 && next <= 0xdfff) {
+          const cp = 0x10000 + ((c - 0xd800) << 10) + (next - 0xdc00);
+          out.push(0xf0 | (cp >> 18), 0x80 | ((cp >> 12) & 63), 0x80 | ((cp >> 6) & 63), 0x80 | (cp & 63));
+          i++;
+          continue;
+        }
+        out.push(0xef, 0xbf, 0xbd);
+        continue;
+      }
+      if (c >= 0xdc00 && c <= 0xdfff) { out.push(0xef, 0xbf, 0xbd); continue; }
+      out.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 63), 0x80 | (c & 63));
+    }
+    return out;
+  }
+
+  function sha256Hex(message) {
+    const bytes = utf8Bytes(message);
+    const len = bytes.length;
+    const padded = len + 9 + ((64 - ((len + 9) % 64)) % 64);
+    const m = new Array(padded).fill(0);
+    for (let i = 0; i < len; i++) m[i] = bytes[i];
+    m[len] = 0x80;
+    // Longueur en BITS, sur 64 bits gros-boutiens. `len / 2^29` est la moitié
+    // haute ; la basse est calculée modulo 2^29 avant le ×8 pour ne jamais
+    // dépasser 2^32 et perdre des bits en cours de route.
+    const hi = Math.floor(len / 536870912);
+    const lo = (len % 536870912) * 8;
+    m[padded - 8] = (hi >>> 24) & 255; m[padded - 7] = (hi >>> 16) & 255;
+    m[padded - 6] = (hi >>> 8) & 255; m[padded - 5] = hi & 255;
+    m[padded - 4] = (lo >>> 24) & 255; m[padded - 3] = (lo >>> 16) & 255;
+    m[padded - 2] = (lo >>> 8) & 255; m[padded - 1] = lo & 255;
+
+    const rotr = (x, n) => ((x >>> n) | (x << (32 - n))) >>> 0;
+    let h0 = 0x6a09e667, h1 = 0xbb67ae85, h2 = 0x3c6ef372, h3 = 0xa54ff53a;
+    let h4 = 0x510e527f, h5 = 0x9b05688c, h6 = 0x1f83d9ab, h7 = 0x5be0cd19;
+    const w = new Array(64);
+
+    for (let off = 0; off < padded; off += 64) {
+      for (let i = 0; i < 16; i++) {
+        const j = off + i * 4;
+        w[i] = ((m[j] << 24) | (m[j + 1] << 16) | (m[j + 2] << 8) | m[j + 3]) >>> 0;
+      }
+      for (let i = 16; i < 64; i++) {
+        const x = w[i - 15], y = w[i - 2];
+        const s0 = (rotr(x, 7) ^ rotr(x, 18) ^ (x >>> 3)) >>> 0;
+        const s1 = (rotr(y, 17) ^ rotr(y, 19) ^ (y >>> 10)) >>> 0;
+        w[i] = (w[i - 16] + s0 + w[i - 7] + s1) >>> 0;
+      }
+      let a = h0, b = h1, c = h2, d = h3, e = h4, f = h5, g = h6, h = h7;
+      for (let i = 0; i < 64; i++) {
+        const S1 = (rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25)) >>> 0;
+        const ch = ((e & f) ^ (~e & g)) >>> 0;
+        const t1 = (h + S1 + ch + SHA256_K[i] + w[i]) >>> 0;
+        const S0 = (rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22)) >>> 0;
+        const maj = ((a & b) ^ (a & c) ^ (b & c)) >>> 0;
+        const t2 = (S0 + maj) >>> 0;
+        h = g; g = f; f = e; e = (d + t1) >>> 0;
+        d = c; c = b; b = a; a = (t1 + t2) >>> 0;
+      }
+      h0 = (h0 + a) >>> 0; h1 = (h1 + b) >>> 0; h2 = (h2 + c) >>> 0; h3 = (h3 + d) >>> 0;
+      h4 = (h4 + e) >>> 0; h5 = (h5 + f) >>> 0; h6 = (h6 + g) >>> 0; h7 = (h7 + h) >>> 0;
+    }
+    return [h0, h1, h2, h3, h4, h5, h6, h7]
+      .map((x) => ('0000000' + x.toString(16)).slice(-8))
+      .join('');
+  }
+
+  // --- La chaîne d'authentification courte -----------------------------------
+  // Ce que les deux personnes se lisent à voix haute. Elle est dérivée des DEUX
+  // empreintes DTLS, donc elle ne peut concorder que si les deux navigateurs
+  // parlent bien l'un à l'autre : un intercepteur, qui négocie deux sessions
+  // distinctes, en produit deux différentes et le notaire l'entend.
+  //
+  // L'ordre des empreintes ne doit rien changer — chaque pair connaît la sienne
+  // et celle d'en face, dans l'ordre inverse de l'autre. D'où le tri.
+  //
+  // Alphabet sans 0/O/1/I/L : « zéro » et « O » se confondent au téléphone, et
+  // la chaîne est faite pour être DITE.
+  const SAS_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
+  const SAS_GROUPES = 2;
+  const SAS_TAILLE_GROUPE = 4;
+
+  function normalizeEmpreinte(value) {
+    return String(value == null ? '' : value).trim().toUpperCase().replace(/\s+/g, '');
+  }
+
+  function chaineAuthentification(empreinteA, empreinteB) {
+    const a = normalizeEmpreinte(empreinteA);
+    const b = normalizeEmpreinte(empreinteB);
+    if (!a || !b) return null;
+    const paire = [a, b].sort();
+    const digest = sha256Hex('nota/sas/v1\n' + paire[0] + '\n' + paire[1]);
+    let out = '';
+    for (let g = 0; g < SAS_GROUPES; g++) {
+      if (g) out += '-';
+      for (let i = 0; i < SAS_TAILLE_GROUPE; i++) {
+        const octet = parseInt(digest.slice((g * SAS_TAILLE_GROUPE + i) * 2, (g * SAS_TAILLE_GROUPE + i) * 2 + 2), 16);
+        out += SAS_ALPHABET[octet % SAS_ALPHABET.length];
+      }
+    }
+    return out;
+  }
+
+  // --- États, modes, portes --------------------------------------------------
+  const SALLE_STATUT = Object.freeze({
+    PREVUE: 'prevue',
+    OUVERTE: 'ouverte',
+    SUSPENDUE: 'suspendue',
+    SCELLEE: 'scellee',
+    ANNULEE: 'annulee',
+  });
+
+  // `strict` est le défaut, et c'est une décision : un enregistrement côté
+  // serveur exigerait un troisième déchiffreur, et il n'y a pas de manière
+  // honnête d'appeler « bout en bout » un canal à trois (ADR 0047 §2).
+  const SALLE_MODES = Object.freeze([
+    {
+      id: 'strict',
+      nom: 'Bout en bout, sans enregistrement',
+      nomEn: 'End-to-end, no recording',
+      enregistre: false,
+      aide: 'Le lien vidéo est chiffré entre vous deux seulement. Rien n’est enregistré : la preuve de la séance est le procès-verbal scellé.',
+    },
+    {
+      id: 'temoin',
+      nom: 'Bout en bout, avec enregistrement chiffré',
+      nomEn: 'End-to-end, with encrypted recording',
+      enregistre: true,
+      aide: 'La séance est enregistrée dans le navigateur du notaire et chiffrée avant d’être déposée. Nota conserve les octets sans pouvoir les lire. Exige l’accord des deux parties.',
+    },
+    {
+      id: 'aucun',
+      nom: 'Répétition, sans valeur',
+      nomEn: 'Rehearsal, no legal value',
+      enregistre: false,
+      aide: 'Pour se pratiquer. Une séance en répétition ne peut pas atteindre l’étape de la signature.',
+    },
+  ]);
+  const SALLE_MODE_DEFAUT = 'strict';
+  function salleModeById(id) { return SALLE_MODES.find((m) => m.id === id) || null; }
+
+  const SALLE_PORTES = Object.freeze(['compte', 'identite', 'lien', 'presence']);
+
+  // Ce que chaque porte établit, dit à la personne qui la regarde se fermer.
+  const SALLE_PORTE_LABELS = Object.freeze({
+    compte: { nom: 'Comptes authentifiés', nomEn: 'Authenticated accounts' },
+    identite: { nom: 'Identité vérifiée', nomEn: 'Identity verified' },
+    lien: { nom: 'Lien privé confirmé', nomEn: 'Private link confirmed' },
+    presence: { nom: 'Présence continue', nomEn: 'Continuous presence' },
+  });
+
+  // Une coupure plus courte que ceci est un hoquet de réseau ; plus longue, le
+  // notaire n'a plus vu ni entendu la personne et la séance se suspend.
+  const PRESENCE_TOLERANCE_MS = 10000;
+
+  const SALLE_PARTIES = Object.freeze(['notaire', 'client']);
+
+  // --- Les huit étapes, et ce que le notaire a à dire -------------------------
+  // `conduite` est le texte de conduite : ce que le notaire dit. `constat` est
+  // ce qu'il doit avoir constaté avant de passer à la suite. Les deux vivent
+  // ici et NON dans la maquette — l'interface, le procès-verbal et les tests
+  // lisent la même phrase (règle 1 de AGENTS.md), et l'anglais la suit.
+  const CEREMONIE_ETAPES = Object.freeze([
+    {
+      id: 'accueil', ordre: 1,
+      nom: 'Accueil',
+      conduite: 'Je me nomme, je nomme mon étude, et je nomme l’acte que nous allons recevoir aujourd’hui. Je confirme que vous me voyez et que vous m’entendez.',
+      constat: 'Les deux parties se voient et s’entendent.',
+    },
+    {
+      id: 'identite', ordre: 2,
+      nom: 'Vérification de l’identité',
+      conduite: 'Je vérifie votre identité et je note la méthode employée. Cette vérification ne se fait pas par la fenêtre vidéo seule.',
+      constat: 'Une attestation d’identité est au dossier, avec sa méthode et son heure.',
+    },
+    {
+      id: 'lien', ordre: 3,
+      nom: 'Confirmation du lien privé',
+      conduite: 'Nous lisons chacun à voix haute la chaîne affichée à l’écran. Si elles concordent, personne ne s’est interposé entre nous.',
+      constat: 'Les deux chaînes concordent et le notaire l’a confirmé.',
+    },
+    {
+      id: 'consentement', ordre: 4,
+      nom: 'Portée et consentement',
+      conduite: 'Je vous explique ce qui est consigné, ce qui est enregistré et ce qui ne l’est pas, puis je recueille votre accord.',
+      constat: 'Les deux parties ont répondu, et leur réponse est horodatée.',
+    },
+    {
+      id: 'lecture', ordre: 5,
+      nom: 'Lecture de l’acte',
+      conduite: 'Je vous lis l’acte et les obligations qui s’y rattachent.',
+      constat: 'La lecture est faite en entier, sans interruption du lien.',
+    },
+    {
+      id: 'questions', ordre: 6,
+      nom: 'Questions',
+      conduite: 'Je réponds à vos questions avant que vous signiez quoi que ce soit.',
+      constat: 'La partie n’a plus de question.',
+    },
+    {
+      id: 'signature', ordre: 7,
+      nom: 'Signature',
+      conduite: 'Je libère la signature vers le flux admis par la Chambre des notaires. C’est là, et non ici, que l’acte prend sa forme définitive.',
+      constat: 'Les quatre portes sont ouvertes et la signature est libérée.',
+    },
+    {
+      id: 'cloture', ordre: 8,
+      nom: 'Clôture',
+      conduite: 'Je scelle le procès-verbal de la séance et je vous en remets l’empreinte.',
+      constat: 'Le procès-verbal est scellé et son empreinte est publiée.',
+    },
+  ]);
+  const CEREMONIE_PREMIERE_ETAPE = CEREMONIE_ETAPES[0].id;
+  function etapeById(id) { return CEREMONIE_ETAPES.find((e) => e.id === id) || null; }
+  function etapeOrdre(id) { const e = etapeById(id); return e ? e.ordre : 0; }
+
+  // --- L'attestation d'identité ----------------------------------------------
+  // Elle porte sa MÉTHODE, son HEURE et son VÉRIFICATEUR, sinon elle n'ouvre
+  // rien. Un booléen « identité vérifiée » ne répond pas à la question qu'un
+  // tribunal pose sept ans plus tard : vérifiée comment, et par qui.
+  const IDENTITE_METHODES = Object.freeze([
+    { id: 'piece_officielle', nom: 'Pièce d’identité officielle présentée au notaire', nomEn: 'Official identity document shown to the notary' },
+    { id: 'fournisseur', nom: 'Vérification par un fournisseur externe', nomEn: 'Verification by an external provider' },
+    { id: 'connaissance_personnelle', nom: 'Connaissance personnelle du notaire', nomEn: 'Notary’s personal knowledge' },
+    { id: 'demonstration', nom: 'Attestation de démonstration — sans valeur', nomEn: 'Demonstration attestation — no legal value' },
+  ]);
+  function identiteMethodeById(id) { return IDENTITE_METHODES.find((m) => m.id === id) || null; }
+
+  function isISODateTime(value) {
+    return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/.test(value)
+      && Number.isFinite(Date.parse(value));
+  }
+
+  function validateAttestationIdentite(att) {
+    const errors = [];
+    const a = att && typeof att === 'object' ? att : {};
+    if (!identiteMethodeById(a.methode)) {
+      errors.push({ field: 'methode', code: 'methode_inconnue', message: 'La méthode de vérification de l’identité est inconnue.' });
+    }
+    if (!isISODateTime(a.verifieeLe)) {
+      errors.push({ field: 'verifieeLe', code: 'heure_requise', message: 'Une attestation d’identité doit porter l’heure de la vérification.' });
+    }
+    const par = String(a.verifieePar || '').trim();
+    if (!par) {
+      errors.push({ field: 'verifieePar', code: 'verificateur_requis', message: 'Une attestation d’identité doit nommer qui a vérifié.' });
+    }
+    if (errors.length) return { ok: false, errors };
+    return {
+      ok: true,
+      attestation: {
+        methode: a.methode,
+        verifieeLe: a.verifieeLe,
+        verifieePar: par,
+        reference: a.reference ? String(a.reference).slice(0, 120) : null,
+      },
+    };
+  }
+
+  // --- Les quatre portes -----------------------------------------------------
+  // LA fonction. Rien d'autre dans le produit ne décide qu'une porte est
+  // ouverte ; l'API et l'interface lisent ce qu'elle répond.
+  function porteFermee(raison, message) { return { ouverte: false, raison, message }; }
+  const PORTE_OUVERTE = Object.freeze({ ouverte: true, raison: null, message: null });
+
+  function salleReadiness(salle, opts) {
+    const s = salle && typeof salle === 'object' ? salle : {};
+    const nowMs = opts && Number.isFinite(opts.nowMs) ? opts.nowMs : Date.now();
+    const parties = s.parties && typeof s.parties === 'object' ? s.parties : {};
+    const identites = s.identites && typeof s.identites === 'object' ? s.identites : {};
+    const lien = s.lien && typeof s.lien === 'object' ? s.lien : {};
+    const portes = {};
+
+    // 1. COMPTE — les deux côtés sont des personnes authentifiées, pas des
+    //    porteurs de lien (ADR 0044).
+    const sansCompte = SALLE_PARTIES.filter((p) => !(parties[p] && parties[p].authentifie === true));
+    portes.compte = sansCompte.length
+      ? porteFermee('compte_manquant', sansCompte.length === 2
+        ? 'Aucune des deux parties n’est encore authentifiée.'
+        : (sansCompte[0] === 'notaire' ? 'Le notaire n’est pas encore authentifié.' : 'Le client n’est pas encore authentifié.'))
+      : PORTE_OUVERTE;
+
+    // 2. IDENTITÉ — une attestation valide par partie.
+    const sansIdentite = SALLE_PARTIES.filter((p) => !validateAttestationIdentite(identites[p]).ok);
+    portes.identite = sansIdentite.length
+      ? porteFermee('identite_manquante', 'L’identité n’est pas encore vérifiée pour : ' + sansIdentite.join(', ') + '.')
+      : PORTE_OUVERTE;
+
+    // 3. LIEN — les deux empreintes DTLS sont connues, elles produisent une
+    //    chaîne, et le NOTAIRE a confirmé qu'elle concordait de vive voix. La
+    //    machine ne peut pas confirmer à sa place : c'est tout l'intérêt.
+    const sas = chaineAuthentification(lien.empreinteNotaire, lien.empreinteClient);
+    if (!sas) portes.lien = porteFermee('lien_inconnu', 'Le lien chiffré n’est pas encore établi entre les deux navigateurs.');
+    else if (!isISODateTime(lien.confirmeLe)) portes.lien = porteFermee('lien_non_confirme', 'Le notaire n’a pas encore confirmé que les deux chaînes concordent.');
+    else if (lien.confirmePour && lien.confirmePour !== sas) portes.lien = porteFermee('lien_change', 'Le lien chiffré a changé depuis la confirmation. Relisez les chaînes.');
+    else portes.lien = PORTE_OUVERTE;
+
+    // 4. PRÉSENCE — les quatre pistes vivent, et aucune coupure en cours n'a
+    //    dépassé la tolérance.
+    portes.presence = presenceEtat(s, nowMs);
+
+    const ouvertes = SALLE_PORTES.filter((p) => portes[p].ouverte);
+    const toutesOuvertes = ouvertes.length === SALLE_PORTES.length;
+    return {
+      portes,
+      sas,
+      ouvertes,
+      fermees: SALLE_PORTES.filter((p) => !portes[p].ouverte),
+      toutesOuvertes,
+    };
+  }
+
+  function presenceEtat(salle, nowMs) {
+    const parties = salle.parties && typeof salle.parties === 'object' ? salle.parties : {};
+    for (const p of SALLE_PARTIES) {
+      const pistes = (parties[p] && parties[p].pistes) || {};
+      if (pistes.video !== true) {
+        return porteFermee('piste_video', p === 'notaire' ? 'La caméra du notaire n’envoie plus d’image.' : 'La caméra du client n’envoie plus d’image.');
+      }
+      if (pistes.audio !== true) {
+        return porteFermee('piste_audio', p === 'notaire' ? 'Le micro du notaire n’envoie plus de son.' : 'Le micro du client n’envoie plus de son.');
+      }
+    }
+    const presence = salle.presence && typeof salle.presence === 'object' ? salle.presence : {};
+    if (Number.isFinite(presence.coupeeA) && !Number.isFinite(presence.repriseA)) {
+      return porteFermee('lien_coupe', 'Le lien est coupé depuis ' + Math.max(0, Math.round((nowMs - presence.coupeeA) / 1000)) + ' s.');
+    }
+    return PORTE_OUVERTE;
+  }
+
+  // Une coupure EN COURS qui dépasse la tolérance suspend la séance. Une
+  // coupure déjà reprise ne la suspend pas : elle est au procès-verbal, ce qui
+  // est le point.
+  function doitSuspendre(salle, nowMs) {
+    const s = salle && typeof salle === 'object' ? salle : {};
+    if (s.statut !== SALLE_STATUT.OUVERTE) return false;
+    const presence = s.presence && typeof s.presence === 'object' ? s.presence : {};
+    if (!Number.isFinite(presence.coupeeA) || Number.isFinite(presence.repriseA)) return false;
+    return (nowMs - presence.coupeeA) > PRESENCE_TOLERANCE_MS;
+  }
+
+  // --- Le consentement -------------------------------------------------------
+  // Requis des DEUX parties dès que la séance a une valeur (donc hors
+  // répétition). Il porte ce qu'il couvre : le procès-verbal toujours,
+  // l'enregistrement seulement en mode témoin.
+  function consentementRequis(mode) { return mode !== 'aucun'; }
+
+  function consentementEtat(salle) {
+    const s = salle && typeof salle === 'object' ? salle : {};
+    const mode = s.mode || SALLE_MODE_DEFAUT;
+    const donnes = s.consentements && typeof s.consentements === 'object' ? s.consentements : {};
+    const manquants = [];
+    const retires = [];
+    for (const p of SALLE_PARTIES) {
+      const c = donnes[p];
+      if (!c || !isISODateTime(c.donneLe)) { manquants.push(p); continue; }
+      if (c.retireLe) { retires.push(p); continue; }
+      if (salleModeById(mode) && salleModeById(mode).enregistre && c.enregistrement !== true) manquants.push(p);
+    }
+    const requis = consentementRequis(mode);
+    return {
+      requis,
+      manquants,
+      retires,
+      complet: !requis || (manquants.length === 0 && retires.length === 0),
+    };
+  }
+
+  // L'enregistrement ne tourne QUE pendant que les deux accords tiennent. Un
+  // retrait l'arrête à l'instant — c'est la même fonction qui répond, donc il
+  // n'y a pas d'endroit où l'oublier.
+  function enregistrementActif(salle) {
+    const s = salle && typeof salle === 'object' ? salle : {};
+    const mode = salleModeById(s.mode || SALLE_MODE_DEFAUT);
+    if (!mode || !mode.enregistre) return false;
+    if (s.statut !== SALLE_STATUT.OUVERTE) return false;
+    return consentementEtat(s).complet;
+  }
+
+  // --- L'avancement de la cérémonie ------------------------------------------
+  // Le notaire conduit. Il ne saute pas d'étape ; il peut revenir en arrière,
+  // et le retour est un fait consigné, pas une correction silencieuse.
+  function peutAvancer(salle, versEtape, opts) {
+    const s = salle && typeof salle === 'object' ? salle : {};
+    const o = opts || {};
+    const errors = [];
+    const cible = etapeById(versEtape);
+    if (!cible) {
+      return { ok: false, errors: [{ field: 'etape', code: 'etape_inconnue', message: 'Cette étape n’existe pas dans la cérémonie.' }] };
+    }
+    if (s.statut === SALLE_STATUT.SUSPENDUE) {
+      errors.push({ field: 'statut', code: 'salle_suspendue', message: 'La séance est suspendue. Rétablissez le lien avant de poursuivre.' });
+    } else if (s.statut !== SALLE_STATUT.OUVERTE) {
+      errors.push({ field: 'statut', code: 'salle_fermee', message: 'La séance n’est pas ouverte.' });
+    }
+    const courante = etapeOrdre(s.etape || CEREMONIE_PREMIERE_ETAPE);
+    if (cible.ordre > courante + 1) {
+      errors.push({ field: 'etape', code: 'etape_sautee', message: 'Une étape ne se saute pas : la suivante est « ' + CEREMONIE_ETAPES[courante].nom + ' ».' });
+    }
+    const retour = cible.ordre <= courante;
+
+    // Les exigences propres aux étapes ne s'appliquent qu'en AVANÇANT. Revenir
+    // sur la lecture parce que le lien a sauté ne doit pas exiger la signature.
+    if (!retour) {
+      const readiness = salleReadiness(s, { nowMs: o.nowMs });
+      if (cible.id === 'lecture' && !readiness.portes.lien.ouverte) {
+        errors.push({ field: 'lien', code: 'lien_non_confirme', message: readiness.portes.lien.message });
+      }
+      if (cible.id === 'signature') {
+        const mode = s.mode || SALLE_MODE_DEFAUT;
+        if (mode === 'aucun') {
+          errors.push({ field: 'mode', code: 'repetition', message: 'Une répétition ne peut pas atteindre la signature.' });
+        }
+        for (const porte of readiness.fermees) {
+          errors.push({ field: porte, code: 'porte_fermee', message: readiness.portes[porte].message });
+        }
+        const consentement = consentementEtat(s);
+        if (!consentement.complet) {
+          errors.push({
+            field: 'consentement', code: 'consentement_incomplet',
+            message: consentement.retires.length
+              ? 'Un consentement a été retiré. La signature ne peut pas être libérée.'
+              : 'Les deux parties doivent avoir donné leur accord avant la signature.',
+          });
+        }
+        // ADR 0047 §6 : l'adaptateur de démonstration ne peut pas produire de
+        // minute. Le refus est ICI, pas dans une consigne d'exploitation.
+        if (o.fournisseur === 'demonstration' && s.demonstration !== true) {
+          errors.push({
+            field: 'fournisseur', code: 'fournisseur_demonstration',
+            message: 'Aucun acte réel ne peut être signé tant que le fournisseur admis par la Chambre n’est pas configuré.',
+          });
+        }
+      }
+    }
+    if (errors.length) return { ok: false, errors };
+    return { ok: true, etape: cible.id, retour };
+  }
+
+  // --- Le procès-verbal ------------------------------------------------------
+  // Ce qui peut y entrer, et RIEN d'autre. La liste est blanche à dessein : le
+  // procès-verbal dit ce qui s'est passé, jamais ce qui a été dit ni ce que
+  // l'acte contient (exigence E2).
+  const PV_FAITS = Object.freeze([
+    'salle_ouverte', 'porte_ouverte', 'porte_fermee', 'etape_franchie', 'etape_reprise',
+    'consentement_donne', 'consentement_retire', 'lien_confirme', 'lien_coupe', 'lien_repris',
+    'enregistrement_demarre', 'enregistrement_arrete', 'signature_liberee', 'salle_suspendue',
+    'salle_reprise', 'salle_scellee', 'mention_demonstration',
+  ]);
+  // Les seules clés qu'un détail peut porter. Un champ libre y ouvrirait la
+  // porte au contenu de l'acte, et le scellé perdrait ce qui fait sa valeur.
+  const PV_DETAIL_CHAMPS = Object.freeze([
+    'porte', 'etape', 'partie', 'mode', 'methode', 'sas', 'coupureMs', 'reference', 'fournisseur',
+  ]);
+  const PV_PARTIES = Object.freeze(['notaire', 'client', 'systeme']);
+
+  function validateEntreePv(entree) {
+    const errors = [];
+    const e = entree && typeof entree === 'object' ? entree : {};
+    if (!PV_FAITS.includes(e.fait)) {
+      errors.push({ field: 'fait', code: 'fait_inconnu', message: 'Ce fait n’a pas sa place au procès-verbal.' });
+    }
+    if (!PV_PARTIES.includes(e.par)) {
+      errors.push({ field: 'par', code: 'acteur_inconnu', message: 'Une entrée du procès-verbal nomme son acteur.' });
+    }
+    if (!isISODateTime(e.a)) {
+      errors.push({ field: 'a', code: 'heure_requise', message: 'Une entrée du procès-verbal porte son heure.' });
+    }
+    const detail = e.detail && typeof e.detail === 'object' ? e.detail : {};
+    for (const cle of Object.keys(detail)) {
+      if (!PV_DETAIL_CHAMPS.includes(cle)) {
+        errors.push({ field: 'detail.' + cle, code: 'champ_interdit', message: 'Le procès-verbal ne porte ni le contenu de l’acte ni ce qui a été dit.' });
+      }
+    }
+    if (errors.length) return { ok: false, errors };
+    const propre = {};
+    for (const cle of PV_DETAIL_CHAMPS) if (detail[cle] !== undefined && detail[cle] !== null) propre[cle] = detail[cle];
+    return { ok: true, entree: { fait: e.fait, par: e.par, a: e.a, detail: propre } };
+  }
+
+  // Sérialisation canonique : clés triées, pas d'espaces. Deux procès-verbaux
+  // identiques doivent donner deux empreintes identiques, quelle que soit la
+  // machine qui les a assemblés.
+  function canonique(valeur) {
+    if (valeur === null || valeur === undefined) return 'null';
+    if (Array.isArray(valeur)) return '[' + valeur.map(canonique).join(',') + ']';
+    if (typeof valeur === 'object') {
+      return '{' + Object.keys(valeur).sort().map((k) => JSON.stringify(k) + ':' + canonique(valeur[k])).join(',') + '}';
+    }
+    return JSON.stringify(valeur);
+  }
+
+  // empreinte(n) = SHA-256( empreinte(n-1) ‖ entrée(n) ). Retirer une entrée,
+  // en insérer une, ou déplacer une heure change TOUTES les empreintes qui
+  // suivent — et donc l'empreinte finale.
+  const PV_GENESE = '0000000000000000000000000000000000000000000000000000000000000000';
+
+  function chainerProcesVerbal(entrees) {
+    const liste = Array.isArray(entrees) ? entrees : [];
+    let precedente = PV_GENESE;
+    return liste.map((brute, i) => {
+      const v = validateEntreePv(brute);
+      const entree = v.ok ? v.entree : { fait: 'inconnu', par: 'systeme', a: null, detail: {} };
+      const n = i + 1;
+      const empreinte = sha256Hex(precedente + '\n' + canonique({ n, ...entree }));
+      precedente = empreinte;
+      return { n, ...entree, empreinte };
+    });
+  }
+
+  // Le scellé. Une salle de démonstration porte sa mention DANS la chaîne, en
+  // première entrée : un procès-verbal de démonstration ne peut donc pas être
+  // présenté comme autre chose sans que l'empreinte cesse de concorder.
+  function scellerProcesVerbal(salle, opts) {
+    const s = salle && typeof salle === 'object' ? salle : {};
+    const o = opts || {};
+    const brutes = Array.isArray(s.pv) ? s.pv.slice() : [];
+    if (s.demonstration === true) {
+      brutes.unshift({
+        fait: 'mention_demonstration', par: 'systeme',
+        a: brutes.length && isISODateTime(brutes[0].a) ? brutes[0].a : (o.a || null),
+        detail: {},
+      });
+    }
+    const entrees = chainerProcesVerbal(brutes);
+    return {
+      salleId: s.id || null,
+      bidId: s.bidId || null,
+      mode: s.mode || SALLE_MODE_DEFAUT,
+      demonstration: s.demonstration === true,
+      entrees,
+      empreinte: entrees.length ? entrees[entrees.length - 1].empreinte : PV_GENESE,
+      scelleLe: o.a || null,
+    };
+  }
+
+  // Relire un scellé reçu : la chaîne est-elle celle qu'elle prétend être ?
+  // Le notaire garde sa copie, Nota garde l'empreinte ; ceci les confronte.
+  function verifierProcesVerbal(scelle) {
+    const s = scelle && typeof scelle === 'object' ? scelle : {};
+    const entrees = Array.isArray(s.entrees) ? s.entrees : [];
+    const rechaine = chainerProcesVerbal(entrees.map((e) => ({ fait: e.fait, par: e.par, a: e.a, detail: e.detail })));
+    for (let i = 0; i < entrees.length; i++) {
+      if (!rechaine[i] || rechaine[i].empreinte !== entrees[i].empreinte) {
+        return { ok: false, rompueA: i + 1, empreinte: null };
+      }
+    }
+    const empreinte = rechaine.length ? rechaine[rechaine.length - 1].empreinte : PV_GENESE;
+    if (s.empreinte && s.empreinte !== empreinte) return { ok: false, rompueA: entrees.length, empreinte };
+    return { ok: true, rompueA: null, empreinte };
+  }
+
+  // --- L'ouverture d'une salle -----------------------------------------------
+  // Une salle n'existe que sur un acte RETENU : sans notaire engagé, il n'y a
+  // pas de cérémonie à conduire.
+  function validateSalleOuverture(bid, opts) {
+    const o = opts || {};
+    const errors = [];
+    const b = bid && typeof bid === 'object' ? bid : {};
+    if (b.status !== STATUS.RETENUE) {
+      errors.push({ field: 'bid', code: 'acte_non_retenu', message: 'Une séance de signature s’ouvre sur un acte retenu par un notaire.' });
+    }
+    const mode = o.mode === undefined ? SALLE_MODE_DEFAUT : o.mode;
+    if (!salleModeById(mode)) {
+      errors.push({ field: 'mode', code: 'mode_inconnu', message: 'Ce mode de séance n’existe pas.' });
+    }
+    if (errors.length) return { ok: false, errors };
+    return {
+      ok: true,
+      salle: {
+        bidId: b.id,
+        dateISO: b.dateISO,
+        notaryId: b.notaryId,
+        mode,
+        demonstration: o.demonstration === true,
+        statut: SALLE_STATUT.PREVUE,
+        etape: CEREMONIE_PREMIERE_ETAPE,
+        parties: {
+          notaire: { authentifie: false, pistes: { video: false, audio: false } },
+          client: { authentifie: false, pistes: { video: false, audio: false } },
+        },
+        identites: { notaire: null, client: null },
+        lien: { empreinteNotaire: null, empreinteClient: null, confirmeLe: null, confirmePour: null },
+        consentements: { notaire: null, client: null },
+        presence: { coupeeA: null, repriseA: null },
+        pv: [],
+        scelle: null,
+      },
+    };
+  }
+
   return {
     money,
     moneyEn,
@@ -3833,5 +4463,38 @@
     reminderKindForDays,
     dueReminders,
     FIXTURE_SEED,
+    // --- Salle de signature (ADR 0047) ---------------------------------------
+    sha256Hex,
+    chaineAuthentification,
+    SALLE_STATUT,
+    SALLE_MODES,
+    SALLE_MODE_DEFAUT,
+    salleModeById,
+    SALLE_PORTES,
+    SALLE_PORTE_LABELS,
+    SALLE_PARTIES,
+    PRESENCE_TOLERANCE_MS,
+    CEREMONIE_ETAPES,
+    CEREMONIE_PREMIERE_ETAPE,
+    etapeById,
+    etapeOrdre,
+    IDENTITE_METHODES,
+    identiteMethodeById,
+    isISODateTime,
+    validateAttestationIdentite,
+    salleReadiness,
+    doitSuspendre,
+    consentementRequis,
+    consentementEtat,
+    enregistrementActif,
+    peutAvancer,
+    PV_FAITS,
+    PV_DETAIL_CHAMPS,
+    PV_GENESE,
+    validateEntreePv,
+    chainerProcesVerbal,
+    scellerProcesVerbal,
+    verifierProcesVerbal,
+    validateSalleOuverture,
   };
 });

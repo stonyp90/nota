@@ -59,6 +59,40 @@ function createApp(repo, opts = {}) {
   // (the API role has no Scan). Configurable; default the current month + 3.
   const NOTARY_HORIZON_MONTHS = opts.notaryHorizonMonths || 4;
 
+  // --- La salle de signature (ADR 0047) -------------------------------------
+  // Construite paresseusement : la plupart des requêtes n'en ont pas besoin, et
+  // `createSignaturePort` LÈVE quand la configuration nomme un fournisseur dont
+  // l'adaptateur n'existe pas. Cette levée doit atteindre l'appel qui touche la
+  // salle — pas faire tomber toute l'API au premier `/health`.
+  let _salle = null;
+  function salleService() {
+    if (!_salle) {
+      _salle = opts.salle || require('./salle').createSalleService({
+        repo, now, nowMs, env: opts.env || process.env, appendAudit: (action, meta, notaryId) =>
+          appendAudit(action, meta, acteur(ACTEUR.NOTAIRE, notaryId)),
+        signature: opts.signature,
+      });
+    }
+    return _salle;
+  }
+  // Les refus de la salle, dits en français à la personne qui les reçoit. Le
+  // service rend un code ; la traduction en message vit ici, une seule fois.
+  const SALLE_MESSAGES = {
+    salle_introuvable: 'Aucune séance n’est ouverte pour cet acte.',
+    salle_conflit: 'La séance a changé pendant l’envoi. Réessayez.',
+    partie_inconnue: 'Cette partie n’existe pas dans une séance.',
+    signal_inconnu: 'Ce type de signalisation n’est pas accepté.',
+    signal_trop_gros: 'Ce message de signalisation est trop volumineux.',
+    lien_inconnu: 'Le lien chiffré n’est pas encore établi entre les deux navigateurs.',
+    sas_discordant: 'La chaîne confirmée ne correspond pas au lien courant. Relisez-la.',
+    consentement_absent: 'Il n’y a pas de consentement à retirer.',
+    salle_non_suspendue: 'La séance n’est pas suspendue.',
+    presence_absente: 'Le lien n’est pas rétabli : la séance ne peut pas reprendre.',
+    deja_scellee: 'Cette séance est déjà scellée.',
+    signature_absente: 'Une séance se scelle après la signature, pas avant.',
+  };
+  const messageErreurSalle = (code) => SALLE_MESSAGES[code] || 'La séance a refusé cette action.';
+
   // --- Notary passwordless sign-in (magic link) -----------------------------
   // Sign-in is a TWO step handshake that proves mailbox ownership before any
   // session token is minted (the old one-shot route trusted a bare request
@@ -4595,6 +4629,140 @@ function createApp(repo, opts = {}) {
       }
       await notifyClient(released, 'desistement', bid.etude ? String(bid.etude) : null);
       return json(200, { bid: publicBid(released) });
+    }
+
+    // =======================================================================
+    // LA SALLE DE SIGNATURE — ADR 0047
+    //
+    // Une seule porte d'entrée pour les deux côtés : `salleAcces` établit QUI
+    // parle et sur quel acte, avant que la moindre route touche à la séance.
+    // Le notaire entre avec sa session, le client avec le jeton de SON offre —
+    // et un jeton valide pour une autre offre est refusé (exigence A5).
+    //
+    // Aucune de ces routes ne voit passer un octet de média : le média est pair
+    // à pair. Ce qui passe ici, c'est la signalisation, l'état des portes, et
+    // le procès-verbal.
+    // =======================================================================
+    if (route === '/salle' || route.startsWith('/salle/')) {
+      const { payload, error: bodyError } = method === 'GET' ? { payload: {} } : parseBody(request);
+      if (bodyError) return bodyError;
+      const q = request.query || {};
+      const bidId = String(payload.id || q.id || '');
+      const dateISO = String(payload.dateISO || q.dateISO || '');
+      if (!bidId || !domain.isISODate(dateISO)) {
+        return json(400, { errors: [{ code: 'salle_adresse', message: 'Une séance s’adresse par l’offre et sa date.' }] });
+      }
+      const bid = await repo.get(bidId, dateISO);
+      if (!bid) return json(404, { errors: [{ code: 'introuvable', message: 'Offre introuvable.' }] });
+      if (bid.status === domain.STATUS.ANNULEE) return goneCancelled();
+
+      // Qui parle ? Le notaire retenu, ou le client de CETTE offre.
+      const raw = bearer(request) || payload.token || q.token;
+      let partie = null;
+      let notaryId = requireScope(raw, SCOPES.SESSION);
+      if (notaryId) {
+        if (bid.notaryId !== notaryId) {
+          return json(403, { errors: [{ code: 'interdit', message: 'Seul le notaire qui a retenu l’acte entre dans sa séance.' }] });
+        }
+        partie = 'notaire';
+      } else if (requireScope(raw, SCOPES.CLIENT) === bidId) {
+        partie = 'client';
+      } else {
+        return json(401, { errors: [{ code: 'non_autorise', message: 'Jeton invalide ou expiré.' }] });
+      }
+
+      // Le notaire CONDUIT. Le client participe. La liste est courte et vaut
+      // mieux qu'un contrôle répété route par route, où l'oubli est silencieux.
+      const CONDUITE = ['/salle/lien', '/salle/identite', '/salle/etape', '/salle/sceau'];
+      if (CONDUITE.includes(route) && partie !== 'notaire') {
+        return json(403, { errors: [{ code: 'interdit', message: 'Seul le notaire conduit la séance.' }] });
+      }
+
+      let salle;
+      try {
+        salle = salleService();
+      } catch (e) {
+        // Configuration nommant un adaptateur de signature inexistant : refuser
+        // franchement plutôt que retomber en silence sur la démonstration.
+        return json(503, { errors: [{ code: 'signature_indisponible', message: String(e.message || e) }] });
+      }
+
+      const rendre = (r) => {
+        if (r && r.errors) return json(422, { errors: r.errors });
+        if (r && r.error) {
+          const codes = { salle_introuvable: 404, salle_conflit: 409, deja_scellee: 409, salle_non_suspendue: 409, signature_absente: 409 };
+          return json(codes[r.error] || 422, { errors: [{ code: r.error, message: r.message || messageErreurSalle(r.error) }] });
+        }
+        return null;
+      };
+
+      if (route === '/salle/rejoindre' && method === 'POST') {
+        const r = await salle.rejoindre(bid, {
+          partie,
+          empreinte: payload.empreinte,
+          mode: payload.mode,
+          // Une séance est de démonstration si on le demande, ET toujours quand
+          // le fournisseur admis n'est pas configuré — c'est la seule chose qui
+          // puisse alors être ouverte honnêtement.
+          demonstration: payload.demonstration === true || salle.fournisseur === 'demonstration',
+        });
+        const stop = rendre(r); if (stop) return stop;
+        return json(200, { salle: salle.vueSalle(r.salle), ice: salle.iceServers(partie + ':' + bidId) });
+      }
+
+      if (route === '/salle' && method === 'GET') {
+        const r = await salle.etat(bidId, { partie, depuis: q.depuis });
+        const stop = rendre(r); if (stop) return stop;
+        return json(200, r);
+      }
+
+      if (route === '/salle/ice' && method === 'GET') {
+        return json(200, { ice: salle.iceServers(partie + ':' + bidId) });
+      }
+
+      if (route === '/salle/signal' && method === 'POST') {
+        const r = await salle.signaler(bidId, { de: partie, type: payload.type, charge: payload.charge });
+        const stop = rendre(r); if (stop) return stop;
+        return json(200, { n: r.n });
+      }
+
+      if (route === '/salle/pistes' && method === 'POST') {
+        const r = await salle.pistes(bidId, { partie, video: payload.video, audio: payload.audio });
+        const stop = rendre(r); if (stop) return stop;
+        return json(200, { salle: salle.vueSalle(r.salle) });
+      }
+
+      if (route === '/salle/lien' && method === 'POST') {
+        const r = await salle.confirmerLien(bidId, { sas: payload.sas });
+        const stop = rendre(r); if (stop) return stop;
+        return json(200, { salle: salle.vueSalle(r.salle) });
+      }
+
+      if (route === '/salle/identite' && method === 'POST') {
+        const r = await salle.attesterIdentite(bidId, { partie: payload.partie, attestation: payload.attestation });
+        const stop = rendre(r); if (stop) return stop;
+        return json(200, { salle: salle.vueSalle(r.salle) });
+      }
+
+      if (route === '/salle/consentement' && method === 'POST') {
+        const r = await salle.consentir(bidId, { partie, enregistrement: payload.enregistrement, retire: payload.retire === true });
+        const stop = rendre(r); if (stop) return stop;
+        return json(200, { salle: salle.vueSalle(r.salle) });
+      }
+
+      if (route === '/salle/etape' && method === 'POST') {
+        const r = await salle.avancer(bidId, { versEtape: payload.versEtape, reprendre: payload.reprendre === true });
+        const stop = rendre(r); if (stop) return stop;
+        return json(200, { salle: salle.vueSalle(r.salle) });
+      }
+
+      if (route === '/salle/sceau' && method === 'POST') {
+        const r = await salle.sceller(bidId, { notaryId });
+        const stop = rendre(r); if (stop) return stop;
+        return json(200, { salle: salle.vueSalle(r.salle), scelle: r.scelle });
+      }
+
+      return json(404, { errors: [{ code: 'route_inconnue', message: 'Route inconnue.' }] });
     }
 
     if (route === '/notary/dossier' && method === 'GET') {
