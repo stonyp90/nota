@@ -19,8 +19,8 @@ for (const width of [320, 390, 768]) {
   test(`mobile menu keeps its layout, labels and keyboard focus at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 });
     await gotoHome(page, { suppressOnboarding: true });
-    const back = await page.locator('#nav-back').boundingBox();
-    const forward = await page.locator('#nav-forward').boundingBox();
+    const back = await page.locator('.mnav-history-btn[data-history="back"]').boundingBox();
+    const forward = await page.locator('.mnav-history-btn[data-history="forward"]').boundingBox();
     expect(Math.abs(back.y - forward.y)).toBeLessThan(2);
     expect(back.width).toBeGreaterThanOrEqual(44);
     expect(forward.x).toBeGreaterThanOrEqual(back.x + back.width);

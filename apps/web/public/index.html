@@ -320,14 +320,6 @@
           <span class="brand-sub">Québec</span>
         </a>
         <span class="header-spacer"></span>
-        <div class="nav-history" role="group" aria-label="Navigation">
-          <button class="icon-btn nav-history-btn" id="nav-back" data-history="back" type="button" aria-label="Retour" title="Retour" disabled>
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18 9 12l6-6"/><path d="M9 12h10"/></svg>
-          </button>
-          <button class="icon-btn nav-history-btn" id="nav-forward" data-history="forward" type="button" aria-label="Avancer" title="Avancer" disabled>
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/><path d="M5 12h10"/></svg>
-          </button>
-        </div>
         <!-- Marketplace doors plus the owner-requested Beta section. No chevron submenus — every inner destination is
              reached from inside its pane, never from a nested menu. The
              dossier is deliberately NOT a door: with one act it is a step of
@@ -1573,7 +1565,7 @@
             <div class="beta-intro">
               <p class="beta-eyebrow"><span class="beta-dot" aria-hidden="true"></span>Bêta · essais disponibles</p>
               <h1>La signature électronique, avec votre notaire.</h1>
-              <p class="beta-lead">Un rendez-vous à distance qui garde l’essentiel : se voir, comprendre le document et avancer ensemble.</p>
+              <p class="beta-lead">Une signature électronique accompagnée par votre notaire : une visioconférence sécurisée pour vous voir, comprendre le document et avancer ensemble.</p>
               <div class="beta-actions">
                 <a class="btn btn-primary btn-lg" href="/signature.html" id="beta-preview">Découvrir la salle</a>
                 <a class="btn btn-ghost goto-link" href="#t=profil" data-goto="profil">Retrouver mon dossier</a>
@@ -1591,8 +1583,31 @@
           </div>
           <aside class="beta-boundary" aria-label="Portée de la bêta">
             <strong>Un essai, aucun acte réel.</strong>
-            <p>La bêta utilise un document fictif. Elle ne signe aucun acte notarié et ne déclenche aucun paiement. La signature officielle reste à venir, après validation et intégration du fournisseur autorisé.</p>
+            <p>La bêta utilise un document fictif. Elle ne signe aucun acte notarié et ne déclenche aucun paiement. La signature électronique en conférence sera libérée après la lecture et votre consentement. La signature officielle reste à venir, après validation et intégration du fournisseur autorisé.</p>
           </aside>
+          <section class="beta-security" aria-labelledby="beta-security-title">
+            <div class="beta-section-heading"><p class="beta-eyebrow">Confiance et hébergement</p><h2 id="beta-security-title">Une salle pensée pour vos échanges sensibles.</h2></div>
+            <div class="beta-security-grid">
+              <article class="beta-security-card">
+                <span class="beta-security-icon" aria-hidden="true">01</span>
+                <p class="beta-eyebrow">Communication sécurisée</p>
+                <h3>Une visioconférence propriétaire, hébergée au Canada.</h3>
+                <p>La salle de bêta utilise une communication vidéo propriétaire sur une infrastructure canadienne. La caméra et le micro restent inactifs jusqu’à votre accord.</p>
+              </article>
+              <article class="beta-security-card">
+                <span class="beta-security-icon" aria-hidden="true">02</span>
+                <p class="beta-eyebrow">Conservation contrôlée</p>
+                <h3>Des preuves conservées avec des contrôles reconnus.</h3>
+                <p>Les éléments de séance et les documents de la bêta sont conservés sur une infrastructure canadienne avec des contrôles alignés sur les référentiels SOC 2 et ISO 27001.</p>
+              </article>
+              <article class="beta-security-card">
+                <span class="beta-security-icon" aria-hidden="true">03</span>
+                <p class="beta-eyebrow">Langue et consentement</p>
+                <h3>Le parcours reste en français.</h3>
+                <p>Les écrans, communications et consentements sont prévus en français québécois, dans le respect de la Charte de la langue française.</p>
+              </article>
+            </div>
+          </section>
           <section class="beta-experience" aria-labelledby="beta-experience-title">
             <div class="beta-section-heading"><p class="beta-eyebrow">À essayer aujourd’hui</p><h2 id="beta-experience-title">Du premier échange au reçu d’essai.</h2></div>
             <ol class="beta-features">

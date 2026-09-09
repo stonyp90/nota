@@ -5740,7 +5740,7 @@ body.salle-ouverte { overflow: hidden; }
 .beta-page { max-width: 1120px; padding-top: 52px; padding-bottom: 72px; }
 .beta-hero { display: grid; grid-template-columns: 1.1fr 1fr; gap: 56px; align-items: center; }
 .beta-eyebrow { display: flex; align-items: center; gap: 9px; margin: 0 0 18px; font-size: 12px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-muted); }
-.beta-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.beta-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 28%, transparent); }
 .beta-intro h1 { max-width: 560px; margin: 0 0 22px; font-size: clamp(32px, 4.2vw, 52px); line-height: 1.08; letter-spacing: -.04em; }
 .beta-lead { max-width: 500px; color: var(--ink-muted); font-size: 18px; line-height: 1.7; }
 .beta-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 26px; }
@@ -5757,10 +5757,24 @@ body.salle-ouverte { overflow: hidden; }
 .beta-preview-paper i { display: block; height: 4px; background: var(--border); margin: 11px 0; }
 .beta-preview-paper i:nth-of-type(2) { width: 80%; }
 .beta-preview-paper i:nth-of-type(4) { width: 60%; }
-.beta-preview-paper svg { width: 100%; margin-top: 16px; stroke: var(--brand); stroke-width: 1.7; }
+.beta-preview-paper svg { width: 100%; margin-top: 16px; stroke: var(--brand); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .beta-preview-steps { list-style: none; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; padding: 16px 0 0; margin: 0; border-top: 1px solid var(--border); font-size: 11px; color: var(--ink-muted); }
+.beta-preview-steps li { position: relative; padding-left: 17px; transition: color .18s ease, transform .18s ease; }
+.beta-preview-steps li::before { content: ''; position: absolute; left: 0; top: .35em; width: 8px; height: 8px; border: 1px solid currentColor; border-radius: 50%; background: var(--surface); transition: background .18s ease, border-color .18s ease, transform .18s ease; }
+.beta-preview-steps li:first-child { color: var(--brand); }
+.beta-preview-steps li:first-child::before { border-color: var(--brand); background: var(--brand); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 17%, transparent); }
+.beta-preview-steps li:hover, .beta-preview-steps li:focus-within { color: var(--ink); transform: translateY(-2px); }
+.beta-preview-steps li:hover::before, .beta-preview-steps li:focus-within::before { transform: scale(1.2); }
 .beta-boundary { display: grid; grid-template-columns: 210px 1fr; gap: 24px; align-items: start; margin-top: 40px; padding: 22px 26px; border-left: 3px solid var(--brand); background: var(--surface-inset); border-radius: 0 var(--radius) var(--radius) 0; font-size: 14px; line-height: 1.7; }
 .beta-boundary p { margin: 0; color: var(--ink-muted); }
+.beta-security { margin-top: 58px; }
+.beta-security-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 28px; }
+.beta-security-card { position: relative; min-width: 0; border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; background: var(--surface); box-shadow: 0 10px 28px rgb(var(--nota-blue-700-rgb) / .04); transition: transform .2s cubic-bezier(.2, .8, .2, 1), border-color .2s ease, box-shadow .2s ease; }
+.beta-security-card:hover { transform: translateY(-4px); border-color: var(--border-strong); box-shadow: var(--shadow); }
+.beta-security-card .beta-eyebrow { margin: 18px 0 10px; font-size: 10px; }
+.beta-security-card h3 { margin: 0 0 10px; font-size: 18px; line-height: 1.3; letter-spacing: -.015em; }
+.beta-security-card > p:last-child { margin: 0; color: var(--ink-muted); font-size: 14px; line-height: 1.65; }
+.beta-security-icon { display: inline-grid; place-items: center; width: 34px; height: 34px; border: 1px solid color-mix(in srgb, var(--brand) 42%, var(--border)); border-radius: 50%; color: var(--brand); font-size: 11px; font-weight: 800; letter-spacing: .05em; }
 .beta-experience { margin-top: 64px; }
 .beta-section-heading h2, .beta-access-grid h2 { margin: 0 0 22px; font-size: 27px; line-height: 1.25; letter-spacing: -.025em; }
 .beta-features { list-style: none; display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; margin: 28px 0 0; padding: 0; }
@@ -5791,14 +5805,48 @@ body.salle-ouverte { overflow: hidden; }
   .beta-preview-scene { min-height: 200px; }
   .beta-boundary { grid-template-columns: 1fr; gap: 8px; margin-top: 28px; padding: 20px; }
   .beta-experience { margin-top: 40px; }
-  .beta-features, .beta-access-grid { grid-template-columns: 1fr; gap: 22px; }
+  .beta-features, .beta-access-grid, .beta-security-grid { grid-template-columns: 1fr; gap: 22px; }
   .beta-features h3 { margin-top: 10px; }
   .beta-access, .beta-upcoming { padding: 24px; }
   .beta-access-grid { margin-top: 28px; }
   .beta-lead { font-size: 16px; }
 }
 
-/* Keep history controls aligned and reachable at every header width. */
-.nav-history { display: flex; align-items: center; gap: 4px; flex: none; }
-.nav-history-btn { min-width: 44px; min-height: 44px; }
-.nav-history-btn:disabled { opacity: .42; cursor: default; }
+/* Beta motion is layered and short: the room enters once, then the paper and
+   live marker breathe gently while the user explores the static preview. */
+@keyframes betaReveal { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes betaFloat { 0%, 100% { transform: rotate(3deg) translateY(0); } 50% { transform: rotate(3deg) translateY(-5px); } }
+@keyframes betaPulse { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 28%, transparent); } 50% { box-shadow: 0 0 0 6px color-mix(in srgb, currentColor 0%, transparent); } }
+@keyframes betaSignDraw { from { stroke-dashoffset: 150; } to { stroke-dashoffset: 0; } }
+.tab-pane.is-active .beta-intro > *, .tab-pane.is-active .beta-preview, .tab-pane.is-active .beta-boundary,
+.tab-pane.is-active .beta-security, .tab-pane.is-active .beta-security-card, .tab-pane.is-active .beta-experience,
+.tab-pane.is-active .beta-features li, .tab-pane.is-active .beta-access-grid > *, .tab-pane.is-active .beta-demo {
+  animation: betaReveal .48s cubic-bezier(.2, .8, .2, 1) both;
+}
+.tab-pane.is-active .beta-intro > *:nth-child(1) { animation-delay: .04s; }
+.tab-pane.is-active .beta-intro > *:nth-child(2) { animation-delay: .1s; }
+.tab-pane.is-active .beta-intro > *:nth-child(3) { animation-delay: .17s; }
+.tab-pane.is-active .beta-intro > *:nth-child(4) { animation-delay: .24s; }
+.tab-pane.is-active .beta-intro > *:nth-child(5) { animation-delay: .3s; }
+.tab-pane.is-active .beta-preview { animation-delay: .18s; }
+.tab-pane.is-active .beta-boundary { animation-delay: .34s; }
+.tab-pane.is-active .beta-security { animation-delay: .4s; }
+.tab-pane.is-active .beta-security-card:nth-child(2) { animation-delay: .48s; }
+.tab-pane.is-active .beta-security-card:nth-child(3) { animation-delay: .56s; }
+.tab-pane.is-active .beta-experience { animation-delay: .52s; }
+.tab-pane.is-active .beta-features li:nth-child(2) { animation-delay: .6s; }
+.tab-pane.is-active .beta-features li:nth-child(3) { animation-delay: .68s; }
+.tab-pane.is-active .beta-access-grid > *:first-child { animation-delay: .66s; }
+.tab-pane.is-active .beta-access-grid > *:last-child { animation-delay: .74s; }
+.tab-pane.is-active .beta-demo { animation-delay: .8s; }
+.tab-pane.is-active .beta-dot { animation: betaPulse 2.5s ease-in-out .4s 2; }
+.tab-pane.is-active .beta-preview-paper { animation: betaFloat 7s ease-in-out 1s infinite; }
+.tab-pane.is-active .beta-preview-paper svg { stroke-dasharray: 150; stroke-dashoffset: 150; animation: betaSignDraw 1.2s cubic-bezier(.2, .8, .2, 1) .8s forwards; }
+@media (prefers-reduced-motion: reduce) {
+  .tab-pane.is-active .beta-intro > *, .tab-pane.is-active .beta-preview, .tab-pane.is-active .beta-boundary,
+  .tab-pane.is-active .beta-security, .tab-pane.is-active .beta-security-card, .tab-pane.is-active .beta-experience,
+  .tab-pane.is-active .beta-features li, .tab-pane.is-active .beta-access-grid > *, .tab-pane.is-active .beta-demo,
+  .tab-pane.is-active .beta-dot, .tab-pane.is-active .beta-preview-paper, .tab-pane.is-active .beta-preview-paper svg { animation: none; }
+  .beta-preview-paper { transform: rotate(3deg); }
+  .beta-security-card, .beta-preview-steps li { transition: none; }
+}
