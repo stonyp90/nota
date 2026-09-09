@@ -92,7 +92,16 @@ jobs:
         run: npm ci
 
       - name: Install Playwright browser engines
-        run: npx playwright install --with-deps chromium firefox webkit
+        shell: bash
+        run: |
+          set -euo pipefail
+          # GitHub's Ubuntu image preconfigures Google's Chrome APT mirror.
+          # During mirror propagation its Packages index can disagree with the
+          # signed metadata, making Playwright's --with-deps fail before any
+          # browser is installed. The runner is disposable; remove only this
+          # optional source and let Playwright use the stable Ubuntu mirrors.
+          sudo rm -f /etc/apt/sources.list.d/google-chrome.list
+          npx playwright install --with-deps chromium firefox webkit
 
       - name: Run critical journeys (client booking, notary sign-in, partner claim, home numbers)
         run: npm run test:e2e
