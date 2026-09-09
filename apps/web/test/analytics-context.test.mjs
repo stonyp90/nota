@@ -73,3 +73,40 @@ test('load timing is bucketed once after load, without exposing exact durations'
   assert.ok(!JSON.stringify(measured).includes('4501'));
   dom.window.close();
 });
+
+// LA RÉGRESSION DE LA FUSION DU 2026-09-09.
+//
+// Deux mesures ont été écrites en parallèle sur le MÊME battement : la
+// provenance (`acquisition.js`, #4) et le contexte borné (`analytics.js`).
+// Dans app.js, le chemin d'`analytics.js` retourne AVANT le repli qui portait
+// la provenance ; comme analytics.js est toujours chargé, le compteur de
+// provenance aurait cessé de compter sans qu'aucune erreur ne paraisse.
+// Le battement doit donc porter les DEUX lectures, jamais une seule.
+test('le battement porte la provenance ET le contexte borné, dans une seule requête', async () => {
+  const { win, dom, calls } = boot({ url: 'https://gonota.ca/?utm_source=linkedin' });
+  const seen = [];
+  win.NotaAcquisition = {
+    snapshot: () => ({ last: { source: 'linkedin' } }),
+    event: (name) => seen.push(name),
+  };
+  win.NotaAnalytics.send('formulaire');
+  await Promise.resolve();
+
+  const beacons = calls.filter(c => c.body.event === 'formulaire');
+  assert.equal(beacons.length, 1, 'une seule requête, pas deux');
+  assert.deepEqual(beacons[0].body.acquisition, { last: { source: 'linkedin' } });
+  assert.equal(beacons[0].body.context.source, 'linkedin');
+  assert.deepEqual(seen, ['form_start'], '« formulaire » se traduit en form_start côté provenance');
+  dom.window.close();
+});
+
+test('sans acquisition.js chargé, le battement part quand même', async () => {
+  const { win, dom, calls } = boot();
+  delete win.NotaAcquisition;
+  win.NotaAnalytics.send('visite');
+  await Promise.resolve();
+  const beacon = calls.find(c => c.body.event === 'visite');
+  assert.ok(beacon, 'le battement part sans acquisition.js');
+  assert.equal(beacon.body.acquisition, undefined);
+  dom.window.close();
+});
