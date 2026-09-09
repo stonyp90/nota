@@ -615,14 +615,14 @@ test('P2-19: the logomark is drawn once as a <symbol>; every inline copy is a <u
   }
   const outside = HTML_SRC.replace(/<symbol[\s\S]*?<\/symbol>/, '');
   assert.ok(!/fill="#[0-9a-fA-F]{3,6}"/.test(outside), 'no hardcoded fill outside the symbol');
-  // The mark's two greens are the stylesheet's brand ramp — every asset
-  // (symbol, favicon.svg, og.svg, manifests, theme-color) says the same green.
-  const ramp = (step) => /--hunter-STEP:\s*(#[0-9a-fA-F]{6})/.source.replace('STEP', step);
+  // The mark's two brand colors are the stylesheet's Nota ramp — every asset
+  // (symbol, favicon.svg, og.svg, manifests, theme-color) stays in lockstep.
+  const ramp = (step) => /--nota-blue-STEP:\s*(#[0-9a-fA-F]{6})/.source.replace('STEP', step);
   const brand = new RegExp(ramp('700')).exec(CSS_SRC)[1].toLowerCase();
   const bright = new RegExp(ramp('500')).exec(CSS_SRC)[1].toLowerCase();
   const symbol = /<symbol[\s\S]*?<\/symbol>/.exec(HTML_SRC)[0].toLowerCase();
-  assert.ok(symbol.includes('fill="' + brand + '"'), 'the symbol’s square is --hunter-700');
-  assert.ok(symbol.includes('fill="' + bright + '"'), 'the symbol’s dot is --hunter-500');
+  assert.ok(symbol.includes('fill="' + brand + '"'), 'the symbol’s square is --nota-blue-700');
+  assert.ok(symbol.includes('fill="' + bright + '"'), 'the symbol’s dot is --nota-blue-500');
   for (const f of ['../public/favicon.svg', '../public/og.svg']) {
     const svg = read(f).toLowerCase();
     assert.ok(svg.includes(brand) && !svg.includes('#2c5f34') && !svg.includes('#50b848'), f + ' carries the current brand green');

@@ -380,7 +380,7 @@ test('P2-11: the auth dialog’s comment no longer narrates a social-login plan 
 // c'est « gratuit pour le client » qui a été rétracté.
 const FREE_LIE = /Gratuit pour (vous|le client)|gratuit pour (vous|le client)|It is free for the client|free for the client\.|Free for (you|the client)|se rémunère auprès du notaire|paid by the notary/;
 
-const OG_SVG_SHA256 = 'eb88f37309e0c8966442b417cd9f67fc2ffa5ebad8aed6ecbf9368b9b7c1c827';
+const OG_SVG_SHA256 = '0d6b9b040584d4defc6cc89e6eb454fb18e01e6b1a0b031ea948a0b38f2f1667';
 
 test('l’image sociale ne vend pas des services retirés, ni une gratuité rétractée', () => {
   const hit = OG_SVG_SRC.match(FREE_LIE);

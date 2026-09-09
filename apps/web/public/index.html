@@ -26,10 +26,10 @@
     <link rel="alternate" hreflang="en-CA" href="https://gonota.ca/?lang=en" />
     <link rel="alternate" hreflang="x-default" href="https://gonota.ca/" />
     <!-- Browser chrome: the dark canvas on a dark system (the page boots dark
-         by default), the brand green otherwise. The dark value is --bg of the
+         by default), the Nota cobalt otherwise. The dark value is --bg of the
          dark theme in styles.css — keep the two in lockstep. -->
     <meta name="theme-color" content="#0f110f" media="(prefers-color-scheme: dark)" />
-    <meta name="theme-color" content="#315b43" />
+    <meta name="theme-color" content="#174a63" />
 
     <!-- Local / geo signals (Ville de Québec) -->
     <meta name="geo.region" content="CA-QC" />
@@ -181,21 +181,20 @@
     <a class="skip" href="#main">Aller au contenu</a>
 
     <!-- The Nota logomark, drawn ONCE: every inline copy below is a
-         <use href="#nota-logomark">. The two greens are styles.css :root
-         --hunter-700 and --hunter-500 (the same as favicon.svg / og.svg /
+         <use href="#nota-logomark">. The two Nota blues are styles.css :root
+         --nota-blue-700 and --nota-blue-500 (the same as favicon.svg / og.svg /
          manifest theme_color) — ux-nav.test.mjs keeps them in lockstep.
-         (The drifting dice in app.js keep their own string copy on purpose:
-         they are cloned twenty times into a cube, outside this document's
-         symbol table.) -->
+         (The drifting cubes in app.js are quiet branded facets, kept outside
+         this document's symbol table so the mark itself appears only once.) -->
     <svg class="svg-defs" aria-hidden="true" focusable="false" width="0" height="0">
       <symbol id="nota-logomark" viewBox="0 0 64 64">
-        <rect width="64" height="64" rx="12" fill="#315b43"/>
+        <rect width="64" height="64" rx="12" fill="#174a63"/>
         <g fill="#ffffff">
           <rect x="16" y="15" width="7.5" height="34" rx="2.5"/>
           <rect x="40.5" y="15" width="7.5" height="34" rx="2.5"/>
           <polygon points="16,15 24,15 48,49 40,49"/>
         </g>
-        <circle cx="48" cy="16" r="8" fill="#599a71" stroke="#315b43" stroke-width="3"/>
+        <circle cx="48" cy="16" r="8" fill="#2a769b" stroke="#174a63" stroke-width="3"/>
       </symbol>
     </svg>
 
@@ -631,6 +630,7 @@
                  scope it was mostly empty placeholder cards. -->
             <div class="view-panel" id="view-calendrier">
               <div class="cal-grid" id="cal-grid" role="grid" aria-label="Calendrier des offres"></div>
+              <p class="cal-empty help" id="cal-empty" hidden></p>
               <div class="legend" id="legend"></div>
             </div>
 

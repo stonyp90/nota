@@ -72,15 +72,15 @@ const SENDER = {
 // reads that file and holds every key here to it, so the mail can never drift
 // from the site. The card is light-only on purpose (see layout()).
 const PALETTE = {
-  ink: '#111614', // --ink (hunter-black)
-  muted: '#4f5e57', // --ink-muted (AA on every light surface)
-  bg: '#f0f2f1', // --bg — the page canvas the card floats on
-  card: '#fdfdfd', // --surface — a whisper off pure white
-  border: '#dde2df', // --border
-  brand: '#315b43', // --brand (hunter-700) — fills, rules, links
-  brandDark: '#254633', // --brand-hover (hunter-800) — the button's edge
+  ink: '#0d1b27', // --ink
+  muted: '#526574', // --ink-muted (AA on every light surface)
+  bg: '#f2f5f7', // --bg — the page canvas the card floats on
+  card: '#fbfcfd', // --surface
+  border: '#d9e3e9', // --border
+  brand: '#174a63', // --brand (nota-blue-700) — fills, rules, links
+  brandDark: '#113a51', // --brand-hover (nota-blue-800) — the button's edge
   brandInk: '#ffffff', // --brand-ink — text on the brand fill
-  tint: '#f0f8f1', // hunter-50 — the callout wash
+  tint: '#f1f7fb', // nota-blue-50 — the callout wash
 };
 // The web square scale (--radius-lg / --radius / --radius-sm): the card, the
 // mark and the button, the callout. No pills, no circles.
@@ -207,7 +207,7 @@ function preheaderHtml(text) {
     '</div>'
   );
 }
-// Bulletproof, VML-free, table-based CTA. Hunter green with white text; the
+// Bulletproof, VML-free, table-based CTA. Institutional cobalt with white text; the
 // padding + line-height guarantee a >=44px touch target on mobile, and
 // mso-padding-alt keeps Outlook honest about the padding.
 function button(label, url) {
@@ -232,8 +232,8 @@ function button(label, url) {
   );
 }
 // Header band: the Nota "N" mark rendered WITHOUT images/SVG (many clients block
-// them) — a hunter-green square holding a bold white "N" — next to the "Nota"
-// wordmark in brand green and a small bilingual tagline. The mark is decoration
+// them) — a cobalt square holding a bold white "N" — next to the "Nota"
+// wordmark in brand blue and a small bilingual tagline. The mark is decoration
 // (aria-hidden): the wordmark IS the accessible name, so a screen reader says
 // « Nota », not « N Nota ». border-radius degrades gracefully to a square. Sits
 // at the top of the card, above a hairline rule.
