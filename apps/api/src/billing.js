@@ -945,6 +945,12 @@ function createBilling({
       return { ok: false, error: 'signature_invalide' };
     }
 
+    if (typeof stripe.acceptsEvent === 'function' && !stripe.acceptsEvent(event)) {
+      // Acknowledge without touching persistence or triggering notifications.
+      // Stripe intentionally delivers some sandbox Connect events to live URLs.
+      return { ok: true, handled: false, duplicate: false, modeMismatch: true, event: null, notary: null, bid: null };
+    }
+
     if (await repo.wasEventProcessed(event.id)) {
       return { ok: true, handled: false, duplicate: true, type: event.type, event, notary: null, bid: null };
     }

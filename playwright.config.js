@@ -5,7 +5,7 @@
  *
  * Boots BOTH demo servers on fixed test ports (the API first, then the web
  * server that points at it) and drives the critical user journeys through a
- * single headless Chromium. The demo API runs on in-memory fixtures with the
+ * Chromium plus a compatibility matrix. The demo API runs on in-memory fixtures with the
  * magic-link dev echo enabled (NOTA_DEMO_OPEN=true, non-production), so the
  * notary and partner link flows complete with no mailbox.
  *
@@ -18,6 +18,7 @@ const { defineConfig, devices } = require('@playwright/test');
 // developer's running app is never mistaken for (or clobbered by) the test app.
 const API_PORT = Number(process.env.E2E_API_PORT || 8811);
 const WEB_PORT = Number(process.env.E2E_WEB_PORT || 4311);
+const ADMIN_PORT = Number(process.env.E2E_ADMIN_PORT || 4312);
 const API_BASE = `http://localhost:${API_PORT}`;
 const WEB_BASE = `http://localhost:${WEB_PORT}`;
 
@@ -45,6 +46,11 @@ module.exports = defineConfig({
   },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    { name: 'firefox', testMatch: /compatibility\.spec\.js/, use: { ...devices['Desktop Firefox'] } },
+    { name: 'webkit', testMatch: /compatibility\.spec\.js/, use: { ...devices['Desktop Safari'] } },
+    { name: 'iphone', testMatch: /compatibility\.spec\.js/, use: { ...devices['iPhone 13'] } },
+    { name: 'android', testMatch: /compatibility\.spec\.js/, use: { ...devices['Pixel 7'] } },
+    { name: 'ipad', testMatch: /compatibility\.spec\.js/, use: { ...devices['iPad (gen 7)'] } },
   ],
   // Start the API first (its /health gate), then the web app that proxies to it.
   // reuseExistingServer keeps local iteration instant; CI always boots clean.
@@ -64,6 +70,15 @@ module.exports = defineConfig({
       command: `node apps/web/run-local.mjs`,
       env: { NOTA_API_BASE: API_BASE, PORT: String(WEB_PORT) },
       url: WEB_BASE,
+      reuseExistingServer: !process.env.CI,
+      timeout: 30_000,
+      stdout: 'ignore',
+      stderr: 'pipe',
+    },
+    {
+      command: `node apps/admin/run-local.mjs`,
+      env: { NOTA_ADMIN_API: API_BASE, PORT: String(ADMIN_PORT) },
+      url: `http://localhost:${ADMIN_PORT}`,
       reuseExistingServer: !process.env.CI,
       timeout: 30_000,
       stdout: 'ignore',

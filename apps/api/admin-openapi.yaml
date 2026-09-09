@@ -5,8 +5,8 @@ info:
   description: >-
     HTTP API for the Nota admin console (admin.nota.ca). A separate surface from
     the public API — its own Lambda (apps/api/admin.js), its own signing secret,
-    read-only IAM on the customer table and read/write only on the separate
-    admin table. Auth is a passwordless magic link: request → e-mailed
+    scoped configuration/support writes on the customer table and read/write
+    access to the separate admin table. Auth is a passwordless magic link: request → e-mailed
     single-use link → short-lived server-backed session presented as a Bearer
     token on every call. Responses never reveal whether an address is an admin
     (no account enumeration), and every response carries
@@ -33,6 +33,59 @@ components:
         necessary but not sufficient — the server-side session must exist, be
         un-revoked, inside its 12 h absolute window and not idle past 30 min.
   schemas:
+    SupportMessage:
+      type: object
+      required: [id, de, texte, createdAt]
+      properties:
+        id: { type: string }
+        de: { type: string, enum: [visiteur, nota, assistant] }
+        texte: { type: string, maxLength: 2000 }
+        createdAt: { type: string, format: date-time }
+        notificationPending:
+          type: boolean
+          description: On Nota replies only; true while a saved recipient's email delivery still needs completion. No private delivery claims are exposed.
+    SupportThread:
+      type: object
+      required: [id, statut, nb, escalade, humain]
+      properties:
+        id: { type: string }
+        courriel: { type: [string, "null"] }
+        nom: { type: [string, "null"] }
+        origine: { type: string }
+        sujet: { type: [string, "null"] }
+        createdAt: { type: [string, "null"] }
+        statut: { type: string, enum: [a_repondre, repondu, clos] }
+        nb: { type: integer }
+        dernierAt: { type: [string, "null"] }
+        dernierDe: { type: [string, "null"] }
+        dernierTexte: { type: string }
+        closLe: { type: [string, "null"] }
+        escalade: { type: boolean }
+        escaladeLe: { type: [string, "null"] }
+        escaladeMotif: { type: [string, "null"] }
+        humain: { type: boolean }
+        messages:
+          type: array
+          description: Included in detail/reply/close responses; absent from inbox summaries.
+          items: { $ref: "#/components/schemas/SupportMessage" }
+    SupportDetailResponse:
+      type: object
+      required: [ok, thread, limites]
+      properties:
+        ok: { type: boolean }
+        duplicate: { type: boolean }
+        message: { $ref: "#/components/schemas/SupportMessage" }
+        notification:
+          type: [object, "null"]
+          description: Null when no visitor email exists. Failed delivery can retry the same message ID without another message or audit entry.
+          properties:
+            ok: { type: boolean }
+            retryable: { type: boolean }
+        thread: { $ref: "#/components/schemas/SupportThread" }
+        limites:
+          type: object
+          properties:
+            messageMax: { type: integer }
     AdminGroup:
       type: object
       required: [id, nom, permissions]
@@ -903,6 +956,144 @@ components:
               - code: modele_inconnu
                 message: "Modèle de courriel inconnu : nope."
 paths:
+  /admin/support:
+    get:
+      operationId: listAdminSupport
+      summary: Read the shared customer support inbox.
+      description: >-
+        Requires support:read and pii:read. Reads the same month-sharded support
+        records as the public widget and inbound email, for the current month and
+        previous two months, newest first. No second conversation system or storage.
+        Reads are audited without copying transcript text into the audit log.
+      security: [{ adminSession: [] }]
+      parameters:
+        - name: statut
+          in: query
+          schema: { type: string, enum: [a_repondre, repondu, clos] }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
+      responses:
+        "200":
+          description: Recent support conversation summaries.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, threads, statuts, limites, mois]
+                properties:
+                  ok: { type: boolean }
+                  threads:
+                    type: array
+                    items: { $ref: "#/components/schemas/SupportThread" }
+                  statuts:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        nom: { type: string }
+                        nomEn: { type: string }
+                  limites:
+                    type: object
+                    properties:
+                      messageMax: { type: integer }
+                  mois:
+                    type: array
+                    items: { type: string, pattern: '^\d{4}-\d{2}$' }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "503":
+          description: Support persistence is unavailable.
+  /admin/support/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getAdminSupport
+      summary: Read one shared support conversation.
+      description: Requires support:read and pii:read; records the access in the audit log.
+      security: [{ adminSession: [] }]
+      responses:
+        "200":
+          description: Conversation including messages, visitor email and human ownership.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SupportDetailResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { description: Conversation not found. }
+        "503": { description: Support persistence is unavailable. }
+  /admin/support/{id}/reponse:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: replyAdminSupport
+      summary: Reply directly to the existing customer support conversation.
+      description: >-
+        Requires support:write and pii:read. Uses the same revision-safe append
+        service as public operator links and inbound email. A stable messageId
+        makes retries return the existing message without adding another bubble,
+        email or audit entry. Reusing an ID for different content returns 409.
+        A real reply keeps the conversation with the human and clears escalation.
+      security: [{ adminSession: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [texte]
+              properties:
+                texte: { type: string, maxLength: 2000 }
+                messageId:
+                  type: string
+                  maxLength: 160
+                  pattern: '^[A-Za-z0-9_.:@-]+$'
+                  description: Stable request ID; retain it when retrying the same send.
+      responses:
+        "200":
+          description: Reply appended, or a duplicate acknowledged without another send.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SupportDetailResponse" }
+        "400": { description: Malformed JSON. }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { description: Conversation not found; this endpoint never creates one. }
+        "409": { description: Conflicting message ID or concurrent updates exhausted retries. }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "503": { description: Support persistence is unavailable. }
+  /admin/support/{id}/clos:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: closeAdminSupport
+      summary: Close an existing conversation without sending a message.
+      description: >-
+        Requires support:write and pii:read. Idempotent, revision-safe and audited;
+        creates no message or email. A new visitor message reopens the same thread.
+      security: [{ adminSession: [] }]
+      responses:
+        "200":
+          description: Closed, or already closed with duplicate true.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SupportDetailResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { description: Conversation not found. }
+        "409": { description: Concurrent updates exhausted retries. }
+        "503": { description: Support persistence is unavailable. }
   /admin/auth/login:
     post:
       operationId: loginAdminWithPassword
@@ -2144,6 +2335,39 @@ paths:
                           type: integer
                         retenue:
                           type: integer
+                  segments:
+                    type: array
+                    description: Independent bounded browser, OS, device, viewport, language, arrival source, entry page, dialog, storage and load breakdowns. No joined visitor profiles; historical events are not backfilled. Raw user agents and URLs are not exposed. Rows with no attributed events are omitted.
+                    items:
+                      type: object
+                      required: [id, nom, nomEn, rows]
+                      properties:
+                        id: { type: string }
+                        nom: { type: string }
+                        nomEn: { type: string }
+                        rows:
+                          type: array
+                          items:
+                            type: object
+                            required: [id, nom, nomEn, events]
+                            properties:
+                              id: { type: string }
+                              nom: { type: string }
+                              nomEn: { type: string }
+                              events:
+                                type: object
+                                description: Counts keyed by domain FUNNEL_EVENTS IDs, not unique people.
+                                additionalProperties: { type: integer, minimum: 0 }
+                  entonnoir:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, nom, nomEn, total]
+                      properties:
+                        id: { type: string }
+                        nom: { type: string }
+                        nomEn: { type: string }
+                        total: { type: integer, minimum: 0 }
                   annulations:
                     type: object
                     description: >-

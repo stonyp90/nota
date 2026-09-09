@@ -1,0 +1,10 @@
+
+# Production OAuth IDs are public; credentials stay in Secrets Manager.
+oauth_origin = "https://gonota.ca"
+oauth_client_ids = {
+  linkedin = "86odvyiq884lte"
+  google = "40395079894-pj19t5o6hulr93r5o0omiv3m1dk3ah5l.apps.googleusercontent.com"
+  microsoft = "93d6c709-8e5d-4814-9d7e-1a4cd320fed6"
+}
+outlook_client_id = "93d6c709-8e5d-4814-9d7e-1a4cd320fed6"
+outlook_redirect_uri = "https://gonota.ca/api/calendar/outlook/callback"

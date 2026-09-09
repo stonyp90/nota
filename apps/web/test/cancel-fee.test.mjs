@@ -91,7 +91,7 @@ async function boot({ seed = {}, routes = [] } = {}) {
 }
 
 const DATE = addDays(todayISO(), 2); // inside the last-minute fee window
-const OFFER = { id: 'o1', dateISO: DATE, serviceId: 'financement', montant: 2800, clientToken: 'tok-o1' };
+const OFFER = { expiresOn: DATE, id: 'o1', dateISO: DATE, serviceId: 'financement', montant: 2800, clientToken: 'tok-o1' };
 const FEE = { taux: 0.3, plafond: 840, joursAvant: 2, delaiJours: 7 };
 // The indemnity file once the notary decided (ADR 0041).
 const PERCUE = { ...FEE, statut: 'percue', frais: 840, justification: 'Journée bloquée, dossier ouvert.', chargeId: 'ch_1', mecanisme: 'capture', percu: true, dedommagement: { notaire: true, verse: true, transferId: 'tr_1' } };
@@ -101,7 +101,7 @@ const PERCUE = { ...FEE, statut: 'percue', frais: 840, justification: 'Journée 
 // retenir quoi que ce soit. Par défaut, la caution EST posée (la date est à
 // J+2, dans la fenêtre) ; les cas sans caution le disent.
 const retainedStatus = (annulation, caution) => ({
-  bid: { id: 'o1', serviceId: 'financement', dateISO: DATE, montant: 2800, status: 'retenue', etude: 'Étude Tremblay' },
+  bid: { expiresOn: DATE, id: 'o1', serviceId: 'financement', dateISO: DATE, montant: 2800, status: 'retenue', etude: 'Étude Tremblay' },
   notaire: { etude: 'Étude Tremblay', courriel: 'n@etude.ca', rating: null },
   propositions: [], demandes: [],
   readiness: { total: 6, done: 2, missing: [], consent: false, ready: false },

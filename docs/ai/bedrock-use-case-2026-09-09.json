@@ -1,0 +1,8 @@
+{
+  "companyName": "GESTION A. PAQUET INC.",
+  "companyWebsite": "https://gonota.ca",
+  "intendedUsers": "2",
+  "industryOption": "Other",
+  "otherIndustryOption": "Legal technology for Quebec notarial workflows",
+  "useCases": "Nota is a Quebec notarial workflow application. We intend to use Claude to extract and summarize customer-provided financing and refinancing document text, identify missing information, compare values across source documents, and prepare draft materials for review by licensed notaries. Initial use is internal engineering evaluation on wholly fictional synthetic documents, with no real customer data. Proposed values must retain source quotations and page references. Notaries remain responsible for legal advice, identity and title verification, final contracts, signatures, registration and fund disbursement. We will evaluate extraction errors and authorized notary corrections to improve prompts and preparation workflows. The current implementation does not train model weights or perform autonomous legal execution. Intended users include the internal development team and, after qualification and appropriate data-handling arrangements, notaries using Nota."
+}

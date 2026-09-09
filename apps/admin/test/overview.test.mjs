@@ -68,6 +68,13 @@ const futureISO = () => new Date(Date.now() + 3600000).toISOString();
 
 function sampleOverview() {
   return {
+    segments: [{ id: 'browser', nom: 'Navigateur', nomEn: 'Browser', rows: [
+      { id: 'safari', nom: 'Safari', nomEn: 'Safari', events: { visite: 12, publie: 2 } },
+    ] }],
+    entonnoir: [
+      { id: 'visite', nom: 'Visites', nomEn: 'Visits', total: 52 },
+      { id: 'prix_vu', nom: 'Étape du prix vue', nomEn: 'Price step viewed', total: 0 },
+    ],
     kpis: { offersPosted: 120, offersRetained: 48, actsCompleted: 31, commissionCents: 1234567, retentionRate: 0.4 },
     gauge: { open: 12, retained: 7, activeNotaries: 9, onboardingNotaries: 3 },
     series: { offersPerDay: [{ date: '2026-08-01', count: 3 }], byService: [{ serviceId: 'refinancement', nom: 'Refinancement', offers: 60, retained: 25 }] },
@@ -75,6 +82,40 @@ function sampleOverview() {
     creances: { commissionCentsDue: 65000, dedommagementCentsDue: 20000 },
   };
 }
+
+test('funnel counts render in French and English, including zeros and measurement limits', async () => {
+  for (const lang of ['fr', 'en']) {
+    const { win, doc } = await boot(api(), '#/auth?token=T', lang);
+    await waitFor(win, '.funnel-card');
+    await settle(win);
+    assert.equal(text(doc.querySelector('[data-event="visite"] td')), '52');
+    assert.equal(text(doc.querySelector('[data-event="prix_vu"] td')), '0');
+    assert.equal(text(doc.querySelector('[data-event="prix_vu"] th')), lang === 'en' ? 'Price step viewed' : 'Étape du prix vue');
+    assert.match(text(doc.querySelector('.funnel-card')), lang === 'en' ? /do not confirm payment/ : /ne confirment pas un paiement/);
+  }
+});
+
+test('missing funnel data is unavailable, not a zero; traffic alone is activity', async () => {
+  const missing = await boot(api({ overview: () => [200, {}] }), '#/auth?token=T');
+  await waitFor(missing.win, '.funnel-card');
+  assert.match(text(missing.doc.querySelector('.funnel-card')), /indisponibles/);
+  const traffic = await boot(api({ overview: () => [200, { entonnoir: sampleOverview().entonnoir }] }), '#/auth?token=T');
+  await waitFor(traffic.win, '.funnel-card');
+  assert.equal(traffic.doc.querySelector('.stat-grid.is-muted'), null);
+});
+
+test('device breakdowns use API labels and remain bilingual, with missing data explicit', async () => {
+  const { win, doc } = await boot(api(), '#/auth?token=T', 'en');
+  await waitFor(win, '.segment-card');
+  await settle(win);
+  assert.equal(text(doc.querySelector('[data-segment="browser"] summary')), 'Browser');
+  assert.equal(text(doc.querySelector('[data-bucket="safari"] td')), '12');
+  assert.match(text(doc.querySelector('.segment-card')), /does not track people/);
+  const missing = await boot(api({ overview: () => [200, {}] }), '#/auth?token=T', 'en');
+  await waitFor(missing.win, '.segment-card');
+  await settle(missing.win);
+  assert.match(text(missing.doc.querySelector('.segment-card')), /No breakdown available/);
+});
 
 function api(opts = {}) {
   return (method, url) => {

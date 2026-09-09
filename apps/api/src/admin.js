@@ -72,6 +72,7 @@ function createAdmin({
   const genId = newId || (() => require('node:crypto').randomUUID());
   const clockMs = nowMs || (() => Date.now());
   const clockIso = now || (() => new Date(clockMs()).toISOString());
+  const support = require('./support-conversations').createSupportConversations({ repo, nowMs: clockMs, newId: genId, notifier });
 
   const SCOPES = authDefaults.SCOPES;
   const ROLES = authDefaults.ROLES;
@@ -2433,7 +2434,91 @@ function createAdmin({
     return { ok: true, execute: true, courriel: adresse, plan, effacees, enAttente, marque, avertissement };
   }
 
+  async function supportPrincipal(token, permission, ip) {
+    const principal = await requireAdmin(token, { ip });
+    if (!principal) return { error: { ok: false, status: 401 } };
+    const permitted = permission === 'support:write'
+      ? rbac.can(principal.permissions, 'support:write')
+      : rbac.can(principal.permissions, 'support:read');
+    if (!permitted || !rbac.can(principal.permissions, 'pii:read')) {
+      return { error: { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Accès à la messagerie de soutien non autorisé.' }] } };
+    }
+    return { principal };
+  }
+  const supportDetail = thread => ({
+    ...domain.supportThreadSummary(thread), ...support.state(thread),
+    messages: (thread.messages || []).map(message => ({
+      ...support.messageView(message),
+      ...(message.de === domain.SUPPORT_FROM.NOTA ? {
+        notificationPending: !!(thread.courriel && message.delivery && message.delivery.state !== 'complete'),
+      } : {}),
+    })),
+  });
+  const supportUnavailable = () => ({ ok: false, status: 503, errors: [{ code: 'soutien_indisponible', message: 'La messagerie de soutien est momentanément indisponible.' }] });
+  async function listSupport(token, { statut, limit, ip } = {}) {
+    const gate = await supportPrincipal(token, 'support:read', ip);
+    if (gate.error) return gate.error;
+    if (statut && !domain.SUPPORT_STATUTS.some(item => item.id === statut)) {
+      return { ok: false, status: 422, errors: [{ code: 'statut_invalide', message: 'Le statut de conversation n’est pas valide.' }] };
+    }
+    const mois = require('./keys').supportInboxMonths(clockIso());
+    const max = Math.max(1, Math.min(500, Number(limit) || 100));
+    let threads;
+    try {
+      threads = await repo.listSupportThreads({ months: mois, limit: statut ? 500 : max });
+    } catch { return supportUnavailable(); }
+    const summaries = threads.map(thread => ({ ...domain.supportThreadSummary(thread), ...support.state(thread) }));
+    await appendAudit('support_inbox_read', { adminId: gate.principal.adminId, email: gate.principal.email, ip, meta: { statut: statut || null, count: summaries.length } });
+    return {
+      ok: true, threads: summaries.filter(thread => !statut || thread.statut === statut).slice(0, max),
+      statuts: domain.SUPPORT_STATUTS, limites: { messageMax: domain.SUPPORT_MESSAGE_MAX }, mois,
+    };
+  }
+  async function getSupport(token, id, { ip } = {}) {
+    const gate = await supportPrincipal(token, 'support:read', ip);
+    if (gate.error) return gate.error;
+    let thread;
+    try { thread = await repo.getSupportThread(id); } catch { return supportUnavailable(); }
+    if (!thread) return support.writeError(null);
+    await appendAudit('support_thread_read', { adminId: gate.principal.adminId, email: gate.principal.email, ip, meta: { threadId: thread.id } });
+    return { ok: true, thread: supportDetail(thread), limites: { messageMax: domain.SUPPORT_MESSAGE_MAX } };
+  }
+  async function replySupport(token, id, payload, { ip } = {}) {
+    const gate = await supportPrincipal(token, 'support:write', ip);
+    if (gate.error) return gate.error;
+    let result;
+    try {
+      result = await support.reply({ threadId: id, texte: payload.texte, messageId: payload.messageId, author: gate.principal.adminId });
+    } catch { return supportUnavailable(); }
+    if (!result.ok) return result;
+    if (!result.duplicate) {
+      await appendAudit('support_reply_sent', {
+        adminId: gate.principal.adminId, email: gate.principal.email, ip,
+        meta: { threadId: id, messageId: result.message.id },
+      });
+    }
+    const thread = supportDetail(result.thread);
+    const notification = !result.thread.courriel ? null : result.notification && result.notification.ok !== false
+      ? { ok: true } : { ok: false, retryable: true };
+    return {
+      ok: true, message: thread.messages.find(message => message.id === result.message.id),
+      duplicate: result.duplicate, notification, thread, limites: { messageMax: domain.SUPPORT_MESSAGE_MAX },
+    };
+  }
+  async function closeSupport(token, id, { ip } = {}) {
+    const gate = await supportPrincipal(token, 'support:write', ip);
+    if (gate.error) return gate.error;
+    let result;
+    try { result = await support.close({ threadId: id }); } catch { return supportUnavailable(); }
+    if (!result.ok) return result;
+    if (!result.duplicate) await appendAudit('support_thread_closed', {
+      adminId: gate.principal.adminId, email: gate.principal.email, ip, meta: { threadId: id },
+    });
+    return { ok: true, duplicate: result.duplicate, thread: supportDetail(result.thread), limites: { messageMax: domain.SUPPORT_MESSAGE_MAX } };
+  }
+
   return {
+    listSupport, getSupport, replySupport, closeSupport,
     requestLogin,
     login,
     verifyMagic,

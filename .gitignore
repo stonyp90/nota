@@ -43,3 +43,10 @@ awsenv.sh
 # Environment-specific Terraform inputs (examples stay versioned).
 infra/*.tfvars
 !infra/*.tfvars.example
+
+# Rendus vidéo et artefacts QA produits localement (418 Mo) — jamais versionnés.
+output/
+
+# Python bytecode des scripts d'exploitation.
+__pycache__/
+*.pyc

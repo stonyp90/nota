@@ -30,13 +30,17 @@ function createSesAdapter({ from, region, configurationSet = process.env.NOTA_SE
   const client = new SESv2Client({ ...(region ? { region } : {}) });
 
   return {
-    async send({ to, subject, html, text, unsubscribeUrl, replyTo }) {
+    async send({ to, subject, html, text, unsubscribeUrl, replyTo, supportAutomation }) {
       if (!to) throw new Error('send: a recipient (to) is required');
       const body = {};
       if (html) body.Html = { Data: html, Charset: 'UTF-8' };
       if (text) body.Text = { Data: text, Charset: 'UTF-8' };
 
       const headers = [];
+      if (supportAutomation) {
+        headers.push({ Name: 'Auto-Submitted', Value: 'auto-generated' });
+        headers.push({ Name: 'X-Nota-Support-Automation', Value: '1' });
+      }
       if (unsubscribeUrl) {
         headers.push({ Name: 'List-Unsubscribe', Value: '<' + unsubscribeUrl + '>' });
         // One-click (RFC 8058) only makes sense for an http(s) endpoint.
@@ -111,7 +115,7 @@ function createFileMailer({ dir, log } = {}) {
         if (msg.text) fs.writeFileSync(base + '.txt', msg.text);
         fs.writeFileSync(
           base + '.json',
-          JSON.stringify({ to: msg.to, subject: msg.subject, replyTo: msg.replyTo || null, unsubscribeUrl: msg.unsubscribeUrl || null, at: stamp }, null, 2)
+          JSON.stringify({ to: msg.to, subject: msg.subject, replyTo: msg.replyTo || null, supportAutomation: !!msg.supportAutomation, unsubscribeUrl: msg.unsubscribeUrl || null, at: stamp }, null, 2)
         );
         // Le lien est ce qu'on vient chercher neuf fois sur dix : on le sort
         // en clair dans la console pour qu'un test local soit un copier-coller.

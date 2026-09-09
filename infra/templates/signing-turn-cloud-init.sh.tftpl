@@ -1,0 +1,208 @@
+#!/bin/bash
+set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+export AWS_DEFAULT_REGION='${region}'
+# Block package post-install startup before the authenticated configuration
+# exists. Only our hardened nota-turn.service may open a listener.
+systemctl mask coturn.service
+apt-get update -q
+apt-get install -y -q coturn python3-boto3 certbot python3-certbot-dns-route53 nftables
+systemctl disable --now coturn
+# Keep unrelated automatic client sockets out of the dedicated relay range.
+printf '%s\n' 'net.ipv4.ip_local_reserved_ports=49160-49200' >/etc/sysctl.d/90-nota-turn.conf
+sysctl -p /etc/sysctl.d/90-nota-turn.conf
+install -d -m 0750 -o root -g turnserver /etc/nota-turn
+install -d -m 0755 /etc/systemd/journald.conf.d
+cat >/etc/systemd/journald.conf.d/nota-turn.conf <<'EOF'
+[Journal]
+SystemMaxUse=50M
+MaxRetentionSec=1day
+EOF
+systemctl restart systemd-journald
+cat >/etc/nota-turn/base.conf <<'EOF'
+listening-port=3478
+tls-listening-port=443
+listening-ip=${private_ip}
+relay-ip=${private_ip}
+# Coturn maps same-host relay peers to this private address and allowlists it.
+# The separate kernel guard restricts that exception to relay-to-relay UDP.
+external-ip=${public_ip}/${private_ip}
+min-port=49160
+max-port=49200
+realm=${hostname}
+server-name=${hostname}
+fingerprint
+use-auth-secret
+stale-nonce=600
+max-allocate-lifetime=600
+# Three transports per role plus a bounded retry; two small beta sessions.
+user-quota=8
+total-quota=24
+max-bps=1000000
+# Coturn reserves max-bps per allocation; allow all 24 bounded allocations.
+bps-capacity=24000000
+no-cli
+no-tlsv1
+no-tlsv1_1
+no-tcp-relay
+no-multicast-peers
+no-stdout-log
+log-file=syslog
+cert=/etc/nota-turn/fullchain.pem
+pkey=/etc/nota-turn/privkey.pem
+denied-peer-ip=0.0.0.0-0.255.255.255
+denied-peer-ip=10.0.0.0-10.255.255.255
+denied-peer-ip=100.64.0.0-100.127.255.255
+denied-peer-ip=127.0.0.0-127.255.255.255
+denied-peer-ip=169.254.0.0-169.254.255.255
+denied-peer-ip=172.16.0.0-172.31.255.255
+denied-peer-ip=192.0.0.0-192.0.0.255
+denied-peer-ip=192.0.2.0-192.0.2.255
+denied-peer-ip=192.168.0.0-192.168.255.255
+denied-peer-ip=198.18.0.0-198.19.255.255
+denied-peer-ip=198.51.100.0-198.51.100.255
+denied-peer-ip=203.0.113.0-203.0.113.255
+denied-peer-ip=224.0.0.0-255.255.255.255
+denied-peer-ip=::1
+denied-peer-ip=fc00::-fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+denied-peer-ip=fe80::-febf:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+EOF
+cat >/usr/local/sbin/nota-turn-refresh-config <<'PY'
+#!/usr/bin/python3
+import boto3, os, pathlib, pwd, re
+secret = boto3.client('ssm', region_name='${region}').get_parameter(
+    Name='${secret_parameter}', WithDecryption=True)['Parameter']['Value']
+if not re.fullmatch(r'[A-Za-z0-9_-]{40,128}', secret):
+    raise SystemExit('TURN secret unavailable or invalid; refusing to start')
+path = pathlib.Path('/etc/nota-turn/turnserver.conf')
+os.umask(0o027)
+path.write_text(pathlib.Path('/etc/nota-turn/base.conf').read_text() + 'static-auth-secret=' + secret + '\n')
+os.chown(path, 0, pwd.getpwnam('turnserver').pw_gid)
+os.chmod(path, 0o640)
+PY
+chmod 0750 /usr/local/sbin/nota-turn-refresh-config
+cat >/usr/local/sbin/nota-turn-peer-guard <<'SH'
+#!/bin/sh
+set -eu
+turn_guard_delete=''
+if nft list table inet nota_turn_peer_guard >/dev/null 2>&1; then
+  turn_guard_delete='delete table inet nota_turn_peer_guard'
+fi
+# This table is never touched by the daily quota reset. No connection-state
+# bypass is allowed. Only coturn UDP relay ports may reach its own addresses.
+# Deletion and replacement are one atomic nftables transaction.
+nft -f - <<EOF
+$turn_guard_delete
+table inet nota_turn_peer_guard {
+  chain output {
+    type filter hook output priority -10; policy accept;
+    meta skuid "turnserver" ip daddr { ${private_ip}, ${public_ip} } udp sport 49160-49200 udp dport 49160-49200 accept
+    meta skuid "turnserver" ip daddr { ${public_ip}, 0.0.0.0/8, 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.254.0.0/16, 172.16.0.0/12, 192.0.0.0/24, 192.0.2.0/24, 192.168.0.0/16, 198.18.0.0/15, 198.51.100.0/24, 203.0.113.0/24, 224.0.0.0/3 } counter drop
+    meta skuid "turnserver" meta nfproto ipv6 counter drop
+  }
+}
+EOF
+SH
+chmod 0750 /usr/local/sbin/nota-turn-peer-guard
+cat >/etc/systemd/system/nota-turn-peer-guard.service <<'EOF'
+[Unit]
+Description=Block Nota TURN access to private services and metadata
+Before=nota-turn.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/nota-turn-peer-guard
+RemainAfterExit=yes
+[Install]
+WantedBy=multi-user.target
+EOF
+cat >/usr/local/sbin/nota-turn-reset-quota <<'SH'
+#!/bin/sh
+set -eu
+# A daily 5 GiB ciphertext egress limit bounds beta usage; exhaustion stops media.
+# Reset is performed only at boot and midnight UTC, not on every relay restart.
+if nft list table inet nota_turn_egress >/dev/null 2>&1; then
+  nft delete table inet nota_turn_egress
+fi
+nft -f - <<'EOF'
+table inet nota_turn_egress {
+  chain output {
+    type filter hook output priority 0; policy accept;
+    meta skuid "turnserver" quota over 5368709120 bytes counter drop
+  }
+}
+EOF
+SH
+chmod 0750 /usr/local/sbin/nota-turn-reset-quota
+cat >/etc/systemd/system/nota-turn-quota.service <<'EOF'
+[Unit]
+Description=Daily Nota TURN beta ciphertext egress budget
+Before=nota-turn.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/nota-turn-reset-quota
+RemainAfterExit=yes
+[Install]
+WantedBy=multi-user.target
+EOF
+cat >/etc/systemd/system/nota-turn-quota-reset.service <<'EOF'
+[Unit]
+Description=Reset daily Nota TURN beta ciphertext egress budget
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/nota-turn-reset-quota
+EOF
+cat >/etc/systemd/system/nota-turn-quota-reset.timer <<'EOF'
+[Unit]
+Description=Reset Nota TURN egress budget at midnight UTC
+[Timer]
+OnCalendar=*-*-* 00:00:00 UTC
+Persistent=true
+Unit=nota-turn-quota-reset.service
+[Install]
+WantedBy=timers.target
+EOF
+cat >/etc/systemd/system/nota-turn.service <<'EOF'
+[Unit]
+Description=Nota authenticated TURN beta relay
+Wants=network-online.target
+After=network-online.target nota-turn-quota.service nota-turn-peer-guard.service
+Requires=nota-turn-quota.service nota-turn-peer-guard.service
+[Service]
+Type=simple
+User=turnserver
+Group=turnserver
+RuntimeDirectory=nota-turn
+RuntimeDirectoryMode=0750
+ExecStartPre=+/usr/local/sbin/nota-turn-refresh-config
+# Refuse startup if a required kernel boundary was removed after boot.
+ExecStartPre=+/usr/sbin/nft list table inet nota_turn_peer_guard
+ExecStartPre=+/usr/sbin/nft list table inet nota_turn_egress
+ExecStart=/usr/bin/turnserver -c /etc/nota-turn/turnserver.conf --pidfile=/run/nota-turn/turnserver.pid
+Restart=on-failure
+RestartSec=10
+LimitNOFILE=4096
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE CAP_SETUID CAP_SETGID CAP_CHOWN CAP_FOWNER CAP_DAC_OVERRIDE
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+ReadWritePaths=/etc/nota-turn /run/nota-turn
+[Install]
+WantedBy=multi-user.target
+EOF
+cat >/usr/local/sbin/nota-turn-renew-certificate <<'SH'
+#!/bin/sh
+set -eu
+install -m 0640 -o root -g turnserver /etc/letsencrypt/live/${hostname}/fullchain.pem /etc/nota-turn/fullchain.pem
+install -m 0640 -o root -g turnserver /etc/letsencrypt/live/${hostname}/privkey.pem /etc/nota-turn/privkey.pem
+if systemctl is-active --quiet nota-turn; then systemctl restart nota-turn; fi
+SH
+chmod 0750 /usr/local/sbin/nota-turn-renew-certificate
+# Only DNS validation is used; no public web server or HTTP port is opened.
+certbot certonly --dns-route53 --non-interactive --agree-tos --register-unsafely-without-email \
+  -d '${hostname}' --deploy-hook /usr/local/sbin/nota-turn-renew-certificate
+/usr/local/sbin/nota-turn-renew-certificate
+systemctl daemon-reload
+systemctl enable --now nota-turn-peer-guard.service nota-turn-quota.service nota-turn-quota-reset.timer nota-turn.service
+systemctl enable --now certbot.timer

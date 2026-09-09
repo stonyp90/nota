@@ -36,7 +36,7 @@ async function runReminders({ repo, notifier, billing, now } = {}) {
   // Pay-on-accept: an offer that never went live — its card authorization is
   // still pending, or it lapsed/was voided — is invisible to clients AND to
   // the notary digest alike.
-  const isLive = (bid) => bid.paymentStatus !== 'pending' && bid.paymentStatus !== 'void';
+  const isLive = (bid) => !domain.isOfferExpired(bid, todayISO) && bid.paymentStatus !== 'pending' && bid.paymentStatus !== 'void';
 
   for (const bid of open) {
     // Only new leads opt in to recovery; do not replay legacy confirmations.
@@ -163,7 +163,7 @@ async function runReminders({ repo, notifier, billing, now } = {}) {
     const candidates = [];
     for (const m of months) candidates.push(...(await repo.listByMonth(m)));
     for (const bid of candidates) {
-      if (!bid || bid.status === domain.STATUS.ANNULEE) continue;
+      if (!bid || bid.status === domain.STATUS.ANNULEE || domain.isOfferExpired(bid, todayISO)) continue;
       // Le port de facturation dit LUI-MÊME quelles offres attendent leur
       // caution : celles dont la carte est enregistrée sans qu'aucune somme
       // soit réservée — y compris un acte renégocié (`a_reautoriser`), dont

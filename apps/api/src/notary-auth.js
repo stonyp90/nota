@@ -78,8 +78,9 @@ function notaryIdForEmail(email) {
 
 // `exp` is an absolute expiry in epoch milliseconds. `scope` (see SCOPES) narrows
 // what the token authorizes and defaults to a full 'session' token.
-function signToken(sub, exp, scope = SCOPES.SESSION, sec = secret()) {
-  const payload = b64url(JSON.stringify({ sub: String(sub), exp: Number(exp), scope: String(scope) }));
+function signToken(sub, exp, scope = SCOPES.SESSION, sec = secret(), evidence = {}) {
+  const payload = b64url(JSON.stringify({ sub: String(sub), exp: Number(exp), scope: String(scope),
+    ...(Number.isFinite(evidence.verifiedAt) ? { verifiedAt: evidence.verifiedAt } : {}) }));
   const sig = crypto.createHmac('sha256', sec).update(payload).digest('base64url');
   return payload + '.' + sig;
 }
@@ -127,6 +128,9 @@ function verifyToken(token, nowMs, sec = secret()) {
   // consume the matching record. Session/feed/client tokens keep the exact
   // `{ sub, scope }` shape they always had (no undefined `cid` key added).
   const out = { sub: claims.sub, scope };
+  // Present only on tokens minted after successful mailbox verification.
+  // Existing bid-creation tokens deliberately carry no such assurance.
+  if (Number.isFinite(claims.verifiedAt)) out.verifiedAt = claims.verifiedAt;
   if (typeof claims.cid === 'string' && claims.cid) out.cid = claims.cid;
   return out;
 }

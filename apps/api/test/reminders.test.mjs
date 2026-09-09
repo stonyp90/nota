@@ -18,6 +18,7 @@ const TODAY = '2026-08-12';
 function bidAt(id, offset, over = {}) {
   return {
     id,
+    expiresOn: domain.addDays(TODAY, domain.OFFER_VALIDITY_DAYS),
     serviceId: 'refinancement',
     dateISO: domain.addDays(TODAY, offset),
     montant: 2400,

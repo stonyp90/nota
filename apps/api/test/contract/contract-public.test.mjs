@@ -336,6 +336,9 @@ function routedPathsFromHandler() {
 
 test('no documented path is missing from the app, and undocumented routes are the known set', async () => {
   const routed = routedPathsFromHandler();
+  // OAuth is delegated by handler.js to its own route module.
+  Object.values(require('../../src/oauth-routes').OAUTH_PATHS).forEach(p => routed.add(p));
+  require('../../src/signing-routes').SIGNING_BETA_PATHS.forEach(p => routed.add(p));
   const documented = new Set(contract.documentedRoutes().map((r) => r.path));
 
   const documentedButNotRouted = [...documented].filter((p) => !routed.has(p));

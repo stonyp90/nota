@@ -89,7 +89,7 @@ test('a visitor courriel gets the reply copied to their inbox', async () => {
   const a = app();
   parse(await ask(a, { texte: 'Pouvez-vous me rappeler ?', courriel: 'Curieux@Exemple.CA' }));
   await flush();
-  assert.equal(a.mailer.sent[0].replyTo, 'curieux@exemple.ca', 'Reply sends the operator straight to the visitor');
+  assert.equal(a.mailer.sent[0].replyTo, null, 'without inbound email configured, the signed reply link keeps the response in the conversation');
   const opToken = replyTokenFrom(a.mailer.sent[0]);
   await reply(a, opToken, { texte: 'Bien sûr — laissez-nous votre numéro.' });
   await flush();

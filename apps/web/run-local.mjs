@@ -5,7 +5,7 @@ import { pages, pagePath, renderPage } from './seo-pages.mjs';
  * source stays single-sourced and public/ has no committed copy), and falls
  * back unknown paths to index.html — matching the CloudFront SPA behavior.
  */
-import { createServer } from 'node:http';
+import { createServer, request as httpRequest } from 'node:http';
 import { readFileSync, existsSync, statSync } from 'node:fs';
 import { join, dirname, extname, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -40,13 +40,30 @@ const TYPES = {
 const server = createServer((req, res) => {
   const start = Date.now();
   let path = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
+  // OAuth requires same-origin HttpOnly cookies even when ordinary local API
+  // traffic uses a different port. Never log authorization query parameters.
+  if (path.startsWith('/api/auth/oauth/')) {
+    const target = new URL(req.url, API_BASE || 'http://localhost:8788');
+    const headers = { ...req.headers }; delete headers.host; delete headers.connection;
+    const upstream = httpRequest(target, { method: req.method, headers }, apiRes => {
+      res.writeHead(apiRes.statusCode, apiRes.headers); apiRes.pipe(res);
+    });
+    upstream.on('error', () => {
+      if (res.headersSent) { res.destroy(); return; }
+      res.writeHead(502, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ errors: [{ code: 'oauth_unavailable' }] }));
+    });
+    req.pipe(upstream); return;
+  }
   if (path === '/') path = '/index.html';
 
   for (const page of pages) {
     for (const lang of ['fr', 'en']) {
       if (path === pagePath(page, lang)) {
         res.writeHead(200, { 'content-type': TYPES['.html'] });
-        res.end(renderPage(page, lang));
+        let html = renderPage(page, lang);
+        if (API_BASE) html = html.replace('<head>', '<head><script>window.__NOTA_API__=' + JSON.stringify(API_BASE) + ';</script>');
+        res.end(html);
         return log(req, 200, start);
       }
     }
@@ -56,6 +73,11 @@ const server = createServer((req, res) => {
   if (path === '/domain.js') {
     res.writeHead(200, { 'content-type': TYPES['.js'] });
     res.end(readFileSync(domainSrc));
+    return log(req, 200, start);
+  }
+  if (path === '/signing-domain.js') {
+    res.writeHead(200, { 'content-type': TYPES['.js'] });
+    res.end(readFileSync(join(dirname(domainSrc), 'signing.js')));
     return log(req, 200, start);
   }
 

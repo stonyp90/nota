@@ -51,7 +51,7 @@ const ANSWER_SCHEMA = {
       type: 'string',
       description:
         'La réponse au visiteur, dans SA langue. Si repond=false, une phrase qui dit ' +
-        'qu’Anthony reprend la question personnellement — jamais une excuse vide.',
+        'que la personne nommée dans l’invite reprend la question — jamais une excuse vide.',
     },
   },
 };
@@ -66,19 +66,12 @@ const DEFAULT_MAX_TOKENS = 1500;
  * messagerie retombe alors sur l'humain, ce qui est le comportement d'avant
  * l'ADR 0046. Une clé manquante dégrade, elle ne casse jamais.
  */
-function createAnthropicAssistant({ apiKey, model, maxTokens, effort, timeoutMs } = {}) {
-  if (!apiKey) return null;
+function createAnthropicAssistant({ apiKey, model, maxTokens, effort, timeoutMs, client } = {}) {
+  if (typeof apiKey !== 'string' || !apiKey.trim()) return null;
 
-  // Requis paresseusement — exactement comme le SDK SES et Stripe.
-  const Anthropic = require('@anthropic-ai/sdk');
-  const Client = Anthropic.default || Anthropic;
-  const client = new Client({
-    apiKey,
-    // Une question de visiteur attend une réponse ; mieux vaut escalader vite
-    // que faire patienter. Le port est appelé pendant la requête HTTP.
-    timeout: timeoutMs || 20000,
-    maxRetries: 1,
-  });
+  const timeout = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 20000;
+  const tokens = Number.isSafeInteger(maxTokens) && maxTokens > 0 ? maxTokens : DEFAULT_MAX_TOKENS;
+  let provider = client;
 
   return {
     async answer({ systeme, historique, question, locale } = {}) {
@@ -94,26 +87,41 @@ function createAnthropicAssistant({ apiKey, model, maxTokens, effort, timeoutMs 
       }
       messages.push({ role: 'user', content: String(question || '') });
 
-      const res = await client.messages.create({
-        model: model || DEFAULT_MODEL,
-        max_tokens: maxTokens || DEFAULT_MAX_TOKENS,
-        // L'invite système est STABLE d'une question à l'autre (la fiche de
-        // faits ne bouge qu'avec le catalogue) : elle se met en cache, et
-        // seule la conversation est facturée plein tarif.
-        system: [{ type: 'text', text: String(systeme || ''), cache_control: { type: 'ephemeral' } }],
-        messages,
-        thinking: { type: 'adaptive' },
-        output_config: {
-          // Une question de support ne demande pas une longue réflexion ; ce
-          // qu'elle demande, c'est de la fidélité à la fiche.
-          effort: effort || 'low',
-          format: { type: 'json_schema', schema: ANSWER_SCHEMA },
-        },
-      });
+      let res;
+      try {
+        // A prepared answer never loads the SDK or initializes a client.
+        if (!provider) {
+          const Anthropic = require('@anthropic-ai/sdk');
+          const Client = Anthropic.default || Anthropic;
+          provider = new Client({ apiKey, timeout, maxRetries: 0, logLevel: 'off' });
+        }
+        res = await provider.messages.create({
+          model: model || DEFAULT_MODEL,
+          max_tokens: tokens,
+          // L'invite système est STABLE d'une question à l'autre (la fiche de
+          // faits ne bouge qu'avec le catalogue) : elle se met en cache, et
+          // seule la conversation est facturée plein tarif.
+          system: [{ type: 'text', text: String(systeme || ''), cache_control: { type: 'ephemeral' } }],
+          messages,
+          thinking: { type: 'adaptive' },
+          output_config: {
+            // Une question de support ne demande pas une longue réflexion ; ce
+            // qu'elle demande, c'est de la fidélité à la fiche.
+            effort: effort || 'low',
+            format: { type: 'json_schema', schema: ANSWER_SCHEMA },
+          },
+        // Retrying a full timeout can outlast the HTTP request and lose the
+        // handoff. One bounded attempt leaves room for the human workflow.
+        }, { timeout, maxRetries: 0 });
+      } catch {
+        // Provider errors can echo credentials or visitor text. Keep those
+        // details out of errors propagated to callers and infrastructure.
+        throw new Error('Support assistant provider unavailable.');
+      }
 
       // Un refus de sécurité du modèle est traité comme une escalade : la
       // question part à l'humain plutôt que de rester sans réponse.
-      if (res.stop_reason === 'refusal') {
+      if (!res || res.stop_reason !== 'end_turn') {
         return { texte: null, repond: false, niveau: null, motif: 'inconnu', usage: usageOf(res) };
       }
       const parsed = parseAnswer(res);
@@ -125,18 +133,18 @@ function createAnthropicAssistant({ apiKey, model, maxTokens, effort, timeoutMs 
 
 function usageOf(res) {
   const u = (res && res.usage) || {};
-  return { in: u.input_tokens || 0, out: u.output_tokens || 0, cacheRead: u.cache_read_input_tokens || 0 };
+  const count = value => Number.isSafeInteger(value) && value >= 0 ? value : 0;
+  return { in: count(u.input_tokens), out: count(u.output_tokens), cacheRead: count(u.cache_read_input_tokens) };
 }
 
 // Le bloc texte de la réponse EST le JSON (output_config.format). On le lit
 // avec prudence : un corps illisible vaut une escalade, jamais une exception.
 function parseAnswer(res) {
-  const blocks = (res && res.content) || [];
-  const text = blocks
-    .filter((b) => b && b.type === 'text')
-    .map((b) => b.text || '')
-    .join('')
-    .trim();
+  const blocks = res && res.content;
+  if (!Array.isArray(blocks) || blocks.some(b => !b || !['text', 'thinking', 'redacted_thinking'].includes(b.type))) return null;
+  const texts = blocks.filter(b => b.type === 'text');
+  if (texts.length !== 1 || typeof texts[0].text !== 'string') return null;
+  const text = texts[0].text.trim();
   if (!text) return null;
   let obj;
   try {
@@ -144,12 +152,15 @@ function parseAnswer(res) {
   } catch {
     return null;
   }
-  if (!obj || typeof obj !== 'object') return null;
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null;
+  if (Object.keys(obj).length !== 4 || !Object.keys(ANSWER_SCHEMA.properties).every(key => Object.hasOwn(obj, key))) return null;
+  if (typeof obj.repond !== 'boolean' || typeof obj.texte !== 'string' || (obj.motif !== null && typeof obj.motif !== 'string')) return null;
+  if (obj.repond ? ![1, 2, 3].includes(obj.niveau) || obj.motif !== null : obj.niveau !== null) return null;
   return {
-    texte: typeof obj.texte === 'string' ? obj.texte.trim() : null,
-    repond: obj.repond === true,
-    niveau: [1, 2, 3].includes(obj.niveau) ? obj.niveau : null,
-    motif: typeof obj.motif === 'string' && obj.motif ? obj.motif : null,
+    texte: obj.texte.trim(),
+    repond: obj.repond,
+    niveau: obj.niveau,
+    motif: obj.motif,
   };
 }
 

@@ -66,7 +66,7 @@ function createAnalytics({ repo, now, gaugeHorizonMonths } = {}) {
     for (const items of perShard) {
       for (const it of items || []) {
         const day = String(it.sk || it.SK || '').replace(/^D#/, '') || it.day;
-        const cur = byDay.get(day) || { offers: 0, retenues: 0, actes: 0, commissionCents: 0, funnel: {}, acquisition: {} };
+        const cur = byDay.get(day) || { offers: 0, retenues: 0, actes: 0, commissionCents: 0, funnel: {}, acquisition: {}, segments: {} };
         cur.offers += num(it.offers);
         cur.retenues += num(it.retenues);
         cur.actes += num(it.actes);
@@ -79,6 +79,7 @@ function createAnalytics({ repo, now, gaugeHorizonMonths } = {}) {
           cur.acquisition[key] = (cur.acquisition[key] || 0) + num(it[key]);
         }
         for (const k of Object.keys(it)) {
+          if (k.startsWith('segment__')) cur.segments[k] = (cur.segments[k] || 0) + num(it[k]);
           if (k.startsWith(FUNNEL_COUNTER_PREFIX)) {
             const id = k.slice(FUNNEL_COUNTER_PREFIX.length);
             cur.funnel[id] = (cur.funnel[id] || 0) + num(it[k]);
@@ -356,6 +357,19 @@ function createAnalytics({ repo, now, gaugeHorizonMonths } = {}) {
     const entonnoir = domain.FUNNEL_EVENTS.map((e) => ({
       id: e.id, nom: e.nom, nomEn: e.nomEn, total: Math.max(0, num(funnelTotals[e.id])),
     }));
+    // Independent breakdowns only; never a browser × source × device fingerprint.
+    const segmentTotals = {};
+    for (const day of global.values()) {
+      for (const [key, count] of Object.entries(day.segments)) segmentTotals[key] = (segmentTotals[key] || 0) + count;
+    }
+    const segments = domain.ANALYTICS_DIMENSIONS.map(dimension => ({
+      id: dimension.id, nom: dimension.nom, nomEn: dimension.nomEn,
+      rows: dimension.values.map(value => ({
+        id: value.id, nom: value.nom, nomEn: value.nomEn,
+        events: Object.fromEntries(domain.FUNNEL_EVENTS.map(event => [event.id,
+          Math.max(0, num(segmentTotals['segment__' + dimension.id + '__' + value.id + '__' + event.id]))])),
+      })).filter(row => Object.values(row.events).some(count => count > 0)),
+    }));
 
     const offersPerDay = days.map((date) => ({ date, count: global.get(date)?.offers || 0 }));
 
@@ -430,6 +444,7 @@ function createAnalytics({ repo, now, gaugeHorizonMonths } = {}) {
       followUp: inv.followUp,
       entonnoir,
       acquisition: SOURCES.map(source => ({ source, ...Object.fromEntries(STAGES.map(stage => [stage, acquisitionTotals['acq_' + source + '_' + stage] || 0])) })),
+      segments,
       // Per-code referral totals (demandes / retenues / complétés / dû) plus
       // the flat commission amount — see ADR 0011.
       parrainages,

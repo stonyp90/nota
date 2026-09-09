@@ -1,0 +1,204 @@
+{
+  "checkedAt": "2026-09-08T12:15:24.704671+00:00",
+  "stripeAccount": "acct_19hMgWAZUksBrhVb",
+  "mode": "test",
+  "providerChecks": {
+    "account": "acct_19hMgWAZUksBrhVb",
+    "mode": "test",
+    "run": "nota_smoke_2f1a93cd-45e6-440f-9222-9ef95e71bfe4",
+    "checks": [
+      {
+        "check": "checkout_total",
+        "service": "refinancement",
+        "tier": "standard",
+        "cents": 227900
+      },
+      {
+        "check": "checkout_total",
+        "service": "refinancement",
+        "tier": "rapide",
+        "cents": 242800
+      },
+      {
+        "check": "checkout_total",
+        "service": "refinancement",
+        "tier": "prioritaire",
+        "cents": 257800
+      },
+      {
+        "check": "checkout_total",
+        "service": "refinancement",
+        "tier": "urgence",
+        "cents": 272800
+      },
+      {
+        "check": "checkout_total",
+        "service": "refinancement",
+        "tier": "extreme",
+        "cents": 282800
+      },
+      {
+        "check": "checkout_total",
+        "service": "financement",
+        "tier": "standard",
+        "cents": 202900
+      },
+      {
+        "check": "checkout_total",
+        "service": "financement",
+        "tier": "rapide",
+        "cents": 217800
+      },
+      {
+        "check": "checkout_total",
+        "service": "financement",
+        "tier": "prioritaire",
+        "cents": 232800
+      },
+      {
+        "check": "checkout_total",
+        "service": "financement",
+        "tier": "urgence",
+        "cents": 247800
+      },
+      {
+        "check": "checkout_total",
+        "service": "financement",
+        "tier": "extreme",
+        "cents": 257800
+      },
+      {
+        "check": "card_registration_checkout",
+        "passed": true
+      },
+      {
+        "check": "authorize_capture_refund",
+        "cents": 227900,
+        "passed": true
+      },
+      {
+        "check": "release_authorization",
+        "passed": true
+      },
+      {
+        "check": "declined_card",
+        "passed": true
+      },
+      {
+        "check": "connect_onboarding_link",
+        "passed": true
+      }
+    ],
+    "cleanupErrors": [],
+    "passed": true
+  },
+  "localSignedWebhook": {
+    "passed": true,
+    "mode": "test",
+    "test": "Stripe CLI signed event to actual local API",
+    "event": "payment_intent.canceled",
+    "httpStatus": 200
+  },
+  "productionTariff": {
+    "grille": {
+      "defaut": 22900,
+      "services": {
+        "refinancement": 27900,
+        "financement": 22900
+      },
+      "garantieDate": {
+        "standard": 0,
+        "rapide": 14900,
+        "prioritaire": 29900,
+        "urgence": 44900,
+        "extreme": 54900
+      }
+    },
+    "prixNotaMinCents": 22900,
+    "taxesIncluses": false,
+    "deboursInclus": false,
+    "annulation": {
+      "plafonds": [
+        {
+          "maxJours": 3,
+          "plafond": 0.3
+        },
+        {
+          "maxJours": 14,
+          "plafond": 0.1
+        }
+      ],
+      "delaiJours": 7
+    }
+  },
+  "productionPaymentsActivated": false,
+  "remaining": [
+    "Tax invoicing and collection decision",
+    "Live secret promotion, destination enablement and delivery verification",
+    "Connected-account onboarding completion and transfer/payout validation",
+    "Browser 3DS and payment-return recovery with actual Stripe Checkout"
+  ],
+  "deployment": [
+    {
+      "function": "nota-api",
+      "state": "Active",
+      "update": "Successful",
+      "sha256": "E6UA1oBM7qyOYm+dH8hebsjgyPblx0+xQHNOiEO7tbA=",
+      "returnUrl": "https://gonota.ca/#notaires"
+    },
+    {
+      "function": "nota-reminders",
+      "state": "Active",
+      "update": "Successful",
+      "sha256": "E6UA1oBM7qyOYm+dH8hebsjgyPblx0+xQHNOiEO7tbA=",
+      "returnUrl": null
+    }
+  ],
+  "liveStaging": {
+    "checkedAt": "2026-09-08T12:31:51.029173+00:00",
+    "stripeAccount": "acct_19hMgWAZUksBrhVb",
+    "chargesEnabled": true,
+    "payoutsEnabled": true,
+    "accountRequirements": {
+      "currently_due": null,
+      "past_due": null,
+      "disabled_reason": null
+    },
+    "destinations": [
+      {
+        "id": "we_1UDOBnAZUksBrhVbQ4s0rhd8",
+        "url": "https://gonota.ca/api/stripe/webhook",
+        "api_version": "2024-06-20",
+        "status": "disabled",
+        "enabled_events": [
+          "checkout.session.completed",
+          "checkout.session.expired",
+          "setup_intent.succeeded",
+          "payment_intent.canceled"
+        ],
+        "livemode": true,
+        "description": "Nota production platform \u2014 pending activation"
+      },
+      {
+        "id": "we_1UDOBnAZUksBrhVbs6pPnAOb",
+        "url": "https://gonota.ca/api/stripe/webhook",
+        "api_version": "2024-06-20",
+        "status": "disabled",
+        "enabled_events": [
+          "account.updated",
+          "account.application.deauthorized"
+        ],
+        "livemode": true,
+        "description": "Nota production connect \u2014 pending activation"
+      }
+    ],
+    "activeCredentialsChanged": false,
+    "webhookDeliveryVerified": false,
+    "productionPaymentsActivated": false,
+    "pendingVersionId": "bbdee999-047e-448b-96c0-b08e6e0add94",
+    "unchangedActiveVersionId": "0e97cb99-1e5b-4389-9592-3f75063aa8ba",
+    "unrelatedDestinationsUnchanged": true,
+    "unrelatedDestinationCount": 2,
+    "secretsReadbackVerified": true
+  }
+}

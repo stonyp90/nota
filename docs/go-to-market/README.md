@@ -35,6 +35,9 @@ grille complète et pour ce que les ADR 0031, 0034 et 0030 ont retiré.
 
 ## Le plan
 
+Behavior optimization: [measurement and retention strategy](behavior-conversion-strategy.md)
+and [recurring review log](behavior-review-log.md).
+
 | Document | Ce qu'il contient |
 | --- | --- |
 | [`plan-pmf-30-jours.md`](plan-pmf-30-jours.md) | Les 30 jours du 3 septembre au 3 octobre 2026 : une seule mesure (rétention > 40 %), sept gestes du propriétaire qui bloquent le premier usager, et ce qui reste à coder. |

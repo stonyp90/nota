@@ -13,6 +13,8 @@
     "test:domain": "npm test --workspace @nota/domain",
     "test:api": "npm test --workspace @nota/api",
     "test:contract": "node --test apps/api/test/contract/*.test.mjs",
+    "test:financing-ai": "node --test packages/domain/test/financing-ai.test.mjs apps/api/test/financing-ai*.test.mjs",
+    "eval:financing-ai": "node apps/api/scripts/evaluate-financing-ai.js",
     "test:web": "npm test --workspace @nota/web",
     "test:admin": "npm test --workspace @nota/admin",
     "build": "npm run build --workspace @nota/web",
@@ -22,10 +24,14 @@
     "api:local": "npm run start --workspace @nota/api",
     "admin:local": "npm run start:admin --workspace @nota/api",
     "local": "node apps/api/scripts/dev-all.js",
+    "local:stripe": "node apps/api/scripts/dev-all.js --stripe",
+    "test:stripe": "node apps/api/scripts/stripe-provider-check.js",
     "local:tables": "node apps/api/scripts/create-table.js",
     "local:seed": "node apps/api/scripts/seed.js",
     "local:check": "node apps/api/scripts/check-stack.js",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:chat": "node --test packages/domain/test/support-assistant.test.mjs apps/api/test/assistant-port.test.mjs apps/api/test/assistant-secret.test.mjs apps/api/test/support*.test.mjs apps/api/test/admin-support.test.mjs apps/admin/test/support.test.mjs apps/web/test/support-chat.test.mjs apps/web/test/support-assistant-ui.test.mjs",
+    "benchmark:chat": "node apps/api/scripts/benchmark-support-matcher.js"
   },
   "engines": {
     "node": ">=20"

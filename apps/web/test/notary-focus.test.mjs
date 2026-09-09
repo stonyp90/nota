@@ -29,6 +29,16 @@ const HTML_SRC = readFileSync(fileURLToPath(new URL('../public/index.html', impo
 // The console's live-feed poll is a jsdom timer that would hold the runner's
 // process open — close every window once the suite ends so it can exit.
 const DOMS = [];
+test('retained financing shows missing preparation and outstanding professional checks', async () => {
+  const retained = { id: 'prep-1', dateISO: todayISO(), serviceId: 'refinancement', montant: 2000, tier: 'standard', prefixe: 'G1R', courriel: 'c@x.ca', dossier: { adresse: 'Adresse déclarée' }, viaProposition: true };
+  const { doc } = await bootSignedIn(null, { retained: [retained] });
+  const brief = doc.querySelector('#notary-retained-list .nc-preparation');
+  assert.ok(brief);
+  assert.match(brief.textContent, /Personnes qui doivent signer/);
+  assert.match(brief.textContent, /instructions au notaire sont distinctes/);
+  assert.match(brief.textContent, /restent à vérifier/);
+  assert.doesNotMatch(brief.textContent, /Adresse déclarée/);
+});
 after(() => { for (const d of DOMS) { try { d.window.close(); } catch {} } });
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -56,7 +66,7 @@ async function boot() {
   win.eval(DOMAIN_SRC);
   const D = win.NotaDomain;
   const anchor = firstOfMonth(todayISO());
-  const seed = D.makeFixtures(anchor);
+  const seed = D.makeFixtures(todayISO());
   win.localStorage.setItem('nota.bids.v1', JSON.stringify(seed));
   win.localStorage.setItem('nota.bids.sig.v1', D.seedSignature());
   win.eval(APP_SRC);

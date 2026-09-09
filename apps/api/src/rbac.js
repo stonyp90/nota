@@ -24,6 +24,8 @@ const WILDCARD = '*';
 const PERMISSIONS = Object.freeze([
   'analytics:read', // dashboards / metrics
   'pii:read', // reveal customer personal data
+  'support:read', // read the shared customer-support inbox
+  'support:write', // reply in existing customer-support conversations
   'moderation:write', // moderate offers / notaries
   'settings:write', // global settings
   'users:read',

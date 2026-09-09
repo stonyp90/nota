@@ -111,17 +111,33 @@ function assertThreeArticles(root, tileSel) {
   assert.ok(!/commission|pourcentage|\d+\s*%(?!\s*du montant)/.test(txt.replace('100 %', '')), 'no share vocabulary: ' + txt);
 }
 
-test('both films explain the product immediately, with five concise scenes and one shared timeline', () => {
+test('both films explain the outcome in four scenes, keep Nota visible and offer a direct next step', () => {
   for (const film of ['client', 'notaire']) {
-    const scenes = [...doc.querySelectorAll('#ig-stage-' + film + ' .ig-scene')];
-    assert.equal(scenes.length, 5);
+    const stage = doc.querySelector('#ig-stage-' + film);
+    const scenes = [...stage.querySelectorAll('.ig-scene')];
+    assert.equal(scenes.length, 4);
     assert.match(scenes[0].textContent, /Nota/);
+    const masthead = stage.querySelector('.ig-masthead');
+    const wordmark = masthead && masthead.querySelector('.ig-wordmark');
+    assert.ok(wordmark && wordmark.querySelector('svg'), 'the persistent wordmark includes the Nota mark');
+    assert.match(wordmark.textContent, /Nota/);
+    assert.ok(!masthead.closest('.ig-scene'), 'the brand stays outside the changing scenes');
+    assert.equal(stage.querySelector('.ig-dollar, .ig-step'), null, 'each message stands on its own without dollar scenery or repeated step cards');
     for (const scene of scenes) {
       assert.ok(scene.querySelector('.ig-h'));
       assert.ok(scene.querySelector('.ig-sub'));
-      assert.ok(scene.querySelectorAll('.ig-step').length <= 3);
       assert.ok(!scene.hasAttribute('aria-hidden'), 'visible scene text stays accessible');
     }
+    for (const scene of [scenes[0], scenes.at(-1)]) {
+      const signature = scene.querySelector('.ig-signature');
+      assert.ok(signature && signature.querySelector('svg'), 'Nota opens and closes each film');
+      assert.match(signature.textContent, /Nota/);
+    }
+    const next = scenes.at(-1).querySelector('.ig-cta');
+    assert.ok(next && next.tagName === 'BUTTON', 'the last scene has a real next-step button');
+    assert.equal(next.getAttribute('type'), 'button');
+    assert.equal(next.dataset.igGoto, film === 'client' ? 'carnet' : 'notaires');
+    assert.ok(next.textContent.trim(), 'the next step has a readable label');
   }
   assert.match(css, /igBarAnim 20s/);
   assert.match(appSrc, /igRemaining = 20600/);

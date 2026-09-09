@@ -44,6 +44,7 @@ for (const page of pages) {
   for (const lang of ['fr', 'en']) writeFileSync(join(distDir, pagePath(page, lang)), renderPage(page, lang));
 }
 writeFileSync(join(distDir, 'domain.js'), readFileSync(domainSrc));
+writeFileSync(join(distDir, 'signing-domain.js'), readFileSync(join(dirname(domainSrc), 'signing.js')));
 
 // --- Content-hash the cacheable assets ------------------------------------
 // Every deploy overwrites app.js/styles.css/domain.js in place, so a browser
@@ -53,7 +54,7 @@ writeFileSync(join(distDir, 'domain.js'), readFileSync(domainSrc));
 // files be cached immutably forever. index.html (and sw.js) stay unhashed and
 // no-cache; they are the single source that points at the current hashes.
 const hash = (buf) => createHash('sha256').update(buf).digest('hex').slice(0, 10);
-const HASHED = ['app.js', 'styles.css', 'domain.js', 'i18n.js', 'landing.js', 'acquisition.js'];
+const HASHED = ['app.js', 'styles.css', 'domain.js', 'i18n.js', 'landing.js', 'acquisition.js', 'analytics.js', 'signature.js', 'signature.css', 'signing-domain.js'];
 const manifest = {}; // original name -> hashed name
 for (const name of HASHED) {
   const p = join(distDir, name);

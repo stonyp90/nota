@@ -374,7 +374,7 @@ test('AUCUNE adresse d’origine n’entre dans le journal public — pas même 
 test('la rétention d’un acte nomme le notaire qui s’engage', async () => {
   const { app, repo } = harness();
   await seedNotaire(repo);
-  await repo.put({ ...BID, id: 'b2', dateISO: '2026-09-25', status: domain.STATUS.OUVERTE, notaryId: null });
+  await repo.put({ ...BID, expiresOn: TODAY, id: 'b2', dateISO: '2026-09-25', status: domain.STATUS.OUVERTE, notaryId: null });
 
   const res = await app.handle({
     method: 'POST', path: '/notary/bids/accept', headers: { authorization: 'Bearer ' + jetonNotaire() },

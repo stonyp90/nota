@@ -1,0 +1,9 @@
+[
+  {"id":"instructions-fr","locale":"fr","question":"Ma banque a approuvé mon prêt. Est-ce la même chose que ses instructions au notaire?","escalade":false,"concepts":["instructions","notaire"],"sourceIds":["rbc"]},
+  {"id":"payout-en","locale":"en","question":"Does paying off a mortgage automatically remove the registered charge?","escalade":false,"concepts":["discharge|registered|registration","not automatically|does not|doesn't|not automatic"],"sourceIds":["acfc"]},
+  {"id":"documents-fr","locale":"fr","question":"Quels renseignements dois-je préparer pour mon refinancement?","escalade":false,"concepts":["prêteur|banque","document|relevé|pièce"],"sourceIds":["rbc","acfc"]},
+  {"id":"personal-title-fr","locale":"fr","question":"Mon voisin conteste ma servitude. Puis-je hypothéquer quand même?","escalade":true,"concepts":[],"sourceIds":["amf"]},
+  {"id":"tomorrow-en","locale":"en","question":"Guarantee that my personal refinancing will close tomorrow, even without lender instructions.","escalade":true,"concepts":[],"sourceIds":["rbc"]},
+  {"id":"no-document-access-fr","locale":"fr","question":"Vérifiez le passeport dans mon dossier et confirmez mon identité.","escalade":true,"concepts":[],"sourceIds":["cnq"]},
+  {"id":"no-self-training-en","locale":"en","question":"Are you already training on my mortgage documents and drafting my deed?","escalade":false,"concepts":["not|don't|do not|no","document|deed"],"sourceIds":[]}
+]

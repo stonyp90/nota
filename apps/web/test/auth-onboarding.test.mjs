@@ -1,7 +1,7 @@
 /**
  * LA PORTE D'ENTRÉE — s'inscrire et se connecter, et ce qui arrive bientôt.
  *
- * Décision du propriétaire (2026-09-06) : exposer Google, Facebook et LinkedIn
+ * Décision du propriétaire (2026-09-06) : exposer Google, Microsoft et LinkedIn
  * comme portes à venir. Le dépôt les avait RETIRÉES le 2026-08-28 (« No dead
  * social doors — they return the day OAuth is actually wired ») ; elles
  * reviennent, mais annoncées pour ce qu'elles sont.
@@ -82,9 +82,9 @@ test('les trois fournisseurs sont exposés, chacun nommé', async () => {
   const { doc } = await boot();
   $(doc, 'header-signup').click();
   const btns = socials(doc);
-  assert.equal(btns.length, 3, 'Google, Facebook, LinkedIn');
+  assert.equal(btns.length, 3, 'Google, Microsoft, LinkedIn');
   const fournisseurs = btns.map((b) => b.dataset.provider).sort();
-  assert.deepEqual(fournisseurs, ['facebook', 'google', 'linkedin']);
+  assert.deepEqual(fournisseurs, ['google', 'linkedin', 'microsoft']);
   btns.forEach((b) => {
     assert.ok(txt(b).trim().length, 'chaque bouton porte un libellé lisible');
     assert.ok(b.querySelector('svg'), 'et la marque du fournisseur');
@@ -129,7 +129,7 @@ test('un fournisseur à venir n’envoie RIEN sur le réseau', async () => {
   $(doc, 'header-signup').click();
   socials(doc).forEach((b) => b.click());
   await wait(30);
-  const auth = calls.filter((c) => /oauth|google|facebook|linkedin|session\/request/.test(c.url));
+  const auth = calls.filter((c) => !c.url.endsWith('/auth/oauth/providers') && /oauth|google|microsoft|linkedin|session\/request/.test(c.url));
   assert.deepEqual(auth, [], 'aucun appel : il n’y a rien au bout');
 });
 

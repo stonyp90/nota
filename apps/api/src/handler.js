@@ -2,6 +2,7 @@
 const { acquisition } = require('./acquisition');
 
 const domain = require('@nota/domain');
+const { analyticsContext } = require('./analytics-context');
 const prixConfig = require('./prix-nota-config.js');
 const cote = require('./cote');
 const { createBilling, attendCaution } = require('./billing');
@@ -108,22 +109,16 @@ function createApp(repo, opts = {}) {
   const SUPPORT_URL = String(
     opts.supportUrl || process.env.NOTA_BASE_URL || opts.siteUrl || process.env.NOTA_SITE_URL || ''
   ).replace(/\/+$/, '');
-  // The wire shape of one chat message — an allow-list, like publicBid().
-  const supportMessageView = (m) => ({ id: m.id, de: m.de, texte: m.texte, createdAt: m.createdAt });
-  // A thread is stored WITH its summary (status, last message, count) so the
-  // operator's inbox lists without opening a single log — the domain derives
-  // it, this layer only stamps it before every rewrite.
-  const supportSummarize = (thread) => {
-    const sm = domain.supportThreadSummary(thread);
-    // `escalade` voyage avec le résumé (ADR 0046) pour que la boîte de
-    // l'opérateur distingue d'un coup d'œil les fils que l'assistant a
-    // traités de ceux qui l'attendent, LUI.
-    return {
-      ...thread,
-      dernierAt: sm.dernierAt, dernierDe: sm.dernierDe, nb: sm.nb, statut: sm.statut,
-      escalade: sm.escalade, escaladeMotif: sm.escaladeMotif,
-    };
-  };
+  const supportConversations = require('./support-conversations').createSupportConversations({
+    repo, nowMs, newId, notifier, notifyFlushMs: opts.notifyFlushMs ?? (Number((opts.env || process.env).NOTA_SEND_FLUSH_MS) || 5000),
+  });
+  const supportMessageView = supportConversations.messageView;
+  const supportConversationState = supportConversations.state;
+  const supportSummarize = supportConversations.summarize;
+  const supportUpdate = supportConversations.update;
+  const supportWriteError = (result) => result === null
+    ? json(404, { errors: [{ code: 'introuvable', message: 'Conversation introuvable.' }] })
+    : json(409, { errors: [{ code: 'conversation_occupee', message: 'La conversation a changé pendant l’envoi. Réessayez votre message.' }] });
   // The retained-act chat is throttled per thread AND side: a runaway client
   // (or a stuck notary console) must not flood the other party's inbox. Same
   // fixed-window counter as the sign-in, failing OPEN.
@@ -218,6 +213,7 @@ function createApp(repo, opts = {}) {
     const stripe = createStripeAdapter({
       secretKey: process.env.STRIPE_SECRET_KEY,
       webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+      connectWebhookSecret: process.env.STRIPE_CONNECT_WEBHOOK_SECRET,
     });
     billingInstance = createBilling({
       repo,
@@ -274,8 +270,8 @@ function createApp(repo, opts = {}) {
   const FUNNEL_RL_WINDOW_SEC = opts.funnelRlWindowSec || 60;
   const FUNNEL_RL_MAX = opts.funnelRlMax || 120;
   // An offer is shown on the carnet unless its card authorization is still pending
-  // or was voided (pay-on-accept). Legacy bids (no paymentStatus) are always live.
-  const isLive = (b) => b.paymentStatus !== 'pending' && b.paymentStatus !== 'void';
+  // or was voided (pay-on-accept), and only while its offer deadline is valid.
+  const isLive = (b) => !domain.isOfferExpired(b, now()) && b.paymentStatus !== 'pending' && b.paymentStatus !== 'void';
 
   // Notifier is injected so tests pass a fake (no SES package, no network). In
   // production it is built LAZILY from a real SES adapter on first use, exactly
@@ -316,7 +312,7 @@ function createApp(repo, opts = {}) {
         if (typeof value !== 'function') return value;
         if (!cache.has(key)) {
           cache.set(key, (...args) => {
-            const p = Promise.resolve(value.apply(target, args)).catch(() => {});
+            const p = Promise.resolve(value.apply(target, args)).catch(() => ({ ok: false }));
             pendingSends.push(p);
             return p;
           });
@@ -432,8 +428,18 @@ function createApp(repo, opts = {}) {
       prixConfig.resolveGrille(repo, env).catch(() => undefined),
       annulationConfig().catch(() => null),
     ]);
+    let port;
+    try {
+      port = await assistantPort();
+    } catch {
+      // Secret resolution is part of assistant availability too. Route the
+      // configured-but-unavailable case through the same guarded fallback as
+      // a provider outage, so the visitor's question is saved and handed off.
+      // An intentionally absent port still preserves the human-only path.
+      port = { async answer() { throw new Error('assistant_unavailable'); } };
+    }
     return createSupportAssistant({
-      port: await assistantPort(),
+      port,
       operator: {
         // Le prénom de la personne qui reprend la main est une donnée
         // d'exploitation, jamais un littéral : sans lui, c'est la maison qui
@@ -522,7 +528,7 @@ function createApp(repo, opts = {}) {
     const { notaryId, existing, demoOpen, active } = gate;
     const label = (existing && existing.label) || email;
     const demoActivation =
-      demoOpen && !active
+      demoOpen && !active && !billingConfigured
         ? { status: 'active', chargesEnabled: true, connectAccountId: 'acct_demo_' + notaryId.slice(0, 12) }
         : {};
     // ADR 0033: retaining needs a name, a phone and an address (the client
@@ -802,6 +808,7 @@ function createApp(repo, opts = {}) {
       id: b.id,
       serviceId: b.serviceId,
       dateISO: b.dateISO,
+      expiresOn: b.expiresOn || null,
       montant: b.montant,
       tier: b.tier,
       premium: publicPremium(b),
@@ -1059,6 +1066,7 @@ function createApp(repo, opts = {}) {
       id: b.id,
       serviceId: b.serviceId,
       dateISO: b.dateISO,
+      expiresOn: b.expiresOn || null,
       montant: b.montant,
       tier: b.tier,
       premium: b.premium,
@@ -1350,6 +1358,7 @@ function createApp(repo, opts = {}) {
   }
 
   // The one answer every route gives about a bid the client withdrew.
+  const goneExpired = () => json(410, { errors: [{ code: 'offre_expiree', message: 'Cette offre a expiré. Publiez une nouvelle offre.' }] });
   const goneCancelled = () =>
     json(410, { errors: [{ code: 'offre_annulee', message: 'Cette offre a été annulée par le client.' }] });
 
@@ -1376,6 +1385,7 @@ function createApp(repo, opts = {}) {
   // La trace `acte_retenu` nomme celle qui a été franchie, pas seulement le
   // notaire qui se retrouve engagé.
   async function retainFor(bid, notaryId, extra = {}, qui) {
+    if (domain.isOfferExpired(bid, now())) return null;
     const profile = await repo.getNotary(notaryId);
     const updated = {
       ...bid,
@@ -1397,7 +1407,7 @@ function createApp(repo, opts = {}) {
     // notaires : rien n'y dépend du notaire, donc rien n'a besoin d'être figé à
     // SON engagement. (Le devis du CLIENT, lui, est bien figé — mais à
     // l'autorisation de sa carte, et sur l'offre : voir POST /bids.)
-    const retained = await repo.retain(updated, notaryId);
+    const retained = await repo.retain(updated, notaryId, now());
     if (!retained) return null;
     await appendAudit('acte_retenu', {
       bidId: retained.id,
@@ -1483,7 +1493,7 @@ function createApp(repo, opts = {}) {
   function corsHeaders() {
     return {
       'access-control-allow-origin': '*',
-      'access-control-allow-methods': 'GET,POST,OPTIONS',
+      'access-control-allow-methods': 'GET,POST,PATCH,OPTIONS',
       'access-control-allow-headers': 'content-type,authorization',
     };
   }
@@ -1552,6 +1562,37 @@ function createApp(repo, opts = {}) {
     }
   }
 
+  const signingRoutes = require('./signing-routes').createSigningRoutes({
+    repo, env, nowMs, newId, json, clientIp,
+    authenticate: request => verifyToken(bearer(request), nowMs()),
+  });
+  const financingAIRoutes = require('./financing-ai-routes').createFinancingAIRoutes({
+    repo, env, nowMs, newId, json, parseBody, port: opts.financingAIPort,
+    authenticate: request => requireScope(bearer(request), SCOPES.SESSION),
+    getSecret: name => secrets().get(name),
+    audit: (action, meta, owner) => appendAudit(action, meta, acteur(ACTEUR.NOTAIRE, owner)),
+  });
+  const oauth = opts.oauth || require('./oauth').createOAuth({ repo, env, now: nowMs });
+  const oauthRoutes = require('./oauth-routes').createOAuthRoutes({
+    oauth, repo, now: nowMs, clientIp,
+    notify: async ({ email, provider, language, link, ttlMinutes }) => {
+      const n = notifier();
+      if (!n || typeof n.onOAuthLinkRequested !== 'function') throw new Error('OAuth mail unavailable');
+      const sent = await n.onOAuthLinkRequested({ email, provider, emailLanguage: language, link, ttlMinutes });
+      if (sent?.sent === false || sent?.ok === false) throw new Error('OAuth mail unavailable');
+    },
+    grant: async (email, role, request) => {
+      // Reuse the existing session redemption, including notary eligibility,
+      // audit, language persistence and per-bid client authorization.
+      const cid = newId(), exp = nowMs() + CLIENT_CHALLENGE_TTL_MS;
+      const sub = role === 'notary' ? notaryIdForEmail(email) : clientIdForEmail(email);
+      const value = { challengeId: cid, expiresAt: exp, consumed: false, ttl: Math.floor(exp / 1000) + 60 };
+      if (role === 'notary') await repo.putNotaryLoginChallenge({ ...value, notaryId: sub, email });
+      else await repo.putClientLoginChallenge({ ...value, sujet: sub, courriel: email });
+      return handle({ ...request, method: 'POST', path: '/' + role + '/session/verify', body: { token: signChallengeToken(sub, cid, exp) } });
+    },
+  });
+
   async function handle(request) {
     const method = (request.method || 'GET').toUpperCase();
     // CloudFront routes /api/* to this Lambda so the site is single-origin.
@@ -1567,6 +1608,13 @@ function createApp(repo, opts = {}) {
     if (typeof request.body === 'string' && Buffer.byteLength(request.body) > MAX_BODY_BYTES) {
       return json(413, { errors: [{ code: 'corps_trop_grand', message: 'Le corps de la requête est trop volumineux.' }] });
     }
+
+    if (route.startsWith('/signing-beta/')) return signingRoutes(request, route, method, query);
+    if (route === '/notary/financing/preparation' || route === '/notary/financing/review') {
+      return financingAIRoutes(request, route, method, query);
+    }
+    const oauthResponse = await oauthRoutes(request, route, method);
+    if (oauthResponse) return oauthResponse;
 
     if (route.startsWith('/notary/calendar/outlook') || route === '/calendar/outlook/callback') {
       const cookie = 'nota_outlook_binding';
@@ -1755,6 +1803,7 @@ function createApp(repo, opts = {}) {
         propositions: [],
         demandes: [],
         createdAt: todayISO,
+        expiresOn: v.expiresOn,
         // DynamoDB TTL (epoch seconds), anchored on the SIGNING date — Law 25
         // retention + zero storage cost for stale bids. Never exposed publicly
         // (not in publicBid/notaryBid).
@@ -1835,7 +1884,7 @@ function createApp(repo, opts = {}) {
       }
 
       await recordStats(statsDeltasForOffer(bid));
-      await recordStats(statsDeltasForFunnel('publie', now())); // the funnel's « publié » step is counted HERE, never trusted from the client beacon
+      await recordStats(statsDeltasForFunnel('publie', now(), analyticsContext(request, payload.analytics))); // authoritative publication, with bounded arrival context
 
       // Await delivery before Lambda can freeze. A failed notification never
       // rejects a persisted lead; the scheduled pass retries idempotently.
@@ -2356,10 +2405,11 @@ function createApp(repo, opts = {}) {
         offres.push({
           id: bid.id,
           dateISO: bid.dateISO,
+          expiresOn: bid.expiresOn || null,
           serviceId: bid.serviceId,
           montant: bid.montant,
           status: bid.status,
-          clientToken: signToken(bid.id, nowMs() + CLIENT_TOKEN_TTL_MS, SCOPES.CLIENT),
+          clientToken: signToken(bid.id, nowMs() + CLIENT_TOKEN_TTL_MS, SCOPES.CLIENT, undefined, { verifiedAt: nowMs() }),
         });
       }
       offres.sort((a, b) => String(a.dateISO).localeCompare(String(b.dateISO)));
@@ -2440,7 +2490,7 @@ function createApp(repo, opts = {}) {
         });
         await recordStats(statsDeltasForNotaryOnboarding());
         // The funnel's last step is counted on the FIRST signup only.
-        await recordStats(statsDeltasForFunnel('notaire_inscrit', now()));
+        await recordStats(statsDeltasForFunnel('notaire_inscrit', now(), analyticsContext(request, payload.analytics)));
         created = true;
       } else if ((!existing.lienCNQ && lienCNQ) || (!existing.parrain && parrain)) {
         // An existing record only gains what it lacked — never a status
@@ -2496,8 +2546,8 @@ function createApp(repo, opts = {}) {
     // The web app reports one observable step at a time (`{ event }`); only
     // the domain's FUNNEL_EVENTS catalogue is ever counted, and anything else
     // is dropped with the SAME 204 — a beacon never learns what the catalogue
-    // holds. The two steps that cost money (an offer published, a notary
-    // signed up) are counted server-side on their own routes, never from here.
+    // holds. Verified publication and signup are counted server-side on
+    // their own routes, never from here.
     // Lightly throttled per IP: a page fires this on every step.
     if (route === '/events' && method === 'POST') {
       const ip = clientIp(request);
@@ -2515,7 +2565,9 @@ function createApp(repo, opts = {}) {
         payload = null;
       }
       const id = payload && typeof payload.event === 'string' ? payload.event : null;
-      if (domain.isFunnelEvent(id) && id !== 'publie' && id !== 'notaire_inscrit') await recordStats(statsDeltasForFunnel(id, now(), payload.acquisition));
+      // La provenance (#4) et les segments bornés se comptent ensemble, sur le
+      // même battement, sans jamais être joints entre eux.
+      if (domain.isClientFunnelEvent(id)) await recordStats(statsDeltasForFunnel(id, now(), analyticsContext(request, payload.context), payload.acquisition));
       // A 204 carries no body — bare CORS headers, like the preflight.
       return { statusCode: 204, headers: corsHeaders(), body: '' };
     }
@@ -3036,7 +3088,7 @@ function createApp(repo, opts = {}) {
       const exp = nowMs() + NOTARY_TOKEN_TTL_MS;
       return json(200, {
         // Full-console token: sent in the Authorization header, never in a URL.
-        token: signToken(gate.notaryId, exp, SCOPES.SESSION),
+        token: signToken(gate.notaryId, exp, SCOPES.SESSION, undefined, { verifiedAt: nowMs() }),
         // Read-only calendar token, safe to embed in the webcal URL. It cannot
         // accept a bid or read a dossier.
         feedToken: signToken(gate.notaryId, exp, SCOPES.FEED),
@@ -3421,6 +3473,7 @@ function createApp(repo, opts = {}) {
       const bid = await repo.get(payload.id, payload.dateISO);
       if (!bid) return json(404, { errors: [{ code: 'introuvable', message: 'Offre introuvable.' }] });
       if (bid.status === domain.STATUS.ANNULEE) return goneCancelled();
+      if (domain.isOfferExpired(bid, now())) return goneExpired();
 
       // PAID AT SIGNING (ADR 0015): accepting retains — it never charges.
       // The client's hold stays untouched; every payment (capture + transfer,
@@ -3493,6 +3546,7 @@ function createApp(repo, opts = {}) {
 
       const bid = await repo.get(payload.id, payload.dateISO);
       if (!bid) return json(404, { errors: [{ code: 'introuvable', message: 'Offre introuvable.' }] });
+      if (domain.isOfferExpired(bid, now())) return goneExpired();
       if (bid.status === domain.STATUS.RETENUE) {
         return json(409, { errors: [{ code: 'deja_retenue', message: 'Cette offre est déjà retenue.' }] });
       }
@@ -3578,6 +3632,7 @@ function createApp(repo, opts = {}) {
       const bid = await repo.get(payload.id, payload.dateISO);
       if (!bid) return json(404, { errors: [{ code: 'introuvable', message: 'Offre introuvable.' }] });
       if (bid.status === domain.STATUS.ANNULEE) return goneCancelled();
+      if (domain.isOfferExpired(bid, now())) return goneExpired();
       if (bid.status === domain.STATUS.RETENUE && bid.notaryId !== notaryId) {
         return json(409, { errors: [{ code: 'deja_retenue', message: 'Cette offre est déjà retenue.' }] });
       }
@@ -3735,6 +3790,7 @@ function createApp(repo, opts = {}) {
       const bid = await repo.get(payload.id, payload.dateISO);
       if (!bid) return json(404, { errors: [{ code: 'introuvable', message: 'Offre introuvable.' }] });
       if (bid.status === domain.STATUS.ANNULEE) return goneCancelled();
+      if (domain.isOfferExpired(bid, now())) return goneExpired();
       if (!billingConfigured) {
         return json(503, { errors: [{ code: 'paiement_indisponible', message: 'Le paiement est momentanément indisponible. Réessayez dans quelques minutes — rien n’a été débité.' }] });
       }
@@ -3850,6 +3906,7 @@ function createApp(repo, opts = {}) {
       const bid = await repo.get(payload.id, payload.dateISO);
       if (!bid) return json(404, { errors: [{ code: 'introuvable', message: 'Offre introuvable.' }] });
       if (bid.status === domain.STATUS.ANNULEE) return goneCancelled();
+      if (domain.isOfferExpired(bid, now())) return goneExpired();
       const target = propositionsOf(bid).find((p) => p.id === payload.propositionId);
       if (!target) return json(404, { errors: [{ code: 'proposition_introuvable', message: 'Proposition introuvable.' }] });
       if (target.status !== PROPOSITION.EN_ATTENTE) {
@@ -4140,7 +4197,6 @@ function createApp(repo, opts = {}) {
       };
       await rememberLanguage(msg.courriel, request);
       const kn = notifier();
-      if (kn) Promise.resolve(kn.onContactMessage(msg)).catch(() => {});
       // Durable (2026-09-04): a « Nous joindre » message is a support thread
       // too — same inbox, same reply path — never only a mail. The sender gets
       // the thread's widget token back, so the answer can land live for them.
@@ -4156,6 +4212,7 @@ function createApp(repo, opts = {}) {
       } catch {
         suivi = {};
       }
+      if (kn) Promise.resolve(kn.onContactMessage({ ...msg, ...(suivi.threadId ? { threadId: suivi.threadId } : {}) })).catch(() => {});
       return json(202, { recu: true, ...suivi });
     }
 
@@ -4188,6 +4245,29 @@ function createApp(repo, opts = {}) {
       }
       const v = domain.validateSupportMessage(payload);
       if (!v.ok) return json(422, { errors: v.errors });
+      if (payload.messageId !== undefined && !supportConversations.validMessageId(payload.messageId)) {
+        return json(422, { errors: [{ code: 'message_id_invalide', message: 'L’identifiant du message n’est pas valide.' }] });
+      }
+      if (payload.requestKey !== undefined && (typeof payload.requestKey !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(payload.requestKey) || !payload.messageId)) {
+        return json(422, { errors: [{ code: 'request_key_invalide', message: 'La clé de reprise du message n’est pas valide.' }] });
+      }
+      const locale = String(payload.locale || '').slice(0, 2).toLowerCase() === 'en' ? 'en' : 'fr';
+      const requestHash = require('node:crypto').createHash('sha256').update(JSON.stringify([v.texte, v.courriel, locale, payload.messageId || null])).digest('hex');
+      const pendingMessage = () => json(409, { errors: [{ code: 'message_en_cours', message: 'Votre message est en cours d’envoi. Réessayez dans un instant.' }] });
+      const requestConflict = () => json(409, { errors: [{ code: 'message_id_conflit', message: 'Cet identifiant appartient déjà à un autre message.' }] });
+      async function acknowledge(current, sentMessage, duplicate) {
+        if (sentMessage.notifyOperator) {
+          const replyUrl = SUPPORT_URL ? SUPPORT_URL + '/#reponse=' + encodeURIComponent(signToken(current.id, nowMs() + SUPPORT_OP_TTL_MS, SCOPES.SUPPORT_OP)) : null;
+          const delivered = await supportConversations.notifyVisitor({ thread: current, messageId: sentMessage.id, replyUrl });
+          current = delivered.thread;
+        }
+        const answer = sentMessage.assistantReplyId && current.messages.find(item => item.id === sentMessage.assistantReplyId);
+        return json(201, {
+          threadId: current.id, token: signToken(current.id, nowMs() + SUPPORT_TOKEN_TTL_MS, SCOPES.SUPPORT),
+          message: supportMessageView(sentMessage), ...(answer ? { reponse: supportMessageView(answer) } : {}),
+          duplicate, ...supportConversationState(current),
+        });
+      }
       // A token continues its thread; none starts one. A stale or tampered
       // token is refused (the widget clears it and starts fresh) rather than
       // silently splitting the conversation.
@@ -4198,13 +4278,48 @@ function createApp(repo, opts = {}) {
         if (!id) return json(401, { errors: [{ code: 'non_autorise', message: 'Jeton invalide ou expiré.' }] });
         thread = await repo.getSupportThread(id);
         if (!thread) return json(404, { errors: [{ code: 'introuvable', message: 'Conversation introuvable.' }] });
+      } else if (payload.requestKey) {
+        // This random 256-bit retry credential is never stored or returned.
+        // Its digest chooses the same record after an uncertain first response.
+        const id = require('node:crypto').createHash('sha256').update(payload.requestKey).digest('hex').slice(0, 32);
+        thread = await repo.getSupportThread(id);
+        if (!thread) {
+          const fresh = { id, courriel: v.courriel, createdAt: now(), messages: [], initialRequestHash: requestHash };
+          const saved = await repo.putSupportThread(supportSummarize(fresh), { expectedRevision: 0 });
+          thread = saved || await repo.getSupportThread(id);
+        }
+        if (!thread) return pendingMessage();
+        if (thread.initialRequestHash !== requestHash) return requestConflict();
       }
-      const message = { id: newId(), de: domain.SUPPORT_FROM.VISITEUR, texte: v.texte, createdAt: new Date(nowMs()).toISOString() };
+      const message = { id: payload.messageId || newId(), de: domain.SUPPORT_FROM.VISITEUR, texte: v.texte, createdAt: new Date(nowMs()).toISOString(), requestHash };
       if (!thread) thread = { id: newId(), courriel: null, createdAt: now(), messages: [] };
+      let requestClaim = null;
+      if (payload.messageId) {
+        const existing = (thread.messages || []).find(item => item.id === message.id);
+        if (existing) return existing.de === domain.SUPPORT_FROM.VISITEUR && existing.texte === message.texte && (!existing.requestHash || existing.requestHash === requestHash)
+          ? acknowledge(thread, existing, true) : requestConflict();
+        requestClaim = newId();
+        let conflict = false;
+        thread = await supportUpdate(thread, current => {
+          const sent = (current.messages || []).find(item => item.id === message.id);
+          if (sent) return current;
+          const pending = (current.pendingMessages || []).find(item => item.id === message.id);
+          if (pending && pending.requestHash !== requestHash) { conflict = true; return current; }
+          if (pending && pending.leaseUntil > nowMs()) return current;
+          return { ...current, pendingMessages: [
+            ...(current.pendingMessages || []).filter(item => item.id !== message.id && item.leaseUntil > nowMs()),
+            { id: message.id, requestHash, claimId: requestClaim, leaseUntil: nowMs() + 30000 },
+          ] };
+        });
+        if (!thread) return supportWriteError(thread);
+        if (conflict) return requestConflict();
+        const sent = (thread.messages || []).find(item => item.id === message.id);
+        if (sent) return sent.de === message.de && sent.requestHash === requestHash ? acknowledge(thread, sent, true) : requestConflict();
+        if (!(thread.pendingMessages || []).some(item => item.id === message.id && item.claimId === requestClaim)) return pendingMessage();
+      }
       if (v.courriel) thread.courriel = v.courriel;
       await rememberLanguage(thread.courriel, request);
       const historique = [...(thread.messages || [])];
-      thread.messages = [...historique, message];
 
       // --- L'assistant répond d'abord (ADR 0046) ---------------------------
       // Ce que le propriétaire a demandé : que les questions qu'on sait
@@ -4212,15 +4327,17 @@ function createApp(repo, opts = {}) {
       // courriel. L'assistant est donc SYNCHRONE — le visiteur lit la réponse
       // dans la même requête — et il ne peut pas jeter : tout ce qui n'est pas
       // une réponse propre revient en escalade (support-assistant.js).
-      const assistant = await supportAssistant();
-      const reponse = await assistant.answer({
+      const previousState = supportConversationState(thread);
+      const humanConversation = previousState.escalade || previousState.humain;
+      const assistant = humanConversation ? null : await supportAssistant();
+      const reponse = assistant ? await assistant.answer({
         question: v.texte,
         historique,
-        locale: String(payload.locale || '').slice(0, 2).toLowerCase() === 'en' ? 'en' : 'fr',
-      });
+        locale,
+      }) : { texte: null, escalade: previousState.escalade, motif: thread.escaladeMotif || null };
       // Sans assistant configuré, `texte` est nul et le fil reste muet : la
       // messagerie se comporte exactement comme avant l'ADR 0046.
-      const reply = reponse.texte
+      const preparedReply = reponse.texte
         ? {
             id: newId(),
             de: reponse.de,
@@ -4229,21 +4346,33 @@ function createApp(repo, opts = {}) {
             ...(reponse.niveau ? { niveau: reponse.niveau } : {}),
           }
         : null;
-      if (reply) thread.messages = [...thread.messages, reply];
-      if (reponse.escalade && assistant.enabled) {
-        // L'escalade est portée par le FIL, pas par le message : c'est elle
-        // qui garde le fil dans « à répondre » tant qu'un humain n'a pas
-        // parlé, quoi que l'assistant ait écrit entre-temps.
-        thread.escaladeLe = reply ? reply.createdAt : message.createdAt;
-        thread.escaladeMotif = reponse.motif;
-      } else if (reply && !thread.escaladeLe) {
-        // Une réponse propre CLÔT l'escalade précédente : le fil ne doit pas
-        // rester marqué « attend une personne » après une question suivante
-        // que l'assistant a su traiter.
-        thread.escaladeLe = null;
-        thread.escaladeMotif = null;
-      }
-      await repo.putSupportThread(supportSummarize(thread));
+      thread = await supportUpdate(thread, (current) => {
+        // An SDK retry can report a condition failure after the first write
+        // committed but its response was lost. Recognize our own message id.
+        if ((current.messages || []).some((item) => item.id === message.id)) return current;
+        if (requestClaim && !(current.pendingMessages || []).some(item => item.id === message.id && item.claimId === requestClaim)) return current;
+        const state = supportConversationState(current);
+        // A person or handoff may have arrived during the model request. Keep
+        // that winning state and visitor question, and discard the late bot reply.
+        const answer = state.humain || state.escalade ? null : preparedReply;
+        const notifyOperator = state.humain || state.escalade || reponse.escalade || !assistant || !assistant.enabled || String(env.NOTA_ASSISTANT_COPY_ALL || '') === '1';
+        const next = {
+          ...current,
+          closLe: null,
+          ...(v.courriel ? { courriel: v.courriel } : {}),
+          messages: [...(current.messages || []), { ...message, notifyOperator, ...(answer ? { assistantReplyId: answer.id } : {}) }, ...(answer ? [answer] : [])],
+          ...(requestClaim ? { pendingMessages: (current.pendingMessages || []).filter(item => item.id !== message.id) } : {}),
+        };
+        if (answer && reponse.escalade && assistant && assistant.enabled) {
+          next.escaladeLe = answer.createdAt;
+          next.escaladeMotif = reponse.motif;
+        }
+        return next;
+      });
+      if (!thread) return supportWriteError(thread);
+      const savedMessage = thread.messages.find(item => item.id === message.id);
+      if (!savedMessage) return pendingMessage();
+      const reply = preparedReply && thread.messages.some((item) => item.id === preparedReply.id) ? preparedReply : null;
 
       // Ce que l'assistant vient de faire, compté (ADR 0046). Sans cela, la
       // seule chose visible de lui serait ce qu'il n'a PAS su traiter — et les
@@ -4260,44 +4389,26 @@ function createApp(repo, opts = {}) {
         );
       }
 
-      // Le courriel ne part QUE sur escalade — c'est tout l'intérêt de
-      // l'ADR 0046 : la boîte de l'opérateur cesse de recevoir les questions
-      // dont la fiche de faits a la réponse. `NOTA_ASSISTANT_COPY_ALL` rend
-      // l'ancien comportement (une copie de chaque question) à qui veut lire
-      // par-dessus l'épaule de l'assistant.
-      const sn = notifier();
-      const copieTout = String(env.NOTA_ASSISTANT_COPY_ALL || '') === '1';
-      // Sans assistant, `reponse.escalade` est vrai mais rien n'a ESCALADÉ :
-      // aucune machine n'a examiné la question. L'alerte doit alors rester
-      // celle d'avant l'ADR 0046 — « nouvelle question », pas « une question
-      // pour vous », qui promettrait un tri qui n'a pas eu lieu.
-      const escalade = reponse.escalade && assistant.enabled;
-      if (sn && typeof sn.onSupportMessage === 'function' && (escalade || !assistant.enabled || copieTout)) {
-        const replyUrl = SUPPORT_URL
-          ? SUPPORT_URL + '/#reponse=' + encodeURIComponent(signToken(thread.id, nowMs() + SUPPORT_OP_TTL_MS, SCOPES.SUPPORT_OP))
-          : null;
-        Promise.resolve(
-          sn.onSupportMessage({
-            message,
-            courriel: thread.courriel,
-            replyUrl,
-            escalade,
-            motif: escalade ? reponse.motif : null,
-            // Le fil entier part avec l'alerte : le propriétaire doit pouvoir
-            // répondre depuis son courriel sans ouvrir quoi que ce soit.
-            historique: thread.messages.map(supportMessageView),
-          })
-        ).catch(() => {});
-      }
+      return acknowledge(thread, savedMessage, false);
+    }
 
-      return json(201, {
-        threadId: thread.id,
-        token: signToken(thread.id, nowMs() + SUPPORT_TOKEN_TTL_MS, SCOPES.SUPPORT),
-        message: supportMessageView(message),
-        // La réponse voyage dans la MÊME réponse HTTP : le widget l'affiche
-        // sans attendre son prochain sondage.
-        ...(reply ? { reponse: supportMessageView(reply), escalade: reponse.escalade } : {}),
-      });
+    // Saving an offline reply address must not require another chat message.
+    // Only the visitor token can change it; operator links are read/reply only.
+    if (route === '/support/thread' && method === 'PATCH') {
+      const { payload, error } = parseBody(request);
+      if (error) return error;
+      const id = requireScope(bearer(request), SCOPES.SUPPORT);
+      if (!id) return json(401, { errors: [{ code: 'non_autorise', message: 'Jeton invalide ou expiré.' }] });
+      if (!domain.isEmail(payload.courriel)) {
+        return json(422, { errors: [{ code: 'courriel_invalide', message: 'Le courriel n’est pas valide.' }] });
+      }
+      const courriel = payload.courriel.trim().toLowerCase();
+      let thread = await repo.getSupportThread(id);
+      if (!thread) return json(404, { errors: [{ code: 'introuvable', message: 'Conversation introuvable.' }] });
+      thread = await supportUpdate(thread, (current) => current.courriel === courriel ? current : { ...current, courriel });
+      if (!thread) return supportWriteError(thread);
+      await rememberLanguage(courriel, request);
+      return json(200, { courriel, ...supportConversationState(thread) });
     }
 
     // The widget polls here while open; the operator's reply box reads the
@@ -4308,7 +4419,12 @@ function createApp(repo, opts = {}) {
       if (!id) return json(401, { errors: [{ code: 'non_autorise', message: 'Jeton invalide ou expiré.' }] });
       const thread = await repo.getSupportThread(id);
       if (!thread) return json(404, { errors: [{ code: 'introuvable', message: 'Conversation introuvable.' }] });
-      return json(200, { messages: (thread.messages || []).map(supportMessageView) });
+      return json(200, {
+        threadId: thread.id,
+        messages: (thread.messages || []).map(supportMessageView),
+        ...(requireScope(raw, SCOPES.SUPPORT) ? { courriel: thread.courriel || null } : {}),
+        ...supportConversationState(thread),
+      });
     }
 
     // The operator answers through the emailed link's SUPPORT_OP token — a
@@ -4320,23 +4436,9 @@ function createApp(repo, opts = {}) {
       if (error) return error;
       const id = requireScope(bearer(request) || payload.token, SCOPES.SUPPORT_OP);
       if (!id) return json(401, { errors: [{ code: 'non_autorise', message: 'Jeton invalide ou expiré.' }] });
-      const thread = await repo.getSupportThread(id);
-      if (!thread) return json(404, { errors: [{ code: 'introuvable', message: 'Conversation introuvable.' }] });
-      const v = domain.validateSupportMessage({ texte: payload.texte });
-      if (!v.ok) return json(422, { errors: v.errors });
-      const message = { id: newId(), de: domain.SUPPORT_FROM.NOTA, texte: v.texte, createdAt: new Date(nowMs()).toISOString() };
-      thread.messages = [...(thread.messages || []), message];
-      // A real operator response resolves the handoff. Automated assistant
-      // messages must never do this on their own; the visitor may ask a second
-      // question while the original one is still waiting for a person.
-      thread.escaladeLe = null;
-      thread.escaladeMotif = null;
-      await repo.putSupportThread(supportSummarize(thread));
-      const rn = notifier();
-      if (rn && typeof rn.onSupportReply === 'function' && thread.courriel) {
-        Promise.resolve(rn.onSupportReply({ message, courriel: thread.courriel })).catch(() => {});
-      }
-      return json(200, { message: supportMessageView(message) });
+      const result = await supportConversations.reply({ threadId: id, texte: payload.texte, messageId: payload.messageId });
+      if (!result.ok) return json(result.status, { errors: result.errors });
+      return json(200, { message: result.message, duplicate: result.duplicate });
     }
 
     if (route === '/notary/bids/decline' && method === 'POST') {
@@ -4369,6 +4471,7 @@ function createApp(repo, opts = {}) {
       const bid = await repo.get(payload.id, payload.dateISO);
       if (!bid) return json(404, { errors: [{ code: 'introuvable', message: 'Offre introuvable.' }] });
       if (bid.status === domain.STATUS.ANNULEE) return goneCancelled();
+      if (domain.isOfferExpired(bid, now())) return goneExpired();
       if (bid.notaryId !== notaryId) {
         return json(403, { errors: [{ code: 'interdit', message: 'Conversation réservée au notaire qui a retenu l’offre.' }] });
       }
@@ -4396,6 +4499,7 @@ function createApp(repo, opts = {}) {
       const bid = await repo.get(payload.id, payload.dateISO);
       if (!bid) return json(404, { errors: [{ code: 'introuvable', message: 'Offre introuvable.' }] });
       if (bid.status === domain.STATUS.ANNULEE) return goneCancelled();
+      if (domain.isOfferExpired(bid, now())) return goneExpired();
       const v = domain.validateChatMessage({ bid, de: domain.CHAT_FROM.CLIENT, texte: payload.texte });
       if (!v.ok) return json(422, { errors: v.errors });
       if (await chatOverLimit(bid.id + ':client')) return tropDeMessages();
@@ -4533,6 +4637,7 @@ function createApp(repo, opts = {}) {
       const bid = await repo.get(payload.id, payload.dateISO);
       if (!bid) return json(404, { errors: [{ code: 'introuvable', message: 'Offre introuvable.' }] });
       if (bid.status === domain.STATUS.ANNULEE) return goneCancelled();
+      if (domain.isOfferExpired(bid, now())) return goneExpired();
       if (bid.status === domain.STATUS.RETENUE && bid.notaryId !== notaryId) {
         return json(403, { errors: [{ code: 'interdit', message: 'Seul le notaire qui a retenu l’offre peut se désister.' }] });
       }

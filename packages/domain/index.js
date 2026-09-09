@@ -477,7 +477,7 @@
   function certificatLocalisationCriterion() {
     return {
       id: 'certificat_localisation', type: 'choice', optional: true, groupe: 'immeuble', label: 'Certificat de localisation',
-      aide: 'La plupart des prêteurs exigent un certificat de moins de 10 ans, à jour si des travaux ont été faits depuis. Un certificat périmé ou absent retarde souvent le dossier.',
+      aide: 'Les exigences varient selon le prêteur et les changements à l’immeuble. Le notaire vérifie si le certificat convient ou si une autre démarche est nécessaire.',
       options: [
         { id: 'a_jour', label: 'À jour', add: 0, poids: 0 },
         { id: 'inconnu', label: 'Je ne sais pas', add: 0, poids: 1 },
@@ -544,6 +544,12 @@
     return ids.map((id) => ({ id, ...DOCUMENTS[id] }));
   }
 
+  const FINANCING_INTAKE_FIELDS = [
+    {"id": "parties_signature", "label": "Personnes qui doivent signer", "aide": "Noms des propriétaires et des emprunteurs, situation conjugale et disponibilités. Signalez une procuration ou une personne absente; le notaire confirme qui doit intervenir."},
+    {"id": "contact_preteur", "label": "Personne-ressource chez le prêteur", "aide": "Nom et coordonnées professionnelles de votre conseiller. Indiquez si les instructions ont été envoyées au notaire; une approbation de prêt ne les remplace pas."},
+    {"id": "changements_immeuble", "label": "Changements à l’immeuble", "aide": "Travaux, agrandissement, piscine, occupation ou autre changement depuis le certificat de localisation. Sinon, inscrivez « aucun »; si vous ne savez pas, dites-le."},
+  ];
+
   const SERVICES = [
     {
       id: 'refinancement',
@@ -600,6 +606,8 @@
         // `preteur` (la question obligatoire du carnet), répondu dans __pricing.
         { id: 'adresse', label: 'Adresse de l’immeuble', aide: 'Adresse civique complète de la propriété refinancée.' },
         { id: 'date_echeance_taux', label: 'Échéance du taux', aide: 'La date avant laquelle le taux offert doit être signé, si connue.' },
+        ...FINANCING_INTAKE_FIELDS,
+        {"id": "dettes_garanties", "label": "Prêts et marges garantis par l’immeuble", "aide": "Nommez les prêteurs et les prêts ou marges à rembourser, même si une marge affiche un solde nul. Ne saisissez aucun numéro de compte; le notaire obtient les relevés officiels de remboursement."},
       ],
     },
     {
@@ -658,6 +666,7 @@
       champs: [
         { id: 'adresse', label: 'Adresse de l’immeuble', aide: 'Adresse civique complète de la propriété financée.' },
         { id: 'date_echeance_taux', label: 'Échéance du taux', aide: 'La date avant laquelle le taux offert doit être signé, si connue.' },
+        ...FINANCING_INTAKE_FIELDS,
       ],
     },
   ];
@@ -1133,6 +1142,20 @@
   // one by withdrawal — every market surface treats both as gone. A bid with no
   // status at all (older records) counts as open, as it always has.
   const isOpenBid = (b) => !!b && b.status !== STATUS.RETENUE && b.status !== STATUS.ANNULEE;
+
+  // Last valid civil day, inclusive. Retained acts remain accessible after
+  // this deadline; legacy open offers fail closed instead of being renewed.
+  const OFFER_VALIDITY_DAYS = 7;
+  function offerExpirationDate(createdISO, signingISO) {
+    if (!isISODate(createdISO) || !isISODate(signingISO) || signingISO < createdISO) return null;
+    const limit = addDays(createdISO, OFFER_VALIDITY_DAYS);
+    return signingISO < limit ? signingISO : limit;
+  }
+  function isOfferExpired(bid, todayISO) {
+    if (!bid || bid.status === STATUS.RETENUE || bid.status === STATUS.ANNULEE) return false;
+    return !isISODate(todayISO) || !isISODate(bid.expiresOn)
+      || !isISODate(bid.dateISO) || bid.expiresOn < todayISO || bid.dateISO < todayISO;
+  }
 
   // --- Dates -----------------------------------------------------------------
   // State stores ISO YYYY-MM-DD strings; parse at UTC midnight so day math is
@@ -1676,7 +1699,7 @@
   // (« le document confondu avec la démarche »), et la valeur d'un prêt avec la
   // date d'une signature identifie une transaction.
   const BID_IDENTIFYING_FIELDS = Object.freeze([
-    'nom', 'courriel', 'telephone', 'dossier', 'pricing', 'parrain', 'messages',
+    'nom', 'courriel', 'telephone', 'dossier', 'pricing', 'parrain', 'messages', 'financingAnalysis',
   ]);
 
   // L'offre telle qu'elle survit à un effacement. Ce qui reste ne nomme
@@ -1777,6 +1800,7 @@
       premium,
       // The dynamic floor the offer was validated against (== the flat base when
       // no pricing criteria were answered).
+      expiresOn: offerExpirationDate(input.todayISO, input.dateISO),
       prixDepart: base,
       basePrice: base,
       montant: montantValide ? montant : null,
@@ -2285,8 +2309,74 @@
   // barème d'annulation ni du prix de Nota lui-même au-delà de la grille
   // publique — ces deux-là vivent dans la couche API (frontière de l'ADR
   // 0008), qui complète la fiche avant de la donner au modèle.
+  // Source-backed preparation knowledge; never a file-specific legal opinion.
+  const FINANCING_KNOWLEDGE = {
+    "version": "2026-09-09.1",
+    "reviewedOn": "2026-09-09",
+    "scope": "Préparation générale au Québec; les instructions propres au dossier et le jugement du notaire priment.",
+    "sources": [
+      {
+        "id": "rbc",
+        "url": "https://www.rbcroyalbank.com/fr/formulesjuridiques/qc-residential.html"
+      },
+      {
+        "id": "acfc",
+        "url": "https://www.canada.ca/fr/agence-consommation-matiere-financiere/services/hypotheques/quittance-hypothecaire.html"
+      },
+      {
+        "id": "amf",
+        "url": "https://lautorite.qc.ca/en/general-public/insurance/home-insurance/title-insurance"
+      },
+      {
+        "id": "cnq",
+        "url": "https://www.cnq.org/votre-notaire/un-professionnel-numerique/"
+      }
+    ],
+    "facts": [
+      {
+        "id": "instructions",
+        "sourceIds": [
+          "rbc"
+        ],
+        "texte": "La lettre d’engagement du client et les instructions au notaire sont distinctes. Le notaire doit recevoir et vérifier le mandat et les conditions du prêteur. Les formulaires et exigences varient selon le prêteur."
+      },
+      {
+        "id": "remboursement",
+        "sourceIds": [
+          "acfc",
+          "rbc"
+        ],
+        "texte": "Un relevé hypothécaire du client ne remplace pas un relevé officiel de remboursement. Le remboursement ne radie pas automatiquement l’hypothèque; les autres produits garantis, dont les marges de crédit, doivent être examinés avec le notaire et le prêteur."
+      },
+      {
+        "id": "titres",
+        "sourceIds": [
+          "rbc",
+          "amf"
+        ],
+        "texte": "Le notaire examine les titres et les sûretés et les exigences concernant le certificat de localisation ou l’assurance titres. Une assurance titres ne constitue pas une correction automatique de tous les problèmes."
+      },
+      {
+        "id": "signature",
+        "sourceIds": [
+          "cnq",
+          "rbc"
+        ],
+        "texte": "Le notaire évalue les besoins juridiques, vérifie les personnes qui interviennent et explique l’acte avant la signature. Le mandat comporte aussi les démarches de publication et les conditions de déboursement et de rapport au prêteur."
+      }
+    ],
+    "operatingPolicy": [
+      "Nota peut expliquer les pièces à préparer et les étapes générales; une situation personnelle ou un document juridique doit être examiné par le notaire.",
+      "Un dossier coché ou un nom de fichier ne prouve ni réception, ni lisibilité, ni validité, ni disponibilité des fonds. Ne jamais déclarer un dossier prêt à signer.",
+      "Aucun délai universel de dix jours et aucun raccourcissement garanti. Distinguer la préparation du client, le travail du notaire et les délais du prêteur et du registre.",
+      "L’assistant de soutien ne lit pas les pièces du dossier et ne prépare pas encore les actes. Ne jamais prétendre avoir vérifié des documents, demandé des fonds ou entraîné un modèle.",
+      "Les renseignements du dossier ne sont pas des exemples d’entraînement. Les évaluations utilisent des cas synthétiques; les réponses du modèle ne constituent pas une vérité validée."
+    ]
+  };
+
   function supportFacts({ grille, bids } = {}) {
     return {
+      financement: FINANCING_KNOWLEDGE,
       services: SERVICES.map((svc) => {
         const annonce = prixAnnonce(svc.id, grille);
         return {
@@ -2305,6 +2395,7 @@
             label: c.label,
             requis: !!c.required,
           })),
+          champs: svc.champs,
           documents: (svc.documents || []).map((d) => ({ id: d.id, nom: d.nom, aide: d.aide || null })),
         };
       }),
@@ -2373,23 +2464,57 @@
     },
   ]);
 
-  // Les questions d'amorce du widget. Elles ne sont pas décoratives : la
-  // messagerie s'ouvrait sur un vide de 96 px et une promesse de délai que
-  // personne ne tenait. Ces quatre lignes remplissent ce vide par ce que
-  // l'assistant sait VRAIMENT répondre — une par niveau, plus la question que
-  // tout le monde pose en premier. Données, bilingues, une seule liste pour
-  // les deux langues.
+  // Prepared discussion paths: the UI offers the questions and the assistant
+  // uses the same coverage guide. Operational facts remain in the API policy.
   const SUPPORT_QUESTIONS_SUGGEREES = Object.freeze([
-    { id: 'prix', niveau: 2, fr: 'Combien ça coûte ?', en: 'How much does it cost?' },
-    { id: 'fonctionnement', niveau: 1, fr: 'Comment ça marche ?', en: 'How does it work?' },
-    { id: 'documents', niveau: 2, fr: 'Quels documents me faut-il ?', en: 'Which documents do I need?' },
-    { id: 'annulation', niveau: 3, fr: 'Et si j’annule ?', en: 'What if I cancel?' },
-  ]);
+    { id: 'prix', niveau: 2, fr: 'Combien ça coûte ?', en: 'How much does it cost?', guide: 'Demander le service et la date si absents. Utiliser uniquement les prix de la fiche; distinguer le total annoncé, les taxes et les débours. Ne pas inventer de devis personnalisé.' },
+    { id: 'fonctionnement', niveau: 1, fr: 'Comment ça marche ?', en: 'How does it work?', guide: 'Expliquer choisir le service et la date, publier, attendre la retenue par un notaire, préparer le dossier et signer. Une publication ne confirme pas un rendez-vous.' },
+    { id: 'documents', niveau: 2, fr: 'Quels documents me faut-il ?', en: 'Which documents do I need?', guide: 'Demander le service; reprendre sa liste de documents dans la fiche. Le notaire confirme les pièces nécessaires au dossier. Ne demander aucun document dans le clavardage de soutien.' },
+    { id: 'annulation', niveau: 3, fr: 'Et si j’annule ?', en: 'What if I cancel?', guide: 'Distinguer demande non retenue, retenue et acte signé. Expliquer la politique en vigueur et les réclamations justifiées, sans calculer une indemnité personnelle ni prétendre annuler.' },
+    { id: 'services', niveau: 1, fr: 'Quels actes et secteurs sont offerts ?', en: 'Which services and areas are covered?', guide: 'Nommer le catalogue actif et le territoire de la politique. Distinguer les actes à venir des actes en vente. Ne pas promettre une couverture hors territoire.' },
+    { id: 'date', niveau: 2, fr: 'Ma date de signature est-elle confirmée ?', en: 'Is my signing date confirmed?', guide: 'Expliquer date demandée, retenue et confirmation avec le notaire. Ne confirmer ni disponibilité ni rendez-vous. Pour une date imminente ou un dossier précis, passer à une personne.' },
+    { id: 'paiement', niveau: 3, fr: 'Quand ma carte sera-t-elle débitée ?', en: 'When will my card be charged?', guide: 'Expliquer enregistrement, réservation et encaissement selon la politique. Ne jamais demander un numéro de carte. Un débit contesté ou un remboursement personnel exige un humain.' },
+    { id: 'carte', niveau: 3, fr: 'Mon paiement ne fonctionne pas.', en: 'My payment is not working.', guide: 'Demander seulement le message d’erreur sans données sensibles. Expliquer la possibilité d’enregistrer une autre carte selon la politique. Ne jamais demander code bancaire, numéro de carte ou capture non masquée.' },
+    { id: 'connexion', niveau: 1, fr: 'Je n’arrive pas à me connecter.', en: 'I cannot sign in.', guide: 'Vérifier adresse saisie et dossier indésirable, puis demander un nouveau lien depuis la connexion. Ne demander ni lien de connexion ni code. Ne jamais déclarer avoir déverrouillé un compte; escalader si le problème persiste.' },
+    { id: 'suivi', niveau: 3, fr: 'Où en est ma demande ?', en: 'What is the status of my request?', guide: 'Aucun accès au dossier: ne pas inventer de statut. Orienter vers l’espace client et passer à une personne pour vérifier la demande.' },
+    { id: 'modification', niveau: 3, fr: 'Puis-je changer ma date ou ma demande ?', en: 'Can I change my date or request?', guide: 'Demander si la demande est retenue. Une modification liée au dossier doit être vérifiée par une personne; ne pas prétendre modifier, promettre une nouvelle date ou garantir l’absence de frais.' },
+    { id: 'notaire', niveau: 1, fr: 'Comment communiquer avec mon notaire ?', en: 'How do I contact my notary?', guide: 'Après la retenue, orienter vers la conversation du dossier. Distinguer ce clavardage de soutien de la conversation avec le notaire. Une absence de réponse sur un dossier précis s’escalade sans délai promis.' },
+    { id: 'confidentialite', niveau: 3, fr: 'Qui peut voir mes renseignements ?', en: 'Who can see my information?', guide: 'Distinguer carnet public, conversation du dossier et soutien. Utiliser la politique pour accès, hébergement et conservation. Ne pas promettre secret professionnel ou stockage exclusivement canadien.' },
+    { id: 'effacement', niveau: 3, fr: 'Comment faire supprimer mes renseignements ?', en: 'How do I request deletion of my information?', guide: 'Donner le contact de confidentialité de la fiche et passer la demande personnelle à un humain. Ne pas affirmer que les données ont été supprimées.' },
+    { id: 'deplacement', niveau: 2, fr: 'Puis-je signer à distance ou à domicile ?', en: 'Can I sign remotely or at home?', guide: 'Utiliser les modalités de déplacement de la fiche. Ne pas confirmer une admissibilité personnelle à la signature à distance; le notaire doit la vérifier.' },
+    { id: 'preteur', niveau: 2, fr: 'Mon prêteur est-il accepté ?', en: 'Is my lender supported?', guide: 'Utiliser la liste des prêteurs et les questions du service. Si le prêteur manque, demander son nom sans document bancaire et passer à une personne; ne pas garantir son acceptation.' },
+    { id: 'plainte', niveau: 3, fr: 'Je veux signaler un problème.', en: 'I want to report a problem.', guide: 'Passer à un humain, demander une description brève sans renseignements sensibles. Ne pas contester la plainte ni promettre remboursement ou issue.' },
+    { id: 'humain', niveau: 3, fr: 'Je veux parler à une personne.', en: 'I want to speak to a person.', guide: 'Passer immédiatement à une personne, sans imposer de questions ou tenter de retenir le visiteur dans une boucle automatisée.' },
+  ].map(Object.freeze));
+
+  // These conservative checks are a first barrier, not a complete intent
+  // classifier. The assistant must still escalate uncertain free-form cases.
+  function supportQuestionGuard(texte) {
+    const t = String(texte || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    if (/\b(?:\d[ -]?){13,19}\b/.test(t) || /\b(?:nas|sin)\s*[:=]?\s*\d{3}[ -]?\d{3}[ -]?\d{3}\b/.test(t) || /(?:[?&](?:token|code)=|\b(?:password|mot de passe|cvv|cvc)\s*[:=]\s*\S+)/.test(t)) return 'renseignements_sensibles';
+    if (/(?:parler|parle|parlez|contacter|joindre).{0,35}(?:personne|humain|agent)|(?:speak|talk|connect).{0,30}(?:person|human|agent)|\b(?:human|humain)\b/.test(t)) return 'humain';
+    if (/\b(?:plainte|porter plainte|reclamation|complaint|fraude|fraud|scam)\b|signaler un probleme|report a problem/.test(t)) return 'plainte';
+    return null;
+  }
+
+  // Shared bilingual topic discovery; operational answers live in the API.
+  const SUPPORT_TOPICS = Object.freeze([
+    ...SUPPORT_QUESTIONS_SUGGEREES,
+    {"id": "territoire", "niveau": 1, "fr": "Est-ce offert dans ma région ?", "en": "Is this available in my area?"},
+    {"id": "proposition", "niveau": 1, "fr": "Un notaire propose un autre prix : comment répondre ?", "en": "A notary proposed another price: how do I respond?"},
+    {"id": "sans_notaire", "niveau": 1, "fr": "Aucun notaire n’a retenu ma demande.", "en": "No notary has retained my request."},
+    {"id": "desistement", "niveau": 1, "fr": "Mon notaire s’est désisté : que se passe-t-il ?", "en": "My notary withdrew: what happens next?"},
+    {"id": "inscription_notaire", "niveau": 3, "fr": "Je suis notaire : comment m’inscrire ?", "en": "I am a notary: how do I sign up?"},
+    {"id": "technique", "niveau": 1, "fr": "Le site ne fonctionne pas : que faire ?", "en": "The site is not working: what can I do?"},
+    {"id": "juridique", "niveau": 3, "fr": "Puis-je obtenir un avis juridique ici ?", "en": "Can I get legal advice here?"},
+  ].map((topic) => Object.freeze(topic)));
 
   // Les motifs d'escalade. Chacun est une classe de question qu'AUCUNE fiche
   // ne peut fonder — la lister ici, plutôt que de la deviner, est ce qui rend
   // l'escalade prévisible et testable.
   const SUPPORT_ESCALADE_MOTIFS = Object.freeze([
+    { id: 'humain', nom: 'Une demande de parler à une personne', nomEn: 'A request to speak to a person' },
+    { id: 'renseignements_sensibles', nom: 'Des renseignements sensibles dans le soutien', nomEn: 'Sensitive information in support' },
     { id: 'dossier_precis', nom: 'Un dossier ou une personne en particulier', nomEn: 'A specific file or person' },
     { id: 'exception', nom: 'Une exception : prix, date, entente sur mesure', nomEn: 'An exception: price, date, custom terms' },
     { id: 'conseil_juridique', nom: 'Une question qui demande le jugement d’un notaire', nomEn: 'A question needing a notary’s judgment' },
@@ -2420,6 +2545,8 @@
   const MOT_PART = 'com' + 'mission';
   const MOT_PCT = 'per' + 'cent';
   const SUPPORT_ANSWER_GUARDS = Object.freeze([
+    { code: 'secret_demande', re: /(?:envoyez|partagez|donnez|transmettez|send|share|provide).{0,70}(?:mot de passe|password|num[eé]ro de carte|card number|code de connexion|sign-in (?:code|link)|lien de connexion|\bNAS\b|\bSIN\b)/i, quoi: 'secret' },
+    { code: 'action_inventee', re: /(?:j[’']ai|nous avons|i have|we have|i’ve|we’ve)\s+(?:annul[eé]|modifi[eé]|supprim[eé]|rembours[eé]|d[eé]bit[eé]|v[eé]rifi[eé] votre dossier|cancelled|canceled|updated|deleted|refunded|charged|checked your (?:file|account))/i, quoi: 'action' },
     { code: 'vocabulaire_interdit', re: /\btaux\b/i, quoi: 'taux' },
     { code: 'vocabulaire_interdit', re: /\bpaliers?\b/i, quoi: 'palier' },
     { code: 'vocabulaire_interdit', re: /\bpourcentages?\b/i, quoi: 'pourcentage' },
@@ -2469,6 +2596,8 @@
     { code: 'statistique_inventee', re: /\bm[ée]dianes?\b/i, quoi: 'statistique' },
   ]);
   const SUPPORT_GUARD_MESSAGES = {
+    secret_demande: 'Le soutien automatisé ne demande aucun secret.',
+    action_inventee: 'L’assistant ne peut pas effectuer une action sur un dossier.',
     vocabulaire_interdit: 'Une réponse au client ne nomme pas un taux : le prix annoncé est un total.',
     cote_nominative: 'Une réponse ne publie aucune appréciation chiffrée d’un notaire (art. 70).',
     conseil_juridique: 'Une réponse ne conseille pas : Nota n’est pas notaire.',
@@ -2493,7 +2622,10 @@
     if (de !== SUPPORT_FROM.NOTA) {
       const vus = {};
       for (const g of SUPPORT_ANSWER_GUARDS) {
-        if (vus[g.code] || !g.re.test(texte)) continue;
+        const checked = g.code === 'secret_demande'
+          ? texte.replace(/\b(?:ne\s+(?:envoyez|partagez|donnez|transmettez)\s+(?:pas|aucun)|(?:do not|don't|never)\s+(?:send|share|provide))\b/gi, '[rappel]')
+          : texte;
+        if (vus[g.code] || !g.re.test(checked)) continue;
         vus[g.code] = true;
         errors.push({ code: g.code, message: SUPPORT_GUARD_MESSAGES[g.code], quoi: g.quoi });
       }
@@ -3106,7 +3238,7 @@
   // their demo data whenever it changes.
   function seedSignature() {
     return [
-      'v1',
+      'offer-expiration-v1',
       FIXTURE_SEED.toString(16),
       PREMIUM_CAP,
       // The criteria ids are part of the shape: adding a pricing question (the
@@ -3148,6 +3280,8 @@
       const retenue = rng() > 0.8;
       bids.push({
         id: 'fx-' + i,
+        createdAt: todayISO,
+        expiresOn: offerExpirationDate(todayISO, dateISO),
         serviceId: svc.id,
         dateISO,
         montant,
@@ -3304,6 +3438,246 @@
     });
     (svc.champs || []).forEach((c) => items.push({ kind: 'field', id: c.id, nom: c.label, aide: c.aide }));
     return items;
+  }
+
+  // Evidence-grounded extraction is a proposal for a notary, never a legal
+  // finding. These limits and the field vocabulary are shared by all adapters.
+  const FINANCING_AI_FIELDS = [
+    { id: 'property_address', label: 'Adresse de l’immeuble', description: 'Civic address of the property securing the proposed loan; not a lender, adviser or correspondence address.' },
+    { id: 'borrower_names', label: 'Noms des emprunteurs', description: 'People expressly identified as borrowers. Ownership alone does not establish borrower status; exclude advisers and witnesses.' },
+    { id: 'lender_name', label: 'Nom du prêteur', description: 'Lender for the proposed financing, not an adviser or a creditor mentioned only in an existing debt statement. Preserve conflicting proposed lenders.' },
+    { id: 'loan_amount', label: 'Montant du prêt indiqué', description: 'Proposed loan principal expressly stated as such, not purchase price, valuation, payout balance or registered hypothec/security amount. Do not calculate.' },
+    { id: 'rate_expiry', label: 'Échéance du taux indiquée', description: 'Expiry of the offered rate as stated, not document creation date, loan maturity or a conclusion about validity today.' },
+    { id: 'secured_debts', label: 'Dettes garanties indiquées', description: 'Each expressly stated existing loan or credit line secured by the property, including zero-balance lines. A stated absence of debt is a declaration, not registry verification. Never calculate an official payout.' },
+  ];
+  const FINANCING_AI_LIMITS = Object.freeze({ maxPages: 8, maxPageChars: 8000,
+    maxTotalChars: 36000, maxFields: 24, maxValueChars: 1000, maxQuoteChars: 2000,
+    maxReasonChars: 500, maxReviewSeconds: 86400, maxExtractionChars: 24000 });
+
+  function validateFinancingAIReview(analysis, input) {
+    const errors = [];
+    const fail = code => errors.push({ code });
+    const fields = analysis?.preparation?.fields;
+    if (!Array.isArray(fields) || !input || input.analysisId !== analysis.id) fail('analyse_invalide');
+    const decisions = [];
+    const seen = new Set();
+    if (!Array.isArray(input?.decisions) || input.decisions.length !== fields?.length) fail('decisions_incompletes');
+    else for (const d of input.decisions) {
+      if (!d || !Number.isInteger(d.index) || d.index < 0 || d.index >= fields.length || seen.has(d.index) ||
+        !['accepted', 'corrected', 'rejected'].includes(d.decision)) { fail('decision_invalide'); continue; }
+      seen.add(d.index);
+      const reason = typeof d.reason === 'string' ? d.reason.trim() : '';
+      const value = typeof d.value === 'string' ? d.value.trim() : '';
+      if (reason.length > FINANCING_AI_LIMITS.maxReasonChars ||
+        (d.decision !== 'accepted' && !reason) ||
+        (d.decision === 'corrected' && (!value || value.length > FINANCING_AI_LIMITS.maxValueChars))) fail('correction_invalide');
+      decisions.push({ index: d.index, decision: d.decision,
+        ...(d.decision === 'corrected' ? { value } : {}), ...(reason ? { reason } : {}) });
+    }
+    const activeReviewSeconds = input?.activeReviewSeconds == null ? null : input.activeReviewSeconds;
+    if (activeReviewSeconds !== null && (!Number.isInteger(activeReviewSeconds) || activeReviewSeconds < 0 ||
+      activeReviewSeconds > FINANCING_AI_LIMITS.maxReviewSeconds)) fail('duree_invalide');
+    return { ok: !errors.length, errors, value: errors.length ? null : {
+      decisions, activeReviewSeconds, trainingEligible: false, signingReadiness: 'not_assessed',
+    } };
+  }
+
+  function validateFinancingAIInput(input) {
+    const errors = [];
+    const fail = code => errors.push({ code });
+    const obj = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+    if (!['financement', 'refinancement'].includes(obj.serviceId)) fail('service_inconnu');
+    const pages = [];
+    const seen = new Set();
+    let size = 0;
+    if (!Array.isArray(obj.pages) || !obj.pages.length || obj.pages.length > FINANCING_AI_LIMITS.maxPages) fail('pages_invalides');
+    else for (const page of obj.pages) {
+      if (!page || typeof page !== 'object' || Array.isArray(page) ||
+        typeof page.documentId !== 'string' || !/^[a-zA-Z0-9_-]{1,80}$/.test(page.documentId) ||
+        !Number.isSafeInteger(page.page) || page.page < 1 || page.page > 10000 ||
+        typeof page.text !== 'string' || !page.text.trim() || page.text.length > FINANCING_AI_LIMITS.maxPageChars) {
+        fail('page_invalide'); continue;
+      }
+      const id = page.documentId + ':' + page.page;
+      if (seen.has(id)) fail('page_dupliquee');
+      seen.add(id);
+      size += page.text.length;
+      pages.push({ documentId: page.documentId, page: page.page, text: page.text });
+    }
+    if (size > FINANCING_AI_LIMITS.maxTotalChars) fail('pages_trop_longues');
+    return { ok: !errors.length, errors, value: errors.length ? null : { serviceId: obj.serviceId, pages } };
+  }
+
+  function validateFinancingAIExtraction(input, extraction) {
+    const validated = validateFinancingAIInput(input);
+    if (!validated.ok) return validated;
+    const errors = [];
+    const fail = code => errors.push({ code });
+    const allowed = new Set(FINANCING_AI_FIELDS.map(f => f.id));
+    const fields = [];
+    const seen = new Set();
+    const source = new Map(validated.value.pages.map(p => [p.documentId + ':' + p.page, p.text]));
+    const exactKeys = (obj, keys) => obj && typeof obj === 'object' && !Array.isArray(obj) &&
+      Object.keys(obj).every(k => keys.includes(k));
+    try { if (JSON.stringify(extraction)?.length > FINANCING_AI_LIMITS.maxExtractionChars) fail('extraction_trop_longue'); }
+    catch { fail('extraction_invalide'); }
+    if (!exactKeys(extraction, ['fields']) || !Array.isArray(extraction.fields) || extraction.fields.length > FINANCING_AI_LIMITS.maxFields) {
+      fail('extraction_invalide');
+    } else for (const field of extraction.fields) {
+      if (!exactKeys(field, ['fieldId', 'value', 'evidence']) || !allowed.has(field.fieldId) ||
+        typeof field.value !== 'string' || !field.value.trim() || field.value.length > FINANCING_AI_LIMITS.maxValueChars ||
+        !Array.isArray(field.evidence) || !field.evidence.length || field.evidence.length > FINANCING_AI_LIMITS.maxPages) {
+        fail('champ_invalide'); continue;
+      }
+      const value = field.value.trim();
+      const evidence = [];
+      for (const e of field.evidence) {
+        if (!exactKeys(e, ['documentId', 'page', 'quote']) || typeof e.documentId !== 'string' ||
+          !Number.isSafeInteger(e.page) || typeof e.quote !== 'string' || !e.quote.trim() ||
+          e.quote.length > FINANCING_AI_LIMITS.maxQuoteChars ||
+          !source.get(e.documentId + ':' + e.page)?.includes(e.quote) || !e.quote.includes(value)) {
+          fail('preuve_invalide'); continue;
+        }
+        evidence.push({ documentId: e.documentId, page: e.page, quote: e.quote });
+      }
+      const id = field.fieldId + ':' + value;
+      if (seen.has(id)) fail('champ_duplique');
+      seen.add(id);
+      fields.push({ fieldId: field.fieldId, value, evidence });
+    }
+    const missing = FINANCING_AI_FIELDS.filter(f => !fields.some(p => p.fieldId === f.id)).map(f => f.id);
+    // Multiple names/debts are legitimate. Single-value differences need review;
+    // even an exact quotation does not establish semantic or legal correctness.
+    const conflicts = FINANCING_AI_FIELDS.filter(f => !['borrower_names', 'secured_debts'].includes(f.id) &&
+      new Set(fields.filter(p => p.fieldId === f.id).map(p => p.value)).size > 1).map(f => f.id);
+    return { ok: !errors.length, errors, value: errors.length ? null : {
+      fields, missing, conflicts, status: 'needs_notary_review',
+    } };
+  }
+
+  // A preparation inventory, never evidence that a document was read or that
+  // lender/notarial closing conditions are satisfied. No private values leave
+  // the caller and no free-text answer can mark a professional check complete.
+  function financingPreparation(serviceId, saved, pricing) {
+    if (!['financement', 'refinancement'].includes(serviceId)) return null;
+    const clean = cleanDossier(serviceId, saved);
+    const items = dossierItems(serviceId, pricing || clean.__pricing)
+      .filter(item => item.kind !== 'note')
+      .map(item => ({ id: item.id, nom: item.nom, aide: item.aide,
+        kind: item.kind,
+        status: !clean[item.id] ? 'missing' : item.kind === 'field' ? 'declared'
+          : clean[item.id] === DOSSIER_TRANSMIS ? 'external' : 'listed' }));
+    return { knowledgeVersion: FINANCING_KNOWLEDGE.version, items,
+      missing: items.filter(item => item.status === 'missing'),
+      // Tasks describe dependencies; their completion needs separate evidence.
+      checks: FINANCING_KNOWLEDGE.facts.map(fact => ({
+        id: fact.id, texte: fact.texte, sourceIds: fact.sourceIds.slice(),
+        status: 'notary_review_required',
+      })), signingReadiness: 'not_assessed' };
+  }
+
+  // Reuse client context locally before asking anyone to re-enter it. This
+  // packet is assembled deterministically; customer statements are not lender
+  // evidence and no packet state certifies legal or signing readiness.
+  const FINANCING_AUTOMATION_TARGET = 0.9;
+  const FINANCING_WORK_PACKET_VERSION = '2026-09-09.1';
+  function financingWorkPacket(bid, { todayISO } = {}) {
+    if (!bid || !['financement', 'refinancement'].includes(bid.serviceId) || bid.efface) return null;
+    const svc = serviceById(bid.serviceId);
+    const d = cleanDossier(bid.serviceId, bid.dossier);
+    const pricing = cleanDossier(bid.serviceId, { __pricing: bid.pricing || d.__pricing }).__pricing || {};
+    const preparation = financingPreparation(bid.serviceId, d, pricing);
+    const customerContext = svc.champs.filter(c => d[c.id]).map(c => ({
+      id: c.id, label: c.label, value: d[c.id], source: 'customer',
+    }));
+    if (isISODate(bid.dateISO)) customerContext.push({ id: 'dateISO', label: 'Date de signature demandée', value: bid.dateISO, source: 'customer' });
+    for (const criterion of svc.pricing.criteria) {
+      const answer = pricing[criterion.id];
+      if (criterion.id === 'valeur_pret') {
+        if ((typeof answer === 'number' || (typeof answer === 'string' && answer.trim())) && Number.isFinite(Number(answer)) && Number(answer) > 0) customerContext.push({
+          id: criterion.id, label: criterion.label, value: money(Number(answer)), valueEn: moneyEn(Number(answer)), source: 'customer',
+        });
+      } else if (criterion.id === LENDER_CRITERION_ID) {
+        const lender = lenderById(answer);
+        const name = answer === LENDER_OTHER_ID ? lenderOtherName(pricing) : lender?.nom;
+        if (name) customerContext.push({ id: criterion.id, label: criterion.label, value: name, source: 'customer', valueIsLabel: answer !== LENDER_OTHER_ID });
+      } else {
+        const option = (criterion.options || []).find(o => o.id === answer);
+        if (option) customerContext.push({ id: criterion.id, label: criterion.label, value: option.label, valueIsLabel: true, source: 'customer' });
+      }
+    }
+    const missing = preparation.missing.map(item => ({ id: item.id, label: item.nom, kind: item.kind, aide: item.aide || '' }));
+    for (const item of missingRequired(bid.serviceId, pricing)) {
+      if (!missing.some(m => m.id === item.id)) missing.push({ id: item.id, label: item.label, kind: 'pricing', aide: '' });
+    }
+    const mapping = { adresse: 'property_address', preteur: 'lender_name', valeur_pret: 'loan_amount', date_echeance_taux: 'rate_expiry', dettes_garanties: 'secured_debts' };
+    const labelFor = id => FINANCING_AI_FIELDS.find(f => f.id === id)?.label;
+    const draftFields = customerContext.filter(c => mapping[c.id]).map(c => ({
+      fieldId: mapping[c.id], label: labelFor(mapping[c.id]), value: c.value,
+      ...(c.valueEn ? { valueEn: c.valueEn } : {}), ...(c.valueIsLabel ? { valueIsLabel: true } : {}),
+      source: 'customer', evidence: [],
+    }));
+    const analysis = bid.financingAnalysis;
+    const fields = analysis?.preparation?.fields;
+    const review = analysis?.review;
+    const reviewed = !!(review && bid.notaryId && review.reviewerId === bid.notaryId &&
+      validateFinancingAIReview(analysis, { ...review, analysisId: analysis.id }).ok);
+    if (Array.isArray(fields)) fields.forEach((field, index) => {
+      if (!labelFor(field.fieldId) || typeof field.value !== 'string') return;
+      const decision = reviewed ? review.decisions.find(r => r.index === index) : null;
+      if (decision?.decision === 'rejected') return;
+      const corrected = decision?.decision === 'corrected';
+      draftFields.push({ fieldId: field.fieldId, label: labelFor(field.fieldId),
+        value: corrected ? decision.value : field.value,
+        source: corrected ? 'notary_corrected' : decision?.decision === 'accepted' ? 'notary_accepted' : 'ai_proposal',
+        evidence: (field.evidence || []).map(e => ({ documentId: e.documentId, page: e.page, quote: e.quote })),
+        ...(corrected ? { originalValue: field.value } : {}),
+      });
+    });
+    const normalized = value => String(value).normalize('NFKC').trim().replace(/\s+/g, ' ').toLocaleLowerCase('fr-CA');
+    const comparisons = draftFields.filter(f => f.source === 'customer' && ['property_address', 'lender_name', 'loan_amount', 'rate_expiry'].includes(f.fieldId)).flatMap(c => {
+      const values = [...new Set(draftFields.filter(f => f.source !== 'customer' && f.fieldId === c.fieldId).map(f => f.value))];
+      return values.some(v => normalized(v) !== normalized(c.value)) ? [{
+        fieldId: c.fieldId, label: c.label, customerValue: c.value, documentValues: values,
+      }] : [];
+    });
+    const dateFlags = [];
+    if (d.date_echeance_taux) {
+      if (!isISODate(d.date_echeance_taux)) dateFlags.push({ id: 'expiry_unclear', label: 'Échéance du taux à préciser au format AAAA-MM-JJ.' });
+      else {
+        if (isISODate(todayISO) && d.date_echeance_taux < todayISO) dateFlags.push({ id: 'expiry_past', label: 'L’échéance du taux déclarée est passée; confirmez la suite avec le prêteur.' });
+        if (isISODate(bid.dateISO) && bid.dateISO > d.date_echeance_taux) dateFlags.push({ id: 'signing_after_expiry', label: 'La signature demandée est après l’échéance du taux déclarée; confirmez la date avec le prêteur.' });
+      }
+    }
+    const checks = [
+      { id: 'instructions', label: 'Recevoir et vérifier les instructions officielles du prêteur', owner: 'lender', sourceIds: ['rbc'] },
+      { id: 'parties', label: 'Vérifier l’identité, la capacité et les personnes qui doivent intervenir', owner: 'notary', sourceIds: ['cnq'] },
+      { id: 'title', label: 'Examiner les titres, les charges et les exigences de localisation ou d’assurance titres', owner: 'notary', sourceIds: ['rbc', 'amf'] },
+      ...(bid.serviceId === 'refinancement' ? [{ id: 'payout', label: 'Obtenir les relevés officiels de remboursement et suivre les quittances', owner: 'lender', sourceIds: ['acfc', 'rbc'] }] : []),
+      { id: 'deed', label: 'Choisir le formulaire autorisé et vérifier le projet d’acte', owner: 'notary', sourceIds: ['rbc'] },
+      { id: 'closing', label: 'Confirmer les conditions de signature, de publication et de déboursement', owner: 'notary', sourceIds: ['rbc', 'cnq'] },
+    ].map(check => ({ ...check, status: 'pending' }));
+    return {
+      version: FINANCING_WORK_PACKET_VERSION, customerContext,
+      documentInventory: preparation.items.filter(i => i.kind === 'doc').map(i => ({ id: i.id, label: i.nom, status: i.status })),
+      draftFields, missing, comparisons, dateFlags, checks,
+      clientRequestDraft: missing.length ? {
+        opening: 'Bonjour, voici les renseignements et les pièces à compléter pour préparer votre dossier.',
+        items: missing.map(({ id, label, aide }) => ({ id, label, aide })),
+        closing: 'Utilisez le canal convenu avec votre notaire pour les pièces. Si un élément ne s’applique pas ou vous est inconnu, indiquez-le pour que nous puissions préciser la demande.',
+      } : null,
+      lenderRequestDraft: {
+        opening: 'Bonjour, nous préparons ce dossier à partir des renseignements déclarés par le client, qui restent à confirmer.',
+        items: customerContext.filter(c => ['adresse', 'preteur', 'valeur_pret', 'dateISO', 'date_echeance_taux', 'contact_preteur'].includes(c.id)).map(c => ({ ...c })),
+        requirements: [
+          { id: 'mandate', label: 'Confirmer l’envoi des instructions générales et particulières au notaire mandaté.' },
+          { id: 'funding', label: 'Préciser les conditions et les délais applicables à la demande de fonds et au déboursement.' },
+        ],
+        closing: 'Merci de confirmer la marche à suivre par votre canal autorisé. La date demandée n’est pas une confirmation de signature ni de déboursement.',
+      },
+      measurement: { target: FINANCING_AUTOMATION_TARGET, measuredReduction: null,
+        reviewSeconds: reviewed ? review.activeReviewSeconds ?? null : null },
+    };
   }
 
   function leadReadiness(serviceId, saved, pricing) {
@@ -3655,6 +4029,96 @@
     return 'Client · ' + (bid.prefixe || '—');
   }
 
+  // Bounded reporting categories: never persist raw user agents, URLs or arbitrary labels.
+  const ANALYTICS_DIMENSIONS = Object.freeze([
+    { id: "browser", nom: "Navigateur", nomEn: "Browser", values: [
+      {"id": "chrome", "nom": "Chrome", "nomEn": "Chrome"},
+      {"id": "safari", "nom": "Safari", "nomEn": "Safari"},
+      {"id": "firefox", "nom": "Firefox", "nomEn": "Firefox"},
+      {"id": "edge", "nom": "Edge", "nomEn": "Edge"},
+      {"id": "samsung", "nom": "Samsung Internet", "nomEn": "Samsung Internet"},
+      {"id": "opera", "nom": "Opera", "nomEn": "Opera"},
+      {"id": "in_app", "nom": "Navigateur intégré", "nomEn": "In-app browser"},
+      {"id": "bot", "nom": "Robot déclaré", "nomEn": "Declared bot"},
+      {"id": "other", "nom": "Autre", "nomEn": "Other"},
+      {"id": "unknown", "nom": "Inconnu", "nomEn": "Unknown"},
+    ] },
+    { id: "os", nom: "Système", nomEn: "Operating system", values: [
+      {"id": "ios", "nom": "iOS / iPadOS", "nomEn": "iOS / iPadOS"},
+      {"id": "android", "nom": "Android", "nomEn": "Android"},
+      {"id": "windows", "nom": "Windows", "nomEn": "Windows"},
+      {"id": "macos", "nom": "macOS", "nomEn": "macOS"},
+      {"id": "linux", "nom": "Linux", "nomEn": "Linux"},
+      {"id": "other", "nom": "Autre", "nomEn": "Other"},
+      {"id": "unknown", "nom": "Inconnu", "nomEn": "Unknown"},
+    ] },
+    { id: "device", nom: "Appareil", nomEn: "Device", values: [
+      {"id": "mobile", "nom": "Téléphone", "nomEn": "Phone"},
+      {"id": "tablet", "nom": "Tablette", "nomEn": "Tablet"},
+      {"id": "desktop", "nom": "Ordinateur", "nomEn": "Desktop"},
+      {"id": "unknown", "nom": "Inconnu", "nomEn": "Unknown"},
+    ] },
+    { id: "viewport", nom: "Format de fenêtre", nomEn: "Viewport", values: [
+      {"id": "narrow", "nom": "Étroit", "nomEn": "Narrow"},
+      {"id": "medium", "nom": "Moyen", "nomEn": "Medium"},
+      {"id": "wide", "nom": "Large", "nomEn": "Wide"},
+      {"id": "unknown", "nom": "Inconnu", "nomEn": "Unknown"},
+    ] },
+    { id: "language", nom: "Langue", nomEn: "Language", values: [
+      {"id": "fr", "nom": "Français", "nomEn": "French"},
+      {"id": "en", "nom": "Anglais", "nomEn": "English"},
+      {"id": "other", "nom": "Autre", "nomEn": "Other"},
+      {"id": "unknown", "nom": "Inconnue", "nomEn": "Unknown"},
+    ] },
+    { id: "source", nom: "Source d’arrivée", nomEn: "Arrival source", values: [
+      {"id": "google", "nom": "Google", "nomEn": "Google"},
+      {"id": "bing", "nom": "Bing", "nomEn": "Bing"},
+      {"id": "search_other", "nom": "Autre moteur de recherche", "nomEn": "Other search engine"},
+      {"id": "facebook", "nom": "Facebook", "nomEn": "Facebook"},
+      {"id": "instagram", "nom": "Instagram", "nomEn": "Instagram"},
+      {"id": "linkedin", "nom": "LinkedIn", "nomEn": "LinkedIn"},
+      {"id": "tiktok", "nom": "TikTok", "nomEn": "TikTok"},
+      {"id": "ai", "nom": "Assistant IA", "nomEn": "AI assistant"},
+      {"id": "email", "nom": "Courriel", "nomEn": "Email"},
+      {"id": "partner", "nom": "Lien de référence déclaré", "nomEn": "Declared referral link"},
+      {"id": "campaign_other", "nom": "Autre campagne déclarée", "nomEn": "Other declared campaign"},
+      {"id": "referral_other", "nom": "Autre site", "nomEn": "Other website"},
+      {"id": "internal", "nom": "Navigation interne", "nomEn": "Internal navigation"},
+      {"id": "direct_unknown", "nom": "Direct ou inconnu", "nomEn": "Direct or unknown"},
+    ] },
+    { id: "entry", nom: "Page d’arrivée", nomEn: "Entry page", values: [
+      {"id": "home", "nom": "Carnet", "nomEn": "Marketplace"},
+      {"id": "financement", "nom": "Page de financement", "nomEn": "Financing page"},
+      {"id": "refinancement", "nom": "Page de refinancement", "nomEn": "Refinancing page"},
+      {"id": "other", "nom": "Autre page", "nomEn": "Other page"},
+    ] },
+    { id: "dialog", nom: "Fenêtres de dialogue", nomEn: "Dialogs", values: [
+      {"id": "native", "nom": "Prise en charge native", "nomEn": "Native support"},
+      {"id": "fallback", "nom": "Repli nécessaire", "nomEn": "Fallback needed"},
+      {"id": "unknown", "nom": "Inconnu", "nomEn": "Unknown"},
+    ] },
+    { id: "storage", nom: "Stockage du navigateur", nomEn: "Browser storage", values: [
+      {"id": "available", "nom": "Accessible", "nomEn": "Accessible"},
+      {"id": "unavailable", "nom": "Indisponible", "nomEn": "Unavailable"},
+      {"id": "unknown", "nom": "Inconnu", "nomEn": "Unknown"},
+    ] },
+    { id: "load", nom: "Chargement initial", nomEn: "Initial load", values: [
+      {"id": "fast", "nom": "Moins de 2 secondes", "nomEn": "Under 2 seconds"},
+      {"id": "moderate", "nom": "De 2 à 4 secondes", "nomEn": "2 to 4 seconds"},
+      {"id": "slow", "nom": "Plus de 4 secondes", "nomEn": "Over 4 seconds"},
+      {"id": "unknown", "nom": "Non mesuré", "nomEn": "Not measured"},
+    ] },
+  ]);
+  function cleanAnalyticsContext(input) {
+    const out = {};
+    if (!input || typeof input !== 'object' || Array.isArray(input)) return out;
+    for (const dimension of ANALYTICS_DIMENSIONS) {
+      const value = input[dimension.id];
+      if (typeof value === 'string' && dimension.values.some(v => v.id === value)) out[dimension.id] = value;
+    }
+    return out;
+  }
+
   // --- Funnel events -----------------------------------------------------------
   // The conversion funnel is product data, so its catalogue lives here and both
   // apps read the SAME list: the web app beacons an event, the API accepts only
@@ -3665,14 +4129,28 @@
     { id: 'visite',          nom: 'Visites',                      nomEn: 'Visits' },
     { id: 'jour_ouvert',     nom: 'Dates ouvertes',               nomEn: 'Dates opened' },
     { id: 'formulaire',      nom: 'Formulaires commencés',        nomEn: 'Forms started' },
-    { id: 'publie',          nom: 'Offres publiées',              nomEn: 'Offers published' },
-    { id: 'paiement_ok',     nom: 'Cartes autorisées',            nomEn: 'Cards authorized' },
-    { id: 'paiement_annule', nom: 'Paiements abandonnés',         nomEn: 'Payments abandoned' },
+    { id: 'publie',          nom: 'Offres publiées',              nomEn: 'Offers published', serverOnly: true },
+    { id: 'paiement_ok',     nom: 'Retours de paiement — succès', nomEn: 'Checkout returns — success' },
+    { id: 'paiement_annule', nom: 'Retours de paiement — annulation', nomEn: 'Checkout returns — cancellation' },
     { id: 'notaire_porte',   nom: 'Espace notaire ouvert',        nomEn: 'Notary space opened' },
-    { id: 'notaire_inscrit', nom: 'Notaires inscrits',            nomEn: 'Notaries signed up' },
+    { id: 'notaire_inscrit', nom: 'Notaires inscrits',            nomEn: 'Notaries signed up', serverOnly: true },
+    { id: 'criteres_vus',    nom: 'Questions sur l’acte vues',    nomEn: 'Act questions viewed' },
+    { id: 'prix_vu',         nom: 'Étape du prix vue',            nomEn: 'Price step viewed' },
+    { id: 'coordonnees_vues', nom: 'Étape des coordonnées vue',   nomEn: 'Contact details step viewed' },
+    { id: 'formulaire_bloque', nom: 'Tentatives de continuer bloquées', nomEn: 'Blocked attempts to continue' },
+    { id: 'publication_tentee', nom: 'Tentatives de publication', nomEn: 'Publication attempts' },
+    { id: 'publication_echouee', nom: 'Échecs de publication',    nomEn: 'Publication failures' },
+    { id: 'page_service_vue', nom: 'Pages de service vues', nomEn: 'Service pages viewed' },
+    { id: 'page_service_vers_carnet', nom: 'Passages du service au carnet', nomEn: 'Service page links to marketplace' },
+    { id: 'erreur_script', nom: 'Pages avec erreur JavaScript', nomEn: 'Pages with JavaScript errors' },
+    { id: 'promesse_rejetee', nom: 'Pages avec échec asynchrone non traité', nomEn: 'Pages with unhandled asynchronous failures' },
+    { id: 'navigation_mesuree', nom: 'Chargements mesurés', nomEn: 'Measured page loads' },
   ]);
   function isFunnelEvent(id) {
     return typeof id === 'string' && FUNNEL_EVENTS.some((e) => e.id === id);
+  }
+  function isClientFunnelEvent(id) {
+    return typeof id === 'string' && FUNNEL_EVENTS.some((e) => e.id === id && !e.serverOnly);
   }
 
   return {
@@ -3743,6 +4221,9 @@
     erasurePlan,
     BID_IDENTIFYING_FIELDS,
     redactedBid,
+    OFFER_VALIDITY_DAYS,
+    offerExpirationDate,
+    isOfferExpired,
     validateOffer,
     validateCounterOffer,
     suggestedCounterOffer,
@@ -3771,9 +4252,21 @@
     SUPPORT_EXCERPT_MAX,
     supportThreadSummary,
     SUPPORT_REPONSES_TYPES,
+    FINANCING_KNOWLEDGE,
+    FINANCING_AI_FIELDS,
+    FINANCING_AI_LIMITS,
+    validateFinancingAIInput,
+    validateFinancingAIExtraction,
+    validateFinancingAIReview,
+    financingPreparation,
+    financingWorkPacket,
+    FINANCING_AUTOMATION_TARGET,
+    FINANCING_WORK_PACKET_VERSION,
     supportFacts,
+    supportQuestionGuard,
     SUPPORT_NIVEAUX,
     SUPPORT_QUESTIONS_SUGGEREES,
+    SUPPORT_TOPICS,
     SUPPORT_ESCALADE_MOTIFS,
     validateSupportAnswer,
     NOTIF_KINDS,
@@ -3817,8 +4310,11 @@
     cleanDossier,
     REFERRAL,
     referralProjection,
+    ANALYTICS_DIMENSIONS,
+    cleanAnalyticsContext,
     FUNNEL_EVENTS,
     isFunnelEvent,
+    isClientFunnelEvent,
     normalizeReferralCode,
     isReferralCode,
     referralLedger,

@@ -162,7 +162,7 @@ test('OPTIONS preflight is 204 with an empty body and CORS headers', async () =>
   const res = await app().handle({ method: 'OPTIONS', path: '/bids' });
   assert.equal(res.statusCode, 204);
   assert.equal(res.body, ''); // a 204 must not carry a body
-  assert.equal(res.headers['access-control-allow-methods'], 'GET,POST,OPTIONS');
+  assert.equal(res.headers['access-control-allow-methods'], 'GET,POST,PATCH,OPTIONS');
 });
 
 test('an oversized POST body is rejected with 413 before it is parsed', async () => {
@@ -190,7 +190,7 @@ test('the public projection omits every private field (dossier, pricing, basePri
   // Even if a raw item carries them, GET /bids must expose none of these.
   const repo = createMemoryRepo([
     {
-      id: 'x', serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2800, status: 'ouverte', anonyme: true, prefixe: 'G1R',
+      expiresOn: TODAY, id: 'x', serviceId: 'refinancement', dateISO: '2026-08-20', montant: 2800, status: 'ouverte', anonyme: true, prefixe: 'G1R',
       documents: { secret: 'leak' }, dossier: { secret: 'leak' }, courriel: 'client@example.ca',
       pricing: { valeur_pret: 850000, succession: 'oui' }, basePrice: 2750, createdAt: TODAY,
       telephone: '418 555-1234', parrain: 'EVEROY',

@@ -286,3 +286,41 @@ test('la réponse de l’humain ferme l’escalade : le fil redevient « répond
   assert.equal(s.statut, D.SUPPORT_STATUT.REPONDU);
   assert.equal(s.escalade, false, 'l’humain a parlé après l’escalade : elle est close');
 });
+
+test('prepared coverage is bilingual and gives each question a discussion path', () => {
+  const ids = D.SUPPORT_QUESTIONS_SUGGEREES.map(q => q.id);
+  assert.equal(new Set(ids).size, ids.length);
+  for (const id of ['prix', 'documents', 'annulation', 'services', 'date', 'paiement', 'carte', 'connexion', 'suivi', 'modification', 'notaire', 'confidentialite', 'effacement', 'deplacement', 'preteur', 'plainte', 'humain']) assert.ok(ids.includes(id), id);
+  for (const q of D.SUPPORT_QUESTIONS_SUGGEREES) assert.ok(q.fr && q.en && q.guide && [1, 2, 3].includes(q.niveau));
+});
+
+test('input guards recognize French and English human requests and secrets', () => {
+  for (const text of ['Je veux parler à une personne.', 'Please connect me to an agent', 'Human please']) assert.equal(D.supportQuestionGuard(text), 'humain');
+  for (const text of ['4111 1111 1111 1111', 'NAS: 123-456-789', 'password: secret', 'https://nota.ca/#/auth?token=abc']) assert.equal(D.supportQuestionGuard(text), 'renseignements_sensibles');
+  for (const text of ['Quels documents me faut-il ?', 'How much does it cost?', 'Quand ma carte sera-t-elle débitée ?']) assert.equal(D.supportQuestionGuard(text), null);
+});
+
+test('the assistant cannot request secrets or claim completed account actions', () => {
+  for (const texte of ['Envoyez votre mot de passe.', 'Please send your card number.', 'J’ai annulé votre demande.', 'I have refunded your payment.']) assert.equal(D.validateSupportAnswer({ texte }).ok, false, texte);
+});
+
+test('the complete help catalogue has unique bilingual topics and valid levels', () => {
+  assert.equal(new Set(D.SUPPORT_TOPICS.map(t => t.id)).size, D.SUPPORT_TOPICS.length);
+  for (const topic of D.SUPPORT_TOPICS) {
+    assert.ok(topic.fr && topic.en && topic.fr !== topic.en);
+    assert.ok(D.SUPPORT_NIVEAUX.some(n => n.niveau === topic.niveau));
+    assert.ok(Object.isFrozen(topic));
+  }
+  for (const id of ['connexion', 'paiement', 'confidentialite', 'plainte', 'humain', 'juridique']) {
+    assert.ok(D.SUPPORT_TOPICS.some(t => t.id === id));
+  }
+});
+
+test('privacy reminders pass but cannot hide a subsequent request for a secret', () => {
+  for (const texte of ['Do not send your card number.', 'Ne partagez pas votre mot de passe.', 'Ne transmettez aucun numéro de carte.']) {
+    assert.equal(D.validateSupportAnswer({ texte }).ok, true, texte);
+  }
+  for (const texte of ['Do not send your card number, but provide your password.', 'Ne partagez pas votre numéro de carte. Donnez votre mot de passe.']) {
+    assert.equal(D.validateSupportAnswer({ texte }).ok, false, texte);
+  }
+});
