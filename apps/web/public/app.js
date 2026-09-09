@@ -440,12 +440,16 @@
   // Shared close affordance for generated dialogs. Static dialogs use the
   // same markup in index.html; keeping this tiny primitive here prevents a
   // late-created modal from becoming a visual or keyboard exception.
-  function dialogCloseButton(label) {
-    var form = el('form', 'dlg-x-form'); form.method = 'dialog';
-    var button = el('button', 'dlg-x'); button.type = 'submit'; button.value = 'close';
+  function dialogCloseButton(label, dialog) {
+    // Generated dialogs already contain a meaningful form. A non-form shell
+    // keeps that form as the first submit target while preserving the exact
+    // same sticky visual primitive and keyboard target.
+    var form = el('div', 'dlg-x-form');
+    var button = el('button', 'dlg-x'); button.type = 'button';
     button.setAttribute('aria-label', label || T('Fermer'));
     button.title = label || T('Fermer');
     button.appendChild(strokeGlyph('<path d="M18 6 6 18M6 6l12 12"/>', 18, ''));
+    button.addEventListener('click', function () { if (dialog && dialog.open) dialog.close(); });
     form.appendChild(button);
     return form;
   }
@@ -1459,7 +1463,7 @@
     emailPreferenceIdentity = token;
     var dialog = el('dialog'); dialog.id = 'email-preferences-dialog';
     dialog.addEventListener('close', function () { dialog.remove(); });
-    dialog.appendChild(dialogCloseButton(T('Fermer')));
+    dialog.appendChild(dialogCloseButton(T('Fermer'), dialog));
     dialog.appendChild(el('h2', null, T('Préférences de courriel')));
     var close = el('button', 'btn', T('Fermer les préférences'));
     close.type = 'button'; close.addEventListener('click', function () { dialog.close(); dialog.remove(); });
@@ -1756,7 +1760,7 @@
   function oauthLinkDialog(ticket) {
     var dlg = el('dialog', 'dialog'); dlg.id = 'oauth-link-dialog';
     dlg.setAttribute('aria-labelledby', 'oauth-link-title');
-    dlg.appendChild(dialogCloseButton(T('Fermer')));
+    dlg.appendChild(dialogCloseButton(T('Fermer'), dlg));
     var title = el('h2', null, 'Lier votre compte'); title.id = 'oauth-link-title'; dlg.appendChild(title);
     dlg.appendChild(el('p', 'help', 'Confirmez le courriel de votre compte Nota. Ouvrez le lien reçu dans ce navigateur pour terminer la connexion.'));
     var form = el('form'), label = el('label', null, 'Courriel'), input = el('input');
