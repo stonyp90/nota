@@ -101,21 +101,11 @@ jobs:
           # browser is installed. The runner is disposable; remove only this
           # optional source and let Playwright use the stable Ubuntu mirrors.
           for source in /etc/apt/sources.list.d/*; do
-            if [ -f "$source" ] && grep -q 'dl.google.com/linux/chrome' "$source"; then
-              echo "Disabling transient Google Chrome APT source: $source"
+            if sudo test -f "$source" && sudo grep -q "dl.google.com/linux/chrome" "$source"; then
               sudo rm -f "$source"
             fi
           done
-          for attempt in 1 2 3; do
-            if npx playwright install --with-deps chromium firefox webkit; then
-              exit 0
-            fi
-            echo "Playwright browser install attempt ${attempt} failed; refreshing apt metadata"
-            sudo rm -rf /var/lib/apt/lists/partial /var/lib/apt/lists/*
-            sudo apt-get clean
-            sudo apt-get update -o Acquire::Retries=5
-          done
-          exit 1
+          npx playwright install --with-deps chromium firefox webkit
 
       - name: Run critical journeys (client booking, notary sign-in, partner claim, home numbers)
         run: npm run test:e2e
